@@ -1,0 +1,13 @@
+{
+ "total_routes": 43,
+ "kinds": {
+  "Route": 1,
+  "APIRoute": 42
+ },
+ "api_routes": 42,
+ "unique_api_paths": 37,
+ "api_routes_by_endpoint_module": {
+  "main": 42
+ },
+ "method_path_pairs": 48
+}

@@ -1,0 +1,4 @@
+rv-split-guard-1 tree == rvproto-frozen-1+li-knobs (8ace2294589c0e75)
+{"host": "rv-split-guard-1", "index": 0, "pid": 17027, "tokens_per_s": 234473.39981225587, "model_hash": "2bf20e0f71e3a41e9e8cc4e602e08c142855bcce0cc73e0b65000d816d70877c", "provider": "TensorrtExecutionProvider", "endpoints": ["10.160.0.10:7070"], "queue_cap_tokens": 234473}
+AMF_TARGET_P99_MS=1000
+RV_METRICS_DUMP_S=0

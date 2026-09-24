@@ -1,0 +1,12 @@
+## 2026-09-23T12:36:03Z run=warmup-i2
+## rv-v1-lg-2
+d22d260723c31fb55a387080b853cd94ff922666807ba36845e0b7e962aa7fb3  olg
+1ee6bb5f3665de1d6f42d67d83997b71f429d57a45525650a01b15bcdab39029  synthprov
+4a9ff4a106a48f18ad3470fcb000339c417f62d4671c134638b1fc04ff3b9685  rvproxy
+## rv-v1-prov-2
+d22d260723c31fb55a387080b853cd94ff922666807ba36845e0b7e962aa7fb3  olg
+1ee6bb5f3665de1d6f42d67d83997b71f429d57a45525650a01b15bcdab39029  synthprov
+4a9ff4a106a48f18ad3470fcb000339c417f62d4671c134638b1fc04ff3b9685  rvproxy
+## controller analyze.py (harness git 7c4ee88)
+c9f89fe8862b254c1e6576c37a7f42bae67bd892e982a07b0c9cab64e95409bb  /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/harness/analyze.py
+5a7eeb2f1f643eebaa433b65c43a173734c214dcbaeb8c263feb9731ddf09465  /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/v1-bench/setup/v1_adapter.py

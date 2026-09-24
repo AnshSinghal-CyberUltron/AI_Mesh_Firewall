@@ -1,0 +1,109 @@
+ai_mesh_gateway/tests/test_openai_sdk_compat.py::test_non_streaming_parses_as_chat_completion
+ai_mesh_gateway/tests/test_openai_sdk_compat.py::test_streaming_chunks_trace_frame_and_done
+ai_mesh_gateway/tests/test_openai_sdk_compat.py::test_blocked_request_raises_api_status_error_with_zeroshield_body
+ai_mesh_gateway/tests/test_openai_sdk_compat.py::test_blocked_streaming_request_raises_before_sse
+ai_mesh_gateway/tests/test_openai_sdk_compat.py::test_invalid_api_key_raises_authentication_error
+ai_mesh_gateway/tests/test_openai_sdk_compat.py::test_responses_non_streaming_parses_as_response_object
+ai_mesh_gateway/tests/test_openai_sdk_compat.py::test_responses_streaming_events_and_text
+ai_mesh_gateway/tests/test_openai_sdk_compat.py::test_responses_mid_stream_failure_surfaces_typed_response_failed
+ai_mesh_gateway/tests/test_openai_sdk_compat.py::test_responses_blocked_non_stream_raises_bad_request_error
+ai_mesh_gateway/tests/test_openai_sdk_compat.py::test_responses_blocked_stream_raises_before_sse
+ai_mesh_gateway/tests/test_openai_sdk_compat.py::test_only_one_post_v1_responses_route
+ai_mesh_gateway/tests/test_openai_sdk_compat.py::test_v1_responses_first_match_wins_is_full_handler
+ai_mesh_gateway/tests/test_openai_sdk_compat.py::test_responses_non_string_model_returns_400
+ai_mesh_gateway/tests/test_openai_sdk_compat.py::test_chat_tool_calls_forwarded_and_parsed
+ai_mesh_gateway/tests/test_openai_sdk_compat.py::test_chat_response_format_json_schema
+ai_mesh_gateway/tests/test_openai_sdk_compat.py::test_chat_usage_block_present
+ai_mesh_gateway/tests/test_openai_sdk_compat.py::test_responses_store_retrieve_delete_roundtrip
+ai_mesh_gateway/tests/test_openai_sdk_compat.py::test_responses_input_items_listing
+ai_mesh_gateway/tests/test_openai_sdk_compat.py::test_responses_previous_response_id_replay
+ai_mesh_gateway/tests/test_openai_sdk_compat.py::test_responses_typed_stream_sequence_D5
+ai_mesh_gateway/tests/test_openai_sdk_compat.py::test_embeddings_single
+ai_mesh_gateway/tests/test_openai_sdk_compat.py::test_embeddings_batch
+ai_mesh_gateway/tests/test_openai_sdk_compat.py::test_models_list_returns_real_ids
+ai_mesh_gateway/tests/test_openai_sdk_compat.py::test_models_retrieve_by_id_D4
+ai_mesh_gateway/tests/test_openai_sdk_compat.py::test_error_model_not_allowed
+ai_mesh_gateway/tests/test_openai_sdk_compat.py::test_error_upstream_429_maps_to_rate_limit_error
+ai_mesh_gateway/tests/test_openai_sdk_compat.py::test_error_bad_body_raises_bad_request
+ai_mesh_gateway/tests/test_openai_sdk_compat.py::test_error_fields_populated_on_block_D2
+ai_mesh_gateway/tests/test_openai_sdk_compat.py::test_error_request_id_present_on_block_D3
+ai_mesh_gateway/tests/test_openai_sdk_compat.py::test_error_param_populated_on_bad_model_A1
+ai_mesh_gateway/tests/test_openai_sdk_compat.py::test_error_param_populated_on_bad_messages_A1
+ai_mesh_gateway/tests/test_openai_sdk_compat.py::test_error_param_populated_on_bad_sampling_A1
+ai_mesh_gateway/tests/test_openai_sdk_compat.py::test_error_param_null_on_content_block_A1
+ai_mesh_gateway/tests/test_openai_sdk_compat.py::test_error_request_id_present_across_error_classes
+ai_mesh_gateway/tests/test_openai_sdk_compat.py::test_unimplemented_surface_returns_clean_404
+ai_mesh_gateway/tests/test_openai_sdk_compat.py::test_legacy_completions_create_D4
+ai_mesh_gateway/tests/test_openai_sdk_compat.py::test_legacy_completions_batch_prompt_D4
+ai_mesh_gateway/tests/test_openai_sdk_compat.py::test_legacy_completions_block_routes_through_firewall_D4
+ai_mesh_gateway/tests/test_openai_sdk_compat.py::test_c1_success_chat_carries_request_id_header
+ai_mesh_gateway/tests/test_openai_sdk_compat.py::test_c1_success_streaming_carries_request_id_header
+ai_mesh_gateway/tests/test_openai_sdk_compat.py::test_c1_unmatched_v1_route_is_nested_envelope_with_request_id
+ai_mesh_gateway/tests/test_openai_sdk_compat.py::test_c1_malformed_json_body_is_nested_envelope_with_request_id
+ai_mesh_gateway/tests/test_openai_sdk_compat.py::test_c1_unhandled_exception_is_nested_500_with_request_id_no_traceback
+ai_mesh_gateway/tests/test_openai_sdk_compat.py::test_c4_moderations_benign_parses_with_request_id
+ai_mesh_gateway/tests/test_openai_sdk_compat.py::test_c4_moderations_flags_injection
+ai_mesh_gateway/tests/test_openai_sdk_compat.py::test_c4_moderations_missing_input_is_nested_envelope_with_request_id
+ai_mesh_gateway/tests/test_openai_sdk_compat.py::test_c4_audio_surface_returns_clean_404
+ai_mesh_gateway/tests/test_openai_sdk_compat.py::test_c4_models_retrieve_unknown_returns_404_with_request_id
+ai_mesh_gateway/tests/test_openai_sdk_compat_live_uvicorn.py::test_live_chat_non_stream
+ai_mesh_gateway/tests/test_openai_sdk_compat_live_uvicorn.py::test_live_chat_stream_chunks_and_done
+ai_mesh_gateway/tests/test_openai_sdk_compat_live_uvicorn.py::test_live_responses_stream_typed_events
+ai_mesh_gateway/tests/test_openai_sdk_compat_live_uvicorn.py::test_live_block_raises_permission_denied
+ai_mesh_gateway/tests/test_openai_sdk_compat_live_uvicorn.py::test_live_request_id_header_present_and_matches_body
+ai_mesh_gateway/tests/test_openai_sdk_compat_live_uvicorn.py::test_live_blocked_stream_is_json_not_sse
+ai_mesh_gateway/tests/test_openai_sdk_compat_live_uvicorn.py::test_live_client_disconnect_midstream_then_server_responsive
+ai_mesh_gateway/tests/test_openai_sdk_compat_live_uvicorn.py::test_live_zero_token_scan_only_no_hang
+ai_mesh_gateway/tests/test_openai_sdk_compat_phase2.py::test_max_completion_tokens_not_shadowed_by_injected_max_tokens
+ai_mesh_gateway/tests/test_openai_sdk_compat_phase2.py::test_max_completion_tokens_over_ceiling_is_rejected
+ai_mesh_gateway/tests/test_openai_sdk_compat_phase2.py::test_responses_adapter_forwards_response_format
+ai_mesh_gateway/tests/test_openai_sdk_compat_phase2.py::test_responses_adapter_forwards_sampling_penalties
+ai_mesh_gateway/tests/test_openai_sdk_compat_phase2.py::test_responses_adapter_forwards_top_logprobs
+ai_mesh_gateway/tests/test_openai_sdk_compat_phase2.py::test_block_403_header_request_id_matches_body
+ai_mesh_gateway/tests/test_openai_sdk_compat_phase2.py::test_chat_n_gt_1_returns_n_choices
+ai_mesh_gateway/tests/test_openai_sdk_compat_phase2.py::test_responses_adapter_handles_n
+ai_mesh_gateway/tests/test_openai_sdk_compat_phase2.py::test_chat_validation_400_populates_e_param
+ai_mesh_gateway/tests/test_openai_sdk_compat_phase2.py::test_success_200_header_request_id_matches_body_zeroshield
+ai_mesh_gateway/tests/test_openai_sdk_compat_phase2.py::test_upstream_429_carries_retry_after
+ai_mesh_gateway/tests/test_openai_sdk_compat_phase2.py::test_content_part_file_requires_payload
+ai_mesh_gateway/tests/test_openai_sdk_compat_phase2_adversarial.py::test_responses_adapter_maps_native_text_format
+ai_mesh_gateway/tests/test_openai_sdk_compat_phase2_adversarial.py::test_responses_adapter_forwards_logit_bias
+ai_mesh_gateway/tests/test_openai_sdk_compat_phase2_adversarial.py::test_responses_adapter_forwards_service_tier
+ai_mesh_gateway/tests/test_openai_sdk_compat_phase2_adversarial.py::test_responses_adapter_forwards_prediction
+ai_mesh_gateway/tests/test_openai_sdk_compat_phase2_adversarial.py::test_responses_adapter_forwards_truncation
+ai_mesh_gateway/tests/test_openai_sdk_compat_phase5_correlation.py::test_request_id_join_invariant_across_v1_matrix
+ai_mesh_gateway/tests/test_openai_sdk_compat_phase5_correlation.py::test_every_block_emits_enforcement_signal
+ai_mesh_gateway/tests/test_openai_sdk_compat_phase6_guards.py::test_missing_model_returns_400_invalid_request_param_model
+ai_mesh_gateway/tests/test_openai_sdk_compat_phase6_guards.py::test_stream_upstream_error_emits_error_event_not_clean_empty
+
+=============================== warnings summary ===============================
+ai_mesh_gateway/main.py:6350
+  /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/structure-metrics/CD_sdk_gw24/bl_copy/gateway/ai_mesh_gateway/main.py:6350: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("startup")
+
+../../../../../../../../../../home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/fastapi/applications.py:4598
+../../../../../../../../../../home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/fastapi/applications.py:4598
+  /home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/fastapi/applications.py:4598: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    return self.router.on_event(event_type)  # ty: ignore[deprecated]
+
+ai_mesh_gateway/main.py:6881
+  /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/structure-metrics/CD_sdk_gw24/bl_copy/gateway/ai_mesh_gateway/main.py:6881: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("shutdown")
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+77 tests collected in 1.12s

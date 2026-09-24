@@ -1,0 +1,5 @@
+[2026-09-23 07:30:44 +0000] [10433] [INFO] Application startup complete.
+[2026-09-23 07:30:44 +0000] [10420] [INFO] Control socket listening at /run/user/1001/gunicorn.ctl
+[2026-09-23 07:30:44 +0000] [10435] [INFO] Started server process [10435]
+[2026-09-23 07:30:44 +0000] [10435] [INFO] Waiting for application startup.
+[2026-09-23 07:30:44 +0000] [10435] [INFO] Application startup complete.

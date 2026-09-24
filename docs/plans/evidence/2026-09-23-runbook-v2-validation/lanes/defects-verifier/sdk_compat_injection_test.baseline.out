@@ -1,0 +1,8 @@
+3 failed, 45 deselected in 2.50s
+E               openai.InternalServerError: Error code: 500 - {'error': {'message': 'An internal gateway error occurred.', 'type': 'server_error', 'param': None, 'code': 'gateway_internal_error'}, 'request_id': 'zs-ef617f06d97a'}
+ERROR    gateway:main.py:12039 Unhandled error in proxy_chat
+FAILED ai_mesh_gateway/tests/test_openai_sdk_compat.py::test_blocked_request_raises_api_status_error_with_zeroshield_body
+FAILED ai_mesh_gateway/tests/test_openai_sdk_compat.py::test_blocked_streaming_request_raises_before_sse
+FAILED ai_mesh_gateway/tests/test_openai_sdk_compat.py::test_non_streaming_parses_as_chat_completion
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'ai_mesh_gateway.llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)

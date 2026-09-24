@@ -1,0 +1,3 @@
+compile_plan accepted: strict_withhold
+x-rv-plan-version: a-strict
+content events: 8; first at 4.9 ms, last at 40.6 ms -> content released incrementally while the response was still being generated

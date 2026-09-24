@@ -1,0 +1,14 @@
+{
+ "item": "Instrument honesty: injected 5 ms pre-dispatch delay and 30 ms mid-stream hold visible in the harness metrics",
+ "label": "controller-approved harness build (val-6000-r7)",
+ "status": "harness binaries synthprov 1ee6bb5f, olg d22d2607, analyze.py c9f89fe8 approved by the controller (SP/harness/READY not present)",
+ "code": "final rvproto: RV_GUARD_TOPOLOGY=owner (one guard-owner process, local_cpu PG2-22M, bounded owner queue; 2 HTTP workers over a Unix socket)",
+ "setup": "controller, functional scale: synthprov TTFT 150 ms / ITL 20 ms / sample-mod 1; olg 4 req/s x 60 s (+5 s warm-up), 70% SSE, light corpus (100-170 tokens), org-a key",
+ "analyzer_T_fw_addon_json_p50_ms": {"direct_floor": 0.19, "base": 85.6, "predispatch5": 91.0, "hold30": 85.1},
+ "json_addon_shift_predispatch5_minus_base_ms": {"p10": 5.3, "p25": 5.5, "p50": 5.3, "p75": 4.9, "p90": 2.3},
+ "per_piece_median_lag_ms": {"base": {"46": 106.2, "47": 106.3, "48": 106.2, "49": 106.1},
+                              "predispatch5": {"46": 110.8, "47": 110.8, "48": 110.8, "49": 110.8},
+                              "hold30": {"46": 105.7, "47": 135.4, "48": 115.7, "49": 105.6}},
+ "validity": "all four runs valid=True, 0 schedule drops",
+ "verdict": "PASS: 5 ms delay -> +5.3 ms JSON add-on p50 (+4.9..5.5 over p10-p75) and +4.6 ms per piece; 30 ms hold -> +29.1 ms at the held piece 47"
+}

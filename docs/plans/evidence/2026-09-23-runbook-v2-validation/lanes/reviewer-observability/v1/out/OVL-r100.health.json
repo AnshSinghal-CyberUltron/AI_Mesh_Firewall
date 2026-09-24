@@ -1,0 +1,25 @@
+{
+ "run": "OVL-r100",
+ "probes_total": 1244,
+ "probes_non200_total": 0,
+ "probe_statuses": {
+  "200": 1244
+ },
+ "probe_ms_max": 5244.682,
+ "seconds_with_client_errors": 176,
+ "seconds_errors_ge10_and_all_probes_200": 97,
+ "seconds_errors_ge_ok_and_all_probes_200": 88,
+ "client_errors_in_seconds_where_all_probes_200": 4626,
+ "client_errors_total": 8798,
+ "peak_second": {
+  "t": 136,
+  "ok": 10,
+  "err": 127,
+  "timeout": 45,
+  "http_503": 34,
+  "http_422": 48,
+  "probes": 0,
+  "probe_non200": 0,
+  "probe_max_ms": null
+ }
+}

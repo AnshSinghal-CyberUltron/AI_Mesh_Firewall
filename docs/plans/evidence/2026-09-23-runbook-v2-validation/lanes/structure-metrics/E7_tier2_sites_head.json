@@ -1,0 +1,197 @@
+{
+ "resolver_defs": [
+  [
+   "config.py",
+   365,
+   "resolve_tier2_enabled",
+   "return value is True"
+  ],
+  [
+   "config.py",
+   379,
+   "resolve_rag_tier2_enabled",
+   "return value is True"
+  ],
+  [
+   "config.py",
+   393,
+   "resolve_mcp_tier2_enabled",
+   "return value is True"
+  ],
+  [
+   "config_sync.py",
+   111,
+   "resolve_tier2_enabled",
+   "return value is True"
+  ],
+  [
+   "config_sync.py",
+   131,
+   "resolve_mcp_tier2_enabled",
+   "return value is True"
+  ],
+  [
+   "config_sync.py",
+   151,
+   "resolve_rag_tier2_enabled",
+   "return value is True"
+  ],
+  [
+   "mcp_scan_orchestrator.py",
+   194,
+   "_resolve_mcp_tier2_enabled",
+   "try:\n    from config_sync import resolve_mcp_tier2_enabled\n    return resolve_mc"
+  ],
+  [
+   "mcp_scan_orchestrator.py",
+   216,
+   "_org_tier2_allowed",
+   "return _resolve_mcp_tier2_enabled((enabled_info or {}).get('mcp_tier2_enabled'))"
+  ],
+  [
+   "rag_pipeline/query_stage.py",
+   226,
+   "resolve_rag_tier2_enabled",
+   "return value is True"
+  ]
+ ],
+ "resolver_calls": [
+  [
+   "main.py",
+   1528,
+   "resolve_tier2_enabled",
+   "resolve_tier2_enabled((org_config or {}).get('tier2_enabled'))"
+  ],
+  [
+   "main.py",
+   14150,
+   "resolve_rag_tier2_enabled",
+   "resolve_rag_tier2_enabled(rag_policy.get('rag_tier2_enabled'))"
+  ],
+  [
+   "main.py",
+   14754,
+   "resolve_rag_tier2_enabled",
+   "resolve_rag_tier2_enabled(org_config.get('rag_tier2_enabled'))"
+  ],
+  [
+   "main.py",
+   9114,
+   "resolve_tier2_enabled",
+   "resolve_tier2_enabled(org_tier2_override)"
+  ],
+  [
+   "main.py",
+   14206,
+   "resolve_rag_tier2_enabled",
+   "resolve_rag_tier2_enabled(rag_policy.get('rag_tier2_enabled'))"
+  ],
+  [
+   "mcp_scan_orchestrator.py",
+   225,
+   "_resolve_mcp_tier2_enabled",
+   "_resolve_mcp_tier2_enabled((enabled_info or {}).get('mcp_tier2_enabled'))"
+  ],
+  [
+   "mcp_scan_orchestrator.py",
+   1658,
+   "_org_tier2_allowed",
+   "_org_tier2_allowed(enabled_info)"
+  ],
+  [
+   "mcp_scan_orchestrator.py",
+   207,
+   "resolve_mcp_tier2_enabled",
+   "resolve_mcp_tier2_enabled(value)"
+  ],
+  [
+   "mcp_scan_orchestrator.py",
+   211,
+   "resolve_mcp_tier2_enabled",
+   "resolve_mcp_tier2_enabled(value)"
+  ],
+  [
+   "rag_pipeline/query_stage.py",
+   228,
+   "resolve_rag_tier2_enabled",
+   "resolve_rag_tier2_enabled(inp.policy.get('rag_tier2_enabled'))"
+  ]
+ ],
+ "tier2_invocation_sites": [
+  [
+   "main.py",
+   9221,
+   "scan_prompt_with_tier2",
+   "org_tier2_override=org_tier2_override"
+  ],
+  [
+   "main.py",
+   14822,
+   "scan_prompt_with_tier2",
+   "org_tier2_override=True"
+  ],
+  [
+   "main.py",
+   14208,
+   "scan_prompt_with_tier2",
+   "org_tier2_override=True"
+  ],
+  [
+   "mcp_scan_orchestrator.py",
+   1267,
+   "scan_prompt_with_tier2",
+   "org_tier2_override=org_tier2_override"
+  ],
+  [
+   "output_guard.py",
+   1012,
+   "scan_output_with_tier2",
+   "org_tier2_override=cfg.get('tier2_enabled')"
+  ],
+  [
+   "rag_pipeline/query_stage.py",
+   229,
+   "getattr->scan_prompt_with_tier2",
+   "dynamic lookup (called later)"
+  ]
+ ],
+ "other_gates": [
+  [
+   "mcp_scan_orchestrator.py",
+   1649,
+   "tier2_ctrl.get('enabled', False)"
+  ],
+  [
+   "mcp_scan_orchestrator.py",
+   1454,
+   "tier2_ctrl.get('enabled', False)"
+  ],
+  [
+   "output_guard.py",
+   1010,
+   "_enabled('output_tier2_enabled', True)"
+  ],
+  [
+   "scanner.py",
+   1137,
+   "os.getenv('ENABLE_TIER2', 'true')"
+  ],
+  [
+   "scanner.py",
+   2221,
+   "if org_tier2_override is None and not self.tier2_enabled:"
+  ],
+  [
+   "scanner.py",
+   2574,
+   "if org_tier2_override is None and not self.tier2_enabled:"
+  ]
+ ],
+ "counts": {
+  "resolver_defs": 9,
+  "resolver_calls": 10,
+  "invocation_sites_direct": 5,
+  "invocation_sites_incl_getattr": 6,
+  "other_gates": 6
+ }
+}

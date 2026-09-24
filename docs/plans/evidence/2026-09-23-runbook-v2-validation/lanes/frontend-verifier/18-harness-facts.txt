@@ -1,0 +1,21 @@
+# surfaces.json counts at HEAD and e95f974d
+HEAD surfaces=12 themes=2 widths=4 [1440,1024,768,375] combos=96 auth=11 public=1
+e95f974d surfaces=12 themes=2 widths=4 [1440,1024,768,375] combos=96 auth=11 public=1
+
+# CI references to the visual harness / playwright
+chat-pipeline-golden.yml
+gateway-v2.yml
+none
+
+# harness token path
+if [ -z "${VISUAL_TOKEN:-}" ]; then
+  echo "Minting JWT from ${CONTROL_CTR}..."
+  VISUAL_TOKEN="$(docker exec "${CONTROL_CTR}" python manage.py shell -c "
+from django.contrib.auth import get_user_model
+from rest_framework_simplejwt.tokens import RefreshToken
+U=get_user_model()
+u=U.objects.filter(is_superuser=True).first() or U.objects.first()
+print(RefreshToken.for_user(u).access_token)" 2>/dev/null | tail -1)"
+  export VISUAL_TOKEN
+fi
+119:    "rest_framework_simplejwt.token_blacklist",

@@ -1,0 +1,55 @@
+== M/D/1 GPU stage sojourn (service = 4.50 ms deterministic, Poisson arrivals) ==
+  rho=0.2  RPS/L4=  22.2 (2 win/req)  p50=  4.50  p95=  8.36  p99= 10.92  p99.9= 14.62 ms
+  rho=0.3  RPS/L4=  33.3 (2 win/req)  p50=  4.50  p95=  9.29  p99= 13.01  p99.9= 18.08 ms
+  rho=0.4  RPS/L4=  44.4 (2 win/req)  p50=  4.50  p95= 11.42  p99= 15.82  p99.9= 21.89 ms
+  rho=0.5  RPS/L4=  55.6 (2 win/req)  p50=  4.52  p95= 13.76  p99= 19.61  p99.9= 28.16 ms
+  rho=0.6  RPS/L4=  66.7 (2 win/req)  p50=  6.17  p95= 17.15  p99= 24.89  p99.9= 36.29 ms
+  rho=0.7  RPS/L4=  77.8 (2 win/req)  p50=  7.74  p95= 22.62  p99= 33.25  p99.9= 48.01 ms
+  rho=0.8  RPS/L4=  88.9 (2 win/req)  p50= 10.20  p95= 34.02  p99= 50.74  p99.9= 72.36 ms
+
+== Posture A: 100% semantic coverage, 2x512-token windows/request, L4 batch-2 ==
+   L4 batch-2 service 4.50 ms -> 444 seq/s -> 222 req/s/L4 at 100%; utilisation cap 60% -> 133 RPS/L4
+  8 x g2-standard-4    RPS= 1064 compute=$ 1933.63 egress+LB=$ 460.46 (   4197 GiB) floor=$540.36 TOTAL=$ 2934.44 headroom=$ 2065.56
+  8 x g2-standard-8    RPS= 1064 compute=$ 2335.20 egress+LB=$ 460.46 (   4197 GiB) floor=$540.36 TOTAL=$ 3336.01 headroom=$ 1663.99
+  8 x g2-standard-16   RPS= 1064 compute=$ 3138.33 egress+LB=$ 460.46 (   4197 GiB) floor=$540.36 TOTAL=$ 4139.15 headroom=$  860.85
+
+== Posture A': L4 quota lifted -- how many g2-standard-4 fit $5,000? ==
+  n=10 RPS= 1330 compute=$ 2417.03 egress+LB=$ 579.82 TOTAL=$ 3537.21  <= FITS
+  n=11 RPS= 1463 compute=$ 2658.74 egress+LB=$ 639.50 TOTAL=$ 3838.60  <= FITS
+  n=12 RPS= 1596 compute=$ 2900.44 egress+LB=$ 699.18 TOTAL=$ 4139.99  <= FITS
+  n=13 RPS= 1729 compute=$ 3142.15 egress+LB=$ 758.86 TOTAL=$ 4441.37  <= FITS
+  n=14 RPS= 1862 compute=$ 3383.85 egress+LB=$ 818.55 TOTAL=$ 4742.76  <= FITS
+  n=15 RPS= 1995 compute=$ 3625.55 egress+LB=$ 878.23 TOTAL=$ 5044.14
+  n=16 RPS= 2128 compute=$ 3867.26 egress+LB=$ 937.91 TOTAL=$ 5345.53
+  n=17 RPS= 2261 compute=$ 4108.96 egress+LB=$ 997.59 TOTAL=$ 5646.91
+  n=18 RPS= 2394 compute=$ 4350.66 egress+LB=$1057.27 TOTAL=$ 5948.30
+  n=19 RPS= 2527 compute=$ 4592.37 egress+LB=$1116.96 TOTAL=$ 6249.68
+
+== Same, but BYOK provider OUT of region (prompt leg billable) ==
+  n= 8 RPS= 1064 compute=$ 1933.63 egress+LB=$1131.26 TOTAL=$ 3605.24 FITS
+  n=12 RPS= 1596 compute=$ 2900.44 egress+LB=$1602.98 TOTAL=$ 5043.78 OVER
+  n=14 RPS= 1862 compute=$ 3383.85 egress+LB=$1838.85 TOTAL=$ 5763.06 OVER
+
+== Marginal $/RPS-month ==
+  at   500 RPS: marginal egress+LB = $0.4487/RPS-mo ; node share (g2-std-4/133) = $1.8173
+  at  1064 RPS: marginal egress+LB = $0.4487/RPS-mo ; node share (g2-std-4/133) = $1.8173
+  at  1862 RPS: marginal egress+LB = $0.4487/RPS-mo ; node share (g2-std-4/133) = $1.8173
+  at  4000 RPS: marginal egress+LB = $0.3698/RPS-mo ; node share (g2-std-4/133) = $1.8173
+  at  7812 RPS: marginal egress+LB = $0.3698/RPS-mo ; node share (g2-std-4/133) = $1.8173
+
+== CPU per request, rewritten hot path, 4096-char prompt / 400-token answer ==
+    0.150 ms  framework+http+orjson parse [I]
+    0.020 ms  1 pure-ASGI middleware [D from M]
+    0.160 ms  non-classifier stages [M]
+    0.280 ms  Tier-1 input native+dict filter [D from M]
+    0.864 ms  tokenize 4096 ch [M this session]
+    0.300 ms  Tier-1 output scan, 8 coalesced chunks [D]
+    0.155 ms  gzip-6 flush per answer [M]
+    0.240 ms  SSE frame build orjson [M]
+    2.169 ms TOTAL -> 461 RPS/vCPU at 100% CPU, 277 at 60% cap  [D]
+   GPU-bound check: 8 x g2-standard-8 = 64 vCPU x 277 = 17706 RPS of CPU capacity vs 1064 RPS of GPU capacity
+   => CPU would have to be 16.6x worse than this estimate before it binds instead of the GPU
+   T_hold= 1s ->   133 in-flight streams/node x 2 MB cap [M] = 0.26 GB (g2-standard-8 has 32 GB)
+   T_hold= 5s ->   665 in-flight streams/node x 2 MB cap [M] = 1.30 GB (g2-standard-8 has 32 GB)
+   T_hold=10s ->  1330 in-flight streams/node x 2 MB cap [M] = 2.60 GB (g2-standard-8 has 32 GB)
+   T_hold=20s ->  2660 in-flight streams/node x 2 MB cap [M] = 5.20 GB (g2-standard-8 has 32 GB)

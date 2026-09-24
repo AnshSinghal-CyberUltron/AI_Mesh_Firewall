@@ -1,0 +1,8 @@
+offered RPS GPU util 503 shed %  by bound
+         25     4.4%     0.545%  {'inflight': 0, 'input_queue': 1, 'guard_queue': 81, 'owner': 0}
+         50     8.8%     1.104%  {'inflight': 0, 'input_queue': 1, 'guard_queue': 329, 'owner': 0}
+        100    17.5%     2.192%  {'inflight': 0, 'input_queue': 12, 'guard_queue': 1292, 'owner': 2}
+        150    26.3%     3.409%  {'inflight': 0, 'input_queue': 59, 'guard_queue': 2989, 'owner': 8}
+        200    35.0%     4.830%  {'inflight': 0, 'input_queue': 136, 'guard_queue': 5613, 'owner': 34}
+        300    52.5%     7.802%  {'inflight': 0, 'input_queue': 428, 'guard_queue': 13364, 'owner': 205}
+        400    70.1%    11.832%  {'inflight': 0, 'input_queue': 1162, 'guard_queue': 26383, 'owner': 830}

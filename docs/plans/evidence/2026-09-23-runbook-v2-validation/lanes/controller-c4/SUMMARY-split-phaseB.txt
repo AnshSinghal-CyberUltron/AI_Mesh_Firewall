@@ -1,0 +1,14 @@
+s1b-191         gws=1 guards=1 n= 56304 inf=   0 C4 p99= 15.610 (sse  15.960 json  12.700) p99.9= 17.871 extra p99= 6.009
+s2b-298         gws=1 guards=2 n= 87815 inf=   0 C4 p99= 17.943 (sse  18.599 json  14.211) p99.9= 25.740 extra p99= 7.355
+s2b-298-r2      gws=1 guards=2 n= 87804 inf=   0 C4 p99= 18.860 (sse  19.540 json  14.544) p99.9= 28.051 extra p99= 8.179
+s2b-298-r3      gws=1 guards=2 n= 87787 inf=   0 C4 p99= 18.962 (sse  19.787 json  14.512) p99.9= 30.718 extra p99= 8.378
+s2b-373         gws=1 guards=2 n=109933 inf=   0 C4 p99= 21.611 (sse  22.443 json  17.183) p99.9= 32.891 extra p99= 8.924
+s2b-373-nodump  gws=1 guards=2 n=109905 inf=   0 C4 p99= 20.946 (sse  22.410 json  16.724) p99.9= 37.725 extra p99= 8.676
+s3b-298         gws=2 guards=2 n= 87788 inf=   0 C4 p99= 18.132 (sse  18.754 json  15.511) p99.9= 24.196 extra p99= 5.715
+s3b-298-r2      gws=2 guards=2 n= 87813 inf=   0 C4 p99= 18.422 (sse  19.033 json  15.556) p99.9= 24.534 extra p99= 5.989
+s3b-298-r3      gws=2 guards=2 n= 87798 inf=   0 C4 p99= 18.133 (sse  18.630 json  15.463) p99.9= 22.302 extra p99= 5.638
+s3b-373         gws=2 guards=2 n=109968 inf=  12 C4 p99= 21.736 (sse  22.300 json  19.205) p99.9= 27.592 extra p99= 5.980
+Traceback (most recent call last):
+  File "<stdin>", line 8, in <module>
+KeyError: 'n_inf'
+s5b-728         gws=3 guards=5 n=214528 inf=  36 C4 p99= 23.503 (sse  24.779 json  19.407) p99.9= 32.712 extra p99= 9.585

@@ -1,0 +1,9 @@
+RUN @ 1790140262 commit c1196b9692: bucket=UNEXPECTED sig=disp:allow->redact|tx:->mask
+ENTRY commit 2628961a3e created at wall time 1790140264 (> run 1790140262)
+  git %ct (committer) = 1790136662   git %at (author) = 1790136662   JSON field = 1790136662
+  is entry commit an ancestor of the run commit?  False
+  [CI wiring as shipped (git_commit_time=None, classify() default)] -> bucket=EXPECTED rule=P8-BACKTICK   ACCEPTED (post-hoc entry excused)
+  [git_commit_time from `git log -1 --format=%ct`] -> bucket=EXPECTED rule=P8-BACKTICK   ACCEPTED (post-hoc entry excused)
+  [git_commit_time from `git log -1 --format=%at`] -> bucket=EXPECTED rule=P8-BACKTICK   ACCEPTED (post-hoc entry excused)
+2628961 ct=1790136662 at=1790136662 post-hoc ledger entry
+c1196b9 ct=1790140262 at=1790140262 empty ledger

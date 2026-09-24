@@ -1,0 +1,8 @@
+run           T_fw_addon_json                | T_addon_first                  | T_fw_addon_sse                 | T_release_lag_max              | valid drops qualified/offered errors
+direct        p50=0.2 p90=0.2 max=0.3        | p50=0.2 p90=0.2 max=0.3        | p50=0.2 p90=0.3 max=0.3        | p50=0.2 p90=0.2 max=0.3        | True 0 240/240 0 {}
+base          p50=83.4 p90=87.0 max=95.1     | p50=84.2 p90=88.5 max=107.6    | p50=123.0 p90=128.4 max=153.3  | p50=88.5 p90=127.1 max=153.3   | True 0 238/240 2 {'http_403': 2, 'incomplete': 2, 'unjoined': 2, 'disposition_BLOCK': 2, 'stage_dispatch_S': 2, 'stage_out_S': 2}
+predispatch5  p50=89.4 p90=92.8 max=113.1    | p50=89.6 p90=93.8 max=113.7    | p50=115.2 p90=132.4 max=153.6  | p50=95.8 p90=132.0 max=153.6   | True 0 238/240 2 {'http_403': 2, 'incomplete': 2, 'unjoined': 2, 'disposition_BLOCK': 2, 'stage_dispatch_S': 2, 'stage_out_S': 2}
+hold30        p50=83.6 p90=89.3 max=103.8    | p50=84.4 p90=88.8 max=107.3    | p50=134.4 p90=140.9 max=156.2  | p50=101.8 p90=138.9 max=156.2  | True 0 240/240 0 {}
+base internal: t_input p50 83.36 | release_processing max 0.23 | holdback_wait p50 20.05 | loop_lag p99 2.64
+predispatch5 internal: t_input p50 88.6 | release_processing max 0.22 | holdback_wait p50 20.05 | loop_lag p99 2.87
+hold30 internal: t_input p50 83.36 | release_processing max 31.07 | holdback_wait p50 20.05 | loop_lag p99 2.64

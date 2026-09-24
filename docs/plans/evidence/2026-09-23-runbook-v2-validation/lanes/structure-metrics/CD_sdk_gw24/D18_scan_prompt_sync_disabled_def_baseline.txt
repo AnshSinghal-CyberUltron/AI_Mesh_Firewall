@@ -1,0 +1,55 @@
+## 'builtin_default' anywhere in python at 2a657fad
+2a657fad:gateway/ai_mesh_gateway/scanner.py:1282:    def _scan_prompt_sync_disabled_builtin_default(
+2a657fad:gateway/ai_mesh_gateway/tests/test_pipeline_obfuscation_fp.py:31:# reference body ``_scan_prompt_sync_disabled_builtin_default``. Drive the tests through that
+2a657fad:gateway/ai_mesh_gateway/tests/test_pipeline_obfuscation_fp.py:35:    return _SCANNER._scan_prompt_sync_disabled_builtin_default(text, False, None).action
+2a657fad:gateway/ai_mesh_gateway/tests/test_pipeline_obfuscation_fp.py:39:    return _SCANNER._scan_prompt_sync_disabled_builtin_default(text, False, None).threat_type
+2a657fad:gateway/ai_mesh_gateway/tests/test_policy_driven_engine_retention.py:259:    def test_malformed_rule_only_org_is_passthrough_no_builtin_default(self):
+## scanner.py 1255-1300 (definition context)
+  1255	                true_pii_keys.append(key)
+  1256	        secret_keys.extend(secret_matched.keys())
+  1257	        secret_keys.extend(cred_matched.keys())
+  1258	        # Preserve first-seen order, drop dupes from overlapping dicts.
+  1259	        seen: set[str] = set()
+  1260	        secret_keys = [k for k in secret_keys if not (k in seen or seen.add(k))]
+  1261	
+  1262	        if secret_keys:
+  1263	            return ScanVerdict(
+  1264	                action="redact",
+  1265	                threat_type="secret",
+  1266	                confidence=0.9,
+  1267	                detail=f"Secret/credential detected: {', '.join(secret_keys)}",
+  1268	                matched_patterns=secret_keys,
+  1269	                tier="tier_1",
+  1270	            )
+  1271	        if true_pii_keys and pii_detection_enabled:
+  1272	            return ScanVerdict(
+  1273	                action="redact",
+  1274	                threat_type="pii",
+  1275	                confidence=0.85,
+  1276	                detail=f"PII detected in prompt: {', '.join(true_pii_keys)}",
+  1277	                matched_patterns=true_pii_keys,
+  1278	                tier="tier_1",
+  1279	            )
+  1280	        return ScanVerdict()
+  1281	
+  1282	    def _scan_prompt_sync_disabled_builtin_default(
+  1283	        self,
+  1284	        text: str,
+  1285	        is_rag: bool,
+  1286	        toxicity_threshold: float | None = None,
+  1287	        _multiturn: bool = True,
+  1288	    ) -> ScanVerdict:
+  1289	        """RETAINED-DISABLED reference of the former built-in default scan.
+  1290	
+  1291	        This is the pre-cutover automatic-detection body, kept ONLY as an
+  1292	        internal reference of the pattern-matching mechanics the retained engine
+  1293	        (``compile_pattern`` / ``redact_all`` / deobfuscation helpers) can still
+  1294	        execute. It is NOT called by ``scan_prompt`` / ``_scan_prompt_sync`` and
+  1295	        therefore emits no default verdict on the live path.
+  1296	        """
+  1297	        if not text:
+  1298	            return ScanVerdict(
+  1299	                action="allow",
+  1300	                threat_type="none",
+## defined as method of class InputScanner lines 1282 - 1675 ( 394 lines )
+## AST references in scanner.py other than the def: []

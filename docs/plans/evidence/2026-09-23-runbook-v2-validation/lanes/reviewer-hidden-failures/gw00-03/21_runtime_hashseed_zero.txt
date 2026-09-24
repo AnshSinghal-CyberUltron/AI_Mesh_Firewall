@@ -1,0 +1,21 @@
+Dockerfile ENV block:
+ARG SOURCE_DATE_EPOCH=1704067200
+ENV SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH} \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONHASHSEED=0 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_ROOT_USER_ACTION=ignore \
+    TZ=UTC \
+    LC_ALL=C.UTF-8 \
+    PYTHONPATH=/opt/gateway_v2:/opt/shared
+
+existing team image ai-mesh-gateway-v2:gw00 runtime env (docker image inspect, read-only):
+
+effect inside interpreter when PYTHONHASHSEED=0 (host python, same semantics):
+hash_randomization flag = 0 | hash("org-123") = -4249961281582646888
+second process hash("org-123") = -4249961281582646888 (identical across processes/hosts -> predictable)
+default: hash_randomization flag = 1
+
+HEAD image (built from git archive HEAD, tag hfreview-gw00:head):
+PYTHONHASHSEED=0
+in-container sys.flags.hash_randomization = 0 | hash("org-123") = -4249961281582646888

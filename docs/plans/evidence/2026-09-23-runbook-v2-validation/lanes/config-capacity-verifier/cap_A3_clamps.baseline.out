@@ -1,0 +1,9 @@
+detect() fake host 8 CPU / 16 GiB -> cpu_source=cgroup-v2 mem_source=cgroup-v2 workers=8 asgi_threads=16 scanner_pool=8 vault_pool=4 redis_pool=64 bedrock_pool=10000
+detect() fake host 16 CPU / 64 GiB -> cpu_source=cgroup-v2 mem_source=cgroup-v2 workers=16 asgi_threads=32 scanner_pool=16 vault_pool=8 redis_pool=128 bedrock_pool=10000
+detect() fake host 64 CPU / 256 GiB -> cpu_source=cgroup-v2 mem_source=cgroup-v2 workers=64 asgi_threads=32 scanner_pool=16 vault_pool=8 redis_pool=128 bedrock_pool=8192
+detect() fake host 192 CPU / 1024 GiB -> cpu_source=cgroup-v2 mem_source=cgroup-v2 workers=192 asgi_threads=32 scanner_pool=16 vault_pool=8 redis_pool=128 bedrock_pool=2730
+
+compute_sizing(64 cpu, 256 GiB, nofile=1048576) -> {"workers": 64, "asgi_threads": 32, "scanner_pool": 16, "vault_pool": 8, "redis_pool": 128, "bedrock_pool": 10000, "pg_max_conns": 2162}
+compute_sizing(192 cpu, 1024 GiB, nofile=1048576) -> {"workers": 192, "asgi_threads": 32, "scanner_pool": 16, "vault_pool": 8, "redis_pool": 128, "bedrock_pool": 5461, "pg_max_conns": 6386}
+
+env knobs read by detect(): ['ASGI_DB_THREADS', 'PER_WORKER_RSS_MB', 'PG_CONN_MARGIN', 'RESOURCE_BUDGET_CPUS', 'RESOURCE_BUDGET_MEM_GB', 'RESOURCE_HEADROOM']

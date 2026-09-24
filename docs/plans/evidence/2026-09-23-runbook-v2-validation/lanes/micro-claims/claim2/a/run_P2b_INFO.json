@@ -1,0 +1,1858 @@
+{
+ "profile": "P2b",
+ "level": "INFO",
+ "scenarios": {
+  "s1_benign_nonstream": {
+   "emits_per_request": {
+    "n": 20,
+    "min": 3,
+    "median": 3.0,
+    "max": 3,
+    "mean": 3
+   },
+   "gateway_pub_per_request": {
+    "n": 20,
+    "min": 3,
+    "median": 3.0,
+    "max": 3,
+    "mean": 3
+   },
+   "bedrock_pub_per_request": {
+    "n": 20,
+    "min": 0,
+    "median": 0.0,
+    "max": 0,
+    "mean": 0
+   },
+   "non_debug_emits_per_request": {
+    "n": 20,
+    "min": 3,
+    "median": 3.0,
+    "max": 3,
+    "mean": 3
+   },
+   "per_request_counts_measured": [
+    3,
+    3,
+    3,
+    3,
+    3,
+    3,
+    3,
+    3,
+    3,
+    3,
+    3,
+    3,
+    3,
+    3,
+    3,
+    3,
+    3,
+    3,
+    3,
+    3
+   ],
+   "per_request_counts_warmup": [
+    3,
+    3,
+    3,
+    3,
+    3
+   ],
+   "payload_bytes_per_request": {
+    "n": 20,
+    "min": 797,
+    "median": 797.0,
+    "max": 797,
+    "mean": 797
+   },
+   "unpublished_emits_total": 0,
+   "by_level_mean_per_req": {
+    "INFO": 3.0
+   },
+   "by_logger_level_mean_per_req": {
+    "gateway|INFO": 2.0,
+    "gateway.rate_limiter|INFO": 1.0
+   },
+   "by_src_mean_per_req": {
+    "rate_limiter.py:111|gateway.rate_limiter|INFO": 1.0,
+    "main.py:10105|gateway|INFO": 1.0,
+    "main.py:11594|gateway|INFO": 1.0
+   },
+   "attribution_modes": {
+    "ctx": 60
+   },
+   "root_stream_per_request": {
+    "n": 20,
+    "min": 3,
+    "median": 3.0,
+    "max": 3,
+    "mean": 3
+   },
+   "root_stream_gateway_family_per_request": {
+    "n": 20,
+    "min": 3,
+    "median": 3.0,
+    "max": 3,
+    "mean": 3
+   },
+   "root_stream_other_loggers": {},
+   "statuses": {
+    "200": 20
+   },
+   "actions": {
+    "allow": 20
+   },
+   "codes": {},
+   "upstream_saw_raw_email": {
+    "False": 20
+   },
+   "exceptions": []
+  },
+  "s2_benign_stream": {
+   "emits_per_request": {
+    "n": 20,
+    "min": 2,
+    "median": 2.0,
+    "max": 2,
+    "mean": 2
+   },
+   "gateway_pub_per_request": {
+    "n": 20,
+    "min": 2,
+    "median": 2.0,
+    "max": 2,
+    "mean": 2
+   },
+   "bedrock_pub_per_request": {
+    "n": 20,
+    "min": 0,
+    "median": 0.0,
+    "max": 0,
+    "mean": 0
+   },
+   "non_debug_emits_per_request": {
+    "n": 20,
+    "min": 2,
+    "median": 2.0,
+    "max": 2,
+    "mean": 2
+   },
+   "per_request_counts_measured": [
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2
+   ],
+   "per_request_counts_warmup": [
+    2,
+    2,
+    2,
+    2,
+    2
+   ],
+   "payload_bytes_per_request": {
+    "n": 20,
+    "min": 538,
+    "median": 538.0,
+    "max": 538,
+    "mean": 538
+   },
+   "unpublished_emits_total": 0,
+   "by_level_mean_per_req": {
+    "INFO": 2.0
+   },
+   "by_logger_level_mean_per_req": {
+    "gateway.rate_limiter|INFO": 1.0,
+    "gateway|INFO": 1.0
+   },
+   "by_src_mean_per_req": {
+    "rate_limiter.py:111|gateway.rate_limiter|INFO": 1.0,
+    "main.py:10105|gateway|INFO": 1.0
+   },
+   "attribution_modes": {
+    "ctx": 40
+   },
+   "root_stream_per_request": {
+    "n": 20,
+    "min": 2,
+    "median": 2.0,
+    "max": 2,
+    "mean": 2
+   },
+   "root_stream_gateway_family_per_request": {
+    "n": 20,
+    "min": 2,
+    "median": 2.0,
+    "max": 2,
+    "mean": 2
+   },
+   "root_stream_other_loggers": {},
+   "statuses": {
+    "200": 20
+   },
+   "actions": {
+    "allow": 20
+   },
+   "codes": {},
+   "upstream_saw_raw_email": {
+    "False": 20
+   },
+   "exceptions": []
+  },
+  "s3_pii_nonstream": {
+   "emits_per_request": {
+    "n": 20,
+    "min": 4,
+    "median": 4.0,
+    "max": 4,
+    "mean": 4
+   },
+   "gateway_pub_per_request": {
+    "n": 20,
+    "min": 4,
+    "median": 4.0,
+    "max": 4,
+    "mean": 4
+   },
+   "bedrock_pub_per_request": {
+    "n": 20,
+    "min": 0,
+    "median": 0.0,
+    "max": 0,
+    "mean": 0
+   },
+   "non_debug_emits_per_request": {
+    "n": 20,
+    "min": 4,
+    "median": 4.0,
+    "max": 4,
+    "mean": 4
+   },
+   "per_request_counts_measured": [
+    4,
+    4,
+    4,
+    4,
+    4,
+    4,
+    4,
+    4,
+    4,
+    4,
+    4,
+    4,
+    4,
+    4,
+    4,
+    4,
+    4,
+    4,
+    4,
+    4
+   ],
+   "per_request_counts_warmup": [
+    4,
+    4,
+    4,
+    4,
+    4
+   ],
+   "payload_bytes_per_request": {
+    "n": 20,
+    "min": 1006,
+    "median": 1006.0,
+    "max": 1006,
+    "mean": 1006
+   },
+   "unpublished_emits_total": 0,
+   "by_level_mean_per_req": {
+    "INFO": 4.0
+   },
+   "by_logger_level_mean_per_req": {
+    "gateway|INFO": 3.0,
+    "gateway.rate_limiter|INFO": 1.0
+   },
+   "by_src_mean_per_req": {
+    "rate_limiter.py:111|gateway.rate_limiter|INFO": 1.0,
+    "main.py:9549|gateway|INFO": 1.0,
+    "main.py:10105|gateway|INFO": 1.0,
+    "main.py:11594|gateway|INFO": 1.0
+   },
+   "attribution_modes": {
+    "ctx": 80
+   },
+   "root_stream_per_request": {
+    "n": 20,
+    "min": 4,
+    "median": 4.0,
+    "max": 4,
+    "mean": 4
+   },
+   "root_stream_gateway_family_per_request": {
+    "n": 20,
+    "min": 4,
+    "median": 4.0,
+    "max": 4,
+    "mean": 4
+   },
+   "root_stream_other_loggers": {},
+   "statuses": {
+    "200": 20
+   },
+   "actions": {
+    "redact": 20
+   },
+   "codes": {},
+   "upstream_saw_raw_email": {
+    "False": 20
+   },
+   "exceptions": []
+  },
+  "s4_injection_block": {
+   "emits_per_request": {
+    "n": 20,
+    "min": 2,
+    "median": 2.0,
+    "max": 2,
+    "mean": 2
+   },
+   "gateway_pub_per_request": {
+    "n": 20,
+    "min": 2,
+    "median": 2.0,
+    "max": 2,
+    "mean": 2
+   },
+   "bedrock_pub_per_request": {
+    "n": 20,
+    "min": 0,
+    "median": 0.0,
+    "max": 0,
+    "mean": 0
+   },
+   "non_debug_emits_per_request": {
+    "n": 20,
+    "min": 2,
+    "median": 2.0,
+    "max": 2,
+    "mean": 2
+   },
+   "per_request_counts_measured": [
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2
+   ],
+   "per_request_counts_warmup": [
+    2,
+    2,
+    2,
+    2,
+    2
+   ],
+   "payload_bytes_per_request": {
+    "n": 20,
+    "min": 470,
+    "median": 470.0,
+    "max": 470,
+    "mean": 470
+   },
+   "unpublished_emits_total": 0,
+   "by_level_mean_per_req": {
+    "INFO": 1.0,
+    "WARNING": 1.0
+   },
+   "by_logger_level_mean_per_req": {
+    "gateway.rate_limiter|INFO": 1.0,
+    "gateway|WARNING": 1.0
+   },
+   "by_src_mean_per_req": {
+    "rate_limiter.py:111|gateway.rate_limiter|INFO": 1.0,
+    "main.py:1046|gateway|WARNING": 1.0
+   },
+   "attribution_modes": {
+    "ctx": 40
+   },
+   "root_stream_per_request": {
+    "n": 20,
+    "min": 2,
+    "median": 2.0,
+    "max": 2,
+    "mean": 2
+   },
+   "root_stream_gateway_family_per_request": {
+    "n": 20,
+    "min": 2,
+    "median": 2.0,
+    "max": 2,
+    "mean": 2
+   },
+   "root_stream_other_loggers": {},
+   "statuses": {
+    "400": 20
+   },
+   "actions": {
+    "blocked": 20
+   },
+   "codes": {
+    "content_blocked/content_filter": 20
+   },
+   "upstream_saw_raw_email": {
+    "None": 20
+   },
+   "exceptions": []
+  }
+ },
+ "one_time": {
+  "publisher_emits_by_phase_outside_requests": {
+   "startup": 12,
+   "shutdown": 5
+  },
+  "startup_publisher_emits_by_logger_level": {
+   "gateway|INFO": 10,
+   "gateway|WARNING": 1,
+   "gateway.policy_sync|INFO": 1
+  },
+  "first_request_of_process": {
+   "key": [
+    "s1_benign_nonstream",
+    "warmup",
+    0
+   ],
+   "emits": 3,
+   "s1_measured_median": 3.0,
+   "srcs_not_seen_in_s1_steady_state": []
+  },
+  "background_during_run": {
+   "count": 0,
+   "by_logger_level_src": {}
+  },
+  "records_created_during_import_by_logger_level": {}
+ },
+ "cell": "P2b_INFO",
+ "env_set_by_harness": {
+  "GATEWAY_REDIS_URL": "redis://claim2a-fakeredis.invalid:6379/0",
+  "BEDROCK_LOG_DIR": "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/micro-claims/claim2/a/bedrock_logdir_P2b_INFO",
+  "AWS_EC2_METADATA_DISABLED": "true",
+  "AWS_SHARED_CREDENTIALS_FILE": "/dev/null",
+  "AWS_CONFIG_FILE": "/dev/null",
+  "AWS_DEFAULT_REGION": "ap-south-1",
+  "TIER2_PROVIDER": "bedrock",
+  "LITELLM_LOCAL_MODEL_COST_MAP": "True",
+  "PYTHON_DOTENV_DISABLED": "1",
+  "ENABLE_TIER2": "false",
+  "POLICY_SIGNING_KEY": "<ephemeral random per run; value not recorded>"
+ },
+ "env_names_present_not_set_by_harness": [],
+ "lua_support": "lupa 2.8 /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/micro-claims/claim2/a/pydeps/lupa/__init__.py",
+ "baseline_import_shim": [
+  "llm_router (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py): injected looks_like_display_alias, looks_like_provider_model_id, catalog_row_is_display_alias",
+  "ai_mesh_gateway.llm_router (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py): injected looks_like_display_alias, looks_like_provider_model_id, catalog_row_is_display_alias"
+ ],
+ "provenance": {
+  "main_py": "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py",
+  "redis_log_handler_py": "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/shared/ai_mesh_shared/redis_log_handler.py",
+  "modules_from_baseline": 26,
+  "modules_from_LIVE_repo_tree": []
+ },
+ "provenance_end_of_run": {
+  "main_py": "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py",
+  "redis_log_handler_py": "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/shared/ai_mesh_shared/redis_log_handler.py",
+  "modules_from_baseline": 99,
+  "modules_from_LIVE_repo_tree": []
+ },
+ "publisher_instrumentation": {
+  "module_file": "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/shared/ai_mesh_shared/redis_log_handler.py",
+  "orig_emit_qualname": "RedisLogPublisher.emit"
+ },
+ "root_handler": {
+  "root_level": "INFO",
+  "handler_level": "NOTSET",
+  "format": "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+ },
+ "gateway_setLevel_calls": [
+  {
+   "requested": "DEBUG",
+   "applied": "INFO",
+   "phase": "startup"
+  }
+ ],
+ "singletons": {
+  "CONFIG_SYNC": "config_sync.ConfigSync",
+  "LLM_ROUTER": "llm_router.LLMRouter",
+  "POLICY_SYNC": "policy_sync.PolicySync",
+  "RATE_LIMITER": "rate_limiter.RateLimiter",
+  "INPUT_SCANNER": "scanner.InputScanner",
+  "REDIS_CLIENT": "redis.asyncio.client.Redis",
+  "TELEMETRY": "telemetry.TelemetryProducer",
+  "OUTPUT_GUARD": "output_guard.OutputGuard",
+  "CIRCUIT_BREAKER": "circuit_breaker.CircuitBreaker",
+  "BEDROCK_EMBEDDER": "rag_pipeline.bedrock_embedder.BedrockEmbedder",
+  "GROUNDING_GUARD": "rag_pipeline.grounding_guard.GroundingGuard",
+  "RAG_PIPELINE": "builtins.NoneType",
+  "AGENT_ID": "builtins.NoneType",
+  "_emit_telemetry": "_emit_telemetry",
+  "_audit_fire_and_forget": "_audit_fire_and_forget",
+  "POLICY_SYNC.is_loaded": true,
+  "POLICY_SYNC.policy_count": 2,
+  "OUTPUT_GUARD.grounding_guard": "GroundingGuard",
+  "LLM_ROUTER._execute_completion": "STUB _p2_execute_completion",
+  "REDIS_CLIENT.pool.connection_class": "FakeAsyncRedisConnection",
+  "CONFIG.subset": {
+   "redis_url": "redis://claim2a-fakeredis.invalid:6379/0",
+   "backend_url": "",
+   "tier2_enabled": null,
+   "enforcement_mode": null,
+   "kill_switch_enabled": true,
+   "policy_cache_enabled": true,
+   "telemetry_enabled": true,
+   "output_guard_enabled": true,
+   "circuit_breaker_enabled": true,
+   "rag_enabled": false,
+   "routing_enabled": null,
+   "stream_preflight_fail_closed": true
+  }
+ },
+ "logger_state": {
+  "gateway": {
+   "level": "INFO",
+   "effective": "INFO",
+   "propagate": true,
+   "handlers": [
+    "RedisLogPublisher(level=NOTSET)"
+   ]
+  },
+  "bedrock": {
+   "level": "DEBUG",
+   "effective": "DEBUG",
+   "propagate": false,
+   "handlers": [
+    "RotatingFileHandler(level=DEBUG)",
+    "StreamHandler(level=DEBUG)",
+    "_RingHandler(level=DEBUG)",
+    "RedisLogPublisher(level=NOTSET)"
+   ]
+  },
+  "root": {
+   "level": "INFO",
+   "effective": "INFO",
+   "propagate": true,
+   "handlers": [
+    "StreamHandler(level=NOTSET)"
+   ]
+  }
+ },
+ "lifespan_shutdown": {
+  "type": "lifespan.shutdown.complete"
+ },
+ "blocked_network_attempts": [
+  {
+   "op": "getaddrinfo",
+   "target": "'451bde8f1eca4553811565e1dda6ced0'",
+   "phase": "startup",
+   "stack": "  File \"/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/redis/utils.py\", line 258, in wrapper\n    return func(*args, **kwargs)\n  File \"/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/redis/connection.py\", line 3139, in get_connection\n    connection.connect()\n  File \"/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/fakeredis/_connection.py\", line 21, in connect\n    super().connect()  # type: ignore\n  File \"/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/redis/connection.py\", line 1006, in connect\n    self.retry.call_with_retry(\n  File \"/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/redis/retry.py\", line 120, in call_with_retry\n    return do()\n  File \"/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/redis/connection.py\", line 1007, in <lambda>\n    lambda: self.connect_check_health(\n  File \"/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/redis/connection.py\", line 1061, in connect_check_health\n    self.on_connect_check_health(check_health=check_health)\n  File \"/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/redis/connection.py\", line 1163, in on_connect_check_health\n    self.activate_maint_notifications_handling_if_enabled(check_health=check_health)\n  File \"/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/redis/connection.py\", line 609, in activate_maint_notifications_handling_if_enabled\n    self._enable_maintenance_notifications(\n  File \"/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/redis/connection.py\", line 625, in _enable_maintenance_notifications\n    endpoint_type = maint_notifications_config.get_endpoint_type(host, self)\n  File \"/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/redis/maint_notifications.py\", line 711, in get_endpoint_type\n    resolved_ip = connection.get_resolved_ip()\n  File \"/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/redis/connection.py\", line 689, in get_resolved_ip\n    addr_info = socket.getaddrinfo(\n  File \"/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/micro-claims/claim2/a/claim2a_lib.py\", line 286, in getaddrinfo\n    _rec(\"getaddrinfo\", host); raise socket.gaierror(socket.EAI_NONAME, f\"claim2a: DNS blocked {host!r}\")\n  File \"/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/micro-claims/claim2/a/claim2a_lib.py\", line 272, in _rec\n    \"stack\": \"\".join(traceback.format_stack(limit=14))[-4000:]})\n",
+   "classification": "redis-py 8 maint-notifications resolve of the fakeredis synthetic host (caught by redis-py connection.get_resolved_ip -> None; equivalent to NXDOMAIN; not gateway behaviour)"
+  },
+  {
+   "op": "getaddrinfo",
+   "target": "'bea0cb9bce424390a1d9fed7449361a4'",
+   "phase": "startup",
+   "stack": "  File \"/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/redis/utils.py\", line 258, in wrapper\n    return func(*args, **kwargs)\n  File \"/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/redis/connection.py\", line 3139, in get_connection\n    connection.connect()\n  File \"/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/fakeredis/_connection.py\", line 21, in connect\n    super().connect()  # type: ignore\n  File \"/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/redis/connection.py\", line 1006, in connect\n    self.retry.call_with_retry(\n  File \"/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/redis/retry.py\", line 120, in call_with_retry\n    return do()\n  File \"/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/redis/connection.py\", line 1007, in <lambda>\n    lambda: self.connect_check_health(\n  File \"/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/redis/connection.py\", line 1061, in connect_check_health\n    self.on_connect_check_health(check_health=check_health)\n  File \"/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/redis/connection.py\", line 1163, in on_connect_check_health\n    self.activate_maint_notifications_handling_if_enabled(check_health=check_health)\n  File \"/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/redis/connection.py\", line 609, in activate_maint_notifications_handling_if_enabled\n    self._enable_maintenance_notifications(\n  File \"/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/redis/connection.py\", line 625, in _enable_maintenance_notifications\n    endpoint_type = maint_notifications_config.get_endpoint_type(host, self)\n  File \"/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/redis/maint_notifications.py\", line 711, in get_endpoint_type\n    resolved_ip = connection.get_resolved_ip()\n  File \"/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/redis/connection.py\", line 689, in get_resolved_ip\n    addr_info = socket.getaddrinfo(\n  File \"/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/micro-claims/claim2/a/claim2a_lib.py\", line 286, in getaddrinfo\n    _rec(\"getaddrinfo\", host); raise socket.gaierror(socket.EAI_NONAME, f\"claim2a: DNS blocked {host!r}\")\n  File \"/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/micro-claims/claim2/a/claim2a_lib.py\", line 272, in _rec\n    \"stack\": \"\".join(traceback.format_stack(limit=14))[-4000:]})\n",
+   "classification": "redis-py 8 maint-notifications resolve of the fakeredis synthetic host (caught by redis-py connection.get_resolved_ip -> None; equivalent to NXDOMAIN; not gateway behaviour)"
+  }
+ ],
+ "blocked_network_attempts_unexpected": 0,
+ "redis_from_url_calls": {
+  "async redis://claim2a-fakeredis.invalid:6379/0": 9
+ },
+ "fake_bedrock_converse_calls": null,
+ "fake_bedrock_instances": null,
+ "total_publisher_emits": 292,
+ "total_root_records": 307,
+ "outcomes": [
+  {
+   "scenario": "s1_benign_nonstream",
+   "req_phase": "warmup",
+   "req_idx": 0,
+   "req_seq": 1,
+   "stream": false,
+   "status": 200,
+   "action": "allow",
+   "content_chars": 590,
+   "raw_email_in_upstream_messages": false,
+   "redacted_prompt_passed": false
+  },
+  {
+   "scenario": "s1_benign_nonstream",
+   "req_phase": "warmup",
+   "req_idx": 1,
+   "req_seq": 2,
+   "stream": false,
+   "status": 200,
+   "action": "allow",
+   "content_chars": 590,
+   "raw_email_in_upstream_messages": false,
+   "redacted_prompt_passed": false
+  },
+  {
+   "scenario": "s1_benign_nonstream",
+   "req_phase": "warmup",
+   "req_idx": 2,
+   "req_seq": 3,
+   "stream": false,
+   "status": 200,
+   "action": "allow",
+   "content_chars": 590,
+   "raw_email_in_upstream_messages": false,
+   "redacted_prompt_passed": false
+  },
+  {
+   "scenario": "s1_benign_nonstream",
+   "req_phase": "warmup",
+   "req_idx": 3,
+   "req_seq": 4,
+   "stream": false,
+   "status": 200,
+   "action": "allow",
+   "content_chars": 590,
+   "raw_email_in_upstream_messages": false,
+   "redacted_prompt_passed": false
+  },
+  {
+   "scenario": "s1_benign_nonstream",
+   "req_phase": "warmup",
+   "req_idx": 4,
+   "req_seq": 5,
+   "stream": false,
+   "status": 200,
+   "action": "allow",
+   "content_chars": 590,
+   "raw_email_in_upstream_messages": false,
+   "redacted_prompt_passed": false
+  },
+  {
+   "scenario": "s1_benign_nonstream",
+   "req_phase": "measured",
+   "req_idx": 0,
+   "req_seq": 6,
+   "stream": false,
+   "status": 200,
+   "action": "allow",
+   "content_chars": 590,
+   "raw_email_in_upstream_messages": false,
+   "redacted_prompt_passed": false
+  },
+  {
+   "scenario": "s1_benign_nonstream",
+   "req_phase": "measured",
+   "req_idx": 1,
+   "req_seq": 7,
+   "stream": false,
+   "status": 200,
+   "action": "allow",
+   "content_chars": 590,
+   "raw_email_in_upstream_messages": false,
+   "redacted_prompt_passed": false
+  },
+  {
+   "scenario": "s1_benign_nonstream",
+   "req_phase": "measured",
+   "req_idx": 2,
+   "req_seq": 8,
+   "stream": false,
+   "status": 200,
+   "action": "allow",
+   "content_chars": 590,
+   "raw_email_in_upstream_messages": false,
+   "redacted_prompt_passed": false
+  },
+  {
+   "scenario": "s1_benign_nonstream",
+   "req_phase": "measured",
+   "req_idx": 3,
+   "req_seq": 9,
+   "stream": false,
+   "status": 200,
+   "action": "allow",
+   "content_chars": 590,
+   "raw_email_in_upstream_messages": false,
+   "redacted_prompt_passed": false
+  },
+  {
+   "scenario": "s1_benign_nonstream",
+   "req_phase": "measured",
+   "req_idx": 4,
+   "req_seq": 10,
+   "stream": false,
+   "status": 200,
+   "action": "allow",
+   "content_chars": 591,
+   "raw_email_in_upstream_messages": false,
+   "redacted_prompt_passed": false
+  },
+  {
+   "scenario": "s1_benign_nonstream",
+   "req_phase": "measured",
+   "req_idx": 5,
+   "req_seq": 11,
+   "stream": false,
+   "status": 200,
+   "action": "allow",
+   "content_chars": 591,
+   "raw_email_in_upstream_messages": false,
+   "redacted_prompt_passed": false
+  },
+  {
+   "scenario": "s1_benign_nonstream",
+   "req_phase": "measured",
+   "req_idx": 6,
+   "req_seq": 12,
+   "stream": false,
+   "status": 200,
+   "action": "allow",
+   "content_chars": 591,
+   "raw_email_in_upstream_messages": false,
+   "redacted_prompt_passed": false
+  },
+  {
+   "scenario": "s1_benign_nonstream",
+   "req_phase": "measured",
+   "req_idx": 7,
+   "req_seq": 13,
+   "stream": false,
+   "status": 200,
+   "action": "allow",
+   "content_chars": 591,
+   "raw_email_in_upstream_messages": false,
+   "redacted_prompt_passed": false
+  },
+  {
+   "scenario": "s1_benign_nonstream",
+   "req_phase": "measured",
+   "req_idx": 8,
+   "req_seq": 14,
+   "stream": false,
+   "status": 200,
+   "action": "allow",
+   "content_chars": 591,
+   "raw_email_in_upstream_messages": false,
+   "redacted_prompt_passed": false
+  },
+  {
+   "scenario": "s1_benign_nonstream",
+   "req_phase": "measured",
+   "req_idx": 9,
+   "req_seq": 15,
+   "stream": false,
+   "status": 200,
+   "action": "allow",
+   "content_chars": 591,
+   "raw_email_in_upstream_messages": false,
+   "redacted_prompt_passed": false
+  },
+  {
+   "scenario": "s1_benign_nonstream",
+   "req_phase": "measured",
+   "req_idx": 10,
+   "req_seq": 16,
+   "stream": false,
+   "status": 200,
+   "action": "allow",
+   "content_chars": 591,
+   "raw_email_in_upstream_messages": false,
+   "redacted_prompt_passed": false
+  },
+  {
+   "scenario": "s1_benign_nonstream",
+   "req_phase": "measured",
+   "req_idx": 11,
+   "req_seq": 17,
+   "stream": false,
+   "status": 200,
+   "action": "allow",
+   "content_chars": 591,
+   "raw_email_in_upstream_messages": false,
+   "redacted_prompt_passed": false
+  },
+  {
+   "scenario": "s1_benign_nonstream",
+   "req_phase": "measured",
+   "req_idx": 12,
+   "req_seq": 18,
+   "stream": false,
+   "status": 200,
+   "action": "allow",
+   "content_chars": 591,
+   "raw_email_in_upstream_messages": false,
+   "redacted_prompt_passed": false
+  },
+  {
+   "scenario": "s1_benign_nonstream",
+   "req_phase": "measured",
+   "req_idx": 13,
+   "req_seq": 19,
+   "stream": false,
+   "status": 200,
+   "action": "allow",
+   "content_chars": 591,
+   "raw_email_in_upstream_messages": false,
+   "redacted_prompt_passed": false
+  },
+  {
+   "scenario": "s1_benign_nonstream",
+   "req_phase": "measured",
+   "req_idx": 14,
+   "req_seq": 20,
+   "stream": false,
+   "status": 200,
+   "action": "allow",
+   "content_chars": 591,
+   "raw_email_in_upstream_messages": false,
+   "redacted_prompt_passed": false
+  },
+  {
+   "scenario": "s1_benign_nonstream",
+   "req_phase": "measured",
+   "req_idx": 15,
+   "req_seq": 21,
+   "stream": false,
+   "status": 200,
+   "action": "allow",
+   "content_chars": 591,
+   "raw_email_in_upstream_messages": false,
+   "redacted_prompt_passed": false
+  },
+  {
+   "scenario": "s1_benign_nonstream",
+   "req_phase": "measured",
+   "req_idx": 16,
+   "req_seq": 22,
+   "stream": false,
+   "status": 200,
+   "action": "allow",
+   "content_chars": 591,
+   "raw_email_in_upstream_messages": false,
+   "redacted_prompt_passed": false
+  },
+  {
+   "scenario": "s1_benign_nonstream",
+   "req_phase": "measured",
+   "req_idx": 17,
+   "req_seq": 23,
+   "stream": false,
+   "status": 200,
+   "action": "allow",
+   "content_chars": 591,
+   "raw_email_in_upstream_messages": false,
+   "redacted_prompt_passed": false
+  },
+  {
+   "scenario": "s1_benign_nonstream",
+   "req_phase": "measured",
+   "req_idx": 18,
+   "req_seq": 24,
+   "stream": false,
+   "status": 200,
+   "action": "allow",
+   "content_chars": 591,
+   "raw_email_in_upstream_messages": false,
+   "redacted_prompt_passed": false
+  },
+  {
+   "scenario": "s1_benign_nonstream",
+   "req_phase": "measured",
+   "req_idx": 19,
+   "req_seq": 25,
+   "stream": false,
+   "status": 200,
+   "action": "allow",
+   "content_chars": 591,
+   "raw_email_in_upstream_messages": false,
+   "redacted_prompt_passed": false
+  },
+  {
+   "scenario": "s2_benign_stream",
+   "req_phase": "warmup",
+   "req_idx": 0,
+   "req_seq": 26,
+   "stream": true,
+   "status": 200,
+   "content_chunks": 50,
+   "content_chars": 308,
+   "action": "allow",
+   "raw_email_in_upstream_messages": false,
+   "redacted_prompt_passed": false
+  },
+  {
+   "scenario": "s2_benign_stream",
+   "req_phase": "warmup",
+   "req_idx": 1,
+   "req_seq": 27,
+   "stream": true,
+   "status": 200,
+   "content_chunks": 50,
+   "content_chars": 308,
+   "action": "allow",
+   "raw_email_in_upstream_messages": false,
+   "redacted_prompt_passed": false
+  },
+  {
+   "scenario": "s2_benign_stream",
+   "req_phase": "warmup",
+   "req_idx": 2,
+   "req_seq": 28,
+   "stream": true,
+   "status": 200,
+   "content_chunks": 50,
+   "content_chars": 308,
+   "action": "allow",
+   "raw_email_in_upstream_messages": false,
+   "redacted_prompt_passed": false
+  },
+  {
+   "scenario": "s2_benign_stream",
+   "req_phase": "warmup",
+   "req_idx": 3,
+   "req_seq": 29,
+   "stream": true,
+   "status": 200,
+   "content_chunks": 50,
+   "content_chars": 308,
+   "action": "allow",
+   "raw_email_in_upstream_messages": false,
+   "redacted_prompt_passed": false
+  },
+  {
+   "scenario": "s2_benign_stream",
+   "req_phase": "warmup",
+   "req_idx": 4,
+   "req_seq": 30,
+   "stream": true,
+   "status": 200,
+   "content_chunks": 50,
+   "content_chars": 308,
+   "action": "allow",
+   "raw_email_in_upstream_messages": false,
+   "redacted_prompt_passed": false
+  },
+  {
+   "scenario": "s2_benign_stream",
+   "req_phase": "measured",
+   "req_idx": 0,
+   "req_seq": 31,
+   "stream": true,
+   "status": 200,
+   "content_chunks": 50,
+   "content_chars": 308,
+   "action": "allow",
+   "raw_email_in_upstream_messages": false,
+   "redacted_prompt_passed": false
+  },
+  {
+   "scenario": "s2_benign_stream",
+   "req_phase": "measured",
+   "req_idx": 1,
+   "req_seq": 32,
+   "stream": true,
+   "status": 200,
+   "content_chunks": 50,
+   "content_chars": 308,
+   "action": "allow",
+   "raw_email_in_upstream_messages": false,
+   "redacted_prompt_passed": false
+  },
+  {
+   "scenario": "s2_benign_stream",
+   "req_phase": "measured",
+   "req_idx": 2,
+   "req_seq": 33,
+   "stream": true,
+   "status": 200,
+   "content_chunks": 50,
+   "content_chars": 308,
+   "action": "allow",
+   "raw_email_in_upstream_messages": false,
+   "redacted_prompt_passed": false
+  },
+  {
+   "scenario": "s2_benign_stream",
+   "req_phase": "measured",
+   "req_idx": 3,
+   "req_seq": 34,
+   "stream": true,
+   "status": 200,
+   "content_chunks": 50,
+   "content_chars": 308,
+   "action": "allow",
+   "raw_email_in_upstream_messages": false,
+   "redacted_prompt_passed": false
+  },
+  {
+   "scenario": "s2_benign_stream",
+   "req_phase": "measured",
+   "req_idx": 4,
+   "req_seq": 35,
+   "stream": true,
+   "status": 200,
+   "content_chunks": 50,
+   "content_chars": 308,
+   "action": "allow",
+   "raw_email_in_upstream_messages": false,
+   "redacted_prompt_passed": false
+  },
+  {
+   "scenario": "s2_benign_stream",
+   "req_phase": "measured",
+   "req_idx": 5,
+   "req_seq": 36,
+   "stream": true,
+   "status": 200,
+   "content_chunks": 50,
+   "content_chars": 308,
+   "action": "allow",
+   "raw_email_in_upstream_messages": false,
+   "redacted_prompt_passed": false
+  },
+  {
+   "scenario": "s2_benign_stream",
+   "req_phase": "measured",
+   "req_idx": 6,
+   "req_seq": 37,
+   "stream": true,
+   "status": 200,
+   "content_chunks": 50,
+   "content_chars": 308,
+   "action": "allow",
+   "raw_email_in_upstream_messages": false,
+   "redacted_prompt_passed": false
+  },
+  {
+   "scenario": "s2_benign_stream",
+   "req_phase": "measured",
+   "req_idx": 7,
+   "req_seq": 38,
+   "stream": true,
+   "status": 200,
+   "content_chunks": 50,
+   "content_chars": 308,
+   "action": "allow",
+   "raw_email_in_upstream_messages": false,
+   "redacted_prompt_passed": false
+  },
+  {
+   "scenario": "s2_benign_stream",
+   "req_phase": "measured",
+   "req_idx": 8,
+   "req_seq": 39,
+   "stream": true,
+   "status": 200,
+   "content_chunks": 50,
+   "content_chars": 308,
+   "action": "allow",
+   "raw_email_in_upstream_messages": false,
+   "redacted_prompt_passed": false
+  },
+  {
+   "scenario": "s2_benign_stream",
+   "req_phase": "measured",
+   "req_idx": 9,
+   "req_seq": 40,
+   "stream": true,
+   "status": 200,
+   "content_chunks": 50,
+   "content_chars": 308,
+   "action": "allow",
+   "raw_email_in_upstream_messages": false,
+   "redacted_prompt_passed": false
+  },
+  {
+   "scenario": "s2_benign_stream",
+   "req_phase": "measured",
+   "req_idx": 10,
+   "req_seq": 41,
+   "stream": true,
+   "status": 200,
+   "content_chunks": 50,
+   "content_chars": 308,
+   "action": "allow",
+   "raw_email_in_upstream_messages": false,
+   "redacted_prompt_passed": false
+  },
+  {
+   "scenario": "s2_benign_stream",
+   "req_phase": "measured",
+   "req_idx": 11,
+   "req_seq": 42,
+   "stream": true,
+   "status": 200,
+   "content_chunks": 50,
+   "content_chars": 308,
+   "action": "allow",
+   "raw_email_in_upstream_messages": false,
+   "redacted_prompt_passed": false
+  },
+  {
+   "scenario": "s2_benign_stream",
+   "req_phase": "measured",
+   "req_idx": 12,
+   "req_seq": 43,
+   "stream": true,
+   "status": 200,
+   "content_chunks": 50,
+   "content_chars": 308,
+   "action": "allow",
+   "raw_email_in_upstream_messages": false,
+   "redacted_prompt_passed": false
+  },
+  {
+   "scenario": "s2_benign_stream",
+   "req_phase": "measured",
+   "req_idx": 13,
+   "req_seq": 44,
+   "stream": true,
+   "status": 200,
+   "content_chunks": 50,
+   "content_chars": 308,
+   "action": "allow",
+   "raw_email_in_upstream_messages": false,
+   "redacted_prompt_passed": false
+  },
+  {
+   "scenario": "s2_benign_stream",
+   "req_phase": "measured",
+   "req_idx": 14,
+   "req_seq": 45,
+   "stream": true,
+   "status": 200,
+   "content_chunks": 50,
+   "content_chars": 308,
+   "action": "allow",
+   "raw_email_in_upstream_messages": false,
+   "redacted_prompt_passed": false
+  },
+  {
+   "scenario": "s2_benign_stream",
+   "req_phase": "measured",
+   "req_idx": 15,
+   "req_seq": 46,
+   "stream": true,
+   "status": 200,
+   "content_chunks": 50,
+   "content_chars": 308,
+   "action": "allow",
+   "raw_email_in_upstream_messages": false,
+   "redacted_prompt_passed": false
+  },
+  {
+   "scenario": "s2_benign_stream",
+   "req_phase": "measured",
+   "req_idx": 16,
+   "req_seq": 47,
+   "stream": true,
+   "status": 200,
+   "content_chunks": 50,
+   "content_chars": 308,
+   "action": "allow",
+   "raw_email_in_upstream_messages": false,
+   "redacted_prompt_passed": false
+  },
+  {
+   "scenario": "s2_benign_stream",
+   "req_phase": "measured",
+   "req_idx": 17,
+   "req_seq": 48,
+   "stream": true,
+   "status": 200,
+   "content_chunks": 50,
+   "content_chars": 308,
+   "action": "allow",
+   "raw_email_in_upstream_messages": false,
+   "redacted_prompt_passed": false
+  },
+  {
+   "scenario": "s2_benign_stream",
+   "req_phase": "measured",
+   "req_idx": 18,
+   "req_seq": 49,
+   "stream": true,
+   "status": 200,
+   "content_chunks": 50,
+   "content_chars": 308,
+   "action": "allow",
+   "raw_email_in_upstream_messages": false,
+   "redacted_prompt_passed": false
+  },
+  {
+   "scenario": "s2_benign_stream",
+   "req_phase": "measured",
+   "req_idx": 19,
+   "req_seq": 50,
+   "stream": true,
+   "status": 200,
+   "content_chunks": 50,
+   "content_chars": 308,
+   "action": "allow",
+   "raw_email_in_upstream_messages": false,
+   "redacted_prompt_passed": false
+  },
+  {
+   "scenario": "s3_pii_nonstream",
+   "req_phase": "warmup",
+   "req_idx": 0,
+   "req_seq": 51,
+   "stream": false,
+   "status": 200,
+   "action": "redact",
+   "content_chars": 591,
+   "raw_email_in_upstream_messages": false,
+   "redacted_prompt_passed": false
+  },
+  {
+   "scenario": "s3_pii_nonstream",
+   "req_phase": "warmup",
+   "req_idx": 1,
+   "req_seq": 52,
+   "stream": false,
+   "status": 200,
+   "action": "redact",
+   "content_chars": 591,
+   "raw_email_in_upstream_messages": false,
+   "redacted_prompt_passed": false
+  },
+  {
+   "scenario": "s3_pii_nonstream",
+   "req_phase": "warmup",
+   "req_idx": 2,
+   "req_seq": 53,
+   "stream": false,
+   "status": 200,
+   "action": "redact",
+   "content_chars": 591,
+   "raw_email_in_upstream_messages": false,
+   "redacted_prompt_passed": false
+  },
+  {
+   "scenario": "s3_pii_nonstream",
+   "req_phase": "warmup",
+   "req_idx": 3,
+   "req_seq": 54,
+   "stream": false,
+   "status": 200,
+   "action": "redact",
+   "content_chars": 591,
+   "raw_email_in_upstream_messages": false,
+   "redacted_prompt_passed": false
+  },
+  {
+   "scenario": "s3_pii_nonstream",
+   "req_phase": "warmup",
+   "req_idx": 4,
+   "req_seq": 55,
+   "stream": false,
+   "status": 200,
+   "action": "redact",
+   "content_chars": 591,
+   "raw_email_in_upstream_messages": false,
+   "redacted_prompt_passed": false
+  },
+  {
+   "scenario": "s3_pii_nonstream",
+   "req_phase": "measured",
+   "req_idx": 0,
+   "req_seq": 56,
+   "stream": false,
+   "status": 200,
+   "action": "redact",
+   "content_chars": 591,
+   "raw_email_in_upstream_messages": false,
+   "redacted_prompt_passed": false
+  },
+  {
+   "scenario": "s3_pii_nonstream",
+   "req_phase": "measured",
+   "req_idx": 1,
+   "req_seq": 57,
+   "stream": false,
+   "status": 200,
+   "action": "redact",
+   "content_chars": 591,
+   "raw_email_in_upstream_messages": false,
+   "redacted_prompt_passed": false
+  },
+  {
+   "scenario": "s3_pii_nonstream",
+   "req_phase": "measured",
+   "req_idx": 2,
+   "req_seq": 58,
+   "stream": false,
+   "status": 200,
+   "action": "redact",
+   "content_chars": 591,
+   "raw_email_in_upstream_messages": false,
+   "redacted_prompt_passed": false
+  },
+  {
+   "scenario": "s3_pii_nonstream",
+   "req_phase": "measured",
+   "req_idx": 3,
+   "req_seq": 59,
+   "stream": false,
+   "status": 200,
+   "action": "redact",
+   "content_chars": 591,
+   "raw_email_in_upstream_messages": false,
+   "redacted_prompt_passed": false
+  },
+  {
+   "scenario": "s3_pii_nonstream",
+   "req_phase": "measured",
+   "req_idx": 4,
+   "req_seq": 60,
+   "stream": false,
+   "status": 200,
+   "action": "redact",
+   "content_chars": 591,
+   "raw_email_in_upstream_messages": false,
+   "redacted_prompt_passed": false
+  },
+  {
+   "scenario": "s3_pii_nonstream",
+   "req_phase": "measured",
+   "req_idx": 5,
+   "req_seq": 61,
+   "stream": false,
+   "status": 200,
+   "action": "redact",
+   "content_chars": 591,
+   "raw_email_in_upstream_messages": false,
+   "redacted_prompt_passed": false
+  },
+  {
+   "scenario": "s3_pii_nonstream",
+   "req_phase": "measured",
+   "req_idx": 6,
+   "req_seq": 62,
+   "stream": false,
+   "status": 200,
+   "action": "redact",
+   "content_chars": 591,
+   "raw_email_in_upstream_messages": false,
+   "redacted_prompt_passed": false
+  },
+  {
+   "scenario": "s3_pii_nonstream",
+   "req_phase": "measured",
+   "req_idx": 7,
+   "req_seq": 63,
+   "stream": false,
+   "status": 200,
+   "action": "redact",
+   "content_chars": 591,
+   "raw_email_in_upstream_messages": false,
+   "redacted_prompt_passed": false
+  },
+  {
+   "scenario": "s3_pii_nonstream",
+   "req_phase": "measured",
+   "req_idx": 8,
+   "req_seq": 64,
+   "stream": false,
+   "status": 200,
+   "action": "redact",
+   "content_chars": 591,
+   "raw_email_in_upstream_messages": false,
+   "redacted_prompt_passed": false
+  },
+  {
+   "scenario": "s3_pii_nonstream",
+   "req_phase": "measured",
+   "req_idx": 9,
+   "req_seq": 65,
+   "stream": false,
+   "status": 200,
+   "action": "redact",
+   "content_chars": 591,
+   "raw_email_in_upstream_messages": false,
+   "redacted_prompt_passed": false
+  },
+  {
+   "scenario": "s3_pii_nonstream",
+   "req_phase": "measured",
+   "req_idx": 10,
+   "req_seq": 66,
+   "stream": false,
+   "status": 200,
+   "action": "redact",
+   "content_chars": 591,
+   "raw_email_in_upstream_messages": false,
+   "redacted_prompt_passed": false
+  },
+  {
+   "scenario": "s3_pii_nonstream",
+   "req_phase": "measured",
+   "req_idx": 11,
+   "req_seq": 67,
+   "stream": false,
+   "status": 200,
+   "action": "redact",
+   "content_chars": 591,
+   "raw_email_in_upstream_messages": false,
+   "redacted_prompt_passed": false
+  },
+  {
+   "scenario": "s3_pii_nonstream",
+   "req_phase": "measured",
+   "req_idx": 12,
+   "req_seq": 68,
+   "stream": false,
+   "status": 200,
+   "action": "redact",
+   "content_chars": 591,
+   "raw_email_in_upstream_messages": false,
+   "redacted_prompt_passed": false
+  },
+  {
+   "scenario": "s3_pii_nonstream",
+   "req_phase": "measured",
+   "req_idx": 13,
+   "req_seq": 69,
+   "stream": false,
+   "status": 200,
+   "action": "redact",
+   "content_chars": 591,
+   "raw_email_in_upstream_messages": false,
+   "redacted_prompt_passed": false
+  },
+  {
+   "scenario": "s3_pii_nonstream",
+   "req_phase": "measured",
+   "req_idx": 14,
+   "req_seq": 70,
+   "stream": false,
+   "status": 200,
+   "action": "redact",
+   "content_chars": 591,
+   "raw_email_in_upstream_messages": false,
+   "redacted_prompt_passed": false
+  },
+  {
+   "scenario": "s3_pii_nonstream",
+   "req_phase": "measured",
+   "req_idx": 15,
+   "req_seq": 71,
+   "stream": false,
+   "status": 200,
+   "action": "redact",
+   "content_chars": 591,
+   "raw_email_in_upstream_messages": false,
+   "redacted_prompt_passed": false
+  },
+  {
+   "scenario": "s3_pii_nonstream",
+   "req_phase": "measured",
+   "req_idx": 16,
+   "req_seq": 72,
+   "stream": false,
+   "status": 200,
+   "action": "redact",
+   "content_chars": 591,
+   "raw_email_in_upstream_messages": false,
+   "redacted_prompt_passed": false
+  },
+  {
+   "scenario": "s3_pii_nonstream",
+   "req_phase": "measured",
+   "req_idx": 17,
+   "req_seq": 73,
+   "stream": false,
+   "status": 200,
+   "action": "redact",
+   "content_chars": 591,
+   "raw_email_in_upstream_messages": false,
+   "redacted_prompt_passed": false
+  },
+  {
+   "scenario": "s3_pii_nonstream",
+   "req_phase": "measured",
+   "req_idx": 18,
+   "req_seq": 74,
+   "stream": false,
+   "status": 200,
+   "action": "redact",
+   "content_chars": 591,
+   "raw_email_in_upstream_messages": false,
+   "redacted_prompt_passed": false
+  },
+  {
+   "scenario": "s3_pii_nonstream",
+   "req_phase": "measured",
+   "req_idx": 19,
+   "req_seq": 75,
+   "stream": false,
+   "status": 200,
+   "action": "redact",
+   "content_chars": 591,
+   "raw_email_in_upstream_messages": false,
+   "redacted_prompt_passed": false
+  },
+  {
+   "scenario": "s4_injection_block",
+   "req_phase": "warmup",
+   "req_idx": 0,
+   "req_seq": 76,
+   "stream": false,
+   "status": 400,
+   "code": "content_blocked",
+   "error_code": "content_filter",
+   "blocked_by": "policy",
+   "category": "prompt_injection",
+   "action": "blocked"
+  },
+  {
+   "scenario": "s4_injection_block",
+   "req_phase": "warmup",
+   "req_idx": 1,
+   "req_seq": 77,
+   "stream": false,
+   "status": 400,
+   "code": "content_blocked",
+   "error_code": "content_filter",
+   "blocked_by": "policy",
+   "category": "prompt_injection",
+   "action": "blocked"
+  },
+  {
+   "scenario": "s4_injection_block",
+   "req_phase": "warmup",
+   "req_idx": 2,
+   "req_seq": 78,
+   "stream": false,
+   "status": 400,
+   "code": "content_blocked",
+   "error_code": "content_filter",
+   "blocked_by": "policy",
+   "category": "prompt_injection",
+   "action": "blocked"
+  },
+  {
+   "scenario": "s4_injection_block",
+   "req_phase": "warmup",
+   "req_idx": 3,
+   "req_seq": 79,
+   "stream": false,
+   "status": 400,
+   "code": "content_blocked",
+   "error_code": "content_filter",
+   "blocked_by": "policy",
+   "category": "prompt_injection",
+   "action": "blocked"
+  },
+  {
+   "scenario": "s4_injection_block",
+   "req_phase": "warmup",
+   "req_idx": 4,
+   "req_seq": 80,
+   "stream": false,
+   "status": 400,
+   "code": "content_blocked",
+   "error_code": "content_filter",
+   "blocked_by": "policy",
+   "category": "prompt_injection",
+   "action": "blocked"
+  },
+  {
+   "scenario": "s4_injection_block",
+   "req_phase": "measured",
+   "req_idx": 0,
+   "req_seq": 81,
+   "stream": false,
+   "status": 400,
+   "code": "content_blocked",
+   "error_code": "content_filter",
+   "blocked_by": "policy",
+   "category": "prompt_injection",
+   "action": "blocked"
+  },
+  {
+   "scenario": "s4_injection_block",
+   "req_phase": "measured",
+   "req_idx": 1,
+   "req_seq": 82,
+   "stream": false,
+   "status": 400,
+   "code": "content_blocked",
+   "error_code": "content_filter",
+   "blocked_by": "policy",
+   "category": "prompt_injection",
+   "action": "blocked"
+  },
+  {
+   "scenario": "s4_injection_block",
+   "req_phase": "measured",
+   "req_idx": 2,
+   "req_seq": 83,
+   "stream": false,
+   "status": 400,
+   "code": "content_blocked",
+   "error_code": "content_filter",
+   "blocked_by": "policy",
+   "category": "prompt_injection",
+   "action": "blocked"
+  },
+  {
+   "scenario": "s4_injection_block",
+   "req_phase": "measured",
+   "req_idx": 3,
+   "req_seq": 84,
+   "stream": false,
+   "status": 400,
+   "code": "content_blocked",
+   "error_code": "content_filter",
+   "blocked_by": "policy",
+   "category": "prompt_injection",
+   "action": "blocked"
+  },
+  {
+   "scenario": "s4_injection_block",
+   "req_phase": "measured",
+   "req_idx": 4,
+   "req_seq": 85,
+   "stream": false,
+   "status": 400,
+   "code": "content_blocked",
+   "error_code": "content_filter",
+   "blocked_by": "policy",
+   "category": "prompt_injection",
+   "action": "blocked"
+  },
+  {
+   "scenario": "s4_injection_block",
+   "req_phase": "measured",
+   "req_idx": 5,
+   "req_seq": 86,
+   "stream": false,
+   "status": 400,
+   "code": "content_blocked",
+   "error_code": "content_filter",
+   "blocked_by": "policy",
+   "category": "prompt_injection",
+   "action": "blocked"
+  },
+  {
+   "scenario": "s4_injection_block",
+   "req_phase": "measured",
+   "req_idx": 6,
+   "req_seq": 87,
+   "stream": false,
+   "status": 400,
+   "code": "content_blocked",
+   "error_code": "content_filter",
+   "blocked_by": "policy",
+   "category": "prompt_injection",
+   "action": "blocked"
+  },
+  {
+   "scenario": "s4_injection_block",
+   "req_phase": "measured",
+   "req_idx": 7,
+   "req_seq": 88,
+   "stream": false,
+   "status": 400,
+   "code": "content_blocked",
+   "error_code": "content_filter",
+   "blocked_by": "policy",
+   "category": "prompt_injection",
+   "action": "blocked"
+  },
+  {
+   "scenario": "s4_injection_block",
+   "req_phase": "measured",
+   "req_idx": 8,
+   "req_seq": 89,
+   "stream": false,
+   "status": 400,
+   "code": "content_blocked",
+   "error_code": "content_filter",
+   "blocked_by": "policy",
+   "category": "prompt_injection",
+   "action": "blocked"
+  },
+  {
+   "scenario": "s4_injection_block",
+   "req_phase": "measured",
+   "req_idx": 9,
+   "req_seq": 90,
+   "stream": false,
+   "status": 400,
+   "code": "content_blocked",
+   "error_code": "content_filter",
+   "blocked_by": "policy",
+   "category": "prompt_injection",
+   "action": "blocked"
+  },
+  {
+   "scenario": "s4_injection_block",
+   "req_phase": "measured",
+   "req_idx": 10,
+   "req_seq": 91,
+   "stream": false,
+   "status": 400,
+   "code": "content_blocked",
+   "error_code": "content_filter",
+   "blocked_by": "policy",
+   "category": "prompt_injection",
+   "action": "blocked"
+  },
+  {
+   "scenario": "s4_injection_block",
+   "req_phase": "measured",
+   "req_idx": 11,
+   "req_seq": 92,
+   "stream": false,
+   "status": 400,
+   "code": "content_blocked",
+   "error_code": "content_filter",
+   "blocked_by": "policy",
+   "category": "prompt_injection",
+   "action": "blocked"
+  },
+  {
+   "scenario": "s4_injection_block",
+   "req_phase": "measured",
+   "req_idx": 12,
+   "req_seq": 93,
+   "stream": false,
+   "status": 400,
+   "code": "content_blocked",
+   "error_code": "content_filter",
+   "blocked_by": "policy",
+   "category": "prompt_injection",
+   "action": "blocked"
+  },
+  {
+   "scenario": "s4_injection_block",
+   "req_phase": "measured",
+   "req_idx": 13,
+   "req_seq": 94,
+   "stream": false,
+   "status": 400,
+   "code": "content_blocked",
+   "error_code": "content_filter",
+   "blocked_by": "policy",
+   "category": "prompt_injection",
+   "action": "blocked"
+  },
+  {
+   "scenario": "s4_injection_block",
+   "req_phase": "measured",
+   "req_idx": 14,
+   "req_seq": 95,
+   "stream": false,
+   "status": 400,
+   "code": "content_blocked",
+   "error_code": "content_filter",
+   "blocked_by": "policy",
+   "category": "prompt_injection",
+   "action": "blocked"
+  },
+  {
+   "scenario": "s4_injection_block",
+   "req_phase": "measured",
+   "req_idx": 15,
+   "req_seq": 96,
+   "stream": false,
+   "status": 400,
+   "code": "content_blocked",
+   "error_code": "content_filter",
+   "blocked_by": "policy",
+   "category": "prompt_injection",
+   "action": "blocked"
+  },
+  {
+   "scenario": "s4_injection_block",
+   "req_phase": "measured",
+   "req_idx": 16,
+   "req_seq": 97,
+   "stream": false,
+   "status": 400,
+   "code": "content_blocked",
+   "error_code": "content_filter",
+   "blocked_by": "policy",
+   "category": "prompt_injection",
+   "action": "blocked"
+  },
+  {
+   "scenario": "s4_injection_block",
+   "req_phase": "measured",
+   "req_idx": 17,
+   "req_seq": 98,
+   "stream": false,
+   "status": 400,
+   "code": "content_blocked",
+   "error_code": "content_filter",
+   "blocked_by": "policy",
+   "category": "prompt_injection",
+   "action": "blocked"
+  },
+  {
+   "scenario": "s4_injection_block",
+   "req_phase": "measured",
+   "req_idx": 18,
+   "req_seq": 99,
+   "stream": false,
+   "status": 400,
+   "code": "content_blocked",
+   "error_code": "content_filter",
+   "blocked_by": "policy",
+   "category": "prompt_injection",
+   "action": "blocked"
+  },
+  {
+   "scenario": "s4_injection_block",
+   "req_phase": "measured",
+   "req_idx": 19,
+   "req_seq": 100,
+   "stream": false,
+   "status": 400,
+   "code": "content_blocked",
+   "error_code": "content_filter",
+   "blocked_by": "policy",
+   "category": "prompt_injection",
+   "action": "blocked"
+  }
+ ]
+}

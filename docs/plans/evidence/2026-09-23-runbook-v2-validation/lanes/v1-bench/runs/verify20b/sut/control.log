@@ -1,0 +1,16 @@
+INFO 2026-09-23 10:09:51,394 signals 84243 132636167104192 resync_all_gateway_keys: reconciled 1 active gateway keys into Redis (pruned 0 inactive, reaped 0 orphan)
+INFO 2026-09-23 10:09:51,394 apps 84243 132636167104192 Gateway-key resync reconciled 1 active keys into Redis
+INFO 2026-09-23 10:09:53,751 tasks 12 132636241557184 drain_telemetry_from_redis: inserted 4 events
+INFO 2026-09-23 10:09:54,775 tasks 12 132636241557184 drain_telemetry_from_redis: inserted 2 events
+INFO 2026-09-23 10:09:55,775 tasks 84243 132636175496896 drain_telemetry_from_redis: inserted 2 events
+INFO 2026-09-23 10:09:56,804 tasks 12 132636241557184 drain_telemetry_from_redis: inserted 4 events
+INFO 2026-09-23 10:09:57,809 tasks 84243 132636175496896 drain_telemetry_from_redis: inserted 3 events
+INFO 2026-09-23 10:09:58,846 tasks 84243 132636175496896 drain_telemetry_from_redis: inserted 3 events
+INFO 2026-09-23 10:09:59,853 tasks 12 132636241557184 drain_telemetry_from_redis: inserted 5 events
+INFO 2026-09-23 10:10:00,886 tasks 84243 132636175496896 drain_telemetry_from_redis: inserted 2 events
+INFO 2026-09-23 10:10:01,911 tasks 12 132636241557184 drain_telemetry_from_redis: inserted 6 events
+INFO 2026-09-23 10:10:02,921 tasks 84243 132636175496896 drain_telemetry_from_redis: inserted 3 events
+INFO 2026-09-23 10:10:03,955 tasks 84243 132636175496896 drain_telemetry_from_redis: inserted 2 events
+INFO 2026-09-23 10:10:04,952 tasks 12 132636241557184 drain_telemetry_from_redis: inserted 1 events
+INFO 2026-09-23 10:10:05,980 tasks 12 132636241557184 drain_telemetry_from_redis: inserted 2 events
+INFO 2026-09-23 10:10:07,986 tasks 84243 132636175496896 drain_telemetry_from_redis: inserted 1 events

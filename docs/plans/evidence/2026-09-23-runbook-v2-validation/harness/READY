@@ -1,0 +1,59 @@
+READY  2026-09-23T14:45Z  harness-builder
+VALIDATED_MAX_DIRECT_RPS=6000
+
+Profile: WORST-BAND (corpora/worst-22M.jsonl: 1024 Llama-Prompt-Guard-2-22M tokens in, max_tokens 400),
+  synthprov TTFT 150 ms / ITL 20 ms, 70% SSE with stream_options.include_usage, constant arrivals, DIRECT
+  (olg -> synthprov), 300 s measurement after 30 s ramp + 60 s warm-up.
+Fleet: 5 x c4-highcpu-8 olg (1,200 RPS each) + 4 x c4-highcpu-8 synthprov (1,500 RPS each), asia-south1-c,
+  Ubuntu 24.04 (kernel 7.0.0-1011-gcp), host prep = deploy/prep_host.sh (incl. EEVDF base_slice 300 us,
+  NO_RUN_TO_PARITY, nofile 1M).
+
+Repeats at 6,000 RPS (1,800,000 requests each; runs/val-6000-r5, -r6, -r7): all PASS
+  schedule drops (>5 ms)      0 / 0 / 0     (lateness p99 0.103 / 0.103 / 0.101 ms, max 2.46 / 2.39 / 2.51 ms)
+  errors                      0 / 0 / 0     (1,800,000 qualified and joined in each run)
+  loadgen busy max            63.0 / 61.8 / 59.2 %   (limit 70%; cpuidle-based)
+  provider sched_err_last p99 0.208 / 0.205 / 0.231 ms (limit 1 ms)
+  DIRECT floor T_fw_addon p99 0.610 / 0.619 / 0.605 ms
+First failing step (runs/val-8000, 8,000 RPS = 1,600 per loadgen): 0 drops, 0 errors, 2,400,000 qualified,
+  but loadgen busy max 68.2-75.1% > 70% -> FAIL (CPU rule only).
+Sizing rule: 1 olg c4-highcpu-8 per 1,200 RPS and 1 synthprov c4-highcpu-8 per 1,500 RPS of WORST-BAND traffic
+  with constant arrivals. Poisson arrivals cost ~1.5x loadgen CPU at the same mean rate (runs/val-poisson-4800:
+  busy mean 68-70%, max 71-78%, 0 drops; runs/val-const-4800 on the same VMs: mean 45-48%, max 49-59%) -> use
+  >= 1.5x the loadgens for Poisson runs (derived from that measurement; not separately validated).
+
+Instrument honesty: PASS, 13/13 checks within 1 ms (runs/hon-report/honesty.md; loadgen -> rvproxy -> synthprov,
+  300 RPS, every stream sampled, delays compared with the proxy's own log of what it injected)
+  pre-dispatch 5.06 ms -> T_addon_total +5.107 ms, T_addon_first +5.115 ms
+  30.01 ms hold at content event 50 -> T_release_lag_max +29.68 ms, T_addon_total +0.011 ms, p99 T_fw_addon 30.83 ms (FAIL)
+  both -> T_addon_total +5.065 ms, T_release_lag_max +34.72 ms (injected 35.07)
+  provider TTFT 50 / 500 / 2000 ms -> client TTFT 50.65 / 500.64 / 2000.64 ms, T_addon_total p50 0.525 / 0.516 / 0.515 ms
+  (floor 0.520): provider time never charged to the firewall.
+
+Binaries validated (built from harness git 5af9594a2631; that SHA is recorded in every run's manifests):
+1ee6bb5f3665de1d6f42d67d83997b71f429d57a45525650a01b15bcdab39029  bin/synthprov
+d22d260723c31fb55a387080b853cd94ff922666807ba36845e0b7e962aa7fb3  bin/olg
+4a9ff4a106a48f18ad3470fcb000339c417f62d4671c134638b1fc04ff3b9685  bin/rvproxy
+Python tools (harness git f0d76240a07b; commits after 5af9594a2631 change only analyze.py, deploy scripts and docs):
+3874eaac5cd6bd5013522c64b42e4a011b632725012ec29bc35b0679a685c8c5  analyze.py   (qualification strata, see below)
+95153bb86d00877d256bb8f7ef40cff81f6a8e0c64cecb3fa5c291ea5a66e907  make_corpus.py
+4e87f91cfe4f22b9d57431ec63dc7ac4ae25ad7b5e62f3baffcee6411aae2177  honesty.py
+367b8a3341c202d97c0692a5543cf6beba3c91e2ecb0510c0b3f695289c462df  shared/words.json
+155a3e23fc7f040be63a33ba9cbee46dcacb2da0e13c346817c8a221f39b5aa9  shared/canaries.json
+
+Qualification (analyze.py at 3874eaac; runbook T01 / §1.1):
+  QUALIFIED = HTTP 200 complete + disposition in {ALLOW, REDACT, FLAG} + all --profile-stages executed + content /
+    canary checks; POLICY stratum = block status (400/403/422/451) AND block evidence (BLOCK disposition, or an envelope
+    such as v1's HTTP 400 code=content_filter), split expected / FALSE-POSITIVE (benign) / other, FP rate and cohort
+    latency reported, not qualified and not infra errors; INFRA errors = everything else, the only input to the
+    0.1% gate; percentiles over the qualified cohort. Disposition source is pluggable (--disposition-source
+    auto|xrv|v1: x-rv-* headers, or v1 pipeline_trace / final_action / v1_stages / X-ZeroShield-Action fields).
+  The new analyzer reproduces every number above from the raw files (runs/{val-6000-r7,val-8000,hon-hold30,
+    hon-pre5}/analysis-strata: identical metrics and verdicts). 28 analyzer unit tests pass.
+Shapes for all lanes (controller): loadgen = c4-standard-8, synthprov = c4-standard-8. Per 1,000 RPS of HEADLINE at
+  ITL 20 ms: 1 + 1. DERIVED from the WORST-BAND validation above (HEADLINE is strictly lighter; same C4 8-vCPU platform,
+  2x memory); not separately measured.
+Joins: x-request-id header, else the request id re-derived from the prompt nonce (works through v1, which forwards
+  messages but no headers). A body.user id path is not implemented (would need a synthprov rebuild; binaries frozen).
+
+Evidence: SP/evidence/harness-builder/ (runs/* are symlinks to /home/contact_cyberultron_com/rv-harness-evidence/runs,
+  moved off the RAM-backed /tmp). Usage: SP/harness/USAGE.md. VMs: all deleted (vm-ledger.jsonl, 76.4 VM-hours).

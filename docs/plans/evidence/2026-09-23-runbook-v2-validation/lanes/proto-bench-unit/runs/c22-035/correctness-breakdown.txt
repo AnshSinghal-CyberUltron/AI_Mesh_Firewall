@@ -1,0 +1,15 @@
+category counts by (class, provider-inject, tool):
+   ('benign', '-', '-') policy_block_fp 102
+   ('benign', '-', '-') qualified 12406
+   ('benign', 'email', '-') policy_block_fp 8
+   ('benign', 'email', '-') qualified 2196
+   ('benign', 'split-aws', '-') policy_block_fp 27
+   ('benign', 'split-aws', '-') qualified 2123
+   ('injection', '-', '-') policy_block_expected 457
+   ('injection', '-', '-') safety_failure 591
+   ('pii', '-', '-') qualified 2084
+   ('secret', '-', '-') policy_block_expected 1006
+output-redacted streams/bodies accepted (provider injected, no output canary at client): {('benign', 'email', '-'): 2196, ('benign', 'split-aws', '-'): 2123}
+responses with an OUTPUT canary at the client: 0
+provider calls by class: {'benign': 16725, 'pii': 2084, 'injection': 591}
+provider records with canary hits by (class, canary family): {('injection', ('inj',)): 591}

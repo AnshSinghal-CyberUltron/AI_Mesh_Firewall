@@ -1,0 +1,38 @@
+#0 building with "default" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 1.68kB done
+#1 DONE 0.0s
+
+#2 resolve image config for docker-image://docker.io/docker/dockerfile:1.7@sha256:a57df69d0ea827fb7266491f2813635de6f17269be881f696fbfdf2d83dda33e
+#2 DONE 0.0s
+
+#3 docker-image://docker.io/docker/dockerfile:1.7@sha256:a57df69d0ea827fb7266491f2813635de6f17269be881f696fbfdf2d83dda33e
+#3 resolve docker.io/docker/dockerfile:1.7@sha256:a57df69d0ea827fb7266491f2813635de6f17269be881f696fbfdf2d83dda33e 0.0s done
+#3 CACHED
+
+#4 [internal] load metadata for docker.io/library/python:3.12-slim@sha256:78387bc3881b8273120a12ebe6c1ab22b018ccc2c9adf565ae1ac9b536e184ea
+#4 DONE 0.0s
+
+#5 [internal] load .dockerignore
+#5 transferring context: 487B done
+#5 DONE 0.0s
+
+#6 [stage-0 1/2] FROM docker.io/library/python:3.12-slim@sha256:78387bc3881b8273120a12ebe6c1ab22b018ccc2c9adf565ae1ac9b536e184ea
+#6 resolve docker.io/library/python:3.12-slim@sha256:78387bc3881b8273120a12ebe6c1ab22b018ccc2c9adf565ae1ac9b536e184ea 0.0s done
+#6 DONE 0.0s
+
+#7 [internal] load build context
+#7 transferring context: 6.64kB done
+#7 DONE 0.0s
+
+#8 [stage-0 2/2] RUN --mount=type=bind,source=gateway_v2/pyproject.toml,target=/tmp/src/pyproject.toml,ro     --mount=type=bind,source=gateway_v2/gateway_v2,target=/tmp/src/pkg,ro     --mount=type=bind,source=shared/ai_mesh_shared,target=/tmp/src/shared,ro     umask 022     && mkdir -p /opt/gateway_v2/gateway_v2 /opt/shared/ai_mesh_shared     && cp /tmp/src/pyproject.toml /opt/gateway_v2/pyproject.toml     && cp -R /tmp/src/pkg/. /opt/gateway_v2/gateway_v2/     && cp -R /tmp/src/shared/. /opt/shared/ai_mesh_shared/     && find /opt -xdev -exec touch -h -d "@1704067200" {} +     && pip install --no-cache-dir --no-compile         setuptools==75.8.2         wheel==0.45.1     && pip install --no-cache-dir --no-compile --no-build-isolation /opt/gateway_v2     && chown -R 0:0 /usr/local /opt     && find /usr/local /opt -xdev -exec touch -h -d "@1704067200" {} +
+#8 CACHED
+
+#9 exporting to image
+#9 exporting layers done
+#9 exporting manifest sha256:07bc9358368999aa1df2717089e13626a749745a90202392899e4ecb985a445f done
+#9 exporting config sha256:5a763ec27217694841dc3c8dc32aabf30c095859f760774020aba77afa03d0ff done
+#9 naming to docker.io/library/hfreview-gw00:head done
+#9 unpacking to docker.io/library/hfreview-gw00:head done
+#9 DONE 0.0s

@@ -1,0 +1,103 @@
+## static checks 2026-09-23T07:21:47Z
+== /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/deploy/nginx.conf
+upstream{} blocks: 0
+keepalive directives (excluding keepalive_timeout): 0
+proxy_pass lines: 10
+93:        proxy_pass http://$control_upstream;
+107:        proxy_pass http://$control_upstream;
+110:        proxy_set_header Connection "upgrade";
+124:        proxy_pass http://$gateway_upstream;
+130:        proxy_buffering off;
+139:        proxy_pass http://$gateway_upstream;
+145:        proxy_buffering off;
+152:        proxy_pass http://$gateway_health/health;
+169:        proxy_pass http://$demo_upstream;
+178:        proxy_buffering off;
+220:        proxy_pass http://$control_upstream;
+235:        proxy_pass http://$control_upstream;
+238:        proxy_set_header Connection "upgrade";
+259:        proxy_pass http://$gateway_metrics/metrics;
+272:        proxy_pass http://$gateway_upstream;
+278:        proxy_buffering off;
+== /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/deploy/nginx-ssl.conf
+upstream{} blocks: 0
+keepalive directives (excluding keepalive_timeout): 0
+proxy_pass lines: 10
+19:        proxy_pass http://$control_upstream;
+33:        proxy_pass http://$control_upstream;
+36:        proxy_set_header Connection "upgrade";
+47:        proxy_pass http://$gateway_upstream;
+53:        proxy_buffering off;
+62:        proxy_pass http://$gateway_upstream;
+68:        proxy_buffering off;
+75:        proxy_pass http://$gateway_health/health;
+90:        proxy_pass http://$demo_upstream;
+98:        proxy_buffering off;
+132:        proxy_pass http://$control_upstream;
+146:        proxy_pass http://$control_upstream;
+149:        proxy_set_header Connection "upgrade";
+170:        proxy_pass http://$gateway_metrics/metrics;
+183:        proxy_pass http://$gateway_upstream;
+189:        proxy_buffering off;
+== /home/contact_cyberultron_com/AI_Mesh_Firewall/deploy/nginx.conf
+upstream{} blocks: 0
+keepalive directives (excluding keepalive_timeout): 0
+proxy_pass lines: 10
+93:        proxy_pass http://$control_upstream;
+107:        proxy_pass http://$control_upstream;
+110:        proxy_set_header Connection "upgrade";
+124:        proxy_pass http://$gateway_upstream;
+130:        proxy_buffering off;
+139:        proxy_pass http://$gateway_upstream;
+145:        proxy_buffering off;
+152:        proxy_pass http://$gateway_health/health;
+169:        proxy_pass http://$demo_upstream;
+178:        proxy_buffering off;
+220:        proxy_pass http://$control_upstream;
+235:        proxy_pass http://$control_upstream;
+238:        proxy_set_header Connection "upgrade";
+259:        proxy_pass http://$gateway_metrics/metrics;
+272:        proxy_pass http://$gateway_upstream;
+278:        proxy_buffering off;
+== /home/contact_cyberultron_com/AI_Mesh_Firewall/deploy/nginx-ssl.conf
+upstream{} blocks: 0
+keepalive directives (excluding keepalive_timeout): 0
+proxy_pass lines: 10
+19:        proxy_pass http://$control_upstream;
+33:        proxy_pass http://$control_upstream;
+36:        proxy_set_header Connection "upgrade";
+47:        proxy_pass http://$gateway_upstream;
+53:        proxy_buffering off;
+62:        proxy_pass http://$gateway_upstream;
+68:        proxy_buffering off;
+75:        proxy_pass http://$gateway_health/health;
+90:        proxy_pass http://$demo_upstream;
+98:        proxy_buffering off;
+132:        proxy_pass http://$control_upstream;
+146:        proxy_pass http://$control_upstream;
+149:        proxy_set_header Connection "upgrade";
+170:        proxy_pass http://$gateway_metrics/metrics;
+183:        proxy_pass http://$gateway_upstream;
+189:        proxy_buffering off;
+== baseline main.py:6716 / :6730
+    from ai_mesh_shared.redis_log_handler import RedisLogPublisher
+    gateway_logger.setLevel(logging.DEBUG)
+== baseline redis_log_handler.py:87-100
+    def emit(self, record: logging.LogRecord) -> None:
+        try:
+            entry = {
+                "timestamp": time.strftime(
+                    "%Y-%m-%dT%H:%M:%S", time.localtime(record.created)
+                ),
+                "level": record.levelname,
+                "service": self._resolve_service(record.name),
+                "logger": record.name,
+                "message": self.format(record),
+            }
+            client = self._get_client()
+            if client is not None:
+                client.publish(self._channel, json.dumps(entry))
+== HEAD vs baseline diff for these files:
+redis_log_handler identical
+main.py 6700-6760 identical
+nginx.conf identical

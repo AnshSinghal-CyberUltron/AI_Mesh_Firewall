@@ -1,0 +1,51 @@
+## cmd: cd /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/micro-claims/claim2/a && python3 claim2a_postprocess.py
+P1_DEBUG         s1_benign_nonstream    loop={'min': 1, 'median': 1.0, 'max': 1} worker={'min': 0, 'median': 0.0, 'max': 0}
+P1_DEBUG         s2_benign_stream       loop={'min': 0, 'median': 0.0, 'max': 0} worker={'min': 0, 'median': 0.0, 'max': 0}
+P1_DEBUG         s3_pii_nonstream       loop={'min': 2, 'median': 2.0, 'max': 2} worker={'min': 0, 'median': 0.0, 'max': 0}
+P1_DEBUG         s4_injection_block     loop={'min': 1, 'median': 1.0, 'max': 1} worker={'min': 0, 'median': 0.0, 'max': 0}
+P1_DEBUG         worker thread prefixes: {}
+P1_DEBUG_noshim  s1_benign_nonstream    loop={'min': 1, 'median': 1.0, 'max': 1} worker={'min': 0, 'median': 0.0, 'max': 0}
+P1_DEBUG_noshim  s2_benign_stream       loop={'min': 1, 'median': 1.0, 'max': 1} worker={'min': 0, 'median': 0.0, 'max': 0}
+P1_DEBUG_noshim  s3_pii_nonstream       loop={'min': 1, 'median': 1.0, 'max': 1} worker={'min': 0, 'median': 0.0, 'max': 0}
+P1_DEBUG_noshim  s4_injection_block     loop={'min': 1, 'median': 1.0, 'max': 1} worker={'min': 0, 'median': 0.0, 'max': 0}
+P1_DEBUG_noshim  worker thread prefixes: {}
+P1_INFO          s1_benign_nonstream    loop={'min': 1, 'median': 1.0, 'max': 1} worker={'min': 0, 'median': 0.0, 'max': 0}
+P1_INFO          s2_benign_stream       loop={'min': 0, 'median': 0.0, 'max': 0} worker={'min': 0, 'median': 0.0, 'max': 0}
+P1_INFO          s3_pii_nonstream       loop={'min': 2, 'median': 2.0, 'max': 2} worker={'min': 0, 'median': 0.0, 'max': 0}
+P1_INFO          s4_injection_block     loop={'min': 1, 'median': 1.0, 'max': 1} worker={'min': 0, 'median': 0.0, 'max': 0}
+P1_INFO          worker thread prefixes: {}
+P1_INFO_noshim   s1_benign_nonstream    loop={'min': 1, 'median': 1.0, 'max': 1} worker={'min': 0, 'median': 0.0, 'max': 0}
+P1_INFO_noshim   s2_benign_stream       loop={'min': 1, 'median': 1.0, 'max': 1} worker={'min': 0, 'median': 0.0, 'max': 0}
+P1_INFO_noshim   s3_pii_nonstream       loop={'min': 1, 'median': 1.0, 'max': 1} worker={'min': 0, 'median': 0.0, 'max': 0}
+P1_INFO_noshim   s4_injection_block     loop={'min': 1, 'median': 1.0, 'max': 1} worker={'min': 0, 'median': 0.0, 'max': 0}
+P1_INFO_noshim   worker thread prefixes: {}
+P2_DEBUG         s1_benign_nonstream    loop={'min': 4, 'median': 4.0, 'max': 4} worker={'min': 0, 'median': 0.0, 'max': 0}
+P2_DEBUG         s2_benign_stream       loop={'min': 2, 'median': 2.0, 'max': 2} worker={'min': 0, 'median': 0.0, 'max': 0}
+P2_DEBUG         s3_pii_nonstream       loop={'min': 5, 'median': 5.0, 'max': 5} worker={'min': 0, 'median': 0.0, 'max': 0}
+P2_DEBUG         s4_injection_block     loop={'min': 4, 'median': 4.0, 'max': 4} worker={'min': 0, 'median': 0.0, 'max': 0}
+P2_DEBUG         worker thread prefixes: {}
+P2_INFO          s1_benign_nonstream    loop={'min': 3, 'median': 3.0, 'max': 3} worker={'min': 0, 'median': 0.0, 'max': 0}
+P2_INFO          s2_benign_stream       loop={'min': 2, 'median': 2.0, 'max': 2} worker={'min': 0, 'median': 0.0, 'max': 0}
+P2_INFO          s3_pii_nonstream       loop={'min': 4, 'median': 4.0, 'max': 4} worker={'min': 0, 'median': 0.0, 'max': 0}
+P2_INFO          s4_injection_block     loop={'min': 3, 'median': 3.0, 'max': 3} worker={'min': 0, 'median': 0.0, 'max': 0}
+P2_INFO          worker thread prefixes: {}
+P2b_DEBUG        s1_benign_nonstream    loop={'min': 4, 'median': 4.0, 'max': 4} worker={'min': 0, 'median': 0.0, 'max': 0}
+P2b_DEBUG        s2_benign_stream       loop={'min': 2, 'median': 2.0, 'max': 2} worker={'min': 0, 'median': 0.0, 'max': 0}
+P2b_DEBUG        s3_pii_nonstream       loop={'min': 5, 'median': 5.0, 'max': 5} worker={'min': 0, 'median': 0.0, 'max': 0}
+P2b_DEBUG        s4_injection_block     loop={'min': 2, 'median': 2.0, 'max': 2} worker={'min': 0, 'median': 0.0, 'max': 0}
+P2b_DEBUG        worker thread prefixes: {}
+P2b_INFO         s1_benign_nonstream    loop={'min': 3, 'median': 3.0, 'max': 3} worker={'min': 0, 'median': 0.0, 'max': 0}
+P2b_INFO         s2_benign_stream       loop={'min': 2, 'median': 2.0, 'max': 2} worker={'min': 0, 'median': 0.0, 'max': 0}
+P2b_INFO         s3_pii_nonstream       loop={'min': 4, 'median': 4.0, 'max': 4} worker={'min': 0, 'median': 0.0, 'max': 0}
+P2b_INFO         s4_injection_block     loop={'min': 2, 'median': 2.0, 'max': 2} worker={'min': 0, 'median': 0.0, 'max': 0}
+P2b_INFO         worker thread prefixes: {}
+P2t2_DEBUG       s1_benign_nonstream    loop={'min': 13, 'median': 13.0, 'max': 13} worker={'min': 0, 'median': 0.0, 'max': 0}
+P2t2_DEBUG       s2_benign_stream       loop={'min': 2, 'median': 2.0, 'max': 2} worker={'min': 0, 'median': 0.0, 'max': 0}
+P2t2_DEBUG       s3_pii_nonstream       loop={'min': 14, 'median': 14.0, 'max': 14} worker={'min': 0, 'median': 0.0, 'max': 0}
+P2t2_DEBUG       s4_injection_block     loop={'min': 13, 'median': 13.0, 'max': 13} worker={'min': 0, 'median': 0.0, 'max': 0}
+P2t2_DEBUG       worker thread prefixes: {}
+P2t2_INFO        s1_benign_nonstream    loop={'min': 12, 'median': 12.0, 'max': 12} worker={'min': 0, 'median': 0.0, 'max': 0}
+P2t2_INFO        s2_benign_stream       loop={'min': 2, 'median': 2.0, 'max': 2} worker={'min': 0, 'median': 0.0, 'max': 0}
+P2t2_INFO        s3_pii_nonstream       loop={'min': 13, 'median': 13.0, 'max': 13} worker={'min': 0, 'median': 0.0, 'max': 0}
+P2t2_INFO        s4_injection_block     loop={'min': 12, 'median': 12.0, 'max': 12} worker={'min': 0, 'median': 0.0, 'max': 0}
+P2t2_INFO        worker thread prefixes: {}

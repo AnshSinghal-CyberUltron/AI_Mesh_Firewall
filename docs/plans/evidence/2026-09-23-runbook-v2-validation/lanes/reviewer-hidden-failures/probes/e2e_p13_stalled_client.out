@@ -1,0 +1,7 @@
+got headers: b'HTTP/1.1 200 OK' | now the client stops reading (socket stays open)
+t=  5s gauges (sum over workers): {'active_streams': 1, 'inflight_requests': 1.0}
+t= 30s gauges (sum over workers): {'active_streams': 1, 'inflight_requests': 1.0}
+t= 60s gauges (sum over workers): {'active_streams': 1, 'inflight_requests': 1.0}
+SIGTERM -> launcher 2221722 workers ['2221752', '2221753']
+after 90s: workers still alive = ['2221753']; launcher alive = True
+client socket closed -> workers exited 0.5s later: all exited

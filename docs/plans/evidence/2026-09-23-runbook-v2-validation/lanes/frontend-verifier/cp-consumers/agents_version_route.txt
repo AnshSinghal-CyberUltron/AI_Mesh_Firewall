@@ -1,0 +1,15 @@
+$ grep -rn "api/agents" control/ai_mesh_control --include=*urls*.py
+control/ai_mesh_control/core/dashboard_urls.py:18:    path("agents/", DashboardAgentsView.as_view(), name="dashboard-agents"),
+exit=0 (1=no route)
+$ sed -n 1174,1182p gateway/ai_mesh_gateway/main.py
+def _check_version():
+    """Optional: call version endpoint and log if update available or below min."""
+    cfg = CONFIG
+    if not cfg or not cfg.get("backend_url"):
+        return
+    url = f"{cfg['backend_url']}/api/agents/version/"
+    # Best-effort informational call — bound it so an unhealthy control plane can't stall boot.
+    code, body = _http_request_with_retry(
+        "GET", url, api_key=cfg.get("api_key"),
+$ grep -n "_check_version()" gateway/ai_mesh_gateway/main.py
+1174:def _check_version():

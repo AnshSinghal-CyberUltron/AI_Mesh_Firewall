@@ -1,0 +1,52 @@
+## HEAD gateway_v2/tests/openai_conformance
+total 140
+drwxrwxr-x 4 contact_cyberultron_com contact_cyberultron_com  4096 Sep 21 11:18 .
+drwxrwxr-x 7 contact_cyberultron_com contact_cyberultron_com  4096 Sep 21 12:14 ..
+-rw-rw-r-- 1 contact_cyberultron_com contact_cyberultron_com    87 Sep 21 11:14 __init__.py
+drwxrwxr-x 2 contact_cyberultron_com contact_cyberultron_com  4096 Sep 21 11:22 __pycache__
+-rw-rw-r-- 1 contact_cyberultron_com contact_cyberultron_com   963 Sep 21 11:18 conftest.py
+drwxrwxr-x 3 contact_cyberultron_com contact_cyberultron_com  4096 Sep 21 11:18 node
+-rw-rw-r-- 1 contact_cyberultron_com contact_cyberultron_com  1035 Sep 21 11:17 stub_server.py
+-rw-rw-r-- 1 contact_cyberultron_com contact_cyberultron_com  2383 Sep 21 11:18 test_live_tcp_8300.py
+-rw-rw-r-- 1 contact_cyberultron_com contact_cyberultron_com  2298 Sep 21 11:21 test_malformed_sse_frame.py
+-rw-rw-r-- 1 contact_cyberultron_com contact_cyberultron_com  3629 Sep 21 11:19 test_mcp_rag_vector_shapes.py
+-rw-rw-r-- 1 contact_cyberultron_com contact_cyberultron_com 52529 Sep 21 11:14 test_openai_sdk_compat.py
+-rw-rw-r-- 1 contact_cyberultron_com contact_cyberultron_com  8615 Sep 21 11:13 test_openai_sdk_compat_live_uvicorn.py
+-rw-rw-r-- 1 contact_cyberultron_com contact_cyberultron_com 10860 Sep 21 11:13 test_openai_sdk_compat_phase2.py
+-rw-rw-r-- 1 contact_cyberultron_com contact_cyberultron_com  4777 Sep 21 11:13 test_openai_sdk_compat_phase2_adversarial.py
+-rw-rw-r-- 1 contact_cyberultron_com contact_cyberultron_com  8240 Sep 21 11:13 test_openai_sdk_compat_phase5_correlation.py
+-rw-rw-r-- 1 contact_cyberultron_com contact_cyberultron_com  4043 Sep 21 11:13 test_openai_sdk_compat_phase6_guards.py
+    1 __init__.py
+   24 conftest.py
+   36 stub_server.py
+   73 test_live_tcp_8300.py
+   76 test_malformed_sse_frame.py
+  110 test_mcp_rag_vector_shapes.py
+ 1176 test_openai_sdk_compat.py
+  202 test_openai_sdk_compat_live_uvicorn.py
+  230 test_openai_sdk_compat_phase2.py
+  118 test_openai_sdk_compat_phase2_adversarial.py
+  157 test_openai_sdk_compat_phase5_correlation.py
+   93 test_openai_sdk_compat_phase6_guards.py
+ 2296 total
+ "file": "test_live_tcp_8300.py",
+ "test_funcs": 3,
+ "file": "test_malformed_sse_frame.py",
+ "test_funcs": 1,
+ "file": "test_mcp_rag_vector_shapes.py",
+ "test_funcs": 4,
+ "file": "test_openai_sdk_compat.py",
+ "test_funcs": 48,
+ "file": "test_openai_sdk_compat_live_uvicorn.py",
+ "test_funcs": 8,
+ "file": "test_openai_sdk_compat_phase2.py",
+ "test_funcs": 12,
+   "pytest.mark.xfail(strict=True, reason=\"DEFECT P2-N-CHAT-clamp (MEDIUM; INTENTIONAL single-choice output-guard tradeoff at main.py:4309, but a SILENT OpenAI deviation): n>1 is clamped to 1 with no client-facing signal. OpenAI returns n choices. At minimum the clamp should be surfaced or 400'd, not si"
+   "pytest.mark.xfail(strict=True, reason=\"DEFECT P2-CONTENT-part-validation-gap (LOW): allowlisted multimodal part types (file/input_audio/audio/video_url) are admitted without payload-shape validation (main.py:4214-4231 validates only text/image_url), so a malformed {'type':'file'} (no 'file' key) rea"
+ "file": "test_openai_sdk_compat_phase2_adversarial.py",
+ "test_funcs": 5,
+ "file": "test_openai_sdk_compat_phase5_correlation.py",
+ "test_funcs": 2,
+ "file": "test_openai_sdk_compat_phase6_guards.py",
+ "test_funcs": 2,
+TOTAL test functions/methods (AST): 85

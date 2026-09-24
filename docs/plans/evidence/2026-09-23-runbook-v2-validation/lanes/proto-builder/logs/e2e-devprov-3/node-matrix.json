@@ -1,0 +1,52 @@
+{
+ "sdk": "openai-node@4.104.0",
+ "base": "http://127.0.0.1:8400",
+ "results": [
+  {
+   "name": "non_stream_parsed",
+   "pass": true,
+   "detail": "{\"prompt_tokens\":10,\"completion_tokens\":8,\"total_tokens\":18}"
+  },
+  {
+   "name": "stream_done_and_parsed",
+   "pass": true,
+   "detail": "14 chunks"
+  },
+  {
+   "name": "tool_args_reconstructed_exactly",
+   "pass": true,
+   "detail": "7 frags {\"city\": \"Paris\", \"unit\": \"celsius\", \"days\": 3}"
+  },
+  {
+   "name": "sdk_helper_accumulates_tool_call",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "name": "output_split_aws_redacted",
+   "pass": true,
+   "detail": " alpha river meadow key [REDACTED:secret.aws] end green green lemon window river river stone orbit alpha"
+  },
+  {
+   "name": "block_typed_403_stream_false",
+   "pass": true,
+   "detail": "PermissionDeniedError 403 blocked_by_policy"
+  },
+  {
+   "name": "block_typed_403_stream_true",
+   "pass": true,
+   "detail": "PermissionDeniedError 403 blocked_by_policy"
+  },
+  {
+   "name": "bad_key_typed_401",
+   "pass": true,
+   "detail": "AuthenticationError"
+  },
+  {
+   "name": "quota_typed_429",
+   "pass": true,
+   "detail": "2 ok then RateLimitError insufficient_quota"
+  }
+ ],
+ "failed": 0
+}

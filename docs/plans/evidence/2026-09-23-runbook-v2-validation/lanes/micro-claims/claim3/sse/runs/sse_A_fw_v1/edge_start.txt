@@ -1,0 +1,2 @@
+nginx: configuration file /etc/nginx/nginx.conf test is successful
+edge started variant=A_prod workers=4

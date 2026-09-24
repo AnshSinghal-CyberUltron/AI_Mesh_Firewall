@@ -1,0 +1,10 @@
+run1 exit=1 lines=2407
+RecursionError: maximum recursion depth exceeded
+ProcessLookupError: [Errno 3] No such process
+run2 exit=1 lines=2406
+RecursionError: maximum recursion depth exceeded
+ProcessLookupError: [Errno 3] No such process
+run3 exit=1 lines=53
+object type name: RecursionError
+object repr     : RecursionError('maximum recursion depth exceeded')
+ProcessLookupError: [Errno 3] No such process

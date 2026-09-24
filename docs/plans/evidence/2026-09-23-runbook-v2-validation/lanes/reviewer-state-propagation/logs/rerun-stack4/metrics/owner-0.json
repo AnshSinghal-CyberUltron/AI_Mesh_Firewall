@@ -1,0 +1,1 @@
+{"worker": 0, "pid": 2298767, "exported_at": 1790168450.295371, "uptime_s": 38.890302658081055, "hist": {}, "count": {}, "gauge": {"owner_clients": 4, "owner_queued_tokens": 0, "owner_queue_cap_tokens": 43, "guard_queue_items": 0, "guard_queue_windows": 0, "guard_queue_oldest_age_seconds": 0.0, "guard_tokens_per_s": 2159.4234478456433}}

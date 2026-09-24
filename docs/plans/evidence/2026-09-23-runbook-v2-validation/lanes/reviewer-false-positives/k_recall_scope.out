@@ -1,0 +1,2 @@
+22M recall@0.5 ALL (75, 323, 0.2322) | in-scope (excl data_leakage/sql/command/path) (72, 207, 0.3478) | core PI+JB+paraphrase (62, 129, 0.4806) | out-of-scope (3, 116, 0.0259)
+86M recall@0.5 ALL (87, 323, 0.2693) | in-scope (excl data_leakage/sql/command/path) (82, 207, 0.3961) | core PI+JB+paraphrase (77, 129, 0.5969) | out-of-scope (5, 116, 0.0431)

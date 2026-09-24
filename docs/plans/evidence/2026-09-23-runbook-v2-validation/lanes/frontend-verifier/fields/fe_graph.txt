@@ -1,0 +1,19 @@
+reachable from main.jsx: 156 files; unreachable non-test source files: 15
+unresolved imports: 0
+parse errors: 1
+unreachable (bytes):
+    11069  components/LogViewerPanel.jsx
+    99106  components/MCPManagerPanel.jsx
+    12609  components/MCPScanControlMatrix.jsx
+    51930  components/MCPScannerPanel.jsx
+    12585  components/ServiceStatusPanel.jsx
+     1945  components/firewall/primitives/EmailChipInput.jsx
+      869  components/firewall/primitives/PasswordInput.jsx
+     2546  components/firewall/primitives/SectionNav.jsx
+    18169  components/simulator/CircuitBreakerSimulator.jsx
+    12861  components/simulator/OutputGuardSimulator.jsx
+      598  components/ui/Input.jsx
+      283  components/ui/Label.jsx
+      542  components/ui/Progress.jsx
+     1088  components/ui/Table.jsx
+     1263  lib/api.js

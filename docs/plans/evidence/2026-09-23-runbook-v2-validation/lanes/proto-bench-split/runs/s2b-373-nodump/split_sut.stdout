@@ -1,0 +1,230 @@
+{
+ "n_measured_requests": 111900,
+ "gateways": {
+  "rv-split-gw-1": {
+   "cores": {
+    "worker": 4.594,
+    "launcher": 0.0,
+    "redis": 0.018
+   },
+   "cpu_ms_per_req": 12.357,
+   "redis_cpu_ms_per_req": 0.048,
+   "vm_cores_busy": 4.64,
+   "worker_util": {
+    "n": 12,
+    "min": 0.342,
+    "median": 0.381,
+    "max": 0.417
+   },
+   "core_util": {
+    "max": 0.326,
+    "mean": 0.29,
+    "sum_cores": 4.64
+   },
+   "nic": {
+    "ens3": {
+     "rx_mbit_s": 205.37,
+     "tx_mbit_s": 216.29,
+     "rx_bytes_per_req": 69053.9,
+     "tx_bytes_per_req": 72724.2
+    }
+   },
+   "guard_rtt": null,
+   "guard_wait": null,
+   "guard_queue_seen_by_worker": null,
+   "guard_exec_seen_by_worker": null,
+   "t_input": null,
+   "t_tokenize": null,
+   "loop_lag": null,
+   "windows_per_request": null,
+   "admitted": null,
+   "counts": {}
+  }
+ },
+ "guards": {
+  "rv-split-guard-1": {
+   "owner_cores": 0.729,
+   "owner_cpu_ms_per_req": 1.961,
+   "vm_cores_busy": 0.76,
+   "gpu": {
+    "0": {
+     "samples": 299,
+     "sm_mean": 58.3,
+     "sm_max": 77.0,
+     "mem_mean": 10.1,
+     "fb_mb_max": 434.0
+    }
+   },
+   "nic": {
+    "ens4": {
+     "rx_mbit_s": 3.82,
+     "tx_mbit_s": 0.23,
+     "rx_bytes_per_req": 1285.2,
+     "tx_bytes_per_req": 75.7
+    },
+    "docker0": {
+     "rx_mbit_s": 0.0,
+     "tx_mbit_s": 0.0,
+     "rx_bytes_per_req": 0.0,
+     "tx_bytes_per_req": 0.0
+    }
+   },
+   "gw_guard_bytes_per_req": 1360.9,
+   "owner_queue_gauges": {
+    "o.guard_queue_items.max": {
+     "max": 1.0,
+     "mean": 0.43
+    },
+    "o.guard_queue_items.sum": {
+     "max": 1.0,
+     "mean": 0.43
+    },
+    "o.guard_queue_windows.max": {
+     "max": 2.0,
+     "mean": 0.66
+    },
+    "o.guard_queue_windows.sum": {
+     "max": 2.0,
+     "mean": 0.66
+    }
+   },
+   "owner_hist": {
+    "guard_queue_ns": {
+     "n": 55802,
+     "p50_ms": 0.1751,
+     "p90_ms": 4.6203,
+     "p99_ms": 8.4541,
+     "p99.9_ms": 11.862,
+     "mean_ms": 1.5568
+    },
+    "guard_exec_ns": {
+     "n": 55802,
+     "p50_ms": 4.2271,
+     "p90_ms": 4.6203,
+     "p99_ms": 6.783,
+     "p99.9_ms": 6.9796,
+     "mean_ms": 3.5783
+    }
+   },
+   "owner_counts": {
+    "guard_batches": 55802,
+    "guard_windows": 91262,
+    "owner_requests": 55801,
+    "owner_windows": 91260
+   },
+   "core_util": {
+    "max": 0.46,
+    "mean": 0.19
+   }
+  },
+  "rv-split-guard-2": {
+   "owner_cores": 0.714,
+   "owner_cpu_ms_per_req": 1.921,
+   "vm_cores_busy": 0.74,
+   "gpu": {
+    "0": {
+     "samples": 298,
+     "sm_mean": 57.8,
+     "sm_max": 79.0,
+     "mem_mean": 10.2,
+     "fb_mb_max": 434.0
+    }
+   },
+   "nic": {
+    "ens4": {
+     "rx_mbit_s": 3.85,
+     "tx_mbit_s": 0.23,
+     "rx_bytes_per_req": 1293.3,
+     "tx_bytes_per_req": 75.9
+    },
+    "docker0": {
+     "rx_mbit_s": 0.0,
+     "tx_mbit_s": 0.0,
+     "rx_bytes_per_req": 0.0,
+     "tx_bytes_per_req": 0.0
+    }
+   },
+   "gw_guard_bytes_per_req": 1369.2,
+   "owner_queue_gauges": {
+    "o.guard_queue_items.max": {
+     "max": 2.0,
+     "mean": 0.5
+    },
+    "o.guard_queue_items.sum": {
+     "max": 2.0,
+     "mean": 0.5
+    },
+    "o.guard_queue_windows.max": {
+     "max": 4.0,
+     "mean": 0.73
+    },
+    "o.guard_queue_windows.sum": {
+     "max": 4.0,
+     "mean": 0.73
+    }
+   },
+   "owner_hist": {
+    "guard_queue_ns": {
+     "n": 56088,
+     "p50_ms": 0.105,
+     "p90_ms": 4.2271,
+     "p99_ms": 7.9626,
+     "p99.9_ms": 11.3377,
+     "mean_ms": 1.4189
+    },
+    "guard_exec_ns": {
+     "n": 56088,
+     "p50_ms": 4.1779,
+     "p90_ms": 4.4892,
+     "p99_ms": 6.5864,
+     "p99.9_ms": 6.8485,
+     "mean_ms": 3.4928
+    }
+   },
+   "owner_counts": {
+    "guard_batches": 56088,
+    "guard_windows": 91765,
+    "owner_requests": 56089,
+    "owner_windows": 91767
+   },
+   "core_util": {
+    "max": 0.322,
+    "mean": 0.186
+   }
+  }
+ },
+ "extras": {},
+ "gw_cpu_ms_per_req": 12.357,
+ "gw_cores_busy_total": 4.64,
+ "guard_rtt": null,
+ "t_input": null,
+ "loop_lag": null,
+ "worker_util_max": 0.417,
+ "windows_per_request": null,
+ "gw_admitted_share": {
+  "rv-split-gw-1": null
+ },
+ "gw_core_util_schedstat": {
+  "max": 0.326,
+  "mean": 0.29,
+  "sum_cores": 4.64
+ },
+ "gw_worker_util": {
+  "n": 12,
+  "min": 0.342,
+  "median": 0.381,
+  "max": 0.417
+ },
+ "gw_nic": {
+  "ens3": {
+   "rx_mbit_s": 205.37,
+   "tx_mbit_s": 216.29,
+   "rx_bytes_per_req": 69053.9,
+   "tx_bytes_per_req": 72724.2
+  }
+ },
+ "guard_wait": null,
+ "guard_queue_seen_by_worker": null,
+ "guard_exec_seen_by_worker": null,
+ "gw_counts": {}
+}

@@ -1,0 +1,13 @@
+test_openai_sdk_compat.py:594:# Cells the playbook flagged as defects D2/D3/D4/D5 are marked xfail(strict=False):
+test_openai_sdk_compat.py:595:# a non-strict xfail stays green whether it XFAILs (defect real) or XPASSes (already
+test_openai_sdk_compat.py:596:# fixed in-tree). The post-run xfail/xpass split is the authoritative backlog.
+test_openai_sdk_compat.py:701:@pytest.mark.xfail(strict=False, reason="D5: responses streaming must yield TYPED events (response.created -> output_text.delta -> response.completed); fix is in-tree (main.py:7815) so XPASS is expect
+test_openai_sdk_compat.py:744:@pytest.mark.xfail(strict=False, reason="D4: client.models.retrieve(id) — playbook flagged as a gap; fix is in-tree (main.py:11471) so XPASS is expected")
+test_openai_sdk_compat.py:795:# xfail) — e.code/e.type/e.message must be non-None on a block.
+test_openai_sdk_compat.py:811:# shim 254-287) — REAL passing cell, no longer xfail.
+test_openai_sdk_compat_phase2.py:3:Each test asserts the CORRECT OpenAI behavior and is marked ``xfail(strict=True)``:
+test_openai_sdk_compat_phase2.py:91:# dual-field request that o1/o3/gpt-5 reject is gone. xfail marker removed.
+test_openai_sdk_compat_phase2.py:109:# ceiling/sign validation as max_tokens (50_000_000 -> 400). xfail marker removed.
+test_openai_sdk_compat_phase2.py:159:@pytest.mark.xfail(strict=True, reason="DEFECT P2-N-CHAT-clamp (MEDIUM; INTENTIONAL single-choice output-guard tradeoff at main.py:4309, but a SILENT OpenAI deviation): n>1 is clamped to 1 with
+test_openai_sdk_compat_phase2.py:221:@pytest.mark.xfail(strict=True, reason="DEFECT P2-CONTENT-part-validation-gap (LOW): allowlisted multimodal part types (file/input_audio/audio/video_url) are admitted without payload-shape vali
+test_openai_sdk_compat_phase2_adversarial.py:12:``xfail(strict=True)`` — XFAIL = confirmed defect, XPASS = claim wrong (drop it).

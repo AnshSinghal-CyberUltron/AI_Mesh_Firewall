@@ -1,0 +1,6 @@
+{"name": "rv-v1-sut-1", "zone": "asia-south1-c", "machine_type": "g2-standard-24", "lane": "v1", "create_utc": "2026-09-23T05:37:58Z", "delete_utc": "2026-09-23T12:25:53Z", "note": "v1 SUT (GPU unused)"}
+{"name": "rv-v1-prov-1", "zone": "asia-south1-c", "machine_type": "c4-standard-8", "lane": "v1", "create_utc": "2026-09-23T05:52:20Z", "delete_utc": "2026-09-23T12:25:48Z", "note": "synthprov"}
+{"name": "rv-v1-lg-1", "zone": "asia-south1-c", "machine_type": "c4-standard-8", "lane": "v1", "create_utc": "2026-09-23T05:52:30Z", "delete_utc": "2026-09-23T12:25:49Z", "note": "olg loadgen"}
+{"name": "rv-v1-sut-2", "zone": "asia-south1-c", "machine_type": "g2-standard-24", "lane": "v1", "create_utc": "2026-09-23T12:29:57Z", "delete_utc": "2026-09-23T13:55:52Z", "note": "v1 SUT #2 (GPU unused)"}
+{"name": "rv-v1-lg-2", "zone": "asia-south1-c", "machine_type": "c4-standard-8", "lane": "v1", "create_utc": "2026-09-23T12:29:57Z", "delete_utc": "2026-09-23T13:55:50Z", "note": "olg loadgen #2"}
+{"name": "rv-v1-prov-2", "zone": "asia-south1-c", "machine_type": "c4-standard-8", "lane": "v1", "create_utc": "2026-09-23T12:29:58Z", "delete_utc": "2026-09-23T13:55:50Z", "note": "synthprov #2"}

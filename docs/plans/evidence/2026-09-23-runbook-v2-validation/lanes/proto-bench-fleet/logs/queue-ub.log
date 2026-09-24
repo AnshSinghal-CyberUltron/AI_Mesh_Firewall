@@ -1,0 +1,26 @@
+17:05:11 START ub1-025 25 UNITS=rv-pbf-unit-2 LABEL=UB-1unit-ladder-C4rule
+17:14:01 DONE ub1-025: # ub1-025: strict FAIL | load-knee PASS (sut, units=1, rate=25) | offered 7500 (25.0/s) qualified 7411 (24.7/s) FP-blocks 89 (0.01187) infra 0 (0.0) drops 0 safety 0
+17:14:01 START ub1-040 40 UNITS=rv-pbf-unit-2 LABEL=UB-1unit-ladder-C4rule
+17:22:52 DONE ub1-040: # ub1-040: strict FAIL | load-knee PASS (sut, units=1, rate=40) | offered 12000 (40.0/s) qualified 11832 (39.44/s) FP-blocks 168 (0.014) infra 0 (0.0) drops 0 safety 0
+17:22:52 QUEUE_END /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-bench-fleet/notes/q-ub-a.txt
+17:23:01 START ub1-032 32 UNITS=rv-pbf-unit-2 LABEL=UB-1unit-ladder-C4rule
+17:31:51 DONE ub1-032: # ub1-032: strict FAIL | load-knee PASS (sut, units=1, rate=32) | offered 9600 (32.0/s) qualified 9456 (31.52/s) FP-blocks 144 (0.015) infra 0 (0.0) drops 0 safety 0
+17:31:51 QUEUE_END /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-bench-fleet/notes/q-ub-b.txt
+17:31:51 CMD bash /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-bench-fleet/scripts/edge_set.sh ub-2unit "10.146.0.2:8400 10.146.0.5:8400": nginx: configuration file /etc/nginx/nginx.conf test is successful 2 active 
+17:31:58 START ub2-064 64 UNITS="rv-pbf-unit-2 rv-pbf-unit-3" LABEL=UB-2unit-ladder-C4rule
+17:40:51 DONE ub2-064: # ub2-064: strict FAIL | load-knee PASS (sut, units=2, rate=64) | offered 19200 (64.0/s) qualified 18910 (63.03/s) FP-blocks 290 (0.0151) infra 0 (0.0) drops 0 safety 0
+17:40:51 START ub2-050 50 UNITS="rv-pbf-unit-2 rv-pbf-unit-3" LABEL=UB-2unit-ladder-C4rule
+17:49:43 DONE ub2-050: # ub2-050: strict FAIL | load-knee PASS (sut, units=2, rate=50) | offered 15000 (50.0/s) qualified 14810 (49.37/s) FP-blocks 190 (0.01267) infra 0 (0.0) drops 0 safety 0
+17:49:43 QUEUE_END /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-bench-fleet/notes/q-ub-c.txt
+17:49:43 CMD bash /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-bench-fleet/scripts/edge_set.sh ub-4unit "10.146.0.2:8400 10.146.0.5:8400 10.146.0.3:8400 10.146.0.4:8400": nginx: configuration file /etc/nginx/nginx.conf test is successful 4 active 
+17:49:50 START ub4-100 100 UNITS="rv-pbf-unit-2 rv-pbf-unit-3 rv-pbf-unit-4 rv-pbf-unit-5" LABEL=UB-4unit-ladder-C4rule
+17:58:46 DONE ub4-100: # ub4-100: strict FAIL | load-knee PASS (sut, units=4, rate=100) | offered 30000 (100.0/s) qualified 29466 (98.22/s) FP-blocks 534 (0.0178) infra 0 (0.0) drops 0 safety 0
+17:58:46 START ub4-064 64 UNITS="rv-pbf-unit-2 rv-pbf-unit-3 rv-pbf-unit-4 rv-pbf-unit-5" LABEL=UB-4unit-ladder-C4rule
+18:07:39 DONE ub4-064: # ub4-064: strict FAIL | load-knee PASS (sut, units=4, rate=64) | offered 19200 (64.0/s) qualified 18909 (63.03/s) FP-blocks 291 (0.01516) infra 0 (0.0) drops 0 safety 0
+18:07:39 QUEUE_END /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-bench-fleet/notes/q-ub-d.txt
+18:08:20 START ub4-032 32 UNITS="rv-pbf-unit-2 rv-pbf-unit-3 rv-pbf-unit-4 rv-pbf-unit-5" LABEL=UB-4unit-ladder-C4rule-floor-check
+18:17:15 DONE ub4-032: # ub4-032: strict FAIL | load-knee PASS (sut, units=4, rate=32) | offered 9600 (32.0/s) qualified 9460 (31.53/s) FP-blocks 140 (0.01458) infra 0 (0.0) drops 0 safety 0
+18:17:15 CMD bash /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-bench-fleet/scripts/edge_set.sh ub-1unit "10.146.0.2:8400": nginx: configuration file /etc/nginx/nginx.conf test is successful 1 active 
+18:17:23 START ub1-025-r2 25 UNITS=rv-pbf-unit-2 LABEL=UB-1unit-C4-repeat
+18:26:14 DONE ub1-025-r2: # ub1-025-r2: strict FAIL | load-knee PASS (sut, units=1, rate=25) | offered 7500 (25.0/s) qualified 7407 (24.69/s) FP-blocks 93 (0.0124) infra 0 (0.0) drops 0 safety 0
+18:26:14 QUEUE_END /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-bench-fleet/notes/q-ub-e.txt

@@ -1,0 +1,18 @@
+### v1_spec
+OK        detect->plan   (Finding.__post_init__ validates Category, LGW04-3)
+OK        resolve->detect+plan (resolver compares FindingStatus / Mode at runtime)
+TypeError dispatch->resolve (entry point isinstance(DispatchAuthorization)): provider entry point requires a DispatchAuthorization  (expected rejection => name resolved at runtime)
+OK        egress->plan  (StreamPipeline reads StreamingMode)
+OK        egress->resolve (output_guard calls resolve(), Phase.OUTPUT)
+### v2_tc_minimal
+OK        detect->plan   (Finding.__post_init__ validates Category, LGW04-3)
+OK        resolve->detect+plan (resolver compares FindingStatus / Mode at runtime)
+TypeError dispatch->resolve (entry point isinstance(DispatchAuthorization)): provider entry point requires a DispatchAuthorization  (expected rejection => name resolved at runtime)
+OK        egress->plan  (StreamPipeline reads StreamingMode)
+OK        egress->resolve (output_guard calls resolve(), Phase.OUTPUT)
+### v2_tc_all
+NameError detect->plan   (Finding.__post_init__ validates Category, LGW04-3): name 'Category' is not defined
+NameError resolve->detect+plan (resolver compares FindingStatus / Mode at runtime): name 'FindingStatus' is not defined
+NameError dispatch->resolve (entry point isinstance(DispatchAuthorization)): name 'DispatchAuthorization' is not defined
+NameError egress->plan  (StreamPipeline reads StreamingMode): name 'StreamingMode' is not defined
+NameError egress->resolve (output_guard calls resolve(), Phase.OUTPUT): name 'resolve' is not defined

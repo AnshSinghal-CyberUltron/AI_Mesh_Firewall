@@ -1,0 +1,4 @@
+provider 400 | direct -> provider | SDK saw: BadRequestError status=400 code=context_length_exceeded retry-after=None         | provider calls=1 | elapsed 0.5s
+provider 400 | via rvproto        | SDK saw: InternalServerError status=502 code=provider_error retry-after=None              | provider calls=3 | elapsed 1.6s
+provider 429 | direct -> provider | SDK saw: RateLimitError status=429 code=rate_limit_exceeded retry-after=7                 | provider calls=3 | elapsed 14.3s
+provider 429 | via rvproto        | SDK saw: InternalServerError status=502 code=provider_error retry-after=None              | provider calls=3 | elapsed 1.6s

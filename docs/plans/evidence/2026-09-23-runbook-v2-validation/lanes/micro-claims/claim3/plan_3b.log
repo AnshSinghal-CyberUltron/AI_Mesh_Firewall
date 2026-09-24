@@ -1,0 +1,26 @@
+/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/micro-claims/claim3/c3_step.sh: line 35: wait: pid 1594914 is not a child of this shell
+c3_A_prod_r400_rep3: ok=120000/120000 err={} drops=0 p50=328.5 p99=1098.3 p99.9=1409.4 us | edge ActiveOpens/req=0.9986 up PassiveOpens/req=0.9987 | TW edge=19754 up=0 | cores edge=0.195 up=0.071 | PASS=True
+[plan2] c3_A_prod_r400_rep3 -> PASS
+/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/micro-claims/claim3/c3_step.sh: line 35: wait: pid 1618660 is not a child of this shell
+c3_B_keepalive_r20000_retry: ok=6000000/6000000 err={} drops=0 p50=212.3 p99=326.0 p99.9=466.4 us | edge ActiveOpens/req=0.001 up PassiveOpens/req=0.001 | TW edge=1675 up=0 | cores edge=1.521 up=1.536 | PASS=True
+[plan2] c3_B_keepalive_r20000_retry -> PASS
+/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/micro-claims/claim3/c3_step.sh: line 35: wait: pid 1632690 is not a child of this shell
+c3_B_keepalive_r30000: ok=9000000/9000000 err={} drops=0 p50=235.1 p99=388.3 p99.9=580.0 us | edge ActiveOpens/req=0.001 up PassiveOpens/req=0.001 | TW edge=1258 up=1 | cores edge=2.362 up=2.577 | PASS=True
+[plan2] c3_B_keepalive_r30000 -> PASS
+/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/micro-claims/claim3/c3_step.sh: line 35: wait: pid 1647482 is not a child of this shell
+c3_B_keepalive_r40000: ok=12000000/12000000 err={} drops=1642 p50=258.4 p99=623.2 p99.9=2708.6 us | edge ActiveOpens/req=0.001 up PassiveOpens/req=0.001 | TW edge=1270 up=3 | cores edge=3.196 up=3.568 | PASS=False
+[plan2] c3_B_keepalive_r40000 -> INVALID_LG
+/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/micro-claims/claim3/c3_step.sh: line 35: wait: pid 1662406 is not a child of this shell
+c3_B_keepalive_r40000_try2: ok=12000000/12000000 err={} drops=898 p50=259.7 p99=494.4 p99.9=1374.8 us | edge ActiveOpens/req=0.001 up PassiveOpens/req=0.001 | TW edge=1296 up=0 | cores edge=3.215 up=3.665 | PASS=False
+[plan2] c3_B_keepalive_r40000_try2 -> INVALID_LG
+/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/micro-claims/claim3/c3_step.sh: line 35: wait: pid 1676937 is not a child of this shell
+c3_B_keepalive_r40000_try3: ok=12000000/12000000 err={} drops=1037 p50=258.5 p99=478.0 p99.9=1151.8 us | edge ActiveOpens/req=0.001 up PassiveOpens/req=0.001 | TW edge=1897 up=1 | cores edge=3.218 up=3.65 | PASS=False
+[plan2] c3_B_keepalive_r40000_try3 -> INVALID_LG
+/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/micro-claims/claim3/c3_step.sh: line 35: wait: pid 1692949 is not a child of this shell
+c3_B_keepalive_r30000_rep2: ok=9000000/9000000 err={} drops=605 p50=235.4 p99=393.6 p99.9=632.7 us | edge ActiveOpens/req=0.001 up PassiveOpens/req=0.001 | TW edge=1379 up=0 | cores edge=2.39 up=2.508 | PASS=False
+[plan2] c3_B_keepalive_r30000_rep2 -> INVALID_LG
+/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/micro-claims/claim3/c3_step.sh: line 35: wait: pid 1706971 is not a child of this shell
+c3_B_keepalive_r30000_rep2_try2: ok=9000000/9000000 err={} drops=193 p50=235.2 p99=389.8 p99.9=588.8 us | edge ActiveOpens/req=0.001 up PassiveOpens/req=0.001 | TW edge=1481 up=0 | cores edge=2.364 up=2.52 | PASS=False
+[plan2] c3_B_keepalive_r30000_rep2_try2 -> INVALID_LG
+/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/micro-claims/claim3/c3_step.sh: line 35: wait: pid 1720843 is not a child of this shell
+c3_B_keepalive_r30000_rep2_try3: ok=9000000/9000000 err={} drops=615 p50=237.6 p99=393.0 p99.9=644.1 us | edge ActiveOpens/req=0.001 up PassiveOpens/req=0.001 | TW edge=1873 up=0 | cores edge=2.398 up=2.583 | PASS=False

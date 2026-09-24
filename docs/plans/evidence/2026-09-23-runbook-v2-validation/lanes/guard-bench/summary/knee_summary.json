@@ -1,0 +1,282 @@
+{
+ "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/guard-bench/raw/A/g2-2/Llama-Prompt-Guard-2-22M/knee_serial1_W2_p99le10": {
+  "target_p99_ms": 10.0,
+  "knee_wps": 89.2,
+  "next_wps": 97.4,
+  "fine_sweep": [
+   {
+    "offered_wps": 89.2,
+    "p99": 8.8241,
+    "drops": 0,
+    "n": 1358
+   },
+   {
+    "offered_wps": 97.4,
+    "p99": 10.1313,
+    "drops": 0,
+    "n": 1405
+   },
+   {
+    "offered_wps": 105.6,
+    "p99": 9.3656,
+    "drops": 0,
+    "n": 1610
+   },
+   {
+    "offered_wps": 113.8,
+    "p99": 11.2992,
+    "drops": 0,
+    "n": 1700
+   }
+  ],
+  "knee_repeats": [
+   {
+    "p50": 4.105,
+    "p99": 9.1978,
+    "max": 19.2693,
+    "n": 13282,
+    "drops": 0,
+    "achieved_wps": 88.6,
+    "pass": true
+   },
+   {
+    "p50": 4.1159,
+    "p99": 9.2249,
+    "max": 17.3491,
+    "n": 13287,
+    "drops": 0,
+    "achieved_wps": 88.6,
+    "pass": true
+   },
+   {
+    "p50": 4.0974,
+    "p99": 9.2389,
+    "max": 15.8349,
+    "n": 13410,
+    "drops": 0,
+    "achieved_wps": 89.4,
+    "pass": true
+   }
+  ],
+  "next_step": [
+   {
+    "p50": 4.1137,
+    "p99": 9.6591,
+    "n": 14556,
+    "drops": 0,
+    "pass": true
+   }
+  ],
+  "knee_repeatable_pass": true
+ },
+ "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/guard-bench/raw/A/g2-2/Llama-Prompt-Guard-2-22M/knee_serial1_W2_p99le8": {
+  "target_p99_ms": 8.0,
+  "knee_wps": 41.0,
+  "next_wps": 49.0,
+  "fine_sweep": [
+   {
+    "offered_wps": 49.0,
+    "p99": 8.0686,
+    "drops": 0,
+    "n": 792
+   },
+   {
+    "offered_wps": 57.0,
+    "p99": 8.1524,
+    "drops": 0,
+    "n": 770
+   },
+   {
+    "offered_wps": 65.0,
+    "p99": 7.8319,
+    "drops": 0,
+    "n": 990
+   },
+   {
+    "offered_wps": 73.0,
+    "p99": 10.077,
+    "drops": 0,
+    "n": 1116
+   }
+  ],
+  "knee_repeats": [
+   {
+    "p50": 4.1752,
+    "p99": 7.8611,
+    "max": 16.0987,
+    "n": 6225,
+    "drops": 0,
+    "achieved_wps": 41.5,
+    "pass": true
+   },
+   {
+    "p50": 4.1685,
+    "p99": 7.768,
+    "max": 14.8275,
+    "n": 6098,
+    "drops": 0,
+    "achieved_wps": 40.7,
+    "pass": true
+   },
+   {
+    "p50": 4.1617,
+    "p99": 7.7494,
+    "max": 13.6466,
+    "n": 6130,
+    "drops": 0,
+    "achieved_wps": 40.9,
+    "pass": true
+   }
+  ],
+  "next_step": [
+   {
+    "p50": 4.1408,
+    "p99": 7.9725,
+    "n": 7366,
+    "drops": 0,
+    "pass": true
+   }
+  ],
+  "knee_repeatable_pass": true
+ },
+ "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/guard-bench/raw/A/g2-5/Llama-Prompt-Guard-2-22M/knee_serial1_headline_p99le10": {
+  "target_p99_ms": 10.0,
+  "knee_wps": 162.0,
+  "next_wps": 170.2,
+  "fine_sweep": [
+   {
+    "offered_wps": 170.2,
+    "p99": 10.5165,
+    "drops": 0,
+    "n": 3290
+   },
+   {
+    "offered_wps": 178.4,
+    "p99": 10.8814,
+    "drops": 0,
+    "n": 3419
+   },
+   {
+    "offered_wps": 186.6,
+    "p99": 11.2997,
+    "drops": 0,
+    "n": 3588
+   },
+   {
+    "offered_wps": 194.8,
+    "p99": 12.1902,
+    "drops": 0,
+    "n": 3704
+   }
+  ],
+  "knee_repeats": [
+   {
+    "p50": 4.0545,
+    "p99": 10.985,
+    "max": 26.9652,
+    "n": 31208,
+    "drops": 0,
+    "achieved_wps": 162.6,
+    "pass": false
+   },
+   {
+    "p50": 4.0536,
+    "p99": 10.4284,
+    "max": 22.059,
+    "n": 31033,
+    "drops": 0,
+    "achieved_wps": 161.7,
+    "pass": false
+   },
+   {
+    "p50": 4.051,
+    "p99": 10.8465,
+    "max": 22.0589,
+    "n": 31292,
+    "drops": 0,
+    "achieved_wps": 163.1,
+    "pass": false
+   }
+  ],
+  "next_step": [
+   {
+    "p50": 4.056,
+    "p99": 11.1312,
+    "n": 32741,
+    "drops": 0,
+    "pass": false
+   }
+  ],
+  "knee_repeatable_pass": false
+ },
+ "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/guard-bench/raw/A/g2-5/Llama-Prompt-Guard-2-22M/knee_serial1_headline_p99le8": {
+  "target_p99_ms": 8.0,
+  "knee_wps": 81.0,
+  "next_wps": 89.2,
+  "fine_sweep": [
+   {
+    "offered_wps": 89.2,
+    "p99": 8.3305,
+    "drops": 0,
+    "n": 1775
+   },
+   {
+    "offered_wps": 97.4,
+    "p99": 8.6755,
+    "drops": 0,
+    "n": 1816
+   },
+   {
+    "offered_wps": 105.6,
+    "p99": 8.2543,
+    "drops": 0,
+    "n": 2039
+   },
+   {
+    "offered_wps": 113.8,
+    "p99": 9.8229,
+    "drops": 0,
+    "n": 2163
+   }
+  ],
+  "knee_repeats": [
+   {
+    "p50": 4.0461,
+    "p99": 7.8882,
+    "max": 16.4378,
+    "n": 15527,
+    "drops": 0,
+    "achieved_wps": 80.4,
+    "pass": true
+   },
+   {
+    "p50": 4.0413,
+    "p99": 7.8781,
+    "max": 12.9287,
+    "n": 15383,
+    "drops": 0,
+    "achieved_wps": 79.6,
+    "pass": true
+   },
+   {
+    "p50": 4.0583,
+    "p99": 7.8645,
+    "max": 13.6608,
+    "n": 15596,
+    "drops": 0,
+    "achieved_wps": 80.7,
+    "pass": true
+   }
+  ],
+  "next_step": [
+   {
+    "p50": 4.0364,
+    "p99": 8.1206,
+    "n": 17128,
+    "drops": 1,
+    "pass": false
+   }
+  ],
+  "knee_repeatable_pass": true
+ }
+}

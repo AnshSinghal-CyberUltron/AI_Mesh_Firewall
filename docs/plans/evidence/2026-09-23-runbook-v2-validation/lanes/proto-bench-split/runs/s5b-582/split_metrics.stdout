@@ -1,0 +1,7 @@
+s5b-582 sut: PASS offered 174600 (582.0/s) qualified 171544 (571.81/s) infra 3 (0.0017%) FP-blocks 3053 drops 0
+  JSON_total      {'n': 51411, 'n_inf': 0, 'p50': 8.158, 'p90': 11.508, 'p99': 16.673, 'p999': 21.378, 'max_finite': 30.656, 'mean_finite': 8.169}
+  SSE_total       {'n': 120136, 'n_inf': 3, 'p50': 8.067, 'p90': 11.371, 'p99': 16.415, 'p999': 21.311, 'max_finite': 33.265, 'mean_finite': 8.053}
+  SSE_first_tok1  {'n': 120136, 'n_inf': 3, 'p50': 27.922, 'p90': 31.541, 'p99': 47.551, 'p999': 52.875, 'max_finite': 87.592, 'mean_finite': 27.895}
+  SSE_strict      {'n': 120136, 'n_inf': 3, 'p50': 47.991, 'p90': 53.372, 'p99': 70.629, 'p999': 84.961, 'max_finite': 106.474, 'mean_finite': 47.906}
+  ALL_total       {'n': 171547, 'n_inf': 3, 'p50': 8.094, 'p90': 11.411, 'p99': 16.497, 'p999': 21.33, 'max_finite': 33.265, 'mean_finite': 8.088}
+  checks {'p99_json_total_lt_slo': True, 'p99_sse_total_lt_slo': True, 'infra_le_budget': True, 'zero_drops': True, 'records_complete': True} infra_reasons {'block_on_unavailable': 3} anomalies {}

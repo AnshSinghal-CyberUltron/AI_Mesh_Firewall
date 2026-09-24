@@ -1,0 +1,17 @@
+{
+ "item": "Instrument honesty: injected 5 ms pre-dispatch delay and 30 ms mid-stream hold visible in the harness metrics",
+ "status": "PROVISIONAL: harness READY not yet marked; binaries synthprov 1ee6bb5f.., olg d22d2607.., analyze.py c9f89fe8.. (commit fce67c8)",
+ "code": "final rvproto incl. controller addendum (admission gate, hooks)",
+ "setup": "controller, functional scale: synthprov TTFT 150 ms / ITL 20 ms / sample-mod 1; rvproto local_cpu PG2-22M, 2 workers; olg 4 req/s x 60 s (+5 s warm-up), 70% SSE, light corpus (100-170 tokens), org-a key",
+ "analyzer_p50_ms": {
+  "direct_floor": {"T_fw_addon_json": 0.2, "T_addon_first": 0.2, "T_fw_addon_sse": 0.2},
+  "base": {"T_fw_addon_json": 85.0, "T_addon_first": 85.6, "T_fw_addon_sse": 109.9},
+  "predispatch5": {"T_fw_addon_json": 89.9, "T_addon_first": 90.8, "T_fw_addon_sse": 128.9},
+  "hold30": {"T_fw_addon_json": 83.9, "T_addon_first": 85.0, "T_fw_addon_sse": 135.2}
+ },
+ "per_piece_median_lag_ms": {"base": {"45": 105.5, "47": 105.5, "48": 105.4, "50": 105.5},
+                              "predispatch5": {"45": 110.9, "47": 110.9, "48": 110.8, "50": 110.8},
+                              "hold30": {"45": 105.0, "47": 134.9, "48": 115.0, "50": 104.8}},
+ "validity": "all four runs valid=True, 0 schedule drops",
+ "verdict": "PASS (both injections visible; +4.9 ms JSON p50 / +5.4 ms per piece; +29.4 ms at the held piece)"
+}

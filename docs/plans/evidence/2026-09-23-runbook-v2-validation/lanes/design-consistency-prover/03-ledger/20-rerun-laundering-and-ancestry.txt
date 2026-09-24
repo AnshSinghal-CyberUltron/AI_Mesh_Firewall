@@ -1,0 +1,10 @@
+S1 honest PRE-registration: entry committed, THEN the first run observes the diff
+   run1 bucket=EXPECTED; proposed gate: ACCEPT (entry e76ad3dc ancestor-of first-observing run S1-run1@e76ad3dc: True)
+S2/S3 post-hoc: run1 observes UNEXPECTED, entry added afterwards, then RE-RUN (GW21 L3139 flow)
+   run1 @ 1790140320 commit 24d29fdc bucket=UNEXPECTED
+   run2 @ 1790140323 commit ac56361a: runbook timestamp rule (entry 1790140320<run2) -> bucket=EXPECTED  <= laundered, no back-dating needed
+   proposed gate: REJECT (entry ac56361a ancestor-of first-observing run run1@24d29fdc: False)
+   back-dated variant: proposed gate: REJECT (entry c3291f49 ancestor-of first-observing run run1@24d29fdc: False)
+S4 rewrite history so the entry precedes run1's changes (new SHAs); observation log keeps run1's SHA
+   rewritten tip d02b3468 (run1 was 24d29fdc); proposed gate: REJECT (entry 98addcbd ancestor-of first-observing run run1@24d29fdc: False)
+OBSERVATION LOG: [{"run": "run1", "run_commit": "24d29fdc", "started_at": 1790140320}, {"run": "run2", "run_commit": "ac56361a", "started_at": 1790140323}]

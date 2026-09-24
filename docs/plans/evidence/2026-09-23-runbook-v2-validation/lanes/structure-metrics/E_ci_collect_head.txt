@@ -1,0 +1,64 @@
+=== structural-gates job: pytest -q (addopts ignores openai_conformance, parity)
+      9 tests/runtime/test_lgw03_gates.py
+      4 tests/runtime/test_lgw03_live_docker.py
+      4 tests/gates/test_secret_headers.py
+      4 tests/gates/test_empty_tree_passes.py
+      4 tests/gates/test_check_sizes.py
+      4 tests/gates/test_check_mutable.py
+      4 tests/gates/test_check_http.py
+      4 tests/gates/test_check_capacity.py
+      2 tests/test_package_imports.py
+      2 tests/test_conformance_harness.py
+      2 tests/gates/test_import_linter.py
+      2 tests/gates/test_compare_junit.py
+      1 tests/runtime/test_v1_entrypoint_deviation.py
+      1 46 tests collected in 0.03s
+      1 
+=== openai-conformance job
+      9 Traceback:
+      9 Hint: make sure your test modules/packages have valid Python names.
+      9 ../../.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/importlib/__init__.py:90: in import_module
+      9     return _bootstrap._gcd_import(name[level:], package, level)
+      9            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      5 E   ModuleNotFoundError: No module named 'httpx'
+      5     import httpx
+      2 E   ModuleNotFoundError: No module named 'fakeredis'
+      1 tests/openai_conformance/test_openai_sdk_compat_phase6_guards.py:10: in <module>
+      1 tests/openai_conformance/test_openai_sdk_compat_phase5_correlation.py:17: in <module>
+      1 tests/openai_conformance/test_openai_sdk_compat_phase2_adversarial.py:20: in <module>
+      1 tests/openai_conformance/test_openai_sdk_compat_phase2.py:21: in <module>
+      1 tests/openai_conformance/test_openai_sdk_compat_live_uvicorn.py:20: in <module>
+      1 tests/openai_conformance/test_openai_sdk_compat.py:22: in <module>
+      1 tests/openai_conformance/test_mcp_rag_vector_shapes.py:14: in <module>
+      1 tests/openai_conformance/test_malformed_sse_frame.py:9: in <module>
+      1 tests/openai_conformance/test_live_tcp_8300.py:11: in <module>
+      1 no tests collected, 9 errors in 0.22s
+      1 _______ ERROR collecting tests/openai_conformance/test_live_tcp_8300.py ________
+      1 _____ ERROR collecting tests/openai_conformance/test_openai_sdk_compat.py ______
+=== parity job
+      5 tests/parity/test_lgw02_gates.py
+      3 tests/parity/test_sanitize_ledger.py
+      1 tests/parity/test_t02_reuse.py
+      1 9 tests collected in 0.02s
+      1 
+=== openai-conformance job (collect with gateway/.venv, PYTHONPATH as CI)
+     48 tests/openai_conformance/test_openai_sdk_compat.py
+     12 tests/openai_conformance/test_openai_sdk_compat_phase2.py
+      8 tests/openai_conformance/test_openai_sdk_compat_live_uvicorn.py
+      8 tests/openai_conformance/test_mcp_rag_vector_shapes.py
+      5 tests/openai_conformance/test_openai_sdk_compat_phase2_adversarial.py
+      4 
+      3 tests/openai_conformance/test_live_tcp_8300.py
+      3           on_event is deprecated, use lifespan event handlers instead.
+      3           [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+      3           Read more about it in the
+      3           
+      3   
+      2 tests/openai_conformance/test_openai_sdk_compat_phase6_guards.py
+      2 tests/openai_conformance/test_openai_sdk_compat_phase5_correlation.py
+      2 ../gateway/.venv/lib/python3.14/site-packages/fastapi/applications.py:4598
+      1 tests/openai_conformance/test_malformed_sse_frame.py
+      1 =============================== warnings summary ===============================
+      1 89 tests collected in 0.94s
+      1 ../gateway/ai_mesh_gateway/main.py:6881
+      1 ../gateway/ai_mesh_gateway/main.py:6350

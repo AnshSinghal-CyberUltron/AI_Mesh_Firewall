@@ -1,0 +1,16 @@
+whole_tree | T1_test_*.py|*_test.py                                    files= 526 lines=109391
+whole_tree | T2_T1+conftest                                            files= 532 lines=110025
+whole_tree | T3_T1+any .py under tests/                                files= 559 lines=112584
+excl_venv_worktrees | T1_test_*.py|*_test.py                           files= 526 lines=109391
+excl_venv_worktrees | T2_T1+conftest                                   files= 532 lines=110025
+excl_venv_worktrees | T3_T1+any .py under tests/                       files= 559 lines=112584
+gateway/ | T1_test_*.py|*_test.py                                      files= 350 lines=81913
+gateway/ | T2_T1+conftest                                              files= 353 lines=82360
+gateway/ | T3_T1+any .py under tests/                                  files= 356 lines=82716
+gateway/ai_mesh_gateway/tests/ | T1_test_*.py|*_test.py                files= 341 lines=76705
+gateway/ai_mesh_gateway/tests/ | T2_T1+conftest                        files= 341 lines=76705
+gateway/ai_mesh_gateway/tests/ | T3_T1+any .py under tests/            files= 341 lines=76705
+non-gateway | T1_test_*.py|*_test.py                                   files= 176 lines=27478
+non-gateway | T2_T1+conftest                                           files= 179 lines=27665
+non-gateway | T3_T1+any .py under tests/                               files= 203 lines=29868
+T1 by top dir: {'control': 88, 'examples': 3, 'gateway': 350, 'gateway_v2': 25, 'scripts': 18, 'services': 23, 'shared': 1, 'staging': 1, 'tests': 17}

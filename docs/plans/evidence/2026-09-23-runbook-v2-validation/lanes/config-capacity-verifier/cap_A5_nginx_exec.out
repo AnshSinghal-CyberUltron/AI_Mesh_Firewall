@@ -1,0 +1,6 @@
+== AS-IS replica of deploy/nginx.conf /v1/ (variable proxy_pass, no upstream block)
+client sent 50 requests over 1 keep-alive connection to nginx :18381
+backend saw: {"connections": 50, "requests": 50, "conn_headers": {"close": 50}}
+== CONTROL: upstream block + keepalive 16 + Connection ""
+client sent 50 requests over 1 keep-alive connection to nginx :18382
+backend saw: {"connections": 1, "requests": 50, "conn_headers": {"<absent>": 50}}

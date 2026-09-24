@@ -1,0 +1,1 @@
+{"run": "L1-r30", "client_all_phases": 11250, "events": 8939, "lane_style_completeness": 0.8013, "strict_completeness": 0.7796, "dispatched_to_provider_but_no_strict_event_all_phases": 2480, "measure_phase": {"n": 9000, "lane": 6765, "strict": 6520, "dispatched": 9000, "dispatched_unaudited": 2480}}

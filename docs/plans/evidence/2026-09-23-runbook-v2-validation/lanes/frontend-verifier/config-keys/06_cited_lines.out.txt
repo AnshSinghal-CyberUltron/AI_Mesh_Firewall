@@ -1,0 +1,2531 @@
+================ FIREWALLCONFIG ================
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/control/ai_mesh_control/main_app/urls.py:34-34
+    34	    path("api/firewall/config/", include("core.firewall_config_urls")),
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/control/ai_mesh_control/core/models.py:1370-1388
+  1370	
+  1371	    def build_redis_key(self) -> str:
+  1372	        slug = self.organization.slug if self.organization_id else "default"
+  1373	        return f"firewall:config:{slug}"
+  1374	
+  1375	    def build_gateway_payload(self) -> dict:
+  1376	        """
+  1377	        Build the configuration dict for Redis/Gateway consumption.
+  1378	
+  1379	        Maps model field names to gateway CONFIG keys where they differ.
+  1380	        """
+  1381	        blocked_kw = (
+  1382	            [kw.strip() for kw in self.blocked_keywords.split(",") if kw.strip()] if self.blocked_keywords else []
+  1383	        )
+  1384	
+  1385	        allowed_mdl = [m.strip() for m in self.allowed_models.split(",") if m.strip()] if self.allowed_models else []
+  1386	
+  1387	        return {
+  1388	            "firewall_enabled": self.firewall_enabled,
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/control/ai_mesh_control/core/signals.py:404-440
+   404	CONFIG_UPDATES_CHANNEL = "config_updates"
+   405	
+   406	
+   407	@receiver(post_save, sender=FirewallConfig)
+   408	def sync_firewall_config_to_redis(
+   409	    sender: type,
+   410	    instance: FirewallConfig,
+   411	    created: bool,
+   412	    **kwargs: Any,
+   413	) -> None:
+   414	    """
+   415	    Push the full FirewallConfig gateway payload to Redis and publish
+   416	    a notification to the ``config_updates`` Pub/Sub channel.
+   417	
+   418	    The gateway ConfigSync subscriber re-fetches the config from Redis
+   419	    on each notification, enabling hot-reload without restart.
+   420	    """
+   421	    redis_key = instance.build_redis_key()
+   422	    gw_payload = instance.build_gateway_payload()
+   423	    org_slug = instance.organization.slug if instance.organization_id else "default"
+   424	    gw_payload["org_slug"] = org_slug
+   425	    payload = json.dumps(gw_payload)
+   426	
+   427	    def _do_sync():
+   428	        try:
+   429	            client = _get_redis_client()
+   430	            client.set(redis_key, payload)
+   431	            client.publish(CONFIG_UPDATES_CHANNEL, json.dumps({"action": "reload", "org_slug": org_slug}))
+   432	            logger.info(
+   433	                "FirewallConfig synced to Redis (%s) and published to %s",
+   434	                redis_key,
+   435	                CONFIG_UPDATES_CHANNEL,
+   436	            )
+   437	        except redis.RedisError:
+   438	            logger.exception(
+   439	                "Failed to sync FirewallConfig to Redis. Gateway will use previous config until next successful sync."
+   440	            )
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/control/ai_mesh_control/core/signals.py:444-455
+   444	    # Gateway embeds mcp_tier2_enabled in _get_enabled_tools; bump scan_ver so the
+   445	    # tier-2 org gate invalidates that cache without waiting for TTL.
+   446	    if org_slug:
+   447	        try:
+   448	            from mcp_connector.signals import bump_scan_version
+   449	
+   450	            bump_scan_version(org_slug)
+   451	        except Exception:
+   452	            logger.exception(
+   453	                "Failed to schedule MCP scan-version bump after FirewallConfig save for org=%s",
+   454	                org_slug,
+   455	            )
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/control/ai_mesh_control/core/signals.py:229-247
+   229	        client = _get_redis_client()
+   230	    except redis.RedisError:
+   231	        logger.exception("reconcile_all_routing_state: cannot connect to Redis")
+   232	        return counts
+   233	    for cfg in FirewallConfig.objects.all().iterator():
+   234	        try:
+   235	            client.set(cfg.build_redis_key(), json.dumps(cfg.build_gateway_payload()))
+   236	            counts["firewall_configs"] += 1
+   237	        except Exception:  # noqa: BLE001 - one bad row must not abort the reconcile
+   238	            logger.exception("reconcile: firewall config failed org=%s", getattr(cfg, "organization_id", "?"))
+   239	    for st in ModelState.objects.all().iterator():
+   240	        try:
+   241	            client.set(st.build_redis_key(), json.dumps(st.build_redis_payload()))
+   242	            counts["model_states"] += 1
+   243	        except Exception:  # noqa: BLE001
+   244	            logger.exception("reconcile: model state failed %s", getattr(st, "model_name", "?"))
+   245	    try:
+   246	        client.publish(CONFIG_UPDATES_CHANNEL, json.dumps({"action": "reload"}))
+   247	    except Exception:  # noqa: BLE001 - publish is best-effort
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/control/ai_mesh_control/main_app/settings.py:493-498
+   493	    # B2 DEFENSE: periodically re-push routing state (models/allowlist/isolation)
+   494	    # so a bulk QuerySet.update() (which bypasses post_save signals) cannot leave
+   495	    # the gateway routing on stale config indefinitely.
+   496	    "reconcile-routing-state": {
+   497	        "task": "core.tasks.reconcile_routing_state",
+   498	        "schedule": float(os.environ.get("ROUTING_RECONCILE_INTERVAL_SEC", "120")),
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/config_sync.py:24-28
+    24	REDIS_KEY = "firewall:config"
+    25	REDIS_KEY_PREFIX = "firewall:config:"
+    26	LLM_MODEL_CONFIGS_REDIS_KEY = "llm:model_configs"
+    27	LLM_MODEL_CONFIGS_PREFIX = "llm:model_configs:"
+    28	PUBSUB_CHANNEL = "config_updates"
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/config_sync.py:170-181
+   170	def _value_type_ok(key: str, value: Any) -> bool:
+   171	    """Return True if *value* has an acceptable type for *key*."""
+   172	    expected = CONFIG_KEY_TYPES.get(key)
+   173	    if expected is None:
+   174	        return True  # unknown key — pass through (forward compatible)
+   175	    if value is None:
+   176	        return key in _NULLABLE_KEYS
+   177	    if isinstance(value, bool):
+   178	        # bool is a subclass of int — only accept it where bool is expected.
+   179	        return bool in expected
+   180	    return isinstance(value, expected)
+   181	
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/config_sync.py:478-501
+   478	            )
+   479	
+   480	            raw = await client.get(REDIS_KEY)
+   481	            if raw is not None:
+   482	                # M-19: per-entry parse + schema validation. A malformed
+   483	                # payload is warned about and skipped (fail-open on the
+   484	                # env-var defaults / last-good config).
+   485	                data = self._parse_and_validate(raw, REDIS_KEY)
+   486	                if data is not None:
+   487	                    self._apply(data)
+   488	                    LOG.info("Loaded firewall config from Redis (%d keys)", len(data))
+   489	
+   490	            keys = []
+   491	            async for key in client.scan_iter(match=f"{REDIS_KEY_PREFIX}*"):
+   492	                keys.append(key)
+   493	            for key in keys:
+   494	                raw_val = await client.get(key)
+   495	                if raw_val:
+   496	                    data = self._parse_and_validate(raw_val, key)
+   497	                    if data is None:
+   498	                        continue  # warn+skip; other org keys still load
+   499	                    slug = key.replace(REDIS_KEY_PREFIX, "")
+   500	                    self._config_by_org[slug] = {**self._config, **data}
+   501	                    LOG.info("Loaded org config for '%s' (%d keys)", slug, len(data))
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/config_sync.py:547-558
+   547	    def _apply(self, data: dict[str, Any]) -> None:
+   548	        """
+   549	        Merge Redis-sourced config values into the global CONFIG dict.
+   550	        Only keys present in the data payload are overridden; env-var
+   551	        defaults remain for any missing keys.
+   552	        """
+   553	        for key, value in data.items():
+   554	            self._config[key] = value
+   555	
+   556	        self._config["_config_sync_loaded"] = True
+   557	
+   558	        log_level_name = data.get("log_level")
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/config_sync.py:596-626
+   596	                )
+   597	                pubsub = client.pubsub()
+   598	                await pubsub.subscribe(PUBSUB_CHANNEL)
+   599	                LOG.info("ConfigSync subscribed to Pub/Sub channel '%s'", PUBSUB_CHANNEL)
+   600	
+   601	                async for message in pubsub.listen():
+   602	                    if not self._running:
+   603	                        break
+   604	
+   605	                    if message["type"] != "message":
+   606	                        continue
+   607	
+   608	                    LOG.info(
+   609	                        "Config update notification received on '%s': %s",
+   610	                        PUBSUB_CHANNEL,
+   611	                        message.get("data", ""),
+   612	                    )
+   613	
+   614	                    msg_data = message.get("data", "")
+   615	                    try:
+   616	                        parsed = json.loads(msg_data) if isinstance(msg_data, str) else {}
+   617	                    except (json.JSONDecodeError, TypeError):
+   618	                        parsed = {}
+   619	                    action = parsed.get("action", msg_data)
+   620	                    org_slug = parsed.get("org_slug", "")
+   621	
+   622	                    if action == "model_reload":
+   623	                        await self._reload_llm_models(client, org_slug=org_slug)
+   624	                    else:
+   625	                        await self._refresh(client, org_slug=org_slug)
+   626	
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/config_sync.py:649-690
+   649	    async def _refresh(self, client: aioredis.Redis, org_slug: str = "") -> None:
+   650	        """Fetch the latest firewall config from Redis and apply."""
+   651	        try:
+   652	            if org_slug:
+   653	                key = f"{REDIS_KEY_PREFIX}{org_slug}"
+   654	            else:
+   655	                key = REDIS_KEY
+   656	            raw = await client.get(key)
+   657	            if raw is None:
+   658	                # The GLOBAL `firewall:config` key was retired in favour of per-org
+   659	                # `firewall:config:{slug}` keys (the control plane publishes only
+   660	                # per-org configs now), so its absence is the expected steady state,
+   661	                # not an error — logging it at WARNING floods the logs on every
+   662	                # refresh. A missing PER-ORG key is still noteworthy.
+   663	                if key == REDIS_KEY:
+   664	                    LOG.debug(
+   665	                        "%s absent (retired global key); per-org configs carry the config",
+   666	                        key,
+   667	                    )
+   668	                else:
+   669	                    LOG.warning("%s key missing during refresh; keeping current config", key)
+   670	                return
+   671	
+   672	            # M-19: validate before applying — a malformed payload must not
+   673	            # clobber the last-good config (fail-open).
+   674	            data = self._parse_and_validate(raw, key)
+   675	            if data is None:
+   676	                LOG.warning(
+   677	                    "Malformed config payload at '%s' during refresh; "
+   678	                    "keeping current config",
+   679	                    key,
+   680	                )
+   681	                return
+   682	            # Per-org refreshes must NOT mutate the global CONFIG dict — that would
+   683	            # bleed one tenant's enforcement settings into every other tenant's
+   684	            # fallback path (components that read CONFIG directly, or requests
+   685	            # whose org_slug has no dedicated cache entry yet).
+   686	            if org_slug:
+   687	                self._config_by_org[org_slug] = {**self._config, **data}
+   688	            else:
+   689	                self._apply(data)
+   690	
+================ LLM MODEL CONFIG (/api/firewall/models/) ================
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/control/ai_mesh_control/core/llm_model_urls.py:8-9
+     8	    path("", LLMModelConfigListView.as_view(), name="llm-model-list"),
+     9	    path("<int:pk>/", LLMModelConfigDetailView.as_view(), name="llm-model-detail"),
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/control/ai_mesh_control/core/signals.py:481-505
+   481	        for org in orgs:
+   482	            slug = org.slug
+   483	            redis_key = f"llm:model_configs:{slug}"
+   484	            # P5a: exclude platform/guard (provider=internal) models from the gateway
+   485	            # litellm + routing + fallback entries — they must never be a user-routable
+   486	            # or fallback target. The tier-2 guard scan uses a separate Bedrock client,
+   487	            # so it is unaffected.
+   488	            qs = LLMModelConfig.queryset_user_managed(
+   489	                LLMModelConfig.objects.filter(is_active=True, organization=org)
+   490	            )
+   491	            entries = [m.build_litellm_entry() for m in qs]
+   492	            routing_entries = [m.build_routing_payload() for m in qs]
+   493	            from core.routing_fallback import build_compliant_fallback_chains
+   494	
+   495	            fallback_chains = build_compliant_fallback_chains(routing_entries)
+   496	            payload = json.dumps({
+   497	                "models": entries,
+   498	                "routing": routing_entries,
+   499	                "fallback_chains": fallback_chains,
+   500	            })
+   501	            client.set(redis_key, payload)
+   502	            logger.info("LLMModelConfig synced to Redis (%s): %d models", redis_key, len(entries))
+   503	
+   504	        client.publish(CONFIG_UPDATES_CHANNEL, json.dumps({"action": "model_reload"}))
+   505	    except redis.RedisError:
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/control/ai_mesh_control/core/signals.py:546-575
+   546	@receiver(post_save, sender=LLMModelConfig)
+   547	def sync_llm_model_config_to_redis(
+   548	    sender: type,
+   549	    instance: LLMModelConfig,
+   550	    created: bool,
+   551	    **kwargs: Any,
+   552	) -> None:
+   553	    """Push all active LLM model configs to Redis on create/update.
+   554	
+   555	    When a config is DEACTIVATED (is_active=False), also prune its orphaned
+   556	    ModelState/KillSwitch rows so the risk-monitor / kill-switch surfaces don't
+   557	    show a model that is no longer connected.
+   558	    """
+   559	    captured = instance
+   560	    transaction.on_commit(lambda: _sync_all_llm_models(captured))
+   561	    if not instance.is_active:
+   562	        org = instance.organization
+   563	        model_name = instance.model_name
+   564	        transaction.on_commit(lambda: _prune_orphaned_model_artifacts(org, model_name))
+   565	
+   566	
+   567	@receiver(post_delete, sender=LLMModelConfig)
+   568	def delete_llm_model_config_from_redis(
+   569	    sender: type,
+   570	    instance: LLMModelConfig,
+   571	    **kwargs: Any,
+   572	) -> None:
+   573	    """Re-sync all active LLM model configs to Redis on delete and prune the
+   574	    deleted model's orphaned ModelState/KillSwitch rows."""
+   575	    org = instance.organization
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/config_sync.py:503-525
+   503	            model_keys = []
+   504	            async for key in client.scan_iter(match=f"{LLM_MODEL_CONFIGS_PREFIX}*"):
+   505	                model_keys.append(key)
+   506	            for key in model_keys:
+   507	                raw_val = await client.get(key)
+   508	                if raw_val:
+   509	                    try:
+   510	                        data = json.loads(raw_val)
+   511	                    except (json.JSONDecodeError, TypeError):
+   512	                        LOG.warning("Invalid JSON in model config key '%s'; skipping", key)
+   513	                        continue
+   514	                    normalized = validate_model_config_payload(data, source=key)
+   515	                    if normalized is None:
+   516	                        continue
+   517	                    slug = key.replace(LLM_MODEL_CONFIGS_PREFIX, "")
+   518	                    if "routing" in normalized:
+   519	                        self._model_routing_by_org[slug] = normalized["routing"]
+   520	                        if "fallback_chains" in normalized:
+   521	                            self._fallback_chains_by_org[slug] = normalized["fallback_chains"]
+   522	
+   523	            await client.aclose()
+   524	        except Exception:
+   525	            LOG.warning(
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/config_sync.py:701-719
+   701	    async def _reload_llm_models(self, client: aioredis.Redis, org_slug: str = "") -> None:
+   702	        """
+   703	        Fetch updated LLM model configs from Redis and reload the
+   704	        LiteLLM Router with the new model list.
+   705	        """
+   706	        try:
+   707	            keys_to_check = []
+   708	            if org_slug:
+   709	                keys_to_check.append(f"{LLM_MODEL_CONFIGS_PREFIX}{org_slug}")
+   710	            else:
+   711	                async for key in client.scan_iter(match=f"{LLM_MODEL_CONFIGS_PREFIX}*"):
+   712	                    keys_to_check.append(key)
+   713	                if not keys_to_check:
+   714	                    keys_to_check.append(LLM_MODEL_CONFIGS_REDIS_KEY)
+   715	
+   716	            all_models = []
+   717	            for key in keys_to_check:
+   718	                raw = await client.get(key)
+   719	                if not raw:
+================ POLICIES (/api/policies/*) ================
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/control/ai_mesh_control/policy/urls.py:10-21
+    10	router.register(r"rules", RuleViewSet, basename="rule")
+    11	router.register(r"", PolicyViewSet, basename="policy")
+    12	
+    13	urlpatterns = [
+    14	    path("analytics/", PolicyAnalyticsView.as_view(), name="policy-analytics"),
+    15	    path("top-violators/", TopViolatorsView.as_view(), name="policy-top-violators"),
+    16	    path("test/", PolicyTestView.as_view(), name="policy-test"),
+    17	    path("mcp-presets/", MCPPresetsView.as_view(), name="policy-mcp-presets"),
+    18	    path("compile/", PolicyCompileView.as_view(), name="policy-compile"),
+    19	    path("compile/status/", PolicyCompileStatusView.as_view(), name="policy-compile-status"),
+    20	    path("mcp-server-states/", MCPServerStateView.as_view(), name="policy-mcp-server-states"),
+    21	    path("", include(router.urls)),
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/control/ai_mesh_control/policy/compiler_signals.py:49-70
+    49	    def _do_schedule() -> None:
+    50	        try:
+    51	            from policy.compiler import _get_redis_client
+    52	
+    53	            client = _get_redis_client()
+    54	
+    55	            if changed_policy_id is not None:
+    56	                client.rpush(PENDING_CHANGES_KEY, str(changed_policy_id))
+    57	
+    58	            if organization_id is not None:
+    59	                client.sadd(PENDING_ORGS_KEY, str(organization_id))
+    60	
+    61	            acquired = client.set(
+    62	                "policies:recompile_pending",
+    63	                "1",
+    64	                nx=True,
+    65	                ex=DEBOUNCE_SECONDS if DEBOUNCE_SECONDS > 0 else 1,
+    66	            )
+    67	            if acquired:
+    68	                from policy.tasks import compile_policies_task
+    69	
+    70	                compile_policies_task.apply_async(countdown=DEBOUNCE_SECONDS if DEBOUNCE_SECONDS > 0 else 0)
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/control/ai_mesh_control/policy/compiler_signals.py:92-100
+    92	@receiver(post_save, sender=Policy)
+    93	def recompile_on_policy_save(
+    94	    sender: type,
+    95	    instance: Policy,
+    96	    created: bool,
+    97	    **kwargs: Any,
+    98	) -> None:
+    99	    action = "created" if created else "updated"
+   100	    _trigger_recompilation(
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/control/ai_mesh_control/policy/compiler_signals.py:166-190
+   166	def _recompile_on_server_state(instance, verb):
+   167	    from policy.models import MCPServerPolicyState
+   168	
+   169	    org_id = getattr(instance, "organization_id", None)
+   170	    policy_id = (
+   171	        instance.policy_id if isinstance(instance, MCPServerPolicyState)
+   172	        else getattr(getattr(instance, "rule", None), "policy_id", None)
+   173	    )
+   174	    _trigger_recompilation(
+   175	        sender_name=f"{type(instance).__name__}.{verb}",
+   176	        instance_repr=str(instance),
+   177	        changed_policy_id=policy_id,
+   178	        organization_id=org_id,
+   179	    )
+   180	
+   181	
+   182	def _register_server_state_signals():
+   183	    from policy.models import MCPServerPolicyState, MCPServerRuleState
+   184	
+   185	    for _model in (MCPServerPolicyState, MCPServerRuleState):
+   186	        receiver(post_save, sender=_model,
+   187	                 dispatch_uid=f"recompile_on_{_model.__name__}_save")(
+   188	            lambda sender, instance, **kw: _recompile_on_server_state(instance, "post_save"))
+   189	        receiver(post_delete, sender=_model,
+   190	                 dispatch_uid=f"recompile_on_{_model.__name__}_delete")(
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/control/ai_mesh_control/policy/views.py:1014-1046
+  1014	    def put(self, request):
+  1015	        from policy.models import MCPServerPolicyState, MCPServerRuleState, Policy, Rule
+  1016	        org, server, err = self._resolve(request)
+  1017	        if err:
+  1018	            return err
+  1019	        enabled = bool(request.data.get("enabled"))
+  1020	        policy_id, rule_id = request.data.get("policy_id"), request.data.get("rule_id")
+  1021	        if rule_id is not None:
+  1022	            rule = Rule.objects.filter(policy__organization=org, id=rule_id).first()
+  1023	            if rule is None:
+  1024	                return Response({"error": "Unknown rule."}, status=404)
+  1025	            MCPServerRuleState.objects.update_or_create(
+  1026	                organization=org, server=server, rule=rule, defaults={"enabled": enabled})
+  1027	        elif policy_id is not None:
+  1028	            policy = Policy.objects.filter(organization=org, id=policy_id).first()
+  1029	            if policy is None:
+  1030	                return Response({"error": "Unknown policy."}, status=404)
+  1031	            MCPServerPolicyState.objects.update_or_create(
+  1032	                organization=org, server=server, policy=policy, defaults={"enabled": enabled})
+  1033	        else:
+  1034	            return Response({"error": "policy_id or rule_id required."}, status=400)
+  1035	        return Response({"ok": True, "enabled": enabled})
+  1036	
+  1037	    def delete(self, request):
+  1038	        from policy.models import MCPServerPolicyState, MCPServerRuleState
+  1039	        org, server, err = self._resolve(request)
+  1040	        if err:
+  1041	            return err
+  1042	        policy_id, rule_id = request.data.get("policy_id"), request.data.get("rule_id")
+  1043	        if rule_id is not None:
+  1044	            MCPServerRuleState.objects.filter(organization=org, server=server, rule_id=rule_id).delete()
+  1045	        elif policy_id is not None:
+  1046	            MCPServerPolicyState.objects.filter(organization=org, server=server, policy_id=policy_id).delete()
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/control/ai_mesh_control/policy/compile_views.py:106-116
+   106	                    status=status.HTTP_403_FORBIDDEN,
+   107	                )
+   108	        compiler = PolicyCompiler()
+   109	        bundle = compiler.compile_all(organization=org)
+   110	        success = compiler.push_to_redis(
+   111	            bundle,
+   112	            trigger="manual",
+   113	            changed_policy_ids=[],
+   114	            organization=org,
+   115	        )
+   116	        if not success:
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/control/ai_mesh_control/policy/compiler.py:32-34
+    32	REDIS_KEY_COMPILED = "policies:compiled"
+    33	REDIS_KEY_VERSION = "policies:version"
+    34	PUBSUB_CHANNEL = "policy_updates"
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/control/ai_mesh_control/policy/compiler.py:141-146
+   141	# "version" cache-invalidation counter). Bumped to 2 when actor-scoping
+   142	# fields (allowed_user_ids/allowed_agent_ids/allowed_roles/redaction_fields)
+   143	# were added to the compiled policy snapshot. Consumers may read this to
+   144	# detect capability; absence (old bundle) implies schema 1 = no actor scoping.
+   145	BUNDLE_SCHEMA_VERSION = 2
+   146	
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/control/ai_mesh_control/policy/compiler.py:215-223
+   215	
+   216	        bundle: dict[str, Any] = {
+   217	            "compiled_at": _next_compiled_at(),
+   218	            # M-04: advertise the bundle format so gateways can detect that
+   219	            # actor-scoping fields are present. Additive — old gateways ignore it.
+   220	            "bundle_schema_version": BUNDLE_SCHEMA_VERSION,
+   221	            "policy_count": len(compiled_policies),
+   222	            "rule_count": sum(len(p.get("rules", [])) for p in compiled_policies),
+   223	            "policies": compiled_policies,
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/control/ai_mesh_control/policy/compiler.py:250-253
+   250	
+   251	        org_slug = organization.slug if organization else "default"
+   252	        redis_key = f"{REDIS_KEY_COMPILED}:{org_slug}"
+   253	        version_key = f"{REDIS_KEY_VERSION}:{org_slug}"
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/control/ai_mesh_control/policy/compiler.py:320-347
+   320	                # Bundle is mutated each retry so the signed payload always
+   321	                # reflects the version we are about to commit.
+   322	                bundle["version"] = new_version
+   323	                try:
+   324	                    sign_bundle(bundle)
+   325	                except RuntimeError:
+   326	                    # Surface via outer exception path; raising here aborts
+   327	                    # the WATCH (no EXEC issued) so no partial write occurs.
+   328	                    raise
+   329	
+   330	                serialized_bundle = json.dumps(bundle, default=str)
+   331	                notification = json.dumps(
+   332	                    {
+   333	                        "event": "policy_compiled",
+   334	                        "version": new_version,
+   335	                        "policy_count": bundle.get("policy_count", 0),
+   336	                        "compiled_at": bundle.get("compiled_at"),
+   337	                        "trigger": trigger,
+   338	                        "changed_policy_ids": changed_policy_ids or [],
+   339	                        "org_slug": org_slug,
+   340	                    }
+   341	                )
+   342	
+   343	                pipe.multi()
+   344	                pipe.set(version_key, new_version)
+   345	                pipe.set(redis_key, serialized_bundle)
+   346	                pipe.publish(PUBSUB_CHANNEL, notification)
+   347	
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/control/ai_mesh_control/policy/signing.py:14-23
+    14	Wire format:
+    15	    bundle = {
+    16	        "version": 42,
+    17	        "policy_count": 7,
+    18	        "policies": [...],
+    19	        ...
+    20	        "_sig_alg": "HMAC-SHA256",
+    21	        "_sig_at": 1719500000.123,
+    22	        "_sig": "hex-encoded-mac",
+    23	    }
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/control/ai_mesh_control/policy/signing.py:40-43
+    40	SIG_FIELD = "_sig"
+    41	SIG_ALG_FIELD = "_sig_alg"
+    42	SIG_AT_FIELD = "_sig_at"
+    43	SIG_ALG = "HMAC-SHA256"
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/policy_sync.py:35-37
+    35	REDIS_KEY_COMPILED = "policies:compiled"
+    36	REDIS_KEY_VERSION = "policies:version"
+    37	PUBSUB_CHANNEL = "policy_updates"
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/policy_sync.py:105-118
+   105	    def _accept_bundle(
+   106	        self,
+   107	        bundle: dict[str, Any],
+   108	        org_slug: str,
+   109	        site: str,
+   110	        redis_key: str,
+   111	    ) -> bool:
+   112	        """Return True if *bundle* may be loaded into the cache.
+   113	
+   114	        Logs the decision explicitly; on rejection emits the operational
+   115	        POLICY_HMAC_FAILURE event (fire-and-forget) so dashboards see it.
+   116	        """
+   117	        if verify_bundle(bundle):
+   118	            LOG.debug(
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/policy_sync.py:150-166
+   150	            )
+   151	            return False
+   152	
+   153	        # No signing key and enforcement explicitly disabled: accept, but
+   154	        # surface the degraded trust mode once per process.
+   155	        if not self._unsigned_accept_warned:
+   156	            self._unsigned_accept_warned = True
+   157	            LOG.warning(
+   158	                "Accepting UNSIGNED policy bundles: POLICY_SIGNING_KEY is not "
+   159	                "configured and GATEWAY_POLICY_SIGNING_REQUIRED=false. Bundle "
+   160	                "integrity is NOT verified — only safe during the signing "
+   161	                "cutover window or local development. (Logged once; first "
+   162	                "occurrence: org '%s', %s.)",
+   163	                org_slug,
+   164	                site,
+   165	            )
+   166	        return True
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/policy_sync.py:305-312
+   305	            # Scan org-scoped keys: policies:compiled:{slug}
+   306	            org_keys = []
+   307	            async for key in client.scan_iter(match=f"{REDIS_KEY_COMPILED}:*", count=100):
+   308	                org_keys.append(key)
+   309	
+   310	            for key in org_keys:
+   311	                raw = await client.get(key)
+   312	                if raw is None:
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/policy_sync.py:438-441
+   438	                )
+   439	                pubsub = client.pubsub()
+   440	                await pubsub.subscribe(PUBSUB_CHANNEL)
+   441	                LOG.info("PolicySync subscribed to Pub/Sub channel '%s'", PUBSUB_CHANNEL)
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/policy_sync.py:509-520
+   509	    async def _refresh_cache(self, client: aioredis.Redis, org_slug: str = "default") -> None:
+   510	        """Fetch the latest compiled bundle for a specific org from Redis."""
+   511	        try:
+   512	            redis_key = f"{REDIS_KEY_COMPILED}:{org_slug}"
+   513	            raw_bundle = await client.get(redis_key)
+   514	            if raw_bundle is None:
+   515	                LOG.warning("Policy key '%s' missing during refresh", redis_key)
+   516	                return
+   517	
+   518	            bundle = json.loads(raw_bundle)
+   519	
+   520	            # Same fail-closed verification as initial load. Keep the
+================ VECTOR POLICIES ================
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/control/ai_mesh_control/policy/vector_urls.py:9-12
+     9	router.register(r"", VectorCollectionPolicyViewSet, basename="vector-collection-policy")
+    10	
+    11	urlpatterns = [
+    12	    path("compile/", VectorPolicyCompileView.as_view(), name="vector-policy-compile"),
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/control/ai_mesh_control/policy/vector_views.py:158-178
+   158	    def _recompile_and_push_sync(self, *, trigger: str) -> None:
+   159	        """Synchronously compile all enabled vector policies and push to Redis.
+   160	
+   161	        The post_save/post_delete signal (policy.vector_signals) schedules a
+   162	        DEBOUNCED Celery recompile (``compile_vector_policies_task.apply_async``).
+   163	        That task is consumed only by the optional ``workers`` compose profile,
+   164	        which is not running in the default deployment — so a policy created /
+   165	        edited / deleted through this API would never reach the gateway's Redis
+   166	        bundle, and every request to that collection then 403s with
+   167	        ``rag_access_denied`` (or keeps enforcing a stale bundle). Provider-config
+   168	        sync is already synchronous (vector_provider_signals); mirror that here so
+   169	        vector-policy CRUD is self-sufficient regardless of the worker.
+   170	
+   171	        Best-effort: a compile/push failure must NOT fail the CRUD response — the
+   172	        change is already persisted and the async signal remains as a backstop.
+   173	        """
+   174	        try:
+   175	            from policy.vector_compiler import VectorPolicyCompiler
+   176	
+   177	            VectorPolicyCompiler().compile_and_push(trigger=trigger)
+   178	        except Exception:
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/control/ai_mesh_control/policy/vector_views.py:299-305
+   299	    def post(self, request: Request) -> Response:
+   300	        from policy.vector_compiler import VectorPolicyCompiler
+   301	
+   302	        compiler = VectorPolicyCompiler()
+   303	        bundle = compiler.compile_all()
+   304	        success = compiler.push_to_redis(
+   305	            bundle,
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/control/ai_mesh_control/policy/vector_signals.py:85-101
+    85	@receiver(post_save, sender=VectorCollectionPolicy)
+    86	def recompile_on_vector_policy_save(
+    87	    sender: type,
+    88	    instance: VectorCollectionPolicy,
+    89	    created: bool,
+    90	    **kwargs: Any,
+    91	) -> None:
+    92	    action = "created" if created else "updated"
+    93	    _trigger_vector_recompilation(
+    94	        sender_name=f"VectorCollectionPolicy.post_save ({action})",
+    95	        instance_repr=str(instance),
+    96	        changed_policy_id=str(instance.pk),
+    97	    )
+    98	
+    99	
+   100	@receiver(post_delete, sender=VectorCollectionPolicy)
+   101	def recompile_on_vector_policy_delete(
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/control/ai_mesh_control/policy/vector_compiler.py:26-28
+    26	REDIS_KEY_COMPILED = "vector:policies:compiled"
+    27	REDIS_KEY_VERSION = "vector:policies:version"
+    28	PUBSUB_CHANNEL = "vector_policy_updates"
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/control/ai_mesh_control/policy/vector_compiler.py:108-115
+   108	            )
+   109	
+   110	        bundle: dict[str, Any] = {
+   111	            "compiled_at": time.time(),
+   112	            "policy_count": len(compiled_policies),
+   113	            "policies": compiled_policies,
+   114	        }
+   115	
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/control/ai_mesh_control/policy/vector_compiler.py:164-184
+   164	                # Mutate the bundle on every retry so the serialized payload
+   165	                # always carries the version we are about to commit.
+   166	                bundle["version"] = new_version
+   167	
+   168	                serialized_bundle = json.dumps(bundle, default=str)
+   169	                notification = json.dumps(
+   170	                    {
+   171	                        "event": "vector_policy_compiled",
+   172	                        "version": new_version,
+   173	                        "policy_count": bundle.get("policy_count", 0),
+   174	                        "compiled_at": bundle.get("compiled_at"),
+   175	                        "trigger": trigger,
+   176	                        "changed_policy_ids": changed_policy_ids or [],
+   177	                    }
+   178	                )
+   179	
+   180	                pipe.multi()
+   181	                pipe.set(REDIS_KEY_VERSION, new_version)
+   182	                pipe.set(REDIS_KEY_COMPILED, serialized_bundle)
+   183	                pipe.publish(PUBSUB_CHANNEL, notification)
+   184	
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/vector_policy_sync.py:20-22
+    20	REDIS_KEY_COMPILED = "vector:policies:compiled"
+    21	REDIS_KEY_VERSION = "vector:policies:version"
+    22	PUBSUB_CHANNEL = "vector_policy_updates"
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/vector_policy_sync.py:167-176
+   167	                socket_connect_timeout=2.0,
+   168	            )
+   169	            raw_bundle = await client.get(REDIS_KEY_COMPILED)
+   170	            await client.aclose()
+   171	
+   172	            if raw_bundle is not None:
+   173	                bundle = json.loads(raw_bundle)
+   174	                self._cache = bundle
+   175	                self._version = bundle.get("version", 0)
+   176	                LOG.info(
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/vector_policy_sync.py:207-210
+   207	                )
+   208	                pubsub = client.pubsub()
+   209	                await pubsub.subscribe(PUBSUB_CHANNEL)
+   210	                LOG.info("VectorPolicySync subscribed to Pub/Sub channel '%s'", PUBSUB_CHANNEL)
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/vector_policy_sync.py:225-236
+   225	                    incoming_version = notification.get("version", 0)
+   226	                    # Reload whenever the version DIFFERS — not only when it is
+   227	                    # strictly greater. A Redis flush/AOF loss resets the version
+   228	                    # key to a low number; the old "<= current → skip" logic then
+   229	                    # dropped every notification forever and silently fell back to
+   230	                    # the permissive monitor default. Treat any mismatch as a reload.
+   231	                    if incoming_version == self._version:
+   232	                        LOG.debug(
+   233	                            "Vector policy notification matches cached version (%d); no reload",
+   234	                            self._version,
+   235	                        )
+   236	                        continue
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/vector_policy_sync.py:270-282
+   270	        """Fetch the latest compiled vector policy bundle from Redis and swap the cache."""
+   271	        try:
+   272	            raw_bundle = await client.get(REDIS_KEY_COMPILED)
+   273	            if raw_bundle is None:
+   274	                LOG.warning("vector:policies:compiled key missing during refresh")
+   275	                return
+   276	
+   277	            bundle = json.loads(raw_bundle)
+   278	            new_version = bundle.get("version", 0)
+   279	
+   280	            self._cache = bundle
+   281	            self._version = new_version
+   282	
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/main.py:6615-6621
+  6615	    if CONFIG.get("rag_enabled", False):
+  6616	        from vector_policy_sync import VectorPolicySync
+  6617	        from vector_client import PineconeClient, MilvusClient
+  6618	        from context_guard import ContextGuard
+  6619	
+  6620	        VECTOR_POLICY_SYNC = VectorPolicySync(redis_url=CONFIG["redis_url"])
+  6621	        await VECTOR_POLICY_SYNC.start()
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/config.py:175-175
+   175	    rag_enabled = get_env("GATEWAY_RAG_ENABLED", "false").lower() in ("true", "1", "yes")
+================ VECTOR PROVIDERS ================
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/control/ai_mesh_control/policy/vector_provider_urls.py:9-9
+     9	router.register(r"", VectorProviderConfigViewSet, basename="vector-provider-config")
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/control/ai_mesh_control/policy/vector_provider_signals.py:24-35
+    24	REDIS_KEY_PROVIDERS_COMPILED = "vector:providers:compiled"
+    25	# RAG-16 (2026-08-06): provider payloads contain the org's vector-DB AND embedding
+    26	# API keys in PLAINTEXT (EncryptedCharField decrypts on attribute access, so
+    27	# build_redis_payload materialises the secret). Writing every active org into ONE
+    28	# global key meant a single GET — from any Redis client, a replica, an RDB/AOF
+    29	# snapshot, a backup, or a MONITOR capture — yielded EVERY tenant's provider
+    30	# credentials at once, and those keys grant provider-side read/write/delete
+    31	# entirely OUTSIDE the firewall. Splitting per org means one read is no longer a
+    32	# full-tenant compromise. (This reduces blast radius; it does NOT encrypt — that
+    33	# needs the Fernet key distributed to the gateway, tracked separately.)
+    34	REDIS_KEY_PROVIDERS_ORG_PREFIX = "vector:providers:compiled:"
+    35	PUBSUB_CHANNEL = "vector_provider_updates"
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/control/ai_mesh_control/policy/vector_provider_signals.py:57-82
+    57	            for _k, _payload in bundle.items():
+    58	                _org = str(_k).split("::", 1)[0]
+    59	                by_org.setdefault(_org, {})[_k] = _payload
+    60	            for _org, _sub in by_org.items():
+    61	                client.set(f"{REDIS_KEY_PROVIDERS_ORG_PREFIX}{_org}", json.dumps(_sub))
+    62	            # Drop any org key that no longer has an active provider, so a removed
+    63	            # org's credentials do not linger in Redis indefinitely.
+    64	            try:
+    65	                for _stale in client.scan_iter(match=f"{REDIS_KEY_PROVIDERS_ORG_PREFIX}*", count=200):
+    66	                    _sk = _stale.decode() if isinstance(_stale, bytes) else str(_stale)
+    67	                    if _sk.rsplit(":", 1)[-1] not in by_org:
+    68	                        client.delete(_sk)
+    69	            except Exception:  # noqa: BLE001 — cleanup must not block the sync
+    70	                logger.warning("vector provider per-org key cleanup failed", exc_info=True)
+    71	            # RAG-16: remove the legacy ALL-TENANT key. Leaving it in place would
+    72	            # keep the blast radius exactly as it was.
+    73	            client.delete(REDIS_KEY_PROVIDERS_COMPILED)
+    74	
+    75	            # Publish change notification
+    76	            notification = {
+    77	                "provider_type": instance.provider_type,
+    78	                "organization_id": instance.organization_id,
+    79	                "action": "deleted" if deleted else "updated",
+    80	            }
+    81	            client.publish(PUBSUB_CHANNEL, json.dumps(notification))
+    82	
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/control/ai_mesh_control/policy/vector_provider_signals.py:95-101
+    95	@receiver(post_save, sender=VectorProviderConfig)
+    96	def vector_provider_post_save(sender, instance, **kwargs) -> None:
+    97	    _sync_provider_to_redis(instance, deleted=False)
+    98	
+    99	
+   100	@receiver(post_delete, sender=VectorProviderConfig)
+   101	def vector_provider_post_delete(sender, instance, **kwargs) -> None:
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/vector_provider_sync.py:29-37
+    29	REDIS_KEY_COMPILED = "vector:providers:compiled"
+    30	# RAG-16: the control plane now writes ONE KEY PER ORG so a single Redis read
+    31	# cannot yield every tenant's provider credentials (the payload carries the
+    32	# vector-DB + embedding API keys in plaintext). The legacy all-tenant key is
+    33	# still read as a FALLBACK so a new gateway keeps working against an older
+    34	# control plane mid-rollout; once both sides are deployed the legacy key is
+    35	# deleted by the writer and this fallback simply finds nothing.
+    36	REDIS_KEY_ORG_PREFIX = "vector:providers:compiled:"
+    37	PUBSUB_CHANNEL = "vector_provider_updates"
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/vector_provider_sync.py:110-136
+   110	            # cache has always used, so every consumer is unchanged.
+   111	            merged: dict = {}
+   112	            found_org_keys = False
+   113	            async for _k in client.scan_iter(match=f"{REDIS_KEY_ORG_PREFIX}*", count=200):
+   114	                _rawk = await client.get(_k)
+   115	                if not _rawk:
+   116	                    continue
+   117	                try:
+   118	                    _sub = json.loads(_rawk)
+   119	                except Exception:  # noqa: BLE001 — one bad org must not blank the cache
+   120	                    LOG.warning("Skipping unparseable vector provider key %s", _k)
+   121	                    continue
+   122	                if isinstance(_sub, dict):
+   123	                    merged.update(_sub)
+   124	                    found_org_keys = True
+   125	            raw = None if found_org_keys else await client.get(REDIS_KEY_COMPILED)
+   126	            await client.aclose()
+   127	
+   128	            if found_org_keys or raw is not None:
+   129	                new_cache = merged if found_org_keys else json.loads(raw)
+   130	                # DEBOUNCE FIX: Only update if content actually changed
+   131	                new_hash = hashlib.sha256(json.dumps(new_cache, sort_keys=True).encode()).hexdigest()
+   132	                if new_hash != self._cache_hash:
+   133	                    self._cache = new_cache
+   134	                    self._cache_hash = new_hash
+   135	                    LOG.info("Loaded %d vector provider configs from Redis (updated)", self.provider_count)
+   136	                else:
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/vector_provider_sync.py:152-155
+   152	                )
+   153	                pubsub = client.pubsub()
+   154	                await pubsub.subscribe(PUBSUB_CHANNEL)
+   155	                LOG.info("VectorProviderSync subscribed to %s", PUBSUB_CHANNEL)
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/main.py:6653-6654
+  6653	        VECTOR_PROVIDER_SYNC = VectorProviderSync(redis_url=CONFIG["redis_url"])
+  6654	        await VECTOR_PROVIDER_SYNC.start()
+================ KILL SWITCHES ================
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/control/ai_mesh_control/core/kill_switch_urls.py:8-8
+     8	router.register(r"", KillSwitchViewSet, basename="kill-switch")
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/control/ai_mesh_control/core/kill_switch_views.py:191-206
+   191	    @action(detail=True, methods=["post"], url_path="activate")
+   192	    def activate(self, request, pk=None):
+   193	        """Activate the kill-switch. Sets is_active=True and timestamps."""
+   194	        instance = self.get_object()
+   195	        serializer = KillSwitchActivateSerializer(data=request.data)
+   196	        serializer.is_valid(raise_exception=True)
+   197	
+   198	        reason = serializer.validated_data.get("reason", "")
+   199	        if reason:
+   200	            instance.reason = reason
+   201	
+   202	        instance.is_active = True
+   203	        instance.activated_at = timezone.now()
+   204	        instance.activated_by = request.user
+   205	        instance.save()
+   206	
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/control/ai_mesh_control/core/kill_switch_views.py:241-249
+   241	    @action(detail=True, methods=["post"], url_path="deactivate")
+   242	    def deactivate(self, request, pk=None):
+   243	        """Deactivate the kill-switch. Clears is_active and activated_at."""
+   244	        instance = self.get_object()
+   245	
+   246	        instance.is_active = False
+   247	        instance.activated_at = None
+   248	        instance.save()
+   249	
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/control/ai_mesh_control/core/models.py:837-867
+   837	    def build_redis_key(self) -> str:
+   838	        prefix = self._org_prefix()
+   839	        if self.model_name == self.SCOPE_GLOBAL:
+   840	            return f"kill_switch:{prefix}:global"
+   841	        credential_prefix = (self.api_key_prefix or "").strip()
+   842	        if credential_prefix:
+   843	            return f"kill_switch:{prefix}:credential:{credential_prefix}:model:{self.model_name}"
+   844	        return f"kill_switch:{prefix}:model:{self.model_name}"
+   845	
+   846	    def build_redis_payload(self) -> dict:
+   847	        org_slug = self._org_prefix()
+   848	        if self.organization_id and self.organization and self.organization.slug != org_slug:
+   849	            import logging
+   850	
+   851	            logging.getLogger(__name__).error(
+   852	                "KillSwitch org_slug mismatch: organization.slug=%s payload org_slug=%s id=%s",
+   853	                self.organization.slug,
+   854	                org_slug,
+   855	                self.pk,
+   856	            )
+   857	            org_slug = self.organization.slug
+   858	        return {
+   859	            "is_active": self.is_active,
+   860	            "action": self.action,
+   861	            "fallback_model": self.fallback_model,
+   862	            "reason": self.reason,
+   863	            "organization_id": self.organization_id,
+   864	            "org_slug": org_slug,
+   865	            "api_key_prefix": (self.api_key_prefix or "").strip(),
+   866	            "activated_at": self.activated_at.isoformat() if self.activated_at else None,
+   867	        }
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/control/ai_mesh_control/core/signals.py:279-345
+   279	@receiver(post_save, sender=KillSwitch)
+   280	def sync_kill_switch_to_redis(
+   281	    sender: type,
+   282	    instance: KillSwitch,
+   283	    created: bool,
+   284	    **kwargs: Any,
+   285	) -> None:
+   286	    """
+   287	    Push or remove the KillSwitch payload in Redis on create/update.
+   288	
+   289	    Active switches are SET; inactive switches are DELETEd so the
+   290	    gateway treats absence as 'no kill-switch'.
+   291	    """
+   292	    redis_key = instance.build_redis_key()
+   293	    is_active = instance.is_active
+   294	    payload = json.dumps(instance.build_redis_payload())
+   295	    model_name = instance.model_name
+   296	
+   297	    def _do_sync():
+   298	        try:
+   299	            client = _get_redis_client()
+   300	            if is_active:
+   301	                client.set(redis_key, payload)
+   302	                logger.info(
+   303	                    "KillSwitch activated for '%s' -> Redis key %s",
+   304	                    model_name,
+   305	                    redis_key,
+   306	                )
+   307	            else:
+   308	                client.delete(redis_key)
+   309	                logger.info(
+   310	                    "KillSwitch deactivated for '%s' -> removed Redis key %s",
+   311	                    model_name,
+   312	                    redis_key,
+   313	                )
+   314	        except redis.RedisError:
+   315	            logger.exception(
+   316	                "Failed to sync KillSwitch '%s' to Redis",
+   317	                model_name,
+   318	            )
+   319	
+   320	    transaction.on_commit(_do_sync)
+   321	
+   322	
+   323	@receiver(post_delete, sender=KillSwitch)
+   324	def delete_kill_switch_from_redis(
+   325	    sender: type,
+   326	    instance: KillSwitch,
+   327	    **kwargs: Any,
+   328	) -> None:
+   329	    """Remove the KillSwitch from Redis on delete."""
+   330	    redis_key = instance.build_redis_key()
+   331	    try:
+   332	        client = _get_redis_client()
+   333	        result = client.delete(redis_key)
+   334	        if result:
+   335	            logger.info("Deleted KillSwitch '%s' from Redis", instance.model_name)
+   336	        else:
+   337	            logger.warning(
+   338	                "KillSwitch '%s' not found in Redis (already absent)",
+   339	                instance.model_name,
+   340	            )
+   341	    except redis.RedisError:
+   342	        logger.exception(
+   343	            "Failed to delete KillSwitch '%s' from Redis",
+   344	            instance.model_name,
+   345	        )
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/control/ai_mesh_control/core/admin_urls.py:65-69
+    65	    path(
+    66	        "redis/kill-switches/validate/",
+    67	        RedisKillSwitchValidateView.as_view(),
+    68	        name="admin-redis-kill-switch-validate",
+    69	    ),
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/control/ai_mesh_control/core/redis_kill_switch_views.py:31-38
+    31	def _scan_org_kill_switch_keys(client, org_slug: str) -> list[dict]:
+    32	    """Return findings for keys matching kill_switch:{org_slug}:*"""
+    33	    prefix = f"kill_switch:{org_slug}:"
+    34	    findings: list[dict] = []
+    35	
+    36	    for raw_key in client.scan_iter(f"{prefix}*"):
+    37	        key_str = raw_key.decode() if isinstance(raw_key, bytes) else str(raw_key)
+    38	        raw_val = client.get(raw_key)
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/control/ai_mesh_control/core/redis_kill_switch_views.py:116-140
+   116	class RedisKillSwitchValidateView(APIView):
+   117	    """POST /api/admin/redis/kill-switches/validate/ — scan keys; optional repair."""
+   118	
+   119	    permission_classes = [IsAuthenticated, IsAdminOrSuperuser]
+   120	
+   121	    def post(self, request):
+   122	        org_slug = _org_slug(request)
+   123	        if not org_slug:
+   124	            return Response(
+   125	                {"error": "No organization on user profile"},
+   126	                status=status.HTTP_400_BAD_REQUEST,
+   127	            )
+   128	
+   129	        repair = bool(request.data.get("repair", False))
+   130	        client = _get_redis_client()
+   131	        findings = _scan_org_kill_switch_keys(client, org_slug)
+   132	        malformed = [f for f in findings if f.get("malformed")]
+   133	        repaired_keys: list[str] = []
+   134	
+   135	        if repair and malformed:
+   136	            for item in malformed:
+   137	                key = item["key"]
+   138	                client.delete(key)
+   139	                repaired_keys.append(key)
+   140	                logger.warning(
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/kill_switch.py:44-65
+    44	    On Redis failure, fail-closed (disable).
+    45	    Malformed payloads (non-dict JSON, unknown/missing action, reroute
+    46	    without fallback) are ignored — FAIL-OPEN — so a corrupt entry cannot
+    47	    crash the request path or deny all traffic for a model.
+    48	    """
+    49	    prefix = org_slug or "default"
+    50	    keys: list[tuple[str, str]] = []
+    51	
+    52	    if key_prefix:
+    53	        keys.append(
+    54	            (
+    55	                "credential",
+    56	                f"kill_switch:{prefix}:{CREDENTIAL_KEY_PREFIX}{key_prefix}:{MODEL_KEY_PREFIX}{model_name}",
+    57	            )
+    58	        )
+    59	    keys.append(("org_model", f"kill_switch:{prefix}:{MODEL_KEY_PREFIX}{model_name}"))
+    60	    keys.append(("org_global", f"kill_switch:{prefix}:{GLOBAL_SUFFIX}"))
+    61	
+    62	    try:
+    63	        async with redis_client.pipeline(transaction=False) as pipe:
+    64	            for _, redis_key in keys:
+    65	                pipe.get(redis_key)
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/circuit_breaker.py:138-141
+   138	    def _kill_switch_key(self, org_slug: str, model: str) -> str:
+   139	        slug = (org_slug or "default").strip() or "default"
+   140	        return f"kill_switch:{slug}:model:{model}"
+   141	
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/circuit_breaker.py:205-212
+   205	        # cooldown keeps blocking the model past the point the breaker is eligible
+   206	        # to HALF_OPEN — the blocked request never reaches CB.check to probe, so the
+   207	        # breaker can never self-heal (deadlock until TTL). Expiring the mirror at
+   208	        # exactly the cooldown lets the first post-cooldown request flow to CB.check
+   209	        # → HALF_OPEN probe; a failed probe re-trips and re-sets the mirror.
+   210	        ttl = self._ttl()
+   211	        await self._redis.set(key, payload, ex=ttl)
+   212	        LOG.warning(
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/circuit_breaker.py:234-253
+   234	    async def _clear_kill_switch_for_model(self, model: str) -> None:
+   235	        """Clear any circuit-breaker-owned kill-switch key for this model.
+   236	
+   237	        The org slug is not known at the OPEN -> HALF_OPEN transition (``check``
+   238	        is not org-scoped), so we scan the org-scoped kill-switch keyspace for
+   239	        this model and drop only the keys we own. Without this, a stale
+   240	        ``circuit_breaker``-tripped kill-switch keeps a recovered model 503'd
+   241	        while the circuit is already probing in HALF_OPEN.
+   242	        """
+   243	        pattern = f"kill_switch:*:model:{model}"
+   244	        try:
+   245	            async for key in self._redis.scan_iter(match=pattern):
+   246	                try:
+   247	                    raw = await self._redis.get(key)
+   248	                    if not raw:
+   249	                        continue
+   250	                    payload = json.loads(raw if isinstance(raw, str) else raw.decode())
+   251	                    if payload.get("trigger_source") == "circuit_breaker":
+   252	                        await self._redis.delete(key)
+   253	                        LOG.info(
+================ GATEWAY API KEYS ================
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/control/ai_mesh_control/core/gateway_urls.py:20-38
+    20	router.register(r"keys", GatewayAPIKeyViewSet, basename="gateway-apikey")
+    21	
+    22	urlpatterns = [
+    23	    path("public-url/", GatewayPublicUrlView.as_view(), name="gateway-public-url"),
+    24	    path("instances/register/", GatewayInstanceRegisterView.as_view(), name="gateway-instance-register"),
+    25	    path("instances/telemetry/", GatewayInstanceTelemetryView.as_view(), name="gateway-instance-telemetry"),
+    26	    path("stats/", GatewayStatsListView.as_view(), name="gateway-stats-list"),
+    27	    path("simulator-default/", SimulatorDefaultGatewayKeyView.as_view(), name="gateway-simulator-default-key"),
+    28	    path(
+    29	        "isolation-playground/",
+    30	        IsolationPlaygroundGatewayKeyView.as_view(),
+    31	        name="gateway-isolation-playground-key",
+    32	    ),
+    33	    path(
+    34	        "isolation-playground/rotate/",
+    35	        IsolationPlaygroundRotateView.as_view(),
+    36	        name="gateway-isolation-playground-rotate",
+    37	    ),
+    38	    path("", include(router.urls)),
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/control/ai_mesh_control/core/signals.py:45-45
+    45	REDIS_KEY_PREFIX = "auth:apikey:"
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/control/ai_mesh_control/core/signals.py:72-115
+    72	def _build_redis_key(key_hash: str) -> str:
+    73	    """Construct the Redis key for a given API key hash."""
+    74	    return f"{REDIS_KEY_PREFIX}{key_hash}"
+    75	
+    76	
+    77	@receiver(post_save, sender=GatewayAPIKey)
+    78	def sync_gateway_apikey_to_redis(
+    79	    sender: type,
+    80	    instance: GatewayAPIKey,
+    81	    created: bool,
+    82	    **kwargs: Any,
+    83	) -> None:
+    84	    """
+    85	    Push the GatewayAPIKey identity payload to Redis on create/update.
+    86	    If the key has an 'expires_at', a Redis TTL is set so the key
+    87	    auto-expires without requiring a separate cleanup job.
+    88	    """
+    89	    # Capture values now -- the instance may be stale by the time on_commit fires
+    90	    key_hash = instance.key_hash
+    91	    prefix = instance.prefix
+    92	    payload = json.dumps(instance.build_redis_payload())
+    93	    expires_at = instance.expires_at
+    94	
+    95	    def _do_sync():
+    96	        redis_key = _build_redis_key(key_hash)
+    97	        try:
+    98	            client = _get_redis_client()
+    99	
+   100	            if expires_at:
+   101	                from django.utils import timezone
+   102	
+   103	                ttl_seconds = int((expires_at - timezone.now()).total_seconds())
+   104	                if ttl_seconds > 0:
+   105	                    client.setex(redis_key, ttl_seconds, payload)
+   106	                    logger.info("Synced GatewayAPIKey %s to Redis with TTL %ds", prefix, ttl_seconds)
+   107	                else:
+   108	                    client.delete(redis_key)
+   109	                    logger.warning("GatewayAPIKey %s has expired, removed from Redis", prefix)
+   110	            else:
+   111	                client.set(redis_key, payload)
+   112	                logger.info("Synced GatewayAPIKey %s to Redis (no expiry)", prefix)
+   113	        except redis.RedisError:
+   114	            logger.exception(
+   115	                "Failed to sync GatewayAPIKey %s to Redis. Gateway may serve stale data until next sync.",
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/control/ai_mesh_control/core/signals.py:124-130
+   124	def resync_all_gateway_keys() -> int:
+   125	    """Reconcile EVERY active GatewayAPIKey into Redis (idempotent).
+   126	
+   127	    The post_save signal only fires on save, so a Redis flush/eviction or a
+   128	    redis/worker container recycle silently blanks the gateway auth keyspace and
+   129	    makes every /v1/* request 401 until each key is re-saved. This full reconcile
+   130	    (run on worker startup + periodically via Celery beat) restores them. Safe to
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/control/ai_mesh_control/core/signals.py:253-276
+   253	@receiver(post_delete, sender=GatewayAPIKey)
+   254	def delete_gateway_api_key_from_redis(
+   255	    sender: type,
+   256	    instance: GatewayAPIKey,
+   257	    **kwargs: Any,
+   258	) -> None:
+   259	    """
+   260	    Remove the GatewayAPIKey from Redis on delete.
+   261	    """
+   262	    redis_key = _build_redis_key(instance.key_hash)
+   263	
+   264	    try:
+   265	        client = _get_redis_client()
+   266	        result = client.delete(redis_key)
+   267	
+   268	        if result:
+   269	            logger.info("Deleted GatewayAPIKey %s from Redis", instance.prefix)
+   270	        else:
+   271	            logger.warning("GatewayAPIKey %s not found in Redis (already absent)", instance.prefix)
+   272	    except redis.RedisError:
+   273	        logger.exception("Failed to delete GatewayAPIKey %s from Redis", instance.prefix)
+   274	
+   275	
+   276	# ── KillSwitch Redis sync ──
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/control/ai_mesh_control/core/models.py:735-751
+   735	            "key_id": str(self.id),
+   736	            "prefix": self.prefix,
+   737	            "user_id": self.owner_id,  # type: ignore[attr-defined]  # Django FK _id accessor
+   738	            "project_id": self.project_id,
+   739	            "organization_id": org.id if org else None,
+   740	            "org_slug": org.slug if org else "",
+   741	            "permissions": self.permissions,
+   742	            "allowed_models": self.allowed_models,
+   743	            "rate_limit_tpm": self.rate_limit_tokens_per_minute,
+   744	            "risk_score": self.risk_score,
+   745	            "max_context_tokens": self.max_context_tokens,
+   746	            "mcp_allowed_tools": self.mcp_allowed_tools,
+   747	            "mcp_max_tool_calls": self.mcp_max_tool_calls,
+   748	            "roles": roles,
+   749	            "is_active": self.is_active,
+   750	            "expires_at": self.expires_at.isoformat() if self.expires_at else None,
+   751	        }
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/control/ai_mesh_control/core/gateway_key_views.py:377-384
+   377	    def perform_destroy(self, instance):
+   378	        logger.info(
+   379	            "GatewayAPIKey revoked: prefix=%s user_id=%s project=%s",
+   380	            instance.prefix,
+   381	            self.request.user.pk,
+   382	            instance.project_id,
+   383	        )
+   384	        instance.delete()
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/control/ai_mesh_control/core/gateway_key_views.py:428-444
+   428	    @action(detail=False, methods=["delete", "post"], url_path="purge-revoked")
+   429	    def purge_revoked(self, request, *args, **kwargs):
+   430	        qs = self._revoked_keys_for_bulk_purge()
+   431	        # Materialize before delete so we can return ids. Include key_hash:
+   432	        # post_delete Redis sync reads instance.key_hash; a deferred field after
+   433	        # DELETE would refresh_from_db → DoesNotExist → HTTP 500.
+   434	        targets = list(qs.only("id", "prefix", "project_id", "owner_id", "key_hash"))
+   435	        deleted_ids = []
+   436	        for instance in targets:
+   437	            deleted_ids.append(str(instance.id))
+   438	            logger.info(
+   439	                "GatewayAPIKey bulk-purge revoked: prefix=%s user_id=%s project=%s",
+   440	                instance.prefix,
+   441	                request.user.pk,
+   442	                instance.project_id,
+   443	            )
+   444	            instance.delete()
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/control/ai_mesh_control/core/gateway_views.py:243-262
+   243	    def post(self, request):
+   244	        org, actor, err = self._resolve(request)
+   245	        if err:
+   246	            return err
+   247	
+   248	        from core.simulator_seed import ensure_simulator_dev_bootstrap
+   249	
+   250	        ensure_simulator_dev_bootstrap(org)
+   251	
+   252	        # Idempotent provisioning: ALWAYS return the org's single existing active
+   253	        # simulator key (ensure_simulator_for_org mints one only when none is
+   254	        # active, and collapses any duplicates to one). For recoverable keys the
+   255	        # plaintext comes back on every call — the SAME stable key — so we never
+   256	        # revoke-and-recreate just to hand back plaintext. That rotate-on-ensure
+   257	        # behavior churned the org through dozens of keys and broke the
+   258	        # one-key-per-org invariant.
+   259	        # `?ensure=1` is accepted for backwards-compat but no longer rotates;
+   260	        # explicit rotation is a separate, user-triggered action.
+   261	        _ = request.query_params.get("ensure")  # back-compat; no longer triggers rotation
+   262	        key_instance, raw_key = GatewayAPIKey.ensure_simulator_for_org(org, actor)
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/control/ai_mesh_control/core/gateway_views.py:350-362
+   350	    def post(self, request):
+   351	        org, actor, err = self._resolve(request)
+   352	        if err:
+   353	            return err
+   354	
+   355	        from core.simulator_seed import ensure_simulator_dev_bootstrap
+   356	
+   357	        ensure_simulator_dev_bootstrap(org)
+   358	
+   359	        key_instance, raw_key = GatewayAPIKey.ensure_isolation_playground_for_org(org, actor)
+   360	        storage_key = f"zeroshield_isolation_playground_key:{org.id}"
+   361	        data = {
+   362	            "has_gateway_key": True,
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/control/ai_mesh_control/core/gateway_views.py:389-410
+   389	    def post(self, request):
+   390	        if not _simulator_defaults_enabled():
+   391	            return Response(
+   392	                {"detail": "Simulator defaults are disabled."},
+   393	                status=status.HTTP_404_NOT_FOUND,
+   394	            )
+   395	        org = _resolve_request_org(request.user)
+   396	        if org is None:
+   397	            return Response(
+   398	                {"detail": "Organization membership required for playground keys."},
+   399	                status=status.HTTP_403_FORBIDDEN,
+   400	            )
+   401	
+   402	        key_instance, raw_key = GatewayAPIKey.rotate_isolation_playground_for_org(
+   403	            org, request.user
+   404	        )
+   405	        storage_key = f"zeroshield_isolation_playground_key:{org.id}"
+   406	        return Response(
+   407	            {
+   408	                "has_gateway_key": True,
+   409	                "prefix": key_instance.prefix,
+   410	                "name": key_instance.name,
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/control/ai_mesh_control/core/simulator_seed.py:105-133
+   105	def ensure_simulator_dev_bootstrap(org=None) -> bool:
+   106	    """
+   107	    Apply dev-only simulator bootstrap (LLM model + firewall helpers).
+   108	
+   109	    Gateway API keys are provisioned lazily via ``SimulatorDefaultGatewayKeyView``
+   110	    POST — plaintext is never stored in Redis.
+   111	    """
+   112	    from django.conf import settings
+   113	
+   114	    enabled = os.getenv(
+   115	        "SIMULATOR_DEFAULTS_ENABLED",
+   116	        "true" if getattr(settings, "DEBUG", False) else "false",
+   117	    ).lower() in ("1", "true", "yes", "on")
+   118	    if not enabled:
+   119	        return False
+   120	
+   121	    if org is None:
+   122	        org = _resolve_simulator_org()
+   123	    if org is None:
+   124	        return False
+   125	
+   126	    try:
+   127	        ensure_default_llm_model(org)
+   128	        ensure_firewall_excludes_guard_model(org)
+   129	        ensure_simulator_firewall_keywords_cleared(org)
+   130	        return True
+   131	    except Exception:
+   132	        logger.warning("Simulator dev bootstrap failed for org=%s", getattr(org, "slug", org), exc_info=True)
+   133	        return False
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/control/ai_mesh_control/core/gateway_instance_views.py:84-99
+    84	class GatewayPublicUrlView(APIView):
+    85	    """GET /api/gateways/public-url/ — gateway + backend base URLs for UI simulators."""
+    86	
+    87	    permission_classes = [AllowAny]
+    88	
+    89	    def get(self, request: Request):
+    90	        gateway_base = _resolve_public_gateway_url(request)
+    91	        backend_base = _resolve_public_backend_url(request)
+    92	        return Response(
+    93	            {
+    94	                "gateway_url": gateway_base,
+    95	                "api_endpoint": f"{gateway_base}/v1",
+    96	                "backend_url": backend_base,
+    97	            }
+    98	        )
+    99	
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/control/ai_mesh_control/main_app/settings.py:487-492
+   487	    # Reconcile active gateway API keys into Redis so a Redis flush / container
+   488	    # recycle cannot leave the data plane returning 401 for every /v1/* request.
+   489	    "resync-gateway-keys": {
+   490	        "task": "core.tasks.resync_gateway_keys",
+   491	        "schedule": float(os.environ.get("GATEWAY_KEY_RESYNC_INTERVAL_SEC", "300")),
+   492	    },
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/middleware.py:30-30
+    30	REDIS_KEY_PREFIX = "auth:apikey:"
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/middleware.py:201-205
+   201	    key_hash = hashlib.sha256(raw_key.encode("utf-8")).hexdigest()
+   202	    redis_key = f"{REDIS_KEY_PREFIX}{key_hash}"
+   203	
+   204	    try:
+   205	        raw_payload = await redis_client.get(redis_key)
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/vector_routes.py:353-356
+   353	
+   354	        key_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
+   355	        raw = await client.get(f"auth:apikey:{key_hash}")
+   356	        if not raw:
+================ MODEL STATE (/api/models/*) ================
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/control/ai_mesh_control/core/model_state_urls.py:15-21
+    15	    path("sync/", ModelStatusSyncView.as_view(), name="model-status-sync"),
+    16	    path("status/", ModelStatusListView.as_view(), name="model-status-list"),
+    17	    # <path:> so provider/model ids (e.g. cohere/north-mini-code:free) match.
+    18	    path("status/<path:model_name>/", ModelStatusDetailView.as_view(), name="model-status-detail"),
+    19	    path("isolate/", ModelIsolateView.as_view(), name="model-isolate"),
+    20	    path("recover/<path:model_name>/", ModelRecoverView.as_view(), name="model-recover"),
+    21	    path("audit-log/", KillSwitchAuditLogView.as_view(), name="kill-switch-audit-log"),
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/control/ai_mesh_control/core/model_state_views.py:128-150
+   128	class ModelStatusSyncView(APIView):
+   129	    """POST /api/models/sync/ — bootstrap ModelState from active LLM configs."""
+   130	
+   131	    permission_classes = [IsAuthenticated]
+   132	
+   133	    def post(self, request):
+   134	        org = _get_org(request)
+   135	        if not org:
+   136	            return Response(
+   137	                {"error": "No organization"},
+   138	                status=status.HTTP_400_BAD_REQUEST,
+   139	            )
+   140	        created, active = ensure_model_states_for_org(org)
+   141	        states = ModelState.objects.filter(organization=org)
+   142	        return Response(
+   143	            {
+   144	                "created": created,
+   145	                "active_configs": active,
+   146	                "models": merge_model_states_with_configs(org, states),
+   147	            }
+   148	        )
+   149	
+   150	
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/control/ai_mesh_control/core/model_state_views.py:242-301
+   242	class ModelIsolateView(APIView):
+   243	    """Manually isolate a model — immediate effect via Redis sync."""
+   244	
+   245	    permission_classes = [IsAuthenticated, IsAdminOrSuperuser]
+   246	
+   247	    def post(self, request):
+   248	        org = _get_org(request)
+   249	        if not org:
+   250	            return Response({"error": "No organization"}, status=status.HTTP_400_BAD_REQUEST)
+   251	
+   252	        # R14: a non-dict JSON body (bare list/string/number) reaches the DRF
+   253	        # serializer and helpers that assume a mapping, producing an unhandled
+   254	        # 500. Reject it cleanly with a 400 instead.
+   255	        if not isinstance(request.data, dict):
+   256	            return Response(
+   257	                {"error": "Request body must be a JSON object."},
+   258	                status=status.HTTP_400_BAD_REQUEST,
+   259	            )
+   260	
+   261	        # Pass request context so the serializer can reject a platform guard /
+   262	        # nonexistent / cross-org fallback_model (reroute eligibility check).
+   263	        serializer = ModelIsolateSerializer(data=request.data, context={"request": request})
+   264	        serializer.is_valid(raise_exception=True)
+   265	        data = serializer.validated_data
+   266	
+   267	        # Global scope is disabled: isolation always targets a specific model.
+   268	        if (data["model_name"] or "").strip() == "__global__":
+   269	            return Response(
+   270	                {"error": "Global ('__global__') isolation is disabled. Isolate a specific model."},
+   271	                status=status.HTTP_400_BAD_REQUEST,
+   272	            )
+   273	
+   274	        if is_platform_managed_llm_model_name(data["model_name"]):
+   275	            return Response(
+   276	                {"error": "ZeroShield guard models are platform-managed and cannot be isolated."},
+   277	                status=status.HTTP_400_BAD_REQUEST,
+   278	            )
+   279	
+   280	        state, _ = ModelState.objects.get_or_create(
+   281	            organization=org, model_name=data["model_name"],
+   282	        )
+   283	
+   284	        now = timezone.now()
+   285	        cooldown = data.get("cooldown_seconds", 300)
+   286	        from datetime import timedelta
+   287	
+   288	        state.status = "isolated"
+   289	        state.action = data.get("action", "block")
+   290	        state.fallback_model = data.get("fallback_model", "")
+   291	        state.isolation_reason = data.get("reason", "Manual isolation")
+   292	        state.isolated_at = now
+   293	        state.isolated_until = now + timedelta(seconds=cooldown)
+   294	        state.cooldown_seconds = cooldown
+   295	        # M-20 root cause: enforce model-level invariants (e.g. fallback_model
+   296	        # self-loop) on the DRF .save() path, which never invoked clean().
+   297	        try:
+   298	            state.full_clean()
+   299	        except DjangoValidationError as exc:
+   300	            raise DRFValidationError(getattr(exc, "message_dict", exc.messages))
+   301	        state.save()
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/control/ai_mesh_control/core/model_state_views.py:338-366
+   338	class ModelRecoverView(APIView):
+   339	    """Manually recover a model from isolation."""
+   340	
+   341	    permission_classes = [IsAuthenticated, IsAdminOrSuperuser]
+   342	
+   343	    def post(self, request, model_name):
+   344	        model_name = (model_name or "").strip().rstrip("/")
+   345	        org = _get_org(request)
+   346	        if not org:
+   347	            return Response({"error": "No organization"}, status=status.HTTP_400_BAD_REQUEST)
+   348	
+   349	        try:
+   350	            state = ModelState.objects.get(organization=org, model_name=model_name)
+   351	        except ModelState.DoesNotExist:
+   352	            return Response({"error": f"No state for model '{model_name}'"}, status=status.HTTP_404_NOT_FOUND)
+   353	
+   354	        state.status = "active"
+   355	        state.isolation_reason = ""
+   356	        state.isolated_at = None
+   357	        state.isolated_until = None
+   358	        # Clear the reroute config set during isolation. Leaving a stale
+   359	        # action='reroute' + fallback_model on a now-active model means a GET
+   360	        # reports action=reroute with a possibly-invalid fallback, and on
+   361	        # re-isolation the stale config silently re-applies. Reset to the
+   362	        # governance default ('block') and drop the fallback target.
+   363	        state.action = "block"
+   364	        state.fallback_model = ""
+   365	        state.save()
+   366	
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/control/ai_mesh_control/core/models.py:1877-1895
+  1877	    def build_redis_key(self) -> str:
+  1878	        org_slug = self.organization.slug if self.organization_id else "default"
+  1879	        return f"model_state:{org_slug}:{self.model_name}"
+  1880	
+  1881	    def build_redis_payload(self) -> dict:
+  1882	        return {
+  1883	            "model_name": self.model_name,
+  1884	            "status": self.status,
+  1885	            "risk_score": self.risk_score,
+  1886	            "threshold": self.threshold,
+  1887	            "action": self.action,
+  1888	            "fallback_model": self.fallback_model,
+  1889	            "isolation_reason": self.isolation_reason,
+  1890	            "isolated_at": self.isolated_at.isoformat() if self.isolated_at else None,
+  1891	            "isolated_until": self.isolated_until.isoformat() if self.isolated_until else None,
+  1892	            "cooldown_seconds": self.cooldown_seconds,
+  1893	            "organization_id": self.organization_id,
+  1894	            "org_slug": self.organization.slug if self.organization_id else "default",
+  1895	        }
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/control/ai_mesh_control/core/signals.py:351-398
+   351	@receiver(post_save, sender=ModelState)
+   352	def sync_model_state_to_redis(
+   353	    sender: type,
+   354	    instance: ModelState,
+   355	    created: bool,
+   356	    **kwargs: Any,
+   357	) -> None:
+   358	    """Push ModelState payload to Redis on create/update."""
+   359	    redis_key = instance.build_redis_key()
+   360	    payload = json.dumps(instance.build_redis_payload())
+   361	    model_name = instance.model_name
+   362	
+   363	    def _do_sync():
+   364	        try:
+   365	            client = _get_redis_client()
+   366	            client.set(redis_key, payload)
+   367	            logger.info(
+   368	                "ModelState synced '%s' (status=%s, risk=%.1f) -> Redis key %s",
+   369	                model_name,
+   370	                instance.status,
+   371	                instance.risk_score,
+   372	                redis_key,
+   373	            )
+   374	        except redis.RedisError:
+   375	            logger.exception(
+   376	                "Failed to sync ModelState '%s' to Redis",
+   377	                model_name,
+   378	            )
+   379	
+   380	    transaction.on_commit(_do_sync)
+   381	
+   382	
+   383	@receiver(post_delete, sender=ModelState)
+   384	def delete_model_state_from_redis(
+   385	    sender: type,
+   386	    instance: ModelState,
+   387	    **kwargs: Any,
+   388	) -> None:
+   389	    """Remove ModelState from Redis on delete."""
+   390	    redis_key = instance.build_redis_key()
+   391	    try:
+   392	        client = _get_redis_client()
+   393	        client.delete(redis_key)
+   394	        logger.info("Deleted ModelState '%s' from Redis", instance.model_name)
+   395	    except redis.RedisError:
+   396	        logger.exception(
+   397	            "Failed to delete ModelState '%s' from Redis",
+   398	            instance.model_name,
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/model_state.py:52-57
+    52	    Fail-closed on Redis errors (status ``suspended``).
+    53	    """
+    54	    key = f"model_state:{org_slug}:{model_name}"
+    55	    try:
+    56	        raw = await redis_client.get(key)
+    57	        if not raw:
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/model_state.py:86-91
+    86	                            "isolated_at": None,
+    87	                            "isolated_until": None,
+    88	                        }
+    89	                        try:
+    90	                            await redis_client.set(key, json.dumps(healed))
+    91	                        except Exception as heal_exc:  # noqa: BLE001
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/model_state.py:245-250
+   245	        return False
+   246	
+   247	    state_key = f"model_state:{org_slug}:{model_name}"
+   248	    try:
+   249	        raw = await redis_client.get(state_key)
+   250	        existing_fallback = ""
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/model_state.py:278-281
+   278	            "cooldown_seconds": cooldown_seconds,
+   279	        }
+   280	        await redis_client.set(state_key, json.dumps(isolation_payload))
+   281	
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/model_state.py:301-306
+   301	    Returns True if model was recovered.
+   302	    """
+   303	    state_key = f"model_state:{org_slug}:{model_name}"
+   304	    try:
+   305	        raw = await redis_client.get(state_key)
+   306	        if not raw:
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/model_state.py:330-333
+   330	                "cooldown_seconds": payload.get("cooldown_seconds", AUTO_ISOLATION_COOLDOWN),
+   331	            }
+   332	            await redis_client.set(state_key, json.dumps(recovery_payload))
+   333	            LOG.info(
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/main.py:10553-10556
+ 10553	                cb_fallback = ""
+ 10554	                try:
+ 10555	                    raw_ms = await REDIS_CLIENT.get(
+ 10556	                        f"model_state:{org_slug or 'default'}:{requested_model}"
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/main.py:12483-12488
+ 12483	    if REDIS_CLIENT is not None:
+ 12484	        try:
+ 12485	            async for key in REDIS_CLIENT.scan_iter(match=f"model_state:{org_slug}:*", count=200):
+ 12486	                kname = (key.decode() if isinstance(key, (bytes, bytearray)) else str(key)).split(":", 2)[-1]
+ 12487	                raw = await REDIS_CLIENT.get(key)
+ 12488	                st = json.loads(raw) if raw else {}
+================ CIRCUIT BREAKER (/api/admin/gateway/circuit-breaker/*) ================
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/control/ai_mesh_control/core/admin_urls.py:24-42
+    24	    # Phase 1 Fx-2b: server-side proxy for gateway /v1/admin/* circuit breaker
+    25	    # endpoints. Lets the admin UI consume admin reads/mutations via Django
+    26	    # RBAC (IsAdminOrSuperuser) rather than minting admin gateway API keys.
+    27	    path(
+    28	        "gateway/circuit-breaker/state/",
+    29	        CircuitBreakerStateProxyView.as_view(),
+    30	        name="admin-gateway-cb-state",
+    31	    ),
+    32	    path(
+    33	        "gateway/circuit-breaker/trigger/",
+    34	        CircuitBreakerTriggerProxyView.as_view(),
+    35	        name="admin-gateway-cb-trigger",
+    36	    ),
+    37	    path(
+    38	        "gateway/circuit-breaker/reset/",
+    39	        CircuitBreakerResetProxyView.as_view(),
+    40	        name="admin-gateway-cb-reset",
+    41	    ),
+    42	    # Phase 1 F-3.1: server-side proxy for gateway /v1/admin/rag/collections
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/control/ai_mesh_control/core/gateway_admin_proxy_views.py:64-90
+    64	def _proxy(method: str, gw_path: str, payload: dict | None = None) -> Response:
+    65	    secret = _gateway_internal_secret()
+    66	    if not secret:
+    67	        logger.error("Gateway admin proxy: GATEWAY_INTERNAL_API_KEY not configured")
+    68	        return _envelope_error(
+    69	            "Gateway admin proxy not configured (missing GATEWAY_INTERNAL_API_KEY).",
+    70	            "proxy_unconfigured",
+    71	            503,
+    72	        )
+    73	
+    74	    url = f"{_gateway_base_url()}{gw_path}"
+    75	    headers = {
+    76	        "X-Gateway-Internal-Key": secret,
+    77	        "Content-Type": "application/json",
+    78	    }
+    79	    try:
+    80	        if method == "GET":
+    81	            resp = requests.get(url, headers=headers, timeout=10)
+    82	        else:
+    83	            resp = requests.request(
+    84	                method,
+    85	                url,
+    86	                headers=headers,
+    87	                data=json.dumps(payload or {}),
+    88	                timeout=10,
+    89	            )
+    90	    except requests.RequestException as exc:
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/control/ai_mesh_control/core/gateway_admin_proxy_views.py:137-163
+   137	class CircuitBreakerTriggerProxyView(APIView):
+   138	    """POST /api/admin/gateway/circuit-breaker/trigger/
+   139	
+   140	    Body: ``{"model": str, "error_count": int, "error_type": str}``.
+   141	    """
+   142	
+   143	    permission_classes = [IsAuthenticated, IsAdminOrSuperuser]
+   144	
+   145	    def post(self, request: Request) -> Response:
+   146	        if _cb_forbidden(request):
+   147	            return _cb_forbidden(request)
+   148	        return _proxy("POST", "/v1/admin/circuit-breaker-trigger", request.data)
+   149	
+   150	
+   151	class CircuitBreakerResetProxyView(APIView):
+   152	    """POST /api/admin/gateway/circuit-breaker/reset/
+   153	
+   154	    Body: ``{"model": str}``.
+   155	    """
+   156	
+   157	    permission_classes = [IsAuthenticated, IsAdminOrSuperuser]
+   158	
+   159	    def post(self, request: Request) -> Response:
+   160	        if _cb_forbidden(request):
+   161	            return _cb_forbidden(request)
+   162	        return _proxy("POST", "/v1/admin/circuit-breaker-reset", request.data)
+   163	
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/main.py:15992-16000
+ 15992	@app.post(
+ 15993	    "/v1/admin/circuit-breaker-trigger",
+ 15994	    summary="Record simulated errors to open the circuit (dev/ops)",
+ 15995	    tags=["Admin"],
+ 15996	)
+ 15997	async def admin_circuit_breaker_trigger(request: Request):
+ 15998	    admin_block = _require_admin_role(request)
+ 15999	    if admin_block is not None:
+ 16000	        return admin_block
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/main.py:16012-16020
+ 16012	    model = body.get("model", "")
+ 16013	    error_count = min(int(body.get("error_count", 10)), 50)
+ 16014	    error_type = body.get("error_type", "simulated_error")
+ 16015	    for _ in range(error_count):
+ 16016	        await CIRCUIT_BREAKER.record_error(model, error_type)
+ 16017	    status = await CIRCUIT_BREAKER.check(model)
+ 16018	    return JSONResponse(content={
+ 16019	        "model": model,
+ 16020	        "errors_injected": error_count,
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/main.py:16026-16060
+ 16026	@app.post(
+ 16027	    "/v1/admin/circuit-breaker-reset",
+ 16028	    summary="Clear circuit breaker Redis keys for a model",
+ 16029	    tags=["Admin"],
+ 16030	)
+ 16031	async def admin_circuit_breaker_reset(request: Request):
+ 16032	    admin_block = _require_admin_role(request)
+ 16033	    if admin_block is not None:
+ 16034	        return admin_block
+ 16035	    if not REDIS_CLIENT:
+ 16036	        return JSONResponse(status_code=503, content={"error": "Redis not available"})
+ 16037	    try:
+ 16038	        body = await request.json()
+ 16039	    except Exception:
+ 16040	        return JSONResponse(status_code=400, content={"error": "Invalid JSON"})
+ 16041	    if not isinstance(body, dict):
+ 16042	        return JSONResponse(
+ 16043	            status_code=400,
+ 16044	            content={"error": "invalid_request", "message": "Request body must be a JSON object."},
+ 16045	        )
+ 16046	    model = body.get("model", "")
+ 16047	    cursor = 0
+ 16048	    deleted = 0
+ 16049	    while True:
+ 16050	        cursor, keys = await REDIS_CLIENT.scan(cursor, match=f"circuit:*:{model}*", count=100)
+ 16051	        if keys:
+ 16052	            await REDIS_CLIENT.delete(*keys)
+ 16053	            deleted += len(keys)
+ 16054	        if cursor == 0:
+ 16055	            break
+ 16056	    # Also clear the circuit-breaker-owned kill-switch mirror so a reset model is
+ 16057	    # unblocked immediately instead of staying disabled until the 240s TTL. The
+ 16058	    # helper deletes only keys with trigger_source=="circuit_breaker", so an
+ 16059	    # operator-set kill switch on the same model is preserved.
+ 16060	    mirror_cleared = False
+================ MCP CONNECTOR (/api/mcp-connector/*) ================
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/control/ai_mesh_control/mcp_connector/urls.py:9-35
+     9	    path("health/", views.MCPServicesHealthView.as_view(), name="mcp-services-health"),
+    10	    # MCP Servers
+    11	    path("servers/", views.MCPServerListCreateView.as_view(), name="mcp-server-list-create"),
+    12	    path("servers/<uuid:pk>/", views.MCPServerDetailView.as_view(), name="mcp-server-detail"),
+    13	    # Per-server tool controls
+    14	    path("servers/<uuid:pk>/tools/", views.MCPServerToolListView.as_view(), name="mcp-server-tools"),
+    15	    path("servers/<uuid:pk>/tools/<str:tool_name>/", views.MCPToolControlView.as_view(), name="mcp-tool-control"),
+    16	    path("scan-controls/", views.MCPScanControlListCreateView.as_view(), name="mcp-scan-control-list"),
+    17	    path("scan-controls/<uuid:pk>/", views.MCPScanControlDetailView.as_view(), name="mcp-scan-control-detail"),
+    18	    # OAuth 2.1 authorization (Phase C)
+    19	    path("servers/<uuid:pk>/oauth/authorize/", views.MCPServerOAuthStartView.as_view(), name="mcp-oauth-authorize"),
+    20	    path("oauth/callback/", views.MCPOAuthCallbackView.as_view(), name="mcp-oauth-callback"),
+    21	    # Tool discovery
+    22	    path("tools/", views.MCPToolListView.as_view(), name="mcp-tool-list"),
+    23	    path("tools/call/", views.MCPToolCallView.as_view(), name="mcp-tool-call"),
+    24	    # Gateway-internal: enable/disable enforcement helpers
+    25	    path("internal/enabled-tools/", views.MCPGatewayEnabledToolsView.as_view(), name="mcp-internal-enabled-tools"),
+    26	    path("internal/record-event/", views.MCPGatewayRecordEventView.as_view(), name="mcp-internal-record-event"),
+    27	    path("internal/needs-reauth/", views.MCPGatewayNeedsReauthView.as_view(), name="mcp-internal-needs-reauth"),
+    28	    # Developer diagnostic channel (staff-only) — real cause behind a sanitized
+    29	    # client error, looked up by the correlation ref. Never exposed to clients.
+    30	    path("diagnostics/<str:ref>/", views.MCPDiagnosticDetailView.as_view(), name="mcp-diagnostic-detail"),
+    31	    # Observability events
+    32	    path("events/", views.MCPEventListView.as_view(), name="mcp-event-list"),
+    33	    path("events/summary/", views.MCPEventSummaryView.as_view(), name="mcp-event-summary"),
+    34	    # Org gateway key auto-provisioning
+    35	    path("org-gateway-key/", views.OrgGatewayKeyView.as_view(), name="mcp-org-gateway-key"),
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/control/ai_mesh_control/mcp_connector/signals.py:40-40
+    40	SCAN_VER_KEY_PREFIX = "mcp:scan_ver"
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/control/ai_mesh_control/mcp_connector/signals.py:79-104
+    79	def scan_version_key(org_slug: str, server_slug: str = "") -> str:
+    80	    """Redis key the gateway polls: org-level, or server-level when given."""
+    81	    if server_slug:
+    82	        return f"{SCAN_VER_KEY_PREFIX}:{org_slug}:{server_slug}"
+    83	    return f"{SCAN_VER_KEY_PREFIX}:{org_slug}"
+    84	
+    85	
+    86	def bump_scan_version(org_slug: str, server_slug: str = "") -> None:
+    87	    """INCR the gateway-visible scan-config version key after commit.
+    88	
+    89	    Deferred via ``transaction.on_commit`` so a rolled-back change never
+    90	    invalidates gateway caches (and the gateway never refetches state that
+    91	    does not exist yet).
+    92	    """
+    93	    if not org_slug:
+    94	        return
+    95	    key = scan_version_key(org_slug, server_slug)
+    96	
+    97	    def _do_bump() -> None:
+    98	        try:
+    99	            version = _get_redis_client().incr(key)
+   100	            logger.info("MCP scan version bumped: %s -> %s", key, version)
+   101	        except redis.RedisError:
+   102	            logger.exception(
+   103	                "Failed to bump MCP scan version %s. Gateways may serve a "
+   104	                "stale (<=TTL) tool/scan config until their cache expires.",
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/control/ai_mesh_control/mcp_connector/signals.py:120-124
+   120	
+   121	
+   122	@receiver(post_save, sender=MCPToolRegistration)
+   123	def bump_scan_version_on_tool_save(
+   124	    sender: type,
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/control/ai_mesh_control/mcp_connector/signals.py:152-156
+   152	
+   153	
+   154	@receiver(post_save, sender=MCPServerRegistration)
+   155	def bump_scan_version_on_server_save(
+   156	    sender: type,
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/control/ai_mesh_control/mcp_connector/signals.py:202-216
+   202	
+   203	@receiver(post_save, sender=MCPScanControl)
+   204	def bump_scan_version_on_scan_control_save(
+   205	    sender: type,
+   206	    instance: MCPScanControl,
+   207	    created: bool,
+   208	    **kwargs: Any,
+   209	) -> None:
+   210	    _bump_for_scan_control(instance)
+   211	
+   212	
+   213	@receiver(post_delete, sender=MCPScanControl)
+   214	def bump_scan_version_on_scan_control_delete(
+   215	    sender: type,
+   216	    instance: MCPScanControl,
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/control/ai_mesh_control/mcp_connector/views.py:367-420
+   367	def _mirror_oauth_token_to_gateway(server, tok: dict) -> None:
+   368	    """Best-effort mirror of control-plane OAuth tokens into gateway Redis.
+   369	
+   370	    HTTP OAuth servers route through the sandbox; ``get_stored_token(org, url)``
+   371	    must find the token after control ``_store_oauth_tokens`` or refresh.
+   372	    Failures are logged and swallowed — the control DB row remains authoritative.
+   373	    """
+   374	    org = getattr(server, "organization", None)
+   375	    org_slug = getattr(org, "slug", "") if org else ""
+   376	    server_url = (getattr(server, "url", "") or "").strip()
+   377	    access = (tok.get("access_token") or getattr(server, "auth_token", "") or "").strip()
+   378	    if not org_slug or not server_url or not access:
+   379	        return
+   380	    gateway_url = (
+   381	        (getattr(settings, "GATEWAY_URL", "") or "").strip().rstrip("/")
+   382	        or os.environ.get("GATEWAY_URL", "").strip().rstrip("/")
+   383	        or "http://gateway:8300"
+   384	    )
+   385	    internal_key = (
+   386	        (getattr(settings, "GATEWAY_INTERNAL_API_KEY", "") or "").strip()
+   387	        or os.environ.get("GATEWAY_INTERNAL_API_KEY", "").strip()
+   388	    )
+   389	    if not internal_key:
+   390	        logger.warning(
+   391	            "OAuth token mirror skipped for %s: GATEWAY_INTERNAL_API_KEY not configured",
+   392	            getattr(server, "server_slug", "?"),
+   393	        )
+   394	        return
+   395	    payload = {
+   396	        "org_slug": org_slug,
+   397	        "server_url": server_url,
+   398	        "access_token": access,
+   399	        "refresh_token": tok.get("refresh_token") or getattr(server, "oauth_refresh_token", "") or "",
+   400	        "expires_in": tok.get("expires_in"),
+   401	        "token_type": tok.get("token_type") or "bearer",
+   402	        "token_endpoint": getattr(server, "oauth_token_endpoint", "") or "",
+   403	        "client_id": getattr(server, "oauth_client_id", "") or "",
+   404	        "client_secret": getattr(server, "oauth_client_secret", "") or "",
+   405	        "resource": getattr(server, "oauth_resource", "") or "",
+   406	        "scope": tok.get("scope") or getattr(server, "oauth_scope", "") or "",
+   407	    }
+   408	    try:
+   409	        resp = requests.post(
+   410	            f"{gateway_url}/v1/mcp/internal/oauth-token-mirror",
+   411	            json=payload,
+   412	            headers={
+   413	                "Content-Type": "application/json",
+   414	                "X-Gateway-Internal-Key": internal_key,
+   415	            },
+   416	            timeout=5,
+   417	        )
+   418	        if resp.status_code >= 400:
+   419	            logger.warning(
+   420	                "OAuth token mirror HTTP %s for %s/%s: %s",
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/control/ai_mesh_control/mcp_connector/views.py:738-740
+   738	def _discover_tools_via_gateway(server, org) -> tuple[list[dict], str | None]:
+   739	    """Discover tools from an MCP server via the gateway's internal endpoint.
+   740	
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/control/ai_mesh_control/mcp_connector/views.py:798-806
+   798	                    payload[field] = val
+   799	
+   800	    try:
+   801	        resp = requests.post(
+   802	            f"{gateway_url}/v1/mcp/internal/discover-tools",
+   803	            json=payload,
+   804	            headers={
+   805	                "Content-Type": "application/json",
+   806	                "X-Gateway-Internal-Key": internal_key,
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/control/ai_mesh_control/mcp_connector/views.py:2535-2537
+  2535	class MCPGatewayEnabledToolsView(APIView):
+  2536	    """Gateway-internal lookup of enabled/disabled tools for a server.
+  2537	
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/control/ai_mesh_control/mcp_connector/views.py:2608-2652
+  2608	            server_id=str(server.id),
+  2609	            tool_name="",
+  2610	        )
+  2611	
+  2612	        mcp_tier2_enabled = None
+  2613	        tier2_strict = True
+  2614	        mcp_policy_only_enforcement = False
+  2615	        try:
+  2616	            from core.models import FirewallConfig
+  2617	
+  2618	            fw = FirewallConfig.objects.filter(organization=org).first()
+  2619	            if fw is not None:
+  2620	                mcp_tier2_enabled = fw.mcp_tier2_enabled
+  2621	                tier2_strict = fw.tier2_strict
+  2622	                # Per-org Phase-3 cutover flag — surfaced into the gateway enabled_info so the
+  2623	                # gateway's policy-only observe-only gate is reachable per-org (not only via the
+  2624	                # gateway-wide env kill-switch). Without this the operator toggle is inoperative.
+  2625	                mcp_policy_only_enforcement = bool(fw.mcp_policy_only_enforcement)
+  2626	        except Exception:
+  2627	            pass
+  2628	
+  2629	        return Response({
+  2630	            "server_slug": server_slug,
+  2631	            "server_name": server.name,
+  2632	            "server_id": str(server.id),
+  2633	            "known_tools": known,
+  2634	            "enabled_tools": enabled,
+  2635	            "disabled_tools": disabled,
+  2636	            # New engine-agnostic keys; legacy presidio_* aliases retained so a
+  2637	            # gateway running mid-rename (reading from its <=30s cache) never
+  2638	            # fails open to "tag". Remove the aliases once all gateways are updated.
+  2639	            "default_scan_action": server.default_scan_action,
+  2640	            "tool_scan_actions": tool_actions,
+  2641	            "default_presidio_action": server.default_scan_action,
+  2642	            "tool_presidio_actions": tool_actions,
+  2643	            "scan_controls": scan_rows,
+  2644	            "scan_controls_configured": bool(scan_rows),
+  2645	            "effective_scan_controls": org_effective,
+  2646	            "effective_scan_controls_by_tool": effective_by_tool,
+  2647	            "mcp_tier2_enabled": mcp_tier2_enabled,
+  2648	            "tier2_strict": tier2_strict,
+  2649	            "mcp_policy_only_enforcement": mcp_policy_only_enforcement,
+  2650	        })
+  2651	
+  2652	
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/control/ai_mesh_control/mcp_connector/views.py:2800-2870
+  2800	class OrgGatewayKeyView(APIView):
+  2801	    """Ensure the organization has a default MCP gateway API key.
+  2802	
+  2803	    GET  — returns key metadata (prefix, name, active status).
+  2804	    POST — creates one if none exists; returns plaintext key on first creation.
+  2805	    """
+  2806	
+  2807	    permission_classes = [IsAuthenticatedOrGatewayInternal]
+  2808	
+  2809	    def _resolve(self, request):
+  2810	        org = _request_org(request)
+  2811	        if org is None:
+  2812	            return None, None, Response(
+  2813	                {"error": "No organization context for this user."},
+  2814	                status=status.HTTP_400_BAD_REQUEST,
+  2815	            )
+  2816	        actor = request.user if getattr(request.user, "is_authenticated", False) else None
+  2817	        if actor is None:
+  2818	            return None, None, Response(
+  2819	                {"error": "Authentication required."},
+  2820	                status=status.HTTP_401_UNAUTHORIZED,
+  2821	            )
+  2822	        return org, actor, None
+  2823	
+  2824	    def get(self, request):
+  2825	        org, actor, err = self._resolve(request)
+  2826	        if err:
+  2827	            return err
+  2828	
+  2829	        from core.models import GatewayAPIKey
+  2830	
+  2831	        project_id = f"mcp-default-{org.slug}"
+  2832	        key = GatewayAPIKey.objects.filter(
+  2833	            organization=org,
+  2834	            project_id=project_id,
+  2835	            is_active=True,
+  2836	        ).first()
+  2837	        if key is None:
+  2838	            # Also check for ANY active key in the org
+  2839	            key = GatewayAPIKey.objects.filter(
+  2840	                organization=org,
+  2841	                is_active=True,
+  2842	            ).first()
+  2843	
+  2844	        if key:
+  2845	            return Response({
+  2846	                "has_gateway_key": True,
+  2847	                "prefix": key.prefix,
+  2848	                "name": key.name,
+  2849	                "is_active": key.is_active,
+  2850	                "project_id": key.project_id,
+  2851	            })
+  2852	        return Response({"has_gateway_key": False})
+  2853	
+  2854	    def post(self, request):
+  2855	        org, actor, err = self._resolve(request)
+  2856	        if err:
+  2857	            return err
+  2858	
+  2859	        from core.models import GatewayAPIKey
+  2860	
+  2861	        key_instance, raw_key = GatewayAPIKey.ensure_default_for_org(org, actor)
+  2862	        data = {
+  2863	            "has_gateway_key": True,
+  2864	            "prefix": key_instance.prefix,
+  2865	            "name": key_instance.name,
+  2866	            "is_active": key_instance.is_active,
+  2867	            "project_id": key_instance.project_id,
+  2868	            "created": raw_key is not None,
+  2869	        }
+  2870	        if raw_key:
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/control/ai_mesh_control/mcp_connector/views.py:3039-3045
+  3039	class MCPServerOAuthStartView(APIView):
+  3040	    """Begin the OAuth 2.1 authorization-code (PKCE) flow for a server.
+  3041	
+  3042	    POST /servers/<pk>/oauth/authorize/ → run discovery + dynamic client
+  3043	    registration, generate PKCE + state, persist the transient flow state, and
+  3044	    return the authorization URL for the operator to open in their browser.
+  3045	    """
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/control/ai_mesh_control/mcp_connector/views.py:3120-3150
+  3120	        server.oauth_resource = meta["resource"]
+  3121	        server.oauth_code_verifier = verifier
+  3122	        server.oauth_state = state
+  3123	        server.auth_type = "oauth"
+  3124	        server.save(update_fields=[
+  3125	            "oauth_authorization_endpoint",
+  3126	            "oauth_token_endpoint",
+  3127	            "oauth_registration_endpoint",
+  3128	            "oauth_client_id",
+  3129	            "oauth_client_secret",
+  3130	            "oauth_scope",
+  3131	            "oauth_resource",
+  3132	            "oauth_code_verifier",
+  3133	            "oauth_state",
+  3134	            "auth_type",
+  3135	            "updated_at",
+  3136	        ])
+  3137	
+  3138	        authorize_url = oauth_mod.build_authorize_url(
+  3139	            meta["authorization_endpoint"],
+  3140	            client_id,
+  3141	            redirect_uri,
+  3142	            challenge,
+  3143	            state,
+  3144	            scope,
+  3145	            meta["resource"],
+  3146	        )
+  3147	        return Response({"authorize_url": authorize_url, "resource": meta["resource"]})
+  3148	
+  3149	
+  3150	class MCPOAuthCallbackView(APIView):
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/mcp_proxy.py:64-66
+    64	_BACKEND_URL = (
+    65	    os.environ.get("BACKEND_URL")
+    66	    or os.environ.get("AIGUARDX_BACKEND_URL")
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/mcp_proxy.py:77-90
+    77	def _control_request_headers(org_slug: str = "", extra: dict | None = None) -> dict[str, str]:
+    78	    """Headers for server-to-server calls to the Django control plane."""
+    79	    headers: dict[str, str] = {
+    80	        "Content-Type": "application/json",
+    81	        "Accept": "application/json",
+    82	        "Host": "control",
+    83	        "X-Gateway-Auth": "true",
+    84	    }
+    85	    slug = (org_slug or "").strip()
+    86	    if slug:
+    87	        headers["X-Org-Slug"] = slug
+    88	    if _GATEWAY_INTERNAL_API_KEY:
+    89	        headers["X-Gateway-Internal-Key"] = _GATEWAY_INTERNAL_API_KEY
+    90	    if extra:
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/mcp_proxy.py:650-650
+   650	_SCAN_VER_KEY_PREFIX = "mcp:scan_ver"
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/mcp_proxy.py:670-690
+   670	async def _current_scan_version(org_slug: str, server_slug: str) -> str | None:
+   671	    """Composite "org_ver:server_ver" from Redis, or None when unavailable.
+   672	
+   673	    None means "cannot determine" — the caller degrades to pure-TTL cache
+   674	    validity instead of refetching over HTTP on every call.
+   675	    """
+   676	    try:
+   677	        client = _get_scan_ver_redis()
+   678	        org_ver, srv_ver = await client.mget(
+   679	            f"{_SCAN_VER_KEY_PREFIX}:{org_slug}",
+   680	            f"{_SCAN_VER_KEY_PREFIX}:{org_slug}:{server_slug}",
+   681	        )
+   682	        return f"{org_ver or 0}:{srv_ver or 0}"
+   683	    except Exception as exc:
+   684	        LOG.debug(
+   685	            "Scan-version read failed (org=%s server=%s): %s — degrading to TTL-only cache",
+   686	            org_slug, server_slug, exc,
+   687	        )
+   688	        return None
+   689	
+   690	
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/mcp_proxy.py:731-760
+   731	async def _get_server_config(org_slug: str, server_slug: str) -> dict | None:
+   732	    """Fetch server registration config from backend (cached).
+   733	
+   734	    Returns dict with keys: transport, command, args, env_vars, url, name
+   735	    or None if server not found.
+   736	    """
+   737	    cache_key = f"{org_slug}/{server_slug}"
+   738	    now = time.time()
+   739	    fetch_ver: str | None = None
+   740	    if cache_key in _server_config_cache and now - _server_config_ttl.get(cache_key, 0) < _CONFIG_CACHE_TTL:
+   741	        # Version-invalidate (mirrors _get_enabled_tools): a registration change that
+   742	        # bumped the scan version makes this entry stale before its TTL — refetch so the
+   743	        # _server_disabled gate + url/transport edits take effect on the next call. If
+   744	        # Redis is unavailable (_current_scan_version None) fall back to TTL-only.
+   745	        fetch_ver = await _current_scan_version(org_slug, server_slug)
+   746	        if fetch_ver is None or fetch_ver == _server_config_ver.get(cache_key):
+   747	            return _server_config_cache[cache_key]
+   748	        # scan version changed -> stale; fall through to refetch below.
+   749	
+   750	    if fetch_ver is None:
+   751	        # Read the version BEFORE the HTTP fetch so a mid-fetch bump refetches next call.
+   752	        fetch_ver = await _current_scan_version(org_slug, server_slug)
+   753	
+   754	    headers = _control_request_headers(org_slug)
+   755	
+   756	    try:
+   757	        async with httpx.AsyncClient(timeout=10) as client:
+   758	            resp = await client.get(
+   759	                f"{_BACKEND_URL}/api/mcp-connector/servers/",
+   760	                headers=headers,
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/mcp_proxy.py:883-930
+   883	async def _get_enabled_tools(org_slug: str, server_slug: str) -> dict | None:
+   884	    """Fetch (and cache) enabled/disabled/known tool sets for a server.
+   885	
+   886	    Returns a dict {"known": set, "enabled": set, "disabled": set} or
+   887	    None if the backend lookup failed (caller should fail-open).
+   888	    """
+   889	    if not org_slug or not server_slug:
+   890	        return None
+   891	    # TODO(D10, G7/G8): Cache key is currently per-(org, server) only. If
+   892	    # per-user/per-agent/per-role tool enablement is ever introduced upstream
+   893	    # (control plane), this key MUST be widened to include the actor dimension
+   894	    # (e.g. key_prefix or user_id or sorted(roles)) to avoid cross-actor cache
+   895	    # bleed where actor A's enabled-tool view would mask actor B's restrictions.
+   896	    # Today, tool enable/disable is server-scoped (not actor-scoped), so the
+   897	    # current key is correct; this comment marks the invariant for future work.
+   898	    cache_key = f"{org_slug}/{server_slug}"
+   899	    now = time.time()
+   900	    fetch_ver: str | None = None
+   901	    have_ver = False
+   902	    if cache_key in _enabled_tools_cache:
+   903	        cached = _enabled_tools_cache[cache_key]
+   904	        age = now - _enabled_tools_ttl.get(cache_key, 0)
+   905	        if cached is None:
+   906	            # Negative cache: a failed backend lookup fails-open, but only
+   907	            # for the short _ENABLED_TOOLS_NEG_TTL window — never the full TTL.
+   908	            if age < _ENABLED_TOOLS_NEG_TTL:
+   909	                return None
+   910	        elif age < _ENABLED_TOOLS_TTL:
+   911	            fetch_ver = await _current_scan_version(org_slug, server_slug)
+   912	            have_ver = True
+   913	            if fetch_ver is None or fetch_ver == _enabled_tools_ver.get(cache_key):
+   914	                # Version unchanged (or Redis unavailable -> TTL-only fallback).
+   915	                return cached
+   916	            # Control bumped the scan version -> entry is stale; refetch now.
+   917	
+   918	    if not have_ver:
+   919	        # Read the version BEFORE the HTTP fetch: if control bumps mid-fetch,
+   920	        # the stored version predates the bump and the next call refetches.
+   921	        fetch_ver = await _current_scan_version(org_slug, server_slug)
+   922	
+   923	    headers = _control_request_headers(org_slug, {"X-Server-Slug": server_slug})
+   924	    try:
+   925	        async with httpx.AsyncClient(timeout=5) as client:
+   926	            resp = await client.get(
+   927	                f"{_BACKEND_URL}/api/mcp-connector/internal/enabled-tools/",
+   928	                headers=headers,
+   929	                params={"server_slug": server_slug},
+   930	            )
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/mcp_proxy.py:945-980
+   945	                "enabled": set(data.get("enabled_tools") or []),
+   946	                "disabled": set(data.get("disabled_tools") or []),
+   947	                # Propagate scan enforcement controls so _effective_scan_action
+   948	                # (tool, enabled_info) can resolve the per-tool override and the
+   949	                # server default without an extra backend round-trip per call.
+   950	                # Dual-read: prefer the new ``scan_action`` keys, fall back to the
+   951	                # legacy ``presidio_action`` keys during the deprecation window so a
+   952	                # stale (<=30s) cache never silently fails open to "tag".
+   953	                "default_scan_action": (
+   954	                    data.get("default_scan_action")
+   955	                    or data.get("default_presidio_action")
+   956	                    or "tag"
+   957	                ),
+   958	                "tool_scan_actions": (
+   959	                    data.get("tool_scan_actions")
+   960	                    or data.get("tool_presidio_actions")
+   961	                    or {}
+   962	                ),
+   963	                "server_id": data.get("server_id"),
+   964	                "scan_controls_configured": bool(data.get("scan_controls_configured")),
+   965	                "effective_scan_controls": data.get("effective_scan_controls") or {},
+   966	                "effective_scan_controls_by_tool": data.get("effective_scan_controls_by_tool") or {},
+   967	                "mcp_tier2_enabled": data.get("mcp_tier2_enabled"),
+   968	                "tier2_strict": data.get("tier2_strict", True),
+   969	                # Per-org Phase-3 cutover flag (operator-control #1 delivery): without this the
+   970	                # observe-only gate in _resolved_tier1_action / the orchestrator Tier-2 lane is
+   971	                # UNREACHABLE per-org — only the gateway-wide MCP_POLICY_ONLY_ENFORCEMENT env
+   972	                # activated it, so an operator who flipped FirewallConfig.mcp_policy_only_enforcement
+   973	                # kept getting the retired posture's static floors. Only forward the key when the
+   974	                # control plane actually sent it, so its absence keeps deferring to the env default
+   975	                # (never a synthesized False that would override the env kill-switch).
+   976	                **({"mcp_policy_only_enforcement": data.get("mcp_policy_only_enforcement")}
+   977	                   if "mcp_policy_only_enforcement" in data else {}),
+   978	            }
+   979	            _enabled_tools_cache[cache_key] = result
+   980	            _enabled_tools_ttl[cache_key] = now
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/mcp_proxy.py:1250-1263
+  1250	        if sync is not None:
+  1251	            # STRICT per-org (2026-07-24): read ONLY this org's own synced config.
+  1252	            # ``get_config`` falls back to the ``default``/global config when the org is
+  1253	            # absent, which made an unsynced org INHERIT another org's ext posture —
+  1254	            # enforcing redact/block this operator never selected, the exact no-defaults
+  1255	            # violation this function's docstring forbids. ``get_own_config`` returns
+  1256	            # None for an org that has not synced a posture, so it resolves to
+  1257	            # observe-only below (a SELECTION, never an assumption). Older ConfigSync
+  1258	            # builds without the strict accessor degrade to observe-only, never to
+  1259	            # inherited enforcement.
+  1260	            _own = getattr(sync, "get_own_config", None)
+  1261	            cfg = (_own(org_slug) if callable(_own) else None) or {}
+  1262	            action = (cfg.get("mcp_ext_scan_action") or "tag").strip().lower()
+  1263	    except Exception as exc:  # pragma: no cover - defensive; never 500 the proxy
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/mcp_proxy.py:3665-3715
+  3665	
+  3666	@router.post(
+  3667	    "/internal/oauth-token-mirror",
+  3668	    summary="Mirror control-plane OAuth tokens into gateway Redis",
+  3669	)
+  3670	async def internal_oauth_token_mirror(request: Request):
+  3671	    """Persist a control-plane OAuth token into gateway Redis for sandbox routing."""
+  3672	    internal_key = (request.headers.get("X-Gateway-Internal-Key") or "").strip()
+  3673	    if not _valid_internal_key(internal_key):
+  3674	        return JSONResponse(content={"error": "Unauthorized"}, status_code=401)
+  3675	
+  3676	    try:
+  3677	        body = await request.json()
+  3678	    except Exception:
+  3679	        return JSONResponse(content={"error": "Invalid JSON body"}, status_code=400)
+  3680	
+  3681	    org_slug = (body.get("org_slug") or "").strip()
+  3682	    server_url = (body.get("server_url") or "").strip()
+  3683	    access_token = (body.get("access_token") or "").strip()
+  3684	    if not org_slug or not server_url or not access_token:
+  3685	        return JSONResponse(
+  3686	            content={"error": "org_slug, server_url, and access_token are required"},
+  3687	            status_code=400,
+  3688	        )
+  3689	
+  3690	    data: dict = {
+  3691	        "access_token": access_token,
+  3692	        "refresh_token": body.get("refresh_token") or "",
+  3693	        "token_type": body.get("token_type") or "bearer",
+  3694	        "token_endpoint": body.get("token_endpoint") or "",
+  3695	        "client_id": body.get("client_id") or "",
+  3696	        "client_secret": body.get("client_secret") or "",
+  3697	        "resource": body.get("resource") or "",
+  3698	        "scope": body.get("scope") or "",
+  3699	        "obtained_at": time.time(),
+  3700	    }
+  3701	    expires_in = body.get("expires_in")
+  3702	    if expires_in is not None:
+  3703	        try:
+  3704	            data["expires_at"] = time.time() + int(expires_in)
+  3705	        except (TypeError, ValueError):
+  3706	            data["expires_at"] = None
+  3707	
+  3708	    try:
+  3709	        from mcp_oauth_proxy import _token_save
+  3710	
+  3711	        await _token_save(org_slug, server_url, data)
+  3712	    except Exception as exc:
+  3713	        LOG.warning("oauth-token-mirror save failed org=%s url=%s: %s", org_slug, server_url, exc)
+  3714	        return JSONResponse(content={"error": "token save failed"}, status_code=500)
+  3715	
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/mcp_oauth_proxy.py:55-60
+    55	# ── Persistent Redis-backed stores ─────────────────────────────────
+    56	# Keys:
+    57	#   mcp:oauth:flow:{state}            JSON  TTL=_FLOW_TTL
+    58	#   mcp:oauth:token:{org}|{srv_url}   JSON  TTL=expires_in or _TOKEN_DEFAULT_TTL
+    59	#
+    60	# In-memory dicts kept as a fast-path cache (also used as a fallback if Redis
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/mcp_oauth_proxy.py:103-108
+   103	def _flow_key(state: str) -> str:
+   104	    return f"mcp:oauth:flow:{state}"
+   105	
+   106	
+   107	def _token_redis_key(org_slug: str, server_url: str) -> str:
+   108	    return f"mcp:oauth:token:{org_slug}|{server_url}"
+================ /api/mcp/* (legacy MCPManagerPanel) ================
+--- Django route includes for api/mcp (expect only mcp-connector):
+/home/contact_cyberultron_com/AI_Mesh_Firewall/control/ai_mesh_control/main_app/urls.py:37:    path("api/mcp-connector/", include("mcp_connector.urls")),
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/deploy/nginx.conf:88-93
+    88	    location /api/ {
+    89	        # Lazy Docker DNS: a control recreate must not 502 /api (incl. /auth/token)
+    90	        # to a stale container IP pinned at nginx start. Same pattern as /v1/.
+    91	        resolver 127.0.0.11 ipv6=off valid=30s;
+    92	        set $control_upstream "control:8000";
+    93	        proxy_pass http://$control_upstream;
+--- frontend callers:
+10: * Talks to the Django backend at /api/mcp/* (authenticated via JWT).
+240:      const res = await fetchWithAuth("/api/mcp/servers/");
+253:      const res = await fetchWithAuth("/api/mcp/enforcement-status/");
+266:        const res = await fetchWithAuth(`/api/mcp/servers/${serverId}/tools/`);
+281:          ? `/api/mcp/policies/?server=${serverId}`
+282:          : "/api/mcp/policies/";
+302:        const url = `/api/mcp/audit-logs/${qs ? `?${qs}` : ""}`;
+397:      const res = await fetchWithAuth("/api/mcp/servers/", {
+449:            const cbRes = await fetchWithAuth("/api/mcp/oauth/callback/", {
+480:      const res = await fetchWithAuth(`/api/mcp/servers/${serverId}/connect/`, {
+508:      const res = await fetchWithAuth(`/api/mcp/servers/${serverId}/disconnect/`, {
+523:      const res = await fetchWithAuth(`/api/mcp/servers/${serverId}/`, {
+583:        `/api/mcp/servers/${selectedServerId}/tools/${toolId}/toggle/`,
+598:        `/api/mcp/servers/${serverId}/toggle-verbose-logging/`,
+611:      const res = await fetchWithAuth(`/api/mcp/policies/${policyId}/`, {
+687:      const res = await fetchWithAuth("/api/mcp/policies/", {
+729:                  {"Manage backend MCP server connections, toggle tools on/off, create per-tool deny/allow/redact policies, and review the full audit trail.\n\nServer list refreshes from /api/mcp/servers/."}
+--- importers of MCPManagerPanel / MCPScannerPanel (non-comment):
+(none)
+--- any server implementing /api/mcp/servers|status|policies routes (py/js/ts outside frontend):
+(none)
+================ REVERSE-DIRECTION / NON-CONFIG SHARED KEYS ================
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/control/ai_mesh_control/core/ingestion_views.py:205-209
+   205	
+   206	def _enqueue(redis_client, event: dict, organization_id) -> None:
+   207	    """Push one ingestion event onto the telemetry drain queue."""
+   208	    telemetry_event = _to_telemetry_event(event, organization_id)
+   209	    redis_client.rpush(REDIS_TELEMETRY_KEY, json.dumps(telemetry_event))
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/main.py:16836-16838
+ 16836	    if REDIS_CLIENT is not None:
+ 16837	        try:
+ 16838	            runtime_metrics["telemetry_queue_depth"] = int(await REDIS_CLIENT.llen("telemetry:events"))
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/mcp_error_classifier.py:213-224
+   213	async def _persist_diagnostic(ref: str, code: str, cause: str, *, org_slug: str, server_slug: str) -> None:
+   214	    """Best-effort write of the REAL cause to the shared Redis diagnostic channel,
+   215	    keyed by ref (mcp:diag:<ref>, 7d TTL). A Redis outage must NEVER break the error
+   216	    path — the structured log already carries the cause for developers."""
+   217	    try:
+   218	        import json
+   219	
+   220	        import redis.asyncio as aioredis
+   221	        client = aioredis.from_url(_REDIS_URL, decode_responses=True)
+   222	        await client.set(
+   223	            f"{_DIAG_PREFIX}{ref}",
+   224	            json.dumps({"ref": ref, "code": code, "kind": "mcp_gateway_error",
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/control/ai_mesh_control/mcp_connector/views.py:17-33
+    17	from functools import lru_cache
+    18	
+    19	import jsonschema
+    20	import requests
+    21	from django.conf import settings
+    22	from django.core.cache import cache
+    23	from django.db import IntegrityError
+    24	from django.db.models import Count, Q
+    25	from django.http import HttpResponse
+    26	from django.utils import timezone
+    27	from rest_framework import status
+    28	from rest_framework.permissions import AllowAny, BasePermission, IsAdminUser
+    29	from rest_framework.response import Response
+    30	from rest_framework.views import APIView
+    31	
+    32	from . import mcp_firewall_client
+    33	from .models import MCPEvent, MCPServerRegistration, MCPScanControl, MCPToolRegistration
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/jobs.py:54-56
+    54	    try:
+    55	        client = _get_client()
+    56	        await client.lpush(GATEWAY_JOBS_QUEUE, json.dumps(envelope, default=str))
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/control/ai_mesh_control/core/tasks.py:944-948
+   944	    raw_jobs = []
+   945	    try:
+   946	        raw_jobs = client.lrange(REDIS_GATEWAY_JOBS_KEY, 0, batch_size - 1)
+   947	        if raw_jobs:
+   948	            client.ltrim(REDIS_GATEWAY_JOBS_KEY, len(raw_jobs), -1)
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/control/ai_mesh_control/main_app/settings.py:1005-1010
+  1005	            "filters": ["suppress_health_endpoints"],
+  1006	        },
+  1007	        "redis_log": {
+  1008	            "class": "ai_mesh_shared.redis_log_handler.RedisLogPublisher",
+  1009	            "redis_url": REDIS_URL,
+  1010	            "service_name": "Backend",
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/log_buffer.py:140-150
+   140	    """
+   141	
+   142	    def __init__(
+   143	        self,
+   144	        redis_url: str,
+   145	        buffer: LogBuffer,
+   146	        channel: str = "logs:stream",
+   147	    ) -> None:
+   148	        self._redis_url = redis_url
+   149	        self._buffer = buffer
+   150	        self._channel = channel
+
+##### /home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/log_buffer.py:178-181
+   178	                )
+   179	                pubsub = client.pubsub()
+   180	                await pubsub.subscribe(self._channel)
+   181	
+================ VERSION FIELD CHECKS ================
+--- gateway non-test reads of bundle_schema_version / schema_version / config_version:
+(none)
+--- gateway reads of policies:version / vector:policies:version constants (beyond definition):
+/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/policy_sync.py:36:REDIS_KEY_VERSION = "policies:version"
+/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/vector_policy_sync.py:21:REDIS_KEY_VERSION = "vector:policies:version"
+--- version/signature tokens in FirewallConfig / LLM / apikey / killswitch / modelstate payload builders:
+(firewall payload: none)
+(llm payload: none)
+(apikey payload: none)
+(killswitch payload: none)
+(modelstate payload: none)

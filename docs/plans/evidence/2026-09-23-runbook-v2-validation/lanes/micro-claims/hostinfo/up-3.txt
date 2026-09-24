@@ -1,0 +1,110 @@
+### date -u
+Wed Sep 23 11:35:53 UTC 2026
+### hostname
+rv-micro-up-3.asia-south1-c.c.ai-mesh-firewall.internal
+### uname -a
+Linux rv-micro-up-3.asia-south1-c.c.ai-mesh-firewall.internal 7.0.0-1011-gcp #11~24.04.1-Ubuntu SMP PREEMPT Tue Aug 11 20:14:48 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux
+### nproc
+8
+### lscpu
+Architecture:                            x86_64
+CPU op-mode(s):                          32-bit, 64-bit
+Address sizes:                           52 bits physical, 57 bits virtual
+Byte Order:                              Little Endian
+CPU(s):                                  8
+On-line CPU(s) list:                     0-7
+Vendor ID:                               GenuineIntel
+Model name:                              INTEL(R) XEON(R) PLATINUM 8581C CPU @ 2.30GHz
+CPU family:                              6
+Model:                                   207
+Thread(s) per core:                      2
+Core(s) per socket:                      4
+Socket(s):                               1
+Stepping:                                2
+BogoMIPS:                                4600.00
+Flags:                                   fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ss ht syscall nx pdpe1gb rdtscp lm constant_tsc rep_good nopl xtopology nonstop_tsc cpuid tsc_known_freq pni pclmulqdq monitor ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand hypervisor lahf_lm abm 3dnowprefetch ssbd ibrs ibpb stibp ibrs_enhanced fsgsbase tsc_adjust bmi1 hle avx2 smep bmi2 erms invpcid rtm avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves avx_vnni avx512_bf16 wbnoinvd arat avx512vbmi umip avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq la57 rdpid cldemote movdiri movdir64b fsrm md_clear serialize tsxldtrk amx_bf16 avx512_fp16 amx_tile amx_int8 arch_capabilities
+Hypervisor vendor:                       KVM
+Virtualization type:                     full
+L1d cache:                               192 KiB (4 instances)
+L1i cache:                               128 KiB (4 instances)
+L2 cache:                                8 MiB (4 instances)
+L3 cache:                                260 MiB (1 instance)
+NUMA node(s):                            1
+NUMA node0 CPU(s):                       0-7
+Vulnerability Gather data sampling:      Not affected
+Vulnerability Ghostwrite:                Not affected
+Vulnerability Indirect target selection: Not affected
+Vulnerability Itlb multihit:             Not affected
+Vulnerability L1tf:                      Not affected
+Vulnerability Mds:                       Not affected
+Vulnerability Meltdown:                  Not affected
+Vulnerability Mmio stale data:           Not affected
+Vulnerability Old microcode:             Not affected
+Vulnerability Reg file data sampling:    Not affected
+Vulnerability Retbleed:                  Not affected
+Vulnerability Spec rstack overflow:      Not affected
+Vulnerability Spec store bypass:         Mitigation; Speculative Store Bypass disabled via prctl
+Vulnerability Spectre v1:                Mitigation; usercopy/swapgs barriers and __user pointer sanitization
+Vulnerability Spectre v2:                Mitigation; Enhanced / Automatic IBRS; IBPB conditional; PBRSB-eIBRS SW sequence; BHI BHI_DIS_S
+Vulnerability Srbds:                     Not affected
+Vulnerability Tsa:                       Not affected
+Vulnerability Tsx async abort:           Not affected
+Vulnerability Vmscape:                   Not affected
+### lscpu -e
+CPU NODE SOCKET CORE L1d:L1i:L2:L3 ONLINE
+  0    0      0    0 0:0:0:0          yes
+  1    0      0    1 1:1:1:0          yes
+  2    0      0    2 2:2:2:0          yes
+  3    0      0    3 3:3:3:0          yes
+  4    0      0    0 0:0:0:0          yes
+  5    0      0    1 1:1:1:0          yes
+  6    0      0    2 2:2:2:0          yes
+  7    0      0    3 3:3:3:0          yes
+### free -g
+               total        used        free      shared  buff/cache   available
+Mem:              29           0          27           0           0          28
+Swap:              0           0           0
+### image
+projects/ubuntu-os-cloud/global/images/ubuntu-2404-noble-amd64-v20260918
+### machine-type
+projects/24342156045/machineTypes/c4-standard-8
+### zone
+projects/24342156045/zones/asia-south1-c
+### os-release
+PRETTY_NAME="Ubuntu 24.04.5 LTS"
+NAME="Ubuntu"
+VERSION_ID="24.04"
+VERSION="24.04.5 LTS (Noble Numbat)"
+### sysctl
+net.ipv4.ip_local_port_range = 32768	60999
+net.ipv4.tcp_tw_reuse = 2
+net.core.somaxconn = 4096
+net.ipv4.tcp_fin_timeout = 60
+### cpufreq/governor
+n/a
+### python
+Python 3.12.14 (main, Sep  1 2026, 14:16:52) [Clang 22.1.3 ]
+### pip freeze
+Using Python 3.12.14 environment at: venv
+annotated-doc==0.0.5
+annotated-types==0.8.0
+anyio==4.13.0
+certifi==2026.7.22
+click==8.5.0
+fastapi==0.136.3
+gunicorn==26.0.0
+h11==0.16.0
+httpcore==1.0.9
+httptools==0.8.0
+httpx==0.28.1
+idna==3.20
+orjson==3.11.9
+packaging==26.3
+pydantic==2.13.5
+pydantic-core==2.46.5
+redis==8.0.0
+starlette==1.2.0
+typing-extensions==4.16.0
+typing-inspection==0.4.4
+uvicorn==0.48.0
+uvloop==0.22.1

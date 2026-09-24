@@ -1,0 +1,113 @@
+11:52:39 START h22-025 rate=25 corpus=headline-22M.jsonl env=[LABEL=primary]
+12:00:20 END h22-025 rc=0
+12:00:20 START h22-050 rate=50 corpus=headline-22M.jsonl env=[LABEL=primary]
+12:08:01 END h22-050 rc=0
+12:08:01 CMD bash /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-bench-unit/tools/unit_ctl.sh start p22-a local_gpu 22M
+12:09:01 CMD rc=0 (log /home/contact_cyberultron_com/rv-evidence-raw/proto-bench-unit/logs/cmd-5.log)
+12:09:01 START p22-025 rate=25 corpus=headline-22M.jsonl env=[LABEL=primary]
+12:16:16 END p22-025 rc=0
+12:16:16 CMD ssh -i /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/gcp/rv_ed25519 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR rv@10.160.0.46 'redis-cli config set save ""; redis-cli config get save'
+12:16:16 CMD rc=0 (log /home/contact_cyberultron_com/rv-evidence-raw/proto-bench-unit/logs/cmd-7.log)
+12:16:16 START p22-050 rate=50 corpus=headline-22M.jsonl env=[LABEL=primary]
+12:23:56 END p22-050 rc=0
+12:23:56 START p22-100 rate=100 corpus=headline-22M.jsonl env=[LABEL=primary]
+12:31:37 END p22-100 rc=0
+12:31:37 START p22-200 rate=200 corpus=headline-22M.jsonl env=[LABEL=primary]
+12:39:18 END p22-200 rc=0
+12:39:18 START p22-063 rate=63 corpus=headline-22M.jsonl env=[LABEL=primary_refine]
+12:47:00 END p22-063 rc=0
+12:47:00 START p22-078 rate=78 corpus=headline-22M.jsonl env=[LABEL=primary_refine]
+12:54:40 END p22-078 rc=0
+12:54:40 START d-h-100 rate=100 corpus=headline-22M.jsonl env=[MODE=direct AUTH=none LABEL=direct_floor]
+13:01:52 END d-h-100 rc=0
+13:01:52 START c22-035 rate=35 corpus=correctness-22M.jsonl env=[DURATION=600 PBU_FLAGS="--policy enforce" LABEL=correctness]
+13:14:33 END c22-035 rc=0
+13:14:33 START p22-078-r2 rate=78 corpus=headline-22M.jsonl env=[LABEL=knee_repeat]
+13:22:14 END p22-078-r2 rc=0
+13:22:14 START p22-078-r3 rate=78 corpus=headline-22M.jsonl env=[LABEL=knee_repeat]
+13:29:55 END p22-078-r3 rc=0
+13:29:55 START p22p-078 rate=78 corpus=headline-22M.jsonl env=[OLG_EXTRA="-arrival poisson" LABEL=poisson]
+13:37:37 END p22p-078 rc=0
+13:37:37 START p22-025b rate=25 corpus=headline-22M.jsonl env=[LABEL=primary_rerun_sut_data]
+13:45:18 END p22-025b rc=0
+13:45:18 START p22p-025 rate=25 corpus=headline-22M.jsonl env=[OLG_EXTRA="-arrival poisson" LABEL=poisson]
+13:52:59 END p22p-025 rc=0
+13:52:59 CMD bash /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-bench-unit/tools/pbu_overload.sh ovl-234 39 195 headline-22M.jsonl
+14:05:02 CMD rc=0 (log /home/contact_cyberultron_com/rv-evidence-raw/proto-bench-unit/logs/cmd-27.log)
+14:05:02 START l22-100 rate=100 corpus=long400-22M.jsonl env=[SSE_FRAC=1 PROV_FLAGS="-ttft 150ms -itl 30ms" DURATION=600 LABEL=long_streams]
+14:17:43 END l22-100 rc=0
+14:17:43 START w22-025 rate=25 corpus=worst-22M.jsonl env=[LABEL=worst_band]
+14:25:24 END w22-025 rc=0
+14:25:24 START w22-050 rate=50 corpus=worst-22M.jsonl env=[LABEL=worst_band]
+14:33:05 END w22-050 rc=0
+14:33:05 START w22-063 rate=63 corpus=worst-22M.jsonl env=[LABEL=worst_band]
+14:40:46 END w22-063 rc=0
+14:40:46 START w22-025-r2 rate=25 corpus=worst-22M.jsonl env=[LABEL=worst_band_repeat]
+14:48:26 END w22-025-r2 rc=0
+14:48:26 START w22-025-r3 rate=25 corpus=worst-22M.jsonl env=[LABEL=worst_band_repeat]
+14:56:06 END w22-025-r3 rc=0
+14:56:06 START d-w-050 rate=50 corpus=worst-22M.jsonl env=[MODE=direct AUTH=none LABEL=direct_floor_worst]
+15:03:18 END d-w-050 rc=0
+15:03:18 CMD bash /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-bench-unit/tools/unit_ctl.sh start p22r local_gpu 22M AMF_TARGET_P99_MS=100 RV_GUARD_DEADLINE_MS=20
+15:04:07 CMD rc=0 (log /home/contact_cyberultron_com/rv-evidence-raw/proto-bench-unit/logs/cmd-40.log)
+15:04:07 START p22r-100 rate=100 corpus=headline-22M.jsonl env=[LABEL=relaxed_bounds]
+15:11:48 END p22r-100 rc=0
+15:11:48 START p22rp-150 rate=150 corpus=headline-22M.jsonl env=[OLG_EXTRA="-arrival poisson" LABEL=relaxed_bounds_poisson]
+15:19:30 END p22rp-150 rc=0
+15:19:30 CMD bash /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-bench-unit/tools/unit_ctl.sh start p22u local_gpu 22M AMF_TARGET_P99_MS=1000 RV_GUARD_DEADLINE_MS=20
+15:20:21 CMD rc=0 (log /home/contact_cyberultron_com/rv-evidence-raw/proto-bench-unit/logs/cmd-46.log)
+15:20:21 START p22u-100 rate=100 corpus=headline-22M.jsonl env=[LABEL=unbounded_admission]
+15:28:02 END p22u-100 rc=0
+15:28:02 CMD ssh -i /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/gcp/rv_ed25519 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR rv@10.160.0.46 'bash ~/rv/profile_later.sh 170 90'
+15:28:02 CMD rc=0 (log /home/contact_cyberultron_com/rv-evidence-raw/proto-bench-unit/logs/cmd-49.log)
+15:28:03 START p22u-200 rate=200 corpus=headline-22M.jsonl env=[LABEL=unbounded_admission]
+15:35:44 END p22u-200 rc=0
+15:35:44 START p22up-100 rate=100 corpus=headline-22M.jsonl env=[OLG_EXTRA="-arrival poisson" LABEL=unbounded_admission_poisson]
+15:43:25 END p22up-100 rc=0
+15:43:25 START p22up-150 rate=150 corpus=headline-22M.jsonl env=[OLG_EXTRA="-arrival poisson" LABEL=unbounded_admission_poisson]
+15:51:06 END p22up-150 rc=0
+15:51:06 START p22up-200 rate=200 corpus=headline-22M.jsonl env=[OLG_EXTRA="-arrival poisson" LABEL=unbounded_admission_poisson]
+15:58:47 END p22up-200 rc=0
+15:58:47 CMD bash /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-bench-unit/tools/unit_patch.sh apply
+15:58:48 CMD rc=0 (log /home/contact_cyberultron_com/rv-evidence-raw/proto-bench-unit/logs/cmd-55.log)
+15:58:48 CMD bash /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-bench-unit/tools/unit_ctl.sh start hb-on local_gpu 22M
+15:59:37 CMD rc=0 (log /home/contact_cyberultron_com/rv-evidence-raw/proto-bench-unit/logs/cmd-56.log)
+15:59:37 START hb-on-10 rate=40 corpus=headline-22M.jsonl env=[SSE_FRAC=1 PROV_FLAGS="-ttft 150ms -itl 10ms -sample-mod 1" OLG_EXTRA="-sample-mod 1" LABEL=holdback_on_itl10]
+16:07:19 END hb-on-10 rc=0
+16:07:19 START hb-on-20 rate=40 corpus=headline-22M.jsonl env=[SSE_FRAC=1 PROV_FLAGS="-ttft 150ms -itl 20ms -sample-mod 1" OLG_EXTRA="-sample-mod 1" LABEL=holdback_on_itl20]
+16:15:00 END hb-on-20 rc=0
+16:15:00 START hb-on-30 rate=40 corpus=headline-22M.jsonl env=[SSE_FRAC=1 PROV_FLAGS="-ttft 150ms -itl 30ms -sample-mod 1" OLG_EXTRA="-sample-mod 1" LABEL=holdback_on_itl30]
+16:22:41 END hb-on-30 rc=0
+16:22:41 CMD bash /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-bench-unit/tools/unit_ctl.sh start hb-off local_gpu 22M RV_EXP_OUTPUT_SCAN=off
+16:23:33 CMD rc=0 (log /home/contact_cyberultron_com/rv-evidence-raw/proto-bench-unit/logs/cmd-60.log)
+16:23:33 START hb-off-10 rate=40 corpus=headline-22M.jsonl env=[SSE_FRAC=1 PROV_FLAGS="-ttft 150ms -itl 10ms -sample-mod 1" OLG_EXTRA="-sample-mod 1" PROFILE_STAGES=canon,det,sem,resolve,dispatch,audit LABEL=holdback_off_itl10]
+16:31:14 END hb-off-10 rc=0
+16:31:14 START hb-off-20 rate=40 corpus=headline-22M.jsonl env=[SSE_FRAC=1 PROV_FLAGS="-ttft 150ms -itl 20ms -sample-mod 1" OLG_EXTRA="-sample-mod 1" PROFILE_STAGES=canon,det,sem,resolve,dispatch,audit LABEL=holdback_off_itl20]
+16:38:55 END hb-off-20 rc=0
+16:38:55 START hb-off-30 rate=40 corpus=headline-22M.jsonl env=[SSE_FRAC=1 PROV_FLAGS="-ttft 150ms -itl 30ms -sample-mod 1" OLG_EXTRA="-sample-mod 1" PROFILE_STAGES=canon,det,sem,resolve,dispatch,audit LABEL=holdback_off_itl30]
+16:46:35 END hb-off-30 rc=0
+16:46:35 START d-sse-040 rate=40 corpus=headline-22M.jsonl env=[MODE=direct AUTH=none SSE_FRAC=1 PROV_FLAGS="-ttft 150ms -itl 20ms -sample-mod 1" OLG_EXTRA="-sample-mod 1" LABEL=direct_floor_sse]
+16:53:47 END d-sse-040 rc=0
+16:53:47 CMD bash /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-bench-unit/tools/unit_patch.sh restore
+16:53:48 CMD rc=0 (log /home/contact_cyberultron_com/rv-evidence-raw/proto-bench-unit/logs/cmd-65.log)
+16:53:48 CMD bash /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-bench-unit/tools/unit_ctl.sh start m86 local_gpu 86M
+16:55:10 CMD rc=0 (log /home/contact_cyberultron_com/rv-evidence-raw/proto-bench-unit/logs/cmd-67.log)
+16:55:10 START m86-025 rate=25 corpus=headline-86M.jsonl env=[LABEL=variant_86M]
+17:02:52 END m86-025 rc=0
+17:02:52 START m86-050 rate=50 corpus=headline-86M.jsonl env=[LABEL=variant_86M]
+17:10:33 END m86-050 rc=0
+17:10:33 START m86-078 rate=78 corpus=headline-86M.jsonl env=[LABEL=variant_86M]
+17:18:14 END m86-078 rc=0
+17:18:14 CMD bash /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-bench-unit/tools/unit_ctl.sh start t22 triton_grpc 22M
+17:18:55 CMD rc=0 (log /home/contact_cyberultron_com/rv-evidence-raw/proto-bench-unit/logs/cmd-72.log)
+17:18:55 START t22-025 rate=25 corpus=headline-22M.jsonl env=[LABEL=variant_triton]
+17:26:36 END t22-025 rc=0
+17:26:36 START t22-050 rate=50 corpus=headline-22M.jsonl env=[LABEL=variant_triton]
+17:34:17 END t22-050 rc=0
+17:34:17 START t22-078 rate=78 corpus=headline-22M.jsonl env=[LABEL=variant_triton]
+17:41:57 END t22-078 rc=0
+17:41:57 START t22-100 rate=100 corpus=headline-22M.jsonl env=[LABEL=variant_triton]
+17:49:38 END t22-100 rc=0
+17:49:38 CMD bash /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-bench-unit/tools/unit_ctl.sh stop final
+17:49:44 CMD rc=0 (log /home/contact_cyberultron_com/rv-evidence-raw/proto-bench-unit/logs/cmd-78.log)
+17:49:44 QUEUE DONE

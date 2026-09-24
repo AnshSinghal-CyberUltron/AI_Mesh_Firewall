@@ -1,0 +1,37 @@
+## git diff --stat 2a657fad HEAD (v1 gateway)
+ gateway/ai_mesh_gateway/llm_router.py              |  46 +++
+ gateway/ai_mesh_gateway/pipeline_trace.py          |  65 ++++-
+ .../tests/test_haiku_uncallable_routing.py         | 314 +++++++++++++++++++++
+ .../tests/test_pipeline_pre_masked_redact.py       |  20 ++
+ .../tests/test_pipeline_trace_routing.py           |  50 ++++
+ .../tests/test_routing_runs_under_killswitch.py    | 141 +++++++++
+ .../test_tier2_injection_enforcement_floor.py      | 152 ++++++++++
+ 7 files changed, 786 insertions(+), 2 deletions(-)
+## cited files unchanged?
+unchanged: main.py
+unchanged: config_sync.py
+unchanged: llm_judge.py
+unchanged: rag_pipeline/query_stage.py
+unchanged: rag_pipeline/pipeline.py
+unchanged: vector_routes.py
+unchanged: secure_streaming.py
+unchanged: stream_orchestration.py
+unchanged: output_guard.py
+unchanged: middleware.py
+unchanged: config.py
+## pipeline_trace.py hunks (none touch PipelineStageTimer L43-65 / finalize_stage_metrics L68-100)
+@@ -352,9 +352,11 @@ def _resolve_input_scan_action(
+@@ -364,7 +366,17 @@ def _resolve_input_scan_action(
+@@ -377,6 +389,8 @@ def _resolve_input_scan_action(
+@@ -496,6 +510,13 @@ ROUTING_STAGE_KEYS: tuple[str, ...] = (
+@@ -617,12 +638,14 @@ def normalize_routing_stage_fields(stage: dict[str, Any]) -> dict[str, Any]:
+@@ -1148,6 +1171,14 @@ def build_pipeline_trace(
+@@ -1160,6 +1191,7 @@ def build_pipeline_trace(
+@@ -1230,6 +1262,21 @@ def build_pipeline_trace(
+@@ -1456,6 +1503,13 @@ def build_pipeline_trace(
+@@ -1676,6 +1730,13 @@ def build_pipeline_trace(
+## llm_router.py hunks (reload_models is L1945-2063 at baseline; hunk @2133 is in _score_routing_models)
+@@ -25,6 +25,48 @@ from ai_mesh_shared.litellm_byok import normalize_litellm_params
+@@ -2133,6 +2175,10 @@ class LLMRouter:
+## working tree clean for gateway/ai_mesh_gateway:
+0

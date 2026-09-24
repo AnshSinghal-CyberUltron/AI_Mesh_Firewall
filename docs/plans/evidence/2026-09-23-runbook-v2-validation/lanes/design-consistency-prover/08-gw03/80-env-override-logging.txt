@@ -1,0 +1,21 @@
+env: ['AMF_FD_LIMIT', 'AMF_MEMORY_LIMIT_BYTES', 'RESOURCE_BUDGET_CPUS']
+   log: cpu_quota=64.0 source=env memory_limit=68719476736 source=env fd_limit=65536 source=env
+   log: binding=cpu workers=48 detected_workers=48
+   log: target_p99_ms=20.0 utilization_cap=0.75 per_worker_rss=419430400 declared=defaults
+   any '(deviation)' for cpu/mem/fd override: False
+env: ['AMF_CPU_QUOTA', 'AMF_FD_LIMIT', 'AMF_MEMORY_LIMIT_BYTES', 'WEB_CONCURRENCY']
+   log: cpu_quota=4.0 source=env memory_limit=8589934592 source=env fd_limit=65536 source=env
+   log: binding=cpu workers=16 detected_workers=3
+   log: target_p99_ms=20.0 utilization_cap=0.75 per_worker_rss=419430400 declared=defaults
+   log: WEB_CONCURRENCY override=16 detected=3 (deviation)
+   any '(deviation)' for cpu/mem/fd override: False
+/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/entrypoint.sh:6:# An explicit WEB_CONCURRENCY (env) still wins, but GW03 requires it to be logged
+/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/entrypoint.sh:18:if [ -n "${WEB_CONCURRENCY:-}" ]; then
+/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/entrypoint.sh:19:    WORKERS="$WEB_CONCURRENCY"
+/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/entrypoint.sh:21:    echo "[gateway-entrypoint] WEB_CONCURRENCY override=${WORKERS} detected=${DETECTED:-unreadable} (deviation)" >&2
+/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/entrypoint.sh:32:# Normalize the env for gunicorn: gunicorn itself reads WEB_CONCURRENCY at
+/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/entrypoint.sh:33:# config-import time (`int(os.environ.get("WEB_CONCURRENCY", 1))`) and crashes on
+/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/entrypoint.sh:36:export WEB_CONCURRENCY="$WORKERS"
+/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/entrypoint.sh:55:echo "[gateway-entrypoint] WEB_CONCURRENCY=$WORKERS (source=$WSRC)" >&2
+/home/contact_cyberultron_com/AI_Mesh_Firewall/docker-compose.prod.yml:12:# WEB_CONCURRENCY only as an explicit override — the entrypoint logs it as a
+/home/contact_cyberultron_com/AI_Mesh_Firewall/docker-compose.prod.yml:139:    # worker count). Pin via CONTROL_WEB_CONCURRENCY (2 fits the 2-CPU limit).

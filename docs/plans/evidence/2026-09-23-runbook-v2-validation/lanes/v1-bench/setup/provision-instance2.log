@@ -1,0 +1,16 @@
+control=healthy
+  Applying token_blacklist.0013_alter_blacklistedtoken_options_and_more... OK
+gateway=healthy
+[provision] org v1bench id=2
+[provision] created superuser v1bench
+[provision] firewall config saved: {"firewall_enabled": true, "enforcement_mode": "block", "pii_detection_enabled": true, "content_filtering_enabled": true, "jailbreak_detection_enabled": true, "semantic_analysis_enabled": false, "tier2_enabled": false, "response_filtering_enabled": true, "output_pii_enabled": true, "output_pii_action": "redact", "output_credential_enabled": true, "output_credential_action": "redact", "output_policy_enabled": true, "rate_limit_enabled": true, "requests_per_minute": 100000000, "burst_limit": 1000000, "org_tpm_limit": 0}
+[provision] key prefix=J4Nlyew5 org=v1bench tpm=100000000
+[provision] model synth-1 provider=custom api_base=http://10.160.15.225:8080/v1 created=True
+[provision] builtin packs enabled=False (10 policies)
+INFO 2026-09-23 12:34:18,902 compiler 169 136792752122752 Pushed compiled policies to Redis (policies:compiled:v1bench, version=1, policies=46, trigger=seed_policy_package)
+[provision] policies org=56 enabled=46 pipeline_enabled=17
+[gateway-entrypoint] WEB_CONCURRENCY=18 (source=detector)
+[gateway-entrypoint]   {
+[gateway-entrypoint]     "cpu_budget": 24.0,
+aimeshperf-control:latest 6824c081623f
+aimeshperf-gateway:latest a6198c3a383a

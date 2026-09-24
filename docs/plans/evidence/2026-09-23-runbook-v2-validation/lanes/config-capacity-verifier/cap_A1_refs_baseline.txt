@@ -1,0 +1,19 @@
+shared/tests/test_resource_budget.py:15:from ai_mesh_shared import resource_budget as rb
+shared/ai_mesh_shared/resource_budget.py:29:    python -m ai_mesh_shared.resource_budget --json          # full report
+shared/ai_mesh_shared/resource_budget.py:30:    python -m ai_mesh_shared.resource_budget --export        # KEY=VALUE for eval
+shared/ai_mesh_shared/resource_budget.py:31:    python -m ai_mesh_shared.resource_budget --value workers # one number
+scripts/ralph/perf_scratchpad.md:20:- [x] 03. resource_budget.py: read cgroup v2 (cpu.max, memory.max) + v1 (cfs_quota/period, limit_in_bytes); fall back to sched_getaffinity / /proc/meminfo.
+scripts/ralph/perf_scratchpad.md:21:      → shared/ai_mesh_shared/resource_budget.py (dependency-free stdlib; importable by gateway+control+workers via /app/shared on PYTHONPATH).
+scripts/ralph/perf_scratchpad.md:27:      → shared/tests/test_resource_budget.py, 16 tests green. 6c/16G→6w/12t/128pg; 12c/60G→12w/24t/350pg;
+gateway/entrypoint.sh:3:# (shared/ai_mesh_shared/resource_budget.py) so the gateway uses the full machine
+gateway/entrypoint.sh:20:elif WORKERS="$(python -m ai_mesh_shared.resource_budget --value workers 2>/dev/null)" \
+gateway/entrypoint.sh:41:        _val="$(python -m ai_mesh_shared.resource_budget --value "$2" 2>/dev/null || true)"
+gateway/entrypoint.sh:53:python -m ai_mesh_shared.resource_budget --json 2>/dev/null \
+scripts/perf/pg_budget.py:31:from ai_mesh_shared import resource_budget as rb
+gateway/Dockerfile:38:# (env) still overrides. See gateway/entrypoint.sh + shared/.../resource_budget.py.
+control/Dockerfile:34:# + shared/ai_mesh_shared/resource_budget.py.
+control/server-entrypoint.sh:4:# N derived from the cgroup-aware detector (shared/ai_mesh_shared/resource_budget.py)
+control/server-entrypoint.sh:37:elif WORKERS="$("$PYTHON_BIN" -m ai_mesh_shared.resource_budget --value workers 2>/dev/null)" \
+control/server-entrypoint.sh:46:CPU_BUDGET="$("$PYTHON_BIN" -m ai_mesh_shared.resource_budget --value cpu_budget 2>/dev/null || true)"
+control/server-entrypoint.sh:76:    DJANGO_CACHE_MAX_CONNECTIONS="$("$PYTHON_BIN" -m ai_mesh_shared.resource_budget --value redis_pool 2>/dev/null || true)"
+control/server-entrypoint.sh:83:"$PYTHON_BIN" -m ai_mesh_shared.resource_budget --json 2>/dev/null \

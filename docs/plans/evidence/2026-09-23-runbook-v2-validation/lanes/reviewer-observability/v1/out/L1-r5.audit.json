@@ -1,0 +1,174 @@
+{
+ "run": "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/v1-bench/runs/L1-r5",
+ "mode": "sut",
+ "offered": 1500,
+ "phase_counts": {
+  "0": 75,
+  "1": 300,
+  "2": 1500
+ },
+ "provider_records": 1875,
+ "categories": {
+  "qualified": 1500
+ },
+ "infra_reasons": {},
+ "PUB_T_fw_addon": {
+  "n": 1500,
+  "n_inf": 0,
+  "p50": 733.165,
+  "p90": 1030.496,
+  "p99": 1197.771,
+  "p999": 1738.973,
+  "max_finite": 1739.039,
+  "mean_finite": 591.175
+ },
+ "PUB_sse": {
+  "n": 1050,
+  "n_inf": 0,
+  "p50": 774.302,
+  "p90": 1083.256,
+  "p99": 1248.308,
+  "p999": 1738.973,
+  "max_finite": 1739.039,
+  "mean_finite": 797.236
+ },
+ "PUB_json": {
+  "n": 450,
+  "n_inf": 0,
+  "p50": 104.588,
+  "p90": 153.725,
+  "p99": 271.256,
+  "p999": 356.907,
+  "max_finite": 356.907,
+  "mean_finite": 110.365
+ },
+ "PUB_nohold_T_addon_total": {
+  "n": 1500,
+  "n_inf": 0,
+  "p50": 133.846,
+  "p90": 308.393,
+  "p99": 885.652,
+  "p999": 1318.394,
+  "max_finite": 1320.646,
+  "mean_finite": 179.57
+ },
+ "PUB_first_byte_sse": {
+  "n": 1050,
+  "n_inf": 0,
+  "p50": 760.975,
+  "p90": 920.575,
+  "p99": 1101.288,
+  "p999": 1179.828,
+  "max_finite": 1197.771,
+  "mean_finite": 753.382
+ },
+ "C_T_fw_addon": {
+  "n": 1500,
+  "n_inf": 0,
+  "p50": 733.165,
+  "p90": 1030.496,
+  "p99": 1197.771,
+  "p999": 1738.973,
+  "max_finite": 1739.039,
+  "mean_finite": 591.175
+ },
+ "C_nohold": {
+  "n": 1500,
+  "n_inf": 0,
+  "p50": 133.846,
+  "p90": 308.393,
+  "p99": 885.652,
+  "p999": 1318.394,
+  "max_finite": 1320.646,
+  "mean_finite": 179.57
+ },
+ "ABC_T_fw_addon": {
+  "n": 146,
+  "n_inf": 0,
+  "p50": 1093.195,
+  "p90": 1179.113,
+  "p99": 1738.973,
+  "p999": 1739.039,
+  "max_finite": 1739.039,
+  "mean_finite": 861.39
+ },
+ "ABC_sse": {
+  "n": 108,
+  "n_inf": 0,
+  "p50": 1116.507,
+  "p90": 1214.933,
+  "p99": 1738.973,
+  "p999": 1739.039,
+  "max_finite": 1739.039,
+  "mean_finite": 1125.62
+ },
+ "ABC_json": {
+  "n": 38,
+  "n_inf": 0,
+  "p50": 107.12,
+  "p90": 157.103,
+  "p99": 196.685,
+  "p999": 196.685,
+  "max_finite": 196.685,
+  "mean_finite": 110.42
+ },
+ "ABC_nohold": {
+  "n": 146,
+  "n_inf": 0,
+  "p50": 138.722,
+  "p90": 298.93,
+  "p99": 1073.767,
+  "p999": 1216.795,
+  "max_finite": 1216.795,
+  "mean_finite": 184.971
+ },
+ "sample_first_tok1_sse": {
+  "n": 108,
+  "n_inf": 0,
+  "p50": 760.074,
+  "p90": 962.089,
+  "p99": 1157.489,
+  "p999": 1179.828,
+  "max_finite": 1179.828,
+  "mean_finite": 753.359
+ },
+ "sample_first_byte_sse": {
+  "n": 108,
+  "n_inf": 0,
+  "p50": 760.074,
+  "p90": 962.089,
+  "p99": 1157.489,
+  "p999": 1179.828,
+  "max_finite": 1179.828,
+  "mean_finite": 753.359
+ },
+ "sample_lag": {
+  "n": 108,
+  "n_inf": 0,
+  "p50": 1116.507,
+  "p90": 1214.933,
+  "p99": 1738.973,
+  "p999": 1739.039,
+  "max_finite": 1739.039,
+  "mean_finite": 1125.62
+ },
+ "hdr_addon_sse": {
+  "n": 1050,
+  "n_inf": 0,
+  "p50": -94.152,
+  "p90": -60.064,
+  "p99": 77.948,
+  "p999": 160.656,
+  "max_finite": 204.784,
+  "mean_finite": -88.903
+ },
+ "lone_first_event": {
+  "mappable": 146
+ },
+ "sampled_sse_offered": 108,
+ "sampled_sse_qualified_with_perchunk": 108,
+ "anomalies": {},
+ "blocks_client_total": {
+  "n": 0
+ }
+}

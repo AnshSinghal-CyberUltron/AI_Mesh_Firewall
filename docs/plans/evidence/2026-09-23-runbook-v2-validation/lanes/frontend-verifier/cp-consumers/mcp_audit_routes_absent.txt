@@ -1,0 +1,8 @@
+$ grep -rnE "audit-logs|enforcement-status|enforcement_status" frontend/src control/ai_mesh_control gateway/ai_mesh_gateway (excl tests, .claude-flow)
+frontend/src/components/MCPManagerPanel.jsx:253:      const res = await fetchWithAuth("/api/mcp/enforcement-status/");
+frontend/src/components/MCPManagerPanel.jsx:302:        const url = `/api/mcp/audit-logs/${qs ? `?${qs}` : ""}`;
+control/ai_mesh_control/main_app/settings.py:475:    "cleanup-old-audit-logs": {
+$ grep -rnE "import.*MCPManagerPanel|from .*MCPManagerPanel" frontend/src --include=*.jsx --include=*.js
+exit=1 (1 = no importers)
+$ grep -n "api/mcp" control/ai_mesh_control/main_app/urls.py
+37:    path("api/mcp-connector/", include("mcp_connector.urls")),

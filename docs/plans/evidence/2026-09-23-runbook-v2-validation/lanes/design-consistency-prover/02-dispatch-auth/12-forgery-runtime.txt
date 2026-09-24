@@ -1,0 +1,7 @@
+### runtime v1
+resolve/ refuses to mint for BLOCK: None
+object.__new__ forgery isinstance: True block
+laundered forgery carries rules ('r-inj',) disposition allow
+provider calls recorded (disposition, payload): [('block', b'raw'), ('block', b'raw')]
+### runtime v3
+provider calls recorded (disposition, payload): [('allow', b'raw')]

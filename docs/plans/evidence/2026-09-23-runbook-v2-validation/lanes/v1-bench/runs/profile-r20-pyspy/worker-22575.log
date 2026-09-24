@@ -1,0 +1,31 @@
+py-spy> Sampling process 100 times a second for 30 seconds. Press Control-C to exit.
+
+py-spy> 1.00s behind in sampling, results may be inaccurate. Try reducing the sampling rate
+py-spy> 1.12s behind in sampling, results may be inaccurate. Try reducing the sampling rate
+py-spy> 1.17s behind in sampling, results may be inaccurate. Try reducing the sampling rate
+py-spy> 1.16s behind in sampling, results may be inaccurate. Try reducing the sampling rate
+py-spy> 1.20s behind in sampling, results may be inaccurate. Try reducing the sampling rate
+py-spy> 1.35s behind in sampling, results may be inaccurate. Try reducing the sampling rate
+py-spy> 1.48s behind in sampling, results may be inaccurate. Try reducing the sampling rate
+py-spy> 1.63s behind in sampling, results may be inaccurate. Try reducing the sampling rate
+py-spy> 2.12s behind in sampling, results may be inaccurate. Try reducing the sampling rate
+py-spy> 2.32s behind in sampling, results may be inaccurate. Try reducing the sampling rate
+py-spy> 2.46s behind in sampling, results may be inaccurate. Try reducing the sampling rate
+py-spy> 2.72s behind in sampling, results may be inaccurate. Try reducing the sampling rate
+py-spy> 2.77s behind in sampling, results may be inaccurate. Try reducing the sampling rate
+py-spy> 2.96s behind in sampling, results may be inaccurate. Try reducing the sampling rate
+py-spy> 2.92s behind in sampling, results may be inaccurate. Try reducing the sampling rate
+py-spy> 3.06s behind in sampling, results may be inaccurate. Try reducing the sampling rate
+py-spy> 2.97s behind in sampling, results may be inaccurate. Try reducing the sampling rate
+py-spy> 3.28s behind in sampling, results may be inaccurate. Try reducing the sampling rate
+py-spy> 3.53s behind in sampling, results may be inaccurate. Try reducing the sampling rate
+py-spy> 3.75s behind in sampling, results may be inaccurate. Try reducing the sampling rate
+py-spy> 3.92s behind in sampling, results may be inaccurate. Try reducing the sampling rate
+py-spy> 4.07s behind in sampling, results may be inaccurate. Try reducing the sampling rate
+py-spy> 4.25s behind in sampling, results may be inaccurate. Try reducing the sampling rate
+py-spy> 4.31s behind in sampling, results may be inaccurate. Try reducing the sampling rate
+py-spy> 4.29s behind in sampling, results may be inaccurate. Try reducing the sampling rate
+py-spy> 4.10s behind in sampling, results may be inaccurate. Try reducing the sampling rate
+py-spy> 3.79s behind in sampling, results may be inaccurate. Try reducing the sampling rate
+py-spy> Wrote raw flamegraph data to '/home/rv/pyspy-r20/worker-22575.txt'. Samples: 116300 Errors: 673
+py-spy> You can use the flamegraph.pl script from https://github.com/brendangregg/flamegraph to generate a SVG

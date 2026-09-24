@@ -1,0 +1,19 @@
+{
+ "rlimit_nofile": 256,
+ "a_streams_requested": 190,
+ "a_streaming_at_peak": 0,
+ "worker_open_fds_at_peak": 253,
+ "a_outcomes": {
+  "502:{\"error\":{\"message\":\"provider unreachable: ClientConnect": 12,
+  "503:{\"error\":{\"message\":\"Gateway at capacity (input_queue); ": 30,
+  "503:{\"error\":{\"message\":\"Gateway shared state is unavailable": 148
+ },
+ "b_outcomes": {
+  "200:{\"id\":\"chatcmpl-edge-4477a244004ef5ff\",\"object\":\"chat.completion\",\"created\":1700000000,\"mo": 1,
+  "502:{\"error\":{\"message\":\"provider unreachable: ClientConnectorError\",\"type\":\"upstream_error\",\"": 5,
+  "200:{\"id\":\"chatcmpl-edge-2c15e439ddba7d86\",\"object\":\"chat.completion\",\"created\":1700000000,\"mo": 1,
+  "200:{\"id\":\"chatcmpl-edge-9db13c8a0856c9d0\",\"object\":\"chat.completion\",\"created\":1700000000,\"mo": 1,
+  "200:{\"id\":\"chatcmpl-edge-c073e06de9962492\",\"object\":\"chat.completion\",\"created\":1700000000,\"mo": 1,
+  "200:{\"id\":\"chatcmpl-edge-221a7372af1eeb79\",\"object\":\"chat.completion\",\"created\":1700000000,\"mo": 1
+ }
+}

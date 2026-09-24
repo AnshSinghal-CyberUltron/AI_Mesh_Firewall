@@ -1,0 +1,4 @@
+CI exit-code gate: PASS (a=1 b=1)
+lgw01_5_identical cases=89
+compare_junit exit=0
+cases 89 failures 15 >=70 collected: True

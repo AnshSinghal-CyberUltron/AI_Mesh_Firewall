@@ -1,0 +1,68 @@
+{
+ "run": "uz1-150",
+ "units": 1,
+ "rate": 150,
+ "pass_c4_rule": false,
+ "checks": {
+  "c4_p99_lt_20": false,
+  "infra_le_0.1pct": true,
+  "zero_drops": true,
+  "zero_safety": true,
+  "valid": true
+ },
+ "pass_load_rule": true,
+ "qualified_rps": 147.28,
+ "infra_pct": 0.0,
+ "infra_reasons": {},
+ "sem_U_blocks": 0,
+ "guard_deadline_expired": 0,
+ "guard_unavailable_findings": 0,
+ "sheds": {},
+ "fp_block_pct": 1.811,
+ "C4_p99_ms_offered_inf": 25.258,
+ "C4_p50_ms": 15.167,
+ "C4_n": 44185,
+ "C4_n_inf": 0,
+ "C4_sse_p99": 25.775,
+ "C4_json_p99": 18.777,
+ "c4_counts": {
+  "policy_block": 815,
+  "sse": 30960,
+  "json": 13225
+ },
+ "json_p99_ms_qualified": 18.7773,
+ "sse_total_p99_ms_qualified": 18.206,
+ "load_rule_p99_T_addon_total": 18.3348,
+ "strict_T_fw_addon_p99_qualified": 72.3141,
+ "gpu_sm_mean_range": [
+  21.9,
+  23.7
+ ],
+ "cpu_ms_per_req": 34.191,
+ "gateway_cores": 5.11,
+ "per_unit_skew": {
+  "rv-pbf-unit-2": {
+   "worker_cpu_busiest": 0.311,
+   "worker_cpu_median": 0.263,
+   "worker_cpu_min": 0.192,
+   "conns_per_worker_meas_end": {
+    "total": 759,
+    "workers_with_conns": 18,
+    "min": 29,
+    "median": 45,
+    "max": 54
+   },
+   "admitted_max_over_mean": 1.321,
+   "gpu_sm_mean": [
+    23.7,
+    21.9
+   ]
+  }
+ },
+ "drops": 0,
+ "lateness_max_ms": 0.2999,
+ "loadgen_cpu_max": 18.8,
+ "redis_ops_s": 895.5,
+ "redis_ping_p99_us": 619.4,
+ "edge_nginx_cores": 0.201
+}

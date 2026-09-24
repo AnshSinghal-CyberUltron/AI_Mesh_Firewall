@@ -1,0 +1,1 @@
+{"run": "li34w-130", "verdict": "PASS", "rule": "C4 p99 < 20 ms, infra <= 0.1%, 0 drops", "c4_p99": 13.217, "c4_p999": 27.616, "c4_sse_p99": 14.488, "c4_json_p99": 12.13, "qualified_rps": 126.91, "infra_pct": 0.0, "drops": 0, "json_total_p99": 12.13, "sse_total_p99": 11.991, "sse_first_p99": 50.788, "load_rule_verdict": "PASS"}

@@ -1,0 +1,10 @@
+G2 via Flexible CUD (ASSEMBLY §5.6 fallback): total = 4561.44 - 2736.76 + 3467.00 = 5,291.68  (>5,000? True)
+  check 2,736.76 x 1.267 = 3,467.47
+Egress via assembler band table (cost_matrix_recompute.py §2): total = 4,861.70 (headroom 138.30)
+Both together: 5,591.94
+
+Cost-matrix CPU line items vs MEASURED v1 components (not substitutable 1:1; shown for provenance):
+  Tier-1 output scan, 8 coalesced chunks           matrix: 0.300 ms [D]                     measured v1:  23.50 ms  (output-guard accum, 300-token stream, 1E table (2026-09-09-1E...md:12))
+  non-classifier stages                            matrix: 0.160 ms [M] target-design microbench measured v1:   3.50 ms  (sum of measured v1 stage WALL p50s routing1.7+rl0.8+auth0.4+ks0.2+policy0.2+model_input0.2 (2026-09-09-e2e-baseline.md:25-33))
+  whole request CPU (scan-only, no output)         matrix: -                                measured v1:  13.25 ms  (/proc CPU, 4096-char, conc 1 (2026-09-09-cpu-per-request...md:10))
+  whole request CPU (full 9-stage, 5-token answer) matrix: 2.169 ms [D] total               measured v1:  28.00 ms  (p99-under-20ms...md:38)

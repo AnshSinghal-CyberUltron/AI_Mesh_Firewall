@@ -1,0 +1,20 @@
+19:03:58 uz2-300: olg started on rv-pbf-lg-1 rv-pbf-lg-2 rv-pbf-lg-3 (rate 100.0 each, start-at 1790190262323, mode sut, targets http://10.146.0.10:8080)
+[rv-pbf-lg-1] 2026/09/23 19:11:00 done: scheduled=37500 recorded=37500 ok=36886 errors=map[http_403:614] drops=0 late_p99=107us max=718us cpu_busy_max=8.8%
+[rv-pbf-lg-2] 2026/09/23 19:11:00 done: scheduled=37500 recorded=37500 ok=36858 errors=map[http_403:642] drops=0 late_p99=107us max=261us cpu_busy_max=8.6%
+[rv-pbf-lg-3] 2026/09/23 19:11:00 done: scheduled=37500 recorded=37500 ok=36844 errors=map[http_403:656] drops=0 late_p99=108us max=375us cpu_busy_max=8.8%
+# uz2-300: strict FAIL | load-knee PASS (sut, units=2, rate=300)
+
+checks: {'p99_T_fw_addon_lt_slo': False, 'infra_error_rate_le_budget': True, 'zero_schedule_drops': True, 'zero_safety_failures': True, 'run_valid': True}
+load-knee checks: {'p99_T_fw_addon_nohold_lt_slo': True, 'infra_error_rate_le_budget': True, 'zero_schedule_drops': True, 'zero_safety_failures': True, 'run_valid': True}
+offered 90000 (300.0/s) qualified 88418 (294.73/s) FP-blocks 1581 (0.01757) infra 1 (1.1111111111111112e-05) drops 0 safety 0
+infra reasons: {'block_on_unavailable_sem': 1}
+infra detail: {'403 http_403 type=policy_violation code=blocked_by_policy': 1}
+
+T_fw_addon: n=88418 p50=47.7522 p90=55.2757 p99=72.3569 p99.9=80.3568 max=107.6839 mean=38.8214
+T_fw_addon_nohold: n=88418 p50=11.0465 p90=14.5659 p99=19.0347 p99.9=24.5076 max=60.2627 mean=10.6911
+T_fw_addon_sse: n=61909 p50=50.8359 p90=56.5507 p99=73.0908 p99.9=86.5047 max=107.6839 mean=50.8301
+T_fw_addon_json: n=26509 p50=11.1108 p90=14.676 p99=19.408 p99.9=25.4056 max=53.7214 mean=10.7763
+T_addon_first_sse: n=61909 p50=10.9605 p90=14.7325 p99=29.6925 p99.9=36.6555 max=67.6952 mean=10.8736
+T_addon_total_sse: n=61909 p50=11.0224 p90=14.5182 p99=18.8526 p99.9=24.1997 max=60.2627 mean=10.6546
+T_addon_total_json: n=26509 p50=11.1108 p90=14.676 p99=19.408 p99.9=25.4056 max=53.7214 mean=10.7763
+T_release_lag_max: n=61909 p50=50.8359 p90=56.5507 p99=73.0908 p99.9=86.5047 max=107.6839 mean=50.8301

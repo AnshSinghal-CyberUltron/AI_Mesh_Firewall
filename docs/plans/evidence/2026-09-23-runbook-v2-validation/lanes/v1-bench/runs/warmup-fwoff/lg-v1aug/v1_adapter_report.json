@@ -1,0 +1,127 @@
+{
+ "olg_records": 1300,
+ "audit_events_read": 909,
+ "join_keys": 1818,
+ "duplicate_nonce_events": 0,
+ "matched": 909,
+ "unmatched": 391,
+ "audit_completeness": 0.699231,
+ "by_phase": {
+  "ph0_matched": 70,
+  "ph0_unmatched": 30,
+  "ph2_matched": 839,
+  "ph2_unmatched": 361
+ },
+ "unmatched_by_http_status": {
+  "200": 391
+ },
+ "dispositions": {
+  "ALLOW": 909
+ },
+ "stage_actions": {
+  "auth:allow": 909,
+  "input_scan:allow": 909,
+  "kill_switch:allow": 909,
+  "model_input:allow": 909,
+  "model_output:allow": 909,
+  "model_routing:allow": 909,
+  "output_guardrail:allow": 909,
+  "policy:allow": 909,
+  "rate_limit:allow": 909
+ },
+ "v1_internal_ms_measure_phase": {
+  "sse": {
+   "pre_ms": {
+    "n": 839,
+    "p50": 14.9,
+    "p90": 37.5,
+    "p99": 50.8,
+    "max": 256.7
+   },
+   "post_ms": {
+    "n": 839,
+    "p50": 0.0,
+    "p90": 0.0,
+    "p99": 0.0,
+    "max": 0.0
+   },
+   "overhead_ms": {
+    "n": 839,
+    "p50": 0.0,
+    "p90": 0.0,
+    "p99": 0.0,
+    "max": 0.0
+   },
+   "total_ms": {
+    "n": 839,
+    "p50": 4915.5,
+    "p90": 7758.1,
+    "p99": 9068.0,
+    "max": 9595.7
+   },
+   "stage:auth": {
+    "n": 839,
+    "p50": 10.0,
+    "p90": 26.9,
+    "p99": 36.2,
+    "max": 236.8
+   },
+   "stage:kill_switch": {
+    "n": 839,
+    "p50": 1.8,
+    "p90": 6.1,
+    "p99": 10.1,
+    "max": 36.7
+   },
+   "stage:rate_limit": {
+    "n": 839,
+    "p50": 2.3,
+    "p90": 6.2,
+    "p99": 12.1,
+    "max": 35.7
+   },
+   "stage:policy": {
+    "n": 839,
+    "p50": 0.0,
+    "p90": 0.0,
+    "p99": 0.0,
+    "max": 0.0
+   },
+   "stage:input_scan": {
+    "n": 839,
+    "p50": 0.0,
+    "p90": 0.0,
+    "p99": 0.0,
+    "max": 0.0
+   },
+   "stage:model_routing": {
+    "n": 839,
+    "p50": 0.0,
+    "p90": 0.0,
+    "p99": 0.0,
+    "max": 0.0
+   },
+   "stage:model_input": {
+    "n": 839,
+    "p50": 0.0,
+    "p90": 0.0,
+    "p99": 0.0,
+    "max": 0.0
+   },
+   "stage:model_output": {
+    "n": 839,
+    "p50": 4901.2,
+    "p90": 7742.2,
+    "p99": 9015.0,
+    "max": 9563.0
+   },
+   "stage:output_guardrail": {
+    "n": 839,
+    "p50": 0.0,
+    "p90": 0.0,
+    "p99": 0.0,
+    "max": 0.0
+   }
+  }
+ }
+}

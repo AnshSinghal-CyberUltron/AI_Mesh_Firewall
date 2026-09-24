@@ -1,0 +1,49 @@
+{
+ "self_flagged_benign_samples": [
+  {
+   "id": "ben-developer_traffic-0051",
+   "p1": 0.9001974030049741,
+   "text": "DELETE FROM sessions WHERE expires_at < NOW();"
+  }
+ ],
+ "1": {
+  "reconstruction_matches_meta": true,
+  "n": 1000,
+  "request_fpr": 0.043,
+  "share_containing_selfflagged": 0.088,
+  "fpr_if_contains": 0.4886,
+  "fpr_if_not": 0.0,
+  "flagged_not_containing": 0,
+  "n_not_containing": 912
+ },
+ "2": {
+  "reconstruction_matches_meta": true,
+  "n": 1000,
+  "request_fpr": 0.086,
+  "share_containing_selfflagged": 0.185,
+  "fpr_if_contains": 0.4649,
+  "fpr_if_not": 0.0,
+  "flagged_not_containing": 0,
+  "n_not_containing": 815
+ },
+ "4": {
+  "reconstruction_matches_meta": true,
+  "n": 1000,
+  "request_fpr": 0.155,
+  "share_containing_selfflagged": 0.352,
+  "fpr_if_contains": 0.4403,
+  "fpr_if_not": 0.0,
+  "flagged_not_containing": 0,
+  "n_not_containing": 648
+ },
+ "7": {
+  "reconstruction_matches_meta": true,
+  "n": 1000,
+  "request_fpr": 0.273,
+  "share_containing_selfflagged": 0.614,
+  "fpr_if_contains": 0.4446,
+  "fpr_if_not": 0.0,
+  "flagged_not_containing": 0,
+  "n_not_containing": 386
+ }
+}

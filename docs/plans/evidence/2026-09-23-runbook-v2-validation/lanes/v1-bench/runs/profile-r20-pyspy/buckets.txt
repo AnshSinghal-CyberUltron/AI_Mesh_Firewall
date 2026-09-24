@@ -1,0 +1,14 @@
+non-idle, non-wait samples: 39987 (idle-wait 1603098, policy reply-queue wait 2995)
+ 29.70%  Starlette BaseHTTPMiddleware / anyio task-group plumbing
+ 26.83%  LiteLLM + OpenAI SDK + pydantic per-chunk objects + httpx
+ 10.40%  asyncio core
+  9.08%  input scan / PII+secret redaction (scanner.py, patterns.py)
+  6.45%  policy engine (compiled regex/keyword rules)
+  4.31%  trace/telemetry building incl. its redaction
+  4.05%  redis client
+  3.31%  gateway app code (main/stream_orchestration/llm_router/middleware ...)
+  1.98%  json (de)serialisation
+  1.58%  output guard scan (secure_streaming._flush_buffer / output_guard.py)
+  1.21%  logging
+  0.66%  uvicorn / h11 HTTP server
+  0.42%  other

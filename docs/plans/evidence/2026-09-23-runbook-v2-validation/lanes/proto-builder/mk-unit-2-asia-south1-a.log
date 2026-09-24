@@ -1,0 +1,26 @@
+ERROR: (gcloud.compute.instances.create) Could not fetch resource:
+---
+code: ZONE_RESOURCE_POOL_EXHAUSTED_WITH_DETAILS
+errorDetails:
+- help:
+    links:
+    - description: Troubleshooting documentation
+      url: https://cloud.google.com/compute/docs/resource-error
+- localizedMessage:
+    locale: en-US
+    message: A g2-standard-24 VM instance with 2 nvidia-l4 accelerator(s) is currently
+      unavailable in the asia-south1-a zone. Alternatively, you can try your request
+      again with a different VM hardware configuration or at a later time. For more
+      information, see the troubleshooting documentation.
+- errorInfo:
+    domain: compute.googleapis.com
+    metadatas:
+      attachment: nvidia-l4:2
+      vmType: g2-standard-24
+      zone: asia-south1-a
+      zonesAvailable: ''
+    reason: resource_availability
+message: The zone 'projects/ai-mesh-firewall/zones/asia-south1-a' does not have enough
+  resources available to fulfill the request.  'NULL:0/NULL:0/NULL:0 (state:STOCKOUT,
+  sub-state:STOCKOUT, resource type:compute)'.
+

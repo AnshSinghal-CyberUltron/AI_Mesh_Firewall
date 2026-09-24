@@ -1,0 +1,3 @@
+gateway/ai_mesh_gateway/mcp_oauth.py:476: capacity literal max_connections=50 outside runtime/resources.py
+gateway/ai_mesh_gateway/mcp_proxy.py:149: capacity literal max_connections=64 outside runtime/resources.py
+gateway/ai_mesh_gateway/rate_limiter.py:41: capacity literal max_connections=100 outside runtime/resources.py

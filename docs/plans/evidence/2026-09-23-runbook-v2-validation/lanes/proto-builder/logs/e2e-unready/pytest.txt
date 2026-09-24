@@ -1,0 +1,7 @@
+tests/e2e/test_e8_cancel_and_unready.py .                                [100%]
+
+============================== 1 passed in 0.20s ===============================
+x-rv-disposition: ALLOW
+x-rv-plan-version: a-1
+x-rv-stages: canon:E,det:E,sem:E,resolve:E,dispatch:E,out:E,audit:E
+x-rv-output: ALLOW

@@ -1,0 +1,8 @@
+2026/09/23 16:32:49 corpus: 400 entries sha256=8c72caf578b59b9d
+2026/09/23 16:32:59 t=10s sched=41 inflight=8 ok=33 err=0 drops=0 conns=8
+2026/09/23 16:33:09 t=20s sched=81 inflight=8 ok=73 err=0 drops=0 conns=8
+2026/09/23 16:33:19 t=30s sched=121 inflight=7 ok=113 err=0 drops=0 conns=8
+2026/09/23 16:33:29 t=40s sched=161 inflight=7 ok=153 err=1 drops=0 conns=8
+2026/09/23 16:33:39 t=50s sched=201 inflight=7 ok=191 err=2 drops=0 conns=8
+2026/09/23 16:33:49 t=60s sched=241 inflight=8 ok=231 err=2 drops=0 conns=8
+2026/09/23 16:33:55 done: scheduled=260 recorded=260 ok=258 errors=map[http_403:2] drops=0 late_p99=207us max=232us cpu_busy_max=31.7%

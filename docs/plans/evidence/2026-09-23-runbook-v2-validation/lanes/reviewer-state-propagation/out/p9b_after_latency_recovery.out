@@ -1,0 +1,5 @@
+{"proxy": {"t": 1790166054.555118, "mode": "pass", "delay_ms": 0.0, "backend": 26379, "live_conns": 40, "blackholed_conns": 16, "selective": null, "accepted": 814, "selective_delays": 2, "blackholed": 56, "reset": 155}}
+{"attempt": 0, "t": 1790166054.56, "result": {"200": 150}, "store_clients": 130}
+{"attempt": 1, "t": 1790166057.46, "result": {"200": 150}, "store_clients": 130}
+{"attempt": 2, "t": 1790166060.35, "result": {"200": 150}, "store_clients": 130}
+{"attempt": 3, "t": 1790166063.28, "result": {"200": 150}, "store_clients": 130}

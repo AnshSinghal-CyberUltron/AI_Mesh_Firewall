@@ -1,0 +1,41 @@
+# Harness analysis (sut, policy={'blocks_total': 0, 'expected_blocks': 0, 'false_positive_blocks': 0, 'other_blocks': 0, 'benign_offered': 9000, 'false_positive_rate': 0.0, 'policy_misses': 0, 'latency_client_total_ms': {}, 'block_rule': {'statuses': [400, 403, 422, 451], 'envelope_re': '(?i)content_filter|content_polic|polic(y|ies)_|blocked|block_|guard|violation|unsafe|threat'}}) — FAIL
+
+| check | result |
+|---|---|
+| p99_T_fw_addon_lt_slo | FAIL |
+| infra_error_rate_le_budget | FAIL |
+| zero_schedule_drops | PASS |
+| zero_safety_failures | PASS |
+| run_valid | PASS |
+| qualified_nonempty | PASS |
+
+- offered: 9000 over 300 s = 30.0 req/s (configured 30.0)
+- qualified: 6047 (20.16 req/s; dispositions ['ALLOW', 'FLAG', 'REDACT'], source v1)
+- infra errors (the error-budget gate): 2953 (rate 0.32811111111111113); reasons: {'timeout': 2953, 'incomplete': 2953, 'content_mismatch': 2943, 'disposition_missing': 2235, 'stage_auth_missing': 2235, 'stage_kill_switch_missing': 2235, 'stage_rate_limit_missing': 2235, 'stage_policy_missing': 2235, 'stage_input_scan_missing': 2235, 'stage_model_routing_missing': 2235, 'stage_model_input_missing': 2235, 'stage_model_output_missing': 2235, 'stage_output_guardrail_missing': 2235}
+- policy stratum (not qualified, not infra errors): expected blocks 0, FALSE-POSITIVE blocks 0 of 9000 benign (FP rate 0.0), other blocks 0, policy misses 0
+- safety failures: 0 {}
+- schedule drops (>5.0 ms): 0; lateness ms: n=9000 p50=0.0892 p90=0.1009 p99=0.1153 p99.9=0.1411 max=0.2425 mean=0.0894
+- join: {'joined': 9000, 'by_nonce_fallback': 0, 'provider_records': 11250, 'provider_rids_with_multiple_calls': 0, 'provider_orphans': None}
+- valid: True []
+
+| metric (ms) | distribution |
+|---|---|
+| T_addon_total | n=6047 p50=30263.863 p90=99722.8005 p99=113628.2079 p99.9=115781.1311 max=116661.515 mean=40364.5469 |
+| T_addon_first | n=6047 p50=3991.4525 p90=18258.8113 p99=22360.1371 p99.9=25184.2625 max=26918.889 mean=7850.7574 |
+| T_release_lag_max | n=611 p50=31067.6531 p90=101590.2861 p99=113674.3743 p99.9=115920.515 max=115920.515 mean=41610.3388 |
+| T_release_lag_max_arrival | n=611 p50=31067.6531 p90=101590.2861 p99=113674.3743 p99.9=115920.515 max=115920.515 mean=41610.3388 |
+| T_fw_addon | n=6047 p50=30263.863 p90=99722.8005 p99=113628.2079 p99.9=115781.1311 max=116661.515 mean=40365.2827 |
+| T_fw_addon_sse | n=3346 p50=74095.923 p90=106269.9019 p99=114236.9702 p99.9=116196.9193 max=116661.515 mean=70972.0418 |
+| T_fw_addon_json | n=2701 p50=2623.7945 p90=3633.5478 p99=4128.9487 p99.9=4468.5853 max=4523.4996 mean=2449.616 |
+| client_ttft_sse | n=3346 p50=13250.3072 p90=19481.0118 p99=23584.7089 p99.9=25564.3776 max=27068.9391 mean=12360.7861 |
+| provider_sched_err_last | n=9000 p50=0.0529 p90=0.0893 p99=0.1048 p99.9=0.1203 max=0.1559 mean=0.0516 |
+| provider_sched_err_max_per_stream | n=9000 p50=0.0755 p90=0.1135 p99=0.1342 p99.9=0.1737 max=0.2162 mean=0.0741 |
+| provider_write_max | n=9000 p50=0.0132 p90=0.0198 p99=0.0287 p99.9=0.0465 max=0.1598 mean=0.0142 |
+
+- release lag: 611 sampled streams joined, 297 unmappable (content length differs)
+- loadgen CPU (measurement phase): [{'dir': '/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/v1-bench/runs/L1-r30/lg-v1ready', 'samples': 300, 'busy_max': 7.428601846224526, 'busy_mean': 4.19, 'machine': 'c4-standard-8', 'zone': 'asia-south1-c'}]
+- provider CPU: {'samples': 483, 'busy_max': 18.385981268348537, 'busy_p95': 6.158692198821402}
+- completeness: [{'dir': '/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/v1-bench/runs/L1-r30/lg-v1ready', 'scheduled': 11250, 'recorded': 11250, 'interrupted': False}]
+- health olg L1-r30: gc_cycles=0 sched_latency_max_ms=0.08192 tcp=None
+- health synthprov rv-v1-prov-1: gc_cycles=0 sched_latency_max_ms=0.098304 tcp={'TcpRetransSegs': 24656, 'TcpExtTCPFastRetrans': 0, 'TcpExtTCPLossProbes': 24651, 'TcpExtTCPTimeouts': 6, 'TcpOutSegs': 1807801, 'TcpInSegs': 1473673}
+

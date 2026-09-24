@@ -1,0 +1,9 @@
+sha256 main.py baseline vs HEAD:
+6776745dc50b5aef69dab103f810127fb275ed48aa109cf446ecd415925587c0
+6776745dc50b5aef69dab103f810127fb275ed48aa109cf446ecd415925587c0
+git diff --stat 2a657fad HEAD -- gateway/ai_mesh_gateway (non-test):
+ .../core/tests/test_kill_switch_partial_update.py  |  26 +++-
+ gateway/ai_mesh_gateway/llm_router.py              |  46 +++++++
+ gateway/ai_mesh_gateway/pipeline_trace.py          |  65 +++++++++-
+ services/mcp-broker/src/sandbox/docker_manager.py  |   5 +
+ 5 files changed, 272 insertions(+), 5 deletions(-)

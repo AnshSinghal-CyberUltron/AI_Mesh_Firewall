@@ -1,0 +1,9 @@
+{"plan_convergence_s": 1.094}
+.{"killswitch_scope": "org", "effective_after_s": 0.361}
+.{"killswitch_scope": "model", "effective_after_s": 0.54}
+...s............................{"requests": 200, "elapsed_s": 6.3, "overload_sheds_retried": 203}
+...s...............
+=========================== short test summary info ============================
+SKIPPED [1] tests/e2e/test_e10_addendum.py:157: needs a stack with a tiny guard bound
+SKIPPED [1] tests/e2e/test_e8_cancel_and_unready.py:46: run against a stack started with RV_GUARD_WARMUP_DELAY_S>0
+51 passed, 2 skipped in 82.21s (0:01:22)

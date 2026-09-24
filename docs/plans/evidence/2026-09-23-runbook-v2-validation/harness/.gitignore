@@ -1,0 +1,6 @@
+bin/
+corpora/
+runs/
+__pycache__/
+*.pyc
+testdata/fuzz/

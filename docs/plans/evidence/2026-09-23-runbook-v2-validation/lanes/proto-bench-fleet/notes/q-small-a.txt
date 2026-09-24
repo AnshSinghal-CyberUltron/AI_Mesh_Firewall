@@ -1,0 +1,4 @@
+x8-60 60 LGS=rv-pbf-lg-4 PROVS=rv-pbf-prov-3 REDIS_VM=rv-pbf-redis-2 UNITS=rv-pbf-unit-6 TARGETS=http://10.146.0.7:8400 RAMP=15 WARMUP=30 DURATION=60 LABEL=explore-g2-8
+x8-80 80 LGS=rv-pbf-lg-4 PROVS=rv-pbf-prov-3 REDIS_VM=rv-pbf-redis-2 UNITS=rv-pbf-unit-6 TARGETS=http://10.146.0.7:8400 RAMP=15 WARMUP=30 DURATION=60 LABEL=explore-g2-8
+x4-30 30 LGS=rv-pbf-lg-4 PROVS=rv-pbf-prov-3 REDIS_VM=rv-pbf-redis-2 UNITS=rv-pbf-unit-7 TARGETS=http://10.146.0.14:8400 RAMP=15 WARMUP=30 DURATION=60 LABEL=explore-g2-4
+x4-45 45 LGS=rv-pbf-lg-4 PROVS=rv-pbf-prov-3 REDIS_VM=rv-pbf-redis-2 UNITS=rv-pbf-unit-7 TARGETS=http://10.146.0.14:8400 RAMP=15 WARMUP=30 DURATION=60 LABEL=explore-g2-4

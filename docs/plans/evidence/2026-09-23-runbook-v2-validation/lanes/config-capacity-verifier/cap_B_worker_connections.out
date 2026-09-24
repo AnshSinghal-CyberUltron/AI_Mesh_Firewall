@@ -1,0 +1,8 @@
+gunicorn cfg.worker_connections = 20000
+DeprecationWarning on import: The `uvicorn.workers` module is deprecated. Please use `uvicorn-worker` package instead. For more details, see https://github.com/Kludex/uvicorn-worker.
+resolved worker class: uvicorn.workers.UvicornWorker
+uvicorn Config.limit_concurrency = None
+uvicorn Config.timeout_keep_alive = 65 (mapped from --keep-alive)
+uvicorn Config.backlog = 2048
+worker has attribute worker_connections: False
+<sys>:0: ResourceWarning: unclosed file <_io.FileIO name=3 mode='rb+' closefd=True>

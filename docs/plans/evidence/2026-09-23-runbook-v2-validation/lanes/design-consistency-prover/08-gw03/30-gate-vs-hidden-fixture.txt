@@ -1,0 +1,2 @@
+/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/design-consistency-prover/08-gw03/fixture/admit/hidden.py:25: capacity literal max_connections=64 outside runtime/resources.py
+exit=1

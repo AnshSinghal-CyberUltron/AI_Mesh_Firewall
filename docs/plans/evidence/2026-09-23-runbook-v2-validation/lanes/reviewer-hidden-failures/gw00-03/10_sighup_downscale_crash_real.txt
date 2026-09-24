@@ -1,0 +1,9 @@
+gateway pid=2173385 unit=amfrev-sighup-2173383
+before HUP: {'cpu_quota': 2.0, 'workers': 1, 'in_flight': 1, 'reload_count': 0, 'pool_sizes': {'provider': 1, 'redis': 393215, 'scanner': 1, 'vault': 1}}
+scope cpu.max now: 100000 100000
+gateway exit code after SIGHUP: 1 (process alive? no)
+stderr tail:
+    contract.detected_workers()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/resources.py", line 39, in detected_workers
+    raise CapacityUnavailable(
+gateway_v2.runtime.errors.CapacityUnavailable: derived workers=0 (cpu=0 ram=112); refuse to start

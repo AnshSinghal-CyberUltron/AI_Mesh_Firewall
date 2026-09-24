@@ -1,0 +1,2 @@
+22M t1(short-prompt 99th pct)=0.0123 all windows >=t1: 0.149 | without snippet: 0.080 (n=908) | median window score w/o snippet: 0.0049 vs median short-prompt benign score: 0.00062
+86M t1(short-prompt 99th pct)=0.0011 all windows >=t1: 1.000 | without snippet: 1.000 (n=912) | median window score w/o snippet: 0.0056 vs median short-prompt benign score: 0.00040

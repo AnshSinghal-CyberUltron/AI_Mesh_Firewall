@@ -1,0 +1,15 @@
+middleware.py:311:            max_connections = int(os.environ.get("GATEWAY_REDIS_MAX_CONNECTIONS", "300"))
+embedding_vault.py:273:            max_size = int(os.environ.get("GATEWAY_VAULT_POOL_MAX", "8"))
+config.py:163:        "GATEWAY_SCAN_THREAD_POOL_SIZE", 4, min_value=1, max_value=256)
+scanner.py:89:    "GATEWAY_SCANNER_THREAD_POOL_SIZE", 8, min_value=1, max_value=256)
+scanner.py:1129:            "GATEWAY_BEDROCK_THREAD_POOL_SIZE", 16, min_value=1)
+tests/test_bedrock_pool_uncapped.py:1:"""Task 11: GATEWAY_BEDROCK_THREAD_POOL_SIZE must not clamp at 256.
+tests/test_bedrock_pool_uncapped.py:14:    monkeypatch.setenv("GATEWAY_BEDROCK_THREAD_POOL_SIZE", "4096")
+tests/test_bedrock_pool_uncapped.py:27:    monkeypatch.delenv("GATEWAY_BEDROCK_THREAD_POOL_SIZE", raising=False)
+tests/test_config.py:43:    "GATEWAY_SCANNER_THREAD_POOL_SIZE",
+tests/test_config.py:44:    "GATEWAY_BEDROCK_THREAD_POOL_SIZE",
+tests/test_config.py:343:        monkeypatch.setenv("GATEWAY_SCANNER_THREAD_POOL_SIZE", "eight")
+tests/test_config.py:347:        monkeypatch.setenv("GATEWAY_SCANNER_THREAD_POOL_SIZE", "0")
+tests/test_config.py:351:        monkeypatch.setenv("GATEWAY_SCANNER_THREAD_POOL_SIZE", "4")
+tests/test_config.py:356:        monkeypatch.delenv("GATEWAY_SCANNER_THREAD_POOL_SIZE", raising=False)
+tests/test_config.py:365:    monkeypatch.setenv("GATEWAY_BEDROCK_THREAD_POOL_SIZE", "lots")

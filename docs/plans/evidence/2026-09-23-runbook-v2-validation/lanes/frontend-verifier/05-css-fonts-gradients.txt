@@ -1,0 +1,38 @@
+# index.css font imports (HEAD)
+2:@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+3:@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+4:@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
+
+# radial-gradient occurrences in index.css (HEAD): 11
+62:    radial-gradient(circle at 2% 6%, rgba(14, 165, 233, 0.11), transparent 30%),
+63:    radial-gradient(circle at 96% 0%, rgba(20, 184, 166, 0.08), transparent 28%),
+75:    radial-gradient(circle at 10% 8%, rgba(45, 212, 191, 0.12), transparent 34%),
+76:    radial-gradient(circle at 92% 2%, rgba(14, 165, 233, 0.14), transparent 32%),
+144:  --gradient-card-glow: radial-gradient(ellipse at top right, oklch(0.55 0.22 275 / 0.08), transparent 55%);
+188:  --gradient-card-glow: radial-gradient(ellipse at top right, oklch(0.55 0.22 275 / 0.15), transparent 55%);
+310:    radial-gradient(circle at top right, rgba(14, 165, 233, 0.16), transparent 30%),
+311:    radial-gradient(circle at bottom left, rgba(20, 184, 166, 0.14), transparent 28%),
+317:    radial-gradient(circle at top right, rgba(56, 189, 248, 0.18), transparent 30%),
+318:    radial-gradient(circle at bottom left, rgba(45, 212, 191, 0.16), transparent 26%),
+381:  background: radial-gradient(circle at top right, var(--mesh-glow), transparent 55%);
+
+# index.css identical at e95f974d? (git diff --quiet)
+identical
+
+# Tailwind gradient utility usage across frontend/src (*.jsx/*.js, excl tests)
+occurrences of 'bg-gradient-to-': 35
+files containing it: 13
+distinct from-<color> tokens: 40
+     27 teal
+     14 slate
+      7 cyan
+      5 sky
+      5 emerald
+      5 amber
+      4 orange
+      3 violet
+      3 rose
+      3 indigo
+      2 red
+      1 purple
+      1 blue

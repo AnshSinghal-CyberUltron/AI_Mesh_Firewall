@@ -1,0 +1,82 @@
+{
+ "run": "L1-r25",
+ "client_records_all_phases": 9375,
+ "events": 9375,
+ "matched_client_records": 9375,
+ "audit_completeness_matched_over_client": 1.0,
+ "events_over_client": 1.0,
+ "orphan_events": 0,
+ "events_matching_multiple_client_records": 0,
+ "orphan_event_mix": {},
+ "by_phase": {
+  "ph0_matched": 375,
+  "ph1_matched": 1500,
+  "ph2_matched": 7500
+ },
+ "per_client_outcome": {
+  "ok": {
+   "n": 9375,
+   "audited": 9375
+  }
+ },
+ "matrix": [
+  {
+   "client": "ok",
+   "audit": "audit:stream_complete:allow:200:completed=true:err=false",
+   "provider": "prov:200",
+   "n": 6562
+  },
+  {
+   "client": "ok",
+   "audit": "audit:request:allow:200:completed=None:err=None",
+   "provider": "prov:200",
+   "n": 2813
+  }
+ ],
+ "examples": {
+  "ok | audit:request:allow:200:completed=None:err=None | prov:200": [
+   {
+    "rid": "266688aa-ed69-47ba-a213-82999c2f0d8e",
+    "status": 200,
+    "err": null,
+    "err_detail": null,
+    "end_ms": 2602.8,
+    "stream": false,
+    "event_id": 64288,
+    "event_total_ms": "2587.5"
+   },
+   {
+    "rid": "d86c6a10-3e2e-4e87-8aee-5f74c5527181",
+    "status": 200,
+    "err": null,
+    "err_detail": null,
+    "end_ms": 1629.1,
+    "stream": false,
+    "event_id": 64300,
+    "event_total_ms": "1615.0"
+   }
+  ],
+  "ok | audit:stream_complete:allow:200:completed=true:err=false | prov:200": [
+   {
+    "rid": "69ce41bb-7106-4202-afc0-79210cd2d23a",
+    "status": 200,
+    "err": null,
+    "err_detail": null,
+    "end_ms": 2548.5,
+    "stream": true,
+    "event_id": 64298,
+    "event_total_ms": "2390.7"
+   },
+   {
+    "rid": "ee961170-011b-429c-8ed8-307d195886b0",
+    "status": 200,
+    "err": null,
+    "err_detail": null,
+    "end_ms": 2039.9,
+    "stream": true,
+    "event_id": 64306,
+    "event_total_ms": "1886.6"
+   }
+  ]
+ }
+}

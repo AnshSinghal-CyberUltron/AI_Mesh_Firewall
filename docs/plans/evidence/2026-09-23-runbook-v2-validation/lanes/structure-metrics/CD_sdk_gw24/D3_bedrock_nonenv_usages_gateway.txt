@@ -1,0 +1,35 @@
+bedrock_client.py:16:  - BEDROCK_TIER2_SCANNER_MODEL / BEDROCK_ADJUDICATOR_MODEL: Haiku 4.5 global profile
+bedrock_client.py:208:    - BEDROCK_MODEL: model ID (e.g. global.anthropic.claude-haiku-4-5-20251001-v1:0)
+bedrock_inference.py:9:SIMULATOR_BEDROCK_MODEL_ID = os.getenv("BEDROCK_MODEL", "openai.gpt-oss-120b-1:0").strip()
+bedrock_logger.py:128:BEDROCK_LOG_RING = BedrockLogRing()
+bedrock_logger.py:145:            BEDROCK_LOG_RING.push(entry)
+llm_judge.py:83:        self._model = model or os.getenv("BEDROCK_MODEL", "global.anthropic.claude-haiku-4-5-20251001-v1:0")
+main.py:569:BEDROCK_EMBEDDER = None
+main.py:6404:    global BEDROCK_EMBEDDER, GROUNDING_GUARD
+main.py:6564:            BEDROCK_EMBEDDER = BedrockEmbedder(
+main.py:6568:            GROUNDING_GUARD = GroundingGuard(embedder=BEDROCK_EMBEDDER)
+main.py:6676:            _bedrock_model = CONFIG.get("llm_judge_model") or os.getenv("BEDROCK_MODEL", "global.anthropic.claude-haiku-4-5-20251001-v1:0")
+main.py:6755:        from bedrock_logger import bedrock_log as _bedrock_log, BEDROCK_LOG_RING
+main.py:6761:            BEDROCK_LOG_RING._buf.maxlen,
+main.py:9408:            #     above BEDROCK_BLOCK_THRESHOLD) while the model still says 'allow'
+main.py:16398:        from bedrock_logger import BEDROCK_LOG_RING
+main.py:16404:    entries = BEDROCK_LOG_RING.recent(limit=min(limit, 500), level_filter=level)
+main.py:16407:        "total_logged": BEDROCK_LOG_RING.counter,
+main.py:16429:        from bedrock_logger import BEDROCK_LOG_RING
+main.py:16444:        last_seen = BEDROCK_LOG_RING.counter
+main.py:16449:            current = BEDROCK_LOG_RING.counter
+main.py:16452:                items = list(BEDROCK_LOG_RING._buf)
+platform_models.py:100:        os.getenv("BEDROCK_TIER2_SCANNER_MODEL", "").strip()
+platform_models.py:101:        or os.getenv("BEDROCK_MODEL", "").strip()
+platform_models.py:108:        os.getenv("BEDROCK_ADJUDICATOR_MODEL", "").strip()
+scanner.py:991:BEDROCK_BLOCK_ACTIONS: frozenset[str] = frozenset({
+scanner.py:998:BEDROCK_REDACT_ACTIONS: frozenset[str] = frozenset({
+scanner.py:1003:BEDROCK_MONITOR_ACTIONS: frozenset[str] = frozenset({
+scanner.py:2095:        if value in BEDROCK_BLOCK_ACTIONS:
+scanner.py:2097:        if value in BEDROCK_REDACT_ACTIONS:
+scanner.py:2099:        if value in BEDROCK_MONITOR_ACTIONS:
+scanner.py:2490:        BEDROCK_BLOCK_THRESHOLD = 0.70
+scanner.py:2491:        BEDROCK_FLAG_THRESHOLD = 0.40
+scanner.py:2493:        if score >= BEDROCK_BLOCK_THRESHOLD:
+scanner.py:2510:        if score >= BEDROCK_FLAG_THRESHOLD:
+rag_pipeline/query_stage.py:425:                downgrade_model = self._config.get("rag_downgrade_model", os.getenv("BEDROCK_MODEL", "global.anthropic.claude-haiku-4-5-20251001-v1:0"))

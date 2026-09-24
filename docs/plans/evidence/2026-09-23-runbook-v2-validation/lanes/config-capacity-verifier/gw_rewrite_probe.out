@@ -1,0 +1,18 @@
+=== BASELINE ===
+NON-STREAM rewrite result: "The customer's record is on file." | reinferred: True
+LLM_ROUTER.acompletion calls made by the firewall: 1
+  model: gpt-4o-mini | org: acme | max_tokens: 1024 | routing_preferences: {'enable_routing': False}
+  [system] 'You are an output-sanitization assistant for an AI security gateway. You are given a model response that violated a safety policy. Rewrite it so the specific sensitive or unsafe content is removed or neutralized, while PRESERVING the meaning, tone, and usefulness of everything else. CRITICAL: replace each sensitive value with a short NATURAL-LANGUAGE placeholder in square brackets that describes w'
+  [user] 'Violation type: pii\nInstruction: Remove or redact every piece of personal data (names, emails, phone numbers, SSNs, addresses, account numbers). Replace each with a neutral placeholder like [redacted]. Keep all other information intact.\n\nOriginal response to rewrite:\nTicket #42: customer SSN 123-45-6789, email bob@example.com, card 4111 1111 1111 1111.'
+customer's own messages: [{'role': 'user', 'content': 'Summarise the ticket'}]
+STREAM rewrite (secure_streaming.py:527 call shape) -> 'Sensitive personal information was removed from the generated response.'
+LLM_ROUTER.acompletion calls on stream path: 0
+=== HEAD ===
+NON-STREAM rewrite result: "The customer's record is on file." | reinferred: True
+LLM_ROUTER.acompletion calls made by the firewall: 1
+  model: gpt-4o-mini | org: acme | max_tokens: 1024 | routing_preferences: {'enable_routing': False}
+  [system] 'You are an output-sanitization assistant for an AI security gateway. You are given a model response that violated a safety policy. Rewrite it so the specific sensitive or unsafe content is removed or neutralized, while PRESERVING the meaning, tone, and usefulness of everything else. CRITICAL: replace each sensitive value with a short NATURAL-LANGUAGE placeholder in square brackets that describes w'
+  [user] 'Violation type: pii\nInstruction: Remove or redact every piece of personal data (names, emails, phone numbers, SSNs, addresses, account numbers). Replace each with a neutral placeholder like [redacted]. Keep all other information intact.\n\nOriginal response to rewrite:\nTicket #42: customer SSN 123-45-6789, email bob@example.com, card 4111 1111 1111 1111.'
+customer's own messages: [{'role': 'user', 'content': 'Summarise the ticket'}]
+STREAM rewrite (secure_streaming.py:527 call shape) -> 'Sensitive personal information was removed from the generated response.'
+LLM_ROUTER.acompletion calls on stream path: 0

@@ -1,0 +1,4 @@
+PlanInspector    released per upstream token: [' ', 'hello ', '', 'world. ', 'mail ', 'me ', 'at ', '[REDACTED:pii.email] ']
+NoScanInspector  released per upstream token: [' hello', ' world', '.', ' mail', ' me', ' at', ' bob@example.com', ' now']
+settings default exp_output_scan: True | off: False
+invalid value rejected: RV_EXP_OUTPUT_SCAN='maybe' (on | off)

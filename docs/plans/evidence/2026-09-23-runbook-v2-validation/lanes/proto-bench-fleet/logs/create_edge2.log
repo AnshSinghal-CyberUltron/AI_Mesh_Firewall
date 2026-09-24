@@ -1,0 +1,3 @@
+13:51:41 created rv-pbf-edge-2 (c4-highcpu-8) in asia-northeast1-a ip=10.146.0.20
+prep ok: rv-pbf-edge-2.asia-northeast1-a.c.ai-mesh-firewall.internal 8 vCPU
+binaries ok on rv-pbf-edge-2.asia-northeast1-a.c.ai-mesh-firewall.internal

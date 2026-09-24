@@ -1,0 +1,18 @@
+{
+ "item": "Instrument honesty: injected 5 ms pre-dispatch delay and 30 ms mid-stream hold visible in the harness metrics",
+ "code": "rvproto-frozen-1 (manifest sha256 5bef4440...70bd), RV_GUARD_TOPOLOGY=owner, local_cpu PG2-22M owner, 2 HTTP workers",
+ "harness": "READY 2026-09-23 (SP/harness/READY): synthprov 1ee6bb5f, olg d22d2607 (the READY builds); analyzer: the direct run was analyzed live with c9f89fe8, the three SUT runs live with 3874eaac (analyze.py was replaced mid-run at 20:23:22 IST); ALL FOUR re-analyzed from raw files with the READY analyzer 3874eaac into <run>/analysis-3874eaac (numbers below)",
+ "setup": "controller, functional scale: synthprov TTFT 150 ms / ITL 20 ms / sample-mod 1; olg 4 req/s x 60 s (+5 s warm-up), 70% SSE, light corpus (100-170 tokens), org-a key",
+ "analyzer_3874eaac": {
+  "direct": {"valid": true, "qualified": "240/240", "infra_errors": 0, "T_fw_addon_json_p50_ms": 0.19},
+  "base": {"valid": true, "qualified": "238/240", "infra_errors": 0, "false_positive_blocks": 2, "T_fw_addon_json_p50_ms": 86.4},
+  "predispatch5": {"valid": true, "qualified": "238/240", "infra_errors": 0, "false_positive_blocks": 2, "T_fw_addon_json_p50_ms": 91.2},
+  "hold30": {"valid": true, "qualified": "238/240", "infra_errors": 0, "false_positive_blocks": 2, "T_fw_addon_json_p50_ms": 86.0},
+  "note": "the 2 non-qualified requests per SUT run are PG2 blocks of benign prompts (policy stratum, FP 0.83% of 240), not infra errors; every run fails only the p99 < 20 ms SLO check, expected for a CPU guard at functional scale (no capacity claim)"
+ },
+ "json_addon_shift_predispatch5_minus_base_ms": {"p10": 4.6, "p25": 4.7, "p50": 5.3, "p75": 3.9, "p90": -3.3},
+ "per_piece_median_lag_ms": {"base": {"46": 106.5, "47": 106.5, "48": 106.6, "49": 106.5},
+                              "predispatch5": {"46": 111.1, "47": 111.2, "48": 111.0, "49": 111.1},
+                              "hold30": {"46": 105.2, "47": 135.4, "48": 115.5, "49": 105.3}},
+ "verdict": "PASS: 5 ms delay -> +4.6..5.3 ms at JSON add-on p10-p50 (the p75/p90 tail is CPU-guard noise at n=77) and +4.6 ms per piece at every piece; 30 ms hold -> +28.9 ms at the held piece 47 only"
+}

@@ -1,0 +1,4 @@
+........s                                                                [100%]
+=========================== short test summary info ============================
+SKIPPED [1] tests/parity/test_t02_reuse.py:17: AMF_T02_RECORDER_ADMIN unset (CI has no T02 sidecar)
+8 passed, 1 skipped in 6.66s

@@ -1,0 +1,42 @@
+gunicorn version: Version: 26.0.0
+=== every use of worker_connections in gunicorn/ (non-config):
+/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/gunicorn/workers/base_async.py:24:        self.worker_connections = self.cfg.worker_connections
+/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/gunicorn/ctl/handlers.py:143:            'max_requests_jitter', 'worker_connections', 'preload_app',
+/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/gunicorn/dirty/arbiter.py:90:        self.worker_connections = {}  # pid -> (reader, writer)
+/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/gunicorn/dirty/arbiter.py:627:        if worker_pid in self.worker_connections:
+/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/gunicorn/dirty/arbiter.py:628:            return self.worker_connections[worker_pid]
+/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/gunicorn/dirty/arbiter.py:643:        self.worker_connections[worker_pid] = (reader, writer)
+/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/gunicorn/dirty/arbiter.py:648:        if worker_pid in self.worker_connections:
+/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/gunicorn/dirty/arbiter.py:649:            _reader, writer = self.worker_connections.pop(worker_pid)
+/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/gunicorn/workers/ggevent.py:65:            pool = Pool(self.worker_connections)
+/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/gunicorn/workers/gasgi.py:33:        self.worker_connections = self.cfg.worker_connections
+/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/gunicorn/workers/gasgi.py:46:                        "Use worker_connections instead.")
+/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/gunicorn/workers/gthread.py:219:        self.worker_connections = self.cfg.worker_connections
+/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/gunicorn/workers/gthread.py:220:        self.max_keepalived = self.cfg.worker_connections - self.cfg.threads
+/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/gunicorn/workers/gthread.py:233:        max_keepalived = cfg.worker_connections - cfg.threads
+/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/gunicorn/workers/gthread.py:383:            can_accept = self.nr_conns < self.worker_connections
+=== config.py definition + desc:
+class WorkerConnections(Setting):
+    name = "worker_connections"
+    section = "Worker Processes"
+    cli = ["--worker-connections"]
+    meta = "INT"
+    validator = validate_pos_int
+    type = int
+    default = 1000
+    desc = """\
+        The maximum number of simultaneous clients.
+
+        This setting only affects the ``gthread`` and ``gevent`` worker types.
+        """
+
+
+class MaxRequests(Setting):
+    name = "max_requests"
+    section = "Worker Processes"
+    cli = ["--max-requests"]
+    meta = "INT"
+    validator = validate_pos_int
+=== uvicorn: any reference to worker_connections / limit_concurrency mapping
+/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/uvicorn/config.py:212:        limit_concurrency: int | None = None,
+/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/uvicorn/config.py:260:        self.limit_concurrency = limit_concurrency

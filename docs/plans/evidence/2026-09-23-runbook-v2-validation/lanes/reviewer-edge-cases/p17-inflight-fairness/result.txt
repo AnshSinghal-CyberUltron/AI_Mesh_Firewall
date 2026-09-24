@@ -1,0 +1,14 @@
+{
+ "rlimit_nofile": 256,
+ "a_streams_requested": 190,
+ "a_streaming_at_peak": 0,
+ "worker_open_fds_at_peak": 256,
+ "a_outcomes": {
+  "503:{\"error\":{\"message\":\"Gateway at capacity (input_queue); ": 33,
+  "502:{\"error\":{\"message\":\"provider unreachable: ClientConnect": 12,
+  "503:{\"error\":{\"message\":\"Gateway shared state is unavailable": 145
+ },
+ "b_outcomes": {
+  "502:{\"error\":{\"message\":\"provider unreachable: ClientConnectorError\",\"type\":\"upstream_error\",\"": 10
+ }
+}

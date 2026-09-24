@@ -1,0 +1,1 @@
+{"run": "SAT-r40", "client_all_phases": 15000, "events": 9275, "lane_style_completeness": 0.6342, "strict_completeness": 0.5914, "dispatched_to_provider_but_no_strict_event_all_phases": 6127, "measure_phase": {"n": 12000, "lane": 7151, "strict": 6566, "dispatched": 11998, "dispatched_unaudited": 5432}}

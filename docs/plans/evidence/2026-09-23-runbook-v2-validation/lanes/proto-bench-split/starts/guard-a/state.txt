@@ -1,0 +1,9 @@
+cat: /home/rv/rv/run/guard/guard-0.sock.ready: No such file or directory
+
+{"event": "guard_node", "guard_owners": 1, "listen_unix": false, "listen_tcp": ["10.160.15.228", 7070], "settings": {"host": "0.0.0.0", "port": 8400, "redis_url": "redis://127.0.0.1:16379/0", "provider_url": "http://127.0.0.1:18080", "provider_key": "", "passthrough_prefix": "x-synth-", "guard_backe
+memory.used [MiB], utilization.gpu [%], clocks.current.sm [MHz]
+1 MiB, 4 %, 2040 MHz
+{"host": "rv-split-guard-1", "index": 0, "pid": 1635, "tokens_per_s": 241430.2867908987, "model_hash": "2bf20e0f71e3a41e9e8cc4e602e08c142855bcce0cc73e0b65000d816d70877c", "provider": "TensorrtExecutionProvider", "endpoints": ["10.160.15.228:7070"], "queue_cap_tokens": 241430}
+{"event": "guard_owner_ready", "host": "rv-split-guard-1", "index": 0, "pid": 1635, "tokens_per_s": 241430.2867908987, "model_hash": "2bf20e0f71e3a41e9e8cc4e602e08c142855bcce0cc73e0b65000d816d70877c", "provider": "TensorrtExecutionProvider", "endpoints": ["10.160.15.228:7070"], "queue_cap_tokens": 241430, "detail": "ready providers=['TensorrtExecutionProvider', 'CPUExecutionProvider'] tokens_per_s
+LISTEN 0      100    10.160.15.228:7070       0.0.0.0:*          
+424 MiB, 0 %, 2040 MHz

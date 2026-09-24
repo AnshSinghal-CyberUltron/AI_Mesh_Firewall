@@ -1,0 +1,111 @@
+     1	from __future__ import annotations
+     2	
+     3	import asyncio
+     4	import logging
+     5	import signal
+     6	import sys
+     7	import warnings
+     8	from typing import Any
+     9	
+    10	from gunicorn.arbiter import Arbiter
+    11	from gunicorn.workers.base import Worker
+    12	
+    13	from uvicorn._compat import asyncio_run
+    14	from uvicorn.config import Config
+    15	from uvicorn.server import Server
+    16	
+    17	warnings.warn(
+    18	    "The `uvicorn.workers` module is deprecated. Please use `uvicorn-worker` package instead.\n"
+    19	    "For more details, see https://github.com/Kludex/uvicorn-worker.",
+    20	    DeprecationWarning,
+    21	)
+    22	
+    23	
+    24	class UvicornWorker(Worker):
+    25	    """
+    26	    A worker class for Gunicorn that interfaces with an ASGI consumer callable,
+    27	    rather than a WSGI callable.
+    28	    """
+    29	
+    30	    CONFIG_KWARGS: dict[str, Any] = {"loop": "auto", "http": "auto"}
+    31	
+    32	    def __init__(self, *args: Any, **kwargs: Any) -> None:
+    33	        super().__init__(*args, **kwargs)
+    34	
+    35	        logger = logging.getLogger("uvicorn.error")
+    36	        logger.handlers = self.log.error_log.handlers
+    37	        logger.setLevel(self.log.error_log.level)
+    38	        logger.propagate = False
+    39	
+    40	        logger = logging.getLogger("uvicorn.access")
+    41	        logger.handlers = self.log.access_log.handlers
+    42	        logger.setLevel(self.log.access_log.level)
+    43	        logger.propagate = False
+    44	
+    45	        config_kwargs: dict = {
+    46	            "app": None,
+    47	            "log_config": None,
+    48	            "timeout_keep_alive": self.cfg.keepalive,
+    49	            "timeout_notify": self.timeout,
+    50	            "callback_notify": self.callback_notify,
+    51	            "limit_max_requests": self.max_requests,
+    52	            "forwarded_allow_ips": self.cfg.forwarded_allow_ips,
+    53	        }
+    54	
+    55	        if self.cfg.is_ssl:
+    56	            ssl_kwargs = {
+    57	                "ssl_keyfile": self.cfg.ssl_options.get("keyfile"),
+    58	                "ssl_certfile": self.cfg.ssl_options.get("certfile"),
+    59	                "ssl_keyfile_password": self.cfg.ssl_options.get("password"),
+    60	                "ssl_version": self.cfg.ssl_options.get("ssl_version"),
+    61	                "ssl_cert_reqs": self.cfg.ssl_options.get("cert_reqs"),
+    62	                "ssl_ca_certs": self.cfg.ssl_options.get("ca_certs"),
+    63	                "ssl_ciphers": self.cfg.ssl_options.get("ciphers"),
+    64	            }
+    65	            config_kwargs.update(ssl_kwargs)
+    66	
+    67	        if self.cfg.settings["backlog"].value:
+    68	            config_kwargs["backlog"] = self.cfg.settings["backlog"].value
+    69	
+    70	        config_kwargs.update(self.CONFIG_KWARGS)
+    71	
+    72	        self.config = Config(**config_kwargs)
+    73	
+    74	    def init_signals(self) -> None:
+    75	        # Reset signals so Gunicorn doesn't swallow subprocess return codes
+    76	        # other signals are set up by Server.install_signal_handlers()
+    77	        # See: https://github.com/Kludex/uvicorn/issues/894
+    78	        for s in self.SIGNALS:
+    79	            signal.signal(s, signal.SIG_DFL)
+    80	
+    81	        signal.signal(signal.SIGUSR1, self.handle_usr1)
+    82	        # Don't let SIGUSR1 disturb active requests by interrupting system calls
+    83	        signal.siginterrupt(signal.SIGUSR1, False)
+    84	
+    85	    def _install_sigquit_handler(self) -> None:
+    86	        """Install a SIGQUIT handler on workers.
+    87	
+    88	        - https://github.com/Kludex/uvicorn/issues/1116
+    89	        - https://github.com/benoitc/gunicorn/issues/2604
+    90	        """
+    91	
+    92	        loop = asyncio.get_running_loop()
+    93	        loop.add_signal_handler(signal.SIGQUIT, self.handle_exit, signal.SIGQUIT, None)
+    94	
+    95	    async def _serve(self) -> None:
+    96	        self.config.app = self.wsgi
+    97	        server = Server(config=self.config)
+    98	        self._install_sigquit_handler()
+    99	        await server.serve(sockets=self.sockets)
+   100	        if not server.started:
+   101	            sys.exit(Arbiter.WORKER_BOOT_ERROR)
+   102	
+   103	    def run(self) -> None:
+   104	        return asyncio_run(self._serve(), loop_factory=self.config.get_loop_factory())
+   105	
+   106	    async def callback_notify(self) -> None:
+   107	        self.notify()
+   108	
+   109	
+   110	class UvicornH11Worker(UvicornWorker):
+   111	    CONFIG_KWARGS = {"loop": "asyncio", "http": "h11"}

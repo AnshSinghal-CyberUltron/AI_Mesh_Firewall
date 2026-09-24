@@ -1,0 +1,20 @@
+16:44:15 direct-160-main: olg started on rv-pbf-lg-1 rv-pbf-lg-2 rv-pbf-lg-3 (rate 53.333333333333336 each, start-at 1790181884241, mode direct, targets http://10.146.0.8:8080,http://10.146.0.8:8081,http://10.146.0.8:8082,http://10.146.0.8:8083,http://10.146.0.6:8080,http://10.146.0.6:8081,http://10.146.0.6:8082,http://10.146.0.6:8083)
+[rv-pbf-lg-1] 2026/09/23 16:51:21 done: scheduled=20000 recorded=20000 ok=20000 errors=map[] drops=0 late_p99=106us max=593us cpu_busy_max=8.2%
+[rv-pbf-lg-2] 2026/09/23 16:51:21 done: scheduled=20000 recorded=20000 ok=20000 errors=map[] drops=0 late_p99=104us max=208us cpu_busy_max=6.0%
+[rv-pbf-lg-3] 2026/09/23 16:51:21 done: scheduled=20000 recorded=20000 ok=20000 errors=map[] drops=0 late_p99=106us max=228us cpu_busy_max=6.1%
+# direct-160-main: strict PASS | load-knee PASS (direct, units=0, rate=160)
+
+checks: {'zero_schedule_drops': True, 'zero_errors': True, 'run_valid': True, 'loadgen_cpu_lt_70': True}
+load-knee checks: {'p99_T_fw_addon_nohold_lt_slo': True, 'infra_error_rate_le_budget': True, 'zero_schedule_drops': True, 'zero_safety_failures': True, 'run_valid': True}
+offered 48000 (160.0/s) qualified 48000 (160.0/s) FP-blocks 0 (0.0) infra 0 (0.0) drops 0 safety 0
+infra reasons: {}
+infra detail: {}
+
+T_fw_addon: n=48000 p50=0.1395 p90=0.1664 p99=0.1933 p99.9=0.3469 max=6.5208 mean=0.1423
+T_fw_addon_nohold: n=48000 p50=0.1298 p90=0.1606 p99=0.1893 p99.9=0.3112 max=6.5208 mean=0.1327
+T_fw_addon_sse: n=33600 p50=0.1356 p90=0.1607 p99=0.1878 p99.9=0.3498 max=6.5208 mean=0.1388
+T_fw_addon_json: n=14400 p50=0.1497 p90=0.1742 p99=0.1994 p99.9=0.3391 max=0.4023 mean=0.1506
+T_addon_first_sse: n=33600 p50=0.1294 p90=0.1519 p99=0.1744 p99.9=0.3209 max=0.3957 mean=0.1307
+T_addon_total_sse: n=33600 p50=0.1234 p90=0.1457 p99=0.1698 p99.9=0.3025 max=6.5208 mean=0.1251
+T_addon_total_json: n=14400 p50=0.1497 p90=0.1742 p99=0.1994 p99.9=0.3391 max=0.4023 mean=0.1506
+T_release_lag_max: n=3340 p50=0.1607 p90=0.1826 p99=0.2623 p99.9=3.3607 max=5.2494 mean=0.1715

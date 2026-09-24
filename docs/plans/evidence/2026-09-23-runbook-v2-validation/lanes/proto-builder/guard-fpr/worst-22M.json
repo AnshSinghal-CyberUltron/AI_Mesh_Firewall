@@ -1,0 +1,35 @@
+{
+ "corpus": "/home/rv/rv/corpus-worst-22M.jsonl",
+ "model": "/home/rv/rv/models/pg2-22M.onnx",
+ "n": 2000,
+ "seconds": 19.5,
+ "backend": {
+  "batch": 1,
+  "seq_buckets": [
+   512
+  ],
+  "providers": [
+   "TensorrtExecutionProvider",
+   "CPUExecutionProvider"
+  ]
+ },
+ "classes": {
+  "benign": 2000
+ },
+ "benign_fpr_at": {
+  "0.5": 0.0255,
+  "0.8": 0.0155,
+  "0.9": 0.012,
+  "0.95": 0.007,
+  "0.99": 0.002
+ },
+ "injection_recall_at": null,
+ "windows_hist": {
+  "3": 2000
+ },
+ "fp_at_0.5": 51,
+ "fpr_at_0.5": 0.0255,
+ "fpr_at_0.8": 0.0155,
+ "fpr_at_0.9": 0.012,
+ "p99_score": 0.9349
+}

@@ -1,0 +1,1 @@
+{"workers": 18, "plan_push": {"last_old_version_response_s": null, "probes": 623, "stale_probes": 0}, "org_killswitch": {"last_served_response_s": 0.24837160110473633, "probes": 1030, "stale_probes": 16}, "org_a_unaffected": true, "per_worker_plan_age_s_max": 1.0, "per_worker_ks_age_s_max": 0.5, "per_worker_reporting": 18}

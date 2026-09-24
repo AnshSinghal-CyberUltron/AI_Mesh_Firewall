@@ -1,0 +1,10 @@
+run            T_addon_total              | T_fw_addon_json            | T_addon_first              | T_fw_addon_sse             | T_release_lag_max         
+direct         p50=0.2 p99=0.9 max=2.1    | p50=0.2 p99=1.0 max=1.0    | p50=0.2 p99=0.9 max=2.9    | p50=0.2 p99=12.7 max=12.7  | p50=0.2 p99=9.2 max=12.7  
+base           p50=84.8 p99=100.0 max=106.4 | p50=84.3 p99=102.3 max=102.3 | p50=84.8 p99=105.3 max=106.4 | p50=107.7 p99=147.6 max=149.6 | p50=88.1 p99=145.1 max=149.6
+predispatch5   p50=89.2 p99=108.0 max=116.3 | p50=88.8 p99=108.0 max=108.0 | p50=89.3 p99=114.5 max=116.3 | p50=112.8 p99=152.2 max=156.1 | p50=96.0 p99=141.8 max=156.1
+hold30         p50=84.1 p99=93.8 max=96.4 | p50=83.8 p99=91.7 max=91.7 | p50=84.0 p99=94.8 max=105.5 | p50=134.5 p99=156.1 max=156.5 | p50=94.6 p99=156.1 max=156.5
+
+direct valid= True drops=  {'offered': 240, 'qualified': 240, 'errors': 0}
+base valid= True drops=  {'offered': 240, 'qualified': 238, 'errors': 2}
+predispatch5 valid= True drops=  {'offered': 240, 'qualified': 240, 'errors': 0}
+hold30 valid= True drops=  {'offered': 240, 'qualified': 238, 'errors': 2}

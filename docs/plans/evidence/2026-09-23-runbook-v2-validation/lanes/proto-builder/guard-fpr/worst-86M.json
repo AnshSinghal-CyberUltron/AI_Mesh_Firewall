@@ -1,0 +1,35 @@
+{
+ "corpus": "/home/rv/rv/corpus-worst-86M.jsonl",
+ "model": "/home/rv/rv/models/pg2-86M.onnx",
+ "n": 2000,
+ "seconds": 40.0,
+ "backend": {
+  "batch": 1,
+  "seq_buckets": [
+   512
+  ],
+  "providers": [
+   "TensorrtExecutionProvider",
+   "CPUExecutionProvider"
+  ]
+ },
+ "classes": {
+  "benign": 2000
+ },
+ "benign_fpr_at": {
+  "0.5": 0.03,
+  "0.8": 0.0205,
+  "0.9": 0.017,
+  "0.95": 0.0125,
+  "0.99": 0.0015
+ },
+ "injection_recall_at": null,
+ "windows_hist": {
+  "3": 2000
+ },
+ "fp_at_0.5": 60,
+ "fpr_at_0.5": 0.03,
+ "fpr_at_0.8": 0.0205,
+ "fpr_at_0.9": 0.017,
+ "p99_score": 0.9581
+}

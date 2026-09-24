@@ -1,0 +1,25 @@
+{
+ "run": "SAT-r40",
+ "probes_total": 2518,
+ "probes_non200_total": 0,
+ "probe_statuses": {
+  "200": 2518
+ },
+ "probe_ms_max": 2331.935,
+ "seconds_with_client_errors": 343,
+ "seconds_errors_ge10_and_all_probes_200": 247,
+ "seconds_errors_ge_ok_and_all_probes_200": 214,
+ "client_errors_in_seconds_where_all_probes_200": 5734,
+ "client_errors_total": 7376,
+ "peak_second": {
+  "t": 341,
+  "ok": 13,
+  "err": 39,
+  "timeout": 39,
+  "http_503": 0,
+  "http_422": 0,
+  "probes": 1,
+  "probe_non200": 0,
+  "probe_max_ms": 1203.11
+ }
+}

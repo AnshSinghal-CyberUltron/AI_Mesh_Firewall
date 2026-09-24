@@ -1,0 +1,6 @@
+2026/09/23 07:05:53 corpus: 1 entries sha256=eafeb5c8fc7b6fe8
+2026/09/23 07:05:53 waiting 4.355s for synchronized start
+2026/09/23 07:06:08 t=10s sched=18001 inflight=1 ok=18000 err=0 drops=0 conns=1
+2026/09/23 07:06:18 t=20s sched=38001 inflight=1 ok=38000 err=0 drops=0 conns=2
+2026/09/23 07:06:25 requests.jsonl close: sync /home/rv/runs/olgcheck_w1_none_r2000/requests.jsonl: invalid argument
+2026/09/23 07:06:25 done: scheduled=52000 recorded=52000 ok=52000 errors=map[] drops=0 late_p99=85us max=327us cpu_busy_max=0.1%

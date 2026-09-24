@@ -1,0 +1,14 @@
+{
+  "n": 748,
+  "text_len_chars": {
+    "min": 40,
+    "median": 61.0,
+    "max": 93
+  },
+  "items_over_2000_chars": 0,
+  "items_with_non_ascii": 0,
+  "non_ascii_ids_sample": [],
+  "items_with_base64_like_run": 0,
+  "items_with_fake_fixtures": 0,
+  "fake_fixture_kinds": []
+}

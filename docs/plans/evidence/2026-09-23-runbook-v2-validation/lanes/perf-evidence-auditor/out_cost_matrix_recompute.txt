@@ -1,0 +1,71 @@
+== 1. Line-item total (matrix §2, lines 34-62) ==
+  OK  sum of 21 line items vs TOTAL (line 62)                        recomputed=    4,561.44  matrix=    4,561.44
+  OK  headroom 5000 - total (line 18)                                recomputed=      438.56  matrix=      438.56
+  OK  $/million requests (line 19)                                   recomputed=        1.65  matrix=        1.65
+  OK  requests/month (line 5)                                        recomputed=2,757,888,000.00  matrix=2,757,888,000.00
+
+== 2. Egress (matrix §4.1, line 102) ==
+  OK  GiB/month at 6,244 B/req                                       recomputed=   16,037.61  matrix=   16,037.00
+  OK  banded egress (matrix bands)                                   recomputed=      929.94  matrix=      929.95
+  OK  LB outbound 16,037 x $0.010                                    recomputed=      160.37  matrix=      160.37
+  OK  egress + LB (line 41)                                          recomputed=    1,090.32  matrix=    1,090.32
+  NOTE same 16,037 GiB through the ASSEMBLER's band table = $1,230.21 + LB $160.37 = $1,390.58 (matrix used $1,090.32); total would be $4,861.70
+
+== 3. Audit / logging variants (lines 16, 22, 55) ==
+  OK  GCS audit @1 KiB/req, $0.02/GiB (line 16 = $53)                recomputed=       52.60  matrix=       53.00
+  OK  Cloud Logging @1 KiB, $0.50/GiB, 50 GiB free (=$1,290)         recomputed=    1,290.06  matrix=    1,290.00
+  OK  total with Cloud Logging instead of GCS (line 22)              recomputed=    5,798.44  matrix=    5,798.44
+  OK  control plane on own nodes +$270 (line 21)                     recomputed=    4,831.44  matrix=    4,831.44
+
+== 4. CPU ladder (matrix §5, lines 120-145) ==
+  OK  sum of CPU items (line 132 = 2.169 ms)                         recomputed=        2.17  matrix=        2.17
+  OK  theoretical RPS/vCPU = 1000/2.169 (line 138 = 461)             recomputed=      461.04  matrix=      461.00
+  OK  practical = 0.6 x theoretical (line 139 = 277)                 recomputed=      276.63  matrix=      277.00
+  OK  96 vCPU x 277 (line 26 = 26,592)                               recomputed=   26,592.00  matrix=   26,592.00
+  OK  CPU/GPU headroom 26,592 / 1,064 ('~25x')                       recomputed=       24.99  matrix=       25.00
+  OK  used in posture A 1,064/96 (line 142 = 11.1)                   recomputed=       11.08  matrix=       11.10
+  OK  conservative floor binds: 96 x 10.25 x 0.6 (= ~590)            recomputed=      590.40  matrix=      590.00
+  OK  '50x' worse: 277 / 5.4                                         recomputed=       51.30  matrix=       50.00
+  OK  '1,600x' worse: 277 / 0.17                                     recomputed=    1,629.41  matrix=    1,600.00
+  --- substitute MEASURED v1 CPU costs (docs/perf/evidence 2026-09-09) into the matrix's OWN formula 96 x RPS/vCPU x 0.6:
+     scan-only 13.25 ms CPU/req (cpu-per-request...md:10)    ->   75.5 RPS/vCPU -> 96 vCPU x 0.6 =    4347 RPS (matrix: 26,592; ratio   6.1x)
+     scan-only 11.11 ms CPU/req (p99-under-20ms...md:37)     ->   90.0 RPS/vCPU -> 96 vCPU x 0.6 =    5185 RPS (matrix: 26,592; ratio   5.1x)
+     full 9-stage ~28 ms CPU/req (p99-under-20ms...md:38)    ->   35.7 RPS/vCPU -> 96 vCPU x 0.6 =    2057 RPS (matrix: 26,592; ratio  12.9x)
+     full path 27.3 ms CPU/req (post-fix-profile.md:17)      ->   36.6 RPS/vCPU -> 96 vCPU x 0.6 =    2110 RPS (matrix: 26,592; ratio  12.6x)
+
+== 5. Per-L4 throughput (matrix line 143) ==
+  stated derivation '490 windows/s / 2 windows/request, 60% cap' = 147.0 RPS/L4 -> x8 = 1176 RPS
+  assembler's actual derivation (asm_model.py): 0.6 x 1000/4.50 ms = 133.3 RPS/L4 -> x8 = 1064 (133 rounded)
+  OK  1,064 / 8 = 133 (line 143)                                     recomputed=      133.00  matrix=      133.00
+  MISMATCH '490 windows/s ÷ 2 × 0.6' reproduces 133?                      recomputed=      147.00  matrix=      133.00
+
+== 6. §8 cost model: Cost(RPS) = 613.36 + ceil(RPS/266)*701.19 + banded egress(RPS*15.07) + LB + GCS ==
+  OK  fixed = ALB+IPs+SQL+backups+Valkey+GKE+AR+Monitoring+snapshots recomputed=      613.36  matrix=      613.36
+  OK  per-node 701.19 = (2736.76 + 68)/4                             recomputed=      701.19  matrix=      701.19
+  OK  15.07 GiB per RPS-month                                        recomputed=       15.07  matrix=       15.07
+  OK  §8 table row 1,064 RPS (4 nodes)                               recomputed=    4,561.04  matrix=    4,561.00
+  MISMATCH §8 table row 1,330 RPS (5 nodes)                               recomputed=    5,495.89  matrix=    5,401.00
+  OK  §8 table row 2,000 RPS (8 nodes)                               recomputed=    8,188.00  matrix=    8,188.00
+  OK  §8 table row 5,320 RPS (20 nodes)                              recomputed=   19,518.63  matrix=   19,519.00
+  OK  §8 table row 10,000 RPS (38 nodes)                             recomputed=   36,251.05  matrix=   36,251.00
+  MISMATCH A' 14 L4 / 7 nodes / 1,862 RPS (line 24 = $7,228.70)           recomputed=    7,365.59  matrix=    7,228.70
+  §8.1 budget -> max RPS (100% scanned): solve max RPS with cost <= budget
+  OK  §8.1 $5,000 -> max RPS                                         recomputed=    1,064.00  matrix=    1,064.00
+  OK  §8.1 $7,500 -> max RPS                                         recomputed=    1,862.00  matrix=    1,862.00
+  OK  §8.1 $10,000 -> max RPS                                        recomputed=    2,466.00  matrix=    2,466.00
+  OK  §8.1 $25,000 -> max RPS                                        recomputed=    6,770.00  matrix=    6,770.00
+  OK  §8.1 $50,000 -> max RPS                                        recomputed=   13,832.00  matrix=   13,832.00
+  OK  §8.1 $100,000 -> max RPS                                       recomputed=   28,196.00  matrix=   28,196.00
+  §8.2 risk-gated coverage on $5,000
+  OK  §8.2 coverage 100% -> max RPS                                  recomputed=    1,064.00  matrix=    1,064.00
+  OK  §8.2 coverage 50% -> max RPS                                   recomputed=    1,596.00  matrix=    1,596.00
+  OK  §8.2 coverage 26% -> max RPS                                   recomputed=    2,361.00  matrix=    2,361.00
+  OK  §8.2 coverage 10% -> max RPS                                   recomputed=    3,160.00  matrix=    3,160.00
+  §5.4 ladder rows under the matrix's OWN egress model (prompt leg included):
+     posture B '≥26% -> 4,151 RPS' vs §8.2's own 26% answer: 2,361 RPS
+     posture C 'deterministic only 7,200-9,400' vs zero-GPU-node max under matrix egress: 4,756 RPS (with $0 compute)
+
+== 7. 'Upside: tenant provider in-region ~$3,970' (line 20) ==
+     response-only coalesce x16 + gzip (2,950 B)  :     7577 GiB -> total $4,042.88  (matrix says ~$3,970)
+     response-only x64 (1,770 B)                  :     4546 GiB -> total $3,815.57  (matrix says ~$3,970)
+     assembler blend eb=1634 B                    :     4197 GiB -> total $3,789.37  (matrix says ~$3,970)

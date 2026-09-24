@@ -1,0 +1,6 @@
+{"run": "h22-025", "json_n": 2226, "json_inf": 3, "PUB_json_p99": 14.104, "C_json_p99": 14.155}
+{"run": "p22-025", "json_n": 2226, "json_inf": 0, "PUB_json_p99": 14.894, "C_json_p99": 14.894}
+{"run": "p22-025b", "json_n": 2226, "json_inf": 0, "PUB_json_p99": 14.783, "C_json_p99": 14.783}
+{"run": "p22-078", "json_n": 6893, "json_inf": 6, "PUB_json_p99": 15.7, "C_json_p99": 15.873}
+{"run": "p22-078-r2", "json_n": 6893, "json_inf": 6, "PUB_json_p99": 15.772, "C_json_p99": 15.906}
+{"run": "p22-078-r3", "json_n": 6894, "json_inf": 6, "PUB_json_p99": 16.254, "C_json_p99": 16.545}

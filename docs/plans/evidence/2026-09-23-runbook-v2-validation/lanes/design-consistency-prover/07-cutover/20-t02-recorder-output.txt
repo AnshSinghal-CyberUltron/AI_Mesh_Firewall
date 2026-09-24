@@ -1,0 +1,4 @@
+[benign, stream] frames=3 content_chunks=['pong-t02 seq=1'] tool_calls_present=False
+[asks model to emit a secret, stream] frames=3 content_chunks=['pong-t02 seq=2'] tool_calls_present=False
+[tool call request, stream] frames=3 content_chunks=['pong-t02 seq=3'] tool_calls_present=False
+[benign, non-stream] frames=1 content_chunks=['pong-t02 seq=4'] tool_calls_present=False

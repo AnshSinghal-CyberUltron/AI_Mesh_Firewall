@@ -1,0 +1,11 @@
+golden-freeze	UNKNOWN STEP	2026-08-07T13:06:23.7173571Z 34 passed in 0.24s
+golden-freeze	UNKNOWN STEP	2026-08-07T13:06:42.3951209Z FAILED tests/golden/test_adversarial_attacks.py::test_plain_pii_secret_is_redacted[plain_email-reach me at john.doe@example.com-john.doe@example.com] - AssertionError: plain_email: sensitive dat
+golden-freeze	UNKNOWN STEP	2026-08-07T13:06:42.3965301Z FAILED tests/golden/test_adversarial_attacks.py::test_g88_encoded_credential_output_masked[g88_conn_entity_***db.internal:5432/prod-connection &\u200b#\u200b1\u200b1\u200b2\u200b;\u200b&\u200b#\
+golden-freeze	UNKNOWN STEP	2026-08-07T13:06:42.4005093Z FAILED tests/golden/test_adversarial_attacks.py::test_g88_encoded_credential_output_masked[g88_conn_percent_***db.internal:5432/prod-connection %\u200b7\u200b0\u200b%\u200b6\u200bF\u200b%\u200b7
+golden-freeze	UNKNOWN STEP	2026-08-07T13:06:42.4023270Z FAILED tests/golden/test_adversarial_attacks.py::test_g88_encoded_credential_output_masked[g88_stripe_entity_cf-sk_live_51HxAbCdEfGhIjKlMnOpQrStUv-the key is &\u200b#\u200b1\u200b1\u200b5\u200b;
+golden-freeze	UNKNOWN STEP	2026-08-07T13:06:42.4094010Z FAILED tests/golden/test_adversarial_attacks.py::test_g35_plain_output_pii_still_masks - AssertionError: assert ('***-**-6789' in 'The SSN is 123-45-6789.')
+golden-freeze	UNKNOWN STEP	2026-08-07T13:06:42.4096645Z FAILED tests/golden/test_adversarial_attacks.py::test_g10_nonredactable_category_spans_are_ignored - AssertionError: non-redactable span wrongly masked response text
+golden-freeze	UNKNOWN STEP	2026-08-07T13:06:42.4100214Z FAILED tests/golden/test_adversarial_attacks.py::test_g101_parenthesized_digit_pii_detected_and_masked - AssertionError: card: parenthesized-digit PII not detected
+golden-freeze	UNKNOWN STEP	2026-08-07T13:06:42.4104592Z 7 failed, 661 passed, 7 skipped in 18.34s
+golden-freeze	UNKNOWN STEP	2026-08-07T13:06:42.4663833Z ##[error]Process completed with exit code 1.
+golden-freeze	UNKNOWN STEP	2026-08-07T13:06:42.6393254Z ##[warning]The process '/usr/bin/git' failed with exit code 128

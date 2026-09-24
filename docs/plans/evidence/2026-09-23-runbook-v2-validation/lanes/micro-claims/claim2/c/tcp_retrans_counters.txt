@@ -1,0 +1,14 @@
+== APP1
+TcpRetransSegs                  17                 0.0
+TcpExtTCPLostRetransmit         0                  0.0
+TcpExtTCPTimeouts               18                 0.0
+TcpExtTCPLossProbes             1                  0.0
+TcpExtTCPSpuriousRTOs           0                  0.0
+TcpExtTCPSynRetrans             16                 0.0
+== REDIS1
+TcpRetransSegs                  32                 0.0
+TcpExtTCPLostRetransmit         0                  0.0
+TcpExtTCPTimeouts               32                 0.0
+TcpExtTCPLossProbes             3                  0.0
+TcpExtTCPSpuriousRTOs           0                  0.0
+TcpExtTCPSynRetrans             28                 0.0

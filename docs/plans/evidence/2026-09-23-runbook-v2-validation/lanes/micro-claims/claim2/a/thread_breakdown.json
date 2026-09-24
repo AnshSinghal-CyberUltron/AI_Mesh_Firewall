@@ -1,0 +1,512 @@
+{
+ "P1_DEBUG": {
+  "s1_benign_nonstream": {
+   "event_loop_thread_emits_per_request": {
+    "min": 1,
+    "median": 1.0,
+    "max": 1
+   },
+   "worker_thread_emits_per_request": {
+    "min": 0,
+    "median": 0.0,
+    "max": 0
+   }
+  },
+  "s2_benign_stream": {
+   "event_loop_thread_emits_per_request": {
+    "min": 0,
+    "median": 0.0,
+    "max": 0
+   },
+   "worker_thread_emits_per_request": {
+    "min": 0,
+    "median": 0.0,
+    "max": 0
+   }
+  },
+  "s3_pii_nonstream": {
+   "event_loop_thread_emits_per_request": {
+    "min": 2,
+    "median": 2.0,
+    "max": 2
+   },
+   "worker_thread_emits_per_request": {
+    "min": 0,
+    "median": 0.0,
+    "max": 0
+   }
+  },
+  "s4_injection_block": {
+   "event_loop_thread_emits_per_request": {
+    "min": 1,
+    "median": 1.0,
+    "max": 1
+   },
+   "worker_thread_emits_per_request": {
+    "min": 0,
+    "median": 0.0,
+    "max": 0
+   }
+  },
+  "worker_thread_name_prefixes": {}
+ },
+ "P1_DEBUG_noshim": {
+  "s1_benign_nonstream": {
+   "event_loop_thread_emits_per_request": {
+    "min": 1,
+    "median": 1.0,
+    "max": 1
+   },
+   "worker_thread_emits_per_request": {
+    "min": 0,
+    "median": 0.0,
+    "max": 0
+   }
+  },
+  "s2_benign_stream": {
+   "event_loop_thread_emits_per_request": {
+    "min": 1,
+    "median": 1.0,
+    "max": 1
+   },
+   "worker_thread_emits_per_request": {
+    "min": 0,
+    "median": 0.0,
+    "max": 0
+   }
+  },
+  "s3_pii_nonstream": {
+   "event_loop_thread_emits_per_request": {
+    "min": 1,
+    "median": 1.0,
+    "max": 1
+   },
+   "worker_thread_emits_per_request": {
+    "min": 0,
+    "median": 0.0,
+    "max": 0
+   }
+  },
+  "s4_injection_block": {
+   "event_loop_thread_emits_per_request": {
+    "min": 1,
+    "median": 1.0,
+    "max": 1
+   },
+   "worker_thread_emits_per_request": {
+    "min": 0,
+    "median": 0.0,
+    "max": 0
+   }
+  },
+  "worker_thread_name_prefixes": {}
+ },
+ "P1_INFO": {
+  "s1_benign_nonstream": {
+   "event_loop_thread_emits_per_request": {
+    "min": 1,
+    "median": 1.0,
+    "max": 1
+   },
+   "worker_thread_emits_per_request": {
+    "min": 0,
+    "median": 0.0,
+    "max": 0
+   }
+  },
+  "s2_benign_stream": {
+   "event_loop_thread_emits_per_request": {
+    "min": 0,
+    "median": 0.0,
+    "max": 0
+   },
+   "worker_thread_emits_per_request": {
+    "min": 0,
+    "median": 0.0,
+    "max": 0
+   }
+  },
+  "s3_pii_nonstream": {
+   "event_loop_thread_emits_per_request": {
+    "min": 2,
+    "median": 2.0,
+    "max": 2
+   },
+   "worker_thread_emits_per_request": {
+    "min": 0,
+    "median": 0.0,
+    "max": 0
+   }
+  },
+  "s4_injection_block": {
+   "event_loop_thread_emits_per_request": {
+    "min": 1,
+    "median": 1.0,
+    "max": 1
+   },
+   "worker_thread_emits_per_request": {
+    "min": 0,
+    "median": 0.0,
+    "max": 0
+   }
+  },
+  "worker_thread_name_prefixes": {}
+ },
+ "P1_INFO_noshim": {
+  "s1_benign_nonstream": {
+   "event_loop_thread_emits_per_request": {
+    "min": 1,
+    "median": 1.0,
+    "max": 1
+   },
+   "worker_thread_emits_per_request": {
+    "min": 0,
+    "median": 0.0,
+    "max": 0
+   }
+  },
+  "s2_benign_stream": {
+   "event_loop_thread_emits_per_request": {
+    "min": 1,
+    "median": 1.0,
+    "max": 1
+   },
+   "worker_thread_emits_per_request": {
+    "min": 0,
+    "median": 0.0,
+    "max": 0
+   }
+  },
+  "s3_pii_nonstream": {
+   "event_loop_thread_emits_per_request": {
+    "min": 1,
+    "median": 1.0,
+    "max": 1
+   },
+   "worker_thread_emits_per_request": {
+    "min": 0,
+    "median": 0.0,
+    "max": 0
+   }
+  },
+  "s4_injection_block": {
+   "event_loop_thread_emits_per_request": {
+    "min": 1,
+    "median": 1.0,
+    "max": 1
+   },
+   "worker_thread_emits_per_request": {
+    "min": 0,
+    "median": 0.0,
+    "max": 0
+   }
+  },
+  "worker_thread_name_prefixes": {}
+ },
+ "P2_DEBUG": {
+  "s1_benign_nonstream": {
+   "event_loop_thread_emits_per_request": {
+    "min": 4,
+    "median": 4.0,
+    "max": 4
+   },
+   "worker_thread_emits_per_request": {
+    "min": 0,
+    "median": 0.0,
+    "max": 0
+   }
+  },
+  "s2_benign_stream": {
+   "event_loop_thread_emits_per_request": {
+    "min": 2,
+    "median": 2.0,
+    "max": 2
+   },
+   "worker_thread_emits_per_request": {
+    "min": 0,
+    "median": 0.0,
+    "max": 0
+   }
+  },
+  "s3_pii_nonstream": {
+   "event_loop_thread_emits_per_request": {
+    "min": 5,
+    "median": 5.0,
+    "max": 5
+   },
+   "worker_thread_emits_per_request": {
+    "min": 0,
+    "median": 0.0,
+    "max": 0
+   }
+  },
+  "s4_injection_block": {
+   "event_loop_thread_emits_per_request": {
+    "min": 4,
+    "median": 4.0,
+    "max": 4
+   },
+   "worker_thread_emits_per_request": {
+    "min": 0,
+    "median": 0.0,
+    "max": 0
+   }
+  },
+  "worker_thread_name_prefixes": {}
+ },
+ "P2_INFO": {
+  "s1_benign_nonstream": {
+   "event_loop_thread_emits_per_request": {
+    "min": 3,
+    "median": 3.0,
+    "max": 3
+   },
+   "worker_thread_emits_per_request": {
+    "min": 0,
+    "median": 0.0,
+    "max": 0
+   }
+  },
+  "s2_benign_stream": {
+   "event_loop_thread_emits_per_request": {
+    "min": 2,
+    "median": 2.0,
+    "max": 2
+   },
+   "worker_thread_emits_per_request": {
+    "min": 0,
+    "median": 0.0,
+    "max": 0
+   }
+  },
+  "s3_pii_nonstream": {
+   "event_loop_thread_emits_per_request": {
+    "min": 4,
+    "median": 4.0,
+    "max": 4
+   },
+   "worker_thread_emits_per_request": {
+    "min": 0,
+    "median": 0.0,
+    "max": 0
+   }
+  },
+  "s4_injection_block": {
+   "event_loop_thread_emits_per_request": {
+    "min": 3,
+    "median": 3.0,
+    "max": 3
+   },
+   "worker_thread_emits_per_request": {
+    "min": 0,
+    "median": 0.0,
+    "max": 0
+   }
+  },
+  "worker_thread_name_prefixes": {}
+ },
+ "P2b_DEBUG": {
+  "s1_benign_nonstream": {
+   "event_loop_thread_emits_per_request": {
+    "min": 4,
+    "median": 4.0,
+    "max": 4
+   },
+   "worker_thread_emits_per_request": {
+    "min": 0,
+    "median": 0.0,
+    "max": 0
+   }
+  },
+  "s2_benign_stream": {
+   "event_loop_thread_emits_per_request": {
+    "min": 2,
+    "median": 2.0,
+    "max": 2
+   },
+   "worker_thread_emits_per_request": {
+    "min": 0,
+    "median": 0.0,
+    "max": 0
+   }
+  },
+  "s3_pii_nonstream": {
+   "event_loop_thread_emits_per_request": {
+    "min": 5,
+    "median": 5.0,
+    "max": 5
+   },
+   "worker_thread_emits_per_request": {
+    "min": 0,
+    "median": 0.0,
+    "max": 0
+   }
+  },
+  "s4_injection_block": {
+   "event_loop_thread_emits_per_request": {
+    "min": 2,
+    "median": 2.0,
+    "max": 2
+   },
+   "worker_thread_emits_per_request": {
+    "min": 0,
+    "median": 0.0,
+    "max": 0
+   }
+  },
+  "worker_thread_name_prefixes": {}
+ },
+ "P2b_INFO": {
+  "s1_benign_nonstream": {
+   "event_loop_thread_emits_per_request": {
+    "min": 3,
+    "median": 3.0,
+    "max": 3
+   },
+   "worker_thread_emits_per_request": {
+    "min": 0,
+    "median": 0.0,
+    "max": 0
+   }
+  },
+  "s2_benign_stream": {
+   "event_loop_thread_emits_per_request": {
+    "min": 2,
+    "median": 2.0,
+    "max": 2
+   },
+   "worker_thread_emits_per_request": {
+    "min": 0,
+    "median": 0.0,
+    "max": 0
+   }
+  },
+  "s3_pii_nonstream": {
+   "event_loop_thread_emits_per_request": {
+    "min": 4,
+    "median": 4.0,
+    "max": 4
+   },
+   "worker_thread_emits_per_request": {
+    "min": 0,
+    "median": 0.0,
+    "max": 0
+   }
+  },
+  "s4_injection_block": {
+   "event_loop_thread_emits_per_request": {
+    "min": 2,
+    "median": 2.0,
+    "max": 2
+   },
+   "worker_thread_emits_per_request": {
+    "min": 0,
+    "median": 0.0,
+    "max": 0
+   }
+  },
+  "worker_thread_name_prefixes": {}
+ },
+ "P2t2_DEBUG": {
+  "s1_benign_nonstream": {
+   "event_loop_thread_emits_per_request": {
+    "min": 13,
+    "median": 13.0,
+    "max": 13
+   },
+   "worker_thread_emits_per_request": {
+    "min": 0,
+    "median": 0.0,
+    "max": 0
+   }
+  },
+  "s2_benign_stream": {
+   "event_loop_thread_emits_per_request": {
+    "min": 2,
+    "median": 2.0,
+    "max": 2
+   },
+   "worker_thread_emits_per_request": {
+    "min": 0,
+    "median": 0.0,
+    "max": 0
+   }
+  },
+  "s3_pii_nonstream": {
+   "event_loop_thread_emits_per_request": {
+    "min": 14,
+    "median": 14.0,
+    "max": 14
+   },
+   "worker_thread_emits_per_request": {
+    "min": 0,
+    "median": 0.0,
+    "max": 0
+   }
+  },
+  "s4_injection_block": {
+   "event_loop_thread_emits_per_request": {
+    "min": 13,
+    "median": 13.0,
+    "max": 13
+   },
+   "worker_thread_emits_per_request": {
+    "min": 0,
+    "median": 0.0,
+    "max": 0
+   }
+  },
+  "worker_thread_name_prefixes": {}
+ },
+ "P2t2_INFO": {
+  "s1_benign_nonstream": {
+   "event_loop_thread_emits_per_request": {
+    "min": 12,
+    "median": 12.0,
+    "max": 12
+   },
+   "worker_thread_emits_per_request": {
+    "min": 0,
+    "median": 0.0,
+    "max": 0
+   }
+  },
+  "s2_benign_stream": {
+   "event_loop_thread_emits_per_request": {
+    "min": 2,
+    "median": 2.0,
+    "max": 2
+   },
+   "worker_thread_emits_per_request": {
+    "min": 0,
+    "median": 0.0,
+    "max": 0
+   }
+  },
+  "s3_pii_nonstream": {
+   "event_loop_thread_emits_per_request": {
+    "min": 13,
+    "median": 13.0,
+    "max": 13
+   },
+   "worker_thread_emits_per_request": {
+    "min": 0,
+    "median": 0.0,
+    "max": 0
+   }
+  },
+  "s4_injection_block": {
+   "event_loop_thread_emits_per_request": {
+    "min": 12,
+    "median": 12.0,
+    "max": 12
+   },
+   "worker_thread_emits_per_request": {
+    "min": 0,
+    "median": 0.0,
+    "max": 0
+   }
+  },
+  "worker_thread_name_prefixes": {}
+ }
+}

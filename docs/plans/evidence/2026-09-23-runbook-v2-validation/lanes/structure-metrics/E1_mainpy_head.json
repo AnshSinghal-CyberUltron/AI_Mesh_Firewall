@@ -1,0 +1,748 @@
+{
+ "file": "gateway/ai_mesh_gateway/main.py",
+ "lines_wc": 17452,
+ "bytes": 869078,
+ "KiB": 848.7,
+ "KB_decimal": 869.1,
+ "chars": 866311,
+ "toplevel": {
+  "def_asyncdef_class_nodes": 213,
+  "functions": 153,
+  "async_functions": 58,
+  "classes": 2,
+  "unique_def_class_names": 213,
+  "duplicate_def_names": [],
+  "unique_assigned_names": 89,
+  "defs_plus_assigned_unique": 302,
+  "defs_plus_assigned_plus_imports_unique": 334,
+  "toplevel_statements_total": 340
+ },
+ "routes": {
+  "route_decorators_in_file": 35,
+  "route_decorators_on_app": 35,
+  "unique_route_handlers": 34,
+  "unique_paths_decorated": 30,
+  "unique_verb_path_decorated": 35,
+  "add_api_route_loop_paths": [
+   [
+    "/v1/files",
+    [
+     "POST",
+     "GET"
+    ]
+   ],
+   [
+    "/v1/files/{rest:path}",
+    [
+     "GET",
+     "POST",
+     "DELETE"
+    ]
+   ],
+   [
+    "/v1/batches",
+    [
+     "POST",
+     "GET"
+    ]
+   ],
+   [
+    "/v1/batches/{rest:path}",
+    [
+     "GET",
+     "POST"
+    ]
+   ],
+   [
+    "/v1/images/{rest:path}",
+    [
+     "POST"
+    ]
+   ],
+   [
+    "/v1/audio/{rest:path}",
+    [
+     "POST"
+    ]
+   ],
+   [
+    "/v1/fine_tuning/{rest:path}",
+    [
+     "GET",
+     "POST"
+    ]
+   ]
+  ],
+  "registration_calls": [
+   {
+    "line": 6771,
+    "call": "include_router",
+    "arg0": "mcp_proxy_router"
+   },
+   {
+    "line": 6772,
+    "call": "include_router",
+    "arg0": "org_gateway_router"
+   },
+   {
+    "line": 6781,
+    "call": "include_router",
+    "arg0": "mcp_oauth_router"
+   },
+   {
+    "line": 6789,
+    "call": "include_router",
+    "arg0": "mcp_oauth_proxy_router"
+   },
+   {
+    "line": 6802,
+    "call": "include_router",
+    "arg0": "vector_router"
+   },
+   {
+    "line": 17269,
+    "call": "add_api_route",
+    "arg0": "_p"
+   }
+  ],
+  "list": [
+   {
+    "line": 527,
+    "obj": "app",
+    "verb": "get",
+    "path": "/docs",
+    "handler": "scalar_docs"
+   },
+   {
+    "line": 6961,
+    "obj": "app",
+    "verb": "post",
+    "path": "/v1/chat/completions",
+    "handler": "proxy_chat"
+   },
+   {
+    "line": 7072,
+    "obj": "app",
+    "verb": "post",
+    "path": "/v1/chat-completions",
+    "handler": "proxy_chat"
+   },
+   {
+    "line": 12323,
+    "obj": "app",
+    "verb": "post",
+    "path": "/v1/responses",
+    "handler": "proxy_responses"
+   },
+   {
+    "line": 12427,
+    "obj": "app",
+    "verb": "get",
+    "path": "/v1/responses/{response_id}",
+    "handler": "get_response"
+   },
+   {
+    "line": 12439,
+    "obj": "app",
+    "verb": "delete",
+    "path": "/v1/responses/{response_id}",
+    "handler": "delete_response"
+   },
+   {
+    "line": 12451,
+    "obj": "app",
+    "verb": "get",
+    "path": "/v1/responses/{response_id}/input_items",
+    "handler": "list_response_input_items"
+   },
+   {
+    "line": 12471,
+    "obj": "app",
+    "verb": "get",
+    "path": "/v1/observability",
+    "handler": "zs_observability"
+   },
+   {
+    "line": 12505,
+    "obj": "app",
+    "verb": "get",
+    "path": "/v1/usage",
+    "handler": "zs_usage"
+   },
+   {
+    "line": 12534,
+    "obj": "app",
+    "verb": "post",
+    "path": "/v1/embeddings",
+    "handler": "proxy_embeddings"
+   },
+   {
+    "line": 13405,
+    "obj": "app",
+    "verb": "post",
+    "path": "/v1/rag/query",
+    "handler": "rag_query"
+   },
+   {
+    "line": 14374,
+    "obj": "app",
+    "verb": "post",
+    "path": "/v1/rag/ingest",
+    "handler": "rag_ingest"
+   },
+   {
+    "line": 15164,
+    "obj": "app",
+    "verb": "delete",
+    "path": "/v1/rag/documents",
+    "handler": "rag_delete_documents"
+   },
+   {
+    "line": 15455,
+    "obj": "app",
+    "verb": "get",
+    "path": "/v1/rag/collections",
+    "handler": "rag_list_collections"
+   },
+   {
+    "line": 15495,
+    "obj": "app",
+    "verb": "post",
+    "path": "/v1/rag/collections",
+    "handler": "rag_create_collection"
+   },
+   {
+    "line": 15606,
+    "obj": "app",
+    "verb": "delete",
+    "path": "/v1/rag/collections",
+    "handler": "rag_delete_collection"
+   },
+   {
+    "line": 15756,
+    "obj": "app",
+    "verb": "post",
+    "path": "/v1/admin/db-test",
+    "handler": "admin_db_test"
+   },
+   {
+    "line": 15861,
+    "obj": "app",
+    "verb": "post",
+    "path": "/v1/admin/bedrock-test",
+    "handler": "admin_bedrock_test"
+   },
+   {
+    "line": 15949,
+    "obj": "app",
+    "verb": "get",
+    "path": "/v1/admin/circuit-breaker-state",
+    "handler": "admin_circuit_breaker_state"
+   },
+   {
+    "line": 15992,
+    "obj": "app",
+    "verb": "post",
+    "path": "/v1/admin/circuit-breaker-trigger",
+    "handler": "admin_circuit_breaker_trigger"
+   },
+   {
+    "line": 16026,
+    "obj": "app",
+    "verb": "post",
+    "path": "/v1/admin/circuit-breaker-reset",
+    "handler": "admin_circuit_breaker_reset"
+   },
+   {
+    "line": 16142,
+    "obj": "app",
+    "verb": "get",
+    "path": "/v1/admin/rag/collections",
+    "handler": "admin_rag_list_collections"
+   },
+   {
+    "line": 16191,
+    "obj": "app",
+    "verb": "post",
+    "path": "/v1/admin/rag/collections",
+    "handler": "admin_rag_create_collection"
+   },
+   {
+    "line": 16267,
+    "obj": "app",
+    "verb": "delete",
+    "path": "/v1/admin/rag/collections",
+    "handler": "admin_rag_delete_collection"
+   },
+   {
+    "line": 16344,
+    "obj": "app",
+    "verb": "get",
+    "path": "/v1/admin/logs",
+    "handler": "admin_logs"
+   },
+   {
+    "line": 16382,
+    "obj": "app",
+    "verb": "get",
+    "path": "/v1/admin/bedrock-logs",
+    "handler": "admin_bedrock_logs"
+   },
+   {
+    "line": 16413,
+    "obj": "app",
+    "verb": "get",
+    "path": "/v1/admin/bedrock-logs/stream",
+    "handler": "admin_bedrock_logs_stream"
+   },
+   {
+    "line": 16482,
+    "obj": "app",
+    "verb": "get",
+    "path": "/v1/admin/bedrock-logs/file",
+    "handler": "admin_bedrock_logs_file"
+   },
+   {
+    "line": 16647,
+    "obj": "app",
+    "verb": "post",
+    "path": "/v1/policy/check",
+    "handler": "policy_check_endpoint"
+   },
+   {
+    "line": 16780,
+    "obj": "app",
+    "verb": "get",
+    "path": "/health",
+    "handler": "health"
+   },
+   {
+    "line": 16867,
+    "obj": "app",
+    "verb": "get",
+    "path": "/metrics",
+    "handler": "prometheus_metrics"
+   },
+   {
+    "line": 16903,
+    "obj": "app",
+    "verb": "get",
+    "path": "/v1/models",
+    "handler": "list_models"
+   },
+   {
+    "line": 17048,
+    "obj": "app",
+    "verb": "get",
+    "path": "/v1/models/{model_id:path}",
+    "handler": "retrieve_model"
+   },
+   {
+    "line": 17064,
+    "obj": "app",
+    "verb": "post",
+    "path": "/v1/moderations",
+    "handler": "create_moderations"
+   },
+   {
+    "line": 17134,
+    "obj": "app",
+    "verb": "post",
+    "path": "/v1/completions",
+    "handler": "create_legacy_completion"
+   }
+  ]
+ },
+ "function": {
+  "proxy_chat": {
+   "def_line": 7076,
+   "first_decorator_line": 6961,
+   "end_line": 12065,
+   "lines_def_to_end": 4990,
+   "lines_incl_decorators": 5105,
+   "nonblank_lines": 4872,
+   "code_lines_excl_blank_comment": 3981,
+   "nested_defs": [
+    {
+     "name": "_cancel_deep_scan",
+     "line": 10493,
+     "end": 10497
+    },
+    {
+     "name": "_msg_has_content",
+     "line": 7539,
+     "end": 7547
+    },
+    {
+     "name": "_has_tool_context",
+     "line": 7549,
+     "end": 7559
+    },
+    {
+     "name": "_emit_output_incident_telemetry",
+     "line": 10883,
+     "end": 10885
+    },
+    {
+     "name": "_audit_output_incident",
+     "line": 10887,
+     "end": 10889
+    }
+   ],
+   "return_stmts_incl_nested_defs": 95,
+   "return_stmts_excl_nested_defs": 87,
+   "raise_stmts_incl_nested": 1,
+   "yield_incl_nested": 0,
+   "if_nodes_incl_nested(if+elif)": 319,
+   "if_only_incl_nested": 293,
+   "elif_only_incl_nested": 26,
+   "if_nodes_excl_nested(if+elif)": 309,
+   "ifexp_ternaries_incl_nested": 149,
+   "comprehension_ifs_incl_nested": 7,
+   "source_lines_starting_if_or_elif": 339,
+   "except_handlers_incl_nested": 49,
+   "except_handlers_excl_nested": 49,
+   "broad_kinds_incl_nested": {
+    "Exception": 20
+   },
+   "broad_kinds_excl_nested": {
+    "Exception": 20
+   },
+   "handler_types_incl_nested": {
+    "Exception": 20,
+    "(ValueError, TypeError)": 1,
+    "ImportError": 21,
+    "(TypeError, ValueError, OverflowError)": 3,
+    "(TypeError, ValueError)": 2,
+    "(json.JSONDecodeError, TypeError)": 2
+   },
+   "try_stmts_incl_nested": 49,
+   "nesting": {
+    "elif_flat": {
+     "max_block_depth": 10,
+     "at_line": 7513
+    },
+    "elif_nested": {
+     "max_block_depth": 14,
+     "at_line": 7516
+    },
+    "indent_levels_of_statements(body=1)": {
+     "max": 10,
+     "at_line": 7513,
+     "note": "function body = level 1"
+    },
+    "indent_levels_minus_body(body=0)": {
+     "max": 9,
+     "at_line": 7513
+    }
+   },
+   "body_mutations_direct_incl_nested": 33,
+   "body_mutations_nested_path_incl_nested": 0,
+   "body_rebinds_incl_nested": 1,
+   "body_direct_list": [
+    [
+     7160,
+     "Assign",
+     "body['_zs_declared_rag_context'] = _zs_ctx"
+    ],
+    [
+     7192,
+     "call.pop",
+     "body.pop('estimated_tokens', None)"
+    ],
+    [
+     7210,
+     "call.pop",
+     "body.pop('max_tokens', None)"
+    ],
+    [
+     7256,
+     "Assign",
+     "body['max_tokens'] = 0"
+    ],
+    [
+     7273,
+     "Assign",
+     "body['max_tokens'] = _max_tokens_int"
+    ],
+    [
+     7284,
+     "call.pop",
+     "body.pop('max_completion_tokens', None)"
+    ],
+    [
+     7321,
+     "call.pop",
+     "body.pop('max_completion_tokens', None)"
+    ],
+    [
+     7333,
+     "Assign",
+     "body['max_completion_tokens'] = _mct_int"
+    ],
+    [
+     7604,
+     "Assign",
+     "body['n'] = 1 if _n_int != 1 else _n_int"
+    ],
+    [
+     7639,
+     "Assign",
+     "body['routing_preferences'] = raw_routing_preferences"
+    ],
+    [
+     7643,
+     "Assign",
+     "body['enable_routing'] = raw_enable_routing"
+    ],
+    [
+     7656,
+     "Assign",
+     "body['metadata'] = metadata"
+    ],
+    [
+     7660,
+     "Assign",
+     "body['data_sensitivity'] = raw_body['data_sensitivity']"
+    ],
+    [
+     7663,
+     "Assign",
+     "body['compliance_requirements'] = raw_compliance"
+    ],
+    [
+     7673,
+     "Assign",
+     "body['agent_data'] = raw_agent_data"
+    ],
+    [
+     7687,
+     "Assign",
+     "body['mcp_context'] = raw_mcp_context"
+    ],
+    [
+     7702,
+     "Assign",
+     "body['_zs_org_slug'] = org_slug"
+    ],
+    [
+     7851,
+     "Assign",
+     "body['model'] = requested_model"
+    ],
+    [
+     8070,
+     "Assign",
+     "body['model'] = compliant_model"
+    ],
+    [
+     8233,
+     "Assign",
+     "body['model'] = compliant_model"
+    ],
+    [
+     8452,
+     "Assign",
+     "body['max_tokens'] = _mt_clamped"
+    ],
+    [
+     8567,
+     "Assign",
+     "body['messages'] = messages"
+    ],
+    [
+     8632,
+     "call.pop",
+     "body.pop('_zs_declared_rag_context', None)"
+    ],
+    [
+     8698,
+     "Assign",
+     "body['max_tokens'] = min(_mt, max_tokens_config)"
+    ],
+    [
+     8706,
+     "Assign",
+     "body['max_completion_tokens'] = min(_mct, max_tokens_config)"
+    ],
+    [
+     8708,
+     "Assign",
+     "body['max_tokens'] = max_tokens_config"
+    ],
+    [
+     9042,
+     "Assign",
+     "body['model'] = downgrade_to"
+    ],
+    [
+     10090,
+     "Assign",
+     "body['model'] = requested_model"
+    ],
+    [
+     10251,
+     "Assign",
+     "body['model'] = resolved"
+    ],
+    [
+     10527,
+     "Assign",
+     "body['_inference_allowlist'] = sorted(_routing_identity_set(inference_models))"
+    ],
+    [
+     10529,
+     "Assign",
+     "body['_compliant_fallback_chain'] = list(route_selection.fallback_chain)"
+    ],
+    [
+     10542,
+     "Assign",
+     "body['_compliant_fallback_chain'] = per_primary or [m for m in profile_chain if m != requested_model]"
+    ],
+    [
+     10599,
+     "Assign",
+     "body['model'] = compliant_model"
+    ]
+   ],
+   "body_nested_list": [],
+   "body_rebind_list": [
+    [
+     7147,
+     "body = normalize_openai_chat_request(raw_body, strip_unknown_top_level=True)"
+    ]
+   ],
+   "body_mutations_direct_excl_nested": 33,
+   "body_mutations_nested_path_excl_nested": 0,
+   "body_rebinds_excl_nested": 1,
+   "body_source_lines_containing_name": 187,
+   "stage_metrics_mutations_direct_incl_nested": 20,
+   "stage_metrics_mutations_nested_path_incl_nested": 0,
+   "stage_metrics_rebinds_incl_nested": 3,
+   "stage_metrics_direct_list": [
+    [
+     7109,
+     "Assign",
+     "stage_metrics['gc_pause_mark'] = _m"
+    ],
+    [
+     7691,
+     "Assign",
+     "stage_metrics['auth_ms'] = _ptimer.mark_segment_end('auth')"
+    ],
+    [
+     8142,
+     "Assign",
+     "stage_metrics['kill_switch_ms'] = round((time.perf_counter() - _ks_start) * 1000, 1)"
+    ],
+    [
+     8144,
+     "Assign",
+     "stage_metrics['kill_switch_ms'] = 0.0"
+    ],
+    [
+     8558,
+     "Assign",
+     "stage_metrics['rate_limit_ms'] = round((time.perf_counter() - _rl_start) * 1000, 1)"
+    ],
+    [
+     8847,
+     "Assign",
+     "stage_metrics['policy_ms'] = round((time.perf_counter() - _policy_start) * 1000, 2)"
+    ],
+    [
+     9203,
+     "Assign",
+     "stage_metrics['tier1_ms'] = round((time.perf_counter() - scan_start) * 1000, 2)"
+    ],
+    [
+     9232,
+     "Assign",
+     "stage_metrics['tier2_ms'] = round((time.perf_counter() - scan_start) * 1000, 2)"
+    ],
+    [
+     9234,
+     "Assign",
+     "stage_metrics['tier1_ms'] = round((time.perf_counter() - scan_start) * 1000, 2)"
+    ],
+    [
+     9243,
+     "Assign",
+     "stage_metrics['tier1_ms'] = round((time.perf_counter() - scan_start) * 1000, 2)"
+    ],
+    [
+     9749,
+     "Assign",
+     "stage_metrics['telemetry_enqueue_ms'] = round((time.perf_counter() - telemetry_start) * 1000, 2)"
+    ],
+    [
+     9781,
+     "Assign",
+     "stage_metrics['upstream_ms'] = round((time.perf_counter() - upstream_start) * 1000, 2)"
+    ],
+    [
+     9813,
+     "Assign",
+     "stage_metrics['telemetry_enqueue_ms'] = round((time.perf_counter() - telemetry_start) * 1000, 2)"
+    ],
+    [
+     10192,
+     "Assign",
+     "stage_metrics['model_routing_ms'] = round((time.perf_counter() - _rt_start) * 1000, 1)"
+    ],
+    [
+     10194,
+     "Assign",
+     "stage_metrics['model_routing_ms'] = 0.0"
+    ],
+    [
+     10706,
+     "Assign",
+     "stage_metrics['model_input_ms'] = round((upstream_start - _model_in_start) * 1000, 1)"
+    ],
+    [
+     10709,
+     "Assign",
+     "stage_metrics['upstream_ms'] = round((time.perf_counter() - upstream_start) * 1000, 1)"
+    ],
+    [
+     10710,
+     "Assign",
+     "stage_metrics['model_output_ms'] = stage_metrics['upstream_ms']"
+    ],
+    [
+     10855,
+     "Assign",
+     "stage_metrics['output_guardrail_ms'] = round((time.perf_counter() - _og_start) * 1000, 1)"
+    ],
+    [
+     12000,
+     "Assign",
+     "stage_metrics['telemetry_enqueue_ms'] = round((time.perf_counter() - telemetry_start) * 1000, 2)"
+    ]
+   ],
+   "stage_metrics_nested_list": [],
+   "stage_metrics_rebind_list": [
+    [
+     7092,
+     "stage_metrics = {'auth_ms': 0.0, 'policy_ms': 0.0, 'tier1_ms': 0.0, 'tier2_ms': 0.0, 'upstream_ms': 0.0, 'telemetry_enqu"
+    ],
+    [
+     9927,
+     "stage_metrics = finalize_stage_metrics(stage_metrics, start, ptimer=_ptimer)"
+    ],
+    [
+     11901,
+     "stage_metrics = finalize_stage_metrics(stage_metrics, start, ptimer=_ptimer)"
+    ]
+   ],
+   "stage_metrics_mutations_direct_excl_nested": 20,
+   "stage_metrics_mutations_nested_path_excl_nested": 0,
+   "stage_metrics_rebinds_excl_nested": 3,
+   "stage_metrics_source_lines_containing_name": 45,
+   "stage_metrics_writes_whole_file_direct": 20,
+   "stage_metrics_writes_whole_file_nested": 0
+  }
+ }
+}

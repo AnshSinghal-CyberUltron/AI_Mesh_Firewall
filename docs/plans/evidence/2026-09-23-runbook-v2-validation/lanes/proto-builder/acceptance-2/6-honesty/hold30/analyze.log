@@ -1,0 +1,39 @@
+# Harness analysis (sut, policy=enforce) — FAIL
+
+| check | result |
+|---|---|
+| p99_T_fw_addon_lt_slo | FAIL |
+| error_rate_le_budget | FAIL |
+| zero_schedule_drops | PASS |
+| zero_safety_failures | PASS |
+| run_valid | PASS |
+| qualified_nonempty | PASS |
+
+- offered: 240 over 60 s = 4.0 req/s (configured 4.0)
+- qualified: 239 (3.98 req/s); expected blocks: 0; errors: 1 (rate 0.004166666666666667)
+- error reasons: {'http_403': 1, 'incomplete': 1, 'unjoined': 1, 'disposition_BLOCK': 1, 'stage_dispatch_S': 1, 'stage_out_S': 1}
+- safety failures: 0 {}
+- schedule drops (>5.0 ms): 0; lateness ms: n=240 p50=0.114 p90=0.1352 p99=0.2408 p99.9=0.3595 max=0.3595 mean=0.1172
+- join: {'joined': 239, 'by_nonce_fallback': 0, 'provider_records': 259, 'provider_rids_with_multiple_calls': 0, 'provider_orphans': None}
+- valid: True []
+
+| metric (ms) | distribution |
+|---|---|
+| T_addon_total | n=239 p50=85.0928 p90=88.4105 p99=100.8754 p99.9=113.7223 max=113.7223 mean=71.6278 |
+| T_addon_first | n=239 p50=85.11 p90=88.5597 p99=104.9326 p99.9=113.8302 max=113.8302 mean=71.845 |
+| T_release_lag_max | n=239 p50=97.0549 p90=137.9035 p99=150.784 p99.9=165.2623 max=165.2623 mean=106.8577 |
+| T_release_lag_max_arrival | n=239 p50=95.8621 p90=137.9035 p99=150.5952 p99.9=165.2623 max=165.2623 mean=106.1109 |
+| T_fw_addon | n=239 p50=97.0549 p90=137.9035 p99=150.784 p99.9=165.2623 max=165.2623 mean=106.8577 |
+| T_fw_addon_sse | n=168 p50=134.861 p90=138.5021 p99=158.584 p99.9=165.2623 max=165.2623 mean=122.8169 |
+| T_fw_addon_json | n=71 p50=84.5097 p90=88.0307 p99=101.201 p99.9=101.201 max=101.201 mean=69.095 |
+| client_ttft_sse | n=168 p50=235.3966 p90=239.2691 p99=255.8312 p99.9=263.8519 max=263.8519 mean=223.0632 |
+| provider_sched_err_last | n=239 p50=0.0586 p90=0.0936 p99=0.1015 p99.9=0.1044 max=0.1044 mean=0.0571 |
+| provider_sched_err_max_per_stream | n=239 p50=0.0653 p90=0.1014 p99=0.2134 p99.9=0.431 max=0.431 mean=0.0673 |
+| provider_write_max | n=239 p50=0.0482 p90=0.063 p99=0.1991 p99.9=0.2306 max=0.2306 mean=0.0443 |
+
+- release lag: 239 sampled streams joined, 0 unmappable (content length differs)
+- loadgen CPU (measurement phase): [{'dir': '/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-builder/acceptance-2/6-honesty/hold30/olg', 'samples': 60, 'busy_max': 29.2760110405927, 'busy_mean': 13.24, 'machine': 'c4-standard-16', 'zone': 'asia-south1-c'}]
+- provider CPU: {'samples': 0, 'busy_max': None, 'busy_p95': None}
+- completeness: [{'dir': '/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-builder/acceptance-2/6-honesty/hold30/olg', 'scheduled': 260, 'recorded': 260, 'interrupted': False}]
+- health olg hold30: gc_cycles=0 sched_latency_max_ms=0.13107200000000002 tcp=None
+

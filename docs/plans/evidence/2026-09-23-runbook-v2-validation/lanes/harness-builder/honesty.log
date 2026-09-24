@@ -1,0 +1,7 @@
+11:46:38 olg started on rv-harness-lg-1 (rate 300.0 each, start-at 1790164018393)
+2026/09/23 11:46:37 synthprov 5af9594a2631 listening on :8080 (ttft=150ms itl=20ms sample-mod=1 hb=100µs gomaxprocs=8 gc=off memlimit=9.37GiB)
+[rv-harness-lg-1] 2026/09/23 11:49:06 done: scheduled=34500 recorded=34500 ok=34500 errors=map[] drops=0 late_p99=112us max=927us cpu_busy_max=16.2%
+2026/09/23 11:49:12 final stats: requests=34500 records=34500 blocked=0
+[rv-harness-prov-1] compressed size 60M
+[rv-harness-lg-1] compressed size 62M
+11:49:13 collected hon-direct from rv-harness-lg-1 rv-harness-prov-1 into /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/harness-builder/runs/hon-direct

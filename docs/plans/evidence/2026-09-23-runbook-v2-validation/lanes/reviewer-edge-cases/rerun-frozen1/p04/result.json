@@ -1,0 +1,288 @@
+[
+ {
+  "case": "control: AWS key in user text",
+  "status": 403,
+  "disposition": "BLOCK",
+  "stages": "canon:E,det:E,sem:E,resolve:E,dispatch:S,out:S,audit:E",
+  "error_code": "blocked_by_policy",
+  "provider_called": false,
+  "canary_reached_provider": []
+ },
+ {
+  "case": "control: email in user text (expect REDACT)",
+  "status": 200,
+  "disposition": "REDACT",
+  "stages": "canon:E,det:E,sem:E,resolve:E,dispatch:E,out:E,audit:E",
+  "error_code": null,
+  "provider_called": true,
+  "canary_reached_provider": []
+ },
+ {
+  "case": "control: injection in user text",
+  "status": 403,
+  "disposition": "BLOCK",
+  "stages": "canon:E,det:E,sem:E,resolve:E,dispatch:S,out:S,audit:E",
+  "error_code": "blocked_by_policy",
+  "provider_called": false,
+  "canary_reached_provider": []
+ },
+ {
+  "case": "AWS key in tools[].function.description",
+  "status": 200,
+  "disposition": "ALLOW",
+  "stages": "canon:E,det:E,sem:E,resolve:E,dispatch:E,out:E,audit:E",
+  "error_code": null,
+  "provider_called": true,
+  "canary_reached_provider": [
+   "AKIAQYLPMN5HHHFPZAM2"
+  ]
+ },
+ {
+  "case": "injection in tools[].function.description",
+  "status": 200,
+  "disposition": "ALLOW",
+  "stages": "canon:E,det:E,sem:E,resolve:E,dispatch:E,out:E,audit:E",
+  "error_code": null,
+  "provider_called": true,
+  "canary_reached_provider": []
+ },
+ {
+  "case": "AWS key in tool parameter schema description",
+  "status": 200,
+  "disposition": "ALLOW",
+  "stages": "canon:E,det:E,sem:E,resolve:E,dispatch:E,out:E,audit:E",
+  "error_code": null,
+  "provider_called": true,
+  "canary_reached_provider": [
+   "AKIAQYLPMN5HHHFPZAM2"
+  ]
+ },
+ {
+  "case": "AWS key in message.name",
+  "status": 200,
+  "disposition": "ALLOW",
+  "stages": "canon:E,det:E,sem:E,resolve:E,dispatch:E,out:E,audit:E",
+  "error_code": null,
+  "provider_called": true,
+  "canary_reached_provider": [
+   "AKIAQYLPMN5HHHFPZAM2"
+  ]
+ },
+ {
+  "case": "AWS key in response_format json_schema description",
+  "status": 200,
+  "disposition": "ALLOW",
+  "stages": "canon:E,det:E,sem:E,resolve:E,dispatch:E,out:E,audit:E",
+  "error_code": null,
+  "provider_called": true,
+  "canary_reached_provider": [
+   "AKIAQYLPMN5HHHFPZAM2"
+  ]
+ },
+ {
+  "case": "AWS key in legacy assistant function_call.arguments",
+  "status": 200,
+  "disposition": "ALLOW",
+  "stages": "canon:E,det:E,sem:E,resolve:E,dispatch:E,out:E,audit:E",
+  "error_code": null,
+  "provider_called": true,
+  "canary_reached_provider": [
+   "AKIAQYLPMN5HHHFPZAM2"
+  ]
+ },
+ {
+  "case": "AWS key in assistant tool_calls.arguments (control)",
+  "status": 403,
+  "disposition": "BLOCK",
+  "stages": "canon:E,det:E,sem:E,resolve:E,dispatch:S,out:S,audit:E",
+  "error_code": "blocked_by_policy",
+  "provider_called": false,
+  "canary_reached_provider": []
+ },
+ {
+  "case": "AWS key in image_url URL query",
+  "status": 200,
+  "disposition": "ALLOW",
+  "stages": "canon:E,det:E,sem:E,resolve:E,dispatch:E,out:E,audit:E",
+  "error_code": null,
+  "provider_called": true,
+  "canary_reached_provider": [
+   "AKIAQYLPMN5HHHFPZAM2"
+  ]
+ },
+ {
+  "case": "AWS key as text inside a data: URL (base64 text/plain)",
+  "status": 200,
+  "disposition": "ALLOW",
+  "stages": "canon:E,det:E,sem:E,resolve:E,dispatch:E,out:E,audit:E",
+  "error_code": null,
+  "provider_called": true,
+  "canary_reached_provider": []
+ },
+ {
+  "case": "AWS key in input_audio part data",
+  "status": 200,
+  "disposition": "ALLOW",
+  "stages": "canon:E,det:E,sem:E,resolve:E,dispatch:E,out:E,audit:E",
+  "error_code": null,
+  "provider_called": true,
+  "canary_reached_provider": []
+ },
+ {
+  "case": "AWS key in prediction.content",
+  "status": 200,
+  "disposition": "ALLOW",
+  "stages": "canon:E,det:E,sem:E,resolve:E,dispatch:E,out:E,audit:E",
+  "error_code": null,
+  "provider_called": true,
+  "canary_reached_provider": [
+   "AKIAQYLPMN5HHHFPZAM2"
+  ]
+ },
+ {
+  "case": "AWS key in metadata / user fields",
+  "status": 200,
+  "disposition": "ALLOW",
+  "stages": "canon:E,det:E,sem:E,resolve:E,dispatch:E,out:E,audit:E",
+  "error_code": null,
+  "provider_called": true,
+  "canary_reached_provider": [
+   "AKIAQYLPMN5HHHFPZAM2"
+  ]
+ },
+ {
+  "case": "AWS key split across two user messages",
+  "status": 200,
+  "disposition": "ALLOW",
+  "stages": "canon:E,det:E,sem:E,resolve:E,dispatch:E,out:E,audit:E",
+  "error_code": null,
+  "provider_called": true,
+  "canary_reached_provider": []
+ },
+ {
+  "case": "AWS key split across two text parts of one message",
+  "status": 200,
+  "disposition": "ALLOW",
+  "stages": "canon:E,det:E,sem:E,resolve:E,dispatch:E,out:E,audit:E",
+  "error_code": null,
+  "provider_called": true,
+  "canary_reached_provider": []
+ },
+ {
+  "case": "AWS key percent-encoded once",
+  "status": 403,
+  "disposition": "BLOCK",
+  "stages": "canon:E,det:E,sem:E,resolve:E,dispatch:S,out:S,audit:E",
+  "error_code": "blocked_by_policy",
+  "provider_called": false,
+  "canary_reached_provider": []
+ },
+ {
+  "case": "AWS key percent-encoded twice",
+  "status": 200,
+  "disposition": "ALLOW",
+  "stages": "canon:E,det:E,sem:E,resolve:E,dispatch:E,out:E,audit:E",
+  "error_code": null,
+  "provider_called": true,
+  "canary_reached_provider": []
+ },
+ {
+  "case": "AWS key HTML numeric entities",
+  "status": 200,
+  "disposition": "ALLOW",
+  "stages": "canon:E,det:E,sem:E,resolve:E,dispatch:E,out:E,audit:E",
+  "error_code": null,
+  "provider_called": true,
+  "canary_reached_provider": []
+ },
+ {
+  "case": "AWS key base64",
+  "status": 200,
+  "disposition": "ALLOW",
+  "stages": "canon:E,det:E,sem:E,resolve:E,dispatch:E,out:E,audit:E",
+  "error_code": null,
+  "provider_called": true,
+  "canary_reached_provider": []
+ },
+ {
+  "case": "AWS key fullwidth (NFKC folds)",
+  "status": 403,
+  "disposition": "BLOCK",
+  "stages": "canon:E,det:E,sem:E,resolve:E,dispatch:S,out:S,audit:E",
+  "error_code": "blocked_by_policy",
+  "provider_called": false,
+  "canary_reached_provider": []
+ },
+ {
+  "case": "AWS key zero-width interleaved",
+  "status": 403,
+  "disposition": "BLOCK",
+  "stages": "canon:E,det:E,sem:E,resolve:E,dispatch:S,out:S,audit:E",
+  "error_code": "blocked_by_policy",
+  "provider_called": false,
+  "canary_reached_provider": []
+ },
+ {
+  "case": "AWS key with Cyrillic homoglyph A/K/I (confusable)",
+  "status": 200,
+  "disposition": "ALLOW",
+  "stages": "canon:E,det:E,sem:E,resolve:E,dispatch:E,out:E,audit:E",
+  "error_code": null,
+  "provider_called": true,
+  "canary_reached_provider": []
+ },
+ {
+  "case": "AWS key with RTL override wrapper",
+  "status": 200,
+  "disposition": "ALLOW",
+  "stages": "canon:E,det:E,sem:E,resolve:E,dispatch:E,out:E,audit:E",
+  "error_code": null,
+  "provider_called": true,
+  "canary_reached_provider": []
+ },
+ {
+  "case": "AWS key JSON \\u escapes (orjson decodes)",
+  "status": 403,
+  "disposition": "BLOCK",
+  "stages": "canon:E,det:E,sem:E,resolve:E,dispatch:S,out:S,audit:E",
+  "error_code": "blocked_by_policy",
+  "provider_called": false,
+  "canary_reached_provider": []
+ },
+ {
+  "case": "email obfuscated ' at ' / ' dot '",
+  "status": 200,
+  "disposition": "ALLOW",
+  "stages": "canon:E,det:E,sem:E,resolve:E,dispatch:E,out:E,audit:E",
+  "error_code": null,
+  "provider_called": true,
+  "canary_reached_provider": []
+ },
+ {
+  "case": "injection with Cyrillic homoglyphs",
+  "status": 200,
+  "disposition": "ALLOW",
+  "stages": "canon:E,det:E,sem:E,resolve:E,dispatch:E,out:E,audit:E",
+  "error_code": null,
+  "provider_called": true,
+  "canary_reached_provider": []
+ },
+ {
+  "case": "injection with zero-width joiners inside words",
+  "status": 403,
+  "disposition": "BLOCK",
+  "stages": "canon:E,det:E,sem:E,resolve:E,dispatch:S,out:S,audit:E",
+  "error_code": "blocked_by_policy",
+  "provider_called": false,
+  "canary_reached_provider": []
+ },
+ {
+  "case": "injection in system role (operator prompt)",
+  "status": 403,
+  "disposition": "BLOCK",
+  "stages": "canon:E,det:E,sem:E,resolve:E,dispatch:S,out:S,audit:E",
+  "error_code": "blocked_by_policy",
+  "provider_called": false,
+  "canary_reached_provider": []
+ }
+]

@@ -1,0 +1,31 @@
+## empty-org -> "default" coercions in gateway runtime (BASELINE, non-test)
+rate_limiter.py:142:        scope = org_slug or "default"
+vector_routes.py:647:        org_slug = middleware_auth.org_slug if middleware_auth else "default"
+mcp_stdio_adapter.py:414:    org_slug = key.split("/")[0] if "/" in key else "default"
+circuit_breaker.py:139:        slug = (org_slug or "default").strip() or "default"
+circuit_breaker.py:149:        slug = (org_slug or "default").strip() or "default"
+circuit_breaker.py:199:                "org_slug": (org_slug or "default").strip() or "default",
+kill_switch.py:49:    prefix = org_slug or "default"
+tests/test_mcp_sandbox_adversarial.py:730:    safe = re.sub(r"[^a-zA-Z0-9_.-]", "-", org_slug).strip("-") or "default"
+main.py:1499:            POLICY_SYNC.get_policies(org_slug or "default"), "pipeline"
+main.py:1581:    base = str(pid) if pid else "default"
+main.py:4409:        org_slug=org_slug or "default",
+main.py:4446:        org_slug or "default",
+main.py:4476:                org_slug=org_slug or "default",
+main.py:4779:            ms = await _cms(REDIS_CLIENT, name, org_slug or "default")
+main.py:4840:            ms = await _cms(REDIS_CLIENT, model, org_slug or "default")
+main.py:8054:                        _tgt_ms = await _cms_g6(REDIS_CLIENT, compliant_model, org_slug=org_slug or "default")
+main.py:8150:            ms_verdict = await check_model_state(REDIS_CLIENT, requested_model, org_slug=org_slug or "default")
+main.py:8216:                            REDIS_CLIENT, compliant_model, org_slug=org_slug or "default",
+main.py:10573:                            org_slug or "default", requested_model
+main.py:10716:                await CIRCUIT_BREAKER.record_error(requested_model, org_slug=org_slug or "default")
+main.py:10729:                composite = await record_risk_event(REDIS_CLIENT, requested_model, org_slug or "default", risk_val, "circuit_breaker")
+main.py:10742:                await check_auto_isolate(REDIS_CLIENT, requested_model, org_slug or "default", composite, ms_threshold, ms_action)
+main.py:10785:            await CIRCUIT_BREAKER.record_success(requested_model, org_slug=org_slug or "default")
+main.py:10934:                    composite = await record_risk_event(REDIS_CLIENT, body.get("model", ""), org_slug or "default", getattr(output_verdict, 'confidence', 0.90), "output_guard")
+main.py:10944:                    await check_auto_isolate(REDIS_CLIENT, body.get("model", ""), org_slug or "default", composite, ms_threshold)
+main.py:12476:    org_slug = getattr(auth_ctx, "org_slug", "") or "default"
+main.py:12954:            _emb_ms = await _cms_emb(REDIS_CLIENT, requested_model, org_slug=org_slug or "default")
+main.py:13398:            _ms = await _cms_rag(REDIS_CLIENT, _m, org_slug=org_slug or "default")
+main.py:16751:        org_slug=auth_ctx.org_slug or "default",
+rag_pipeline/pipeline.py:494:        slug = (org_slug or "").strip() or "default"

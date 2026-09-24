@@ -1,0 +1,107 @@
+## cwd: /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/micro-claims/claim2/a/scratch
+## cmd: CLAIM2A_NO_SHIM=0 PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=$B/gateway:$B/shared:$E:$E/pydeps:$E/scratch /home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/bin/python -m pytest $B/gateway/ai_mesh_gateway/tests/test_openai_sdk_compat.py -p envprobe_plugin -p claim2a_pytest_shim -p no:cacheprovider --rootdir=$B/gateway -c $B/gateway/pyproject.toml -k 'test_non_streaming_parses_as_chat_completion or test_streaming_chunks_trace_frame_and_done or test_blocked_request_raises_api_status_error_with_zeroshield_body or test_blocked_streaming_request_raises_before_sse' -q -rA
+[probe] import-time AWS* names: []
+[claim2a] shim: llm_router (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py): injected looks_like_display_alias, looks_like_provider_model_id, catalog_row_is_display_alias
+[claim2a] shim: ai_mesh_gateway.llm_router (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py): injected looks_like_display_alias, looks_like_provider_model_id, catalog_row_is_display_alias
+[probe] configure AWS* names: ['AWS_CONFIG_FILE', 'AWS_DEFAULT_REGION', 'AWS_EC2_METADATA_DISABLED', 'AWS_SHARED_CREDENTIALS_FILE']
+..FF                                                                     [100%]
+[claim2a] blocked network attempts: 0
+[probe] finish AWS* names: ['AWS_CONFIG_FILE', 'AWS_DEFAULT_REGION', 'AWS_EC2_METADATA_DISABLED', 'AWS_SHARED_CREDENTIALS_FILE']
+
+=================================== FAILURES ===================================
+______ test_blocked_request_raises_api_status_error_with_zeroshield_body _______
+
+sdk_client = <openai.AsyncOpenAI object at 0x77825353bd90>
+
+    @pytest.mark.asyncio
+    async def test_blocked_request_raises_api_status_error_with_zeroshield_body(sdk_client):
+>       with pytest.raises(openai.APIStatusError) as excinfo:
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE <class 'openai.APIStatusError'>
+
+../../../../../baseline-2a657fad/gateway/ai_mesh_gateway/tests/test_openai_sdk_compat.py:322: Failed
+---------------------------- Captured stderr setup -----------------------------
+[probe] setup test_blocked_request_raises_api_status_error_with_zeroshield_body ['AWS_CONFIG_FILE', 'AWS_DEFAULT_REGION', 'AWS_EC2_METADATA_DISABLED', 'AWS_SHARED_CREDENTIALS_FILE']
+2026-09-23 11:35:52,953 [INFO] gateway.bedrock_client: BedrockClient initialized: model=zeroshield-guard, region=[region], timeout=60.0s, max_pool_connections=10000, aws_key_prefix=(not set)
+2026-09-23 11:35:52,953 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+------------------------------ Captured log setup ------------------------------
+INFO     gateway.bedrock_client:bedrock_client.py:249 BedrockClient initialized: model=zeroshield-guard, region=[region], timeout=60.0s, max_pool_connections=10000, aws_key_prefix=(not set)
+INFO     gateway.scanner:scanner.py:1150 InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+----------------------------- Captured stderr call -----------------------------
+2026-09-23 11:35:52,957 [INFO] gateway: Token usage: <MagicMock name='mock.extract_usage()' id='131401626219056'> (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+------------------------------ Captured log call -------------------------------
+INFO     gateway:main.py:11594 Token usage: <MagicMock name='mock.extract_usage()' id='131401626219056'> (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+_______________ test_blocked_streaming_request_raises_before_sse _______________
+
+sdk_client = <openai.AsyncOpenAI object at 0x77825075c770>
+
+    @pytest.mark.asyncio
+    async def test_blocked_streaming_request_raises_before_sse(sdk_client):
+        """Input blocks on stream=True return JSON 400 (never an SSE body)."""
+>       with pytest.raises(openai.APIStatusError) as excinfo:
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE <class 'openai.APIStatusError'>
+
+../../../../../baseline-2a657fad/gateway/ai_mesh_gateway/tests/test_openai_sdk_compat.py:360: Failed
+---------------------------- Captured stderr setup -----------------------------
+[probe] setup test_blocked_streaming_request_raises_before_sse ['AWS_CONFIG_FILE', 'AWS_DEFAULT_REGION', 'AWS_EC2_METADATA_DISABLED', 'AWS_SHARED_CREDENTIALS_FILE']
+2026-09-23 11:35:53,036 [INFO] gateway.bedrock_client: BedrockClient initialized: model=zeroshield-guard, region=[region], timeout=60.0s, max_pool_connections=10000, aws_key_prefix=(not set)
+2026-09-23 11:35:53,036 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+------------------------------ Captured log setup ------------------------------
+INFO     gateway.bedrock_client:bedrock_client.py:249 BedrockClient initialized: model=zeroshield-guard, region=[region], timeout=60.0s, max_pool_connections=10000, aws_key_prefix=(not set)
+INFO     gateway.scanner:scanner.py:1150 InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+=============================== warnings summary ===============================
+ai_mesh_gateway/tests/test_openai_sdk_compat.py::test_non_streaming_parses_as_chat_completion
+  /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py:6350: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("startup")
+
+ai_mesh_gateway/tests/test_openai_sdk_compat.py::test_non_streaming_parses_as_chat_completion
+ai_mesh_gateway/tests/test_openai_sdk_compat.py::test_non_streaming_parses_as_chat_completion
+  /home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/fastapi/applications.py:4598: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    return self.router.on_event(event_type)  # ty: ignore[deprecated]
+
+ai_mesh_gateway/tests/test_openai_sdk_compat.py::test_non_streaming_parses_as_chat_completion
+  /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py:6881: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("shutdown")
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+==================================== PASSES ====================================
+_________________ test_non_streaming_parses_as_chat_completion _________________
+---------------------------- Captured stderr setup -----------------------------
+[probe] setup test_non_streaming_parses_as_chat_completion ['AWS_CONFIG_FILE', 'AWS_DEFAULT_REGION', 'AWS_EC2_METADATA_DISABLED', 'AWS_SHARED_CREDENTIALS_FILE']
+2026-09-23 11:35:51,943 [WARNING] gateway.bedrock_scanner: TIER2_PROVIDER=bedrock: Tier-2 inference still uses Bedrock Converse (legacy). Set TIER2_PROVIDER=gemini to use the Gemini Developer API.
+2026-09-23 11:35:51,977 [INFO] gateway.bedrock_client: BedrockClient initialized: model=zeroshield-guard, region=[region], timeout=60.0s, max_pool_connections=10000, aws_key_prefix=(not set)
+2026-09-23 11:35:51,977 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+----------------------------- Captured stderr call -----------------------------
+2026-09-23 11:35:52,268 [INFO] gateway: Token usage: <MagicMock name='mock.extract_usage()' id='131401595949072'> (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+------------------------------ Captured log call -------------------------------
+INFO     gateway:main.py:11594 Token usage: <MagicMock name='mock.extract_usage()' id='131401595949072'> (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+__________________ test_streaming_chunks_trace_frame_and_done __________________
+---------------------------- Captured stderr setup -----------------------------
+[probe] setup test_streaming_chunks_trace_frame_and_done ['AWS_CONFIG_FILE', 'AWS_DEFAULT_REGION', 'AWS_EC2_METADATA_DISABLED', 'AWS_SHARED_CREDENTIALS_FILE']
+2026-09-23 11:35:52,936 [INFO] gateway.bedrock_client: BedrockClient initialized: model=zeroshield-guard, region=[region], timeout=60.0s, max_pool_connections=10000, aws_key_prefix=(not set)
+2026-09-23 11:35:52,936 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+------------------------------ Captured log setup ------------------------------
+INFO     gateway.bedrock_client:bedrock_client.py:249 BedrockClient initialized: model=zeroshield-guard, region=[region], timeout=60.0s, max_pool_connections=10000, aws_key_prefix=(not set)
+INFO     gateway.scanner:scanner.py:1150 InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+=========================== short test summary info ============================
+PASSED ../../../../../baseline-2a657fad/gateway/ai_mesh_gateway/tests/test_openai_sdk_compat.py::test_non_streaming_parses_as_chat_completion
+PASSED ../../../../../baseline-2a657fad/gateway/ai_mesh_gateway/tests/test_openai_sdk_compat.py::test_streaming_chunks_trace_frame_and_done
+FAILED ../../../../../baseline-2a657fad/gateway/ai_mesh_gateway/tests/test_openai_sdk_compat.py::test_blocked_request_raises_api_status_error_with_zeroshield_body
+FAILED ../../../../../baseline-2a657fad/gateway/ai_mesh_gateway/tests/test_openai_sdk_compat.py::test_blocked_streaming_request_raises_before_sse
+2 failed, 2 passed, 44 deselected, 4 warnings in 1.43s

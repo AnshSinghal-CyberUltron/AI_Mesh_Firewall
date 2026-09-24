@@ -1,0 +1,1 @@
+{"ready":false,"guard":{"ready":false,"backend":"remote(owner)","model_hash":"2bf20e0f71e3a41e9e8cc4e602e08c142855bcce0cc73e0b65000d816d70877c","detail":"owners 0/1 connected, starting: 127.0.0.1:7070 DOWN (ConnectionRefusedError: [Errno 111] Connection refused)","error":null},"plans_loaded":true,"plans_fresh":true,"killswitch":"ok","worker":1}

@@ -1,0 +1,174 @@
+{
+ "run": "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/v1-bench/runs/D-r10",
+ "mode": "direct",
+ "offered": 3000,
+ "phase_counts": {
+  "0": 150,
+  "1": 600,
+  "2": 3000
+ },
+ "provider_records": 3750,
+ "categories": {
+  "qualified": 3000
+ },
+ "infra_reasons": {},
+ "PUB_T_fw_addon": {
+  "n": 3000,
+  "n_inf": 0,
+  "p50": 0.365,
+  "p90": 0.687,
+  "p99": 0.914,
+  "p999": 1.044,
+  "max_finite": 1.599,
+  "mean_finite": 0.411
+ },
+ "PUB_sse": {
+  "n": 2100,
+  "n_inf": 0,
+  "p50": 0.37,
+  "p90": 0.708,
+  "p99": 0.923,
+  "p999": 1.072,
+  "max_finite": 1.599,
+  "mean_finite": 0.419
+ },
+ "PUB_json": {
+  "n": 900,
+  "n_inf": 0,
+  "p50": 0.353,
+  "p90": 0.627,
+  "p99": 0.824,
+  "p999": 1.044,
+  "max_finite": 1.044,
+  "mean_finite": 0.393
+ },
+ "PUB_nohold_T_addon_total": {
+  "n": 3000,
+  "n_inf": 0,
+  "p50": 0.289,
+  "p90": 0.557,
+  "p99": 0.794,
+  "p999": 0.961,
+  "max_finite": 1.579,
+  "mean_finite": 0.33
+ },
+ "PUB_first_byte_sse": {
+  "n": 2100,
+  "n_inf": 0,
+  "p50": 0.291,
+  "p90": 0.589,
+  "p99": 0.846,
+  "p999": 1.019,
+  "max_finite": 1.599,
+  "mean_finite": 0.341
+ },
+ "C_T_fw_addon": {
+  "n": 3000,
+  "n_inf": 0,
+  "p50": 0.365,
+  "p90": 0.687,
+  "p99": 0.914,
+  "p999": 1.044,
+  "max_finite": 1.599,
+  "mean_finite": 0.411
+ },
+ "C_nohold": {
+  "n": 3000,
+  "n_inf": 0,
+  "p50": 0.289,
+  "p90": 0.557,
+  "p99": 0.794,
+  "p999": 0.961,
+  "max_finite": 1.579,
+  "mean_finite": 0.33
+ },
+ "ABC_T_fw_addon": {
+  "n": 302,
+  "n_inf": 0,
+  "p50": 0.676,
+  "p90": 0.877,
+  "p99": 1.04,
+  "p999": 1.104,
+  "max_finite": 1.104,
+  "mean_finite": 0.623
+ },
+ "ABC_sse": {
+  "n": 208,
+  "n_inf": 0,
+  "p50": 0.739,
+  "p90": 0.905,
+  "p99": 1.044,
+  "p999": 1.104,
+  "max_finite": 1.104,
+  "mean_finite": 0.722
+ },
+ "ABC_json": {
+  "n": 94,
+  "n_inf": 0,
+  "p50": 0.351,
+  "p90": 0.675,
+  "p99": 0.867,
+  "p999": 0.867,
+  "max_finite": 0.867,
+  "mean_finite": 0.403
+ },
+ "ABC_nohold": {
+  "n": 302,
+  "n_inf": 0,
+  "p50": 0.291,
+  "p90": 0.568,
+  "p99": 0.756,
+  "p999": 0.867,
+  "max_finite": 0.867,
+  "mean_finite": 0.334
+ },
+ "sample_first_tok1_sse": {
+  "n": 208,
+  "n_inf": 0,
+  "p50": 0.294,
+  "p90": 0.561,
+  "p99": 0.801,
+  "p999": 0.914,
+  "max_finite": 0.914,
+  "mean_finite": 0.33
+ },
+ "sample_first_byte_sse": {
+  "n": 208,
+  "n_inf": 0,
+  "p50": 0.294,
+  "p90": 0.561,
+  "p99": 0.801,
+  "p999": 0.914,
+  "max_finite": 0.914,
+  "mean_finite": 0.33
+ },
+ "sample_lag": {
+  "n": 208,
+  "n_inf": 0,
+  "p50": 0.739,
+  "p90": 0.905,
+  "p99": 1.044,
+  "p999": 1.104,
+  "max_finite": 1.104,
+  "mean_finite": 0.722
+ },
+ "hdr_addon_sse": {
+  "n": 2100,
+  "n_inf": 0,
+  "p50": 0.313,
+  "p90": 0.611,
+  "p99": 0.869,
+  "p999": 1.041,
+  "max_finite": 1.611,
+  "mean_finite": 0.362
+ },
+ "lone_first_event": {
+  "mappable": 302
+ },
+ "sampled_sse_offered": 208,
+ "sampled_sse_qualified_with_perchunk": 208,
+ "anomalies": {},
+ "blocks_client_total": {
+  "n": 0
+ }
+}

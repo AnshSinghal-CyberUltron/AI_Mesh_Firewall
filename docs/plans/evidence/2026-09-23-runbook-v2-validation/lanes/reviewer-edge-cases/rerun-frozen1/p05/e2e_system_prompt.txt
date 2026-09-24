@@ -1,0 +1,3 @@
+{"user": "What are your opening hours?", "ok": false, "status": 403, "code": "blocked_by_policy"}
+{"user": "How do I reset my card PIN?", "ok": false, "status": 403, "code": "blocked_by_policy"}
+{"user": "Thanks!", "ok": false, "status": 403, "code": "blocked_by_policy"}

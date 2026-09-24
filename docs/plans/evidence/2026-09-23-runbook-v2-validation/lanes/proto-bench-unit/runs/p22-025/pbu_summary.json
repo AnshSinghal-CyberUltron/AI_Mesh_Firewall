@@ -1,0 +1,1183 @@
+{
+ "offered": 7500,
+ "measure_s": 300,
+ "offered_rps": 25.0,
+ "achieved_rps": 25.0,
+ "qualified": 7400,
+ "qualified_rps": 24.67,
+ "policy_block_fp": 100,
+ "policy_block_expected": 0,
+ "fp_rate": 0.01333,
+ "infra_errors": 0,
+ "infra_error_rate": 0.0,
+ "infra_reasons": {},
+ "infra_detail": {},
+ "block_detail": {
+  "type=policy_violation code=blocked_by_policy": 100
+ },
+ "infra_examples": [],
+ "safety_failures": 0,
+ "safety_reasons": {},
+ "safety_examples": [],
+ "detection_misses": 0,
+ "detection_miss_reasons": {},
+ "detection_miss_examples": [],
+ "by_class": {
+  "benign": {
+   "qualified": 7400,
+   "policy_block_fp": 100
+  }
+ },
+ "drops": 0,
+ "lateness": {
+  "n": 7500,
+  "min": 0.0253,
+  "p50": 0.0925,
+  "p90": 0.1083,
+  "p99": 0.1273,
+  "p999": 0.1677,
+  "max": 0.1994,
+  "mean": 0.0933
+ },
+ "T_fw_addon": {
+  "n": 7400,
+  "min": 4.6433,
+  "p50": 9.7026,
+  "p90": 13.9047,
+  "p99": 51.8285,
+  "p999": 70.3591,
+  "max": 89.036,
+  "mean": 11.8577
+ },
+ "T_fw_addon_sse": {
+  "n": 5174,
+  "min": 4.6433,
+  "p50": 9.7713,
+  "p90": 30.6148,
+  "p99": 52.9001,
+  "p999": 70.699,
+  "max": 89.036,
+  "mean": 13.1462
+ },
+ "T_fw_addon_json": {
+  "n": 2226,
+  "min": 4.9309,
+  "p50": 9.5786,
+  "p90": 11.6705,
+  "p99": 14.8937,
+  "p999": 17.7063,
+  "max": 19.1471,
+  "mean": 8.8628
+ },
+ "T_addon_total_sse": {
+  "n": 5174,
+  "min": 4.6433,
+  "p50": 9.4168,
+  "p90": 11.8121,
+  "p99": 14.3529,
+  "p999": 17.3623,
+  "max": 22.362,
+  "mean": 8.8095
+ },
+ "T_addon_total_json": {
+  "n": 2226,
+  "min": 4.9309,
+  "p50": 9.5786,
+  "p90": 11.6705,
+  "p99": 14.8937,
+  "p999": 17.7063,
+  "max": 19.1471,
+  "mean": 8.8628
+ },
+ "T_addon_first_sse": {
+  "n": 5174,
+  "min": 4.5727,
+  "p50": 9.3502,
+  "p90": 12.6389,
+  "p99": 27.2516,
+  "p999": 31.3763,
+  "max": 36.3238,
+  "mean": 9.0217
+ },
+ "T_release_lag_max": {
+  "n": 523,
+  "min": 25.2646,
+  "p50": 49.377,
+  "p90": 52.8877,
+  "p99": 70.699,
+  "p999": 89.036,
+  "max": 89.036,
+  "mean": 48.5973
+ },
+ "release_lag_unmappable": 0,
+ "client_ttft_sse": {
+  "n": 5174,
+  "min": 154.6384,
+  "p50": 159.4033,
+  "p90": 162.6972,
+  "p99": 177.3377,
+  "p999": 181.4174,
+  "max": 186.3382,
+  "mean": 159.0706
+ },
+ "resp_body_bytes_mean": {
+  "sse": 67858.9,
+  "json": 1436.4
+ },
+ "loadgen": [
+  {
+   "vm": "rv-pbu-lg-1",
+   "busy_max": 14.2,
+   "busy_mean": 4.2,
+   "late_max_us": 222,
+   "conn_opens": 74,
+   "max_inflight": 70
+  },
+  {
+   "vm": "rv-pbu-lg-2",
+   "busy_max": 17.6,
+   "busy_mean": 4.2,
+   "late_max_us": 312,
+   "conn_opens": 74,
+   "max_inflight": 70
+  }
+ ],
+ "provider_records": 9246,
+ "provider_cpu_busy_max": 18.091125924174978,
+ "phase_counts": {
+  "0": 375,
+  "1": 1500,
+  "2": 7500
+ },
+ "valid": true,
+ "invalid_reasons": [],
+ "checks": {
+  "p99_T_fw_addon_lt_slo": false,
+  "infra_error_rate_le_budget": true,
+  "zero_schedule_drops": true,
+  "zero_safety_failures": true,
+  "run_valid": true
+ },
+ "pass": false,
+ "T_fw_addon_nohold": {
+  "n": 7400,
+  "min": 4.6433,
+  "p50": 9.4635,
+  "p90": 11.781,
+  "p99": 14.435,
+  "p999": 17.3709,
+  "max": 22.362,
+  "mean": 8.8255
+ },
+ "load_knee_checks": {
+  "p99_T_fw_addon_nohold_lt_slo": true,
+  "infra_error_rate_le_budget": true,
+  "zero_schedule_drops": true,
+  "zero_safety_failures": true,
+  "run_valid": true
+ },
+ "load_knee_pass": true,
+ "per_second": {
+  "90": {
+   "qualified": 25
+  },
+  "91": {
+   "qualified": 25
+  },
+  "92": {
+   "qualified": 25
+  },
+  "93": {
+   "qualified": 25
+  },
+  "94": {
+   "qualified": 25
+  },
+  "95": {
+   "qualified": 25
+  },
+  "96": {
+   "policy_block_fp": 2,
+   "qualified": 23
+  },
+  "97": {
+   "policy_block_fp": 4,
+   "qualified": 21
+  },
+  "98": {
+   "qualified": 25
+  },
+  "99": {
+   "qualified": 25
+  },
+  "100": {
+   "qualified": 25
+  },
+  "101": {
+   "qualified": 25
+  },
+  "102": {
+   "qualified": 25
+  },
+  "103": {
+   "policy_block_fp": 2,
+   "qualified": 23
+  },
+  "104": {
+   "qualified": 25
+  },
+  "105": {
+   "policy_block_fp": 2,
+   "qualified": 23
+  },
+  "106": {
+   "qualified": 25
+  },
+  "107": {
+   "qualified": 25
+  },
+  "108": {
+   "qualified": 25
+  },
+  "109": {
+   "qualified": 25
+  },
+  "110": {
+   "qualified": 25
+  },
+  "111": {
+   "qualified": 25
+  },
+  "112": {
+   "qualified": 25
+  },
+  "113": {
+   "policy_block_fp": 1,
+   "qualified": 24
+  },
+  "114": {
+   "qualified": 24,
+   "policy_block_fp": 1
+  },
+  "115": {
+   "qualified": 25
+  },
+  "116": {
+   "qualified": 25
+  },
+  "117": {
+   "qualified": 25
+  },
+  "118": {
+   "qualified": 25
+  },
+  "119": {
+   "policy_block_fp": 2,
+   "qualified": 23
+  },
+  "120": {
+   "qualified": 25
+  },
+  "121": {
+   "qualified": 25
+  },
+  "122": {
+   "qualified": 25
+  },
+  "123": {
+   "qualified": 25
+  },
+  "124": {
+   "qualified": 25
+  },
+  "125": {
+   "qualified": 25
+  },
+  "126": {
+   "qualified": 25
+  },
+  "127": {
+   "qualified": 25
+  },
+  "128": {
+   "qualified": 25
+  },
+  "129": {
+   "qualified": 25
+  },
+  "130": {
+   "qualified": 25
+  },
+  "131": {
+   "qualified": 25
+  },
+  "132": {
+   "qualified": 25
+  },
+  "133": {
+   "qualified": 25
+  },
+  "134": {
+   "qualified": 25
+  },
+  "135": {
+   "qualified": 25
+  },
+  "136": {
+   "qualified": 25
+  },
+  "137": {
+   "qualified": 25
+  },
+  "138": {
+   "qualified": 25
+  },
+  "139": {
+   "policy_block_fp": 2,
+   "qualified": 23
+  },
+  "140": {
+   "qualified": 25
+  },
+  "141": {
+   "qualified": 25
+  },
+  "142": {
+   "qualified": 25
+  },
+  "143": {
+   "qualified": 25
+  },
+  "144": {
+   "qualified": 25
+  },
+  "145": {
+   "qualified": 25
+  },
+  "146": {
+   "qualified": 25
+  },
+  "147": {
+   "qualified": 25
+  },
+  "148": {
+   "qualified": 25
+  },
+  "149": {
+   "qualified": 25
+  },
+  "150": {
+   "qualified": 25
+  },
+  "151": {
+   "qualified": 25
+  },
+  "152": {
+   "qualified": 25
+  },
+  "153": {
+   "qualified": 25
+  },
+  "154": {
+   "qualified": 25
+  },
+  "155": {
+   "qualified": 25
+  },
+  "156": {
+   "qualified": 25
+  },
+  "157": {
+   "qualified": 25
+  },
+  "158": {
+   "qualified": 25
+  },
+  "159": {
+   "policy_block_fp": 1,
+   "qualified": 24
+  },
+  "160": {
+   "qualified": 24,
+   "policy_block_fp": 1
+  },
+  "161": {
+   "qualified": 25
+  },
+  "162": {
+   "qualified": 25
+  },
+  "163": {
+   "qualified": 25
+  },
+  "164": {
+   "qualified": 25
+  },
+  "165": {
+   "policy_block_fp": 2,
+   "qualified": 23
+  },
+  "166": {
+   "qualified": 25
+  },
+  "167": {
+   "qualified": 25
+  },
+  "168": {
+   "qualified": 25
+  },
+  "169": {
+   "qualified": 25
+  },
+  "170": {
+   "policy_block_fp": 2,
+   "qualified": 23
+  },
+  "171": {
+   "qualified": 25
+  },
+  "172": {
+   "qualified": 25
+  },
+  "173": {
+   "qualified": 25
+  },
+  "174": {
+   "policy_block_fp": 2,
+   "qualified": 23
+  },
+  "175": {
+   "qualified": 25
+  },
+  "176": {
+   "qualified": 25
+  },
+  "177": {
+   "policy_block_fp": 2,
+   "qualified": 23
+  },
+  "178": {
+   "qualified": 25
+  },
+  "179": {
+   "qualified": 25
+  },
+  "180": {
+   "qualified": 25
+  },
+  "181": {
+   "qualified": 25
+  },
+  "182": {
+   "qualified": 25
+  },
+  "183": {
+   "qualified": 25
+  },
+  "184": {
+   "qualified": 25
+  },
+  "185": {
+   "qualified": 25
+  },
+  "186": {
+   "qualified": 25
+  },
+  "187": {
+   "policy_block_fp": 2,
+   "qualified": 23
+  },
+  "188": {
+   "qualified": 25
+  },
+  "189": {
+   "qualified": 25
+  },
+  "190": {
+   "policy_block_fp": 2,
+   "qualified": 23
+  },
+  "191": {
+   "qualified": 25
+  },
+  "192": {
+   "qualified": 25
+  },
+  "193": {
+   "qualified": 25
+  },
+  "194": {
+   "qualified": 25
+  },
+  "195": {
+   "qualified": 25
+  },
+  "196": {
+   "policy_block_fp": 2,
+   "qualified": 23
+  },
+  "197": {
+   "qualified": 25
+  },
+  "198": {
+   "policy_block_fp": 2,
+   "qualified": 23
+  },
+  "199": {
+   "qualified": 25
+  },
+  "200": {
+   "policy_block_fp": 2,
+   "qualified": 23
+  },
+  "201": {
+   "qualified": 25
+  },
+  "202": {
+   "qualified": 25
+  },
+  "203": {
+   "qualified": 25
+  },
+  "204": {
+   "qualified": 25
+  },
+  "205": {
+   "qualified": 25
+  },
+  "206": {
+   "qualified": 25
+  },
+  "207": {
+   "qualified": 25
+  },
+  "208": {
+   "qualified": 25
+  },
+  "209": {
+   "qualified": 25
+  },
+  "210": {
+   "qualified": 25
+  },
+  "211": {
+   "qualified": 25
+  },
+  "212": {
+   "qualified": 25
+  },
+  "213": {
+   "qualified": 25
+  },
+  "214": {
+   "qualified": 25
+  },
+  "215": {
+   "qualified": 25
+  },
+  "216": {
+   "qualified": 25
+  },
+  "217": {
+   "qualified": 25
+  },
+  "218": {
+   "qualified": 25
+  },
+  "219": {
+   "policy_block_fp": 2,
+   "qualified": 23
+  },
+  "220": {
+   "qualified": 25
+  },
+  "221": {
+   "qualified": 25
+  },
+  "222": {
+   "qualified": 25
+  },
+  "223": {
+   "qualified": 25
+  },
+  "224": {
+   "qualified": 25
+  },
+  "225": {
+   "qualified": 25
+  },
+  "226": {
+   "qualified": 25
+  },
+  "227": {
+   "qualified": 25
+  },
+  "228": {
+   "qualified": 25
+  },
+  "229": {
+   "qualified": 25
+  },
+  "230": {
+   "qualified": 25
+  },
+  "231": {
+   "qualified": 25
+  },
+  "232": {
+   "policy_block_fp": 2,
+   "qualified": 23
+  },
+  "233": {
+   "qualified": 25
+  },
+  "234": {
+   "qualified": 25
+  },
+  "235": {
+   "qualified": 25
+  },
+  "236": {
+   "qualified": 25
+  },
+  "237": {
+   "policy_block_fp": 2,
+   "qualified": 23
+  },
+  "238": {
+   "qualified": 25
+  },
+  "239": {
+   "qualified": 25
+  },
+  "240": {
+   "qualified": 25
+  },
+  "241": {
+   "qualified": 25
+  },
+  "242": {
+   "qualified": 25
+  },
+  "243": {
+   "qualified": 25
+  },
+  "244": {
+   "qualified": 25
+  },
+  "245": {
+   "qualified": 25
+  },
+  "246": {
+   "qualified": 25
+  },
+  "247": {
+   "qualified": 25
+  },
+  "248": {
+   "policy_block_fp": 2,
+   "qualified": 23
+  },
+  "249": {
+   "qualified": 25
+  },
+  "250": {
+   "qualified": 25
+  },
+  "251": {
+   "qualified": 25
+  },
+  "252": {
+   "qualified": 25
+  },
+  "253": {
+   "qualified": 25
+  },
+  "254": {
+   "qualified": 25
+  },
+  "255": {
+   "qualified": 25
+  },
+  "256": {
+   "policy_block_fp": 2,
+   "qualified": 23
+  },
+  "257": {
+   "qualified": 25
+  },
+  "258": {
+   "policy_block_fp": 2,
+   "qualified": 23
+  },
+  "259": {
+   "qualified": 25
+  },
+  "260": {
+   "qualified": 25
+  },
+  "261": {
+   "qualified": 25
+  },
+  "262": {
+   "qualified": 25
+  },
+  "263": {
+   "qualified": 25
+  },
+  "264": {
+   "qualified": 25
+  },
+  "265": {
+   "qualified": 25
+  },
+  "266": {
+   "qualified": 25
+  },
+  "267": {
+   "qualified": 25
+  },
+  "268": {
+   "qualified": 25
+  },
+  "269": {
+   "qualified": 25
+  },
+  "270": {
+   "qualified": 25
+  },
+  "271": {
+   "qualified": 25
+  },
+  "272": {
+   "qualified": 25
+  },
+  "273": {
+   "policy_block_fp": 1,
+   "qualified": 24
+  },
+  "274": {
+   "qualified": 24,
+   "policy_block_fp": 1
+  },
+  "275": {
+   "qualified": 25
+  },
+  "276": {
+   "qualified": 25
+  },
+  "277": {
+   "policy_block_fp": 2,
+   "qualified": 23
+  },
+  "278": {
+   "qualified": 25
+  },
+  "279": {
+   "policy_block_fp": 2,
+   "qualified": 23
+  },
+  "280": {
+   "policy_block_fp": 2,
+   "qualified": 23
+  },
+  "281": {
+   "policy_block_fp": 2,
+   "qualified": 23
+  },
+  "282": {
+   "qualified": 25
+  },
+  "283": {
+   "qualified": 25
+  },
+  "284": {
+   "qualified": 25
+  },
+  "285": {
+   "policy_block_fp": 2,
+   "qualified": 23
+  },
+  "286": {
+   "qualified": 25
+  },
+  "287": {
+   "qualified": 25
+  },
+  "288": {
+   "qualified": 25
+  },
+  "289": {
+   "policy_block_fp": 2,
+   "qualified": 23
+  },
+  "290": {
+   "qualified": 25
+  },
+  "291": {
+   "qualified": 25
+  },
+  "292": {
+   "policy_block_fp": 2,
+   "qualified": 23
+  },
+  "293": {
+   "qualified": 25
+  },
+  "294": {
+   "qualified": 25
+  },
+  "295": {
+   "qualified": 25
+  },
+  "296": {
+   "qualified": 25
+  },
+  "297": {
+   "qualified": 25
+  },
+  "298": {
+   "policy_block_fp": 3,
+   "qualified": 22
+  },
+  "299": {
+   "policy_block_fp": 2,
+   "qualified": 23
+  },
+  "300": {
+   "policy_block_fp": 2,
+   "qualified": 23
+  },
+  "301": {
+   "qualified": 25
+  },
+  "302": {
+   "policy_block_fp": 2,
+   "qualified": 23
+  },
+  "303": {
+   "qualified": 25
+  },
+  "304": {
+   "qualified": 25
+  },
+  "305": {
+   "qualified": 25
+  },
+  "306": {
+   "qualified": 25
+  },
+  "307": {
+   "policy_block_fp": 2,
+   "qualified": 23
+  },
+  "308": {
+   "qualified": 25
+  },
+  "309": {
+   "qualified": 25
+  },
+  "310": {
+   "qualified": 25
+  },
+  "311": {
+   "policy_block_fp": 1,
+   "qualified": 24
+  },
+  "312": {
+   "qualified": 24,
+   "policy_block_fp": 1
+  },
+  "313": {
+   "qualified": 25
+  },
+  "314": {
+   "qualified": 25
+  },
+  "315": {
+   "qualified": 25
+  },
+  "316": {
+   "policy_block_fp": 2,
+   "qualified": 23
+  },
+  "317": {
+   "policy_block_fp": 2,
+   "qualified": 23
+  },
+  "318": {
+   "policy_block_fp": 2,
+   "qualified": 23
+  },
+  "319": {
+   "qualified": 25
+  },
+  "320": {
+   "qualified": 25
+  },
+  "321": {
+   "qualified": 25
+  },
+  "322": {
+   "qualified": 25
+  },
+  "323": {
+   "qualified": 25
+  },
+  "324": {
+   "qualified": 25
+  },
+  "325": {
+   "policy_block_fp": 2,
+   "qualified": 23
+  },
+  "326": {
+   "qualified": 25
+  },
+  "327": {
+   "policy_block_fp": 2,
+   "qualified": 23
+  },
+  "328": {
+   "qualified": 25
+  },
+  "329": {
+   "qualified": 25
+  },
+  "330": {
+   "qualified": 25
+  },
+  "331": {
+   "qualified": 25
+  },
+  "332": {
+   "policy_block_fp": 2,
+   "qualified": 23
+  },
+  "333": {
+   "qualified": 25
+  },
+  "334": {
+   "policy_block_fp": 2,
+   "qualified": 23
+  },
+  "335": {
+   "qualified": 25
+  },
+  "336": {
+   "qualified": 25
+  },
+  "337": {
+   "qualified": 25
+  },
+  "338": {
+   "qualified": 25
+  },
+  "339": {
+   "qualified": 25
+  },
+  "340": {
+   "policy_block_fp": 2,
+   "qualified": 23
+  },
+  "341": {
+   "qualified": 25
+  },
+  "342": {
+   "qualified": 25
+  },
+  "343": {
+   "qualified": 25
+  },
+  "344": {
+   "qualified": 25
+  },
+  "345": {
+   "qualified": 25
+  },
+  "346": {
+   "qualified": 25
+  },
+  "347": {
+   "qualified": 25
+  },
+  "348": {
+   "qualified": 25
+  },
+  "349": {
+   "qualified": 25
+  },
+  "350": {
+   "qualified": 25
+  },
+  "351": {
+   "qualified": 25
+  },
+  "352": {
+   "qualified": 25
+  },
+  "353": {
+   "qualified": 25
+  },
+  "354": {
+   "qualified": 25
+  },
+  "355": {
+   "policy_block_fp": 3,
+   "qualified": 22
+  },
+  "356": {
+   "qualified": 25
+  },
+  "357": {
+   "qualified": 25
+  },
+  "358": {
+   "qualified": 25
+  },
+  "359": {
+   "qualified": 25
+  },
+  "360": {
+   "qualified": 25
+  },
+  "361": {
+   "qualified": 25
+  },
+  "362": {
+   "qualified": 25
+  },
+  "363": {
+   "qualified": 25
+  },
+  "364": {
+   "qualified": 25
+  },
+  "365": {
+   "qualified": 25
+  },
+  "366": {
+   "qualified": 25
+  },
+  "367": {
+   "qualified": 25
+  },
+  "368": {
+   "qualified": 25
+  },
+  "369": {
+   "qualified": 25
+  },
+  "370": {
+   "qualified": 25
+  },
+  "371": {
+   "qualified": 25
+  },
+  "372": {
+   "qualified": 25
+  },
+  "373": {
+   "policy_block_fp": 2,
+   "qualified": 23
+  },
+  "374": {
+   "qualified": 25
+  },
+  "375": {
+   "qualified": 25
+  },
+  "376": {
+   "qualified": 25
+  },
+  "377": {
+   "policy_block_fp": 2,
+   "qualified": 23
+  },
+  "378": {
+   "qualified": 25
+  },
+  "379": {
+   "qualified": 25
+  },
+  "380": {
+   "qualified": 25
+  },
+  "381": {
+   "qualified": 25
+  },
+  "382": {
+   "qualified": 25
+  },
+  "383": {
+   "qualified": 25
+  },
+  "384": {
+   "qualified": 25
+  },
+  "385": {
+   "qualified": 25
+  },
+  "386": {
+   "qualified": 25
+  },
+  "387": {
+   "qualified": 25
+  },
+  "388": {
+   "qualified": 25
+  },
+  "389": {
+   "qualified": 25
+  }
+ },
+ "wire": {
+  "loadgens": {
+   "requests_all_phases": 9375,
+   "ip_in_octets": 533369804,
+   "ip_out_octets": 86069077,
+   "nic_rx_bytes": 0,
+   "nic_tx_bytes": 0,
+   "ip_in_per_req": 56892.8,
+   "ip_out_per_req": 9180.7
+  },
+  "provider": {
+   "requests_all_phases": 9246,
+   "ip_in_octets": 91507455,
+   "ip_out_octets": 539476533,
+   "nic_rx_bytes": 0,
+   "nic_tx_bytes": 0,
+   "ip_in_per_req": 9897.0,
+   "ip_out_per_req": 58347.0
+  },
+  "per_client_request": {
+   "client_to_gw": 9180.7,
+   "gw_to_client": 56892.8,
+   "gw_to_provider": 9760.8,
+   "provider_to_gw": 57544.2
+  }
+ },
+ "sut": {
+  "missing": "unit sampler did not run (see unit/sampler.log)",
+  "sampler_log": "  File \"/home/rv/rv/unit_sampler.py\", line 163\n    global METRICS\n    ^^^^^^^^^^^^^^\nSyntaxError: name 'METRICS' is used prior to global declaration\n"
+ },
+ "step": {
+  "run": "p22-025",
+  "rate": 25,
+  "mode": "sut",
+  "corpus": "headline-22M.jsonl",
+  "targets": "http://10.160.0.46:8400",
+  "auth": "auth-a",
+  "prov_flags": "-ttft 150ms -itl 20ms",
+  "olg_flags": "-corpus /home/rv/rv/corpora/headline-22M.jsonl -ramp 30 -warmup 60 -duration 300 -sse-frac 0.7 -auth-file /home/rv/rv/auth-a ",
+  "lgs": "rv-pbu-lg-1 rv-pbu-lg-2",
+  "prov": "rv-pbu-prov-1",
+  "unit": "rv-proto-unit-1",
+  "label": "primary",
+  "created_utc": "2026-09-23T12:09:01Z"
+ },
+ "tool": {
+  "pbu_analyze": "pbu_analyze.py",
+  "harness_analyze_sha": null
+ }
+}

@@ -1,0 +1,101 @@
+--- /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-bench-unit/rvproto-exp-flag/sp-before/rvproto/runtime/config.py	2026-09-23 17:15:38.925134543 +0530
++++ rvproto/runtime/config.py	2026-09-23 17:26:27.900374574 +0530
+@@ -49,6 +49,9 @@
+     ("RV_LEASE_CHUNK_TOKENS", ""),  # empty => contract-derived; set => logged deviation
+     ("RV_GUARD_TOPOLOGY", "in_process"),  # in_process (PROTO_SPEC) | owner (per GPU) | remote (split)
+     ("RV_GUARD_SOCKET_DIR", ""),  # empty => $XDG_RUNTIME_DIR/rv-guard-<port> (sun_path is 108 bytes)
++    # EXPERIMENT (proto-bench-unit holdback attribution only): off = the output phase
++    # scans and holds nothing (stage reported out:S). Never a production posture.
++    ("RV_EXP_OUTPUT_SCAN", "on"),
+     ("RV_GUARD_OWNER_LISTEN", "unix"),  # owners: `unix` and/or `tcp://HOST:PORT` (owner i binds PORT+i)
+     ("RV_GUARD_OWNER_ADDRS", ""),  # remote: host:port of EVERY owner the workers may use
+     ("RV_GUARD_FLEET_WORKERS", ""),  # remote: workers fleet-wide sharing those owners (empty => this node's)
+@@ -97,6 +100,7 @@
+     lease_chunk_tokens: int | None
+     guard_topology: str
+     guard_socket_dir: str
++    exp_output_scan: bool
+     guard_owner_listen_unix: bool
+     guard_owner_listen_tcp: tuple[str, int] | None
+     guard_owner_addrs: tuple[tuple[str, int], ...]
+@@ -186,6 +190,7 @@
+         lease_chunk_tokens=int(get["RV_LEASE_CHUNK_TOKENS"]) if get["RV_LEASE_CHUNK_TOKENS"].strip() else None,
+         guard_topology=get["RV_GUARD_TOPOLOGY"],
+         guard_socket_dir=get["RV_GUARD_SOCKET_DIR"] or _socket_dir(src, get["RV_PORT"]),
++        exp_output_scan=get["RV_EXP_OUTPUT_SCAN"].strip().lower() != "off",
+         guard_owner_listen_unix=listen_unix,
+         guard_owner_listen_tcp=listen_tcp,
+         guard_owner_addrs=tuple(_hostport(a) for a in get["RV_GUARD_OWNER_ADDRS"].split(",") if a.strip()),
+@@ -193,6 +198,8 @@
+         worker_index=int(src.get("RV_WORKER_INDEX", "0")),
+         defaulted=defaulted,
+     )
++    if get["RV_EXP_OUTPUT_SCAN"].strip().lower() not in ("on", "off"):
++        raise ValueError(f"RV_EXP_OUTPUT_SCAN={get['RV_EXP_OUTPUT_SCAN']!r} (on | off)")
+     if s.guard_topology not in ("in_process", "owner", "remote"):
+         raise ValueError(f"RV_GUARD_TOPOLOGY={s.guard_topology!r} (in_process | owner | remote)")
+     if s.guard_topology == "remote" and not s.guard_owner_addrs:
+--- /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-bench-unit/rvproto-exp-flag/sp-before/rvproto/edge/inspect.py	2026-09-23 11:29:03.731853656 +0530
++++ rvproto/edge/inspect.py	2026-09-23 17:26:27.900447770 +0530
+@@ -40,6 +40,20 @@
+         return hold_start(buf)
+ 
+ 
++class NoScanInspector(PlanInspector):
++    """EXPERIMENT ONLY (RV_EXP_OUTPUT_SCAN=off; proto-bench-unit holdback attribution): the
++    output phase detects nothing and holds nothing, so every upstream piece is released as it
++    arrives. Responses report the stage as out:S (skipped). Never a production posture."""
++
++    __slots__ = ()
++
++    def hits(self, text: str) -> list[Hit]:
++        return []
++
++    def hold_start(self, buf: str) -> int:
++        return len(buf)
++
++
+ class Verifier:
+     """PayloadVerifier: canonicalize + the same matcher, on the transformed texts."""
+ 
+--- /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-bench-unit/rvproto-exp-flag/sp-before/rvproto/edge/state.py	2026-09-23 17:17:45.400597382 +0530
++++ rvproto/edge/state.py	2026-09-23 17:26:27.900515717 +0530
+@@ -23,7 +23,7 @@
+ from rvproto.detect.matcher import Matcher
+ from rvproto.detect.semantic import SemanticDetector
+ from rvproto.dispatch.provider import ProviderClient
+-from rvproto.edge.inspect import PlanInspector, Verifier
++from rvproto.edge.inspect import NoScanInspector, PlanInspector, Verifier
+ from rvproto.plan.snapshot import PlanSnapshot
+ from rvproto.runtime import contract as rc
+ from rvproto.runtime.config import Settings, describe, load_settings
+@@ -65,7 +65,8 @@
+         key = (plan.org_id, plan.version)  # type: ignore[attr-defined]
+         ins = self.inspectors.get(key)
+         if ins is None:
+-            ins = self.inspectors[key] = PlanInspector(self.matcher, self.det, plan)  # type: ignore[arg-type]
++            cls = PlanInspector if self.s.exp_output_scan else NoScanInspector  # experiment flag
++            ins = self.inspectors[key] = cls(self.matcher, self.det, plan)  # type: ignore[arg-type]
+         return ins
+ 
+     def stream_ceiling(self) -> int:
+--- /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-bench-unit/rvproto-exp-flag/sp-before/rvproto/edge/respond.py	2026-09-23 11:33:51.121496492 +0530
++++ rvproto/edge/respond.py	2026-09-23 17:26:27.900558814 +0530
+@@ -42,7 +42,7 @@
+         return await errors.send_error(send, errors.upstream("provider returned malformed JSON",
+                                                              "provider_protocol_error"), ctx.rid)
+     m.observe("t_output_scan_ns", now() - t_prov)
+-    stages = f"{res.stages},dispatch:E,out:E"
++    stages = f"{res.stages},dispatch:E,out:{'E' if st.s.exp_output_scan else 'S'}"
+     audited = _audit_output(st, ctx, jo.decision, "json", stages) and res.audited
+     stages = f"{stages},audit:{'E' if audited else 'U'}"
+     hdr = headers_for(ctx, res.decision.disposition.value, stages)
+@@ -60,7 +60,7 @@
+ async def respond_stream(st: State, ctx: Ctx, res: InputResult, resp: aiohttp.ClientResponse,
+                          send: Send, t_dispatch: int) -> None:
+     m = st.metrics
+-    stages = f"{res.stages},dispatch:E,out:E,audit:{'E' if res.audited else 'U'}"
++    stages = f"{res.stages},dispatch:E,out:{'E' if st.s.exp_output_scan else 'S'},audit:{'E' if res.audited else 'U'}"
+     hdr = [*SSE_HEADERS, (b"x-request-id", ctx.rid.encode()),
+            *headers_for(ctx, res.decision.disposition.value, stages)]
+     await send({"type": "http.response.start", "status": 200, "headers": hdr})

@@ -1,0 +1,4 @@
+$ grep -rn "telemetry:stream|xread|xreadgroup|XREAD" control workers shared services (non-test)
+exit=1 (1=none)
+$ grep -rn TELEMETRY_STREAMS_ENABLED docker-compose*.yml deploy
+exit=1

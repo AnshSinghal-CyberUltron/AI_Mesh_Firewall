@@ -1,0 +1,5 @@
+[M] DeBERTa-v3 SP tokenize  ~256 tok  (699 chars, 230 ids): p50=0.1414 ms  p99=0.1573  min=0.1381
+[M] DeBERTa-v3 SP tokenize  ~512 tok  (1402 chars, 510 ids): p50=0.2931 ms  p99=0.3155  min=0.2854
+[M] DeBERTa-v3 SP tokenize  ~1024 tok  (3406 chars, 1020 ids): p50=0.7125 ms  p99=0.7849  min=0.6838
+[M] DeBERTa-v3 SP tokenize  ~2048 tok  (6970 chars, 2041 ids): p50=1.6489 ms  p99=2.0605  min=1.5891
+tokenizers version: 0.23.1

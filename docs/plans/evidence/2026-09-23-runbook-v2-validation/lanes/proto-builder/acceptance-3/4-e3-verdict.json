@@ -1,0 +1,1 @@
+{"direct": {"json_finish": "stop", "json_nonempty": true, "models_listed": true, "stream_nonempty": true, "tool": "get_weather", "tool_arg_keys": ["limit", "query", "ref"]}, "rvproto": {"json_finish": "stop", "json_nonempty": true, "models_listed": true, "stream_nonempty": true, "tool": "get_weather", "tool_arg_keys": ["limit", "query", "ref"]}, "same_shape": true}

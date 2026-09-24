@@ -1,0 +1,277 @@
+{
+ "orchestrator_file": "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/mcp_scan_orchestrator.py",
+ "rows": [
+  {
+   "direction": "input",
+   "tier2_ctrl": "no_tier2_row",
+   "mcp_tier2_enabled": "absent",
+   "tier2_invoked": false,
+   "n_tier2_calls": 0,
+   "trace": [
+    "tier1_presets_skipped:mcp_default_detection_off",
+    "tier1"
+   ]
+  },
+  {
+   "direction": "input",
+   "tier2_ctrl": "no_tier2_row",
+   "mcp_tier2_enabled": "None",
+   "tier2_invoked": false,
+   "n_tier2_calls": 0,
+   "trace": [
+    "tier1_presets_skipped:mcp_default_detection_off",
+    "tier1"
+   ]
+  },
+  {
+   "direction": "input",
+   "tier2_ctrl": "no_tier2_row",
+   "mcp_tier2_enabled": "False",
+   "tier2_invoked": false,
+   "n_tier2_calls": 0,
+   "trace": [
+    "tier1_presets_skipped:mcp_default_detection_off",
+    "tier1"
+   ]
+  },
+  {
+   "direction": "input",
+   "tier2_ctrl": "no_tier2_row",
+   "mcp_tier2_enabled": "True",
+   "tier2_invoked": false,
+   "n_tier2_calls": 0,
+   "trace": [
+    "tier1_presets_skipped:mcp_default_detection_off",
+    "tier1"
+   ]
+  },
+  {
+   "direction": "input",
+   "tier2_ctrl": "tier2.enabled=False",
+   "mcp_tier2_enabled": "absent",
+   "tier2_invoked": false,
+   "n_tier2_calls": 0,
+   "trace": [
+    "tier1_presets_skipped:mcp_default_detection_off",
+    "tier1"
+   ]
+  },
+  {
+   "direction": "input",
+   "tier2_ctrl": "tier2.enabled=False",
+   "mcp_tier2_enabled": "None",
+   "tier2_invoked": false,
+   "n_tier2_calls": 0,
+   "trace": [
+    "tier1_presets_skipped:mcp_default_detection_off",
+    "tier1"
+   ]
+  },
+  {
+   "direction": "input",
+   "tier2_ctrl": "tier2.enabled=False",
+   "mcp_tier2_enabled": "False",
+   "tier2_invoked": false,
+   "n_tier2_calls": 0,
+   "trace": [
+    "tier1_presets_skipped:mcp_default_detection_off",
+    "tier1"
+   ]
+  },
+  {
+   "direction": "input",
+   "tier2_ctrl": "tier2.enabled=False",
+   "mcp_tier2_enabled": "True",
+   "tier2_invoked": false,
+   "n_tier2_calls": 0,
+   "trace": [
+    "tier1_presets_skipped:mcp_default_detection_off",
+    "tier1"
+   ]
+  },
+  {
+   "direction": "input",
+   "tier2_ctrl": "tier2.enabled=True",
+   "mcp_tier2_enabled": "absent",
+   "tier2_invoked": false,
+   "n_tier2_calls": 0,
+   "trace": [
+    "tier1_presets_skipped:mcp_default_detection_off",
+    "tier1",
+    "tier2_skipped:org_mcp_tier2_disabled"
+   ]
+  },
+  {
+   "direction": "input",
+   "tier2_ctrl": "tier2.enabled=True",
+   "mcp_tier2_enabled": "None",
+   "tier2_invoked": false,
+   "n_tier2_calls": 0,
+   "trace": [
+    "tier1_presets_skipped:mcp_default_detection_off",
+    "tier1",
+    "tier2_skipped:org_mcp_tier2_disabled"
+   ]
+  },
+  {
+   "direction": "input",
+   "tier2_ctrl": "tier2.enabled=True",
+   "mcp_tier2_enabled": "False",
+   "tier2_invoked": false,
+   "n_tier2_calls": 0,
+   "trace": [
+    "tier1_presets_skipped:mcp_default_detection_off",
+    "tier1",
+    "tier2_skipped:org_mcp_tier2_disabled"
+   ]
+  },
+  {
+   "direction": "input",
+   "tier2_ctrl": "tier2.enabled=True",
+   "mcp_tier2_enabled": "True",
+   "tier2_invoked": true,
+   "n_tier2_calls": 1,
+   "trace": [
+    "tier1_presets_skipped:mcp_default_detection_off",
+    "tier1",
+    "tier2"
+   ]
+  },
+  {
+   "direction": "output",
+   "tier2_ctrl": "no_tier2_row",
+   "mcp_tier2_enabled": "absent",
+   "tier2_invoked": false,
+   "n_tier2_calls": 0,
+   "trace": [
+    "tier1_presets_skipped:mcp_default_detection_off",
+    "tier1"
+   ]
+  },
+  {
+   "direction": "output",
+   "tier2_ctrl": "no_tier2_row",
+   "mcp_tier2_enabled": "None",
+   "tier2_invoked": false,
+   "n_tier2_calls": 0,
+   "trace": [
+    "tier1_presets_skipped:mcp_default_detection_off",
+    "tier1"
+   ]
+  },
+  {
+   "direction": "output",
+   "tier2_ctrl": "no_tier2_row",
+   "mcp_tier2_enabled": "False",
+   "tier2_invoked": false,
+   "n_tier2_calls": 0,
+   "trace": [
+    "tier1_presets_skipped:mcp_default_detection_off",
+    "tier1"
+   ]
+  },
+  {
+   "direction": "output",
+   "tier2_ctrl": "no_tier2_row",
+   "mcp_tier2_enabled": "True",
+   "tier2_invoked": false,
+   "n_tier2_calls": 0,
+   "trace": [
+    "tier1_presets_skipped:mcp_default_detection_off",
+    "tier1"
+   ]
+  },
+  {
+   "direction": "output",
+   "tier2_ctrl": "tier2.enabled=False",
+   "mcp_tier2_enabled": "absent",
+   "tier2_invoked": false,
+   "n_tier2_calls": 0,
+   "trace": [
+    "tier1_presets_skipped:mcp_default_detection_off",
+    "tier1"
+   ]
+  },
+  {
+   "direction": "output",
+   "tier2_ctrl": "tier2.enabled=False",
+   "mcp_tier2_enabled": "None",
+   "tier2_invoked": false,
+   "n_tier2_calls": 0,
+   "trace": [
+    "tier1_presets_skipped:mcp_default_detection_off",
+    "tier1"
+   ]
+  },
+  {
+   "direction": "output",
+   "tier2_ctrl": "tier2.enabled=False",
+   "mcp_tier2_enabled": "False",
+   "tier2_invoked": false,
+   "n_tier2_calls": 0,
+   "trace": [
+    "tier1_presets_skipped:mcp_default_detection_off",
+    "tier1"
+   ]
+  },
+  {
+   "direction": "output",
+   "tier2_ctrl": "tier2.enabled=False",
+   "mcp_tier2_enabled": "True",
+   "tier2_invoked": false,
+   "n_tier2_calls": 0,
+   "trace": [
+    "tier1_presets_skipped:mcp_default_detection_off",
+    "tier1"
+   ]
+  },
+  {
+   "direction": "output",
+   "tier2_ctrl": "tier2.enabled=True",
+   "mcp_tier2_enabled": "absent",
+   "tier2_invoked": false,
+   "n_tier2_calls": 0,
+   "trace": [
+    "tier1_presets_skipped:mcp_default_detection_off",
+    "tier1",
+    "tier2_skipped:org_mcp_tier2_disabled"
+   ]
+  },
+  {
+   "direction": "output",
+   "tier2_ctrl": "tier2.enabled=True",
+   "mcp_tier2_enabled": "None",
+   "tier2_invoked": false,
+   "n_tier2_calls": 0,
+   "trace": [
+    "tier1_presets_skipped:mcp_default_detection_off",
+    "tier1",
+    "tier2_skipped:org_mcp_tier2_disabled"
+   ]
+  },
+  {
+   "direction": "output",
+   "tier2_ctrl": "tier2.enabled=True",
+   "mcp_tier2_enabled": "False",
+   "tier2_invoked": false,
+   "n_tier2_calls": 0,
+   "trace": [
+    "tier1_presets_skipped:mcp_default_detection_off",
+    "tier1",
+    "tier2_skipped:org_mcp_tier2_disabled"
+   ]
+  },
+  {
+   "direction": "output",
+   "tier2_ctrl": "tier2.enabled=True",
+   "mcp_tier2_enabled": "True",
+   "tier2_invoked": true,
+   "n_tier2_calls": 1,
+   "trace": [
+    "tier1_presets_skipped:mcp_default_detection_off",
+    "tier1",
+    "tier2"
+   ]
+  }
+ ]
+}

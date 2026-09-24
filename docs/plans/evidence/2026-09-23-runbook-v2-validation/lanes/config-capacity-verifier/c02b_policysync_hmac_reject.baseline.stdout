@@ -1,0 +1,6 @@
+--- org-a signed, org-b UNSIGNED (tampered/unsigned write): cached orgs=['org-a'] is_loaded=True
+    org-a: HTTP 200 action='block' matched=['no-exfil']
+    org-b: HTTP 200 action='allow' matched=[]
+--- BOTH unsigned (signer not deployed / key mismatch): cached orgs=[] is_loaded=True
+    org-a: HTTP 200 action='allow' matched=[]
+    org-b: HTTP 200 action='allow' matched=[]

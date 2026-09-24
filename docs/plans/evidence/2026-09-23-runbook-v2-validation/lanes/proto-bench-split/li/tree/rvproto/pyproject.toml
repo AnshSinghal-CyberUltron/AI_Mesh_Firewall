@@ -1,0 +1,40 @@
+[project]
+name = "rvproto"
+version = "0.0.1"
+description = "Throwaway v2 critical-path prototype for measurement (runbook §10). Never merged."
+requires-python = ">=3.12"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
+[tool.importlinter]
+root_packages = ["rvproto"]
+include_external_packages = true
+
+# Runbook §10.3.3 order (edge > admit > plan > detect > resolve > dispatch > egress >
+# audit > runtime) plus a bottom `domain` layer that owns every shared type. Without it
+# the runbook's own order is unsatisfiable: resolve needs ExecutionPlan (plan, higher)
+# and Finding (detect, higher); egress must run detect+resolve (higher); audit needs
+# Decision (resolve, higher). edge/ is the composition root and injects ports.
+[[tool.importlinter.contracts]]
+name = "rvproto layers (runbook order + bottom domain)"
+type = "layers"
+layers = [
+    "rvproto.edge",
+    "rvproto.admit",
+    "rvproto.plan",
+    "rvproto.detect",
+    "rvproto.resolve",
+    "rvproto.dispatch",
+    "rvproto.egress",
+    "rvproto.audit",
+    "rvproto.runtime",
+    "rvproto.domain",
+]
+
+[[tool.importlinter.contracts]]
+name = "resolver purity: resolve imports only domain"
+type = "forbidden"
+source_modules = ["rvproto.resolve"]
+forbidden_modules = ["rvproto.runtime", "redis", "aiohttp", "time", "asyncio", "logging"]

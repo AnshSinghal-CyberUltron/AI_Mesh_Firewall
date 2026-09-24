@@ -1,0 +1,9 @@
+{"round": 1, "orgs": 300, "notifications_dropped": 0, "stale_after_3.5s_quiescence": 0, "of_which_version_index_claims_current": 0, "examples": [], "plan_reloads": 600, "push_applied": 300}
+{"round": 2, "orgs": 300, "notifications_dropped": 0, "stale_after_3.5s_quiescence": 0, "of_which_version_index_claims_current": 0, "examples": [], "plan_reloads": 900, "push_applied": 600}
+{"round": 3, "orgs": 300, "notifications_dropped": 0, "stale_after_3.5s_quiescence": 0, "of_which_version_index_claims_current": 0, "examples": [], "plan_reloads": 1200, "push_applied": 900}
+{"round": 4, "orgs": 300, "notifications_dropped": 0, "stale_after_3.5s_quiescence": 0, "of_which_version_index_claims_current": 0, "examples": [], "plan_reloads": 1500, "push_applied": 1200}
+{"round": 5, "orgs": 300, "notifications_dropped": 0, "stale_after_3.5s_quiescence": 0, "of_which_version_index_claims_current": 0, "examples": [], "plan_reloads": 1800, "push_applied": 1500}
+{"round": 6, "orgs": 300, "notifications_dropped": 0, "stale_after_3.5s_quiescence": 0, "of_which_version_index_claims_current": 0, "examples": [], "plan_reloads": 2100, "push_applied": 1800}
+{"round": 7, "orgs": 300, "notifications_dropped": 0, "stale_after_3.5s_quiescence": 0, "of_which_version_index_claims_current": 0, "examples": [], "plan_reloads": 2400, "push_applied": 2100}
+{"round": 8, "orgs": 300, "notifications_dropped": 0, "stale_after_3.5s_quiescence": 0, "of_which_version_index_claims_current": 0, "examples": [], "plan_reloads": 2700, "push_applied": 2400}
+{"summary": {"rounds": 8, "orgs": 300, "missed_fraction": 0.0, "stale_org_rounds_total": 0, "stale_at_end_after_extra_5s": 0, "examples": []}}

@@ -1,0 +1,13 @@
+# OS threads per rvproto process (unit sampler: num_threads from /proc/<pid>/stat, sample #100 of each run)
+# li-* workers: +2 rv-tok executor threads + ~24 more, most likely the tokenizers (rayon) pool that encode_batch starts (24 = CPU count); TOKENIZERS_PARALLELISM was left at its default in li-*
+p22-078 launcher x1: 25 threads, owner0 x1: 30 threads, owner1 x1: 30 threads, redis x1: 5 threads, worker x18: 30 threads
+ub-050 launcher x1: 25 threads, owner0 x1: 30 threads, owner1 x1: 30 threads, redis x1: 5 threads, worker x18: 30 threads
+ub-078 launcher x1: 25 threads, owner0 x1: 30 threads, owner1 x1: 31 threads, redis x1: 5 threads, worker x18: 30 threads
+li-050 launcher x1: 25 threads, owner0 x1: 30 threads, owner1 x1: 30 threads, redis x1: 5 threads, worker x18: 56 threads
+li-078 launcher x1: 25 threads, owner0 x1: 30 threads, owner1 x1: 31 threads, redis x1: 5 threads, worker x18: 55 threads
+li-100 launcher x1: 25 threads, owner0 x1: 30 threads, owner1 x1: 30 threads, redis x1: 5 threads, worker x18: 55 threads
+li-150 launcher x1: 25 threads, owner0 x1: 30 threads, owner1 x1: 30 threads, redis x1: 5 threads, worker x8: 55 threads, worker x10: 56 threads
+li-200 launcher x1: 25 threads, owner0 x1: 30 threads, owner1 x1: 30 threads, redis x1: 5 threads, worker x18: 56 threads
+li-250 launcher x1: 25 threads, owner0 x1: 30 threads, owner1 x1: 30 threads, redis x1: 5 threads, worker x18: 56 threads
+li-w050 launcher x1: 25 threads, owner0 x1: 30 threads, owner1 x1: 30 threads, redis x1: 5 threads, worker x18: 56 threads
+lin-078 launcher x1: 25 threads, owner0 x1: 30 threads, owner1 x1: 31 threads, redis x1: 5 threads, worker x18: 55 threads

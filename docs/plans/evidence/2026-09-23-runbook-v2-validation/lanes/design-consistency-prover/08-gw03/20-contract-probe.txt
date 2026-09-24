@@ -1,0 +1,24 @@
+1) 1 vCPU / 1.3 vCPU containers with default utilization 0.75:
+   cpu=1: {'REFUSE_TO_START': 'derived workers=0 (cpu=0 ram=7); refuse to start'}
+   cpu=1.3: {'REFUSE_TO_START': 'derived workers=0 (cpu=0 ram=7); refuse to start'}
+2) queue_depth vs declared target p99 (should change if the SLO is an input):
+   AMF_TARGET_P99_MS=20: queue_depth=8
+   AMF_TARGET_P99_MS=200: queue_depth=8
+   AMF_TARGET_P99_MS=2000: queue_depth=8
+3) provider pool == workers (one upstream connection per worker, for an async multiplexing gateway):
+   cpu=2: workers=1 provider_pool=1 scanner=1 vault=1
+   cpu=4: workers=3 provider_pool=3 scanner=3 vault=3
+   cpu=8: workers=6 provider_pool=6 scanner=6 vault=6
+   cpu=16: workers=12 provider_pool=12 scanner=12 vault=12
+4) redis pool == floor((fd - workers) * 0.75):
+   fd=1024: redis_pool=763
+   fd=65536: redis_pool=49147
+   fd=1048576: redis_pool=786427
+5) stream buffer = 0.75*memory/active_streams, independent of worker RSS already budgeted from the same 0.75*memory:
+   4 GiB, 16 cpu: workers=7 (binding=ram), workers*RSS=2.73 GiB + stream_buffer_bytes(1)=3.00 GiB = 5.73 GiB vs cap 0.75*4 = 3.00 GiB
+6) per-worker RSS default (400 MiB, not measured) decides workers whenever RAM binds:
+   AMF_PER_WORKER_RSS_MB=200: workers=12
+   AMF_PER_WORKER_RSS_MB=400: workers=7
+   AMF_PER_WORKER_RSS_MB=800: workers=3
+7) 'service rate' is derived from the SLO, not measured: offered_service_rate = workers / p99_s -> 350 req/s at 7 workers & 20 ms regardless of guard/provider speed
+8) guard pool = tokens_per_second * p99_seconds (unit: tokens, used as a concurrency limit): 1000

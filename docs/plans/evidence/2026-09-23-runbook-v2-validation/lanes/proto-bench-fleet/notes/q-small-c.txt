@@ -1,0 +1,6 @@
+f8-060-r2 60 LGS=rv-pbf-lg-4 PROVS=rv-pbf-prov-3 REDIS_VM=rv-pbf-redis-2 UNITS=rv-pbf-unit-6 TARGETS=http://10.146.0.7:8400 LABEL=C-g2-8-knee-repeat
+f8-060-r3 60 LGS=rv-pbf-lg-4 PROVS=rv-pbf-prov-3 REDIS_VM=rv-pbf-redis-2 UNITS=rv-pbf-unit-6 TARGETS=http://10.146.0.7:8400 LABEL=C-g2-8-knee-repeat
+f4-035-r2 35 LGS=rv-pbf-lg-4 PROVS=rv-pbf-prov-3 REDIS_VM=rv-pbf-redis-2 UNITS=rv-pbf-unit-7 TARGETS=http://10.146.0.14:8400 LABEL=C-g2-4-knee-repeat
+f4-035-r3 35 LGS=rv-pbf-lg-4 PROVS=rv-pbf-prov-3 REDIS_VM=rv-pbf-redis-2 UNITS=rv-pbf-unit-7 TARGETS=http://10.146.0.14:8400 LABEL=C-g2-4-knee-repeat
+f8-060-poisson 60 LGS=rv-pbf-lg-4 PROVS=rv-pbf-prov-3 REDIS_VM=rv-pbf-redis-2 UNITS=rv-pbf-unit-6 TARGETS=http://10.146.0.7:8400 LABEL=C-g2-8-poisson OLG_EXTRA="-arrival poisson"
+f8-020-poisson 20 LGS=rv-pbf-lg-4 PROVS=rv-pbf-prov-3 REDIS_VM=rv-pbf-redis-2 UNITS=rv-pbf-unit-6 TARGETS=http://10.146.0.7:8400 LABEL=C-g2-8-poisson OLG_EXTRA="-arrival poisson"

@@ -1,0 +1,2962 @@
+[
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/policy/analytics_rollup.py:343",
+  "op": "get",
+  "kind": "READ",
+  "recv": "overlap",
+  "arg0": "key"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/policy/analytics_rollup.py:490",
+  "op": "get",
+  "kind": "READ",
+  "recv": "ev",
+  "arg0": "key"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/policy/tasks.py:36",
+  "op": "delete",
+  "kind": "WRITE",
+  "recv": "client",
+  "arg0": "'policies:recompile_pending'"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/policy/tasks.py:38",
+  "op": "lrange",
+  "kind": "READ",
+  "recv": "client",
+  "arg0": "PENDING_CHANGES_KEY"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/policy/tasks.py:39",
+  "op": "delete",
+  "kind": "WRITE",
+  "recv": "client",
+  "arg0": "PENDING_CHANGES_KEY"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/policy/tasks.py:42",
+  "op": "smembers",
+  "kind": "READ",
+  "recv": "client",
+  "arg0": "PENDING_ORGS_KEY"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/policy/tasks.py:43",
+  "op": "delete",
+  "kind": "WRITE",
+  "recv": "client",
+  "arg0": "PENDING_ORGS_KEY"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/policy/tasks.py:111",
+  "op": "delete",
+  "kind": "WRITE",
+  "recv": "client",
+  "arg0": "'vector:recompile_pending'"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/policy/tasks.py:113",
+  "op": "lrange",
+  "kind": "READ",
+  "recv": "client",
+  "arg0": "VECTOR_PENDING_CHANGES_KEY"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/policy/tasks.py:114",
+  "op": "delete",
+  "kind": "WRITE",
+  "recv": "client",
+  "arg0": "VECTOR_PENDING_CHANGES_KEY"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/policy/security_views.py:808",
+  "op": "get",
+  "kind": "READ",
+  "recv": "stage_metrics",
+  "arg0": "ms_key"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/policy/security_views.py:939",
+  "op": "get",
+  "kind": "READ",
+  "recv": "extra",
+  "arg0": "key"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/policy/security_views.py:930",
+  "op": "get",
+  "kind": "READ",
+  "recv": "pt",
+  "arg0": "key"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/policy/security_views.py:971",
+  "op": "get",
+  "kind": "READ",
+  "recv": "sibling",
+  "arg0": "key"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/policy/security_views.py:971",
+  "op": "get",
+  "kind": "READ",
+  "recv": "merged",
+  "arg0": "key"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/policy/security_views.py:1039",
+  "op": "get",
+  "kind": "READ",
+  "recv": "sm",
+  "arg0": "key"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/policy/security_views.py:1033",
+  "op": "get",
+  "kind": "READ",
+  "recv": "sib_extra",
+  "arg0": "key"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/policy/security_views.py:1039",
+  "op": "get",
+  "kind": "READ",
+  "recv": "merged",
+  "arg0": "key"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/policy/security_views.py:2667",
+  "op": "get",
+  "kind": "READ",
+  "recv": "_CATEGORY_DISPLAY",
+  "arg0": "key"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/policy/security_views.py:1033",
+  "op": "get",
+  "kind": "READ",
+  "recv": "merged_extra",
+  "arg0": "key"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/policy/analytics_views.py:138",
+  "op": "get",
+  "kind": "READ",
+  "recv": "cat_raw",
+  "arg0": "norm_key"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/policy/analytics_views.py:568",
+  "op": "get",
+  "kind": "READ",
+  "recv": "r",
+  "arg0": "'rule_id'"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/policy/vector_provider_signals.py:73",
+  "op": "delete",
+  "kind": "WRITE",
+  "recv": "client",
+  "arg0": "REDIS_KEY_PROVIDERS_COMPILED"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/policy/vector_provider_signals.py:81",
+  "op": "publish",
+  "kind": "WRITE",
+  "recv": "client",
+  "arg0": "PUBSUB_CHANNEL"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/policy/vector_provider_signals.py:61",
+  "op": "set",
+  "kind": "WRITE",
+  "recv": "client",
+  "arg0": "f'{REDIS_KEY_PROVIDERS_ORG_PREFIX}{_org}'"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/policy/vector_provider_signals.py:65",
+  "op": "scan_iter",
+  "kind": "READ",
+  "recv": "client",
+  "arg0": ""
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/policy/vector_provider_signals.py:68",
+  "op": "delete",
+  "kind": "WRITE",
+  "recv": "client",
+  "arg0": "_sk"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/policy/compliance.py:56",
+  "op": "get",
+  "kind": "READ",
+  "recv": "COMPLIANCE_FRAMEWORKS",
+  "arg0": "key"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/policy/analytics_rollup_refresh.py:53",
+  "op": "set",
+  "kind": "WRITE",
+  "recv": "client",
+  "arg0": "LOCK_KEY"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/policy/telemetry_resolution.py:59",
+  "op": "get",
+  "kind": "READ",
+  "recv": "bucket",
+  "arg0": "key"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/policy/telemetry_resolution.py:47",
+  "op": "get",
+  "kind": "READ",
+  "recv": "bucket",
+  "arg0": "key"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/policy/telemetry_resolution.py:36",
+  "op": "get",
+  "kind": "READ",
+  "recv": "bucket",
+  "arg0": "key"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/policy/vector_signals.py:52",
+  "op": "set",
+  "kind": "WRITE",
+  "recv": "client",
+  "arg0": "'vector:recompile_pending'"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/policy/vector_signals.py:50",
+  "op": "rpush",
+  "kind": "WRITE",
+  "recv": "client",
+  "arg0": "PENDING_CHANGES_KEY"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/policy/mcp_seed.py:77",
+  "op": "get",
+  "kind": "READ",
+  "recv": "r",
+  "arg0": "'scope_type'"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/policy/mcp_seed.py:78",
+  "op": "get",
+  "kind": "READ",
+  "recv": "r",
+  "arg0": "'tool_name'"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/policy/mcp_seed.py:95",
+  "op": "delete",
+  "kind": "WRITE",
+  "recv": "r",
+  "arg0": ""
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/policy/mcp_seed.py:131",
+  "op": "delete",
+  "kind": "WRITE",
+  "recv": "r",
+  "arg0": ""
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/policy/mcp_seed.py:77",
+  "op": "get",
+  "kind": "READ",
+  "recv": "r",
+  "arg0": "'server_id'"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/policy/vector_compiler.py:157",
+  "op": "get",
+  "kind": "READ",
+  "recv": "pipe",
+  "arg0": "REDIS_KEY_VERSION"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/policy/vector_compiler.py:181",
+  "op": "set",
+  "kind": "WRITE",
+  "recv": "pipe",
+  "arg0": "REDIS_KEY_VERSION"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/policy/vector_compiler.py:182",
+  "op": "set",
+  "kind": "WRITE",
+  "recv": "pipe",
+  "arg0": "REDIS_KEY_COMPILED"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/policy/vector_compiler.py:183",
+  "op": "publish",
+  "kind": "WRITE",
+  "recv": "pipe",
+  "arg0": "PUBSUB_CHANNEL"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/policy/compile_views.py:175",
+  "op": "get",
+  "kind": "READ",
+  "recv": "client",
+  "arg0": "version_key"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/policy/compile_views.py:176",
+  "op": "get",
+  "kind": "READ",
+  "recv": "client",
+  "arg0": "redis_key"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/policy/mcp_presets.py:130",
+  "op": "get",
+  "kind": "READ",
+  "recv": "_PRESETS",
+  "arg0": "key.strip().lower()"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/policy/builtin_packs_seed.py:85",
+  "op": "get",
+  "kind": "READ",
+  "recv": "_FAMILY_SEVERITY",
+  "arg0": "family.key"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/policy/rate_limit.py:41",
+  "op": "incr",
+  "kind": "WRITE",
+  "recv": "cache",
+  "arg0": "cache_key"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/policy/rate_limit.py:44",
+  "op": "set",
+  "kind": "WRITE",
+  "recv": "cache",
+  "arg0": "cache_key"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/policy/pii_policy_catalog.py:259",
+  "op": "get",
+  "kind": "READ",
+  "recv": "_PRIORITY_OVERRIDES",
+  "arg0": "entity_key"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/policy/compiler.py:128",
+  "op": "get",
+  "kind": "READ",
+  "recv": "mapping",
+  "arg0": "key"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/policy/compiler.py:461",
+  "op": "eval",
+  "kind": "WRITE",
+  "recv": "client",
+  "arg0": "lua"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/policy/compiler.py:287",
+  "op": "get",
+  "kind": "READ",
+  "recv": "pipe",
+  "arg0": "version_key"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/policy/compiler.py:299",
+  "op": "get",
+  "kind": "READ",
+  "recv": "pipe",
+  "arg0": "redis_key"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/policy/compiler.py:344",
+  "op": "set",
+  "kind": "WRITE",
+  "recv": "pipe",
+  "arg0": "version_key"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/policy/compiler.py:345",
+  "op": "set",
+  "kind": "WRITE",
+  "recv": "pipe",
+  "arg0": "redis_key"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/policy/compiler.py:346",
+  "op": "publish",
+  "kind": "WRITE",
+  "recv": "pipe",
+  "arg0": "PUBSUB_CHANNEL"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/policy/compiler.py:421",
+  "op": "set",
+  "kind": "WRITE",
+  "recv": "client",
+  "arg0": "lock_key"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/policy/evaluation_views.py:167",
+  "op": "get",
+  "kind": "READ",
+  "recv": "r",
+  "arg0": "'name'"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/policy/evaluation_views.py:172",
+  "op": "get",
+  "kind": "READ",
+  "recv": "c",
+  "arg0": "'name'"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/policy/evaluation_views.py:187",
+  "op": "get",
+  "kind": "READ",
+  "recv": "r",
+  "arg0": "'args'"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/policy/evaluation_views.py:189",
+  "op": "get",
+  "kind": "READ",
+  "recv": "args",
+  "arg0": "key"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/policy/compiler_signals.py:61",
+  "op": "set",
+  "kind": "WRITE",
+  "recv": "client",
+  "arg0": "'policies:recompile_pending'"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/policy/compiler_signals.py:56",
+  "op": "rpush",
+  "kind": "WRITE",
+  "recv": "client",
+  "arg0": "PENDING_CHANGES_KEY"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/policy/compiler_signals.py:59",
+  "op": "sadd",
+  "kind": "WRITE",
+  "recv": "client",
+  "arg0": "PENDING_ORGS_KEY"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/policy/management/commands/load_policies.py:236",
+  "op": "get",
+  "kind": "READ",
+  "recv": "r",
+  "arg0": "'rule_type'"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/policy/management/commands/load_policies.py:242",
+  "op": "get",
+  "kind": "READ",
+  "recv": "r",
+  "arg0": "'condition'"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/policy/management/commands/load_policies.py:257",
+  "op": "get",
+  "kind": "READ",
+  "recv": "r",
+  "arg0": "'action'"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/policy/management/commands/load_policies.py:160",
+  "op": "get",
+  "kind": "READ",
+  "recv": "r",
+  "arg0": "'rule_type'"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/policy/management/commands/load_policies.py:163",
+  "op": "get",
+  "kind": "READ",
+  "recv": "r",
+  "arg0": "'action'"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/policy/management/commands/load_policies.py:232",
+  "op": "get",
+  "kind": "READ",
+  "recv": "r",
+  "arg0": "'name'"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/policy/management/commands/load_policies.py:169",
+  "op": "get",
+  "kind": "READ",
+  "recv": "r",
+  "arg0": "'name'"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/policy/management/commands/load_policies.py:171",
+  "op": "get",
+  "kind": "READ",
+  "recv": "r",
+  "arg0": "'condition'"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/policy/management/commands/load_policies.py:173",
+  "op": "get",
+  "kind": "READ",
+  "recv": "r",
+  "arg0": "'redaction_config'"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/policy/management/commands/load_policies.py:174",
+  "op": "get",
+  "kind": "READ",
+  "recv": "r",
+  "arg0": "'priority'"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/policy/management/commands/load_policies.py:175",
+  "op": "get",
+  "kind": "READ",
+  "recv": "r",
+  "arg0": "'enabled'"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/policy/management/commands/load_policies.py:176",
+  "op": "get",
+  "kind": "READ",
+  "recv": "r",
+  "arg0": "'description'"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/policy/management/commands/compile_policies.py:80",
+  "op": "get",
+  "kind": "READ",
+  "recv": "client",
+  "arg0": "key_version"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/policy/management/commands/compile_policies.py:81",
+  "op": "get",
+  "kind": "READ",
+  "recv": "client",
+  "arg0": "key_compiled"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/policy/management/commands/compare_analytics_rollups.py:54",
+  "op": "get",
+  "kind": "READ",
+  "recv": "client",
+  "arg0": "path"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/policy/management/commands/compare_analytics_rollups.py:65",
+  "op": "get",
+  "kind": "READ",
+  "recv": "client",
+  "arg0": "path"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/policy/policy_package/catalog.py:69",
+  "op": "get",
+  "kind": "READ",
+  "recv": "r",
+  "arg0": "'field'"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/policy/policy_package/catalog.py:71",
+  "op": "get",
+  "kind": "READ",
+  "recv": "r",
+  "arg0": "'pipeline_stage'"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/policy/policy_package/catalog.py:74",
+  "op": "get",
+  "kind": "READ",
+  "recv": "r",
+  "arg0": "'regex'"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/policy/policy_package/catalog.py:78",
+  "op": "get",
+  "kind": "READ",
+  "recv": "r",
+  "arg0": "'keywords'"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/policy/policy_package/catalog.py:80",
+  "op": "get",
+  "kind": "READ",
+  "recv": "r",
+  "arg0": "'replacement'"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/policy/policy_package/catalog.py:70",
+  "op": "get",
+  "kind": "READ",
+  "recv": "r",
+  "arg0": "'field'"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/policy/policy_package/catalog.py:72",
+  "op": "get",
+  "kind": "READ",
+  "recv": "r",
+  "arg0": "'pipeline_stage'"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/policy/policy_package/seed.py:110",
+  "op": "get",
+  "kind": "READ",
+  "recv": "existing_by_key",
+  "arg0": "rd['_rule_key']"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/mcp_connector/oauth.py:106",
+  "op": "get",
+  "kind": "READ",
+  "recv": "client",
+  "arg0": "url"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/mcp_connector/serializers.py:277",
+  "op": "get",
+  "kind": "READ",
+  "recv": "env_vars",
+  "arg0": "MCP_HOST_TOOLS_ENV_KEY"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/mcp_connector/signals.py:99",
+  "op": "incr",
+  "kind": "WRITE",
+  "recv": "_get_redis_client()",
+  "arg0": "key"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/mcp_connector/scan_controls.py:114",
+  "op": "get",
+  "kind": "READ",
+  "recv": "r",
+  "arg0": "'scope_type'"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/mcp_connector/scan_controls.py:115",
+  "op": "get",
+  "kind": "READ",
+  "recv": "r",
+  "arg0": "'priority'"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/mcp_connector/views.py:681",
+  "op": "get",
+  "kind": "READ",
+  "recv": "client",
+  "arg0": "_diag_cache_key(ref)"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/mcp_connector/views.py:700",
+  "op": "set",
+  "kind": "WRITE",
+  "recv": "cache",
+  "arg0": "_diag_cache_key(ref)"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/mcp_connector/views.py:2405",
+  "op": "get",
+  "kind": "READ",
+  "recv": "cache",
+  "arg0": "_diag_cache_key(ref)"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/mcp_connector/views.py:2592",
+  "op": "get",
+  "kind": "READ",
+  "recv": "r",
+  "arg0": "'scan_action'"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/core/kill_switch_views.py:89",
+  "op": "get",
+  "kind": "READ",
+  "recv": "r",
+  "arg0": "'model_name'"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/core/kill_switch_views.py:106",
+  "op": "get",
+  "kind": "READ",
+  "recv": "r",
+  "arg0": "'model_name'"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/core/redis_kill_switch_views.py:36",
+  "op": "scan_iter",
+  "kind": "READ",
+  "recv": "client",
+  "arg0": "f'{prefix}*'"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/core/redis_kill_switch_views.py:38",
+  "op": "get",
+  "kind": "READ",
+  "recv": "client",
+  "arg0": "raw_key"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/core/redis_kill_switch_views.py:138",
+  "op": "delete",
+  "kind": "WRITE",
+  "recv": "client",
+  "arg0": "key"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/core/tasks.py:304",
+  "op": "get",
+  "kind": "READ",
+  "recv": "event_metadata",
+  "arg0": "_resp_key"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/core/tasks.py:639",
+  "op": "lrange",
+  "kind": "READ",
+  "recv": "client",
+  "arg0": "PROCESSING_KEY"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/core/tasks.py:649",
+  "op": "eval",
+  "kind": "WRITE",
+  "recv": "client",
+  "arg0": "ATOMIC_DEQUEUE_LUA"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/core/tasks.py:875",
+  "op": "delete",
+  "kind": "WRITE",
+  "recv": "client",
+  "arg0": "PROCESSING_KEY"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/core/tasks.py:946",
+  "op": "lrange",
+  "kind": "READ",
+  "recv": "client",
+  "arg0": "REDIS_GATEWAY_JOBS_KEY"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/core/tasks.py:629",
+  "op": "set",
+  "kind": "WRITE",
+  "recv": "client",
+  "arg0": "DRAIN_LOCK_KEY"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/core/tasks.py:641",
+  "op": "rpush",
+  "kind": "WRITE",
+  "recv": "client",
+  "arg0": "REDIS_TELEMETRY_KEY"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/core/tasks.py:642",
+  "op": "delete",
+  "kind": "WRITE",
+  "recv": "client",
+  "arg0": "PROCESSING_KEY"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/core/tasks.py:884",
+  "op": "delete",
+  "kind": "WRITE",
+  "recv": "client",
+  "arg0": "DRAIN_LOCK_KEY"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/core/tasks.py:948",
+  "op": "ltrim",
+  "kind": "WRITE",
+  "recv": "client",
+  "arg0": "REDIS_GATEWAY_JOBS_KEY"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/core/tasks.py:1206",
+  "op": "get",
+  "kind": "READ",
+  "recv": "key_increments",
+  "arg0": "key_prefix"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/core/tasks.py:713",
+  "op": "set",
+  "kind": "WRITE",
+  "recv": "client",
+  "arg0": "dedupe_key"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/core/gateway_views.py:41",
+  "op": "get",
+  "kind": "READ",
+  "recv": "agent.metadata or {}",
+  "arg0": "key"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/core/serializers.py:207",
+  "op": "get",
+  "kind": "READ",
+  "recv": "obj.metadata or {}",
+  "arg0": "key"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/core/signals.py:246",
+  "op": "publish",
+  "kind": "WRITE",
+  "recv": "client",
+  "arg0": "CONFIG_UPDATES_CHANNEL"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/core/signals.py:266",
+  "op": "delete",
+  "kind": "WRITE",
+  "recv": "client",
+  "arg0": "redis_key"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/core/signals.py:333",
+  "op": "delete",
+  "kind": "WRITE",
+  "recv": "client",
+  "arg0": "redis_key"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/core/signals.py:393",
+  "op": "delete",
+  "kind": "WRITE",
+  "recv": "client",
+  "arg0": "redis_key"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/core/signals.py:504",
+  "op": "publish",
+  "kind": "WRITE",
+  "recv": "client",
+  "arg0": "CONFIG_UPDATES_CHANNEL"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/core/signals.py:175",
+  "op": "delete",
+  "kind": "WRITE",
+  "recv": "client",
+  "arg0": "_build_redis_key(key.key_hash)"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/core/signals.py:194",
+  "op": "scan_iter",
+  "kind": "READ",
+  "recv": "client",
+  "arg0": ""
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/core/signals.py:235",
+  "op": "set",
+  "kind": "WRITE",
+  "recv": "client",
+  "arg0": "cfg.build_redis_key()"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/core/signals.py:241",
+  "op": "set",
+  "kind": "WRITE",
+  "recv": "client",
+  "arg0": "st.build_redis_key()"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/core/signals.py:366",
+  "op": "set",
+  "kind": "WRITE",
+  "recv": "client",
+  "arg0": "redis_key"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/core/signals.py:430",
+  "op": "set",
+  "kind": "WRITE",
+  "recv": "client",
+  "arg0": "redis_key"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/core/signals.py:431",
+  "op": "publish",
+  "kind": "WRITE",
+  "recv": "client",
+  "arg0": "CONFIG_UPDATES_CHANNEL"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/core/signals.py:501",
+  "op": "set",
+  "kind": "WRITE",
+  "recv": "client",
+  "arg0": "redis_key"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/core/signals.py:111",
+  "op": "set",
+  "kind": "WRITE",
+  "recv": "client",
+  "arg0": "redis_key"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/core/signals.py:151",
+  "op": "delete",
+  "kind": "WRITE",
+  "recv": "client",
+  "arg0": "redis_key"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/core/signals.py:158",
+  "op": "setex",
+  "kind": "WRITE",
+  "recv": "client",
+  "arg0": "redis_key"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/core/signals.py:160",
+  "op": "set",
+  "kind": "WRITE",
+  "recv": "client",
+  "arg0": "redis_key"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/core/signals.py:301",
+  "op": "set",
+  "kind": "WRITE",
+  "recv": "client",
+  "arg0": "redis_key"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/core/signals.py:308",
+  "op": "delete",
+  "kind": "WRITE",
+  "recv": "client",
+  "arg0": "redis_key"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/core/signals.py:105",
+  "op": "setex",
+  "kind": "WRITE",
+  "recv": "client",
+  "arg0": "redis_key"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/core/signals.py:108",
+  "op": "delete",
+  "kind": "WRITE",
+  "recv": "client",
+  "arg0": "redis_key"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/core/signals.py:156",
+  "op": "delete",
+  "kind": "WRITE",
+  "recv": "client",
+  "arg0": "redis_key"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/core/signals.py:196",
+  "op": "delete",
+  "kind": "WRITE",
+  "recv": "client",
+  "arg0": "_rk"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/core/ingestion_views.py:209",
+  "op": "rpush",
+  "kind": "WRITE",
+  "recv": "redis_client",
+  "arg0": "REDIS_TELEMETRY_KEY"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/core/routing_fallback.py:113",
+  "op": "get",
+  "kind": "READ",
+  "recv": "chains",
+  "arg0": "fallback_profile_key(sens, tags)"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/core/routing_catalog.py:81",
+  "op": "get",
+  "kind": "READ",
+  "recv": "ROUTING_PROFILES",
+  "arg0": "profile_key"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/core/management/commands/resync_kill_switches.py:50",
+  "op": "scan_iter",
+  "kind": "READ",
+  "recv": "client",
+  "arg0": "'kill_switch:*'"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/core/management/commands/resync_kill_switches.py:72",
+  "op": "scan_iter",
+  "kind": "READ",
+  "recv": "client",
+  "arg0": "'kill_switch:*'"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/core/management/commands/resync_kill_switches.py:41",
+  "op": "set",
+  "kind": "WRITE",
+  "recv": "client",
+  "arg0": "key"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/core/management/commands/resync_kill_switches.py:46",
+  "op": "delete",
+  "kind": "WRITE",
+  "recv": "client",
+  "arg0": "key"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/core/management/commands/resync_kill_switches.py:52",
+  "op": "get",
+  "kind": "READ",
+  "recv": "client",
+  "arg0": "key"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/core/management/commands/resync_kill_switches.py:74",
+  "op": "delete",
+  "kind": "WRITE",
+  "recv": "client",
+  "arg0": "key"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/security_engines/integrated_scanner.py:503",
+  "op": "get",
+  "kind": "READ",
+  "recv": "bedrock_result",
+  "arg0": "category_key"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/security_engines/integrated_scanner.py:423",
+  "op": "get",
+  "kind": "READ",
+  "recv": "r",
+  "arg0": "'name'"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/security_engines/integrated_scanner.py:423",
+  "op": "get",
+  "kind": "READ",
+  "recv": "r",
+  "arg0": "'args'"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/security_engines/integrated_scanner.py:423",
+  "op": "get",
+  "kind": "READ",
+  "recv": "r",
+  "arg0": "'parameters'"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/security_engines/integrated_scanner.py:425",
+  "op": "get",
+  "kind": "READ",
+  "recv": "r",
+  "arg0": "'name'"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/auth/throttling.py:69",
+  "op": "incr",
+  "kind": "WRITE",
+  "recv": "self.cache",
+  "arg0": "self.key"
+ },
+ {
+  "side": "control",
+  "loc": "control/ai_mesh_control/auth/utils.py:21",
+  "op": "get",
+  "kind": "READ",
+  "recv": "get_params",
+  "arg0": "key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/scanner.py:2272",
+  "op": "get",
+  "kind": "READ",
+  "recv": "self._tier2_cache",
+  "arg0": "cache_key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/scanner.py:2593",
+  "op": "get",
+  "kind": "READ",
+  "recv": "self._tier2_cache",
+  "arg0": "cache_key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/scanner.py:1252",
+  "op": "get",
+  "kind": "READ",
+  "recv": "COMPLIANCE_TAG_MAP",
+  "arg0": "key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/mcp_error_classifier.py:222",
+  "op": "set",
+  "kind": "WRITE",
+  "recv": "client",
+  "arg0": "f'{_DIAG_PREFIX}{ref}'"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/bedrock_tier2_breaker.py:164",
+  "op": "get",
+  "kind": "READ",
+  "recv": "self._states",
+  "arg0": "key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/bedrock_tier2_breaker.py:179",
+  "op": "get",
+  "kind": "READ",
+  "recv": "self._states",
+  "arg0": "key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/bedrock_tier2_breaker.py:209",
+  "op": "get",
+  "kind": "READ",
+  "recv": "self._states",
+  "arg0": "key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/bedrock_tier2_breaker.py:233",
+  "op": "get",
+  "kind": "READ",
+  "recv": "self._states",
+  "arg0": "key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/pipeline_trace.py:700",
+  "op": "get",
+  "kind": "READ",
+  "recv": "DECISION_SOURCE_LABELS",
+  "arg0": "key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/pipeline_trace.py:858",
+  "op": "get",
+  "kind": "READ",
+  "recv": "REASON_CODE_LABELS",
+  "arg0": "key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/mcp_scan_orchestrator.py:191",
+  "op": "get",
+  "kind": "READ",
+  "recv": "effective",
+  "arg0": "key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/rag_collections.py:220",
+  "op": "get",
+  "kind": "READ",
+  "recv": "vector_clients",
+  "arg0": "vector_db_type"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/context_assembler.py:249",
+  "op": "get",
+  "kind": "READ",
+  "recv": "FIELD_SENSITIVITY_MAP",
+  "arg0": "key_lower"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/context_assembler.py:131",
+  "op": "get",
+  "kind": "READ",
+  "recv": "c",
+  "arg0": "'text'"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/mcp_ws_adapter.py:279",
+  "op": "keys",
+  "kind": "READ",
+  "recv": "_connections",
+  "arg0": ""
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/patterns.py:1937",
+  "op": "get",
+  "kind": "READ",
+  "recv": "COMPLIANCE_TAG_MAP",
+  "arg0": "key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/patterns.py:1448",
+  "op": "get",
+  "kind": "READ",
+  "recv": "COMPLIANCE_TAG_MAP",
+  "arg0": "key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/responses_store.py:57",
+  "op": "set",
+  "kind": "WRITE",
+  "recv": "self._redis",
+  "arg0": "_key(org_id, rid)"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/responses_store.py:66",
+  "op": "get",
+  "kind": "READ",
+  "recv": "self._redis",
+  "arg0": "_key(org_id, response_id)"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/responses_store.py:107",
+  "op": "delete",
+  "kind": "WRITE",
+  "recv": "self._redis",
+  "arg0": "_key(org_id, response_id)"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/policy_engine.py:1139",
+  "op": "get",
+  "kind": "READ",
+  "recv": "context",
+  "arg0": "src_key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/policy_engine.py:929",
+  "op": "get",
+  "kind": "READ",
+  "recv": "r",
+  "arg0": "'pipeline_stage'"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/policy_engine.py:929",
+  "op": "get",
+  "kind": "READ",
+  "recv": "r",
+  "arg0": "'pipeline_stage'"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/policy_engine.py:1465",
+  "op": "get",
+  "kind": "READ",
+  "recv": "r",
+  "arg0": "'target_tool'"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/policy_engine.py:1464",
+  "op": "get",
+  "kind": "READ",
+  "recv": "r",
+  "arg0": "'condition'"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/mcp_oauth.py:139",
+  "op": "get",
+  "kind": "READ",
+  "recv": "router",
+  "arg0": "'/.well-known/oauth-protected-resource/{path:path}'"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/mcp_oauth.py:109",
+  "op": "get",
+  "kind": "READ",
+  "recv": "_registered_clients",
+  "arg0": "client_id"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/metrics.py:475",
+  "op": "get",
+  "kind": "READ",
+  "recv": "stage_metrics_ms",
+  "arg0": "key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/vector_policy_sync.py:169",
+  "op": "get",
+  "kind": "READ",
+  "recv": "client",
+  "arg0": "REDIS_KEY_COMPILED"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/vector_policy_sync.py:272",
+  "op": "get",
+  "kind": "READ",
+  "recv": "client",
+  "arg0": "REDIS_KEY_COMPILED"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/vector_policy_sync.py:209",
+  "op": "subscribe",
+  "kind": "READ",
+  "recv": "pubsub",
+  "arg0": "PUBSUB_CHANNEL"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/policy_sync.py:307",
+  "op": "scan_iter",
+  "kind": "READ",
+  "recv": "client",
+  "arg0": ""
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/policy_sync.py:513",
+  "op": "get",
+  "kind": "READ",
+  "recv": "client",
+  "arg0": "redis_key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/policy_sync.py:311",
+  "op": "get",
+  "kind": "READ",
+  "recv": "client",
+  "arg0": "key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/policy_sync.py:440",
+  "op": "subscribe",
+  "kind": "READ",
+  "recv": "pubsub",
+  "arg0": "PUBSUB_CHANNEL"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/policy_sync.py:210",
+  "op": "get",
+  "kind": "READ",
+  "recv": "r",
+  "arg0": "'server_states'"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/enforcement.py:56",
+  "op": "get",
+  "kind": "READ",
+  "recv": "_ALIASES",
+  "arg0": "key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/model_state.py:165",
+  "op": "zadd",
+  "kind": "WRITE",
+  "recv": "pipe",
+  "arg0": "risk_key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/model_state.py:169",
+  "op": "zrangebyscore",
+  "kind": "READ",
+  "recv": "pipe",
+  "arg0": "risk_key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/model_state.py:171",
+  "op": "expire",
+  "kind": "WRITE",
+  "recv": "pipe",
+  "arg0": "risk_key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/model_state.py:56",
+  "op": "get",
+  "kind": "READ",
+  "recv": "redis_client",
+  "arg0": "key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/model_state.py:212",
+  "op": "set",
+  "kind": "WRITE",
+  "recv": "redis_client",
+  "arg0": "score_key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/model_state.py:249",
+  "op": "get",
+  "kind": "READ",
+  "recv": "redis_client",
+  "arg0": "state_key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/model_state.py:280",
+  "op": "set",
+  "kind": "WRITE",
+  "recv": "redis_client",
+  "arg0": "state_key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/model_state.py:305",
+  "op": "get",
+  "kind": "READ",
+  "recv": "redis_client",
+  "arg0": "state_key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/model_state.py:176",
+  "op": "set",
+  "kind": "WRITE",
+  "recv": "redis_client",
+  "arg0": "score_key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/model_state.py:332",
+  "op": "set",
+  "kind": "WRITE",
+  "recv": "redis_client",
+  "arg0": "state_key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/model_state.py:90",
+  "op": "set",
+  "kind": "WRITE",
+  "recv": "redis_client",
+  "arg0": "key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/telemetry.py:128",
+  "op": "lpush",
+  "kind": "WRITE",
+  "recv": "pipe",
+  "arg0": "REDIS_TELEMETRY_KEY"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/telemetry.py:130",
+  "op": "xadd",
+  "kind": "WRITE",
+  "recv": "pipe",
+  "arg0": "REDIS_TELEMETRY_STREAM_KEY"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/main.py:17048",
+  "op": "get",
+  "kind": "READ",
+  "recv": "app",
+  "arg0": "'/v1/models/{model_id:path}'"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/main.py:5894",
+  "op": "set",
+  "kind": "WRITE",
+  "recv": "_CLIENT_CORRELATION_ID",
+  "arg0": "client_corr if client_corr and client_corr != rid else ''"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/main.py:5936",
+  "op": "get",
+  "kind": "READ",
+  "recv": "_REQUEST_PIPELINE_CTX",
+  "arg0": ""
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/main.py:7112",
+  "op": "set",
+  "kind": "WRITE",
+  "recv": "_REQUEST_PIPELINE_CTX",
+  "arg0": "{'stage_metrics': stage_metrics, 'prompt': '', 'route_metadata': None, 'requested_model': '', 'scan_verdict': "
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/main.py:13099",
+  "op": "get",
+  "kind": "READ",
+  "recv": "{'pinecone': (PineconeClient,), 'chroma': (ChromaDBClient,),",
+  "arg0": "(provider_type or '').strip().lower()"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/main.py:13212",
+  "op": "get",
+  "kind": "READ",
+  "recv": "VECTOR_CLIENTS",
+  "arg0": "vector_db_type"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/main.py:2158",
+  "op": "get",
+  "kind": "READ",
+  "recv": "c",
+  "arg0": "'message'"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/main.py:2158",
+  "op": "get",
+  "kind": "READ",
+  "recv": "c",
+  "arg0": "'delta'"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/main.py:3456",
+  "op": "get",
+  "kind": "READ",
+  "recv": "_REQUEST_PIPELINE_CTX",
+  "arg0": ""
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/main.py:3647",
+  "op": "get",
+  "kind": "READ",
+  "recv": "routing_preferences",
+  "arg0": "pref_key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/main.py:6042",
+  "op": "get",
+  "kind": "READ",
+  "recv": "_REQUEST_PIPELINE_CTX",
+  "arg0": ""
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/main.py:12445",
+  "op": "delete",
+  "kind": "WRITE",
+  "recv": "_ResponseStore(REDIS_CLIENT)",
+  "arg0": "org_id"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/main.py:16762",
+  "op": "set",
+  "kind": "WRITE",
+  "recv": "_REQUEST_METHOD",
+  "arg0": "'POST'"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/main.py:3210",
+  "op": "get",
+  "kind": "READ",
+  "recv": "_ch",
+  "arg0": "_slot_key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/main.py:3649",
+  "op": "get",
+  "kind": "READ",
+  "recv": "_nested_weights",
+  "arg0": "nested_key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/main.py:3652",
+  "op": "get",
+  "kind": "READ",
+  "recv": "_nested_weights",
+  "arg0": "pref_key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/main.py:6174",
+  "op": "get",
+  "kind": "READ",
+  "recv": "_CLIENT_CORRELATION_ID",
+  "arg0": "''"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/main.py:6833",
+  "op": "keys",
+  "kind": "READ",
+  "recv": "VECTOR_CLIENTS",
+  "arg0": ""
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/main.py:12485",
+  "op": "scan_iter",
+  "kind": "READ",
+  "recv": "REDIS_CLIENT",
+  "arg0": ""
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/main.py:14076",
+  "op": "get",
+  "kind": "READ",
+  "recv": "_client_scan_verdict",
+  "arg0": "'detail'"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/main.py:15964",
+  "op": "scan",
+  "kind": "READ",
+  "recv": "REDIS_CLIENT",
+  "arg0": "cursor"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/main.py:16050",
+  "op": "scan",
+  "kind": "READ",
+  "recv": "REDIS_CLIENT",
+  "arg0": "cursor"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/main.py:1664",
+  "op": "get",
+  "kind": "READ",
+  "recv": "c",
+  "arg0": "'text'"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/main.py:1710",
+  "op": "get",
+  "kind": "READ",
+  "recv": "c",
+  "arg0": "'text'"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/main.py:2556",
+  "op": "get",
+  "kind": "READ",
+  "recv": "REDIS_CLIENT",
+  "arg0": "rag_context_id"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/main.py:6658",
+  "op": "keys",
+  "kind": "READ",
+  "recv": "VECTOR_CLIENTS",
+  "arg0": ""
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/main.py:12516",
+  "op": "get",
+  "kind": "READ",
+  "recv": "REDIS_CLIENT",
+  "arg0": "f'ratelimit:tpm:{key_hash}:{bucket}'"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/main.py:16052",
+  "op": "delete",
+  "kind": "WRITE",
+  "recv": "REDIS_CLIENT",
+  "arg0": "*keys"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/main.py:16833",
+  "op": "keys",
+  "kind": "READ",
+  "recv": "VECTOR_CLIENTS",
+  "arg0": ""
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/main.py:1682",
+  "op": "get",
+  "kind": "READ",
+  "recv": "c",
+  "arg0": "'text'"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/main.py:8362",
+  "op": "incr",
+  "kind": "WRITE",
+  "recv": "pipe",
+  "arg0": "burst_key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/main.py:8363",
+  "op": "expire",
+  "kind": "WRITE",
+  "recv": "pipe",
+  "arg0": "burst_key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/main.py:8404",
+  "op": "incr",
+  "kind": "WRITE",
+  "recv": "pipe",
+  "arg0": "rpm_key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/main.py:8405",
+  "op": "expire",
+  "kind": "WRITE",
+  "recv": "pipe",
+  "arg0": "rpm_key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/main.py:10540",
+  "op": "get",
+  "kind": "READ",
+  "recv": "fb_payload.get('chains') or {}",
+  "arg0": "profile_key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/main.py:10732",
+  "op": "get",
+  "kind": "READ",
+  "recv": "REDIS_CLIENT",
+  "arg0": "ms_key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/main.py:12487",
+  "op": "get",
+  "kind": "READ",
+  "recv": "REDIS_CLIENT",
+  "arg0": "key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/main.py:14327",
+  "op": "get",
+  "kind": "READ",
+  "recv": "_client_scan_verdict",
+  "arg0": "'threat_type'"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/main.py:15977",
+  "op": "get",
+  "kind": "READ",
+  "recv": "REDIS_CLIENT",
+  "arg0": "f'circuit:errors:{model}:{window}'"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/main.py:15978",
+  "op": "get",
+  "kind": "READ",
+  "recv": "REDIS_CLIENT",
+  "arg0": "f'circuit:total:{model}:{window}'"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/main.py:16838",
+  "op": "llen",
+  "kind": "READ",
+  "recv": "REDIS_CLIENT",
+  "arg0": "'telemetry:events'"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/main.py:10555",
+  "op": "get",
+  "kind": "READ",
+  "recv": "REDIS_CLIENT",
+  "arg0": "f\"model_state:{org_slug or 'default'}:{requested_model}\""
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/main.py:10830",
+  "op": "get",
+  "kind": "READ",
+  "recv": "REDIS_CLIENT",
+  "arg0": "rag_context_id"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/main.py:10936",
+  "op": "get",
+  "kind": "READ",
+  "recv": "REDIS_CLIENT",
+  "arg0": "ms_key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/main.py:15368",
+  "op": "delete",
+  "kind": "WRITE",
+  "recv": "_client",
+  "arg0": ""
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/main.py:1613",
+  "op": "get",
+  "kind": "READ",
+  "recv": "c",
+  "arg0": "'text'"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/main.py:1616",
+  "op": "get",
+  "kind": "READ",
+  "recv": "c",
+  "arg0": "'type'"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/main.py:1720",
+  "op": "get",
+  "kind": "READ",
+  "recv": "c",
+  "arg0": "'type'"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/main.py:1617",
+  "op": "get",
+  "kind": "READ",
+  "recv": "c",
+  "arg0": "'type'"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/config_sync.py:172",
+  "op": "get",
+  "kind": "READ",
+  "recv": "CONFIG_KEY_TYPES",
+  "arg0": "key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/config_sync.py:420",
+  "op": "get",
+  "kind": "READ",
+  "recv": "self._reload_locks",
+  "arg0": "org_key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/config_sync.py:491",
+  "op": "scan_iter",
+  "kind": "READ",
+  "recv": "client",
+  "arg0": ""
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/config_sync.py:504",
+  "op": "scan_iter",
+  "kind": "READ",
+  "recv": "client",
+  "arg0": ""
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/config_sync.py:480",
+  "op": "get",
+  "kind": "READ",
+  "recv": "client",
+  "arg0": "REDIS_KEY"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/config_sync.py:656",
+  "op": "get",
+  "kind": "READ",
+  "recv": "client",
+  "arg0": "key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/config_sync.py:711",
+  "op": "scan_iter",
+  "kind": "READ",
+  "recv": "client",
+  "arg0": ""
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/config_sync.py:494",
+  "op": "get",
+  "kind": "READ",
+  "recv": "client",
+  "arg0": "key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/config_sync.py:507",
+  "op": "get",
+  "kind": "READ",
+  "recv": "client",
+  "arg0": "key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/config_sync.py:598",
+  "op": "subscribe",
+  "kind": "READ",
+  "recv": "pubsub",
+  "arg0": "PUBSUB_CHANNEL"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/config_sync.py:718",
+  "op": "get",
+  "kind": "READ",
+  "recv": "client",
+  "arg0": "key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/config_sync.py:212",
+  "op": "get",
+  "kind": "READ",
+  "recv": "CONFIG_KEY_TYPES",
+  "arg0": "key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/kill_switch.py:65",
+  "op": "get",
+  "kind": "READ",
+  "recv": "pipe",
+  "arg0": "redis_key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/vector_routes.py:130",
+  "op": "get",
+  "kind": "READ",
+  "recv": "VECTOR_CLIENTS",
+  "arg0": "provider_type"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/vector_routes.py:355",
+  "op": "get",
+  "kind": "READ",
+  "recv": "client",
+  "arg0": "f'auth:apikey:{key_hash}'"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/vector_routes.py:1323",
+  "op": "delete",
+  "kind": "WRITE",
+  "recv": "vector_client",
+  "arg0": ""
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/middleware.py:205",
+  "op": "get",
+  "kind": "READ",
+  "recv": "redis_client",
+  "arg0": "redis_key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/middleware.py:519",
+  "op": "get",
+  "kind": "READ",
+  "recv": "self._last_used_stamp",
+  "arg0": "auth_context.key_hash"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/middleware.py:557",
+  "op": "eval",
+  "kind": "WRITE",
+  "recv": "client",
+  "arg0": "_LUA"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/leakage_detector.py:145",
+  "op": "sadd",
+  "kind": "WRITE",
+  "recv": "pipe",
+  "arg0": "redis_key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/leakage_detector.py:146",
+  "op": "expire",
+  "kind": "WRITE",
+  "recv": "pipe",
+  "arg0": "redis_key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/leakage_detector.py:149",
+  "op": "scard",
+  "kind": "READ",
+  "recv": "self._redis",
+  "arg0": "redis_key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/responses_adapters.py:157",
+  "op": "get",
+  "kind": "READ",
+  "recv": "c",
+  "arg0": "'type'"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/responses_adapters.py:218",
+  "op": "get",
+  "kind": "READ",
+  "recv": "c",
+  "arg0": "'type'"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/responses_adapters.py:219",
+  "op": "get",
+  "kind": "READ",
+  "recv": "c",
+  "arg0": "'text'"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/responses_adapters.py:222",
+  "op": "get",
+  "kind": "READ",
+  "recv": "c",
+  "arg0": "'image_url'"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/responses_adapters.py:222",
+  "op": "get",
+  "kind": "READ",
+  "recv": "c",
+  "arg0": "'url'"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/circuit_breaker.py:413",
+  "op": "incr",
+  "kind": "WRITE",
+  "recv": "pipe",
+  "arg0": "epoch_key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/circuit_breaker.py:414",
+  "op": "expire",
+  "kind": "WRITE",
+  "recv": "pipe",
+  "arg0": "epoch_key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/circuit_breaker.py:415",
+  "op": "delete",
+  "kind": "WRITE",
+  "recv": "pipe",
+  "arg0": "self._legacy_probes_key(model)"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/circuit_breaker.py:436",
+  "op": "incr",
+  "kind": "WRITE",
+  "recv": "pipe",
+  "arg0": "admit_key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/circuit_breaker.py:437",
+  "op": "expire",
+  "kind": "WRITE",
+  "recv": "pipe",
+  "arg0": "admit_key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/circuit_breaker.py:211",
+  "op": "set",
+  "kind": "WRITE",
+  "recv": "self._redis",
+  "arg0": "key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/circuit_breaker.py:245",
+  "op": "scan_iter",
+  "kind": "READ",
+  "recv": "self._redis",
+  "arg0": ""
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/circuit_breaker.py:272",
+  "op": "incr",
+  "kind": "WRITE",
+  "recv": "pipe",
+  "arg0": "total_key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/circuit_breaker.py:273",
+  "op": "expire",
+  "kind": "WRITE",
+  "recv": "pipe",
+  "arg0": "total_key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/circuit_breaker.py:288",
+  "op": "incr",
+  "kind": "WRITE",
+  "recv": "pipe",
+  "arg0": "total_key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/circuit_breaker.py:289",
+  "op": "expire",
+  "kind": "WRITE",
+  "recv": "pipe",
+  "arg0": "total_key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/circuit_breaker.py:290",
+  "op": "incr",
+  "kind": "WRITE",
+  "recv": "pipe",
+  "arg0": "error_key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/circuit_breaker.py:291",
+  "op": "expire",
+  "kind": "WRITE",
+  "recv": "pipe",
+  "arg0": "error_key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/circuit_breaker.py:420",
+  "op": "delete",
+  "kind": "WRITE",
+  "recv": "self._redis",
+  "arg0": "self._probes_key(model, epoch)"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/circuit_breaker.py:544",
+  "op": "get",
+  "kind": "READ",
+  "recv": "self._redis",
+  "arg0": "self._state_key(model)"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/circuit_breaker.py:548",
+  "op": "get",
+  "kind": "READ",
+  "recv": "self._redis",
+  "arg0": "self._epoch_key(model)"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/circuit_breaker.py:555",
+  "op": "set",
+  "kind": "WRITE",
+  "recv": "self._redis",
+  "arg0": "self._state_key(model)"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/circuit_breaker.py:152",
+  "op": "get",
+  "kind": "READ",
+  "recv": "self._redis",
+  "arg0": "state_key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/circuit_breaker.py:224",
+  "op": "get",
+  "kind": "READ",
+  "recv": "self._redis",
+  "arg0": "key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/circuit_breaker.py:229",
+  "op": "delete",
+  "kind": "WRITE",
+  "recv": "self._redis",
+  "arg0": "key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/circuit_breaker.py:341",
+  "op": "get",
+  "kind": "READ",
+  "recv": "self._redis",
+  "arg0": "self._open_at_key(model)"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/circuit_breaker.py:356",
+  "op": "set",
+  "kind": "WRITE",
+  "recv": "self._redis",
+  "arg0": "self._gate_key(model)"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/circuit_breaker.py:516",
+  "op": "set",
+  "kind": "WRITE",
+  "recv": "pipe",
+  "arg0": "state_key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/circuit_breaker.py:517",
+  "op": "set",
+  "kind": "WRITE",
+  "recv": "pipe",
+  "arg0": "self._open_at_key(model)"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/circuit_breaker.py:520",
+  "op": "delete",
+  "kind": "WRITE",
+  "recv": "pipe",
+  "arg0": "self._probes_key(model, epoch)"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/circuit_breaker.py:247",
+  "op": "get",
+  "kind": "READ",
+  "recv": "self._redis",
+  "arg0": "key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/circuit_breaker.py:457",
+  "op": "get",
+  "kind": "READ",
+  "recv": "pipe",
+  "arg0": "state_key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/circuit_breaker.py:461",
+  "op": "get",
+  "kind": "READ",
+  "recv": "pipe",
+  "arg0": "epoch_key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/circuit_breaker.py:465",
+  "op": "get",
+  "kind": "READ",
+  "recv": "pipe",
+  "arg0": "probes_key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/circuit_breaker.py:470",
+  "op": "set",
+  "kind": "WRITE",
+  "recv": "pipe",
+  "arg0": "state_key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/circuit_breaker.py:475",
+  "op": "delete",
+  "kind": "WRITE",
+  "recv": "pipe",
+  "arg0": "probes_key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/circuit_breaker.py:481",
+  "op": "set",
+  "kind": "WRITE",
+  "recv": "pipe",
+  "arg0": "probes_key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/circuit_breaker.py:509",
+  "op": "get",
+  "kind": "READ",
+  "recv": "pipe",
+  "arg0": "state_key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/circuit_breaker.py:513",
+  "op": "get",
+  "kind": "READ",
+  "recv": "pipe",
+  "arg0": "self._epoch_key(model)"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/circuit_breaker.py:252",
+  "op": "delete",
+  "kind": "WRITE",
+  "recv": "self._redis",
+  "arg0": "key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/circuit_breaker.py:303",
+  "op": "set",
+  "kind": "WRITE",
+  "recv": "self._redis",
+  "arg0": "self._open_at_key(model)"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/rate_limit_enforcement.py:195",
+  "op": "incr",
+  "kind": "WRITE",
+  "recv": "pipe",
+  "arg0": "burst_key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/rate_limit_enforcement.py:196",
+  "op": "expire",
+  "kind": "WRITE",
+  "recv": "pipe",
+  "arg0": "burst_key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/rate_limit_enforcement.py:247",
+  "op": "incr",
+  "kind": "WRITE",
+  "recv": "pipe",
+  "arg0": "rpm_key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/rate_limit_enforcement.py:248",
+  "op": "expire",
+  "kind": "WRITE",
+  "recv": "pipe",
+  "arg0": "rpm_key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/rate_limiter.py:105",
+  "op": "eval",
+  "kind": "WRITE",
+  "recv": "client",
+  "arg0": "lua_script"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/rate_limiter.py:222",
+  "op": "eval",
+  "kind": "WRITE",
+  "recv": "client",
+  "arg0": "lua_script"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/rate_limiter.py:264",
+  "op": "incrby",
+  "kind": "WRITE",
+  "recv": "client",
+  "arg0": "redis_key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/rate_limiter.py:305",
+  "op": "incrby",
+  "kind": "WRITE",
+  "recv": "client",
+  "arg0": "redis_key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/rate_limiter.py:163",
+  "op": "eval",
+  "kind": "WRITE",
+  "recv": "client",
+  "arg0": "lua_script"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/rate_limiter.py:271",
+  "op": "set",
+  "kind": "WRITE",
+  "recv": "client",
+  "arg0": "redis_key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/rate_limiter.py:312",
+  "op": "set",
+  "kind": "WRITE",
+  "recv": "client",
+  "arg0": "redis_key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/rate_limiter.py:273",
+  "op": "set",
+  "kind": "WRITE",
+  "recv": "client",
+  "arg0": "redis_key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/rate_limiter.py:314",
+  "op": "set",
+  "kind": "WRITE",
+  "recv": "client",
+  "arg0": "redis_key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/log_buffer.py:180",
+  "op": "subscribe",
+  "kind": "READ",
+  "recv": "pubsub",
+  "arg0": "self._channel"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/mcp_proxy.py:678",
+  "op": "mget",
+  "kind": "READ",
+  "recv": "client",
+  "arg0": "f'{_SCAN_VER_KEY_PREFIX}:{org_slug}'"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/mcp_proxy.py:904",
+  "op": "get",
+  "kind": "READ",
+  "recv": "_enabled_tools_ttl",
+  "arg0": "cache_key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/mcp_proxy.py:2174",
+  "op": "incr",
+  "kind": "WRITE",
+  "recv": "pipe",
+  "arg0": "rk"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/mcp_proxy.py:2175",
+  "op": "expire",
+  "kind": "WRITE",
+  "recv": "pipe",
+  "arg0": "rk"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/mcp_proxy.py:740",
+  "op": "get",
+  "kind": "READ",
+  "recv": "_server_config_ttl",
+  "arg0": "cache_key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/mcp_proxy.py:746",
+  "op": "get",
+  "kind": "READ",
+  "recv": "_server_config_ver",
+  "arg0": "cache_key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/mcp_proxy.py:758",
+  "op": "get",
+  "kind": "READ",
+  "recv": "client",
+  "arg0": "f'{_BACKEND_URL}/api/mcp-connector/servers/'"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/mcp_proxy.py:926",
+  "op": "get",
+  "kind": "READ",
+  "recv": "client",
+  "arg0": "f'{_BACKEND_URL}/api/mcp-connector/internal/enabled-tools/'"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/mcp_proxy.py:2572",
+  "op": "get",
+  "kind": "READ",
+  "recv": "client",
+  "arg0": "f'{_MCP_FIREWALL_URL}/health'"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/mcp_proxy.py:6155",
+  "op": "get",
+  "kind": "READ",
+  "recv": "client",
+  "arg0": "f'{_BACKEND_URL}/api/mcp-connector/tools/'"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/mcp_proxy.py:6235",
+  "op": "get",
+  "kind": "READ",
+  "recv": "client",
+  "arg0": "f'{_BACKEND_URL}/api/mcp-connector/health/'"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/mcp_proxy.py:4916",
+  "op": "get",
+  "kind": "READ",
+  "recv": "client",
+  "arg0": "f'{_BACKEND_URL}/api/mcp-connector/tools/'"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/mcp_proxy.py:913",
+  "op": "get",
+  "kind": "READ",
+  "recv": "_enabled_tools_ver",
+  "arg0": "cache_key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/bedrock_scanner.py:444",
+  "op": "get",
+  "kind": "READ",
+  "recv": "content",
+  "arg0": "key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/jobs.py:56",
+  "op": "lpush",
+  "kind": "WRITE",
+  "recv": "client",
+  "arg0": "GATEWAY_JOBS_QUEUE"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/vector_provider_sync.py:113",
+  "op": "scan_iter",
+  "kind": "READ",
+  "recv": "client",
+  "arg0": ""
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/vector_provider_sync.py:114",
+  "op": "get",
+  "kind": "READ",
+  "recv": "client",
+  "arg0": "_k"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/vector_provider_sync.py:125",
+  "op": "get",
+  "kind": "READ",
+  "recv": "client",
+  "arg0": "REDIS_KEY_COMPILED"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/vector_provider_sync.py:154",
+  "op": "subscribe",
+  "kind": "READ",
+  "recv": "pubsub",
+  "arg0": "PUBSUB_CHANNEL"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/mcp_oauth_proxy.py:221",
+  "op": "get",
+  "kind": "READ",
+  "recv": "_oauth_tokens",
+  "arg0": "_token_key(org_slug, server_url)"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/mcp_oauth_proxy.py:166",
+  "op": "setex",
+  "kind": "WRITE",
+  "recv": "rc",
+  "arg0": "_flow_key(state)"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/mcp_oauth_proxy.py:177",
+  "op": "get",
+  "kind": "READ",
+  "recv": "rc",
+  "arg0": "_flow_key(state)"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/mcp_oauth_proxy.py:178",
+  "op": "delete",
+  "kind": "WRITE",
+  "recv": "rc",
+  "arg0": "_flow_key(state)"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/mcp_oauth_proxy.py:201",
+  "op": "setex",
+  "kind": "WRITE",
+  "recv": "rc",
+  "arg0": "_token_redis_key(org_slug, server_url)"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/mcp_oauth_proxy.py:214",
+  "op": "get",
+  "kind": "READ",
+  "recv": "rc",
+  "arg0": "_token_redis_key(org_slug, server_url)"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/mcp_oauth_proxy.py:375",
+  "op": "get",
+  "kind": "READ",
+  "recv": "client",
+  "arg0": "resource_metadata_url"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/mcp_oauth_proxy.py:391",
+  "op": "get",
+  "kind": "READ",
+  "recv": "client",
+  "arg0": "f'{as_base}/.well-known/oauth-authorization-server'"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/vector_client.py:1184",
+  "op": "get",
+  "kind": "READ",
+  "recv": "clients",
+  "arg0": "vector_db_type"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/vector_client.py:143",
+  "op": "get",
+  "kind": "READ",
+  "recv": "metadata",
+  "arg0": "'hnsw:space'"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/rag_pipeline/retriever_stage.py:127",
+  "op": "get",
+  "kind": "READ",
+  "recv": "self._clients",
+  "arg0": "inp.vector_db_type"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/rag_pipeline/query_stage.py:256",
+  "op": "get",
+  "kind": "READ",
+  "recv": "self._config",
+  "arg0": "key"
+ },
+ {
+  "side": "gateway",
+  "loc": "gateway/ai_mesh_gateway/rag_pipeline/generator_stage.py:395",
+  "op": "set",
+  "kind": "WRITE",
+  "recv": "self._redis",
+  "arg0": "binding_id"
+ },
+ {
+  "side": "shared",
+  "loc": "shared/ai_mesh_shared/owasp_telemetry.py:144",
+  "op": "get",
+  "kind": "READ",
+  "recv": "extra",
+  "arg0": "scan_key"
+ },
+ {
+  "side": "shared",
+  "loc": "shared/ai_mesh_shared/redis_log_handler.py:100",
+  "op": "publish",
+  "kind": "WRITE",
+  "recv": "client",
+  "arg0": "self._channel"
+ },
+ {
+  "side": "shared",
+  "loc": "shared/ai_mesh_shared/mcp_presets.py:97",
+  "op": "get",
+  "kind": "READ",
+  "recv": "_PRESETS",
+  "arg0": "key.strip().lower()"
+ },
+ {
+  "side": "shared",
+  "loc": "shared/ai_mesh_shared/mcp_host_tools.py:144",
+  "op": "get",
+  "kind": "READ",
+  "recv": "merged",
+  "arg0": "MCP_HOST_TOOLS_ENV_KEY"
+ },
+ {
+  "side": "shared",
+  "loc": "shared/ai_mesh_shared/mcp_compliance_tags.py:44",
+  "op": "get",
+  "kind": "READ",
+  "recv": "PRESET_TO_TAGS",
+  "arg0": "key"
+ },
+ {
+  "side": "shared",
+  "loc": "shared/ai_mesh_shared/resource_budget.py:377",
+  "op": "get",
+  "kind": "READ",
+  "recv": "src",
+  "arg0": "key"
+ }
+]

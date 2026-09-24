@@ -1,0 +1,45 @@
+$ grep -rn "beat" docker-compose*.yml deploy/ infra/ (celery beat launchers)
+docker-compose.yml:205:    command: celery -A ai_mesh_workers.celery_app beat --loglevel=info
+$ grep -n "TELEMETRY_DRAIN_MODE" docker-compose*.yml
+docker-compose.yml:146:      TELEMETRY_DRAIN_MODE: ${TELEMETRY_DRAIN_MODE:-thread}
+docker-compose.yml:191:      TELEMETRY_DRAIN_MODE: ${TELEMETRY_DRAIN_MODE:-beat}
+docker-compose.yml:215:      TELEMETRY_DRAIN_MODE: beat
+$ sed -n 33,67p workers/ai_mesh_workers/celery_app.py | grep -n "task"
+3:        "task": "isolation.scan_model_risk_scores",
+7:        "task": "isolation.expire_model_states",
+16:        "task": "core.tasks.process_gateway_jobs_batch",
+23:        "task": "core.tasks.resync_gateway_keys",
+30:        "task": "core.tasks.reconcile_routing_state",
+34:        "task": "policy.refresh_analytics_rollups",
+$ grep -rn "process_telemetry_batch\|drain_telemetry_from_redis" workers/ (callers)
+workers/ai_mesh_workers/tasks/telemetry.py:657:    return drain_telemetry_from_redis(batch_size)
+exit=0 (1 = no callers besides defs/log strings)
+$ sed -n 120,147p control/ai_mesh_control/core/apps.py
+    def _start_telemetry_drain() -> None:
+        import threading
+        from django.conf import settings
+
+        drain_mode = str(getattr(settings, "TELEMETRY_DRAIN_MODE", "beat")).strip().lower()
+        if drain_mode != "thread":
+            logger.info("Telemetry drain thread disabled (TELEMETRY_DRAIN_MODE=%s)", drain_mode)
+            return
+
+        def _drain_loop() -> None:
+            from core.tasks import drain_telemetry_from_redis
+
+            # Let migrations / other startup work settle before periodic writes begin.
+            time.sleep(20.0)
+            batch_size = int(getattr(settings, "TELEMETRY_DRAIN_BATCH_SIZE", 250))
+            interval_seconds = float(getattr(settings, "TELEMETRY_DRAIN_INTERVAL_SEC", 1.0))
+            while True:
+                try:
+                    count = drain_telemetry_from_redis(batch_size=batch_size)
+                    if count > 0:
+                        logger.debug("Telemetry drain: processed %d events", count)
+                except Exception:
+                    logger.warning("Telemetry drain iteration failed", exc_info=True)
+                time.sleep(interval_seconds)
+
+        thread = threading.Thread(target=_drain_loop, daemon=True, name="telemetry-drain")
+        thread.start()
+        logger.info("Telemetry drain thread started (interval=%ss)", getattr(settings, "TELEMETRY_DRAIN_INTERVAL_SEC", 1.0))

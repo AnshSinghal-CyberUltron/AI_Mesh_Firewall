@@ -1,0 +1,3 @@
+dispositions: {(200, 'allow'): 423, (400, 'block'): 2}
+  NON-ALLOW 400 block block [] | This tool can access the orders database and return a summary count.
+  NON-ALLOW 400 block block [] | A job that can retrieve a customer profile by its account identifier.

@@ -1,0 +1,467 @@
+{
+ "run": "OVL-r100",
+ "client_records_all_phases": 12500,
+ "events": 4276,
+ "matched_client_records": 4462,
+ "audit_completeness_matched_over_client": 0.357,
+ "events_over_client": 0.3421,
+ "orphan_events": 0,
+ "events_matching_multiple_client_records": 311,
+ "orphan_event_mix": {},
+ "by_phase": {
+  "ph0_matched": 318,
+  "ph0_unmatched": 182,
+  "ph2_matched": 4144,
+  "ph2_unmatched": 7856
+ },
+ "per_client_outcome": {
+  "ok": {
+   "n": 3702,
+   "audited": 3701
+  },
+  "http_503:circuit_breaker_open": {
+   "n": 1413
+  },
+  "http_422:no_provider_configured": {
+   "n": 1845,
+   "audited": 1
+  },
+  "http_503:kill_switch_active": {
+   "n": 93
+  },
+  "timeout@200": {
+   "n": 5447,
+   "audited": 760
+  }
+ },
+ "matrix": [
+  {
+   "client": "timeout@200",
+   "audit": "audit:none",
+   "provider": "prov:200",
+   "n": 4687
+  },
+  {
+   "client": "ok",
+   "audit": "audit:request:allow:200:completed=None:err=None",
+   "provider": "prov:200",
+   "n": 2715
+  },
+  {
+   "client": "http_422:no_provider_configured",
+   "audit": "audit:none",
+   "provider": "prov:none",
+   "n": 1844
+  },
+  {
+   "client": "http_503:circuit_breaker_open",
+   "audit": "audit:none",
+   "provider": "prov:none",
+   "n": 1413
+  },
+  {
+   "client": "ok",
+   "audit": "audit:stream_complete:allow:200:completed=true:err=false",
+   "provider": "prov:200",
+   "n": 907
+  },
+  {
+   "client": "timeout@200",
+   "audit": "audit:stream_complete:allow:200:completed=false:err=false",
+   "provider": "prov:200",
+   "n": 725
+  },
+  {
+   "client": "http_503:kill_switch_active",
+   "audit": "audit:none",
+   "provider": "prov:none",
+   "n": 93
+  },
+  {
+   "client": "ok",
+   "audit": "audit:stream_complete:allow:200:completed=false:err=false:DUP2",
+   "provider": "prov:200",
+   "n": 71
+  },
+  {
+   "client": "timeout@200",
+   "audit": "audit:stream_complete:allow:200:completed=false:err=false:DUP2",
+   "provider": "prov:200",
+   "n": 27
+  },
+  {
+   "client": "timeout@200",
+   "audit": "audit:stream_complete:allow:200:completed=false:err=false:DUP3",
+   "provider": "prov:200",
+   "n": 6
+  },
+  {
+   "client": "ok",
+   "audit": "audit:stream_complete:allow:200:completed=false:err=false:DUP3",
+   "provider": "prov:200",
+   "n": 5
+  },
+  {
+   "client": "timeout@200",
+   "audit": "audit:stream_complete:allow:200:completed=true:err=false",
+   "provider": "prov:200",
+   "n": 2
+  },
+  {
+   "client": "http_422:no_provider_configured",
+   "audit": "audit:stream_complete:allow:200:completed=false:err=false",
+   "provider": "prov:none",
+   "n": 1
+  },
+  {
+   "client": "ok",
+   "audit": "audit:none",
+   "provider": "prov:200",
+   "n": 1
+  },
+  {
+   "client": "ok",
+   "audit": "audit:request:allow:200:completed=None:err=None:DUP2",
+   "provider": "prov:200",
+   "n": 1
+  },
+  {
+   "client": "ok",
+   "audit": "audit:stream_complete:allow:200:completed=true:err=false:DUP2",
+   "provider": "prov:200",
+   "n": 1
+  },
+  {
+   "client": "ok",
+   "audit": "audit:stream_complete:allow:200:completed=false:err=false:DUP4",
+   "provider": "prov:200",
+   "n": 1
+  }
+ ],
+ "examples": {
+  "ok | audit:request:allow:200:completed=None:err=None | prov:200": [
+   {
+    "rid": "87f6fd5f-cb4d-4060-8b85-bafa32d90fb6",
+    "status": 200,
+    "err": null,
+    "err_detail": null,
+    "end_ms": 2639.5,
+    "stream": false,
+    "event_id": 71493,
+    "event_total_ms": "2607.8"
+   },
+   {
+    "rid": "38a438b5-d1b0-4111-a55d-970f25d29a72",
+    "status": 200,
+    "err": null,
+    "err_detail": null,
+    "end_ms": 1672.5,
+    "stream": false,
+    "event_id": 71491,
+    "event_total_ms": "1643.2"
+   }
+  ],
+  "ok | audit:stream_complete:allow:200:completed=true:err=false | prov:200": [
+   {
+    "rid": "1c7cd2d8-2fc7-415d-887a-f3ea874e4a5c",
+    "status": 200,
+    "err": null,
+    "err_detail": null,
+    "end_ms": 3332.5,
+    "stream": true,
+    "event_id": 71587,
+    "event_total_ms": "3215.9"
+   },
+   {
+    "rid": "f5083921-fbcf-4a7f-92d8-f85233e4fd28",
+    "status": 200,
+    "err": null,
+    "err_detail": null,
+    "end_ms": 2411.4,
+    "stream": true,
+    "event_id": 71546,
+    "event_total_ms": "2261.3"
+   }
+  ],
+  "http_503:circuit_breaker_open | audit:none | prov:none": [
+   {
+    "rid": "072a1b83-a383-4413-80a6-d638785b3ce2",
+    "status": 503,
+    "err": "http_503",
+    "err_detail": "type=service_unavailable code=circuit_breaker_open",
+    "end_ms": 4972.2,
+    "stream": true,
+    "event_id": null,
+    "event_total_ms": null
+   },
+   {
+    "rid": "ab7d4dd9-1824-4a9d-8e67-6af393f5426c",
+    "status": 503,
+    "err": "http_503",
+    "err_detail": "type=service_unavailable code=circuit_breaker_open",
+    "end_ms": 5650.9,
+    "stream": false,
+    "event_id": null,
+    "event_total_ms": null
+   }
+  ],
+  "http_422:no_provider_configured | audit:none | prov:none": [
+   {
+    "rid": "7c00a5b3-8c4d-4295-80e9-c60db9e90e84",
+    "status": 422,
+    "err": "http_422",
+    "err_detail": "type=invalid_request_error code=no_provider_configured",
+    "end_ms": 4487.4,
+    "stream": false,
+    "event_id": null,
+    "event_total_ms": null
+   },
+   {
+    "rid": "6e0c87ea-ba54-4774-9f62-c730c2b76feb",
+    "status": 422,
+    "err": "http_422",
+    "err_detail": "type=invalid_request_error code=no_provider_configured",
+    "end_ms": 4917.8,
+    "stream": false,
+    "event_id": null,
+    "event_total_ms": null
+   }
+  ],
+  "http_503:kill_switch_active | audit:none | prov:none": [
+   {
+    "rid": "a3d0bbe2-7c23-421f-8966-8a03fe681e92",
+    "status": 503,
+    "err": "http_503",
+    "err_detail": "type=service_unavailable_error code=kill_switch_active",
+    "end_ms": 3861.4,
+    "stream": true,
+    "event_id": null,
+    "event_total_ms": null
+   },
+   {
+    "rid": "cf9b2c04-1656-4f77-9a3a-41ae521672ec",
+    "status": 503,
+    "err": "http_503",
+    "err_detail": "type=service_unavailable_error code=kill_switch_active",
+    "end_ms": 5249.6,
+    "stream": true,
+    "event_id": null,
+    "event_total_ms": null
+   }
+  ],
+  "timeout@200 | audit:none | prov:200": [
+   {
+    "rid": "65f7d98c-10ff-4959-a763-1803f5a93731",
+    "status": 200,
+    "err": "timeout",
+    "err_detail": "context deadline exceeded",
+    "end_ms": 100768.1,
+    "stream": true,
+    "event_id": null,
+    "event_total_ms": null
+   },
+   {
+    "rid": "bffe1f74-3ba1-492f-a0a9-95d4704b12c4",
+    "status": 200,
+    "err": "timeout",
+    "err_detail": "context deadline exceeded",
+    "end_ms": 71237.4,
+    "stream": true,
+    "event_id": null,
+    "event_total_ms": null
+   }
+  ],
+  "timeout@200 | audit:stream_complete:allow:200:completed=false:err=false | prov:200": [
+   {
+    "rid": "81189719-88db-4fad-9c16-f92782a07c3d",
+    "status": 200,
+    "err": "timeout",
+    "err_detail": "context deadline exceeded",
+    "end_ms": 119223.3,
+    "stream": true,
+    "event_id": 82041,
+    "event_total_ms": "124026.5"
+   },
+   {
+    "rid": "779f4ab5-fd81-4a93-9b45-eeafae8cb27b",
+    "status": 200,
+    "err": "timeout",
+    "err_detail": "context deadline exceeded",
+    "end_ms": 89555.6,
+    "stream": true,
+    "event_id": 82077,
+    "event_total_ms": "122384.2"
+   }
+  ],
+  "timeout@200 | audit:stream_complete:allow:200:completed=false:err=false:DUP3 | prov:200": [
+   {
+    "rid": "2ffe93a1-442f-4bd0-b534-6c625ddc8956",
+    "status": 200,
+    "err": "timeout",
+    "err_detail": "context deadline exceeded",
+    "end_ms": 70139.5,
+    "stream": true,
+    "event_id": 83228,
+    "event_total_ms": "126130.0"
+   },
+   {
+    "rid": "8212255a-ec6b-48df-ad00-8836ad4cc4e0",
+    "status": 200,
+    "err": "timeout",
+    "err_detail": "context deadline exceeded",
+    "end_ms": 102734.3,
+    "stream": true,
+    "event_id": 82833,
+    "event_total_ms": "125495.3"
+   }
+  ],
+  "http_422:no_provider_configured | audit:stream_complete:allow:200:completed=false:err=false | prov:none": [
+   {
+    "rid": "42796a53-5ca5-4647-9ec7-9adfc372f782",
+    "status": 422,
+    "err": "http_422",
+    "err_detail": "type=invalid_request_error code=no_provider_configured",
+    "end_ms": 10912.9,
+    "stream": true,
+    "event_id": 82881,
+    "event_total_ms": "128545.5"
+   }
+  ],
+  "timeout@200 | audit:stream_complete:allow:200:completed=false:err=false:DUP2 | prov:200": [
+   {
+    "rid": "58618077-282f-4115-8867-15b383aef4ae",
+    "status": 200,
+    "err": "timeout",
+    "err_detail": "context deadline exceeded",
+    "end_ms": 112314.9,
+    "stream": true,
+    "event_id": 83545,
+    "event_total_ms": "126205.9"
+   },
+   {
+    "rid": "3ec6832c-6ac7-42a9-aebb-2fd26e3d735e",
+    "status": 200,
+    "err": "timeout",
+    "err_detail": "context deadline exceeded",
+    "end_ms": 119973.3,
+    "stream": true,
+    "event_id": 84530,
+    "event_total_ms": "124672.1"
+   }
+  ],
+  "ok | audit:none | prov:200": [
+   {
+    "rid": "948904c4-523b-4a46-a994-683cb4463416",
+    "status": 200,
+    "err": null,
+    "err_detail": null,
+    "end_ms": 12929.6,
+    "stream": false,
+    "event_id": null,
+    "event_total_ms": null
+   }
+  ],
+  "ok | audit:request:allow:200:completed=None:err=None:DUP2 | prov:200": [
+   {
+    "rid": "fc62565f-d11d-468a-aab1-310da46d2e8f",
+    "status": 200,
+    "err": null,
+    "err_detail": null,
+    "end_ms": 16317.0,
+    "stream": false,
+    "event_id": 83524,
+    "event_total_ms": "13487.5"
+   }
+  ],
+  "timeout@200 | audit:stream_complete:allow:200:completed=true:err=false | prov:200": [
+   {
+    "rid": "3523e8e0-7abd-468e-bcb8-64ec54fd38ca",
+    "status": 200,
+    "err": "timeout",
+    "err_detail": "context deadline exceeded",
+    "end_ms": 119701.8,
+    "stream": true,
+    "event_id": 85503,
+    "event_total_ms": "118637.5"
+   },
+   {
+    "rid": "e0b3c1a3-e94d-4fb1-b70e-c7cba2d05ba8",
+    "status": 200,
+    "err": "timeout",
+    "err_detail": "context deadline exceeded",
+    "end_ms": 119985.0,
+    "stream": true,
+    "event_id": 85801,
+    "event_total_ms": "118386.5"
+   }
+  ],
+  "ok | audit:stream_complete:allow:200:completed=false:err=false:DUP2 | prov:200": [
+   {
+    "rid": "99596311-05ee-425d-821f-447990e610f4",
+    "status": 200,
+    "err": null,
+    "err_detail": null,
+    "end_ms": 97081.3,
+    "stream": true,
+    "event_id": 85365,
+    "event_total_ms": "119745.8"
+   },
+   {
+    "rid": "9794cbc3-c652-4589-ad3e-d27f84989a0d",
+    "status": 200,
+    "err": null,
+    "err_detail": null,
+    "end_ms": 71511.7,
+    "stream": true,
+    "event_id": 85323,
+    "event_total_ms": "120056.2"
+   }
+  ],
+  "ok | audit:stream_complete:allow:200:completed=false:err=false:DUP3 | prov:200": [
+   {
+    "rid": "2c2dcbe4-d1ca-49ef-a6c7-18d5affd126d",
+    "status": 200,
+    "err": null,
+    "err_detail": null,
+    "end_ms": 101123.0,
+    "stream": true,
+    "event_id": 85393,
+    "event_total_ms": "118867.9"
+   },
+   {
+    "rid": "5b5e2ef5-96c4-4228-a40c-f97e07560ed2",
+    "status": 200,
+    "err": null,
+    "err_detail": null,
+    "end_ms": 109172.5,
+    "stream": true,
+    "event_id": 85351,
+    "event_total_ms": "120927.3"
+   }
+  ],
+  "ok | audit:stream_complete:allow:200:completed=true:err=false:DUP2 | prov:200": [
+   {
+    "rid": "8c36451a-a153-4bd2-9754-6121e298dd00",
+    "status": 200,
+    "err": null,
+    "err_detail": null,
+    "end_ms": 102528.1,
+    "stream": true,
+    "event_id": 86223,
+    "event_total_ms": "100893.1"
+   }
+  ],
+  "ok | audit:stream_complete:allow:200:completed=false:err=false:DUP4 | prov:200": [
+   {
+    "rid": "ece14647-d37b-43ce-bc71-fca9e26a630d",
+    "status": 200,
+    "err": null,
+    "err_detail": null,
+    "end_ms": 108731.0,
+    "stream": true,
+    "event_id": 84271,
+    "event_total_ms": "122363.7"
+   }
+  ]
+ }
+}

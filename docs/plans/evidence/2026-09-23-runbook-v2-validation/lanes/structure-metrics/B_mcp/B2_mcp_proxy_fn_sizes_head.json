@@ -1,0 +1,247 @@
+{
+ "file": "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/mcp_proxy.py",
+ "top_by_def_to_end": [
+  {
+   "name": "org_mcp_jsonrpc",
+   "def_line": 4737,
+   "end_line": 5752,
+   "toplevel": true,
+   "lines_def_to_end": 1016,
+   "lines_incl_decorators": 1020,
+   "next_toplevel_def_minus_def": 1022,
+   "routes": [
+    "org_gateway_router.post('/{org_slug}/mcp/{server_slug}')"
+   ]
+  },
+  {
+   "name": "ext_mcp_proxy",
+   "def_line": 2687,
+   "end_line": 3359,
+   "toplevel": true,
+   "lines_def_to_end": 673,
+   "lines_incl_decorators": 678,
+   "next_toplevel_def_minus_def": 682,
+   "routes": [
+    "router.api_route('/ext-proxy/{path:path}')"
+   ]
+  },
+  {
+   "name": "internal_tools_call",
+   "def_line": 3723,
+   "end_line": 4138,
+   "toplevel": true,
+   "lines_def_to_end": 416,
+   "lines_incl_decorators": 420,
+   "next_toplevel_def_minus_def": 429,
+   "routes": [
+    "router.post('/internal/tools-call')"
+   ]
+  },
+  {
+   "name": "org_mcp_tool_call",
+   "def_line": 5759,
+   "end_line": 6135,
+   "toplevel": true,
+   "lines_def_to_end": 377,
+   "lines_incl_decorators": 381,
+   "next_toplevel_def_minus_def": 383,
+   "routes": [
+    "org_gateway_router.post('/{org_slug}/mcp/{server_slug}/tools/call')"
+   ]
+  },
+  {
+   "name": "internal_discover_tools",
+   "def_line": 3456,
+   "end_line": 3663,
+   "toplevel": true,
+   "lines_def_to_end": 208,
+   "lines_incl_decorators": 212,
+   "next_toplevel_def_minus_def": 214,
+   "routes": [
+    "router.post('/internal/discover-tools')"
+   ]
+  },
+  {
+   "name": "_scan_tool_result_floor",
+   "def_line": 1774,
+   "end_line": 1960,
+   "toplevel": true,
+   "lines_def_to_end": 187,
+   "lines_incl_decorators": 187,
+   "next_toplevel_def_minus_def": 189,
+   "routes": []
+  },
+  {
+   "name": "_scan_reframe_sse_tool_result",
+   "def_line": 1963,
+   "end_line": 2118,
+   "toplevel": true,
+   "lines_def_to_end": 156,
+   "lines_incl_decorators": 156,
+   "next_toplevel_def_minus_def": 158,
+   "routes": []
+  },
+  {
+   "name": "_mcp_security_scan_inner",
+   "def_line": 2416,
+   "end_line": 2557,
+   "toplevel": true,
+   "lines_def_to_end": 142,
+   "lines_incl_decorators": 142,
+   "next_toplevel_def_minus_def": 147,
+   "routes": []
+  },
+  {
+   "name": "_adapter_forward",
+   "def_line": 4541,
+   "end_line": 4658,
+   "toplevel": true,
+   "lines_def_to_end": 118,
+   "lines_incl_decorators": 118,
+   "next_toplevel_def_minus_def": 120,
+   "routes": []
+  },
+  {
+   "name": "_scan_tool_args_block",
+   "def_line": 1510,
+   "end_line": 1624,
+   "toplevel": true,
+   "lines_def_to_end": 115,
+   "lines_incl_decorators": 115,
+   "next_toplevel_def_minus_def": 117,
+   "routes": []
+  },
+  {
+   "name": "_get_enabled_tools",
+   "def_line": 883,
+   "end_line": 995,
+   "toplevel": true,
+   "lines_def_to_end": 113,
+   "lines_incl_decorators": 113,
+   "next_toplevel_def_minus_def": 115,
+   "routes": []
+  },
+  {
+   "name": "_scan_internal_tools_list",
+   "def_line": 3369,
+   "end_line": 3449,
+   "toplevel": true,
+   "lines_def_to_end": 81,
+   "lines_incl_decorators": 81,
+   "next_toplevel_def_minus_def": 87,
+   "routes": []
+  }
+ ],
+ "n_route_handlers": 9,
+ "n_route_decorators": 9,
+ "route_handlers": [
+  {
+   "name": "mcp_health",
+   "def_line": 2563,
+   "end_line": 2581,
+   "toplevel": true,
+   "lines_def_to_end": 19,
+   "lines_incl_decorators": 20,
+   "next_toplevel_def_minus_def": 80,
+   "routes": [
+    "router.get('/health')"
+   ]
+  },
+  {
+   "name": "ext_mcp_proxy",
+   "def_line": 2687,
+   "end_line": 3359,
+   "toplevel": true,
+   "lines_def_to_end": 673,
+   "lines_incl_decorators": 678,
+   "next_toplevel_def_minus_def": 682,
+   "routes": [
+    "router.api_route('/ext-proxy/{path:path}')"
+   ]
+  },
+  {
+   "name": "internal_discover_tools",
+   "def_line": 3456,
+   "end_line": 3663,
+   "toplevel": true,
+   "lines_def_to_end": 208,
+   "lines_incl_decorators": 212,
+   "next_toplevel_def_minus_def": 214,
+   "routes": [
+    "router.post('/internal/discover-tools')"
+   ]
+  },
+  {
+   "name": "internal_oauth_token_mirror",
+   "def_line": 3670,
+   "end_line": 3716,
+   "toplevel": true,
+   "lines_def_to_end": 47,
+   "lines_incl_decorators": 51,
+   "next_toplevel_def_minus_def": 53,
+   "routes": [
+    "router.post('/internal/oauth-token-mirror')"
+   ]
+  },
+  {
+   "name": "internal_tools_call",
+   "def_line": 3723,
+   "end_line": 4138,
+   "toplevel": true,
+   "lines_def_to_end": 416,
+   "lines_incl_decorators": 420,
+   "next_toplevel_def_minus_def": 429,
+   "routes": [
+    "router.post('/internal/tools-call')"
+   ]
+  },
+  {
+   "name": "org_mcp_jsonrpc",
+   "def_line": 4737,
+   "end_line": 5752,
+   "toplevel": true,
+   "lines_def_to_end": 1016,
+   "lines_incl_decorators": 1020,
+   "next_toplevel_def_minus_def": 1022,
+   "routes": [
+    "org_gateway_router.post('/{org_slug}/mcp/{server_slug}')"
+   ]
+  },
+  {
+   "name": "org_mcp_tool_call",
+   "def_line": 5759,
+   "end_line": 6135,
+   "toplevel": true,
+   "lines_def_to_end": 377,
+   "lines_incl_decorators": 381,
+   "next_toplevel_def_minus_def": 383,
+   "routes": [
+    "org_gateway_router.post('/{org_slug}/mcp/{server_slug}/tools/call')"
+   ]
+  },
+  {
+   "name": "org_mcp_tools_list",
+   "def_line": 6142,
+   "end_line": 6216,
+   "toplevel": true,
+   "lines_def_to_end": 75,
+   "lines_incl_decorators": 79,
+   "next_toplevel_def_minus_def": 81,
+   "routes": [
+    "org_gateway_router.get('/{org_slug}/mcp/{server_slug}/tools')"
+   ]
+  },
+  {
+   "name": "org_mcp_server_health",
+   "def_line": 6223,
+   "end_line": 6250,
+   "toplevel": true,
+   "lines_def_to_end": 28,
+   "lines_incl_decorators": 32,
+   "next_toplevel_def_minus_def": null,
+   "routes": [
+    "org_gateway_router.get('/{org_slug}/mcp/{server_slug}/health')"
+   ]
+  }
+ ]
+}

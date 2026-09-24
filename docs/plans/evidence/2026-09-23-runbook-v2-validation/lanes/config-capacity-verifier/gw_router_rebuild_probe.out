@@ -1,0 +1,3 @@
+deployments=10: LiteLLMRouter(...) construction median 7.5 ms (blocks the event loop; synchronous)
+deployments=100: LiteLLMRouter(...) construction median 68.1 ms (blocks the event loop; synchronous)
+deployments=400: LiteLLMRouter(...) construction median 286.7 ms (blocks the event loop; synchronous)

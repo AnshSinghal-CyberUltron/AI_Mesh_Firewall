@@ -1,0 +1,11 @@
+step[sizes] rc=0 ::  
+step[http] rc=0 ::  
+step[mutable] rc=0 ::  
+step[capacity] rc=0 ::  
+step[imports] rc=0 ::  Contracts: 1 kept, 0 broken. 
+step[ruff] rc=0 :: All checks passed! 
+step[mypy] rc=0 :: Success: no issues found in 79 source files 
+step[pytest] rc=0 :: .....................................ssss.....                           [100%] 42 passed, 4 skipped in 0.83s 
+JOB structural-gates => GREEN
+RUNTIME: detect.verdict returned JSONResponse status 403 {"error":"forbidden","message":"Admin role required for this endpoint.","code":"
+image-equivalent sys.path (gateway_v2 + shared only): ModuleNotFoundError No module named 'ai_mesh_gateway'

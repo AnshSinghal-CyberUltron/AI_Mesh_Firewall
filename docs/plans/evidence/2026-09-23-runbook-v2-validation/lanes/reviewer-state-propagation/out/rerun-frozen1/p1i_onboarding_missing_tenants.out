@@ -1,0 +1,4 @@
+{"worker": 0, "store_tenants": 2000, "loaded": 1964, "missing_on_worker": 36, "stale_on_worker": 75, "missing_examples": ["bulk-00648", "bulk-00654", "bulk-00663"]}
+{"worker": 1, "store_tenants": 2000, "loaded": 2000, "missing_on_worker": 0, "stale_on_worker": 83, "missing_examples": []}
+{"worker": 2, "store_tenants": 2000, "loaded": 2000, "missing_on_worker": 0, "stale_on_worker": 79, "missing_examples": []}
+{"worker": 3, "store_tenants": 2000, "loaded": 2000, "missing_on_worker": 0, "stale_on_worker": 0, "missing_examples": []}

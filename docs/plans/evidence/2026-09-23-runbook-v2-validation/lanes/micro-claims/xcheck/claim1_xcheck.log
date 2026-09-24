@@ -1,0 +1,5 @@
+xc_w1_none_r318: ok=95400/95400 err={} drops=0 opens=0 p50=116.4 p99=181.2 p99.9=313.8 max=2476.3 us | cpu_us/req=59.07 vm_cores=0.028
+xc_w1_pure4_r318: ok=95400/95400 err={} drops=0 opens=1 p50=124.3 p99=167.4 p99.9=282.0 max=204344.0 us | cpu_us/req=62.79 vm_cores=0.029
+xc_w1_base4_r318: ok=95400/95400 err={} drops=0 opens=0 p50=473.9 p99=881.7 p99.9=6473.7 max=8364.5 us | cpu_us/req=513.03 vm_cores=0.167
+xc_w1_v1stack_r318: ok=95400/95400 err={} drops=0 opens=0 p50=479.2 p99=961.3 p99.9=6164.6 max=8291.4 us | cpu_us/req=516.11 vm_cores=0.168
+XCHECK DONE 2026-09-23T12:01:07Z

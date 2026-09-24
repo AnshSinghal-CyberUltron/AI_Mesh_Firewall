@@ -1,0 +1,45 @@
+{
+ "n_files": 77,
+ "DS-A": {
+  "sites": 264,
+  "modules": 21,
+  "mcp_proxy.py": 52,
+  "main.py": 92
+ },
+ "DS-B1": {
+  "sites": 267,
+  "modules": 9,
+  "mcp_proxy.py": 28,
+  "main.py": 209
+ },
+ "DS-B2": {
+  "sites": 75,
+  "modules": 6,
+  "mcp_proxy.py": 8,
+  "main.py": 63
+ },
+ "DS-C": {
+  "sites": 407,
+  "modules": 23,
+  "mcp_proxy.py": 57,
+  "main.py": 137
+ },
+ "DS-D": {
+  "sites": 360,
+  "modules": 9,
+  "mcp_proxy.py": 81,
+  "main.py": 210
+ },
+ "DS-AD": {
+  "sites": 624,
+  "modules": 25,
+  "mcp_proxy.py": 133,
+  "main.py": 302
+ }
+}
+DS-A {'main.py': 92, 'mcp_proxy.py': 52, 'scanner.py': 21, 'enforcement.py': 16, 'secure_streaming.py': 11, 'context_guard.py': 8, 'output_guard.py': 7, 'rag_pipeline/query_stage.py': 7, 'rag_pipeline/pipeline.py': 6, 'rag_pipeline/retriever_stage.py': 6, 'vector_routes.py': 6, 'bedrock_scanner.py': 5, 'pipeline_trace.py': 5, 'model_state.py': 4, 'rag_pipeline/grounding_guard.py': 4, 'rate_limit_enforcement.py': 4, 'stream_orchestration.py': 4, 'rag_pipeline/ranker_stage.py': 3, 'mcp_scan_orchestrator.py': 1, 'rag_pipeline/generator_stage.py': 1, 'telemetry_ops.py': 1}
+DS-B1 {'main.py': 209, 'mcp_proxy.py': 28, 'mcp_oauth.py': 13, 'mcp_oauth_proxy.py': 8, 'rate_limit_enforcement.py': 3, 'admin_auth.py': 2, 'vector_routes.py': 2, '_url_guard.py': 1, 'bedrock_scanner.py': 1}
+DS-B2 {'main.py': 63, 'mcp_proxy.py': 8, '_url_guard.py': 1, 'admin_auth.py': 1, 'bedrock_scanner.py': 1, 'mcp_oauth_proxy.py': 1}
+DS-C {'main.py': 137, 'mcp_proxy.py': 57, 'enforcement.py': 28, 'scanner.py': 27, 'pipeline_trace.py': 22, 'secure_streaming.py': 13, 'output_guard.py': 12, 'rag_pipeline/query_stage.py': 12, 'rag_pipeline/pipeline.py': 10, 'stream_orchestration.py': 10, 'vector_routes.py': 10, 'context_guard.py': 9, 'mcp_scan_orchestrator.py': 9, 'policy_engine.py': 8, 'bedrock_scanner.py': 7, 'rag_pipeline/grounding_guard.py': 7, 'rag_pipeline/retriever_stage.py': 7, 'rate_limit_enforcement.py': 7, 'rag_pipeline/ranker_stage.py': 6, 'model_state.py': 4, 'rag_pipeline/generator_stage.py': 2, 'telemetry_ops.py': 2, 'rag_pipeline/context.py': 1}
+DS-D {'main.py': 210, 'mcp_proxy.py': 81, 'vector_routes.py': 41, 'mcp_oauth.py': 13, 'mcp_oauth_proxy.py': 8, 'rate_limit_enforcement.py': 3, 'admin_auth.py': 2, '_url_guard.py': 1, 'bedrock_scanner.py': 1}
+DS-AD {'main.py': 302, 'mcp_proxy.py': 133, 'vector_routes.py': 47, 'scanner.py': 21, 'enforcement.py': 16, 'mcp_oauth.py': 13, 'secure_streaming.py': 11, 'context_guard.py': 8, 'mcp_oauth_proxy.py': 8, 'output_guard.py': 7, 'rag_pipeline/query_stage.py': 7, 'rate_limit_enforcement.py': 7, 'bedrock_scanner.py': 6, 'rag_pipeline/pipeline.py': 6, 'rag_pipeline/retriever_stage.py': 6, 'pipeline_trace.py': 5, 'model_state.py': 4, 'rag_pipeline/grounding_guard.py': 4, 'stream_orchestration.py': 4, 'rag_pipeline/ranker_stage.py': 3, 'admin_auth.py': 2, '_url_guard.py': 1, 'mcp_scan_orchestrator.py': 1, 'rag_pipeline/generator_stage.py': 1, 'telemetry_ops.py': 1}

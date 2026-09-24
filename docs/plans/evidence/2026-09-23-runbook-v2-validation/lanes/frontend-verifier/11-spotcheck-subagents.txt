@@ -1,0 +1,133 @@
+## spot-check 1: workers celery beat schedule entries
+app.conf.beat_schedule = {
+    "scan-model-risk-scores": {
+        "task": "isolation.scan_model_risk_scores",
+        "schedule": 60.0,
+    },
+    "expire-model-states": {
+        "task": "isolation.expire_model_states",
+        "schedule": 60.0,
+    },
+    # Drain the gateway:jobs queue (async envelopes incl. vector_ingest) and
+    # dispatch the routed handler tasks. This beat is the ONLY scheduler in the
+    # stack (workers-beat); assigning app.conf.beat_schedule REPLACES the
+    # settings CELERY_BEAT_SCHEDULE, so the gateway-jobs drainer must be listed
+    # here explicitly or async RAG ingest never persists.
+    "process-gateway-jobs": {
+        "task": "core.tasks.process_gateway_jobs_batch",
+        "schedule": 2.0,
+    },
+    # Periodically reconcile active gateway API keys into Redis so a Redis flush
+    # / container recycle cannot leave the data plane returning 401 for every
+    # /v1/* request until each key is re-saved.
+    "resync-gateway-keys": {
+        "task": "core.tasks.resync_gateway_keys",
+        "schedule": float(os.environ.get("GATEWAY_KEY_RESYNC_INTERVAL_SEC", "300")),
+    },
+    # B2 DEFENSE: re-push routing state (models/allowlist/isolation) so a bulk
+    # QuerySet.update() (no post_save signal) cannot leave the gateway routing on
+    # stale config. Same pattern as resync-gateway-keys, for the routing plane.
+    "reconcile-routing-state": {
+        "task": "core.tasks.reconcile_routing_state",
+        "schedule": float(os.environ.get("ROUTING_RECONCILE_INTERVAL_SEC", "120")),
+    },
+    "refresh-analytics-rollups": {
+        "task": "policy.refresh_analytics_rollups",
+        "schedule": float(os.environ.get("ANALYTICS_ROLLUP_REFRESH_SEC", "900")),
+
+## spot-check 2: TELEMETRY_DRAIN_MODE in compose + control apps.py
+control/ai_mesh_control/core/apps.py:124:        drain_mode = str(getattr(settings, "TELEMETRY_DRAIN_MODE", "beat")).strip().lower()
+control/ai_mesh_control/core/apps.py:126:            logger.info("Telemetry drain thread disabled (TELEMETRY_DRAIN_MODE=%s)", drain_mode)
+docker-compose.yml:146:      TELEMETRY_DRAIN_MODE: ${TELEMETRY_DRAIN_MODE:-thread}
+docker-compose.yml:191:      TELEMETRY_DRAIN_MODE: ${TELEMETRY_DRAIN_MODE:-beat}
+docker-compose.yml:215:      TELEMETRY_DRAIN_MODE: beat
+
+## spot-check 3: threat-feed serializer returns metadata
+                    "user_id": ev.user_id,
+                    "user_display": _display_name(user_obj),
+                    "endpoint_id": ev.endpoint_id,
+                    "endpoint_name": endpoint.name if endpoint else None,
+                    "endpoint_identifier": endpoint.identifier if endpoint else None,
+                    "organization_name": org_name,
+                    "agent_id": str(ev.agent_id) if ev.agent_id else None,
+                    "action": ev.action,
+                    "source": source,
+                    "source_display": source_display,
+                    "metadata": _sanitized_meta_for_client(meta),
+                    "request_id": meta.get("request_id") or meta.get("pipeline_request_id") or "",
+                    "incident_id": meta.get("incident_id") or meta.get("request_id") or str(ev.pk),
+                    "incident_title": get_incident_title(category, subcategory, source),
+                    "enforcement_action_text": _enforcement_action_text(ev.action, source, meta),
+                    "prompt_lineage": meta.get("prompt_lineage") or [],
+                    "tools_invoked": _tools_invoked_with_model(meta),
+                    "data_accessed": meta.get("data_accessed") or [],
+                    "assignee": _display_name(assignee_obj),
+                    "incident_status": ev.incident_status,
+                    "escalated_at": ev.escalated_at.isoformat() if ev.escalated_at else None,
+
+## spot-check 4: /api/mcp/ routes and MCPManagerPanel imports
+37:    path("api/mcp-connector/", include("mcp_connector.urls")),
+(above: import lines referencing MCPManagerPanel/MCPScannerPanel)
+
+## spot-check 5: TelemetryEvent schema file + references
+total 92
+drwxrwxr-x  3 contact_cyberultron_com contact_cyberultron_com  4096 Jul  2 11:12 .
+drwxrwxr-x 10 contact_cyberultron_com contact_cyberultron_com  4096 Sep 17 16:46 ..
+-rw-rw-r--  1 contact_cyberultron_com contact_cyberultron_com   622 Jul  2 11:12 JobEnvelope.v1.schema.json
+-rw-rw-r--  1 contact_cyberultron_com contact_cyberultron_com   572 Jul  2 11:12 MCPDecision.v1.schema.json
+-rw-rw-r--  1 contact_cyberultron_com contact_cyberultron_com 17965 Jul  2 11:12 OPENAI_SDK_COMPAT.md
+-rw-rw-r--  1 contact_cyberultron_com contact_cyberultron_com  9004 Jul  2 11:12 OPENAI_SDK_COMPAT_PHASE2_TRIAGE.md
+-rw-rw-r--  1 contact_cyberultron_com contact_cyberultron_com  6334 Jul  2 11:12 OPENAI_SDK_COMPAT_PHASE3_DECISIONS.md
+-rw-rw-r--  1 contact_cyberultron_com contact_cyberultron_com  4886 Jul  2 11:12 OPENAI_SDK_COMPAT_PHASE7_READINESS.md
+-rw-rw-r--  1 contact_cyberultron_com contact_cyberultron_com   645 Jul  2 11:12 PolicyBundle.v1.schema.json
+docs/contracts/TelemetryEvent.v1.schema.json:3:  "$id": "https://zeroshield.ai/schemas/ai-mesh/TelemetryEvent.v1.json",
+## workers beat schedule tail
+        "schedule": float(os.environ.get("ANALYTICS_ROLLUP_REFRESH_SEC", "900")),
+    },
+}
+
+
+from celery.signals import worker_ready as _worker_ready
+
+
+@_worker_ready.connect
+def _resync_gateway_keys_on_boot(**kwargs):
+    """On worker startup, immediately reconcile gateway keys into Redis (recovers
+    the data plane after a Redis/worker recycle without waiting for the first
+    periodic beat run)."""
+    try:
+## grep telemetry drain in workers beat
+17:    "ai_mesh_workers.tasks.telemetry",
+
+## _sanitized_meta_for_client
+220:def _sanitized_meta_for_client(meta):
+221-    """Return a shallow copy of metadata safe to reflect to a client surface.
+222-
+223-    Canonicalizes a reserved platform/guard/bedrock model id under metadata.model
+224-    so the raw upstream id is never echoed back in a threat-feed entry (R4). Leaves
+225-    the original metadata dict untouched.
+226-    """
+227-    if not isinstance(meta, dict):
+228-        return meta
+229-    if not meta.get("model"):
+230-        return meta
+231-    canonical = _canonicalize_model_name(meta.get("model"))
+232-    if canonical == str(meta.get("model") or "").strip():
+233-        return meta
+234-    sanitized = dict(meta)
+235-    sanitized["model"] = canonical
+236-    return sanitized
+237-
+238-
+239-def _enforcement_action_text(action, source, metadata):
+240-    """Human-readable enforcement action for Investigation & Forensics UI."""
+241-    source = (source or "policy").lower()
+242-    if action == "block":
+243-        if source == "security_scan":
+244-            return "Request blocked by security scan."
+245-        if source == "mcp_scan":
+246-            return "Session terminated, tool request blocked."
+247-        if source == "agentic_scan":
+248-            return "Agent action blocked (agentic violation)."
+249-        return "Request blocked by policy."
+250-    if action == "redact":

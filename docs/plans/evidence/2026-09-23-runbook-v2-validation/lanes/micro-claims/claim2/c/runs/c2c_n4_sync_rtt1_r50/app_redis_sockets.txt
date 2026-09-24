@@ -1,0 +1,3 @@
+State Recv-Q Send-Q Local Address:Port  Peer Address:PortProcess
+ESTAB 0      0        10.160.0.34:39730  10.160.0.33:6379
+	 cubic wscale:10,10 rto:202 rtt:1.101/0.098 ato:40 mss:1408 pmtu:1460 rcvmss:536 advmss:1408 cwnd:10 bytes_sent:19312043 bytes_acked:19312044 bytes_received:266221 segs_out:66558 segs_in:66506 data_segs_out:66504 data_segs_in:66504 send 102306994bps lastsnd:8437 lastrcv:8436 lastack:8436 pacing_rate 204521104bps delivery_rate 10904160bps delivered:66505 app_limited busy:68460ms rcv_rtt:81919.9 rcv_space:65685 rcv_ssthresh:64128 minrtt:1.033 snd_wnd:1060864

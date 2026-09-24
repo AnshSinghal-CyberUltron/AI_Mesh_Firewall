@@ -1,0 +1,101 @@
+[bedrock_logger] Cannot write to /var/log/bedrock: [Errno 13] Permission denied: '/var/log/bedrock'
+2026-09-23 10:42:27,443 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+{"ts": "2026-09-23T05:12:27.482493+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=probe prompt=212\u2192212 context=True model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "probe", "prompt_len": 212, "truncated_len": 212, "has_context": true, "model": "zeroshield-guard", "max_tokens": 1024}}
+{"ts": "2026-09-23T05:12:27.483037+00:00", "level": "ERROR", "logger": "bedrock", "msg": "BEDROCK ERROR    | reqid=probe model=zeroshield-guard elapsed=0.001s error=simulated: endpoint unreachable", "data": {"event": "bedrock_error", "request_id": "probe", "model": "zeroshield-guard", "elapsed_s": 0.001, "error": "simulated: endpoint unreachable", "error_type": "ConnectionError", "payload_bytes": 11876}}
+2026-09-23 10:42:27,483 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+{"ts": "2026-09-23T05:12:27.511260+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=probe prompt=212\u2192212 context=True model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "probe", "prompt_len": 212, "truncated_len": 212, "has_context": true, "model": "zeroshield-guard", "max_tokens": 1024}}
+{"ts": "2026-09-23T05:12:27.511415+00:00", "level": "ERROR", "logger": "bedrock", "msg": "BEDROCK ERROR    | reqid=probe model=zeroshield-guard elapsed=0.000s error=simulated: read timeout", "data": {"event": "bedrock_error", "request_id": "probe", "model": "zeroshield-guard", "elapsed_s": 0.0, "error": "simulated: read timeout", "error_type": "TimeoutError", "payload_bytes": 11876}}
+2026-09-23 10:42:27,511 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+{"ts": "2026-09-23T05:12:27.544728+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=probe prompt=212\u2192212 context=True model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "probe", "prompt_len": 212, "truncated_len": 212, "has_context": true, "model": "zeroshield-guard", "max_tokens": 1024}}
+{"ts": "2026-09-23T05:12:27.544913+00:00", "level": "ERROR", "logger": "bedrock", "msg": "BEDROCK ERROR    | reqid=probe model=zeroshield-guard elapsed=0.000s error=An error occurred (ThrottlingException) when calling the Converse operation: Rate exceeded", "data": {"event": "bedrock_error", "request_id": "probe", "model": "zeroshield-guard", "elapsed_s": 0.0, "error": "An error occurred (ThrottlingException) when calling the Converse operation: Rate exceeded", "error_type": "ClientError", "payload_bytes": 11876}}
+2026-09-23 10:42:27,545 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+{"ts": "2026-09-23T05:12:27.572904+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=probe prompt=212\u2192212 context=True model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "probe", "prompt_len": 212, "truncated_len": 212, "has_context": true, "model": "zeroshield-guard", "max_tokens": 1024}}
+2026-09-23 10:42:27,909 [WARNING] gateway.bedrock_scanner: Failed to parse Bedrock response as JSON: Expecting value: line 1 column 1 (char 0) (content: The analysis could not be completed for this request.)
+{"ts": "2026-09-23T05:12:27.910302+00:00", "level": "WARNING", "logger": "bedrock", "msg": "BEDROCK PARSE FAIL  | reqid=probe reason=empty_or_unparseable content_len=53 snippet=The analysis could not be completed for this request.", "data": {"event": "scan_parse_failed", "request_id": "probe", "content_len": 53, "reason": "empty_or_unparseable", "content_snippet": "The analysis could not be completed for this request."}}
+2026-09-23 10:42:27,910 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+{"ts": "2026-09-23T05:12:27.938699+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=probe prompt=212\u2192212 context=True model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "probe", "prompt_len": 212, "truncated_len": 212, "has_context": true, "model": "zeroshield-guard", "max_tokens": 1024}}
+2026-09-23 10:42:27,938 [WARNING] gateway.bedrock_scanner: Bedrock response content is empty
+{"ts": "2026-09-23T05:12:27.938856+00:00", "level": "WARNING", "logger": "bedrock", "msg": "BEDROCK PARSE FAIL  | reqid=probe reason=empty_or_unparseable content_len=0 snippet=(empty)", "data": {"event": "scan_parse_failed", "request_id": "probe", "content_len": 0, "reason": "empty_or_unparseable", "content_snippet": "(empty)"}}
+2026-09-23 10:42:27,939 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+{"ts": "2026-09-23T05:12:27.966846+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=74b58be38067 prompt=212\u2192212 context=True model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "74b58be38067", "prompt_len": 212, "truncated_len": 212, "has_context": true, "model": "zeroshield-guard", "max_tokens": 1024}}
+{"ts": "2026-09-23T05:12:27.966997+00:00", "level": "ERROR", "logger": "bedrock", "msg": "BEDROCK ERROR    | reqid=74b58be38067 model=zeroshield-guard elapsed=0.000s error=simulated", "data": {"event": "bedrock_error", "request_id": "74b58be38067", "model": "zeroshield-guard", "elapsed_s": 0.0, "error": "simulated", "error_type": "ConnectionError", "payload_bytes": 11876}}
+2026-09-23 10:42:27,967 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+{"ts": "2026-09-23T05:12:27.994819+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=b34a6d6f3d86 prompt=212\u2192212 context=True model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "b34a6d6f3d86", "prompt_len": 212, "truncated_len": 212, "has_context": true, "model": "zeroshield-guard", "max_tokens": 1024}}
+{"ts": "2026-09-23T05:12:27.994970+00:00", "level": "ERROR", "logger": "bedrock", "msg": "BEDROCK ERROR    | reqid=b34a6d6f3d86 model=zeroshield-guard elapsed=0.000s error=simulated", "data": {"event": "bedrock_error", "request_id": "b34a6d6f3d86", "model": "zeroshield-guard", "elapsed_s": 0.0, "error": "simulated", "error_type": "ConnectionError", "payload_bytes": 11876}}
+{"ts": "2026-09-23T05:12:28.022837+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=07cc2eb677f6 prompt=212\u2192212 context=True model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "07cc2eb677f6", "prompt_len": 212, "truncated_len": 212, "has_context": true, "model": "zeroshield-guard", "max_tokens": 1024}}
+{"ts": "2026-09-23T05:12:28.022984+00:00", "level": "ERROR", "logger": "bedrock", "msg": "BEDROCK ERROR    | reqid=07cc2eb677f6 model=zeroshield-guard elapsed=0.000s error=simulated", "data": {"event": "bedrock_error", "request_id": "07cc2eb677f6", "model": "zeroshield-guard", "elapsed_s": 0.0, "error": "simulated", "error_type": "ConnectionError", "payload_bytes": 11876}}
+{"ts": "2026-09-23T05:12:28.050916+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=fb27f59a562d prompt=212\u2192212 context=True model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "fb27f59a562d", "prompt_len": 212, "truncated_len": 212, "has_context": true, "model": "zeroshield-guard", "max_tokens": 1024}}
+{"ts": "2026-09-23T05:12:28.051070+00:00", "level": "ERROR", "logger": "bedrock", "msg": "BEDROCK ERROR    | reqid=fb27f59a562d model=zeroshield-guard elapsed=0.000s error=simulated", "data": {"event": "bedrock_error", "request_id": "fb27f59a562d", "model": "zeroshield-guard", "elapsed_s": 0.0, "error": "simulated", "error_type": "ConnectionError", "payload_bytes": 11876}}
+{"ts": "2026-09-23T05:12:28.079257+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=b191917786f0 prompt=212\u2192212 context=True model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "b191917786f0", "prompt_len": 212, "truncated_len": 212, "has_context": true, "model": "zeroshield-guard", "max_tokens": 1024}}
+{"ts": "2026-09-23T05:12:28.079413+00:00", "level": "ERROR", "logger": "bedrock", "msg": "BEDROCK ERROR    | reqid=b191917786f0 model=zeroshield-guard elapsed=0.000s error=simulated", "data": {"event": "bedrock_error", "request_id": "b191917786f0", "model": "zeroshield-guard", "elapsed_s": 0.0, "error": "simulated", "error_type": "ConnectionError", "payload_bytes": 11876}}
+{"ts": "2026-09-23T05:12:28.107576+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=f41915da0fa4 prompt=212\u2192212 context=True model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "f41915da0fa4", "prompt_len": 212, "truncated_len": 212, "has_context": true, "model": "zeroshield-guard", "max_tokens": 1024}}
+{"ts": "2026-09-23T05:12:28.107724+00:00", "level": "ERROR", "logger": "bedrock", "msg": "BEDROCK ERROR    | reqid=f41915da0fa4 model=zeroshield-guard elapsed=0.000s error=simulated", "data": {"event": "bedrock_error", "request_id": "f41915da0fa4", "model": "zeroshield-guard", "elapsed_s": 0.0, "error": "simulated", "error_type": "ConnectionError", "payload_bytes": 11876}}
+2026-09-23 10:42:28,107 [WARNING] gateway.tier2_breaker: tier2_breaker state change org=probe-breaker-True model=global.anthropic.claude-haiku-probe closed -> open
+2026-09-23 10:42:28,108 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+{"ts": "2026-09-23T05:12:28.136508+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=9f8f988be74e prompt=212\u2192212 context=True model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "9f8f988be74e", "prompt_len": 212, "truncated_len": 212, "has_context": true, "model": "zeroshield-guard", "max_tokens": 1024}}
+{"ts": "2026-09-23T05:12:28.136667+00:00", "level": "ERROR", "logger": "bedrock", "msg": "BEDROCK ERROR    | reqid=9f8f988be74e model=zeroshield-guard elapsed=0.000s error=simulated", "data": {"event": "bedrock_error", "request_id": "9f8f988be74e", "model": "zeroshield-guard", "elapsed_s": 0.0, "error": "simulated", "error_type": "ConnectionError", "payload_bytes": 11876}}
+{"ts": "2026-09-23T05:12:28.164671+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=a5df8f8a7fbb prompt=212\u2192212 context=True model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "a5df8f8a7fbb", "prompt_len": 212, "truncated_len": 212, "has_context": true, "model": "zeroshield-guard", "max_tokens": 1024}}
+{"ts": "2026-09-23T05:12:28.164815+00:00", "level": "ERROR", "logger": "bedrock", "msg": "BEDROCK ERROR    | reqid=a5df8f8a7fbb model=zeroshield-guard elapsed=0.000s error=simulated", "data": {"event": "bedrock_error", "request_id": "a5df8f8a7fbb", "model": "zeroshield-guard", "elapsed_s": 0.0, "error": "simulated", "error_type": "ConnectionError", "payload_bytes": 11876}}
+{"ts": "2026-09-23T05:12:28.193002+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=97f58e0a2f9a prompt=212\u2192212 context=True model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "97f58e0a2f9a", "prompt_len": 212, "truncated_len": 212, "has_context": true, "model": "zeroshield-guard", "max_tokens": 1024}}
+{"ts": "2026-09-23T05:12:28.193165+00:00", "level": "ERROR", "logger": "bedrock", "msg": "BEDROCK ERROR    | reqid=97f58e0a2f9a model=zeroshield-guard elapsed=0.000s error=simulated", "data": {"event": "bedrock_error", "request_id": "97f58e0a2f9a", "model": "zeroshield-guard", "elapsed_s": 0.0, "error": "simulated", "error_type": "ConnectionError", "payload_bytes": 11876}}
+{"ts": "2026-09-23T05:12:28.221198+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=62a6943191ba prompt=212\u2192212 context=True model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "62a6943191ba", "prompt_len": 212, "truncated_len": 212, "has_context": true, "model": "zeroshield-guard", "max_tokens": 1024}}
+{"ts": "2026-09-23T05:12:28.221349+00:00", "level": "ERROR", "logger": "bedrock", "msg": "BEDROCK ERROR    | reqid=62a6943191ba model=zeroshield-guard elapsed=0.000s error=simulated", "data": {"event": "bedrock_error", "request_id": "62a6943191ba", "model": "zeroshield-guard", "elapsed_s": 0.0, "error": "simulated", "error_type": "ConnectionError", "payload_bytes": 11876}}
+{"ts": "2026-09-23T05:12:28.249204+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=99ee8a94024a prompt=212\u2192212 context=True model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "99ee8a94024a", "prompt_len": 212, "truncated_len": 212, "has_context": true, "model": "zeroshield-guard", "max_tokens": 1024}}
+{"ts": "2026-09-23T05:12:28.249340+00:00", "level": "ERROR", "logger": "bedrock", "msg": "BEDROCK ERROR    | reqid=99ee8a94024a model=zeroshield-guard elapsed=0.000s error=simulated", "data": {"event": "bedrock_error", "request_id": "99ee8a94024a", "model": "zeroshield-guard", "elapsed_s": 0.0, "error": "simulated", "error_type": "ConnectionError", "payload_bytes": 11876}}
+2026-09-23 10:42:28,249 [WARNING] gateway.tier2_breaker: tier2_breaker state change org=probe-breaker-False model=global.anthropic.claude-haiku-probe closed -> open
+ROOT = /home/contact_cyberultron_com/AI_Mesh_Firewall | TIER2_PROVIDER = bedrock
+main._is_tier2_degraded_verdict source (main.py:5447):
+    def _is_tier2_degraded_verdict(verdict) -> bool:
+        if verdict is None:
+            return False
+        if verdict.tier != "tier_2":
+            return False
+        if verdict.threat_type == "bedrock_degraded":
+            return True
+        return str(getattr(verdict, "reason_code", "")).startswith("degraded")
+
+
+== real scanner degraded verdicts -> main.py helpers -> resolver ==
+[client_error: ConnectionError]
+   verdict: action='flag' threat_type='scanner_degraded' tier='tier_2' reason_code='client_error' conf=0.5 scan_meta.recommended_action='monitor' scan_meta.decision_reason='client_error'
+   main._is_tier2_degraded_verdict -> False
+   _guard_rec (main.py:9420) -> 'monitor'; adapter kwargs all None -> True
+   resolve_and_enforce (as main.py:9440-9456) -> action='allow' degraded=False
+   counterfactual tier2_degraded=True -> 'monitor' degraded=True; +tier1_pii_detected=True -> 'redact'
+[client_error: TimeoutError]
+   verdict: action='flag' threat_type='scanner_degraded' tier='tier_2' reason_code='client_error' conf=0.5 scan_meta.recommended_action='monitor' scan_meta.decision_reason='client_error'
+   main._is_tier2_degraded_verdict -> False
+   _guard_rec (main.py:9420) -> 'monitor'; adapter kwargs all None -> True
+   resolve_and_enforce (as main.py:9440-9456) -> action='allow' degraded=False
+   counterfactual tier2_degraded=True -> 'monitor' degraded=True; +tier1_pii_detected=True -> 'redact'
+[client_error: botocore ThrottlingException]
+   verdict: action='flag' threat_type='scanner_degraded' tier='tier_2' reason_code='client_error' conf=0.5 scan_meta.recommended_action='monitor' scan_meta.decision_reason='client_error'
+   main._is_tier2_degraded_verdict -> False
+   _guard_rec (main.py:9420) -> 'monitor'; adapter kwargs all None -> True
+   resolve_and_enforce (as main.py:9440-9456) -> action='allow' degraded=False
+   counterfactual tier2_degraded=True -> 'monitor' degraded=True; +tier1_pii_detected=True -> 'redact'
+[unparseable guard output]
+   verdict: action='flag' threat_type='scanner_degraded' tier='tier_2' reason_code='parse_failure_conservative' conf=0.5 scan_meta.recommended_action='monitor' scan_meta.decision_reason='parse_failure_conservative'
+   main._is_tier2_degraded_verdict -> False
+   _guard_rec (main.py:9420) -> 'monitor'; adapter kwargs all None -> True
+   resolve_and_enforce (as main.py:9440-9456) -> action='allow' degraded=False
+   counterfactual tier2_degraded=True -> 'monitor' degraded=True; +tier1_pii_detected=True -> 'redact'
+[empty guard output]
+   verdict: action='flag' threat_type='scanner_degraded' tier='tier_2' reason_code='parse_failure_conservative' conf=0.5 scan_meta.recommended_action='monitor' scan_meta.decision_reason='parse_failure_conservative'
+   main._is_tier2_degraded_verdict -> False
+   _guard_rec (main.py:9420) -> 'monitor'; adapter kwargs all None -> True
+   resolve_and_enforce (as main.py:9440-9456) -> action='allow' degraded=False
+   counterfactual tier2_degraded=True -> 'monitor' degraded=True; +tier1_pii_detected=True -> 'redact'
+
+== tier2_input_fail_closed=True variant (env GATEWAY_TIER2_INPUT_FAIL_CLOSED; default false) ==
+   verdict 'block'/'scanner_degraded'/'client_error_failclosed' -> degraded? False -> resolved 'block'
+
+== what _is_tier2_degraded_verdict DOES accept (constructed verdicts) ==
+   ScanVerdict(tier='tier_2', {'threat_type': 'bedrock_degraded'}) -> True
+   ScanVerdict(tier='tier_2', {'threat_type': 'scanner_degraded', 'reason_code': 'degraded_client_error'}) -> True
+   ScanVerdict(tier='tier_2', {'threat_type': 'scanner_degraded', 'reason_code': 'bedrock_degraded'}) -> False
+   ScanVerdict(tier='tier_2', {'threat_type': 'scanner_degraded', 'reason_code': 'client_error'}) -> False
+
+== sustained outage: circuit breaker (defaults MIN_CALLS=5, FAILURE_THRESHOLD=0.5) ==
+   org_tier2_strict=True: #1:scanner_degraded->allow  #2:scanner_degraded->allow  #3:scanner_degraded->allow  #4:scanner_degraded->allow  #5:scanner_degraded->allow  #6:Tier2UnavailableStrict  #7:Tier2UnavailableStrict
+   org_tier2_strict=False: #1:scanner_degraded->allow  #2:scanner_degraded->allow  #3:scanner_degraded->allow  #4:scanner_degraded->allow  #5:scanner_degraded->allow  #6:tier1->allow  #7:tier1->allow

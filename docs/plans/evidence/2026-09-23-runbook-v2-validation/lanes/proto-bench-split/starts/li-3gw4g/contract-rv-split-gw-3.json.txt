@@ -1,0 +1,10 @@
+rvproto/detect/guard/owner.py: FAILED
+rvproto/detect/semantic.py: FAILED
+rvproto/edge/app.py: FAILED
+rvproto/edge/chat.py: FAILED
+rvproto/edge/respond.py: FAILED
+rvproto/edge/state.py: FAILED
+rvproto/egress/stream.py: FAILED
+rvproto/runtime/config.py: FAILED
+sha256sum: WARNING: 8 computed checksums did NOT match
+{"cpu_quota": 16.0, "cpu_source": "affinity", "memory_limit": 33643098112, "mem_source": "meminfo", "fd_limit": 1048576, "fd_source": "rlimit", "workers": 12, "detected_workers": 12, "worker_override": null, "binding": "cpu", "queue_depth": 16, "connection_budget": 786423, "stream_buffer_bytes": 25232323584, "pools": {"scanner": 12, "provider": 12, "vault": 12, "redis": 786423, "guard": 26388}, "logs": ["cpu_quota=16.0 source=affinity memory_limit=33643098112 source=meminfo fd_limit=1048576 source=rlimit", "binding=cpu workers=12 detected_workers=12", "target_p99_ms=1000.0 utilization_cap=0.75 per_worker_rss=419430400 declared=env"], "rvproto_bounds": {"workers": 12, "provider_connections": 786423, "redis_connections": 786423, "listen_backlog": 786423, "limit_concurrency": 786423, "lease_chunk_tokens": 136960, "lease_chunk_source": "contract", "max_request_tokens": 8560, "audit_queue": 60, "guard_queue_tokens": 26388}, "guard_capacity": 26388.10930241339}

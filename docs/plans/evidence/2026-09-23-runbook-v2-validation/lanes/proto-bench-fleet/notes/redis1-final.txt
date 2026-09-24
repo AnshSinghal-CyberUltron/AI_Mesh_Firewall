@@ -1,0 +1,15 @@
+used_memory:1762699432
+used_memory_human:1.64G
+maxmemory_policy:noeviction
+rv:audit:org-a xlen=600888
+rv:audit:org-q xlen=9761
+total_commands_processed:12151814
+org-a
+a-2
+org-b
+b-1
+org-q
+q-1
+org-a
+0
+0

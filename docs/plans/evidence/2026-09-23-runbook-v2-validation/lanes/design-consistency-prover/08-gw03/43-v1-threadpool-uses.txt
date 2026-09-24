@@ -1,0 +1,11 @@
+gateway/ai_mesh_gateway/llm_judge.py:25:DEFAULT_THREAD_POOL_SIZE = 2
+gateway/ai_mesh_gateway/llm_judge.py:80:        thread_pool_size: int = DEFAULT_THREAD_POOL_SIZE,
+gateway/ai_mesh_gateway/embedding_vault.py:45:DEFAULT_THREAD_POOL_SIZE = 2
+gateway/ai_mesh_gateway/embedding_vault.py:226:        thread_pool_size: int = DEFAULT_THREAD_POOL_SIZE,
+gateway/ai_mesh_gateway/context_guard.py:35:DEFAULT_THREAD_POOL_SIZE = 4
+gateway/ai_mesh_gateway/context_guard.py:55:# DEFAULT_THREAD_POOL_SIZE workers, so a handful of oversized documents starve
+gateway/ai_mesh_gateway/context_guard.py:160:    def __init__(self, thread_pool_size: int = DEFAULT_THREAD_POOL_SIZE) -> None:
+gateway/ai_mesh_gateway/vector_client.py:20:DEFAULT_THREAD_POOL_SIZE = 4
+gateway/ai_mesh_gateway/vector_client.py:341:        thread_pool_size: int = DEFAULT_THREAD_POOL_SIZE,
+gateway/ai_mesh_gateway/vector_client.py:686:        thread_pool_size: int = DEFAULT_THREAD_POOL_SIZE,
+gateway/ai_mesh_gateway/vector_client.py:1086:        thread_pool_size: int = DEFAULT_THREAD_POOL_SIZE,

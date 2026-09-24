@@ -1,0 +1,70 @@
+[
+ {
+  "run": "warmup-fwoff",
+  "offered_rps": 20.0,
+  "qualified_rps": 13.98,
+  "offered": 1200,
+  "qualified": 839,
+  "errors": 361,
+  "error_rate": 0.30083333333333334,
+  "error_reasons": {
+   "disposition_missing": 361,
+   "stage_auth_missing": 361,
+   "stage_kill_switch_missing": 361,
+   "stage_rate_limit_missing": 361,
+   "stage_policy_missing": 361,
+   "stage_input_scan_missing": 361,
+   "stage_model_routing_missing": 361,
+   "stage_model_input_missing": 361,
+   "stage_model_output_missing": 361,
+   "stage_output_guardrail_missing": 361
+  },
+  "drops": 0,
+  "late_p99_ms": 0.1335,
+  "fw_p50": 203.9695,
+  "fw_p90": 873.9051,
+  "fw_p99": 2004.0356,
+  "fw_p999": 2508.3084,
+  "sse_p50": 203.9695,
+  "sse_p99": 2004.0356,
+  "json_p50": null,
+  "json_p99": null,
+  "json_p999": null,
+  "total_p50": 170.9081,
+  "total_p99": 2004.0356,
+  "first_p50": 82.7535,
+  "first_p99": 372.0701,
+  "lag_p50": 284.8354,
+  "lag_p99": 1918.8243,
+  "gw_cpu_ms_req": 333.932,
+  "stack_cpu_ms_req": 365.074,
+  "gw_cores": 6.679,
+  "gw_cores_1s_max": 7.438,
+  "host_util_pct": 31.22,
+  "gw_anon_mib_max": 4051.1,
+  "worker_rss_mib_max": 285.8,
+  "worker_cores": {
+   "n": 19,
+   "min": 0.0,
+   "p50": 0.012,
+   "max": 0.921
+  },
+  "probe_p99": 21.459,
+  "probe_max": 53.114,
+  "probe_fail": 0,
+  "audit_completeness": 0.699231,
+  "verdict": {
+   "pass": false,
+   "checks": {
+    "p99_T_fw_addon_lt_slo": false,
+    "error_rate_le_budget": false,
+    "zero_schedule_drops": true,
+    "zero_safety_failures": true,
+    "run_valid": true,
+    "qualified_nonempty": true
+   }
+  },
+  "valid": true,
+  "checks": {}
+ }
+]

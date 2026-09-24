@@ -1,0 +1,213 @@
+diff -ru li-orig/rvproto/detect/guard/owner.py li-tree/rvproto/detect/guard/owner.py
+--- li-orig/rvproto/detect/guard/owner.py	2026-09-23 16:43:23.000000000 +0530
++++ li-tree/rvproto/detect/guard/owner.py	2026-09-23 23:41:42.707374938 +0530
+@@ -25,8 +25,10 @@
+ import asyncio
+ import json
+ import os
++import signal
+ import struct
+ import sys
++import time
+ from pathlib import Path
+ 
+ import numpy as np
+@@ -127,6 +129,12 @@
+             gauges.cancel()
+ 
+     async def _gauges(self) -> None:
++        def dump() -> None:
++            if self.s.metrics_dir:
++                self.metrics.dump(self.s.metrics_dir, stem="owner")
++
++        asyncio.get_running_loop().add_signal_handler(signal.SIGUSR1, dump)  # li experiment
++        last = 0.0
+         while True:
+             m = self.metrics
+             m.set("owner_clients", self.clients)
+@@ -140,8 +148,9 @@
+                 m.set("guard_queue_oldest_age_seconds", age)
+             if self.backend.tokens_per_s is not None:
+                 m.set("guard_tokens_per_s", self.backend.tokens_per_s)
+-            if self.s.metrics_dir:
+-                m.dump(self.s.metrics_dir, stem="owner")
++            if self.s.metrics_dump_s > 0 and time.monotonic() - last >= self.s.metrics_dump_s:
++                dump()
++                last = time.monotonic()
+             await asyncio.sleep(1.0)
+ 
+     async def _client(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+diff -ru li-orig/rvproto/detect/semantic.py li-tree/rvproto/detect/semantic.py
+--- li-orig/rvproto/detect/semantic.py	2026-09-23 11:36:34.000000000 +0530
++++ li-tree/rvproto/detect/semantic.py	2026-09-23 23:41:42.707432952 +0530
+@@ -72,8 +72,12 @@
+         self.backend = backend
+         self.version = f"pg2-{model_hash[:12]}-tok-{file_hash(tokenizer_path)[:12]}"
+ 
+-    def windows(self, texts: Sequence[str]) -> Windows:
+-        ids = self.tok.encode("\n".join(texts), add_special_tokens=False).ids
++    def windows(self, texts: Sequence[str], batch_api: bool = False) -> Windows:
++        joined = "\n".join(texts)
++        # li experiment: encode_batch releases the GIL (encode does not); identical ids
++        enc = (self.tok.encode_batch([joined], add_special_tokens=False)[0] if batch_api
++               else self.tok.encode(joined, add_special_tokens=False))
++        ids = enc.ids
+         n = len(ids)
+         if n > self.max_tokens:
+             raise InputTooLong(n, self.max_tokens)
+diff -ru li-orig/rvproto/edge/app.py li-tree/rvproto/edge/app.py
+--- li-orig/rvproto/edge/app.py	2026-09-23 13:04:13.000000000 +0530
++++ li-tree/rvproto/edge/app.py	2026-09-23 23:41:42.707286316 +0530
+@@ -4,6 +4,7 @@
+ 
+ import asyncio
+ import contextlib
++import signal
+ import time
+ 
+ from rvproto.edge import errors, ops
+@@ -75,11 +76,18 @@
+             st.metrics.observe("loop_lag_ns", max(time.perf_counter_ns() - t - int(period * 1e9), 0))
+ 
+     async def _dump_metrics(self, st: State) -> None:
+-        while True:
+-            await asyncio.sleep(1.0)
++        def dump() -> None:
+             ops._gauges(st)
+             st.metrics.dump(st.s.metrics_dir)
+ 
++        # li experiment: SIGUSR1 = on-demand dump; RV_METRICS_DUMP_S=0 disables the periodic dump
++        asyncio.get_running_loop().add_signal_handler(signal.SIGUSR1, dump)
++        if st.s.metrics_dump_s <= 0:
++            await asyncio.Event().wait()
++        while True:
++            await asyncio.sleep(st.s.metrics_dump_s)
++            dump()
++
+     async def _shutdown(self) -> None:
+         st = self.st
+         if st is None:
+diff -ru li-orig/rvproto/edge/chat.py li-tree/rvproto/edge/chat.py
+--- li-orig/rvproto/edge/chat.py	2026-09-23 16:43:23.000000000 +0530
++++ li-tree/rvproto/edge/chat.py	2026-09-23 23:41:42.707496546 +0530
+@@ -161,7 +161,11 @@
+         m.observe("t_canon_ns", t_canon - t)
+         if SEMANTIC_DETECTOR in plan.required_input:
+             try:
+-                windows = st.sem.windows([c.text for c in canon])
++                if st.tok_pool is not None:  # li experiment: tokenization off the event loop
++                    windows = await asyncio.get_running_loop().run_in_executor(
++                        st.tok_pool, st.sem.windows, [c.text for c in canon], True)
++                else:
++                    windows = st.sem.windows([c.text for c in canon])
+             except InputTooLong as exc:
+                 m.inc("rejected_input_too_long")
+                 return errors.too_large(str(exc), "context_length_exceeded")
+diff -ru li-orig/rvproto/edge/respond.py li-tree/rvproto/edge/respond.py
+--- li-orig/rvproto/edge/respond.py	2026-09-23 22:23:48.560663003 +0530
++++ li-tree/rvproto/edge/respond.py	2026-09-23 23:41:42.707705080 +0530
+@@ -69,7 +69,7 @@
+         await send({"type": "http.response.body", "body": chunk, "more_body": True})
+ 
+     pipe = StreamPipeline(st.inspector(ctx.plan), m, ceiling=st.stream_ceiling(),
+-                          inject_hold=st.s.inject_hold)
++                          inject_hold=st.s.inject_hold, holdback=st.s.holdback)
+     st.active_streams += 1
+     sst = pipe.stats
+     try:
+diff -ru li-orig/rvproto/edge/state.py li-tree/rvproto/edge/state.py
+--- li-orig/rvproto/edge/state.py	2026-09-23 22:23:48.343640955 +0530
++++ li-tree/rvproto/edge/state.py	2026-09-23 23:41:42.707558706 +0530
+@@ -7,6 +7,7 @@
+ import json
+ import sys
+ import time
++from concurrent.futures import ThreadPoolExecutor
+ from dataclasses import dataclass, field
+ 
+ import redis.asyncio as aioredis
+@@ -56,6 +57,7 @@
+     active_streams: int = 0
+     tasks: list[asyncio.Task[None]] = field(default_factory=list)
+     inspectors: dict[tuple[str, str], PlanInspector] = field(default_factory=dict)
++    tok_pool: ThreadPoolExecutor | None = None  # li experiment (RV_TOKENIZE_IN_THREAD=1)
+ 
+     def inspector(self, plan: object) -> PlanInspector:
+         key = (plan.org_id, plan.version)  # type: ignore[attr-defined]
+@@ -108,6 +110,8 @@
+     st = State(s, contract, logs, bounds, metrics, redis, redis_bg, identity, ks,
+                Admission(identity, ks, Gcra(), lease), plans, matcher, det,
+                Verifier(matcher, s.decode_budget), guard, sem, audit, provider, deadline, gate)
++    if s.tokenize_in_thread:
++        st.tok_pool = ThreadPoolExecutor(max_workers=s.tokenize_threads, thread_name_prefix="rv-tok")
+     _log("startup", worker=s.worker_index, settings=describe(s), matcher=matcher.engine,
+          contract=rc.describe(contract, logs, bounds), audit_drain_rate=audit_rate,
+          guard_deadline_ms=deadline)
+diff -ru li-orig/rvproto/egress/stream.py li-tree/rvproto/egress/stream.py
+--- li-orig/rvproto/egress/stream.py	2026-09-23 11:31:07.000000000 +0530
++++ li-tree/rvproto/egress/stream.py	2026-09-23 23:41:42.707632895 +0530
+@@ -64,11 +64,12 @@
+ 
+ class StreamPipeline:
+     def __init__(self, inspector: OutputInspector, metrics: Registry, *, ceiling: int,
+-                 inject_hold: tuple[int, float] | None) -> None:
++                 inject_hold: tuple[int, float] | None, holdback: bool = True) -> None:
+         self.inspector = inspector
+         self.metrics = metrics
+         self.ceiling = ceiling
+         self.inject_hold = inject_hold
++        self.holdback = holdback  # li experiment: False = scan-no-holdback (NOT boundary-safe)
+         self.stats = StreamStats()  # partial state stays inspectable after cancellation
+ 
+     async def run(self, resp: aiohttp.ClientResponse, send: Send) -> StreamStats:
+@@ -217,7 +218,7 @@
+             t = st.texts[key] = _Text(held_since=t_ready)
+         old = t.pending
+         buf = old + text
+-        h = len(buf) if final else self.inspector.hold_start(buf)
++        h = len(buf) if (final or not self.holdback) else self.inspector.hold_start(buf)
+         off = len(t.ctx)
+         st.scans += 1
+         hits = [(d, max(s - off, 0), e - off) for d, s, e in self.inspector.hits(t.ctx + buf) if e > off]
+diff -ru li-orig/rvproto/runtime/config.py li-tree/rvproto/runtime/config.py
+--- li-orig/rvproto/runtime/config.py	2026-09-23 22:23:47.902596147 +0530
++++ li-tree/rvproto/runtime/config.py	2026-09-23 23:41:42.707139904 +0530
+@@ -49,6 +49,11 @@
+     ("RV_LEASE_CHUNK_TOKENS", ""),  # empty => contract-derived; set => logged deviation
+     ("RV_GUARD_TOPOLOGY", "in_process"),  # in_process (PROTO_SPEC) | owner (one process per GPU)
+     ("RV_GUARD_SOCKET_DIR", ""),  # empty => $XDG_RUNTIME_DIR/rv-guard-<port> (sun_path is 108 bytes)
++    # LOOP-ISOLATION EXPERIMENT (proto-bench-unit li-*, capacity measurement only; defaults = unchanged)
++    ("RV_METRICS_DUMP_S", "1"),  # periodic metrics dump interval; 0 = only on SIGUSR1
++    ("RV_TOKENIZE_IN_THREAD", "0"),  # 1 = encode_batch (releases the GIL) in a thread pool
++    ("RV_TOKENIZE_THREADS", "2"),  # thread-pool size per worker when RV_TOKENIZE_IN_THREAD=1
++    ("RV_HOLDBACK", "on"),  # off = scan-no-holdback, NOT boundary-safe
+ )
+ _SUN_PATH_MAX = 107  # sockaddr_un.sun_path minus the NUL terminator (Linux)
+ 
+@@ -94,6 +99,10 @@
+     lease_chunk_tokens: int | None
+     guard_topology: str
+     guard_socket_dir: str
++    metrics_dump_s: float
++    tokenize_in_thread: bool
++    tokenize_threads: int
++    holdback: bool
+     worker_index: int
+     defaulted: tuple[str, ...]
+ 
+@@ -156,9 +165,15 @@
+         lease_chunk_tokens=int(get["RV_LEASE_CHUNK_TOKENS"]) if get["RV_LEASE_CHUNK_TOKENS"].strip() else None,
+         guard_topology=get["RV_GUARD_TOPOLOGY"],
+         guard_socket_dir=get["RV_GUARD_SOCKET_DIR"] or _socket_dir(src, get["RV_PORT"]),
++        metrics_dump_s=float(get["RV_METRICS_DUMP_S"]),
++        tokenize_in_thread=get["RV_TOKENIZE_IN_THREAD"] == "1",
++        tokenize_threads=int(get["RV_TOKENIZE_THREADS"]),
++        holdback=get["RV_HOLDBACK"].strip().lower() != "off",
+         worker_index=int(src.get("RV_WORKER_INDEX", "0")),
+         defaulted=defaulted,
+     )
++    if get["RV_HOLDBACK"].strip().lower() not in ("on", "off"):
++        raise ValueError(f"RV_HOLDBACK={get['RV_HOLDBACK']!r} (on | off)")
+     if s.guard_topology not in ("in_process", "owner"):
+         raise ValueError(f"RV_GUARD_TOPOLOGY={s.guard_topology!r} (in_process | owner)")
+     if s.guard_topology == "owner" and len(os.path.join(s.guard_socket_dir, "guard-99.sock").encode()) > _SUN_PATH_MAX:

@@ -1,0 +1,2 @@
+107147 bash -c bash ~/rv/rvproto/deploy/stop_unit.sh; sleep 3; pgrep -af rvproto.serve && echo STILL_RUNNING || true
+STILL_RUNNING

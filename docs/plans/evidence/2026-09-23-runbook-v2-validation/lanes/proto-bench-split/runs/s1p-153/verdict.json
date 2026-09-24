@@ -1,0 +1,1 @@
+{"run": "s1p-153", "verdict": "FAIL", "rule": "C4 p99 < 20 ms, infra <= 0.1%, 0 drops", "c4_p99": 25.471, "c4_p999": Infinity, "c4_sse_p99": 26.111, "c4_json_p99": 23.52, "qualified_rps": 151.14, "infra_pct": 0.2572, "drops": 0, "json_total_p99": 23.52, "sse_total_p99": 23.507, "sse_first_p99": 48.394, "load_rule_verdict": "FAIL"}

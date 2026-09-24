@@ -1,0 +1,25 @@
+GREAT-CIRCLE + FIBER RTT FLOOR FROM MUMBAI (c_fiber=2.0e8 m/s, path factor 1.4x great circle)
+  Singapore asia-southeast1      gc=   3904 km  fiber=   5465 km  1-way= 27.3 ms  RTT>= 54.7 ms
+  Delhi asia-south2              gc=   1148 km  fiber=   1607 km  1-way=  8.0 ms  RTT>= 16.1 ms
+  Tokyo asia-northeast1          gc=   6720 km  fiber=   9408 km  1-way= 47.0 ms  RTT>= 94.1 ms
+  Jakarta asia-southeast2        gc=   4663 km  fiber=   6529 km  1-way= 32.6 ms  RTT>= 65.3 ms
+
+PER-L4 COST LADDER (Mumbai, 3yr Resource CUD, $/month):
+  g2-standard-4      4vCPU   16GB 1xL4  $   241.70/mo  $  241.70/L4    4 vCPU per L4
+  g2-standard-8      8vCPU   32GB 1xL4  $   291.90/mo  $  291.90/L4    8 vCPU per L4
+  g2-standard-12    12vCPU   48GB 1xL4  $   342.10/mo  $  342.10/L4   12 vCPU per L4
+  g2-standard-16    16vCPU   64GB 1xL4  $   392.29/mo  $  392.29/L4   16 vCPU per L4
+  g2-standard-24    24vCPU   96GB 2xL4  $   684.19/mo  $  342.10/L4   12 vCPU per L4
+  g2-standard-32    32vCPU  128GB 1xL4  $   593.08/mo  $  593.08/L4   32 vCPU per L4
+  g2-standard-48    48vCPU  192GB 4xL4  $  1368.38/mo  $  342.10/L4   12 vCPU per L4
+  g2-standard-96    96vCPU  384GB 8xL4  $  2736.76/mo  $  342.10/L4   12 vCPU per L4
+
+HA store+platform floor: on-demand $949.12/mo | 3yr-CUD $579.79/mo
+GPU/compute budget left of $5000:  on-demand $4050.88 | 3yr-CUD $4420.21
+
+EGRESS TRADE (prior [M from V]: $4,866/mo == ~1000 RPS coalesced => $4.866 per RPS-month):
+  8xL4 cheapest (8x g2-standard-4)         gpu=$ 1933.63  left=$ 2486.58  =>    511 RPS of streaming egress
+  8xL4 balanced (8x g2-standard-16)        gpu=$ 3138.33  left=$ 1281.88  =>    263 RPS of streaming egress
+  8xL4 dense (2x g2-standard-48)           gpu=$ 2736.76  left=$ 1683.45  =>    346 RPS of streaming egress
+  2x RTX PRO 6000 (2x g4-standard-48)      gpu=$ 3756.23  left=$  663.98  =>    136 RPS of streaming egress
+  CPU-only 128 vCPU (8x c4a-standard-16)   gpu=$ 1964.30  left=$ 2455.91  =>    505 RPS of streaming egress

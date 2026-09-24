@@ -1,0 +1,27 @@
+BOM check (compute values [V] Mumbai 3-yr resource CUD):
+  4 x g2-standard-24 (8 L4, 96 vCPU, 4 nodes/3 zones)  $  2736.76/mo
+  8 x g2-standard-4  (8 L4, 32 vCPU, 8 nodes/3 zones)  $  1933.63/mo
+  8 x g2-standard-8  (8 L4, 64 vCPU, 8 nodes/3 zones)  $  2335.20/mo
+  2 x g2-standard-48 (8 L4, 96 vCPU, 2 nodes/2 zones)  $  2736.76/mo
+
+Max RPS the *budget* allows for each compute layout (egress-bound), in-region provider:
+  4 x g2-standard-24 (8 L4, 96 vCPU, 4 nodes/3 zones)  ->     4151 RPS  (egress+LB budget $ 1722.88)
+  8 x g2-standard-4  (8 L4, 32 vCPU, 8 nodes/3 zones)  ->     6322 RPS  (egress+LB budget $ 2526.01)
+  8 x g2-standard-8  (8 L4, 64 vCPU, 8 nodes/3 zones)  ->     5236 RPS  (egress+LB budget $ 2124.44)
+  2 x g2-standard-48 (8 L4, 96 vCPU, 2 nodes/2 zones)  ->     4151 RPS  (egress+LB budget $ 1722.88)
+
+Same, BYOK provider OUT of region (+3,294 B/req):
+  4 x g2-standard-24 (8 L4, 96 vCPU, 4 nodes/3 zones)  ->     1731 RPS
+  8 x g2-standard-4  (8 L4, 32 vCPU, 8 nodes/3 zones)  ->     2637 RPS
+  8 x g2-standard-8  (8 L4, 64 vCPU, 8 nodes/3 zones)  ->     2184 RPS
+  2 x g2-standard-48 (8 L4, 96 vCPU, 2 nodes/2 zones)  ->     1731 RPS
+
+CPU-only (no GPU) reference layouts:
+  6 x c4-standard-16 (96 x86 vCPU, AMX)                $ 1620.78  ->     7168 RPS budget ceiling
+  3 x c4-standard-16 (48 vCPU)                         $  810.39  ->     9359 RPS budget ceiling
+
+Cost at the recommended point (4 x g2-standard-24, 100% coverage, 1,064 RPS):
+  compute $2736.76 + floor $540.36 + egress+LB $460.46 (4197 GiB egress) = $3737.58  headroom $1262.42
+Cost at 30% semantic coverage on the SAME 8 L4 (3,547 RPS of gateway traffic):
+  compute $2736.76 + floor $540.36 + egress+LB $1499.65 = $4776.77
+Egress-bound ceiling with that GPU tier bought: 4151 RPS (=> min coverage 26%)

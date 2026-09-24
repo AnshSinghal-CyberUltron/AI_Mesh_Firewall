@@ -1,0 +1,3 @@
+2026/09/23 10:58:40 synthprov 5af9594a2631 listening on 0.0.0.0:8080 (ttft=150ms itl=20ms sample-mod=10 hb=100µs gomaxprocs=4 gc=off memlimit=8.78GiB)
+2026/09/23 11:24:15 shutting down
+2026/09/23 11:24:15 final stats: requests=1821 records=1821 blocked=0

@@ -1,0 +1,70 @@
+{
+ "run": "SAT-r40",
+ "events": 9275,
+ "by_kind": {
+  "consistent|request": 4500,
+  "consistent|stream_complete": 4370,
+  "MISMATCH_corr_vs_content|stream_complete": 404,
+  "nonce_only|stream_complete": 1
+ },
+ "client_corr_with_multiple_events": 140,
+ "extra_events_same_corr": 148,
+ "nonces_with_multiple_events": 0,
+ "examples": [
+  {
+   "event_id": 150593,
+   "et": "stream_complete",
+   "client_corr": "fa278f2a-b35c-489f-90a3-b5bd3abd76aa",
+   "corr_client_nonce": "(ref-whale-anchor-anchor-anchor-banana-whale)",
+   "content_nonce": "(ref-whale-anchor-anchor-anchor-ant-cave)",
+   "content_client_rid": "bcb6f456-9f01-4ff4-9eae-536bd237d162",
+   "corr_client_status": 200,
+   "content_client_status": 200,
+   "completed": "false"
+  },
+  {
+   "event_id": 151031,
+   "et": "stream_complete",
+   "client_corr": "b41c960e-5e68-4149-a965-1f168dead296",
+   "corr_client_nonce": "(ref-whale-anchor-anchor-anchor-bedroom-gentle)",
+   "content_nonce": "(ref-whale-anchor-anchor-anchor-april-game)",
+   "content_client_rid": "956ec19e-b517-4664-bb91-6d80d4b67153",
+   "corr_client_status": 200,
+   "content_client_status": 200,
+   "completed": "false"
+  },
+  {
+   "event_id": 151112,
+   "et": "stream_complete",
+   "client_corr": "e3868d96-97a9-4e6c-ae61-45da975d2c96",
+   "corr_client_nonce": "(ref-whale-anchor-anchor-anchor-balloon-forest)",
+   "content_nonce": "(ref-whale-anchor-anchor-anchor-april-marsh)",
+   "content_client_rid": "50dbe0e4-4ae3-4678-b115-76100496659d",
+   "corr_client_status": 200,
+   "content_client_status": 200,
+   "completed": "false"
+  },
+  {
+   "event_id": 151156,
+   "et": "stream_complete",
+   "client_corr": "fcb41eea-d5bd-43cb-a72b-c9a0508c4fb6",
+   "corr_client_nonce": "(ref-whale-anchor-anchor-anchor-baker-bright)",
+   "content_nonce": "(ref-whale-anchor-anchor-anchor-april-third)",
+   "content_client_rid": "c326ecec-9490-4964-9d44-e90ff01b2a8d",
+   "corr_client_status": 200,
+   "content_client_status": 200,
+   "completed": "false"
+  },
+  {
+   "event_id": 151349,
+   "et": "stream_complete",
+   "client_corr": "50927e86-7f56-4928-a922-aa6540aca864",
+   "corr_client_nonce": "(ref-whale-anchor-anchor-anchor-bowl-border)",
+   "content_nonce": "(ref-whale-anchor-anchor-anchor-april-late)",
+   "content_client_rid": "6e529496-656a-4abe-a891-a834d2e63d2a",
+   "corr_client_status": 200,
+   "content_client_status": 200,
+   "completed": "false"
+  }
+ ]
+}

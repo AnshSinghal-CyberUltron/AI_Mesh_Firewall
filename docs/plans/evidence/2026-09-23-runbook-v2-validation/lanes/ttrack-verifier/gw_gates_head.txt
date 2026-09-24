@@ -1,0 +1,14 @@
+Python 3.12.14
+check_sizes exit=0
+check_http_outside_edge_resolve exit=0
+check_no_module_mutable exit=0
+check_capacity_literals exit=0
+
+Gateway v2 layers KEPT
+
+Contracts: 1 kept, 0 broken.
+lint-imports exit=0
+All checks passed!
+Success: no issues found in 78 source files
+.....................................ssss.....                           [100%]
+42 passed, 4 skipped in 0.76s

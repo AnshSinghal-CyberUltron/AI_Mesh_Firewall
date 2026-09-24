@@ -1,0 +1,14 @@
+# rvproto gateway-only node (split topology, no guard engine). Same pins as requirements-unit.txt.
+uvicorn[standard]==0.53.0
+uvloop==0.22.1
+httptools==0.8.0
+orjson==3.12.0
+aiohttp==3.14.3
+httpx==0.28.1
+redis==8.1.0
+hiredis==3.4.2
+tokenizers==0.23.2
+numpy==2.5.3
+hyperscan==0.8.2
+regex==2026.9.10
+openai==2.38.0

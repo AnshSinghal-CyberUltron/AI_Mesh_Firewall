@@ -1,0 +1,4 @@
+{"t": 1790165293.103, "step": "a0 new key warmed on the workers", "warm": {"200 v=b-1 disp=ALLOW": 24}}
+{"t": 1790165293.373, "step": "a1 revoked with epoch bump", "every_probe_401_from_s": 0.184, "last_accept_after_revocation_s": 0.179, "n_probes": 18}
+{"t": 1790165296.547, "step": "b0 second key warmed", "warm": {"200 v=b-1 disp=ALLOW": 24}}
+{"t": 1790165316.578, "step": "b1 revoked WITHOUT epoch bump (store has no key)", "every_probe_401_within_20s": null, "accepted_after_revocation": 221, "of": 221, "last": [[19.846, "200"], [19.938, "200"], [20.029, "200"]]}

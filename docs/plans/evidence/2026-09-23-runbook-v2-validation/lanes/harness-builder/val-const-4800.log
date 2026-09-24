@@ -1,0 +1,39 @@
+2026/09/23 11:55:55 synthprov 5af9594a2631 listening on :8080 (ttft=150ms itl=20ms sample-mod=10 hb=100µs gomaxprocs=8 gc=off memlimit=9.37GiB)
+2026/09/23 11:55:55 synthprov 5af9594a2631 listening on :8080 (ttft=150ms itl=20ms sample-mod=10 hb=100µs gomaxprocs=8 gc=off memlimit=9.37GiB)
+2026/09/23 11:55:55 synthprov 5af9594a2631 listening on :8080 (ttft=150ms itl=20ms sample-mod=10 hb=100µs gomaxprocs=8 gc=off memlimit=9.37GiB)
+11:55:56 olg started on rv-harness-lg-2 rv-harness-lg-3 rv-harness-lg-4 rv-harness-lg-5 (rate 1200.0 each, start-at 1790164576109)
+[rv-harness-lg-2] 2026/09/23 12:02:54 done: scheduled=450000 recorded=450000 ok=450000 errors=map[] drops=1 late_p99=116us max=9850us cpu_busy_max=49.0%
+[rv-harness-lg-3] 2026/09/23 12:02:54 done: scheduled=450000 recorded=450000 ok=450000 errors=map[] drops=0 late_p99=118us max=711us cpu_busy_max=59.2%
+[rv-harness-lg-4] 2026/09/23 12:02:54 done: scheduled=450000 recorded=450000 ok=450000 errors=map[] drops=0 late_p99=117us max=2456us cpu_busy_max=57.6%
+[rv-harness-lg-5] 2026/09/23 12:02:54 done: scheduled=450000 recorded=450000 ok=450000 errors=map[] drops=0 late_p99=118us max=2427us cpu_busy_max=49.6%
+2026/09/23 12:02:57 final stats: requests=600522 records=600522 blocked=0
+659852103 records.jsonl
+2253 stats.json
+2026/09/23 12:02:57 final stats: requests=599216 records=599216 blocked=0
+656740084 records.jsonl
+2243 stats.json
+2026/09/23 12:02:57 final stats: requests=600262 records=600262 blocked=0
+660501820 records.jsonl
+2240 stats.json
+[rv-harness-lg-2] compressed size 132M
+[rv-harness-lg-5] compressed size 132M
+[rv-harness-lg-3] compressed size 133M
+[rv-harness-lg-4] compressed size 132M
+[rv-harness-prov-2] compressed size 184M
+[rv-harness-prov-3] compressed size 185M
+[rv-harness-prov-4] compressed size 186M
+12:02:59 collected val-const-4800 from rv-harness-lg-2 rv-harness-lg-3 rv-harness-lg-4 rv-harness-lg-5 rv-harness-prov-2 rv-harness-prov-3 rv-harness-prov-4 into /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/harness-builder/runs/val-const-4800
+# Harness analysis (direct, policy=none) — PASS
+
+| check | result |
+|---|---|
+| zero_schedule_drops | PASS |
+| zero_errors | PASS |
+| provider_p99_sched_err_within_tol | PASS |
+| loadgen_cpu_max_lt_limit | PASS |
+| run_valid | PASS |
+| all_joined | PASS |
+
+- offered: 1440000 over 300 s = 4800.0 req/s (configured 4800.0)
+- qualified: 1440000 (4800.0 req/s); expected blocks: 0; errors: 0 (rate 0.0)
+- error reasons: {}

@@ -1,0 +1,6 @@
+tree contains a known violation: 3:_SEEN: dict[str, int] = {}
+check_sizes(root=gateway_v2)=0  check_http_outside_edge_resolve(root=gateway_v2)=0  check_no_module_mutable(root=gateway_v2)=1  check_capacity_literals(root=gateway_v2)=0  
+check_sizes(root=./gateway_v2/)=0  check_http_outside_edge_resolve(root=./gateway_v2/)=0  check_no_module_mutable(root=./gateway_v2/)=1  check_capacity_literals(root=./gateway_v2/)=0  
+check_sizes(root=src/gateway_v2)=0  check_http_outside_edge_resolve(root=src/gateway_v2)=0  check_no_module_mutable(root=src/gateway_v2)=0  check_capacity_literals(root=src/gateway_v2)=0  
+check_sizes(root=gateway-v2)=0  check_http_outside_edge_resolve(root=gateway-v2)=0  check_no_module_mutable(root=gateway-v2)=0  check_capacity_literals(root=gateway-v2)=0  
+check_sizes(root='')=0  check_http_outside_edge_resolve(root='')=0  check_no_module_mutable(root='')=1  check_capacity_literals(root='')=0  

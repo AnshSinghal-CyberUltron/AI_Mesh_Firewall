@@ -1,0 +1,61 @@
+[
+ {
+  "rid": "p10-org_killswitch-ce9d91",
+  "status": 200,
+  "duration_s": 40.4,
+  "chars": 10220,
+  "chars_after_control_applied": 9489,
+  "done_seen": true,
+  "plan_version_header": "a-1",
+  "control": "org_killswitch",
+  "new_request_after_control": {
+   "status": 503,
+   "code": "kill_switch_engaged",
+   "plan_version": null
+  }
+ },
+ {
+  "rid": "p10-key_revoked-6a9d7a",
+  "status": 200,
+  "duration_s": 40.5,
+  "chars": 10243,
+  "chars_after_control_applied": 9504,
+  "done_seen": true,
+  "plan_version_header": "a-1",
+  "control": "key_revoked",
+  "new_request_after_control": {
+   "status": 401,
+   "code": "invalid_api_key",
+   "plan_version": null
+  }
+ },
+ {
+  "rid": "p10-plan_tightened_new_version-d97913",
+  "status": 200,
+  "duration_s": 40.5,
+  "chars": 10239,
+  "chars_after_control_applied": 9499,
+  "done_seen": true,
+  "plan_version_header": "a-1",
+  "control": "plan_tightened_new_version",
+  "new_request_after_control": {
+   "status": 200,
+   "code": null,
+   "plan_version": "a-2"
+  },
+  "audit_records_for_stream": [
+   {
+    "phase": "input",
+    "plan_version": "a-1",
+    "disposition": "ALLOW",
+    "verification": "none"
+   },
+   {
+    "phase": "output",
+    "plan_version": "a-1",
+    "disposition": "ALLOW",
+    "verification": "stream_complete"
+   }
+  ]
+ }
+]

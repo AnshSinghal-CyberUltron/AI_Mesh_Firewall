@@ -1,0 +1,6 @@
+fuzz: elapsed: 1m24s, execs: 2352057 (0/sec), new interesting: 462 (total: 466)
+fuzz: elapsed: 1m27s, execs: 2352057 (0/sec), new interesting: 462 (total: 466)
+fuzz: elapsed: 1m30s, execs: 2666406 (104845/sec), new interesting: 465 (total: 469)
+fuzz: elapsed: 1m31s, execs: 2666406 (0/sec), new interesting: 465 (total: 469)
+PASS
+ok  	rvharness/internal/rv	91.037s

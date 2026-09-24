@@ -1,0 +1,1243 @@
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/runtime/sighup_deadlock.py", line 65, in <module>
+    pool.acquire()   # request path on the main (event-loop) thread
+    ^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 26, in acquire
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 302, in __exit__
+    def __exit__(self, *args):
+
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+DEADLOCK: main thread stuck after ops=25099 hups=1139 reloads=1134
+Current thread 0x0000792e596896c0 (most recent call first):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/runtime/sighup_deadlock.py", line 55 in watchdog
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 1012 in run
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 1075 in _bootstrap_inner
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 1032 in _bootstrap
+
+Thread 0x0000792e59e8a6c0 (most recent call first):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/runtime/sighup_deadlock.py", line 43 in sender
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 1012 in run
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 1075 in _bootstrap_inner
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 1032 in _bootstrap
+
+Thread 0x0000792e5a5cb780 (most recent call first):
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300 in __enter__
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40 in resize
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76 in apply
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82 in reload
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26 in handler
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300 in __enter__
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40 in resize
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76 in apply
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82 in reload
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26 in handler
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300 in __enter__
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40 in resize
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76 in apply
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82 in reload
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26 in handler
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300 in __enter__
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40 in resize
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76 in apply
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82 in reload
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26 in handler
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300 in __enter__
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40 in resize
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76 in apply
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82 in reload
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26 in handler
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300 in __enter__
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40 in resize
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76 in apply
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82 in reload
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26 in handler
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300 in __enter__
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40 in resize
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76 in apply
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82 in reload
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26 in handler
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300 in __enter__
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40 in resize
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76 in apply
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82 in reload
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26 in handler
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300 in __enter__
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40 in resize
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76 in apply
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82 in reload
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26 in handler
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300 in __enter__
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40 in resize
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76 in apply
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82 in reload
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26 in handler
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300 in __enter__
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40 in resize
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76 in apply
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82 in reload
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26 in handler
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300 in __enter__
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40 in resize
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76 in apply
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82 in reload
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26 in handler
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300 in __enter__
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40 in resize
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76 in apply
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82 in reload
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26 in handler
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300 in __enter__
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40 in resize
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76 in apply
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82 in reload
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26 in handler
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300 in __enter__
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40 in resize
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76 in apply
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82 in reload
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26 in handler
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300 in __enter__
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40 in resize
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76 in apply
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82 in reload
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26 in handler
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300 in __enter__
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40 in resize
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76 in apply
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82 in reload
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26 in handler
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300 in __enter__
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40 in resize
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76 in apply
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82 in reload
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26 in handler
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300 in __enter__
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40 in resize
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76 in apply
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82 in reload
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26 in handler
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300 in __enter__
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 40 in resize
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 76 in apply
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/pools.py", line 82 in reload
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-hidden-failures/gw00-03/copy/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26 in handler
+  ...

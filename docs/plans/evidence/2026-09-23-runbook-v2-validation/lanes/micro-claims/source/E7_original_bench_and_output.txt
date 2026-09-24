@@ -1,0 +1,86 @@
+# SOURCE transcript: ~/.claude/projects/-home-contact-cyberultron-com-AI-Mesh-Firewall/4b1feace-5c5c-4958-9fcd-e4a98c62733a/subagents/workflows/wf_3a825355-ff7/agent-a8b043715e8d0bb5a.jsonl
+# tool_result line 188 timestamp 2026-08-27T10:54:38.668Z
+# ===== COMMAND (tool_use line 187) =====
+cd /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/4b1feace-5c5c-4958-9fcd-e4a98c62733a/scratchpad/e7 && ./v312/bin/pip install -q "starlette==1.2.0" httpx 2>&1|tail -3; cat > bench_mw.py <<'PYEOF'
+"""E7: ASGI middleware-stack overhead. 4x BaseHTTPMiddleware + 2 pure-ASGI, as in main.py."""
+import asyncio, time, statistics, sys
+from starlette.applications import Starlette
+from starlette.routing import Route
+from starlette.responses import JSONResponse, Response
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.middleware.cors import CORSMiddleware
+import starlette; print("starlette", starlette.__version__)
+
+async def ep(request):
+    await request.json()
+    return JSONResponse({"ok": True, "id": "chatcmpl-x"})
+
+def build(n_basehttp, cors=False, pure=0):
+    app = Starlette(routes=[Route("/v1/chat/completions", ep, methods=["POST"])])
+    for i in range(n_basehttp):
+        class M(BaseHTTPMiddleware):
+            async def dispatch(self, request, call_next):
+                resp = await call_next(request)
+                resp.headers["x-mw"] = "1"
+                return resp
+        app.add_middleware(M)
+    if cors: app.add_middleware(CORSMiddleware, allow_origins=["*"])
+    inner = app
+    for _ in range(pure):
+        class Pure:
+            def __init__(self, a): self.a=a
+            async def __call__(self, scope, receive, send):
+                if scope["type"]!="http": return await self.a(scope,receive,send)
+                return await self.a(scope,receive,send)
+        inner = Pure(inner)
+    return inner
+
+BODY = b'{"model":"gpt-4o-mini","messages":[{"role":"user","content":"%s"}],"max_tokens":1024}' % (b"x"*3900)
+
+async def call(app):
+    scope={"type":"http","asgi":{"version":"3.0"},"http_version":"1.1","method":"POST",
+           "path":"/v1/chat/completions","raw_path":b"/v1/chat/completions","query_string":b"",
+           "root_path":"","scheme":"http","headers":[(b"content-type",b"application/json"),
+           (b"host",b"x"),(b"content-length",str(len(BODY)).encode())],
+           "client":("1.2.3.4",1234),"server":("x",80),"app":None}
+    sent=[]
+    body_left=[BODY]
+    async def receive():
+        if body_left: return {"type":"http.request","body":body_left.pop(),"more_body":False}
+        return {"type":"http.disconnect"}
+    async def send(m): sent.append(m)
+    await app(scope, receive, send)
+    return sent
+
+async def main():
+    async def bench(app,n=3000,warm=300):
+        for _ in range(warm): await call(app)
+        xs=[]
+        for _ in range(n):
+            t=time.perf_counter(); await call(app); xs.append((time.perf_counter()-t)*1e3)
+        xs.sort(); return xs[len(xs)//2], xs[int(n*.99)]
+    base=build(0)
+    b50,b99 = await bench(base)
+    print(f"{'bare route (json parse + JSONResponse)':52s} p50={b50:7.4f}ms p99={b99:7.4f}ms")
+    for n in (1,2,3,4):
+        a=build(n)
+        m50,m99=await bench(a)
+        print(f"{f'+ {n}x BaseHTTPMiddleware':52s} p50={m50:7.4f}ms p99={m99:7.4f}ms  "
+              f"delta_p50={m50-b50:+7.4f}ms ({(m50-b50)/n:.4f} ms each)")
+    a=build(4, cors=True, pure=1)
+    m50,m99=await bench(a)
+    print(f"{'main.py shape: 4x BaseHTTP + CORS + 1 pure ASGI':52s} p50={m50:7.4f}ms p99={m99:7.4f}ms  "
+          f"delta_p50={m50-b50:+7.4f}ms")
+asyncio.run(main())
+PYEOF
+./v312/bin/python bench_mw.py 2>&1 | tail -12
+# ===== OUTPUT =====
+[notice] A new release of pip is available: 25.0.1 -> 26.2.1
+[notice] To update, run: python3.12 -m pip install --upgrade pip
+starlette 1.2.0
+bare route (json parse + JSONResponse)               p50= 0.0231ms p99= 0.0352ms
++ 1x BaseHTTPMiddleware                              p50= 0.2581ms p99= 1.6541ms  delta_p50=+0.2351ms (0.2351 ms each)
++ 2x BaseHTTPMiddleware                              p50= 0.4878ms p99= 1.0225ms  delta_p50=+0.4648ms (0.2324 ms each)
++ 3x BaseHTTPMiddleware                              p50= 0.7580ms p99= 3.8368ms  delta_p50=+0.7350ms (0.2450 ms each)
++ 4x BaseHTTPMiddleware                              p50= 1.0069ms p99= 4.9863ms  delta_p50=+0.9839ms (0.2460 ms each)
+main.py shape: 4x BaseHTTP + CORS + 1 pure ASGI      p50= 1.0249ms p99= 4.7023ms  delta_p50=+1.0019ms

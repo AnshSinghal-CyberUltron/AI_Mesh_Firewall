@@ -1,0 +1,1 @@
+{"json_finish": "stop", "json_words": 10, "models_listed": true, "stream_words": 10, "tool": "get_weather", "tool_args": {"limit": 5, "query": "fact what take as after this then an with at people even", "ref": "9965d663"}}

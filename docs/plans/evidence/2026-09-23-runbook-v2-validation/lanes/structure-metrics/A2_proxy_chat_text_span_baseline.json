@@ -1,0 +1,42 @@
+{
+ "def_line": 7076,
+ "ast_end": 12065,
+ "next_toplevel_def_line": 12103,
+ "span_next_def_minus_def": 5027,
+ "AST": {
+  "n_lines": 4990,
+  "lines_starting_if_elif": 339,
+  "lines_starting_if": 313,
+  "lines_starting_elif": 26,
+  "lines_starting_return": 95,
+  "lines_starting_except": 49,
+  "lines_except_Exception_any": 20,
+  "lines_except_Exception_colon": 17,
+  "lines_except_Exception_as": 3,
+  "lines_containing_'except Exception'": 20,
+  "lines_body_subscript_assign": 28,
+  "lines_body_pop_setdefault_update": 5,
+  "lines_stage_metrics_subscript_assign": 20,
+  "max_indent_levels_any_line(def=0)": 12,
+  "max_indent_line_no": 9169,
+  "max_indent_of_block_opening_lines(def=0)": 9
+ },
+ "GREP_to_next_toplevel_def": {
+  "n_lines": 5027,
+  "lines_starting_if_elif": 339,
+  "lines_starting_if": 313,
+  "lines_starting_elif": 26,
+  "lines_starting_return": 95,
+  "lines_starting_except": 50,
+  "lines_except_Exception_any": 20,
+  "lines_except_Exception_colon": 17,
+  "lines_except_Exception_as": 3,
+  "lines_containing_'except Exception'": 20,
+  "lines_body_subscript_assign": 28,
+  "lines_body_pop_setdefault_update": 5,
+  "lines_stage_metrics_subscript_assign": 20,
+  "max_indent_levels_any_line(def=0)": 12,
+  "max_indent_line_no": 9169,
+  "max_indent_of_block_opening_lines(def=0)": 9
+ }
+}

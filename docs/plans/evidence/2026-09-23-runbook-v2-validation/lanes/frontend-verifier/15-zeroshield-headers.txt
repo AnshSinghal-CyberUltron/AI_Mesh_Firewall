@@ -1,0 +1,16 @@
+# X-ZeroShield-* / x-zeroshield-* header names read by frontend (non-test)
+      2 x-zeroshield-original-model
+      1 x-zeroshield-pipeline-request-id
+      1 x-zeroshield-rag-context-id
+      1 x-zeroshield-rerouted
+      2 x-zeroshield-routed-model
+      1 x-zeroshield-routing-policy-summary
+      1 x-zeroshield-routing-reason
+      1 x-zeroshield-routing-source
+      1 x-zeroshield-signature
+      1 x-zeroshield-stream-scan-mode
+
+# emitted by gateway (non-test)
+20
+# frontend-read headers not emitted by gateway:
+x-zeroshield-signature

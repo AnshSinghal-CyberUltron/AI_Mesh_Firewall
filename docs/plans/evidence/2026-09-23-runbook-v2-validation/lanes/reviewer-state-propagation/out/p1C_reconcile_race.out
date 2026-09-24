@@ -1,0 +1,5 @@
+{"t": 1790164478.896, "step": "C0 loaded", "org_x": "ExecutionPlan(version=x-1, pii.out=enforce/redact)", "org_w": "ExecutionPlan(version=w-1, pii.out=monitor/redact)"}
+{"t": 1790164479.001, "step": "C1 after B (push) applied W", "org_w": "ExecutionPlan(version=w-2, pii.out=enforce/block)"}
+{"t": 1790164479.297, "step": "C2 after A (periodic) finished", "org_x": "ExecutionPlan(version=x-2, pii.out=enforce/redact)", "org_w": "ExecutionPlan(version=w-1, pii.out=monitor/redact)", "version_index": {"org-x": "x-2", "org-w": "w-2"}}
+{"t": 1790164479.298, "step": "C3 after 5 more reconciles (quiescent store)", "org_w": "ExecutionPlan(version=w-1, pii.out=monitor/redact)", "store_version_w": "w-2", "version_index": {"org-x": "x-2", "org-w": "w-2"}}
+{"proxy": {"t": 1790164479.2989523, "mode": "pass", "delay_ms": 0.0, "backend": 26379, "live_conns": 2, "blackholed_conns": 0, "selective": ["GET", "rv:plan:org-x", 400.0], "accepted": 2, "selective_delays": 1, "blackholed": 0, "reset": 0}}

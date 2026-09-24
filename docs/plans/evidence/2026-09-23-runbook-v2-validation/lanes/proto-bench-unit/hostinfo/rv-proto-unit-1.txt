@@ -1,0 +1,175 @@
+## date -u
+Wed Sep 23 12:05:20 UTC 2026
+## uname -a
+Linux rv-proto-unit-1 6.8.0-1066-gcp #74~22.04.1-Ubuntu SMP Fri Aug  7 21:51:15 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux
+## nproc
+24
+## free -g
+               total        used        free      shared  buff/cache   available
+Mem:              94           6          82           0           5          86
+Swap:              0           0           0
+## lscpu
+Architecture:                            x86_64
+CPU op-mode(s):                          32-bit, 64-bit
+Address sizes:                           46 bits physical, 48 bits virtual
+Byte Order:                              Little Endian
+CPU(s):                                  24
+On-line CPU(s) list:                     0-23
+Vendor ID:                               GenuineIntel
+Model name:                              Intel(R) Xeon(R) CPU @ 2.20GHz
+CPU family:                              6
+Model:                                   85
+Thread(s) per core:                      2
+Core(s) per socket:                      12
+Socket(s):                               1
+Stepping:                                7
+BogoMIPS:                                4400.44
+Flags:                                   fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ss ht syscall nx pdpe1gb rdtscp lm constant_tsc rep_good nopl xtopology nonstop_tsc cpuid tsc_known_freq pni pclmulqdq ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt aes xsave avx f16c rdrand hypervisor lahf_lm abm 3dnowprefetch ssbd ibrs ibpb stibp ibrs_enhanced fsgsbase tsc_adjust bmi1 hle avx2 smep bmi2 erms invpcid rtm mpx avx512f avx512dq rdseed adx smap clflushopt clwb avx512cd avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves arat avx512_vnni md_clear arch_capabilities
+Hypervisor vendor:                       KVM
+Virtualization type:                     full
+L1d cache:                               384 KiB (12 instances)
+L1i cache:                               384 KiB (12 instances)
+L2 cache:                                12 MiB (12 instances)
+L3 cache:                                38.5 MiB (1 instance)
+NUMA node(s):                            1
+NUMA node0 CPU(s):                       0-23
+Vulnerability Gather data sampling:      Not affected
+Vulnerability Indirect target selection: Mitigation; Aligned branch/return thunks
+Vulnerability Itlb multihit:             Not affected
+Vulnerability L1tf:                      Not affected
+Vulnerability Mds:                       Not affected
+Vulnerability Meltdown:                  Not affected
+Vulnerability Mmio stale data:           Vulnerable: Clear CPU buffers attempted, no microcode; SMT Host state unknown
+Vulnerability Reg file data sampling:    Not affected
+Vulnerability Retbleed:                  Mitigation; Enhanced IBRS
+Vulnerability Spec rstack overflow:      Not affected
+Vulnerability Spec store bypass:         Mitigation; Speculative Store Bypass disabled via prctl
+Vulnerability Spectre v1:                Mitigation; usercopy/swapgs barriers and __user pointer sanitization
+Vulnerability Spectre v2:                Mitigation; Enhanced / Automatic IBRS; IBPB conditional; PBRSB-eIBRS SW sequence; BHI SW loop, KVM SW loop
+Vulnerability Srbds:                     Not affected
+Vulnerability Tsa:                       Not affected
+Vulnerability Tsx async abort:           Vulnerable: Clear CPU buffers attempted, no microcode; SMT Host state unknown
+Vulnerability Vmscape:                   Not affected
+## image
+projects/deeplearning-platform-release/global/images/common-cu129-ubuntu-2204-nvidia-580-v20260909
+## machine-type
+projects/24342156045/machineTypes/g2-standard-24
+## zone
+projects/24342156045/zones/asia-south1-c
+## disks
+NAME           SIZE TYPE MOUNTPOINT                 ROTA
+loop0           74M loop /snap/core22/2437             0
+loop1         66.8M loop /snap/core24/1643             0
+loop2        332.2M loop /snap/google-cloud-cli/493    0
+loop3        115.3M loop /snap/lxd/40575               0
+loop4         50.3M loop /snap/snapd/27738             0
+nvme0n1        200G disk                               0
+├─nvme0n1p1  199.9G part /                             0
+├─nvme0n1p14     4M part                               0
+└─nvme0n1p15   106M part /boot/efi                     0
+TARGET SOURCE         FSTYPE OPTIONS
+/      /dev/nvme0n1p1 ext4   rw,relatime,discard,errors=remount-ro
+## redis
+save
+900 1 300 10 60 10000
+appendonly
+no
+## sysctl
+net.core.somaxconn = 4096
+net.ipv4.ip_local_port_range = 32768	60999
+fs.nr_open = 1048576
+vm.dirty_ratio = 20
+vm.dirty_background_ratio = 10
+## ulimit
+open files                          (-n) 1048576
+open files                          (-n) 1048576
+## nvidia-smi
+Wed Sep 23 12:05:20 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 580.178.04             Driver Version: 580.178.04     CUDA Version: 13.0     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA L4                      Off |   00000000:00:03.0 Off |                    0 |
+| N/A   76C    P0             37W /   72W |     434MiB /  23034MiB |      7%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+|   1  NVIDIA L4                      Off |   00000000:00:04.0 Off |                    0 |
+| N/A   70C    P0             35W /   72W |     434MiB /  23034MiB |      4%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|    0   N/A  N/A           55074      C   /home/rv/rv/venv/bin/python             426MiB |
+|    1   N/A  N/A           55075      C   /home/rv/rv/venv/bin/python             426MiB |
++-----------------------------------------------------------------------------------------+
+## pip freeze
+Using Python 3.12.14 environment at: rv/venv
+aiohappyeyeballs==2.7.1
+aiohttp==3.14.3
+aiosignal==1.4.0
+annotated-types==0.8.0
+anyio==4.15.1
+attrs==26.1.0
+certifi==2026.7.22
+click==8.5.0
+distro==1.9.0
+filelock==4.0.1
+flatbuffers==25.12.19
+frozenlist==1.8.0
+fsspec==2026.9.0
+grpcio==1.84.0
+h11==0.16.0
+hf-xet==1.6.0
+hiredis==3.4.2
+httpcore==1.0.9
+httptools==0.8.0
+httpx==0.28.1
+huggingface-hub==1.32.0
+hyperscan==0.8.2
+idna==3.20
+jiter==0.17.0
+ml-dtypes==0.5.4
+multidict==6.9.1
+numpy==2.5.3
+nvidia-cublas==13.8.0.4
+nvidia-cuda-nvrtc==13.4.92
+nvidia-cuda-runtime==13.4.92
+nvidia-cudnn-cu13==9.26.0.51
+nvidia-cufft==12.4.0.43
+nvidia-curand==10.4.4.72
+nvidia-nvjitlink==13.4.92
+onnxruntime-gpu==1.30.0
+openai==2.38.0
+orjson==3.12.0
+packaging==26.3
+propcache==0.5.4
+protobuf==6.33.6
+pydantic==2.13.5
+pydantic-core==2.46.5
+python-dotenv==1.2.3
+python-rapidjson==1.25
+pyyaml==6.0.3
+redis==8.1.0
+regex==2026.9.10
+sniffio==1.3.1
+tensorrt-cu13==10.16.1.11
+tensorrt-cu13-bindings==10.16.1.11
+tensorrt-cu13-libs==10.16.1.11
+tokenizers==0.23.2
+tqdm==4.70.1
+tritonclient==2.72.0
+typing-extensions==4.16.0
+typing-inspection==0.4.4
+urllib3==2.8.0
+uvicorn==0.53.0
+uvloop==0.22.1
+watchfiles==1.3.0
+websockets==17.1
+yarl==1.25.1

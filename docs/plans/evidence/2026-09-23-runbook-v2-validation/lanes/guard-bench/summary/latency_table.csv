@@ -1,0 +1,99 @@
+exp,host,model,backend,W,seq,n,p50,p90,p99,max,devio_p50,engine_build_s,file
+A in-process ORT,g2-1,PG2-22M,cuda_fp16,1,256,3000,6.6583,6.8403,7.1597,8.5193,6.6904,1.6645,raw/A/g2-1/Llama-Prompt-Guard-2-22M/lat_cuda_fp16.json
+A in-process ORT,g2-1,PG2-22M,cuda_fp16,1,512,3000,6.6689,6.8283,7.079,7.9836,6.6091,,raw/A/g2-1/Llama-Prompt-Guard-2-22M/lat_cuda_fp16.json
+A in-process ORT,g2-1,PG2-22M,cuda_fp16,2,512,3000,8.3138,8.3723,8.4237,8.5246,8.305,,raw/A/g2-1/Llama-Prompt-Guard-2-22M/lat_cuda_fp16.json
+A in-process ORT,g2-1,PG2-22M,cuda_fp16,3,512,3000,13.5254,13.6081,13.675,13.9052,13.4996,,raw/A/g2-1/Llama-Prompt-Guard-2-22M/lat_cuda_fp16.json
+A in-process ORT,g2-1,PG2-22M,cuda_fp16,4,512,3000,20.27,20.4555,20.7196,21.1562,20.3493,,raw/A/g2-1/Llama-Prompt-Guard-2-22M/lat_cuda_fp16.json
+A in-process ORT,g2-1,PG2-22M,cuda_fp16,7,512,3000,43.2748,43.3733,43.4643,43.6025,43.181,,raw/A/g2-1/Llama-Prompt-Guard-2-22M/lat_cuda_fp16.json
+A in-process ORT,g2-1,PG2-22M,cuda_fp32,1,256,3000,5.9971,6.1218,6.3933,6.9429,5.8891,1.8606,raw/A/g2-1/Llama-Prompt-Guard-2-22M/lat_cuda_fp32.json
+A in-process ORT,g2-1,PG2-22M,cuda_fp32,1,512,3000,6.1787,6.3334,6.6133,7.0797,5.8989,,raw/A/g2-1/Llama-Prompt-Guard-2-22M/lat_cuda_fp32.json
+A in-process ORT,g2-1,PG2-22M,cuda_fp32,2,512,3000,13.6139,13.705,13.7954,14.3275,13.7153,,raw/A/g2-1/Llama-Prompt-Guard-2-22M/lat_cuda_fp32.json
+A in-process ORT,g2-1,PG2-22M,cuda_fp32,3,512,3000,24.7363,24.8616,24.9624,25.1313,22.7177,,raw/A/g2-1/Llama-Prompt-Guard-2-22M/lat_cuda_fp32.json
+A in-process ORT,g2-1,PG2-22M,cuda_fp32,4,512,3000,36.0378,36.1942,36.3203,36.4761,36.1838,,raw/A/g2-1/Llama-Prompt-Guard-2-22M/lat_cuda_fp32.json
+A in-process ORT,g2-1,PG2-22M,cuda_fp32,7,512,3000,81.7752,81.9173,82.024,82.5202,81.7152,,raw/A/g2-1/Llama-Prompt-Guard-2-22M/lat_cuda_fp32.json
+A in-process ORT,g2-1,PG2-22M,trt_fp16_dyn_opt16,1,256,3000,2.2667,2.2781,2.3011,2.4573,2.2172,67.3765,raw/A/g2-1/Llama-Prompt-Guard-2-22M/lat_trt_fp16_dyn_opt16.json
+A in-process ORT,g2-1,PG2-22M,trt_fp16_dyn_opt16,1,512,3000,3.5076,3.601,3.6307,3.7353,3.5039,,raw/A/g2-1/Llama-Prompt-Guard-2-22M/lat_trt_fp16_dyn_opt16.json
+A in-process ORT,g2-1,PG2-22M,trt_fp16_dyn_opt16,2,512,3000,6.0582,6.1498,6.241,6.4186,5.9884,,raw/A/g2-1/Llama-Prompt-Guard-2-22M/lat_trt_fp16_dyn_opt16.json
+A in-process ORT,g2-1,PG2-22M,trt_fp16_dyn_opt16,3,512,3000,9.1816,9.3197,9.4601,9.627,9.2308,,raw/A/g2-1/Llama-Prompt-Guard-2-22M/lat_trt_fp16_dyn_opt16.json
+A in-process ORT,g2-1,PG2-22M,trt_fp16_dyn_opt16,4,512,3000,12.213,12.336,12.4298,12.5353,12.163,,raw/A/g2-1/Llama-Prompt-Guard-2-22M/lat_trt_fp16_dyn_opt16.json
+A in-process ORT,g2-1,PG2-22M,trt_fp16_dyn_opt16,7,512,3000,21.0034,21.4843,21.7365,21.9413,21.0662,,raw/A/g2-1/Llama-Prompt-Guard-2-22M/lat_trt_fp16_dyn_opt16.json
+A in-process ORT,g2-1,PG2-22M,trt_fp16_dyn_opt4,1,256,3000,1.8327,1.8441,1.8658,2.0242,1.7847,53.8019,raw/A/g2-1/Llama-Prompt-Guard-2-22M/lat_trt_fp16_dyn_opt4.json
+A in-process ORT,g2-1,PG2-22M,trt_fp16_dyn_opt4,1,512,3000,3.0005,3.0269,3.0544,3.2583,2.9628,,raw/A/g2-1/Llama-Prompt-Guard-2-22M/lat_trt_fp16_dyn_opt4.json
+A in-process ORT,g2-1,PG2-22M,trt_fp16_dyn_opt4,2,512,3000,5.6611,5.7878,5.821,5.9177,5.7314,,raw/A/g2-1/Llama-Prompt-Guard-2-22M/lat_trt_fp16_dyn_opt4.json
+A in-process ORT,g2-1,PG2-22M,trt_fp16_dyn_opt4,3,512,3000,8.8515,9.1148,9.2261,9.3962,8.7886,,raw/A/g2-1/Llama-Prompt-Guard-2-22M/lat_trt_fp16_dyn_opt4.json
+A in-process ORT,g2-1,PG2-22M,trt_fp16_dyn_opt4,4,512,3000,10.9038,11.0992,11.2034,11.3215,10.9223,,raw/A/g2-1/Llama-Prompt-Guard-2-22M/lat_trt_fp16_dyn_opt4.json
+A in-process ORT,g2-1,PG2-22M,trt_fp16_dyn_opt4,7,512,3000,20.611,21.4921,21.8714,22.1472,20.9535,,raw/A/g2-1/Llama-Prompt-Guard-2-22M/lat_trt_fp16_dyn_opt4.json
+A in-process ORT,g2-1,PG2-22M,trt_fp16_static,1,256,3000,1.12,1.133,1.15,1.1958,1.0823,55.0899,raw/A/g2-1/Llama-Prompt-Guard-2-22M/lat_trt_fp16_static.json
+A in-process ORT,g2-1,PG2-22M,trt_fp16_static,1,512,3000,2.1519,2.1796,2.198,2.3678,2.1284,53.1125,raw/A/g2-1/Llama-Prompt-Guard-2-22M/lat_trt_fp16_static.json
+A in-process ORT,g2-1,PG2-22M,trt_fp16_static,2,512,3000,4.9789,5.0993,5.1189,5.2345,5.018,43.0204,raw/A/g2-1/Llama-Prompt-Guard-2-22M/lat_trt_fp16_static.json
+A in-process ORT,g2-1,PG2-22M,trt_fp16_static,3,512,3000,7.88,7.9327,8.0789,8.1599,8.0474,42.9209,raw/A/g2-1/Llama-Prompt-Guard-2-22M/lat_trt_fp16_static.json
+A in-process ORT,g2-1,PG2-22M,trt_fp16_static,4,512,3000,11.0098,11.17,11.2743,11.3689,10.7679,45.7349,raw/A/g2-1/Llama-Prompt-Guard-2-22M/lat_trt_fp16_static.json
+A in-process ORT,g2-1,PG2-22M,trt_fp16_static,7,512,3000,19.3876,19.9144,20.5572,21.8184,19.0959,58.1853,raw/A/g2-1/Llama-Prompt-Guard-2-22M/lat_trt_fp16_static.json
+A in-process ORT,g2-3,PG2-86M,cuda_fp16,1,256,3000,6.6551,7.0588,7.7596,11.2042,6.5264,2.7514,raw/A/g2-3/Llama-Prompt-Guard-2-86M/lat_cuda_fp16.json
+A in-process ORT,g2-3,PG2-86M,cuda_fp16,1,512,3000,9.9733,10.0904,10.1738,11.856,10.0149,,raw/A/g2-3/Llama-Prompt-Guard-2-86M/lat_cuda_fp16.json
+A in-process ORT,g2-3,PG2-86M,cuda_fp16,2,512,3000,22.266,22.4373,22.5775,22.7142,22.3083,,raw/A/g2-3/Llama-Prompt-Guard-2-86M/lat_cuda_fp16.json
+A in-process ORT,g2-3,PG2-86M,cuda_fp16,3,512,3000,38.2968,38.4401,38.5711,38.7658,38.2131,,raw/A/g2-3/Llama-Prompt-Guard-2-86M/lat_cuda_fp16.json
+A in-process ORT,g2-3,PG2-86M,cuda_fp16,4,512,3000,54.6356,54.7856,54.9096,55.0538,54.5667,,raw/A/g2-3/Llama-Prompt-Guard-2-86M/lat_cuda_fp16.json
+A in-process ORT,g2-3,PG2-86M,cuda_fp16,7,512,3000,103.9594,104.0868,104.19,104.3158,103.8356,,raw/A/g2-3/Llama-Prompt-Guard-2-86M/lat_cuda_fp16.json
+A in-process ORT,g2-3,PG2-86M,cuda_fp32,1,256,3000,5.7674,5.9227,6.4423,7.2879,5.7686,3.8924,raw/A/g2-3/Llama-Prompt-Guard-2-86M/lat_cuda_fp32.json
+A in-process ORT,g2-3,PG2-86M,cuda_fp32,1,512,3000,15.7189,15.8258,15.9855,16.2161,15.6999,,raw/A/g2-3/Llama-Prompt-Guard-2-86M/lat_cuda_fp32.json
+A in-process ORT,g2-3,PG2-86M,cuda_fp32,2,512,3000,38.8362,38.9958,39.1461,39.2874,38.8141,,raw/A/g2-3/Llama-Prompt-Guard-2-86M/lat_cuda_fp32.json
+A in-process ORT,g2-3,PG2-86M,cuda_fp32,3,512,3000,72.2491,72.4064,72.5491,72.7217,72.199,,raw/A/g2-3/Llama-Prompt-Guard-2-86M/lat_cuda_fp32.json
+A in-process ORT,g2-3,PG2-86M,cuda_fp32,4,512,3000,98.8386,98.994,99.1227,99.3432,98.791,,raw/A/g2-3/Llama-Prompt-Guard-2-86M/lat_cuda_fp32.json
+A in-process ORT,g2-3,PG2-86M,cuda_fp32,7,512,3000,174.2154,174.445,174.6109,174.7695,174.1001,,raw/A/g2-3/Llama-Prompt-Guard-2-86M/lat_cuda_fp32.json
+A in-process ORT,g2-3,PG2-86M,trt_fp16_dyn_opt16,1,256,3000,3.3827,3.4136,3.4314,3.6075,3.3827,83.7603,raw/A/g2-3/Llama-Prompt-Guard-2-86M/lat_trt_fp16_dyn_opt16.json
+A in-process ORT,g2-3,PG2-86M,trt_fp16_dyn_opt16,1,512,3000,7.4,7.4568,7.5339,7.9797,7.3453,,raw/A/g2-3/Llama-Prompt-Guard-2-86M/lat_trt_fp16_dyn_opt16.json
+A in-process ORT,g2-3,PG2-86M,trt_fp16_dyn_opt16,2,512,3000,13.8868,14.0742,14.1511,14.2263,13.963,,raw/A/g2-3/Llama-Prompt-Guard-2-86M/lat_trt_fp16_dyn_opt16.json
+A in-process ORT,g2-3,PG2-86M,trt_fp16_dyn_opt16,3,512,3000,20.8682,21.1593,21.4062,21.5299,20.8619,,raw/A/g2-3/Llama-Prompt-Guard-2-86M/lat_trt_fp16_dyn_opt16.json
+A in-process ORT,g2-3,PG2-86M,trt_fp16_dyn_opt16,4,512,3000,28.4857,28.7504,28.9827,29.3434,28.5294,,raw/A/g2-3/Llama-Prompt-Guard-2-86M/lat_trt_fp16_dyn_opt16.json
+A in-process ORT,g2-3,PG2-86M,trt_fp16_dyn_opt16,7,512,3000,51.8375,52.394,52.8751,53.2086,51.575,,raw/A/g2-3/Llama-Prompt-Guard-2-86M/lat_trt_fp16_dyn_opt16.json
+A in-process ORT,g2-3,PG2-86M,trt_fp16_dyn_opt4,1,256,3000,3.6066,3.6352,3.6609,4.0773,3.593,61.8805,raw/A/g2-3/Llama-Prompt-Guard-2-86M/lat_trt_fp16_dyn_opt4.json
+A in-process ORT,g2-3,PG2-86M,trt_fp16_dyn_opt4,1,512,3000,7.797,7.8563,7.9132,7.9869,7.7115,,raw/A/g2-3/Llama-Prompt-Guard-2-86M/lat_trt_fp16_dyn_opt4.json
+A in-process ORT,g2-3,PG2-86M,trt_fp16_dyn_opt4,2,512,3000,13.7585,13.8471,14.0256,14.1512,13.8105,,raw/A/g2-3/Llama-Prompt-Guard-2-86M/lat_trt_fp16_dyn_opt4.json
+A in-process ORT,g2-3,PG2-86M,trt_fp16_dyn_opt4,3,512,3000,20.4592,21.1521,21.5733,21.9167,20.6124,,raw/A/g2-3/Llama-Prompt-Guard-2-86M/lat_trt_fp16_dyn_opt4.json
+A in-process ORT,g2-3,PG2-86M,trt_fp16_dyn_opt4,4,512,3000,25.8001,26.0502,26.2436,26.4012,25.8862,,raw/A/g2-3/Llama-Prompt-Guard-2-86M/lat_trt_fp16_dyn_opt4.json
+A in-process ORT,g2-3,PG2-86M,trt_fp16_dyn_opt4,7,512,3000,51.0031,51.7465,52.6439,53.0184,50.8751,,raw/A/g2-3/Llama-Prompt-Guard-2-86M/lat_trt_fp16_dyn_opt4.json
+A in-process ORT,g2-3,PG2-86M,trt_fp16_static,1,256,3000,2.1807,2.2128,2.2272,2.413,2.1528,67.1419,raw/A/g2-3/Llama-Prompt-Guard-2-86M/lat_trt_fp16_static.json
+A in-process ORT,g2-3,PG2-86M,trt_fp16_static,1,512,3000,5.9364,5.9816,6.0715,6.1706,5.967,66.1408,raw/A/g2-3/Llama-Prompt-Guard-2-86M/lat_trt_fp16_static.json
+A in-process ORT,g2-3,PG2-86M,trt_fp16_static,2,512,3000,12.3667,12.5868,12.6887,12.8406,12.7847,55.1824,raw/A/g2-3/Llama-Prompt-Guard-2-86M/lat_trt_fp16_static.json
+A in-process ORT,g2-3,PG2-86M,trt_fp16_static,3,512,3000,18.996,19.3453,19.8004,20.4124,18.6663,55.6304,raw/A/g2-3/Llama-Prompt-Guard-2-86M/lat_trt_fp16_static.json
+A in-process ORT,g2-3,PG2-86M,trt_fp16_static,4,512,3000,26.1347,26.675,26.9043,27.1121,26.1169,56.2629,raw/A/g2-3/Llama-Prompt-Guard-2-86M/lat_trt_fp16_static.json
+A in-process ORT,g2-3,PG2-86M,trt_fp16_static,7,512,3000,47.887,48.5957,49.4222,50.7258,47.8022,75.7516,raw/A/g2-3/Llama-Prompt-Guard-2-86M/lat_trt_fp16_static.json
+B Triton loopback gRPC,,PG2-22M,"triton 26.05 TRT10.16 plan (1 profile 1-64, opt 16)",1,512,3000,3.9801,4.0356,4.106,10.9193,,,raw/B/g2-2/Llama-Prompt-Guard-2-22M/triton_26.05/lat_rtt.json
+B Triton loopback gRPC,,PG2-22M,"triton 26.05 TRT10.16 plan (1 profile 1-64, opt 16)",2,512,3000,6.6611,6.7316,6.804,7.0007,,,raw/B/g2-2/Llama-Prompt-Guard-2-22M/triton_26.05/lat_rtt.json
+B Triton loopback gRPC,,PG2-22M,"triton 26.05 TRT10.16 plan (1 profile 1-64, opt 16)",3,512,3000,9.7451,9.8929,10.0371,12.5825,,,raw/B/g2-2/Llama-Prompt-Guard-2-22M/triton_26.05/lat_rtt.json
+B Triton loopback gRPC,,PG2-22M,"triton 26.05 TRT10.16 plan (1 profile 1-64, opt 16)",4,512,3000,12.6154,12.7387,12.8469,12.9648,,,raw/B/g2-2/Llama-Prompt-Guard-2-22M/triton_26.05/lat_rtt.json
+B Triton loopback gRPC,,PG2-22M,"triton 26.05 TRT10.16 plan (1 profile 1-64, opt 16)",7,512,3000,21.3148,21.9443,22.293,23.7302,,,raw/B/g2-2/Llama-Prompt-Guard-2-22M/triton_26.05/lat_rtt.json
+B Triton loopback gRPC,,PG2-86M,"triton 26.05 TRT10.16 plan (1 profile 1-64, opt 16)",1,512,3000,7.7724,7.9349,8.0738,19.3987,,,raw/B/g2-4/Llama-Prompt-Guard-2-86M/triton_26.05/lat_rtt.json
+B Triton loopback gRPC,,PG2-86M,"triton 26.05 TRT10.16 plan (1 profile 1-64, opt 16)",2,512,3000,14.3126,14.598,14.7838,15.2432,,,raw/B/g2-4/Llama-Prompt-Guard-2-86M/triton_26.05/lat_rtt.json
+B Triton loopback gRPC,,PG2-86M,"triton 26.05 TRT10.16 plan (1 profile 1-64, opt 16)",3,512,3000,20.7891,21.4949,21.9873,22.8549,,,raw/B/g2-4/Llama-Prompt-Guard-2-86M/triton_26.05/lat_rtt.json
+B Triton loopback gRPC,,PG2-86M,"triton 26.05 TRT10.16 plan (1 profile 1-64, opt 16)",4,512,3000,27.9259,28.4538,28.7163,28.934,,,raw/B/g2-4/Llama-Prompt-Guard-2-86M/triton_26.05/lat_rtt.json
+B Triton loopback gRPC,,PG2-86M,"triton 26.05 TRT10.16 plan (1 profile 1-64, opt 16)",7,512,3000,48.864,49.7996,50.6539,51.8887,,,raw/B/g2-4/Llama-Prompt-Guard-2-86M/triton_26.05/lat_rtt.json
+"C Triton off-box gRPC (c4 -> G2, same zone)",,PG2-22M,"triton 26.05 TRT10.16 plan (1 profile 1-64, opt 16)",1,512,3000,3.6452,3.7204,3.8393,8.634,,,raw/C/c4-1/Llama-Prompt-Guard-2-22M/lat_rtt.json
+"C Triton off-box gRPC (c4 -> G2, same zone)",,PG2-22M,"triton 26.05 TRT10.16 plan (1 profile 1-64, opt 16)",2,512,3000,6.1993,6.3327,6.443,6.5685,,,raw/C/c4-1/Llama-Prompt-Guard-2-22M/lat_rtt.json
+"C Triton off-box gRPC (c4 -> G2, same zone)",,PG2-22M,"triton 26.05 TRT10.16 plan (1 profile 1-64, opt 16)",3,512,3000,9.3149,9.5062,9.6641,10.7668,,,raw/C/c4-1/Llama-Prompt-Guard-2-22M/lat_rtt.json
+"C Triton off-box gRPC (c4 -> G2, same zone)",,PG2-22M,"triton 26.05 TRT10.16 plan (1 profile 1-64, opt 16)",4,512,3000,12.3205,12.4852,12.6476,12.8086,,,raw/C/c4-1/Llama-Prompt-Guard-2-22M/lat_rtt.json
+"C Triton off-box gRPC (c4 -> G2, same zone)",,PG2-22M,"triton 26.05 TRT10.16 plan (1 profile 1-64, opt 16)",7,512,3000,20.0162,20.3333,21.2871,21.8722,,,raw/C/c4-1/Llama-Prompt-Guard-2-22M/lat_rtt.json
+"C Triton off-box gRPC (c4 -> G2, same zone)",,PG2-86M,"triton 26.05 TRT10.16 plan (1 profile 1-64, opt 16)",1,512,3000,7.4969,7.6412,7.7573,15.6431,,,raw/C/c4-1/Llama-Prompt-Guard-2-86M/lat_rtt.json
+"C Triton off-box gRPC (c4 -> G2, same zone)",,PG2-86M,"triton 26.05 TRT10.16 plan (1 profile 1-64, opt 16)",2,512,3000,13.9491,14.234,14.4958,15.0215,,,raw/C/c4-1/Llama-Prompt-Guard-2-86M/lat_rtt.json
+"C Triton off-box gRPC (c4 -> G2, same zone)",,PG2-86M,"triton 26.05 TRT10.16 plan (1 profile 1-64, opt 16)",3,512,3000,20.3069,20.8936,21.314,21.614,,,raw/C/c4-1/Llama-Prompt-Guard-2-86M/lat_rtt.json
+"C Triton off-box gRPC (c4 -> G2, same zone)",,PG2-86M,"triton 26.05 TRT10.16 plan (1 profile 1-64, opt 16)",4,512,3000,27.5281,27.9678,28.252,28.6268,,,raw/C/c4-1/Llama-Prompt-Guard-2-86M/lat_rtt.json
+"C Triton off-box gRPC (c4 -> G2, same zone)",,PG2-86M,"triton 26.05 TRT10.16 plan (1 profile 1-64, opt 16)",7,512,3000,47.4875,48.4545,48.885,49.426,,,raw/C/c4-1/Llama-Prompt-Guard-2-86M/lat_rtt.json
+trtexec GPU compute only,,PG2-22M,trt10_2605,1,512,2000,3.4292,3.4695,3.4796,3.4816,,,raw/B/g2-2/Llama-Prompt-Guard-2-22M/trt10_2605/trtexec_times_W1.json
+trtexec GPU compute only,,PG2-22M,trt10_2605,16,512,2000,46.3945,47.5625,48.1895,48.7617,,,raw/B/g2-2/Llama-Prompt-Guard-2-22M/trt10_2605/trtexec_times_W16.json
+trtexec GPU compute only,,PG2-22M,trt10_2605,2,512,2000,6.1641,6.2197,6.2937,6.3898,,,raw/B/g2-2/Llama-Prompt-Guard-2-22M/trt10_2605/trtexec_times_W2.json
+trtexec GPU compute only,,PG2-22M,trt10_2605,3,512,2000,9.2344,9.4565,9.7976,10.2051,,,raw/B/g2-2/Llama-Prompt-Guard-2-22M/trt10_2605/trtexec_times_W3.json
+trtexec GPU compute only,,PG2-22M,trt10_2605,4,512,2000,12.2324,12.4043,12.4878,12.7119,,,raw/B/g2-2/Llama-Prompt-Guard-2-22M/trt10_2605/trtexec_times_W4.json
+trtexec GPU compute only,,PG2-22M,trt10_2605,7,512,2000,21.4951,21.7676,21.9375,22.1287,,,raw/B/g2-2/Llama-Prompt-Guard-2-22M/trt10_2605/trtexec_times_W7.json
+trtexec GPU compute only,,PG2-22M,trt11_2608,1,512,3001,3.207,3.2481,3.2978,3.3603,,,raw/B/g2-2/Llama-Prompt-Guard-2-22M/trt11_2608/trtexec_times_W1.json
+trtexec GPU compute only,,PG2-22M,trt11_2608,16,512,3001,48.5469,49.0234,49.3047,49.918,,,raw/B/g2-2/Llama-Prompt-Guard-2-22M/trt11_2608/trtexec_times_W16.json
+trtexec GPU compute only,,PG2-22M,trt11_2608,2,512,3001,6.5791,6.6499,6.6755,6.7307,,,raw/B/g2-2/Llama-Prompt-Guard-2-22M/trt11_2608/trtexec_times_W2.json
+trtexec GPU compute only,,PG2-22M,trt11_2608,3,512,3001,10.2969,10.4238,10.6113,10.8667,,,raw/B/g2-2/Llama-Prompt-Guard-2-22M/trt11_2608/trtexec_times_W3.json
+trtexec GPU compute only,,PG2-22M,trt11_2608,4,512,3001,14.1299,14.2422,14.3086,14.3809,,,raw/B/g2-2/Llama-Prompt-Guard-2-22M/trt11_2608/trtexec_times_W4.json
+trtexec GPU compute only,,PG2-22M,trt11_2608,7,512,3001,25.0859,25.4219,25.6445,25.8926,,,raw/B/g2-2/Llama-Prompt-Guard-2-22M/trt11_2608/trtexec_times_W7.json
+trtexec GPU compute only,,PG2-86M,trt10_2605,1,512,2000,6.9463,7.0308,7.0923,7.0953,,,raw/B/g2-4/Llama-Prompt-Guard-2-86M/trt10_2605/trtexec_times_W1.json
+trtexec GPU compute only,,PG2-86M,trt10_2605,16,512,2000,108.258,110.141,111.5,113.728,,,raw/B/g2-4/Llama-Prompt-Guard-2-86M/trt10_2605/trtexec_times_W16.json
+trtexec GPU compute only,,PG2-86M,trt10_2605,2,512,2000,13.2461,13.3213,13.4258,13.5527,,,raw/B/g2-4/Llama-Prompt-Guard-2-86M/trt10_2605/trtexec_times_W2.json
+trtexec GPU compute only,,PG2-86M,trt10_2605,3,512,2000,20.1328,20.3457,20.5938,20.8711,,,raw/B/g2-4/Llama-Prompt-Guard-2-86M/trt10_2605/trtexec_times_W3.json
+trtexec GPU compute only,,PG2-86M,trt10_2605,4,512,2000,27.3418,27.9648,28.4297,28.9141,,,raw/B/g2-4/Llama-Prompt-Guard-2-86M/trt10_2605/trtexec_times_W4.json
+trtexec GPU compute only,,PG2-86M,trt10_2605,7,512,2000,48.2461,49.5957,50.3359,50.8945,,,raw/B/g2-4/Llama-Prompt-Guard-2-86M/trt10_2605/trtexec_times_W7.json

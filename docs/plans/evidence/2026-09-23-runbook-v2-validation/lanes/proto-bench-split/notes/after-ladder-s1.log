@@ -1,0 +1,10 @@
+16:35:35 knee=191 fail=238
+16:35:35 START s1-191-r2 rate=191 env=[LABEL=knee_repeat]
+16:43:21 END s1-191-r2 PASS q/s 187.8 infra% 0.0 drops 0 p99 json 11.48 sse-total 11.366 sse-first 45.974
+16:43:21 START s1-191-r3 rate=191 env=[LABEL=knee_repeat]
+16:51:06 END s1-191-r3 PASS q/s 187.73 infra% 0.0 drops 0 p99 json 11.364 sse-total 11.298 sse-first 46.215
+16:51:06 START s1p-191 rate=191 env=[LABEL=knee_poisson OLG_EXTRA=-sample-mod 1 -arrival poisson]
+16:58:52 END s1p-191 FAIL q/s 185.77 infra% 1.2806 drops 0 p99 json inf sse-total inf sse-first inf
+16:58:52 START d1-238 rate=238 env=[LABEL=direct_floor_at_first_fail MODE=direct]
+17:06:09 END d1-238 PASS q/s 238.0 infra% 0.0 drops 0 p99 json 0.212 sse-total 0.178 sse-first 0.18
+17:06:09 AFTER-LADDER DONE

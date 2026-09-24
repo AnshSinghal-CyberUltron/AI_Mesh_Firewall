@@ -1,0 +1,1 @@
+{"run": "s2b-373-nodump", "verdict": "FAIL", "rule": "C4 p99 < 20 ms, infra <= 0.1%, 0 drops", "c4_p99": 20.946, "c4_p999": 37.725, "c4_sse_p99": 22.41, "c4_json_p99": 16.724, "qualified_rps": 366.35, "infra_pct": 0.0, "drops": 0, "json_total_p99": 16.724, "sse_total_p99": 16.711, "sse_first_p99": 48.127, "load_rule_verdict": "PASS"}

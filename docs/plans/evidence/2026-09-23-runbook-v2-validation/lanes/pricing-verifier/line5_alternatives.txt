@@ -1,0 +1,5 @@
+doc volumes: response 7577.03 GiB, prompt leg 8460.58 GiB, total 16037.61 GiB
+A all Standard tier (doc's intent, needs explicit Standard tier): $1539.22
+B response Standard via LB + prompt Premium->Americas (VM IPs default PREMIUM): $1752.38
+C all Premium (project default): response->India $843.71 + prompt->Americas $940.9 = $1784.62
+LB processing (in+out @ $0.01): $160.38

@@ -1,0 +1,5 @@
+fixture: secret 20 < pii 30                             -> BLOCK  deciding_rules=('A.secret.in',) | 403, zero provider calls
+pii REDACT prio 10, secret BLOCK prio 20                -> REDACT deciding_rules=('A.pii.in', 'A.secret.in') | dispatched; AWS key in provider bytes=True; email in bytes=False
+equal prio 20, ids A.pii.in / A.secret.in               -> REDACT deciding_rules=('A.pii.in', 'A.secret.in') | dispatched; AWS key in provider bytes=True; email in bytes=False
+equal prio 20, ids Z.pii.in / A.secret.in (rename only) -> BLOCK  deciding_rules=('A.secret.in',) | 403, zero provider calls
+pii FLAG prio 10, secret BLOCK prio 20                  -> FLAG   deciding_rules=('A.pii.in', 'A.secret.in') | dispatched; AWS key in provider bytes=True; email in bytes=True

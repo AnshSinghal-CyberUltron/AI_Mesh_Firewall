@@ -1,0 +1,9 @@
+
+[[tool.importlinter.contracts]]
+name = "Only edge/ may import HTTP server frameworks"
+type = "forbidden"
+source_modules = [
+    "gateway_v2.admit", "gateway_v2.plan", "gateway_v2.detect", "gateway_v2.resolve",
+    "gateway_v2.dispatch", "gateway_v2.egress", "gateway_v2.audit", "gateway_v2.runtime",
+]
+forbidden_modules = ["starlette", "fastapi"]

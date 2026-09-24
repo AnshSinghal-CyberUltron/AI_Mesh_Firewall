@@ -1,0 +1,217 @@
+{
+ "olg_records": 375,
+ "audit_events_read": 375,
+ "join_keys": 750,
+ "duplicate_nonce_events": 0,
+ "matched": 375,
+ "unmatched": 0,
+ "audit_completeness": 1.0,
+ "by_phase": {
+  "ph0_matched": 15,
+  "ph1_matched": 60,
+  "ph2_matched": 300
+ },
+ "unmatched_by_http_status": {},
+ "dispositions": {
+  "ALLOW": 375
+ },
+ "stage_actions": {
+  "auth:allow": 375,
+  "input_scan:allow": 375,
+  "kill_switch:allow": 375,
+  "model_input:allow": 375,
+  "model_output:allow": 375,
+  "model_routing:allow": 375,
+  "output_guardrail:allow": 375,
+  "policy:allow": 375,
+  "rate_limit:allow": 375
+ },
+ "v1_internal_ms_measure_phase": {
+  "json": {
+   "pre_ms": {
+    "n": 90,
+    "p50": 48.3,
+    "p90": 65.2,
+    "p99": 75.6,
+    "max": 75.6
+   },
+   "post_ms": {
+    "n": 90,
+    "p50": 8.5,
+    "p90": 12.6,
+    "p99": 19.5,
+    "max": 19.5
+   },
+   "overhead_ms": {
+    "n": 90,
+    "p50": 18.6,
+    "p90": 24.6,
+    "p99": 38.0,
+    "max": 38.0
+   },
+   "total_ms": {
+    "n": 90,
+    "p50": 4725.2,
+    "p90": 7374.5,
+    "p99": 7866.2,
+    "max": 7866.2
+   },
+   "stage:auth": {
+    "n": 90,
+    "p50": 0.6,
+    "p90": 1.3,
+    "p99": 3.3,
+    "max": 3.3
+   },
+   "stage:kill_switch": {
+    "n": 90,
+    "p50": 0.3,
+    "p90": 0.5,
+    "p99": 1.6,
+    "max": 1.6
+   },
+   "stage:rate_limit": {
+    "n": 90,
+    "p50": 1.4,
+    "p90": 2.0,
+    "p99": 2.8,
+    "max": 2.8
+   },
+   "stage:policy": {
+    "n": 90,
+    "p50": 9.4,
+    "p90": 14.8,
+    "p99": 21.9,
+    "max": 21.9
+   },
+   "stage:input_scan": {
+    "n": 90,
+    "p50": 13.3,
+    "p90": 20.0,
+    "p99": 31.1,
+    "max": 31.1
+   },
+   "stage:model_routing": {
+    "n": 90,
+    "p50": 2.5,
+    "p90": 3.7,
+    "p99": 5.8,
+    "max": 5.8
+   },
+   "stage:model_input": {
+    "n": 90,
+    "p50": 0.3,
+    "p90": 0.9,
+    "p99": 2.5,
+    "max": 2.5
+   },
+   "stage:model_output": {
+    "n": 90,
+    "p50": 4656.0,
+    "p90": 7316.3,
+    "p99": 7816.3,
+    "max": 7816.3
+   },
+   "stage:output_guardrail": {
+    "n": 90,
+    "p50": 8.5,
+    "p90": 12.6,
+    "p99": 19.5,
+    "max": 19.5
+   }
+  },
+  "sse": {
+   "pre_ms": {
+    "n": 210,
+    "p50": 26.7,
+    "p90": 39.0,
+    "p99": 56.2,
+    "max": 68.6
+   },
+   "post_ms": {
+    "n": 210,
+    "p50": 23.0,
+    "p90": 40.9,
+    "p99": 58.4,
+    "max": 74.8
+   },
+   "overhead_ms": {
+    "n": 210,
+    "p50": 0.0,
+    "p90": 0.0,
+    "p99": 0.0,
+    "max": 0.0
+   },
+   "total_ms": {
+    "n": 210,
+    "p50": 4898.6,
+    "p90": 7483.5,
+    "p99": 8071.2,
+    "max": 8133.3
+   },
+   "stage:auth": {
+    "n": 210,
+    "p50": 0.7,
+    "p90": 1.3,
+    "p99": 2.1,
+    "max": 2.3
+   },
+   "stage:kill_switch": {
+    "n": 210,
+    "p50": 0.3,
+    "p90": 0.5,
+    "p99": 1.6,
+    "max": 1.8
+   },
+   "stage:rate_limit": {
+    "n": 210,
+    "p50": 1.4,
+    "p90": 2.2,
+    "p99": 5.0,
+    "max": 13.3
+   },
+   "stage:policy": {
+    "n": 210,
+    "p50": 8.9,
+    "p90": 13.9,
+    "p99": 16.1,
+    "max": 17.8
+   },
+   "stage:input_scan": {
+    "n": 210,
+    "p50": 11.9,
+    "p90": 19.2,
+    "p99": 23.8,
+    "max": 29.1
+   },
+   "stage:model_routing": {
+    "n": 210,
+    "p50": 2.4,
+    "p90": 3.6,
+    "p99": 21.4,
+    "max": 55.5
+   },
+   "stage:model_input": {
+    "n": 210,
+    "p50": 0.0,
+    "p90": 0.0,
+    "p99": 0.0,
+    "max": 0.0
+   },
+   "stage:model_output": {
+    "n": 210,
+    "p50": 4843.0,
+    "p90": 7415.9,
+    "p99": 8007.6,
+    "max": 8039.5
+   },
+   "stage:output_guardrail": {
+    "n": 210,
+    "p50": 23.0,
+    "p90": 40.9,
+    "p99": 58.4,
+    "max": 74.8
+   }
+  }
+ }
+}

@@ -1,0 +1,10 @@
+file=id_ed25519 hook=installed exit=0
+file=id_ed25519 hook=script exit=1
+file=.ssh/id_ed25519 hook=installed exit=0
+file=.ssh/id_ed25519 hook=script exit=0
+file=keys.d/id_rsa hook=installed exit=0
+file=keys.d/id_rsa hook=script exit=0
+file=id_ed25519.bak hook=installed exit=0
+file=id_ed25519.bak hook=script exit=0
+file=deploy/key.txt hook=installed exit=0
+file=deploy/key.txt hook=script exit=0

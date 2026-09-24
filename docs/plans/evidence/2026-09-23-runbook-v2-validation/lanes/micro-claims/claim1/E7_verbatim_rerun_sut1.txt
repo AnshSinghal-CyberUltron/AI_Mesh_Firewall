@@ -1,0 +1,24 @@
+=== repeat 1 (taskset -c 2, 2026-09-23T05:38:59Z)
+starlette 1.2.0
+bare route (json parse + JSONResponse)               p50= 0.0185ms p99= 0.0266ms
++ 1x BaseHTTPMiddleware                              p50= 0.1846ms p99= 0.3362ms  delta_p50=+0.1661ms (0.1661 ms each)
++ 2x BaseHTTPMiddleware                              p50= 0.3474ms p99= 0.5381ms  delta_p50=+0.3290ms (0.1645 ms each)
++ 3x BaseHTTPMiddleware                              p50= 0.4948ms p99= 0.6995ms  delta_p50=+0.4764ms (0.1588 ms each)
++ 4x BaseHTTPMiddleware                              p50= 0.6298ms p99= 0.8555ms  delta_p50=+0.6113ms (0.1528 ms each)
+main.py shape: 4x BaseHTTP + CORS + 1 pure ASGI      p50= 0.6376ms p99= 0.8585ms  delta_p50=+0.6192ms
+=== repeat 2 (taskset -c 2, 2026-09-23T05:39:08Z)
+starlette 1.2.0
+bare route (json parse + JSONResponse)               p50= 0.0186ms p99= 0.0269ms
++ 1x BaseHTTPMiddleware                              p50= 0.1854ms p99= 0.3272ms  delta_p50=+0.1668ms (0.1668 ms each)
++ 2x BaseHTTPMiddleware                              p50= 0.3439ms p99= 0.5201ms  delta_p50=+0.3253ms (0.1627 ms each)
++ 3x BaseHTTPMiddleware                              p50= 0.4922ms p99= 0.6862ms  delta_p50=+0.4736ms (0.1579 ms each)
++ 4x BaseHTTPMiddleware                              p50= 0.6253ms p99= 0.8412ms  delta_p50=+0.6067ms (0.1517 ms each)
+main.py shape: 4x BaseHTTP + CORS + 1 pure ASGI      p50= 0.6295ms p99= 0.8404ms  delta_p50=+0.6109ms
+=== repeat 3 (taskset -c 2, 2026-09-23T05:39:16Z)
+starlette 1.2.0
+bare route (json parse + JSONResponse)               p50= 0.0184ms p99= 0.0265ms
++ 1x BaseHTTPMiddleware                              p50= 0.1819ms p99= 0.3271ms  delta_p50=+0.1636ms (0.1636 ms each)
++ 2x BaseHTTPMiddleware                              p50= 0.3413ms p99= 0.5195ms  delta_p50=+0.3230ms (0.1615 ms each)
++ 3x BaseHTTPMiddleware                              p50= 0.4870ms p99= 0.6848ms  delta_p50=+0.4687ms (0.1562 ms each)
++ 4x BaseHTTPMiddleware                              p50= 0.6210ms p99= 0.8393ms  delta_p50=+0.6027ms (0.1507 ms each)
+main.py shape: 4x BaseHTTP + CORS + 1 pure ASGI      p50= 0.6286ms p99= 0.8401ms  delta_p50=+0.6102ms

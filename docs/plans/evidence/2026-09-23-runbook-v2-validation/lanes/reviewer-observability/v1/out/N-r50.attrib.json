@@ -1,0 +1,69 @@
+{
+ "run": "N-r50",
+ "events": 10207,
+ "by_kind": {
+  "consistent|request": 5568,
+  "consistent|stream_complete": 4023,
+  "MISMATCH_corr_vs_content|stream_complete": 616
+ },
+ "client_corr_with_multiple_events": 188,
+ "extra_events_same_corr": 202,
+ "nonces_with_multiple_events": 0,
+ "examples": [
+  {
+   "event_id": 51637,
+   "et": "stream_complete",
+   "client_corr": "057ae15f-f9f1-4267-950d-ec263d172645",
+   "corr_client_nonce": "(ref-honest-anchor-anchor-anchor-bottle-table)",
+   "content_nonce": "(ref-honest-anchor-anchor-anchor-animal-mirror)",
+   "content_client_rid": "39d6fed1-8866-4759-8294-96a714820a58",
+   "corr_client_status": 200,
+   "content_client_status": 200,
+   "completed": "false"
+  },
+  {
+   "event_id": 51781,
+   "et": "stream_complete",
+   "client_corr": "4f09f1cc-2dbd-4d06-acb9-e9a8ee10dbaf",
+   "corr_client_nonce": "(ref-honest-anchor-anchor-anchor-bowl-ship)",
+   "content_nonce": "(ref-honest-anchor-anchor-anchor-animal-first)",
+   "content_client_rid": "766ca0e7-d3d1-4a4a-95c9-ea2640e06a3f",
+   "corr_client_status": 200,
+   "content_client_status": 200,
+   "completed": "false"
+  },
+  {
+   "event_id": 51785,
+   "et": "stream_complete",
+   "client_corr": "4f09f1cc-2dbd-4d06-acb9-e9a8ee10dbaf",
+   "corr_client_nonce": "(ref-honest-anchor-anchor-anchor-bowl-ship)",
+   "content_nonce": "(ref-honest-anchor-anchor-anchor-animal-oak)",
+   "content_client_rid": "6153cd6d-a135-451b-a5de-9d5dca33b2ec",
+   "corr_client_status": 200,
+   "content_client_status": 200,
+   "completed": "false"
+  },
+  {
+   "event_id": 51818,
+   "et": "stream_complete",
+   "client_corr": "07ac8ca7-c8f0-4bea-9763-93512a7cab2f",
+   "corr_client_nonce": "(ref-honest-anchor-anchor-anchor-banana-peach)",
+   "content_nonce": "(ref-honest-anchor-anchor-anchor-animal-story)",
+   "content_client_rid": "7c58fc43-a697-47b3-a9ee-e9392ae1f5fc",
+   "corr_client_status": 200,
+   "content_client_status": 200,
+   "completed": "false"
+  },
+  {
+   "event_id": 51869,
+   "et": "stream_complete",
+   "client_corr": "22a914fc-aea2-4f0b-84a3-f9c8edeb1442",
+   "corr_client_nonce": "(ref-honest-anchor-anchor-anchor-bell-animal)",
+   "content_nonce": "(ref-honest-anchor-anchor-anchor-animal-rice)",
+   "content_client_rid": "18369ab4-4205-4aae-8646-b5471ebf5b48",
+   "corr_client_status": 200,
+   "content_client_status": 200,
+   "completed": "false"
+  }
+ ]
+}

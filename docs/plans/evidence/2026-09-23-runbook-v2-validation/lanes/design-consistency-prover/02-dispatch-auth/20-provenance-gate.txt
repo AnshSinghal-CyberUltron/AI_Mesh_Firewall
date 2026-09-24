@@ -1,0 +1,36 @@
+### gate on V1 tree (spec placement + edge/forge.py)
+edge/forge.py:22: forging primitive object.__new__
+edge/forge.py:23: forging primitive object.__setattr__
+edge/forge.py:28: forging primitive dataclasses.replace
+edge/forge.py:22: non-annotation use of DispatchAuthorization
+edge/forge.py:29: non-annotation use of DispatchAuthorization
+edge/forge.py:18: forging primitive dataclasses.replace
+edge/forge.py:12: non-annotation use of DispatchAuthorization
+exit=1
+### gate on V3 tree (domain placement + dispatch/forge.py)
+dispatch/forge.py:14: forging primitive dataclasses.replace
+dispatch/forge.py:15: non-annotation use of DispatchAuthorization
+exit=1
+### gate on extra forgery fixture
+edge/more_forgeries.py:13: forging primitive dataclasses.replace
+edge/more_forgeries.py:14: type(x)(...) re-construction
+edge/more_forgeries.py:15: x.__class__(...) re-construction
+edge/more_forgeries.py:17: non-annotation use of DispatchAuthorization
+edge/more_forgeries.py:20: forging primitive copy.copy
+edge/more_forgeries.py:21: forging primitive pickle.loads
+edge/more_forgeries.py:11: non-annotation use of DispatchAuthorization
+edge/more_forgeries.py:12: non-annotation use of DispatchAuthorization
+edge/more_forgeries.py:16: getattr(..., 'DispatchAuthorization')
+edge/more_forgeries.py:19: non-annotation use of DispatchAuthorization
+edge/more_forgeries.py:22: non-annotation use of Decision
+edge/more_forgeries.py:18: non-annotation use of DispatchAuthorization
+exit=1
+### gate on V1 tree WITHOUT forgeries (legit mint in resolve/, annotation+isinstance uses elsewhere)
+OK: no Decision/DispatchAuthorization provenance violations
+exit=0
+### gate on V3 tree WITHOUT forgeries
+OK: no Decision/DispatchAuthorization provenance violations
+exit=0
+### gate on pristine repo copy
+OK: no Decision/DispatchAuthorization provenance violations
+exit=0

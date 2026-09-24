@@ -1,0 +1,38 @@
+# Harness analysis (direct, policy=enforce) — FAIL
+
+| check | result |
+|---|---|
+| zero_schedule_drops | PASS |
+| zero_errors | PASS |
+| provider_p99_sched_err_within_tol | PASS |
+| loadgen_cpu_max_lt_limit | FAIL |
+| run_valid | PASS |
+| all_joined | PASS |
+
+- offered: 240 over 60 s = 4.0 req/s (configured 4.0)
+- qualified: 240 (4.0 req/s); expected blocks: 0; errors: 0 (rate 0.0)
+- error reasons: {}
+- safety failures: 0 {}
+- schedule drops (>5.0 ms): 0; lateness ms: n=240 p50=0.1293 p90=0.1428 p99=0.4983 p99.9=4.4488 max=4.4488 mean=0.1391
+- join: {'joined': 240, 'by_nonce_fallback': 0, 'provider_records': 260, 'provider_rids_with_multiple_calls': 0, 'provider_orphans': None}
+- valid: True []
+
+| metric (ms) | distribution |
+|---|---|
+| T_addon_total | n=240 p50=0.1595 p90=0.2432 p99=0.9109 p99.9=2.0579 max=2.0579 mean=0.1908 |
+| T_addon_first | n=240 p50=0.1714 p90=0.2417 p99=0.9443 p99.9=2.9314 max=2.9314 mean=0.2015 |
+| T_release_lag_max | n=240 p50=0.2092 p90=0.3671 p99=9.1973 p99.9=12.7298 max=12.7298 mean=0.4229 |
+| T_release_lag_max_arrival | n=240 p50=0.2092 p90=0.3671 p99=9.1973 p99.9=12.7298 max=12.7298 mean=0.4229 |
+| T_fw_addon | n=240 p50=0.2092 p90=0.3671 p99=9.1973 p99.9=12.7298 max=12.7298 mean=0.4229 |
+| T_fw_addon_sse | n=168 p50=0.1886 p90=0.3811 p99=12.6564 p99.9=12.7298 max=12.7298 mean=0.5008 |
+| T_fw_addon_json | n=72 p50=0.2228 p90=0.2573 p99=0.958 p99.9=0.958 max=0.958 mean=0.2413 |
+| client_ttft_sse | n=168 p50=150.1902 p90=150.2743 p99=151.0037 p99.9=153.7635 max=153.7635 mean=150.2339 |
+| provider_sched_err_last | n=240 p50=0.0384 p90=0.0931 p99=0.2026 p99.9=2.0641 max=2.0641 mean=0.0626 |
+| provider_sched_err_max_per_stream | n=240 p50=0.1032 p90=0.2744 p99=4.652 p99.9=5.9662 max=5.9662 mean=0.2545 |
+| provider_write_max | n=240 p50=0.0385 p90=0.0616 p99=0.3689 p99.9=1.7985 max=1.7985 mean=0.0566 |
+
+- release lag: 240 sampled streams joined, 0 unmappable (content length differs)
+- loadgen CPU (measurement phase): [{'dir': '/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-builder/honesty/direct/olg', 'samples': 60, 'busy_max': 73.04737516005122, 'busy_mean': 6.04, 'machine': 'c4-standard-16', 'zone': 'asia-south1-c'}]
+- provider CPU: {'samples': 0, 'busy_max': None, 'busy_p95': None}
+- completeness: [{'dir': '/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-builder/honesty/direct/olg', 'scheduled': 260, 'recorded': 260, 'interrupted': False}]
+

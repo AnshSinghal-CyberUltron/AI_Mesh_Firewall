@@ -1,0 +1,10 @@
+field                                  http x-rv-disposition audit(input) provider canary_hits (raw body)
+control user content                    403 BLOCK            BLOCK        NO PROVIDER CALL
+legacy function_call.arguments          200 ALLOW            ALLOW        ['secret.aws']
+messages[].name                         200 ALLOW            ALLOW        ['secret.aws']
+tools[].function.description            200 ALLOW            ALLOW        ['secret.aws']
+prediction.content                      200 ALLOW            ALLOW        ['secret.aws']
+user                                    200 ALLOW            ALLOW        ['secret.aws']
+assistant content part type=refusal     200 ALLOW            ALLOW        ['secret.aws']
+PII control (REDACT) user content       200 REDACT           REDACT       None
+PII in tools description                200 ALLOW            ALLOW        ['pii.email']

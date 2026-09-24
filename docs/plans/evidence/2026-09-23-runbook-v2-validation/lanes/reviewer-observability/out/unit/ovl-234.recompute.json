@@ -1,0 +1,85 @@
+{
+ "windows": {
+  "pre": {
+   "offered": 7020,
+   "qualified": 6904,
+   "policy_block": 116,
+   "offered_per_s": 39.0,
+   "qualified_per_s": 38.36,
+   "shed_share": 0.0,
+   "T_addon_total_qualified_p99": 14.921,
+   "T_addon_total_rule_c_p99": 14.921
+  },
+  "burst": {
+   "offered": 42120,
+   "shed_503": 3392,
+   "qualified": 38031,
+   "policy_block": 697,
+   "offered_per_s": 234.0,
+   "qualified_per_s": 211.28,
+   "shed_share": 0.0805,
+   "T_addon_total_qualified_p99": 22.107,
+   "T_addon_total_rule_c_p99": Infinity
+  },
+  "post": {
+   "offered": 7020,
+   "policy_block": 108,
+   "qualified": 6912,
+   "offered_per_s": 39.0,
+   "qualified_per_s": 38.4,
+   "shed_share": 0.0,
+   "T_addon_total_qualified_p99": 14.71,
+   "T_addon_total_rule_c_p99": 14.71
+  }
+ },
+ "shed_response_ms": {
+  "0.5": 4.37,
+  "0.99": 12.331
+ },
+ "probe": {
+  "200": 384,
+  "503": 32
+ },
+ "probe_detail": {
+  "200||": 384,
+  "503|1|40": 18,
+  "503|1|20": 8,
+  "503|1|59": 3,
+  "503|1|60": 3
+ },
+ "client_all": {
+  "rv-pbu-lg-1_status_200": 23013,
+  "rv-pbu-lg-1_status_403": 392,
+  "rv-pbu-lg-1_status_503": 580,
+  "rv-pbu-lg-2_status_503": 2812,
+  "rv-pbu-lg-2_status_403": 566,
+  "rv-pbu-lg-2_status_200": 31722
+ },
+ "provider_records": 55119,
+ "gw_whole": {
+  "admitted": 59501,
+  "audit_enqueued": 111196,
+  "audit_written": 111196,
+  "background_round_trips": 25536,
+  "disposition_ALLOW": 55119,
+  "disposition_BLOCK": 958,
+  "disposition_REDACT": 0,
+  "guard_deadline_expired": 0,
+  "guard_owner_connects": 0,
+  "guard_owner_sheds": 0,
+  "guard_unavailable_findings": 0,
+  "guard_windows": 91891,
+  "lease_granted_tokens{org=\"org-a\"}": 55879680,
+  "lease_refills": 272,
+  "plan_reloads": 0,
+  "provider_calls": 55119,
+  "provider_connections_opened": 8517,
+  "quota_admitted_tokens{org=\"org-a\"}": 55929266,
+  "requests_by_round_trips{n=\"0\"}": 59229,
+  "requests_by_round_trips{n=\"1\"}": 272,
+  "requests_by_round_trips{n=\"2\"}": 0,
+  "shared_state_round_trips": 272,
+  "shed{reason=\"guard_owner_queue\"}": 0,
+  "shed{reason=\"guard_queue\"}": 3424
+ }
+}

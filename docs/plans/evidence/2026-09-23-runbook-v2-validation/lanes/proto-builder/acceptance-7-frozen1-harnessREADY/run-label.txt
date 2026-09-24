@@ -1,0 +1,3 @@
+rvproto-frozen-1 (SP/rvproto/VERSION manifest sha256 5bef44407b86775f3ca8bf08abea453d45aa714ec8fb9b74b66dc46b558070bd, verified before the run)
+harness READY 2026-09-23T14:45Z (SP/harness/READY): synthprov 1ee6bb5f, olg d22d2607, analyze.py c9f89fe8 -- byte-identical to the val-6000-r7 build used in acceptance-6
+topologies: 1) owner (tools/acceptance.sh, RV_GUARD_TOPOLOGY=owner)  2) split on loopback TCP (tools/split_local_check.sh)

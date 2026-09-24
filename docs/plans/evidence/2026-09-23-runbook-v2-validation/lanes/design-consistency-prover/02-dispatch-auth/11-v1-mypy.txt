@@ -1,0 +1,6 @@
+### v1 mypy --strict (forge.py + no_auth.py)
+gateway_v2/edge/no_auth.py:10: error: Argument 1 to "open_stream" of "ProviderClient" has incompatible type "Decision"; expected "DispatchAuthorization"  [arg-type]
+Found 1 error in 1 file (checked 80 source files)
+### v1 mypy --strict (forge.py only)
+Success: no issues found in 79 source files
+exit=0

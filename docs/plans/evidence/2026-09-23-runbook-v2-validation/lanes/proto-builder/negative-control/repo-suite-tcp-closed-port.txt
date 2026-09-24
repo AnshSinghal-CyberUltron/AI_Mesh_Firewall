@@ -1,0 +1,1705 @@
+FFF.sssssssssssssss.ssssssss...sssssssssssssssssssssssssssss...F.F...... [ 80%]
+.Fx....x......F.F                                                        [100%]
+=================================== FAILURES ===================================
+______________ test_live_tcp_missing_key_is_authentication_error _______________
+
+    @contextlib.contextmanager
+    def map_httpcore_exceptions() -> typing.Iterator[None]:
+        global HTTPCORE_EXC_MAP
+        if len(HTTPCORE_EXC_MAP) == 0:
+            HTTPCORE_EXC_MAP = _load_httpcore_exceptions()
+        try:
+>           yield
+
+../gateway/.venv/lib/python3.14/site-packages/httpx/_transports/default.py:101: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../gateway/.venv/lib/python3.14/site-packages/httpx/_transports/default.py:394: in handle_async_request
+    resp = await self._pool.handle_async_request(req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../gateway/.venv/lib/python3.14/site-packages/httpcore/_async/connection_pool.py:256: in handle_async_request
+    raise exc from None
+../gateway/.venv/lib/python3.14/site-packages/httpcore/_async/connection_pool.py:236: in handle_async_request
+    response = await connection.handle_async_request(
+../gateway/.venv/lib/python3.14/site-packages/httpcore/_async/connection.py:101: in handle_async_request
+    raise exc
+../gateway/.venv/lib/python3.14/site-packages/httpcore/_async/connection.py:78: in handle_async_request
+    stream = await self._connect(request)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../gateway/.venv/lib/python3.14/site-packages/httpcore/_async/connection.py:124: in _connect
+    stream = await self._network_backend.connect_tcp(**kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../gateway/.venv/lib/python3.14/site-packages/httpcore/_backends/auto.py:31: in connect_tcp
+    return await self._backend.connect_tcp(
+../gateway/.venv/lib/python3.14/site-packages/httpcore/_backends/anyio.py:113: in connect_tcp
+    with map_exceptions(exc_map):
+         ^^^^^^^^^^^^^^^^^^^^^^^
+/usr/lib/python3.14/contextlib.py:162: in __exit__
+    self.gen.throw(value)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+map = {<class 'TimeoutError'>: <class 'httpcore.ConnectTimeout'>, <class 'OSError'>: <class 'httpcore.ConnectError'>, <class 'anyio.BrokenResourceError'>: <class 'httpcore.ConnectError'>}
+
+    @contextlib.contextmanager
+    def map_exceptions(map: ExceptionMapping) -> typing.Iterator[None]:
+        try:
+            yield
+        except Exception as exc:  # noqa: PIE786
+            for from_exc, to_exc in map.items():
+                if isinstance(exc, from_exc):
+>                   raise to_exc(exc) from exc
+E                   httpcore.ConnectError: All connection attempts failed
+
+../gateway/.venv/lib/python3.14/site-packages/httpcore/_exceptions.py:14: ConnectError
+
+The above exception was the direct cause of the following exception:
+
+self = <openai.AsyncOpenAI object at 0x7c7fb8ab6120>
+cast_to = <class 'openai.types.chat.chat_completion.ChatCompletion'>
+options = FinalRequestOptions(method='post', url='/chat/completions', params={}, headers=NOT_GIVEN, max_retries=NOT_GIVEN, timeo...ne, content=None, json_data={'messages': [{'role': 'user', 'content': 'hi'}], 'model': 'gpt-4o-mini'}, extra_json=None)
+
+    async def request(
+        self,
+        cast_to: Type[ResponseT],
+        options: FinalRequestOptions,
+        *,
+        stream: bool = False,
+        stream_cls: type[_AsyncStreamT] | None = None,
+    ) -> ResponseT | _AsyncStreamT:
+        if self._platform is None:
+            # `get_platform` can make blocking IO calls so we
+            # execute it earlier while we are in an async context
+            self._platform = await asyncify(get_platform)()
+    
+        cast_to = self._maybe_override_cast_to(cast_to, options)
+    
+        # create a copy of the options we were given so that if the
+        # options are mutated later & we then retry, the retries are
+        # given the original options
+        input_options = model_copy(options)
+        if input_options.idempotency_key is None and input_options.method.lower() != "get":
+            # ensure the idempotency key is reused between requests
+            input_options.idempotency_key = self._idempotency_key()
+    
+        response: httpx.Response | None = None
+        max_retries = input_options.get_max_retries(self.max_retries)
+    
+        retries_taken = 0
+        for retries_taken in range(max_retries + 1):
+            options = model_copy(input_options)
+            options = await self._prepare_options(options)
+    
+            remaining_retries = max_retries - retries_taken
+            request = self._build_request(options, retries_taken=retries_taken)
+            await self._prepare_request(request)
+    
+            kwargs: HttpxSendArgs = {}
+            if self.custom_auth is not None:
+                kwargs["auth"] = self.custom_auth
+    
+            if options.follow_redirects is not None:
+                kwargs["follow_redirects"] = options.follow_redirects
+    
+            log.debug("Sending HTTP Request: %s %s", request.method, request.url)
+    
+            response = None
+            try:
+>               response = await self._send_request(
+                    request,
+                    stream=stream or self._should_stream_response_body(request=request),
+                    **kwargs,
+                )
+
+../gateway/.venv/lib/python3.14/site-packages/openai/_base_client.py:1648: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../gateway/.venv/lib/python3.14/site-packages/openai/_client.py:946: in _send_request
+    return await self._send_with_auth_retry(request, stream=stream, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../gateway/.venv/lib/python3.14/site-packages/openai/_client.py:924: in _send_with_auth_retry
+    response = await super()._send_request(request, stream=stream, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../gateway/.venv/lib/python3.14/site-packages/openai/_base_client.py:1571: in _send_request
+    return await self._client.send(request, stream=stream, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../gateway/.venv/lib/python3.14/site-packages/httpx/_client.py:1629: in send
+    response = await self._send_handling_auth(
+../gateway/.venv/lib/python3.14/site-packages/httpx/_client.py:1657: in _send_handling_auth
+    response = await self._send_handling_redirects(
+../gateway/.venv/lib/python3.14/site-packages/httpx/_client.py:1694: in _send_handling_redirects
+    response = await self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../gateway/.venv/lib/python3.14/site-packages/httpx/_client.py:1730: in _send_single_request
+    response = await transport.handle_async_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../gateway/.venv/lib/python3.14/site-packages/httpx/_transports/default.py:393: in handle_async_request
+    with map_httpcore_exceptions():
+         ^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/lib/python3.14/contextlib.py:162: in __exit__
+    self.gen.throw(value)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    @contextlib.contextmanager
+    def map_httpcore_exceptions() -> typing.Iterator[None]:
+        global HTTPCORE_EXC_MAP
+        if len(HTTPCORE_EXC_MAP) == 0:
+            HTTPCORE_EXC_MAP = _load_httpcore_exceptions()
+        try:
+            yield
+        except Exception as exc:
+            mapped_exc = None
+    
+            for from_exc, to_exc in HTTPCORE_EXC_MAP.items():
+                if not isinstance(exc, from_exc):
+                    continue
+                # We want to map to the most specific exception we can find.
+                # Eg if `exc` is an `httpcore.ReadTimeout`, we want to map to
+                # `httpx.ReadTimeout`, not just `httpx.TimeoutException`.
+                if mapped_exc is None or issubclass(to_exc, mapped_exc):
+                    mapped_exc = to_exc
+    
+            if mapped_exc is None:  # pragma: no cover
+                raise
+    
+            message = str(exc)
+>           raise mapped_exc(message) from exc
+E           httpx.ConnectError: All connection attempts failed
+
+../gateway/.venv/lib/python3.14/site-packages/httpx/_transports/default.py:118: ConnectError
+
+The above exception was the direct cause of the following exception:
+
+    @pytest.mark.asyncio
+    async def test_live_tcp_missing_key_is_authentication_error() -> None:
+        base = tcp_base_url()
+        assert base
+        client = openai.AsyncOpenAI(
+            base_url=f"{base.rstrip('/')}/v1",
+            api_key="sk-bogus",
+            max_retries=0,
+        )
+        try:
+            with pytest.raises(openai.AuthenticationError):
+>               await client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[{"role": "user", "content": "hi"}],
+                )
+
+tests/openai_conformance/test_live_tcp_8300.py:34: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../gateway/.venv/lib/python3.14/site-packages/openai/resources/chat/completions/completions.py:2739: in create
+    return await self._post(
+../gateway/.venv/lib/python3.14/site-packages/openai/_base_client.py:1931: in post
+    return await self.request(cast_to, opts, stream=stream, stream_cls=stream_cls)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <openai.AsyncOpenAI object at 0x7c7fb8ab6120>
+cast_to = <class 'openai.types.chat.chat_completion.ChatCompletion'>
+options = FinalRequestOptions(method='post', url='/chat/completions', params={}, headers=NOT_GIVEN, max_retries=NOT_GIVEN, timeo...ne, content=None, json_data={'messages': [{'role': 'user', 'content': 'hi'}], 'model': 'gpt-4o-mini'}, extra_json=None)
+
+    async def request(
+        self,
+        cast_to: Type[ResponseT],
+        options: FinalRequestOptions,
+        *,
+        stream: bool = False,
+        stream_cls: type[_AsyncStreamT] | None = None,
+    ) -> ResponseT | _AsyncStreamT:
+        if self._platform is None:
+            # `get_platform` can make blocking IO calls so we
+            # execute it earlier while we are in an async context
+            self._platform = await asyncify(get_platform)()
+    
+        cast_to = self._maybe_override_cast_to(cast_to, options)
+    
+        # create a copy of the options we were given so that if the
+        # options are mutated later & we then retry, the retries are
+        # given the original options
+        input_options = model_copy(options)
+        if input_options.idempotency_key is None and input_options.method.lower() != "get":
+            # ensure the idempotency key is reused between requests
+            input_options.idempotency_key = self._idempotency_key()
+    
+        response: httpx.Response | None = None
+        max_retries = input_options.get_max_retries(self.max_retries)
+    
+        retries_taken = 0
+        for retries_taken in range(max_retries + 1):
+            options = model_copy(input_options)
+            options = await self._prepare_options(options)
+    
+            remaining_retries = max_retries - retries_taken
+            request = self._build_request(options, retries_taken=retries_taken)
+            await self._prepare_request(request)
+    
+            kwargs: HttpxSendArgs = {}
+            if self.custom_auth is not None:
+                kwargs["auth"] = self.custom_auth
+    
+            if options.follow_redirects is not None:
+                kwargs["follow_redirects"] = options.follow_redirects
+    
+            log.debug("Sending HTTP Request: %s %s", request.method, request.url)
+    
+            response = None
+            try:
+                response = await self._send_request(
+                    request,
+                    stream=stream or self._should_stream_response_body(request=request),
+                    **kwargs,
+                )
+            except httpx.TimeoutException as err:
+                log.debug("Encountered httpx.TimeoutException", exc_info=True)
+    
+                if remaining_retries > 0:
+                    await self._sleep_for_retry(
+                        retries_taken=retries_taken,
+                        max_retries=max_retries,
+                        options=input_options,
+                        response=None,
+                    )
+                    continue
+    
+                log.debug("Raising timeout error")
+                raise APITimeoutError(request=request) from err
+            except OpenAIError as err:
+                # Propagate OpenAIErrors as-is, without retrying or wrapping in APIConnectionError
+                raise err
+            except Exception as err:
+                log.debug("Encountered Exception", exc_info=True)
+    
+                if remaining_retries > 0:
+                    await self._sleep_for_retry(
+                        retries_taken=retries_taken,
+                        max_retries=max_retries,
+                        options=input_options,
+                        response=None,
+                    )
+                    continue
+    
+                log.debug("Raising connection error")
+>               raise APIConnectionError(request=request) from err
+E               openai.APIConnectionError: Connection error.
+
+../gateway/.venv/lib/python3.14/site-packages/openai/_base_client.py:1683: APIConnectionError
+__________________ test_live_tcp_error_body_is_json_not_html ___________________
+
+    @contextlib.contextmanager
+    def map_httpcore_exceptions() -> typing.Iterator[None]:
+        global HTTPCORE_EXC_MAP
+        if len(HTTPCORE_EXC_MAP) == 0:
+            HTTPCORE_EXC_MAP = _load_httpcore_exceptions()
+        try:
+>           yield
+
+../gateway/.venv/lib/python3.14/site-packages/httpx/_transports/default.py:101: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../gateway/.venv/lib/python3.14/site-packages/httpx/_transports/default.py:394: in handle_async_request
+    resp = await self._pool.handle_async_request(req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../gateway/.venv/lib/python3.14/site-packages/httpcore/_async/connection_pool.py:256: in handle_async_request
+    raise exc from None
+../gateway/.venv/lib/python3.14/site-packages/httpcore/_async/connection_pool.py:236: in handle_async_request
+    response = await connection.handle_async_request(
+../gateway/.venv/lib/python3.14/site-packages/httpcore/_async/connection.py:101: in handle_async_request
+    raise exc
+../gateway/.venv/lib/python3.14/site-packages/httpcore/_async/connection.py:78: in handle_async_request
+    stream = await self._connect(request)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../gateway/.venv/lib/python3.14/site-packages/httpcore/_async/connection.py:124: in _connect
+    stream = await self._network_backend.connect_tcp(**kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../gateway/.venv/lib/python3.14/site-packages/httpcore/_backends/auto.py:31: in connect_tcp
+    return await self._backend.connect_tcp(
+../gateway/.venv/lib/python3.14/site-packages/httpcore/_backends/anyio.py:113: in connect_tcp
+    with map_exceptions(exc_map):
+         ^^^^^^^^^^^^^^^^^^^^^^^
+/usr/lib/python3.14/contextlib.py:162: in __exit__
+    self.gen.throw(value)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+map = {<class 'TimeoutError'>: <class 'httpcore.ConnectTimeout'>, <class 'OSError'>: <class 'httpcore.ConnectError'>, <class 'anyio.BrokenResourceError'>: <class 'httpcore.ConnectError'>}
+
+    @contextlib.contextmanager
+    def map_exceptions(map: ExceptionMapping) -> typing.Iterator[None]:
+        try:
+            yield
+        except Exception as exc:  # noqa: PIE786
+            for from_exc, to_exc in map.items():
+                if isinstance(exc, from_exc):
+>                   raise to_exc(exc) from exc
+E                   httpcore.ConnectError: All connection attempts failed
+
+../gateway/.venv/lib/python3.14/site-packages/httpcore/_exceptions.py:14: ConnectError
+
+The above exception was the direct cause of the following exception:
+
+    @pytest.mark.asyncio
+    async def test_live_tcp_error_body_is_json_not_html() -> None:
+        base = tcp_base_url()
+        assert base
+        async with httpx.AsyncClient(base_url=base, timeout=15) as raw:
+>           resp = await raw.post(
+                "/v1/chat/completions",
+                json={"model": "gpt-4o-mini", "messages": [{"role": "user", "content": "hi"}]},
+            )
+
+tests/openai_conformance/test_live_tcp_8300.py:47: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../gateway/.venv/lib/python3.14/site-packages/httpx/_client.py:1859: in post
+    return await self.request(
+../gateway/.venv/lib/python3.14/site-packages/httpx/_client.py:1540: in request
+    return await self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../gateway/.venv/lib/python3.14/site-packages/httpx/_client.py:1629: in send
+    response = await self._send_handling_auth(
+../gateway/.venv/lib/python3.14/site-packages/httpx/_client.py:1657: in _send_handling_auth
+    response = await self._send_handling_redirects(
+../gateway/.venv/lib/python3.14/site-packages/httpx/_client.py:1694: in _send_handling_redirects
+    response = await self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../gateway/.venv/lib/python3.14/site-packages/httpx/_client.py:1730: in _send_single_request
+    response = await transport.handle_async_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../gateway/.venv/lib/python3.14/site-packages/httpx/_transports/default.py:393: in handle_async_request
+    with map_httpcore_exceptions():
+         ^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/lib/python3.14/contextlib.py:162: in __exit__
+    self.gen.throw(value)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    @contextlib.contextmanager
+    def map_httpcore_exceptions() -> typing.Iterator[None]:
+        global HTTPCORE_EXC_MAP
+        if len(HTTPCORE_EXC_MAP) == 0:
+            HTTPCORE_EXC_MAP = _load_httpcore_exceptions()
+        try:
+            yield
+        except Exception as exc:
+            mapped_exc = None
+    
+            for from_exc, to_exc in HTTPCORE_EXC_MAP.items():
+                if not isinstance(exc, from_exc):
+                    continue
+                # We want to map to the most specific exception we can find.
+                # Eg if `exc` is an `httpcore.ReadTimeout`, we want to map to
+                # `httpx.ReadTimeout`, not just `httpx.TimeoutException`.
+                if mapped_exc is None or issubclass(to_exc, mapped_exc):
+                    mapped_exc = to_exc
+    
+            if mapped_exc is None:  # pragma: no cover
+                raise
+    
+            message = str(exc)
+>           raise mapped_exc(message) from exc
+E           httpx.ConnectError: All connection attempts failed
+
+../gateway/.venv/lib/python3.14/site-packages/httpx/_transports/default.py:118: ConnectError
+____________________ test_live_tcp_mcp_rag_vector_not_html _____________________
+
+    @contextlib.contextmanager
+    def map_httpcore_exceptions() -> typing.Iterator[None]:
+        global HTTPCORE_EXC_MAP
+        if len(HTTPCORE_EXC_MAP) == 0:
+            HTTPCORE_EXC_MAP = _load_httpcore_exceptions()
+        try:
+>           yield
+
+../gateway/.venv/lib/python3.14/site-packages/httpx/_transports/default.py:101: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../gateway/.venv/lib/python3.14/site-packages/httpx/_transports/default.py:394: in handle_async_request
+    resp = await self._pool.handle_async_request(req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../gateway/.venv/lib/python3.14/site-packages/httpcore/_async/connection_pool.py:256: in handle_async_request
+    raise exc from None
+../gateway/.venv/lib/python3.14/site-packages/httpcore/_async/connection_pool.py:236: in handle_async_request
+    response = await connection.handle_async_request(
+../gateway/.venv/lib/python3.14/site-packages/httpcore/_async/connection.py:101: in handle_async_request
+    raise exc
+../gateway/.venv/lib/python3.14/site-packages/httpcore/_async/connection.py:78: in handle_async_request
+    stream = await self._connect(request)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../gateway/.venv/lib/python3.14/site-packages/httpcore/_async/connection.py:124: in _connect
+    stream = await self._network_backend.connect_tcp(**kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../gateway/.venv/lib/python3.14/site-packages/httpcore/_backends/auto.py:31: in connect_tcp
+    return await self._backend.connect_tcp(
+../gateway/.venv/lib/python3.14/site-packages/httpcore/_backends/anyio.py:113: in connect_tcp
+    with map_exceptions(exc_map):
+         ^^^^^^^^^^^^^^^^^^^^^^^
+/usr/lib/python3.14/contextlib.py:162: in __exit__
+    self.gen.throw(value)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+map = {<class 'TimeoutError'>: <class 'httpcore.ConnectTimeout'>, <class 'OSError'>: <class 'httpcore.ConnectError'>, <class 'anyio.BrokenResourceError'>: <class 'httpcore.ConnectError'>}
+
+    @contextlib.contextmanager
+    def map_exceptions(map: ExceptionMapping) -> typing.Iterator[None]:
+        try:
+            yield
+        except Exception as exc:  # noqa: PIE786
+            for from_exc, to_exc in map.items():
+                if isinstance(exc, from_exc):
+>                   raise to_exc(exc) from exc
+E                   httpcore.ConnectError: All connection attempts failed
+
+../gateway/.venv/lib/python3.14/site-packages/httpcore/_exceptions.py:14: ConnectError
+
+The above exception was the direct cause of the following exception:
+
+    @pytest.mark.asyncio
+    async def test_live_tcp_mcp_rag_vector_not_html() -> None:
+        base = tcp_base_url()
+        assert base
+        async with httpx.AsyncClient(base_url=base, timeout=15) as raw:
+>           mcp = await raw.post(
+                "/v1/mcp",
+                json={"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}},
+            )
+
+tests/openai_conformance/test_live_tcp_8300.py:63: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../gateway/.venv/lib/python3.14/site-packages/httpx/_client.py:1859: in post
+    return await self.request(
+../gateway/.venv/lib/python3.14/site-packages/httpx/_client.py:1540: in request
+    return await self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../gateway/.venv/lib/python3.14/site-packages/httpx/_client.py:1629: in send
+    response = await self._send_handling_auth(
+../gateway/.venv/lib/python3.14/site-packages/httpx/_client.py:1657: in _send_handling_auth
+    response = await self._send_handling_redirects(
+../gateway/.venv/lib/python3.14/site-packages/httpx/_client.py:1694: in _send_handling_redirects
+    response = await self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../gateway/.venv/lib/python3.14/site-packages/httpx/_client.py:1730: in _send_single_request
+    response = await transport.handle_async_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../gateway/.venv/lib/python3.14/site-packages/httpx/_transports/default.py:393: in handle_async_request
+    with map_httpcore_exceptions():
+         ^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/lib/python3.14/contextlib.py:162: in __exit__
+    self.gen.throw(value)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    @contextlib.contextmanager
+    def map_httpcore_exceptions() -> typing.Iterator[None]:
+        global HTTPCORE_EXC_MAP
+        if len(HTTPCORE_EXC_MAP) == 0:
+            HTTPCORE_EXC_MAP = _load_httpcore_exceptions()
+        try:
+            yield
+        except Exception as exc:
+            mapped_exc = None
+    
+            for from_exc, to_exc in HTTPCORE_EXC_MAP.items():
+                if not isinstance(exc, from_exc):
+                    continue
+                # We want to map to the most specific exception we can find.
+                # Eg if `exc` is an `httpcore.ReadTimeout`, we want to map to
+                # `httpx.ReadTimeout`, not just `httpx.TimeoutException`.
+                if mapped_exc is None or issubclass(to_exc, mapped_exc):
+                    mapped_exc = to_exc
+    
+            if mapped_exc is None:  # pragma: no cover
+                raise
+    
+            message = str(exc)
+>           raise mapped_exc(message) from exc
+E           httpx.ConnectError: All connection attempts failed
+
+../gateway/.venv/lib/python3.14/site-packages/httpx/_transports/default.py:118: ConnectError
+___________________ test_live_block_raises_permission_denied ___________________
+
+live_url = 'http://127.0.0.1:6249'
+
+    @pytest.mark.asyncio
+    async def test_live_block_raises_permission_denied(live_url):
+        c = _client(live_url)
+        try:
+>           with pytest.raises(openai.APIStatusError) as exc:
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           Failed: DID NOT RAISE <class 'openai.APIStatusError'>
+
+tests/openai_conformance/test_openai_sdk_compat_live_uvicorn.py:149: Failed
+----------------------------- Captured stderr call -----------------------------
+2026-09-23 15:43:16,860 [INFO] gateway: Token usage: <MagicMock name='mock.extract_usage()' id='136887631891488'> (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+------------------------------ Captured log call -------------------------------
+INFO     gateway:main.py:11594 Token usage: <MagicMock name='mock.extract_usage()' id='136887631891488'> (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+___________________ test_live_blocked_stream_is_json_not_sse ___________________
+
+live_url = 'http://127.0.0.1:6249'
+
+    @pytest.mark.asyncio
+    async def test_live_blocked_stream_is_json_not_sse(live_url):
+        """v5: a stream=true request blocked at input returns JSON 400, never a corrupt SSE body."""
+        async with httpx.AsyncClient(base_url=live_url, headers=_AUTH) as rc:
+            r = await rc.post("/v1/chat/completions",
+                              json={"model": "gpt-4o-mini", "messages": [{"role": "user", "content": INJECTION}], "stream": True})
+>       assert r.status_code == 400
+E       assert 200 == 400
+E        +  where 200 = <Response [200 OK]>.status_code
+
+tests/openai_conformance/test_openai_sdk_compat_live_uvicorn.py:176: AssertionError
+________________ test_block_403_header_request_id_matches_body _________________
+
+appctx = (<fastapi.applications.FastAPI object at 0x7c7fbaed57f0>, {'_compliant_fallback_chain': [], '_inference_allowlist': ['gpt-4o-mini', 'text-embedding-3-small', 'zs-embed'], '_zs_org_slug': '', 'max_tokens': 4096, ...})
+
+    @pytest.mark.asyncio
+    async def test_block_403_header_request_id_matches_body(appctx):
+        app, _cap = appctx
+        async with _raw(app) as rc:
+            resp = await rc.post("/v1/chat/completions",
+                                 json={"model": "gpt-4o-mini", "messages": [{"role": "user", "content": INJECTION}]})
+>       assert resp.status_code == 400
+E       assert 200 == 400
+E        +  where 200 = <Response [200 OK]>.status_code
+
+tests/openai_conformance/test_openai_sdk_compat_phase2.py:153: AssertionError
+---------------------------- Captured stderr setup -----------------------------
+2026-09-23 15:43:17,123 [INFO] ai_mesh_shared.tier2_gemini: GeminiTier2Client initialized: model=gemini-3.5-flash-lite, api_key_set=True
+2026-09-23 15:43:17,123 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+------------------------------ Captured log setup ------------------------------
+INFO     ai_mesh_shared.tier2_gemini:tier2_gemini_client.py:175 GeminiTier2Client initialized: model=gemini-3.5-flash-lite, api_key_set=True
+INFO     gateway.scanner:scanner.py:1150 InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+----------------------------- Captured stderr call -----------------------------
+2026-09-23 15:43:17,126 [INFO] gateway: Token usage: <MagicMock name='mock.extract_usage()' id='136887592526112'> (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+------------------------------ Captured log call -------------------------------
+INFO     gateway:main.py:11594 Token usage: <MagicMock name='mock.extract_usage()' id='136887592526112'> (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+__________________ test_every_block_emits_enforcement_signal ___________________
+
+watched = (<fastapi.applications.FastAPI object at 0x7c7fbaed57f0>, [{'action': 'allow', 'event_type': 'request', 'kind': 'telemetry', 'rid': 'zs-1d39e9717f09'}])
+
+    @pytest.mark.asyncio
+    async def test_every_block_emits_enforcement_signal(watched):
+        """audit-watcher: a 403 content block MUST emit >=1 telemetry/audit signal, all
+        carrying the request_id == the header (so e.request_id joins to the audit record)."""
+        app, emits = watched
+        status, header, body_rid, emit_rids, _audit_join_rid = await _correlate(
+            app, emits, "POST", "/v1/chat/completions",
+            {"model": "gpt-4o-mini", "messages": [{"role": "user", "content": INJECTION}]})
+        # GATEWAY_BLOCK_STATUS contract (main.py:660, default 400): a content block now
+        # surfaces as 400 content_filter — the block STILL happens and STILL emits the
+        # enforcement signal joined to the request id.
+>       assert status == 400
+E       assert 200 == 400
+
+tests/openai_conformance/test_openai_sdk_compat_phase5_correlation.py:153: AssertionError
+---------------------------- Captured stderr setup -----------------------------
+2026-09-23 15:43:17,431 [INFO] ai_mesh_shared.tier2_gemini: GeminiTier2Client initialized: model=gemini-3.5-flash-lite, api_key_set=True
+2026-09-23 15:43:17,431 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+------------------------------ Captured log setup ------------------------------
+INFO     ai_mesh_shared.tier2_gemini:tier2_gemini_client.py:175 GeminiTier2Client initialized: model=gemini-3.5-flash-lite, api_key_set=True
+INFO     gateway.scanner:scanner.py:1150 InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+----------------------------- Captured stderr call -----------------------------
+2026-09-23 15:43:17,434 [INFO] gateway: Token usage: <MagicMock name='mock.extract_usage()' id='136887589568000'> (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+------------------------------ Captured log call -------------------------------
+INFO     gateway:main.py:11594 Token usage: <MagicMock name='mock.extract_usage()' id='136887589568000'> (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+_________ test_stream_upstream_error_emits_error_event_not_clean_empty _________
+  + Exception Group Traceback (most recent call last):
+  |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/_utils.py", line 81, in collapse_excgroups
+  |     yield
+  |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/responses.py", line 274, in __call__
+  |     async with anyio.create_task_group() as task_group:
+  |                ~~~~~~~~~~~~~~~~~~~~~~~^^
+  |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/anyio/_backends/_asyncio.py", line 799, in __aexit__
+  |     raise BaseExceptionGroup(
+  |         "unhandled errors in a TaskGroup", self._exceptions
+  |     ) from None
+  | ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)
+  +-+---------------- 1 ----------------
+    | Traceback (most recent call last):
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/_pytest/runner.py", line 353, in from_call
+    |     result: TResult | None = func()
+    |                              ~~~~^^
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/_pytest/runner.py", line 245, in <lambda>
+    |     lambda: runtest_hook(item=item, **kwds),
+    |             ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/pluggy/_hooks.py", line 512, in __call__
+    |     return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+    |            ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/pluggy/_manager.py", line 120, in _hookexec
+    |     return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+    |            ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/pluggy/_callers.py", line 167, in _multicall
+    |     raise exception
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/pluggy/_callers.py", line 139, in _multicall
+    |     teardown.throw(exception)
+    |     ~~~~~~~~~~~~~~^^^^^^^^^^^
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/_pytest/logging.py", line 850, in pytest_runtest_call
+    |     yield
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/pluggy/_callers.py", line 139, in _multicall
+    |     teardown.throw(exception)
+    |     ~~~~~~~~~~~~~~^^^^^^^^^^^
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/_pytest/capture.py", line 900, in pytest_runtest_call
+    |     return (yield)
+    |             ^^^^^
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/pluggy/_callers.py", line 139, in _multicall
+    |     teardown.throw(exception)
+    |     ~~~~~~~~~~~~~~^^^^^^^^^^^
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/pluggy/_callers.py", line 53, in run_old_style_hookwrapper
+    |     return result.get_result()
+    |            ~~~~~~~~~~~~~~~~~^^
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/pluggy/_result.py", line 103, in get_result
+    |     raise exc.with_traceback(tb)
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/pluggy/_callers.py", line 38, in run_old_style_hookwrapper
+    |     res = yield
+    |           ^^^^^
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/pluggy/_callers.py", line 139, in _multicall
+    |     teardown.throw(exception)
+    |     ~~~~~~~~~~~~~~^^^^^^^^^^^
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/_pytest/skipping.py", line 268, in pytest_runtest_call
+    |     return (yield)
+    |             ^^^^^
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/pluggy/_callers.py", line 121, in _multicall
+    |     res = hook_impl.function(*args)
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/_pytest/runner.py", line 179, in pytest_runtest_call
+    |     item.runtest()
+    |     ~~~~~~~~~~~~^^
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py", line 569, in runtest
+    |     super().runtest()
+    |     ~~~~~~~~~~~~~~~^^
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/_pytest/python.py", line 1720, in runtest
+    |     self.ihook.pytest_pyfunc_call(pyfuncitem=self)
+    |     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/pluggy/_hooks.py", line 512, in __call__
+    |     return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+    |            ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/pluggy/_manager.py", line 120, in _hookexec
+    |     return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+    |            ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/pluggy/_callers.py", line 167, in _multicall
+    |     raise exception
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/pluggy/_callers.py", line 139, in _multicall
+    |     teardown.throw(exception)
+    |     ~~~~~~~~~~~~~~^^^^^^^^^^^
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/pluggy/_callers.py", line 53, in run_old_style_hookwrapper
+    |     return result.get_result()
+    |            ~~~~~~~~~~~~~~~~~^^
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/pluggy/_result.py", line 103, in get_result
+    |     raise exc.with_traceback(tb)
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/pluggy/_callers.py", line 38, in run_old_style_hookwrapper
+    |     res = yield
+    |           ^^^^^
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/pluggy/_callers.py", line 121, in _multicall
+    |     res = hook_impl.function(*args)
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/_pytest/python.py", line 166, in pytest_pyfunc_call
+    |     result = testfunction(**testargs)
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py", line 905, in inner
+    |     runner.run(coro, context=context)
+    |     ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/lib/python3.14/asyncio/runners.py", line 127, in run
+    |     return self._loop.run_until_complete(task)
+    |            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^
+    |   File "/usr/lib/python3.14/asyncio/base_events.py", line 719, in run_until_complete
+    |     return future.result()
+    |            ~~~~~~~~~~~~~^^
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/tests/openai_conformance/test_openai_sdk_compat_phase6_guards.py", line 85, in test_stream_upstream_error_emits_error_event_not_clean_empty
+    |     async with rc.stream("POST", "/v1/chat/completions",
+    |                ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |                          json={"model": "gpt-4o-mini", "messages": [{"role": "user", "content": "hi"}], "stream": True}) as resp:
+    |                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/lib/python3.14/contextlib.py", line 214, in __aenter__
+    |     return await anext(self.gen)
+    |            ^^^^^^^^^^^^^^^^^^^^^
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1583, in stream
+    |     response = await self.send(
+    |                ^^^^^^^^^^^^^^^^
+    |     ...<4 lines>...
+    |     )
+    |     ^
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1629, in send
+    |     response = await self._send_handling_auth(
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |     ...<4 lines>...
+    |     )
+    |     ^
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1657, in _send_handling_auth
+    |     response = await self._send_handling_redirects(
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |     ...<3 lines>...
+    |     )
+    |     ^
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1694, in _send_handling_redirects
+    |     response = await self._send_single_request(request)
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1730, in _send_single_request
+    |     response = await transport.handle_async_request(request)
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/httpx/_transports/asgi.py", line 170, in handle_async_request
+    |     await self.app(scope, receive, send)
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/fastapi/applications.py", line 1159, in __call__
+    |     await super().__call__(scope, receive, send)
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/applications.py", line 90, in __call__
+    |     await self.middleware_stack(scope, receive, send)
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/middleware/errors.py", line 186, in __call__
+    |     raise exc
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/middleware/errors.py", line 164, in __call__
+    |     await self.app(scope, receive, _send)
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/middleware/cors.py", line 88, in __call__
+    |     await self.app(scope, receive, send)
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/middleware/base.py", line 198, in __call__
+    |     raise app_exc
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/middleware/base.py", line 144, in coro
+    |     await self.app(scope, receive_or_disconnect, send_no_error)
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/middleware/base.py", line 198, in __call__
+    |     raise app_exc
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/middleware/base.py", line 144, in coro
+    |     await self.app(scope, receive_or_disconnect, send_no_error)
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/middleware/base.py", line 198, in __call__
+    |     raise app_exc
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/middleware/base.py", line 144, in coro
+    |     await self.app(scope, receive_or_disconnect, send_no_error)
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/middleware/base.py", line 198, in __call__
+    |     raise app_exc
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/middleware/base.py", line 144, in coro
+    |     await self.app(scope, receive_or_disconnect, send_no_error)
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/middleware.py", line 529, in __call__
+    |     await self.app(scope, receive, send)
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
+    |     await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    |     raise exc
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    |     await app(scope, receive, sender)
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+    |     await self.app(scope, receive, send)
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/routing.py", line 660, in __call__
+    |     await self.middleware_stack(scope, receive, send)
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/routing.py", line 680, in app
+    |     await route.handle(scope, receive, send)
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/routing.py", line 276, in handle
+    |     await self.app(scope, receive, send)
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/fastapi/routing.py", line 134, in app
+    |     await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    |     raise exc
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    |     await app(scope, receive, sender)
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/fastapi/routing.py", line 121, in app
+    |     await response(scope, receive, send)
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/responses.py", line 273, in __call__
+    |     with collapse_excgroups():
+    |          ~~~~~~~~~~~~~~~~~~^^
+    |   File "/usr/lib/python3.14/contextlib.py", line 162, in __exit__
+    |     self.gen.throw(value)
+    |     ~~~~~~~~~~~~~~^^^^^^^
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/_utils.py", line 87, in collapse_excgroups
+    |     raise exc
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/responses.py", line 277, in wrap
+    |     await func()
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/responses.py", line 250, in stream_response
+    |     async for chunk in self.body_iterator:
+    |     ...<2 lines>...
+    |         await send({"type": "http.response.body", "body": chunk, "more_body": True})
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/stream_orchestration.py", line 873, in stream_with_finalize
+    |     async for chunk in wrapped:
+    |     ...<64 lines>...
+    |         yield chunk
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/main.py", line 4451, in _provider_stream
+    |     async for chunk in LLM_ROUTER.acompletion_stream(
+    |     ...<7 lines>...
+    |         yield chunk
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/tests/openai_conformance/test_openai_sdk_compat_phase6_guards.py", line 80, in _boom_stream
+    |     raise RuntimeError("upstream boom before first token")
+    | RuntimeError: upstream boom before first token
+    +------------------------------------
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/tests/openai_conformance/test_openai_sdk_compat_phase6_guards.py", line 85, in test_stream_upstream_error_emits_error_event_not_clean_empty
+    async with rc.stream("POST", "/v1/chat/completions",
+               ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                         json={"model": "gpt-4o-mini", "messages": [{"role": "user", "content": "hi"}], "stream": True}) as resp:
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/contextlib.py", line 214, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1583, in stream
+    response = await self.send(
+               ^^^^^^^^^^^^^^^^
+    ...<4 lines>...
+    )
+    ^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1629, in send
+    response = await self._send_handling_auth(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<4 lines>...
+    )
+    ^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1657, in _send_handling_auth
+    response = await self._send_handling_redirects(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1694, in _send_handling_redirects
+    response = await self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1730, in _send_single_request
+    response = await transport.handle_async_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/httpx/_transports/asgi.py", line 170, in handle_async_request
+    await self.app(scope, receive, send)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/fastapi/applications.py", line 1159, in __call__
+    await super().__call__(scope, receive, send)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/applications.py", line 90, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/middleware/errors.py", line 186, in __call__
+    raise exc
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/middleware/errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/middleware/cors.py", line 88, in __call__
+    await self.app(scope, receive, send)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/middleware/base.py", line 198, in __call__
+    raise app_exc
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/middleware/base.py", line 144, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/middleware/base.py", line 198, in __call__
+    raise app_exc
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/middleware/base.py", line 144, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/middleware/base.py", line 198, in __call__
+    raise app_exc
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/middleware/base.py", line 144, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/middleware/base.py", line 198, in __call__
+    raise app_exc
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/middleware/base.py", line 144, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/middleware.py", line 529, in __call__
+    await self.app(scope, receive, send)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/routing.py", line 660, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/routing.py", line 680, in app
+    await route.handle(scope, receive, send)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/routing.py", line 276, in handle
+    await self.app(scope, receive, send)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/fastapi/routing.py", line 134, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/fastapi/routing.py", line 121, in app
+    await response(scope, receive, send)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/responses.py", line 273, in __call__
+    with collapse_excgroups():
+         ~~~~~~~~~~~~~~~~~~^^
+  File "/usr/lib/python3.14/contextlib.py", line 162, in __exit__
+    self.gen.throw(value)
+    ~~~~~~~~~~~~~~^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/_utils.py", line 87, in collapse_excgroups
+    raise exc
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/responses.py", line 277, in wrap
+    await func()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/responses.py", line 250, in stream_response
+    async for chunk in self.body_iterator:
+    ...<2 lines>...
+        await send({"type": "http.response.body", "body": chunk, "more_body": True})
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/stream_orchestration.py", line 873, in stream_with_finalize
+    async for chunk in wrapped:
+    ...<64 lines>...
+        yield chunk
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/main.py", line 4451, in _provider_stream
+    async for chunk in LLM_ROUTER.acompletion_stream(
+    ...<7 lines>...
+        yield chunk
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/tests/openai_conformance/test_openai_sdk_compat_phase6_guards.py", line 80, in _boom_stream
+    raise RuntimeError("upstream boom before first token")
+RuntimeError: upstream boom before first token
+
+During handling of the above exception, another exception occurred:
+
+appctx = <fastapi.applications.FastAPI object at 0x7c7fbaed57f0>
+
+    @pytest.mark.asyncio
+    async def test_stream_upstream_error_emits_error_event_not_clean_empty(appctx):
+        """P6-STREAM-error: an upstream raise before the first token must surface an
+        OpenAI-parseable error event in the SSE body (status already 200), not a clean
+        empty stream the SDK reads as a successful empty completion."""
+        app = appctx
+    
+        async def _boom_stream(body, redacted_prompt=None, metrics=None, **kw):
+            raise RuntimeError("upstream boom before first token")
+            yield ""  # unreachable; makes this an async generator
+    
+        _resolved_main().LLM_ROUTER.acompletion_stream = _boom_stream
+        async with _raw(app) as rc:
+>           async with rc.stream("POST", "/v1/chat/completions",
+                                 json={"model": "gpt-4o-mini", "messages": [{"role": "user", "content": "hi"}], "stream": True}) as resp:
+
+tests/openai_conformance/test_openai_sdk_compat_phase6_guards.py:85: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/lib/python3.14/contextlib.py:214: in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+../gateway/.venv/lib/python3.14/site-packages/httpx/_client.py:1583: in stream
+    response = await self.send(
+../gateway/.venv/lib/python3.14/site-packages/httpx/_client.py:1629: in send
+    response = await self._send_handling_auth(
+../gateway/.venv/lib/python3.14/site-packages/httpx/_client.py:1657: in _send_handling_auth
+    response = await self._send_handling_redirects(
+../gateway/.venv/lib/python3.14/site-packages/httpx/_client.py:1694: in _send_handling_redirects
+    response = await self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../gateway/.venv/lib/python3.14/site-packages/httpx/_client.py:1730: in _send_single_request
+    response = await transport.handle_async_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../gateway/.venv/lib/python3.14/site-packages/httpx/_transports/asgi.py:170: in handle_async_request
+    await self.app(scope, receive, send)
+../gateway/.venv/lib/python3.14/site-packages/fastapi/applications.py:1159: in __call__
+    await super().__call__(scope, receive, send)
+../gateway/.venv/lib/python3.14/site-packages/starlette/applications.py:90: in __call__
+    await self.middleware_stack(scope, receive, send)
+../gateway/.venv/lib/python3.14/site-packages/starlette/middleware/errors.py:186: in __call__
+    raise exc
+../gateway/.venv/lib/python3.14/site-packages/starlette/middleware/errors.py:164: in __call__
+    await self.app(scope, receive, _send)
+../gateway/.venv/lib/python3.14/site-packages/starlette/middleware/cors.py:88: in __call__
+    await self.app(scope, receive, send)
+../gateway/.venv/lib/python3.14/site-packages/starlette/middleware/base.py:198: in __call__
+    raise app_exc
+../gateway/.venv/lib/python3.14/site-packages/starlette/middleware/base.py:144: in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+../gateway/.venv/lib/python3.14/site-packages/starlette/middleware/base.py:198: in __call__
+    raise app_exc
+../gateway/.venv/lib/python3.14/site-packages/starlette/middleware/base.py:144: in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+../gateway/.venv/lib/python3.14/site-packages/starlette/middleware/base.py:198: in __call__
+    raise app_exc
+../gateway/.venv/lib/python3.14/site-packages/starlette/middleware/base.py:144: in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+../gateway/.venv/lib/python3.14/site-packages/starlette/middleware/base.py:198: in __call__
+    raise app_exc
+../gateway/.venv/lib/python3.14/site-packages/starlette/middleware/base.py:144: in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+../gateway/ai_mesh_gateway/middleware.py:529: in __call__
+    await self.app(scope, receive, send)
+../gateway/.venv/lib/python3.14/site-packages/starlette/middleware/exceptions.py:63: in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+../gateway/.venv/lib/python3.14/site-packages/starlette/_exception_handler.py:53: in wrapped_app
+    raise exc
+../gateway/.venv/lib/python3.14/site-packages/starlette/_exception_handler.py:42: in wrapped_app
+    await app(scope, receive, sender)
+../gateway/.venv/lib/python3.14/site-packages/fastapi/middleware/asyncexitstack.py:18: in __call__
+    await self.app(scope, receive, send)
+../gateway/.venv/lib/python3.14/site-packages/starlette/routing.py:660: in __call__
+    await self.middleware_stack(scope, receive, send)
+../gateway/.venv/lib/python3.14/site-packages/starlette/routing.py:680: in app
+    await route.handle(scope, receive, send)
+../gateway/.venv/lib/python3.14/site-packages/starlette/routing.py:276: in handle
+    await self.app(scope, receive, send)
+../gateway/.venv/lib/python3.14/site-packages/fastapi/routing.py:134: in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+../gateway/.venv/lib/python3.14/site-packages/starlette/_exception_handler.py:53: in wrapped_app
+    raise exc
+../gateway/.venv/lib/python3.14/site-packages/starlette/_exception_handler.py:42: in wrapped_app
+    await app(scope, receive, sender)
+../gateway/.venv/lib/python3.14/site-packages/fastapi/routing.py:121: in app
+    await response(scope, receive, send)
+../gateway/.venv/lib/python3.14/site-packages/starlette/responses.py:273: in __call__
+    with collapse_excgroups():
+         ^^^^^^^^^^^^^^^^^^^^
+/usr/lib/python3.14/contextlib.py:162: in __exit__
+    self.gen.throw(value)
+../gateway/.venv/lib/python3.14/site-packages/starlette/_utils.py:87: in collapse_excgroups
+    raise exc
+../gateway/.venv/lib/python3.14/site-packages/starlette/responses.py:277: in wrap
+    await func()
+../gateway/.venv/lib/python3.14/site-packages/starlette/responses.py:250: in stream_response
+    async for chunk in self.body_iterator:
+../gateway/ai_mesh_gateway/stream_orchestration.py:873: in stream_with_finalize
+    async for chunk in wrapped:
+../gateway/ai_mesh_gateway/main.py:4451: in _provider_stream
+    async for chunk in LLM_ROUTER.acompletion_stream(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+body = {'_compliant_fallback_chain': [], '_inference_allowlist': ['gpt-4o-mini', 'text-embedding-3-small', 'zs-embed'], '_zs_org_slug': '', 'max_tokens': 4096, ...}
+redacted_prompt = None
+metrics = StreamRunMetrics(provider_start_ts=0.0, first_token_ts=0.0, completed=False, had_error=True, output_blocked=False, fal...put_snippet='', guard_action='', guard_threat_type='', guard_detail='', guard_matched_patterns=[], output_guard_ms=0.0)
+kw = {'echo_model': 'gpt-4o-mini', 'redaction_hints': [], 'state_check': None}
+
+    async def _boom_stream(body, redacted_prompt=None, metrics=None, **kw):
+>       raise RuntimeError("upstream boom before first token")
+E       RuntimeError: upstream boom before first token
+
+tests/openai_conformance/test_openai_sdk_compat_phase6_guards.py:80: RuntimeError
+---------------------------- Captured stderr setup -----------------------------
+2026-09-23 15:43:17,480 [INFO] ai_mesh_shared.tier2_gemini: GeminiTier2Client initialized: model=gemini-3.5-flash-lite, api_key_set=True
+2026-09-23 15:43:17,480 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+------------------------------ Captured log setup ------------------------------
+INFO     ai_mesh_shared.tier2_gemini:tier2_gemini_client.py:175 GeminiTier2Client initialized: model=gemini-3.5-flash-lite, api_key_set=True
+INFO     gateway.scanner:scanner.py:1150 InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+----------------------------- Captured stderr call -----------------------------
+2026-09-23 15:43:17,484 [ERROR] gateway: Unhandled gateway error at /v1/chat/completions
+  + Exception Group Traceback (most recent call last):
+  |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/_utils.py", line 81, in collapse_excgroups
+  |     yield
+  |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/responses.py", line 274, in __call__
+  |     async with anyio.create_task_group() as task_group:
+  |                ~~~~~~~~~~~~~~~~~~~~~~~^^
+  |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/anyio/_backends/_asyncio.py", line 799, in __aexit__
+  |     raise BaseExceptionGroup(
+  |         "unhandled errors in a TaskGroup", self._exceptions
+  |     ) from None
+  | ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)
+  +-+---------------- 1 ----------------
+    | Traceback (most recent call last):
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/middleware/errors.py", line 164, in __call__
+    |     await self.app(scope, receive, _send)
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/middleware/cors.py", line 88, in __call__
+    |     await self.app(scope, receive, send)
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/middleware/base.py", line 198, in __call__
+    |     raise app_exc
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/middleware/base.py", line 144, in coro
+    |     await self.app(scope, receive_or_disconnect, send_no_error)
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/middleware/base.py", line 198, in __call__
+    |     raise app_exc
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/middleware/base.py", line 144, in coro
+    |     await self.app(scope, receive_or_disconnect, send_no_error)
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/middleware/base.py", line 198, in __call__
+    |     raise app_exc
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/middleware/base.py", line 144, in coro
+    |     await self.app(scope, receive_or_disconnect, send_no_error)
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/middleware/base.py", line 198, in __call__
+    |     raise app_exc
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/middleware/base.py", line 144, in coro
+    |     await self.app(scope, receive_or_disconnect, send_no_error)
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/middleware.py", line 529, in __call__
+    |     await self.app(scope, receive, send)
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
+    |     await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    |     raise exc
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    |     await app(scope, receive, sender)
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+    |     await self.app(scope, receive, send)
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/routing.py", line 660, in __call__
+    |     await self.middleware_stack(scope, receive, send)
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/routing.py", line 680, in app
+    |     await route.handle(scope, receive, send)
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/routing.py", line 276, in handle
+    |     await self.app(scope, receive, send)
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/fastapi/routing.py", line 134, in app
+    |     await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    |     raise exc
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    |     await app(scope, receive, sender)
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/fastapi/routing.py", line 121, in app
+    |     await response(scope, receive, send)
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/responses.py", line 273, in __call__
+    |     with collapse_excgroups():
+    |          ~~~~~~~~~~~~~~~~~~^^
+    |   File "/usr/lib/python3.14/contextlib.py", line 162, in __exit__
+    |     self.gen.throw(value)
+    |     ~~~~~~~~~~~~~~^^^^^^^
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/_utils.py", line 87, in collapse_excgroups
+    |     raise exc
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/responses.py", line 277, in wrap
+    |     await func()
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/responses.py", line 250, in stream_response
+    |     async for chunk in self.body_iterator:
+    |     ...<2 lines>...
+    |         await send({"type": "http.response.body", "body": chunk, "more_body": True})
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/stream_orchestration.py", line 873, in stream_with_finalize
+    |     async for chunk in wrapped:
+    |     ...<64 lines>...
+    |         yield chunk
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/main.py", line 4451, in _provider_stream
+    |     async for chunk in LLM_ROUTER.acompletion_stream(
+    |     ...<7 lines>...
+    |         yield chunk
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/tests/openai_conformance/test_openai_sdk_compat_phase6_guards.py", line 80, in _boom_stream
+    |     raise RuntimeError("upstream boom before first token")
+    | RuntimeError: upstream boom before first token
+    +------------------------------------
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/middleware/errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/middleware/cors.py", line 88, in __call__
+    await self.app(scope, receive, send)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/middleware/base.py", line 198, in __call__
+    raise app_exc
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/middleware/base.py", line 144, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/middleware/base.py", line 198, in __call__
+    raise app_exc
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/middleware/base.py", line 144, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/middleware/base.py", line 198, in __call__
+    raise app_exc
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/middleware/base.py", line 144, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/middleware/base.py", line 198, in __call__
+    raise app_exc
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/middleware/base.py", line 144, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/middleware.py", line 529, in __call__
+    await self.app(scope, receive, send)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/routing.py", line 660, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/routing.py", line 680, in app
+    await route.handle(scope, receive, send)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/routing.py", line 276, in handle
+    await self.app(scope, receive, send)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/fastapi/routing.py", line 134, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/fastapi/routing.py", line 121, in app
+    await response(scope, receive, send)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/responses.py", line 273, in __call__
+    with collapse_excgroups():
+         ~~~~~~~~~~~~~~~~~~^^
+  File "/usr/lib/python3.14/contextlib.py", line 162, in __exit__
+    self.gen.throw(value)
+    ~~~~~~~~~~~~~~^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/_utils.py", line 87, in collapse_excgroups
+    raise exc
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/responses.py", line 277, in wrap
+    await func()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/responses.py", line 250, in stream_response
+    async for chunk in self.body_iterator:
+    ...<2 lines>...
+        await send({"type": "http.response.body", "body": chunk, "more_body": True})
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/stream_orchestration.py", line 873, in stream_with_finalize
+    async for chunk in wrapped:
+    ...<64 lines>...
+        yield chunk
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/main.py", line 4451, in _provider_stream
+    async for chunk in LLM_ROUTER.acompletion_stream(
+    ...<7 lines>...
+        yield chunk
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/tests/openai_conformance/test_openai_sdk_compat_phase6_guards.py", line 80, in _boom_stream
+    raise RuntimeError("upstream boom before first token")
+RuntimeError: upstream boom before first token
+------------------------------ Captured log call -------------------------------
+ERROR    gateway:main.py:182 Unhandled gateway error at /v1/chat/completions
+  + Exception Group Traceback (most recent call last):
+  |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/_utils.py", line 81, in collapse_excgroups
+  |     yield
+  |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/responses.py", line 274, in __call__
+  |     async with anyio.create_task_group() as task_group:
+  |                ~~~~~~~~~~~~~~~~~~~~~~~^^
+  |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/anyio/_backends/_asyncio.py", line 799, in __aexit__
+  |     raise BaseExceptionGroup(
+  |         "unhandled errors in a TaskGroup", self._exceptions
+  |     ) from None
+  | ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)
+  +-+---------------- 1 ----------------
+    | Traceback (most recent call last):
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/middleware/errors.py", line 164, in __call__
+    |     await self.app(scope, receive, _send)
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/middleware/cors.py", line 88, in __call__
+    |     await self.app(scope, receive, send)
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/middleware/base.py", line 198, in __call__
+    |     raise app_exc
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/middleware/base.py", line 144, in coro
+    |     await self.app(scope, receive_or_disconnect, send_no_error)
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/middleware/base.py", line 198, in __call__
+    |     raise app_exc
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/middleware/base.py", line 144, in coro
+    |     await self.app(scope, receive_or_disconnect, send_no_error)
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/middleware/base.py", line 198, in __call__
+    |     raise app_exc
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/middleware/base.py", line 144, in coro
+    |     await self.app(scope, receive_or_disconnect, send_no_error)
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/middleware/base.py", line 198, in __call__
+    |     raise app_exc
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/middleware/base.py", line 144, in coro
+    |     await self.app(scope, receive_or_disconnect, send_no_error)
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/middleware.py", line 529, in __call__
+    |     await self.app(scope, receive, send)
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
+    |     await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    |     raise exc
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    |     await app(scope, receive, sender)
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+    |     await self.app(scope, receive, send)
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/routing.py", line 660, in __call__
+    |     await self.middleware_stack(scope, receive, send)
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/routing.py", line 680, in app
+    |     await route.handle(scope, receive, send)
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/routing.py", line 276, in handle
+    |     await self.app(scope, receive, send)
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/fastapi/routing.py", line 134, in app
+    |     await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    |     raise exc
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    |     await app(scope, receive, sender)
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/fastapi/routing.py", line 121, in app
+    |     await response(scope, receive, send)
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/responses.py", line 273, in __call__
+    |     with collapse_excgroups():
+    |          ~~~~~~~~~~~~~~~~~~^^
+    |   File "/usr/lib/python3.14/contextlib.py", line 162, in __exit__
+    |     self.gen.throw(value)
+    |     ~~~~~~~~~~~~~~^^^^^^^
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/_utils.py", line 87, in collapse_excgroups
+    |     raise exc
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/responses.py", line 277, in wrap
+    |     await func()
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/responses.py", line 250, in stream_response
+    |     async for chunk in self.body_iterator:
+    |     ...<2 lines>...
+    |         await send({"type": "http.response.body", "body": chunk, "more_body": True})
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/stream_orchestration.py", line 873, in stream_with_finalize
+    |     async for chunk in wrapped:
+    |     ...<64 lines>...
+    |         yield chunk
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/main.py", line 4451, in _provider_stream
+    |     async for chunk in LLM_ROUTER.acompletion_stream(
+    |     ...<7 lines>...
+    |         yield chunk
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/tests/openai_conformance/test_openai_sdk_compat_phase6_guards.py", line 80, in _boom_stream
+    |     raise RuntimeError("upstream boom before first token")
+    | RuntimeError: upstream boom before first token
+    +------------------------------------
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/middleware/errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/middleware/cors.py", line 88, in __call__
+    await self.app(scope, receive, send)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/middleware/base.py", line 198, in __call__
+    raise app_exc
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/middleware/base.py", line 144, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/middleware/base.py", line 198, in __call__
+    raise app_exc
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/middleware/base.py", line 144, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/middleware/base.py", line 198, in __call__
+    raise app_exc
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/middleware/base.py", line 144, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/middleware/base.py", line 198, in __call__
+    raise app_exc
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/middleware/base.py", line 144, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/middleware.py", line 529, in __call__
+    await self.app(scope, receive, send)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/routing.py", line 660, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/routing.py", line 680, in app
+    await route.handle(scope, receive, send)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/routing.py", line 276, in handle
+    await self.app(scope, receive, send)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/fastapi/routing.py", line 134, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/fastapi/routing.py", line 121, in app
+    await response(scope, receive, send)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/responses.py", line 273, in __call__
+    with collapse_excgroups():
+         ~~~~~~~~~~~~~~~~~~^^
+  File "/usr/lib/python3.14/contextlib.py", line 162, in __exit__
+    self.gen.throw(value)
+    ~~~~~~~~~~~~~~^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/_utils.py", line 87, in collapse_excgroups
+    raise exc
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/responses.py", line 277, in wrap
+    await func()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/responses.py", line 250, in stream_response
+    async for chunk in self.body_iterator:
+    ...<2 lines>...
+        await send({"type": "http.response.body", "body": chunk, "more_body": True})
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/stream_orchestration.py", line 873, in stream_with_finalize
+    async for chunk in wrapped:
+    ...<64 lines>...
+        yield chunk
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/main.py", line 4451, in _provider_stream
+    async for chunk in LLM_ROUTER.acompletion_stream(
+    ...<7 lines>...
+        yield chunk
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/tests/openai_conformance/test_openai_sdk_compat_phase6_guards.py", line 80, in _boom_stream
+    raise RuntimeError("upstream boom before first token")
+RuntimeError: upstream boom before first token
+=============================== warnings summary ===============================
+../gateway/ai_mesh_gateway/main.py:6350
+  /home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/main.py:6350: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("startup")
+
+../gateway/.venv/lib/python3.14/site-packages/fastapi/applications.py:4598
+../gateway/.venv/lib/python3.14/site-packages/fastapi/applications.py:4598
+  /home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/fastapi/applications.py:4598: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    return self.router.on_event(event_type)  # ty: ignore[deprecated]
+
+../gateway/ai_mesh_gateway/main.py:6881
+  /home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/main.py:6881: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("shutdown")
+
+tests/openai_conformance/test_openai_sdk_compat.py::test_responses_store_retrieve_delete_roundtrip
+  /home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/google/genai/types.py:42: DeprecationWarning: '_UnionGenericAlias' is deprecated and slated for removal in Python 3.17
+    VersionedUnionType = Union[builtin_types.UnionType, _UnionGenericAlias]
+
+tests/openai_conformance/test_openai_sdk_compat_live_uvicorn.py::test_live_chat_non_stream
+  /home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/websockets/legacy/__init__.py:6: DeprecationWarning: websockets.legacy is deprecated; see https://websockets.readthedocs.io/en/stable/howto/upgrade.html for upgrade instructions
+    warnings.warn(  # deprecated in 14.0 - 2024-11-09
+
+tests/openai_conformance/test_openai_sdk_compat_live_uvicorn.py::test_live_chat_non_stream
+  /home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/uvicorn/protocols/websockets/websockets_impl.py:17: DeprecationWarning: websockets.server.WebSocketServerProtocol is deprecated
+    from websockets.server import WebSocketServerProtocol
+
+tests/openai_conformance/test_openai_sdk_compat_live_uvicorn.py::test_live_chat_non_stream
+tests/openai_conformance/test_openai_sdk_compat_live_uvicorn.py::test_live_chat_stream_chunks_and_done
+tests/openai_conformance/test_openai_sdk_compat_live_uvicorn.py::test_live_responses_stream_typed_events
+tests/openai_conformance/test_openai_sdk_compat_live_uvicorn.py::test_live_block_raises_permission_denied
+tests/openai_conformance/test_openai_sdk_compat_live_uvicorn.py::test_live_request_id_header_present_and_matches_body
+tests/openai_conformance/test_openai_sdk_compat_live_uvicorn.py::test_live_blocked_stream_is_json_not_sse
+tests/openai_conformance/test_openai_sdk_compat_live_uvicorn.py::test_live_client_disconnect_midstream_then_server_responsive
+tests/openai_conformance/test_openai_sdk_compat_live_uvicorn.py::test_live_client_disconnect_midstream_then_server_responsive
+tests/openai_conformance/test_openai_sdk_compat_live_uvicorn.py::test_live_zero_token_scan_only_no_hang
+  /home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/scanner.py:1178: DeprecationWarning: 'asyncio.iscoroutinefunction' is deprecated and slated for removal in Python 3.16; use inspect.iscoroutinefunction() instead
+    return await loop.run_in_executor(
+
+tests/openai_conformance/test_openai_sdk_compat_live_uvicorn.py::test_live_chat_non_stream
+tests/openai_conformance/test_openai_sdk_compat_live_uvicorn.py::test_live_block_raises_permission_denied
+tests/openai_conformance/test_openai_sdk_compat_live_uvicorn.py::test_live_request_id_header_present_and_matches_body
+tests/openai_conformance/test_openai_sdk_compat_live_uvicorn.py::test_live_client_disconnect_midstream_then_server_responsive
+  /home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/scanner.py:1191: DeprecationWarning: 'asyncio.iscoroutinefunction' is deprecated and slated for removal in Python 3.16; use inspect.iscoroutinefunction() instead
+    return await loop.run_in_executor(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+==================================== PASSES ====================================
+_____________ test_malformed_sse_data_frame_fails_and_names_frame ______________
+----------------------------- Captured stdout call -----------------------------
+lgw01_4_named_frame not-json-this-frame-MUST-fail
+_______ test_responses_mid_stream_failure_surfaces_typed_response_failed _______
+----------------------------- Captured stderr call -----------------------------
+2026-09-23 15:43:13,150 [WARNING] gateway.bedrock_scanner: TIER2_PROVIDER=bedrock: Tier-2 inference still uses Bedrock Converse (legacy). Set TIER2_PROVIDER=gemini to use the Gemini Developer API.
+2026-09-23 15:43:13,160 [INFO] botocore.credentials: Found credentials in shared credentials file: ~/.aws/credentials
+2026-09-23 15:43:13,473 [INFO] gateway.bedrock_client: BedrockClient initialized: model=zeroshield-guard, region=[region], timeout=60.0s, max_pool_connections=10000, aws_key_prefix=(not set)
+2026-09-23 15:43:13,473 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+------------------------------ Captured log call -------------------------------
+WARNING  gateway.bedrock_scanner:bedrock_scanner.py:625 TIER2_PROVIDER=bedrock: Tier-2 inference still uses Bedrock Converse (legacy). Set TIER2_PROVIDER=gemini to use the Gemini Developer API.
+INFO     botocore.credentials:credentials.py:1392 Found credentials in shared credentials file: ~/.aws/credentials
+INFO     gateway.bedrock_client:bedrock_client.py:249 BedrockClient initialized: model=zeroshield-guard, region=[region], timeout=60.0s, max_pool_connections=10000, aws_key_prefix=(not set)
+INFO     gateway.scanner:scanner.py:1150 InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+________________ test_responses_store_retrieve_delete_roundtrip ________________
+---------------------------- Captured stderr setup -----------------------------
+2026-09-23 15:43:16,542 [INFO] ai_mesh_shared.tier2_gemini: GeminiTier2Client initialized: model=gemini-3.5-flash-lite, api_key_set=True
+2026-09-23 15:43:16,543 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+------------------------------ Captured log setup ------------------------------
+INFO     ai_mesh_shared.tier2_gemini:tier2_gemini_client.py:175 GeminiTier2Client initialized: model=gemini-3.5-flash-lite, api_key_set=True
+INFO     gateway.scanner:scanner.py:1150 InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+----------------------------- Captured stderr call -----------------------------
+2026-09-23 15:43:16,557 [INFO] gateway: Token usage: <MagicMock name='mock.extract_usage()' id='136887635347840'> (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+------------------------------ Captured log call -------------------------------
+INFO     gateway:main.py:11594 Token usage: <MagicMock name='mock.extract_usage()' id='136887635347840'> (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+______________________ test_responses_input_items_listing ______________________
+---------------------------- Captured stderr setup -----------------------------
+2026-09-23 15:43:16,587 [INFO] ai_mesh_shared.tier2_gemini: GeminiTier2Client initialized: model=gemini-3.5-flash-lite, api_key_set=True
+2026-09-23 15:43:16,588 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+------------------------------ Captured log setup ------------------------------
+INFO     ai_mesh_shared.tier2_gemini:tier2_gemini_client.py:175 GeminiTier2Client initialized: model=gemini-3.5-flash-lite, api_key_set=True
+INFO     gateway.scanner:scanner.py:1150 InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+----------------------------- Captured stderr call -----------------------------
+2026-09-23 15:43:16,593 [INFO] gateway: Token usage: <MagicMock name='mock.extract_usage()' id='136887635351200'> (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+------------------------------ Captured log call -------------------------------
+INFO     gateway:main.py:11594 Token usage: <MagicMock name='mock.extract_usage()' id='136887635351200'> (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+__________________ test_responses_previous_response_id_replay __________________
+---------------------------- Captured stderr setup -----------------------------
+2026-09-23 15:43:16,656 [INFO] ai_mesh_shared.tier2_gemini: GeminiTier2Client initialized: model=gemini-3.5-flash-lite, api_key_set=True
+2026-09-23 15:43:16,656 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+------------------------------ Captured log setup ------------------------------
+INFO     ai_mesh_shared.tier2_gemini:tier2_gemini_client.py:175 GeminiTier2Client initialized: model=gemini-3.5-flash-lite, api_key_set=True
+INFO     gateway.scanner:scanner.py:1150 InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+----------------------------- Captured stderr call -----------------------------
+2026-09-23 15:43:16,662 [INFO] gateway: Token usage: <MagicMock name='mock.extract_usage()' id='136887635358928'> (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 15:43:16,667 [INFO] gateway: Token usage: <MagicMock name='mock.extract_usage()' id='136887635358928'> (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+------------------------------ Captured log call -------------------------------
+INFO     gateway:main.py:11594 Token usage: <MagicMock name='mock.extract_usage()' id='136887635358928'> (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+INFO     gateway:main.py:11594 Token usage: <MagicMock name='mock.extract_usage()' id='136887635358928'> (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+__________________________ test_live_chat_non_stream ___________________________
+---------------------------- Captured stderr setup -----------------------------
+2026-09-23 15:43:16,724 [INFO] ai_mesh_shared.tier2_gemini: GeminiTier2Client initialized: model=gemini-3.5-flash-lite, api_key_set=True
+2026-09-23 15:43:16,724 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+------------------------------ Captured log setup ------------------------------
+INFO     ai_mesh_shared.tier2_gemini:tier2_gemini_client.py:175 GeminiTier2Client initialized: model=gemini-3.5-flash-lite, api_key_set=True
+INFO     gateway.scanner:scanner.py:1150 InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+----------------------------- Captured stderr call -----------------------------
+2026-09-23 15:43:16,806 [INFO] gateway: Token usage: <MagicMock name='mock.extract_usage()' id='136887631891488'> (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+------------------------------ Captured log call -------------------------------
+INFO     gateway:main.py:11594 Token usage: <MagicMock name='mock.extract_usage()' id='136887631891488'> (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+_____________ test_live_request_id_header_present_and_matches_body _____________
+----------------------------- Captured stderr call -----------------------------
+2026-09-23 15:43:16,876 [INFO] gateway: Token usage: <MagicMock name='mock.extract_usage()' id='136887631891488'> (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+------------------------------ Captured log call -------------------------------
+INFO     gateway:main.py:11594 Token usage: <MagicMock name='mock.extract_usage()' id='136887631891488'> (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+_________ test_live_client_disconnect_midstream_then_server_responsive _________
+----------------------------- Captured stderr call -----------------------------
+2026-09-23 15:43:16,913 [INFO] gateway: Token usage: <MagicMock name='mock.extract_usage()' id='136887631891488'> (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+------------------------------ Captured log call -------------------------------
+INFO     gateway:main.py:11594 Token usage: <MagicMock name='mock.extract_usage()' id='136887631891488'> (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+________ test_max_completion_tokens_not_shadowed_by_injected_max_tokens ________
+---------------------------- Captured stderr setup -----------------------------
+2026-09-23 15:43:17,077 [INFO] ai_mesh_shared.tier2_gemini: GeminiTier2Client initialized: model=gemini-3.5-flash-lite, api_key_set=True
+2026-09-23 15:43:17,077 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+------------------------------ Captured log setup ------------------------------
+INFO     ai_mesh_shared.tier2_gemini:tier2_gemini_client.py:175 GeminiTier2Client initialized: model=gemini-3.5-flash-lite, api_key_set=True
+INFO     gateway.scanner:scanner.py:1150 InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+----------------------------- Captured stderr call -----------------------------
+2026-09-23 15:43:17,081 [INFO] gateway: Token usage: <MagicMock name='mock.extract_usage()' id='136887631899888'> (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+------------------------------ Captured log call -------------------------------
+INFO     gateway:main.py:11594 Token usage: <MagicMock name='mock.extract_usage()' id='136887631899888'> (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+_____________ test_max_completion_tokens_over_ceiling_is_rejected ______________
+---------------------------- Captured stderr setup -----------------------------
+2026-09-23 15:43:17,101 [INFO] ai_mesh_shared.tier2_gemini: GeminiTier2Client initialized: model=gemini-3.5-flash-lite, api_key_set=True
+2026-09-23 15:43:17,101 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+------------------------------ Captured log setup ------------------------------
+INFO     ai_mesh_shared.tier2_gemini:tier2_gemini_client.py:175 GeminiTier2Client initialized: model=gemini-3.5-flash-lite, api_key_set=True
+INFO     gateway.scanner:scanner.py:1150 InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+__________________ test_chat_validation_400_populates_e_param __________________
+---------------------------- Captured stderr setup -----------------------------
+2026-09-23 15:43:17,176 [INFO] ai_mesh_shared.tier2_gemini: GeminiTier2Client initialized: model=gemini-3.5-flash-lite, api_key_set=True
+2026-09-23 15:43:17,176 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+------------------------------ Captured log setup ------------------------------
+INFO     ai_mesh_shared.tier2_gemini:tier2_gemini_client.py:175 GeminiTier2Client initialized: model=gemini-3.5-flash-lite, api_key_set=True
+INFO     gateway.scanner:scanner.py:1150 InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+__________ test_success_200_header_request_id_matches_body_zeroshield __________
+---------------------------- Captured stderr setup -----------------------------
+2026-09-23 15:43:17,197 [INFO] ai_mesh_shared.tier2_gemini: GeminiTier2Client initialized: model=gemini-3.5-flash-lite, api_key_set=True
+2026-09-23 15:43:17,197 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+------------------------------ Captured log setup ------------------------------
+INFO     ai_mesh_shared.tier2_gemini:tier2_gemini_client.py:175 GeminiTier2Client initialized: model=gemini-3.5-flash-lite, api_key_set=True
+INFO     gateway.scanner:scanner.py:1150 InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+----------------------------- Captured stderr call -----------------------------
+2026-09-23 15:43:17,200 [INFO] gateway: Token usage: <MagicMock name='mock.extract_usage()' id='136887593318256'> (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+------------------------------ Captured log call -------------------------------
+INFO     gateway:main.py:11594 Token usage: <MagicMock name='mock.extract_usage()' id='136887593318256'> (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+____________________ test_upstream_429_carries_retry_after _____________________
+---------------------------- Captured stderr setup -----------------------------
+2026-09-23 15:43:17,219 [INFO] ai_mesh_shared.tier2_gemini: GeminiTier2Client initialized: model=gemini-3.5-flash-lite, api_key_set=True
+2026-09-23 15:43:17,219 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+------------------------------ Captured log setup ------------------------------
+INFO     ai_mesh_shared.tier2_gemini:tier2_gemini_client.py:175 GeminiTier2Client initialized: model=gemini-3.5-flash-lite, api_key_set=True
+INFO     gateway.scanner:scanner.py:1150 InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+----------------------------- Captured stderr call -----------------------------
+2026-09-23 15:43:17,222 [WARNING] gateway: Upstream LLM error [429]: {'message': 'rate limited', 'type': 'rate_limit_error', 'code': 'rate_limit_exceeded'}
+------------------------------ Captured log call -------------------------------
+WARNING  gateway:main.py:3431 Upstream LLM error [429]: {'message': 'rate limited', 'type': 'rate_limit_error', 'code': 'rate_limit_exceeded'}
+________________ test_responses_adapter_maps_native_text_format ________________
+---------------------------- Captured stderr setup -----------------------------
+2026-09-23 15:43:17,265 [INFO] ai_mesh_shared.tier2_gemini: GeminiTier2Client initialized: model=gemini-3.5-flash-lite, api_key_set=True
+2026-09-23 15:43:17,265 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+------------------------------ Captured log setup ------------------------------
+INFO     ai_mesh_shared.tier2_gemini:tier2_gemini_client.py:175 GeminiTier2Client initialized: model=gemini-3.5-flash-lite, api_key_set=True
+INFO     gateway.scanner:scanner.py:1150 InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+----------------------------- Captured stderr call -----------------------------
+2026-09-23 15:43:17,270 [INFO] gateway: Token usage: <MagicMock name='mock.extract_usage()' id='136887592324464'> (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+------------------------------ Captured log call -------------------------------
+INFO     gateway:main.py:11594 Token usage: <MagicMock name='mock.extract_usage()' id='136887592324464'> (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+__________________ test_responses_adapter_forwards_logit_bias __________________
+---------------------------- Captured stderr setup -----------------------------
+2026-09-23 15:43:17,289 [INFO] ai_mesh_shared.tier2_gemini: GeminiTier2Client initialized: model=gemini-3.5-flash-lite, api_key_set=True
+2026-09-23 15:43:17,289 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+------------------------------ Captured log setup ------------------------------
+INFO     ai_mesh_shared.tier2_gemini:tier2_gemini_client.py:175 GeminiTier2Client initialized: model=gemini-3.5-flash-lite, api_key_set=True
+INFO     gateway.scanner:scanner.py:1150 InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+----------------------------- Captured stderr call -----------------------------
+2026-09-23 15:43:17,293 [INFO] gateway: Token usage: <MagicMock name='mock.extract_usage()' id='136887592331856'> (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+------------------------------ Captured log call -------------------------------
+INFO     gateway:main.py:11594 Token usage: <MagicMock name='mock.extract_usage()' id='136887592331856'> (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+_________________ test_responses_adapter_forwards_service_tier _________________
+---------------------------- Captured stderr setup -----------------------------
+2026-09-23 15:43:17,312 [INFO] ai_mesh_shared.tier2_gemini: GeminiTier2Client initialized: model=gemini-3.5-flash-lite, api_key_set=True
+2026-09-23 15:43:17,312 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+------------------------------ Captured log setup ------------------------------
+INFO     ai_mesh_shared.tier2_gemini:tier2_gemini_client.py:175 GeminiTier2Client initialized: model=gemini-3.5-flash-lite, api_key_set=True
+INFO     gateway.scanner:scanner.py:1150 InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+----------------------------- Captured stderr call -----------------------------
+2026-09-23 15:43:17,316 [INFO] gateway: Token usage: <MagicMock name='mock.extract_usage()' id='136887590930480'> (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+------------------------------ Captured log call -------------------------------
+INFO     gateway:main.py:11594 Token usage: <MagicMock name='mock.extract_usage()' id='136887590930480'> (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+__________________ test_responses_adapter_forwards_prediction __________________
+---------------------------- Captured stderr setup -----------------------------
+2026-09-23 15:43:17,335 [INFO] ai_mesh_shared.tier2_gemini: GeminiTier2Client initialized: model=gemini-3.5-flash-lite, api_key_set=True
+2026-09-23 15:43:17,335 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+------------------------------ Captured log setup ------------------------------
+INFO     ai_mesh_shared.tier2_gemini:tier2_gemini_client.py:175 GeminiTier2Client initialized: model=gemini-3.5-flash-lite, api_key_set=True
+INFO     gateway.scanner:scanner.py:1150 InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+----------------------------- Captured stderr call -----------------------------
+2026-09-23 15:43:17,339 [INFO] gateway: Token usage: <MagicMock name='mock.extract_usage()' id='136887590937872'> (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+------------------------------ Captured log call -------------------------------
+INFO     gateway:main.py:11594 Token usage: <MagicMock name='mock.extract_usage()' id='136887590937872'> (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+__________________ test_responses_adapter_forwards_truncation __________________
+---------------------------- Captured stderr setup -----------------------------
+2026-09-23 15:43:17,358 [INFO] ai_mesh_shared.tier2_gemini: GeminiTier2Client initialized: model=gemini-3.5-flash-lite, api_key_set=True
+2026-09-23 15:43:17,358 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+------------------------------ Captured log setup ------------------------------
+INFO     ai_mesh_shared.tier2_gemini:tier2_gemini_client.py:175 GeminiTier2Client initialized: model=gemini-3.5-flash-lite, api_key_set=True
+INFO     gateway.scanner:scanner.py:1150 InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+----------------------------- Captured stderr call -----------------------------
+2026-09-23 15:43:17,362 [INFO] gateway: Token usage: <MagicMock name='mock.extract_usage()' id='136887589552880'> (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+------------------------------ Captured log call -------------------------------
+INFO     gateway:main.py:11594 Token usage: <MagicMock name='mock.extract_usage()' id='136887589552880'> (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+_______________ test_request_id_join_invariant_across_v1_matrix ________________
+---------------------------- Captured stderr setup -----------------------------
+2026-09-23 15:43:17,381 [INFO] ai_mesh_shared.tier2_gemini: GeminiTier2Client initialized: model=gemini-3.5-flash-lite, api_key_set=True
+2026-09-23 15:43:17,381 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+------------------------------ Captured log setup ------------------------------
+INFO     ai_mesh_shared.tier2_gemini:tier2_gemini_client.py:175 GeminiTier2Client initialized: model=gemini-3.5-flash-lite, api_key_set=True
+INFO     gateway.scanner:scanner.py:1150 InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+----------------------------- Captured stderr call -----------------------------
+2026-09-23 15:43:17,384 [INFO] gateway: Token usage: <MagicMock name='mock.extract_usage()' id='136887589559600'> (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 15:43:17,388 [INFO] gateway: Token usage: <MagicMock name='mock.extract_usage()' id='136887589559600'> (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 15:43:17,406 [INFO] gateway: Token usage: <MagicMock name='mock.extract_usage()' id='136887589559600'> (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 15:43:17,410 [INFO] gateway: Token usage: <MagicMock name='mock.extract_usage()' id='136887589559600'> (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 15:43:17,413 [WARNING] gateway.middleware: API key not found in Redis (prefix: zs_wrong...)
+2026-09-23 15:43:17,413 [WARNING] gateway.middleware: 401 Unauthorized for path=/v1/chat/completions — Bearer token present but invalid (prefix=zs_wrong)
+------------------------------ Captured log call -------------------------------
+INFO     gateway:main.py:11594 Token usage: <MagicMock name='mock.extract_usage()' id='136887589559600'> (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+INFO     gateway:main.py:11594 Token usage: <MagicMock name='mock.extract_usage()' id='136887589559600'> (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+INFO     gateway:main.py:11594 Token usage: <MagicMock name='mock.extract_usage()' id='136887589559600'> (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+INFO     gateway:main.py:11594 Token usage: <MagicMock name='mock.extract_usage()' id='136887589559600'> (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+WARNING  gateway.middleware:middleware.py:215 API key not found in Redis (prefix: zs_wrong...)
+WARNING  gateway.middleware:middleware.py:471 401 Unauthorized for path=/v1/chat/completions — Bearer token present but invalid (prefix=zs_wrong)
+__________ test_missing_model_returns_400_invalid_request_param_model __________
+---------------------------- Captured stderr setup -----------------------------
+2026-09-23 15:43:17,456 [INFO] ai_mesh_shared.tier2_gemini: GeminiTier2Client initialized: model=gemini-3.5-flash-lite, api_key_set=True
+2026-09-23 15:43:17,456 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+------------------------------ Captured log setup ------------------------------
+INFO     ai_mesh_shared.tier2_gemini:tier2_gemini_client.py:175 GeminiTier2Client initialized: model=gemini-3.5-flash-lite, api_key_set=True
+INFO     gateway.scanner:scanner.py:1150 InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+=========================== short test summary info ============================
+PASSED tests/openai_conformance/test_malformed_sse_frame.py::test_malformed_sse_data_frame_fails_and_names_frame
+PASSED tests/openai_conformance/test_openai_sdk_compat.py::test_responses_mid_stream_failure_surfaces_typed_response_failed
+PASSED tests/openai_conformance/test_openai_sdk_compat.py::test_responses_store_retrieve_delete_roundtrip
+PASSED tests/openai_conformance/test_openai_sdk_compat.py::test_responses_input_items_listing
+PASSED tests/openai_conformance/test_openai_sdk_compat.py::test_responses_previous_response_id_replay
+PASSED tests/openai_conformance/test_openai_sdk_compat_live_uvicorn.py::test_live_chat_non_stream
+PASSED tests/openai_conformance/test_openai_sdk_compat_live_uvicorn.py::test_live_chat_stream_chunks_and_done
+PASSED tests/openai_conformance/test_openai_sdk_compat_live_uvicorn.py::test_live_responses_stream_typed_events
+PASSED tests/openai_conformance/test_openai_sdk_compat_live_uvicorn.py::test_live_request_id_header_present_and_matches_body
+PASSED tests/openai_conformance/test_openai_sdk_compat_live_uvicorn.py::test_live_client_disconnect_midstream_then_server_responsive
+PASSED tests/openai_conformance/test_openai_sdk_compat_live_uvicorn.py::test_live_zero_token_scan_only_no_hang
+PASSED tests/openai_conformance/test_openai_sdk_compat_phase2.py::test_max_completion_tokens_not_shadowed_by_injected_max_tokens
+PASSED tests/openai_conformance/test_openai_sdk_compat_phase2.py::test_max_completion_tokens_over_ceiling_is_rejected
+PASSED tests/openai_conformance/test_openai_sdk_compat_phase2.py::test_responses_adapter_forwards_response_format
+PASSED tests/openai_conformance/test_openai_sdk_compat_phase2.py::test_responses_adapter_forwards_sampling_penalties
+PASSED tests/openai_conformance/test_openai_sdk_compat_phase2.py::test_responses_adapter_forwards_top_logprobs
+PASSED tests/openai_conformance/test_openai_sdk_compat_phase2.py::test_responses_adapter_handles_n
+PASSED tests/openai_conformance/test_openai_sdk_compat_phase2.py::test_chat_validation_400_populates_e_param
+PASSED tests/openai_conformance/test_openai_sdk_compat_phase2.py::test_success_200_header_request_id_matches_body_zeroshield
+PASSED tests/openai_conformance/test_openai_sdk_compat_phase2.py::test_upstream_429_carries_retry_after
+PASSED tests/openai_conformance/test_openai_sdk_compat_phase2_adversarial.py::test_responses_adapter_maps_native_text_format
+PASSED tests/openai_conformance/test_openai_sdk_compat_phase2_adversarial.py::test_responses_adapter_forwards_logit_bias
+PASSED tests/openai_conformance/test_openai_sdk_compat_phase2_adversarial.py::test_responses_adapter_forwards_service_tier
+PASSED tests/openai_conformance/test_openai_sdk_compat_phase2_adversarial.py::test_responses_adapter_forwards_prediction
+PASSED tests/openai_conformance/test_openai_sdk_compat_phase2_adversarial.py::test_responses_adapter_forwards_truncation
+PASSED tests/openai_conformance/test_openai_sdk_compat_phase5_correlation.py::test_request_id_join_invariant_across_v1_matrix
+PASSED tests/openai_conformance/test_openai_sdk_compat_phase6_guards.py::test_missing_model_returns_400_invalid_request_param_model
+SKIPPED [3] tests/openai_conformance/test_mcp_rag_vector_shapes.py:66: v2 has no OpenAI surface yet (GW15)
+SKIPPED [1] tests/openai_conformance/test_mcp_rag_vector_shapes.py:83: v2 has no OpenAI surface yet (GW15)
+SKIPPED [3] tests/openai_conformance/test_mcp_rag_vector_shapes.py:92: v2 has no OpenAI surface yet (GW15)
+SKIPPED [1] tests/openai_conformance/test_mcp_rag_vector_shapes.py:105: v2 has no OpenAI surface yet (GW15)
+SKIPPED [1] tests/openai_conformance/test_openai_sdk_compat.py:268: v2 has no OpenAI surface yet (GW15)
+SKIPPED [1] tests/openai_conformance/test_openai_sdk_compat.py:286: v2 has no OpenAI surface yet (GW15)
+SKIPPED [1] tests/openai_conformance/test_openai_sdk_compat.py:320: v2 has no OpenAI surface yet (GW15)
+SKIPPED [1] tests/openai_conformance/test_openai_sdk_compat.py:357: v2 has no OpenAI surface yet (GW15)
+SKIPPED [1] tests/openai_conformance/test_openai_sdk_compat.py:375: v2 has no OpenAI surface yet (GW15)
+SKIPPED [1] tests/openai_conformance/test_openai_sdk_compat.py:395: v2 has no OpenAI surface yet (GW15)
+SKIPPED [1] tests/openai_conformance/test_openai_sdk_compat.py:413: v2 has no OpenAI surface yet (GW15)
+SKIPPED [1] tests/openai_conformance/test_openai_sdk_compat.py:521: v2 has no OpenAI surface yet (GW15)
+SKIPPED [1] tests/openai_conformance/test_openai_sdk_compat.py:539: v2 has no OpenAI surface yet (GW15)
+SKIPPED [1] tests/openai_conformance/test_openai_sdk_compat.py:552: v2 has no OpenAI surface yet (GW15)
+SKIPPED [1] tests/openai_conformance/test_openai_sdk_compat.py:562: v2 has no OpenAI surface yet (GW15)
+SKIPPED [1] tests/openai_conformance/test_openai_sdk_compat.py:584: v2 has no OpenAI surface yet (GW15)
+SKIPPED [1] tests/openai_conformance/test_openai_sdk_compat.py:599: v2 has no OpenAI surface yet (GW15)
+SKIPPED [1] tests/openai_conformance/test_openai_sdk_compat.py:627: v2 has no OpenAI surface yet (GW15)
+SKIPPED [1] tests/openai_conformance/test_openai_sdk_compat.py:649: v2 has no OpenAI surface yet (GW15)
+SKIPPED [1] tests/openai_conformance/test_openai_sdk_compat.py:700: v2 has no OpenAI surface yet (GW15)
+SKIPPED [1] tests/openai_conformance/test_openai_sdk_compat.py:715: v2 has no OpenAI surface yet (GW15)
+SKIPPED [1] tests/openai_conformance/test_openai_sdk_compat.py:726: v2 has no OpenAI surface yet (GW15)
+SKIPPED [1] tests/openai_conformance/test_openai_sdk_compat.py:735: v2 has no OpenAI surface yet (GW15)
+SKIPPED [1] tests/openai_conformance/test_openai_sdk_compat.py:742: v2 has no OpenAI surface yet (GW15)
+SKIPPED [1] tests/openai_conformance/test_openai_sdk_compat.py:751: v2 has no OpenAI surface yet (GW15)
+SKIPPED [1] tests/openai_conformance/test_openai_sdk_compat.py:762: v2 has no OpenAI surface yet (GW15)
+SKIPPED [1] tests/openai_conformance/test_openai_sdk_compat.py:777: v2 has no OpenAI surface yet (GW15)
+SKIPPED [1] tests/openai_conformance/test_openai_sdk_compat.py:793: v2 has no OpenAI surface yet (GW15)
+SKIPPED [1] tests/openai_conformance/test_openai_sdk_compat.py:809: v2 has no OpenAI surface yet (GW15)
+SKIPPED [1] tests/openai_conformance/test_openai_sdk_compat.py:839: v2 has no OpenAI surface yet (GW15)
+SKIPPED [1] tests/openai_conformance/test_openai_sdk_compat.py:852: v2 has no OpenAI surface yet (GW15)
+SKIPPED [1] tests/openai_conformance/test_openai_sdk_compat.py:865: v2 has no OpenAI surface yet (GW15)
+SKIPPED [1] tests/openai_conformance/test_openai_sdk_compat.py:878: v2 has no OpenAI surface yet (GW15)
+SKIPPED [1] tests/openai_conformance/test_openai_sdk_compat.py:892: v2 has no OpenAI surface yet (GW15)
+SKIPPED [1] tests/openai_conformance/test_openai_sdk_compat.py:935: v2 has no OpenAI surface yet (GW15)
+SKIPPED [1] tests/openai_conformance/test_openai_sdk_compat.py:947: v2 has no OpenAI surface yet (GW15)
+SKIPPED [1] tests/openai_conformance/test_openai_sdk_compat.py:962: v2 has no OpenAI surface yet (GW15)
+SKIPPED [1] tests/openai_conformance/test_openai_sdk_compat.py:970: v2 has no OpenAI surface yet (GW15)
+SKIPPED [1] tests/openai_conformance/test_openai_sdk_compat.py:999: v2 has no OpenAI surface yet (GW15)
+SKIPPED [1] tests/openai_conformance/test_openai_sdk_compat.py:1013: v2 has no OpenAI surface yet (GW15)
+SKIPPED [1] tests/openai_conformance/test_openai_sdk_compat.py:1029: v2 has no OpenAI surface yet (GW15)
+SKIPPED [1] tests/openai_conformance/test_openai_sdk_compat.py:1059: v2 has no OpenAI surface yet (GW15)
+SKIPPED [1] tests/openai_conformance/test_openai_sdk_compat.py:1077: v2 has no OpenAI surface yet (GW15)
+SKIPPED [1] tests/openai_conformance/test_openai_sdk_compat.py:1110: v2 has no OpenAI surface yet (GW15)
+SKIPPED [1] tests/openai_conformance/test_openai_sdk_compat.py:1127: v2 has no OpenAI surface yet (GW15)
+SKIPPED [1] tests/openai_conformance/test_openai_sdk_compat.py:1140: v2 has no OpenAI surface yet (GW15)
+SKIPPED [1] tests/openai_conformance/test_openai_sdk_compat.py:1160: v2 has no OpenAI surface yet (GW15)
+SKIPPED [1] tests/openai_conformance/test_openai_sdk_compat.py:1169: v2 has no OpenAI surface yet (GW15)
+XFAIL tests/openai_conformance/test_openai_sdk_compat_phase2.py::test_chat_n_gt_1_returns_n_choices - DEFECT P2-N-CHAT-clamp (MEDIUM; INTENTIONAL single-choice output-guard tradeoff at main.py:4309, but a SILENT OpenAI deviation): n>1 is clamped to 1 with no client-facing signal. OpenAI returns n choices. At minimum the clamp should be surfaced or 400'd, not silently applied.
+XFAIL tests/openai_conformance/test_openai_sdk_compat_phase2.py::test_content_part_file_requires_payload - DEFECT P2-CONTENT-part-validation-gap (LOW): allowlisted multimodal part types (file/input_audio/audio/video_url) are admitted without payload-shape validation (main.py:4214-4231 validates only text/image_url), so a malformed {'type':'file'} (no 'file' key) reaches upstream — the slow-502/KeyError vector C2 closed for image_url, reopened for the others.
+FAILED tests/openai_conformance/test_live_tcp_8300.py::test_live_tcp_missing_key_is_authentication_error
+FAILED tests/openai_conformance/test_live_tcp_8300.py::test_live_tcp_error_body_is_json_not_html
+FAILED tests/openai_conformance/test_live_tcp_8300.py::test_live_tcp_mcp_rag_vector_not_html
+FAILED tests/openai_conformance/test_openai_sdk_compat_live_uvicorn.py::test_live_block_raises_permission_denied
+FAILED tests/openai_conformance/test_openai_sdk_compat_live_uvicorn.py::test_live_blocked_stream_is_json_not_sse
+FAILED tests/openai_conformance/test_openai_sdk_compat_phase2.py::test_block_403_header_request_id_matches_body
+FAILED tests/openai_conformance/test_openai_sdk_compat_phase5_correlation.py::test_every_block_emits_enforcement_signal
+FAILED tests/openai_conformance/test_openai_sdk_compat_phase6_guards.py::test_stream_upstream_error_emits_error_event_not_clean_empty
+8 failed, 27 passed, 52 skipped, 2 xfailed, 20 warnings in 8.04s

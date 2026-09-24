@@ -1,0 +1,57 @@
+11:22:03 START idle-baseline
+{
+ "seconds": 120.0,
+ "cores_idle": {
+  "aimeshperf-control-1": 0.0249,
+  "aimeshperf-gateway-1": 0.0498,
+  "aimeshperf-pgbouncer-1": 0.0034,
+  "aimeshperf-postgres-1": 0.6619,
+  "aimeshperf-rabbitmq-1": 0.3489,
+  "aimeshperf-redis-1": 0.0113
+ },
+ "host_util_pct_idle": 4.87
+}
+11:24:17 DONE idle-baseline
+11:24:17 START L1b-r1 rate=1
+11:31:11 DONE L1b-r1 rc=0
+| L1b-r1 | 1.00 | 1.00 | 0 (0.0000) | 0 | 703.5 | 851.8 | 1124.3 | 1168.3 | 1133.5 | 79.1 | 142.3 | 190.7 | 507.5 | 904.2 | 0.51 | 4.1 | 6052 | 5.3 / 41.9 | 1.0000 |
+11:31:11 START L1b-r25 rate=25
+11:39:03 DONE L1b-r25 rc=0
+| L1b-r25 | 25.00 | 25.00 | 0 (0.0000) | 0 | 856.0 | 3724.3 | 7241.8 | 8959.6 | 7533.7 | 206.7 | 493.7 | 7217.0 | 631.3 | 694.4 | 15.78 | 73.5 | 6070 | 51.6 / 300.9 | 1.0000 |
+11:39:03 START L1c-r1 rate=1
+11:45:58 DONE L1c-r1 rc=0
+| L1c-r1 | 1.00 | 1.00 | 0 (0.0000) | 0 | 706.9 | 1022.5 | 1155.3 | 1242.5 | 1162.8 | 78.6 | 205.6 | 157.8 | 496.2 | 891.5 | 0.50 | 4.0 | 6073 | 5.9 / 206.9 | 1.0000 |
+11:45:58 START L1c-r25 rate=25
+11:53:50 DONE L1c-r25 rc=0
+| L1c-r25 | 25.00 | 25.00 | 0 (0.0000) | 0 | 849.0 | 3868.4 | 8227.5 | 10953.3 | 8670.6 | 204.8 | 504.9 | 8227.5 | 623.7 | 668.0 | 15.59 | 70.9 | 6086 | 49.7 / 77.2 | 1.0000 |
+11:53:50 START SAT-r40 rate=40
+12:03:09 DONE SAT-r40 rc=0
+| SAT-r40 | 40.00 | 18.41 | 6477 (0.5397) | 0 | 5565.7 | 102537.9 | 115282.4 | 117460.6 | 116625.5 | 5013.4 | 6854.8 | 115282.4 | 443.8 | 497.8 | 17.75 | 84.1 | 6622 | 2173.8 / 2331.9 | 0.6342 |
+12:03:09 START D-r1
+12:09:52 DONE D-r1
+# Harness analysis (direct, policy=none) — PASS
+| zero_schedule_drops | PASS |
+- schedule drops (>5.0 ms): 0; lateness ms: n=300 p50=0.1303 p90=0.1731 p99=0.246 p99.9=0.3116 max=0.3116 mean=0.135
+| T_addon_total | n=300 p50=0.44 p90=0.6411 p99=0.7858 p99.9=1.0369 max=1.0369 mean=0.4537 |
+| T_addon_first | n=300 p50=0.4677 p90=0.6687 p99=0.7858 p99.9=1.0369 max=1.0369 mean=0.4695 |
+| T_release_lag_max | n=27 p50=0.6869 p90=0.8121 p99=1.0548 p99.9=1.0548 max=1.0548 mean=0.6504 |
+| T_fw_addon | n=300 p50=0.5041 p90=0.6942 p99=0.9155 p99.9=1.0548 max=1.0548 mean=0.514 |
+12:09:52 START D-r10
+12:16:45 DONE D-r10
+# Harness analysis (direct, policy=none) — PASS
+| zero_schedule_drops | PASS |
+- schedule drops (>5.0 ms): 0; lateness ms: n=3000 p50=0.0896 p90=0.1238 p99=0.2211 p99.9=0.2587 max=0.29 mean=0.0949
+| T_addon_total | n=3000 p50=0.2887 p90=0.5566 p99=0.794 p99.9=0.9615 max=1.5786 mean=0.3303 |
+| T_addon_first | n=3000 p50=0.3052 p90=0.6005 p99=0.8284 p99.9=1.0193 max=1.5995 mean=0.357 |
+| T_release_lag_max | n=302 p50=0.6764 p90=0.877 p99=1.0396 p99.9=1.1036 max=1.1036 mean=0.6226 |
+| T_fw_addon | n=3000 p50=0.3652 p90=0.6872 p99=0.9141 p99.9=1.0445 max=1.5995 mean=0.4113 |
+12:16:45 START D-r25
+12:23:39 DONE D-r25
+# Harness analysis (direct, policy=none) — PASS
+| zero_schedule_drops | PASS |
+- schedule drops (>5.0 ms): 0; lateness ms: n=7500 p50=0.0925 p90=0.1162 p99=0.2159 p99.9=0.261 max=0.2814 mean=0.0961
+| T_addon_total | n=7500 p50=0.1904 p90=0.3366 p99=0.6288 p99.9=0.9812 max=2.3151 mean=0.2229 |
+| T_addon_first | n=7500 p50=0.1952 p90=0.3645 p99=0.65 p99.9=1.0566 max=2.3151 mean=0.2342 |
+| T_release_lag_max | n=763 p50=0.3767 p90=0.7088 p99=0.9046 p99.9=1.3983 max=1.3983 mean=0.4218 |
+| T_fw_addon | n=7500 p50=0.2187 p90=0.4459 p99=0.7517 p99.9=1.2568 max=2.3151 mean=0.267 |
+12:23:39 ALL DONE

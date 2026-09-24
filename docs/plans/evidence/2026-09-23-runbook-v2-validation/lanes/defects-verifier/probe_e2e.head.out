@@ -1,0 +1,508 @@
+[bedrock_logger] Cannot write to /var/log/bedrock: [Errno 13] Permission denied: '/var/log/bedrock'
+2026-09-23 10:49:13,787 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+2026-09-23 10:49:15,147 [INFO] gateway: Token usage: <MagicMock name='mock.extract_usage()' id='139052269130080'> (model=gpt-4o-mini, user=1, project=orgorg-probe-proj-probe)
+2026-09-23 10:49:15,805 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+2026-09-23 10:49:15,809 [INFO] gateway: Token usage: <MagicMock name='mock.extract_usage()' id='139052352755024'> (model=gpt-4o-mini, user=1, project=orgorg-probe-proj-probe)
+2026-09-23 10:49:15,814 [INFO] gateway: Token usage: <MagicMock name='mock.extract_usage()' id='139052352755024'> (model=gpt-4o-mini, user=1, project=orgorg-probe-proj-probe)
+2026-09-23 10:49:15,817 [INFO] gateway: Token usage: <MagicMock name='mock.extract_usage()' id='139052352755024'> (model=gpt-4o-mini, user=1, project=orgorg-probe-proj-probe)
+2026-09-23 10:49:15,821 [INFO] gateway: Token usage: <MagicMock name='mock.extract_usage()' id='139052352755024'> (model=gpt-4o-mini, user=1, project=orgorg-probe-proj-probe)
+2026-09-23 10:49:15,825 [INFO] gateway: Token usage: <MagicMock name='mock.extract_usage()' id='139052352755024'> (model=gpt-4o-mini, user=1, project=orgorg-probe-proj-probe)
+2026-09-23 10:49:15,829 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+{"ts": "2026-09-23T05:19:15.859957+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=zs-001ad0c1d894 prompt=227\u2192227 context=True model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "zs-001ad0c1d894", "prompt_len": 227, "truncated_len": 227, "has_context": true, "model": "zeroshield-guard", "max_tokens": 1024}}
+{"ts": "2026-09-23T05:19:15.860487+00:00", "level": "ERROR", "logger": "bedrock", "msg": "BEDROCK ERROR    | reqid=zs-001ad0c1d894 model=zeroshield-guard elapsed=0.001s error=simulated: guard endpoint unreachable", "data": {"event": "bedrock_error", "request_id": "zs-001ad0c1d894", "model": "zeroshield-guard", "elapsed_s": 0.001, "error": "simulated: guard endpoint unreachable", "error_type": "ConnectionError", "payload_bytes": 11899}}
+2026-09-23 10:49:15,861 [INFO] gateway: Token usage: <MagicMock name='mock.extract_usage()' id='139052269129408'> (model=gpt-4o-mini, user=1, project=orgorg-probe-proj-probe)
+2026-09-23 10:49:15,865 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+{"ts": "2026-09-23T05:19:15.894814+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=zs-b6aca1b3e531 prompt=227\u2192227 context=True model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "zs-b6aca1b3e531", "prompt_len": 227, "truncated_len": 227, "has_context": true, "model": "zeroshield-guard", "max_tokens": 1024}}
+{"ts": "2026-09-23T05:19:15.894987+00:00", "level": "ERROR", "logger": "bedrock", "msg": "BEDROCK ERROR    | reqid=zs-b6aca1b3e531 model=zeroshield-guard elapsed=0.000s error=simulated: guard endpoint unreachable", "data": {"event": "bedrock_error", "request_id": "zs-b6aca1b3e531", "model": "zeroshield-guard", "elapsed_s": 0.0, "error": "simulated: guard endpoint unreachable", "error_type": "ConnectionError", "payload_bytes": 11899}}
+2026-09-23 10:49:15,895 [INFO] gateway: Token usage: <MagicMock name='mock.extract_usage()' id='139052269136464'> (model=gpt-4o-mini, user=1, project=orgorg-probe-proj-probe)
+{"ts": "2026-09-23T05:19:15.926788+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=zs-c03d67ad1a5d prompt=227\u2192227 context=True model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "zs-c03d67ad1a5d", "prompt_len": 227, "truncated_len": 227, "has_context": true, "model": "zeroshield-guard", "max_tokens": 1024}}
+{"ts": "2026-09-23T05:19:15.926963+00:00", "level": "ERROR", "logger": "bedrock", "msg": "BEDROCK ERROR    | reqid=zs-c03d67ad1a5d model=zeroshield-guard elapsed=0.000s error=simulated: guard endpoint unreachable", "data": {"event": "bedrock_error", "request_id": "zs-c03d67ad1a5d", "model": "zeroshield-guard", "elapsed_s": 0.0, "error": "simulated: guard endpoint unreachable", "error_type": "ConnectionError", "payload_bytes": 11899}}
+2026-09-23 10:49:15,927 [INFO] gateway: Token usage: <MagicMock name='mock.extract_usage()' id='139052269136464'> (model=gpt-4o-mini, user=1, project=orgorg-probe-proj-probe)
+{"ts": "2026-09-23T05:19:15.958278+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=zs-e81d7cdfd9df prompt=227\u2192227 context=True model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "zs-e81d7cdfd9df", "prompt_len": 227, "truncated_len": 227, "has_context": true, "model": "zeroshield-guard", "max_tokens": 1024}}
+{"ts": "2026-09-23T05:19:15.958429+00:00", "level": "ERROR", "logger": "bedrock", "msg": "BEDROCK ERROR    | reqid=zs-e81d7cdfd9df model=zeroshield-guard elapsed=0.000s error=simulated: guard endpoint unreachable", "data": {"event": "bedrock_error", "request_id": "zs-e81d7cdfd9df", "model": "zeroshield-guard", "elapsed_s": 0.0, "error": "simulated: guard endpoint unreachable", "error_type": "ConnectionError", "payload_bytes": 11899}}
+2026-09-23 10:49:15,959 [INFO] gateway: Token usage: <MagicMock name='mock.extract_usage()' id='139052269136464'> (model=gpt-4o-mini, user=1, project=orgorg-probe-proj-probe)
+{"ts": "2026-09-23T05:19:15.989937+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=zs-b7fa1143df85 prompt=227\u2192227 context=True model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "zs-b7fa1143df85", "prompt_len": 227, "truncated_len": 227, "has_context": true, "model": "zeroshield-guard", "max_tokens": 1024}}
+{"ts": "2026-09-23T05:19:15.990088+00:00", "level": "ERROR", "logger": "bedrock", "msg": "BEDROCK ERROR    | reqid=zs-b7fa1143df85 model=zeroshield-guard elapsed=0.000s error=simulated: guard endpoint unreachable", "data": {"event": "bedrock_error", "request_id": "zs-b7fa1143df85", "model": "zeroshield-guard", "elapsed_s": 0.0, "error": "simulated: guard endpoint unreachable", "error_type": "ConnectionError", "payload_bytes": 11899}}
+2026-09-23 10:49:15,990 [INFO] gateway: Token usage: <MagicMock name='mock.extract_usage()' id='139052269136464'> (model=gpt-4o-mini, user=1, project=orgorg-probe-proj-probe)
+{"ts": "2026-09-23T05:19:16.021184+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=zs-8f2c75756337 prompt=227\u2192227 context=True model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "zs-8f2c75756337", "prompt_len": 227, "truncated_len": 227, "has_context": true, "model": "zeroshield-guard", "max_tokens": 1024}}
+{"ts": "2026-09-23T05:19:16.021346+00:00", "level": "ERROR", "logger": "bedrock", "msg": "BEDROCK ERROR    | reqid=zs-8f2c75756337 model=zeroshield-guard elapsed=0.000s error=simulated: guard endpoint unreachable", "data": {"event": "bedrock_error", "request_id": "zs-8f2c75756337", "model": "zeroshield-guard", "elapsed_s": 0.0, "error": "simulated: guard endpoint unreachable", "error_type": "ConnectionError", "payload_bytes": 11899}}
+2026-09-23 10:49:16,021 [WARNING] gateway.tier2_breaker: tier2_breaker state change org= model=global.anthropic.claude-haiku-probe closed -> open
+2026-09-23 10:49:16,022 [INFO] gateway: Token usage: <MagicMock name='mock.extract_usage()' id='139052269136464'> (model=gpt-4o-mini, user=1, project=orgorg-probe-proj-probe)
+2026-09-23 10:49:16,025 [WARNING] gateway: Tier-2 scanner breaker OPEN (strict) — refusing request, retry_after=29s
+2026-09-23 10:49:16,028 [WARNING] gateway: Tier-2 scanner breaker OPEN (strict) — refusing request, retry_after=29s
+2026-09-23 10:49:16,031 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+{"ts": "2026-09-23T05:19:16.060981+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=zs-f66ed112c5bb prompt=227\u2192227 context=True model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "zs-f66ed112c5bb", "prompt_len": 227, "truncated_len": 227, "has_context": true, "model": "zeroshield-guard", "max_tokens": 1024}}
+{"ts": "2026-09-23T05:19:16.061136+00:00", "level": "ERROR", "logger": "bedrock", "msg": "BEDROCK ERROR    | reqid=zs-f66ed112c5bb model=zeroshield-guard elapsed=0.000s error=simulated: guard endpoint unreachable", "data": {"event": "bedrock_error", "request_id": "zs-f66ed112c5bb", "model": "zeroshield-guard", "elapsed_s": 0.0, "error": "simulated: guard endpoint unreachable", "error_type": "ConnectionError", "payload_bytes": 11899}}
+2026-09-23 10:49:16,062 [INFO] gateway: Token usage: <MagicMock name='mock.extract_usage()' id='139052238225488'> (model=gpt-4o-mini, user=1, project=orgorg-probe-proj-probe)
+{"ts": "2026-09-23T05:19:16.093039+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=zs-5ad4e04c3ba7 prompt=227\u2192227 context=True model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "zs-5ad4e04c3ba7", "prompt_len": 227, "truncated_len": 227, "has_context": true, "model": "zeroshield-guard", "max_tokens": 1024}}
+{"ts": "2026-09-23T05:19:16.093194+00:00", "level": "ERROR", "logger": "bedrock", "msg": "BEDROCK ERROR    | reqid=zs-5ad4e04c3ba7 model=zeroshield-guard elapsed=0.000s error=simulated: guard endpoint unreachable", "data": {"event": "bedrock_error", "request_id": "zs-5ad4e04c3ba7", "model": "zeroshield-guard", "elapsed_s": 0.0, "error": "simulated: guard endpoint unreachable", "error_type": "ConnectionError", "payload_bytes": 11899}}
+2026-09-23 10:49:16,094 [INFO] gateway: Token usage: <MagicMock name='mock.extract_usage()' id='139052238225488'> (model=gpt-4o-mini, user=1, project=orgorg-probe-proj-probe)
+{"ts": "2026-09-23T05:19:16.124577+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=zs-1a128ef726b8 prompt=227\u2192227 context=True model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "zs-1a128ef726b8", "prompt_len": 227, "truncated_len": 227, "has_context": true, "model": "zeroshield-guard", "max_tokens": 1024}}
+{"ts": "2026-09-23T05:19:16.124736+00:00", "level": "ERROR", "logger": "bedrock", "msg": "BEDROCK ERROR    | reqid=zs-1a128ef726b8 model=zeroshield-guard elapsed=0.000s error=simulated: guard endpoint unreachable", "data": {"event": "bedrock_error", "request_id": "zs-1a128ef726b8", "model": "zeroshield-guard", "elapsed_s": 0.0, "error": "simulated: guard endpoint unreachable", "error_type": "ConnectionError", "payload_bytes": 11899}}
+2026-09-23 10:49:16,125 [INFO] gateway: Token usage: <MagicMock name='mock.extract_usage()' id='139052238225488'> (model=gpt-4o-mini, user=1, project=orgorg-probe-proj-probe)
+{"ts": "2026-09-23T05:19:16.156159+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=zs-a5bbf3fca856 prompt=227\u2192227 context=True model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "zs-a5bbf3fca856", "prompt_len": 227, "truncated_len": 227, "has_context": true, "model": "zeroshield-guard", "max_tokens": 1024}}
+{"ts": "2026-09-23T05:19:16.156312+00:00", "level": "ERROR", "logger": "bedrock", "msg": "BEDROCK ERROR    | reqid=zs-a5bbf3fca856 model=zeroshield-guard elapsed=0.000s error=simulated: guard endpoint unreachable", "data": {"event": "bedrock_error", "request_id": "zs-a5bbf3fca856", "model": "zeroshield-guard", "elapsed_s": 0.0, "error": "simulated: guard endpoint unreachable", "error_type": "ConnectionError", "payload_bytes": 11899}}
+2026-09-23 10:49:16,157 [INFO] gateway: Token usage: <MagicMock name='mock.extract_usage()' id='139052238225488'> (model=gpt-4o-mini, user=1, project=orgorg-probe-proj-probe)
+{"ts": "2026-09-23T05:19:16.187769+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=zs-70c5ffa3a193 prompt=227\u2192227 context=True model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "zs-70c5ffa3a193", "prompt_len": 227, "truncated_len": 227, "has_context": true, "model": "zeroshield-guard", "max_tokens": 1024}}
+{"ts": "2026-09-23T05:19:16.187943+00:00", "level": "ERROR", "logger": "bedrock", "msg": "BEDROCK ERROR    | reqid=zs-70c5ffa3a193 model=zeroshield-guard elapsed=0.000s error=simulated: guard endpoint unreachable", "data": {"event": "bedrock_error", "request_id": "zs-70c5ffa3a193", "model": "zeroshield-guard", "elapsed_s": 0.0, "error": "simulated: guard endpoint unreachable", "error_type": "ConnectionError", "payload_bytes": 11899}}
+2026-09-23 10:49:16,188 [WARNING] gateway.tier2_breaker: tier2_breaker state change org= model=global.anthropic.claude-haiku-probe closed -> open
+2026-09-23 10:49:16,188 [INFO] gateway: Token usage: <MagicMock name='mock.extract_usage()' id='139052238225488'> (model=gpt-4o-mini, user=1, project=orgorg-probe-proj-probe)
+2026-09-23 10:49:16,192 [INFO] gateway: Token usage: <MagicMock name='mock.extract_usage()' id='139052238225488'> (model=gpt-4o-mini, user=1, project=orgorg-probe-proj-probe)
+2026-09-23 10:49:16,196 [INFO] gateway: Token usage: <MagicMock name='mock.extract_usage()' id='139052238225488'> (model=gpt-4o-mini, user=1, project=orgorg-probe-proj-probe)
+2026-09-23 10:49:16,199 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+{"ts": "2026-09-23T05:19:16.229121+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=zs-7e29ed57ab4e prompt=227\u2192227 context=True model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "zs-7e29ed57ab4e", "prompt_len": 227, "truncated_len": 227, "has_context": true, "model": "zeroshield-guard", "max_tokens": 1024}}
+{"ts": "2026-09-23T05:19:16.229274+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN RESULT | reqid=zs-7e29ed57ab4e risk=20 action=monitor findings=1 llm_guard=0.20 degraded=False elapsed=0.000s", "data": {"event": "scan_result", "request_id": "zs-7e29ed57ab4e", "risk_score": 20, "action": "monitor", "findings_count": 1, "findings_categories": ["OBF-01"], "llm_guard_score": 0.2, "degraded": false, "elapsed_s": 0.0, "tokens_in": 10, "tokens_out": 30}}
+{"ts": "2026-09-23T05:19:16.229344+00:00", "level": "WARNING", "logger": "bedrock", "msg": "BEDROCK RULE HIT    | rule=OBF-01 severity=medium reqid=zs-7e29ed57ab4e source=bedrock", "data": {"event": "rule_hit", "rule_id": "OBF-01", "severity": "medium", "source": "bedrock", "request_id": "zs-7e29ed57ab4e"}}
+2026-09-23 10:49:16,230 [INFO] gateway: Token usage: <MagicMock name='mock.extract_usage()' id='139052238231200'> (model=gpt-4o-mini, user=1, project=orgorg-probe-proj-probe)
+2026-09-23 10:49:16,233 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+{"ts": "2026-09-23T05:19:16.263494+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=zs-f028daf4a3ed prompt=227\u2192227 context=True model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "zs-f028daf4a3ed", "prompt_len": 227, "truncated_len": 227, "has_context": true, "model": "zeroshield-guard", "max_tokens": 1024}}
+{"ts": "2026-09-23T05:19:16.263639+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN RESULT | reqid=zs-f028daf4a3ed risk=55 action=allow findings=0 llm_guard=0.55 degraded=False elapsed=0.000s", "data": {"event": "scan_result", "request_id": "zs-f028daf4a3ed", "risk_score": 55, "action": "allow", "findings_count": 0, "findings_categories": [], "llm_guard_score": 0.55, "degraded": false, "elapsed_s": 0.0, "tokens_in": 10, "tokens_out": 30}}
+2026-09-23 10:49:16,264 [INFO] gateway: Token usage: <MagicMock name='mock.extract_usage()' id='139052238236576'> (model=gpt-4o-mini, user=1, project=orgorg-probe-proj-probe)
+2026-09-23 10:49:16,268 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+{"ts": "2026-09-23T05:19:16.297899+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=zs-ca090002d63e prompt=227\u2192227 context=True model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "zs-ca090002d63e", "prompt_len": 227, "truncated_len": 227, "has_context": true, "model": "zeroshield-guard", "max_tokens": 1024}}
+{"ts": "2026-09-23T05:19:16.298038+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN RESULT | reqid=zs-ca090002d63e risk=30 action=block findings=1 llm_guard=0.30 degraded=False elapsed=0.000s", "data": {"event": "scan_result", "request_id": "zs-ca090002d63e", "risk_score": 30, "action": "block", "findings_count": 1, "findings_categories": ["X-1"], "llm_guard_score": 0.3, "degraded": false, "elapsed_s": 0.0, "tokens_in": 10, "tokens_out": 30}}
+{"ts": "2026-09-23T05:19:16.298111+00:00", "level": "WARNING", "logger": "bedrock", "msg": "BEDROCK RULE HIT    | rule=X-1 severity=medium reqid=zs-ca090002d63e source=bedrock", "data": {"event": "rule_hit", "rule_id": "X-1", "severity": "medium", "source": "bedrock", "request_id": "zs-ca090002d63e"}}
+2026-09-23 10:49:16,298 [WARNING] gateway: Input blocked by scanner (type=injection, detail=ZeroShield Tier-2 detected threat: x, user=1)
+2026-09-23 10:49:16,299 [WARNING] gateway: [SECURITY_BLOCK] code=content_blocked, category=injection, request_id=zs-ca090002d63e, detail=Tier 2 ML scanner detected injection: ZeroShield Tier-2 detected threat: x
+2026-09-23 10:49:16,302 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+{"ts": "2026-09-23T05:19:16.332589+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=zs-56dc7ed91fe1 prompt=227\u2192227 context=True model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "zs-56dc7ed91fe1", "prompt_len": 227, "truncated_len": 227, "has_context": true, "model": "zeroshield-guard", "max_tokens": 1024}}
+{"ts": "2026-09-23T05:19:16.332722+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN RESULT | reqid=zs-56dc7ed91fe1 risk=30 action=block findings=1 llm_guard=0.30 degraded=False elapsed=0.000s", "data": {"event": "scan_result", "request_id": "zs-56dc7ed91fe1", "risk_score": 30, "action": "block", "findings_count": 1, "findings_categories": ["X-1"], "llm_guard_score": 0.3, "degraded": false, "elapsed_s": 0.0, "tokens_in": 10, "tokens_out": 30}}
+{"ts": "2026-09-23T05:19:16.332787+00:00", "level": "WARNING", "logger": "bedrock", "msg": "BEDROCK RULE HIT    | rule=X-1 severity=medium reqid=zs-56dc7ed91fe1 source=bedrock", "data": {"event": "rule_hit", "rule_id": "X-1", "severity": "medium", "source": "bedrock", "request_id": "zs-56dc7ed91fe1"}}
+2026-09-23 10:49:16,333 [INFO] gateway: Token usage: <MagicMock name='mock.extract_usage()' id='139052237574496'> (model=gpt-4o-mini, user=1, project=orgorg-probe-proj-probe)
+2026-09-23 10:49:16,337 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+{"ts": "2026-09-23T05:19:16.342263+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=9dc9d12bd276 prompt=20\u219220 context=False model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "9dc9d12bd276", "prompt_len": 20, "truncated_len": 20, "has_context": false, "model": "zeroshield-guard", "max_tokens": 1024}}
+{"ts": "2026-09-23T05:19:16.342414+00:00", "level": "ERROR", "logger": "bedrock", "msg": "BEDROCK ERROR    | reqid=9dc9d12bd276 model=zeroshield-guard elapsed=0.000s error=simulated: guard endpoint unreachable", "data": {"event": "bedrock_error", "request_id": "9dc9d12bd276", "model": "zeroshield-guard", "elapsed_s": 0.0, "error": "simulated: guard endpoint unreachable", "error_type": "ConnectionError", "payload_bytes": 11396}}
+2026-09-23 10:49:16,345 [INFO] gateway: Token usage: <MagicMock name='mock.extract_usage()' id='139052237582896'> (model=gpt-4o-mini, user=1, project=orgorg-probe-proj-probe)
+2026-09-23 10:49:16,348 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+{"ts": "2026-09-23T05:19:16.352083+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=232ab5dc84f7 prompt=71\u219271 context=False model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "232ab5dc84f7", "prompt_len": 71, "truncated_len": 71, "has_context": false, "model": "zeroshield-guard", "max_tokens": 1024}}
+{"ts": "2026-09-23T05:19:16.352227+00:00", "level": "ERROR", "logger": "bedrock", "msg": "BEDROCK ERROR    | reqid=232ab5dc84f7 model=zeroshield-guard elapsed=0.000s error=simulated: guard endpoint unreachable", "data": {"event": "bedrock_error", "request_id": "232ab5dc84f7", "model": "zeroshield-guard", "elapsed_s": 0.0, "error": "simulated: guard endpoint unreachable", "error_type": "ConnectionError", "payload_bytes": 11447}}
+2026-09-23 10:49:16,353 [WARNING] gateway: [SECURITY_BLOCK] code=output_blocked, category=pii, request_id=zs-6dff583fce57, detail=PII detected in output: ssn, email — ssn=***-**-6789, email=j***@e***.com
+2026-09-23 10:49:16,356 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+{"ts": "2026-09-23T05:19:16.359431+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=0f79a006119c prompt=71\u219271 context=False model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "0f79a006119c", "prompt_len": 71, "truncated_len": 71, "has_context": false, "model": "zeroshield-guard", "max_tokens": 1024}}
+{"ts": "2026-09-23T05:19:16.359550+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN RESULT | reqid=0f79a006119c risk=0 action=allow findings=0 llm_guard=0.00 degraded=False elapsed=0.000s", "data": {"event": "scan_result", "request_id": "0f79a006119c", "risk_score": 0, "action": "allow", "findings_count": 0, "findings_categories": [], "llm_guard_score": 0.0, "degraded": false, "elapsed_s": 0.0, "tokens_in": 10, "tokens_out": 30}}
+2026-09-23 10:49:16,359 [WARNING] gateway: [SECURITY_BLOCK] code=output_blocked, category=pii, request_id=zs-ddb2c49b739c, detail=PII detected in output: ssn, email — ssn=***-**-6789, email=j***@e***.com
+2026-09-23 10:49:16,362 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+{"ts": "2026-09-23T05:19:16.365660+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=0e4df5cc57c4 prompt=20\u219220 context=False model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "0e4df5cc57c4", "prompt_len": 20, "truncated_len": 20, "has_context": false, "model": "zeroshield-guard", "max_tokens": 1024}}
+2026-09-23 10:49:16,366 [INFO] gateway: Output redaction triggered (type=scanner_degraded, user=1)
+2026-09-23 10:49:16,366 [WARNING] gateway: [SECURITY_BLOCK] code=output_blocked, category=scanner_degraded, request_id=zs-e7bf1374acab, detail=ZeroShield Tier-2 Gemini output scan failed; response withheld (fail-closed)
+2026-09-23 10:49:16,369 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+{"ts": "2026-09-23T05:19:16.372324+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=c783ef919dfb prompt=71\u219271 context=False model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "c783ef919dfb", "prompt_len": 71, "truncated_len": 71, "has_context": false, "model": "zeroshield-guard", "max_tokens": 1024}}
+2026-09-23 10:49:16,372 [INFO] gateway: Output redaction triggered (type=pii, user=1)
+2026-09-23 10:49:16,372 [WARNING] gateway: [SECURITY_BLOCK] code=output_blocked, category=pii, request_id=zs-de9091dfdae5, detail=PII detected in output: ssn, email — ssn=***-**-6789, email=j***@e***.com
+2026-09-23 10:49:16,375 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+{"ts": "2026-09-23T05:19:16.378838+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=ed15c773ddd9 prompt=71\u219271 context=False model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "ed15c773ddd9", "prompt_len": 71, "truncated_len": 71, "has_context": false, "model": "zeroshield-guard", "max_tokens": 1024}}
+{"ts": "2026-09-23T05:19:16.378963+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN RESULT | reqid=ed15c773ddd9 risk=0 action=allow findings=0 llm_guard=0.00 degraded=False elapsed=0.000s", "data": {"event": "scan_result", "request_id": "ed15c773ddd9", "risk_score": 0, "action": "allow", "findings_count": 0, "findings_categories": [], "llm_guard_score": 0.0, "degraded": false, "elapsed_s": 0.0, "tokens_in": 10, "tokens_out": 30}}
+2026-09-23 10:49:16,379 [WARNING] gateway: [SECURITY_BLOCK] code=output_blocked, category=pii, request_id=zs-2cd3b8ef9a6c, detail=PII detected in output: ssn, email — ssn=***-**-6789, email=j***@e***.com
+2026-09-23 10:49:16,382 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+{"ts": "2026-09-23T05:19:16.385201+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=7f8e73388adf prompt=71\u219271 context=False model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "7f8e73388adf", "prompt_len": 71, "truncated_len": 71, "has_context": false, "model": "zeroshield-guard", "max_tokens": 1024}}
+{"ts": "2026-09-23T05:19:16.385343+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN RESULT | reqid=7f8e73388adf risk=0 action=allow findings=0 llm_guard=0.00 degraded=False elapsed=0.000s", "data": {"event": "scan_result", "request_id": "7f8e73388adf", "risk_score": 0, "action": "allow", "findings_count": 0, "findings_categories": [], "llm_guard_score": 0.0, "degraded": false, "elapsed_s": 0.0, "tokens_in": 10, "tokens_out": 30}}
+2026-09-23 10:49:16,385 [WARNING] gateway: [SECURITY_BLOCK] code=output_blocked, category=pii, request_id=zs-1ee156065d72, detail=PII detected in output: ssn, email — ssn=***-**-6789, email=j***@e***.com
+2026-09-23 10:49:16,388 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+2026-09-23 10:49:16,395 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+{"ts": "2026-09-23T05:19:16.425497+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=zs-27c069ef1ae4 prompt=227\u2192227 context=True model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "zs-27c069ef1ae4", "prompt_len": 227, "truncated_len": 227, "has_context": true, "model": "zeroshield-guard", "max_tokens": 1024}}
+2026-09-23 10:49:16,425 [ERROR] gateway: Unhandled error in proxy_chat
+Traceback (most recent call last):
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/bedrock_scanner.py", line 814, in ascan
+    resp = await self.client.ascan_prompt(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<5 lines>...
+    )
+    ^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/defects-verifier/probe_e2e.py", line 69, in ascan_prompt
+    raise ConnectionError("simulated: guard endpoint unreachable")
+ConnectionError: simulated: guard endpoint unreachable
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/main.py", line 9221, in proxy_chat
+    verdict = await INPUT_SCANNER.scan_prompt_with_tier2(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<8 lines>...
+    )
+    ^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/scanner.py", line 2157, in scan_prompt_with_tier2
+    verdict = await self._scan_prompt_with_tier2_unfiltered(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<8 lines>...
+    )
+    ^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/scanner.py", line 2294, in _scan_prompt_with_tier2_unfiltered
+    bedrock_normalized = await self._bedrock_scanner.ascan(
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        bedrock_input, context=original_context, request_id=request_id or None,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/bedrock_scanner.py", line 830, in ascan
+    raise RuntimeError("Gemini tier-2 request failed") from exc
+RuntimeError: Gemini tier-2 request failed
+2026-09-23 10:49:16,431 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+{"ts": "2026-09-23T05:19:16.461131+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=zs-5c2bac51a152 prompt=227\u2192227 context=True model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "zs-5c2bac51a152", "prompt_len": 227, "truncated_len": 227, "has_context": true, "model": "zeroshield-guard", "max_tokens": 1024}}
+2026-09-23 10:49:16,461 [WARNING] gateway.bedrock_scanner: Bedrock response content is empty
+{"ts": "2026-09-23T05:19:16.461280+00:00", "level": "WARNING", "logger": "bedrock", "msg": "BEDROCK PARSE FAIL  | reqid=zs-5c2bac51a152 reason=empty_or_unparseable content_len=0 snippet=(empty)", "data": {"event": "scan_parse_failed", "request_id": "zs-5c2bac51a152", "content_len": 0, "reason": "empty_or_unparseable", "content_snippet": "(empty)"}}
+2026-09-23 10:49:16,462 [INFO] gateway: Token usage: <MagicMock name='mock.extract_usage()' id='139052233918176'> (model=gpt-4o-mini, user=1, project=orgorg-probe-proj-probe)
+2026-09-23 10:49:16,465 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+{"ts": "2026-09-23T05:19:16.495222+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=zs-f2c7fba982ac prompt=227\u2192227 context=True model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "zs-f2c7fba982ac", "prompt_len": 227, "truncated_len": 227, "has_context": true, "model": "zeroshield-guard", "max_tokens": 1024}}
+{"ts": "2026-09-23T05:19:16.495400+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN RESULT | reqid=zs-f2c7fba982ac risk=0 action=allow findings=0 llm_guard=0.00 degraded=False elapsed=0.000s", "data": {"event": "scan_result", "request_id": "zs-f2c7fba982ac", "risk_score": 0, "action": "allow", "findings_count": 0, "findings_categories": [], "llm_guard_score": 0.0, "degraded": false, "elapsed_s": 0.0, "tokens_in": 10, "tokens_out": 30}}
+{"ts": "2026-09-23T05:19:16.496670+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=53787030b41d prompt=43\u219243 context=False model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "53787030b41d", "prompt_len": 43, "truncated_len": 43, "has_context": false, "model": "zeroshield-guard", "max_tokens": 1024}}
+{"ts": "2026-09-23T05:19:16.496872+00:00", "level": "ERROR", "logger": "bedrock", "msg": "BEDROCK ERROR    | reqid=53787030b41d model=zeroshield-guard elapsed=0.000s error=simulated: guard endpoint unreachable (output scan)", "data": {"event": "bedrock_error", "request_id": "53787030b41d", "model": "zeroshield-guard", "elapsed_s": 0.0, "error": "simulated: guard endpoint unreachable (output scan)", "error_type": "ConnectionError", "payload_bytes": 11419}}
+2026-09-23 10:49:16,497 [INFO] gateway: Token usage: <MagicMock name='mock.extract_usage()' id='139052233923552'> (model=gpt-4o-mini, user=1, project=orgorg-probe-proj-probe)
+2026-09-23 10:49:16,501 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+{"ts": "2026-09-23T05:19:16.530710+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=zs-994090cf9aed prompt=227\u2192227 context=True model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "zs-994090cf9aed", "prompt_len": 227, "truncated_len": 227, "has_context": true, "model": "zeroshield-guard", "max_tokens": 1024}}
+{"ts": "2026-09-23T05:19:16.530885+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN RESULT | reqid=zs-994090cf9aed risk=0 action=allow findings=0 llm_guard=0.00 degraded=False elapsed=0.000s", "data": {"event": "scan_result", "request_id": "zs-994090cf9aed", "risk_score": 0, "action": "allow", "findings_count": 0, "findings_categories": [], "llm_guard_score": 0.0, "degraded": false, "elapsed_s": 0.0, "tokens_in": 10, "tokens_out": 30}}
+{"ts": "2026-09-23T05:19:16.534067+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=489fe9c841cb prompt=43\u219243 context=False model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "489fe9c841cb", "prompt_len": 43, "truncated_len": 43, "has_context": false, "model": "zeroshield-guard", "max_tokens": 1024}}
+{"ts": "2026-09-23T05:19:16.534255+00:00", "level": "ERROR", "logger": "bedrock", "msg": "BEDROCK ERROR    | reqid=489fe9c841cb model=zeroshield-guard elapsed=0.000s error=simulated: guard endpoint unreachable (output scan)", "data": {"event": "bedrock_error", "request_id": "489fe9c841cb", "model": "zeroshield-guard", "elapsed_s": 0.0, "error": "simulated: guard endpoint unreachable (output scan)", "error_type": "ConnectionError", "payload_bytes": 11419}}
+{"ts": "2026-09-23T05:19:16.535349+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=482582e20c6d prompt=43\u219243 context=False model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "482582e20c6d", "prompt_len": 43, "truncated_len": 43, "has_context": false, "model": "zeroshield-guard", "max_tokens": 1024}}
+{"ts": "2026-09-23T05:19:16.535505+00:00", "level": "ERROR", "logger": "bedrock", "msg": "BEDROCK ERROR    | reqid=482582e20c6d model=zeroshield-guard elapsed=0.000s error=simulated: guard endpoint unreachable (output scan)", "data": {"event": "bedrock_error", "request_id": "482582e20c6d", "model": "zeroshield-guard", "elapsed_s": 0.0, "error": "simulated: guard endpoint unreachable (output scan)", "error_type": "ConnectionError", "payload_bytes": 11419}}
+2026-09-23 10:49:16,539 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+{"ts": "2026-09-23T05:19:16.569487+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=zs-411c41a84942 prompt=227\u2192227 context=True model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "zs-411c41a84942", "prompt_len": 227, "truncated_len": 227, "has_context": true, "model": "zeroshield-guard", "max_tokens": 1024}}
+{"ts": "2026-09-23T05:19:16.569612+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN RESULT | reqid=zs-411c41a84942 risk=0 action=allow findings=0 llm_guard=0.00 degraded=False elapsed=0.000s", "data": {"event": "scan_result", "request_id": "zs-411c41a84942", "risk_score": 0, "action": "allow", "findings_count": 0, "findings_categories": [], "llm_guard_score": 0.0, "degraded": false, "elapsed_s": 0.0, "tokens_in": 10, "tokens_out": 30}}
+{"ts": "2026-09-23T05:19:16.570850+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=44e5006c8149 prompt=43\u219243 context=False model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "44e5006c8149", "prompt_len": 43, "truncated_len": 43, "has_context": false, "model": "zeroshield-guard", "max_tokens": 1024}}
+{"ts": "2026-09-23T05:19:16.570993+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN RESULT | reqid=44e5006c8149 risk=0 action=allow findings=0 llm_guard=0.00 degraded=False elapsed=0.000s", "data": {"event": "scan_result", "request_id": "44e5006c8149", "risk_score": 0, "action": "allow", "findings_count": 0, "findings_categories": [], "llm_guard_score": 0.0, "degraded": false, "elapsed_s": 0.0, "tokens_in": 10, "tokens_out": 30}}
+2026-09-23 10:49:16,571 [INFO] gateway: Token usage: <MagicMock name='mock.extract_usage()' id='139052234818960'> (model=gpt-4o-mini, user=1, project=orgorg-probe-proj-probe)
+2026-09-23 10:49:16,574 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+{"ts": "2026-09-23T05:19:16.604516+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=zs-4665ec9c95f0 prompt=227\u2192227 context=True model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "zs-4665ec9c95f0", "prompt_len": 227, "truncated_len": 227, "has_context": true, "model": "zeroshield-guard", "max_tokens": 1024}}
+{"ts": "2026-09-23T05:19:16.604645+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN RESULT | reqid=zs-4665ec9c95f0 risk=0 action=allow findings=0 llm_guard=0.00 degraded=False elapsed=0.000s", "data": {"event": "scan_result", "request_id": "zs-4665ec9c95f0", "risk_score": 0, "action": "allow", "findings_count": 0, "findings_categories": [], "llm_guard_score": 0.0, "degraded": false, "elapsed_s": 0.0, "tokens_in": 10, "tokens_out": 30}}
+{"ts": "2026-09-23T05:19:16.607445+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=19b320aea83f prompt=43\u219243 context=False model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "19b320aea83f", "prompt_len": 43, "truncated_len": 43, "has_context": false, "model": "zeroshield-guard", "max_tokens": 1024}}
+{"ts": "2026-09-23T05:19:16.607569+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN RESULT | reqid=19b320aea83f risk=0 action=allow findings=0 llm_guard=0.00 degraded=False elapsed=0.000s", "data": {"event": "scan_result", "request_id": "19b320aea83f", "risk_score": 0, "action": "allow", "findings_count": 0, "findings_categories": [], "llm_guard_score": 0.0, "degraded": false, "elapsed_s": 0.0, "tokens_in": 10, "tokens_out": 30}}
+2026-09-23 10:49:16,612 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+{"ts": "2026-09-23T05:19:16.642395+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=zs-1d4d3c83f923 prompt=227\u2192227 context=True model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "zs-1d4d3c83f923", "prompt_len": 227, "truncated_len": 227, "has_context": true, "model": "zeroshield-guard", "max_tokens": 1024}}
+{"ts": "2026-09-23T05:19:16.642567+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN RESULT | reqid=zs-1d4d3c83f923 risk=0 action=allow findings=0 llm_guard=0.00 degraded=False elapsed=0.000s", "data": {"event": "scan_result", "request_id": "zs-1d4d3c83f923", "risk_score": 0, "action": "allow", "findings_count": 0, "findings_categories": [], "llm_guard_score": 0.0, "degraded": false, "elapsed_s": 0.0, "tokens_in": 10, "tokens_out": 30}}
+{"ts": "2026-09-23T05:19:16.643754+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=35a76abb3a4f prompt=48\u219248 context=False model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "35a76abb3a4f", "prompt_len": 48, "truncated_len": 48, "has_context": false, "model": "zeroshield-guard", "max_tokens": 1024}}
+{"ts": "2026-09-23T05:19:16.643956+00:00", "level": "ERROR", "logger": "bedrock", "msg": "BEDROCK ERROR    | reqid=35a76abb3a4f model=zeroshield-guard elapsed=0.000s error=simulated: guard endpoint unreachable (output scan)", "data": {"event": "bedrock_error", "request_id": "35a76abb3a4f", "model": "zeroshield-guard", "elapsed_s": 0.0, "error": "simulated: guard endpoint unreachable (output scan)", "error_type": "ConnectionError", "payload_bytes": 11424}}
+2026-09-23 10:49:16,644 [WARNING] gateway: [SECURITY_BLOCK] code=output_blocked, category=pii, request_id=zs-1d4d3c83f923, detail=PII detected in output: ssn — ssn=***-**-6789
+2026-09-23 10:49:16,647 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+{"ts": "2026-09-23T05:19:16.678019+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=zs-63e03d02714e prompt=227\u2192227 context=True model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "zs-63e03d02714e", "prompt_len": 227, "truncated_len": 227, "has_context": true, "model": "zeroshield-guard", "max_tokens": 1024}}
+{"ts": "2026-09-23T05:19:16.678192+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN RESULT | reqid=zs-63e03d02714e risk=0 action=allow findings=0 llm_guard=0.00 degraded=False elapsed=0.000s", "data": {"event": "scan_result", "request_id": "zs-63e03d02714e", "risk_score": 0, "action": "allow", "findings_count": 0, "findings_categories": [], "llm_guard_score": 0.0, "degraded": false, "elapsed_s": 0.0, "tokens_in": 10, "tokens_out": 30}}
+{"ts": "2026-09-23T05:19:16.680569+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=55bf927f5dc5 prompt=48\u219248 context=False model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "55bf927f5dc5", "prompt_len": 48, "truncated_len": 48, "has_context": false, "model": "zeroshield-guard", "max_tokens": 1024}}
+{"ts": "2026-09-23T05:19:16.680776+00:00", "level": "ERROR", "logger": "bedrock", "msg": "BEDROCK ERROR    | reqid=55bf927f5dc5 model=zeroshield-guard elapsed=0.000s error=simulated: guard endpoint unreachable (output scan)", "data": {"event": "bedrock_error", "request_id": "55bf927f5dc5", "model": "zeroshield-guard", "elapsed_s": 0.0, "error": "simulated: guard endpoint unreachable (output scan)", "error_type": "ConnectionError", "payload_bytes": 11424}}
+2026-09-23 10:49:16,680 [WARNING] gateway.secure_streaming: Output guard blocked streaming content (type=pii, detail=PII detected in output: ssn — ssn=***-**-6789, flush=boundary)
+2026-09-23 10:49:16,684 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+{"ts": "2026-09-23T05:19:16.714488+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=zs-411d3b837d96 prompt=227\u2192227 context=True model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "zs-411d3b837d96", "prompt_len": 227, "truncated_len": 227, "has_context": true, "model": "zeroshield-guard", "max_tokens": 1024}}
+{"ts": "2026-09-23T05:19:16.714611+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN RESULT | reqid=zs-411d3b837d96 risk=0 action=allow findings=0 llm_guard=0.00 degraded=False elapsed=0.000s", "data": {"event": "scan_result", "request_id": "zs-411d3b837d96", "risk_score": 0, "action": "allow", "findings_count": 0, "findings_categories": [], "llm_guard_score": 0.0, "degraded": false, "elapsed_s": 0.0, "tokens_in": 10, "tokens_out": 30}}
+{"ts": "2026-09-23T05:19:16.715742+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=ce8ca7e0b063 prompt=48\u219248 context=False model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "ce8ca7e0b063", "prompt_len": 48, "truncated_len": 48, "has_context": false, "model": "zeroshield-guard", "max_tokens": 1024}}
+{"ts": "2026-09-23T05:19:16.715873+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN RESULT | reqid=ce8ca7e0b063 risk=0 action=allow findings=0 llm_guard=0.00 degraded=False elapsed=0.000s", "data": {"event": "scan_result", "request_id": "ce8ca7e0b063", "risk_score": 0, "action": "allow", "findings_count": 0, "findings_categories": [], "llm_guard_score": 0.0, "degraded": false, "elapsed_s": 0.0, "tokens_in": 10, "tokens_out": 30}}
+2026-09-23 10:49:16,716 [WARNING] gateway: [SECURITY_BLOCK] code=output_blocked, category=pii, request_id=zs-411d3b837d96, detail=PII detected in output: ssn — ssn=***-**-6789
+2026-09-23 10:49:16,719 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+{"ts": "2026-09-23T05:19:16.748703+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=zs-42f290f08c78 prompt=227\u2192227 context=True model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "zs-42f290f08c78", "prompt_len": 227, "truncated_len": 227, "has_context": true, "model": "zeroshield-guard", "max_tokens": 1024}}
+{"ts": "2026-09-23T05:19:16.748832+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN RESULT | reqid=zs-42f290f08c78 risk=0 action=allow findings=0 llm_guard=0.00 degraded=False elapsed=0.000s", "data": {"event": "scan_result", "request_id": "zs-42f290f08c78", "risk_score": 0, "action": "allow", "findings_count": 0, "findings_categories": [], "llm_guard_score": 0.0, "degraded": false, "elapsed_s": 0.0, "tokens_in": 10, "tokens_out": 30}}
+{"ts": "2026-09-23T05:19:16.750963+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=c8383bad606e prompt=48\u219248 context=False model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "c8383bad606e", "prompt_len": 48, "truncated_len": 48, "has_context": false, "model": "zeroshield-guard", "max_tokens": 1024}}
+{"ts": "2026-09-23T05:19:16.751076+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN RESULT | reqid=c8383bad606e risk=0 action=allow findings=0 llm_guard=0.00 degraded=False elapsed=0.000s", "data": {"event": "scan_result", "request_id": "c8383bad606e", "risk_score": 0, "action": "allow", "findings_count": 0, "findings_categories": [], "llm_guard_score": 0.0, "degraded": false, "elapsed_s": 0.0, "tokens_in": 10, "tokens_out": 30}}
+2026-09-23 10:49:16,751 [WARNING] gateway.secure_streaming: Output guard blocked streaming content (type=pii, detail=PII detected in output: ssn — ssn=***-**-6789, flush=boundary)
+2026-09-23 10:49:16,754 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+{"ts": "2026-09-23T05:19:16.784507+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=zs-d754f4155813 prompt=227\u2192227 context=True model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "zs-d754f4155813", "prompt_len": 227, "truncated_len": 227, "has_context": true, "model": "zeroshield-guard", "max_tokens": 1024}}
+{"ts": "2026-09-23T05:19:16.784690+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN RESULT | reqid=zs-d754f4155813 risk=0 action=allow findings=0 llm_guard=0.00 degraded=False elapsed=0.000s", "data": {"event": "scan_result", "request_id": "zs-d754f4155813", "risk_score": 0, "action": "allow", "findings_count": 0, "findings_categories": [], "llm_guard_score": 0.0, "degraded": false, "elapsed_s": 0.0, "tokens_in": 10, "tokens_out": 30}}
+{"ts": "2026-09-23T05:19:16.786816+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=9ac7af51d446 prompt=113\u2192113 context=False model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "9ac7af51d446", "prompt_len": 113, "truncated_len": 113, "has_context": false, "model": "zeroshield-guard", "max_tokens": 1024}}
+{"ts": "2026-09-23T05:19:16.787019+00:00", "level": "ERROR", "logger": "bedrock", "msg": "BEDROCK ERROR    | reqid=9ac7af51d446 model=zeroshield-guard elapsed=0.000s error=simulated: guard endpoint unreachable (output scan)", "data": {"event": "bedrock_error", "request_id": "9ac7af51d446", "model": "zeroshield-guard", "elapsed_s": 0.0, "error": "simulated: guard endpoint unreachable (output scan)", "error_type": "ConnectionError", "payload_bytes": 11489}}
+2026-09-23 10:49:16,787 [WARNING] gateway: [SECURITY_BLOCK] code=output_blocked, category=pii, request_id=zs-d754f4155813, detail=PII detected in output: ssn — ssn=***-**-6789
+2026-09-23 10:49:16,790 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+{"ts": "2026-09-23T05:19:16.820045+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=zs-1fb8c5fee7da prompt=227\u2192227 context=True model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "zs-1fb8c5fee7da", "prompt_len": 227, "truncated_len": 227, "has_context": true, "model": "zeroshield-guard", "max_tokens": 1024}}
+{"ts": "2026-09-23T05:19:16.820218+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN RESULT | reqid=zs-1fb8c5fee7da risk=0 action=allow findings=0 llm_guard=0.00 degraded=False elapsed=0.000s", "data": {"event": "scan_result", "request_id": "zs-1fb8c5fee7da", "risk_score": 0, "action": "allow", "findings_count": 0, "findings_categories": [], "llm_guard_score": 0.0, "degraded": false, "elapsed_s": 0.0, "tokens_in": 10, "tokens_out": 30}}
+{"ts": "2026-09-23T05:19:16.822392+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=96d333c644a3 prompt=56\u219256 context=False model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "96d333c644a3", "prompt_len": 56, "truncated_len": 56, "has_context": false, "model": "zeroshield-guard", "max_tokens": 1024}}
+{"ts": "2026-09-23T05:19:16.822581+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN RESULT | reqid=96d333c644a3 risk=0 action=allow findings=0 llm_guard=0.00 degraded=False elapsed=0.000s", "data": {"event": "scan_result", "request_id": "96d333c644a3", "risk_score": 0, "action": "allow", "findings_count": 0, "findings_categories": [], "llm_guard_score": 0.0, "degraded": false, "elapsed_s": 0.0, "tokens_in": 10, "tokens_out": 30}}
+2026-09-23 10:49:16,822 [WARNING] gateway.secure_streaming: Output guard blocked streaming content (type=pii, detail=PII detected in output: ssn — ssn=***-**-6789, flush=boundary)
+2026-09-23 10:49:16,826 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+{"ts": "2026-09-23T05:19:16.856062+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=zs-2206ef82751b prompt=227\u2192227 context=True model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "zs-2206ef82751b", "prompt_len": 227, "truncated_len": 227, "has_context": true, "model": "zeroshield-guard", "max_tokens": 1024}}
+{"ts": "2026-09-23T05:19:16.856187+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN RESULT | reqid=zs-2206ef82751b risk=0 action=allow findings=0 llm_guard=0.00 degraded=False elapsed=0.000s", "data": {"event": "scan_result", "request_id": "zs-2206ef82751b", "risk_score": 0, "action": "allow", "findings_count": 0, "findings_categories": [], "llm_guard_score": 0.0, "degraded": false, "elapsed_s": 0.0, "tokens_in": 10, "tokens_out": 30}}
+{"ts": "2026-09-23T05:19:16.857890+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=87ffc90140fa prompt=113\u2192113 context=False model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "87ffc90140fa", "prompt_len": 113, "truncated_len": 113, "has_context": false, "model": "zeroshield-guard", "max_tokens": 1024}}
+{"ts": "2026-09-23T05:19:16.858005+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN RESULT | reqid=87ffc90140fa risk=0 action=allow findings=0 llm_guard=0.00 degraded=False elapsed=0.000s", "data": {"event": "scan_result", "request_id": "87ffc90140fa", "risk_score": 0, "action": "allow", "findings_count": 0, "findings_categories": [], "llm_guard_score": 0.0, "degraded": false, "elapsed_s": 0.0, "tokens_in": 10, "tokens_out": 30}}
+2026-09-23 10:49:16,858 [WARNING] gateway: [SECURITY_BLOCK] code=output_blocked, category=pii, request_id=zs-2206ef82751b, detail=PII detected in output: ssn — ssn=***-**-6789
+2026-09-23 10:49:16,861 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+{"ts": "2026-09-23T05:19:16.890809+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=zs-c79d02e284bd prompt=227\u2192227 context=True model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "zs-c79d02e284bd", "prompt_len": 227, "truncated_len": 227, "has_context": true, "model": "zeroshield-guard", "max_tokens": 1024}}
+{"ts": "2026-09-23T05:19:16.890945+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN RESULT | reqid=zs-c79d02e284bd risk=0 action=allow findings=0 llm_guard=0.00 degraded=False elapsed=0.000s", "data": {"event": "scan_result", "request_id": "zs-c79d02e284bd", "risk_score": 0, "action": "allow", "findings_count": 0, "findings_categories": [], "llm_guard_score": 0.0, "degraded": false, "elapsed_s": 0.0, "tokens_in": 10, "tokens_out": 30}}
+{"ts": "2026-09-23T05:19:16.893075+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=0bb6ee0e77f5 prompt=56\u219256 context=False model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "0bb6ee0e77f5", "prompt_len": 56, "truncated_len": 56, "has_context": false, "model": "zeroshield-guard", "max_tokens": 1024}}
+{"ts": "2026-09-23T05:19:16.893199+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN RESULT | reqid=0bb6ee0e77f5 risk=0 action=allow findings=0 llm_guard=0.00 degraded=False elapsed=0.000s", "data": {"event": "scan_result", "request_id": "0bb6ee0e77f5", "risk_score": 0, "action": "allow", "findings_count": 0, "findings_categories": [], "llm_guard_score": 0.0, "degraded": false, "elapsed_s": 0.0, "tokens_in": 10, "tokens_out": 30}}
+2026-09-23 10:49:16,893 [WARNING] gateway.secure_streaming: Output guard blocked streaming content (type=pii, detail=PII detected in output: ssn — ssn=***-**-6789, flush=boundary)
+2026-09-23 10:49:16,897 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+{"ts": "2026-09-23T05:19:16.926765+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=zs-a5d00853d67c prompt=227\u2192227 context=True model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "zs-a5d00853d67c", "prompt_len": 227, "truncated_len": 227, "has_context": true, "model": "zeroshield-guard", "max_tokens": 1024}}
+{"ts": "2026-09-23T05:19:16.926943+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN RESULT | reqid=zs-a5d00853d67c risk=0 action=allow findings=0 llm_guard=0.00 degraded=False elapsed=0.000s", "data": {"event": "scan_result", "request_id": "zs-a5d00853d67c", "risk_score": 0, "action": "allow", "findings_count": 0, "findings_categories": [], "llm_guard_score": 0.0, "degraded": false, "elapsed_s": 0.0, "tokens_in": 10, "tokens_out": 30}}
+{"ts": "2026-09-23T05:19:16.928216+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=26db357fda8b prompt=43\u219243 context=False model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "26db357fda8b", "prompt_len": 43, "truncated_len": 43, "has_context": false, "model": "zeroshield-guard", "max_tokens": 1024}}
+2026-09-23 10:49:16,928 [INFO] gateway: Output redaction triggered (type=scanner_degraded, user=1)
+2026-09-23 10:49:16,928 [WARNING] gateway: [SECURITY_BLOCK] code=output_blocked, category=scanner_degraded, request_id=zs-a5d00853d67c, detail=ZeroShield Tier-2 Gemini output scan failed; response withheld (fail-closed)
+2026-09-23 10:49:16,931 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+{"ts": "2026-09-23T05:19:16.960979+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=zs-0cf45ac7bec8 prompt=227\u2192227 context=True model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "zs-0cf45ac7bec8", "prompt_len": 227, "truncated_len": 227, "has_context": true, "model": "zeroshield-guard", "max_tokens": 1024}}
+{"ts": "2026-09-23T05:19:16.961151+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN RESULT | reqid=zs-0cf45ac7bec8 risk=0 action=allow findings=0 llm_guard=0.00 degraded=False elapsed=0.000s", "data": {"event": "scan_result", "request_id": "zs-0cf45ac7bec8", "risk_score": 0, "action": "allow", "findings_count": 0, "findings_categories": [], "llm_guard_score": 0.0, "degraded": false, "elapsed_s": 0.0, "tokens_in": 10, "tokens_out": 30}}
+{"ts": "2026-09-23T05:19:16.963537+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=2c4fef471871 prompt=43\u219243 context=False model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "2c4fef471871", "prompt_len": 43, "truncated_len": 43, "has_context": false, "model": "zeroshield-guard", "max_tokens": 1024}}
+2026-09-23 10:49:16,963 [INFO] gateway.secure_streaming: Output guard redacted streaming content (type=scanner_degraded, patterns=[], flush=boundary)
+2026-09-23 10:49:16,968 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+{"ts": "2026-09-23T05:19:16.997986+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=zs-3d341f6a7563 prompt=227\u2192227 context=True model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "zs-3d341f6a7563", "prompt_len": 227, "truncated_len": 227, "has_context": true, "model": "zeroshield-guard", "max_tokens": 1024}}
+{"ts": "2026-09-23T05:19:16.998114+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN RESULT | reqid=zs-3d341f6a7563 risk=0 action=allow findings=0 llm_guard=0.00 degraded=False elapsed=0.000s", "data": {"event": "scan_result", "request_id": "zs-3d341f6a7563", "risk_score": 0, "action": "allow", "findings_count": 0, "findings_categories": [], "llm_guard_score": 0.0, "degraded": false, "elapsed_s": 0.0, "tokens_in": 10, "tokens_out": 30}}
+{"ts": "2026-09-23T05:19:16.999365+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=e9f3e20a910f prompt=43\u219243 context=False model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "e9f3e20a910f", "prompt_len": 43, "truncated_len": 43, "has_context": false, "model": "zeroshield-guard", "max_tokens": 1024}}
+{"ts": "2026-09-23T05:19:16.999490+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN RESULT | reqid=e9f3e20a910f risk=0 action=allow findings=0 llm_guard=0.00 degraded=False elapsed=0.000s", "data": {"event": "scan_result", "request_id": "e9f3e20a910f", "risk_score": 0, "action": "allow", "findings_count": 0, "findings_categories": [], "llm_guard_score": 0.0, "degraded": false, "elapsed_s": 0.0, "tokens_in": 10, "tokens_out": 30}}
+2026-09-23 10:49:17,000 [INFO] gateway: Token usage: <MagicMock name='mock.extract_usage()' id='139052231462256'> (model=gpt-4o-mini, user=1, project=orgorg-probe-proj-probe)
+2026-09-23 10:49:17,003 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+{"ts": "2026-09-23T05:19:17.032891+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=zs-76ff64a59e77 prompt=227\u2192227 context=True model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "zs-76ff64a59e77", "prompt_len": 227, "truncated_len": 227, "has_context": true, "model": "zeroshield-guard", "max_tokens": 1024}}
+{"ts": "2026-09-23T05:19:17.033023+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN RESULT | reqid=zs-76ff64a59e77 risk=0 action=allow findings=0 llm_guard=0.00 degraded=False elapsed=0.000s", "data": {"event": "scan_result", "request_id": "zs-76ff64a59e77", "risk_score": 0, "action": "allow", "findings_count": 0, "findings_categories": [], "llm_guard_score": 0.0, "degraded": false, "elapsed_s": 0.0, "tokens_in": 10, "tokens_out": 30}}
+{"ts": "2026-09-23T05:19:17.035509+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=4e61435ad7d1 prompt=43\u219243 context=False model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "4e61435ad7d1", "prompt_len": 43, "truncated_len": 43, "has_context": false, "model": "zeroshield-guard", "max_tokens": 1024}}
+{"ts": "2026-09-23T05:19:17.035632+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN RESULT | reqid=4e61435ad7d1 risk=0 action=allow findings=0 llm_guard=0.00 degraded=False elapsed=0.000s", "data": {"event": "scan_result", "request_id": "4e61435ad7d1", "risk_score": 0, "action": "allow", "findings_count": 0, "findings_categories": [], "llm_guard_score": 0.0, "degraded": false, "elapsed_s": 0.0, "tokens_in": 10, "tokens_out": 30}}
+2026-09-23 10:49:17,040 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+{"ts": "2026-09-23T05:19:17.070445+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=zs-5d10e87da5a4 prompt=227\u2192227 context=True model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "zs-5d10e87da5a4", "prompt_len": 227, "truncated_len": 227, "has_context": true, "model": "zeroshield-guard", "max_tokens": 1024}}
+{"ts": "2026-09-23T05:19:17.070616+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN RESULT | reqid=zs-5d10e87da5a4 risk=0 action=allow findings=0 llm_guard=0.00 degraded=False elapsed=0.000s", "data": {"event": "scan_result", "request_id": "zs-5d10e87da5a4", "risk_score": 0, "action": "allow", "findings_count": 0, "findings_categories": [], "llm_guard_score": 0.0, "degraded": false, "elapsed_s": 0.0, "tokens_in": 10, "tokens_out": 30}}
+{"ts": "2026-09-23T05:19:17.071802+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=9fa082a86e8d prompt=48\u219248 context=False model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "9fa082a86e8d", "prompt_len": 48, "truncated_len": 48, "has_context": false, "model": "zeroshield-guard", "max_tokens": 1024}}
+2026-09-23 10:49:17,072 [INFO] gateway: Output redaction triggered (type=pii, user=1)
+2026-09-23 10:49:17,072 [WARNING] gateway: [SECURITY_BLOCK] code=output_blocked, category=pii, request_id=zs-5d10e87da5a4, detail=PII detected in output: ssn — ssn=***-**-6789
+2026-09-23 10:49:17,075 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+{"ts": "2026-09-23T05:19:17.105265+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=zs-27bd06f895a7 prompt=227\u2192227 context=True model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "zs-27bd06f895a7", "prompt_len": 227, "truncated_len": 227, "has_context": true, "model": "zeroshield-guard", "max_tokens": 1024}}
+{"ts": "2026-09-23T05:19:17.105442+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN RESULT | reqid=zs-27bd06f895a7 risk=0 action=allow findings=0 llm_guard=0.00 degraded=False elapsed=0.000s", "data": {"event": "scan_result", "request_id": "zs-27bd06f895a7", "risk_score": 0, "action": "allow", "findings_count": 0, "findings_categories": [], "llm_guard_score": 0.0, "degraded": false, "elapsed_s": 0.0, "tokens_in": 10, "tokens_out": 30}}
+{"ts": "2026-09-23T05:19:17.107769+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=df6d6048e639 prompt=48\u219248 context=False model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "df6d6048e639", "prompt_len": 48, "truncated_len": 48, "has_context": false, "model": "zeroshield-guard", "max_tokens": 1024}}
+2026-09-23 10:49:17,108 [INFO] gateway.secure_streaming: Output guard redacted streaming content (type=pii, patterns=['ssn'], flush=boundary)
+{"ts": "2026-09-23T05:19:17.109177+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=3fad83d1a318 prompt=48\u219248 context=False model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "3fad83d1a318", "prompt_len": 48, "truncated_len": 48, "has_context": false, "model": "zeroshield-guard", "max_tokens": 1024}}
+2026-09-23 10:49:17,109 [INFO] gateway.secure_streaming: Output guard redacted streaming content (type=pii, patterns=['ssn'], flush=done)
+2026-09-23 10:49:17,113 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+{"ts": "2026-09-23T05:19:17.144639+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=zs-4675f3a97836 prompt=227\u2192227 context=True model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "zs-4675f3a97836", "prompt_len": 227, "truncated_len": 227, "has_context": true, "model": "zeroshield-guard", "max_tokens": 1024}}
+{"ts": "2026-09-23T05:19:17.144776+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN RESULT | reqid=zs-4675f3a97836 risk=0 action=allow findings=0 llm_guard=0.00 degraded=False elapsed=0.000s", "data": {"event": "scan_result", "request_id": "zs-4675f3a97836", "risk_score": 0, "action": "allow", "findings_count": 0, "findings_categories": [], "llm_guard_score": 0.0, "degraded": false, "elapsed_s": 0.0, "tokens_in": 10, "tokens_out": 30}}
+{"ts": "2026-09-23T05:19:17.146005+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=4b06037da5c6 prompt=48\u219248 context=False model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "4b06037da5c6", "prompt_len": 48, "truncated_len": 48, "has_context": false, "model": "zeroshield-guard", "max_tokens": 1024}}
+{"ts": "2026-09-23T05:19:17.146127+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN RESULT | reqid=4b06037da5c6 risk=0 action=allow findings=0 llm_guard=0.00 degraded=False elapsed=0.000s", "data": {"event": "scan_result", "request_id": "4b06037da5c6", "risk_score": 0, "action": "allow", "findings_count": 0, "findings_categories": [], "llm_guard_score": 0.0, "degraded": false, "elapsed_s": 0.0, "tokens_in": 10, "tokens_out": 30}}
+2026-09-23 10:49:17,146 [WARNING] gateway: [SECURITY_BLOCK] code=output_blocked, category=pii, request_id=zs-4675f3a97836, detail=PII detected in output: ssn — ssn=***-**-6789
+2026-09-23 10:49:17,149 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+{"ts": "2026-09-23T05:19:17.179715+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=zs-abccba46e43a prompt=227\u2192227 context=True model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "zs-abccba46e43a", "prompt_len": 227, "truncated_len": 227, "has_context": true, "model": "zeroshield-guard", "max_tokens": 1024}}
+{"ts": "2026-09-23T05:19:17.179842+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN RESULT | reqid=zs-abccba46e43a risk=0 action=allow findings=0 llm_guard=0.00 degraded=False elapsed=0.000s", "data": {"event": "scan_result", "request_id": "zs-abccba46e43a", "risk_score": 0, "action": "allow", "findings_count": 0, "findings_categories": [], "llm_guard_score": 0.0, "degraded": false, "elapsed_s": 0.0, "tokens_in": 10, "tokens_out": 30}}
+{"ts": "2026-09-23T05:19:17.182205+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=0af25e24eda6 prompt=48\u219248 context=False model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "0af25e24eda6", "prompt_len": 48, "truncated_len": 48, "has_context": false, "model": "zeroshield-guard", "max_tokens": 1024}}
+{"ts": "2026-09-23T05:19:17.182338+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN RESULT | reqid=0af25e24eda6 risk=0 action=allow findings=0 llm_guard=0.00 degraded=False elapsed=0.000s", "data": {"event": "scan_result", "request_id": "0af25e24eda6", "risk_score": 0, "action": "allow", "findings_count": 0, "findings_categories": [], "llm_guard_score": 0.0, "degraded": false, "elapsed_s": 0.0, "tokens_in": 10, "tokens_out": 30}}
+2026-09-23 10:49:17,182 [WARNING] gateway.secure_streaming: Output guard blocked streaming content (type=pii, detail=PII detected in output: ssn — ssn=***-**-6789, flush=boundary)
+2026-09-23 10:49:17,186 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+{"ts": "2026-09-23T05:19:17.216012+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=zs-8a704fa1d314 prompt=227\u2192227 context=True model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "zs-8a704fa1d314", "prompt_len": 227, "truncated_len": 227, "has_context": true, "model": "zeroshield-guard", "max_tokens": 1024}}
+{"ts": "2026-09-23T05:19:17.216184+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN RESULT | reqid=zs-8a704fa1d314 risk=0 action=allow findings=0 llm_guard=0.00 degraded=False elapsed=0.000s", "data": {"event": "scan_result", "request_id": "zs-8a704fa1d314", "risk_score": 0, "action": "allow", "findings_count": 0, "findings_categories": [], "llm_guard_score": 0.0, "degraded": false, "elapsed_s": 0.0, "tokens_in": 10, "tokens_out": 30}}
+{"ts": "2026-09-23T05:19:17.218043+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=4ca2776fa9a4 prompt=113\u2192113 context=False model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "4ca2776fa9a4", "prompt_len": 113, "truncated_len": 113, "has_context": false, "model": "zeroshield-guard", "max_tokens": 1024}}
+2026-09-23 10:49:17,218 [INFO] gateway: Output redaction triggered (type=pii, user=1)
+2026-09-23 10:49:17,219 [INFO] gateway: Token usage: <MagicMock name='mock.extract_usage()' id='139052230275632'> (model=gpt-4o-mini, user=1, project=orgorg-probe-proj-probe)
+2026-09-23 10:49:17,223 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+{"ts": "2026-09-23T05:19:17.253834+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=zs-8607167d58e3 prompt=227\u2192227 context=True model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "zs-8607167d58e3", "prompt_len": 227, "truncated_len": 227, "has_context": true, "model": "zeroshield-guard", "max_tokens": 1024}}
+{"ts": "2026-09-23T05:19:17.254016+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN RESULT | reqid=zs-8607167d58e3 risk=0 action=allow findings=0 llm_guard=0.00 degraded=False elapsed=0.000s", "data": {"event": "scan_result", "request_id": "zs-8607167d58e3", "risk_score": 0, "action": "allow", "findings_count": 0, "findings_categories": [], "llm_guard_score": 0.0, "degraded": false, "elapsed_s": 0.0, "tokens_in": 10, "tokens_out": 30}}
+{"ts": "2026-09-23T05:19:17.256304+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=6cb6c936c597 prompt=56\u219256 context=False model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "6cb6c936c597", "prompt_len": 56, "truncated_len": 56, "has_context": false, "model": "zeroshield-guard", "max_tokens": 1024}}
+{"ts": "2026-09-23T05:19:17.256470+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN RESULT | reqid=6cb6c936c597 risk=0 action=allow findings=0 llm_guard=0.00 degraded=False elapsed=0.000s", "data": {"event": "scan_result", "request_id": "6cb6c936c597", "risk_score": 0, "action": "allow", "findings_count": 0, "findings_categories": [], "llm_guard_score": 0.0, "degraded": false, "elapsed_s": 0.0, "tokens_in": 10, "tokens_out": 30}}
+2026-09-23 10:49:17,256 [WARNING] gateway.secure_streaming: Output guard blocked streaming content (type=pii, detail=PII detected in output: ssn — ssn=***-**-6789, flush=boundary)
+2026-09-23 10:49:17,260 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+{"ts": "2026-09-23T05:19:17.290533+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=zs-531a03ba060f prompt=227\u2192227 context=True model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "zs-531a03ba060f", "prompt_len": 227, "truncated_len": 227, "has_context": true, "model": "zeroshield-guard", "max_tokens": 1024}}
+{"ts": "2026-09-23T05:19:17.290661+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN RESULT | reqid=zs-531a03ba060f risk=0 action=allow findings=0 llm_guard=0.00 degraded=False elapsed=0.000s", "data": {"event": "scan_result", "request_id": "zs-531a03ba060f", "risk_score": 0, "action": "allow", "findings_count": 0, "findings_categories": [], "llm_guard_score": 0.0, "degraded": false, "elapsed_s": 0.0, "tokens_in": 10, "tokens_out": 30}}
+{"ts": "2026-09-23T05:19:17.292420+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=b8fac159b643 prompt=113\u2192113 context=False model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "b8fac159b643", "prompt_len": 113, "truncated_len": 113, "has_context": false, "model": "zeroshield-guard", "max_tokens": 1024}}
+{"ts": "2026-09-23T05:19:17.292546+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN RESULT | reqid=b8fac159b643 risk=0 action=allow findings=0 llm_guard=0.00 degraded=False elapsed=0.000s", "data": {"event": "scan_result", "request_id": "b8fac159b643", "risk_score": 0, "action": "allow", "findings_count": 0, "findings_categories": [], "llm_guard_score": 0.0, "degraded": false, "elapsed_s": 0.0, "tokens_in": 10, "tokens_out": 30}}
+2026-09-23 10:49:17,292 [WARNING] gateway: [SECURITY_BLOCK] code=output_blocked, category=pii, request_id=zs-531a03ba060f, detail=PII detected in output: ssn — ssn=***-**-6789
+2026-09-23 10:49:17,295 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+{"ts": "2026-09-23T05:19:17.325633+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=zs-85e5b4dcb0b4 prompt=227\u2192227 context=True model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "zs-85e5b4dcb0b4", "prompt_len": 227, "truncated_len": 227, "has_context": true, "model": "zeroshield-guard", "max_tokens": 1024}}
+{"ts": "2026-09-23T05:19:17.325759+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN RESULT | reqid=zs-85e5b4dcb0b4 risk=0 action=allow findings=0 llm_guard=0.00 degraded=False elapsed=0.000s", "data": {"event": "scan_result", "request_id": "zs-85e5b4dcb0b4", "risk_score": 0, "action": "allow", "findings_count": 0, "findings_categories": [], "llm_guard_score": 0.0, "degraded": false, "elapsed_s": 0.0, "tokens_in": 10, "tokens_out": 30}}
+{"ts": "2026-09-23T05:19:17.327899+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=94e610df748d prompt=56\u219256 context=False model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "94e610df748d", "prompt_len": 56, "truncated_len": 56, "has_context": false, "model": "zeroshield-guard", "max_tokens": 1024}}
+{"ts": "2026-09-23T05:19:17.328043+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN RESULT | reqid=94e610df748d risk=0 action=allow findings=0 llm_guard=0.00 degraded=False elapsed=0.000s", "data": {"event": "scan_result", "request_id": "94e610df748d", "risk_score": 0, "action": "allow", "findings_count": 0, "findings_categories": [], "llm_guard_score": 0.0, "degraded": false, "elapsed_s": 0.0, "tokens_in": 10, "tokens_out": 30}}
+2026-09-23 10:49:17,328 [WARNING] gateway.secure_streaming: Output guard blocked streaming content (type=pii, detail=PII detected in output: ssn — ssn=***-**-6789, flush=boundary)
+2026-09-23 10:49:17,332 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+{"ts": "2026-09-23T05:19:17.361468+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=zs-ceac79317bf7 prompt=227\u2192227 context=True model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "zs-ceac79317bf7", "prompt_len": 227, "truncated_len": 227, "has_context": true, "model": "zeroshield-guard", "max_tokens": 1024}}
+{"ts": "2026-09-23T05:19:17.361592+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN RESULT | reqid=zs-ceac79317bf7 risk=0 action=allow findings=0 llm_guard=0.00 degraded=False elapsed=0.000s", "data": {"event": "scan_result", "request_id": "zs-ceac79317bf7", "risk_score": 0, "action": "allow", "findings_count": 0, "findings_categories": [], "llm_guard_score": 0.0, "degraded": false, "elapsed_s": 0.0, "tokens_in": 10, "tokens_out": 30}}
+{"ts": "2026-09-23T05:19:17.362653+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=fa6b8cf2884d prompt=25\u219225 context=False model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "fa6b8cf2884d", "prompt_len": 25, "truncated_len": 25, "has_context": false, "model": "zeroshield-guard", "max_tokens": 1024}}
+{"ts": "2026-09-23T05:19:17.362777+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN RESULT | reqid=fa6b8cf2884d risk=0 action=allow findings=0 llm_guard=0.00 degraded=False elapsed=0.000s", "data": {"event": "scan_result", "request_id": "fa6b8cf2884d", "risk_score": 0, "action": "allow", "findings_count": 0, "findings_categories": [], "llm_guard_score": 0.0, "degraded": false, "elapsed_s": 0.0, "tokens_in": 10, "tokens_out": 30}}
+2026-09-23 10:49:17,363 [WARNING] gateway: [SECURITY_BLOCK] code=output_blocked, category=pii, request_id=zs-ceac79317bf7, detail=PII detected in output: ssn — ssn=***-**-6789
+2026-09-23 10:49:17,366 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+{"ts": "2026-09-23T05:19:17.395815+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=zs-4a360d73cfec prompt=227\u2192227 context=True model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "zs-4a360d73cfec", "prompt_len": 227, "truncated_len": 227, "has_context": true, "model": "zeroshield-guard", "max_tokens": 1024}}
+{"ts": "2026-09-23T05:19:17.395958+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN RESULT | reqid=zs-4a360d73cfec risk=0 action=allow findings=0 llm_guard=0.00 degraded=False elapsed=0.000s", "data": {"event": "scan_result", "request_id": "zs-4a360d73cfec", "risk_score": 0, "action": "allow", "findings_count": 0, "findings_categories": [], "llm_guard_score": 0.0, "degraded": false, "elapsed_s": 0.0, "tokens_in": 10, "tokens_out": 30}}
+{"ts": "2026-09-23T05:19:17.398214+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=e716dec53ad7 prompt=25\u219225 context=False model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "e716dec53ad7", "prompt_len": 25, "truncated_len": 25, "has_context": false, "model": "zeroshield-guard", "max_tokens": 1024}}
+{"ts": "2026-09-23T05:19:17.398342+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN RESULT | reqid=e716dec53ad7 risk=0 action=allow findings=0 llm_guard=0.00 degraded=False elapsed=0.000s", "data": {"event": "scan_result", "request_id": "e716dec53ad7", "risk_score": 0, "action": "allow", "findings_count": 0, "findings_categories": [], "llm_guard_score": 0.0, "degraded": false, "elapsed_s": 0.0, "tokens_in": 10, "tokens_out": 30}}
+2026-09-23 10:49:17,398 [WARNING] gateway.secure_streaming: Output guard blocked streaming content (type=pii, detail=PII detected in output: ssn — ssn=***-**-6789, flush=boundary)
+ROOT = /home/contact_cyberultron_com/AI_Mesh_Firewall
+
+[E0 clean prompt, Tier-2 off]
+  #1 status=200 zs.action='allow' zs.threat='clean' err.code=None top.code=None content='Hello from upstream.'
+      telemetry=[('request', 'allow', '')] audit=[]
+
+[E1 backtick prompt 'What does `git rebase -i` do?']
+  #1 status=200 zs.action='allow' zs.threat='clean' err.code=None top.code=None content='Hello from upstream.'
+      telemetry=[('request', 'allow', '')] audit=[]
+
+[E1 backtick prompt 'Why does `list.sort()` return None in Py']
+  #1 status=200 zs.action='allow' zs.threat='clean' err.code=None top.code=None content='Hello from upstream.'
+      telemetry=[('request', 'allow', '')] audit=[]
+
+[E1 backtick prompt 'How do I read `process.env.NODE_ENV` ins']
+  #1 status=200 zs.action='allow' zs.threat='clean' err.code=None top.code=None content='Hello from upstream.'
+      telemetry=[('request', 'allow', '')] audit=[]
+
+[E1 backtick prompt "What's the difference between `String` a"]
+  #1 status=200 zs.action='allow' zs.threat='clean' err.code=None top.code=None content='Hello from upstream.'
+      telemetry=[('request', 'allow', '')] audit=[]
+
+[E1 backtick prompt 'My Dockerfile runs `npm ci && npm run bu']
+  #1 status=200 zs.action='allow' zs.threat='clean' err.code=None top.code=None content='Hello from upstream.'
+      telemetry=[('request', 'allow', '')] audit=[]
+
+[E2 input Tier-2 client_error, clean prompt]
+  #1 status=200 zs.action='flag' zs.threat='scanner_degraded' err.code=None top.code=None content='Hello from upstream.'
+      telemetry=[('request', 'allow', 'scanner_degraded')] audit=[]
+
+[E3 sustained input outage, tier2_strict default(True)] statuses: [200, 200, 200, 200, 200, 503, 503] codes: ['flag', 'flag', 'flag', 'flag', 'flag', 'tier2_unavailable', 'tier2_unavailable']
+[E3b sustained input outage, tier2_strict=False] statuses: [200, 200, 200, 200, 200, 200, 200] zs.action: ['flag', 'flag', 'flag', 'flag', 'flag', 'allow', 'allow']
+
+[E4 Tier-2 flag/obfuscation]
+  #1 status=200 zs.action='flag' zs.threat='obfuscation' err.code=None top.code=None content='Hello from upstream.'
+      telemetry=[('request', 'allow', 'obfuscation')] audit=[]
+
+[E4b Tier-2 flag/risk_score (score 0.55)]
+  #1 status=200 zs.action='flag' zs.threat='risk_score' err.code=None top.code=None content='Hello from upstream.'
+      telemetry=[('request', 'allow', 'risk_score')] audit=[]
+
+[E5 Tier-2 block conf=0.30 category=injection]
+  #1 status=400 zs.action=None zs.threat=None err.code='content_filter' top.code='content_blocked' content=None
+      reason='Request blocked due to security policy'
+      telemetry=[('input_blocked', 'block', 'injection')] audit=[('block', 'tier_2_injection')]
+
+[E5 Tier-2 block conf=0.30 category=prompt_injection]
+  #1 status=200 zs.action='flag' zs.threat='prompt_injection' err.code=None top.code=None content='Hello from upstream.'
+      telemetry=[('request', 'allow', 'prompt_injection')] audit=[]
+
+[O1 output Tier-2 client_error, provider=bedrock, clean completion]
+  #1 status=200 zs.action='allow' zs.threat='clean' err.code=None top.code=None content='Hello from upstream.'
+      telemetry=[('request', 'allow', '')] audit=[]
+
+[O2 output_pii_action=block, PII completion, provider=bedrock, output Tier-2 client_error]
+  #1 status=400 zs.action=None zs.threat=None err.code='content_filter' top.code='output_blocked' content=None
+      reason='Request blocked due to security policy'
+      telemetry=[('output_guard', 'block', 'pii')] audit=[('block', 'output_guard_pii')]
+
+[O2-control output_pii_action=block, PII completion, provider=bedrock, output Tier-2 HEALTHY (allow)]
+  #1 status=400 zs.action=None zs.threat=None err.code='content_filter' top.code='output_blocked' content=None
+      reason='Request blocked due to security policy'
+      telemetry=[('output_guard', 'block', 'pii')] audit=[('block', 'output_guard_pii')]
+
+[O1 output Tier-2 client_error, provider=gemini, clean completion]
+  #1 status=400 zs.action=None zs.threat=None err.code='content_filter' top.code='output_blocked' content=None
+      reason='Request blocked due to security policy'
+      telemetry=[('output_scan_degraded', 'allow', 'scanner_degraded'), ('output_guard', 'block', 'scanner_degraded')] audit=[('block', 'output_guard_scanner_degraded_unmaskable')]
+
+[O2 output_pii_action=block, PII completion, provider=gemini, output Tier-2 client_error]
+  #1 status=400 zs.action=None zs.threat=None err.code='content_filter' top.code='output_blocked' content=None
+      reason='Request blocked due to security policy'
+      telemetry=[('output_scan_degraded', 'allow', 'scanner_degraded'), ('output_guard', 'block', 'pii')] audit=[('block', 'output_guard_pii_unmaskable')]
+
+[O2-control output_pii_action=block, PII completion, provider=gemini, output Tier-2 HEALTHY (allow)]
+  #1 status=400 zs.action=None zs.threat=None err.code='content_filter' top.code='output_blocked' content=None
+      reason='Request blocked due to security policy'
+      telemetry=[('output_guard', 'block', 'pii')] audit=[('block', 'output_guard_pii')]
+
+[O3 enforcement_mode=monitor, output_pii_action=block, PII completion, output Tier-2 healthy, stream=False]
+  #1 status=400 zs.action=None zs.threat=None err.code='content_filter' top.code='output_blocked' content=None
+      reason='Request blocked due to security policy'
+      telemetry=[('output_guard', 'block', 'pii')] audit=[('block', 'output_guard_pii')]
+
+[O3 enforcement_mode=monitor, output_pii_action=block, PII completion, output Tier-2 healthy, stream=True]
+  #1 status=200 zs.action='allow' zs.threat='clean' err.code=None top.code=None content="Sure. The customer's SSN is 123-45-6789 and email jane.roe@example.com."
+      telemetry=[('stream_complete', 'allow', '')] audit=[]
+
+[E2g input Tier-2 client_error, provider=gemini]
+  #1 status=500 zs.action=None zs.threat=None err.code='gateway_internal_error' top.code=None content=None
+      reason='An internal gateway error occurred.'
+      telemetry=[] audit=[]
+
+[E2g-parse input Tier-2 empty guard output, provider=gemini]
+  #1 status=200 zs.action='flag' zs.threat='scanner_degraded' err.code=None top.code=None content='Hello from upstream.'
+      telemetry=[('request', 'allow', 'scanner_degraded')] audit=[]
+
+[T1 clean completion | provider=bedrock | output Tier-2 client_error | stream=False]
+  #1 status=200 zs.action='allow' zs.threat='clean' err.code=None top.code=None content='Hello from upstream (upstream-marker-7f3a).'
+      telemetry=[('request', 'allow', '')] audit=[]
+
+[T1 clean completion | provider=bedrock | output Tier-2 client_error | stream=True]
+  #1 status=200 zs.action='allow' zs.threat='clean' err.code=None top.code=None content='Hello from upstream (upstream-marker-7f3a).'
+      telemetry=[('stream_complete', 'allow', '')] audit=[]
+
+[T1 clean completion | provider=bedrock | output Tier-2 HEALTHY | stream=False]
+  #1 status=200 zs.action='allow' zs.threat='clean' err.code=None top.code=None content='Hello from upstream (upstream-marker-7f3a).'
+      telemetry=[('request', 'allow', '')] audit=[]
+
+[T1 clean completion | provider=bedrock | output Tier-2 HEALTHY | stream=True]
+  #1 status=200 zs.action='allow' zs.threat='clean' err.code=None top.code=None content='Hello from upstream (upstream-marker-7f3a).'
+      telemetry=[('stream_complete', 'allow', '')] audit=[]
+
+[T2 pii=block, SSN completion | provider=bedrock | output Tier-2 client_error | stream=False]
+  #1 status=400 zs.action=None zs.threat=None err.code='content_filter' top.code='output_blocked' content=None
+      reason='Request blocked due to security policy'
+      telemetry=[('output_guard', 'block', 'pii')] audit=[('block', 'output_guard_pii')]
+
+[T2 pii=block, SSN completion | provider=bedrock | output Tier-2 client_error | stream=True]
+  #1 status=200 zs.action='block' zs.threat='pii' err.code='SSE_ERROR_FRAME: Response blocked: pii detected in output.' top.code=None content=''
+      telemetry=[('output_guard', 'block', 'pii')] audit=[]
+
+[T2 pii=block, SSN completion | provider=bedrock | output Tier-2 HEALTHY | stream=False]
+  #1 status=400 zs.action=None zs.threat=None err.code='content_filter' top.code='output_blocked' content=None
+      reason='Request blocked due to security policy'
+      telemetry=[('output_guard', 'block', 'pii')] audit=[('block', 'output_guard_pii')]
+
+[T2 pii=block, SSN completion | provider=bedrock | output Tier-2 HEALTHY | stream=True]
+  #1 status=200 zs.action='block' zs.threat='pii' err.code='SSE_ERROR_FRAME: Response blocked: pii detected in output.' top.code=None content=''
+      telemetry=[('output_guard', 'block', 'pii')] audit=[]
+
+[T3 pii=block + markdown-image exfil beacon (exfil default=redact) | provider=bedrock | output Tier-2 client_error | stream=False]
+  #1 status=400 zs.action=None zs.threat=None err.code='content_filter' top.code='output_blocked' content=None
+      reason='Request blocked due to security policy'
+      telemetry=[('output_guard', 'block', 'pii')] audit=[('block', 'output_guard_pii')]
+
+[T3 pii=block + markdown-image exfil beacon (exfil default=redact) | provider=bedrock | output Tier-2 client_error | stream=True]
+  #1 status=200 zs.action='block' zs.threat='pii' err.code='SSE_ERROR_FRAME: Response blocked: pii detected in output.' top.code=None content=''
+      telemetry=[('output_guard', 'block', 'pii')] audit=[]
+
+[T3 pii=block + markdown-image exfil beacon (exfil default=redact) | provider=bedrock | output Tier-2 HEALTHY | stream=False]
+  #1 status=400 zs.action=None zs.threat=None err.code='content_filter' top.code='output_blocked' content=None
+      reason='Request blocked due to security policy'
+      telemetry=[('output_guard', 'block', 'pii')] audit=[('block', 'output_guard_pii')]
+
+[T3 pii=block + markdown-image exfil beacon (exfil default=redact) | provider=bedrock | output Tier-2 HEALTHY | stream=True]
+  #1 status=200 zs.action='block' zs.threat='pii' err.code='SSE_ERROR_FRAME: Response blocked: pii detected in output.' top.code=None content=''
+      telemetry=[('output_guard', 'block', 'pii')] audit=[]
+
+[T1 clean completion | provider=gemini | output Tier-2 client_error | stream=False]
+  #1 status=400 zs.action=None zs.threat=None err.code='content_filter' top.code='output_blocked' content=None
+      reason='Request blocked due to security policy'
+      telemetry=[('output_scan_degraded', 'allow', 'scanner_degraded'), ('output_guard', 'block', 'scanner_degraded')] audit=[('block', 'output_guard_scanner_degraded_unmaskable')]
+
+[T1 clean completion | provider=gemini | output Tier-2 client_error | stream=True]
+  #1 status=200 zs.action='redact' zs.threat='scanner_degraded' err.code=None top.code=None content='The original model output was rewritten to comply with response safety policy.'
+      telemetry=[('output_guard', 'redact', 'scanner_degraded')] audit=[]
+
+[T1 clean completion | provider=gemini | output Tier-2 HEALTHY | stream=False]
+  #1 status=200 zs.action='allow' zs.threat='clean' err.code=None top.code=None content='Hello from upstream (upstream-marker-7f3a).'
+      telemetry=[('request', 'allow', '')] audit=[]
+
+[T1 clean completion | provider=gemini | output Tier-2 HEALTHY | stream=True]
+  #1 status=200 zs.action='allow' zs.threat='clean' err.code=None top.code=None content='Hello from upstream (upstream-marker-7f3a).'
+      telemetry=[('stream_complete', 'allow', '')] audit=[]
+
+[T2 pii=block, SSN completion | provider=gemini | output Tier-2 client_error | stream=False]
+  #1 status=400 zs.action=None zs.threat=None err.code='content_filter' top.code='output_blocked' content=None
+      reason='Request blocked due to security policy'
+      telemetry=[('output_scan_degraded', 'allow', 'scanner_degraded'), ('output_guard', 'block', 'pii')] audit=[('block', 'output_guard_pii_unmaskable')]
+
+[T2 pii=block, SSN completion | provider=gemini | output Tier-2 client_error | stream=True]
+  #1 status=200 zs.action='redact' zs.threat='pii' err.code=None top.code=None content='Customer SSN [REDACTED_PII] (upstream-marker-7f3a).'
+      telemetry=[('output_guard', 'redact', 'pii')] audit=[]
+
+[T2 pii=block, SSN completion | provider=gemini | output Tier-2 HEALTHY | stream=False]
+  #1 status=400 zs.action=None zs.threat=None err.code='content_filter' top.code='output_blocked' content=None
+      reason='Request blocked due to security policy'
+      telemetry=[('output_guard', 'block', 'pii')] audit=[('block', 'output_guard_pii')]
+
+[T2 pii=block, SSN completion | provider=gemini | output Tier-2 HEALTHY | stream=True]
+  #1 status=200 zs.action='block' zs.threat='pii' err.code='SSE_ERROR_FRAME: Response blocked: pii detected in output.' top.code=None content=''
+      telemetry=[('output_guard', 'block', 'pii')] audit=[]
+
+[T3 pii=block + markdown-image exfil beacon (exfil default=redact) | provider=gemini | output Tier-2 client_error | stream=False]
+  #1 status=200 zs.action='redact' zs.threat='pii' err.code=None top.code=None content='Customer SSN 123-45-6789. [chart](https://collector.evil-example.net/[exfil-redacted]) (upstream-marker-7f3a)'
+      telemetry=[('output_scan_degraded', 'allow', 'scanner_degraded'), ('output_guard', 'redact', 'pii'), ('request', 'redact', 'pii')] audit=[('redact', 'output_guard_redact_pii')]
+
+[T3 pii=block + markdown-image exfil beacon (exfil default=redact) | provider=gemini | output Tier-2 client_error | stream=True]
+  #1 status=200 zs.action='block' zs.threat='pii' err.code='SSE_ERROR_FRAME: Response blocked: pii detected in output.' top.code=None content=''
+      telemetry=[('output_guard', 'block', 'pii')] audit=[]
+
+[T3 pii=block + markdown-image exfil beacon (exfil default=redact) | provider=gemini | output Tier-2 HEALTHY | stream=False]
+  #1 status=400 zs.action=None zs.threat=None err.code='content_filter' top.code='output_blocked' content=None
+      reason='Request blocked due to security policy'
+      telemetry=[('output_guard', 'block', 'pii')] audit=[('block', 'output_guard_pii')]
+
+[T3 pii=block + markdown-image exfil beacon (exfil default=redact) | provider=gemini | output Tier-2 HEALTHY | stream=True]
+  #1 status=200 zs.action='block' zs.threat='pii' err.code='SSE_ERROR_FRAME: Response blocked: pii detected in output.' top.code=None content=''
+      telemetry=[('output_guard', 'block', 'pii')] audit=[]
+
+[T4 enforcement_mode=monitor, pii=block, SSN completion, Tier-2 healthy, stream=False]
+  #1 status=400 zs.action=None zs.threat=None err.code='content_filter' top.code='output_blocked' content=None
+      reason='Request blocked due to security policy'
+      telemetry=[('output_guard', 'block', 'pii')] audit=[('block', 'output_guard_pii')]
+
+[T4 enforcement_mode=monitor, pii=block, SSN completion, Tier-2 healthy, stream=True]
+  #1 status=200 zs.action='block' zs.threat='pii' err.code='SSE_ERROR_FRAME: Response blocked: pii detected in output.' top.code=None content=''
+      telemetry=[('output_guard', 'block', 'pii')] audit=[]

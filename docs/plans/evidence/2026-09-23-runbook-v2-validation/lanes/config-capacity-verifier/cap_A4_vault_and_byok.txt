@@ -1,0 +1,27 @@
+=== main.py 6455-6470
+    from rate_limiter import RateLimiter
+
+    RATE_LIMITER = RateLimiter(redis_url=CONFIG["redis_url"])
+
+    # ── Embedding Vault (Tier-1.6 semantic injection check) ──
+    # M9: the legacy EmbeddingVault (system pgvector attack-pattern store between
+    # Tier-1 regex and the Tier-2 ML guard) is fully REMOVED. It was disabled by
+    # default and failed OPEN on credential/config failure (silently disabling a
+    # whole detection layer); Tier-2 Bedrock semantic scanning covers it. Input
+    # scanning is now Tier-1 + Tier-2 only — no system embedding model.
+    _embedding_vault = None
+
+    # policy-driven-detection task 6.1: the legacy ``input_scan_enabled`` toggle no
+    # longer gates the construction of the scanning engine. The engine is RETAINED
+    # as the executor the policy engine drives (design §"Tier-1 becomes policy-only"
+    # keeps InputScanner/compile_pattern/redact_all), so it is always available; a
+=== embedding_vault instantiation anywhere (non-test)
+tests/test_embedding_vault.py:37:    v = EmbeddingVault(pg_dsn="postgresql://fake:fake@127.0.0.1:1/fake")
+tests/test_query_stage_layer_failure_observable.py:38:                       embedding_vault=r, intent_classifier=r)
+main.py:6708:            embedding_vault=_embedding_vault,
+rag_pipeline/pipeline.py:78:            embedding_vault=embedding_vault,
+=== main.py _resolve_vector_client head + caching
+def at 13112
+1:def _resolve_vector_client(
+9:        1. Org-level VectorProviderConfig from VECTOR_PROVIDER_SYNC cache
+10:        2. Gateway-level VECTOR_CLIENTS from env-var startup

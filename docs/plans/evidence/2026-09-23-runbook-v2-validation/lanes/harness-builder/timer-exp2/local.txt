@@ -1,0 +1,5 @@
+    clock_test.go:50: go timer   : p50=56.597µs p99=148.372µs p999=900.548µs max=1.219254ms
+    clock_test.go:51: nanosleep  : p50=58.739µs p99=74.906µs p999=1.150615ms max=1.306507ms
+--- PASS: TestPreciseClockLateness (6.01s)
+PASS
+ok  	rvharness/internal/rv	6.012s

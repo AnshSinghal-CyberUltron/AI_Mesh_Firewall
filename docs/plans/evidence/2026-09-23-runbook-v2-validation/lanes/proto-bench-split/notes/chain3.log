@@ -1,0 +1,5 @@
+18:17:00 START s2p-298 rate=298 env=[LABEL=poisson_down_2guards GUARDS=rv-split-guard-1 rv-split-guard-2 OLG_EXTRA=-sample-mod 1 -arrival poisson]
+18:24:49 END s2p-298 PASS q/s 293.04 infra% 0.0201 drops 0 p99 json 19.447 sse-total 19.597 sse-first 47.518
+18:24:49 START d2-466 rate=466 env=[LABEL=direct_floor_at_2guard_first_fail MODE=direct]
+18:32:12 END d2-466 PASS q/s 466.0 infra% 0.0 drops 0 p99 json 0.22 sse-total 0.186 sse-first 0.192
+18:32:12 CHAIN3 DONE

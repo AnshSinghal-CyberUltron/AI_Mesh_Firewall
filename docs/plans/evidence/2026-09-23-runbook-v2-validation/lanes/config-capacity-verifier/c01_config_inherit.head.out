@@ -1,0 +1,7 @@
+global CONFIG has enforcement_mode: False | tier2_enabled: False
+orgs loaded: ['acme', 'default', 'partial']
+get_config('acme'          ) -> enforcement_mode='monitor' tier2_enabled=None  (effective Tier-2 OFF) rag_tier2_enabled=None  | own_config=present | same-object-as-default=False
+get_config('partial'       ) -> enforcement_mode=None      tier2_enabled=None  (effective Tier-2 OFF) rag_tier2_enabled=None  | own_config=present | same-object-as-default=False
+get_config('newco-no-row'  ) -> enforcement_mode='block'   tier2_enabled=True  (effective Tier-2 ON) rag_tier2_enabled=True  | own_config=None | same-object-as-default=True
+get_config(''              ) -> enforcement_mode='block'   tier2_enabled=True  (effective Tier-2 ON) rag_tier2_enabled=True  | own_config=None | same-object-as-default=True
+after global _apply + refresh(partial): {'enforcement_mode': 'block', 'tier2_enabled': True}

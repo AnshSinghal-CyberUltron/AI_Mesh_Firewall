@@ -1,0 +1,4 @@
+t0 serving a-1
+t+10ms after push of a-3, serving a-3
+t+300ms after the delayed periodic reconcile finishes, serving a-2 | snapshot age 0.0 s (fresh, so readiness stays green)
+next periodic reconcile (up to RV_PLAN_RECONCILE_MS later) serving a-3

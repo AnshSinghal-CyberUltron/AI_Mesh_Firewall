@@ -1,0 +1,4 @@
+JSON logprobs=False: content has AWS=False MAIL=False | logprobs tokens reassembled have AWS=False MAIL=False
+SSE  logprobs=False: content has AWS=False MAIL=False | logprobs tokens reassembled have AWS=False MAIL=False
+JSON logprobs=True : content has AWS=False MAIL=False | logprobs tokens reassembled have AWS=True MAIL=True
+SSE  logprobs=True : content has AWS=False MAIL=False | logprobs tokens reassembled have AWS=True MAIL=True

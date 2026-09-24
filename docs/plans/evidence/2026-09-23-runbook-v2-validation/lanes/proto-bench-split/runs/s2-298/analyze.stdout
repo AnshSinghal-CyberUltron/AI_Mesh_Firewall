@@ -1,0 +1,42 @@
+# Harness analysis (sut, policy={'blocks_total': 1477, 'expected_blocks': 0, 'false_positive_blocks': 1477, 'other_blocks': 0, 'benign_offered': 89400, 'false_positive_rate': 0.016521252796420582, 'policy_misses': 0, 'latency_client_total_ms': {'policy_block_fp': {'n': 1477, 'min': 3.2714, 'p50': 7.1937, 'p90': 9.6936, 'p99': 12.4905, 'p999': 14.1155, 'max': 19.6418, 'mean': 7.3354}}, 'block_rule': {'statuses': [400, 403, 422, 451], 'envelope_re': '(?i)content_filter|content_polic|polic(y|ies)_|blocked|block_|guard|violation|unsafe|threat'}}) — FAIL
+
+| check | result |
+|---|---|
+| p99_T_fw_addon_lt_slo | FAIL |
+| infra_error_rate_le_budget | PASS |
+| zero_schedule_drops | PASS |
+| zero_safety_failures | PASS |
+| run_valid | PASS |
+| qualified_nonempty | PASS |
+
+- offered: 89400 over 300 s = 298.0 req/s (configured 298.0)
+- qualified: 87923 (293.08 req/s; dispositions ['ALLOW', 'FLAG', 'REDACT'], source auto)
+- infra errors (the error-budget gate): 0 (rate 0.0); reasons: {}
+- policy stratum (not qualified, not infra errors): expected blocks 0, FALSE-POSITIVE blocks 1477 of 89400 benign (FP rate 0.016521252796420582), other blocks 0, policy misses 0
+- policy cohort latency policy_block_fp (client total ms): n=1477 p50=7.1937 p90=9.6936 p99=12.4905 p99.9=14.1155 max=19.6418 mean=7.3354
+- safety failures: 0 {}
+- schedule drops (>5.0 ms): 0; lateness ms: n=89400 p50=0.0836 p90=0.0956 p99=0.1119 p99.9=0.1303 max=0.5069 mean=0.083
+- join: {'joined': 87923, 'by_nonce_fallback': 0, 'provider_records': 109923, 'provider_rids_with_multiple_calls': 0, 'provider_orphans': None}
+- valid: True []
+
+| metric (ms) | distribution |
+|---|---|
+| T_addon_total | n=87923 p50=7.4216 p90=10.1634 p99=12.9683 p99.9=15.6706 max=40.3471 mean=7.2673 |
+| T_addon_first | n=87923 p50=7.4066 p90=10.2765 p99=24.5351 p99.9=30.5141 max=69.7478 mean=7.4766 |
+| T_release_lag_max | n=87923 p50=45.2266 p90=50.2858 p99=68.4828 p99.9=73.0242 max=91.5426 mean=35.2054 |
+| T_release_lag_max_arrival | n=87923 p50=28.2804 p90=32.3353 p99=36.1987 p99.9=49.2852 max=62.3601 mean=23.1 |
+| T_fw_addon | n=87923 p50=45.2266 p90=50.2858 p99=68.4828 p99.9=73.0242 max=91.5426 mean=35.2054 |
+| T_fw_addon_sse | n=61570 p50=47.365 p90=51.1535 p99=69.2899 p99.9=75.1315 max=91.5426 mean=47.1363 |
+| T_fw_addon_json | n=26353 p50=7.4775 p90=10.2297 p99=12.9713 p99.9=15.6706 max=33.7603 mean=7.3304 |
+| client_ttft_sse | n=61570 p50=157.4173 p90=160.3351 p99=176.9885 p99.9=181.081 max=219.7534 mean=157.5777 |
+| provider_sched_err_last | n=87923 p50=0.0305 p90=0.0843 p99=0.1184 p99.9=0.1498 max=0.2216 mean=0.0386 |
+| provider_sched_err_max_per_stream | n=87923 p50=0.1121 p90=0.1541 p99=0.1939 p99.9=0.2232 max=0.5529 mean=0.1002 |
+| provider_write_max | n=87923 p50=0.0211 p90=0.0296 p99=0.0406 p99.9=0.0515 max=0.1385 mean=0.0208 |
+
+- release lag: 87923 sampled streams joined, 0 unmappable (content length differs)
+- loadgen CPU (measurement phase): [{'dir': '/home/contact_cyberultron_com/rv-evidence-raw/proto-bench-split/runs/s2-298/rv-split-lg-1/lg', 'samples': 300, 'busy_max': 31.544775233601975, 'busy_mean': 18.83, 'machine': 'c4-highcpu-8', 'zone': 'asia-south1-c'}]
+- provider CPU: {'samples': 430, 'busy_max': 27.61772800136467, 'busy_p95': 17.650890218301875}
+- completeness: [{'dir': '/home/contact_cyberultron_com/rv-evidence-raw/proto-bench-split/runs/s2-298/rv-split-lg-1/lg', 'scheduled': 111750, 'recorded': 111750, 'interrupted': False}]
+- health olg rv-split-lg-1: gc_cycles=0 sched_latency_max_ms=0.098304 tcp={'TcpRetransSegs': 2, 'TcpExtTCPFastRetrans': 0, 'TcpExtTCPLossProbes': 2, 'TcpExtTCPTimeouts': 0, 'TcpOutSegs': 9987823, 'TcpInSegs': 17370639}
+- health synthprov rv-split-prov-1: gc_cycles=0 sched_latency_max_ms=0.114688 tcp={'TcpRetransSegs': 12, 'TcpExtTCPFastRetrans': 0, 'TcpExtTCPLossProbes': 12, 'TcpExtTCPTimeouts': 0, 'TcpOutSegs': 17807957, 'TcpInSegs': 14314725}
+

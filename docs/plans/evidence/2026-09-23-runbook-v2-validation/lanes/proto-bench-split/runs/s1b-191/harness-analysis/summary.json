@@ -1,0 +1,367 @@
+{
+ "mode": "sut",
+ "policy": {
+  "blocks_total": 996,
+  "expected_blocks": 0,
+  "false_positive_blocks": 996,
+  "other_blocks": 0,
+  "benign_offered": 57300,
+  "false_positive_rate": 0.017382198952879582,
+  "policy_misses": 0,
+  "latency_client_total_ms": {
+   "policy_block_fp": {
+    "n": 996,
+    "min": 3.3459,
+    "p50": 7.4351,
+    "p90": 9.8199,
+    "p99": 12.5181,
+    "p999": 16.8979,
+    "max": 16.8979,
+    "mean": 7.3921
+   }
+  },
+  "block_rule": {
+   "statuses": [
+    400,
+    403,
+    422,
+    451
+   ],
+   "envelope_re": "(?i)content_filter|content_polic|polic(y|ies)_|blocked|block_|guard|violation|unsafe|threat"
+  }
+ },
+ "phases": [
+  2
+ ],
+ "inputs": {
+  "client_files": [
+   "/home/contact_cyberultron_com/rv-evidence-raw/proto-bench-split/runs/s1b-191/rv-split-lg-1/lg/requests.jsonl.zst"
+  ],
+  "provider_files": [
+   "/home/contact_cyberultron_com/rv-evidence-raw/proto-bench-split/runs/s1b-191/rv-split-prov-1/prov/records.jsonl.zst"
+  ],
+  "corpus": "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/harness/corpora/headline-22M.jsonl"
+ },
+ "offered": 57300,
+ "offered_rate_config": 191.0,
+ "measure_s": 300,
+ "achieved_offered_rps": 191.0,
+ "qualified": 56304,
+ "expected_blocks": 0,
+ "errors": 0,
+ "infra_errors": 0,
+ "outcomes": {
+  "policy_block_fp": 996,
+  "qualified": 56304
+ },
+ "disposition_source": "auto",
+ "qualified_dispositions": [
+  "ALLOW",
+  "FLAG",
+  "REDACT"
+ ],
+ "qualified_rps": 187.68,
+ "error_rate": 0.0,
+ "error_reasons": {},
+ "error_examples": [],
+ "safety_failures": 0,
+ "safety_reasons": {},
+ "safety_examples": [],
+ "schedule": {
+  "drops": 0,
+  "drop_threshold_ms": 5.0,
+  "lateness": {
+   "n": 57300,
+   "min": 0.0194,
+   "p50": 0.083,
+   "p90": 0.0915,
+   "p99": 0.1013,
+   "p999": 0.1157,
+   "max": 0.5282,
+   "mean": 0.0826
+  }
+ },
+ "join": {
+  "joined": 56304,
+  "by_nonce_fallback": 0,
+  "provider_records": 70382,
+  "provider_rids_with_multiple_calls": 0,
+  "provider_orphans": null
+ },
+ "classes": {
+  "benign": 57300
+ },
+ "phase_counts": {
+  "0": 2865,
+  "1": 11460,
+  "2": 57300
+ },
+ "T_addon_total": {
+  "n": 56304,
+  "min": 3.7284,
+  "p50": 7.8489,
+  "p90": 10.3366,
+  "p99": 12.6059,
+  "p999": 14.9574,
+  "max": 19.7573,
+  "mean": 7.433
+ },
+ "T_addon_first": {
+  "n": 56304,
+  "min": 3.6711,
+  "p50": 7.8493,
+  "p90": 10.4662,
+  "p99": 24.6685,
+  "p999": 30.5491,
+  "max": 48.8618,
+  "mean": 7.6398
+ },
+ "T_release_lag_max": {
+  "n": 56304,
+  "min": 3.8142,
+  "p50": 45.24,
+  "p90": 50.4627,
+  "p99": 68.6311,
+  "p999": 73.2996,
+  "max": 104.6058,
+  "mean": 35.3546
+ },
+ "T_release_lag_max_arrival": {
+  "n": 56304,
+  "min": 3.8142,
+  "p50": 28.6149,
+  "p90": 32.719,
+  "p99": 35.597,
+  "p999": 37.8731,
+  "max": 42.0364,
+  "mean": 23.3831
+ },
+ "T_fw_addon": {
+  "n": 56304,
+  "min": 3.8142,
+  "p50": 45.24,
+  "p90": 50.4627,
+  "p99": 68.6311,
+  "p999": 73.2996,
+  "max": 104.6058,
+  "mean": 35.3546
+ },
+ "T_fw_addon_sse": {
+  "n": 39426,
+  "min": 24.1319,
+  "p50": 47.7362,
+  "p90": 51.1721,
+  "p99": 69.1338,
+  "p999": 84.4786,
+  "max": 104.6058,
+  "mean": 47.28
+ },
+ "T_fw_addon_json": {
+  "n": 16878,
+  "min": 3.8142,
+  "p50": 7.9034,
+  "p90": 10.4832,
+  "p99": 12.7004,
+  "p999": 14.9905,
+  "max": 19.7573,
+  "mean": 7.4974
+ },
+ "release_lag_sampled_joined": 56304,
+ "release_lag_unmappable": 0,
+ "client_ttft_sse": {
+  "n": 39426,
+  "min": 153.6915,
+  "p50": 157.8673,
+  "p90": 160.5054,
+  "p99": 177.3458,
+  "p999": 180.9576,
+  "max": 198.885,
+  "mean": 157.7425
+ },
+ "provider_sched_err_last": {
+  "n": 56304,
+  "min": 0.0005,
+  "p50": 0.0359,
+  "p90": 0.0861,
+  "p99": 0.1159,
+  "p999": 0.1403,
+  "max": 0.2046,
+  "mean": 0.0414
+ },
+ "provider_sched_err_max_per_stream": {
+  "n": 56304,
+  "min": 0.0006,
+  "p50": 0.1039,
+  "p90": 0.1446,
+  "p99": 0.1875,
+  "p999": 0.228,
+  "max": 0.7603,
+  "mean": 0.0952
+ },
+ "provider_write_max": {
+  "n": 56304,
+  "min": 0.0043,
+  "p50": 0.0203,
+  "p90": 0.0272,
+  "p99": 0.0378,
+  "p999": 0.0505,
+  "max": 0.755,
+  "mean": 0.0198
+ },
+ "loadgen_cpu": [
+  {
+   "dir": "/home/contact_cyberultron_com/rv-evidence-raw/proto-bench-split/runs/s1b-191/rv-split-lg-1/lg",
+   "samples": 300,
+   "busy_max": 20.732707985450325,
+   "busy_mean": 8.92,
+   "machine": "c4-highcpu-8",
+   "zone": "asia-south1-b"
+  }
+ ],
+ "provider_cpu": {
+  "samples": 431,
+  "busy_max": 24.773406664000895,
+  "busy_p95": 13.303632194906612
+ },
+ "provider_stats": [
+  {
+   "build_sha": "5af9594a2631",
+   "bytes_out": 3416879411,
+   "chunks": 11176147,
+   "client_gone": 0,
+   "cpu": {
+    "busy_max": 24.773406664000895,
+    "busy_mean": 11.840883734051742,
+    "proc_max": 8.500055743365566,
+    "samples": 431
+   },
+   "faults": 0,
+   "gc_config": "gc=off memlimit=9.37GiB",
+   "host": {
+    "hostname": "rv-split-prov-1.asia-south1-b.c.ai-mesh-firewall.internal",
+    "num_cpu": 8,
+    "gomaxprocs": 8,
+    "go_version": "go1.27.1",
+    "harness_build_sha": "5af9594a2631",
+    "kernel": "Linux version 7.0.0-1011-gcp (buildd@lcy02-amd64-099) (x86_64-linux-gnu-gcc-13 (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0, GNU ld (GNU Binutils for Ubuntu) 2.42) #11~24.04.1-Ubuntu SMP PREEMPT Tue Aug 11 20:14:48 UTC 2026",
+    "mem_total_kb": 16366888,
+    "lscpu": {
+     "CPU(s)": "8",
+     "Core(s) per socket": "4",
+     "Flags": "aes avx2 avx512f sha_ni amx_tile",
+     "Hypervisor vendor": "KVM",
+     "Model name": "INTEL(R) XEON(R) PLATINUM 8581C CPU @ 2.30GHz",
+     "NUMA node(s)": "1",
+     "Socket(s)": "1",
+     "Thread(s) per core": "2"
+    },
+    "gce": {
+     "image": "projects/ubuntu-os-cloud/global/images/ubuntu-2404-noble-amd64-v20260918",
+     "machine-type": "c4-highcpu-8",
+     "name": "rv-split-prov-1",
+     "zone": "asia-south1-b"
+    },
+    "sysctl": {
+     "fs/file-max": "4194304",
+     "net/core/netdev_max_backlog": "250000",
+     "net/core/somaxconn": "65535",
+     "net/ipv4/ip_local_port_range": "1024\t65535",
+     "net/ipv4/tcp_max_syn_backlog": "65535",
+     "net/ipv4/tcp_tw_reuse": "1"
+    },
+    "nofile_limit": "1048576/1048576",
+    "start_utc": "2026-09-23T18:59:01.879890706Z"
+   },
+   "inflight": 0,
+   "itl_ms": 20,
+   "record_queue_blocked": 0,
+   "records": 70382,
+   "requests": 70382,
+   "runtime": {
+    "/gc/cycles/total:gc-cycles": 0,
+    "/gc/heap/goal:bytes": 9695431917,
+    "/gc/pauses:seconds": {
+     "count": 0
+    },
+    "/sched/goroutines:goroutines": 11,
+    "/sched/latencies:seconds": {
+     "count": 2024553,
+     "max_ms": 0.114688,
+     "p50_ms": 0.001536,
+     "p9999_ms": 0.098304,
+     "p999_ms": 0.08192,
+     "p99_ms": 0.02048
+    }
+   },
+   "sample_mod": 1,
+   "sampled": 70382,
+   "sched_err_max_ns": 760334,
+   "status_2xx": 70382,
+   "status_4xx": 0,
+   "status_5xx": 0,
+   "streams_active": 0,
+   "ttft_ms": 150,
+   "uptime_s": 431.213785433,
+   "write_max_ns": 754960
+  }
+ ],
+ "instrument_health": [
+  {
+   "proc": "olg",
+   "dir": "/home/contact_cyberultron_com/rv-evidence-raw/proto-bench-split/runs/s1b-191/rv-split-lg-1/lg",
+   "gc_cycles": 0,
+   "sched_latency_max_ms": 0.16384,
+   "tcp": {
+    "TcpRetransSegs": 7,
+    "TcpExtTCPFastRetrans": 0,
+    "TcpExtTCPLossProbes": 2,
+    "TcpExtTCPTimeouts": 6,
+    "TcpOutSegs": 6453812,
+    "TcpInSegs": 11124483
+   }
+  },
+  {
+   "proc": "synthprov",
+   "dir": "/home/contact_cyberultron_com/rv-evidence-raw/proto-bench-split/runs/s1b-191/rv-split-prov-1/prov",
+   "gc_cycles": 0,
+   "sched_latency_max_ms": 0.114688,
+   "tcp": {
+    "TcpRetransSegs": 16,
+    "TcpExtTCPFastRetrans": 0,
+    "TcpExtTCPLossProbes": 11,
+    "TcpExtTCPTimeouts": 6,
+    "TcpOutSegs": 11400919,
+    "TcpInSegs": 9469613
+   }
+  }
+ ],
+ "completeness": [
+  {
+   "dir": "/home/contact_cyberultron_com/rv-evidence-raw/proto-bench-split/runs/s1b-191/rv-split-lg-1/lg",
+   "scheduled": 71625,
+   "recorded": 71625,
+   "interrupted": false
+  }
+ ],
+ "valid": true,
+ "invalid_reasons": [],
+ "per_second": null,
+ "thresholds": {
+  "slo_ms": 20.0,
+  "err_budget": 0.001,
+  "drop_ms": 5.0,
+  "sched_tol_ms": 1.0,
+  "cpu_max": 70.0
+ },
+ "verdict": {
+  "pass": false,
+  "checks": {
+   "p99_T_fw_addon_lt_slo": false,
+   "infra_error_rate_le_budget": true,
+   "zero_schedule_drops": true,
+   "zero_safety_failures": true,
+   "run_valid": true,
+   "qualified_nonempty": true
+  }
+ }
+}

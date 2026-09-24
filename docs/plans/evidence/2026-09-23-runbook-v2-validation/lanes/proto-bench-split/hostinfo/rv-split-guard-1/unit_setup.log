@@ -1,0 +1,242 @@
++ TARBALL=/home/rv/rvproto-unit.tar.gz
++ RV=/home/rv/rv
++ TRITON_IMAGE=nvcr.io/nvidia/tritonserver:26.05-py3
++ mkdir -p /home/rv/rv
++ tar -xzf /home/rv/rvproto-unit.tar.gz -C /home/rv/rv
++ sudo fuser /var/lib/dpkg/lock-frontend
++ sudo DEBIAN_FRONTEND=noninteractive apt-get update -q
+Get:1 file:/var/cudnn-local-repo-ubuntu2404-9.13.0  InRelease [1572 B]
+Get:1 file:/var/cudnn-local-repo-ubuntu2404-9.13.0  InRelease [1572 B]
+Hit:2 http://packages.cloud.google.com/apt apt-transport-artifact-registry-stable InRelease
+Get:3 https://nvidia.github.io/libnvidia-container/stable/deb/amd64  InRelease [1477 B]
+Get:4 http://asia-south1.gce.archive.ubuntu.com/ubuntu jammy InRelease [270 kB]
+Get:5 https://nvidia.github.io/libnvidia-container/stable/deb/amd64  Packages [28.0 kB]
+Get:6 http://security.ubuntu.com/ubuntu jammy-security InRelease [129 kB]
+Get:7 https://us-apt.pkg.dev/projects/gce-ai-infra gpudirect-gib-apt InRelease [1239 B]
+Get:8 http://asia-south1.gce.archive.ubuntu.com/ubuntu jammy-updates InRelease [128 kB]
+Get:9 http://asia-south1.gce.archive.ubuntu.com/ubuntu jammy-backports InRelease [127 kB]
+Get:10 http://asia-south1.gce.archive.ubuntu.com/ubuntu jammy/main amd64 Packages [1395 kB]
+Get:11 https://us-apt.pkg.dev/projects/gce-ai-infra gpudirect-gib-apt/main amd64 Packages [11.5 kB]
+Get:12 http://security.ubuntu.com/ubuntu jammy-security/main amd64 Packages [3548 kB]
+Get:13 http://asia-south1.gce.archive.ubuntu.com/ubuntu jammy/main Translation-en [510 kB]
+Get:14 http://asia-south1.gce.archive.ubuntu.com/ubuntu jammy/main amd64 c-n-f Metadata [30.3 kB]
+Get:15 http://asia-south1.gce.archive.ubuntu.com/ubuntu jammy/restricted amd64 Packages [129 kB]
+Get:16 http://asia-south1.gce.archive.ubuntu.com/ubuntu jammy/restricted Translation-en [18.6 kB]
+Get:17 http://asia-south1.gce.archive.ubuntu.com/ubuntu jammy/restricted amd64 c-n-f Metadata [488 B]
+Get:18 http://asia-south1.gce.archive.ubuntu.com/ubuntu jammy/universe amd64 Packages [14.1 MB]
+Get:19 http://asia-south1.gce.archive.ubuntu.com/ubuntu jammy/universe Translation-en [5652 kB]
+Get:20 http://asia-south1.gce.archive.ubuntu.com/ubuntu jammy/universe amd64 c-n-f Metadata [286 kB]
+Get:21 http://asia-south1.gce.archive.ubuntu.com/ubuntu jammy/multiverse amd64 Packages [217 kB]
+Get:22 http://asia-south1.gce.archive.ubuntu.com/ubuntu jammy/multiverse Translation-en [112 kB]
+Get:23 http://asia-south1.gce.archive.ubuntu.com/ubuntu jammy/multiverse amd64 c-n-f Metadata [8372 B]
+Get:24 http://asia-south1.gce.archive.ubuntu.com/ubuntu jammy-updates/main amd64 Packages [3852 kB]
+Get:25 http://asia-south1.gce.archive.ubuntu.com/ubuntu jammy-updates/main Translation-en [569 kB]
+Get:26 http://asia-south1.gce.archive.ubuntu.com/ubuntu jammy-updates/main amd64 c-n-f Metadata [20.1 kB]
+Get:27 http://asia-south1.gce.archive.ubuntu.com/ubuntu jammy-updates/restricted amd64 Packages [6632 kB]
+Get:28 http://asia-south1.gce.archive.ubuntu.com/ubuntu jammy-updates/restricted Translation-en [1274 kB]
+Get:29 http://asia-south1.gce.archive.ubuntu.com/ubuntu jammy-updates/restricted amd64 c-n-f Metadata [584 B]
+Get:30 http://asia-south1.gce.archive.ubuntu.com/ubuntu jammy-updates/universe amd64 Packages [1283 kB]
+Get:31 http://asia-south1.gce.archive.ubuntu.com/ubuntu jammy-updates/universe Translation-en [324 kB]
+Get:32 http://asia-south1.gce.archive.ubuntu.com/ubuntu jammy-updates/universe amd64 c-n-f Metadata [30.8 kB]
+Get:33 http://asia-south1.gce.archive.ubuntu.com/ubuntu jammy-updates/multiverse amd64 Packages [76.8 kB]
+Get:34 http://asia-south1.gce.archive.ubuntu.com/ubuntu jammy-updates/multiverse Translation-en [15.9 kB]
+Get:35 http://asia-south1.gce.archive.ubuntu.com/ubuntu jammy-updates/multiverse amd64 c-n-f Metadata [756 B]
+Get:36 http://asia-south1.gce.archive.ubuntu.com/ubuntu jammy-backports/main amd64 Packages [70.2 kB]
+Get:37 http://asia-south1.gce.archive.ubuntu.com/ubuntu jammy-backports/main Translation-en [11.4 kB]
+Get:38 http://security.ubuntu.com/ubuntu jammy-security/main Translation-en [499 kB]
+Get:39 http://asia-south1.gce.archive.ubuntu.com/ubuntu jammy-backports/main amd64 c-n-f Metadata [412 B]
+Get:40 http://asia-south1.gce.archive.ubuntu.com/ubuntu jammy-backports/restricted amd64 c-n-f Metadata [116 B]
+Get:41 http://asia-south1.gce.archive.ubuntu.com/ubuntu jammy-backports/universe amd64 Packages [30.8 kB]
+Get:42 http://asia-south1.gce.archive.ubuntu.com/ubuntu jammy-backports/universe Translation-en [16.9 kB]
+Get:43 http://security.ubuntu.com/ubuntu jammy-security/restricted amd64 Packages [6342 kB]
+Get:44 http://asia-south1.gce.archive.ubuntu.com/ubuntu jammy-backports/universe amd64 c-n-f Metadata [676 B]
+Get:45 http://asia-south1.gce.archive.ubuntu.com/ubuntu jammy-backports/multiverse amd64 c-n-f Metadata [116 B]
+Get:46 http://security.ubuntu.com/ubuntu jammy-security/restricted Translation-en [1219 kB]
+Get:47 http://security.ubuntu.com/ubuntu jammy-security/universe amd64 Packages [1049 kB]
+Get:48 http://security.ubuntu.com/ubuntu jammy-security/universe Translation-en [235 kB]
+Get:49 http://security.ubuntu.com/ubuntu jammy-security/multiverse amd64 Packages [69.4 kB]
+Get:50 http://security.ubuntu.com/ubuntu jammy-security/multiverse Translation-en [12.9 kB]
+Fetched 50.3 MB in 9s (5428 kB/s)
+Reading package lists...
+W: http://packages.cloud.google.com/apt/dists/apt-transport-artifact-registry-stable/InRelease: Key is stored in legacy trusted.gpg keyring (/etc/apt/trusted.gpg), see the DEPRECATION section in apt-key(8) for details.
+W: https://us-apt.pkg.dev/projects/gce-ai-infra/dists/gpudirect-gib-apt/InRelease: Key is stored in legacy trusted.gpg keyring (/etc/apt/trusted.gpg), see the DEPRECATION section in apt-key(8) for details.
++ sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -q redis-server docker.io jq
+Reading package lists...
+Building dependency tree...
+Reading state information...
+jq is already the newest version (1.6-2.1ubuntu3.2).
+jq set to manually installed.
+The following additional packages will be installed:
+  bridge-utils containerd dns-root-data dnsmasq-base libjemalloc2 liblua5.1-0
+  liblzf1 lua-bitop lua-cjson pigz redis-tools runc ubuntu-fan
+Suggested packages:
+  ifupdown aufs-tools cgroupfs-mount | cgroup-lite debootstrap docker-buildx
+  docker-compose-v2 docker-doc rinse zfs-fuse | zfsutils ruby-redis
+The following NEW packages will be installed:
+  bridge-utils containerd dns-root-data dnsmasq-base docker.io libjemalloc2
+  liblua5.1-0 liblzf1 lua-bitop lua-cjson pigz redis-server redis-tools runc
+  ubuntu-fan
+0 upgraded, 15 newly installed, 0 to remove and 33 not upgraded.
+Need to get 75.3 MB of archives.
+After this operation, 285 MB of additional disk space will be used.
+Get:1 http://asia-south1.gce.archive.ubuntu.com/ubuntu jammy/universe amd64 libjemalloc2 amd64 5.2.1-4ubuntu1 [240 kB]
+Get:2 http://asia-south1.gce.archive.ubuntu.com/ubuntu jammy/universe amd64 liblua5.1-0 amd64 5.1.5-8.1build4 [99.9 kB]
+Get:3 http://asia-south1.gce.archive.ubuntu.com/ubuntu jammy/universe amd64 liblzf1 amd64 3.6-3 [7444 B]
+Get:4 http://asia-south1.gce.archive.ubuntu.com/ubuntu jammy/universe amd64 lua-bitop amd64 1.0.2-5 [6680 B]
+Get:5 http://asia-south1.gce.archive.ubuntu.com/ubuntu jammy/universe amd64 lua-cjson amd64 2.1.0+dfsg-2.1 [17.4 kB]
+Get:6 http://asia-south1.gce.archive.ubuntu.com/ubuntu jammy-updates/universe amd64 redis-tools amd64 5:6.0.16-1ubuntu1.1 [856 kB]
+Get:7 http://asia-south1.gce.archive.ubuntu.com/ubuntu jammy-updates/universe amd64 redis-server amd64 5:6.0.16-1ubuntu1.1 [45.9 kB]
+Get:8 http://asia-south1.gce.archive.ubuntu.com/ubuntu jammy/universe amd64 pigz amd64 2.6-1 [63.6 kB]
+Get:9 http://asia-south1.gce.archive.ubuntu.com/ubuntu jammy/main amd64 bridge-utils amd64 1.7-1ubuntu3 [34.4 kB]
+Get:10 http://asia-south1.gce.archive.ubuntu.com/ubuntu jammy-updates/main amd64 runc amd64 1.3.4-0ubuntu1~22.04.1 [9569 kB]
+Get:11 http://asia-south1.gce.archive.ubuntu.com/ubuntu jammy-updates/main amd64 containerd amd64 2.2.1-0ubuntu1~22.04.2 [28.3 MB]
+Get:12 http://asia-south1.gce.archive.ubuntu.com/ubuntu jammy-updates/main amd64 dns-root-data all 2024071801~ubuntu0.22.04.1 [6132 B]
+Get:13 http://asia-south1.gce.archive.ubuntu.com/ubuntu jammy-updates/main amd64 dnsmasq-base amd64 2.91-0ubuntu0.22.04.1 [379 kB]
+Get:14 http://asia-south1.gce.archive.ubuntu.com/ubuntu jammy-updates/universe amd64 docker.io amd64 29.1.3-0ubuntu3~22.04.2 [35.7 MB]
+Get:15 http://asia-south1.gce.archive.ubuntu.com/ubuntu jammy/universe amd64 ubuntu-fan all 0.12.16 [35.2 kB]
+Preconfiguring packages ...
+Fetched 75.3 MB in 6s (12.5 MB/s)
+Selecting previously unselected package libjemalloc2:amd64.
+(Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 71520 files and directories currently installed.)
+Preparing to unpack .../00-libjemalloc2_5.2.1-4ubuntu1_amd64.deb ...
+Unpacking libjemalloc2:amd64 (5.2.1-4ubuntu1) ...
+Selecting previously unselected package liblua5.1-0:amd64.
+Preparing to unpack .../01-liblua5.1-0_5.1.5-8.1build4_amd64.deb ...
+Unpacking liblua5.1-0:amd64 (5.1.5-8.1build4) ...
+Selecting previously unselected package liblzf1:amd64.
+Preparing to unpack .../02-liblzf1_3.6-3_amd64.deb ...
+Unpacking liblzf1:amd64 (3.6-3) ...
+Selecting previously unselected package lua-bitop:amd64.
+Preparing to unpack .../03-lua-bitop_1.0.2-5_amd64.deb ...
+Unpacking lua-bitop:amd64 (1.0.2-5) ...
+Selecting previously unselected package lua-cjson:amd64.
+Preparing to unpack .../04-lua-cjson_2.1.0+dfsg-2.1_amd64.deb ...
+Unpacking lua-cjson:amd64 (2.1.0+dfsg-2.1) ...
+Selecting previously unselected package redis-tools.
+Preparing to unpack .../05-redis-tools_5%3a6.0.16-1ubuntu1.1_amd64.deb ...
+Unpacking redis-tools (5:6.0.16-1ubuntu1.1) ...
+Selecting previously unselected package redis-server.
+Preparing to unpack .../06-redis-server_5%3a6.0.16-1ubuntu1.1_amd64.deb ...
+Unpacking redis-server (5:6.0.16-1ubuntu1.1) ...
+Selecting previously unselected package pigz.
+Preparing to unpack .../07-pigz_2.6-1_amd64.deb ...
+Unpacking pigz (2.6-1) ...
+Selecting previously unselected package bridge-utils.
+Preparing to unpack .../08-bridge-utils_1.7-1ubuntu3_amd64.deb ...
+Unpacking bridge-utils (1.7-1ubuntu3) ...
+Selecting previously unselected package runc.
+Preparing to unpack .../09-runc_1.3.4-0ubuntu1~22.04.1_amd64.deb ...
+Unpacking runc (1.3.4-0ubuntu1~22.04.1) ...
+Selecting previously unselected package containerd.
+Preparing to unpack .../10-containerd_2.2.1-0ubuntu1~22.04.2_amd64.deb ...
+Unpacking containerd (2.2.1-0ubuntu1~22.04.2) ...
+Selecting previously unselected package dns-root-data.
+Preparing to unpack .../11-dns-root-data_2024071801~ubuntu0.22.04.1_all.deb ...
+Unpacking dns-root-data (2024071801~ubuntu0.22.04.1) ...
+Selecting previously unselected package dnsmasq-base.
+Preparing to unpack .../12-dnsmasq-base_2.91-0ubuntu0.22.04.1_amd64.deb ...
+Unpacking dnsmasq-base (2.91-0ubuntu0.22.04.1) ...
+Selecting previously unselected package docker.io.
+Preparing to unpack .../13-docker.io_29.1.3-0ubuntu3~22.04.2_amd64.deb ...
+Unpacking docker.io (29.1.3-0ubuntu3~22.04.2) ...
+Selecting previously unselected package ubuntu-fan.
+Preparing to unpack .../14-ubuntu-fan_0.12.16_all.deb ...
+Unpacking ubuntu-fan (0.12.16) ...
+Setting up libjemalloc2:amd64 (5.2.1-4ubuntu1) ...
+Setting up dnsmasq-base (2.91-0ubuntu0.22.04.1) ...
+Setting up runc (1.3.4-0ubuntu1~22.04.1) ...
+Setting up dns-root-data (2024071801~ubuntu0.22.04.1) ...
+Setting up lua-cjson:amd64 (2.1.0+dfsg-2.1) ...
+Setting up liblzf1:amd64 (3.6-3) ...
+Setting up bridge-utils (1.7-1ubuntu3) ...
+Setting up lua-bitop:amd64 (1.0.2-5) ...
+Setting up pigz (2.6-1) ...
+Setting up liblua5.1-0:amd64 (5.1.5-8.1build4) ...
+Setting up containerd (2.2.1-0ubuntu1~22.04.2) ...
+Created symlink /etc/systemd/system/multi-user.target.wants/containerd.service → /lib/systemd/system/containerd.service.
+Setting up ubuntu-fan (0.12.16) ...
+Created symlink /etc/systemd/system/multi-user.target.wants/ubuntu-fan.service → /lib/systemd/system/ubuntu-fan.service.
+Setting up docker.io (29.1.3-0ubuntu3~22.04.2) ...
+Adding group `docker' (GID 122) ...
+Done.
+Created symlink /etc/systemd/system/multi-user.target.wants/docker.service → /lib/systemd/system/docker.service.
+Created symlink /etc/systemd/system/sockets.target.wants/docker.socket → /lib/systemd/system/docker.socket.
+Setting up redis-tools (5:6.0.16-1ubuntu1.1) ...
+Setting up redis-server (5:6.0.16-1ubuntu1.1) ...
+Created symlink /etc/systemd/system/redis.service → /lib/systemd/system/redis-server.service.
+Created symlink /etc/systemd/system/multi-user.target.wants/redis-server.service → /lib/systemd/system/redis-server.service.
+Processing triggers for libc-bin (2.35-0ubuntu3.15) ...
+Processing triggers for man-db (2.10.2-1) ...
+Processing triggers for dbus (1.12.20-2ubuntu4.1) ...
+
+Running kernel seems to be up-to-date.
+
+No services need to be restarted.
+
+No containers need to be restarted.
+
+No user sessions are running outdated binaries.
+
+No VM guests are running outdated hypervisor (qemu) binaries on this host.
++ sudo sed -i 's/^save .*/save ""/' /etc/redis/redis.conf
++ sudo systemctl enable --now redis-server
+Synchronizing state of redis-server.service with SysV service script with /lib/systemd/systemd-sysv-install.
+Executing: /lib/systemd/systemd-sysv-install enable redis-server
++ sudo nvidia-ctk runtime configure --runtime=docker
+time="2026-09-23T06:40:11Z" level=info msg="Config file does not exist; using empty config"
+time="2026-09-23T06:40:11Z" level=info msg="Wrote updated config to /etc/docker/daemon.json"
+time="2026-09-23T06:40:11Z" level=info msg="It is recommended that docker daemon be restarted."
++ sudo systemctl restart docker
++ '[' -x /home/rv/.local/bin/uv ']'
++ '[' -x /home/rv/rv/venv/bin/python ']'
++ /home/rv/.local/bin/uv pip install -q -p /home/rv/rv/venv/bin/python -r /home/rv/rv/rvproto/deploy/requirements-unit.txt
++ sudo docker pull -q nvcr.io/nvidia/tritonserver:26.05-py3
+nvcr.io/nvidia/tritonserver:26.05-py3
++ bash /home/rv/rv/rvproto/deploy/triton_build.sh nvcr.io/nvidia/tritonserver:26.05-py3
++ IMG=nvcr.io/nvidia/tritonserver:26.05-py3
++ RV=/home/rv/rv
++ REPO=/home/rv/rv/triton/models
++ MAXB=64
++ QUS=1000
+++ nvidia-smi -L
+++ grep -c '^GPU '
++ NGPU=2
++ INSTANCES=
++ (( g = 0 ))
++ (( g < NGPU ))
++ INSTANCES+='{ count: 1 kind: KIND_GPU gpus: [ 0 ] },'
++ (( g++ ))
++ (( g < NGPU ))
++ INSTANCES+='{ count: 1 kind: KIND_GPU gpus: [ 1 ] },'
++ (( g++ ))
++ (( g < NGPU ))
++ mkdir -p /home/rv/rv/triton/build
++ for M in 22M 86M
+++ echo 22M
+++ tr M m
++ N=pg2-22m
++ mkdir -p /home/rv/rv/triton/models/pg2-22m/1
++ '[' '!' -s /home/rv/rv/triton/models/pg2-22m/1/model.plan ']'
++ sudo docker run --rm --gpus all -v /home/rv/rv:/rv nvcr.io/nvidia/tritonserver:26.05-py3 trtexec --onnx=/rv/models/pg2-22M.onnx --fp16 --saveEngine=/rv/triton/models/pg2-22m/1/model.plan --minShapes=input_ids:1x16,attention_mask:1x16 --optShapes=input_ids:16x512,attention_mask:16x512 --maxShapes=input_ids:64x512,attention_mask:64x512 --memPoolSize=workspace:4096M --timingCacheFile=/rv/triton/build/pg2-22m.tcache --skipInference
++ cat
++ for M in 22M 86M
+++ echo 86M
+++ tr M m
++ N=pg2-86m
++ mkdir -p /home/rv/rv/triton/models/pg2-86m/1
++ '[' '!' -s /home/rv/rv/triton/models/pg2-86m/1/model.plan ']'
++ sudo docker run --rm --gpus all -v /home/rv/rv:/rv nvcr.io/nvidia/tritonserver:26.05-py3 trtexec --onnx=/rv/models/pg2-86M.onnx --fp16 --saveEngine=/rv/triton/models/pg2-86m/1/model.plan --minShapes=input_ids:1x16,attention_mask:1x16 --optShapes=input_ids:16x512,attention_mask:16x512 --maxShapes=input_ids:64x512,attention_mask:64x512 --memPoolSize=workspace:4096M --timingCacheFile=/rv/triton/build/pg2-86m.tcache --skipInference
++ cat
++ sudo chown -R rv /home/rv/rv/triton
++ sha256sum /home/rv/rv/triton/models/pg2-22m/1/model.plan /home/rv/rv/triton/models/pg2-86m/1/model.plan
+00e89a66855082070a1880acf3b8872da1839b63c39db44a19a1a0d2ac8c6db7  /home/rv/rv/triton/models/pg2-22m/1/model.plan
+57a6b28fc4b3fd194fdf0147acf2531ebd174cfd8e4e45c73756d072f238c5bc  /home/rv/rv/triton/models/pg2-86m/1/model.plan
++ echo TRITON_BUILD_DONE
+TRITON_BUILD_DONE
++ /home/rv/rv/venv/bin/python -c 'import onnxruntime as o, tokenizers, hyperscan, tritonclient.grpc.aio; print('\''ort'\'', o.__version__, o.get_available_providers())'
+ort 1.30.0 ['TensorrtExecutionProvider', 'CUDAExecutionProvider', 'CPUExecutionProvider']
++ nvidia-smi -L
+GPU 0: NVIDIA L4 (UUID: GPU-e0e409f0-59e2-77ee-2dc5-26aec233b63a)
+GPU 1: NVIDIA L4 (UUID: GPU-c582c877-6cbe-c8d7-c7d0-ed3878d3e3ce)
++ echo UNIT_SETUP_DONE
+UNIT_SETUP_DONE

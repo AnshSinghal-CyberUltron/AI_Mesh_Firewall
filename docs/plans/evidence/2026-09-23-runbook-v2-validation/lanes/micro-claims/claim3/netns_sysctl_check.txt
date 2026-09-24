@@ -1,0 +1,4 @@
+host: 1024 65535 tw_reuse=1
+bridge-container: 32768 60999 tw_reuse=2
+restored host: 32768 60999 tw_reuse=2
+7.0.0-1011-gcp

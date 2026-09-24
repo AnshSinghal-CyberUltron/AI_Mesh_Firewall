@@ -1,0 +1,9 @@
+before load: is_loaded = False
+after load : is_loaded = True | cached orgs = ['org-a']
+get_policies('org-b') = []
+_policy_check_cached(org=org-a) -> HTTP 200 action='block' matched=['no-exfil']
+_policy_check_cached(org=org-b) -> HTTP 200 action='allow' matched=[]
+_org_has_enabled_pipeline_policies(org-a) = True
+_org_has_enabled_pipeline_policies(org-b) = False
+control: fresh PolicySync (no load) is_loaded = False
+control: _policy_check_cached(org-b) with nothing loaded -> HTTP 503 action='block'

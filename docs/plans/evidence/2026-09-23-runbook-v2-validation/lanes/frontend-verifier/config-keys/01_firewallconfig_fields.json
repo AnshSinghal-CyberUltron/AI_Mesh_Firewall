@@ -1,0 +1,4104 @@
+{
+ "model_fields": [
+  [
+   "organization",
+   "ForeignKey",
+   909
+  ],
+  [
+   "firewall_enabled",
+   "BooleanField",
+   919
+  ],
+  [
+   "enforcement_mode",
+   "CharField",
+   923
+  ],
+  [
+   "log_level",
+   "CharField",
+   929
+  ],
+  [
+   "rate_limit_enabled",
+   "BooleanField",
+   937
+  ],
+  [
+   "requests_per_minute",
+   "PositiveIntegerField",
+   941
+  ],
+  [
+   "burst_limit",
+   "PositiveIntegerField",
+   946
+  ],
+  [
+   "org_tpm_limit",
+   "PositiveIntegerField",
+   956
+  ],
+  [
+   "content_filtering_enabled",
+   "BooleanField",
+   962
+  ],
+  [
+   "pii_detection_enabled",
+   "BooleanField",
+   966
+  ],
+  [
+   "toxicity_threshold",
+   "FloatField",
+   970
+  ],
+  [
+   "blocked_keywords",
+   "TextField",
+   975
+  ],
+  [
+   "model_isolation_enabled",
+   "BooleanField",
+   982
+  ],
+  [
+   "allowed_models",
+   "TextField",
+   986
+  ],
+  [
+   "default_model",
+   "CharField",
+   991
+  ],
+  [
+   "jailbreak_detection_enabled",
+   "BooleanField",
+   999
+  ],
+  [
+   "semantic_analysis_enabled",
+   "BooleanField",
+   1003
+  ],
+  [
+   "tier2_fail_closed_enabled",
+   "BooleanField",
+   1007
+  ],
+  [
+   "tier2_execution_mode",
+   "CharField",
+   1011
+  ],
+  [
+   "tier2_stream_hold_enabled",
+   "BooleanField",
+   1020
+  ],
+  [
+   "tier2_stream_hold_timeout_ms",
+   "PositiveIntegerField",
+   1024
+  ],
+  [
+   "tier2_enabled",
+   "BooleanField",
+   1036
+  ],
+  [
+   "mcp_tier2_enabled",
+   "BooleanField",
+   1046
+  ],
+  [
+   "mcp_ext_scan_action",
+   "CharField",
+   1060
+  ],
+  [
+   "tier2_strict",
+   "BooleanField",
+   1082
+  ],
+  [
+   "mcp_policy_only_enforcement",
+   "BooleanField",
+   1099
+  ],
+  [
+   "prompt_injection_threshold",
+   "FloatField",
+   1107
+  ],
+  [
+   "response_filtering_enabled",
+   "BooleanField",
+   1114
+  ],
+  [
+   "factuality_check_enabled",
+   "BooleanField",
+   1118
+  ],
+  [
+   "hallucination_grounding_mode",
+   "CharField",
+   1127
+  ],
+  [
+   "hallucination_grounding_threshold",
+   "FloatField",
+   1140
+  ],
+  [
+   "hallucination_grounding_model",
+   "CharField",
+   1148
+  ],
+  [
+   "output_pii_enabled",
+   "BooleanField",
+   1166
+  ],
+  [
+   "output_pii_action",
+   "CharField",
+   1170
+  ],
+  [
+   "output_credential_enabled",
+   "BooleanField",
+   1176
+  ],
+  [
+   "output_credential_action",
+   "CharField",
+   1180
+  ],
+  [
+   "output_ip_leakage_enabled",
+   "BooleanField",
+   1186
+  ],
+  [
+   "output_ip_leakage_action",
+   "CharField",
+   1190
+  ],
+  [
+   "output_policy_enabled",
+   "BooleanField",
+   1196
+  ],
+  [
+   "output_policy_action",
+   "CharField",
+   1200
+  ],
+  [
+   "output_hallucination_action",
+   "CharField",
+   1206
+  ],
+  [
+   "output_incident_logging_enabled",
+   "BooleanField",
+   1215
+  ],
+  [
+   "max_response_tokens",
+   "PositiveIntegerField",
+   1220
+  ],
+  [
+   "rag_enabled",
+   "BooleanField",
+   1227
+  ],
+  [
+   "vector_db_isolation",
+   "BooleanField",
+   1231
+  ],
+  [
+   "rag_max_documents",
+   "PositiveIntegerField",
+   1235
+  ],
+  [
+   "rag_relevance_threshold",
+   "FloatField",
+   1240
+  ],
+  [
+   "rag_redaction_enabled",
+   "BooleanField",
+   1245
+  ],
+  [
+   "rag_tier2_enabled",
+   "BooleanField",
+   1253
+  ],
+  [
+   "threat_intel_enabled",
+   "BooleanField",
+   1262
+  ],
+  [
+   "auto_block_threats",
+   "BooleanField",
+   1266
+  ],
+  [
+   "threat_score_threshold",
+   "PositiveIntegerField",
+   1270
+  ],
+  [
+   "audit_logging_enabled",
+   "BooleanField",
+   1277
+  ],
+  [
+   "retention_days",
+   "PositiveIntegerField",
+   1281
+  ],
+  [
+   "compliance_frameworks",
+   "JSONField",
+   1286
+  ],
+  [
+   "routing_risk_weight",
+   "FloatField",
+   1293
+  ],
+  [
+   "routing_cost_weight",
+   "FloatField",
+   1298
+  ],
+  [
+   "routing_latency_weight",
+   "FloatField",
+   1303
+  ],
+  [
+   "routing_priority_weight",
+   "FloatField",
+   1308
+  ],
+  [
+   "default_data_sensitivity",
+   "CharField",
+   1313
+  ],
+  [
+   "routing_enabled",
+   "BooleanField",
+   1332
+  ],
+  [
+   "updated_at",
+   "DateTimeField",
+   1342
+  ],
+  [
+   "updated_by",
+   "ForeignKey",
+   1343
+  ]
+ ],
+ "serializer_fields": [
+  "organization",
+  "firewall_enabled",
+  "enforcement_mode",
+  "log_level",
+  "rate_limit_enabled",
+  "requests_per_minute",
+  "burst_limit",
+  "org_tpm_limit",
+  "content_filtering_enabled",
+  "pii_detection_enabled",
+  "toxicity_threshold",
+  "blocked_keywords",
+  "model_isolation_enabled",
+  "allowed_models",
+  "default_model",
+  "jailbreak_detection_enabled",
+  "semantic_analysis_enabled",
+  "tier2_fail_closed_enabled",
+  "tier2_execution_mode",
+  "tier2_stream_hold_enabled",
+  "tier2_stream_hold_timeout_ms",
+  "tier2_enabled",
+  "mcp_tier2_enabled",
+  "mcp_ext_scan_action",
+  "tier2_strict",
+  "mcp_policy_only_enforcement",
+  "prompt_injection_threshold",
+  "response_filtering_enabled",
+  "factuality_check_enabled",
+  "hallucination_grounding_mode",
+  "hallucination_grounding_threshold",
+  "hallucination_grounding_model",
+  "output_pii_enabled",
+  "output_pii_action",
+  "output_credential_enabled",
+  "output_credential_action",
+  "output_ip_leakage_enabled",
+  "output_ip_leakage_action",
+  "output_policy_enabled",
+  "output_policy_action",
+  "output_hallucination_action",
+  "output_incident_logging_enabled",
+  "max_response_tokens",
+  "rag_enabled",
+  "vector_db_isolation",
+  "rag_max_documents",
+  "rag_relevance_threshold",
+  "rag_redaction_enabled",
+  "rag_tier2_enabled",
+  "threat_intel_enabled",
+  "auto_block_threats",
+  "threat_score_threshold",
+  "audit_logging_enabled",
+  "retention_days",
+  "compliance_frameworks",
+  "routing_risk_weight",
+  "routing_cost_weight",
+  "routing_latency_weight",
+  "routing_priority_weight",
+  "default_data_sensitivity",
+  "routing_enabled",
+  "updated_at",
+  "connected_models",
+  "allowed_models_list",
+  "governance_stale_models"
+ ],
+ "payload_map": {
+  "firewall_enabled": [
+   [
+    "firewall_enabled"
+   ],
+   1388
+  ],
+  "enforcement_mode": [
+   [
+    "enforcement_mode"
+   ],
+   1389
+  ],
+  "pii_detection_enabled": [
+   [
+    "pii_detection_enabled"
+   ],
+   1393
+  ],
+  "log_level": [
+   [
+    "log_level"
+   ],
+   1394
+  ],
+  "rate_limit_enabled": [
+   [
+    "rate_limit_enabled"
+   ],
+   1395
+  ],
+  "requests_per_minute": [
+   [
+    "requests_per_minute"
+   ],
+   1396
+  ],
+  "burst_limit": [
+   [
+    "burst_limit"
+   ],
+   1397
+  ],
+  "org_tpm_limit": [
+   [
+    "org_tpm_limit"
+   ],
+   1398
+  ],
+  "toxicity_threshold": [
+   [
+    "toxicity_threshold"
+   ],
+   1414
+  ],
+  "blocked_keywords": [
+   [
+    "blocked_keywords"
+   ],
+   1415
+  ],
+  "model_isolation_enabled": [
+   [
+    "model_isolation_enabled"
+   ],
+   1416
+  ],
+  "allowed_models": [
+   [
+    "allowed_models"
+   ],
+   1417
+  ],
+  "litellm_default_model": [
+   [
+    "default_model"
+   ],
+   1418
+  ],
+  "deep_scan_enabled": [
+   [
+    "semantic_analysis_enabled"
+   ],
+   1421
+  ],
+  "tier2_fail_closed_enabled": [
+   [
+    "tier2_fail_closed_enabled"
+   ],
+   1422
+  ],
+  "tier2_execution_mode": [
+   [
+    "tier2_execution_mode"
+   ],
+   1423
+  ],
+  "tier2_stream_hold_enabled": [
+   [
+    "tier2_stream_hold_enabled"
+   ],
+   1424
+  ],
+  "tier2_stream_hold_timeout_ms": [
+   [
+    "tier2_stream_hold_timeout_ms"
+   ],
+   1425
+  ],
+  "tier2_enabled": [
+   [
+    "tier2_enabled"
+   ],
+   1429
+  ],
+  "mcp_tier2_enabled": [
+   [
+    "mcp_tier2_enabled"
+   ],
+   1430
+  ],
+  "mcp_ext_scan_action": [
+   [
+    "mcp_ext_scan_action"
+   ],
+   1431
+  ],
+  "tier2_strict": [
+   [
+    "tier2_strict"
+   ],
+   1432
+  ],
+  "mcp_policy_only_enforcement": [
+   [
+    "mcp_policy_only_enforcement"
+   ],
+   1435
+  ],
+  "prompt_injection_threshold": [
+   [
+    "prompt_injection_threshold"
+   ],
+   1436
+  ],
+  "hallucination_flag_enabled": [
+   [
+    "factuality_check_enabled"
+   ],
+   1440
+  ],
+  "hallucination_grounding_mode": [
+   [
+    "hallucination_grounding_mode"
+   ],
+   1442
+  ],
+  "hallucination_grounding_threshold": [
+   [
+    "hallucination_grounding_threshold"
+   ],
+   1443
+  ],
+  "hallucination_grounding_model": [
+   [
+    "hallucination_grounding_model"
+   ],
+   1444
+  ],
+  "output_pii_enabled": [
+   [
+    "output_pii_enabled"
+   ],
+   1446
+  ],
+  "output_pii_action": [
+   [
+    "output_pii_action"
+   ],
+   1447
+  ],
+  "output_credential_enabled": [
+   [
+    "output_credential_enabled"
+   ],
+   1448
+  ],
+  "output_credential_action": [
+   [
+    "output_credential_action"
+   ],
+   1449
+  ],
+  "output_ip_leakage_enabled": [
+   [
+    "output_ip_leakage_enabled"
+   ],
+   1450
+  ],
+  "output_ip_leakage_action": [
+   [
+    "output_ip_leakage_action"
+   ],
+   1451
+  ],
+  "output_policy_enabled": [
+   [
+    "output_policy_enabled"
+   ],
+   1452
+  ],
+  "output_policy_action": [
+   [
+    "output_policy_action"
+   ],
+   1453
+  ],
+  "output_hallucination_action": [
+   [
+    "output_hallucination_action"
+   ],
+   1454
+  ],
+  "output_incident_logging_enabled": [
+   [
+    "output_incident_logging_enabled"
+   ],
+   1455
+  ],
+  "max_response_tokens": [
+   [
+    "max_response_tokens"
+   ],
+   1456
+  ],
+  "rag_enabled": [
+   [
+    "rag_enabled"
+   ],
+   1457
+  ],
+  "vector_db_isolation": [
+   [
+    "vector_db_isolation"
+   ],
+   1458
+  ],
+  "rag_default_max_results": [
+   [
+    "rag_max_documents"
+   ],
+   1459
+  ],
+  "rag_relevance_threshold": [
+   [
+    "rag_relevance_threshold"
+   ],
+   1460
+  ],
+  "rag_redaction_enabled": [
+   [
+    "rag_redaction_enabled"
+   ],
+   1461
+  ],
+  "rag_tier2_enabled": [
+   [
+    "rag_tier2_enabled"
+   ],
+   1462
+  ],
+  "threat_intel_enabled": [
+   [
+    "threat_intel_enabled"
+   ],
+   1463
+  ],
+  "auto_block_threats": [
+   [
+    "auto_block_threats"
+   ],
+   1464
+  ],
+  "threat_score_threshold": [
+   [
+    "threat_score_threshold"
+   ],
+   1465
+  ],
+  "telemetry_enabled": [
+   [
+    "audit_logging_enabled"
+   ],
+   1466
+  ],
+  "retention_days": [
+   [
+    "retention_days"
+   ],
+   1467
+  ],
+  "compliance_frameworks": [
+   [
+    "compliance_frameworks"
+   ],
+   1468
+  ],
+  "routing_risk_weight": [
+   [
+    "routing_risk_weight"
+   ],
+   1469
+  ],
+  "routing_cost_weight": [
+   [
+    "routing_cost_weight"
+   ],
+   1470
+  ],
+  "routing_latency_weight": [
+   [
+    "routing_latency_weight"
+   ],
+   1471
+  ],
+  "routing_priority_weight": [
+   [
+    "routing_priority_weight"
+   ],
+   1472
+  ],
+  "default_data_sensitivity": [
+   [
+    "default_data_sensitivity"
+   ],
+   1473
+  ],
+  "routing_enabled": [
+   [
+    "routing_enabled"
+   ],
+   1474
+  ]
+ },
+ "rows": [
+  {
+   "field": "organization",
+   "literal_hits": 2,
+   "literal_nondecl_hits": 2,
+   "payload_keys": [],
+   "payload_key_hits": {},
+   "payload_key_nondecl_hits": {},
+   "literal_hit_sample": [
+    [
+     "gateway/ai_mesh_gateway/main.py",
+     12495,
+     "\"organization\": org_slug,"
+    ],
+    [
+     "gateway/ai_mesh_gateway/main.py",
+     12522,
+     "\"organization\": getattr(auth_ctx, \"org_slug\", \"\"),"
+    ]
+   ],
+   "payload_hit_sample": {}
+  },
+  {
+   "field": "firewall_enabled",
+   "literal_hits": 12,
+   "literal_nondecl_hits": 10,
+   "payload_keys": [
+    "firewall_enabled"
+   ],
+   "payload_key_hits": {
+    "firewall_enabled": 12
+   },
+   "payload_key_nondecl_hits": {
+    "firewall_enabled": 10
+   },
+   "literal_hit_sample": [
+    [
+     "gateway/ai_mesh_gateway/config_sync.py",
+     47,
+     "# (e.g. ``\"firewall_enabled\": \"false\"`` \u2014 a truthy string \u2014 silently"
+    ],
+    [
+     "gateway/ai_mesh_gateway/config_sync.py",
+     61,
+     "\"firewall_enabled\", \"rate_limit_enabled\","
+    ],
+    [
+     "gateway/ai_mesh_gateway/config_sync.py",
+     352,
+     "self._config.get(\"firewall_enabled\", \"N/A\"),"
+    ],
+    [
+     "gateway/ai_mesh_gateway/config_sync.py",
+     576,
+     "self._config.get(\"firewall_enabled\"),"
+    ],
+    [
+     "gateway/ai_mesh_gateway/config_sync.py",
+     695,
+     "data.get(\"firewall_enabled\"),"
+    ],
+    [
+     "gateway/ai_mesh_gateway/main.py",
+     7737,
+     "and org_config.get(\"firewall_enabled\") is not False"
+    ]
+   ],
+   "payload_hit_sample": {
+    "firewall_enabled": [
+     [
+      "gateway/ai_mesh_gateway/config_sync.py",
+      47,
+      "# (e.g. ``\"firewall_enabled\": \"false\"`` \u2014 a truthy string \u2014 silently"
+     ],
+     [
+      "gateway/ai_mesh_gateway/config_sync.py",
+      61,
+      "\"firewall_enabled\", \"rate_limit_enabled\","
+     ],
+     [
+      "gateway/ai_mesh_gateway/config_sync.py",
+      352,
+      "self._config.get(\"firewall_enabled\", \"N/A\"),"
+     ],
+     [
+      "gateway/ai_mesh_gateway/config_sync.py",
+      576,
+      "self._config.get(\"firewall_enabled\"),"
+     ],
+     [
+      "gateway/ai_mesh_gateway/config_sync.py",
+      695,
+      "data.get(\"firewall_enabled\"),"
+     ],
+     [
+      "gateway/ai_mesh_gateway/main.py",
+      7737,
+      "and org_config.get(\"firewall_enabled\") is not False"
+     ]
+    ]
+   }
+  },
+  {
+   "field": "enforcement_mode",
+   "literal_hits": 15,
+   "literal_nondecl_hits": 14,
+   "payload_keys": [
+    "enforcement_mode"
+   ],
+   "payload_key_hits": {
+    "enforcement_mode": 15
+   },
+   "payload_key_nondecl_hits": {
+    "enforcement_mode": 14
+   },
+   "literal_hit_sample": [
+    [
+     "gateway/ai_mesh_gateway/config_sync.py",
+     91,
+     "\"enforcement_mode\", \"log_level\", \"tier2_execution_mode\","
+    ],
+    [
+     "gateway/ai_mesh_gateway/config_sync.py",
+     353,
+     "self._config.get(\"enforcement_mode\", \"N/A\"),"
+    ],
+    [
+     "gateway/ai_mesh_gateway/config_sync.py",
+     577,
+     "self._config.get(\"enforcement_mode\"),"
+    ],
+    [
+     "gateway/ai_mesh_gateway/config_sync.py",
+     696,
+     "data.get(\"enforcement_mode\"),"
+    ],
+    [
+     "gateway/ai_mesh_gateway/main.py",
+     2639,
+     "_enforcement_mode = org_config.get(\"enforcement_mode\", \"block\")"
+    ],
+    [
+     "gateway/ai_mesh_gateway/main.py",
+     3027,
+     "scan_verdict, org_config.get(\"enforcement_mode\", \"block\"),"
+    ]
+   ],
+   "payload_hit_sample": {
+    "enforcement_mode": [
+     [
+      "gateway/ai_mesh_gateway/config_sync.py",
+      91,
+      "\"enforcement_mode\", \"log_level\", \"tier2_execution_mode\","
+     ],
+     [
+      "gateway/ai_mesh_gateway/config_sync.py",
+      353,
+      "self._config.get(\"enforcement_mode\", \"N/A\"),"
+     ],
+     [
+      "gateway/ai_mesh_gateway/config_sync.py",
+      577,
+      "self._config.get(\"enforcement_mode\"),"
+     ],
+     [
+      "gateway/ai_mesh_gateway/config_sync.py",
+      696,
+      "data.get(\"enforcement_mode\"),"
+     ],
+     [
+      "gateway/ai_mesh_gateway/main.py",
+      2639,
+      "_enforcement_mode = org_config.get(\"enforcement_mode\", \"block\")"
+     ],
+     [
+      "gateway/ai_mesh_gateway/main.py",
+      3027,
+      "scan_verdict, org_config.get(\"enforcement_mode\", \"block\"),"
+     ]
+    ]
+   }
+  },
+  {
+   "field": "log_level",
+   "literal_hits": 2,
+   "literal_nondecl_hits": 1,
+   "payload_keys": [
+    "log_level"
+   ],
+   "payload_key_hits": {
+    "log_level": 2
+   },
+   "payload_key_nondecl_hits": {
+    "log_level": 1
+   },
+   "literal_hit_sample": [
+    [
+     "gateway/ai_mesh_gateway/config_sync.py",
+     91,
+     "\"enforcement_mode\", \"log_level\", \"tier2_execution_mode\","
+    ],
+    [
+     "gateway/ai_mesh_gateway/config_sync.py",
+     558,
+     "log_level_name = data.get(\"log_level\")"
+    ]
+   ],
+   "payload_hit_sample": {
+    "log_level": [
+     [
+      "gateway/ai_mesh_gateway/config_sync.py",
+      91,
+      "\"enforcement_mode\", \"log_level\", \"tier2_execution_mode\","
+     ],
+     [
+      "gateway/ai_mesh_gateway/config_sync.py",
+      558,
+      "log_level_name = data.get(\"log_level\")"
+     ]
+    ]
+   }
+  },
+  {
+   "field": "rate_limit_enabled",
+   "literal_hits": 4,
+   "literal_nondecl_hits": 3,
+   "payload_keys": [
+    "rate_limit_enabled"
+   ],
+   "payload_key_hits": {
+    "rate_limit_enabled": 4
+   },
+   "payload_key_nondecl_hits": {
+    "rate_limit_enabled": 3
+   },
+   "literal_hit_sample": [
+    [
+     "gateway/ai_mesh_gateway/config_sync.py",
+     61,
+     "\"firewall_enabled\", \"rate_limit_enabled\","
+    ],
+    [
+     "gateway/ai_mesh_gateway/config_sync.py",
+     578,
+     "self._config.get(\"rate_limit_enabled\"),"
+    ],
+    [
+     "gateway/ai_mesh_gateway/main.py",
+     8341,
+     "and org_config.get(\"rate_limit_enabled\", CONFIG.get(\"rate_limit_enabled\", True))"
+    ],
+    [
+     "gateway/ai_mesh_gateway/rate_limit_enforcement.py",
+     165,
+     "\"rate_limit_enabled\", gateway_config.get(\"rate_limit_enabled\", True)"
+    ]
+   ],
+   "payload_hit_sample": {
+    "rate_limit_enabled": [
+     [
+      "gateway/ai_mesh_gateway/config_sync.py",
+      61,
+      "\"firewall_enabled\", \"rate_limit_enabled\","
+     ],
+     [
+      "gateway/ai_mesh_gateway/config_sync.py",
+      578,
+      "self._config.get(\"rate_limit_enabled\"),"
+     ],
+     [
+      "gateway/ai_mesh_gateway/main.py",
+      8341,
+      "and org_config.get(\"rate_limit_enabled\", CONFIG.get(\"rate_limit_enabled\", True))"
+     ],
+     [
+      "gateway/ai_mesh_gateway/rate_limit_enforcement.py",
+      165,
+      "\"rate_limit_enabled\", gateway_config.get(\"rate_limit_enabled\", True)"
+     ]
+    ]
+   }
+  },
+  {
+   "field": "requests_per_minute",
+   "literal_hits": 3,
+   "literal_nondecl_hits": 2,
+   "payload_keys": [
+    "requests_per_minute"
+   ],
+   "payload_key_hits": {
+    "requests_per_minute": 3
+   },
+   "payload_key_nondecl_hits": {
+    "requests_per_minute": 2
+   },
+   "literal_hit_sample": [
+    [
+     "gateway/ai_mesh_gateway/config_sync.py",
+     75,
+     "\"requests_per_minute\", \"burst_limit\", \"toxicity_threshold\","
+    ],
+    [
+     "gateway/ai_mesh_gateway/main.py",
+     8397,
+     "rpm_limit = org_config.get(\"requests_per_minute\", CONFIG.get(\"requests_per_minute\", 1000))"
+    ],
+    [
+     "gateway/ai_mesh_gateway/rate_limit_enforcement.py",
+     240,
+     "org_config.get(\"requests_per_minute\", gateway_config.get(\"requests_per_minute\", 1000))"
+    ]
+   ],
+   "payload_hit_sample": {
+    "requests_per_minute": [
+     [
+      "gateway/ai_mesh_gateway/config_sync.py",
+      75,
+      "\"requests_per_minute\", \"burst_limit\", \"toxicity_threshold\","
+     ],
+     [
+      "gateway/ai_mesh_gateway/main.py",
+      8397,
+      "rpm_limit = org_config.get(\"requests_per_minute\", CONFIG.get(\"requests_per_minute\", 1000))"
+     ],
+     [
+      "gateway/ai_mesh_gateway/rate_limit_enforcement.py",
+      240,
+      "org_config.get(\"requests_per_minute\", gateway_config.get(\"requests_per_minute\", 1000))"
+     ]
+    ]
+   }
+  },
+  {
+   "field": "burst_limit",
+   "literal_hits": 3,
+   "literal_nondecl_hits": 2,
+   "payload_keys": [
+    "burst_limit"
+   ],
+   "payload_key_hits": {
+    "burst_limit": 3
+   },
+   "payload_key_nondecl_hits": {
+    "burst_limit": 2
+   },
+   "literal_hit_sample": [
+    [
+     "gateway/ai_mesh_gateway/config_sync.py",
+     75,
+     "\"requests_per_minute\", \"burst_limit\", \"toxicity_threshold\","
+    ],
+    [
+     "gateway/ai_mesh_gateway/main.py",
+     8350,
+     "burst_limit = org_config.get(\"burst_limit\", CONFIG.get(\"burst_limit\", 150))"
+    ],
+    [
+     "gateway/ai_mesh_gateway/rate_limit_enforcement.py",
+     183,
+     "org_config.get(\"burst_limit\", gateway_config.get(\"burst_limit\", 150))"
+    ]
+   ],
+   "payload_hit_sample": {
+    "burst_limit": [
+     [
+      "gateway/ai_mesh_gateway/config_sync.py",
+      75,
+      "\"requests_per_minute\", \"burst_limit\", \"toxicity_threshold\","
+     ],
+     [
+      "gateway/ai_mesh_gateway/main.py",
+      8350,
+      "burst_limit = org_config.get(\"burst_limit\", CONFIG.get(\"burst_limit\", 150))"
+     ],
+     [
+      "gateway/ai_mesh_gateway/rate_limit_enforcement.py",
+      183,
+      "org_config.get(\"burst_limit\", gateway_config.get(\"burst_limit\", 150))"
+     ]
+    ]
+   }
+  },
+  {
+   "field": "org_tpm_limit",
+   "literal_hits": 7,
+   "literal_nondecl_hits": 7,
+   "payload_keys": [
+    "org_tpm_limit"
+   ],
+   "payload_key_hits": {
+    "org_tpm_limit": 7
+   },
+   "payload_key_nondecl_hits": {
+    "org_tpm_limit": 7
+   },
+   "literal_hit_sample": [
+    [
+     "gateway/ai_mesh_gateway/main.py",
+     8475,
+     "org_tpm_limit = int(org_cfg.get(\"org_tpm_limit\", 0) or 0)"
+    ],
+    [
+     "gateway/ai_mesh_gateway/main.py",
+     8748,
+     "org_tpm_limit=int(org_config.get(\"org_tpm_limit\", 0) or 0),"
+    ],
+    [
+     "gateway/ai_mesh_gateway/main.py",
+     9767,
+     "org_tpm_limit=int(org_config.get(\"org_tpm_limit\", 0) or 0),"
+    ],
+    [
+     "gateway/ai_mesh_gateway/main.py",
+     10695,
+     "org_tpm_limit=int(org_config.get(\"org_tpm_limit\", 0) or 0),"
+    ],
+    [
+     "gateway/ai_mesh_gateway/main.py",
+     11623,
+     "_org_tpm = int(org_config.get(\"org_tpm_limit\", 0) or 0)"
+    ],
+    [
+     "gateway/ai_mesh_gateway/main.py",
+     16701,
+     "org_tpm = int(org_cfg.get(\"org_tpm_limit\", 0) or 0)"
+    ]
+   ],
+   "payload_hit_sample": {
+    "org_tpm_limit": [
+     [
+      "gateway/ai_mesh_gateway/main.py",
+      8475,
+      "org_tpm_limit = int(org_cfg.get(\"org_tpm_limit\", 0) or 0)"
+     ],
+     [
+      "gateway/ai_mesh_gateway/main.py",
+      8748,
+      "org_tpm_limit=int(org_config.get(\"org_tpm_limit\", 0) or 0),"
+     ],
+     [
+      "gateway/ai_mesh_gateway/main.py",
+      9767,
+      "org_tpm_limit=int(org_config.get(\"org_tpm_limit\", 0) or 0),"
+     ],
+     [
+      "gateway/ai_mesh_gateway/main.py",
+      10695,
+      "org_tpm_limit=int(org_config.get(\"org_tpm_limit\", 0) or 0),"
+     ],
+     [
+      "gateway/ai_mesh_gateway/main.py",
+      11623,
+      "_org_tpm = int(org_config.get(\"org_tpm_limit\", 0) or 0)"
+     ],
+     [
+      "gateway/ai_mesh_gateway/main.py",
+      16701,
+      "org_tpm = int(org_cfg.get(\"org_tpm_limit\", 0) or 0)"
+     ]
+    ]
+   }
+  },
+  {
+   "field": "content_filtering_enabled",
+   "literal_hits": 0,
+   "literal_nondecl_hits": 0,
+   "payload_keys": [],
+   "payload_key_hits": {},
+   "payload_key_nondecl_hits": {},
+   "literal_hit_sample": [],
+   "payload_hit_sample": {}
+  },
+  {
+   "field": "pii_detection_enabled",
+   "literal_hits": 7,
+   "literal_nondecl_hits": 6,
+   "payload_keys": [
+    "pii_detection_enabled"
+   ],
+   "payload_key_hits": {
+    "pii_detection_enabled": 7
+   },
+   "payload_key_nondecl_hits": {
+    "pii_detection_enabled": 6
+   },
+   "literal_hit_sample": [
+    [
+     "gateway/ai_mesh_gateway/config_sync.py",
+     67,
+     "\"pii_detection_enabled\","
+    ],
+    [
+     "gateway/ai_mesh_gateway/main.py",
+     960,
+     "if not isinstance(org_config, dict) or \"pii_detection_enabled\" not in org_config:"
+    ],
+    [
+     "gateway/ai_mesh_gateway/main.py",
+     962,
+     "raw = org_config.get(\"pii_detection_enabled\")"
+    ],
+    [
+     "gateway/ai_mesh_gateway/main.py",
+     2641,
+     "\"pii_detection_enabled\","
+    ],
+    [
+     "gateway/ai_mesh_gateway/main.py",
+     2642,
+     "CONFIG.get(\"pii_detection_enabled\", True),"
+    ],
+    [
+     "gateway/ai_mesh_gateway/main.py",
+     10898,
+     "\"pii_detection_enabled\","
+    ]
+   ],
+   "payload_hit_sample": {
+    "pii_detection_enabled": [
+     [
+      "gateway/ai_mesh_gateway/config_sync.py",
+      67,
+      "\"pii_detection_enabled\","
+     ],
+     [
+      "gateway/ai_mesh_gateway/main.py",
+      960,
+      "if not isinstance(org_config, dict) or \"pii_detection_enabled\" not in org_config:"
+     ],
+     [
+      "gateway/ai_mesh_gateway/main.py",
+      962,
+      "raw = org_config.get(\"pii_detection_enabled\")"
+     ],
+     [
+      "gateway/ai_mesh_gateway/main.py",
+      2641,
+      "\"pii_detection_enabled\","
+     ],
+     [
+      "gateway/ai_mesh_gateway/main.py",
+      2642,
+      "CONFIG.get(\"pii_detection_enabled\", True),"
+     ],
+     [
+      "gateway/ai_mesh_gateway/main.py",
+      10898,
+      "\"pii_detection_enabled\","
+     ]
+    ]
+   }
+  },
+  {
+   "field": "toxicity_threshold",
+   "literal_hits": 3,
+   "literal_nondecl_hits": 2,
+   "payload_keys": [
+    "toxicity_threshold"
+   ],
+   "payload_key_hits": {
+    "toxicity_threshold": 3
+   },
+   "payload_key_nondecl_hits": {
+    "toxicity_threshold": 2
+   },
+   "literal_hit_sample": [
+    [
+     "gateway/ai_mesh_gateway/config_sync.py",
+     75,
+     "\"requests_per_minute\", \"burst_limit\", \"toxicity_threshold\","
+    ],
+    [
+     "gateway/ai_mesh_gateway/main.py",
+     9121,
+     "org_toxicity_threshold = org_config.get(\"toxicity_threshold\")"
+    ],
+    [
+     "gateway/ai_mesh_gateway/scanner.py",
+     1914,
+     "else self._config.get(\"toxicity_threshold\", 0.70)"
+    ]
+   ],
+   "payload_hit_sample": {
+    "toxicity_threshold": [
+     [
+      "gateway/ai_mesh_gateway/config_sync.py",
+      75,
+      "\"requests_per_minute\", \"burst_limit\", \"toxicity_threshold\","
+     ],
+     [
+      "gateway/ai_mesh_gateway/main.py",
+      9121,
+      "org_toxicity_threshold = org_config.get(\"toxicity_threshold\")"
+     ],
+     [
+      "gateway/ai_mesh_gateway/scanner.py",
+      1914,
+      "else self._config.get(\"toxicity_threshold\", 0.70)"
+     ]
+    ]
+   }
+  },
+  {
+   "field": "blocked_keywords",
+   "literal_hits": 5,
+   "literal_nondecl_hits": 4,
+   "payload_keys": [
+    "blocked_keywords"
+   ],
+   "payload_key_hits": {
+    "blocked_keywords": 5
+   },
+   "payload_key_nondecl_hits": {
+    "blocked_keywords": 4
+   },
+   "literal_hit_sample": [
+    [
+     "gateway/ai_mesh_gateway/config_sync.py",
+     98,
+     "_LIST_KEYS = (\"blocked_keywords\", \"allowed_models\", \"compliance_frameworks\")"
+    ],
+    [
+     "gateway/ai_mesh_gateway/main.py",
+     2020,
+     "kws = (CONFIG_SYNC.get_config(org_slug) or {}).get(\"blocked_keywords\") or []"
+    ],
+    [
+     "gateway/ai_mesh_gateway/main.py",
+     8636,
+     "custom_blocked = org_config.get(\"blocked_keywords\", [])"
+    ],
+    [
+     "gateway/ai_mesh_gateway/main.py",
+     12868,
+     "_emb_blocked = org_config.get(\"blocked_keywords\", [])"
+    ],
+    [
+     "gateway/ai_mesh_gateway/main.py",
+     14145,
+     "policy.get(\"blocked_keywords\"),"
+    ]
+   ],
+   "payload_hit_sample": {
+    "blocked_keywords": [
+     [
+      "gateway/ai_mesh_gateway/config_sync.py",
+      98,
+      "_LIST_KEYS = (\"blocked_keywords\", \"allowed_models\", \"compliance_frameworks\")"
+     ],
+     [
+      "gateway/ai_mesh_gateway/main.py",
+      2020,
+      "kws = (CONFIG_SYNC.get_config(org_slug) or {}).get(\"blocked_keywords\") or []"
+     ],
+     [
+      "gateway/ai_mesh_gateway/main.py",
+      8636,
+      "custom_blocked = org_config.get(\"blocked_keywords\", [])"
+     ],
+     [
+      "gateway/ai_mesh_gateway/main.py",
+      12868,
+      "_emb_blocked = org_config.get(\"blocked_keywords\", [])"
+     ],
+     [
+      "gateway/ai_mesh_gateway/main.py",
+      14145,
+      "policy.get(\"blocked_keywords\"),"
+     ]
+    ]
+   }
+  },
+  {
+   "field": "model_isolation_enabled",
+   "literal_hits": 3,
+   "literal_nondecl_hits": 2,
+   "payload_keys": [
+    "model_isolation_enabled"
+   ],
+   "payload_key_hits": {
+    "model_isolation_enabled": 3
+   },
+   "payload_key_nondecl_hits": {
+    "model_isolation_enabled": 2
+   },
+   "literal_hit_sample": [
+    [
+     "gateway/ai_mesh_gateway/config_sync.py",
+     65,
+     "\"model_isolation_enabled\", \"routing_enabled\","
+    ],
+    [
+     "gateway/ai_mesh_gateway/main.py",
+     7889,
+     "if not firewall_disabled and org_config.get(\"model_isolation_enabled\", False):"
+    ],
+    [
+     "gateway/ai_mesh_gateway/main.py",
+     10442,
+     "if not firewall_disabled and org_config.get(\"model_isolation_enabled\", False):"
+    ]
+   ],
+   "payload_hit_sample": {
+    "model_isolation_enabled": [
+     [
+      "gateway/ai_mesh_gateway/config_sync.py",
+      65,
+      "\"model_isolation_enabled\", \"routing_enabled\","
+     ],
+     [
+      "gateway/ai_mesh_gateway/main.py",
+      7889,
+      "if not firewall_disabled and org_config.get(\"model_isolation_enabled\", False):"
+     ],
+     [
+      "gateway/ai_mesh_gateway/main.py",
+      10442,
+      "if not firewall_disabled and org_config.get(\"model_isolation_enabled\", False):"
+     ]
+    ]
+   }
+  },
+  {
+   "field": "allowed_models",
+   "literal_hits": 6,
+   "literal_nondecl_hits": 5,
+   "payload_keys": [
+    "allowed_models"
+   ],
+   "payload_key_hits": {
+    "allowed_models": 6
+   },
+   "payload_key_nondecl_hits": {
+    "allowed_models": 5
+   },
+   "literal_hit_sample": [
+    [
+     "gateway/ai_mesh_gateway/config_sync.py",
+     98,
+     "_LIST_KEYS = (\"blocked_keywords\", \"allowed_models\", \"compliance_frameworks\")"
+    ],
+    [
+     "gateway/ai_mesh_gateway/main.py",
+     7754,
+     "global_allowed_models = _coerce_string_list(org_config.get(\"allowed_models\", []))"
+    ],
+    [
+     "gateway/ai_mesh_gateway/main.py",
+     12527,
+     "\"allowed_models\": getattr(auth_ctx, \"allowed_models\", []),"
+    ],
+    [
+     "gateway/ai_mesh_gateway/main.py",
+     17032,
+     "_key_allowed = list(getattr(auth_ctx, \"allowed_models\", None) or []) if auth_ctx else []"
+    ],
+    [
+     "gateway/ai_mesh_gateway/middleware.py",
+     143,
+     "\"allowed_models\","
+    ],
+    [
+     "gateway/ai_mesh_gateway/middleware.py",
+     163,
+     "self.allowed_models: list = payload.get(\"allowed_models\", [])"
+    ]
+   ],
+   "payload_hit_sample": {
+    "allowed_models": [
+     [
+      "gateway/ai_mesh_gateway/config_sync.py",
+      98,
+      "_LIST_KEYS = (\"blocked_keywords\", \"allowed_models\", \"compliance_frameworks\")"
+     ],
+     [
+      "gateway/ai_mesh_gateway/main.py",
+      7754,
+      "global_allowed_models = _coerce_string_list(org_config.get(\"allowed_models\", []))"
+     ],
+     [
+      "gateway/ai_mesh_gateway/main.py",
+      12527,
+      "\"allowed_models\": getattr(auth_ctx, \"allowed_models\", []),"
+     ],
+     [
+      "gateway/ai_mesh_gateway/main.py",
+      17032,
+      "_key_allowed = list(getattr(auth_ctx, \"allowed_models\", None) or []) if auth_ctx else []"
+     ],
+     [
+      "gateway/ai_mesh_gateway/middleware.py",
+      143,
+      "\"allowed_models\","
+     ],
+     [
+      "gateway/ai_mesh_gateway/middleware.py",
+      163,
+      "self.allowed_models: list = payload.get(\"allowed_models\", [])"
+     ]
+    ]
+   }
+  },
+  {
+   "field": "default_model",
+   "literal_hits": 1,
+   "literal_nondecl_hits": 1,
+   "payload_keys": [
+    "litellm_default_model"
+   ],
+   "payload_key_hits": {
+    "litellm_default_model": 10
+   },
+   "payload_key_nondecl_hits": {
+    "litellm_default_model": 9
+   },
+   "literal_hit_sample": [
+    [
+     "gateway/ai_mesh_gateway/main.py",
+     4615,
+     "(org_config or {}).get(\"default_model\")"
+    ]
+   ],
+   "payload_hit_sample": {
+    "litellm_default_model": [
+     [
+      "gateway/ai_mesh_gateway/config.py",
+      307,
+      "\"litellm_default_model\": litellm_default_model,"
+     ],
+     [
+      "gateway/ai_mesh_gateway/config_sync.py",
+      92,
+      "\"litellm_default_model\", \"default_data_sensitivity\","
+     ],
+     [
+      "gateway/ai_mesh_gateway/llm_router.py",
+      741,
+      "preferred_default = self._normalize_model_alias(self._config.get(\"litellm_default_model\", \"\") or \"\")"
+     ],
+     [
+      "gateway/ai_mesh_gateway/llm_router.py",
+      828,
+      "configured_default = self._normalize_model_alias(self._config.get(\"litellm_default_model\", \"\") or \"\")"
+     ],
+     [
+      "gateway/ai_mesh_gateway/llm_router.py",
+      958,
+      "configured = self._config.get(\"litellm_default_model\", \"\")"
+     ],
+     [
+      "gateway/ai_mesh_gateway/llm_router.py",
+      1978,
+      "elif self._config.get(\"litellm_default_model\"):"
+     ]
+    ]
+   }
+  },
+  {
+   "field": "jailbreak_detection_enabled",
+   "literal_hits": 0,
+   "literal_nondecl_hits": 0,
+   "payload_keys": [],
+   "payload_key_hits": {},
+   "payload_key_nondecl_hits": {},
+   "literal_hit_sample": [],
+   "payload_hit_sample": {}
+  },
+  {
+   "field": "semantic_analysis_enabled",
+   "literal_hits": 0,
+   "literal_nondecl_hits": 0,
+   "payload_keys": [
+    "deep_scan_enabled"
+   ],
+   "payload_key_hits": {
+    "deep_scan_enabled": 3
+   },
+   "payload_key_nondecl_hits": {
+    "deep_scan_enabled": 2
+   },
+   "literal_hit_sample": [],
+   "payload_hit_sample": {
+    "deep_scan_enabled": [
+     [
+      "gateway/ai_mesh_gateway/config.py",
+      305,
+      "\"deep_scan_enabled\": deep_scan_enabled,"
+     ],
+     [
+      "gateway/ai_mesh_gateway/config_sync.py",
+      62,
+      "\"deep_scan_enabled\","
+     ],
+     [
+      "gateway/ai_mesh_gateway/main.py",
+      10501,
+      "if org_config.get(\"deep_scan_enabled\") and AGENT_ID and CONFIG[\"backend_url\"]:"
+     ]
+    ]
+   }
+  },
+  {
+   "field": "tier2_fail_closed_enabled",
+   "literal_hits": 2,
+   "literal_nondecl_hits": 1,
+   "payload_keys": [
+    "tier2_fail_closed_enabled"
+   ],
+   "payload_key_hits": {
+    "tier2_fail_closed_enabled": 2
+   },
+   "payload_key_nondecl_hits": {
+    "tier2_fail_closed_enabled": 1
+   },
+   "literal_hit_sample": [
+    [
+     "gateway/ai_mesh_gateway/config.py",
+     293,
+     "\"tier2_fail_closed_enabled\": tier2_fail_closed_enabled,"
+    ],
+    [
+     "gateway/ai_mesh_gateway/config_sync.py",
+     63,
+     "\"tier2_fail_closed_enabled\", \"tier2_input_fail_closed\", \"tier2_stream_hold_enabled\","
+    ]
+   ],
+   "payload_hit_sample": {
+    "tier2_fail_closed_enabled": [
+     [
+      "gateway/ai_mesh_gateway/config.py",
+      293,
+      "\"tier2_fail_closed_enabled\": tier2_fail_closed_enabled,"
+     ],
+     [
+      "gateway/ai_mesh_gateway/config_sync.py",
+      63,
+      "\"tier2_fail_closed_enabled\", \"tier2_input_fail_closed\", \"tier2_stream_hold_enabled\","
+     ]
+    ]
+   }
+  },
+  {
+   "field": "tier2_execution_mode",
+   "literal_hits": 4,
+   "literal_nondecl_hits": 3,
+   "payload_keys": [
+    "tier2_execution_mode"
+   ],
+   "payload_key_hits": {
+    "tier2_execution_mode": 4
+   },
+   "payload_key_nondecl_hits": {
+    "tier2_execution_mode": 3
+   },
+   "literal_hit_sample": [
+    [
+     "gateway/ai_mesh_gateway/config.py",
+     295,
+     "\"tier2_execution_mode\": tier2_execution_mode,"
+    ],
+    [
+     "gateway/ai_mesh_gateway/config_sync.py",
+     91,
+     "\"enforcement_mode\", \"log_level\", \"tier2_execution_mode\","
+    ],
+    [
+     "gateway/ai_mesh_gateway/main.py",
+     7753,
+     "tier2_execution_mode = str(org_config.get(\"tier2_execution_mode\", \"sync_pre_llm\")).strip().lower()"
+    ],
+    [
+     "gateway/ai_mesh_gateway/main.py",
+     9083,
+     "tier2_execution_mode = str(org_config.get(\"tier2_execution_mode\", \"sync_pre_llm\")).strip().lower()"
+    ]
+   ],
+   "payload_hit_sample": {
+    "tier2_execution_mode": [
+     [
+      "gateway/ai_mesh_gateway/config.py",
+      295,
+      "\"tier2_execution_mode\": tier2_execution_mode,"
+     ],
+     [
+      "gateway/ai_mesh_gateway/config_sync.py",
+      91,
+      "\"enforcement_mode\", \"log_level\", \"tier2_execution_mode\","
+     ],
+     [
+      "gateway/ai_mesh_gateway/main.py",
+      7753,
+      "tier2_execution_mode = str(org_config.get(\"tier2_execution_mode\", \"sync_pre_llm\")).strip().lower()"
+     ],
+     [
+      "gateway/ai_mesh_gateway/main.py",
+      9083,
+      "tier2_execution_mode = str(org_config.get(\"tier2_execution_mode\", \"sync_pre_llm\")).strip().lower()"
+     ]
+    ]
+   }
+  },
+  {
+   "field": "tier2_stream_hold_enabled",
+   "literal_hits": 3,
+   "literal_nondecl_hits": 2,
+   "payload_keys": [
+    "tier2_stream_hold_enabled"
+   ],
+   "payload_key_hits": {
+    "tier2_stream_hold_enabled": 3
+   },
+   "payload_key_nondecl_hits": {
+    "tier2_stream_hold_enabled": 2
+   },
+   "literal_hit_sample": [
+    [
+     "gateway/ai_mesh_gateway/config.py",
+     296,
+     "\"tier2_stream_hold_enabled\": tier2_stream_hold_enabled,"
+    ],
+    [
+     "gateway/ai_mesh_gateway/config_sync.py",
+     63,
+     "\"tier2_fail_closed_enabled\", \"tier2_input_fail_closed\", \"tier2_stream_hold_enabled\","
+    ],
+    [
+     "gateway/ai_mesh_gateway/main.py",
+     9084,
+     "tier2_stream_hold_enabled = bool(org_config.get(\"tier2_stream_hold_enabled\", False))"
+    ]
+   ],
+   "payload_hit_sample": {
+    "tier2_stream_hold_enabled": [
+     [
+      "gateway/ai_mesh_gateway/config.py",
+      296,
+      "\"tier2_stream_hold_enabled\": tier2_stream_hold_enabled,"
+     ],
+     [
+      "gateway/ai_mesh_gateway/config_sync.py",
+      63,
+      "\"tier2_fail_closed_enabled\", \"tier2_input_fail_closed\", \"tier2_stream_hold_enabled\","
+     ],
+     [
+      "gateway/ai_mesh_gateway/main.py",
+      9084,
+      "tier2_stream_hold_enabled = bool(org_config.get(\"tier2_stream_hold_enabled\", False))"
+     ]
+    ]
+   }
+  },
+  {
+   "field": "tier2_stream_hold_timeout_ms",
+   "literal_hits": 2,
+   "literal_nondecl_hits": 1,
+   "payload_keys": [
+    "tier2_stream_hold_timeout_ms"
+   ],
+   "payload_key_hits": {
+    "tier2_stream_hold_timeout_ms": 2
+   },
+   "payload_key_nondecl_hits": {
+    "tier2_stream_hold_timeout_ms": 1
+   },
+   "literal_hit_sample": [
+    [
+     "gateway/ai_mesh_gateway/config.py",
+     297,
+     "\"tier2_stream_hold_timeout_ms\": tier2_stream_hold_timeout_ms,"
+    ],
+    [
+     "gateway/ai_mesh_gateway/config_sync.py",
+     84,
+     "\"prompt_downgrade_threshold\", \"tier2_stream_hold_timeout_ms\","
+    ]
+   ],
+   "payload_hit_sample": {
+    "tier2_stream_hold_timeout_ms": [
+     [
+      "gateway/ai_mesh_gateway/config.py",
+      297,
+      "\"tier2_stream_hold_timeout_ms\": tier2_stream_hold_timeout_ms,"
+     ],
+     [
+      "gateway/ai_mesh_gateway/config_sync.py",
+      84,
+      "\"prompt_downgrade_threshold\", \"tier2_stream_hold_timeout_ms\","
+     ]
+    ]
+   }
+  },
+  {
+   "field": "tier2_enabled",
+   "literal_hits": 7,
+   "literal_nondecl_hits": 5,
+   "payload_keys": [
+    "tier2_enabled"
+   ],
+   "payload_key_hits": {
+    "tier2_enabled": 7
+   },
+   "payload_key_nondecl_hits": {
+    "tier2_enabled": 5
+   },
+   "literal_hit_sample": [
+    [
+     "gateway/ai_mesh_gateway/config_sync.py",
+     64,
+     "\"tier2_enabled\", \"mcp_tier2_enabled\", \"tier2_strict\","
+    ],
+    [
+     "gateway/ai_mesh_gateway/config_sync.py",
+     108,
+     "_NULLABLE_KEYS: frozenset[str] = frozenset({\"tier2_enabled\", \"mcp_tier2_enabled\"})"
+    ],
+    [
+     "gateway/ai_mesh_gateway/main.py",
+     1528,
+     "return resolve_tier2_enabled((org_config or {}).get(\"tier2_enabled\"))"
+    ],
+    [
+     "gateway/ai_mesh_gateway/main.py",
+     9105,
+     "org_tier2_override = org_config.get(\"tier2_enabled\")"
+    ],
+    [
+     "gateway/ai_mesh_gateway/output_guard.py",
+     1014,
+     "org_tier2_override=cfg.get(\"tier2_enabled\"),"
+    ],
+    [
+     "gateway/ai_mesh_gateway/scanner.py",
+     2196,
+     "Callers MUST pass via identity (``org_config.get(\"tier2_enabled\")``)"
+    ]
+   ],
+   "payload_hit_sample": {
+    "tier2_enabled": [
+     [
+      "gateway/ai_mesh_gateway/config_sync.py",
+      64,
+      "\"tier2_enabled\", \"mcp_tier2_enabled\", \"tier2_strict\","
+     ],
+     [
+      "gateway/ai_mesh_gateway/config_sync.py",
+      108,
+      "_NULLABLE_KEYS: frozenset[str] = frozenset({\"tier2_enabled\", \"mcp_tier2_enabled\"})"
+     ],
+     [
+      "gateway/ai_mesh_gateway/main.py",
+      1528,
+      "return resolve_tier2_enabled((org_config or {}).get(\"tier2_enabled\"))"
+     ],
+     [
+      "gateway/ai_mesh_gateway/main.py",
+      9105,
+      "org_tier2_override = org_config.get(\"tier2_enabled\")"
+     ],
+     [
+      "gateway/ai_mesh_gateway/output_guard.py",
+      1014,
+      "org_tier2_override=cfg.get(\"tier2_enabled\"),"
+     ],
+     [
+      "gateway/ai_mesh_gateway/scanner.py",
+      2196,
+      "Callers MUST pass via identity (``org_config.get(\"tier2_enabled\")``)"
+     ]
+    ]
+   }
+  },
+  {
+   "field": "mcp_tier2_enabled",
+   "literal_hits": 4,
+   "literal_nondecl_hits": 2,
+   "payload_keys": [
+    "mcp_tier2_enabled"
+   ],
+   "payload_key_hits": {
+    "mcp_tier2_enabled": 4
+   },
+   "payload_key_nondecl_hits": {
+    "mcp_tier2_enabled": 2
+   },
+   "literal_hit_sample": [
+    [
+     "gateway/ai_mesh_gateway/config_sync.py",
+     64,
+     "\"tier2_enabled\", \"mcp_tier2_enabled\", \"tier2_strict\","
+    ],
+    [
+     "gateway/ai_mesh_gateway/config_sync.py",
+     108,
+     "_NULLABLE_KEYS: frozenset[str] = frozenset({\"tier2_enabled\", \"mcp_tier2_enabled\"})"
+    ],
+    [
+     "gateway/ai_mesh_gateway/mcp_proxy.py",
+     967,
+     "\"mcp_tier2_enabled\": data.get(\"mcp_tier2_enabled\"),"
+    ],
+    [
+     "gateway/ai_mesh_gateway/mcp_scan_orchestrator.py",
+     225,
+     "return _resolve_mcp_tier2_enabled((enabled_info or {}).get(\"mcp_tier2_enabled\"))"
+    ]
+   ],
+   "payload_hit_sample": {
+    "mcp_tier2_enabled": [
+     [
+      "gateway/ai_mesh_gateway/config_sync.py",
+      64,
+      "\"tier2_enabled\", \"mcp_tier2_enabled\", \"tier2_strict\","
+     ],
+     [
+      "gateway/ai_mesh_gateway/config_sync.py",
+      108,
+      "_NULLABLE_KEYS: frozenset[str] = frozenset({\"tier2_enabled\", \"mcp_tier2_enabled\"})"
+     ],
+     [
+      "gateway/ai_mesh_gateway/mcp_proxy.py",
+      967,
+      "\"mcp_tier2_enabled\": data.get(\"mcp_tier2_enabled\"),"
+     ],
+     [
+      "gateway/ai_mesh_gateway/mcp_scan_orchestrator.py",
+      225,
+      "return _resolve_mcp_tier2_enabled((enabled_info or {}).get(\"mcp_tier2_enabled\"))"
+     ]
+    ]
+   }
+  },
+  {
+   "field": "mcp_ext_scan_action",
+   "literal_hits": 1,
+   "literal_nondecl_hits": 1,
+   "payload_keys": [
+    "mcp_ext_scan_action"
+   ],
+   "payload_key_hits": {
+    "mcp_ext_scan_action": 1
+   },
+   "payload_key_nondecl_hits": {
+    "mcp_ext_scan_action": 1
+   },
+   "literal_hit_sample": [
+    [
+     "gateway/ai_mesh_gateway/mcp_proxy.py",
+     1262,
+     "action = (cfg.get(\"mcp_ext_scan_action\") or \"tag\").strip().lower()"
+    ]
+   ],
+   "payload_hit_sample": {
+    "mcp_ext_scan_action": [
+     [
+      "gateway/ai_mesh_gateway/mcp_proxy.py",
+      1262,
+      "action = (cfg.get(\"mcp_ext_scan_action\") or \"tag\").strip().lower()"
+     ]
+    ]
+   }
+  },
+  {
+   "field": "tier2_strict",
+   "literal_hits": 7,
+   "literal_nondecl_hits": 6,
+   "payload_keys": [
+    "tier2_strict"
+   ],
+   "payload_key_hits": {
+    "tier2_strict": 7
+   },
+   "payload_key_nondecl_hits": {
+    "tier2_strict": 6
+   },
+   "literal_hit_sample": [
+    [
+     "gateway/ai_mesh_gateway/config_sync.py",
+     64,
+     "\"tier2_enabled\", \"mcp_tier2_enabled\", \"tier2_strict\","
+    ],
+    [
+     "gateway/ai_mesh_gateway/main.py",
+     9118,
+     "org_tier2_strict = bool(org_config.get(\"tier2_strict\", True))"
+    ],
+    [
+     "gateway/ai_mesh_gateway/main.py",
+     13896,
+     "\"tier2_strict\","
+    ],
+    [
+     "gateway/ai_mesh_gateway/main.py",
+     14213,
+     "org_tier2_strict=bool(rag_policy.get(\"tier2_strict\", True)),"
+    ],
+    [
+     "gateway/ai_mesh_gateway/mcp_proxy.py",
+     968,
+     "\"tier2_strict\": data.get(\"tier2_strict\", True),"
+    ],
+    [
+     "gateway/ai_mesh_gateway/mcp_scan_orchestrator.py",
+     1672,
+     "org_strict = bool((enabled_info or {}).get(\"tier2_strict\", True))"
+    ]
+   ],
+   "payload_hit_sample": {
+    "tier2_strict": [
+     [
+      "gateway/ai_mesh_gateway/config_sync.py",
+      64,
+      "\"tier2_enabled\", \"mcp_tier2_enabled\", \"tier2_strict\","
+     ],
+     [
+      "gateway/ai_mesh_gateway/main.py",
+      9118,
+      "org_tier2_strict = bool(org_config.get(\"tier2_strict\", True))"
+     ],
+     [
+      "gateway/ai_mesh_gateway/main.py",
+      13896,
+      "\"tier2_strict\","
+     ],
+     [
+      "gateway/ai_mesh_gateway/main.py",
+      14213,
+      "org_tier2_strict=bool(rag_policy.get(\"tier2_strict\", True)),"
+     ],
+     [
+      "gateway/ai_mesh_gateway/mcp_proxy.py",
+      968,
+      "\"tier2_strict\": data.get(\"tier2_strict\", True),"
+     ],
+     [
+      "gateway/ai_mesh_gateway/mcp_scan_orchestrator.py",
+      1672,
+      "org_strict = bool((enabled_info or {}).get(\"tier2_strict\", True))"
+     ]
+    ]
+   }
+  },
+  {
+   "field": "mcp_policy_only_enforcement",
+   "literal_hits": 5,
+   "literal_nondecl_hits": 5,
+   "payload_keys": [
+    "mcp_policy_only_enforcement"
+   ],
+   "payload_key_hits": {
+    "mcp_policy_only_enforcement": 5
+   },
+   "payload_key_nondecl_hits": {
+    "mcp_policy_only_enforcement": 5
+   },
+   "literal_hit_sample": [
+    [
+     "gateway/ai_mesh_gateway/mcp_proxy.py",
+     976,
+     "**({\"mcp_policy_only_enforcement\": data.get(\"mcp_policy_only_enforcement\")}"
+    ],
+    [
+     "gateway/ai_mesh_gateway/mcp_proxy.py",
+     977,
+     "if \"mcp_policy_only_enforcement\" in data else {}),"
+    ],
+    [
+     "gateway/ai_mesh_gateway/mcp_scan_orchestrator.py",
+     379,
+     "``enabled_info['mcp_policy_only_enforcement']`` (preferred \u2014 lets an operator cut over one"
+    ],
+    [
+     "gateway/ai_mesh_gateway/mcp_scan_orchestrator.py",
+     383,
+     "if enabled_info and \"mcp_policy_only_enforcement\" in enabled_info:"
+    ],
+    [
+     "gateway/ai_mesh_gateway/mcp_scan_orchestrator.py",
+     384,
+     "return _coerce_flag(enabled_info.get(\"mcp_policy_only_enforcement\"))"
+    ]
+   ],
+   "payload_hit_sample": {
+    "mcp_policy_only_enforcement": [
+     [
+      "gateway/ai_mesh_gateway/mcp_proxy.py",
+      976,
+      "**({\"mcp_policy_only_enforcement\": data.get(\"mcp_policy_only_enforcement\")}"
+     ],
+     [
+      "gateway/ai_mesh_gateway/mcp_proxy.py",
+      977,
+      "if \"mcp_policy_only_enforcement\" in data else {}),"
+     ],
+     [
+      "gateway/ai_mesh_gateway/mcp_scan_orchestrator.py",
+      379,
+      "``enabled_info['mcp_policy_only_enforcement']`` (preferred \u2014 lets an operator cut over one"
+     ],
+     [
+      "gateway/ai_mesh_gateway/mcp_scan_orchestrator.py",
+      383,
+      "if enabled_info and \"mcp_policy_only_enforcement\" in enabled_info:"
+     ],
+     [
+      "gateway/ai_mesh_gateway/mcp_scan_orchestrator.py",
+      384,
+      "return _coerce_flag(enabled_info.get(\"mcp_policy_only_enforcement\"))"
+     ]
+    ]
+   }
+  },
+  {
+   "field": "prompt_injection_threshold",
+   "literal_hits": 7,
+   "literal_nondecl_hits": 6,
+   "payload_keys": [
+    "prompt_injection_threshold"
+   ],
+   "payload_key_hits": {
+    "prompt_injection_threshold": 7
+   },
+   "payload_key_nondecl_hits": {
+    "prompt_injection_threshold": 6
+   },
+   "literal_hit_sample": [
+    [
+     "gateway/ai_mesh_gateway/config_sync.py",
+     83,
+     "\"prompt_injection_threshold\", \"prompt_rewrite_threshold\","
+    ],
+    [
+     "gateway/ai_mesh_gateway/main.py",
+     9455,
+     "injection_threshold=org_config.get(\"prompt_injection_threshold\", 0.80),"
+    ],
+    [
+     "gateway/ai_mesh_gateway/main.py",
+     9615,
+     "injection_threshold=org_config.get(\"prompt_injection_threshold\", 0.80),"
+    ],
+    [
+     "gateway/ai_mesh_gateway/main.py",
+     13879,
+     "\"prompt_injection_threshold\","
+    ],
+    [
+     "gateway/ai_mesh_gateway/main.py",
+     16546,
+     "injection_threshold = org_config.get(\"prompt_injection_threshold\", 0.80)"
+    ],
+    [
+     "gateway/ai_mesh_gateway/rag_pipeline/query_stage.py",
+     269,
+     "threshold = _thr(\"prompt_injection_threshold\", 0.80)"
+    ]
+   ],
+   "payload_hit_sample": {
+    "prompt_injection_threshold": [
+     [
+      "gateway/ai_mesh_gateway/config_sync.py",
+      83,
+      "\"prompt_injection_threshold\", \"prompt_rewrite_threshold\","
+     ],
+     [
+      "gateway/ai_mesh_gateway/main.py",
+      9455,
+      "injection_threshold=org_config.get(\"prompt_injection_threshold\", 0.80),"
+     ],
+     [
+      "gateway/ai_mesh_gateway/main.py",
+      9615,
+      "injection_threshold=org_config.get(\"prompt_injection_threshold\", 0.80),"
+     ],
+     [
+      "gateway/ai_mesh_gateway/main.py",
+      13879,
+      "\"prompt_injection_threshold\","
+     ],
+     [
+      "gateway/ai_mesh_gateway/main.py",
+      16546,
+      "injection_threshold = org_config.get(\"prompt_injection_threshold\", 0.80)"
+     ],
+     [
+      "gateway/ai_mesh_gateway/rag_pipeline/query_stage.py",
+      269,
+      "threshold = _thr(\"prompt_injection_threshold\", 0.80)"
+     ]
+    ]
+   }
+  },
+  {
+   "field": "response_filtering_enabled",
+   "literal_hits": 0,
+   "literal_nondecl_hits": 0,
+   "payload_keys": [],
+   "payload_key_hits": {},
+   "payload_key_nondecl_hits": {},
+   "literal_hit_sample": [],
+   "payload_hit_sample": {}
+  },
+  {
+   "field": "factuality_check_enabled",
+   "literal_hits": 2,
+   "literal_nondecl_hits": 2,
+   "payload_keys": [
+    "hallucination_flag_enabled"
+   ],
+   "payload_key_hits": {
+    "hallucination_flag_enabled": 5
+   },
+   "payload_key_nondecl_hits": {
+    "hallucination_flag_enabled": 4
+   },
+   "literal_hit_sample": [
+    [
+     "gateway/ai_mesh_gateway/output_guard.py",
+     961,
+     "if \"hallucination_flag_enabled\" in cfg or \"factuality_check_enabled\" in cfg:"
+    ],
+    [
+     "gateway/ai_mesh_gateway/output_guard.py",
+     963,
+     "cfg.get(\"factuality_check_enabled\")"
+    ]
+   ],
+   "payload_hit_sample": {
+    "hallucination_flag_enabled": [
+     [
+      "gateway/ai_mesh_gateway/config.py",
+      335,
+      "\"hallucination_flag_enabled\": hallucination_flag_enabled,"
+     ],
+     [
+      "gateway/ai_mesh_gateway/config_sync.py",
+      66,
+      "\"hallucination_flag_enabled\", \"output_pii_enabled\","
+     ],
+     [
+      "gateway/ai_mesh_gateway/output_guard.py",
+      961,
+      "if \"hallucination_flag_enabled\" in cfg or \"factuality_check_enabled\" in cfg:"
+     ],
+     [
+      "gateway/ai_mesh_gateway/output_guard.py",
+      962,
+      "_hall_enabled = bool(cfg.get(\"hallucination_flag_enabled\")) or bool("
+     ],
+     [
+      "gateway/ai_mesh_gateway/output_guard.py",
+      966,
+      "_hall_enabled = bool(self._config.get(\"hallucination_flag_enabled\", True))"
+     ]
+    ]
+   }
+  },
+  {
+   "field": "hallucination_grounding_mode",
+   "literal_hits": 2,
+   "literal_nondecl_hits": 1,
+   "payload_keys": [
+    "hallucination_grounding_mode"
+   ],
+   "payload_key_hits": {
+    "hallucination_grounding_mode": 2
+   },
+   "payload_key_nondecl_hits": {
+    "hallucination_grounding_mode": 1
+   },
+   "literal_hit_sample": [
+    [
+     "gateway/ai_mesh_gateway/config_sync.py",
+     93,
+     "\"hallucination_grounding_mode\", \"hallucination_grounding_model\","
+    ],
+    [
+     "gateway/ai_mesh_gateway/output_guard.py",
+     1523,
+     "mode = str(cfg.get(\"hallucination_grounding_mode\", \"lexical\") or \"lexical\").lower()"
+    ]
+   ],
+   "payload_hit_sample": {
+    "hallucination_grounding_mode": [
+     [
+      "gateway/ai_mesh_gateway/config_sync.py",
+      93,
+      "\"hallucination_grounding_mode\", \"hallucination_grounding_model\","
+     ],
+     [
+      "gateway/ai_mesh_gateway/output_guard.py",
+      1523,
+      "mode = str(cfg.get(\"hallucination_grounding_mode\", \"lexical\") or \"lexical\").lower()"
+     ]
+    ]
+   }
+  },
+  {
+   "field": "hallucination_grounding_threshold",
+   "literal_hits": 3,
+   "literal_nondecl_hits": 2,
+   "payload_keys": [
+    "hallucination_grounding_threshold"
+   ],
+   "payload_key_hits": {
+    "hallucination_grounding_threshold": 3
+   },
+   "payload_key_nondecl_hits": {
+    "hallucination_grounding_threshold": 2
+   },
+   "literal_hit_sample": [
+    [
+     "gateway/ai_mesh_gateway/config_sync.py",
+     86,
+     "\"routing_priority_weight\", \"hallucination_grounding_threshold\","
+    ],
+    [
+     "gateway/ai_mesh_gateway/output_guard.py",
+     1392,
+     "cfg.get(\"hallucination_grounding_threshold\"),"
+    ],
+    [
+     "gateway/ai_mesh_gateway/output_guard.py",
+     1399,
+     "cfg.get(\"hallucination_grounding_threshold\"),"
+    ]
+   ],
+   "payload_hit_sample": {
+    "hallucination_grounding_threshold": [
+     [
+      "gateway/ai_mesh_gateway/config_sync.py",
+      86,
+      "\"routing_priority_weight\", \"hallucination_grounding_threshold\","
+     ],
+     [
+      "gateway/ai_mesh_gateway/output_guard.py",
+      1392,
+      "cfg.get(\"hallucination_grounding_threshold\"),"
+     ],
+     [
+      "gateway/ai_mesh_gateway/output_guard.py",
+      1399,
+      "cfg.get(\"hallucination_grounding_threshold\"),"
+     ]
+    ]
+   }
+  },
+  {
+   "field": "hallucination_grounding_model",
+   "literal_hits": 1,
+   "literal_nondecl_hits": 0,
+   "payload_keys": [
+    "hallucination_grounding_model"
+   ],
+   "payload_key_hits": {
+    "hallucination_grounding_model": 1
+   },
+   "payload_key_nondecl_hits": {
+    "hallucination_grounding_model": 0
+   },
+   "literal_hit_sample": [
+    [
+     "gateway/ai_mesh_gateway/config_sync.py",
+     93,
+     "\"hallucination_grounding_mode\", \"hallucination_grounding_model\","
+    ]
+   ],
+   "payload_hit_sample": {
+    "hallucination_grounding_model": [
+     [
+      "gateway/ai_mesh_gateway/config_sync.py",
+      93,
+      "\"hallucination_grounding_mode\", \"hallucination_grounding_model\","
+     ]
+    ]
+   }
+  },
+  {
+   "field": "output_pii_enabled",
+   "literal_hits": 4,
+   "literal_nondecl_hits": 3,
+   "payload_keys": [
+    "output_pii_enabled"
+   ],
+   "payload_key_hits": {
+    "output_pii_enabled": 4
+   },
+   "payload_key_nondecl_hits": {
+    "output_pii_enabled": 3
+   },
+   "literal_hit_sample": [
+    [
+     "gateway/ai_mesh_gateway/config_sync.py",
+     66,
+     "\"hallucination_flag_enabled\", \"output_pii_enabled\","
+    ],
+    [
+     "gateway/ai_mesh_gateway/output_guard.py",
+     906,
+     "return _action(\"output_pii_action\", \"redact\") if _enabled(\"output_pii_enabled\", True) else \"allow\""
+    ],
+    [
+     "gateway/ai_mesh_gateway/output_guard.py",
+     920,
+     "_pii_on = _enabled(\"output_pii_enabled\", True)"
+    ],
+    [
+     "gateway/ai_mesh_gateway/output_guard.py",
+     1187,
+     "if _enabled(\"output_pii_enabled\", True) and _action(\"output_pii_action\", \"redact\") in _PROTECTIVE_MUTATIONS:"
+    ]
+   ],
+   "payload_hit_sample": {
+    "output_pii_enabled": [
+     [
+      "gateway/ai_mesh_gateway/config_sync.py",
+      66,
+      "\"hallucination_flag_enabled\", \"output_pii_enabled\","
+     ],
+     [
+      "gateway/ai_mesh_gateway/output_guard.py",
+      906,
+      "return _action(\"output_pii_action\", \"redact\") if _enabled(\"output_pii_enabled\", True) else \"allow\""
+     ],
+     [
+      "gateway/ai_mesh_gateway/output_guard.py",
+      920,
+      "_pii_on = _enabled(\"output_pii_enabled\", True)"
+     ],
+     [
+      "gateway/ai_mesh_gateway/output_guard.py",
+      1187,
+      "if _enabled(\"output_pii_enabled\", True) and _action(\"output_pii_action\", \"redact\") in _PROTECTIVE_MUTATIONS:"
+     ]
+    ]
+   }
+  },
+  {
+   "field": "output_pii_action",
+   "literal_hits": 4,
+   "literal_nondecl_hits": 3,
+   "payload_keys": [
+    "output_pii_action"
+   ],
+   "payload_key_hits": {
+    "output_pii_action": 4
+   },
+   "payload_key_nondecl_hits": {
+    "output_pii_action": 3
+   },
+   "literal_hit_sample": [
+    [
+     "gateway/ai_mesh_gateway/config_sync.py",
+     94,
+     "\"output_pii_action\", \"output_credential_action\","
+    ],
+    [
+     "gateway/ai_mesh_gateway/output_guard.py",
+     906,
+     "return _action(\"output_pii_action\", \"redact\") if _enabled(\"output_pii_enabled\", True) else \"allow\""
+    ],
+    [
+     "gateway/ai_mesh_gateway/output_guard.py",
+     923,
+     "_pii_act = _action(\"output_pii_action\", \"redact\") if _pii_on else \"allow\""
+    ],
+    [
+     "gateway/ai_mesh_gateway/output_guard.py",
+     1187,
+     "if _enabled(\"output_pii_enabled\", True) and _action(\"output_pii_action\", \"redact\") in _PROTECTIVE_MUTATIONS:"
+    ]
+   ],
+   "payload_hit_sample": {
+    "output_pii_action": [
+     [
+      "gateway/ai_mesh_gateway/config_sync.py",
+      94,
+      "\"output_pii_action\", \"output_credential_action\","
+     ],
+     [
+      "gateway/ai_mesh_gateway/output_guard.py",
+      906,
+      "return _action(\"output_pii_action\", \"redact\") if _enabled(\"output_pii_enabled\", True) else \"allow\""
+     ],
+     [
+      "gateway/ai_mesh_gateway/output_guard.py",
+      923,
+      "_pii_act = _action(\"output_pii_action\", \"redact\") if _pii_on else \"allow\""
+     ],
+     [
+      "gateway/ai_mesh_gateway/output_guard.py",
+      1187,
+      "if _enabled(\"output_pii_enabled\", True) and _action(\"output_pii_action\", \"redact\") in _PROTECTIVE_MUTATIONS:"
+     ]
+    ]
+   }
+  },
+  {
+   "field": "output_credential_enabled",
+   "literal_hits": 5,
+   "literal_nondecl_hits": 4,
+   "payload_keys": [
+    "output_credential_enabled"
+   ],
+   "payload_key_hits": {
+    "output_credential_enabled": 5
+   },
+   "payload_key_nondecl_hits": {
+    "output_credential_enabled": 4
+   },
+   "literal_hit_sample": [
+    [
+     "gateway/ai_mesh_gateway/config_sync.py",
+     68,
+     "\"output_credential_enabled\", \"output_ip_leakage_enabled\","
+    ],
+    [
+     "gateway/ai_mesh_gateway/output_guard.py",
+     900,
+     "return _action(\"output_credential_action\", \"redact\") if _enabled(\"output_credential_enabled\", True) else \"allow\""
+    ],
+    [
+     "gateway/ai_mesh_gateway/output_guard.py",
+     921,
+     "_cred_on = _enabled(\"output_credential_enabled\", True)"
+    ],
+    [
+     "gateway/ai_mesh_gateway/output_guard.py",
+     932,
+     "if _enabled(\"output_credential_enabled\", True):"
+    ],
+    [
+     "gateway/ai_mesh_gateway/output_guard.py",
+     1189,
+     "if _enabled(\"output_credential_enabled\", True) and _action(\"output_credential_action\", \"redact\") in _PROTECTIVE_MUTATIONS:"
+    ]
+   ],
+   "payload_hit_sample": {
+    "output_credential_enabled": [
+     [
+      "gateway/ai_mesh_gateway/config_sync.py",
+      68,
+      "\"output_credential_enabled\", \"output_ip_leakage_enabled\","
+     ],
+     [
+      "gateway/ai_mesh_gateway/output_guard.py",
+      900,
+      "return _action(\"output_credential_action\", \"redact\") if _enabled(\"output_credential_enabled\", True) else \"allow\""
+     ],
+     [
+      "gateway/ai_mesh_gateway/output_guard.py",
+      921,
+      "_cred_on = _enabled(\"output_credential_enabled\", True)"
+     ],
+     [
+      "gateway/ai_mesh_gateway/output_guard.py",
+      932,
+      "if _enabled(\"output_credential_enabled\", True):"
+     ],
+     [
+      "gateway/ai_mesh_gateway/output_guard.py",
+      1189,
+      "if _enabled(\"output_credential_enabled\", True) and _action(\"output_credential_action\", \"redact\") in _PROTECTIVE_MUTATIONS:"
+     ]
+    ]
+   }
+  },
+  {
+   "field": "output_credential_action",
+   "literal_hits": 5,
+   "literal_nondecl_hits": 4,
+   "payload_keys": [
+    "output_credential_action"
+   ],
+   "payload_key_hits": {
+    "output_credential_action": 5
+   },
+   "payload_key_nondecl_hits": {
+    "output_credential_action": 4
+   },
+   "literal_hit_sample": [
+    [
+     "gateway/ai_mesh_gateway/config_sync.py",
+     94,
+     "\"output_pii_action\", \"output_credential_action\","
+    ],
+    [
+     "gateway/ai_mesh_gateway/output_guard.py",
+     900,
+     "return _action(\"output_credential_action\", \"redact\") if _enabled(\"output_credential_enabled\", True) else \"allow\""
+    ],
+    [
+     "gateway/ai_mesh_gateway/output_guard.py",
+     924,
+     "_cred_act = _action(\"output_credential_action\", \"redact\") if _cred_on else \"allow\""
+    ],
+    [
+     "gateway/ai_mesh_gateway/output_guard.py",
+     936,
+     "cred_action = _action(\"output_credential_action\", \"redact\")"
+    ],
+    [
+     "gateway/ai_mesh_gateway/output_guard.py",
+     1189,
+     "if _enabled(\"output_credential_enabled\", True) and _action(\"output_credential_action\", \"redact\") in _PROTECTIVE_MUTATIONS:"
+    ]
+   ],
+   "payload_hit_sample": {
+    "output_credential_action": [
+     [
+      "gateway/ai_mesh_gateway/config_sync.py",
+      94,
+      "\"output_pii_action\", \"output_credential_action\","
+     ],
+     [
+      "gateway/ai_mesh_gateway/output_guard.py",
+      900,
+      "return _action(\"output_credential_action\", \"redact\") if _enabled(\"output_credential_enabled\", True) else \"allow\""
+     ],
+     [
+      "gateway/ai_mesh_gateway/output_guard.py",
+      924,
+      "_cred_act = _action(\"output_credential_action\", \"redact\") if _cred_on else \"allow\""
+     ],
+     [
+      "gateway/ai_mesh_gateway/output_guard.py",
+      936,
+      "cred_action = _action(\"output_credential_action\", \"redact\")"
+     ],
+     [
+      "gateway/ai_mesh_gateway/output_guard.py",
+      1189,
+      "if _enabled(\"output_credential_enabled\", True) and _action(\"output_credential_action\", \"redact\") in _PROTECTIVE_MUTATIONS:"
+     ]
+    ]
+   }
+  },
+  {
+   "field": "output_ip_leakage_enabled",
+   "literal_hits": 4,
+   "literal_nondecl_hits": 3,
+   "payload_keys": [
+    "output_ip_leakage_enabled"
+   ],
+   "payload_key_hits": {
+    "output_ip_leakage_enabled": 4
+   },
+   "payload_key_nondecl_hits": {
+    "output_ip_leakage_enabled": 3
+   },
+   "literal_hit_sample": [
+    [
+     "gateway/ai_mesh_gateway/config_sync.py",
+     68,
+     "\"output_credential_enabled\", \"output_ip_leakage_enabled\","
+    ],
+    [
+     "gateway/ai_mesh_gateway/output_guard.py",
+     904,
+     "return _action(\"output_ip_leakage_action\", \"redact\") if _enabled(\"output_ip_leakage_enabled\", True) else \"allow\""
+    ],
+    [
+     "gateway/ai_mesh_gateway/output_guard.py",
+     942,
+     "if _enabled(\"output_ip_leakage_enabled\", True):"
+    ],
+    [
+     "gateway/ai_mesh_gateway/output_guard.py",
+     1191,
+     "if _enabled(\"output_ip_leakage_enabled\", True) and _action("
+    ]
+   ],
+   "payload_hit_sample": {
+    "output_ip_leakage_enabled": [
+     [
+      "gateway/ai_mesh_gateway/config_sync.py",
+      68,
+      "\"output_credential_enabled\", \"output_ip_leakage_enabled\","
+     ],
+     [
+      "gateway/ai_mesh_gateway/output_guard.py",
+      904,
+      "return _action(\"output_ip_leakage_action\", \"redact\") if _enabled(\"output_ip_leakage_enabled\", True) else \"allow\""
+     ],
+     [
+      "gateway/ai_mesh_gateway/output_guard.py",
+      942,
+      "if _enabled(\"output_ip_leakage_enabled\", True):"
+     ],
+     [
+      "gateway/ai_mesh_gateway/output_guard.py",
+      1191,
+      "if _enabled(\"output_ip_leakage_enabled\", True) and _action("
+     ]
+    ]
+   }
+  },
+  {
+   "field": "output_ip_leakage_action",
+   "literal_hits": 5,
+   "literal_nondecl_hits": 4,
+   "payload_keys": [
+    "output_ip_leakage_action"
+   ],
+   "payload_key_hits": {
+    "output_ip_leakage_action": 5
+   },
+   "payload_key_nondecl_hits": {
+    "output_ip_leakage_action": 4
+   },
+   "literal_hit_sample": [
+    [
+     "gateway/ai_mesh_gateway/config_sync.py",
+     95,
+     "\"output_ip_leakage_action\", \"output_policy_action\","
+    ],
+    [
+     "gateway/ai_mesh_gateway/output_guard.py",
+     904,
+     "return _action(\"output_ip_leakage_action\", \"redact\") if _enabled(\"output_ip_leakage_enabled\", True) else \"allow\""
+    ],
+    [
+     "gateway/ai_mesh_gateway/output_guard.py",
+     944,
+     "\"output_ip_leakage_action\","
+    ],
+    [
+     "gateway/ai_mesh_gateway/output_guard.py",
+     1160,
+     "or \"output_ip_leakage_action\" in cfg"
+    ],
+    [
+     "gateway/ai_mesh_gateway/output_guard.py",
+     1192,
+     "\"output_ip_leakage_action\","
+    ]
+   ],
+   "payload_hit_sample": {
+    "output_ip_leakage_action": [
+     [
+      "gateway/ai_mesh_gateway/config_sync.py",
+      95,
+      "\"output_ip_leakage_action\", \"output_policy_action\","
+     ],
+     [
+      "gateway/ai_mesh_gateway/output_guard.py",
+      904,
+      "return _action(\"output_ip_leakage_action\", \"redact\") if _enabled(\"output_ip_leakage_enabled\", True) else \"allow\""
+     ],
+     [
+      "gateway/ai_mesh_gateway/output_guard.py",
+      944,
+      "\"output_ip_leakage_action\","
+     ],
+     [
+      "gateway/ai_mesh_gateway/output_guard.py",
+      1160,
+      "or \"output_ip_leakage_action\" in cfg"
+     ],
+     [
+      "gateway/ai_mesh_gateway/output_guard.py",
+      1192,
+      "\"output_ip_leakage_action\","
+     ]
+    ]
+   }
+  },
+  {
+   "field": "output_policy_enabled",
+   "literal_hits": 3,
+   "literal_nondecl_hits": 2,
+   "payload_keys": [
+    "output_policy_enabled"
+   ],
+   "payload_key_hits": {
+    "output_policy_enabled": 3
+   },
+   "payload_key_nondecl_hits": {
+    "output_policy_enabled": 2
+   },
+   "literal_hit_sample": [
+    [
+     "gateway/ai_mesh_gateway/config_sync.py",
+     69,
+     "\"output_policy_enabled\", \"output_incident_logging_enabled\","
+    ],
+    [
+     "gateway/ai_mesh_gateway/main.py",
+     11378,
+     "if response_text and (_policy_cache_ready or AGENT_ID) and org_config.get(\"output_policy_enabled\", True):"
+    ],
+    [
+     "gateway/ai_mesh_gateway/output_guard.py",
+     910,
+     "return _action(\"output_policy_action\", \"block\") if _enabled(\"output_policy_enabled\", True) else \"allow\""
+    ]
+   ],
+   "payload_hit_sample": {
+    "output_policy_enabled": [
+     [
+      "gateway/ai_mesh_gateway/config_sync.py",
+      69,
+      "\"output_policy_enabled\", \"output_incident_logging_enabled\","
+     ],
+     [
+      "gateway/ai_mesh_gateway/main.py",
+      11378,
+      "if response_text and (_policy_cache_ready or AGENT_ID) and org_config.get(\"output_policy_enabled\", True):"
+     ],
+     [
+      "gateway/ai_mesh_gateway/output_guard.py",
+      910,
+      "return _action(\"output_policy_action\", \"block\") if _enabled(\"output_policy_enabled\", True) else \"allow\""
+     ]
+    ]
+   }
+  },
+  {
+   "field": "output_policy_action",
+   "literal_hits": 3,
+   "literal_nondecl_hits": 2,
+   "payload_keys": [
+    "output_policy_action"
+   ],
+   "payload_key_hits": {
+    "output_policy_action": 3
+   },
+   "payload_key_nondecl_hits": {
+    "output_policy_action": 2
+   },
+   "literal_hit_sample": [
+    [
+     "gateway/ai_mesh_gateway/config_sync.py",
+     95,
+     "\"output_ip_leakage_action\", \"output_policy_action\","
+    ],
+    [
+     "gateway/ai_mesh_gateway/main.py",
+     11406,
+     "resp_action = _normalize_output_action(org_config.get(\"output_policy_action\", \"flag\"))"
+    ],
+    [
+     "gateway/ai_mesh_gateway/output_guard.py",
+     910,
+     "return _action(\"output_policy_action\", \"block\") if _enabled(\"output_policy_enabled\", True) else \"allow\""
+    ]
+   ],
+   "payload_hit_sample": {
+    "output_policy_action": [
+     [
+      "gateway/ai_mesh_gateway/config_sync.py",
+      95,
+      "\"output_ip_leakage_action\", \"output_policy_action\","
+     ],
+     [
+      "gateway/ai_mesh_gateway/main.py",
+      11406,
+      "resp_action = _normalize_output_action(org_config.get(\"output_policy_action\", \"flag\"))"
+     ],
+     [
+      "gateway/ai_mesh_gateway/output_guard.py",
+      910,
+      "return _action(\"output_policy_action\", \"block\") if _enabled(\"output_policy_enabled\", True) else \"allow\""
+     ]
+    ]
+   }
+  },
+  {
+   "field": "output_hallucination_action",
+   "literal_hits": 3,
+   "literal_nondecl_hits": 2,
+   "payload_keys": [
+    "output_hallucination_action"
+   ],
+   "payload_key_hits": {
+    "output_hallucination_action": 3
+   },
+   "payload_key_nondecl_hits": {
+    "output_hallucination_action": 2
+   },
+   "literal_hit_sample": [
+    [
+     "gateway/ai_mesh_gateway/config_sync.py",
+     96,
+     "\"output_hallucination_action\","
+    ],
+    [
+     "gateway/ai_mesh_gateway/output_guard.py",
+     908,
+     "return _action(\"output_hallucination_action\", \"flag\")"
+    ],
+    [
+     "gateway/ai_mesh_gateway/output_guard.py",
+     968,
+     "hall_action = _action(\"output_hallucination_action\", \"flag\")"
+    ]
+   ],
+   "payload_hit_sample": {
+    "output_hallucination_action": [
+     [
+      "gateway/ai_mesh_gateway/config_sync.py",
+      96,
+      "\"output_hallucination_action\","
+     ],
+     [
+      "gateway/ai_mesh_gateway/output_guard.py",
+      908,
+      "return _action(\"output_hallucination_action\", \"flag\")"
+     ],
+     [
+      "gateway/ai_mesh_gateway/output_guard.py",
+      968,
+      "hall_action = _action(\"output_hallucination_action\", \"flag\")"
+     ]
+    ]
+   }
+  },
+  {
+   "field": "output_incident_logging_enabled",
+   "literal_hits": 3,
+   "literal_nondecl_hits": 2,
+   "payload_keys": [
+    "output_incident_logging_enabled"
+   ],
+   "payload_key_hits": {
+    "output_incident_logging_enabled": 3
+   },
+   "payload_key_nondecl_hits": {
+    "output_incident_logging_enabled": 2
+   },
+   "literal_hit_sample": [
+    [
+     "gateway/ai_mesh_gateway/config_sync.py",
+     69,
+     "\"output_policy_enabled\", \"output_incident_logging_enabled\","
+    ],
+    [
+     "gateway/ai_mesh_gateway/main.py",
+     2703,
+     "incident_logging = bool(org_config.get(\"output_incident_logging_enabled\", True))"
+    ],
+    [
+     "gateway/ai_mesh_gateway/main.py",
+     10881,
+     "_output_incident_logging = bool(org_config.get(\"output_incident_logging_enabled\", True))"
+    ]
+   ],
+   "payload_hit_sample": {
+    "output_incident_logging_enabled": [
+     [
+      "gateway/ai_mesh_gateway/config_sync.py",
+      69,
+      "\"output_policy_enabled\", \"output_incident_logging_enabled\","
+     ],
+     [
+      "gateway/ai_mesh_gateway/main.py",
+      2703,
+      "incident_logging = bool(org_config.get(\"output_incident_logging_enabled\", True))"
+     ],
+     [
+      "gateway/ai_mesh_gateway/main.py",
+      10881,
+      "_output_incident_logging = bool(org_config.get(\"output_incident_logging_enabled\", True))"
+     ]
+    ]
+   }
+  },
+  {
+   "field": "max_response_tokens",
+   "literal_hits": 3,
+   "literal_nondecl_hits": 2,
+   "payload_keys": [
+    "max_response_tokens"
+   ],
+   "payload_key_hits": {
+    "max_response_tokens": 3
+   },
+   "payload_key_nondecl_hits": {
+    "max_response_tokens": 2
+   },
+   "literal_hit_sample": [
+    [
+     "gateway/ai_mesh_gateway/config_sync.py",
+     87,
+     "\"max_response_tokens\", \"rag_default_max_results\","
+    ],
+    [
+     "gateway/ai_mesh_gateway/main.py",
+     8448,
+     "_mt_ceiling = int(org_config.get(\"max_response_tokens\", 4096) or 4096)"
+    ],
+    [
+     "gateway/ai_mesh_gateway/main.py",
+     8690,
+     "max_tokens_config = org_config.get(\"max_response_tokens\", 4096)"
+    ]
+   ],
+   "payload_hit_sample": {
+    "max_response_tokens": [
+     [
+      "gateway/ai_mesh_gateway/config_sync.py",
+      87,
+      "\"max_response_tokens\", \"rag_default_max_results\","
+     ],
+     [
+      "gateway/ai_mesh_gateway/main.py",
+      8448,
+      "_mt_ceiling = int(org_config.get(\"max_response_tokens\", 4096) or 4096)"
+     ],
+     [
+      "gateway/ai_mesh_gateway/main.py",
+      8690,
+      "max_tokens_config = org_config.get(\"max_response_tokens\", 4096)"
+     ]
+    ]
+   }
+  },
+  {
+   "field": "rag_enabled",
+   "literal_hits": 4,
+   "literal_nondecl_hits": 3,
+   "payload_keys": [
+    "rag_enabled"
+   ],
+   "payload_key_hits": {
+    "rag_enabled": 4
+   },
+   "payload_key_nondecl_hits": {
+    "rag_enabled": 3
+   },
+   "literal_hit_sample": [
+    [
+     "gateway/ai_mesh_gateway/config.py",
+     312,
+     "\"rag_enabled\": rag_enabled,"
+    ],
+    [
+     "gateway/ai_mesh_gateway/config_sync.py",
+     70,
+     "\"rag_enabled\", \"vector_db_isolation\","
+    ],
+    [
+     "gateway/ai_mesh_gateway/main.py",
+     2055,
+     "return oc.get(\"rag_enabled\", True) is False"
+    ],
+    [
+     "gateway/ai_mesh_gateway/main.py",
+     6615,
+     "if CONFIG.get(\"rag_enabled\", False):"
+    ]
+   ],
+   "payload_hit_sample": {
+    "rag_enabled": [
+     [
+      "gateway/ai_mesh_gateway/config.py",
+      312,
+      "\"rag_enabled\": rag_enabled,"
+     ],
+     [
+      "gateway/ai_mesh_gateway/config_sync.py",
+      70,
+      "\"rag_enabled\", \"vector_db_isolation\","
+     ],
+     [
+      "gateway/ai_mesh_gateway/main.py",
+      2055,
+      "return oc.get(\"rag_enabled\", True) is False"
+     ],
+     [
+      "gateway/ai_mesh_gateway/main.py",
+      6615,
+      "if CONFIG.get(\"rag_enabled\", False):"
+     ]
+    ]
+   }
+  },
+  {
+   "field": "vector_db_isolation",
+   "literal_hits": 2,
+   "literal_nondecl_hits": 1,
+   "payload_keys": [
+    "vector_db_isolation"
+   ],
+   "payload_key_hits": {
+    "vector_db_isolation": 2
+   },
+   "payload_key_nondecl_hits": {
+    "vector_db_isolation": 1
+   },
+   "literal_hit_sample": [
+    [
+     "gateway/ai_mesh_gateway/config_sync.py",
+     70,
+     "\"rag_enabled\", \"vector_db_isolation\","
+    ],
+    [
+     "gateway/ai_mesh_gateway/rag_pipeline/retriever_stage.py",
+     142,
+     "# ``inp.project_id if self._config.get(\"vector_db_isolation\", True) else None`` \u2014"
+    ]
+   ],
+   "payload_hit_sample": {
+    "vector_db_isolation": [
+     [
+      "gateway/ai_mesh_gateway/config_sync.py",
+      70,
+      "\"rag_enabled\", \"vector_db_isolation\","
+     ],
+     [
+      "gateway/ai_mesh_gateway/rag_pipeline/retriever_stage.py",
+      142,
+      "# ``inp.project_id if self._config.get(\"vector_db_isolation\", True) else None`` \u2014"
+     ]
+    ]
+   }
+  },
+  {
+   "field": "rag_max_documents",
+   "literal_hits": 0,
+   "literal_nondecl_hits": 0,
+   "payload_keys": [
+    "rag_default_max_results"
+   ],
+   "payload_key_hits": {
+    "rag_default_max_results": 4
+   },
+   "payload_key_nondecl_hits": {
+    "rag_default_max_results": 3
+   },
+   "literal_hit_sample": [],
+   "payload_hit_sample": {
+    "rag_default_max_results": [
+     [
+      "gateway/ai_mesh_gateway/config.py",
+      323,
+      "\"rag_default_max_results\": rag_default_max_results,"
+     ],
+     [
+      "gateway/ai_mesh_gateway/config_sync.py",
+      87,
+      "\"max_response_tokens\", \"rag_default_max_results\","
+     ],
+     [
+      "gateway/ai_mesh_gateway/main.py",
+      13522,
+      "n_results = int(body.get(\"n_results\", CONFIG.get(\"rag_default_max_results\", 10)))"
+     ],
+     [
+      "gateway/ai_mesh_gateway/main.py",
+      13864,
+      "max_results = policy.get(\"max_results_per_query\", CONFIG.get(\"rag_default_max_results\", 10))"
+     ]
+    ]
+   }
+  },
+  {
+   "field": "rag_relevance_threshold",
+   "literal_hits": 6,
+   "literal_nondecl_hits": 5,
+   "payload_keys": [
+    "rag_relevance_threshold"
+   ],
+   "payload_key_hits": {
+    "rag_relevance_threshold": 6
+   },
+   "payload_key_nondecl_hits": {
+    "rag_relevance_threshold": 5
+   },
+   "literal_hit_sample": [
+    [
+     "gateway/ai_mesh_gateway/config.py",
+     349,
+     "\"rag_relevance_threshold\": rag_relevance_threshold,"
+    ],
+    [
+     "gateway/ai_mesh_gateway/config_sync.py",
+     88,
+     "\"rag_relevance_threshold\", \"threat_score_threshold\", \"retention_days\","
+    ],
+    [
+     "gateway/ai_mesh_gateway/main.py",
+     13885,
+     "\"rag_relevance_threshold\","
+    ],
+    [
+     "gateway/ai_mesh_gateway/rag_pipeline/retriever_stage.py",
+     249,
+     "\"rag_relevance_threshold\","
+    ],
+    [
+     "gateway/ai_mesh_gateway/rag_pipeline/retriever_stage.py",
+     250,
+     "self._config.get(\"rag_relevance_threshold\", 0.0),"
+    ],
+    [
+     "gateway/ai_mesh_gateway/rag_pipeline/retriever_stage.py",
+     253,
+     "relevance_threshold = float(self._config.get(\"rag_relevance_threshold\", 0.0) or 0.0)"
+    ]
+   ],
+   "payload_hit_sample": {
+    "rag_relevance_threshold": [
+     [
+      "gateway/ai_mesh_gateway/config.py",
+      349,
+      "\"rag_relevance_threshold\": rag_relevance_threshold,"
+     ],
+     [
+      "gateway/ai_mesh_gateway/config_sync.py",
+      88,
+      "\"rag_relevance_threshold\", \"threat_score_threshold\", \"retention_days\","
+     ],
+     [
+      "gateway/ai_mesh_gateway/main.py",
+      13885,
+      "\"rag_relevance_threshold\","
+     ],
+     [
+      "gateway/ai_mesh_gateway/rag_pipeline/retriever_stage.py",
+      249,
+      "\"rag_relevance_threshold\","
+     ],
+     [
+      "gateway/ai_mesh_gateway/rag_pipeline/retriever_stage.py",
+      250,
+      "self._config.get(\"rag_relevance_threshold\", 0.0),"
+     ],
+     [
+      "gateway/ai_mesh_gateway/rag_pipeline/retriever_stage.py",
+      253,
+      "relevance_threshold = float(self._config.get(\"rag_relevance_threshold\", 0.0) or 0.0)"
+     ]
+    ]
+   }
+  },
+  {
+   "field": "rag_redaction_enabled",
+   "literal_hits": 2,
+   "literal_nondecl_hits": 1,
+   "payload_keys": [
+    "rag_redaction_enabled"
+   ],
+   "payload_key_hits": {
+    "rag_redaction_enabled": 2
+   },
+   "payload_key_nondecl_hits": {
+    "rag_redaction_enabled": 1
+   },
+   "literal_hit_sample": [
+    [
+     "gateway/ai_mesh_gateway/config_sync.py",
+     71,
+     "\"rag_redaction_enabled\", \"rag_tier2_enabled\", \"threat_intel_enabled\","
+    ],
+    [
+     "gateway/ai_mesh_gateway/main.py",
+     14746,
+     "rag_redaction_enabled = bool(org_config.get(\"rag_redaction_enabled\", True))"
+    ]
+   ],
+   "payload_hit_sample": {
+    "rag_redaction_enabled": [
+     [
+      "gateway/ai_mesh_gateway/config_sync.py",
+      71,
+      "\"rag_redaction_enabled\", \"rag_tier2_enabled\", \"threat_intel_enabled\","
+     ],
+     [
+      "gateway/ai_mesh_gateway/main.py",
+      14746,
+      "rag_redaction_enabled = bool(org_config.get(\"rag_redaction_enabled\", True))"
+     ]
+    ]
+   }
+  },
+  {
+   "field": "rag_tier2_enabled",
+   "literal_hits": 6,
+   "literal_nondecl_hits": 5,
+   "payload_keys": [
+    "rag_tier2_enabled"
+   ],
+   "payload_key_hits": {
+    "rag_tier2_enabled": 6
+   },
+   "payload_key_nondecl_hits": {
+    "rag_tier2_enabled": 5
+   },
+   "literal_hit_sample": [
+    [
+     "gateway/ai_mesh_gateway/config_sync.py",
+     71,
+     "\"rag_redaction_enabled\", \"rag_tier2_enabled\", \"threat_intel_enabled\","
+    ],
+    [
+     "gateway/ai_mesh_gateway/main.py",
+     13895,
+     "\"rag_tier2_enabled\","
+    ],
+    [
+     "gateway/ai_mesh_gateway/main.py",
+     14150,
+     "_t2_on = resolve_rag_tier2_enabled(rag_policy.get(\"rag_tier2_enabled\"))"
+    ],
+    [
+     "gateway/ai_mesh_gateway/main.py",
+     14206,
+     ") and resolve_rag_tier2_enabled(rag_policy.get(\"rag_tier2_enabled\")) and INPUT_SCANNER is not None:"
+    ],
+    [
+     "gateway/ai_mesh_gateway/main.py",
+     14754,
+     "rag_tier2_enabled = resolve_rag_tier2_enabled(org_config.get(\"rag_tier2_enabled\"))"
+    ],
+    [
+     "gateway/ai_mesh_gateway/rag_pipeline/query_stage.py",
+     228,
+     "_t2 = resolve_rag_tier2_enabled(inp.policy.get(\"rag_tier2_enabled\"))"
+    ]
+   ],
+   "payload_hit_sample": {
+    "rag_tier2_enabled": [
+     [
+      "gateway/ai_mesh_gateway/config_sync.py",
+      71,
+      "\"rag_redaction_enabled\", \"rag_tier2_enabled\", \"threat_intel_enabled\","
+     ],
+     [
+      "gateway/ai_mesh_gateway/main.py",
+      13895,
+      "\"rag_tier2_enabled\","
+     ],
+     [
+      "gateway/ai_mesh_gateway/main.py",
+      14150,
+      "_t2_on = resolve_rag_tier2_enabled(rag_policy.get(\"rag_tier2_enabled\"))"
+     ],
+     [
+      "gateway/ai_mesh_gateway/main.py",
+      14206,
+      ") and resolve_rag_tier2_enabled(rag_policy.get(\"rag_tier2_enabled\")) and INPUT_SCANNER is not None:"
+     ],
+     [
+      "gateway/ai_mesh_gateway/main.py",
+      14754,
+      "rag_tier2_enabled = resolve_rag_tier2_enabled(org_config.get(\"rag_tier2_enabled\"))"
+     ],
+     [
+      "gateway/ai_mesh_gateway/rag_pipeline/query_stage.py",
+      228,
+      "_t2 = resolve_rag_tier2_enabled(inp.policy.get(\"rag_tier2_enabled\"))"
+     ]
+    ]
+   }
+  },
+  {
+   "field": "threat_intel_enabled",
+   "literal_hits": 2,
+   "literal_nondecl_hits": 1,
+   "payload_keys": [
+    "threat_intel_enabled"
+   ],
+   "payload_key_hits": {
+    "threat_intel_enabled": 2
+   },
+   "payload_key_nondecl_hits": {
+    "threat_intel_enabled": 1
+   },
+   "literal_hit_sample": [
+    [
+     "gateway/ai_mesh_gateway/config_sync.py",
+     71,
+     "\"rag_redaction_enabled\", \"rag_tier2_enabled\", \"threat_intel_enabled\","
+    ],
+    [
+     "gateway/ai_mesh_gateway/main.py",
+     7938,
+     "and org_config.get(\"threat_intel_enabled\", True)"
+    ]
+   ],
+   "payload_hit_sample": {
+    "threat_intel_enabled": [
+     [
+      "gateway/ai_mesh_gateway/config_sync.py",
+      71,
+      "\"rag_redaction_enabled\", \"rag_tier2_enabled\", \"threat_intel_enabled\","
+     ],
+     [
+      "gateway/ai_mesh_gateway/main.py",
+      7938,
+      "and org_config.get(\"threat_intel_enabled\", True)"
+     ]
+    ]
+   }
+  },
+  {
+   "field": "auto_block_threats",
+   "literal_hits": 2,
+   "literal_nondecl_hits": 1,
+   "payload_keys": [
+    "auto_block_threats"
+   ],
+   "payload_key_hits": {
+    "auto_block_threats": 2
+   },
+   "payload_key_nondecl_hits": {
+    "auto_block_threats": 1
+   },
+   "literal_hit_sample": [
+    [
+     "gateway/ai_mesh_gateway/config_sync.py",
+     72,
+     "\"auto_block_threats\", \"telemetry_enabled\","
+    ],
+    [
+     "gateway/ai_mesh_gateway/main.py",
+     7943,
+     "if ctx_risk_score >= threat_threshold and org_config.get(\"auto_block_threats\", True):"
+    ]
+   ],
+   "payload_hit_sample": {
+    "auto_block_threats": [
+     [
+      "gateway/ai_mesh_gateway/config_sync.py",
+      72,
+      "\"auto_block_threats\", \"telemetry_enabled\","
+     ],
+     [
+      "gateway/ai_mesh_gateway/main.py",
+      7943,
+      "if ctx_risk_score >= threat_threshold and org_config.get(\"auto_block_threats\", True):"
+     ]
+    ]
+   }
+  },
+  {
+   "field": "threat_score_threshold",
+   "literal_hits": 2,
+   "literal_nondecl_hits": 1,
+   "payload_keys": [
+    "threat_score_threshold"
+   ],
+   "payload_key_hits": {
+    "threat_score_threshold": 2
+   },
+   "payload_key_nondecl_hits": {
+    "threat_score_threshold": 1
+   },
+   "literal_hit_sample": [
+    [
+     "gateway/ai_mesh_gateway/config_sync.py",
+     88,
+     "\"rag_relevance_threshold\", \"threat_score_threshold\", \"retention_days\","
+    ],
+    [
+     "gateway/ai_mesh_gateway/main.py",
+     7942,
+     "threat_threshold = org_config.get(\"threat_score_threshold\", 75) / 100.0"
+    ]
+   ],
+   "payload_hit_sample": {
+    "threat_score_threshold": [
+     [
+      "gateway/ai_mesh_gateway/config_sync.py",
+      88,
+      "\"rag_relevance_threshold\", \"threat_score_threshold\", \"retention_days\","
+     ],
+     [
+      "gateway/ai_mesh_gateway/main.py",
+      7942,
+      "threat_threshold = org_config.get(\"threat_score_threshold\", 75) / 100.0"
+     ]
+    ]
+   }
+  },
+  {
+   "field": "audit_logging_enabled",
+   "literal_hits": 0,
+   "literal_nondecl_hits": 0,
+   "payload_keys": [
+    "telemetry_enabled"
+   ],
+   "payload_key_hits": {
+    "telemetry_enabled": 6
+   },
+   "payload_key_nondecl_hits": {
+    "telemetry_enabled": 5
+   },
+   "literal_hit_sample": [],
+   "payload_hit_sample": {
+    "telemetry_enabled": [
+     [
+      "gateway/ai_mesh_gateway/config.py",
+      328,
+      "\"telemetry_enabled\": telemetry_enabled,"
+     ],
+     [
+      "gateway/ai_mesh_gateway/config_sync.py",
+      72,
+      "\"auto_block_threats\", \"telemetry_enabled\","
+     ],
+     [
+      "gateway/ai_mesh_gateway/main.py",
+      6094,
+      "if oc is not None and \"telemetry_enabled\" in oc:"
+     ],
+     [
+      "gateway/ai_mesh_gateway/main.py",
+      6095,
+      "return bool(oc.get(\"telemetry_enabled\", True))"
+     ],
+     [
+      "gateway/ai_mesh_gateway/main.py",
+      6098,
+      "return bool(CONFIG.get(\"telemetry_enabled\", True))"
+     ],
+     [
+      "gateway/ai_mesh_gateway/main.py",
+      6495,
+      "if CONFIG.get(\"telemetry_enabled\", True) and REDIS_CLIENT is not None:"
+     ]
+    ]
+   }
+  },
+  {
+   "field": "retention_days",
+   "literal_hits": 1,
+   "literal_nondecl_hits": 0,
+   "payload_keys": [
+    "retention_days"
+   ],
+   "payload_key_hits": {
+    "retention_days": 1
+   },
+   "payload_key_nondecl_hits": {
+    "retention_days": 0
+   },
+   "literal_hit_sample": [
+    [
+     "gateway/ai_mesh_gateway/config_sync.py",
+     88,
+     "\"rag_relevance_threshold\", \"threat_score_threshold\", \"retention_days\","
+    ]
+   ],
+   "payload_hit_sample": {
+    "retention_days": [
+     [
+      "gateway/ai_mesh_gateway/config_sync.py",
+      88,
+      "\"rag_relevance_threshold\", \"threat_score_threshold\", \"retention_days\","
+     ]
+    ]
+   }
+  },
+  {
+   "field": "compliance_frameworks",
+   "literal_hits": 7,
+   "literal_nondecl_hits": 6,
+   "payload_keys": [
+    "compliance_frameworks"
+   ],
+   "payload_key_hits": {
+    "compliance_frameworks": 7
+   },
+   "payload_key_nondecl_hits": {
+    "compliance_frameworks": 6
+   },
+   "literal_hit_sample": [
+    [
+     "gateway/ai_mesh_gateway/config_sync.py",
+     98,
+     "_LIST_KEYS = (\"blocked_keywords\", \"allowed_models\", \"compliance_frameworks\")"
+    ],
+    [
+     "gateway/ai_mesh_gateway/main.py",
+     2871,
+     "return (CONFIG or {}).get(\"compliance_frameworks\", [])"
+    ],
+    [
+     "gateway/ai_mesh_gateway/main.py",
+     6160,
+     "_cf = (CONFIG_SYNC.get_config(_cf_slug) or {}).get(\"compliance_frameworks\")"
+    ],
+    [
+     "gateway/ai_mesh_gateway/main.py",
+     9475,
+     "compliance_tags=org_config.get(\"compliance_frameworks\", []),"
+    ],
+    [
+     "gateway/ai_mesh_gateway/main.py",
+     9645,
+     "compliance_tags=org_config.get(\"compliance_frameworks\", []),"
+    ],
+    [
+     "gateway/ai_mesh_gateway/main.py",
+     12986,
+     "compliance_tags=org_config.get(\"compliance_frameworks\", []),"
+    ]
+   ],
+   "payload_hit_sample": {
+    "compliance_frameworks": [
+     [
+      "gateway/ai_mesh_gateway/config_sync.py",
+      98,
+      "_LIST_KEYS = (\"blocked_keywords\", \"allowed_models\", \"compliance_frameworks\")"
+     ],
+     [
+      "gateway/ai_mesh_gateway/main.py",
+      2871,
+      "return (CONFIG or {}).get(\"compliance_frameworks\", [])"
+     ],
+     [
+      "gateway/ai_mesh_gateway/main.py",
+      6160,
+      "_cf = (CONFIG_SYNC.get_config(_cf_slug) or {}).get(\"compliance_frameworks\")"
+     ],
+     [
+      "gateway/ai_mesh_gateway/main.py",
+      9475,
+      "compliance_tags=org_config.get(\"compliance_frameworks\", []),"
+     ],
+     [
+      "gateway/ai_mesh_gateway/main.py",
+      9645,
+      "compliance_tags=org_config.get(\"compliance_frameworks\", []),"
+     ],
+     [
+      "gateway/ai_mesh_gateway/main.py",
+      12986,
+      "compliance_tags=org_config.get(\"compliance_frameworks\", []),"
+     ]
+    ]
+   }
+  },
+  {
+   "field": "routing_risk_weight",
+   "literal_hits": 3,
+   "literal_nondecl_hits": 2,
+   "payload_keys": [
+    "routing_risk_weight"
+   ],
+   "payload_key_hits": {
+    "routing_risk_weight": 3
+   },
+   "payload_key_nondecl_hits": {
+    "routing_risk_weight": 2
+   },
+   "literal_hit_sample": [
+    [
+     "gateway/ai_mesh_gateway/config.py",
+     336,
+     "\"routing_risk_weight\": routing_risk_weight,"
+    ],
+    [
+     "gateway/ai_mesh_gateway/config_sync.py",
+     85,
+     "\"routing_risk_weight\", \"routing_cost_weight\", \"routing_latency_weight\","
+    ],
+    [
+     "gateway/ai_mesh_gateway/main.py",
+     3668,
+     "\"risk\": _weight(\"risk_weight\", \"routing_risk_weight\", 0.30, \"risk\"),"
+    ]
+   ],
+   "payload_hit_sample": {
+    "routing_risk_weight": [
+     [
+      "gateway/ai_mesh_gateway/config.py",
+      336,
+      "\"routing_risk_weight\": routing_risk_weight,"
+     ],
+     [
+      "gateway/ai_mesh_gateway/config_sync.py",
+      85,
+      "\"routing_risk_weight\", \"routing_cost_weight\", \"routing_latency_weight\","
+     ],
+     [
+      "gateway/ai_mesh_gateway/main.py",
+      3668,
+      "\"risk\": _weight(\"risk_weight\", \"routing_risk_weight\", 0.30, \"risk\"),"
+     ]
+    ]
+   }
+  },
+  {
+   "field": "routing_cost_weight",
+   "literal_hits": 3,
+   "literal_nondecl_hits": 2,
+   "payload_keys": [
+    "routing_cost_weight"
+   ],
+   "payload_key_hits": {
+    "routing_cost_weight": 3
+   },
+   "payload_key_nondecl_hits": {
+    "routing_cost_weight": 2
+   },
+   "literal_hit_sample": [
+    [
+     "gateway/ai_mesh_gateway/config.py",
+     337,
+     "\"routing_cost_weight\": routing_cost_weight,"
+    ],
+    [
+     "gateway/ai_mesh_gateway/config_sync.py",
+     85,
+     "\"routing_risk_weight\", \"routing_cost_weight\", \"routing_latency_weight\","
+    ],
+    [
+     "gateway/ai_mesh_gateway/main.py",
+     3669,
+     "\"cost\": _weight(\"cost_weight\", \"routing_cost_weight\", 0.20, \"cost\"),"
+    ]
+   ],
+   "payload_hit_sample": {
+    "routing_cost_weight": [
+     [
+      "gateway/ai_mesh_gateway/config.py",
+      337,
+      "\"routing_cost_weight\": routing_cost_weight,"
+     ],
+     [
+      "gateway/ai_mesh_gateway/config_sync.py",
+      85,
+      "\"routing_risk_weight\", \"routing_cost_weight\", \"routing_latency_weight\","
+     ],
+     [
+      "gateway/ai_mesh_gateway/main.py",
+      3669,
+      "\"cost\": _weight(\"cost_weight\", \"routing_cost_weight\", 0.20, \"cost\"),"
+     ]
+    ]
+   }
+  },
+  {
+   "field": "routing_latency_weight",
+   "literal_hits": 3,
+   "literal_nondecl_hits": 2,
+   "payload_keys": [
+    "routing_latency_weight"
+   ],
+   "payload_key_hits": {
+    "routing_latency_weight": 3
+   },
+   "payload_key_nondecl_hits": {
+    "routing_latency_weight": 2
+   },
+   "literal_hit_sample": [
+    [
+     "gateway/ai_mesh_gateway/config.py",
+     338,
+     "\"routing_latency_weight\": routing_latency_weight,"
+    ],
+    [
+     "gateway/ai_mesh_gateway/config_sync.py",
+     85,
+     "\"routing_risk_weight\", \"routing_cost_weight\", \"routing_latency_weight\","
+    ],
+    [
+     "gateway/ai_mesh_gateway/main.py",
+     3670,
+     "\"latency\": _weight(\"latency_weight\", \"routing_latency_weight\", 0.20, \"latency\"),"
+    ]
+   ],
+   "payload_hit_sample": {
+    "routing_latency_weight": [
+     [
+      "gateway/ai_mesh_gateway/config.py",
+      338,
+      "\"routing_latency_weight\": routing_latency_weight,"
+     ],
+     [
+      "gateway/ai_mesh_gateway/config_sync.py",
+      85,
+      "\"routing_risk_weight\", \"routing_cost_weight\", \"routing_latency_weight\","
+     ],
+     [
+      "gateway/ai_mesh_gateway/main.py",
+      3670,
+      "\"latency\": _weight(\"latency_weight\", \"routing_latency_weight\", 0.20, \"latency\"),"
+     ]
+    ]
+   }
+  },
+  {
+   "field": "routing_priority_weight",
+   "literal_hits": 3,
+   "literal_nondecl_hits": 2,
+   "payload_keys": [
+    "routing_priority_weight"
+   ],
+   "payload_key_hits": {
+    "routing_priority_weight": 3
+   },
+   "payload_key_nondecl_hits": {
+    "routing_priority_weight": 2
+   },
+   "literal_hit_sample": [
+    [
+     "gateway/ai_mesh_gateway/config.py",
+     339,
+     "\"routing_priority_weight\": routing_priority_weight,"
+    ],
+    [
+     "gateway/ai_mesh_gateway/config_sync.py",
+     86,
+     "\"routing_priority_weight\", \"hallucination_grounding_threshold\","
+    ],
+    [
+     "gateway/ai_mesh_gateway/main.py",
+     3671,
+     "\"priority\": _weight(\"priority_weight\", \"routing_priority_weight\", 0.30, \"priority\"),"
+    ]
+   ],
+   "payload_hit_sample": {
+    "routing_priority_weight": [
+     [
+      "gateway/ai_mesh_gateway/config.py",
+      339,
+      "\"routing_priority_weight\": routing_priority_weight,"
+     ],
+     [
+      "gateway/ai_mesh_gateway/config_sync.py",
+      86,
+      "\"routing_priority_weight\", \"hallucination_grounding_threshold\","
+     ],
+     [
+      "gateway/ai_mesh_gateway/main.py",
+      3671,
+      "\"priority\": _weight(\"priority_weight\", \"routing_priority_weight\", 0.30, \"priority\"),"
+     ]
+    ]
+   }
+  },
+  {
+   "field": "default_data_sensitivity",
+   "literal_hits": 2,
+   "literal_nondecl_hits": 1,
+   "payload_keys": [
+    "default_data_sensitivity"
+   ],
+   "payload_key_hits": {
+    "default_data_sensitivity": 2
+   },
+   "payload_key_nondecl_hits": {
+    "default_data_sensitivity": 1
+   },
+   "literal_hit_sample": [
+    [
+     "gateway/ai_mesh_gateway/config_sync.py",
+     92,
+     "\"litellm_default_model\", \"default_data_sensitivity\","
+    ],
+    [
+     "gateway/ai_mesh_gateway/main.py",
+     3598,
+     "_ds_org = org_config.get(\"default_data_sensitivity\")"
+    ]
+   ],
+   "payload_hit_sample": {
+    "default_data_sensitivity": [
+     [
+      "gateway/ai_mesh_gateway/config_sync.py",
+      92,
+      "\"litellm_default_model\", \"default_data_sensitivity\","
+     ],
+     [
+      "gateway/ai_mesh_gateway/main.py",
+      3598,
+      "_ds_org = org_config.get(\"default_data_sensitivity\")"
+     ]
+    ]
+   }
+  },
+  {
+   "field": "routing_enabled",
+   "literal_hits": 22,
+   "literal_nondecl_hits": 21,
+   "payload_keys": [
+    "routing_enabled"
+   ],
+   "payload_key_hits": {
+    "routing_enabled": 22
+   },
+   "payload_key_nondecl_hits": {
+    "routing_enabled": 21
+   },
+   "literal_hit_sample": [
+    [
+     "gateway/ai_mesh_gateway/config_sync.py",
+     65,
+     "\"model_isolation_enabled\", \"routing_enabled\","
+    ],
+    [
+     "gateway/ai_mesh_gateway/main.py",
+     3558,
+     "org_routing_enabled = bool(org_config.get(\"routing_enabled\", True))"
+    ],
+    [
+     "gateway/ai_mesh_gateway/main.py",
+     3561,
+     "routing_override = routing_preferences.get(\"routing_enabled\")"
+    ],
+    [
+     "gateway/ai_mesh_gateway/main.py",
+     3746,
+     "\"routing_enabled\": routing_enabled,"
+    ],
+    [
+     "gateway/ai_mesh_gateway/main.py",
+     3797,
+     "\"routing_enabled\": routing_enabled,"
+    ],
+    [
+     "gateway/ai_mesh_gateway/main.py",
+     3854,
+     "\"routing_enabled\": bool(routing_prefs.get(\"routing_enabled\")),"
+    ]
+   ],
+   "payload_hit_sample": {
+    "routing_enabled": [
+     [
+      "gateway/ai_mesh_gateway/config_sync.py",
+      65,
+      "\"model_isolation_enabled\", \"routing_enabled\","
+     ],
+     [
+      "gateway/ai_mesh_gateway/main.py",
+      3558,
+      "org_routing_enabled = bool(org_config.get(\"routing_enabled\", True))"
+     ],
+     [
+      "gateway/ai_mesh_gateway/main.py",
+      3561,
+      "routing_override = routing_preferences.get(\"routing_enabled\")"
+     ],
+     [
+      "gateway/ai_mesh_gateway/main.py",
+      3746,
+      "\"routing_enabled\": routing_enabled,"
+     ],
+     [
+      "gateway/ai_mesh_gateway/main.py",
+      3797,
+      "\"routing_enabled\": routing_enabled,"
+     ],
+     [
+      "gateway/ai_mesh_gateway/main.py",
+      3854,
+      "\"routing_enabled\": bool(routing_prefs.get(\"routing_enabled\")),"
+     ]
+    ]
+   }
+  },
+  {
+   "field": "updated_at",
+   "literal_hits": 0,
+   "literal_nondecl_hits": 0,
+   "payload_keys": [],
+   "payload_key_hits": {},
+   "payload_key_nondecl_hits": {},
+   "literal_hit_sample": [],
+   "payload_hit_sample": {}
+  },
+  {
+   "field": "connected_models",
+   "literal_hits": 0,
+   "literal_nondecl_hits": 0,
+   "payload_keys": [],
+   "payload_key_hits": {},
+   "payload_key_nondecl_hits": {},
+   "literal_hit_sample": [],
+   "payload_hit_sample": {}
+  },
+  {
+   "field": "allowed_models_list",
+   "literal_hits": 0,
+   "literal_nondecl_hits": 0,
+   "payload_keys": [],
+   "payload_key_hits": {},
+   "payload_key_nondecl_hits": {},
+   "literal_hit_sample": [],
+   "payload_hit_sample": {}
+  },
+  {
+   "field": "governance_stale_models",
+   "literal_hits": 0,
+   "literal_nondecl_hits": 0,
+   "payload_keys": [],
+   "payload_key_hits": {},
+   "payload_key_nondecl_hits": {},
+   "literal_hit_sample": [],
+   "payload_hit_sample": {}
+  }
+ ],
+ "gw_files": [
+  "gateway/ai_mesh_gateway/__init__.py",
+  "gateway/ai_mesh_gateway/_url_guard.py",
+  "gateway/ai_mesh_gateway/admin_auth.py",
+  "gateway/ai_mesh_gateway/bedrock_client.py",
+  "gateway/ai_mesh_gateway/bedrock_inference.py",
+  "gateway/ai_mesh_gateway/bedrock_logger.py",
+  "gateway/ai_mesh_gateway/bedrock_scanner.py",
+  "gateway/ai_mesh_gateway/bedrock_tier2_breaker.py",
+  "gateway/ai_mesh_gateway/byok_embedder.py",
+  "gateway/ai_mesh_gateway/canary_tokens.py",
+  "gateway/ai_mesh_gateway/circuit_breaker.py",
+  "gateway/ai_mesh_gateway/config.py",
+  "gateway/ai_mesh_gateway/config_sync.py",
+  "gateway/ai_mesh_gateway/context_assembler.py",
+  "gateway/ai_mesh_gateway/context_guard.py",
+  "gateway/ai_mesh_gateway/embedding_vault.py",
+  "gateway/ai_mesh_gateway/enforcement.py",
+  "gateway/ai_mesh_gateway/gc_monitor.py",
+  "gateway/ai_mesh_gateway/intent_classifier.py",
+  "gateway/ai_mesh_gateway/jobs.py",
+  "gateway/ai_mesh_gateway/kill_switch.py",
+  "gateway/ai_mesh_gateway/leakage_detector.py",
+  "gateway/ai_mesh_gateway/llm_judge.py",
+  "gateway/ai_mesh_gateway/llm_router.py",
+  "gateway/ai_mesh_gateway/log_buffer.py",
+  "gateway/ai_mesh_gateway/main.py",
+  "gateway/ai_mesh_gateway/mcp_error_classifier.py",
+  "gateway/ai_mesh_gateway/mcp_oauth.py",
+  "gateway/ai_mesh_gateway/mcp_oauth_proxy.py",
+  "gateway/ai_mesh_gateway/mcp_proxy.py",
+  "gateway/ai_mesh_gateway/mcp_sandbox_client.py",
+  "gateway/ai_mesh_gateway/mcp_scan_orchestrator.py",
+  "gateway/ai_mesh_gateway/mcp_scan_targets.py",
+  "gateway/ai_mesh_gateway/mcp_stdio_adapter.py",
+  "gateway/ai_mesh_gateway/mcp_ws_adapter.py",
+  "gateway/ai_mesh_gateway/metrics.py",
+  "gateway/ai_mesh_gateway/metrics_auth.py",
+  "gateway/ai_mesh_gateway/middleware.py",
+  "gateway/ai_mesh_gateway/model_state.py",
+  "gateway/ai_mesh_gateway/output_guard.py",
+  "gateway/ai_mesh_gateway/patterns.py",
+  "gateway/ai_mesh_gateway/pipeline_trace.py",
+  "gateway/ai_mesh_gateway/platform_models.py",
+  "gateway/ai_mesh_gateway/playground_auth.py",
+  "gateway/ai_mesh_gateway/policy_engine.py",
+  "gateway/ai_mesh_gateway/policy_signing.py",
+  "gateway/ai_mesh_gateway/policy_sync.py",
+  "gateway/ai_mesh_gateway/rag_collections.py",
+  "gateway/ai_mesh_gateway/rag_orchestrator.py",
+  "gateway/ai_mesh_gateway/rag_pipeline/__init__.py",
+  "gateway/ai_mesh_gateway/rag_pipeline/bedrock_embedder.py",
+  "gateway/ai_mesh_gateway/rag_pipeline/context.py",
+  "gateway/ai_mesh_gateway/rag_pipeline/contracts.py",
+  "gateway/ai_mesh_gateway/rag_pipeline/escalation.py",
+  "gateway/ai_mesh_gateway/rag_pipeline/generator_stage.py",
+  "gateway/ai_mesh_gateway/rag_pipeline/grounding_guard.py",
+  "gateway/ai_mesh_gateway/rag_pipeline/pipeline.py",
+  "gateway/ai_mesh_gateway/rag_pipeline/query_stage.py",
+  "gateway/ai_mesh_gateway/rag_pipeline/ranker_stage.py",
+  "gateway/ai_mesh_gateway/rag_pipeline/retriever_stage.py",
+  "gateway/ai_mesh_gateway/rate_limit_enforcement.py",
+  "gateway/ai_mesh_gateway/rate_limiter.py",
+  "gateway/ai_mesh_gateway/responses_adapters.py",
+  "gateway/ai_mesh_gateway/responses_store.py",
+  "gateway/ai_mesh_gateway/routing_isolation.py",
+  "gateway/ai_mesh_gateway/scanner.py",
+  "gateway/ai_mesh_gateway/secure_streaming.py",
+  "gateway/ai_mesh_gateway/stream_orchestration.py",
+  "gateway/ai_mesh_gateway/telemetry.py",
+  "gateway/ai_mesh_gateway/telemetry_mongo.py",
+  "gateway/ai_mesh_gateway/telemetry_ops.py",
+  "gateway/ai_mesh_gateway/trace_projection.py",
+  "gateway/ai_mesh_gateway/typed_placeholder_redactor.py",
+  "gateway/ai_mesh_gateway/vector_client.py",
+  "gateway/ai_mesh_gateway/vector_policy_sync.py",
+  "gateway/ai_mesh_gateway/vector_provider_sync.py",
+  "gateway/ai_mesh_gateway/vector_routes.py"
+ ]
+}

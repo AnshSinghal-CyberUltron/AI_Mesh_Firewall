@@ -1,0 +1,1 @@
+{"run": "FWOFF-r10", "client_all_phases": 3750, "events": 2625, "lane_style_completeness": 0.7, "strict_completeness": 0.7, "dispatched_to_provider_but_no_strict_event_all_phases": 1125, "measure_phase": {"n": 3000, "lane": 2100, "strict": 2100, "dispatched_unaudited": 900, "dispatched": 3000}}

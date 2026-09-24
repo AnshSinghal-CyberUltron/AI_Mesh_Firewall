@@ -1,0 +1,2 @@
+REPOSITORY                    TAG         DIGEST                                                                    IMAGE ID       CREATED        SIZE
+nvcr.io/nvidia/tritonserver   26.05-py3   sha256:f319b4364ab48ab44c846654c4aca8ed1e1c6c1687a7c510d1c58b524ca84cdc   f319b4364ab4   4 months ago   22.4GB

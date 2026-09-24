@@ -1,0 +1,376 @@
+{
+ "n_files_scanned": 77,
+ "context_totals": [
+  [
+   "kw:action",
+   109
+  ],
+  [
+   "Compare",
+   91
+  ],
+  [
+   "Tuple-in-Compare",
+   37
+  ],
+  [
+   "kw:decision",
+   36
+  ],
+  [
+   "IfExp",
+   19
+  ],
+  [
+   "callarg:_ext_audit",
+   16
+  ],
+  [
+   "arguments",
+   9
+  ],
+  [
+   "dictval:action",
+   8
+  ],
+  [
+   "dictkey",
+   7
+  ],
+  [
+   "callarg:org_config.get",
+   7
+  ],
+  [
+   "Assign:action",
+   6
+  ],
+  [
+   "Return",
+   4
+  ],
+  [
+   "Set-in-Call",
+   4
+  ],
+  [
+   "Assign:ctx.final_action",
+   4
+  ],
+  [
+   "dictval:recommended_action",
+   3
+  ],
+  [
+   "callarg:CONFIG.get",
+   3
+  ],
+  [
+   "BoolOp",
+   3
+  ],
+  [
+   "Tuple-in-Return",
+   3
+  ],
+  [
+   "Assign:decision",
+   2
+  ],
+  [
+   "callarg:payload.get",
+   2
+  ],
+  [
+   "Assign:verdict.action",
+   2
+  ],
+  [
+   "Set-in-Compare",
+   2
+  ],
+  [
+   "callarg:_verdict",
+   2
+  ],
+  [
+   "callarg:self._record_metric",
+   2
+  ],
+  [
+   "callarg:self._record_guard_metrics",
+   2
+  ],
+  [
+   "Assign:recommended_action",
+   1
+  ],
+  [
+   "dictval:block_immediately",
+   1
+  ],
+  [
+   "dictval:block_and_alert",
+   1
+  ],
+  [
+   "dictval:deny",
+   1
+  ],
+  [
+   "dictval:reject",
+   1
+  ],
+  [
+   "Assign:resolved",
+   1
+  ],
+  [
+   "Assign:act",
+   1
+  ],
+  [
+   "callarg:action_rank",
+   1
+  ],
+  [
+   "kw:final_action",
+   1
+  ],
+  [
+   "Assign:ms_action",
+   1
+  ],
+  [
+   "Assign:ks_audit['kill_switch_action']",
+   1
+  ],
+  [
+   "callarg:ms_data.get",
+   1
+  ],
+  [
+   "Assign:effective_action",
+   1
+  ],
+  [
+   "callarg:_action",
+   1
+  ],
+  [
+   "Set-in-Assign",
+   1
+  ],
+  [
+   "Assign:verdict_action",
+   1
+  ],
+  [
+   "callarg:gateway_config.get",
+   1
+  ],
+  [
+   "Assign:zs['action']",
+   1
+  ]
+ ],
+ "per_module_totals": {
+  "bedrock_scanner.py": 6,
+  "context_guard.py": 9,
+  "enforcement.py": 27,
+  "main.py": 138,
+  "mcp_proxy.py": 55,
+  "mcp_scan_orchestrator.py": 8,
+  "model_state.py": 4,
+  "output_guard.py": 12,
+  "pipeline_trace.py": 22,
+  "policy_engine.py": 7,
+  "rag_pipeline/context.py": 1,
+  "rag_pipeline/generator_stage.py": 2,
+  "rag_pipeline/grounding_guard.py": 7,
+  "rag_pipeline/pipeline.py": 10,
+  "rag_pipeline/query_stage.py": 12,
+  "rag_pipeline/ranker_stage.py": 6,
+  "rag_pipeline/retriever_stage.py": 7,
+  "rate_limit_enforcement.py": 6,
+  "scanner.py": 27,
+  "secure_streaming.py": 14,
+  "stream_orchestration.py": 10,
+  "telemetry_ops.py": 2,
+  "vector_routes.py": 9
+ },
+ "examples": {
+  "Return": [
+   "bedrock_scanner.py:243",
+   "pipeline_trace.py:689",
+   "pipeline_trace.py:1194"
+  ],
+  "dictval:recommended_action": [
+   "bedrock_scanner.py:385",
+   "bedrock_scanner.py:402",
+   "bedrock_scanner.py:856"
+  ],
+  "Compare": [
+   "bedrock_scanner.py:910",
+   "enforcement.py:135",
+   "enforcement.py:135"
+  ],
+  "Assign:recommended_action": [
+   "bedrock_scanner.py:911"
+  ],
+  "IfExp": [
+   "context_guard.py:370",
+   "enforcement.py:310",
+   "main.py:16757"
+  ],
+  "Tuple-in-Compare": [
+   "context_guard.py:359",
+   "main.py:3706",
+   "main.py:11646"
+  ],
+  "kw:action": [
+   "context_guard.py:399",
+   "context_guard.py:420",
+   "context_guard.py:529"
+  ],
+  "dictkey": [
+   "enforcement.py:40",
+   "main.py:5046",
+   "main.py:11980"
+  ],
+  "dictval:block_immediately": [
+   "enforcement.py:44"
+  ],
+  "dictval:block_and_alert": [
+   "enforcement.py:45"
+  ],
+  "dictval:deny": [
+   "enforcement.py:46"
+  ],
+  "dictval:reject": [
+   "enforcement.py:47"
+  ],
+  "arguments": [
+   "enforcement.py:81",
+   "enforcement.py:156",
+   "enforcement.py:242"
+  ],
+  "Assign:resolved": [
+   "enforcement.py:124"
+  ],
+  "Assign:action": [
+   "enforcement.py:301",
+   "main.py:433",
+   "main.py:14813"
+  ],
+  "Assign:act": [
+   "enforcement.py:422"
+  ],
+  "callarg:action_rank": [
+   "enforcement.py:129"
+  ],
+  "callarg:org_config.get": [
+   "main.py:2639",
+   "main.py:7752",
+   "main.py:10896"
+  ],
+  "callarg:CONFIG.get": [
+   "main.py:4405",
+   "main.py:12497",
+   "main.py:16825"
+  ],
+  "kw:final_action": [
+   "main.py:5606"
+  ],
+  "Assign:ms_action": [
+   "main.py:10734"
+  ],
+  "dictval:action": [
+   "main.py:1358",
+   "main.py:14940",
+   "mcp_scan_orchestrator.py:1505"
+  ],
+  "BoolOp": [
+   "main.py:8019",
+   "main.py:5494",
+   "secure_streaming.py:241"
+  ],
+  "Assign:ks_audit['kill_switch_action']": [
+   "main.py:8092"
+  ],
+  "kw:decision": [
+   "main.py:10973",
+   "main.py:11433",
+   "main.py:8903"
+  ],
+  "callarg:ms_data.get": [
+   "main.py:10739"
+  ],
+  "Set-in-Call": [
+   "mcp_proxy.py:139",
+   "output_guard.py:82",
+   "scanner.py:992"
+  ],
+  "Tuple-in-Return": [
+   "mcp_proxy.py:238",
+   "mcp_proxy.py:242",
+   "pipeline_trace.py:364"
+  ],
+  "callarg:_ext_audit": [
+   "mcp_proxy.py:2742",
+   "mcp_proxy.py:2760",
+   "mcp_proxy.py:3144"
+  ],
+  "Assign:decision": [
+   "mcp_proxy.py:5263",
+   "mcp_proxy.py:5336"
+  ],
+  "callarg:payload.get": [
+   "model_state.py:66",
+   "model_state.py:325"
+  ],
+  "Assign:effective_action": [
+   "model_state.py:262"
+  ],
+  "callarg:_action": [
+   "output_guard.py:910"
+  ],
+  "Set-in-Assign": [
+   "rag_pipeline/grounding_guard.py:55"
+  ],
+  "Assign:verdict.action": [
+   "rag_pipeline/grounding_guard.py:300",
+   "rag_pipeline/grounding_guard.py:248"
+  ],
+  "Set-in-Compare": [
+   "rag_pipeline/grounding_guard.py:215",
+   "rag_pipeline/grounding_guard.py:331"
+  ],
+  "Assign:ctx.final_action": [
+   "rag_pipeline/pipeline.py:169",
+   "rag_pipeline/pipeline.py:214",
+   "rag_pipeline/pipeline.py:319"
+  ],
+  "Assign:verdict_action": [
+   "rag_pipeline/ranker_stage.py:389"
+  ],
+  "callarg:gateway_config.get": [
+   "rate_limit_enforcement.py:172"
+  ],
+  "callarg:_verdict": [
+   "scanner.py:2687",
+   "scanner.py:2695"
+  ],
+  "callarg:self._record_metric": [
+   "secure_streaming.py:565",
+   "secure_streaming.py:709"
+  ],
+  "callarg:self._record_guard_metrics": [
+   "secure_streaming.py:562",
+   "secure_streaming.py:706"
+  ],
+  "Assign:zs['action']": [
+   "stream_orchestration.py:723"
+  ]
+ }
+}

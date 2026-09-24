@@ -1,0 +1,10 @@
+{
+ "invalid_key_requests": 5000,
+ "statuses": {
+  "401": 5000
+ },
+ "redis_hget_calls": 5000,
+ "hget_per_request": 1.0,
+ "wall_s": 0.76,
+ "rps": 6573
+}

@@ -1,0 +1,72 @@
+12:45:36 START f1u-060 60 UNITS=rv-pbf-unit-2 LABEL=A-1unit-ladder
+12:54:23 DONE f1u-060: # f1u-060: strict FAIL | load-knee PASS (sut, units=1, rate=60) | offered 18000 (60.0/s) qualified 17726 (59.09/s) FP-blocks 272 (0.01511) infra 2 (0.00011111111111111112) drops 0 safety 0
+12:54:23 QUEUE_END /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-bench-fleet/notes/q-1unit-a.txt
+12:54:41 START f1u-070 70 UNITS=rv-pbf-unit-2 LABEL=A-1unit-ladder
+13:03:28 DONE f1u-070: # f1u-070: strict FAIL | load-knee PASS (sut, units=1, rate=70) | offered 21000 (70.0/s) qualified 20690 (68.97/s) FP-blocks 305 (0.01452) infra 5 (0.0002380952380952381) drops 0 safety 0
+13:03:28 START f1u-080 80 UNITS=rv-pbf-unit-2 LABEL=A-1unit-ladder
+13:12:14 DONE f1u-080: # f1u-080: strict FAIL | load-knee FAIL (sut, units=1, rate=80) | offered 24000 (80.0/s) qualified 23580 (78.6/s) FP-blocks 377 (0.01571) infra 43 (0.0017916666666666667) drops 0 safety 0
+13:12:14 START f1u-090 90 UNITS=rv-pbf-unit-2 LABEL=A-1unit-ladder
+13:21:01 DONE f1u-090: # f1u-090: strict FAIL | load-knee FAIL (sut, units=1, rate=90) | offered 27000 (90.0/s) qualified 26427 (88.09/s) FP-blocks 467 (0.0173) infra 106 (0.003925925925925926) drops 0 safety 0
+13:21:01 QUEUE_END /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-bench-fleet/notes/q-1unit-b.txt
+13:21:09 START f1u-070-r2 70 UNITS=rv-pbf-unit-2 LABEL=A-1unit-knee-repeat
+13:29:56 DONE f1u-070-r2: # f1u-070-r2: strict FAIL | load-knee PASS (sut, units=1, rate=70) | offered 21000 (70.0/s) qualified 20681 (68.94/s) FP-blocks 316 (0.01505) infra 3 (0.00014285714285714287) drops 0 safety 0
+13:29:56 START f1u-070-r3 70 UNITS=rv-pbf-unit-2 LABEL=A-1unit-knee-repeat
+13:38:43 DONE f1u-070-r3: # f1u-070-r3: strict FAIL | load-knee PASS (sut, units=1, rate=70) | offered 21000 (70.0/s) qualified 20690 (68.97/s) FP-blocks 307 (0.01462) infra 3 (0.00014285714285714287) drops 0 safety 0
+13:38:43 START f1u-070-poisson 70 UNITS=rv-pbf-unit-2 LABEL=A-1unit-poisson-sensitivity OLG_EXTRA="-arrival poisson"
+13:47:29 DONE f1u-070-poisson: # f1u-070-poisson: strict FAIL | load-knee FAIL (sut, units=1, rate=70) | offered 21090 (70.3/s) qualified 20091 (66.97/s) FP-blocks 321 (0.01522) infra 678 (0.032147937411095305) drops 0 safety 0
+13:47:29 QUEUE_END /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-bench-fleet/notes/q-1unit-c.txt
+13:47:29 START f1u-075 75 UNITS=rv-pbf-unit-2 LABEL=A-1unit-ladder-fine
+13:56:16 DONE f1u-075: # f1u-075: strict FAIL | load-knee PASS (sut, units=1, rate=75) | offered 22500 (75.0/s) qualified 22127 (73.76/s) FP-blocks 366 (0.01627) infra 7 (0.0003111111111111111) drops 0 safety 0
+13:56:16 EDGE 2unit nginx: configuration file /etc/nginx/nginx.conf test is successful 2 active 
+13:56:23 CMD ssh -i /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/gcp/rv_ed25519 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR rv@10.146.0.13 'redis-cli DEL rv:audit:org-a; redis-cli INFO memory | grep used_memory_human': 1 used_memory_human:6.52M 
+13:56:25 START f2u-140 140 UNITS="rv-pbf-unit-2 rv-pbf-unit-3" LABEL=A-2unit-ladder
+14:05:12 DONE f2u-140: # f2u-140: strict FAIL | load-knee FAIL (sut, units=2, rate=140) | offered 42000 (140.0/s) qualified 40656 (135.52/s) FP-blocks 771 (0.01836) infra 573 (0.013642857142857142) drops 0 safety 0
+14:05:12 START f2u-150 150 UNITS="rv-pbf-unit-2 rv-pbf-unit-3" LABEL=A-2unit-ladder
+14:06:41 START f2u-100 100 UNITS="rv-pbf-unit-2 rv-pbf-unit-3" LABEL=A-2unit-ladder
+14:15:28 DONE f2u-100: # f2u-100: strict FAIL | load-knee FAIL (sut, units=2, rate=100) | offered 30000 (100.0/s) qualified 29420 (98.07/s) FP-blocks 520 (0.01733) infra 60 (0.002) drops 0 safety 0
+14:15:28 START f2u-080 80 UNITS="rv-pbf-unit-2 rv-pbf-unit-3" LABEL=A-2unit-ladder
+14:24:15 DONE f2u-080: # f2u-080: strict FAIL | load-knee PASS (sut, units=2, rate=80) | offered 24000 (80.0/s) qualified 23616 (78.72/s) FP-blocks 383 (0.01596) infra 1 (4.1666666666666665e-05) drops 0 safety 0
+14:24:15 CMD env NGINX_WORKERS=1 bash /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-bench-fleet/scripts/edge_set.sh 2unit-w1 "10.146.0.2:8400 10.146.0.5:8400": nginx: configuration file /etc/nginx/nginx.conf test is successful 2 active 
+14:24:22 START f2u-100-w1 100 UNITS="rv-pbf-unit-2 rv-pbf-unit-3" LABEL=A-2unit-DIAG-nginx-1-worker-global-RR
+14:33:09 DONE f2u-100-w1: # f2u-100-w1: strict FAIL | load-knee PASS (sut, units=2, rate=100) | offered 30000 (100.0/s) qualified 29477 (98.26/s) FP-blocks 523 (0.01743) infra 0 (0.0) drops 0 safety 0
+14:33:09 CMD bash /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-bench-fleet/scripts/edge_set.sh 2unit "10.146.0.2:8400 10.146.0.5:8400": nginx: configuration file /etc/nginx/nginx.conf test is successful 2 active 
+14:33:16 START f2u-090 90 UNITS="rv-pbf-unit-2 rv-pbf-unit-3" LABEL=A-2unit-ladder
+14:42:03 DONE f2u-090: # f2u-090: strict FAIL | load-knee FAIL (sut, units=2, rate=90) | offered 27000 (90.0/s) qualified 26480 (88.27/s) FP-blocks 461 (0.01707) infra 59 (0.002185185185185185) drops 0 safety 0
+14:42:03 QUEUE_END /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-bench-fleet/notes/q-2unit-b.txt
+14:42:28 START f2u-080-r2 80 UNITS="rv-pbf-unit-2 rv-pbf-unit-3" LABEL=A-2unit-knee-repeat
+14:51:15 DONE f2u-080-r2: # f2u-080-r2: strict FAIL | load-knee PASS (sut, units=2, rate=80) | offered 24000 (80.0/s) qualified 23607 (78.69/s) FP-blocks 384 (0.016) infra 9 (0.000375) drops 0 safety 0
+14:51:15 START f2u-080-r3 80 UNITS="rv-pbf-unit-2 rv-pbf-unit-3" LABEL=A-2unit-knee-repeat
+15:00:02 DONE f2u-080-r3:  | 
+15:00:02 CMD bash /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-bench-fleet/scripts/edge_set.sh 1unit "10.146.0.2:8400": nginx: configuration file /etc/nginx/nginx.conf test is successful 1 active 
+15:00:09 START f1u-075-r2 75 UNITS=rv-pbf-unit-2 LABEL=A-1unit-knee-repeat
+15:08:56 DONE f1u-075-r2: # f1u-075-r2: strict FAIL | load-knee PASS (sut, units=1, rate=75) | offered 22500 (75.0/s) qualified 22124 (73.75/s) FP-blocks 373 (0.01658) infra 3 (0.00013333333333333334) drops 0 safety 0
+15:08:56 START f1u-075-r3 75 UNITS=rv-pbf-unit-2 LABEL=A-1unit-knee-repeat
+15:17:43 DONE f1u-075-r3: # f1u-075-r3: strict FAIL | load-knee PASS (sut, units=1, rate=75) | offered 22500 (75.0/s) qualified 22143 (73.81/s) FP-blocks 349 (0.01551) infra 8 (0.00035555555555555557) drops 0 safety 0
+15:17:43 CMD bash /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-bench-fleet/scripts/edge_set.sh 4unit "10.146.0.2:8400 10.146.0.5:8400 10.146.0.3:8400 10.146.0.4:8400": nginx: configuration file /etc/nginx/nginx.conf test is successful 4 active 
+15:17:50 CMD ssh -i /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/gcp/rv_ed25519 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR rv@10.146.0.13 'redis-cli DEL rv:audit:org-a': 1 
+15:17:52 START f4u-160 160 UNITS="rv-pbf-unit-2 rv-pbf-unit-3 rv-pbf-unit-4 rv-pbf-unit-5" LABEL=A-4unit-ladder
+15:26:41 DONE f4u-160: # f4u-160: strict FAIL | load-knee FAIL (sut, units=4, rate=160) | offered 48000 (160.0/s) qualified 46789 (155.96/s) FP-blocks 826 (0.01721) infra 385 (0.008020833333333333) drops 0 safety 0
+15:26:41 START f4u-140 140 UNITS="rv-pbf-unit-2 rv-pbf-unit-3 rv-pbf-unit-4 rv-pbf-unit-5" LABEL=A-4unit-ladder
+15:35:29 DONE f4u-140: # f4u-140: strict FAIL | load-knee FAIL (sut, units=4, rate=140) | offered 42000 (140.0/s) qualified 40945 (136.48/s) FP-blocks 752 (0.0179) infra 303 (0.007214285714285714) drops 0 safety 0
+15:35:29 START f4u-120 120 UNITS="rv-pbf-unit-2 rv-pbf-unit-3 rv-pbf-unit-4 rv-pbf-unit-5" LABEL=A-4unit-ladder
+15:44:16 DONE f4u-120: # f4u-120: strict FAIL | load-knee FAIL (sut, units=4, rate=120) | offered 36000 (120.0/s) qualified 35144 (117.15/s) FP-blocks 665 (0.01847) infra 191 (0.0053055555555555555) drops 0 safety 0
+15:44:16 START f4u-100 100 UNITS="rv-pbf-unit-2 rv-pbf-unit-3 rv-pbf-unit-4 rv-pbf-unit-5" LABEL=A-4unit-ladder
+15:53:03 DONE f4u-100: # f4u-100: strict FAIL | load-knee FAIL (sut, units=4, rate=100) | offered 30000 (100.0/s) qualified 29453 (98.18/s) FP-blocks 506 (0.01687) infra 41 (0.0013666666666666666) drops 0 safety 0
+15:53:03 START f4u-080 80 UNITS="rv-pbf-unit-2 rv-pbf-unit-3 rv-pbf-unit-4 rv-pbf-unit-5" LABEL=A-4unit-ladder
+16:01:51 DONE f4u-080: # f4u-080: strict FAIL | load-knee PASS (sut, units=4, rate=80) | offered 24000 (80.0/s) qualified 23614 (78.71/s) FP-blocks 386 (0.01608) infra 0 (0.0) drops 0 safety 0
+16:01:51 START f4u-080-r2 80 UNITS="rv-pbf-unit-2 rv-pbf-unit-3 rv-pbf-unit-4 rv-pbf-unit-5" LABEL=A-4unit-knee-repeat
+16:10:40 DONE f4u-080-r2: # f4u-080-r2: strict FAIL | load-knee PASS (sut, units=4, rate=80) | offered 24000 (80.0/s) qualified 23617 (78.72/s) FP-blocks 383 (0.01596) infra 0 (0.0) drops 0 safety 0
+16:10:40 START f4u-080-r3 80 UNITS="rv-pbf-unit-2 rv-pbf-unit-3 rv-pbf-unit-4 rv-pbf-unit-5" LABEL=A-4unit-knee-repeat
+16:19:27 DONE f4u-080-r3: # f4u-080-r3: strict FAIL | load-knee PASS (sut, units=4, rate=80) | offered 24000 (80.0/s) qualified 23618 (78.73/s) FP-blocks 379 (0.01579) infra 3 (0.000125) drops 0 safety 0
+16:19:27 CMD bash /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-bench-fleet/.frozen-b/b_test.sh b-plan-ks 56 plan_ks: [rv-pbf-lg-2] 2026/09/23 16:23:52 done: scheduled=4107 recorded=4107 ok=3766 errors=map[http_403:62 http_503:279] drops=0 late_p99=111us max=202us cpu_busy_max=6.7% [rv-pbf-lg-3] 2026/09/23 16:23:52 done: scheduled=4107 recorded=4107 ok=3764 errors=map[http_403:63 http_503:280] drops=0 late_p99=118us max=266us cpu_busy_max=9.4% b-plan-ks collected 
+16:24:36 CMD bash /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-bench-fleet/scripts/restart4.sh: 10.146.0.5 READY after 11s: 18/18 workers workers=18 code=265f34c4658e 10.146.0.4 READY after 12s: 18/18 workers workers=18 code=265f34c4658e 10.146.0.3 READY after 12s: 18/18 workers workers=18 code=265f34c4658e 
+16:25:31 CMD env AUTH=auth-q BUDGET=4000000 RAMP=10 WARMUP=5 DURATION=150 bash /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-bench-fleet/.frozen-b/b_test.sh b-quota-default 56 quota: [rv-pbf-lg-2] 2026/09/23 16:28:46 done: scheduled=2987 recorded=2987 ok=222 errors=map[http_403:3 http_429:2762] drops=0 late_p99=158us max=234us cpu_busy_max=9.2% [rv-pbf-lg-3] 2026/09/23 16:28:51 done: scheduled=2987 recorded=2987 ok=190 errors=map[http_403:5 http_429:2792] drops=0 late_p99=158us max=232us cpu_busy_max=8.5% b-quota-default collected 
+16:29:29 CMD bash /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-bench-fleet/scripts/restart4.sh RV_LEASE_CHUNK_TOKENS=4096: 10.146.0.3 READY after 11s: 18/18 workers workers=18 code=265f34c4658e 10.146.0.5 READY after 12s: 18/18 workers workers=18 code=265f34c4658e 10.146.0.4 READY after 12s: 18/18 workers workers=18 code=265f34c4658e 
+16:30:24 CMD env AUTH=auth-q BUDGET=4000000 RAMP=10 WARMUP=5 DURATION=150 bash /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-bench-fleet/.frozen-b/b_test.sh b-quota-4k 56 quota: [rv-pbf-lg-2] 2026/09/23 16:33:36 done: scheduled=2987 recorded=2987 ok=1403 errors=map[http_403:23 http_429:1561] drops=0 late_p99=155us max=220us cpu_busy_max=8.2% [rv-pbf-lg-3] 2026/09/23 16:33:36 done: scheduled=2987 recorded=2987 ok=1383 errors=map[http_403:22 http_429:1582] drops=0 late_p99=157us max=250us cpu_busy_max=7.5% b-quota-4k collected 
+16:34:22 CMD bash /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-bench-fleet/scripts/restart4.sh: 10.146.0.4 READY after 12s: 18/18 workers workers=18 code=265f34c4658e 10.146.0.2 READY after 12s: 18/18 workers workers=18 code=265f34c4658e 10.146.0.5 READY after 12s: 18/18 workers workers=18 code=265f34c4658e 
+16:35:17 CMD bash /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-bench-fleet/scripts/edge_set.sh 1unit "10.146.0.2:8400": nginx: configuration file /etc/nginx/nginx.conf test is successful 1 active 
+16:35:24 START f1u-020-poisson 20 UNITS=rv-pbf-unit-2 LABEL=A-1unit-poisson-sensitivity OLG_EXTRA="-arrival poisson"
+16:44:10 DONE f1u-020-poisson: # f1u-020-poisson: strict FAIL | load-knee FAIL (sut, units=1, rate=20) | offered 6154 (20.51/s) qualified 6028 (20.09/s) FP-blocks 76 (0.01235) infra 50 (0.008124796880077998) drops 0 safety 0
+16:44:10 START direct-160-main 160 MODE=direct AUTH=none LABEL=direct-floor-main-lane
+16:51:55 DONE direct-160-main: # direct-160-main: strict PASS | load-knee PASS (direct, units=0, rate=160) | offered 48000 (160.0/s) qualified 48000 (160.0/s) FP-blocks 0 (0.0) infra 0 (0.0) drops 0 safety 0
+16:51:55 QUEUE_END /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-bench-fleet/notes/q-main-c.txt

@@ -1,0 +1,1623 @@
+{
+ "derived": {
+  "n_measured_requests": 18900,
+  "gateways": {
+   "rv-split-gw-1": {
+    "cores": {
+     "worker": 0.671,
+     "launcher": 0.0,
+     "redis": 0.004
+    },
+    "cpu_ms_per_req": 10.686,
+    "redis_cpu_ms_per_req": 0.064,
+    "vm_cores_busy": 0.69,
+    "worker_util": {
+     "n": 12,
+     "min": 0.048,
+     "median": 0.056,
+     "max": 0.07
+    },
+    "core_util": {
+     "max": 0.054,
+     "mean": 0.043,
+     "sum_cores": 0.69
+    },
+    "nic": {
+     "ens3": {
+      "rx_mbit_s": 34.63,
+      "tx_mbit_s": 36.88,
+      "rx_bytes_per_req": 68934.1,
+      "tx_bytes_per_req": 73420.9
+     }
+    },
+    "guard_rtt": {
+     "n": 18883,
+     "p50_ms": 4.8169,
+     "p90_ms": 5.0135,
+     "p99_ms": 7.0451,
+     "p99.9_ms": 7.3073,
+     "mean_ms": 4.0937
+    },
+    "guard_wait": {
+     "n": 18883,
+     "p50_ms": 4.6858,
+     "p90_ms": 4.8824,
+     "p99_ms": 6.914,
+     "p99.9_ms": 7.4383,
+     "mean_ms": 4.0012
+    },
+    "guard_queue_seen_by_worker": {
+     "n": 18883,
+     "p50_ms": 0.0865,
+     "p90_ms": 0.105,
+     "p99_ms": 0.1321,
+     "p99.9_ms": 0.8561,
+     "mean_ms": 0.0895
+    },
+    "guard_exec_seen_by_worker": {
+     "n": 18883,
+     "p50_ms": 4.1452,
+     "p90_ms": 4.2926,
+     "p99_ms": 6.3242,
+     "p99.9_ms": 6.4553,
+     "mean_ms": 3.4534
+    },
+    "t_input": {
+     "n": 18883,
+     "p50_ms": 6.1932,
+     "p90_ms": 7.1107,
+     "p99_ms": 9.3716,
+     "p99.9_ms": 9.8959,
+     "mean_ms": 5.4884
+    },
+    "t_tokenize": {
+     "n": 18883,
+     "p50_ms": 1.237,
+     "p90_ms": 1.9087,
+     "p99_ms": 2.2446,
+     "p99.9_ms": 2.6051,
+     "mean_ms": 1.2249
+    },
+    "loop_lag": {
+     "n": 35880,
+     "p50_ms": 0.0027,
+     "p90_ms": 1.0035,
+     "p99_ms": 2.9983,
+     "p99.9_ms": 4.1124,
+     "mean_ms": 0.3175
+    },
+    "windows_per_request": 1.643,
+    "admitted": 18883,
+    "counts": {
+     "admitted": 18883,
+     "audit_enqueued": 37448,
+     "audit_written": 37449,
+     "background_round_trips": 7176,
+     "disposition_ALLOW": 18548,
+     "disposition_BLOCK": 335,
+     "guard_windows": 31018,
+     "lease_granted_tokens{org=\"org-a\"}": 17804800,
+     "lease_refills": 130,
+     "provider_calls": 18548,
+     "provider_connections_opened": 12268,
+     "quota_admitted_tokens{org=\"org-a\"}": 17856878,
+     "requests_by_round_trips{n=\"0\"}": 18753,
+     "requests_by_round_trips{n=\"1\"}": 130,
+     "shared_state_round_trips": 130
+    }
+   }
+  },
+  "guards": {
+   "rv-split-guard-1": {
+    "owner_cores": 0.244,
+    "owner_cpu_ms_per_req": 3.886,
+    "vm_cores_busy": 0.27,
+    "gpu": {
+     "0": {
+      "samples": 299,
+      "sm_mean": 19.1,
+      "sm_max": 27.0,
+      "mem_mean": 3.5,
+      "fb_mb_max": 434.0
+     }
+    },
+    "nic": {
+     "ens4": {
+      "rx_mbit_s": 1.3,
+      "tx_mbit_s": 0.08,
+      "rx_bytes_per_req": 2592.8,
+      "tx_bytes_per_req": 153.1
+     },
+     "docker0": {
+      "rx_mbit_s": 0.0,
+      "tx_mbit_s": 0.0,
+      "rx_bytes_per_req": 0.0,
+      "tx_bytes_per_req": 0.0
+     }
+    },
+    "gw_guard_bytes_per_req": 2745.9,
+    "owner_queue_gauges": {
+     "o.guard_queue_items.max": {
+      "max": 1.0,
+      "mean": 0.08
+     },
+     "o.guard_queue_items.sum": {
+      "max": 1.0,
+      "mean": 0.08
+     },
+     "o.guard_queue_windows.max": {
+      "max": 3.0,
+      "mean": 0.13
+     },
+     "o.guard_queue_windows.sum": {
+      "max": 3.0,
+      "mean": 0.13
+     }
+    },
+    "owner_hist": {
+     "guard_queue_ns": {
+      "n": 18881,
+      "p50_ms": 0.0865,
+      "p90_ms": 0.105,
+      "p99_ms": 0.1321,
+      "p99.9_ms": 0.8561,
+      "mean_ms": 0.0895
+     },
+     "guard_exec_ns": {
+      "n": 18881,
+      "p50_ms": 4.1452,
+      "p90_ms": 4.2926,
+      "p99_ms": 6.3242,
+      "p99.9_ms": 6.4553,
+      "mean_ms": 3.4535
+     }
+    },
+    "owner_counts": {
+     "guard_batches": 18881,
+     "guard_windows": 31016,
+     "owner_requests": 18880,
+     "owner_windows": 31015
+    },
+    "core_util": {
+     "max": 0.126,
+     "mean": 0.069
+    }
+   }
+  },
+  "extras": {},
+  "gw_cpu_ms_per_req": 10.686,
+  "gw_cores_busy_total": 0.69,
+  "guard_rtt": {
+   "n": 18883,
+   "p50_ms": 4.8169,
+   "p90_ms": 5.0135,
+   "p99_ms": 7.0451,
+   "p99.9_ms": 7.3073,
+   "mean_ms": 4.0937
+  },
+  "t_input": {
+   "n": 18883,
+   "p50_ms": 6.1932,
+   "p90_ms": 7.1107,
+   "p99_ms": 9.3716,
+   "p99.9_ms": 9.8959,
+   "mean_ms": 5.4884
+  },
+  "loop_lag": {
+   "n": 35880,
+   "p50_ms": 0.0027,
+   "p90_ms": 1.0035,
+   "p99_ms": 2.9983,
+   "p99.9_ms": 4.1124,
+   "mean_ms": 0.3175
+  },
+  "worker_util_max": 0.07,
+  "windows_per_request": 1.643,
+  "gw_admitted_share": {
+   "rv-split-gw-1": 18883
+  },
+  "gw_core_util_schedstat": {
+   "max": 0.054,
+   "mean": 0.043,
+   "sum_cores": 0.69
+  },
+  "gw_worker_util": {
+   "n": 12,
+   "min": 0.048,
+   "median": 0.056,
+   "max": 0.07
+  },
+  "gw_nic": {
+   "ens3": {
+    "rx_mbit_s": 34.63,
+    "tx_mbit_s": 36.88,
+    "rx_bytes_per_req": 68934.1,
+    "tx_bytes_per_req": 73420.9
+   }
+  },
+  "guard_wait": {
+   "n": 18883,
+   "p50_ms": 4.6858,
+   "p90_ms": 4.8824,
+   "p99_ms": 6.914,
+   "p99.9_ms": 7.4383,
+   "mean_ms": 4.0012
+  },
+  "guard_queue_seen_by_worker": {
+   "n": 18883,
+   "p50_ms": 0.0865,
+   "p90_ms": 0.105,
+   "p99_ms": 0.1321,
+   "p99.9_ms": 0.8561,
+   "mean_ms": 0.0895
+  },
+  "guard_exec_seen_by_worker": {
+   "n": 18883,
+   "p50_ms": 4.1452,
+   "p90_ms": 4.2926,
+   "p99_ms": 6.3242,
+   "p99.9_ms": 6.4553,
+   "mean_ms": 3.4534
+  },
+  "gw_counts": {
+   "admitted": 18883,
+   "audit_enqueued": 37448,
+   "audit_written": 37449,
+   "background_round_trips": 7176,
+   "disposition_ALLOW": 18548,
+   "disposition_BLOCK": 335,
+   "guard_windows": 31018,
+   "lease_granted_tokens{org=\"org-a\"}": 17804800,
+   "lease_refills": 130,
+   "provider_calls": 18548,
+   "provider_connections_opened": 12268,
+   "quota_admitted_tokens{org=\"org-a\"}": 17856878,
+   "requests_by_round_trips{n=\"0\"}": 18753,
+   "requests_by_round_trips{n=\"1\"}": 130,
+   "shared_state_round_trips": 130
+  }
+ },
+ "gws": {
+  "rv-split-gw-1": {
+   "schedule": {
+    "start": 1790178099.489,
+    "meas_start": 1790178189.489,
+    "meas_end": 1790178489.489,
+    "end": 1790178529.489,
+    "hz": 100,
+    "ncpu": 16
+   },
+   "samples_in_window": 302,
+   "window_s": 301.0,
+   "cpu_cores_by_role": {
+    "launcher": 0.0,
+    "redis": 0.004,
+    "worker": 0.671
+   },
+   "cpu_cores_by_role_ticks": {
+    "launcher": 0.0,
+    "redis": 0.004,
+    "worker": 0.671
+   },
+   "gateway_cores": 0.671,
+   "gateway_cpu_ms_per_req": 10.692,
+   "worker_cpu_ms_per_req": 10.69,
+   "owner_cpu_ms_per_req": 0.0,
+   "redis_cpu_ms_per_req": 0.059,
+   "triton_cpu_ms_per_req": null,
+   "processes_without_window_start": [],
+   "worker_util": {
+    "n": 12,
+    "min": 0.048,
+    "median": 0.056,
+    "max": 0.07
+   },
+   "per_core_util_schedstat": {
+    "max": 0.054,
+    "mean": 0.043,
+    "sum_cores": 0.69,
+    "values": [
+     0.034,
+     0.029,
+     0.046,
+     0.043,
+     0.05,
+     0.043,
+     0.047,
+     0.03,
+     0.052,
+     0.046,
+     0.049,
+     0.046,
+     0.054,
+     0.044,
+     0.029,
+     0.05
+    ]
+   },
+   "per_core_util_procstat": {
+    "max": 0.078,
+    "mean": 0.063,
+    "values": [
+     0.054,
+     0.039,
+     0.069,
+     0.062,
+     0.068,
+     0.062,
+     0.072,
+     0.044,
+     0.075,
+     0.066,
+     0.068,
+     0.073,
+     0.076,
+     0.065,
+     0.043,
+     0.078
+    ]
+   },
+   "rss_mb_max_total_by_role": {
+    "redis": 258.3,
+    "launcher": 14.6,
+    "worker": 2259.1
+   },
+   "rss_mb_max_single_proc_by_role": {
+    "redis": 258.3,
+    "launcher": 14.6,
+    "worker": 188.8
+   },
+   "fds_max_total_by_role": {
+    "redis": 0,
+    "launcher": 3,
+    "worker": 887
+   },
+   "loadavg_max": 1.19,
+   "gauges_window": {
+    "w.active_streams.max": {
+     "max": 28.0,
+     "mean": 22.54
+    },
+    "w.active_streams.sum": {
+     "max": 218.0,
+     "mean": 194.67
+    },
+    "w.audit_dropped.max": {
+     "max": 0.0,
+     "mean": 0.0
+    },
+    "w.audit_dropped.sum": {
+     "max": 0.0,
+     "mean": 0.0
+    },
+    "w.audit_queue_depth.max": {
+     "max": 1.0,
+     "mean": 0.02
+    },
+    "w.audit_queue_depth.sum": {
+     "max": 1.0,
+     "mean": 0.02
+    },
+    "w.guard_inflight_tokens.max": {
+     "max": 1536.0,
+     "mean": 310.56
+    },
+    "w.guard_inflight_tokens.sum": {
+     "max": 3072.0,
+     "mean": 386.1
+    },
+    "w.guard_queue_items.max": {
+     "max": 1.0,
+     "mean": 0.33
+    },
+    "w.guard_queue_items.sum": {
+     "max": 2.0,
+     "mean": 0.34
+    },
+    "w.guard_queue_windows.max": {
+     "max": 3.0,
+     "mean": 0.61
+    },
+    "w.guard_queue_windows.sum": {
+     "max": 4.0,
+     "mean": 0.64
+    },
+    "w.inflight_requests.max": {
+     "max": 33.0,
+     "mean": 31.36
+    },
+    "w.inflight_requests.sum": {
+     "max": 315.0,
+     "mean": 288.11
+    },
+    "w.input_queue_depth.max": {
+     "max": 1.0,
+     "mean": 0.33
+    },
+    "w.input_queue_depth.sum": {
+     "max": 3.0,
+     "mean": 0.41
+    }
+   },
+   "timeseries_10s": [
+    {
+     "t": -24.6,
+     "gw_rss_mb": 2269.3,
+     "gw_fds": 255,
+     "tcp": "TCP: inuse 151 orphan 0 tw 2 alloc 153 mem 0",
+     "active_streams": 0.0,
+     "inflight": 0.0
+    },
+    {
+     "t": -14.6,
+     "gw_rss_mb": 2269.3,
+     "gw_fds": 255,
+     "tcp": "TCP: inuse 151 orphan 0 tw 2 alloc 153 mem 0",
+     "active_streams": 0.0,
+     "inflight": 0.0
+    },
+    {
+     "t": -4.6,
+     "gw_rss_mb": 2269.3,
+     "gw_fds": 255,
+     "tcp": "TCP: inuse 151 orphan 0 tw 2 alloc 153 mem 0",
+     "active_streams": 0.0,
+     "inflight": 0.0
+    },
+    {
+     "t": 5.4,
+     "gw_rss_mb": 2269.3,
+     "gw_fds": 309,
+     "tcp": "TCP: inuse 205 orphan 0 tw 2 alloc 207 mem 0",
+     "active_streams": 15.0,
+     "inflight": 24.0
+    },
+    {
+     "t": 15.4,
+     "gw_rss_mb": 2269.3,
+     "gw_fds": 506,
+     "tcp": "TCP: inuse 402 orphan 0 tw 2 alloc 404 mem 93",
+     "active_streams": 85.0,
+     "inflight": 122.0
+    },
+    {
+     "t": 25.4,
+     "gw_rss_mb": 2269.5,
+     "gw_fds": 683,
+     "tcp": "TCP: inuse 579 orphan 0 tw 2 alloc 581 mem 364",
+     "active_streams": 143.0,
+     "inflight": 213.0
+    },
+    {
+     "t": 35.4,
+     "gw_rss_mb": 2270.6,
+     "gw_fds": 848,
+     "tcp": "TCP: inuse 745 orphan 0 tw 1 alloc 747 mem 638",
+     "active_streams": 193.0,
+     "inflight": 294.0
+    },
+    {
+     "t": 45.4,
+     "gw_rss_mb": 2271.0,
+     "gw_fds": 849,
+     "tcp": "TCP: inuse 745 orphan 0 tw 0 alloc 747 mem 136",
+     "active_streams": 183.0,
+     "inflight": 283.0
+    },
+    {
+     "t": 55.4,
+     "gw_rss_mb": 2271.3,
+     "gw_fds": 878,
+     "tcp": "TCP: inuse 774 orphan 0 tw 0 alloc 776 mem 668",
+     "active_streams": 202.0,
+     "inflight": 306.0
+    },
+    {
+     "t": 65.4,
+     "gw_rss_mb": 2271.5,
+     "gw_fds": 865,
+     "tcp": "TCP: inuse 761 orphan 0 tw 0 alloc 763 mem 168",
+     "active_streams": 193.0,
+     "inflight": 289.0
+    },
+    {
+     "t": 75.4,
+     "gw_rss_mb": 2271.5,
+     "gw_fds": 875,
+     "tcp": "TCP: inuse 771 orphan 0 tw 0 alloc 773 mem 695",
+     "active_streams": 202.0,
+     "inflight": 300.0
+    },
+    {
+     "t": 85.4,
+     "gw_rss_mb": 2271.6,
+     "gw_fds": 873,
+     "tcp": "TCP: inuse 769 orphan 0 tw 0 alloc 771 mem 710",
+     "active_streams": 199.0,
+     "inflight": 298.0
+    },
+    {
+     "t": 95.4,
+     "gw_rss_mb": 2271.9,
+     "gw_fds": 863,
+     "tcp": "TCP: inuse 759 orphan 0 tw 0 alloc 761 mem 0",
+     "active_streams": 198.0,
+     "inflight": 291.0
+    },
+    {
+     "t": 105.4,
+     "gw_rss_mb": 2271.9,
+     "gw_fds": 853,
+     "tcp": "TCP: inuse 749 orphan 0 tw 0 alloc 751 mem 468",
+     "active_streams": 190.0,
+     "inflight": 278.0
+    },
+    {
+     "t": 115.4,
+     "gw_rss_mb": 2272.0,
+     "gw_fds": 861,
+     "tcp": "TCP: inuse 757 orphan 0 tw 0 alloc 759 mem 0",
+     "active_streams": 192.0,
+     "inflight": 284.0
+    },
+    {
+     "t": 125.4,
+     "gw_rss_mb": 2272.0,
+     "gw_fds": 857,
+     "tcp": "TCP: inuse 753 orphan 0 tw 0 alloc 755 mem 269",
+     "active_streams": 185.0,
+     "inflight": 280.0
+    },
+    {
+     "t": 135.4,
+     "gw_rss_mb": 2272.2,
+     "gw_fds": 868,
+     "tcp": "TCP: inuse 764 orphan 0 tw 0 alloc 766 mem 0",
+     "active_streams": 194.0,
+     "inflight": 292.0
+    },
+    {
+     "t": 145.4,
+     "gw_rss_mb": 2272.3,
+     "gw_fds": 862,
+     "tcp": "TCP: inuse 758 orphan 0 tw 0 alloc 760 mem 0",
+     "active_streams": 195.0,
+     "inflight": 288.0
+    },
+    {
+     "t": 155.4,
+     "gw_rss_mb": 2272.3,
+     "gw_fds": 865,
+     "tcp": "TCP: inuse 761 orphan 0 tw 0 alloc 763 mem 312",
+     "active_streams": 194.0,
+     "inflight": 290.0
+    },
+    {
+     "t": 165.4,
+     "gw_rss_mb": 2272.4,
+     "gw_fds": 851,
+     "tcp": "TCP: inuse 747 orphan 0 tw 6 alloc 749 mem 1099",
+     "active_streams": 193.0,
+     "inflight": 282.0
+    },
+    {
+     "t": 175.4,
+     "gw_rss_mb": 2272.5,
+     "gw_fds": 867,
+     "tcp": "TCP: inuse 768 orphan 0 tw 8 alloc 770 mem 0",
+     "active_streams": 195.0,
+     "inflight": 301.0
+    },
+    {
+     "t": 185.4,
+     "gw_rss_mb": 2272.5,
+     "gw_fds": 854,
+     "tcp": "TCP: inuse 753 orphan 0 tw 10 alloc 755 mem 871",
+     "active_streams": 192.0,
+     "inflight": 282.0
+    },
+    {
+     "t": 195.4,
+     "gw_rss_mb": 2272.7,
+     "gw_fds": 854,
+     "tcp": "TCP: inuse 752 orphan 0 tw 10 alloc 754 mem 125",
+     "active_streams": 196.0,
+     "inflight": 292.0
+    },
+    {
+     "t": 205.4,
+     "gw_rss_mb": 2272.7,
+     "gw_fds": 850,
+     "tcp": "TCP: inuse 748 orphan 0 tw 10 alloc 750 mem 152",
+     "active_streams": 184.0,
+     "inflight": 279.0
+    },
+    {
+     "t": 215.4,
+     "gw_rss_mb": 2273.1,
+     "gw_fds": 880,
+     "tcp": "TCP: inuse 777 orphan 0 tw 10 alloc 779 mem 701",
+     "active_streams": 218.0,
+     "inflight": 315.0
+    },
+    {
+     "t": 225.4,
+     "gw_rss_mb": 2273.3,
+     "gw_fds": 856,
+     "tcp": "TCP: inuse 753 orphan 0 tw 10 alloc 755 mem 969",
+     "active_streams": 183.0,
+     "inflight": 277.0
+    },
+    {
+     "t": 235.4,
+     "gw_rss_mb": 2273.3,
+     "gw_fds": 867,
+     "tcp": "TCP: inuse 764 orphan 0 tw 4 alloc 766 mem 231",
+     "active_streams": 195.0,
+     "inflight": 289.0
+    },
+    {
+     "t": 245.4,
+     "gw_rss_mb": 2273.3,
+     "gw_fds": 859,
+     "tcp": "TCP: inuse 756 orphan 0 tw 0 alloc 758 mem 0",
+     "active_streams": 182.0,
+     "inflight": 280.0
+    },
+    {
+     "t": 255.4,
+     "gw_rss_mb": 2273.3,
+     "gw_fds": 858,
+     "tcp": "TCP: inuse 755 orphan 0 tw 0 alloc 757 mem 778",
+     "active_streams": 194.0,
+     "inflight": 291.0
+    },
+    {
+     "t": 265.4,
+     "gw_rss_mb": 2273.3,
+     "gw_fds": 860,
+     "tcp": "TCP: inuse 757 orphan 0 tw 0 alloc 759 mem 35",
+     "active_streams": 205.0,
+     "inflight": 293.0
+    },
+    {
+     "t": 275.4,
+     "gw_rss_mb": 2273.4,
+     "gw_fds": 872,
+     "tcp": "TCP: inuse 769 orphan 0 tw 0 alloc 771 mem 572",
+     "active_streams": 200.0,
+     "inflight": 286.0
+    },
+    {
+     "t": 285.4,
+     "gw_rss_mb": 2273.4,
+     "gw_fds": 862,
+     "tcp": "TCP: inuse 759 orphan 0 tw 0 alloc 761 mem 316",
+     "active_streams": 188.0,
+     "inflight": 277.0
+    },
+    {
+     "t": 295.4,
+     "gw_rss_mb": 2273.4,
+     "gw_fds": 864,
+     "tcp": "TCP: inuse 761 orphan 0 tw 7 alloc 763 mem 353",
+     "active_streams": 209.0,
+     "inflight": 297.0
+    },
+    {
+     "t": 305.4,
+     "gw_rss_mb": 2273.5,
+     "gw_fds": 865,
+     "tcp": "TCP: inuse 762 orphan 0 tw 8 alloc 764 mem 0",
+     "active_streams": 192.0,
+     "inflight": 290.0
+    },
+    {
+     "t": 315.4,
+     "gw_rss_mb": 2273.6,
+     "gw_fds": 855,
+     "tcp": "TCP: inuse 752 orphan 0 tw 8 alloc 754 mem 655",
+     "active_streams": 193.0,
+     "inflight": 288.0
+    },
+    {
+     "t": 325.4,
+     "gw_rss_mb": 2273.6,
+     "gw_fds": 858,
+     "tcp": "TCP: inuse 755 orphan 0 tw 8 alloc 757 mem 416",
+     "active_streams": 195.0,
+     "inflight": 286.0
+    },
+    {
+     "t": 335.4,
+     "gw_rss_mb": 2273.6,
+     "gw_fds": 851,
+     "tcp": "TCP: inuse 747 orphan 0 tw 8 alloc 749 mem 183",
+     "active_streams": 199.0,
+     "inflight": 283.0
+    },
+    {
+     "t": 345.4,
+     "gw_rss_mb": 2273.6,
+     "gw_fds": 862,
+     "tcp": "TCP: inuse 759 orphan 0 tw 8 alloc 761 mem 204",
+     "active_streams": 190.0,
+     "inflight": 289.0
+    },
+    {
+     "t": 355.4,
+     "gw_rss_mb": 2273.6,
+     "gw_fds": 862,
+     "tcp": "TCP: inuse 759 orphan 0 tw 1 alloc 761 mem 482",
+     "active_streams": 196.0,
+     "inflight": 290.0
+    },
+    {
+     "t": 365.4,
+     "gw_rss_mb": 2273.7,
+     "gw_fds": 843,
+     "tcp": "TCP: inuse 740 orphan 0 tw 0 alloc 742 mem 240",
+     "active_streams": 187.0,
+     "inflight": 274.0
+    },
+    {
+     "t": 375.4,
+     "gw_rss_mb": 2273.7,
+     "gw_fds": 848,
+     "tcp": "TCP: inuse 746 orphan 0 tw 0 alloc 748 mem 5",
+     "active_streams": 181.0,
+     "inflight": 279.0
+    },
+    {
+     "t": 385.4,
+     "gw_rss_mb": 2273.7,
+     "gw_fds": 857,
+     "tcp": "TCP: inuse 754 orphan 0 tw 0 alloc 756 mem 278",
+     "active_streams": 193.0,
+     "inflight": 288.0
+    },
+    {
+     "t": 395.4,
+     "gw_rss_mb": 2273.7,
+     "gw_fds": 684,
+     "tcp": "TCP: inuse 581 orphan 0 tw 6 alloc 583 mem 0",
+     "active_streams": 30.0,
+     "inflight": 43.0
+    },
+    {
+     "t": 405.4,
+     "gw_rss_mb": 2273.7,
+     "gw_fds": 255,
+     "tcp": "TCP: inuse 153 orphan 0 tw 6 alloc 155 mem 0",
+     "active_streams": 0.0,
+     "inflight": 0.0
+    },
+    {
+     "t": 415.4,
+     "gw_rss_mb": 2273.7,
+     "gw_fds": 255,
+     "tcp": "TCP: inuse 153 orphan 0 tw 6 alloc 155 mem 0",
+     "active_streams": 0.0,
+     "inflight": 0.0
+    },
+    {
+     "t": 425.4,
+     "gw_rss_mb": 2273.7,
+     "gw_fds": 255,
+     "tcp": "TCP: inuse 152 orphan 0 tw 7 alloc 154 mem 0",
+     "active_streams": 0.0,
+     "inflight": 0.0
+    }
+   ],
+   "worker_hist": {
+    "loop_lag_ns": {
+     "n": 35880,
+     "mean_ms": 0.3175,
+     "p50_ms": 0.0027,
+     "p90_ms": 1.0035,
+     "p99_ms": 2.9983,
+     "p99.9_ms": 4.1124,
+     "max_cum_ms": 12.1103
+    },
+    "t_admit_ns": {
+     "n": 18883,
+     "mean_ms": 0.0514,
+     "p50_ms": 0.0504,
+     "p90_ms": 0.0607,
+     "p99_ms": 0.0906,
+     "p99.9_ms": 0.2847,
+     "max_cum_ms": 3.8393
+    },
+    "round_trips_per_request": {
+     "n": 18883,
+     "mean_ms": 0.0,
+     "p50_ms": 0.0,
+     "p90_ms": 0.0,
+     "p99_ms": 0.0,
+     "p99.9_ms": 0.0,
+     "max_cum_ms": 0.0
+    },
+    "t_plan_ns": {
+     "n": 18883,
+     "mean_ms": 0.0059,
+     "p50_ms": 0.0057,
+     "p90_ms": 0.0064,
+     "p99_ms": 0.0106,
+     "p99.9_ms": 0.0191,
+     "max_cum_ms": 0.0291
+    },
+    "t_canon_ns": {
+     "n": 18883,
+     "mean_ms": 0.0036,
+     "p50_ms": 0.0034,
+     "p90_ms": 0.0041,
+     "p99_ms": 0.0064,
+     "p99.9_ms": 0.0161,
+     "max_cum_ms": 0.4158
+    },
+    "t_tokenize_ns": {
+     "n": 18883,
+     "mean_ms": 1.2249,
+     "p50_ms": 1.237,
+     "p90_ms": 1.9087,
+     "p99_ms": 2.2446,
+     "p99.9_ms": 2.6051,
+     "max_cum_ms": 5.0284
+    },
+    "guard_windows_per_request": {
+     "n": 18883,
+     "mean_ms": 0.0,
+     "p50_ms": 0.0,
+     "p90_ms": 0.0,
+     "p99_ms": 0.0,
+     "p99.9_ms": 0.0,
+     "max_cum_ms": 0.0
+    },
+    "t_det_scan_ns": {
+     "n": 18883,
+     "mean_ms": 0.0585,
+     "p50_ms": 0.0581,
+     "p90_ms": 0.0742,
+     "p99_ms": 0.0927,
+     "p99.9_ms": 0.107,
+     "max_cum_ms": 0.6933
+    },
+    "guard_owner_rtt_ns": {
+     "n": 18883,
+     "mean_ms": 4.0937,
+     "p50_ms": 4.8169,
+     "p90_ms": 5.0135,
+     "p99_ms": 7.0451,
+     "p99.9_ms": 7.3073,
+     "max_cum_ms": 13.7078
+    },
+    "guard_queue_ns": {
+     "n": 18883,
+     "mean_ms": 0.0895,
+     "p50_ms": 0.0865,
+     "p90_ms": 0.105,
+     "p99_ms": 0.1321,
+     "p99.9_ms": 0.8561,
+     "max_cum_ms": 1.3614
+    },
+    "guard_exec_ns": {
+     "n": 18883,
+     "mean_ms": 3.4534,
+     "p50_ms": 4.1452,
+     "p90_ms": 4.2926,
+     "p99_ms": 6.3242,
+     "p99.9_ms": 6.4553,
+     "max_cum_ms": 8.9979
+    },
+    "t_guard_wait_ns": {
+     "n": 18883,
+     "mean_ms": 4.0012,
+     "p50_ms": 4.6858,
+     "p90_ms": 4.8824,
+     "p99_ms": 6.914,
+     "p99.9_ms": 7.4383,
+     "max_cum_ms": 13.5063
+    },
+    "t_resolve_ns": {
+     "n": 18883,
+     "mean_ms": 0.0116,
+     "p50_ms": 0.0112,
+     "p90_ms": 0.0129,
+     "p99_ms": 0.0211,
+     "p99.9_ms": 0.0262,
+     "max_cum_ms": 0.0623
+    },
+    "t_input_ns": {
+     "n": 18883,
+     "mean_ms": 5.4884,
+     "p50_ms": 6.1932,
+     "p90_ms": 7.1107,
+     "p99_ms": 9.3716,
+     "p99.9_ms": 9.8959,
+     "max_cum_ms": 20.0023
+    },
+    "audit_batch_write_ns": {
+     "n": 37439,
+     "mean_ms": 0.2171,
+     "p50_ms": 0.2017,
+     "p90_ms": 0.2724,
+     "p99_ms": 0.4157,
+     "p99.9_ms": 2.5068,
+     "max_cum_ms": 5.2191
+    },
+    "dispatch_headers_ns": {
+     "n": 18558,
+     "mean_ms": 1504.3467,
+     "p50_ms": 149.9464,
+     "p90_ms": 5804.9167,
+     "p99_ms": 7952.4004,
+     "p99.9_ms": 8153.727,
+     "max_cum_ms": 8133.3958
+    },
+    "release_processing_ns": {
+     "n": 2892414,
+     "mean_ms": 0.0216,
+     "p50_ms": 0.0201,
+     "p90_ms": 0.0283,
+     "p99_ms": 0.0422,
+     "p99.9_ms": 0.055,
+     "max_cum_ms": 0.6168
+    },
+    "release_lag_ns": {
+     "n": 2892414,
+     "mean_ms": 19.8494,
+     "p50_ms": 20.054,
+     "p90_ms": 20.054,
+     "p99_ms": 40.108,
+     "p99.9_ms": 40.108,
+     "max_cum_ms": 101.6965
+    },
+    "holdback_wait_ns": {
+     "n": 2819422,
+     "mean_ms": 20.3411,
+     "p50_ms": 20.054,
+     "p90_ms": 20.054,
+     "p99_ms": 40.108,
+     "p99.9_ms": 40.108,
+     "max_cum_ms": 101.6515
+    },
+    "provider_total_ns": {
+     "n": 18565,
+     "mean_ms": 4648.3951,
+     "p50_ms": 4664.066,
+     "p90_ms": 7482.6383,
+     "p99_ms": 8086.6181,
+     "p99.9_ms": 8153.727,
+     "max_cum_ms": 8133.4074
+    },
+    "t_output_scan_ns": {
+     "n": 5567,
+     "mean_ms": 0.0539,
+     "p50_ms": 0.0535,
+     "p90_ms": 0.0627,
+     "p99_ms": 0.0753,
+     "p99.9_ms": 0.0886,
+     "max_cum_ms": 0.1206
+    },
+    "t_finalize_ns": {
+     "n": 18565,
+     "mean_ms": 0.105,
+     "p50_ms": 0.105,
+     "p90_ms": 0.1193,
+     "p99_ms": 0.1444,
+     "p99.9_ms": 0.171,
+     "max_cum_ms": 0.2166
+    },
+    "t_total_ns": {
+     "n": 18565,
+     "mean_ms": 4653.9736,
+     "p50_ms": 4664.066,
+     "p90_ms": 7482.6383,
+     "p99_ms": 8086.6181,
+     "p99.9_ms": 8153.727,
+     "max_cum_ms": 8142.7847
+    },
+    "provider_first_bytes_ns": {
+     "n": 12998,
+     "mean_ms": 150.5909,
+     "p50_ms": 149.9464,
+     "p90_ms": 149.9464,
+     "p99_ms": 152.0435,
+     "p99.9_ms": 154.1407,
+     "max_cum_ms": 162.6948
+    },
+    "release_lag_max_ns": {
+     "n": 12998,
+     "mean_ms": 39.8452,
+     "p50_ms": 40.108,
+     "p90_ms": 40.108,
+     "p99_ms": 60.031,
+     "p99.9_ms": 80.2161,
+     "max_cum_ms": 101.6965
+    },
+    "output_scans_per_request": {
+     "n": 12998,
+     "mean_ms": 0.0002,
+     "p50_ms": 0.0002,
+     "p90_ms": 0.0004,
+     "p99_ms": 0.0004,
+     "p99.9_ms": 0.0004,
+     "max_cum_ms": 0.0004
+    }
+   },
+   "worker_counts": {
+    "admitted": 18883,
+    "audit_enqueued": 37448,
+    "audit_written": 37449,
+    "background_round_trips": 7176,
+    "disposition_ALLOW": 18548,
+    "disposition_BLOCK": 335,
+    "guard_windows": 31018,
+    "lease_granted_tokens{org=\"org-a\"}": 17804800,
+    "lease_refills": 130,
+    "provider_calls": 18548,
+    "provider_connections_opened": 12268,
+    "quota_admitted_tokens{org=\"org-a\"}": 17856878,
+    "requests_by_round_trips{n=\"0\"}": 18753,
+    "requests_by_round_trips{n=\"1\"}": 130,
+    "shared_state_round_trips": 130
+   },
+   "owner_hist": {},
+   "owner_counts": {},
+   "snapshot_notes": [],
+   "worker_gauges_at_end": {
+    "audit_queue_bound": [
+     60
+    ],
+    "guard_tokens_per_s": [
+     20119.190565908226
+    ],
+    "audit_completeness_ratio": [
+     1.0
+    ],
+    "audit_dropped": [
+     0
+    ],
+    "inflight_cap": [
+     786423.0
+    ],
+    "input_queue_cap": [
+     53.0
+    ],
+    "guard_queue_cap_tokens": [
+     20119.0
+    ]
+   },
+   "owner_gauges_at_end": []
+  }
+ },
+ "guards": {
+  "rv-split-guard-1": {
+   "schedule": {
+    "start": 1790178099.489,
+    "meas_start": 1790178189.489,
+    "meas_end": 1790178489.489,
+    "end": 1790178529.489,
+    "hz": 100,
+    "ncpu": 4
+   },
+   "samples_in_window": 302,
+   "window_s": 301.0,
+   "cpu_cores_by_role": {
+    "launcher": 0.0,
+    "owner": 0.244,
+    "owner0": 0.244,
+    "redis": 0.001
+   },
+   "cpu_cores_by_role_ticks": {
+    "launcher": 0.0,
+    "owner": 0.244,
+    "redis": 0.001
+   },
+   "gateway_cores": 0.244,
+   "gateway_cpu_ms_per_req": 3.885,
+   "worker_cpu_ms_per_req": 0.0,
+   "owner_cpu_ms_per_req": 3.881,
+   "redis_cpu_ms_per_req": 0.017,
+   "triton_cpu_ms_per_req": null,
+   "processes_without_window_start": [],
+   "worker_util": {
+    "n": 0,
+    "min": null,
+    "median": null,
+    "max": null
+   },
+   "per_core_util_schedstat": {
+    "max": 0.126,
+    "mean": 0.069,
+    "sum_cores": 0.27,
+    "values": [
+     0.035,
+     0.069,
+     0.044,
+     0.126
+    ]
+   },
+   "per_core_util_procstat": {
+    "max": 0.126,
+    "mean": 0.072,
+    "values": [
+     0.048,
+     0.07,
+     0.043,
+     0.126
+    ]
+   },
+   "rss_mb_max_total_by_role": {
+    "redis": 10.9,
+    "launcher": 38.5,
+    "owner": 1629.1
+   },
+   "rss_mb_max_single_proc_by_role": {
+    "redis": 10.9,
+    "launcher": 38.5,
+    "owner": 1629.1
+   },
+   "fds_max_total_by_role": {
+    "redis": 0,
+    "launcher": 3,
+    "owner": 62
+   },
+   "unit_nic": {
+    "rx_mbit_s": 1.3,
+    "tx_mbit_s": 0.08,
+    "rx_bytes_per_req": 2592.8,
+    "tx_bytes_per_req": 153.1
+   },
+   "loadavg_max": 0.42,
+   "gauges_window": {
+    "o.guard_queue_items.max": {
+     "max": 1.0,
+     "mean": 0.08
+    },
+    "o.guard_queue_items.sum": {
+     "max": 1.0,
+     "mean": 0.08
+    },
+    "o.guard_queue_windows.max": {
+     "max": 3.0,
+     "mean": 0.13
+    },
+    "o.guard_queue_windows.sum": {
+     "max": 3.0,
+     "mean": 0.13
+    }
+   },
+   "timeseries_10s": [
+    {
+     "t": -24.1,
+     "gw_rss_mb": 1667.6,
+     "gw_fds": 65,
+     "tcp": "TCP: inuse 20 orphan 0 tw 0 alloc 22 mem 201",
+     "active_streams": null,
+     "inflight": null
+    },
+    {
+     "t": -14.1,
+     "gw_rss_mb": 1667.6,
+     "gw_fds": 65,
+     "tcp": "TCP: inuse 20 orphan 0 tw 0 alloc 22 mem 201",
+     "active_streams": null,
+     "inflight": null
+    },
+    {
+     "t": -4.1,
+     "gw_rss_mb": 1667.6,
+     "gw_fds": 65,
+     "tcp": "TCP: inuse 20 orphan 0 tw 0 alloc 22 mem 201",
+     "active_streams": null,
+     "inflight": null
+    },
+    {
+     "t": 5.9,
+     "gw_rss_mb": 1667.6,
+     "gw_fds": 65,
+     "tcp": "TCP: inuse 20 orphan 0 tw 0 alloc 22 mem 201",
+     "active_streams": null,
+     "inflight": null
+    },
+    {
+     "t": 15.9,
+     "gw_rss_mb": 1667.6,
+     "gw_fds": 65,
+     "tcp": "TCP: inuse 20 orphan 0 tw 0 alloc 22 mem 201",
+     "active_streams": null,
+     "inflight": null
+    },
+    {
+     "t": 25.9,
+     "gw_rss_mb": 1667.6,
+     "gw_fds": 65,
+     "tcp": "TCP: inuse 20 orphan 0 tw 1 alloc 22 mem 0",
+     "active_streams": null,
+     "inflight": null
+    },
+    {
+     "t": 35.9,
+     "gw_rss_mb": 1667.6,
+     "gw_fds": 65,
+     "tcp": "TCP: inuse 20 orphan 0 tw 1 alloc 22 mem 0",
+     "active_streams": null,
+     "inflight": null
+    },
+    {
+     "t": 45.9,
+     "gw_rss_mb": 1667.6,
+     "gw_fds": 65,
+     "tcp": "TCP: inuse 20 orphan 0 tw 1 alloc 22 mem 0",
+     "active_streams": null,
+     "inflight": null
+    },
+    {
+     "t": 55.9,
+     "gw_rss_mb": 1667.6,
+     "gw_fds": 65,
+     "tcp": "TCP: inuse 20 orphan 0 tw 1 alloc 22 mem 0",
+     "active_streams": null,
+     "inflight": null
+    },
+    {
+     "t": 65.9,
+     "gw_rss_mb": 1667.6,
+     "gw_fds": 65,
+     "tcp": "TCP: inuse 20 orphan 0 tw 1 alloc 22 mem 0",
+     "active_streams": null,
+     "inflight": null
+    },
+    {
+     "t": 75.9,
+     "gw_rss_mb": 1667.6,
+     "gw_fds": 65,
+     "tcp": "TCP: inuse 20 orphan 0 tw 1 alloc 22 mem 0",
+     "active_streams": null,
+     "inflight": null
+    },
+    {
+     "t": 85.9,
+     "gw_rss_mb": 1667.6,
+     "gw_fds": 65,
+     "tcp": "TCP: inuse 20 orphan 0 tw 0 alloc 22 mem 0",
+     "active_streams": null,
+     "inflight": null
+    },
+    {
+     "t": 95.9,
+     "gw_rss_mb": 1667.6,
+     "gw_fds": 65,
+     "tcp": "TCP: inuse 20 orphan 0 tw 0 alloc 22 mem 0",
+     "active_streams": null,
+     "inflight": null
+    },
+    {
+     "t": 105.9,
+     "gw_rss_mb": 1667.6,
+     "gw_fds": 65,
+     "tcp": "TCP: inuse 20 orphan 0 tw 0 alloc 22 mem 0",
+     "active_streams": null,
+     "inflight": null
+    },
+    {
+     "t": 115.9,
+     "gw_rss_mb": 1667.6,
+     "gw_fds": 65,
+     "tcp": "TCP: inuse 20 orphan 0 tw 0 alloc 22 mem 0",
+     "active_streams": null,
+     "inflight": null
+    },
+    {
+     "t": 125.9,
+     "gw_rss_mb": 1667.6,
+     "gw_fds": 65,
+     "tcp": "TCP: inuse 22 orphan 0 tw 6 alloc 24 mem 0",
+     "active_streams": null,
+     "inflight": null
+    },
+    {
+     "t": 135.9,
+     "gw_rss_mb": 1667.6,
+     "gw_fds": 65,
+     "tcp": "TCP: inuse 23 orphan 0 tw 6 alloc 25 mem 0",
+     "active_streams": null,
+     "inflight": null
+    },
+    {
+     "t": 145.9,
+     "gw_rss_mb": 1667.6,
+     "gw_fds": 65,
+     "tcp": "TCP: inuse 23 orphan 0 tw 6 alloc 25 mem 0",
+     "active_streams": null,
+     "inflight": null
+    },
+    {
+     "t": 155.9,
+     "gw_rss_mb": 1667.6,
+     "gw_fds": 65,
+     "tcp": "TCP: inuse 22 orphan 0 tw 6 alloc 24 mem 0",
+     "active_streams": null,
+     "inflight": null
+    },
+    {
+     "t": 165.9,
+     "gw_rss_mb": 1667.6,
+     "gw_fds": 65,
+     "tcp": "TCP: inuse 21 orphan 0 tw 6 alloc 23 mem 0",
+     "active_streams": null,
+     "inflight": null
+    },
+    {
+     "t": 175.9,
+     "gw_rss_mb": 1667.6,
+     "gw_fds": 65,
+     "tcp": "TCP: inuse 21 orphan 0 tw 6 alloc 23 mem 0",
+     "active_streams": null,
+     "inflight": null
+    },
+    {
+     "t": 185.9,
+     "gw_rss_mb": 1667.6,
+     "gw_fds": 65,
+     "tcp": "TCP: inuse 21 orphan 0 tw 4 alloc 23 mem 0",
+     "active_streams": null,
+     "inflight": null
+    },
+    {
+     "t": 195.9,
+     "gw_rss_mb": 1667.6,
+     "gw_fds": 65,
+     "tcp": "TCP: inuse 21 orphan 0 tw 0 alloc 23 mem 0",
+     "active_streams": null,
+     "inflight": null
+    },
+    {
+     "t": 205.9,
+     "gw_rss_mb": 1667.6,
+     "gw_fds": 65,
+     "tcp": "TCP: inuse 21 orphan 0 tw 0 alloc 23 mem 0",
+     "active_streams": null,
+     "inflight": null
+    },
+    {
+     "t": 215.9,
+     "gw_rss_mb": 1667.6,
+     "gw_fds": 65,
+     "tcp": "TCP: inuse 21 orphan 0 tw 0 alloc 23 mem 0",
+     "active_streams": null,
+     "inflight": null
+    },
+    {
+     "t": 225.9,
+     "gw_rss_mb": 1667.6,
+     "gw_fds": 65,
+     "tcp": "TCP: inuse 21 orphan 0 tw 0 alloc 23 mem 0",
+     "active_streams": null,
+     "inflight": null
+    },
+    {
+     "t": 235.9,
+     "gw_rss_mb": 1667.6,
+     "gw_fds": 65,
+     "tcp": "TCP: inuse 21 orphan 0 tw 0 alloc 23 mem 0",
+     "active_streams": null,
+     "inflight": null
+    },
+    {
+     "t": 245.9,
+     "gw_rss_mb": 1667.6,
+     "gw_fds": 65,
+     "tcp": "TCP: inuse 21 orphan 0 tw 0 alloc 23 mem 0",
+     "active_streams": null,
+     "inflight": null
+    },
+    {
+     "t": 255.9,
+     "gw_rss_mb": 1667.6,
+     "gw_fds": 65,
+     "tcp": "TCP: inuse 21 orphan 0 tw 0 alloc 23 mem 0",
+     "active_streams": null,
+     "inflight": null
+    },
+    {
+     "t": 265.9,
+     "gw_rss_mb": 1667.6,
+     "gw_fds": 65,
+     "tcp": "TCP: inuse 21 orphan 0 tw 0 alloc 23 mem 0",
+     "active_streams": null,
+     "inflight": null
+    },
+    {
+     "t": 275.9,
+     "gw_rss_mb": 1667.6,
+     "gw_fds": 65,
+     "tcp": "TCP: inuse 21 orphan 0 tw 0 alloc 23 mem 0",
+     "active_streams": null,
+     "inflight": null
+    },
+    {
+     "t": 285.9,
+     "gw_rss_mb": 1667.6,
+     "gw_fds": 65,
+     "tcp": "TCP: inuse 21 orphan 0 tw 0 alloc 23 mem 0",
+     "active_streams": null,
+     "inflight": null
+    },
+    {
+     "t": 295.9,
+     "gw_rss_mb": 1667.6,
+     "gw_fds": 65,
+     "tcp": "TCP: inuse 21 orphan 0 tw 0 alloc 23 mem 202",
+     "active_streams": null,
+     "inflight": null
+    },
+    {
+     "t": 305.9,
+     "gw_rss_mb": 1667.6,
+     "gw_fds": 65,
+     "tcp": "TCP: inuse 21 orphan 0 tw 0 alloc 23 mem 0",
+     "active_streams": null,
+     "inflight": null
+    },
+    {
+     "t": 315.9,
+     "gw_rss_mb": 1667.6,
+     "gw_fds": 65,
+     "tcp": "TCP: inuse 21 orphan 0 tw 0 alloc 23 mem 0",
+     "active_streams": null,
+     "inflight": null
+    },
+    {
+     "t": 325.9,
+     "gw_rss_mb": 1667.6,
+     "gw_fds": 65,
+     "tcp": "TCP: inuse 21 orphan 0 tw 0 alloc 23 mem 0",
+     "active_streams": null,
+     "inflight": null
+    },
+    {
+     "t": 335.9,
+     "gw_rss_mb": 1667.6,
+     "gw_fds": 65,
+     "tcp": "TCP: inuse 21 orphan 0 tw 0 alloc 23 mem 0",
+     "active_streams": null,
+     "inflight": null
+    },
+    {
+     "t": 345.9,
+     "gw_rss_mb": 1667.6,
+     "gw_fds": 65,
+     "tcp": "TCP: inuse 21 orphan 0 tw 0 alloc 23 mem 202",
+     "active_streams": null,
+     "inflight": null
+    },
+    {
+     "t": 355.9,
+     "gw_rss_mb": 1667.6,
+     "gw_fds": 65,
+     "tcp": "TCP: inuse 21 orphan 0 tw 0 alloc 23 mem 0",
+     "active_streams": null,
+     "inflight": null
+    },
+    {
+     "t": 365.9,
+     "gw_rss_mb": 1667.6,
+     "gw_fds": 65,
+     "tcp": "TCP: inuse 21 orphan 0 tw 0 alloc 23 mem 0",
+     "active_streams": null,
+     "inflight": null
+    },
+    {
+     "t": 375.9,
+     "gw_rss_mb": 1667.6,
+     "gw_fds": 65,
+     "tcp": "TCP: inuse 20 orphan 0 tw 1 alloc 22 mem 0",
+     "active_streams": null,
+     "inflight": null
+    },
+    {
+     "t": 385.9,
+     "gw_rss_mb": 1667.6,
+     "gw_fds": 65,
+     "tcp": "TCP: inuse 20 orphan 0 tw 1 alloc 22 mem 0",
+     "active_streams": null,
+     "inflight": null
+    },
+    {
+     "t": 395.9,
+     "gw_rss_mb": 1667.6,
+     "gw_fds": 65,
+     "tcp": "TCP: inuse 20 orphan 0 tw 1 alloc 22 mem 0",
+     "active_streams": null,
+     "inflight": null
+    },
+    {
+     "t": 405.9,
+     "gw_rss_mb": 1667.6,
+     "gw_fds": 65,
+     "tcp": "TCP: inuse 21 orphan 0 tw 1 alloc 23 mem 0",
+     "active_streams": null,
+     "inflight": null
+    },
+    {
+     "t": 415.9,
+     "gw_rss_mb": 1667.6,
+     "gw_fds": 65,
+     "tcp": "TCP: inuse 21 orphan 0 tw 1 alloc 23 mem 0",
+     "active_streams": null,
+     "inflight": null
+    },
+    {
+     "t": 425.9,
+     "gw_rss_mb": 1667.6,
+     "gw_fds": 65,
+     "tcp": "TCP: inuse 21 orphan 0 tw 1 alloc 23 mem 0",
+     "active_streams": null,
+     "inflight": null
+    }
+   ],
+   "gpu": {
+    "0": {
+     "samples": 299,
+     "sm_mean": 19.1,
+     "sm_max": 27.0,
+     "mem_mean": 3.5,
+     "fb_mb_max": 434.0
+    }
+   },
+   "worker_hist": {},
+   "worker_counts": {},
+   "owner_hist": {
+    "guard_exec_ns": {
+     "n": 18881,
+     "mean_ms": 3.4535,
+     "p50_ms": 4.1452,
+     "p90_ms": 4.2926,
+     "p99_ms": 6.3242,
+     "p99.9_ms": 6.4553,
+     "max_cum_ms": 8.9979
+    },
+    "guard_batch_windows": {
+     "n": 18881,
+     "mean_ms": 0.0,
+     "p50_ms": 0.0,
+     "p90_ms": 0.0,
+     "p99_ms": 0.0,
+     "p99.9_ms": 0.0,
+     "max_cum_ms": 0.0
+    },
+    "guard_queue_ns": {
+     "n": 18881,
+     "mean_ms": 0.0895,
+     "p50_ms": 0.0865,
+     "p90_ms": 0.105,
+     "p99_ms": 0.1321,
+     "p99.9_ms": 0.8561,
+     "max_cum_ms": 1.3614
+    }
+   },
+   "owner_counts": {
+    "guard_batches": 18881,
+    "guard_windows": 31016,
+    "owner_requests": 18880,
+    "owner_windows": 31015
+   },
+   "snapshot_notes": [],
+   "worker_gauges_at_end": {},
+   "owner_gauges_at_end": [
+    {
+     "owner_clients": 12,
+     "owner_queued_tokens": 0,
+     "owner_queue_cap_tokens": 241430,
+     "guard_queue_items": 0,
+     "guard_queue_windows": 0,
+     "guard_queue_oldest_age_seconds": 0.0,
+     "guard_tokens_per_s": 241430.2867908987
+    }
+   ]
+  }
+ },
+ "extras": {}
+}

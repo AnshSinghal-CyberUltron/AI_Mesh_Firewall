@@ -1,0 +1,31 @@
+F
+=================================== FAILURES ===================================
+_______________ test_overload_sheds_immediately_with_retry_after _______________
+
+base = 'http://127.0.0.1:8400'
+
+    @pytest.mark.skipif(os.environ.get("E2E_OVERLOAD") != "1", reason="needs a stack with a tiny guard bound")
+    def test_overload_sheds_immediately_with_retry_after(base: str) -> None:
+        async def fire() -> list[httpx.Response]:
+            async with httpx.AsyncClient(base_url=base, timeout=60) as c:
+                return await asyncio.gather(*(c.post(
+                    "/v1/chat/completions", headers={"authorization": f"Bearer {KEY_B}", "x-request-id": rid(f"ov{i}")},
+                    json={"model": MODEL, "max_tokens": 3,
+                          "messages": [{"role": "user", "content": "benign words " * 60}]}) for i in range(40)))
+        before = _counts(base)
+        res = asyncio.run(fire())
+        shed = [r for r in res if r.status_code == 503]
+        admitted = [r for r in res if r.status_code == 200]
+        assert shed and admitted, [r.status_code for r in res]
+        for r in shed:
+            err = r.json()["error"]
+>           assert err["code"] == "overloaded" and err["type"] == "server_overloaded"
+E           AssertionError: assert ('shared_state_unavailable' == 'overloaded'
+E             
+E             - overloaded
+E             + shared_state_unavailable)
+
+tests/e2e/test_e10_addendum.py:172: AssertionError
+=========================== short test summary info ============================
+FAILED tests/e2e/test_e10_addendum.py::test_overload_sheds_immediately_with_retry_after
+1 failed in 0.68s

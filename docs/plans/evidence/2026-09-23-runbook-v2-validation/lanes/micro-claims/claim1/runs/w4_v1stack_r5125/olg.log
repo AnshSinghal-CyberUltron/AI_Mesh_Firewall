@@ -1,0 +1,38 @@
+2026/09/23 08:14:55 corpus: 1 entries sha256=eafeb5c8fc7b6fe8
+2026/09/23 08:14:55 waiting 4.556s for synchronized start
+2026/09/23 08:15:09 t=10s sched=25626 inflight=8 ok=25618 err=0 drops=0 conns=19
+2026/09/23 08:15:19 t=20s sched=76876 inflight=43 ok=76833 err=0 drops=0 conns=125
+2026/09/23 08:15:29 t=30s sched=128126 inflight=10 ok=128116 err=0 drops=0 conns=125
+2026/09/23 08:15:39 t=40s sched=179376 inflight=12 ok=179364 err=0 drops=0 conns=125
+2026/09/23 08:15:49 t=50s sched=230626 inflight=8 ok=230618 err=0 drops=0 conns=125
+2026/09/23 08:15:59 t=60s sched=281876 inflight=9 ok=281867 err=0 drops=0 conns=125
+2026/09/23 08:16:09 t=70s sched=333126 inflight=6 ok=333119 err=0 drops=0 conns=125
+2026/09/23 08:16:19 t=80s sched=384376 inflight=3 ok=384373 err=0 drops=0 conns=125
+2026/09/23 08:16:29 t=90s sched=435625 inflight=3 ok=435622 err=0 drops=0 conns=125
+2026/09/23 08:16:39 t=100s sched=486876 inflight=3 ok=486873 err=0 drops=0 conns=125
+2026/09/23 08:16:49 t=110s sched=538126 inflight=12 ok=538114 err=0 drops=0 conns=125
+2026/09/23 08:16:59 t=120s sched=589376 inflight=7 ok=589369 err=0 drops=0 conns=125
+2026/09/23 08:17:09 t=130s sched=640626 inflight=5 ok=640621 err=0 drops=0 conns=139
+2026/09/23 08:17:19 t=140s sched=691876 inflight=4 ok=691871 err=0 drops=0 conns=139
+2026/09/23 08:17:29 t=150s sched=743126 inflight=428 ok=742698 err=0 drops=0 conns=489
+2026/09/23 08:17:39 t=160s sched=794376 inflight=19982 ok=774394 err=0 drops=0 conns=7574
+2026/09/23 08:17:49 t=170s sched=845626 inflight=44432 ok=801161 err=33 drops=0 conns=10758
+2026/09/23 08:17:59 t=180s sched=896876 inflight=4228 ok=825403 err=67244 drops=242 conns=71662
+2026/09/23 08:18:09 t=190s sched=948126 inflight=4032 ok=850008 err=94085 drops=314 conns=98440
+2026/09/23 08:18:19 t=200s sched=999376 inflight=4161 ok=874706 err=120509 drops=325 conns=125188
+2026/09/23 08:18:29 t=210s sched=1050626 inflight=3985 ok=898948 err=147693 drops=342 conns=152427
+2026/09/23 08:18:39 t=220s sched=1101876 inflight=4044 ok=923367 err=174465 drops=348 conns=179433
+2026/09/23 08:18:49 t=230s sched=1153125 inflight=3934 ok=948028 err=201163 drops=360 conns=206315
+2026/09/23 08:18:59 t=240s sched=1204376 inflight=4093 ok=972445 err=227838 drops=367 conns=233274
+2026/09/23 08:19:09 t=250s sched=1255626 inflight=4029 ok=996758 err=254839 drops=393 conns=260436
+2026/09/23 08:19:19 t=260s sched=1306876 inflight=3968 ok=1021172 err=281736 drops=399 conns=287491
+2026/09/23 08:19:29 t=270s sched=1358126 inflight=3954 ok=1045365 err=308804 drops=410 conns=314755
+2026/09/23 08:19:39 t=280s sched=1409376 inflight=4024 ok=1069143 err=336209 drops=413 conns=342292
+2026/09/23 08:19:49 t=290s sched=1460626 inflight=4038 ok=1092767 err=363821 drops=461 conns=370078
+2026/09/23 08:19:59 t=300s sched=1511876 inflight=4016 ok=1116465 err=391395 drops=467 conns=397778
+2026/09/23 08:20:09 t=310s sched=1563126 inflight=4064 ok=1140086 err=418976 drops=477 conns=425538
+2026/09/23 08:20:19 t=320s sched=1614376 inflight=3991 ok=1163846 err=446539 drops=484 conns=453197
+2026/09/23 08:20:29 t=330s sched=1665626 inflight=3999 ok=1187506 err=474121 drops=520 conns=480934
+2026/09/23 08:20:39 t=340s sched=1716875 inflight=4013 ok=1211231 err=501631 drops=533 conns=508579
+2026/09/23 08:20:40 requests.jsonl close: sync /home/rv/runs/w4_v1stack_r5125/requests.jsonl: invalid argument
+2026/09/23 08:20:40 done: scheduled=1716875 recorded=1716875 ok=1215243 errors=map[eof_mid_stream:493833 transport:7799] drops=533 late_p99=112us max=36092us cpu_busy_max=35.7%

@@ -1,0 +1,58 @@
+{
+ "phase1_B_alone": {
+  "B": {
+   "who": "B(org-b short)",
+   "n": 15,
+   "outcomes": {
+    "200:None": 15
+   },
+   "ok_p50_ms": 26.1,
+   "ok_max_ms": 37.2,
+   "ok_stages": {
+    "canon:E,det:E,sem:E,resolve:E,dispatch:E,out:E,audit:E": 15
+   }
+  }
+ },
+ "phase2_A_plus_B": {
+  "B": {
+   "who": "B(org-b short)",
+   "n": 30,
+   "outcomes": {
+    "200:None": 30
+   },
+   "ok_p50_ms": 66.5,
+   "ok_max_ms": 90.1,
+   "ok_stages": {
+    "canon:E,det:E,sem:E,resolve:E,dispatch:E,out:E,audit:E": 30
+   }
+  },
+  "A": {
+   "who": "A(org-a 16-window)",
+   "n": 1708,
+   "outcomes": {
+    "413:context_length_exceeded": 1708
+   },
+   "ok_p50_ms": null,
+   "ok_max_ms": null,
+   "ok_stages": {}
+  }
+ },
+ "phase3_B_sdk_with_retries": {
+  "sdk_calls": 5,
+  "results": {
+   "ok": 5
+  },
+  "http_attempts": 5,
+  "wall_s": 0.6
+ },
+ "phase3_A": {
+  "who": "A",
+  "n": 89,
+  "outcomes": {
+   "413:context_length_exceeded": 89
+  },
+  "ok_p50_ms": null,
+  "ok_max_ms": null,
+  "ok_stages": {}
+ }
+}

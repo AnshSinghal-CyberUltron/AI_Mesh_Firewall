@@ -1,0 +1,18 @@
+2026/09/23 15:30:09 synthprov 5af9594a2631 listening on :8080 (ttft=150ms itl=20ms sample-mod=1 hb=100µs gomaxprocs=8 gc=off memlimit=9.37GiB)
+15:30:10 smoke-050: olg started on rv-split-lg-1 (rate 50.0 each, start-at 1790177434722, mode sut, targets http://10.160.15.231:8400)
+[rv-split-lg-1] 2026/09/23 15:31:27 done: scheduled=2125 recorded=2125 ok=2097 errors=map[http_403:28] drops=0 late_p99=109us max=191us cpu_busy_max=7.9%
+2026/09/23 15:31:32 final stats: requests=2097 records=2097 blocked=0
+6485374 records.jsonl
+2242 stats.json
+[rv-split-gw-1] compressed size 1.1M
+[rv-split-lg-1] compressed size 2.5M
+[rv-split-prov-1] compressed size 2.2M
+[rv-split-guard-1] compressed size 184K
+15:32:04 collected smoke-050 from rv-split-lg-1 rv-split-prov-1 rv-split-gw-1 rv-split-guard-1 into /home/contact_cyberultron_com/rv-evidence-raw/proto-bench-split/runs/smoke-050
+smoke-050 sut: PASS offered 1500 (50.0/s) qualified 1481 (49.37/s) infra 0 (0.0%) FP-blocks 19 drops 0
+  JSON_total      {'n': 448, 'n_inf': 0, 'p50': 6.992, 'p90': 8.568, 'p99': 10.75, 'p999': 11.023, 'max_finite': 11.023, 'mean_finite': 6.444}
+  SSE_total       {'n': 1033, 'n_inf': 0, 'p50': 7.088, 'p90': 8.417, 'p99': 10.638, 'p999': 12.219, 'max_finite': 12.626, 'mean_finite': 6.461}
+  SSE_first_tok1  {'n': 1033, 'n_inf': 0, 'p50': 26.944, 'p90': 28.47, 'p99': 45.307, 'p999': 49.894, 'max_finite': 50.012, 'mean_finite': 26.385}
+  SSE_strict      {'n': 1033, 'n_inf': 0, 'p50': 47.0, 'p90': 49.739, 'p99': 67.749, 'p999': 70.076, 'max_finite': 72.614, 'mean_finite': 46.297}
+  ALL_total       {'n': 1481, 'n_inf': 0, 'p50': 7.081, 'p90': 8.452, 'p99': 10.689, 'p999': 12.219, 'max_finite': 12.626, 'mean_finite': 6.456}
+  checks {'p99_json_total_lt_slo': True, 'p99_sse_total_lt_slo': True, 'infra_le_budget': True, 'zero_drops': True, 'records_complete': True} infra_reasons {} anomalies {}

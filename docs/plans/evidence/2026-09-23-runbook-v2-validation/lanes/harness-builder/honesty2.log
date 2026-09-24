@@ -1,0 +1,35 @@
+14:23:30 proxy0: # Harness analysis (sut, policy=none) — PASS
+14:26:13 pre5: # Harness analysis (sut, policy=none) — PASS
+14:28:57 hold30: # Harness analysis (sut, policy=none) — FAIL
+14:31:40 both: # Harness analysis (sut, policy=none) — FAIL
+14:34:23 ttft50: # Harness analysis (sut, policy=none) — PASS
+14:37:06 ttft500: # Harness analysis (sut, policy=none) — PASS
+14:39:50 ttft2000: # Harness analysis (sut, policy=none) — PASS
+# Instrument honesty — PASS (tolerance 1.0 ms)
+
+| case | qualified | T_addon_total p50/p99 | T_addon_first p50 | T_release_lag_max p50/p99 | T_fw_addon p50/p99 | client TTFT p50 | proxy truth (median pre / hold ms) |
+|---|---|---|---|---|---|---|---|
+| direct (network floor) | 27000 | 0.2472 / 0.4563 | 0.2571 | 0.4342 / 0.6959 | 0.4342 / 0.6959 | 150.3746 | - |
+| proxy floor (no injected delay) | 27000 | 0.5201 / 0.8127 | 0.5433 | 0.7729 / 1.54 | 0.773 / 1.54 | 150.6506 | 0.0 / 0.0 (held 0) |
+| pre-dispatch delay | 27000 | 5.6274 / 5.9878 | 5.658 | 5.9284 / 7.4615 | 5.9285 / 7.4615 | 155.78 | 5.0614 / 0.0 (held 0) |
+| mid-stream hold | 27000 | 0.5314 / 0.8426 | 0.5597 | 30.4515 / 30.8313 | 30.4515 / 30.8313 | 150.6748 | 0.0 / 30.0102 (held 24150) |
+| pre-delay + hold | 27000 | 5.5848 / 5.8896 | 5.6122 | 35.4952 / 35.8858 | 35.4952 / 35.8858 | 155.7205 | 5.0616 / 30.0097 (held 24150) |
+| TTFT sweep hon-ttft50 | 27000 | 0.5246 / 0.8254 | 0.5472 | 0.7742 / 1.5139 | 0.7742 / 1.5139 | 50.6503 | 0.0 / 0.0 (held 0) |
+| TTFT sweep hon-ttft500 | 27000 | 0.5155 / 0.8174 | 0.5399 | 0.7657 / 1.7499 | 0.7658 / 1.7499 | 500.6435 | 0.0 / 0.0 (held 0) |
+| TTFT sweep hon-ttft2000 | 27000 | 0.5147 / 0.8065 | 0.5415 | 0.7658 / 1.4684 | 0.7659 / 1.4684 | 2000.6393 | 0.0 / 0.0 (held 0) |
+
+| check | result | detail |
+|---|---|---|
+| pre: T_addon_total shift == injected pre-delay | PASS | {"shift_ms": 5.1073, "injected_ms": 5.0614} |
+| pre: T_addon_first shift == injected pre-delay | PASS | {"shift_ms": 5.1147, "injected_ms": 5.0614} |
+| hold: T_release_lag_max shift == injected hold | PASS | {"shift_ms": 29.6786, "injected_ms": 30.0102} |
+| hold: T_addon_total unchanged (totals hide holds) | PASS | {"shift_ms": 0.0113} |
+| hold: sub-SLO claim fails (p99 T_fw_addon >= slo) | PASS | {"p99_ms": 30.8313} |
+| both: T_addon_total shift == pre-delay | PASS | {"shift_ms": 5.0647, "injected_ms": 5.0616} |
+| both: T_release_lag_max shift == pre-delay + hold | PASS | {"shift_ms": 34.7223, "injected_ms": 35.0713} |
+| ttft hon-ttft50: T_addon_total within tol of floor | PASS | {"addon_total_p50": 0.5246, "floor_p50": 0.5201, "client_ttft_p50": 50.6503} |
+| ttft hon-ttft50: T_fw_addon within tol of floor | PASS | {"fw_addon_p50": 0.7742, "floor_p50": 0.773} |
+| ttft hon-ttft500: T_addon_total within tol of floor | PASS | {"addon_total_p50": 0.5155, "floor_p50": 0.5201, "client_ttft_p50": 500.6435} |
+| ttft hon-ttft500: T_fw_addon within tol of floor | PASS | {"fw_addon_p50": 0.7658, "floor_p50": 0.773} |
+| ttft hon-ttft2000: T_addon_total within tol of floor | PASS | {"addon_total_p50": 0.5147, "floor_p50": 0.5201, "client_ttft_p50": 2000.6393} |
+| ttft hon-ttft2000: T_fw_addon within tol of floor | PASS | {"fw_addon_p50": 0.7659, "floor_p50": 0.773} |

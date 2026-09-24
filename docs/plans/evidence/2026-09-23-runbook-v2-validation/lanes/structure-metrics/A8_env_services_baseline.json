@@ -1,0 +1,186 @@
+{
+ "scope": [
+  "services"
+ ],
+ "n_files": 19,
+ "wrappers_detected": {
+  "_env_truthy": {
+   "def": "services/mcp-broker/src/sandbox/docker_manager.py:30",
+   "param": "name",
+   "index": 0,
+   "default": null
+  }
+ },
+ "distinct_literal_names": 50,
+ "literal_call_sites": 58,
+ "dynamic_key_sites": 0,
+ "total_sites_incl_dynamic": 58,
+ "distinct_names_direct_only": 48,
+ "call_sites_direct_only": 56,
+ "by_kind": {
+  "environ.get": 56,
+  "wrapper:_env_truthy": 2
+ },
+ "names": {
+  "MCP_AGENT_ALLOW_INTERNAL_HOSTS": [
+   "services/mcp-broker/sandbox-image/agent/upstream_manager.py:107"
+  ],
+  "MCP_AGENT_CONNECT_TIMEOUT": [
+   "services/mcp-broker/sandbox-image/agent/upstream_manager.py:19"
+  ],
+  "MCP_AGENT_INTERNAL_KEY": [
+   "services/mcp-broker/sandbox-image/agent/main.py:37",
+   "services/mcp-broker/src/sandbox/docker_manager.py:634",
+   "services/mcp-broker/src/sandbox/routes.py:293"
+  ],
+  "MCP_AGENT_MAX_RESPONSE_BYTES": [
+   "services/mcp-broker/sandbox-image/agent/upstream_manager.py:22"
+  ],
+  "MCP_AGENT_SSE_POST_READ_TIMEOUT": [
+   "services/mcp-broker/sandbox-image/agent/sse_manager.py:93"
+  ],
+  "MCP_AGENT_SSE_QUEUE_MAXSIZE": [
+   "services/mcp-broker/sandbox-image/agent/sse_manager.py:88"
+  ],
+  "MCP_BROKER_AGENT_MAX_RESPONSE_BYTES": [
+   "services/mcp-broker/src/sandbox/routes.py:71"
+  ],
+  "MCP_BROKER_AGENT_TIMEOUT": [
+   "services/mcp-broker/src/sandbox/routes.py:48"
+  ],
+  "MCP_BROKER_AGENT_TIMEOUT_MAX": [
+   "services/mcp-broker/src/sandbox/routes.py:60"
+  ],
+  "MCP_BROKER_CONTAINER_NAME": [
+   "services/mcp-broker/src/sandbox/docker_manager.py:353"
+  ],
+  "MCP_BROKER_INTERNAL_KEY": [
+   "services/mcp-broker/src/auth.py:13"
+  ],
+  "MCP_REMOTE_CONFIG_DIR": [
+   "services/mcp-broker/sandbox-image/agent/stdio_manager.py:557"
+  ],
+  "MCP_SANDBOX_AGENT_PORT": [
+   "services/mcp-broker/src/sandbox/docker_manager.py:106"
+  ],
+  "MCP_SANDBOX_AGENT_READY_BASE_DELAY": [
+   "services/mcp-broker/src/sandbox/routes.py:80"
+  ],
+  "MCP_SANDBOX_AGENT_READY_MAX_DELAY": [
+   "services/mcp-broker/src/sandbox/routes.py:81"
+  ],
+  "MCP_SANDBOX_AGENT_READY_RETRIES": [
+   "services/mcp-broker/src/sandbox/routes.py:79"
+  ],
+  "MCP_SANDBOX_CPUS": [
+   "services/mcp-broker/src/sandbox/docker_manager.py:110"
+  ],
+  "MCP_SANDBOX_DNS": [
+   "services/mcp-broker/src/sandbox/docker_manager.py:139"
+  ],
+  "MCP_SANDBOX_EGRESS_LOCKDOWN": [
+   "services/mcp-broker/src/sandbox/docker_manager.py:115"
+  ],
+  "MCP_SANDBOX_HTTPS_PROXY": [
+   "services/mcp-broker/src/sandbox/docker_manager.py:102"
+  ],
+  "MCP_SANDBOX_HTTP_PROXY": [
+   "services/mcp-broker/src/sandbox/docker_manager.py:101"
+  ],
+  "MCP_SANDBOX_IDLE_TIMEOUT": [
+   "services/mcp-broker/src/sandbox/reaper.py:26"
+  ],
+  "MCP_SANDBOX_IMAGE": [
+   "services/mcp-broker/src/sandbox/docker_manager.py:104"
+  ],
+  "MCP_SANDBOX_MAX_ORGS": [
+   "services/mcp-broker/src/sandbox/routes.py:142"
+  ],
+  "MCP_SANDBOX_MEMORY_MB": [
+   "services/mcp-broker/src/sandbox/docker_manager.py:107"
+  ],
+  "MCP_SANDBOX_NETWORK": [
+   "services/mcp-broker/src/sandbox/docker_manager.py:105"
+  ],
+  "MCP_SANDBOX_NODE_MAX_OLD_SPACE_MB": [
+   "services/mcp-broker/src/sandbox/docker_manager.py:108"
+  ],
+  "MCP_SANDBOX_NODE_OPTIONS": [
+   "services/mcp-broker/src/sandbox/docker_manager.py:588"
+  ],
+  "MCP_SANDBOX_NO_PROXY": [
+   "services/mcp-broker/src/sandbox/docker_manager.py:118"
+  ],
+  "MCP_SANDBOX_NPM_CACHE_SIZE_MB": [
+   "services/mcp-broker/src/sandbox/docker_manager.py:109"
+  ],
+  "MCP_SANDBOX_PIDS_LIMIT": [
+   "services/mcp-broker/src/sandbox/docker_manager.py:111"
+  ],
+  "MCP_SANDBOX_REAPER_INTERVAL": [
+   "services/mcp-broker/src/sandbox/reaper.py:27"
+  ],
+  "MCP_SANDBOX_RUNTIME": [
+   "services/mcp-broker/src/sandbox/docker_manager.py:100"
+  ],
+  "MCP_SANDBOX_RUNTIME_REQUIRED": [
+   "services/mcp-broker/src/sandbox/docker_manager.py:113"
+  ],
+  "MCP_SANDBOX_SECCOMP_PROFILE": [
+   "services/mcp-broker/src/sandbox/docker_manager.py:66"
+  ],
+  "MCP_SANDBOX_USER": [
+   "services/mcp-broker/src/sandbox/docker_manager.py:114"
+  ],
+  "MCP_SANDBOX_WARM_READY_INTERVAL": [
+   "services/mcp-broker/src/sandbox/routes.py:182"
+  ],
+  "MCP_SANDBOX_WARM_READY_TIMEOUT": [
+   "services/mcp-broker/src/sandbox/routes.py:178"
+  ],
+  "MCP_STDIO_ALLOWED_COMMANDS": [
+   "services/mcp-broker/sandbox-image/agent/stdio_manager.py:54"
+  ],
+  "MCP_STDIO_HUNG_INIT_TIMEOUT": [
+   "services/mcp-broker/sandbox-image/agent/stdio_manager.py:48"
+  ],
+  "MCP_STDIO_IDLE_TIMEOUT": [
+   "services/mcp-broker/sandbox-image/agent/stdio_manager.py:43"
+  ],
+  "MCP_STDIO_INIT_TIMEOUT": [
+   "services/mcp-broker/sandbox-image/agent/stdio_manager.py:46",
+   "services/mcp-broker/sandbox-image/agent/upstream_manager.py:20"
+  ],
+  "MCP_STDIO_MAX_CONCURRENT_INITS": [
+   "services/mcp-broker/sandbox-image/agent/stdio_manager.py:50"
+  ],
+  "MCP_STDIO_MAX_LINE_BYTES": [
+   "services/mcp-broker/sandbox-image/agent/stdio_manager.py:45"
+  ],
+  "MCP_STDIO_MAX_PROCESSES": [
+   "services/mcp-broker/sandbox-image/agent/stdio_manager.py:44"
+  ],
+  "MCP_STDIO_MAX_PROCESSES_PER_ORG": [
+   "services/mcp-broker/sandbox-image/agent/stdio_manager.py:49",
+   "services/mcp-broker/src/sandbox/docker_manager.py:591"
+  ],
+  "MCP_STDIO_METHOD_TIMEOUT": [
+   "services/mcp-broker/sandbox-image/agent/stdio_manager.py:47",
+   "services/mcp-broker/sandbox-image/agent/upstream_manager.py:21"
+  ],
+  "MCP_STDIO_PACKAGE_ALLOWLIST": [
+   "services/mcp-broker/sandbox-image/agent/stdio_manager.py:66",
+   "services/mcp-broker/src/sandbox/docker_manager.py:610"
+  ],
+  "MCP_STDIO_REQUIRE_PINNED_PACKAGES": [
+   "services/mcp-broker/sandbox-image/agent/stdio_manager.py:73",
+   "services/mcp-broker/src/sandbox/docker_manager.py:607"
+  ],
+  "ORG_SLUG": [
+   "services/mcp-broker/sandbox-image/agent/main.py:27",
+   "services/mcp-broker/sandbox-image/agent/stdio_manager.py:41"
+  ]
+ },
+ "dynamic_sites": [],
+ "writes": []
+}

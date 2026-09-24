@@ -1,0 +1,39 @@
+## per-cell integrity (provenance, network guard, publish success, env contamination, level wiring)
+P1_DEBUG         live_repo_modules(start/end)=0/0 baseline_modules(start/end)=26/52 blocked=1 unexpected=0 unpublished_emits=0 foreign_env_names=[] gateway.setLevel(DEBUG)->['DEBUG'] logger_levels(gateway/bedrock/root)=DEBUG/DEBUG/INFO fake_converse_calls=None
+P1_DEBUG_noshim  live_repo_modules(start/end)=0/0 baseline_modules(start/end)=26/43 blocked=1 unexpected=0 unpublished_emits=0 foreign_env_names=[] gateway.setLevel(DEBUG)->['DEBUG'] logger_levels(gateway/bedrock/root)=DEBUG/DEBUG/INFO fake_converse_calls=None
+P1_INFO          live_repo_modules(start/end)=0/0 baseline_modules(start/end)=26/52 blocked=1 unexpected=0 unpublished_emits=0 foreign_env_names=[] gateway.setLevel(DEBUG)->['INFO'] logger_levels(gateway/bedrock/root)=INFO/DEBUG/INFO fake_converse_calls=None
+P1_INFO_noshim   live_repo_modules(start/end)=0/0 baseline_modules(start/end)=26/43 blocked=1 unexpected=0 unpublished_emits=0 foreign_env_names=[] gateway.setLevel(DEBUG)->['INFO'] logger_levels(gateway/bedrock/root)=INFO/DEBUG/INFO fake_converse_calls=None
+P2_DEBUG         live_repo_modules(start/end)=0/0 baseline_modules(start/end)=26/97 blocked=2 unexpected=0 unpublished_emits=0 foreign_env_names=[] gateway.setLevel(DEBUG)->['DEBUG'] logger_levels(gateway/bedrock/root)=DEBUG/DEBUG/INFO fake_converse_calls=None
+P2_INFO          live_repo_modules(start/end)=0/0 baseline_modules(start/end)=26/97 blocked=2 unexpected=0 unpublished_emits=0 foreign_env_names=[] gateway.setLevel(DEBUG)->['INFO'] logger_levels(gateway/bedrock/root)=INFO/DEBUG/INFO fake_converse_calls=None
+P2b_DEBUG        live_repo_modules(start/end)=0/0 baseline_modules(start/end)=26/99 blocked=2 unexpected=0 unpublished_emits=0 foreign_env_names=[] gateway.setLevel(DEBUG)->['DEBUG'] logger_levels(gateway/bedrock/root)=DEBUG/DEBUG/INFO fake_converse_calls=None
+P2b_INFO         live_repo_modules(start/end)=0/0 baseline_modules(start/end)=26/99 blocked=2 unexpected=0 unpublished_emits=0 foreign_env_names=[] gateway.setLevel(DEBUG)->['INFO'] logger_levels(gateway/bedrock/root)=INFO/DEBUG/INFO fake_converse_calls=None
+P2t2_DEBUG       live_repo_modules(start/end)=0/0 baseline_modules(start/end)=26/98 blocked=3 unexpected=0 unpublished_emits=0 foreign_env_names=[] gateway.setLevel(DEBUG)->['DEBUG'] logger_levels(gateway/bedrock/root)=DEBUG/DEBUG/INFO fake_converse_calls=75
+P2t2_INFO        live_repo_modules(start/end)=0/0 baseline_modules(start/end)=26/98 blocked=3 unexpected=0 unpublished_emits=0 foreign_env_names=[] gateway.setLevel(DEBUG)->['INFO'] logger_levels(gateway/bedrock/root)=INFO/DEBUG/INFO fake_converse_calls=75
+
+## blocked-attempt classifications (all cells)
+6 ('getaddrinfo', 'run', 'redis-py 8 maint-notifications resolve of the fakeredis synt')
+12 ('getaddrinfo', 'startup', 'redis-py 8 maint-notifications resolve of the fakeredis synt')
+
+## DEBUG records that reached the ROOT StreamHandler (root logger level INFO) -- measured requests
+records_root_P1_DEBUG.jsonl {'INFO': 80}
+records_root_P2_DEBUG.jsonl {'INFO': 240, 'DEBUG': 60}
+records_root_P2b_DEBUG.jsonl {'INFO': 200, 'DEBUG': 40, 'WARNING': 20}
+records_root_P2t2_DEBUG.jsonl {'INFO': 360, 'DEBUG': 60}
+
+## cross-check: DEBUG-cell non-DEBUG emits/request == INFO-cell emits/request (median)
+P1    s1_benign_nonstream  debug_nonDEBUG=1.0 + bedrock_DEBUG(kept, BEDROCK_LOG_LEVEL=DEBUG)=0 -> expect 1.0; INFO cell=1.0: OK
+P1    s2_benign_stream     debug_nonDEBUG=0.0 + bedrock_DEBUG(kept, BEDROCK_LOG_LEVEL=DEBUG)=0 -> expect 0.0; INFO cell=0.0: OK
+P1    s3_pii_nonstream     debug_nonDEBUG=2.0 + bedrock_DEBUG(kept, BEDROCK_LOG_LEVEL=DEBUG)=0 -> expect 2.0; INFO cell=2.0: OK
+P1    s4_injection_block   debug_nonDEBUG=1.0 + bedrock_DEBUG(kept, BEDROCK_LOG_LEVEL=DEBUG)=0 -> expect 1.0; INFO cell=1.0: OK
+P2    s1_benign_nonstream  debug_nonDEBUG=3.0 + bedrock_DEBUG(kept, BEDROCK_LOG_LEVEL=DEBUG)=0 -> expect 3.0; INFO cell=3.0: OK
+P2    s2_benign_stream     debug_nonDEBUG=2.0 + bedrock_DEBUG(kept, BEDROCK_LOG_LEVEL=DEBUG)=0 -> expect 2.0; INFO cell=2.0: OK
+P2    s3_pii_nonstream     debug_nonDEBUG=4.0 + bedrock_DEBUG(kept, BEDROCK_LOG_LEVEL=DEBUG)=0 -> expect 4.0; INFO cell=4.0: OK
+P2    s4_injection_block   debug_nonDEBUG=3.0 + bedrock_DEBUG(kept, BEDROCK_LOG_LEVEL=DEBUG)=0 -> expect 3.0; INFO cell=3.0: OK
+P2b   s1_benign_nonstream  debug_nonDEBUG=3.0 + bedrock_DEBUG(kept, BEDROCK_LOG_LEVEL=DEBUG)=0 -> expect 3.0; INFO cell=3.0: OK
+P2b   s2_benign_stream     debug_nonDEBUG=2.0 + bedrock_DEBUG(kept, BEDROCK_LOG_LEVEL=DEBUG)=0 -> expect 2.0; INFO cell=2.0: OK
+P2b   s3_pii_nonstream     debug_nonDEBUG=4.0 + bedrock_DEBUG(kept, BEDROCK_LOG_LEVEL=DEBUG)=0 -> expect 4.0; INFO cell=4.0: OK
+P2b   s4_injection_block   debug_nonDEBUG=2.0 + bedrock_DEBUG(kept, BEDROCK_LOG_LEVEL=DEBUG)=0 -> expect 2.0; INFO cell=2.0: OK
+P2t2  s1_benign_nonstream  debug_nonDEBUG=11.0 + bedrock_DEBUG(kept, BEDROCK_LOG_LEVEL=DEBUG)=1.0 -> expect 12.0; INFO cell=12.0: OK
+P2t2  s2_benign_stream     debug_nonDEBUG=2.0 + bedrock_DEBUG(kept, BEDROCK_LOG_LEVEL=DEBUG)=0 -> expect 2.0; INFO cell=2.0: OK
+P2t2  s3_pii_nonstream     debug_nonDEBUG=12.0 + bedrock_DEBUG(kept, BEDROCK_LOG_LEVEL=DEBUG)=1.0 -> expect 13.0; INFO cell=13.0: OK
+P2t2  s4_injection_block   debug_nonDEBUG=11.0 + bedrock_DEBUG(kept, BEDROCK_LOG_LEVEL=DEBUG)=1.0 -> expect 12.0; INFO cell=12.0: OK

@@ -1,0 +1,2 @@
+{"trt_cache": "/home/rv/rv/trtcache", "devices": [{"device": 0, "providers": ["TensorrtExecutionProvider", "CPUExecutionProvider"], "session_s": 13.6, "warmup_s": 1.3, "tokens_per_s": 234412}, {"device": 1, "providers": ["TensorrtExecutionProvider", "CPUExecutionProvider"], "session_s": 6.9, "warmup_s": 1.0, "tokens_per_s": 242248}]}
+READY after 11s: 18/18 workers

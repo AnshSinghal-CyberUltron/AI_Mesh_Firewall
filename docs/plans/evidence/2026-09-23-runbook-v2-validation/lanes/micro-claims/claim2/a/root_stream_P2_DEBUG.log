@@ -1,0 +1,409 @@
+2026-09-23 11:46:01,928 [INFO] gateway: Multi-pattern prefilter ready (57 patterns)
+2026-09-23 11:46:01,931 [INFO] gateway.config_sync: ConfigSync started (loaded=False, firewall_enabled=N/A, enforcement_mode=N/A)
+2026-09-23 11:46:01,931 [INFO] gateway.llm_router: Org-only inference enabled. LiteLLM router models load from Redis (llm:model_configs:{org_slug}) after Control Plane sync.
+2026-09-23 11:46:01,932 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 11:46:01,938 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=4, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+2026-09-23 11:46:01,938 [INFO] gateway: Shared async Redis client initialized
+2026-09-23 11:46:01,940 [INFO] gateway.telemetry: Telemetry producer started (flush_interval=2.0s, buffer_size=100)
+2026-09-23 11:46:01,944 [INFO] gateway: Output guard initialized
+2026-09-23 11:46:01,945 [INFO] gateway: Circuit breaker initialized
+2026-09-23 11:46:01,966 [INFO] gateway: Semantic grounding (Bedrock Titan v2) attached to output guard
+2026-09-23 11:46:01,966 [INFO] gateway.policy_sync: Policy bundle signing: ENFORCED (POLICY_SIGNING_KEY configured; unsigned or tampered bundles will be rejected)
+2026-09-23 11:46:01,968 [INFO] gateway.policy_sync: Loaded policy bundle for org 'acme' (version=1, policies=0)
+2026-09-23 11:46:01,969 [INFO] gateway.config_sync: ConfigSync subscribed to Pub/Sub channel 'config_updates'
+2026-09-23 11:46:01,969 [INFO] gateway: Bedrock credential preflight OK
+2026-09-23 11:46:01,969 [INFO] gateway.policy_sync: PolicySync started (orgs=1, total_policies=0)
+2026-09-23 11:46:01,971 [INFO] gateway: Centralized log pipeline started (Redis Pub/Sub -> LogBuffer -> SSE)
+2026-09-23 11:46:01,972 [INFO] gateway: ZeroShield Gateway ready — real-time log streaming active
+2026-09-23 11:46:01,973 [INFO] gateway: Bedrock dedicated logger initialized: log_dir=/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/micro-claims/claim2/a/bedrock_logdir_P2_DEBUG, level=DEBUG, json=true, ring_size=500
+2026-09-23 11:46:02,024 [INFO] gateway: MCP proxy routes mounted at /v1/mcp
+2026-09-23 11:46:02,024 [INFO] gateway: MCP org gateway routes mounted at /gateway/{org}/mcp/{server}
+2026-09-23 11:46:02,029 [INFO] gateway: MCP OAuth 2.1 routes mounted (/.well-known/oauth-authorization-server, /oauth/*)
+2026-09-23 11:46:02,035 [INFO] gateway: MCP upstream OAuth proxy mounted (/gateway/{org}/mcp/{server}/oauth/*)
+2026-09-23 11:46:02,039 [INFO] gateway: Vector operations routes mounted at /v1/vector/*
+2026-09-23 11:46:02,039 [INFO] gateway: Vector operations globals injected (provider_sync=False pipeline=False clients=[])
+2026-09-23 11:46:02,056 [INFO] gateway: MCP stdio & WebSocket adapters initialized (reapers started)
+2026-09-23 11:46:02,056 [WARNING] gateway: AIGUARDX_BACKEND_URL not set; gateway will not register or enforce
+2026-09-23 11:46:02,057 [INFO] gateway.policy_sync: PolicySync subscribed to Pub/Sub channel 'policy_updates'
+2026-09-23 11:46:02,303 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 241]
+2026-09-23 11:46:02,319 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:02,329 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 11:46:02,330 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-226 (actual=15, est=241)
+2026-09-23 11:46:02,667 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 256]
+2026-09-23 11:46:02,671 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:02,676 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 11:46:02,676 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-226 (actual=15, est=241)
+2026-09-23 11:46:02,684 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 271]
+2026-09-23 11:46:02,687 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:02,691 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 11:46:02,691 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-226 (actual=15, est=241)
+2026-09-23 11:46:02,699 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 286]
+2026-09-23 11:46:02,702 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:02,706 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 11:46:02,707 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-226 (actual=15, est=241)
+2026-09-23 11:46:02,715 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 301]
+2026-09-23 11:46:02,718 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:02,723 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 11:46:02,723 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-226 (actual=15, est=241)
+2026-09-23 11:46:02,731 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 316]
+2026-09-23 11:46:02,735 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:02,739 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 11:46:02,739 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-226 (actual=15, est=241)
+2026-09-23 11:46:02,748 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 331]
+2026-09-23 11:46:02,751 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:02,756 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 11:46:02,756 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-226 (actual=15, est=241)
+2026-09-23 11:46:02,765 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 346]
+2026-09-23 11:46:02,769 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:02,774 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 11:46:02,774 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-226 (actual=15, est=241)
+2026-09-23 11:46:02,782 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 361]
+2026-09-23 11:46:02,786 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:02,791 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 11:46:02,791 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-226 (actual=15, est=241)
+2026-09-23 11:46:02,800 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 376]
+2026-09-23 11:46:02,804 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:02,808 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 11:46:02,808 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-226 (actual=15, est=241)
+2026-09-23 11:46:02,815 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 391]
+2026-09-23 11:46:02,819 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:02,823 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 11:46:02,823 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-226 (actual=15, est=241)
+2026-09-23 11:46:02,830 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 406]
+2026-09-23 11:46:02,834 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:02,838 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 11:46:02,838 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-226 (actual=15, est=241)
+2026-09-23 11:46:02,845 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 421]
+2026-09-23 11:46:02,849 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:02,853 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 11:46:02,853 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-226 (actual=15, est=241)
+2026-09-23 11:46:02,860 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 436]
+2026-09-23 11:46:02,864 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:02,868 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 11:46:02,868 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-226 (actual=15, est=241)
+2026-09-23 11:46:02,875 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 451]
+2026-09-23 11:46:02,879 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:02,883 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 11:46:02,883 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-226 (actual=15, est=241)
+2026-09-23 11:46:02,890 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 466]
+2026-09-23 11:46:02,894 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:02,898 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 11:46:02,898 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-226 (actual=15, est=241)
+2026-09-23 11:46:02,905 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 481]
+2026-09-23 11:46:02,908 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:02,912 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 11:46:02,913 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-226 (actual=15, est=241)
+2026-09-23 11:46:02,920 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 496]
+2026-09-23 11:46:02,923 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:02,927 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 11:46:02,927 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-226 (actual=15, est=241)
+2026-09-23 11:46:02,934 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 511]
+2026-09-23 11:46:02,938 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:02,942 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 11:46:02,942 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-226 (actual=15, est=241)
+2026-09-23 11:46:02,949 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 526]
+2026-09-23 11:46:02,953 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:02,956 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 11:46:02,957 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-226 (actual=15, est=241)
+2026-09-23 11:46:02,964 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 541]
+2026-09-23 11:46:02,967 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:02,971 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 11:46:02,972 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-226 (actual=15, est=241)
+2026-09-23 11:46:02,979 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 556]
+2026-09-23 11:46:02,982 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:02,986 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 11:46:02,986 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-226 (actual=15, est=241)
+2026-09-23 11:46:02,993 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 571]
+2026-09-23 11:46:02,997 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:03,001 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 11:46:03,001 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-226 (actual=15, est=241)
+2026-09-23 11:46:03,008 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 586]
+2026-09-23 11:46:03,011 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:03,015 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 11:46:03,016 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-226 (actual=15, est=241)
+2026-09-23 11:46:03,023 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 601]
+2026-09-23 11:46:03,026 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:03,030 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 11:46:03,030 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-226 (actual=15, est=241)
+2026-09-23 11:46:03,238 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 616]
+2026-09-23 11:46:03,242 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:03,281 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 857]
+2026-09-23 11:46:03,284 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:03,318 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 1098]
+2026-09-23 11:46:03,322 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:03,356 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 1339]
+2026-09-23 11:46:03,360 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:03,399 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 1580]
+2026-09-23 11:46:03,404 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:03,440 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 1821]
+2026-09-23 11:46:03,444 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:03,479 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 2062]
+2026-09-23 11:46:03,483 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:03,517 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 2303]
+2026-09-23 11:46:03,521 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:03,555 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 2544]
+2026-09-23 11:46:03,559 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:03,590 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 2785]
+2026-09-23 11:46:03,593 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:03,625 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 3026]
+2026-09-23 11:46:03,629 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:03,660 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 3267]
+2026-09-23 11:46:03,664 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:03,695 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 3508]
+2026-09-23 11:46:03,699 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:03,730 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 3749]
+2026-09-23 11:46:03,734 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:03,765 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 3990]
+2026-09-23 11:46:03,769 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:03,801 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 4231]
+2026-09-23 11:46:03,805 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:03,900 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 4472]
+2026-09-23 11:46:03,904 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:03,935 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 4713]
+2026-09-23 11:46:03,938 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:03,969 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 4954]
+2026-09-23 11:46:03,978 [DEBUG] gateway.telemetry: Telemetry flushed 86 events to Redis
+2026-09-23 11:46:03,981 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:04,012 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 5195]
+2026-09-23 11:46:04,016 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:04,046 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 5436]
+2026-09-23 11:46:04,050 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:04,081 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 5677]
+2026-09-23 11:46:04,085 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:04,116 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 5918]
+2026-09-23 11:46:04,120 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:04,150 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 6159]
+2026-09-23 11:46:04,154 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:04,185 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 6400]
+2026-09-23 11:46:04,189 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:04,447 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=50 limit=10000000 result=[1, 6450]
+2026-09-23 11:46:04,448 [INFO] gateway: PII/secret detected, redacting before LLM call (type=pii, patterns=['email', 'phone_us'], user=1)
+2026-09-23 11:46:04,450 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:04,454 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 11:46:04,454 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-35 (actual=15, est=50)
+2026-09-23 11:46:04,461 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=50 limit=10000000 result=[1, 6465]
+2026-09-23 11:46:04,463 [INFO] gateway: PII/secret detected, redacting before LLM call (type=pii, patterns=['email', 'phone_us'], user=1)
+2026-09-23 11:46:04,464 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:04,468 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 11:46:04,469 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-35 (actual=15, est=50)
+2026-09-23 11:46:04,475 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=50 limit=10000000 result=[1, 6480]
+2026-09-23 11:46:04,476 [INFO] gateway: PII/secret detected, redacting before LLM call (type=pii, patterns=['email', 'phone_us'], user=1)
+2026-09-23 11:46:04,477 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:04,481 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 11:46:04,482 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-35 (actual=15, est=50)
+2026-09-23 11:46:04,488 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=50 limit=10000000 result=[1, 6495]
+2026-09-23 11:46:04,489 [INFO] gateway: PII/secret detected, redacting before LLM call (type=pii, patterns=['email', 'phone_us'], user=1)
+2026-09-23 11:46:04,490 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:04,495 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 11:46:04,495 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-35 (actual=15, est=50)
+2026-09-23 11:46:04,501 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=50 limit=10000000 result=[1, 6510]
+2026-09-23 11:46:04,503 [INFO] gateway: PII/secret detected, redacting before LLM call (type=pii, patterns=['email', 'phone_us'], user=1)
+2026-09-23 11:46:04,504 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:04,508 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 11:46:04,509 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-35 (actual=15, est=50)
+2026-09-23 11:46:04,515 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=50 limit=10000000 result=[1, 6525]
+2026-09-23 11:46:04,516 [INFO] gateway: PII/secret detected, redacting before LLM call (type=pii, patterns=['email', 'phone_us'], user=1)
+2026-09-23 11:46:04,517 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:04,521 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 11:46:04,522 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-35 (actual=15, est=50)
+2026-09-23 11:46:04,528 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=50 limit=10000000 result=[1, 6540]
+2026-09-23 11:46:04,529 [INFO] gateway: PII/secret detected, redacting before LLM call (type=pii, patterns=['email', 'phone_us'], user=1)
+2026-09-23 11:46:04,530 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:04,534 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 11:46:04,535 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-35 (actual=15, est=50)
+2026-09-23 11:46:04,541 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=50 limit=10000000 result=[1, 6555]
+2026-09-23 11:46:04,542 [INFO] gateway: PII/secret detected, redacting before LLM call (type=pii, patterns=['email', 'phone_us'], user=1)
+2026-09-23 11:46:04,543 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:04,547 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 11:46:04,548 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-35 (actual=15, est=50)
+2026-09-23 11:46:04,554 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=50 limit=10000000 result=[1, 6570]
+2026-09-23 11:46:04,555 [INFO] gateway: PII/secret detected, redacting before LLM call (type=pii, patterns=['email', 'phone_us'], user=1)
+2026-09-23 11:46:04,556 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:04,560 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 11:46:04,561 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-35 (actual=15, est=50)
+2026-09-23 11:46:04,567 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=50 limit=10000000 result=[1, 6585]
+2026-09-23 11:46:04,568 [INFO] gateway: PII/secret detected, redacting before LLM call (type=pii, patterns=['email', 'phone_us'], user=1)
+2026-09-23 11:46:04,569 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:04,573 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 11:46:04,574 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-35 (actual=15, est=50)
+2026-09-23 11:46:04,580 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=50 limit=10000000 result=[1, 6600]
+2026-09-23 11:46:04,581 [INFO] gateway: PII/secret detected, redacting before LLM call (type=pii, patterns=['email', 'phone_us'], user=1)
+2026-09-23 11:46:04,582 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:04,587 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 11:46:04,587 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-35 (actual=15, est=50)
+2026-09-23 11:46:04,593 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=50 limit=10000000 result=[1, 6615]
+2026-09-23 11:46:04,594 [INFO] gateway: PII/secret detected, redacting before LLM call (type=pii, patterns=['email', 'phone_us'], user=1)
+2026-09-23 11:46:04,595 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:04,600 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 11:46:04,600 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-35 (actual=15, est=50)
+2026-09-23 11:46:04,606 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=50 limit=10000000 result=[1, 6630]
+2026-09-23 11:46:04,608 [INFO] gateway: PII/secret detected, redacting before LLM call (type=pii, patterns=['email', 'phone_us'], user=1)
+2026-09-23 11:46:04,609 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:04,613 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 11:46:04,613 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-35 (actual=15, est=50)
+2026-09-23 11:46:04,620 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=50 limit=10000000 result=[1, 6645]
+2026-09-23 11:46:04,621 [INFO] gateway: PII/secret detected, redacting before LLM call (type=pii, patterns=['email', 'phone_us'], user=1)
+2026-09-23 11:46:04,622 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:04,626 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 11:46:04,627 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-35 (actual=15, est=50)
+2026-09-23 11:46:04,633 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=50 limit=10000000 result=[1, 6660]
+2026-09-23 11:46:04,634 [INFO] gateway: PII/secret detected, redacting before LLM call (type=pii, patterns=['email', 'phone_us'], user=1)
+2026-09-23 11:46:04,635 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:04,639 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 11:46:04,640 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-35 (actual=15, est=50)
+2026-09-23 11:46:04,646 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=50 limit=10000000 result=[1, 6675]
+2026-09-23 11:46:04,647 [INFO] gateway: PII/secret detected, redacting before LLM call (type=pii, patterns=['email', 'phone_us'], user=1)
+2026-09-23 11:46:04,648 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:04,653 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 11:46:04,653 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-35 (actual=15, est=50)
+2026-09-23 11:46:04,659 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=50 limit=10000000 result=[1, 6690]
+2026-09-23 11:46:04,660 [INFO] gateway: PII/secret detected, redacting before LLM call (type=pii, patterns=['email', 'phone_us'], user=1)
+2026-09-23 11:46:04,661 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:04,666 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 11:46:04,666 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-35 (actual=15, est=50)
+2026-09-23 11:46:04,673 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=50 limit=10000000 result=[1, 6705]
+2026-09-23 11:46:04,674 [INFO] gateway: PII/secret detected, redacting before LLM call (type=pii, patterns=['email', 'phone_us'], user=1)
+2026-09-23 11:46:04,675 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:04,679 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 11:46:04,680 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-35 (actual=15, est=50)
+2026-09-23 11:46:04,686 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=50 limit=10000000 result=[1, 6720]
+2026-09-23 11:46:04,687 [INFO] gateway: PII/secret detected, redacting before LLM call (type=pii, patterns=['email', 'phone_us'], user=1)
+2026-09-23 11:46:04,688 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:04,692 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 11:46:04,693 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-35 (actual=15, est=50)
+2026-09-23 11:46:04,699 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=50 limit=10000000 result=[1, 6735]
+2026-09-23 11:46:04,700 [INFO] gateway: PII/secret detected, redacting before LLM call (type=pii, patterns=['email', 'phone_us'], user=1)
+2026-09-23 11:46:04,701 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:04,706 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 11:46:04,707 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-35 (actual=15, est=50)
+2026-09-23 11:46:04,716 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=50 limit=10000000 result=[1, 6750]
+2026-09-23 11:46:04,717 [INFO] gateway: PII/secret detected, redacting before LLM call (type=pii, patterns=['email', 'phone_us'], user=1)
+2026-09-23 11:46:04,718 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:04,722 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 11:46:04,723 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-35 (actual=15, est=50)
+2026-09-23 11:46:04,729 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=50 limit=10000000 result=[1, 6765]
+2026-09-23 11:46:04,730 [INFO] gateway: PII/secret detected, redacting before LLM call (type=pii, patterns=['email', 'phone_us'], user=1)
+2026-09-23 11:46:04,731 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:04,736 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 11:46:04,736 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-35 (actual=15, est=50)
+2026-09-23 11:46:04,742 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=50 limit=10000000 result=[1, 6780]
+2026-09-23 11:46:04,744 [INFO] gateway: PII/secret detected, redacting before LLM call (type=pii, patterns=['email', 'phone_us'], user=1)
+2026-09-23 11:46:04,745 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:04,749 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 11:46:04,749 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-35 (actual=15, est=50)
+2026-09-23 11:46:04,756 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=50 limit=10000000 result=[1, 6795]
+2026-09-23 11:46:04,757 [INFO] gateway: PII/secret detected, redacting before LLM call (type=pii, patterns=['email', 'phone_us'], user=1)
+2026-09-23 11:46:04,758 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:04,762 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 11:46:04,763 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-35 (actual=15, est=50)
+2026-09-23 11:46:04,769 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=50 limit=10000000 result=[1, 6810]
+2026-09-23 11:46:04,770 [INFO] gateway: PII/secret detected, redacting before LLM call (type=pii, patterns=['email', 'phone_us'], user=1)
+2026-09-23 11:46:04,771 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:04,775 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 11:46:04,775 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-35 (actual=15, est=50)
+2026-09-23 11:46:04,983 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=18 limit=10000000 result=[1, 6793]
+2026-09-23 11:46:04,985 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:04,989 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 11:46:04,989 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-3 (actual=15, est=18)
+2026-09-23 11:46:04,995 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=18 limit=10000000 result=[1, 6808]
+2026-09-23 11:46:04,996 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:05,001 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 11:46:05,001 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-3 (actual=15, est=18)
+2026-09-23 11:46:05,007 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=18 limit=10000000 result=[1, 6823]
+2026-09-23 11:46:05,008 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:05,012 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 11:46:05,012 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-3 (actual=15, est=18)
+2026-09-23 11:46:05,018 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=18 limit=10000000 result=[1, 6838]
+2026-09-23 11:46:05,019 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:05,023 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 11:46:05,024 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-3 (actual=15, est=18)
+2026-09-23 11:46:05,029 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=18 limit=10000000 result=[1, 6853]
+2026-09-23 11:46:05,031 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:05,035 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 11:46:05,035 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-3 (actual=15, est=18)
+2026-09-23 11:46:05,041 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=18 limit=10000000 result=[1, 6868]
+2026-09-23 11:46:05,042 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:05,046 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 11:46:05,047 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-3 (actual=15, est=18)
+2026-09-23 11:46:05,053 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=18 limit=10000000 result=[1, 6883]
+2026-09-23 11:46:05,054 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:05,059 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 11:46:05,059 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-3 (actual=15, est=18)
+2026-09-23 11:46:05,065 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=18 limit=10000000 result=[1, 6898]
+2026-09-23 11:46:05,067 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:05,071 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 11:46:05,071 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-3 (actual=15, est=18)
+2026-09-23 11:46:05,078 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=18 limit=10000000 result=[1, 6913]
+2026-09-23 11:46:05,080 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:05,084 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 11:46:05,084 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-3 (actual=15, est=18)
+2026-09-23 11:46:05,091 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=18 limit=10000000 result=[1, 6928]
+2026-09-23 11:46:05,092 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:05,096 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 11:46:05,097 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-3 (actual=15, est=18)
+2026-09-23 11:46:05,111 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=18 limit=10000000 result=[1, 6943]
+2026-09-23 11:46:05,113 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:05,117 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 11:46:05,118 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-3 (actual=15, est=18)
+2026-09-23 11:46:05,124 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=18 limit=10000000 result=[1, 6958]
+2026-09-23 11:46:05,126 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:05,130 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 11:46:05,131 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-3 (actual=15, est=18)
+2026-09-23 11:46:05,137 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=18 limit=10000000 result=[1, 6973]
+2026-09-23 11:46:05,139 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:05,143 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 11:46:05,144 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-3 (actual=15, est=18)
+2026-09-23 11:46:05,150 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=18 limit=10000000 result=[1, 6988]
+2026-09-23 11:46:05,151 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:05,155 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 11:46:05,156 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-3 (actual=15, est=18)
+2026-09-23 11:46:05,161 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=18 limit=10000000 result=[1, 7003]
+2026-09-23 11:46:05,163 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:05,167 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 11:46:05,167 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-3 (actual=15, est=18)
+2026-09-23 11:46:05,173 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=18 limit=10000000 result=[1, 7018]
+2026-09-23 11:46:05,174 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:05,179 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 11:46:05,179 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-3 (actual=15, est=18)
+2026-09-23 11:46:05,185 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=18 limit=10000000 result=[1, 7033]
+2026-09-23 11:46:05,186 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:05,190 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 11:46:05,191 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-3 (actual=15, est=18)
+2026-09-23 11:46:05,196 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=18 limit=10000000 result=[1, 7048]
+2026-09-23 11:46:05,198 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:05,202 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 11:46:05,202 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-3 (actual=15, est=18)
+2026-09-23 11:46:05,208 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=18 limit=10000000 result=[1, 7063]
+2026-09-23 11:46:05,209 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:05,213 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 11:46:05,214 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-3 (actual=15, est=18)
+2026-09-23 11:46:05,219 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=18 limit=10000000 result=[1, 7078]
+2026-09-23 11:46:05,221 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:05,225 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 11:46:05,225 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-3 (actual=15, est=18)
+2026-09-23 11:46:05,231 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=18 limit=10000000 result=[1, 7093]
+2026-09-23 11:46:05,232 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:05,236 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 11:46:05,237 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-3 (actual=15, est=18)
+2026-09-23 11:46:05,242 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=18 limit=10000000 result=[1, 7108]
+2026-09-23 11:46:05,244 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:05,248 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 11:46:05,248 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-3 (actual=15, est=18)
+2026-09-23 11:46:05,255 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=18 limit=10000000 result=[1, 7123]
+2026-09-23 11:46:05,256 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:05,260 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 11:46:05,261 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-3 (actual=15, est=18)
+2026-09-23 11:46:05,266 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=18 limit=10000000 result=[1, 7138]
+2026-09-23 11:46:05,268 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:05,272 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 11:46:05,272 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-3 (actual=15, est=18)
+2026-09-23 11:46:05,278 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=19 limit=10000000 result=[1, 7154]
+2026-09-23 11:46:05,279 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 11:46:05,283 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 11:46:05,284 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-4 (actual=15, est=19)
+2026-09-23 11:46:05,988 [DEBUG] gateway.telemetry: Telemetry flushed 114 events to Redis
+2026-09-23 11:46:05,989 [INFO] gateway.telemetry: Telemetry producer stopped (final flush complete)
+2026-09-23 11:46:05,990 [INFO] gateway.config_sync: ConfigSync stopped
+2026-09-23 11:46:05,990 [INFO] gateway.policy_sync: PolicySync stopped
+2026-09-23 11:46:05,990 [INFO] gateway.mcp_stdio_adapter: All stdio MCP processes terminated
+2026-09-23 11:46:05,991 [INFO] gateway.mcp_ws_adapter: All WebSocket MCP connections closed

@@ -1,0 +1,275 @@
+{
+ "lines": [
+  {
+   "line": 1,
+   "service": "GCE G2 x4 (96 vCPU + 384 GiB + 8 L4)",
+   "doc_usd": 2736.76,
+   "on_demand_mumbai_usd": 6081.7,
+   "assumes_3yr_cud": "YES (exact)",
+   "verdict_and_derivation": "Doc value = 3-yr CUD SKUs C13C-86D2-4291/E2CF-A78E-CCC3/3D44-B7C2-56AD: 4x(24x0.0117052+96x0.001371301+2x0.262339046)x730 = $2736.76 (matches to the cent). On-demand: 4x(24x0.026011561+96x0.003047337+2x0.582975726)x730 = $6081.7. (1-yr CUD would be $3831.47.)"
+  },
+  {
+   "line": 2,
+   "service": "NVIDIA L4 x8 (bundled)",
+   "doc_usd": 0.0,
+   "on_demand_mumbai_usd": 0.0,
+   "assumes_3yr_cud": "n/a",
+   "verdict_and_derivation": "Correct: L4 is priced inside line 1 (SKU AE59-12DA-20E3 on-demand $0.582975726/GPU-h)."
+  },
+  {
+   "line": 3,
+   "service": "Persistent disks 4x100 GiB pd-ssd + 250 GiB data",
+   "doc_usd": 68.0,
+   "on_demand_mumbai_usd": 132.6,
+   "assumes_3yr_cud": "no",
+   "verdict_and_derivation": "ERROR x2: $68.00 = 400 GiB x $0.17 = us-central1 pd-ssd (B188-61DD-52E4), not Mumbai ($0.204, FF66-41CB-DE90); and the 250 GiB data disk is not priced. Mumbai: 650 x 0.204 = $132.6 (all pd-ssd) or $111.6 with the 250 GiB on pd-balanced."
+  },
+  {
+   "line": 4,
+   "service": "Regional external ALB (Standard tier)",
+   "doc_usd": 18.25,
+   "on_demand_mumbai_usd": 21.9,
+   "assumes_3yr_cud": "no",
+   "verdict_and_derivation": "ERROR: $18.25 = 730 x $0.025 (global / us rate DEE3-C42E-3E4D). Mumbai regional ext ALB first-5-rules = $0.03/h (22FA-9BFA-EC10) = $21.90."
+  },
+  {
+   "line": 5,
+   "service": "Egress 16,037 GiB banded + LB bytes",
+   "doc_usd": 1090.32,
+   "on_demand_mumbai_usd": 1699.6,
+   "assumes_3yr_cud": "no",
+   "verdict_and_derivation": "Doc arithmetic is internally consistent (824x0.085+9216x0.065+5797x0.045 = $929.97; +16,037x0.01 = $160.38), BUT the bands are not Mumbai's: SKU 4C3B-5563-1BF6 is 0-200 GiB free, 200-10,240 @ $0.11, 10,240-153,600 @ $0.075, >153,600 @ $0.07 (no 1,024 GiB break). Same 16037.61 GiB at Mumbai Standard tier = $1539.22; LB processing is billed on BOTH inbound (client request) and outbound (response) at $0.01/GiB each, and the prompt leg to the provider does not traverse the LB: resp 7577.03 GiB out + client-request 8460.58 GiB in (if request ~= prompt leg) = $160.38 (numerically = doc's $160.37). If the prompt leg leaves via Premium-tier VM IPs to US providers: $1752.38 egress instead of $1539.22."
+  },
+  {
+   "line": 6,
+   "service": "External IPs (LB + node addresses)",
+   "doc_usd": 15.0,
+   "on_demand_mumbai_usd": 14.6,
+   "assumes_3yr_cud": "no",
+   "verdict_and_derivation": "OK: 4 VM IPs x $0.005/h (C054-7F72-A02E) x 730 = $14.60; IPs on forwarding rules are not charged (Google network-pricing page). First 720 IP-h/account/month free would lower it to $11.00."
+  },
+  {
+   "line": 7,
+   "service": "Cloud SQL Postgres HA 4 vCPU/16 GiB/100 GiB",
+   "doc_usd": 273.91,
+   "on_demand_mumbai_usd": 526.4,
+   "assumes_3yr_cud": "YES (inferred)",
+   "verdict_and_derivation": "On-demand Mumbai regional(HA): (4x0.0991 + 16x0.0168)x730 + 100x0.408 = $526.4. Doc's $273.91 reproduces to $0.02 as 0.48 x compute ($485.6) + storage $40.80 = $273.89 => a 52% compute discount (3-yr CUD rate); the catalog exposes no Cloud SQL commit SKUs to prove it."
+  },
+  {
+   "line": 8,
+   "service": "SQL backups (PITR)",
+   "doc_usd": 15.0,
+   "on_demand_mumbai_usd": 15.0,
+   "assumes_3yr_cud": "no",
+   "verdict_and_derivation": "Unit verified $0.096/GiB-mo (D737-A9D2-80AB) => $15 = 156.25 GiB; quantity is the doc's assumption (kept)."
+  },
+  {
+   "line": 9,
+   "service": "Memorystore Valkey HA 2 x highmem-medium",
+   "doc_usd": 175.2,
+   "on_demand_mumbai_usd": 292.0,
+   "assumes_3yr_cud": "YES (inferred)",
+   "verdict_and_derivation": "Mumbai on-demand $0.20/node-h (DEEA-ABC3-D53D) x2 x730 = $292.0. Doc = $0.12/node-h = 0.60 x Mumbai; no region lists $0.12 on-demand (min $0.1923 Iowa) => 40% discount (3-yr CUD rate); no Memorystore commit SKUs in catalog."
+  },
+  {
+   "line": 10,
+   "service": "Control + Celery + MCP + PgBouncer (co-located)",
+   "doc_usd": 0.0,
+   "on_demand_mumbai_usd": 0.0,
+   "assumes_3yr_cud": "n/a",
+   "verdict_and_derivation": "$0 by co-location assumption (not a price claim)."
+  },
+  {
+   "line": 11,
+   "service": "MongoDB (co-located)",
+   "doc_usd": 0.0,
+   "on_demand_mumbai_usd": 0.0,
+   "assumes_3yr_cud": "n/a",
+   "verdict_and_derivation": "Disk is supposed to be in line 3 but line 3 never priced it (see line 3)."
+  },
+  {
+   "line": 12,
+   "service": "ChromaDB (co-located)",
+   "doc_usd": 0.0,
+   "on_demand_mumbai_usd": 0.0,
+   "assumes_3yr_cud": "n/a",
+   "verdict_and_derivation": "Same as 11."
+  },
+  {
+   "line": 13,
+   "service": "SPA + nginx (co-located)",
+   "doc_usd": 0.0,
+   "on_demand_mumbai_usd": 0.0,
+   "assumes_3yr_cud": "n/a",
+   "verdict_and_derivation": "$0 by co-location assumption."
+  },
+  {
+   "line": 14,
+   "service": "GKE regional cluster fee",
+   "doc_usd": 73.0,
+   "on_demand_mumbai_usd": 73.0,
+   "assumes_3yr_cud": "no",
+   "verdict_and_derivation": "OK: $0.10/h (B561-BFBD-1264) x 730."
+  },
+  {
+   "line": 15,
+   "service": "Artifact Registry ~20 GB",
+   "doc_usd": 10.0,
+   "on_demand_mumbai_usd": 1.95,
+   "assumes_3yr_cud": "no",
+   "verdict_and_derivation": "OVERSTATED: 8502-299A-ABAF = first 0.5 GiB free then $0.10/GiB-mo => 20 GiB = $1.95."
+  },
+  {
+   "line": 16,
+   "service": "Audit -> GCS",
+   "doc_usd": 53.0,
+   "on_demand_mumbai_usd": 60.49,
+   "assumes_3yr_cud": "no",
+   "verdict_and_derivation": "Doc uses $0.02/GiB; Mumbai Standard is $0.023/GiB-MONTH (2717-BEFE-3773): 2630.13 GiB (1 KiB x 2.758 B req) = $60.49 for ONE month of data held one month. It is storage, so it accumulates: R months of retention => R x that per month (Nearline $0.016, Coldline $0.006, Archive $0.0025 with lifecycle rules)."
+  },
+  {
+   "line": 17,
+   "service": "Cloud Monitoring",
+   "doc_usd": 15.0,
+   "on_demand_mumbai_usd": 15.0,
+   "assumes_3yr_cud": "no",
+   "verdict_and_derivation": "Unit verified: first 150 MiB free then $0.258/MiB (A924-09D0-8854) => $15 = 208.1 MiB/mo; quantity is the doc's assumption (kept)."
+  },
+  {
+   "line": 18,
+   "service": "Disk snapshots weekly",
+   "doc_usd": 18.0,
+   "on_demand_mumbai_usd": 18.0,
+   "assumes_3yr_cud": "no",
+   "verdict_and_derivation": "Unit verified: $0.052/GiB-mo regional (A0EA-3B8B-0794) or $0.083 multi-regional asia (6E69-DD68-8DCA); $18 = 346 / 217 GiB; quantity unstated (kept)."
+  },
+  {
+   "line": 19,
+   "service": "Cloud NAT (not bought)",
+   "doc_usd": 0.0,
+   "on_demand_mumbai_usd": 0.0,
+   "assumes_3yr_cud": "n/a",
+   "verdict_and_derivation": "Claim '$0.045/GiB both ways' CONFIRMED: 015F-5732-FFF0 $0.045/GiB; Google doc: 'Price per GiB processed, inbound and outbound data transfer'."
+  },
+  {
+   "line": 20,
+   "service": "Cloud Armor (not bought)",
+   "doc_usd": 0.0,
+   "on_demand_mumbai_usd": 0.0,
+   "assumes_3yr_cud": "n/a",
+   "verdict_and_derivation": "Claim '$15,180/mo' NOT REPRODUCIBLE: at the doc's 2,757,888,000 req/mo, Standard Cloud Armor = $0.75/M req (1A87-DEB9-C4BE) + $5/policy = $2073.42 (+$1/rule); regional $0.60/M (928E-CF60-E186) = $1659.73."
+  },
+  {
+   "line": 21,
+   "service": "Kafka/ClickHouse/BigQuery/Vertex (not bought)",
+   "doc_usd": 0.0,
+   "on_demand_mumbai_usd": 0.0,
+   "assumes_3yr_cud": "n/a",
+   "verdict_and_derivation": "$0."
+  }
+ ],
+ "doc_total_usd": 4561.44,
+ "on_demand_total_usd": 8952.24,
+ "doc_claim_g2_on_demand_usd": 7906,
+ "doc_claim_g2_on_demand_recomputed": 7906.38,
+ "section8_model_check": [
+  {
+   "rps": 1064,
+   "doc_nodes": 4,
+   "formula_nodes": 4,
+   "doc_usd": 4561,
+   "doc_formula_recomputed_usd": 4560.9,
+   "on_demand_mumbai_usd": 8951.95
+  },
+  {
+   "rps": 1330,
+   "doc_nodes": 5,
+   "formula_nodes": 5,
+   "doc_usd": 5401,
+   "doc_formula_recomputed_usd": 5495.71,
+   "on_demand_mumbai_usd": 10852.28
+  },
+  {
+   "rps": 2000,
+   "doc_nodes": 8,
+   "formula_nodes": 8,
+   "doc_usd": 8188,
+   "doc_formula_recomputed_usd": 8187.74,
+   "on_demand_mumbai_usd": 16382.02
+  },
+  {
+   "rps": 5320,
+   "doc_nodes": 20,
+   "formula_nodes": 20,
+   "doc_usd": 19519,
+   "doc_formula_recomputed_usd": 19517.93,
+   "on_demand_mumbai_usd": 39357.17
+  },
+  {
+   "rps": 10000,
+   "doc_nodes": 38,
+   "formula_nodes": 38,
+   "doc_usd": 36251,
+   "doc_formula_recomputed_usd": 36249.74,
+   "on_demand_mumbai_usd": 73418.55
+  },
+  {
+   "rps": 1862,
+   "doc_nodes": 7,
+   "formula_nodes": 7,
+   "doc_usd": 7228.7,
+   "doc_formula_recomputed_usd": 7365.34,
+   "on_demand_mumbai_usd": 14652.93
+  }
+ ],
+ "section1_claims": [
+  {
+   "claim": "Headroom $438.56",
+   "recomputed": 438.56,
+   "note": "arithmetic OK"
+  },
+  {
+   "claim": "Unit $1.65 / million requests",
+   "recomputed": 1.65,
+   "note": "arithmetic OK"
+  },
+  {
+   "claim": "G2 on-demand (no 3-yr CUD) $7,906",
+   "recomputed": 7906.38,
+   "note": "arithmetic OK but swaps ONLY line 1; lines 7 and 9 keep implied 3-yr CUD, lines 3/4/5/16 keep non-Mumbai rates"
+  },
+  {
+   "claim": "Cloud Logging @1 KiB/req instead of GCS $5,798.44",
+   "recomputed": 5798.5,
+   "note": "arithmetic OK; unit $0.50/GiB after 50 GiB/project free (143F-A1B0-E0BE)"
+  },
+  {
+   "claim": "Optional control plane on own nodes +$270",
+   "recomputed": null,
+   "note": "unit not stated; n2-standard-4 = $170.3, e2-standard-4 = $117.51 (+disk)"
+  },
+  {
+   "claim": "Upside tenant provider in-region ~$3,970",
+   "recomputed": 4042.88,
+   "note": "NOT reproducible exactly: removing the prompt leg under the doc's own bands gives this value"
+  },
+  {
+   "claim": "Quota to 14 L4 (A', 1,862 RPS) $7,228.70",
+   "recomputed": null,
+   "note": "see section8_model_check: doc's own formula gives a different value"
+  },
+  {
+   "claim": "Traffic month vs compute month",
+   "recomputed": null,
+   "note": "doc prices compute at 730 h but traffic at 30 d = 720 h (2,592,000 s); traffic is understated 1.39% vs a 730 h month"
+  }
+ ],
+ "volumes_used (doc's own)": {
+  "requests_per_month": 2757888000,
+  "egress_gib_6244B": 16037.61,
+  "response_gib_2950B": 7577.03,
+  "prompt_gib_3294B": 8460.58,
+  "audit_gib_1KiB": 2630.13
+ }
+}

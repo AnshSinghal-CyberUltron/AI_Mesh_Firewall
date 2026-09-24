@@ -1,0 +1,23 @@
+=== max_connections / max_keepalive / Limits( in gateway runtime (non-test)
+rate_limiter.py:41:            self._pool = aioredis.ConnectionPool.from_url(
+rate_limiter.py:44:                max_connections=100,
+middleware.py:311:            max_connections = int(os.environ.get("GATEWAY_REDIS_MAX_CONNECTIONS", "300"))
+middleware.py:312:            self._pool = aioredis.ConnectionPool.from_url(
+middleware.py:315:                max_connections=max_connections,
+mcp_oauth.py:476:        pool = aioredis.ConnectionPool.from_url(
+mcp_oauth.py:477:            redis_url, decode_responses=True, max_connections=50
+embedding_vault.py:274:            self._pool = ConnectionPool(
+mcp_proxy.py:149:            limits=httpx.Limits(max_connections=64, max_keepalive_connections=32),
+
+=== ThreadPoolExecutor(max_workers=...) sites
+vector_client.py-346-            max_workers=thread_pool_size,
+vector_client.py-720-            max_workers=thread_pool_size,
+vector_client.py-1091-            max_workers=thread_pool_size,
+llm_judge.py-89-            max_workers=thread_pool_size,
+context_guard.py-162-            max_workers=thread_pool_size,
+embedding_vault.py-238-            max_workers=thread_pool_size,
+scanner.py-1121-            max_workers=thread_pool_size,
+scanner.py-1131-            max_workers=bedrock_pool_size,
+
+=== redis from_url sites in runtime (per-call clients?)
+17

@@ -1,0 +1,12 @@
+== corpus headline-22M.jsonl
+encode vs encode_batch windows identical: 400/400
+holdback=True: released per token [' ', 'hello ', '', 'world. ', 'mail ', '', '', '[REDACTED:pii.email] ', 'now ', 'key ', '', '[REDACTED:secret.aws] ']  scans=12
+holdback=False: released per token [' hello', ' world', '.', ' mail', ' bob', '@exa', 'mple.com', ' now', ' key', ' AKIA', 'IOSFODNN7EXAMPLE', ' end']  scans=12
+defaults -> 1.0 False 2 True
+{'RV_METRICS_DUMP_S': '0', 'RV_TOKENIZE_IN_THREAD': '1', 'RV_HOLDBACK': 'off'} -> 0.0 True 2 False
+== corpus worst-22M.jsonl
+encode vs encode_batch windows identical: 400/400
+holdback=True: released per token [' ', 'hello ', '', 'world. ', 'mail ', '', '', '[REDACTED:pii.email] ', 'now ', 'key ', '', '[REDACTED:secret.aws] ']  scans=12
+holdback=False: released per token [' hello', ' world', '.', ' mail', ' bob', '@exa', 'mple.com', ' now', ' key', ' AKIA', 'IOSFODNN7EXAMPLE', ' end']  scans=12
+defaults -> 1.0 False 2 True
+{'RV_METRICS_DUMP_S': '0', 'RV_TOKENIZE_IN_THREAD': '1', 'RV_HOLDBACK': 'off'} -> 0.0 True 2 False

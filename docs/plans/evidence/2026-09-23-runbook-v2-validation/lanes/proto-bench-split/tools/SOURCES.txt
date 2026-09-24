@@ -1,0 +1,7 @@
+pinned/analyze_3874eaac.py = SP/harness/analyze.py at READY (3874eaac)
+pinned/analyze_c9f89fe8.py + shared/ = proto-bench-unit's pinned analyzer (needed by pbu_analyze_ref.py)
+sampler.py = proto-bench-unit tools/unit_sampler.py (unchanged)
+pbu_analyze_ref.py = proto-bench-unit tools/pbu_analyze.py (reference; sut_side logic reused)
+recompute_ref.py = reviewer-observability/recompute.py (corrected rules a/b/c; independent)
+c4_client.py = reviewer-observability c4_client.py + --sample-mod=N flag (default 10 unchanged; 1 = all streams); recompute.py = its unchanged dependency
+fleet_select_ref.py = proto-bench-fleet scripts/fleet_select.py (price loader, tiered egress, F-lead-list fixed bundle), unchanged

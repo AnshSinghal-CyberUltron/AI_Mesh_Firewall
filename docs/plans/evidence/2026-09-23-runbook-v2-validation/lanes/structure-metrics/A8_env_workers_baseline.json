@@ -1,0 +1,33 @@
+{
+ "scope": [
+  "workers"
+ ],
+ "n_files": 9,
+ "wrappers_detected": {},
+ "distinct_literal_names": 4,
+ "literal_call_sites": 4,
+ "dynamic_key_sites": 0,
+ "total_sites_incl_dynamic": 4,
+ "distinct_names_direct_only": 4,
+ "call_sites_direct_only": 4,
+ "by_kind": {
+  "environ.get": 3,
+  "environ.setdefault": 1
+ },
+ "names": {
+  "ANALYTICS_ROLLUP_REFRESH_SEC": [
+   "workers/ai_mesh_workers/celery_app.py:67"
+  ],
+  "DJANGO_SETTINGS_MODULE": [
+   "workers/ai_mesh_workers/celery_app.py:7"
+  ],
+  "GATEWAY_KEY_RESYNC_INTERVAL_SEC": [
+   "workers/ai_mesh_workers/celery_app.py:56"
+  ],
+  "ROUTING_RECONCILE_INTERVAL_SEC": [
+   "workers/ai_mesh_workers/celery_app.py:63"
+  ]
+ },
+ "dynamic_sites": [],
+ "writes": []
+}

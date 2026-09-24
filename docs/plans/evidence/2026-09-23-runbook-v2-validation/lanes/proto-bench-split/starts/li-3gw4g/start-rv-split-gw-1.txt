@@ -1,0 +1,1 @@
+GATEWAY NODE READY after 3s: 12/12 workers

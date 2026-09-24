@@ -1,0 +1,6 @@
+uv.lock openai version: 2.38.0
+  optional-dep of: gateway extra= dev
+  runtime dependency of: litellm 1.86.2
+gateway runtime deps include litellm: True
+litellm version: 1.86.2 deps openai: [{'name': 'openai'}]
+gateway metadata requires-dist openai: [{'name': 'openai', 'marker': "extra == 'dev'", 'specifier': '==2.38.0'}]

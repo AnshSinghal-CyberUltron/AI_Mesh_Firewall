@@ -1,0 +1,5 @@
+f8-020-poisson: lambda/worker 3.36/s rho 0.0146 ErlangB 1.44% measured 2.32% ratio 1.61
+f1u-070-poisson: lambda/worker 3.91/s rho 0.0170 ErlangB 1.67% measured 3.14% ratio 1.88
+f8-060-poisson: lambda/worker 10.07/s rho 0.0438 ErlangB 4.20% measured 7.69% ratio 1.83
+0.1% shed under Poisson needs lambda/worker <= 0.144/s (x1.6 imbalance) -> g2-8 (6 w) 0.86 RPS, g2-24 (18 w) 2.59 RPS
+0.1% shed under Poisson needs lambda/worker <= 0.121/s (x1.9 imbalance) -> g2-8 (6 w) 0.73 RPS, g2-24 (18 w) 2.18 RPS

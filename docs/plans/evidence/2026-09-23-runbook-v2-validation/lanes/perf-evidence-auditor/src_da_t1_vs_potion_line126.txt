@@ -1,0 +1,342 @@
+SP=/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/4b1feace-5c5c-4958-9fcd-e4a98c62733a/scratchpad/final; cat > $SP/DEVILS-ADVOCATE.md <<'MDEOF'
+# DEVIL'S ADVOCATE — final gate before implementation
+
+**Date:** 2026-08-27 · **Role:** CLAUDE.md Phase 4 · **Inputs:** `SYNTHESIS.md`, `E1`–`E7`, `R1`–`R5`, repo `@ c26eb491` (read-only, L4 honoured).
+**Evidence tags:** `[M]` measured **by me, this session** · `[M:X]` measured by agent X · `[R]` repo corpus · `[V]` vendor · `[I]` independent · `[D]` derived · `[NF]` searched, not found.
+
+Everything tagged `[M]` below was run this session on the same Xeon Platinum 8581C the E-agents used. Scripts: `scratchpad/da/{tok_check,potion_probe,potion_cost,t1_vs_potion,t1_fp,memo,whichpat}.py`.
+
+---
+
+## 0. THE SHORT VERSION
+
+The synthesis's verdict — **NOT ACHIEVABLE as locked** — survives. I attacked it and could not move it. Two of its numbers are wrong (I corrected one by direct measurement, 8.60 ms → 1.67 ms), which moves the total from 126.0 ms to **≈ 119 ms**. A 9.9× miss instead of a 10.5× miss is not a different answer.
+
+**But the synthesis answered the wrong question, and so did every reviewer except one.**
+
+The whole pass asks: *can we run a semantic classifier inside 12 ms?* No. Fine. It then recommends shipping **Tier-1-only as the default posture** and certifying 12 ms for it — and **nobody in seven evidence agents and five adversarial reviewers measured what Tier-1-only actually detects.** I did:
+
+| Measured this session, real `InputScanner._scan_prompt_sync` at HEAD | Result |
+|---|---|
+| Bare English prompt injections, same family as the shipped regexes | **3 / 10 detected** `[M]` |
+| Bare English prompt injections, paraphrased with disjoint trigger vocabulary | **0 / 10 detected** `[M]` |
+| Benign prompts containing any inline-backtick code | **5 / 5 HARD-BLOCKED**, `command_injection`, confidence 1.00 `[M]` |
+| Ordinary agentic tool descriptions (my own list, not R5's) | **3 / 12 HARD-BLOCKED**, `data_leakage`, confidence 1.00 `[M]` |
+
+The recommended shipping posture is **near-blind on the primary threat and hostile to ordinary developer traffic, simultaneously**. `` r"`[^`]+`" `` is a literal `command_injection` pattern at `scanner.py` (`ATTACK_PATTERNS["command_injection"]`), and `command_injection`/`data_leakage` are explicitly excluded from the explanatory-mention carve-out (`scanner.py:1197-1202`), so the block is terminal at tier_1 and never reaches Tier-2.
+
+**That reframes the decision entirely.** This is not "12 ms vs 126 ms". It is: **the product's detection value lives almost entirely in the layer that costs 100× the SLO, and the layer that fits the SLO has never been measured and does not work.** A plan that ships posture (4) and publishes "12 ms p50" is publishing a latency number for a configuration whose security value is, on the only measurement anyone has taken, close to zero.
+
+Everything else in this document is detail.
+
+---
+
+## 1. ADJUDICATION
+
+### 1.1 The synthesis's own claims
+
+| # | Claim | Verdict | Evidence |
+|---|---|---|---|
+| S-a | Total target ≈ 126.0 ms; 10.5× over | **OVERSTATED (small)** | Stage 8 is 5.1× too high (§1.2 A-1). Corrected total **≈ 119.1 ms**, still **9.9×**. Direction unchanged. |
+| S-b | Semantic classifier = 98.1 % of the target budget | **CONFIRMED** | Corrected: 116.7 / 119.1 = **98.0 %**. |
+| S-c | "Everything else = 2.39 ms, **fits 12 ms with 9.6 ms of margin**", tagged `[M] component-wise` | **OVERSTATED — and this is the most dangerous sentence in the document** | Three independent defects: it is a sum of *unbuilt targets* mis-tagged `[M]` (R1 A-4, confirmed); it omits per-request multipliers the reviewers found (R5 F4 multi-turn ×1.43, R3/R2 snapshot-miss, R3 ×16 workers); and — decisively — **the posture it justifies has never had its detection quality measured.** Honest range **3.0–5.5 ms p50**, margin 6.5–9 ms, **p99 entirely unestablished** (the ASGI stack alone is 4.702 ms p99 `[M:E7]` = 39 % of the budget from one line). |
+| S-d | FLOP-supply argument: ~53 GFLOP/prompt vs 0.571 TFLOPS ⇒ 7.9× short, 10.8 RPS/host | **CONFIRMED in direction, OVERSTATED as "hard arithmetic"** | The demand side is sound and I re-derived it independently (2·21.2 M·1024 = 43.4 GFLOP linear + ~19 GFLOP attention ⇒ 53–62 GFLOP; DeBERTa's disentangled p2c+c2p attention makes 53 a *floor*, so the shortfall is if anything larger). **The supply side is doubly derived**: a vendor peak nobody measured × a 62 % efficiency measured **on x86** and transferred to Arm. And R5's F6 is right that it is **input-path only**. Say "single-digit RPS/host at the L5 band, unmeasured on the target SKU", not "10.8". The *conclusion* is insensitive to all of it. |
+| S-e | Speculative dispatch REJECTED | **CONFIRMED** | E6's six grounds hold; I verified ground 2 (force-sync in every branch) and ground 5 independently in R1's re-check. The arithmetic addition (residual ≈ 76 ms even at 100 % effectiveness) is right and, with my corrected tokenizer line, becomes ≈ 69 ms — still 5.7× over. Not a closer. |
+| S-f | Batch-4 ONNX must be struck from L5 | **CONFIRMED** | E3's four-way head-to-head is a within-process comparison under identical conditions. R1 independently reproduced the 16-thread SMT cliff. No counter-evidence found. |
+| S-g | Cost is not the binding constraint; BOM $2,044.06/mo | **CONFIRMED** | Nobody dented it. One caveat: the 6-node ceiling is **CPU-derived**, not validated against in-flight memory (R2 H-3) or Redis fan-out (R3 Attack 1). |
+| S-h | Lever D (off-host accelerator) rejected because "GPU is $15–16 k/mo, 3× the envelope" | **INVALID AS STATED** | `[NF]` **No GCP accelerator unit rate exists anywhere in E2's BOM** — I grepped it; the only hit is the disabled Billing Catalog API note. The $15–16 k figure is **AWS-derived** `[R]` and was carried into an L7-locked (GCP asia-south1) plan without re-derivation. **The only lever that closes the gap outright was rejected on a price from the wrong cloud.** It probably still fails — on MASTER D1's 2–8 ms hop tax, which would consume 17–67 % of the budget before a single FLOP — but *that* is the honest reason, and the plan must say so instead of quoting an unsourced price. |
+| S-i | Lever A (`potion-base-8M`) is "THE ONLY MEASURED PATH THAT SATISFIES L1 AND L2 TOGETHER" | **REFUTED — by my own measurement, see §2** | |
+
+### 1.2 R1 — false positives
+
+| ID | Verdict | Adjudication |
+|---|---|---|
+| **A-1** tokenization 8.60 ms is a 5.2× false positive | **CONFIRMED — I reproduced it independently** | `[M]` Same artifact, `tokenizers` 0.23.1, quiet box. The shipped `tokenizer.json` carries `truncation.max_length=512` **and** `padding {Fixed: 512}` — I dumped both. With truncation active, four texts spanning 662→10,483 chars **all return exactly 512 ids** while p50 runs 0.277→3.839 ms. With truncation and padding disabled: **1024 TRUE tokens = 5,194 chars = 1.673 ms p50**; 512 tokens = 0.853 ms; cost is linear in characters at **0.322–0.338 µs/char across a 16× range**. R1's 1.65 ms replicates to 1.4 %. **Stage 8: 8.60 → 1.67 ms.** R3's original 0.3–1 ms estimate was right, not "4–14× off". |
+| **A-1 corollary R1 found and the synthesis missed** | **CONFIRMED and upgraded to a security finding** | The same config means a naive integration feeding `encode()` straight to ORT runs every window at **seq 512** (123 ms) instead of seq 256 (47 ms) — R1's 2.6× silent cost. **I add:** truncation at 512 also means a *single-call* PG2 classification of a 1024-token prompt **silently sees only the first 512 tokens**. Windowing is therefore not an optimisation, it is a **correctness requirement**, and the bake-off must assert on the realised `input_ids` shape. |
+| **A-2** MAX_PROMPT_LENGTH ⇒ ~2,120 tokens, "2048 IS servable" | **CONFIRMED in mechanism, OVERSTATED in conclusion** | `[M]` My prose measures **5.08 chars/token** (R1's measured 4.71 on different prose). At 5.08, 2048 tokens = **10,402 chars > 10,000 ⇒ BLOCKED**. The honest statement is a **band: ~1,970–2,120 tokens for English prose**, and 2048 tokens sits *on* the boundary — servable or not depending on the text. Both the synthesis's "~1,650+" and R1's flat "2048 IS servable" are over-precise. The load-bearing correction stands: L5's 1024-token band is **~50 % of the ceiling**, so it *is* a design choice. |
+| **A-3** "L1 AND L2 jointly unsatisfiable" overstates | **CONFIRMED** | A verdict and an offered option cannot both stand. The defensible form: *"L1 with **PG2-22M** is unsatisfiable by ~10×, measured. L1 with L2-as-a-class turns on a recall question."* §2 now answers that question for the only candidate. |
+| **A-4** 2.39 ms is a sum of targets mis-tagged `[M]` | **CONFIRMED** | Verified: stages 5/14 need `hyperscan`+`ahocorasick_rs`, absent from `gateway/pyproject.toml`; stage 7 needs an unfunded Rust extension; stage 11 is `[NF]`. |
+| **R1's new finding**: `lru_cache` on `_segment_token` is ~24× and verdict-identical | **CONFIRMED — and I measured it** | `[M]` `_segment_token` is a **module-level pure function** (`scanner.py:869`) of `(str, frozenset, float)` — all hashable, no `self`. On a 3,480-char benign prompt: `_deobfuscate_text` **1,186.5 ms → 100.2 ms (11.8×)**; full `_scan_prompt_sync` **1,342.0 ms → 232.9 ms** with a *per-request cold* cache, **135.4 ms** warm; **verdict byte-identical**. Cache stats on ONE prompt: **440 hits / 40 misses** — i.e. **the win is intra-request**, so it needs no cross-request warmth and introduces no cross-tenant cache surface. **This belongs at the top of Phase 1.** Two caveats R1 did not state: it does *not* touch the adversarial tail (R5's near-vocab shape gets 0 hits and still costs 9.17 s), and 232.9 ms is still **155× over** the 1.50 ms target — memoisation reframes the Rust question, it does not answer it. |
+| R1's 10 `PLAN_SURVIVED` verdicts | **NOT lazy — spot-checked 4, all hold** | DEBUG logger (`main.py:5999` unconditional, `GATEWAY_LOG_LEVEL` sets only the root), flush arithmetic, redis-py 100-connection default, force-sync-in-every-branch. R1 also volunteered a measurement 3× *worse* for the current code than E1's, which is the behaviour of an honest reviewer. |
+
+### 1.3 R2 — hidden failures
+
+| ID | Verdict | Adjudication |
+|---|---|---|
+| **H-1** `potion-base-8M` is REFUTED, not merely unvalidated | **CONCLUSION CONFIRMED — REASONING OVERSTATED. I ran the experiment R2 did not.** See §2. | R2 measured raw cosine geometry and order invariance and concluded "no trained head can recover it". Order-invariance alone does **not** prove that (a bag-of-tokens head is still a head, and Tier-1 is itself a bag-of-tokens detector). The **dilution** argument does — and only at large windows. I trained the head: at the deployed 256-token window, AUC 0.60 / **recall 2.8 % @ 1 % FPR** on paraphrases. R2's *verdict* is right. Its *proof* was not, and at 21-token windows R2's absolutism is measurably false (AUC 0.95). |
+| **H-2** partial cold start / signature rejection ⇒ silent policy disablement, no reconciliation, `is_loaded` reports healthy | **CONFIRMED at source — but "gateway-wide ALLOW-ALL" is OVERSTATED** | Verified: `policy_sync.py:346` sets `_sync_completed = True` after the loop *unconditionally*, including the zero-accepted-bundles path; `is_loaded` (`:228-236`) is `bool(self._org_caches) or self._cache is not None or self._sync_completed` — a **process-global OR over per-org state**, so a *partial* SCAN also satisfies it via the first term, independently of signing. `main.py:1212` fail-closes only when `is_loaded` is False. `_load_initial_bundle` has exactly one call site. All confirmed. **Precision correction:** this disables the **operator-authored policy layer**, not the whole firewall — `scanner.py` Tier-1/Tier-2 still run on their own path. Given my §0 measurement of what Tier-1 alone catches, the practical severity is barely reduced, but the sentence must be accurate or an operator will dismiss it when they see the scanner still firing. |
+| **H-3** no admission control; `--worker-connections 20000` inert; `timeoutSec 3600` ⇒ OOM cascade at t≈701 s | **MECHANISM CONFIRMED, QUANTIFICATION OVERSTATED** | `[M]` I verified `uvicorn.workers.CONFIG_KWARGS = {"loop","http"}` only — no `worker_connections`, no `limit_concurrency`. `entrypoint.sh:66` does pass `--worker-connections 20000`. So the operator's one concurrency cap **is silently inert**. **But the OOM timeline is built on 1.1 MB/stream — the exact constant R2's own H-8 discredits two findings later.** That is an internal contradiction. Report the mechanism as fatal and the timeline as `[D, on a constant this same report calls unreliable]`. |
+| **H-4** admit-snapshot hit rate ~0.5 % at day-one, 23 % at N=85 | **CONFIRMED as "the 0.001 ms lines are unsupported", OVERSTATED as "no viable refresh policy"** | The Poisson arithmetic is right *for a lazy TTL cache*. E7 never specified the refresh policy, and a **traffic-gated eager refresher** (refresh only orgs seen in the last T seconds) is the obvious third variant neither R2 nor R3 examined; at day-one traffic it costs almost nothing because almost no org is active. The correct finding is: **the refresh policy is unwritten, all three variants have a problem, and rows 2/3/10 cannot be budgeted at 0.001 ms until one is chosen and costed.** |
+| **H-5** L8 fail-closed + Memorystore failover = designed-in all-tenant outage, unsized | **CONFIRMED** | `kill_switch.py:130-138` returns `is_killed=True, action="disable"` on `RedisError|OSError|ConnectionError`; vendor failover is "tens of seconds" `[V]`. Nobody signed "every cache failover is a full product outage". This belongs next to O-14…O-17. |
+| **H-6** E4's 40 ms deadline sits at E3's 39.67 ms p50 and *below* the 4-thread p50 that design-change #3 recommends | **CONFIRMED — a clean internal contradiction inside one document** | Two of the synthesis's own recommendations are mutually inconsistent from its own measurements. Fail-closed at the p50 of the thing you are timing makes the degraded path the steady state. |
+| **H-7** telemetry drops enforcement evidence exactly during the failure the plan expects | **CONFIRMED at source** | `telemetry.py:69-73` drops the oldest on overflow; `:133-138` discards the **entire batch** on `RedisError|OSError|ConnectionError` with `LOG.error` and no retry/DLQ/spill. For a compliance product these records are the enforcement evidence. |
+| **H-8** T-S1's 1.1 MB/stream is not "RESOLVED" | **CONFIRMED** | The source JSON's own `interpretation` field says a large fraction is warmup noise and calls it "not a precision constant". The synthesis marked it RESOLVED anyway. |
+| **H-9** `uvicorn.workers` deprecated | **CONFIRMED, low** | Worth merging with the H-3 fix into one item, as R2 argues. |
+
+### 1.4 R3 — state propagation
+
+| ID | Verdict | Adjudication |
+|---|---|---|
+| **A1** 16 worker **processes**, zero shared memory; the ×16 multiplier is applied once in the plan and belongs everywhere | **CONFIRMED — and this is R3's real contribution** | `[M]` I ran the repo's own formula: `compute_sizing(16.0, 64 GiB) → workers=16, asgi_threads=32`. `grep multiprocessing|shared_memory|mmap` over `gateway/ai_mesh_gateway/*.py` returns nothing. Every per-worker cache, every ONNX session, every local GCRA, every LRU is ×16 on one host and ×96 on the 6-node ceiling. **Adopt R3's proposed tracker column ("worker-count multiplier applied? Y/N") verbatim** — it is the cheapest structural fix in the entire review. The 20 Hz eager-refresh cost model is R3's assumption, not E7's spec (see H-4). |
+| **A2** `_sync_completed` unconditional | **CONFIRMED** (= H-2; two reviewers reached it independently, from different directions) | |
+| **A3** `ConfigSync` falls back to the **`default` ORG's** config ⇒ cross-tenant posture inheritance | **CONFIRMED, AND I VERIFIED IT IS REACHABLE — R3 stopped one step short of the thing that makes it real** | `config_sync.py:229-235` is as quoted. The open question R3 left is whether anything ever writes a `default` entry. **It does:** `control/.../core/models.py:1368-1370` — `build_redis_key()` returns `f"firewall:config:{slug}"` with `slug = self.organization.slug if self.organization_id else "default"`. So **any org-less (platform-level) `FirewallConfig` row publishes `firewall:config:default`**, the gateway loads it into `_config_by_org["default"]` (`config_sync.py:433`), and every un-synced tenant inherits its `firewall_enabled`, `enforcement_mode`, `tier2_execution_mode` and `allowed_models` via `main.py:6929`. Corroboration that this key family has bitten before: `signals.py:479` — *"Previously this mapped None→'default' causing key collision with real default org."* **Precision correction to R3:** the direction is **undetermined** — an unsynced tenant may inherit a *stricter* posture as easily as a looser one — so it is a tenant-isolation defect that must be **treated as fail-open** rather than asserted to be one. The fix already exists in-repo: `get_own_config()` with its explicit security docstring. |
+| **A4** Config/Policy/VectorPolicy sync never re-load after a pub/sub disconnect ⇒ unbounded staleness; L8 locks the smallest surface | **CONFIRMED** | `config_sync.py` `_load_initial` has one call site (`:281`); the reconnect path only re-subscribes; the comment at `:456-460` promising a retry is false. R3's framing is the right one: **signing a 50 ms bound on `kill_switch:*` while `enforcement_mode` and the entire compiled bundle have no bound at all is incoherent.** |
+| **A5** lease rate limiter over-admits ×96 and under-admits below 16 RPS/org | **CONFIRMED** | Arithmetic on 96 independent GCRAs is unavoidable. "Fixes the limiter half by construction" (E7 §3d) is false in both directions. |
+| **A6** design-change #3's "N independent ONNX sessions × 4 threads, costs nothing" is unproducible in a 16-process model | **CONFIRMED** | 16 sessions × 4 intra-op threads = 64 threads on 16 cores is exactly the oversubscribed regime E3 blamed for the batch-4 artifact. The recommendation either costs a sidecar (re-opening D1) or invalidates E3's projection. Plus 88 MB × 16 = 1.41 GB/host of duplicated fp32 weights against a `per_worker_rss` constant that **derives the worker count** — so shipping the classifier in-process changes N. |
+| **A7** `auth:epoch` is global and cannot be hash-tagged, in tension with E7's own slot rule | **CONFIRMED** | Also correct that today auth staleness is **zero** and the plan *introduces* it as an optimisation — a security-posture change sitting in a latency table. |
+| **A8** credential-scoped kill switch has control-plane-unbounded cardinality | **CONFIRMED at source** | `kill_switch.py:52-58` includes `key_prefix` in the key. Either the snapshot re-acquires per-request cardinality or stage 3's 0.001 ms is void. |
+| **A9** hash-tag migration has 5 sites across 2 services; one ordering fails **open** | **CONFIRMED** | Reader-first fails open silently; writer-first fails closed. Only one order is safe and the plan does not name it. |
+| **A10** seven more per-worker-state instances | **CONFIRMED** | The Tier-2 verdict cache omitting `scanner_model_id` while the breaker key includes it is a genuine, non-obvious inconsistency. |
+| **A11** L8's snapshot introduces a ≤50 ms fail-**open** hole; the correct fail-closed reading makes every failover a full outage | **CONFIRMED** (= H-5 from the other side) | |
+| R3's 6 `PLAN_SURVIVED` items | **Sound, and one is valuable** | The Tier-2 verdict cache storing the *raw* Bedrock response (so threshold changes apply immediately) is a real defence of the current design that a less careful reviewer would have flagged as a bug. Good discipline. |
+
+### 1.5 R4 — observability
+
+**This is the sleeper of the entire pass and I rank it above every performance item except the detection-quality finding.** Every gate in the FINAL plan is scored by an instrument that, on the path L1 explicitly names, reports the firewall as free.
+
+| ID | Verdict | Adjudication |
+|---|---|---|
+| **A1** on streams the published gateway addon reduces **algebraically to provider TTFT** | **CONFIRMED EXACTLY, at source, by me** | `stream_orchestration.py:120-131` — **both** `ttft_ms` and `duration_ms` are measured from `provider_start_ts`. `:666` — `sm.setdefault("model_output_ms", duration_ms - ttft_ms)`. I checked the one thing that could have saved it: `setdefault` only fires if the key is absent, and `main.py:6330` initialises `stage_metrics` **without** `model_output_ms` (the only writer is `main.py:9808`, on the non-stream path, after the streaming branch has already returned). So it *does* fire. `:738` `elapsed_ms = metrics.duration_ms`; `:778` `total_latency_ms = elapsed_ms`. Bench `addon = total − model_output` (`gateway_pipeline_bench.py:96`). **⇒ addon = duration − (duration − ttft) = ttft.** Against the L6-mandated stub (TTFT 0.011 ms `[M:E6]`) a streaming gate run would report ~0.011 ms of firewall tax while the gateway burns seconds of CPU. |
+| **A2** `T_addon_pre = ttft − output_guard_ms`, clamped at 0, monotonically **decreasing** in the cost it polices | **CONFIRMED at source** | `pipeline_trace.py:708` `pre = round(max(0.0, total_f − model_out − post), 1)`. Phase 1.1's "no drop ⇒ diagnosis wrong, stop and revise" gate can never fire. |
+| **A3** the SLO harness hardcodes `stream: False` | **CONFIRMED** | `gateway_pipeline_bench.py:240` (R4 said 238 — line drift only). No SSE parsing anywhere in `scripts/perf/`. The harness that produced N≈85 **has never executed the path L1 names**. |
+| **A4** ten of seventeen budget lines are below the instrument's 0.1 ms quantum; Phase 0.2's "0 ms = skipped" renders the success state as SKIPPED | **CONFIRMED in substance, slightly OVERSTATED in framing** | The quantum is real (`pipeline_trace.py:53,58-61,715-723`) and `add_ms(0.031) → 0.0` is demonstrated. The "renders as SKIPPED" consequence depends on the Phase-0.2 rule being applied as written; the underlying defect — you cannot verify a 0.031 ms budget with a 0.1 ms instrument — is unarguable and is the point. |
+| **A5** FINAL:715 says a stub run **fails** the capacity predicate; FINAL:800/851 **require** a stub to measure the tax | **CONFIRMED — a genuine internal contradiction** | R4's fix (split `capacity_eligible` from `tax_eligible`) is correct and cheap. |
+| **A6** `t_addon_post_seconds` observes 0 for every streaming request, forever | **CONFIRMED at source, by me** | `main.py:11123-11137` — `record_chat_completion` fires from `proxy_chat`'s `finally`, which on a stream runs when the handler returns the `StreamingResponse`, before the first token. |
+| **A7** the largest non-classifier line (ASGI, 1.025 / 4.702 ms) is outside every clock | **CONFIRMED** | `start = time.perf_counter()` is inside the handler body. |
+| **A8** the trace carries durations, no timeline ⇒ L2's mandated overlap is unrepresentable and "only the tail is on the critical path" is unverifiable in principle | **CONFIRMED** | The signed lock and the observability contract are incompatible. |
+| **A9** the bench silently drops failed (= slowest) requests from the addon distribution; deterministic tail-slice truncation then random subsample | **CONFIRMED at source** | `:364` filters `addon_ms is not None`. A run that degrades by shedding its tail reports an improving p99. |
+| **A10–A13** L6 clauses unevaluable (no CPU field), stub emits the cheapest possible detector input, ±0.1 ms tolerance over a 9-term sum, `PipelineStageTimer` used for 1 of 9 stages | **CONFIRMED** | All verifiable at the cited lines. |
+
+**R4's single best recommendation, which I endorse without modification:** add one assertion to the bench — `|wall_ms − addon − model_output| < ε`. It would have caught A1, A6 and A7 on the first run. Its absence is why three independent blind spots coexisted undetected.
+
+### 1.6 R5 — edge cases
+
+| ID | Verdict | Adjudication |
+|---|---|---|
+| **F1** tool/function-calling is unservable at the L5 band; two independent 8,000-char schema budgets stack on a 10,000-char total cap | **CONFIRMED in mechanism; the exact tool count is text-dependent** | `main.py:7809-7816` folds `_extract_tool_definitions_text(body["tools"])` **and** `_extract_response_format_text(...)` into `prompt` before the scan; `:1631` and `:1689` each allocate their own `budget = [_TOOL_SCHEMA_TEXT_BUDGET]` (=8000, `:1588`); `scanner.py:74` caps at 10,000 chars. At my measured 5.08 chars/token a 1024-token conversation is ~5,200 chars, leaving ~4,800 — so ~6–7 tools rather than R5's 5. **Directionally identical; the plan has no budget line for the `tools` / `response_format` / `agent_data` channels at all.** |
+| **F2** a Tier-1-only default hard-blocks ordinary tool suites | **CONFIRMED — independently reproduced with my own tool list, 3/12** `[M]` | `data_leakage` pattern `(?:access|retrieve|download|dump)\s+.*(?:database|records|user\s+data|customer)` (`scanner.py:269`). Excluded from the carve-out at `:1197-1202`. Returns block before Tier-2 at `:1210-1218`. R5's severity call is right. |
+| **F3** `potion-base-8M` has no head, is order-invariant, and is 96 % tokenizer | **QUALITY claim CONFIRMED (§2); COST claim OVERSTATED** | `[M]` My own timing: potion full `encode` p50 = 0.233 / 0.422 / 0.805 / 0.889 ms at 113 / 227 / 452 / 902 tokens. R5's 2.792 ms at 1024 tokens is inflated (R5 ran at loadavg 8.8–10.3 and says so). MASTER D9's 0.635 ms @390 words replicates against my 0.805 ms @400 words. **Correct model:** tokenize once over the whole prompt (~1.6 ms) + N cheap window pools — so potion's cost at the band is **~1.5–2 ms total regardless of window count**, not 3.2 core-ms × N. **Cost was never potion's problem. Quality is.** |
+| **F4** every ≥2-turn conversation runs the whole Tier-1 scan twice (×1.43–1.57 wall) | **CONFIRMED by code path** | `scanner.py:1470-1474` re-enters `_scan_prompt_sync` on the reassembled-turns view; `:855` returns `None` for a bare string with no `\n`/`[user]:`, which is exactly E1's corpus shape — so E1's baseline never executed it. A per-**scan** number sitting in a per-**request** budget. |
+| **F5** admission is in characters, the SLO band is in tokens, and in the **locked deployment region** they differ by 10× | **CONFIRMED and under-rated** | A 10,000-char prompt is ~1,970 English tokens but ~10,252 Hindi / ~13,136 Tamil, in an **asia-south1-only** deployment; `_estimate_request_tokens` is `len//4` (`main.py:2725`), a 4.1× under-charge on Devanagari that also mis-bills the TPM ceiling. This should be a headline item, not a "high". |
+| **F6** the "hard arithmetic" 10.8 RPS/host is **input-path only** by the synthesis's own label | **CONFIRMED** | With a 400-token answer it is 7.7 RPS; at the 4,096-token default `main.py:7928` injects, 2.15 RPS. |
+| **F7** L2's overlap mechanism does not exist on `stream=false`; no non-streaming total in the table | **CONFIRMED** | |
+| **F8** ONNX session construction 1.4–5.9 s; potion's first Run is 511× warm; **MiniLM-L6 fp32 warm p50 = 15.611 ms for ONE 256-token window** | **CONFIRMED — and it closes a synthesis open item** | MiniLM is dead on latency alone, without needing an Axion measurement. Cold start vs `gunicorn` boot timeout × 16 workers × 2 models is a real deployment hazard nobody budgeted. |
+| **F9–F14** 9,174 ms worst admissible Tier-1 request; 36× script-driven variance anti-correlated with Tier-2 cost; row #9 contradicting §2's own 1.75× overlap conclusion; L6's stub never firing BOUNDARY/secret/media paths; `__aiter__` with no `finally` while two abnormal exits bypass `[DONE]`; Bedrock `_head_tail` blinding Tier-2 to the middle of long answers | **CONFIRMED** | F11 is worth promoting: applying the synthesis's *own* 1.75×-overlap conclusion to its *own* row #9 takes the total to ~182 ms. The document does not apply its own finding. |
+| R5's 2 `PLAN_SURVIVED` | **Honest** | R5 was handed the G70 content-array hypothesis by its own brief, ran four shapes, found all caught, and declined to manufacture a finding. That is the correct behaviour and it should be noted. |
+
+---
+
+## 2. THE EXPERIMENT NOBODY RAN — and it decides the plan's recommendation
+
+The synthesis's option (1) — its **funded research track** — is `potion-base-8M`. R2 attacked it with raw cosine geometry and declared it fatally refuted. R5 attacked it with an order-invariance check. **Neither trained a head.** A head is exactly what the design proposes, so neither result was decisive.
+
+I trained it. `scratchpad/da/potion_probe.py`, `model2vec` 0.9.0, the checkpoint already on disk, benign corpus = 72 real varied English documents harvested from this repo, injections inserted **replacing** an equal number of words (length held constant), **documents disjoint** between train and test, **injection phrasings disjoint** between train and test, L2-regularised logistic head, ROC-AUC + recall at fixed FPR.
+
+Two test families: **TEST-A** = unseen wording that still shares trigger vocabulary; **TEST-B** = paraphrases with *disjoint* trigger vocabulary (no ignore/disregard/instruction/prompt/system/override/forget/reveal) — the only family that tests whether the embedding adds anything over the keyword matcher it would replace.
+
+| window size | ≈ tokens | AUC (A, same family) | AUC (B, disjoint vocab) | recall @1 % FPR (B) |
+|---:|---:|---:|---:|---:|
+| 16 words | ~21 | **0.9995** | **0.9498** | **0.377** |
+| 48 words | ~62 | 0.9566 | 0.7708 | 0.060 |
+| **200 words** | **~260 — the deployed window** | **0.7397** | **0.6017** | **0.028** |
+
+`[M]` all six cells. Raw cosine benign-vs-poisoned at 200 words: median 0.9937. Order-invariance sanity check: `cos(original, shuffled) = 1.000000` — R2's observation replicates exactly.
+
+**Adjudication, three ways:**
+
+1. **R2's verdict is CONFIRMED at the deployed configuration.** At a 256-token window a trained head reaches AUC 0.60 and **2.8 % recall at 1 % FPR** on true paraphrases. That is not a security control. Lever A, **as specified in the synthesis**, is dead — now on the right evidence rather than on a suggestive geometry argument.
+2. **R2's reasoning is OVERSTATED.** "No trained head can recover it" is measurably false: at 21-token windows the same head reaches AUC 0.95 / 37.7 % recall @1 % FPR on paraphrases. The failure mechanism is **dilution**, not order-invariance. That distinction matters because dilution has a lever (window size) and order-invariance does not.
+3. **The lever does not survive the arithmetic.** Small windows mean many windows, and **FPR compounds**: 51 windows at 1 % per-window FPR gives a **40 % per-request** false-positive rate. Holding a 1 % per-request budget across 51 windows requires ~0.02 % per-window FPR, far below anything I can even estimate with 600 negatives — and recall there is well under the 2.8 % floor already measured at 0.1 %. **Cost was never the constraint** (my §1.6 F3 measurement: potion at the band is ~1.5–2 ms total). **The multiple-comparisons FPR budget is the constraint, and no document in this pass models it.**
+
+**The finding the whole pass missed, and the reason this matters more than any of the above:**
+
+I then asked the question the plan never asks — *what does the layer we are keeping actually catch?* — and ran the **same two families** through the real `InputScanner._scan_prompt_sync` at HEAD:
+
+```
+SAME-FAMILY (shares trigger words)      Tier-1 detects  3/10
+DISJOINT-VOCAB PARAPHRASE               Tier-1 detects  0/10
+```
+
+`[M]`, `scratchpad/da/t1_vs_potion.py`. And on the false-positive side, `scratchpad/da/t1_fp.py`:
+
+```
+"How do I use the `subprocess.run` helper in Python?"   -> block / command_injection / 1.00
+"Explain what `SELECT * FROM users` does in SQL."       -> block / command_injection / 1.00
+"What does the `--dry-run` flag do?"                    -> block / command_injection / 1.00
+"Please review this snippet: ```python print('hi')```"  -> block / command_injection / 1.00
+"The config key is `enforcement_mode` and I want ..."   -> block / command_injection / 1.00
+                                                           5/5 benign prompts hard-blocked
+```
+
+Root cause, verified at source: `ATTACK_PATTERNS["command_injection"]` contains the literal pattern `` r"`[^`]+`" `` — *any* pair of backticks with content between them. `command_injection` and `data_leakage` are excluded from the explanatory-mention carve-out (`scanner.py:1197-1202`), so the verdict is terminal, `tier_1`, confidence 1.00, and never reaches Tier-2.
+
+**So:** the posture the synthesis recommends shipping as the default, and certifying 12 ms for, detects 0/10 paraphrased injections and blocks 5/5 benign developer questions. **Three of the four options on the table (1, 2 and 4) rest on that posture being a viable product.** On the only measurement anyone has taken, it is not.
+
+---
+
+## 3. THE HONEST VERDICT ON 12 ms
+
+### 3.1 The corrected arithmetic
+
+| Block | Synthesis | Corrected | Basis |
+|---|---:|---:|---|
+| Tier-2 tokenization, 1024 tok | 8.60 | **1.67** | `[M]` mine, §1.2 A-1 |
+| Tier-2 input, 4 × 256-tok windows | 75.0 | 75.0 (→ **131** at the document's own 1.75 % overlap conclusion) | `[M:E3]` + R5 F11 |
+| Tier-2 output tail at `[DONE]` | 40.0 | 40.0 | `[M:E3]` |
+| **Semantic subtotal** | **123.6** | **116.7** (→ 172.7 with overlap) | |
+| Everything else | 2.39 `[M]`-tagged | **3.0 – 5.5** `[D]`, p99 **unestablished** | §1.1 S-c |
+| **TOTAL p50** | **126.0** | **≈ 119 – 122** (→ ~178 with overlap) | |
+| vs L1 = 12 ms | 10.5× | **9.9 – 10.2×** | |
+
+**NOT ACHIEVABLE as locked. Confirmed.** The correction changes the decimal, not the decision.
+
+### 3.2 The number that IS achievable
+
+**Ask three separate questions, because they have three different answers.**
+
+**(a) What latency is achievable with a transformer-class semantic classifier on this SKU inside $5 k/mo?**
+**≈ 119 ms p50**, p99 unmeasured (E3's p99/p50 was 2.27 at 16 threads ⇒ plausibly **250–300 ms**), at **~5–10 RPS/host** and ~25–50 RPS fleet-wide at the $3,688/mo alarm-respecting ceiling. **No priced path to 12 ms exists.** Off-host acceleration is the only mechanism that closes it, it has **never been priced on the locked platform** (§1.1 S-h), and even if it fits L3 it still owes 2–8 ms of hop tax against a 12 ms budget — 17–67 % of the whole SLO before inference. State that as the honest position.
+
+**(b) What latency is achievable with deterministic Tier-1 only?**
+**p50 ≈ 3.0–5.5 ms fully rewritten** (my honest re-sum, §1.1 S-c), **p99 unproven and probably the real problem** — the ASGI stack alone is 4.702 ms p99 today `[M:E7]`, `policy.evaluate()` degrades 2.771 → 24.676 ms p50 under 8 concurrent workers `[M:E7]`, and all Tier-1 work is GIL-serialised. **L6's 40 ms p99 clause is supported by no evidence in this pass.** 12 ms p50 is plausibly reachable; **12 ms p50 *and* 40 ms p99 is not demonstrated for any posture.**
+
+**(c) What is achievable this quarter, with no new dependencies and no Rust?**
+This is the number the team should actually be given, and nobody computed it:
+
+| Change | Today | After | Basis |
+|---|---:|---:|---|
+| `lru_cache` on `_segment_token` | 1,342 ms (full Tier-1 scan) | **233 ms** | `[M]` mine, verdict-identical |
+| Byte-based release trigger (359 → ~10 flushes) | 1,229 ms | **~35 ms** | `[D]` from `[M:E4]` |
+| Detach the Redis `PUBLISH`; logger → INFO | 1.5–6.8 ms | **~0** | `[M:E1/E6/E7]` |
+| Telemetry payload shrink (25 prompt copies, 19 `redact_all`) | ~355 ms | **~20 ms** `[D]` | `[M:E1/E7]` |
+| Per-unit stream machinery | 28.4 ms | ~5 ms `[D]` | `[M:E1]` |
+| **TOTAL streaming firewall tax** | **≈ 3,503 ms** | **≈ 300–400 ms** | **~10×, zero new dependencies, zero unfunded work** |
+
+Then Hyperscan + Aho-Corasick buys the next ~5×, and only then does the Rust/PyO3 question become live — against a 233 ms baseline instead of a 1,880 ms one. **Stage the plan by dependency risk, not by budget-table order.**
+
+### 3.3 What it would cost to actually reach 12 ms with a semantic control
+
+**There is no priced path. Every candidate is either measured-inadequate or unpriced:**
+
+| Path | Status |
+|---|---|
+| PG2-22M on CPU | **10× over.** Measured. |
+| PG2-22M INT8 | 1.27× at b=1, **1.73× slower** at b=4, error one-sided **against recall** `[M:E3]`. Dead. |
+| MiniLM-L6 | **15.611 ms warm p50 for ONE 256-token window** `[M:R5]`. Dead on latency. |
+| `potion-base-8M` + head | **AUC 0.60, recall 2.8 % @1 % FPR at the deployed window** `[M]` mine. Dead on quality. Cost was never the issue. |
+| Off-host accelerator | **`[NF]` never priced on GCP.** Rejected on an AWS number. Owes 2–8 ms hop tax regardless. |
+| Speculative dispatch | 1.5 ms, removes zero FLOPs, residual still 5.7× over. Not a closer. |
+| 512-token band | ~93 ms corrected. Not a closer. |
+| **Move L1** | The only free option. |
+
+**So the honest answer to "what would it cost to reach 12 ms?" is: nobody knows, because the one mechanism that could is the one nobody priced.** Price it (a day of work), then decide — and decide it on D1's hop tax, which is the argument that will actually kill it.
+
+---
+
+## 4. TOP RISKS, RANKED — what would actually kill this in production
+
+1. **The default posture does not detect the threat and blocks ordinary traffic.** `[M]` 0/10 paraphrased injections detected; 5/5 benign backtick prompts and 3/12 ordinary tool descriptions hard-blocked at confidence 1.00. This is not a latency risk; it is an existence risk for the product story, and it is measured, today, at HEAD. Everything below is secondary.
+2. **Every gate in the plan is scored by an instrument that reports the firewall as free on streams.** R4 A1/A2/A3/A6 — confirmed at source. Ship the plan and Phase 1.1's "stop and revise" gate cannot fire, the 12 ms gate passes unconditionally, and the team will believe it succeeded. **Nothing else should be measured until this is fixed.**
+3. **A partial cold start silently disables the operator policy layer for a subset of tenants, forever, while `/health` reports 200.** R2 H-2 / R3 A2, confirmed at source. Live today. 16 workers × 6 nodes = 96 independent SCANs, each able to stop at a different point, so the same tenant is enforced on some workers and not others with no way to tell which served a given request.
+4. **An un-synced tenant silently inherits the platform-default org's firewall posture.** R3 A3 — confirmed **reachable** (`models.py:1368-1370` writes `firewall:config:default`). Direction undetermined, so treat as fail-open. The in-repo fix already exists (`get_own_config`) and was applied to the MCP path but not to the chat hot path.
+5. **No admission control anywhere, and the one operator cap is silently inert.** R2 H-3 — `uvicorn.workers.CONFIG_KWARGS` verified `[M]`. Rate limits bound rate, not concurrency. Raising `timeoutSec` to 3600 without first adding `limit_concurrency` converts a routine upstream stall into a metastable failure.
+6. **Fail-closed kill switch × a dependency with tens-of-seconds unplanned failover = a designed-in, unsized, all-tenant outage,** which one tenant's connection-pool exhaustion can trigger for everyone. R2 H-5 + S-4.
+7. **Config/policy staleness is unbounded after any pub/sub disconnect** while L8 signs 50 ms for the smallest key family. R3 A4.
+8. **The output-path `scan_degraded` floor is dead code** (S-1) and input/output share one breaker key (S-2) which counts globally across tenants (S-3). Confirmed by three reviewers independently.
+9. **p99 under concurrency is unestablished for every posture.** All 17 budget lines are p50, C=1, idle-box, x86, loopback. L6's 40 ms p99 clause has no evidence behind it.
+10. **Nothing was measured on `c4a-standard-16`.** Every millisecond is Intel x86. The Arm transfer factor is `[D]`, including the 62 % FLOP-efficiency term the whole capacity argument rests on.
+11. **Language × region mismatch:** admission in characters, SLO in tokens, deployment locked to asia-south1, `len//4` token estimator under-charging Devanagari 4.1×. R5 F5.
+12. **Telemetry discards enforcement evidence during exactly the failure the plan expects.** R2 H-7.
+
+---
+
+## 5. WHAT MUST CHANGE BEFORE ANYONE WRITES CODE
+
+**Gate 0 — measure what we are protecting (new; blocks everything).**
+- Build a labelled detection corpus and publish a recall/FPR table **per posture**: Tier-1 only, Tier-1 + policy pack, Tier-1 + PG2-22M. Include a paraphrase family with disjoint trigger vocabulary. My §2 result (3/10, 0/10, 5/5 FP) is 40 lines of script — it is not a research programme, it is an afternoon.
+- **No posture may be recommended, and no SLO may be published for a posture, until this table exists.**
+- Fix `` r"`[^`]+`" `` and the `data_leakage` pattern, and add both to the FP corpus **as two separate tracked changes with two separate gates** — the synthesis is right that a verdict-equivalence gate will otherwise score the fix as a regression.
+
+**Gate 1 — fix the instrument before measuring anything (R4, adopted in full).**
+- Re-base stream metrics on the **request** epoch, not `provider_start_ts`.
+- Replace every reconciliation clamp (`pipeline_trace.py:95,708,1512`, `stream_orchestration.py:773`) with a **signed** residual plus a reconciliation-error histogram that fails CI at non-zero p50.
+- Add `STREAM=1` with SSE parsing to the bench, plus the single assertion `|wall − addon − model_output| < ε`.
+- Microsecond resolution and an explicit `ran: bool`; **strike** Phase 0.2's "0 ms = skipped".
+- Split `capacity_eligible` from `tax_eligible`.
+- Emit the addon split from the **stream finalizer**; add per-stage `t_start_ms`/`t_end_ms` (without which L2's overlap is unverifiable in principle).
+
+**Gate 2 — the live defects, which are not performance work.**
+- `PolicySync`: make `is_loaded` **per-org**, never set `_sync_completed` on zero accepted bundles, and add a periodic reconcile. (R2 H-2 / R3 A2.)
+- `ConfigSync`: switch `main.py:6929` and its five siblings to `get_own_config` + explicit safe defaults. (R3 A3.)
+- Periodic re-load for `ConfigSync`/`PolicySync`/`VectorPolicySync`; delete the false "will retry" comments. (R3 A4.)
+- `limit_concurrency` + 503 shedding **before** any `timeoutSec` increase; migrate off the deprecated worker class in the same change. (R2 H-3/H-9.)
+- S-1 through S-10, plus R3's A8/A9/A10 and R5's F14 (`__aiter__` with no `finally`).
+
+**Gate 3 — restate the locks and the budget honestly.**
+- **L1** must be restated as a **band + posture + percentile**: "≤ X ms p50 and ≤ Y ms p99, for posture P, at prompt-length band B, at N RPS/host". Every gate citing `T_addon_pre` must be rewritten. Phase 1.1's absolute threshold must become a **delta** test.
+- **L2** must name a class with a **GFLOP-per-window entry gate *and* a published recall floor**, evaluated at the **deployed window size** with a **per-request** FPR budget (the multiple-comparisons correction, §2). Cost-only gates admitted potion; a quality gate excludes it.
+- **L5**: strike the batch-4 mechanism. Replace with concurrent independent sessions **and resolve R3 A6 first** (16 processes cannot produce that shape).
+- **L6**: re-baseline N with a declared prompt band; N≈85 is a 32–64-token number.
+- **L8**: either sign the availability consequence (every Memorystore failover is a full-product outage) or add the grace window; and extend the staleness lock to the surfaces that actually carry the operator's posture.
+- Add the three missing stages (ASGI, tokenization, stream machinery) **and** three more the reviewers found: multi-turn double-scan, the `tools`/`response_format` channels, snapshot refresh.
+- Add R3's **"worker-count multiplier applied? Y/N"** column to every cache line in the tracker.
+
+**Gate 4 — sequence by dependency risk, not by budget-table order.**
+Phase 1 = zero-new-dependency (memoise, detach logger, flush trigger, telemetry shrink) ⇒ **~10×** `[M]`/`[D]`. Phase 2 = engine swaps. Phase 3 = the Rust extension, decided against a 233 ms baseline. **Fund the extension explicitly or move the target — do not leave it implied.**
+
+**Gate 5 — price the option you rejected.**
+Get GCP `asia-south1` accelerator rates and re-decide lever D on **D1's hop tax**, which is the argument that will hold, rather than on an AWS price that does not apply.
+
+---
+
+## 6. THE HONESTY LIST — what we must NOT claim
+
+**Latency**
+1. **Do not claim "12 ms" without a posture, a prompt band, and a percentile.** Today the honest sentence is: *"≈ 119 ms p50 with semantic classification on; a Tier-1-only posture is projected at 3–5 ms p50 once rewritten, with p99 unmeasured."*
+2. **Do not publish any streaming latency number produced by the current bench.** On streams it measures the customer's model, not us (R4 A1, confirmed at source). Any streaming figure quoted today is provider TTFT wearing our name.
+3. **Do not claim a p99.** No p99 evidence exists for any posture under realistic concurrency. L6's 40 ms clause is unbacked.
+4. **Do not claim any figure "on Axion / c4a-standard-16".** Nothing was measured there.
+5. **Do not claim N ≈ 85 RPS/host.** It is a 32–64-token number; at the L5 band today's host does ~5 RPS.
+6. **Do not claim 100 k RPS.** 118 nodes = $43,290/mo of compute alone, 8.7× the envelope.
+
+**Detection — the part that has never been said out loud**
+
+7. **We cannot claim the default posture detects prompt injection.** Measured `[M]`: 3/10 same-family, **0/10 paraphrased**. If Tier-1-only ships as the default, the product's default configuration does not do the thing the product is named after.
+8. **We cannot claim a low false-positive rate.** Measured `[M]`: **5/5** benign inline-code prompts and **3/12** ordinary tool descriptions hard-blocked at confidence 1.00, terminally. A developer-facing customer will hit this in the first session.
+9. **We cannot claim tool/function-calling support at the 1024-token band.** ~6–7 ordinary tools tip the request into `block/dos/context_length_exceeded`.
+10. **We cannot claim a supported prompt length above ~1,970 tokens** (English prose; ~800 in Hindi, ~750 in Tamil — in an India-only deployment).
+11. **We cannot claim streaming "block" is a block.** It is a truncation: measured 260 of 800 characters delivered, then an error frame. Overlapping widens the released prefix. Either withhold fully or document truncation semantics — but do not let an operator who selected "block" believe they got one.
+12. **We cannot claim output responses are Tier-2 scanned end-to-end today.** `scan_degraded` is dead code on the output path (S-1, confirmed by three reviewers), so on a Bedrock outage or breaker-OPEN streams are delivered Tier-1-only, fail-open, with no operator signal — while the telemetry attests otherwise. **This is a false attestation in a compliance record and it is live.**
+13. **We cannot claim per-tenant policy isolation.** An un-synced tenant inherits the platform-default org's posture (R3 A3, confirmed reachable).
+14. **We cannot claim policy enforcement is fail-closed.** A partial cold start leaves a subset of tenants unenforced with `/health` green and no reconciliation, ever.
+15. **We cannot claim a bounded revocation or config-propagation time.** `auth:epoch` does not exist; config/policy staleness after a pub/sub disconnect is unbounded.
+16. **We cannot claim complete enforcement records.** Telemetry drops the whole batch on a Redis error and the oldest events on overflow, with no retry, DLQ or spill — precisely during the failures we expect.
+17. **We cannot claim Tier-2 sees the whole response.** `_head_tail` at `bedrock_scanner.py:63-72` silently drops the middle of any answer over 10,000 characters.
+18. **We cannot claim availability during cache maintenance.** Under L8 as signed, every Memorystore failover — including scheduled maintenance — is a full-product 503.
+
+**Process**
+
+19. **Do not present target values as measurements.** The "2.39 ms `[M]` component-wise" row is a sum of unbuilt targets, two of which the same document calls unreachable. It has already misled one reader in this very pass.
+20. **Do not claim `potion-base-8M` is a viable Tier-2 replacement.** Measured `[M]`: AUC 0.60 / 2.8 % recall @1 % FPR at the deployed window. It may be worth research at ~20-token windows, where the unsolved problem is the per-request FPR budget, not the FLOPs.
+21. **Do not claim the off-host option was evaluated.** It was rejected on a price from a different cloud.
+
+---
+
+## 7. WHAT SURVIVES, UNCHANGED
+
+- **The verdict.** NOT ACHIEVABLE as locked. Over-determined: FLOP supply, measured PG2-22M latency, and cost each sink it independently. My corrections move 126.0 → ~119 ms.
+- **The FLOP-supply argument** as a *direction* — hardware-independent on the demand side, and I re-derived it.
+- **The rejection of speculative dispatch**, on E6's six grounds plus arithmetic.
+- **Striking L5's batch-4 mechanism.**
+- **The `difflib`/`_deobfuscate_text` diagnosis** — I measured 1,186 ms on a 3,480-char prompt and an 11.8× verdict-identical memoisation win, which confirms both the diagnosis and its magnitude.
+- **E4's flush-trigger arithmetic** — `ceil(512/d) ≥ 64 ⟺ d ≤ 8 bytes`, verified independently by two reviewers at HEAD.
+- **"Cost is not the binding constraint."** The BOM is careful and is not where this fails.
+- **"The non-classifier work is real and worth doing."** It is ~10× available with no new dependencies. It is just not, on its own, a shippable product.
+
+---
+
+## 8. ONE PARAGRAPH FOR THE PERSON WHO SIGNS THIS
+
+The 12 ms lock cannot be met with a semantic classifier on this hardware inside this budget, and no priced path to it exists — that part of the analysis is correct and survived five adversarial reviews and mine. But the recommendation built on top of it is not safe to ship. It proposes defaulting to the deterministic layer and certifying 12 ms for that default, and **nobody measured what the deterministic layer detects until this review**: 0 of 10 paraphrased prompt injections caught, 5 of 5 benign questions containing inline code hard-blocked. The plan has spent seven agents optimising the latency of a control whose effectiveness has never been measured, and is about to publish an SLO for it. Fix the instrument, measure the detection, then choose the posture — in that order. The engineering work in the plan is real and a ~10× improvement is available this quarter with no new dependencies; but the decision in front of you is a product decision about what this firewall actually stops, and it cannot be made from a latency table.
+MDEOF
+wc -l $SP/DEVILS-ADVOCATE.md

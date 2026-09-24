@@ -1,0 +1,67 @@
+L2113: | The only externally visible contract that may not change is this: an application already using the OpenAI SDK must work against AI Mesh by changing base_url and the API key, and nothing else. No custom client, no patched parser, no SDK fork, no header the SDK does not send, no response field the SDK cannot ignore. Every other interface in the backend — internal modules, database schema, trace payload, telemetry s
+L2280: | IDENTICAL | Same disposition, same transformations, same provider bytes. | Target for the majority of C2. |
+L2288: v2 runs in shadow against live-shaped traffic before it serves any: v1 serves the response; v2 receives a copy of the request, executes fully against the synthetic provider recorder, and its decision is recorded, never delivered. Shadow must reach a stable window — the track uses ≥72 hours and ≥5 million requests with zero UNEXPECTED diffs — before the cutover rehearsal is scheduled.
+L2289: Shadow also measures what a replay cannot: real concurrency, real tenant mix, real plan-update-under-load, and v2's actual resource curve beside v1's.
+L2291: A single cutover was chosen over route-by-route because the two systems disagree deliberately (§10.2.2) — and running both simultaneously on live traffic would mean the same tenant gets different security dispositions depending on which gateway served the request. That is worse than either system alone, and it is unauditable.
+L2292: What makes one cutover survivable is that it is a routing change, not a deployment: v2 is already deployed, already warm, already shadowing, and the switch is an edge weight. Rollback is the same weight moved back, with v1 still running and still warm. The rehearsal in GW22 executes the full sequence — cut, observe, roll back — on staging under load, and the measured rollback time becomes the published number.
+L2412: Reuse staging/t02/ from the revamp branch — a deterministic token-emitting upstream recorder with nginx, provisioning and teardown scripts already exists and is exactly the controlled provider this needs. Cherry-pick it rather than rebuilding it.
+L2969: Surfaces ship independently; an incomplete surface stays on v1 until the cutover. Stop if a surface needs its own enablement logic.
+L3009: MCP stays on v1 until its replay is clean; surfaces cut over together at GW23 but are developed independently. Stop if any isolation control regresses.
+L3138: Run v2 in shadow: v1 serves; v2 receives a copy, executes fully against the recorder, records its decision and delivers nothing.
+L3140: Run to the declared window: ≥72 hours and ≥5 million requests, covering all four surfaces, both streaming modes, both tenants of the opposite-policy pair, and at least one plan update under load.
+L3141: Measure v2's resource curve beside v1's on the same traffic, and confirm shadow load does not distort v1's service.
+L3150: | LGW21-5 | Shadow overhead on v1. | Within the declared budget; v1 p99 unaffected. | Shadow degrades production. |
+L3179: Rehearse each documented failure mode: v2 unhealthy after shift; a v2 defect visible only at full traffic; shared-state contention from both versions; in-flight streams at the moment of the shift.
+L3180: Verify in-flight stream behaviour explicitly: a stream that began on v1 completes on v1 or terminates per the declared contract; it is never spliced onto v2.
+L3188: | LGW22-4 | Both versions on shared state under load. | No quota multiplication, no plan corruption, no cross-version leakage. | Any contention effect. |
+L3209: | Objective | Move production to v2 in one routing change, with v1 warm and rollback proven. |
+L3217: Observe against pre-declared thresholds for error rate, p99 addon, security disposition distribution, provider call ratio and audit completeness. The disposition distribution matters as much as the latency: a sudden shift in block rate is a defect signal even when latency looks excellent.
+L3222: | LGW23-1 | Cutover at low traffic. | Thresholds hold through the observation window. | Any breach → roll back immediately. |
+L3223: | LGW23-2 | Ramp to full production traffic. | Thresholds hold at every step. | Any breach → roll back. |
+L3224: | LGW23-3 | Disposition distribution versus shadow. | Within the declared tolerance. | Material shift → investigate before proceeding. |
+L1956: - Keep backend APIs and security semantics unchanged during the visual canary. Functional changes require their own task/gate.
+L1957: - Advance 5%→25%→50%→100% only when live errors/critical workflows and support feedback meet the signed thresholds.
+L1125: T24  Canary with an authorized real provider and customer-shaped traffic
+L1137: - Choose one authorized provider/account/model with documented quota and a synthetic/non-sensitive canary tenant. Keep rate well below provider quota initially.
+L1138: - Run non-stream and SSE via official OpenAI SDKs through AI Mesh with selected policies, tool calls if applicable, cancellation and error cases.
+
+1125: T24  Canary with an authorized real provider and customer-shaped traffic
+1126: [TABLE]
+1127: | Field | Value |
+1128: | Phase | Release |
+1129: | Depends on | T23 |
+1130: | Primary owner | Release lead + SRE + product/security owner |
+1131: | Objective | Verify real BYOK/provider behavior without confusing provider quota with gateway capacity. |
+1132: [/TABLE]
+1133: 
+1134: ### Why this task exists
+1135: Controlled providers are required for causal latency/capacity proof, but actual provider integrations can reveal SDK, streaming, timeout and policy interactions that staging generators cannot.
+1136: ### Implementation work
+1137: - Choose one authorized provider/account/model with documented quota and a synthetic/non-sensitive canary tenant. Keep rate well below provider quota initially.
+1138: - Run non-stream and SSE via official OpenAI SDKs through AI Mesh with selected policies, tool calls if applicable, cancellation and error cases.
+1139: - Compare direct-provider and through-AI-Mesh client timings, while treating provider intrinsic timing as uncertain unless the provider exposes it.
+1140: - Advance canary traffic only after zero safety/compatibility regressions and acceptable tails. Keep customer/provider spend visible but outside firewall-infrastructure budget.
+1141: - Record the exact tested provider throughput; do not extrapolate it to gateway capacity or another tenant.
+1142: ### Live acceptance tests — required to exit
+1143: [TABLE]
+1144: | Test | Live procedure | PASS | FAIL / stop |
+1145: | L24-1 | Official Python/Node SDK against real provider through AI Mesh. | Same supported SDK contract passes as staging. | Provider-specific stream/tool shape breaks gateway. |
+1146: | L24-2 | Direct vs gateway request sample. | Gateway behaves correctly; latency difference labeled carefully without false causal subtraction. | Provider TTFT presented as firewall tax. |
+1147: | L24-3 | Provider rate-limit/error/cancel cases. | AI Mesh surfaces consistent typed errors and cancels work. | Hidden retries/splices or generic success. |
+1148: | L24-4 | Small canary policy changes by org admin. | Runtime behavior follows selected plan with no cross-tenant effect. | Canary requires code/config fork. |
+1149: [/TABLE]
+1150: 
+1151: ### Exit criteria
+1152: - Real-provider SDK/stream compatibility passes.
+1153: - No external platform guard calls.
+1154: - Observed provider-supported rate/latency stated separately.
+1155: - Canary rollback path proven.
+1156: ### Evidence package
+1157: - provider/account test manifest
+1158: - SDK logs
+1159: - direct-vs-gateway timing sample
+1160: - provider error matrix
+1161: - canary policy/action evidence
+1162: ### Rollback / stop rule
+1163: Return tenant to last qualified release/provider route. Do not disable mandatory controls to work around a provider incompatibility.
+1164: 

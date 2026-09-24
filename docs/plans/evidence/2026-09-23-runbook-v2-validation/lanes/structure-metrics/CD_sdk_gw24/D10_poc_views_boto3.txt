@@ -1,0 +1,27 @@
+## find poc_views.py in baseline export
+control/ai_mesh_control/core/poc_views.py
+## full-tree 2a657fad
+control/ai_mesh_control/core/poc_views.py
+## sed -n 60,75p (cat -n)
+    60	    if not isinstance(data, dict):
+    61	        return JsonResponse({"error": "Request body must be a JSON object."}, status=400)
+    62	
+    63	    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    64	    uid = uuid.uuid4().hex[:10]
+    65	    s3_key = f"poc-questionnaires/{timestamp}_{uid}.json"
+    66	
+    67	    if _S3_BUCKET:
+    68	        try:
+    69	            s3 = boto3.client(
+    70	                "s3",
+    71	                region_name=_AWS_REGION,
+    72	                aws_access_key_id=os.environ.get("AWS_ACCESS_KEY_ID"),
+    73	                aws_secret_access_key=os.environ.get("AWS_SECRET_ACCESS_KEY"),
+    74	            )
+    75	            s3.put_object(
+## all boto3 references in poc_views.py
+7:import boto3
+69:            s3 = boto3.client(
+## HEAD line 69
+            s3 = boto3.client(
+HEAD IDENTICAL

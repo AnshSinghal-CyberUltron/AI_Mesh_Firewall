@@ -1,0 +1,13 @@
+== non-stream (inspect_json) ==
+message.content (control)                          disposition=REDACT leaked_raw=- leaked_via_logprob_bytes=-
+logprobs.content[].token/bytes (content redacted)  disposition=REDACT leaked_raw=['AKIAQYLPMN5HHHFPZAM2', 'alice.canary@example.com'] leaked_via_logprob_bytes=['AKIAQYLPMN5HHHFPZAM2', 'alice.canary@example.com']
+message.refusal                                    disposition=ALLOW  leaked_raw=['AKIAQYLPMN5HHHFPZAM2', 'alice.canary@example.com'] leaked_via_logprob_bytes=-
+message.function_call.arguments (legacy)           disposition=ALLOW  leaked_raw=['AKIAQYLPMN5HHHFPZAM2', 'alice.canary@example.com'] leaked_via_logprob_bytes=-
+message.audio.transcript                           disposition=ALLOW  leaked_raw=['AKIAQYLPMN5HHHFPZAM2', 'alice.canary@example.com'] leaked_via_logprob_bytes=-
+message.reasoning_content (vLLM/DeepSeek-style)    disposition=ALLOW  leaked_raw=['AKIAQYLPMN5HHHFPZAM2', 'alice.canary@example.com'] leaked_via_logprob_bytes=-
+== SSE (StreamPipeline) ==
+delta.content (control)                       stream_error=None content_leak=- logprob_leak=- other_field_leak=-
+delta.content + logprobs per chunk            stream_error=None content_leak=- logprob_leak=['AKIAQYLPMN5HHHFPZAM2', 'alice.canary@example.com'] other_field_leak=-
+delta.refusal                                 stream_error=None content_leak=- logprob_leak=- other_field_leak=['AKIAQYLPMN5HHHFPZAM2', 'alice.canary@example.com']
+delta.function_call.arguments (legacy)        stream_error=None content_leak=- logprob_leak=- other_field_leak=['AKIAQYLPMN5HHHFPZAM2', 'alice.canary@example.com']
+delta.reasoning_content                       stream_error=None content_leak=- logprob_leak=- other_field_leak=['AKIAQYLPMN5HHHFPZAM2', 'alice.canary@example.com']

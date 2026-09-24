@@ -1,0 +1,152 @@
+--- shared/ai_mesh_shared/tier2_gemini_client.py:41
+    return (os.getenv("TIER2_PROVIDER") or "bedrock").strip().lower()
+--- shared/ai_mesh_shared/tier2_gemini_client.py:55
+    return genai.Client(api_key=api_key)
+--- shared/ai_mesh_shared/tier2_gemini_client.py:224
+                return self._client.models.generate_content(
+--- shared/ai_mesh_shared/tier2_gemini_client.py:245
+                return await self._client.aio.models.generate_content(
+--- gateway/ai_mesh_gateway/bedrock_client.py:239
+        self._client = boto3.client("bedrock-runtime", config=boto_config)
+--- gateway/ai_mesh_gateway/bedrock_client.py:312
+            response = self._client.converse(**converse_input)
+--- gateway/ai_mesh_gateway/bedrock_client.py:513
+            response = await aio_client.converse(**converse_input)
+--- gateway/ai_mesh_gateway/bedrock_client.py:727
+            response = self._client.invoke_model(
+--- gateway/ai_mesh_gateway/bedrock_client.py:818
+            bedrock_mgmt = boto3.client("bedrock", region_name=self.region)
+--- gateway/ai_mesh_gateway/bedrock_client.py:819
+            bedrock_mgmt.list_foundation_models()
+--- gateway/ai_mesh_gateway/bedrock_scanner.py:792
+            resp = self.client.scan_prompt(
+--- gateway/ai_mesh_gateway/bedrock_scanner.py:814
+            resp = await self.client.ascan_prompt(
+--- gateway/ai_mesh_gateway/scanner.py:1138
+        self._bedrock_scanner: BedrockScanner | None = BedrockScanner() if self.tier2_enabled else None
+--- gateway/ai_mesh_gateway/scanner.py:2574
+        if org_tier2_override is None and not self.tier2_enabled:
+--- gateway/ai_mesh_gateway/main.py:9221
+                    verdict = await INPUT_SCANNER.scan_prompt_with_tier2(
+--- gateway/ai_mesh_gateway/output_guard.py:1010
+        if _enabled("output_tier2_enabled", True) and self._scanner is not None:
+--- gateway/ai_mesh_gateway/output_guard.py:1012
+                t2 = await self._scanner.scan_output_with_tier2(
+--- gateway/ai_mesh_gateway/mcp_scan_orchestrator.py:1267
+        verdict = await scanner.scan_prompt_with_tier2(
+--- gateway/ai_mesh_gateway/mcp_scan_orchestrator.py:225
+    return _resolve_mcp_tier2_enabled((enabled_info or {}).get("mcp_tier2_enabled"))
+--- gateway/ai_mesh_gateway/main.py:14208
+                            _t2v = await INPUT_SCANNER.scan_prompt_with_tier2(
+--- gateway/ai_mesh_gateway/main.py:14822
+                        t2 = await INPUT_SCANNER.scan_prompt_with_tier2(
+--- gateway/ai_mesh_gateway/main.py:6674
+        if CONFIG.get("llm_judge_enabled", True):
+--- gateway/ai_mesh_gateway/rag_pipeline/query_stage.py:452
+        if self._llm_judge is not None and self._llm_judge.enabled:
+--- gateway/ai_mesh_gateway/llm_judge.py:109
+            self._client = boto3.client("bedrock-runtime", config=boto_config)
+--- gateway/ai_mesh_gateway/llm_judge.py:166
+            response = client.invoke_model(
+--- gateway/ai_mesh_gateway/rag_pipeline/bedrock_embedder.py:117
+    MODEL_ID: str = "amazon.titan-embed-text-v2:0"
+--- gateway/ai_mesh_gateway/rag_pipeline/bedrock_embedder.py:188
+        resp = self._client.invoke_model(
+--- gateway/ai_mesh_gateway/main.py:6557
+        and CONFIG.get("output_grounding_enabled", True)
+--- gateway/ai_mesh_gateway/main.py:6564
+            BEDROCK_EMBEDDER = BedrockEmbedder(
+--- gateway/ai_mesh_gateway/config.py:206
+    output_grounding_enabled = get_env("GATEWAY_OUTPUT_GROUNDING_ENABLED", "true").lower() in ("true", "1", "yes")
+--- gateway/ai_mesh_gateway/main.py:6588
+                lambda: default_bedrock_client().is_available()
+--- gateway/ai_mesh_gateway/main.py:6605
+        asyncio.create_task(_bedrock_credential_preflight())
+--- gateway/ai_mesh_gateway/main.py:15862
+    "/v1/admin/bedrock-test",
+--- gateway/ai_mesh_gateway/main.py:15890
+            client = BedrockClient()
+--- gateway/ai_mesh_gateway/main.py:15909
+            scanner = BedrockScanner()
+--- gateway/ai_mesh_gateway/output_guard.py:1785
+        result = bedrock_client.converse(
+--- gateway/ai_mesh_gateway/secure_streaming.py:527
+                rewritten = rewrite_output_response_text(
+--- gateway/ai_mesh_gateway/embedding_vault.py:286
+        response = litellm.embedding(model=self._embedding_model, input=[text])
+--- gateway/ai_mesh_gateway/main.py:6465
+    _embedding_vault = None
+--- gateway/ai_mesh_gateway/byok_embedder.py:13
+  ``provider_api_key``; if absent, litellm uses the gateway environment.
+--- gateway/ai_mesh_gateway/byok_embedder.py:123
+        resp = litellm.embedding(**kwargs)
+--- gateway/ai_mesh_gateway/vector_client.py:826
+        # falling back to gateway-environment credentials when empty. embed_texts
+--- gateway/ai_mesh_gateway/vector_client.py:834
+            provider_api_key=None if is_pinecone_hosted else (self._embedding_api_key or None),
+--- control/ai_mesh_control/core/tasks.py:1011
+        return PineconeClient(
+--- control/ai_mesh_control/core/tasks.py:1014
+            embedding_model=cfg.embedding_model or "text-embedding-3-small",
+--- workers/Dockerfile:31
+COPY gateway/ai_mesh_gateway/vector_client.py gateway/ai_mesh_gateway/byok_embedder.py /app/vendored_vector/
+--- gateway/ai_mesh_gateway/main.py:4733
+        # Local/self-hosted ollama can run without an API key. AWS Bedrock
+--- gateway/ai_mesh_gateway/main.py:4737
+        if provider not in {"ollama", "bedrock", "aws_bedrock"} and not (
+--- gateway/ai_mesh_gateway/main.py:5158
+        code, resp = await LLM_ROUTER.acompletion(rewrite_body, None)
+--- control/ai_mesh_control/security_engines/bedrock_client.py:143
+            "bedrock-runtime",
+--- control/ai_mesh_control/security_engines/bedrock_client.py:193
+            response = self._client.invoke_model(
+--- control/ai_mesh_control/security_engines/bedrock_scanner.py:36
+    if is_gemini_tier2_provider is not None and is_gemini_tier2_provider():
+--- control/ai_mesh_control/security_engines/bedrock_scanner.py:383
+            resp = self.client.scan_prompt(
+--- control/ai_mesh_control/security_engines/integrated_scanner.py:66
+            if os.getenv("ENABLE_TIER2", "true").lower() in ("1", "true", "yes"):
+--- control/ai_mesh_control/security_engines/integrated_scanner.py:113
+        self._merge_bedrock_results(detection_results, prompt)
+--- control/ai_mesh_control/security_engines/integrated_scanner.py:473
+            bedrock_result = self.bedrock_scanner.scan(prompt, full_context or None)
+--- control/ai_mesh_control/security_engines/apps.py:22
+                # Trigger actual ML model load
+--- control/ai_mesh_control/policy/evaluation_views.py:566
+                        pii_scan = scanner.scan_prompt(prompt)
+--- control/ai_mesh_control/policy/evaluation_views.py:603
+                    scan_result = scanner.scan_prompt(prompt)
+--- control/ai_mesh_control/policy/evaluation_views.py:1213
+                scan_result = scanner.scan_prompt(prompt, context=context_hint)
+--- control/ai_mesh_control/core/models.py:1004
+        default=True,
+--- control/ai_mesh_control/core/models.py:1421
+            "deep_scan_enabled": self.semantic_analysis_enabled,
+--- gateway/ai_mesh_gateway/main.py:10501
+        if org_config.get("deep_scan_enabled") and AGENT_ID and CONFIG["backend_url"]:
+--- gateway/ai_mesh_gateway/main.py:11343
+                    if scan_action in ("block_immediately", "block_and_alert"):
+--- gateway/ai_mesh_gateway/config.py:101
+    call_security_scan = get_env("GATEWAY_CALL_SECURITY_SCAN", "false").lower() in ("true", "1", "yes")
+--- gateway/ai_mesh_gateway/config.py:105
+    policy_cache_require_loaded = get_env("GATEWAY_POLICY_CACHE_REQUIRE_LOADED", "true").lower() in ("true", "1", "yes")
+--- gateway/ai_mesh_gateway/main.py:1367
+        LOG.debug("Policy cache not loaded, falling back to backend HTTP")
+--- workers/ai_mesh_workers/tasks/tier2.py:9
+def tier2_post_scan_task(payload: dict) -> dict:
+--- workers/ai_mesh_workers/tasks/tier2.py:17
+    return {"status": "queued", "request_id": payload.get("request_id", "")}
+--- docker-compose.yml:252
+      ENABLE_TIER2: ${ENABLE_TIER2:-true}
+--- docker-compose.yml:253
+      TIER2_PROVIDER: ${TIER2_PROVIDER:-bedrock}
+--- docker-compose.prod.yml:192
+      ENABLE_TIER2: ${ENABLE_TIER2:-true}
+--- docker-compose.prod.yml:193
+      TIER2_PROVIDER: ${TIER2_PROVIDER:-bedrock}
+--- docker-compose.prod.yml:156
+      TIER2_PROVIDER: ${TIER2_PROVIDER:-bedrock}
+--- control/ai_mesh_control/core/poc_views.py:69
+            s3 = boto3.client(
+--- control/ai_mesh_control/security_engines/apps.py:23 (corrected pin)
+                scanner.scan_prompt("warmup_prompt_for_ml_models")

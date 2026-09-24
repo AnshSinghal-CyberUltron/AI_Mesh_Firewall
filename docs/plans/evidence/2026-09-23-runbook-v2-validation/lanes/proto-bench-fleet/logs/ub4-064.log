@@ -1,0 +1,20 @@
+17:58:56 ub4-064: olg started on rv-pbf-lg-1 rv-pbf-lg-2 rv-pbf-lg-3 (rate 21.333333333333332 each, start-at 1790186360175, mode sut, targets http://10.146.0.10:8080)
+[rv-pbf-lg-1] 2026/09/23 18:05:57 done: scheduled=8000 recorded=8000 ok=7879 errors=map[http_403:121] drops=0 late_p99=108us max=260us cpu_busy_max=7.0%
+[rv-pbf-lg-2] 2026/09/23 18:05:57 done: scheduled=8000 recorded=8000 ok=7879 errors=map[http_403:121] drops=0 late_p99=112us max=230us cpu_busy_max=6.9%
+[rv-pbf-lg-3] 2026/09/23 18:05:57 done: scheduled=8000 recorded=8000 ok=7883 errors=map[http_403:117] drops=0 late_p99=110us max=259us cpu_busy_max=7.3%
+# ub4-064: strict FAIL | load-knee PASS (sut, units=4, rate=64)
+
+checks: {'p99_T_fw_addon_lt_slo': False, 'infra_error_rate_le_budget': True, 'zero_schedule_drops': True, 'zero_safety_failures': True, 'run_valid': True}
+load-knee checks: {'p99_T_fw_addon_nohold_lt_slo': True, 'infra_error_rate_le_budget': True, 'zero_schedule_drops': True, 'zero_safety_failures': True, 'run_valid': True}
+offered 19200 (64.0/s) qualified 18909 (63.03/s) FP-blocks 291 (0.01516) infra 0 (0.0) drops 0 safety 0
+infra reasons: {}
+infra detail: {}
+
+T_fw_addon: n=18909 p50=46.9356 p90=53.0422 p99=71.2168 p99.9=75.3944 max=97.5873 mean=37.41
+T_fw_addon_nohold: n=18909 p50=10.2262 p90=12.8004 p99=15.3715 p99.9=18.5967 max=21.6033 mean=9.6495
+T_fw_addon_sse: n=13230 p50=49.953 p90=53.8576 p99=71.6144 p99.9=76.7336 max=97.5873 mean=49.3052
+T_fw_addon_json: n=5679 p50=10.2966 p90=12.8346 p99=15.4304 p99.9=18.7565 max=21.4086 mean=9.6987
+T_addon_first_sse: n=13230 p50=10.1405 p90=13.308 p99=29.9721 p99.9=34.1222 max=50.4184 mean=9.8912
+T_addon_total_sse: n=13230 p50=10.1974 p90=12.7833 p99=15.3678 p99.9=18.299 max=21.6033 mean=9.6283
+T_addon_total_json: n=5679 p50=10.2966 p90=12.8346 p99=15.4304 p99.9=18.7565 max=21.4086 mean=9.6987
+T_release_lag_max: n=13230 p50=49.953 p90=53.8576 p99=71.6144 p99.9=76.7336 max=97.5873 mean=49.3052

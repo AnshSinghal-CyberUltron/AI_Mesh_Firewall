@@ -1,0 +1,10 @@
+{"plan_convergence_s": 1.104}
+.{"killswitch_scope": "org", "effective_after_s": 0.448}
+.{"killswitch_scope": "model", "effective_after_s": 0.742}
+...{"offered": 40, "shed": 38, "admitted": 2, "reasons": {"shed{reason=\"guard_queue\"}": 38}}
+.{"offered": 12, "shed": 11, "admitted": 1, "reasons": {"shed{reason=\"guard_queue\"}": 10, "shed{reason=\"guard_owner_queue\"}": 1}}
+.............................{"requests": 200, "elapsed_s": 7.42, "overload_sheds_retried": 311}
+....s...............
+=========================== short test summary info ============================
+SKIPPED [1] tests/e2e/test_e8_cancel_and_unready.py:46: run against a stack started with RV_GUARD_WARMUP_DELAY_S>0
+54 passed, 1 skipped in 107.37s (0:01:47)

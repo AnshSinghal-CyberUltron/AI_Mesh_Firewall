@@ -1,0 +1,12 @@
+{
+ "run": "N-r25",
+ "events": 9375,
+ "by_kind": {
+  "consistent|stream_complete": 6562,
+  "consistent|request": 2813
+ },
+ "client_corr_with_multiple_events": 0,
+ "extra_events_same_corr": 0,
+ "nonces_with_multiple_events": 0,
+ "examples": []
+}

@@ -1,0 +1,3 @@
+n 5000 dispositions: {(200, 'allow'): 5000}
+rules firing on non-allow: []
+policies firing on non-allow: []

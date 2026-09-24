@@ -1,0 +1,304 @@
+{
+ "n_measured_requests": 89400,
+ "gateways": {
+  "rv-split-gw-1": {
+   "cores": {
+    "worker": 3.724,
+    "launcher": 0.0,
+    "redis": 0.015
+   },
+   "cpu_ms_per_req": 12.538,
+   "redis_cpu_ms_per_req": 0.051,
+   "vm_cores_busy": 3.77,
+   "worker_util": {
+    "n": 12,
+    "min": 0.278,
+    "median": 0.307,
+    "max": 0.366
+   },
+   "core_util": {
+    "max": 0.267,
+    "mean": 0.235,
+    "sum_cores": 3.77
+   },
+   "nic": {
+    "ens3": {
+     "rx_mbit_s": 163.9,
+     "tx_mbit_s": 173.27,
+     "rx_bytes_per_req": 68980.1,
+     "tx_bytes_per_req": 72922.7
+    }
+   },
+   "guard_rtt": {
+    "n": 89384,
+    "p50_ms": 4.8824,
+    "p90_ms": 7.1762,
+    "p99_ms": 10.1581,
+    "p99.9_ms": 12.5174,
+    "mean_ms": 4.9183
+   },
+   "guard_wait": {
+    "n": 89384,
+    "p50_ms": 4.7514,
+    "p90_ms": 7.1107,
+    "p99_ms": 10.027,
+    "p99.9_ms": 12.6484,
+    "mean_ms": 4.8238
+   },
+   "guard_queue_seen_by_worker": {
+    "n": 89384,
+    "p50_ms": 0.0845,
+    "p90_ms": 2.5723,
+    "p99_ms": 5.5378,
+    "p99.9_ms": 8.0282,
+    "mean_ms": 0.7568
+   },
+   "guard_exec_seen_by_worker": {
+    "n": 89384,
+    "p50_ms": 4.1452,
+    "p90_ms": 4.3581,
+    "p99_ms": 6.3898,
+    "p99.9_ms": 6.7174,
+    "mean_ms": 3.4571
+   },
+   "t_input": {
+    "n": 89384,
+    "p50_ms": 6.914,
+    "p90_ms": 9.7649,
+    "p99_ms": 12.6484,
+    "p99.9_ms": 15.1388,
+    "mean_ms": 6.7073
+   },
+   "t_tokenize": {
+    "n": 89380,
+    "p50_ms": 1.5319,
+    "p90_ms": 2.4412,
+    "p99_ms": 2.8344,
+    "p99.9_ms": 3.1293,
+    "mean_ms": 1.5277
+   },
+   "loop_lag": {
+    "n": 35830,
+    "p50_ms": 0.0028,
+    "p90_ms": 2.2118,
+    "p99_ms": 5.5378,
+    "p99.9_ms": 7.1762,
+    "mean_ms": 0.519
+   },
+   "windows_per_request": 1.637,
+   "admitted": 89380,
+   "counts": {
+    "admitted": 89380,
+    "audit_enqueued": 177104,
+    "audit_written": 177104,
+    "background_round_trips": 7166,
+    "disposition_ALLOW": 87772,
+    "disposition_BLOCK": 1612,
+    "guard_windows": 146359,
+    "lease_granted_tokens{org=\"org-a\"}": 84504320,
+    "lease_refills": 617,
+    "provider_calls": 87772,
+    "provider_connections_opened": 48509,
+    "quota_admitted_tokens{org=\"org-a\"}": 84524868,
+    "requests_by_round_trips{n=\"0\"}": 88763,
+    "requests_by_round_trips{n=\"1\"}": 617,
+    "shared_state_round_trips": 617
+   }
+  }
+ },
+ "guards": {
+  "rv-split-guard-1": {
+   "owner_cores": 0.57,
+   "owner_cpu_ms_per_req": 1.919,
+   "vm_cores_busy": 0.58,
+   "gpu": {
+    "0": {
+     "samples": 298,
+     "sm_mean": 45.6,
+     "sm_max": 63.0,
+     "mem_mean": 8.1,
+     "fb_mb_max": 434.0
+    }
+   },
+   "nic": {
+    "ens4": {
+     "rx_mbit_s": 3.07,
+     "tx_mbit_s": 0.18,
+     "rx_bytes_per_req": 1290.4,
+     "tx_bytes_per_req": 75.3
+    },
+    "docker0": {
+     "rx_mbit_s": 0.0,
+     "tx_mbit_s": 0.0,
+     "rx_bytes_per_req": 0.0,
+     "tx_bytes_per_req": 0.0
+    }
+   },
+   "gw_guard_bytes_per_req": 1365.7,
+   "owner_queue_gauges": {
+    "o.guard_queue_items.max": {
+     "max": 2.0,
+     "mean": 0.26
+    },
+    "o.guard_queue_items.sum": {
+     "max": 2.0,
+     "mean": 0.26
+    },
+    "o.guard_queue_windows.max": {
+     "max": 2.0,
+     "mean": 0.31
+    },
+    "o.guard_queue_windows.sum": {
+     "max": 2.0,
+     "mean": 0.31
+    }
+   },
+   "owner_hist": {
+    "guard_queue_ns": {
+     "n": 44584,
+     "p50_ms": 0.0865,
+     "p90_ms": 2.6051,
+     "p99_ms": 5.6033,
+     "p99.9_ms": 8.0937,
+     "mean_ms": 0.7687
+    },
+    "guard_exec_ns": {
+     "n": 44584,
+     "p50_ms": 4.1779,
+     "p90_ms": 4.4237,
+     "p99_ms": 6.4553,
+     "p99.9_ms": 6.783,
+     "mean_ms": 3.4823
+    }
+   },
+   "owner_counts": {
+    "guard_batches": 44584,
+    "guard_windows": 72974,
+    "owner_requests": 44584,
+    "owner_windows": 72974
+   },
+   "core_util": {
+    "max": 0.203,
+    "mean": 0.146
+   }
+  },
+  "rv-split-guard-2": {
+   "owner_cores": 0.562,
+   "owner_cpu_ms_per_req": 1.892,
+   "vm_cores_busy": 0.58,
+   "gpu": {
+    "0": {
+     "samples": 298,
+     "sm_mean": 44.6,
+     "sm_max": 61.0,
+     "mem_mean": 8.1,
+     "fb_mb_max": 434.0
+    }
+   },
+   "nic": {
+    "ens4": {
+     "rx_mbit_s": 3.08,
+     "tx_mbit_s": 0.18,
+     "rx_bytes_per_req": 1295.2,
+     "tx_bytes_per_req": 75.6
+    },
+    "docker0": {
+     "rx_mbit_s": 0.0,
+     "tx_mbit_s": 0.0,
+     "rx_bytes_per_req": 0.0,
+     "tx_bytes_per_req": 0.0
+    }
+   },
+   "gw_guard_bytes_per_req": 1370.8,
+   "owner_queue_gauges": {
+    "o.guard_queue_items.max": {
+     "max": 1.0,
+     "mean": 0.15
+    },
+    "o.guard_queue_items.sum": {
+     "max": 1.0,
+     "mean": 0.15
+    },
+    "o.guard_queue_windows.max": {
+     "max": 2.0,
+     "mean": 0.25
+    },
+    "o.guard_queue_windows.sum": {
+     "max": 2.0,
+     "mean": 0.25
+    }
+   },
+   "owner_hist": {
+    "guard_queue_ns": {
+     "n": 44770,
+     "p50_ms": 0.0824,
+     "p90_ms": 2.5395,
+     "p99_ms": 5.4723,
+     "p99.9_ms": 7.8971,
+     "mean_ms": 0.7455
+    },
+    "guard_exec_ns": {
+     "n": 44770,
+     "p50_ms": 4.1452,
+     "p90_ms": 4.2926,
+     "p99_ms": 6.3242,
+     "p99.9_ms": 6.5208,
+     "mean_ms": 3.4316
+    }
+   },
+   "owner_counts": {
+    "guard_batches": 44770,
+    "guard_windows": 73332,
+    "owner_requests": 44770,
+    "owner_windows": 73332
+   },
+   "core_util": {
+    "max": 0.225,
+    "mean": 0.144
+   }
+  }
+ },
+ "extras": {},
+ "gw_cpu_ms_per_req": 12.538,
+ "gw_cores_busy_total": 3.77,
+ "guard_rtt": {
+  "n": 89384,
+  "p50_ms": 4.8824,
+  "p90_ms": 7.1762,
+  "p99_ms": 10.1581,
+  "p99.9_ms": 12.5174,
+  "mean_ms": 4.9183
+ },
+ "t_input": {
+  "n": 89384,
+  "p50_ms": 6.914,
+  "p90_ms": 9.7649,
+  "p99_ms": 12.6484,
+  "p99.9_ms": 15.1388,
+  "mean_ms": 6.7073
+ },
+ "loop_lag": {
+  "n": 35830,
+  "p50_ms": 0.0028,
+  "p90_ms": 2.2118,
+  "p99_ms": 5.5378,
+  "p99.9_ms": 7.1762,
+  "mean_ms": 0.519
+ },
+ "worker_util_max": 0.366,
+ "windows_per_request": 1.637,
+ "gw_admitted_share": {
+  "rv-split-gw-1": 89380
+ },
+ "gw_core_util_schedstat": {
+  "max": 0.267,
+  "mean": 0.235,
+  "sum_cores": 3.77
+ },
+ "gw_worker_util": {
+  "n": 12,
+  "min": 0.278,
+  "median": 0.307,
+  "max": 0.366
+ },
+ "

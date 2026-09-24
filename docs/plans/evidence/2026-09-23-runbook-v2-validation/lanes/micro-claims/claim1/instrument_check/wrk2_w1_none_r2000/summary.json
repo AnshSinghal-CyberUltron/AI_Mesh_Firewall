@@ -1,0 +1,1 @@
+{"latency_us": {"p50": 762.0, "p75": 1100.0, "p90": 1330.0, "p99": 1840.0, "p99.9": 2060.0, "p99.99": 171130.0, "p99.999": 234880.0, "p100": 234880.0}, "u_latency_us": {}, "requests": 39956, "elapsed": "20.00s", "achieved_rps": 1997.67, "non_2xx": 0, "socket_errors": {}, "hdr_max_ms": 234.752, "hdr_total_count": 19840, "calibration_mean_ms": [0.815, 0.853, 0.749, 0.8]}

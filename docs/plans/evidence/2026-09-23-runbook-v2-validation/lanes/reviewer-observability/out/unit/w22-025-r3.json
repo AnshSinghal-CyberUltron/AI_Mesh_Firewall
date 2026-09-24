@@ -1,0 +1,183 @@
+{
+ "run": "/home/contact_cyberultron_com/rv-evidence-raw/proto-bench-unit/runs/w22-025-r3",
+ "mode": "sut",
+ "offered": 7500,
+ "phase_counts": {
+  "0": 375,
+  "1": 1500,
+  "2": 7500
+ },
+ "provider_records": 9161,
+ "categories": {
+  "block_fp": 167,
+  "qualified": 7333
+ },
+ "infra_reasons": {},
+ "PUB_T_fw_addon": {
+  "n": 7333,
+  "n_inf": 0,
+  "p50": 14.468,
+  "p90": 17.22,
+  "p99": 56.914,
+  "p999": 74.545,
+  "max_finite": 97.351,
+  "mean_finite": 17.655
+ },
+ "PUB_sse": {
+  "n": 5132,
+  "n_inf": 0,
+  "p50": 14.458,
+  "p90": 34.574,
+  "p99": 61.987,
+  "p999": 74.699,
+  "max_finite": 97.351,
+  "mean_finite": 18.994
+ },
+ "PUB_json": {
+  "n": 2201,
+  "n_inf": 0,
+  "p50": 14.48,
+  "p90": 15.033,
+  "p99": 19.979,
+  "p999": 21.736,
+  "max_finite": 22.524,
+  "mean_finite": 14.533
+ },
+ "PUB_nohold_T_addon_total": {
+  "n": 7333,
+  "n_inf": 0,
+  "p50": 14.33,
+  "p90": 14.93,
+  "p99": 19.041,
+  "p999": 21.8,
+  "max_finite": 22.524,
+  "mean_finite": 14.382
+ },
+ "PUB_first_byte_sse": {
+  "n": 5132,
+  "n_inf": 0,
+  "p50": 14.19,
+  "p90": 14.96,
+  "p99": 33.981,
+  "p999": 34.793,
+  "max_finite": 73.878,
+  "mean_finite": 14.654
+ },
+ "C_T_fw_addon": {
+  "n": 7333,
+  "n_inf": 0,
+  "p50": 14.468,
+  "p90": 17.22,
+  "p99": 56.914,
+  "p999": 74.545,
+  "max_finite": 97.351,
+  "mean_finite": 17.655
+ },
+ "C_nohold": {
+  "n": 7333,
+  "n_inf": 0,
+  "p50": 14.33,
+  "p90": 14.93,
+  "p99": 19.041,
+  "p999": 21.8,
+  "max_finite": 22.524,
+  "mean_finite": 14.382
+ },
+ "ABC_T_fw_addon": {
+  "n": 723,
+  "n_inf": 0,
+  "p50": 54.072,
+  "p90": 56.914,
+  "p99": 74.545,
+  "p999": 97.351,
+  "max_finite": 97.351,
+  "mean_finite": 43.894
+ },
+ "ABC_sse": {
+  "n": 504,
+  "n_inf": 0,
+  "p50": 54.405,
+  "p90": 61.987,
+  "p99": 74.699,
+  "p999": 97.351,
+  "max_finite": 97.351,
+  "mean_finite": 56.658
+ },
+ "ABC_json": {
+  "n": 219,
+  "n_inf": 0,
+  "p50": 14.556,
+  "p90": 15.008,
+  "p99": 19.75,
+  "p999": 20.22,
+  "max_finite": 20.22,
+  "mean_finite": 14.519
+ },
+ "ABC_nohold": {
+  "n": 723,
+  "n_inf": 0,
+  "p50": 14.348,
+  "p90": 14.907,
+  "p99": 18.653,
+  "p999": 22.081,
+  "max_finite": 22.081,
+  "mean_finite": 14.367
+ },
+ "sample_first_tok1_sse": {
+  "n": 504,
+  "n_inf": 0,
+  "p50": 33.965,
+  "p90": 34.666,
+  "p99": 53.767,
+  "p999": 57.182,
+  "max_finite": 57.182,
+  "mean_finite": 33.943
+ },
+ "sample_first_byte_sse": {
+  "n": 504,
+  "n_inf": 0,
+  "p50": 14.179,
+  "p90": 14.846,
+  "p99": 34.006,
+  "p999": 34.801,
+  "max_finite": 34.801,
+  "mean_finite": 14.551
+ },
+ "sample_lag": {
+  "n": 504,
+  "n_inf": 0,
+  "p50": 54.405,
+  "p90": 61.987,
+  "p99": 74.699,
+  "p999": 97.351,
+  "max_finite": 97.351,
+  "mean_finite": 56.658
+ },
+ "hdr_addon_sse": {
+  "n": 5132,
+  "n_inf": 0,
+  "p50": 14.202,
+  "p90": 14.867,
+  "p99": 19.205,
+  "p999": 21.817,
+  "max_finite": 24.041,
+  "mean_finite": 14.304
+ },
+ "lone_first_event": {
+  "first_event_1B_token_gt_1B": 485,
+  "mappable": 723
+ },
+ "sampled_sse_offered": 517,
+ "sampled_sse_qualified_with_perchunk": 504,
+ "anomalies": {},
+ "blocks_client_total": {
+  "n": 167,
+  "n_inf": 0,
+  "p50": 13.134,
+  "p90": 13.667,
+  "p99": 20.135,
+  "p999": 21.281,
+  "max_finite": 21.281,
+  "mean_finite": 13.318
+ }
+}

@@ -1,0 +1,3 @@
+orgs=  1000: startup load_all=   0.17s  steady reconcile (no change) median=    1.0 ms  worst event-loop lag during reconcile=   0.8 ms  -> per worker per second (x18 workers on a unit)
+orgs= 10000: startup load_all=   1.83s  steady reconcile (no change) median=    8.7 ms  worst event-loop lag during reconcile=   7.0 ms  -> per worker per second (x18 workers on a unit)
+orgs=100000: startup load_all=  20.62s  steady reconcile (no change) median=  119.7 ms  worst event-loop lag during reconcile=  55.5 ms  -> per worker per second (x18 workers on a unit)

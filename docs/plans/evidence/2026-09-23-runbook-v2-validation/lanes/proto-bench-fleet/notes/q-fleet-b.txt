@@ -1,0 +1,1 @@
+fleet-075 75 EDGE_VM=rv-pbf-edge-2 LGS=rv-pbf-lg-4 PROVS=rv-pbf-prov-3 REDIS_VM=rv-pbf-redis-2 UNITS="rv-pbf-unit-6 rv-pbf-unit-8 rv-pbf-unit-9" TARGETS=http://10.146.0.20:8080 LABEL=C-fleet-3xg2-8-ladder

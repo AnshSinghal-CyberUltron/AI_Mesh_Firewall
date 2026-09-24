@@ -1,0 +1,60 @@
+## variant v2_tc_minimal
+Success: no issues found in 78 source files
+mypy exit=0
+Contracts
+---------
+
+Analyzed 71 files, 45 dependencies.
+-----------------------------------
+
+Gateway v2 layers BROKEN
+
+Contracts: 0 kept, 1 broken.
+
+
+----------------
+Broken contracts
+----------------
+
+Gateway v2 layers
+-----------------
+
+gateway_v2.dispatch is not allowed to import gateway_v2.resolve:
+
+- gateway_v2.dispatch.provider -> gateway_v2.resolve.decision (l.11)
+
+
+gateway_v2.egress is not allowed to import gateway_v2.resolve:
+
+- gateway_v2.egress.output_guard -> gateway_v2.resolve.resolver (l.13)
+
+- gateway_v2.egress.output_guard -> gateway_v2.resolve.decision (l.12)
+
+
+gateway_v2.detect is not allowed to import gateway_v2.plan:
+
+- gateway_v2.detect.base -> gateway_v2.plan.model (l.15)
+
+
+gateway_v2.resolve is not allowed to import gateway_v2.plan:
+
+- gateway_v2.resolve.resolver -> gateway_v2.plan.model (l.14)
+
+
+gateway_v2.egress is not allowed to import gateway_v2.plan:
+
+- gateway_v2.egress.stream -> gateway_v2.plan.model (l.13)
+
+
+gateway_v2.resolve is not allowed to import gateway_v2.detect:
+
+- gateway_v2.resolve.resolver -> gateway_v2.detect.base (l.11)
+
+
+lint-imports exit=1
+## smoke
+disposition: block deciding: ('r-inj',)
+mint for BLOCK -> None
+LGW04-3 runtime rejection needs the Category import at runtime: category 'prompt-injection' is not a plan.model.Category
+audit record: block
+smoke exit=0

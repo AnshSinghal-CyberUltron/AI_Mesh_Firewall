@@ -1,0 +1,3 @@
+11:55:29 created rv-pbf-redis-1 (c4-standard-8) in asia-northeast1-a ip=10.146.0.13
+prep ok: rv-pbf-redis-1.asia-northeast1-a.c.ai-mesh-firewall.internal 8 vCPU
+binaries ok on rv-pbf-redis-1.asia-northeast1-a.c.ai-mesh-firewall.internal

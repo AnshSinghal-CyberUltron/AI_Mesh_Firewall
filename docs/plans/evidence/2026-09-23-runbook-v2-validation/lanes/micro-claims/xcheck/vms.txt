@@ -1,0 +1,5 @@
+rv-micro-sut-3 asia-south1-c c4-standard-8 10.160.15.205
+rv-micro-lg-6 asia-south1-c c4-standard-16 10.160.15.203
+rv-micro-edge-3 asia-south1-c c4-standard-8 10.160.15.202
+rv-micro-up-3 asia-south1-c c4-standard-8 10.160.15.201
+rv-micro-lg-7 asia-south1-c c4-standard-16 10.160.15.204

@@ -1,0 +1,16 @@
+module: /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/secure_streaming.py
+shipped STREAM_FLUSH_BYTES = 160
+
+300 x 'tok{i} ' deltas: 1990 bytes
+   STREAM_FLUSH_BYTES= 64: guard passes = 29
+   STREAM_FLUSH_BYTES= 96: guard passes = 21
+   STREAM_FLUSH_BYTES=160: guard passes = 13  <- shipped
+   STREAM_FLUSH_BYTES=192: guard passes = 11
+   STREAM_FLUSH_BYTES=384: guard passes = 6
+
+300 x 6-byte slices of prose: 1800 bytes
+   STREAM_FLUSH_BYTES= 64: guard passes = 41
+   STREAM_FLUSH_BYTES= 96: guard passes = 41
+   STREAM_FLUSH_BYTES=160: guard passes = 41  <- shipped
+   STREAM_FLUSH_BYTES=192: guard passes = 41
+   STREAM_FLUSH_BYTES=384: guard passes = 41

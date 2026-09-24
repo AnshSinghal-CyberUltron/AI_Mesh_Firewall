@@ -1,0 +1,43 @@
+== x1u-350
+client per-stream max lag (harness)    {0.5: 54.34, 0.9: 65.2, 0.99: 79.57, 'mean': 55.24, 'n': 1299}
+client per-stream max lag minus A0     {0.5: 39.93, 0.9: 46.69, 0.99: 60.21, 'mean': 40.64, 'n': 1299}
+   gateway release_lag_max_ns {'n': 12541, 'mean_ms': 41.2889, 'p50_ms': 40.108, 'p90_ms': 45.8752, 'p99_ms': 60.5553, 'p99.9_ms': 80.2161, 'top_bucket_ms': 80.216}
+== f2u-140
+client per-stream max lag (harness)    {0.5: 50.23, 0.9: 55.01, 0.99: 72.13, 'mean': 49.95, 'n': 2856}
+client per-stream max lag minus A0     {0.5: 39.87, 0.9: 42.06, 0.99: 59.93, 'mean': 39.71, 'n': 2856}
+   gateway release_lag_max_ns {'n': 28414, 'mean_ms': 40.2206, 'p50_ms': 40.108, 'p90_ms': 41.6809, 'p99_ms': 60.031, 'p99.9_ms': 80.2161, 'top_bucket_ms': 80.216}
+== fleet-090
+client per-stream max lag (harness)    {0.5: 50.26, 0.9: 54.54, 0.99: 71.52, 'mean': 49.73, 'n': 1862}
+client per-stream max lag minus A0     {0.5: 39.87, 0.9: 40.94, 0.99: 59.87, 'mean': 39.41, 'n': 1862}
+   gateway release_lag_max_ns {'n': 18476, 'mean_ms': 40.2432, 'p50_ms': 40.108, 'p90_ms': 42.2052, 'p99_ms': 60.031, 'p99.9_ms': 80.2161, 'top_bucket_ms': 80.216}
+== f8-060
+client per-stream max lag (harness)    {0.5: 50.57, 0.9: 55.75, 0.99: 72.51, 'mean': 50.24, 'n': 1300}
+client per-stream max lag minus A0     {0.5: 39.88, 0.9: 43.23, 0.99: 59.96, 'mean': 39.75, 'n': 1300}
+   gateway release_lag_max_ns {'n': 12418, 'mean_ms': 40.6155, 'p50_ms': 40.108, 'p90_ms': 43.778, 'p99_ms': 60.031, 'p99.9_ms': 68.6817, 'top_bucket_ms': 84.41}
+== fleet f1u-070
+streams 1505
+A0 = T_addon_first (first byte)        {0.5: 10.34, 0.9: 13.79, 0.99: 30.74, 'mean': 10.21, 'n': 1505}
+client per-stream max lag (harness)    {0.5: 50.16, 0.9: 55.13, 0.99: 72.27, 'mean': 50.02, 'n': 1505}
+client per-stream max lag minus A0     {0.5: 39.87, 0.9: 42.27, 0.99: 59.91, 'mean': 39.81, 'n': 1505}
+client per-piece lag (harness)         {0.5: 30.05, 0.9: 33.67, 0.99: 48.57, 'mean': 29.55, 'n': 331815}
+client per-piece lag minus A0          {0.5: 19.83, 0.9: 19.92, 0.99: 39.82, 'mean': 19.39, 'n': 331815}
+share of streams whose max is at piece 0: 0.007
+   gateway release_lag_max_ns {'n': 14457, 'mean_ms': 40.1348, 'p50_ms': 40.108, 'p90_ms': 41.6809, 'p99_ms': 60.031, 'p99.9_ms': 80.2161, 'top_bucket_ms': 80.216}
+== fleet x4-10
+streams 41
+A0 = T_addon_first (first byte)        {0.5: 10.49, 0.9: 14.06, 0.99: 34.7, 'mean': 11.02, 'n': 41}
+client per-stream max lag (harness)    {0.5: 50.51, 0.9: 56.56, 0.99: 70.02, 'mean': 51.28, 'n': 41}
+client per-stream max lag minus A0     {0.5: 39.89, 0.9: 44.72, 0.99: 59.94, 'mean': 40.26, 'n': 41}
+client per-piece lag (harness)         {0.5: 30.03, 0.9: 33.95, 0.99: 48.01, 'mean': 29.75, 'n': 9895}
+client per-piece lag minus A0          {0.5: 19.84, 0.9: 19.95, 0.99: 39.82, 'mean': 18.65, 'n': 9895}
+share of streams whose max is at piece 0: 0.024
+   gateway release_lag_max_ns {'n': 419, 'mean_ms': 41.1415, 'p50_ms': 40.108, 'p90_ms': 44.8266, 'p99_ms': 60.031, 'p99.9_ms': 60.031, 'top_bucket_ms': 60.031}
+== unit p22-078
+streams 1586
+A0 = T_addon_first (first byte)        {0.5: 9.55, 0.9: 13.0, 0.99: 27.11, 'mean': 9.34, 'n': 1586}
+client per-stream max lag (harness)    {0.5: 49.37, 0.9: 53.9, 0.99: 70.97, 'mean': 48.84, 'n': 1586}
+client per-stream max lag minus A0     {0.5: 39.87, 0.9: 41.6, 0.99: 59.9, 'mean': 39.5, 'n': 1586}
+client per-piece lag (harness)         {0.5: 29.23, 0.9: 32.44, 0.99: 46.87, 'mean': 28.57, 'n': 359115}
+client per-piece lag minus A0          {0.5: 19.83, 0.9: 19.93, 0.99: 39.82, 'mean': 19.24, 'n': 359115}
+share of streams whose max is at piece 0: 0.006
+   gateway release_lag_max_ns {'n': 16074, 'mean_ms': 40.3517, 'p50_ms': 40.108, 'p90_ms': 42.2052, 'p99_ms': 60.031, 'p99.9_ms': 80.2161, 'top_bucket_ms': 80.216}

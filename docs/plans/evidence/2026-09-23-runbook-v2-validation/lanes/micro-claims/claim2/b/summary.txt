@@ -1,0 +1,38 @@
+=== claim2b run 2026-09-23T06:23:21Z app=10.160.0.34 redis=10.160.0.33 (same zone asia-south1-c)
+redis_version:7.4.11
+tcp_port:6379
+appendonly yes 
+qdisc mq 0: root 
+qdisc fq_codel 0: parent :2 limit 10240p flows 1024 quantum 1474 target 5ms interval 100ms memory_limit 32Mb ecn drop_batch 64 
+qdisc fq_codel 0: parent :1 limit 10240p flows 1024 quantum 1474 target 5ms interval 100ms memory_limit 32Mb ecn drop_batch 64 
+cpu_only_noop                mode=noop    n=20000 emit_us p50=     3.9 p90=     4.4 p99=     5.3 max=    21.4 mean=     4.0
+[natural icmp app->redis] 500 packets transmitted, 500 received, 0% packet loss, time 5488ms
+[natural icmp app->redis] rtt min/avg/max/mdev = 0.025/0.178/1.072/0.094 ms
+[natural redis-cli --latency ms] 0 1 0.35 962
+natural_0sub                 mode=publish n=20000 emit_us p50=    70.2 p90=    76.2 p99=    93.4 max=   351.2 mean=    71.2 | ping_us p50=   62.2 p99=   84.3
+[subscribers] logs:stream 16 
+natural_16sub                mode=publish n=20000 emit_us p50=    69.6 p90=    76.6 p99=    92.6 max=   360.7 mean=    71.1 | ping_us p50=   58.0 p99=   76.5
+=== claim2b RESUME (netem part) 2026-09-23T06:23:57Z -- first run aborted after natural_16sub by a self-matching pkill; fixed
+[subscribers] logs:stream 0 
+qdisc netem 8001: root refcnt 5 limit 100000 delay 1ms
+[netem1ms icmp app->redis] 500 packets transmitted, 499 received, 0.2% packet loss, time 4988ms
+[netem1ms icmp app->redis] rtt min/avg/max/mdev = 1.026/1.091/2.201/0.080 ms
+[netem1ms redis-cli --latency ms] 1 2 1.42 873
+netem1ms_0sub                mode=publish n=5000 emit_us p50=  1072.9 p90=  1078.8 p99=  1221.9 max=  1336.9 mean=  1076.0 | ping_us p50= 1061.5 p99= 1224.3
+qdisc netem 8002: root refcnt 5 limit 100000 delay 5ms
+[netem5ms icmp app->redis] 500 packets transmitted, 500 received, 0% packet loss, time 4985ms
+[netem5ms icmp app->redis] rtt min/avg/max/mdev = 5.026/5.041/5.698/0.039 ms
+[netem5ms redis-cli --latency ms] 5 6 5.28 653
+netem5ms_0sub                mode=publish n=2000 emit_us p50=  5072.2 p90=  5079.4 p99=  5223.9 max=  5362.9 mean=  5076.0 | ping_us p50= 5059.6 p99= 5088.4
+qdisc netem 8003: root refcnt 5 limit 100000 delay 20ms
+[netem20ms icmp app->redis] 500 packets transmitted, 500 received, 0% packet loss, time 7531ms
+[netem20ms icmp app->redis] rtt min/avg/max/mdev = 20.029/20.131/20.774/0.075 ms, pipe 2
+[netem20ms redis-cli --latency ms] 20 21 20.42 329
+netem20ms_0sub               mode=publish n=500 emit_us p50= 20427.8 p90= 20476.2 p99= 20588.6 max= 20813.9 mean= 20407.2 | ping_us p50=20406.8 p99=20590.1
+qdisc mq 0: root 
+qdisc fq_codel 0: parent :2 limit 10240p flows 1024 quantum 1474 target 5ms interval 100ms memory_limit 32Mb ecn drop_batch 64 
+qdisc fq_codel 0: parent :1 limit 10240p flows 1024 quantum 1474 target 5ms interval 100ms memory_limit 32Mb ecn drop_batch 64 
+[natural_after icmp app->redis] 500 packets transmitted, 500 received, 0% packet loss, time 5489ms
+[natural_after icmp app->redis] rtt min/avg/max/mdev = 0.028/0.231/0.699/0.060 ms
+[natural_after redis-cli --latency ms] 0 1 0.37 960
+=== done 2026-09-23T06:26:39Z

@@ -1,0 +1,7 @@
+net.ipv4.ip_local_port_range = 32768	60999
+net.ipv4.ip_local_reserved_ports = 
+net.ipv4.tcp_fin_timeout = 60
+net.ipv4.tcp_max_tw_buckets = 131072
+net.ipv4.tcp_tw_reuse = 2
+net.ipv4.tcp_tw_reuse_delay = 1000
+7.0.0-1011-gcp

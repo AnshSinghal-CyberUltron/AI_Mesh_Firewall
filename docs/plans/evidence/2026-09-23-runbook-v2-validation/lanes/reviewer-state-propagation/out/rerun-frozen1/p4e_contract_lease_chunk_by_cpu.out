@@ -1,0 +1,3 @@
+cpu 8 workers 6 lease_chunk_tokens 68480 redis_pool_per_worker 786427
+cpu 16 workers 12 lease_chunk_tokens 136960 redis_pool_per_worker 786423
+cpu 24 workers 18 lease_chunk_tokens 205440 redis_pool_per_worker 786418

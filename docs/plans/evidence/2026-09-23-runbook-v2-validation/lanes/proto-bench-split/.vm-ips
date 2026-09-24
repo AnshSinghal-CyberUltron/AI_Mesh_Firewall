@@ -1,0 +1,17 @@
+rv-split-lg-2 10.160.0.19
+rv-split-prov-1 10.160.0.17
+rv-split-prov-2 10.160.0.18
+rv-split-lg-1 10.160.0.16
+rv-split-edge-1 10.160.0.11
+rv-split-gw-1 10.160.0.13
+rv-split-guard-2 10.160.15.248
+rv-split-gw-2 10.160.0.14
+rv-split-gw-3 10.160.0.15
+rv-split-guard-1 10.160.0.10
+rv-split-redis-1 10.160.0.12
+rv-split-guard-4 10.160.15.246
+rv-split-guard-3 10.160.15.247
+rv-split-guard-6 10.160.0.61
+rv-split-lg-3 10.160.0.62
+rv-split-prov-3 10.160.15.192
+rv-split-gw-4 10.160.0.63

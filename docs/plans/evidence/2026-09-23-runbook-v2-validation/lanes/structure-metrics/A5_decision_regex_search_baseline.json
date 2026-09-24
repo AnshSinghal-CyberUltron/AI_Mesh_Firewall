@@ -1,0 +1,1552 @@
+{
+ "scope_file_counts": {
+  "S1_gateway_pkg": 77,
+  "S2_gateway_pkg+shared": 95,
+  "S3_+services": 114,
+  "S4_all_runtime(gateway,shared,services,workers,control)": 331
+ },
+ "single_patterns": {
+  "S1_gateway_pkg": {
+   "P1_q_block": {
+    "lines": 407,
+    "modules": 23,
+    "mcp_proxy": 57
+   },
+   "P2_q_block_noncompare": {
+    "lines": 274,
+    "modules": 22,
+    "mcp_proxy": 54
+   },
+   "P3_action_eq_block": {
+    "lines": 133,
+    "modules": 17,
+    "mcp_proxy": 0
+   },
+   "P4_decision_eq_block": {
+    "lines": 44,
+    "modules": 4,
+    "mcp_proxy": 34
+   },
+   "P5_dict_action_block": {
+    "lines": 12,
+    "modules": 4,
+    "mcp_proxy": 0
+   },
+   "P6_return_block": {
+    "lines": 7,
+    "modules": 4,
+    "mcp_proxy": 2
+   },
+   "P7_status_403": {
+    "lines": 101,
+    "modules": 6,
+    "mcp_proxy": 9
+   },
+   "P8_build_block_response": {
+    "lines": 20,
+    "modules": 1,
+    "mcp_proxy": 0
+   },
+   "P9_blocked_true": {
+    "lines": 26,
+    "modules": 5,
+    "mcp_proxy": 6
+   },
+   "P10_should_block_true": {
+    "lines": 4,
+    "modules": 1,
+    "mcp_proxy": 0
+   },
+   "P11_return_JSONResponse_4xx": {
+    "lines": 68,
+    "modules": 1,
+    "mcp_proxy": 0
+   },
+   "P12_raise_HTTPException": {
+    "lines": 0,
+    "modules": 0,
+    "mcp_proxy": 0
+   },
+   "P14_event_type_blocked": {
+    "lines": 36,
+    "modules": 2,
+    "mcp_proxy": 2
+   },
+   "P15_q_blocked": {
+    "lines": 115,
+    "modules": 8,
+    "mcp_proxy": 9
+   },
+   "P17_METRICS_blocked": {
+    "lines": 84,
+    "modules": 1,
+    "mcp_proxy": 0
+   },
+   "P18_return_line_mentions_block": {
+    "lines": 94,
+    "modules": 12,
+    "mcp_proxy": 16
+   },
+   "P19_block_fn_call": {
+    "lines": 94,
+    "modules": 10,
+    "mcp_proxy": 20
+   },
+   "P20_any_ident_eq_block": {
+    "lines": 188,
+    "modules": 18,
+    "mcp_proxy": 34
+   }
+  },
+  "S2_gateway_pkg+shared": {
+   "P1_q_block": {
+    "lines": 408,
+    "modules": 24,
+    "mcp_proxy": 57
+   },
+   "P2_q_block_noncompare": {
+    "lines": 275,
+    "modules": 23,
+    "mcp_proxy": 54
+   },
+   "P3_action_eq_block": {
+    "lines": 133,
+    "modules": 17,
+    "mcp_proxy": 0
+   },
+   "P4_decision_eq_block": {
+    "lines": 44,
+    "modules": 4,
+    "mcp_proxy": 34
+   },
+   "P5_dict_action_block": {
+    "lines": 12,
+    "modules": 4,
+    "mcp_proxy": 0
+   },
+   "P6_return_block": {
+    "lines": 7,
+    "modules": 4,
+    "mcp_proxy": 2
+   },
+   "P7_status_403": {
+    "lines": 101,
+    "modules": 6,
+    "mcp_proxy": 9
+   },
+   "P8_build_block_response": {
+    "lines": 20,
+    "modules": 1,
+    "mcp_proxy": 0
+   },
+   "P9_blocked_true": {
+    "lines": 26,
+    "modules": 5,
+    "mcp_proxy": 6
+   },
+   "P10_should_block_true": {
+    "lines": 4,
+    "modules": 1,
+    "mcp_proxy": 0
+   },
+   "P11_return_JSONResponse_4xx": {
+    "lines": 68,
+    "modules": 1,
+    "mcp_proxy": 0
+   },
+   "P12_raise_HTTPException": {
+    "lines": 0,
+    "modules": 0,
+    "mcp_proxy": 0
+   },
+   "P14_event_type_blocked": {
+    "lines": 36,
+    "modules": 2,
+    "mcp_proxy": 2
+   },
+   "P15_q_blocked": {
+    "lines": 115,
+    "modules": 8,
+    "mcp_proxy": 9
+   },
+   "P17_METRICS_blocked": {
+    "lines": 84,
+    "modules": 1,
+    "mcp_proxy": 0
+   },
+   "P18_return_line_mentions_block": {
+    "lines": 94,
+    "modules": 12,
+    "mcp_proxy": 16
+   },
+   "P19_block_fn_call": {
+    "lines": 96,
+    "modules": 11,
+    "mcp_proxy": 20
+   },
+   "P20_any_ident_eq_block": {
+    "lines": 188,
+    "modules": 18,
+    "mcp_proxy": 34
+   }
+  },
+  "S3_+services": {
+   "P1_q_block": {
+    "lines": 408,
+    "modules": 24,
+    "mcp_proxy": 57
+   },
+   "P2_q_block_noncompare": {
+    "lines": 275,
+    "modules": 23,
+    "mcp_proxy": 54
+   },
+   "P3_action_eq_block": {
+    "lines": 133,
+    "modules": 17,
+    "mcp_proxy": 0
+   },
+   "P4_decision_eq_block": {
+    "lines": 44,
+    "modules": 4,
+    "mcp_proxy": 34
+   },
+   "P5_dict_action_block": {
+    "lines": 12,
+    "modules": 4,
+    "mcp_proxy": 0
+   },
+   "P6_return_block": {
+    "lines": 7,
+    "modules": 4,
+    "mcp_proxy": 2
+   },
+   "P7_status_403": {
+    "lines": 101,
+    "modules": 6,
+    "mcp_proxy": 9
+   },
+   "P8_build_block_response": {
+    "lines": 20,
+    "modules": 1,
+    "mcp_proxy": 0
+   },
+   "P9_blocked_true": {
+    "lines": 26,
+    "modules": 5,
+    "mcp_proxy": 6
+   },
+   "P10_should_block_true": {
+    "lines": 4,
+    "modules": 1,
+    "mcp_proxy": 0
+   },
+   "P11_return_JSONResponse_4xx": {
+    "lines": 68,
+    "modules": 1,
+    "mcp_proxy": 0
+   },
+   "P12_raise_HTTPException": {
+    "lines": 10,
+    "modules": 2,
+    "mcp_proxy": 0
+   },
+   "P14_event_type_blocked": {
+    "lines": 36,
+    "modules": 2,
+    "mcp_proxy": 2
+   },
+   "P15_q_blocked": {
+    "lines": 115,
+    "modules": 8,
+    "mcp_proxy": 9
+   },
+   "P17_METRICS_blocked": {
+    "lines": 84,
+    "modules": 1,
+    "mcp_proxy": 0
+   },
+   "P18_return_line_mentions_block": {
+    "lines": 94,
+    "modules": 12,
+    "mcp_proxy": 16
+   },
+   "P19_block_fn_call": {
+    "lines": 98,
+    "modules": 12,
+    "mcp_proxy": 20
+   },
+   "P20_any_ident_eq_block": {
+    "lines": 188,
+    "modules": 18,
+    "mcp_proxy": 34
+   }
+  },
+  "S4_all_runtime(gateway,shared,services,workers,control)": {
+   "P1_q_block": {
+    "lines": 724,
+    "modules": 61,
+    "mcp_proxy": 57
+   },
+   "P2_q_block_noncompare": {
+    "lines": 560,
+    "modules": 57,
+    "mcp_proxy": 54
+   },
+   "P3_action_eq_block": {
+    "lines": 158,
+    "modules": 29,
+    "mcp_proxy": 0
+   },
+   "P4_decision_eq_block": {
+    "lines": 52,
+    "modules": 5,
+    "mcp_proxy": 34
+   },
+   "P5_dict_action_block": {
+    "lines": 150,
+    "modules": 15,
+    "mcp_proxy": 0
+   },
+   "P6_return_block": {
+    "lines": 7,
+    "modules": 4,
+    "mcp_proxy": 2
+   },
+   "P7_status_403": {
+    "lines": 111,
+    "modules": 11,
+    "mcp_proxy": 9
+   },
+   "P8_build_block_response": {
+    "lines": 20,
+    "modules": 1,
+    "mcp_proxy": 0
+   },
+   "P9_blocked_true": {
+    "lines": 26,
+    "modules": 5,
+    "mcp_proxy": 6
+   },
+   "P10_should_block_true": {
+    "lines": 4,
+    "modules": 1,
+    "mcp_proxy": 0
+   },
+   "P11_return_JSONResponse_4xx": {
+    "lines": 68,
+    "modules": 1,
+    "mcp_proxy": 0
+   },
+   "P12_raise_HTTPException": {
+    "lines": 10,
+    "modules": 2,
+    "mcp_proxy": 0
+   },
+   "P14_event_type_blocked": {
+    "lines": 36,
+    "modules": 2,
+    "mcp_proxy": 2
+   },
+   "P15_q_blocked": {
+    "lines": 204,
+    "modules": 21,
+    "mcp_proxy": 9
+   },
+   "P17_METRICS_blocked": {
+    "lines": 84,
+    "modules": 1,
+    "mcp_proxy": 0
+   },
+   "P18_return_line_mentions_block": {
+    "lines": 108,
+    "modules": 19,
+    "mcp_proxy": 16
+   },
+   "P19_block_fn_call": {
+    "lines": 105,
+    "modules": 15,
+    "mcp_proxy": 20
+   },
+   "P20_any_ident_eq_block": {
+    "lines": 229,
+    "modules": 36,
+    "mcp_proxy": 34
+   }
+  }
+ },
+ "exact_283_25": [],
+ "near_hits": [
+  {
+   "scope": "S1_gateway_pkg",
+   "combo": [
+    "P18_return_line_mentions_block",
+    "P20_any_ident_eq_block"
+   ],
+   "lines": 282,
+   "modules": 22,
+   "mcp_proxy": 50
+  },
+  {
+   "scope": "S1_gateway_pkg",
+   "combo": [
+    "P19_block_fn_call",
+    "P20_any_ident_eq_block"
+   ],
+   "lines": 281,
+   "modules": 22,
+   "mcp_proxy": 54
+  },
+  {
+   "scope": "S1_gateway_pkg",
+   "combo": [
+    "P1_q_block",
+    "P7_status_403",
+    "P9_blocked_true"
+   ],
+   "lines": 532,
+   "modules": 26,
+   "mcp_proxy": 72
+  },
+  {
+   "scope": "S1_gateway_pkg",
+   "combo": [
+    "P1_q_block",
+    "P9_blocked_true",
+    "P15_q_blocked"
+   ],
+   "lines": 545,
+   "modules": 25,
+   "mcp_proxy": 72
+  },
+  {
+   "scope": "S1_gateway_pkg",
+   "combo": [
+    "P1_q_block",
+    "P14_event_type_blocked",
+    "P18_return_line_mentions_block"
+   ],
+   "lines": 523,
+   "modules": 25,
+   "mcp_proxy": 72
+  },
+  {
+   "scope": "S1_gateway_pkg",
+   "combo": [
+    "P2_q_block_noncompare",
+    "P3_action_eq_block",
+    "P10_should_block_true"
+   ],
+   "lines": 280,
+   "modules": 23,
+   "mcp_proxy": 54
+  },
+  {
+   "scope": "S1_gateway_pkg",
+   "combo": [
+    "P2_q_block_noncompare",
+    "P5_dict_action_block",
+    "P10_should_block_true"
+   ],
+   "lines": 280,
+   "modules": 23,
+   "mcp_proxy": 54
+  },
+  {
+   "scope": "S1_gateway_pkg",
+   "combo": [
+    "P2_q_block_noncompare",
+    "P7_status_403",
+    "P15_q_blocked"
+   ],
+   "lines": 487,
+   "modules": 27,
+   "mcp_proxy": 72
+  },
+  {
+   "scope": "S1_gateway_pkg",
+   "combo": [
+    "P2_q_block_noncompare",
+    "P9_blocked_true",
+    "P18_return_line_mentions_block"
+   ],
+   "lines": 378,
+   "modules": 24,
+   "mcp_proxy": 72
+  },
+  {
+   "scope": "S1_gateway_pkg",
+   "combo": [
+    "P2_q_block_noncompare",
+    "P10_should_block_true",
+    "P20_any_ident_eq_block"
+   ],
+   "lines": 281,
+   "modules": 23,
+   "mcp_proxy": 54
+  },
+  {
+   "scope": "S1_gateway_pkg",
+   "combo": [
+    "P3_action_eq_block",
+    "P11_return_JSONResponse_4xx",
+    "P17_METRICS_blocked"
+   ],
+   "lines": 285,
+   "modules": 17,
+   "mcp_proxy": 0
+  },
+  {
+   "scope": "S1_gateway_pkg",
+   "combo": [
+    "P3_action_eq_block",
+    "P14_event_type_blocked",
+    "P15_q_blocked"
+   ],
+   "lines": 284,
+   "modules": 21,
+   "mcp_proxy": 11
+  },
+  {
+   "scope": "S1_gateway_pkg",
+   "combo": [
+    "P3_action_eq_block",
+    "P18_return_line_mentions_block",
+    "P20_any_ident_eq_block"
+   ],
+   "lines": 282,
+   "modules": 22,
+   "mcp_proxy": 50
+  },
+  {
+   "scope": "S1_gateway_pkg",
+   "combo": [
+    "P3_action_eq_block",
+    "P19_block_fn_call",
+    "P20_any_ident_eq_block"
+   ],
+   "lines": 281,
+   "modules": 22,
+   "mcp_proxy": 54
+  },
+  {
+   "scope": "S1_gateway_pkg",
+   "combo": [
+    "P4_decision_eq_block",
+    "P18_return_line_mentions_block",
+    "P20_any_ident_eq_block"
+   ],
+   "lines": 282,
+   "modules": 22,
+   "mcp_proxy": 50
+  },
+  {
+   "scope": "S1_gateway_pkg",
+   "combo": [
+    "P4_decision_eq_block",
+    "P19_block_fn_call",
+    "P20_any_ident_eq_block"
+   ],
+   "lines": 281,
+   "modules": 22,
+   "mcp_proxy": 54
+  },
+  {
+   "scope": "S1_gateway_pkg",
+   "combo": [
+    "P5_dict_action_block",
+    "P17_METRICS_blocked",
+    "P20_any_ident_eq_block"
+   ],
+   "lines": 284,
+   "modules": 19,
+   "mcp_proxy": 34
+  },
+  {
+   "scope": "S1_gateway_pkg",
+   "combo": [
+    "P6_return_block",
+    "P18_return_line_mentions_block",
+    "P20_any_ident_eq_block"
+   ],
+   "lines": 282,
+   "modules": 22,
+   "mcp_proxy": 50
+  },
+  {
+   "scope": "S1_gateway_pkg",
+   "combo": [
+    "P8_build_block_response",
+    "P18_return_line_mentions_block",
+    "P20_any_ident_eq_block"
+   ],
+   "lines": 284,
+   "modules": 22,
+   "mcp_proxy": 50
+  },
+  {
+   "scope": "S1_gateway_pkg",
+   "combo": [
+    "P8_build_block_response",
+    "P19_block_fn_call",
+    "P20_any_ident_eq_block"
+   ],
+   "lines": 281,
+   "modules": 22,
+   "mcp_proxy": 54
+  },
+  {
+   "scope": "S1_gateway_pkg",
+   "combo": [
+    "P9_blocked_true",
+    "P11_return_JSONResponse_4xx",
+    "P20_any_ident_eq_block"
+   ],
+   "lines": 282,
+   "modules": 19,
+   "mcp_proxy": 40
+  },
+  {
+   "scope": "S1_gateway_pkg",
+   "combo": [
+    "P10_should_block_true",
+    "P18_return_line_mentions_block",
+    "P20_any_ident_eq_block"
+   ],
+   "lines": 285,
+   "modules": 22,
+   "mcp_proxy": 50
+  },
+  {
+   "scope": "S1_gateway_pkg",
+   "combo": [
+    "P10_should_block_true",
+    "P19_block_fn_call",
+    "P20_any_ident_eq_block"
+   ],
+   "lines": 285,
+   "modules": 23,
+   "mcp_proxy": 54
+  },
+  {
+   "scope": "S1_gateway_pkg",
+   "combo": [
+    "P12_raise_HTTPException",
+    "P18_return_line_mentions_block",
+    "P20_any_ident_eq_block"
+   ],
+   "lines": 282,
+   "modules": 22,
+   "mcp_proxy": 50
+  },
+  {
+   "scope": "S1_gateway_pkg",
+   "combo": [
+    "P12_raise_HTTPException",
+    "P19_block_fn_call",
+    "P20_any_ident_eq_block"
+   ],
+   "lines": 281,
+   "modules": 22,
+   "mcp_proxy": 54
+  },
+  {
+   "scope": "S1_gateway_pkg",
+   "combo": [
+    "P15_q_blocked",
+    "P18_return_line_mentions_block",
+    "P19_block_fn_call"
+   ],
+   "lines": 282,
+   "modules": 17,
+   "mcp_proxy": 45
+  },
+  {
+   "scope": "S2_gateway_pkg+shared",
+   "combo": [
+    "P18_return_line_mentions_block",
+    "P20_any_ident_eq_block"
+   ],
+   "lines": 282,
+   "modules": 22,
+   "mcp_proxy": 50
+  },
+  {
+   "scope": "S2_gateway_pkg+shared",
+   "combo": [
+    "P19_block_fn_call",
+    "P20_any_ident_eq_block"
+   ],
+   "lines": 283,
+   "modules": 23,
+   "mcp_proxy": 54
+  },
+  {
+   "scope": "S2_gateway_pkg+shared",
+   "combo": [
+    "P1_q_block",
+    "P7_status_403",
+    "P9_blocked_true"
+   ],
+   "lines": 533,
+   "modules": 27,
+   "mcp_proxy": 72
+  },
+  {
+   "scope": "S2_gateway_pkg+shared",
+   "combo": [
+    "P1_q_block",
+    "P9_blocked_true",
+    "P15_q_blocked"
+   ],
+   "lines": 546,
+   "modules": 26,
+   "mcp_proxy": 72
+  },
+  {
+   "scope": "S2_gateway_pkg+shared",
+   "combo": [
+    "P1_q_block",
+    "P14_event_type_blocked",
+    "P18_return_line_mentions_block"
+   ],
+   "lines": 524,
+   "modules": 26,
+   "mcp_proxy": 72
+  },
+  {
+   "scope": "S2_gateway_pkg+shared",
+   "combo": [
+    "P2_q_block_noncompare",
+    "P3_action_eq_block",
+    "P10_should_block_true"
+   ],
+   "lines": 281,
+   "modules": 24,
+   "mcp_proxy": 54
+  },
+  {
+   "scope": "S2_gateway_pkg+shared",
+   "combo": [
+    "P2_q_block_noncompare",
+    "P4_decision_eq_block",
+    "P10_should_block_true"
+   ],
+   "lines": 280,
+   "modules": 24,
+   "mcp_proxy": 54
+  },
+  {
+   "scope": "S2_gateway_pkg+shared",
+   "combo": [
+    "P2_q_block_noncompare",
+    "P5_dict_action_block",
+    "P10_should_block_true"
+   ],
+   "lines": 281,
+   "modules": 24,
+   "mcp_proxy": 54
+  },
+  {
+   "scope": "S2_gateway_pkg+shared",
+   "combo": [
+    "P2_q_block_noncompare",
+    "P5_dict_action_block",
+    "P20_any_ident_eq_block"
+   ],
+   "lines": 280,
+   "modules": 23,
+   "mcp_proxy": 54
+  },
+  {
+   "scope": "S2_gateway_pkg+shared",
+   "combo": [
+    "P2_q_block_noncompare",
+    "P7_status_403",
+    "P15_q_blocked"
+   ],
+   "lines": 488,
+   "modules": 28,
+   "mcp_proxy": 72
+  },
+  {
+   "scope": "S2_gateway_pkg+shared",
+   "combo": [
+    "P2_q_block_noncompare",
+    "P9_blocked_true",
+    "P18_return_line_mentions_block"
+   ],
+   "lines": 379,
+   "modules": 25,
+   "mcp_proxy": 72
+  },
+  {
+   "scope": "S2_gateway_pkg+shared",
+   "combo": [
+    "P2_q_block_noncompare",
+    "P10_should_block_true",
+    "P20_any_ident_eq_block"
+   ],
+   "lines": 282,
+   "modules": 24,
+   "mcp_proxy": 54
+  },
+  {
+   "scope": "S2_gateway_pkg+shared",
+   "combo": [
+    "P3_action_eq_block",
+    "P11_return_JSONResponse_4xx",
+    "P17_METRICS_blocked"
+   ],
+   "lines": 285,
+   "modules": 17,
+   "mcp_proxy": 0
+  },
+  {
+   "scope": "S2_gateway_pkg+shared",
+   "combo": [
+    "P3_action_eq_block",
+    "P14_event_type_blocked",
+    "P15_q_blocked"
+   ],
+   "lines": 284,
+   "modules": 21,
+   "mcp_proxy": 11
+  },
+  {
+   "scope": "S2_gateway_pkg+shared",
+   "combo": [
+    "P3_action_eq_block",
+    "P18_return_line_mentions_block",
+    "P19_block_fn_call"
+   ],
+   "lines": 302,
+   "modules": 25,
+   "mcp_proxy": 36
+  },
+  {
+   "scope": "S2_gateway_pkg+shared",
+   "combo": [
+    "P3_action_eq_block",
+    "P18_return_line_mentions_block",
+    "P20_any_ident_eq_block"
+   ],
+   "lines": 282,
+   "modules": 22,
+   "mcp_proxy": 50
+  },
+  {
+   "scope": "S2_gateway_pkg+shared",
+   "combo": [
+    "P3_action_eq_block",
+    "P19_block_fn_call",
+    "P20_any_ident_eq_block"
+   ],
+   "lines": 283,
+   "modules": 23,
+   "mcp_proxy": 54
+  },
+  {
+   "scope": "S2_gateway_pkg+shared",
+   "combo": [
+    "P4_decision_eq_block",
+    "P18_return_line_mentions_block",
+    "P20_any_ident_eq_block"
+   ],
+   "lines": 282,
+   "modules": 22,
+   "mcp_proxy": 50
+  },
+  {
+   "scope": "S2_gateway_pkg+shared",
+   "combo": [
+    "P4_decision_eq_block",
+    "P19_block_fn_call",
+    "P20_any_ident_eq_block"
+   ],
+   "lines": 283,
+   "modules": 23,
+   "mcp_proxy": 54
+  },
+  {
+   "scope": "S2_gateway_pkg+shared",
+   "combo": [
+    "P5_dict_action_block",
+    "P17_METRICS_blocked",
+    "P20_any_ident_eq_block"
+   ],
+   "lines": 284,
+   "modules": 19,
+   "mcp_proxy": 34
+  },
+  {
+   "scope": "S2_gateway_pkg+shared",
+   "combo": [
+    "P6_return_block",
+    "P18_return_line_mentions_block",
+    "P20_any_ident_eq_block"
+   ],
+   "lines": 282,
+   "modules": 22,
+   "mcp_proxy": 50
+  },
+  {
+   "scope": "S2_gateway_pkg+shared",
+   "combo": [
+    "P8_build_block_response",
+    "P18_return_line_mentions_block",
+    "P20_any_ident_eq_block"
+   ],
+   "lines": 284,
+   "modules": 22,
+   "mcp_proxy": 50
+  },
+  {
+   "scope": "S2_gateway_pkg+shared",
+   "combo": [
+    "P8_build_block_response",
+    "P19_block_fn_call",
+    "P20_any_ident_eq_block"
+   ],
+   "lines": 283,
+   "modules": 23,
+   "mcp_proxy": 54
+  },
+  {
+   "scope": "S2_gateway_pkg+shared",
+   "combo": [
+    "P9_blocked_true",
+    "P11_return_JSONResponse_4xx",
+    "P20_any_ident_eq_block"
+   ],
+   "lines": 282,
+   "modules": 19,
+   "mcp_proxy": 40
+  },
+  {
+   "scope": "S2_gateway_pkg+shared",
+   "combo": [
+    "P10_should_block_true",
+    "P18_return_line_mentions_block",
+    "P20_any_ident_eq_block"
+   ],
+   "lines": 285,
+   "modules": 22,
+   "mcp_proxy": 50
+  },
+  {
+   "scope": "S2_gateway_pkg+shared",
+   "combo": [
+    "P12_raise_HTTPException",
+    "P18_return_line_mentions_block",
+    "P20_any_ident_eq_block"
+   ],
+   "lines": 282,
+   "modules": 22,
+   "mcp_proxy": 50
+  },
+  {
+   "scope": "S2_gateway_pkg+shared",
+   "combo": [
+    "P12_raise_HTTPException",
+    "P19_block_fn_call",
+    "P20_any_ident_eq_block"
+   ],
+   "lines": 283,
+   "modules": 23,
+   "mcp_proxy": 54
+  },
+  {
+   "scope": "S2_gateway_pkg+shared",
+   "combo": [
+    "P15_q_blocked",
+    "P18_return_line_mentions_block",
+    "P19_block_fn_call"
+   ],
+   "lines": 284,
+   "modules": 18,
+   "mcp_proxy": 45
+  },
+  {
+   "scope": "S3_+services",
+   "combo": [
+    "P2_q_block_noncompare",
+    "P12_raise_HTTPException"
+   ],
+   "lines": 285,
+   "modules": 25,
+   "mcp_proxy": 54
+  },
+  {
+   "scope": "S3_+services",
+   "combo": [
+    "P18_return_line_mentions_block",
+    "P20_any_ident_eq_block"
+   ],
+   "lines": 282,
+   "modules": 22,
+   "mcp_proxy": 50
+  },
+  {
+   "scope": "S3_+services",
+   "combo": [
+    "P19_block_fn_call",
+    "P20_any_ident_eq_block"
+   ],
+   "lines": 285,
+   "modules": 24,
+   "mcp_proxy": 54
+  },
+  {
+   "scope": "S3_+services",
+   "combo": [
+    "P1_q_block",
+    "P7_status_403",
+    "P9_blocked_true"
+   ],
+   "lines": 533,
+   "modules": 27,
+   "mcp_proxy": 72
+  },
+  {
+   "scope": "S3_+services",
+   "combo": [
+    "P1_q_block",
+    "P9_blocked_true",
+    "P15_q_blocked"
+   ],
+   "lines": 546,
+   "modules": 26,
+   "mcp_proxy": 72
+  },
+  {
+   "scope": "S3_+services",
+   "combo": [
+    "P1_q_block",
+    "P14_event_type_blocked",
+    "P18_return_line_mentions_block"
+   ],
+   "lines": 524,
+   "modules": 26,
+   "mcp_proxy": 72
+  },
+  {
+   "scope": "S3_+services",
+   "combo": [
+    "P2_q_block_noncompare",
+    "P3_action_eq_block",
+    "P10_should_block_true"
+   ],
+   "lines": 281,
+   "modules": 24,
+   "mcp_proxy": 54
+  },
+  {
+   "scope": "S3_+services",
+   "combo": [
+    "P2_q_block_noncompare",
+    "P3_action_eq_block",
+    "P12_raise_HTTPException"
+   ],
+   "lines": 287,
+   "modules": 25,
+   "mcp_proxy": 54
+  },
+  {
+   "scope": "S3_+services",
+   "combo": [
+    "P2_q_block_noncompare",
+    "P4_decision_eq_block",
+    "P10_should_block_true"
+   ],
+   "lines": 280,
+   "modules": 24,
+   "mcp_proxy": 54
+  },
+  {
+   "scope": "S3_+services",
+   "combo": [
+    "P2_q_block_noncompare",
+    "P4_decision_eq_block",
+    "P12_raise_HTTPException"
+   ],
+   "lines": 286,
+   "modules": 25,
+   "mcp_proxy": 54
+  },
+  {
+   "scope": "S3_+services",
+   "combo": [
+    "P2_q_block_noncompare",
+    "P5_dict_action_block",
+    "P10_should_block_true"
+   ],
+   "lines": 281,
+   "modules": 24,
+   "mcp_proxy": 54
+  },
+  {
+   "scope": "S3_+services",
+   "combo": [
+    "P2_q_block_noncompare",
+    "P5_dict_action_block",
+    "P12_raise_HTTPException"
+   ],
+   "lines": 287,
+   "modules": 25,
+   "mcp_proxy": 54
+  },
+  {
+   "scope": "S3_+services",
+   "combo": [
+    "P2_q_block_noncompare",
+    "P5_dict_action_block",
+    "P20_any_ident_eq_block"
+   ],
+   "lines": 280,
+   "modules": 23,
+   "mcp_proxy": 54
+  },
+  {
+   "scope": "S3_+services",
+   "combo": [
+    "P2_q_block_noncompare",
+    "P6_return_block",
+    "P12_raise_HTTPException"
+   ],
+   "lines": 285,
+   "modules": 25,
+   "mcp_proxy": 54
+  },
+  {
+   "scope": "S3_+services",
+   "combo": [
+    "P2_q_block_noncompare",
+    "P7_status_403",
+    "P15_q_blocked"
+   ],
+   "lines": 488,
+   "modules": 28,
+   "mcp_proxy": 72
+  },
+  {
+   "scope": "S3_+services",
+   "combo": [
+    "P2_q_block_noncompare",
+    "P8_build_block_response",
+    "P12_raise_HTTPException"
+   ],
+   "lines": 305,
+   "modules": 25,
+   "mcp_proxy": 54
+  },
+  {
+   "scope": "S3_+services",
+   "combo": [
+    "P2_q_block_noncompare",
+    "P9_blocked_true",
+    "P12_raise_HTTPException"
+   ],
+   "lines": 311,
+   "modules": 25,
+   "mcp_proxy": 60
+  },
+  {
+   "scope": "S3_+services",
+   "combo": [
+    "P2_q_block_noncompare",
+    "P9_blocked_true",
+    "P18_return_line_mentions_block"
+   ],
+   "lines": 379,
+   "modules": 25,
+   "mcp_proxy": 72
+  },
+  {
+   "scope": "S3_+services",
+   "combo": [
+    "P2_q_block_noncompare",
+    "P10_should_block_true",
+    "P20_any_ident_eq_block"
+   ],
+   "lines": 282,
+   "modules": 24,
+   "mcp_proxy": 54
+  },
+  {
+   "scope": "S3_+services",
+   "combo": [
+    "P2_q_block_noncompare",
+    "P12_raise_HTTPException",
+    "P20_any_ident_eq_block"
+   ],
+   "lines": 288,
+   "modules": 25,
+   "mcp_proxy": 54
+  },
+  {
+   "scope": "S3_+services",
+   "combo": [
+    "P3_action_eq_block",
+    "P11_return_JSONResponse_4xx",
+    "P17_METRICS_blocked"
+   ],
+   "lines": 285,
+   "modules": 17,
+   "mcp_proxy": 0
+  },
+  {
+   "scope": "S3_+services",
+   "combo": [
+    "P3_action_eq_block",
+    "P14_event_type_blocked",
+    "P15_q_blocked"
+   ],
+   "lines": 284,
+   "modules": 21,
+   "mcp_proxy": 11
+  },
+  {
+   "scope": "S3_+services",
+   "combo": [
+    "P3_action_eq_block",
+    "P18_return_line_mentions_block",
+    "P20_any_ident_eq_block"
+   ],
+   "lines": 282,
+   "modules": 22,
+   "mcp_proxy": 50
+  },
+  {
+   "scope": "S3_+services",
+   "combo": [
+    "P3_action_eq_block",
+    "P19_block_fn_call",
+    "P20_any_ident_eq_block"
+   ],
+   "lines": 285,
+   "modules": 24,
+   "mcp_proxy": 54
+  },
+  {
+   "scope": "S3_+services",
+   "combo": [
+    "P4_decision_eq_block",
+    "P18_return_line_mentions_block",
+    "P20_any_ident_eq_block"
+   ],
+   "lines": 282,
+   "modules": 22,
+   "mcp_proxy": 50
+  },
+  {
+   "scope": "S3_+services",
+   "combo": [
+    "P4_decision_eq_block",
+    "P19_block_fn_call",
+    "P20_any_ident_eq_block"
+   ],
+   "lines": 285,
+   "modules": 24,
+   "mcp_proxy": 54
+  },
+  {
+   "scope": "S3_+services",
+   "combo": [
+    "P5_dict_action_block",
+    "P17_METRICS_blocked",
+    "P20_any_ident_eq_block"
+   ],
+   "lines": 284,
+   "modules": 19,
+   "mcp_proxy": 34
+  },
+  {
+   "scope": "S3_+services",
+   "combo": [
+    "P6_return_block",
+    "P18_return_line_mentions_block",
+    "P20_any_ident_eq_block"
+   ],
+   "lines": 282,
+   "modules": 22,
+   "mcp_proxy": 50
+  },
+  {
+   "scope": "S3_+services",
+   "combo": [
+    "P6_return_block",
+    "P19_block_fn_call",
+    "P20_any_ident_eq_block"
+   ],
+   "lines": 292,
+   "modules": 25,
+   "mcp_proxy": 56
+  },
+  {
+   "scope": "S3_+services",
+   "combo": [
+    "P8_build_block_response",
+    "P18_return_line_mentions_block",
+    "P20_any_ident_eq_block"
+   ],
+   "lines": 284,
+   "modules": 22,
+   "mcp_proxy": 50
+  },
+  {
+   "scope": "S3_+services",
+   "combo": [
+    "P8_build_block_response",
+    "P19_block_fn_call",
+    "P20_any_ident_eq_block"
+   ],
+   "lines": 285,
+   "modules": 24,
+   "mcp_proxy": 54
+  },
+  {
+   "scope": "S3_+services",
+   "combo": [
+    "P9_blocked_true",
+    "P11_return_JSONResponse_4xx",
+    "P20_any_ident_eq_block"
+   ],
+   "lines": 282,
+   "modules": 19,
+   "mcp_proxy": 40
+  },
+  {
+   "scope": "S3_+services",
+   "combo": [
+    "P10_should_block_true",
+    "P18_return_line_mentions_block",
+    "P20_any_ident_eq_block"
+   ],
+   "lines": 285,
+   "modules": 22,
+   "mcp_proxy": 50
+  },
+  {
+   "scope": "S3_+services",
+   "combo": [
+    "P10_should_block_true",
+    "P19_block_fn_call",
+    "P20_any_ident_eq_block"
+   ],
+   "lines": 289,
+   "modules": 25,
+   "mcp_proxy": 54
+  },
+  {
+   "scope": "S3_+services",
+   "combo": [
+    "P11_return_JSONResponse_4xx",
+    "P15_q_blocked",
+    "P19_block_fn_call"
+   ],
+   "lines": 281,
+   "modules": 15,
+   "mcp_proxy": 29
+  },
+  {
+   "scope": "S3_+services",
+   "combo": [
+    "P12_raise_HTTPException",
+    "P17_METRICS_blocked",
+    "P20_any_ident_eq_block"
+   ],
+   "lines": 282,
+   "modules": 20,
+   "mcp_proxy": 34
+  },
+  {
+   "scope": "S3_+services",
+   "combo": [
+    "P15_q_blocked",
+    "P18_return_line_mentions_block",
+    "P19_block_fn_call"
+   ],
+   "lines": 286,
+   "modules": 19,
+   "mcp_proxy": 45
+  },
+  {
+   "scope": "S4_all_runtime(gateway,shared,services,workers,control)",
+   "combo": [
+    "P1_q_block",
+    "P7_status_403",
+    "P9_blocked_true"
+   ],
+   "lines": 857,
+   "modules": 66,
+   "mcp_proxy": 72
+  },
+  {
+   "scope": "S4_all_runtime(gateway,shared,services,workers,control)",
+   "combo": [
+    "P1_q_block",
+    "P9_blocked_true",
+    "P15_q_blocked"
+   ],
+   "lines": 951,
+   "modules": 70,
+   "mcp_proxy": 72
+  },
+  {
+   "scope": "S4_all_runtime(gateway,shared,services,workers,control)",
+   "combo": [
+    "P1_q_block",
+    "P14_event_type_blocked",
+    "P18_return_line_mentions_block"
+   ],
+   "lines": 854,
+   "modules": 69,
+   "mcp_proxy": 72
+  },
+  {
+   "scope": "S4_all_runtime(gateway,shared,services,workers,control)",
+   "combo": [
+    "P2_q_block_noncompare",
+    "P7_status_403",
+    "P15_q_blocked"
+   ],
+   "lines": 870,
+   "modules": 72,
+   "mcp_proxy": 72
+  },
+  {
+   "scope": "S4_all_runtime(gateway,shared,services,workers,control)",
+   "combo": [
+    "P2_q_block_noncompare",
+    "P9_blocked_true",
+    "P18_return_line_mentions_block"
+   ],
+   "lines": 678,
+   "modules": 65,
+   "mcp_proxy": 72
+  },
+  {
+   "scope": "S4_all_runtime(gateway,shared,services,workers,control)",
+   "combo": [
+    "P3_action_eq_block",
+    "P7_status_403",
+    "P8_build_block_response"
+   ],
+   "lines": 281,
+   "modules": 38,
+   "mcp_proxy": 9
+  },
+  {
+   "scope": "S4_all_runtime(gateway,shared,services,workers,control)",
+   "combo": [
+    "P3_action_eq_block",
+    "P9_blocked_true",
+    "P18_return_line_mentions_block"
+   ],
+   "lines": 286,
+   "modules": 40,
+   "mcp_proxy": 20
+  },
+  {
+   "scope": "S4_all_runtime(gateway,shared,services,workers,control)",
+   "combo": [
+    "P4_decision_eq_block",
+    "P5_dict_action_block",
+    "P17_METRICS_blocked"
+   ],
+   "lines": 286,
+   "modules": 19,
+   "mcp_proxy": 34
+  },
+  {
+   "scope": "S4_all_runtime(gateway,shared,services,workers,control)",
+   "combo": [
+    "P4_decision_eq_block",
+    "P9_blocked_true",
+    "P15_q_blocked"
+   ],
+   "lines": 282,
+   "modules": 24,
+   "mcp_proxy": 49
+  },
+  {
+   "scope": "S4_all_runtime(gateway,shared,services,workers,control)",
+   "combo": [
+    "P4_decision_eq_block",
+    "P12_raise_HTTPException",
+    "P15_q_blocked"
+   ],
+   "lines": 266,
+   "modules": 25,
+   "mcp_proxy": 43
+  },
+  {
+   "scope": "S4_all_runtime(gateway,shared,services,workers,control)",
+   "combo": [
+    "P5_dict_action_block",
+    "P7_status_403",
+    "P10_should_block_true"
+   ],
+   "lines": 265,
+   "modules": 25,
+   "mcp_proxy": 9
+  },
+  {
+   "scope": "S4_all_runtime(gateway,shared,services,workers,control)",
+   "combo": [
+    "P5_dict_action_block",
+    "P9_blocked_true",
+    "P19_block_fn_call"
+   ],
+   "lines": 281,
+   "modules": 29,
+   "mcp_proxy": 26
+  },
+  {
+   "scope": "S4_all_runtime(gateway,shared,services,workers,control)",
+   "combo": [
+    "P8_build_block_response",
+    "P14_event_type_blocked",
+    "P20_any_ident_eq_block"
+   ],
+   "lines": 285,
+   "modules": 36,
+   "mcp_proxy": 36
+  },
+  {
+   "scope": "S4_all_runtime(gateway,shared,services,workers,control)",
+   "combo": [
+    "P11_return_JSONResponse_4xx",
+    "P12_raise_HTTPException",
+    "P15_q_blocked"
+   ],
+   "lines": 282,
+   "modules": 23,
+   "mcp_proxy": 9
+  },
+  {
+   "scope": "S4_all_runtime(gateway,shared,services,workers,control)",
+   "combo": [
+    "P11_return_JSONResponse_4xx",
+    "P18_return_line_mentions_block",
+    "P19_block_fn_call"
+   ],
+   "lines": 259,
+   "modules": 25,
+   "mcp_proxy": 36
+  },
+  {
+   "scope": "S4_all_runtime(gateway,shared,services,workers,control)",
+   "combo": [
+    "P17_METRICS_blocked",
+    "P18_return_line_mentions_block",
+    "P19_block_fn_call"
+   ],
+   "lines": 275,
+   "modules": 25,
+   "mcp_proxy": 36
+  }
+ ],
+ "n_near_hits": 107
+}

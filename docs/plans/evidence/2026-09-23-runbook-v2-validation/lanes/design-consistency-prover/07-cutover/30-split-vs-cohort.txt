@@ -1,0 +1,4 @@
+developer_traffic prompts where v1 and v2 disagree: 25 of 75
+w=0.05: tenants that got BOTH block and allow for the IDENTICAL prompt -> per-request split 43/200, per-tenant cohort 0/200
+w=0.25: tenants that got BOTH block and allow for the IDENTICAL prompt -> per-request split 130/200, per-tenant cohort 0/200
+w=0.50: tenants that got BOTH block and allow for the IDENTICAL prompt -> per-request split 158/200, per-tenant cohort 0/200

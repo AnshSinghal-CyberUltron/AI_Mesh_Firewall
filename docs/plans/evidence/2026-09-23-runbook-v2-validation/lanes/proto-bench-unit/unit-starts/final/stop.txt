@@ -1,0 +1,4 @@
+118701 bash -c bash ~/rv/rvproto/deploy/stop_unit.sh; sleep 2; pgrep -af rvproto.serve || echo "rvproto stopped"; nvidia-smi --query-gpu=index,memory.used --format=csv
+index, memory.used [MiB]
+0, 0 MiB
+1, 0 MiB

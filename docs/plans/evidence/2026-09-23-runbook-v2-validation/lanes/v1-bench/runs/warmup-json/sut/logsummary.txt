@@ -1,0 +1,6 @@
+gateway_lines 12586
+gateway_error_lines 0
+gateway_warning_lines 0
+worker_timeouts 0
+worker_boots 0
+control_error_lines 0

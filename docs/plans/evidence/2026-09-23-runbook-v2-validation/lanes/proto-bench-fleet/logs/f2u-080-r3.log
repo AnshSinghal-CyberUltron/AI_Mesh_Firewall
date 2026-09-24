@@ -1,0 +1,20 @@
+14:51:26 f2u-080-r3: olg started on rv-pbf-lg-1 rv-pbf-lg-2 rv-pbf-lg-3 (rate 26.666666666666668 each, start-at 1790175110070, mode sut, targets http://10.146.0.10:8080)
+[rv-pbf-lg-1] 2026/09/23 14:58:27 done: scheduled=10000 recorded=10000 ok=9841 errors=map[http_403:156 http_503:3] drops=0 late_p99=107us max=346us cpu_busy_max=15.8%
+[rv-pbf-lg-2] 2026/09/23 14:58:27 done: scheduled=10000 recorded=10000 ok=9842 errors=map[http_403:157 http_503:1] drops=0 late_p99=107us max=204us cpu_busy_max=16.0%
+[rv-pbf-lg-3] 2026/09/23 14:58:27 done: scheduled=10000 recorded=10000 ok=9841 errors=map[http_403:159] drops=0 late_p99=110us max=261us cpu_busy_max=16.8%
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-bench-fleet/scripts/pbf_analyze.py", line 373, in <module>
+    raise SystemExit(main())
+                     ~~~~^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-bench-fleet/scripts/pbf_analyze.py", line 322, in main
+    s = P.classify(run, a.mode, stages, a.corpus, a.policy, a.slo_ms, a.err_budget, a.drop_ms)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-bench-fleet/scripts/pbu_analyze_copy.py", line 163, in classify
+    k, m, reasons, saf = categorize(c, p, calls, args, exp, stages_req, nonce[c.get("nonce")] > 1,
+                         ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                                    mode, policy)
+                                    ^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-bench-fleet/scripts/pbu_analyze_copy.py", line 72, in categorize
+    outcome, reasons, m, saf = A.evaluate(c, p, calls, args, exp, stages_req, dup)
+                               ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/harness/analyze.py", line 404, in evaluate
+    disp, stages = extract_disposition(c, args.disposition_source)

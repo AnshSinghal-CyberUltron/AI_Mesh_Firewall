@@ -1,0 +1,5 @@
+gateway pid=2202380 (16-vCPU host, no cgroup quota)
+before HUP: {'cpu_quota': 16.0, 'workers': 12, 'fd_limit': 524288, 'in_flight': 1, 'pool_sizes': {'provider': 12, 'redis': 393207, 'scanner': 12, 'vault': 12}}
+prlimit: RLIMIT_NOFILE lowered to 8 (cpu unchanged: 16 vCPU / 12 workers)
+exit code after SIGHUP: 1
+gateway_v2.runtime.errors.CapacityUnavailable: redis pool below minimum to serve

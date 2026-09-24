@@ -1,0 +1,1457 @@
+
+AI MESH FIREWALL
+100K RPS / <20 msFINAL EXECUTION RUNBOOK
+SSE-correct · OpenAI-SDK compatible · local guard inference · resilient multi-tenant gateway
+EXECUTION STATUS
+This document is the final ordered task list. A task is complete only when its required evidence exists. Source comments, screenshots, isolated model timings, or configured load rates do not count as proof by themselves.
+Prepared 16 September 2026Repository review baseline: branch ansh, commit e95f974dc500414b8f4db28038977fa9bf7deb44
+
+1. Locked final outcome
+Release target
+Build a stateless, organization-controlled AI gateway that uses no platform-owned external AI APIs for enforcement, remains OpenAI-SDK and SSE compatible, sustains 100,000 fully evaluated gateway requests per second at fleet level on the signed qualification workload, and adds less than 20 ms p99 firewall overhead relative to the same provider path without AI Mesh.
+ID
+Outcome
+Release interpretation
+O1
+Zero external guard AI
+No Bedrock / Vertex / Gemini / hosted moderation / remote embedding or judge calls initiated by the firewall. The organization-authorized generation provider is explicitly excluded from this prohibition.
+O2
+<20 ms firewall overhead
+p99, not only p50. Includes auth, tenant checks, rate/kill-switch policy, input checks, local guard queue/inference, routing, output checks, transformations, serialization, and gateway-caused output holdback. Provider compute and client WAN are measured separately.
+O3
+100k RPS
+100,000 successful fully evaluated gateway requests/s at fleet level on a controlled or dedicated provider that can sustain the offered load. Public BYOK completion rate is reported separately because customer-provider quota is outside gateway control.
+O4
+Organization control
+Every supported optional content rule has explicit OFF / MONITOR / ENFORCE semantics and a chosen action. Disabled rules have no hidden enforcement effect. Platform integrity controls such as authentication and tenant isolation remain mandatory.
+O5
+SSE correctness
+Streaming preserves event order and OpenAI-compatible framing, applies output guard semantics without hidden buffering, handles disconnect/backpressure, and reports first-content delay, release lag and completion overhead separately.
+O6
+OpenAI SDK compatibility
+Pinned and current stable OpenAI Python SDK tests pass for supported Chat Completions and Responses behavior, sync and async, streaming and non-streaming, tool calls, errors and cancellation.
+O7
+Industry resilience
+Stateless data plane, versioned local configuration snapshot, bounded queues, graceful drain, circuit breaking, overload shedding, multi-AZ scale-out, and async observability. Hot path avoids avoidable network dependencies.
+2. Non-negotiable measurement definitions
+Firewall overhead is measured against a direct-to-provider control using the same producer, network path class, payload, token schedule and client. Provider time is never guessed from TTFT subtraction.
+For streaming, publish three values: p99 first-content added delay, p99 maximum per-request release lag caused by AI Mesh, and p99 completion overhead. A whole-response-withholding policy is a separate mode and cannot inherit the low-latency streaming claim.
+100k goodput excludes gateway 5xx, incomplete SSE streams, skipped selected guards, schedule drops, load-generator misses and scan-only responses. Intentional 4xx policy blocks are reported separately and never counted as successful allowed completions.
+The 100k result is fleet-level. Single-node and RPS/vCPU efficiency are separately measured and published.
+A customer SaaS BYOK endpoint is not required to sustain 100k completions/s. The gateway must prove 100k with a controlled/dedicated producer; real-provider capacity is reported separately.
+3. Qualification profiles
+Profile
+Enabled behavior
+How it may be claimed
+P0 Protocol baseline
+No optional content controls; mandatory auth/tenant/routing only.
+Used only for protocol and transport floor. Never used to claim full-security performance.
+P1 Standard low-latency security
+Auth + tenant + rate limit + policy + local input PG2 + selected deterministic PII/secret checks + deterministic routing + provider + selected local output PII/secret/exfil + lightweight local semantic output classifier + async audit.
+This is the primary <20 ms / 100k release profile.
+P2 Strict whole-response
+All P1 controls plus whole-response withholding for policies that require a final semantic decision before any output is delivered.
+Separate first-content SLO; must not be marketed as low-latency streaming.
+P3 RAG/MCP extended
+P1 plus local grounding/embedding and MCP/tool checks.
+Must have its own measured latency/throughput certificate if enabled.
+4. Global hard constraints
+No platform external AI fallback. If a required local model is unavailable, return the signed operational failure behavior; never call Bedrock/Gemini/Vertex as an emergency path.
+No speculative generation before an enforcing input decision. An input BLOCK must produce zero provider calls.
+No hidden optional content floor. A supported optional content rule that is OFF cannot secretly redact/block through another default path.
+A valid empty organization policy is different from missing/stale/unavailable policy state.
+Policy transformations precede scanners that consume the transformed bytes. Do not parallelize dependent stages merely to win latency.
+Redaction success is determined from actual provider/client bytes, not a dashboard action label.
+No selected detector may be reported as executed when it was skipped, degraded or unavailable.
+No unbounded queue, retry loop, thread pool, buffer or batch wait. Overload must shed deliberately before latency collapses.
+No synchronous audit/logging network call on the ordinary request critical path.
+No runtime model download, TensorRT engine compilation or fallback-to-CPU after readiness succeeds.
+No performance result without exact source SHA, image digest, model/export/tokenizer hash, policy version, runtime versions and workload manifest.
+No release claim from notebook timing alone. The release Docker image and real data plane are the source of truth.
+5. Execution order
+Phase
+Tasks
+Exit from phase
+Phase 0
+T00-T03
+Identity, acceptance contract, reproducible benchmark lab, trustworthy timing
+Phase 1
+T04-T09
+OpenAI/SSE correctness, organization control, input/output enforcement, quality corpus
+Phase 2
+T10-T15
+Remove external AI and productionize all required local guard capabilities
+Phase 3
+T16-T18
+Industry-grade data plane: local hot state, async observability, transport/runtime hardening
+Phase 4
+T19-T24
+Capacity, resilience, 100k scale-out, competitive comparison, soak/canary/release
+
+6. Final task list
+Task
+Work
+Depends
+Primary exit gate
+Status
+T00
+Contain credential exposure and freeze the release baseline
+None
+All credential disposition is recorded.
+NOT RUN
+T01
+Lock the 100k / <20 ms acceptance contract
+T00
+Signed workload/profile manifest exists.
+NOT RUN
+T02
+Build the reproducible benchmark lab and controlled provider
+T00,T01
+Controlled provider is deterministic and horizontally scalable beyond target rate.
+NOT RUN
+T03
+Repair auth-inclusive, stream-aware latency instrumentation
+T00,T01,T02
+Injected-delay tests pass.
+NOT RUN
+T04
+Establish OpenAI SDK and SSE conformance as a release gate
+T02,T03
+100% pass on the supported OpenAI compatibility matrix.
+NOT RUN
+T05
+Compile one authoritative organization execution plan
+T01,T04
+Execution-plan semantics are identical across supported surfaces.
+NOT RUN
+T06
+Fix input semantic verdict-to-enforcement integration
+T05
+100% pass on input action matrix.
+NOT RUN
+T07
+Make output enforcement composition fail-safe and policy-honest
+T05,T06
+Stream/non-stream parity matrix passes.
+NOT RUN
+T08
+Make SSE streaming truly streaming and guardrail-correct
+T03,T04,T07
+OpenAI SDK streaming matrix passes.
+NOT RUN
+T09
+Freeze the security, redaction and compatibility corpus
+T01,T05,T06,T07,T08
+Recommended minimum P1 release gates: injection recall >=97% overall and benign false-block rate <=0.5%; supported high-confidence credential/secret byte-leak rate = 0 in corpus; supported structured PII span recall >=99%; action-mapping correctness = 100%.
+NOT RUN
+T10
+Create a provable zero-external-AI operation boundary
+T05,T09
+Zero attempted platform external-AI operations across the full test matrix.
+NOT RUN
+T11
+Productionize Prompt Guard 2 TensorRT for input semantics
+T03,T09,T10
+Pinned engine passes quality gate.
+NOT RUN
+T12
+Optimize deterministic Tier-1 scanning and redaction without semantic drift
+T03,T09
+Quality differential passes.
+NOT RUN
+T13
+Select and productionize the local output semantic guard
+T03,T09,T10,T11
+One pinned local output backend selected for P1.
+NOT RUN
+T14
+Replace RAG grounding, embeddings and MCP security with local capabilities
+T05,T09,T10,T12,T13
+All selected RAG/MCP AI operations are local.
+NOT RUN
+T15
+Delete cloud guard callers, dependencies and credentials only after parity passes
+T10,T11,T13,T14
+Local-only release image starts and passes capability matrix.
+NOT RUN
+T16
+Move hot-path auth, policy, routing and rate checks to local state
+T03,T05,T15
+Normal request path has no avoidable state-store RTT.
+NOT RUN
+T17
+Remove synchronous observability from the request critical path
+T03,T16
+p99 request latency is insensitive to downstream log-sink stalls within queue capacity.
+NOT RUN
+T18
+Harden the transport and runtime like an industry gateway
+T04,T08,T11,T13,T16,T17
+Stateless pods scale horizontally.
+NOT RUN
+T19
+Measure one-unit capacity and the real practical RPS/vCPU
+T03,T09,T11,T12,T13,T16,T17,T18
+Highest repeatable passing RPS/vCPU is established for P1.
+NOT RUN
+T20
+Tune batching, queues, workers and model concurrency to the safe operating point
+T19
+Safe configuration maximizes qualified throughput while staying inside p99 budget.
+NOT RUN
+T21
+Prove resilience, backpressure and failure isolation
+T16,T17,T18,T20
+No cross-tenant correctness failure.
+NOT RUN
+T22
+Scale the fleet from one-unit proof to 100,000 RPS
+T19,T20,T21
+100k successful fully evaluated P1 requests/s achieved at a repeatable plateau.
+NOT RUN
+T23
+Run the final 100k + <20 ms + SDK/SSE qualification and competitive bake-off
+T04,T08,T09,T21,T22
+Three 30-minute plateaus and two-hour soak pass.
+NOT RUN
+T24
+Canary, release, rollback proof and final cleanup
+T23
+Production reaches full traffic with the same artifact identities as qualification.
+NOT RUN
+
+T00 — Contain credential exposure and freeze the release baseline
+Phase
+Phase 0
+Depends on
+None
+Owner
+Infra + Security
+Parallelizable
+Yes
+Status
+NOT RUN
+Release effect
+Blocking
+Objective
+Create a safe, immutable starting point before any performance or architecture change.
+Why this task exists
+The repository review identified a tracked file with an OpenSSH private-key header, and branch/deployed-image identity is not automatically the same thing. A benchmark is useless if the code under test is unknown or a credential incident is unresolved.
+Implementation steps
+Classify the tracked key material through the authorized infrastructure inventory. If genuine, revoke/rotate it before any new release; preserve only sanitized evidence.
+Pin the candidate Git SHA, gateway image digest, frontend build ID, proxy config, policy snapshot version, model artifacts, CUDA/ORT/TensorRT versions and all CPU/GPU limits.
+Map every running component to source and image: edge proxy, gateway, control plane, Redis/cache, audit workers, local inference owner and frontend.
+Create an immutable rollback tuple containing the last known safe image digests and config versions. Do not use ad-hoc docker cp or pip edits.
+Verification / test cases
+Static: secret scan reports file paths/types without printing credential bodies.
+Runtime identity: one staging request ID can be joined across frontend, gateway and audit with the exact image/policy/model versions.
+Restart test: the candidate stack recreates from source + pinned artifacts without manual mutation.
+Failure / stop conditions
+Unknown deployed revision.
+Potentially active leaked credential unresolved.
+Serving container has local uncommitted edits or manually installed dependencies.
+Rollback image/config cannot be reproduced.
+Success criteria
+All credential disposition is recorded.
+Every serving component has immutable identity.
+Authorized staging tenant and rollback target exist.
+Exit evidence required
+T00 manifest with SHA/digests/config hashes.
+Sanitized secret-rotation change record.
+Request-ID correlation evidence.
+Rollback tuple.
+Example
+PASS example: gateway image sha256:... -> source e95f... -> policy v184 -> PG2 engine hash ...; one staging request produces the same identifiers in telemetry.FAIL example: container reports code newer than the selected Git SHA or the private key remains authorized.
+
+T01 — Lock the 100k / <20 ms acceptance contract
+Phase
+Phase 0
+Depends on
+T00
+Owner
+Product + Security + Performance
+Parallelizable
+No
+Status
+NOT RUN
+Release effect
+Blocking
+Objective
+Make the target mathematically testable before optimization begins.
+Why this task exists
+Without a fixed workload and timing boundary it is easy to claim <20 ms by excluding auth/output holdback or claim 100k by counting incomplete/error traffic.
+Implementation steps
+Approve p99 <20 ms as the primary firewall-overhead SLO; always report p50/p95/p99.
+Freeze the P1 standard workload: input token distribution, output bytes/tokens, SSE share, rule count/complexity, languages, tool-call share, cache behavior and unique-prompt percentage.
+Define successful goodput, intentional policy block, rate-limit rejection, infrastructure failure, incomplete stream and load-generator schedule drop as separate outcomes.
+Define provider exclusion precisely: provider compute is excluded from firewall overhead, but gateway queueing/serialization/guard holdback is included.
+Approve policy capability matrix: which controls are P1 low-latency-qualified and which require P2/P3 separate certificates.
+Freeze quality gates before model tuning.
+Verification / test cases
+Counterexample test: adding 2 seconds of provider TTFT must not add 2 seconds to firewall overhead.
+Counterexample test: a 30 ms gateway output hold must cause the streaming <20 ms gate to fail.
+Accounting test: all started requests land in exactly one outcome bucket.
+Failure / stop conditions
+Any mandatory workload field remains undefined.
+Different teams use different meanings of “100k” or “<20 ms”.
+Whole-response withholding is mixed with low-latency streaming under one number.
+Success criteria
+Signed workload/profile manifest exists.
+Latency boundaries and outcome taxonomy are unambiguous.
+P1/P2/P3 claim language is approved.
+Exit evidence required
+Acceptance-contract JSON/YAML.
+Workload manifest.
+Quality threshold sheet.
+Reviewer sign-off.
+Example
+Recommended P1 gate: p99 firewall overhead <20 ms; zero security correctness failures; <=0.1% gateway-caused errors; 100,000 successful fully evaluated req/s in fleet qualification; zero load-generator schedule drops.
+
+T02 — Build the reproducible benchmark lab and controlled provider
+Phase
+Phase 0
+Depends on
+T00,T01
+Owner
+Performance + QA
+Parallelizable
+Yes
+Status
+NOT RUN
+Release effect
+Blocking
+Objective
+Create a benchmark environment capable of proving gateway overhead independently of model-provider latency.
+Why this task exists
+A public BYOK provider cannot be used as the only performance oracle because provider latency and quota dominate. The gateway needs a deterministic producer with controllable TTFT, chunk timing, output size, errors and tool calls.
+Implementation steps
+Build a same-region controlled OpenAI-compatible upstream with deterministic JSON and SSE schedules, configurable TTFT, inter-chunk delay, output length, tool-call deltas, status errors and connection resets.
+Build an open-loop load generator that records scheduled rate, actual starts, completions, errors, latency and SSE release timestamps. Use multiple load-generator nodes when one generator approaches saturation.
+Run direct-to-provider and through-gateway paths from the same load generators.
+Collect cgroup CPU usage/throttling, RSS, file descriptors, event-loop lag, queue depths, Redis operations, GPU utilization/memory, inference queue and batch statistics.
+Version every benchmark input and produce a machine-readable result bundle.
+Verification / test cases
+Producer schedule test: configured 50 ms and 2,000 ms TTFT are observed within tolerance.
+SSE test producer emits ordered valid chunks, tool-call deltas and [DONE].
+Load-generator self-test: two generators produce the same rate/latency on a direct no-op target.
+Schedule-pressure test: generator reports missed schedules rather than silently lowering offered load.
+Failure / stop conditions
+Load generator is CPU/network saturated.
+Producer behavior changes under load.
+No direct control path exists.
+Only closed-loop load generation is used for the 100k claim.
+Success criteria
+Controlled provider is deterministic and horizontally scalable beyond target rate.
+Direct-control and gateway tests use the same workload.
+Result bundle contains all resource and outcome counters.
+Exit evidence required
+Producer image + SHA.
+Loadgen image + SHA.
+Direct baseline.
+Resource collector output.
+Machine-readable benchmark manifest.
+Example
+Example producer modes: /fast-json, /sse?ttft_ms=50&chunks=16&gap_ms=2, /sse-toolcall, /error?status=429, /reset-after-chunk=3.
+
+T03 — Repair auth-inclusive, stream-aware latency instrumentation
+Phase
+Phase 0
+Depends on
+T00,T01,T02
+Owner
+Gateway + Performance
+Parallelizable
+No
+Status
+NOT RUN
+Release effect
+Blocking
+Objective
+Make every <20 ms number trustworthy before tuning code.
+Why this task exists
+The current handler timer begins after middleware authentication, and residual timing can be derived by subtraction/clamping. That can misattribute provider time and hide accounting errors.
+Implementation steps
+Stamp a monotonic request-start timestamp at the outer ASGI boundary before authentication.
+Record explicit start/end timestamps for auth, admission, policy, input scanning, local inference queue, local inference compute, routing, provider dispatch, provider first byte, provider last byte, each output-guard hold, final client release and audit enqueue.
+Stop deriving provider or gateway phases from TTFT subtraction when direct timestamps exist.
+Preserve signed reconciliation residuals. Negative/unaccounted residual above tolerance is a test failure, not max(0,...).
+Expose a compact per-request timing object in test/debug mode and aggregate histograms in production.
+Verification / test cases
+Inject 5 ms into auth: reported gateway overhead increases by ~5 ms.
+Inject 5 ms into input guard and 7 ms into output guard: each appears in its own stage and total increases by ~12 ms.
+Change provider TTFT 50 -> 2,000 ms: provider timing changes; firewall overhead remains within measurement noise.
+Hold an SSE chunk for 30 ms inside the gateway: max release lag reports >=30 ms and low-latency gate fails.
+Create an intentionally impossible metric tuple: reconciliation fails loudly rather than clamping.
+Failure / stop conditions
+Auth is still outside the measured boundary.
+Provider delay changes firewall-overhead metric materially.
+Output holdback has no timestamped accounting.
+Negative residuals are silently clamped.
+Success criteria
+Injected-delay tests pass.
+Direct/gateway decomposition reconciles within <=1 ms p99 accounting error on the controlled producer.
+All production performance dashboards use the repaired metric definitions.
+Exit evidence required
+Timing unit tests.
+Injected-delay traces.
+Provider-delay invariance result.
+Metric schema version.
+Example
+Expected relation: gateway_total = pre_provider_gateway + provider_observed + post_provider_gateway; firewall_overhead is measured directly from owned intervals, not guessed from total minus TTFT.
+
+T04 — Establish OpenAI SDK and SSE conformance as a release gate
+Phase
+Phase 1
+Depends on
+T02,T03
+Owner
+Protocol QA + Gateway
+Parallelizable
+Yes
+Status
+NOT RUN
+Release effect
+Blocking
+Objective
+Guarantee that AI Mesh behaves like an OpenAI-compatible gateway for real SDK clients before and after performance changes.
+Why this task exists
+OpenAI Python clients consume both normal JSON and SSE streams, including tool-call deltas and structured error behavior. A fast proxy that subtly breaks SDK parsing is not an industry gateway.
+Implementation steps
+Create a pinned CI environment for the repository-supported OpenAI Python SDK and a second compatibility job for the current stable SDK used by customers.
+Test sync and async clients using base_url pointed at AI Mesh.
+Cover Chat Completions create(), stream=True, chat.completions.stream(), and the supported Responses API adapter. Preserve unknown-but-supported OpenAI fields through normalization where the product claims compatibility.
+Cover tool calls, function argument deltas, finish_reason, usage when requested, structured-output request shapes, request IDs, timeouts, cancellation and retries.
+Define pre-stream HTTP errors versus post-header SSE error semantics explicitly.
+Verification / test cases
+Non-stream JSON parses as OpenAI SDK objects with matching model/choices/usage fields.
+SSE: sync and AsyncOpenAI iterators consume the stream to completion without parser errors.
+SSE chunk order and choice indexes match the controlled provider after allowed transformations.
+Tool-call arguments split across chunks reassemble correctly.
+Client disconnect stops upstream generation and guard work within a bounded cancellation time.
+429/401/403/500/503 errors expose stable status/code/message and request ID.
+Responses API streaming emits the documented event ordering for the subset AI Mesh supports.
+Failure / stop conditions
+SDK parser error, missing terminal event, duplicated/dropped chunk, invalid JSON in data field, broken tool-call reconstruction, or stream hang.
+Gateway changes HTTP status after headers are already sent.
+Client cancellation leaves provider or local-guard work running unbounded.
+Success criteria
+100% pass on the supported OpenAI compatibility matrix.
+No unsupported feature is silently accepted; it is either passed through correctly or rejected deterministically.
+Conformance tests run in CI and live Docker qualification.
+Exit evidence required
+SDK version matrix.
+Raw sanitized request/response fixtures.
+SSE transcript hashes.
+CI results.
+Example
+Python smoke test:from openai import OpenAIclient = OpenAI(api_key="test-key", base_url="https://staging.example/v1")for chunk in client.chat.completions.create(model="test", messages=[{"role":"user","content":"hello"}], stream=True):    assert chunk.id and chunk.choices is not None
+
+T05 — Compile one authoritative organization execution plan
+Phase
+Phase 1
+Depends on
+T01,T04
+Owner
+Control Plane + Gateway
+Parallelizable
+No
+Status
+NOT RUN
+Release effect
+Blocking
+Objective
+Make organization-selected policies the single source of truth for what optional content checks execute and how findings are handled.
+Why this task exists
+The current source has different gating/default behavior across input and output, and some input PII/secret behavior is still a platform floor. This conflicts with full organization control unless resolved deliberately.
+Implementation steps
+Define normalized rule states: OFF, MONITOR, ENFORCE(action). Keep platform integrity controls separate from optional content policy.
+Compile control-plane settings into a versioned immutable execution plan containing enabled rules, detector dependencies, thresholds, actions, precedence, output mode, failure posture and plan hash.
+Push complete snapshots to gateway pods. Readiness requires a valid snapshot. An explicitly empty plan remains valid; unavailable/corrupt state is not treated as empty.
+Remove per-surface reinterpretation of null/false/default values. Chat input, output, Responses, MCP and RAG consume the same normalized semantics.
+Expose applied plan version in trace/audit and the frontend.
+Verification / test cases
+For each supported rule: OFF -> MONITOR -> ENFORCE -> OFF. Verify actual detector invocation and wire behavior at each transition.
+Two-tenant test: opposite policies on the same pod cannot influence each other.
+Restart while control plane is down: pod starts only if approved snapshot persistence policy allows it; otherwise readiness remains false.
+Missed pub/sub update followed by full snapshot reconciliation converges to the correct plan.
+Unsupported action/rule is rejected when saving/activating, not silently ignored.
+Failure / stop conditions
+Optional rule disabled in UI but still affects verdict/bytes.
+Missing config becomes permissive empty config.
+Old/global config leaks into another tenant.
+Plan update becomes visible before all referenced detector artifacts are ready.
+Success criteria
+Execution-plan semantics are identical across supported surfaces.
+Configuration changes are versioned and observable.
+No request performs a control-plane DB/HTTP lookup on the normal hot path.
+Exit evidence required
+Plan schema.
+Round-trip UI/API tests.
+Cross-tenant test traces.
+Readiness/reconciliation evidence.
+Example
+Example: PII=OFF, Injection=ENFORCE(BLOCK), Credential=MONITOR must produce no PII detector work solely for PII, must block a confirmed injection before provider dispatch, and must log credential findings without changing bytes.
+
+T06 — Fix input semantic verdict-to-enforcement integration
+Phase
+Phase 1
+Depends on
+T05
+Owner
+Gateway Security
+Parallelizable
+No
+Status
+NOT RUN
+Release effect
+Blocking
+Objective
+Ensure local semantic findings actually control provider dispatch when the organization enabled them.
+Why this task exists
+Repository review found an adapter path that can filter injection/jailbreak findings before the authoritative resolver. Replacing Gemini with a 2 ms local model is useless if its BLOCK never reaches enforcement.
+Implementation steps
+Carry detector identity, rule identity, score, recommendation, execution status and evidence metadata into one authoritative input resolver.
+Remove helper logic that drops enabled semantic findings merely because they are not a deterministic PII/secret category.
+Define explicit precedence among multiple matched organization rules. Do not let an unrelated allow cancel another rule’s valid block.
+Preserve policy transformations before scanning and the effective outbound message body after redaction/rewrite.
+Guarantee terminal input BLOCK completes before provider dispatch.
+Verification / test cases
+Enabled PG2 returns MALICIOUS/BLOCK with no regex match -> HTTP block -> provider recorder call_count=0.
+PG2 BENIGN + credential REDACT -> sanitized bytes reach provider.
+Injection rule MONITOR -> provider called; finding recorded; no hidden block.
+Injection rule OFF -> PG2 not invoked solely for that rule.
+Conflicting rules are resolved according to the signed precedence table.
+Redaction no-op on a mandatory removal action fails according to signed policy rather than claiming success.
+Failure / stop conditions
+Any terminal block reaches the provider.
+Semantic findings vanish between scanner and resolver.
+Redaction badge differs from actual provider payload.
+Rule precedence depends on incidental code ordering.
+Success criteria
+100% pass on input action matrix.
+Provider call count and provider bytes prove each action.
+One authoritative input decision is emitted per request.
+Exit evidence required
+Route-level tests.
+Provider-recorder traces.
+Decision/audit object.
+Policy matrix results.
+Example
+Core invariant: enabled semantic BLOCK => provider dispatch count 0; REDACT => provider receives transformed bytes; MONITOR => bytes unchanged but finding is visible; OFF => detector does not run solely for that rule.
+
+T07 — Make output enforcement composition fail-safe and policy-honest
+Phase
+Phase 1
+Depends on
+T05,T06
+Owner
+Output Guard + Gateway
+Parallelizable
+No
+Status
+NOT RUN
+Release effect
+Blocking
+Objective
+Guarantee that the final delivered bytes honor the configured output action through scanner, resolver, sanitizer and transport.
+Why this task exists
+Intermediate “BLOCK” assertions are insufficient if later layers transform it into REDACT or ALLOW. Current code has distinct degraded handling paths that must be composed and tested end-to-end.
+Implementation steps
+Define one output decision object carrying requested rule action, detector result, execution status, degradation status, redaction spans/classes and final transport disposition.
+Preserve a terminal configured BLOCK through all layers unless the signed organization policy explicitly maps that condition differently.
+For REDACT, sanitize only selected classes/spans and byte-verify that prohibited values are absent before release.
+For FLAG/MONITOR, deliver content only if no separately enforced rule requires block/redact.
+Represent detector unavailable/degraded explicitly. Do not return “clean” merely because the model did not run.
+Verification / test cases
+Non-stream and stream tests for BLOCK, REDACT, FLAG, ALLOW and detector unavailable.
+Output PG2/semantic backend exception -> expected signed failure action survives to client bytes.
+PII=FLAG + credential=REDACT: credential masked; email remains; audit records both findings correctly.
+Redact selected but sanitizer changes zero bytes for a redactable finding -> fail closed according to contract.
+Multiple detectors disagree -> deterministic rule precedence and no phantom redaction.
+Failure / stop conditions
+Configured output BLOCK is delivered as content.
+Unavailable detector is recorded as clean.
+Blanket redaction masks classes configured as FLAG/ALLOW.
+Stream and non-stream produce different security outcome for equivalent content.
+Success criteria
+Stream/non-stream parity matrix passes.
+Actual client bytes match configured output actions.
+No terminal decision is silently downgraded.
+Exit evidence required
+Output action matrix.
+Sanitized payload hashes.
+Failure-injection tests.
+Audit/frontend correlation.
+Example
+Example: Credential=BLOCK and PII=FLAG over output containing both must block according to the credential rule; PII flag remains evidence, not a reason to downgrade the block.
+
+T08 — Make SSE streaming truly streaming and guardrail-correct
+Phase
+Phase 1
+Depends on
+T03,T04,T07
+Owner
+Streaming + Edge
+Parallelizable
+No
+Status
+NOT RUN
+Release effect
+Blocking
+Objective
+Preserve low-latency SSE behavior while applying selected output controls without leaks, duplication, deadlocks or hidden buffering.
+Why this task exists
+SSE is a product contract, not only a transport. Guard buffering, proxy buffering, boundary-spanning secrets, provider errors and client disconnects all affect correctness and perceived latency.
+Implementation steps
+Define two explicit modes: LOW_LATENCY_STREAM (bounded lookbehind/holdback) and STRICT_WHOLE_RESPONSE (no release until final decision).
+For low-latency mode, use bounded trailing context sufficient for supported deterministic patterns; never hold the whole response accidentally.
+Run lightweight per-chunk deterministic scans only when required; run completion-only semantic classifiers once at DONE unless the policy specifically requires incremental semantics.
+Disable proxy buffering and compression behaviors that delay text/event-stream. Configure keepalive, idle timeouts and graceful drain for long streams.
+Propagate backpressure; stop reading/generating aggressively if the client is slow/disconnected.
+Define post-header security failure framing: valid OpenAI-compatible SSE error event + terminal behavior; do not attempt to change HTTP status after streaming begins.
+Verification / test cases
+TTFT test: producer emits first chunk at 50 ms; AI Mesh low-latency mode adds <20 ms p99 first-content delay under the signed load.
+Gap test: 16 chunks spaced 5 ms remain ordered and are not coalesced into a single final burst.
+Boundary test: email/API key split across 2-4 chunks is never released raw when REDACT is enabled.
+Tool-call test: function argument deltas split across chunks remain valid and reconstruct to provider-equivalent JSON.
+Disconnect test: client closes after chunk 3; upstream and guard activity terminate within the configured cancellation bound.
+Slow-client test: memory remains bounded; queue depth hits a defined threshold and backpressure/load shedding activates.
+Provider reset test: stream emits a parseable error and terminates; no fake success [DONE] without error context.
+Strict-mode test: zero bytes are delivered before final output decision.
+Failure / stop conditions
+First content waits until DONE in low-latency mode.
+Chunks duplicate/reorder/drop.
+Cross-boundary secret leaks.
+Memory grows with response length or slow client.
+Proxy buffers SSE.
+Output block occurs only after unsafe bytes were already released while UI claims “nothing delivered”.
+Success criteria
+OpenAI SDK streaming matrix passes.
+p99 release-lag metric exists and stays within the signed P1 limit.
+No boundary leak in held-out streaming corpus.
+Strict and low-latency modes are visibly distinct in config and telemetry.
+Exit evidence required
+Raw sanitized SSE transcripts.
+Chunk timing trace.
+Proxy config test.
+Disconnect/backpressure metrics.
+OpenAI SDK results.
+Example
+SSE framing example: each event is complete `data: {json}\n\n`; Chat Completions terminates with `data: [DONE]\n\n` after all allowed chunks. Do not split one JSON event across arbitrary proxy writes.
+
+T09 — Freeze the security, redaction and compatibility corpus
+Phase
+Phase 1
+Depends on
+T01,T05,T06,T07,T08
+Owner
+Security Eval + QA
+Parallelizable
+Yes
+Status
+NOT RUN
+Release effect
+Blocking
+Objective
+Prevent latency optimizations from silently weakening detection or changing organization policy behavior.
+Why this task exists
+A 2 ms detector that misses real attacks or over-blocks normal code is not a valid replacement. Performance must be tuned against a frozen held-out quality gate.
+Implementation steps
+Create labeled input sets for direct/indirect injection, jailbreak, prompt extraction, encoded attacks, quoted security discussion, tool/RAG content and multilingual cases.
+Create benign sets dominated by code, security documentation, logs, JSON/tool schemas and normal enterprise text.
+Create exact-span PII/credential/secret/redaction fixtures, including values split across messages and SSE boundaries.
+Create policy-action fixtures for OFF/MONITOR/BLOCK/REDACT/FLAG/ALLOW/REWRITE where supported.
+Split development and held-out sets; freeze hashes before final tuning.
+Verification / test cases
+Run PyTorch/reference vs local optimized model on identical token IDs.
+Run full gateway action matrix against held-out corpus, not only detector logits.
+Streaming corpus repeats every sensitive-span case with randomized chunk boundaries.
+Mutation tests change encoding/casing/Unicode/whitespace and verify expected behavior.
+Failure / stop conditions
+Evaluation set is changed after seeing final results without version bump.
+Quality is reported per window only while request-level false blocks are ignored.
+Redaction quality is scored from action labels instead of resulting bytes.
+Success criteria
+Recommended minimum P1 release gates: injection recall >=97% overall and benign false-block rate <=0.5%; supported high-confidence credential/secret byte-leak rate = 0 in corpus; supported structured PII span recall >=99%; action-mapping correctness = 100%.
+All thresholds have confidence intervals and a frozen held-out manifest.
+Exit evidence required
+Corpus hashes.
+Evaluation report.
+False-positive/false-negative examples.
+Streaming boundary matrix.
+Example
+Failure example: a quoted “ignore previous instructions” sentence in a security guide is blocked at materially elevated rate. That blocks release even if latency improves.
+
+T10 — Create a provable zero-external-AI operation boundary
+Phase
+Phase 2
+Depends on
+T05,T09
+Owner
+Platform + Security
+Parallelizable
+No
+Status
+NOT RUN
+Release effect
+Blocking
+Objective
+Eliminate Bedrock/Vertex/Gemini/hosted moderation or embedding use by the firewall and make accidental reintroduction detectable.
+Why this task exists
+The current code still contains multiple external AI clients and fallback paths. Source deletion alone does not prove a worker, health check or hidden path stopped calling them.
+Implementation steps
+Inventory every platform-owned inference/embedding/moderation/rewrite call site across gateway, control plane, workers, RAG, MCP, simulator and health checks.
+Introduce an explicit local capability registry. Every supported security capability resolves to a local artifact/runtime or activation is rejected.
+Route customer generation through a clearly separate provider-dispatch authority so firewall security code cannot borrow those credentials for judge/rewrite calls.
+Apply egress controls so gateway/guard components can reach only approved internal services and the authorized customer-generation egress path. Remove generic internet access where feasible.
+Add a CI/source rule rejecting new forbidden SDK imports or provider operations in firewall packages unless explicitly allowlisted for customer dispatch.
+Verification / test cases
+Run startup + chat input/output + streaming + RAG + MCP + worker + restart + error paths with platform external-AI credentials absent and outbound attempts recorded.
+Simulate local guard failure: no Bedrock/Gemini/Vertex fallback attempt occurs.
+Customer generation still works through its authorized dispatch path.
+Network audit shows zero platform-owned external AI attempts, not merely zero successes.
+Failure / stop conditions
+Any security path attempts a hosted AI call.
+Generic customer provider credential is reused by guard code.
+A local model error silently falls back to cloud AI.
+Success criteria
+Zero attempted platform external-AI operations across the full test matrix.
+Customer provider path remains functional and separately attributable.
+Forbidden-client CI rule passes.
+Exit evidence required
+Call-site inventory.
+Network/egress logs.
+CI rule output.
+Authorized dispatch test.
+Example
+PASS: local PG2 unavailable -> signed 503/guard-unavailable behavior, zero cloud calls. FAIL: code catches the local error and creates `genai.Client(...)` or `boto3 bedrock-runtime`.
+
+T11 — Productionize Prompt Guard 2 TensorRT for input semantics
+Phase
+Phase 2
+Depends on
+T03,T09,T10
+Owner
+ML Runtime + Gateway
+Parallelizable
+Yes
+Status
+NOT RUN
+Release effect
+Blocking
+Objective
+Turn the proven ~2 ms experiment into a reproducible, correctness-gated release component.
+Why this task exists
+The notebook result is promising but the release image must prove model identity, graph placement, cache behavior, accuracy equivalence and throughput under concurrent gateway load.
+Implementation steps
+Pin model/tokenizer/export hashes and the exact 512-token windowing/special-token policy.
+Build the TensorRT engine before readiness; persist a version-compatible engine cache. Never compile on customer traffic.
+Use a dedicated local inference owner (process/sidecar) rather than loading separate engines in every gunicorn worker.
+Expose bounded queue, queue-wait metric, batch size, execution count, GPU memory and engine/version health.
+Return a structured semantic finding to the gateway; policy decides BLOCK/MONITOR, not the model runtime.
+Verification / test cases
+Correctness: benign and malicious sanity cases agree with reference; held-out corpus meets T09 gates.
+Exact-token parity: same token IDs through reference ONNX/PyTorch and TensorRT remain decision-equivalent within approved numerical tolerance.
+No-fallback: provider placement/profiling shows intended TensorRT execution; unsupported/fallback nodes are documented and measured.
+Cold-start: readiness remains false until engine loaded; first customer request does not trigger 30+ s build.
+Performance: W=1 512 active-token p99 target <=4 ms including local invocation overhead; measure W=2/W=4/W=7 and saturation QPS.
+Failure / stop conditions
+Accuracy gate fails.
+Silent CPU fallback.
+Runtime downloads/builds after readiness.
+Unbounded inference queue.
+p99 cannot fit the signed P1 latency budget under target concurrency.
+Success criteria
+Pinned engine passes quality gate.
+Measured p50/p95/p99 and QPS curves exist.
+Engine restarts reproducibly from immutable artifacts.
+Gateway can distinguish queue timeout/unavailable from benign classification.
+Exit evidence required
+Engine manifest.
+Reference-vs-TRT report.
+Concurrency/queue benchmark.
+GPU placement proof.
+Example
+Current evidence to reproduce, not assume: approximately 2.14 ms p50 at 512 tokens on an NVIDIA L4 with ORT TensorRT EP. Release must remeasure it inside the production runtime.
+
+T12 — Optimize deterministic Tier-1 scanning and redaction without semantic drift
+Phase
+Phase 2
+Depends on
+T03,T09
+Owner
+Gateway Performance + Security
+Parallelizable
+Yes
+Status
+NOT RUN
+Release effect
+Blocking
+Objective
+Reduce CPU cost of selected PII/secret/policy checks to a few milliseconds while preserving byte-for-byte enforcement behavior.
+Why this task exists
+At 100k RPS, Python regex, normalization, repeated rescans and trace redaction can dominate CPU even when GPU classification is fast.
+Implementation steps
+Profile only reachable current hot-path functions under P1; do not optimize retained disabled historical scanner bodies.
+Compile multi-pattern deterministic scans using Hyperscan/Vectorscan/Rust or another bounded engine where semantics are provably equivalent.
+Retain explicit fallback for patterns that cannot be represented safely; unsupported prefilter patterns must not be silently skipped.
+Normalize/decode once per required view and share immutable findings across dependent stages when the bytes/context are unchanged.
+Apply scoped redaction once and preserve offset mapping to original fields. Avoid repeated redact_all passes in telemetry and router.
+Bound regex complexity and decoded-view expansion.
+Verification / test cases
+Soundness differential: optimized engine vs reference across the full deterministic corpus has zero under-report for supported patterns.
+Unicode/UTF-8/UCP cases match approved semantics.
+Redaction produces identical or stricter safe outbound bytes for every reference fixture.
+Performance target: P1 deterministic input + required redaction p99 <=3 ms for the signed 4 KB/<=1024-token envelope on one allocated CPU worker lane, or update fleet sizing honestly.
+CPU flamegraph proves removed work is actually on the serving path.
+Failure / stop conditions
+Any false negative introduced by prefilter.
+Unsupported pattern silently omitted.
+Optimization only accelerates a disabled/reference function.
+Regex timeout is interpreted as no-match.
+Success criteria
+Quality differential passes.
+CPU/service-time reduction measured in live Docker.
+All timeouts/unavailable evaluations become explicit status, not clean.
+Exit evidence required
+Before/after flamegraphs.
+Differential corpus report.
+p50/p95/p99 CPU-stage timing.
+Pattern capability manifest.
+Example
+Example failure: Hyperscan cannot compile a zero-width assertion and the gate excludes it from the fallback set; benchmark gets faster but a credential is no longer detected. This is a release blocker.
+
+T13 — Select and productionize the local output semantic guard
+Phase
+Phase 2
+Depends on
+T03,T09,T10,T11
+Owner
+ML Runtime + Output Guard
+Parallelizable
+Yes
+Status
+NOT RUN
+Release effect
+Blocking
+Objective
+Replace hosted output judgment with a local model that meets both policy coverage and the remaining latency budget.
+Why this task exists
+Prompt Guard is an input injection classifier; it does not automatically replace output harm taxonomy, semantic PII spans, confidentiality or grounding. The output model must be selected by measured capability, not model size alone.
+Implementation steps
+Define the exact P1 output semantic taxonomy required after deterministic PII/secret/exfil checks.
+Bake off candidate local classifiers using the same held-out corpus and production runtime. Include model size, window length, batching behavior, p99 and GPU QPS.
+Prefer classification heads or constrained outputs over generative explanations.
+Run semantic output classification once at completion for P1 unless a specific selected rule requires incremental semantic judgment.
+Keep span-producing semantic PII capability separate if needed; do not infer redaction spans from a whole-response class score.
+Verification / test cases
+Quality: candidate meets T09 output-category gates and required multilingual/enterprise cases.
+Latency: completion-time local semantic guard fits the remaining P1 p99 budget; recommended component target <=5 ms at the signed output window.
+Throughput: GPU saturation curve remains compatible with 100k fleet sizing.
+Failure: missing model, queue timeout and OOM map to explicit detector-unavailable behavior.
+Stream/non-stream final actions are equivalent for equivalent completed content.
+Failure / stop conditions
+Candidate requires generative multi-token verdicts on every request.
+Quality below agreed threshold.
+Component p99 makes the <20 ms P1 budget impossible.
+Classification result is used as a fake span redactor.
+Success criteria
+One pinned local output backend selected for P1.
+Capability gaps are explicit and either assigned to P2/P3 or unsupported.
+Engine/model manifest and throughput curve exist.
+Exit evidence required
+Bake-off report.
+Model artifact hashes.
+Quality/latency/QPS curves.
+Output capability matrix.
+Example
+Decision rule: if a model is accurate but cannot fit P1, keep the capability as an explicitly slower profile instead of hiding its cost or disabling it during the benchmark.
+
+T14 — Replace RAG grounding, embeddings and MCP security with local capabilities
+Phase
+Phase 2
+Depends on
+T05,T09,T10,T12,T13
+Owner
+RAG/MCP + ML
+Parallelizable
+Yes
+Status
+NOT RUN
+Release effect
+Blocking
+Objective
+Remove remaining platform-owned external AI calls from RAG/MCP while preserving organization policy semantics.
+Why this task exists
+The repository still contains a Bedrock Titan embedder and RAG/Tier-2 pathways. Zero external guard AI is not complete until these are replaced or explicitly disabled.
+Implementation steps
+Inventory RAG ingest/query and MCP request/response capabilities that currently use external AI or shared Tier-2 behavior.
+Select local embedding/grounding models and pin them; separate lexical checks from semantic entailment/grounding.
+Apply PII/secret redaction before any local embedding storage if required by organization policy and verify tenant isolation in vector keys/collections.
+Ensure MCP arguments are scanned before tool execution and MCP outputs before client release using the same execution-plan semantics.
+Classify P3 latency separately if local grounding cannot meet P1.
+Verification / test cases
+RAG ingest/query with external AI network denied still works when local capability enabled.
+Cross-tenant vector isolation tests.
+Grounding unavailable does not become “grounded=true”.
+MCP malicious argument BLOCK prevents tool invocation; REDACT mutates tool args only when safe and defined.
+MCP output secret split/encoded fixtures do not leak.
+Failure / stop conditions
+Bedrock Titan or another hosted embedder is attempted.
+Wrong-tenant vector/config reuse.
+Tool executes before enforcing input policy.
+Unsupported semantic capability silently becomes allow.
+Success criteria
+All selected RAG/MCP AI operations are local.
+P3 quality/latency certificate exists.
+No external-AI attempts under test.
+Exit evidence required
+RAG/MCP call inventory.
+Local model manifests.
+Tenant-isolation tests.
+Tool invocation recorder evidence.
+Example
+Example: MCP tool call containing an enabled credential-block finding must record tool invocation count=0; monitor mode may invoke but must record the finding and organization plan version.
+
+T15 — Delete cloud guard callers, dependencies and credentials only after parity passes
+Phase
+Phase 2
+Depends on
+T10,T11,T13,T14
+Owner
+Platform + Security
+Parallelizable
+No
+Status
+NOT RUN
+Release effect
+Blocking
+Objective
+Complete the migration by removing obsolete Bedrock/Gemini/Vertex guard code rather than leaving dormant fallback paths.
+Why this task exists
+Dead cloud paths become future accidental fallbacks, expand dependency/credential surface and make “zero external AI” hard to prove.
+Implementation steps
+Remove gateway/control/worker call sites for Bedrock/Gemini/Vertex guard inference, remote embeddings and guard-triggered cloud rewrites after local replacements pass.
+Remove related SDK dependencies from gateway release image if they are no longer needed for non-AI cloud functions. Do not remove boto3 blindly if S3 or other approved functions still use it.
+Remove obsolete environment variables, health checks, circuit breakers and UI copy that imply hosted guard use.
+Revoke platform guard credentials/IAM permissions last, after caller removal is verified.
+Add regression tests preventing forbidden clients from re-entering firewall packages.
+Verification / test cases
+Build and boot with no Bedrock/Gemini/Vertex guard credentials.
+Full P1 + P3 test matrix produces zero forbidden DNS/connect attempts.
+Repository grep/static rule shows no forbidden runtime call sites outside documented non-guard exceptions.
+Rollback uses the last local-only image, not a cloud-guard image.
+Failure / stop conditions
+Credential revoked before local parity, causing uncontrolled outage.
+Cloud client remains reachable as fallback.
+Health check still calls hosted AI.
+Dependency removal breaks approved non-AI AWS functionality.
+Success criteria
+Local-only release image starts and passes capability matrix.
+Forbidden operation inventory is zero.
+Credentials/IAM removed or scoped away.
+Exit evidence required
+Dependency diff.
+Credential/IAM change record.
+Network denial run.
+Static forbidden-call report.
+Example
+Exit means zero platform guard API attempts during startup, normal traffic, failures, background jobs and restarts.
+
+T16 — Move hot-path auth, policy, routing and rate checks to local state
+Phase
+Phase 3
+Depends on
+T03,T05,T15
+Owner
+Gateway Architecture + Control Plane
+Parallelizable
+No
+Status
+NOT RUN
+Release effect
+Blocking
+Objective
+Remove avoidable shared-service round trips from the critical path while preserving global correctness and rapid revocation.
+Why this task exists
+Industry gateways achieve high RPS by keeping authorization, routing and most admission checks in memory. TrueFoundry documents this pattern; Envoy distinguishes lightweight local rate limiting from coordinated global limiting.
+Implementation steps
+Load signed auth/authorization, model, routing, kill-switch and policy snapshots into each gateway pod. Readiness requires a complete compatible snapshot.
+Validate API keys locally from a securely synchronized key-hash/permission map or signed token scheme; define revocation freshness explicitly.
+Replace per-request global rate-limit RTTs with local GCRA/token buckets plus a coordinated quota-lease design for global TPM/RPM fairness. Keep exact shared state only where required by the signed product contract.
+Keep deterministic model routing entirely local from the versioned model snapshot.
+Push snapshot updates asynchronously and periodically reconcile full state to eliminate drift.
+Separate control-plane availability from data-plane continuity: existing healthy pods continue with last-good state within the approved staleness window; fresh pods are not ready without valid state.
+Verification / test cases
+Hot-path network trace shows no control-plane HTTP/DB call and no per-request shared Redis call except explicitly approved global-consistency operations.
+Revocation test: key/model/kill-switch change reaches all pods within the signed freshness SLO.
+Missed update test: periodic full reconciliation repairs drift.
+Global quota test across N pods cannot exceed the allowed lease envelope by more than the documented bound.
+Control plane/NATS/Redis snapshot publisher outage: healthy pods behave according to stale-state contract; restarted pod readiness is correct.
+Failure / stop conditions
+Local caches can diverge indefinitely.
+Org A state used by Org B.
+Local rate limit permits unbounded N-times global quota.
+Gateway starts ready with no policy/auth state.
+Success criteria
+Normal request path has no avoidable state-store RTT.
+Revocation/freshness and global quota bounds are measured.
+Data plane remains stateless/restartable from signed snapshot.
+Exit evidence required
+Packet/trace proof.
+Update-lag histogram.
+Quota overshoot test.
+Readiness/failover evidence.
+Example
+Competitive reference: TrueFoundry documents in-memory auth/rate/load-balancing with async config/logging; Envoy supports local and global rate-limit layers. AI Mesh should copy the physics while preserving stricter security semantics.
+
+T17 — Remove synchronous observability from the request critical path
+Phase
+Phase 3
+Depends on
+T03,T16
+Owner
+Observability + Gateway
+Parallelizable
+Yes
+Status
+NOT RUN
+Release effect
+Blocking
+Objective
+Make telemetry/audit durable and useful without letting Redis/logging stalls destroy p99 latency.
+Why this task exists
+The current Redis logging handler performs synchronous network publication. At high RPS, one blocked logger can serialize otherwise fast requests.
+Implementation steps
+Replace synchronous network logging with an in-process bounded non-blocking queue/ring buffer feeding dedicated async exporter workers.
+Keep per-request hot-path events compact; move expensive trace formatting/redaction off the critical path using already-sanitized structured fields.
+Batch telemetry writes and use asynchronous queue/broker/storage outside the response path.
+Define audit failure posture separately from security enforcement: standard profile may continue with an explicit audit-degraded signal if approved; strict compliance profile may fail closed.
+Expose queue depth, drops, exporter latency and audit-degraded state.
+Verification / test cases
+Artificial 1-second Redis/log sink stall does not add 1 second to ordinary request latency.
+Queue-full test triggers documented drop/degrade/fail behavior without unbounded memory.
+No raw test secrets appear in logs even when errors occur.
+Audit events preserve request/policy/model IDs for later correlation.
+Failure / stop conditions
+Request handler calls blocking publish/write.
+Queue unbounded.
+Audit failure silently drops all evidence while system reports healthy.
+Telemetry redaction repeats expensive full-content scans on hot path.
+Success criteria
+p99 request latency is insensitive to downstream log-sink stalls within queue capacity.
+Audit queue behavior is bounded and observable.
+Trace overhead fits signed CPU budget.
+Exit evidence required
+Before/after p99.
+Queue saturation test.
+Audit durability test.
+PII log-scrub audit.
+Example
+Target architecture: request creates a small sanitized event and enqueues it locally; exporter performs broker/storage I/O after the response path.
+
+T18 — Harden the transport and runtime like an industry gateway
+Phase
+Phase 3
+Depends on
+T04,T08,T11,T13,T16,T17
+Owner
+Platform + Networking
+Parallelizable
+No
+Status
+NOT RUN
+Release effect
+Blocking
+Objective
+Create a stateless, horizontally scalable data plane with strong connection handling, readiness and graceful degradation.
+Why this task exists
+100k RPS is primarily a systems problem after per-request work is reduced. Connection handling, file descriptors, keepalive, worker ownership, queues and draining must be explicit.
+Implementation steps
+Benchmark the current nginx front against an Envoy-based front door using identical direct and P1 workloads. Choose the transport based on SSE correctness, p99, CPU/RPS, connection scale and operational fit.
+Recommended topology for qualification: L4 load balancer -> transport proxy -> stateless AI Mesh CPU pods -> local/same-AZ guard GPU service -> customer provider; control and analytics are off the request path.
+Configure HTTP/2 client multiplexing where supported, upstream keepalive, proxy_buffering off for SSE, gzip/compression off for event streams, long idle timeout and graceful connection drain.
+Size worker/process counts from cgroup CPU/RAM/fd limits. One local inference engine is shared via bounded local IPC/service rather than duplicated per web worker.
+Prebuild/warm all local engines before readiness. During shutdown stop admission, drain active streams, then terminate workers.
+Set explicit admission queue and concurrency bounds from measured capacity, not hardcoded legacy values or infinity.
+Verification / test cases
+100k connection/burst rehearsal does not exhaust file descriptors or ephemeral ports.
+Rolling restart drains SSE without truncating healthy streams beyond the signed deadline.
+One gateway pod or one guard instance killed: traffic rebalances; error/latency budget remains within resilience target.
+Proxy SSE buffering test and HTTP keepalive reuse test.
+Local guard IPC failure returns explicit guard-unavailable behavior; no CPU fallback or cloud fallback.
+Failure / stop conditions
+Unbounded connection/queue settings OOM the node.
+One worker owns a separate GPU engine and multiplies VRAM.
+Proxy buffers SSE.
+Readiness becomes true before model/config is loaded.
+Retry duplicates streamed requests after bytes were delivered.
+Success criteria
+Stateless pods scale horizontally.
+Graceful drain and backpressure are proven.
+Chosen proxy meets protocol/performance gates.
+Capacity controls are derived from measurements.
+Exit evidence required
+Proxy bake-off.
+FD/memory/connection metrics.
+Drain/failover test.
+Runtime topology manifest.
+Example
+Industry reference goal: match the separation seen in high-throughput gateways—stateless proxy plane, local decision state, dedicated inference plane, async analytics—while retaining stronger pre-provider security checks.
+
+T19 — Measure one-unit capacity and the real practical RPS/vCPU
+Phase
+Phase 4
+Depends on
+T03,T09,T11,T12,T13,T16,T17,T18
+Owner
+Performance Engineering
+Parallelizable
+No
+Status
+NOT RUN
+Release effect
+Blocking
+Objective
+Determine the maximum repeatable useful throughput of one gateway/guard unit before extrapolating fleet size.
+Why this task exists
+Historical ~277 RPS/vCPU was planning arithmetic, not the current implementation’s measured ceiling. The single-unit operating point drives cost and 100k fleet size.
+Implementation steps
+Freeze P1 workload, GPU count, model artifacts, worker topology and policy version.
+Run CPU allocation sweeps at feasible 1, 2, 4, 8+ vCPU limits while holding GPU capacity fixed.
+At each CPU allocation run an open-loop RPS sweep until the first repeatable violation of p99 latency, error, queue, CPU throttling or correctness.
+Measure consumed CPU microseconds/request from cgroup counters and publish RPS per allocated serving vCPU, per purchased vCPU and per consumed CPU-second separately.
+Run corresponding guard-GPU throughput sweep with input/output mixes to identify whether CPU or GPU is the bottleneck.
+Verification / test cases
+Three repeated plateaus at each candidate operating point.
+Adjacent failing point retained to prove the boundary.
+No selected guards disabled during the sweep.
+Generator schedule drops = 0; otherwise add generators and repeat.
+At least one test with cold caches/unique prompts verifies the result is not a cache artifact.
+Failure / stop conditions
+Reporting configured RPS instead of completed qualified RPS.
+Dividing by only one process’s CPU while excluding guard/proxy CPU from declared denominator.
+Changing GPU count between CPU points.
+Counting scan-only or policy errors as successful requests.
+Success criteria
+Highest repeatable passing RPS/vCPU is established for P1.
+CPU and GPU bottlenecks are separately identified.
+One-unit p99 remains under signed budget at the chosen safe operating point.
+Exit evidence required
+CPU/GPU sweep CSV.
+cgroup counters.
+Queue/latency plots.
+Passing and failing point manifests.
+Example
+Reference only: TrueFoundry currently documents roughly 350 RPS on 1 vCPU for a much lighter gateway workload and ~7-12 ms added latency depending tracing. AI Mesh P1 has heavier security work, so compare using identical workloads rather than marketing numbers.
+
+T20 — Tune batching, queues, workers and model concurrency to the safe operating point
+Phase
+Phase 4
+Depends on
+T19
+Owner
+Performance + ML Runtime
+Parallelizable
+No
+Status
+NOT RUN
+Release effect
+Blocking
+Objective
+Increase throughput without violating p99 or correctness.
+Why this task exists
+GPU batching and async concurrency can multiply throughput, but queueing delay can erase the <20 ms budget. The optimum must be measured, not guessed.
+Implementation steps
+Sweep TensorRT/Triton/ORT model-instance concurrency and allowed dynamic-batch sizes for the actual W1/W2/W4/W7 mix.
+Sweep maximum batch delay from 0 upward in sub-millisecond increments; stop when p99 queueing consumes the budget.
+Tune gateway workers, event-loop settings, scanner CPU pool, local IPC connections and admission concurrency together.
+Use separate bounded queues for input and output semantic work if head-of-line blocking appears.
+Introduce overload shedding before queue latency becomes nonlinear; return explicit retryable responses rather than timing out deep in the pipeline.
+Verification / test cases
+Burst and steady-arrival tests at 50%, 70%, 85%, 95%, 105% of the candidate safe rate.
+Queueing p99 and max are recorded separately from compute.
+Mixed long/short inputs verify long requests do not starve short requests.
+Output bursts at stream completion do not starve new input scans.
+Overload test returns bounded retryable errors and recovers without restart.
+Failure / stop conditions
+Queue waits dominate <20 ms budget.
+Batching causes cross-tenant data mixing.
+One output burst starves all inputs.
+Overload causes unbounded memory or cascading retries.
+Success criteria
+Safe configuration maximizes qualified throughput while staying inside p99 budget.
+All queues and concurrency limits are documented and observable.
+Overload recovery is automatic.
+Exit evidence required
+Batch/concurrency sweep.
+Queue histograms.
+Mixed-workload traces.
+Final resource-budget config.
+Example
+Rule: prefer a lower peak RPS with stable p99 and bounded queues over a higher burst number that collapses after seconds.
+
+T21 — Prove resilience, backpressure and failure isolation
+Phase
+Phase 4
+Depends on
+T16,T17,T18,T20
+Owner
+SRE + Security + QA
+Parallelizable
+Yes
+Status
+NOT RUN
+Release effect
+Blocking
+Objective
+Make the gateway remain predictable when dependencies fail or load exceeds capacity.
+Why this task exists
+An industry gateway is differentiated by failure behavior: no global collapse, no cross-tenant blast radius and no false “clean” result when a security component is unavailable.
+Implementation steps
+Create fault-injection scenarios for control plane down, snapshot bus down, shared quota store down, audit broker down, one gateway pod killed, one GPU worker killed, full GPU worker loss, provider timeout/429/5xx, DNS failure, partial network loss, slow client and loadgen burst.
+Define circuit-breaker and retry rules per dependency. Never retry a streamed provider request after client-visible bytes were emitted.
+Implement per-tenant admission/fairness so one organization cannot fill every queue.
+Implement readiness/liveness based on loaded policy/model state rather than process existence.
+Verify graceful drain and autoscaling do not drop active streams.
+Verification / test cases
+Kill one gateway pod during 80% load.
+Kill one guard worker during 80% load.
+Drop control-plane connectivity for 15 minutes.
+Stall audit sink for 60 seconds.
+Provider sends 429 burst and later recovers.
+One tenant generates 10x its fair share while another tenant sends normal traffic.
+GPU queue is forced full; gateway sheds before memory growth.
+Failure / stop conditions
+Security detector outage becomes ALLOW without the signed policy.
+Failure in one tenant consumes global queues.
+Retry duplicates provider actions or tool calls.
+Pod reports ready without guard/config state.
+Recovery requires manual restart.
+Success criteria
+No cross-tenant correctness failure.
+Documented failure response for every dependency.
+Healthy capacity continues serving within the approved degraded SLO.
+System returns to steady state automatically after fault removal.
+Exit evidence required
+Chaos run report.
+Error/latency graphs.
+Queue/fairness evidence.
+Recovery time evidence.
+Example
+Example: if local semantic input guard is mandatory and all guard workers are unavailable, requests fail with the signed retryable guard-unavailable response; they do not bypass security or call hosted AI.
+
+T22 — Scale the fleet from one-unit proof to 100,000 RPS
+Phase
+Phase 4
+Depends on
+T19,T20,T21
+Owner
+Platform + Performance
+Parallelizable
+No
+Status
+NOT RUN
+Release effect
+Blocking
+Objective
+Reach 100k qualified gateway goodput using measured horizontal scaling rather than theoretical multiplication.
+Why this task exists
+Linear extrapolation often fails because load balancers, shared state, guard queues, network bandwidth or the load generator become the next bottleneck.
+Implementation steps
+Calculate initial gateway CPU pod count and guard GPU count from the safe single-unit goodput with at least the approved headroom; distribute across at least three failure domains where available.
+Provision enough independent load-generator capacity and controlled-provider capacity to exceed 120k RPS so the system under test—not the harness—is the bottleneck.
+Run staged plateaus: 10k -> 25k -> 50k -> 75k -> 100k -> 110k/120k exploratory.
+At each stage inspect load-balancer connections, pod CPU, queue waits, shared quota coordination, guard QPS/GPU, packet rate and audit exporter backlog.
+Tune horizontal autoscaling on accepted RPS/queue depth and guard waiting work, not only CPU utilization.
+Verification / test cases
+Repeat each stage after a clean restart/warmup.
+Run both JSON and SSE mixes from the signed P1 workload.
+Run unique prompts to defeat verdict caches.
+Remove one failure-domain slice at 70-80% normal load and verify remaining capacity.
+Run tenant-skew distribution rather than perfectly even traffic only.
+Failure / stop conditions
+Load generator or controlled provider saturates first.
+A shared Redis/broker/network tier becomes the hidden 100k wall.
+p99 exceeds 20 ms before 100k.
+Scaling causes config drift or cross-tenant policy errors.
+Result relies on 100% utilization with no failure headroom.
+Success criteria
+100k successful fully evaluated P1 requests/s achieved at a repeatable plateau.
+p99 complete firewall overhead remains <20 ms.
+No selected security control is skipped.
+Fleet has documented headroom/failure-domain reserve.
+Exit evidence required
+Stage-by-stage capacity report.
+Topology and replica counts.
+Loadgen/provider headroom proof.
+Per-stage p99 and queue metrics.
+Example
+Fleet sizing formula: required_units = ceil(target_goodput / safe_unit_goodput) + failure/headroom reserve. Replace every planning estimate with measured safe_unit_goodput.
+
+T23 — Run the final 100k + <20 ms + SDK/SSE qualification and competitive bake-off
+Phase
+Phase 4
+Depends on
+T04,T08,T09,T21,T22
+Owner
+Independent Performance QA
+Parallelizable
+No
+Status
+NOT RUN
+Release effect
+Blocking
+Objective
+Produce the release certificate that proves performance, protocol correctness and security simultaneously.
+Why this task exists
+The final result must survive an independent, frozen test. It should also show where AI Mesh sits relative to a plain Envoy hop and published industry gateway baselines without pretending the workloads are identical.
+Implementation steps
+Freeze images, policy plan, model hashes, proxy config and workload. No tuning during the qualification run.
+Warm for 5 minutes, then run three independent 30-minute 100k-RPS P1 plateaus with restart/reconciliation between runs.
+Run a two-hour soak at the safe release rate.
+During qualification run the OpenAI SDK canary suite continuously on a statistically meaningful side stream, including SSE/tool-call cases.
+Run direct provider, plain Envoy/nginx passthrough, AI Mesh P0 and AI Mesh P1 with the same controlled workload. If a licensed TrueFoundry environment is available, run the same workload; otherwise cite its vendor benchmark only as context.
+Publish p50/p95/p99 overhead, first-content delay, max release lag, completion overhead, goodput, errors, CPU/RPS, GPU/QPS, memory, queueing and policy correctness.
+Verification / test cases
+100k scheduled RPS with zero loadgen schedule drops.
+All OpenAI SDK canaries pass while load is active.
+No forbidden external-AI network attempts.
+Security corpus sent as a low-rate interleaved canary produces zero action regressions.
+Restart between plateau trials reproduces the result.
+Competitor/pass-through comparison uses identical payloads and reports different feature sets honestly.
+Failure / stop conditions
+Any p99 >20 ms in P1.
+Goodput <100k.
+Gateway-caused error rate >0.1%.
+Any raw protected secret egress in qualification corpus.
+Any SDK/SSE conformance failure.
+Any selected detector skipped/unavailable without signed handling.
+Any run requires manual mid-test mutation.
+Success criteria
+Three 30-minute plateaus and two-hour soak pass.
+100k P1 goodput and <20 ms p99 coexist.
+SSE/OpenAI SDK correctness remains green under load.
+Competitive report separates transport-only and security-enabled overhead.
+Exit evidence required
+Signed qualification bundle.
+Raw sanitized histograms.
+OpenAI SDK canary report.
+Network egress report.
+Competitive benchmark table.
+Reviewer sign-off.
+Example
+Industry context to report carefully: TrueFoundry documentation currently reports ~350 RPS on 1 vCPU for its gateway benchmark and ~7-12 ms overhead depending tracing; that is a lighter proxy workload. Envoy provides local/global rate-limit primitives. AI Mesh must compare identical workloads and highlight the additional security controls rather than copy marketing numbers.
+
+T24 — Canary, release, rollback proof and final cleanup
+Phase
+Phase 4
+Depends on
+T23
+Owner
+SRE + Release Manager + Security
+Parallelizable
+No
+Status
+NOT RUN
+Release effect
+Blocking
+Objective
+Ship the qualified system without losing rollback safety or reintroducing external guard dependencies.
+Why this task exists
+A benchmark build is not production-ready until canary traffic, rollback, configuration migration, stream draining and post-release observability are proven.
+Implementation steps
+Deploy immutable candidate images to a small canary slice with the same local guard artifacts and execution-plan mechanism used in qualification.
+Ramp canary traffic in explicit steps while comparing latency, action distribution, SDK errors, queueing, provider errors and detector quality to the previous release.
+Run live organization setting toggles through the real frontend and verify applied plan version/wire behavior.
+Exercise rollback while active SSE streams exist; drain candidate and restore the last local-only safe release.
+After sustained success, complete removal of deprecated environment variables, cloud guard credentials, dead code and misleading frontend labels.
+Archive the qualification bundle and publish the exact claim language for P1/P2/P3.
+Verification / test cases
+1% -> 5% -> 25% -> 50% -> 100% canary/ramp or the organization-approved equivalent.
+Real OpenAI SDK sync/async canaries during every step.
+Rollback rehearsal with active streams.
+Organization OFF/MONITOR/ENFORCE change during canary reaches all pods within the freshness SLO.
+Post-release zero-external-AI network audit.
+Failure / stop conditions
+Canary action/latency distribution diverges unexpectedly.
+Rollback requires restoring external guard credentials.
+Active SSE streams are truncated during normal rolling deployment.
+Old UI can configure semantics the new gateway no longer understands.
+Success criteria
+Production reaches full traffic with the same artifact identities as qualification.
+Rollback is proven and local-only.
+Post-release 100k/<20 ms certificate remains valid for the claimed profile.
+No external guard credentials/callers remain.
+Runbook and operational dashboards are handed to SRE.
+Exit evidence required
+Canary report.
+Rollback evidence.
+Final dependency/config diff.
+Production claim statement.
+Operations handoff.
+Example
+Final claim example: “AI Mesh P1 firewall overhead: p99 <20 ms on the published qualification workload at 100k fully evaluated gateway requests/s; OpenAI Python SDK and SSE compatibility passed. Customer BYOK generation throughput remains subject to the customer provider’s quota.”
+
+7. Final release exit checklist
+Release gate
+Result
+Evidence
+Zero platform external AI attempts
+PASS / FAIL
+T10/T15/T23 network and source evidence
+Organization rule control correct
+PASS / FAIL
+T05-T07/T24 real UI + wire proof
+OpenAI SDK sync/async non-stream
+PASS / FAIL
+T04/T23
+OpenAI SDK SSE streaming
+PASS / FAIL
+T04/T08/T23
+SSE first-content added delay p99 < signed limit
+PASS / FAIL
+T08/T23
+SSE max release lag p99 < signed limit
+PASS / FAIL
+T08/T23
+Complete P1 firewall overhead p99 <20 ms
+PASS / FAIL
+T23
+100,000 P1 qualified goodput RPS
+PASS / FAIL
+T22/T23
+Gateway-caused error rate <=0.1%
+PASS / FAIL
+T23
+No load-generator schedule drops
+PASS / FAIL
+T23
+Security quality gates pass
+PASS / FAIL
+T09/T23
+No raw supported secret egress
+PASS / FAIL
+T09/T23
+Resilience/chaos gates pass
+PASS / FAIL
+T21
+Practical RPS/vCPU measured
+PASS / FAIL
+T19
+Two-hour soak passes
+PASS / FAIL
+T23
+Canary and rollback pass
+PASS / FAIL
+T24
+GO / NO-GO RULE
+Release is GO only when every mandatory row above is PASS on the same immutable artifact/profile family. A faster run with guards disabled cannot replace a failed P1 run. A successful P1 run cannot be used to claim strict whole-response P2 streaming latency.
+8. External reference principles used in this runbook
+TrueFoundry Gateway Plane Architecture: documents stateless gateway pods, in-memory authentication/authorization/rate/load-balancing decisions, asynchronous logging/config propagation, readiness dependent on configuration, and horizontal CPU scaling. It currently reports about 350 RPS on 1 vCPU and roughly +7 to +12 ms in its published gateway benchmark depending tracing. Treat these as vendor/reference results, not an apples-to-apples security benchmark.
+Envoy Gateway: documents both local and global rate limiting. Local rate limiting is lightweight and per instance; global rate limiting coordinates across the fleet through an external rate-limit service/datastore. AI Mesh uses the same layered design principle but must measure its own consistency/latency trade-off.
+OpenAI Python SDK: streaming responses use Server-Sent Events; both sync and async clients iterate streamed events. The runbook therefore treats SSE parsing, event order, terminal behavior, cancellation and tool-call deltas as compatibility gates rather than optional UI tests.
+Reference URLs:
+https://www.truefoundry.com/docs/platform/gateway-plane-architecture
+https://gateway.envoyproxy.io/docs/concepts/rate-limiting/
+https://github.com/openai/openai-python/blob/main/README.md

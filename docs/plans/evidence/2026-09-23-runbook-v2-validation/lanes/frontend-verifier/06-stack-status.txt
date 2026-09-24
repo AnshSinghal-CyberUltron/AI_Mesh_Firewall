@@ -1,0 +1,17 @@
+# docker ps (names/images/status/ports) at 2026-09-23T11:02:32+05:30
+aiguardx-postgres-1	postgres:16-alpine	Up 25 hours (healthy)	0.0.0.0:5433->5432/tcp, [::]:5433->5432/tcp
+buildx_buildkit_gw000	moby/buildkit:v0.21.1	Up 4 days	
+ai_mesh_firewall-frontend-1	node:22-alpine	Up 5 days	0.0.0.0:8180->5173/tcp, [::]:8180->5173/tcp
+ai_mesh_firewall-demo-1	ai_mesh_firewall-demo	Up 5 days (healthy)	0.0.0.0:8770->8770/tcp, [::]:8770->8770/tcp
+ai_mesh_firewall-gateway-1	ai_mesh_firewall-gateway	Up 5 days (healthy)	0.0.0.0:8300->8300/tcp, [::]:8300->8300/tcp
+ai_mesh_firewall-control-1	ai_mesh_firewall-control	Up 5 days (healthy)	0.0.0.0:8100->8000/tcp, [::]:8100->8000/tcp
+ai_mesh_firewall-pgbouncer-1	edoburu/pgbouncer:v1.23.1-p1	Up 5 days (healthy)	5432/tcp, 0.0.0.0:6432->6432/tcp, [::]:6432->6432/tcp
+ai_mesh_firewall-redis-1	redis:7.4-alpine	Up 5 days (healthy)	0.0.0.0:6379->6379/tcp, [::]:6379->6379/tcp
+ai_mesh_firewall-mcp-stub-1	python:3.12-slim	Up 5 days (healthy)	0.0.0.0:9999->9999/tcp, [::]:9999->9999/tcp
+ai_mesh_firewall-rabbitmq-1	rabbitmq:3-management	Up 5 days (healthy)	4369/tcp, 5671/tcp, 15671/tcp, 15691-15692/tcp, 25672/tcp, 0.0.0.0:5772->5672/tcp, [::]:5772->5672/tcp, 0.0.0.0:15772->15672/tcp, [::]:15772->15672/tcp
+ai_mesh_firewall-postgres-1	pgvector/pgvector:pg16	Up 5 days (healthy)	0.0.0.0:5432->5432/tcp, [::]:5432->5432/tcp
+ai_mesh_firewall-t02-recorder-1	ai-mesh-t02-recorder:t02	Up 5 days (healthy)	8080/tcp, 127.0.0.1:18081->18081/tcp
+buildx_buildkit_aim-fast0	moby/buildkit:buildx-stable-1	Up 5 days	
+
+# curl :8180 /
+HTTP 200 bytes=639 t=0.040193s

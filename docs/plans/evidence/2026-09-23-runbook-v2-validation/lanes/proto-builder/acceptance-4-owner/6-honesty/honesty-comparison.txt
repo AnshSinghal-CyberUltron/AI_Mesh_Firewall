@@ -1,0 +1,4 @@
+direct        json p50=0.1887 | first p50=0.1573 | sse p50=0.1703 | valid True drops 0 q 240 / 240
+base          json p50=85.3237 | first p50=85.6694 | sse p50=123.7719 | valid True drops 0 q 238 / 240
+predispatch5  json p50=89.4538 | first p50=89.5674 | sse p50=113.4127 | valid True drops 0 q 238 / 240
+hold30        json p50=85.2148 | first p50=85.7484 | sse p50=135.7604 | valid True drops 0 q 238 / 240

@@ -1,0 +1,1 @@
+{"P1_DEBUG": {"s1_benign_nonstream": {"n": 20, "min": 1, "median": 1.0, "max": 1, "mean": 1}, "s2_benign_stream": {"n": 20, "min": 0, "median": 0.0, "max": 0, "mean": 0}, "s3_pii_nonstream": {"n": 20, "min": 2, "median": 2.0, "max": 2, "mean": 2}, "s4_injection_block": {"n": 20, "min": 1, "median": 1.0, "max": 1, "mean": 1}}, "blocked": 1, "blocked_unexpected": 0}

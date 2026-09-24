@@ -1,0 +1,9 @@
+{"round": 1, "orgs": 300, "notifications_dropped": 0, "stale_after_3.5s_quiescence": 0, "of_which_version_index_claims_current": 0, "examples": [], "plan_reloads": 899, "push_applied": 600}
+{"round": 2, "orgs": 300, "notifications_dropped": 0, "stale_after_3.5s_quiescence": 13, "of_which_version_index_claims_current": 13, "examples": [["org-0012", "v2a", "v2b"], ["org-0037", "v2a", "v2b"], ["org-0062", "v2a", "v2b"]], "plan_reloads": 1518, "push_applied": 1200}
+{"round": 3, "orgs": 300, "notifications_dropped": 0, "stale_after_3.5s_quiescence": 0, "of_which_version_index_claims_current": 0, "examples": [], "plan_reloads": 2116, "push_applied": 1800}
+{"round": 4, "orgs": 300, "notifications_dropped": 0, "stale_after_3.5s_quiescence": 2, "of_which_version_index_claims_current": 2, "examples": [["org-0005", "v4a", "v4b"], ["org-0129", "v4a", "v4b"]], "plan_reloads": 2743, "push_applied": 2400}
+{"round": 5, "orgs": 300, "notifications_dropped": 0, "stale_after_3.5s_quiescence": 0, "of_which_version_index_claims_current": 0, "examples": [], "plan_reloads": 3343, "push_applied": 3000}
+{"round": 6, "orgs": 300, "notifications_dropped": 0, "stale_after_3.5s_quiescence": 0, "of_which_version_index_claims_current": 0, "examples": [], "plan_reloads": 3941, "push_applied": 3600}
+{"round": 7, "orgs": 300, "notifications_dropped": 0, "stale_after_3.5s_quiescence": 0, "of_which_version_index_claims_current": 0, "examples": [], "plan_reloads": 4558, "push_applied": 4200}
+{"round": 8, "orgs": 300, "notifications_dropped": 0, "stale_after_3.5s_quiescence": 0, "of_which_version_index_claims_current": 0, "examples": [], "plan_reloads": 5156, "push_applied": 4800}
+{"summary": {"rounds": 8, "orgs": 300, "missed_fraction": 0.0, "stale_org_rounds_total": 15, "stale_at_end_after_extra_5s": 0, "examples": []}}

@@ -1,0 +1,16 @@
+check_sizes exit=0
+check_http_outside_edge_resolve exit=0
+check_no_module_mutable exit=0
+check_capacity_literals exit=0
+Found 8 errors.
+[*] 8 fixable with the `--fix` option.
+ruff exit=1
+All checks passed!
+ruff after isort autofix exit=0
+Success: no issues found in 78 source files
+Gateway v2 layers KEPT
+NameError detect->plan   (Finding.__post_init__ validates Ca
+NameError resolve->detect+plan (resolver compares FindingSta
+NameError dispatch->resolve (entry point isinstance(Dispatch
+NameError egress->plan  (StreamPipeline reads StreamingMode)
+NameError egress->resolve (output_guard calls resolve(), Pha

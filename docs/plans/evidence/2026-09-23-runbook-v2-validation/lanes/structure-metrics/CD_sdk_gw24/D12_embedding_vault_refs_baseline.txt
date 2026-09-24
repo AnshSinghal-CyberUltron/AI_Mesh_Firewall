@@ -1,0 +1,44 @@
+## wc -l
+497 gateway/ai_mesh_gateway/embedding_vault.py
+## importers (non-test + test) of embedding_vault
+gateway/ai_mesh_gateway/tests/test_query_stage_layer_failure_observable.py:38:                       embedding_vault=r, intent_classifier=r)
+gateway/ai_mesh_gateway/tests/test_embedding_vault.py:1:"""Tests for EmbeddingVault failure handling (M-16).
+gateway/ai_mesh_gateway/tests/test_embedding_vault.py:13:import embedding_vault
+gateway/ai_mesh_gateway/tests/test_embedding_vault.py:14:from embedding_vault import EmbeddingVault, VaultVerdict, _is_auth_error
+gateway/ai_mesh_gateway/tests/test_embedding_vault.py:16:VAULT_LOGGER = "gateway.embedding_vault"
+gateway/ai_mesh_gateway/tests/test_embedding_vault.py:37:    v = EmbeddingVault(pg_dsn="postgresql://fake:fake@127.0.0.1:1/fake")
+gateway/ai_mesh_gateway/tests/test_embedding_vault.py:45:    return dict(embedding_vault.VAULT_ERROR_COUNTERS)
+gateway/ai_mesh_gateway/tests/test_embedding_vault.py:49:    return embedding_vault.VAULT_ERROR_COUNTERS.get(kind, 0) - snapshot.get(kind, 0)
+gateway/ai_mesh_gateway/tests/test_embedding_vault.py:141:    assert "amf_gateway_embedding_vault_errors_total" in text
+gateway/ai_mesh_gateway/scanner.py:1118:        embedding_vault: Any = None,  # M9: removed (legacy Tier-1.6 vault); kept for call-site compat, ignored
+gateway/ai_mesh_gateway/scanner.py:1135:        # M9: legacy Tier-1.6 EmbeddingVault removed; param ignored.
+gateway/ai_mesh_gateway/scanner.py:1459:        # M9: the legacy Tier-1.6 EmbeddingVault semantic-injection check was
+gateway/ai_mesh_gateway/rag_pipeline/query_stage.py:15:    from embedding_vault import EmbeddingVault
+gateway/ai_mesh_gateway/rag_pipeline/query_stage.py:40:        embedding_vault: "EmbeddingVault | None" = None,
+gateway/ai_mesh_gateway/rag_pipeline/query_stage.py:46:        self._embedding_vault = embedding_vault
+gateway/ai_mesh_gateway/rag_pipeline/query_stage.py:113:        if self._embedding_vault is not None:
+gateway/ai_mesh_gateway/rag_pipeline/query_stage.py:115:                vault_v = await self._embedding_vault.check(inp.query_text)
+gateway/ai_mesh_gateway/rag_pipeline/query_stage.py:132:                            threat_type="embedding_vault_match",
+gateway/ai_mesh_gateway/rag_pipeline/query_stage.py:139:                        injection_flags=["embedding_vault_match"],
+gateway/ai_mesh_gateway/rag_pipeline/query_stage.py:140:                        scan_tier="embedding_vault",
+gateway/ai_mesh_gateway/rag_pipeline/query_stage.py:142:                        embedding_vault_verdict=vault_result,
+gateway/ai_mesh_gateway/rag_pipeline/query_stage.py:146:                    injection_flags.append("embedding_vault_match")
+gateway/ai_mesh_gateway/rag_pipeline/query_stage.py:313:                if self._embedding_vault is not None:
+gateway/ai_mesh_gateway/rag_pipeline/query_stage.py:315:                        await self._embedding_vault.add_attack(
+gateway/ai_mesh_gateway/rag_pipeline/query_stage.py:335:                    embedding_vault_verdict=vault_result,
+gateway/ai_mesh_gateway/rag_pipeline/query_stage.py:377:                        embedding_vault_verdict=vault_result,
+gateway/ai_mesh_gateway/rag_pipeline/query_stage.py:416:                        embedding_vault_verdict=vault_result,
+gateway/ai_mesh_gateway/rag_pipeline/query_stage.py:443:                    embedding_vault_verdict=vault_result,
+gateway/ai_mesh_gateway/rag_pipeline/query_stage.py:466:                    if self._embedding_vault is not None:
+gateway/ai_mesh_gateway/rag_pipeline/query_stage.py:468:                            await self._embedding_vault.add_attack(
+gateway/ai_mesh_gateway/rag_pipeline/query_stage.py:488:                        embedding_vault_verdict=vault_result,
+gateway/ai_mesh_gateway/rag_pipeline/query_stage.py:511:            embedding_vault_verdict=vault_result,
+gateway/ai_mesh_gateway/rag_pipeline/pipeline.py:30:    from embedding_vault import EmbeddingVault
+gateway/ai_mesh_gateway/rag_pipeline/pipeline.py:71:        embedding_vault: "EmbeddingVault | None" = None,
+gateway/ai_mesh_gateway/rag_pipeline/pipeline.py:78:            embedding_vault=embedding_vault,
+gateway/ai_mesh_gateway/rag_pipeline/contracts.py:62:    embedding_vault_verdict: dict[str, Any] = field(default_factory=dict)
+gateway/ai_mesh_gateway/rag_pipeline/bedrock_embedder.py:10:  * OrderedDict + monotonic TTL cache (mirrors ``embedding_vault.py``).
+gateway/ai_mesh_gateway/main.py:6460:    # M9: the legacy EmbeddingVault (system pgvector attack-pattern store between
+gateway/ai_mesh_gateway/main.py:6465:    _embedding_vault = None
+gateway/ai_mesh_gateway/main.py:6708:            embedding_vault=_embedding_vault,
+gateway/ai_mesh_gateway/main.py:6713:                 sum(1 for x in [_llm_judge, _embedding_vault, _canary_manager, _intent_classifier, _leakage_for_rag] if x))

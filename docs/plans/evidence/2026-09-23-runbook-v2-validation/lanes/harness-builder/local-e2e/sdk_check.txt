@@ -1,0 +1,12 @@
+json: stop ' their large any we will have an more at like in about' 12
+stream: stop ' their large any we will have an more at like in about' 12 same_as_json: True
+tool stream: tool_calls lookup_record fragments: 8 args json valid: {'limit': 5, 'query': 'good some study more it people study , after no like will', 'ref': 'sdk-tool'}
+tool json: tool_calls True
+Traceback (most recent call last):
+  File "<stdin>", line 27, in <module>
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/openai/_utils/_utils.py", line 298, in wrapper
+    return func(*args, **kwargs)
+TypeError: Completions.create() got an unexpected keyword argument 'max_retries'
+fault prebyte-500 -> InternalServerError 500 {'code': 'synthetic_fault', 'message': 'synthetic pre-byte 500', 'param': None, 'type': 'server_error'}
+split-aws stream contains canary: True ' do on be would these do these after after by could first fact year list here then all for each AKIARVOUTPUT4417ZZ9Q yea'
+disconnect-after:5 -> RemoteProtocolError peer closed connection without sending complete message body (incomplete chunked read)

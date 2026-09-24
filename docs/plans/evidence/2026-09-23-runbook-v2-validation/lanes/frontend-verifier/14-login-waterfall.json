@@ -1,0 +1,63 @@
+{
+ "ms_to_networkidle": 1151,
+ "total_requests": 8,
+ "api_calls": 0,
+ "requests": [
+  {
+   "url": "http://127.0.0.1:4173/login",
+   "type": "document",
+   "status": 200,
+   "respBodyBytes": 478,
+   "respHeaderBytes": 238
+  },
+  {
+   "url": "http://127.0.0.1:4173/assets/index-BSQJP-da.css",
+   "type": "stylesheet",
+   "status": 200,
+   "respBodyBytes": 28432,
+   "respHeaderBytes": 348
+  },
+  {
+   "url": "https://fonts.googleapis.com/css2?…",
+   "type": "stylesheet",
+   "status": 200,
+   "respBodyBytes": 1278,
+   "respHeaderBytes": 0
+  },
+  {
+   "url": "http://127.0.0.1:4173/assets/index-EVycmEYU.js",
+   "type": "script",
+   "status": 200,
+   "respBodyBytes": 644043,
+   "respHeaderBytes": 356
+  },
+  {
+   "url": "https://fonts.googleapis.com/css2?…",
+   "type": "stylesheet",
+   "status": 200,
+   "respBodyBytes": 860,
+   "respHeaderBytes": 0
+  },
+  {
+   "url": "https://fonts.googleapis.com/css2?…",
+   "type": "stylesheet",
+   "status": 200,
+   "respBodyBytes": 741,
+   "respHeaderBytes": 0
+  },
+  {
+   "url": "http://127.0.0.1:4173/favicon.svg",
+   "type": "other",
+   "status": 200,
+   "respBodyBytes": 335,
+   "respHeaderBytes": 267
+  },
+  {
+   "url": "https://fonts.gstatic.com/s/plusjakartasans/v12/LDIoaomQNQcsA88c7O9yZ4KMCoOg4Ko20yw.woff2",
+   "type": "font",
+   "status": 200,
+   "respBodyBytes": 27377,
+   "respHeaderBytes": 0
+  }
+ ]
+}

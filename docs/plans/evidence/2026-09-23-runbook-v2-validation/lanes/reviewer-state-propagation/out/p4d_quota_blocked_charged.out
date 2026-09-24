@@ -1,0 +1,1 @@
+{"t": 1790165417.273, "step": "blocked request", "response": "403 blocked_by_policy", "budget_before": 100000, "store_remaining": 48640, "note": "the lease took a chunk; see quota_admitted_tokens for the charge", "per_worker": {"0": {"held": 0}, "1": {"held": 0}, "2": {"held": 0}, "3": {"held": 47328}, "all_workers": {"granted": 51360, "admitted": 4032, "rejected": 0}}}

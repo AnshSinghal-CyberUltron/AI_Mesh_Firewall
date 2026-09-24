@@ -1,0 +1,18 @@
+14:42:32 fleet-090: olg started on rv-pbf-lg-4 (rate 90.0 each, start-at 1790174575982, mode sut, targets http://10.146.0.20:8080)
+[rv-pbf-lg-4] 2026/09/23 14:49:33 done: scheduled=33750 recorded=33750 ok=33020 errors=map[http_403:595 http_503:135] drops=0 late_p99=107us max=773us cpu_busy_max=20.6%
+# fleet-090: strict FAIL | load-knee FAIL (sut, units=3, rate=90)
+
+checks: {'p99_T_fw_addon_lt_slo': False, 'infra_error_rate_le_budget': False, 'zero_schedule_drops': True, 'zero_safety_failures': True, 'run_valid': True}
+load-knee checks: {'p99_T_fw_addon_nohold_lt_slo': True, 'infra_error_rate_le_budget': False, 'zero_schedule_drops': True, 'zero_safety_failures': True, 'run_valid': True}
+offered 27000 (90.0/s) qualified 26395 (87.98/s) FP-blocks 495 (0.01833) infra 110 (0.004074074074074074) drops 0 safety 0
+infra reasons: {'http_503': 110, 'incomplete': 110, 'unjoined': 110, 'disposition_missing': 110, 'stage_canon_missing': 110, 'stage_det_missing': 110, 'stage_sem_missing': 110, 'stage_resolve_missing': 110, 'stage_dispatch_missing': 110, 'stage_out_missing': 110, 'stage_audit_missing': 110}
+infra detail: {'503 http_503 type=server_overloaded code=overloaded': 110}
+
+T_fw_addon: n=26395 p50=10.7821 p90=16.02 p99=53.7041 p99.9=71.0527 max=101.6421 mean=13.1071
+T_fw_addon_nohold: n=26395 p50=10.4872 p90=13.6745 p99=17.0233 p99.9=21.0132 max=25.443 mean=10.0439
+T_fw_addon_sse: n=18489 p50=10.8786 p90=32.859 p99=54.5757 p99.9=71.5225 max=101.6421 mean=14.3769
+T_fw_addon_json: n=7906 p50=10.566 p90=13.8558 p99=16.9881 p99.9=21.466 max=23.6316 mean=10.1376
+T_addon_first_sse: n=18489 p50=10.4319 p90=13.7731 p99=29.5498 p99.9=35.2721 max=55.7147 mean=10.2502
+T_addon_total_sse: n=18489 p50=10.4495 p90=13.6018 p99=17.0769 p99.9=21.0132 max=25.443 mean=10.0039
+T_addon_total_json: n=7906 p50=10.566 p90=13.8558 p99=16.9881 p99.9=21.466 max=23.6316 mean=10.1376
+T_release_lag_max: n=1862 p50=50.2585 p90=54.5401 p99=71.5225 p99.9=75.7164 max=101.6421 mean=49.7256

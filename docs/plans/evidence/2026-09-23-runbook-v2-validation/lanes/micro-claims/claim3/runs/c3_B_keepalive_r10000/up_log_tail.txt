@@ -1,0 +1,5 @@
+[2026-09-23 08:09:59 +0000] [15621] [INFO] Booting worker with pid: 15621
+[2026-09-23 08:09:59 +0000] [15621] [INFO] Started server process [15621]
+[2026-09-23 08:09:59 +0000] [15621] [INFO] Waiting for application startup.
+[2026-09-23 08:09:59 +0000] [15621] [INFO] Application startup complete.
+[2026-09-23 08:09:59 +0000] [15605] [INFO] Control socket listening at /run/user/1001/gunicorn.ctl

@@ -1,0 +1,40 @@
+## start 2026-09-23T11:22:04.160785365Z
+aimeshperf-gateway-1 Up 6 hours (healthy) aimeshperf-gateway
+aimeshperf-control-1 Up 6 hours (healthy) aimeshperf-control
+aimeshperf-pgbouncer-1 Up 6 hours (healthy) edoburu/pgbouncer:v1.23.1-p1
+aimeshperf-rabbitmq-1 Up 6 hours (healthy) rabbitmq:3-management
+aimeshperf-redis-1 Up 6 hours (healthy) redis:7.4-alpine
+aimeshperf-postgres-1 Up 6 hours (healthy) pgvector/pgvector:pg16
+/aimeshperf-gateway-1 restarts=0 started=2026-09-23T05:51:29.454747255Z
+/aimeshperf-control-1 restarts=0 started=2026-09-23T05:50:59.888756861Z
+/aimeshperf-pgbouncer-1 restarts=0 started=2026-09-23T05:50:54.479207443Z
+/aimeshperf-rabbitmq-1 restarts=0 started=2026-09-23T05:50:43.642465113Z
+/aimeshperf-redis-1 restarts=0 started=2026-09-23T05:50:43.976172707Z
+/aimeshperf-postgres-1 restarts=0 started=2026-09-23T05:50:43.834877327Z
+total_commands_processed:5873405
+instantaneous_ops_per_sec:22
+rejected_connections:0
+connected_clients:1256
+blocked_clients:0
+used_memory_human:19.57M
+6.48 14.37 12.56 2/1896 720979
+## stop 2026-09-23T11:24:15.165785353Z
+aimeshperf-gateway-1 Up 6 hours (healthy) aimeshperf-gateway
+aimeshperf-control-1 Up 6 hours (healthy) aimeshperf-control
+aimeshperf-pgbouncer-1 Up 6 hours (healthy) edoburu/pgbouncer:v1.23.1-p1
+aimeshperf-rabbitmq-1 Up 6 hours (healthy) rabbitmq:3-management
+aimeshperf-redis-1 Up 6 hours (healthy) redis:7.4-alpine
+aimeshperf-postgres-1 Up 6 hours (healthy) pgvector/pgvector:pg16
+/aimeshperf-gateway-1 restarts=0 started=2026-09-23T05:51:29.454747255Z
+/aimeshperf-control-1 restarts=0 started=2026-09-23T05:50:59.888756861Z
+/aimeshperf-pgbouncer-1 restarts=0 started=2026-09-23T05:50:54.479207443Z
+/aimeshperf-rabbitmq-1 restarts=0 started=2026-09-23T05:50:43.642465113Z
+/aimeshperf-redis-1 restarts=0 started=2026-09-23T05:50:43.976172707Z
+/aimeshperf-postgres-1 restarts=0 started=2026-09-23T05:50:43.834877327Z
+total_commands_processed:5878386
+instantaneous_ops_per_sec:21
+rejected_connections:0
+connected_clients:1256
+blocked_clients:0
+used_memory_human:19.28M
+1.07 9.55 11.02 1/1893 723495

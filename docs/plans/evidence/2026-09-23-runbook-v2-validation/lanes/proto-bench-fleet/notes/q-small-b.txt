@@ -1,0 +1,5 @@
+f8-060 60 LGS=rv-pbf-lg-4 PROVS=rv-pbf-prov-3 REDIS_VM=rv-pbf-redis-2 UNITS=rv-pbf-unit-6 TARGETS=http://10.146.0.7:8400 LABEL=C-g2-8-ladder
+f8-070 70 LGS=rv-pbf-lg-4 PROVS=rv-pbf-prov-3 REDIS_VM=rv-pbf-redis-2 UNITS=rv-pbf-unit-6 TARGETS=http://10.146.0.7:8400 LABEL=C-g2-8-ladder
+f4-030 30 LGS=rv-pbf-lg-4 PROVS=rv-pbf-prov-3 REDIS_VM=rv-pbf-redis-2 UNITS=rv-pbf-unit-7 TARGETS=http://10.146.0.14:8400 LABEL=C-g2-4-ladder
+f4-035 35 LGS=rv-pbf-lg-4 PROVS=rv-pbf-prov-3 REDIS_VM=rv-pbf-redis-2 UNITS=rv-pbf-unit-7 TARGETS=http://10.146.0.14:8400 LABEL=C-g2-4-ladder
+f4-040 40 LGS=rv-pbf-lg-4 PROVS=rv-pbf-prov-3 REDIS_VM=rv-pbf-redis-2 UNITS=rv-pbf-unit-7 TARGETS=http://10.146.0.14:8400 LABEL=C-g2-4-ladder

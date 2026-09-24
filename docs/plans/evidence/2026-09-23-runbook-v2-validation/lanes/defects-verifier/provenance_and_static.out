@@ -1,0 +1,79 @@
+== provenance: files under test, sha256[:16] at commit 2a657fad / baseline export / HEAD ==
+HEAD=52a584e944c08e63fc7a20b521a958e425ffd0e5 feat(gw03): derive every bound from ResourceContract
+gateway/ai_mesh_gateway/enforcement.py commit=937b2b32cdb9a1be export=937b2b32cdb9a1be head=937b2b32cdb9a1be export==commit UNCHANGED-AT-HEAD
+gateway/ai_mesh_gateway/main.py commit=6776745dc50b5aef export=6776745dc50b5aef head=6776745dc50b5aef export==commit UNCHANGED-AT-HEAD
+gateway/ai_mesh_gateway/scanner.py commit=e657d56a1a78b8b4 export=e657d56a1a78b8b4 head=e657d56a1a78b8b4 export==commit UNCHANGED-AT-HEAD
+gateway/ai_mesh_gateway/bedrock_scanner.py commit=95252811463c427b export=95252811463c427b head=95252811463c427b export==commit UNCHANGED-AT-HEAD
+gateway/ai_mesh_gateway/bedrock_tier2_breaker.py commit=0dcde9eb0ea1d730 export=0dcde9eb0ea1d730 head=0dcde9eb0ea1d730 export==commit UNCHANGED-AT-HEAD
+gateway/ai_mesh_gateway/policy_engine.py commit=deb94a94cfc8e6f0 export=deb94a94cfc8e6f0 head=deb94a94cfc8e6f0 export==commit UNCHANGED-AT-HEAD
+gateway/ai_mesh_gateway/mcp_scan_orchestrator.py commit=cf01403ef317a6ca export=cf01403ef317a6ca head=cf01403ef317a6ca export==commit UNCHANGED-AT-HEAD
+gateway/ai_mesh_gateway/output_guard.py commit=8698b0a26f4e951f export=8698b0a26f4e951f head=8698b0a26f4e951f export==commit UNCHANGED-AT-HEAD
+gateway/ai_mesh_gateway/secure_streaming.py commit=5c2cd9caa11fd5a9 export=5c2cd9caa11fd5a9 head=5c2cd9caa11fd5a9 export==commit UNCHANGED-AT-HEAD
+gateway/ai_mesh_gateway/patterns.py commit=c772800fd8abb91f export=c772800fd8abb91f head=c772800fd8abb91f export==commit UNCHANGED-AT-HEAD
+gateway/ai_mesh_gateway/middleware.py commit=2ac5897b4ee0dd8d export=2ac5897b4ee0dd8d head=2ac5897b4ee0dd8d export==commit UNCHANGED-AT-HEAD
+control/ai_mesh_control/policy/builtin_packs_catalog.py commit=64e49eeed698528e export=64e49eeed698528e head=64e49eeed698528e export==commit UNCHANGED-AT-HEAD
+gateway/ai_mesh_gateway/llm_router.py commit=4834963cf405eafd export=4834963cf405eafd head=d641565206b51d59 export==commit CHANGED-AT-HEAD
+gateway/ai_mesh_gateway/pipeline_trace.py commit=7917d9e0e7bfbb77 export=7917d9e0e7bfbb77 head=f1d6a55475aa76e9 export==commit CHANGED-AT-HEAD
+
+== v1 source changes 2a657fad..HEAD (gateway/ai_mesh_gateway, shared) ==
+ gateway/ai_mesh_gateway/llm_router.py              |  46 +++
+ gateway/ai_mesh_gateway/pipeline_trace.py          |  65 ++++-
+ .../tests/test_haiku_uncallable_routing.py         | 314 +++++++++++++++++++++
+ .../tests/test_pipeline_pre_masked_redact.py       |  20 ++
+ .../tests/test_pipeline_trace_routing.py           |  50 ++++
+ .../tests/test_routing_runs_under_killswitch.py    | 141 +++++++++
+ .../test_tier2_injection_enforcement_floor.py      | 152 ++++++++++
+ 7 files changed, 786 insertions(+), 2 deletions(-)
+
+== catalog_row_is_display_alias: defined in llm_router? ==
+at 2a657fad: 0  at HEAD: 1
+3903:                catalog_row_is_display_alias as _alias_row,
+3908:                catalog_row_is_display_alias as _alias_row,
+4745:            from llm_router import catalog_row_is_display_alias as _display_alias_row
+4747:            from .llm_router import catalog_row_is_display_alias as _display_alias_row
+first added to llm_router in:
+2ed687a6 2026-09-17 13:34:12 +0530 chore(revamp): snapshot T00–T02 lab tree and plans off ansh
+
+== commit that moved ATTACK_PATTERNS iteration into _scan_prompt_sync_disabled_builtin_default ==
+35f1fe45 2026-09-10 Remove FRONTEND_AUDIT.md file and add new detection corpus specifications and requirements documents
+35f1fe45 IS an ancestor of 2a657fad
+
+== every reference to ATTACK_PATTERNS / the disabled reference fn / command_injection in baseline non-test gateway+control+shared code ==
+gateway/ai_mesh_gateway/scanner.py:171:        "command_injection",
+gateway/ai_mesh_gateway/scanner.py:207:ATTACK_PATTERNS: dict[str, list[str]] = {
+gateway/ai_mesh_gateway/scanner.py:347:    "command_injection": [
+gateway/ai_mesh_gateway/scanner.py:1154:            len(ATTACK_PATTERNS),
+gateway/ai_mesh_gateway/scanner.py:1211:        method does NOT iterate ``ATTACK_PATTERNS``. A zero-policy org will not
+gateway/ai_mesh_gateway/scanner.py:1282:    def _scan_prompt_sync_disabled_builtin_default(
+gateway/ai_mesh_gateway/scanner.py:1332:        for category, patterns in ATTACK_PATTERNS.items():
+gateway/ai_mesh_gateway/scanner.py:1397:            for category, patterns in ATTACK_PATTERNS.items():
+gateway/ai_mesh_gateway/policy_engine.py:79:# _injection_match (keyword substrings + scanner.ATTACK_PATTERNS prompt_injection/jailbreak).
+gateway/ai_mesh_gateway/policy_engine.py:91:        from scanner import ATTACK_PATTERNS  # local: scanner does not import this module
+gateway/ai_mesh_gateway/policy_engine.py:96:        for ps in ATTACK_PATTERNS.get(cat, ()):
+gateway/ai_mesh_gateway/policy_engine.py:124:    """STRICT injection match — the ATTACK_PATTERNS regexes ONLY, WITHOUT the loose
+gateway/ai_mesh_gateway/policy_engine.py:132:        from scanner import ATTACK_PATTERNS  # local: scanner does not import this module
+gateway/ai_mesh_gateway/policy_engine.py:137:        for ps in ATTACK_PATTERNS.get(cat, ()):
+gateway/ai_mesh_gateway/main.py:862:# Policy-driven-detection keeps Tier-1 ATTACK_PATTERNS out of enforcement.
+gateway/ai_mesh_gateway/main.py:900:    restores data-protection + DoS without re-arming ATTACK_PATTERNS as enforcement.
+gateway/ai_mesh_gateway/main.py:928:        # Tier-2 block/redact rec is an enabled source. Tier-1 ATTACK_PATTERNS
+gateway/ai_mesh_gateway/mcp_scan_orchestrator.py:322:    # high-precision prompt_injection + jailbreak patterns (ATTACK_PATTERNS). Only those two
+gateway/ai_mesh_gateway/mcp_scan_orchestrator.py:329:        from scanner import ATTACK_PATTERNS  # local: scanner does not import this module
+gateway/ai_mesh_gateway/mcp_scan_orchestrator.py:334:        for _ps in ATTACK_PATTERNS.get(_cat, ()):
+control/ai_mesh_control/policy/builtin_packs_seed.py:6:``ATTACK_PATTERNS`` families + the PII/secret set) as per-org, toggleable system
+control/ai_mesh_control/policy/builtin_packs_seed.py:45:    "command_injection": "CRITICAL",
+control/ai_mesh_control/security_engines/pattern_matcher.py:56:            "command_injection": [
+control/ai_mesh_control/policy/builtin_packs_catalog.py:5:(``gateway/ai_mesh_gateway/scanner.py`` ``ATTACK_PATTERNS`` + the built-in
+control/ai_mesh_control/policy/builtin_packs_catalog.py:206:        key="command_injection",
+control/ai_mesh_control/policy/builtin_packs_catalog.py:207:        category="command_injection",
+control/ai_mesh_control/policy/builtin_packs_catalog.py:435:        "prompt_injection", "jailbreak", "command_injection", "sql_injection",
+control/ai_mesh_control/core/tasks.py:141:    "command_injection": 0.15,
+
+== GATEWAY_CALL_SECURITY_SCAN (the only other backend scan hook) ==
+gateway/ai_mesh_gateway/config.py:101:    call_security_scan = get_env("GATEWAY_CALL_SECURITY_SCAN", "false").lower() in ("true", "1", "yes")
+
+== literal blanket backtick regex occurrences (baseline, non-test) ==
+gateway/ai_mesh_gateway/scanner.py:351:        r"`[^`]+`",
+control/ai_mesh_control/policy/builtin_packs_catalog.py:78:# blanket rule ``r"`[^`]+`"`` hard-blocked ANY inline-code span (``\`ls -la\``,
+control/ai_mesh_control/policy/builtin_packs_catalog.py:93:    r"|`[^`]+`"                           # nested backtick substitution
+control/ai_mesh_control/security_engines/pattern_matcher.py:60:                r"`[^`]+`",
+control/ai_mesh_control/policy/policy_package/mcp_policies.py:278:                "regex": r"(?:\|\s*(?:bash|sh|zsh)\b|\$\([^)]*\)|`[^`]+`|;\s*rm\s+-rf|&&\s*\S)",

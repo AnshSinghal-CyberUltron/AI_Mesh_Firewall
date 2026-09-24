@@ -1,0 +1,29 @@
+## baseline wc -l test_openai_sdk_compat*.py
+ 1179 test_openai_sdk_compat.py
+  202 test_openai_sdk_compat_live_uvicorn.py
+  230 test_openai_sdk_compat_phase2.py
+  118 test_openai_sdk_compat_phase2_adversarial.py
+  157 test_openai_sdk_compat_phase5_correlation.py
+   93 test_openai_sdk_compat_phase6_guards.py
+ 1979 total
+## sha256 baseline vs HEAD
+test_openai_sdk_compat.py base=1a66c3f787f5fc82 head=1a66c3f787f5fc82
+test_openai_sdk_compat_live_uvicorn.py base=c41390d8084cc1a2 head=c41390d8084cc1a2
+test_openai_sdk_compat_phase2.py base=be6f77f64837a188 head=be6f77f64837a188
+test_openai_sdk_compat_phase2_adversarial.py base=f5d7db3ef7d48e8a head=f5d7db3ef7d48e8a
+test_openai_sdk_compat_phase5_correlation.py base=a491bb1fd6005eae head=a491bb1fd6005eae
+test_openai_sdk_compat_phase6_guards.py base=c8866ea77c623be1 head=c8866ea77c623be1
+## HEAD glob
+/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/tests/test_openai_sdk_compat.py
+/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/tests/test_openai_sdk_compat_live_uvicorn.py
+/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/tests/test_openai_sdk_compat_phase2.py
+/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/tests/test_openai_sdk_compat_phase2_adversarial.py
+/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/tests/test_openai_sdk_compat_phase5_correlation.py
+/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/tests/test_openai_sdk_compat_phase6_guards.py
+## git show 2a657fad wc
+test_openai_sdk_compat.py 1179
+test_openai_sdk_compat_live_uvicorn.py 202
+test_openai_sdk_compat_phase2.py 230
+test_openai_sdk_compat_phase2_adversarial.py 118
+test_openai_sdk_compat_phase5_correlation.py 157
+test_openai_sdk_compat_phase6_guards.py 93

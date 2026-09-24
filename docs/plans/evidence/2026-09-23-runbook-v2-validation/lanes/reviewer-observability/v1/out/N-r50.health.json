@@ -1,0 +1,25 @@
+{
+ "run": "N-r50",
+ "probes_total": 2571,
+ "probes_non200_total": 0,
+ "probe_statuses": {
+  "200": 2571
+ },
+ "probe_ms_max": 2564.926,
+ "seconds_with_client_errors": 377,
+ "seconds_errors_ge10_and_all_probes_200": 221,
+ "seconds_errors_ge_ok_and_all_probes_200": 208,
+ "client_errors_in_seconds_where_all_probes_200": 6859,
+ "client_errors_total": 11030,
+ "peak_second": {
+  "t": 304,
+  "ok": 22,
+  "err": 49,
+  "timeout": 46,
+  "http_503": 1,
+  "http_422": 2,
+  "probes": 1,
+  "probe_non200": 0,
+  "probe_max_ms": 2338.203
+ }
+}

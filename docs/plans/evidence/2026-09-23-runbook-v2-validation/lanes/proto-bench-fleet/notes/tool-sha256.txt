@@ -1,0 +1,5 @@
+c9f89fe8862b254c1e6576c37a7f42bae67bd892e982a07b0c9cab64e95409bb  /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/harness/analyze.py
+d22d260723c31fb55a387080b853cd94ff922666807ba36845e0b7e962aa7fb3  /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/harness/bin/olg
+1ee6bb5f3665de1d6f42d67d83997b71f429d57a45525650a01b15bcdab39029  /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/harness/bin/synthprov
+96c1773a2b6a3cea5a2c4383ad66c9fa10af2d7281b2362d5816926583c57cc6  /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-bench-unit/tools/pbu_analyze.py
+bc7fa949015ef1f92d77968889acc01ef7fafdc7a4935e1b1fc1366098b56230  /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-bench-unit/tools/unit_sampler.py

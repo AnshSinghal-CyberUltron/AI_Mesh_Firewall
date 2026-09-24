@@ -1,0 +1,2 @@
+opentelemetry installed in venv: True
+after `import main` (baseline): opentelemetry modules loaded = ['opentelemetry', 'opentelemetry.attributes', 'opentelemetry.context', 'opentelemetry.context.context', 'opentelemetry.context.contextvars_context', 'opentelemetry.environment_variables', 'opentelemetry.metrics', 'opentelemetry.metrics._internal', 'opentelemetry.metrics._internal.instrument', 'opentelemetry.metrics._internal.observation']

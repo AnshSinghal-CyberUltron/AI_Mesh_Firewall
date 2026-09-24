@@ -1,0 +1,1 @@
+{"json_finish": "stop", "json_words": 10, "models_listed": true, "stream_words": 9, "tool": "get_weather", "tool_args": {"limit": 5, "query": "water over so into plan many think was our but look our", "ref": "synth-b6"}}

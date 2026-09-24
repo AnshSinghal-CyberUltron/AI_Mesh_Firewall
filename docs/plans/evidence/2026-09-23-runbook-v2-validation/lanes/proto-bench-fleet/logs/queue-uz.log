@@ -1,0 +1,26 @@
+18:35:34 START uz1-150 150 UNITS=rv-pbf-unit-2 LABEL=UZ-1unit-loadrule-ladder-zone
+18:44:34 DONE uz1-150: # uz1-150: strict FAIL | load-knee PASS (sut, units=1, rate=150) | offered 45000 (150.0/s) qualified 44185 (147.28/s) FP-blocks 815 (0.01811) infra 0 (0.0) drops 0 safety 0
+18:44:34 START uz1-175 175 UNITS=rv-pbf-unit-2 LABEL=UZ-1unit-loadrule-ladder-zone
+18:53:37 DONE uz1-175: # uz1-175: strict FAIL | load-knee FAIL (sut, units=1, rate=175) | offered 52500 (175.0/s) qualified 51574 (171.91/s) FP-blocks 926 (0.01764) infra 0 (0.0) drops 0 safety 0
+18:53:37 START uz1-200 200 UNITS=rv-pbf-unit-2 LABEL=UZ-1unit-loadrule-ladder-zone
+18:54:22 QUEUE_END /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-bench-fleet/notes/q-uz-a.txt (manual: uz1-200 aborted)
+18:54:25 CMD env NGINX_ZONE=1 bash /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-bench-fleet/scripts/edge_set.sh uz-2unit "10.146.0.2:8400 10.146.0.5:8400": nginx: configuration file /etc/nginx/nginx.conf test is successful 2 active 
+18:54:31 START uz2-350 350 UNITS="rv-pbf-unit-2 rv-pbf-unit-3" LABEL=UZ-2unit-loadrule-ladder-zone
+19:03:48 DONE uz2-350: # uz2-350: strict FAIL | load-knee FAIL (sut, units=2, rate=350) | offered 105000 (350.0/s) qualified 103089 (343.63/s) FP-blocks 1908 (0.01817) infra 3 (2.857142857142857e-05) drops 0 safety 0
+19:03:48 START uz2-300 300 UNITS="rv-pbf-unit-2 rv-pbf-unit-3" LABEL=UZ-2unit-loadrule-ladder-zone
+19:12:59 DONE uz2-300: # uz2-300: strict FAIL | load-knee PASS (sut, units=2, rate=300) | offered 90000 (300.0/s) qualified 88418 (294.73/s) FP-blocks 1581 (0.01757) infra 1 (1.1111111111111112e-05) drops 0 safety 0
+19:12:59 QUEUE_END /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-bench-fleet/notes/q-uz-b.txt
+19:13:03 CMD env NGINX_ZONE=1 bash /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-bench-fleet/scripts/edge_set.sh uz-4unit "10.146.0.2:8400 10.146.0.5:8400 10.146.0.3:8400 10.146.0.4:8400": nginx: configuration file /etc/nginx/nginx.conf test is successful 4 active 
+19:13:10 CMD ssh -i /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/gcp/rv_ed25519 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR rv@10.146.0.13 'redis-cli DEL rv:audit:org-a; redis-cli INFO memory | grep used_memory_human': 1 used_memory_human:6.91M 
+19:13:12 START uz4-600 600 UNITS="rv-pbf-unit-2 rv-pbf-unit-3 rv-pbf-unit-4 rv-pbf-unit-5" LABEL=UZ-4unit-loadrule-ladder-zone
+19:22:48 DONE uz4-600: # uz4-600: strict FAIL | load-knee PASS (sut, units=4, rate=600) | offered 180000 (600.0/s) qualified 176891 (589.64/s) FP-blocks 3109 (0.01727) infra 0 (0.0) drops 0 safety 0
+19:22:48 START uz4-700 700 UNITS="rv-pbf-unit-2 rv-pbf-unit-3 rv-pbf-unit-4 rv-pbf-unit-5" LABEL=UZ-4unit-loadrule-ladder-zone
+19:32:33 DONE uz4-700: # uz4-700: strict FAIL | load-knee FAIL (sut, units=4, rate=700) | offered 210000 (700.0/s) qualified 206405 (688.02/s) FP-blocks 3589 (0.01709) infra 6 (2.857142857142857e-05) drops 0 safety 0
+19:32:33 START uz4-600-r2 600 UNITS="rv-pbf-unit-2 rv-pbf-unit-3 rv-pbf-unit-4 rv-pbf-unit-5" LABEL=UZ-4unit-knee-repeat
+19:42:10 DONE uz4-600-r2: # uz4-600-r2: strict FAIL | load-knee PASS (sut, units=4, rate=600) | offered 180000 (600.0/s) qualified 176900 (589.67/s) FP-blocks 3099 (0.01722) infra 1 (5.555555555555556e-06) drops 0 safety 0
+19:42:10 START uz4-600-r3 600 UNITS="rv-pbf-unit-2 rv-pbf-unit-3 rv-pbf-unit-4 rv-pbf-unit-5" LABEL=UZ-4unit-knee-repeat
+19:51:48 DONE uz4-600-r3: # uz4-600-r3: strict FAIL | load-knee PASS (sut, units=4, rate=600) | offered 180000 (600.0/s) qualified 176835 (589.45/s) FP-blocks 3160 (0.01756) infra 5 (2.777777777777778e-05) drops 0 safety 0
+19:51:48 QUEUE_END /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-bench-fleet/notes/q-uz-c.txt
+19:58:19 START uz1-150-r2 150 UNITS=rv-pbf-unit-2 PROVS=rv-pbf-prov-1 LABEL=UZ-1unit-knee-repeat
+20:07:20 DONE uz1-150-r2: # uz1-150-r2: strict FAIL | load-knee PASS (sut, units=1, rate=150) | offered 45000 (150.0/s) qualified 44216 (147.39/s) FP-blocks 784 (0.01742) infra 0 (0.0) drops 0 safety 0
+20:07:20 QUEUE_END /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-bench-fleet/notes/q-uz-d.txt

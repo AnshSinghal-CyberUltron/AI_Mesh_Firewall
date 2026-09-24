@@ -1,0 +1,12 @@
+{
+ "seconds": 120.0,
+ "cores_idle": {
+  "aimeshperf-control-1": 0.0249,
+  "aimeshperf-gateway-1": 0.0498,
+  "aimeshperf-pgbouncer-1": 0.0034,
+  "aimeshperf-postgres-1": 0.6619,
+  "aimeshperf-rabbitmq-1": 0.3489,
+  "aimeshperf-redis-1": 0.0113
+ },
+ "host_util_pct_idle": 4.87
+}

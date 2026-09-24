@@ -1,0 +1,7 @@
+{
+ "name": "rv-split-guard-5",
+ "machineType": "projects/24342156045/machineTypes/g2-standard-4",
+ "zone": "projects/24342156045/zones/asia-south1-b",
+ "image": "projects/ai-mesh-firewall/global/images/rv-proto-unit-img-20260923f",
+ "cpuPlatform": "Intel Cascade Lake"
+}

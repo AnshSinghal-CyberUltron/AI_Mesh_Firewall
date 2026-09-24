@@ -1,0 +1,8 @@
+doc total 4561.44 | on-demand Mumbai total 8952.24 (ledger says 8952.24)
+3-yr-CUD basis (lines 1/7/9 at doc's own commit prices) + Mumbai-corrected lines 3/4/5/15/16: 5238.01  -> vs $5,000 cap: +238.01
+G2 1-yr CUD only, rest on-demand: 6702.01
+  line  3 Persistent disks 4x100 GiB pd-ssd + 250 GiB d doc     68.00 -> Mumbai    132.60 (+64.60)
+  line  4 Regional external ALB (Standard tier)         doc     18.25 -> Mumbai     21.90 (+3.65)
+  line  5 Egress 16,037 GiB banded + LB bytes           doc   1090.32 -> Mumbai   1699.60 (+609.28)
+  line 15 Artifact Registry ~20 GB                      doc     10.00 -> Mumbai      1.95 (-8.05)
+  line 16 Audit -> GCS                                  doc     53.00 -> Mumbai     60.49 (+7.49)

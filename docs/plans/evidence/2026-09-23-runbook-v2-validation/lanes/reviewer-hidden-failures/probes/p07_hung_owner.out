@@ -1,0 +1,1 @@
+guard deadline 20.0 ms; after 10.0 s the request's guard future is STILL PENDING (owner received 1 frame(s)); readiness=Readiness(ready=True, backend='local_gpu(owner)', model_hash='h', detail="owner 0 pid=2223741 providers=['TensorrtExecutionProvider'] owner_tokens_per_s=240000 share=1/1")

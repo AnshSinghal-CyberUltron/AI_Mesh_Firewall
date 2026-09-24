@@ -1,0 +1,3 @@
+#!/bin/sh
+echo "[gunicorn-shim] argv: $*"
+for v in WEB_CONCURRENCY GATEWAY_SCANNER_THREAD_POOL_SIZE GATEWAY_SCAN_THREAD_POOL_SIZE GATEWAY_BEDROCK_THREAD_POOL_SIZE GATEWAY_VAULT_POOL_MAX GATEWAY_REDIS_MAX_CONNECTIONS; do eval "echo \"[gunicorn-shim] env $v=\${$v:-<unset>}\""; done

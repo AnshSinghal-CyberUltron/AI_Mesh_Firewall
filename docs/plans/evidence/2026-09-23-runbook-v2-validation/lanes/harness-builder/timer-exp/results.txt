@@ -1,0 +1,8 @@
+n=1 itl=20ms hb=0s samples=150 lateness_us p50=534 p90=938 p99=1026 p999=1028 max=1032
+n=10 itl=20ms hb=0s samples=1491 lateness_us p50=536 p90=953 p99=1058 p999=1183 max=3171
+n=200 itl=20ms hb=0s samples=29801 lateness_us p50=521 p90=959 p99=1061 p999=2633 max=12940
+n=2000 itl=20ms hb=0s samples=298001 lateness_us p50=503 p90=957 p99=1079 p999=1538 max=3792
+n=1 itl=20ms hb=100µs samples=150 lateness_us p50=39 p90=41 p99=47 p999=48 max=49
+n=10 itl=20ms hb=100µs samples=1491 lateness_us p50=46 p90=48 p99=52 p999=64 max=147
+n=200 itl=20ms hb=100µs samples=29801 lateness_us p50=8 p90=9 p99=12 p999=56 max=759
+n=2000 itl=20ms hb=100µs samples=298001 lateness_us p50=28 p90=76 p99=97 p999=245 max=1843

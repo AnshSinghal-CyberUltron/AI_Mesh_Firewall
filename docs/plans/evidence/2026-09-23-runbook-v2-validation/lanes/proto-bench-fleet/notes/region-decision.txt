@@ -1,0 +1,7 @@
+rv-pbf-unit-1 deleted: all lane measurements consolidated in asia-northeast1-a (g2-standard-24 stock-out in asia-south1-a/b/c at 11:41Z and asia-southeast1-a/b/c, asia-east1-a/b/c at ~11:50Z; g2-standard-8 only 1 in asia-south1-b)
+2026-09-23 11:40-11:55Z stock probes (logs/mk_unit.log): g2-standard-24 ZONE_RESOURCE_POOL_EXHAUSTED in asia-south1-c/-a/-b (11:40-11:42Z),
+asia-southeast1-a/-b/-c (11:48-11:50Z), asia-east1-a/-b/-c (11:52-11:53Z); created 4x g2-standard-24 in asia-northeast1-a (11:54Z).
+g2-standard-8: stock-out asia-south1-c/-a (11:42Z), one obtained in asia-south1-b then no more in -b/-c/-a (11:43Z) -> deleted
+(consolidated). All lane VMs (units, shared Redis, nginx edge, loadgens, synthprov) are in asia-northeast1-a (Tokyo), so
+every measured number in this lane is labelled region asia-northeast1 / zone asia-northeast1-a. Prices are asia-south1
+(Mumbai) on-demand list (prices.json): same machine types; only the price basis is Mumbai.

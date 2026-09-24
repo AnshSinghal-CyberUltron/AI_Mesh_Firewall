@@ -1,0 +1,1139 @@
+[bedrock_logger] Cannot write to /var/log/bedrock: [Errno 13] Permission denied: '/var/log/bedrock'
+2026-09-23 10:49:51,098 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+2026-09-23 10:49:52,463 [ERROR] gateway: Unhandled error in proxy_chat
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4745, in _filter_inference_eligible_models
+    from llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 7708, in proxy_chat
+    inference_models = _filter_inference_eligible_models(routing_models)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4747, in _filter_inference_eligible_models
+    from .llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'ai_mesh_gateway.llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+2026-09-23 10:49:52,468 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+2026-09-23 10:49:52,471 [ERROR] gateway: Unhandled error in proxy_chat
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4745, in _filter_inference_eligible_models
+    from llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 7708, in proxy_chat
+    inference_models = _filter_inference_eligible_models(routing_models)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4747, in _filter_inference_eligible_models
+    from .llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'ai_mesh_gateway.llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+2026-09-23 10:49:52,474 [ERROR] gateway: Unhandled error in proxy_chat
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4745, in _filter_inference_eligible_models
+    from llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 7708, in proxy_chat
+    inference_models = _filter_inference_eligible_models(routing_models)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4747, in _filter_inference_eligible_models
+    from .llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'ai_mesh_gateway.llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+2026-09-23 10:49:52,477 [ERROR] gateway: Unhandled error in proxy_chat
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4745, in _filter_inference_eligible_models
+    from llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 7708, in proxy_chat
+    inference_models = _filter_inference_eligible_models(routing_models)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4747, in _filter_inference_eligible_models
+    from .llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'ai_mesh_gateway.llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+2026-09-23 10:49:52,481 [ERROR] gateway: Unhandled error in proxy_chat
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4745, in _filter_inference_eligible_models
+    from llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 7708, in proxy_chat
+    inference_models = _filter_inference_eligible_models(routing_models)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4747, in _filter_inference_eligible_models
+    from .llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'ai_mesh_gateway.llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+2026-09-23 10:49:52,485 [ERROR] gateway: Unhandled error in proxy_chat
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4745, in _filter_inference_eligible_models
+    from llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 7708, in proxy_chat
+    inference_models = _filter_inference_eligible_models(routing_models)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4747, in _filter_inference_eligible_models
+    from .llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'ai_mesh_gateway.llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+2026-09-23 10:49:52,489 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+2026-09-23 10:49:52,491 [ERROR] gateway: Unhandled error in proxy_chat
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4745, in _filter_inference_eligible_models
+    from llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 7708, in proxy_chat
+    inference_models = _filter_inference_eligible_models(routing_models)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4747, in _filter_inference_eligible_models
+    from .llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'ai_mesh_gateway.llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+2026-09-23 10:49:52,494 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+2026-09-23 10:49:52,496 [ERROR] gateway: Unhandled error in proxy_chat
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4745, in _filter_inference_eligible_models
+    from llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 7708, in proxy_chat
+    inference_models = _filter_inference_eligible_models(routing_models)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4747, in _filter_inference_eligible_models
+    from .llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'ai_mesh_gateway.llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+2026-09-23 10:49:52,499 [ERROR] gateway: Unhandled error in proxy_chat
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4745, in _filter_inference_eligible_models
+    from llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 7708, in proxy_chat
+    inference_models = _filter_inference_eligible_models(routing_models)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4747, in _filter_inference_eligible_models
+    from .llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'ai_mesh_gateway.llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+2026-09-23 10:49:52,503 [ERROR] gateway: Unhandled error in proxy_chat
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4745, in _filter_inference_eligible_models
+    from llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 7708, in proxy_chat
+    inference_models = _filter_inference_eligible_models(routing_models)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4747, in _filter_inference_eligible_models
+    from .llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'ai_mesh_gateway.llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+2026-09-23 10:49:52,506 [ERROR] gateway: Unhandled error in proxy_chat
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4745, in _filter_inference_eligible_models
+    from llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 7708, in proxy_chat
+    inference_models = _filter_inference_eligible_models(routing_models)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4747, in _filter_inference_eligible_models
+    from .llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'ai_mesh_gateway.llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+2026-09-23 10:49:52,509 [ERROR] gateway: Unhandled error in proxy_chat
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4745, in _filter_inference_eligible_models
+    from llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 7708, in proxy_chat
+    inference_models = _filter_inference_eligible_models(routing_models)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4747, in _filter_inference_eligible_models
+    from .llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'ai_mesh_gateway.llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+2026-09-23 10:49:52,512 [ERROR] gateway: Unhandled error in proxy_chat
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4745, in _filter_inference_eligible_models
+    from llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 7708, in proxy_chat
+    inference_models = _filter_inference_eligible_models(routing_models)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4747, in _filter_inference_eligible_models
+    from .llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'ai_mesh_gateway.llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+2026-09-23 10:49:52,515 [ERROR] gateway: Unhandled error in proxy_chat
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4745, in _filter_inference_eligible_models
+    from llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 7708, in proxy_chat
+    inference_models = _filter_inference_eligible_models(routing_models)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4747, in _filter_inference_eligible_models
+    from .llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'ai_mesh_gateway.llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+2026-09-23 10:49:52,519 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+2026-09-23 10:49:52,521 [ERROR] gateway: Unhandled error in proxy_chat
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4745, in _filter_inference_eligible_models
+    from llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 7708, in proxy_chat
+    inference_models = _filter_inference_eligible_models(routing_models)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4747, in _filter_inference_eligible_models
+    from .llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'ai_mesh_gateway.llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+2026-09-23 10:49:52,524 [ERROR] gateway: Unhandled error in proxy_chat
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4745, in _filter_inference_eligible_models
+    from llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 7708, in proxy_chat
+    inference_models = _filter_inference_eligible_models(routing_models)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4747, in _filter_inference_eligible_models
+    from .llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'ai_mesh_gateway.llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+2026-09-23 10:49:52,527 [ERROR] gateway: Unhandled error in proxy_chat
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4745, in _filter_inference_eligible_models
+    from llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 7708, in proxy_chat
+    inference_models = _filter_inference_eligible_models(routing_models)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4747, in _filter_inference_eligible_models
+    from .llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'ai_mesh_gateway.llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+2026-09-23 10:49:52,530 [ERROR] gateway: Unhandled error in proxy_chat
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4745, in _filter_inference_eligible_models
+    from llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 7708, in proxy_chat
+    inference_models = _filter_inference_eligible_models(routing_models)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4747, in _filter_inference_eligible_models
+    from .llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'ai_mesh_gateway.llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+2026-09-23 10:49:52,533 [ERROR] gateway: Unhandled error in proxy_chat
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4745, in _filter_inference_eligible_models
+    from llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 7708, in proxy_chat
+    inference_models = _filter_inference_eligible_models(routing_models)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4747, in _filter_inference_eligible_models
+    from .llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'ai_mesh_gateway.llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+2026-09-23 10:49:52,536 [ERROR] gateway: Unhandled error in proxy_chat
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4745, in _filter_inference_eligible_models
+    from llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 7708, in proxy_chat
+    inference_models = _filter_inference_eligible_models(routing_models)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4747, in _filter_inference_eligible_models
+    from .llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'ai_mesh_gateway.llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+2026-09-23 10:49:52,540 [ERROR] gateway: Unhandled error in proxy_chat
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4745, in _filter_inference_eligible_models
+    from llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 7708, in proxy_chat
+    inference_models = _filter_inference_eligible_models(routing_models)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4747, in _filter_inference_eligible_models
+    from .llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'ai_mesh_gateway.llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+2026-09-23 10:49:52,543 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+2026-09-23 10:49:52,545 [ERROR] gateway: Unhandled error in proxy_chat
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4745, in _filter_inference_eligible_models
+    from llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 7708, in proxy_chat
+    inference_models = _filter_inference_eligible_models(routing_models)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4747, in _filter_inference_eligible_models
+    from .llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'ai_mesh_gateway.llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+2026-09-23 10:49:52,548 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+2026-09-23 10:49:52,550 [ERROR] gateway: Unhandled error in proxy_chat
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4745, in _filter_inference_eligible_models
+    from llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 7708, in proxy_chat
+    inference_models = _filter_inference_eligible_models(routing_models)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4747, in _filter_inference_eligible_models
+    from .llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'ai_mesh_gateway.llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+2026-09-23 10:49:52,553 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+2026-09-23 10:49:52,555 [ERROR] gateway: Unhandled error in proxy_chat
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4745, in _filter_inference_eligible_models
+    from llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 7708, in proxy_chat
+    inference_models = _filter_inference_eligible_models(routing_models)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4747, in _filter_inference_eligible_models
+    from .llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'ai_mesh_gateway.llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+2026-09-23 10:49:52,559 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+2026-09-23 10:49:52,561 [ERROR] gateway: Unhandled error in proxy_chat
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4745, in _filter_inference_eligible_models
+    from llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 7708, in proxy_chat
+    inference_models = _filter_inference_eligible_models(routing_models)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4747, in _filter_inference_eligible_models
+    from .llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'ai_mesh_gateway.llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+2026-09-23 10:49:52,564 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+2026-09-23 10:49:52,566 [ERROR] gateway: Unhandled error in proxy_chat
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4745, in _filter_inference_eligible_models
+    from llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 7708, in proxy_chat
+    inference_models = _filter_inference_eligible_models(routing_models)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4747, in _filter_inference_eligible_models
+    from .llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'ai_mesh_gateway.llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+2026-09-23 10:49:52,569 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+2026-09-23 10:49:52,571 [ERROR] gateway: Unhandled error in proxy_chat
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4745, in _filter_inference_eligible_models
+    from llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 7708, in proxy_chat
+    inference_models = _filter_inference_eligible_models(routing_models)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4747, in _filter_inference_eligible_models
+    from .llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'ai_mesh_gateway.llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+2026-09-23 10:49:52,574 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+2026-09-23 10:49:52,576 [ERROR] gateway: Unhandled error in proxy_chat
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4745, in _filter_inference_eligible_models
+    from llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 7708, in proxy_chat
+    inference_models = _filter_inference_eligible_models(routing_models)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4747, in _filter_inference_eligible_models
+    from .llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'ai_mesh_gateway.llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+2026-09-23 10:49:52,580 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+2026-09-23 10:49:52,582 [ERROR] gateway: Unhandled error in proxy_chat
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4745, in _filter_inference_eligible_models
+    from llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 7708, in proxy_chat
+    inference_models = _filter_inference_eligible_models(routing_models)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4747, in _filter_inference_eligible_models
+    from .llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'ai_mesh_gateway.llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+2026-09-23 10:49:52,585 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+2026-09-23 10:49:52,587 [ERROR] gateway: Unhandled error in proxy_chat
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4745, in _filter_inference_eligible_models
+    from llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 7708, in proxy_chat
+    inference_models = _filter_inference_eligible_models(routing_models)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4747, in _filter_inference_eligible_models
+    from .llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'ai_mesh_gateway.llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+2026-09-23 10:49:52,590 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+2026-09-23 10:49:52,592 [ERROR] gateway: Unhandled error in proxy_chat
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4745, in _filter_inference_eligible_models
+    from llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 7708, in proxy_chat
+    inference_models = _filter_inference_eligible_models(routing_models)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4747, in _filter_inference_eligible_models
+    from .llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'ai_mesh_gateway.llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+2026-09-23 10:49:52,595 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+2026-09-23 10:49:52,597 [ERROR] gateway: Unhandled error in proxy_chat
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4745, in _filter_inference_eligible_models
+    from llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 7708, in proxy_chat
+    inference_models = _filter_inference_eligible_models(routing_models)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4747, in _filter_inference_eligible_models
+    from .llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'ai_mesh_gateway.llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+2026-09-23 10:49:52,601 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+2026-09-23 10:49:52,603 [ERROR] gateway: Unhandled error in proxy_chat
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4745, in _filter_inference_eligible_models
+    from llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 7708, in proxy_chat
+    inference_models = _filter_inference_eligible_models(routing_models)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4747, in _filter_inference_eligible_models
+    from .llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'ai_mesh_gateway.llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+2026-09-23 10:49:52,606 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+2026-09-23 10:49:52,608 [ERROR] gateway: Unhandled error in proxy_chat
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4745, in _filter_inference_eligible_models
+    from llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 7708, in proxy_chat
+    inference_models = _filter_inference_eligible_models(routing_models)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4747, in _filter_inference_eligible_models
+    from .llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'ai_mesh_gateway.llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+2026-09-23 10:49:52,611 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+2026-09-23 10:49:52,613 [ERROR] gateway: Unhandled error in proxy_chat
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4745, in _filter_inference_eligible_models
+    from llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 7708, in proxy_chat
+    inference_models = _filter_inference_eligible_models(routing_models)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4747, in _filter_inference_eligible_models
+    from .llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'ai_mesh_gateway.llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+2026-09-23 10:49:52,617 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+2026-09-23 10:49:52,619 [ERROR] gateway: Unhandled error in proxy_chat
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4745, in _filter_inference_eligible_models
+    from llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 7708, in proxy_chat
+    inference_models = _filter_inference_eligible_models(routing_models)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4747, in _filter_inference_eligible_models
+    from .llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'ai_mesh_gateway.llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+2026-09-23 10:49:52,622 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+2026-09-23 10:49:52,624 [ERROR] gateway: Unhandled error in proxy_chat
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4745, in _filter_inference_eligible_models
+    from llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 7708, in proxy_chat
+    inference_models = _filter_inference_eligible_models(routing_models)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4747, in _filter_inference_eligible_models
+    from .llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'ai_mesh_gateway.llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+2026-09-23 10:49:52,627 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+2026-09-23 10:49:52,629 [ERROR] gateway: Unhandled error in proxy_chat
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4745, in _filter_inference_eligible_models
+    from llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 7708, in proxy_chat
+    inference_models = _filter_inference_eligible_models(routing_models)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4747, in _filter_inference_eligible_models
+    from .llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'ai_mesh_gateway.llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+2026-09-23 10:49:52,633 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+2026-09-23 10:49:52,634 [ERROR] gateway: Unhandled error in proxy_chat
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4745, in _filter_inference_eligible_models
+    from llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 7708, in proxy_chat
+    inference_models = _filter_inference_eligible_models(routing_models)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4747, in _filter_inference_eligible_models
+    from .llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'ai_mesh_gateway.llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+2026-09-23 10:49:52,638 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+2026-09-23 10:49:52,640 [ERROR] gateway: Unhandled error in proxy_chat
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4745, in _filter_inference_eligible_models
+    from llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 7708, in proxy_chat
+    inference_models = _filter_inference_eligible_models(routing_models)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4747, in _filter_inference_eligible_models
+    from .llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'ai_mesh_gateway.llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+2026-09-23 10:49:52,643 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+2026-09-23 10:49:52,645 [ERROR] gateway: Unhandled error in proxy_chat
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4745, in _filter_inference_eligible_models
+    from llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 7708, in proxy_chat
+    inference_models = _filter_inference_eligible_models(routing_models)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4747, in _filter_inference_eligible_models
+    from .llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'ai_mesh_gateway.llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+2026-09-23 10:49:52,648 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+2026-09-23 10:49:52,650 [ERROR] gateway: Unhandled error in proxy_chat
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4745, in _filter_inference_eligible_models
+    from llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 7708, in proxy_chat
+    inference_models = _filter_inference_eligible_models(routing_models)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4747, in _filter_inference_eligible_models
+    from .llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'ai_mesh_gateway.llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+2026-09-23 10:49:52,653 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+2026-09-23 10:49:52,655 [ERROR] gateway: Unhandled error in proxy_chat
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4745, in _filter_inference_eligible_models
+    from llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 7708, in proxy_chat
+    inference_models = _filter_inference_eligible_models(routing_models)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4747, in _filter_inference_eligible_models
+    from .llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'ai_mesh_gateway.llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+2026-09-23 10:49:52,659 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+2026-09-23 10:49:52,661 [ERROR] gateway: Unhandled error in proxy_chat
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4745, in _filter_inference_eligible_models
+    from llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 7708, in proxy_chat
+    inference_models = _filter_inference_eligible_models(routing_models)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4747, in _filter_inference_eligible_models
+    from .llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'ai_mesh_gateway.llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+2026-09-23 10:49:52,664 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+2026-09-23 10:49:52,666 [ERROR] gateway: Unhandled error in proxy_chat
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4745, in _filter_inference_eligible_models
+    from llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 7708, in proxy_chat
+    inference_models = _filter_inference_eligible_models(routing_models)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4747, in _filter_inference_eligible_models
+    from .llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'ai_mesh_gateway.llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+2026-09-23 10:49:52,669 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+2026-09-23 10:49:52,671 [ERROR] gateway: Unhandled error in proxy_chat
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4745, in _filter_inference_eligible_models
+    from llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 7708, in proxy_chat
+    inference_models = _filter_inference_eligible_models(routing_models)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4747, in _filter_inference_eligible_models
+    from .llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'ai_mesh_gateway.llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+2026-09-23 10:49:52,674 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+2026-09-23 10:49:52,676 [ERROR] gateway: Unhandled error in proxy_chat
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4745, in _filter_inference_eligible_models
+    from llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 7708, in proxy_chat
+    inference_models = _filter_inference_eligible_models(routing_models)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4747, in _filter_inference_eligible_models
+    from .llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'ai_mesh_gateway.llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+2026-09-23 10:49:52,680 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+2026-09-23 10:49:52,682 [ERROR] gateway: Unhandled error in proxy_chat
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4745, in _filter_inference_eligible_models
+    from llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 7708, in proxy_chat
+    inference_models = _filter_inference_eligible_models(routing_models)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4747, in _filter_inference_eligible_models
+    from .llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'ai_mesh_gateway.llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+2026-09-23 10:49:52,685 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+2026-09-23 10:49:52,687 [ERROR] gateway: Unhandled error in proxy_chat
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4745, in _filter_inference_eligible_models
+    from llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 7708, in proxy_chat
+    inference_models = _filter_inference_eligible_models(routing_models)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4747, in _filter_inference_eligible_models
+    from .llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'ai_mesh_gateway.llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+2026-09-23 10:49:52,690 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+2026-09-23 10:49:52,692 [ERROR] gateway: Unhandled error in proxy_chat
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4745, in _filter_inference_eligible_models
+    from llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 7708, in proxy_chat
+    inference_models = _filter_inference_eligible_models(routing_models)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4747, in _filter_inference_eligible_models
+    from .llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'ai_mesh_gateway.llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+2026-09-23 10:49:52,695 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+2026-09-23 10:49:52,697 [ERROR] gateway: Unhandled error in proxy_chat
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4745, in _filter_inference_eligible_models
+    from llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 7708, in proxy_chat
+    inference_models = _filter_inference_eligible_models(routing_models)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4747, in _filter_inference_eligible_models
+    from .llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'ai_mesh_gateway.llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+2026-09-23 10:49:52,701 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+2026-09-23 10:49:52,702 [ERROR] gateway: Unhandled error in proxy_chat
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4745, in _filter_inference_eligible_models
+    from llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 7708, in proxy_chat
+    inference_models = _filter_inference_eligible_models(routing_models)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4747, in _filter_inference_eligible_models
+    from .llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'ai_mesh_gateway.llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+2026-09-23 10:49:52,706 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+2026-09-23 10:49:52,708 [ERROR] gateway: Unhandled error in proxy_chat
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4745, in _filter_inference_eligible_models
+    from llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 7708, in proxy_chat
+    inference_models = _filter_inference_eligible_models(routing_models)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4747, in _filter_inference_eligible_models
+    from .llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'ai_mesh_gateway.llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+2026-09-23 10:49:52,711 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+2026-09-23 10:49:52,713 [ERROR] gateway: Unhandled error in proxy_chat
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4745, in _filter_inference_eligible_models
+    from llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 7708, in proxy_chat
+    inference_models = _filter_inference_eligible_models(routing_models)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4747, in _filter_inference_eligible_models
+    from .llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'ai_mesh_gateway.llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+2026-09-23 10:49:52,716 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+2026-09-23 10:49:52,718 [ERROR] gateway: Unhandled error in proxy_chat
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4745, in _filter_inference_eligible_models
+    from llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 7708, in proxy_chat
+    inference_models = _filter_inference_eligible_models(routing_models)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4747, in _filter_inference_eligible_models
+    from .llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'ai_mesh_gateway.llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+2026-09-23 10:49:52,721 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+2026-09-23 10:49:52,723 [ERROR] gateway: Unhandled error in proxy_chat
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4745, in _filter_inference_eligible_models
+    from llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 7708, in proxy_chat
+    inference_models = _filter_inference_eligible_models(routing_models)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4747, in _filter_inference_eligible_models
+    from .llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'ai_mesh_gateway.llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+2026-09-23 10:49:52,727 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+2026-09-23 10:49:52,729 [ERROR] gateway: Unhandled error in proxy_chat
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4745, in _filter_inference_eligible_models
+    from llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 7708, in proxy_chat
+    inference_models = _filter_inference_eligible_models(routing_models)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4747, in _filter_inference_eligible_models
+    from .llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'ai_mesh_gateway.llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+2026-09-23 10:49:52,732 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+2026-09-23 10:49:52,734 [ERROR] gateway: Unhandled error in proxy_chat
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4745, in _filter_inference_eligible_models
+    from llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 7708, in proxy_chat
+    inference_models = _filter_inference_eligible_models(routing_models)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4747, in _filter_inference_eligible_models
+    from .llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'ai_mesh_gateway.llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+2026-09-23 10:49:52,738 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+2026-09-23 10:49:52,740 [ERROR] gateway: Unhandled error in proxy_chat
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4745, in _filter_inference_eligible_models
+    from llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 7708, in proxy_chat
+    inference_models = _filter_inference_eligible_models(routing_models)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4747, in _filter_inference_eligible_models
+    from .llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'ai_mesh_gateway.llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+2026-09-23 10:49:52,743 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+2026-09-23 10:49:52,745 [ERROR] gateway: Unhandled error in proxy_chat
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4745, in _filter_inference_eligible_models
+    from llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 7708, in proxy_chat
+    inference_models = _filter_inference_eligible_models(routing_models)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4747, in _filter_inference_eligible_models
+    from .llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'ai_mesh_gateway.llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+2026-09-23 10:49:52,748 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+2026-09-23 10:49:52,750 [ERROR] gateway: Unhandled error in proxy_chat
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4745, in _filter_inference_eligible_models
+    from llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 7708, in proxy_chat
+    inference_models = _filter_inference_eligible_models(routing_models)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py", line 4747, in _filter_inference_eligible_models
+    from .llm_router import catalog_row_is_display_alias as _display_alias_row
+ImportError: cannot import name 'catalog_row_is_display_alias' from 'ai_mesh_gateway.llm_router' (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py)
+ROOT = /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad
+
+[E0 clean prompt, Tier-2 off]
+  #1 status=500 zs.action=None zs.threat=None err.code='gateway_internal_error' top.code=None content=None
+      reason='An internal gateway error occurred.'
+      telemetry=[] audit=[]
+
+[E1 backtick prompt 'What does `git rebase -i` do?']
+  #1 status=500 zs.action=None zs.threat=None err.code='gateway_internal_error' top.code=None content=None
+      reason='An internal gateway error occurred.'
+      telemetry=[] audit=[]
+
+[E1 backtick prompt 'Why does `list.sort()` return None in Py']
+  #1 status=500 zs.action=None zs.threat=None err.code='gateway_internal_error' top.code=None content=None
+      reason='An internal gateway error occurred.'
+      telemetry=[] audit=[]
+
+[E1 backtick prompt 'How do I read `process.env.NODE_ENV` ins']
+  #1 status=500 zs.action=None zs.threat=None err.code='gateway_internal_error' top.code=None content=None
+      reason='An internal gateway error occurred.'
+      telemetry=[] audit=[]
+
+[E1 backtick prompt "What's the difference between `String` a"]
+  #1 status=500 zs.action=None zs.threat=None err.code='gateway_internal_error' top.code=None content=None
+      reason='An internal gateway error occurred.'
+      telemetry=[] audit=[]
+
+[E1 backtick prompt 'My Dockerfile runs `npm ci && npm run bu']
+  #1 status=500 zs.action=None zs.threat=None err.code='gateway_internal_error' top.code=None content=None
+      reason='An internal gateway error occurred.'
+      telemetry=[] audit=[]
+
+[E2 input Tier-2 client_error, clean prompt]
+  #1 status=500 zs.action=None zs.threat=None err.code='gateway_internal_error' top.code=None content=None
+      reason='An internal gateway error occurred.'
+      telemetry=[] audit=[]
+
+[E3 sustained input outage, tier2_strict default(True)] statuses: [500, 500, 500, 500, 500, 500, 500] codes: ['gateway_internal_error', 'gateway_internal_error', 'gateway_internal_error', 'gateway_internal_error', 'gateway_internal_error', 'gateway_internal_error', 'gateway_internal_error']
+[E3b sustained input outage, tier2_strict=False] statuses: [500, 500, 500, 500, 500, 500, 500] zs.action: [None, None, None, None, None, None, None]
+
+[E4 Tier-2 flag/obfuscation]
+  #1 status=500 zs.action=None zs.threat=None err.code='gateway_internal_error' top.code=None content=None
+      reason='An internal gateway error occurred.'
+      telemetry=[] audit=[]
+
+[E4b Tier-2 flag/risk_score (score 0.55)]
+  #1 status=500 zs.action=None zs.threat=None err.code='gateway_internal_error' top.code=None content=None
+      reason='An internal gateway error occurred.'
+      telemetry=[] audit=[]
+
+[E5 Tier-2 block conf=0.30 category=injection]
+  #1 status=500 zs.action=None zs.threat=None err.code='gateway_internal_error' top.code=None content=None
+      reason='An internal gateway error occurred.'
+      telemetry=[] audit=[]
+
+[E5 Tier-2 block conf=0.30 category=prompt_injection]
+  #1 status=500 zs.action=None zs.threat=None err.code='gateway_internal_error' top.code=None content=None
+      reason='An internal gateway error occurred.'
+      telemetry=[] audit=[]
+
+[O1 output Tier-2 client_error, provider=bedrock, clean completion]
+  #1 status=500 zs.action=None zs.threat=None err.code='gateway_internal_error' top.code=None content=None
+      reason='An internal gateway error occurred.'
+      telemetry=[] audit=[]
+
+[O2 output_pii_action=block, PII completion, provider=bedrock, output Tier-2 client_error]
+  #1 status=500 zs.action=None zs.threat=None err.code='gateway_internal_error' top.code=None content=None
+      reason='An internal gateway error occurred.'
+      telemetry=[] audit=[]
+
+[O2-control output_pii_action=block, PII completion, provider=bedrock, output Tier-2 HEALTHY (allow)]
+  #1 status=500 zs.action=None zs.threat=None err.code='gateway_internal_error' top.code=None content=None
+      reason='An internal gateway error occurred.'
+      telemetry=[] audit=[]
+
+[O1 output Tier-2 client_error, provider=gemini, clean completion]
+  #1 status=500 zs.action=None zs.threat=None err.code='gateway_internal_error' top.code=None content=None
+      reason='An internal gateway error occurred.'
+      telemetry=[] audit=[]
+
+[O2 output_pii_action=block, PII completion, provider=gemini, output Tier-2 client_error]
+  #1 status=500 zs.action=None zs.threat=None err.code='gateway_internal_error' top.code=None content=None
+      reason='An internal gateway error occurred.'
+      telemetry=[] audit=[]
+
+[O2-control output_pii_action=block, PII completion, provider=gemini, output Tier-2 HEALTHY (allow)]
+  #1 status=500 zs.action=None zs.threat=None err.code='gateway_internal_error' top.code=None content=None
+      reason='An internal gateway error occurred.'
+      telemetry=[] audit=[]
+
+[O3 enforcement_mode=monitor, output_pii_action=block, PII completion, output Tier-2 healthy, stream=False]
+  #1 status=500 zs.action=None zs.threat=None err.code='gateway_internal_error' top.code=None content=None
+      reason='An internal gateway error occurred.'
+      telemetry=[] audit=[]
+
+[O3 enforcement_mode=monitor, output_pii_action=block, PII completion, output Tier-2 healthy, stream=True]
+  #1 status=500 zs.action=None zs.threat=None err.code='gateway_internal_error' top.code=None content=None
+      reason='An internal gateway error occurred.'
+      telemetry=[] audit=[]
+
+[E2g input Tier-2 client_error, provider=gemini]
+  #1 status=500 zs.action=None zs.threat=None err.code='gateway_internal_error' top.code=None content=None
+      reason='An internal gateway error occurred.'
+      telemetry=[] audit=[]
+
+[E2g-parse input Tier-2 empty guard output, provider=gemini]
+  #1 status=500 zs.action=None zs.threat=None err.code='gateway_internal_error' top.code=None content=None
+      reason='An internal gateway error occurred.'
+      telemetry=[] audit=[]
+
+[T1 clean completion | provider=bedrock | output Tier-2 client_error | stream=False]
+  #1 status=500 zs.action=None zs.threat=None err.code='gateway_internal_error' top.code=None content=None
+      reason='An internal gateway error occurred.'
+      telemetry=[] audit=[]
+
+[T1 clean completion | provider=bedrock | output Tier-2 client_error | stream=True]
+  #1 status=500 zs.action=None zs.threat=None err.code='gateway_internal_error' top.code=None content=None
+      reason='An internal gateway error occurred.'
+      telemetry=[] audit=[]
+
+[T1 clean completion | provider=bedrock | output Tier-2 HEALTHY | stream=False]
+  #1 status=500 zs.action=None zs.threat=None err.code='gateway_internal_error' top.code=None content=None
+      reason='An internal gateway error occurred.'
+      telemetry=[] audit=[]
+
+[T1 clean completion | provider=bedrock | output Tier-2 HEALTHY | stream=True]
+  #1 status=500 zs.action=None zs.threat=None err.code='gateway_internal_error' top.code=None content=None
+      reason='An internal gateway error occurred.'
+      telemetry=[] audit=[]
+
+[T2 pii=block, SSN completion | provider=bedrock | output Tier-2 client_error | stream=False]
+  #1 status=500 zs.action=None zs.threat=None err.code='gateway_internal_error' top.code=None content=None
+      reason='An internal gateway error occurred.'
+      telemetry=[] audit=[]
+
+[T2 pii=block, SSN completion | provider=bedrock | output Tier-2 client_error | stream=True]
+  #1 status=500 zs.action=None zs.threat=None err.code='gateway_internal_error' top.code=None content=None
+      reason='An internal gateway error occurred.'
+      telemetry=[] audit=[]
+
+[T2 pii=block, SSN completion | provider=bedrock | output Tier-2 HEALTHY | stream=False]
+  #1 status=500 zs.action=None zs.threat=None err.code='gateway_internal_error' top.code=None content=None
+      reason='An internal gateway error occurred.'
+      telemetry=[] audit=[]
+
+[T2 pii=block, SSN completion | provider=bedrock | output Tier-2 HEALTHY | stream=True]
+  #1 status=500 zs.action=None zs.threat=None err.code='gateway_internal_error' top.code=None content=None
+      reason='An internal gateway error occurred.'
+      telemetry=[] audit=[]
+
+[T3 pii=block + markdown-image exfil beacon (exfil default=redact) | provider=bedrock | output Tier-2 client_error | stream=False]
+  #1 status=500 zs.action=None zs.threat=None err.code='gateway_internal_error' top.code=None content=None
+      reason='An internal gateway error occurred.'
+      telemetry=[] audit=[]
+
+[T3 pii=block + markdown-image exfil beacon (exfil default=redact) | provider=bedrock | output Tier-2 client_error | stream=True]
+  #1 status=500 zs.action=None zs.threat=None err.code='gateway_internal_error' top.code=None content=None
+      reason='An internal gateway error occurred.'
+      telemetry=[] audit=[]
+
+[T3 pii=block + markdown-image exfil beacon (exfil default=redact) | provider=bedrock | output Tier-2 HEALTHY | stream=False]
+  #1 status=500 zs.action=None zs.threat=None err.code='gateway_internal_error' top.code=None content=None
+      reason='An internal gateway error occurred.'
+      telemetry=[] audit=[]
+
+[T3 pii=block + markdown-image exfil beacon (exfil default=redact) | provider=bedrock | output Tier-2 HEALTHY | stream=True]
+  #1 status=500 zs.action=None zs.threat=None err.code='gateway_internal_error' top.code=None content=None
+      reason='An internal gateway error occurred.'
+      telemetry=[] audit=[]
+
+[T1 clean completion | provider=gemini | output Tier-2 client_error | stream=False]
+  #1 status=500 zs.action=None zs.threat=None err.code='gateway_internal_error' top.code=None content=None
+      reason='An internal gateway error occurred.'
+      telemetry=[] audit=[]
+
+[T1 clean completion | provider=gemini | output Tier-2 client_error | stream=True]
+  #1 status=500 zs.action=None zs.threat=None err.code='gateway_internal_error' top.code=None content=None
+      reason='An internal gateway error occurred.'
+      telemetry=[] audit=[]
+
+[T1 clean completion | provider=gemini | output Tier-2 HEALTHY | stream=False]
+  #1 status=500 zs.action=None zs.threat=None err.code='gateway_internal_error' top.code=None content=None
+      reason='An internal gateway error occurred.'
+      telemetry=[] audit=[]
+
+[T1 clean completion | provider=gemini | output Tier-2 HEALTHY | stream=True]
+  #1 status=500 zs.action=None zs.threat=None err.code='gateway_internal_error' top.code=None content=None
+      reason='An internal gateway error occurred.'
+      telemetry=[] audit=[]
+
+[T2 pii=block, SSN completion | provider=gemini | output Tier-2 client_error | stream=False]
+  #1 status=500 zs.action=None zs.threat=None err.code='gateway_internal_error' top.code=None content=None
+      reason='An internal gateway error occurred.'
+      telemetry=[] audit=[]
+
+[T2 pii=block, SSN completion | provider=gemini | output Tier-2 client_error | stream=True]
+  #1 status=500 zs.action=None zs.threat=None err.code='gateway_internal_error' top.code=None content=None
+      reason='An internal gateway error occurred.'
+      telemetry=[] audit=[]
+
+[T2 pii=block, SSN completion | provider=gemini | output Tier-2 HEALTHY | stream=False]
+  #1 status=500 zs.action=None zs.threat=None err.code='gateway_internal_error' top.code=None content=None
+      reason='An internal gateway error occurred.'
+      telemetry=[] audit=[]
+
+[T2 pii=block, SSN completion | provider=gemini | output Tier-2 HEALTHY | stream=True]
+  #1 status=500 zs.action=None zs.threat=None err.code='gateway_internal_error' top.code=None content=None
+      reason='An internal gateway error occurred.'
+      telemetry=[] audit=[]
+
+[T3 pii=block + markdown-image exfil beacon (exfil default=redact) | provider=gemini | output Tier-2 client_error | stream=False]
+  #1 status=500 zs.action=None zs.threat=None err.code='gateway_internal_error' top.code=None content=None
+      reason='An internal gateway error occurred.'
+      telemetry=[] audit=[]
+
+[T3 pii=block + markdown-image exfil beacon (exfil default=redact) | provider=gemini | output Tier-2 client_error | stream=True]
+  #1 status=500 zs.action=None zs.threat=None err.code='gateway_internal_error' top.code=None content=None
+      reason='An internal gateway error occurred.'
+      telemetry=[] audit=[]
+
+[T3 pii=block + markdown-image exfil beacon (exfil default=redact) | provider=gemini | output Tier-2 HEALTHY | stream=False]
+  #1 status=500 zs.action=None zs.threat=None err.code='gateway_internal_error' top.code=None content=None
+      reason='An internal gateway error occurred.'
+      telemetry=[] audit=[]
+
+[T3 pii=block + markdown-image exfil beacon (exfil default=redact) | provider=gemini | output Tier-2 HEALTHY | stream=True]
+  #1 status=500 zs.action=None zs.threat=None err.code='gateway_internal_error' top.code=None content=None
+      reason='An internal gateway error occurred.'
+      telemetry=[] audit=[]
+
+[T4 enforcement_mode=monitor, pii=block, SSN completion, Tier-2 healthy, stream=False]
+  #1 status=500 zs.action=None zs.threat=None err.code='gateway_internal_error' top.code=None content=None
+      reason='An internal gateway error occurred.'
+      telemetry=[] audit=[]
+
+[T4 enforcement_mode=monitor, pii=block, SSN completion, Tier-2 healthy, stream=True]
+  #1 status=500 zs.action=None zs.threat=None err.code='gateway_internal_error' top.code=None content=None
+      reason='An internal gateway error occurred.'
+      telemetry=[] audit=[]

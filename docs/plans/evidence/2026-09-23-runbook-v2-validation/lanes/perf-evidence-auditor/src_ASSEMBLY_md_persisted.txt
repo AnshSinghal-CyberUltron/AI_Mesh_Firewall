@@ -1,0 +1,558 @@
+# ASSEMBLY — The best latency and the best RPS achievable on $5,000/month, all constraints removed
+
+**Assembler.** Date 2026-08-29. Region of record `asia-south1` (Mumbai). Inputs: B1–B5 (read in full),
+the prior E/W/R corpus, plus **four new measurements and two simulations I ran this session** (§4.1).
+
+**Tags.** `[M]` measured on this box this session (by me or by a named B-agent, box identified) ·
+`[V]` vendor-published (URL + access date) · `[I]` independent third party · `[D]` derived, arithmetic
+shown · `[NF]` searched, not found.
+
+> ## THE ONE THING TO READ FIRST
+> **There is no GPU on this box. Every GPU number in this document is `[V]` or `[D]`. Not one is `[M]`.**
+> The GPU forward pass is **74 % of the recommended latency budget**, so 74 % of the headline rests on a
+> derivation chain, not a measurement. That chain is unusually strong — NVIDIA published *our exact
+> architecture at our exact sequence length* — but it is still a chain. §5.1 is the $7, 30-minute
+> experiment that converts it. **Do not present 6.1 ms as measured until that runs.**
+
+---
+
+## 0. THE ANSWER
+
+| | Answer | Binding constraint | Tag |
+|---|---|---|---|
+| **Best latency** | **6.1 ms p50 / 18.3 ms p99** added, enforce posture, 4,096-char (1,024-token) prompt, at 266 RPS/host (1,064 RPS fleet) | GPU forward pass (4.50 of 6.10 ms) | `[D]` composite of 5 `[M]` + 2 `[D]` + 1 `[I]` |
+| **Best latency, tail-optimised** | **6.1 ms p50 / 13.3 ms p99** at 100 RPS/host (400 RPS fleet) | queueing at the L4, not the model | `[D]` (queue simulation, §1.4) |
+| **Best RPS, semantic scan on *every* request** | **≈ 1,064 RPS** | **`NVIDIA_L4_GPUS = 8` regional quota** — *not* the budget ($1,262/mo left unspent) | `[D]` from `[M]` quota + `[V]` prices + `[D]` GPU throughput |
+| **Best RPS, same 8 L4, risk-gated semantic (≥26 % coverage)** | **≈ 4,150 RPS** | **egress + LB** | `[D]` |
+| **Best RPS, no semantic tier at all** | **≈ 7,200–9,400 RPS** | egress + LB | `[D]`, contingent on a hot-path rewrite that has not been load-tested |
+| **Monthly cost at the recommended point** | **$3,737.58** of $5,000 | — | `[D]` from `[V]` prices |
+
+**The three findings that decide the shape of the answer:**
+
+1. **The budget is no longer the constraint on the classifier — the quota is.** B4's levered egress
+   architecture drops the marginal cost of a request from W1's $4.87/RPS-month to **$0.45/RPS-month**
+   `[D]`. That is a 10.8× change, and it moves the binding constraint off egress and onto the
+   `NVIDIA_L4_GPUS = 8` limit `[M, live gcloud]`. At the recommended BOM we leave **$1,262/month
+   unspent** because there is nothing left to buy.
+2. **p50 is flat and cheap; p99 is what you actually buy with money.** The GPU forward pass is 4.50 ms
+   at any load below saturation, so p50 barely moves from 200 RPS to 1,064 RPS. p99 goes 13.3 → 18.3 ms
+   over the same range, driven entirely by queueing at a single-GPU server. **Pooling GPUs behind one
+   queue is worth more to the tail than any model optimisation** (§1.4): 8 L4 as 4×2 instead of 8×1 cuts
+   p99 from 25.7 ms to 14.8 ms at the same RPS and the same price.
+3. **The brief's tokenizer figure is wrong by ~15×, and that kills B3's headline consequence.** I
+   measured `[M]` DeBERTa-v3 SentencePiece at **0.2894 ms per 512-token window** (1,407 chars of real
+   prose) and **0.864 ms per 4,096-character prompt** — against the brief's 4.3 ms/512 tok and B2's
+   1.2159 ms. Tokenizer cost is **linear in characters (0.21 µs/char), not in tokens**. B3's conclusion
+   that "the GPU promotes the tokenizer to the #1 hot-path cost" is therefore **false**: the tokenizer is
+   **14 %** of the budget, the GPU is **74 %**.
+
+---
+
+## 1. THE BEST LATENCY
+
+### 1.1 The claim, stated properly
+
+> **6.10 ms p50 / 18.31 ms p99 of added latency (firewall tax on TTFT), posture = ENFORCE
+> (synchronous block-capable verdict before any byte reaches the provider), prompt band = 4,096
+> characters ≈ 1,024 tokens = 2 × 512-token classifier windows, at 266 RPS/host on a
+> `g2-standard-24` (2 × NVIDIA L4), 1,064 RPS across a 4-node fleet.**
+>
+> Convergence band on p50: **5.6 – 7.6 ms**, driven almost entirely by the GPU's own 2.7–4.0 ms
+> 80 % CI. `[D]`
+
+At the 512-token band (2,048 chars, 1 window) the same design gives **3.9 ms p50** `[D]`.
+
+### 1.2 Stage-by-stage budget — 1,024-token band, enforce posture
+
+| # | Stage | p50 ms | Tag | Evidence |
+|---|---|---:|---|---|
+| 1 | ALB→backend, HTTP parse, orjson decode of a 3 KiB body | 0.150 | `[I]` | granian/uvicorn+httptools benchmark, B4 §5.2 |
+| 2 | **One** pure-ASGI middleware (authn, org, policy snapshot — all in process memory) | 0.020 | `[D]` | from `[M]` 1.00 ms p50 for 4 × `BaseHTTPMiddleware`; ≈0.25 ms/layer, pure-ASGI ≈10× cheaper |
+| 3 | All non-classifier pipeline stages in the target design (policy resolve, routing, budget) | 0.160 | `[M]` | prior corpus, target-design measurement |
+| 4 | **Tier-1 deterministic** — native normalise + Hyperscan 174-pattern gate + dictionary-gated segmentation | 0.280 | `[D from M]` | B5: 0.0099 `[M]` + 0.042 `[M]` + 0.118 `[M]` + 0.053 `[M]` + ≈0.04 `[D]` (0.434 `[M]` ÷ 16.6 dictionary filter) |
+| 5 | **Tokenize** 4,096 chars → 2 × 512-token windows (HF `tokenizers` Rust, DeBERTa-v3 SP/Unigram) | 0.864 | **`[M]` this session** | §4.1; 300 iters, p99 0.974 ms, loadavg 0.20 |
+| 6 | H2D + D2H copies (2 × 512 × int32 × 2 tensors) | 0.040 | `[D]` | B3: PCIe latency-bound, 4 KiB payload, 10–25 µs each way |
+| 7 | **TensorRT FP16 forward, window-batch 2 × seq512, 1 × L4** | **4.500** | **`[D]`** | §1.3 — the load-bearing number |
+| 8 | In-process TRT-EP / Triton C-API call overhead | 0.080 | `[I]` weak | single perf_analyzer decomposition; order-of-magnitude only |
+| | **TOTAL added TTFT, p50** | **6.094** | `[D]` | |
+
+**Response side** (not part of TTFT, charged once per answer): Tier-1 output scan over 8 coalesced
+chunks ≈0.30 ms `[D]`, gzip-6 `Z_SYNC_FLUSH` 0.155 ms `[M]`, SSE frame build with orjson 0.24 ms `[M]`.
+**Total CPU per request end-to-end: 2.169 ms** `[D]` (§2.3).
+
+### 1.3 Where the 4.50 ms comes from, and why I believe it
+
+The anchor is **`[V]`, not `[D]`**, and it is the single strongest piece of evidence in this whole
+workstream:
+
+> NVIDIA published **`microsoft/deberta-v3-xsmall`** — 12 layers, hidden 384, intermediate 1536,
+> 6 heads, max relative distance 256, vocab 128 K, **sequence length 512, batch 1** — at
+> **1.8 ms on A100-80GB** and **5.6 ms on T4**, TensorRT FP16.
+> `[V]` github.com/NVIDIA/TensorRT `release/10.8/demo/DeBERTa/README.md`, fetched 2026-08-29.
+
+That is **our exact model architecture at our exact sequence length**. `Llama-Prompt-Guard-2-22M`'s own
+`config.json` is byte-identical to it on every field that matters (`deberta-v2`, 12/384/1536/6,
+vocab 128100, `pos_att_type [p2c, c2p]`) `[M]`, and B2 validated the twin at seq512 to **1.0 %**
+(104.747 vs 105.785 ms FP32 on CPU) `[M]`.
+
+Bridge to L4, three independent paths, all from NVIDIA's own same-harness demoBERT tables `[V]`:
+
+| Path | Arithmetic | Result |
+|---|---|---|
+| A — A100 anchor × (L4/A100 p95) | 1.8 × (2.10/1.25) = 1.8 × 1.680 | 3.02 ms |
+| A′ — A100 anchor × (L4/A100 avg) | 1.8 × (2.09/1.26) = 1.8 × 1.659 | 2.99 ms |
+| B — T4 anchor ÷ (T4/L4 implied) | 5.6 ÷ 1.872 | 2.99 ms |
+| B′ — T4 no-plugin | 6.2 ÷ 1.872 | 3.31 ms |
+
+**Method self-validation:** the T4/A100 batch-1 ratio is **3.111** measured on DeBERTa-xsmall@512 and
+**3.145** measured on BERT-base@384 — **1.08 % apart** across a different architecture *and* a different
+sequence length `[D]`. Batch-1 transformer latency is launch/memory-latency bound, so GPU-to-GPU ratios
+are architecture-insensitive. That is what licenses the bridge.
+
+**Batch-2 factor** (2 windows of one request, submitted together): from NVIDIA's L4 BERT-base seq384
+FP16 curve, b1 = 2.092 ms and b2 = 3.139 ms `[V]` ⇒ ×1.500. Applied to 3.00 ms ⇒ **4.50 ms** `[D]`.
+
+**Residual risks I did not resolve, stated:** (a) the demoBERT table is labelled "L4" in `release/10.8`
+and "A30" in `release/10.13` with byte-identical numbers — B3 resolved this to L4 by three arguments
+(TensorRT does not regress 1.9×; A30 has 3.11× L4's bandwidth; MFU clustering puts "disputed = A30" at a
+27 % outlier), but NVIDIA never issued an erratum, so it is **inference, not their word**; (b) the anchor
+is A100-**80 GB** while the bridge ratio is A100-**40 GB**, which biases the estimate *low*; (c) the
+anchor is an average of 100 runs with **no published percentiles anywhere for DeBERTa on any GPU**.
+
+### 1.4 p99 — the honest part
+
+**No p95/p99 exists for DeBERTa on any GPU, from any source `[NF]`.** So I did not guess a tail: I
+**simulated the queue**, which is what actually produces the tail at these service times.
+
+Model: Poisson arrivals to one node, one shared queue served by *c* GPU workers with Triton-style dynamic
+batching capped at 4 windows, service time taken from NVIDIA's own L4 batch-latency curve scaled by
+3.00/2.092 for DeBERTa. 300 k arrivals, 30 k warm-up. Script:
+`scratchpad/best/asm_queue2.py`. CPU-side p99 taken as 3.5 ms `[D]` (2.2× the 1.6 ms CPU p50; the measured
+p99/p50 ratios in play are 4.7× for `BaseHTTPMiddleware`, 1.13× for the tokenizer, 1.07× for ORT).
+
+**8 L4 total, three layouts, same price for the first and last:**
+
+| Fleet RPS | Layout | GPU p50 | GPU p95 | GPU p99 | **tax p50** | **tax p99** |
+|---:|---|---:|---:|---:|---:|---:|
+| 400 | 8 × `g2-standard-4` (1 L4/node) | 4.50 | 8.85 | 12.15 | 6.10 | 15.65 |
+| 400 | **4 × `g2-standard-24` (2 L4/node)** | 4.50 | 5.68 | 9.77 | **6.10** | **13.27** |
+| 400 | 2 × `g2-standard-48` (4 L4/node) | 4.50 | 4.50 | 4.92 | 6.10 | 8.42 |
+| 800 | 8 × `g2-standard-4` | 4.50 | 12.46 | 17.65 | 6.10 | 21.15 |
+| 800 | **4 × `g2-standard-24`** | 4.50 | 10.14 | 11.95 | **6.10** | **15.45** |
+| 1,064 | 8 × `g2-standard-4` | 6.02 | 16.81 | 23.05 | 7.62 | 26.55 |
+| 1,064 | **4 × `g2-standard-24`** | 4.50 | 11.54 | 14.81 | **6.10** | **18.31** |
+| 1,064 | 2 × `g2-standard-48` | 4.50 | 9.66 | 11.04 | 6.10 | 14.54 |
+| 1,400 | 4 × `g2-standard-24` | 6.65 | 16.24 | 21.81 | 8.25 | 25.31 |
+
+**The finding:** 8 L4 as `4 × g2-standard-24` and 8 L4 as `8 × g2-standard-4` differ by **$803/month**
+and by **8 ms of p99 at 1,064 RPS**. `4 × g2-standard-24` and `2 × g2-standard-48` cost **exactly the
+same** ($342.095478/L4 — GCP prices the 12-vCPU-per-L4 family identically `[D from V]`); the 4-node
+layout trades 3.8 ms of p99 for a third availability zone. **Take the 4-node layout.**
+
+Caveats on the simulation, stated: Poisson arrivals are **conservative** — a least-request LB smooths
+per-node arrivals; and the DeBERTa batch-scaling factor is assumed constant across batch, which B3
+flagged as unresolved (the per-FLOP penalty is part launch overhead, which amortises, and part memory
+indirection, which does not).
+
+### 1.5 Two things that would make it faster, and why I am not banking either
+
+- **Swap to a BERT-family backbone.** `[D]` ~1.0–1.2 ms FP16 on L4 for the same 12L/384 shape (3× faster,
+  and INT8 becomes available). On CPU the same swap is **4.53× measured** `[M]` (100.345 → 22.172 ms at
+  seq512). **Not banked: there is no injection classifier on an ORT-fusable backbone with a defensible
+  published accuracy number** `[M]` — 0 of 10 credible detectors qualify; the one fusable detector with an
+  independent score is at 44.58 % average / 34.63 % benign accuracy `[I]`.
+- **Speculative dispatch** (send upstream, classify in parallel, abort on a late trip) would hide the
+  entire 4.5 ms behind the provider's own 200–800 ms TTFT. **Not banked: E6 rejected it** — it produces a
+  false attestation in the customer-facing pipeline trace, uncancellable provider billing, and a
+  cross-tenant circuit-breaker DoS at ~10 req/min. Permissible only as an explicitly-consented per-tenant
+  opt-in on the Tier-2 verdict alone. **It must not be load-bearing for the SLO.**
+
+### 1.6 What CPU-only would give, for contrast
+
+There is no CPU path to single-digit milliseconds with a transformer that has published accuracy:
+
+| Option | seq512 p50, 8 threads | Tag | Accuracy |
+|---|---:|---|---|
+| PG2-22M INT8, as shipped | **100.345 ms** | `[M]` | AUC .995 / 88.7 % recall @1 % FPR `[V]` |
+| Same, better ONNX export | ~62 ms `[D]` (1.61× `[M]`) | `[D]` | unchanged |
+| Identically-shaped BERT, offline-fused + INT8 `QAttention` | **22.172 ms** | `[M]` | **`[NF]` — head does not exist** |
+| testsavant-small (BERT 4L/512) | **8.08 ms** | `[M]` | **`[NF]` — publishes nothing** |
+| testsavant-tiny (BERT 2L/128) | **1.31 ms** | `[M]` | **`[NF]` — publishes nothing** |
+
+Two windows of the shipping model on CPU is **~200 ms**. The GPU is a **44×** reduction on the stage that
+dominates the budget. This is the whole case for lifting the GPU prohibition, and it holds.
+
+---
+
+## 2. THE BEST RPS ON $5,000/MONTH
+
+### 2.1 The ladder, with the binding constraint named at each rung
+
+| Posture | Semantic coverage | **Max RPS** | **Binding constraint** | Budget used |
+|---|---:|---:|---|---:|
+| **A. Enforce, scan every request** | 100 % | **1,064** | **`NVIDIA_L4_GPUS = 8` quota** `[M]` | $3,737.58 (**$1,262 unspent**) |
+| A′. Same, quota raised to 14 L4 | 100 % | **1,862** | budget — GPU compute at $1.82/RPS-mo | $4,742.76 |
+| **B. Enforce, risk-gated semantic** | ≥26 % | **4,151** | **egress + LB** | $5,000 |
+| C. Deterministic only, no transformer | 0 % | **7,200–9,400** | egress + LB | $5,000 |
+| D. Any of the above, BYOK provider **out of region** | 100 % / gated | 1,064 / **1,731** | egress (prompt leg becomes 65 % of it) | $5,000 |
+
+Script: `scratchpad/best/asm_bom.py`. All compute prices `[V]` Mumbai 3-yr **resource** CUD; egress
+priced through the real GCP Standard-Tier band table (200 GiB free / $0.085 / $0.065 / $0.045) `[V]`,
+not linearised.
+
+### 2.2 Why the quota binds and the budget does not
+
+One L4 running DeBERTa-v3-xsmall@512 through TensorRT FP16 sustains **≈490 windows/s** `[D]`
+(saturation knee at window-batch 8, from NVIDIA's own L4 curve — batching past that *hurts*). At 2
+windows per request and a 60 % utilisation cap for tail control, that is **133 requests/s per L4**.
+Eight L4 — the entire regional quota `[M]` — is **1,064 RPS**.
+
+The money to do that is $2,736.76 (compute) + $540.36 (HA floor) + $460.46 (egress+LB) = **$3,737.58**.
+**$1,262.42 of the budget has nothing to buy.** More GPU is not purchasable; more CPU is not needed
+(§2.3); more egress buys nothing while the GPU is the wall.
+
+**This corrects B1.** B1 concluded egress caps the 8×L4 design at ~346–511 RPS by linearising W1's
+$4.866/RPS-month. That figure predates B4's measured levers. With the trace frame deleted, SSE coalesced,
+gzip applied and the provider in-region, the marginal cost is **$0.449/RPS-month** `[D]` — **10.8×
+cheaper** — and egress stops being the constraint until ~4,150 RPS.
+
+### 2.3 Why CPU does not bind — and how wrong I can be before it does
+
+Bottom-up CPU per request, rewritten hot path, 4,096-char prompt / 400-token answer:
+
+| ms | item | tag |
+|---:|---|---|
+| 0.150 | framework + HTTP + orjson parse | `[I]` |
+| 0.020 | one pure-ASGI middleware | `[D from M]` |
+| 0.160 | non-classifier stages | `[M]` |
+| 0.280 | Tier-1 input, native + dictionary gate | `[D from M]` |
+| **0.864** | **tokenize 4,096 chars** | **`[M]` this session** |
+| 0.300 | Tier-1 output scan, 8 coalesced chunks | `[D]` |
+| 0.155 | gzip-6 `Z_SYNC_FLUSH` per answer | `[M]` |
+| 0.240 | SSE frame build, orjson | `[M]` |
+| **2.169** | **TOTAL** ⇒ **461 RPS/vCPU** at 100 %, **277** at a 60 % cap | `[D]` |
+
+96 vCPU × 277 = **26,592 RPS of CPU capacity** against **1,064 RPS of GPU capacity**. **The CPU estimate
+would have to be 25× too optimistic before it changes the answer.** That is the robustness argument, and
+it is why I am comfortable asserting the conclusion despite the CPU number being `[D]` and never
+load-tested end-to-end.
+
+For calibration: **today's measured value is 0.17–5.4 RPS/vCPU** `[M]`, i.e. 50–1,600× worse. The entire
+gap is two items B5 measured: Tier-1 at 63.40 ms → 0.28 ms, and `redact_all` at 32.76 ms → 0 ms (run it
+only on `redact` verdicts — it executes every pattern unconditionally and costs 6.4–8.2 ms even on text
+with zero PII `[M]`). **B4's more conservative sum, which keeps both, gives 10.25 RPS/vCPU** — at which
+point 96 vCPU × 10.25 × 0.6 = 590 RPS and **CPU would bind before the GPU**. That is the one scenario in
+which my answer is wrong, and it is exactly the scenario the native Tier-1 rewrite exists to prevent.
+
+### 2.4 In-flight memory does not bind
+
+`[M]` **1.1 MB per in-flight stream** (project measurement, `mcp-parallel/findings/phase0-t-s1/`,
+conservative cap 2 MB). At 266 RPS/host and a 20 s hold, 5,320 streams × 2 MB = **10.6 GB** of the
+96 GB on a `g2-standard-24`. `[D]`
+
+### 2.5 The egress levers this rests on (B4, all `[M]` this workstream)
+
+| Lever | Value | Tag |
+|---|---|---|
+| Delete the 41,424-byte `pipeline_trace` tail frame — **85.5 % of raw response bytes** at coalesce ×16, still **48.6 % after gzip** | 1.46× | `[M]` |
+| Coalesce SSE (adaptive: flush on N tokens **or** 120 ms) | 8.26× | `[M]`/`[D]` |
+| gzip-6 with `Z_SYNC_FLUSH` per frame — **14.7–19.4×**, not the 4× W1 assumed; proven not to batch SSE through `httpx` (median client gap 100.2 ms against a 100 ms server cadence) | 1.53× | `[M]` |
+| Regional external ALB + Standard Tier ($0.045/GiB floor, **region-independent** — W1's "Mumbai exception" was wrong) | 1.25× | `[V]` |
+| HTTP/3 (49 B/packet vs 74 B measured) | 1.03× | `[M]`/`[D]` |
+| Provider in-region / PSC — the prompt leg is 2.7 % of egress today but **65.1 %** after the response levers | 1.90× | `[D from M]` |
+
+`_scrub_trace_for_client` is defined at `main.py:723` and called from exactly one site, `main.py:955`
+(the blocked/non-stream path). `grep -rn "emit_trace_frame=" gateway/ai_mesh_gateway/*.py` returns
+nothing, so the streaming trace always emits. **There is no config flag.** `[M]`
+
+---
+
+## 3. THE ARCHITECTURE
+
+### 3.1 Bill of materials — $3,737.58/month of $5,000
+
+| Component | Spec | $/mo | Tag |
+|---|---|---:|---|
+| **Gateway + classifier nodes** | **4 × `g2-standard-24`** — 24 vCPU, 96 GB, **2 × NVIDIA L4** each; 8 L4 and 96 vCPU total; spread a/b/c with 2 nodes in the largest zone | **2,736.76** | `[V]` 3-yr resource CUD, $684.19095678/node |
+| Postgres | Cloud SQL Enterprise **HA**, 4 vCPU / 16 GiB / 100 GiB SSD | 273.91 | `[V]` 3-yr CUD $34.731648/vCPU + $5.88672/GiB + $0.408/GiB SSD |
+| Cache / counters | Memorystore **HA**, 2 × 13 GB `highmem-medium` | 175.20 | `[V]` 3-yr CUD $87.60/node |
+| Orchestration | 1 GKE cluster management fee | 73.00 | `[V]` verbatim: flat $0.10/cluster/hr |
+| Edge | regional external ALB forwarding rules (first 5) | 18.25 | `[V]` $0.025/hr |
+| **Cloud NAT** | **NONE — deliberately** ($0.045/GiB **both directions** would make the otherwise-free 87 KiB provider response billable) | 0.00 | `[V]` |
+| Egress + LB data processing @ 1,064 RPS (4,197 GiB) | Standard Tier, banded | 460.46 | `[D from V]` |
+| **TOTAL** | | **3,737.58** | |
+| **Unspent** | nothing left to buy at the quota ceiling | **1,262.42** | |
+
+### 3.2 Where the classifier runs: **in-process on the GPU node. There is no hop.**
+
+`[M]` Live GCP Compute API, this session: `g2-standard-24` returns
+`accelerators: [{guestAcceleratorCount: 2, guestAcceleratorType: "nvidia-l4"}], guestCpus: 24` — **the
+GPU and the vCPUs are one VM.** Confirmed three ways (machine-types list, machine-types describe,
+`docs.cloud.google.com/compute/docs/gpus`). Every G2 shape exists in all three `asia-south1` zones.
+
+This kills the objection that a 12 ms budget cannot absorb a hop to a GPU: **there is no hop to absorb.**
+And the alternative is fatal — the *nearest* other region (Delhi) is **≥16.1 ms RTT** by the physics floor
+alone `[D]`, Singapore ≥54.7 ms.
+
+**Runtime stack — and this is not a tuning knob:** `[M]` ONNX Runtime 1.29.0's fusion registry
+(`MODEL_TYPES`, 19 entries) contains **no `deberta` and no `deberta-v2`**, and fusion is a **graph-level
+pass applied before execution-provider assignment**. **ORT CUDA EP would therefore run the same unfused
+graph on the GPU.** The viable stacks are (a) native TensorRT, or (b) ORT with the **TensorRT EP**, which
+hands the subgraph to TRT and supports the disentangled-attention plugin. The plugin is alive: present on
+`main` and `release/11.2`, migrated to `IPluginV3` in 2024.03, touched in the TensorRT 11.0 release
+2026-06-02 `[V]` — and at seq512 it is worth **0 %** on A100 and 11 % on T4 anyway, so that risk is
+doubly closed.
+
+**Serving:** Triton with the TensorRT backend, one instance group per GPU, **both GPUs on a node behind
+one shared queue** (this is the 8 ms of p99 in §1.4), `max_queue_delay_microseconds ≈ 500`,
+**`max_batch_size` capped at 4 windows** — the throughput knee is at 8 windows but the tail is materially
+better at 4 for a 0.4 % throughput cost `[D]`. Called over the C API / CUDA shared memory on localhost,
+never over the network.
+
+### 3.3 The Tier-1 tier — rebuilt, and demoted
+
+| Change | Effect | Tag |
+|---|---|---|
+| Replace **both** inline `ATTACK_PATTERNS` regex loops with one **Hyperscan relaxed-superset gate**, 174/174 patterns compiled | **21.97 ms → 0.160 ms (137×)**, zero measured recall change | `[M]` |
+| Port normalise + segmentation to native code (C/Rust-PyO3), byte-identical output | 14.72 ms → **0.434 ms (33.9×)** | `[M]` |
+| Gate the segmentation DP behind a **provably-sound dictionary filter** (`DICT \ D_seg`, precomputed offline in 1,052 ms; `|D_seg|` = 2,805 of 272,543 words) | 16.6× less DP work, **0.00 % recall loss by construction** | `[M]` |
+| **Demote the injection/jailbreak patterns from `block` to `signal`** | fixes 5/5 + 7/7 + 3/12 measured false positives, **today, with no performance work** | `[M]` |
+| `sorted(vocab)` | removes proven per-process **non-determinism** in a security control | `[M]` |
+
+**Why the demotion is not optional.** The shipped scanner **hard-blocks 7/7 realistic benign sentences
+containing the word "nominations"** as `jailbreak / tier_0_5 / confidence 0.95`, because
+`_deobfuscate_text` mangles it into `"no limitations"` `[M]`. It also hard-blocks 5/5 benign developer
+prompts (`` `npm install` ``, `$(date)`) `[M]`. On benign prose the segmentation DP does **18.6 ms of work
+and returns zero segmentations from 199 tokens** `[M]`, and it hands an attacker a **93× CPU
+amplification** (0.139 ms → 12.91 ms *in native code* at the 10,000-char cap) `[M]`. Published evidence
+corroborates the local measurement exactly: a 26-detector production regex pack scores **recall 0.017 on
+paraphrase-dominated corpora and 0.978 on template-dominated ones — the same pack** `[I]`. **Meta's
+LlamaFirewall ships no regex at all in its injection tier** `[V]`.
+
+**Keep** the value scanners — PII/secret/credential/DoS/transport-anomaly. Those have literal grammar,
+regex is the correct and complete tool, and the published FPR for a well-built pack on trigger-word-rich
+benign text is **0.9 %** `[I]`. Folded into the Hyperscan gate they cost **0.042 ms**.
+
+### 3.4 Edge and wire format
+
+- **Regional external ALB, Standard Network Tier, HTTP/3 enabled.** Standard Tier requires the regional
+  ALB (the global ALB is Premium-only `[V]`); the regional ALB supports HTTP/3 `[V]`. Cost: anycast —
+  clients enter Google's network at Mumbai. Free for a Mumbai-centric tenant base.
+- **Backend service timeout must be raised explicitly** — the default is 30 s and on an external ALB it
+  bounds the *entire* SSE response `[V]`.
+- **SSE, `text/event-stream`, adaptive coalescing** ("flush on 16 tokens **or** 120 ms"), **gzip-6 with
+  `Z_SYNC_FLUSH` per frame**, `Accept-Encoding`-gated. **No `pipeline_trace` frame — emit a `trace_id`.**
+- **Binary framing (WebSocket/gRPC) is not worth it:** at coalesce ×16 the entire JSON
+  `chat.completion.chunk` envelope costs **224 compressed bytes for a whole 400-token answer** `[M]`. A
+  binary transport would save 13 % of app bytes, 0 % of transport, and every OpenAI-SDK client.
+- **nginx:** leave `gzip_types` excluding `text/event-stream` (`deploy/nginx.conf:14`) — nginx buffers its
+  own gzip output and would batch the events. The gateway compresses; nginx passes through.
+- **No Cloud Armor.** At these rates Standard is **$15,180/mo — 3× the entire budget** `[D]`. Say this out
+  loud to whoever signs off.
+
+---
+
+## 4. PROOF LEDGER
+
+### 4.1 New measurements I made this session
+
+| # | Claim | Value | Tag | Proof |
+|---|---|---|---|---|
+| N1 | DeBERTa-v3 SentencePiece/Unigram tokenization, HF `tokenizers` 0.23.1, real English prose from the repo's own `docs/` | **0.1329 ms** @256 tok · **0.2894** @512 tok · **0.6231** @1024 tok · **0.8638 ms @4,096 chars** (1,347 ids, p99 0.9743) · 2.1631 ms @10,000 chars | **`[M]`** | `scratchpad/best/asm_tok.py`, `asm_tok2.py`; 300 timed iters after 30 warm-up, Xeon 8581C, loadavg 0.20. Cost is **linear in characters at 0.208–0.216 µs/char**, not in tokens. |
+| N2 | **The brief's "SentencePiece 4.3 ms/512 tok" is wrong by ~15×**, and B2's 1.2159 ms is wrong by ~4× | 512 tokens of real prose = 1,407 chars = **0.2894 ms** | **`[M]`** | N1. B2 likely timed a longer character string truncated post-hoc to 512 tokens; tokenizer cost tracks characters, not the truncated token count. **This falsifies B3 §9's headline consequence** ("the GPU promotes the tokenizer to the #1 hot-path cost") — at 0.864 ms for the whole 4,096-char band the tokenizer is 14 % of the budget, the GPU is 74 %. |
+| N3 | GPU-stage tail vs load, dynamic-batching server, 8 L4 in three layouts | table in §1.4 | `[D]` | `scratchpad/best/asm_queue.py`, `asm_queue2.py`; 300 k Poisson arrivals, 30 k warm-up, service from NVIDIA's `[V]` L4 batch curve × 1.434 |
+| N4 | Full BOM and RPS ceilings with **banded** (not linearised) GCP Standard-Tier egress | §2.1, §3.1 | `[D]` | `scratchpad/best/asm_bom.py`, `asm_model.py` |
+| N5 | Marginal cost per RPS-month in the levered architecture | **$0.449** at ≤4,000 RPS; $0.370 above | `[D]` | `asm_model.py`; vs W1's $4.866 — a **10.8×** correction |
+| N6 | CPU per request, bottom-up, rewritten hot path | **2.169 ms** ⇒ 461 RPS/vCPU @100 %, 277 @60 % | `[D]` | §2.3, sum of 5 `[M]` + 2 `[D]` + 1 `[I]` |
+
+### 4.2 Every load-bearing number in the recommendation
+
+| Item | Value | Tag | Proof |
+|---|---|---|---|
+| **G2 bundles GPU + vCPU in ONE VM** | `g2-standard-24` = 24 vCPU / 96 GB / **2 × L4**, all three zones | **`[M]`** | live `gcloud compute machine-types {list,describe}` 2026-08-29, project 24342156045; third confirmation `[V]` docs.cloud.google.com/compute/docs/gpus |
+| `NVIDIA_L4_GPUS` quota, asia-south1 | **8** (usage 0); `COMMITTED_NVIDIA_L4_GPUS` **8** | **`[M]`** | `gcloud compute regions describe asia-south1`, 113 metrics, 2026-08-29 |
+| No A100 in asia-south1 at any price | zero `a2-*` machine types, zero `nvidia-a100` accelerator types | **`[M]`** | same; the `NVIDIA_A100_GPUS=1` quota row is a **phantom**. Corrects the 2026-08-25 note. |
+| No H100/H200/RTX-PRO quota metric exists | substring scan of all 113 metrics: `H100`→0, `H200`→0, `RTX`→0 | **`[M]`** | same. A3 is also **12.9× the budget** at $64,597.70/mo `[D from V]`. |
+| `g2-standard-24` price, 3-yr resource CUD | **$684.19095678/mo** ($342.095478/L4) | `[V]` | cloud.google.com/products/compute/pricing/accelerator-optimized, Mumbai table, 2026-08-29; `[I]` cross-check gcloud-compute.com CSV agrees **to the cent** |
+| **DeBERTa-v3-xsmall @ seq512 b1 FP16 TRT, A100-80GB / T4** | **1.8 ms / 5.6 ms** | **`[V]`** | NVIDIA TensorRT `release/10.8/demo/DeBERTa/README.md`, 2026-08-29 — *our exact architecture, our exact sequence length* |
+| **Same on one L4, batch 1** | **3.00 ms** (band 2.99–3.31, 80 % CI 2.7–4.0) | **`[D]`** | three bridge paths §1.3, method self-validated to 1.08 % |
+| **Same, window-batch 2 (one 1,024-token request)** | **4.50 ms** | **`[D]`** | 3.00 × (3.139/2.092) from NVIDIA's L4 batch curve `[V]` |
+| One L4 saturation throughput, our model | **≈490 windows/s** (knee at window-batch 8); band 490–1,580 | `[D]` | two independent conservative methods agree; upper bound unresolvable from public data |
+| PG2-22M is `deberta-v2` 12/384/1536/6, vocab 128100 | identical to NVIDIA's demo config | `[M]` | `config.json` of `gravitee-io/Llama-Prompt-Guard-2-22M-onnx`; FP32 twin validated to **1.0 %** at seq512 |
+| PG2-22M INT8 on CPU, seq512, 8 threads | **100.345 ms** p50 (p99 107.47) | `[M]` | B2, ORT 1.29.0, 200+ iters, idle box |
+| ORT `MODEL_TYPES` has **no** `deberta` | 19 keys, absent; no `fusion_deberta_attention.py` | **`[M]`** | inspected installed ORT 1.29.0 |
+| Identically-shaped BERT, offline-fused + INT8 `QAttention`, seq512 | **22.172 ms** ⇒ **4.53×** | `[M]` | B2, same box/session/harness; fusion is **bit-exact** (cosine 1.000000) |
+| Tier-1 shipped vs verdict-identical rewrite, 4,096 ch | **1,894.4 ms → 59.78 ms**, 43 full verdicts, **0 mismatches** | `[M]` | B5, idle box |
+| Hyperscan relaxed-superset gate, 174/174 patterns | 42.3 µs raw + 117.8 µs deobfuscated = **0.160 ms**, replacing 21.97 ms | `[M]` | B5 |
+| Native segmentation, byte-identical output | **0.434 ms** vs 14.72 ms Python (**33.9×**) | `[M]` | B5 `seg.c`, gcc -O3 -march=native |
+| Adversarial Tier-1 amplification, in native code | 0.139 → **12.91 ms at the 10,000-char cap (93×)** | `[M]` | B5 |
+| "nominations" hard-blocked by the **unmodified shipped** scanner | **7/7** benign sentences, `jailbreak/tier_0_5/0.95` | `[M]` | B5 |
+| Benign developer prompts hard-blocked | **5/5** | `[M]` | B5 |
+| `pipeline_trace` tail frame | **41,424 B**, 85.5 % of raw response bytes at ×16, **48.6 % after gzip**; never scrubbed on the streaming path; **no config flag** | `[M]` | B4 + source (`main.py:723`/`:955`) |
+| gzip-6 `Z_SYNC_FLUSH` on per-token SSE | **14.85×** (gzip-9 15.73×; OpenAI shape 19.40×); **155 µs/answer**; **does not batch SSE** (client gap 100.2 ms vs 100 ms cadence) | `[M]` | B4, real-text corpora, `httpx` end-to-end |
+| Transport overhead per SSE write, this GCE VM | **87.4 ± 0.4 B** L2, 74 B IP, **exactly 1.00 packet** ≤~1,400 B | `[M]` | B4, `/proc/net/dev` differential |
+| GCP Standard Tier egress | $0.085 / $0.065 / **$0.045** per GiB, **region-independent**; first 200 GiB free | `[V]` | three byte-identical on-disk page dumps; corrects W1's "Mumbai exception" |
+| MB per in-flight stream | **1.1 MB** (n=4), conservative cap 2 MB | `[M]` | project measurement, `mcp-parallel/findings/phase0-t-s1/` |
+| Cross-region GPU RTT floor from Mumbai | Delhi **≥16.1 ms**, Singapore ≥54.7 ms | `[D]` | great-circle × 1.4 routing factor, 0.67c; **lower bounds** |
+| PG2-22M published accuracy | AUC .995, **recall 88.7 % @1 % FPR**; 86M: .998 / 97.5 % | `[V]` | Meta model card + arXiv:2505.03574 |
+| …which does not survive distribution shift | LODO drops AUC **8–16 points**; ProtectAI 0 % TPR on harmful requests; Deepset 82.4 % FPR | `[I]` | arXiv:2602.14161, arXiv:2410.22284v1 |
+
+---
+
+## 5. WHAT IS NOT PROVEN
+
+Ordered by how much of the recommendation each one carries.
+
+### 5.1 `[D]` — The 4.50 ms GPU forward pass (74 % of the p50 budget). **Cost to convert: $7 and 30 minutes.**
+
+```bash
+# g2-standard-8, asia-south1-a  ($0.888583031/hr on-demand [V], inside the existing 8-GPU quota)
+docker run --gpus all -it nvcr.io/nvidia/tensorrt:<tag>-py3
+git clone -b release/11.2 https://github.com/NVIDIA/TensorRT && cd TensorRT/demo/DeBERTa
+python deberta_pytorch2onnx.py --filename ./pg2.onnx --variant <OUR PG2-22M checkpoint>
+python deberta_onnx_modify.py ./pg2.onnx --plugin     # -> pg2_plugin.onnx
+python deberta_onnx_modify.py ./pg2.onnx              # -> pg2_original.onnx (control)
+for M in pg2_plugin pg2_original; do for W in 1 2 4 8 16 32; do
+  trtexec --onnx=./$M.onnx --fp16 --optShapes=input_ids:${W}x512,attention_mask:${W}x512 \
+          --iterations=1000 --warmUp=200 --percentile=95,99 --noDataTransfers   # NVIDIA-comparable
+  trtexec --onnx=./$M.onnx --fp16 --optShapes=input_ids:${W}x512,attention_mask:${W}x512 \
+          --iterations=1000 --warmUp=200 --percentile=95,99                     # end-to-end truth
+done; done
+```
+
+**Five things it must settle, in this order:** (1) is window-batch 1 inside **2.7–4.0 ms**? — if not, the
+whole derivation dies and the "L4 vs A30" label call in §1.3 was wrong; (2) **where does throughput
+actually saturate** — the 490 vs 1,580 windows/s spread is 3.2× and directly sets $/RPS; (3) **p95/p99
+over 1,000+ iterations**, because every published DeBERTa number is an average of 100 runs and *no tail
+data exists anywhere* — a 72 W card under sustained load is exactly where tails appear; (4)
+`--noDataTransfers` on vs off, to measure the copy cost I estimated at 0.04 ms; (5) **`--int8` with
+calibration — does DeBERTa INT8 work on TensorRT at all?** Currently **`[NF]`, a coin-flip**: if it works
+throughput roughly doubles; if it fails the way it failed on CPU (missing fusion around the
+disentangled-attention gathers) FP16 is the ceiling. **Also worth 20 minutes: `--useCudaGraph`.**
+
+### 5.2 `[NF]` — Real-world detection accuracy. **The most important gap in this document.**
+
+Everything above optimises the *cost* of a verdict. Nothing proves the verdict is *right*.
+`[M]` Tier-1 today: 3/10 same-family injections, **0/10 paraphrased**, 5/5 benign developer prompts
+hard-blocked, 7/7 "nominations" sentences hard-blocked, 3/12 ordinary tool descriptions hard-blocked.
+`[V]` PG2-22M publishes 88.7 % recall @1 % FPR; `[I]` the literature shows an 8–16 point AUC collapse
+under leave-one-dataset-out evaluation, ProtectAI at 0 % TPR on harmful requests, Deepset at 82.4 % FPR.
+**We have no LODO number for our own deployed configuration.**
+**Bake-off:** run this project's own 174-pattern set *and* PG2-22M against deepset/prompt-injections +
+NotInject + LLMail-Inject + AgentDojo + AgentHarm, hold out whole datasets, publish the confusion
+matrices. Then score the §3.3 demotion (block → signal) before and after. **This gates the demotion and
+it gates the product claim.** Nothing here is a substitute for it.
+
+### 5.3 `[D]` — 461 RPS/vCPU / 2.169 ms of CPU per request
+
+Sum of measured components; **never load-tested end to end**. Today's measured value is 0.17–5.4
+RPS/vCPU `[M]`. The gap is entirely Tier-1 (63.40 → 0.28 ms) and `redact_all` (32.76 → 0 ms), both backed
+by `[M]`, neither shipped. **Bake-off:** do the rewrite, then `oha`/`k6` at a fixed arrival rate against
+one host with the classifier off and the prompt length declared. **Until then quote 590–1,064 RPS for
+posture A, not 1,064.** (At B4's conservative 10.25 RPS/vCPU the CPU binds first, at ~590 RPS.)
+
+### 5.4 `[NF]` — Does the GFE buffer `text/event-stream`?
+
+No authoritative Google statement in either direction. B4's compression proof covers the **client** stack
+(`httpx`) end to end; it does not cover the load balancer. **This is a go/no-go gate on the gzip lever
+(1.53×) and possibly on TTFT itself, and it cannot be researched.** **Bake-off:** stand up one regional
+external ALB, stream 12 frames at 100 ms with `Content-Encoding: gzip` and `X-Accel-Buffering: no`,
+measure client-side arrival gaps. Same harness, real forwarding rule. Also untested: browser
+`EventSource` with gzip (Playwright, three browsers).
+
+### 5.5 `[NF]` — Does GCP meter the 74 B/packet of IP+TCP+TLS headers in VM internet egress?
+
+Not stated in any GCP document. I modelled the **conservative** (IP-layer) basis throughout; the L7 basis
+makes every RPS number ~13 % better and changes no ranking. **Bake-off:** one VM, 24 h, a known counted
+number of application bytes and packets, then read the `Network Internet Egress` SKU off the actual bill.
+~$3.
+
+### 5.6 `[NF]` — Is a G2 3-year **resource** CUD actually purchasable?
+
+`COMMITTED_NVIDIA_L4_GPUS = 8` covers the GPU half `[M]`, but `COMMITTED_CPUS = 0` and no
+`COMMITTED_G2_CPUS` metric exists. **Worth $479.47/mo per `g2-standard-16`-class node.** If blocked, the
+safe fallback is the Flexible (spend-based) CUD at **+26.7 %**, which would raise the BOM from $2,736.76
+to ~$3,467 and cut posture-B RPS by ~1,700. **Bake-off:** `gcloud compute commitments create … --plan=36-month`
+as a validation attempt — the quota error surfaces without committing.
+
+### 5.7 `[NF]` — Is `NVIDIA_L4_GPUS` raisable above 8 in asia-south1, and in what lead time?
+
+This is the difference between **1,064** and **1,862** RPS at full coverage. **Bake-off:** file the quota
+request and record the outcome. Cheapest high-value action in this entire document.
+
+### 5.8 Smaller, still open
+
+- **AMX-INT8 dispatch for `QAttention`** `[NF]` — decides whether B2's 22.17 ms transfers off this Xeon.
+- **Everything is x86** `[NF]` on ARM — no Graviton/Axion timing exists for any of it; the PyPI aarch64
+  Vectorscan wheel is NEON-only.
+- **Triton overhead** rests on a single GitHub-issue anecdote (~78 µs) `[I] weak`. Immaterial at 4.5 ms;
+  do not quote it as precise.
+- **Semantic/exact response cache hit rate** `[NF]` — worth 1.25× at h=0.20; one day of telemetry settles it.
+- **70 % streaming share / 400-token answers / 550-token prompts** are inherited assumptions, not
+  telemetry. Every egress number is linear in all three. **Reading the real distributions off production
+  remains the cheapest high-value measurement in the whole workstream.**
+- **DeBERTa's 12 `If` control-flow nodes** `[M]` — all CPU timings used uniform random token IDs. If those
+  branch on content, real text could time differently. Untested.
+
+---
+
+## 6. HONEST COMPARISON TO THE INDUSTRY BENCHMARKS
+
+Every published gateway number shares the same four defects, which R1 verified against the primary
+sources: **mock upstream, non-streaming, features off, vendor-run, single host, no error bars.**
+
+| Vendor | Published | What was actually running | Our comparable number |
+|---|---|---|---|
+| **TrueFoundry** | **+7 ms** (docs; +12 with tracing; +3–5 in the blog), **350 RPS/vCPU** on 1 vCPU/1 GB `[V]` | Node/Hono; **auth + authz + rate-limit + budget + routing, all from process memory**; mock OpenAI with **no token generation**; 73 ms baseline | **0.61 ms** `[D]` — our stages 1–4 (framework + middleware + policy + full deterministic Tier-1). **We can legitimately claim ~11× lighter than TrueFoundry on the comparable subset**, and our subset does *more* (a 174-pattern PII/secret/credential scan they do not run). Our 277 RPS/vCPU at a 60 % cap `[D]` is in the same class as their 350 `[V]`. |
+| **Kong** | **96–100k RPS, p99 9.2–9.8 ms** with rate-limit + key-auth on 12 CPUs; core proxy 135k RPS `[V]` | Lua/OpenResty, WireMock upstream; the *AI* benchmark explicitly states **"no policies, like caching or API key based authentication mechanisms, were configured"**; streaming does not work with HTTP/2; response-phase plugins are incompatible with streaming | **We cannot claim anything close and should not try.** Kong is measuring an Nginx-class L7 proxy with the policy engine off. Our 1,064 RPS is a *transformer classifier on every request*, which Kong's own AI plugins put behind either an inline regex (`ai-prompt-guard`) or an embedding + Redis vector search (`ai-semantic-prompt-guard`, latency `[NF]`). |
+| **LiteLLM Rust** | **0.05 ms overhead, 6,782 RPS** on 4 vCPU `[V]` | Rust axum/hyper against a **local deterministic Rust mock**, **"no logging callbacks, spend tracking, or persistence enabled"**, streaming "still landing" | **We cannot claim 0.05 ms and never will** — that is a forwarding path with everything off. What LiteLLM's own migration *does* prove, as a controlled experiment on the same product, is the runtime effect: 7.5 ms → 0.05 ms and 453 → 6,782 RPS on identical hardware `[V]`. That is the strongest external evidence that our §3.3 native-Tier-1 rewrite is the right move. |
+| **Envoy AI Gateway** | data-plane overhead **`[NF]`**; the only figure is a community RLS PoC at 4.28 ms avg / 7.18 ms p99 @ 2.9k RPS `[C]` | — | No comparison is possible. Anyone citing an Envoy number for this class of work is citing something that does not exist. |
+| **agentgateway (Rust)** | <0.2 ms p99 @ 30k QPS `[V]` | in-memory IR, regex/PII inline, external guardrails sequential | Same caveat as Kong/LiteLLM: it is a proxy overhead figure, not a scanned-request figure. |
+
+**Where our number actually belongs.** The only published figures for *the work we are doing* are:
+
+| Guardrail | Published latency | Tag |
+|---|---|---|
+| **Meta Prompt Guard 2 (86M/22M), self-hosted** | **9.17–9.47 ms per input on an H100**, sequential, no batching | `[I]` arXiv:2601.19970 |
+| Meta's own PG2-22M figure | **19.3 ms on an A100**, 512 tokens, batch 1 | `[V]` arXiv:2505.03574 |
+| Llama Guard 3 8B | **>57 ms on an H100** | `[I]` |
+| Amazon Bedrock Guardrails (`ApplyGuardrail`) | ~100–300 ms per evaluation | `[C]` |
+| Lakera Guard (external API) | 5–15 ms p50, 30–60 ms p95 incl. RTT | `[C]` |
+| NVIDIA NeMo (5 GPU NIM rails) | ≈0.5 s added | `[C]` |
+| Meta CodeShield (their *deterministic* tier) | ~60 ms tier-1, ~300 ms tier-2 | `[V]` |
+
+**What we can legitimately claim, in one sentence:**
+
+> *A full deterministic scan plus a transformer injection verdict on **every** request, synchronously,
+> before any byte reaches the provider, for **6.1 ms p50 / 18.3 ms p99** `[D]` and **$0.45–1.82 per
+> RPS-month marginal** ($1.82 GPU + $0.45 egress/LB) `[D]`, **$3.51/RPS-month all-in including the
+> fixed floor** — against Meta's own 19.3 ms on an A100 `[V]` for the same model, and against Bedrock
+> Guardrails at 100–300 ms `[C]`.*
+
+**What we cannot claim:** we are not faster than Kong or LiteLLM at proxying (nobody who scans is), we
+have no measured p99 under real load, our GPU numbers are derived, and — the one that matters most —
+**we have no leave-one-dataset-out accuracy number for our own configuration.** A defensible 25 ms beats
+an indefensible 5 ms; a defensible 6.1 ms with an undefended detection rate beats nothing at all.
+
+---
+
+## 7. THE ORDER TO DO THIS IN
+
+| # | Action | Worth | Effort | Risk |
+|---|---|---|---|---|
+| 1 | **Demote injection/jailbreak patterns from `block` to `signal`** | fixes 5/5 + 7/7 + 3/12 measured false positives | one config change | none to latency; recall cost is `[NF]` — gate on §5.2 |
+| 2 | **Delete the `pipeline_trace` tail frame; emit a `trace_id`** | 1.46× RPS + closes a 41 KB disclosure oracle | one function | none — the non-stream path already scrubs |
+| 3 | **Adaptive SSE coalescing + gzip-6 `Z_SYNC_FLUSH`** | 12.6× RPS combined | ~1 day | needs the §5.4 GFE gate before it ships |
+| 4 | **Run the §5.1 GPU bake-off** ($7, 30 min) | converts 74 % of the latency headline from `[D]` to `[M]` | 30 minutes | **do this before promising anyone 6 ms** |
+| 5 | **File the `NVIDIA_L4_GPUS` quota increase** | 1,064 → 1,862 RPS | one form | none |
+| 6 | **Ship the Hyperscan gate + native Tier-1** | 21.97 → 0.16 ms and 14.72 → 0.43 ms | 1–2 weeks | verdict-identical, gated on the §5.2 corpus |
+| 7 | **Run the §5.2 LODO accuracy bake-off** | decides whether any of this is a security product | days | **this is the real risk, not the milliseconds** |
+| 8 | Buy 4 × `g2-standard-24` on a 3-yr CUD; move the classifier in-process behind Triton + TensorRT EP | the architecture | weeks | gated on 4 and 5.6 |
+
+---
+
+### Scripts and artifacts from this session
+
+`scratchpad/best/asm_tok.py`, `asm_tok2.py`, `asm_tok.json` (tokenizer `[M]`) ·
+`asm_queue.py`, `asm_queue2.py` (tail simulation) · `asm_model.py`, `asm_bom.py` (cost model) ·
+plus B1–B5's own artifacts listed in their reports.

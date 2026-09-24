@@ -1,0 +1,3 @@
+{"offered": 40, "shed": 36, "admitted": 4, "reasons": {"shed{reason=\"guard_queue\"}": 36}}
+.
+1 passed in 5.30s

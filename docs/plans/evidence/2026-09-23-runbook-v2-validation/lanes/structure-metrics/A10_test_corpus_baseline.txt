@@ -1,0 +1,16 @@
+whole_tree | T1_test_*.py|*_test.py                                    files= 497 lines=105314
+whole_tree | T2_T1+conftest                                            files= 502 lines=105924
+whole_tree | T3_T1+any .py under tests/                                files= 523 lines=108444
+excl_venv_worktrees | T1_test_*.py|*_test.py                           files= 497 lines=105314
+excl_venv_worktrees | T2_T1+conftest                                   files= 502 lines=105924
+excl_venv_worktrees | T3_T1+any .py under tests/                       files= 523 lines=108444
+gateway/ | T1_test_*.py|*_test.py                                      files= 347 lines=81236
+gateway/ | T2_T1+conftest                                              files= 350 lines=81683
+gateway/ | T3_T1+any .py under tests/                                  files= 353 lines=82039
+gateway/ai_mesh_gateway/tests/ | T1_test_*.py|*_test.py                files= 338 lines=76028
+gateway/ai_mesh_gateway/tests/ | T2_T1+conftest                        files= 338 lines=76028
+gateway/ai_mesh_gateway/tests/ | T3_T1+any .py under tests/            files= 338 lines=76028
+non-gateway | T1_test_*.py|*_test.py                                   files= 150 lines=24078
+non-gateway | T2_T1+conftest                                           files= 152 lines=24241
+non-gateway | T3_T1+any .py under tests/                               files= 170 lines=26405
+T1 by top dir: {'control': 87, 'examples': 3, 'gateway': 347, 'mcp-parallel': 1, 'scripts': 18, 'services': 23, 'shared': 1, 'tests': 17}

@@ -1,0 +1,266 @@
+{
+ "n_files": 77,
+ "results": {
+  "q_block_literal": {
+   "lines": 407,
+   "modules": 23,
+   "main.py": 137,
+   "mcp_proxy.py": 57,
+   "per_module": {
+    "bedrock_scanner.py": 7,
+    "context_guard.py": 9,
+    "enforcement.py": 28,
+    "main.py": 137,
+    "mcp_proxy.py": 57,
+    "mcp_scan_orchestrator.py": 9,
+    "model_state.py": 4,
+    "output_guard.py": 12,
+    "pipeline_trace.py": 22,
+    "policy_engine.py": 8,
+    "rag_pipeline/context.py": 1,
+    "rag_pipeline/generator_stage.py": 2,
+    "rag_pipeline/grounding_guard.py": 7,
+    "rag_pipeline/pipeline.py": 10,
+    "rag_pipeline/query_stage.py": 12,
+    "rag_pipeline/ranker_stage.py": 6,
+    "rag_pipeline/retriever_stage.py": 7,
+    "rate_limit_enforcement.py": 7,
+    "scanner.py": 27,
+    "secure_streaming.py": 13,
+    "stream_orchestration.py": 10,
+    "telemetry_ops.py": 2,
+    "vector_routes.py": 10
+   }
+  },
+  "q_block_literal_not_compare": {
+   "lines": 320,
+   "modules": 22,
+   "main.py": 105,
+   "mcp_proxy.py": 55,
+   "per_module": {
+    "bedrock_scanner.py": 6,
+    "context_guard.py": 9,
+    "enforcement.py": 19,
+    "main.py": 105,
+    "mcp_proxy.py": 55,
+    "mcp_scan_orchestrator.py": 5,
+    "model_state.py": 4,
+    "output_guard.py": 12,
+    "pipeline_trace.py": 14,
+    "policy_engine.py": 3,
+    "rag_pipeline/generator_stage.py": 1,
+    "rag_pipeline/grounding_guard.py": 6,
+    "rag_pipeline/pipeline.py": 6,
+    "rag_pipeline/query_stage.py": 10,
+    "rag_pipeline/ranker_stage.py": 4,
+    "rag_pipeline/retriever_stage.py": 6,
+    "rate_limit_enforcement.py": 5,
+    "scanner.py": 21,
+    "secure_streaming.py": 11,
+    "stream_orchestration.py": 8,
+    "telemetry_ops.py": 2,
+    "vector_routes.py": 8
+   }
+  },
+  "action_eq_block(assign/kw)": {
+   "lines": 133,
+   "modules": 17,
+   "main.py": 66,
+   "mcp_proxy.py": 0,
+   "per_module": {
+    "bedrock_scanner.py": 1,
+    "context_guard.py": 8,
+    "enforcement.py": 5,
+    "main.py": 66,
+    "model_state.py": 1,
+    "output_guard.py": 2,
+    "rag_pipeline/generator_stage.py": 1,
+    "rag_pipeline/grounding_guard.py": 2,
+    "rag_pipeline/pipeline.py": 5,
+    "rag_pipeline/query_stage.py": 7,
+    "rag_pipeline/ranker_stage.py": 3,
+    "rag_pipeline/retriever_stage.py": 6,
+    "rate_limit_enforcement.py": 3,
+    "scanner.py": 17,
+    "secure_streaming.py": 4,
+    "stream_orchestration.py": 1,
+    "vector_routes.py": 1
+   }
+  },
+  "decision_eq_block(assign/kw)": {
+   "lines": 44,
+   "modules": 4,
+   "main.py": 8,
+   "mcp_proxy.py": 34,
+   "per_module": {
+    "main.py": 8,
+    "mcp_proxy.py": 34,
+    "rag_pipeline/grounding_guard.py": 1,
+    "secure_streaming.py": 1
+   }
+  },
+  "any_ident_eq_block(assign/kw)": {
+   "lines": 188,
+   "modules": 18,
+   "main.py": 75,
+   "mcp_proxy.py": 34,
+   "per_module": {
+    "bedrock_scanner.py": 1,
+    "context_guard.py": 8,
+    "enforcement.py": 11,
+    "main.py": 75,
+    "mcp_proxy.py": 34,
+    "model_state.py": 2,
+    "output_guard.py": 3,
+    "rag_pipeline/generator_stage.py": 1,
+    "rag_pipeline/grounding_guard.py": 3,
+    "rag_pipeline/pipeline.py": 5,
+    "rag_pipeline/query_stage.py": 7,
+    "rag_pipeline/ranker_stage.py": 3,
+    "rag_pipeline/retriever_stage.py": 6,
+    "rate_limit_enforcement.py": 3,
+    "scanner.py": 17,
+    "secure_streaming.py": 6,
+    "stream_orchestration.py": 2,
+    "vector_routes.py": 1
+   }
+  },
+  "dict_action_block": {
+   "lines": 12,
+   "modules": 4,
+   "main.py": 2,
+   "mcp_proxy.py": 0,
+   "per_module": {
+    "bedrock_scanner.py": 3,
+    "main.py": 2,
+    "mcp_scan_orchestrator.py": 1,
+    "vector_routes.py": 6
+   }
+  },
+  "return_block_literal": {
+   "lines": 7,
+   "modules": 4,
+   "main.py": 0,
+   "mcp_proxy.py": 2,
+   "per_module": {
+    "bedrock_scanner.py": 1,
+    "mcp_proxy.py": 2,
+    "pipeline_trace.py": 3,
+    "scanner.py": 1
+   }
+  },
+  "compare_eq_block": {
+   "lines": 90,
+   "modules": 19,
+   "main.py": 34,
+   "mcp_proxy.py": 1,
+   "per_module": {
+    "bedrock_scanner.py": 1,
+    "enforcement.py": 10,
+    "main.py": 34,
+    "mcp_proxy.py": 1,
+    "mcp_scan_orchestrator.py": 4,
+    "pipeline_trace.py": 8,
+    "policy_engine.py": 5,
+    "rag_pipeline/context.py": 1,
+    "rag_pipeline/generator_stage.py": 1,
+    "rag_pipeline/grounding_guard.py": 1,
+    "rag_pipeline/pipeline.py": 4,
+    "rag_pipeline/query_stage.py": 2,
+    "rag_pipeline/ranker_stage.py": 2,
+    "rag_pipeline/retriever_stage.py": 1,
+    "rate_limit_enforcement.py": 2,
+    "scanner.py": 6,
+    "secure_streaming.py": 3,
+    "stream_orchestration.py": 2,
+    "vector_routes.py": 2
+   }
+  },
+  "status_code_403": {
+   "lines": 76,
+   "modules": 4,
+   "main.py": 66,
+   "mcp_proxy.py": 8,
+   "per_module": {
+    "admin_auth.py": 1,
+    "main.py": 66,
+    "mcp_proxy.py": 8,
+    "middleware.py": 1
+   }
+  },
+  "status_4xx_literal": {
+   "lines": 278,
+   "modules": 7,
+   "main.py": 223,
+   "mcp_proxy.py": 30,
+   "per_module": {
+    "admin_auth.py": 2,
+    "main.py": 223,
+    "mcp_oauth.py": 13,
+    "mcp_proxy.py": 30,
+    "middleware.py": 2,
+    "rate_limit_enforcement.py": 6,
+    "vector_routes.py": 2
+   }
+  },
+  "build_block_response": {
+   "lines": 20,
+   "modules": 1,
+   "main.py": 20,
+   "mcp_proxy.py": 0,
+   "per_module": {
+    "main.py": 20
+   }
+  },
+  "blocked_true": {
+   "lines": 26,
+   "modules": 5,
+   "main.py": 1,
+   "mcp_proxy.py": 6,
+   "per_module": {
+    "main.py": 1,
+    "mcp_proxy.py": 6,
+    "mcp_scan_orchestrator.py": 10,
+    "rag_pipeline/pipeline.py": 4,
+    "secure_streaming.py": 5
+   }
+  },
+  "should_block_true": {
+   "lines": 4,
+   "modules": 1,
+   "main.py": 0,
+   "mcp_proxy.py": 0,
+   "per_module": {
+    "circuit_breaker.py": 4
+   }
+  },
+  "event_type_blocked": {
+   "lines": 36,
+   "modules": 2,
+   "main.py": 34,
+   "mcp_proxy.py": 2,
+   "per_module": {
+    "main.py": 34,
+    "mcp_proxy.py": 2
+   }
+  },
+  "METRICS_blocked_inc": {
+   "lines": 77,
+   "modules": 1,
+   "main.py": 77,
+   "mcp_proxy.py": 0,
+   "per_module": {
+    "main.py": 77
+   }
+  },
+  "return_JSONResponse_4xx": {
+   "lines": 68,
+   "modules": 1,
+   "main.py": 68,
+   "mcp_proxy.py": 0,
+   "per_module": {
+    "main.py": 68
+   }
+  }
+ }
+}

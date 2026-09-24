@@ -1,0 +1,12 @@
+--- AMF_CPU_QUOTA=1 python -m gateway_v2.runtime ---
+exit=2
+stdout: 
+stderr: {"error": "derived workers=0 (cpu=0 ram=112); refuse to start", "refuse_start": true} 
+--- AMF_FD_LIMIT=8 python -m gateway_v2.runtime ---
+exit=1
+stdout: 
+stderr:     raise CapacityUnavailable(f"{kind} pool below minimum to serve") gateway_v2.runtime.errors.CapacityUnavailable: redis pool below minimum to serve 
+--- ulimit -n 12 (real rlimit, 16-vCPU host => 12 workers) ---
+exit=1
+stdout: 
+stderr:     raise CapacityUnavailable(f"{kind} pool below minimum to serve") gateway_v2.runtime.errors.CapacityUnavailable: redis pool below minimum to serve 

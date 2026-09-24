@@ -1,0 +1,128 @@
+[
+ {
+  "turn": 1,
+  "pg2_tokens": 252,
+  "in_signed_1024_band": true,
+  "status": 200,
+  "code": null,
+  "guard_windows_run": 1,
+  "latency_s": 0.08
+ },
+ {
+  "turn": 2,
+  "pg2_tokens": 867,
+  "in_signed_1024_band": true,
+  "status": 200,
+  "code": null,
+  "guard_windows_run": 2,
+  "latency_s": 0.41
+ },
+ {
+  "turn": 3,
+  "pg2_tokens": 1482,
+  "in_signed_1024_band": false,
+  "status": 200,
+  "code": null,
+  "guard_windows_run": 4,
+  "latency_s": 0.88
+ },
+ {
+  "turn": 4,
+  "pg2_tokens": 2097,
+  "in_signed_1024_band": false,
+  "status": 200,
+  "code": null,
+  "guard_windows_run": 5,
+  "latency_s": 1.15
+ },
+ {
+  "turn": 5,
+  "pg2_tokens": 2712,
+  "in_signed_1024_band": false,
+  "status": 200,
+  "code": null,
+  "guard_windows_run": 6,
+  "latency_s": 1.8
+ },
+ {
+  "turn": 6,
+  "pg2_tokens": 3327,
+  "in_signed_1024_band": false,
+  "status": 200,
+  "code": null,
+  "guard_windows_run": 8,
+  "latency_s": 2.1
+ },
+ {
+  "turn": 7,
+  "pg2_tokens": 3942,
+  "in_signed_1024_band": false,
+  "status": 200,
+  "code": null,
+  "guard_windows_run": 9,
+  "latency_s": 2.36
+ },
+ {
+  "turn": 8,
+  "pg2_tokens": 4557,
+  "in_signed_1024_band": false,
+  "status": 200,
+  "code": null,
+  "guard_windows_run": 11,
+  "latency_s": 2.86
+ },
+ {
+  "turn": 9,
+  "pg2_tokens": 5172,
+  "in_signed_1024_band": false,
+  "status": 200,
+  "code": null,
+  "guard_windows_run": 12,
+  "latency_s": 3.09
+ },
+ {
+  "turn": 10,
+  "pg2_tokens": 5787,
+  "in_signed_1024_band": false,
+  "status": 200,
+  "code": null,
+  "guard_windows_run": 13,
+  "latency_s": 3.12
+ },
+ {
+  "turn": 11,
+  "pg2_tokens": 6402,
+  "in_signed_1024_band": false,
+  "status": 200,
+  "code": null,
+  "guard_windows_run": 15,
+  "latency_s": 4.0
+ },
+ {
+  "turn": 12,
+  "pg2_tokens": 7017,
+  "in_signed_1024_band": false,
+  "status": 200,
+  "code": null,
+  "guard_windows_run": 16,
+  "latency_s": 4.1
+ },
+ {
+  "turn": 13,
+  "pg2_tokens": 7632,
+  "in_signed_1024_band": false,
+  "status": 413,
+  "code": "context_length_exceeded",
+  "guard_windows_run": 0,
+  "latency_s": 0.02
+ },
+ {
+  "turn": 14,
+  "pg2_tokens": 8247,
+  "in_signed_1024_band": false,
+  "status": 413,
+  "code": "context_length_exceeded",
+  "guard_windows_run": 0,
+  "latency_s": 0.02
+ }
+]

@@ -1,0 +1,5 @@
+worker 0 plan_snapshot_age_seconds 0.29 stale bulk-00318: ['plan_version_info{org="bulk-00318",version="k1"}']
+worker 1 plan_snapshot_age_seconds 0.9 stale bulk-00318: ['plan_version_info{org="bulk-00318",version="k1"}']
+worker 2 plan_snapshot_age_seconds 0.91 stale bulk-00318: ['plan_version_info{org="bulk-00318",version="k1"}']
+worker 3 plan_snapshot_age_seconds 0.59 stale bulk-00318: ['plan_version_info{org="bulk-00318",version="k0"}']
+readyz {"ready": true, "plans_fresh": true}

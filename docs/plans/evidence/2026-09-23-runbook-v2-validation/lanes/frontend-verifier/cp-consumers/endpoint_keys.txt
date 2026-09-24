@@ -1,0 +1,64 @@
+/api/security/threat-feed/
+  top-level (24): data_accessed, event_type, extra, incident_id, is_audit_log, is_isolation_event, model, module, module_id, organization_id, owasp_code, pipeline_request_id, pipeline_trace, prompt_lineage, prompt_submitted, request_id, security_risk_score, severity, source, threat_category, threat_subcategory, threat_type, tools_invoked, trigger_source
+  nested (9): extra.original_model, extra.pipeline_trace, extra.request_id, extra.reroute_reason, extra.rerouted, extra.routed_model, extra.routing_reason, extra.selected_model, extra.stage_metrics_ms
+  read sites: policy/module_16.py:57, policy/module_16.py:59, policy/module_16.py:61, policy/module_16.py:62, policy/module_16.py:67, policy/module_16.py:75, policy/module_16.py:76, policy/module_16.py:77, policy/module_16.py:78, policy/module_16.py:79, policy/module_16.py:80, policy/module_16.py:81, policy/module_16.py:182, policy/module_16.py:189, policy/security_views.py:213, policy/security_views.py:214, policy/security_views.py:215, policy/security_views.py:229, policy/security_views.py:231, policy/security_views.py:232, policy/security_views.py:506, policy/security_views.py:510, policy/security_views.py:512, policy/security_views.py:536, policy/security_views.py:540, policy/security_views.py:547, policy/security_views.py:568, policy/security_views.py:569, policy/security_views.py:573, policy/security_views.py:574, policy/security_views.py:582, policy/security_views.py:583, policy/security_views.py:587, policy/security_views.py:588, policy/security_views.py:593, policy/security_views.py:594, policy/security_views.py:596, policy/security_views.py:652, policy/security_views.py:656, policy/security_views.py:658, policy/security_views.py:707, policy/security_views.py:709, policy/security_views.py:740, policy/security_views.py:742, policy/security_views.py:744, policy/security_views.py:758, policy/security_views.py:767, policy/security_views.py:781, policy/security_views.py:782, policy/security_views.py:785, policy/security_views.py:787, policy/security_views.py:803, policy/security_views.py:834, policy/security_views.py:841, policy/security_views.py:842, policy/security_views.py:853, policy/security_views.py:854, policy/security_views.py:855, policy/security_views.py:856, policy/security_views.py:857, policy/security_views.py:858, policy/security_views.py:865, policy/security_views.py:867, policy/security_views.py:869, policy/security_views.py:870, policy/security_views.py:873, policy/security_views.py:874, policy/security_views.py:876, policy/security_views.py:877, policy/security_views.py:881, policy/security_views.py:882, policy/security_views.py:887, policy/security_views.py:901, policy/security_views.py:902, policy/security_views.py:904, policy/security_views.py:916, policy/security_views.py:917, policy/security_views.py:918, policy/security_views.py:919
+/api/security/threat-feed/<pk>/
+  top-level (23): data_accessed, event_type, extra, incident_id, input_text, model, organization_id, owasp_code, pipeline_request_id, pipeline_trace, prompt_lineage, prompt_snippet, prompt_submitted, raw_output, request_id, response_snippet, sanitized_output, security_risk_score, severity, source, threat_category, threat_subcategory, tools_invoked
+  nested (17): extra.input_text, extra.original_model, extra.pipeline_trace, extra.prompt_snippet, extra.prompt_submitted, extra.request_id, extra.reroute_reason, extra.rerouted, extra.routed_model, extra.routing_reason, extra.selected_model, extra.stage_metrics_ms, extra.weights, pipeline_trace.input_text, pipeline_trace.prompt_preview, pipeline_trace.prompt_submitted, pipeline_trace.stages
+  read sites: policy/security_views.py:213, policy/security_views.py:214, policy/security_views.py:215, policy/security_views.py:229, policy/security_views.py:231, policy/security_views.py:232, policy/security_views.py:707, policy/security_views.py:709, policy/security_views.py:740, policy/security_views.py:742, policy/security_views.py:744, policy/security_views.py:758, policy/security_views.py:767, policy/security_views.py:781, policy/security_views.py:782, policy/security_views.py:785, policy/security_views.py:787, policy/security_views.py:803, policy/security_views.py:834, policy/security_views.py:841, policy/security_views.py:842, policy/security_views.py:853, policy/security_views.py:854, policy/security_views.py:855, policy/security_views.py:856, policy/security_views.py:857, policy/security_views.py:858, policy/security_views.py:865, policy/security_views.py:867, policy/security_views.py:869, policy/security_views.py:870, policy/security_views.py:873, policy/security_views.py:874, policy/security_views.py:876, policy/security_views.py:877, policy/security_views.py:881, policy/security_views.py:882, policy/security_views.py:887, policy/security_views.py:901, policy/security_views.py:902, policy/security_views.py:904, policy/security_views.py:916, policy/security_views.py:917, policy/security_views.py:918, policy/security_views.py:919, policy/security_views.py:927, policy/security_views.py:930, policy/security_views.py:934, policy/security_views.py:937, policy/security_views.py:939, policy/security_views.py:1000, policy/security_views.py:1002, policy/security_views.py:1003, policy/security_views.py:1005, policy/security_views.py:1007, policy/security_views.py:1011, policy/security_views.py:1012, policy/security_views.py:1013, policy/security_views.py:1014, policy/security_views.py:1018, policy/security_views.py:1019, policy/security_views.py:1021, policy/security_views.py:1022, policy/security_views.py:1023, policy/security_views.py:1033, policy/security_views.py:1034, policy/security_views.py:1039, policy/security_views.py:1040, policy/security_views.py:1041, policy/security_views.py:1043, policy/security_views.py:1074, policy/security_views.py:1075, policy/security_views.py:1076, policy/security_views.py:1081, policy/security_views.py:1088, policy/security_views.py:1089
+/api/security/soc-kpis/
+  top-level (3): latency_ms, request_id, security_risk_score
+  nested (0): 
+  read sites: policy/analytics_rollup.py:309, policy/analytics_sql.py:138, policy/analytics_sql.py:150, policy/analytics_sql.py:151
+/api/security/module-kpis/
+  top-level (10): event_type, is_audit_log, is_isolation_event, module, module_id, owasp_code, security_risk_score, source, threat_type, trigger_source
+  nested (0): 
+  read sites: policy/analytics_rollup.py:457, policy/analytics_rollup.py:463, policy/analytics_rollup.py:480, policy/analytics_sql.py:72, policy/firewall_module_classifier.py:57, policy/firewall_module_classifier.py:62, policy/firewall_module_classifier.py:63, policy/firewall_module_classifier.py:64, policy/firewall_module_classifier.py:65, policy/module_16.py:57, policy/module_16.py:59, policy/module_16.py:61, policy/module_16.py:62, policy/module_16.py:67, policy/security_views.py:1410
+/api/security/module-trends/
+  top-level (10): event_type, is_audit_log, is_isolation_event, module, module_id, owasp_code, security_risk_score, source, threat_type, trigger_source
+  nested (0): 
+  read sites: policy/analytics_rollup.py:457, policy/analytics_rollup.py:463, policy/analytics_rollup.py:480, policy/analytics_sql.py:72, policy/firewall_module_classifier.py:57, policy/firewall_module_classifier.py:62, policy/firewall_module_classifier.py:63, policy/firewall_module_classifier.py:64, policy/firewall_module_classifier.py:65, policy/module_16.py:57, policy/module_16.py:59, policy/module_16.py:61, policy/module_16.py:62, policy/module_16.py:67, policy/security_views.py:1498
+/api/security/attack-vector-trends/
+  top-level (12): event_type, is_audit_log, is_isolation_event, module, module_id, owasp_code, owasp_codes, pii_detected, source, threat_category, threat_type, trigger_source
+  nested (0): 
+  read sites: policy/analytics_rollup.py:480, policy/security_views.py:1203, policy/security_views.py:1204, policy/security_views.py:1205, policy/security_views.py:1206, policy/security_views.py:1207, policy/security_views.py:1248, policy/security_views.py:1251, policy/security_views.py:1258, policy/security_views.py:1260, policy/security_views.py:1287
+/api/security/module-charts/<id>/
+  top-level (13): event_type, is_audit_log, is_isolation_event, latency_ms, model, module, module_id, owasp_code, security_risk_score, source, threat_category, threat_type, trigger_source
+  nested (0): 
+  read sites: policy/firewall_module_classifier.py:125, policy/firewall_module_classifier.py:127, policy/firewall_module_classifier.py:129, policy/firewall_module_classifier.py:131, policy/firewall_module_classifier.py:132, policy/module_16.py:75, policy/module_16.py:76, policy/module_16.py:77, policy/module_16.py:78, policy/module_16.py:79, policy/module_16.py:80, policy/module_16.py:81, policy/security_views.py:1875, policy/security_views.py:1876, policy/security_views.py:1923, policy/security_views.py:1946, policy/security_views.py:1960
+/api/security/owasp-stats/
+  top-level (2): owasp_code, owasp_codes
+  nested (0): 
+  read sites: policy/security_views.py:1586, policy/security_views.py:1587
+/api/security/rag-pipeline-kpis/
+  top-level (5): escalation_level, event_type, extra, latency_ms, pipeline_stage
+  nested (1): extra.escalation_level
+  read sites: policy/analytics_sql.py:119, policy/analytics_sql.py:120, policy/analytics_sql.py:122, policy/security_views.py:2924, policy/security_views.py:2925, policy/security_views.py:2926
+/api/security/rag-pipeline-trace/<rid>/
+  top-level (9): detail, escalation_level, event_type, extra, latency_ms, pipeline_stage, request_id, risk_score, threat_type
+  nested (3): extra.detail, extra.escalation_level, extra.request_id
+  read sites: policy/analytics_sql.py:119, policy/analytics_sql.py:120, policy/analytics_sql.py:122, policy/security_views.py:3005, policy/security_views.py:3006, policy/security_views.py:3009, policy/security_views.py:3010, policy/security_views.py:3011, policy/security_views.py:3012, policy/security_views.py:3013, policy/security_views.py:3015
+/api/policies/analytics/
+  top-level (5): owasp_code, owasp_codes, pii_detected, source, threat_category
+  nested (0): 
+  read sites: policy/analytics_views.py:198, policy/analytics_views.py:202, policy/analytics_views.py:204, policy/analytics_views.py:205, policy/analytics_views.py:208, policy/analytics_views.py:243, policy/analytics_views.py:254
+/api/policies/top-violators/
+  top-level (5): extra, matched_policies, matched_policy_codes, policy_violations, security_risk_score
+  nested (2): extra.matched_policies, extra.policy_violations
+  read sites: policy/analytics_views.py:370, policy/analytics_views.py:371, policy/analytics_views.py:384, policy/analytics_views.py:407, policy/analytics_views.py:408, policy/analytics_views.py:421, policy/telemetry_resolution.py:30, policy/telemetry_resolution.py:36
+/api/policy/top-rules/
+  top-level (6): extra, matched_policies, matched_policy_codes, matched_rule_names, matched_rules, policy_violations
+  nested (3): extra.matched_policies, extra.matched_rule_names, extra.matched_rules
+  read sites: policy/analytics_views.py:492, policy/analytics_views.py:499, policy/telemetry_resolution.py:30, policy/telemetry_resolution.py:36, policy/telemetry_resolution.py:47
+/api/notifications/
+  top-level (1): threat_category
+  nested (0): 
+  read sites: policy/notification_views.py:36
+(drain) SecurityIncident rows -> /api/security/incidents/
+  top-level (2): security_risk_score, threat_type
+  nested (0): 
+  read sites: core/tasks.py:469, core/tasks.py:470
+(drain) isolation bell Notification rows -> /api/notifications/
+  top-level (6): action, event_type, is_isolation_event, model, model_name, threat_type
+  nested (0): 
+  read sites: core/isolation_notify.py:33, core/isolation_notify.py:34, core/isolation_notify.py:37, core/isolation_notify.py:40, core/isolation_notify.py:46

@@ -1,0 +1,38 @@
+# f4u-160: strict FAIL | load-knee FAIL (sut, units=4, rate=160)
+
+checks: {'p99_T_fw_addon_lt_slo': False, 'infra_error_rate_le_budget': False, 'zero_schedule_drops': True, 'zero_safety_failures': True, 'run_valid': True}
+load-knee checks: {'p99_T_fw_addon_nohold_lt_slo': True, 'infra_error_rate_le_budget': False, 'zero_schedule_drops': True, 'zero_safety_failures': True, 'run_valid': True}
+offered 48000 (160.0/s) qualified 46789 (155.96/s) FP-blocks 826 (0.01721) infra 385 (0.008020833333333333) drops 0 safety 0
+infra reasons: {'http_503': 385, 'incomplete': 385, 'unjoined': 385, 'disposition_missing': 385, 'stage_canon_missing': 385, 'stage_det_missing': 385, 'stage_sem_missing': 385, 'stage_resolve_missing': 385, 'stage_dispatch_missing': 385, 'stage_out_missing': 385, 'stage_audit_missing': 385}
+infra detail: {'503 http_503 type=server_overloaded code=overloaded': 385}
+
+T_fw_addon: n=46789 p50=10.3906 p90=14.9233 p99=53.1962 p99.9=71.1327 max=91.8479 mean=12.6377
+T_fw_addon_nohold: n=46789 p50=10.1499 p90=12.8727 p99=15.7744 p99.9=19.9793 max=39.4412 mean=9.6137
+T_fw_addon_sse: n=32782 p50=10.4848 p90=31.2772 p99=54.0992 p99.9=71.6282 max=91.8479 mean=13.9071
+T_fw_addon_json: n=14007 p50=10.1759 p90=13.0501 p99=15.8918 p99.9=20.3161 max=24.646 mean=9.6668
+T_addon_first_sse: n=32782 p50=10.0844 p90=13.207 p99=29.4527 p99.9=34.1685 max=65.5366 mean=9.817
+T_addon_total_sse: n=32782 p50=10.1393 p90=12.803 p99=15.711 p99.9=19.6639 max=39.4412 mean=9.5909
+T_addon_total_json: n=14007 p50=10.1759 p90=13.0501 p99=15.8918 p99.9=20.3161 max=24.646 mean=9.6668
+T_release_lag_max: n=3268 p50=49.9539 p90=54.0992 p99=71.6282 p99.9=89.7909 max=91.8479 mean=49.452
+lateness: n=48000 p50=0.0875 p90=0.0984 p99=0.1105 p99.9=0.1255 max=0.2616 mean=0.0879
+loadgen: [{'vm': 'rv-pbf-lg-1', 'busy_max': 5.7, 'busy_mean': 5.2, 'late_max_us': 489, 'conn_opens': 293, 'max_inflight': 276}, {'vm': 'rv-pbf-lg-2', 'busy_max': 5.4, 'busy_mean': 5.0, 'late_max_us': 163, 'conn_opens': 290, 'max_inflight': 275}, {'vm': 'rv-pbf-lg-3', 'busy_max': 5.6, 'busy_mean': 5.1, 'late_max_us': 261, 'conn_opens': 293, 'max_inflight': 275}]  provider_cpu_busy_max: 19.583607086140773
+gateway cores total 5.8 cpu-ms/req {'gateway': 36.386, 'workers': 32.329, 'owners': 4.046}
+  rv-pbf-unit-2: cores {'launcher': 0.0, 'owner': 0.162, 'owner0': 0.077, 'owner1': 0.085, 'redis': 0.001, 'worker': 1.289} worker util max 0.099 per-core max 0.077 mean 0.064 gpu {'0': {'n': 298, 'sm_mean': 6.1, 'sm_p95': 13.0, 'sm_max': 17.0}, '1': {'n': 298, 'sm_mean': 6.6, 'sm_p95': 15.0, 'sm_max': 24.0}} t_input_p99 12.7795 per-worker admitted {'n': 18, 'min': 266, 'max': 978, 'mean': 665.9, 'max_over_mean': 1.469, 'sheds_per_worker': [0, 0, 1, 3, 3, 3, 4, 4, 4, 4, 5, 6, 6, 6, 8, 11, 11, 14]}
+  rv-pbf-unit-3: cores {'launcher': 0.0, 'owner': 0.16, 'owner0': 0.075, 'owner1': 0.085, 'redis': 0.001, 'worker': 1.299} worker util max 0.099 per-core max 0.073 mean 0.063 gpu {'0': {'n': 298, 'sm_mean': 5.6, 'sm_p95': 13.0, 'sm_max': 18.0}, '1': {'n': 298, 'sm_mean': 6.5, 'sm_p95': 13.0, 'sm_max': 22.0}} t_input_p99 12.5174 per-worker admitted {'n': 18, 'min': 519, 'max': 996, 'mean': 665.8, 'max_over_mean': 1.496, 'sheds_per_worker': [1, 1, 2, 2, 3, 3, 3, 3, 4, 4, 5, 5, 6, 8, 8, 9, 9, 10]}
+  rv-pbf-unit-4: cores {'launcher': 0.0, 'owner': 0.165, 'owner0': 0.086, 'owner1': 0.079, 'redis': 0.001, 'worker': 1.316} worker util max 0.103 per-core max 0.074 mean 0.064 gpu {'0': {'n': 298, 'sm_mean': 6.7, 'sm_p95': 15.0, 'sm_max': 22.0}, '1': {'n': 298, 'sm_mean': 5.6, 'sm_p95': 14.0, 'sm_max': 19.0}} t_input_p99 12.7795 per-worker admitted {'n': 18, 'min': 231, 'max': 1006, 'mean': 665.9, 'max_over_mean': 1.511, 'sheds_per_worker': [0, 0, 1, 2, 2, 2, 2, 3, 3, 5, 5, 6, 7, 8, 8, 9, 10, 14]}
+  rv-pbf-unit-5: cores {'launcher': 0.0, 'owner': 0.158, 'owner0': 0.085, 'owner1': 0.074, 'redis': 0.001, 'worker': 1.253} worker util max 0.092 per-core max 0.075 mean 0.061 gpu {'0': {'n': 298, 'sm_mean': 6.4, 'sm_p95': 14.0, 'sm_max': 25.0}, '1': {'n': 298, 'sm_mean': 5.5, 'sm_p95': 13.0, 'sm_max': 17.0}} t_input_p99 12.3863 per-worker admitted {'n': 18, 'min': 381, 'max': 930, 'mean': 666.4, 'max_over_mean': 1.396, 'sheds_per_worker': [0, 1, 2, 3, 3, 4, 4, 5, 6, 7, 7, 8, 8, 10, 11, 12, 12, 16]}
+W t_input_ns: {'n': 47568, 'mean_ms': 7.4489, 'p50_ms': 8.1592, 'p90_ms': 10.027, 'p99_ms': 12.6484, 'p99.9_ms': 16.0563, 'max_cum_ms': 36.429}
+W t_tokenize_ns: {'n': 47953, 'mean_ms': 2.7139, 'p50_ms': 2.7361, 'p90_ms': 4.1452, 'p99_ms': 4.8169, 'p99.9_ms': 6.1932, 'max_cum_ms': 8.9355}
+W t_guard_wait_ns: {'n': 47568, 'mean_ms': 4.2029, 'p50_ms': 4.7514, 'p90_ms': 5.2756, 'p99_ms': 7.3728, 'p99.9_ms': 11.5999, 'max_cum_ms': 29.7032}
+W guard_owner_rtt_ns: {'n': 47568, 'mean_ms': 4.3732, 'p50_ms': 4.948, 'p90_ms': 5.4723, 'p99_ms': 7.6349, 'p99.9_ms': 10.9445, 'max_cum_ms': 28.7454}
+W guard_queue_ns: {'n': 47568, 'mean_ms': 0.119, 'p50_ms': 0.106, 'p90_ms': 0.1306, 'p99_ms': 0.3297, 'p99.9_ms': 3.0966, 'max_cum_ms': 16.1001}
+W guard_exec_ns: {'n': 47568, 'mean_ms': 3.5773, 'p50_ms': 4.2271, 'p90_ms': 4.4892, 'p99_ms': 6.5864, 'p99.9_ms': 6.7174, 'max_cum_ms': 9.1328}
+W t_admit_ns: {'n': 47953, 'mean_ms': 0.0929, 'p50_ms': 0.0876, 'p90_ms': 0.1039, 'p99_ms': 0.1306, 'p99.9_ms': 0.9871, 'max_cum_ms': 21.7487}
+W release_processing_ns: {'n': 7313468, 'mean_ms': 0.0629, 'p50_ms': 0.0627, 'p90_ms': 0.0783, 'p99_ms': 0.1009, 'p99.9_ms': 0.1295, 'max_cum_ms': 26.8838}
+W loop_lag_ns: {'n': 214590, 'mean_ms': 0.7011, 'p50_ms': 0.0092, 'p90_ms': 1.5155, 'p99_ms': 7.1762, 'p99.9_ms': 9.1095, 'max_cum_ms': 27.862}
+W audit_batch_write_ns: {'n': 94353, 'mean_ms': 0.9564, 'p50_ms': 0.9052, 'p90_ms': 1.1223, 'p99_ms': 1.4991, 'p99.9_ms': 7.5039, 'max_cum_ms': 40.9418}
+W counts: {"admitted": 47953, "audit_enqueued": 94380, "audit_written": 94380, "background_round_trips": 42918, "disposition_ALLOW": 46741, "disposition_BLOCK": 827, "guard_windows": 78217, "lease_refills": 227, "provider_calls": 46741, "provider_connections_opened": 7332, "requests_by_round_trips{n=\"0\"}": 47726, "requests_by_round_trips{n=\"1\"}": 227, "shared_state_round_trips": 227, "shed{reason=\"guard_queue\"}": 385}
+edge: {"window_s": 301.0, "cores_by_role": {"nginx": 0.204}, "per_proc_util": {"nginx": [0.0, 0.01, 0.011, 0.011, 0.011, 0.011, 0.011, 0.012, 0.012, 0.012, 0.013, 0.014, 0.014, 0.014, 0.015, 0.015, 0.016]}, "per_core_util": {"max": 0.014, "mean": 0.013, "sum": 0.21, "n": 16}, "nic": null, "restarted": [], "loadavg_max": 0.3} nginx cpu-ms/req 1.281
+redis: ops/s 911.9 ops/req 5.699 cpu cores 0.009 clients 363 mem 330.3MB ping(us) {'n': 28349, 'p50_us': 479.1, 'p90_us': 503.5, 'p99_us': 587.3, 'p99.9_us': 1868.7, 'max_us': 5520.3, 'mean_us': 488.5}
+redis cmdstats: {'info': {'calls_per_s': 0.0, 'usec_per_call': 145.0}, 'ping': {'calls_per_s': 94.3, 'usec_per_call': 0.11}, 'evalsha': {'calls_per_s': 0.8, 'usec_per_call': 10.96}, 'xadd': {'calls_per_s': 314.5, 'usec_per_call': 3.63}, 'mget': {'calls_per_s': 143.1, 'usec_per_call': 0.39}, 'hgetall': {'calls_per_s': 357.6, 'usec_per_call': 0.23}, 'get': {'calls_per_s': 0.8, 'usec_per_call': 0.58}, 'decrby': {'calls_per_s': 0.8, 'usec_per_call': 0.39}, 'hello': {'calls_per_s': 0.1, 'usec_per_call': 3.07}}
+wire: {'requests_in_window': 48000, 'unit_ip_bytes_per_req': {'unit_to_client_side': 56007.3, 'client_side_to_unit': 9578.4, 'unit_to_provider': 10160.8, 'provider_to_unit': 56687.5, 'unit_to_redis': 5670.3, 'redis_to_unit': 406.4}, 'edge_ip_bytes_per_req': {'edge_to_clients': 56125.3, 'clients_to_edge': 8053.7}, 'olg_resp_body_bytes_mean': {'sse': 67722.1, 'json': 1422.5}}

@@ -1,0 +1,10145 @@
+{
+ "n_files": 77,
+ "summary": {
+  "DS-A": {
+   "sites": 264,
+   "modules": 21,
+   "mcp_proxy.py": 52,
+   "main.py": 92,
+   "per_module": {
+    "main.py": 92,
+    "mcp_proxy.py": 52,
+    "scanner.py": 21,
+    "enforcement.py": 16,
+    "secure_streaming.py": 11,
+    "context_guard.py": 8,
+    "output_guard.py": 7,
+    "rag_pipeline/query_stage.py": 7,
+    "rag_pipeline/pipeline.py": 6,
+    "rag_pipeline/retriever_stage.py": 6,
+    "vector_routes.py": 6,
+    "bedrock_scanner.py": 5,
+    "pipeline_trace.py": 5,
+    "model_state.py": 4,
+    "rag_pipeline/grounding_guard.py": 4,
+    "rate_limit_enforcement.py": 4,
+    "stream_orchestration.py": 4,
+    "rag_pipeline/ranker_stage.py": 3,
+    "mcp_scan_orchestrator.py": 1,
+    "rag_pipeline/generator_stage.py": 1,
+    "telemetry_ops.py": 1
+   }
+  },
+  "DS-B1": {
+   "sites": 267,
+   "modules": 9,
+   "mcp_proxy.py": 28,
+   "main.py": 209,
+   "per_module": {
+    "main.py": 209,
+    "mcp_proxy.py": 28,
+    "mcp_oauth.py": 13,
+    "mcp_oauth_proxy.py": 8,
+    "rate_limit_enforcement.py": 3,
+    "admin_auth.py": 2,
+    "vector_routes.py": 2,
+    "_url_guard.py": 1,
+    "bedrock_scanner.py": 1
+   }
+  },
+  "DS-B2": {
+   "sites": 75,
+   "modules": 6,
+   "mcp_proxy.py": 8,
+   "main.py": 63,
+   "per_module": {
+    "main.py": 63,
+    "mcp_proxy.py": 8,
+    "_url_guard.py": 1,
+    "admin_auth.py": 1,
+    "bedrock_scanner.py": 1,
+    "mcp_oauth_proxy.py": 1
+   }
+  },
+  "DS-C": {
+   "sites": 407,
+   "modules": 23,
+   "mcp_proxy.py": 57,
+   "main.py": 137,
+   "per_module": {
+    "main.py": 137,
+    "mcp_proxy.py": 57,
+    "enforcement.py": 28,
+    "scanner.py": 27,
+    "pipeline_trace.py": 22,
+    "secure_streaming.py": 13,
+    "output_guard.py": 12,
+    "rag_pipeline/query_stage.py": 12,
+    "rag_pipeline/pipeline.py": 10,
+    "stream_orchestration.py": 10,
+    "vector_routes.py": 10,
+    "context_guard.py": 9,
+    "mcp_scan_orchestrator.py": 9,
+    "policy_engine.py": 8,
+    "bedrock_scanner.py": 7,
+    "rag_pipeline/grounding_guard.py": 7,
+    "rag_pipeline/retriever_stage.py": 7,
+    "rate_limit_enforcement.py": 7,
+    "rag_pipeline/ranker_stage.py": 6,
+    "model_state.py": 4,
+    "rag_pipeline/generator_stage.py": 2,
+    "telemetry_ops.py": 2,
+    "rag_pipeline/context.py": 1
+   }
+  },
+  "DS-D": {
+   "sites": 360,
+   "modules": 9,
+   "mcp_proxy.py": 81,
+   "main.py": 210,
+   "per_module": {
+    "main.py": 210,
+    "mcp_proxy.py": 81,
+    "vector_routes.py": 41,
+    "mcp_oauth.py": 13,
+    "mcp_oauth_proxy.py": 8,
+    "rate_limit_enforcement.py": 3,
+    "admin_auth.py": 2,
+    "_url_guard.py": 1,
+    "bedrock_scanner.py": 1
+   }
+  },
+  "DS-AD": {
+   "sites": 624,
+   "modules": 25,
+   "mcp_proxy.py": 133,
+   "main.py": 302,
+   "per_module": {
+    "main.py": 302,
+    "mcp_proxy.py": 133,
+    "vector_routes.py": 47,
+    "scanner.py": 21,
+    "enforcement.py": 16,
+    "mcp_oauth.py": 13,
+    "secure_streaming.py": 11,
+    "context_guard.py": 8,
+    "mcp_oauth_proxy.py": 8,
+    "output_guard.py": 7,
+    "rag_pipeline/query_stage.py": 7,
+    "rate_limit_enforcement.py": 7,
+    "bedrock_scanner.py": 6,
+    "rag_pipeline/pipeline.py": 6,
+    "rag_pipeline/retriever_stage.py": 6,
+    "pipeline_trace.py": 5,
+    "model_state.py": 4,
+    "rag_pipeline/grounding_guard.py": 4,
+    "stream_orchestration.py": 4,
+    "rag_pipeline/ranker_stage.py": 3,
+    "admin_auth.py": 2,
+    "_url_guard.py": 1,
+    "mcp_scan_orchestrator.py": 1,
+    "rag_pipeline/generator_stage.py": 1,
+    "telemetry_ops.py": 1
+   }
+  }
+ },
+ "items": {
+  "DS-A": [
+   [
+    "bedrock_scanner.py",
+    243,
+    "return \"block\""
+   ],
+   [
+    "bedrock_scanner.py",
+    385,
+    "\"recommended_action\": \"block\","
+   ],
+   [
+    "bedrock_scanner.py",
+    402,
+    "\"recommended_action\": \"block\","
+   ],
+   [
+    "bedrock_scanner.py",
+    911,
+    "recommended_action = \"block\""
+   ],
+   [
+    "bedrock_scanner.py",
+    856,
+    "\"recommended_action\": \"block\","
+   ],
+   [
+    "context_guard.py",
+    370,
+    "action = \"block\" if worst_confidence >= 0.9 else \"flag\""
+   ],
+   [
+    "context_guard.py",
+    399,
+    "action=\"block\","
+   ],
+   [
+    "context_guard.py",
+    420,
+    "action=\"block\","
+   ],
+   [
+    "context_guard.py",
+    529,
+    "action=\"block\","
+   ],
+   [
+    "context_guard.py",
+    541,
+    "action=\"block\","
+   ],
+   [
+    "context_guard.py",
+    463,
+    "action=\"block\","
+   ],
+   [
+    "context_guard.py",
+    507,
+    "action=\"block\","
+   ],
+   [
+    "context_guard.py",
+    492,
+    "action=\"block\","
+   ],
+   [
+    "enforcement.py",
+    44,
+    "\"block_immediately\": \"block\","
+   ],
+   [
+    "enforcement.py",
+    45,
+    "\"block_and_alert\": \"block\","
+   ],
+   [
+    "enforcement.py",
+    46,
+    "\"deny\": \"block\","
+   ],
+   [
+    "enforcement.py",
+    47,
+    "\"reject\": \"block\","
+   ],
+   [
+    "enforcement.py",
+    81,
+    "enforcement_mode: str = \"block\","
+   ],
+   [
+    "enforcement.py",
+    156,
+    "def should_hard_block(resolved_action: str, enforcement_mode: str = \"block\") -> bool:"
+   ],
+   [
+    "enforcement.py",
+    242,
+    "enforcement_mode: str = \"block\","
+   ],
+   [
+    "enforcement.py",
+    352,
+    "enforcement_mode: str = \"block\","
+   ],
+   [
+    "enforcement.py",
+    124,
+    "resolved = \"block\""
+   ],
+   [
+    "enforcement.py",
+    301,
+    "action = \"block\""
+   ],
+   [
+    "enforcement.py",
+    422,
+    "act = \"block\""
+   ],
+   [
+    "enforcement.py",
+    129,
+    "and action_rank(rec) < action_rank(\"block\")"
+   ],
+   [
+    "enforcement.py",
+    336,
+    "action=\"block\","
+   ],
+   [
+    "enforcement.py",
+    381,
+    "action=\"block\","
+   ],
+   [
+    "enforcement.py",
+    449,
+    "action=\"block\","
+   ],
+   [
+    "enforcement.py",
+    310,
+    "action = \"redact\" if redaction_possible else \"block\""
+   ],
+   [
+    "main.py",
+    5458,
+    "scan_verdict, enforcement_mode: str = \"block\","
+   ],
+   [
+    "main.py",
+    2639,
+    "_enforcement_mode = org_config.get(\"enforcement_mode\", \"block\")"
+   ],
+   [
+    "main.py",
+    6000,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    7752,
+    "enforcement_mode = org_config.get(\"enforcement_mode\", \"block\")"
+   ],
+   [
+    "main.py",
+    16591,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    16619,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    16757,
+    "_action = \"block\" if status in (403, 451) else \"allow\""
+   ],
+   [
+    "main.py",
+    433,
+    "action = \"block\""
+   ],
+   [
+    "main.py",
+    2666,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    2732,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    4080,
+    "action=\"reroute\" if compliant else \"block\","
+   ],
+   [
+    "main.py",
+    4405,
+    "enforcement_mode = str(org_config.get(\"enforcement_mode\", CONFIG.get(\"enforcement_mode\", \"block\")))"
+   ],
+   [
+    "main.py",
+    5606,
+    "final_action=\"block\","
+   ],
+   [
+    "main.py",
+    10734,
+    "ms_action = \"block\""
+   ],
+   [
+    "main.py",
+    10896,
+    "_og_enforcement_mode = org_config.get(\"enforcement_mode\", \"block\")"
+   ],
+   [
+    "main.py",
+    12497,
+    "\"enforcement_mode\": org_config.get(\"enforcement_mode\", CONFIG.get(\"enforcement_mode\", \"block\")),"
+   ],
+   [
+    "main.py",
+    16825,
+    "\"enforcement_mode\": CONFIG.get(\"enforcement_mode\", \"block\"),"
+   ],
+   [
+    "main.py",
+    1358,
+    "\"action\": \"block\","
+   ],
+   [
+    "main.py",
+    2686,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    2742,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    2806,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    3027,
+    "scan_verdict, org_config.get(\"enforcement_mode\", \"block\"),"
+   ],
+   [
+    "main.py",
+    7874,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    10005,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    10760,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    12729,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    12983,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    13612,
+    "action=\"block\", risk_score=1.0, threat_type=\"blocked_keyword\","
+   ],
+   [
+    "main.py",
+    13995,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    14813,
+    "action = \"block\""
+   ],
+   [
+    "main.py",
+    2816,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    7796,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    7988,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    8019,
+    "_prom_ks(requested_model, ks_verdict.action or \"block\")"
+   ],
+   [
+    "main.py",
+    8092,
+    "ks_audit[\"kill_switch_action\"] = \"block\""
+   ],
+   [
+    "main.py",
+    8166,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    8528,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    10271,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    10287,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    10952,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    10973,
+    "decision=\"block\","
+   ],
+   [
+    "main.py",
+    11433,
+    "decision=\"block\","
+   ],
+   [
+    "main.py",
+    12694,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    12773,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    12914,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    12998,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    13729,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    14819,
+    "action = \"block\""
+   ],
+   [
+    "main.py",
+    14940,
+    "\"action\": \"block\","
+   ],
+   [
+    "main.py",
+    7909,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    8122,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    8493,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    8903,
+    "decision=\"block\","
+   ],
+   [
+    "main.py",
+    8913,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    9472,
+    "action=\"block\" if enforcement_mode == \"block\" else \"monitor\","
+   ],
+   [
+    "main.py",
+    9493,
+    "decision=\"block\","
+   ],
+   [
+    "main.py",
+    9627,
+    "decision=\"block\","
+   ],
+   [
+    "main.py",
+    9642,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    10367,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    10739,
+    "ms_action = ms_data.get(\"action\", \"block\")"
+   ],
+   [
+    "main.py",
+    10986,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    11039,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    11059,
+    "decision=\"block\","
+   ],
+   [
+    "main.py",
+    11420,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    11443,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    11482,
+    "decision=\"block\","
+   ],
+   [
+    "main.py",
+    11791,
+    "scan_verdict, org_config.get('enforcement_mode', 'block'))"
+   ],
+   [
+    "main.py",
+    12873,
+    "if _emb_matched and org_config.get(\"enforcement_mode\", \"block\") == \"block\":"
+   ],
+   [
+    "main.py",
+    12882,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    14833,
+    "action = \"block\""
+   ],
+   [
+    "main.py",
+    5494,
+    "elif str(enforcement_mode or \"block\").lower() == \"monitor\" and _raw_action:"
+   ],
+   [
+    "main.py",
+    7954,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    8100,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    8265,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    8314,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    8375,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    8417,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    8656,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    8665,
+    "decision=\"block\","
+   ],
+   [
+    "main.py",
+    8888,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    9165,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    9506,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    9660,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    9867,
+    "scan_verdict, org_config.get('enforcement_mode', 'block'))"
+   ],
+   [
+    "main.py",
+    10168,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    11072,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    11492,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    7960,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    8674,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    8817,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    9174,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    11368,
+    "action=\"block\","
+   ],
+   [
+    "mcp_proxy.py",
+    139,
+    "_AUDIT_HIGH_PRIORITY_DECISIONS = frozenset({\"block\", \"redact\", \"rate_limited\", \"error\"})"
+   ],
+   [
+    "mcp_proxy.py",
+    238,
+    "return \"block\", reason, \"backend\""
+   ],
+   [
+    "mcp_proxy.py",
+    242,
+    "return \"block\", (reason or \"blocked_by_policy\"), \"backend\""
+   ],
+   [
+    "mcp_proxy.py",
+    833,
+    "decision=\"block\", reason=\"server_disabled\", request_id=request_id,"
+   ],
+   [
+    "mcp_proxy.py",
+    2742,
+    "await _ext_audit(\"block\", \"request_too_large\")  # CHG-0095: audit the DoS-guard reject"
+   ],
+   [
+    "mcp_proxy.py",
+    2760,
+    "await _ext_audit(\"block\", \"ssrf_blocked\")  # CHG-0068"
+   ],
+   [
+    "mcp_proxy.py",
+    463,
+    "decision=\"block\", reason=\"body_too_large\", request_id=request_id,"
+   ],
+   [
+    "mcp_proxy.py",
+    501,
+    "decision=\"block\", reason=\"unsupported_media_type\", request_id=request_id,"
+   ],
+   [
+    "mcp_proxy.py",
+    527,
+    "decision=\"block\", reason=(reason or code), request_id=request_id,"
+   ],
+   [
+    "mcp_proxy.py",
+    3495,
+    "decision=\"block\", reason=\"server_disabled\","
+   ],
+   [
+    "mcp_proxy.py",
+    3768,
+    "decision=\"block\", reason=\"server_disabled\","
+   ],
+   [
+    "mcp_proxy.py",
+    3833,
+    "decision=\"block\","
+   ],
+   [
+    "mcp_proxy.py",
+    4239,
+    "decision=\"block\","
+   ],
+   [
+    "mcp_proxy.py",
+    4806,
+    "decision=\"block\", reason=\"server_disabled\","
+   ],
+   [
+    "mcp_proxy.py",
+    5871,
+    "org_slug=org_slug, server_slug=server_slug, tool_name=\"\", decision=\"block\","
+   ],
+   [
+    "mcp_proxy.py",
+    5894,
+    "org_slug=org_slug, server_slug=server_slug, tool_name=\"\", decision=\"block\","
+   ],
+   [
+    "mcp_proxy.py",
+    3144,
+    "\"block\", \"response_too_large\", tool=_ext_tool_name)"
+   ],
+   [
+    "mcp_proxy.py",
+    3240,
+    "\"block\", \"pii_blocked_outbound\","
+   ],
+   [
+    "mcp_proxy.py",
+    3430,
+    "decision=\"block\" if _blk else \"redact\", reason=\"tools_list_error_scan\","
+   ],
+   [
+    "mcp_proxy.py",
+    3911,
+    "decision=\"block\", reason=\"pii_blocked_outbound\","
+   ],
+   [
+    "mcp_proxy.py",
+    4013,
+    "decision=\"block\","
+   ],
+   [
+    "mcp_proxy.py",
+    4709,
+    "decision=\"block\" if blocked else \"redact\","
+   ],
+   [
+    "mcp_proxy.py",
+    4991,
+    "decision=\"block\","
+   ],
+   [
+    "mcp_proxy.py",
+    5059,
+    "decision=\"block\","
+   ],
+   [
+    "mcp_proxy.py",
+    5087,
+    "decision=\"block\", reason=\"tool_not_registered\","
+   ],
+   [
+    "mcp_proxy.py",
+    5122,
+    "decision=\"block\", reason=\"invalid_arguments\", request_id=_req_id,"
+   ],
+   [
+    "mcp_proxy.py",
+    5150,
+    "decision=\"block\","
+   ],
+   [
+    "mcp_proxy.py",
+    5263,
+    "decision = \"block\""
+   ],
+   [
+    "mcp_proxy.py",
+    5915,
+    "decision=\"block\", reason=\"tool_not_allowed_for_key\","
+   ],
+   [
+    "mcp_proxy.py",
+    5946,
+    "decision=\"block\", reason=\"tool_disabled\","
+   ],
+   [
+    "mcp_proxy.py",
+    5978,
+    "decision=\"block\","
+   ],
+   [
+    "mcp_proxy.py",
+    3022,
+    "\"block\", \"pii_blocked_outbound\","
+   ],
+   [
+    "mcp_proxy.py",
+    3292,
+    "\"block\", \"error_content_withheld\","
+   ],
+   [
+    "mcp_proxy.py",
+    5020,
+    "decision=\"block\","
+   ],
+   [
+    "mcp_proxy.py",
+    5931,
+    "decision=\"block\", reason=\"tool_call_cap_exceeded\","
+   ],
+   [
+    "mcp_proxy.py",
+    2824,
+    "\"block\", \"tool_not_allowed_for_key\", tool=_ext_tool_name)"
+   ],
+   [
+    "mcp_proxy.py",
+    2874,
+    "\"block\", \"credential_blocked_inbound\","
+   ],
+   [
+    "mcp_proxy.py",
+    2930,
+    "\"block\", \"credential_blocked_inbound\","
+   ],
+   [
+    "mcp_proxy.py",
+    2993,
+    "\"block\", \"response_too_large\", tool=_ext_tool_name)"
+   ],
+   [
+    "mcp_proxy.py",
+    3180,
+    "\"block\", \"text_body_withheld\","
+   ],
+   [
+    "mcp_proxy.py",
+    3332,
+    "\"block\", \"nonok_body_withheld\","
+   ],
+   [
+    "mcp_proxy.py",
+    2841,
+    "\"block\", \"tool_call_cap_exceeded\", tool=_ext_tool_name)"
+   ],
+   [
+    "mcp_proxy.py",
+    3093,
+    "\"block\", \"sse_stream_event_too_large\", tool=_ext_tool_name)"
+   ],
+   [
+    "mcp_proxy.py",
+    3106,
+    "\"block\", \"sse_stream_limit_exceeded\", tool=_ext_tool_name)"
+   ],
+   [
+    "mcp_proxy.py",
+    4890,
+    "decision=\"block\" if _tl_blocked else \"redact\","
+   ],
+   [
+    "mcp_proxy.py",
+    5336,
+    "decision = \"block\""
+   ],
+   [
+    "mcp_proxy.py",
+    5441,
+    "decision=\"block\","
+   ],
+   [
+    "mcp_proxy.py",
+    5527,
+    "decision=\"block\","
+   ],
+   [
+    "mcp_proxy.py",
+    6064,
+    "decision=\"block\","
+   ],
+   [
+    "mcp_proxy.py",
+    6188,
+    "decision=\"block\" if _tl_blocked else \"redact\","
+   ],
+   [
+    "mcp_proxy.py",
+    3081,
+    "\"block\", \"sse_stream_event_withheld\","
+   ],
+   [
+    "mcp_proxy.py",
+    5595,
+    "decision=\"block\","
+   ],
+   [
+    "mcp_scan_orchestrator.py",
+    1505,
+    "\"action\": \"block\", \"blocked\": True,"
+   ],
+   [
+    "model_state.py",
+    234,
+    "action: str = \"block\","
+   ],
+   [
+    "model_state.py",
+    66,
+    "action = payload.get(\"action\", \"block\")"
+   ],
+   [
+    "model_state.py",
+    262,
+    "effective_action = \"block\""
+   ],
+   [
+    "model_state.py",
+    325,
+    "\"action\": payload.get(\"action\", \"block\"),"
+   ],
+   [
+    "output_guard.py",
+    82,
+    "{\"block\", \"redact\", \"rewrite\", \"flag\", \"allow\", HUMAN_REVIEW_ACTION}"
+   ],
+   [
+    "output_guard.py",
+    1339,
+    "def _check_credential_exposure(self, text: str, action: str = \"block\") -> OutputVerdict:"
+   ],
+   [
+    "output_guard.py",
+    910,
+    "return _action(\"output_policy_action\", \"block\") if _enabled(\"output_policy_enabled\", True) else \"allow\""
+   ],
+   [
+    "output_guard.py",
+    945,
+    "\"block\" if self._config.get(\"output_block_on_ip_leakage\", False) else \"redact\","
+   ],
+   [
+    "output_guard.py",
+    1444,
+    "action=\"block\","
+   ],
+   [
+    "output_guard.py",
+    1193,
+    "\"block\" if self._config.get(\"output_block_on_ip_leakage\", False) else \"redact\","
+   ],
+   [
+    "output_guard.py",
+    1117,
+    "action=\"block\","
+   ],
+   [
+    "pipeline_trace.py",
+    689,
+    "return \"block\""
+   ],
+   [
+    "pipeline_trace.py",
+    1286,
+    "\"block\" if blocked_stage == \"kill_switch\""
+   ],
+   [
+    "pipeline_trace.py",
+    1316,
+    "\"block\" if blocked_stage == \"policy\""
+   ],
+   [
+    "pipeline_trace.py",
+    364,
+    "return \"block\", \"\", False"
+   ],
+   [
+    "pipeline_trace.py",
+    1194,
+    "return \"block\""
+   ],
+   [
+    "rag_pipeline/generator_stage.py",
+    329,
+    "action=\"block\","
+   ],
+   [
+    "rag_pipeline/grounding_guard.py",
+    55,
+    "VALID_MODES = {\"off\", \"warn\", \"downgrade\", \"block\"}"
+   ],
+   [
+    "rag_pipeline/grounding_guard.py",
+    300,
+    "verdict.action = \"block\""
+   ],
+   [
+    "rag_pipeline/grounding_guard.py",
+    248,
+    "verdict.action = \"block\""
+   ],
+   [
+    "rag_pipeline/grounding_guard.py",
+    253,
+    "decision=\"block\","
+   ],
+   [
+    "rag_pipeline/pipeline.py",
+    169,
+    "ctx.final_action = \"block\""
+   ],
+   [
+    "rag_pipeline/pipeline.py",
+    214,
+    "ctx.final_action = \"block\""
+   ],
+   [
+    "rag_pipeline/pipeline.py",
+    319,
+    "ctx.final_action = \"block\""
+   ],
+   [
+    "rag_pipeline/pipeline.py",
+    393,
+    "ctx.final_action = \"block\""
+   ],
+   [
+    "rag_pipeline/pipeline.py",
+    566,
+    "action=\"block\" if blocked else (last_stage.verdict.action if last_stage else \"allow\"),"
+   ],
+   [
+    "rag_pipeline/pipeline.py",
+    570,
+    "\"action\": last_stage.verdict.action if last_stage else \"block\","
+   ],
+   [
+    "rag_pipeline/query_stage.py",
+    64,
+    "action=\"block\","
+   ],
+   [
+    "rag_pipeline/query_stage.py",
+    82,
+    "action=\"block\","
+   ],
+   [
+    "rag_pipeline/query_stage.py",
+    324,
+    "action=\"block\","
+   ],
+   [
+    "rag_pipeline/query_stage.py",
+    131,
+    "action=\"block\","
+   ],
+   [
+    "rag_pipeline/query_stage.py",
+    181,
+    "action=\"block\","
+   ],
+   [
+    "rag_pipeline/query_stage.py",
+    363,
+    "action=\"block\","
+   ],
+   [
+    "rag_pipeline/query_stage.py",
+    477,
+    "action=\"block\","
+   ],
+   [
+    "rag_pipeline/ranker_stage.py",
+    385,
+    "verdict_action = \"block\" if not documents else \"flag\""
+   ],
+   [
+    "rag_pipeline/ranker_stage.py",
+    389,
+    "verdict_action = \"block\""
+   ],
+   [
+    "rag_pipeline/ranker_stage.py",
+    277,
+    "action=\"block\","
+   ],
+   [
+    "rag_pipeline/retriever_stage.py",
+    131,
+    "action=\"block\","
+   ],
+   [
+    "rag_pipeline/retriever_stage.py",
+    115,
+    "action=\"block\","
+   ],
+   [
+    "rag_pipeline/retriever_stage.py",
+    152,
+    "action=\"block\","
+   ],
+   [
+    "rag_pipeline/retriever_stage.py",
+    189,
+    "action=\"block\","
+   ],
+   [
+    "rag_pipeline/retriever_stage.py",
+    68,
+    "action=\"block\","
+   ],
+   [
+    "rag_pipeline/retriever_stage.py",
+    88,
+    "action=\"block\","
+   ],
+   [
+    "rate_limit_enforcement.py",
+    92,
+    "action=\"block\","
+   ],
+   [
+    "rate_limit_enforcement.py",
+    172,
+    "org_config.get(\"enforcement_mode\", gateway_config.get(\"enforcement_mode\", \"block\"))"
+   ],
+   [
+    "rate_limit_enforcement.py",
+    209,
+    "action=\"block\","
+   ],
+   [
+    "rate_limit_enforcement.py",
+    261,
+    "action=\"block\","
+   ],
+   [
+    "scanner.py",
+    992,
+    "\"block\","
+   ],
+   [
+    "scanner.py",
+    199,
+    "action=\"block\","
+   ],
+   [
+    "scanner.py",
+    2096,
+    "return \"block\""
+   ],
+   [
+    "scanner.py",
+    2687,
+    "return _verdict(\"block\", cats[0] if cats else \"output_finding\", max_conf or 1.0,"
+   ],
+   [
+    "scanner.py",
+    2695,
+    "return _verdict(\"block\", cats[0] if cats else \"output_finding\", score,"
+   ],
+   [
+    "scanner.py",
+    1229,
+    "action=\"block\","
+   ],
+   [
+    "scanner.py",
+    1238,
+    "action=\"block\","
+   ],
+   [
+    "scanner.py",
+    1307,
+    "action=\"block\","
+   ],
+   [
+    "scanner.py",
+    1325,
+    "action=\"block\","
+   ],
+   [
+    "scanner.py",
+    1926,
+    "action=\"block\","
+   ],
+   [
+    "scanner.py",
+    2425,
+    "action=\"block\","
+   ],
+   [
+    "scanner.py",
+    2495,
+    "action=\"block\","
+   ],
+   [
+    "scanner.py",
+    2464,
+    "action=\"block\","
+   ],
+   [
+    "scanner.py",
+    1368,
+    "action=\"block\","
+   ],
+   [
+    "scanner.py",
+    1381,
+    "action=\"block\","
+   ],
+   [
+    "scanner.py",
+    1430,
+    "action=\"block\","
+   ],
+   [
+    "scanner.py",
+    1604,
+    "action=\"block\","
+   ],
+   [
+    "scanner.py",
+    1637,
+    "action=\"block\","
+   ],
+   [
+    "scanner.py",
+    1999,
+    "action=\"block\","
+   ],
+   [
+    "scanner.py",
+    1447,
+    "action=\"block\","
+   ],
+   [
+    "scanner.py",
+    1549,
+    "action=\"block\","
+   ],
+   [
+    "secure_streaming.py",
+    214,
+    "enforcement_mode: str = \"block\","
+   ],
+   [
+    "secure_streaming.py",
+    565,
+    "self._record_metric(\"block\")"
+   ],
+   [
+    "secure_streaming.py",
+    562,
+    "self._record_guard_metrics(\"block\", verdict)"
+   ],
+   [
+    "secure_streaming.py",
+    563,
+    "self._emit_guard_telemetry(verdict, action=\"block\", flush_reason=reason)"
+   ],
+   [
+    "secure_streaming.py",
+    564,
+    "self._audit_output_guard(verdict, action=\"block\")"
+   ],
+   [
+    "secure_streaming.py",
+    241,
+    "self._enforcement_mode = (enforcement_mode or \"block\").strip().lower()"
+   ],
+   [
+    "secure_streaming.py",
+    709,
+    "self._record_metric(\"block\")"
+   ],
+   [
+    "secure_streaming.py",
+    975,
+    "decision=\"block\" if action == \"block\" else action,"
+   ],
+   [
+    "secure_streaming.py",
+    706,
+    "self._record_guard_metrics(\"block\", verdict)"
+   ],
+   [
+    "secure_streaming.py",
+    707,
+    "self._emit_guard_telemetry(verdict, action=\"block\", flush_reason=reason)"
+   ],
+   [
+    "secure_streaming.py",
+    708,
+    "self._audit_output_guard(verdict, action=\"block\")"
+   ],
+   [
+    "stream_orchestration.py",
+    1046,
+    "enforcement_mode: str = \"block\","
+   ],
+   [
+    "stream_orchestration.py",
+    416,
+    "_guard_action = \"block\" if metrics.output_blocked else (metrics.guard_action or \"\")"
+   ],
+   [
+    "stream_orchestration.py",
+    579,
+    "\"block\""
+   ],
+   [
+    "stream_orchestration.py",
+    723,
+    "zs[\"action\"] = \"block\""
+   ],
+   [
+    "telemetry_ops.py",
+    128,
+    "{\"allow\", \"rewrite\", \"block\", \"downgrade\", \"redact\", \"flag\"}"
+   ],
+   [
+    "vector_routes.py",
+    873,
+    "action = \"block\""
+   ],
+   [
+    "vector_routes.py",
+    876,
+    "scan_results.append({\"index\": i, \"action\": \"block\", \"threats\": threats})"
+   ],
+   [
+    "vector_routes.py",
+    697,
+    "\"action\": \"block\","
+   ],
+   [
+    "vector_routes.py",
+    890,
+    "\"index\": i, \"action\": \"block\", \"threats\": [\"pii\"],"
+   ],
+   [
+    "vector_routes.py",
+    727,
+    "\"action\": \"block\","
+   ],
+   [
+    "vector_routes.py",
+    1121,
+    "\"action\": \"block\","
+   ]
+  ],
+  "DS-B1": [
+   [
+    "_url_guard.py",
+    95,
+    "Return _ip_is_blocked status=None"
+   ],
+   [
+    "admin_auth.py",
+    71,
+    "Return JSONResponse status=401"
+   ],
+   [
+    "admin_auth.py",
+    80,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "bedrock_scanner.py",
+    884,
+    "Return _parse_failure_threat_block_result status=None"
+   ],
+   [
+    "main.py",
+    166,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    4888,
+    "Return JSONResponse status=422"
+   ],
+   [
+    "main.py",
+    5670,
+    "Return _build_safe_block_response status=None"
+   ],
+   [
+    "main.py",
+    16633,
+    "Return _build_block_response status=None"
+   ],
+   [
+    "main.py",
+    17058,
+    "Return JSONResponse status=404"
+   ],
+   [
+    "main.py",
+    17255,
+    "Return JSONResponse status=404"
+   ],
+   [
+    "main.py",
+    2682,
+    "Return _build_block_response status=None"
+   ],
+   [
+    "main.py",
+    2738,
+    "Return _build_block_response status=None"
+   ],
+   [
+    "main.py",
+    4918,
+    "Return JSONResponse status=422"
+   ],
+   [
+    "main.py",
+    4934,
+    "Return JSONResponse status=404"
+   ],
+   [
+    "main.py",
+    4950,
+    "Return JSONResponse status=404"
+   ],
+   [
+    "main.py",
+    12336,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    12338,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    12340,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    12345,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    12352,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    12432,
+    "Return JSONResponse status=401"
+   ],
+   [
+    "main.py",
+    12435,
+    "Return JSONResponse status=404"
+   ],
+   [
+    "main.py",
+    12444,
+    "Return JSONResponse status=401"
+   ],
+   [
+    "main.py",
+    12447,
+    "Return JSONResponse status=404"
+   ],
+   [
+    "main.py",
+    12456,
+    "Return JSONResponse status=401"
+   ],
+   [
+    "main.py",
+    12459,
+    "Return JSONResponse status=404"
+   ],
+   [
+    "main.py",
+    12475,
+    "Return JSONResponse status=401"
+   ],
+   [
+    "main.py",
+    12509,
+    "Return JSONResponse status=401"
+   ],
+   [
+    "main.py",
+    15464,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    15507,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    15517,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    15519,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    15530,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    15553,
+    "Return JSONResponse status=422"
+   ],
+   [
+    "main.py",
+    15618,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    15628,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    15630,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    15641,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    15680,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    15690,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    15703,
+    "Return JSONResponse status=422"
+   ],
+   [
+    "main.py",
+    15768,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    15876,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    15941,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    16008,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    16042,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    16173,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    16205,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    16226,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    16228,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    16230,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    16244,
+    "Return JSONResponse status=422"
+   ],
+   [
+    "main.py",
+    16281,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    16302,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    16304,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    16306,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    16320,
+    "Return JSONResponse status=422"
+   ],
+   [
+    "main.py",
+    16498,
+    "Return JSONResponse status=404"
+   ],
+   [
+    "main.py",
+    16655,
+    "Return JSONResponse status=401"
+   ],
+   [
+    "main.py",
+    16886,
+    "Return JSONResponse status=401"
+   ],
+   [
+    "main.py",
+    16932,
+    "Return JSONResponse status=401"
+   ],
+   [
+    "main.py",
+    17053,
+    "Return JSONResponse status=401"
+   ],
+   [
+    "main.py",
+    17072,
+    "Return JSONResponse status=401"
+   ],
+   [
+    "main.py",
+    17081,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    17090,
+    "Return JSONResponse status=413"
+   ],
+   [
+    "main.py",
+    17096,
+    "Return JSONResponse status=413"
+   ],
+   [
+    "main.py",
+    17148,
+    "Return JSONResponse status=401"
+   ],
+   [
+    "main.py",
+    17156,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    17160,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    17165,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    17170,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    17186,
+    "Return JSONResponse status=413"
+   ],
+   [
+    "main.py",
+    17190,
+    "Return JSONResponse status=413"
+   ],
+   [
+    "main.py",
+    2812,
+    "Return _build_block_response status=None"
+   ],
+   [
+    "main.py",
+    7183,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    7195,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    7337,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    7350,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    7363,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    7377,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    7879,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    10010,
+    "Return JSONResponse status=404"
+   ],
+   [
+    "main.py",
+    10412,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    10430,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    12333,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    12371,
+    "Return JSONResponse status=401"
+   ],
+   [
+    "main.py",
+    12374,
+    "Return JSONResponse status=404"
+   ],
+   [
+    "main.py",
+    12596,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    12605,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    12616,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    12637,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    12663,
+    "Return JSONResponse status=413"
+   ],
+   [
+    "main.py",
+    12734,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    12994,
+    "Return _build_block_response status=None"
+   ],
+   [
+    "main.py",
+    13509,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    13532,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    13544,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    13554,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    13559,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    13571,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    13578,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    13589,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    13615,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    13698,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    13809,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    13825,
+    "Return JSONResponse status=404"
+   ],
+   [
+    "main.py",
+    13944,
+    "Return JSONResponse status=422"
+   ],
+   [
+    "main.py",
+    14016,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    14418,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    14447,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    14476,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    14478,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    14491,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    14504,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    14508,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    14581,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    14664,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    14694,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    14717,
+    "Return JSONResponse status=422"
+   ],
+   [
+    "main.py",
+    14844,
+    "Return JSONResponse status=422"
+   ],
+   [
+    "main.py",
+    14956,
+    "Return JSONResponse status=422"
+   ],
+   [
+    "main.py",
+    15049,
+    "Return JSONResponse status=422"
+   ],
+   [
+    "main.py",
+    15069,
+    "Return JSONResponse status=422"
+   ],
+   [
+    "main.py",
+    15186,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    15205,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    15207,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    15219,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    15223,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    15338,
+    "Return JSONResponse status=422"
+   ],
+   [
+    "main.py",
+    15505,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    15616,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    15746,
+    "Return JSONResponse status=404"
+   ],
+   [
+    "main.py",
+    15794,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    15874,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    16006,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    16040,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    16203,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    16279,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    16685,
+    "Return JSONResponse status=429"
+   ],
+   [
+    "main.py",
+    16713,
+    "Return JSONResponse status=429"
+   ],
+   [
+    "main.py",
+    17077,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    17153,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    17180,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    7134,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    7168,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    7217,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    7243,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    7287,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    7309,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    7565,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    7627,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    7777,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    7801,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    7810,
+    "Return JSONResponse status=404"
+   ],
+   [
+    "main.py",
+    8538,
+    "Return JSONResponse status=429"
+   ],
+   [
+    "main.py",
+    10292,
+    "Return JSONResponse status=422"
+   ],
+   [
+    "main.py",
+    10381,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    10982,
+    "Return _build_block_response status=None"
+   ],
+   [
+    "main.py",
+    11442,
+    "Return _build_block_response status=None"
+   ],
+   [
+    "main.py",
+    12588,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    12652,
+    "Return JSONResponse status=413"
+   ],
+   [
+    "main.py",
+    12699,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    12792,
+    "Return JSONResponse status=404"
+   ],
+   [
+    "main.py",
+    12921,
+    "Return JSONResponse status=429"
+   ],
+   [
+    "main.py",
+    13503,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    13527,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    13664,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    13743,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    13791,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    13855,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    14411,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    14464,
+    "Return JSONResponse status=413"
+   ],
+   [
+    "main.py",
+    14470,
+    "Return JSONResponse status=413"
+   ],
+   [
+    "main.py",
+    14557,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    14593,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    14626,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    15183,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    15271,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    15294,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    15323,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    15843,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    7233,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    7261,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    7299,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    7323,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    7401,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    7415,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    7470,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    7619,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    7914,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    8501,
+    "Return JSONResponse status=429"
+   ],
+   [
+    "main.py",
+    8867,
+    "Return _ambiguous_policy_block_response status=None"
+   ],
+   [
+    "main.py",
+    8930,
+    "Return _build_block_response status=None"
+   ],
+   [
+    "main.py",
+    9502,
+    "Return _build_block_response status=None"
+   ],
+   [
+    "main.py",
+    9656,
+    "Return _build_block_response status=None"
+   ],
+   [
+    "main.py",
+    10182,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    10452,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    10480,
+    "Return JSONResponse status=429"
+   ],
+   [
+    "main.py",
+    11068,
+    "Return _build_block_response status=None"
+   ],
+   [
+    "main.py",
+    11491,
+    "Return _build_block_response status=None"
+   ],
+   [
+    "main.py",
+    12779,
+    "Return JSONResponse status=422"
+   ],
+   [
+    "main.py",
+    12888,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    13845,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    7437,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    7959,
+    "Return _build_block_response status=None"
+   ],
+   [
+    "main.py",
+    8380,
+    "Return JSONResponse status=429"
+   ],
+   [
+    "main.py",
+    8422,
+    "Return JSONResponse status=429"
+   ],
+   [
+    "main.py",
+    8673,
+    "Return _build_block_response status=None"
+   ],
+   [
+    "main.py",
+    8816,
+    "Return _build_block_response status=None"
+   ],
+   [
+    "main.py",
+    9171,
+    "Return _build_block_response status=None"
+   ],
+   [
+    "main.py",
+    7452,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    7520,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    11367,
+    "Return _build_block_response status=None"
+   ],
+   [
+    "mcp_oauth.py",
+    245,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "mcp_oauth.py",
+    251,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "mcp_oauth.py",
+    261,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "mcp_oauth.py",
+    274,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "mcp_oauth.py",
+    443,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "mcp_oauth.py",
+    451,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "mcp_oauth.py",
+    459,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "mcp_oauth.py",
+    551,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "mcp_oauth.py",
+    560,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "mcp_oauth.py",
+    570,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "mcp_oauth.py",
+    580,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "mcp_oauth.py",
+    594,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "mcp_oauth.py",
+    604,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "mcp_oauth_proxy.py",
+    493,
+    "Return JSONResponse status=401"
+   ],
+   [
+    "mcp_oauth_proxy.py",
+    501,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "mcp_oauth_proxy.py",
+    526,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "mcp_oauth_proxy.py",
+    538,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "mcp_oauth_proxy.py",
+    645,
+    "Return HTMLResponse status=400"
+   ],
+   [
+    "mcp_oauth_proxy.py",
+    655,
+    "Return HTMLResponse status=400"
+   ],
+   [
+    "mcp_oauth_proxy.py",
+    666,
+    "Return HTMLResponse status=400"
+   ],
+   [
+    "mcp_oauth_proxy.py",
+    522,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "mcp_proxy.py",
+    466,
+    "Return JSONResponse status=413"
+   ],
+   [
+    "mcp_proxy.py",
+    504,
+    "Return JSONResponse status=415"
+   ],
+   [
+    "mcp_proxy.py",
+    836,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "mcp_proxy.py",
+    2701,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "mcp_proxy.py",
+    2763,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "mcp_proxy.py",
+    3465,
+    "Return JSONResponse status=401"
+   ],
+   [
+    "mcp_proxy.py",
+    3484,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "mcp_proxy.py",
+    3498,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "mcp_proxy.py",
+    3505,
+    "Return JSONResponse status=404"
+   ],
+   [
+    "mcp_proxy.py",
+    3549,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "mcp_proxy.py",
+    3674,
+    "Return JSONResponse status=401"
+   ],
+   [
+    "mcp_proxy.py",
+    3685,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "mcp_proxy.py",
+    3727,
+    "Return JSONResponse status=401"
+   ],
+   [
+    "mcp_proxy.py",
+    3752,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "mcp_proxy.py",
+    3780,
+    "Return JSONResponse status=404"
+   ],
+   [
+    "mcp_proxy.py",
+    3947,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "mcp_proxy.py",
+    4161,
+    "Return JSONResponse status=401"
+   ],
+   [
+    "mcp_proxy.py",
+    4170,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "mcp_proxy.py",
+    5875,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "mcp_proxy.py",
+    5898,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "mcp_proxy.py",
+    3479,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "mcp_proxy.py",
+    3679,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "mcp_proxy.py",
+    3745,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "mcp_proxy.py",
+    5920,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "mcp_proxy.py",
+    5951,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "mcp_proxy.py",
+    5937,
+    "Return JSONResponse status=429"
+   ],
+   [
+    "mcp_proxy.py",
+    6195,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "mcp_proxy.py",
+    6072,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "rate_limit_enforcement.py",
+    105,
+    "Return JSONResponse status=429"
+   ],
+   [
+    "rate_limit_enforcement.py",
+    219,
+    "Return JSONResponse status=429"
+   ],
+   [
+    "rate_limit_enforcement.py",
+    271,
+    "Return JSONResponse status=429"
+   ],
+   [
+    "vector_routes.py",
+    1055,
+    "Return JSONResponse status=413"
+   ],
+   [
+    "vector_routes.py",
+    1297,
+    "Return JSONResponse status=413"
+   ]
+  ],
+  "DS-B2": [
+   [
+    "_url_guard.py",
+    95,
+    "Return _ip_is_blocked status=None"
+   ],
+   [
+    "admin_auth.py",
+    80,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "bedrock_scanner.py",
+    884,
+    "Return _parse_failure_threat_block_result status=None"
+   ],
+   [
+    "main.py",
+    5670,
+    "Return _build_safe_block_response status=None"
+   ],
+   [
+    "main.py",
+    16633,
+    "Return _build_block_response status=None"
+   ],
+   [
+    "main.py",
+    2682,
+    "Return _build_block_response status=None"
+   ],
+   [
+    "main.py",
+    2738,
+    "Return _build_block_response status=None"
+   ],
+   [
+    "main.py",
+    15464,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    15519,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    15530,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    15630,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    15641,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    15680,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    15690,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    16230,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    16306,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    2812,
+    "Return _build_block_response status=None"
+   ],
+   [
+    "main.py",
+    7879,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    10412,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    10430,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    12734,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    12994,
+    "Return _build_block_response status=None"
+   ],
+   [
+    "main.py",
+    13559,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    13578,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    13589,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    13615,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    13698,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    13809,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    14016,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    14478,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    14504,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    14508,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    14581,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    14664,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    14694,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    15207,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    15223,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    7801,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    10381,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    10982,
+    "Return _build_block_response status=None"
+   ],
+   [
+    "main.py",
+    11442,
+    "Return _build_block_response status=None"
+   ],
+   [
+    "main.py",
+    12699,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    13664,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    13743,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    13791,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    13855,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    14557,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    14593,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    14626,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    15271,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    15294,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    15323,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    7914,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    8867,
+    "Return _ambiguous_policy_block_response status=None"
+   ],
+   [
+    "main.py",
+    8930,
+    "Return _build_block_response status=None"
+   ],
+   [
+    "main.py",
+    9502,
+    "Return _build_block_response status=None"
+   ],
+   [
+    "main.py",
+    9656,
+    "Return _build_block_response status=None"
+   ],
+   [
+    "main.py",
+    10182,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    10452,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    11068,
+    "Return _build_block_response status=None"
+   ],
+   [
+    "main.py",
+    11491,
+    "Return _build_block_response status=None"
+   ],
+   [
+    "main.py",
+    7959,
+    "Return _build_block_response status=None"
+   ],
+   [
+    "main.py",
+    8673,
+    "Return _build_block_response status=None"
+   ],
+   [
+    "main.py",
+    8816,
+    "Return _build_block_response status=None"
+   ],
+   [
+    "main.py",
+    9171,
+    "Return _build_block_response status=None"
+   ],
+   [
+    "main.py",
+    11367,
+    "Return _build_block_response status=None"
+   ],
+   [
+    "mcp_oauth_proxy.py",
+    501,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "mcp_proxy.py",
+    836,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "mcp_proxy.py",
+    2701,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "mcp_proxy.py",
+    3498,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "mcp_proxy.py",
+    4170,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "mcp_proxy.py",
+    5920,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "mcp_proxy.py",
+    5951,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "mcp_proxy.py",
+    6195,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "mcp_proxy.py",
+    6072,
+    "Return JSONResponse status=403"
+   ]
+  ],
+  "DS-C": [
+   [
+    "bedrock_scanner.py",
+    100,
+    "re.compile(r'\"recommended_action\"\\s*:\\s*\"block\"', re.IGNORECASE),"
+   ],
+   [
+    "bedrock_scanner.py",
+    243,
+    "return \"block\""
+   ],
+   [
+    "bedrock_scanner.py",
+    385,
+    "\"recommended_action\": \"block\","
+   ],
+   [
+    "bedrock_scanner.py",
+    402,
+    "\"recommended_action\": \"block\","
+   ],
+   [
+    "bedrock_scanner.py",
+    856,
+    "\"recommended_action\": \"block\","
+   ],
+   [
+    "bedrock_scanner.py",
+    910,
+    "if _action_from_findings(findings) == \"block\":"
+   ],
+   [
+    "bedrock_scanner.py",
+    911,
+    "recommended_action = \"block\""
+   ],
+   [
+    "context_guard.py",
+    359,
+    "if verdict.action in (\"block\", \"flag\"):"
+   ],
+   [
+    "context_guard.py",
+    370,
+    "action = \"block\" if worst_confidence >= 0.9 else \"flag\""
+   ],
+   [
+    "context_guard.py",
+    399,
+    "action=\"block\","
+   ],
+   [
+    "context_guard.py",
+    420,
+    "action=\"block\","
+   ],
+   [
+    "context_guard.py",
+    463,
+    "action=\"block\","
+   ],
+   [
+    "context_guard.py",
+    492,
+    "action=\"block\","
+   ],
+   [
+    "context_guard.py",
+    507,
+    "action=\"block\","
+   ],
+   [
+    "context_guard.py",
+    529,
+    "action=\"block\","
+   ],
+   [
+    "context_guard.py",
+    541,
+    "action=\"block\","
+   ],
+   [
+    "enforcement.py",
+    40,
+    "\"block\": 3,"
+   ],
+   [
+    "enforcement.py",
+    44,
+    "\"block_immediately\": \"block\","
+   ],
+   [
+    "enforcement.py",
+    45,
+    "\"block_and_alert\": \"block\","
+   ],
+   [
+    "enforcement.py",
+    46,
+    "\"deny\": \"block\","
+   ],
+   [
+    "enforcement.py",
+    47,
+    "\"reject\": \"block\","
+   ],
+   [
+    "enforcement.py",
+    81,
+    "enforcement_mode: str = \"block\","
+   ],
+   [
+    "enforcement.py",
+    124,
+    "resolved = \"block\""
+   ],
+   [
+    "enforcement.py",
+    127,
+    "and policy != \"block\""
+   ],
+   [
+    "enforcement.py",
+    128,
+    "and resolved == \"block\""
+   ],
+   [
+    "enforcement.py",
+    129,
+    "and action_rank(rec) < action_rank(\"block\")"
+   ],
+   [
+    "enforcement.py",
+    135,
+    "if resolved == \"block\" and str(enforcement_mode or \"\").strip().lower() != \"block\":"
+   ],
+   [
+    "enforcement.py",
+    156,
+    "def should_hard_block(resolved_action: str, enforcement_mode: str = \"block\") -> bool:"
+   ],
+   [
+    "enforcement.py",
+    159,
+    "normalize_action(resolved_action) == \"block\""
+   ],
+   [
+    "enforcement.py",
+    160,
+    "and str(enforcement_mode or \"\").strip().lower() == \"block\""
+   ],
+   [
+    "enforcement.py",
+    200,
+    "return self.action == \"block\""
+   ],
+   [
+    "enforcement.py",
+    242,
+    "enforcement_mode: str = \"block\","
+   ],
+   [
+    "enforcement.py",
+    265,
+    "- An exception inside \u2192 ``PipelineDecision(action=\"block\")``"
+   ],
+   [
+    "enforcement.py",
+    273,
+    "if is_injection and normalize_action(guard_rec) == \"block\":"
+   ],
+   [
+    "enforcement.py",
+    280,
+    "normalize_action(guard_rec) == \"block\""
+   ],
+   [
+    "enforcement.py",
+    301,
+    "action = \"block\""
+   ],
+   [
+    "enforcement.py",
+    310,
+    "action = \"redact\" if redaction_possible else \"block\""
+   ],
+   [
+    "enforcement.py",
+    336,
+    "action=\"block\","
+   ],
+   [
+    "enforcement.py",
+    352,
+    "enforcement_mode: str = \"block\","
+   ],
+   [
+    "enforcement.py",
+    371,
+    "- ``flag`` is preserved under ``enforcement_mode==\"block\"`` (UI honesty /"
+   ],
+   [
+    "enforcement.py",
+    381,
+    "action=\"block\","
+   ],
+   [
+    "enforcement.py",
+    422,
+    "act = \"block\""
+   ],
+   [
+    "enforcement.py",
+    434,
+    "blocked_by = \"output_guard\" if act == \"block\" else None"
+   ],
+   [
+    "enforcement.py",
+    449,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    433,
+    "action = \"block\""
+   ],
+   [
+    "main.py",
+    453,
+    "\"blocked\": action == \"block\","
+   ],
+   [
+    "main.py",
+    933,
+    "and _t2_rec in (\"block\", \"redact\", \"deny\", \"reject\", \"block_immediately\", \"block_and_alert\")"
+   ],
+   [
+    "main.py",
+    1358,
+    "\"action\": \"block\","
+   ],
+   [
+    "main.py",
+    1434,
+    "elif result.action == \"block\" and result.redaction_hints:"
+   ],
+   [
+    "main.py",
+    1453,
+    "if rule.get(\"action\") != \"block\":"
+   ],
+   [
+    "main.py",
+    2639,
+    "_enforcement_mode = org_config.get(\"enforcement_mode\", \"block\")"
+   ],
+   [
+    "main.py",
+    2666,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    2686,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    2732,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    2742,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    2806,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    2816,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    2998,
+    "if zs_action == \"block\":"
+   ],
+   [
+    "main.py",
+    3027,
+    "scan_verdict, org_config.get(\"enforcement_mode\", \"block\"),"
+   ],
+   [
+    "main.py",
+    3706,
+    "_malicious = _action in (\"block\", \"flag\", \"redact\", \"rewrite\")"
+   ],
+   [
+    "main.py",
+    4080,
+    "action=\"reroute\" if compliant else \"block\","
+   ],
+   [
+    "main.py",
+    4405,
+    "enforcement_mode = str(org_config.get(\"enforcement_mode\", CONFIG.get(\"enforcement_mode\", \"block\")))"
+   ],
+   [
+    "main.py",
+    5046,
+    "\"block\": 4,"
+   ],
+   [
+    "main.py",
+    5352,
+    "if _presult.action == \"block\":"
+   ],
+   [
+    "main.py",
+    5458,
+    "scan_verdict, enforcement_mode: str = \"block\","
+   ],
+   [
+    "main.py",
+    5466,
+    "\"block\"; the clamp below then collapsed anything outside {allow, flag} to"
+   ],
+   [
+    "main.py",
+    5494,
+    "elif str(enforcement_mode or \"block\").lower() == \"monitor\" and _raw_action:"
+   ],
+   [
+    "main.py",
+    5497,
+    "elif _raw_action == \"block\":"
+   ],
+   [
+    "main.py",
+    5606,
+    "final_action=\"block\","
+   ],
+   [
+    "main.py",
+    5925,
+    "if stamped.get(\"final_action\") == \"block\":"
+   ],
+   [
+    "main.py",
+    6000,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    6024,
+    "if not (event_type == \"stream_complete\" and action == \"block\"):"
+   ],
+   [
+    "main.py",
+    6034,
+    "if action != \"block\":"
+   ],
+   [
+    "main.py",
+    7752,
+    "enforcement_mode = org_config.get(\"enforcement_mode\", \"block\")"
+   ],
+   [
+    "main.py",
+    7796,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    7874,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    7898,
+    "if enforcement_mode == \"block\":"
+   ],
+   [
+    "main.py",
+    7909,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    7944,
+    "if enforcement_mode == \"block\":"
+   ],
+   [
+    "main.py",
+    7954,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    7960,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    7988,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    8019,
+    "_prom_ks(requested_model, ks_verdict.action or \"block\")"
+   ],
+   [
+    "main.py",
+    8092,
+    "ks_audit[\"kill_switch_action\"] = \"block\""
+   ],
+   [
+    "main.py",
+    8100,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    8122,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    8166,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    8265,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    8314,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    8366,
+    "if enforcement_mode == \"block\":"
+   ],
+   [
+    "main.py",
+    8375,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    8408,
+    "if enforcement_mode == \"block\":"
+   ],
+   [
+    "main.py",
+    8417,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    8493,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    8528,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    8646,
+    "if enforcement_mode == \"block\":"
+   ],
+   [
+    "main.py",
+    8656,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    8665,
+    "decision=\"block\","
+   ],
+   [
+    "main.py",
+    8674,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    8817,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    8860,
+    "if action == \"block\":"
+   ],
+   [
+    "main.py",
+    8868,
+    "if action == \"block\":"
+   ],
+   [
+    "main.py",
+    8869,
+    "if enforcement_mode == \"block\":"
+   ],
+   [
+    "main.py",
+    8888,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    8903,
+    "decision=\"block\","
+   ],
+   [
+    "main.py",
+    8913,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    9090,
+    "if tier2_execution_mode == \"async_post_llm\" and enforcement_mode == \"block\":"
+   ],
+   [
+    "main.py",
+    9165,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    9174,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    9466,
+    "status_code=403 if enforcement_mode == \"block\" else 200,"
+   ],
+   [
+    "main.py",
+    9472,
+    "action=\"block\" if enforcement_mode == \"block\" else \"monitor\","
+   ],
+   [
+    "main.py",
+    9487,
+    "if enforcement_mode == \"block\":"
+   ],
+   [
+    "main.py",
+    9493,
+    "decision=\"block\","
+   ],
+   [
+    "main.py",
+    9506,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    9565,
+    "and _normalize_enforcement_action(_guard_rec) in (\"block\", \"redact\", \"flag\")"
+   ],
+   [
+    "main.py",
+    9627,
+    "decision=\"block\","
+   ],
+   [
+    "main.py",
+    9642,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    9660,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    9867,
+    "scan_verdict, org_config.get('enforcement_mode', 'block'))"
+   ],
+   [
+    "main.py",
+    10005,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    10168,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    10271,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    10287,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    10367,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    10450,
+    "if enforcement_mode == \"block\":"
+   ],
+   [
+    "main.py",
+    10734,
+    "ms_action = \"block\""
+   ],
+   [
+    "main.py",
+    10739,
+    "ms_action = ms_data.get(\"action\", \"block\")"
+   ],
+   [
+    "main.py",
+    10760,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    10896,
+    "_og_enforcement_mode = org_config.get(\"enforcement_mode\", \"block\")"
+   ],
+   [
+    "main.py",
+    10952,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    10973,
+    "decision=\"block\","
+   ],
+   [
+    "main.py",
+    10986,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    11039,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    11059,
+    "decision=\"block\","
+   ],
+   [
+    "main.py",
+    11072,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    11169,
+    ") in (\"block\", \"redact\", \"rewrite\")"
+   ],
+   [
+    "main.py",
+    11358,
+    "if enforcement_mode != \"block\":"
+   ],
+   [
+    "main.py",
+    11368,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    11407,
+    "if resp_check and resp_action == \"block\":"
+   ],
+   [
+    "main.py",
+    11420,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    11433,
+    "decision=\"block\","
+   ],
+   [
+    "main.py",
+    11443,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    11482,
+    "decision=\"block\","
+   ],
+   [
+    "main.py",
+    11492,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    11646,
+    "_output_acted = _output_delivery_action in (\"redact\", \"rewrite\", \"flag\", \"block\")"
+   ],
+   [
+    "main.py",
+    11791,
+    "scan_verdict, org_config.get('enforcement_mode', 'block'))"
+   ],
+   [
+    "main.py",
+    11897,
+    "if _out_final in (\"redact\", \"rewrite\", \"flag\", \"block\"):"
+   ],
+   [
+    "main.py",
+    11980,
+    "_act_word = {\"redact\": \"redacted\", \"rewrite\": \"rewritten\", \"flag\": \"flagged\", \"block\": \"blocked\"}.get(_tel_action, _tel_action)"
+   ],
+   [
+    "main.py",
+    12497,
+    "\"enforcement_mode\": org_config.get(\"enforcement_mode\", CONFIG.get(\"enforcement_mode\", \"block\")),"
+   ],
+   [
+    "main.py",
+    12694,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    12729,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    12773,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    12873,
+    "if _emb_matched and org_config.get(\"enforcement_mode\", \"block\") == \"block\":"
+   ],
+   [
+    "main.py",
+    12882,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    12914,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    12983,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    12998,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    13612,
+    "action=\"block\", risk_score=1.0, threat_type=\"blocked_keyword\","
+   ],
+   [
+    "main.py",
+    13720,
+    "if _default_action in (\"deny\", \"block\"):"
+   ],
+   [
+    "main.py",
+    13729,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    13983,
+    "if result.action == \"block\":"
+   ],
+   [
+    "main.py",
+    13995,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    14205,
+    "or getattr(_inj_verdict, \"action\", \"allow\") != \"block\""
+   ],
+   [
+    "main.py",
+    14215,
+    "if getattr(_t2v, \"action\", \"allow\") == \"block\":"
+   ],
+   [
+    "main.py",
+    14231,
+    "and getattr(_inj_verdict, \"action\", \"allow\") == \"block\""
+   ],
+   [
+    "main.py",
+    14592,
+    "if _default_action in (\"deny\", \"block\"):"
+   ],
+   [
+    "main.py",
+    14813,
+    "action = \"block\""
+   ],
+   [
+    "main.py",
+    14818,
+    "if v.action == \"block\":"
+   ],
+   [
+    "main.py",
+    14819,
+    "action = \"block\""
+   ],
+   [
+    "main.py",
+    14820,
+    "if rag_tier2_enabled and INPUT_SCANNER is not None and action != \"block\":"
+   ],
+   [
+    "main.py",
+    14832,
+    "if t2.action == \"block\":"
+   ],
+   [
+    "main.py",
+    14833,
+    "action = \"block\""
+   ],
+   [
+    "main.py",
+    14837,
+    "if action == \"block\":"
+   ],
+   [
+    "main.py",
+    14940,
+    "\"action\": \"block\","
+   ],
+   [
+    "main.py",
+    15293,
+    "if _del_default in (\"deny\", \"block\"):"
+   ],
+   [
+    "main.py",
+    16550,
+    "verdict.action == \"block\""
+   ],
+   [
+    "main.py",
+    16591,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    16619,
+    "action=\"block\","
+   ],
+   [
+    "main.py",
+    16757,
+    "_action = \"block\" if status in (403, 451) else \"allow\""
+   ],
+   [
+    "main.py",
+    16825,
+    "\"enforcement_mode\": CONFIG.get(\"enforcement_mode\", \"block\"),"
+   ],
+   [
+    "main.py",
+    17120,
+    "flagged = action in (\"block\", \"flag\", \"redact\") or any(zs.values())"
+   ],
+   [
+    "mcp_proxy.py",
+    139,
+    "_AUDIT_HIGH_PRIORITY_DECISIONS = frozenset({\"block\", \"redact\", \"rate_limited\", \"error\"})"
+   ],
+   [
+    "mcp_proxy.py",
+    227,
+    "``decision=\"block\"`` attributed to the backend guard \u2014 NOT an ``error`` \u2014 so"
+   ],
+   [
+    "mcp_proxy.py",
+    238,
+    "return \"block\", reason, \"backend\""
+   ],
+   [
+    "mcp_proxy.py",
+    241,
+    "if \"blocked by policy\" in err or (\"block\" in err and \"polic\" in err):"
+   ],
+   [
+    "mcp_proxy.py",
+    242,
+    "return \"block\", (reason or \"blocked_by_policy\"), \"backend\""
+   ],
+   [
+    "mcp_proxy.py",
+    463,
+    "decision=\"block\", reason=\"body_too_large\", request_id=request_id,"
+   ],
+   [
+    "mcp_proxy.py",
+    501,
+    "decision=\"block\", reason=\"unsupported_media_type\", request_id=request_id,"
+   ],
+   [
+    "mcp_proxy.py",
+    527,
+    "decision=\"block\", reason=(reason or code), request_id=request_id,"
+   ],
+   [
+    "mcp_proxy.py",
+    833,
+    "decision=\"block\", reason=\"server_disabled\", request_id=request_id,"
+   ],
+   [
+    "mcp_proxy.py",
+    1268,
+    "if action not in (\"tag\", \"monitor\", \"redact\", \"block\"):"
+   ],
+   [
+    "mcp_proxy.py",
+    1793,
+    "* ``blocked`` \u2014 orchestrator output block (a hard ``\"block\"`` action on a"
+   ],
+   [
+    "mcp_proxy.py",
+    2304,
+    "return _resolved_tier1_action(tool_name, enabled_info, scan_direction) == \"block\""
+   ],
+   [
+    "mcp_proxy.py",
+    2742,
+    "await _ext_audit(\"block\", \"request_too_large\")  # CHG-0095: audit the DoS-guard reject"
+   ],
+   [
+    "mcp_proxy.py",
+    2760,
+    "await _ext_audit(\"block\", \"ssrf_blocked\")  # CHG-0068"
+   ],
+   [
+    "mcp_proxy.py",
+    2824,
+    "\"block\", \"tool_not_allowed_for_key\", tool=_ext_tool_name)"
+   ],
+   [
+    "mcp_proxy.py",
+    2841,
+    "\"block\", \"tool_call_cap_exceeded\", tool=_ext_tool_name)"
+   ],
+   [
+    "mcp_proxy.py",
+    2874,
+    "\"block\", \"credential_blocked_inbound\","
+   ],
+   [
+    "mcp_proxy.py",
+    2930,
+    "\"block\", \"credential_blocked_inbound\","
+   ],
+   [
+    "mcp_proxy.py",
+    2993,
+    "\"block\", \"response_too_large\", tool=_ext_tool_name)"
+   ],
+   [
+    "mcp_proxy.py",
+    3022,
+    "\"block\", \"pii_blocked_outbound\","
+   ],
+   [
+    "mcp_proxy.py",
+    3081,
+    "\"block\", \"sse_stream_event_withheld\","
+   ],
+   [
+    "mcp_proxy.py",
+    3093,
+    "\"block\", \"sse_stream_event_too_large\", tool=_ext_tool_name)"
+   ],
+   [
+    "mcp_proxy.py",
+    3106,
+    "\"block\", \"sse_stream_limit_exceeded\", tool=_ext_tool_name)"
+   ],
+   [
+    "mcp_proxy.py",
+    3144,
+    "\"block\", \"response_too_large\", tool=_ext_tool_name)"
+   ],
+   [
+    "mcp_proxy.py",
+    3180,
+    "\"block\", \"text_body_withheld\","
+   ],
+   [
+    "mcp_proxy.py",
+    3240,
+    "\"block\", \"pii_blocked_outbound\","
+   ],
+   [
+    "mcp_proxy.py",
+    3292,
+    "\"block\", \"error_content_withheld\","
+   ],
+   [
+    "mcp_proxy.py",
+    3332,
+    "\"block\", \"nonok_body_withheld\","
+   ],
+   [
+    "mcp_proxy.py",
+    3430,
+    "decision=\"block\" if _blk else \"redact\", reason=\"tools_list_error_scan\","
+   ],
+   [
+    "mcp_proxy.py",
+    3495,
+    "decision=\"block\", reason=\"server_disabled\","
+   ],
+   [
+    "mcp_proxy.py",
+    3768,
+    "decision=\"block\", reason=\"server_disabled\","
+   ],
+   [
+    "mcp_proxy.py",
+    3833,
+    "decision=\"block\","
+   ],
+   [
+    "mcp_proxy.py",
+    3911,
+    "decision=\"block\", reason=\"pii_blocked_outbound\","
+   ],
+   [
+    "mcp_proxy.py",
+    4013,
+    "decision=\"block\","
+   ],
+   [
+    "mcp_proxy.py",
+    4239,
+    "decision=\"block\","
+   ],
+   [
+    "mcp_proxy.py",
+    4709,
+    "decision=\"block\" if blocked else \"redact\","
+   ],
+   [
+    "mcp_proxy.py",
+    4806,
+    "decision=\"block\", reason=\"server_disabled\","
+   ],
+   [
+    "mcp_proxy.py",
+    4890,
+    "decision=\"block\" if _tl_blocked else \"redact\","
+   ],
+   [
+    "mcp_proxy.py",
+    4991,
+    "decision=\"block\","
+   ],
+   [
+    "mcp_proxy.py",
+    5020,
+    "decision=\"block\","
+   ],
+   [
+    "mcp_proxy.py",
+    5059,
+    "decision=\"block\","
+   ],
+   [
+    "mcp_proxy.py",
+    5087,
+    "decision=\"block\", reason=\"tool_not_registered\","
+   ],
+   [
+    "mcp_proxy.py",
+    5122,
+    "decision=\"block\", reason=\"invalid_arguments\", request_id=_req_id,"
+   ],
+   [
+    "mcp_proxy.py",
+    5150,
+    "decision=\"block\","
+   ],
+   [
+    "mcp_proxy.py",
+    5263,
+    "decision = \"block\""
+   ],
+   [
+    "mcp_proxy.py",
+    5336,
+    "decision = \"block\""
+   ],
+   [
+    "mcp_proxy.py",
+    5441,
+    "decision=\"block\","
+   ],
+   [
+    "mcp_proxy.py",
+    5527,
+    "decision=\"block\","
+   ],
+   [
+    "mcp_proxy.py",
+    5595,
+    "decision=\"block\","
+   ],
+   [
+    "mcp_proxy.py",
+    5871,
+    "org_slug=org_slug, server_slug=server_slug, tool_name=\"\", decision=\"block\","
+   ],
+   [
+    "mcp_proxy.py",
+    5894,
+    "org_slug=org_slug, server_slug=server_slug, tool_name=\"\", decision=\"block\","
+   ],
+   [
+    "mcp_proxy.py",
+    5915,
+    "decision=\"block\", reason=\"tool_not_allowed_for_key\","
+   ],
+   [
+    "mcp_proxy.py",
+    5931,
+    "decision=\"block\", reason=\"tool_call_cap_exceeded\","
+   ],
+   [
+    "mcp_proxy.py",
+    5946,
+    "decision=\"block\", reason=\"tool_disabled\","
+   ],
+   [
+    "mcp_proxy.py",
+    5978,
+    "decision=\"block\","
+   ],
+   [
+    "mcp_proxy.py",
+    6064,
+    "decision=\"block\","
+   ],
+   [
+    "mcp_proxy.py",
+    6188,
+    "decision=\"block\" if _tl_blocked else \"redact\","
+   ],
+   [
+    "mcp_scan_orchestrator.py",
+    369,
+    "return enforcement == \"block\""
+   ],
+   [
+    "mcp_scan_orchestrator.py",
+    581,
+    "policy_blocks = eval_result.action == \"block\""
+   ],
+   [
+    "mcp_scan_orchestrator.py",
+    1150,
+    "eval_result.action == \"block\" and posture != \"monitor\""
+   ],
+   [
+    "mcp_scan_orchestrator.py",
+    1290,
+    "if verdict.action in (\"block\", \"redact\", \"flag\"):"
+   ],
+   [
+    "mcp_scan_orchestrator.py",
+    1326,
+    "if _is_judge_verdict and verdict.action == \"block\":"
+   ],
+   [
+    "mcp_scan_orchestrator.py",
+    1331,
+    "if _enforce_blocks(enforcement) and verdict.action in (\"block\", \"redact\", \"flag\"):"
+   ],
+   [
+    "mcp_scan_orchestrator.py",
+    1335,
+    "if enforcement == \"redact\" and verdict.action in (\"redact\", \"block\"):"
+   ],
+   [
+    "mcp_scan_orchestrator.py",
+    1396,
+    "'block' posture already withheld the payload upstream, so field masking"
+   ],
+   [
+    "mcp_scan_orchestrator.py",
+    1505,
+    "\"action\": \"block\", \"blocked\": True,"
+   ],
+   [
+    "model_state.py",
+    66,
+    "action = payload.get(\"action\", \"block\")"
+   ],
+   [
+    "model_state.py",
+    234,
+    "action: str = \"block\","
+   ],
+   [
+    "model_state.py",
+    262,
+    "effective_action = \"block\""
+   ],
+   [
+    "model_state.py",
+    325,
+    "\"action\": payload.get(\"action\", \"block\"),"
+   ],
+   [
+    "output_guard.py",
+    65,
+    "ACTION_PRIORITY = {\"allow\": 0, \"flag\": 1, \"rewrite\": 2, \"redact\": 3, \"block\": 4}"
+   ],
+   [
+    "output_guard.py",
+    82,
+    "{\"block\", \"redact\", \"rewrite\", \"flag\", \"allow\", HUMAN_REVIEW_ACTION}"
+   ],
+   [
+    "output_guard.py",
+    910,
+    "return _action(\"output_policy_action\", \"block\") if _enabled(\"output_policy_enabled\", True) else \"allow\""
+   ],
+   [
+    "output_guard.py",
+    945,
+    "\"block\" if self._config.get(\"output_block_on_ip_leakage\", False) else \"redact\","
+   ],
+   [
+    "output_guard.py",
+    1027,
+    "and t2.action not in (\"block\", \"redact\", \"flag\")"
+   ],
+   [
+    "output_guard.py",
+    1068,
+    "and t2.action in (\"block\", \"redact\", \"flag\")"
+   ],
+   [
+    "output_guard.py",
+    1087,
+    "if _t2_op_action in (\"block\", \"redact\")"
+   ],
+   [
+    "output_guard.py",
+    1117,
+    "action=\"block\","
+   ],
+   [
+    "output_guard.py",
+    1193,
+    "\"block\" if self._config.get(\"output_block_on_ip_leakage\", False) else \"redact\","
+   ],
+   [
+    "output_guard.py",
+    1339,
+    "def _check_credential_exposure(self, text: str, action: str = \"block\") -> OutputVerdict:"
+   ],
+   [
+    "output_guard.py",
+    1444,
+    "action=\"block\","
+   ],
+   [
+    "output_guard.py",
+    2166,
+    "if verdict is None or verdict.action not in (\"redact\", \"flag\", \"block\"):"
+   ],
+   [
+    "pipeline_trace.py",
+    338,
+    "if a not in (\"allow\", \"flag\", \"block\", \"redact\", \"rewrite\"):"
+   ],
+   [
+    "pipeline_trace.py",
+    364,
+    "return \"block\", \"\", False"
+   ],
+   [
+    "pipeline_trace.py",
+    366,
+    "if not is_blocked and action == \"block\":"
+   ],
+   [
+    "pipeline_trace.py",
+    370,
+    "return (action if action in (\"flag\", \"block\") else \"allow\"), \"\", False"
+   ],
+   [
+    "pipeline_trace.py",
+    407,
+    "if scan_action == \"block\" and threat_type:"
+   ],
+   [
+    "pipeline_trace.py",
+    420,
+    "if scan_action == \"block\" and threat_type:"
+   ],
+   [
+    "pipeline_trace.py",
+    689,
+    "return \"block\""
+   ],
+   [
+    "pipeline_trace.py",
+    937,
+    "if final_attributed and final_action in (\"block\", \"redact\", \"rewrite\", \"flag\"):"
+   ],
+   [
+    "pipeline_trace.py",
+    993,
+    "if enforcement_action == \"allow\" and recommended in (\"block\", \"redact\"):"
+   ],
+   [
+    "pipeline_trace.py",
+    995,
+    "elif enforcement_action == \"redact\" and recommended == \"block\":"
+   ],
+   [
+    "pipeline_trace.py",
+    1000,
+    "elif enforcement_action in (\"block\", \"redact\", \"rewrite\") and recommended == \"allow\":"
+   ],
+   [
+    "pipeline_trace.py",
+    1129,
+    "is_blocked = final_action == \"block\""
+   ],
+   [
+    "pipeline_trace.py",
+    1194,
+    "return \"block\""
+   ],
+   [
+    "pipeline_trace.py",
+    1266,
+    "if _output_own_action not in (\"block\", \"redact\", \"rewrite\", \"flag\", \"allow\"):"
+   ],
+   [
+    "pipeline_trace.py",
+    1269,
+    "if _output_own_action in (\"block\", \"redact\", \"rewrite\", \"flag\") and _enforced_at_output:"
+   ],
+   [
+    "pipeline_trace.py",
+    1286,
+    "\"block\" if blocked_stage == \"kill_switch\""
+   ],
+   [
+    "pipeline_trace.py",
+    1316,
+    "\"block\" if blocked_stage == \"policy\""
+   ],
+   [
+    "pipeline_trace.py",
+    1352,
+    "\"detail\": \"Gateway API key accepted\" if _action(\"auth\") != \"block\" else \"Gateway API key invalid or missing\","
+   ],
+   [
+    "pipeline_trace.py",
+    1359,
+    "\"prompt_out\": prompt_preview if _action(\"auth\") != \"block\" else \"\","
+   ],
+   [
+    "pipeline_trace.py",
+    1370,
+    "\"prompt_out\": prompt_preview if kill_switch_action not in (\"block\",) else \"\","
+   ],
+   [
+    "pipeline_trace.py",
+    1383,
+    "\"prompt_out\": prompt_preview if _action(\"rate_limit\") != \"block\" else \"\","
+   ],
+   [
+    "pipeline_trace.py",
+    1415,
+    "detail=policy_detail if policy_action in (\"block\", \"redact\") else \"\","
+   ],
+   [
+    "policy_engine.py",
+    28,
+    "\"block\": 5,"
+   ],
+   [
+    "policy_engine.py",
+    853,
+    "if action == \"block\":"
+   ],
+   [
+    "policy_engine.py",
+    891,
+    "if result.action == \"block\" and result.matched_rule_ids:"
+   ],
+   [
+    "policy_engine.py",
+    1259,
+    "\"redact\"/\"block\"; ``key`` is \"\" for an entire-scope rule or the ``key`` path for a scope=key"
+   ],
+   [
+    "policy_engine.py",
+    1274,
+    "if action not in (\"redact\", \"block\"):"
+   ],
+   [
+    "policy_engine.py",
+    1352,
+    "encoded_check = (rule.get(\"action\") == \"block\")"
+   ],
+   [
+    "policy_engine.py",
+    1542,
+    "if action == \"block\":"
+   ],
+   [
+    "policy_engine.py",
+    1574,
+    "if result.action == \"block\" and result.matched_rule_ids:"
+   ],
+   [
+    "rag_pipeline/context.py",
+    95,
+    "if s.verdict.action == \"block\":"
+   ],
+   [
+    "rag_pipeline/generator_stage.py",
+    241,
+    "if _pol.action == \"block\":"
+   ],
+   [
+    "rag_pipeline/generator_stage.py",
+    329,
+    "action=\"block\","
+   ],
+   [
+    "rag_pipeline/grounding_guard.py",
+    55,
+    "VALID_MODES = {\"off\", \"warn\", \"downgrade\", \"block\"}"
+   ],
+   [
+    "rag_pipeline/grounding_guard.py",
+    215,
+    "verdict.action = \"warn\" if mode in {\"warn\", \"downgrade\", \"block\"} else \"allow\""
+   ],
+   [
+    "rag_pipeline/grounding_guard.py",
+    248,
+    "verdict.action = \"block\""
+   ],
+   [
+    "rag_pipeline/grounding_guard.py",
+    253,
+    "decision=\"block\","
+   ],
+   [
+    "rag_pipeline/grounding_guard.py",
+    299,
+    "if mode == \"block\":"
+   ],
+   [
+    "rag_pipeline/grounding_guard.py",
+    300,
+    "verdict.action = \"block\""
+   ],
+   [
+    "rag_pipeline/grounding_guard.py",
+    331,
+    "severity=\"warning\" if decision in {\"block\", \"downgrade\", \"warn\"} else \"info\","
+   ],
+   [
+    "rag_pipeline/pipeline.py",
+    168,
+    "if q_out.verdict.action == \"block\":"
+   ],
+   [
+    "rag_pipeline/pipeline.py",
+    169,
+    "ctx.final_action = \"block\""
+   ],
+   [
+    "rag_pipeline/pipeline.py",
+    213,
+    "if r_out.verdict.action == \"block\":"
+   ],
+   [
+    "rag_pipeline/pipeline.py",
+    214,
+    "ctx.final_action = \"block\""
+   ],
+   [
+    "rag_pipeline/pipeline.py",
+    318,
+    "if rank_out.verdict.action == \"block\":"
+   ],
+   [
+    "rag_pipeline/pipeline.py",
+    319,
+    "ctx.final_action = \"block\""
+   ],
+   [
+    "rag_pipeline/pipeline.py",
+    392,
+    "if gen_out.verdict.action == \"block\":"
+   ],
+   [
+    "rag_pipeline/pipeline.py",
+    393,
+    "ctx.final_action = \"block\""
+   ],
+   [
+    "rag_pipeline/pipeline.py",
+    566,
+    "action=\"block\" if blocked else (last_stage.verdict.action if last_stage else \"allow\"),"
+   ],
+   [
+    "rag_pipeline/pipeline.py",
+    570,
+    "\"action\": last_stage.verdict.action if last_stage else \"block\","
+   ],
+   [
+    "rag_pipeline/query_stage.py",
+    64,
+    "action=\"block\","
+   ],
+   [
+    "rag_pipeline/query_stage.py",
+    82,
+    "action=\"block\","
+   ],
+   [
+    "rag_pipeline/query_stage.py",
+    131,
+    "action=\"block\","
+   ],
+   [
+    "rag_pipeline/query_stage.py",
+    174,
+    "if _pol.action == \"block\":"
+   ],
+   [
+    "rag_pipeline/query_stage.py",
+    181,
+    "action=\"block\","
+   ],
+   [
+    "rag_pipeline/query_stage.py",
+    310,
+    "if verdict.action == \"block\" and verdict.confidence >= threshold:"
+   ],
+   [
+    "rag_pipeline/query_stage.py",
+    324,
+    "action=\"block\","
+   ],
+   [
+    "rag_pipeline/query_stage.py",
+    363,
+    "action=\"block\","
+   ],
+   [
+    "rag_pipeline/query_stage.py",
+    385,
+    "and verdict.action in (\"block\", \"flag\")"
+   ],
+   [
+    "rag_pipeline/query_stage.py",
+    422,
+    "verdict.action in (\"block\", \"flag\")"
+   ],
+   [
+    "rag_pipeline/query_stage.py",
+    448,
+    "if verdict.action in (\"block\", \"flag\") and verdict.confidence > 0:"
+   ],
+   [
+    "rag_pipeline/query_stage.py",
+    477,
+    "action=\"block\","
+   ],
+   [
+    "rag_pipeline/ranker_stage.py",
+    265,
+    "if scan_action == \"block\":"
+   ],
+   [
+    "rag_pipeline/ranker_stage.py",
+    277,
+    "action=\"block\","
+   ],
+   [
+    "rag_pipeline/ranker_stage.py",
+    309,
+    "if sv_threat in (\"pii\", \"secret\") and sv_action in (\"flag\", \"block\"):"
+   ],
+   [
+    "rag_pipeline/ranker_stage.py",
+    357,
+    "if result.action == \"block\":"
+   ],
+   [
+    "rag_pipeline/ranker_stage.py",
+    385,
+    "verdict_action = \"block\" if not documents else \"flag\""
+   ],
+   [
+    "rag_pipeline/ranker_stage.py",
+    389,
+    "verdict_action = \"block\""
+   ],
+   [
+    "rag_pipeline/retriever_stage.py",
+    64,
+    "if _pol.action == \"block\":"
+   ],
+   [
+    "rag_pipeline/retriever_stage.py",
+    68,
+    "action=\"block\","
+   ],
+   [
+    "rag_pipeline/retriever_stage.py",
+    88,
+    "action=\"block\","
+   ],
+   [
+    "rag_pipeline/retriever_stage.py",
+    115,
+    "action=\"block\","
+   ],
+   [
+    "rag_pipeline/retriever_stage.py",
+    131,
+    "action=\"block\","
+   ],
+   [
+    "rag_pipeline/retriever_stage.py",
+    152,
+    "action=\"block\","
+   ],
+   [
+    "rag_pipeline/retriever_stage.py",
+    189,
+    "action=\"block\","
+   ],
+   [
+    "rate_limit_enforcement.py",
+    92,
+    "action=\"block\","
+   ],
+   [
+    "rate_limit_enforcement.py",
+    142,
+    "* Honors ``enforcement_mode`` \u2014 only ``\"block\"`` returns a 429; otherwise"
+   ],
+   [
+    "rate_limit_enforcement.py",
+    172,
+    "org_config.get(\"enforcement_mode\", gateway_config.get(\"enforcement_mode\", \"block\"))"
+   ],
+   [
+    "rate_limit_enforcement.py",
+    199,
+    "if enforcement_mode == \"block\":"
+   ],
+   [
+    "rate_limit_enforcement.py",
+    209,
+    "action=\"block\","
+   ],
+   [
+    "rate_limit_enforcement.py",
+    251,
+    "if enforcement_mode == \"block\":"
+   ],
+   [
+    "rate_limit_enforcement.py",
+    261,
+    "action=\"block\","
+   ],
+   [
+    "scanner.py",
+    199,
+    "action=\"block\","
+   ],
+   [
+    "scanner.py",
+    992,
+    "\"block\","
+   ],
+   [
+    "scanner.py",
+    1229,
+    "action=\"block\","
+   ],
+   [
+    "scanner.py",
+    1238,
+    "action=\"block\","
+   ],
+   [
+    "scanner.py",
+    1307,
+    "action=\"block\","
+   ],
+   [
+    "scanner.py",
+    1325,
+    "action=\"block\","
+   ],
+   [
+    "scanner.py",
+    1368,
+    "action=\"block\","
+   ],
+   [
+    "scanner.py",
+    1381,
+    "action=\"block\","
+   ],
+   [
+    "scanner.py",
+    1430,
+    "action=\"block\","
+   ],
+   [
+    "scanner.py",
+    1447,
+    "action=\"block\","
+   ],
+   [
+    "scanner.py",
+    1549,
+    "action=\"block\","
+   ],
+   [
+    "scanner.py",
+    1604,
+    "action=\"block\","
+   ],
+   [
+    "scanner.py",
+    1631,
+    "if mt.action == \"block\" and mt.threat_type != \"dos\":"
+   ],
+   [
+    "scanner.py",
+    1637,
+    "action=\"block\","
+   ],
+   [
+    "scanner.py",
+    1926,
+    "action=\"block\","
+   ],
+   [
+    "scanner.py",
+    1999,
+    "action=\"block\","
+   ],
+   [
+    "scanner.py",
+    2096,
+    "return \"block\""
+   ],
+   [
+    "scanner.py",
+    2214,
+    "if tier1.action == \"block\":"
+   ],
+   [
+    "scanner.py",
+    2364,
+    "_t2_escalates_to_block = recommended == \"block\" or score >= 0.70"
+   ],
+   [
+    "scanner.py",
+    2398,
+    "if recommended == \"block\":"
+   ],
+   [
+    "scanner.py",
+    2425,
+    "action=\"block\","
+   ],
+   [
+    "scanner.py",
+    2464,
+    "action=\"block\","
+   ],
+   [
+    "scanner.py",
+    2495,
+    "action=\"block\","
+   ],
+   [
+    "scanner.py",
+    2507,
+    "reason_code=(reason_code if recommended == \"block\" else \"score_threshold_block\"),"
+   ],
+   [
+    "scanner.py",
+    2686,
+    "if recommended == \"block\":"
+   ],
+   [
+    "scanner.py",
+    2687,
+    "return _verdict(\"block\", cats[0] if cats else \"output_finding\", max_conf or 1.0,"
+   ],
+   [
+    "scanner.py",
+    2695,
+    "return _verdict(\"block\", cats[0] if cats else \"output_finding\", score,"
+   ],
+   [
+    "secure_streaming.py",
+    214,
+    "enforcement_mode: str = \"block\","
+   ],
+   [
+    "secure_streaming.py",
+    241,
+    "self._enforcement_mode = (enforcement_mode or \"block\").strip().lower()"
+   ],
+   [
+    "secure_streaming.py",
+    551,
+    "if effective_action == \"block\":"
+   ],
+   [
+    "secure_streaming.py",
+    562,
+    "self._record_guard_metrics(\"block\", verdict)"
+   ],
+   [
+    "secure_streaming.py",
+    563,
+    "self._emit_guard_telemetry(verdict, action=\"block\", flush_reason=reason)"
+   ],
+   [
+    "secure_streaming.py",
+    564,
+    "self._audit_output_guard(verdict, action=\"block\")"
+   ],
+   [
+    "secure_streaming.py",
+    565,
+    "self._record_metric(\"block\")"
+   ],
+   [
+    "secure_streaming.py",
+    696,
+    "if _noop_decision.action == \"block\":"
+   ],
+   [
+    "secure_streaming.py",
+    706,
+    "self._record_guard_metrics(\"block\", verdict)"
+   ],
+   [
+    "secure_streaming.py",
+    707,
+    "self._emit_guard_telemetry(verdict, action=\"block\", flush_reason=reason)"
+   ],
+   [
+    "secure_streaming.py",
+    708,
+    "self._audit_output_guard(verdict, action=\"block\")"
+   ],
+   [
+    "secure_streaming.py",
+    709,
+    "self._record_metric(\"block\")"
+   ],
+   [
+    "secure_streaming.py",
+    975,
+    "decision=\"block\" if action == \"block\" else action,"
+   ],
+   [
+    "stream_orchestration.py",
+    44,
+    "_GUARD_ACTION_SEVERITY = {\"\": 0, \"flag\": 1, \"redact\": 2, \"block\": 3}"
+   ],
+   [
+    "stream_orchestration.py",
+    416,
+    "_guard_action = \"block\" if metrics.output_blocked else (metrics.guard_action or \"\")"
+   ],
+   [
+    "stream_orchestration.py",
+    417,
+    "if _guard_action in (\"block\", \"redact\", \"rewrite\", \"flag\"):"
+   ],
+   [
+    "stream_orchestration.py",
+    431,
+    "or metrics.guard_action in (\"block\", \"redact\", \"rewrite\", \"flag\")"
+   ],
+   [
+    "stream_orchestration.py",
+    579,
+    "\"block\""
+   ],
+   [
+    "stream_orchestration.py",
+    580,
+    "if (metrics.output_blocked or metrics.guard_action == \"block\")"
+   ],
+   [
+    "stream_orchestration.py",
+    583,
+    "_guard_acted = _out_stage_action in (\"block\", \"redact\", \"flag\", \"rewrite\")"
+   ],
+   [
+    "stream_orchestration.py",
+    722,
+    "if metrics.output_blocked or metrics.guard_action == \"block\":"
+   ],
+   [
+    "stream_orchestration.py",
+    723,
+    "zs[\"action\"] = \"block\""
+   ],
+   [
+    "stream_orchestration.py",
+    1046,
+    "enforcement_mode: str = \"block\","
+   ],
+   [
+    "telemetry_ops.py",
+    122,
+    "\"block\": EVENT_CLASS_QUERY_BLOCKED,"
+   ],
+   [
+    "telemetry_ops.py",
+    128,
+    "{\"allow\", \"rewrite\", \"block\", \"downgrade\", \"redact\", \"flag\"}"
+   ],
+   [
+    "vector_routes.py",
+    524,
+    "\"action\": \"block\","
+   ],
+   [
+    "vector_routes.py",
+    682,
+    "if rag_verdict.action in (\"block\", \"deny\"):"
+   ],
+   [
+    "vector_routes.py",
+    697,
+    "\"action\": \"block\","
+   ],
+   [
+    "vector_routes.py",
+    727,
+    "\"action\": \"block\","
+   ],
+   [
+    "vector_routes.py",
+    872,
+    "if getattr(verdict, \"action\", \"allow\") == \"block\":"
+   ],
+   [
+    "vector_routes.py",
+    873,
+    "action = \"block\""
+   ],
+   [
+    "vector_routes.py",
+    875,
+    "if action == \"block\":"
+   ],
+   [
+    "vector_routes.py",
+    876,
+    "scan_results.append({\"index\": i, \"action\": \"block\", \"threats\": threats})"
+   ],
+   [
+    "vector_routes.py",
+    890,
+    "\"index\": i, \"action\": \"block\", \"threats\": [\"pii\"],"
+   ],
+   [
+    "vector_routes.py",
+    1121,
+    "\"action\": \"block\","
+   ]
+  ],
+  "DS-D": [
+   [
+    "_url_guard.py",
+    95,
+    "Return _ip_is_blocked status=None"
+   ],
+   [
+    "admin_auth.py",
+    71,
+    "Return JSONResponse status=401"
+   ],
+   [
+    "admin_auth.py",
+    80,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "bedrock_scanner.py",
+    884,
+    "Return _parse_failure_threat_block_result status=None"
+   ],
+   [
+    "main.py",
+    166,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    4888,
+    "Return JSONResponse status=422"
+   ],
+   [
+    "main.py",
+    5670,
+    "Return _build_safe_block_response status=None"
+   ],
+   [
+    "main.py",
+    16633,
+    "Return _build_block_response status=None"
+   ],
+   [
+    "main.py",
+    17058,
+    "Return JSONResponse status=404"
+   ],
+   [
+    "main.py",
+    17255,
+    "Return JSONResponse status=404"
+   ],
+   [
+    "main.py",
+    2682,
+    "Return _build_block_response status=None"
+   ],
+   [
+    "main.py",
+    2738,
+    "Return _build_block_response status=None"
+   ],
+   [
+    "main.py",
+    4918,
+    "Return JSONResponse status=422"
+   ],
+   [
+    "main.py",
+    4934,
+    "Return JSONResponse status=404"
+   ],
+   [
+    "main.py",
+    4950,
+    "Return JSONResponse status=404"
+   ],
+   [
+    "main.py",
+    12336,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    12338,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    12340,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    12345,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    12352,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    12432,
+    "Return JSONResponse status=401"
+   ],
+   [
+    "main.py",
+    12435,
+    "Return JSONResponse status=404"
+   ],
+   [
+    "main.py",
+    12444,
+    "Return JSONResponse status=401"
+   ],
+   [
+    "main.py",
+    12447,
+    "Return JSONResponse status=404"
+   ],
+   [
+    "main.py",
+    12456,
+    "Return JSONResponse status=401"
+   ],
+   [
+    "main.py",
+    12459,
+    "Return JSONResponse status=404"
+   ],
+   [
+    "main.py",
+    12475,
+    "Return JSONResponse status=401"
+   ],
+   [
+    "main.py",
+    12509,
+    "Return JSONResponse status=401"
+   ],
+   [
+    "main.py",
+    15464,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    15507,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    15517,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    15519,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    15530,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    15553,
+    "Return JSONResponse status=422"
+   ],
+   [
+    "main.py",
+    15618,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    15628,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    15630,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    15641,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    15680,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    15690,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    15703,
+    "Return JSONResponse status=422"
+   ],
+   [
+    "main.py",
+    15768,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    15876,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    15941,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    16008,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    16042,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    16173,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    16205,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    16226,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    16228,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    16230,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    16244,
+    "Return JSONResponse status=422"
+   ],
+   [
+    "main.py",
+    16281,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    16302,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    16304,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    16306,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    16320,
+    "Return JSONResponse status=422"
+   ],
+   [
+    "main.py",
+    16498,
+    "Return JSONResponse status=404"
+   ],
+   [
+    "main.py",
+    16655,
+    "Return JSONResponse status=401"
+   ],
+   [
+    "main.py",
+    16886,
+    "Return JSONResponse status=401"
+   ],
+   [
+    "main.py",
+    16932,
+    "Return JSONResponse status=401"
+   ],
+   [
+    "main.py",
+    17053,
+    "Return JSONResponse status=401"
+   ],
+   [
+    "main.py",
+    17072,
+    "Return JSONResponse status=401"
+   ],
+   [
+    "main.py",
+    17081,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    17090,
+    "Return JSONResponse status=413"
+   ],
+   [
+    "main.py",
+    17096,
+    "Return JSONResponse status=413"
+   ],
+   [
+    "main.py",
+    17148,
+    "Return JSONResponse status=401"
+   ],
+   [
+    "main.py",
+    17156,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    17160,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    17165,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    17170,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    17186,
+    "Return JSONResponse status=413"
+   ],
+   [
+    "main.py",
+    17190,
+    "Return JSONResponse status=413"
+   ],
+   [
+    "main.py",
+    2812,
+    "Return _build_block_response status=None"
+   ],
+   [
+    "main.py",
+    7183,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    7195,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    7337,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    7350,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    7363,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    7377,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    7879,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    10010,
+    "Return JSONResponse status=404"
+   ],
+   [
+    "main.py",
+    10412,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    10430,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    12333,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    12371,
+    "Return JSONResponse status=401"
+   ],
+   [
+    "main.py",
+    12374,
+    "Return JSONResponse status=404"
+   ],
+   [
+    "main.py",
+    12596,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    12605,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    12616,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    12637,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    12663,
+    "Return JSONResponse status=413"
+   ],
+   [
+    "main.py",
+    12734,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    12994,
+    "Return _build_block_response status=None"
+   ],
+   [
+    "main.py",
+    13509,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    13532,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    13544,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    13554,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    13559,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    13571,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    13578,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    13589,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    13615,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    13698,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    13809,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    13825,
+    "Return JSONResponse status=404"
+   ],
+   [
+    "main.py",
+    13944,
+    "Return JSONResponse status=422"
+   ],
+   [
+    "main.py",
+    14016,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    14418,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    14447,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    14476,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    14478,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    14491,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    14504,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    14508,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    14581,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    14664,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    14694,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    14717,
+    "Return JSONResponse status=422"
+   ],
+   [
+    "main.py",
+    14844,
+    "Return JSONResponse status=422"
+   ],
+   [
+    "main.py",
+    14956,
+    "Return JSONResponse status=422"
+   ],
+   [
+    "main.py",
+    15049,
+    "Return JSONResponse status=422"
+   ],
+   [
+    "main.py",
+    15069,
+    "Return JSONResponse status=422"
+   ],
+   [
+    "main.py",
+    15186,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    15205,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    15207,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    15219,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    15223,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    15338,
+    "Return JSONResponse status=422"
+   ],
+   [
+    "main.py",
+    15505,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    15616,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    15746,
+    "Return JSONResponse status=404"
+   ],
+   [
+    "main.py",
+    15794,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    15850,
+    "Return JSONResponse status=200"
+   ],
+   [
+    "main.py",
+    15874,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    16006,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    16040,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    16203,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    16279,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    16685,
+    "Return JSONResponse status=429"
+   ],
+   [
+    "main.py",
+    16713,
+    "Return JSONResponse status=429"
+   ],
+   [
+    "main.py",
+    17077,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    17153,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    17180,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    7134,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    7168,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    7217,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    7243,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    7287,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    7309,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    7565,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    7627,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    7777,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    7801,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    7810,
+    "Return JSONResponse status=404"
+   ],
+   [
+    "main.py",
+    8538,
+    "Return JSONResponse status=429"
+   ],
+   [
+    "main.py",
+    10292,
+    "Return JSONResponse status=422"
+   ],
+   [
+    "main.py",
+    10381,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    10982,
+    "Return _build_block_response status=None"
+   ],
+   [
+    "main.py",
+    11442,
+    "Return _build_block_response status=None"
+   ],
+   [
+    "main.py",
+    12588,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    12652,
+    "Return JSONResponse status=413"
+   ],
+   [
+    "main.py",
+    12699,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    12792,
+    "Return JSONResponse status=404"
+   ],
+   [
+    "main.py",
+    12921,
+    "Return JSONResponse status=429"
+   ],
+   [
+    "main.py",
+    13503,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    13527,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    13664,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    13743,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    13791,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    13855,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    14411,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    14464,
+    "Return JSONResponse status=413"
+   ],
+   [
+    "main.py",
+    14470,
+    "Return JSONResponse status=413"
+   ],
+   [
+    "main.py",
+    14557,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    14593,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    14626,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    15183,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    15271,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    15294,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    15323,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    15843,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    7233,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    7261,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    7299,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    7323,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    7401,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    7415,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    7470,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    7619,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    7914,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    8501,
+    "Return JSONResponse status=429"
+   ],
+   [
+    "main.py",
+    8867,
+    "Return _ambiguous_policy_block_response status=None"
+   ],
+   [
+    "main.py",
+    8930,
+    "Return _build_block_response status=None"
+   ],
+   [
+    "main.py",
+    9502,
+    "Return _build_block_response status=None"
+   ],
+   [
+    "main.py",
+    9656,
+    "Return _build_block_response status=None"
+   ],
+   [
+    "main.py",
+    10182,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    10452,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "main.py",
+    10480,
+    "Return JSONResponse status=429"
+   ],
+   [
+    "main.py",
+    11068,
+    "Return _build_block_response status=None"
+   ],
+   [
+    "main.py",
+    11491,
+    "Return _build_block_response status=None"
+   ],
+   [
+    "main.py",
+    12779,
+    "Return JSONResponse status=422"
+   ],
+   [
+    "main.py",
+    12888,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    13845,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    7437,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    7959,
+    "Return _build_block_response status=None"
+   ],
+   [
+    "main.py",
+    8380,
+    "Return JSONResponse status=429"
+   ],
+   [
+    "main.py",
+    8422,
+    "Return JSONResponse status=429"
+   ],
+   [
+    "main.py",
+    8673,
+    "Return _build_block_response status=None"
+   ],
+   [
+    "main.py",
+    8816,
+    "Return _build_block_response status=None"
+   ],
+   [
+    "main.py",
+    9171,
+    "Return _build_block_response status=None"
+   ],
+   [
+    "main.py",
+    7452,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    7520,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "main.py",
+    11367,
+    "Return _build_block_response status=None"
+   ],
+   [
+    "mcp_oauth.py",
+    245,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "mcp_oauth.py",
+    251,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "mcp_oauth.py",
+    261,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "mcp_oauth.py",
+    274,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "mcp_oauth.py",
+    443,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "mcp_oauth.py",
+    451,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "mcp_oauth.py",
+    459,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "mcp_oauth.py",
+    551,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "mcp_oauth.py",
+    560,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "mcp_oauth.py",
+    570,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "mcp_oauth.py",
+    580,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "mcp_oauth.py",
+    594,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "mcp_oauth.py",
+    604,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "mcp_oauth_proxy.py",
+    493,
+    "Return JSONResponse status=401"
+   ],
+   [
+    "mcp_oauth_proxy.py",
+    501,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "mcp_oauth_proxy.py",
+    526,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "mcp_oauth_proxy.py",
+    538,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "mcp_oauth_proxy.py",
+    645,
+    "Return HTMLResponse status=400"
+   ],
+   [
+    "mcp_oauth_proxy.py",
+    655,
+    "Return HTMLResponse status=400"
+   ],
+   [
+    "mcp_oauth_proxy.py",
+    666,
+    "Return HTMLResponse status=400"
+   ],
+   [
+    "mcp_oauth_proxy.py",
+    522,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "mcp_proxy.py",
+    49,
+    "Return JSONResponse status=200"
+   ],
+   [
+    "mcp_proxy.py",
+    466,
+    "Return JSONResponse status=413"
+   ],
+   [
+    "mcp_proxy.py",
+    504,
+    "Return JSONResponse status=415"
+   ],
+   [
+    "mcp_proxy.py",
+    530,
+    "Return JSONResponse status=dyn"
+   ],
+   [
+    "mcp_proxy.py",
+    836,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "mcp_proxy.py",
+    4285,
+    "Return JSONResponse status=200"
+   ],
+   [
+    "mcp_proxy.py",
+    5742,
+    "Return JSONResponse status=200"
+   ],
+   [
+    "mcp_proxy.py",
+    2701,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "mcp_proxy.py",
+    2743,
+    "Return _mcp_body_too_large_response status=None"
+   ],
+   [
+    "mcp_proxy.py",
+    2763,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "mcp_proxy.py",
+    3437,
+    "Return JSONResponse status=200"
+   ],
+   [
+    "mcp_proxy.py",
+    3465,
+    "Return JSONResponse status=401"
+   ],
+   [
+    "mcp_proxy.py",
+    3470,
+    "Return _mcp_body_too_large_response status=None"
+   ],
+   [
+    "mcp_proxy.py",
+    3484,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "mcp_proxy.py",
+    3498,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "mcp_proxy.py",
+    3505,
+    "Return JSONResponse status=404"
+   ],
+   [
+    "mcp_proxy.py",
+    3549,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "mcp_proxy.py",
+    3565,
+    "Return _discovery_error_response status=None"
+   ],
+   [
+    "mcp_proxy.py",
+    3674,
+    "Return JSONResponse status=401"
+   ],
+   [
+    "mcp_proxy.py",
+    3685,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "mcp_proxy.py",
+    3727,
+    "Return JSONResponse status=401"
+   ],
+   [
+    "mcp_proxy.py",
+    3736,
+    "Return _mcp_body_too_large_response status=None"
+   ],
+   [
+    "mcp_proxy.py",
+    3752,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "mcp_proxy.py",
+    3771,
+    "Return JSONResponse status=200"
+   ],
+   [
+    "mcp_proxy.py",
+    3780,
+    "Return JSONResponse status=404"
+   ],
+   [
+    "mcp_proxy.py",
+    3807,
+    "Return JSONResponse status=200"
+   ],
+   [
+    "mcp_proxy.py",
+    3841,
+    "Return JSONResponse status=200"
+   ],
+   [
+    "mcp_proxy.py",
+    3947,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "mcp_proxy.py",
+    3963,
+    "Return _discovery_error_response status=None"
+   ],
+   [
+    "mcp_proxy.py",
+    4161,
+    "Return JSONResponse status=401"
+   ],
+   [
+    "mcp_proxy.py",
+    4170,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "mcp_proxy.py",
+    4717,
+    "Return JSONResponse status=200"
+   ],
+   [
+    "mcp_proxy.py",
+    4750,
+    "Return _mcp_body_too_large_response status=None"
+   ],
+   [
+    "mcp_proxy.py",
+    4809,
+    "Return JSONResponse status=200"
+   ],
+   [
+    "mcp_proxy.py",
+    5786,
+    "Return _mcp_body_too_large_response status=None"
+   ],
+   [
+    "mcp_proxy.py",
+    5875,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "mcp_proxy.py",
+    5898,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "mcp_proxy.py",
+    2784,
+    "Return _mcp_body_too_large_response status=None"
+   ],
+   [
+    "mcp_proxy.py",
+    3474,
+    "Return _mcp_body_too_large_response status=None"
+   ],
+   [
+    "mcp_proxy.py",
+    3479,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "mcp_proxy.py",
+    3663,
+    "Return _discovery_error_response status=None"
+   ],
+   [
+    "mcp_proxy.py",
+    3679,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "mcp_proxy.py",
+    3740,
+    "Return _mcp_body_too_large_response status=None"
+   ],
+   [
+    "mcp_proxy.py",
+    3745,
+    "Return JSONResponse status=400"
+   ],
+   [
+    "mcp_proxy.py",
+    3917,
+    "Return JSONResponse status=200"
+   ],
+   [
+    "mcp_proxy.py",
+    4021,
+    "Return JSONResponse status=200"
+   ],
+   [
+    "mcp_proxy.py",
+    4131,
+    "Return JSONResponse status=200"
+   ],
+   [
+    "mcp_proxy.py",
+    4637,
+    "Return JSONResponse status=200"
+   ],
+   [
+    "mcp_proxy.py",
+    4651,
+    "Return JSONResponse status=200"
+   ],
+   [
+    "mcp_proxy.py",
+    4770,
+    "Return _mcp_body_too_large_response status=None"
+   ],
+   [
+    "mcp_proxy.py",
+    4774,
+    "Return JSONResponse status=200"
+   ],
+   [
+    "mcp_proxy.py",
+    5091,
+    "Return JSONResponse status=200"
+   ],
+   [
+    "mcp_proxy.py",
+    5126,
+    "Return JSONResponse status=200"
+   ],
+   [
+    "mcp_proxy.py",
+    5791,
+    "Return _mcp_body_too_large_response status=None"
+   ],
+   [
+    "mcp_proxy.py",
+    5920,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "mcp_proxy.py",
+    5951,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "mcp_proxy.py",
+    5989,
+    "Return JSONResponse status=dyn"
+   ],
+   [
+    "mcp_proxy.py",
+    3145,
+    "Return _mcp_upstream_too_large_response status=None"
+   ],
+   [
+    "mcp_proxy.py",
+    3243,
+    "Return JSONResponse status=200"
+   ],
+   [
+    "mcp_proxy.py",
+    4119,
+    "Return JSONResponse status=200"
+   ],
+   [
+    "mcp_proxy.py",
+    5829,
+    "Return _mcp_client_error_response status=None"
+   ],
+   [
+    "mcp_proxy.py",
+    5845,
+    "Return _mcp_client_error_response status=None"
+   ],
+   [
+    "mcp_proxy.py",
+    5937,
+    "Return JSONResponse status=429"
+   ],
+   [
+    "mcp_proxy.py",
+    3025,
+    "Return JSONResponse status=200"
+   ],
+   [
+    "mcp_proxy.py",
+    3294,
+    "Return JSONResponse status=200"
+   ],
+   [
+    "mcp_proxy.py",
+    3642,
+    "Return _discovery_error_response status=None"
+   ],
+   [
+    "mcp_proxy.py",
+    4899,
+    "Return JSONResponse status=200"
+   ],
+   [
+    "mcp_proxy.py",
+    4956,
+    "Return JSONResponse status=200"
+   ],
+   [
+    "mcp_proxy.py",
+    4965,
+    "Return JSONResponse status=200"
+   ],
+   [
+    "mcp_proxy.py",
+    5704,
+    "Return JSONResponse status=200"
+   ],
+   [
+    "mcp_proxy.py",
+    5716,
+    "Return JSONResponse status=200"
+   ],
+   [
+    "mcp_proxy.py",
+    5725,
+    "Return JSONResponse status=200"
+   ],
+   [
+    "mcp_proxy.py",
+    6195,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "mcp_proxy.py",
+    2825,
+    "Return JSONResponse status=200"
+   ],
+   [
+    "mcp_proxy.py",
+    2877,
+    "Return JSONResponse status=200"
+   ],
+   [
+    "mcp_proxy.py",
+    2933,
+    "Return JSONResponse status=200"
+   ],
+   [
+    "mcp_proxy.py",
+    2994,
+    "Return _mcp_upstream_too_large_response status=None"
+   ],
+   [
+    "mcp_proxy.py",
+    3334,
+    "Return JSONResponse status=dyn"
+   ],
+   [
+    "mcp_proxy.py",
+    3650,
+    "Return _discovery_error_response status=None"
+   ],
+   [
+    "mcp_proxy.py",
+    6072,
+    "Return JSONResponse status=403"
+   ],
+   [
+    "mcp_proxy.py",
+    2842,
+    "Return JSONResponse status=200"
+   ],
+   [
+    "rate_limit_enforcement.py",
+    105,
+    "Return JSONResponse status=429"
+   ],
+   [
+    "rate_limit_enforcement.py",
+    219,
+    "Return JSONResponse status=429"
+   ],
+   [
+    "rate_limit_enforcement.py",
+    271,
+    "Return JSONResponse status=429"
+   ],
+   [
+    "vector_routes.py",
+    534,
+    "Return JSONResponse status=dyn"
+   ],
+   [
+    "vector_routes.py",
+    551,
+    "Return JSONResponse status=dyn"
+   ],
+   [
+    "vector_routes.py",
+    571,
+    "Return JSONResponse status=dyn"
+   ],
+   [
+    "vector_routes.py",
+    585,
+    "Return JSONResponse status=dyn"
+   ],
+   [
+    "vector_routes.py",
+    594,
+    "Return JSONResponse status=dyn"
+   ],
+   [
+    "vector_routes.py",
+    611,
+    "Return JSONResponse status=dyn"
+   ],
+   [
+    "vector_routes.py",
+    623,
+    "Return JSONResponse status=dyn"
+   ],
+   [
+    "vector_routes.py",
+    640,
+    "Return JSONResponse status=dyn"
+   ],
+   [
+    "vector_routes.py",
+    720,
+    "Return JSONResponse status=dyn"
+   ],
+   [
+    "vector_routes.py",
+    766,
+    "Return JSONResponse status=dyn"
+   ],
+   [
+    "vector_routes.py",
+    773,
+    "Return JSONResponse status=dyn"
+   ],
+   [
+    "vector_routes.py",
+    961,
+    "Return JSONResponse status=dyn"
+   ],
+   [
+    "vector_routes.py",
+    971,
+    "Return JSONResponse status=dyn"
+   ],
+   [
+    "vector_routes.py",
+    992,
+    "Return JSONResponse status=dyn"
+   ],
+   [
+    "vector_routes.py",
+    1001,
+    "Return JSONResponse status=dyn"
+   ],
+   [
+    "vector_routes.py",
+    1007,
+    "Return JSONResponse status=dyn"
+   ],
+   [
+    "vector_routes.py",
+    1026,
+    "Return JSONResponse status=dyn"
+   ],
+   [
+    "vector_routes.py",
+    1055,
+    "Return JSONResponse status=413"
+   ],
+   [
+    "vector_routes.py",
+    1065,
+    "Return JSONResponse status=dyn"
+   ],
+   [
+    "vector_routes.py",
+    1077,
+    "Return JSONResponse status=dyn"
+   ],
+   [
+    "vector_routes.py",
+    1094,
+    "Return JSONResponse status=dyn"
+   ],
+   [
+    "vector_routes.py",
+    1201,
+    "Return JSONResponse status=dyn"
+   ],
+   [
+    "vector_routes.py",
+    1207,
+    "Return JSONResponse status=dyn"
+   ],
+   [
+    "vector_routes.py",
+    1244,
+    "Return JSONResponse status=dyn"
+   ],
+   [
+    "vector_routes.py",
+    1254,
+    "Return JSONResponse status=dyn"
+   ],
+   [
+    "vector_routes.py",
+    1275,
+    "Return JSONResponse status=dyn"
+   ],
+   [
+    "vector_routes.py",
+    1284,
+    "Return JSONResponse status=dyn"
+   ],
+   [
+    "vector_routes.py",
+    1291,
+    "Return JSONResponse status=dyn"
+   ],
+   [
+    "vector_routes.py",
+    1297,
+    "Return JSONResponse status=413"
+   ],
+   [
+    "vector_routes.py",
+    1304,
+    "Return JSONResponse status=dyn"
+   ],
+   [
+    "vector_routes.py",
+    1317,
+    "Return JSONResponse status=dyn"
+   ],
+   [
+    "vector_routes.py",
+    1355,
+    "Return JSONResponse status=dyn"
+   ],
+   [
+    "vector_routes.py",
+    1361,
+    "Return JSONResponse status=dyn"
+   ],
+   [
+    "vector_routes.py",
+    1403,
+    "Return JSONResponse status=dyn"
+   ],
+   [
+    "vector_routes.py",
+    1412,
+    "Return JSONResponse status=dyn"
+   ],
+   [
+    "vector_routes.py",
+    1440,
+    "Return JSONResponse status=dyn"
+   ],
+   [
+    "vector_routes.py",
+    564,
+    "Return JSONResponse status=dyn"
+   ],
+   [
+    "vector_routes.py",
+    676,
+    "Return JSONResponse status=dyn"
+   ],
+   [
+    "vector_routes.py",
+    1134,
+    "Return JSONResponse status=dyn"
+   ],
+   [
+    "vector_routes.py",
+    1195,
+    "Return JSONResponse status=dyn"
+   ],
+   [
+    "vector_routes.py",
+    1349,
+    "Return JSONResponse status=dyn"
+   ]
+  ],
+  "DS-AD": [
+   [
+    "_url_guard.py",
+    95,
+    "D"
+   ],
+   [
+    "admin_auth.py",
+    71,
+    "D"
+   ],
+   [
+    "admin_auth.py",
+    80,
+    "D"
+   ],
+   [
+    "bedrock_scanner.py",
+    243,
+    "A"
+   ],
+   [
+    "bedrock_scanner.py",
+    385,
+    "A"
+   ],
+   [
+    "bedrock_scanner.py",
+    402,
+    "A"
+   ],
+   [
+    "bedrock_scanner.py",
+    856,
+    "A"
+   ],
+   [
+    "bedrock_scanner.py",
+    884,
+    "D"
+   ],
+   [
+    "bedrock_scanner.py",
+    911,
+    "A"
+   ],
+   [
+    "context_guard.py",
+    370,
+    "A"
+   ],
+   [
+    "context_guard.py",
+    399,
+    "A"
+   ],
+   [
+    "context_guard.py",
+    420,
+    "A"
+   ],
+   [
+    "context_guard.py",
+    463,
+    "A"
+   ],
+   [
+    "context_guard.py",
+    492,
+    "A"
+   ],
+   [
+    "context_guard.py",
+    507,
+    "A"
+   ],
+   [
+    "context_guard.py",
+    529,
+    "A"
+   ],
+   [
+    "context_guard.py",
+    541,
+    "A"
+   ],
+   [
+    "enforcement.py",
+    44,
+    "A"
+   ],
+   [
+    "enforcement.py",
+    45,
+    "A"
+   ],
+   [
+    "enforcement.py",
+    46,
+    "A"
+   ],
+   [
+    "enforcement.py",
+    47,
+    "A"
+   ],
+   [
+    "enforcement.py",
+    81,
+    "A"
+   ],
+   [
+    "enforcement.py",
+    124,
+    "A"
+   ],
+   [
+    "enforcement.py",
+    129,
+    "A"
+   ],
+   [
+    "enforcement.py",
+    156,
+    "A"
+   ],
+   [
+    "enforcement.py",
+    242,
+    "A"
+   ],
+   [
+    "enforcement.py",
+    301,
+    "A"
+   ],
+   [
+    "enforcement.py",
+    310,
+    "A"
+   ],
+   [
+    "enforcement.py",
+    336,
+    "A"
+   ],
+   [
+    "enforcement.py",
+    352,
+    "A"
+   ],
+   [
+    "enforcement.py",
+    381,
+    "A"
+   ],
+   [
+    "enforcement.py",
+    422,
+    "A"
+   ],
+   [
+    "enforcement.py",
+    449,
+    "A"
+   ],
+   [
+    "main.py",
+    166,
+    "D"
+   ],
+   [
+    "main.py",
+    433,
+    "A"
+   ],
+   [
+    "main.py",
+    1358,
+    "A"
+   ],
+   [
+    "main.py",
+    2639,
+    "A"
+   ],
+   [
+    "main.py",
+    2666,
+    "A"
+   ],
+   [
+    "main.py",
+    2682,
+    "D"
+   ],
+   [
+    "main.py",
+    2686,
+    "A"
+   ],
+   [
+    "main.py",
+    2732,
+    "A"
+   ],
+   [
+    "main.py",
+    2738,
+    "D"
+   ],
+   [
+    "main.py",
+    2742,
+    "A"
+   ],
+   [
+    "main.py",
+    2806,
+    "A"
+   ],
+   [
+    "main.py",
+    2812,
+    "D"
+   ],
+   [
+    "main.py",
+    2816,
+    "A"
+   ],
+   [
+    "main.py",
+    3027,
+    "A"
+   ],
+   [
+    "main.py",
+    4080,
+    "A"
+   ],
+   [
+    "main.py",
+    4405,
+    "A"
+   ],
+   [
+    "main.py",
+    4888,
+    "D"
+   ],
+   [
+    "main.py",
+    4918,
+    "D"
+   ],
+   [
+    "main.py",
+    4934,
+    "D"
+   ],
+   [
+    "main.py",
+    4950,
+    "D"
+   ],
+   [
+    "main.py",
+    5458,
+    "A"
+   ],
+   [
+    "main.py",
+    5494,
+    "A"
+   ],
+   [
+    "main.py",
+    5606,
+    "A"
+   ],
+   [
+    "main.py",
+    5670,
+    "D"
+   ],
+   [
+    "main.py",
+    6000,
+    "A"
+   ],
+   [
+    "main.py",
+    7134,
+    "D"
+   ],
+   [
+    "main.py",
+    7168,
+    "D"
+   ],
+   [
+    "main.py",
+    7183,
+    "D"
+   ],
+   [
+    "main.py",
+    7195,
+    "D"
+   ],
+   [
+    "main.py",
+    7217,
+    "D"
+   ],
+   [
+    "main.py",
+    7233,
+    "D"
+   ],
+   [
+    "main.py",
+    7243,
+    "D"
+   ],
+   [
+    "main.py",
+    7261,
+    "D"
+   ],
+   [
+    "main.py",
+    7287,
+    "D"
+   ],
+   [
+    "main.py",
+    7299,
+    "D"
+   ],
+   [
+    "main.py",
+    7309,
+    "D"
+   ],
+   [
+    "main.py",
+    7323,
+    "D"
+   ],
+   [
+    "main.py",
+    7337,
+    "D"
+   ],
+   [
+    "main.py",
+    7350,
+    "D"
+   ],
+   [
+    "main.py",
+    7363,
+    "D"
+   ],
+   [
+    "main.py",
+    7377,
+    "D"
+   ],
+   [
+    "main.py",
+    7401,
+    "D"
+   ],
+   [
+    "main.py",
+    7415,
+    "D"
+   ],
+   [
+    "main.py",
+    7437,
+    "D"
+   ],
+   [
+    "main.py",
+    7452,
+    "D"
+   ],
+   [
+    "main.py",
+    7470,
+    "D"
+   ],
+   [
+    "main.py",
+    7520,
+    "D"
+   ],
+   [
+    "main.py",
+    7565,
+    "D"
+   ],
+   [
+    "main.py",
+    7619,
+    "D"
+   ],
+   [
+    "main.py",
+    7627,
+    "D"
+   ],
+   [
+    "main.py",
+    7752,
+    "A"
+   ],
+   [
+    "main.py",
+    7777,
+    "D"
+   ],
+   [
+    "main.py",
+    7796,
+    "A"
+   ],
+   [
+    "main.py",
+    7801,
+    "D"
+   ],
+   [
+    "main.py",
+    7810,
+    "D"
+   ],
+   [
+    "main.py",
+    7874,
+    "A"
+   ],
+   [
+    "main.py",
+    7879,
+    "D"
+   ],
+   [
+    "main.py",
+    7909,
+    "A"
+   ],
+   [
+    "main.py",
+    7914,
+    "D"
+   ],
+   [
+    "main.py",
+    7954,
+    "A"
+   ],
+   [
+    "main.py",
+    7959,
+    "D"
+   ],
+   [
+    "main.py",
+    7960,
+    "A"
+   ],
+   [
+    "main.py",
+    7988,
+    "A"
+   ],
+   [
+    "main.py",
+    8019,
+    "A"
+   ],
+   [
+    "main.py",
+    8092,
+    "A"
+   ],
+   [
+    "main.py",
+    8100,
+    "A"
+   ],
+   [
+    "main.py",
+    8122,
+    "A"
+   ],
+   [
+    "main.py",
+    8166,
+    "A"
+   ],
+   [
+    "main.py",
+    8265,
+    "A"
+   ],
+   [
+    "main.py",
+    8314,
+    "A"
+   ],
+   [
+    "main.py",
+    8375,
+    "A"
+   ],
+   [
+    "main.py",
+    8380,
+    "D"
+   ],
+   [
+    "main.py",
+    8417,
+    "A"
+   ],
+   [
+    "main.py",
+    8422,
+    "D"
+   ],
+   [
+    "main.py",
+    8493,
+    "A"
+   ],
+   [
+    "main.py",
+    8501,
+    "D"
+   ],
+   [
+    "main.py",
+    8528,
+    "A"
+   ],
+   [
+    "main.py",
+    8538,
+    "D"
+   ],
+   [
+    "main.py",
+    8656,
+    "A"
+   ],
+   [
+    "main.py",
+    8665,
+    "A"
+   ],
+   [
+    "main.py",
+    8673,
+    "D"
+   ],
+   [
+    "main.py",
+    8674,
+    "A"
+   ],
+   [
+    "main.py",
+    8816,
+    "D"
+   ],
+   [
+    "main.py",
+    8817,
+    "A"
+   ],
+   [
+    "main.py",
+    8867,
+    "D"
+   ],
+   [
+    "main.py",
+    8888,
+    "A"
+   ],
+   [
+    "main.py",
+    8903,
+    "A"
+   ],
+   [
+    "main.py",
+    8913,
+    "A"
+   ],
+   [
+    "main.py",
+    8930,
+    "D"
+   ],
+   [
+    "main.py",
+    9165,
+    "A"
+   ],
+   [
+    "main.py",
+    9171,
+    "D"
+   ],
+   [
+    "main.py",
+    9174,
+    "A"
+   ],
+   [
+    "main.py",
+    9472,
+    "A"
+   ],
+   [
+    "main.py",
+    9493,
+    "A"
+   ],
+   [
+    "main.py",
+    9502,
+    "D"
+   ],
+   [
+    "main.py",
+    9506,
+    "A"
+   ],
+   [
+    "main.py",
+    9627,
+    "A"
+   ],
+   [
+    "main.py",
+    9642,
+    "A"
+   ],
+   [
+    "main.py",
+    9656,
+    "D"
+   ],
+   [
+    "main.py",
+    9660,
+    "A"
+   ],
+   [
+    "main.py",
+    9867,
+    "A"
+   ],
+   [
+    "main.py",
+    10005,
+    "A"
+   ],
+   [
+    "main.py",
+    10010,
+    "D"
+   ],
+   [
+    "main.py",
+    10168,
+    "A"
+   ],
+   [
+    "main.py",
+    10182,
+    "D"
+   ],
+   [
+    "main.py",
+    10271,
+    "A"
+   ],
+   [
+    "main.py",
+    10287,
+    "A"
+   ],
+   [
+    "main.py",
+    10292,
+    "D"
+   ],
+   [
+    "main.py",
+    10367,
+    "A"
+   ],
+   [
+    "main.py",
+    10381,
+    "D"
+   ],
+   [
+    "main.py",
+    10412,
+    "D"
+   ],
+   [
+    "main.py",
+    10430,
+    "D"
+   ],
+   [
+    "main.py",
+    10452,
+    "D"
+   ],
+   [
+    "main.py",
+    10480,
+    "D"
+   ],
+   [
+    "main.py",
+    10734,
+    "A"
+   ],
+   [
+    "main.py",
+    10739,
+    "A"
+   ],
+   [
+    "main.py",
+    10760,
+    "A"
+   ],
+   [
+    "main.py",
+    10896,
+    "A"
+   ],
+   [
+    "main.py",
+    10952,
+    "A"
+   ],
+   [
+    "main.py",
+    10973,
+    "A"
+   ],
+   [
+    "main.py",
+    10982,
+    "D"
+   ],
+   [
+    "main.py",
+    10986,
+    "A"
+   ],
+   [
+    "main.py",
+    11039,
+    "A"
+   ],
+   [
+    "main.py",
+    11059,
+    "A"
+   ],
+   [
+    "main.py",
+    11068,
+    "D"
+   ],
+   [
+    "main.py",
+    11072,
+    "A"
+   ],
+   [
+    "main.py",
+    11367,
+    "D"
+   ],
+   [
+    "main.py",
+    11368,
+    "A"
+   ],
+   [
+    "main.py",
+    11420,
+    "A"
+   ],
+   [
+    "main.py",
+    11433,
+    "A"
+   ],
+   [
+    "main.py",
+    11442,
+    "D"
+   ],
+   [
+    "main.py",
+    11443,
+    "A"
+   ],
+   [
+    "main.py",
+    11482,
+    "A"
+   ],
+   [
+    "main.py",
+    11491,
+    "D"
+   ],
+   [
+    "main.py",
+    11492,
+    "A"
+   ],
+   [
+    "main.py",
+    11791,
+    "A"
+   ],
+   [
+    "main.py",
+    12333,
+    "D"
+   ],
+   [
+    "main.py",
+    12336,
+    "D"
+   ],
+   [
+    "main.py",
+    12338,
+    "D"
+   ],
+   [
+    "main.py",
+    12340,
+    "D"
+   ],
+   [
+    "main.py",
+    12345,
+    "D"
+   ],
+   [
+    "main.py",
+    12352,
+    "D"
+   ],
+   [
+    "main.py",
+    12371,
+    "D"
+   ],
+   [
+    "main.py",
+    12374,
+    "D"
+   ],
+   [
+    "main.py",
+    12432,
+    "D"
+   ],
+   [
+    "main.py",
+    12435,
+    "D"
+   ],
+   [
+    "main.py",
+    12444,
+    "D"
+   ],
+   [
+    "main.py",
+    12447,
+    "D"
+   ],
+   [
+    "main.py",
+    12456,
+    "D"
+   ],
+   [
+    "main.py",
+    12459,
+    "D"
+   ],
+   [
+    "main.py",
+    12475,
+    "D"
+   ],
+   [
+    "main.py",
+    12497,
+    "A"
+   ],
+   [
+    "main.py",
+    12509,
+    "D"
+   ],
+   [
+    "main.py",
+    12588,
+    "D"
+   ],
+   [
+    "main.py",
+    12596,
+    "D"
+   ],
+   [
+    "main.py",
+    12605,
+    "D"
+   ],
+   [
+    "main.py",
+    12616,
+    "D"
+   ],
+   [
+    "main.py",
+    12637,
+    "D"
+   ],
+   [
+    "main.py",
+    12652,
+    "D"
+   ],
+   [
+    "main.py",
+    12663,
+    "D"
+   ],
+   [
+    "main.py",
+    12694,
+    "A"
+   ],
+   [
+    "main.py",
+    12699,
+    "D"
+   ],
+   [
+    "main.py",
+    12729,
+    "A"
+   ],
+   [
+    "main.py",
+    12734,
+    "D"
+   ],
+   [
+    "main.py",
+    12773,
+    "A"
+   ],
+   [
+    "main.py",
+    12779,
+    "D"
+   ],
+   [
+    "main.py",
+    12792,
+    "D"
+   ],
+   [
+    "main.py",
+    12873,
+    "A"
+   ],
+   [
+    "main.py",
+    12882,
+    "A"
+   ],
+   [
+    "main.py",
+    12888,
+    "D"
+   ],
+   [
+    "main.py",
+    12914,
+    "A"
+   ],
+   [
+    "main.py",
+    12921,
+    "D"
+   ],
+   [
+    "main.py",
+    12983,
+    "A"
+   ],
+   [
+    "main.py",
+    12994,
+    "D"
+   ],
+   [
+    "main.py",
+    12998,
+    "A"
+   ],
+   [
+    "main.py",
+    13503,
+    "D"
+   ],
+   [
+    "main.py",
+    13509,
+    "D"
+   ],
+   [
+    "main.py",
+    13527,
+    "D"
+   ],
+   [
+    "main.py",
+    13532,
+    "D"
+   ],
+   [
+    "main.py",
+    13544,
+    "D"
+   ],
+   [
+    "main.py",
+    13554,
+    "D"
+   ],
+   [
+    "main.py",
+    13559,
+    "D"
+   ],
+   [
+    "main.py",
+    13571,
+    "D"
+   ],
+   [
+    "main.py",
+    13578,
+    "D"
+   ],
+   [
+    "main.py",
+    13589,
+    "D"
+   ],
+   [
+    "main.py",
+    13612,
+    "A"
+   ],
+   [
+    "main.py",
+    13615,
+    "D"
+   ],
+   [
+    "main.py",
+    13664,
+    "D"
+   ],
+   [
+    "main.py",
+    13698,
+    "D"
+   ],
+   [
+    "main.py",
+    13729,
+    "A"
+   ],
+   [
+    "main.py",
+    13743,
+    "D"
+   ],
+   [
+    "main.py",
+    13791,
+    "D"
+   ],
+   [
+    "main.py",
+    13809,
+    "D"
+   ],
+   [
+    "main.py",
+    13825,
+    "D"
+   ],
+   [
+    "main.py",
+    13845,
+    "D"
+   ],
+   [
+    "main.py",
+    13855,
+    "D"
+   ],
+   [
+    "main.py",
+    13944,
+    "D"
+   ],
+   [
+    "main.py",
+    13995,
+    "A"
+   ],
+   [
+    "main.py",
+    14016,
+    "D"
+   ],
+   [
+    "main.py",
+    14411,
+    "D"
+   ],
+   [
+    "main.py",
+    14418,
+    "D"
+   ],
+   [
+    "main.py",
+    14447,
+    "D"
+   ],
+   [
+    "main.py",
+    14464,
+    "D"
+   ],
+   [
+    "main.py",
+    14470,
+    "D"
+   ],
+   [
+    "main.py",
+    14476,
+    "D"
+   ],
+   [
+    "main.py",
+    14478,
+    "D"
+   ],
+   [
+    "main.py",
+    14491,
+    "D"
+   ],
+   [
+    "main.py",
+    14504,
+    "D"
+   ],
+   [
+    "main.py",
+    14508,
+    "D"
+   ],
+   [
+    "main.py",
+    14557,
+    "D"
+   ],
+   [
+    "main.py",
+    14581,
+    "D"
+   ],
+   [
+    "main.py",
+    14593,
+    "D"
+   ],
+   [
+    "main.py",
+    14626,
+    "D"
+   ],
+   [
+    "main.py",
+    14664,
+    "D"
+   ],
+   [
+    "main.py",
+    14694,
+    "D"
+   ],
+   [
+    "main.py",
+    14717,
+    "D"
+   ],
+   [
+    "main.py",
+    14813,
+    "A"
+   ],
+   [
+    "main.py",
+    14819,
+    "A"
+   ],
+   [
+    "main.py",
+    14833,
+    "A"
+   ],
+   [
+    "main.py",
+    14844,
+    "D"
+   ],
+   [
+    "main.py",
+    14940,
+    "A"
+   ],
+   [
+    "main.py",
+    14956,
+    "D"
+   ],
+   [
+    "main.py",
+    15049,
+    "D"
+   ],
+   [
+    "main.py",
+    15069,
+    "D"
+   ],
+   [
+    "main.py",
+    15183,
+    "D"
+   ],
+   [
+    "main.py",
+    15186,
+    "D"
+   ],
+   [
+    "main.py",
+    15205,
+    "D"
+   ],
+   [
+    "main.py",
+    15207,
+    "D"
+   ],
+   [
+    "main.py",
+    15219,
+    "D"
+   ],
+   [
+    "main.py",
+    15223,
+    "D"
+   ],
+   [
+    "main.py",
+    15271,
+    "D"
+   ],
+   [
+    "main.py",
+    15294,
+    "D"
+   ],
+   [
+    "main.py",
+    15323,
+    "D"
+   ],
+   [
+    "main.py",
+    15338,
+    "D"
+   ],
+   [
+    "main.py",
+    15464,
+    "D"
+   ],
+   [
+    "main.py",
+    15505,
+    "D"
+   ],
+   [
+    "main.py",
+    15507,
+    "D"
+   ],
+   [
+    "main.py",
+    15517,
+    "D"
+   ],
+   [
+    "main.py",
+    15519,
+    "D"
+   ],
+   [
+    "main.py",
+    15530,
+    "D"
+   ],
+   [
+    "main.py",
+    15553,
+    "D"
+   ],
+   [
+    "main.py",
+    15616,
+    "D"
+   ],
+   [
+    "main.py",
+    15618,
+    "D"
+   ],
+   [
+    "main.py",
+    15628,
+    "D"
+   ],
+   [
+    "main.py",
+    15630,
+    "D"
+   ],
+   [
+    "main.py",
+    15641,
+    "D"
+   ],
+   [
+    "main.py",
+    15680,
+    "D"
+   ],
+   [
+    "main.py",
+    15690,
+    "D"
+   ],
+   [
+    "main.py",
+    15703,
+    "D"
+   ],
+   [
+    "main.py",
+    15746,
+    "D"
+   ],
+   [
+    "main.py",
+    15768,
+    "D"
+   ],
+   [
+    "main.py",
+    15794,
+    "D"
+   ],
+   [
+    "main.py",
+    15843,
+    "D"
+   ],
+   [
+    "main.py",
+    15850,
+    "D"
+   ],
+   [
+    "main.py",
+    15874,
+    "D"
+   ],
+   [
+    "main.py",
+    15876,
+    "D"
+   ],
+   [
+    "main.py",
+    15941,
+    "D"
+   ],
+   [
+    "main.py",
+    16006,
+    "D"
+   ],
+   [
+    "main.py",
+    16008,
+    "D"
+   ],
+   [
+    "main.py",
+    16040,
+    "D"
+   ],
+   [
+    "main.py",
+    16042,
+    "D"
+   ],
+   [
+    "main.py",
+    16173,
+    "D"
+   ],
+   [
+    "main.py",
+    16203,
+    "D"
+   ],
+   [
+    "main.py",
+    16205,
+    "D"
+   ],
+   [
+    "main.py",
+    16226,
+    "D"
+   ],
+   [
+    "main.py",
+    16228,
+    "D"
+   ],
+   [
+    "main.py",
+    16230,
+    "D"
+   ],
+   [
+    "main.py",
+    16244,
+    "D"
+   ],
+   [
+    "main.py",
+    16279,
+    "D"
+   ],
+   [
+    "main.py",
+    16281,
+    "D"
+   ],
+   [
+    "main.py",
+    16302,
+    "D"
+   ],
+   [
+    "main.py",
+    16304,
+    "D"
+   ],
+   [
+    "main.py",
+    16306,
+    "D"
+   ],
+   [
+    "main.py",
+    16320,
+    "D"
+   ],
+   [
+    "main.py",
+    16498,
+    "D"
+   ],
+   [
+    "main.py",
+    16591,
+    "A"
+   ],
+   [
+    "main.py",
+    16619,
+    "A"
+   ],
+   [
+    "main.py",
+    16633,
+    "D"
+   ],
+   [
+    "main.py",
+    16655,
+    "D"
+   ],
+   [
+    "main.py",
+    16685,
+    "D"
+   ],
+   [
+    "main.py",
+    16713,
+    "D"
+   ],
+   [
+    "main.py",
+    16757,
+    "A"
+   ],
+   [
+    "main.py",
+    16825,
+    "A"
+   ],
+   [
+    "main.py",
+    16886,
+    "D"
+   ],
+   [
+    "main.py",
+    16932,
+    "D"
+   ],
+   [
+    "main.py",
+    17053,
+    "D"
+   ],
+   [
+    "main.py",
+    17058,
+    "D"
+   ],
+   [
+    "main.py",
+    17072,
+    "D"
+   ],
+   [
+    "main.py",
+    17077,
+    "D"
+   ],
+   [
+    "main.py",
+    17081,
+    "D"
+   ],
+   [
+    "main.py",
+    17090,
+    "D"
+   ],
+   [
+    "main.py",
+    17096,
+    "D"
+   ],
+   [
+    "main.py",
+    17148,
+    "D"
+   ],
+   [
+    "main.py",
+    17153,
+    "D"
+   ],
+   [
+    "main.py",
+    17156,
+    "D"
+   ],
+   [
+    "main.py",
+    17160,
+    "D"
+   ],
+   [
+    "main.py",
+    17165,
+    "D"
+   ],
+   [
+    "main.py",
+    17170,
+    "D"
+   ],
+   [
+    "main.py",
+    17180,
+    "D"
+   ],
+   [
+    "main.py",
+    17186,
+    "D"
+   ],
+   [
+    "main.py",
+    17190,
+    "D"
+   ],
+   [
+    "main.py",
+    17255,
+    "D"
+   ],
+   [
+    "mcp_oauth.py",
+    245,
+    "D"
+   ],
+   [
+    "mcp_oauth.py",
+    251,
+    "D"
+   ],
+   [
+    "mcp_oauth.py",
+    261,
+    "D"
+   ],
+   [
+    "mcp_oauth.py",
+    274,
+    "D"
+   ],
+   [
+    "mcp_oauth.py",
+    443,
+    "D"
+   ],
+   [
+    "mcp_oauth.py",
+    451,
+    "D"
+   ],
+   [
+    "mcp_oauth.py",
+    459,
+    "D"
+   ],
+   [
+    "mcp_oauth.py",
+    551,
+    "D"
+   ],
+   [
+    "mcp_oauth.py",
+    560,
+    "D"
+   ],
+   [
+    "mcp_oauth.py",
+    570,
+    "D"
+   ],
+   [
+    "mcp_oauth.py",
+    580,
+    "D"
+   ],
+   [
+    "mcp_oauth.py",
+    594,
+    "D"
+   ],
+   [
+    "mcp_oauth.py",
+    604,
+    "D"
+   ],
+   [
+    "mcp_oauth_proxy.py",
+    493,
+    "D"
+   ],
+   [
+    "mcp_oauth_proxy.py",
+    501,
+    "D"
+   ],
+   [
+    "mcp_oauth_proxy.py",
+    522,
+    "D"
+   ],
+   [
+    "mcp_oauth_proxy.py",
+    526,
+    "D"
+   ],
+   [
+    "mcp_oauth_proxy.py",
+    538,
+    "D"
+   ],
+   [
+    "mcp_oauth_proxy.py",
+    645,
+    "D"
+   ],
+   [
+    "mcp_oauth_proxy.py",
+    655,
+    "D"
+   ],
+   [
+    "mcp_oauth_proxy.py",
+    666,
+    "D"
+   ],
+   [
+    "mcp_proxy.py",
+    49,
+    "D"
+   ],
+   [
+    "mcp_proxy.py",
+    139,
+    "A"
+   ],
+   [
+    "mcp_proxy.py",
+    238,
+    "A"
+   ],
+   [
+    "mcp_proxy.py",
+    242,
+    "A"
+   ],
+   [
+    "mcp_proxy.py",
+    463,
+    "A"
+   ],
+   [
+    "mcp_proxy.py",
+    466,
+    "D"
+   ],
+   [
+    "mcp_proxy.py",
+    501,
+    "A"
+   ],
+   [
+    "mcp_proxy.py",
+    504,
+    "D"
+   ],
+   [
+    "mcp_proxy.py",
+    527,
+    "A"
+   ],
+   [
+    "mcp_proxy.py",
+    530,
+    "D"
+   ],
+   [
+    "mcp_proxy.py",
+    833,
+    "A"
+   ],
+   [
+    "mcp_proxy.py",
+    836,
+    "D"
+   ],
+   [
+    "mcp_proxy.py",
+    2701,
+    "D"
+   ],
+   [
+    "mcp_proxy.py",
+    2742,
+    "A"
+   ],
+   [
+    "mcp_proxy.py",
+    2743,
+    "D"
+   ],
+   [
+    "mcp_proxy.py",
+    2760,
+    "A"
+   ],
+   [
+    "mcp_proxy.py",
+    2763,
+    "D"
+   ],
+   [
+    "mcp_proxy.py",
+    2784,
+    "D"
+   ],
+   [
+    "mcp_proxy.py",
+    2824,
+    "A"
+   ],
+   [
+    "mcp_proxy.py",
+    2825,
+    "D"
+   ],
+   [
+    "mcp_proxy.py",
+    2841,
+    "A"
+   ],
+   [
+    "mcp_proxy.py",
+    2842,
+    "D"
+   ],
+   [
+    "mcp_proxy.py",
+    2874,
+    "A"
+   ],
+   [
+    "mcp_proxy.py",
+    2877,
+    "D"
+   ],
+   [
+    "mcp_proxy.py",
+    2930,
+    "A"
+   ],
+   [
+    "mcp_proxy.py",
+    2933,
+    "D"
+   ],
+   [
+    "mcp_proxy.py",
+    2993,
+    "A"
+   ],
+   [
+    "mcp_proxy.py",
+    2994,
+    "D"
+   ],
+   [
+    "mcp_proxy.py",
+    3022,
+    "A"
+   ],
+   [
+    "mcp_proxy.py",
+    3025,
+    "D"
+   ],
+   [
+    "mcp_proxy.py",
+    3081,
+    "A"
+   ],
+   [
+    "mcp_proxy.py",
+    3093,
+    "A"
+   ],
+   [
+    "mcp_proxy.py",
+    3106,
+    "A"
+   ],
+   [
+    "mcp_proxy.py",
+    3144,
+    "A"
+   ],
+   [
+    "mcp_proxy.py",
+    3145,
+    "D"
+   ],
+   [
+    "mcp_proxy.py",
+    3180,
+    "A"
+   ],
+   [
+    "mcp_proxy.py",
+    3240,
+    "A"
+   ],
+   [
+    "mcp_proxy.py",
+    3243,
+    "D"
+   ],
+   [
+    "mcp_proxy.py",
+    3292,
+    "A"
+   ],
+   [
+    "mcp_proxy.py",
+    3294,
+    "D"
+   ],
+   [
+    "mcp_proxy.py",
+    3332,
+    "A"
+   ],
+   [
+    "mcp_proxy.py",
+    3334,
+    "D"
+   ],
+   [
+    "mcp_proxy.py",
+    3430,
+    "A"
+   ],
+   [
+    "mcp_proxy.py",
+    3437,
+    "D"
+   ],
+   [
+    "mcp_proxy.py",
+    3465,
+    "D"
+   ],
+   [
+    "mcp_proxy.py",
+    3470,
+    "D"
+   ],
+   [
+    "mcp_proxy.py",
+    3474,
+    "D"
+   ],
+   [
+    "mcp_proxy.py",
+    3479,
+    "D"
+   ],
+   [
+    "mcp_proxy.py",
+    3484,
+    "D"
+   ],
+   [
+    "mcp_proxy.py",
+    3495,
+    "A"
+   ],
+   [
+    "mcp_proxy.py",
+    3498,
+    "D"
+   ],
+   [
+    "mcp_proxy.py",
+    3505,
+    "D"
+   ],
+   [
+    "mcp_proxy.py",
+    3549,
+    "D"
+   ],
+   [
+    "mcp_proxy.py",
+    3565,
+    "D"
+   ],
+   [
+    "mcp_proxy.py",
+    3642,
+    "D"
+   ],
+   [
+    "mcp_proxy.py",
+    3650,
+    "D"
+   ],
+   [
+    "mcp_proxy.py",
+    3663,
+    "D"
+   ],
+   [
+    "mcp_proxy.py",
+    3674,
+    "D"
+   ],
+   [
+    "mcp_proxy.py",
+    3679,
+    "D"
+   ],
+   [
+    "mcp_proxy.py",
+    3685,
+    "D"
+   ],
+   [
+    "mcp_proxy.py",
+    3727,
+    "D"
+   ],
+   [
+    "mcp_proxy.py",
+    3736,
+    "D"
+   ],
+   [
+    "mcp_proxy.py",
+    3740,
+    "D"
+   ],
+   [
+    "mcp_proxy.py",
+    3745,
+    "D"
+   ],
+   [
+    "mcp_proxy.py",
+    3752,
+    "D"
+   ],
+   [
+    "mcp_proxy.py",
+    3768,
+    "A"
+   ],
+   [
+    "mcp_proxy.py",
+    3771,
+    "D"
+   ],
+   [
+    "mcp_proxy.py",
+    3780,
+    "D"
+   ],
+   [
+    "mcp_proxy.py",
+    3807,
+    "D"
+   ],
+   [
+    "mcp_proxy.py",
+    3833,
+    "A"
+   ],
+   [
+    "mcp_proxy.py",
+    3841,
+    "D"
+   ],
+   [
+    "mcp_proxy.py",
+    3911,
+    "A"
+   ],
+   [
+    "mcp_proxy.py",
+    3917,
+    "D"
+   ],
+   [
+    "mcp_proxy.py",
+    3947,
+    "D"
+   ],
+   [
+    "mcp_proxy.py",
+    3963,
+    "D"
+   ],
+   [
+    "mcp_proxy.py",
+    4013,
+    "A"
+   ],
+   [
+    "mcp_proxy.py",
+    4021,
+    "D"
+   ],
+   [
+    "mcp_proxy.py",
+    4119,
+    "D"
+   ],
+   [
+    "mcp_proxy.py",
+    4131,
+    "D"
+   ],
+   [
+    "mcp_proxy.py",
+    4161,
+    "D"
+   ],
+   [
+    "mcp_proxy.py",
+    4170,
+    "D"
+   ],
+   [
+    "mcp_proxy.py",
+    4239,
+    "A"
+   ],
+   [
+    "mcp_proxy.py",
+    4285,
+    "D"
+   ],
+   [
+    "mcp_proxy.py",
+    4637,
+    "D"
+   ],
+   [
+    "mcp_proxy.py",
+    4651,
+    "D"
+   ],
+   [
+    "mcp_proxy.py",
+    4709,
+    "A"
+   ],
+   [
+    "mcp_proxy.py",
+    4717,
+    "D"
+   ],
+   [
+    "mcp_proxy.py",
+    4750,
+    "D"
+   ],
+   [
+    "mcp_proxy.py",
+    4770,
+    "D"
+   ],
+   [
+    "mcp_proxy.py",
+    4774,
+    "D"
+   ],
+   [
+    "mcp_proxy.py",
+    4806,
+    "A"
+   ],
+   [
+    "mcp_proxy.py",
+    4809,
+    "D"
+   ],
+   [
+    "mcp_proxy.py",
+    4890,
+    "A"
+   ],
+   [
+    "mcp_proxy.py",
+    4899,
+    "D"
+   ],
+   [
+    "mcp_proxy.py",
+    4956,
+    "D"
+   ],
+   [
+    "mcp_proxy.py",
+    4965,
+    "D"
+   ],
+   [
+    "mcp_proxy.py",
+    4991,
+    "A"
+   ],
+   [
+    "mcp_proxy.py",
+    5020,
+    "A"
+   ],
+   [
+    "mcp_proxy.py",
+    5059,
+    "A"
+   ],
+   [
+    "mcp_proxy.py",
+    5087,
+    "A"
+   ],
+   [
+    "mcp_proxy.py",
+    5091,
+    "D"
+   ],
+   [
+    "mcp_proxy.py",
+    5122,
+    "A"
+   ],
+   [
+    "mcp_proxy.py",
+    5126,
+    "D"
+   ],
+   [
+    "mcp_proxy.py",
+    5150,
+    "A"
+   ],
+   [
+    "mcp_proxy.py",
+    5263,
+    "A"
+   ],
+   [
+    "mcp_proxy.py",
+    5336,
+    "A"
+   ],
+   [
+    "mcp_proxy.py",
+    5441,
+    "A"
+   ],
+   [
+    "mcp_proxy.py",
+    5527,
+    "A"
+   ],
+   [
+    "mcp_proxy.py",
+    5595,
+    "A"
+   ],
+   [
+    "mcp_proxy.py",
+    5704,
+    "D"
+   ],
+   [
+    "mcp_proxy.py",
+    5716,
+    "D"
+   ],
+   [
+    "mcp_proxy.py",
+    5725,
+    "D"
+   ],
+   [
+    "mcp_proxy.py",
+    5742,
+    "D"
+   ],
+   [
+    "mcp_proxy.py",
+    5786,
+    "D"
+   ],
+   [
+    "mcp_proxy.py",
+    5791,
+    "D"
+   ],
+   [
+    "mcp_proxy.py",
+    5829,
+    "D"
+   ],
+   [
+    "mcp_proxy.py",
+    5845,
+    "D"
+   ],
+   [
+    "mcp_proxy.py",
+    5871,
+    "A"
+   ],
+   [
+    "mcp_proxy.py",
+    5875,
+    "D"
+   ],
+   [
+    "mcp_proxy.py",
+    5894,
+    "A"
+   ],
+   [
+    "mcp_proxy.py",
+    5898,
+    "D"
+   ],
+   [
+    "mcp_proxy.py",
+    5915,
+    "A"
+   ],
+   [
+    "mcp_proxy.py",
+    5920,
+    "D"
+   ],
+   [
+    "mcp_proxy.py",
+    5931,
+    "A"
+   ],
+   [
+    "mcp_proxy.py",
+    5937,
+    "D"
+   ],
+   [
+    "mcp_proxy.py",
+    5946,
+    "A"
+   ],
+   [
+    "mcp_proxy.py",
+    5951,
+    "D"
+   ],
+   [
+    "mcp_proxy.py",
+    5978,
+    "A"
+   ],
+   [
+    "mcp_proxy.py",
+    5989,
+    "D"
+   ],
+   [
+    "mcp_proxy.py",
+    6064,
+    "A"
+   ],
+   [
+    "mcp_proxy.py",
+    6072,
+    "D"
+   ],
+   [
+    "mcp_proxy.py",
+    6188,
+    "A"
+   ],
+   [
+    "mcp_proxy.py",
+    6195,
+    "D"
+   ],
+   [
+    "mcp_scan_orchestrator.py",
+    1505,
+    "A"
+   ],
+   [
+    "model_state.py",
+    66,
+    "A"
+   ],
+   [
+    "model_state.py",
+    234,
+    "A"
+   ],
+   [
+    "model_state.py",
+    262,
+    "A"
+   ],
+   [
+    "model_state.py",
+    325,
+    "A"
+   ],
+   [
+    "output_guard.py",
+    82,
+    "A"
+   ],
+   [
+    "output_guard.py",
+    910,
+    "A"
+   ],
+   [
+    "output_guard.py",
+    945,
+    "A"
+   ],
+   [
+    "output_guard.py",
+    1117,
+    "A"
+   ],
+   [
+    "output_guard.py",
+    1193,
+    "A"
+   ],
+   [
+    "output_guard.py",
+    1339,
+    "A"
+   ],
+   [
+    "output_guard.py",
+    1444,
+    "A"
+   ],
+   [
+    "pipeline_trace.py",
+    364,
+    "A"
+   ],
+   [
+    "pipeline_trace.py",
+    689,
+    "A"
+   ],
+   [
+    "pipeline_trace.py",
+    1194,
+    "A"
+   ],
+   [
+    "pipeline_trace.py",
+    1286,
+    "A"
+   ],
+   [
+    "pipeline_trace.py",
+    1316,
+    "A"
+   ],
+   [
+    "rag_pipeline/generator_stage.py",
+    329,
+    "A"
+   ],
+   [
+    "rag_pipeline/grounding_guard.py",
+    55,
+    "A"
+   ],
+   [
+    "rag_pipeline/grounding_guard.py",
+    248,
+    "A"
+   ],
+   [
+    "rag_pipeline/grounding_guard.py",
+    253,
+    "A"
+   ],
+   [
+    "rag_pipeline/grounding_guard.py",
+    300,
+    "A"
+   ],
+   [
+    "rag_pipeline/pipeline.py",
+    169,
+    "A"
+   ],
+   [
+    "rag_pipeline/pipeline.py",
+    214,
+    "A"
+   ],
+   [
+    "rag_pipeline/pipeline.py",
+    319,
+    "A"
+   ],
+   [
+    "rag_pipeline/pipeline.py",
+    393,
+    "A"
+   ],
+   [
+    "rag_pipeline/pipeline.py",
+    566,
+    "A"
+   ],
+   [
+    "rag_pipeline/pipeline.py",
+    570,
+    "A"
+   ],
+   [
+    "rag_pipeline/query_stage.py",
+    64,
+    "A"
+   ],
+   [
+    "rag_pipeline/query_stage.py",
+    82,
+    "A"
+   ],
+   [
+    "rag_pipeline/query_stage.py",
+    131,
+    "A"
+   ],
+   [
+    "rag_pipeline/query_stage.py",
+    181,
+    "A"
+   ],
+   [
+    "rag_pipeline/query_stage.py",
+    324,
+    "A"
+   ],
+   [
+    "rag_pipeline/query_stage.py",
+    363,
+    "A"
+   ],
+   [
+    "rag_pipeline/query_stage.py",
+    477,
+    "A"
+   ],
+   [
+    "rag_pipeline/ranker_stage.py",
+    277,
+    "A"
+   ],
+   [
+    "rag_pipeline/ranker_stage.py",
+    385,
+    "A"
+   ],
+   [
+    "rag_pipeline/ranker_stage.py",
+    389,
+    "A"
+   ],
+   [
+    "rag_pipeline/retriever_stage.py",
+    68,
+    "A"
+   ],
+   [
+    "rag_pipeline/retriever_stage.py",
+    88,
+    "A"
+   ],
+   [
+    "rag_pipeline/retriever_stage.py",
+    115,
+    "A"
+   ],
+   [
+    "rag_pipeline/retriever_stage.py",
+    131,
+    "A"
+   ],
+   [
+    "rag_pipeline/retriever_stage.py",
+    152,
+    "A"
+   ],
+   [
+    "rag_pipeline/retriever_stage.py",
+    189,
+    "A"
+   ],
+   [
+    "rate_limit_enforcement.py",
+    92,
+    "A"
+   ],
+   [
+    "rate_limit_enforcement.py",
+    105,
+    "D"
+   ],
+   [
+    "rate_limit_enforcement.py",
+    172,
+    "A"
+   ],
+   [
+    "rate_limit_enforcement.py",
+    209,
+    "A"
+   ],
+   [
+    "rate_limit_enforcement.py",
+    219,
+    "D"
+   ],
+   [
+    "rate_limit_enforcement.py",
+    261,
+    "A"
+   ],
+   [
+    "rate_limit_enforcement.py",
+    271,
+    "D"
+   ],
+   [
+    "scanner.py",
+    199,
+    "A"
+   ],
+   [
+    "scanner.py",
+    992,
+    "A"
+   ],
+   [
+    "scanner.py",
+    1229,
+    "A"
+   ],
+   [
+    "scanner.py",
+    1238,
+    "A"
+   ],
+   [
+    "scanner.py",
+    1307,
+    "A"
+   ],
+   [
+    "scanner.py",
+    1325,
+    "A"
+   ],
+   [
+    "scanner.py",
+    1368,
+    "A"
+   ],
+   [
+    "scanner.py",
+    1381,
+    "A"
+   ],
+   [
+    "scanner.py",
+    1430,
+    "A"
+   ],
+   [
+    "scanner.py",
+    1447,
+    "A"
+   ],
+   [
+    "scanner.py",
+    1549,
+    "A"
+   ],
+   [
+    "scanner.py",
+    1604,
+    "A"
+   ],
+   [
+    "scanner.py",
+    1637,
+    "A"
+   ],
+   [
+    "scanner.py",
+    1926,
+    "A"
+   ],
+   [
+    "scanner.py",
+    1999,
+    "A"
+   ],
+   [
+    "scanner.py",
+    2096,
+    "A"
+   ],
+   [
+    "scanner.py",
+    2425,
+    "A"
+   ],
+   [
+    "scanner.py",
+    2464,
+    "A"
+   ],
+   [
+    "scanner.py",
+    2495,
+    "A"
+   ],
+   [
+    "scanner.py",
+    2687,
+    "A"
+   ],
+   [
+    "scanner.py",
+    2695,
+    "A"
+   ],
+   [
+    "secure_streaming.py",
+    214,
+    "A"
+   ],
+   [
+    "secure_streaming.py",
+    241,
+    "A"
+   ],
+   [
+    "secure_streaming.py",
+    562,
+    "A"
+   ],
+   [
+    "secure_streaming.py",
+    563,
+    "A"
+   ],
+   [
+    "secure_streaming.py",
+    564,
+    "A"
+   ],
+   [
+    "secure_streaming.py",
+    565,
+    "A"
+   ],
+   [
+    "secure_streaming.py",
+    706,
+    "A"
+   ],
+   [
+    "secure_streaming.py",
+    707,
+    "A"
+   ],
+   [
+    "secure_streaming.py",
+    708,
+    "A"
+   ],
+   [
+    "secure_streaming.py",
+    709,
+    "A"
+   ],
+   [
+    "secure_streaming.py",
+    975,
+    "A"
+   ],
+   [
+    "stream_orchestration.py",
+    416,
+    "A"
+   ],
+   [
+    "stream_orchestration.py",
+    579,
+    "A"
+   ],
+   [
+    "stream_orchestration.py",
+    723,
+    "A"
+   ],
+   [
+    "stream_orchestration.py",
+    1046,
+    "A"
+   ],
+   [
+    "telemetry_ops.py",
+    128,
+    "A"
+   ],
+   [
+    "vector_routes.py",
+    534,
+    "D"
+   ],
+   [
+    "vector_routes.py",
+    551,
+    "D"
+   ],
+   [
+    "vector_routes.py",
+    564,
+    "D"
+   ],
+   [
+    "vector_routes.py",
+    571,
+    "D"
+   ],
+   [
+    "vector_routes.py",
+    585,
+    "D"
+   ],
+   [
+    "vector_routes.py",
+    594,
+    "D"
+   ],
+   [
+    "vector_routes.py",
+    611,
+    "D"
+   ],
+   [
+    "vector_routes.py",
+    623,
+    "D"
+   ],
+   [
+    "vector_routes.py",
+    640,
+    "D"
+   ],
+   [
+    "vector_routes.py",
+    676,
+    "D"
+   ],
+   [
+    "vector_routes.py",
+    697,
+    "A"
+   ],
+   [
+    "vector_routes.py",
+    720,
+    "D"
+   ],
+   [
+    "vector_routes.py",
+    727,
+    "A"
+   ],
+   [
+    "vector_routes.py",
+    766,
+    "D"
+   ],
+   [
+    "vector_routes.py",
+    773,
+    "D"
+   ],
+   [
+    "vector_routes.py",
+    873,
+    "A"
+   ],
+   [
+    "vector_routes.py",
+    876,
+    "A"
+   ],
+   [
+    "vector_routes.py",
+    890,
+    "A"
+   ],
+   [
+    "vector_routes.py",
+    961,
+    "D"
+   ],
+   [
+    "vector_routes.py",
+    971,
+    "D"
+   ],
+   [
+    "vector_routes.py",
+    992,
+    "D"
+   ],
+   [
+    "vector_routes.py",
+    1001,
+    "D"
+   ],
+   [
+    "vector_routes.py",
+    1007,
+    "D"
+   ],
+   [
+    "vector_routes.py",
+    1026,
+    "D"
+   ],
+   [
+    "vector_routes.py",
+    1055,
+    "D"
+   ],
+   [
+    "vector_routes.py",
+    1065,
+    "D"
+   ],
+   [
+    "vector_routes.py",
+    1077,
+    "D"
+   ],
+   [
+    "vector_routes.py",
+    1094,
+    "D"
+   ],
+   [
+    "vector_routes.py",
+    1121,
+    "A"
+   ],
+   [
+    "vector_routes.py",
+    1134,
+    "D"
+   ],
+   [
+    "vector_routes.py",
+    1195,
+    "D"
+   ],
+   [
+    "vector_routes.py",
+    1201,
+    "D"
+   ],
+   [
+    "vector_routes.py",
+    1207,
+    "D"
+   ],
+   [
+    "vector_routes.py",
+    1244,
+    "D"
+   ],
+   [
+    "vector_routes.py",
+    1254,
+    "D"
+   ],
+   [
+    "vector_routes.py",
+    1275,
+    "D"
+   ],
+   [
+    "vector_routes.py",
+    1284,
+    "D"
+   ],
+   [
+    "vector_routes.py",
+    1291,
+    "D"
+   ],
+   [
+    "vector_routes.py",
+    1297,
+    "D"
+   ],
+   [
+    "vector_routes.py",
+    1304,
+    "D"
+   ],
+   [
+    "vector_routes.py",
+    1317,
+    "D"
+   ],
+   [
+    "vector_routes.py",
+    1349,
+    "D"
+   ],
+   [
+    "vector_routes.py",
+    1355,
+    "D"
+   ],
+   [
+    "vector_routes.py",
+    1361,
+    "D"
+   ],
+   [
+    "vector_routes.py",
+    1403,
+    "D"
+   ],
+   [
+    "vector_routes.py",
+    1412,
+    "D"
+   ],
+   [
+    "vector_routes.py",
+    1440,
+    "D"
+   ]
+  ]
+ }
+}

@@ -1,0 +1,4 @@
+before: contract.cpu_quota= 8.0 fd= 65536 {'scanner': 6, 'provider': 6, 'vault': 6, 'redis': 49147} in_flight= 1
+reload raised: redis pool below minimum to serve
+after: contract.cpu_quota= 4.0 fd= 4 reload_count= 1 {'scanner': 3, 'provider': 3, 'vault': 3, 'redis': 49147}
+=> contract says fd=4/workers=3 but redis pool still 49147 ; as_dict() now raises: CapacityUnavailable('redis pool below minimum to serve')

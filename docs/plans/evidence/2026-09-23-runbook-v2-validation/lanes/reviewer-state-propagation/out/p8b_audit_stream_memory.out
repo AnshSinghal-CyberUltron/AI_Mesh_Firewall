@@ -1,0 +1,6 @@
+rv:audit:org-pin len=920 bytes=3023628 per_record=3286
+rv:audit:org-b len=1338 bytes=4523156 per_record=3380
+rv:audit:org-a len=66 bytes=225184 per_record=3411
+1790165557473-0
+r
+{"request_id":"pin-5-e50e563b","org_id":"org-pin","key_id":"key-pin","phase":"output","plan_version":"r-1","disposition":"ALLOW","deciding_rules":[],"unavailable_detectors":[],"findings":[{"detector":"pii.email","version":"rules-f6f093b3b9cd-hyperscan","category":"pii","status":"executed","confidence":1.0,"spans":[[0,29,52]],"evidence":"matches=1"},{"detector":"pii.phone","version":"rules-f6f093b3b9cd-hyperscan","category":"pii","status":"executed","confidence":0.0,"spans":[],"evidence":null},{"detector":"pii.ssn","version":"rules-f6f093b3b9cd-hyperscan","category":"pii","status":"executed","c

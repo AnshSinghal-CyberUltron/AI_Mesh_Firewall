@@ -1,0 +1,17 @@
+2026/09/23 07:32:50 corpus: 1 entries sha256=448823b20303e035
+2026/09/23 07:32:50 waiting 3.821s for synchronized start
+2026/09/23 07:33:04 t=10s sched=91 inflight=22 ok=69 err=0 drops=0 conns=22
+2026/09/23 07:33:14 t=20s sched=191 inflight=22 ok=169 err=0 drops=0 conns=22
+2026/09/23 07:33:24 t=30s sched=291 inflight=22 ok=269 err=0 drops=0 conns=22
+2026/09/23 07:33:34 t=40s sched=391 inflight=22 ok=369 err=0 drops=0 conns=22
+2026/09/23 07:33:44 t=50s sched=491 inflight=22 ok=469 err=0 drops=0 conns=22
+2026/09/23 07:33:54 t=60s sched=591 inflight=22 ok=569 err=0 drops=0 conns=22
+2026/09/23 07:34:04 t=70s sched=691 inflight=22 ok=669 err=0 drops=0 conns=22
+2026/09/23 07:34:14 t=80s sched=791 inflight=22 ok=769 err=0 drops=0 conns=22
+2026/09/23 07:34:24 t=90s sched=891 inflight=22 ok=869 err=0 drops=0 conns=22
+2026/09/23 07:34:34 t=100s sched=991 inflight=22 ok=969 err=0 drops=0 conns=22
+2026/09/23 07:34:44 t=110s sched=1091 inflight=22 ok=1069 err=0 drops=0 conns=22
+2026/09/23 07:34:54 t=120s sched=1191 inflight=22 ok=1169 err=0 drops=0 conns=22
+2026/09/23 07:35:04 t=130s sched=1291 inflight=22 ok=1269 err=0 drops=0 conns=22
+2026/09/23 07:35:08 requests.jsonl close: sync /home/rv/runs/sse_C_gw_buffer_on_NEGCTRL/requests.jsonl: invalid argument
+2026/09/23 07:35:08 done: scheduled=1310 recorded=1310 ok=1310 errors=map[] drops=0 late_p99=146us max=158us cpu_busy_max=6.1%

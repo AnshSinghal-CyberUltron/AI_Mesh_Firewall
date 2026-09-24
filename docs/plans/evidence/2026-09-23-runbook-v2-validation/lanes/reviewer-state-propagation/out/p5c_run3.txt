@@ -1,0 +1,53 @@
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-state-propagation/probes/p5c_gw03_sighup_reentrancy.py", line 69, in <module>
+    main()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-state-propagation/probes/p5c_gw03_sighup_reentrancy.py", line 60, in main
+    pool.acquire()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 26, in acquire
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+object address  : 0x73b6cc4844c0
+object refcount : 3
+object type     : 0x143deb8
+object type name: RecursionError
+object repr     : RecursionError('maximum recursion depth exceeded')
+lost sys.stderr
+Traceback (most recent call last):
+  File "<string>", line 5, in <module>
+ProcessLookupError: [Errno 3] No such process

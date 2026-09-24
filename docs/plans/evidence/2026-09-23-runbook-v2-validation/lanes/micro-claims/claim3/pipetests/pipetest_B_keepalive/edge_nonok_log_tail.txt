@@ -1,0 +1,5 @@
+10.160.0.36 - - [23/Sep/2026:07:14:34 +0000] "POST /v1/chat/completions HTTP/1.1" 502 150 "-" "rv-olg/df3209a2f020" "-"
+10.160.0.36 - - [23/Sep/2026:07:14:34 +0000] "POST /v1/chat/completions HTTP/1.1" 502 150 "-" "rv-olg/df3209a2f020" "-"
+10.160.0.36 - - [23/Sep/2026:07:14:34 +0000] "POST /v1/chat/completions HTTP/1.1" 502 150 "-" "rv-olg/df3209a2f020" "-"
+2026/09/23 07:14:34 [crit] 20#20: *1050 connect() to 10.160.0.30:8300 failed (99: Address not available) while connecting to upstream, client: 10.160.0.36, server: aimeshgateway.zeroshield.ai, request: "POST /v1/chat/completions HTTP/1.1", upstream: "http://10.160.0.30:8300/v1/chat/completions", host: "aimeshgateway.zeroshield.ai"
+2026/09/23 07:14:34 [crit] 27#27: *1047 connect() to 10.160.0.30:8300 failed (99: Address not available) while connecting to upstream, client: 10.160.0.36, server: aimeshgateway.zeroshield.ai, request: "POST /v1/chat/completions HTTP/1.1", upstream: "http://10.160.0.30:8300/v1/chat/completions", host: "aimeshgateway.zeroshield.ai"

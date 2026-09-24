@@ -1,0 +1,37 @@
+2026/09/23 08:05:49 corpus: 1 entries sha256=75f49026029ecf55
+2026/09/23 08:05:49 waiting 4.566s for synchronized start
+2026/09/23 08:06:03 t=10s sched=375 inflight=0 ok=375 err=0 drops=0 conns=1
+2026/09/23 08:06:13 t=20s sched=876 inflight=1 ok=875 err=0 drops=0 conns=1
+2026/09/23 08:06:23 t=30s sched=1376 inflight=0 ok=1375 err=0 drops=0 conns=1
+2026/09/23 08:06:33 t=40s sched=1876 inflight=1 ok=1875 err=0 drops=0 conns=1
+2026/09/23 08:06:43 t=50s sched=2375 inflight=0 ok=2375 err=0 drops=0 conns=1
+2026/09/23 08:06:53 t=60s sched=2876 inflight=0 ok=2875 err=0 drops=0 conns=1
+2026/09/23 08:07:03 t=70s sched=3375 inflight=0 ok=3375 err=0 drops=0 conns=1
+2026/09/23 08:07:13 t=80s sched=3876 inflight=1 ok=3875 err=0 drops=0 conns=1
+2026/09/23 08:07:23 t=90s sched=4375 inflight=0 ok=4375 err=0 drops=0 conns=1
+2026/09/23 08:07:33 t=100s sched=4876 inflight=1 ok=4875 err=0 drops=0 conns=1
+2026/09/23 08:07:43 t=110s sched=5376 inflight=0 ok=5375 err=0 drops=0 conns=1
+2026/09/23 08:07:53 t=120s sched=5876 inflight=0 ok=5875 err=0 drops=0 conns=1
+2026/09/23 08:08:03 t=130s sched=6375 inflight=0 ok=6375 err=0 drops=0 conns=1
+2026/09/23 08:08:13 t=140s sched=6876 inflight=0 ok=6875 err=0 drops=0 conns=1
+2026/09/23 08:08:23 t=150s sched=7376 inflight=0 ok=7375 err=0 drops=0 conns=1
+2026/09/23 08:08:33 t=160s sched=7876 inflight=1 ok=7875 err=0 drops=0 conns=1
+2026/09/23 08:08:43 t=170s sched=8376 inflight=1 ok=8375 err=0 drops=0 conns=1
+2026/09/23 08:08:53 t=180s sched=8876 inflight=1 ok=8875 err=0 drops=0 conns=1
+2026/09/23 08:09:03 t=190s sched=9376 inflight=1 ok=9375 err=0 drops=0 conns=1
+2026/09/23 08:09:13 t=200s sched=9876 inflight=0 ok=9875 err=0 drops=0 conns=1
+2026/09/23 08:09:23 t=210s sched=10376 inflight=1 ok=10375 err=0 drops=0 conns=1
+2026/09/23 08:09:33 t=220s sched=10876 inflight=0 ok=10875 err=0 drops=0 conns=1
+2026/09/23 08:09:43 t=230s sched=11376 inflight=1 ok=11375 err=0 drops=0 conns=1
+2026/09/23 08:09:53 t=240s sched=11875 inflight=0 ok=11875 err=0 drops=0 conns=1
+2026/09/23 08:10:03 t=250s sched=12376 inflight=1 ok=12375 err=0 drops=0 conns=1
+2026/09/23 08:10:13 t=260s sched=12876 inflight=1 ok=12875 err=0 drops=0 conns=1
+2026/09/23 08:10:23 t=270s sched=13376 inflight=1 ok=13375 err=0 drops=0 conns=1
+2026/09/23 08:10:33 t=280s sched=13875 inflight=0 ok=13875 err=0 drops=0 conns=1
+2026/09/23 08:10:43 t=290s sched=14376 inflight=1 ok=14375 err=0 drops=0 conns=1
+2026/09/23 08:10:53 t=300s sched=14876 inflight=1 ok=14875 err=0 drops=0 conns=1
+2026/09/23 08:11:03 t=310s sched=15375 inflight=0 ok=15375 err=0 drops=0 conns=1
+2026/09/23 08:11:13 t=320s sched=15875 inflight=0 ok=15875 err=0 drops=0 conns=1
+2026/09/23 08:11:23 t=330s sched=16375 inflight=0 ok=16375 err=0 drops=0 conns=1
+2026/09/23 08:11:28 requests.jsonl close: sync /home/rv/runs/c2c_n4_sync_rtt1_r50/requests.jsonl: invalid argument
+2026/09/23 08:11:28 done: scheduled=16625 recorded=16625 ok=16625 errors=map[] drops=0 late_p99=116us max=214us cpu_busy_max=21.6%

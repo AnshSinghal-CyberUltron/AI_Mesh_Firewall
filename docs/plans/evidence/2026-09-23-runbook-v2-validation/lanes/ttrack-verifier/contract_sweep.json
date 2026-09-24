@@ -1,0 +1,80 @@
+{
+  "HardwareSignals_fields": [
+    "cpu_quota",
+    "cpu_source",
+    "memory_limit",
+    "mem_source",
+    "fd_limit",
+    "fd_source"
+  ],
+  "runs": {
+    "1.0": {
+      "error": "CapacityUnavailable: derived workers=0 (cpu=0 ram=122); refuse to start"
+    },
+    "1.5": {
+      "workers": 1,
+      "queue_depth": 2,
+      "pools": {
+        "scanner": 1,
+        "provider": 1,
+        "vault": 1,
+        "redis": 49151,
+        "guard": null
+      },
+      "offered_service_rate_rps": 50.0,
+      "implied_rps_per_vcpu": 33.333333333333336
+    },
+    "2.0": {
+      "workers": 1,
+      "queue_depth": 2,
+      "pools": {
+        "scanner": 1,
+        "provider": 1,
+        "vault": 1,
+        "redis": 49151,
+        "guard": null
+      },
+      "offered_service_rate_rps": 50.0,
+      "implied_rps_per_vcpu": 25.0
+    },
+    "4.0": {
+      "workers": 3,
+      "queue_depth": 4,
+      "pools": {
+        "scanner": 3,
+        "provider": 3,
+        "vault": 3,
+        "redis": 49149,
+        "guard": null
+      },
+      "offered_service_rate_rps": 150.0,
+      "implied_rps_per_vcpu": 37.5
+    },
+    "8.0": {
+      "workers": 6,
+      "queue_depth": 8,
+      "pools": {
+        "scanner": 6,
+        "provider": 6,
+        "vault": 6,
+        "redis": 49147,
+        "guard": null
+      },
+      "offered_service_rate_rps": 300.0,
+      "implied_rps_per_vcpu": 37.5
+    },
+    "16.0": {
+      "workers": 12,
+      "queue_depth": 16,
+      "pools": {
+        "scanner": 12,
+        "provider": 12,
+        "vault": 12,
+        "redis": 49143,
+        "guard": null
+      },
+      "offered_service_rate_rps": 600.0,
+      "implied_rps_per_vcpu": 37.5
+    }
+  }
+}

@@ -1,0 +1,79 @@
+{
+ "config": {
+  "targets": [
+   "http://127.0.0.1:8400"
+  ],
+  "path": "/v1/chat/completions",
+  "corpus": "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-builder/acceptance-4-owner/6-honesty/light-corpus.jsonl",
+  "corpus_sha256": "8c72caf578b59b9d70e16e95c3761c2af68fa79363dbbb5b7dc64c2f8af36ff8",
+  "rate": 4,
+  "duration_s": 60,
+  "warmup_s": 5,
+  "ramp_s": 0,
+  "arrival": "constant",
+  "seed": 7,
+  "sse_frac": 0.7,
+  "include_usage": true,
+  "lg_index": 0,
+  "lg_count": 1,
+  "run_tag": 220,
+  "run_id": "",
+  "out_dir": "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-builder/acceptance-4-owner/6-honesty/hold30/olg",
+  "sample_mod": 1,
+  "req_timeout_s": 120,
+  "drain_timeout_s": 120,
+  "drop_threshold_ns": 5000000,
+  "max_inflight": 0,
+  "max_requests": 0,
+  "heartbeat": "100us",
+  "start_at_unix_ms": 0,
+  "model_override": "",
+  "synth_headers": true,
+  "extra_header_names": null,
+  "gc_percent": -1,
+  "mem_limit": "auto",
+  "gc_config": "gc=off memlimit=35.31GiB",
+  "dial_timeout_s": 10,
+  "auth_set": true,
+  "rt_prio": 0,
+  "dispatchers": 3,
+  "dispatch_stagger_us": 250,
+  "rt_status": "",
+  "label": "honesty-hold30"
+ },
+ "host": {
+  "hostname": "ai-mesh-firewall.asia-south1-c.c.ai-mesh-firewall.internal",
+  "num_cpu": 16,
+  "gomaxprocs": 16,
+  "go_version": "go1.27.1",
+  "harness_build_sha": "5af9594a2631",
+  "kernel": "Linux version 7.0.0-1008-gcp (buildd@lcy02-amd64-079) (x86_64-linux-gnu-gcc (Ubuntu 15.2.0-16ubuntu1) 15.2.0, GNU ld (GNU Binutils for Ubuntu) 2.46) #8-Ubuntu SMP PREEMPT Thu Jul  2 19:07:22 UTC 2026",
+  "mem_total_kb": 61705872,
+  "lscpu": {
+   "CPU(s)": "16",
+   "Core(s) per socket": "8",
+   "Flags": "aes avx2 avx512f sha_ni amx_tile",
+   "Hypervisor vendor": "KVM",
+   "Model name": "INTEL(R) XEON(R) PLATINUM 8581C CPU @ 2.30GHz",
+   "NUMA node(s)": "1",
+   "Socket(s)": "1",
+   "Thread(s) per core": "2"
+  },
+  "gce": {
+   "image": "projects/ubuntu-os-cloud/global/images/ubuntu-minimal-2604-resolute-amd64-v20260623",
+   "machine-type": "c4-standard-16",
+   "name": "ai-mesh-firewall",
+   "zone": "asia-south1-c"
+  },
+  "sysctl": {
+   "fs/file-max": "2097152",
+   "net/core/netdev_max_backlog": "1000",
+   "net/core/somaxconn": "65535",
+   "net/ipv4/ip_local_port_range": "1024\t65535",
+   "net/ipv4/tcp_max_syn_backlog": "4096",
+   "net/ipv4/tcp_tw_reuse": "1"
+  },
+  "nofile_limit": "524288/524288",
+  "start_utc": "2026-09-23T11:04:10.556573835Z"
+ }
+}

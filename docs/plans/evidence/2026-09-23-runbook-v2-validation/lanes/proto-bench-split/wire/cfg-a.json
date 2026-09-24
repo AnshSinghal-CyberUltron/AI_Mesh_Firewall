@@ -1,0 +1,15 @@
+{
+ "runs": [
+  "s1-191",
+  "s1-191-r2",
+  "s1-191-r3"
+ ],
+ "bytes_per_qualified": {
+  "lb_to_client": 59803.7,
+  "client_to_lb": 9126.3,
+  "gw_to_provider": 11980.8,
+  "provider_to_gw": 60536.5,
+  "gw_to_guard": 2620.3,
+  "guard_to_gw": 154.3
+ }
+}

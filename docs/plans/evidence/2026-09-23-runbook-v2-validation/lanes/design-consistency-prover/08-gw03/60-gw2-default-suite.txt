@@ -1,0 +1,7 @@
+.....................................ssss.....                           [100%]
+=========================== short test summary info ============================
+SKIPPED [1] tests/runtime/test_lgw03_live_docker.py:58: set AMF_LIVE_DOCKER=1 to rebuild the v2 image and run --cpus proofs
+SKIPPED [1] tests/runtime/test_lgw03_live_docker.py:70: set AMF_LIVE_DOCKER=1 to rebuild the v2 image and run --cpus proofs
+SKIPPED [1] tests/runtime/test_lgw03_live_docker.py:79: set AMF_LIVE_DOCKER=1 to rebuild the v2 image and run --cpus proofs
+SKIPPED [1] tests/runtime/test_lgw03_live_docker.py:86: set AMF_LIVE_DOCKER=1 to rebuild the v2 image and run --cpus proofs
+42 passed, 4 skipped in 0.79s

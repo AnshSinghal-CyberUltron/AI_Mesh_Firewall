@@ -1,0 +1,18 @@
+== /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-bench-fleet/logs/mk_unit.log
+2026-09-23T11:40:50Z rv-pbf-unit-1 g2-standard-24 asia-south1-c ZONE_RESOURCE_POOL_EXHAUSTED_WITH_DETAILS g2-standard-24 2026-09-23T11:41:32Z rv-pbf-unit-1 g2-standard-24 asia-south1-a ZONE_RESOURCE_POOL_EXHAUSTED_WITH_DETAILS g2-standard-24 2026-09-23T11:42:09Z rv-pbf-unit-1 g2-standard-24 asia-south1-b ZONE_RESOURCE_POOL_EXHAUSTED_WITH_DETAILS g2-standard-24 2026-09-23T11:42:45Z rv-pbf-unit-1 g2-standard-8 asia-south1-c ZONE_RESOURCE_POOL_EXHAUSTED_WITH_DETAILS g2-standard-8 2026-09-23T11:42:56Z rv-pbf-unit-1 g2-standard-8 asia-south1-a ZONE_RESOURCE_POOL_EXHAUSTED_WITH_DETAILS g2-standard-8 2026-09-23T11:43:08Z rv-pbf-unit-1 g2-standard-8 asia-south1-b asia-south1-b asia-south1-b g2-standard-8 2026-09-23T11:43:27Z rv-pbf-unit-3 g2-standard-8 asia-south1-b ZONE_RESOURCE_POOL_EXHAUSTED_WITH_DETAILS g2-standard-8 2026-09-23T11:43:27Z rv-pbf-unit-2 g2-standard-8 asia-south1-b ZONE_RESOURCE_POOL_EXHAUSTED_WITH_DETAILS g2-standard-8 2026-09-23T11:43:27Z rv-pbf-unit-4 g2-standard-8 asia-south1-b ZONE_RESOURCE_POOL_EXHAUSTED_WITH_DETAILS g2-standard-8 2026-09-23T11:43:38Z rv-pbf-unit-3 g2-standard-8 asia-south1-c ZONE_RESOURCE_POOL_EXHAUSTED_WITH_DETAILS g2-standard-8 2026-09-23T11:43:39Z rv-pbf-unit-4 g2-standard-8 asia-south1-c ZONE_RESOURCE_POOL_EXHAUSTED_WITH_DETAILS g2-standard-8 2026-09-23T11:43:40Z rv-pbf-unit-2 g2-standard-8 asia-south1-c ZONE_RESOURCE_POOL_EXHAUSTED_WITH_DETAILS g2-standard-8 2026-09-23T11:43:49Z rv-pbf-unit-3 g2-standard-8 asia-south1-a ZONE_RESOURCE_POO
+
+== /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-builder/mk-unit-2-asia-south1-a.log
+ZONE_RESOURCE_POOL_EXHAUSTED_WITH_DETAILS g2-standard-24 asia-south1-a g2-standard-24 asia-south1-a asia-south1-a 
+
+== /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-builder/mk-unit-2-asia-south1-b.log
+ZONE_RESOURCE_POOL_EXHAUSTED_WITH_DETAILS g2-standard-24 asia-south1-b g2-standard-24 asia-south1-b asia-south1-b 
+
+== /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/guard-bench/logs/mk-g2-6.log
+ZONE_RESOURCE_POOL_EXHAUSTED_WITH_DETAILS g2-standard-8 asia-south1-c asia-south1-b g2-standard-8 asia-south1-c asia-south1-b asia-south1-c 
+
+== /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/guard-bench/logs/mk-g2-6a.log
+ZONE_RESOURCE_POOL_EXHAUSTED_WITH_DETAILS g2-standard-8 asia-south1-a g2-standard-8 asia-south1-a asia-south1-a 
+
+== /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/guard-bench/logs/mk-g2-6b.log
+ZONE_RESOURCE_POOL_EXHAUSTED_WITH_DETAILS g2-standard-8 asia-south1-b g2-standard-8 asia-south1-b asia-south1-b 
+

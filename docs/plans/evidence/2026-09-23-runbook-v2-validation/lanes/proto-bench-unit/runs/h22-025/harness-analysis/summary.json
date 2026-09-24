@@ -1,0 +1,646 @@
+{
+ "mode": "sut",
+ "policy": "none",
+ "phases": [
+  2
+ ],
+ "inputs": {
+  "client_files": [
+   "/home/contact_cyberultron_com/rv-evidence-raw/proto-bench-unit/runs/h22-025/rv-pbu-lg-1/lg/requests.jsonl.zst",
+   "/home/contact_cyberultron_com/rv-evidence-raw/proto-bench-unit/runs/h22-025/rv-pbu-lg-2/lg/requests.jsonl.zst"
+  ],
+  "provider_files": [
+   "/home/contact_cyberultron_com/rv-evidence-raw/proto-bench-unit/runs/h22-025/rv-pbu-prov-1/prov/records.jsonl.zst"
+  ],
+  "corpus": null
+ },
+ "offered": 7500,
+ "offered_rate_config": 25.0,
+ "measure_s": 300,
+ "achieved_offered_rps": 25.0,
+ "qualified": 7392,
+ "expected_blocks": 0,
+ "errors": 108,
+ "qualified_rps": 24.64,
+ "error_rate": 0.0144,
+ "error_reasons": {
+  "incomplete": 108,
+  "unjoined": 108,
+  "http_403": 104,
+  "disposition_BLOCK": 104,
+  "stage_dispatch_S": 104,
+  "stage_out_S": 104,
+  "http_503": 4,
+  "disposition_missing": 4,
+  "stage_canon_missing": 4,
+  "stage_det_missing": 4,
+  "stage_sem_missing": 4,
+  "stage_resolve_missing": 4,
+  "stage_dispatch_missing": 4,
+  "stage_out_missing": 4,
+  "stage_audit_missing": 4,
+  "stage_sem_U": 3
+ },
+ "error_examples": [
+  {
+   "rid": "5504295d-4611-4d7c-b7e1-f01e32366347",
+   "reasons": [
+    "http_403",
+    "incomplete",
+    "unjoined",
+    "disposition_BLOCK",
+    "stage_dispatch_S",
+    "stage_out_S"
+   ],
+   "status": 403,
+   "err_detail": "type=policy_violation code=blocked_by_policy"
+  },
+  {
+   "rid": "5d08326f-5f01-4f5b-b6ea-2d02188e8e32",
+   "reasons": [
+    "http_403",
+    "incomplete",
+    "unjoined",
+    "disposition_BLOCK",
+    "stage_dispatch_S",
+    "stage_out_S"
+   ],
+   "status": 403,
+   "err_detail": "type=policy_violation code=blocked_by_policy"
+  },
+  {
+   "rid": "3d8a2bc0-baa5-4272-ae3b-e181b7e2d216",
+   "reasons": [
+    "http_403",
+    "incomplete",
+    "unjoined",
+    "disposition_BLOCK",
+    "stage_dispatch_S",
+    "stage_out_S"
+   ],
+   "status": 403,
+   "err_detail": "type=policy_violation code=blocked_by_policy"
+  },
+  {
+   "rid": "e735a3bc-505f-408b-9106-3a65df2270b1",
+   "reasons": [
+    "http_403",
+    "incomplete",
+    "unjoined",
+    "disposition_BLOCK",
+    "stage_dispatch_S",
+    "stage_out_S"
+   ],
+   "status": 403,
+   "err_detail": "type=policy_violation code=blocked_by_policy"
+  },
+  {
+   "rid": "9fd68a55-ef1d-4655-9709-4f79b9235cac",
+   "reasons": [
+    "http_403",
+    "incomplete",
+    "unjoined",
+    "disposition_BLOCK",
+    "stage_dispatch_S",
+    "stage_out_S"
+   ],
+   "status": 403,
+   "err_detail": "type=policy_violation code=blocked_by_policy"
+  },
+  {
+   "rid": "56dbaa08-a15b-49d6-ac8f-e70db7695e15",
+   "reasons": [
+    "http_403",
+    "incomplete",
+    "unjoined",
+    "disposition_BLOCK",
+    "stage_dispatch_S",
+    "stage_out_S"
+   ],
+   "status": 403,
+   "err_detail": "type=policy_violation code=blocked_by_policy"
+  },
+  {
+   "rid": "9a517e5f-f9d8-4ff5-b3d5-841b25bc284d",
+   "reasons": [
+    "http_403",
+    "incomplete",
+    "unjoined",
+    "disposition_BLOCK",
+    "stage_dispatch_S",
+    "stage_out_S"
+   ],
+   "status": 403,
+   "err_detail": "type=policy_violation code=blocked_by_policy"
+  },
+  {
+   "rid": "5c9e5a60-88d0-43e1-acf7-a48e9cd58548",
+   "reasons": [
+    "http_503",
+    "incomplete",
+    "unjoined",
+    "disposition_missing",
+    "stage_canon_missing",
+    "stage_det_missing",
+    "stage_sem_missing",
+    "stage_resolve_missing",
+    "stage_dispatch_missing",
+    "stage_out_missing",
+    "stage_audit_missing"
+   ],
+   "status": 503,
+   "err_detail": "type=server_overloaded code=overloaded"
+  },
+  {
+   "rid": "7dec495b-abd0-4d6f-bc76-a1dcc656f68d",
+   "reasons": [
+    "http_503",
+    "incomplete",
+    "unjoined",
+    "disposition_missing",
+    "stage_canon_missing",
+    "stage_det_missing",
+    "stage_sem_missing",
+    "stage_resolve_missing",
+    "stage_dispatch_missing",
+    "stage_out_missing",
+    "stage_audit_missing"
+   ],
+   "status": 503,
+   "err_detail": "type=server_overloaded code=overloaded"
+  },
+  {
+   "rid": "c0301f65-e505-4f23-b52b-5e8b8bb6cfd9",
+   "reasons": [
+    "http_403",
+    "incomplete",
+    "unjoined",
+    "disposition_BLOCK",
+    "stage_sem_U",
+    "stage_dispatch_S",
+    "stage_out_S"
+   ],
+   "status": 403,
+   "err_detail": "type=policy_violation code=blocked_by_policy"
+  },
+  {
+   "rid": "ccf1a25a-1ed4-4b51-8dab-eb8852ea2bed",
+   "reasons": [
+    "http_403",
+    "incomplete",
+    "unjoined",
+    "disposition_BLOCK",
+    "stage_sem_U",
+    "stage_dispatch_S",
+    "stage_out_S"
+   ],
+   "status": 403,
+   "err_detail": "type=policy_violation code=blocked_by_policy"
+  },
+  {
+   "rid": "01e86738-3376-4a85-be68-e63b8d48e3de",
+   "reasons": [
+    "http_403",
+    "incomplete",
+    "unjoined",
+    "disposition_BLOCK",
+    "stage_dispatch_S",
+    "stage_out_S"
+   ],
+   "status": 403,
+   "err_detail": "type=policy_violation code=blocked_by_policy"
+  },
+  {
+   "rid": "f4889d7a-8d44-4ae0-aa19-812ff4265867",
+   "reasons": [
+    "http_403",
+    "incomplete",
+    "unjoined",
+    "disposition_BLOCK",
+    "stage_dispatch_S",
+    "stage_out_S"
+   ],
+   "status": 403,
+   "err_detail": "type=policy_violation code=blocked_by_policy"
+  },
+  {
+   "rid": "6f8dff15-39e8-41a5-bbf3-6557bd34010e",
+   "reasons": [
+    "http_403",
+    "incomplete",
+    "unjoined",
+    "disposition_BLOCK",
+    "stage_dispatch_S",
+    "stage_out_S"
+   ],
+   "status": 403,
+   "err_detail": "type=policy_violation code=blocked_by_policy"
+  },
+  {
+   "rid": "ace6d1b4-f8b4-46af-aa64-2d920741a2b1",
+   "reasons": [
+    "http_403",
+    "incomplete",
+    "unjoined",
+    "disposition_BLOCK",
+    "stage_dispatch_S",
+    "stage_out_S"
+   ],
+   "status": 403,
+   "err_detail": "type=policy_violation code=blocked_by_policy"
+  },
+  {
+   "rid": "5afb40ee-d636-4d17-af82-13e6c98ed531",
+   "reasons": [
+    "http_403",
+    "incomplete",
+    "unjoined",
+    "disposition_BLOCK",
+    "stage_dispatch_S",
+    "stage_out_S"
+   ],
+   "status": 403,
+   "err_detail": "type=policy_violation code=blocked_by_policy"
+  },
+  {
+   "rid": "aa582221-ff9d-4953-aef0-36e3141bb01c",
+   "reasons": [
+    "http_403",
+    "incomplete",
+    "unjoined",
+    "disposition_BLOCK",
+    "stage_dispatch_S",
+    "stage_out_S"
+   ],
+   "status": 403,
+   "err_detail": "type=policy_violation code=blocked_by_policy"
+  },
+  {
+   "rid": "a468a956-14ee-4547-a341-adf1d2939eee",
+   "reasons": [
+    "http_403",
+    "incomplete",
+    "unjoined",
+    "disposition_BLOCK",
+    "stage_dispatch_S",
+    "stage_out_S"
+   ],
+   "status": 403,
+   "err_detail": "type=policy_violation code=blocked_by_policy"
+  },
+  {
+   "rid": "29246a8d-f9f9-476e-8ca4-6d6f756ba337",
+   "reasons": [
+    "http_403",
+    "incomplete",
+    "unjoined",
+    "disposition_BLOCK",
+    "stage_dispatch_S",
+    "stage_out_S"
+   ],
+   "status": 403,
+   "err_detail": "type=policy_violation code=blocked_by_policy"
+  },
+  {
+   "rid": "d820c99f-fb37-4a10-9335-fc3a0c495b35",
+   "reasons": [
+    "http_403",
+    "incomplete",
+    "unjoined",
+    "disposition_BLOCK",
+    "stage_dispatch_S",
+    "stage_out_S"
+   ],
+   "status": 403,
+   "err_detail": "type=policy_violation code=blocked_by_policy"
+  }
+ ],
+ "safety_failures": 0,
+ "safety_reasons": {},
+ "safety_examples": [],
+ "schedule": {
+  "drops": 0,
+  "drop_threshold_ms": 5.0,
+  "lateness": {
+   "n": 7500,
+   "min": 0.0305,
+   "p50": 0.0924,
+   "p90": 0.1084,
+   "p99": 0.1254,
+   "p999": 0.1438,
+   "max": 0.1779,
+   "mean": 0.0932
+  }
+ },
+ "join": {
+  "joined": 7392,
+  "by_nonce_fallback": 0,
+  "provider_records": 9238,
+  "provider_rids_with_multiple_calls": 0,
+  "provider_orphans": null
+ },
+ "classes": {
+  "benign": 7500
+ },
+ "phase_counts": {
+  "0": 375,
+  "1": 1500,
+  "2": 7500
+ },
+ "T_addon_total": {
+  "n": 7392,
+  "min": 4.7914,
+  "p50": 9.4541,
+  "p90": 11.708,
+  "p99": 14.1715,
+  "p999": 18.6387,
+  "max": 20.7925,
+  "mean": 8.8171
+ },
+ "T_addon_first": {
+  "n": 7392,
+  "min": 4.7497,
+  "p50": 9.4181,
+  "p90": 12.6409,
+  "p99": 25.9716,
+  "p999": 32.9626,
+  "max": 49.8712,
+  "mean": 9.0094
+ },
+ "T_release_lag_max": {
+  "n": 730,
+  "min": 5.0315,
+  "p50": 46.1338,
+  "p90": 51.9435,
+  "p99": 70.0984,
+  "p999": 72.9708,
+  "max": 72.9708,
+  "mean": 35.9798
+ },
+ "T_release_lag_max_arrival": {
+  "n": 730,
+  "min": 5.0315,
+  "p50": 30.921,
+  "p90": 36.1528,
+  "p99": 39.6316,
+  "p999": 41.3587,
+  "max": 41.3587,
+  "mean": 25.3132
+ },
+ "T_fw_addon": {
+  "n": 7392,
+  "min": 4.7914,
+  "p50": 9.6953,
+  "p90": 13.7314,
+  "p99": 51.9435,
+  "p999": 70.0984,
+  "max": 72.9708,
+  "mean": 11.7669
+ },
+ "T_fw_addon_sse": {
+  "n": 5169,
+  "min": 4.8699,
+  "p50": 9.7671,
+  "p90": 29.6988,
+  "p99": 52.9033,
+  "p999": 70.2608,
+  "max": 72.9708,
+  "mean": 13.0149
+ },
+ "T_fw_addon_json": {
+  "n": 2223,
+  "min": 4.7914,
+  "p50": 9.5451,
+  "p90": 11.8395,
+  "p99": 14.1043,
+  "p999": 16.8376,
+  "max": 17.1383,
+  "mean": 8.8648
+ },
+ "release_lag_sampled_joined": 730,
+ "release_lag_unmappable": 0,
+ "client_ttft_sse": {
+  "n": 5169,
+  "min": 154.7548,
+  "p50": 159.4243,
+  "p90": 162.754,
+  "p99": 176.7285,
+  "p999": 183.6507,
+  "max": 199.8796,
+  "mean": 159.1194
+ },
+ "provider_sched_err_last": {
+  "n": 7392,
+  "min": 0.0007,
+  "p50": 0.0452,
+  "p90": 0.0884,
+  "p99": 0.1136,
+  "p999": 0.2201,
+  "max": 0.3295,
+  "mean": 0.0472
+ },
+ "provider_sched_err_max_per_stream": {
+  "n": 7392,
+  "min": 0.0008,
+  "p50": 0.0913,
+  "p90": 0.2272,
+  "p99": 0.3422,
+  "p999": 0.5154,
+  "max": 0.6182,
+  "mean": 0.1071
+ },
+ "provider_write_max": {
+  "n": 7392,
+  "min": 0.0047,
+  "p50": 0.0178,
+  "p90": 0.0255,
+  "p99": 0.0364,
+  "p999": 0.0484,
+  "max": 0.0882,
+  "mean": 0.0178
+ },
+ "loadgen_cpu": [
+  {
+   "dir": "/home/contact_cyberultron_com/rv-evidence-raw/proto-bench-unit/runs/h22-025/rv-pbu-lg-1/lg",
+   "samples": 300,
+   "busy_max": 7.149018243694439,
+   "busy_mean": 4.14,
+   "machine": "c4-highcpu-8",
+   "zone": "asia-south1-c"
+  },
+  {
+   "dir": "/home/contact_cyberultron_com/rv-evidence-raw/proto-bench-unit/runs/h22-025/rv-pbu-lg-2/lg",
+   "samples": 300,
+   "busy_max": 4.373411025437413,
+   "busy_mean": 4.02,
+   "machine": "c4-highcpu-8",
+   "zone": "asia-south1-c"
+  }
+ ],
+ "provider_cpu": {
+  "samples": 430,
+  "busy_max": 15.593106675093104,
+  "busy_p95": 5.552692972916451
+ },
+ "provider_stats": [
+  {
+   "build_sha": "5af9594a2631",
+   "bytes_out": 449346956,
+   "chunks": 1469768,
+   "client_gone": 0,
+   "cpu": {
+    "busy_max": 15.593106675093104,
+    "busy_mean": 4.965536430674043,
+    "proc_max": 3.625783890851418,
+    "samples": 430
+   },
+   "faults": 0,
+   "gc_config": "gc=off memlimit=9.37GiB",
+   "host": {
+    "hostname": "rv-pbu-prov-1.asia-south1-c.c.ai-mesh-firewall.internal",
+    "num_cpu": 8,
+    "gomaxprocs": 8,
+    "go_version": "go1.27.1",
+    "harness_build_sha": "5af9594a2631",
+    "kernel": "Linux version 7.0.0-1011-gcp (buildd@lcy02-amd64-099) (x86_64-linux-gnu-gcc-13 (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0, GNU ld (GNU Binutils for Ubuntu) 2.42) #11~24.04.1-Ubuntu SMP PREEMPT Tue Aug 11 20:14:48 UTC 2026",
+    "mem_total_kb": 16366888,
+    "lscpu": {
+     "CPU(s)": "8",
+     "Core(s) per socket": "4",
+     "Flags": "aes avx2 avx512f sha_ni amx_tile",
+     "Hypervisor vendor": "KVM",
+     "Model name": "INTEL(R) XEON(R) PLATINUM 8581C CPU @ 2.30GHz",
+     "NUMA node(s)": "1",
+     "Socket(s)": "1",
+     "Thread(s) per core": "2"
+    },
+    "gce": {
+     "image": "projects/ubuntu-os-cloud/global/images/ubuntu-2404-noble-amd64-v20260918",
+     "machine-type": "c4-highcpu-8",
+     "name": "rv-pbu-prov-1",
+     "zone": "asia-south1-c"
+    },
+    "sysctl": {
+     "fs/file-max": "4194304",
+     "net/core/netdev_max_backlog": "250000",
+     "net/core/somaxconn": "65535",
+     "net/ipv4/ip_local_port_range": "1024\t65535",
+     "net/ipv4/tcp_max_syn_backlog": "65535",
+     "net/ipv4/tcp_tw_reuse": "1"
+    },
+    "nofile_limit": "1048576/1048576",
+    "start_utc": "2026-09-23T11:59:50.829305619Z"
+   },
+   "inflight": 0,
+   "itl_ms": 20,
+   "record_queue_blocked": 0,
+   "records": 9238,
+   "requests": 9238,
+   "runtime": {
+    "/gc/cycles/total:gc-cycles": 0,
+    "/gc/heap/goal:bytes": 9734643088,
+    "/gc/pauses:seconds": {
+     "count": 0
+    },
+    "/sched/goroutines:goroutines": 11,
+    "/sched/latencies:seconds": {
+     "count": 730445,
+     "max_ms": 0.098304,
+     "p50_ms": 6.400000000000001e-05,
+     "p9999_ms": 0.08192,
+     "p999_ms": 0.06553600000000001,
+     "p99_ms": 0.01024
+    }
+   },
+   "sample_mod": 10,
+   "sampled": 930,
+   "sched_err_max_ns": 618200,
+   "status_2xx": 9238,
+   "status_4xx": 0,
+   "status_5xx": 0,
+   "streams_active": 0,
+   "ttft_ms": 150,
+   "uptime_s": 430.772665619,
+   "write_max_ns": 96002
+  }
+ ],
+ "instrument_health": [
+  {
+   "proc": "olg",
+   "dir": "/home/contact_cyberultron_com/rv-evidence-raw/proto-bench-unit/runs/h22-025/rv-pbu-lg-1/lg",
+   "gc_cycles": 0,
+   "sched_latency_max_ms": 0.057344,
+   "tcp": {
+    "TcpRetransSegs": 6,
+    "TcpExtTCPFastRetrans": 0,
+    "TcpExtTCPLossProbes": 1,
+    "TcpExtTCPTimeouts": 6,
+    "TcpOutSegs": 552275,
+    "TcpInSegs": 729549
+   }
+  },
+  {
+   "proc": "olg",
+   "dir": "/home/contact_cyberultron_com/rv-evidence-raw/proto-bench-unit/runs/h22-025/rv-pbu-lg-2/lg",
+   "gc_cycles": 0,
+   "sched_latency_max_ms": 0.13107200000000002,
+   "tcp": {
+    "TcpRetransSegs": 0,
+    "TcpExtTCPFastRetrans": 0,
+    "TcpExtTCPLossProbes": 0,
+    "TcpExtTCPTimeouts": 0,
+    "TcpOutSegs": 550946,
+    "TcpInSegs": 728432
+   }
+  },
+  {
+   "proc": "synthprov",
+   "dir": "/home/contact_cyberultron_com/rv-evidence-raw/proto-bench-unit/runs/h22-025/rv-pbu-prov-1/prov",
+   "gc_cycles": 0,
+   "sched_latency_max_ms": 0.098304,
+   "tcp": {
+    "TcpRetransSegs": 2,
+    "TcpExtTCPFastRetrans": 0,
+    "TcpExtTCPLossProbes": 2,
+    "TcpExtTCPTimeouts": 0,
+    "TcpOutSegs": 1495563,
+    "TcpInSegs": 1218134
+   }
+  }
+ ],
+ "completeness": [
+  {
+   "dir": "/home/contact_cyberultron_com/rv-evidence-raw/proto-bench-unit/runs/h22-025/rv-pbu-lg-1/lg",
+   "scheduled": 4688,
+   "recorded": 4688,
+   "interrupted": false
+  },
+  {
+   "dir": "/home/contact_cyberultron_com/rv-evidence-raw/proto-bench-unit/runs/h22-025/rv-pbu-lg-2/lg",
+   "scheduled": 4687,
+   "recorded": 4687,
+   "interrupted": false
+  }
+ ],
+ "valid": true,
+ "invalid_reasons": [],
+ "per_second": null,
+ "thresholds": {
+  "slo_ms": 20.0,
+  "err_budget": 0.001,
+  "drop_ms": 5.0,
+  "sched_tol_ms": 1.0,
+  "cpu_max": 70.0
+ },
+ "verdict": {
+  "pass": false,
+  "checks": {
+   "p99_T_fw_addon_lt_slo": false,
+   "error_rate_le_budget": false,
+   "zero_schedule_drops": true,
+   "zero_safety_failures": true,
+   "run_valid": true,
+   "qualified_nonempty": true
+  }
+ }
+}

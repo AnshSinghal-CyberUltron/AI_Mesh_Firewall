@@ -1,0 +1,13 @@
+ok   login           light 1440  mainScroll=   0 realOver= 0 leak=0 echarts=0 recharts=0 jsErr=0
+ok   login           light 1024  mainScroll=   0 realOver= 0 leak=0 echarts=0 recharts=0 jsErr=0
+ok   login           light  768  mainScroll=   0 realOver= 0 leak=0 echarts=0 recharts=0 jsErr=0
+ok   login           light  375  mainScroll=   0 realOver= 0 leak=0 echarts=0 recharts=0 jsErr=0
+ok   login           dark  1440  mainScroll=   0 realOver= 0 leak=0 echarts=0 recharts=0 jsErr=0
+ok   login           dark  1024  mainScroll=   0 realOver= 0 leak=0 echarts=0 recharts=0 jsErr=0
+ok   login           dark   768  mainScroll=   0 realOver= 0 leak=0 echarts=0 recharts=0 jsErr=0
+ok   login           dark   375  mainScroll=   0 realOver= 0 leak=0 echarts=0 recharts=0 jsErr=0
+
+8 combos audited across 1 surfaces x 2 themes x 4 widths.
+report -> /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/frontend-verifier/visual-login-prodbundle/report.json ; screenshots -> /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/frontend-verifier/visual-login-prodbundle/screenshots
+
+GATE PASSED — no visual/behavior regressions.

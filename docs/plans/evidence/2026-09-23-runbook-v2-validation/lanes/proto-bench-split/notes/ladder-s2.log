@@ -1,0 +1,9 @@
+17:21:56 START s2-238 rate=238 env=[LABEL=ladder_2guards GUARDS=rv-split-guard-1 rv-split-guard-2]
+17:29:44 END s2-238 PASS q/s 233.86 infra% 0.0 drops 0 p99 json 11.53 sse-total 11.363 sse-first 45.752
+17:29:44 START s2-298 rate=298 env=[LABEL=ladder_2guards GUARDS=rv-split-guard-1 rv-split-guard-2]
+17:37:32 END s2-298 PASS q/s 293.08 infra% 0.0 drops 0 p99 json 12.971 sse-total 12.967 sse-first 46.872
+17:37:32 START s2-373 rate=373 env=[LABEL=ladder_2guards GUARDS=rv-split-guard-1 rv-split-guard-2]
+17:45:23 END s2-373 PASS q/s 366.61 infra% 0.0 drops 0 p99 json 15.597 sse-total 15.468 sse-first 47.314
+17:45:23 START s2-466 rate=466 env=[LABEL=ladder_2guards GUARDS=rv-split-guard-1 rv-split-guard-2]
+17:53:16 END s2-466 FAIL q/s 457.57 infra% 0.0687 drops 0 p99 json 23.171 sse-total 23.24 sse-first 49.826
+17:53:16 ladder stops at s2-466

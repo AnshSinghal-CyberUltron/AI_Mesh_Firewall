@@ -1,0 +1,5 @@
+{"run": "h22-025", "window_s": 300.0, "offered_in_window": 7500, "cores_by_role": {"redis": 0.007, "launcher": 0.0, "owner": 0.105, "worker": 0.87}, "gateway_cpu_ms_per_req": 39.028}
+{"run": "p22-025b", "window_s": 300.0, "offered_in_window": 7500, "cores_by_role": {"redis": 0.007, "launcher": 0.0, "owner": 0.105, "worker": 0.885}, "gateway_cpu_ms_per_req": 39.615}
+{"run": "p22-078", "window_s": 300.0, "offered_in_window": 23400, "cores_by_role": {"redis": 0.015, "launcher": 0.0, "owner": 0.315, "worker": 2.434}, "gateway_cpu_ms_per_req": 35.258}
+{"run": "p22-078-r2", "window_s": 300.0, "offered_in_window": 23400, "cores_by_role": {"redis": 0.015, "launcher": 0.0, "owner": 0.315, "worker": 2.441}, "gateway_cpu_ms_per_req": 35.331}
+{"run": "p22-078-r3", "window_s": 300.0, "offered_in_window": 23400, "cores_by_role": {"redis": 0.015, "launcher": 0.0, "owner": 0.316, "worker": 2.445}, "gateway_cpu_ms_per_req": 35.402}

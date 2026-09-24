@@ -1,0 +1,15 @@
+11:55:29 created rv-pbf-prov-1 (c4-highcpu-8) in asia-northeast1-a ip=10.146.0.8
+11:55:29 created rv-pbf-prov-2 (c4-highcpu-8) in asia-northeast1-a ip=10.146.0.6
+11:55:29 created rv-pbf-lg-1 (c4-highcpu-8) in asia-northeast1-a ip=10.146.0.11
+11:55:30 created rv-pbf-lg-3 (c4-highcpu-8) in asia-northeast1-a ip=10.146.0.9
+11:55:30 created rv-pbf-lg-2 (c4-highcpu-8) in asia-northeast1-a ip=10.146.0.12
+prep ok: rv-pbf-lg-3.asia-northeast1-a.c.ai-mesh-firewall.internal 8 vCPU
+prep ok: rv-pbf-prov-1.asia-northeast1-a.c.ai-mesh-firewall.internal 8 vCPU
+prep ok: rv-pbf-prov-2.asia-northeast1-a.c.ai-mesh-firewall.internal 8 vCPU
+prep ok: rv-pbf-lg-2.asia-northeast1-a.c.ai-mesh-firewall.internal 8 vCPU
+prep ok: rv-pbf-lg-1.asia-northeast1-a.c.ai-mesh-firewall.internal 8 vCPU
+binaries ok on rv-pbf-lg-3.asia-northeast1-a.c.ai-mesh-firewall.internal
+binaries ok on rv-pbf-prov-1.asia-northeast1-a.c.ai-mesh-firewall.internal
+binaries ok on rv-pbf-prov-2.asia-northeast1-a.c.ai-mesh-firewall.internal
+binaries ok on rv-pbf-lg-2.asia-northeast1-a.c.ai-mesh-firewall.internal
+binaries ok on rv-pbf-lg-1.asia-northeast1-a.c.ai-mesh-firewall.internal

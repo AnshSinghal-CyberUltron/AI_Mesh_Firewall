@@ -1,0 +1,3 @@
+{"offered": 12, "shed": 10, "admitted": 2, "reasons": {"shed{reason=\"guard_queue\"}": 4, "shed{reason=\"guard_owner_queue\"}": 6}}
+.
+1 passed, 6 deselected in 4.07s

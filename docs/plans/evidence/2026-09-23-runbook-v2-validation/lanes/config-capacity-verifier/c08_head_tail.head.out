@@ -1,0 +1,7 @@
+MAX_PROMPT_CHARS (BEDROCK_MAX_PROMPT_CHARS default) = 10000
+input len=25065  output len=9915  head kept=[0:9200]  tail kept=[24365:25065]
+DROPPED span = chars [9200:24365] = 15165 chars (61% of the text)
+marker at char 12000 -> present in what Tier-2 sees? False
+truncation marker in payload: '\n…[truncated]…\no'
+real _prepare_scan payload bytes = 21303 | marker present in Bedrock payload: False | '[truncated]' present: True
+input prompt len=9990 (<= MAX_PROMPT_LENGTH 10000, passes Tier-1 length cap); deobfuscated len=29972 -> _head_tail truncates? True

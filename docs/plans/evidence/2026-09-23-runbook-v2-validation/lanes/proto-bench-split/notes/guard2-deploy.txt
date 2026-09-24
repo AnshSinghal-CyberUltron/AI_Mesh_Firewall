@@ -1,0 +1,3 @@
+guard-2 tree == rvproto-frozen-1
+2bf20e0f71e3a41e
+GPU 0: NVIDIA L4 (UUID: GPU-a24b41da-22c4-c5a9-31ce-ce3b7213dd92)

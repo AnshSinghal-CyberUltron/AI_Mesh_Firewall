@@ -1,0 +1,5 @@
+A input BLOCK        -> (<Disposition.BLOCK: 'block'>, 0, None)
+B clean INCREMENTAL  -> (<Disposition.ALLOW: 'allow'>, 1, b'hello world')
+C output BLOCK STRICT-> (<Disposition.ALLOW: 'allow'>, 1, b'')
+D clean STRICT       -> (<Disposition.ALLOW: 'allow'>, 1, b'fine output')
+E LGW04-3 bad category rejected at construction: category 'prompt_injection' is not a Category

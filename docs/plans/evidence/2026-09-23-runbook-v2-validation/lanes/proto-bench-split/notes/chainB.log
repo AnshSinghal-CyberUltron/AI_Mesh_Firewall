@@ -1,0 +1,49 @@
+18:51:49 === B1 (a) 1gw+1guard confirmation (zone b)
+18:51:49 START s1b-191 rate=191 env=[LABEL=a_zone_b_confirm GWS=rv-split-gw-1 GUARDS=rv-split-guard-1 PROVS=rv-split-prov-1 LGS=rv-split-lg-1]
+18:59:38 END s1b-191 PASS q/s 187.68 C4 15.61 infra% 0.0 drops 0 json 12.7 sse-total 12.571
+18:59:38 === B2 (b) 1gw+2guards
+rv-split-gw-1: GATEWAY NODE READY after 3s: 12/12 workers | {"ready":true,"guard":{"ready":true,"backend":"remote(owner)","model_hash":"2bf20e0f71e3a41e9e8cc4e602e08c142855bcce0cc73e0b65000d816d70877c","detail":"owners 2/2 connected, share 1/12: 10.160.0.10:7070 pid=1572 host=rv-split-guard-1 tokens_per_s=237624; 10.16
+18:59:43 START s2b-298 rate=298 env=[LABEL=b_1gw2g GWS=rv-split-gw-1 GUARDS=rv-split-guard-1 rv-split-guard-2 PROVS=rv-split-prov-1 LGS=rv-split-lg-1]
+19:07:35 END s2b-298 PASS q/s 292.72 C4 17.943 infra% 0.0 drops 0 json 14.211 sse-total 14.198
+19:07:35 START s2b-373 rate=373 env=[LABEL=b_1gw2g GWS=rv-split-gw-1 GUARDS=rv-split-guard-1 rv-split-guard-2 PROVS=rv-split-prov-1 LGS=rv-split-lg-1]
+19:15:29 END s2b-373 FAIL q/s 366.44 C4 21.611 infra% 0.0 drops 0 json 17.183 sse-total 17.136
+19:15:30 START s2b-298-r2 rate=298 env=[LABEL=b_1gw2g GWS=rv-split-gw-1 GUARDS=rv-split-guard-1 rv-split-guard-2 PROVS=rv-split-prov-1 LGS=rv-split-lg-1]
+19:23:21 END s2b-298-r2 PASS q/s 292.68 C4 18.86 infra% 0.0 drops 0 json 14.544 sse-total 14.448
+19:23:21 START s2b-298-r3 rate=298 env=[LABEL=b_1gw2g GWS=rv-split-gw-1 GUARDS=rv-split-guard-1 rv-split-guard-2 PROVS=rv-split-prov-1 LGS=rv-split-lg-1]
+19:31:13 END s2b-298-r3 PASS q/s 292.62 C4 18.962 infra% 0.0 drops 0 json 14.512 sse-total 14.324
+19:31:13 KNEE s2b = 298 (3/3 PASS)
+rv-split-gw-1: NODUMP-READY | {"ready":true,"guard":{"ready":true,"backend":"remote(owner)","model_hash":"2bf20e0f71e3a41e9e8cc4e602e08c142855bcce0cc73e0b65000d816d70877c","detail":"owners 2/2 connected, share 1/12: 10.160.0.10:7070 pid=1572 host=rv-split-guard-1 tokens_per_s=237624; 10.16
+19:31:23 START s2b-373-nodump rate=373 env=[LABEL=b_1gw2g_metrics_dump_disabled GWS=rv-split-gw-1 GUARDS=rv-split-guard-1 rv-split-guard-2 PROVS=rv-split-prov-1 LGS=rv-split-lg-1]
+19:39:17 END s2b-373-nodump FAIL q/s 366.35 C4 20.946 infra% 0.0 drops 0 json 16.724 sse-total 16.711
+19:39:17 === B3 (c) 2gw+2guards + edge + shared redis
+rv-split-gw-1: GATEWAY NODE READY after 3s: 12/12 workers | {"ready":true,"guard":{"ready":true,"backend":"remote(owner)","model_hash":"2bf20e0f71e3a41e9e8cc4e602e08c142855bcce0cc73e0b65000d816d70877c","detail":"owners 2/2 connected, share 1/24: 10.160.0.10:7070 pid=1572 host=rv-split-guard-1 tokens_per_s=237624; 10.16
+rv-split-gw-2: GATEWAY NODE READY after 3s: 12/12 workers | {"ready":true,"guard":{"ready":true,"backend":"remote(owner)","model_hash":"2bf20e0f71e3a41e9e8cc4e602e08c142855bcce0cc73e0b65000d816d70877c","detail":"owners 2/2 connected, share 1/24: 10.160.0.10:7070 pid=1572 host=rv-split-guard-1 tokens_per_s=237624; 10.16
+active
+{"ready":true,"guard":{"ready":true,"backend":"remote(owner)","model_hash":"2bf20e0f71e3a41e9e8cc4e602e08c142855bcce0cc73e0b65000d816d70877c","detail":"owners 2/2 connected, share 1/24: 10.160.0.10:70
+19:39:28 START s3b-373 rate=373 env=[LABEL=c_2gw2g_edge TARGETS=http://10.160.0.11:8080 GWS=rv-split-gw-1 rv-split-gw-2 GUARDS=rv-split-guard-1 rv-split-guard-2 PROVS=rv-split-prov-1 rv-split-prov-2 LGS=rv-split-lg-1 rv-split-lg-2 EXTRA_SUT=rv-split-edge-1 rv-split-redis-1]
+19:47:22 END s3b-373 FAIL q/s 366.52 C4 21.736 infra% 0.0107 drops 0 json 19.205 sse-total 19.294
+19:47:22 START s3b-298 rate=298 env=[LABEL=c_2gw2g_edge TARGETS=http://10.160.0.11:8080 GWS=rv-split-gw-1 rv-split-gw-2 GUARDS=rv-split-guard-1 rv-split-guard-2 PROVS=rv-split-prov-1 rv-split-prov-2 LGS=rv-split-lg-1 rv-split-lg-2 EXTRA_SUT=rv-split-edge-1 rv-split-redis-1]
+19:55:12 END s3b-298 PASS q/s 292.63 C4 18.132 infra% 0.0 drops 0 json 15.511 sse-total 15.306
+19:55:13 START s3b-298-r2 rate=298 env=[LABEL=c_2gw2g_edge TARGETS=http://10.160.0.11:8080 GWS=rv-split-gw-1 rv-split-gw-2 GUARDS=rv-split-guard-1 rv-split-guard-2 PROVS=rv-split-prov-1 rv-split-prov-2 LGS=rv-split-lg-1 rv-split-lg-2 EXTRA_SUT=rv-split-edge-1 rv-split-redis-1]
+20:03:03 END s3b-298-r2 PASS q/s 292.71 C4 18.422 infra% 0.0 drops 0 json 15.556 sse-total 15.438
+20:03:03 START s3b-298-r3 rate=298 env=[LABEL=c_2gw2g_edge TARGETS=http://10.160.0.11:8080 GWS=rv-split-gw-1 rv-split-gw-2 GUARDS=rv-split-guard-1 rv-split-guard-2 PROVS=rv-split-prov-1 rv-split-prov-2 LGS=rv-split-lg-1 rv-split-lg-2 EXTRA_SUT=rv-split-edge-1 rv-split-redis-1]
+20:10:54 END s3b-298-r3 PASS q/s 292.66 C4 18.133 infra% 0.0 drops 0 json 15.463 sse-total 15.354
+20:10:54 KNEE s3b = 298 (3/3 PASS)
+20:10:54 === B4 (d) <=$5k fleet: 3gw+5guards + edge + shared redis
+rv-split-gw-1: GATEWAY NODE READY after 3s: 12/12 workers | {"ready":true,"guard":{"ready":true,"backend":"remote(owner)","model_hash":"2bf20e0f71e3a41e9e8cc4e602e08c142855bcce0cc73e0b65000d816d70877c","detail":"owners 5/5 connected, share 1/36: 10.160.0.10:7070 pid=1572 host=rv-split-guard-1 tokens_per_s=237624; 10.16
+rv-split-gw-2: GATEWAY NODE READY after 3s: 12/12 workers | {"ready":true,"guard":{"ready":true,"backend":"remote(owner)","model_hash":"2bf20e0f71e3a41e9e8cc4e602e08c142855bcce0cc73e0b65000d816d70877c","detail":"owners 5/5 connected, share 1/36: 10.160.0.10:7070 pid=1572 host=rv-split-guard-1 tokens_per_s=237624; 10.16
+rv-split-gw-3: GATEWAY NODE READY after 4s: 12/12 workers | {"ready":true,"guard":{"ready":true,"backend":"remote(owner)","model_hash":"2bf20e0f71e3a41e9e8cc4e602e08c142855bcce0cc73e0b65000d816d70877c","detail":"owners 5/5 connected, share 1/36: 10.160.0.10:7070 pid=1572 host=rv-split-guard-1 tokens_per_s=237624; 10.16
+active
+{"ready":true,"guard":{"ready":true,"backend":"remote(owner)","model_hash":"2bf20e0f71e3a41e9e8cc4e602e08c142855bcce0cc73e0b65000d816d70877c","detail":"owners 5/5 connected, share 1/36: 10.160.0.10:70
+20:11:07 START s5b-728 rate=728 env=[LABEL=d_fleet_3gw5g_edge TARGETS=http://10.160.0.11:8080 GWS=rv-split-gw-1 rv-split-gw-2 rv-split-gw-3 GUARDS=rv-split-guard-1 rv-split-guard-2 rv-split-guard-3 rv-split-guard-4 rv-split-guard-5 PROVS=rv-split-prov-1 rv-split-prov-2 LGS=rv-split-lg-1 rv-split-lg-2 EXTRA_SUT=rv-split-edge-1 rv-split-redis-1]
+20:19:14 END s5b-728 FAIL q/s 714.97 C4 23.503 infra% 0.0165 drops 0 json 19.407 sse-total 19.152
+20:19:14 START s5b-582 rate=582 env=[LABEL=d_fleet_3gw5g_edge TARGETS=http://10.160.0.11:8080 GWS=rv-split-gw-1 rv-split-gw-2 rv-split-gw-3 GUARDS=rv-split-guard-1 rv-split-guard-2 rv-split-guard-3 rv-split-guard-4 rv-split-guard-5 PROVS=rv-split-prov-1 rv-split-prov-2 LGS=rv-split-lg-1 rv-split-lg-2 EXTRA_SUT=rv-split-edge-1 rv-split-redis-1]
+20:27:16 END s5b-582 FAIL q/s 571.81 C4 20.297 infra% 0.0017 drops 0 json 16.673 sse-total 16.415
+20:27:16 START s5b-466 rate=466 env=[LABEL=d_fleet_3gw5g_edge TARGETS=http://10.160.0.11:8080 GWS=rv-split-gw-1 rv-split-gw-2 rv-split-gw-3 GUARDS=rv-split-guard-1 rv-split-guard-2 rv-split-guard-3 rv-split-guard-4 rv-split-guard-5 PROVS=rv-split-prov-1 rv-split-prov-2 LGS=rv-split-lg-1 rv-split-lg-2 EXTRA_SUT=rv-split-edge-1 rv-split-redis-1]
+20:35:13 END s5b-466 PASS q/s 458.13 C4 18.088 infra% 0.0 drops 0 json 15.191 sse-total 15.146
+20:35:13 START s5b-466-r2 rate=466 env=[LABEL=d_fleet_3gw5g_edge TARGETS=http://10.160.0.11:8080 GWS=rv-split-gw-1 rv-split-gw-2 rv-split-gw-3 GUARDS=rv-split-guard-1 rv-split-guard-2 rv-split-guard-3 rv-split-guard-4 rv-split-guard-5 PROVS=rv-split-prov-1 rv-split-prov-2 LGS=rv-split-lg-1 rv-split-lg-2 EXTRA_SUT=rv-split-edge-1 rv-split-redis-1]
+20:43:10 END s5b-466-r2 PASS q/s 457.85 C4 17.977 infra% 0.0 drops 0 json 15.121 sse-total 15.028
+20:43:10 START s5b-466-r3 rate=466 env=[LABEL=d_fleet_3gw5g_edge TARGETS=http://10.160.0.11:8080 GWS=rv-split-gw-1 rv-split-gw-2 rv-split-gw-3 GUARDS=rv-split-guard-1 rv-split-guard-2 rv-split-guard-3 rv-split-guard-4 rv-split-guard-5 PROVS=rv-split-prov-1 rv-split-prov-2 LGS=rv-split-lg-1 rv-split-lg-2 EXTRA_SUT=rv-split-edge-1 rv-split-redis-1]
+20:51:07 END s5b-466-r3 PASS q/s 457.93 C4 18.659 infra% 0.0007 drops 0 json 15.336 sse-total 15.176
+20:51:07 KNEE s5b = 466 (3/3 PASS)
+20:51:07 CHAINB DONE

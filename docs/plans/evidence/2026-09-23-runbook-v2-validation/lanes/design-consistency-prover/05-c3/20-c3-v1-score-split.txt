@@ -1,0 +1,27 @@
+score_v1() as shipped (all splits pooled):
+  malicious command_injection  n= 26 flagged= 24 rate=0.9231
+  malicious data_leakage       n= 38 flagged= 38 rate=1.0
+  benign    developer_traffic  n= 75 flagged= 27 rate=0.36
+  benign    general_benign     n=350 flagged=  0 rate=0.0
+  malicious goal_hijacking     n= 26 flagged= 26 rate=1.0
+  malicious jailbreak          n= 38 flagged= 37 rate=0.9737
+  malicious paraphrase         n= 31 flagged=  0 rate=0.0
+  malicious path_traversal     n= 26 flagged= 26 rate=1.0
+  malicious prompt_injection   n= 60 flagged= 60 rate=1.0
+  malicious sql_injection      n= 26 flagged= 22 rate=0.8462
+  malicious tool_overreach     n= 26 flagged= 26 rate=1.0
+  malicious vector_injection   n= 26 flagged= 26 rate=1.0
+
+EVAL split only (held-out), v1 block rate with Wilson 95% CI:
+  benign    developer_traffic  n= 11 blocked=  5 CI95=(0.213, 0.72)
+  benign    general_benign     n= 78 blocked=  0 CI95=(0, 0.047)
+  malicious command_injection  n=  3 blocked=  3 CI95=(0.438, 1)
+  malicious data_leakage       n=  6 blocked=  6 CI95=(0.61, 1.0)
+  malicious goal_hijacking     n=  5 blocked=  5 CI95=(0.566, 1)
+  malicious jailbreak          n=  6 blocked=  6 CI95=(0.61, 1.0)
+  malicious paraphrase         n=  6 blocked=  0 CI95=(0, 0.39)
+  malicious path_traversal     n=  2 blocked=  2 CI95=(0.342, 1)
+  malicious prompt_injection   n= 10 blocked= 10 CI95=(0.722, 1)
+  malicious sql_injection      n=  5 blocked=  4 CI95=(0.376, 0.964)
+  malicious tool_overreach     n=  7 blocked=  7 CI95=(0.646, 1)
+  malicious vector_injection   n=  4 blocked=  4 CI95=(0.51, 1)

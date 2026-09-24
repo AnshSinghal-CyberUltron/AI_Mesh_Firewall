@@ -1,0 +1,1 @@
+cmdstat_publish:calls=5221165,usec=1122283,usec_per_call=0.21,rejected_calls=0,failed_calls=0

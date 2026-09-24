@@ -1,0 +1,100 @@
+{
+ "window": {
+  "t0": 1790160678.357,
+  "t1": 1790160978.357,
+  "seconds": 300.0,
+  "requests_scheduled_in_window": 4500,
+  "offered_rps": 15.0,
+  "samples_in_window": 300
+ },
+ "containers": {
+  "aimeshperf-control-1": {
+   "cpu_seconds": 72.843,
+   "cores_mean": 0.243,
+   "cores_1s_p99": 0.526,
+   "cores_1s_max": 0.554,
+   "cpu_ms_per_request": 16.187,
+   "nr_throttled_delta": 0.0,
+   "mem_anon_mib_max": 362.2,
+   "mem_current_mib_max": 386.1
+  },
+  "aimeshperf-gateway-1": {
+   "cpu_seconds": 2287.948,
+   "cores_mean": 7.626,
+   "cores_1s_p99": 8.897,
+   "cores_1s_max": 8.999,
+   "cpu_ms_per_request": 508.433,
+   "nr_throttled_delta": 0.0,
+   "mem_anon_mib_max": 4961.5,
+   "mem_current_mib_max": 5033.8
+  },
+  "aimeshperf-pgbouncer-1": {
+   "cpu_seconds": 3.025,
+   "cores_mean": 0.01,
+   "cores_1s_p99": 0.048,
+   "cores_1s_max": 0.053,
+   "cpu_ms_per_request": 0.672,
+   "nr_throttled_delta": 0.0,
+   "mem_anon_mib_max": 1.2,
+   "mem_current_mib_max": 3.3
+  },
+  "aimeshperf-postgres-1": {
+   "cpu_seconds": 21.136,
+   "cores_mean": 0.07,
+   "cores_1s_p99": 0.178,
+   "cores_1s_max": 0.202,
+   "cpu_ms_per_request": 4.697,
+   "nr_throttled_delta": 0.0,
+   "mem_anon_mib_max": 83.0,
+   "mem_current_mib_max": 1403.0
+  },
+  "aimeshperf-rabbitmq-1": {
+   "cpu_seconds": 107.329,
+   "cores_mean": 0.358,
+   "cores_1s_p99": 3.823,
+   "cores_1s_max": 3.877,
+   "cpu_ms_per_request": 23.851,
+   "nr_throttled_delta": 0.0,
+   "mem_anon_mib_max": 161.5,
+   "mem_current_mib_max": 233.1
+  },
+  "aimeshperf-redis-1": {
+   "cpu_seconds": 23.632,
+   "cores_mean": 0.079,
+   "cores_1s_p99": 0.175,
+   "cores_1s_max": 0.204,
+   "cpu_ms_per_request": 5.252,
+   "nr_throttled_delta": 0.0,
+   "mem_anon_mib_max": 27.9,
+   "mem_current_mib_max": 31.4
+  }
+ },
+ "stack_cpu_ms_per_request": 559.092,
+ "host_cpu_util_pct": 35.82,
+ "host_cpus": 24,
+ "gateway_processes": {
+  "min": 19,
+  "max": 19,
+  "pids_seen": 19
+ },
+ "gateway_worker_rss_mib": {
+  "max": 322.2,
+  "sum_max": 5692.9
+ },
+ "gateway_worker_cores": {
+  "n": 19,
+  "min": 0.0,
+  "p50": 0.266,
+  "max": 0.92
+ },
+ "health_probe_ms": {
+  "n": 1500,
+  "p50": 3.693,
+  "p90": 9.697,
+  "p99": 30.478,
+  "p999": 241.921,
+  "max": 244.837,
+  "mean": 5.752
+ },
+ "health_probe_failures": 0
+}

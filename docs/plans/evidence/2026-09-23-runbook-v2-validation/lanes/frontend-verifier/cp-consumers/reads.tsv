@@ -1,0 +1,475 @@
+cat	kind	file:line	class	func	path	key	note
+ee_read	helper:metadata_json	control/ai_mesh_control/core/dashboard_views.py:134	DashboardSummaryView	get		owasp_codes	
+ee_read	helper:metadata_text	control/ai_mesh_control/core/dashboard_views.py:135	DashboardSummaryView	get		owasp_code	
+ee_read	helper:metadata_text	control/ai_mesh_control/core/dashboard_views.py:255	DashboardReportView	get		model	
+ee_read	helper:metadata_text	control/ai_mesh_control/core/dashboard_views.py:256	DashboardReportView	get		security_risk_score	
+ee_read	helper:metadata_text	control/ai_mesh_control/core/dashboard_views.py:257	DashboardReportView	get		threat_category	
+ee_read	helper:metadata_text	control/ai_mesh_control/core/dashboard_views.py:258	DashboardReportView	get		owasp_code	
+ee_read	helper:metadata_text	control/ai_mesh_control/core/dashboard_views.py:451	ModelUsageView	get		model	
+ee_read	helper:annotate_numeric_float	control/ai_mesh_control/core/dashboard_views.py:452	ModelUsageView	get		security_risk_score	
+ee_read	helper:annotate_numeric_float	control/ai_mesh_control/core/dashboard_views.py:572	RiskDistributionView	get		security_risk_score	
+ee_read	py_get	control/ai_mesh_control/core/isolation_notify.py:33		create_isolation_bell_notifications_for_events		event_type	
+ee_read	py_get	control/ai_mesh_control/core/isolation_notify.py:34		create_isolation_bell_notifications_for_events		threat_type	
+ee_read	py_get	control/ai_mesh_control/core/isolation_notify.py:37		create_isolation_bell_notifications_for_events		is_isolation_event	
+ee_read	py_get	control/ai_mesh_control/core/isolation_notify.py:40		create_isolation_bell_notifications_for_events		action	
+ee_read	py_get	control/ai_mesh_control/core/isolation_notify.py:46		create_isolation_bell_notifications_for_events		model	
+ee_read	py_get	control/ai_mesh_control/core/isolation_notify.py:46		create_isolation_bell_notifications_for_events		model_name	
+ee_read	py_get	control/ai_mesh_control/core/tasks.py:342		_build_notification_payload		security_risk_score	
+ee_read	py_get	control/ai_mesh_control/core/tasks.py:342		_build_notification_payload		severity	
+ee_read	py_get	control/ai_mesh_control/core/tasks.py:343		_build_notification_payload		threat_category	
+ee_read	py_get	control/ai_mesh_control/core/tasks.py:344		_build_notification_payload		owasp_code	
+ee_read	py_get	control/ai_mesh_control/core/tasks.py:344		_build_notification_payload		threat_subcategory	
+ee_read	py_get	control/ai_mesh_control/core/tasks.py:345		_build_notification_payload		source	
+ee_read	py_get	control/ai_mesh_control/core/tasks.py:469		_auto_create_review_items_and_incidents		threat_type	
+ee_read	py_get	control/ai_mesh_control/core/tasks.py:470		_auto_create_review_items_and_incidents		security_risk_score	
+ee_read	orm_lookup	control/ai_mesh_control/core/tasks.py:1194		update_risk_scores_from_telemetry		threat_type	metadata__threat_type
+ee_read	py_get	control/ai_mesh_control/core/tasks.py:1200		update_risk_scores_from_telemetry		key_prefix	
+ee_read	py_get	control/ai_mesh_control/core/tasks.py:1201		update_risk_scores_from_telemetry		threat_type	
+ee_read	orm_lookup	control/ai_mesh_control/core/tasks.py:1260		_apply_risk_decay		key_prefix	metadata__key_prefix
+ee_read	orm_lookup	control/ai_mesh_control/mcp_connector/management/commands/backfill_mcp_events.py:73	Command	handle		source	metadata__source
+ee_read	orm_lookup	control/ai_mesh_control/mcp_connector/management/commands/backfill_mcp_events.py:74	Command	handle		request_id	metadata__request_id
+ee_read	py_get	control/ai_mesh_control/mcp_connector/management/commands/backfill_mcp_events.py:119	Command	handle		source_ip	
+ee_read	py_get	control/ai_mesh_control/mcp_connector/management/commands/backfill_mcp_events.py:120	Command	handle		user_agent	
+ee_read	helper:annotate_numeric_float	control/ai_mesh_control/policy/analytics_rollup.py:172		refresh_org_rollups		latency_ms	
+ee_read	helper:annotate_numeric_float	control/ai_mesh_control/policy/analytics_rollup.py:173		refresh_org_rollups		security_risk_score	
+ee_read	keytransform	control/ai_mesh_control/policy/analytics_rollup.py:240		refresh_org_rollups		event_type	
+ee_read	keytransform	control/ai_mesh_control/policy/analytics_rollup.py:240		refresh_org_rollups		is_audit_log	
+ee_read	keytransform	control/ai_mesh_control/policy/analytics_rollup.py:240		refresh_org_rollups		is_isolation_event	
+ee_read	keytransform	control/ai_mesh_control/policy/analytics_rollup.py:240		refresh_org_rollups		module	
+ee_read	keytransform	control/ai_mesh_control/policy/analytics_rollup.py:240		refresh_org_rollups		module_id	
+ee_read	keytransform	control/ai_mesh_control/policy/analytics_rollup.py:240		refresh_org_rollups		owasp_code	
+ee_read	keytransform	control/ai_mesh_control/policy/analytics_rollup.py:240		refresh_org_rollups		owasp_codes	
+ee_read	keytransform	control/ai_mesh_control/policy/analytics_rollup.py:240		refresh_org_rollups		pii_detected	
+ee_read	keytransform	control/ai_mesh_control/policy/analytics_rollup.py:240		refresh_org_rollups		source	
+ee_read	keytransform	control/ai_mesh_control/policy/analytics_rollup.py:240		refresh_org_rollups		threat_category	
+ee_read	keytransform	control/ai_mesh_control/policy/analytics_rollup.py:240		refresh_org_rollups		threat_type	
+ee_read	keytransform	control/ai_mesh_control/policy/analytics_rollup.py:240		refresh_org_rollups		trigger_source	
+ee_read	helper:annotate_numeric_float	control/ai_mesh_control/policy/analytics_rollup.py:309		_merge_request_partition		security_risk_score	
+ee_read	keytransform	control/ai_mesh_control/policy/analytics_rollup.py:480		_module_groups_from_events		event_type	
+ee_read	keytransform	control/ai_mesh_control/policy/analytics_rollup.py:480		_module_groups_from_events		is_audit_log	
+ee_read	keytransform	control/ai_mesh_control/policy/analytics_rollup.py:480		_module_groups_from_events		is_isolation_event	
+ee_read	keytransform	control/ai_mesh_control/policy/analytics_rollup.py:480		_module_groups_from_events		module	
+ee_read	keytransform	control/ai_mesh_control/policy/analytics_rollup.py:480		_module_groups_from_events		module_id	
+ee_read	keytransform	control/ai_mesh_control/policy/analytics_rollup.py:480		_module_groups_from_events		owasp_code	
+ee_read	keytransform	control/ai_mesh_control/policy/analytics_rollup.py:480		_module_groups_from_events		source	
+ee_read	keytransform	control/ai_mesh_control/policy/analytics_rollup.py:480		_module_groups_from_events		threat_type	
+ee_read	keytransform	control/ai_mesh_control/policy/analytics_rollup.py:480		_module_groups_from_events		trigger_source	
+ee_read	keytransform_dynamic	control/ai_mesh_control/policy/analytics_sql.py:36		metadata_text		<param>	KeyTextTransform(key, 'metadata')
+ee_read	keytransform_dynamic	control/ai_mesh_control/policy/analytics_sql.py:40		metadata_json		<param>	KeyTransform(key, 'metadata')
+ee_read	keytransform_dynamic	control/ai_mesh_control/policy/analytics_sql.py:46		annotate_numeric_float		<param>	KeyTextTransform(key, 'metadata')
+ee_read	helper:annotate_numeric_float	control/ai_mesh_control/policy/analytics_sql.py:72		annotate_is_critical		security_risk_score	
+ee_read	keytransform	control/ai_mesh_control/policy/analytics_sql.py:119		annotate_escalation_level	extra	escalation_level	
+ee_read	keytransform	control/ai_mesh_control/policy/analytics_sql.py:119		annotate_escalation_level		extra	
+ee_read	keytransform	control/ai_mesh_control/policy/analytics_sql.py:120		annotate_escalation_level		extra	
+ee_read	keytransform	control/ai_mesh_control/policy/analytics_sql.py:122		annotate_escalation_level		escalation_level	
+ee_read	keytransform	control/ai_mesh_control/policy/analytics_sql.py:138		annotate_request_key		request_id	
+ee_read	helper:annotate_numeric_float	control/ai_mesh_control/policy/analytics_sql.py:150		soc_kpis_from_events		security_risk_score	
+ee_read	helper:annotate_numeric_float	control/ai_mesh_control/policy/analytics_sql.py:151		soc_kpis_from_events		latency_ms	
+ee_read	keytransform_dynamic	control/ai_mesh_control/policy/analytics_views.py:40		_json_key	extra	<param>	KeyTransform(name, KeyTransform('extra', 'metadata'))
+ee_read	keytransform	control/ai_mesh_control/policy/analytics_views.py:40		_json_key		extra	
+ee_read	keytransform_dynamic	control/ai_mesh_control/policy/analytics_views.py:41		_json_key		<param>	KeyTransform(name, 'metadata')
+ee_read	helper:_json_key	control/ai_mesh_control/policy/analytics_views.py:49		_annotate_meta		security_risk_score	
+ee_read	py_get	control/ai_mesh_control/policy/analytics_views.py:198	PolicyAnalyticsView	get		owasp_codes	
+ee_read	py_get	control/ai_mesh_control/policy/analytics_views.py:202	PolicyAnalyticsView	get		owasp_code	
+ee_read	py_get	control/ai_mesh_control/policy/analytics_views.py:204	PolicyAnalyticsView	get		threat_category	
+ee_read	py_get	control/ai_mesh_control/policy/analytics_views.py:205	PolicyAnalyticsView	get		source	
+ee_read	py_get	control/ai_mesh_control/policy/analytics_views.py:208	PolicyAnalyticsView	get		pii_detected	
+ee_read	helper:_annotate_meta	control/ai_mesh_control/policy/analytics_views.py:243	PolicyAnalyticsView	get		owasp_code	
+ee_read	helper:_annotate_meta	control/ai_mesh_control/policy/analytics_views.py:243	PolicyAnalyticsView	get		owasp_codes	
+ee_read	helper:_annotate_meta	control/ai_mesh_control/policy/analytics_views.py:243	PolicyAnalyticsView	get		pii_detected	
+ee_read	helper:_annotate_meta	control/ai_mesh_control/policy/analytics_views.py:243	PolicyAnalyticsView	get		source	
+ee_read	helper:_annotate_meta	control/ai_mesh_control/policy/analytics_views.py:243	PolicyAnalyticsView	get		threat_category	
+ee_read	helper:_meta_from_row	control/ai_mesh_control/policy/analytics_views.py:254	PolicyAnalyticsView	get		owasp_code	
+ee_read	helper:_meta_from_row	control/ai_mesh_control/policy/analytics_views.py:254	PolicyAnalyticsView	get		owasp_codes	
+ee_read	helper:_meta_from_row	control/ai_mesh_control/policy/analytics_views.py:254	PolicyAnalyticsView	get		pii_detected	
+ee_read	helper:_meta_from_row	control/ai_mesh_control/policy/analytics_views.py:254	PolicyAnalyticsView	get		source	
+ee_read	helper:_meta_from_row	control/ai_mesh_control/policy/analytics_views.py:254	PolicyAnalyticsView	get		threat_category	
+ee_read	helper:annotate_numeric_float	control/ai_mesh_control/policy/analytics_views.py:370	TopViolatorsView	get		security_risk_score	
+ee_read	helper:_annotate_meta	control/ai_mesh_control/policy/analytics_views.py:371	TopViolatorsView	get		extra	
+ee_read	helper:_annotate_meta	control/ai_mesh_control/policy/analytics_views.py:371	TopViolatorsView	get		matched_policies	
+ee_read	helper:_annotate_meta	control/ai_mesh_control/policy/analytics_views.py:371	TopViolatorsView	get	extra	matched_policies	
+ee_read	helper:_annotate_meta	control/ai_mesh_control/policy/analytics_views.py:371	TopViolatorsView	get		matched_policy_codes	
+ee_read	helper:_annotate_meta	control/ai_mesh_control/policy/analytics_views.py:371	TopViolatorsView	get		policy_violations	
+ee_read	helper:_annotate_meta	control/ai_mesh_control/policy/analytics_views.py:371	TopViolatorsView	get	extra	policy_violations	
+ee_read	helper:_meta_from_row	control/ai_mesh_control/policy/analytics_views.py:384	TopViolatorsView	get		extra	
+ee_read	helper:_meta_from_row	control/ai_mesh_control/policy/analytics_views.py:384	TopViolatorsView	get		matched_policies	
+ee_read	helper:_meta_from_row	control/ai_mesh_control/policy/analytics_views.py:384	TopViolatorsView	get	extra	matched_policies	
+ee_read	helper:_meta_from_row	control/ai_mesh_control/policy/analytics_views.py:384	TopViolatorsView	get		matched_policy_codes	
+ee_read	helper:_meta_from_row	control/ai_mesh_control/policy/analytics_views.py:384	TopViolatorsView	get		policy_violations	
+ee_read	helper:_meta_from_row	control/ai_mesh_control/policy/analytics_views.py:384	TopViolatorsView	get	extra	policy_violations	
+ee_read	helper:annotate_numeric_float	control/ai_mesh_control/policy/analytics_views.py:407	TopViolatorsView	get		security_risk_score	
+ee_read	helper:_annotate_meta	control/ai_mesh_control/policy/analytics_views.py:408	TopViolatorsView	get		extra	
+ee_read	helper:_annotate_meta	control/ai_mesh_control/policy/analytics_views.py:408	TopViolatorsView	get		matched_policies	
+ee_read	helper:_annotate_meta	control/ai_mesh_control/policy/analytics_views.py:408	TopViolatorsView	get	extra	matched_policies	
+ee_read	helper:_annotate_meta	control/ai_mesh_control/policy/analytics_views.py:408	TopViolatorsView	get		matched_policy_codes	
+ee_read	helper:_annotate_meta	control/ai_mesh_control/policy/analytics_views.py:408	TopViolatorsView	get		policy_violations	
+ee_read	helper:_annotate_meta	control/ai_mesh_control/policy/analytics_views.py:408	TopViolatorsView	get	extra	policy_violations	
+ee_read	helper:_meta_from_row	control/ai_mesh_control/policy/analytics_views.py:421	TopViolatorsView	get		extra	
+ee_read	helper:_meta_from_row	control/ai_mesh_control/policy/analytics_views.py:421	TopViolatorsView	get		matched_policies	
+ee_read	helper:_meta_from_row	control/ai_mesh_control/policy/analytics_views.py:421	TopViolatorsView	get	extra	matched_policies	
+ee_read	helper:_meta_from_row	control/ai_mesh_control/policy/analytics_views.py:421	TopViolatorsView	get		matched_policy_codes	
+ee_read	helper:_meta_from_row	control/ai_mesh_control/policy/analytics_views.py:421	TopViolatorsView	get		policy_violations	
+ee_read	helper:_meta_from_row	control/ai_mesh_control/policy/analytics_views.py:421	TopViolatorsView	get	extra	policy_violations	
+ee_read	helper:_annotate_meta	control/ai_mesh_control/policy/analytics_views.py:492		_aggregate_top_rules		extra	
+ee_read	helper:_annotate_meta	control/ai_mesh_control/policy/analytics_views.py:492		_aggregate_top_rules	extra	matched_policies	
+ee_read	helper:_annotate_meta	control/ai_mesh_control/policy/analytics_views.py:492		_aggregate_top_rules	extra	matched_rule_names	
+ee_read	helper:_annotate_meta	control/ai_mesh_control/policy/analytics_views.py:492		_aggregate_top_rules	extra	matched_rules	
+ee_read	helper:_meta_from_row	control/ai_mesh_control/policy/analytics_views.py:499		_aggregate_top_rules		extra	
+ee_read	helper:_meta_from_row	control/ai_mesh_control/policy/analytics_views.py:499		_aggregate_top_rules	extra	matched_policies	
+ee_read	helper:_meta_from_row	control/ai_mesh_control/policy/analytics_views.py:499		_aggregate_top_rules	extra	matched_rule_names	
+ee_read	helper:_meta_from_row	control/ai_mesh_control/policy/analytics_views.py:499		_aggregate_top_rules	extra	matched_rules	
+ee_read	py_get	control/ai_mesh_control/policy/compliance_service.py:46		create_violations_for_event		pii_detected	
+ee_read	py_get	control/ai_mesh_control/policy/compliance_service.py:47		create_violations_for_event		owasp_codes	
+ee_read	py_get	control/ai_mesh_control/policy/compliance_service.py:51		create_violations_for_event		owasp_code	
+ee_read	py_get	control/ai_mesh_control/policy/compliance_service.py:53		create_violations_for_event	pii_detected	detected	
+ee_read	py_get	control/ai_mesh_control/policy/compliance_service.py:54		create_violations_for_event	pii_detected	category	
+ee_read	py_get	control/ai_mesh_control/policy/compliance_service.py:69		create_violations_for_event	pii_detected	severity	
+ee_read	py_get	control/ai_mesh_control/policy/firewall_module_classifier.py:57		_norm_source		source	
+ee_read	py_get	control/ai_mesh_control/policy/firewall_module_classifier.py:62		_norm_fields		owasp_code	
+ee_read	py_get	control/ai_mesh_control/policy/firewall_module_classifier.py:63		_norm_fields		threat_type	
+ee_read	py_get	control/ai_mesh_control/policy/firewall_module_classifier.py:64		_norm_fields		event_type	
+ee_read	py_get	control/ai_mesh_control/policy/firewall_module_classifier.py:65		_norm_fields		module	
+ee_read	py_get	control/ai_mesh_control/policy/firewall_module_classifier.py:65		_norm_fields		module_id	
+ee_read	orm_lookup	control/ai_mesh_control/policy/firewall_module_classifier.py:125		module_enforcement_q		source	metadata__source
+ee_read	orm_lookup	control/ai_mesh_control/policy/firewall_module_classifier.py:127		module_enforcement_q		owasp_code	metadata__owasp_code__startswith
+ee_read	orm_lookup	control/ai_mesh_control/policy/firewall_module_classifier.py:129		module_enforcement_q		threat_type	metadata__threat_type
+ee_read	orm_lookup	control/ai_mesh_control/policy/firewall_module_classifier.py:131		module_enforcement_q		event_type	metadata__event_type
+ee_read	orm_lookup	control/ai_mesh_control/policy/firewall_module_classifier.py:132		module_enforcement_q		module	metadata__module
+ee_read	orm_lookup	control/ai_mesh_control/policy/firewall_module_classifier.py:132		module_enforcement_q		module_id	metadata__module_id
+ee_read	py_get	control/ai_mesh_control/policy/module_16.py:57		is_module_16_enforcement		module	
+ee_read	py_get	control/ai_mesh_control/policy/module_16.py:57		is_module_16_enforcement		module_id	
+ee_read	py_get	control/ai_mesh_control/policy/module_16.py:59		is_module_16_enforcement		is_audit_log	
+ee_read	py_get	control/ai_mesh_control/policy/module_16.py:59		is_module_16_enforcement		is_isolation_event	
+ee_read	py_get	control/ai_mesh_control/policy/module_16.py:61		is_module_16_enforcement		event_type	
+ee_read	py_get	control/ai_mesh_control/policy/module_16.py:62		is_module_16_enforcement		threat_type	
+ee_read	py_get	control/ai_mesh_control/policy/module_16.py:67		is_module_16_enforcement		trigger_source	
+ee_read	orm_lookup	control/ai_mesh_control/policy/module_16.py:75		module_16_enforcement_q		module_id	metadata__module_id
+ee_read	orm_lookup	control/ai_mesh_control/policy/module_16.py:76		module_16_enforcement_q		module	metadata__module
+ee_read	orm_lookup	control/ai_mesh_control/policy/module_16.py:77		module_16_enforcement_q		event_type	metadata__event_type__in
+ee_read	orm_lookup	control/ai_mesh_control/policy/module_16.py:78		module_16_enforcement_q		threat_type	metadata__threat_type__in
+ee_read	orm_lookup	control/ai_mesh_control/policy/module_16.py:79		module_16_enforcement_q		is_isolation_event	metadata__is_isolation_event
+ee_read	orm_lookup	control/ai_mesh_control/policy/module_16.py:80		module_16_enforcement_q		is_audit_log	metadata__is_audit_log
+ee_read	orm_lookup	control/ai_mesh_control/policy/module_16.py:81		module_16_enforcement_q		trigger_source	metadata__trigger_source__in
+ee_read	py_get	control/ai_mesh_control/policy/module_16.py:182		merge_module_16_feed_items		request_id	
+ee_read	py_get	control/ai_mesh_control/policy/module_16.py:189		merge_module_16_feed_items		request_id	
+ee_read	py_get	control/ai_mesh_control/policy/notification_views.py:36	NotificationsListView	get		threat_category	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:213		_tools_invoked_with_model		tools_invoked	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:214		_tools_invoked_with_model		model	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:215		_tools_invoked_with_model		model	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:229		_sanitized_meta_for_client		model	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:231		_sanitized_meta_for_client		model	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:232		_sanitized_meta_for_client		model	
+ee_read	orm_lookup	control/ai_mesh_control/policy/security_views.py:506	ThreatFeedView	get		source	metadata__source
+ee_read	orm_lookup	control/ai_mesh_control/policy/security_views.py:510	ThreatFeedView	get		threat_category	metadata__threat_category__icontains
+ee_read	orm_lookup	control/ai_mesh_control/policy/security_views.py:512	ThreatFeedView	get		model	metadata__model__icontains
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:536	ThreatFeedView	get		request_id	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:540	ThreatFeedView	get		event_type	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:547	ThreatFeedView	get		event_type	
+ee_read	orm_lookup	control/ai_mesh_control/policy/security_views.py:568	ThreatFeedView	get		request_id	metadata__request_id__isnull
+ee_read	orm_lookup	control/ai_mesh_control/policy/security_views.py:569	ThreatFeedView	get		request_id	metadata__request_id
+ee_read	orm_lookup	control/ai_mesh_control/policy/security_views.py:573	ThreatFeedView	get		request_id	metadata__request_id__isnull
+ee_read	orm_lookup	control/ai_mesh_control/policy/security_views.py:574	ThreatFeedView	get		request_id	metadata__request_id
+ee_read	orm_lookup	control/ai_mesh_control/policy/security_views.py:582	ThreatFeedView	get		request_id	metadata__request_id__isnull
+ee_read	orm_lookup	control/ai_mesh_control/policy/security_views.py:583	ThreatFeedView	get		request_id	metadata__request_id
+ee_read	orm_lookup	control/ai_mesh_control/policy/security_views.py:587	ThreatFeedView	get		request_id	metadata__request_id__isnull
+ee_read	orm_lookup	control/ai_mesh_control/policy/security_views.py:588	ThreatFeedView	get		request_id	metadata__request_id
+ee_read	orm_lookup	control/ai_mesh_control/policy/security_views.py:593	ThreatFeedView	get		request_id	metadata__request_id__isnull
+ee_read	orm_lookup	control/ai_mesh_control/policy/security_views.py:594	ThreatFeedView	get		request_id	metadata__request_id
+ee_read	orm_lookup	control/ai_mesh_control/policy/security_views.py:596	ThreatFeedView	get		request_id	metadata__request_id__isnull
+ee_read	orm_lookup	control/ai_mesh_control/policy/security_views.py:652	ThreatFeedView	_get_module_16_threat_feed		source	metadata__source
+ee_read	orm_lookup	control/ai_mesh_control/policy/security_views.py:656	ThreatFeedView	_get_module_16_threat_feed		threat_category	metadata__threat_category__icontains
+ee_read	orm_lookup	control/ai_mesh_control/policy/security_views.py:658	ThreatFeedView	_get_module_16_threat_feed		model	metadata__model__icontains
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:707	ThreatFeedView	_serialize_threat_feed_page		organization_id	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:709	ThreatFeedView	_serialize_threat_feed_page		organization_id	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:740	ThreatFeedView	_serialize_threat_feed_page		threat_category	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:742	ThreatFeedView	_serialize_threat_feed_page		owasp_code	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:742	ThreatFeedView	_serialize_threat_feed_page		threat_subcategory	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:744	ThreatFeedView	_serialize_threat_feed_page		source	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:758	ThreatFeedView	_serialize_threat_feed_page		organization_id	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:767	ThreatFeedView	_serialize_threat_feed_page		security_risk_score	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:767	ThreatFeedView	_serialize_threat_feed_page		severity	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:781	ThreatFeedView	_serialize_threat_feed_page		pipeline_request_id	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:781	ThreatFeedView	_serialize_threat_feed_page		request_id	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:782	ThreatFeedView	_serialize_threat_feed_page		incident_id	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:782	ThreatFeedView	_serialize_threat_feed_page		request_id	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:785	ThreatFeedView	_serialize_threat_feed_page		prompt_lineage	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:787	ThreatFeedView	_serialize_threat_feed_page		data_accessed	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:803		_synthesize_pipeline_from_stage_metrics		extra	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:834		_synthesize_pipeline_from_stage_metrics		event_type	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:834		_synthesize_pipeline_from_stage_metrics	extra	rerouted	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:841		_synthesize_pipeline_from_stage_metrics	extra	routing_reason	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:842		_synthesize_pipeline_from_stage_metrics	extra	reroute_reason	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:853		_synthesize_pipeline_from_stage_metrics	extra	original_model	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:854		_synthesize_pipeline_from_stage_metrics	extra	original_model	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:855		_synthesize_pipeline_from_stage_metrics	extra	routed_model	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:855		_synthesize_pipeline_from_stage_metrics	extra	selected_model	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:856		_synthesize_pipeline_from_stage_metrics	extra	routed_model	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:856		_synthesize_pipeline_from_stage_metrics	extra	selected_model	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:857		_synthesize_pipeline_from_stage_metrics	extra	routing_reason	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:858		_synthesize_pipeline_from_stage_metrics	extra	routing_reason	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:865		_enrich_scan_detail_metadata		extra	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:867		_enrich_scan_detail_metadata		request_id	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:869		_enrich_scan_detail_metadata	extra	request_id	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:870		_enrich_scan_detail_metadata		pipeline_request_id	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:873		_enrich_scan_detail_metadata		incident_id	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:874		_enrich_scan_detail_metadata		request_id	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:876		_enrich_scan_detail_metadata		prompt_submitted	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:877		_enrich_scan_detail_metadata		prompt_lineage	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:881		_enrich_scan_detail_metadata		pipeline_trace	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:882		_enrich_scan_detail_metadata		pipeline_trace	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:882		_enrich_scan_detail_metadata	extra	pipeline_trace	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:887		_enrich_scan_detail_metadata	extra	stage_metrics_ms	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:901		_synthesize_routing_only_pipeline		extra	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:902		_synthesize_routing_only_pipeline		event_type	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:902		_synthesize_routing_only_pipeline	extra	rerouted	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:904		_synthesize_routing_only_pipeline	extra	reroute_reason	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:904		_synthesize_routing_only_pipeline	extra	routing_reason	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:916		_synthesize_routing_only_pipeline	extra	original_model	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:917		_synthesize_routing_only_pipeline	extra	original_model	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:918		_synthesize_routing_only_pipeline	extra	routed_model	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:918		_synthesize_routing_only_pipeline	extra	selected_model	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:919		_synthesize_routing_only_pipeline	extra	routed_model	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:919		_synthesize_routing_only_pipeline	extra	selected_model	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:927		_pipeline_io_fingerprint		pipeline_trace	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:930		_pipeline_io_fingerprint	pipeline_trace	input_text	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:930		_pipeline_io_fingerprint	pipeline_trace	prompt_preview	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:930		_pipeline_io_fingerprint	pipeline_trace	prompt_submitted	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:934		_pipeline_io_fingerprint		input_text	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:934		_pipeline_io_fingerprint		prompt_snippet	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:934		_pipeline_io_fingerprint		prompt_submitted	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:937		_pipeline_io_fingerprint		extra	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:939		_pipeline_io_fingerprint	extra	input_text	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:939		_pipeline_io_fingerprint	extra	prompt_snippet	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:939		_pipeline_io_fingerprint	extra	prompt_submitted	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:1000		_merge_related_scan_metadata		pipeline_trace	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:1002		_merge_related_scan_metadata		extra	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:1003		_merge_related_scan_metadata	extra	pipeline_trace	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:1005		_merge_related_scan_metadata		pipeline_trace	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:1007		_merge_related_scan_metadata	pipeline_trace	stages	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:1011		_merge_related_scan_metadata		pipeline_trace	
+ee_read	py_subscript	control/ai_mesh_control/policy/security_views.py:1012		_merge_related_scan_metadata		pipeline_trace	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:1013		_merge_related_scan_metadata		pipeline_trace	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:1014		_merge_related_scan_metadata		extra	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:1014		_merge_related_scan_metadata	extra	pipeline_trace	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:1018		_merge_related_scan_metadata		prompt_lineage	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:1019		_merge_related_scan_metadata		prompt_lineage	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:1021		_merge_related_scan_metadata		event_type	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:1022		_merge_related_scan_metadata		extra	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:1023		_merge_related_scan_metadata		extra	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:1033		_merge_related_scan_metadata	extra	original_model	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:1033		_merge_related_scan_metadata	extra	reroute_reason	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:1033		_merge_related_scan_metadata	extra	rerouted	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:1033		_merge_related_scan_metadata	extra	routed_model	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:1033		_merge_related_scan_metadata	extra	routing_reason	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:1033		_merge_related_scan_metadata	extra	selected_model	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:1033		_merge_related_scan_metadata	extra	weights	
+ee_read	py_subscript	control/ai_mesh_control/policy/security_views.py:1034		_merge_related_scan_metadata	extra	original_model	
+ee_read	py_subscript	control/ai_mesh_control/policy/security_views.py:1034		_merge_related_scan_metadata	extra	reroute_reason	
+ee_read	py_subscript	control/ai_mesh_control/policy/security_views.py:1034		_merge_related_scan_metadata	extra	rerouted	
+ee_read	py_subscript	control/ai_mesh_control/policy/security_views.py:1034		_merge_related_scan_metadata	extra	routed_model	
+ee_read	py_subscript	control/ai_mesh_control/policy/security_views.py:1034		_merge_related_scan_metadata	extra	routing_reason	
+ee_read	py_subscript	control/ai_mesh_control/policy/security_views.py:1034		_merge_related_scan_metadata	extra	selected_model	
+ee_read	py_subscript	control/ai_mesh_control/policy/security_views.py:1034		_merge_related_scan_metadata	extra	weights	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:1039		_merge_related_scan_metadata		incident_id	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:1039		_merge_related_scan_metadata		pipeline_request_id	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:1039		_merge_related_scan_metadata		prompt_snippet	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:1039		_merge_related_scan_metadata		prompt_submitted	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:1039		_merge_related_scan_metadata		raw_output	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:1039		_merge_related_scan_metadata		request_id	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:1039		_merge_related_scan_metadata		response_snippet	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:1039		_merge_related_scan_metadata		sanitized_output	
+ee_read	py_subscript	control/ai_mesh_control/policy/security_views.py:1040		_merge_related_scan_metadata		incident_id	
+ee_read	py_subscript	control/ai_mesh_control/policy/security_views.py:1040		_merge_related_scan_metadata		pipeline_request_id	
+ee_read	py_subscript	control/ai_mesh_control/policy/security_views.py:1040		_merge_related_scan_metadata		prompt_snippet	
+ee_read	py_subscript	control/ai_mesh_control/policy/security_views.py:1040		_merge_related_scan_metadata		prompt_submitted	
+ee_read	py_subscript	control/ai_mesh_control/policy/security_views.py:1040		_merge_related_scan_metadata		raw_output	
+ee_read	py_subscript	control/ai_mesh_control/policy/security_views.py:1040		_merge_related_scan_metadata		request_id	
+ee_read	py_subscript	control/ai_mesh_control/policy/security_views.py:1040		_merge_related_scan_metadata		response_snippet	
+ee_read	py_subscript	control/ai_mesh_control/policy/security_views.py:1040		_merge_related_scan_metadata		sanitized_output	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:1041		_merge_related_scan_metadata		incident_id	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:1043		_merge_related_scan_metadata		pipeline_request_id	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:1043		_merge_related_scan_metadata		request_id	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:1074	ThreatFeedEventDetailView	get		request_id	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:1075	ThreatFeedEventDetailView	get		pipeline_request_id	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:1076	ThreatFeedEventDetailView	get		extra	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:1076	ThreatFeedEventDetailView	get	extra	request_id	
+ee_read	orm_lookup	control/ai_mesh_control/policy/security_views.py:1081	ThreatFeedEventDetailView	get		request_id	metadata__request_id
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:1088	ThreatFeedEventDetailView	get		request_id	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:1089	ThreatFeedEventDetailView	get		incident_id	
+ee_read	helper:metadata_text	control/ai_mesh_control/policy/security_views.py:1203	AttackVectorTrendsView	get		source	
+ee_read	helper:metadata_text	control/ai_mesh_control/policy/security_views.py:1204	AttackVectorTrendsView	get		owasp_code	
+ee_read	helper:metadata_json	control/ai_mesh_control/policy/security_views.py:1205	AttackVectorTrendsView	get		owasp_codes	
+ee_read	helper:metadata_text	control/ai_mesh_control/policy/security_views.py:1206	AttackVectorTrendsView	get		threat_category	
+ee_read	helper:metadata_json	control/ai_mesh_control/policy/security_views.py:1207	AttackVectorTrendsView	get		pii_detected	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:1248		_get_owasp_codes		owasp_codes	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:1251		_get_owasp_codes		owasp_code	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:1258		_event_to_vectors_simple		source	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:1260		_event_to_vectors_simple		threat_category	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:1287		_event_to_vectors_simple		pii_detected	
+ee_read	keytransform	control/ai_mesh_control/policy/security_views.py:1410	ModuleKpisView	get		event_type	
+ee_read	keytransform	control/ai_mesh_control/policy/security_views.py:1410	ModuleKpisView	get		is_audit_log	
+ee_read	keytransform	control/ai_mesh_control/policy/security_views.py:1410	ModuleKpisView	get		is_isolation_event	
+ee_read	keytransform	control/ai_mesh_control/policy/security_views.py:1410	ModuleKpisView	get		module	
+ee_read	keytransform	control/ai_mesh_control/policy/security_views.py:1410	ModuleKpisView	get		module_id	
+ee_read	keytransform	control/ai_mesh_control/policy/security_views.py:1410	ModuleKpisView	get		owasp_code	
+ee_read	keytransform	control/ai_mesh_control/policy/security_views.py:1410	ModuleKpisView	get		source	
+ee_read	keytransform	control/ai_mesh_control/policy/security_views.py:1410	ModuleKpisView	get		threat_type	
+ee_read	keytransform	control/ai_mesh_control/policy/security_views.py:1410	ModuleKpisView	get		trigger_source	
+ee_read	keytransform	control/ai_mesh_control/policy/security_views.py:1498	ModuleTrendsView	get		event_type	
+ee_read	keytransform	control/ai_mesh_control/policy/security_views.py:1498	ModuleTrendsView	get		is_audit_log	
+ee_read	keytransform	control/ai_mesh_control/policy/security_views.py:1498	ModuleTrendsView	get		is_isolation_event	
+ee_read	keytransform	control/ai_mesh_control/policy/security_views.py:1498	ModuleTrendsView	get		module	
+ee_read	keytransform	control/ai_mesh_control/policy/security_views.py:1498	ModuleTrendsView	get		module_id	
+ee_read	keytransform	control/ai_mesh_control/policy/security_views.py:1498	ModuleTrendsView	get		owasp_code	
+ee_read	keytransform	control/ai_mesh_control/policy/security_views.py:1498	ModuleTrendsView	get		source	
+ee_read	keytransform	control/ai_mesh_control/policy/security_views.py:1498	ModuleTrendsView	get		threat_type	
+ee_read	keytransform	control/ai_mesh_control/policy/security_views.py:1498	ModuleTrendsView	get		trigger_source	
+ee_read	keytransform	control/ai_mesh_control/policy/security_views.py:1586	OwaspStatsView	get		owasp_codes	
+ee_read	keytransform	control/ai_mesh_control/policy/security_views.py:1587	OwaspStatsView	get		owasp_code	
+ee_read	keytransform	control/ai_mesh_control/policy/security_views.py:1718	OwaspEventsView	get		owasp_codes	
+ee_read	keytransform	control/ai_mesh_control/policy/security_views.py:1719	OwaspEventsView	get		owasp_code	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:1756	OwaspEventsView	get		prompt_snippet	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:1756	OwaspEventsView	get		prompt_snippet_truncated	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:1764	OwaspEventsView	get		threat_category	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:1765	OwaspEventsView	get		owasp_code	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:1765	OwaspEventsView	get		threat_subcategory	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:1766	OwaspEventsView	get		security_risk_score	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:1768	OwaspEventsView	get		source	
+ee_read	helper:metadata_text	control/ai_mesh_control/policy/security_views.py:1875	ModuleChartsView	_build_threat_breakdown		threat_category	
+ee_read	helper:metadata_text	control/ai_mesh_control/policy/security_views.py:1876	ModuleChartsView	_build_threat_breakdown		threat_type	
+ee_read	helper:annotate_numeric_float	control/ai_mesh_control/policy/security_views.py:1923	ModuleChartsView	_build_risk_distribution		security_risk_score	
+ee_read	helper:annotate_numeric_float	control/ai_mesh_control/policy/security_views.py:1946	ModuleChartsView	_build_latency_histogram		latency_ms	
+ee_read	helper:metadata_text	control/ai_mesh_control/policy/security_views.py:1960	ModuleChartsView	_build_model_routing		model	
+ee_read	helper:metadata_json	control/ai_mesh_control/policy/security_views.py:1990	ThreatSourcesView	get		owasp_codes	
+ee_read	helper:metadata_text	control/ai_mesh_control/policy/security_views.py:1991	ThreatSourcesView	get		owasp_code	
+ee_read	helper:metadata_text	control/ai_mesh_control/policy/security_views.py:1992	ThreatSourcesView	get		threat_category	
+ee_read	helper:annotate_numeric_float	control/ai_mesh_control/policy/security_views.py:1995	ThreatSourcesView	get		security_risk_score	
+ee_read	helper:metadata_text	control/ai_mesh_control/policy/security_views.py:2114	AttackGraphView	get		model	
+ee_read	helper:metadata_json	control/ai_mesh_control/policy/security_views.py:2115	AttackGraphView	get		tools_invoked	
+ee_read	helper:metadata_json	control/ai_mesh_control/policy/security_views.py:2116	AttackGraphView	get		data_accessed	
+ee_read	helper:annotate_numeric_float	control/ai_mesh_control/policy/security_views.py:2119	AttackGraphView	get		security_risk_score	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:2303	EscalateIncidentView	post		threat_category	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:2437		_violation_tag_event		owasp_codes	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:2441		_violation_tag_event		owasp_code	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:2443		_violation_tag_event		threat_category	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:2444		_violation_tag_event		source	
+ee_read	py_get	control/ai_mesh_control/policy/security_views.py:2447		_violation_tag_event		pii_detected	
+ee_read	helper:annotate_numeric_float	control/ai_mesh_control/policy/security_views.py:2518	UserBlockageKpisView	get		security_risk_score	
+ee_read	helper:metadata_json	control/ai_mesh_control/policy/security_views.py:2636	ViolationCategoriesView	get		owasp_codes	
+ee_read	helper:metadata_text	control/ai_mesh_control/policy/security_views.py:2637	ViolationCategoriesView	get		owasp_code	
+ee_read	helper:metadata_text	control/ai_mesh_control/policy/security_views.py:2638	ViolationCategoriesView	get		threat_category	
+ee_read	helper:metadata_text	control/ai_mesh_control/policy/security_views.py:2639	ViolationCategoriesView	get		source	
+ee_read	helper:metadata_json	control/ai_mesh_control/policy/security_views.py:2640	ViolationCategoriesView	get		pii_detected	
+ee_read	keytransform	control/ai_mesh_control/policy/security_views.py:2702	AgentTypeStatsView	get		security_risk_score	
+ee_read	helper:metadata_json	control/ai_mesh_control/policy/security_views.py:2790	UserBlockageStatsView	get		owasp_codes	
+ee_read	helper:metadata_text	control/ai_mesh_control/policy/security_views.py:2791	UserBlockageStatsView	get		owasp_code	
+ee_read	helper:metadata_text	control/ai_mesh_control/policy/security_views.py:2792	UserBlockageStatsView	get		threat_category	
+ee_read	helper:metadata_json	control/ai_mesh_control/policy/security_views.py:2793	UserBlockageStatsView	get		pii_detected	
+ee_read	helper:annotate_numeric_float	control/ai_mesh_control/policy/security_views.py:2796	UserBlockageStatsView	get		security_risk_score	
+ee_read	orm_lookup	control/ai_mesh_control/policy/security_views.py:2924	RAGPipelineStageKpisView	get		event_type	metadata__event_type
+ee_read	helper:metadata_text	control/ai_mesh_control/policy/security_views.py:2925	RAGPipelineStageKpisView	get		pipeline_stage	
+ee_read	helper:annotate_numeric_float	control/ai_mesh_control/policy/security_views.py:2926	RAGPipelineStageKpisView	get		latency_ms	
+ee_read	orm_lookup	control/ai_mesh_control/policy/security_views.py:3005	RAGPipelineTraceView	get		event_type	metadata__event_type
+ee_read	orm_lookup	control/ai_mesh_control/policy/security_views.py:3006	RAGPipelineTraceView	get		extra	metadata__extra__request_id
+ee_read	orm_lookup	control/ai_mesh_control/policy/security_views.py:3006	RAGPipelineTraceView	get		request_id	metadata__request_id
+ee_read	orm_lookup	control/ai_mesh_control/policy/security_views.py:3006	RAGPipelineTraceView	get	extra	request_id	metadata__extra__request_id
+ee_read	helper:metadata_text	control/ai_mesh_control/policy/security_views.py:3009	RAGPipelineTraceView	get		pipeline_stage	
+ee_read	helper:metadata_text	control/ai_mesh_control/policy/security_views.py:3010	RAGPipelineTraceView	get		threat_type	
+ee_read	helper:metadata_text	control/ai_mesh_control/policy/security_views.py:3011	RAGPipelineTraceView	get		detail	
+ee_read	keytransform	control/ai_mesh_control/policy/security_views.py:3012	RAGPipelineTraceView	get	extra	detail	
+ee_read	keytransform	control/ai_mesh_control/policy/security_views.py:3012	RAGPipelineTraceView	get		extra	
+ee_read	helper:metadata_text	control/ai_mesh_control/policy/security_views.py:3013	RAGPipelineTraceView	get		risk_score	
+ee_read	helper:annotate_numeric_float	control/ai_mesh_control/policy/security_views.py:3015	RAGPipelineTraceView	get		latency_ms	
+ee_read	py_get	control/ai_mesh_control/policy/telemetry_resolution.py:12		_meta_bucket		extra	
+ee_read	py_get	control/ai_mesh_control/policy/telemetry_resolution.py:30		metadata_policy_codes		policy_violations	
+ee_read	py_get	control/ai_mesh_control/policy/telemetry_resolution.py:36		metadata_policy_codes		matched_policies	
+ee_read	py_get	control/ai_mesh_control/policy/telemetry_resolution.py:36		metadata_policy_codes		matched_policy_codes	
+ee_read	py_get	control/ai_mesh_control/policy/telemetry_resolution.py:47		metadata_rule_names		matched_rule_names	
+ee_read	py_get	control/ai_mesh_control/policy/telemetry_resolution.py:47		metadata_rule_names		matched_rules	
+ee_read	py_get	control/ai_mesh_control/ws/notify.py:28		_resolve_org_id		organization_id	
+ee_read	py_get	workers/ai_mesh_workers/tasks/telemetry.py:207		_build_notification_payload		security_risk_score	
+ee_read	py_get	workers/ai_mesh_workers/tasks/telemetry.py:207		_build_notification_payload		severity	
+ee_read	py_get	workers/ai_mesh_workers/tasks/telemetry.py:208		_build_notification_payload		threat_category	
+ee_read	py_get	workers/ai_mesh_workers/tasks/telemetry.py:209		_build_notification_payload		owasp_code	
+ee_read	py_get	workers/ai_mesh_workers/tasks/telemetry.py:209		_build_notification_payload		threat_subcategory	
+ee_read	py_get	workers/ai_mesh_workers/tasks/telemetry.py:210		_build_notification_payload		source	
+ee_read	py_get	workers/ai_mesh_workers/tasks/telemetry.py:290		_auto_create_review_items_and_incidents		threat_type	
+ee_read	py_get	workers/ai_mesh_workers/tasks/telemetry.py:291		_auto_create_review_items_and_incidents		security_risk_score	
+ee_read	orm_lookup	workers/ai_mesh_workers/tasks/telemetry.py:827		update_risk_scores_from_telemetry		threat_type	metadata__threat_type
+ee_read	py_get	workers/ai_mesh_workers/tasks/telemetry.py:833		update_risk_scores_from_telemetry		key_prefix	
+ee_read	py_get	workers/ai_mesh_workers/tasks/telemetry.py:834		update_risk_scores_from_telemetry		threat_type	
+ee_read	orm_lookup	workers/ai_mesh_workers/tasks/telemetry.py:898		_apply_risk_decay		key_prefix	metadata__key_prefix
+fact_read	py_in	control/ai_mesh_control/policy/analytics_rollup.py:454		_is_critical_meta		is_critical	
+fact_read	py_subscript	control/ai_mesh_control/policy/analytics_rollup.py:455		_is_critical_meta		is_critical	
+fact_read	py_get	control/ai_mesh_control/policy/analytics_rollup.py:457		_is_critical_meta		security_risk_score	
+fact_read	py_get	control/ai_mesh_control/policy/analytics_rollup.py:463		_accumulate_module		source	
+ingest	py_get	control/ai_mesh_control/core/tasks.py:171		_build_enforcement_metadata		source	
+ingest	py_get	control/ai_mesh_control/core/tasks.py:173		_build_enforcement_metadata		module	
+ingest	py_get	control/ai_mesh_control/core/tasks.py:174		_build_enforcement_metadata		module_id	
+ingest	py_get	control/ai_mesh_control/core/tasks.py:180		_build_enforcement_metadata		request_id	
+ingest	py_get	control/ai_mesh_control/core/tasks.py:241		_build_enforcement_metadata		input_action	
+ingest	py_get	control/ai_mesh_control/core/tasks.py:242		_build_enforcement_metadata		output_action	
+ingest	py_get	control/ai_mesh_control/core/tasks.py:243		_build_enforcement_metadata		detail	
+ingest	py_get	control/ai_mesh_control/core/tasks.py:243		_build_enforcement_metadata		reason	
+ingest	py_get	control/ai_mesh_control/core/tasks.py:256		_build_enforcement_metadata		matched_policies	
+ingest	py_get	control/ai_mesh_control/core/tasks.py:257		_build_enforcement_metadata		matched_policies	
+ingest	py_get	control/ai_mesh_control/core/tasks.py:258		_build_enforcement_metadata		matched_policy_codes	
+ingest	py_get	control/ai_mesh_control/core/tasks.py:259		_build_enforcement_metadata		matched_policies	
+ingest	py_get	control/ai_mesh_control/core/tasks.py:261		_build_enforcement_metadata		matched_rules	
+ingest	py_get	control/ai_mesh_control/core/tasks.py:262		_build_enforcement_metadata		matched_rule_names	
+ingest	py_get	control/ai_mesh_control/core/tasks.py:263		_build_enforcement_metadata		matched_rules	
+ingest	py_get	control/ai_mesh_control/core/tasks.py:265		_build_enforcement_metadata		matched_policy_ids	
+ingest	py_get	control/ai_mesh_control/core/tasks.py:266		_build_enforcement_metadata		matched_rule_ids	
+ingest	py_get	control/ai_mesh_control/core/tasks.py:286		_build_enforcement_metadata		pipeline_trace	
+ingest	py_subscript	control/ai_mesh_control/core/tasks.py:287		_build_enforcement_metadata		pipeline_trace	
+ingest	py_get	control/ai_mesh_control/core/tasks.py:289		_build_enforcement_metadata		incident_id	
+ingest	py_get	control/ai_mesh_control/core/tasks.py:290		_build_enforcement_metadata		request_id	
+ingest	py_get	control/ai_mesh_control/core/tasks.py:294		_build_enforcement_metadata		prompt_submitted	
+ingest	py_get	control/ai_mesh_control/core/tasks.py:295		_build_enforcement_metadata		prompt_snippet	
+ingest	py_get	control/ai_mesh_control/core/tasks.py:304		_build_enforcement_metadata		raw_output	
+ingest	py_get	control/ai_mesh_control/core/tasks.py:304		_build_enforcement_metadata		response_snippet	
+ingest	py_get	control/ai_mesh_control/core/tasks.py:304		_build_enforcement_metadata		sanitized_output	
+ingest	py_subscript	control/ai_mesh_control/core/tasks.py:305		_build_enforcement_metadata		raw_output	
+ingest	py_subscript	control/ai_mesh_control/core/tasks.py:305		_build_enforcement_metadata		response_snippet	
+ingest	py_subscript	control/ai_mesh_control/core/tasks.py:305		_build_enforcement_metadata		sanitized_output	
+ingest	py_get	control/ai_mesh_control/core/tasks.py:667		drain_telemetry_from_redis		request_id	
+ingest	py_get	control/ai_mesh_control/core/tasks.py:674		drain_telemetry_from_redis		organization_id	
+ingest	py_get	control/ai_mesh_control/mcp_connector/views.py:2268		_record_event		incomplete_fields	
+ingest	py_get	control/ai_mesh_control/mcp_connector/views.py:2285		_record_event		matched_policy_codes	
+ingest	py_get	control/ai_mesh_control/mcp_connector/views.py:2286		_record_event		matched_policy_codes	
+ingest	py_get	control/ai_mesh_control/mcp_connector/views.py:2287		_record_event		matched_policy_codes	
+ingest	py_get	control/ai_mesh_control/mcp_connector/views.py:2289		_record_event		matched_rule_names	
+ingest	py_in	control/ai_mesh_control/mcp_connector/views.py:2714	MCPGatewayRecordEventView	post		write_risk	
+ingest	py_get	control/ai_mesh_control/policy/evaluation_views.py:117		_enforcement_event_payload		security_risk_score	
+ingest	py_get	control/ai_mesh_control/policy/evaluation_views.py:117		_enforcement_event_payload		severity	
+ingest	py_get	control/ai_mesh_control/policy/evaluation_views.py:118		_enforcement_event_payload		threat_category	
+ingest	py_get	control/ai_mesh_control/policy/evaluation_views.py:119		_enforcement_event_payload		owasp_code	
+ingest	py_get	control/ai_mesh_control/policy/evaluation_views.py:119		_enforcement_event_payload		owasp_codes	
+ingest	py_get	control/ai_mesh_control/policy/evaluation_views.py:120		_enforcement_event_payload		threat_subcategory	
+ingest	py_get	control/ai_mesh_control/policy/evaluation_views.py:123		_enforcement_event_payload		source	
+ingest	py_get	control/ai_mesh_control/policy/evaluation_views.py:253		_build_forensics_metadata		security_risk_score	
+ingest	py_subscript	control/ai_mesh_control/policy/evaluation_views.py:254		_build_forensics_metadata		security_risk_score	
+ingest	py_get	control/ai_mesh_control/policy/evaluation_views.py:489	PolicyCheckView	post		policy_domain	
+ingest	py_get	control/ai_mesh_control/policy/evaluation_views.py:974	PolicyTestView	post		policy_domain	
+ingest	py_get	control/ai_mesh_control/policy/evaluation_views.py:1283	EnforcementEventBatchView	post		prompt_lineage	
+ingest	py_get	control/ai_mesh_control/policy/evaluation_views.py:1283	EnforcementEventBatchView	post		prompt_snippet	
+ingest	py_subscript	control/ai_mesh_control/policy/evaluation_views.py:1285	EnforcementEventBatchView	post		prompt_snippet	
+ingest	py_get	control/ai_mesh_control/policy/evaluation_views.py:1286	EnforcementEventBatchView	post		security_risk_score	
+ingest	helper:metadata_matched_ids	control/ai_mesh_control/policy/telemetry_resolution.py:86		resolve_policy_rule_from_event		matched_policy_ids	
+ingest	helper:metadata_matched_ids	control/ai_mesh_control/policy/telemetry_resolution.py:87		resolve_policy_rule_from_event		matched_rule_ids	
+ingest	py_get	workers/ai_mesh_workers/tasks/telemetry.py:88		_build_enforcement_metadata		source	
+ingest	py_get	workers/ai_mesh_workers/tasks/telemetry.py:90		_build_enforcement_metadata		module	
+ingest	py_get	workers/ai_mesh_workers/tasks/telemetry.py:91		_build_enforcement_metadata		module_id	
+ingest	py_get	workers/ai_mesh_workers/tasks/telemetry.py:97		_build_enforcement_metadata		request_id	
+ingest	py_get	workers/ai_mesh_workers/tasks/telemetry.py:104		_build_enforcement_metadata		raw_findings	
+ingest	py_get	workers/ai_mesh_workers/tasks/telemetry.py:148		_build_enforcement_metadata		matched_policies	
+ingest	py_get	workers/ai_mesh_workers/tasks/telemetry.py:149		_build_enforcement_metadata		matched_policies	
+ingest	py_get	workers/ai_mesh_workers/tasks/telemetry.py:150		_build_enforcement_metadata		matched_policy_codes	
+ingest	py_get	workers/ai_mesh_workers/tasks/telemetry.py:151		_build_enforcement_metadata		matched_policies	
+ingest	py_get	workers/ai_mesh_workers/tasks/telemetry.py:153		_build_enforcement_metadata		matched_rules	
+ingest	py_get	workers/ai_mesh_workers/tasks/telemetry.py:154		_build_enforcement_metadata		matched_rule_names	
+ingest	py_get	workers/ai_mesh_workers/tasks/telemetry.py:155		_build_enforcement_metadata		matched_rules	
+ingest	py_get	workers/ai_mesh_workers/tasks/telemetry.py:157		_build_enforcement_metadata		matched_policy_ids	
+ingest	py_get	workers/ai_mesh_workers/tasks/telemetry.py:158		_build_enforcement_metadata		matched_rule_ids	
+ingest	py_get	workers/ai_mesh_workers/tasks/telemetry.py:475		drain_telemetry_from_redis		request_id	
+ingest	py_get	workers/ai_mesh_workers/tasks/telemetry.py:481		drain_telemetry_from_redis		organization_id	

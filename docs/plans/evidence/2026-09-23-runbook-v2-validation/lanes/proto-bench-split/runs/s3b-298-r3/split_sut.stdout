@@ -1,0 +1,289 @@
+{
+ "n_measured_requests": 89400,
+ "gateways": {
+  "rv-split-gw-1": {
+   "cores": {
+    "worker": 1.847,
+    "launcher": 0.0,
+    "redis": 0.0
+   },
+   "cpu_ms_per_req": 6.219,
+   "redis_cpu_ms_per_req": 0.0,
+   "vm_cores_busy": 1.87,
+   "worker_util": {
+    "n": 12,
+    "min": 0.131,
+    "median": 0.155,
+    "max": 0.174
+   },
+   "core_util": {
+    "max": 0.135,
+    "mean": 0.117,
+    "sum_cores": 1.87
+   },
+   "nic": {
+    "ens3": {
+     "rx_mbit_s": 82.34,
+     "tx_mbit_s": 93.76,
+     "rx_bytes_per_req": 34654.2,
+     "tx_bytes_per_req": 39458.7
+    }
+   },
+   "guard_rtt": {
+    "n": 44702,
+    "p50_ms": 4.8824,
+    "p90_ms": 7.3728,
+    "p99_ms": 11.9931,
+    "p99.9_ms": 15.6631,
+    "mean_ms": 5.05
+   },
+   "guard_wait": {
+    "n": 44702,
+    "p50_ms": 4.7514,
+    "p90_ms": 7.3073,
+    "p99_ms": 11.862,
+    "p99.9_ms": 15.6631,
+    "mean_ms": 4.9423
+   },
+   "guard_queue_seen_by_worker": {
+    "n": 44702,
+    "p50_ms": 0.0865,
+    "p90_ms": 3.0638,
+    "p99_ms": 7.8316,
+    "p99.9_ms": 11.0756,
+    "mean_ms": 0.9632
+   },
+   "guard_exec_seen_by_worker": {
+    "n": 44702,
+    "p50_ms": 4.1452,
+    "p90_ms": 4.4237,
+    "p99_ms": 6.4553,
+    "p99.9_ms": 6.8485,
+    "mean_ms": 3.477
+   },
+   "t_input": {
+    "n": 44702,
+    "p50_ms": 6.8485,
+    "p90_ms": 9.7649,
+    "p99_ms": 13.8281,
+    "p99.9_ms": 17.6947,
+    "mean_ms": 6.7253
+   },
+   "t_tokenize": {
+    "n": 44702,
+    "p50_ms": 1.4664,
+    "p90_ms": 2.3101,
+    "p99_ms": 2.6378,
+    "p99.9_ms": 2.9983,
+    "mean_ms": 1.4576
+   },
+   "loop_lag": {
+    "n": 35880,
+    "p50_ms": 0.0019,
+    "p90_ms": 1.876,
+    "p99_ms": 4.5548,
+    "p99.9_ms": 5.7999,
+    "mean_ms": 0.4571
+   },
+   "windows_per_request": 1.639,
+   "admitted": 44702,
+   "counts": {
+    "admitted": 44702,
+    "audit_enqueued": 88661,
+    "audit_written": 88661,
+    "background_round_trips": 7176,
+    "disposition_ALLOW": 43914,
+    "disposition_BLOCK": 788,
+    "guard_windows": 73267,
+    "lease_granted_tokens{org=\"org-a\"}": 42320640,
+    "lease_refills": 309,
+    "provider_calls": 43914,
+    "provider_connections_opened": 27579,
+    "quota_admitted_tokens{org=\"org-a\"}": 42312220,
+    "requests_by_round_trips{n=\"0\"}": 44393,
+    "requests_by_round_trips{n=\"1\"}": 309,
+    "shared_state_round_trips": 309
+   }
+  },
+  "rv-split-gw-2": {
+   "cores": {
+    "worker": 1.828,
+    "launcher": 0.0,
+    "redis": 0.0
+   },
+   "cpu_ms_per_req": 6.155,
+   "redis_cpu_ms_per_req": 0.0,
+   "vm_cores_busy": 1.85,
+   "worker_util": {
+    "n": 12,
+    "min": 0.122,
+    "median": 0.152,
+    "max": 0.19
+   },
+   "core_util": {
+    "max": 0.134,
+    "mean": 0.116,
+    "sum_cores": 1.85
+   },
+   "nic": {
+    "ens3": {
+     "rx_mbit_s": 82.28,
+     "tx_mbit_s": 93.66,
+     "rx_bytes_per_req": 34630.2,
+     "tx_bytes_per_req": 39419.4
+    }
+   },
+   "guard_rtt": {
+    "n": 44681,
+    "p50_ms": 4.8824,
+    "p90_ms": 7.3728,
+    "p99_ms": 11.862,
+    "p99.9_ms": 16.0563,
+    "mean_ms": 4.873
+   },
+   "guard_wait": {
+    "n": 44681,
+    "p50_ms": 4.7514,
+    "p90_ms": 7.2417,
+    "p99_ms": 11.7309,
+    "p99.9_ms": 16.0563,
+    "mean_ms": 4.7646
+   },
+   "guard_queue_seen_by_worker": {
+    "n": 44681,
+    "p50_ms": 0.0876,
+    "p90_ms": 2.6378,
+    "p99_ms": 6.7174,
+    "p99.9_ms": 10.4202,
+    "mean_ms": 0.7917
+   },
+   "guard_exec_seen_by_worker": {
+    "n": 44681,
+    "p50_ms": 4.1452,
+    "p90_ms": 4.4237,
+    "p99_ms": 6.5208,
+    "p99.9_ms": 6.8485,
+    "mean_ms": 3.4788
+   },
+   "t_input": {
+    "n": 44681,
+    "p50_ms": 6.8485,
+    "p90_ms": 9.6338,
+    "p99_ms": 14.0902,
+    "p99.9_ms": 18.219,
+    "mean_ms": 6.5305
+   },
+   "t_tokenize": {
+    "n": 44680,
+    "p50_ms": 1.45,
+    "p90_ms": 2.2774,
+    "p99_ms": 2.6051,
+    "p99.9_ms": 3.031,
+    "mean_ms": 1.4381
+   },
+   "loop_lag": {
+    "n": 35880,
+    "p50_ms": 0.0016,
+    "p90_ms": 1.8924,
+    "p99_ms": 4.5548,
+    "p99.9_ms": 5.6689,
+    "mean_ms": 0.4532
+   },
+   "windows_per_request": 1.639,
+   "admitted": 44680,
+   "counts": {
+    "admitted": 44680,
+    "audit_enqueued": 88608,
+    "audit_written": 88608,
+    "background_round_trips": 7176,
+    "disposition_ALLOW": 43867,
+    "disposition_BLOCK": 814,
+    "guard_windows": 73236,
+    "lease_granted_tokens{org=\"org-a\"}": 42457600,
+    "lease_refills": 310,
+    "provider_calls": 43867,
+    "provider_connections_opened": 27581,
+    "quota_admitted_tokens{org=\"org-a\"}": 42271196,
+    "requests_by_round_trips{n=\"0\"}": 44370,
+    "requests_by_round_trips{n=\"1\"}": 310,
+    "shared_state_round_trips": 310
+   }
+  }
+ },
+ "guards": {
+  "rv-split-guard-1": {
+   "owner_cores": 0.576,
+   "owner_cpu_ms_per_req": 1.939,
+   "vm_cores_busy": 0.59,
+   "gpu": {
+    "0": {
+     "samples": 299,
+     "sm_mean": 46.1,
+     "sm_max": 79.0,
+     "mem_mean": 8.2,
+     "fb_mb_max": 434.0
+    }
+   },
+   "nic": {
+    "ens4": {
+     "rx_mbit_s": 3.08,
+     "tx_mbit_s": 0.18,
+     "rx_bytes_per_req": 1297.4,
+     "tx_bytes_per_req": 75.5
+    },
+    "docker0": {
+     "rx_mbit_s": 0.0,
+     "tx_mbit_s": 0.0,
+     "rx_bytes_per_req": 0.0,
+     "tx_bytes_per_req": 0.0
+    }
+   },
+   "gw_guard_bytes_per_req": 1372.9,
+   "owner_queue_gauges": {
+    "o.guard_queue_items.max": {
+     "max": 2.0,
+     "mean": 0.25
+    },
+    "o.guard_queue_items.sum": {
+     "max": 2.0,
+     "mean": 0.25
+    },
+    "o.guard_queue_windows.max": {
+     "max": 4.0,
+     "mean": 0.42
+    },
+    "o.guard_queue_windows.sum": {
+     "max": 4.0,
+     "mean": 0.42
+    }
+   },
+   "owner_hist": {
+    "guard_queue_ns": {
+     "n": 44750,
+     "p50_ms": 0.0886,
+     "p90_ms": 2.9655,
+     "p99_ms": 7.7005,
+     "p99.9_ms": 11.3377,
+     "mean_ms": 0.9144
+    },
+    "guard_exec_ns": {
+     "n": 44750,
+     "p50_ms": 4.1779,
+     "p90_ms": 4.4892,
+     "p99_ms": 6.5864,
+     "p99.9_ms": 6.914,
+     "mean_ms": 3.5068
+    }
+   },
+   "owner_counts": {
+    "guard_batches": 44750,
+    "guard_windows": 73311,
+    "owner_requests": 44751,
+    "owner_windows": 73312
+   },
+   "core_util": {
+    "max": 0.224,
+    "mean": 0.147
+   }
+  },
+  "rv-s

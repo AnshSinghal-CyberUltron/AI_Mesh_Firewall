@@ -1,0 +1,10 @@
+setup rc=0
++ echo GATEWAY_SETUP_DONE
+GATEWAY_SETUP_DONE
+gateway tree == rvproto-frozen-1
+redis save=[]
+1048576
+16
+               total        used        free      shared  buff/cache   available
+Mem:              31           1          29           0           0          30
+7.0.0-1011-gcp

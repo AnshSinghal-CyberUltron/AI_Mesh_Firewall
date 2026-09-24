@@ -1,0 +1,4 @@
+20:41:44 rv-split-guard-6 asia-south1-b g2-standard-4 rc=1 STOCKOUT
+20:42:40 rv-split-guard-6 asia-south1-b g2-standard-4 rc=1 STOCKOUT
+20:43:37 rv-split-guard-6 asia-south1-b g2-standard-4 rc=0 10.160.0.61
+CREATED rv-split-guard-6 10.160.0.61

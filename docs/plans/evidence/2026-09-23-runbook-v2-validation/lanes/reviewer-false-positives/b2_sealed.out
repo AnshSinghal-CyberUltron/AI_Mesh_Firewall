@@ -1,0 +1,8 @@
+## mypy --strict
+pkg/edge/forge.py:9: error: Missing positional argument "_cap" in call to "DispatchAuthorization"  [call-arg]
+Found 1 error in 1 file (checked 7 source files)
+## runtime
+f1_direct: rejected at runtime: DispatchAuthorization.__init__() missing 1 required positional argument: '_cap'
+f2_replace: rejected at runtime: DispatchAuthorization is minted only by resolve/ for non-BLOCK decisions
+f3_new: provider CALLED with disposition='block'
+f4_launder: provider CALLED with disposition='allow'

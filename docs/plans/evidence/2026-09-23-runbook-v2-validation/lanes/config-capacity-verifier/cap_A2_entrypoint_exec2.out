@@ -1,0 +1,46 @@
+######## BASELINE WEB_CONCURRENCY=16 + RESOURCE_BUDGET_CPUS=4 (simulated 4-CPU box) exec->shim
+[gateway-entrypoint] WEB_CONCURRENCY=16 (source=env-override)
+[gunicorn-shim] argv: ai_mesh_gateway.main:app -k uvicorn.workers.UvicornWorker --config /app/gateway/gunicorn.conf.py --bind 0.0.0.0:8300 --workers 16 --worker-connections 20000 --timeout 120 --graceful-timeout 60 --keep-alive 65
+[gunicorn-shim] env WEB_CONCURRENCY=16
+[gunicorn-shim] env GATEWAY_SCANNER_THREAD_POOL_SIZE=4
+[gunicorn-shim] env GATEWAY_SCAN_THREAD_POOL_SIZE=4
+[gunicorn-shim] env GATEWAY_BEDROCK_THREAD_POOL_SIZE=10000
+[gunicorn-shim] env GATEWAY_VAULT_POOL_MAX=2
+[gunicorn-shim] env GATEWAY_REDIS_MAX_CONNECTIONS=64
+exit=0
+######## HEAD WEB_CONCURRENCY=16 + RESOURCE_BUDGET_CPUS=4 exec->shim
+[gateway-entrypoint] WEB_CONCURRENCY override=16 detected=4 (deviation)
+[gateway-entrypoint] WEB_CONCURRENCY=16 (source=env-override)
+[gunicorn-shim] argv: ai_mesh_gateway.main:app -k uvicorn.workers.UvicornWorker --config /app/gateway/gunicorn.conf.py --bind 0.0.0.0:8300 --workers 16 --worker-connections 20000 --timeout 120 --graceful-timeout 60 --keep-alive 65
+[gunicorn-shim] env WEB_CONCURRENCY=16
+[gunicorn-shim] env GATEWAY_SCANNER_THREAD_POOL_SIZE=4
+[gunicorn-shim] env GATEWAY_SCAN_THREAD_POOL_SIZE=4
+[gunicorn-shim] env GATEWAY_BEDROCK_THREAD_POOL_SIZE=10000
+[gunicorn-shim] env GATEWAY_VAULT_POOL_MAX=2
+[gunicorn-shim] env GATEWAY_REDIS_MAX_CONNECTIONS=64
+exit=0
+######## HEAD unset + RESOURCE_BUDGET_CPUS=4 DRYRUN
+[gateway-entrypoint] WEB_CONCURRENCY=4 (source=detector)
+[gateway-entrypoint] DRYRUN would exec: gunicorn ai_mesh_gateway.main:app -k uvicorn.workers.UvicornWorker --config /app/gateway/gunicorn.conf.py --bind 0.0.0.0:8300 --workers 4 --worker-connections 20000 --timeout 120 --graceful-timeout 60 --keep-alive 65
+exit=0
+
+=== detector-unavailable path (python cannot import ai_mesh_shared) ===
+######## /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad  (DRYRUN, PYTHONPATH=/nonexistent)
+exit=1
+######## /home/contact_cyberultron_com/AI_Mesh_Firewall  (DRYRUN, PYTHONPATH=/nonexistent)
+[gateway-entrypoint] FALLBACK_WORKERS=4 detected=unreadable (deviation)
+exit=1
+######## /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad  (sh -x trace tail, detector unavailable)
++ _cur=
++ [ -z  ]
++ python -m ai_mesh_shared.resource_budget --value scanner_pool
++ true
++ _val=
++ [ -n  ]
+######## /home/contact_cyberultron_com/AI_Mesh_Firewall  (sh -x trace tail, detector unavailable)
++ _cur=
++ [ -z  ]
++ python -m ai_mesh_shared.resource_budget --value scanner_pool
++ true
++ _val=
++ [ -n  ]

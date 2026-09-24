@@ -1,0 +1,4 @@
+[bedrock_logger] Cannot write to /var/log/bedrock: [Errno 13] Permission denied: '/var/log/bedrock'
+main imported; 'embedding_vault' in sys.modules: False
+guardrails-related modules loaded: []
+unconditional assignment present in main.py source: True line 6465

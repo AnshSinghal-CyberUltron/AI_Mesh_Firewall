@@ -1,0 +1,3 @@
+{"orgs": 500, "writer_s": 0.18, "converged_s": 0.23, "store_calls_one_worker": {"cmdstat_hgetall": 2515, "cmdstat_get": 2504}, "store_cpu_ms_one_worker": {"cmdstat_hgetall": 85.1, "cmdstat_get": 1.3}, "hgetall_calls_per_notification": 5.03}
+
+[exited with code 144]

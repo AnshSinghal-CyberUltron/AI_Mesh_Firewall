@@ -1,0 +1,17 @@
+{
+ "item": "Instrument honesty: injected 5 ms pre-dispatch delay and 30 ms mid-stream hold visible in harness metrics",
+ "setup": "controller, functional scale: synthprov TTFT 150 ms / ITL 20 ms / sample-mod 1; rvproto local_cpu 22M, 2 workers; olg 4 req/s x 60 s + 5 s warm-up, 70% SSE, light corpus (100-170 tok), key org-a; analyzer: SP/harness/analyze.py --mode sut --policy enforce --profile-stages canon,det,sem,resolve,dispatch,out,audit",
+ "harness_external_ms_p50": {
+  "direct_floor": {"T_fw_addon_json": 0.2, "T_addon_first": 0.2, "T_fw_addon_sse": 0.2},
+  "base": {"T_fw_addon_json": 84.3, "T_addon_first": 84.8, "T_fw_addon_sse": 107.7},
+  "predispatch5": {"T_fw_addon_json": 88.8, "T_addon_first": 89.3, "T_fw_addon_sse": 112.8},
+  "hold30": {"T_fw_addon_json": 83.8, "T_addon_first": 84.0, "T_fw_addon_sse": 134.5}
+ },
+ "deltas_vs_base_ms_p50": {"predispatch5": {"json": 4.5, "first": 4.5, "sse": 5.1}, "hold30": {"json": -0.5, "first": -0.8, "sse": 26.8}},
+ "gateway_internal": {"t_input_p50_ms": {"base": 83.36, "predispatch5": 88.6}, "release_processing_max_ms": {"base": 0.51, "hold30": 31.07},
+                      "release_lag_max_per_stream_p50_ms": {"base": 40.11, "hold30": 50.07},
+                      "note": "internal release lag under-reports a loop stall by ~1 ITL because upstream bytes queued in the socket during the stall are timestamped when read; the external harness metric is authoritative"},
+ "validity": "all four runs valid=True, 0 schedule drops, loadgen busy_max 19.5%",
+ "blocked_benign": "2/240 in base and hold30: PG2-22M false positives (p=0.538, 0.632 at threshold 0.5) -> A.inj.sem BLOCK; not an instrument issue",
+ "verdict": "PASS"
+}

@@ -1,0 +1,6 @@
+{"orgs": 2000, "writer_s": 0.67, "converged_s": 30.02, "store_calls_one_worker": {"cmdstat_get": 2139, "cmdstat_hgetall": 2030}, "store_cpu_ms_one_worker": {"cmdstat_get": 2.0, "cmdstat_hgetall": 1375.0}, "hgetall_calls_per_notification": 1.01}
+{"orgs": 2000, "stale_after_cap": 24, "examples": [["org-01451", "v0", "v1"], ["org-01452", "v0", "v1"], ["org-01453", "v0", "v1"], ["org-01454", "v0", "v1"], ["org-01455", "v0", "v1"]], "store_says": "v1 for every org"}
+{"orgs": 2000, "writer_s": 0.71, "converged_s": 30.05, "store_calls_one_worker": {"cmdstat_get": 2057, "cmdstat_hgetall": 2030}, "store_cpu_ms_one_worker": {"cmdstat_get": 2.5, "cmdstat_hgetall": 1419.9}, "hgetall_calls_per_notification": 1.01}
+{"orgs": 2000, "stale_after_cap": 23, "examples": [["org-01314", "v0", "v1"], ["org-01315", "v0", "v1"], ["org-01316", "v0", "v1"], ["org-01320", "v0", "v1"], ["org-01321", "v0", "v1"]], "store_says": "v1 for every org"}
+{"orgs": 500, "writer_s": 0.16, "converged_s": 0.22, "store_calls_one_worker": {"cmdstat_get": 500, "cmdstat_hgetall": 501}, "store_cpu_ms_one_worker": {"cmdstat_get": 0.5, "cmdstat_hgetall": 81.8}, "hgetall_calls_per_notification": 1.0}
+{"orgs": 500, "stale_after_cap": 0, "examples": [], "store_says": "v1 for every org"}

@@ -1,0 +1,2 @@
+current tree: guard future resolved after 202 ms: ok=False detail='guard owner /tmp/rvh-trxemwda/guard-0.sock: no answer within twice the budget'
+readiness over 7 s while the owner stays wedged: [(0.2, True), (0.7, True), (1.2, True), (1.7, True), (2.2, True), (2.7, True), (3.2, True), (3.7, True), (4.2, True), (4.7, True), (5.2, True), (5.7, True), (6.2, True), (6.7, True)] | owner connections: 2

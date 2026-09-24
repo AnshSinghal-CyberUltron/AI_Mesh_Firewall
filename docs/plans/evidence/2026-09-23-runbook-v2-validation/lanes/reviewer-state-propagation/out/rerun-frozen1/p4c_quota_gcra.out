@@ -1,0 +1,1 @@
+{"t": 1790168021.719, "step": "gcra result (org rate_per_s=2, burst=2)", "fresh_connection_per_request": {"window_s": 3.0, "responses": {"200": 28, "429 rate_limit_exceeded": 208}, "admitted": 28, "org_limit_would_allow": 8}, "one_keepalive_connection": {"window_s": 3.0, "responses": {"200": 7, "429 rate_limit_exceeded": 5733}, "admitted": 7, "org_limit_would_allow": 8}}

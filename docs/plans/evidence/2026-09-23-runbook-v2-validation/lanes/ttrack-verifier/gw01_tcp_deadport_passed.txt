@@ -1,0 +1,9 @@
+passed_with_base_url_pointing_at_closed_port_9: 27
+  test_malformed_sse_frame 1
+  test_openai_sdk_compat 4
+  test_openai_sdk_compat_live_uvicorn 6
+  test_openai_sdk_compat_phase2 9
+  test_openai_sdk_compat_phase2_adversarial 5
+  test_openai_sdk_compat_phase5_correlation 1
+  test_openai_sdk_compat_phase6_guards 1
+sample: ['test_malformed_sse_data_frame_fails_and_names_frame', 'test_responses_mid_stream_failure_surfaces_typed_response_failed', 'test_responses_store_retrieve_delete_roundtrip', 'test_responses_input_items_listing', 'test_responses_previous_response_id_replay', 'test_live_chat_non_stream', 'test_live_chat_stream_chunks_and_done', 'test_live_responses_stream_typed_events', 'test_live_request_id_header_present_and_matches_body', 'test_live_client_disconnect_midstream_then_server_responsive', 'test_live_zero_token_scan_only_no_hang', 'test_max_completion_tokens_not_shadowed_by_injected_max_tokens']

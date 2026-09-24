@@ -1,0 +1,49 @@
+bytes 869078 KiB 848.7 kB 869.1
+bytes excl comment-only lines 663314 KiB 647.8
+bytes excl leading indentation 662.69140625
+chars 866311 chars/1024 846.0
+-rw-rw-r-- 1 contact_cyberultron_com contact_cyberultron_com 869078 Sep 17 12:35 /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py
+-rw-rw-r-- 1 contact_cyberultron_com contact_cyberultron_com 849K Sep 17 12:35 /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py
+852	/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py
+849	/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py
+main.py size history (last 40 commits touching it, lines bytes):
+2a657fad   17452  869078
+f060d03c   17086  854369
+7cfd287d   16942  848113
+35f1fe45   16830  842170
+543bbd67   16757  838529
+04fef308   16751  838096
+15fe40fe   16733  837026
+a68c91a4   16718  836133
+01131b0a   16689  834758
+5c0beca7   16667  833749
+a83d113f   16645  832586
+40f117c2   16540  825125
+9ee714f4   16509  823646
+785a32b5   16155  807944
+db306362   16091  804068
+d522294f   15422  766071
+802d4b4c   15401  764581
+d75343c3   15349  761333
+c982e8cb   15319  759787
+659c10a2   15316  759496
+69acbcfa   15281  756873
+571e0e8e   15265  755733
+6bd08600   15254  754979
+67f3887e   15234  753921
+cbcf3cd0   15222  753047
+bd7f3e4e   15172  749931
+b67fd742   14993  739300
+513d42d6   14415  704369
+34012150   14408  703837
+27231fab   14407  703729
+46a77f22   14374  701779
+43e72608   14366  701140
+952d3f8a   14322  698032
+bb432a22   14285  695277
+268f0f92   14278  694682
+6359c049   14204  690537
+5e700f4d   13683  663379
+4e154d8e   13646  661837
+d63ff959   13628  660839
+cdbec282   13617  660083

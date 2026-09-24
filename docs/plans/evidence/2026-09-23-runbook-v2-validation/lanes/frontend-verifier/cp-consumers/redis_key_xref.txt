@@ -1,0 +1,79 @@
+=== key 'telemetry:events' : gateway refs
+gateway/ai_mesh_gateway/telemetry.py:5:(``telemetry:events``) periodically or when the buffer is full.
+gateway/ai_mesh_gateway/telemetry.py:28:REDIS_TELEMETRY_KEY = "telemetry:events"
+gateway/ai_mesh_gateway/main.py:16838:            runtime_metrics["telemetry_queue_depth"] = int(await REDIS_CLIENT.llen("telemetry:events"))
+shared/ai_mesh_shared/jobs/queues.py:1:TELEMETRY_EVENTS_QUEUE = "telemetry:events"
+=== key 'telemetry:events' : control/workers refs
+control/ai_mesh_control/core/tasks.py:28:REDIS_TELEMETRY_KEY = "telemetry:events"
+control/ai_mesh_control/core/ingestion_views.py:5:``telemetry:events`` Redis list — the SAME queue the gateway data plane writes to
+control/ai_mesh_control/core/ingestion_views.py:27:REDIS_TELEMETRY_KEY = "telemetry:events"
+workers/ai_mesh_workers/tasks/telemetry.py:28:REDIS_TELEMETRY_KEY = "telemetry:events"
+=== key 'telemetry:stream' : gateway refs
+gateway/ai_mesh_gateway/telemetry.py:29:REDIS_TELEMETRY_STREAM_KEY = "telemetry:stream"
+=== key 'telemetry:stream' : control/workers refs
+=== key 'gateway:jobs' : gateway refs
+shared/ai_mesh_shared/jobs/queues.py:2:GATEWAY_JOBS_QUEUE = "gateway:jobs"
+=== key 'gateway:jobs' : control/workers refs
+control/ai_mesh_control/core/tasks.py:29:REDIS_GATEWAY_JOBS_KEY = "gateway:jobs"
+workers/ai_mesh_workers/celery_app.py:42:    # Drain the gateway:jobs queue (async envelopes incl. vector_ingest) and
+workers/ai_mesh_workers/tasks/telemetry.py:29:REDIS_GATEWAY_JOBS_KEY = "gateway:jobs"
+=== key 'model_risk_score:' : gateway refs
+gateway/ai_mesh_gateway/model_state.py:10:- ``model_risk_score:{org_slug}:{model_name}`` -- Cached composite risk score
+gateway/ai_mesh_gateway/model_state.py:157:    score_key = f"model_risk_score:{org_slug}:{model_name}"
+=== key 'model_risk_score:' : control/workers refs
+workers/ai_mesh_workers/tasks/isolation.py:4:Gateway writes ``model_risk_score:{org_slug}:{model_name}`` in Redis.
+workers/ai_mesh_workers/tasks/isolation.py:37:    for key in client.scan_iter("model_risk_score:*"):
+=== key 'model_risk:' : gateway refs
+gateway/ai_mesh_gateway/model_state.py:9:- ``model_risk:{org_slug}:{model_name}`` -- Rolling risk window (sorted set)
+gateway/ai_mesh_gateway/model_state.py:156:    risk_key = f"model_risk:{org_slug}:{model_name}"
+=== key 'model_risk:' : control/workers refs
+=== key 'model_state:' : gateway refs
+gateway/ai_mesh_gateway/model_state.py:8:- ``model_state:{org_slug}:{model_name}`` -- JSON payload from Django signals
+gateway/ai_mesh_gateway/model_state.py:54:    key = f"model_state:{org_slug}:{model_name}"
+gateway/ai_mesh_gateway/model_state.py:247:    state_key = f"model_state:{org_slug}:{model_name}"
+gateway/ai_mesh_gateway/model_state.py:303:    state_key = f"model_state:{org_slug}:{model_name}"
+=== key 'model_state:' : control/workers refs
+control/ai_mesh_control/core/models.py:1799:    The gateway reads this from Redis (``model_state:{org_slug}:{model_name}``)
+control/ai_mesh_control/core/models.py:1879:        return f"model_state:{org_slug}:{self.model_name}"
+=== key 'circuit:' : gateway refs
+gateway/ai_mesh_gateway/circuit_breaker.py:14:- circuit:errors:{model}:{window} -- error count
+gateway/ai_mesh_gateway/circuit_breaker.py:15:- circuit:total:{model}:{window} -- total request count
+gateway/ai_mesh_gateway/circuit_breaker.py:16:- circuit:state:{model} -- current state (closed/open/half_open)
+gateway/ai_mesh_gateway/circuit_breaker.py:17:- circuit:open_at:{model} -- timestamp when circuit opened
+=== key 'circuit:' : control/workers refs
+=== key 'mcp:diag:' : gateway refs
+gateway/ai_mesh_gateway/mcp_error_classifier.py:13:the shared Redis diagnostic channel ``mcp:diag:<ref>`` (same key convention as the
+gateway/ai_mesh_gateway/mcp_error_classifier.py:48:_DIAG_PREFIX = "mcp:diag:"
+gateway/ai_mesh_gateway/mcp_error_classifier.py:215:    keyed by ref (mcp:diag:<ref>, 7d TTL). A Redis outage must NEVER break the error
+=== key 'mcp:diag:' : control/workers refs
+control/ai_mesh_control/mcp_connector/views.py:658:MCP_DIAG_CACHE_PREFIX = "mcp:diag:"
+control/ai_mesh_control/mcp_connector/views.py:671:    ``mcp:diag:<ref>`` as JSON — which is NOT the django_redis cache key
+control/ai_mesh_control/mcp_connector/views.py:672:    (``<KEY_PREFIX>:<version>:mcp:diag:<ref>``, pickled). Read it directly off the
+=== key 'logs:stream' : gateway refs
+gateway/ai_mesh_gateway/log_buffer.py:146:        channel: str = "logs:stream",
+shared/ai_mesh_shared/redis_log_handler.py:17:REDIS_LOG_CHANNEL = "logs:stream"
+=== key 'logs:stream' : control/workers refs
+=== key 'policies:compiled' : gateway refs
+gateway/ai_mesh_gateway/vector_policy_sync.py:20:REDIS_KEY_COMPILED = "vector:policies:compiled"
+gateway/ai_mesh_gateway/vector_policy_sync.py:274:                LOG.warning("vector:policies:compiled key missing during refresh")
+gateway/ai_mesh_gateway/conftest.py:159:    """Compiled policy bundle as stored in policies:compiled Redis key."""
+gateway/ai_mesh_gateway/policy_sync.py:7:    1. On startup, scans org-scoped ``policies:compiled:*`` keys from Redis
+=== key 'policies:compiled' : control/workers refs
+control/ai_mesh_control/policy/vector_compiler.py:6:    - vector:policies:compiled       -- Full JSON bundle keyed by project_id::collection_name
+control/ai_mesh_control/policy/vector_compiler.py:26:REDIS_KEY_COMPILED = "vector:policies:compiled"
+control/ai_mesh_control/policy/compiler.py:6:    - policies:compiled       -- Full JSON bundle of all enabled policies + rules
+control/ai_mesh_control/policy/compiler.py:32:REDIS_KEY_COMPILED = "policies:compiled"
+control/ai_mesh_control/policy/vector_models.py:52:    enabled vector policies into a bundle at ``vector:policies:compiled``
+workers/ai_mesh_workers/tasks/policy.py:13:    global ``policies:compiled:default`` bundle and never the changed org's
+=== key 'kill_switch:' : gateway refs
+gateway/ai_mesh_gateway/circuit_breaker.py:140:        return f"kill_switch:{slug}:model:{model}"
+gateway/ai_mesh_gateway/circuit_breaker.py:243:        pattern = f"kill_switch:*:model:{model}"
+gateway/ai_mesh_gateway/kill_switch.py:56:                f"kill_switch:{prefix}:{CREDENTIAL_KEY_PREFIX}{key_prefix}:{MODEL_KEY_PREFIX}{model_name}",
+gateway/ai_mesh_gateway/kill_switch.py:59:    keys.append(("org_model", f"kill_switch:{prefix}:{MODEL_KEY_PREFIX}{model_name}"))
+=== key 'kill_switch:' : control/workers refs
+control/ai_mesh_control/core/signals.py:9:- ``kill_switch:global`` for the global kill-switch
+control/ai_mesh_control/core/signals.py:10:- ``kill_switch:model:{model_name}`` for per-model switches
+control/ai_mesh_control/core/models.py:766:    - ``kill_switch:global`` when model_name == ``__global__``
+control/ai_mesh_control/core/models.py:767:    - ``kill_switch:model:{model_name}`` for per-model switches
+control/ai_mesh_control/core/models.py:840:            return f"kill_switch:{prefix}:global"
+control/ai_mesh_control/core/models.py:843:            return f"kill_switch:{prefix}:credential:{credential_prefix}:model:{self.model_name}"

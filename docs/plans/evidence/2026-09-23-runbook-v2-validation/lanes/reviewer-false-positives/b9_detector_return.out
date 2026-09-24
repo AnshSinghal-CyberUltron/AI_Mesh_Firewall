@@ -1,0 +1,9 @@
+## mypy --strict (uv ephemeral env: mypy + starlette)
+Downloading mypy (14.5MiB)
+ Downloaded mypy
+Installed 9 packages in 14ms
+gateway_v2/detect/evil_detector.py:14: error: Incompatible return value type (got "Response", expected "tuple[Finding, ...]")  [return-value]
+gateway_v2/detect/evil_detector.py:20: error: Function is missing a type annotation  [no-untyped-def]
+Found 2 errors in 1 file (checked 79 source files)
+## shipped HTTP AST gate
+gate exit=0

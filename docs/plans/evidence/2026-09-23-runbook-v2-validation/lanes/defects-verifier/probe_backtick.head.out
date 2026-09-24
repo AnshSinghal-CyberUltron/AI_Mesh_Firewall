@@ -1,0 +1,74 @@
+[bedrock_logger] Cannot write to /var/log/bedrock: [Errno 13] Permission denied: '/var/log/bedrock'
+2026-09-23 10:38:24,706 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+2026-09-23 10:38:25,057 [INFO] gateway.scanner: policy #5: suppressed prompt_injection block — all matches are quoted/explanatory mentions (patterns=['ignore all previous instructions', 'ignore all previous instructions'])
+2026-09-23 10:38:25,083 [INFO] gateway.scanner: policy #5 (tier-0.5): suppressed prompt_injection block — all matches are explanatory mentions (patterns=['ignore all previous instructions', 'ignore all previous instructions'])
+ROOT = /home/contact_cyberultron_com/AI_Mesh_Firewall
+modules: {'ai_mesh_gateway.main': '<ROOT>/gateway/ai_mesh_gateway/main.py', 'enforcement': '<ROOT>/gateway/ai_mesh_gateway/enforcement.py', 'scanner': '<ROOT>/gateway/ai_mesh_gateway/scanner.py', 'policy_engine': '<ROOT>/gateway/ai_mesh_gateway/policy_engine.py', 'mcp_scan_orchestrator': '<ROOT>/gateway/ai_mesh_gateway/mcp_scan_orchestrator.py'}
+
+== P8a: ATTACK_PATTERNS['command_injection'] ==
+   ';\\s*rm\\s+-rf'
+   '&&\\s*curl'
+   '\\|\\s*bash'
+   '`[^`]+`'
+   '\\$\\([^\\)]+\\)'
+blanket backtick pattern present: True | index: 3
+
+== P8b: re.search(r'`[^`]+`', prompt) on 5 benign prompts ==
+  match=True  span='`git rebase -i`'            prompt='What does `git rebase -i` do?'
+  match=True  span='`list.sort()`'              prompt='Why does `list.sort()` return None in Python?'
+  match=True  span='`process.env.NODE_ENV`'     prompt='How do I read `process.env.NODE_ENV` inside a Next.js API route?'
+  match=True  span='`String`'                   prompt="What's the difference between `String` and `&str` in Rust?"
+  match=True  span='`npm ci && npm run build`'  prompt='My Dockerfile runs `npm ci && npm run build` but the image is 2 GB. How can I slim it down?'
+TOTAL: 5/5 match
+
+== LIVE v1 Tier-1 input scan (InputScanner.scan_prompt -> _scan_prompt_sync) ==
+   (main.py:9198/9238 call INPUT_SCANNER.scan_prompt; /v1/policy/check main.py:16578 too)
+  action='allow'  threat=''                 conf=0.0   tier=''        prompt='What does `git rebase -i` do?'
+  action='allow'  threat=''                 conf=0.0   tier=''        prompt='Why does `list.sort()` return None in Python?'
+  action='allow'  threat=''                 conf=0.0   tier=''        prompt='How do I read `process.env.NODE_ENV` inside a'
+  action='allow'  threat=''                 conf=0.0   tier=''        prompt="What's the difference between `String` and `&"
+  action='allow'  threat=''                 conf=0.0   tier=''        prompt='My Dockerfile runs `npm ci && npm run build` '
+LIVE scan_prompt blocks: 0/5
+
+== scan_prompt_with_tier2 Tier-1 stage (Tier-2 off for org) ==
+  action='allow'  threat=''         conf=0.0 tier=''
+  action='allow'  threat=''         conf=0.0 tier=''
+  action='allow'  threat=''         conf=0.0 tier=''
+  action='allow'  threat=''         conf=0.0 tier=''
+  action='allow'  threat=''         conf=0.0 tier=''
+
+== RETAINED-DISABLED reference _scan_prompt_sync_disabled_builtin_default (NOT on live path) ==
+  action='block'  threat='command_injection' conf=1.0   tier='tier_1'  matched=['`git rebase -i`']
+  action='block'  threat='command_injection' conf=1.0   tier='tier_1'  matched=['`list.sort()`']
+  action='block'  threat='command_injection' conf=1.0   tier='tier_1'  matched=['`process.env.NODE_ENV`']
+  action='block'  threat='command_injection' conf=1.0   tier='tier_1'  matched=['`String`']
+  action='block'  threat='command_injection' conf=1.0   tier='tier_1'  matched=['`npm ci && npm run build`']
+
+== Would main.py enforce such a Tier-1 command_injection verdict? (adapter main.py:895-948) ==
+  verdict(block/command_injection/tier_1) -> kwargs all None: True -> resolved 'allow'
+  verdict(block/command_injection/tier_1) -> kwargs all None: True -> resolved 'allow'
+
+== live consumers of ATTACK_PATTERNS (they read only prompt_injection+jailbreak) ==
+  policy_engine._detector_injection_match=False _strict=False mcp_scan_orchestrator._injection_match=False prompt='What does `git rebase -i` do?'
+  policy_engine._detector_injection_match=False _strict=False mcp_scan_orchestrator._injection_match=False prompt='Why does `list.sort()` return None in Py'
+  policy_engine._detector_injection_match=False _strict=False mcp_scan_orchestrator._injection_match=False prompt='How do I read `process.env.NODE_ENV` ins'
+  policy_engine._detector_injection_match=False _strict=False mcp_scan_orchestrator._injection_match=False prompt="What's the difference between `String` a"
+  policy_engine._detector_injection_match=False _strict=False mcp_scan_orchestrator._injection_match=False prompt='My Dockerfile runs `npm ci && npm run bu'
+
+== carve-out claim (rb.md:2676) ==
+  scanner._INJECTION_EXPLANATORY_CATEGORIES = ['jailbreak', 'prompt_injection']
+  'command_injection' in carve-out: False
+  disabled-ref -> 'block'/'command_injection'; LIVE scan_prompt -> 'allow'/''   prompt='Explain what `rm -rf /` does.'
+  disabled-ref -> 'allow'/''; LIVE scan_prompt -> 'allow'/''   prompt="Explain what 'ignore all previous instructions' means."
+
+== control-plane built-in pack (the re-homed command_injection family, seeded enabled=False) ==
+  family=command_injection default_action=block rules=5
+  pack rules matching: []                                                           prompt='What does `git rebase -i` do?'
+  pack rules matching: []                                                           prompt='Why does `list.sort()` return None in Python?'
+  pack rules matching: []                                                           prompt='How do I read `process.env.NODE_ENV` inside a Ne'
+  pack rules matching: ['Backtick shell-injection (narrowed, G0.3)']                prompt="What's the difference between `String` and `&str"
+  pack rules matching: ['Backtick shell-injection (narrowed, G0.3)']                prompt='My Dockerfile runs `npm ci && npm run build` but'
+  -- supplementary shapes for the NARROWED rule --
+  narrowed match=True  span='`map` or `forEach`'               prompt='Should I use `map` or `forEach` here?'
+  narrowed match=True  span='`for (int i = 0; i < n; i++)`'    prompt='Is `for (int i = 0; i < n; i++)` idiomatic in modern C++?'
+  narrowed match=True  span='`a && b`'                         prompt='What does `a && b` return in JavaScript when a is falsy?'

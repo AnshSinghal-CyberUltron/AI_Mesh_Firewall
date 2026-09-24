@@ -1,0 +1,1 @@
+{"mode":"direct","run":"D-r25","rate":25,"ramp_s":30,"warmup_s":60,"duration_s":300,"corpus":"headline-22M.jsonl","prov_flags":"-ttft 150ms -itl 20ms","extra":"","target":"http://10.160.0.38:8080","started_utc":"2026-09-23T12:16:45Z"}

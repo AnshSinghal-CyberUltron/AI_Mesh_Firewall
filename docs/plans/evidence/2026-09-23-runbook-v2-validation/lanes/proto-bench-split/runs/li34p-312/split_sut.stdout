@@ -1,0 +1,285 @@
+{
+ "n_measured_requests": 94255,
+ "gateways": {
+  "rv-split-gw-1": {
+   "cores": {
+    "worker": 1.296,
+    "launcher": 0.0,
+    "redis": 0.0
+   },
+   "cpu_ms_per_req": 4.139,
+   "redis_cpu_ms_per_req": 0.0,
+   "vm_cores_busy": 1.32,
+   "worker_util": {
+    "n": 12,
+    "min": 0.09,
+    "median": 0.11,
+    "max": 0.124
+   },
+   "core_util": {
+    "max": 0.089,
+    "mean": 0.083,
+    "sum_cores": 1.32
+   },
+   "nic": {
+    "ens3": {
+     "rx_mbit_s": 58.79,
+     "tx_mbit_s": 66.33,
+     "rx_bytes_per_req": 23467.8,
+     "tx_bytes_per_req": 26478.6
+    }
+   },
+   "guard_rtt": {
+    "n": 31326,
+    "p50_ms": 4.8169,
+    "p90_ms": 7.3728,
+    "p99_ms": 11.862,
+    "p99.9_ms": 16.3185,
+    "mean_ms": 4.8262
+   },
+   "guard_wait": {
+    "n": 31326,
+    "p50_ms": 4.6858,
+    "p90_ms": 7.2417,
+    "p99_ms": 11.7309,
+    "p99.9_ms": 16.1874,
+    "mean_ms": 4.712
+   },
+   "guard_queue_seen_by_worker": {
+    "n": 31325,
+    "p50_ms": 0.0886,
+    "p90_ms": 3.1949,
+    "p99_ms": 7.2417,
+    "p99.9_ms": 11.5999,
+    "mean_ms": 0.8288
+   },
+   "guard_exec_seen_by_worker": {
+    "n": 31325,
+    "p50_ms": 4.1452,
+    "p90_ms": 4.2926,
+    "p99_ms": 6.3242,
+    "p99.9_ms": 6.5208,
+    "mean_ms": 3.4476
+   },
+   "t_input": {
+    "n": 31326,
+    "p50_ms": 6.8485,
+    "p90_ms": 9.8959,
+    "p99_ms": 14.0902,
+    "p99.9_ms": 18.7433,
+    "mean_ms": 6.6251
+   },
+   "t_tokenize": {
+    "n": 31326,
+    "p50_ms": 1.5974,
+    "p90_ms": 2.4412,
+    "p99_ms": 2.8344,
+    "p99.9_ms": 3.1949,
+    "mean_ms": 1.5983
+   },
+   "loop_lag": {
+    "n": 35997,
+    "p50_ms": 0.0,
+    "p90_ms": 0.0916,
+    "p99_ms": 0.7414,
+    "p99.9_ms": 1.0363,
+    "mean_ms": 0.0445
+   },
+   "windows_per_request": 1.64,
+   "admitted": 31325,
+   "counts": {
+    "admitted": 31325,
+    "audit_enqueued": 62183,
+    "audit_written": 62183,
+    "background_round_trips": 7200,
+    "disposition_ALLOW": 30771,
+    "disposition_BLOCK": 555,
+    "guard_deadline_expired": 1,
+    "guard_unavailable_findings": 1,
+    "guard_windows": 51386,
+    "lease_granted_tokens{org=\"org-a\"}": 29583360,
+    "lease_refills": 216,
+    "provider_calls": 30771,
+    "provider_connections_opened": 20190,
+    "quota_admitted_tokens{org=\"org-a\"}": 29625092,
+    "requests_by_round_trips{n=\"0\"}": 31109,
+    "requests_by_round_trips{n=\"1\"}": 216,
+    "shared_state_round_trips": 216
+   }
+  },
+  "rv-split-gw-2": {
+   "cores": {
+    "worker": 1.285,
+    "launcher": 0.0,
+    "redis": 0.0
+   },
+   "cpu_ms_per_req": 4.104,
+   "redis_cpu_ms_per_req": 0.0,
+   "vm_cores_busy": 1.31,
+   "worker_util": {
+    "n": 12,
+    "min": 0.091,
+    "median": 0.107,
+    "max": 0.128
+   },
+   "core_util": {
+    "max": 0.086,
+    "mean": 0.082,
+    "sum_cores": 1.31
+   },
+   "nic": {
+    "ens3": {
+     "rx_mbit_s": 58.98,
+     "tx_mbit_s": 66.58,
+     "rx_bytes_per_req": 23545.4,
+     "tx_bytes_per_req": 26576.9
+    }
+   },
+   "guard_rtt": {
+    "n": 31392,
+    "p50_ms": 4.8169,
+    "p90_ms": 7.3073,
+    "p99_ms": 11.862,
+    "p99.9_ms": 15.7942,
+    "mean_ms": 4.8066
+   },
+   "guard_wait": {
+    "n": 31392,
+    "p50_ms": 4.6858,
+    "p90_ms": 7.1762,
+    "p99_ms": 11.7309,
+    "p99.9_ms": 15.6631,
+    "mean_ms": 4.6919
+   },
+   "guard_queue_seen_by_worker": {
+    "n": 31391,
+    "p50_ms": 0.0886,
+    "p90_ms": 3.1293,
+    "p99_ms": 7.4383,
+    "p99.9_ms": 11.5999,
+    "mean_ms": 0.8224
+   },
+   "guard_exec_seen_by_worker": {
+    "n": 31391,
+    "p50_ms": 4.1452,
+    "p90_ms": 4.2926,
+    "p99_ms": 6.3242,
+    "p99.9_ms": 6.5208,
+    "mean_ms": 3.4365
+   },
+   "t_input": {
+    "n": 31392,
+    "p50_ms": 6.783,
+    "p90_ms": 9.7649,
+    "p99_ms": 14.2213,
+    "p99.9_ms": 18.4812,
+    "mean_ms": 6.5676
+   },
+   "t_tokenize": {
+    "n": 31392,
+    "p50_ms": 1.5647,
+    "p90_ms": 2.3757,
+    "p99_ms": 2.7361,
+    "p99.9_ms": 3.0638,
+    "mean_ms": 1.558
+   },
+   "loop_lag": {
+    "n": 35997,
+    "p50_ms": 0.0,
+    "p90_ms": 0.0804,
+    "p99_ms": 0.6513,
+    "p99.9_ms": 1.0035,
+    "mean_ms": 0.0374
+   },
+   "windows_per_request": 1.635,
+   "admitted": 31392,
+   "counts": {
+    "admitted": 31392,
+    "audit_enqueued": 62262,
+    "audit_written": 62263,
+    "background_round_trips": 7200,
+    "disposition_ALLOW": 30835,
+    "disposition_BLOCK": 557,
+    "guard_deadline_expired": 1,
+    "guard_unavailable_findings": 1,
+    "guard_windows": 51318,
+    "lease_granted_tokens{org=\"org-a\"}": 29583360,
+    "lease_refills": 216,
+    "provider_calls": 30835,
+    "provider_connections_opened": 20392,
+    "quota_admitted_tokens{org=\"org-a\"}": 29657142,
+    "requests_by_round_trips{n=\"0\"}": 31176,
+    "requests_by_round_trips{n=\"1\"}": 216,
+    "shared_state_round_trips": 216
+   }
+  },
+  "rv-split-gw-3": {
+   "cores": {
+    "worker": 1.301,
+    "launcher": 0.0,
+    "redis": 0.0
+   },
+   "cpu_ms_per_req": 4.155,
+   "redis_cpu_ms_per_req": 0.0,
+   "vm_cores_busy": 1.32,
+   "worker_util": {
+    "n": 12,
+    "min": 0.091,
+    "median": 0.11,
+    "max": 0.126
+   },
+   "core_util": {
+    "max": 0.088,
+    "mean": 0.083,
+    "sum_cores": 1.32
+   },
+   "nic": {
+    "ens3": {
+     "rx_mbit_s": 59.32,
+     "tx_mbit_s": 66.87,
+     "rx_bytes_per_req": 23678.7,
+     "tx_bytes_per_req": 26691.9
+    }
+   },
+   "guard_rtt": {
+    "n": 31351,
+    "p50_ms": 4.8169,
+    "p90_ms": 7.3073,
+    "p99_ms": 11.862,
+    "p99.9_ms": 15.9252,
+    "mean_ms": 4.8311
+   },
+   "guard_wait": {
+    "n": 31351,
+    "p50_ms": 4.6858,
+    "p90_ms": 7.1762,
+    "p99_ms": 11.7309,
+    "p99.9_ms": 15.7942,
+    "mean_ms": 4.7159
+   },
+   "guard_queue_seen_by_worker": {
+    "n": 31351,
+    "p50_ms": 0.0886,
+    "p90_ms": 3.1293,
+    "p99_ms": 7.2417,
+    "p99.9_ms": 11.5999,
+    "mean_ms": 0.8248
+   },
+   "guard_exec_seen_by_worker": {
+    "n": 31351,
+    "p50_ms": 4.1452,
+    "p90_ms": 4.2926,
+    "p99_ms": 6.3242,
+    "p99.9_ms": 6.5208,
+    "mean_ms": 3.4562
+   },
+   "t_input": {
+    "n": 31351,
+    "p50_ms": 6.7174,
+    "p90_ms": 9.6338,
+    "p99_ms": 13.9592,
+    "p99.9_ms": 18.219,
+    "mean_ms": 6.5385
+   },
+   "t_tokenize": {
+    "n": 313

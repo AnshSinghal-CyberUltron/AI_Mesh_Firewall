@@ -1,0 +1,3 @@
+controller-approved harness build (val-6000-r7)
+synthprov 1ee6bb5f, olg d22d2607, analyze.py c9f89fe8 (SP/harness/READY not present; approved by controller 2026-09-23T11:34:59Z)
+rvproto RV_GUARD_TOPOLOGY=owner, final code (owner-side queue shed)

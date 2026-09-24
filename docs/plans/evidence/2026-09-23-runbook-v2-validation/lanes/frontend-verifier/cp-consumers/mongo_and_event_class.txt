@@ -1,0 +1,52 @@
+$ grep -rn "event_class" control/ai_mesh_control workers (non-test, non-migration)
+control/ai_mesh_control/policy/models.py:207:    event_class = models.CharField(
+control/ai_mesh_control/policy/models.py:233:            # `WHERE organization=X AND event_class=Y ORDER BY created_at DESC`.
+control/ai_mesh_control/policy/models.py:237:                fields=["organization", "event_class", "-created_at"],
+control/ai_mesh_control/core/isolation_notify.py:135:        event_class="isolation",
+$ grep -rniE "pymongo|motor|MongoClient|MONGO_URL" control/ai_mesh_control workers/ai_mesh_workers shared (non-test)
+exit=1 (1=none)
+$ grep -n "record_enforcement_event\|insert_one\|_COLLECTION\|_DB_NAME" gateway/ai_mesh_gateway/telemetry_mongo.py
+8:Disabled by default. Enable via GATEWAY_MONGO_TELEMETRY_ENABLED=true. All
+21:_COLLECTION = "enforcement_events"
+22:_DB_NAME = "aiguardx_telemetry"
+30:    return os.getenv("GATEWAY_MONGO_TELEMETRY_ENABLED", "false").lower() == "true"
+52:            "GATEWAY_MONGO_TELEMETRY_ENABLED=true but motor not installed; "
+83:async def record_enforcement_event(event: Mapping[str, Any]) -> None:
+91:        await coll.insert_one(dict(event))
+$ grep -n telemetry_mongo gateway/ai_mesh_gateway/main.py
+    if _is_isolation:
+        md = dict(kwargs.get("metadata") or {})
+        md["is_isolation_event"] = True
+        kwargs["metadata"] = md
+        if event_type == "kill_switch" and float(kwargs.get("risk_score") or 0) <= 0.60:
+            kwargs["risk_score"] = 0.85
+    event = build_telemetry_event(**kwargs)
+    TELEMETRY.emit(event)
+    # Phase 1 pilot: best-effort fan-out to Mongo append-only sink.
+    # Gated by GATEWAY_MONGO_TELEMETRY_ENABLED; never blocks the hot path.
+    try:
+        from telemetry_mongo import is_mongo_telemetry_enabled, record_enforcement_event
+        if is_mongo_telemetry_enabled():
+            try:
+                loop = asyncio.get_running_loop()
+                loop.create_task(record_enforcement_event(event if isinstance(event, dict) else dict(event)))
+            except RuntimeError:
+                pass  # No running loop (e.g., called from sync context); skip silently.
+    except Exception:
+        pass
+
+
+async def _enforce_org_tpm_rate_limit(
+    auth_ctx,
+    *,
+    event_type: str,
+    model: str = "",
+    user_id: int | None = None,
+    project_id: str = "",
+    estimated_tokens: int = 20,
+) -> JSONResponse | None:
+    """
+    Phase 1 hardening (Module 1 §1.1): enforce the per-org TPM ceiling on
+    any endpoint that consumes upstream model / vector-DB capacity.
+
+    Thin shim — actual logic in rate_limit_enforcement.py so it can be unit-

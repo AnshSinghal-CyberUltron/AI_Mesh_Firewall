@@ -1,0 +1,17 @@
+15:33:31 START s1-050 rate=50 env=[LABEL=ladder_1guard]
+15:41:13 END s1-050 PASS q/s 49.16 infra% 0.0 drops 0 p99 json 10.239 sse-total 10.102 sse-first 46.568
+15:41:13 START s1-063 rate=63 env=[LABEL=ladder_1guard]
+15:48:55 END s1-063 PASS q/s 61.88 infra% 0.0 drops 0 p99 json 10.274 sse-total 10.227 sse-first 44.523
+15:48:55 START s1-078 rate=78 env=[LABEL=ladder_1guard]
+15:56:38 END s1-078 PASS q/s 76.62 infra% 0.0 drops 0 p99 json 10.283 sse-total 10.182 sse-first 44.51
+15:56:38 START s1-098 rate=98 env=[LABEL=ladder_1guard]
+16:04:21 END s1-098 PASS q/s 96.11 infra% 0.0 drops 0 p99 json 10.695 sse-total 10.594 sse-first 44.612
+16:04:21 START s1-122 rate=122 env=[LABEL=ladder_1guard]
+16:12:05 END s1-122 PASS q/s 119.85 infra% 0.0 drops 0 p99 json 11.117 sse-total 10.879 sse-first 44.481
+16:12:05 START s1-153 rate=153 env=[LABEL=ladder_1guard]
+16:19:49 END s1-153 PASS q/s 150.24 infra% 0.0 drops 0 p99 json 10.546 sse-total 10.469 sse-first 44.637
+16:19:49 START s1-191 rate=191 env=[LABEL=ladder_1guard]
+16:27:35 END s1-191 PASS q/s 187.71 infra% 0.0 drops 0 p99 json 11.32 sse-total 11.242 sse-first 46.876
+16:27:35 START s1-238 rate=238 env=[LABEL=ladder_1guard]
+16:35:22 END s1-238 FAIL q/s 233.82 infra% 0.0308 drops 0 p99 json 21.066 sse-total 20.879 sse-first 48.334
+16:35:22 ladder stops at s1-238

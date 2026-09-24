@@ -1,0 +1,20 @@
+[gateway-entrypoint] WEB_CONCURRENCY=18 (source=detector)
+[gateway-entrypoint]   {
+[gateway-entrypoint]     "cpu_budget": 24.0,
+[gateway-entrypoint]     "ram_bytes": 12884901888,
+[gateway-entrypoint]     "cpu_source": "affinity",
+[gateway-entrypoint]     "mem_source": "cgroup-v2",
+[gateway-entrypoint]     "per_worker_rss": 536870912,
+[gateway-entrypoint]     "workers": 18,
+[gateway-entrypoint]     "asgi_threads": 32,
+[gateway-entrypoint]     "db_threads": 32,
+[gateway-entrypoint]     "pg_max_conns": 644,
+[gateway-entrypoint]     "scanner_pool": 16,
+[gateway-entrypoint]     "bedrock_pool": 3640,
+[gateway-entrypoint]     "vault_pool": 8,
+[gateway-entrypoint]     "redis_pool": 128,
+[gateway-entrypoint]     "headroom": 0.75,
+[gateway-entrypoint]     "ram_gib": 12.0,
+[gateway-entrypoint]     "ram_workers": 18,
+[gateway-entrypoint]     "cpu_bound": false
+[gateway-entrypoint]   }

@@ -1,0 +1,34 @@
+######## BASELINE WEB_CONCURRENCY=16 (compose prod default) DRYRUN
+[gateway-entrypoint] WEB_CONCURRENCY=16 (source=env-override)
+[gateway-entrypoint] DRYRUN would exec: gunicorn ai_mesh_gateway.main:app -k uvicorn.workers.UvicornWorker --config /app/gateway/gunicorn.conf.py --bind 0.0.0.0:8300 --workers 16 --worker-connections 20000 --timeout 120 --graceful-timeout 60 --keep-alive 65
+######## BASELINE WEB_CONCURRENCY unset DRYRUN
+[gateway-entrypoint] WEB_CONCURRENCY=16 (source=detector)
+[gateway-entrypoint] DRYRUN would exec: gunicorn ai_mesh_gateway.main:app -k uvicorn.workers.UvicornWorker --config /app/gateway/gunicorn.conf.py --bind 0.0.0.0:8300 --workers 16 --worker-connections 20000 --timeout 120 --graceful-timeout 60 --keep-alive 65
+######## BASELINE WEB_CONCURRENCY=16 exec->gunicorn shim (shows pool env still detector-derived)
+[gateway-entrypoint] WEB_CONCURRENCY=16 (source=env-override)
+[gunicorn-shim] argv: ai_mesh_gateway.main:app -k uvicorn.workers.UvicornWorker --config /app/gateway/gunicorn.conf.py --bind 0.0.0.0:8300 --workers 16 --worker-connections 20000 --timeout 120 --graceful-timeout 60 --keep-alive 65
+[gunicorn-shim] env WEB_CONCURRENCY=16
+[gunicorn-shim] env GATEWAY_SCANNER_THREAD_POOL_SIZE=16
+[gunicorn-shim] env GATEWAY_SCAN_THREAD_POOL_SIZE=16
+[gunicorn-shim] env GATEWAY_BEDROCK_THREAD_POOL_SIZE=10000
+[gunicorn-shim] env GATEWAY_VAULT_POOL_MAX=8
+[gunicorn-shim] env GATEWAY_REDIS_MAX_CONNECTIONS=128
+######## HEAD WEB_CONCURRENCY=16 DRYRUN
+[gateway-entrypoint] WEB_CONCURRENCY override=16 detected=16 (deviation)
+[gateway-entrypoint] WEB_CONCURRENCY=16 (source=env-override)
+[gateway-entrypoint] DRYRUN would exec: gunicorn ai_mesh_gateway.main:app -k uvicorn.workers.UvicornWorker --config /app/gateway/gunicorn.conf.py --bind 0.0.0.0:8300 --workers 16 --worker-connections 20000 --timeout 120 --graceful-timeout 60 --keep-alive 65
+######## HEAD WEB_CONCURRENCY unset DRYRUN
+[gateway-entrypoint] WEB_CONCURRENCY=16 (source=detector)
+[gateway-entrypoint] DRYRUN would exec: gunicorn ai_mesh_gateway.main:app -k uvicorn.workers.UvicornWorker --config /app/gateway/gunicorn.conf.py --bind 0.0.0.0:8300 --workers 16 --worker-connections 20000 --timeout 120 --graceful-timeout 60 --keep-alive 65
+######## HEAD WEB_CONCURRENCY=16 exec->gunicorn shim
+[gateway-entrypoint] WEB_CONCURRENCY override=16 detected=16 (deviation)
+[gateway-entrypoint] WEB_CONCURRENCY=16 (source=env-override)
+[gunicorn-shim] argv: ai_mesh_gateway.main:app -k uvicorn.workers.UvicornWorker --config /app/gateway/gunicorn.conf.py --bind 0.0.0.0:8300 --workers 16 --worker-connections 20000 --timeout 120 --graceful-timeout 60 --keep-alive 65
+[gunicorn-shim] env WEB_CONCURRENCY=16
+[gunicorn-shim] env GATEWAY_SCANNER_THREAD_POOL_SIZE=16
+[gunicorn-shim] env GATEWAY_SCAN_THREAD_POOL_SIZE=16
+[gunicorn-shim] env GATEWAY_BEDROCK_THREAD_POOL_SIZE=10000
+[gunicorn-shim] env GATEWAY_VAULT_POOL_MAX=8
+[gunicorn-shim] env GATEWAY_REDIS_MAX_CONNECTIONS=128
+######## HEAD detector broken (no PYTHONPATH to shared) DRYRUN
+[gateway-entrypoint] FALLBACK_WORKERS=4 detected=unreadable (deviation)

@@ -1,0 +1,7 @@
+| P8 | re.search(r"[^]+", …)` against five benign inline-code prompts | 5 / 5 match | ATTACK_PATTERNS["command_injection"] contains the literal pattern ` [^]+ `` — any backtick pair. |
+'[^]+' -> re.error: unterminated character set at position 0
+'`[^`]+`' -> compiles
+DOCX: re.search(r"[^]+", …)` against five benign inline-code prompts
+DOCX: ATTACK_PATTERNS["command_injection"] contains the literal pattern ` [^]+ `` — any backtick pair.
+DOCX: 5/5 backtick prompts hard-blocked at confidence 1.00
+DOCX: Two separate v1 problems meet here. First, the decision is made against one redactor (INPUT_SCANNER.redact_pii on a flattened prompt) while the wire is produced by a different one (llm_router._apply_redaction → patterns.redact_all, whose own docstring calls it "by construction WEAKER"). The system can therefore decide REDACT and emit something the decision never inspected. Second, ATTACK_PATTERNS[

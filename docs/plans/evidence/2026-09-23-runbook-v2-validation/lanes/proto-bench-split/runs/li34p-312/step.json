@@ -1,0 +1,5 @@
+{"run": "li34p-312", "rate": 312, "mode": "sut", "corpus": "headline-22M.jsonl", "targets": "http://10.160.0.11:8080",
+ "auth": "auth-a", "prov_flags": "-ttft 150ms -itl 20ms -sample-mod 1", "olg_flags": "-corpus /home/rv/rv/corpora/headline-22M.jsonl -ramp 30 -warmup 60 -duration 300 -sse-frac 0.7 -auth-file /home/rv/rv/auth-a -sample-mod 1 -arrival poisson", "lgs": "rv-split-lg-1 rv-split-lg-2", "provs": "rv-split-prov-1 rv-split-prov-2",
+ "gws": "rv-split-gw-1 rv-split-gw-2 rv-split-gw-3", "guards": "rv-split-guard-1 rv-split-guard-2 rv-split-guard-3 rv-split-guard-4", "extra_sut": "rv-split-edge-1 rv-split-redis-1", "sut_vms": "rv-split-gw-1 rv-split-gw-2 rv-split-gw-3 rv-split-guard-1 rv-split-guard-2 rv-split-guard-3 rv-split-guard-4 rv-split-edge-1 rv-split-redis-1", "sample_mod": 1, "label": "li_3gw4g_edge_poisson_60pct",
+ "build": "rvproto-frozen-1+li-knobs tree 8ace2294589c0e75 knobs ON: gateways RV_METRICS_DUMP_S=0 RV_TOKENIZE_IN_THREAD=1 TOKENIZERS_PARALLELISM=false; owners RV_METRICS_DUMP_S=0", "sampler_extra": "--sigusr1",
+ "created_utc": "2026-09-23T22:00:12Z"}

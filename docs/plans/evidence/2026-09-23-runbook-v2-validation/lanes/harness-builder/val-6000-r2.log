@@ -1,0 +1,44 @@
+2026/09/23 07:44:58 synthprov 760f124e5732 listening on :8080 (ttft=150ms itl=20ms sample-mod=10 hb=100µs gomaxprocs=8 gc=off memlimit=9.37GiB)
+2026/09/23 07:44:58 synthprov 760f124e5732 listening on :8080 (ttft=150ms itl=20ms sample-mod=10 hb=100µs gomaxprocs=8 gc=off memlimit=9.37GiB)
+2026/09/23 07:44:58 synthprov 760f124e5732 listening on :8080 (ttft=150ms itl=20ms sample-mod=10 hb=100µs gomaxprocs=8 gc=off memlimit=9.37GiB)
+2026/09/23 07:44:58 synthprov 760f124e5732 listening on :8080 (ttft=150ms itl=20ms sample-mod=10 hb=100µs gomaxprocs=8 gc=off memlimit=9.37GiB)
+07:44:58 olg started on rv-harness-lg-1 rv-harness-lg-2 rv-harness-lg-3 rv-harness-lg-4 (rate 1500.0 each, start-at 1790149518697)
+[rv-harness-lg-1] 2026/09/23 07:51:56 done: scheduled=562500 recorded=562500 ok=562500 errors=map[] drops=1 late_p99=732us max=5071us cpu_busy_max=72.1%
+[rv-harness-lg-2] 2026/09/23 07:51:56 done: scheduled=562500 recorded=562500 ok=562500 errors=map[] drops=2 late_p99=151us max=5795us cpu_busy_max=68.9%
+[rv-harness-lg-3] 2026/09/23 07:51:56 done: scheduled=562500 recorded=562500 ok=562500 errors=map[] drops=10 late_p99=400us max=11100us cpu_busy_max=75.4%
+[rv-harness-lg-4] 2026/09/23 07:51:56 done: scheduled=562500 recorded=562500 ok=562500 errors=map[] drops=2 late_p99=162us max=5414us cpu_busy_max=68.4%
+2026/09/23 07:52:00 final stats: requests=562496 records=562496 blocked=0
+618981997 records.jsonl
+2253 stats.json
+2026/09/23 07:52:00 final stats: requests=562496 records=562496 blocked=0
+2026/09/23 07:52:00 final stats: requests=562512 records=562512 blocked=0
+620247646 records.jsonl
+2242 stats.json
+618755330 records.jsonl
+2242 stats.json
+2026/09/23 07:52:00 final stats: requests=562496 records=562496 blocked=0
+619950280 records.jsonl
+2256 stats.json
+[rv-harness-lg-2] compressed size 168M
+[rv-harness-prov-3] compressed size 174M
+[rv-harness-prov-2] compressed size 174M
+[rv-harness-lg-3] compressed size 167M
+[rv-harness-lg-4] compressed size 168M
+[rv-harness-lg-1] compressed size 168M
+[rv-harness-prov-1] compressed size 173M
+[rv-harness-prov-4] compressed size 174M
+07:52:03 collected val-6000-r2 from rv-harness-lg-1 rv-harness-lg-2 rv-harness-lg-3 rv-harness-lg-4 rv-harness-prov-1 rv-harness-prov-2 rv-harness-prov-3 rv-harness-prov-4 into /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/harness-builder/runs/val-6000-r2
+# Harness analysis (direct, policy=none) — FAIL
+
+| check | result |
+|---|---|
+| zero_schedule_drops | FAIL |
+| zero_errors | PASS |
+| provider_p99_sched_err_within_tol | PASS |
+| loadgen_cpu_max_lt_limit | FAIL |
+| run_valid | PASS |
+| all_joined | PASS |
+
+- offered: 1800000 over 300 s = 6000.0 req/s (configured 6000.0)
+- qualified: 1800000 (6000.0 req/s); expected blocks: 0; errors: 0 (rate 0.0)
+- error reasons: {}

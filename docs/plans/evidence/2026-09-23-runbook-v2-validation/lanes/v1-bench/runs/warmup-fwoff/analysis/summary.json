@@ -1,0 +1,664 @@
+{
+ "mode": "sut",
+ "policy": "none",
+ "phases": [
+  2
+ ],
+ "inputs": {
+  "client_files": [
+   "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/v1-bench/runs/warmup-fwoff/lg-v1aug/requests.jsonl"
+  ],
+  "provider_files": [
+   "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/v1-bench/runs/warmup-fwoff/rv-v1-prov-2/prov/records.jsonl.zst"
+  ],
+  "corpus": "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/harness/corpora/headline-22M.jsonl"
+ },
+ "offered": 1200,
+ "offered_rate_config": 20.0,
+ "measure_s": 60,
+ "achieved_offered_rps": 20.0,
+ "qualified": 839,
+ "expected_blocks": 0,
+ "errors": 361,
+ "qualified_rps": 13.98,
+ "error_rate": 0.30083333333333334,
+ "error_reasons": {
+  "disposition_missing": 361,
+  "stage_auth_missing": 361,
+  "stage_kill_switch_missing": 361,
+  "stage_rate_limit_missing": 361,
+  "stage_policy_missing": 361,
+  "stage_input_scan_missing": 361,
+  "stage_model_routing_missing": 361,
+  "stage_model_input_missing": 361,
+  "stage_model_output_missing": 361,
+  "stage_output_guardrail_missing": 361
+ },
+ "error_examples": [
+  {
+   "rid": "403fe559-7d03-4b23-b649-a1f8bdc84f8d",
+   "reasons": [
+    "disposition_missing",
+    "stage_auth_missing",
+    "stage_kill_switch_missing",
+    "stage_rate_limit_missing",
+    "stage_policy_missing",
+    "stage_input_scan_missing",
+    "stage_model_routing_missing",
+    "stage_model_input_missing",
+    "stage_model_output_missing",
+    "stage_output_guardrail_missing"
+   ],
+   "status": 200,
+   "err_detail": null
+  },
+  {
+   "rid": "26dead75-75bb-4fbc-a894-c529e4a65058",
+   "reasons": [
+    "disposition_missing",
+    "stage_auth_missing",
+    "stage_kill_switch_missing",
+    "stage_rate_limit_missing",
+    "stage_policy_missing",
+    "stage_input_scan_missing",
+    "stage_model_routing_missing",
+    "stage_model_input_missing",
+    "stage_model_output_missing",
+    "stage_output_guardrail_missing"
+   ],
+   "status": 200,
+   "err_detail": null
+  },
+  {
+   "rid": "cd254384-10c0-4c0d-bd2e-ca8d16c3ca17",
+   "reasons": [
+    "disposition_missing",
+    "stage_auth_missing",
+    "stage_kill_switch_missing",
+    "stage_rate_limit_missing",
+    "stage_policy_missing",
+    "stage_input_scan_missing",
+    "stage_model_routing_missing",
+    "stage_model_input_missing",
+    "stage_model_output_missing",
+    "stage_output_guardrail_missing"
+   ],
+   "status": 200,
+   "err_detail": null
+  },
+  {
+   "rid": "f5b80ac4-7423-42b0-b368-58308c471cae",
+   "reasons": [
+    "disposition_missing",
+    "stage_auth_missing",
+    "stage_kill_switch_missing",
+    "stage_rate_limit_missing",
+    "stage_policy_missing",
+    "stage_input_scan_missing",
+    "stage_model_routing_missing",
+    "stage_model_input_missing",
+    "stage_model_output_missing",
+    "stage_output_guardrail_missing"
+   ],
+   "status": 200,
+   "err_detail": null
+  },
+  {
+   "rid": "73dae746-02e1-4f93-80e2-1e8ee51ff261",
+   "reasons": [
+    "disposition_missing",
+    "stage_auth_missing",
+    "stage_kill_switch_missing",
+    "stage_rate_limit_missing",
+    "stage_policy_missing",
+    "stage_input_scan_missing",
+    "stage_model_routing_missing",
+    "stage_model_input_missing",
+    "stage_model_output_missing",
+    "stage_output_guardrail_missing"
+   ],
+   "status": 200,
+   "err_detail": null
+  },
+  {
+   "rid": "7c32576a-2811-4740-810a-250b36ab3536",
+   "reasons": [
+    "disposition_missing",
+    "stage_auth_missing",
+    "stage_kill_switch_missing",
+    "stage_rate_limit_missing",
+    "stage_policy_missing",
+    "stage_input_scan_missing",
+    "stage_model_routing_missing",
+    "stage_model_input_missing",
+    "stage_model_output_missing",
+    "stage_output_guardrail_missing"
+   ],
+   "status": 200,
+   "err_detail": null
+  },
+  {
+   "rid": "23eae05e-0f89-47c8-8b65-849c4ec29595",
+   "reasons": [
+    "disposition_missing",
+    "stage_auth_missing",
+    "stage_kill_switch_missing",
+    "stage_rate_limit_missing",
+    "stage_policy_missing",
+    "stage_input_scan_missing",
+    "stage_model_routing_missing",
+    "stage_model_input_missing",
+    "stage_model_output_missing",
+    "stage_output_guardrail_missing"
+   ],
+   "status": 200,
+   "err_detail": null
+  },
+  {
+   "rid": "a7d2e1fd-6539-47be-954e-610ae5011329",
+   "reasons": [
+    "disposition_missing",
+    "stage_auth_missing",
+    "stage_kill_switch_missing",
+    "stage_rate_limit_missing",
+    "stage_policy_missing",
+    "stage_input_scan_missing",
+    "stage_model_routing_missing",
+    "stage_model_input_missing",
+    "stage_model_output_missing",
+    "stage_output_guardrail_missing"
+   ],
+   "status": 200,
+   "err_detail": null
+  },
+  {
+   "rid": "6c20e194-44b0-4576-93ac-615bf77aed72",
+   "reasons": [
+    "disposition_missing",
+    "stage_auth_missing",
+    "stage_kill_switch_missing",
+    "stage_rate_limit_missing",
+    "stage_policy_missing",
+    "stage_input_scan_missing",
+    "stage_model_routing_missing",
+    "stage_model_input_missing",
+    "stage_model_output_missing",
+    "stage_output_guardrail_missing"
+   ],
+   "status": 200,
+   "err_detail": null
+  },
+  {
+   "rid": "ea677669-0707-46c7-814d-b5954426ce33",
+   "reasons": [
+    "disposition_missing",
+    "stage_auth_missing",
+    "stage_kill_switch_missing",
+    "stage_rate_limit_missing",
+    "stage_policy_missing",
+    "stage_input_scan_missing",
+    "stage_model_routing_missing",
+    "stage_model_input_missing",
+    "stage_model_output_missing",
+    "stage_output_guardrail_missing"
+   ],
+   "status": 200,
+   "err_detail": null
+  },
+  {
+   "rid": "7d10e310-b431-4565-a81b-10a0fd5ed1d0",
+   "reasons": [
+    "disposition_missing",
+    "stage_auth_missing",
+    "stage_kill_switch_missing",
+    "stage_rate_limit_missing",
+    "stage_policy_missing",
+    "stage_input_scan_missing",
+    "stage_model_routing_missing",
+    "stage_model_input_missing",
+    "stage_model_output_missing",
+    "stage_output_guardrail_missing"
+   ],
+   "status": 200,
+   "err_detail": null
+  },
+  {
+   "rid": "37422d08-a55b-47ad-a9b9-3f12357e9ba9",
+   "reasons": [
+    "disposition_missing",
+    "stage_auth_missing",
+    "stage_kill_switch_missing",
+    "stage_rate_limit_missing",
+    "stage_policy_missing",
+    "stage_input_scan_missing",
+    "stage_model_routing_missing",
+    "stage_model_input_missing",
+    "stage_model_output_missing",
+    "stage_output_guardrail_missing"
+   ],
+   "status": 200,
+   "err_detail": null
+  },
+  {
+   "rid": "eee120cf-1e54-43e9-8c8e-c3049f9455ec",
+   "reasons": [
+    "disposition_missing",
+    "stage_auth_missing",
+    "stage_kill_switch_missing",
+    "stage_rate_limit_missing",
+    "stage_policy_missing",
+    "stage_input_scan_missing",
+    "stage_model_routing_missing",
+    "stage_model_input_missing",
+    "stage_model_output_missing",
+    "stage_output_guardrail_missing"
+   ],
+   "status": 200,
+   "err_detail": null
+  },
+  {
+   "rid": "9a03f0dc-3f91-48d4-953f-69254cc46454",
+   "reasons": [
+    "disposition_missing",
+    "stage_auth_missing",
+    "stage_kill_switch_missing",
+    "stage_rate_limit_missing",
+    "stage_policy_missing",
+    "stage_input_scan_missing",
+    "stage_model_routing_missing",
+    "stage_model_input_missing",
+    "stage_model_output_missing",
+    "stage_output_guardrail_missing"
+   ],
+   "status": 200,
+   "err_detail": null
+  },
+  {
+   "rid": "eb9f8509-e9ee-4071-a620-35734141374c",
+   "reasons": [
+    "disposition_missing",
+    "stage_auth_missing",
+    "stage_kill_switch_missing",
+    "stage_rate_limit_missing",
+    "stage_policy_missing",
+    "stage_input_scan_missing",
+    "stage_model_routing_missing",
+    "stage_model_input_missing",
+    "stage_model_output_missing",
+    "stage_output_guardrail_missing"
+   ],
+   "status": 200,
+   "err_detail": null
+  },
+  {
+   "rid": "9042fe90-e69a-44a8-8350-56761554686c",
+   "reasons": [
+    "disposition_missing",
+    "stage_auth_missing",
+    "stage_kill_switch_missing",
+    "stage_rate_limit_missing",
+    "stage_policy_missing",
+    "stage_input_scan_missing",
+    "stage_model_routing_missing",
+    "stage_model_input_missing",
+    "stage_model_output_missing",
+    "stage_output_guardrail_missing"
+   ],
+   "status": 200,
+   "err_detail": null
+  },
+  {
+   "rid": "1718bff5-b130-4c9d-96ac-a7c9131f3909",
+   "reasons": [
+    "disposition_missing",
+    "stage_auth_missing",
+    "stage_kill_switch_missing",
+    "stage_rate_limit_missing",
+    "stage_policy_missing",
+    "stage_input_scan_missing",
+    "stage_model_routing_missing",
+    "stage_model_input_missing",
+    "stage_model_output_missing",
+    "stage_output_guardrail_missing"
+   ],
+   "status": 200,
+   "err_detail": null
+  },
+  {
+   "rid": "a0fc2e08-e090-41b0-86e5-4259695f82dd",
+   "reasons": [
+    "disposition_missing",
+    "stage_auth_missing",
+    "stage_kill_switch_missing",
+    "stage_rate_limit_missing",
+    "stage_policy_missing",
+    "stage_input_scan_missing",
+    "stage_model_routing_missing",
+    "stage_model_input_missing",
+    "stage_model_output_missing",
+    "stage_output_guardrail_missing"
+   ],
+   "status": 200,
+   "err_detail": null
+  },
+  {
+   "rid": "86b88392-48d9-473a-bac0-5b633b640171",
+   "reasons": [
+    "disposition_missing",
+    "stage_auth_missing",
+    "stage_kill_switch_missing",
+    "stage_rate_limit_missing",
+    "stage_policy_missing",
+    "stage_input_scan_missing",
+    "stage_model_routing_missing",
+    "stage_model_input_missing",
+    "stage_model_output_missing",
+    "stage_output_guardrail_missing"
+   ],
+   "status": 200,
+   "err_detail": null
+  },
+  {
+   "rid": "a763fd8f-40a8-4f31-9611-c2a4ccc4b37d",
+   "reasons": [
+    "disposition_missing",
+    "stage_auth_missing",
+    "stage_kill_switch_missing",
+    "stage_rate_limit_missing",
+    "stage_policy_missing",
+    "stage_input_scan_missing",
+    "stage_model_routing_missing",
+    "stage_model_input_missing",
+    "stage_model_output_missing",
+    "stage_output_guardrail_missing"
+   ],
+   "status": 200,
+   "err_detail": null
+  }
+ ],
+ "safety_failures": 0,
+ "safety_reasons": {},
+ "safety_examples": [],
+ "schedule": {
+  "drops": 0,
+  "drop_threshold_ms": 5.0,
+  "lateness": {
+   "n": 1200,
+   "min": 0.0695,
+   "p50": 0.088,
+   "p90": 0.1003,
+   "p99": 0.1335,
+   "p999": 0.1795,
+   "max": 0.3406,
+   "mean": 0.0901
+  }
+ },
+ "join": {
+  "joined": 1200,
+  "by_nonce_fallback": 0,
+  "provider_records": 1300,
+  "provider_rids_with_multiple_calls": 0,
+  "provider_orphans": null
+ },
+ "classes": {
+  "benign": 1200
+ },
+ "phase_counts": {
+  "0": 100,
+  "2": 1200
+ },
+ "T_addon_total": {
+  "n": 839,
+  "min": 32.5641,
+  "p50": 170.9081,
+  "p90": 873.9051,
+  "p99": 2004.0356,
+  "p999": 2508.3084,
+  "max": 2508.3084,
+  "mean": 352.4599
+ },
+ "T_addon_first": {
+  "n": 839,
+  "min": 17.7307,
+  "p50": 82.7535,
+  "p90": 171.3384,
+  "p99": 372.0701,
+  "p999": 566.8335,
+  "max": 566.8335,
+  "mean": 100.497
+ },
+ "T_release_lag_max": {
+  "n": 89,
+  "min": 24.6786,
+  "p50": 284.8354,
+  "p90": 592.9423,
+  "p99": 1918.8243,
+  "p999": 1918.8243,
+  "max": 1918.8243,
+  "mean": 333.4522
+ },
+ "T_release_lag_max_arrival": {
+  "n": 89,
+  "min": 24.6786,
+  "p50": 284.8354,
+  "p90": 592.9423,
+  "p99": 1918.8243,
+  "p999": 1918.8243,
+  "max": 1918.8243,
+  "mean": 333.4522
+ },
+ "T_fw_addon": {
+  "n": 839,
+  "min": 32.5641,
+  "p50": 203.9695,
+  "p90": 873.9051,
+  "p99": 2004.0356,
+  "p999": 2508.3084,
+  "max": 2508.3084,
+  "mean": 362.9073
+ },
+ "T_fw_addon_sse": {
+  "n": 839,
+  "min": 32.5641,
+  "p50": 203.9695,
+  "p90": 873.9051,
+  "p99": 2004.0356,
+  "p999": 2508.3084,
+  "max": 2508.3084,
+  "mean": 362.9073
+ },
+ "T_fw_addon_json": {
+  "n": 0
+ },
+ "release_lag_sampled_joined": 125,
+ "release_lag_unmappable": 0,
+ "client_ttft_sse": {
+  "n": 839,
+  "min": 167.7679,
+  "p50": 232.819,
+  "p90": 321.3675,
+  "p99": 522.0737,
+  "p999": 716.8407,
+  "max": 716.8407,
+  "mean": 250.5499
+ },
+ "provider_sched_err_last": {
+  "n": 1200,
+  "min": 0.0016,
+  "p50": 0.0536,
+  "p90": 0.0884,
+  "p99": 0.1005,
+  "p999": 0.1064,
+  "max": 0.1092,
+  "mean": 0.0522
+ },
+ "provider_sched_err_max_per_stream": {
+  "n": 1200,
+  "min": 0.002,
+  "p50": 0.0626,
+  "p90": 0.0999,
+  "p99": 0.1193,
+  "p999": 0.1466,
+  "max": 0.1523,
+  "mean": 0.0622
+ },
+ "provider_write_max": {
+  "n": 1200,
+  "min": 0.0056,
+  "p50": 0.0123,
+  "p90": 0.0218,
+  "p99": 0.0438,
+  "p999": 0.0765,
+  "max": 0.0781,
+  "mean": 0.0145
+ },
+ "loadgen_cpu": [
+  {
+   "dir": "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/v1-bench/runs/warmup-fwoff/lg-v1aug",
+   "samples": 60,
+   "busy_max": 7.060577832123494,
+   "busy_mean": 3.43,
+   "machine": "c4-standard-8",
+   "zone": "asia-south1-c"
+  }
+ ],
+ "provider_cpu": {
+  "samples": 95,
+  "busy_max": 16.09312843494345,
+  "busy_p95": 8.844375337267884
+ },
+ "provider_stats": [
+  {
+   "build_sha": "5af9594a2631",
+   "bytes_out": 64432129,
+   "chunks": 210869,
+   "client_gone": 0,
+   "cpu": {
+    "busy_max": 16.09312843494345,
+    "busy_mean": 3.3509393260625746,
+    "proc_max": 2.6251827783509425,
+    "samples": 95
+   },
+   "faults": 0,
+   "gc_config": "gc=off memlimit=17.62GiB",
+   "host": {
+    "hostname": "rv-v1-prov-2.asia-south1-c.c.ai-mesh-firewall.internal",
+    "num_cpu": 8,
+    "gomaxprocs": 8,
+    "go_version": "go1.27.1",
+    "harness_build_sha": "5af9594a2631",
+    "kernel": "Linux version 7.0.0-1011-gcp (buildd@lcy02-amd64-099) (x86_64-linux-gnu-gcc-13 (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0, GNU ld (GNU Binutils for Ubuntu) 2.42) #11~24.04.1-Ubuntu SMP PREEMPT Tue Aug 11 20:14:48 UTC 2026",
+    "mem_total_kb": 30792980,
+    "lscpu": {
+     "CPU(s)": "8",
+     "Core(s) per socket": "4",
+     "Flags": "aes avx2 avx512f sha_ni amx_tile",
+     "Hypervisor vendor": "KVM",
+     "Model name": "INTEL(R) XEON(R) PLATINUM 8581C CPU @ 2.30GHz",
+     "NUMA node(s)": "1",
+     "Socket(s)": "1",
+     "Thread(s) per core": "2"
+    },
+    "gce": {
+     "image": "projects/ubuntu-os-cloud/global/images/ubuntu-2404-noble-amd64-v20260918",
+     "machine-type": "c4-standard-8",
+     "name": "rv-v1-prov-2",
+     "zone": "asia-south1-c"
+    },
+    "sysctl": {
+     "fs/file-max": "4194304",
+     "net/core/netdev_max_backlog": "250000",
+     "net/core/somaxconn": "65535",
+     "net/ipv4/ip_local_port_range": "1024\t65535",
+     "net/ipv4/tcp_max_syn_backlog": "65535",
+     "net/ipv4/tcp_tw_reuse": "1"
+    },
+    "nofile_limit": "1048576/1048576",
+    "start_utc": "2026-09-23T13:45:55.305389841Z"
+   },
+   "inflight": 0,
+   "itl_ms": 20,
+   "record_queue_blocked": 0,
+   "records": 1300,
+   "requests": 1300,
+   "runtime": {
+    "/gc/cycles/total:gc-cycles": 0,
+    "/gc/heap/goal:bytes": 18340281046,
+    "/gc/pauses:seconds": {
+     "count": 0
+    },
+    "/sched/goroutines:goroutines": 11,
+    "/sched/latencies:seconds": {
+     "count": 147383,
+     "max_ms": 0.098304,
+     "p50_ms": 6.400000000000001e-05,
+     "p9999_ms": 0.08192,
+     "p999_ms": 0.06553600000000001,
+     "p99_ms": 0.00256
+    }
+   },
+   "sample_mod": 10,
+   "sampled": 131,
+   "sched_err_max_ns": 177842,
+   "status_2xx": 1300,
+   "status_4xx": 0,
+   "status_5xx": 0,
+   "streams_active": 0,
+   "ttft_ms": 150,
+   "uptime_s": 95.94900584,
+   "write_max_ns": 243890
+  }
+ ],
+ "instrument_health": [
+  {
+   "proc": "olg",
+   "dir": "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/v1-bench/runs/warmup-fwoff/lg-v1aug",
+   "gc_cycles": 0,
+   "sched_latency_max_ms": 0.114688,
+   "tcp": null
+  },
+  {
+   "proc": "synthprov",
+   "dir": "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/v1-bench/runs/warmup-fwoff/rv-v1-prov-2/prov",
+   "gc_cycles": 0,
+   "sched_latency_max_ms": 0.098304,
+   "tcp": {
+    "TcpRetransSegs": 619,
+    "TcpExtTCPFastRetrans": 0,
+    "TcpExtTCPLossProbes": 619,
+    "TcpExtTCPTimeouts": 0,
+    "TcpOutSegs": 214845,
+    "TcpInSegs": 210405
+   }
+  }
+ ],
+ "completeness": [
+  {
+   "dir": "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/v1-bench/runs/warmup-fwoff/lg-v1aug",
+   "scheduled": 1300,
+   "recorded": 1300,
+   "interrupted": false
+  }
+ ],
+ "valid": true,
+ "invalid_reasons": [],
+ "per_second": null,
+ "thresholds": {
+  "slo_ms": 20.0,
+  "err_budget": 0.001,
+  "drop_ms": 5.0,
+  "sched_tol_ms": 1.0,
+  "cpu_max": 70.0
+ },
+ "verdict": {
+  "pass": false,
+  "checks": {
+   "p99_T_fw_addon_lt_slo": false,
+   "error_rate_le_budget": false,
+   "zero_schedule_drops": true,
+   "zero_safety_failures": true,
+   "run_valid": true,
+   "qualified_nonempty": true
+  }
+ }
+}

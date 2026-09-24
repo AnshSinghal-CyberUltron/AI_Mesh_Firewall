@@ -1,0 +1,118 @@
+=== BASELINE ===
+2026-09-23 10:38:41,103 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:41,108 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:41,113 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:41,118 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:41,124 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:41,129 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:41,134 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:41,139 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:41,144 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:41,150 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:41,155 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:41,160 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:41,165 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:41,170 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:41,175 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:41,180 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:41,186 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:41,191 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:41,196 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:41,201 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:41,207 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:41,212 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:41,217 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:41,222 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:41,227 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:41,232 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:41,238 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:41,243 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:41,248 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:41,253 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:41,258 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:41,263 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:41,269 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:41,274 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:41,279 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:41,284 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:41,289 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:41,295 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:41,300 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:41,305 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:41,310 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:41,315 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:41,320 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:41,326 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:41,331 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:41,336 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:41,341 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:41,346 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:41,351 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:41,357 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:41,362 [INFO] gateway.config_sync: LLM model configs reloaded from Redis (2 models)
+2026-09-23 10:38:41,362 [INFO] gateway.config_sync: LLM model configs reloaded from Redis (2 models)
+(1) 50 concurrent reload_models_now('zeta') with 5 ms Redis GET: 260 ms total (serialized ~= 250 ms; parallel would be ~5 ms); routing still empty: True
+(2) shared LLM_ROUTER.reload_models calls made from request path: 2
+    reload #1: [('beta', 'beta::claude-haiku'), ('acme', 'gpt-4o-mini')]
+    reload #2: [('acme', 'gpt-4o-mini'), ('beta', 'claude-haiku')]
+    final shared router model_list: [('acme', 'gpt-4o-mini'), ('beta', 'claude-haiku')]
+    per-org locks created: ['acme', 'beta', 'zeta']
+=== HEAD ===
+2026-09-23 10:38:42,013 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:42,018 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:42,024 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:42,029 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:42,034 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:42,039 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:42,044 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:42,049 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:42,055 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:42,060 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:42,065 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:42,070 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:42,075 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:42,080 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:42,086 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:42,091 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:42,096 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:42,101 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:42,106 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:42,111 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:42,117 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:42,122 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:42,127 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:42,132 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:42,137 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:42,142 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:42,148 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:42,153 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:42,158 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:42,163 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:42,168 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:42,173 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:42,178 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:42,184 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:42,189 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:42,194 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:42,199 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:42,204 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:42,209 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:42,215 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:42,220 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:42,225 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:42,230 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:42,235 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:42,240 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:42,246 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:42,251 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:42,256 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:42,261 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:42,266 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 10:38:42,271 [INFO] gateway.config_sync: LLM model configs reloaded from Redis (2 models)
+2026-09-23 10:38:42,272 [INFO] gateway.config_sync: LLM model configs reloaded from Redis (2 models)
+(1) 50 concurrent reload_models_now('zeta') with 5 ms Redis GET: 259 ms total (serialized ~= 250 ms; parallel would be ~5 ms); routing still empty: True
+(2) shared LLM_ROUTER.reload_models calls made from request path: 2
+    reload #1: [('beta', 'beta::claude-haiku'), ('acme', 'gpt-4o-mini')]
+    reload #2: [('acme', 'gpt-4o-mini'), ('beta', 'claude-haiku')]
+    final shared router model_list: [('acme', 'gpt-4o-mini'), ('beta', 'claude-haiku')]
+    per-org locks created: ['acme', 'beta', 'zeta']

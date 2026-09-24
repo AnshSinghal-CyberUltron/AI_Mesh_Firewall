@@ -1,0 +1,5 @@
+B2_mcp_proxy_fn_sizes                baseline==HEAD (paths/labels normalized): True
+B6_exec_default_detection            baseline==HEAD (paths/labels normalized): True
+B4_exec_tier2_gate                   baseline==HEAD (paths/labels normalized): True
+B5_exec_resolver_divergence          baseline==HEAD (paths/labels normalized): True
+B7_exec_tools_list_desc_scan         baseline==HEAD (paths/labels normalized): True

@@ -1,0 +1,27 @@
+# workers=4 cpus=0-3; rates = 25/50/75/90% of closed-loop saturation (none-grid for none+pure4, base4-grid for base4+v1stack+none)
+w4_none_r1424 none 4 0-3 1424
+w4_base4_r1424 base4 4 0-3 1424
+w4_v1stack_r1424 v1stack 4 0-3 1424
+w4_none_r2847 none 4 0-3 2847
+w4_base4_r2847 base4 4 0-3 2847
+w4_v1stack_r2847 v1stack 4 0-3 2847
+w4_none_r4271 none 4 0-3 4271
+w4_base4_r4271 base4 4 0-3 4271
+w4_v1stack_r4271 v1stack 4 0-3 4271
+w4_none_r5125 none 4 0-3 5125
+w4_base4_r5125 base4 4 0-3 5125
+w4_v1stack_r5125 v1stack 4 0-3 5125
+w4_none_r17585 none 4 0-3 17585
+w4_pure4_r17585 pure4 4 0-3 17585
+w4_none_r35171 none 4 0-3 35171
+w4_pure4_r35171 pure4 4 0-3 35171
+w4_none_r52756 none 4 0-3 52756
+w4_pure4_r52756 pure4 4 0-3 52756
+w4_none_r63307 none 4 0-3 63307
+w4_pure4_r63307 pure4 4 0-3 63307
+# re-runs: per-process CPU sampler missed uvicorn's multiprocessing workers in the first two w4 steps (fixed 07:18Z)
+w4_none_r1424_rerun none 4 0-3 1424
+w4_base4_r1424_rerun base4 4 0-3 1424
+# repeat the 90%-of-saturation BaseHTTP cells: v1stack collapsed here (eof/transport errors, 52k in flight), base4 held
+w4_v1stack_r5125_rep2 v1stack 4 0-3 5125
+w4_base4_r5125_rep2 base4 4 0-3 5125

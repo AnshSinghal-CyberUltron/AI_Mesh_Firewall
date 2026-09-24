@@ -1,0 +1,5 @@
+# PHASE 3 (controller 2026-09-23 ~19:10Z, received 20:20Z): Poisson arrivals at the highest C4-passing constant rate
+# (200 RPS, li-200 x3). Same loop-isolated config as li-*; -sample-mod 1 on olg + synthprov; lg-5/lg-6 + prov-3.
+CMD bash /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-bench-unit/tools/li_deploy.sh apply
+CMD PROV_IP=10.160.0.20 bash /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-bench-unit/tools/unit_ctl.sh start li-p local_gpu 22M AMF_TARGET_P99_MS=1000 RV_GUARD_DEADLINE_MS=20 RV_METRICS_DUMP_S=0 RV_TOKENIZE_IN_THREAD=1
+li-p-200 200 headline-22M.jsonl SAMPLER_FLAGS=--sigusr1 OLG_EXTRA="-sample-mod 1 -arrival poisson" PROV_FLAGS="-ttft 150ms -itl 20ms -sample-mod 1" LABEL=loop_isolation_poisson

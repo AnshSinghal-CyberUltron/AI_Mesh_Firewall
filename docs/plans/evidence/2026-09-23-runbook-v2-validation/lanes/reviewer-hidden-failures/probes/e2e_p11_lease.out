@@ -1,0 +1,3 @@
+org budget=30000  per-request cost=140  requests: {200: 81, 429: 39}
+tokens actually admitted=11340  budget left in Redis=0  -> 18660 tokens drawn into worker leases but unusable by the rejected worker(s)
+per-worker unspent lease (gauge, summed over workers in /metrics/all): {}

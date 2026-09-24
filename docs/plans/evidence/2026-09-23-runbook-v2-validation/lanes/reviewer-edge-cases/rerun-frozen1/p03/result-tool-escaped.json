@@ -1,0 +1,12 @@
+{
+ "output_args_on_wire": "{\"to\": \"alice.canary\\u0040example.com\", \"path\": \"s3:\\/\\/bucket\\/k\", \"key\": \"AKIA\\u0051YLPMN5HHHFPZAM2\"}",
+ "output_args_after_json_loads": {
+  "to": "alice.canary@example.com",
+  "path": "s3://bucket/k",
+  "key": "AKIAQYLPMN5HHHFPZAM2"
+ },
+ "raw_email_after_decode": true,
+ "raw_aws_after_decode": true,
+ "input_escaped_args_status": 200,
+ "input_escaped_args_disposition": "ALLOW"
+}

@@ -1,0 +1,32 @@
+12:54:41 START x8-60 60 LGS=rv-pbf-lg-4 PROVS=rv-pbf-prov-3 REDIS_VM=rv-pbf-redis-2 UNITS=rv-pbf-unit-6 TARGETS=http://10.146.0.7:8400 RAMP=15 WARMUP=30 DURATION=60 LABEL=explore-g2-8
+12:58:13 DONE x8-60: # x8-60: strict FAIL | load-knee PASS (sut, units=1, rate=60) | offered 3600 (60.0/s) qualified 3549 (59.15/s) FP-blocks 50 (0.01389) infra 1 (0.0002777777777777778) drops 0 safety 0
+12:58:13 START x8-80 80 LGS=rv-pbf-lg-4 PROVS=rv-pbf-prov-3 REDIS_VM=rv-pbf-redis-2 UNITS=rv-pbf-unit-6 TARGETS=http://10.146.0.7:8400 RAMP=15 WARMUP=30 DURATION=60 LABEL=explore-g2-8
+13:01:46 DONE x8-80: # x8-80: strict FAIL | load-knee FAIL (sut, units=1, rate=80) | offered 4800 (80.0/s) qualified 4670 (77.83/s) FP-blocks 81 (0.01688) infra 49 (0.010208333333333333) drops 0 safety 0
+13:01:46 START x4-30 30 LGS=rv-pbf-lg-4 PROVS=rv-pbf-prov-3 REDIS_VM=rv-pbf-redis-2 UNITS=rv-pbf-unit-7 TARGETS=http://10.146.0.14:8400 RAMP=15 WARMUP=30 DURATION=60 LABEL=explore-g2-4
+13:05:12 DONE x4-30: # x4-30: strict FAIL | load-knee PASS (sut, units=1, rate=30) | offered 1800 (30.0/s) qualified 1782 (29.7/s) FP-blocks 18 (0.01) infra 0 (0.0) drops 0 safety 0
+13:05:12 START x4-45 45 LGS=rv-pbf-lg-4 PROVS=rv-pbf-prov-3 REDIS_VM=rv-pbf-redis-2 UNITS=rv-pbf-unit-7 TARGETS=http://10.146.0.14:8400 RAMP=15 WARMUP=30 DURATION=60 LABEL=explore-g2-4
+13:08:38 DONE x4-45: # x4-45: strict FAIL | load-knee FAIL (sut, units=1, rate=45) | offered 2700 (45.0/s) qualified 2657 (44.28/s) FP-blocks 42 (0.01556) infra 1 (0.00037037037037037035) drops 0 safety 0
+13:08:38 QUEUE_END /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-bench-fleet/notes/q-small-a.txt
+13:09:05 START f8-060 60 LGS=rv-pbf-lg-4 PROVS=rv-pbf-prov-3 REDIS_VM=rv-pbf-redis-2 UNITS=rv-pbf-unit-6 TARGETS=http://10.146.0.7:8400 LABEL=C-g2-8-ladder
+13:17:24 DONE f8-060: # f8-060: strict FAIL | load-knee PASS (sut, units=1, rate=60) | offered 18000 (60.0/s) qualified 17682 (58.94/s) FP-blocks 311 (0.01728) infra 7 (0.00038888888888888887) drops 0 safety 0
+13:17:24 START f8-070 70 LGS=rv-pbf-lg-4 PROVS=rv-pbf-prov-3 REDIS_VM=rv-pbf-redis-2 UNITS=rv-pbf-unit-6 TARGETS=http://10.146.0.7:8400 LABEL=C-g2-8-ladder
+13:25:42 DONE f8-070: # f8-070: strict FAIL | load-knee FAIL (sut, units=1, rate=70) | offered 21000 (70.0/s) qualified 20596 (68.65/s) FP-blocks 375 (0.01786) infra 29 (0.001380952380952381) drops 0 safety 0
+13:25:42 START f4-030 30 LGS=rv-pbf-lg-4 PROVS=rv-pbf-prov-3 REDIS_VM=rv-pbf-redis-2 UNITS=rv-pbf-unit-7 TARGETS=http://10.146.0.14:8400 LABEL=C-g2-4-ladder
+13:33:54 DONE f4-030: # f4-030: strict FAIL | load-knee PASS (sut, units=1, rate=30) | offered 9000 (30.0/s) qualified 8854 (29.51/s) FP-blocks 146 (0.01622) infra 0 (0.0) drops 0 safety 0
+13:33:54 START f4-035 35 LGS=rv-pbf-lg-4 PROVS=rv-pbf-prov-3 REDIS_VM=rv-pbf-redis-2 UNITS=rv-pbf-unit-7 TARGETS=http://10.146.0.14:8400 LABEL=C-g2-4-ladder
+13:42:05 DONE f4-035: # f4-035: strict FAIL | load-knee PASS (sut, units=1, rate=35) | offered 10500 (35.0/s) qualified 10327 (34.42/s) FP-blocks 173 (0.01648) infra 0 (0.0) drops 0 safety 0
+13:42:05 START f4-040 40 LGS=rv-pbf-lg-4 PROVS=rv-pbf-prov-3 REDIS_VM=rv-pbf-redis-2 UNITS=rv-pbf-unit-7 TARGETS=http://10.146.0.14:8400 LABEL=C-g2-4-ladder
+13:50:18 DONE f4-040: # f4-040: strict FAIL | load-knee FAIL (sut, units=1, rate=40) | offered 12000 (40.0/s) qualified 11784 (39.28/s) FP-blocks 214 (0.01783) infra 2 (0.00016666666666666666) drops 0 safety 0
+13:50:33 START f8-060-r2 60 LGS=rv-pbf-lg-4 PROVS=rv-pbf-prov-3 REDIS_VM=rv-pbf-redis-2 UNITS=rv-pbf-unit-6 TARGETS=http://10.146.0.7:8400 LABEL=C-g2-8-knee-repeat
+13:58:51 DONE f8-060-r2: # f8-060-r2: strict FAIL | load-knee PASS (sut, units=1, rate=60) | offered 18000 (60.0/s) qualified 17684 (58.95/s) FP-blocks 314 (0.01744) infra 2 (0.00011111111111111112) drops 0 safety 0
+13:58:51 START f8-060-r3 60 LGS=rv-pbf-lg-4 PROVS=rv-pbf-prov-3 REDIS_VM=rv-pbf-redis-2 UNITS=rv-pbf-unit-6 TARGETS=http://10.146.0.7:8400 LABEL=C-g2-8-knee-repeat
+14:07:10 DONE f8-060-r3: # f8-060-r3: strict FAIL | load-knee PASS (sut, units=1, rate=60) | offered 18000 (60.0/s) qualified 17676 (58.92/s) FP-blocks 314 (0.01744) infra 10 (0.0005555555555555556) drops 0 safety 0
+14:07:10 START f4-035-r2 35 LGS=rv-pbf-lg-4 PROVS=rv-pbf-prov-3 REDIS_VM=rv-pbf-redis-2 UNITS=rv-pbf-unit-7 TARGETS=http://10.146.0.14:8400 LABEL=C-g2-4-knee-repeat
+14:15:21 DONE f4-035-r2: # f4-035-r2: strict FAIL | load-knee PASS (sut, units=1, rate=35) | offered 10500 (35.0/s) qualified 10319 (34.4/s) FP-blocks 181 (0.01724) infra 0 (0.0) drops 0 safety 0
+14:15:21 START f4-035-r3 35 LGS=rv-pbf-lg-4 PROVS=rv-pbf-prov-3 REDIS_VM=rv-pbf-redis-2 UNITS=rv-pbf-unit-7 TARGETS=http://10.146.0.14:8400 LABEL=C-g2-4-knee-repeat
+14:23:33 DONE f4-035-r3: # f4-035-r3: strict FAIL | load-knee PASS (sut, units=1, rate=35) | offered 10500 (35.0/s) qualified 10314 (34.38/s) FP-blocks 186 (0.01771) infra 0 (0.0) drops 0 safety 0
+14:23:33 START f8-060-poisson 60 LGS=rv-pbf-lg-4 PROVS=rv-pbf-prov-3 REDIS_VM=rv-pbf-redis-2 UNITS=rv-pbf-unit-6 TARGETS=http://10.146.0.7:8400 LABEL=C-g2-8-poisson OLG_EXTRA="-arrival poisson"
+14:31:51 DONE f8-060-poisson: # f8-060-poisson: strict FAIL | load-knee FAIL (sut, units=1, rate=60) | offered 18202 (60.67/s) qualified 16520 (55.07/s) FP-blocks 274 (0.01505) infra 1408 (0.07735413690803208) drops 0 safety 0
+14:31:51 START f8-020-poisson 20 LGS=rv-pbf-lg-4 PROVS=rv-pbf-prov-3 REDIS_VM=rv-pbf-redis-2 UNITS=rv-pbf-unit-6 TARGETS=http://10.146.0.7:8400 LABEL=C-g2-8-poisson OLG_EXTRA="-arrival poisson"
+14:40:09 DONE f8-020-poisson: # f8-020-poisson: strict FAIL | load-knee FAIL (sut, units=1, rate=20) | offered 6034 (20.11/s) qualified 5810 (19.37/s) FP-blocks 87 (0.01442) infra 137 (0.022704673516738483) drops 0 safety 0
+14:40:09 QUEUE_END /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-bench-fleet/notes/q-small-c.txt

@@ -1,0 +1,9 @@
+== INPUT: assistant tool_calls[].function.arguments ==
+  plain         disposition=BLOCK  consumer json.loads(arguments) -> {'key': 'AKIAQYLPMN5HHHFPZAM2', 'mail': 'alice.canary@example.com'}
+  JSON-escaped  disposition=ALLOW  consumer json.loads(arguments) -> {'key': 'AKIAQYLPMN5HHHFPZAM2', 'mail': 'alice.canary@example.com'}
+== OUTPUT (non-stream): message.tool_calls[].function.arguments ==
+  plain         disposition=REDACT client json.loads(arguments) -> {'key': '[REDACTED:secret.aws]', 'mail': '[REDACTED:pii.email]'}
+  JSON-escaped  disposition=ALLOW  client json.loads(arguments) -> {'key': 'AKIAQYLPMN5HHHFPZAM2', 'mail': 'alice.canary@example.com'}
+== OUTPUT (SSE): arguments fragments ==
+  plain         client json.loads(assembled arguments) -> {'key': '[REDACTED:secret.aws]', 'mail': '[REDACTED:pii.email]'}
+  JSON-escaped  client json.loads(assembled arguments) -> {'key': 'AKIAQYLPMN5HHHFPZAM2', 'mail': 'alice.canary@example.com'}

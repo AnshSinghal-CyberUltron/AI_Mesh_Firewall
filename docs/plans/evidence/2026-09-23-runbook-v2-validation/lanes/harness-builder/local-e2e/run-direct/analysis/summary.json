@@ -1,0 +1,215 @@
+{
+ "mode": "direct",
+ "policy": "none",
+ "phases": [
+  2
+ ],
+ "inputs": {
+  "client_files": [
+   "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/harness-builder/local-e2e/run-direct/requests.jsonl"
+  ],
+  "provider_files": [
+   "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/harness-builder/local-e2e/prov/records.jsonl"
+  ],
+  "corpus": null
+ },
+ "offered": 160,
+ "offered_rate_config": 20.0,
+ "measure_s": 8,
+ "achieved_offered_rps": 20.0,
+ "qualified": 160,
+ "expected_blocks": 0,
+ "errors": 0,
+ "qualified_rps": 20.0,
+ "error_rate": 0.0,
+ "error_reasons": {},
+ "error_examples": [],
+ "safety_failures": 0,
+ "safety_reasons": {},
+ "safety_examples": [],
+ "schedule": {
+  "drops": 0,
+  "drop_threshold_ms": 5.0,
+  "lateness": {
+   "n": 160,
+   "min": 0.0557,
+   "p50": 0.0679,
+   "p90": 0.0943,
+   "p99": 0.1958,
+   "p999": 0.2044,
+   "max": 0.2044,
+   "mean": 0.0755
+  }
+ },
+ "join": {
+  "joined": 160,
+  "by_nonce_fallback": 0,
+  "provider_records": 207,
+  "provider_rids_with_multiple_calls": 2,
+  "provider_orphans": null
+ },
+ "classes": {
+  "benign": 160
+ },
+ "phase_counts": {
+  "1": 40,
+  "2": 160
+ },
+ "T_addon_total": {
+  "n": 160,
+  "min": 0.0858,
+  "p50": 0.1631,
+  "p90": 0.3333,
+  "p99": 0.5536,
+  "p999": 0.5818,
+  "max": 0.5818,
+  "mean": 0.1895
+ },
+ "T_addon_first": {
+  "n": 160,
+  "min": 0.097,
+  "p50": 0.1626,
+  "p90": 0.3157,
+  "p99": 0.5818,
+  "p999": 0.5869,
+  "max": 0.5869,
+  "mean": 0.1959
+ },
+ "T_release_lag_max": {
+  "n": 160,
+  "min": 0.1364,
+  "p50": 0.2087,
+  "p90": 0.4419,
+  "p99": 0.5818,
+  "p999": 0.5869,
+  "max": 0.5869,
+  "mean": 0.253
+ },
+ "T_release_lag_max_arrival": {
+  "n": 160,
+  "min": 0.1364,
+  "p50": 0.2087,
+  "p90": 0.4419,
+  "p99": 0.5818,
+  "p999": 0.5869,
+  "max": 0.5869,
+  "mean": 0.253
+ },
+ "T_fw_addon": {
+  "n": 160,
+  "min": 0.1364,
+  "p50": 0.2087,
+  "p90": 0.4419,
+  "p99": 0.5818,
+  "p999": 0.5869,
+  "max": 0.5869,
+  "mean": 0.253
+ },
+ "T_fw_addon_sse": {
+  "n": 112,
+  "min": 0.1364,
+  "p50": 0.2255,
+  "p90": 0.442,
+  "p99": 0.5812,
+  "p999": 0.5869,
+  "max": 0.5869,
+  "mean": 0.262
+ },
+ "T_fw_addon_json": {
+  "n": 48,
+  "min": 0.1574,
+  "p50": 0.1939,
+  "p90": 0.3972,
+  "p99": 0.5818,
+  "p999": 0.5818,
+  "max": 0.5818,
+  "mean": 0.2322
+ },
+ "release_lag_sampled_joined": 160,
+ "release_lag_unmappable": 0,
+ "client_ttft_sse": {
+  "n": 112,
+  "min": 150.115,
+  "p50": 150.1915,
+  "p90": 150.351,
+  "p99": 150.5914,
+  "p999": 150.6366,
+  "max": 150.6366,
+  "mean": 150.2231
+ },
+ "provider_sched_err_last": {
+  "n": 160,
+  "min": 0.0018,
+  "p50": 0.0254,
+  "p90": 0.067,
+  "p99": 0.1077,
+  "p999": 0.1655,
+  "max": 0.1655,
+  "mean": 0.0312
+ },
+ "provider_sched_err_max_per_stream": {
+  "n": 160,
+  "min": 0.0028,
+  "p50": 0.1087,
+  "p90": 0.2334,
+  "p99": 0.3128,
+  "p999": 0.3135,
+  "max": 0.3135,
+  "mean": 0.1194
+ },
+ "provider_write_max": {
+  "n": 160,
+  "min": 0.0212,
+  "p50": 0.0388,
+  "p90": 0.0588,
+  "p99": 0.0753,
+  "p999": 0.3968,
+  "max": 0.3968,
+  "mean": 0.0432
+ },
+ "loadgen_cpu": [
+  {
+   "dir": "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/harness-builder/local-e2e/run-direct",
+   "samples": 8,
+   "busy_max": 33.070348454963835,
+   "busy_mean": 13.84,
+   "machine": "c4-standard-16",
+   "zone": "asia-south1-c"
+  }
+ ],
+ "provider_cpu": {
+  "samples": 52,
+  "busy_max": 46.82230869001297,
+  "busy_p95": 33.741146168705725
+ },
+ "provider_stats": [],
+ "completeness": [
+  {
+   "dir": "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/harness-builder/local-e2e/run-direct",
+   "scheduled": 200,
+   "recorded": 200,
+   "interrupted": false
+  }
+ ],
+ "valid": true,
+ "invalid_reasons": [],
+ "per_second": null,
+ "thresholds": {
+  "slo_ms": 20.0,
+  "err_budget": 0.001,
+  "drop_ms": 5.0,
+  "sched_tol_ms": 1.0,
+  "cpu_max": 101.0
+ },
+ "verdict": {
+  "pass": true,
+  "checks": {
+   "zero_schedule_drops": true,
+   "zero_errors": true,
+   "provider_p99_sched_err_within_tol": true,
+   "loadgen_cpu_max_lt_limit": true,
+   "run_valid": true,
+   "all_joined": true
+  }
+ }
+}

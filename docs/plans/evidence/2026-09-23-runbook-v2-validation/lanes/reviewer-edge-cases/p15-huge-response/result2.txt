@@ -1,0 +1,3 @@
+{"upstream_body_MiB": 64, "status": 200, "client_body_MiB": 64.0, "elapsed_s": 0.81, "worker_rss_MiB_baseline": 1244, "worker_rss_MiB_peak_during": 1372, "delta_MiB": 128, "delta_over_body": 2.0}
+{"upstream_body_MiB": 192, "status": 200, "client_body_MiB": 192.0, "elapsed_s": 2.4, "worker_rss_MiB_baseline": 1244, "worker_rss_MiB_peak_during": 1821, "delta_MiB": 577, "delta_over_body": 3.01}
+{"upstream_body_MiB": 384, "status": 200, "client_body_MiB": 384.0, "elapsed_s": 4.94, "worker_rss_MiB_baseline": 1245, "worker_rss_MiB_peak_during": 2399, "delta_MiB": 1154, "delta_over_body": 3.01}

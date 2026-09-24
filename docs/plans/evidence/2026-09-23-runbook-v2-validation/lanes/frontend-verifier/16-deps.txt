@@ -1,0 +1,31 @@
+parsed UI rows=14 T dispositions=27
+
+UI00 (rb.md:1434) depends on: T00
+   T00: RETAINED   -> GW00         (rb.md:3337) Retained, strengthened as GW00. Adds three-branch resolution and the structural gates.
+UI02 (rb.md:1436) depends on: UI00, UI01, T01
+   T01: RETAINED   -> -            (rb.md:3338) Retained. §1–§2 stand. §10.2 narrows the frozen contract to the wire and explicitly unfree
+UI04 (rb.md:1438) depends on: UI01, UI02, T12
+   T12: ELEVATED   -> GW01         (rb.md:3349) Elevated to GW01 and promoted from a task to the frozen contract that gates every commit.
+UI05 (rb.md:1439) depends on: UI03, T03, T15
+   T03: SUPERSEDED -> GW14         (rb.md:3340) Superseded by GW14. v2 measures rather than repairs; no derived model_output_ms exists to 
+   T15: ABSORBED   -> GW14         (rb.md:3352) Absorbed into GW14, extended with counted loss and removal of the synchronous log publishe
+UI06 (rb.md:1440) depends on: UI03, T03, T07, T15
+   T03: SUPERSEDED -> GW14         (rb.md:3340) Superseded by GW14. v2 measures rather than repairs; no derived model_output_ms exists to 
+   T07: ABSORBED   -> GW09         (rb.md:3344) Absorbed into GW09, extended with single-redactor byte verification and the injection-to-s
+   T15: ABSORBED   -> GW14         (rb.md:3352) Absorbed into GW14, extended with counted loss and removal of the synchronous log publishe
+UI07 (rb.md:1441) depends on: UI03, T05, T06, T10
+   T05: ABSORBED   -> GW05         (rb.md:3342) Absorbed into GW05, extended with three distinct plan states and one lookup for all surfac
+   T06: ABSORBED   -> GW07         (rb.md:3343) Absorbed into GW07, extended with purity, type-level BLOCK unreachability and a property s
+   T10: ABSORBED   -> GW13         (rb.md:3347) Absorbed into GW13, extended by using the same resolver for both phases.
+UI08 (rb.md:1442) depends on: UI03, T13, T14
+   T13: ABSORBED   -> GW11,GW12    (rb.md:3350) Absorbed into GW11 and GW12.
+   T14: ABSORBED   -> GW06         (rb.md:3351) Absorbed into GW06, extended with one posture table implemented once.
+UI11 (rb.md:1445) depends on: UI02-UI10, T02
+   T02: RETAINED   -> GW02         (rb.md:3339) Retained and reused by GW02, which cherry-picks staging/t02/ rather than rebuilding it.
+UI12 (rb.md:1446) depends on: UI11, T18-T21
+   T18: ABSORBED   -> GW20         (rb.md:3355) Absorbed into GW20, extended with the three separate denominators and open-loop generation
+   T19: ABSORBED   -> GW20         (rb.md:3356) Absorbed into GW20.
+   T20: RETAINED   -> -            (rb.md:3357) Retained and re-run on the v2 candidate.
+   T21: RETAINED   -> GW22         (rb.md:3358) Retained, extended by GW22's dual-version and in-flight scenarios.
+UI13 (rb.md:1447) depends on: UI12, T22
+   T22: RETAINED   -> -            (rb.md:3359) Retained, and now runs against v2 as part of UI12.

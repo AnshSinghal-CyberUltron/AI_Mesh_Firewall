@@ -1,0 +1,7 @@
+tokenizers 0.23.2
+{"fn": "encode", "tokens": 1018, "per_call_ms": 3.145, "seq_s": 1.887, "two_threads_s": 1.865, "speedup": 1.01}
+{"fn": "encode_batch", "tokens": 1018, "per_call_ms": 3.111, "seq_s": 1.867, "two_threads_s": 0.929, "speedup": 2.01}
+{"loop_test": "inline", "fn": "encode", "wall_s": 0.537, "tick_lag_ms_p50": 0.226, "p99": 3.576, "max": 3.652, "ticks": 200}
+{"loop_test": "thread", "fn": "encode", "wall_s": 0.547, "tick_lag_ms_p50": 0.114, "p99": 2.31, "max": 2.329, "ticks": 299}
+{"loop_test": "inline", "fn": "encode_batch", "wall_s": 0.536, "tick_lag_ms_p50": 0.169, "p99": 3.321, "max": 3.363, "ticks": 200}
+{"loop_test": "thread", "fn": "encode_batch", "wall_s": 0.544, "tick_lag_ms_p50": 0.084, "p99": 0.157, "max": 0.184, "ticks": 500}

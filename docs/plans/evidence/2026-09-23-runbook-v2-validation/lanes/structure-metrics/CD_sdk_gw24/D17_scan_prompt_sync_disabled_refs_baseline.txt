@@ -1,0 +1,11 @@
+## all references to _scan_prompt_sync_disabled_builtin_default in the FULL 2a657fad tree (git grep, incl docs/tests)
+2a657fad:docs/perf/evidence/2026-09-09-G4.1-deobfuscation-cache-targets-dead-code.md:21:| 1269 | `_scan_prompt_sync_disabled_builtin_default` | **dead** — grep finds no callers |
+2a657fad:gateway/ai_mesh_gateway/scanner.py:1282:    def _scan_prompt_sync_disabled_builtin_default(
+2a657fad:gateway/ai_mesh_gateway/tests/test_pipeline_obfuscation_fp.py:31:# reference body ``_scan_prompt_sync_disabled_builtin_default``. Drive the tests through that
+2a657fad:gateway/ai_mesh_gateway/tests/test_pipeline_obfuscation_fp.py:35:    return _SCANNER._scan_prompt_sync_disabled_builtin_default(text, False, None).action
+2a657fad:gateway/ai_mesh_gateway/tests/test_pipeline_obfuscation_fp.py:39:    return _SCANNER._scan_prompt_sync_disabled_builtin_default(text, False, None).threat_type
+## partial-name / string-construction probes (getattr, 'disabled_builtin', 'sync_disabled')
+2a657fad:gateway/ai_mesh_gateway/scanner.py:1282:    def _scan_prompt_sync_disabled_builtin_default(
+2a657fad:gateway/ai_mesh_gateway/tests/test_pipeline_obfuscation_fp.py:31:# reference body ``_scan_prompt_sync_disabled_builtin_default``. Drive the tests through that
+2a657fad:gateway/ai_mesh_gateway/tests/test_pipeline_obfuscation_fp.py:35:    return _SCANNER._scan_prompt_sync_disabled_builtin_default(text, False, None).action
+2a657fad:gateway/ai_mesh_gateway/tests/test_pipeline_obfuscation_fp.py:39:    return _SCANNER._scan_prompt_sync_disabled_builtin_default(text, False, None).threat_type

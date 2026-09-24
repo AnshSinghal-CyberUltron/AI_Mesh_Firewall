@@ -1,0 +1,19 @@
+2026/09/23 13:36:23 synthprov 5af9594a2631 listening on :8080 (ttft=150ms itl=20ms sample-mod=10 hb=100µs gomaxprocs=8 gc=off memlimit=17.62GiB)
+13:36:25 olg started on rv-v1-lg-2 (rate 10.0 each, start-at 1790170590022)
+[rv-v1-lg-2] 2026/09/23 13:43:06 done: scheduled=3750 recorded=3750 ok=3750 errors=map[] drops=0 late_p99=182us max=352us cpu_busy_max=16.4%
+2026/09/23 13:43:16 final stats: requests=3750 records=3750 blocked=0
+3364344 records.jsonl
+2229 stats.json
+gateway_lines 36280
+gateway_error_lines 0
+gateway_warning_lines 0
+worker_timeouts 0
+worker_boots 0
+control_error_lines 0
+13:43:38 v1 audit events exported: 3750
+[rv-v1-prov-2] compressed size 1012K
+[rv-v1-lg-2] compressed size 1.1M
+13:43:39 collected GO-r10 from rv-v1-lg-2 rv-v1-prov-2 into /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/v1-bench/runs/GO-r10
+# Harness analysis (sut, policy=none) — FAIL
+
+| check | result |

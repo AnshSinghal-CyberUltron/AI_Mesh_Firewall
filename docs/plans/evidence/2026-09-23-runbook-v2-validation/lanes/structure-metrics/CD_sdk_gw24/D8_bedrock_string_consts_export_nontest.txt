@@ -1,0 +1,65 @@
+BEDROCK_ADJUDICATOR_MODEL 1
+    gateway/ai_mesh_gateway/platform_models.py:108 [call:os.getenv]
+BEDROCK_COMPONENT_LOG_LEVEL 1
+    control/ai_mesh_control/main_app/settings.py:969 [call:os.environ.get]
+BEDROCK_DEPLOYMENT_PATH 2
+    gateway/ai_mesh_gateway/bedrock_scanner.py:728 [call:os.getenv]
+    control/ai_mesh_control/security_engines/bedrock_scanner.py:380 [call:os.getenv]
+BEDROCK_LOG_BACKUPS 1
+    gateway/ai_mesh_gateway/bedrock_logger.py:38 [call:os.getenv]
+BEDROCK_LOG_DIR 3
+    gateway/ai_mesh_gateway/main.py:16494 [call:_os.getenv]
+    gateway/ai_mesh_gateway/main.py:6758 [call:os.getenv]
+    gateway/ai_mesh_gateway/bedrock_logger.py:35 [call:os.getenv]
+BEDROCK_LOG_JSON 2
+    gateway/ai_mesh_gateway/main.py:6760 [call:os.getenv]
+    gateway/ai_mesh_gateway/bedrock_logger.py:39 [call:os.getenv]
+BEDROCK_LOG_LEVEL 2
+    gateway/ai_mesh_gateway/main.py:6759 [call:os.getenv]
+    gateway/ai_mesh_gateway/bedrock_logger.py:36 [call:os.getenv]
+BEDROCK_LOG_MAX_MB 1
+    gateway/ai_mesh_gateway/bedrock_logger.py:37 [call:os.getenv]
+BEDROCK_LOG_OUTPUT_PREVIEW 1
+    gateway/ai_mesh_gateway/bedrock_logger.py:42 [call:os.getenv]
+BEDROCK_LOG_PREVIEW_CHARS 1
+    gateway/ai_mesh_gateway/bedrock_logger.py:40 [call:os.getenv]
+BEDROCK_LOG_PROMPT_PREVIEW 1
+    gateway/ai_mesh_gateway/bedrock_logger.py:41 [call:os.getenv]
+BEDROCK_LOG_RING_SIZE 1
+    gateway/ai_mesh_gateway/bedrock_logger.py:45 [call:os.getenv]
+BEDROCK_MAX_PROMPT_CHARS 1
+    gateway/ai_mesh_gateway/bedrock_scanner.py:58 [call:os.getenv]
+BEDROCK_MAX_TOKENS 5
+    gateway/ai_mesh_gateway/bedrock_scanner.py:716 [call:_env_int]
+    gateway/ai_mesh_gateway/bedrock_client.py:632 [call:os.getenv]
+    gateway/ai_mesh_gateway/bedrock_client.py:687 [call:os.getenv]
+    shared/ai_mesh_shared/tier2_gemini_client.py:189 [call:os.getenv]
+    control/ai_mesh_control/security_engines/bedrock_scanner.py:360 [call:os.getenv]
+BEDROCK_MODEL 8
+    gateway/ai_mesh_gateway/platform_models.py:101 [call:os.getenv]
+    gateway/ai_mesh_gateway/main.py:6676 [call:os.getenv]
+    gateway/ai_mesh_gateway/llm_judge.py:83 [call:os.getenv]
+    gateway/ai_mesh_gateway/bedrock_inference.py:9 [call:os.getenv]
+    gateway/ai_mesh_gateway/rag_pipeline/query_stage.py:425 [call:os.getenv]
+    control/ai_mesh_control/security_engines/bedrock_scanner.py:345 [call:os.getenv]
+    control/ai_mesh_control/security_engines/bedrock_client.py:130 [call:os.getenv]
+    control/ai_mesh_control/security_engines/bedrock_client.py:268 [call:os.getenv]
+BEDROCK_REGION 6
+    gateway/ai_mesh_gateway/llm_judge.py:84 [call:os.getenv]
+    gateway/ai_mesh_gateway/bedrock_client.py:224 [call:os.getenv]
+    gateway/ai_mesh_gateway/bedrock_client.py:844 [call:os.getenv]
+    control/ai_mesh_control/security_engines/bedrock_client.py:129 [call:os.getenv]
+    control/ai_mesh_control/security_engines/bedrock_client.py:267 [call:os.getenv]
+    control/ai_mesh_control/main_app/settings.py:407 [call:os.environ.get]
+BEDROCK_TIER2_SCANNER_MODEL 1
+    gateway/ai_mesh_gateway/platform_models.py:100 [call:os.getenv]
+BEDROCK_TIMEOUT 2
+    gateway/ai_mesh_gateway/bedrock_client.py:846 [call:os.getenv]
+    control/ai_mesh_control/security_engines/bedrock_client.py:269 [call:os.getenv]
+BEDROCK_VERIFY_SSL 1
+    control/ai_mesh_control/security_engines/bedrock_client.py:33 [call:os.getenv]
+GATEWAY_BEDROCK_MAX_POOL_CONNECTIONS 1
+    gateway/ai_mesh_gateway/bedrock_client.py:68 [call:os.getenv]
+GATEWAY_BEDROCK_THREAD_POOL_SIZE 1
+    gateway/ai_mesh_gateway/scanner.py:1129 [call:_env_int]
+DISTINCT: 21 prefix BEDROCK_: 19

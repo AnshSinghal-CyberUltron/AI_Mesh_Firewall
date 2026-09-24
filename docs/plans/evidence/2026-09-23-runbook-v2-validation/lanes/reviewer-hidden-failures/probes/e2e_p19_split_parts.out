@@ -1,0 +1,4 @@
+AWS key whole (control)      http=403 disposition=BLOCK  provider called=False provider canary_hits=-
+AWS key split over 2 parts   http=200 disposition=ALLOW  provider called=True provider canary_hits=None
+email split over 2 parts     http=200 disposition=REDACT provider called=True provider canary_hits=None
+SSN split over 2 parts       http=200 disposition=ALLOW  provider called=True provider canary_hits=None

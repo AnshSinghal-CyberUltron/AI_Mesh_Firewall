@@ -1,0 +1,36 @@
+=== CONTROL: raise HTTPException(status_code=403) in detect/verdict.py ===
+step[sizes] rc=0 ::  
+step[http] rc=1 :: gateway_v2/detect/verdict.py:7: forbidden status_code=4xx outside edge/ and resolve/ gateway_v2/detect/verdict.py:7: forbidden HTTPException outside edge/ and resolve/ 
+step[mutable] rc=0 ::  
+step[capacity] rc=0 ::  
+step[imports] rc=0 ::  Contracts: 1 kept, 0 broken. 
+step[ruff] rc=0 :: All checks passed! 
+step[mypy] rc=0 :: Success: no issues found in 79 source files 
+step[pytest] rc=1 :: FAILED tests/gates/test_empty_tree_passes.py::test_shipped_tree_has_no_http_outside_edge_resolve 1 failed, 41 passed, 4 skipped in 0.80s 
+JOB structural-gates => RED
+
+=== MUTATION: aliased HTTPException/JSONResponse + status constants in detect/verdict.py ===
+"""Mutation: a detector that terminates the request itself (forbidden outside edge/resolve)."""
+
+from http import HTTPStatus
+
+from fastapi import HTTPException as Denied  # type: ignore[import-not-found]
+from fastapi import status
+from fastapi.responses import JSONResponse as Reply  # type: ignore[import-not-found]
+
+
+def block() -> None:
+    raise Denied(status_code=status.HTTP_403_FORBIDDEN)
+
+
+def refuse() -> object:
+    return Reply({"error": "blocked"}, status_code=HTTPStatus.FORBIDDEN)
+step[sizes] rc=0 ::  
+step[http] rc=0 ::  
+step[mutable] rc=0 ::  
+step[capacity] rc=0 ::  
+step[imports] rc=0 ::  Contracts: 1 kept, 0 broken. 
+step[ruff] rc=0 :: All checks passed! 
+step[mypy] rc=0 :: Success: no issues found in 79 source files 
+step[pytest] rc=0 :: .....................................ssss.....                           [100%] 42 passed, 4 skipped in 0.78s 
+JOB structural-gates => GREEN

@@ -1,0 +1,14 @@
+=== BASELINE ===
+synthetic truth: gateway pre-provider 20 ms | provider TTFT 900 ms | streaming after 1st token 300 ms
+stage latencies (ms): {'auth': 2.0, 'kill_switch': 1.0, 'rate_limit': 1.0, 'policy': 4.0, 'input_scan': 8.0, 'model_routing': 0.0, 'model_input': 0.0, 'model_output': 300.0, 'output_guardrail': 0.0}
+total_latency_ms: 1220.02 | stage_latency_sum_ms: 316.0 | overhead_ms: 904.0 | ttft_ms: 900.0
+addon split: {'t_addon_pre_ms': 920.0, 't_addon_post_ms': 0.0, 't_t2_ms': 0.0}
+PipelineStageTimer first segment labelled 'auth' measured: 4.1 ms (only body parse happened in it)
+finalize_stage_metrics overhead_ms clamp: max(0, wall - stages - telemetry) -> 45.9
+=== HEAD ===
+synthetic truth: gateway pre-provider 20 ms | provider TTFT 900 ms | streaming after 1st token 300 ms
+stage latencies (ms): {'auth': 2.0, 'kill_switch': 1.0, 'rate_limit': 1.0, 'policy': 4.0, 'input_scan': 8.0, 'model_routing': 0.0, 'model_input': 0.0, 'model_output': 300.0, 'output_guardrail': 0.0}
+total_latency_ms: 1220.02 | stage_latency_sum_ms: 316.0 | overhead_ms: 904.0 | ttft_ms: 900.0
+addon split: {'t_addon_pre_ms': 920.0, 't_addon_post_ms': 0.0, 't_t2_ms': 0.0}
+PipelineStageTimer first segment labelled 'auth' measured: 4.1 ms (only body parse happened in it)
+finalize_stage_metrics overhead_ms clamp: max(0, wall - stages - telemetry) -> 45.9

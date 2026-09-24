@@ -1,0 +1,75 @@
+== runtime/cgroup.py
+   L14   literal 1             | _UNLIMITED = 1 << 62
+   L14   literal 62            | _UNLIMITED = 1 << 62
+   L15   literal 3             | _BYTES_PER_GIB = 1024**3
+   L15   literal 1024          | _BYTES_PER_GIB = 1024**3
+   L38   literal 0             | quota_s = parts[0]
+   L45   literal 100000        | period = 100000
+   L46   literal 1             | if len(parts) > 1:
+   L48   literal 1             | period = int(parts[1])
+   L51   literal 0             | if quota < 0 or period <= 0:
+   L79   literal 1             | if len(parts) >= 3 and parts[1] == "":
+   L79   literal 3             | if len(parts) >= 3 and parts[1] == "":
+   L80   literal 2             | rel = parts[2].lstrip("/")
+   L95   literal 0             | if quota < 0 or period <= 0:
+   L107  literal 0             | if n <= 0 or n >= _UNLIMITED:
+   L133  literal 2             | if len(parts) >= 2:
+   L135  literal 1             | return int(parts[1]) * 1024
+   L135  literal 1024          | return int(parts[1]) * 1024
+   L144  literal 1             | if n < 1:
+   L148  literal 0             | n = len(os.sched_getaffinity(0))
+   L151  literal 1             | if n < 1:
+   L159  literal 1             | if soft < 1:
+   L168  literal 1             | if soft < 1:
+   L245  literal 1             | if fd_limit < 1:
+   L188  env     AMF_CPU_QUOTA           | forced = _env(env, "AMF_CPU_QUOTA") or _env(env, "RESOURCE_BUDGET_CPUS")
+   L188  env     RESOURCE_BUDGET_CPUS    | forced = _env(env, "AMF_CPU_QUOTA") or _env(env, "RESOURCE_BUDGET_CPUS")
+   L207  env     AMF_MEMORY_LIMIT_BYTES  | forced_bytes = _env(env, "AMF_MEMORY_LIMIT_BYTES")
+   L210  env     RESOURCE_BUDGET_MEM_GB  | forced_gb = _env(env, "RESOURCE_BUDGET_MEM_GB")
+   L242  env     AMF_FD_LIMIT            | forced_fd = _env(env, "AMF_FD_LIMIT")
+== runtime/lifecycle.py
+   L34   literal 2             | text = json.dumps(runtime.as_dict(), indent=2, sort_keys=True)
+   L45   literal 0.05          | time.sleep(0.05)
+   L71   literal 0.25          | if bounced.wait(timeout=0.25):
+   L74   literal 0             | return 0
+   L78   literal 1             | args = list(sys.argv[1:] if argv is None else argv)
+   L84   literal 2             | return 2
+   L91   literal 0             | return 0
+   L87   env     AMF_SNAPSHOT_PATH       | path = os.environ.get("AMF_SNAPSHOT_PATH")
+   L88   env     AMF_HOLD_LEASE          | hold = os.environ.get("AMF_HOLD_LEASE") == "1"
+   L90   env     AMF_SNAPSHOT_PATH       | emit_snapshot(runtime, os.environ.get("AMF_SNAPSHOT_PATH"))
+== runtime/pools.py
+   L21   literal 0             | self.held = 0
+   L22   literal 0             | self.completed = 0
+   L23   literal 0             | self.dropped = 0
+   L29   literal 1             | self.held += 1
+   L33   literal 1             | if self.held < 1:
+   L35   literal 1             | self.held -= 1
+   L36   literal 1             | self.completed += 1
+   L58   literal 0             | self.reload_count = 0
+   L73   literal 1             | self.reload_count += 1
+== runtime/resources.py
+   L14   literal 20.0          | _DEFAULT_TARGET_P99_MS = 20.0
+   L15   literal 0.75          | _DEFAULT_UTILIZATION_CAP = 0.75
+   L16   literal 400           | _DEFAULT_PER_WORKER_RSS = 400 * 1024 * 1024
+   L16   literal 1024          | _DEFAULT_PER_WORKER_RSS = 400 * 1024 * 1024
+   L17   literal 1000.0        | _MS_PER_S = 1000.0
+   L38   literal 1             | if n < 1:
+   L46   literal 1             | if self.worker_override < 1:
+   L62   literal 0             | if service_rate <= 0:
+   L69   literal 1             | if n < 1:
+   L75   literal 0             | n = math.floor(max(usable, 0) * self.utilization_cap)
+   L92   literal 1             | if n < 1:
+   L102  literal 1             | if n < 1:
+   L107  literal 0             | streams = active_streams if active_streams > 0 else 1
+   L107  literal 1             | streams = active_streams if active_streams > 0 else 1
+   L109  literal 1             | if n < 1:
+   L135  literal 0             | if target_p99_ms <= 0 or utilization_cap <= 0 or per_worker_rss < 1:
+   L135  literal 1             | if target_p99_ms <= 0 or utilization_cap <= 0 or per_worker_rss < 1:
+   L168  literal 1024          | rss = int(float(rss_raw) * 1024 * 1024) if rss_raw else _DEFAULT_PER_WORKER_RSS
+   L238  literal 1             | "stream_buffer_bytes": contract.stream_buffer_bytes(1),
+   L163  env     AMF_TARGET_P99_MS       | p99_raw = src.get("AMF_TARGET_P99_MS")
+   L164  env     AMF_UTILIZATION_CAP     | util_raw = src.get("AMF_UTILIZATION_CAP")
+   L165  env     AMF_PER_WORKER_RSS_MB   | rss_raw = src.get("AMF_PER_WORKER_RSS_MB")
+   L169  env     AMF_WEB_CONCURRENCY     | override = _parse_override(src.get("WEB_CONCURRENCY") or src.get("AMF_WEB_CONCUR
+   L169  env     WEB_CONCURRENCY         | override = _parse_override(src.get("WEB_CONCURRENCY") or src.get("AMF_WEB_CONCUR

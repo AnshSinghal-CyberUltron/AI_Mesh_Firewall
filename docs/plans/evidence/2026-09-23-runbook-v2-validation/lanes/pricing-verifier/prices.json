@@ -1,0 +1,3841 @@
+{
+ "meta": {
+  "source": "Cloud Billing Catalog API v1 (cloudbilling.googleapis.com/v1/services/*/skus?currencyCode=USD), raw pages in raw/",
+  "fetched_at_utc": "2026-09-23T05:31:46Z",
+  "pricing_effectiveTime_all_used_skus": [
+   "2026-09-22T07:00:00Z"
+  ],
+  "region": "asia-south1 (Mumbai)",
+  "basis": "ON-DEMAND list price; no CUD, no SUD, no Spot, no free-tier credits",
+  "hours_per_month": 730,
+  "currency": "USD",
+  "services": {
+   "Compute Engine": "6F81-5844-456A",
+   "Networking": "E505-1604-58F8",
+   "Cloud Memorystore for Redis": "5AF5-2C11-D467",
+   "Cloud Memorystore (Valkey)": "A2B5-E0F1-B0F3",
+   "Cloud SQL": "9662-B51E-5089",
+   "Cloud Logging": "5490-F7B7-8DF6",
+   "Cloud Monitoring": "58CD-E7C3-72CA",
+   "Kubernetes Engine": "CCD8-9BF1-090E",
+   "Artifact Registry": "149C-F9EC-3994",
+   "Cloud Storage": "95FF-2EF5-5EA1"
+  },
+  "machine_specs_source": "gcloud compute machine-types list --zones asia-south1-a,b,c (raw/machine_types_asia-south1.json); cross-checked g2-standard-24 and c4d-highcpu-16 with gcloud compute machine-types describe (raw/describe_*.json)",
+  "doc_sourced_rules (not in the API)": [
+   "Hyperdisk Balanced bills provisioned IOPS/throughput only in excess of 3,000 IOPS and 140 MBps (docs/compute_disks-image-pricing.html)",
+   "Static external IPs assigned to forwarding rules are not charged (docs/vpc_network-pricing.html)",
+   "Cloud NAT data processing is charged on inbound and outbound bytes (docs/vpc_network-pricing.html)",
+   "SUD applies to N1/N2/N2D/C2/M1/M2 vCPU+RAM only; G2, C4, C4D, C3, E2 get none (docs/compute_docs_sustained-use-discounts.html)"
+  ]
+ },
+ "unit_prices_usd": {
+  "g2_core_h": "0.026011561",
+  "g2_ram_gib_h": "0.003047337",
+  "l4_gpu_h": "0.582975726",
+  "c4_core_h": "0.036036",
+  "c4_ram_gib_h": "0.00409552",
+  "c4d_core_h": "0.0340116",
+  "c4d_ram_gb_h": "0.003635401",
+  "c3_core_h": "0.036036",
+  "c3_ram_gib_h": "0.00409552",
+  "n2_core_h": "0.03797",
+  "n2_ram_gib_h": "0.005088",
+  "e2_core_h": "0.0261993",
+  "e2_ram_gib_h": "0.00351072",
+  "cud3_g2_core_h": "0.0117052",
+  "cud3_g2_ram_gib_h": "0.001371301",
+  "cud3_l4_gpu_h": "0.262339046",
+  "cud1_g2_core_h": "0.016387288",
+  "cud1_g2_ram_gib_h": "0.001919822",
+  "cud1_l4_gpu_h": "0.3672747",
+  "cud3_c4_core_h": "0.01621672",
+  "cud3_c4_ram_gib_h": "0.00184288",
+  "pd_balanced_gib_mo": "0.12",
+  "pd_ssd_gib_mo": "0.204",
+  "pd_standard_gib_mo": "0.048",
+  "hdb_capacity_gib_mo": "0.083",
+  "hdb_iops_mo": "0.005",
+  "hdb_throughput_mibps_mo": "0.042",
+  "snapshot_regional_gib_mo": "0.052",
+  "snapshot_multiregional_asia_gib_mo": "0.083",
+  "pd_ssd_gib_mo_us_central1_reference": "0.17",
+  "egress_standard_tier_mumbai": "0.11",
+  "egress_premium_to_india": "0.12",
+  "egress_premium_to_americas": "0.12",
+  "egress_premium_to_emea": "0.12",
+  "egress_premium_to_western_europe": "0.12",
+  "egress_premium_to_eastern_europe": "0.12",
+  "egress_premium_to_central_america": "0.12",
+  "egress_premium_to_apac_ex_kr_id": "0.12",
+  "egress_premium_to_middle_east": "0.15",
+  "egress_premium_to_africa": "0.15",
+  "egress_premium_to_australia": "0.19",
+  "egress_premium_to_indonesia": "0.19",
+  "egress_premium_to_south_korea": "0.19",
+  "egress_premium_to_south_america": "0.19",
+  "egress_premium_to_china": "0.23",
+  "egress_intrazone": "0",
+  "egress_interzone": "0.01",
+  "ip_external_standard_vm_h": "0.005",
+  "ip_external_spot_vm_h": "0.0025",
+  "ip_static_unassigned_mumbai_h": "0.012",
+  "lb_regional_ext_alb_fr_min_h": "0.03",
+  "lb_regional_ext_alb_fr_additional_h": "0.012",
+  "lb_regional_ext_alb_inbound_gib": "0.01",
+  "lb_regional_ext_alb_outbound_gib": "0.01",
+  "lb_global_fr_min_h": "0.025",
+  "lb_global_fr_additional_h": "0.01",
+  "lb_global_ext_alb_inbound_gib_mumbai": "0.01",
+  "lb_global_ext_alb_outbound_gib_mumbai": "0.01",
+  "nat_gateway_uptime_per_vm_h": "0.0014",
+  "nat_data_processing_gib": "0.045",
+  "nat_ip_usage_h": "0.005",
+  "armor_std_policy_mo": "5",
+  "armor_std_rule_mo": "1",
+  "armor_std_request": "7.5E-7",
+  "armor_regional_request": "6E-7",
+  "valkey_shared_core_nano_node_h": "0.0331",
+  "valkey_standard_small_node_h": "0.1482",
+  "valkey_highmem_medium_node_h": "0.2",
+  "valkey_highcpu_medium_node_h": "0.5185",
+  "redis_basic_m1_gib_h": "0.063",
+  "redis_basic_m2_gib_h": "0.037",
+  "redis_basic_m3_gib_h": "0.03",
+  "redis_basic_m4_gib_h": "0.022",
+  "redis_basic_m5_gib_h": "0.017",
+  "redis_standard_m1_gib_h": "0.11",
+  "redis_standard_m2_gib_h": "0.07",
+  "redis_standard_m3_gib_h": "0.058",
+  "redis_standard_m4_gib_h": "0.043",
+  "redis_standard_m5_gib_h": "0.034",
+  "redis_cluster_node_shared_core_nano_h": "0.0331",
+  "redis_cluster_node_default_h": "0.2",
+  "sql_pg_regional_vcpu_h": "0.0991",
+  "sql_pg_regional_ram_gib_h": "0.0168",
+  "sql_pg_regional_ssd_gib_mo": "0.408",
+  "sql_pg_zonal_vcpu_h": "0.0496",
+  "sql_pg_zonal_ram_gib_h": "0.0084",
+  "sql_pg_zonal_ssd_gib_mo": "0.204",
+  "sql_backups_gib_mo": "0.096",
+  "logging_storage_gib": "0.5",
+  "logging_retention_gib_mo": "0.01",
+  "monitoring_metric_volume_mib": "0.258",
+  "monitoring_prometheus_sample": "6E-8",
+  "gke_regional_cluster_h": "0.1",
+  "gke_zonal_cluster_h": "0.1",
+  "artifact_registry_storage_gib_mo": "0.1",
+  "gcs_standard_mumbai_gib_mo": "0.023",
+  "gcs_nearline_mumbai_gib_mo": "0.016",
+  "gcs_coldline_mumbai_gib_mo": "0.006",
+  "gcs_archive_mumbai_gib_mo": "0.0025"
+ },
+ "skus": [
+  {
+   "key": "g2_core_h",
+   "skuId": "A6EC-9503-C0CD",
+   "service": "Compute Engine",
+   "description": "G2 Instance Core running in Mumbai",
+   "usageType": "OnDemand",
+   "serviceRegions": [
+    "asia-south1"
+   ],
+   "usageUnit": "h",
+   "usageUnitDescription": "hour",
+   "baseUnit": "s",
+   "baseUnitConversionFactor": 3600,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0.026011561"
+    }
+   ],
+   "aggregationInfo": null,
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_compute_p4.json"
+  },
+  {
+   "key": "g2_ram_gib_h",
+   "skuId": "5C70-9568-3192",
+   "service": "Compute Engine",
+   "description": "G2 Instance Ram running in Mumbai",
+   "usageType": "OnDemand",
+   "serviceRegions": [
+    "asia-south1"
+   ],
+   "usageUnit": "GiBy.h",
+   "usageUnitDescription": "gibibyte hour",
+   "baseUnit": "By.s",
+   "baseUnitConversionFactor": 3865470566400,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0.003047337"
+    }
+   ],
+   "aggregationInfo": null,
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_compute_p2.json"
+  },
+  {
+   "key": "l4_gpu_h",
+   "skuId": "AE59-12DA-20E3",
+   "service": "Compute Engine",
+   "description": "Nvidia L4 GPU running in Mumbai",
+   "usageType": "OnDemand",
+   "serviceRegions": [
+    "asia-south1"
+   ],
+   "usageUnit": "h",
+   "usageUnitDescription": "hour",
+   "baseUnit": "s",
+   "baseUnitConversionFactor": 3600,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0.582975726"
+    }
+   ],
+   "aggregationInfo": null,
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_compute_p4.json"
+  },
+  {
+   "key": "c4_core_h",
+   "skuId": "70F1-D1A1-608C",
+   "service": "Compute Engine",
+   "description": "C4 Instance Core running in Mumbai",
+   "usageType": "OnDemand",
+   "serviceRegions": [
+    "asia-south1"
+   ],
+   "usageUnit": "h",
+   "usageUnitDescription": "hour",
+   "baseUnit": "s",
+   "baseUnitConversionFactor": 3600,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0.036036"
+    }
+   ],
+   "aggregationInfo": null,
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_compute_p2.json"
+  },
+  {
+   "key": "c4_ram_gib_h",
+   "skuId": "BC60-A7D5-6A2C",
+   "service": "Compute Engine",
+   "description": "C4 Instance Ram running in Mumbai",
+   "usageType": "OnDemand",
+   "serviceRegions": [
+    "asia-south1"
+   ],
+   "usageUnit": "GiBy.h",
+   "usageUnitDescription": "gibibyte hour",
+   "baseUnit": "By.s",
+   "baseUnitConversionFactor": 3865470566400,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0.00409552"
+    }
+   ],
+   "aggregationInfo": null,
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_compute_p4.json"
+  },
+  {
+   "key": "c4d_core_h",
+   "skuId": "D1E1-0367-825A",
+   "service": "Compute Engine",
+   "description": "C4D Instance Core running in Mumbai",
+   "usageType": "OnDemand",
+   "serviceRegions": [
+    "asia-south1"
+   ],
+   "usageUnit": "h",
+   "usageUnitDescription": "hour",
+   "baseUnit": "s",
+   "baseUnitConversionFactor": 3600,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0.0340116"
+    }
+   ],
+   "aggregationInfo": null,
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_compute_p5.json"
+  },
+  {
+   "key": "c4d_ram_gb_h",
+   "skuId": "CA2D-2A52-B49E",
+   "service": "Compute Engine",
+   "description": "C4D Instance Ram running in Mumbai",
+   "usageType": "OnDemand",
+   "serviceRegions": [
+    "asia-south1"
+   ],
+   "usageUnit": "GBy.h",
+   "usageUnitDescription": "gigabyte hour",
+   "baseUnit": "By.s",
+   "baseUnitConversionFactor": 3600000000000,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0.003635401"
+    }
+   ],
+   "aggregationInfo": null,
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_compute_p5.json"
+  },
+  {
+   "key": "c3_core_h",
+   "skuId": "1B93-073E-DFE5",
+   "service": "Compute Engine",
+   "description": "C3 Instance Core running in Mumbai",
+   "usageType": "OnDemand",
+   "serviceRegions": [
+    "asia-south1"
+   ],
+   "usageUnit": "h",
+   "usageUnitDescription": "hour",
+   "baseUnit": "s",
+   "baseUnitConversionFactor": 3600,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0.036036"
+    }
+   ],
+   "aggregationInfo": null,
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_compute_p0.json"
+  },
+  {
+   "key": "c3_ram_gib_h",
+   "skuId": "61A0-38AE-BC2D",
+   "service": "Compute Engine",
+   "description": "C3 Instance Ram running in Mumbai",
+   "usageType": "OnDemand",
+   "serviceRegions": [
+    "asia-south1"
+   ],
+   "usageUnit": "GiBy.h",
+   "usageUnitDescription": "gibibyte hour",
+   "baseUnit": "By.s",
+   "baseUnitConversionFactor": 3865470566400,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0.00409552"
+    }
+   ],
+   "aggregationInfo": null,
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_compute_p2.json"
+  },
+  {
+   "key": "n2_core_h",
+   "skuId": "3A1A-7CFC-5747",
+   "service": "Compute Engine",
+   "description": "N2 Instance Core running in Mumbai",
+   "usageType": "OnDemand",
+   "serviceRegions": [
+    "asia-south1"
+   ],
+   "usageUnit": "h",
+   "usageUnitDescription": "hour",
+   "baseUnit": "s",
+   "baseUnitConversionFactor": 3600,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0.03797"
+    }
+   ],
+   "aggregationInfo": null,
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_compute_p1.json"
+  },
+  {
+   "key": "n2_ram_gib_h",
+   "skuId": "23FA-BF9A-7C7A",
+   "service": "Compute Engine",
+   "description": "N2 Instance Ram running in Mumbai",
+   "usageType": "OnDemand",
+   "serviceRegions": [
+    "asia-south1"
+   ],
+   "usageUnit": "GiBy.h",
+   "usageUnitDescription": "gibibyte hour",
+   "baseUnit": "By.s",
+   "baseUnitConversionFactor": 3865470566400,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0.005088"
+    }
+   ],
+   "aggregationInfo": null,
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_compute_p0.json"
+  },
+  {
+   "key": "e2_core_h",
+   "skuId": "DFC1-04D4-B4A1",
+   "service": "Compute Engine",
+   "description": "E2 Instance Core running in Mumbai",
+   "usageType": "OnDemand",
+   "serviceRegions": [
+    "asia-south1"
+   ],
+   "usageUnit": "h",
+   "usageUnitDescription": "hour",
+   "baseUnit": "s",
+   "baseUnitConversionFactor": 3600,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0.0261993"
+    }
+   ],
+   "aggregationInfo": null,
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_compute_p5.json"
+  },
+  {
+   "key": "e2_ram_gib_h",
+   "skuId": "90AB-A7A8-F873",
+   "service": "Compute Engine",
+   "description": "E2 Instance Ram running in Mumbai",
+   "usageType": "OnDemand",
+   "serviceRegions": [
+    "asia-south1"
+   ],
+   "usageUnit": "GiBy.h",
+   "usageUnitDescription": "gibibyte hour",
+   "baseUnit": "By.s",
+   "baseUnitConversionFactor": 3865470566400,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0.00351072"
+    }
+   ],
+   "aggregationInfo": null,
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_compute_p3.json"
+  },
+  {
+   "key": "cud3_g2_core_h",
+   "skuId": "C13C-86D2-4291",
+   "service": "Compute Engine",
+   "description": "Commitment v1: G2 Cpu in Mumbai for 3 Years",
+   "usageType": "Commit3Yr",
+   "serviceRegions": [
+    "asia-south1"
+   ],
+   "usageUnit": "h",
+   "usageUnitDescription": "hour",
+   "baseUnit": "s",
+   "baseUnitConversionFactor": 3600,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0.0117052"
+    }
+   ],
+   "aggregationInfo": null,
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_compute_p5.json"
+  },
+  {
+   "key": "cud3_g2_ram_gib_h",
+   "skuId": "E2CF-A78E-CCC3",
+   "service": "Compute Engine",
+   "description": "Commitment v1: G2 Ram in Mumbai for 3 Years",
+   "usageType": "Commit3Yr",
+   "serviceRegions": [
+    "asia-south1"
+   ],
+   "usageUnit": "GiBy.h",
+   "usageUnitDescription": "gibibyte hour",
+   "baseUnit": "By.s",
+   "baseUnitConversionFactor": 3865470566400,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0.001371301"
+    }
+   ],
+   "aggregationInfo": null,
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_compute_p5.json"
+  },
+  {
+   "key": "cud3_l4_gpu_h",
+   "skuId": "3D44-B7C2-56AD",
+   "service": "Compute Engine",
+   "description": "Commitment v1: Nvidia L4 GPU running in Mumbai for 3 Years",
+   "usageType": "Commit3Yr",
+   "serviceRegions": [
+    "asia-south1"
+   ],
+   "usageUnit": "h",
+   "usageUnitDescription": "hour",
+   "baseUnit": "s",
+   "baseUnitConversionFactor": 3600,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0.262339046"
+    }
+   ],
+   "aggregationInfo": null,
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_compute_p1.json"
+  },
+  {
+   "key": "cud1_g2_core_h",
+   "skuId": "C0F8-853A-346E",
+   "service": "Compute Engine",
+   "description": "Commitment v1: G2 Cpu in Mumbai for 1 Year",
+   "usageType": "Commit1Yr",
+   "serviceRegions": [
+    "asia-south1"
+   ],
+   "usageUnit": "h",
+   "usageUnitDescription": "hour",
+   "baseUnit": "s",
+   "baseUnitConversionFactor": 3600,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0.016387288"
+    }
+   ],
+   "aggregationInfo": null,
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_compute_p5.json"
+  },
+  {
+   "key": "cud1_g2_ram_gib_h",
+   "skuId": "E47D-A49A-40F9",
+   "service": "Compute Engine",
+   "description": "Commitment v1: G2 Ram in Mumbai for 1 Year",
+   "usageType": "Commit1Yr",
+   "serviceRegions": [
+    "asia-south1"
+   ],
+   "usageUnit": "GiBy.h",
+   "usageUnitDescription": "gibibyte hour",
+   "baseUnit": "By.s",
+   "baseUnitConversionFactor": 3865470566400,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0.001919822"
+    }
+   ],
+   "aggregationInfo": null,
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_compute_p5.json"
+  },
+  {
+   "key": "cud1_l4_gpu_h",
+   "skuId": "2F5D-68A6-1945",
+   "service": "Compute Engine",
+   "description": "Commitment v1: Nvidia L4 GPU running in Mumbai for 1 Year",
+   "usageType": "Commit1Yr",
+   "serviceRegions": [
+    "asia-south1"
+   ],
+   "usageUnit": "h",
+   "usageUnitDescription": "hour",
+   "baseUnit": "s",
+   "baseUnitConversionFactor": 3600,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0.3672747"
+    }
+   ],
+   "aggregationInfo": null,
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_compute_p1.json"
+  },
+  {
+   "key": "cud3_c4_core_h",
+   "skuId": "2699-895D-A705",
+   "service": "Compute Engine",
+   "description": "Commitment v1: C4 Cpu in Mumbai for 3 Years",
+   "usageType": "Commit3Yr",
+   "serviceRegions": [
+    "asia-south1"
+   ],
+   "usageUnit": "h",
+   "usageUnitDescription": "hour",
+   "baseUnit": "s",
+   "baseUnitConversionFactor": 3600,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0.01621672"
+    }
+   ],
+   "aggregationInfo": null,
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_compute_p1.json"
+  },
+  {
+   "key": "cud3_c4_ram_gib_h",
+   "skuId": "DCA5-2AF1-D3CB",
+   "service": "Compute Engine",
+   "description": "Commitment v1: C4 Ram in Mumbai for 3 Years",
+   "usageType": "Commit3Yr",
+   "serviceRegions": [
+    "asia-south1"
+   ],
+   "usageUnit": "GiBy.h",
+   "usageUnitDescription": "gibibyte hour",
+   "baseUnit": "By.s",
+   "baseUnitConversionFactor": 3865470566400,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0.00184288"
+    }
+   ],
+   "aggregationInfo": null,
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_compute_p5.json"
+  },
+  {
+   "key": "pd_balanced_gib_mo",
+   "skuId": "C24C-88D9-75ED",
+   "service": "Compute Engine",
+   "description": "Balanced PD Capacity in Mumbai",
+   "usageType": "OnDemand",
+   "serviceRegions": [
+    "asia-south1"
+   ],
+   "usageUnit": "GiBy.mo",
+   "usageUnitDescription": "gibibyte month",
+   "baseUnit": "By.s",
+   "baseUnitConversionFactor": 2783138807808000.0,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0.12"
+    }
+   ],
+   "aggregationInfo": null,
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_compute_p5.json"
+  },
+  {
+   "key": "pd_ssd_gib_mo",
+   "skuId": "FF66-41CB-DE90",
+   "service": "Compute Engine",
+   "description": "SSD backed PD Capacity in Mumbai",
+   "usageType": "OnDemand",
+   "serviceRegions": [
+    "asia-south1"
+   ],
+   "usageUnit": "GiBy.mo",
+   "usageUnitDescription": "gibibyte month",
+   "baseUnit": "By.s",
+   "baseUnitConversionFactor": 2783138807808000.0,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0.204"
+    }
+   ],
+   "aggregationInfo": null,
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_compute_p6.json"
+  },
+  {
+   "key": "pd_standard_gib_mo",
+   "skuId": "320C-7688-1A62",
+   "service": "Compute Engine",
+   "description": "Storage PD Capacity in Mumbai",
+   "usageType": "OnDemand",
+   "serviceRegions": [
+    "asia-south1"
+   ],
+   "usageUnit": "GiBy.mo",
+   "usageUnitDescription": "gibibyte month",
+   "baseUnit": "By.s",
+   "baseUnitConversionFactor": 2783138807808000.0,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0.048"
+    }
+   ],
+   "aggregationInfo": null,
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_compute_p1.json"
+  },
+  {
+   "key": "hdb_capacity_gib_mo",
+   "skuId": "9953-32B6-978B",
+   "service": "Compute Engine",
+   "description": "Hyperdisk Balanced Capacity in Mumbai",
+   "usageType": "OnDemand",
+   "serviceRegions": [
+    "asia-south1"
+   ],
+   "usageUnit": "GiBy.mo",
+   "usageUnitDescription": "gibibyte month",
+   "baseUnit": "By.s",
+   "baseUnitConversionFactor": 2783138807808000.0,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0.083"
+    }
+   ],
+   "aggregationInfo": null,
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_compute_p3.json"
+  },
+  {
+   "key": "hdb_iops_mo",
+   "skuId": "519B-E9DD-3AF5",
+   "service": "Compute Engine",
+   "description": "Hyperdisk Balanced IOPS in Mumbai",
+   "usageType": "OnDemand",
+   "serviceRegions": [
+    "asia-south1"
+   ],
+   "usageUnit": "mo",
+   "usageUnitDescription": "month",
+   "baseUnit": "s",
+   "baseUnitConversionFactor": 2592000,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0.005"
+    }
+   ],
+   "aggregationInfo": null,
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_compute_p2.json"
+  },
+  {
+   "key": "hdb_throughput_mibps_mo",
+   "skuId": "947E-BF81-9AE3",
+   "service": "Compute Engine",
+   "description": "Hyperdisk Balanced Throughput in Mumbai",
+   "usageType": "OnDemand",
+   "serviceRegions": [
+    "asia-south1"
+   ],
+   "usageUnit": "mo",
+   "usageUnitDescription": "month",
+   "baseUnit": "s",
+   "baseUnitConversionFactor": 2592000,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0.042"
+    }
+   ],
+   "aggregationInfo": null,
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_compute_p3.json"
+  },
+  {
+   "key": "snapshot_regional_gib_mo",
+   "skuId": "A0EA-3B8B-0794",
+   "service": "Compute Engine",
+   "description": "Storage PD Snapshot in Mumbai",
+   "usageType": "OnDemand",
+   "serviceRegions": [
+    "asia-south1"
+   ],
+   "usageUnit": "GiBy.mo",
+   "usageUnitDescription": "gibibyte month",
+   "baseUnit": "By.s",
+   "baseUnitConversionFactor": 2783138807808000.0,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0.052"
+    }
+   ],
+   "aggregationInfo": null,
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_compute_p4.json"
+  },
+  {
+   "key": "snapshot_multiregional_asia_gib_mo",
+   "skuId": "6E69-DD68-8DCA",
+   "service": "Compute Engine",
+   "description": "Storage PD Snapshot in Asia",
+   "usageType": "OnDemand",
+   "serviceRegions": [
+    "asia"
+   ],
+   "usageUnit": "GiBy.mo",
+   "usageUnitDescription": "gibibyte month",
+   "baseUnit": "By.s",
+   "baseUnitConversionFactor": 2783138807808000.0,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0.083"
+    }
+   ],
+   "aggregationInfo": null,
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_compute_p2.json"
+  },
+  {
+   "key": "pd_ssd_gib_mo_us_central1_reference",
+   "skuId": "B188-61DD-52E4",
+   "service": "Compute Engine",
+   "description": "SSD backed PD Capacity",
+   "usageType": "OnDemand",
+   "serviceRegions": [
+    "us-central1",
+    "us-east1",
+    "us-west1",
+    "asia-east1",
+    "europe-west1"
+   ],
+   "usageUnit": "GiBy.mo",
+   "usageUnitDescription": "gibibyte month",
+   "baseUnit": "By.s",
+   "baseUnitConversionFactor": 2783138807808000.0,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0.17"
+    }
+   ],
+   "aggregationInfo": null,
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_compute_p4.json"
+  },
+  {
+   "key": "egress_standard_tier_mumbai",
+   "skuId": "4C3B-5563-1BF6",
+   "service": "Compute Engine",
+   "description": "Network Standard Data Transfer Out to Internet from Mumbai",
+   "usageType": "OnDemand",
+   "serviceRegions": [
+    "asia-south1"
+   ],
+   "usageUnit": "GiBy",
+   "usageUnitDescription": "gibibyte",
+   "baseUnit": "By",
+   "baseUnitConversionFactor": 1073741824,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0"
+    },
+    {
+     "startUsageAmount": "200",
+     "unitPrice": "0.11"
+    },
+    {
+     "startUsageAmount": "10240",
+     "unitPrice": "0.075"
+    },
+    {
+     "startUsageAmount": "153600",
+     "unitPrice": "0.07"
+    }
+   ],
+   "aggregationInfo": {
+    "aggregationLevel": "ACCOUNT",
+    "aggregationInterval": "MONTHLY",
+    "aggregationCount": 1
+   },
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_compute_p1.json"
+  },
+  {
+   "key": "egress_premium_to_india",
+   "skuId": "31FB-BB20-320E",
+   "service": "Compute Engine",
+   "description": "Network Internet Data Transfer Out from Mumbai to India",
+   "usageType": "OnDemand",
+   "serviceRegions": [
+    "asia-south1"
+   ],
+   "usageUnit": "GiBy",
+   "usageUnitDescription": "gibibyte",
+   "baseUnit": "By",
+   "baseUnitConversionFactor": 1073741824,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0.12"
+    },
+    {
+     "startUsageAmount": "1024",
+     "unitPrice": "0.11"
+    },
+    {
+     "startUsageAmount": "10240",
+     "unitPrice": "0.08"
+    }
+   ],
+   "aggregationInfo": {
+    "aggregationLevel": "ACCOUNT",
+    "aggregationInterval": "MONTHLY",
+    "aggregationCount": 1
+   },
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_compute_p1.json"
+  },
+  {
+   "key": "egress_premium_to_americas",
+   "skuId": "1507-FFFF-0D8E",
+   "service": "Compute Engine",
+   "description": "Network Internet Data Transfer Out from Mumbai to Americas",
+   "usageType": "OnDemand",
+   "serviceRegions": [
+    "asia-south1"
+   ],
+   "usageUnit": "GiBy",
+   "usageUnitDescription": "gibibyte",
+   "baseUnit": "By",
+   "baseUnitConversionFactor": 1073741824,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0.12"
+    },
+    {
+     "startUsageAmount": "1024",
+     "unitPrice": "0.11"
+    },
+    {
+     "startUsageAmount": "10240",
+     "unitPrice": "0.085"
+    }
+   ],
+   "aggregationInfo": {
+    "aggregationLevel": "ACCOUNT",
+    "aggregationInterval": "MONTHLY",
+    "aggregationCount": 1
+   },
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_compute_p0.json"
+  },
+  {
+   "key": "egress_premium_to_emea",
+   "skuId": "09EF-5244-AB40",
+   "service": "Compute Engine",
+   "description": "Network Internet Data Transfer Out from Mumbai to EMEA",
+   "usageType": "OnDemand",
+   "serviceRegions": [
+    "asia-south1"
+   ],
+   "usageUnit": "GiBy",
+   "usageUnitDescription": "gibibyte",
+   "baseUnit": "By",
+   "baseUnitConversionFactor": 1073741824,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0.12"
+    },
+    {
+     "startUsageAmount": "1024",
+     "unitPrice": "0.11"
+    },
+    {
+     "startUsageAmount": "10240",
+     "unitPrice": "0.085"
+    }
+   ],
+   "aggregationInfo": {
+    "aggregationLevel": "ACCOUNT",
+    "aggregationInterval": "MONTHLY",
+    "aggregationCount": 1
+   },
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_compute_p0.json"
+  },
+  {
+   "key": "egress_premium_to_western_europe",
+   "skuId": "863B-7F19-62E9",
+   "service": "Compute Engine",
+   "description": "Network Internet Data Transfer Out from Mumbai to Western Europe",
+   "usageType": "OnDemand",
+   "serviceRegions": [
+    "asia-south1"
+   ],
+   "usageUnit": "GiBy",
+   "usageUnitDescription": "gibibyte",
+   "baseUnit": "By",
+   "baseUnitConversionFactor": 1073741824,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0.12"
+    },
+    {
+     "startUsageAmount": "1024",
+     "unitPrice": "0.11"
+    },
+    {
+     "startUsageAmount": "10240",
+     "unitPrice": "0.085"
+    }
+   ],
+   "aggregationInfo": {
+    "aggregationLevel": "ACCOUNT",
+    "aggregationInterval": "MONTHLY",
+    "aggregationCount": 1
+   },
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_compute_p3.json"
+  },
+  {
+   "key": "egress_premium_to_eastern_europe",
+   "skuId": "1D96-2EA8-C01C",
+   "service": "Compute Engine",
+   "description": "Network Internet Data Transfer Out from Mumbai to Eastern Europe",
+   "usageType": "OnDemand",
+   "serviceRegions": [
+    "asia-south1"
+   ],
+   "usageUnit": "GiBy",
+   "usageUnitDescription": "gibibyte",
+   "baseUnit": "By",
+   "baseUnitConversionFactor": 1073741824,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0.12"
+    },
+    {
+     "startUsageAmount": "1024",
+     "unitPrice": "0.11"
+    },
+    {
+     "startUsageAmount": "10240",
+     "unitPrice": "0.085"
+    }
+   ],
+   "aggregationInfo": {
+    "aggregationLevel": "ACCOUNT",
+    "aggregationInterval": "MONTHLY",
+    "aggregationCount": 1
+   },
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_compute_p0.json"
+  },
+  {
+   "key": "egress_premium_to_central_america",
+   "skuId": "EC9D-4D53-6C97",
+   "service": "Compute Engine",
+   "description": "Network Internet Data Transfer Out from Mumbai to Central America",
+   "usageType": "OnDemand",
+   "serviceRegions": [
+    "asia-south1"
+   ],
+   "usageUnit": "GiBy",
+   "usageUnitDescription": "gibibyte",
+   "baseUnit": "By",
+   "baseUnitConversionFactor": 1073741824,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0.12"
+    },
+    {
+     "startUsageAmount": "1024",
+     "unitPrice": "0.11"
+    },
+    {
+     "startUsageAmount": "10240",
+     "unitPrice": "0.085"
+    }
+   ],
+   "aggregationInfo": {
+    "aggregationLevel": "ACCOUNT",
+    "aggregationInterval": "MONTHLY",
+    "aggregationCount": 1
+   },
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_compute_p6.json"
+  },
+  {
+   "key": "egress_premium_to_apac_ex_kr_id",
+   "skuId": "95E2-380C-BFFC",
+   "service": "Compute Engine",
+   "description": "Network Internet Data Transfer Out from Mumbai to Apac(Excluding Korea and Indonesia)",
+   "usageType": "OnDemand",
+   "serviceRegions": [
+    "asia-south1"
+   ],
+   "usageUnit": "GiBy",
+   "usageUnitDescription": "gibibyte",
+   "baseUnit": "By",
+   "baseUnitConversionFactor": 1073741824,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0.12"
+    },
+    {
+     "startUsageAmount": "1024",
+     "unitPrice": "0.11"
+    },
+    {
+     "startUsageAmount": "10240",
+     "unitPrice": "0.085"
+    }
+   ],
+   "aggregationInfo": {
+    "aggregationLevel": "ACCOUNT",
+    "aggregationInterval": "MONTHLY",
+    "aggregationCount": 1
+   },
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_compute_p3.json"
+  },
+  {
+   "key": "egress_premium_to_middle_east",
+   "skuId": "CC55-F2D0-1A51",
+   "service": "Compute Engine",
+   "description": "Network Internet Data Transfer Out from Mumbai to Middle East",
+   "usageType": "OnDemand",
+   "serviceRegions": [
+    "asia-south1"
+   ],
+   "usageUnit": "GiBy",
+   "usageUnitDescription": "gibibyte",
+   "baseUnit": "By",
+   "baseUnitConversionFactor": 1073741824,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0.15"
+    },
+    {
+     "startUsageAmount": "1024",
+     "unitPrice": "0.13"
+    },
+    {
+     "startUsageAmount": "10240",
+     "unitPrice": "0.11"
+    }
+   ],
+   "aggregationInfo": {
+    "aggregationLevel": "ACCOUNT",
+    "aggregationInterval": "MONTHLY",
+    "aggregationCount": 1
+   },
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_compute_p5.json"
+  },
+  {
+   "key": "egress_premium_to_africa",
+   "skuId": "2F21-9AA2-DFA4",
+   "service": "Compute Engine",
+   "description": "Network Internet Data Transfer Out from Mumbai to Africa",
+   "usageType": "OnDemand",
+   "serviceRegions": [
+    "asia-south1"
+   ],
+   "usageUnit": "GiBy",
+   "usageUnitDescription": "gibibyte",
+   "baseUnit": "By",
+   "baseUnitConversionFactor": 1073741824,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0.15"
+    },
+    {
+     "startUsageAmount": "1024",
+     "unitPrice": "0.13"
+    },
+    {
+     "startUsageAmount": "10240",
+     "unitPrice": "0.11"
+    }
+   ],
+   "aggregationInfo": {
+    "aggregationLevel": "ACCOUNT",
+    "aggregationInterval": "MONTHLY",
+    "aggregationCount": 1
+   },
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_compute_p1.json"
+  },
+  {
+   "key": "egress_premium_to_australia",
+   "skuId": "5708-C46F-8E73",
+   "service": "Compute Engine",
+   "description": "Network Internet Data Transfer Out from Mumbai to Australia",
+   "usageType": "OnDemand",
+   "serviceRegions": [
+    "asia-south1"
+   ],
+   "usageUnit": "GiBy",
+   "usageUnitDescription": "gibibyte",
+   "baseUnit": "By",
+   "baseUnitConversionFactor": 1073741824,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0.19"
+    },
+    {
+     "startUsageAmount": "1024",
+     "unitPrice": "0.18"
+    },
+    {
+     "startUsageAmount": "10240",
+     "unitPrice": "0.15"
+    }
+   ],
+   "aggregationInfo": {
+    "aggregationLevel": "ACCOUNT",
+    "aggregationInterval": "MONTHLY",
+    "aggregationCount": 1
+   },
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_compute_p2.json"
+  },
+  {
+   "key": "egress_premium_to_indonesia",
+   "skuId": "92C0-71AC-1535",
+   "service": "Compute Engine",
+   "description": "Network Internet Data Transfer Out from Mumbai to Indonesia",
+   "usageType": "OnDemand",
+   "serviceRegions": [
+    "asia-south1"
+   ],
+   "usageUnit": "GiBy",
+   "usageUnitDescription": "gibibyte",
+   "baseUnit": "By",
+   "baseUnitConversionFactor": 1073741824,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0.19"
+    },
+    {
+     "startUsageAmount": "1024",
+     "unitPrice": "0.18"
+    },
+    {
+     "startUsageAmount": "10240",
+     "unitPrice": "0.15"
+    }
+   ],
+   "aggregationInfo": {
+    "aggregationLevel": "ACCOUNT",
+    "aggregationInterval": "MONTHLY",
+    "aggregationCount": 1
+   },
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_compute_p3.json"
+  },
+  {
+   "key": "egress_premium_to_south_korea",
+   "skuId": "C46F-9E5F-4D55",
+   "service": "Compute Engine",
+   "description": "Network Internet Data Transfer Out from Mumbai to South Korea",
+   "usageType": "OnDemand",
+   "serviceRegions": [
+    "asia-south1"
+   ],
+   "usageUnit": "GiBy",
+   "usageUnitDescription": "gibibyte",
+   "baseUnit": "By",
+   "baseUnitConversionFactor": 1073741824,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0.19"
+    },
+    {
+     "startUsageAmount": "1024",
+     "unitPrice": "0.18"
+    },
+    {
+     "startUsageAmount": "10240",
+     "unitPrice": "0.15"
+    }
+   ],
+   "aggregationInfo": {
+    "aggregationLevel": "ACCOUNT",
+    "aggregationInterval": "MONTHLY",
+    "aggregationCount": 1
+   },
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_compute_p5.json"
+  },
+  {
+   "key": "egress_premium_to_south_america",
+   "skuId": "A3F9-E63A-36FA",
+   "service": "Compute Engine",
+   "description": "Network Internet Data Transfer Out from Mumbai to South America",
+   "usageType": "OnDemand",
+   "serviceRegions": [
+    "asia-south1"
+   ],
+   "usageUnit": "GiBy",
+   "usageUnitDescription": "gibibyte",
+   "baseUnit": "By",
+   "baseUnitConversionFactor": 1073741824,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0.19"
+    },
+    {
+     "startUsageAmount": "1024",
+     "unitPrice": "0.18"
+    },
+    {
+     "startUsageAmount": "10240",
+     "unitPrice": "0.15"
+    }
+   ],
+   "aggregationInfo": {
+    "aggregationLevel": "ACCOUNT",
+    "aggregationInterval": "MONTHLY",
+    "aggregationCount": 1
+   },
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_compute_p4.json"
+  },
+  {
+   "key": "egress_premium_to_china",
+   "skuId": "96B7-A85B-0114",
+   "service": "Compute Engine",
+   "description": "Network Internet Data Transfer Out from Mumbai to China",
+   "usageType": "OnDemand",
+   "serviceRegions": [
+    "asia-south1"
+   ],
+   "usageUnit": "GiBy",
+   "usageUnitDescription": "gibibyte",
+   "baseUnit": "By",
+   "baseUnitConversionFactor": 1073741824,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0.23"
+    },
+    {
+     "startUsageAmount": "1024",
+     "unitPrice": "0.22"
+    },
+    {
+     "startUsageAmount": "10240",
+     "unitPrice": "0.2"
+    }
+   ],
+   "aggregationInfo": {
+    "aggregationLevel": "ACCOUNT",
+    "aggregationInterval": "MONTHLY",
+    "aggregationCount": 1
+   },
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_compute_p3.json"
+  },
+  {
+   "key": "egress_intrazone",
+   "skuId": "14F9-7705-2FD4",
+   "service": "Compute Engine",
+   "description": "Network Intra Zone Data Transfer Out",
+   "usageType": "OnDemand",
+   "serviceRegions": [
+    "global"
+   ],
+   "usageUnit": "GiBy",
+   "usageUnitDescription": "gibibyte",
+   "baseUnit": "By",
+   "baseUnitConversionFactor": 1073741824,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0"
+    }
+   ],
+   "aggregationInfo": null,
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_compute_p0.json"
+  },
+  {
+   "key": "egress_interzone",
+   "skuId": "DE9E-AFBC-A15A",
+   "service": "Compute Engine",
+   "description": "Network Inter Zone Data Transfer Out",
+   "usageType": "OnDemand",
+   "serviceRegions": [
+    "us-central1",
+    "us-east1",
+    "us-west1",
+    "asia-east1",
+    "europe-west1"
+   ],
+   "usageUnit": "GiBy",
+   "usageUnitDescription": "gibibyte",
+   "baseUnit": "By",
+   "baseUnitConversionFactor": 1073741824,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0.01"
+    }
+   ],
+   "aggregationInfo": null,
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_compute_p5.json"
+  },
+  {
+   "key": "ip_external_standard_vm_h",
+   "skuId": "C054-7F72-A02E",
+   "service": "Compute Engine",
+   "description": "External IP Charge on a Standard VM",
+   "usageType": "OnDemand",
+   "serviceRegions": [
+    "global"
+   ],
+   "usageUnit": "h",
+   "usageUnitDescription": "hour",
+   "baseUnit": "s",
+   "baseUnitConversionFactor": 3600,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0"
+    },
+    {
+     "startUsageAmount": "720",
+     "unitPrice": "0.005"
+    }
+   ],
+   "aggregationInfo": {
+    "aggregationLevel": "ACCOUNT",
+    "aggregationInterval": "MONTHLY",
+    "aggregationCount": 1
+   },
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_compute_p5.json"
+  },
+  {
+   "key": "ip_external_spot_vm_h",
+   "skuId": "4AF8-7C1F-39C4",
+   "service": "Compute Engine",
+   "description": "External IP Charge on a Spot Preemptible VM",
+   "usageType": "OnDemand",
+   "serviceRegions": [
+    "global"
+   ],
+   "usageUnit": "h",
+   "usageUnitDescription": "hour",
+   "baseUnit": "s",
+   "baseUnitConversionFactor": 3600,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0.0025"
+    }
+   ],
+   "aggregationInfo": null,
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_compute_p1.json"
+  },
+  {
+   "key": "ip_static_unassigned_mumbai_h",
+   "skuId": "1268-F71A-6285",
+   "service": "Compute Engine",
+   "description": "Static Ip Charge in Mumbai",
+   "usageType": "OnDemand",
+   "serviceRegions": [
+    "asia-south1"
+   ],
+   "usageUnit": "h",
+   "usageUnitDescription": "hour",
+   "baseUnit": "s",
+   "baseUnitConversionFactor": 3600,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0"
+    },
+    {
+     "startUsageAmount": "1",
+     "unitPrice": "0.012"
+    }
+   ],
+   "aggregationInfo": {
+    "aggregationLevel": "ACCOUNT",
+    "aggregationInterval": "MONTHLY",
+    "aggregationCount": 1
+   },
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_compute_p0.json"
+  },
+  {
+   "key": "lb_regional_ext_alb_fr_min_h",
+   "skuId": "22FA-9BFA-EC10",
+   "service": "Networking",
+   "description": "Regional External Application Load Balancer Forwarding Rule Minimum for Mumbai (asia-south1)",
+   "usageType": "OnDemand",
+   "serviceRegions": [
+    "asia-south1"
+   ],
+   "usageUnit": "h",
+   "usageUnitDescription": "hour",
+   "baseUnit": "s",
+   "baseUnitConversionFactor": 3600,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0.03"
+    }
+   ],
+   "aggregationInfo": null,
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_networking_p0.json"
+  },
+  {
+   "key": "lb_regional_ext_alb_fr_additional_h",
+   "skuId": "1A70-4FE8-9FBA",
+   "service": "Networking",
+   "description": "Regional External Application Load Balancer Forwarding Rule Additional for Mumbai (asia-south1)",
+   "usageType": "OnDemand",
+   "serviceRegions": [
+    "asia-south1"
+   ],
+   "usageUnit": "h",
+   "usageUnitDescription": "hour",
+   "baseUnit": "s",
+   "baseUnitConversionFactor": 3600,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0.012"
+    }
+   ],
+   "aggregationInfo": null,
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_networking_p0.json"
+  },
+  {
+   "key": "lb_regional_ext_alb_inbound_gib",
+   "skuId": "7087-03B4-CF6F",
+   "service": "Networking",
+   "description": "Regional External Application Load Balancer Inbound Data Processing for Mumbai (asia-south1)",
+   "usageType": "OnDemand",
+   "serviceRegions": [
+    "asia-south1"
+   ],
+   "usageUnit": "GiBy",
+   "usageUnitDescription": "gibibyte",
+   "baseUnit": "By",
+   "baseUnitConversionFactor": 1073741824,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0.01"
+    }
+   ],
+   "aggregationInfo": null,
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_networking_p0.json"
+  },
+  {
+   "key": "lb_regional_ext_alb_outbound_gib",
+   "skuId": "8625-A380-1224",
+   "service": "Networking",
+   "description": "Regional External Application Load Balancer Outbound Data Processing for Mumbai (asia-south1)",
+   "usageType": "OnDemand",
+   "serviceRegions": [
+    "asia-south1"
+   ],
+   "usageUnit": "GiBy",
+   "usageUnitDescription": "gibibyte",
+   "baseUnit": "By",
+   "baseUnitConversionFactor": 1073741824,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0.01"
+    }
+   ],
+   "aggregationInfo": null,
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_networking_p0.json"
+  },
+  {
+   "key": "lb_global_fr_min_h",
+   "skuId": "DEE3-C42E-3E4D",
+   "service": "Networking",
+   "description": "Cloud Load Balancer Forwarding Rule Minimum Global",
+   "usageType": "OnDemand",
+   "serviceRegions": [
+    "global"
+   ],
+   "usageUnit": "h",
+   "usageUnitDescription": "hour",
+   "baseUnit": "s",
+   "baseUnitConversionFactor": 3600,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0.025"
+    }
+   ],
+   "aggregationInfo": null,
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_networking_p0.json"
+  },
+  {
+   "key": "lb_global_fr_additional_h",
+   "skuId": "1211-928B-AF92",
+   "service": "Networking",
+   "description": "Cloud Load Balancer Forwarding Rule Additional Global",
+   "usageType": "OnDemand",
+   "serviceRegions": [
+    "global"
+   ],
+   "usageUnit": "h",
+   "usageUnitDescription": "hour",
+   "baseUnit": "s",
+   "baseUnitConversionFactor": 3600,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0.01"
+    }
+   ],
+   "aggregationInfo": null,
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_networking_p0.json"
+  },
+  {
+   "key": "lb_global_ext_alb_inbound_gib_mumbai",
+   "skuId": "91F1-423B-CF42",
+   "service": "Networking",
+   "description": "Global External Application Load Balancer Inbound Data Processing for Mumbai (asia-south1)",
+   "usageType": "OnDemand",
+   "serviceRegions": [
+    "asia-south1"
+   ],
+   "usageUnit": "GiBy",
+   "usageUnitDescription": "gibibyte",
+   "baseUnit": "By",
+   "baseUnitConversionFactor": 1073741824,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0.01"
+    }
+   ],
+   "aggregationInfo": null,
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_networking_p0.json"
+  },
+  {
+   "key": "lb_global_ext_alb_outbound_gib_mumbai",
+   "skuId": "91CC-DEC4-4AC7",
+   "service": "Networking",
+   "description": "Global External Application Load Balancer Outbound Data Processing for Mumbai (asia-south1)",
+   "usageType": "OnDemand",
+   "serviceRegions": [
+    "asia-south1"
+   ],
+   "usageUnit": "GiBy",
+   "usageUnitDescription": "gibibyte",
+   "baseUnit": "By",
+   "baseUnitConversionFactor": 1073741824,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0.01"
+    }
+   ],
+   "aggregationInfo": null,
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_networking_p0.json"
+  },
+  {
+   "key": "nat_gateway_uptime_per_vm_h",
+   "skuId": "32E2-4EFC-EF9F",
+   "service": "Networking",
+   "description": "Networking Cloud Nat Gateway Uptime",
+   "usageType": "OnDemand",
+   "serviceRegions": [
+    "global"
+   ],
+   "usageUnit": "h",
+   "usageUnitDescription": "hour",
+   "baseUnit": "s",
+   "baseUnitConversionFactor": 3600,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0.0014"
+    }
+   ],
+   "aggregationInfo": null,
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_networking_p0.json"
+  },
+  {
+   "key": "nat_data_processing_gib",
+   "skuId": "015F-5732-FFF0",
+   "service": "Networking",
+   "description": "Networking Cloud Nat Data Processing",
+   "usageType": "OnDemand",
+   "serviceRegions": [
+    "global"
+   ],
+   "usageUnit": "GiBy",
+   "usageUnitDescription": "gibibyte",
+   "baseUnit": "By",
+   "baseUnitConversionFactor": 1073741824,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0.045"
+    }
+   ],
+   "aggregationInfo": null,
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_networking_p0.json"
+  },
+  {
+   "key": "nat_ip_usage_h",
+   "skuId": "8515-9425-D2CE",
+   "service": "Networking",
+   "description": "Networking Cloud NAT IP Usage",
+   "usageType": "OnDemand",
+   "serviceRegions": [
+    "global"
+   ],
+   "usageUnit": "h",
+   "usageUnitDescription": "hour",
+   "baseUnit": "s",
+   "baseUnitConversionFactor": 3600,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0.005"
+    }
+   ],
+   "aggregationInfo": null,
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_networking_p0.json"
+  },
+  {
+   "key": "armor_std_policy_mo",
+   "skuId": "4B13-E64F-4A2B",
+   "service": "Networking",
+   "description": "Networking Cloud Armor Policy",
+   "usageType": "OnDemand",
+   "serviceRegions": [
+    "global"
+   ],
+   "usageUnit": "mo",
+   "usageUnitDescription": "month",
+   "baseUnit": "s",
+   "baseUnitConversionFactor": 2592000,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "5"
+    }
+   ],
+   "aggregationInfo": null,
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_networking_p0.json"
+  },
+  {
+   "key": "armor_std_rule_mo",
+   "skuId": "A321-89BD-F5BC",
+   "service": "Networking",
+   "description": "Networking Cloud Armor Rule",
+   "usageType": "OnDemand",
+   "serviceRegions": [
+    "global"
+   ],
+   "usageUnit": "mo",
+   "usageUnitDescription": "month",
+   "baseUnit": "s",
+   "baseUnitConversionFactor": 2592000,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "1"
+    }
+   ],
+   "aggregationInfo": null,
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_networking_p0.json"
+  },
+  {
+   "key": "armor_std_request",
+   "skuId": "1A87-DEB9-C4BE",
+   "service": "Networking",
+   "description": "Networking Cloud Armor Requests",
+   "usageType": "OnDemand",
+   "serviceRegions": [
+    "global"
+   ],
+   "usageUnit": "count",
+   "usageUnitDescription": "count",
+   "baseUnit": "count",
+   "baseUnitConversionFactor": 1,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "7.5E-7"
+    }
+   ],
+   "aggregationInfo": null,
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_networking_p0.json"
+  },
+  {
+   "key": "armor_regional_request",
+   "skuId": "928E-CF60-E186",
+   "service": "Networking",
+   "description": "Networking Cloud Armor Requests Regional",
+   "usageType": "OnDemand",
+   "serviceRegions": [
+    "global"
+   ],
+   "usageUnit": "count",
+   "usageUnitDescription": "count",
+   "baseUnit": "count",
+   "baseUnitConversionFactor": 1,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "6E-7"
+    }
+   ],
+   "aggregationInfo": null,
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_networking_p0.json"
+  },
+  {
+   "key": "valkey_shared_core_nano_node_h",
+   "skuId": "BBE1-7BC7-645D",
+   "service": "Cloud Memorystore",
+   "description": "Shared Core Nano Node Mumbai",
+   "usageType": "OnDemand",
+   "serviceRegions": [
+    "asia-south1"
+   ],
+   "usageUnit": "h",
+   "usageUnitDescription": "hour",
+   "baseUnit": "s",
+   "baseUnitConversionFactor": 3600,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0.0331"
+    }
+   ],
+   "aggregationInfo": null,
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_memorystore_p0.json"
+  },
+  {
+   "key": "valkey_standard_small_node_h",
+   "skuId": "44CF-B864-F1F7",
+   "service": "Cloud Memorystore",
+   "description": "Standard Small Node Mumbai",
+   "usageType": "OnDemand",
+   "serviceRegions": [
+    "asia-south1"
+   ],
+   "usageUnit": "h",
+   "usageUnitDescription": "hour",
+   "baseUnit": "s",
+   "baseUnitConversionFactor": 3600,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0.1482"
+    }
+   ],
+   "aggregationInfo": null,
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_memorystore_p0.json"
+  },
+  {
+   "key": "valkey_highmem_medium_node_h",
+   "skuId": "DEEA-ABC3-D53D",
+   "service": "Cloud Memorystore",
+   "description": "Highmem Medium Node Mumbai",
+   "usageType": "OnDemand",
+   "serviceRegions": [
+    "asia-south1"
+   ],
+   "usageUnit": "h",
+   "usageUnitDescription": "hour",
+   "baseUnit": "s",
+   "baseUnitConversionFactor": 3600,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0.2"
+    }
+   ],
+   "aggregationInfo": null,
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_memorystore_p0.json"
+  },
+  {
+   "key": "valkey_highcpu_medium_node_h",
+   "skuId": "2335-465B-42DF",
+   "service": "Cloud Memorystore",
+   "description": "Highcpu Medium Node Mumbai",
+   "usageType": "OnDemand",
+   "serviceRegions": [
+    "asia-south1"
+   ],
+   "usageUnit": "h",
+   "usageUnitDescription": "hour",
+   "baseUnit": "s",
+   "baseUnitConversionFactor": 3600,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0.5185"
+    }
+   ],
+   "aggregationInfo": null,
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_memorystore_p0.json"
+  },
+  {
+   "key": "redis_basic_m1_gib_h",
+   "skuId": "1A79-AA76-9403",
+   "service": "Cloud Memorystore for Redis",
+   "description": "Redis Capacity Basic M1 Mumbai",
+   "usageType": "OnDemand",
+   "serviceRegions": [
+    "asia-south1"
+   ],
+   "usageUnit": "GiBy.h",
+   "usageUnitDescription": "gibibyte hour",
+   "baseUnit": "By.s",
+   "baseUnitConversionFactor": 3865470566400,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0.063"
+    }
+   ],
+   "aggregationInfo": null,
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_memorystore_redis_p0.json"
+  },
+  {
+   "key": "redis_basic_m2_gib_h",
+   "skuId": "C0DE-CBF3-DEE8",
+   "service": "Cloud Memorystore for Redis",
+   "description": "Redis Capacity Basic M2 Mumbai",
+   "usageType": "OnDemand",
+   "serviceRegions": [
+    "asia-south1"
+   ],
+   "usageUnit": "GiBy.h",
+   "usageUnitDescription": "gibibyte hour",
+   "baseUnit": "By.s",
+   "baseUnitConversionFactor": 3865470566400,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0.037"
+    }
+   ],
+   "aggregationInfo": null,
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_memorystore_redis_p0.json"
+  },
+  {
+   "key": "redis_basic_m3_gib_h",
+   "skuId": "A8E3-58B2-16A7",
+   "service": "Cloud Memorystore for Redis",
+   "description": "Redis Capacity Basic M3 Mumbai",
+   "usageType": "OnDemand",
+   "serviceRegions": [
+    "asia-south1"
+   ],
+   "usageUnit": "GiBy.h",
+   "usageUnitDescription": "gibibyte hour",
+   "baseUnit": "By.s",
+   "baseUnitConversionFactor": 3865470566400,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0.03"
+    }
+   ],
+   "aggregationInfo": null,
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_memorystore_redis_p0.json"
+  },
+  {
+   "key": "redis_basic_m4_gib_h",
+   "skuId": "6213-D978-3159",
+   "service": "Cloud Memorystore for Redis",
+   "description": "Redis Capacity Basic M4 Mumbai",
+   "usageType": "OnDemand",
+   "serviceRegions": [
+    "asia-south1"
+   ],
+   "usageUnit": "GiBy.h",
+   "usageUnitDescription": "gibibyte hour",
+   "baseUnit": "By.s",
+   "baseUnitConversionFactor": 3865470566400,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0.022"
+    }
+   ],
+   "aggregationInfo": null,
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_memorystore_redis_p0.json"
+  },
+  {
+   "key": "redis_basic_m5_gib_h",
+   "skuId": "0B85-062F-82FF",
+   "service": "Cloud Memorystore for Redis",
+   "description": "Redis Capacity Basic M5 Mumbai",
+   "usageType": "OnDemand",
+   "serviceRegions": [
+    "asia-south1"
+   ],
+   "usageUnit": "GiBy.h",
+   "usageUnitDescription": "gibibyte hour",
+   "baseUnit": "By.s",
+   "baseUnitConversionFactor": 3865470566400,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0.017"
+    }
+   ],
+   "aggregationInfo": null,
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_memorystore_redis_p0.json"
+  },
+  {
+   "key": "redis_standard_m1_gib_h",
+   "skuId": "E546-A818-9A77",
+   "service": "Cloud Memorystore for Redis",
+   "description": "Redis Capacity Standard M1 Mumbai",
+   "usageType": "OnDemand",
+   "serviceRegions": [
+    "asia-south1"
+   ],
+   "usageUnit": "GiBy.h",
+   "usageUnitDescription": "gibibyte hour",
+   "baseUnit": "By.s",
+   "baseUnitConversionFactor": 3865470566400,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0.11"
+    }
+   ],
+   "aggregationInfo": null,
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_memorystore_redis_p0.json"
+  },
+  {
+   "key": "redis_standard_m2_gib_h",
+   "skuId": "F042-8822-7B79",
+   "service": "Cloud Memorystore for Redis",
+   "description": "Redis Capacity Standard M2 Mumbai",
+   "usageType": "OnDemand",
+   "serviceRegions": [
+    "asia-south1"
+   ],
+   "usageUnit": "GiBy.h",
+   "usageUnitDescription": "gibibyte hour",
+   "baseUnit": "By.s",
+   "baseUnitConversionFactor": 3865470566400,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0.07"
+    }
+   ],
+   "aggregationInfo": null,
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_memorystore_redis_p0.json"
+  },
+  {
+   "key": "redis_standard_m3_gib_h",
+   "skuId": "7C7C-D23A-8C50",
+   "service": "Cloud Memorystore for Redis",
+   "description": "Redis Capacity Standard M3 Mumbai",
+   "usageType": "OnDemand",
+   "serviceRegions": [
+    "asia-south1"
+   ],
+   "usageUnit": "GiBy.h",
+   "usageUnitDescription": "gibibyte hour",
+   "baseUnit": "By.s",
+   "baseUnitConversionFactor": 3865470566400,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0.058"
+    }
+   ],
+   "aggregationInfo": null,
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_memorystore_redis_p0.json"
+  },
+  {
+   "key": "redis_standard_m4_gib_h",
+   "skuId": "651E-DF06-719C",
+   "service": "Cloud Memorystore for Redis",
+   "description": "Redis Capacity Standard M4 Mumbai",
+   "usageType": "OnDemand",
+   "serviceRegions": [
+    "asia-south1"
+   ],
+   "usageUnit": "GiBy.h",
+   "usageUnitDescription": "gibibyte hour",
+   "baseUnit": "By.s",
+   "baseUnitConversionFactor": 3865470566400,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0.043"
+    }
+   ],
+   "aggregationInfo": null,
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_memorystore_redis_p0.json"
+  },
+  {
+   "key": "redis_standard_m5_gib_h",
+   "skuId": "88FA-7986-6593",
+   "service": "Cloud Memorystore for Redis",
+   "description": "Redis Capacity Standard M5 Mumbai",
+   "usageType": "OnDemand",
+   "serviceRegions": [
+    "asia-south1"
+   ],
+   "usageUnit": "GiBy.h",
+   "usageUnitDescription": "gibibyte hour",
+   "baseUnit": "By.s",
+   "baseUnitConversionFactor": 3865470566400,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0.034"
+    }
+   ],
+   "aggregationInfo": null,
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_memorystore_redis_p0.json"
+  },
+  {
+   "key": "redis_cluster_node_shared_core_nano_h",
+   "skuId": "B72B-FDED-C923",
+   "service": "Cloud Memorystore for Redis",
+   "description": "Redis Cluster Node Shared Core Nano Mumbai",
+   "usageType": "OnDemand",
+   "serviceRegions": [
+    "asia-south1"
+   ],
+   "usageUnit": "h",
+   "usageUnitDescription": "hour",
+   "baseUnit": "s",
+   "baseUnitConversionFactor": 3600,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0.0331"
+    }
+   ],
+   "aggregationInfo": null,
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_memorystore_redis_p0.json"
+  },
+  {
+   "key": "redis_cluster_node_default_h",
+   "skuId": "A531-0942-CD60",
+   "service": "Cloud Memorystore for Redis",
+   "description": "Redis Cluster Node Default Mumbai",
+   "usageType": "OnDemand",
+   "serviceRegions": [
+    "asia-south1"
+   ],
+   "usageUnit": "h",
+   "usageUnitDescription": "hour",
+   "baseUnit": "s",
+   "baseUnitConversionFactor": 3600,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0.2"
+    }
+   ],
+   "aggregationInfo": null,
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_memorystore_redis_p0.json"
+  },
+  {
+   "key": "sql_pg_regional_vcpu_h",
+   "skuId": "65ED-2048-3203",
+   "service": "Cloud SQL",
+   "description": "Cloud SQL for PostgreSQL: Regional - vCPU in Mumbai",
+   "usageType": "OnDemand",
+   "serviceRegions": [
+    "asia-south1"
+   ],
+   "usageUnit": "h",
+   "usageUnitDescription": "hour",
+   "baseUnit": "s",
+   "baseUnitConversionFactor": 3600,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0.0991"
+    }
+   ],
+   "aggregationInfo": null,
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_cloudsql_p1.json"
+  },
+  {
+   "key": "sql_pg_regional_ram_gib_h",
+   "skuId": "34E0-9B1D-C80D",
+   "service": "Cloud SQL",
+   "description": "Cloud SQL for PostgreSQL: Regional - RAM in Mumbai",
+   "usageType": "OnDemand",
+   "serviceRegions": [
+    "asia-south1"
+   ],
+   "usageUnit": "GiBy.h",
+   "usageUnitDescription": "gibibyte hour",
+   "baseUnit": "By.s",
+   "baseUnitConversionFactor": 3865470566400,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0.0168"
+    }
+   ],
+   "aggregationInfo": null,
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_cloudsql_p0.json"
+  },
+  {
+   "key": "sql_pg_regional_ssd_gib_mo",
+   "skuId": "E77A-52C7-BB42",
+   "service": "Cloud SQL",
+   "description": "Cloud SQL for PostgreSQL: Regional - Standard storage in Mumbai",
+   "usageType": "OnDemand",
+   "serviceRegions": [
+    "asia-south1"
+   ],
+   "usageUnit": "GiBy.mo",
+   "usageUnitDescription": "gibibyte month",
+   "baseUnit": "By.s",
+   "baseUnitConversionFactor": 2783138807808000.0,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0.408"
+    }
+   ],
+   "aggregationInfo": null,
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_cloudsql_p3.json"
+  },
+  {
+   "key": "sql_pg_zonal_vcpu_h",
+   "skuId": "DF80-E0D1-CCE3",
+   "service": "Cloud SQL",
+   "description": "Cloud SQL for PostgreSQL: Zonal - vCPU in Mumbai",
+   "usageType": "OnDemand",
+   "serviceRegions": [
+    "asia-south1"
+   ],
+   "usageUnit": "h",
+   "usageUnitDescription": "hour",
+   "baseUnit": "s",
+   "baseUnitConversionFactor": 3600,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0.0496"
+    }
+   ],
+   "aggregationInfo": null,
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_cloudsql_p3.json"
+  },
+  {
+   "key": "sql_pg_zonal_ram_gib_h",
+   "skuId": "72C1-62A1-2C8B",
+   "service": "Cloud SQL",
+   "description": "Cloud SQL for PostgreSQL: Zonal - RAM in Mumbai",
+   "usageType": "OnDemand",
+   "serviceRegions": [
+    "asia-south1"
+   ],
+   "usageUnit": "GiBy.h",
+   "usageUnitDescription": "gibibyte hour",
+   "baseUnit": "By.s",
+   "baseUnitConversionFactor": 3865470566400,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0.0084"
+    }
+   ],
+   "aggregationInfo": null,
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_cloudsql_p1.json"
+  },
+  {
+   "key": "sql_pg_zonal_ssd_gib_mo",
+   "skuId": "42A1-880A-9B0F",
+   "service": "Cloud SQL",
+   "description": "Cloud SQL for PostgreSQL: Zonal - Standard storage in Mumbai",
+   "usageType": "OnDemand",
+   "serviceRegions": [
+    "asia-south1"
+   ],
+   "usageUnit": "GiBy.mo",
+   "usageUnitDescription": "gibibyte month",
+   "baseUnit": "By.s",
+   "baseUnitConversionFactor": 2783138807808000.0,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0.204"
+    }
+   ],
+   "aggregationInfo": null,
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_cloudsql_p1.json"
+  },
+  {
+   "key": "sql_backups_gib_mo",
+   "skuId": "D737-A9D2-80AB",
+   "service": "Cloud SQL",
+   "description": "Cloud SQL: Backups in Mumbai",
+   "usageType": "OnDemand",
+   "serviceRegions": [
+    "asia-south1"
+   ],
+   "usageUnit": "GiBy.mo",
+   "usageUnitDescription": "gibibyte month",
+   "baseUnit": "By.s",
+   "baseUnitConversionFactor": 2783138807808000.0,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0.096"
+    }
+   ],
+   "aggregationInfo": null,
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_cloudsql_p3.json"
+  },
+  {
+   "key": "logging_storage_gib",
+   "skuId": "143F-A1B0-E0BE",
+   "service": "Cloud Logging",
+   "description": "Log Storage cost",
+   "usageType": "OnDemand",
+   "serviceRegions": [
+    "asia-east1",
+    "asia-east2",
+    "asia-northeast1",
+    "asia-northeast2",
+    "asia-northeast3",
+    "asia-south1",
+    "asia-south2",
+    "asia-southeast1",
+    "asia-southeast2",
+    "australia-southeast1",
+    "australia-southeast2",
+    "europe-central2",
+    "europe-north1",
+    "europe-southwest1",
+    "europe-west1",
+    "europe-west2",
+    "europe-west3",
+    "europe-west4",
+    "europe-west6",
+    "europe-west8",
+    "europe-west9",
+    "northamerica-northeast1",
+    "northamerica-northeast2",
+    "southamerica-east1",
+    "southamerica-west1",
+    "us",
+    "us-central1",
+    "us-central2",
+    "us-east1",
+    "us-east4",
+    "us-east7",
+    "us-west1",
+    "us-west2",
+    "us-west3",
+    "us-west4"
+   ],
+   "usageUnit": "GiBy",
+   "usageUnitDescription": "gibibyte",
+   "baseUnit": "By",
+   "baseUnitConversionFactor": 1073741824,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0"
+    },
+    {
+     "startUsageAmount": "50",
+     "unitPrice": "0.5"
+    }
+   ],
+   "aggregationInfo": {
+    "aggregationLevel": "PROJECT",
+    "aggregationInterval": "MONTHLY",
+    "aggregationCount": 1
+   },
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_logging_p0.json"
+  },
+  {
+   "key": "logging_retention_gib_mo",
+   "skuId": "F4AE-5A52-ACE3",
+   "service": "Cloud Logging",
+   "description": "Log Retention cost",
+   "usageType": "OnDemand",
+   "serviceRegions": [
+    "global"
+   ],
+   "usageUnit": "GiBy.mo",
+   "usageUnitDescription": "gibibyte month",
+   "baseUnit": "By.s",
+   "baseUnitConversionFactor": 2783138807808000.0,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0.01"
+    }
+   ],
+   "aggregationInfo": null,
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_logging_p0.json"
+  },
+  {
+   "key": "monitoring_metric_volume_mib",
+   "skuId": "A924-09D0-8854",
+   "service": "Cloud Monitoring",
+   "description": "Metric Volume",
+   "usageType": "OnDemand",
+   "serviceRegions": [
+    "global"
+   ],
+   "usageUnit": "MiBy",
+   "usageUnitDescription": "mebibyte",
+   "baseUnit": "By",
+   "baseUnitConversionFactor": 1048576,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0"
+    },
+    {
+     "startUsageAmount": "150",
+     "unitPrice": "0.258"
+    },
+    {
+     "startUsageAmount": "100000",
+     "unitPrice": "0.151"
+    },
+    {
+     "startUsageAmount": "250000",
+     "unitPrice": "0.061"
+    }
+   ],
+   "aggregationInfo": {
+    "aggregationLevel": "ACCOUNT",
+    "aggregationInterval": "MONTHLY",
+    "aggregationCount": 1
+   },
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_monitoring_p0.json"
+  },
+  {
+   "key": "monitoring_prometheus_sample",
+   "skuId": "A4E4-DF03-CDB6",
+   "service": "Cloud Monitoring",
+   "description": "Prometheus Samples Ingested",
+   "usageType": "OnDemand",
+   "serviceRegions": [
+    "global"
+   ],
+   "usageUnit": "count",
+   "usageUnitDescription": "count",
+   "baseUnit": "count",
+   "baseUnitConversionFactor": 1,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "6E-8"
+    },
+    {
+     "startUsageAmount": "50000000000",
+     "unitPrice": "4.8E-8"
+    },
+    {
+     "startUsageAmount": "250000000000",
+     "unitPrice": "3.6E-8"
+    },
+    {
+     "startUsageAmount": "500000000000",
+     "unitPrice": "2.4E-8"
+    }
+   ],
+   "aggregationInfo": {
+    "aggregationLevel": "ACCOUNT",
+    "aggregationInterval": "MONTHLY",
+    "aggregationCount": 1
+   },
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_monitoring_p0.json"
+  },
+  {
+   "key": "gke_regional_cluster_h",
+   "skuId": "B561-BFBD-1264",
+   "service": "Kubernetes Engine",
+   "description": "Regional Kubernetes Clusters",
+   "usageType": "OnDemand",
+   "serviceRegions": [
+    "global"
+   ],
+   "usageUnit": "h",
+   "usageUnitDescription": "hour",
+   "baseUnit": "s",
+   "baseUnitConversionFactor": 3600,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0.1"
+    }
+   ],
+   "aggregationInfo": null,
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_gke_p0.json"
+  },
+  {
+   "key": "gke_zonal_cluster_h",
+   "skuId": "6B92-A835-08AB",
+   "service": "Kubernetes Engine",
+   "description": "Zonal Kubernetes Clusters",
+   "usageType": "OnDemand",
+   "serviceRegions": [
+    "global"
+   ],
+   "usageUnit": "h",
+   "usageUnitDescription": "hour",
+   "baseUnit": "s",
+   "baseUnitConversionFactor": 3600,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0.1"
+    }
+   ],
+   "aggregationInfo": null,
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_gke_p0.json"
+  },
+  {
+   "key": "artifact_registry_storage_gib_mo",
+   "skuId": "8502-299A-ABAF",
+   "service": "Artifact Registry",
+   "description": "Artifact Registry Storage",
+   "usageType": "OnDemand",
+   "serviceRegions": [
+    "global"
+   ],
+   "usageUnit": "GiBy.mo",
+   "usageUnitDescription": "gibibyte month",
+   "baseUnit": "By.s",
+   "baseUnitConversionFactor": 2783138807808000.0,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0"
+    },
+    {
+     "startUsageAmount": "0.5",
+     "unitPrice": "0.1"
+    }
+   ],
+   "aggregationInfo": {
+    "aggregationLevel": "ACCOUNT",
+    "aggregationInterval": "MONTHLY",
+    "aggregationCount": 1
+   },
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_artifact_registry_p0.json"
+  },
+  {
+   "key": "gcs_standard_mumbai_gib_mo",
+   "skuId": "2717-BEFE-3773",
+   "service": "Cloud Storage",
+   "description": "Standard Storage Mumbai",
+   "usageType": "OnDemand",
+   "serviceRegions": [
+    "asia-south1"
+   ],
+   "usageUnit": "GiBy.mo",
+   "usageUnitDescription": "gibibyte month",
+   "baseUnit": "By.s",
+   "baseUnitConversionFactor": 2783138807808000.0,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0.023"
+    }
+   ],
+   "aggregationInfo": null,
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_gcs_p0.json"
+  },
+  {
+   "key": "gcs_nearline_mumbai_gib_mo",
+   "skuId": "FD55-A8ED-B1A6",
+   "service": "Cloud Storage",
+   "description": "Nearline Storage Mumbai",
+   "usageType": "OnDemand",
+   "serviceRegions": [
+    "asia-south1"
+   ],
+   "usageUnit": "GiBy.mo",
+   "usageUnitDescription": "gibibyte month",
+   "baseUnit": "By.s",
+   "baseUnitConversionFactor": 2783138807808000.0,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0.016"
+    }
+   ],
+   "aggregationInfo": null,
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_gcs_p0.json"
+  },
+  {
+   "key": "gcs_coldline_mumbai_gib_mo",
+   "skuId": "81E6-58F6-12C7",
+   "service": "Cloud Storage",
+   "description": "Coldline Storage Mumbai",
+   "usageType": "OnDemand",
+   "serviceRegions": [
+    "asia-south1"
+   ],
+   "usageUnit": "GiBy.mo",
+   "usageUnitDescription": "gibibyte month",
+   "baseUnit": "By.s",
+   "baseUnitConversionFactor": 2783138807808000.0,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0.006"
+    }
+   ],
+   "aggregationInfo": null,
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_gcs_p0.json"
+  },
+  {
+   "key": "gcs_archive_mumbai_gib_mo",
+   "skuId": "891B-EBF4-A8DC",
+   "service": "Cloud Storage",
+   "description": "Archive Storage Mumbai",
+   "usageType": "OnDemand",
+   "serviceRegions": [
+    "asia-south1"
+   ],
+   "usageUnit": "GiBy.mo",
+   "usageUnitDescription": "gibibyte month",
+   "baseUnit": "By.s",
+   "baseUnitConversionFactor": 2783138807808000.0,
+   "tieredRates_usd": [
+    {
+     "startUsageAmount": "0",
+     "unitPrice": "0.0025"
+    }
+   ],
+   "aggregationInfo": null,
+   "effectiveTime": "2026-09-22T07:00:00Z",
+   "raw_file": "skus_gcs_p0.json"
+  }
+ ],
+ "shapes": {
+  "g2-standard-4": {
+   "family": "G2",
+   "vcpu": 4,
+   "memory_mib": 16384,
+   "memory_gib": 16.0,
+   "gpus": 1,
+   "gpu_type": "nvidia-l4",
+   "zones_asia_south1": [
+    "asia-south1-a",
+    "asia-south1-b",
+    "asia-south1-c"
+   ],
+   "ram_billed_units_per_hour": "16 GiBy.h",
+   "usd_per_hour": {
+    "cpu": "0.104046244",
+    "ram": "0.048757392",
+    "gpu": "0.582975726",
+    "total": "0.735779362"
+   },
+   "usd_per_hour_total": 0.735779362,
+   "usd_per_month_730h": 537.12,
+   "sku_ids": [
+    "A6EC-9503-C0CD",
+    "5C70-9568-3192",
+    "AE59-12DA-20E3"
+   ],
+   "sustained_use_discount_eligible": false,
+   "reference_only_3yr_cud_usd_per_month_730h": 241.7
+  },
+  "g2-standard-8": {
+   "family": "G2",
+   "vcpu": 8,
+   "memory_mib": 32768,
+   "memory_gib": 32.0,
+   "gpus": 1,
+   "gpu_type": "nvidia-l4",
+   "zones_asia_south1": [
+    "asia-south1-a",
+    "asia-south1-b",
+    "asia-south1-c"
+   ],
+   "ram_billed_units_per_hour": "32 GiBy.h",
+   "usd_per_hour": {
+    "cpu": "0.208092488",
+    "ram": "0.097514784",
+    "gpu": "0.582975726",
+    "total": "0.888582998"
+   },
+   "usd_per_hour_total": 0.888582998,
+   "usd_per_month_730h": 648.67,
+   "sku_ids": [
+    "A6EC-9503-C0CD",
+    "5C70-9568-3192",
+    "AE59-12DA-20E3"
+   ],
+   "sustained_use_discount_eligible": false,
+   "reference_only_3yr_cud_usd_per_month_730h": 291.9
+  },
+  "g2-standard-12": {
+   "family": "G2",
+   "vcpu": 12,
+   "memory_mib": 49152,
+   "memory_gib": 48.0,
+   "gpus": 1,
+   "gpu_type": "nvidia-l4",
+   "zones_asia_south1": [
+    "asia-south1-a",
+    "asia-south1-b",
+    "asia-south1-c"
+   ],
+   "ram_billed_units_per_hour": "48 GiBy.h",
+   "usd_per_hour": {
+    "cpu": "0.312138732",
+    "ram": "0.146272176",
+    "gpu": "0.582975726",
+    "total": "1.041386634"
+   },
+   "usd_per_hour_total": 1.041386634,
+   "usd_per_month_730h": 760.21,
+   "sku_ids": [
+    "A6EC-9503-C0CD",
+    "5C70-9568-3192",
+    "AE59-12DA-20E3"
+   ],
+   "sustained_use_discount_eligible": false,
+   "reference_only_3yr_cud_usd_per_month_730h": 342.1
+  },
+  "g2-standard-16": {
+   "family": "G2",
+   "vcpu": 16,
+   "memory_mib": 65536,
+   "memory_gib": 64.0,
+   "gpus": 1,
+   "gpu_type": "nvidia-l4",
+   "zones_asia_south1": [
+    "asia-south1-a",
+    "asia-south1-b",
+    "asia-south1-c"
+   ],
+   "ram_billed_units_per_hour": "64 GiBy.h",
+   "usd_per_hour": {
+    "cpu": "0.416184976",
+    "ram": "0.195029568",
+    "gpu": "0.582975726",
+    "total": "1.194190270"
+   },
+   "usd_per_hour_total": 1.19419027,
+   "usd_per_month_730h": 871.76,
+   "sku_ids": [
+    "A6EC-9503-C0CD",
+    "5C70-9568-3192",
+    "AE59-12DA-20E3"
+   ],
+   "sustained_use_discount_eligible": false,
+   "reference_only_3yr_cud_usd_per_month_730h": 392.29
+  },
+  "g2-standard-24": {
+   "family": "G2",
+   "vcpu": 24,
+   "memory_mib": 98304,
+   "memory_gib": 96.0,
+   "gpus": 2,
+   "gpu_type": "nvidia-l4",
+   "zones_asia_south1": [
+    "asia-south1-a",
+    "asia-south1-b",
+    "asia-south1-c"
+   ],
+   "ram_billed_units_per_hour": "96 GiBy.h",
+   "usd_per_hour": {
+    "cpu": "0.624277464",
+    "ram": "0.292544352",
+    "gpu": "1.165951452",
+    "total": "2.082773268"
+   },
+   "usd_per_hour_total": 2.082773268,
+   "usd_per_month_730h": 1520.42,
+   "sku_ids": [
+    "A6EC-9503-C0CD",
+    "5C70-9568-3192",
+    "AE59-12DA-20E3"
+   ],
+   "sustained_use_discount_eligible": false,
+   "reference_only_3yr_cud_usd_per_month_730h": 684.19
+  },
+  "g2-standard-32": {
+   "family": "G2",
+   "vcpu": 32,
+   "memory_mib": 131072,
+   "memory_gib": 128.0,
+   "gpus": 1,
+   "gpu_type": "nvidia-l4",
+   "zones_asia_south1": [
+    "asia-south1-a",
+    "asia-south1-b",
+    "asia-south1-c"
+   ],
+   "ram_billed_units_per_hour": "128 GiBy.h",
+   "usd_per_hour": {
+    "cpu": "0.832369952",
+    "ram": "0.390059136",
+    "gpu": "0.582975726",
+    "total": "1.805404814"
+   },
+   "usd_per_hour_total": 1.805404814,
+   "usd_per_month_730h": 1317.95,
+   "sku_ids": [
+    "A6EC-9503-C0CD",
+    "5C70-9568-3192",
+    "AE59-12DA-20E3"
+   ],
+   "sustained_use_discount_eligible": false,
+   "reference_only_3yr_cud_usd_per_month_730h": 593.08
+  },
+  "g2-standard-48": {
+   "family": "G2",
+   "vcpu": 48,
+   "memory_mib": 196608,
+   "memory_gib": 192.0,
+   "gpus": 4,
+   "gpu_type": "nvidia-l4",
+   "zones_asia_south1": [
+    "asia-south1-a",
+    "asia-south1-b",
+    "asia-south1-c"
+   ],
+   "ram_billed_units_per_hour": "192 GiBy.h",
+   "usd_per_hour": {
+    "cpu": "1.248554928",
+    "ram": "0.585088704",
+    "gpu": "2.331902904",
+    "total": "4.165546536"
+   },
+   "usd_per_hour_total": 4.165546536,
+   "usd_per_month_730h": 3040.85,
+   "sku_ids": [
+    "A6EC-9503-C0CD",
+    "5C70-9568-3192",
+    "AE59-12DA-20E3"
+   ],
+   "sustained_use_discount_eligible": false,
+   "reference_only_3yr_cud_usd_per_month_730h": 1368.38
+  },
+  "c4-standard-4": {
+   "family": "C4",
+   "vcpu": 4,
+   "memory_mib": 15360,
+   "memory_gib": 15.0,
+   "gpus": 0,
+   "gpu_type": null,
+   "zones_asia_south1": [
+    "asia-south1-a",
+    "asia-south1-b",
+    "asia-south1-c"
+   ],
+   "ram_billed_units_per_hour": "15 GiBy.h",
+   "usd_per_hour": {
+    "cpu": "0.144144",
+    "ram": "0.06143280",
+    "gpu": "0",
+    "total": "0.20557680"
+   },
+   "usd_per_hour_total": 0.2055768,
+   "usd_per_month_730h": 150.07,
+   "sku_ids": [
+    "70F1-D1A1-608C",
+    "BC60-A7D5-6A2C"
+   ],
+   "sustained_use_discount_eligible": false,
+   "reference_only_3yr_cud_usd_per_month_730h": 67.53
+  },
+  "c4-standard-8": {
+   "family": "C4",
+   "vcpu": 8,
+   "memory_mib": 30720,
+   "memory_gib": 30.0,
+   "gpus": 0,
+   "gpu_type": null,
+   "zones_asia_south1": [
+    "asia-south1-a",
+    "asia-south1-b",
+    "asia-south1-c"
+   ],
+   "ram_billed_units_per_hour": "3E+1 GiBy.h",
+   "usd_per_hour": {
+    "cpu": "0.288288",
+    "ram": "0.12286560",
+    "gpu": "0",
+    "total": "0.41115360"
+   },
+   "usd_per_hour_total": 0.4111536,
+   "usd_per_month_730h": 300.14,
+   "sku_ids": [
+    "70F1-D1A1-608C",
+    "BC60-A7D5-6A2C"
+   ],
+   "sustained_use_discount_eligible": false,
+   "reference_only_3yr_cud_usd_per_month_730h": 135.06
+  },
+  "c4-standard-16": {
+   "family": "C4",
+   "vcpu": 16,
+   "memory_mib": 61440,
+   "memory_gib": 60.0,
+   "gpus": 0,
+   "gpu_type": null,
+   "zones_asia_south1": [
+    "asia-south1-a",
+    "asia-south1-b",
+    "asia-south1-c"
+   ],
+   "ram_billed_units_per_hour": "6E+1 GiBy.h",
+   "usd_per_hour": {
+    "cpu": "0.576576",
+    "ram": "0.24573120",
+    "gpu": "0",
+    "total": "0.82230720"
+   },
+   "usd_per_hour_total": 0.8223072,
+   "usd_per_month_730h": 600.28,
+   "sku_ids": [
+    "70F1-D1A1-608C",
+    "BC60-A7D5-6A2C"
+   ],
+   "sustained_use_discount_eligible": false,
+   "reference_only_3yr_cud_usd_per_month_730h": 270.13
+  },
+  "c4-standard-32": {
+   "family": "C4",
+   "vcpu": 32,
+   "memory_mib": 122880,
+   "memory_gib": 120.0,
+   "gpus": 0,
+   "gpu_type": null,
+   "zones_asia_south1": [
+    "asia-south1-a",
+    "asia-south1-b",
+    "asia-south1-c"
+   ],
+   "ram_billed_units_per_hour": "1.2E+2 GiBy.h",
+   "usd_per_hour": {
+    "cpu": "1.153152",
+    "ram": "0.49146240",
+    "gpu": "0",
+    "total": "1.64461440"
+   },
+   "usd_per_hour_total": 1.6446144,
+   "usd_per_month_730h": 1200.57,
+   "sku_ids": [
+    "70F1-D1A1-608C",
+    "BC60-A7D5-6A2C"
+   ],
+   "sustained_use_discount_eligible": false,
+   "reference_only_3yr_cud_usd_per_month_730h": 540.26
+  },
+  "c4-highcpu-8": {
+   "family": "C4",
+   "vcpu": 8,
+   "memory_mib": 16384,
+   "memory_gib": 16.0,
+   "gpus": 0,
+   "gpu_type": null,
+   "zones_asia_south1": [
+    "asia-south1-a",
+    "asia-south1-b",
+    "asia-south1-c"
+   ],
+   "ram_billed_units_per_hour": "16 GiBy.h",
+   "usd_per_hour": {
+    "cpu": "0.288288",
+    "ram": "0.06552832",
+    "gpu": "0",
+    "total": "0.35381632"
+   },
+   "usd_per_hour_total": 0.35381632,
+   "usd_per_month_730h": 258.29,
+   "sku_ids": [
+    "70F1-D1A1-608C",
+    "BC60-A7D5-6A2C"
+   ],
+   "sustained_use_discount_eligible": false,
+   "reference_only_3yr_cud_usd_per_month_730h": 116.23
+  },
+  "c4-highcpu-16": {
+   "family": "C4",
+   "vcpu": 16,
+   "memory_mib": 32768,
+   "memory_gib": 32.0,
+   "gpus": 0,
+   "gpu_type": null,
+   "zones_asia_south1": [
+    "asia-south1-a",
+    "asia-south1-b",
+    "asia-south1-c"
+   ],
+   "ram_billed_units_per_hour": "32 GiBy.h",
+   "usd_per_hour": {
+    "cpu": "0.576576",
+    "ram": "0.13105664",
+    "gpu": "0",
+    "total": "0.70763264"
+   },
+   "usd_per_hour_total": 0.70763264,
+   "usd_per_month_730h": 516.57,
+   "sku_ids": [
+    "70F1-D1A1-608C",
+    "BC60-A7D5-6A2C"
+   ],
+   "sustained_use_discount_eligible": false,
+   "reference_only_3yr_cud_usd_per_month_730h": 232.46
+  },
+  "c4-highcpu-32": {
+   "family": "C4",
+   "vcpu": 32,
+   "memory_mib": 65536,
+   "memory_gib": 64.0,
+   "gpus": 0,
+   "gpu_type": null,
+   "zones_asia_south1": [
+    "asia-south1-a",
+    "asia-south1-b",
+    "asia-south1-c"
+   ],
+   "ram_billed_units_per_hour": "64 GiBy.h",
+   "usd_per_hour": {
+    "cpu": "1.153152",
+    "ram": "0.26211328",
+    "gpu": "0",
+    "total": "1.41526528"
+   },
+   "usd_per_hour_total": 1.41526528,
+   "usd_per_month_730h": 1033.14,
+   "sku_ids": [
+    "70F1-D1A1-608C",
+    "BC60-A7D5-6A2C"
+   ],
+   "sustained_use_discount_eligible": false,
+   "reference_only_3yr_cud_usd_per_month_730h": 464.92
+  },
+  "c4d-highcpu-8": {
+   "family": "C4D",
+   "vcpu": 8,
+   "memory_mib": 15360,
+   "memory_gib": 15.0,
+   "gpus": 0,
+   "gpu_type": null,
+   "zones_asia_south1": [
+    "asia-south1-b",
+    "asia-south1-c"
+   ],
+   "ram_billed_units_per_hour": "16.10612736 GBy.h (decimal GB, per SKU baseUnitConversionFactor 3.6e12)",
+   "usd_per_hour": {
+    "cpu": "0.2720928",
+    "ram": "0.05855223151067136",
+    "gpu": "0",
+    "total": "0.33064503151067136"
+   },
+   "usd_per_hour_total": 0.33064503151067137,
+   "usd_per_month_730h": 241.37,
+   "sku_ids": [
+    "D1E1-0367-825A",
+    "CA2D-2A52-B49E"
+   ],
+   "sustained_use_discount_eligible": false,
+   "note_c4d_ram": "C4D RAM SKU is priced per decimal GB (GBy.h, baseUnitConversionFactor=3.6e12 By.s). If Google instead billed the nominal 15 'GB', RAM would be $39.81/mo instead of $42.74/mo (total $238.44/mo)."
+  },
+  "c4d-highcpu-16": {
+   "family": "C4D",
+   "vcpu": 16,
+   "memory_mib": 30720,
+   "memory_gib": 30.0,
+   "gpus": 0,
+   "gpu_type": null,
+   "zones_asia_south1": [
+    "asia-south1-b",
+    "asia-south1-c"
+   ],
+   "ram_billed_units_per_hour": "32.21225472 GBy.h (decimal GB, per SKU baseUnitConversionFactor 3.6e12)",
+   "usd_per_hour": {
+    "cpu": "0.5441856",
+    "ram": "0.11710446302134272",
+    "gpu": "0",
+    "total": "0.66129006302134272"
+   },
+   "usd_per_hour_total": 0.6612900630213427,
+   "usd_per_month_730h": 482.74,
+   "sku_ids": [
+    "D1E1-0367-825A",
+    "CA2D-2A52-B49E"
+   ],
+   "sustained_use_discount_eligible": false,
+   "note_c4d_ram": "C4D RAM SKU is priced per decimal GB (GBy.h, baseUnitConversionFactor=3.6e12 By.s). If Google instead billed the nominal 30 'GB', RAM would be $79.62/mo instead of $85.49/mo (total $476.87/mo)."
+  },
+  "c4d-highcpu-32": {
+   "family": "C4D",
+   "vcpu": 32,
+   "memory_mib": 61440,
+   "memory_gib": 60.0,
+   "gpus": 0,
+   "gpu_type": null,
+   "zones_asia_south1": [
+    "asia-south1-b",
+    "asia-south1-c"
+   ],
+   "ram_billed_units_per_hour": "64.42450944 GBy.h (decimal GB, per SKU baseUnitConversionFactor 3.6e12)",
+   "usd_per_hour": {
+    "cpu": "1.0883712",
+    "ram": "0.23420892604268544",
+    "gpu": "0",
+    "total": "1.32258012604268544"
+   },
+   "usd_per_hour_total": 1.3225801260426855,
+   "usd_per_month_730h": 965.48,
+   "sku_ids": [
+    "D1E1-0367-825A",
+    "CA2D-2A52-B49E"
+   ],
+   "sustained_use_discount_eligible": false,
+   "note_c4d_ram": "C4D RAM SKU is priced per decimal GB (GBy.h, baseUnitConversionFactor=3.6e12 By.s). If Google instead billed the nominal 60 'GB', RAM would be $159.23/mo instead of $170.97/mo (total $953.74/mo)."
+  },
+  "n2-standard-8": {
+   "family": "N2",
+   "vcpu": 8,
+   "memory_mib": 32768,
+   "memory_gib": 32.0,
+   "gpus": 0,
+   "gpu_type": null,
+   "zones_asia_south1": [
+    "asia-south1-a",
+    "asia-south1-b",
+    "asia-south1-c"
+   ],
+   "ram_billed_units_per_hour": "32 GiBy.h",
+   "usd_per_hour": {
+    "cpu": "0.30376",
+    "ram": "0.162816",
+    "gpu": "0",
+    "total": "0.466576"
+   },
+   "usd_per_hour_total": 0.466576,
+   "usd_per_month_730h": 340.6,
+   "sku_ids": [
+    "3A1A-7CFC-5747",
+    "23FA-BF9A-7C7A"
+   ],
+   "sustained_use_discount_eligible": true
+  },
+  "n2-standard-16": {
+   "family": "N2",
+   "vcpu": 16,
+   "memory_mib": 65536,
+   "memory_gib": 64.0,
+   "gpus": 0,
+   "gpu_type": null,
+   "zones_asia_south1": [
+    "asia-south1-a",
+    "asia-south1-b",
+    "asia-south1-c"
+   ],
+   "ram_billed_units_per_hour": "64 GiBy.h",
+   "usd_per_hour": {
+    "cpu": "0.60752",
+    "ram": "0.325632",
+    "gpu": "0",
+    "total": "0.933152"
+   },
+   "usd_per_hour_total": 0.933152,
+   "usd_per_month_730h": 681.2,
+   "sku_ids": [
+    "3A1A-7CFC-5747",
+    "23FA-BF9A-7C7A"
+   ],
+   "sustained_use_discount_eligible": true
+  },
+  "n2-standard-4": {
+   "family": "N2",
+   "vcpu": 4,
+   "memory_mib": 16384,
+   "memory_gib": 16.0,
+   "gpus": 0,
+   "gpu_type": null,
+   "zones_asia_south1": [
+    "asia-south1-a",
+    "asia-south1-b",
+    "asia-south1-c"
+   ],
+   "ram_billed_units_per_hour": "16 GiBy.h",
+   "usd_per_hour": {
+    "cpu": "0.15188",
+    "ram": "0.081408",
+    "gpu": "0",
+    "total": "0.233288"
+   },
+   "usd_per_hour_total": 0.233288,
+   "usd_per_month_730h": 170.3,
+   "sku_ids": [
+    "3A1A-7CFC-5747",
+    "23FA-BF9A-7C7A"
+   ],
+   "sustained_use_discount_eligible": true
+  },
+  "c3-standard-8": {
+   "family": "C3",
+   "vcpu": 8,
+   "memory_mib": 32768,
+   "memory_gib": 32.0,
+   "gpus": 0,
+   "gpu_type": null,
+   "zones_asia_south1": [
+    "asia-south1-b",
+    "asia-south1-c"
+   ],
+   "ram_billed_units_per_hour": "32 GiBy.h",
+   "usd_per_hour": {
+    "cpu": "0.288288",
+    "ram": "0.13105664",
+    "gpu": "0",
+    "total": "0.41934464"
+   },
+   "usd_per_hour_total": 0.41934464,
+   "usd_per_month_730h": 306.12,
+   "sku_ids": [
+    "1B93-073E-DFE5",
+    "61A0-38AE-BC2D"
+   ],
+   "sustained_use_discount_eligible": false
+  },
+  "c3-highcpu-8": {
+   "family": "C3",
+   "vcpu": 8,
+   "memory_mib": 16384,
+   "memory_gib": 16.0,
+   "gpus": 0,
+   "gpu_type": null,
+   "zones_asia_south1": [
+    "asia-south1-c"
+   ],
+   "ram_billed_units_per_hour": "16 GiBy.h",
+   "usd_per_hour": {
+    "cpu": "0.288288",
+    "ram": "0.06552832",
+    "gpu": "0",
+    "total": "0.35381632"
+   },
+   "usd_per_hour_total": 0.35381632,
+   "usd_per_month_730h": 258.29,
+   "sku_ids": [
+    "1B93-073E-DFE5",
+    "61A0-38AE-BC2D"
+   ],
+   "sustained_use_discount_eligible": false
+  },
+  "e2-standard-2": {
+   "family": "E2",
+   "vcpu": 2,
+   "memory_mib": 8192,
+   "memory_gib": 8.0,
+   "gpus": 0,
+   "gpu_type": null,
+   "zones_asia_south1": [
+    "asia-south1-a",
+    "asia-south1-b",
+    "asia-south1-c"
+   ],
+   "ram_billed_units_per_hour": "8 GiBy.h",
+   "usd_per_hour": {
+    "cpu": "0.0523986",
+    "ram": "0.02808576",
+    "gpu": "0",
+    "total": "0.08048436"
+   },
+   "usd_per_hour_total": 0.08048436,
+   "usd_per_month_730h": 58.75,
+   "sku_ids": [
+    "DFC1-04D4-B4A1",
+    "90AB-A7A8-F873"
+   ],
+   "sustained_use_discount_eligible": false
+  },
+  "e2-standard-4": {
+   "family": "E2",
+   "vcpu": 4,
+   "memory_mib": 16384,
+   "memory_gib": 16.0,
+   "gpus": 0,
+   "gpu_type": null,
+   "zones_asia_south1": [
+    "asia-south1-a",
+    "asia-south1-b",
+    "asia-south1-c"
+   ],
+   "ram_billed_units_per_hour": "16 GiBy.h",
+   "usd_per_hour": {
+    "cpu": "0.1047972",
+    "ram": "0.05617152",
+    "gpu": "0",
+    "total": "0.16096872"
+   },
+   "usd_per_hour_total": 0.16096872,
+   "usd_per_month_730h": 117.51,
+   "sku_ids": [
+    "DFC1-04D4-B4A1",
+    "90AB-A7A8-F873"
+   ],
+   "sustained_use_discount_eligible": false
+  },
+  "e2-standard-8": {
+   "family": "E2",
+   "vcpu": 8,
+   "memory_mib": 32768,
+   "memory_gib": 32.0,
+   "gpus": 0,
+   "gpu_type": null,
+   "zones_asia_south1": [
+    "asia-south1-a",
+    "asia-south1-b",
+    "asia-south1-c"
+   ],
+   "ram_billed_units_per_hour": "32 GiBy.h",
+   "usd_per_hour": {
+    "cpu": "0.2095944",
+    "ram": "0.11234304",
+    "gpu": "0",
+    "total": "0.32193744"
+   },
+   "usd_per_hour_total": 0.32193744,
+   "usd_per_month_730h": 235.01,
+   "sku_ids": [
+    "DFC1-04D4-B4A1",
+    "90AB-A7A8-F873"
+   ],
+   "sustained_use_discount_eligible": false
+  }
+ },
+ "per_node_extras_usd_per_month": {
+  "g2_boot_pd_balanced_200gib": 24.0,
+  "g2_boot_pd_balanced_100gib": 12.0,
+  "g2_boot_pd_ssd_100gib": 20.4,
+  "c4_boot_hdb_60gib_default_provisioning_3360iops_230mibps": 10.56,
+  "c4_boot_hdb_50gib_baseline_3000iops_140mibps": 4.15,
+  "controller_boot_hdb_512gib_100000iops_2400mibps": 622.42,
+  "external_ip_standard_vm": 3.65
+ },
+ "fixed_items": [
+  {
+   "item": "lb_regional_external_alb_up_to_5_rules",
+   "usd_per_month": 21.9,
+   "sku_ids": "22FA-9BFA-EC10",
+   "note": "+$0.01/GiB inbound AND +$0.01/GiB outbound processed (7087-03B4-CF6F, 8625-A380-1224)"
+  },
+  {
+   "item": "valkey_1x_shared_core_nano",
+   "usd_per_month": 24.16,
+   "sku_ids": "BBE1-7BC7-645D",
+   "note": "node capacity per Google docs, not API"
+  },
+  {
+   "item": "valkey_2x_shared_core_nano",
+   "usd_per_month": 48.33,
+   "sku_ids": "BBE1-7BC7-645D",
+   "note": ""
+  },
+  {
+   "item": "valkey_2x_standard_small",
+   "usd_per_month": 216.37,
+   "sku_ids": "44CF-B864-F1F7",
+   "note": ""
+  },
+  {
+   "item": "valkey_2x_highmem_medium (doc line 9 parity)",
+   "usd_per_month": 292.0,
+   "sku_ids": "DEEA-ABC3-D53D",
+   "note": ""
+  },
+  {
+   "item": "redis_basic_1gib (M1)",
+   "usd_per_month": 45.99,
+   "sku_ids": "1A79-AA76-9403",
+   "note": "tier sizes M1..M5 per Google docs, not API"
+  },
+  {
+   "item": "redis_basic_5gib (M2)",
+   "usd_per_month": 135.05,
+   "sku_ids": "C0DE-CBF3-DEE8",
+   "note": ""
+  },
+  {
+   "item": "redis_standard_ha_1gib (M1)",
+   "usd_per_month": 80.3,
+   "sku_ids": "E546-A818-9A77",
+   "note": ""
+  },
+  {
+   "item": "redis_standard_ha_5gib (M2)",
+   "usd_per_month": 255.5,
+   "sku_ids": "F042-8822-7B79",
+   "note": ""
+  },
+  {
+   "item": "redis_standard_ha_13gib (M3)",
+   "usd_per_month": 550.42,
+   "sku_ids": "7C7C-D23A-8C50",
+   "note": ""
+  },
+  {
+   "item": "cloudsql_pg_ha_4vcpu_16gib_100gib (doc line 7 parity)",
+   "usd_per_month": 526.4,
+   "sku_ids": "65ED-2048-3203,34E0-9B1D-C80D,E77A-52C7-BB42",
+   "note": ""
+  },
+  {
+   "item": "cloudsql_pg_ha_2vcpu_8gib_20gib",
+   "usd_per_month": 250.96,
+   "sku_ids": "65ED-2048-3203,34E0-9B1D-C80D,E77A-52C7-BB42",
+   "note": ""
+  },
+  {
+   "item": "cloudsql_pg_zonal_2vcpu_8gib_20gib",
+   "usd_per_month": 125.55,
+   "sku_ids": "DF80-E0D1-CCE3,72C1-62A1-2C8B,42A1-880A-9B0F",
+   "note": ""
+  },
+  {
+   "item": "control_plane_vm_e2-standard-4",
+   "usd_per_month": 117.51,
+   "sku_ids": "DFC1-04D4-B4A1,90AB-A7A8-F873",
+   "note": "E2_CPUS quota in ai-mesh-firewall/asia-south1 reads limit=0"
+  },
+  {
+   "item": "control_plane_vm_n2-standard-4 (list; SUD-eligible)",
+   "usd_per_month": 170.3,
+   "sku_ids": "3A1A-7CFC-5747,23FA-BF9A-7C7A",
+   "note": ""
+  },
+  {
+   "item": "control_plane_vm_c4-standard-4",
+   "usd_per_month": 150.07,
+   "sku_ids": "70F1-D1A1-608C,BC60-A7D5-6A2C",
+   "note": ""
+  },
+  {
+   "item": "control_plane_boot_pd_balanced_100gib",
+   "usd_per_month": 12.0,
+   "sku_ids": "C24C-88D9-75ED",
+   "note": ""
+  },
+  {
+   "item": "mongo_chroma_data_250gib_pd_ssd (doc line 3 data part)",
+   "usd_per_month": 51.0,
+   "sku_ids": "FF66-41CB-DE90",
+   "note": ""
+  },
+  {
+   "item": "mongo_chroma_data_250gib_pd_balanced",
+   "usd_per_month": 30.0,
+   "sku_ids": "C24C-88D9-75ED",
+   "note": ""
+  },
+  {
+   "item": "gke_regional_cluster_fee",
+   "usd_per_month": 73.0,
+   "sku_ids": "B561-BFBD-1264",
+   "note": "$0 if plain VMs/MIGs"
+  },
+  {
+   "item": "artifact_registry_20gib",
+   "usd_per_month": 1.95,
+   "sku_ids": "8502-299A-ABAF",
+   "note": "first 0.5 GiB free"
+  },
+  {
+   "item": "cloud_monitoring_doc_parity",
+   "usd_per_month": 15.0,
+   "sku_ids": "A924-09D0-8854",
+   "note": "unit: first 150 MiB free then $0.258/MiB; $15 = 208.1 MiB/mo (doc's quantity)"
+  },
+  {
+   "item": "cloudsql_backups_doc_parity",
+   "usd_per_month": 15.0,
+   "sku_ids": "D737-A9D2-80AB",
+   "note": "unit $0.096/GiB-mo; $15 = 156.25 GiB (doc's quantity)"
+  },
+  {
+   "item": "snapshots_doc_parity",
+   "usd_per_month": 18.0,
+   "sku_ids": "A0EA-3B8B-0794",
+   "note": "unit $0.052/GiB-mo regional, $0.083 multi-regional asia; $18 = 346 GiB regional (doc's quantity)"
+  },
+  {
+   "item": "cloud_nat_per_vm_uptime (if NAT instead of VM IPs)",
+   "usd_per_month": 1.02,
+   "sku_ids": "32E2-4EFC-EF9F",
+   "note": "per VM; +$0.045/GiB processed both directions (015F-5732-FFF0) + $3.65/mo per NAT IP (8515-9425-D2CE)"
+  }
+ ],
+ "fixed_bundles": {
+  "F-doc-parity (doc lines 4,7,8,9,14,15,17,18 + 250 GiB pd-ssd data disks, on-demand Mumbai)": {
+   "items": [
+    "lb_regional_external_alb_up_to_5_rules",
+    "cloudsql_pg_ha_4vcpu_16gib_100gib (doc line 7 parity)",
+    "cloudsql_backups_doc_parity",
+    "valkey_2x_highmem_medium (doc line 9 parity)",
+    "gke_regional_cluster_fee",
+    "artifact_registry_20gib",
+    "cloud_monitoring_doc_parity",
+    "snapshots_doc_parity",
+    "mongo_chroma_data_250gib_pd_ssd (doc line 3 data part)"
+   ],
+   "usd_per_month": 1014.25
+  },
+  "F-lead-list (LB + Redis Standard HA 1 GiB + control-plane n2-standard-4 w/ 100 GiB pd-balanced + 250 GiB pd-balanced data + monitoring $15)": {
+   "items": [
+    "lb_regional_external_alb_up_to_5_rules",
+    "redis_standard_ha_1gib (M1)",
+    "control_plane_vm_n2-standard-4 (list; SUD-eligible)",
+    "control_plane_boot_pd_balanced_100gib",
+    "mongo_chroma_data_250gib_pd_balanced",
+    "cloud_monitoring_doc_parity"
+   ],
+   "usd_per_month": 329.5
+  }
+ },
+ "egress": {
+  "note": "Tiers are GiB/month, aggregated per billing ACCOUNT per SKU (aggregationInfo). Multiply MEASURED bytes/request x requests/month / 2^30 to get GiB. 1 RPS sustained = 2,628,000 req/month at 730 h (the doc used 30 d = 2,592,000).",
+  "standard_tier_from_mumbai": [
+   {
+    "from_gib": "0",
+    "usd_per_gib": "0"
+   },
+   {
+    "from_gib": "200",
+    "usd_per_gib": "0.11"
+   },
+   {
+    "from_gib": "10240",
+    "usd_per_gib": "0.075"
+   },
+   {
+    "from_gib": "153600",
+    "usd_per_gib": "0.07"
+   }
+  ],
+  "premium_tier_from_mumbai_by_destination": {
+   "india": [
+    {
+     "from_gib": "0",
+     "usd_per_gib": "0.12"
+    },
+    {
+     "from_gib": "1024",
+     "usd_per_gib": "0.11"
+    },
+    {
+     "from_gib": "10240",
+     "usd_per_gib": "0.08"
+    }
+   ],
+   "americas": [
+    {
+     "from_gib": "0",
+     "usd_per_gib": "0.12"
+    },
+    {
+     "from_gib": "1024",
+     "usd_per_gib": "0.11"
+    },
+    {
+     "from_gib": "10240",
+     "usd_per_gib": "0.085"
+    }
+   ],
+   "emea": [
+    {
+     "from_gib": "0",
+     "usd_per_gib": "0.12"
+    },
+    {
+     "from_gib": "1024",
+     "usd_per_gib": "0.11"
+    },
+    {
+     "from_gib": "10240",
+     "usd_per_gib": "0.085"
+    }
+   ],
+   "western_europe": [
+    {
+     "from_gib": "0",
+     "usd_per_gib": "0.12"
+    },
+    {
+     "from_gib": "1024",
+     "usd_per_gib": "0.11"
+    },
+    {
+     "from_gib": "10240",
+     "usd_per_gib": "0.085"
+    }
+   ],
+   "eastern_europe": [
+    {
+     "from_gib": "0",
+     "usd_per_gib": "0.12"
+    },
+    {
+     "from_gib": "1024",
+     "usd_per_gib": "0.11"
+    },
+    {
+     "from_gib": "10240",
+     "usd_per_gib": "0.085"
+    }
+   ],
+   "central_america": [
+    {
+     "from_gib": "0",
+     "usd_per_gib": "0.12"
+    },
+    {
+     "from_gib": "1024",
+     "usd_per_gib": "0.11"
+    },
+    {
+     "from_gib": "10240",
+     "usd_per_gib": "0.085"
+    }
+   ],
+   "apac_ex_kr_id": [
+    {
+     "from_gib": "0",
+     "usd_per_gib": "0.12"
+    },
+    {
+     "from_gib": "1024",
+     "usd_per_gib": "0.11"
+    },
+    {
+     "from_gib": "10240",
+     "usd_per_gib": "0.085"
+    }
+   ],
+   "middle_east": [
+    {
+     "from_gib": "0",
+     "usd_per_gib": "0.15"
+    },
+    {
+     "from_gib": "1024",
+     "usd_per_gib": "0.13"
+    },
+    {
+     "from_gib": "10240",
+     "usd_per_gib": "0.11"
+    }
+   ],
+   "africa": [
+    {
+     "from_gib": "0",
+     "usd_per_gib": "0.15"
+    },
+    {
+     "from_gib": "1024",
+     "usd_per_gib": "0.13"
+    },
+    {
+     "from_gib": "10240",
+     "usd_per_gib": "0.11"
+    }
+   ],
+   "australia": [
+    {
+     "from_gib": "0",
+     "usd_per_gib": "0.19"
+    },
+    {
+     "from_gib": "1024",
+     "usd_per_gib": "0.18"
+    },
+    {
+     "from_gib": "10240",
+     "usd_per_gib": "0.15"
+    }
+   ],
+   "indonesia": [
+    {
+     "from_gib": "0",
+     "usd_per_gib": "0.19"
+    },
+    {
+     "from_gib": "1024",
+     "usd_per_gib": "0.18"
+    },
+    {
+     "from_gib": "10240",
+     "usd_per_gib": "0.15"
+    }
+   ],
+   "south_korea": [
+    {
+     "from_gib": "0",
+     "usd_per_gib": "0.19"
+    },
+    {
+     "from_gib": "1024",
+     "usd_per_gib": "0.18"
+    },
+    {
+     "from_gib": "10240",
+     "usd_per_gib": "0.15"
+    }
+   ],
+   "south_america": [
+    {
+     "from_gib": "0",
+     "usd_per_gib": "0.19"
+    },
+    {
+     "from_gib": "1024",
+     "usd_per_gib": "0.18"
+    },
+    {
+     "from_gib": "10240",
+     "usd_per_gib": "0.15"
+    }
+   ],
+   "china": [
+    {
+     "from_gib": "0",
+     "usd_per_gib": "0.23"
+    },
+    {
+     "from_gib": "1024",
+     "usd_per_gib": "0.22"
+    },
+    {
+     "from_gib": "10240",
+     "usd_per_gib": "0.2"
+    }
+   ]
+  },
+  "regional_external_alb_processing_usd_per_gib": {
+   "inbound": "0.01",
+   "outbound": "0.01"
+  },
+  "cloud_nat_processing_usd_per_gib_each_direction": "0.045",
+  "inter_zone_vm_to_vm_usd_per_gib": "0.01",
+  "inter_zone_caveat": "SKU DE9E-AFBC-A15A serviceRegions lists us-central1/us-east1/us-west1/asia-east1/europe-west1 only; the catalog has no asia-south1-specific VM inter-zone SKU.",
+  "intra_zone_usd_per_gib": "0",
+  "ingress_usd_per_gib": "0 (all PremiumInternetIngress / StandardInternetIngress SKUs for Mumbai are $0)",
+  "usd_per_million_requests_per_KiB_per_request_at_rate": "0.9536743 x rate  (1e6 x 1024 / 2^30)",
+  "reference_points_usd": {
+   "1024_GiB": {
+    "standard_tier": 90.64,
+    "premium_to_india": 122.88,
+    "premium_to_americas": 122.88
+   },
+   "10240_GiB": {
+    "standard_tier": 1104.4,
+    "premium_to_india": 1136.64,
+    "premium_to_americas": 1136.64
+   },
+   "16037_GiB": {
+    "standard_tier": 1539.18,
+    "premium_to_india": 1600.4,
+    "premium_to_americas": 1629.39
+   },
+   "51200_GiB": {
+    "standard_tier": 4176.4,
+    "premium_to_india": 4413.44,
+    "premium_to_americas": 4618.24
+   },
+   "102400_GiB": {
+    "standard_tier": 8016.4,
+    "premium_to_india": 8509.44,
+    "premium_to_americas": 8970.24
+   }
+  }
+ }
+}

@@ -1,0 +1,87 @@
+non-idle samples: 42982  (excluded idle-wait samples: 1603098)
+
+## self time by file (top 15)
+ 16.28%  _asyncio.py
+ 12.96%  policy_engine.py
+ 10.57%  main.py
+  9.77%  patterns.py
+  4.58%  base.py
+  2.95%  streaming_handler.py
+  2.44%  __init__.py
+  2.18%  utils.py
+  1.99%  _models.py
+  1.92%  locks.py
+  1.64%  base64.py
+  1.60%  memory.py
+  1.38%  weakref.py
+  1.27%  typing.py
+  1.25%  _model_construction.py
+
+## self time by function (top 25)
+  6.97%  run (ai_mesh_gateway/policy_engine.py:313)
+  5.55%  _scan_all (ai_mesh_gateway/policy_engine.py:486)
+  1.73%  _setattr_handler (pydantic/main.py:1076)
+  1.66%  _detect_pii_core (ai_mesh_gateway/patterns.py:1156)
+  1.24%  _detect_secrets_core (ai_mesh_gateway/patterns.py:1225)
+  1.23%  model_dump (pydantic/main.py:475)
+  1.18%  _iter_transport_decodes (ai_mesh_gateway/patterns.py:467)
+  1.04%  sub (re/__init__.py:186)
+  0.92%  cancel (anyio/_backends/_asyncio.py:646)
+  0.83%  emit (logging/__init__.py:1163)
+  0.74%  is_disconnected (starlette/requests.py:322)
+  0.70%  raw_decode (json/decoder.py:354)
+  0.68%  __init__ (anyio/_backends/_asyncio.py:406)
+  0.68%  __call__ (starlette/middleware/base.py:232)
+  0.66%  _read_from_socket (redis/_parsers/socket.py:64)
+  0.65%  receive_or_disconnect (starlette/middleware/base.py:117)
+  0.65%  __getitem__ (weakref.py:415)
+  0.64%  _spawn (anyio/_backends/_asyncio.py:814)
+  0.59%  __getattr__ (pydantic/_internal/_model_construction.py:287)
+  0.58%  wait (asyncio/locks.py:215)
+  0.58%  _deliver_cancellation (anyio/_backends/_asyncio.py:572)
+  0.57%  __setattr__ (pydantic/main.py:1048)
+  0.56%  __aenter__ (anyio/_backends/_asyncio.py:746)
+  0.55%  cancel_shielded_checkpoint (anyio/_backends/_asyncio.py:2397)
+  0.54%  _detect_credential_exposure_core (ai_mesh_gateway/patterns.py:2031)
+
+## inclusive time (top 40)
+ 61.36%  <module> (gunicorn)
+ 61.36%  run (wsgiapp.py)
+ 61.36%  run (base.py)
+ 61.36%  run (arbiter.py)
+ 61.36%  manage_workers (arbiter.py)
+ 61.36%  spawn_workers (arbiter.py)
+ 61.36%  spawn_worker (arbiter.py)
+ 61.36%  init_process (base.py)
+ 61.36%  run (workers.py)
+ 61.36%  run (runners.py)
+ 44.69%  wrap (responses.py)
+ 43.24%  stream_with_finalize (stream_orchestration.py)
+ 41.49%  stream_response (responses.py)
+ 35.23%  __aiter__ (secure_streaming.py)
+ 24.33%  acompletion_stream (llm_router.py)
+ 24.10%  _provider_stream (main.py)
+ 23.01%  _stream_with_state_check (llm_router.py)
+ 22.40%  _stream_chunks_from_response (llm_router.py)
+ 22.17%  _bootstrap (threading.py)
+ 22.17%  _bootstrap_inner (threading.py)
+ 22.17%  run (threading.py)
+ 21.79%  __anext__ (streaming_handler.py)
+ 21.72%  stream_with_fallbacks (router.py)
+ 21.43%  __anext__ (router.py)
+ 18.26%  receive_or_disconnect (base.py)
+ 17.83%  is_disconnected (requests.py)
+ 16.46%  _worker (thread.py)
+ 16.42%  run (thread.py)
+ 14.80%  wrap (base.py)
+ 14.40%  chunk_creator (streaming_handler.py)
+ 14.25%  wrapped_receive (base.py)
+  9.57%  __init__ (utils.py)
+  8.67%  __aexit__ (_asyncio.py)
+  8.17%  coro (base.py)
+  7.25%  _policy_check_cached (main.py)
+  7.24%  evaluate (policy_engine.py)
+  6.98%  _search_many_with_budget (policy_engine.py)
+  6.98%  run (policy_engine.py)
+  6.98%  _run_with_timeout (policy_engine.py)
+  6.74%  return_processed_chunk_logic (streaming_handler.py)

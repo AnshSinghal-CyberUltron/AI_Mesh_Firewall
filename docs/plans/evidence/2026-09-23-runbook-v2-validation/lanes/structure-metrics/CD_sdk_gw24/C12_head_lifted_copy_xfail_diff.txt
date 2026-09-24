@@ -1,0 +1,16 @@
+## HEAD gateway_v2 copy: xfail lines
+595:# Remaining xfail(strict=True) cells in the phase2 modules stay as recorded v1 defects.
+792:# xfail) — e.code/e.type/e.message must be non-None on a block.
+808:# shim 254-287) — REAL passing cell, no longer xfail.
+## diff v1 file vs v2 lifted copy (stat)
+594,596c594,595
+< # Cells the playbook flagged as defects D2/D3/D4/D5 are marked xfail(strict=False):
+< # a non-strict xfail stays green whether it XFAILs (defect real) or XPASSes (already
+< # fixed in-tree). The post-run xfail/xpass split is the authoritative backlog.
+---
+> # GW01: D4 (models.retrieve) and D5 (typed responses stream) are strict must-pass.
+> # Remaining xfail(strict=True) cells in the phase2 modules stay as recorded v1 defects.
+701d699
+< @pytest.mark.xfail(strict=False, reason="D5: responses streaming must yield TYPED events (response.created -> output_text.delta -> response.completed); fix is in-tree (main.py:7815) so XPASS is expected")
+744d741
+< @pytest.mark.xfail(strict=False, reason="D4: client.models.retrieve(id) — playbook flagged as a gap; fix is in-tree (main.py:11471) so XPASS is expected")

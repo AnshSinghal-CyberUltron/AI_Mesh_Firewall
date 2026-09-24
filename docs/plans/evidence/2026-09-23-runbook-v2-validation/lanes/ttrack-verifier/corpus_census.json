@@ -1,0 +1,156 @@
+{
+  "malicious": {
+    "rows": 323,
+    "labels": {
+      "malicious": 323
+    },
+    "families": {
+      "prompt_injection": 60,
+      "jailbreak": 38,
+      "data_leakage": 38,
+      "goal_hijacking": 26,
+      "tool_overreach": 26,
+      "sql_injection": 26,
+      "command_injection": 26,
+      "path_traversal": 26,
+      "vector_injection": 26,
+      "paraphrase": 31
+    },
+    "splits": {
+      "train": 269,
+      "eval": 54
+    },
+    "family_x_split": {
+      "command_injection|eval": 3,
+      "command_injection|train": 23,
+      "data_leakage|eval": 6,
+      "data_leakage|train": 32,
+      "goal_hijacking|eval": 5,
+      "goal_hijacking|train": 21,
+      "jailbreak|eval": 6,
+      "jailbreak|train": 32,
+      "paraphrase|eval": 6,
+      "paraphrase|train": 25,
+      "path_traversal|eval": 2,
+      "path_traversal|train": 24,
+      "prompt_injection|eval": 10,
+      "prompt_injection|train": 50,
+      "sql_injection|eval": 5,
+      "sql_injection|train": 21,
+      "tool_overreach|eval": 7,
+      "tool_overreach|train": 19,
+      "vector_injection|eval": 4,
+      "vector_injection|train": 22
+    },
+    "record_keys": {
+      "id": 323,
+      "text": 323,
+      "label": 323,
+      "family": 323,
+      "split": 323,
+      "provenance": 323,
+      "fake_fixtures": 323
+    },
+    "has_expected_action_or_span_labels": false,
+    "has_language_field": false
+  },
+  "benign": {
+    "rows": 425,
+    "labels": {
+      "benign": 425
+    },
+    "families": {
+      "developer_traffic": 75,
+      "general_benign": 350
+    },
+    "splits": {
+      "eval": 89,
+      "train": 336
+    },
+    "family_x_split": {
+      "developer_traffic|eval": 11,
+      "developer_traffic|train": 64,
+      "general_benign|eval": 78,
+      "general_benign|train": 272
+    },
+    "record_keys": {
+      "id": 425,
+      "text": 425,
+      "label": 425,
+      "family": 425,
+      "split": 425,
+      "provenance": 425,
+      "fake_fixtures": 425
+    },
+    "has_expected_action_or_span_labels": false,
+    "has_language_field": false
+  },
+  "families_json": {
+    "attack": [
+      "prompt_injection",
+      "jailbreak",
+      "data_leakage",
+      "goal_hijacking",
+      "tool_overreach",
+      "sql_injection",
+      "command_injection",
+      "path_traversal",
+      "vector_injection",
+      "paraphrase"
+    ],
+    "benign": [
+      "developer_traffic",
+      "general_benign"
+    ]
+  },
+  "attack_family_count_nonempty": 10,
+  "sha256": {
+    "malicious.jsonl": "71768a2ec4bf61012180563a6dbed175fac5082fefb07c4e2056d2d4704fcee6",
+    "benign.jsonl": "c73f93584ec65cc16d6f28b2de0242a7f2117cafc1c2c6a03ad3031fe8aa1e6b"
+  },
+  "git_grep_heldout_frozen_hash_hits": [
+    "docs/plans/evidence/2026-09-17-t00-t01-gate/t02-start-gate.json:62:      \"Node OpenAI SDK pin not frozen (frontend has no openai package)\"",
+    "scripts/detection/attribution.py:37:@dataclass(frozen=True)",
+    "scripts/detection/attribution.py:57:@dataclass(frozen=True)",
+    "scripts/detection/corpus.py:34:@dataclass(frozen=True)",
+    "scripts/detection/corpus.py:76:@dataclass(frozen=True)",
+    "scripts/detection/corpus.py:86:@dataclass(frozen=True)",
+    "scripts/detection/corpus.py:94:@dataclass(frozen=True)",
+    "scripts/detection/metrics.py:47:@dataclass(frozen=True)",
+    "scripts/detection/postures.py:57:@dataclass(frozen=True)",
+    "scripts/detection/report.py:71:@dataclass(frozen=True)",
+    "scripts/detection/report.py:145:@dataclass(frozen=True)",
+    "scripts/detection/report.py:179:@dataclass(frozen=True)",
+    "scripts/detection/thresholds.py:32:@dataclass(frozen=True)",
+    "scripts/detection/thresholds.py:49:@dataclass(frozen=True)",
+    "tests/detection_corpus/corpus_lint.py:66:@dataclass(frozen=True)",
+    "tests/detection_corpus/corpus_lint.py:85:@dataclass(frozen=True)",
+    "tests/detection_corpus/corpus_lint.py:101:@dataclass(frozen=True)",
+    "tests/detection_corpus/corpus_lint.py:219:def _load_family_sets(root: pathlib.Path) -> dict[str, frozenset[str]]:",
+    "tests/detection_corpus/corpus_lint.py:232:    attack = frozenset(data.get(\"attack\", ()))",
+    "tests/detection_corpus/corpus_lint.py:233:    benign = frozenset(data.get(\"benign\", ()))",
+    "tests/detection_corpus/corpus_lint.py:241:    item: LoadedItem, family_sets: dict[str, frozenset[str]]",
+    "tests/detection_corpus/corpus_lint.py:344:            valid = family_sets.get(label, frozenset())",
+    "tests/detection_corpus/corpus_lint.py:358:    family_sets: dict[str, frozenset[str]] | None = None,",
+    "tests/detection_corpus/corpus_lint.py:783:ATTACK_PATTERN_FAMILIES = frozenset(",
+    "tests/detection_corpus/corpus_lint.py:1113:def _derive_live_literals() -> tuple[frozenset[str], str | None]:",
+    "tests/detection_corpus/corpus_lint.py:1131:        ``(literals, None)`` on success, or ``(frozenset(), error_message)`` when",
+    "tests/detection_corpus/corpus_lint.py:1142:        return frozenset(), f\"{type(exc).__name__}: {exc}\"",
+    "tests/detection_corpus/corpus_lint.py:1158:        return frozenset(), f\"{type(exc).__name__}: {exc}\"",
+    "tests/detection_corpus/corpus_lint.py:1160:    return frozenset(literals), None",
+    "tests/detection_corpus/corpus_lint.py:1453:    frozen = tuple(violations)",
+    "tests/detection_corpus/corpus_lint.py:1454:    return LintReport(ok=(frozen == ()), violations=frozen, counts=counts)",
+    "tests/detection_corpus/test_check_schema.py:52:    \"malicious\": frozenset(",
+    "tests/detection_corpus/test_check_schema.py:66:    \"benign\": frozenset({\"developer_traffic\", \"general_benign\"}),",
+    "tests/detection_corpus/test_corpus_lint_properties.py:31:_VALID_SPLITS = frozenset(corpus_lint.VALID_SPLITS)",
+    "tests/detection_corpus/test_exit_code_contract_properties.py:152:# a freshly constructed frozen LintReport for an ARBITRARY violations tuple, so",
+    "tests/detection_corpus/test_exit_code_contract_properties.py:171:    frozen = tuple(violations)",
+    "tests/detection_corpus/test_exit_code_contract_properties.py:174:        ok=(frozen == ()), violations=frozen, counts={}",
+    "tests/detection_corpus/test_trigger_token_and_path_scope.py:46:def _live_literals() -> frozenset[str]:",
+    "tests/detection_corpus/test_trigger_token_and_path_scope.py:141:    # The helper returns (frozenset(), error_message) \u2014 never raises \u2014 when the",
+    "tests/detection_corpus/test_trigger_token_and_path_scope.py:149:    assert literals == frozenset()"
+  ],
+  "git_log_corpus_files": [
+    "a67337fb 2026-09-08 19:09:35 +0530 Commit G0.1 detection corpus (tests/detection_corpus/) to pin corpus_version for the posture-scoring harness"
+  ]
+}

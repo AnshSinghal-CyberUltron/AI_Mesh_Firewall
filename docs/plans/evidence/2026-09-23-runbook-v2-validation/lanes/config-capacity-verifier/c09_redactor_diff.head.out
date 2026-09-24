@@ -1,0 +1,24 @@
+=== 1 SSN split across two text parts (G70)
+  Tier-1 verdict           : action=redact threat=pii patterns=['ssn']
+  DECISION redacted_prompt : '[user]: Please file this. My SSN is 123- 45-6789 thanks\nPlease file this. My SSN is ***-**-6789 thanks'
+  WIRE (what model sees)   : ['[user] Please file this. My SSN is 123-45-6789 thanks']
+  raw values on the wire   : ['123-45-6789']   | decision contains them: []
+  B1 check (main.py:9592) redaction_noop=False -> fail-closed block armed: False
+=== 2 PII inside the system message
+  Tier-1 verdict           : action=redact threat=pii patterns=['ssn', 'email']
+  DECISION redacted_prompt : "[system]: You are a support agent. Customer: Jane Roe, SSN ***-**-6789, j***@e***.com\n[user]: Summarise the customer's record."
+  WIRE (what model sees)   : ['[system] You are a support agent. Customer: Jane Roe, SSN 123-45-6789, jane.roe@example.com', "[user] Summarise the customer's record."]
+  raw values on the wire   : ['123-45-6789', 'jane.roe@example.com']   | decision contains them: []
+  B1 check (main.py:9592) redaction_noop=False -> fail-closed block armed: False
+=== 3 phone label in one turn, number in the next
+  Tier-1 verdict           : action=allow threat= patterns=[]
+  DECISION redacted_prompt : '[user]: My phone number is\n[user]: 9876543210'
+  WIRE (what model sees)   : ['[user] My phone number is', '[user] 9876543210']
+  raw values on the wire   : ['9876543210']   | decision contains them: ['9876543210']
+  B1 check (main.py:9592) redaction_noop=True -> fail-closed block armed: True
+=== 4 plain SSN in one user turn (control)
+  Tier-1 verdict           : action=redact threat=pii patterns=['ssn']
+  DECISION redacted_prompt : '[user]: My SSN is ***-**-6789, please update it.'
+  WIRE (what model sees)   : ['[user] My SSN is ***-**-6789, please update it.']
+  raw values on the wire   : []   | decision contains them: []
+  B1 check (main.py:9592) redaction_noop=False -> fail-closed block armed: False

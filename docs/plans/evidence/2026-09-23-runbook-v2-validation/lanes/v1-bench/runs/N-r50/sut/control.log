@@ -1,0 +1,362 @@
+INFO 2026-09-23 13:13:17,963 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 1 events
+INFO 2026-09-23 13:13:19,972 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 2 events
+INFO 2026-09-23 13:13:22,000 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 10 events
+INFO 2026-09-23 13:13:24,036 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 19 events
+INFO 2026-09-23 13:13:25,054 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 4 events
+INFO 2026-09-23 13:13:26,188 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 29 events
+INFO 2026-09-23 13:13:27,144 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 12 events
+INFO 2026-09-23 13:13:27,347 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 7 events
+INFO 2026-09-23 13:13:28,278 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 18 events
+INFO 2026-09-23 13:13:29,497 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 35 events
+INFO 2026-09-23 13:13:30,462 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 21 events
+INFO 2026-09-23 13:13:30,687 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 6 events
+INFO 2026-09-23 13:13:31,713 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 37 events
+INFO 2026-09-23 13:13:32,951 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 38 events
+INFO 2026-09-23 13:13:34,053 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 40 events
+INFO 2026-09-23 13:13:35,304 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 50 events
+INFO 2026-09-23 13:13:36,562 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 53 events
+INFO 2026-09-23 13:13:37,942 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 67 events
+INFO 2026-09-23 13:13:39,272 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 51 events
+INFO 2026-09-23 13:13:40,900 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 90 events
+INFO 2026-09-23 13:13:42,053 signals 13 125979994351296 resync_all_gateway_keys: reconciled 1 active gateway keys into Redis (pruned 0 inactive, reaped 0 orphan)
+INFO 2026-09-23 13:13:42,054 apps 13 125979994351296 Gateway-key resync reconciled 1 active keys into Redis
+INFO 2026-09-23 13:13:42,067 signals 12 125979994351296 resync_all_gateway_keys: reconciled 1 active gateway keys into Redis (pruned 0 inactive, reaped 0 orphan)
+INFO 2026-09-23 13:13:42,068 apps 12 125979994351296 Gateway-key resync reconciled 1 active keys into Redis
+INFO 2026-09-23 13:13:42,074 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 83 events
+INFO 2026-09-23 13:13:44,156 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 127 events
+INFO 2026-09-23 13:13:46,322 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 133 events
+INFO 2026-09-23 13:13:48,602 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 142 events
+INFO 2026-09-23 13:13:50,737 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 134 events
+INFO 2026-09-23 13:13:53,391 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 171 events
+INFO 2026-09-23 13:13:55,546 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 155 events
+INFO 2026-09-23 13:13:58,352 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 212 events
+INFO 2026-09-23 13:14:01,427 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 182 events
+INFO 2026-09-23 13:14:03,659 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 171 events
+INFO 2026-09-23 13:14:06,350 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 190 events
+INFO 2026-09-23 13:14:08,439 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 158 events
+INFO 2026-09-23 13:14:10,061 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 122 events
+INFO 2026-09-23 13:14:11,880 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 127 events
+INFO 2026-09-23 13:14:13,597 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 115 events
+INFO 2026-09-23 13:14:15,156 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 127 events
+INFO 2026-09-23 13:14:16,915 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 126 events
+INFO 2026-09-23 13:14:18,225 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 75 events
+INFO 2026-09-23 13:14:20,128 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 120 events
+INFO 2026-09-23 13:14:22,348 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 142 events
+INFO 2026-09-23 13:14:24,359 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 138 events
+INFO 2026-09-23 13:14:25,660 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 117 events
+INFO 2026-09-23 13:14:27,703 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 135 events
+INFO 2026-09-23 13:14:29,977 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 149 events
+INFO 2026-09-23 13:14:32,281 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 154 events
+INFO 2026-09-23 13:14:34,644 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 164 events
+INFO 2026-09-23 13:14:37,075 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 150 events
+INFO 2026-09-23 13:14:39,443 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 174 events
+INFO 2026-09-23 13:14:41,954 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 158 events
+INFO 2026-09-23 13:14:44,142 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 162 events
+INFO 2026-09-23 13:14:46,665 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 149 events
+INFO 2026-09-23 13:14:48,990 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 162 events
+INFO 2026-09-23 13:14:51,213 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 159 events
+INFO 2026-09-23 13:14:53,621 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 145 events
+INFO 2026-09-23 13:14:55,746 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 150 events
+INFO 2026-09-23 13:14:58,332 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 176 events
+INFO 2026-09-23 13:15:00,541 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 149 events
+INFO 2026-09-23 13:15:03,228 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 170 events
+INFO 2026-09-23 13:15:05,091 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 148 events
+INFO 2026-09-23 13:15:06,690 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 102 events
+INFO 2026-09-23 13:15:08,575 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 111 events
+INFO 2026-09-23 13:15:09,975 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 129 events
+INFO 2026-09-23 13:15:11,705 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 108 events
+INFO 2026-09-23 13:15:13,224 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 105 events
+INFO 2026-09-23 13:15:14,739 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 100 events
+INFO 2026-09-23 13:15:16,332 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 131 events
+INFO 2026-09-23 13:15:17,529 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 43 events
+INFO 2026-09-23 13:15:18,487 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 93 events
+INFO 2026-09-23 13:15:20,157 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 88 events
+INFO 2026-09-23 13:15:21,618 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 93 events
+INFO 2026-09-23 13:15:23,092 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 99 events
+INFO 2026-09-23 13:15:24,558 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 93 events
+INFO 2026-09-23 13:15:26,346 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 122 events
+INFO 2026-09-23 13:15:27,560 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 90 events
+INFO 2026-09-23 13:15:29,554 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 128 events
+INFO 2026-09-23 13:15:31,646 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 129 events
+INFO 2026-09-23 13:15:32,978 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 114 events
+INFO 2026-09-23 13:15:34,960 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 132 events
+INFO 2026-09-23 13:15:37,123 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 126 events
+INFO 2026-09-23 13:15:39,575 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 149 events
+INFO 2026-09-23 13:15:41,600 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 147 events
+INFO 2026-09-23 13:15:42,920 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 104 events
+INFO 2026-09-23 13:15:44,910 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 104 events
+INFO 2026-09-23 13:15:47,133 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 117 events
+INFO 2026-09-23 13:15:49,323 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 159 events
+INFO 2026-09-23 13:15:50,256 tasks 12 125980002744000 drain_telemetry_from_redis: created 1 isolation bell notifications
+INFO 2026-09-23 13:15:50,261 tasks 12 125980002744000 Auto-created 1 SecurityIncidents
+INFO 2026-09-23 13:15:51,702 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 150 events
+INFO 2026-09-23 13:15:52,815 tasks 13 125980002744000 drain_telemetry_from_redis: created 1 isolation bell notifications
+INFO 2026-09-23 13:15:52,819 tasks 13 125980002744000 Auto-created 1 SecurityIncidents
+INFO 2026-09-23 13:15:53,969 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 161 events
+INFO 2026-09-23 13:15:56,773 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 192 events
+INFO 2026-09-23 13:15:58,811 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 152 events
+WARNING 2026-09-23 13:16:00,016 tasks 13 125980002744000 Skipping unscoped telemetry event (invalid organization_id): event_type=stream_complete
+WARNING 2026-09-23 13:16:00,069 tasks 13 125980002744000 Skipping unscoped telemetry event (invalid organization_id): event_type=stream_complete
+INFO 2026-09-23 13:16:00,782 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 150 events
+INFO 2026-09-23 13:16:02,500 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 165 events
+INFO 2026-09-23 13:16:04,242 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 119 events
+INFO 2026-09-23 13:16:06,369 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 127 events
+INFO 2026-09-23 13:16:08,819 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 163 events
+INFO 2026-09-23 13:16:10,831 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 147 events
+INFO 2026-09-23 13:16:12,830 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 185 events
+INFO 2026-09-23 13:16:15,722 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 189 events
+INFO 2026-09-23 13:16:17,779 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 141 events
+INFO 2026-09-23 13:16:19,886 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 186 events
+WARNING 2026-09-23 13:16:21,714 tasks 13 125980002744000 Skipping unscoped telemetry event (invalid organization_id): event_type=stream_complete
+INFO 2026-09-23 13:16:22,539 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 204 events
+INFO 2026-09-23 13:16:23,725 tasks 13 125980002744000 drain_telemetry_from_redis: created 1 isolation bell notifications
+INFO 2026-09-23 13:16:23,729 tasks 13 125980002744000 Auto-created 1 SecurityIncidents
+WARNING 2026-09-23 13:16:24,097 tasks 12 125980002744000 Skipping unscoped telemetry event (invalid organization_id): event_type=stream_complete
+INFO 2026-09-23 13:16:24,756 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 151 events
+INFO 2026-09-23 13:16:26,534 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 170 events
+INFO 2026-09-23 13:16:28,382 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 145 events
+WARNING 2026-09-23 13:16:29,626 tasks 13 125980002744000 Skipping unscoped telemetry event (invalid organization_id): event_type=stream_complete
+INFO 2026-09-23 13:16:30,168 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 133 events
+INFO 2026-09-23 13:16:30,944 tasks 13 125980002744000 drain_telemetry_from_redis: created 2 isolation bell notifications
+INFO 2026-09-23 13:16:30,949 tasks 13 125980002744000 Auto-created 2 SecurityIncidents
+INFO 2026-09-23 13:16:31,764 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 104 events
+INFO 2026-09-23 13:16:33,735 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 147 events
+INFO 2026-09-23 13:16:36,322 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 196 events
+WARNING 2026-09-23 13:16:38,806 tasks 13 125980002744000 Skipping unscoped telemetry event (invalid organization_id): event_type=stream_complete
+INFO 2026-09-23 13:16:39,772 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 233 events
+INFO 2026-09-23 13:16:41,186 tasks 13 125980002744000 drain_telemetry_from_redis: created 1 isolation bell notifications
+INFO 2026-09-23 13:16:41,190 tasks 13 125980002744000 Auto-created 1 SecurityIncidents
+INFO 2026-09-23 13:16:43,022 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 221 events
+INFO 2026-09-23 13:16:44,397 tasks 12 125980002744000 drain_telemetry_from_redis: created 1 isolation bell notifications
+INFO 2026-09-23 13:16:44,400 tasks 12 125980002744000 Auto-created 1 SecurityIncidents
+WARNING 2026-09-23 13:16:45,396 tasks 13 125980002744000 Skipping unscoped telemetry event (invalid organization_id): event_type=stream_complete
+INFO 2026-09-23 13:16:46,503 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 249 events
+INFO 2026-09-23 13:16:49,678 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 250 events
+INFO 2026-09-23 13:16:52,402 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 202 events
+WARNING 2026-09-23 13:16:54,378 tasks 12 125980002744000 Skipping unscoped telemetry event (invalid organization_id): event_type=stream_complete
+INFO 2026-09-23 13:16:55,537 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 249 events
+INFO 2026-09-23 13:16:58,923 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 250 events
+WARNING 2026-09-23 13:17:01,220 tasks 12 125980002744000 Skipping unscoped telemetry event (invalid organization_id): event_type=stream_complete
+INFO 2026-09-23 13:17:02,121 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 220 events
+WARNING 2026-09-23 13:17:03,783 tasks 13 125980002744000 Skipping unscoped telemetry event (invalid organization_id): event_type=stream_complete
+INFO 2026-09-23 13:17:04,994 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 249 events
+WARNING 2026-09-23 13:17:07,416 tasks 12 125980002744000 Skipping unscoped telemetry event (invalid organization_id): event_type=stream_complete
+INFO 2026-09-23 13:17:08,553 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 249 events
+INFO 2026-09-23 13:17:11,801 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 250 events
+INFO 2026-09-23 13:17:15,362 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 250 events
+INFO 2026-09-23 13:17:16,773 tasks 12 125980002744000 drain_telemetry_from_redis: created 1 isolation bell notifications
+INFO 2026-09-23 13:17:16,776 tasks 12 125980002744000 Auto-created 1 SecurityIncidents
+INFO 2026-09-23 13:17:18,509 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 250 events
+INFO 2026-09-23 13:17:19,955 tasks 13 125980002744000 drain_telemetry_from_redis: created 1 isolation bell notifications
+INFO 2026-09-23 13:17:19,959 tasks 13 125980002744000 Auto-created 1 SecurityIncidents
+INFO 2026-09-23 13:17:21,915 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 250 events
+WARNING 2026-09-23 13:17:24,074 tasks 13 125980002744000 Skipping unscoped telemetry event (invalid organization_id): event_type=stream_complete
+INFO 2026-09-23 13:17:25,294 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 249 events
+INFO 2026-09-23 13:17:28,806 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 250 events
+INFO 2026-09-23 13:17:30,332 tasks 12 125980002744000 drain_telemetry_from_redis: created 1 isolation bell notifications
+INFO 2026-09-23 13:17:30,336 tasks 12 125980002744000 Auto-created 1 SecurityIncidents
+INFO 2026-09-23 13:17:31,914 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 250 events
+INFO 2026-09-23 13:17:34,196 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 187 events
+INFO 2026-09-23 13:17:36,401 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 185 events
+INFO 2026-09-23 13:17:39,213 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 191 events
+INFO 2026-09-23 13:17:41,245 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 161 events
+INFO 2026-09-23 13:17:43,141 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 152 events
+WARNING 2026-09-23 13:17:44,205 tasks 13 125980002744000 Skipping unscoped telemetry event (invalid organization_id): event_type=stream_complete
+INFO 2026-09-23 13:17:45,073 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 181 events
+INFO 2026-09-23 13:17:48,068 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 181 events
+WARNING 2026-09-23 13:17:49,386 tasks 13 125980002744000 Skipping unscoped telemetry event (invalid organization_id): event_type=stream_complete
+WARNING 2026-09-23 13:17:49,387 tasks 13 125980002744000 Skipping unscoped telemetry event (invalid organization_id): event_type=stream_complete
+INFO 2026-09-23 13:17:50,132 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 185 events
+WARNING 2026-09-23 13:17:52,168 tasks 12 125980002744000 Skipping unscoped telemetry event (invalid organization_id): event_type=stream_complete
+WARNING 2026-09-23 13:17:52,270 tasks 12 125980002744000 Skipping unscoped telemetry event (invalid organization_id): event_type=stream_complete
+INFO 2026-09-23 13:17:53,170 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 181 events
+WARNING 2026-09-23 13:17:54,324 tasks 13 125980002744000 Skipping unscoped telemetry event (invalid organization_id): event_type=stream_complete
+INFO 2026-09-23 13:17:55,089 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 155 events
+WARNING 2026-09-23 13:17:56,265 tasks 12 125980002744000 Skipping unscoped telemetry event (invalid organization_id): event_type=stream_complete
+INFO 2026-09-23 13:17:56,779 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 156 events
+INFO 2026-09-23 13:17:58,760 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 130 events
+INFO 2026-09-23 13:18:00,311 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 105 events
+WARNING 2026-09-23 13:18:01,607 tasks 13 125980002744000 Skipping unscoped telemetry event (invalid organization_id): event_type=stream_complete
+INFO 2026-09-23 13:18:02,386 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 175 events
+INFO 2026-09-23 13:18:04,610 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 180 events
+INFO 2026-09-23 13:18:05,650 tasks 12 125980002744000 drain_telemetry_from_redis: created 1 isolation bell notifications
+INFO 2026-09-23 13:18:05,655 tasks 12 125980002744000 Auto-created 1 SecurityIncidents
+WARNING 2026-09-23 13:18:06,578 tasks 13 125980002744000 Skipping unscoped telemetry event (invalid organization_id): event_type=stream_complete
+INFO 2026-09-23 13:18:07,443 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 192 events
+INFO 2026-09-23 13:18:10,879 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 222 events
+INFO 2026-09-23 13:18:13,858 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 247 events
+INFO 2026-09-23 13:18:17,418 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 250 events
+INFO 2026-09-23 13:18:19,004 tasks 12 125980002744000 drain_telemetry_from_redis: created 1 isolation bell notifications
+INFO 2026-09-23 13:18:19,008 tasks 12 125980002744000 Auto-created 1 SecurityIncidents
+INFO 2026-09-23 13:18:20,476 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 241 events
+WARNING 2026-09-23 13:18:22,184 tasks 12 125980002744000 Skipping unscoped telemetry event (invalid organization_id): event_type=stream_complete
+INFO 2026-09-23 13:18:23,127 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 218 events
+INFO 2026-09-23 13:18:24,313 tasks 12 125980002744000 drain_telemetry_from_redis: created 1 isolation bell notifications
+INFO 2026-09-23 13:18:24,316 tasks 12 125980002744000 Auto-created 1 SecurityIncidents
+WARNING 2026-09-23 13:18:25,017 tasks 13 125980002744000 Skipping unscoped telemetry event (invalid organization_id): event_type=stream_complete
+INFO 2026-09-23 13:18:25,598 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 185 events
+WARNING 2026-09-23 13:18:27,519 tasks 12 125980002744000 Skipping unscoped telemetry event (invalid organization_id): event_type=stream_complete
+INFO 2026-09-23 13:18:28,383 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 181 events
+INFO 2026-09-23 13:18:30,817 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 198 events
+INFO 2026-09-23 13:18:33,275 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 181 events
+INFO 2026-09-23 13:18:35,836 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 184 events
+INFO 2026-09-23 13:18:38,300 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 197 events
+INFO 2026-09-23 13:18:40,780 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 185 events
+INFO 2026-09-23 13:18:42,138 signals 13 125979994351296 resync_all_gateway_keys: reconciled 1 active gateway keys into Redis (pruned 0 inactive, reaped 0 orphan)
+INFO 2026-09-23 13:18:42,138 apps 13 125979994351296 Gateway-key resync reconciled 1 active keys into Redis
+INFO 2026-09-23 13:18:42,150 signals 12 125979994351296 resync_all_gateway_keys: reconciled 1 active gateway keys into Redis (pruned 0 inactive, reaped 0 orphan)
+INFO 2026-09-23 13:18:42,151 apps 12 125979994351296 Gateway-key resync reconciled 1 active keys into Redis
+INFO 2026-09-23 13:18:43,228 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 180 events
+INFO 2026-09-23 13:18:46,157 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 214 events
+WARNING 2026-09-23 13:18:48,417 tasks 12 125980002744000 Skipping unscoped telemetry event (invalid organization_id): event_type=stream_complete
+WARNING 2026-09-23 13:18:48,549 tasks 12 125980002744000 Skipping unscoped telemetry event (invalid organization_id): event_type=stream_complete
+INFO 2026-09-23 13:18:49,400 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 226 events
+INFO 2026-09-23 13:18:52,584 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 236 events
+INFO 2026-09-23 13:18:55,775 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 250 events
+INFO 2026-09-23 13:18:58,843 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 199 events
+INFO 2026-09-23 13:19:01,079 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 174 events
+INFO 2026-09-23 13:19:04,322 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 244 events
+INFO 2026-09-23 13:19:07,235 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 222 events
+INFO 2026-09-23 13:19:09,796 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 202 events
+INFO 2026-09-23 13:19:12,566 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 217 events
+INFO 2026-09-23 13:19:14,964 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 196 events
+WARNING 2026-09-23 13:19:16,816 tasks 12 125980002744000 Skipping unscoped telemetry event (invalid organization_id): event_type=stream_complete
+WARNING 2026-09-23 13:19:16,860 tasks 12 125980002744000 Skipping unscoped telemetry event (invalid organization_id): event_type=stream_complete
+INFO 2026-09-23 13:19:17,618 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 174 events
+INFO 2026-09-23 13:19:20,078 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 174 events
+WARNING 2026-09-23 13:19:21,726 tasks 12 125980002744000 Skipping unscoped telemetry event (invalid organization_id): event_type=stream_complete
+INFO 2026-09-23 13:19:22,572 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 202 events
+INFO 2026-09-23 13:19:24,986 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 183 events
+WARNING 2026-09-23 13:19:26,737 tasks 12 125980002744000 Skipping unscoped telemetry event (invalid organization_id): event_type=stream_complete
+INFO 2026-09-23 13:19:27,540 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 188 events
+WARNING 2026-09-23 13:19:29,243 tasks 13 125980002744000 Skipping unscoped telemetry event (invalid organization_id): event_type=stream_complete
+INFO 2026-09-23 13:19:29,915 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 156 events
+WARNING 2026-09-23 13:19:31,801 tasks 12 125980002744000 Skipping unscoped telemetry event (invalid organization_id): event_type=stream_complete
+INFO 2026-09-23 13:19:32,749 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 232 events
+INFO 2026-09-23 13:19:35,893 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 222 events
+WARNING 2026-09-23 13:19:38,154 tasks 12 125980002744000 Skipping unscoped telemetry event (invalid organization_id): event_type=stream_complete
+WARNING 2026-09-23 13:19:38,200 tasks 12 125980002744000 Skipping unscoped telemetry event (invalid organization_id): event_type=stream_complete
+INFO 2026-09-23 13:19:39,467 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 248 events
+INFO 2026-09-23 13:19:42,539 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 235 events
+INFO 2026-09-23 13:19:43,856 tasks 13 125980002744000 drain_telemetry_from_redis: created 1 isolation bell notifications
+INFO 2026-09-23 13:19:43,860 tasks 13 125980002744000 Auto-created 1 SecurityIncidents
+INFO 2026-09-23 13:19:44,858 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 202 events
+WARNING 2026-09-23 13:19:46,997 tasks 13 125980002744000 Skipping unscoped telemetry event (invalid organization_id): event_type=stream_complete
+WARNING 2026-09-23 13:19:47,040 tasks 13 125980002744000 Skipping unscoped telemetry event (invalid organization_id): event_type=stream_complete
+INFO 2026-09-23 13:19:48,099 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 240 events
+INFO 2026-09-23 13:19:49,916 tasks 13 125980002744000 drain_telemetry_from_redis: created 1 isolation bell notifications
+INFO 2026-09-23 13:19:49,920 tasks 13 125980002744000 Auto-created 1 SecurityIncidents
+INFO 2026-09-23 13:19:51,363 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 229 events
+INFO 2026-09-23 13:19:53,902 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 191 events
+WARNING 2026-09-23 13:19:56,023 tasks 12 125980002744000 Skipping unscoped telemetry event (invalid organization_id): event_type=stream_complete
+INFO 2026-09-23 13:19:56,722 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 83 events
+INFO 2026-09-23 13:19:58,780 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 53 events
+INFO 2026-09-23 13:19:59,477 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 22 events
+INFO 2026-09-23 13:20:00,226 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 9 events
+INFO 2026-09-23 13:20:00,663 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 1 events
+INFO 2026-09-23 13:20:01,429 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 11 events
+INFO 2026-09-23 13:20:01,705 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 2 events
+WARNING 2026-09-23 13:20:03,520 tasks 13 125980002744000 Skipping unscoped telemetry event (invalid organization_id): event_type=stream_complete
+INFO 2026-09-23 13:20:03,559 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 4 events
+INFO 2026-09-23 13:20:03,740 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 1 events
+INFO 2026-09-23 13:20:04,791 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 3 events
+INFO 2026-09-23 13:20:05,642 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 3 events
+INFO 2026-09-23 13:20:05,828 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 1 events
+INFO 2026-09-23 13:20:06,754 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 8 events
+INFO 2026-09-23 13:20:07,843 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 2 events
+INFO 2026-09-23 13:20:08,975 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 11 events
+INFO 2026-09-23 13:20:09,878 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 1 events
+INFO 2026-09-23 13:20:10,927 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 2 events
+INFO 2026-09-23 13:20:11,994 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 4 events
+INFO 2026-09-23 13:20:13,058 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 3 events
+INFO 2026-09-23 13:20:14,172 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 8 events
+INFO 2026-09-23 13:20:16,131 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 2 events
+INFO 2026-09-23 13:20:16,260 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 1 events
+INFO 2026-09-23 13:20:17,274 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 11 events
+INFO 2026-09-23 13:20:19,431 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 14 events
+INFO 2026-09-23 13:20:20,574 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 6 events
+INFO 2026-09-23 13:20:21,577 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 5 events
+INFO 2026-09-23 13:20:21,636 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 1 events
+INFO 2026-09-23 13:20:22,687 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 6 events
+INFO 2026-09-23 13:20:23,724 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 6 events
+INFO 2026-09-23 13:20:24,830 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 7 events
+INFO 2026-09-23 13:20:25,876 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 9 events
+INFO 2026-09-23 13:20:26,938 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 4 events
+INFO 2026-09-23 13:20:28,036 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 11 events
+WARNING 2026-09-23 13:20:28,978 tasks 12 125980002744000 Skipping unscoped telemetry event (invalid organization_id): event_type=stream_complete
+INFO 2026-09-23 13:20:29,054 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 7 events
+INFO 2026-09-23 13:20:30,164 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 7 events
+INFO 2026-09-23 13:20:31,183 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 6 events
+INFO 2026-09-23 13:20:32,376 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 14 events
+INFO 2026-09-23 13:20:33,360 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 11 events
+INFO 2026-09-23 13:20:33,473 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 1 events
+INFO 2026-09-23 13:20:34,547 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 9 events
+INFO 2026-09-23 13:20:35,549 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 5 events
+INFO 2026-09-23 13:20:36,674 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 8 events
+INFO 2026-09-23 13:20:37,737 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 10 events
+INFO 2026-09-23 13:20:38,816 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 7 events
+INFO 2026-09-23 13:20:39,956 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 12 events
+INFO 2026-09-23 13:20:40,937 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 5 events
+INFO 2026-09-23 13:20:42,137 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 21 events
+INFO 2026-09-23 13:20:43,118 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 6 events
+INFO 2026-09-23 13:20:44,257 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 10 events
+INFO 2026-09-23 13:20:45,077 apps 13 125979913615040 Analytics rollup refresh: {'skipped': True, 'reason': 'lock'}
+INFO 2026-09-23 13:20:45,389 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 9 events
+INFO 2026-09-23 13:20:46,513 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 16 events
+INFO 2026-09-23 13:20:47,697 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 21 events
+INFO 2026-09-23 13:20:48,750 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 12 events
+INFO 2026-09-23 13:20:48,871 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 3 events
+INFO 2026-09-23 13:20:49,995 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 15 events
+INFO 2026-09-23 13:20:50,942 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 4 events
+INFO 2026-09-23 13:20:51,151 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 5 events
+INFO 2026-09-23 13:20:52,094 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 11 events
+INFO 2026-09-23 13:20:52,270 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 7 events
+INFO 2026-09-23 13:20:53,253 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 8 events
+INFO 2026-09-23 13:20:53,345 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 2 events
+INFO 2026-09-23 13:20:54,408 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 13 events
+INFO 2026-09-23 13:20:55,437 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 8 events
+INFO 2026-09-23 13:20:55,527 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 3 events
+INFO 2026-09-23 13:20:56,546 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 5 events
+WARNING 2026-09-23 13:20:57,570 tasks 13 125980002744000 Skipping unscoped telemetry event (invalid organization_id): event_type=stream_complete
+INFO 2026-09-23 13:20:57,788 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 21 events
+INFO 2026-09-23 13:20:58,776 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 17 events
+INFO 2026-09-23 13:20:58,982 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 6 events
+INFO 2026-09-23 13:21:00,071 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 17 events
+INFO 2026-09-23 13:21:01,116 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 10 events
+INFO 2026-09-23 13:21:01,253 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 6 events
+INFO 2026-09-23 13:21:02,283 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 11 events
+INFO 2026-09-23 13:21:03,412 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 10 events
+INFO 2026-09-23 13:21:04,517 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 16 events
+INFO 2026-09-23 13:21:05,679 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 17 events
+INFO 2026-09-23 13:21:06,780 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 16 events
+INFO 2026-09-23 13:21:08,095 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 26 events
+INFO 2026-09-23 13:21:09,124 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 20 events
+WARNING 2026-09-23 13:21:09,270 tasks 12 125980002744000 Skipping unscoped telemetry event (invalid organization_id): event_type=stream_complete
+INFO 2026-09-23 13:21:09,344 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 8 events
+INFO 2026-09-23 13:21:10,481 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 19 events
+INFO 2026-09-23 13:21:11,588 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 16 events
+INFO 2026-09-23 13:21:12,689 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 8 events
+INFO 2026-09-23 13:21:13,964 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 23 events
+INFO 2026-09-23 13:21:14,907 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 16 events
+INFO 2026-09-23 13:21:15,156 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 3 events
+WARNING 2026-09-23 13:21:15,992 tasks 13 125980002744000 Skipping unscoped telemetry event (invalid organization_id): event_type=stream_complete
+INFO 2026-09-23 13:21:16,122 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 11 events
+INFO 2026-09-23 13:21:17,413 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 20 events
+INFO 2026-09-23 13:21:18,511 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 28 events
+INFO 2026-09-23 13:21:19,832 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 24 events
+INFO 2026-09-23 13:21:21,001 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 21 events
+INFO 2026-09-23 13:21:22,386 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 33 events
+INFO 2026-09-23 13:21:23,354 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 17 events
+INFO 2026-09-23 13:21:23,735 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 13 events
+INFO 2026-09-23 13:21:24,662 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 15 events
+INFO 2026-09-23 13:21:24,907 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 7 events
+INFO 2026-09-23 13:21:26,051 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 26 events
+INFO 2026-09-23 13:21:27,322 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 28 events
+INFO 2026-09-23 13:21:28,622 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 32 events
+INFO 2026-09-23 13:21:30,036 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 40 events
+INFO 2026-09-23 13:21:31,391 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 39 events
+INFO 2026-09-23 13:21:32,926 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 48 events
+INFO 2026-09-23 13:21:34,216 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 52 events
+INFO 2026-09-23 13:21:35,961 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 85 events
+INFO 2026-09-23 13:21:36,651 tasks 13 125980002744000 drain_telemetry_from_redis: inserted 25 events
+INFO 2026-09-23 13:21:37,426 tasks 12 125980002744000 drain_telemetry_from_redis: inserted 6 events

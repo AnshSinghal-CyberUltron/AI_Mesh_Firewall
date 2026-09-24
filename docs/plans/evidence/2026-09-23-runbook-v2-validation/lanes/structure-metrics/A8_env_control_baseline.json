@@ -1,0 +1,367 @@
+{
+ "scope": [
+  "control"
+ ],
+ "n_files": 204,
+ "wrappers_detected": {},
+ "distinct_literal_names": 98,
+ "literal_call_sites": 130,
+ "dynamic_key_sites": 0,
+ "total_sites_incl_dynamic": 130,
+ "distinct_names_direct_only": 98,
+ "call_sites_direct_only": 130,
+ "by_kind": {
+  "environ.get": 98,
+  "environ.pop": 1,
+  "environ.setdefault": 9,
+  "getenv": 22
+ },
+ "names": {
+  "AGENT_API_KEY": [
+   "control/ai_mesh_control/main_app/settings.py:320"
+  ],
+  "AGENT_ARTIFACTS_DIR": [
+   "control/ai_mesh_control/main_app/settings.py:382"
+  ],
+  "AGENT_DOWNLOAD_URL": [
+   "control/ai_mesh_control/main_app/settings.py:337"
+  ],
+  "AGENT_MIN_VERSION": [
+   "control/ai_mesh_control/main_app/settings.py:335"
+  ],
+  "AGENT_RECOMMENDED_VERSION": [
+   "control/ai_mesh_control/main_app/settings.py:336"
+  ],
+  "ALLOWED_HOSTS": [
+   "control/ai_mesh_control/main_app/settings.py:72"
+  ],
+  "ANALYTICS_MAX_INFLIGHT": [
+   "control/ai_mesh_control/policy/analytics_concurrency.py:10"
+  ],
+  "ANALYTICS_ROLLUP_REFRESH": [
+   "control/ai_mesh_control/policy/analytics_rollup_refresh.py:14"
+  ],
+  "ANALYTICS_ROLLUP_REFRESH_HOURS": [
+   "control/ai_mesh_control/policy/analytics_rollup_refresh.py:26"
+  ],
+  "ANALYTICS_ROLLUP_REFRESH_SEC": [
+   "control/ai_mesh_control/main_app/settings.py:504",
+   "control/ai_mesh_control/policy/analytics_rollup_refresh.py:19"
+  ],
+  "ANALYTICS_SERVE_ROLLUPS": [
+   "control/ai_mesh_control/policy/analytics_rollup.py:65",
+   "control/ai_mesh_control/policy/management/commands/compare_analytics_rollups.py:41",
+   "control/ai_mesh_control/policy/management/commands/compare_analytics_rollups.py:96"
+  ],
+  "APP_LOG_LEVEL": [
+   "control/ai_mesh_control/main_app/settings.py:967"
+  ],
+  "ASGI_ALLOWED_ORIGINS": [
+   "control/ai_mesh_control/main_app/settings.py:195",
+   "control/ai_mesh_control/main_app/settings.py:194"
+  ],
+  "ASGI_THREADS": [
+   "control/ai_mesh_control/main_app/asgi.py:54"
+  ],
+  "AWS_ACCESS_KEY_ID": [
+   "control/ai_mesh_control/core/poc_views.py:72",
+   "control/ai_mesh_control/security_engines/bedrock_client.py:152"
+  ],
+  "AWS_CA_BUNDLE": [
+   "control/ai_mesh_control/security_engines/bedrock_client.py:37"
+  ],
+  "AWS_DEFAULT_REGION": [
+   "control/ai_mesh_control/main_app/settings.py:407"
+  ],
+  "AWS_REGION": [
+   "control/ai_mesh_control/core/poc_views.py:33"
+  ],
+  "AWS_SECRET_ACCESS_KEY": [
+   "control/ai_mesh_control/core/poc_views.py:73"
+  ],
+  "BACKEND_PUBLIC_URL": [
+   "control/ai_mesh_control/main_app/settings.py:387",
+   "control/ai_mesh_control/main_app/settings.py:959"
+  ],
+  "BEDROCK_COMPONENT_LOG_LEVEL": [
+   "control/ai_mesh_control/main_app/settings.py:969"
+  ],
+  "BEDROCK_DEPLOYMENT_PATH": [
+   "control/ai_mesh_control/security_engines/bedrock_scanner.py:380"
+  ],
+  "BEDROCK_MAX_TOKENS": [
+   "control/ai_mesh_control/security_engines/bedrock_scanner.py:360"
+  ],
+  "BEDROCK_MODEL": [
+   "control/ai_mesh_control/security_engines/bedrock_client.py:130",
+   "control/ai_mesh_control/security_engines/bedrock_client.py:268",
+   "control/ai_mesh_control/security_engines/bedrock_scanner.py:345"
+  ],
+  "BEDROCK_REGION": [
+   "control/ai_mesh_control/main_app/settings.py:407",
+   "control/ai_mesh_control/security_engines/bedrock_client.py:129",
+   "control/ai_mesh_control/security_engines/bedrock_client.py:267"
+  ],
+  "BEDROCK_TIMEOUT": [
+   "control/ai_mesh_control/security_engines/bedrock_client.py:269"
+  ],
+  "BEDROCK_VERIFY_SSL": [
+   "control/ai_mesh_control/security_engines/bedrock_client.py:33"
+  ],
+  "CELERY_BROKER_URL": [
+   "control/ai_mesh_control/main_app/settings.py:404"
+  ],
+  "CELERY_SQS_POLLING_INTERVAL": [
+   "control/ai_mesh_control/main_app/settings.py:411"
+  ],
+  "CELERY_SQS_PREDEFINED_QUEUES": [
+   "control/ai_mesh_control/main_app/settings.py:413"
+  ],
+  "CELERY_SQS_VISIBILITY_TIMEOUT": [
+   "control/ai_mesh_control/main_app/settings.py:410"
+  ],
+  "CELERY_WORKER_LOG_FORMAT": [
+   "control/ai_mesh_control/main_app/settings.py:451"
+  ],
+  "CELERY_WORKER_TASK_LOG_FORMAT": [
+   "control/ai_mesh_control/main_app/settings.py:455"
+  ],
+  "CHANNEL_LAYERS_REDIS_URL": [
+   "control/ai_mesh_control/main_app/settings.py:166"
+  ],
+  "CORS_ALLOWED_ORIGINS": [
+   "control/ai_mesh_control/main_app/settings.py:939",
+   "control/ai_mesh_control/main_app/settings.py:938"
+  ],
+  "CSRF_TRUSTED_ORIGINS": [
+   "control/ai_mesh_control/main_app/settings.py:953"
+  ],
+  "CURL_CA_BUNDLE": [
+   "control/ai_mesh_control/security_engines/bedrock_client.py:35"
+  ],
+  "DATABASE_ANALYTICS_URL": [
+   "control/ai_mesh_control/main_app/settings.py:254"
+  ],
+  "DATABASE_REPLICA_URL": [
+   "control/ai_mesh_control/main_app/settings.py:218"
+  ],
+  "DATABASE_URL": [
+   "control/ai_mesh_control/main_app/settings.py:205"
+  ],
+  "DATA_UPLOAD_MAX_MEMORY_SIZE": [
+   "control/ai_mesh_control/main_app/settings.py:310"
+  ],
+  "DATA_UPLOAD_MAX_NUMBER_FIELDS": [
+   "control/ai_mesh_control/main_app/settings.py:313"
+  ],
+  "DEBUG": [
+   "control/ai_mesh_control/main_app/settings.py:32"
+  ],
+  "DISABLE_SERVER_SIDE_CURSORS": [
+   "control/ai_mesh_control/main_app/settings.py:259",
+   "control/ai_mesh_control/main_app/settings.py:213",
+   "control/ai_mesh_control/main_app/settings.py:225"
+  ],
+  "DJANGO_CACHE_BACKEND": [
+   "control/ai_mesh_control/main_app/settings.py:275"
+  ],
+  "DJANGO_CACHE_KEY_PREFIX": [
+   "control/ai_mesh_control/main_app/settings.py:292"
+  ],
+  "DJANGO_CACHE_MAX_CONNECTIONS": [
+   "control/ai_mesh_control/main_app/settings.py:286"
+  ],
+  "DJANGO_CACHE_TIMEOUT_SECONDS": [
+   "control/ai_mesh_control/main_app/settings.py:293"
+  ],
+  "DJANGO_DB_PATH": [
+   "control/ai_mesh_control/main_app/settings.py:238"
+  ],
+  "DJANGO_LOG_JSON": [
+   "control/ai_mesh_control/main_app/settings.py:973"
+  ],
+  "DJANGO_SECRET_KEY": [
+   "control/ai_mesh_control/main_app/settings.py:35",
+   "control/ai_mesh_control/policy/signing.py:62"
+  ],
+  "DJANGO_SETTINGS_MODULE": [
+   "control/ai_mesh_control/main_app/asgi.py:24",
+   "control/ai_mesh_control/main_app/celery_app.py:7",
+   "control/ai_mesh_control/main_app/wsgi.py:14",
+   "control/ai_mesh_control/policy/_test_domain.py:1",
+   "control/manage.py:11",
+   "control/race_test_compiler.py:22"
+  ],
+  "ENABLE_TIER2": [
+   "control/ai_mesh_control/security_engines/integrated_scanner.py:66"
+  ],
+  "FRONTEND_ORIGIN": [
+   "control/ai_mesh_control/core/gateway_instance_views.py:75",
+   "control/ai_mesh_control/core/gateway_instance_views.py:51",
+   "control/ai_mesh_control/main_app/settings.py:942",
+   "control/ai_mesh_control/main_app/settings.py:959",
+   "control/ai_mesh_control/main_app/settings.py:943"
+  ],
+  "GATEWAY_INTERNAL_API_KEY": [
+   "control/ai_mesh_control/core/gateway_admin_proxy_views.py:53",
+   "control/ai_mesh_control/main_app/settings.py:324",
+   "control/ai_mesh_control/mcp_connector/views.py:387"
+  ],
+  "GATEWAY_KEY_RESYNC_INTERVAL_SEC": [
+   "control/ai_mesh_control/core/apps.py:94",
+   "control/ai_mesh_control/main_app/settings.py:491"
+  ],
+  "GATEWAY_PUBLIC_URL": [
+   "control/ai_mesh_control/main_app/settings.py:392",
+   "control/ai_mesh_control/main_app/settings.py:959"
+  ],
+  "GATEWAY_URL": [
+   "control/ai_mesh_control/core/gateway_admin_proxy_views.py:45",
+   "control/ai_mesh_control/mcp_connector/views.py:382",
+   "control/ai_mesh_control/mcp_connector/views.py:753",
+   "control/ai_mesh_control/mcp_connector/views.py:985"
+  ],
+  "JWT_SIGNING_KEY": [
+   "control/ai_mesh_control/main_app/settings.py:546"
+  ],
+  "LOGIN_THROTTLE_IP_RATE": [
+   "control/ai_mesh_control/main_app/settings.py:529"
+  ],
+  "LOGIN_THROTTLE_USER_RATE": [
+   "control/ai_mesh_control/main_app/settings.py:530"
+  ],
+  "LOG_LEVEL": [
+   "control/ai_mesh_control/main_app/settings.py:966"
+  ],
+  "MCP_ALLOW_INTERNAL_HOSTS": [
+   "control/ai_mesh_control/mcp_connector/_url_guard.py:36"
+  ],
+  "MCP_DISCOVER_HTTP_TIMEOUT": [
+   "control/ai_mesh_control/mcp_connector/views.py:83"
+  ],
+  "MCP_OAUTH_FRONTEND_URL": [
+   "control/ai_mesh_control/mcp_connector/views.py:3000"
+  ],
+  "MCP_OAUTH_REDIRECT_URI": [
+   "control/ai_mesh_control/mcp_connector/views.py:2992"
+  ],
+  "NUM_PROXIES": [
+   "control/ai_mesh_control/main_app/settings.py:538"
+  ],
+  "ORG_MSI_REQUIRED_FOR_UPSTREAM_CA": [
+   "control/ai_mesh_control/main_app/settings.py:397"
+  ],
+  "ORG_UPSTREAM_CA_MAX_BYTES": [
+   "control/ai_mesh_control/main_app/settings.py:395"
+  ],
+  "POC_S3_BUCKET": [
+   "control/ai_mesh_control/core/poc_views.py:32"
+  ],
+  "POLICY_AUDIT_SNIPPET_LENGTH": [
+   "control/ai_mesh_control/main_app/settings.py:332"
+  ],
+  "POLICY_AUDIT_STORE_PROMPT_RESPONSE": [
+   "control/ai_mesh_control/main_app/settings.py:327"
+  ],
+  "POLICY_SIGNING_KEY": [
+   "control/ai_mesh_control/policy/signing.py:56"
+  ],
+  "POLICY_WRITE_THROTTLE_RATE": [
+   "control/ai_mesh_control/main_app/settings.py:531"
+  ],
+  "POSTGRES_CONN_MAX_AGE": [
+   "control/ai_mesh_control/main_app/settings.py:258",
+   "control/ai_mesh_control/main_app/settings.py:212",
+   "control/ai_mesh_control/main_app/settings.py:224"
+  ],
+  "RATELIMIT_POLICY_CHECK_PER_MINUTE": [
+   "control/ai_mesh_control/main_app/settings.py:317"
+  ],
+  "REDIS_URL": [
+   "control/ai_mesh_control/main_app/settings.py:274"
+  ],
+  "REQUESTS_CA_BUNDLE": [
+   "control/ai_mesh_control/security_engines/bedrock_client.py:36"
+  ],
+  "ROUTING_RECONCILE_INTERVAL_SEC": [
+   "control/ai_mesh_control/main_app/settings.py:498"
+  ],
+  "SECURE_HSTS_PRELOAD": [
+   "control/ai_mesh_control/main_app/settings.py:92"
+  ],
+  "SECURE_HSTS_SECONDS": [
+   "control/ai_mesh_control/main_app/settings.py:89"
+  ],
+  "SECURE_SSL_REDIRECT": [
+   "control/ai_mesh_control/main_app/settings.py:82"
+  ],
+  "SIMULATOR_CLEAR_BLOCKED_KEYWORDS": [
+   "control/ai_mesh_control/core/simulator_seed.py:63"
+  ],
+  "SIMULATOR_DEFAULTS_ENABLED": [
+   "control/ai_mesh_control/core/gateway_views.py:27",
+   "control/ai_mesh_control/core/simulator_seed.py:114"
+  ],
+  "SIMULATOR_ORG_SLUG": [
+   "control/ai_mesh_control/core/simulator_seed.py:14"
+  ],
+  "SQLITE_TIMEOUT_SECONDS": [
+   "control/ai_mesh_control/main_app/settings.py:240"
+  ],
+  "SQL_LOG_LEVEL": [
+   "control/ai_mesh_control/main_app/settings.py:968"
+  ],
+  "TELEMETRY_DRAIN_BATCH_SIZE": [
+   "control/ai_mesh_control/main_app/settings.py:459"
+  ],
+  "TELEMETRY_DRAIN_INTERVAL_SEC": [
+   "control/ai_mesh_control/main_app/settings.py:460"
+  ],
+  "TELEMETRY_DRAIN_MODE": [
+   "control/ai_mesh_control/main_app/settings.py:462"
+  ],
+  "TELEMETRY_GATEWAY_JOB_DRAIN_INTERVAL_SEC": [
+   "control/ai_mesh_control/main_app/settings.py:461"
+  ],
+  "TEST_EMAIL": [
+   "control/ai_mesh_control/policy/management/commands/compare_analytics_rollups.py:28"
+  ],
+  "ZEROSHIELD_ADMIN_EMAIL": [
+   "control/ai_mesh_control/auth/management/commands/ensure_zeroshield_admin.py:64"
+  ],
+  "ZEROSHIELD_ADMIN_PASSWORD": [
+   "control/ai_mesh_control/auth/management/commands/ensure_zeroshield_admin.py:66"
+  ],
+  "ZEROSHIELD_GUARD_MODEL_ID": [
+   "control/ai_mesh_control/core/simulator_seed.py:36"
+  ],
+  "ZEROSHIELD_GUARD_MODEL_NAME": [
+   "control/ai_mesh_control/core/models.py:1511",
+   "control/ai_mesh_control/core/simulator_seed.py:13"
+  ],
+  "ZEROSHIELD_ORG_NAME": [
+   "control/ai_mesh_control/auth/management/commands/ensure_zeroshield_admin.py:71"
+  ],
+  "ZEROSHIELD_ORG_SLUG": [
+   "control/ai_mesh_control/auth/management/commands/ensure_zeroshield_admin.py:68"
+  ]
+ },
+ "dynamic_sites": [],
+ "writes": [
+  {
+   "file": "control/ai_mesh_control/policy/management/commands/compare_analytics_rollups.py",
+   "line": 98,
+   "key": "ANALYTICS_SERVE_ROLLUPS"
+  },
+  {
+   "file": "control/ai_mesh_control/policy/management/commands/compare_analytics_rollups.py",
+   "line": 50,
+   "key": "ANALYTICS_SERVE_ROLLUPS"
+  },
+  {
+   "file": "control/ai_mesh_control/policy/management/commands/compare_analytics_rollups.py",
+   "line": 59,
+   "key": "ANALYTICS_SERVE_ROLLUPS"
+  }
+ ]
+}

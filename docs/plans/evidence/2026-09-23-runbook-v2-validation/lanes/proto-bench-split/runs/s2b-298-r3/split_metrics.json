@@ -1,0 +1,96 @@
+{
+ "run": "s2b-298-r3",
+ "mode": "sut",
+ "sample_mod": 1,
+ "offered": 89400,
+ "offered_sse": 62581,
+ "offered_json": 26819,
+ "measure_s": 300,
+ "offered_rps": 298.0,
+ "qualified": 87787,
+ "qualified_rps": 292.62,
+ "categories": {
+  "block_fp": 1613,
+  "qualified": 87787
+ },
+ "infra_rate": 0.0,
+ "infra_pct": 0.0,
+ "infra_reasons": {},
+ "drops": 0,
+ "late_max_ms": 0.774,
+ "fp_block_rate": 0.01804,
+ "sampled_sse_in_cohort": 61477,
+ "anomalies": {},
+ "provider_records": 109755,
+ "latency_ms": {
+  "JSON_total": {
+   "n": 26310,
+   "n_inf": 0,
+   "p50": 8.137,
+   "p90": 11.12,
+   "p99": 14.512,
+   "p999": 17.997,
+   "max_finite": 22.67,
+   "mean_finite": 8.04
+  },
+  "SSE_total": {
+   "n": 61477,
+   "n_inf": 0,
+   "p50": 8.052,
+   "p90": 11.012,
+   "p99": 14.324,
+   "p999": 17.946,
+   "max_finite": 40.17,
+   "mean_finite": 7.948
+  },
+  "SSE_first_tok1": {
+   "n": 61477,
+   "n_inf": 0,
+   "p50": 27.871,
+   "p90": 31.052,
+   "p99": 47.369,
+   "p999": 51.869,
+   "max_finite": 88.334,
+   "mean_finite": 27.796
+  },
+  "SSE_strict": {
+   "n": 61477,
+   "n_inf": 0,
+   "p50": 48.05,
+   "p90": 52.395,
+   "p99": 70.222,
+   "p999": 82.126,
+   "max_finite": 107.45,
+   "mean_finite": 47.968
+  },
+  "ALL_total": {
+   "n": 87787,
+   "n_inf": 0,
+   "p50": 8.079,
+   "p90": 11.046,
+   "p99": 14.371,
+   "p999": 17.994,
+   "max_finite": 40.17,
+   "mean_finite": 7.975
+  },
+  "SSE_lag_qualified": {
+   "n": 61477,
+   "n_inf": 0,
+   "p50": 48.05,
+   "p90": 52.395,
+   "p99": 70.222,
+   "p999": 82.126,
+   "max_finite": 107.45,
+   "mean_finite": 47.968
+  }
+ },
+ "checks": {
+  "p99_json_total_lt_slo": true,
+  "p99_sse_total_lt_slo": true,
+  "infra_le_budget": true,
+  "zero_drops": true,
+  "records_complete": true
+ },
+ "verdict": "PASS",
+ "notes": []
+}

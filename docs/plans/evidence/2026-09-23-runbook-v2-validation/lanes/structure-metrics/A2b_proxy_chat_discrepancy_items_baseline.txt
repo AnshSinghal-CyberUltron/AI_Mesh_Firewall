@@ -1,0 +1,53 @@
+(a) lines starting with if/elif that are NOT ast.If statements (continuation lines of ternaries/comprehensions): 20
+   main.py:7157  if _v is not None
+   main.py:8643  if _blocked_keyword_matches(prompt_lower, kw)
+   main.py:9726  if scan_verdict and redacted_prompt is not None
+   main.py:9731  if scan_verdict and redacted_prompt is not None
+   main.py:9790  if scan_verdict and redacted_prompt is not None
+   main.py:9795  if scan_verdict and redacted_prompt is not None
+   main.py:9829  if scan_verdict and scan_verdict.threat_type not in ("none", "", None)
+   main.py:9837  if _policy_rules
+   main.py:9937  if policy_redacted_prompt
+   main.py:10044  if str(m.get("model_name") or "") == _iso_target
+   main.py:10220  if not routing_prefs["routing_enabled"]
+   main.py:10225  if not routing_prefs["routing_enabled"]
+   main.py:10772  if _iso_remap
+   main.py:11650  if _output_acted
+   main.py:11653  if scan_verdict and redacted_prompt is not None
+   main.py:11659  if _output_acted
+   main.py:11662  if scan_verdict and redacted_prompt is not None
+   main.py:11751  if scan_verdict and scan_verdict.threat_type not in ("none", "", None)
+   main.py:11759  if _policy_rules
+   main.py:11911  if policy_redacted_prompt
+(b) broad handlers written 'except Exception as X:' (missed by an 'except Exception:' grep):
+   main.py:12038  except Exception as exc:
+   main.py:9262  except Exception as _t2err:
+   main.py:11627  except Exception as exc:  # noqa: BLE001 - best-effort, fail-open
+(c) the 50th 'except' line in the def..next-def span lies OUTSIDE proxy_chat (module level):
+   main.py:12090  except ImportError:
+(d) proxy_chat ends at main.py:12065; lines 12066-12102 are module-level:
+   main.py:12078  from starlette.requests import Request as _StarletteRequest  # noqa: E402
+   main.py:12079  try:
+   main.py:12080      from .responses_adapters import (  # noqa: E402
+   main.py:12081          generate_openai_id as _gen_oai_id,
+   main.py:12082          build_openai_error as _build_oai_error,
+   main.py:12083          coerce_chat_error_to_openai as _coerce_chat_error,
+   main.py:12084          responses_to_chat as _responses_to_chat,
+   main.py:12085          chat_completion_to_responses as _chat_to_responses,
+   main.py:12086          extract_assistant_messages_for_replay as _replay_msgs,
+   main.py:12087          find_unsupported_input_part as _find_unsupported_input_part,
+   main.py:12088      )
+   main.py:12089      from .responses_store import ResponseStore as _ResponseStore  # noqa: E402
+   main.py:12090  except ImportError:
+   main.py:12091      from responses_adapters import (  # noqa: E402
+   main.py:12092          generate_openai_id as _gen_oai_id,
+   main.py:12093          build_openai_error as _build_oai_error,
+   main.py:12094          coerce_chat_error_to_openai as _coerce_chat_error,
+   main.py:12095          responses_to_chat as _responses_to_chat,
+   main.py:12096          chat_completion_to_responses as _chat_to_responses,
+   main.py:12097          extract_assistant_messages_for_replay as _replay_msgs,
+   main.py:12098          find_unsupported_input_part as _find_unsupported_input_part,
+   main.py:12099      )
+   main.py:12100      from responses_store import ResponseStore as _ResponseStore  # noqa: E402
+(e) deepest indentation line (12 levels rel. to def) is an expression continuation:
+   main.py:9169  '                                                "content could not be fully inspected"},'

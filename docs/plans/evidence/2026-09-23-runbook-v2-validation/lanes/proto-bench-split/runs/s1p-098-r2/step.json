@@ -1,0 +1,5 @@
+{"run": "s1p-098-r2", "rate": 98, "mode": "sut", "corpus": "headline-22M.jsonl", "targets": "http://10.160.0.63:8400",
+ "auth": "auth-a", "prov_flags": "-ttft 150ms -itl 20ms -sample-mod 1", "olg_flags": "-corpus /home/rv/rv/corpora/headline-22M.jsonl -ramp 30 -warmup 60 -duration 300 -sse-frac 0.7 -auth-file /home/rv/rv/auth-a -sample-mod 1 -arrival poisson", "lgs": "rv-split-lg-3", "provs": "rv-split-prov-3",
+ "gws": "rv-split-gw-4", "guards": "rv-split-guard-6", "extra_sut": "", "sut_vms": "rv-split-gw-4 rv-split-guard-6 ", "sample_mod": 1, "label": "e_1gw1g_poisson_zone_b",
+ "build": "rvproto-frozen-1", "sampler_extra": "",
+ "created_utc": "2026-09-23T21:11:54Z"}

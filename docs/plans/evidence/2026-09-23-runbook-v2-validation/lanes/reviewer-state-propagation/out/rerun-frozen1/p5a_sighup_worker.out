@@ -1,0 +1,2 @@
+{"t": 1790168345.034, "step": "SIGHUP sent to one worker", "pid": 2293363, "workers_before": 4}
+{"t": 1790168354.334, "step": "after SIGHUP", "in_flight_streams": {"1": {"chunks": 57, "completed": false, "error": "RemoteProtocolError"}, "0": {"chunks": 59, "completed": false, "error": "RemoteProtocolError"}, "3": {"chunks": 304, "completed": true, "error": null}, "2": {"chunks": 304, "completed": true, "error": null}}, "workers_after": 0, "launcher_alive": false, "healthz": "ConnectError", "seconds": 9.3}

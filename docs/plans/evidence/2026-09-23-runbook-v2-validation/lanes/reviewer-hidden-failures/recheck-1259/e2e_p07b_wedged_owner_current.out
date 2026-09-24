@@ -1,0 +1,9 @@
+baseline: HTTP 200 disp=ALLOW stages=canon:E,det:E,sem:E,resolve:E,dispatch:E,out:E,audit:E in 0.12s
+SIGSTOP owner 2301354
+t= 0.0s readyz=[200, 200, 200, 200] | org-a: client TIMEOUT after 8.0s | org-b: client TIMEOUT after 8.0s
+t=16.1s readyz=[200, 200, 200, 200] | org-a: client TIMEOUT after 8.0s | org-b: client TIMEOUT after 8.0s
+t=32.1s readyz=[200, 200, 200, 200] | org-a: client TIMEOUT after 8.0s | org-b: client TIMEOUT after 8.0s
+t=48.2s readyz=[200, 200, 200, 200] | org-a: client TIMEOUT after 8.0s | org-b: client TIMEOUT after 8.0s
+t=64.2s readyz=[200, 200, 200, 200] | org-a: client TIMEOUT after 8.0s | org-b: client TIMEOUT after 8.0s
+t=80.3s readyz=[200, 200, 200, 200] | org-a: client TIMEOUT after 8.0s | org-b: client TIMEOUT after 8.0s
+t=96.3s readyz=[200, 200, 200, 200] | org-a: client TIMEOUT after 8.0s | org-b: client TIMEOUT after 8.0s

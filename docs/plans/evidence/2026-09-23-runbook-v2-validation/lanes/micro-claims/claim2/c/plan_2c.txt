@@ -1,0 +1,17 @@
+# label emits mode level netem_ms rate replayfile
+c2c_n0_sync_rtt0_r500 0 sync DEBUG 0 500 replay_payloads_P2t2_DEBUG.jsonl
+c2c_n4_sync_rtt0_r500 4 sync DEBUG 0 500 replay_payloads_P2_DEBUG.jsonl
+c2c_n13_sync_rtt0_r500 13 sync DEBUG 0 500 replay_payloads_P2t2_DEBUG.jsonl
+c2c_n13info_sync_rtt0_r500 13 sync INFO 0 500 replay_payloads_P2t2_DEBUG.jsonl
+c2c_n13_queue_rtt0_r500 13 queue DEBUG 0 500 replay_payloads_P2t2_DEBUG.jsonl
+c2c_n0_sync_rtt0_r200 0 sync DEBUG 0 200 replay_payloads_P2t2_DEBUG.jsonl
+c2c_n4_sync_rtt0_r200 4 sync DEBUG 0 200 replay_payloads_P2_DEBUG.jsonl
+c2c_n13_sync_rtt0_r200 13 sync DEBUG 0 200 replay_payloads_P2t2_DEBUG.jsonl
+c2c_n0_sync_rtt1_r50 0 sync DEBUG 1 50 replay_payloads_P2t2_DEBUG.jsonl
+c2c_n4_sync_rtt1_r50 4 sync DEBUG 1 50 replay_payloads_P2_DEBUG.jsonl
+c2c_n13_sync_rtt1_r50 13 sync DEBUG 1 50 replay_payloads_P2t2_DEBUG.jsonl
+c2c_n13_queue_rtt1_r50 13 queue DEBUG 1 50 replay_payloads_P2t2_DEBUG.jsonl
+c2c_n0_sync_rtt5_r10 0 sync DEBUG 5 10 replay_payloads_P2t2_DEBUG.jsonl
+c2c_n4_sync_rtt5_r10 4 sync DEBUG 5 10 replay_payloads_P2_DEBUG.jsonl
+c2c_n13_sync_rtt5_r10 13 sync DEBUG 5 10 replay_payloads_P2t2_DEBUG.jsonl
+c2c_n13_queue_rtt5_r10 13 queue DEBUG 5 10 replay_payloads_P2t2_DEBUG.jsonl

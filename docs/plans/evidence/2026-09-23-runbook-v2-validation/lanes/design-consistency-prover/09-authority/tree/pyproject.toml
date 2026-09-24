@@ -1,0 +1,85 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gateway-v2"
+version = "0.0.0"
+description = "AI Mesh Firewall gateway v2 — workspace + OpenAI conformance + parity harness"
+requires-python = ">=3.12"
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+    "ruff>=0.6",
+    "mypy>=1.11",
+    "import-linter>=2.1",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["gateway_v2*", "lint*"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+addopts = "--ignore=tests/openai_conformance --ignore=tests/parity"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = ["gateway_v2", "lint", "tests"]
+extend-exclude = [
+    "tests/openai_conformance/test_openai_sdk_compat.py",
+    "tests/openai_conformance/test_openai_sdk_compat_live_uvicorn.py",
+    "tests/openai_conformance/test_openai_sdk_compat_phase2.py",
+    "tests/openai_conformance/test_openai_sdk_compat_phase2_adversarial.py",
+    "tests/openai_conformance/test_openai_sdk_compat_phase5_correlation.py",
+    "tests/openai_conformance/test_openai_sdk_compat_phase6_guards.py",
+    "tests/openai_conformance/stub_server.py",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["gateway_v2", "lint"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+files = ["gateway_v2", "lint"]
+
+[[tool.mypy.overrides]]
+module = ["ai_mesh_gateway.*"]
+ignore_missing_imports = true
+
+[tool.importlinter]
+root_packages = ["gateway_v2"]
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "Gateway v2 layers"
+type = "layers"
+layers = [
+    "gateway_v2.edge",
+    "gateway_v2.admit",
+    "gateway_v2.plan",
+    "gateway_v2.detect",
+    "gateway_v2.resolve",
+    "gateway_v2.dispatch",
+    "gateway_v2.egress",
+    "gateway_v2.audit",
+    "gateway_v2.runtime",
+    "gateway_v2.contracts",
+]
+
+[[tool.importlinter.contracts]]
+name = "Only edge/ may import HTTP server frameworks"
+type = "forbidden"
+source_modules = [
+    "gateway_v2.admit", "gateway_v2.plan", "gateway_v2.detect", "gateway_v2.resolve",
+    "gateway_v2.dispatch", "gateway_v2.egress", "gateway_v2.audit", "gateway_v2.runtime",
+]
+forbidden_modules = ["starlette", "fastapi"]

@@ -1,0 +1,101 @@
+
+╔══╗─────────▶╔╗ ╔╗      ╔╗◀───┐
+╚╣╠╝◀─────┐  ╔╝╚╗║║────▶╔╝╚╗   │
+ ║║   ╔══╦══╦╩╗╔╝║║  ╔╦═╩╗╔╝╔═╦══╗
+ ║║╔══╣╔╗║╔╗║╔╣║ ║║ ╔╬╣╔╗║║ ║│║╔═╝
+╔╣╠╣║║║╚╝║╚╝║║║╚╗║╚═╝║║║║║╚╗║═╣║
+╚══╩╩╩╣╔═╩══╩╝╚═╝╚═══╩╩╝╚╩═╩╩═╩╝
+  └──▶║║                    ▲ 
+      ╚╝────────────────────┘
+
+
+---------
+Contracts
+---------
+
+Analyzed 71 files, 55 dependencies.
+-----------------------------------
+
+Gateway v2 layers BROKEN
+
+Contracts: 0 kept, 1 broken.
+
+
+----------------
+Broken contracts
+----------------
+
+Gateway v2 layers
+-----------------
+
+gateway_v2.audit is not allowed to import gateway_v2.detect:
+
+- gateway_v2.audit.record -> gateway_v2.detect.base (l.9)
+
+
+gateway_v2.dispatch is not allowed to import gateway_v2.resolve:
+
+- gateway_v2.dispatch.provider -> gateway_v2.resolve.decision (l.11)
+
+- gateway_v2.dispatch.transform -> gateway_v2.resolve.decision (l.7)
+
+
+gateway_v2.dispatch is not allowed to import gateway_v2.plan:
+
+- gateway_v2.dispatch.routing -> gateway_v2.plan.model (l.6)
+
+
+gateway_v2.egress is not allowed to import gateway_v2.resolve:
+
+- gateway_v2.egress.output_guard -> gateway_v2.resolve.resolver (l.13)
+
+- gateway_v2.egress.output_guard -> gateway_v2.resolve.decision (l.12)
+
+
+gateway_v2.audit is not allowed to import gateway_v2.resolve:
+
+- gateway_v2.audit.record -> gateway_v2.resolve.decision (l.10)
+
+
+gateway_v2.resolve is not allowed to import gateway_v2.plan:
+
+- gateway_v2.resolve.resolver -> gateway_v2.plan.model (l.12)
+
+- gateway_v2.resolve.conflict -> gateway_v2.plan.model (l.8)
+
+
+gateway_v2.egress is not allowed to import gateway_v2.detect:
+
+- gateway_v2.egress.output_guard -> gateway_v2.detect.base (l.8)
+
+
+gateway_v2.dispatch is not allowed to import gateway_v2.detect:
+
+- gateway_v2.dispatch.transform -> gateway_v2.detect.base (l.6)
+
+
+gateway_v2.egress is not allowed to import gateway_v2.plan:
+
+- gateway_v2.egress.stream -> gateway_v2.plan.model (l.12)
+
+- gateway_v2.egress.output_guard -> gateway_v2.plan.model (l.9)
+
+
+gateway_v2.resolve is not allowed to import gateway_v2.detect:
+
+- gateway_v2.resolve.resolver -> gateway_v2.detect.base (l.9)
+
+- gateway_v2.resolve.decision -> gateway_v2.detect.base (l.9)
+
+
+gateway_v2.detect is not allowed to import gateway_v2.plan:
+
+- gateway_v2.detect.base -> gateway_v2.plan.model (l.13)
+
+
+gateway_v2.egress is not allowed to import gateway_v2.dispatch:
+
+- gateway_v2.egress.stream -> gateway_v2.dispatch.provider (l.9)
+
+
+lint-imports exit=1

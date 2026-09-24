@@ -1,0 +1,28 @@
+(a) INPUT side: canonicalize() then Matcher(hyperscan)
+obfuscation                                  aws   ssn email   (1 = detected)
+plain (control)                                1     1     1
+U+200B ZWSP (in list, control)                 1     1     1
+fullwidth (NFKC, control)                      1     1     1
+U+FE0F variation selector-16                   0     0     0
+U+E0020 TAG SPACE (tag block)                  0     0     0
+U+034F combining grapheme joiner               0     0     0
+U+0301 combining acute after each char         0     0     0
+U+061C arabic letter mark (bidi)               0     0     0
+U+180B mongolian FVS1                          0     0     0
+U+3164 hangul filler                           0     0     0
+U+2800 braille blank                           0     0     0
+U+206A inhibit symmetric swapping              0     0     0
+
+(b) OUTPUT side (egress scans raw text, no canonicalize): Matcher(hyperscan) on raw
+plain (control)                                1     1     1
+U+200B ZWSP (in list, control)                 0     0     0
+fullwidth (NFKC, control)                      0     0     0
+
+(c) engine parity (same canonical text): hyperscan vs re
+CJK prefix, no space     hyperscan=['pii.ssn']                  re=[]                           MISMATCH
+CJK around email         hyperscan=['pii.email']                re=[]                           MISMATCH
+accented letter glued    hyperscan=[]                           re=[]                           PARITY
+Cyrillic glued AWS       hyperscan=['secret.aws']               re=[]                           MISMATCH
+Devanagari glued card    hyperscan=['pii.card']                 re=[]                           MISMATCH
+
+_CONTROLS size: 22 ; Unicode Cf+Mn code points: 2155

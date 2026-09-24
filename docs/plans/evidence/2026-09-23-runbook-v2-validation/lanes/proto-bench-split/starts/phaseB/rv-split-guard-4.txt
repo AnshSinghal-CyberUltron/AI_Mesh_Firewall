@@ -1,0 +1,2 @@
+rv-split-guard-4 tree == rvproto-frozen-1
+{"host": "rv-split-guard-4", "index": 0, "pid": 2156, "tokens_per_s": 242371.2563964673, "model_hash": "2bf20e0f71e3a41e9e8cc4e602e08c142855bcce0cc73e0b65000d816d70877c", "provider": "TensorrtExecutionProvider", "endpoints": ["10.160.15.246:7070"], "queue_cap_tokens": 242371}

@@ -1,0 +1,11 @@
+2026-09-23 10:45:28,667 [INFO] gateway.policy_sync: Loaded policy bundle for org 'org-a' (version=3, policies=1)
+2026-09-23 10:45:28,667 [CRITICAL] gateway.policy_sync: REFUSING policy bundle for org 'org-b' at key 'policies:compiled:org-b' (initial_load): POLICY_SIGNING_KEY is configured but the bundle is unsigned or its signature is invalid. Gateway keeps its last-good policies for this org.
+2026-09-23 10:45:28,723 [CRITICAL] gateway.policy_sync: REFUSING policy bundle for org 'org-a' at key 'policies:compiled:org-a' (initial_load): POLICY_SIGNING_KEY is configured but the bundle is unsigned or its signature is invalid. Gateway keeps its last-good policies for this org.
+2026-09-23 10:45:28,723 [CRITICAL] gateway.policy_sync: REFUSING policy bundle for org 'org-b' at key 'policies:compiled:org-b' (initial_load): POLICY_SIGNING_KEY is configured but the bundle is unsigned or its signature is invalid. Gateway keeps its last-good policies for this org.
+2026-09-23 10:45:28,723 [WARNING] gateway.policy_sync: PolicySync initial load completed with ZERO policy bundles. Gateway will allow all requests until backend compiles per-org bundles. If this persists, verify backend policy_compiler ran and Redis is reachable.
+--- org-a signed, org-b UNSIGNED (tampered/unsigned write): cached orgs=['org-a'] is_loaded=True
+    org-a: HTTP 200 action='block' matched=['no-exfil']
+    org-b: HTTP 200 action='allow' matched=[]
+--- BOTH unsigned (signer not deployed / key mismatch): cached orgs=[] is_loaded=True
+    org-a: HTTP 200 action='allow' matched=[]
+    org-b: HTTP 200 action='allow' matched=[]

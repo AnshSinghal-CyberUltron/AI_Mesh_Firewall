@@ -1,0 +1,1 @@
+{"window_s": 16.0, "rps": 2000.0, "proc_cpu_s": 1.11, "proc_cores_busy": 0.069, "cpu_us_per_req": 34.69, "n_procs": 8, "vm_sched_busy_pct": 1.9, "vm_sched_cores_busy": 0.152, "vm_alltasks_cores_busy": 0.153, "vm_cpu_us_per_req": 76.15, "ncpu": 8, "statfile_busy_pct_secondary": 0.33}

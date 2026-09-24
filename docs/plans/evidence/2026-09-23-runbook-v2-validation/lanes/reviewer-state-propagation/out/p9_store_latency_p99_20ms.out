@@ -1,0 +1,4 @@
+{"t": 1790166032.155, "step": "T0 no injected latency", "warm": {"200": 32}, "store_clients": 46}
+{"t": 1790166034.205, "step": "T1 +~200 ms store RTT (LGW06-5)", "warm_keys": {"200": 32}, "cold_keys_150_concurrent": {"503 shared_state_unavailable": 150}, "store_clients_before": 45, "store_clients_after_burst": 157, "seconds": 1.05}
+{"t": 1790166040.53, "step": "T2 background refreshers under the same latency (+6 s)", "readyz_killswitch": "ok", "plans_fresh": true, "warm": {"200": 32}}
+{"t": 1790166042.37, "step": "T3 latency removed", "cold_retry": {"503 shared_state_unavailable": 138, "200": 12}, "store_clients": 26}

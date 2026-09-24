@@ -1,0 +1,39 @@
+18:15:11 CMD bash /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-bench-unit/tools/li_deploy.sh apply
+18:15:14 CMD rc=0 (log /home/contact_cyberultron_com/rv-evidence-raw/proto-bench-unit/logs/cmd-3.log)
+18:15:14 CMD bash /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-bench-unit/tools/unit_ctl.sh start ub local_gpu 22M AMF_TARGET_P99_MS=1000 RV_GUARD_DEADLINE_MS=20
+18:16:03 CMD rc=0 (log /home/contact_cyberultron_com/rv-evidence-raw/proto-bench-unit/logs/cmd-4.log)
+18:16:03 START ub-078 rate=78 corpus=headline-22M.jsonl env=[SAMPLER_FLAGS=--sigusr1 OLG_EXTRA="-sample-mod 1" PROV_FLAGS="-ttft 150ms -itl 20ms -sample-mod 1" LABEL=before_loop_isolation]
+18:23:44 END ub-078 rc=0
+18:23:44 START ub-050 rate=50 corpus=headline-22M.jsonl env=[SAMPLER_FLAGS=--sigusr1 OLG_EXTRA="-sample-mod 1" PROV_FLAGS="-ttft 150ms -itl 20ms -sample-mod 1" LABEL=before_loop_isolation]
+18:31:25 END ub-050 rc=0
+18:31:25 CMD bash /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-bench-unit/tools/unit_ctl.sh start li local_gpu 22M AMF_TARGET_P99_MS=1000 RV_GUARD_DEADLINE_MS=20 RV_METRICS_DUMP_S=0 RV_TOKENIZE_IN_THREAD=1
+18:32:15 CMD rc=0 (log /home/contact_cyberultron_com/rv-evidence-raw/proto-bench-unit/logs/cmd-9.log)
+18:32:15 START li-078 rate=78 corpus=headline-22M.jsonl env=[SAMPLER_FLAGS=--sigusr1 OLG_EXTRA="-sample-mod 1" PROV_FLAGS="-ttft 150ms -itl 20ms -sample-mod 1" LABEL=loop_isolation]
+18:39:56 END li-078 rc=0
+18:39:56 START li-100 rate=100 corpus=headline-22M.jsonl env=[SAMPLER_FLAGS=--sigusr1 OLG_EXTRA="-sample-mod 1" PROV_FLAGS="-ttft 150ms -itl 20ms -sample-mod 1" LABEL=loop_isolation]
+18:47:36 END li-100 rc=0
+18:47:36 START li-150 rate=150 corpus=headline-22M.jsonl env=[SAMPLER_FLAGS=--sigusr1 OLG_EXTRA="-sample-mod 1" PROV_FLAGS="-ttft 150ms -itl 20ms -sample-mod 1" LABEL=loop_isolation]
+18:55:17 END li-150 rc=0
+18:55:17 START li-200 rate=200 corpus=headline-22M.jsonl env=[SAMPLER_FLAGS=--sigusr1 OLG_EXTRA="-sample-mod 1" PROV_FLAGS="-ttft 150ms -itl 20ms -sample-mod 1" LABEL=loop_isolation]
+19:02:58 END li-200 rc=0
+19:02:58 START li-050 rate=50 corpus=headline-22M.jsonl env=[SAMPLER_FLAGS=--sigusr1 OLG_EXTRA="-sample-mod 1" PROV_FLAGS="-ttft 150ms -itl 20ms -sample-mod 1" LABEL=loop_isolation]
+19:10:39 END li-050 rc=0
+19:10:39 START li-200-r2 rate=200 corpus=headline-22M.jsonl env=[SAMPLER_FLAGS=--sigusr1 OLG_EXTRA="-sample-mod 1" PROV_FLAGS="-ttft 150ms -itl 20ms -sample-mod 1" LABEL=loop_isolation]
+19:18:20 END li-200-r2 rc=0
+19:18:20 START li-200-r3 rate=200 corpus=headline-22M.jsonl env=[SAMPLER_FLAGS=--sigusr1 OLG_EXTRA="-sample-mod 1" PROV_FLAGS="-ttft 150ms -itl 20ms -sample-mod 1" LABEL=loop_isolation]
+19:26:02 END li-200-r3 rc=0
+19:26:02 START li-250 rate=250 corpus=headline-22M.jsonl env=[SAMPLER_FLAGS=--sigusr1 OLG_EXTRA="-sample-mod 1" PROV_FLAGS="-ttft 150ms -itl 20ms -sample-mod 1" LABEL=loop_isolation]
+19:33:43 END li-250 rc=0
+19:33:43 START li-w025 rate=25 corpus=worst-22M.jsonl env=[SAMPLER_FLAGS=--sigusr1 OLG_EXTRA="-sample-mod 1" PROV_FLAGS="-ttft 150ms -itl 20ms -sample-mod 1" LABEL=loop_isolation_worst]
+19:41:24 END li-w025 rc=0
+19:41:24 START li-w050 rate=50 corpus=worst-22M.jsonl env=[SAMPLER_FLAGS=--sigusr1 OLG_EXTRA="-sample-mod 1" PROV_FLAGS="-ttft 150ms -itl 20ms -sample-mod 1" LABEL=loop_isolation_worst]
+19:49:04 END li-w050 rc=0
+19:49:04 CMD bash /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-bench-unit/tools/unit_ctl.sh start lin local_gpu 22M AMF_TARGET_P99_MS=1000 RV_GUARD_DEADLINE_MS=20 RV_METRICS_DUMP_S=0 RV_TOKENIZE_IN_THREAD=1 RV_HOLDBACK=off
+19:49:54 CMD rc=0 (log /home/contact_cyberultron_com/rv-evidence-raw/proto-bench-unit/logs/cmd-23.log)
+19:49:54 START lin-078 rate=78 corpus=headline-22M.jsonl env=[SAMPLER_FLAGS=--sigusr1 OLG_EXTRA="-sample-mod 1" PROV_FLAGS="-ttft 150ms -itl 20ms -sample-mod 1" LABEL=scan_no_holdback]
+19:57:35 END lin-078 rc=0
+19:57:35 CMD bash /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-bench-unit/tools/unit_ctl.sh stop phase2
+19:57:41 CMD rc=0 (log /home/contact_cyberultron_com/rv-evidence-raw/proto-bench-unit/logs/cmd-25.log)
+19:57:41 CMD bash /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-bench-unit/tools/li_deploy.sh restore
+19:57:42 CMD rc=0 (log /home/contact_cyberultron_com/rv-evidence-raw/proto-bench-unit/logs/cmd-26.log)
+19:57:42 QUEUE DONE

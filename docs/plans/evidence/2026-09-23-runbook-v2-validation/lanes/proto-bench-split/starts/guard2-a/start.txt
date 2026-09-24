@@ -1,0 +1,4 @@
+{"trt_cache": "/home/rv/rv/trtcache", "devices": [{"device": 0, "providers": ["TensorrtExecutionProvider", "CPUExecutionProvider"], "session_s": 12.0, "warmup_s": 1.4, "tokens_per_s": 236884}]}
+start_guard_node rc=2 (rc 2 = known wait-loop pipefail bug; node keeps starting)
+{"host": "rv-split-guard-2", "index": 0, "pid": 1714, "tokens_per_s": 237701.4919883069, "model_hash": "2bf20e0f71e3a41e9e8cc4e602e08c142855bcce0cc73e0b65000d816d70877c", "provider": "TensorrtExecutionProvider", "endpoints": ["10.160.15.232:7070"], "queue_cap_tokens": 237701}
+LISTEN 0      100    10.160.15.232:7070       0.0.0.0:*          

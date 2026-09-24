@@ -1,0 +1,84 @@
+[
+ {
+  "case": "X1_cancel_during_input_guard",
+  "rid": "p13-X1_cancel_during_input_guard-3aa802",
+  "counter_delta": {
+   "client_disconnects": 1,
+   "guard_windows": 16,
+   "guard_batches": 1,
+   "guard_cancelled_skipped": 0,
+   "provider_calls": 0,
+   "audit_enqueued": 0,
+   "audit_dropped": 0
+  },
+  "audit_records": [],
+  "provider_records": []
+ },
+ {
+  "case": "X2_cancel_after_dispatch_json",
+  "rid": "p13-X2_cancel_after_dispatch_json-c841af",
+  "counter_delta": {
+   "client_disconnects": 1,
+   "guard_windows": 1,
+   "guard_batches": 1,
+   "guard_cancelled_skipped": 0,
+   "provider_calls": 1,
+   "audit_enqueued": 1,
+   "audit_dropped": 0
+  },
+  "audit_records": [
+   {
+    "phase": "input",
+    "disposition": "ALLOW",
+    "verification": "none",
+    "stages": "canon:E,det:E,sem:E,resolve:E"
+   }
+  ],
+  "provider_records": [
+   {
+    "event": null,
+    "stream": false,
+    "canary_hits": []
+   }
+  ]
+ },
+ {
+  "case": "X3_cancel_mid_sse",
+  "rid": "p13-X3_cancel_mid_sse-cb0cf0",
+  "counter_delta": {
+   "client_disconnects": 1,
+   "guard_windows": 1,
+   "guard_batches": 1,
+   "guard_cancelled_skipped": 0,
+   "provider_calls": 1,
+   "audit_enqueued": 2,
+   "audit_dropped": 0
+  },
+  "audit_records": [
+   {
+    "phase": "input",
+    "disposition": "ALLOW",
+    "verification": "none",
+    "stages": "canon:E,det:E,sem:E,resolve:E"
+   },
+   {
+    "phase": "output",
+    "disposition": "ALLOW",
+    "verification": "client_disconnected",
+    "stages": "canon:E,det:E,sem:E,resolve:E,dispatch:E,out:E,audit:E"
+   }
+  ],
+  "provider_records": [
+   {
+    "event": null,
+    "stream": true,
+    "canary_hits": []
+   },
+   {
+    "event": "client_gone_mid_stream",
+    "stream": null,
+    "canary_hits": null
+   }
+  ]
+ }
+]

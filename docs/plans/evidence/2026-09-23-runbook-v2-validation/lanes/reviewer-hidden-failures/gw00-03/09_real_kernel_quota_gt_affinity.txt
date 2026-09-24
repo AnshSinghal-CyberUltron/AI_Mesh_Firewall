@@ -1,0 +1,3 @@
+--- quota 8 CPUs, affinity pinned to 2 CPUs (taskset -c 0,1) ---
+sched_getaffinity = [0, 1] cpu.max = 800000 100000
+GW03 => {"cpu_quota": 8.0, "cpu_source": "cgroup-v2", "workers": 6, "queue_depth": 8, "pools": {"scanner": 6, "provider": 6, "vault": 6, "redis": 393211, "guard": null}}

@@ -1,0 +1,12 @@
+=== rootreexport ===
+Gateway v2 layers BROKEN
+Contracts: 0 kept, 1 broken.
+- gateway_v2.detect.windowing -> gateway_v2 (l.3)
+  gateway_v2 -> gateway_v2.edge.app (l.3)
+lint-imports exit=1
+=== sidemodule ===
+Gateway v2 layers BROKEN
+Contracts: 0 kept, 1 broken.
+- gateway_v2.detect.windowing -> gateway_v2.common (l.3)
+  gateway_v2.common -> gateway_v2.edge.app (l.3)
+lint-imports exit=1

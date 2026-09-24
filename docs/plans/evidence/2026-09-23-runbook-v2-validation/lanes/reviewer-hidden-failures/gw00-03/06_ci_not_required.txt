@@ -1,0 +1,25 @@
+== GitHub branch objects (read-only API) ==
+{"name":"revamp","protected":false,"protection":{"enabled":false,"required_status_checks":{"checks":[],"contexts":[],"enforcement_level":"off"}}}
+{"name":"main","protected":true,"protection":{"enabled":false,"required_status_checks":{"checks":[],"contexts":[],"enforcement_level":"off"}}}
+== active rules on main ==
+deletion
+non_fast_forward
+creation
+update
+pull_request
+== active rules on revamp ==
+[]
+== gateway-v2 runs (all event=push to revamp) ==
+2026-09-21T06:51:32Z	revamp	push	52a584e9	success	feat(gw03): derive every bound from ResourceContract
+2026-09-21T06:10:08Z	revamp	push	7e9c1883	success	docs(gw02): record green parity-harness Actions run
+2026-09-21T06:07:34Z	revamp	push	001cc1c6	success	feat(gw02): add C2 replay differ, expected-diff ledger, and C3 scorecard
+2026-09-21T05:55:08Z	revamp	push	2f1156fc	success	fix(gw01): install v1 test deps without editable gateway layout
+2026-09-21T05:53:53Z	revamp	push	4e74c573	failure	feat(gw01): freeze the OpenAI SDK wire contract in CI
+2026-09-18T07:54:31Z	revamp	push	49629d2b	success	docs(gw00): record two-host config digest match and OS Login residual
+2026-09-18T07:52:50Z	revamp	push	837c4a66	success	fix(gw00): copy v2 sources as root so host UIDs cannot shift the digest
+2026-09-18T07:50:32Z	revamp	push	b44ad5c8	success	fix(gw00): pin BuildKit v0.21.1 so GHA and this VM share a digest
+2026-09-18T07:46:38Z	revamp	push	8e18ca95	success	fix(gw00): untrack leaked key and make v2 image A/B-identical
+2026-09-18T06:49:12Z	revamp	push	0e7555bf	success	docs(gw00): record green gateway-v2 Actions run
+2026-09-18T06:48:22Z	revamp	push	8d1230f3	success	feat(gw00): stand up empty gateway_v2 workspace with structural gates
+== gw workflow has no needs:/required gate; grep ==
+(no needs:/continue-on-error/if: in gateway-v2.yml)

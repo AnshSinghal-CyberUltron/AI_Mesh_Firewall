@@ -1,0 +1,31 @@
+## lint-imports (runbook layer list verbatim, types under contracts/domain)
+---------
+
+Analyzed 78 files, 79 dependencies.
+-----------------------------------
+
+Gateway v2 layers KEPT
+
+Contracts: 1 kept, 0 broken.
+exit=0
+## mypy --strict
+Success: no issues found in 78 source files
+## smoke
+A input BLOCK        -> (<Disposition.BLOCK: 'block'>, 0, None)
+B clean INCREMENTAL  -> (<Disposition.ALLOW: 'allow'>, 1, b'hello world')
+C output BLOCK STRICT-> (<Disposition.ALLOW: 'allow'>, 1, b'')
+D clean STRICT       -> (<Disposition.ALLOW: 'allow'>, 1, b'fine output')
+E LGW04-3 bad category rejected at construction: category 'prompt_injection' is not a Category
+smoke exit=0
+## other gates
+lint/__init__.py
+lint/check_capacity_literals.py
+lint/check_http_outside_edge_resolve.py
+lint/check_no_module_mutable.py
+lint/check_secret_headers.py
+lint/check_sizes.py
+lint/compare_junit.py
+## LGW00-3 negative fixture on the contracts-variant (runbook layer list verbatim)
+Gateway v2 layers BROKEN
+gateway_v2.detect is not allowed to import gateway_v2.edge:
+- gateway_v2.detect.base -> gateway_v2.edge.app (l.17)

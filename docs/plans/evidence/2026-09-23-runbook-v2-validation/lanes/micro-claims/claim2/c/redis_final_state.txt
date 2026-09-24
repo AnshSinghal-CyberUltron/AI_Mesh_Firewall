@@ -1,0 +1,5 @@
+qdisc mq 0: root 
+aof_delayed_fsync:0
+1:M 23 Sep 2026 05:38:35.696 * Creating AOF base file appendonly.aof.1.base.rdb on server start
+1:M 23 Sep 2026 05:38:35.698 * Creating AOF incr file appendonly.aof.1.incr.aof on server start
+1:M 23 Sep 2026 05:38:35.698 * Ready to accept connections tcp

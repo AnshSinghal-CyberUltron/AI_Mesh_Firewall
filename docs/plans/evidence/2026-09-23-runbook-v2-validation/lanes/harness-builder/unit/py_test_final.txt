@@ -1,0 +1,27 @@
+test_direct_floor_passes (test_analyze.TestAnalyzeEndToEnd.test_direct_floor_passes) ... ok
+test_incomplete_records_invalidate (test_analyze.TestAnalyzeEndToEnd.test_incomplete_records_invalidate) ... ok
+test_join_by_nonce_when_rid_not_forwarded (test_analyze.TestAnalyzeEndToEnd.test_join_by_nonce_when_rid_not_forwarded) ... ok
+test_loadgen_cpu_limit (test_analyze.TestAnalyzeEndToEnd.test_loadgen_cpu_limit) ... ok
+test_midstream_hold_fails_slo_via_release_lag_only (test_analyze.TestAnalyzeEndToEnd.test_midstream_hold_fails_slo_via_release_lag_only) ... ok
+test_negative_addon_invalidates_run_never_clamped (test_analyze.TestAnalyzeEndToEnd.test_negative_addon_invalidates_run_never_clamped) ... ok
+test_output_redaction_length_check (test_analyze.TestAnalyzeEndToEnd.test_output_redaction_length_check) ... ok
+test_percentiles_over_merged_samples_not_averaged (test_analyze.TestAnalyzeEndToEnd.test_percentiles_over_merged_samples_not_averaged) ... ok
+test_policy_enforce_safety_and_expected_blocks (test_analyze.TestAnalyzeEndToEnd.test_policy_enforce_safety_and_expected_blocks) ... ok
+test_pre_delay_attributed_to_addon (test_analyze.TestAnalyzeEndToEnd.test_pre_delay_attributed_to_addon) ... ok
+test_stage_skipped_disqualifies (test_analyze.TestAnalyzeEndToEnd.test_stage_skipped_disqualifies) ... ok
+test_unjoined_duplicate_and_drop_are_errors (test_analyze.TestAnalyzeEndToEnd.test_unjoined_duplicate_and_drop_are_errors) ... ok
+test_known_vectors_match_go (test_analyze.TestHashes.test_known_vectors_match_go) ... ok
+test_sampling_fraction (test_analyze.TestHashes.test_sampling_fraction) ... ok
+test_empty (test_analyze.TestPercentile.test_empty) ... ok
+test_nearest_rank_against_bruteforce (test_analyze.TestPercentile.test_nearest_rank_against_bruteforce) ... ok
+test_coalesced_release_spec_formula_underreports (test_analyze.TestReleaseLag.test_coalesced_release_spec_formula_underreports) ... ok
+test_floor (test_analyze.TestReleaseLag.test_floor) ... ok
+test_midstream_hold_visible_in_lag_not_in_total (test_analyze.TestReleaseLag.test_midstream_hold_visible_in_lag_not_in_total) ... ok
+test_pre_dispatch_delay_shifts_everything (test_analyze.TestReleaseLag.test_pre_dispatch_delay_shifts_everything) ... ok
+test_split_tokens_spec_formula_overreports (test_analyze.TestReleaseLag.test_split_tokens_spec_formula_overreports) ... ok
+test_unmappable_when_content_shorter (test_analyze.TestReleaseLag.test_unmappable_when_content_shorter) ... ok
+
+----------------------------------------------------------------------
+Ran 22 tests in 0.836s
+
+OK

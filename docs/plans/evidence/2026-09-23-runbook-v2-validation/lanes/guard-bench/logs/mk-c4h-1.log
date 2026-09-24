@@ -1,0 +1,7 @@
+Created [https://www.googleapis.com/compute/v1/projects/ai-mesh-firewall/zones/asia-south1-c/instances/rv-guard-c4h-1].
+WARNING: Some requests generated warnings:
+ - Disk size: '60 GB' is larger than image size: '10 GB'. You might need to resize the root repartition manually if the operating system does not support automatic resizing. See https://cloud.google.com/compute/docs/disks/add-persistent-disk#resize_pd for details.
+
+NAME            ZONE           MACHINE_TYPE   PREEMPTIBLE  INTERNAL_IP  EXTERNAL_IP     STATUS
+rv-guard-c4h-1  asia-south1-c  c4-highcpu-16               10.160.0.29  34.100.241.172  RUNNING
+{"name": "rv-guard-c4h-1", "zone": "asia-south1-c", "machine_type": "c4-highcpu-16", "lane": "guard", "create_utc": "2026-09-23T05:36:51Z", "delete_utc": null, "note": "cpu"}

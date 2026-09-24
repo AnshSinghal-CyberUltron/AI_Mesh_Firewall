@@ -1,0 +1,19 @@
+DeBERTa-v3-xsmall @512 on 1x L4, TRT FP16 -- derived latency & throughput by window-batch [D]
+  w= 1 windows  latency=  3.00 ms  ->  333.3 win/s =  166.7 req/s (2 win/req)
+  w= 2 windows  latency=  4.50 ms  ->  444.3 win/s =  222.2 req/s (2 win/req)
+  w= 4 windows  latency=  8.23 ms  ->  486.0 win/s =  243.0 req/s (2 win/req)
+  w= 8 windows  latency= 16.32 ms  ->  490.2 win/s =  245.1 req/s (2 win/req)
+  w=16 windows  latency= 33.01 ms  ->  484.7 win/s =  242.3 req/s (2 win/req)
+  w=32 windows  latency= 72.61 ms  ->  440.7 win/s =  220.4 req/s (2 win/req)
+
+1x L4 with dynamic batching (max window-batch 8), Poisson arrivals, 2 windows/request
+  per-L4 RPS | GPU p50 | GPU p95 | GPU p99 | TOTAL tax p50 | TOTAL tax p99 | 8-L4 fleet RPS
+         25 |    4.50 |    7.29 |    9.24 |          6.10 |         12.74 |    200
+         50 |    4.50 |    8.84 |   12.40 |          6.10 |         15.90 |    400
+         75 |    4.50 |   11.46 |   15.64 |          6.10 |         19.14 |    600
+        100 |    4.50 |   13.61 |   19.30 |          6.10 |         22.80 |    800
+        125 |    5.37 |   16.65 |   23.95 |          6.97 |         27.45 |   1000
+        150 |    7.36 |   21.10 |   30.37 |          8.96 |         33.87 |   1200
+        175 |    9.44 |   28.57 |   40.28 |         11.04 |         43.78 |   1400
+        200 |   13.92 |   42.44 |   59.81 |         15.52 |         63.31 |   1600
+        220 |   22.24 |   69.52 |   95.17 |         23.84 |         98.67 |   1760

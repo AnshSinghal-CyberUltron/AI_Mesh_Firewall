@@ -1,0 +1,14 @@
+scope=/sys/fs/cgroup/user.slice/user-1872320012.slice/user@1872320012.service/app.slice/run-p2171641-i169867244.scope
+scope cpu.max=200000 100000 memory.max=2147483648
+now in: 0::/user.slice/user-1872320012.slice/user@1872320012.service/app.slice/run-p2171641-i169867244.scope/gw
+child cpu.max=cat: /sys/fs/cgroup/user.slice/user-1872320012.slice/user@1872320012.service/app.slice/run-p2171641-i169867244.scope/gw/cpu.max: No such file or directory memory.max=cat: /sys/fs/cgroup/user.slice/user-1872320012.slice/user@1872320012.service/app.slice/run-p2171641-i169867244.scope/gw/memory.max: No such file or directory
+GW03 CLI => {"cpu_quota": 16.0, "cpu_source": "affinity", "memory_limit": 63186812928, "mem_source": "meminfo", "workers": 12, "queue_depth": 16, "pools": {"guard": null, "provider": 12, "redis": 393207, "scanner": 12, "vault": 12}}
+--- variant 2: controllers enabled on the child (leaf files present, value max) ---
+scope=/sys/fs/cgroup/user.slice/user-1872320012.slice/user@1872320012.service/app.slice/run-p2171987-i169890243.scope
+scope cpu.max=200000 100000 memory.max=2147483648
+enabled cpu+memory on child
+now in: 0::/user.slice/user-1872320012.slice/user@1872320012.service/app.slice/run-p2171987-i169890243.scope/gw
+child cpu.max=max 100000 memory.max=max
+GW03 CLI => {"cpu_quota": 16.0, "cpu_source": "affinity", "memory_limit": 63186812928, "mem_source": "meminfo", "workers": 12, "queue_depth": 16, "pools": {"guard": null, "provider": 12, "redis": 393207, "scanner": 12, "vault": 12}}
+--- control: same scope limits, process stays in the leaf scope ---
+GW03 CLI => {"cpu_quota": 2.0, "cpu_source": "cgroup-v2", "memory_limit": 2147483648, "mem_source": "cgroup-v2", "workers": 1, "queue_depth": 2, "pools": {"guard": null, "provider": 1, "redis": 393215, "scanner": 1, "vault": 1}}

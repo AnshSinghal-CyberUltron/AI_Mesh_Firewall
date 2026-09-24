@@ -1,0 +1,19 @@
+{
+  "cpu_budget": 16.0,
+  "ram_bytes": 63186812928,
+  "cpu_source": "affinity",
+  "mem_source": "meminfo",
+  "per_worker_rss": 536870912,
+  "workers": 16,
+  "asgi_threads": 32,
+  "db_threads": 32,
+  "pg_max_conns": 578,
+  "scanner_pool": 16,
+  "bedrock_pool": 10000,
+  "vault_pool": 8,
+  "redis_pool": 128,
+  "headroom": 0.75,
+  "ram_gib": 58.85,
+  "ram_workers": 88,
+  "cpu_bound": true
+}

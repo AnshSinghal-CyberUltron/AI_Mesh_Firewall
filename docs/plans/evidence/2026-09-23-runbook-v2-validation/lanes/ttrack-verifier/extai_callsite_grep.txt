@@ -1,0 +1,46 @@
+control/ai_mesh_control/security_engines/bedrock_client.py:193:            response = self._client.invoke_model(
+demo/zeroshield-openai-demo/app/gateway_client.py:30:        self.client = OpenAI(
+demo/zeroshield-openai-demo/scripts/sdk_examples.py:26:client = OpenAI(
+examples/zeroshield-openai-demo/backend/main.py:5:observability traffic goes through stock ``openai.OpenAI(base_url, api_key)``
+examples/zeroshield-openai-demo/backend/sdk_snippets.py:28:client = OpenAI(
+examples/zeroshield-openai-demo/backend/sdk_snippets.py:46:client = OpenAI(
+examples/zeroshield-openai-demo/backend/sdk_snippets.py:182:client = OpenAI(
+examples/zeroshield-openai-demo/backend/sdk_snippets.py:211:client = OpenAI(
+examples/zeroshield-openai-demo/backend/sdk_snippets.py:262:client = OpenAI(
+examples/zeroshield-openai-demo/backend/zeroshield_client.py:41:    return OpenAI(api_key=key, base_url=url, timeout=90, max_retries=1)
+examples/zeroshield-openai-demo/sdk_examples.py:15:client = OpenAI(
+frontend/src/components/howToUseContent.js:95:        text: 'Replace your existing provider URL (e.g. https://api.openai.com/v1) with the gateway base URL: https://aisecshieldgateway.zeroshield.ai/v1',
+frontend/src/components/howToUseContent.js:128:client = OpenAI(
+frontend/src/components/howToUseContent.js:687:client = OpenAI(
+frontend/src/components/howToUseContent.js:756:client = OpenAI(
+frontend/src/components/howToUseContent.js:782:client = OpenAI(
+gateway/ai_mesh_gateway/bedrock_client.py:239:        self._client = boto3.client("bedrock-runtime", config=boto_config)
+gateway/ai_mesh_gateway/bedrock_client.py:312:            response = self._client.converse(**converse_input)
+gateway/ai_mesh_gateway/bedrock_client.py:513:            response = await aio_client.converse(**converse_input)
+gateway/ai_mesh_gateway/bedrock_client.py:689:            return self.converse(
+gateway/ai_mesh_gateway/bedrock_client.py:727:            response = self._client.invoke_model(
+gateway/ai_mesh_gateway/bedrock_client.py:818:            bedrock_mgmt = boto3.client("bedrock", region_name=self.region)
+gateway/ai_mesh_gateway/byok_embedder.py:123:        resp = litellm.embedding(**kwargs)
+gateway/ai_mesh_gateway/embedding_vault.py:286:        response = litellm.embedding(model=self._embedding_model, input=[text])
+gateway/ai_mesh_gateway/llm_judge.py:109:            self._client = boto3.client("bedrock-runtime", config=boto_config)
+gateway/ai_mesh_gateway/llm_judge.py:166:            response = client.invoke_model(
+gateway/ai_mesh_gateway/llm_router.py:963:            return await self._router.acompletion(**kwargs)
+gateway/ai_mesh_gateway/llm_router.py:964:        return await litellm.acompletion(**kwargs)
+gateway/ai_mesh_gateway/llm_router.py:968:            return await self._router.aembedding(**kwargs)
+gateway/ai_mesh_gateway/llm_router.py:969:        return await litellm.aembedding(**kwargs)
+gateway/ai_mesh_gateway/llm_router.py:1242:    async def acompletion(
+gateway/ai_mesh_gateway/llm_router.py:1767:    async def aembedding(
+gateway/ai_mesh_gateway/main.py:5158:        code, resp = await LLM_ROUTER.acompletion(rewrite_body, None)
+gateway/ai_mesh_gateway/main.py:8752:            code, resp = await LLM_ROUTER.acompletion(body, None)
+gateway/ai_mesh_gateway/main.py:9779:            code, resp = await LLM_ROUTER.acompletion(
+gateway/ai_mesh_gateway/main.py:10707:        code, llm_resp = await LLM_ROUTER.acompletion(
+gateway/ai_mesh_gateway/main.py:13010:        status, result = await LLM_ROUTER.aembedding(body)
+gateway/ai_mesh_gateway/main.py:17066:    """D4-P1: ``client.moderations.create()`` — expose the firewall's input detectors as a
+gateway/ai_mesh_gateway/output_guard.py:1785:        result = bedrock_client.converse(
+gateway/ai_mesh_gateway/output_guard.py:1819:    """Pull the assistant text out of a BedrockClient.converse() result dict."""
+gateway/ai_mesh_gateway/rag_pipeline/bedrock_embedder.py:188:        resp = self._client.invoke_model(
+gateway/scripts/bedrock_latency_probe.py:88:            client.converse(
+scripts/openai_sdk_live_gateway.py:151:    client = openai.AsyncOpenAI(
+shared/ai_mesh_shared/tier2_gemini_client.py:55:    return genai.Client(api_key=api_key)
+shared/ai_mesh_shared/tier2_gemini_client.py:224:                return self._client.models.generate_content(
+shared/ai_mesh_shared/tier2_gemini_client.py:245:                return await self._client.aio.models.generate_content(

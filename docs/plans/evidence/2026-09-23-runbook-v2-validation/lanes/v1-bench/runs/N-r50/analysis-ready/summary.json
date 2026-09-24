@@ -1,0 +1,767 @@
+{
+ "mode": "sut",
+ "policy": {
+  "blocks_total": 0,
+  "expected_blocks": 0,
+  "false_positive_blocks": 0,
+  "other_blocks": 0,
+  "benign_offered": 15000,
+  "false_positive_rate": 0.0,
+  "policy_misses": 0,
+  "latency_client_total_ms": {},
+  "block_rule": {
+   "statuses": [
+    400,
+    403,
+    422,
+    451
+   ],
+   "envelope_re": "(?i)content_filter|content_polic|polic(y|ies)_|blocked|block_|guard|violation|unsafe|threat"
+  }
+ },
+ "phases": [
+  2
+ ],
+ "inputs": {
+  "client_files": [
+   "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/v1-bench/runs/N-r50/lg-v1ready/requests.jsonl"
+  ],
+  "provider_files": [
+   "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/v1-bench/runs/N-r50/rv-v1-prov-2/prov/records.jsonl.zst"
+  ],
+  "corpus": "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/harness/corpora/headline-22M.jsonl"
+ },
+ "offered": 15000,
+ "offered_rate_config": 50.0,
+ "measure_s": 300,
+ "achieved_offered_rps": 50.0,
+ "qualified": 5704,
+ "expected_blocks": 0,
+ "errors": 9296,
+ "infra_errors": 9296,
+ "outcomes": {
+  "qualified": 5704,
+  "infra_error": 9296
+ },
+ "disposition_source": "v1",
+ "qualified_dispositions": [
+  "ALLOW",
+  "FLAG",
+  "REDACT"
+ ],
+ "qualified_rps": 19.01,
+ "error_rate": 0.6197333333333334,
+ "error_reasons": {
+  "incomplete": 9296,
+  "timeout": 9149,
+  "content_mismatch": 9133,
+  "disposition_missing": 6940,
+  "stage_auth_missing": 6940,
+  "stage_kill_switch_missing": 6940,
+  "stage_rate_limit_missing": 6940,
+  "stage_policy_missing": 6940,
+  "stage_input_scan_missing": 6940,
+  "stage_model_routing_missing": 6940,
+  "stage_model_input_missing": 6940,
+  "stage_model_output_missing": 6940,
+  "stage_output_guardrail_missing": 6940,
+  "unjoined": 147,
+  "http_503": 89,
+  "http_422": 58
+ },
+ "error_examples": [
+  {
+   "rid": "8c60a2ca-2ea1-4467-b932-08a8c6d5ad50",
+   "reasons": [
+    "http_422",
+    "incomplete",
+    "unjoined",
+    "disposition_missing",
+    "stage_auth_missing",
+    "stage_kill_switch_missing",
+    "stage_rate_limit_missing",
+    "stage_policy_missing",
+    "stage_input_scan_missing",
+    "stage_model_routing_missing",
+    "stage_model_input_missing",
+    "stage_model_output_missing",
+    "stage_output_guardrail_missing"
+   ],
+   "status": 422,
+   "err_detail": "type=invalid_request_error code=no_provider_configured"
+  },
+  {
+   "rid": "07de19c4-24de-4571-b993-3d400c486127",
+   "reasons": [
+    "http_503",
+    "incomplete",
+    "unjoined",
+    "disposition_missing",
+    "stage_auth_missing",
+    "stage_kill_switch_missing",
+    "stage_rate_limit_missing",
+    "stage_policy_missing",
+    "stage_input_scan_missing",
+    "stage_model_routing_missing",
+    "stage_model_input_missing",
+    "stage_model_output_missing",
+    "stage_output_guardrail_missing"
+   ],
+   "status": 503,
+   "err_detail": "type=service_unavailable code=circuit_breaker_open"
+  },
+  {
+   "rid": "fca63431-2270-41f5-aad4-4ab078fbcda6",
+   "reasons": [
+    "http_422",
+    "incomplete",
+    "unjoined",
+    "disposition_missing",
+    "stage_auth_missing",
+    "stage_kill_switch_missing",
+    "stage_rate_limit_missing",
+    "stage_policy_missing",
+    "stage_input_scan_missing",
+    "stage_model_routing_missing",
+    "stage_model_input_missing",
+    "stage_model_output_missing",
+    "stage_output_guardrail_missing"
+   ],
+   "status": 422,
+   "err_detail": "type=invalid_request_error code=no_provider_configured"
+  },
+  {
+   "rid": "a1e1fd14-3ffc-463a-9c5b-9c984f7d845f",
+   "reasons": [
+    "http_503",
+    "incomplete",
+    "unjoined",
+    "disposition_missing",
+    "stage_auth_missing",
+    "stage_kill_switch_missing",
+    "stage_rate_limit_missing",
+    "stage_policy_missing",
+    "stage_input_scan_missing",
+    "stage_model_routing_missing",
+    "stage_model_input_missing",
+    "stage_model_output_missing",
+    "stage_output_guardrail_missing"
+   ],
+   "status": 503,
+   "err_detail": "type=service_unavailable code=circuit_breaker_open"
+  },
+  {
+   "rid": "421d1705-d2e6-4b14-9611-d38a797c90ff",
+   "reasons": [
+    "http_503",
+    "incomplete",
+    "unjoined",
+    "disposition_missing",
+    "stage_auth_missing",
+    "stage_kill_switch_missing",
+    "stage_rate_limit_missing",
+    "stage_policy_missing",
+    "stage_input_scan_missing",
+    "stage_model_routing_missing",
+    "stage_model_input_missing",
+    "stage_model_output_missing",
+    "stage_output_guardrail_missing"
+   ],
+   "status": 503,
+   "err_detail": "type=service_unavailable_error code=kill_switch_active"
+  },
+  {
+   "rid": "576081e3-1d79-462a-968f-d58c563bf48a",
+   "reasons": [
+    "http_503",
+    "incomplete",
+    "unjoined",
+    "disposition_missing",
+    "stage_auth_missing",
+    "stage_kill_switch_missing",
+    "stage_rate_limit_missing",
+    "stage_policy_missing",
+    "stage_input_scan_missing",
+    "stage_model_routing_missing",
+    "stage_model_input_missing",
+    "stage_model_output_missing",
+    "stage_output_guardrail_missing"
+   ],
+   "status": 503,
+   "err_detail": "type=service_unavailable_error code=kill_switch_active"
+  },
+  {
+   "rid": "056860b9-0033-4069-a88e-8a285eddb01a",
+   "reasons": [
+    "http_503",
+    "incomplete",
+    "unjoined",
+    "disposition_missing",
+    "stage_auth_missing",
+    "stage_kill_switch_missing",
+    "stage_rate_limit_missing",
+    "stage_policy_missing",
+    "stage_input_scan_missing",
+    "stage_model_routing_missing",
+    "stage_model_input_missing",
+    "stage_model_output_missing",
+    "stage_output_guardrail_missing"
+   ],
+   "status": 503,
+   "err_detail": "type=service_unavailable code=circuit_breaker_open"
+  },
+  {
+   "rid": "540c0ece-3209-4971-ae67-0a3b9bdd9c05",
+   "reasons": [
+    "http_503",
+    "incomplete",
+    "unjoined",
+    "disposition_missing",
+    "stage_auth_missing",
+    "stage_kill_switch_missing",
+    "stage_rate_limit_missing",
+    "stage_policy_missing",
+    "stage_input_scan_missing",
+    "stage_model_routing_missing",
+    "stage_model_input_missing",
+    "stage_model_output_missing",
+    "stage_output_guardrail_missing"
+   ],
+   "status": 503,
+   "err_detail": "type=service_unavailable code=circuit_breaker_open"
+  },
+  {
+   "rid": "8e2061f1-d27f-4bac-a941-1bb88c9359c0",
+   "reasons": [
+    "http_503",
+    "incomplete",
+    "unjoined",
+    "disposition_missing",
+    "stage_auth_missing",
+    "stage_kill_switch_missing",
+    "stage_rate_limit_missing",
+    "stage_policy_missing",
+    "stage_input_scan_missing",
+    "stage_model_routing_missing",
+    "stage_model_input_missing",
+    "stage_model_output_missing",
+    "stage_output_guardrail_missing"
+   ],
+   "status": 503,
+   "err_detail": "type=service_unavailable code=circuit_breaker_open"
+  },
+  {
+   "rid": "e8f9e7c1-fce8-4e15-a8b9-c098c9a470eb",
+   "reasons": [
+    "http_503",
+    "incomplete",
+    "unjoined",
+    "disposition_missing",
+    "stage_auth_missing",
+    "stage_kill_switch_missing",
+    "stage_rate_limit_missing",
+    "stage_policy_missing",
+    "stage_input_scan_missing",
+    "stage_model_routing_missing",
+    "stage_model_input_missing",
+    "stage_model_output_missing",
+    "stage_output_guardrail_missing"
+   ],
+   "status": 503,
+   "err_detail": "type=service_unavailable_error code=kill_switch_active"
+  },
+  {
+   "rid": "b3ef2018-e34d-4a68-94ca-5bcaf4515213",
+   "reasons": [
+    "http_503",
+    "incomplete",
+    "unjoined",
+    "disposition_missing",
+    "stage_auth_missing",
+    "stage_kill_switch_missing",
+    "stage_rate_limit_missing",
+    "stage_policy_missing",
+    "stage_input_scan_missing",
+    "stage_model_routing_missing",
+    "stage_model_input_missing",
+    "stage_model_output_missing",
+    "stage_output_guardrail_missing"
+   ],
+   "status": 503,
+   "err_detail": "type=service_unavailable code=circuit_breaker_open"
+  },
+  {
+   "rid": "092421f7-a080-4265-9b53-94df0f780d84",
+   "reasons": [
+    "http_503",
+    "incomplete",
+    "unjoined",
+    "disposition_missing",
+    "stage_auth_missing",
+    "stage_kill_switch_missing",
+    "stage_rate_limit_missing",
+    "stage_policy_missing",
+    "stage_input_scan_missing",
+    "stage_model_routing_missing",
+    "stage_model_input_missing",
+    "stage_model_output_missing",
+    "stage_output_guardrail_missing"
+   ],
+   "status": 503,
+   "err_detail": "type=service_unavailable code=circuit_breaker_open"
+  },
+  {
+   "rid": "4754ad18-e621-4934-824b-8bd1daf08e8b",
+   "reasons": [
+    "http_422",
+    "incomplete",
+    "unjoined",
+    "disposition_missing",
+    "stage_auth_missing",
+    "stage_kill_switch_missing",
+    "stage_rate_limit_missing",
+    "stage_policy_missing",
+    "stage_input_scan_missing",
+    "stage_model_routing_missing",
+    "stage_model_input_missing",
+    "stage_model_output_missing",
+    "stage_output_guardrail_missing"
+   ],
+   "status": 422,
+   "err_detail": "type=invalid_request_error code=no_provider_configured"
+  },
+  {
+   "rid": "da99fc90-f3d0-4728-9b33-2dc056779958",
+   "reasons": [
+    "http_422",
+    "incomplete",
+    "unjoined",
+    "disposition_missing",
+    "stage_auth_missing",
+    "stage_kill_switch_missing",
+    "stage_rate_limit_missing",
+    "stage_policy_missing",
+    "stage_input_scan_missing",
+    "stage_model_routing_missing",
+    "stage_model_input_missing",
+    "stage_model_output_missing",
+    "stage_output_guardrail_missing"
+   ],
+   "status": 422,
+   "err_detail": "type=invalid_request_error code=no_provider_configured"
+  },
+  {
+   "rid": "e20edc18-4e43-405a-b76b-69236566d38d",
+   "reasons": [
+    "http_503",
+    "incomplete",
+    "unjoined",
+    "disposition_missing",
+    "stage_auth_missing",
+    "stage_kill_switch_missing",
+    "stage_rate_limit_missing",
+    "stage_policy_missing",
+    "stage_input_scan_missing",
+    "stage_model_routing_missing",
+    "stage_model_input_missing",
+    "stage_model_output_missing",
+    "stage_output_guardrail_missing"
+   ],
+   "status": 503,
+   "err_detail": "type=service_unavailable code=circuit_breaker_open"
+  },
+  {
+   "rid": "86a8422f-76ea-4e06-bdea-51fbda7867b3",
+   "reasons": [
+    "http_422",
+    "incomplete",
+    "unjoined",
+    "disposition_missing",
+    "stage_auth_missing",
+    "stage_kill_switch_missing",
+    "stage_rate_limit_missing",
+    "stage_policy_missing",
+    "stage_input_scan_missing",
+    "stage_model_routing_missing",
+    "stage_model_input_missing",
+    "stage_model_output_missing",
+    "stage_output_guardrail_missing"
+   ],
+   "status": 422,
+   "err_detail": "type=invalid_request_error code=no_provider_configured"
+  },
+  {
+   "rid": "d3231054-134a-4e0a-a634-8a17ec08c0e8",
+   "reasons": [
+    "http_503",
+    "incomplete",
+    "unjoined",
+    "disposition_missing",
+    "stage_auth_missing",
+    "stage_kill_switch_missing",
+    "stage_rate_limit_missing",
+    "stage_policy_missing",
+    "stage_input_scan_missing",
+    "stage_model_routing_missing",
+    "stage_model_input_missing",
+    "stage_model_output_missing",
+    "stage_output_guardrail_missing"
+   ],
+   "status": 503,
+   "err_detail": "type=service_unavailable_error code=kill_switch_active"
+  },
+  {
+   "rid": "a2e228dd-04f1-4ba6-96bf-9ce2420481bf",
+   "reasons": [
+    "http_422",
+    "incomplete",
+    "unjoined",
+    "disposition_missing",
+    "stage_auth_missing",
+    "stage_kill_switch_missing",
+    "stage_rate_limit_missing",
+    "stage_policy_missing",
+    "stage_input_scan_missing",
+    "stage_model_routing_missing",
+    "stage_model_input_missing",
+    "stage_model_output_missing",
+    "stage_output_guardrail_missing"
+   ],
+   "status": 422,
+   "err_detail": "type=invalid_request_error code=no_provider_configured"
+  },
+  {
+   "rid": "49c8dd80-5cd9-4c1d-80d8-232c673acba2",
+   "reasons": [
+    "http_503",
+    "incomplete",
+    "unjoined",
+    "disposition_missing",
+    "stage_auth_missing",
+    "stage_kill_switch_missing",
+    "stage_rate_limit_missing",
+    "stage_policy_missing",
+    "stage_input_scan_missing",
+    "stage_model_routing_missing",
+    "stage_model_input_missing",
+    "stage_model_output_missing",
+    "stage_output_guardrail_missing"
+   ],
+   "status": 503,
+   "err_detail": "type=service_unavailable_error code=kill_switch_active"
+  },
+  {
+   "rid": "a3d07b30-0d11-4682-aa36-2f4c41817572",
+   "reasons": [
+    "http_503",
+    "incomplete",
+    "unjoined",
+    "disposition_missing",
+    "stage_auth_missing",
+    "stage_kill_switch_missing",
+    "stage_rate_limit_missing",
+    "stage_policy_missing",
+    "stage_input_scan_missing",
+    "stage_model_routing_missing",
+    "stage_model_input_missing",
+    "stage_model_output_missing",
+    "stage_output_guardrail_missing"
+   ],
+   "status": 503,
+   "err_detail": "type=service_unavailable code=circuit_breaker_open"
+  }
+ ],
+ "safety_failures": 0,
+ "safety_reasons": {},
+ "safety_examples": [],
+ "schedule": {
+  "drops": 0,
+  "drop_threshold_ms": 5.0,
+  "lateness": {
+   "n": 15000,
+   "min": 0.0419,
+   "p50": 0.0862,
+   "p90": 0.116,
+   "p99": 0.1957,
+   "p999": 0.2627,
+   "max": 0.3431,
+   "mean": 0.0929
+  }
+ },
+ "join": {
+  "joined": 14853,
+  "by_nonce_fallback": 0,
+  "provider_records": 18603,
+  "provider_rids_with_multiple_calls": 0,
+  "provider_orphans": null
+ },
+ "classes": {
+  "benign": 15000
+ },
+ "phase_counts": {
+  "0": 750,
+  "1": 3000,
+  "2": 15000
+ },
+ "T_addon_total": {
+  "n": 5704,
+  "min": 2532.3684,
+  "p50": 7362.1745,
+  "p90": 105594.2433,
+  "p99": 116185.2637,
+  "p999": 118354.549,
+  "max": 118502.8515,
+  "mean": 27805.3351
+ },
+ "T_addon_first": {
+  "n": 5704,
+  "min": 2532.3684,
+  "p50": 7362.1745,
+  "p90": 36623.8445,
+  "p99": 48594.2567,
+  "p999": 60454.2564,
+  "max": 64935.5658,
+  "mean": 13260.0285
+ },
+ "T_release_lag_max": {
+  "n": 614,
+  "min": 3103.0304,
+  "p50": 7372.4282,
+  "p90": 107788.8797,
+  "p99": 115565.5525,
+  "p999": 117161.0838,
+  "max": 117161.0838,
+  "mean": 29968.1866
+ },
+ "T_release_lag_max_arrival": {
+  "n": 614,
+  "min": 3103.0304,
+  "p50": 7372.4282,
+  "p90": 107788.8797,
+  "p99": 115565.5525,
+  "p999": 117161.0838,
+  "max": 117161.0838,
+  "mean": 29968.1866
+ },
+ "T_fw_addon": {
+  "n": 5704,
+  "min": 2532.3684,
+  "p50": 7362.1745,
+  "p90": 105594.2433,
+  "p99": 116185.2637,
+  "p999": 118354.549,
+  "max": 118502.8515,
+  "mean": 27806.8752
+ },
+ "T_fw_addon_sse": {
+  "n": 1261,
+  "min": 57975.2867,
+  "p50": 104380.0543,
+  "p90": 114582.0721,
+  "p99": 118058.7849,
+  "p999": 118493.4042,
+  "max": 118502.8515,
+  "mean": 101746.3108
+ },
+ "T_fw_addon_json": {
+  "n": 4443,
+  "min": 2532.3684,
+  "p50": 7007.874,
+  "p90": 8230.2971,
+  "p99": 9244.5564,
+  "p999": 9901.4146,
+  "max": 10305.0825,
+  "mean": 6821.5886
+ },
+ "release_lag_sampled_joined": 616,
+ "release_lag_unmappable": 912,
+ "client_ttft_sse": {
+  "n": 1261,
+  "min": 13045.2014,
+  "p50": 35680.5211,
+  "p90": 45290.3864,
+  "p99": 57218.0522,
+  "p999": 64388.8496,
+  "max": 65085.5696,
+  "mean": 36095.2403
+ },
+ "provider_sched_err_last": {
+  "n": 14853,
+  "min": 0.0007,
+  "p50": 0.0512,
+  "p90": 0.0885,
+  "p99": 0.103,
+  "p999": 0.1138,
+  "max": 0.2343,
+  "mean": 0.0504
+ },
+ "provider_sched_err_max_per_stream": {
+  "n": 14853,
+  "min": 0.0013,
+  "p50": 0.0678,
+  "p90": 0.1069,
+  "p99": 0.1424,
+  "p999": 0.1883,
+  "max": 0.2343,
+  "mean": 0.0679
+ },
+ "provider_write_max": {
+  "n": 14853,
+  "min": 0.0052,
+  "p50": 0.0129,
+  "p90": 0.0221,
+  "p99": 0.036,
+  "p999": 0.0498,
+  "max": 0.1465,
+  "mean": 0.0145
+ },
+ "loadgen_cpu": [
+  {
+   "dir": "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/v1-bench/runs/N-r50/lg-v1ready",
+   "samples": 300,
+   "busy_max": 6.568334665972597,
+   "busy_mean": 2.69,
+   "machine": "c4-standard-8",
+   "zone": "asia-south1-c"
+  }
+ ],
+ "provider_cpu": {
+  "samples": 514,
+  "busy_max": 13.716934043217199,
+  "busy_p95": 4.775995943779643
+ },
+ "provider_stats": [
+  {
+   "build_sha": "5af9594a2631",
+   "bytes_out": 902224614,
+   "chunks": 2950985,
+   "client_gone": 0,
+   "cpu": {
+    "busy_max": 13.716934043217199,
+    "busy_mean": 4.095259894410932,
+    "proc_max": 3.2500270402249747,
+    "samples": 514
+   },
+   "faults": 0,
+   "gc_config": "gc=off memlimit=17.62GiB",
+   "host": {
+    "hostname": "rv-v1-prov-2.asia-south1-c.c.ai-mesh-firewall.internal",
+    "num_cpu": 8,
+    "gomaxprocs": 8,
+    "go_version": "go1.27.1",
+    "harness_build_sha": "5af9594a2631",
+    "kernel": "Linux version 7.0.0-1011-gcp (buildd@lcy02-amd64-099) (x86_64-linux-gnu-gcc-13 (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0, GNU ld (GNU Binutils for Ubuntu) 2.42) #11~24.04.1-Ubuntu SMP PREEMPT Tue Aug 11 20:14:48 UTC 2026",
+    "mem_total_kb": 30792980,
+    "lscpu": {
+     "CPU(s)": "8",
+     "Core(s) per socket": "4",
+     "Flags": "aes avx2 avx512f sha_ni amx_tile",
+     "Hypervisor vendor": "KVM",
+     "Model name": "INTEL(R) XEON(R) PLATINUM 8581C CPU @ 2.30GHz",
+     "NUMA node(s)": "1",
+     "Socket(s)": "1",
+     "Thread(s) per core": "2"
+    },
+    "gce": {
+     "image": "projects/ubuntu-os-cloud/global/images/ubuntu-2404-noble-amd64-v20260918",
+     "machine-type": "c4-standard-8",
+     "name": "rv-v1-prov-2",
+     "zone": "asia-south1-c"
+    },
+    "sysctl": {
+     "fs/file-max": "4194304",
+     "net/core/netdev_max_backlog": "250000",
+     "net/core/somaxconn": "65535",
+     "net/ipv4/ip_local_port_range": "1024\t65535",
+     "net/ipv4/tcp_max_syn_backlog": "65535",
+     "net/ipv4/tcp_tw_reuse": "1"
+    },
+    "nofile_limit": "1048576/1048576",
+    "start_utc": "2026-09-23T13:21:45.869175223Z"
+   },
+   "inflight": 0,
+   "itl_ms": 20,
+   "record_queue_blocked": 0,
+   "records": 18603,
+   "requests": 18603,
+   "runtime": {
+    "/gc/cycles/total:gc-cycles": 0,
+    "/gc/heap/goal:bytes": 18318234950,
+    "/gc/pauses:seconds": {
+     "count": 0
+    },
+    "/sched/goroutines:goroutines": 419,
+    "/sched/latencies:seconds": {
+     "count": 1025764,
+     "max_ms": 0.098304,
+     "p50_ms": 6.400000000000001e-05,
+     "p9999_ms": 0.08192,
+     "p999_ms": 0.08192,
+     "p99_ms": 0.008192000000000001
+    }
+   },
+   "sample_mod": 10,
+   "sampled": 1883,
+   "sched_err_max_ns": 234345,
+   "status_2xx": 18603,
+   "status_4xx": 0,
+   "status_5xx": 0,
+   "streams_active": 0,
+   "ttft_ms": 150,
+   "uptime_s": 514.378613535,
+   "write_max_ns": 146520
+  }
+ ],
+ "instrument_health": [
+  {
+   "proc": "olg",
+   "dir": "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/v1-bench/runs/N-r50/lg-v1ready",
+   "gc_cycles": 0,
+   "sched_latency_max_ms": 0.16384,
+   "tcp": null
+  },
+  {
+   "proc": "synthprov",
+   "dir": "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/v1-bench/runs/N-r50/rv-v1-prov-2/prov",
+   "gc_cycles": 0,
+   "sched_latency_max_ms": 0.098304,
+   "tcp": {
+    "TcpRetransSegs": 131978,
+    "TcpExtTCPFastRetrans": 0,
+    "TcpExtTCPLossProbes": 131978,
+    "TcpExtTCPTimeouts": 0,
+    "TcpOutSegs": 3004851,
+    "TcpInSegs": 2750346
+   }
+  }
+ ],
+ "completeness": [
+  {
+   "dir": "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/v1-bench/runs/N-r50/lg-v1ready",
+   "scheduled": 18750,
+   "recorded": 18750,
+   "interrupted": false
+  }
+ ],
+ "valid": true,
+ "invalid_reasons": [],
+ "per_second": null,
+ "thresholds": {
+  "slo_ms": 20.0,
+  "err_budget": 0.001,
+  "drop_ms": 5.0,
+  "sched_tol_ms": 1.0,
+  "cpu_max": 70.0
+ },
+ "verdict": {
+  "pass": false,
+  "checks": {
+   "p99_T_fw_addon_lt_slo": false,
+   "infra_error_rate_le_budget": false,
+   "zero_schedule_drops": true,
+   "zero_safety_failures": true,
+   "run_valid": true,
+   "qualified_nonempty": true
+  }
+ }
+}

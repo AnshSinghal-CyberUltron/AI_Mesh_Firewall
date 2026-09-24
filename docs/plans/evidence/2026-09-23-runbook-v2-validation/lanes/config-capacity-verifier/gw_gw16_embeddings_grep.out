@@ -1,0 +1,15 @@
+## BASELINE: any embeddings Tier-2 / semantic key?
+(no hits in gateway runtime)
+(no hits in control plane)
+## scan_prompt_with_tier2 call sites (BASELINE main.py)
+5300:    Tier-1 only (no ``scan_prompt_with_tier2``): embeddings are batched/large, so
+9221:                    verdict = await INPUT_SCANNER.scan_prompt_with_tier2(
+14208:                            _t2v = await INPUT_SCANNER.scan_prompt_with_tier2(
+14822:                        t2 = await INPUT_SCANNER.scan_prompt_with_tier2(
+## proxy_embeddings body 12577-13100: INPUT_SCANNER.* calls
+(none)
+## docstring lines
+    Tier-1 only (no ``scan_prompt_with_tier2``): embeddings are batched/large, so
+    the per-item ML round-trip of Tier-2 is intentionally NOT run here.
+## HEAD identical?
+identical at HEAD

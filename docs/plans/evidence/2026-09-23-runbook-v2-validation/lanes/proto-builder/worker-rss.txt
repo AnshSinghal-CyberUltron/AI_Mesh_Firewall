@@ -1,0 +1,8 @@
+READY after 9s
+local_gpu-22M pid=10879 VmHWM: 3520 kB VmRSS: 3520 kB 
+local_gpu-22M pid=11042 VmHWM: 2512544 kB VmRSS: 1747528 kB 
+READY after 7s
+triton_grpc-86M pid=10879 VmHWM: 3528 kB VmRSS: 3528 kB 
+triton_grpc-86M pid=11672 VmHWM: 316808 kB VmRSS: 316808 kB 
+0, 4374 MiB
+1, 4374 MiB

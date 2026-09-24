@@ -1,0 +1,6 @@
+run p22-050: SSE 200s joined=10327, per-chunk sampled=1035 (10.0%)
+(1) bytes carried by the first content event (sampled streams): {1: 1021, 2: 14}
+    time from that event to the event completing provider token 1: {'n': 1035, 'min': 0.0, 'p50': 19.8221, 'p90': 19.9117, 'p99': 39.7892, 'p999': 40.0784, 'max': 59.837, 'mean': 19.6771}
+(2) T_addon_first (SSE, all): {'n': 10327, 'min': 4.5226, 'p50': 9.4164, 'p90': 12.7122, 'p99': 27.0716, 'p999': 33.2287, 'max': 45.3365, 'mean': 9.151}
+    T_addon_total (SSE, all): {'n': 10327, 'min': 4.6374, 'p50': 9.4954, 'p90': 12.311, 'p99': 15.2174, 'p999': 18.3504, 'max': 19.9649, 'mean': 8.9332}
+    T_release_lag_max (sampled only): {'n': 1035, 'min': 25.5406, 'p50': 49.2124, 'p90': 54.5525, 'p99': 72.0856, 'p999': 75.9346, 'max': 76.1724, 'mean': 49.0638}

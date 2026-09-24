@@ -1,0 +1,6 @@
+{"units": {"g2-standard-24": {"capacity_rps": 75, "source": "f1u-075,-r2,-r3 PASS (load-knee), f1u-080 FAIL; via nginx edge, constant arrivals"},
+           "g2-standard-8": {"capacity_rps": 60, "source": "f8-060,-r2,-r3 PASS, f8-070 FAIL; client->unit direct, constant arrivals"},
+           "g2-standard-4": {"capacity_rps": 35, "source": "f4-035,-r2,-r3 PASS, f4-040 FAIL (latency); client->unit direct, constant arrivals"}},
+ "bytes_per_qualified_request": {"lb_to_client": 57188, "client_to_lb": 8594, "unit_to_provider": 9277,
+   "source": "mean of f1u-075/-r2/-r3 iptables ACCT (IP layer) per offered x offered/qualified (1.0167)"},
+ "offered_per_qualified": 1.0}

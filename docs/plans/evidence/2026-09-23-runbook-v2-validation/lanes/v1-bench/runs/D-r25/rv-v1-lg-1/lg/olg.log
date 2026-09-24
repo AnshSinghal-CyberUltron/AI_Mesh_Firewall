@@ -1,0 +1,42 @@
+2026/09/23 12:16:46 corpus: 5000 entries sha256=6b8420958f0cb22b
+2026/09/23 12:16:46 waiting 4.729s for synchronized start
+2026/09/23 12:17:01 t=10s sched=42 inflight=23 ok=19 err=0 drops=0 conns=24
+2026/09/23 12:17:11 t=20s sched=167 inflight=67 ok=100 err=0 drops=0 conns=67
+2026/09/23 12:17:21 t=30s sched=376 inflight=111 ok=265 err=0 drops=0 conns=113
+2026/09/23 12:17:31 t=40s sched=626 inflight=120 ok=506 err=0 drops=0 conns=119
+2026/09/23 12:17:41 t=50s sched=876 inflight=115 ok=761 err=0 drops=0 conns=120
+2026/09/23 12:17:51 t=60s sched=1126 inflight=114 ok=1012 err=0 drops=0 conns=128
+2026/09/23 12:18:01 t=70s sched=1376 inflight=124 ok=1252 err=0 drops=0 conns=134
+2026/09/23 12:18:11 t=80s sched=1626 inflight=115 ok=1511 err=0 drops=0 conns=134
+2026/09/23 12:18:21 t=90s sched=1876 inflight=120 ok=1756 err=0 drops=0 conns=134
+2026/09/23 12:18:31 t=100s sched=2126 inflight=123 ok=2003 err=0 drops=0 conns=134
+2026/09/23 12:18:41 t=110s sched=2376 inflight=115 ok=2261 err=0 drops=0 conns=134
+2026/09/23 12:18:51 t=120s sched=2626 inflight=121 ok=2505 err=0 drops=0 conns=134
+2026/09/23 12:19:01 t=130s sched=2876 inflight=121 ok=2755 err=0 drops=0 conns=134
+2026/09/23 12:19:11 t=140s sched=3126 inflight=120 ok=3006 err=0 drops=0 conns=134
+2026/09/23 12:19:21 t=150s sched=3376 inflight=108 ok=3268 err=0 drops=0 conns=134
+2026/09/23 12:19:31 t=160s sched=3625 inflight=124 ok=3501 err=0 drops=0 conns=134
+2026/09/23 12:19:41 t=170s sched=3876 inflight=113 ok=3763 err=0 drops=0 conns=134
+2026/09/23 12:19:51 t=180s sched=4126 inflight=114 ok=4012 err=0 drops=0 conns=134
+2026/09/23 12:20:01 t=190s sched=4376 inflight=134 ok=4242 err=0 drops=0 conns=136
+2026/09/23 12:20:11 t=200s sched=4626 inflight=109 ok=4517 err=0 drops=0 conns=136
+2026/09/23 12:20:21 t=210s sched=4876 inflight=124 ok=4752 err=0 drops=0 conns=136
+2026/09/23 12:20:31 t=220s sched=5126 inflight=120 ok=5006 err=0 drops=0 conns=136
+2026/09/23 12:20:41 t=230s sched=5376 inflight=114 ok=5262 err=0 drops=0 conns=136
+2026/09/23 12:20:51 t=240s sched=5626 inflight=110 ok=5516 err=0 drops=0 conns=136
+2026/09/23 12:21:01 t=250s sched=5876 inflight=123 ok=5753 err=0 drops=0 conns=136
+2026/09/23 12:21:11 t=260s sched=6126 inflight=114 ok=6012 err=0 drops=0 conns=136
+2026/09/23 12:21:21 t=270s sched=6376 inflight=110 ok=6266 err=0 drops=0 conns=136
+2026/09/23 12:21:31 t=280s sched=6626 inflight=106 ok=6520 err=0 drops=0 conns=136
+2026/09/23 12:21:41 t=290s sched=6876 inflight=113 ok=6763 err=0 drops=0 conns=136
+2026/09/23 12:21:51 t=300s sched=7126 inflight=126 ok=7000 err=0 drops=0 conns=136
+2026/09/23 12:22:01 t=310s sched=7376 inflight=117 ok=7259 err=0 drops=0 conns=136
+2026/09/23 12:22:11 t=320s sched=7626 inflight=118 ok=7508 err=0 drops=0 conns=136
+2026/09/23 12:22:21 t=330s sched=7876 inflight=121 ok=7755 err=0 drops=0 conns=136
+2026/09/23 12:22:31 t=340s sched=8126 inflight=117 ok=8009 err=0 drops=0 conns=136
+2026/09/23 12:22:41 t=350s sched=8376 inflight=123 ok=8253 err=0 drops=0 conns=136
+2026/09/23 12:22:51 t=360s sched=8626 inflight=121 ok=8505 err=0 drops=0 conns=136
+2026/09/23 12:23:01 t=370s sched=8876 inflight=123 ok=8753 err=0 drops=0 conns=136
+2026/09/23 12:23:11 t=380s sched=9126 inflight=117 ok=9009 err=0 drops=0 conns=136
+2026/09/23 12:23:21 t=390s sched=9375 inflight=117 ok=9258 err=0 drops=0 conns=136
+2026/09/23 12:23:28 done: scheduled=9375 recorded=9375 ok=9375 errors=map[] drops=0 late_p99=211us max=397us cpu_busy_max=13.4%

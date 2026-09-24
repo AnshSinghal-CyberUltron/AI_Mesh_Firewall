@@ -1,0 +1,923 @@
+{
+ "scope": [
+  "gateway",
+  "shared",
+  "services"
+ ],
+ "n_files": 118,
+ "wrappers_detected": {
+  "get_env": {
+   "def": "gateway/ai_mesh_gateway/config.py:10",
+   "param": "key",
+   "index": 0,
+   "default": null
+  },
+  "_env_int": {
+   "def": "gateway/ai_mesh_gateway/config.py:14",
+   "param": "key",
+   "index": 0,
+   "default": null
+  },
+  "_env_float": {
+   "def": "gateway/ai_mesh_gateway/config.py:46",
+   "param": "key",
+   "index": 0,
+   "default": null
+  },
+  "is_http_allowed_for_url": {
+   "def": "gateway/ai_mesh_gateway/config.py:72",
+   "param": "allow_env_var",
+   "index": 1,
+   "default": "GATEWAY_ALLOW_HTTP"
+  },
+  "_env_truthy": {
+   "def": "services/mcp-broker/src/sandbox/docker_manager.py:30",
+   "param": "name",
+   "index": 0,
+   "default": null
+  }
+ },
+ "distinct_literal_names": 260,
+ "literal_call_sites": 317,
+ "dynamic_key_sites": 3,
+ "total_sites_incl_dynamic": 320,
+ "distinct_names_direct_only": 182,
+ "call_sites_direct_only": 232,
+ "by_kind": {
+  "environ.get": 183,
+  "getenv": 52,
+  "wrapper:_env_float": 10,
+  "wrapper:_env_int": 22,
+  "wrapper:_env_truthy": 2,
+  "wrapper:get_env": 49,
+  "wrapper:is_http_allowed_for_url": 2
+ },
+ "names": {
+  "AGENT_API_KEY": [
+   "gateway/ai_mesh_gateway/mcp_proxy.py:71"
+  ],
+  "AIGUARDX_API_KEY": [
+   "gateway/ai_mesh_gateway/config.py:96"
+  ],
+  "AIGUARDX_BACKEND_URL": [
+   "gateway/ai_mesh_gateway/config.py:93",
+   "gateway/ai_mesh_gateway/mcp_proxy.py:66"
+  ],
+  "AIGUARDX_GATEWAY_LOCATION": [
+   "gateway/ai_mesh_gateway/config.py:95"
+  ],
+  "AIGUARDX_GATEWAY_NAME": [
+   "gateway/ai_mesh_gateway/config.py:94"
+  ],
+  "AI_MESH_CONTROL_URL": [
+   "gateway/ai_mesh_gateway/mcp_proxy.py:67"
+  ],
+  "ASGI_ALLOWED_ORIGINS": [
+   "gateway/ai_mesh_gateway/main.py:479"
+  ],
+  "AWS_ACCESS_KEY_ID": [
+   "gateway/ai_mesh_gateway/bedrock_client.py:247"
+  ],
+  "BACKEND_PUBLIC_URL": [
+   "gateway/ai_mesh_gateway/main.py:83"
+  ],
+  "BACKEND_URL": [
+   "gateway/ai_mesh_gateway/mcp_proxy.py:65"
+  ],
+  "BEDROCK_ADJUDICATOR_MODEL": [
+   "gateway/ai_mesh_gateway/platform_models.py:108"
+  ],
+  "BEDROCK_DEPLOYMENT_PATH": [
+   "gateway/ai_mesh_gateway/bedrock_scanner.py:728"
+  ],
+  "BEDROCK_LOG_BACKUPS": [
+   "gateway/ai_mesh_gateway/bedrock_logger.py:38"
+  ],
+  "BEDROCK_LOG_DIR": [
+   "gateway/ai_mesh_gateway/bedrock_logger.py:35",
+   "gateway/ai_mesh_gateway/main.py:16494",
+   "gateway/ai_mesh_gateway/main.py:6758"
+  ],
+  "BEDROCK_LOG_JSON": [
+   "gateway/ai_mesh_gateway/bedrock_logger.py:39",
+   "gateway/ai_mesh_gateway/main.py:6760"
+  ],
+  "BEDROCK_LOG_LEVEL": [
+   "gateway/ai_mesh_gateway/bedrock_logger.py:36",
+   "gateway/ai_mesh_gateway/main.py:6759"
+  ],
+  "BEDROCK_LOG_MAX_MB": [
+   "gateway/ai_mesh_gateway/bedrock_logger.py:37"
+  ],
+  "BEDROCK_LOG_OUTPUT_PREVIEW": [
+   "gateway/ai_mesh_gateway/bedrock_logger.py:42"
+  ],
+  "BEDROCK_LOG_PREVIEW_CHARS": [
+   "gateway/ai_mesh_gateway/bedrock_logger.py:40"
+  ],
+  "BEDROCK_LOG_PROMPT_PREVIEW": [
+   "gateway/ai_mesh_gateway/bedrock_logger.py:41"
+  ],
+  "BEDROCK_LOG_RING_SIZE": [
+   "gateway/ai_mesh_gateway/bedrock_logger.py:45"
+  ],
+  "BEDROCK_MAX_PROMPT_CHARS": [
+   "gateway/ai_mesh_gateway/bedrock_scanner.py:58"
+  ],
+  "BEDROCK_MAX_TOKENS": [
+   "gateway/ai_mesh_gateway/bedrock_client.py:632",
+   "gateway/ai_mesh_gateway/bedrock_client.py:687",
+   "gateway/ai_mesh_gateway/bedrock_scanner.py:716",
+   "shared/ai_mesh_shared/tier2_gemini_client.py:189"
+  ],
+  "BEDROCK_MODEL": [
+   "gateway/ai_mesh_gateway/bedrock_inference.py:9",
+   "gateway/ai_mesh_gateway/llm_judge.py:83",
+   "gateway/ai_mesh_gateway/main.py:6676",
+   "gateway/ai_mesh_gateway/platform_models.py:101",
+   "gateway/ai_mesh_gateway/rag_pipeline/query_stage.py:425"
+  ],
+  "BEDROCK_REGION": [
+   "gateway/ai_mesh_gateway/bedrock_client.py:224",
+   "gateway/ai_mesh_gateway/bedrock_client.py:844",
+   "gateway/ai_mesh_gateway/llm_judge.py:84"
+  ],
+  "BEDROCK_TIER2_SCANNER_MODEL": [
+   "gateway/ai_mesh_gateway/platform_models.py:100"
+  ],
+  "BEDROCK_TIMEOUT": [
+   "gateway/ai_mesh_gateway/bedrock_client.py:846"
+  ],
+  "CHROMA_URL": [
+   "gateway/ai_mesh_gateway/config.py:188"
+  ],
+  "DATABASE_URL": [
+   "gateway/ai_mesh_gateway/config.py:190",
+   "gateway/ai_mesh_gateway/embedding_vault.py:229"
+  ],
+  "DJANGO_SECRET_KEY": [
+   "gateway/ai_mesh_gateway/llm_router.py:876"
+  ],
+  "EMBEDDING_VAULT_AUTH_LOG_COOLDOWN_S": [
+   "gateway/ai_mesh_gateway/embedding_vault.py:245"
+  ],
+  "EMBEDDING_VAULT_STRICT": [
+   "gateway/ai_mesh_gateway/embedding_vault.py:162"
+  ],
+  "ENABLE_TIER2": [
+   "gateway/ai_mesh_gateway/scanner.py:1137"
+  ],
+  "FRONTEND_ORIGIN": [
+   "gateway/ai_mesh_gateway/main.py:479"
+  ],
+  "GATEWAY_ADMIN_USER_IDS": [
+   "gateway/ai_mesh_gateway/admin_auth.py:30"
+  ],
+  "GATEWAY_ALLOW_HTTP": [
+   "gateway/ai_mesh_gateway/config.py:282"
+  ],
+  "GATEWAY_ALLOW_HTTP_LLM": [
+   "gateway/ai_mesh_gateway/config.py:283"
+  ],
+  "GATEWAY_API_KEY": [
+   "gateway/scripts/pipeline_9stage_verify.py:32",
+   "gateway/scripts/routing_e2e_matrix.py:36"
+  ],
+  "GATEWAY_ASYNC_MCP_AUDIT": [
+   "gateway/ai_mesh_gateway/mcp_proxy.py:118"
+  ],
+  "GATEWAY_ASYNC_VECTOR_INGEST": [
+   "gateway/ai_mesh_gateway/main.py:130"
+  ],
+  "GATEWAY_AUDIT_MAX_INFLIGHT": [
+   "gateway/ai_mesh_gateway/mcp_proxy.py:134"
+  ],
+  "GATEWAY_AUDIT_MAX_INFLIGHT_HIGH": [
+   "gateway/ai_mesh_gateway/mcp_proxy.py:138"
+  ],
+  "GATEWAY_AUTH_ENABLED": [
+   "gateway/ai_mesh_gateway/config.py:103",
+   "gateway/ai_mesh_gateway/main.py:125"
+  ],
+  "GATEWAY_BEDROCK_MAX_POOL_CONNECTIONS": [
+   "gateway/ai_mesh_gateway/bedrock_client.py:68"
+  ],
+  "GATEWAY_BEDROCK_THREAD_POOL_SIZE": [
+   "gateway/ai_mesh_gateway/scanner.py:1128"
+  ],
+  "GATEWAY_BLOCK_STATUS": [
+   "gateway/ai_mesh_gateway/main.py:843"
+  ],
+  "GATEWAY_CALL_SECURITY_SCAN": [
+   "gateway/ai_mesh_gateway/config.py:101"
+  ],
+  "GATEWAY_CHROMA_AUTH_TOKEN": [
+   "gateway/ai_mesh_gateway/config.py:189"
+  ],
+  "GATEWAY_CHROMA_URL": [
+   "gateway/ai_mesh_gateway/config.py:188"
+  ],
+  "GATEWAY_CIRCUIT_BREAKER_COOLDOWN_SECONDS": [
+   "gateway/ai_mesh_gateway/config.py:247"
+  ],
+  "GATEWAY_CIRCUIT_BREAKER_ENABLED": [
+   "gateway/ai_mesh_gateway/config.py:242"
+  ],
+  "GATEWAY_CIRCUIT_BREAKER_ERROR_THRESHOLD": [
+   "gateway/ai_mesh_gateway/config.py:243"
+  ],
+  "GATEWAY_CIRCUIT_BREAKER_MIN_REQUESTS": [
+   "gateway/ai_mesh_gateway/config.py:245"
+  ],
+  "GATEWAY_CORS_ORIGINS": [
+   "gateway/ai_mesh_gateway/main.py:479"
+  ],
+  "GATEWAY_DEEP_SCAN_ENABLED": [
+   "gateway/ai_mesh_gateway/config.py:164"
+  ],
+  "GATEWAY_DEFAULT_MAX_CONTEXT_TOKENS": [
+   "gateway/ai_mesh_gateway/config.py:197"
+  ],
+  "GATEWAY_EMBEDDING_VAULT_DIM": [
+   "gateway/ai_mesh_gateway/embedding_vault.py:234"
+  ],
+  "GATEWAY_EMBEDDING_VAULT_MODEL": [
+   "gateway/ai_mesh_gateway/embedding_vault.py:232"
+  ],
+  "GATEWAY_GC_INSTRUMENTATION": [
+   "gateway/ai_mesh_gateway/gc_monitor.py:74"
+  ],
+  "GATEWAY_GIL_SWITCH_INTERVAL_S": [
+   "gateway/ai_mesh_gateway/main.py:6373"
+  ],
+  "GATEWAY_HALLUCINATION_FLAG_ENABLED": [
+   "gateway/ai_mesh_gateway/config.py:209"
+  ],
+  "GATEWAY_INTERNAL_API_KEY": [
+   "gateway/ai_mesh_gateway/main.py:6307",
+   "gateway/ai_mesh_gateway/mcp_proxy.py:70",
+   "gateway/ai_mesh_gateway/middleware.py:363"
+  ],
+  "GATEWAY_KILL_SWITCH_ENABLED": [
+   "gateway/ai_mesh_gateway/config.py:199"
+  ],
+  "GATEWAY_LAST_USED_DEBOUNCE_SECONDS": [
+   "gateway/ai_mesh_gateway/middleware.py:305"
+  ],
+  "GATEWAY_LLM_API_KEY": [
+   "gateway/ai_mesh_gateway/config.py:98"
+  ],
+  "GATEWAY_LOADTEST_STUB_DURATION_S": [
+   "gateway/ai_mesh_gateway/llm_router.py:97"
+  ],
+  "GATEWAY_LOADTEST_STUB_LLM": [
+   "gateway/ai_mesh_gateway/llm_router.py:77",
+   "gateway/ai_mesh_gateway/metrics.py:252"
+  ],
+  "GATEWAY_LOADTEST_STUB_TOK_PER_S": [
+   "gateway/ai_mesh_gateway/llm_router.py:81"
+  ],
+  "GATEWAY_LOG_JSON": [
+   "gateway/ai_mesh_gateway/main.py:17361"
+  ],
+  "GATEWAY_LOG_LEVEL": [
+   "gateway/ai_mesh_gateway/main.py:17358"
+  ],
+  "GATEWAY_MCP_BLOCK_ON_CREDENTIAL": [
+   "gateway/ai_mesh_gateway/config.py:127",
+   "gateway/ai_mesh_gateway/mcp_proxy.py:1333"
+  ],
+  "GATEWAY_MCP_DEFAULT_DETECTION": [
+   "gateway/ai_mesh_gateway/mcp_scan_orchestrator.py:257"
+  ],
+  "GATEWAY_MCP_REDACT_RESULT_ON_DETECT": [
+   "gateway/ai_mesh_gateway/config.py:138",
+   "gateway/ai_mesh_gateway/mcp_proxy.py:1417"
+  ],
+  "GATEWAY_MILVUS_TOKEN": [
+   "gateway/ai_mesh_gateway/config.py:186"
+  ],
+  "GATEWAY_MILVUS_URI": [
+   "gateway/ai_mesh_gateway/config.py:185"
+  ],
+  "GATEWAY_MONGO_TELEMETRY_ENABLED": [
+   "gateway/ai_mesh_gateway/telemetry_mongo.py:30"
+  ],
+  "GATEWAY_ORG_ONLY_INFERENCE": [
+   "gateway/ai_mesh_gateway/config.py:165"
+  ],
+  "GATEWAY_OUTPUT_BLOCK_ON_CREDENTIAL": [
+   "gateway/ai_mesh_gateway/config.py:207"
+  ],
+  "GATEWAY_OUTPUT_BLOCK_ON_IP_LEAKAGE": [
+   "gateway/ai_mesh_gateway/config.py:208"
+  ],
+  "GATEWAY_OUTPUT_GROUNDING_ENABLED": [
+   "gateway/ai_mesh_gateway/config.py:206"
+  ],
+  "GATEWAY_OUTPUT_GUARD_ENABLED": [
+   "gateway/ai_mesh_gateway/config.py:205"
+  ],
+  "GATEWAY_PINECONE_API_KEY": [
+   "gateway/ai_mesh_gateway/config.py:183"
+  ],
+  "GATEWAY_PINECONE_ENVIRONMENT": [
+   "gateway/ai_mesh_gateway/config.py:184"
+  ],
+  "GATEWAY_PIPELINE_TRACE_MODE": [
+   "gateway/ai_mesh_gateway/trace_projection.py:51"
+  ],
+  "GATEWAY_POLICY_CACHE_ENABLED": [
+   "gateway/ai_mesh_gateway/config.py:104"
+  ],
+  "GATEWAY_POLICY_CACHE_REQUIRE_LOADED": [
+   "gateway/ai_mesh_gateway/config.py:105"
+  ],
+  "GATEWAY_POLICY_SIGNING_REQUIRED": [
+   "gateway/ai_mesh_gateway/policy_signing.py:80"
+  ],
+  "GATEWAY_PORT": [
+   "gateway/ai_mesh_gateway/config.py:99"
+  ],
+  "GATEWAY_PROMOTE_REASONING_TO_CONTENT": [
+   "gateway/ai_mesh_gateway/main.py:2182"
+  ],
+  "GATEWAY_PROMPT_REWRITE_THRESHOLD": [
+   "gateway/ai_mesh_gateway/config.py:269"
+  ],
+  "GATEWAY_PUBLIC_URL": [
+   "gateway/ai_mesh_gateway/main.py:82",
+   "gateway/ai_mesh_gateway/mcp_oauth.py:48",
+   "gateway/ai_mesh_gateway/mcp_oauth_proxy.py:224",
+   "gateway/ai_mesh_gateway/middleware.py:410",
+   "gateway/ai_mesh_gateway/middleware.py:468"
+  ],
+  "GATEWAY_RAG_ANOMALY_DETECTION_ENABLED": [
+   "gateway/ai_mesh_gateway/config.py:192"
+  ],
+  "GATEWAY_RAG_CIRCUIT_BREAKER_ENABLED": [
+   "gateway/ai_mesh_gateway/config.py:254"
+  ],
+  "GATEWAY_RAG_CONTEXT_BINDING_ENABLED": [
+   "gateway/ai_mesh_gateway/config.py:255"
+  ],
+  "GATEWAY_RAG_CONTEXT_BINDING_TTL": [
+   "gateway/ai_mesh_gateway/config.py:256"
+  ],
+  "GATEWAY_RAG_CONTEXT_SCAN_ENABLED": [
+   "gateway/ai_mesh_gateway/config.py:191"
+  ],
+  "GATEWAY_RAG_DEFAULT_MAX_RESULTS": [
+   "gateway/ai_mesh_gateway/config.py:195"
+  ],
+  "GATEWAY_RAG_ENABLED": [
+   "gateway/ai_mesh_gateway/config.py:175"
+  ],
+  "GATEWAY_RAG_GENERATOR_ENABLED": [
+   "gateway/ai_mesh_gateway/config.py:182"
+  ],
+  "GATEWAY_RAG_MAX_QUERY_LENGTH": [
+   "gateway/ai_mesh_gateway/config.py:193"
+  ],
+  "GATEWAY_RAG_RANKER_ENABLED": [
+   "gateway/ai_mesh_gateway/config.py:181"
+  ],
+  "GATEWAY_RAG_RATE_LIMIT_RPM": [
+   "gateway/ai_mesh_gateway/config.py:252"
+  ],
+  "GATEWAY_RAG_RELEVANCE_THRESHOLD": [
+   "gateway/ai_mesh_gateway/config.py:267"
+  ],
+  "GATEWAY_REDIS_MAX_CONNECTIONS": [
+   "gateway/ai_mesh_gateway/middleware.py:311"
+  ],
+  "GATEWAY_REDIS_URL": [
+   "gateway/ai_mesh_gateway/config.py:102",
+   "gateway/ai_mesh_gateway/jobs.py:13",
+   "gateway/ai_mesh_gateway/main.py:124",
+   "gateway/ai_mesh_gateway/mcp_error_classifier.py:51",
+   "gateway/ai_mesh_gateway/mcp_oauth.py:468",
+   "gateway/ai_mesh_gateway/mcp_oauth_proxy.py:67",
+   "gateway/ai_mesh_gateway/mcp_proxy.py:662",
+   "gateway/ai_mesh_gateway/vector_routes.py:298"
+  ],
+  "GATEWAY_ROUTING_COST_WEIGHT": [
+   "gateway/ai_mesh_gateway/config.py:214"
+  ],
+  "GATEWAY_ROUTING_LATENCY_WEIGHT": [
+   "gateway/ai_mesh_gateway/config.py:216"
+  ],
+  "GATEWAY_ROUTING_PRIORITY_WEIGHT": [
+   "gateway/ai_mesh_gateway/config.py:218"
+  ],
+  "GATEWAY_ROUTING_RISK_WEIGHT": [
+   "gateway/ai_mesh_gateway/config.py:212"
+  ],
+  "GATEWAY_SCANNER_THREAD_POOL_SIZE": [
+   "gateway/ai_mesh_gateway/scanner.py:88"
+  ],
+  "GATEWAY_SCAN_BUFFER_MAX_BYTES": [
+   "gateway/ai_mesh_gateway/config.py:160"
+  ],
+  "GATEWAY_SCAN_THREAD_POOL_SIZE": [
+   "gateway/ai_mesh_gateway/config.py:162"
+  ],
+  "GATEWAY_SEMANTIC_LEAKAGE_ENABLED": [
+   "gateway/ai_mesh_gateway/config.py:249"
+  ],
+  "GATEWAY_STATS_INTERVAL_SEC": [
+   "gateway/ai_mesh_gateway/config.py:100"
+  ],
+  "GATEWAY_STREAM_EMIT_DEBUG_HEADERS": [
+   "gateway/ai_mesh_gateway/config.py:157"
+  ],
+  "GATEWAY_STREAM_FINALIZE_TIMEOUT_MS": [
+   "gateway/ai_mesh_gateway/config.py:158"
+  ],
+  "GATEWAY_STREAM_MAX_BUFFER_BYTES": [
+   "gateway/ai_mesh_gateway/config.py:153"
+  ],
+  "GATEWAY_STREAM_MAX_BUFFER_CHUNKS": [
+   "gateway/ai_mesh_gateway/config.py:155"
+  ],
+  "GATEWAY_STREAM_PREFLIGHT_FAIL_CLOSED": [
+   "gateway/ai_mesh_gateway/config.py:151"
+  ],
+  "GATEWAY_TELEMETRY_BUFFER_SIZE": [
+   "gateway/ai_mesh_gateway/config.py:203"
+  ],
+  "GATEWAY_TELEMETRY_ENABLED": [
+   "gateway/ai_mesh_gateway/config.py:200"
+  ],
+  "GATEWAY_TELEMETRY_FLUSH_INTERVAL": [
+   "gateway/ai_mesh_gateway/config.py:201"
+  ],
+  "GATEWAY_TIER2_CACHE_MAX": [
+   "gateway/ai_mesh_gateway/scanner.py:1146"
+  ],
+  "GATEWAY_TIER2_CACHE_TTL_SECONDS": [
+   "gateway/ai_mesh_gateway/scanner.py:1144"
+  ],
+  "GATEWAY_TIER2_EXECUTION_MODE": [
+   "gateway/ai_mesh_gateway/config.py:145"
+  ],
+  "GATEWAY_TIER2_FAIL_CLOSED_ENABLED": [
+   "gateway/ai_mesh_gateway/config.py:139"
+  ],
+  "GATEWAY_TIER2_INPUT_FAIL_CLOSED": [
+   "gateway/ai_mesh_gateway/config.py:144"
+  ],
+  "GATEWAY_TIER2_SAMPLE_RATE": [
+   "gateway/ai_mesh_gateway/scanner.py:1148"
+  ],
+  "GATEWAY_TIER2_STREAM_HOLD_ENABLED": [
+   "gateway/ai_mesh_gateway/config.py:146"
+  ],
+  "GATEWAY_TIER2_STREAM_HOLD_TIMEOUT_MS": [
+   "gateway/ai_mesh_gateway/config.py:149"
+  ],
+  "GATEWAY_UPSTREAM_LLM_URL": [
+   "gateway/ai_mesh_gateway/config.py:97"
+  ],
+  "GATEWAY_URL": [
+   "gateway/scripts/pipeline_9stage_verify.py:31",
+   "gateway/scripts/routing_e2e_matrix.py:35"
+  ],
+  "GATEWAY_VAULT_DB_DSN": [
+   "gateway/ai_mesh_gateway/config.py:190"
+  ],
+  "GATEWAY_VAULT_POOL_MAX": [
+   "gateway/ai_mesh_gateway/embedding_vault.py:273"
+  ],
+  "GATEWAY_VAULT_POOL_MIN": [
+   "gateway/ai_mesh_gateway/embedding_vault.py:272"
+  ],
+  "GOOGLE_API_KEY": [
+   "shared/ai_mesh_shared/tier2_gemini_client.py:59"
+  ],
+  "LITELLM_DEFAULT_MODEL": [
+   "gateway/ai_mesh_gateway/config.py:166"
+  ],
+  "LITELLM_DROP_PARAMS": [
+   "gateway/ai_mesh_gateway/config.py:174"
+  ],
+  "LITELLM_FALLBACK_MODELS": [
+   "gateway/ai_mesh_gateway/config.py:167"
+  ],
+  "LITELLM_NUM_RETRIES": [
+   "gateway/ai_mesh_gateway/config.py:172"
+  ],
+  "LITELLM_REQUEST_TIMEOUT": [
+   "gateway/ai_mesh_gateway/config.py:170"
+  ],
+  "MAX_TOOL_METADATA_BYTES": [
+   "gateway/ai_mesh_gateway/main.py:3398"
+  ],
+  "MCP_AGENT_ALLOW_INTERNAL_HOSTS": [
+   "services/mcp-broker/sandbox-image/agent/upstream_manager.py:107"
+  ],
+  "MCP_AGENT_CONNECT_TIMEOUT": [
+   "services/mcp-broker/sandbox-image/agent/upstream_manager.py:19"
+  ],
+  "MCP_AGENT_INTERNAL_KEY": [
+   "services/mcp-broker/sandbox-image/agent/main.py:37",
+   "services/mcp-broker/src/sandbox/docker_manager.py:634",
+   "services/mcp-broker/src/sandbox/routes.py:293"
+  ],
+  "MCP_AGENT_MAX_RESPONSE_BYTES": [
+   "services/mcp-broker/sandbox-image/agent/upstream_manager.py:22"
+  ],
+  "MCP_AGENT_SSE_POST_READ_TIMEOUT": [
+   "services/mcp-broker/sandbox-image/agent/sse_manager.py:93"
+  ],
+  "MCP_AGENT_SSE_QUEUE_MAXSIZE": [
+   "services/mcp-broker/sandbox-image/agent/sse_manager.py:88"
+  ],
+  "MCP_ALLOW_INTERNAL_HOSTS": [
+   "gateway/ai_mesh_gateway/_url_guard.py:36"
+  ],
+  "MCP_BROKER_AGENT_MAX_RESPONSE_BYTES": [
+   "services/mcp-broker/src/sandbox/routes.py:71"
+  ],
+  "MCP_BROKER_AGENT_TIMEOUT": [
+   "services/mcp-broker/src/sandbox/routes.py:48"
+  ],
+  "MCP_BROKER_AGENT_TIMEOUT_MAX": [
+   "services/mcp-broker/src/sandbox/routes.py:60"
+  ],
+  "MCP_BROKER_CONTAINER_NAME": [
+   "services/mcp-broker/src/sandbox/docker_manager.py:353"
+  ],
+  "MCP_BROKER_INTERNAL_KEY": [
+   "gateway/ai_mesh_gateway/mcp_sandbox_client.py:37",
+   "services/mcp-broker/src/auth.py:13"
+  ],
+  "MCP_BROKER_URL": [
+   "gateway/ai_mesh_gateway/mcp_sandbox_client.py:25"
+  ],
+  "MCP_ENABLED_TOOLS_NEG_TTL": [
+   "gateway/ai_mesh_gateway/mcp_proxy.py:638"
+  ],
+  "MCP_ENABLED_TOOLS_TTL": [
+   "gateway/ai_mesh_gateway/mcp_proxy.py:637"
+  ],
+  "MCP_EXFIL_WALK_MAX_DEPTH": [
+   "gateway/ai_mesh_gateway/mcp_scan_orchestrator.py:450"
+  ],
+  "MCP_EXT_ALLOWED_DOMAINS": [
+   "gateway/ai_mesh_gateway/mcp_proxy.py:257"
+  ],
+  "MCP_EXT_PROXY_HTTP_HOSTS": [
+   "gateway/ai_mesh_gateway/mcp_proxy.py:284"
+  ],
+  "MCP_FIREWALL_URL": [
+   "gateway/ai_mesh_gateway/mcp_proxy.py:63"
+  ],
+  "MCP_HOST_TOOLS_ALLOWLIST": [
+   "shared/ai_mesh_shared/mcp_host_tools.py:109"
+  ],
+  "MCP_HOST_TOOL_INSTALL_TIMEOUT": [
+   "shared/ai_mesh_shared/mcp_host_tools_runtime.py:18"
+  ],
+  "MCP_HTTP_VIA_SANDBOX": [
+   "gateway/ai_mesh_gateway/mcp_proxy.py:4520"
+  ],
+  "MCP_MAX_ARGS_BYTES": [
+   "gateway/ai_mesh_gateway/mcp_proxy.py:361"
+  ],
+  "MCP_MAX_ARG_DEPTH": [
+   "gateway/ai_mesh_gateway/mcp_proxy.py:355"
+  ],
+  "MCP_MAX_ARG_NODES": [
+   "gateway/ai_mesh_gateway/mcp_proxy.py:368"
+  ],
+  "MCP_MAX_BODY_BYTES": [
+   "gateway/ai_mesh_gateway/mcp_proxy.py:294"
+  ],
+  "MCP_MAX_CONTENT_BLOCKS": [
+   "gateway/ai_mesh_gateway/mcp_proxy.py:323"
+  ],
+  "MCP_MAX_RESPONSE_BYTES": [
+   "gateway/ai_mesh_gateway/mcp_proxy.py:301"
+  ],
+  "MCP_MAX_RESULT_DEPTH": [
+   "gateway/ai_mesh_gateway/mcp_proxy.py:352"
+  ],
+  "MCP_MAX_RESULT_NODES": [
+   "gateway/ai_mesh_gateway/mcp_proxy.py:334"
+  ],
+  "MCP_OAUTH_ENCRYPTION_KEY": [
+   "gateway/ai_mesh_gateway/mcp_oauth_proxy.py:124"
+  ],
+  "MCP_OBSERVE_SCAN_UNCONFIGURED": [
+   "gateway/ai_mesh_gateway/mcp_proxy.py:380"
+  ],
+  "MCP_POLICY_ONLY_ENFORCEMENT": [
+   "gateway/ai_mesh_gateway/mcp_scan_orchestrator.py:398"
+  ],
+  "MCP_PROXY_TIMEOUT": [
+   "gateway/ai_mesh_gateway/mcp_proxy.py:117"
+  ],
+  "MCP_REMOTE_CONFIG_DIR": [
+   "services/mcp-broker/sandbox-image/agent/stdio_manager.py:557"
+  ],
+  "MCP_SANDBOX_AGENT_PORT": [
+   "services/mcp-broker/src/sandbox/docker_manager.py:106"
+  ],
+  "MCP_SANDBOX_AGENT_READY_BASE_DELAY": [
+   "services/mcp-broker/src/sandbox/routes.py:80"
+  ],
+  "MCP_SANDBOX_AGENT_READY_MAX_DELAY": [
+   "services/mcp-broker/src/sandbox/routes.py:81"
+  ],
+  "MCP_SANDBOX_AGENT_READY_RETRIES": [
+   "services/mcp-broker/src/sandbox/routes.py:79"
+  ],
+  "MCP_SANDBOX_CPUS": [
+   "services/mcp-broker/src/sandbox/docker_manager.py:110"
+  ],
+  "MCP_SANDBOX_DNS": [
+   "services/mcp-broker/src/sandbox/docker_manager.py:139"
+  ],
+  "MCP_SANDBOX_EGRESS_LOCKDOWN": [
+   "services/mcp-broker/src/sandbox/docker_manager.py:115"
+  ],
+  "MCP_SANDBOX_ENSURE_READY_MAX": [
+   "gateway/ai_mesh_gateway/mcp_sandbox_client.py:33"
+  ],
+  "MCP_SANDBOX_HTTPS_PROXY": [
+   "services/mcp-broker/src/sandbox/docker_manager.py:102"
+  ],
+  "MCP_SANDBOX_HTTP_PROXY": [
+   "services/mcp-broker/src/sandbox/docker_manager.py:101"
+  ],
+  "MCP_SANDBOX_IDLE_TIMEOUT": [
+   "services/mcp-broker/src/sandbox/reaper.py:26"
+  ],
+  "MCP_SANDBOX_IMAGE": [
+   "services/mcp-broker/src/sandbox/docker_manager.py:104"
+  ],
+  "MCP_SANDBOX_MAX_ORGS": [
+   "services/mcp-broker/src/sandbox/routes.py:142"
+  ],
+  "MCP_SANDBOX_MEMORY_MB": [
+   "services/mcp-broker/src/sandbox/docker_manager.py:107"
+  ],
+  "MCP_SANDBOX_NETWORK": [
+   "services/mcp-broker/src/sandbox/docker_manager.py:105"
+  ],
+  "MCP_SANDBOX_NODE_MAX_OLD_SPACE_MB": [
+   "services/mcp-broker/src/sandbox/docker_manager.py:108"
+  ],
+  "MCP_SANDBOX_NODE_OPTIONS": [
+   "services/mcp-broker/src/sandbox/docker_manager.py:588"
+  ],
+  "MCP_SANDBOX_NO_PROXY": [
+   "services/mcp-broker/src/sandbox/docker_manager.py:118"
+  ],
+  "MCP_SANDBOX_NPM_CACHE_SIZE_MB": [
+   "services/mcp-broker/src/sandbox/docker_manager.py:109"
+  ],
+  "MCP_SANDBOX_PIDS_LIMIT": [
+   "services/mcp-broker/src/sandbox/docker_manager.py:111"
+  ],
+  "MCP_SANDBOX_REAPER_INTERVAL": [
+   "services/mcp-broker/src/sandbox/reaper.py:27"
+  ],
+  "MCP_SANDBOX_RETRY_BASE_DELAY": [
+   "gateway/ai_mesh_gateway/mcp_sandbox_client.py:29"
+  ],
+  "MCP_SANDBOX_RETRY_MAX": [
+   "gateway/ai_mesh_gateway/mcp_sandbox_client.py:28"
+  ],
+  "MCP_SANDBOX_RETRY_MAX_DELAY": [
+   "gateway/ai_mesh_gateway/mcp_sandbox_client.py:30"
+  ],
+  "MCP_SANDBOX_RUNTIME": [
+   "services/mcp-broker/src/sandbox/docker_manager.py:100"
+  ],
+  "MCP_SANDBOX_RUNTIME_REQUIRED": [
+   "services/mcp-broker/src/sandbox/docker_manager.py:113"
+  ],
+  "MCP_SANDBOX_SECCOMP_PROFILE": [
+   "services/mcp-broker/src/sandbox/docker_manager.py:66"
+  ],
+  "MCP_SANDBOX_USER": [
+   "services/mcp-broker/src/sandbox/docker_manager.py:114"
+  ],
+  "MCP_SANDBOX_WARM_READY_INTERVAL": [
+   "services/mcp-broker/src/sandbox/routes.py:182"
+  ],
+  "MCP_SANDBOX_WARM_READY_TIMEOUT": [
+   "services/mcp-broker/src/sandbox/routes.py:178"
+  ],
+  "MCP_SPLIT_SECRET_SPAN": [
+   "gateway/ai_mesh_gateway/mcp_proxy.py:1645"
+  ],
+  "MCP_SSE_EVENT_MAX_BYTES": [
+   "gateway/ai_mesh_gateway/mcp_proxy.py:307"
+  ],
+  "MCP_SSE_STREAM_MAX_BYTES": [
+   "gateway/ai_mesh_gateway/mcp_proxy.py:315"
+  ],
+  "MCP_SSE_STREAM_MAX_EVENTS": [
+   "gateway/ai_mesh_gateway/mcp_proxy.py:316"
+  ],
+  "MCP_STDIO_ALLOWED_COMMANDS": [
+   "gateway/ai_mesh_gateway/mcp_stdio_adapter.py:124",
+   "services/mcp-broker/sandbox-image/agent/stdio_manager.py:54"
+  ],
+  "MCP_STDIO_HUNG_INIT_TIMEOUT": [
+   "gateway/ai_mesh_gateway/mcp_stdio_adapter.py:71",
+   "services/mcp-broker/sandbox-image/agent/stdio_manager.py:48"
+  ],
+  "MCP_STDIO_IDLE_TIMEOUT": [
+   "gateway/ai_mesh_gateway/mcp_stdio_adapter.py:45",
+   "services/mcp-broker/sandbox-image/agent/stdio_manager.py:43"
+  ],
+  "MCP_STDIO_INIT_TIMEOUT": [
+   "gateway/ai_mesh_gateway/mcp_sandbox_client.py:26",
+   "gateway/ai_mesh_gateway/mcp_stdio_adapter.py:65",
+   "services/mcp-broker/sandbox-image/agent/stdio_manager.py:46",
+   "services/mcp-broker/sandbox-image/agent/upstream_manager.py:20"
+  ],
+  "MCP_STDIO_IN_PROCESS": [
+   "gateway/ai_mesh_gateway/mcp_stdio_adapter.py:104"
+  ],
+  "MCP_STDIO_MAX_CONCURRENT_INITS": [
+   "gateway/ai_mesh_gateway/mcp_stdio_adapter.py:77",
+   "services/mcp-broker/sandbox-image/agent/stdio_manager.py:50"
+  ],
+  "MCP_STDIO_MAX_LINE_BYTES": [
+   "gateway/ai_mesh_gateway/mcp_stdio_adapter.py:56",
+   "services/mcp-broker/sandbox-image/agent/stdio_manager.py:45"
+  ],
+  "MCP_STDIO_MAX_PROCESSES": [
+   "gateway/ai_mesh_gateway/mcp_stdio_adapter.py:47",
+   "services/mcp-broker/sandbox-image/agent/stdio_manager.py:44"
+  ],
+  "MCP_STDIO_MAX_PROCESSES_PER_ORG": [
+   "gateway/ai_mesh_gateway/mcp_stdio_adapter.py:74",
+   "services/mcp-broker/sandbox-image/agent/stdio_manager.py:49",
+   "services/mcp-broker/src/sandbox/docker_manager.py:591"
+  ],
+  "MCP_STDIO_METHOD_TIMEOUT": [
+   "gateway/ai_mesh_gateway/mcp_sandbox_client.py:27",
+   "gateway/ai_mesh_gateway/mcp_stdio_adapter.py:67",
+   "services/mcp-broker/sandbox-image/agent/stdio_manager.py:47",
+   "services/mcp-broker/sandbox-image/agent/upstream_manager.py:21"
+  ],
+  "MCP_STDIO_PACKAGE_ALLOWLIST": [
+   "gateway/ai_mesh_gateway/mcp_stdio_adapter.py:84",
+   "services/mcp-broker/sandbox-image/agent/stdio_manager.py:66",
+   "services/mcp-broker/src/sandbox/docker_manager.py:610"
+  ],
+  "MCP_STDIO_REQUIRE_PINNED_PACKAGES": [
+   "gateway/ai_mesh_gateway/mcp_stdio_adapter.py:89",
+   "services/mcp-broker/sandbox-image/agent/stdio_manager.py:73",
+   "services/mcp-broker/src/sandbox/docker_manager.py:607"
+  ],
+  "MCP_TIER1_OFFLOAD_BYTES": [
+   "gateway/ai_mesh_gateway/mcp_scan_orchestrator.py:861"
+  ],
+  "MCP_WS_IDLE_TIMEOUT": [
+   "gateway/ai_mesh_gateway/mcp_ws_adapter.py:37"
+  ],
+  "MCP_WS_MAX_CONNECTIONS": [
+   "gateway/ai_mesh_gateway/mcp_ws_adapter.py:39"
+  ],
+  "METRICS_ALLOW_OPEN": [
+   "gateway/ai_mesh_gateway/metrics_auth.py:22"
+  ],
+  "METRICS_SCRAPER_KEY": [
+   "gateway/ai_mesh_gateway/metrics_auth.py:20",
+   "gateway/ai_mesh_gateway/metrics_auth.py:9"
+  ],
+  "MONGO_URL": [
+   "gateway/ai_mesh_gateway/telemetry_mongo.py:57"
+  ],
+  "NPM_CONFIG_PREFIX": [
+   "shared/ai_mesh_shared/mcp_stdio_common.py:125"
+  ],
+  "ORG_SLUG": [
+   "services/mcp-broker/sandbox-image/agent/main.py:27",
+   "services/mcp-broker/sandbox-image/agent/stdio_manager.py:41"
+  ],
+  "PATH": [
+   "shared/ai_mesh_shared/mcp_stdio_common.py:119"
+  ],
+  "PIN_MODEL": [
+   "gateway/scripts/pipeline_9stage_verify.py:40"
+  ],
+  "PIN_MODELS": [
+   "gateway/scripts/routing_e2e_matrix.py:51"
+  ],
+  "POLICY_SIGNING_KEY": [
+   "gateway/ai_mesh_gateway/policy_signing.py:41"
+  ],
+  "PROMETHEUS_MULTIPROC_DIR": [
+   "gateway/ai_mesh_gateway/metrics.py:494"
+  ],
+  "RAG_INGEST_MAX_CHARS": [
+   "gateway/ai_mesh_gateway/main.py:14468"
+  ],
+  "RAG_INGEST_MAX_DOCS": [
+   "gateway/ai_mesh_gateway/main.py:14462"
+  ],
+  "RAG_LIST_COLLECTIONS_TIMEOUT": [
+   "gateway/ai_mesh_gateway/rag_collections.py:30"
+  ],
+  "REDIS_URL": [
+   "gateway/ai_mesh_gateway/mcp_oauth_proxy.py:69",
+   "gateway/ai_mesh_gateway/vector_routes.py:298"
+  ],
+  "ROUTING_RISK_ESCALATION_FLOOR": [
+   "gateway/ai_mesh_gateway/llm_router.py:399"
+  ],
+  "SECRET_KEY": [
+   "gateway/ai_mesh_gateway/llm_router.py:876"
+  ],
+  "SSL_VERIFY": [
+   "gateway/ai_mesh_gateway/llm_router.py:646"
+  ],
+  "TELEMETRY_STREAMS_ENABLED": [
+   "gateway/ai_mesh_gateway/telemetry.py:32"
+  ],
+  "TIER2_BREAKER_COOLDOWN_SECONDS": [
+   "gateway/ai_mesh_gateway/bedrock_tier2_breaker.py:64"
+  ],
+  "TIER2_BREAKER_FAILURE_THRESHOLD": [
+   "gateway/ai_mesh_gateway/bedrock_tier2_breaker.py:62"
+  ],
+  "TIER2_BREAKER_MAX_KEYS": [
+   "gateway/ai_mesh_gateway/bedrock_tier2_breaker.py:65"
+  ],
+  "TIER2_BREAKER_MIN_CALLS": [
+   "gateway/ai_mesh_gateway/bedrock_tier2_breaker.py:61"
+  ],
+  "TIER2_BREAKER_WINDOW_SECONDS": [
+   "gateway/ai_mesh_gateway/bedrock_tier2_breaker.py:63"
+  ],
+  "TIER2_PROVIDER": [
+   "shared/ai_mesh_shared/tier2_gemini_client.py:41"
+  ],
+  "UV_TOOL_BIN_DIR": [
+   "shared/ai_mesh_shared/mcp_stdio_common.py:121"
+  ],
+  "VECTOR_DELETE_MAX_IDS": [
+   "gateway/ai_mesh_gateway/vector_routes.py:1295"
+  ],
+  "VECTOR_PROVIDER_ALLOW_PRIVATE": [
+   "shared/ai_mesh_shared/url_safety.py:151"
+  ],
+  "VECTOR_UPSERT_MAX_CHARS": [
+   "gateway/ai_mesh_gateway/vector_routes.py:1043"
+  ],
+  "VECTOR_UPSERT_MAX_DOCS": [
+   "gateway/ai_mesh_gateway/vector_routes.py:1018"
+  ],
+  "VERTEX_TIER2_MODEL": [
+   "shared/ai_mesh_shared/tier2_gemini_client.py:49"
+  ],
+  "ZEROSHIELD_GUARD_MODEL_NAME": [
+   "gateway/ai_mesh_gateway/main.py:4640",
+   "gateway/ai_mesh_gateway/platform_models.py:37"
+  ],
+  "ZEROSHIELD_MODEL_KEY_ENCRYPTION_KEY": [
+   "shared/ai_mesh_shared/llm_model_crypto.py:26"
+  ],
+  "npm_config_prefix": [
+   "shared/ai_mesh_shared/mcp_stdio_common.py:124"
+  ],
+  "prometheus_multiproc_dir": [
+   "gateway/ai_mesh_gateway/metrics.py:494"
+  ]
+ },
+ "dynamic_sites": [
+  {
+   "file": "gateway/ai_mesh_gateway/main.py",
+   "line": 3918,
+   "keys": [
+    "<dynamic:env_var>"
+   ],
+   "kind": "environ.get"
+  },
+  {
+   "file": "gateway/ai_mesh_gateway/main.py",
+   "line": 4731,
+   "keys": [
+    "<dynamic:env_var>"
+   ],
+   "kind": "environ.get"
+  },
+  {
+   "file": "gateway/ai_mesh_gateway/main.py",
+   "line": 4879,
+   "keys": [
+    "<dynamic:env_var>"
+   ],
+   "kind": "environ.get"
+  }
+ ],
+ "writes": []
+}

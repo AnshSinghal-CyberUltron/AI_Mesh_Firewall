@@ -1,0 +1,41 @@
+Redis unavailable during auth lookup: Error 111 connecting to 127.0.0.1:45047. Connect call failed ('127.0.0.1', 45047).
+Rate limit check failed (fail-OPEN, allowing): Error 111 connecting to 127.0.0.1:45047. Connect call failed ('127.0.0.1', 45047).
+Model rate limit check failed (fail-OPEN, allowing): Error 111 connecting to 127.0.0.1:45047. Connect call failed ('127.0.0.1', 45047).
+Org rate limit check failed (fail-OPEN, allowing): Error 111 connecting to 127.0.0.1:45047. Connect call failed ('127.0.0.1', 45047).
+Circuit breaker check failed (fail-CLOSED): Error 111 connecting to 127.0.0.1:45047. Connect call failed ('127.0.0.1', 45047).
+Model rate limit check failed (fail-OPEN, allowing): int() argument must be a string, a bytes-like object or a real number, not 'list'
+Rate limit check failed (fail-OPEN, allowing): Timeout reading from 127.0.0.1:4137
+Model rate limit check failed (fail-OPEN, allowing): Timeout reading from 127.0.0.1:4137
+Org rate limit check failed (fail-OPEN, allowing): Timeout reading from 127.0.0.1:4137
+Redis unavailable during auth lookup: Timeout reading from 127.0.0.1:4137
+Rate limit check failed (fail-OPEN, allowing): Timeout reading from 127.0.0.1:4137
+Model rate limit check failed (fail-OPEN, allowing): Timeout reading from 127.0.0.1:4137
+Org rate limit check failed (fail-OPEN, allowing): Timeout reading from 127.0.0.1:4137
+--- (a) Redis DOWN (connection refused)
+    auth                               -> 503 service_unavailable   [0.0s]
+    key TPM (rate_limiter:116)         -> (True, 0)   [0.0s]
+    model RPM (rate_limiter:169)       -> (True, 0)   [0.0s]
+    org TPM (rate_limiter:230)         -> (True, 0)   [0.0s]
+    circuit_breaker.check (:397-400)   -> should_block=True state=open   [0.0s]
+--- (0) Redis healthy (control)
+    auth                               -> ok   [0.0s]
+    key TPM (rate_limiter:116)         -> (True, 20)   [0.0s]
+    model RPM (rate_limiter:169)       -> (True, 0)   [0.0s]
+    org TPM (rate_limiter:230)         -> (True, 20)   [0.0s]
+    circuit_breaker.check (:397-400)   -> should_block=False state=closed   [0.0s]
+--- (b) Redis SLOW 1.5 s/command
+    auth                               -> ok   [1.5s]
+    key TPM (rate_limiter:116)         -> (True, 0)   [2.01s]
+    model RPM (rate_limiter:169)       -> (True, 0)   [2.0s]
+    org TPM (rate_limiter:230)         -> (True, 0)   [2.0s]
+    circuit_breaker.check (:397-400)   -> should_block=False state=closed   [1.5s]
+--- (c) Redis SLOW 2.5 s/command
+    auth                               -> 503 service_unavailable   [2.01s]
+    key TPM (rate_limiter:116)         -> (True, 0)   [2.01s]
+    model RPM (rate_limiter:169)       -> (True, 0)   [2.0s]
+    org TPM (rate_limiter:230)         -> (True, 0)   [2.0s]
+    circuit_breaker.check (:397-400)   -> should_block=False state=closed   [2.5s]
+# NOTE (verifier): in the healthy control, model RPM's "int() argument ... 'list'" error is an artifact of this
+# fake server answering every EVAL with a 2-element array; the model-RPM Lua script returns a scalar. Healthy
+# control is a sanity check only. The rate limiter's ~2.0 s at 1.5 s latency = 2 attempts x 1.0 s socket_timeout
+# (retry_on_timeout=True, rate_limiter.py:47) before failing open.

@@ -1,0 +1,2503 @@
+=== 1790166303.332808044 owner 60186
+Process 60186: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 0
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60186 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60255 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61769 (idle): "guard-local_gpu0"
+    wait (threading.py:355)
+    _take (rvproto/detect/guard/batcher.py:150)
+    _run (rvproto/detect/guard/batcher.py:173)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166303.391999912 owner 60187
+Process 60187: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 1
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60187 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60257 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61750 (idle): "guard-local_gpu1"
+    wait (threading.py:355)
+    _take (rvproto/detect/guard/batcher.py:150)
+    _run (rvproto/detect/guard/batcher.py:173)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166303.599390380 owner 60186
+Process 60186: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 0
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60186 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60255 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61769 (idle): "guard-local_gpu0"
+    wait (threading.py:355)
+    _take (rvproto/detect/guard/batcher.py:150)
+    _run (rvproto/detect/guard/batcher.py:173)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166303.652128306 owner 60187
+Process 60187: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 1
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60187 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60257 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61750 (active): "guard-local_gpu1"
+    run (onnxruntime/capi/onnxruntime_inference_collection.py:395)
+    _infer (rvproto/detect/guard/local_onnx.py:106)
+    _execute (rvproto/detect/guard/batcher.py:202)
+    _run (rvproto/detect/guard/batcher.py:187)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166303.854690677 owner 60186
+Process 60186: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 0
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60186 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60255 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61769 (idle): "guard-local_gpu0"
+    wait (threading.py:355)
+    _take (rvproto/detect/guard/batcher.py:150)
+    _run (rvproto/detect/guard/batcher.py:173)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166303.912713205 owner 60187
+Process 60187: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 1
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60187 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60257 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61750 (idle): "guard-local_gpu1"
+    wait (threading.py:355)
+    _take (rvproto/detect/guard/batcher.py:150)
+    _run (rvproto/detect/guard/batcher.py:173)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166304.114182529 owner 60186
+Process 60186: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 0
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60186 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60255 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61769 (idle): "guard-local_gpu0"
+    wait (threading.py:355)
+    _take (rvproto/detect/guard/batcher.py:150)
+    _run (rvproto/detect/guard/batcher.py:173)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166304.173420496 owner 60187
+Process 60187: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 1
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60187 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60257 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61750 (idle): "guard-local_gpu1"
+    wait (threading.py:355)
+    _take (rvproto/detect/guard/batcher.py:150)
+    _run (rvproto/detect/guard/batcher.py:173)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166304.380240190 owner 60186
+Process 60186: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 0
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60186 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60255 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61769 (idle): "guard-local_gpu0"
+    wait (threading.py:355)
+    _take (rvproto/detect/guard/batcher.py:150)
+    _run (rvproto/detect/guard/batcher.py:173)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166304.428570855 owner 60187
+Process 60187: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 1
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60187 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60257 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61750 (idle): "guard-local_gpu1"
+    wait (threading.py:355)
+    _take (rvproto/detect/guard/batcher.py:150)
+    _run (rvproto/detect/guard/batcher.py:173)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166304.636176495 owner 60186
+Process 60186: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 0
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60186 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60255 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61769 (active): "guard-local_gpu0"
+    run (onnxruntime/capi/onnxruntime_inference_collection.py:395)
+    _infer (rvproto/detect/guard/local_onnx.py:106)
+    _execute (rvproto/detect/guard/batcher.py:202)
+    _run (rvproto/detect/guard/batcher.py:187)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166304.689666359 owner 60187
+Process 60187: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 1
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60187 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60257 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61750 (idle): "guard-local_gpu1"
+    wait (threading.py:355)
+    _take (rvproto/detect/guard/batcher.py:150)
+    _run (rvproto/detect/guard/batcher.py:173)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166304.896300331 owner 60186
+Process 60186: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 0
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60186 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60255 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61769 (idle): "guard-local_gpu0"
+    wait (threading.py:355)
+    _take (rvproto/detect/guard/batcher.py:150)
+    _run (rvproto/detect/guard/batcher.py:173)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166304.949997577 owner 60187
+Process 60187: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 1
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60187 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60257 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61750 (idle): "guard-local_gpu1"
+    wait (threading.py:355)
+    _take (rvproto/detect/guard/batcher.py:150)
+    _run (rvproto/detect/guard/batcher.py:173)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166305.156850214 owner 60186
+Process 60186: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 0
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60186 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60255 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61769 (idle): "guard-local_gpu0"
+    wait (threading.py:355)
+    _take (rvproto/detect/guard/batcher.py:150)
+    _run (rvproto/detect/guard/batcher.py:173)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166305.212262077 owner 60187
+Process 60187: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 1
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60187 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60257 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61750 (idle): "guard-local_gpu1"
+    wait (threading.py:355)
+    _take (rvproto/detect/guard/batcher.py:150)
+    _run (rvproto/detect/guard/batcher.py:173)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166305.420131120 owner 60186
+Process 60186: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 0
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60186 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60255 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61769 (idle): "guard-local_gpu0"
+    wait (threading.py:355)
+    _take (rvproto/detect/guard/batcher.py:150)
+    _run (rvproto/detect/guard/batcher.py:173)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166305.470693210 owner 60187
+Process 60187: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 1
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60187 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60257 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61750 (idle): "guard-local_gpu1"
+    wait (threading.py:355)
+    _take (rvproto/detect/guard/batcher.py:150)
+    _run (rvproto/detect/guard/batcher.py:173)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166305.676630397 owner 60186
+Process 60186: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 0
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60186 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60255 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61769 (active): "guard-local_gpu0"
+    run (onnxruntime/capi/onnxruntime_inference_collection.py:395)
+    _infer (rvproto/detect/guard/local_onnx.py:106)
+    _execute (rvproto/detect/guard/batcher.py:202)
+    _run (rvproto/detect/guard/batcher.py:187)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166305.726148792 owner 60187
+Process 60187: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 1
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60187 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60257 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61750 (idle): "guard-local_gpu1"
+    wait (threading.py:355)
+    _take (rvproto/detect/guard/batcher.py:150)
+    _run (rvproto/detect/guard/batcher.py:173)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166305.933778389 owner 60186
+Process 60186: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 0
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60186 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60255 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61769 (active): "guard-local_gpu0"
+    run (onnxruntime/capi/onnxruntime_inference_collection.py:395)
+    _infer (rvproto/detect/guard/local_onnx.py:106)
+    _execute (rvproto/detect/guard/batcher.py:202)
+    _run (rvproto/detect/guard/batcher.py:187)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166305.980075021 owner 60187
+Process 60187: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 1
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60187 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60257 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61750 (idle): "guard-local_gpu1"
+    wait (threading.py:355)
+    _take (rvproto/detect/guard/batcher.py:150)
+    _run (rvproto/detect/guard/batcher.py:173)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166306.183009260 owner 60186
+Process 60186: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 0
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60186 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60255 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61769 (idle): "guard-local_gpu0"
+    wait (threading.py:355)
+    _take (rvproto/detect/guard/batcher.py:150)
+    _run (rvproto/detect/guard/batcher.py:173)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166306.233033333 owner 60187
+Process 60187: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 1
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60187 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60257 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61750 (idle): "guard-local_gpu1"
+    wait (threading.py:355)
+    _take (rvproto/detect/guard/batcher.py:150)
+    _run (rvproto/detect/guard/batcher.py:173)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166306.438268333 owner 60186
+Process 60186: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 0
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60186 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60255 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61769 (idle): "guard-local_gpu0"
+    wait (threading.py:355)
+    _take (rvproto/detect/guard/batcher.py:150)
+    _run (rvproto/detect/guard/batcher.py:173)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166306.492617808 owner 60187
+Process 60187: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 1
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60187 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60257 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61750 (idle): "guard-local_gpu1"
+    wait (threading.py:355)
+    _take (rvproto/detect/guard/batcher.py:150)
+    _run (rvproto/detect/guard/batcher.py:173)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166306.700627449 owner 60186
+Process 60186: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 0
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60186 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60255 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61769 (idle): "guard-local_gpu0"
+    wait (threading.py:355)
+    _take (rvproto/detect/guard/batcher.py:150)
+    _run (rvproto/detect/guard/batcher.py:173)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166306.750953746 owner 60187
+Process 60187: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 1
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60187 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60257 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61750 (idle): "guard-local_gpu1"
+    wait (threading.py:355)
+    _take (rvproto/detect/guard/batcher.py:150)
+    _run (rvproto/detect/guard/batcher.py:173)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166306.952761367 owner 60186
+Process 60186: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 0
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60186 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60255 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61769 (idle): "guard-local_gpu0"
+    wait (threading.py:355)
+    _take (rvproto/detect/guard/batcher.py:150)
+    _run (rvproto/detect/guard/batcher.py:173)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166307.005966825 owner 60187
+Process 60187: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 1
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60187 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60257 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61750 (active): "guard-local_gpu1"
+    run (onnxruntime/capi/onnxruntime_inference_collection.py:395)
+    _infer (rvproto/detect/guard/local_onnx.py:106)
+    _execute (rvproto/detect/guard/batcher.py:202)
+    _run (rvproto/detect/guard/batcher.py:187)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166307.210329312 owner 60186
+Process 60186: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 0
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60186 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60255 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61769 (idle): "guard-local_gpu0"
+    wait (threading.py:355)
+    _take (rvproto/detect/guard/batcher.py:150)
+    _run (rvproto/detect/guard/batcher.py:173)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166307.260987795 owner 60187
+Process 60187: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 1
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60187 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60257 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61750 (active): "guard-local_gpu1"
+    run (onnxruntime/capi/onnxruntime_inference_collection.py:395)
+    _infer (rvproto/detect/guard/local_onnx.py:106)
+    _execute (rvproto/detect/guard/batcher.py:202)
+    _run (rvproto/detect/guard/batcher.py:187)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166307.460836397 owner 60186
+Process 60186: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 0
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60186 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60255 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61769 (idle): "guard-local_gpu0"
+    wait (threading.py:355)
+    _take (rvproto/detect/guard/batcher.py:150)
+    _run (rvproto/detect/guard/batcher.py:173)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166307.511029812 owner 60187
+Process 60187: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 1
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60187 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60257 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61750 (idle): "guard-local_gpu1"
+    wait (threading.py:355)
+    _take (rvproto/detect/guard/batcher.py:150)
+    _run (rvproto/detect/guard/batcher.py:173)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166307.713044028 owner 60186
+Process 60186: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 0
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60186 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60255 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61769 (idle): "guard-local_gpu0"
+    wait (threading.py:355)
+    _take (rvproto/detect/guard/batcher.py:150)
+    _run (rvproto/detect/guard/batcher.py:173)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166307.764367167 owner 60187
+Process 60187: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 1
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60187 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60257 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61750 (active): "guard-local_gpu1"
+    run (onnxruntime/capi/onnxruntime_inference_collection.py:395)
+    _infer (rvproto/detect/guard/local_onnx.py:106)
+    _execute (rvproto/detect/guard/batcher.py:202)
+    _run (rvproto/detect/guard/batcher.py:187)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166307.967355308 owner 60186
+Process 60186: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 0
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60186 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60255 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61769 (active): "guard-local_gpu0"
+    run (onnxruntime/capi/onnxruntime_inference_collection.py:395)
+    _infer (rvproto/detect/guard/local_onnx.py:106)
+    _execute (rvproto/detect/guard/batcher.py:202)
+    _run (rvproto/detect/guard/batcher.py:187)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166308.018149560 owner 60187
+Process 60187: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 1
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60187 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60257 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61750 (idle): "guard-local_gpu1"
+    wait (threading.py:355)
+    _take (rvproto/detect/guard/batcher.py:150)
+    _run (rvproto/detect/guard/batcher.py:173)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166308.223647674 owner 60186
+Process 60186: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 0
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60186 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60255 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61769 (active): "guard-local_gpu0"
+    run (onnxruntime/capi/onnxruntime_inference_collection.py:395)
+    _infer (rvproto/detect/guard/local_onnx.py:106)
+    _execute (rvproto/detect/guard/batcher.py:202)
+    _run (rvproto/detect/guard/batcher.py:187)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166308.276605366 owner 60187
+Process 60187: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 1
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60187 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60257 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61750 (idle): "guard-local_gpu1"
+    wait (threading.py:355)
+    _take (rvproto/detect/guard/batcher.py:150)
+    _run (rvproto/detect/guard/batcher.py:173)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166308.477502427 owner 60186
+Process 60186: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 0
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60186 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60255 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61769 (idle): "guard-local_gpu0"
+    wait (threading.py:355)
+    _take (rvproto/detect/guard/batcher.py:150)
+    _run (rvproto/detect/guard/batcher.py:173)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166308.524168702 owner 60187
+Process 60187: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 1
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60187 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60257 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61750 (active+gil): "guard-local_gpu1"
+    _execute (rvproto/detect/guard/batcher.py:220)
+    _run (rvproto/detect/guard/batcher.py:173)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166308.726242214 owner 60186
+Process 60186: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 0
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60186 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60255 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61769 (idle): "guard-local_gpu0"
+    wait (threading.py:355)
+    _take (rvproto/detect/guard/batcher.py:150)
+    _run (rvproto/detect/guard/batcher.py:173)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166308.776058732 owner 60187
+Process 60187: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 1
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60187 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60257 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61750 (idle): "guard-local_gpu1"
+    wait (threading.py:355)
+    _take (rvproto/detect/guard/batcher.py:150)
+    _run (rvproto/detect/guard/batcher.py:173)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166308.982468250 owner 60186
+Process 60186: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 0
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60186 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60255 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61769 (idle): "guard-local_gpu0"
+    wait (threading.py:355)
+    _take (rvproto/detect/guard/batcher.py:150)
+    _run (rvproto/detect/guard/batcher.py:173)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166309.034128063 owner 60187
+Process 60187: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 1
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60187 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60257 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61750 (active): "guard-local_gpu1"
+    run (onnxruntime/capi/onnxruntime_inference_collection.py:395)
+    _infer (rvproto/detect/guard/local_onnx.py:106)
+    _execute (rvproto/detect/guard/batcher.py:202)
+    _run (rvproto/detect/guard/batcher.py:187)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166309.240339059 owner 60186
+Process 60186: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 0
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60186 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60255 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61769 (active): "guard-local_gpu0"
+    run (onnxruntime/capi/onnxruntime_inference_collection.py:395)
+    _infer (rvproto/detect/guard/local_onnx.py:106)
+    _execute (rvproto/detect/guard/batcher.py:202)
+    _run (rvproto/detect/guard/batcher.py:187)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166309.297128680 owner 60187
+Process 60187: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 1
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60187 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60257 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61750 (idle): "guard-local_gpu1"
+    wait (threading.py:355)
+    _take (rvproto/detect/guard/batcher.py:150)
+    _run (rvproto/detect/guard/batcher.py:173)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166309.498440579 owner 60186
+Process 60186: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 0
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60186 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60255 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61769 (idle): "guard-local_gpu0"
+    wait (threading.py:355)
+    _take (rvproto/detect/guard/batcher.py:150)
+    _run (rvproto/detect/guard/batcher.py:173)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166309.549627330 owner 60187
+Process 60187: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 1
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60187 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60257 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61750 (idle): "guard-local_gpu1"
+    wait (threading.py:355)
+    _take (rvproto/detect/guard/batcher.py:150)
+    _run (rvproto/detect/guard/batcher.py:173)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166309.755835981 owner 60186
+Process 60186: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 0
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60186 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60255 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61769 (idle): "guard-local_gpu0"
+    wait (threading.py:355)
+    _take (rvproto/detect/guard/batcher.py:150)
+    _run (rvproto/detect/guard/batcher.py:173)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166309.806356101 owner 60187
+Process 60187: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 1
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60187 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60257 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61750 (active): "guard-local_gpu1"
+    run (onnxruntime/capi/onnxruntime_inference_collection.py:395)
+    _infer (rvproto/detect/guard/local_onnx.py:106)
+    _execute (rvproto/detect/guard/batcher.py:202)
+    _run (rvproto/detect/guard/batcher.py:187)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166310.014445630 owner 60186
+Process 60186: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 0
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60186 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60255 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61769 (idle): "guard-local_gpu0"
+    wait (threading.py:355)
+    _take (rvproto/detect/guard/batcher.py:150)
+    _run (rvproto/detect/guard/batcher.py:173)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166310.067474384 owner 60187
+Process 60187: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 1
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60187 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60257 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61750 (idle): "guard-local_gpu1"
+    wait (threading.py:355)
+    _take (rvproto/detect/guard/batcher.py:150)
+    _run (rvproto/detect/guard/batcher.py:173)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166310.271750687 owner 60186
+Process 60186: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 0
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60186 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60255 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61769 (active): "guard-local_gpu0"
+    run (onnxruntime/capi/onnxruntime_inference_collection.py:395)
+    _infer (rvproto/detect/guard/local_onnx.py:106)
+    _execute (rvproto/detect/guard/batcher.py:202)
+    _run (rvproto/detect/guard/batcher.py:187)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166310.333775045 owner 60187
+Process 60187: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 1
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60187 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60257 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61750 (idle): "guard-local_gpu1"
+    wait (threading.py:355)
+    _take (rvproto/detect/guard/batcher.py:150)
+    _run (rvproto/detect/guard/batcher.py:173)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166310.540414131 owner 60186
+Process 60186: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 0
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60186 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60255 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61769 (idle): "guard-local_gpu0"
+    wait (threading.py:355)
+    _take (rvproto/detect/guard/batcher.py:150)
+    _run (rvproto/detect/guard/batcher.py:173)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166310.594852637 owner 60187
+Process 60187: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 1
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60187 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60257 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61750 (idle): "guard-local_gpu1"
+    wait (threading.py:355)
+    _take (rvproto/detect/guard/batcher.py:150)
+    _run (rvproto/detect/guard/batcher.py:173)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166310.800565194 owner 60186
+Process 60186: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 0
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60186 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60255 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61769 (active): "guard-local_gpu0"
+    run (onnxruntime/capi/onnxruntime_inference_collection.py:395)
+    _infer (rvproto/detect/guard/local_onnx.py:106)
+    _execute (rvproto/detect/guard/batcher.py:202)
+    _run (rvproto/detect/guard/batcher.py:187)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166310.856387705 owner 60187
+Process 60187: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 1
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60187 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60257 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61750 (idle): "guard-local_gpu1"
+    wait (threading.py:355)
+    _take (rvproto/detect/guard/batcher.py:150)
+    _run (rvproto/detect/guard/batcher.py:173)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166311.064763149 owner 60186
+Process 60186: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 0
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60186 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60255 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61769 (idle): "guard-local_gpu0"
+    wait (threading.py:355)
+    _take (rvproto/detect/guard/batcher.py:150)
+    _run (rvproto/detect/guard/batcher.py:173)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166311.118261890 owner 60187
+Process 60187: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 1
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60187 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60257 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61750 (idle): "guard-local_gpu1"
+    wait (threading.py:355)
+    _take (rvproto/detect/guard/batcher.py:150)
+    _run (rvproto/detect/guard/batcher.py:173)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166311.322970635 owner 60186
+Process 60186: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 0
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60186 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60255 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61769 (idle): "guard-local_gpu0"
+    wait (threading.py:355)
+    _take (rvproto/detect/guard/batcher.py:150)
+    _run (rvproto/detect/guard/batcher.py:173)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166311.376107077 owner 60187
+Process 60187: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 1
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60187 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60257 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61750 (idle): "guard-local_gpu1"
+    wait (threading.py:355)
+    _take (rvproto/detect/guard/batcher.py:150)
+    _run (rvproto/detect/guard/batcher.py:173)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166311.578817749 owner 60186
+Process 60186: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 0
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60186 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60255 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61769 (idle): "guard-local_gpu0"
+    wait (threading.py:355)
+    _take (rvproto/detect/guard/batcher.py:150)
+    _run (rvproto/detect/guard/batcher.py:173)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166311.630140873 owner 60187
+Process 60187: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 1
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60187 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60257 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61750 (idle): "guard-local_gpu1"
+    wait (threading.py:355)
+    _take (rvproto/detect/guard/batcher.py:150)
+    _run (rvproto/detect/guard/batcher.py:173)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166311.830457998 owner 60186
+Process 60186: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 0
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60186 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60255 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61769 (idle): "guard-local_gpu0"
+    wait (threading.py:355)
+    _take (rvproto/detect/guard/batcher.py:150)
+    _run (rvproto/detect/guard/batcher.py:173)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166311.883426603 owner 60187
+Process 60187: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 1
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60187 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60257 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61750 (active): "guard-local_gpu1"
+    run (onnxruntime/capi/onnxruntime_inference_collection.py:395)
+    _infer (rvproto/detect/guard/local_onnx.py:106)
+    _execute (rvproto/detect/guard/batcher.py:202)
+    _run (rvproto/detect/guard/batcher.py:187)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166312.085599810 owner 60186
+Process 60186: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 0
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60186 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60255 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61769 (idle): "guard-local_gpu0"
+    wait (threading.py:355)
+    _take (rvproto/detect/guard/batcher.py:150)
+    _run (rvproto/detect/guard/batcher.py:173)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166312.140958337 owner 60187
+Process 60187: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 1
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60187 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60257 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61750 (idle): "guard-local_gpu1"
+    wait (threading.py:355)
+    _take (rvproto/detect/guard/batcher.py:150)
+    _run (rvproto/detect/guard/batcher.py:173)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166312.344878899 owner 60186
+Process 60186: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 0
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60186 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60255 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61769 (idle): "guard-local_gpu0"
+    wait (threading.py:355)
+    _take (rvproto/detect/guard/batcher.py:150)
+    _run (rvproto/detect/guard/batcher.py:173)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166312.392852798 owner 60187
+Process 60187: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 1
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60187 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60257 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61750 (idle): "guard-local_gpu1"
+    wait (threading.py:355)
+    _take (rvproto/detect/guard/batcher.py:150)
+    _run (rvproto/detect/guard/batcher.py:173)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166312.592212953 owner 60186
+Process 60186: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 0
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60186 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60255 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61769 (idle): "guard-local_gpu0"
+    wait (threading.py:355)
+    _take (rvproto/detect/guard/batcher.py:150)
+    _run (rvproto/detect/guard/batcher.py:173)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166312.644076092 owner 60187
+Process 60187: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 1
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60187 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60257 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61750 (idle): "guard-local_gpu1"
+    wait (threading.py:355)
+    _take (rvproto/detect/guard/batcher.py:150)
+    _run (rvproto/detect/guard/batcher.py:173)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166312.844084038 owner 60186
+Process 60186: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 0
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60186 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60255 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61769 (active): "guard-local_gpu0"
+    run (onnxruntime/capi/onnxruntime_inference_collection.py:395)
+    _infer (rvproto/detect/guard/local_onnx.py:106)
+    _execute (rvproto/detect/guard/batcher.py:202)
+    _run (rvproto/detect/guard/batcher.py:187)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166312.891441347 owner 60187
+Process 60187: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 1
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60187 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60257 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61750 (idle): "guard-local_gpu1"
+    wait (threading.py:355)
+    _take (rvproto/detect/guard/batcher.py:150)
+    _run (rvproto/detect/guard/batcher.py:173)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166313.095593051 owner 60186
+Process 60186: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 0
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Error: Failed to get stack traces
+
+Caused by:
+    0: Failed to call get_stack_trace for thread 124590470182720
+    1: Failed to copy PyCodeObject
+    2: Bad address (os error 14)
+    3: Bad address (os error 14)
+=== 1790166313.145668384 owner 60187
+Process 60187: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 1
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60187 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60257 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61750 (idle): "guard-local_gpu1"
+    wait (threading.py:355)
+    _take (rvproto/detect/guard/batcher.py:150)
+    _run (rvproto/detect/guard/batcher.py:173)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166313.351272948 owner 60186
+Process 60186: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 0
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60186 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60255 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61769 (idle): "guard-local_gpu0"
+    wait (threading.py:355)
+    _take (rvproto/detect/guard/batcher.py:150)
+    _run (rvproto/detect/guard/batcher.py:173)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166313.401708274 owner 60187
+Process 60187: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 1
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60187 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60257 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61750 (idle): "guard-local_gpu1"
+    wait (threading.py:355)
+    _take (rvproto/detect/guard/batcher.py:150)
+    _run (rvproto/detect/guard/batcher.py:173)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166313.606916056 owner 60186
+Process 60186: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 0
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60186 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60255 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61769 (idle): "guard-local_gpu0"
+    wait (threading.py:355)
+    _take (rvproto/detect/guard/batcher.py:150)
+    _run (rvproto/detect/guard/batcher.py:173)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166313.657139844 owner 60187
+Process 60187: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 1
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60187 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60257 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61750 (idle): "guard-local_gpu1"
+    wait (threading.py:355)
+    _take (rvproto/detect/guard/batcher.py:150)
+    _run (rvproto/detect/guard/batcher.py:173)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166313.859943277 owner 60186
+Process 60186: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 0
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60186 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60255 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61769 (idle): "guard-local_gpu0"
+    wait (threading.py:355)
+    _take (rvproto/detect/guard/batcher.py:150)
+    _run (rvproto/detect/guard/batcher.py:173)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166313.912769216 owner 60187
+Process 60187: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 1
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60187 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60257 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61750 (idle): "guard-local_gpu1"
+    wait (threading.py:355)
+    _take (rvproto/detect/guard/batcher.py:150)
+    _run (rvproto/detect/guard/batcher.py:173)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166314.119077826 owner 60186
+Process 60186: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 0
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60186 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60255 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61769 (idle): "guard-local_gpu0"
+    wait (threading.py:355)
+    _take (rvproto/detect/guard/batcher.py:150)
+    _run (rvproto/detect/guard/batcher.py:173)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166314.169135676 owner 60187
+Process 60187: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 1
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60187 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60257 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61750 (idle): "guard-local_gpu1"
+    wait (threading.py:355)
+    _take (rvproto/detect/guard/batcher.py:150)
+    _run (rvproto/detect/guard/batcher.py:173)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166314.368960700 owner 60186
+Process 60186: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 0
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60186 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60255 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61769 (idle): "guard-local_gpu0"
+    wait (threading.py:355)
+    _take (rvproto/detect/guard/batcher.py:150)
+    _run (rvproto/detect/guard/batcher.py:173)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166314.415174397 owner 60187
+Process 60187: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 1
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60187 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60257 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61750 (idle): "guard-local_gpu1"
+    wait (threading.py:355)
+    _take (rvproto/detect/guard/batcher.py:150)
+    _run (rvproto/detect/guard/batcher.py:173)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166314.618637464 owner 60186
+Process 60186: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 0
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60186 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60255 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61769 (idle): "guard-local_gpu0"
+    wait (threading.py:355)
+    _take (rvproto/detect/guard/batcher.py:150)
+    _run (rvproto/detect/guard/batcher.py:173)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166314.669454862 owner 60187
+Process 60187: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 1
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60187 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60257 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61750 (idle): "guard-local_gpu1"
+    wait (threading.py:355)
+    _take (rvproto/detect/guard/batcher.py:150)
+    _run (rvproto/detect/guard/batcher.py:173)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166314.875175114 owner 60186
+Process 60186: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 0
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60186 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60255 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61769 (idle): "guard-local_gpu0"
+    wait (threading.py:355)
+    _take (rvproto/detect/guard/batcher.py:150)
+    _run (rvproto/detect/guard/batcher.py:173)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166314.921896986 owner 60187
+Process 60187: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 1
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60187 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60257 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61750 (idle): "guard-local_gpu1"
+    wait (threading.py:355)
+    _take (rvproto/detect/guard/batcher.py:150)
+    _run (rvproto/detect/guard/batcher.py:173)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166315.126323368 owner 60186
+Process 60186: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 0
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60186 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60255 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61769 (active): "guard-local_gpu0"
+    run (onnxruntime/capi/onnxruntime_inference_collection.py:395)
+    _infer (rvproto/detect/guard/local_onnx.py:106)
+    _execute (rvproto/detect/guard/batcher.py:202)
+    _run (rvproto/detect/guard/batcher.py:187)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166315.179728084 owner 60187
+Process 60187: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 1
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60187 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60257 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61750 (active): "guard-local_gpu1"
+    run (onnxruntime/capi/onnxruntime_inference_collection.py:395)
+    _infer (rvproto/detect/guard/local_onnx.py:106)
+    _execute (rvproto/detect/guard/batcher.py:202)
+    _run (rvproto/detect/guard/batcher.py:187)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166315.383739310 owner 60186
+Process 60186: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 0
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60186 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60255 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61769 (active+gil): "guard-local_gpu0"
+    _softmax_p1 (rvproto/detect/guard/batcher.py:67)
+    _execute (rvproto/detect/guard/batcher.py:202)
+    _run (rvproto/detect/guard/batcher.py:187)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166315.431779270 owner 60187
+Process 60187: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 1
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60187 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60257 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61750 (idle): "guard-local_gpu1"
+    wait (threading.py:355)
+    _take (rvproto/detect/guard/batcher.py:150)
+    _run (rvproto/detect/guard/batcher.py:173)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166315.633615607 owner 60186
+Process 60186: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 0
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60186 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60255 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61769 (idle): "guard-local_gpu0"
+    wait (threading.py:355)
+    _take (rvproto/detect/guard/batcher.py:150)
+    _run (rvproto/detect/guard/batcher.py:173)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166315.683978935 owner 60187
+Process 60187: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 1
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60187 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60257 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61750 (idle): "guard-local_gpu1"
+    wait (threading.py:355)
+    _take (rvproto/detect/guard/batcher.py:150)
+    _run (rvproto/detect/guard/batcher.py:173)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166315.889968651 owner 60186
+Process 60186: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 0
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60186 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60255 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61769 (idle): "guard-local_gpu0"
+    wait (threading.py:355)
+    _take (rvproto/detect/guard/batcher.py:150)
+    _run (rvproto/detect/guard/batcher.py:173)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+=== 1790166315.942693126 owner 60187
+Process 60187: /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 1
+Python v3.12.14 (/home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12)
+
+Thread 60187 (idle): "MainThread"
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:195)
+    run (uvloop/__init__.py:96)
+    run_owner (rvproto/detect/guard/owner.py:200)
+    guard_owner (rvproto/serve.py:68)
+    <module> (rvproto/serve.py:155)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 60257 (idle): "ThreadPoolExecutor-0_0"
+    _worker (concurrent/futures/thread.py:90)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)
+Thread 61750 (idle): "guard-local_gpu1"
+    wait (threading.py:355)
+    _take (rvproto/detect/guard/batcher.py:150)
+    _run (rvproto/detect/guard/batcher.py:173)
+    run (threading.py:1012)
+    _bootstrap_inner (threading.py:1075)
+    _bootstrap (threading.py:1032)

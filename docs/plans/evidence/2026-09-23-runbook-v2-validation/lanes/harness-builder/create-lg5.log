@@ -1,0 +1,3 @@
+08:12:44 created rv-harness-lg-5 (c4-highcpu-8) in asia-south1-c ip=10.160.15.195
+prep ok: rv-harness-lg-5.asia-south1-c.c.ai-mesh-firewall.internal 8 vCPU
+binaries ok on rv-harness-lg-5.asia-south1-c.c.ai-mesh-firewall.internal

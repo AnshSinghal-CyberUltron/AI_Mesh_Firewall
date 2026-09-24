@@ -1,0 +1,65 @@
+{
+ "file": "test_openai_sdk_compat.py",
+ "test_funcs": 48,
+ "parametrize_decorators": [],
+ "xfail_decorators": [
+  [
+   "test_responses_typed_stream_sequence_D5",
+   701,
+   "pytest.mark.xfail(strict=False, reason='D5: responses streaming must yield TYPED events (response.created -> output_text.delta -> response.completed); fix is in-tree (main.py:7815) so XPASS is expected')"
+  ],
+  [
+   "test_models_retrieve_by_id_D4",
+   744,
+   "pytest.mark.xfail(strict=False, reason='D4: client.models.retrieve(id) \u2014 playbook flagged as a gap; fix is in-tree (main.py:11471) so XPASS is expected')"
+  ]
+ ],
+ "pytestmark": []
+}
+{
+ "file": "test_openai_sdk_compat_live_uvicorn.py",
+ "test_funcs": 8,
+ "parametrize_decorators": [],
+ "xfail_decorators": [],
+ "pytestmark": []
+}
+{
+ "file": "test_openai_sdk_compat_phase2.py",
+ "test_funcs": 12,
+ "parametrize_decorators": [],
+ "xfail_decorators": [
+  [
+   "test_chat_n_gt_1_returns_n_choices",
+   159,
+   "pytest.mark.xfail(strict=True, reason=\"DEFECT P2-N-CHAT-clamp (MEDIUM; INTENTIONAL single-choice output-guard tradeoff at main.py:4309, but a SILENT OpenAI deviation): n>1 is clamped to 1 with no client-facing signal. OpenAI returns n choices. At minimum the clamp should be surfaced or 400'd, not si"
+  ],
+  [
+   "test_content_part_file_requires_payload",
+   221,
+   "pytest.mark.xfail(strict=True, reason=\"DEFECT P2-CONTENT-part-validation-gap (LOW): allowlisted multimodal part types (file/input_audio/audio/video_url) are admitted without payload-shape validation (main.py:4214-4231 validates only text/image_url), so a malformed {'type':'file'} (no 'file' key) rea"
+  ]
+ ],
+ "pytestmark": []
+}
+{
+ "file": "test_openai_sdk_compat_phase2_adversarial.py",
+ "test_funcs": 5,
+ "parametrize_decorators": [],
+ "xfail_decorators": [],
+ "pytestmark": []
+}
+{
+ "file": "test_openai_sdk_compat_phase5_correlation.py",
+ "test_funcs": 2,
+ "parametrize_decorators": [],
+ "xfail_decorators": [],
+ "pytestmark": []
+}
+{
+ "file": "test_openai_sdk_compat_phase6_guards.py",
+ "test_funcs": 2,
+ "parametrize_decorators": [],
+ "xfail_decorators": [],
+ "pytestmark": []
+}
+TOTAL test functions/methods (AST): 77

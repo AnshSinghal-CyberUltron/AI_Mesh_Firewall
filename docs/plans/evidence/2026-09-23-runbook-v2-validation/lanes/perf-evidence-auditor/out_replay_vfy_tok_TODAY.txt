@@ -1,0 +1,17 @@
+tokenizers 0.23.1
+
+=== Corpus A: repo markdown (the assembler's corpus) ===
+  markdown    1024 chars ->   372 ids  (2.75 ch/tok)  p50=0.2276 ms p99=0.2399  => 1 x 512-tok windows
+  markdown    2048 chars ->   694 ids  (2.95 ch/tok)  p50=0.4607 ms p99=0.4778  => 2 x 512-tok windows
+  markdown    4096 chars ->  1235 ids  (3.32 ch/tok)  p50=0.9926 ms p99=1.2156  => 3 x 512-tok windows
+  markdown   10000 chars ->  2863 ids  (3.49 ch/tok)  p50=2.3525 ms p99=2.8963  => 6 x 512-tok windows
+
+=== Corpus B: plain English prose (realistic chat prompt) ===
+  prose       1024 chars ->   162 ids  (6.32 ch/tok)  p50=0.1753 ms p99=0.1983  => 1 x 512-tok windows
+  prose       2048 chars ->   325 ids  (6.30 ch/tok)  p50=0.3449 ms p99=0.3779  => 1 x 512-tok windows
+  prose       4096 chars ->   652 ids  (6.28 ch/tok)  p50=0.7836 ms p99=0.9543  => 2 x 512-tok windows
+  prose      10000 chars ->  1594 ids  (6.27 ch/tok)  p50=2.0288 ms p99=2.6100  => 4 x 512-tok windows
+
+=== Token-band timing (fixed token counts, markdown corpus) ===
+  512 tok = 1393 chars -> 508 ids : p50=0.2837 ms p99=0.3393
+  1024 tok = 3415 chars -> 1022 ids : p50=0.7413 ms p99=0.7785

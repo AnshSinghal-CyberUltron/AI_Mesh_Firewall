@@ -1,0 +1,10 @@
+short   rep0 chars=   63 http=200 wall= 4696.9 total=4688.0 pre=18.5 post=11.7 overhead=9.8 policy=1.7 input_scan=0.8 out_guard=11.7 model_out=4657.8
+rep_4k  rep0 chars= 4043 http=200 wall= 4746.0 total=4722.4 pre=48.8 post=11.6 overhead=19.8 policy=10.2 input_scan=13.1 out_guard=11.6 model_out=4662.0
+nat_4k  rep0 chars= 4379 http=200 wall= 4749.8 total=4727.6 pre=53.5 post=11.6 overhead=21.4 policy=12.4 input_scan=14.8 out_guard=11.6 model_out=4662.5
+rep_1k  rep0 chars=  999 http=200 wall= 4705.0 total=4694.9 pre=24.6 post=11.9 overhead=12.7 policy=3.7 input_scan=3.7 out_guard=11.9 model_out=4658.4
+nat_1k  rep0 chars= 1068 http=200 wall= 4707.0 total=4697.5 pre=26.9 post=11.6 overhead=12.3 policy=4.3 input_scan=5.0 out_guard=11.6 model_out=4659.0
+short   rep1 chars=   63 http=200 wall= 4688.9 total=4684.1 pre=15.4 post=11.6 overhead=9.3 policy=1.4 input_scan=0.8 out_guard=11.6 model_out=4657.1
+rep_4k  rep1 chars= 4043 http=200 wall= 4745.2 total=4722.3 pre=48.8 post=11.9 overhead=20.0 policy=10.1 input_scan=13.6 out_guard=11.9 model_out=4661.6
+nat_4k  rep1 chars= 4379 http=200 wall= 4750.1 total=4727.8 pre=53.3 post=11.7 overhead=21.3 policy=12.4 input_scan=14.8 out_guard=11.7 model_out=4662.8
+rep_1k  rep1 chars=  999 http=200 wall= 4703.4 total=4694.0 pre=23.8 post=11.7 overhead=11.9 policy=3.6 input_scan=3.7 out_guard=11.7 model_out=4658.5
+nat_1k  rep1 chars= 1068 http=200 wall= 4704.5 total=4694.8 pre=24.8 post=11.6 overhead=12.0 policy=4.1 input_scan=4.1 out_guard=11.6 model_out=4658.4

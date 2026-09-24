@@ -1,0 +1,2 @@
+benign.jsonl n= 425 max chars= 83 mean= 63.2
+malicious.jsonl n= 323 max chars= 93 mean= 59.3

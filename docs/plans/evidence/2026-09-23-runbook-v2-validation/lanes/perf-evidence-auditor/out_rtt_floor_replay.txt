@@ -1,0 +1,3 @@
+Delhi asia-south2 (CROSS-REGION)   great-circle=  1148 km fibre(x1.4)=  1607 km one-way= 8.04 ms RTT floor=16.07 ms
+Singapore asia-southeast1          great-circle=  3904 km fibre(x1.4)=  5465 km one-way=27.33 ms RTT floor=54.65 ms
+Note: the formula takes a distance between two REGIONS; it has no term for an off-box GPU in the SAME region/zone.

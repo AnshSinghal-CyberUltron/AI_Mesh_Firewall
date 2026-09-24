@@ -1,0 +1,15 @@
+# hardcoded proof-point claims on the public /login page (HEAD)
+119:              { icon: Activity, label: 'Uptime', value: '99.99%' },
+120:              { icon: FileCheck, label: 'Compliance', value: 'SOC2 / ISO' },
+121:              { icon: Shield, label: 'Protected', value: '10M+ calls' },
+287:                { icon: Activity, label: 'Uptime', value: '99.99%' },
+288:                { icon: FileCheck, label: 'Compliance', value: 'SOC2' },
+289:                { icon: Shield, label: 'Protected', value: '10M+' },
+
+# same at e95f974d
+119:              { icon: Activity, label: 'Uptime', value: '99.99%' },
+120:              { icon: FileCheck, label: 'Compliance', value: 'SOC2 / ISO' },
+121:              { icon: Shield, label: 'Protected', value: '10M+ calls' },
+287:                { icon: Activity, label: 'Uptime', value: '99.99%' },
+288:                { icon: FileCheck, label: 'Compliance', value: 'SOC2' },
+289:                { icon: Shield, label: 'Protected', value: '10M+' },

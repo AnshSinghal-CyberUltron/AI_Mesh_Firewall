@@ -1,0 +1,6 @@
+main.py 35
+mcp_oauth.py 7
+mcp_oauth_proxy.py 3
+mcp_proxy.py 9
+vector_routes.py 4
+TOTAL route decorators in gateway package: 58

@@ -1,0 +1,5 @@
+2 failed, 1 passed, 45 deselected in 2.96s
+E       Failed: DID NOT RAISE <class 'openai.APIStatusError'>
+FAILED ai_mesh_gateway/tests/test_openai_sdk_compat.py::test_blocked_request_raises_api_status_error_with_zeroshield_body
+FAILED ai_mesh_gateway/tests/test_openai_sdk_compat.py::test_blocked_streaming_request_raises_before_sse
+PASSED ai_mesh_gateway/tests/test_openai_sdk_compat.py::test_non_streaming_parses_as_chat_completion

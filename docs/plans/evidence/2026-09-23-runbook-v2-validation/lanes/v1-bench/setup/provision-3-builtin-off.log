@@ -1,0 +1,7 @@
+[provision] org v1bench id=2
+[provision] firewall config saved: {"firewall_enabled": true, "enforcement_mode": "block", "pii_detection_enabled": true, "content_filtering_enabled": true, "jailbreak_detection_enabled": true, "semantic_analysis_enabled": false, "tier2_enabled": false, "response_filtering_enabled": true, "output_pii_enabled": true, "output_pii_action": "redact", "output_credential_enabled": true, "output_credential_action": "redact", "output_policy_enabled": true, "rate_limit_enabled": true, "requests_per_minute": 100000000, "burst_limit": 1000000, "org_tpm_limit": 0}
+[provision] key prefix=NCDCVIrc org=v1bench tpm=100000000
+[provision] model synth-1 provider=custom api_base=http://10.160.0.38:8080/v1 created=False
+[provision] builtin packs enabled=False (10 policies)
+INFO 2026-09-23 06:21:24,577 compiler 19555 136193337133952 Pushed compiled policies to Redis (policies:compiled:v1bench, version=2, policies=46, trigger=seed_policy_package)
+[provision] policies org=56 enabled=46 pipeline_enabled=17

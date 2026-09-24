@@ -1,0 +1,14 @@
+gateway/ai_mesh_gateway/metrics.py:141:    # CHG-0094: MCP audit records DROPPED under backpressure (inflight >= cap), labeled
+gateway/ai_mesh_gateway/mcp_stdio_adapter.py:77:_MAX_CONCURRENT_INITS = int(os.environ.get("MCP_STDIO_MAX_CONCURRENT_INITS", "4"))
+gateway/ai_mesh_gateway/mcp_stdio_adapter.py:115:        _init_semaphore = asyncio.Semaphore(_MAX_CONCURRENT_INITS)
+gateway/ai_mesh_gateway/mcp_proxy.py:133:_AUDIT_INFLIGHT = 0
+gateway/ai_mesh_gateway/mcp_proxy.py:134:_AUDIT_MAX_INFLIGHT = int(os.environ.get("GATEWAY_AUDIT_MAX_INFLIGHT", "64"))
+gateway/ai_mesh_gateway/mcp_proxy.py:138:_AUDIT_MAX_INFLIGHT_HIGH = int(os.environ.get("GATEWAY_AUDIT_MAX_INFLIGHT_HIGH", "256"))
+gateway/ai_mesh_gateway/mcp_proxy.py:155:    global _AUDIT_INFLIGHT
+gateway/ai_mesh_gateway/mcp_proxy.py:165:        _AUDIT_INFLIGHT -= 1
+gateway/ai_mesh_gateway/mcp_proxy.py:176:    (``_AUDIT_MAX_INFLIGHT_HIGH``) so it survives a backpressure burst that sheds the
+gateway/ai_mesh_gateway/mcp_proxy.py:181:    global _AUDIT_INFLIGHT
+gateway/ai_mesh_gateway/mcp_proxy.py:184:    cap = _AUDIT_MAX_INFLIGHT_HIGH if high else _AUDIT_MAX_INFLIGHT
+gateway/ai_mesh_gateway/mcp_proxy.py:185:    if _AUDIT_INFLIGHT >= cap:
+gateway/ai_mesh_gateway/mcp_proxy.py:188:            _AUDIT_INFLIGHT, decision or "?", "high" if high else "normal",
+gateway/ai_mesh_gateway/mcp_proxy.py:196:    _AUDIT_INFLIGHT += 1

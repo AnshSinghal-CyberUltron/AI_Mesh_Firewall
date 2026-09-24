@@ -1,0 +1,21 @@
+consumer files: 37 (962702 bytes)
+P (G_trace ∪ G_telemetry ∪ C_ee) size: 192
+F ∩ P  (specific payload fields read by consumer files): 135
+F ∩ (G_gateway ∪ P) (broad; includes generic names): 314
+fields read by >=3 consumer files: 61
+v1 stage-name string literals in consumer files:
+  auth              1 files
+  kill_switch       3 files
+  rate_limit        2 files
+  policy            3 files
+  input_scan        2 files
+  model_routing     3 files
+  model_input       1 files
+  model_output      2 files
+  output_guardrail  3 files
+
+F ∩ P:
+  action, actions, auth_ms, auth_status, by_stage, candidate_count, compliance_tags, confidence, content, content_safety, data_sensitivity, decision_factors, decision_source, decision_source_label, detail, detection_tier, dominant_latency_ms, dominant_share_pct, dominant_stage, endpoint, endpoint_id, enforcement_source, evaluator_model, event_type, extra, fallback_chain, final_action, final_response, guard_action, guard_findings, guard_model, guard_reason, guard_summary, hints, incident_id, input_action, input_text, input_text_after, input_text_before, input_tokens, input_validation, input_was_redacted, intent, is_isolation_event, jailbreak_detected, key_prefix, kill_switch_ms, latency_breakdown, latency_ms, llm, matched_patterns, matched_policies, matched_rule_names, matched_rules, mcp, message, metadata, method, model, model_input_ms, module, module_id, name, org_routing_enabled, organization_id, original_model, output_guardrail_ms, output_text, output_tokens, output_withheld, output_withheld_reason, overhead_ms, owasp_code, pii_detected, pipeline_request_id, pipeline_stage, pipeline_trace, policy_ms, policy_summary, policy_violations, project_id, prompt, prompt_hash, prompt_in, prompt_in_operator_masked, prompt_injection_detected, prompt_lineage, prompt_out, prompt_preview, prompt_snippet, prompt_submitted, rate_limit, rate_limit_ms, rate_limit_status, reason, reason_code, recommended_action, redact_noop, redaction_display_note, remapped_from, request_id, requested_model, risk_score, route_destination, route_destination_label, routed_model, routing, routing_enabled, routing_reason, routing_score, scan_outcome, security_risk_score, selected_model, severity, share_pct, source, source_ip, stage, stage_latency_sum_ms, stages, status_code, threat_category, threat_type, tier, tier1_ms, tier2_ms, timestamp, tokens_used, total_latency_ms, total_ms, total_tokens, upstream_ms, user_agent, user_id, weights
+F∩P total 135 | snake_case (unambiguous backend payload names): 108 | single-word (may be generic): 27
+single-word: action, actions, confidence, content, detail, endpoint, extra, hints, intent, llm, mcp, message, metadata, method, model, module, name, prompt, reason, routing, severity, source, stage, stages, tier, timestamp, weights
+37-file set: F∩G_trace=87 F∩G_telemetry=23/23 F∩C_ee=53/60 (control-translation-only: 12: auth_status, extra, input_validation, jailbreak_detected, owasp_code, pii_detected, policy_violations, prompt_injection_detected, prompt_lineage, rate_limit_status, security_risk_score, threat_category)

@@ -1,0 +1,149 @@
+  1  -y @org/mcp-server   <- components/MCPManagerPanel.jsx:1533
+  2  -y mcp-remote https://mcp.linear.app/mcp   <- components/MCPScannerPanel.jsx:939, components/MCPScannerPanel.jsx:972
+  1  -y, @playwright/mcp@latest   <- components/MCPConnectorPanel.jsx:1912
+  1  /api/   <- utils/environmentUrls.js:115
+  2  /api/admin/gateway/bedrock-test/   <- components/BedrockTestPanel.jsx:45, components/BedrockTestPanel.jsx:98
+  2  /api/admin/gateway/circuit-breaker/reset/   <- components/simulator/CircuitBreakerSimulator.jsx:105, components/simulator/IsolationOpsSimulator.jsx:210
+  2  /api/admin/gateway/circuit-breaker/state/   <- components/simulator/CircuitBreakerSimulator.jsx:37, components/simulator/IsolationOpsSimulator.jsx:56
+  2  /api/admin/gateway/circuit-breaker/trigger/   <- components/simulator/CircuitBreakerSimulator.jsx:73, components/simulator/IsolationOpsSimulator.jsx:180
+  1  /api/admin/gateway/db-test/   <- components/DatabaseConnectionPanel.jsx:107
+  2  /api/admin/gateway/rag/collections/   <- components/rag/CollectionManagerPanel.jsx:9, hooks/useCollections.js:4
+  1  /api/admin/redis/kill-switches/validate/   <- components/KillSwitchPanel.jsx:171
+  1  /api/auth/change-password/   <- components/ChangePasswordForm.jsx:30
+  1  /api/auth/logout/   <- context/AuthContext.jsx:221
+  1  /api/auth/me/   <- context/AuthContext.jsx:133
+  2  /api/auth/me/profile/   <- pages/Profile.jsx:111, pages/Profile.jsx:142
+  1  /api/auth/token/   <- context/AuthContext.jsx:198
+  1  /api/auth/token/refresh/   <- context/AuthContext.jsx:95
+ 17  /api/firewall/config/   <- components/MCPConnectorPanel.jsx:490, components/MCPConnectorPanel.jsx:872, components/MCPScanControlMatrix.jsx:72, components/MCPScanControlMatrix.jsx:104 ...
+  4  /api/firewall/models/   <- components/KillSwitchPanel.jsx:84, components/ModelConnectionPanel.jsx:264, components/ModelConnectionPanel.jsx:518, hooks/useSimulatorGatewayModels.js:53
+  3  /api/firewall/models/{x}/   <- components/ModelConnectionPanel.jsx:517, components/ModelConnectionPanel.jsx:557, components/ModelConnectionPanel.jsx:578
+  1  /api/gateways/isolation-playground/   <- hooks/useIsolationPlayground.js:10
+  1  /api/gateways/isolation-playground/rotate/   <- hooks/useIsolationPlayground.js:11
+  2  /api/gateways/keys/   <- components/GatewayKeyPanel.jsx:39, components/GatewayKeyPanel.jsx:109
+  1  /api/gateways/keys/purge-revoked/   <- components/GatewayKeyPanel.jsx:168
+  1  /api/gateways/keys/{x}/   <- components/GatewayKeyPanel.jsx:144
+  1  /api/gateways/public-url/   <- hooks/useGatewayConfig.js:89
+  2  /api/gateways/simulator-default/   <- hooks/useGatewayCredential.js:39, hooks/useSimulatorEngine.js:176
+  1  /api/gateways/stats/   <- hooks/useFirewallData.js:123
+  4  /api/health/   <- components/ServiceStatusPanel.jsx:110, hooks/useBackendHealth.js:41, hooks/useIsolationPlayground.js:109, hooks/useSimulatorEngine.js:136
+  1  /api/health/services/   <- components/ServiceStatusPanel.jsx:126
+  2  /api/kill-switches/   <- components/KillSwitchPanel.jsx:59, components/KillSwitchPanel.jsx:223
+  2  /api/kill-switches/{x}/   <- components/KillSwitchPanel.jsx:219, components/KillSwitchPanel.jsx:289
+  1  /api/kill-switches/{x}/activate/   <- components/KillSwitchPanel.jsx:251
+  1  /api/kill-switches/{x}/deactivate/   <- components/KillSwitchPanel.jsx:270
+  1  /api/mcp-connector/events/summary/{x}   <- components/MCPConnectorPanel.jsx:576
+  1  /api/mcp-connector/events/{x}   <- components/MCPConnectorPanel.jsx:565
+  1  /api/mcp-connector/health/   <- components/MCPConnectorPanel.jsx:541
+  2  /api/mcp-connector/org-gateway-key/   <- components/MCPConnectorPanel.jsx:593, components/MCPConnectorPanel.jsx:600
+  4  /api/mcp-connector/scan-controls/   <- components/MCPConnectorPanel.jsx:465, components/MCPScanControlMatrix.jsx:57, components/ServerTier2Manager.jsx:164, components/ServerTier2Manager.jsx:206
+  1  /api/mcp-connector/scan-controls/{x}/   <- components/ServerTier2Manager.jsx:219
+  4  /api/mcp-connector/servers/   <- components/MCPConnectorPanel.jsx:452, components/MCPConnectorPanel.jsx:637, components/MCPConnectorPanel.jsx:784, components/simulator/MCPGuardrailSimulator.jsx:198
+  5  /api/mcp-connector/servers/{x}/   <- components/MCPConnectorPanel.jsx:663, components/MCPConnectorPanel.jsx:729, components/MCPConnectorPanel.jsx:741, components/MCPConnectorPanel.jsx:1168 ...
+  1  /api/mcp-connector/servers/{x}/oauth/authorize/   <- components/MCPConnectorPanel.jsx:1138
+  6  /api/mcp-connector/servers/{x}/tools/   <- components/MCPConnectorPanel.jsx:584, components/MCPConnectorPanel.jsx:678, components/MCPConnectorPanel.jsx:820, components/PolicyManagementPanel.jsx:1271 ...
+  1  /api/mcp-connector/servers/{x}/tools/{x}/   <- components/MCPConnectorPanel.jsx:849
+  1  /api/mcp-connector/tools/   <- components/MCPConnectorPanel.jsx:528
+  2  /api/mcp-connector/tools/call/   <- components/MCPConnectorPanel.jsx:1284, components/simulator/MCPGuardrailSimulator.jsx:340
+  1  /api/mcp/audit-logs/${qs    <- components/MCPManagerPanel.jsx:302
+  1  /api/mcp/enforcement-status/   <- components/MCPManagerPanel.jsx:253
+  1  /api/mcp/graph   <- components/MCPScannerPanel.jsx:155
+  1  /api/mcp/history   <- components/MCPScannerPanel.jsx:144
+  1  /api/mcp/oauth/callback/   <- components/MCPManagerPanel.jsx:449
+  3  /api/mcp/policies/   <- components/MCPManagerPanel.jsx:281, components/MCPManagerPanel.jsx:282, components/MCPManagerPanel.jsx:687
+  1  /api/mcp/policies/{x}/   <- components/MCPManagerPanel.jsx:611
+  1  /api/mcp/scan   <- components/MCPScannerPanel.jsx:210
+  1  /api/mcp/scan/{x}   <- components/MCPScannerPanel.jsx:183
+  1  /api/mcp/servers   <- components/MCPScannerPanel.jsx:133
+  2  /api/mcp/servers/   <- components/MCPManagerPanel.jsx:240, components/MCPManagerPanel.jsx:397
+  1  /api/mcp/servers/register   <- components/MCPScannerPanel.jsx:260
+  1  /api/mcp/servers/{x}   <- components/MCPScannerPanel.jsx:284
+  1  /api/mcp/servers/{x}/   <- components/MCPManagerPanel.jsx:523
+  1  /api/mcp/servers/{x}/connect/   <- components/MCPManagerPanel.jsx:480
+  1  /api/mcp/servers/{x}/disconnect/   <- components/MCPManagerPanel.jsx:508
+  1  /api/mcp/servers/{x}/rescan   <- components/MCPScannerPanel.jsx:231
+  1  /api/mcp/servers/{x}/toggle-verbose-logging/   <- components/MCPManagerPanel.jsx:598
+  1  /api/mcp/servers/{x}/tools/   <- components/MCPManagerPanel.jsx:266
+  1  /api/mcp/servers/{x}/tools/{x}   <- components/MCPScannerPanel.jsx:296
+  1  /api/mcp/servers/{x}/tools/{x}/toggle/   <- components/MCPManagerPanel.jsx:583
+  1  /api/mcp/status   <- components/MCPScannerPanel.jsx:119
+  1  /api/models/audit-log/   <- components/ModelStatePanel.jsx:111
+  3  /api/models/isolate/   <- components/ModelStatePanel.jsx:167, components/simulator/CircuitBreakerSimulator.jsx:117, components/simulator/IsolationOpsSimulator.jsx:227
+  1  /api/models/recover/{x}/   <- components/ModelStatePanel.jsx:25
+  1  /api/models/status/   <- components/ModelStatePanel.jsx:76
+  1  /api/models/status/{x}/   <- components/ModelStatePanel.jsx:21
+  1  /api/models/sync/   <- components/ModelStatePanel.jsx:94
+  1  /api/notifications/   <- components/layout/Header.jsx:180
+  1  /api/notifications/mark-all-read/   <- components/layout/Header.jsx:238
+  1  /api/notifications/{x}/read/   <- components/layout/Header.jsx:229
+  3  /api/policies/   <- components/Firewall12EnterprisePage.jsx:162, components/PolicyManagementPanel.jsx:1161, components/PolicyManagementPanel.jsx:1306
+  1  /api/policies/analytics/   <- components/PolicyAnalyticsPanel.jsx:147
+  3  /api/policies/compile/   <- components/PolicyManagementPanel.jsx:1402, components/PolicyManagementPanel.jsx:1435, components/PolicyManagementPanel.jsx:1613
+  1  /api/policies/compile/status/   <- components/PolicyManagementPanel.jsx:1615
+  1  /api/policies/mcp-presets/   <- components/PolicyManagementPanel.jsx:1210
+  3  /api/policies/mcp-server-states/   <- components/ServerTier1Manager.jsx:75, components/ServerTier1Manager.jsx:127, components/ServerTier1Manager.jsx:139
+  3  /api/policies/rules/{x}/   <- components/PolicyManagementPanel.jsx:1420, components/PolicyManagementPanel.jsx:1512, components/PolicyManagementPanel.jsx:1541
+  1  /api/policies/test/   <- components/simulator/MCPGuardrailSimulator.jsx:335
+  1  /api/policies/top-violators/   <- components/PolicyAnalyticsPanel.jsx:148
+  3  /api/policies/{x}/   <- components/PolicyManagementPanel.jsx:1332, components/PolicyManagementPanel.jsx:1389, components/PolicyManagementPanel.jsx:1455
+  2  /api/policies/{x}/rules/   <- components/PolicyManagementPanel.jsx:1225, components/PolicyManagementPanel.jsx:1486
+  1  /api/policy/top-rules/   <- components/PolicyAnalyticsPanel.jsx:149
+  2  /api/security/attack-vector-trends/   <- hooks/useFirewallData.js:122, pages/AIMeshFirewallOverview.jsx:620
+  1  /api/security/incidents/   <- components/MCPManagerPanel.jsx:327
+  1  /api/security/module-charts/{x}/   <- components/OutputGuardrailCharts.jsx:153
+  1  /api/security/module-kpis/   <- pages/AIMeshFirewallOverview.jsx:621
+  1  /api/security/module-trends/   <- pages/AIMeshFirewallOverview.jsx:622
+  1  /api/security/owasp-stats/   <- components/OWASPStatsPanel.jsx:147
+  2  /api/security/rag-pipeline-kpis/   <- components/RAGPipelineTelemetry.jsx:276, hooks/useFirewallData.js:126
+  2  /api/security/soc-kpis/   <- hooks/useFirewallData.js:99, pages/AIMeshFirewallOverview.jsx:619
+  5  /api/security/threat-feed/   <- components/MCPManagerPanel.jsx:316, components/OutputGovernancePanel.jsx:151, components/OutputGuardrailEngineCard.jsx:81, components/RoutingAuditPanel.jsx:49 ...
+  1  /api/security/threat-feed/{x}/   <- components/LogDetailPage.jsx:170
+  2  /api/vector-policies/   <- components/VectorPolicyPanel.jsx:397, components/VectorPolicyPanel.jsx:448
+  1  /api/vector-policies/compile/   <- components/VectorPolicyPanel.jsx:563
+  2  /api/vector-policies/{x}/   <- components/VectorPolicyPanel.jsx:491, components/VectorPolicyPanel.jsx:546
+  3  /api/vector-providers/   <- components/rag/VectorProviderConfigPanel.jsx:30, components/rag/VectorProviderConfigPanel.jsx:103, hooks/useVectorProviders.js:35
+  2  /api/vector-providers/{x}/   <- components/rag/VectorProviderConfigPanel.jsx:98, components/rag/VectorProviderConfigPanel.jsx:127
+  1  /data/mcp-auth   <- components/MCPConnectorPanel.jsx:113
+  1  /mcp   <- components/module-specific-log-charts.jsx:105
+  1  /mcp-remote   <- components/MCPConnectorPanel.jsx:246
+ 10  /v1/chat/completions   <- components/AttackSimulatorPanel.jsx:288, components/AttackSimulatorPanel.jsx:292, components/AttackSimulatorPanel.jsx:318, components/AttackSimulatorPanel.jsx:538 ...
+  2  /v1/rag/ingest   <- components/simulator/RAGIngestionPanel.jsx:72, components/simulator/RAGIngestionPanel.jsx:83
+  1  >/v1/chat/completions</code>, set{   <- components/OrgIsolationBanner.jsx:54
+  1  @anthropic/mcp-server-filesystem   <- components/howToUseContent.js:591
+  1  @playwright/mcp@latest   <- components/MCPConnectorPanel.jsx:109
+  1  Change your base_url to the gateway URL. Your app can still send a preferred model, but `/v1/chat/completions` treats it as a routing hint rather than a hard guarantee. The final model and reroute reason are visible in the `zeroshield.routing` object in the API response and in the Routing Audit panel.   <- components/howToUseContent.js:661
+  1  Compile triggered; status fetch failed — verify via /api/policies/compile/status/ or redis-cli.   <- components/PolicyManagementPanel.jsx:1628
+  1  Every `/v1/chat/completions` request is evaluated by the AI Mesh Router. The gateway first applies your weights and policy filters, then an deterministic routing engine confirms or overrides the preferred model based on sensitivity, compliance, budget, latency, and model risk. The final route and reason are returned in ZeroShield metadata and the routing audit trail.   <- components/howToUseContent.js:75
+  1  Every response generated through /v1/chat/completions is evaluated in-line before it reaches the client. Input checks, model generation, and output enforcement now happen in one lifecycle so the UI, review queue, and incident records all reflect the final delivered outcome.   <- components/howToUseContent.js:913
+  1  Exercise live /v1/chat/completions routing (same path as production) with priority weights and compliance filters   <- components/simulator/ModelRoutingSimulator.jsx:138
+  1  Gateway API keys authenticate requests to the AI Gateway. Create a key, copy it, and use it as the Authorization: Bearer <key> header in your API calls to the gateway at /v1/chat/completions.   <- components/GatewayKeyPanel.jsx:208
+  1  Manage backend MCP server connections, toggle tools on/off, create per-tool deny/allow/redact policies, and review the full audit trail.\n\nServer list refreshes from /api/mcp/servers/.   <- components/MCPManagerPanel.jsx:729
+  1  Official MCP filesystem server (sandbox /data/mcp-auth scope)   <- components/MCPConnectorPanel.jsx:113
+  1  Rules for the live chat gateway path (/v1/chat/completions): input scan, routing, model output, and output guard stages.   <- utils/policyCreateBehavior.js:9
+  1  Scans MCP (Model Context Protocol) servers for security vulnerabilities. Enter an MCP server URL or stdio command to initiate a scan.\n\nExample: npx -y @anthropic/mcp-server-filesystem /tmp   <- components/MCPScannerPanel.jsx:325
+  1  Test the AI firewall with pre-built OWASP attack scenarios. Select a scenario and click 'Run' to send a real prompt through the gateway pipeline (Auth → Rate Limit → Policy → Input Scan → Kill Switch → Output Scan). Single-run results include the final output-stage action, review requirement, rewrite or redaction preview, and incident status returned by /v1/chat/completions.   <- components/AttackSimulatorPanel.jsx:694
+  1  The /v1/chat/completions endpoint accepts POST requests with a JSON body containing model, messages array, and optional max_tokens parameter.   <- components/simulator/RAGIngestionPanel.jsx:48
+  1  The AI Mesh Router automatically evaluates every `/v1/chat/completions` request. Your configured weights and sensitivity rules create the candidate pool, then an deterministic routing engine analyzes the input and governance settings to decide whether to keep the requested model or reroute to a safer, cheaper, faster, or more compliant target. The full routing decision — including score, reason, policy summary, and decision factors — is returned in the API response and visible in the Routing Audit panel.   <- components/howToUseContent.js:641
+  1  Use the Dynamic Routing toggle in Module 1.5 to globally enable or disable deterministic routing for `/v1/chat/completions`. When disabled, requests keep the preferred model unless blocked by allowlist or policy constraints.   <- components/howToUseContent.js:656
+  1  When Dynamic Routing is enabled, `/v1/chat/completions` requests go through the deterministic routing engine. The routing engine evaluates governance settings and request attributes (weights, sensitivity, compliance) to select the optimal model in real-time.   <- components/howToUseContent.js:797
+  1  http://127.0.0.1:8300/api/mcp/policies/   <- components/howToUseContent.js:576
+  1  http://<gateway_host>:<gateway_port>/gateway/<org_slug>/mcp/<server_slug>   <- components/howToUseContent.js:612
+  2  http://localhost:8300/v1/rag/ingest   <- components/howToUseContent.js:392, components/howToUseContent.js:408
+  1  https://aisecshieldgateway.zeroshield.ai/v1/chat/completions   <- components/howToUseContent.js:145
+  1  https://api.githubcopilot.com/mcp/   <- components/MCPConnectorPanel.jsx:94
+  1  https://gateway.example.com/mcp/linear   <- components/howToUseContent.js:544
+  1  https://mcp.context7.com/mcp   <- components/MCPConnectorPanel.jsx:107
+  1  https://mcp.example.com/mcp   <- components/MCPScannerPanel.jsx:928
+  1  https://mcp.linear.app/mcp   <- components/MCPConnectorPanel.jsx:105
+  1  https://mcp.linear.app/sse   <- components/MCPManagerPanel.jsx:1505
+  1  https://my-server.example.com/mcp   <- components/MCPConnectorPanel.jsx:1825
+  1  {GATEWAY}/v1/chat/completions   <- components/howToUseContent.js:999
+  1  {x}/gateway/{x}/mcp/{x}   <- utils/environmentUrls.js:331
+  1  {x}/gateway/{x}/mcp/{x}/oauth/start   <- components/MCPConnectorPanel.jsx:1079
+  1  {x}/health   <- utils/environmentUrls.js:243
+  1  {x}/mcp/zeroshield/{x}   <- components/MCPManagerPanel.jsx:538
+  1  {x}/v1/admin/logs   <- components/LogViewerPanel.jsx:61
+  1  {x}/v1/models   <- components/ModelConnectionPanel.jsx:301
+  4  {x}/v1/rag/query   <- components/DatabaseConnectionPanel.jsx:160, components/RAGAttackTrustSimulator.jsx:299, components/RAGFeatureTestPanel.jsx:117, components/rag/SemanticSearchPanel.jsx:56
+
+TOTAL literal occurrences=241 distinct normalised paths=147 files scanned=170

@@ -1,0 +1,27 @@
+# PHASE 2 (controller reprioritisation): loop isolation + corrected metrics (rules a-d), all with -sample-mod 1
+# unit tree + li knobs (tools/apply_li.py; every knob defaults to unchanged behaviour); AMF_TARGET_P99_MS=1000, deadline 20 ms
+CMD bash /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-bench-unit/tools/li_deploy.sh apply
+CMD bash /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-bench-unit/tools/unit_ctl.sh start ub local_gpu 22M AMF_TARGET_P99_MS=1000 RV_GUARD_DEADLINE_MS=20
+# BEFORE: li knobs at defaults (1 s metrics dump on the loop, tokenizer encode inline) = original behaviour
+ub-078 78 headline-22M.jsonl SAMPLER_FLAGS=--sigusr1 OLG_EXTRA="-sample-mod 1" PROV_FLAGS="-ttft 150ms -itl 20ms -sample-mod 1" LABEL=before_loop_isolation
+ub-050 50 headline-22M.jsonl SAMPLER_FLAGS=--sigusr1 OLG_EXTRA="-sample-mod 1" PROV_FLAGS="-ttft 150ms -itl 20ms -sample-mod 1" LABEL=before_loop_isolation
+# AFTER: no periodic metrics dump (SIGUSR1 at window edges only) + tokenizer encode_batch in a thread pool
+CMD bash /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-bench-unit/tools/unit_ctl.sh start li local_gpu 22M AMF_TARGET_P99_MS=1000 RV_GUARD_DEADLINE_MS=20 RV_METRICS_DUMP_S=0 RV_TOKENIZE_IN_THREAD=1
+li-078 78 headline-22M.jsonl SAMPLER_FLAGS=--sigusr1 OLG_EXTRA="-sample-mod 1" PROV_FLAGS="-ttft 150ms -itl 20ms -sample-mod 1" LABEL=loop_isolation
+li-100 100 headline-22M.jsonl SAMPLER_FLAGS=--sigusr1 OLG_EXTRA="-sample-mod 1" PROV_FLAGS="-ttft 150ms -itl 20ms -sample-mod 1" LABEL=loop_isolation
+# li-078 passed C4 (14.99 ms p99): extend the loop-isolated ladder to find the C4 knee
+li-150 150 headline-22M.jsonl SAMPLER_FLAGS=--sigusr1 OLG_EXTRA="-sample-mod 1" PROV_FLAGS="-ttft 150ms -itl 20ms -sample-mod 1" LABEL=loop_isolation
+li-200 200 headline-22M.jsonl SAMPLER_FLAGS=--sigusr1 OLG_EXTRA="-sample-mod 1" PROV_FLAGS="-ttft 150ms -itl 20ms -sample-mod 1" LABEL=loop_isolation
+li-050 50 headline-22M.jsonl SAMPLER_FLAGS=--sigusr1 OLG_EXTRA="-sample-mod 1" PROV_FLAGS="-ttft 150ms -itl 20ms -sample-mod 1" LABEL=loop_isolation
+# li-200 C4 p99 19.61 (marginal PASS, p99.9 47.6): repeats at 200 + first-fail probe at 250
+li-200-r2 200 headline-22M.jsonl SAMPLER_FLAGS=--sigusr1 OLG_EXTRA="-sample-mod 1" PROV_FLAGS="-ttft 150ms -itl 20ms -sample-mod 1" LABEL=loop_isolation
+li-200-r3 200 headline-22M.jsonl SAMPLER_FLAGS=--sigusr1 OLG_EXTRA="-sample-mod 1" PROV_FLAGS="-ttft 150ms -itl 20ms -sample-mod 1" LABEL=loop_isolation
+li-250 250 headline-22M.jsonl SAMPLER_FLAGS=--sigusr1 OLG_EXTRA="-sample-mod 1" PROV_FLAGS="-ttft 150ms -itl 20ms -sample-mod 1" LABEL=loop_isolation
+li-w025 25 worst-22M.jsonl SAMPLER_FLAGS=--sigusr1 OLG_EXTRA="-sample-mod 1" PROV_FLAGS="-ttft 150ms -itl 20ms -sample-mod 1" LABEL=loop_isolation_worst
+li-w050 50 worst-22M.jsonl SAMPLER_FLAGS=--sigusr1 OLG_EXTRA="-sample-mod 1" PROV_FLAGS="-ttft 150ms -itl 20ms -sample-mod 1" LABEL=loop_isolation_worst
+# scan-no-holdback (RV_HOLDBACK=off: scan executes on every chunk, nothing held; NOT boundary-safe) + li knobs: C4 cross-check
+CMD bash /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-bench-unit/tools/unit_ctl.sh start lin local_gpu 22M AMF_TARGET_P99_MS=1000 RV_GUARD_DEADLINE_MS=20 RV_METRICS_DUMP_S=0 RV_TOKENIZE_IN_THREAD=1 RV_HOLDBACK=off
+lin-078 78 headline-22M.jsonl SAMPLER_FLAGS=--sigusr1 OLG_EXTRA="-sample-mod 1" PROV_FLAGS="-ttft 150ms -itl 20ms -sample-mod 1" LABEL=scan_no_holdback
+CMD bash /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-bench-unit/tools/unit_ctl.sh stop phase2
+CMD bash /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-bench-unit/tools/li_deploy.sh restore
+STOP

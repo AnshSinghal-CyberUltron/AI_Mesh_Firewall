@@ -1,0 +1,59 @@
+[
+ {
+  "run": "ITL20-sse-r10",
+  "offered_rps": 10.0,
+  "qualified_rps": 10.0,
+  "offered": 1800,
+  "qualified": 1800,
+  "errors": 0,
+  "error_rate": 0.0,
+  "error_reasons": {},
+  "drops": 0,
+  "late_p99_ms": 0.1512,
+  "fw_p50": 801.5765,
+  "fw_p90": 1099.3802,
+  "fw_p99": 1313.2491,
+  "fw_p999": 1523.7014,
+  "sse_p50": 801.5765,
+  "sse_p99": 1313.2491,
+  "json_p50": null,
+  "json_p99": null,
+  "json_p999": null,
+  "total_p50": 239.0051,
+  "total_p99": 1063.6671,
+  "first_p50": 785.0409,
+  "first_p99": 1143.0056,
+  "lag_p50": 1145.335,
+  "lag_p99": 1523.7014,
+  "gw_cpu_ms_req": 645.458,
+  "stack_cpu_ms_req": 730.951,
+  "gw_cores": 6.455,
+  "gw_cores_1s_max": 7.859,
+  "host_util_pct": 31.26,
+  "gw_anon_mib_max": 4464.6,
+  "worker_rss_mib_max": 291.9,
+  "worker_cores": {
+   "n": 19,
+   "min": 0.0,
+   "p50": 0.072,
+   "max": 0.956
+  },
+  "probe_p99": 21.444,
+  "probe_max": 42.779,
+  "probe_fail": 0,
+  "audit_completeness": 1.0,
+  "verdict": {
+   "pass": false,
+   "checks": {
+    "p99_T_fw_addon_lt_slo": false,
+    "error_rate_le_budget": true,
+    "zero_schedule_drops": true,
+    "zero_safety_failures": true,
+    "run_valid": true,
+    "qualified_nonempty": true
+   }
+  },
+  "valid": true,
+  "checks": {}
+ }
+]

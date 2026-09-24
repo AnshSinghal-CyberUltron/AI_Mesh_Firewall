@@ -1,0 +1,40 @@
+## start 2026-09-23T13:36:24.591433992Z
+aimeshperf-gateway-1 Up 2 minutes (healthy) aimeshperf-gateway
+aimeshperf-control-1 Up About an hour (healthy) aimeshperf-control
+aimeshperf-pgbouncer-1 Up About an hour (healthy) edoburu/pgbouncer:v1.23.1-p1
+aimeshperf-redis-1 Up About an hour (healthy) redis:7.4-alpine
+aimeshperf-rabbitmq-1 Up About an hour (healthy) rabbitmq:3-management
+aimeshperf-postgres-1 Up About an hour (healthy) pgvector/pgvector:pg16
+/aimeshperf-gateway-1 restarts=0 started=2026-09-23T13:34:04.354070098Z
+/aimeshperf-control-1 restarts=0 started=2026-09-23T12:33:33.740517496Z
+/aimeshperf-pgbouncer-1 restarts=0 started=2026-09-23T12:33:28.084358964Z
+/aimeshperf-redis-1 restarts=0 started=2026-09-23T12:33:17.144389938Z
+/aimeshperf-rabbitmq-1 restarts=0 started=2026-09-23T12:33:17.301557931Z
+/aimeshperf-postgres-1 restarts=0 started=2026-09-23T12:33:17.436564518Z
+total_commands_processed:8404540
+instantaneous_ops_per_sec:11
+rejected_connections:0
+connected_clients:222
+blocked_clients:0
+used_memory_human:16.61M
+6.11 6.39 9.10 2/1009 393931
+## stop 2026-09-23T13:43:17.076646910Z
+aimeshperf-gateway-1 Up 9 minutes (healthy) aimeshperf-gateway
+aimeshperf-control-1 Up About an hour (healthy) aimeshperf-control
+aimeshperf-pgbouncer-1 Up About an hour (healthy) edoburu/pgbouncer:v1.23.1-p1
+aimeshperf-redis-1 Up About an hour (healthy) redis:7.4-alpine
+aimeshperf-rabbitmq-1 Up About an hour (healthy) rabbitmq:3-management
+aimeshperf-postgres-1 Up About an hour (healthy) pgvector/pgvector:pg16
+/aimeshperf-gateway-1 restarts=0 started=2026-09-23T13:34:04.354070098Z
+/aimeshperf-control-1 restarts=0 started=2026-09-23T12:33:33.740517496Z
+/aimeshperf-pgbouncer-1 restarts=0 started=2026-09-23T12:33:28.084358964Z
+/aimeshperf-redis-1 restarts=0 started=2026-09-23T12:33:17.144389938Z
+/aimeshperf-rabbitmq-1 restarts=0 started=2026-09-23T12:33:17.301557931Z
+/aimeshperf-postgres-1 restarts=0 started=2026-09-23T12:33:17.436564518Z
+total_commands_processed:8747012
+instantaneous_ops_per_sec:26
+rejected_connections:0
+connected_clients:227
+blocked_clients:0
+used_memory_human:16.98M
+5.51 5.83 7.86 1/1016 424538

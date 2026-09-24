@@ -1,0 +1,54 @@
+500/5000
+1000/5000
+1500/5000
+2000/5000
+2500/5000
+3000/5000
+3500/5000
+4000/5000
+4500/5000
+5000/5000
+{
+ "profile": "headline",
+ "n": 5000,
+ "seed": 22,
+ "tokenizer": "Llama-Prompt-Guard-2-86M",
+ "tokenizer_sha256": "3e7e96867c2acdd575f0862c74822e05d1d15b93d9d9a4a2144b1ce83ae3339f",
+ "token_count_definition": "PG2 tokens, no special tokens, of system+'\\n'+user content with a real nonce",
+ "nonce_tokens": {
+  "22M": 15,
+  "86M": 15
+ },
+ "tokens_in": {
+  "min": 100,
+  "max": 1024,
+  "mean": 563.86,
+  "deciles": [
+   190,
+   287,
+   373,
+   476,
+   567,
+   661,
+   747,
+   842,
+   934
+  ]
+ },
+ "max_tokens": {
+  "min": 50,
+  "max": 400,
+  "mean": 226.44
+ },
+ "classes": {
+  "benign": 5000
+ },
+ "tools_frac": 0.0,
+ "synth_in_text": false,
+ "verification": {
+  "recounted_with_random_nonce": 250,
+  "mismatches": 0
+ },
+ "corpus_sha256": "cea51fcafd576c3dc793e7868dda409829ad6318de0be1d2c20f25d470590b03",
+ "benign_source": "/home/contact_cyberultron_com/AI_Mesh_Firewall/tests/detection_corpus/benign.jsonl"
+}

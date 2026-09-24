@@ -1,0 +1,2406 @@
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-state-propagation/probes/p5c_gw03_sighup_reentrancy.py", line 69, in <module>
+    main()
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-state-propagation/probes/p5c_gw03_sighup_reentrancy.py", line 61, in main
+    pool.release()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 37, in release
+    self._cv.notify_all()
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 431, in notify_all
+    self.notify(len(self._waiters))
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 404, in notify
+    if not self._is_owned():
+           ^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 317, in _is_owned
+    if self._lock.acquire(False):
+       ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 82, in reload
+    self.apply(contract, logs)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 76, in apply
+    pool.resize(contract.pool_size(kind))
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 40, in resize
+    with self._cv:
+         ^^^^^^^^
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/threading.py", line 300, in __enter__
+    return self._lock.__enter__()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/lifecycle.py", line 26, in handler
+    runtime.reload()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/pools.py", line 81, in reload
+    contract, logs = load_contract(env=self.env, hooks=self.hooks)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/resources.py", line 170, in load_contract
+    signals = detect_with_hooks(env=src, hooks=hooks)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/gateway_v2/runtime/cgroup.py", line 264, in detect_with_hooks
+    h = hooks if hooks is not None else DetectHooks()
+                                        ^^^^^^^^^^^^^
+RecursionError: maximum recursion depth exceeded
+Traceback (most recent call last):
+  File "<string>", line 5, in <module>
+ProcessLookupError: [Errno 3] No such process

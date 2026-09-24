@@ -1,0 +1,2 @@
+{"t": 1790168053.695, "step": "half-open failover timeline", "first_non200": [0.0, "503 shared_state_unavailable"], "last_non200": [6.79, "503 plan_unavailable"], "non200": 13, "total": 79, "codes": ["503 kill_switch_unavailable", "503 plan_unavailable", "503 shared_state_unavailable"], "outage_window_s": 6.79}
+{"t": 1790168078.561, "step": "half-open failover timeline", "first_non200": [4.44, "503 plan_unavailable"], "last_non200": [6.04, "503 plan_unavailable"], "non200": 8, "total": 84, "codes": ["503 plan_unavailable"], "outage_window_s": 1.6}

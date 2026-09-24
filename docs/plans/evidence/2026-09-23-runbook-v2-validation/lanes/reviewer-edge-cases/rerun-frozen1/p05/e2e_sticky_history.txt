@@ -1,0 +1,3 @@
+{"turn": 1, "user": "What is a prompt injection attack? One sentence please.", "result": "200 ALLOW"}
+{"turn": 2, "user": "Thanks. How do I store API keys safely in a web app?", "result": "403 blocked_by_policy"}
+{"turn": 3, "user": "And how often should I rotate them?", "result": "403 blocked_by_policy"}

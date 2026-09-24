@@ -1,0 +1,15 @@
+=== collect step1
+      1 
+      1 34 tests collected in 0.12s
+     28 ai_mesh_gateway/tests/test_enforcement.py
+      6 ai_mesh_gateway/tests/test_policy_engine_redos_guard.py
+=== collect step2
+      1 
+      1 675 tests collected in 0.15s
+    665 tests/golden/test_adversarial_attacks.py
+     10 tests/golden/test_chat_pipeline_golden.py
+=== step2 outcome per file
+    153 FAILED tests/golden/test_adversarial_attacks.py
+    512 PASSED tests/golden/test_adversarial_attacks.py
+      3 PASSED tests/golden/test_chat_pipeline_golden.py
+      2 SKIPPED tests/golden/test_chat_pipeline_golden.py

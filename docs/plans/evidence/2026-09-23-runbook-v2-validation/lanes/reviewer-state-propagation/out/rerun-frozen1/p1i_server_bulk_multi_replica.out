@@ -1,0 +1,7 @@
+{"t": 1790168167.937, "step": "B0 every worker serves k0 for all tenants", "workers": {"0": 1587, "1": 2000, "2": 2000, "3": 2000}}
+{"t": 1790168184.523, "step": "B1 +15s after the bulk re-publish (store: k1 for all 2000)", "stale_per_worker": {"0": 75, "1": 83, "2": 79, "3": 0}, "examples": {"0": ["bulk-00649", "bulk-00650", "bulk-00652"], "1": ["bulk-00586", "bulk-00587", "bulk-00592"], "2": ["bulk-00518", "bulk-00520", "bulk-00527"]}}
+{"t": 1790168229.523, "step": "B1 +60s after the bulk re-publish (store: k1 for all 2000)", "stale_per_worker": {"0": 75, "1": 83, "2": 79, "3": 0}, "examples": {"0": ["bulk-00649", "bulk-00650", "bulk-00652"], "1": ["bulk-00586", "bulk-00587", "bulk-00592"], "2": ["bulk-00518", "bulk-00520", "bulk-00527"]}}
+worker 0 plan_snapshot_age_seconds 0.88 orgs_still_on_k0 75
+worker 1 plan_snapshot_age_seconds 0.85 orgs_still_on_k0 83
+worker 2 plan_snapshot_age_seconds 0.14 orgs_still_on_k0 79
+worker 3 plan_snapshot_age_seconds 0.26 orgs_still_on_k0 0

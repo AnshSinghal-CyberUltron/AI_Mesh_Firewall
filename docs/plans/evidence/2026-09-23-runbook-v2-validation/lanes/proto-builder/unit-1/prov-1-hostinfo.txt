@@ -1,0 +1,4 @@
+4
+Model name:                              INTEL(R) XEON(R) PLATINUM 8581C CPU @ 2.30GHz
+               total        used        free      shared  buff/cache   available
+Mem:              14           0          13           0           0          14

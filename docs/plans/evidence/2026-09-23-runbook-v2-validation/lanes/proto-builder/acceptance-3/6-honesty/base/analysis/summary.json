@@ -1,0 +1,258 @@
+{
+ "mode": "sut",
+ "policy": "enforce",
+ "phases": [
+  2
+ ],
+ "inputs": {
+  "client_files": [
+   "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-builder/acceptance-3/6-honesty/base/olg/requests.jsonl"
+  ],
+  "provider_files": [
+   "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-builder/acceptance-3/6-honesty/base/provider.jsonl"
+  ],
+  "corpus": "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-builder/acceptance-3/6-honesty/light-corpus.jsonl"
+ },
+ "offered": 240,
+ "offered_rate_config": 4.0,
+ "measure_s": 60,
+ "achieved_offered_rps": 4.0,
+ "qualified": 238,
+ "expected_blocks": 0,
+ "errors": 2,
+ "qualified_rps": 3.97,
+ "error_rate": 0.008333333333333333,
+ "error_reasons": {
+  "http_403": 2,
+  "incomplete": 2,
+  "unjoined": 2,
+  "disposition_BLOCK": 2,
+  "stage_dispatch_S": 2,
+  "stage_out_S": 2
+ },
+ "error_examples": [
+  {
+   "rid": "7fc89dc3-027c-4d00-bda3-37df0878d8ce",
+   "reasons": [
+    "http_403",
+    "incomplete",
+    "unjoined",
+    "disposition_BLOCK",
+    "stage_dispatch_S",
+    "stage_out_S"
+   ],
+   "status": 403,
+   "err_detail": "type=policy_violation code=blocked_by_policy"
+  },
+  {
+   "rid": "c727e361-9979-4ee9-8cda-d9f59d8d2214",
+   "reasons": [
+    "http_403",
+    "incomplete",
+    "unjoined",
+    "disposition_BLOCK",
+    "stage_dispatch_S",
+    "stage_out_S"
+   ],
+   "status": 403,
+   "err_detail": "type=policy_violation code=blocked_by_policy"
+  }
+ ],
+ "safety_failures": 0,
+ "safety_reasons": {},
+ "safety_examples": [],
+ "schedule": {
+  "drops": 0,
+  "drop_threshold_ms": 5.0,
+  "lateness": {
+   "n": 240,
+   "min": 0.0853,
+   "p50": 0.1119,
+   "p90": 0.1278,
+   "p99": 0.1736,
+   "p999": 0.2591,
+   "max": 0.2591,
+   "mean": 0.1141
+  }
+ },
+ "join": {
+  "joined": 238,
+  "by_nonce_fallback": 0,
+  "provider_records": 258,
+  "provider_rids_with_multiple_calls": 0,
+  "provider_orphans": null
+ },
+ "classes": {
+  "benign": 240
+ },
+ "phase_counts": {
+  "1": 20,
+  "2": 240
+ },
+ "T_addon_total": {
+  "n": 238,
+  "min": 41.7321,
+  "p50": 85.6142,
+  "p90": 89.5687,
+  "p99": 99.2474,
+  "p999": 108.9916,
+  "max": 108.9916,
+  "mean": 72.3942
+ },
+ "T_addon_first": {
+  "n": 238,
+  "min": 41.7185,
+  "p50": 85.5701,
+  "p90": 89.6162,
+  "p99": 106.8468,
+  "p999": 108.9916,
+  "max": 108.9916,
+  "mean": 72.6798
+ },
+ "T_release_lag_max": {
+  "n": 238,
+  "min": 41.7513,
+  "p50": 89.8769,
+  "p90": 127.9479,
+  "p99": 132.3416,
+  "p999": 145.6701,
+  "max": 145.6701,
+  "mean": 96.2536
+ },
+ "T_release_lag_max_arrival": {
+  "n": 238,
+  "min": 41.7513,
+  "p50": 89.4747,
+  "p90": 109.521,
+  "p99": 117.6027,
+  "p999": 125.9986,
+  "max": 125.9986,
+  "mean": 86.6921
+ },
+ "T_fw_addon": {
+  "n": 238,
+  "min": 41.7513,
+  "p50": 89.8769,
+  "p90": 127.9479,
+  "p99": 132.3416,
+  "p999": 145.6701,
+  "max": 145.6701,
+  "mean": 96.2536
+ },
+ "T_fw_addon_sse": {
+  "n": 167,
+  "min": 62.3404,
+  "p50": 109.9335,
+  "p90": 128.8154,
+  "p99": 137.4723,
+  "p999": 145.6701,
+  "max": 145.6701,
+  "mean": 107.3344
+ },
+ "T_fw_addon_json": {
+  "n": 71,
+  "min": 41.7513,
+  "p50": 84.9572,
+  "p90": 89.4269,
+  "p99": 108.9916,
+  "p999": 108.9916,
+  "max": 108.9916,
+  "mean": 70.1904
+ },
+ "release_lag_sampled_joined": 238,
+ "release_lag_unmappable": 0,
+ "client_ttft_sse": {
+  "n": 167,
+  "min": 191.7377,
+  "p50": 235.9134,
+  "p90": 239.7529,
+  "p99": 256.8807,
+  "p999": 257.6488,
+  "max": 257.6488,
+  "mean": 223.7947
+ },
+ "provider_sched_err_last": {
+  "n": 238,
+  "min": 0.0035,
+  "p50": 0.0539,
+  "p90": 0.0913,
+  "p99": 0.1002,
+  "p999": 0.1043,
+  "max": 0.1043,
+  "mean": 0.0541
+ },
+ "provider_sched_err_max_per_stream": {
+  "n": 238,
+  "min": 0.0056,
+  "p50": 0.069,
+  "p90": 0.1065,
+  "p99": 0.3386,
+  "p999": 0.4902,
+  "max": 0.4902,
+  "mean": 0.0746
+ },
+ "provider_write_max": {
+  "n": 238,
+  "min": 0.0094,
+  "p50": 0.0489,
+  "p90": 0.0641,
+  "p99": 0.2077,
+  "p999": 0.2677,
+  "max": 0.2677,
+  "mean": 0.0461
+ },
+ "loadgen_cpu": [
+  {
+   "dir": "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-builder/acceptance-3/6-honesty/base/olg",
+   "samples": 60,
+   "busy_max": 24.552094748404752,
+   "busy_mean": 14.39,
+   "machine": "c4-standard-16",
+   "zone": "asia-south1-c"
+  }
+ ],
+ "provider_cpu": {
+  "samples": 0,
+  "busy_max": null,
+  "busy_p95": null
+ },
+ "provider_stats": [],
+ "instrument_health": [
+  {
+   "proc": "olg",
+   "dir": "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-builder/acceptance-3/6-honesty/base/olg",
+   "gc_cycles": 0,
+   "sched_latency_max_ms": 0.114688,
+   "tcp": null
+  }
+ ],
+ "completeness": [
+  {
+   "dir": "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-builder/acceptance-3/6-honesty/base/olg",
+   "scheduled": 260,
+   "recorded": 260,
+   "interrupted": false
+  }
+ ],
+ "valid": true,
+ "invalid_reasons": [],
+ "per_second": null,
+ "thresholds": {
+  "slo_ms": 20.0,
+  "err_budget": 0.001,
+  "drop_ms": 5.0,
+  "sched_tol_ms": 1.0,
+  "cpu_max": 70.0
+ },
+ "verdict": {
+  "pass": false,
+  "checks": {
+   "p99_T_fw_addon_lt_slo": false,
+   "error_rate_le_budget": false,
+   "zero_schedule_drops": true,
+   "zero_safety_failures": true,
+   "run_valid": true,
+   "qualified_nonempty": true
+  }
+ }
+}

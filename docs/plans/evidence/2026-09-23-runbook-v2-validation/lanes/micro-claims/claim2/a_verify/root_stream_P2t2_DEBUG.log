@@ -1,0 +1,562 @@
+2026-09-23 13:14:31,561 [INFO] gateway.bedrock_client: BedrockClient initialized: model=zeroshield-guard, region=[region], timeout=60.0s, max_pool_connections=10000, aws_key_prefix=(not set)
+2026-09-23 13:14:31,563 [INFO] gateway.bedrock_client: BedrockClient initialized: model=zeroshield-guard, region=[region], timeout=60.0s, max_pool_connections=10000, aws_key_prefix=(not set)
+2026-09-23 13:14:31,922 [INFO] gateway: Multi-pattern prefilter ready (57 patterns)
+2026-09-23 13:14:31,926 [INFO] gateway.config_sync: ConfigSync started (loaded=False, firewall_enabled=N/A, enforcement_mode=N/A)
+2026-09-23 13:14:31,926 [INFO] gateway.llm_router: Org-only inference enabled. LiteLLM router models load from Redis (llm:model_configs:{org_slug}) after Control Plane sync.
+2026-09-23 13:14:31,927 [INFO] gateway.config_sync: Empty model list from Redis; skipping reload
+2026-09-23 13:14:31,937 [WARNING] gateway.bedrock_scanner: TIER2_PROVIDER=bedrock: Tier-2 inference still uses Bedrock Converse (legacy). Set TIER2_PROVIDER=gemini to use the Gemini Developer API.
+2026-09-23 13:14:31,937 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=4, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+2026-09-23 13:14:31,937 [INFO] gateway: Shared async Redis client initialized
+2026-09-23 13:14:31,938 [INFO] gateway.telemetry: Telemetry producer started (flush_interval=2.0s, buffer_size=100)
+2026-09-23 13:14:31,942 [INFO] gateway: Output guard initialized
+2026-09-23 13:14:31,943 [INFO] gateway: Circuit breaker initialized
+2026-09-23 13:14:31,964 [INFO] gateway: Semantic grounding (Bedrock Titan v2) attached to output guard
+2026-09-23 13:14:31,965 [INFO] gateway.policy_sync: Policy bundle signing: ENFORCED (POLICY_SIGNING_KEY configured; unsigned or tampered bundles will be rejected)
+2026-09-23 13:14:31,966 [INFO] gateway.policy_sync: Loaded policy bundle for org 'acme' (version=1, policies=0)
+2026-09-23 13:14:31,967 [INFO] gateway.config_sync: ConfigSync subscribed to Pub/Sub channel 'config_updates'
+2026-09-23 13:14:31,967 [INFO] gateway: Bedrock credential preflight OK
+2026-09-23 13:14:31,968 [INFO] gateway.policy_sync: PolicySync started (orgs=1, total_policies=0)
+2026-09-23 13:14:31,969 [INFO] gateway: Centralized log pipeline started (Redis Pub/Sub -> LogBuffer -> SSE)
+2026-09-23 13:14:31,971 [INFO] gateway: ZeroShield Gateway ready — real-time log streaming active
+2026-09-23 13:14:31,971 [INFO] gateway: Bedrock dedicated logger initialized: log_dir=/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/micro-claims/claim2/a_verify/bedrock_logdir_P2t2_DEBUG, level=DEBUG, json=true, ring_size=500
+2026-09-23 13:14:32,023 [INFO] gateway: MCP proxy routes mounted at /v1/mcp
+2026-09-23 13:14:32,024 [INFO] gateway: MCP org gateway routes mounted at /gateway/{org}/mcp/{server}
+2026-09-23 13:14:32,028 [INFO] gateway: MCP OAuth 2.1 routes mounted (/.well-known/oauth-authorization-server, /oauth/*)
+2026-09-23 13:14:32,035 [INFO] gateway: MCP upstream OAuth proxy mounted (/gateway/{org}/mcp/{server}/oauth/*)
+2026-09-23 13:14:32,039 [INFO] gateway: Vector operations routes mounted at /v1/vector/*
+2026-09-23 13:14:32,039 [INFO] gateway: Vector operations globals injected (provider_sync=False pipeline=False clients=[])
+2026-09-23 13:14:32,059 [INFO] gateway: MCP stdio & WebSocket adapters initialized (reapers started)
+2026-09-23 13:14:32,059 [WARNING] gateway: AIGUARDX_BACKEND_URL not set; gateway will not register or enforce
+2026-09-23 13:14:32,060 [INFO] gateway.policy_sync: PolicySync subscribed to Pub/Sub channel 'policy_updates'
+2026-09-23 13:14:32,533 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 241]
+2026-09-23 13:14:32,551 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:32,563 [INFO] gateway.bedrock_client: Bedrock aconverse DONE: model=zeroshield-guard, call_site=tier2_scan, elapsed=0.000s, tokens_in=900, tokens_out=20
+2026-09-23 13:14:32,563 [INFO] gateway.bedrock_client: {"call_site": "tier2_scan", "gateway_request_id": "8df78160b698", "x_amzn_request_id": "claim2a-fake-1", "tokens_out": 20, "client_init_ms": 0.0, "converse_ms": 0.011510215699672699, "parse_ms": 0.008161179721355438}
+2026-09-23 13:14:32,567 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 13:14:32,568 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-226 (actual=15, est=241)
+2026-09-23 13:14:32,950 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 256]
+2026-09-23 13:14:32,954 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:32,959 [INFO] gateway.bedrock_client: Bedrock aconverse DONE: model=zeroshield-guard, call_site=tier2_scan, elapsed=0.000s, tokens_in=900, tokens_out=20
+2026-09-23 13:14:32,959 [INFO] gateway.bedrock_client: {"call_site": "tier2_scan", "gateway_request_id": "e0acef1cd3df", "x_amzn_request_id": "claim2a-fake-2", "tokens_out": 20, "client_init_ms": 0.0, "converse_ms": 0.011537224054336548, "parse_ms": 0.007667578756809235}
+2026-09-23 13:14:32,960 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 13:14:32,961 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-226 (actual=15, est=241)
+2026-09-23 13:14:32,968 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 271]
+2026-09-23 13:14:32,972 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:32,977 [INFO] gateway.bedrock_client: Bedrock aconverse DONE: model=zeroshield-guard, call_site=tier2_scan, elapsed=0.000s, tokens_in=900, tokens_out=20
+2026-09-23 13:14:32,977 [INFO] gateway.bedrock_client: {"call_site": "tier2_scan", "gateway_request_id": "b25a56131bee", "x_amzn_request_id": "claim2a-fake-3", "tokens_out": 20, "client_init_ms": 0.0, "converse_ms": 0.008868053555488586, "parse_ms": 0.004461035132408142}
+2026-09-23 13:14:32,978 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 13:14:32,979 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-226 (actual=15, est=241)
+2026-09-23 13:14:32,986 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 286]
+2026-09-23 13:14:32,989 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:32,994 [INFO] gateway.bedrock_client: Bedrock aconverse DONE: model=zeroshield-guard, call_site=tier2_scan, elapsed=0.000s, tokens_in=900, tokens_out=20
+2026-09-23 13:14:32,994 [INFO] gateway.bedrock_client: {"call_site": "tier2_scan", "gateway_request_id": "fef0c2f4c5b3", "x_amzn_request_id": "claim2a-fake-4", "tokens_out": 20, "client_init_ms": 0.0, "converse_ms": 0.008922070264816284, "parse_ms": 0.004091300070285797}
+2026-09-23 13:14:32,996 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 13:14:32,996 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-226 (actual=15, est=241)
+2026-09-23 13:14:33,003 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 301]
+2026-09-23 13:14:33,007 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:33,012 [INFO] gateway.bedrock_client: Bedrock aconverse DONE: model=zeroshield-guard, call_site=tier2_scan, elapsed=0.000s, tokens_in=900, tokens_out=20
+2026-09-23 13:14:33,012 [INFO] gateway.bedrock_client: {"call_site": "tier2_scan", "gateway_request_id": "bf4e7991d25f", "x_amzn_request_id": "claim2a-fake-5", "tokens_out": 20, "client_init_ms": 0.0, "converse_ms": 0.008637085556983948, "parse_ms": 0.004383735358715057}
+2026-09-23 13:14:33,013 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 13:14:33,014 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-226 (actual=15, est=241)
+2026-09-23 13:14:33,021 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 316]
+2026-09-23 13:14:33,024 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:33,029 [INFO] gateway.bedrock_client: Bedrock aconverse DONE: model=zeroshield-guard, call_site=tier2_scan, elapsed=0.000s, tokens_in=900, tokens_out=20
+2026-09-23 13:14:33,029 [INFO] gateway.bedrock_client: {"call_site": "tier2_scan", "gateway_request_id": "d6cdd2c0414d", "x_amzn_request_id": "claim2a-fake-6", "tokens_out": 20, "client_init_ms": 0.0, "converse_ms": 0.009282492101192474, "parse_ms": 0.004032626748085022}
+2026-09-23 13:14:33,031 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 13:14:33,031 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-226 (actual=15, est=241)
+2026-09-23 13:14:33,038 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 331]
+2026-09-23 13:14:33,042 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:33,047 [INFO] gateway.bedrock_client: Bedrock aconverse DONE: model=zeroshield-guard, call_site=tier2_scan, elapsed=0.000s, tokens_in=900, tokens_out=20
+2026-09-23 13:14:33,047 [INFO] gateway.bedrock_client: {"call_site": "tier2_scan", "gateway_request_id": "849a1b4327b4", "x_amzn_request_id": "claim2a-fake-7", "tokens_out": 20, "client_init_ms": 0.0, "converse_ms": 0.00929366797208786, "parse_ms": 0.004163011908531189}
+2026-09-23 13:14:33,048 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 13:14:33,049 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-226 (actual=15, est=241)
+2026-09-23 13:14:33,056 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 346]
+2026-09-23 13:14:33,059 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:33,064 [INFO] gateway.bedrock_client: Bedrock aconverse DONE: model=zeroshield-guard, call_site=tier2_scan, elapsed=0.000s, tokens_in=900, tokens_out=20
+2026-09-23 13:14:33,064 [INFO] gateway.bedrock_client: {"call_site": "tier2_scan", "gateway_request_id": "577c12a60f84", "x_amzn_request_id": "claim2a-fake-8", "tokens_out": 20, "client_init_ms": 0.0, "converse_ms": 0.008946284651756287, "parse_ms": 0.004126690328121185}
+2026-09-23 13:14:33,065 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 13:14:33,066 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-226 (actual=15, est=241)
+2026-09-23 13:14:33,073 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 361]
+2026-09-23 13:14:33,077 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:33,081 [INFO] gateway.bedrock_client: Bedrock aconverse DONE: model=zeroshield-guard, call_site=tier2_scan, elapsed=0.000s, tokens_in=900, tokens_out=20
+2026-09-23 13:14:33,082 [INFO] gateway.bedrock_client: {"call_site": "tier2_scan", "gateway_request_id": "4003294829d5", "x_amzn_request_id": "claim2a-fake-9", "tokens_out": 20, "client_init_ms": 0.0, "converse_ms": 0.008828938007354736, "parse_ms": 0.004398636519908905}
+2026-09-23 13:14:33,083 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 13:14:33,083 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-226 (actual=15, est=241)
+2026-09-23 13:14:33,090 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 376]
+2026-09-23 13:14:33,094 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:33,099 [INFO] gateway.bedrock_client: Bedrock aconverse DONE: model=zeroshield-guard, call_site=tier2_scan, elapsed=0.000s, tokens_in=900, tokens_out=20
+2026-09-23 13:14:33,099 [INFO] gateway.bedrock_client: {"call_site": "tier2_scan", "gateway_request_id": "0ee346183592", "x_amzn_request_id": "claim2a-fake-10", "tokens_out": 20, "client_init_ms": 0.0, "converse_ms": 0.008838251233100891, "parse_ms": 0.004172325134277344}
+2026-09-23 13:14:33,100 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 13:14:33,101 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-226 (actual=15, est=241)
+2026-09-23 13:14:33,108 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 391]
+2026-09-23 13:14:33,111 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:33,116 [INFO] gateway.bedrock_client: Bedrock aconverse DONE: model=zeroshield-guard, call_site=tier2_scan, elapsed=0.000s, tokens_in=900, tokens_out=20
+2026-09-23 13:14:33,116 [INFO] gateway.bedrock_client: {"call_site": "tier2_scan", "gateway_request_id": "2da677e056c9", "x_amzn_request_id": "claim2a-fake-11", "tokens_out": 20, "client_init_ms": 0.0, "converse_ms": 0.009469687938690186, "parse_ms": 0.004014931619167328}
+2026-09-23 13:14:33,118 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 13:14:33,118 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-226 (actual=15, est=241)
+2026-09-23 13:14:33,125 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 406]
+2026-09-23 13:14:33,129 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:33,134 [INFO] gateway.bedrock_client: Bedrock aconverse DONE: model=zeroshield-guard, call_site=tier2_scan, elapsed=0.000s, tokens_in=900, tokens_out=20
+2026-09-23 13:14:33,134 [INFO] gateway.bedrock_client: {"call_site": "tier2_scan", "gateway_request_id": "943de37467ee", "x_amzn_request_id": "claim2a-fake-12", "tokens_out": 20, "client_init_ms": 0.0, "converse_ms": 0.009441748261451721, "parse_ms": 0.004326924681663513}
+2026-09-23 13:14:33,135 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 13:14:33,136 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-226 (actual=15, est=241)
+2026-09-23 13:14:33,143 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 421]
+2026-09-23 13:14:33,147 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:33,151 [INFO] gateway.bedrock_client: Bedrock aconverse DONE: model=zeroshield-guard, call_site=tier2_scan, elapsed=0.000s, tokens_in=900, tokens_out=20
+2026-09-23 13:14:33,151 [INFO] gateway.bedrock_client: {"call_site": "tier2_scan", "gateway_request_id": "c6c8de8b76ab", "x_amzn_request_id": "claim2a-fake-13", "tokens_out": 20, "client_init_ms": 0.0, "converse_ms": 0.009036622941493988, "parse_ms": 0.003999099135398865}
+2026-09-23 13:14:33,153 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 13:14:33,153 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-226 (actual=15, est=241)
+2026-09-23 13:14:33,160 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 436]
+2026-09-23 13:14:33,164 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:33,169 [INFO] gateway.bedrock_client: Bedrock aconverse DONE: model=zeroshield-guard, call_site=tier2_scan, elapsed=0.000s, tokens_in=900, tokens_out=20
+2026-09-23 13:14:33,169 [INFO] gateway.bedrock_client: {"call_site": "tier2_scan", "gateway_request_id": "06b25c176f23", "x_amzn_request_id": "claim2a-fake-14", "tokens_out": 20, "client_init_ms": 0.0, "converse_ms": 0.008568167686462402, "parse_ms": 0.004190020263195038}
+2026-09-23 13:14:33,170 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 13:14:33,170 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-226 (actual=15, est=241)
+2026-09-23 13:14:33,178 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 451]
+2026-09-23 13:14:33,181 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:33,186 [INFO] gateway.bedrock_client: Bedrock aconverse DONE: model=zeroshield-guard, call_site=tier2_scan, elapsed=0.000s, tokens_in=900, tokens_out=20
+2026-09-23 13:14:33,186 [INFO] gateway.bedrock_client: {"call_site": "tier2_scan", "gateway_request_id": "9bfa0e07f84e", "x_amzn_request_id": "claim2a-fake-15", "tokens_out": 20, "client_init_ms": 0.0, "converse_ms": 0.008452683687210083, "parse_ms": 0.003996305167675018}
+2026-09-23 13:14:33,188 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 13:14:33,188 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-226 (actual=15, est=241)
+2026-09-23 13:14:33,195 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 466]
+2026-09-23 13:14:33,199 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:33,203 [INFO] gateway.bedrock_client: Bedrock aconverse DONE: model=zeroshield-guard, call_site=tier2_scan, elapsed=0.000s, tokens_in=900, tokens_out=20
+2026-09-23 13:14:33,204 [INFO] gateway.bedrock_client: {"call_site": "tier2_scan", "gateway_request_id": "c084484b49c9", "x_amzn_request_id": "claim2a-fake-16", "tokens_out": 20, "client_init_ms": 0.0, "converse_ms": 0.008585862815380096, "parse_ms": 0.004212372004985809}
+2026-09-23 13:14:33,205 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 13:14:33,205 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-226 (actual=15, est=241)
+2026-09-23 13:14:33,212 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 481]
+2026-09-23 13:14:33,216 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:33,221 [INFO] gateway.bedrock_client: Bedrock aconverse DONE: model=zeroshield-guard, call_site=tier2_scan, elapsed=0.000s, tokens_in=900, tokens_out=20
+2026-09-23 13:14:33,221 [INFO] gateway.bedrock_client: {"call_site": "tier2_scan", "gateway_request_id": "27f1ab7c8517", "x_amzn_request_id": "claim2a-fake-17", "tokens_out": 20, "client_init_ms": 0.0, "converse_ms": 0.008890405297279358, "parse_ms": 0.003837980329990387}
+2026-09-23 13:14:33,222 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 13:14:33,223 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-226 (actual=15, est=241)
+2026-09-23 13:14:33,230 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 496]
+2026-09-23 13:14:33,234 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:33,239 [INFO] gateway.bedrock_client: Bedrock aconverse DONE: model=zeroshield-guard, call_site=tier2_scan, elapsed=0.000s, tokens_in=900, tokens_out=20
+2026-09-23 13:14:33,239 [INFO] gateway.bedrock_client: {"call_site": "tier2_scan", "gateway_request_id": "826c61767666", "x_amzn_request_id": "claim2a-fake-18", "tokens_out": 20, "client_init_ms": 0.0, "converse_ms": 0.00916793942451477, "parse_ms": 0.004165805876255035}
+2026-09-23 13:14:33,241 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 13:14:33,241 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-226 (actual=15, est=241)
+2026-09-23 13:14:33,248 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 511]
+2026-09-23 13:14:33,253 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:33,259 [INFO] gateway.bedrock_client: Bedrock aconverse DONE: model=zeroshield-guard, call_site=tier2_scan, elapsed=0.000s, tokens_in=900, tokens_out=20
+2026-09-23 13:14:33,259 [INFO] gateway.bedrock_client: {"call_site": "tier2_scan", "gateway_request_id": "8f6f415e5a1a", "x_amzn_request_id": "claim2a-fake-19", "tokens_out": 20, "client_init_ms": 0.0, "converse_ms": 0.012753531336784363, "parse_ms": 0.005381181836128235}
+2026-09-23 13:14:33,261 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 13:14:33,262 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-226 (actual=15, est=241)
+2026-09-23 13:14:33,273 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 526]
+2026-09-23 13:14:33,277 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:33,282 [INFO] gateway.bedrock_client: Bedrock aconverse DONE: model=zeroshield-guard, call_site=tier2_scan, elapsed=0.000s, tokens_in=900, tokens_out=20
+2026-09-23 13:14:33,282 [INFO] gateway.bedrock_client: {"call_site": "tier2_scan", "gateway_request_id": "cf47485e4be3", "x_amzn_request_id": "claim2a-fake-20", "tokens_out": 20, "client_init_ms": 0.0, "converse_ms": 0.008354894816875458, "parse_ms": 0.004304572939872742}
+2026-09-23 13:14:33,283 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 13:14:33,284 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-226 (actual=15, est=241)
+2026-09-23 13:14:33,291 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 541]
+2026-09-23 13:14:33,295 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:33,300 [INFO] gateway.bedrock_client: Bedrock aconverse DONE: model=zeroshield-guard, call_site=tier2_scan, elapsed=0.000s, tokens_in=900, tokens_out=20
+2026-09-23 13:14:33,300 [INFO] gateway.bedrock_client: {"call_site": "tier2_scan", "gateway_request_id": "b6cdf55278e0", "x_amzn_request_id": "claim2a-fake-21", "tokens_out": 20, "client_init_ms": 0.0, "converse_ms": 0.011683441698551178, "parse_ms": 0.0051604583859443665}
+2026-09-23 13:14:33,302 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 13:14:33,303 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-226 (actual=15, est=241)
+2026-09-23 13:14:33,314 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 556]
+2026-09-23 13:14:33,318 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:33,322 [INFO] gateway.bedrock_client: Bedrock aconverse DONE: model=zeroshield-guard, call_site=tier2_scan, elapsed=0.000s, tokens_in=900, tokens_out=20
+2026-09-23 13:14:33,323 [INFO] gateway.bedrock_client: {"call_site": "tier2_scan", "gateway_request_id": "f53b6d1f9037", "x_amzn_request_id": "claim2a-fake-22", "tokens_out": 20, "client_init_ms": 0.0, "converse_ms": 0.008855946362018585, "parse_ms": 0.004128552973270416}
+2026-09-23 13:14:33,324 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 13:14:33,324 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-226 (actual=15, est=241)
+2026-09-23 13:14:33,332 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 571]
+2026-09-23 13:14:33,335 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:33,340 [INFO] gateway.bedrock_client: Bedrock aconverse DONE: model=zeroshield-guard, call_site=tier2_scan, elapsed=0.000s, tokens_in=900, tokens_out=20
+2026-09-23 13:14:33,340 [INFO] gateway.bedrock_client: {"call_site": "tier2_scan", "gateway_request_id": "ec027fbbd325", "x_amzn_request_id": "claim2a-fake-23", "tokens_out": 20, "client_init_ms": 0.0, "converse_ms": 0.00991765409708023, "parse_ms": 0.004234723746776581}
+2026-09-23 13:14:33,341 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 13:14:33,342 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-226 (actual=15, est=241)
+2026-09-23 13:14:33,349 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 586]
+2026-09-23 13:14:33,353 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:33,358 [INFO] gateway.bedrock_client: Bedrock aconverse DONE: model=zeroshield-guard, call_site=tier2_scan, elapsed=0.000s, tokens_in=900, tokens_out=20
+2026-09-23 13:14:33,358 [INFO] gateway.bedrock_client: {"call_site": "tier2_scan", "gateway_request_id": "f81a7c02a3f9", "x_amzn_request_id": "claim2a-fake-24", "tokens_out": 20, "client_init_ms": 0.0, "converse_ms": 0.008977018296718597, "parse_ms": 0.004113651812076569}
+2026-09-23 13:14:33,359 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 13:14:33,359 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-226 (actual=15, est=241)
+2026-09-23 13:14:33,367 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 601]
+2026-09-23 13:14:33,370 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:33,375 [INFO] gateway.bedrock_client: Bedrock aconverse DONE: model=zeroshield-guard, call_site=tier2_scan, elapsed=0.000s, tokens_in=900, tokens_out=20
+2026-09-23 13:14:33,376 [INFO] gateway.bedrock_client: {"call_site": "tier2_scan", "gateway_request_id": "09a9b618b827", "x_amzn_request_id": "claim2a-fake-25", "tokens_out": 20, "client_init_ms": 0.0, "converse_ms": 0.008656643331050873, "parse_ms": 0.004340894520282745}
+2026-09-23 13:14:33,377 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 13:14:33,377 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-226 (actual=15, est=241)
+2026-09-23 13:14:33,585 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 616]
+2026-09-23 13:14:33,589 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:33,629 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 857]
+2026-09-23 13:14:33,633 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:33,666 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 1098]
+2026-09-23 13:14:33,670 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:33,707 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 1339]
+2026-09-23 13:14:33,711 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:33,744 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 1580]
+2026-09-23 13:14:33,748 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:33,780 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 1821]
+2026-09-23 13:14:33,784 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:33,816 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 2062]
+2026-09-23 13:14:33,821 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:33,853 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 2303]
+2026-09-23 13:14:33,857 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:33,889 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 2544]
+2026-09-23 13:14:33,893 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:33,925 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 2785]
+2026-09-23 13:14:33,929 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:33,961 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 3026]
+2026-09-23 13:14:33,965 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:33,974 [DEBUG] gateway.telemetry: Telemetry flushed 71 events to Redis
+2026-09-23 13:14:34,006 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 3267]
+2026-09-23 13:14:34,009 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:34,043 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 3508]
+2026-09-23 13:14:34,047 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:34,079 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 3749]
+2026-09-23 13:14:34,083 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:34,197 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 3990]
+2026-09-23 13:14:34,203 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:34,235 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 4231]
+2026-09-23 13:14:34,238 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:34,269 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 4472]
+2026-09-23 13:14:34,273 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:34,304 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 4713]
+2026-09-23 13:14:34,308 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:34,341 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 4954]
+2026-09-23 13:14:34,344 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:34,376 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 5195]
+2026-09-23 13:14:34,379 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:34,411 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 5436]
+2026-09-23 13:14:34,414 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:34,445 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 5677]
+2026-09-23 13:14:34,449 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:34,480 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 5918]
+2026-09-23 13:14:34,484 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:34,543 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 6159]
+2026-09-23 13:14:34,547 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:34,577 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 6400]
+2026-09-23 13:14:34,583 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:34,814 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=50 limit=10000000 result=[1, 6450]
+2026-09-23 13:14:34,816 [INFO] gateway: PII/secret detected, redacting before LLM call (type=pii, patterns=['email', 'phone_us'], user=1)
+2026-09-23 13:14:34,817 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:34,823 [INFO] gateway.bedrock_client: Bedrock aconverse DONE: model=zeroshield-guard, call_site=tier2_scan, elapsed=0.000s, tokens_in=900, tokens_out=20
+2026-09-23 13:14:34,823 [INFO] gateway.bedrock_client: {"call_site": "tier2_scan", "gateway_request_id": "e0f456ce56c8", "x_amzn_request_id": "claim2a-fake-26", "tokens_out": 20, "client_init_ms": 0.0, "converse_ms": 0.00992603600025177, "parse_ms": 0.005477108061313629}
+2026-09-23 13:14:34,824 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 13:14:34,825 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-35 (actual=15, est=50)
+2026-09-23 13:14:34,832 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=50 limit=10000000 result=[1, 6465]
+2026-09-23 13:14:34,833 [INFO] gateway: PII/secret detected, redacting before LLM call (type=pii, patterns=['email', 'phone_us'], user=1)
+2026-09-23 13:14:34,834 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:34,839 [INFO] gateway.bedrock_client: Bedrock aconverse DONE: model=zeroshield-guard, call_site=tier2_scan, elapsed=0.000s, tokens_in=900, tokens_out=20
+2026-09-23 13:14:34,840 [INFO] gateway.bedrock_client: {"call_site": "tier2_scan", "gateway_request_id": "ccba2d0666f9", "x_amzn_request_id": "claim2a-fake-27", "tokens_out": 20, "client_init_ms": 0.0, "converse_ms": 0.008686445653438568, "parse_ms": 0.004735775291919708}
+2026-09-23 13:14:34,841 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 13:14:34,841 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-35 (actual=15, est=50)
+2026-09-23 13:14:34,848 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=50 limit=10000000 result=[1, 6480]
+2026-09-23 13:14:34,849 [INFO] gateway: PII/secret detected, redacting before LLM call (type=pii, patterns=['email', 'phone_us'], user=1)
+2026-09-23 13:14:34,850 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:34,855 [INFO] gateway.bedrock_client: Bedrock aconverse DONE: model=zeroshield-guard, call_site=tier2_scan, elapsed=0.000s, tokens_in=900, tokens_out=20
+2026-09-23 13:14:34,855 [INFO] gateway.bedrock_client: {"call_site": "tier2_scan", "gateway_request_id": "35c7ee8cedc1", "x_amzn_request_id": "claim2a-fake-28", "tokens_out": 20, "client_init_ms": 0.0, "converse_ms": 0.009529292583465576, "parse_ms": 0.00410713255405426}
+2026-09-23 13:14:34,857 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 13:14:34,857 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-35 (actual=15, est=50)
+2026-09-23 13:14:34,863 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=50 limit=10000000 result=[1, 6495]
+2026-09-23 13:14:34,865 [INFO] gateway: PII/secret detected, redacting before LLM call (type=pii, patterns=['email', 'phone_us'], user=1)
+2026-09-23 13:14:34,866 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:34,871 [INFO] gateway.bedrock_client: Bedrock aconverse DONE: model=zeroshield-guard, call_site=tier2_scan, elapsed=0.000s, tokens_in=900, tokens_out=20
+2026-09-23 13:14:34,871 [INFO] gateway.bedrock_client: {"call_site": "tier2_scan", "gateway_request_id": "9196c0c53bd0", "x_amzn_request_id": "claim2a-fake-29", "tokens_out": 20, "client_init_ms": 0.0, "converse_ms": 0.009000301361083984, "parse_ms": 0.0039869919419288635}
+2026-09-23 13:14:34,872 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 13:14:34,873 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-35 (actual=15, est=50)
+2026-09-23 13:14:34,879 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=50 limit=10000000 result=[1, 6510]
+2026-09-23 13:14:34,881 [INFO] gateway: PII/secret detected, redacting before LLM call (type=pii, patterns=['email', 'phone_us'], user=1)
+2026-09-23 13:14:34,882 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:34,887 [INFO] gateway.bedrock_client: Bedrock aconverse DONE: model=zeroshield-guard, call_site=tier2_scan, elapsed=0.000s, tokens_in=900, tokens_out=20
+2026-09-23 13:14:34,887 [INFO] gateway.bedrock_client: {"call_site": "tier2_scan", "gateway_request_id": "6c9222c0873b", "x_amzn_request_id": "claim2a-fake-30", "tokens_out": 20, "client_init_ms": 0.0, "converse_ms": 0.008725561201572418, "parse_ms": 0.004139728844165802}
+2026-09-23 13:14:34,888 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 13:14:34,889 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-35 (actual=15, est=50)
+2026-09-23 13:14:34,895 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=50 limit=10000000 result=[1, 6525]
+2026-09-23 13:14:34,896 [INFO] gateway: PII/secret detected, redacting before LLM call (type=pii, patterns=['email', 'phone_us'], user=1)
+2026-09-23 13:14:34,897 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:34,902 [INFO] gateway.bedrock_client: Bedrock aconverse DONE: model=zeroshield-guard, call_site=tier2_scan, elapsed=0.000s, tokens_in=900, tokens_out=20
+2026-09-23 13:14:34,903 [INFO] gateway.bedrock_client: {"call_site": "tier2_scan", "gateway_request_id": "4503e7ce17d5", "x_amzn_request_id": "claim2a-fake-31", "tokens_out": 20, "client_init_ms": 0.0, "converse_ms": 0.010145828127861023, "parse_ms": 0.0039888545870780945}
+2026-09-23 13:14:34,904 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 13:14:34,904 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-35 (actual=15, est=50)
+2026-09-23 13:14:34,911 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=50 limit=10000000 result=[1, 6540]
+2026-09-23 13:14:34,912 [INFO] gateway: PII/secret detected, redacting before LLM call (type=pii, patterns=['email', 'phone_us'], user=1)
+2026-09-23 13:14:34,913 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:34,918 [INFO] gateway.bedrock_client: Bedrock aconverse DONE: model=zeroshield-guard, call_site=tier2_scan, elapsed=0.000s, tokens_in=900, tokens_out=20
+2026-09-23 13:14:34,918 [INFO] gateway.bedrock_client: {"call_site": "tier2_scan", "gateway_request_id": "b7d63d19dc0d", "x_amzn_request_id": "claim2a-fake-32", "tokens_out": 20, "client_init_ms": 0.0, "converse_ms": 0.008714385330677032, "parse_ms": 0.004198402166366577}
+2026-09-23 13:14:34,920 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 13:14:34,920 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-35 (actual=15, est=50)
+2026-09-23 13:14:34,926 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=50 limit=10000000 result=[1, 6555]
+2026-09-23 13:14:34,928 [INFO] gateway: PII/secret detected, redacting before LLM call (type=pii, patterns=['email', 'phone_us'], user=1)
+2026-09-23 13:14:34,929 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:34,934 [INFO] gateway.bedrock_client: Bedrock aconverse DONE: model=zeroshield-guard, call_site=tier2_scan, elapsed=0.000s, tokens_in=900, tokens_out=20
+2026-09-23 13:14:34,934 [INFO] gateway.bedrock_client: {"call_site": "tier2_scan", "gateway_request_id": "1e74e7a40e07", "x_amzn_request_id": "claim2a-fake-33", "tokens_out": 20, "client_init_ms": 0.0, "converse_ms": 0.008597038686275482, "parse_ms": 0.00410713255405426}
+2026-09-23 13:14:34,935 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 13:14:34,936 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-35 (actual=15, est=50)
+2026-09-23 13:14:34,942 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=50 limit=10000000 result=[1, 6570]
+2026-09-23 13:14:34,943 [INFO] gateway: PII/secret detected, redacting before LLM call (type=pii, patterns=['email', 'phone_us'], user=1)
+2026-09-23 13:14:34,945 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:34,950 [INFO] gateway.bedrock_client: Bedrock aconverse DONE: model=zeroshield-guard, call_site=tier2_scan, elapsed=0.000s, tokens_in=900, tokens_out=20
+2026-09-23 13:14:34,950 [INFO] gateway.bedrock_client: {"call_site": "tier2_scan", "gateway_request_id": "a099e5678d08", "x_amzn_request_id": "claim2a-fake-34", "tokens_out": 20, "client_init_ms": 0.0, "converse_ms": 0.008858740329742432, "parse_ms": 0.004111789166927338}
+2026-09-23 13:14:34,951 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 13:14:34,952 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-35 (actual=15, est=50)
+2026-09-23 13:14:34,958 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=50 limit=10000000 result=[1, 6585]
+2026-09-23 13:14:34,959 [INFO] gateway: PII/secret detected, redacting before LLM call (type=pii, patterns=['email', 'phone_us'], user=1)
+2026-09-23 13:14:34,960 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:34,965 [INFO] gateway.bedrock_client: Bedrock aconverse DONE: model=zeroshield-guard, call_site=tier2_scan, elapsed=0.000s, tokens_in=900, tokens_out=20
+2026-09-23 13:14:34,966 [INFO] gateway.bedrock_client: {"call_site": "tier2_scan", "gateway_request_id": "270fe5776779", "x_amzn_request_id": "claim2a-fake-35", "tokens_out": 20, "client_init_ms": 0.0, "converse_ms": 0.008565373718738556, "parse_ms": 0.00413600355386734}
+2026-09-23 13:14:34,967 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 13:14:34,967 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-35 (actual=15, est=50)
+2026-09-23 13:14:34,974 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=50 limit=10000000 result=[1, 6600]
+2026-09-23 13:14:34,975 [INFO] gateway: PII/secret detected, redacting before LLM call (type=pii, patterns=['email', 'phone_us'], user=1)
+2026-09-23 13:14:34,976 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:34,981 [INFO] gateway.bedrock_client: Bedrock aconverse DONE: model=zeroshield-guard, call_site=tier2_scan, elapsed=0.000s, tokens_in=900, tokens_out=20
+2026-09-23 13:14:34,981 [INFO] gateway.bedrock_client: {"call_site": "tier2_scan", "gateway_request_id": "6985223c4fd5", "x_amzn_request_id": "claim2a-fake-36", "tokens_out": 20, "client_init_ms": 0.0, "converse_ms": 0.008314847946166992, "parse_ms": 0.0040316954255104065}
+2026-09-23 13:14:34,983 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 13:14:34,983 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-35 (actual=15, est=50)
+2026-09-23 13:14:34,989 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=50 limit=10000000 result=[1, 6615]
+2026-09-23 13:14:34,990 [INFO] gateway: PII/secret detected, redacting before LLM call (type=pii, patterns=['email', 'phone_us'], user=1)
+2026-09-23 13:14:34,999 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:35,004 [INFO] gateway.bedrock_client: Bedrock aconverse DONE: model=zeroshield-guard, call_site=tier2_scan, elapsed=0.000s, tokens_in=900, tokens_out=20
+2026-09-23 13:14:35,004 [INFO] gateway.bedrock_client: {"call_site": "tier2_scan", "gateway_request_id": "6a1588de73c8", "x_amzn_request_id": "claim2a-fake-37", "tokens_out": 20, "client_init_ms": 0.0, "converse_ms": 0.00821426510810852, "parse_ms": 0.00406801700592041}
+2026-09-23 13:14:35,006 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 13:14:35,006 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-35 (actual=15, est=50)
+2026-09-23 13:14:35,012 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=50 limit=10000000 result=[1, 6630]
+2026-09-23 13:14:35,014 [INFO] gateway: PII/secret detected, redacting before LLM call (type=pii, patterns=['email', 'phone_us'], user=1)
+2026-09-23 13:14:35,015 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:35,020 [INFO] gateway.bedrock_client: Bedrock aconverse DONE: model=zeroshield-guard, call_site=tier2_scan, elapsed=0.000s, tokens_in=900, tokens_out=20
+2026-09-23 13:14:35,020 [INFO] gateway.bedrock_client: {"call_site": "tier2_scan", "gateway_request_id": "f944c211fb68", "x_amzn_request_id": "claim2a-fake-38", "tokens_out": 20, "client_init_ms": 0.0, "converse_ms": 0.008820556104183197, "parse_ms": 0.004061497747898102}
+2026-09-23 13:14:35,021 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 13:14:35,022 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-35 (actual=15, est=50)
+2026-09-23 13:14:35,028 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=50 limit=10000000 result=[1, 6645]
+2026-09-23 13:14:35,029 [INFO] gateway: PII/secret detected, redacting before LLM call (type=pii, patterns=['email', 'phone_us'], user=1)
+2026-09-23 13:14:35,030 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:35,035 [INFO] gateway.bedrock_client: Bedrock aconverse DONE: model=zeroshield-guard, call_site=tier2_scan, elapsed=0.000s, tokens_in=900, tokens_out=20
+2026-09-23 13:14:35,036 [INFO] gateway.bedrock_client: {"call_site": "tier2_scan", "gateway_request_id": "7574058f6178", "x_amzn_request_id": "claim2a-fake-39", "tokens_out": 20, "client_init_ms": 0.0, "converse_ms": 0.009171664714813232, "parse_ms": 0.004179775714874268}
+2026-09-23 13:14:35,037 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 13:14:35,037 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-35 (actual=15, est=50)
+2026-09-23 13:14:35,044 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=50 limit=10000000 result=[1, 6660]
+2026-09-23 13:14:35,045 [INFO] gateway: PII/secret detected, redacting before LLM call (type=pii, patterns=['email', 'phone_us'], user=1)
+2026-09-23 13:14:35,046 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:35,051 [INFO] gateway.bedrock_client: Bedrock aconverse DONE: model=zeroshield-guard, call_site=tier2_scan, elapsed=0.000s, tokens_in=900, tokens_out=20
+2026-09-23 13:14:35,051 [INFO] gateway.bedrock_client: {"call_site": "tier2_scan", "gateway_request_id": "e4c2f4dbfa29", "x_amzn_request_id": "claim2a-fake-40", "tokens_out": 20, "client_init_ms": 0.0, "converse_ms": 0.009182840585708618, "parse_ms": 0.003900378942489624}
+2026-09-23 13:14:35,052 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 13:14:35,053 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-35 (actual=15, est=50)
+2026-09-23 13:14:35,059 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=50 limit=10000000 result=[1, 6675]
+2026-09-23 13:14:35,060 [INFO] gateway: PII/secret detected, redacting before LLM call (type=pii, patterns=['email', 'phone_us'], user=1)
+2026-09-23 13:14:35,061 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:35,066 [INFO] gateway.bedrock_client: Bedrock aconverse DONE: model=zeroshield-guard, call_site=tier2_scan, elapsed=0.000s, tokens_in=900, tokens_out=20
+2026-09-23 13:14:35,066 [INFO] gateway.bedrock_client: {"call_site": "tier2_scan", "gateway_request_id": "803ceeaa2956", "x_amzn_request_id": "claim2a-fake-41", "tokens_out": 20, "client_init_ms": 0.0, "converse_ms": 0.009245239198207855, "parse_ms": 0.004415400326251984}
+2026-09-23 13:14:35,068 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 13:14:35,068 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-35 (actual=15, est=50)
+2026-09-23 13:14:35,074 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=50 limit=10000000 result=[1, 6690]
+2026-09-23 13:14:35,076 [INFO] gateway: PII/secret detected, redacting before LLM call (type=pii, patterns=['email', 'phone_us'], user=1)
+2026-09-23 13:14:35,077 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:35,082 [INFO] gateway.bedrock_client: Bedrock aconverse DONE: model=zeroshield-guard, call_site=tier2_scan, elapsed=0.000s, tokens_in=900, tokens_out=20
+2026-09-23 13:14:35,082 [INFO] gateway.bedrock_client: {"call_site": "tier2_scan", "gateway_request_id": "c28bf167676c", "x_amzn_request_id": "claim2a-fake-42", "tokens_out": 20, "client_init_ms": 0.0, "converse_ms": 0.008260831236839294, "parse_ms": 0.004130415618419647}
+2026-09-23 13:14:35,083 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 13:14:35,084 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-35 (actual=15, est=50)
+2026-09-23 13:14:35,090 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=50 limit=10000000 result=[1, 6705]
+2026-09-23 13:14:35,091 [INFO] gateway: PII/secret detected, redacting before LLM call (type=pii, patterns=['email', 'phone_us'], user=1)
+2026-09-23 13:14:35,092 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:35,097 [INFO] gateway.bedrock_client: Bedrock aconverse DONE: model=zeroshield-guard, call_site=tier2_scan, elapsed=0.000s, tokens_in=900, tokens_out=20
+2026-09-23 13:14:35,097 [INFO] gateway.bedrock_client: {"call_site": "tier2_scan", "gateway_request_id": "6fc7873a5a9a", "x_amzn_request_id": "claim2a-fake-43", "tokens_out": 20, "client_init_ms": 0.0, "converse_ms": 0.009479932487010956, "parse_ms": 0.004056841135025024}
+2026-09-23 13:14:35,099 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 13:14:35,099 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-35 (actual=15, est=50)
+2026-09-23 13:14:35,106 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=50 limit=10000000 result=[1, 6720]
+2026-09-23 13:14:35,107 [INFO] gateway: PII/secret detected, redacting before LLM call (type=pii, patterns=['email', 'phone_us'], user=1)
+2026-09-23 13:14:35,108 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:35,113 [INFO] gateway.bedrock_client: Bedrock aconverse DONE: model=zeroshield-guard, call_site=tier2_scan, elapsed=0.000s, tokens_in=900, tokens_out=20
+2026-09-23 13:14:35,113 [INFO] gateway.bedrock_client: {"call_site": "tier2_scan", "gateway_request_id": "609f5e84c5f7", "x_amzn_request_id": "claim2a-fake-44", "tokens_out": 20, "client_init_ms": 0.0, "converse_ms": 0.008828938007354736, "parse_ms": 0.004027038812637329}
+2026-09-23 13:14:35,114 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 13:14:35,115 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-35 (actual=15, est=50)
+2026-09-23 13:14:35,121 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=50 limit=10000000 result=[1, 6735]
+2026-09-23 13:14:35,122 [INFO] gateway: PII/secret detected, redacting before LLM call (type=pii, patterns=['email', 'phone_us'], user=1)
+2026-09-23 13:14:35,124 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:35,129 [INFO] gateway.bedrock_client: Bedrock aconverse DONE: model=zeroshield-guard, call_site=tier2_scan, elapsed=0.000s, tokens_in=900, tokens_out=20
+2026-09-23 13:14:35,129 [INFO] gateway.bedrock_client: {"call_site": "tier2_scan", "gateway_request_id": "f2541dba54f0", "x_amzn_request_id": "claim2a-fake-45", "tokens_out": 20, "client_init_ms": 0.0, "converse_ms": 0.009094364941120148, "parse_ms": 0.004234723746776581}
+2026-09-23 13:14:35,130 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 13:14:35,131 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-35 (actual=15, est=50)
+2026-09-23 13:14:35,137 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=50 limit=10000000 result=[1, 6750]
+2026-09-23 13:14:35,138 [INFO] gateway: PII/secret detected, redacting before LLM call (type=pii, patterns=['email', 'phone_us'], user=1)
+2026-09-23 13:14:35,139 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:35,144 [INFO] gateway.bedrock_client: Bedrock aconverse DONE: model=zeroshield-guard, call_site=tier2_scan, elapsed=0.000s, tokens_in=900, tokens_out=20
+2026-09-23 13:14:35,144 [INFO] gateway.bedrock_client: {"call_site": "tier2_scan", "gateway_request_id": "ec1f408b5122", "x_amzn_request_id": "claim2a-fake-46", "tokens_out": 20, "client_init_ms": 0.0, "converse_ms": 0.008984468877315521, "parse_ms": 0.004251487553119659}
+2026-09-23 13:14:35,146 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 13:14:35,146 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-35 (actual=15, est=50)
+2026-09-23 13:14:35,152 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=50 limit=10000000 result=[1, 6765]
+2026-09-23 13:14:35,153 [INFO] gateway: PII/secret detected, redacting before LLM call (type=pii, patterns=['email', 'phone_us'], user=1)
+2026-09-23 13:14:35,155 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:35,160 [INFO] gateway.bedrock_client: Bedrock aconverse DONE: model=zeroshield-guard, call_site=tier2_scan, elapsed=0.000s, tokens_in=900, tokens_out=20
+2026-09-23 13:14:35,160 [INFO] gateway.bedrock_client: {"call_site": "tier2_scan", "gateway_request_id": "acd00345de47", "x_amzn_request_id": "claim2a-fake-47", "tokens_out": 20, "client_init_ms": 0.0, "converse_ms": 0.008503906428813934, "parse_ms": 0.004011206328868866}
+2026-09-23 13:14:35,161 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 13:14:35,161 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-35 (actual=15, est=50)
+2026-09-23 13:14:35,168 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=50 limit=10000000 result=[1, 6780]
+2026-09-23 13:14:35,169 [INFO] gateway: PII/secret detected, redacting before LLM call (type=pii, patterns=['email', 'phone_us'], user=1)
+2026-09-23 13:14:35,170 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:35,175 [INFO] gateway.bedrock_client: Bedrock aconverse DONE: model=zeroshield-guard, call_site=tier2_scan, elapsed=0.000s, tokens_in=900, tokens_out=20
+2026-09-23 13:14:35,175 [INFO] gateway.bedrock_client: {"call_site": "tier2_scan", "gateway_request_id": "da8be006a226", "x_amzn_request_id": "claim2a-fake-48", "tokens_out": 20, "client_init_ms": 0.0, "converse_ms": 0.008965842425823212, "parse_ms": 0.004435889422893524}
+2026-09-23 13:14:35,176 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 13:14:35,177 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-35 (actual=15, est=50)
+2026-09-23 13:14:35,183 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=50 limit=10000000 result=[1, 6795]
+2026-09-23 13:14:35,184 [INFO] gateway: PII/secret detected, redacting before LLM call (type=pii, patterns=['email', 'phone_us'], user=1)
+2026-09-23 13:14:35,185 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:35,190 [INFO] gateway.bedrock_client: Bedrock aconverse DONE: model=zeroshield-guard, call_site=tier2_scan, elapsed=0.000s, tokens_in=900, tokens_out=20
+2026-09-23 13:14:35,191 [INFO] gateway.bedrock_client: {"call_site": "tier2_scan", "gateway_request_id": "95ede7c1e9b9", "x_amzn_request_id": "claim2a-fake-49", "tokens_out": 20, "client_init_ms": 0.0, "converse_ms": 0.00850670039653778, "parse_ms": 0.0043334439396858215}
+2026-09-23 13:14:35,192 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 13:14:35,192 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-35 (actual=15, est=50)
+2026-09-23 13:14:35,199 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=50 limit=10000000 result=[1, 6810]
+2026-09-23 13:14:35,200 [INFO] gateway: PII/secret detected, redacting before LLM call (type=pii, patterns=['email', 'phone_us'], user=1)
+2026-09-23 13:14:35,201 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:35,206 [INFO] gateway.bedrock_client: Bedrock aconverse DONE: model=zeroshield-guard, call_site=tier2_scan, elapsed=0.000s, tokens_in=900, tokens_out=20
+2026-09-23 13:14:35,206 [INFO] gateway.bedrock_client: {"call_site": "tier2_scan", "gateway_request_id": "11bef7735fcb", "x_amzn_request_id": "claim2a-fake-50", "tokens_out": 20, "client_init_ms": 0.0, "converse_ms": 0.00894162803888321, "parse_ms": 0.0043120235204696655}
+2026-09-23 13:14:35,208 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 13:14:35,208 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-35 (actual=15, est=50)
+2026-09-23 13:14:35,415 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=18 limit=10000000 result=[1, 6793]
+2026-09-23 13:14:35,417 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:35,424 [INFO] gateway.bedrock_client: Bedrock aconverse DONE: model=zeroshield-guard, call_site=tier2_scan, elapsed=0.000s, tokens_in=900, tokens_out=20
+2026-09-23 13:14:35,424 [INFO] gateway.bedrock_client: {"call_site": "tier2_scan", "gateway_request_id": "7c11dcbbcc62", "x_amzn_request_id": "claim2a-fake-51", "tokens_out": 20, "client_init_ms": 0.0, "converse_ms": 0.008960254490375519, "parse_ms": 0.004202127456665039}
+2026-09-23 13:14:35,425 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 13:14:35,425 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-3 (actual=15, est=18)
+2026-09-23 13:14:35,432 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=18 limit=10000000 result=[1, 6808]
+2026-09-23 13:14:35,433 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:35,438 [INFO] gateway.bedrock_client: Bedrock aconverse DONE: model=zeroshield-guard, call_site=tier2_scan, elapsed=0.000s, tokens_in=900, tokens_out=20
+2026-09-23 13:14:35,438 [INFO] gateway.bedrock_client: {"call_site": "tier2_scan", "gateway_request_id": "dc0267141f08", "x_amzn_request_id": "claim2a-fake-52", "tokens_out": 20, "client_init_ms": 0.0, "converse_ms": 0.00887550413608551, "parse_ms": 0.003925524652004242}
+2026-09-23 13:14:35,440 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 13:14:35,440 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-3 (actual=15, est=18)
+2026-09-23 13:14:35,446 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=18 limit=10000000 result=[1, 6823]
+2026-09-23 13:14:35,447 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:35,452 [INFO] gateway.bedrock_client: Bedrock aconverse DONE: model=zeroshield-guard, call_site=tier2_scan, elapsed=0.000s, tokens_in=900, tokens_out=20
+2026-09-23 13:14:35,452 [INFO] gateway.bedrock_client: {"call_site": "tier2_scan", "gateway_request_id": "1a6cfccdcbe5", "x_amzn_request_id": "claim2a-fake-53", "tokens_out": 20, "client_init_ms": 0.0, "converse_ms": 0.009026378393173218, "parse_ms": 0.004120171070098877}
+2026-09-23 13:14:35,454 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 13:14:35,454 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-3 (actual=15, est=18)
+2026-09-23 13:14:35,460 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=18 limit=10000000 result=[1, 6838]
+2026-09-23 13:14:35,461 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:35,466 [INFO] gateway.bedrock_client: Bedrock aconverse DONE: model=zeroshield-guard, call_site=tier2_scan, elapsed=0.000s, tokens_in=900, tokens_out=20
+2026-09-23 13:14:35,466 [INFO] gateway.bedrock_client: {"call_site": "tier2_scan", "gateway_request_id": "351f0258d0ce", "x_amzn_request_id": "claim2a-fake-54", "tokens_out": 20, "client_init_ms": 0.0, "converse_ms": 0.009025447070598602, "parse_ms": 0.004121102392673492}
+2026-09-23 13:14:35,467 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 13:14:35,468 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-3 (actual=15, est=18)
+2026-09-23 13:14:35,474 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=18 limit=10000000 result=[1, 6853]
+2026-09-23 13:14:35,476 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:35,481 [INFO] gateway.bedrock_client: Bedrock aconverse DONE: model=zeroshield-guard, call_site=tier2_scan, elapsed=0.000s, tokens_in=900, tokens_out=20
+2026-09-23 13:14:35,481 [INFO] gateway.bedrock_client: {"call_site": "tier2_scan", "gateway_request_id": "a3a890361ebc", "x_amzn_request_id": "claim2a-fake-55", "tokens_out": 20, "client_init_ms": 0.0, "converse_ms": 0.009451992809772491, "parse_ms": 0.004230067133903503}
+2026-09-23 13:14:35,482 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 13:14:35,482 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-3 (actual=15, est=18)
+2026-09-23 13:14:35,488 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=18 limit=10000000 result=[1, 6868]
+2026-09-23 13:14:35,490 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:35,495 [INFO] gateway.bedrock_client: Bedrock aconverse DONE: model=zeroshield-guard, call_site=tier2_scan, elapsed=0.000s, tokens_in=900, tokens_out=20
+2026-09-23 13:14:35,495 [INFO] gateway.bedrock_client: {"call_site": "tier2_scan", "gateway_request_id": "4d5ae48b5ce3", "x_amzn_request_id": "claim2a-fake-56", "tokens_out": 20, "client_init_ms": 0.0, "converse_ms": 0.008850358426570892, "parse_ms": 0.004423782229423523}
+2026-09-23 13:14:35,496 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 13:14:35,496 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-3 (actual=15, est=18)
+2026-09-23 13:14:35,502 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=18 limit=10000000 result=[1, 6883]
+2026-09-23 13:14:35,504 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:35,509 [INFO] gateway.bedrock_client: Bedrock aconverse DONE: model=zeroshield-guard, call_site=tier2_scan, elapsed=0.000s, tokens_in=900, tokens_out=20
+2026-09-23 13:14:35,509 [INFO] gateway.bedrock_client: {"call_site": "tier2_scan", "gateway_request_id": "3890f30adb77", "x_amzn_request_id": "claim2a-fake-57", "tokens_out": 20, "client_init_ms": 0.0, "converse_ms": 0.008695758879184723, "parse_ms": 0.00408664345741272}
+2026-09-23 13:14:35,510 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 13:14:35,510 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-3 (actual=15, est=18)
+2026-09-23 13:14:35,516 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=18 limit=10000000 result=[1, 6898]
+2026-09-23 13:14:35,519 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:35,524 [INFO] gateway.bedrock_client: Bedrock aconverse DONE: model=zeroshield-guard, call_site=tier2_scan, elapsed=0.000s, tokens_in=900, tokens_out=20
+2026-09-23 13:14:35,524 [INFO] gateway.bedrock_client: {"call_site": "tier2_scan", "gateway_request_id": "cabdcaf0123f", "x_amzn_request_id": "claim2a-fake-58", "tokens_out": 20, "client_init_ms": 0.0, "converse_ms": 0.00941101461648941, "parse_ms": 0.00408664345741272}
+2026-09-23 13:14:35,526 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 13:14:35,526 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-3 (actual=15, est=18)
+2026-09-23 13:14:35,532 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=18 limit=10000000 result=[1, 6913]
+2026-09-23 13:14:35,533 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:35,538 [INFO] gateway.bedrock_client: Bedrock aconverse DONE: model=zeroshield-guard, call_site=tier2_scan, elapsed=0.000s, tokens_in=900, tokens_out=20
+2026-09-23 13:14:35,539 [INFO] gateway.bedrock_client: {"call_site": "tier2_scan", "gateway_request_id": "d205255f2aa2", "x_amzn_request_id": "claim2a-fake-59", "tokens_out": 20, "client_init_ms": 0.0, "converse_ms": 0.008772127330303192, "parse_ms": 0.003987923264503479}
+2026-09-23 13:14:35,540 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 13:14:35,540 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-3 (actual=15, est=18)
+2026-09-23 13:14:35,546 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=18 limit=10000000 result=[1, 6928]
+2026-09-23 13:14:35,547 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:35,552 [INFO] gateway.bedrock_client: Bedrock aconverse DONE: model=zeroshield-guard, call_site=tier2_scan, elapsed=0.000s, tokens_in=900, tokens_out=20
+2026-09-23 13:14:35,552 [INFO] gateway.bedrock_client: {"call_site": "tier2_scan", "gateway_request_id": "dd661284dfa3", "x_amzn_request_id": "claim2a-fake-60", "tokens_out": 20, "client_init_ms": 0.0, "converse_ms": 0.00860355794429779, "parse_ms": 0.004230067133903503}
+2026-09-23 13:14:35,554 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 13:14:35,554 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-3 (actual=15, est=18)
+2026-09-23 13:14:35,560 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=18 limit=10000000 result=[1, 6943]
+2026-09-23 13:14:35,561 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:35,566 [INFO] gateway.bedrock_client: Bedrock aconverse DONE: model=zeroshield-guard, call_site=tier2_scan, elapsed=0.000s, tokens_in=900, tokens_out=20
+2026-09-23 13:14:35,566 [INFO] gateway.bedrock_client: {"call_site": "tier2_scan", "gateway_request_id": "e2eb65d75780", "x_amzn_request_id": "claim2a-fake-61", "tokens_out": 20, "client_init_ms": 0.0, "converse_ms": 0.009194016456604004, "parse_ms": 0.00436045229434967}
+2026-09-23 13:14:35,568 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 13:14:35,568 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-3 (actual=15, est=18)
+2026-09-23 13:14:35,575 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=18 limit=10000000 result=[1, 6958]
+2026-09-23 13:14:35,576 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:35,581 [INFO] gateway.bedrock_client: Bedrock aconverse DONE: model=zeroshield-guard, call_site=tier2_scan, elapsed=0.000s, tokens_in=900, tokens_out=20
+2026-09-23 13:14:35,582 [INFO] gateway.bedrock_client: {"call_site": "tier2_scan", "gateway_request_id": "e7e83b124fed", "x_amzn_request_id": "claim2a-fake-62", "tokens_out": 20, "client_init_ms": 0.0, "converse_ms": 0.008814036846160889, "parse_ms": 0.003997236490249634}
+2026-09-23 13:14:35,583 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 13:14:35,583 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-3 (actual=15, est=18)
+2026-09-23 13:14:35,589 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=18 limit=10000000 result=[1, 6973]
+2026-09-23 13:14:35,591 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:35,596 [INFO] gateway.bedrock_client: Bedrock aconverse DONE: model=zeroshield-guard, call_site=tier2_scan, elapsed=0.000s, tokens_in=900, tokens_out=20
+2026-09-23 13:14:35,596 [INFO] gateway.bedrock_client: {"call_site": "tier2_scan", "gateway_request_id": "73d35b734f9d", "x_amzn_request_id": "claim2a-fake-63", "tokens_out": 20, "client_init_ms": 0.0, "converse_ms": 0.00880751758813858, "parse_ms": 0.0039227306842803955}
+2026-09-23 13:14:35,597 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 13:14:35,598 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-3 (actual=15, est=18)
+2026-09-23 13:14:35,604 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=18 limit=10000000 result=[1, 6988]
+2026-09-23 13:14:35,605 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:35,610 [INFO] gateway.bedrock_client: Bedrock aconverse DONE: model=zeroshield-guard, call_site=tier2_scan, elapsed=0.000s, tokens_in=900, tokens_out=20
+2026-09-23 13:14:35,611 [INFO] gateway.bedrock_client: {"call_site": "tier2_scan", "gateway_request_id": "2c9912e5f413", "x_amzn_request_id": "claim2a-fake-64", "tokens_out": 20, "client_init_ms": 0.0, "converse_ms": 0.008714385330677032, "parse_ms": 0.004084780812263489}
+2026-09-23 13:14:35,612 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 13:14:35,612 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-3 (actual=15, est=18)
+2026-09-23 13:14:35,619 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=18 limit=10000000 result=[1, 7003]
+2026-09-23 13:14:35,622 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:35,627 [INFO] gateway.bedrock_client: Bedrock aconverse DONE: model=zeroshield-guard, call_site=tier2_scan, elapsed=0.000s, tokens_in=900, tokens_out=20
+2026-09-23 13:14:35,627 [INFO] gateway.bedrock_client: {"call_site": "tier2_scan", "gateway_request_id": "dabc25eb82f4", "x_amzn_request_id": "claim2a-fake-65", "tokens_out": 20, "client_init_ms": 0.0, "converse_ms": 0.009141862392425537, "parse_ms": 0.004084780812263489}
+2026-09-23 13:14:35,628 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 13:14:35,629 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-3 (actual=15, est=18)
+2026-09-23 13:14:35,635 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=18 limit=10000000 result=[1, 7018]
+2026-09-23 13:14:35,636 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:35,641 [INFO] gateway.bedrock_client: Bedrock aconverse DONE: model=zeroshield-guard, call_site=tier2_scan, elapsed=0.000s, tokens_in=900, tokens_out=20
+2026-09-23 13:14:35,641 [INFO] gateway.bedrock_client: {"call_site": "tier2_scan", "gateway_request_id": "d7597c2a3f45", "x_amzn_request_id": "claim2a-fake-66", "tokens_out": 20, "client_init_ms": 0.0, "converse_ms": 0.008686445653438568, "parse_ms": 0.004108063876628876}
+2026-09-23 13:14:35,643 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 13:14:35,643 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-3 (actual=15, est=18)
+2026-09-23 13:14:35,649 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=18 limit=10000000 result=[1, 7033]
+2026-09-23 13:14:35,651 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:35,656 [INFO] gateway.bedrock_client: Bedrock aconverse DONE: model=zeroshield-guard, call_site=tier2_scan, elapsed=0.000s, tokens_in=900, tokens_out=20
+2026-09-23 13:14:35,656 [INFO] gateway.bedrock_client: {"call_site": "tier2_scan", "gateway_request_id": "c2b46679986c", "x_amzn_request_id": "claim2a-fake-67", "tokens_out": 20, "client_init_ms": 0.0, "converse_ms": 0.008354894816875458, "parse_ms": 0.004048459231853485}
+2026-09-23 13:14:35,657 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 13:14:35,658 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-3 (actual=15, est=18)
+2026-09-23 13:14:35,664 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=18 limit=10000000 result=[1, 7048]
+2026-09-23 13:14:35,665 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:35,670 [INFO] gateway.bedrock_client: Bedrock aconverse DONE: model=zeroshield-guard, call_site=tier2_scan, elapsed=0.000s, tokens_in=900, tokens_out=20
+2026-09-23 13:14:35,670 [INFO] gateway.bedrock_client: {"call_site": "tier2_scan", "gateway_request_id": "a9f2b02981a6", "x_amzn_request_id": "claim2a-fake-68", "tokens_out": 20, "client_init_ms": 0.0, "converse_ms": 0.008612871170043945, "parse_ms": 0.004049390554428101}
+2026-09-23 13:14:35,672 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 13:14:35,672 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-3 (actual=15, est=18)
+2026-09-23 13:14:35,682 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=18 limit=10000000 result=[1, 7063]
+2026-09-23 13:14:35,683 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:35,688 [INFO] gateway.bedrock_client: Bedrock aconverse DONE: model=zeroshield-guard, call_site=tier2_scan, elapsed=0.000s, tokens_in=900, tokens_out=20
+2026-09-23 13:14:35,688 [INFO] gateway.bedrock_client: {"call_site": "tier2_scan", "gateway_request_id": "5c2a15e31931", "x_amzn_request_id": "claim2a-fake-69", "tokens_out": 20, "client_init_ms": 0.0, "converse_ms": 0.00872742384672165, "parse_ms": 0.004068948328495026}
+2026-09-23 13:14:35,690 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 13:14:35,690 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-3 (actual=15, est=18)
+2026-09-23 13:14:35,696 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=18 limit=10000000 result=[1, 7078]
+2026-09-23 13:14:35,698 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:35,703 [INFO] gateway.bedrock_client: Bedrock aconverse DONE: model=zeroshield-guard, call_site=tier2_scan, elapsed=0.000s, tokens_in=900, tokens_out=20
+2026-09-23 13:14:35,703 [INFO] gateway.bedrock_client: {"call_site": "tier2_scan", "gateway_request_id": "6eab937aa60f", "x_amzn_request_id": "claim2a-fake-70", "tokens_out": 20, "client_init_ms": 0.0, "converse_ms": 0.008799135684967041, "parse_ms": 0.004100613296031952}
+2026-09-23 13:14:35,704 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 13:14:35,705 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-3 (actual=15, est=18)
+2026-09-23 13:14:35,710 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=18 limit=10000000 result=[1, 7093]
+2026-09-23 13:14:35,712 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:35,717 [INFO] gateway.bedrock_client: Bedrock aconverse DONE: model=zeroshield-guard, call_site=tier2_scan, elapsed=0.000s, tokens_in=900, tokens_out=20
+2026-09-23 13:14:35,717 [INFO] gateway.bedrock_client: {"call_site": "tier2_scan", "gateway_request_id": "7b89c62a1798", "x_amzn_request_id": "claim2a-fake-71", "tokens_out": 20, "client_init_ms": 0.0, "converse_ms": 0.008231028914451599, "parse_ms": 0.003973953425884247}
+2026-09-23 13:14:35,718 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 13:14:35,719 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-3 (actual=15, est=18)
+2026-09-23 13:14:35,725 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=18 limit=10000000 result=[1, 7108]
+2026-09-23 13:14:35,770 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:35,775 [INFO] gateway.bedrock_client: Bedrock aconverse DONE: model=zeroshield-guard, call_site=tier2_scan, elapsed=0.000s, tokens_in=900, tokens_out=20
+2026-09-23 13:14:35,775 [INFO] gateway.bedrock_client: {"call_site": "tier2_scan", "gateway_request_id": "94ad991ec43a", "x_amzn_request_id": "claim2a-fake-72", "tokens_out": 20, "client_init_ms": 0.0, "converse_ms": 0.009170733392238617, "parse_ms": 0.004526227712631226}
+2026-09-23 13:14:35,777 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 13:14:35,777 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-3 (actual=15, est=18)
+2026-09-23 13:14:35,783 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=18 limit=10000000 result=[1, 7123]
+2026-09-23 13:14:35,785 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:35,790 [INFO] gateway.bedrock_client: Bedrock aconverse DONE: model=zeroshield-guard, call_site=tier2_scan, elapsed=0.000s, tokens_in=900, tokens_out=20
+2026-09-23 13:14:35,790 [INFO] gateway.bedrock_client: {"call_site": "tier2_scan", "gateway_request_id": "b34cfa824415", "x_amzn_request_id": "claim2a-fake-73", "tokens_out": 20, "client_init_ms": 0.0, "converse_ms": 0.008777715265750885, "parse_ms": 0.004423782229423523}
+2026-09-23 13:14:35,791 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 13:14:35,791 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-3 (actual=15, est=18)
+2026-09-23 13:14:35,797 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=18 limit=10000000 result=[1, 7138]
+2026-09-23 13:14:35,799 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:35,804 [INFO] gateway.bedrock_client: Bedrock aconverse DONE: model=zeroshield-guard, call_site=tier2_scan, elapsed=0.000s, tokens_in=900, tokens_out=20
+2026-09-23 13:14:35,804 [INFO] gateway.bedrock_client: {"call_site": "tier2_scan", "gateway_request_id": "c0763802fba7", "x_amzn_request_id": "claim2a-fake-74", "tokens_out": 20, "client_init_ms": 0.0, "converse_ms": 0.008370727300643921, "parse_ms": 0.004098750650882721}
+2026-09-23 13:14:35,805 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 13:14:35,806 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-3 (actual=15, est=18)
+2026-09-23 13:14:35,811 [INFO] gateway.rate_limiter: RateLimit check: 11f92b86ac12 est=19 limit=10000000 result=[1, 7154]
+2026-09-23 13:14:35,813 [INFO] gateway: Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, priority=30%); gpt-4o-mini ranked best among 2 eligible models.)
+2026-09-23 13:14:35,818 [INFO] gateway.bedrock_client: Bedrock aconverse DONE: model=zeroshield-guard, call_site=tier2_scan, elapsed=0.000s, tokens_in=900, tokens_out=20
+2026-09-23 13:14:35,818 [INFO] gateway.bedrock_client: {"call_site": "tier2_scan", "gateway_request_id": "77d7fa54924e", "x_amzn_request_id": "claim2a-fake-75", "tokens_out": 20, "client_init_ms": 0.0, "converse_ms": 0.00903196632862091, "parse_ms": 0.004027970135211945}
+2026-09-23 13:14:35,819 [INFO] gateway: Token usage: {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15} (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)
+2026-09-23 13:14:35,820 [DEBUG] gateway.rate_limiter: RateLimit record_usage: 11f92b86ac12 delta=-4 (actual=15, est=19)
+2026-09-23 13:14:35,985 [DEBUG] gateway.telemetry: Telemetry flushed 129 events to Redis
+2026-09-23 13:14:36,524 [INFO] gateway.telemetry: Telemetry producer stopped (final flush complete)
+2026-09-23 13:14:36,524 [INFO] gateway.config_sync: ConfigSync stopped
+2026-09-23 13:14:36,525 [INFO] gateway.policy_sync: PolicySync stopped
+2026-09-23 13:14:36,525 [INFO] gateway.mcp_stdio_adapter: All stdio MCP processes terminated
+2026-09-23 13:14:36,525 [INFO] gateway.mcp_ws_adapter: All WebSocket MCP connections closed

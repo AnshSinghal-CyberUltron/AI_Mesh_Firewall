@@ -1,0 +1,20 @@
+15:23:24 asia-south1-c rc=0 10.160.15.228
+15:41:43 guard-2 asia-south1-c rc=0 10.160.15.232
+18:40:28 rv-split-guard-2 asia-south1-c rc=1   sub-state:STOCKOUT, resource type:compute)'.
+18:40:28 rv-split-guard-3 asia-south1-c rc=1   sub-state:STOCKOUT, resource type:compute)'.
+18:40:28 rv-split-guard-5 asia-south1-c rc=1   sub-state:STOCKOUT, resource type:compute)'.
+18:40:28 rv-split-guard-1 asia-south1-c rc=1   sub-state:STOCKOUT, resource type:compute)'.
+18:40:28 rv-split-guard-4 asia-south1-c rc=1   sub-state:STOCKOUT, resource type:compute)'.
+18:41:41 rv-split-guard-1 asia-south1-c g2-standard-4 rc=1 STOCKOUT
+18:42:38 rv-split-guard-1 asia-south1-a g2-standard-4 rc=1 STOCKOUT
+18:43:10 rv-split-guard-1 asia-south1-b g2-standard-4 rc=0 10.160.0.10
+18:43:30 rv-split-guard-2 asia-south1-b g2-standard-4 rc=0 10.160.15.248
+18:43:30 rv-split-guard-3 asia-south1-b g2-standard-4 rc=0 10.160.15.247
+18:43:31 rv-split-guard-5 asia-south1-b g2-standard-4 rc=0 10.160.15.245
+18:43:31 rv-split-guard-4 asia-south1-b g2-standard-4 rc=0 10.160.15.246
+18:44:53 moved phase B CPU VMs from asia-south1-c to asia-south1-b: g2-standard-4 stock-out in -c and -a at 18:40-18:42Z, 5 obtained in -b at 18:43Z (same-zone placement for gateway<->guard RTT)
+20:41:12 rv-split-guard-6 asia-south1-b g2-standard-4 rc=1 STOCKOUT
+20:41:44 rv-split-guard-6 asia-south1-b g2-standard-4 rc=1 STOCKOUT
+20:42:40 rv-split-guard-6 asia-south1-b g2-standard-4 rc=1 STOCKOUT
+20:43:37 rv-split-guard-6 asia-south1-b g2-standard-4 rc=0 10.160.0.61
+20:45:03 guard6_setup.sh endpoint grep also matched the '": ' of the JSON key (file held ':' + endpoint); .guard6-ready rewritten to the endpoint only before chainC read it; script fixed (python JSON parse)

@@ -1,0 +1,60 @@
+{
+ "raw/C/c4-1/Llama-Prompt-Guard-2-22M/net": {
+  "icmp_ping_ms": {
+   "min": 0.043,
+   "avg": 0.052,
+   "max": 0.717,
+   "mdev": 0.014
+  },
+  "netperf_tcprr_16384_64": {
+   "min_us": 51.0,
+   "mean_us": 86.28,
+   "p50_us": 84.0,
+   "p90_us": 109.0,
+   "p99_us": 126.0,
+   "max_us": 361.0,
+   "req_bytes": 16384,
+   "resp_bytes": 64
+  },
+  "netperf_tcprr_1_1": {
+   "min_us": 34.0,
+   "mean_us": 47.86,
+   "p50_us": 48.0,
+   "p90_us": 52.0,
+   "p99_us": 64.0,
+   "max_us": 730.0,
+   "req_bytes": 1,
+   "resp_bytes": 1
+  },
+  "netperf_tcprr_57344_64": {
+   "min_us": 82.0,
+   "mean_us": 141.72,
+   "p50_us": 136.0,
+   "p90_us": 173.0,
+   "p99_us": 187.0,
+   "max_us": 366.0,
+   "req_bytes": 57344,
+   "resp_bytes": 64
+  },
+  "netperf_tcprr_8192_64": {
+   "min_us": 47.0,
+   "mean_us": 77.39,
+   "p50_us": 76.0,
+   "p90_us": 91.0,
+   "p99_us": 114.0,
+   "max_us": 470.0,
+   "req_bytes": 8192,
+   "resp_bytes": 64
+  },
+  "sockperf_tcp_16KB": {
+   "p50_us": 89.438,
+   "p99_us": 134.092,
+   "p99.9_us": 163.125
+  },
+  "sockperf_tcp_64B": {
+   "p50_us": 46.068,
+   "p99_us": 61.619,
+   "p99.9_us": 86.354
+  }
+ }
+}

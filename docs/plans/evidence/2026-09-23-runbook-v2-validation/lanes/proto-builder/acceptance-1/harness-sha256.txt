@@ -1,0 +1,3 @@
+2142dc955c585ff8e500843a2f5404d384fa954314f6b8fc079e07e927af00b8  /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/harness/bin/synthprov
+4f48977e1a4c930f2378d906991d20832e4ab187d66d7e42fd260db31ec65c35  /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/harness/bin/olg
+c9f89fe8862b254c1e6576c37a7f42bae67bd892e982a07b0c9cab64e95409bb  /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/harness/analyze.py

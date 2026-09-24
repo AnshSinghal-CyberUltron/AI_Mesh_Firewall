@@ -1,0 +1,58 @@
+# harness binaries on rv-pbu-lg-1/lg-2/prov-1 (verified with sha256sum -c at VM creation 2026-09-23T11:41Z, same files for every run)
+1ee6bb5f3665de1d6f42d67d83997b71f429d57a45525650a01b15bcdab39029  synthprov
+d22d260723c31fb55a387080b853cd94ff922666807ba36845e0b7e962aa7fb3  olg
+4a9ff4a106a48f18ad3470fcb000339c417f62d4671c134638b1fc04ff3b9685  rvproxy (unused)
+# harness build sha recorded in every olg manifest / synthprov log:
+c22-035 5af9594a2631 1f04a55bc7a6d872 constant 17.5 0.7 10
+d-h-100 5af9594a2631 6b8420958f0cb22b constant 50 0.7 10
+d-sse-040 5af9594a2631 6b8420958f0cb22b constant 20 1 1
+d-w-050 5af9594a2631 757742759ba28d15 constant 25 0.7 10
+h22-025 5af9594a2631 6b8420958f0cb22b constant 12.5 0.7 10
+h22-050 5af9594a2631 6b8420958f0cb22b constant 25 0.7 10
+hb-off-10 5af9594a2631 6b8420958f0cb22b constant 20 1 1
+hb-off-20 5af9594a2631 6b8420958f0cb22b constant 20 1 1
+hb-off-30 5af9594a2631 6b8420958f0cb22b constant 20 1 1
+hb-on-10 5af9594a2631 6b8420958f0cb22b constant 20 1 1
+hb-on-20 5af9594a2631 6b8420958f0cb22b constant 20 1 1
+hb-on-30 5af9594a2631 6b8420958f0cb22b constant 20 1 1
+l22-100 5af9594a2631 f6ccb7bd17c1f500 constant 50 1 10
+m86-025 5af9594a2631 cea51fcafd576c3d constant 12.5 0.7 10
+m86-050 5af9594a2631 cea51fcafd576c3d constant 25 0.7 10
+m86-078 5af9594a2631 cea51fcafd576c3d constant 39 0.7 10
+ovl-234 5af9594a2631 6b8420958f0cb22b constant 195 0.7 10
+ovl-234 5af9594a2631 6b8420958f0cb22b constant 39 0.7 10
+p22-025 5af9594a2631 6b8420958f0cb22b constant 12.5 0.7 10
+p22-025b 5af9594a2631 6b8420958f0cb22b constant 12.5 0.7 10
+p22-050 5af9594a2631 6b8420958f0cb22b constant 25 0.7 10
+p22-063 5af9594a2631 6b8420958f0cb22b constant 31.5 0.7 10
+p22-078 5af9594a2631 6b8420958f0cb22b constant 39 0.7 10
+p22-078-r2 5af9594a2631 6b8420958f0cb22b constant 39 0.7 10
+p22-078-r3 5af9594a2631 6b8420958f0cb22b constant 39 0.7 10
+p22-100 5af9594a2631 6b8420958f0cb22b constant 50 0.7 10
+p22-200 5af9594a2631 6b8420958f0cb22b constant 100 0.7 10
+p22p-025 5af9594a2631 6b8420958f0cb22b poisson 12.5 0.7 10
+p22p-078 5af9594a2631 6b8420958f0cb22b poisson 39 0.7 10
+p22r-100 5af9594a2631 6b8420958f0cb22b constant 50 0.7 10
+p22rp-150 5af9594a2631 6b8420958f0cb22b poisson 75 0.7 10
+p22u-100 5af9594a2631 6b8420958f0cb22b constant 50 0.7 10
+p22u-200 5af9594a2631 6b8420958f0cb22b constant 100 0.7 10
+p22up-100 5af9594a2631 6b8420958f0cb22b poisson 50 0.7 10
+p22up-150 5af9594a2631 6b8420958f0cb22b poisson 75 0.7 10
+p22up-200 5af9594a2631 6b8420958f0cb22b poisson 100 0.7 10
+smoke-25 5af9594a2631 6b8420958f0cb22b constant 12.5 0.7 10
+t22-025 5af9594a2631 6b8420958f0cb22b constant 12.5 0.7 10
+t22-050 5af9594a2631 6b8420958f0cb22b constant 25 0.7 10
+t22-078 5af9594a2631 6b8420958f0cb22b constant 39 0.7 10
+t22-100 5af9594a2631 6b8420958f0cb22b constant 50 0.7 10
+w22-025 5af9594a2631 757742759ba28d15 constant 12.5 0.7 10
+w22-025-r2 5af9594a2631 757742759ba28d15 constant 12.5 0.7 10
+w22-025-r3 5af9594a2631 757742759ba28d15 constant 12.5 0.7 10
+w22-050 5af9594a2631 757742759ba28d15 constant 25 0.7 10
+w22-063 5af9594a2631 757742759ba28d15 constant 31.5 0.7 10
+# analyzers
+c9f89fe8862b254c1e6576c37a7f42bae67bd892e982a07b0c9cab64e95409bb  /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-bench-unit/tools/pinned/analyze_c9f89fe8.py
+333dca63352da773f84b01f1fc49dca43305b75f1209cae79408d3d6790b365f  /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-bench-unit/tools/pbu_analyze.py
+c9cfff72c99fefad18724cdd067dc74b02c40dcda82c19034394688e37c5848d  /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-bench-unit/tools/overload_analyze.py
+# current SP/harness/bin (for comparison)
+d22d260723c31fb55a387080b853cd94ff922666807ba36845e0b7e962aa7fb3  /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/harness/bin/olg
+1ee6bb5f3665de1d6f42d67d83997b71f429d57a45525650a01b15bcdab39029  /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/harness/bin/synthprov

@@ -1,0 +1,80 @@
+conftest.py:96:    return InputScanner(thread_pool_size=2)
+context_guard.py:166:            "ContextGuard initialized (thread_pool_size=%d, injection_patterns=%d, "
+tests/test_v3_stream_newcode.py:187:    gm.INPUT_SCANNER = InputScanner(thread_pool_size=2)
+scanner.py:1151:            "InputScanner initialized (thread_pool_size=%d, bedrock_pool_size=%d, attack_categories=%d, pii_patterns=%d)",
+tests/test_vector_upsert_scan_redact.py:61:    monkeypatch.setattr(_resolved_main(), "CONTEXT_GUARD", ContextGuard(thread_pool_size=2), raising=False)
+tests/test_vector_upsert_scan_redact.py:62:    monkeypatch.setattr(_resolved_main(), "INPUT_SCANNER", InputScanner(thread_pool_size=2), raising=False)
+tests/test_v2_tier2_detection_sdk.py:300:    scanner = InputScanner(thread_pool_size=2)
+tests/test_v2_streaming_parity_sdk.py:366:    monkeypatch.setattr(gm, "INPUT_SCANNER", InputScanner(thread_pool_size=2))
+tests/test_v2_streaming_parity_sdk.py:1272:    gm.INPUT_SCANNER = InputScanner(thread_pool_size=2)
+tests/test_v2_connected_path_sdk.py:150:    scanner = InputScanner(thread_pool_size=2)
+tests/test_ranker_anomaly_fail_closed.py:33:    return RankerStage(ContextGuard(thread_pool_size=2), {"rag_anomaly_detection_enabled": True})
+tests/test_v3_doc_conformance.py:260:        "INPUT_SCANNER": InputScanner(thread_pool_size=2), "AGENT_ID": None,
+tests/test_openai_sdk_compat.py:207:    monkeypatch.setattr(gateway_main, "INPUT_SCANNER", InputScanner(thread_pool_size=2))
+tests/test_m1_7_output_guard_sdk.py:609:    gm.INPUT_SCANNER = InputScanner(thread_pool_size=2)
+tests/test_rag_egress_injection_backstop.py:80:_GUARD = ContextGuard(thread_pool_size=2)
+tests/test_rag_vector_redteam_fixes.py:247:    return ContextGuard(thread_pool_size=2)
+tests/test_fix_low_findings_i16_i25.py:91:    scanner = InputScanner(thread_pool_size=1)
+tests/test_rag_main_disclosure.py:211:_GUARD = ContextGuard(thread_pool_size=2)
+tests/test_e10_embeddings_scan.py:131:    monkeypatch.setattr(gateway_main, "INPUT_SCANNER", InputScanner(thread_pool_size=2))
+tests/test_e10_embeddings_scan.py:236:    scanner = InputScanner(thread_pool_size=2)
+tests/test_e10_embeddings_scan.py:258:    monkeypatch.setattr(gateway_main, "INPUT_SCANNER", InputScanner(thread_pool_size=2))
+tests/test_config.py:369:    scanner = InputScanner(thread_pool_size=1)  # crashed at startup pre-M-09
+tests/test_config.py:389:    scanner = InputScanner(thread_pool_size=1)
+tests/test_openai_sdk_compat_live_uvicorn.py:60:    gm.INPUT_SCANNER = InputScanner(thread_pool_size=2)
+main.py:6476:        thread_pool_size=CONFIG.get("scan_thread_pool_size", 4),
+main.py:6635:                thread_pool_size=CONFIG.get("scan_thread_pool_size", 4),
+main.py:6643:                thread_pool_size=CONFIG.get("scan_thread_pool_size", 4),
+main.py:6648:            thread_pool_size=CONFIG.get("scan_thread_pool_size", 4),
+tests/test_v2_cross_tenant_sdk.py:219:    monkeypatch.setattr(gateway_main, "INPUT_SCANNER", InputScanner(thread_pool_size=2))
+tests/test_fix_i01_i02_criticals.py:347:        "INPUT_SCANNER": InputScanner(thread_pool_size=2),
+tests/test_t01_pii_org_config.py:87:    sc = InputScanner(thread_pool_size=1, config={})
+tests/test_t01_pii_org_config.py:110:    sc = InputScanner(thread_pool_size=1, config={})
+tests/test_egress_metadata_poison.py:12:    v = ContextGuard(thread_pool_size=2)._scan_single_document_sync(text)
+tests/test_egress_metadata_poison.py:46:    v = ContextGuard(thread_pool_size=2)._scan_single_document_sync(text)
+tests/test_v2_fix_adversarial.py:269:    monkeypatch.setattr(gm, "OUTPUT_GUARD", OutputGuard(InputScanner(thread_pool_size=2),
+tests/test_v2_vector_rag_firewall.py:306:    scanner = InputScanner(thread_pool_size=2)
+tests/test_v2_vector_rag_firewall.py:307:    guard = ContextGuard(thread_pool_size=2)
+tests/test_bedrock_pool_uncapped.py:15:    scanner = InputScanner(thread_pool_size=1)
+tests/test_bedrock_pool_uncapped.py:28:    scanner = InputScanner(thread_pool_size=1)
+tests/test_m1_6_isolation_killswitch_sdk.py:78:            "INPUT_SCANNER": InputScanner(thread_pool_size=2), "POLICY_SYNC": None,
+tests/test_context_guard.py:18:    return ContextGuard(thread_pool_size=2)
+tests/test_e14_cross_model.py:423:        scanner=InputScanner(thread_pool_size=2),
+tests/test_gemini_output_failclosed.py:14:    sc = InputScanner(thread_pool_size=1)
+tests/test_m1_2_query_firewall_sdk.py:142:    monkeypatch.setattr(gateway_main, "INPUT_SCANNER", InputScanner(thread_pool_size=2))
+tests/test_m1_5_routing_governance_sdk.py:153:        "INPUT_SCANNER": InputScanner(thread_pool_size=2),
+tests/test_input_detail_masking.py:45:    return InputScanner(thread_pool_size=2)
+tests/test_input_detail_masking.py:155:    sc = InputScanner(thread_pool_size=2)
+tests/test_context_guard_unicode_obfuscation.py:42:    cg = ContextGuard(thread_pool_size=2)
+tests/test_context_guard_unicode_obfuscation.py:49:    cg = ContextGuard(thread_pool_size=2)
+tests/test_context_guard_transport_poisoning.py:22:    return ContextGuard(thread_pool_size=2)
+rag_collections.py:73:            return PineconeClient(
+rag_collections.py:98:            return MilvusClient(
+vector_routes.py:160:            return MilvusClient(
+tests/test_vector_upsert_scan_redact.py:61:    monkeypatch.setattr(_resolved_main(), "CONTEXT_GUARD", ContextGuard(thread_pool_size=2), raising=False)
+tests/test_rag_pipeline_telemetry_gate.py:60:    await _run(_pipeline(tel), _StubVectorClient(_DOCS), telemetry_enabled=False)
+tests/test_rag_pipeline_telemetry_gate.py:69:    await _run(_pipeline(tel), _StubVectorClient(_DOCS), telemetry_enabled=True)
+tests/test_rag_pipeline_telemetry_gate.py:76:    await _run(_pipeline(tel), _StubVectorClient(_DOCS))
+tests/test_ranker_anomaly_fail_closed.py:33:    return RankerStage(ContextGuard(thread_pool_size=2), {"rag_anomaly_detection_enabled": True})
+tests/test_rag_egress_injection_backstop.py:80:_GUARD = ContextGuard(thread_pool_size=2)
+tests/test_provider_write_capability.py:26:    m = MilvusClient(uri="http://milvus.invalid:19530")
+tests/test_provider_write_capability.py:40:    p = PineconeClient(api_key="fake-key")
+tests/test_provider_write_capability.py:58:    p = PineconeClient(api_key="fake", reranker_model="bge-reranker-v2-m3")
+tests/test_provider_write_capability.py:60:    m = MilvusClient(uri="http://milvus.invalid:19530")
+tests/test_provider_write_capability.py:79:    m = MilvusClient(uri="http://milvus.invalid:19530")
+tests/test_provider_write_capability.py:80:    p = PineconeClient(api_key="fake")
+tests/test_embedding_vault.py:37:    v = EmbeddingVault(pg_dsn="postgresql://fake:fake@127.0.0.1:1/fake")
+tests/test_vector_namespace_binding.py:36:    client = PineconeClient(api_key="fake")
+tests/test_e11_upsert_vector_guard.py:156:    client = PineconeClient(api_key="fake-key", embedding_model="test-embed")
+tests/test_egress_metadata_poison.py:12:    v = ContextGuard(thread_pool_size=2)._scan_single_document_sync(text)
+tests/test_egress_metadata_poison.py:46:    v = ContextGuard(thread_pool_size=2)._scan_single_document_sync(text)
+main.py:6631:            VECTOR_CLIENTS["pinecone"] = PineconeClient(
+main.py:6640:            VECTOR_CLIENTS["milvus"] = MilvusClient(
+main.py:6647:        CONTEXT_GUARD = ContextGuard(
+main.py:6677:            _llm_judge = LLMJudge(model=_bedrock_model)
+main.py:13167:                        return PineconeClient(
+main.py:13189:                        return MilvusClient(
+main.py:13200:                        return MilvusClient(
+tests/test_rag_vector_metric.py:72:    client._client = _FakeChromaClient(collection)
+tests/test_rag_vector_metric.py:327:    client = PineconeClient(api_key="k")
+tests/test_context_guard.py:18:    return ContextGuard(thread_pool_size=2)

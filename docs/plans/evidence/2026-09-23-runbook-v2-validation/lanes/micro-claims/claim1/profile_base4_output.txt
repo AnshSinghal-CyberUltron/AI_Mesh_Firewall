@@ -1,0 +1,33 @@
+none: 0.0210 ms/request (sequential, blocking receive, uvloop)
+base4: 0.5403 ms/request (sequential, blocking receive, uvloop)
+         5109985 function calls (5035985 primitive calls) in 2.766 seconds
+
+   Ordered by: internal time
+   List reduced from 203 to 22 due to restriction <22>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+    16000    0.142    0.000    0.257    0.000 /home/rv/venv/lib/python3.12/site-packages/anyio/_backends/_asyncio.py:814(_spawn)
+    76000    0.096    0.000    1.388    0.000 /home/rv/venv/lib/python3.12/site-packages/starlette/middleware/base.py:101(__call__)
+    58000    0.078    0.000    0.436    0.000 /home/rv/venv/lib/python3.12/site-packages/anyio/streams/memory.py:114(receive)
+    32000    0.070    0.000    0.159    0.000 /home/rv/venv/lib/python3.12/site-packages/anyio/_backends/_asyncio.py:444(__exit__)
+    34000    0.070    0.000    0.320    0.000 /home/rv/venv/lib/python3.12/site-packages/anyio/_backends/_asyncio.py:751(__aexit__)
+    32000    0.066    0.000    0.111    0.000 /home/rv/venv/lib/python3.12/site-packages/anyio/_backends/_asyncio.py:413(__enter__)
+38000/30000    0.066    0.000    0.112    0.000 /home/rv/venv/lib/python3.12/site-packages/anyio/_backends/_asyncio.py:572(_deliver_cancellation)
+    60000    0.050    0.000    0.101    0.000 /home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/asyncio/locks.py:199(wait)
+    16000    0.049    0.000    0.084    0.000 /home/rv/venv/lib/python3.12/site-packages/anyio/_backends/_asyncio.py:821(task_done)
+    70000    0.048    0.000    1.787    0.000 /home/rv/venv/lib/python3.12/site-packages/starlette/middleware/base.py:139(coro)
+    52000    0.046    0.000    0.573    0.000 /home/rv/venv/lib/python3.12/site-packages/starlette/middleware/base.py:220(__call__)
+   104000    0.045    0.000    0.059    0.000 /home/rv/venv/lib/python3.12/site-packages/anyio/_core/_eventloop.py:205(current_async_library)
+    88000    0.043    0.000    0.156    0.000 /home/rv/venv/lib/python3.12/site-packages/anyio/lowlevel.py:26(checkpoint)
+   104000    0.039    0.000    0.098    0.000 /home/rv/venv/lib/python3.12/site-packages/anyio/_core/_eventloop.py:185(get_async_backend)
+    52000    0.038    0.000    0.293    0.000 /home/rv/venv/lib/python3.12/site-packages/anyio/streams/memory.py:234(send)
+    24000    0.035    0.000    0.363    0.000 /home/rv/venv/lib/python3.12/site-packages/starlette/middleware/base.py:112(call_next)
+   174000    0.033    0.000    0.033    0.000 {method 'add' of 'set' objects}
+    92000    0.032    0.000    0.044    0.000 /home/rv/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/asyncio/tasks.py:653(sleep)
+26000/14000    0.032    0.000    0.564    0.000 /home/rv/venv/lib/python3.12/site-packages/starlette/middleware/base.py:113(receive_or_disconnect)
+    32000    0.030    0.000    0.030    0.000 /home/rv/venv/lib/python3.12/site-packages/anyio/_backends/_asyncio.py:395(__init__)
+    14000    0.029    0.000    0.055    0.000 /home/rv/venv/lib/python3.12/site-packages/anyio/_backends/_asyncio.py:2140(__init__)
+    60000    0.029    0.000    0.133    0.000 /home/rv/venv/lib/python3.12/site-packages/anyio/_backends/_asyncio.py:1800(wait)
+
+
+

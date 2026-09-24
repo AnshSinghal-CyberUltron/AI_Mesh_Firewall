@@ -1,0 +1,19 @@
+## dependency manifests at 2a657fad declaring opentelemetry
+--- gateway/ai_mesh_gateway/pyproject.toml
+25:    "opentelemetry-api>=1.20.0",
+26:    "opentelemetry-sdk>=1.20.0",
+27:    "opentelemetry-exporter-otlp>=1.20.0",
+--- gateway/pyproject.toml
+28:    "opentelemetry-api>=1.20.0",
+29:    "opentelemetry-sdk>=1.20.0",
+30:    "opentelemetry-exporter-otlp>=1.20.0",
+## ALL references to 'opentelemetry' in any .py at 2a657fad (git grep, incl tests)
+## references in non-py (Dockerfiles, compose, sh) at 2a657fad
+2a657fad:gateway/ai_mesh_gateway/pyproject.toml:25:    "opentelemetry-api>=1.20.0",
+2a657fad:gateway/ai_mesh_gateway/pyproject.toml:26:    "opentelemetry-sdk>=1.20.0",
+2a657fad:gateway/ai_mesh_gateway/pyproject.toml:27:    "opentelemetry-exporter-otlp>=1.20.0",
+2a657fad:gateway/pyproject.toml:28:    "opentelemetry-api>=1.20.0",
+2a657fad:gateway/pyproject.toml:29:    "opentelemetry-sdk>=1.20.0",
+2a657fad:gateway/pyproject.toml:30:    "opentelemetry-exporter-otlp>=1.20.0",
+## probes for indirect OTel activation at 2a657fad (litellm otel callback, OTEL_ env, instrument CLI, importlib)
+(end)

@@ -1,0 +1,12 @@
+guard tree == rvproto-frozen-1 (5bef44407b86775f)
+2bf20e0f71e3a41e
+GPU 0: NVIDIA L4 (UUID: GPU-14315bb9-3566-e867-dbe1-79ed443b9dc0)
+4
+               total        used        free      shared  buff/cache   available
+Mem:              15           0          14           0           0          15
+TensorrtExecutionProvider_TRTKernel_graph_main_graph_1000493451896901554_0_0_fp16_sm89.engine
+TensorrtExecutionProvider_TRTKernel_graph_main_graph_1000493451896901554_0_0_fp16_sm89.profile
+TensorrtExecutionProvider_TRTKernel_graph_main_graph_12547553764645166863_0_0_fp16_sm89.engine
+TensorrtExecutionProvider_TRTKernel_graph_main_graph_12547553764645166863_0_0_fp16_sm89.profile
+TensorrtExecutionProvider_cache_sm89.timing
+52a584e944c08e63fc7a20b521a958e425ffd0e5

@@ -1,0 +1,8 @@
+stream=False http=200 disposition=ALLOW x-rv-stages=canon:E,det:E,sem:E,resolve:E,dispatch:E,out:E,audit:E
+   provider-injected output email reached client: True
+   audit phase=input  disposition=ALLOW  deterministic finding statuses=['skipped'] semantic=['executed'] stages=canon:E,det:E,sem:E,resolve:E
+   audit phase=output disposition=ALLOW  deterministic finding statuses=['skipped'] semantic=[] stages=canon:E,det:E,sem:E,resolve:E,dispatch:E,out:E
+stream=True http=200 disposition=ALLOW x-rv-stages=canon:E,det:E,sem:E,resolve:E,dispatch:E,out:E,audit:E
+   provider-injected output email reached client: True
+   audit phase=input  disposition=ALLOW  deterministic finding statuses=['skipped'] semantic=['executed'] stages=canon:E,det:E,sem:E,resolve:E
+   audit phase=output disposition=ALLOW  deterministic finding statuses=['skipped'] semantic=[] stages=canon:E,det:E,sem:E,resolve:E,dispatch:E,out:E,audit:E

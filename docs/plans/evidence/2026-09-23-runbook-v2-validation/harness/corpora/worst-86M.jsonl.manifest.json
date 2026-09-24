@@ -1,0 +1,44 @@
+{
+ "profile": "worst",
+ "n": 2000,
+ "seed": 21,
+ "tokenizer": "Llama-Prompt-Guard-2-86M",
+ "tokenizer_sha256": "3e7e96867c2acdd575f0862c74822e05d1d15b93d9d9a4a2144b1ce83ae3339f",
+ "token_count_definition": "PG2 tokens, no special tokens, of system+'\\n'+user content with a real nonce",
+ "nonce_tokens": {
+  "22M": 15,
+  "86M": 15
+ },
+ "tokens_in": {
+  "min": 1024,
+  "max": 1024,
+  "mean": 1024,
+  "deciles": [
+   1024,
+   1024,
+   1024,
+   1024,
+   1024,
+   1024,
+   1024,
+   1024,
+   1024
+  ]
+ },
+ "max_tokens": {
+  "min": 400,
+  "max": 400,
+  "mean": 400
+ },
+ "classes": {
+  "benign": 2000
+ },
+ "tools_frac": 0.0,
+ "synth_in_text": false,
+ "verification": {
+  "recounted_with_random_nonce": 100,
+  "mismatches": 0
+ },
+ "corpus_sha256": "65623a7815f58172b1b073da638fe5db5bd17caf5b46a01772454c5e4d1f22cc",
+ "benign_source": "/home/contact_cyberultron_com/AI_Mesh_Firewall/tests/detection_corpus/benign.jsonl"
+}

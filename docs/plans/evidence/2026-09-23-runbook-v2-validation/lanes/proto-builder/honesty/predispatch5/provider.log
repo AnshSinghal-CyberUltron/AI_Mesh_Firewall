@@ -1,0 +1,3 @@
+2026/09/23 12:15:41 synthprov df3209a2f020 listening on 127.0.0.1:18080 (ttft=150ms itl=20ms sample-mod=1 hb=100µs gomaxprocs=16)
+2026/09/23 12:17:03 shutting down
+2026/09/23 12:17:03 final stats: requests=260 records=260 blocked=0

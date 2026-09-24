@@ -1,0 +1,21 @@
+# workers=1 cpus=2; rates = 25/50/75/90% of closed-loop saturation (none-grid for none+pure4, base4-grid for base4+v1stack+none)
+w1_none_r318 none 1 2 318
+w1_base4_r318 base4 1 2 318
+w1_v1stack_r318 v1stack 1 2 318
+w1_none_r636 none 1 2 636
+w1_base4_r636 base4 1 2 636
+w1_v1stack_r636 v1stack 1 2 636
+w1_none_r954 none 1 2 954
+w1_base4_r954 base4 1 2 954
+w1_v1stack_r954 v1stack 1 2 954
+w1_none_r1144 none 1 2 1144
+w1_base4_r1144 base4 1 2 1144
+w1_v1stack_r1144 v1stack 1 2 1144
+w1_none_r5168 none 1 2 5168
+w1_pure4_r5168 pure4 1 2 5168
+w1_none_r10337 none 1 2 10337
+w1_pure4_r10337 pure4 1 2 10337
+w1_none_r15505 none 1 2 15505
+w1_pure4_r15505 pure4 1 2 15505
+w1_none_r18606 none 1 2 18606
+w1_pure4_r18606 pure4 1 2 18606

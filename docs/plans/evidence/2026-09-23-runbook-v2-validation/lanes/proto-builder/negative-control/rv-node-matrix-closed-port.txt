@@ -1,0 +1,25 @@
+APIConnectionError: Connection error.
+    at OpenAI.makeRequest (file:///tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/rvproto/tests/e2e/node/node_modules/openai/core.mjs:325:19)
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async main (file:///tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/rvproto/tests/e2e/node/rv_matrix.mjs:49:13) {
+  status: undefined,
+  headers: undefined,
+  request_id: undefined,
+  error: undefined,
+  code: undefined,
+  param: undefined,
+  type: undefined,
+  cause: FetchError: request to http://127.0.0.1:8499/v1/chat/completions failed, reason: connect ECONNREFUSED 127.0.0.1:8499
+      at ClientRequest.<anonymous> (/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/rvproto/tests/e2e/node/node_modules/node-fetch/lib/index.js:1501:11)
+      at ClientRequest.emit (node:events:514:28)
+      at emitErrorEvent (node:_http_client:114:11)
+      at Socket.socketErrorListener (node:_http_client:766:5)
+      at Socket.emit (node:events:526:24)
+      at emitErrorNT (node:internal/streams/destroy:170:8)
+      at emitErrorCloseNT (node:internal/streams/destroy:129:3)
+      at process.processTicksAndRejections (node:internal/process/task_queues:90:21) {
+    type: 'system',
+    errno: 'ECONNREFUSED',
+    code: 'ECONNREFUSED'
+  }
+}

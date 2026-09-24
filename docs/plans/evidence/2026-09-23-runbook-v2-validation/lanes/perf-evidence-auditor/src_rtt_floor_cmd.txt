@@ -1,0 +1,36 @@
+python3 - <<'EOF'
+import math
+def gc(a,b):
+    (la1,lo1),(la2,lo2)=a,b
+    p1,p2=math.radians(la1),math.radians(la2); dl=math.radians(lo2-lo1)
+    return 6371.0*math.acos(min(1,math.sin(p1)*math.sin(p2)+math.cos(p1)*math.cos(p2)*math.cos(dl)))
+pts={'Mumbai asia-south1':(19.0760,72.8777),'Singapore asia-southeast1':(1.3521,103.8198),
+     'Delhi asia-south2':(28.6139,77.2090),'Tokyo asia-northeast1':(35.6762,139.6503),
+     'Jakarta asia-southeast2':(-6.2088,106.8456)}
+m=pts['Mumbai asia-south1']
+print("GREAT-CIRCLE + FIBER RTT FLOOR FROM MUMBAI (c_fiber=2.0e8 m/s, path factor 1.4x great circle)")
+for k,v in pts.items():
+    if k.startswith('Mumbai'): continue
+    d=gc(m,v); fib=d*1.4; ow=fib*1000/2.0e8*1000; print(f"  {k:30s} gc={d:7.0f} km  fiber={fib:7.0f} km  1-way={ow:5.1f} ms  RTT>={2*ow:5.1f} ms")
+print()
+print("PER-L4 COST LADDER (Mumbai, 3yr Resource CUD, $/month):")
+g2={'g2-standard-4':(4,16,1,241.70349567),'g2-standard-8':(8,32,1,291.89948703),
+    'g2-standard-12':(12,48,1,342.09547839),'g2-standard-16':(16,64,1,392.29146975),
+    'g2-standard-24':(24,96,2,684.19095678),'g2-standard-32':(32,128,1,593.07543519),
+    'g2-standard-48':(48,192,4,1368.38191356),'g2-standard-96':(96,384,8,2736.76382712)}
+for n,(c,r,g,p) in g2.items(): print(f"  {n:16s} {c:3d}vCPU {r:4d}GB {g}xL4  ${p:9.2f}/mo  ${p/g:8.2f}/L4  {c//g:3d} vCPU per L4")
+print()
+FLOOR_OD=526.45+292.00+73.00+39.42+18.25
+FLOOR_CUD=273.92+175.20+73.00+39.42+18.25
+print(f"HA store+platform floor: on-demand ${FLOOR_OD:.2f}/mo | 3yr-CUD ${FLOOR_CUD:.2f}/mo")
+print(f"GPU/compute budget left of $5000:  on-demand ${5000-FLOOR_OD:.2f} | 3yr-CUD ${5000-FLOOR_CUD:.2f}")
+print()
+print("EGRESS TRADE (prior [M from V]: $4,866/mo == ~1000 RPS coalesced => $4.866 per RPS-month):")
+for label,gpu in [("8xL4 cheapest (8x g2-standard-4)",8*241.70349567),
+                  ("8xL4 balanced (8x g2-standard-16)",8*392.29146975),
+                  ("8xL4 dense (2x g2-standard-48)",2*1368.38191356),
+                  ("2x RTX PRO 6000 (2x g4-standard-48)",2*1878.1148),
+                  ("CPU-only 128 vCPU (8x c4a-standard-16)",8*245.53696)]:
+    rem=5000-FLOOR_CUD-gpu
+    print(f"  {label:40s} gpu=${gpu:8.2f}  left=${rem:8.2f}  => {rem/4.866:6.0f} RPS of streaming egress")
+EOF

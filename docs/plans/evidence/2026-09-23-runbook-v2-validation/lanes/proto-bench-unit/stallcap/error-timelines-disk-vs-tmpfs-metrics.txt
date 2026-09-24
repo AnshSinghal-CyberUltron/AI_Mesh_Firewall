@@ -1,0 +1,28 @@
+== h22-025: 7 errors
+  11:55:10.006 ph 2 403 type=policy_violation code=blocked_by_policy canon:E,det:E,sem:U,resolve:E,dispatch:S,out:S,audit:E 381.6 ms
+  11:55:10.086 ph 2 403 type=policy_violation code=blocked_by_policy canon:E,det:E,sem:U,resolve:E,dispatch:S,out:S,audit:E 301.4 ms
+  11:55:10.126 ph 2 403 type=policy_violation code=blocked_by_policy canon:E,det:E,sem:U,resolve:E,dispatch:S,out:S,audit:E 261.6 ms
+  11:55:10.246 ph 2 503 type=server_overloaded code=overloaded None 2.3 ms
+  11:55:10.286 ph 2 503 type=server_overloaded code=overloaded None 2.4 ms
+  11:55:10.326 ph 2 503 type=server_overloaded code=overloaded None 3.8 ms
+  11:55:10.366 ph 2 503 type=server_overloaded code=overloaded None 3.9 ms
+== h22-050: 6 errors
+  12:05:10.145 ph 2 403 type=policy_violation code=blocked_by_policy canon:E,det:E,sem:U,resolve:E,dispatch:S,out:S,audit:E 187.4 ms
+  12:05:10.165 ph 2 403 type=policy_violation code=blocked_by_policy canon:E,det:E,sem:U,resolve:E,dispatch:S,out:S,audit:E 167.4 ms
+  12:05:10.245 ph 2 503 type=server_overloaded code=overloaded None 91.9 ms
+  12:05:10.265 ph 2 403 type=policy_violation code=blocked_by_policy canon:E,det:E,sem:U,resolve:E,dispatch:S,out:S,audit:E 67.4 ms
+  12:05:10.305 ph 2 503 type=server_overloaded code=overloaded None 1.7 ms
+  12:05:10.325 ph 2 503 type=server_overloaded code=overloaded None 2.0 ms
+== p22-025: 0 errors
+== p22-050: 0 errors
+== h22-050 unit /proc/stat iowait jiffies per second (all CPUs) around the stall
+  12:05:05 iowait 0 user 233 system 51
+  12:05:06 iowait 0 user 244 system 83
+  12:05:07 iowait 0 user 246 system 43
+  12:05:08 iowait 0 user 223 system 38
+  12:05:09 iowait 2 user 230 system 31
+  12:05:10 iowait 19 user 160 system 27
+  12:05:11 iowait 29 user 138 system 22
+  12:05:12 iowait 0 user 142 system 23
+  12:05:13 iowait 0 user 152 system 17
+  12:05:14 iowait 1 user 166 system 24

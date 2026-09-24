@@ -1,0 +1,1 @@
+2026/09/23 09:22:19 done: scheduled=477040 recorded=477040 ok=477040 errors=map[] drops=0 late_p99=107us max=380us cpu_busy_max=7.2%

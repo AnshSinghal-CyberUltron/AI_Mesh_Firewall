@@ -1,0 +1,271 @@
+---- main.py:5100-5105
+  5100  async def _rewrite_output_response_text_via_router(
+  5101      threat_type: str,
+  5102      detail: str | None,
+  5103      original_text: str | None,
+  5104      base_body: dict | None,
+  5105  ) -> tuple[str, bool]:
+---- main.py:5156-5159
+  5156              "_zs_org_slug": base_body.get("_zs_org_slug", ""),
+  5157          }
+  5158          code, resp = await LLM_ROUTER.acompletion(rewrite_body, None)
+  5159          if code == 200:
+---- main.py:2766-2768
+  2766          rewritten, _rw_reinferred = await _rewrite_output_response_text_via_router(
+  2767              verdict.threat_type, verdict.detail, response_text, body
+  2768          )
+---- main.py:11144-11148
+ 11144              if _out_decision.action == "rewrite":
+ 11145                  LOG.info("Output rewrite triggered (type=%s, user=%s)", output_verdict.threat_type, user_id)
+ 11146                  rewritten_response, _rw_reinferred = await _rewrite_output_response_text_via_router(
+ 11147                      output_verdict.threat_type, output_verdict.detail, response_text, body
+ 11148                  )
+---- main.py:11502-11506
+ 11502              elif resp_check and resp_action == "rewrite":
+ 11503                  resp_categories = resp_check.get("matched_policy_categories") or []
+ 11504                  resp_threat_type = _category_to_threat_type(resp_categories[0]) if resp_categories else "policy_violation"
+ 11505                  rewritten_response, _rw_reinferred = await _rewrite_output_response_text_via_router(
+ 11506                      resp_threat_type, resp_check.get("message"), response_text, body
+---- secure_streaming.py:511-531
+   511              if effective_action == "rewrite":
+   512                  if reason != FlushReason.DONE:
+   513                      # Hold the original — do not release unsafe bytes. Keep
+   514                      # buffers so the final DONE flush sees the full response.
+   515                      LOG.info(
+   516                          "Output guard rewrite pending until stream end "
+   517                          "(type=%s, flush=%s, request_id=%s)",
+   518                          verdict.threat_type,
+   519                          reason.value,
+   520                          self._request_id,
+   521                      )
+   522                      return
+   523                  try:
+   524                      from output_guard import rewrite_output_response_text
+   525                  except ImportError:
+   526                      from .output_guard import rewrite_output_response_text
+   527                  rewritten = rewrite_output_response_text(
+   528                      verdict.threat_type or "",
+   529                      getattr(verdict, "detail", None),
+   530                      original_text=full_text,
+   531                  )
+---- llm_judge.py:83-84
+    83          self._model = model or os.getenv("BEDROCK_MODEL", "global.anthropic.claude-haiku-4-5-20251001-v1:0")
+    84          self._region = os.getenv("BEDROCK_REGION", "ap-south-1")
+---- llm_judge.py:142-142
+   142              _user_content = f"Analyze this input for prompt injection:\n\n{text[:2000]}"
+---- llm_judge.py:166-171
+   166              response = client.invoke_model(
+   167                  modelId=self._model,
+   168                  body=json.dumps(payload),
+   169                  contentType="application/json",
+   170                  accept="application/json",
+   171              )
+---- llm_judge.py:213-221
+   213          except (json.JSONDecodeError, KeyError, TypeError) as e:
+   214              latency = (time.perf_counter() - start) * 1000
+   215              LOG.warning("LLM Judge Bedrock returned unparseable response (%.1fms): %s", latency, e)
+   216              return self._regex_fallback(text, latency)
+   217  
+   218          except Exception as e:
+   219              latency = (time.perf_counter() - start) * 1000
+   220              LOG.error("LLM Judge Bedrock call FAILED (%.1fms): %s — falling back to regex", latency, e)
+   221              return self._regex_fallback(text, latency)
+---- rag_pipeline/query_stage.py:452-454
+   452          if self._llm_judge is not None and self._llm_judge.enabled:
+   453              try:
+   454                  judge_v = await self._llm_judge.judge(inp.query_text)
+---- main.py:6672-6677
+  6672          # ── New detection layers ──
+  6673          _llm_judge = None
+  6674          if CONFIG.get("llm_judge_enabled", True):
+  6675              from llm_judge import LLMJudge
+  6676              _bedrock_model = CONFIG.get("llm_judge_model") or os.getenv("BEDROCK_MODEL", "global.anthropic.claude-haiku-4-5-20251001-v1:0")
+  6677              _llm_judge = LLMJudge(model=_bedrock_model)
+---- config_sync.py:367-367
+   367      async def reload_models_now(self, org_slug: Any = _UNSET) -> None:
+---- config_sync.py:400-410
+   400          # Per-request path passed an explicit but empty org → do not scan and
+   401          # merge every org's model configs (the fan-out amplifier). The global
+   402          # scan is reserved for the no-argument startup load.
+   403          if org_slug is not _UNSET and not org_slug:
+   404              return
+   405          effective_org = "" if org_slug is _UNSET else org_slug
+   406          lock = self._reload_lock_for(str(effective_org or ""))
+   407          async with lock:
+   408              try:
+   409                  client = self._get_redis_client()
+   410                  await self._reload_llm_models(client, org_slug=effective_org)
+---- config_sync.py:419-424
+   419      def _reload_lock_for(self, org_key: str) -> asyncio.Lock:
+   420          lock = self._reload_locks.get(org_key)
+   421          if lock is None:
+   422              lock = asyncio.Lock()
+   423              self._reload_locks[org_key] = lock
+   424          return lock
+---- config_sync.py:450-465
+   450      @staticmethod
+   451      def _merge_org_into_router(llm_router: Any, slug: str, org_models: list) -> list:
+   452          """Keep other orgs' LiteLLM deployments; replace this org's.
+   453  
+   454          Per-org ``reload_models_now(org_slug=…)`` must not rebuild the router
+   455          from only that tenant's models (that dropped every other org → 422
+   456          ``no_provider_configured`` under concurrent chat).
+   457          """
+   458          existing: list = []
+   459          inner = getattr(llm_router, "_router", None)
+   460          model_list = getattr(inner, "model_list", None) if inner is not None else None
+   461          if isinstance(model_list, list):
+   462              for entry in model_list:
+   463                  if isinstance(entry, dict) and entry.get("_zs_org") != slug:
+   464                      existing.append(dict(entry))
+   465          return existing + list(org_models)
+---- config_sync.py:765-773
+   765              from ai_mesh_gateway import main as gateway_main
+   766  
+   767              if gateway_main.LLM_ROUTER is not None:
+   768                  to_load = all_models
+   769                  if org_slug:
+   770                      to_load = self._merge_org_into_router(
+   771                          gateway_main.LLM_ROUTER, str(org_slug), all_models
+   772                      )
+   773                  gateway_main.LLM_ROUTER.reload_models(to_load)
+---- main.py:7703-7707
+  7703          org_config = CONFIG_SYNC.get_config(org_slug) if CONFIG_SYNC else CONFIG
+  7704          routing_models = CONFIG_SYNC.get_model_routing(org_slug) if CONFIG_SYNC else []
+  7705          if not routing_models and CONFIG_SYNC is not None:
+  7706              await CONFIG_SYNC.reload_models_now(org_slug=org_slug)
+  7707              routing_models = CONFIG_SYNC.get_model_routing(org_slug)
+---- main.py:12751-12756
+ 12751          if auth_ctx is not None and CONFIG_SYNC is not None:
+ 12752              _emb_routing = CONFIG_SYNC.get_model_routing(org_slug)
+ 12753              if not _emb_routing:
+ 12754                  # cold-cache self-heal (same as the chat path)
+ 12755                  await CONFIG_SYNC.reload_models_now(org_slug=org_slug)
+ 12756                  _emb_routing = CONFIG_SYNC.get_model_routing(org_slug)
+---- main.py:138-138
+   138      app.add_middleware(AuthMiddleware, redis_url=_redis_url)
+---- middleware.py:204-205
+   204      try:
+   205          raw_payload = await redis_client.get(redis_key)
+---- main.py:7083-7088
+  7083      METRICS["total_requests"] += 1
+  7084      METRICS["active_connections"] += 1
+  7085      start = time.perf_counter()
+  7086      from pipeline_trace import PipelineStageTimer, finalize_stage_metrics
+  7087  
+  7088      _ptimer = PipelineStageTimer(start)
+---- main.py:7130-7133
+  7130      try:
+  7131          try:
+  7132              raw_body = await request.json()
+  7133          except Exception:
+---- main.py:7690-7691
+  7690          auth_ctx = getattr(request.state, "auth_context", None)
+  7691          stage_metrics["auth_ms"] = _ptimer.mark_segment_end("auth")
+---- stream_orchestration.py:120-131
+   120      @property
+   121      def ttft_ms(self) -> float:
+   122          if self.first_token_ts <= 0 or self.provider_start_ts <= 0:
+   123              return 0.0
+   124          return (self.first_token_ts - self.provider_start_ts) * 1000
+   125  
+   126      @property
+   127      def duration_ms(self) -> float:
+   128          if self.provider_start_ts <= 0:
+   129              return 0.0
+   130          end = time.perf_counter()
+   131          return (end - self.provider_start_ts) * 1000
+---- stream_orchestration.py:681-683
+   681          sm = dict(kwargs.get("stage_metrics") or {})
+   682          if metrics.ttft_ms > 0 and metrics.duration_ms > metrics.ttft_ms:
+   683              sm.setdefault("model_output_ms", round(metrics.duration_ms - metrics.ttft_ms, 1))
+---- stream_orchestration.py:796-802
+   796              _stage_sum = round(
+   797                  sum(float(s.get("latency_ms") or 0) for s in (pt.get("stages") or []) if isinstance(s, dict)),
+   798                  1,
+   799              )
+   800              _overhead = round(max(0.0, elapsed_ms - _stage_sum), 1)
+   801              pt["stage_latency_sum_ms"] = _stage_sum
+   802              pt["overhead_ms"] = _overhead
+---- pipeline_trace.py:94-98
+    94      wall = round((time.perf_counter() - wall_start) * 1000, 1)
+    95      m["total_ms"] = wall
+    96      stage_sum = sum(m.get(k) or 0.0 for k in _STAGE_METRIC_KEYS)
+    97      telemetry = m.get("telemetry_enqueue_ms") or 0.0
+    98      m["overhead_ms"] = round(max(0.0, wall - stage_sum - telemetry), 1)
+---- main.py:5300-5301
+  5300      Tier-1 only (no ``scan_prompt_with_tier2``): embeddings are batched/large, so
+  5301      the per-item ML round-trip of Tier-2 is intentionally NOT run here.
+---- main.py:5314-5316
+  5314      compiled_policies = _embedding_enabled_compiled_policies(org_slug)
+  5315      if not compiled_policies:
+  5316          return texts, None
+---- main.py:12972-12972
+ 12972          _emb_redacted, _emb_block = await _scan_redact_embedding_inputs(_emb_texts, org_config, org_slug)
+---- vector_routes.py:210-215
+   210  _RAG_GUARDRAIL_KEYS = (
+   211      "prompt_injection_threshold",
+   212      "prompt_rewrite_threshold",
+   213      "prompt_downgrade_threshold",
+   214      "input_scan_enabled",
+   215  )
+---- vector_routes.py:647-647
+   647          org_slug = middleware_auth.org_slug if middleware_auth else "default"
+---- vector_routes.py:659-670
+   659              rag_verdict = await RAG_PIPELINE.execute(
+   660                  query_text=query_text,
+   661                  collection_name=collection_name,
+   662                  project_id=str(project_id),
+   663                  vector_db_type=provider_type,
+   664                  n_results=n_results,
+   665                  where_filter=where_filter,
+   666                  # Build a DICT policy (see _build_rag_policy): passing the raw
+   667                  # POLICY_SYNC.get_policies() list here raised AttributeError in
+   668                  # the pipeline. The pipeline resolves the org's compiled policies
+   669                  # internally from ``_org_slug``.
+   670                  policy=_build_rag_policy(org_slug),
+---- vector_routes.py:752-756
+   752          return JSONResponse(
+   753              status_code=status.HTTP_200_OK,
+   754              content={
+   755                  "documents": rag_verdict.documents or [],
+   756                  "x-zeroshield": {
+---- main.py:13254-13254
+ 13254  _RAG_EGRESS_REQUIRES_OPERATOR_SELECTION = False
+---- main.py:14090-14092
+ 14090          # ── E11: client-egress retrieved-context PII backstop ──
+ 14091          # The generation-time PII backstop (``_redact_retrieved_pii``) lives in the
+ 14092          # GeneratorStage, which is gated by ``rag_generator_enabled`` (default OFF).
+---- main.py:14107-14108
+ 14107          # ── E11b: UNCONDITIONAL client-egress indirect-injection backstop ──
+ 14108          # Retrieved-document injection ("ignore all previous instructions",
+---- main.py:14163-14167
+ 14163              CONTEXT_GUARD is not None
+ 14164              and isinstance(_egress_documents, list)
+ 14165              and (_egress_controls_selected or not _RAG_EGRESS_REQUIRES_OPERATOR_SELECTION)
+ 14166          ):
+ 14167              _kept_after_injection: list = []
+---- main.py:14183-14183
+ 14183                              CONTEXT_GUARD._scan_single_document_sync, _scan_text
+---- main.py:14272-14278
+ 14272          ):
+ 14273              for _doc in _egress_documents:
+ 14274                  if not isinstance(_doc, dict):
+ 14275                      continue
+ 14276                  _content = _doc.get("content")
+ 14277                  if isinstance(_content, str) and _content:
+ 14278                      _doc["content"] = _egress_redact_pii(_content)
+---- config.py:175-175
+   175      rag_enabled = get_env("GATEWAY_RAG_ENABLED", "false").lower() in ("true", "1", "yes")
+---- config.py:181-182
+   181      rag_ranker_enabled = get_env("GATEWAY_RAG_RANKER_ENABLED", "false").lower() in ("true", "1", "yes")
+   182      rag_generator_enabled = get_env("GATEWAY_RAG_GENERATOR_ENABLED", "false").lower() in ("true", "1", "yes")
+---- rag_pipeline/pipeline.py:223-224
+   223          rag_ranker_on = bool(self._config.get("rag_ranker_enabled", False))
+   224          rag_generator_on = bool(self._config.get("rag_generator_enabled", False))
+---- rag_pipeline/pipeline.py:490-494
+   490      def _get_compiled_policies(self, org_slug: str = "") -> list[dict]:
+   491          """Retrieve compiled policy entries from the sync cache for an org."""
+   492          if self._policy_sync is None:
+   493              return []
+   494          slug = (org_slug or "").strip() or "default"

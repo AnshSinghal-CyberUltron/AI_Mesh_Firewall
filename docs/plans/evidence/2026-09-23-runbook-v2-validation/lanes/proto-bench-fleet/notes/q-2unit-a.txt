@@ -1,0 +1,10 @@
+f1u-075 75 UNITS=rv-pbf-unit-2 LABEL=A-1unit-ladder-fine
+EDGE 2unit 10.146.0.2:8400,10.146.0.5:8400
+CMD ssh -i /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/gcp/rv_ed25519 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR rv@10.146.0.13 'redis-cli DEL rv:audit:org-a; redis-cli INFO memory | grep used_memory_human'
+f2u-140 140 UNITS="rv-pbf-unit-2 rv-pbf-unit-3" LABEL=A-2unit-ladder
+f2u-150 150 UNITS="rv-pbf-unit-2 rv-pbf-unit-3" LABEL=A-2unit-ladder
+f2u-160 160 UNITS="rv-pbf-unit-2 rv-pbf-unit-3" LABEL=A-2unit-ladder
+EDGE 1unit 10.146.0.2:8400
+f1u-075-r2 75 UNITS=rv-pbf-unit-2 LABEL=A-1unit-knee-repeat
+f1u-075-r3 75 UNITS=rv-pbf-unit-2 LABEL=A-1unit-knee-repeat
+EDGE 2unit 10.146.0.2:8400,10.146.0.5:8400

@@ -1,0 +1,15 @@
+Output guard blocked streaming content (type=credential, detail=credential (test), flush=boundary)
+=== A) streaming BLOCK after earlier flushes ===
+upstream tokens=300, secret at token 200; guard calls=19
+bytes RELEASED to client before error frame = 1211 (94% of the 1292 bytes preceding the secret)
+error frame: {"message": "Response blocked: credential detected in output.", "type": "output_blocked", "code": "output_blocked"}
+secret leaked? False | last 60 released chars: 'eport shows steady growth across all regions this year. The '
+=== B) guard passes per stream (STREAM_FLUSH_BYTES=160) ===
+300 x 6-byte deltas, no sentence boundary        bytes= 1800 guard calls= 12 bytes scanned=2526
+300 prose tokens (period every 12 words)         bytes= 1938 guard calls= 28 bytes scanned=3747
+300 markdown tokens (newline every 8 tokens)     bytes= 1500 guard calls= 38 bytes scanned=3880
+=== C) rewrite verdict mid-stream: buffer never cleared until DONE ===
+n=  300 deltas (  1806 B): guard calls=   12 max buffer scanned=  1806 B  total bytes re-scanned=    12498  first 5 lengths=[162, 324, 486, 648, 810] last 3=[1620, 1782, 1806]  client got 71 B at DONE
+n= 1000 deltas (  6006 B): guard calls=  345 max buffer scanned=  6006 B  total bytes re-scanned=  1670244  first 5 lengths=[162, 324, 486, 648, 810] last 3=[6000, 6006, 6006]  client got 71 B at DONE
+n= 2000 deltas ( 12006 B): guard calls= 1345 max buffer scanned= 12006 B  total bytes re-scanned= 10685244  first 5 lengths=[162, 324, 486, 648, 810] last 3=[12000, 12006, 12006]  client got 71 B at DONE
+n= 4000 deltas ( 24006 B): guard calls= 3345 max buffer scanned= 24006 B  total bytes re-scanned= 46715244  first 5 lengths=[162, 324, 486, 648, 810] last 3=[24000, 24006, 24006]  client got 71 B at DONE

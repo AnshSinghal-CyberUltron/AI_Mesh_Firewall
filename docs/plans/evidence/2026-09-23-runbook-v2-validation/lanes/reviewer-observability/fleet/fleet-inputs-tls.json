@@ -1,0 +1,23 @@
+{
+ "units": {
+  "g2-standard-24": {
+   "capacity_rps": 70,
+   "source": "f1u-070,-r2,-r3 PASS; f1u-080 FAIL"
+  },
+  "g2-standard-8": {
+   "capacity_rps": 60,
+   "source": "f8-060 PASS (repeats pending); f8-070 FAIL"
+  },
+  "g2-standard-4": {
+   "capacity_rps": 35,
+   "source": "f4-035 PASS (repeats pending); f4-040 FAIL"
+  }
+ },
+ "bytes_per_qualified_request": {
+  "lb_to_client": 60705,
+  "client_to_lb": 8629,
+  "unit_to_provider": 9223,
+  "source": "f1u-070 edge iptables ACCT per offered x offered/qualified 1.015 + reviewer TLS1.3 record overhead estimate (22 B x 227 events x 0.689 SSE share)"
+ },
+ "offered_per_qualified": 1.0
+}

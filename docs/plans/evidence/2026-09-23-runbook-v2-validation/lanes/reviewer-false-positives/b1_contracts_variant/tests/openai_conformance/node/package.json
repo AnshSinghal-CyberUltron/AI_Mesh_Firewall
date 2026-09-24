@@ -1,0 +1,11 @@
+{
+  "name": "gw01-openai-conformance-node",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "openai": "4.104.0"
+  }
+}

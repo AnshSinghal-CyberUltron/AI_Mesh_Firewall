@@ -1,0 +1,78 @@
+{
+ "run": "f1u-070",
+ "offered": 21000,
+ "body_B_per_offered": 46861.2,
+ "body_B_mean_by_kind": {
+  "sse": 67353.3,
+  "json": 1432.8,
+  "http_403": 141.0,
+  "http_503": 131.0
+ },
+ "count_by_kind": {
+  "sse": 14478,
+  "json": 6212,
+  "http_403": 305,
+  "http_503": 5
+ },
+ "sse_events_per_response": 225.8,
+ "sse_tokens_out_mean": 224.6,
+ "sse_body_B_per_output_token": 299.9,
+ "edge_to_clients_IP_B_per_offered": 56368.9,
+ "edge_to_clients_pkts_per_offered": 155.2,
+ "IP_minus_body_B": 9507.7,
+ "tcpip_hdr_B_at_52B_per_pkt": 8068.4,
+ "residual_B_(http_hdr+chunk_framing)": 1439.2,
+ "IP_over_body": 1.203
+}
+{
+ "run": "f2u-080",
+ "offered": 24000,
+ "body_B_per_offered": 46777.7,
+ "body_B_mean_by_kind": {
+  "http_403": 141.0,
+  "json": 1433.2,
+  "sse": 67303.1,
+  "http_503": 131.0
+ },
+ "count_by_kind": {
+  "http_403": 383,
+  "json": 7087,
+  "sse": 16529,
+  "http_503": 1
+ },
+ "sse_events_per_response": 225.7,
+ "sse_tokens_out_mean": 224.5,
+ "sse_body_B_per_output_token": 299.8,
+ "edge_to_clients_IP_B_per_offered": 56265.6,
+ "edge_to_clients_pkts_per_offered": 154.9,
+ "IP_minus_body_B": 9487.9,
+ "tcpip_hdr_B_at_52B_per_pkt": 8053.8,
+ "residual_B_(http_hdr+chunk_framing)": 1434.1,
+ "IP_over_body": 1.203
+}
+{
+ "run": "fleet-090",
+ "offered": 27000,
+ "body_B_per_offered": 46793.6,
+ "body_B_mean_by_kind": {
+  "sse": 67722.0,
+  "json": 1420.6,
+  "http_403": 141.0,
+  "http_503": 131.0
+ },
+ "count_by_kind": {
+  "sse": 18489,
+  "json": 7906,
+  "http_403": 495,
+  "http_503": 110
+ },
+ "sse_events_per_response": 227.1,
+ "sse_tokens_out_mean": 225.9,
+ "sse_body_B_per_output_token": 299.8,
+ "edge_to_clients_IP_B_per_offered": 56241.4,
+ "edge_to_clients_pkts_per_offered": 154.8,
+ "IP_minus_body_B": 9447.8,
+ "tcpip_hdr_B_at_52B_per_pkt": 8049.5,
+ "residual_B_(http_hdr+chunk_framing)": 1398.2,
+ "IP_over_body": 1.202
+}

@@ -1,0 +1,239 @@
+..FFFF..                                                                 [100%]
+=================================== FAILURES ===================================
+___________________ test_live_responses_stream_typed_events ____________________
+
+live_url = 'http://127.0.0.1:8400'
+
+    @pytest.mark.asyncio
+    async def test_live_responses_stream_typed_events(live_url):
+        """Over a real socket: typed Responses events arrive in order."""
+        c = _client(live_url)
+        try:
+>           stream = await c.responses.create(model="gpt-4o-mini", input="stream", stream=True)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+test_live_uvicorn_on_rvproto.py:125: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/openai/resources/responses/responses.py:2626: in create
+    return await self._post(
+/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/openai/_base_client.py:1931: in post
+    return await self.request(cast_to, opts, stream=stream, stream_cls=stream_cls)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <openai.AsyncOpenAI object at 0x797cd752f250>
+cast_to = <class 'openai.types.responses.response.Response'>
+options = FinalRequestOptions(method='post', url='/responses', params={}, headers=NOT_GIVEN, max_retries=NOT_GIVEN, timeout=NOT_...nt_and_data=None, content=None, json_data={'input': 'stream', 'model': 'gpt-4o-mini', 'stream': True}, extra_json=None)
+
+    async def request(
+        self,
+        cast_to: Type[ResponseT],
+        options: FinalRequestOptions,
+        *,
+        stream: bool = False,
+        stream_cls: type[_AsyncStreamT] | None = None,
+    ) -> ResponseT | _AsyncStreamT:
+        if self._platform is None:
+            # `get_platform` can make blocking IO calls so we
+            # execute it earlier while we are in an async context
+            self._platform = await asyncify(get_platform)()
+    
+        cast_to = self._maybe_override_cast_to(cast_to, options)
+    
+        # create a copy of the options we were given so that if the
+        # options are mutated later & we then retry, the retries are
+        # given the original options
+        input_options = model_copy(options)
+        if input_options.idempotency_key is None and input_options.method.lower() != "get":
+            # ensure the idempotency key is reused between requests
+            input_options.idempotency_key = self._idempotency_key()
+    
+        response: httpx.Response | None = None
+        max_retries = input_options.get_max_retries(self.max_retries)
+    
+        retries_taken = 0
+        for retries_taken in range(max_retries + 1):
+            options = model_copy(input_options)
+            options = await self._prepare_options(options)
+    
+            remaining_retries = max_retries - retries_taken
+            request = self._build_request(options, retries_taken=retries_taken)
+            await self._prepare_request(request)
+    
+            kwargs: HttpxSendArgs = {}
+            if self.custom_auth is not None:
+                kwargs["auth"] = self.custom_auth
+    
+            if options.follow_redirects is not None:
+                kwargs["follow_redirects"] = options.follow_redirects
+    
+            log.debug("Sending HTTP Request: %s %s", request.method, request.url)
+    
+            response = None
+            try:
+                response = await self._send_request(
+                    request,
+                    stream=stream or self._should_stream_response_body(request=request),
+                    **kwargs,
+                )
+            except httpx.TimeoutException as err:
+                log.debug("Encountered httpx.TimeoutException", exc_info=True)
+    
+                if remaining_retries > 0:
+                    await self._sleep_for_retry(
+                        retries_taken=retries_taken,
+                        max_retries=max_retries,
+                        options=input_options,
+                        response=None,
+                    )
+                    continue
+    
+                log.debug("Raising timeout error")
+                raise APITimeoutError(request=request) from err
+            except OpenAIError as err:
+                # Propagate OpenAIErrors as-is, without retrying or wrapping in APIConnectionError
+                raise err
+            except Exception as err:
+                log.debug("Encountered Exception", exc_info=True)
+    
+                if remaining_retries > 0:
+                    await self._sleep_for_retry(
+                        retries_taken=retries_taken,
+                        max_retries=max_retries,
+                        options=input_options,
+                        response=None,
+                    )
+                    continue
+    
+                log.debug("Raising connection error")
+                raise APIConnectionError(request=request) from err
+    
+            log.debug(
+                'HTTP Response: %s %s "%i %s" %s',
+                request.method,
+                request.url,
+                response.status_code,
+                response.reason_phrase,
+                response.headers,
+            )
+            log.debug("request_id: %s", response.headers.get("x-request-id"))
+    
+            try:
+                response.raise_for_status()
+            except httpx.HTTPStatusError as err:  # thrown on 4xx and 5xx status code
+                log.debug("Encountered httpx.HTTPStatusError", exc_info=True)
+    
+                if remaining_retries > 0 and self._should_retry(err.response):
+                    await err.response.aclose()
+                    await self._sleep_for_retry(
+                        retries_taken=retries_taken,
+                        max_retries=max_retries,
+                        options=input_options,
+                        response=response,
+                    )
+                    continue
+    
+                # If the response is streamed then we need to explicitly read the response
+                # to completion before attempting to access the response text.
+                if not err.response.is_closed:
+                    await err.response.aread()
+    
+                log.debug("Re-raising status error")
+>               raise self._make_status_error_from_response(err.response) from None
+E               openai.NotFoundError: Error code: 404 - {'error': {'message': 'Unknown request URL: /v1/responses', 'type': 'invalid_request_error', 'param': None, 'code': 'unknown_url'}}
+
+/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/openai/_base_client.py:1716: NotFoundError
+___________________ test_live_block_raises_permission_denied ___________________
+
+live_url = 'http://127.0.0.1:8400'
+
+    @pytest.mark.asyncio
+    async def test_live_block_raises_permission_denied(live_url):
+        c = _client(live_url)
+        try:
+            with pytest.raises(openai.APIStatusError) as exc:
+                await c.chat.completions.create(model="gpt-4o-mini", messages=[{"role": "user", "content": INJECTION}])
+            # D-a content-filter contract (GATEWAY_BLOCK_STATUS default 400): a content
+            # block surfaces as 400 content_filter over the LIVE socket too (block still
+            # happens). request_id (x-request-id header) is still populated.
+>           assert exc.value.status_code == 400
+E           assert 403 == 400
+E            +  where 403 = PermissionDeniedError("Error code: 403 - {'error': {'message': 'Request blocked by organization policy (A.inj.sem).', 'type': 'policy_violation', 'param': None, 'code': 'blocked_by_policy'}}").status_code
+E            +    where PermissionDeniedError("Error code: 403 - {'error': {'message': 'Request blocked by organization policy (A.inj.sem).', 'type': 'policy_violation', 'param': None, 'code': 'blocked_by_policy'}}") = <ExceptionInfo PermissionDeniedError("Error code: 403 - {'error': {'message': 'Request blocked by organization policy (A.inj.sem).', 'type': 'policy_violation', 'param': None, 'code': 'blocked_by_policy'}}") tblen=4>.value
+
+test_live_uvicorn_on_rvproto.py:143: AssertionError
+_____________ test_live_request_id_header_present_and_matches_body _____________
+
+live_url = 'http://127.0.0.1:8400'
+
+    @pytest.mark.asyncio
+    async def test_live_request_id_header_present_and_matches_body(live_url):
+        async with httpx.AsyncClient(base_url=live_url, headers=_AUTH) as rc:
+            r = await rc.post("/v1/chat/completions", json={"model": "gpt-4o-mini", "messages": [{"role": "user", "content": "hi"}]})
+        assert r.status_code == 200
+        zs = r.json().get("zeroshield") or {}
+>       assert r.headers.get("x-request-id") == zs.get("request_id")
+E       AssertionError: assert '19f86d95703e475a8715dddea6b5d1ce' == None
+E        +  where '19f86d95703e475a8715dddea6b5d1ce' = get('x-request-id')
+E        +    where get = Headers({'content-type': 'application/json', 'content-length': '299', 'x-rv-disposition': 'ALLOW', 'x-rv-plan-version'...sem:E,resolve:E,dispatch:E,out:E,audit:E', 'x-rv-output': 'ALLOW', 'x-request-id': '19f86d95703e475a8715dddea6b5d1ce'}).get
+E        +      where Headers({'content-type': 'application/json', 'content-length': '299', 'x-rv-disposition': 'ALLOW', 'x-rv-plan-version'...sem:E,resolve:E,dispatch:E,out:E,audit:E', 'x-rv-output': 'ALLOW', 'x-request-id': '19f86d95703e475a8715dddea6b5d1ce'}) = <Response [200 OK]>.headers
+E        +  and   None = <built-in method get of dict object at 0x797cd5df41c0>('request_id')
+E        +    where <built-in method get of dict object at 0x797cd5df41c0> = {}.get
+
+test_live_uvicorn_on_rvproto.py:156: AssertionError
+___________________ test_live_blocked_stream_is_json_not_sse ___________________
+
+live_url = 'http://127.0.0.1:8400'
+
+    @pytest.mark.asyncio
+    async def test_live_blocked_stream_is_json_not_sse(live_url):
+        """v5: a stream=true request blocked at input returns JSON 400, never a corrupt SSE body."""
+        async with httpx.AsyncClient(base_url=live_url, headers=_AUTH) as rc:
+            r = await rc.post("/v1/chat/completions",
+                              json={"model": "gpt-4o-mini", "messages": [{"role": "user", "content": INJECTION}], "stream": True})
+>       assert r.status_code == 400
+E       assert 403 == 400
+E        +  where 403 = <Response [403 Forbidden]>.status_code
+
+test_live_uvicorn_on_rvproto.py:165: AssertionError
+=============================== warnings summary ===============================
+../../../../../../../home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/main.py:6350
+  /home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/main.py:6350: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("startup")
+
+../../../../../../../home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/fastapi/applications.py:4598
+../../../../../../../home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/fastapi/applications.py:4598
+  /home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/fastapi/applications.py:4598: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    return self.router.on_event(event_type)  # ty: ignore[deprecated]
+
+../../../../../../../home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/main.py:6881
+  /home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/main.py:6881: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("shutdown")
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+==================================== PASSES ====================================
+=========================== short test summary info ============================
+PASSED test_live_uvicorn_on_rvproto.py::test_live_chat_non_stream
+PASSED test_live_uvicorn_on_rvproto.py::test_live_chat_stream_chunks_and_done
+PASSED test_live_uvicorn_on_rvproto.py::test_live_client_disconnect_midstream_then_server_responsive
+PASSED test_live_uvicorn_on_rvproto.py::test_live_zero_token_scan_only_no_hang
+FAILED test_live_uvicorn_on_rvproto.py::test_live_responses_stream_typed_events
+FAILED test_live_uvicorn_on_rvproto.py::test_live_block_raises_permission_denied
+FAILED test_live_uvicorn_on_rvproto.py::test_live_request_id_header_present_and_matches_body
+FAILED test_live_uvicorn_on_rvproto.py::test_live_blocked_stream_is_json_not_sse
+4 failed, 4 passed, 4 warnings in 1.67s

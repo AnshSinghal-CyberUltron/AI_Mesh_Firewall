@@ -1,0 +1,12 @@
+21:03:56 === E1 (e) 1gw+1g Poisson, frozen build (guard-6)
+rv-split-gw-4: GATEWAY NODE READY after 3s: 12/12 workers | {"ready":true,"guard":{"ready":true,"backend":"remote(owner)","model_hash":"2bf20e0f71e3a41e9e8cc4e602e08c142855bcce0cc73e0b65000d816d70877c","detail":"owners 1/1 connected, share 1/12: 10.160.0.61:7070 pid=1661 host=rv-split-guard-6 tokens_per_s=246360","erro
+21:04:01 START s1p-098 rate=98 corpus=headline-22M.jsonl env=[OLG_EXTRA=-sample-mod 1 -arrival poisson LABEL=e_1gw1g_poisson_zone_b GUARDS=rv-split-guard-6 GWS=rv-split-gw-4 PROVS=rv-split-prov-3 LGS=rv-split-lg-3]
+21:06:33 chainE.sh stopped (controller final list: skip E2 li12-373); s1p-098 step left running; continued by chainE1.sh
+21:11:54 s1p-098 step finished: PASS q/s 96.73 C4 18.997 infra% 0.0135 drops 0 json 16.983 sse-total 17.295
+21:11:54 SKIP s1p-098 (exists): PASS q/s 96.73 C4 18.997 infra% 0.0135 drops 0 json 16.983 sse-total 17.295
+21:11:54 START s1p-098-r2 rate=98 corpus=headline-22M.jsonl env=[OLG_EXTRA=-sample-mod 1 -arrival poisson LABEL=e_1gw1g_poisson_zone_b GUARDS=rv-split-guard-6 GWS=rv-split-gw-4 PROVS=rv-split-prov-3 LGS=rv-split-lg-3]
+21:19:38 END s1p-098-r2 PASS q/s 96.84 C4 18.878 infra% 0.0169 drops 0 json 16.897 sse-total 17.233
+21:19:38 START s1p-098-r3 rate=98 corpus=headline-22M.jsonl env=[OLG_EXTRA=-sample-mod 1 -arrival poisson LABEL=e_1gw1g_poisson_zone_b GUARDS=rv-split-guard-6 GWS=rv-split-gw-4 PROVS=rv-split-prov-3 LGS=rv-split-lg-3]
+21:27:22 END s1p-098-r3 PASS q/s 96.84 C4 19.519 infra% 0.0135 drops 0 json 16.847 sse-total 17.195
+21:27:22 KNEE s1p = 98 (3/3 PASS)
+21:27:22 CHAINE1 DONE

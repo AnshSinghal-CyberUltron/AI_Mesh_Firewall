@@ -1,0 +1,6 @@
+gateway non-test files: 77
+G_gateway    1341
+G_trace      137
+G_telemetry  23
+C_ee         60
+C_feed       247

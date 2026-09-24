@@ -1,0 +1,38 @@
+# Harness analysis (direct, policy=enforce) — PASS
+
+| check | result |
+|---|---|
+| zero_schedule_drops | PASS |
+| zero_errors | PASS |
+| provider_p99_sched_err_within_tol | PASS |
+| loadgen_cpu_max_lt_limit | PASS |
+| run_valid | PASS |
+| all_joined | PASS |
+
+- offered: 240 over 60 s = 4.0 req/s (configured 4.0)
+- qualified: 240 (4.0 req/s); expected blocks: 0; errors: 0 (rate 0.0)
+- error reasons: {}
+- safety failures: 0 {}
+- schedule drops (>5.0 ms): 0; lateness ms: n=240 p50=0.1095 p90=0.1251 p99=0.1887 p99.9=0.2564 max=0.2564 mean=0.1084
+- join: {'joined': 240, 'by_nonce_fallback': 0, 'provider_records': 260, 'provider_rids_with_multiple_calls': 0, 'provider_orphans': None}
+- valid: True []
+
+| metric (ms) | distribution |
+|---|---|
+| T_addon_total | n=240 p50=0.1508 p90=0.2001 p99=0.2439 p99.9=0.3078 max=0.3078 mean=0.1593 |
+| T_addon_first | n=240 p50=0.1641 p90=0.2063 p99=0.2439 p99.9=0.3078 max=0.3078 mean=0.1695 |
+| T_release_lag_max | n=240 p50=0.1825 p90=0.2208 p99=0.3575 p99.9=0.5943 max=0.5943 mean=0.1901 |
+| T_release_lag_max_arrival | n=240 p50=0.1825 p90=0.2208 p99=0.3575 p99.9=0.5943 max=0.5943 mean=0.1901 |
+| T_fw_addon | n=240 p50=0.1825 p90=0.2208 p99=0.3575 p99.9=0.5943 max=0.5943 mean=0.1901 |
+| T_fw_addon_sse | n=168 p50=0.175 p90=0.2187 p99=0.3856 p99.9=0.5943 max=0.5943 mean=0.1875 |
+| T_fw_addon_json | n=72 p50=0.1898 p90=0.2245 p99=0.3078 p99.9=0.3078 max=0.3078 mean=0.1961 |
+| client_ttft_sse | n=168 p50=150.2002 p90=150.2376 p99=150.2955 p99.9=150.336 max=150.336 mean=150.2046 |
+| provider_sched_err_last | n=240 p50=0.0443 p90=0.0765 p99=0.1832 p99.9=0.2405 max=0.2405 mean=0.0471 |
+| provider_sched_err_max_per_stream | n=240 p50=0.0765 p90=0.2138 p99=0.3437 p99.9=0.3567 max=0.3567 mean=0.103 |
+| provider_write_max | n=240 p50=0.0308 p90=0.0432 p99=0.0699 p99.9=0.1175 max=0.1175 mean=0.0305 |
+
+- release lag: 240 sampled streams joined, 0 unmappable (content length differs)
+- loadgen CPU (measurement phase): [{'dir': '/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-builder/acceptance-6-owner-val6000r7/6-honesty/direct/olg', 'samples': 60, 'busy_max': 25.66217479828622, 'busy_mean': 10.23, 'machine': 'c4-standard-16', 'zone': 'asia-south1-c'}]
+- provider CPU: {'samples': 0, 'busy_max': None, 'busy_p95': None}
+- completeness: [{'dir': '/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-builder/acceptance-6-owner-val6000r7/6-honesty/direct/olg', 'scheduled': 260, 'recorded': 260, 'interrupted': False}]
+- health olg direct: gc_cycles=0 sched_latency_max_ms=0.098304 tcp=None

@@ -1,0 +1,34 @@
+aimeshperf-gateway:latest id=83238dc50640 digest=sha256:83238dc50640d8bea46a31a098ee89c18cf4d84792bc3f8b60053a1dc8428d1e size=1.44GB
+aimeshperf-control:latest id=56bf7eaf4b6f digest=sha256:56bf7eaf4b6fe8d03fa1e6bd303d65f3d0c9895702407b1ea1c2f4f9a06b1168 size=1.03GB
+redis:7.4-alpine id=858f009f9709 digest=sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499 size=57.8MB
+pgvector/pgvector:pg16 id=ccc6e83d6e35 digest=sha256:ccc6e83d6e35e931dc7c5def2022729d5a6c370318d099181995567ff1fb4d6b size=621MB
+rabbitmq:3-management id=e582c0bc7766 digest=sha256:e582c0bc7766f3342496d8485efb5a1df782b5ce3886ad017e2eaae442311f69 size=392MB
+edoburu/pgbouncer:v1.23.1-p1 id=a4dd9fc8d9cc digest=sha256:a4dd9fc8d9ccf3e78d9de9c6d4aafb543982c4bf375c1121f2fe9a64a34bad14 size=23MB
+
+aimeshperf-gateway-1 aimeshperf-gateway Up 7 hours (healthy)
+aimeshperf-control-1 aimeshperf-control Up 7 hours (healthy)
+aimeshperf-pgbouncer-1 edoburu/pgbouncer:v1.23.1-p1 Up 7 hours (healthy)
+aimeshperf-rabbitmq-1 rabbitmq:3-management Up 7 hours (healthy)
+aimeshperf-redis-1 redis:7.4-alpine Up 7 hours (healthy)
+aimeshperf-postgres-1 pgvector/pgvector:pg16 Up 7 hours (healthy)
+
+/aimeshperf-gateway-1 sha256:83238dc50640d8bea46a31a098ee89c18cf4d84792bc3f8b60053a1dc8428d1e restarts=0 started=2026-09-23T05:51:29.454747255Z
+/aimeshperf-control-1 sha256:56bf7eaf4b6fe8d03fa1e6bd303d65f3d0c9895702407b1ea1c2f4f9a06b1168 restarts=0 started=2026-09-23T05:50:59.888756861Z
+/aimeshperf-pgbouncer-1 sha256:a4dd9fc8d9ccf3e78d9de9c6d4aafb543982c4bf375c1121f2fe9a64a34bad14 restarts=0 started=2026-09-23T05:50:54.479207443Z
+/aimeshperf-rabbitmq-1 sha256:e582c0bc7766f3342496d8485efb5a1df782b5ce3886ad017e2eaae442311f69 restarts=0 started=2026-09-23T05:50:43.642465113Z
+/aimeshperf-redis-1 sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499 restarts=0 started=2026-09-23T05:50:43.976172707Z
+/aimeshperf-postgres-1 sha256:ccc6e83d6e35e931dc7c5def2022729d5a6c370318d099181995567ff1fb4d6b restarts=0 started=2026-09-23T05:50:43.834877327Z
+
+Python 3.12.14
+/app/gateway/.venv/bin/python /app/gateway/.venv/bin/gunicorn ai_mesh_gateway.main:app -k uvicorn.workers.UvicornWorker --config /app/gateway/gunicorn.conf.py --bind 0.0.0.0:8300 --workers 18 --worker-connections 20000 --timeout 120 --graceful-timeout 60 --keep-alive 65 
+GUNICORN_KEEPALIVE=65
+GUNICORN_WORKER_CONNECTIONS=20000
+GATEWAY_LOG_LEVEL=INFO
+GATEWAY_OUTPUT_GROUNDING_ENABLED=false
+GATEWAY_RAG_ENABLED=true
+GATEWAY_ALLOW_HTTP_LLM=1
+GATEWAY_OUTPUT_GUARD_ENABLED=true
+ENABLE_TIER2=false
+GUNICORN_TIMEOUT=120
+GATEWAY_LOADTEST_STUB_LLM=0
+GATEWAY_TIER2_EXECUTION_MODE=sync_pre_llm

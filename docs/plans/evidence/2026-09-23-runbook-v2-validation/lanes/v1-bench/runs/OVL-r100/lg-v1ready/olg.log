@@ -1,0 +1,26 @@
+2026/09/23 13:22:45 corpus: 5000 entries sha256=6b8420958f0cb22b
+2026/09/23 13:22:45 waiting 4.697s for synchronized start
+2026/09/23 13:23:00 t=10s sched=501 inflight=425 ok=76 err=0 drops=0 conns=424
+2026/09/23 13:23:10 t=20s sched=1501 inflight=1198 ok=303 err=0 drops=0 conns=1198
+2026/09/23 13:23:20 t=30s sched=2501 inflight=1915 ok=586 err=0 drops=0 conns=1914
+2026/09/23 13:23:30 t=40s sched=3501 inflight=2639 ok=862 err=0 drops=0 conns=2639
+2026/09/23 13:23:40 t=50s sched=4501 inflight=3377 ok=1124 err=0 drops=0 conns=3376
+2026/09/23 13:23:50 t=60s sched=5501 inflight=4099 ok=1398 err=4 drops=0 conns=4098
+2026/09/23 13:24:00 t=70s sched=6501 inflight=4800 ok=1663 err=38 drops=0 conns=4800
+2026/09/23 13:24:10 t=80s sched=7501 inflight=5418 ok=1906 err=177 drops=0 conns=5421
+2026/09/23 13:24:20 t=90s sched=8501 inflight=5891 ok=2128 err=482 drops=0 conns=5890
+2026/09/23 13:24:30 t=100s sched=9501 inflight=6253 ok=2290 err=958 drops=0 conns=6261
+2026/09/23 13:24:40 t=110s sched=10501 inflight=6558 ok=2429 err=1514 drops=0 conns=6561
+2026/09/23 13:24:50 t=120s sched=11501 inflight=6856 ok=2540 err=2105 drops=0 conns=6857
+2026/09/23 13:25:00 t=130s sched=12500 inflight=6861 ok=2640 err=2999 drops=0 conns=7110
+2026/09/23 13:25:10 t=140s sched=12500 inflight=5494 ok=2751 err=4255 drops=0 conns=7110
+2026/09/23 13:25:20 t=150s sched=12500 inflight=4682 ok=2864 err=4954 drops=0 conns=7110
+2026/09/23 13:25:30 t=160s sched=12500 inflight=3982 ok=2864 err=5654 drops=0 conns=7110
+2026/09/23 13:25:40 t=170s sched=12500 inflight=3282 ok=2864 err=6354 drops=0 conns=7110
+2026/09/23 13:25:50 t=180s sched=12500 inflight=2590 ok=2864 err=7046 drops=0 conns=7110
+2026/09/23 13:26:00 t=190s sched=12500 inflight=1944 ok=2891 err=7665 drops=0 conns=7110
+2026/09/23 13:26:10 t=200s sched=12500 inflight=1375 ok=3000 err=8125 drops=0 conns=7110
+2026/09/23 13:26:20 t=210s sched=12500 inflight=924 ok=3129 err=8447 drops=0 conns=7110
+2026/09/23 13:26:30 t=220s sched=12500 inflight=549 ok=3288 err=8663 drops=0 conns=7110
+2026/09/23 13:26:40 t=230s sched=12500 inflight=158 ok=3561 err=8781 drops=0 conns=7110
+2026/09/23 13:26:46 done: scheduled=12500 recorded=12500 ok=3702 errors=map[http_422:1845 http_503:1506 timeout:5447] drops=0 late_p99=123us max=502us cpu_busy_max=6.4%

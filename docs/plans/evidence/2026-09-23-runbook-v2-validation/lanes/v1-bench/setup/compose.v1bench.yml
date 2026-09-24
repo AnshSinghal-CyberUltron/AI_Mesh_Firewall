@@ -1,0 +1,123 @@
+# v1-bench overlay — compose ON TOP of the repo's docker-compose.yml at HEAD 52a584e9:
+#   docker compose -f docker-compose.yml -f compose.v1bench.yml up -d postgres pgbouncer redis rabbitmq control gateway
+# Values mirror docker-compose.prod.yml (the shipped prod posture) except where the
+# benchmark profile requires otherwise (each exception commented). Images are built
+# locally from the HEAD export instead of pulled from the registry.
+name: aimeshperf
+
+networks:
+  mcp_sandbox_bridge:
+    name: aimeshperf_mcp_sandbox_bridge
+    external: false
+  mcp_sandbox_net_zeroshield:
+    name: aimeshperf_mcp_sandbox_net_zeroshield
+    external: false
+
+services:
+  postgres:
+    ports: !override []
+    command:          # prod values
+      - postgres
+      - -c
+      - shared_buffers=512MB
+      - -c
+      - effective_cache_size=1536MB
+      - -c
+      - max_connections=400
+      - -c
+      - work_mem=4MB
+    deploy:
+      resources:
+        limits:
+          memory: 2560M
+
+  pgbouncer:
+    ports: !override []
+    environment:      # prod values
+      MAX_DB_CONNECTIONS: "80"
+      DEFAULT_POOL_SIZE: "25"
+      MAX_CLIENT_CONN: "1000"
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  redis:
+    ports: !override []
+    command: redis-server --appendonly yes --maxmemory 768mb --maxmemory-policy allkeys-lru --timeout 0 --tcp-keepalive 60
+    deploy:
+      resources:
+        limits:
+          memory: 1024M
+
+  rabbitmq:
+    ports: !override []
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  control:
+    ports: !override ["127.0.0.1:8100:8000"]
+    env_file: !override ["bench.env"]
+    environment:
+      POLICY_SIGNING_KEY: "v1bench-harness-signing-key-not-a-secret"
+      DJANGO_SECRET_KEY: "v1bench-harness-not-a-secret-do-not-deploy"
+      GATEWAY_INTERNAL_API_KEY: "v1bench-harness-internal-key"
+      DEBUG: "false"
+      LOG_LEVEL: INFO
+      CONTROL_WEB_CONCURRENCY: "2"      # prod value
+      ALLOWED_HOSTS: "localhost,127.0.0.1,control,gateway"
+      TIER2_PROVIDER: bedrock
+      POSTGRES_CONN_MAX_AGE: "0"
+      DISABLE_SERVER_SIDE_CURSORS: "true"
+      DJANGO_CACHE_MAX_CONNECTIONS: "50"
+    deploy:
+      resources:
+        limits:
+          cpus: "2"                     # prod value
+          memory: 2560M
+
+  gateway:
+    ports: !override ["0.0.0.0:8300:8300"]
+    env_file: !override ["bench.env"]
+    environment:
+      POLICY_SIGNING_KEY: "v1bench-harness-signing-key-not-a-secret"
+      DJANGO_SECRET_KEY: "v1bench-harness-not-a-secret-do-not-deploy"
+      GATEWAY_INTERNAL_API_KEY: "v1bench-harness-internal-key"
+      # ── prod values (docker-compose.prod.yml gateway block) ──
+      GATEWAY_CIRCUIT_BREAKER_ENABLED: "true"
+      TIER2_BREAKER_MIN_CALLS: "5"
+      TIER2_BREAKER_FAILURE_THRESHOLD: "0.5"
+      TIER2_BREAKER_COOLDOWN_SECONDS: "30"
+      GUNICORN_WORKER_CONNECTIONS: "20000"
+      GUNICORN_TIMEOUT: "120"
+      GUNICORN_KEEPALIVE: "65"
+      GATEWAY_LAST_USED_DEBOUNCE_SECONDS: "60"
+      GATEWAY_TIER2_CACHE_TTL_SECONDS: "0"
+      GATEWAY_TIER2_CACHE_MAX: "3000"
+      GATEWAY_TIER2_SAMPLE_RATE: "1.0"
+      GATEWAY_RAG_ENABLED: "true"
+      GATEWAY_TIER2_EXECUTION_MODE: sync_pre_llm
+      GATEWAY_LOG_LEVEL: INFO
+      GATEWAY_ALLOW_HTTP: "1"
+      METRICS_ALLOW_OPEN: "false"
+      MCP_STDIO_IN_PROCESS: "false"
+      # WEB_CONCURRENCY deliberately UNSET: GW03 entrypoint sizes workers from the
+      # cgroup detector (prod posture).
+      # ── benchmark-profile deviations from prod ──
+      ENABLE_TIER2: "${V1B_ENABLE_TIER2:-false}"   # "v1 local profile (no semantic guard)"
+      TIER2_PROVIDER: "${V1B_TIER2_PROVIDER:-bedrock}"
+      GATEWAY_LOADTEST_STUB_LLM: "0"               # real BYOK upstream (synthprov), never the in-gateway stub
+      GATEWAY_ALLOW_HTTP_LLM: "1"                  # synthprov is plain http on the internal VPC
+      GATEWAY_OUTPUT_GUARD_ENABLED: "true"         # output guard ON for SSE and JSON
+      GATEWAY_OUTPUT_GROUNDING_ENABLED: "false"    # grounding calls Bedrock Titan (external AI) — off
+      PYTHONUNBUFFERED: "1"
+    ulimits:
+      nofile:
+        soft: 65535
+        hard: 65535
+    deploy:
+      resources:
+        limits:
+          memory: 12288M                           # prod value; NO CPU quota (prod value)

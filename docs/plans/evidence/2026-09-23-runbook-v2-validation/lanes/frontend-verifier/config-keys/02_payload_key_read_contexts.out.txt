@@ -1,0 +1,419 @@
+payload_key | total quoted hits | READ-context hits | TUPLE/LIST hits (need manual check)
+firewall_enabled                       12    9    0
+enforcement_mode                       15   14    0
+pii_detection_enabled                   7    4    2
+log_level                               2    1    0
+rate_limit_enabled                      4    3    0
+requests_per_minute                     3    2    0
+burst_limit                             3    2    0
+org_tpm_limit                           7    7    0
+toxicity_threshold                      3    2    0
+blocked_keywords                        5    4    0
+model_isolation_enabled                 3    2    0
+allowed_models                          6    2    2
+litellm_default_model                  10    8    0
+deep_scan_enabled                       3    1    0
+tier2_fail_closed_enabled               2    0    0
+tier2_execution_mode                    4    2    0
+tier2_stream_hold_enabled               3    1    0
+tier2_stream_hold_timeout_ms            2    0    0
+tier2_enabled                           7    3    0
+mcp_tier2_enabled                       4    2    0
+mcp_ext_scan_action                     1    1    0
+tier2_strict                            7    5    1
+mcp_policy_only_enforcement             5    4    0
+prompt_injection_threshold              7    3    3
+hallucination_flag_enabled              5    3    0
+hallucination_grounding_mode            2    1    0
+hallucination_grounding_threshold       3    2    0
+hallucination_grounding_model           1    0    0
+output_pii_enabled                      4    3    0
+output_pii_action                       4    3    0
+output_credential_enabled               5    4    0
+output_credential_action                5    4    0
+output_ip_leakage_enabled               4    3    0
+output_ip_leakage_action                5    2    2
+output_policy_enabled                   3    2    0
+output_policy_action                    3    2    0
+output_hallucination_action             3    2    0
+output_incident_logging_enabled         3    2    0
+max_response_tokens                     3    2    0
+rag_enabled                             4    2    0
+vector_db_isolation                     2    0    0
+rag_default_max_results                 4    2    0
+rag_relevance_threshold                 6    2    2
+rag_redaction_enabled                   2    1    0
+rag_tier2_enabled                       6    4    1
+threat_intel_enabled                    2    1    0
+auto_block_threats                      2    1    0
+threat_score_threshold                  2    1    0
+telemetry_enabled                       6    4    0
+retention_days                          1    0    0
+compliance_frameworks                   7    6    0
+routing_risk_weight                     3    1    0
+routing_cost_weight                     3    1    0
+routing_latency_weight                  3    1    0
+routing_priority_weight                 3    1    0
+default_data_sensitivity                2    1    0
+routing_enabled                        22   15    2
+org_slug                               43   10   22
+
+### firewall_enabled
+   COMMENT/DOCSTRING                recv=                               gateway/ai_mesh_gateway/config_sync.py:47: # (e.g. ``"firewall_enabled": "false"`` — a truthy string — silently
+   DECL:config_sync type table      recv=                               gateway/ai_mesh_gateway/config_sync.py:61: "firewall_enabled", "rate_limit_enabled",
+   READ:.get                        recv=self._config                   gateway/ai_mesh_gateway/config_sync.py:352: self._config.get("firewall_enabled", "N/A"),
+   READ:.get                        recv=self._config                   gateway/ai_mesh_gateway/config_sync.py:576: self._config.get("firewall_enabled"),
+   READ:.get                        recv=data                           gateway/ai_mesh_gateway/config_sync.py:695: data.get("firewall_enabled"),
+   READ:.get                        recv=and org_config                 gateway/ai_mesh_gateway/main.py:7737: and org_config.get("firewall_enabled") is not False
+   READ:.get                        recv=org_config                     gateway/ai_mesh_gateway/main.py:7751: firewall_disabled = org_config.get("firewall_enabled") is False
+   READ:.get                        recv=bool(org_config                gateway/ai_mesh_gateway/main.py:12496: "firewall_enabled": bool(org_config.get("firewall_enabled", True)),
+   READ:.get                        recv=org_config                     gateway/ai_mesh_gateway/main.py:12866: _emb_firewall_disabled = org_config.get("firewall_enabled") is False
+   READ:.get                        recv=CONFIG                         gateway/ai_mesh_gateway/main.py:16824: "firewall_enabled": CONFIG.get("firewall_enabled", True),
+   READ:.get                        recv=if org_config                  gateway/ai_mesh_gateway/rate_limit_enforcement.py:168: if org_config.get("firewall_enabled") is False:
+   DICT-LITERAL key (write/emit)    recv=                               gateway/ai_mesh_gateway/vector_routes.py:760: "firewall_enabled": True,
+### enforcement_mode
+   DECL:config_sync type table      recv=                               gateway/ai_mesh_gateway/config_sync.py:91: "enforcement_mode", "log_level", "tier2_execution_mode",
+   READ:.get                        recv=self._config                   gateway/ai_mesh_gateway/config_sync.py:353: self._config.get("enforcement_mode", "N/A"),
+   READ:.get                        recv=self._config                   gateway/ai_mesh_gateway/config_sync.py:577: self._config.get("enforcement_mode"),
+   READ:.get                        recv=data                           gateway/ai_mesh_gateway/config_sync.py:696: data.get("enforcement_mode"),
+   READ:.get                        recv=org_config                     gateway/ai_mesh_gateway/main.py:2639: _enforcement_mode = org_config.get("enforcement_mode", "block")
+   READ:.get                        recv=org_config                     gateway/ai_mesh_gateway/main.py:3027: scan_verdict, org_config.get("enforcement_mode", "block"),
+   READ:.get                        recv=str(org_config                 gateway/ai_mesh_gateway/main.py:4405: enforcement_mode = str(org_config.get("enforcement_mode", CONFIG.get("enforcement_mode", "block")))
+   READ:.get                        recv=org_config                     gateway/ai_mesh_gateway/main.py:7752: enforcement_mode = org_config.get("enforcement_mode", "block")
+   READ:.get                        recv=org_config                     gateway/ai_mesh_gateway/main.py:9867: scan_verdict, org_config.get('enforcement_mode', 'block'))
+   READ:.get                        recv=org_config                     gateway/ai_mesh_gateway/main.py:10896: _og_enforcement_mode = org_config.get("enforcement_mode", "block")
+   READ:.get                        recv=org_config                     gateway/ai_mesh_gateway/main.py:11791: scan_verdict, org_config.get('enforcement_mode', 'block'))
+   READ:.get                        recv=org_config                     gateway/ai_mesh_gateway/main.py:12497: "enforcement_mode": org_config.get("enforcement_mode", CONFIG.get("enforcement_mode", "block")),
+   READ:.get                        recv=if _emb_matched and org_config gateway/ai_mesh_gateway/main.py:12873: if _emb_matched and org_config.get("enforcement_mode", "block") == "block":
+   READ:.get                        recv=CONFIG                         gateway/ai_mesh_gateway/main.py:16825: "enforcement_mode": CONFIG.get("enforcement_mode", "block"),
+   READ:.get                        recv=org_config                     gateway/ai_mesh_gateway/rate_limit_enforcement.py:172: org_config.get("enforcement_mode", gateway_config.get("enforcement_mode", "block"))
+### pii_detection_enabled
+   DECL:config_sync type table      recv=                               gateway/ai_mesh_gateway/config_sync.py:67: "pii_detection_enabled",
+   READ:membership                  recv=org_config                     gateway/ai_mesh_gateway/main.py:960: if not isinstance(org_config, dict) or "pii_detection_enabled" not in org_config:
+   READ:.get                        recv=org_config                     gateway/ai_mesh_gateway/main.py:962: raw = org_config.get("pii_detection_enabled")
+   TUPLE/LIST element               recv=                               gateway/ai_mesh_gateway/main.py:2641: "pii_detection_enabled",
+   READ:.get                        recv=CONFIG                         gateway/ai_mesh_gateway/main.py:2642: CONFIG.get("pii_detection_enabled", True),
+   TUPLE/LIST element               recv=                               gateway/ai_mesh_gateway/main.py:10898: "pii_detection_enabled",
+   READ:.get                        recv=CONFIG                         gateway/ai_mesh_gateway/main.py:10899: CONFIG.get("pii_detection_enabled", True),
+### log_level
+   DECL:config_sync type table      recv=                               gateway/ai_mesh_gateway/config_sync.py:91: "enforcement_mode", "log_level", "tier2_execution_mode",
+   READ:.get                        recv=data                           gateway/ai_mesh_gateway/config_sync.py:558: log_level_name = data.get("log_level")
+### rate_limit_enabled
+   DECL:config_sync type table      recv=                               gateway/ai_mesh_gateway/config_sync.py:61: "firewall_enabled", "rate_limit_enabled",
+   READ:.get                        recv=self._config                   gateway/ai_mesh_gateway/config_sync.py:578: self._config.get("rate_limit_enabled"),
+   READ:.get                        recv=and org_config                 gateway/ai_mesh_gateway/main.py:8341: and org_config.get("rate_limit_enabled", CONFIG.get("rate_limit_enabled", True))
+   READ:.get                        recv=gateway_config                 gateway/ai_mesh_gateway/rate_limit_enforcement.py:165: "rate_limit_enabled", gateway_config.get("rate_limit_enabled", True)
+### requests_per_minute
+   DECL:config_sync type table      recv=                               gateway/ai_mesh_gateway/config_sync.py:75: "requests_per_minute", "burst_limit", "toxicity_threshold",
+   READ:.get                        recv=org_config                     gateway/ai_mesh_gateway/main.py:8397: rpm_limit = org_config.get("requests_per_minute", CONFIG.get("requests_per_minute", 1000))
+   READ:.get                        recv=org_config                     gateway/ai_mesh_gateway/rate_limit_enforcement.py:240: org_config.get("requests_per_minute", gateway_config.get("requests_per_minute", 1000))
+### burst_limit
+   DECL:config_sync type table      recv=                               gateway/ai_mesh_gateway/config_sync.py:75: "requests_per_minute", "burst_limit", "toxicity_threshold",
+   READ:.get                        recv=org_config                     gateway/ai_mesh_gateway/main.py:8350: burst_limit = org_config.get("burst_limit", CONFIG.get("burst_limit", 150))
+   READ:.get                        recv=org_config                     gateway/ai_mesh_gateway/rate_limit_enforcement.py:183: org_config.get("burst_limit", gateway_config.get("burst_limit", 150))
+### org_tpm_limit
+   READ:.get                        recv=int(org_cfg                    gateway/ai_mesh_gateway/main.py:8475: org_tpm_limit = int(org_cfg.get("org_tpm_limit", 0) or 0)
+   READ:.get                        recv=int(org_config                 gateway/ai_mesh_gateway/main.py:8748: org_tpm_limit=int(org_config.get("org_tpm_limit", 0) or 0),
+   READ:.get                        recv=int(org_config                 gateway/ai_mesh_gateway/main.py:9767: org_tpm_limit=int(org_config.get("org_tpm_limit", 0) or 0),
+   READ:.get                        recv=int(org_config                 gateway/ai_mesh_gateway/main.py:10695: org_tpm_limit=int(org_config.get("org_tpm_limit", 0) or 0),
+   READ:.get                        recv=int(org_config                 gateway/ai_mesh_gateway/main.py:11623: _org_tpm = int(org_config.get("org_tpm_limit", 0) or 0)
+   READ:.get                        recv=int(org_cfg                    gateway/ai_mesh_gateway/main.py:16701: org_tpm = int(org_cfg.get("org_tpm_limit", 0) or 0)
+   READ:.get                        recv=int(org_cfg                    gateway/ai_mesh_gateway/rate_limit_enforcement.py:62: org_tpm_limit = int(org_cfg.get("org_tpm_limit", 0) or 0)
+### toxicity_threshold
+   DECL:config_sync type table      recv=                               gateway/ai_mesh_gateway/config_sync.py:75: "requests_per_minute", "burst_limit", "toxicity_threshold",
+   READ:.get                        recv=org_config                     gateway/ai_mesh_gateway/main.py:9121: org_toxicity_threshold = org_config.get("toxicity_threshold")
+   READ:.get                        recv=else self._config              gateway/ai_mesh_gateway/scanner.py:1914: else self._config.get("toxicity_threshold", 0.70)
+### blocked_keywords
+   DECL:config_sync type table      recv=                               gateway/ai_mesh_gateway/config_sync.py:98: _LIST_KEYS = ("blocked_keywords", "allowed_models", "compliance_frameworks")
+   READ:.get                        recv=)                              gateway/ai_mesh_gateway/main.py:2020: kws = (CONFIG_SYNC.get_config(org_slug) or {}).get("blocked_keywords") or []
+   READ:.get                        recv=org_config                     gateway/ai_mesh_gateway/main.py:8636: custom_blocked = org_config.get("blocked_keywords", [])
+   READ:.get                        recv=org_config                     gateway/ai_mesh_gateway/main.py:12868: _emb_blocked = org_config.get("blocked_keywords", [])
+   READ:.get                        recv=policy                         gateway/ai_mesh_gateway/main.py:14145: policy.get("blocked_keywords"),
+### model_isolation_enabled
+   DECL:config_sync type table      recv=                               gateway/ai_mesh_gateway/config_sync.py:65: "model_isolation_enabled", "routing_enabled",
+   READ:.get                        recv=if not firewall_disabled and org_config gateway/ai_mesh_gateway/main.py:7889: if not firewall_disabled and org_config.get("model_isolation_enabled", False):
+   READ:.get                        recv=if not firewall_disabled and org_config gateway/ai_mesh_gateway/main.py:10442: if not firewall_disabled and org_config.get("model_isolation_enabled", False):
+### allowed_models
+   DECL:config_sync type table      recv=                               gateway/ai_mesh_gateway/config_sync.py:98: _LIST_KEYS = ("blocked_keywords", "allowed_models", "compliance_frameworks")
+   READ:.get                        recv=_coerce_string_list(org_config gateway/ai_mesh_gateway/main.py:7754: global_allowed_models = _coerce_string_list(org_config.get("allowed_models", []))
+   DICT-LITERAL key (write/emit)    recv=                               gateway/ai_mesh_gateway/main.py:12527: "allowed_models": getattr(auth_ctx, "allowed_models", []),
+   TUPLE/LIST element               recv=                               gateway/ai_mesh_gateway/main.py:17032: _key_allowed = list(getattr(auth_ctx, "allowed_models", None) or []) if auth_ctx else []
+   TUPLE/LIST element               recv=                               gateway/ai_mesh_gateway/middleware.py:143: "allowed_models",
+   READ:.get                        recv=payload                        gateway/ai_mesh_gateway/middleware.py:163: self.allowed_models: list = payload.get("allowed_models", [])
+### litellm_default_model
+   DECL:config.py env-default       recv=                               gateway/ai_mesh_gateway/config.py:307: "litellm_default_model": litellm_default_model,
+   DECL:config_sync type table      recv=                               gateway/ai_mesh_gateway/config_sync.py:92: "litellm_default_model", "default_data_sensitivity",
+   READ:.get                        recv=self._normalize_model_alias(self._config gateway/ai_mesh_gateway/llm_router.py:741: preferred_default = self._normalize_model_alias(self._config.get("litellm_default_model", "") or "")
+   READ:.get                        recv=self._normalize_model_alias(self._config gateway/ai_mesh_gateway/llm_router.py:828: configured_default = self._normalize_model_alias(self._config.get("litellm_default_model", "") or "")
+   READ:.get                        recv=self._config                   gateway/ai_mesh_gateway/llm_router.py:958: configured = self._config.get("litellm_default_model", "")
+   READ:.get                        recv=elif self._config              gateway/ai_mesh_gateway/llm_router.py:1978: elif self._config.get("litellm_default_model"):
+   READ:subscript                   recv=self._config                   gateway/ai_mesh_gateway/llm_router.py:1980: "id": self._config["litellm_default_model"],
+   READ:subscript                   recv=self._config                   gateway/ai_mesh_gateway/llm_router.py:1983: "model_id": self._config["litellm_default_model"],
+   READ:.get                        recv=)                              gateway/ai_mesh_gateway/main.py:4616: or (org_config or {}).get("litellm_default_model")
+   READ:.get                        recv=org_config                     gateway/ai_mesh_gateway/main.py:9031: downgrade_to = redaction_cfg.get("downgrade_to", org_config.get("litellm_default_model", "gpt-3.5-turbo"))
+### deep_scan_enabled
+   DECL:config.py env-default       recv=                               gateway/ai_mesh_gateway/config.py:305: "deep_scan_enabled": deep_scan_enabled,
+   DECL:config_sync type table      recv=                               gateway/ai_mesh_gateway/config_sync.py:62: "deep_scan_enabled",
+   READ:.get                        recv=if org_config                  gateway/ai_mesh_gateway/main.py:10501: if org_config.get("deep_scan_enabled") and AGENT_ID and CONFIG["backend_url"]:
+### tier2_fail_closed_enabled
+   DECL:config.py env-default       recv=                               gateway/ai_mesh_gateway/config.py:293: "tier2_fail_closed_enabled": tier2_fail_closed_enabled,
+   DECL:config_sync type table      recv=                               gateway/ai_mesh_gateway/config_sync.py:63: "tier2_fail_closed_enabled", "tier2_input_fail_closed", "tier2_stream_hold_enabled",
+### tier2_execution_mode
+   DECL:config.py env-default       recv=                               gateway/ai_mesh_gateway/config.py:295: "tier2_execution_mode": tier2_execution_mode,
+   DECL:config_sync type table      recv=                               gateway/ai_mesh_gateway/config_sync.py:91: "enforcement_mode", "log_level", "tier2_execution_mode",
+   READ:.get                        recv=str(org_config                 gateway/ai_mesh_gateway/main.py:7753: tier2_execution_mode = str(org_config.get("tier2_execution_mode", "sync_pre_llm")).strip().lower()
+   READ:.get                        recv=str(org_config                 gateway/ai_mesh_gateway/main.py:9083: tier2_execution_mode = str(org_config.get("tier2_execution_mode", "sync_pre_llm")).strip().lower()
+### tier2_stream_hold_enabled
+   DECL:config.py env-default       recv=                               gateway/ai_mesh_gateway/config.py:296: "tier2_stream_hold_enabled": tier2_stream_hold_enabled,
+   DECL:config_sync type table      recv=                               gateway/ai_mesh_gateway/config_sync.py:63: "tier2_fail_closed_enabled", "tier2_input_fail_closed", "tier2_stream_hold_enabled",
+   READ:.get                        recv=bool(org_config                gateway/ai_mesh_gateway/main.py:9084: tier2_stream_hold_enabled = bool(org_config.get("tier2_stream_hold_enabled", False))
+### tier2_stream_hold_timeout_ms
+   DECL:config.py env-default       recv=                               gateway/ai_mesh_gateway/config.py:297: "tier2_stream_hold_timeout_ms": tier2_stream_hold_timeout_ms,
+   DECL:config_sync type table      recv=                               gateway/ai_mesh_gateway/config_sync.py:84: "prompt_downgrade_threshold", "tier2_stream_hold_timeout_ms",
+### tier2_enabled
+   DECL:config_sync type table      recv=                               gateway/ai_mesh_gateway/config_sync.py:64: "tier2_enabled", "mcp_tier2_enabled", "tier2_strict",
+   DECL:config_sync type table      recv=                               gateway/ai_mesh_gateway/config_sync.py:108: _NULLABLE_KEYS: frozenset[str] = frozenset({"tier2_enabled", "mcp_tier2_enabled"})
+   READ:.get                        recv=)                              gateway/ai_mesh_gateway/main.py:1528: return resolve_tier2_enabled((org_config or {}).get("tier2_enabled"))
+   READ:.get                        recv=org_config                     gateway/ai_mesh_gateway/main.py:9105: org_tier2_override = org_config.get("tier2_enabled")
+   READ:.get                        recv=cfg                            gateway/ai_mesh_gateway/output_guard.py:1014: org_tier2_override=cfg.get("tier2_enabled"),
+   COMMENT/DOCSTRING                recv=                               gateway/ai_mesh_gateway/scanner.py:2196: Callers MUST pass via identity (``org_config.get("tier2_enabled")``)
+   COMMENT/DOCSTRING                recv=                               gateway/ai_mesh_gateway/scanner.py:2569: (pass ``org_config.get("tier2_enabled")`` so ``None`` is preserved).
+### mcp_tier2_enabled
+   DECL:config_sync type table      recv=                               gateway/ai_mesh_gateway/config_sync.py:64: "tier2_enabled", "mcp_tier2_enabled", "tier2_strict",
+   DECL:config_sync type table      recv=                               gateway/ai_mesh_gateway/config_sync.py:108: _NULLABLE_KEYS: frozenset[str] = frozenset({"tier2_enabled", "mcp_tier2_enabled"})
+   READ:.get                        recv=data                           gateway/ai_mesh_gateway/mcp_proxy.py:967: "mcp_tier2_enabled": data.get("mcp_tier2_enabled"),
+   READ:.get                        recv=)                              gateway/ai_mesh_gateway/mcp_scan_orchestrator.py:225: return _resolve_mcp_tier2_enabled((enabled_info or {}).get("mcp_tier2_enabled"))
+### mcp_ext_scan_action
+   READ:.get                        recv=(cfg                           gateway/ai_mesh_gateway/mcp_proxy.py:1262: action = (cfg.get("mcp_ext_scan_action") or "tag").strip().lower()
+### tier2_strict
+   DECL:config_sync type table      recv=                               gateway/ai_mesh_gateway/config_sync.py:64: "tier2_enabled", "mcp_tier2_enabled", "tier2_strict",
+   READ:.get                        recv=bool(org_config                gateway/ai_mesh_gateway/main.py:9118: org_tier2_strict = bool(org_config.get("tier2_strict", True))
+   TUPLE/LIST element               recv=                               gateway/ai_mesh_gateway/main.py:13896: "tier2_strict",
+   READ:.get                        recv=bool(rag_policy                gateway/ai_mesh_gateway/main.py:14213: org_tier2_strict=bool(rag_policy.get("tier2_strict", True)),
+   READ:.get                        recv=data                           gateway/ai_mesh_gateway/mcp_proxy.py:968: "tier2_strict": data.get("tier2_strict", True),
+   READ:.get                        recv=)                              gateway/ai_mesh_gateway/mcp_scan_orchestrator.py:1672: org_strict = bool((enabled_info or {}).get("tier2_strict", True))
+   READ:.get                        recv=bool(inp.policy                gateway/ai_mesh_gateway/rag_pipeline/query_stage.py:236: org_tier2_strict=bool(inp.policy.get("tier2_strict", True)),
+### mcp_policy_only_enforcement
+   READ:.get                        recv=data                           gateway/ai_mesh_gateway/mcp_proxy.py:976: **({"mcp_policy_only_enforcement": data.get("mcp_policy_only_enforcement")}
+   READ:membership                  recv=data                           gateway/ai_mesh_gateway/mcp_proxy.py:977: if "mcp_policy_only_enforcement" in data else {}),
+   COMMENT/DOCSTRING                recv=                               gateway/ai_mesh_gateway/mcp_scan_orchestrator.py:379: ``enabled_info['mcp_policy_only_enforcement']`` (preferred — lets an operator cut over one
+   READ:membership                  recv=enabled_info                   gateway/ai_mesh_gateway/mcp_scan_orchestrator.py:383: if enabled_info and "mcp_policy_only_enforcement" in enabled_info:
+   READ:.get                        recv=return _coerce_flag(enabled_info gateway/ai_mesh_gateway/mcp_scan_orchestrator.py:384: return _coerce_flag(enabled_info.get("mcp_policy_only_enforcement"))
+### prompt_injection_threshold
+   DECL:config_sync type table      recv=                               gateway/ai_mesh_gateway/config_sync.py:83: "prompt_injection_threshold", "prompt_rewrite_threshold",
+   READ:.get                        recv=org_config                     gateway/ai_mesh_gateway/main.py:9455: injection_threshold=org_config.get("prompt_injection_threshold", 0.80),
+   READ:.get                        recv=org_config                     gateway/ai_mesh_gateway/main.py:9615: injection_threshold=org_config.get("prompt_injection_threshold", 0.80),
+   TUPLE/LIST element               recv=                               gateway/ai_mesh_gateway/main.py:13879: "prompt_injection_threshold",
+   READ:.get                        recv=org_config                     gateway/ai_mesh_gateway/main.py:16546: injection_threshold = org_config.get("prompt_injection_threshold", 0.80)
+   TUPLE/LIST element               recv=                               gateway/ai_mesh_gateway/rag_pipeline/query_stage.py:269: threshold = _thr("prompt_injection_threshold", 0.80)
+   TUPLE/LIST element               recv=                               gateway/ai_mesh_gateway/vector_routes.py:211: "prompt_injection_threshold",
+### hallucination_flag_enabled
+   DECL:config.py env-default       recv=                               gateway/ai_mesh_gateway/config.py:335: "hallucination_flag_enabled": hallucination_flag_enabled,
+   DECL:config_sync type table      recv=                               gateway/ai_mesh_gateway/config_sync.py:66: "hallucination_flag_enabled", "output_pii_enabled",
+   READ:membership                  recv=cfg                            gateway/ai_mesh_gateway/output_guard.py:961: if "hallucination_flag_enabled" in cfg or "factuality_check_enabled" in cfg:
+   READ:.get                        recv=bool(cfg                       gateway/ai_mesh_gateway/output_guard.py:962: _hall_enabled = bool(cfg.get("hallucination_flag_enabled")) or bool(
+   READ:.get                        recv=bool(self._config              gateway/ai_mesh_gateway/output_guard.py:966: _hall_enabled = bool(self._config.get("hallucination_flag_enabled", True))
+### hallucination_grounding_mode
+   DECL:config_sync type table      recv=                               gateway/ai_mesh_gateway/config_sync.py:93: "hallucination_grounding_mode", "hallucination_grounding_model",
+   READ:.get                        recv=str(cfg                        gateway/ai_mesh_gateway/output_guard.py:1523: mode = str(cfg.get("hallucination_grounding_mode", "lexical") or "lexical").lower()
+### hallucination_grounding_threshold
+   DECL:config_sync type table      recv=                               gateway/ai_mesh_gateway/config_sync.py:86: "routing_priority_weight", "hallucination_grounding_threshold",
+   READ:.get                        recv=cfg                            gateway/ai_mesh_gateway/output_guard.py:1392: cfg.get("hallucination_grounding_threshold"),
+   READ:.get                        recv=cfg                            gateway/ai_mesh_gateway/output_guard.py:1399: cfg.get("hallucination_grounding_threshold"),
+### hallucination_grounding_model
+   DECL:config_sync type table      recv=                               gateway/ai_mesh_gateway/config_sync.py:93: "hallucination_grounding_mode", "hallucination_grounding_model",
+### output_pii_enabled
+   DECL:config_sync type table      recv=                               gateway/ai_mesh_gateway/config_sync.py:66: "hallucination_flag_enabled", "output_pii_enabled",
+   READ:helper-call                 recv=_enabled                       gateway/ai_mesh_gateway/output_guard.py:906: return _action("output_pii_action", "redact") if _enabled("output_pii_enabled", True) else "allow"
+   READ:helper-call                 recv=_enabled                       gateway/ai_mesh_gateway/output_guard.py:920: _pii_on = _enabled("output_pii_enabled", True)
+   READ:helper-call                 recv=_enabled                       gateway/ai_mesh_gateway/output_guard.py:1187: if _enabled("output_pii_enabled", True) and _action("output_pii_action", "redact") in _PROTECTIVE_MUTATIONS:
+### output_pii_action
+   DECL:config_sync type table      recv=                               gateway/ai_mesh_gateway/config_sync.py:94: "output_pii_action", "output_credential_action",
+   READ:helper-call                 recv=_action                        gateway/ai_mesh_gateway/output_guard.py:906: return _action("output_pii_action", "redact") if _enabled("output_pii_enabled", True) else "allow"
+   READ:helper-call                 recv=_action                        gateway/ai_mesh_gateway/output_guard.py:923: _pii_act = _action("output_pii_action", "redact") if _pii_on else "allow"
+   READ:helper-call                 recv=_action                        gateway/ai_mesh_gateway/output_guard.py:1187: if _enabled("output_pii_enabled", True) and _action("output_pii_action", "redact") in _PROTECTIVE_MUTATIONS:
+### output_credential_enabled
+   DECL:config_sync type table      recv=                               gateway/ai_mesh_gateway/config_sync.py:68: "output_credential_enabled", "output_ip_leakage_enabled",
+   READ:helper-call                 recv=_enabled                       gateway/ai_mesh_gateway/output_guard.py:900: return _action("output_credential_action", "redact") if _enabled("output_credential_enabled", True) else "allow"
+   READ:helper-call                 recv=_enabled                       gateway/ai_mesh_gateway/output_guard.py:921: _cred_on = _enabled("output_credential_enabled", True)
+   READ:helper-call                 recv=_enabled                       gateway/ai_mesh_gateway/output_guard.py:932: if _enabled("output_credential_enabled", True):
+   READ:helper-call                 recv=_enabled                       gateway/ai_mesh_gateway/output_guard.py:1189: if _enabled("output_credential_enabled", True) and _action("output_credential_action", "redact") in _PROTECTIVE_MUTATIONS:
+### output_credential_action
+   DECL:config_sync type table      recv=                               gateway/ai_mesh_gateway/config_sync.py:94: "output_pii_action", "output_credential_action",
+   READ:helper-call                 recv=_action                        gateway/ai_mesh_gateway/output_guard.py:900: return _action("output_credential_action", "redact") if _enabled("output_credential_enabled", True) else "allow"
+   READ:helper-call                 recv=_action                        gateway/ai_mesh_gateway/output_guard.py:924: _cred_act = _action("output_credential_action", "redact") if _cred_on else "allow"
+   READ:helper-call                 recv=_action                        gateway/ai_mesh_gateway/output_guard.py:936: cred_action = _action("output_credential_action", "redact")
+   READ:helper-call                 recv=_action                        gateway/ai_mesh_gateway/output_guard.py:1189: if _enabled("output_credential_enabled", True) and _action("output_credential_action", "redact") in _PROTECTIVE_MUTATIONS:
+### output_ip_leakage_enabled
+   DECL:config_sync type table      recv=                               gateway/ai_mesh_gateway/config_sync.py:68: "output_credential_enabled", "output_ip_leakage_enabled",
+   READ:helper-call                 recv=_enabled                       gateway/ai_mesh_gateway/output_guard.py:904: return _action("output_ip_leakage_action", "redact") if _enabled("output_ip_leakage_enabled", True) else "allow"
+   READ:helper-call                 recv=_enabled                       gateway/ai_mesh_gateway/output_guard.py:942: if _enabled("output_ip_leakage_enabled", True):
+   READ:helper-call                 recv=_enabled                       gateway/ai_mesh_gateway/output_guard.py:1191: if _enabled("output_ip_leakage_enabled", True) and _action(
+### output_ip_leakage_action
+   DECL:config_sync type table      recv=                               gateway/ai_mesh_gateway/config_sync.py:95: "output_ip_leakage_action", "output_policy_action",
+   READ:helper-call                 recv=_action                        gateway/ai_mesh_gateway/output_guard.py:904: return _action("output_ip_leakage_action", "redact") if _enabled("output_ip_leakage_enabled", True) else "allow"
+   TUPLE/LIST element               recv=                               gateway/ai_mesh_gateway/output_guard.py:944: "output_ip_leakage_action",
+   READ:membership                  recv=cfg                            gateway/ai_mesh_gateway/output_guard.py:1160: or "output_ip_leakage_action" in cfg
+   TUPLE/LIST element               recv=                               gateway/ai_mesh_gateway/output_guard.py:1192: "output_ip_leakage_action",
+### output_policy_enabled
+   DECL:config_sync type table      recv=                               gateway/ai_mesh_gateway/config_sync.py:69: "output_policy_enabled", "output_incident_logging_enabled",
+   READ:.get                        recv=d (_policy_cache_ready or AGENT_ID) and org_config gateway/ai_mesh_gateway/main.py:11378: if response_text and (_policy_cache_ready or AGENT_ID) and org_config.get("output_policy_enabled", True):
+   READ:helper-call                 recv=_enabled                       gateway/ai_mesh_gateway/output_guard.py:910: return _action("output_policy_action", "block") if _enabled("output_policy_enabled", True) else "allow"
+### output_policy_action
+   DECL:config_sync type table      recv=                               gateway/ai_mesh_gateway/config_sync.py:95: "output_ip_leakage_action", "output_policy_action",
+   READ:.get                        recv=_normalize_output_action(org_config gateway/ai_mesh_gateway/main.py:11406: resp_action = _normalize_output_action(org_config.get("output_policy_action", "flag"))
+   READ:helper-call                 recv=_action                        gateway/ai_mesh_gateway/output_guard.py:910: return _action("output_policy_action", "block") if _enabled("output_policy_enabled", True) else "allow"
+### output_hallucination_action
+   DECL:config_sync type table      recv=                               gateway/ai_mesh_gateway/config_sync.py:96: "output_hallucination_action",
+   READ:helper-call                 recv=_action                        gateway/ai_mesh_gateway/output_guard.py:908: return _action("output_hallucination_action", "flag")
+   READ:helper-call                 recv=_action                        gateway/ai_mesh_gateway/output_guard.py:968: hall_action = _action("output_hallucination_action", "flag")
+### output_incident_logging_enabled
+   DECL:config_sync type table      recv=                               gateway/ai_mesh_gateway/config_sync.py:69: "output_policy_enabled", "output_incident_logging_enabled",
+   READ:.get                        recv=bool(org_config                gateway/ai_mesh_gateway/main.py:2703: incident_logging = bool(org_config.get("output_incident_logging_enabled", True))
+   READ:.get                        recv=bool(org_config                gateway/ai_mesh_gateway/main.py:10881: _output_incident_logging = bool(org_config.get("output_incident_logging_enabled", True))
+### max_response_tokens
+   DECL:config_sync type table      recv=                               gateway/ai_mesh_gateway/config_sync.py:87: "max_response_tokens", "rag_default_max_results",
+   READ:.get                        recv=int(org_config                 gateway/ai_mesh_gateway/main.py:8448: _mt_ceiling = int(org_config.get("max_response_tokens", 4096) or 4096)
+   READ:.get                        recv=org_config                     gateway/ai_mesh_gateway/main.py:8690: max_tokens_config = org_config.get("max_response_tokens", 4096)
+### rag_enabled
+   DECL:config.py env-default       recv=                               gateway/ai_mesh_gateway/config.py:312: "rag_enabled": rag_enabled,
+   DECL:config_sync type table      recv=                               gateway/ai_mesh_gateway/config_sync.py:70: "rag_enabled", "vector_db_isolation",
+   READ:.get                        recv=return oc                      gateway/ai_mesh_gateway/main.py:2055: return oc.get("rag_enabled", True) is False
+   READ:.get                        recv=if CONFIG                      gateway/ai_mesh_gateway/main.py:6615: if CONFIG.get("rag_enabled", False):
+### vector_db_isolation
+   DECL:config_sync type table      recv=                               gateway/ai_mesh_gateway/config_sync.py:70: "rag_enabled", "vector_db_isolation",
+   COMMENT/DOCSTRING                recv=                               gateway/ai_mesh_gateway/rag_pipeline/retriever_stage.py:142: # ``inp.project_id if self._config.get("vector_db_isolation", True) else None`` —
+### rag_default_max_results
+   DECL:config.py env-default       recv=                               gateway/ai_mesh_gateway/config.py:323: "rag_default_max_results": rag_default_max_results,
+   DECL:config_sync type table      recv=                               gateway/ai_mesh_gateway/config_sync.py:87: "max_response_tokens", "rag_default_max_results",
+   READ:.get                        recv=CONFIG                         gateway/ai_mesh_gateway/main.py:13522: n_results = int(body.get("n_results", CONFIG.get("rag_default_max_results", 10)))
+   READ:.get                        recv=CONFIG                         gateway/ai_mesh_gateway/main.py:13864: max_results = policy.get("max_results_per_query", CONFIG.get("rag_default_max_results", 10))
+### rag_relevance_threshold
+   DECL:config.py env-default       recv=                               gateway/ai_mesh_gateway/config.py:349: "rag_relevance_threshold": rag_relevance_threshold,
+   DECL:config_sync type table      recv=                               gateway/ai_mesh_gateway/config_sync.py:88: "rag_relevance_threshold", "threat_score_threshold", "retention_days",
+   TUPLE/LIST element               recv=                               gateway/ai_mesh_gateway/main.py:13885: "rag_relevance_threshold",
+   TUPLE/LIST element               recv=                               gateway/ai_mesh_gateway/rag_pipeline/retriever_stage.py:249: "rag_relevance_threshold",
+   READ:.get                        recv=self._config                   gateway/ai_mesh_gateway/rag_pipeline/retriever_stage.py:250: self._config.get("rag_relevance_threshold", 0.0),
+   READ:.get                        recv=float(self._config             gateway/ai_mesh_gateway/rag_pipeline/retriever_stage.py:253: relevance_threshold = float(self._config.get("rag_relevance_threshold", 0.0) or 0.0)
+### rag_redaction_enabled
+   DECL:config_sync type table      recv=                               gateway/ai_mesh_gateway/config_sync.py:71: "rag_redaction_enabled", "rag_tier2_enabled", "threat_intel_enabled",
+   READ:.get                        recv=bool(org_config                gateway/ai_mesh_gateway/main.py:14746: rag_redaction_enabled = bool(org_config.get("rag_redaction_enabled", True))
+### rag_tier2_enabled
+   DECL:config_sync type table      recv=                               gateway/ai_mesh_gateway/config_sync.py:71: "rag_redaction_enabled", "rag_tier2_enabled", "threat_intel_enabled",
+   TUPLE/LIST element               recv=                               gateway/ai_mesh_gateway/main.py:13895: "rag_tier2_enabled",
+   READ:.get                        recv=resolve_rag_tier2_enabled(rag_policy gateway/ai_mesh_gateway/main.py:14150: _t2_on = resolve_rag_tier2_enabled(rag_policy.get("rag_tier2_enabled"))
+   READ:.get                        recv=) and resolve_rag_tier2_enabled(rag_policy gateway/ai_mesh_gateway/main.py:14206: ) and resolve_rag_tier2_enabled(rag_policy.get("rag_tier2_enabled")) and INPUT_SCANNER is not None:
+   READ:.get                        recv=resolve_rag_tier2_enabled(org_config gateway/ai_mesh_gateway/main.py:14754: rag_tier2_enabled = resolve_rag_tier2_enabled(org_config.get("rag_tier2_enabled"))
+   READ:.get                        recv=resolve_rag_tier2_enabled(inp.policy gateway/ai_mesh_gateway/rag_pipeline/query_stage.py:228: _t2 = resolve_rag_tier2_enabled(inp.policy.get("rag_tier2_enabled"))
+### threat_intel_enabled
+   DECL:config_sync type table      recv=                               gateway/ai_mesh_gateway/config_sync.py:71: "rag_redaction_enabled", "rag_tier2_enabled", "threat_intel_enabled",
+   READ:.get                        recv=and org_config                 gateway/ai_mesh_gateway/main.py:7938: and org_config.get("threat_intel_enabled", True)
+### auto_block_threats
+   DECL:config_sync type table      recv=                               gateway/ai_mesh_gateway/config_sync.py:72: "auto_block_threats", "telemetry_enabled",
+   READ:.get                        recv=threat_threshold and org_config gateway/ai_mesh_gateway/main.py:7943: if ctx_risk_score >= threat_threshold and org_config.get("auto_block_threats", True):
+### threat_score_threshold
+   DECL:config_sync type table      recv=                               gateway/ai_mesh_gateway/config_sync.py:88: "rag_relevance_threshold", "threat_score_threshold", "retention_days",
+   READ:.get                        recv=org_config                     gateway/ai_mesh_gateway/main.py:7942: threat_threshold = org_config.get("threat_score_threshold", 75) / 100.0
+### telemetry_enabled
+   DECL:config.py env-default       recv=                               gateway/ai_mesh_gateway/config.py:328: "telemetry_enabled": telemetry_enabled,
+   DECL:config_sync type table      recv=                               gateway/ai_mesh_gateway/config_sync.py:72: "auto_block_threats", "telemetry_enabled",
+   READ:membership                  recv=oc                             gateway/ai_mesh_gateway/main.py:6094: if oc is not None and "telemetry_enabled" in oc:
+   READ:.get                        recv=return bool(oc                 gateway/ai_mesh_gateway/main.py:6095: return bool(oc.get("telemetry_enabled", True))
+   READ:.get                        recv=return bool(CONFIG             gateway/ai_mesh_gateway/main.py:6098: return bool(CONFIG.get("telemetry_enabled", True))
+   READ:.get                        recv=if CONFIG                      gateway/ai_mesh_gateway/main.py:6495: if CONFIG.get("telemetry_enabled", True) and REDIS_CLIENT is not None:
+### retention_days
+   DECL:config_sync type table      recv=                               gateway/ai_mesh_gateway/config_sync.py:88: "rag_relevance_threshold", "threat_score_threshold", "retention_days",
+### compliance_frameworks
+   DECL:config_sync type table      recv=                               gateway/ai_mesh_gateway/config_sync.py:98: _LIST_KEYS = ("blocked_keywords", "allowed_models", "compliance_frameworks")
+   READ:.get                        recv=)                              gateway/ai_mesh_gateway/main.py:2871: return (CONFIG or {}).get("compliance_frameworks", [])
+   READ:.get                        recv=)                              gateway/ai_mesh_gateway/main.py:6160: _cf = (CONFIG_SYNC.get_config(_cf_slug) or {}).get("compliance_frameworks")
+   READ:.get                        recv=org_config                     gateway/ai_mesh_gateway/main.py:9475: compliance_tags=org_config.get("compliance_frameworks", []),
+   READ:.get                        recv=org_config                     gateway/ai_mesh_gateway/main.py:9645: compliance_tags=org_config.get("compliance_frameworks", []),
+   READ:.get                        recv=org_config                     gateway/ai_mesh_gateway/main.py:12986: compliance_tags=org_config.get("compliance_frameworks", []),
+   READ:.get                        recv=org_config                     gateway/ai_mesh_gateway/main.py:16622: compliance_tags=org_config.get("compliance_frameworks", []),
+### routing_risk_weight
+   DECL:config.py env-default       recv=                               gateway/ai_mesh_gateway/config.py:336: "routing_risk_weight": routing_risk_weight,
+   DECL:config_sync type table      recv=                               gateway/ai_mesh_gateway/config_sync.py:85: "routing_risk_weight", "routing_cost_weight", "routing_latency_weight",
+   READ:helper-call                 recv=_weight                        gateway/ai_mesh_gateway/main.py:3668: "risk": _weight("risk_weight", "routing_risk_weight", 0.30, "risk"),
+### routing_cost_weight
+   DECL:config.py env-default       recv=                               gateway/ai_mesh_gateway/config.py:337: "routing_cost_weight": routing_cost_weight,
+   DECL:config_sync type table      recv=                               gateway/ai_mesh_gateway/config_sync.py:85: "routing_risk_weight", "routing_cost_weight", "routing_latency_weight",
+   READ:helper-call                 recv=_weight                        gateway/ai_mesh_gateway/main.py:3669: "cost": _weight("cost_weight", "routing_cost_weight", 0.20, "cost"),
+### routing_latency_weight
+   DECL:config.py env-default       recv=                               gateway/ai_mesh_gateway/config.py:338: "routing_latency_weight": routing_latency_weight,
+   DECL:config_sync type table      recv=                               gateway/ai_mesh_gateway/config_sync.py:85: "routing_risk_weight", "routing_cost_weight", "routing_latency_weight",
+   READ:helper-call                 recv=_weight                        gateway/ai_mesh_gateway/main.py:3670: "latency": _weight("latency_weight", "routing_latency_weight", 0.20, "latency"),
+### routing_priority_weight
+   DECL:config.py env-default       recv=                               gateway/ai_mesh_gateway/config.py:339: "routing_priority_weight": routing_priority_weight,
+   DECL:config_sync type table      recv=                               gateway/ai_mesh_gateway/config_sync.py:86: "routing_priority_weight", "hallucination_grounding_threshold",
+   READ:helper-call                 recv=_weight                        gateway/ai_mesh_gateway/main.py:3671: "priority": _weight("priority_weight", "routing_priority_weight", 0.30, "priority"),
+### default_data_sensitivity
+   DECL:config_sync type table      recv=                               gateway/ai_mesh_gateway/config_sync.py:92: "litellm_default_model", "default_data_sensitivity",
+   READ:.get                        recv=org_config                     gateway/ai_mesh_gateway/main.py:3598: _ds_org = org_config.get("default_data_sensitivity")
+### routing_enabled
+   DECL:config_sync type table      recv=                               gateway/ai_mesh_gateway/config_sync.py:65: "model_isolation_enabled", "routing_enabled",
+   READ:.get                        recv=bool(org_config                gateway/ai_mesh_gateway/main.py:3558: org_routing_enabled = bool(org_config.get("routing_enabled", True))
+   READ:.get                        recv=routing_preferences            gateway/ai_mesh_gateway/main.py:3561: routing_override = routing_preferences.get("routing_enabled")
+   DICT-LITERAL key (write/emit)    recv=                               gateway/ai_mesh_gateway/main.py:3746: "routing_enabled": routing_enabled,
+   DICT-LITERAL key (write/emit)    recv=                               gateway/ai_mesh_gateway/main.py:3797: "routing_enabled": routing_enabled,
+   READ:.get                        recv=bool(routing_prefs             gateway/ai_mesh_gateway/main.py:3854: "routing_enabled": bool(routing_prefs.get("routing_enabled")),
+   READ:subscript                   recv=routing_prefs                  gateway/ai_mesh_gateway/main.py:7712: inference_models and LLM_ROUTER is not None and routing_prefs["routing_enabled"]
+   READ:subscript                   recv=routing_prefs                  gateway/ai_mesh_gateway/main.py:9979: and routing_prefs["routing_enabled"]
+   READ:subscript                   recv=routing_prefs                  gateway/ai_mesh_gateway/main.py:10093: routing_enabled=bool(routing_prefs["routing_enabled"]),
+   READ:subscript                   recv=routing_prefs                  gateway/ai_mesh_gateway/main.py:10145: "routing_enabled": bool(routing_prefs["routing_enabled"]),
+   READ:subscript                   recv=routing_prefs                  gateway/ai_mesh_gateway/main.py:10214: "routing_enabled": bool(routing_prefs["routing_enabled"]),
+   READ:subscript                   recv=routing_prefs                  gateway/ai_mesh_gateway/main.py:10217: "decision_source": "routing_disabled" if not routing_prefs["routing_enabled"] else "no_routing_models",
+   READ:subscript                   recv=routing_prefs                  gateway/ai_mesh_gateway/main.py:10220: if not routing_prefs["routing_enabled"]
+   READ:subscript                   recv=routing_prefs                  gateway/ai_mesh_gateway/main.py:10225: if not routing_prefs["routing_enabled"]
+   READ:subscript                   recv=routing_prefs                  gateway/ai_mesh_gateway/main.py:10344: "routing_enabled": bool(routing_prefs["routing_enabled"]),
+   READ:.get                        recv=route_metadata                 gateway/ai_mesh_gateway/main.py:11828: llm_resp["zeroshield"]["routing_enabled"] = route_metadata.get("routing_enabled", True)
+   TUPLE/LIST element               recv=                               gateway/ai_mesh_gateway/pipeline_trace.py:518: "routing_enabled",
+   TUPLE/LIST element               recv=                               gateway/ai_mesh_gateway/pipeline_trace.py:647: elif key in ("org_routing_enabled", "routing_enabled", "routing_override"):
+   READ:.get                        recv=routing                        gateway/ai_mesh_gateway/pipeline_trace.py:1274: routing_enabled_flag = routing.get("routing_enabled")
+   READ:.get                        recv=zs                             gateway/ai_mesh_gateway/pipeline_trace.py:1276: routing_enabled_flag = zs.get("routing_enabled")
+   DICT-LITERAL key (write/emit)    recv=                               gateway/ai_mesh_gateway/pipeline_trace.py:1511: "routing_enabled": routing_enabled_flag,
+   DICT-LITERAL key (write/emit)    recv=                               gateway/ai_mesh_gateway/pipeline_trace.py:1738: "routing_enabled": routing_enabled_flag,
+### org_slug
+   DICT-LITERAL key (write/emit)    recv=                               gateway/ai_mesh_gateway/circuit_breaker.py:199: "org_slug": (org_slug or "default").strip() or "default",
+   READ:.get                        recv=parsed                         gateway/ai_mesh_gateway/config_sync.py:620: org_slug = parsed.get("org_slug", "")
+   TUPLE/LIST element               recv=                               gateway/ai_mesh_gateway/main.py:244: org = getattr(auth_ctx, "org_slug", "") if auth_ctx else ""
+   TUPLE/LIST element               recv=                               gateway/ai_mesh_gateway/main.py:2048: org_slug = getattr(auth_ctx, "org_slug", None) or ""
+   TUPLE/LIST element               recv=                               gateway/ai_mesh_gateway/main.py:6112: _REQUEST_ORG_SLUG.set((getattr(auth_ctx, "org_slug", "") or "") if auth_ctx else "")
+   TUPLE/LIST element               recv=                               gateway/ai_mesh_gateway/main.py:7748: _REQUEST_ORG_SLUG.set((getattr(auth_ctx, "org_slug", "") or "") if auth_ctx else "")
+   DICT-LITERAL key (write/emit)    recv=                               gateway/ai_mesh_gateway/main.py:8498: "org_slug": auth_ctx.org_slug,
+   TUPLE/LIST element               recv=                               gateway/ai_mesh_gateway/main.py:12476: org_slug = getattr(auth_ctx, "org_slug", "") or "default"
+   TUPLE/LIST element               recv=                               gateway/ai_mesh_gateway/main.py:12522: "organization": getattr(auth_ctx, "org_slug", ""),
+   TUPLE/LIST element               recv=                               gateway/ai_mesh_gateway/main.py:13605: if _rag_blocked_keyword_hit(query_text, getattr(auth_ctx, "org_slug", "") or ""):
+   TUPLE/LIST element               recv=                               gateway/ai_mesh_gateway/main.py:13869: rag_policy["_org_slug"] = getattr(auth_ctx, "org_slug", None) or ""
+   TUPLE/LIST element               recv=                               gateway/ai_mesh_gateway/main.py:14733: org_slug = getattr(auth_ctx, "org_slug", "") or ""
+   TUPLE/LIST element               recv=                               gateway/ai_mesh_gateway/main.py:16760: _REQUEST_ORG_SLUG.set(getattr(auth_ctx, "org_slug", "") or "")
+   DICT-LITERAL key (write/emit)    recv=                               gateway/ai_mesh_gateway/mcp_error_classifier.py:225: "org_slug": org_slug, "server_slug": server_slug, "raw_cause": cause}),
+   TUPLE/LIST element               recv=                               gateway/ai_mesh_gateway/mcp_oauth.py:515: getattr(auth_context, "org_slug", "?"),
+   TUPLE/LIST element               recv=                               gateway/ai_mesh_gateway/mcp_oauth_proxy.py:496: if getattr(auth, "org_slug", None) != org_slug:
+   TUPLE/LIST element               recv=                               gateway/ai_mesh_gateway/mcp_oauth_proxy.py:499: getattr(auth, "org_slug", None), org_slug,
+   DICT-LITERAL key (write/emit)    recv=                               gateway/ai_mesh_gateway/mcp_oauth_proxy.py:615: "org_slug": org_slug,
+   READ:subscript                   recv=flow                           gateway/ai_mesh_gateway/mcp_oauth_proxy.py:731: org_slug = flow["org_slug"]
+   DICT-LITERAL key (write/emit)    recv=                               gateway/ai_mesh_gateway/mcp_proxy.py:1146: "org_slug": org_slug,
+   TUPLE/LIST element               recv=                               gateway/ai_mesh_gateway/mcp_proxy.py:2713: _ext_org = getattr(_get_auth_context(request), "org_slug", "") or ""
+   TUPLE/LIST element               recv=                               gateway/ai_mesh_gateway/mcp_proxy.py:2772: _ext_org = getattr(_get_auth_context(request), "org_slug", "") or ""
+   READ:.get                        recv=(body                          gateway/ai_mesh_gateway/mcp_proxy.py:3481: org_slug = (body.get("org_slug") or "").strip()
+   READ:.get                        recv=(body                          gateway/ai_mesh_gateway/mcp_proxy.py:3681: org_slug = (body.get("org_slug") or "").strip()
+   READ:.get                        recv=(body                          gateway/ai_mesh_gateway/mcp_proxy.py:3747: org_slug = (body.get("org_slug") or "").strip()
+   TUPLE/LIST element               recv=                               gateway/ai_mesh_gateway/mcp_proxy.py:4234: caller_org = getattr(auth, "org_slug", "") or ""
+   TUPLE/LIST element               recv=                               gateway/ai_mesh_gateway/mcp_proxy.py:4342: str(getattr(auth_ctx, "org_slug", "") or ""), "rate_limited")
+   DICT-LITERAL key (write/emit)    recv=                               gateway/ai_mesh_gateway/mcp_proxy.py:4413: json={"org_slug": org_slug, "server_slug": server_slug, "reason": reason},
+   WRITE:subscript-assign           recv=stdio_cfg                      gateway/ai_mesh_gateway/mcp_proxy.py:4621: stdio_cfg["org_slug"] = org_slug
+   TUPLE/LIST element               recv=                               gateway/ai_mesh_gateway/mcp_stdio_adapter.py:670: cfg.setdefault("org_slug", org_slug)
+   READ:.get                        recv=str(cfg                        gateway/ai_mesh_gateway/mcp_stdio_adapter.py:676: effective_org = str(cfg.get("org_slug") or org_slug)
+   TUPLE/LIST element               recv=                               gateway/ai_mesh_gateway/middleware.py:141: "org_slug",
+   READ:.get                        recv=payload                        gateway/ai_mesh_gateway/middleware.py:161: self.org_slug: str = payload.get("org_slug", "")
+   READ:.get                        recv=notification                   gateway/ai_mesh_gateway/policy_sync.py:456: org_slug = notification.get("org_slug", "default")
+   TUPLE/LIST element               recv=                               gateway/ai_mesh_gateway/rate_limit_enforcement.py:54: org_slug = getattr(auth_ctx, "org_slug", "") or ""
+   DICT-LITERAL key (write/emit)    recv=                               gateway/ai_mesh_gateway/rate_limit_enforcement.py:97: "org_slug": org_slug,
+   TUPLE/LIST element               recv=                               gateway/ai_mesh_gateway/rate_limit_enforcement.py:153: org_slug = getattr(auth_ctx, "org_slug", "") or ""
+   DICT-LITERAL key (write/emit)    recv=                               gateway/ai_mesh_gateway/rate_limit_enforcement.py:214: "org_slug": org_slug,
+   DICT-LITERAL key (write/emit)    recv=                               gateway/ai_mesh_gateway/rate_limit_enforcement.py:266: "org_slug": org_slug,
+   TUPLE/LIST element               recv=                               gateway/ai_mesh_gateway/telemetry_mongo.py:74: [("org_slug", 1), ("event_class", 1), ("ts", -1)],
+   DICT-LITERAL key (write/emit)    recv=                               gateway/ai_mesh_gateway/telemetry_ops.py:106: "org_slug": org_slug,
+   READ:.get                        recv=payload                        gateway/ai_mesh_gateway/vector_routes.py:384: "org_slug": payload.get("org_slug") or "",
+   READ:.get                        recv=str(auth_context               gateway/ai_mesh_gateway/vector_routes.py:1114: org_slug=str(auth_context.get("org_slug") or ""),

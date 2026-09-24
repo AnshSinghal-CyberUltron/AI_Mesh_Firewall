@@ -1,0 +1,13 @@
+== /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad
+62:DEFAULT_THREAD_HI = 32
+326:    asgi_threads = _clamp(round(cpu_budget * 2), thread_lo, thread_hi)
+339:    scanner_pool = _clamp(round(cpu_budget), 4, 16)
+346:    vault_pool = _clamp(round(cpu_budget / 2), 2, 8)
+351:    redis_pool = _clamp(asgi_threads * 4, 64, 256)
+== /home/contact_cyberultron_com/AI_Mesh_Firewall
+62:DEFAULT_THREAD_HI = 32
+326:    asgi_threads = _clamp(round(cpu_budget * 2), thread_lo, thread_hi)
+339:    scanner_pool = _clamp(round(cpu_budget), 4, 16)
+346:    vault_pool = _clamp(round(cpu_budget / 2), 2, 8)
+351:    redis_pool = _clamp(asgi_threads * 4, 64, 256)
+resource_budget.py IDENTICAL baseline vs HEAD

@@ -1,0 +1,57 @@
+# git diff --stat e95f974d HEAD -- frontend
+ frontend/src/components/AttackSimulatorPanel.jsx   |  22 +-
+ frontend/src/components/LogDetailPage.jsx          |  23 +-
+ .../src/components/OutputGuardrailControls.jsx     |  63 +++---
+ frontend/src/components/RoutingAuditPanel.jsx      |   3 +-
+ .../components/firewall/ResponseGuardrailsCard.jsx |  16 +-
+ frontend/src/components/howToUseContent.js         |  10 +-
+ frontend/src/components/outputGuardActions.js      |  34 +++
+ frontend/src/components/outputGuardActions.test.js |  44 ++++
+ .../simulator/CircuitBreakerSimulator.jsx          |  15 +-
+ frontend/src/context/AuthContext.jsx               |  72 +++++--
+ frontend/src/hooks/useFirewallData.js              |  18 +-
+ frontend/src/hooks/useGatewayConfig.js             |  14 +-
+ frontend/src/hooks/useIsolationPlayground.js       |  54 ++---
+ frontend/src/hooks/useSimulatorEngine.js           |  55 ++---
+ frontend/src/pages/AIMeshFirewallConfig.jsx        |  14 +-
+ frontend/src/utils/environmentUrls.js              |  35 ++-
+ frontend/src/utils/environmentUrls.test.js         |  49 +++++
+ frontend/src/utils/gatewayChatFetch.js             | 202 ++++++++++++++++++
+ frontend/src/utils/gatewayChatFetch.test.js        | 236 +++++++++++++++++++++
+ frontend/src/utils/liveGateway.js                  |  26 ++-
+ frontend/src/utils/liveGateway.test.js             |  56 +++++
+ frontend/src/utils/pipelineTrace.js                |  62 +++++-
+ frontend/src/utils/pipelineTrace.test.js           |  67 ++++++
+ frontend/src/utils/requestLifecycle.js             |   6 +
+ frontend/src/utils/requestLifecycle.test.js        |   7 +
+ frontend/src/utils/routingExplain.js               |  67 +++++-
+ frontend/src/utils/routingExplain.test.js          | 120 ++++++++++-
+ 27 files changed, 1201 insertions(+), 189 deletions(-)
+
+# git diff --stat 2a657fad HEAD -- frontend
+ frontend/src/components/AttackSimulatorPanel.jsx   |  22 +-
+ frontend/src/components/LogDetailPage.jsx          |  23 +-
+ frontend/src/components/RoutingAuditPanel.jsx      |   3 +-
+ frontend/src/components/howToUseContent.js         |  10 +-
+ .../simulator/CircuitBreakerSimulator.jsx          |  15 +-
+ frontend/src/context/AuthContext.jsx               |  72 +++++--
+ frontend/src/hooks/useFirewallData.js              |  18 +-
+ frontend/src/hooks/useGatewayConfig.js             |  14 +-
+ frontend/src/hooks/useIsolationPlayground.js       |  54 ++---
+ frontend/src/hooks/useSimulatorEngine.js           |  55 ++---
+ frontend/src/utils/environmentUrls.js              |  35 ++-
+ frontend/src/utils/environmentUrls.test.js         |  49 +++++
+ frontend/src/utils/gatewayChatFetch.js             | 202 ++++++++++++++++++
+ frontend/src/utils/gatewayChatFetch.test.js        | 236 +++++++++++++++++++++
+ frontend/src/utils/liveGateway.js                  |  26 ++-
+ frontend/src/utils/liveGateway.test.js             |  56 +++++
+ frontend/src/utils/pipelineTrace.js                |  62 +++++-
+ frontend/src/utils/pipelineTrace.test.js           |  67 ++++++
+ frontend/src/utils/requestLifecycle.js             |   6 +
+ frontend/src/utils/requestLifecycle.test.js        |   7 +
+ frontend/src/utils/routingExplain.js               |  67 +++++-
+ frontend/src/utils/routingExplain.test.js          | 120 ++++++++++-
+ 22 files changed, 1058 insertions(+), 161 deletions(-)
+# commits touching frontend/ in e95f974d..HEAD
+2ed687a6 2026-09-17 chore(revamp): snapshot T00–T02 lab tree and plans off ansh
+2a657fad 2026-09-17 fix(t01): honor PII-off as a true bypass and classify AKIA as secret

@@ -1,0 +1,20 @@
+ALL export non-test code: distinct env names read = 467 sites = 763
+(i)  BEDROCK_* read by gateway runtime: 17 names, 27 sites
+(ii) BEDROCK_* read by any export code (non-test): 19 names, 39 sites
+     names: ['BEDROCK_ADJUDICATOR_MODEL', 'BEDROCK_COMPONENT_LOG_LEVEL', 'BEDROCK_DEPLOYMENT_PATH', 'BEDROCK_LOG_BACKUPS', 'BEDROCK_LOG_DIR', 'BEDROCK_LOG_JSON', 'BEDROCK_LOG_LEVEL', 'BEDROCK_LOG_MAX_MB', 'BEDROCK_LOG_OUTPUT_PREVIEW', 'BEDROCK_LOG_PREVIEW_CHARS', 'BEDROCK_LOG_PROMPT_PREVIEW', 'BEDROCK_LOG_RING_SIZE', 'BEDROCK_MAX_PROMPT_CHARS', 'BEDROCK_MAX_TOKENS', 'BEDROCK_MODEL', 'BEDROCK_REGION', 'BEDROCK_TIER2_SCANNER_MODEL', 'BEDROCK_TIMEOUT', 'BEDROCK_VERIFY_SSL']
+contains 'BEDROCK' but not prefix BEDROCK_ (code reads): ['GATEWAY_BEDROCK_MAX_POOL_CONNECTIONS'] [('GATEWAY_BEDROCK_MAX_POOL_CONNECTIONS', 1)]
+dynamic (non-literal) env-name reads, first 40:
+    LLM_MODEL_KEY_ENCRYPTION_ENV [('shared/ai_mesh_shared/llm_model_crypto.py', 26, 'os.environ.get')]
+    MCP_HOST_TOOLS_ALLOWLIST_ENV [('shared/ai_mesh_shared/mcp_host_tools.py', 109, 'os.environ.get')]
+    _ENV [('gateway/ai_mesh_gateway/gc_monitor.py', 74, 'os.environ.get')]
+    _MODE_ENV [('gateway/ai_mesh_gateway/trace_projection.py', 51, 'os.environ.get')]
+    _env_key [('gateway/ai_mesh_gateway/main.py', 479, 'os.environ.get')]
+    _pub_var [('control/ai_mesh_control/main_app/settings.py', 959, 'os.environ.get')]
+    allow_env_var [('gateway/ai_mesh_gateway/config.py', 83, 'wrapper:get_env')]
+    env_var [('gateway/ai_mesh_gateway/main.py', 3918, 'os.environ.get'), ('gateway/ai_mesh_gateway/main.py', 4731, 'os.environ.get'), ('gateway/ai_mesh_gateway/main.py', 4879, 'os.environ.get')]
+    key [('gateway/ai_mesh_gateway/config.py', 11, 'os.environ.get'), ('gateway/ai_mesh_gateway/config.py', 25, 'wrapper:get_env'), ('gateway/ai_mesh_gateway/config.py', 51, 'wrapper:get_env')]
+    name [('services/mcp-broker/src/sandbox/docker_manager.py', 31, 'os.environ.get')]
+(iii) BEDROCK_* declared/interpolated in config (incl. commented): 9 ['BEDROCK_ADJUDICATOR_MAX_TOKENS', 'BEDROCK_ADJUDICATOR_MODEL', 'BEDROCK_LOG_LEVEL', 'BEDROCK_LOG_PROMPT_PREVIEW', 'BEDROCK_MAX_TOKENS', 'BEDROCK_MODEL', 'BEDROCK_REGION', 'BEDROCK_TIER2_SCANNER_MODEL', 'BEDROCK_TIMEOUT']
+(iv) union code-reads U config: 20 ['BEDROCK_ADJUDICATOR_MAX_TOKENS', 'BEDROCK_ADJUDICATOR_MODEL', 'BEDROCK_COMPONENT_LOG_LEVEL', 'BEDROCK_DEPLOYMENT_PATH', 'BEDROCK_LOG_BACKUPS', 'BEDROCK_LOG_DIR', 'BEDROCK_LOG_JSON', 'BEDROCK_LOG_LEVEL', 'BEDROCK_LOG_MAX_MB', 'BEDROCK_LOG_OUTPUT_PREVIEW', 'BEDROCK_LOG_PREVIEW_CHARS', 'BEDROCK_LOG_PROMPT_PREVIEW', 'BEDROCK_LOG_RING_SIZE', 'BEDROCK_MAX_PROMPT_CHARS', 'BEDROCK_MAX_TOKENS', 'BEDROCK_MODEL', 'BEDROCK_REGION', 'BEDROCK_TIER2_SCANNER_MODEL', 'BEDROCK_TIMEOUT', 'BEDROCK_VERIFY_SSL']
+config-only (never read by code): ['BEDROCK_ADJUDICATOR_MAX_TOKENS']
+code-only (read, never declared in config): ['BEDROCK_COMPONENT_LOG_LEVEL', 'BEDROCK_DEPLOYMENT_PATH', 'BEDROCK_LOG_BACKUPS', 'BEDROCK_LOG_DIR', 'BEDROCK_LOG_JSON', 'BEDROCK_LOG_MAX_MB', 'BEDROCK_LOG_OUTPUT_PREVIEW', 'BEDROCK_LOG_PREVIEW_CHARS', 'BEDROCK_LOG_RING_SIZE', 'BEDROCK_MAX_PROMPT_CHARS', 'BEDROCK_VERIFY_SSL']

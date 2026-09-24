@@ -1,0 +1,8 @@
+{"conn_opens":29,"drops":0,"errors":0,"goroutines":97,"inflight":29,"late_max_ns":1583162,"ok":1,"recorded":1,"scheduled":31,"sent":30,"t":1.000130674}
+{"conn_opens":57,"drops":0,"errors":0,"goroutines":182,"inflight":58,"late_max_ns":229883,"ok":3,"recorded":3,"scheduled":61,"sent":61,"t":2.000102205}
+{"conn_opens":71,"drops":0,"errors":0,"goroutines":222,"inflight":71,"late_max_ns":148311,"ok":20,"recorded":20,"scheduled":91,"sent":91,"t":3.000108258}
+{"conn_opens":76,"drops":0,"errors":0,"goroutines":235,"inflight":74,"late_max_ns":149831,"ok":47,"recorded":47,"scheduled":121,"sent":121,"t":4.000106239}
+{"conn_opens":81,"drops":0,"errors":0,"goroutines":245,"inflight":73,"late_max_ns":126684,"ok":77,"recorded":77,"scheduled":150,"sent":150,"t":5.000128458}
+{"conn_opens":81,"drops":0,"errors":0,"goroutines":222,"inflight":50,"late_max_ns":0,"ok":100,"recorded":100,"scheduled":150,"sent":150,"t":6.00012841}
+{"conn_opens":81,"drops":0,"errors":0,"goroutines":192,"inflight":20,"late_max_ns":0,"ok":130,"recorded":130,"scheduled":150,"sent":150,"t":7.000127842}
+{"conn_opens":81,"drops":0,"errors":0,"goroutines":174,"inflight":2,"late_max_ns":0,"ok":148,"recorded":148,"scheduled":150,"sent":150,"t":8.000136605}

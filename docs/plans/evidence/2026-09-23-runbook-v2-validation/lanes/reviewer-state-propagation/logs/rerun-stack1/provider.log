@@ -1,0 +1,46 @@
+Error handling request from 127.0.0.1
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/rvproto/.venv/lib/python3.12/site-packages/aiohttp/web_protocol.py", line 575, in _handle_request
+    resp = await request_handler(request)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/rvproto/.venv/lib/python3.12/site-packages/aiohttp/web_app.py", line 559, in _handle
+    return await handler(request)
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-state-propagation/rvproto-frozen1/tools/devprov.py", line 117, in chat
+    await self._emit(chunk, resp, doc, toks, tool, ttft, itl, start, cid, progress)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-state-propagation/rvproto-frozen1/tools/devprov.py", line 140, in _emit
+    await chunk({"content": t})
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-state-propagation/rvproto-frozen1/tools/devprov.py", line 112, in chunk
+    await resp.write(b"data: " + orjson.dumps(c) + b"\n\n")
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/rvproto/.venv/lib/python3.12/site-packages/aiohttp/web_response.py", line 564, in write
+    await self._payload_writer.write(data)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/rvproto/.venv/lib/python3.12/site-packages/aiohttp/http_writer.py", line 199, in write
+    self._write_chunked_payload(chunk)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/rvproto/.venv/lib/python3.12/site-packages/aiohttp/http_writer.py", line 122, in _write_chunked_payload
+    self._writelines((chunk_len_pre, chunk, b"\r\n"))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/rvproto/.venv/lib/python3.12/site-packages/aiohttp/http_writer.py", line 113, in _writelines
+    raise ClientConnectionResetError("Cannot write to closing transport")
+aiohttp.client_exceptions.ClientConnectionResetError: Cannot write to closing transport
+Error handling request from 127.0.0.1
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/rvproto/.venv/lib/python3.12/site-packages/aiohttp/web_protocol.py", line 575, in _handle_request
+    resp = await request_handler(request)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/rvproto/.venv/lib/python3.12/site-packages/aiohttp/web_app.py", line 559, in _handle
+    return await handler(request)
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-state-propagation/rvproto-frozen1/tools/devprov.py", line 117, in chat
+    await self._emit(chunk, resp, doc, toks, tool, ttft, itl, start, cid, progress)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-state-propagation/rvproto-frozen1/tools/devprov.py", line 140, in _emit
+    await chunk({"content": t})
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-state-propagation/rvproto-frozen1/tools/devprov.py", line 112, in chunk
+    await resp.write(b"data: " + orjson.dumps(c) + b"\n\n")
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/rvproto/.venv/lib/python3.12/site-packages/aiohttp/web_response.py", line 564, in write
+    await self._payload_writer.write(data)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/rvproto/.venv/lib/python3.12/site-packages/aiohttp/http_writer.py", line 199, in write
+    self._write_chunked_payload(chunk)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/rvproto/.venv/lib/python3.12/site-packages/aiohttp/http_writer.py", line 122, in _write_chunked_payload
+    self._writelines((chunk_len_pre, chunk, b"\r\n"))
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/rvproto/.venv/lib/python3.12/site-packages/aiohttp/http_writer.py", line 113, in _writelines
+    raise ClientConnectionResetError("Cannot write to closing transport")
+aiohttp.client_exceptions.ClientConnectionResetError: Cannot write to closing transport

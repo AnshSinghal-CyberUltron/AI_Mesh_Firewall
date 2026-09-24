@@ -1,0 +1,7 @@
+input (~1,000 PG2 tokens)           chars  canonicalize   matcher  tokenize   (median of 20, ms)
+English ASCII (benchmark shape)      5292        0.001     0.033     1.672
+English + one curly apostrophe       4452        0.389     0.028     1.430
+French (accents)                     3534        0.293     0.023     1.195
+German (umlauts)                     2958        0.251     0.020     0.957
+Chinese                              1024        0.359     0.012     0.442
+emoji-heavy chat                     3906        1.267     0.030     1.269

@@ -1,0 +1,3 @@
+{"ready":true,"guard":{"ready":true,"backend":"remote(owner)","model_hash":"2bf20e0f71e3a41e9e8cc4e602e08c142855bcce0cc73e0b65000d816d70877c","detail":"owners 1/1 connected, share 1/12: 10.160.15.228:7070 pid=1635 host=rv-split-guard-1 tokens_per_s=241430","error":null},"plans_loaded":true,"plans_fresh":true,"killswitch":"ok","worker":5}
+
+tree-ok

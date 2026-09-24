@@ -1,0 +1,23 @@
+./scripts/perf/e2e/perf.env:21:BEDROCK_REGION=ap-south-1
+./infra/terraform/envs/prod/main.tf:183:    BEDROCK_REGION               = var.region
+./infra/terraform/envs/prod/main.tf:187:    GATEWAY_BEDROCK_THREAD_POOL_SIZE = "16"
+./gateway/entrypoint.sh:47:_set_default GATEWAY_BEDROCK_THREAD_POOL_SIZE bedrock_pool
+./docker-compose.yml:249:      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-${BEDROCK_REGION:-ap-south-1}}
+./docker-compose.yml:250:      BEDROCK_REGION: ${BEDROCK_REGION:-ap-south-1}
+./docker-compose.yml:251:      BEDROCK_MODEL: ${BEDROCK_MODEL:-global.anthropic.claude-haiku-4-5-20251001-v1:0}
+./docker-compose.prod.yml:184:      # Thread pools are per forked worker. Leave GATEWAY_BEDROCK_THREAD_POOL_SIZE
+./docker-compose.prod.yml:196:      # rejects it on-demand. T2 scanner stays BEDROCK_TIER2_SCANNER_MODEL.
+./docker-compose.observability.yml:40:      BEDROCK_LOG_LEVEL: ${BEDROCK_LOG_LEVEL:-INFO}
+./docker-compose.observability.yml:41:      BEDROCK_LOG_PROMPT_PREVIEW: ${BEDROCK_LOG_PROMPT_PREVIEW:-false}
+./.env.sample:24:BEDROCK_REGION=ap-south-1
+./.env.sample:25:BEDROCK_MODEL=openai.gpt-oss-120b-1:0
+./.env.ec2.sample:73:GATEWAY_BEDROCK_THREAD_POOL_SIZE=8
+./.env.ec2.sample:88:# BEDROCK_TIMEOUT=60
+./.env.ec2.sample:100:BEDROCK_REGION=ap-south-1
+./.env.ec2.sample:102:BEDROCK_TIER2_SCANNER_MODEL=global.anthropic.claude-haiku-4-5-20251001-v1:0
+./.env.ec2.sample:103:BEDROCK_ADJUDICATOR_MODEL=global.anthropic.claude-haiku-4-5-20251001-v1:0
+./.env.ec2.sample:104:BEDROCK_MAX_TOKENS=256
+./.env.ec2.sample:105:BEDROCK_ADJUDICATOR_MAX_TOKENS=200
+./.env.ec2.sample:107:BEDROCK_MODEL=global.anthropic.claude-haiku-4-5-20251001-v1:0
+./.env.ec2.sample:132:BEDROCK_LOG_LEVEL=INFO
+./.env.ec2.sample:133:BEDROCK_LOG_PROMPT_PREVIEW=false

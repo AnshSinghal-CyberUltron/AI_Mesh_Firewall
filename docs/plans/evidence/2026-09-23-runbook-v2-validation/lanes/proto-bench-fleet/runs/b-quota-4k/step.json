@@ -1,0 +1,3 @@
+{"run": "b-quota-4k", "rate": 56, "mode": "sut", "kind": "quota", "corpus": "headline-22M.jsonl", "targets": "http://10.146.0.2:8400,http://10.146.0.5:8400,http://10.146.0.3:8400,http://10.146.0.4:8400",
+ "units": "rv-pbf-unit-2 rv-pbf-unit-3 rv-pbf-unit-4 rv-pbf-unit-5", "auth": "auth-q", "olg_flags": "-corpus /home/rv/rv/corpora/headline-22M.jsonl -ramp 10 -warmup 5 -duration 150 -sse-frac 0.7 -auth-file /home/rv/rv/auth-q", "lgs": "rv-pbf-lg-1 rv-pbf-lg-2 rv-pbf-lg-3", "provs": "rv-pbf-prov-1 rv-pbf-prov-2", "sut_vms": "",
+ "newver": "a-2", "budget": "4000000", "region_zone": "asia-northeast1-a", "created_utc": "2026-09-23T16:30:24Z"}

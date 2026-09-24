@@ -1,0 +1,1 @@
+qdisc netem 8006: root refcnt 5 limit 100000 delay 1ms

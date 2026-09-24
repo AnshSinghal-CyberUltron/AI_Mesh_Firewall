@@ -1,0 +1,20 @@
+16:35:34 f1u-020-poisson: olg started on rv-pbf-lg-1 rv-pbf-lg-2 rv-pbf-lg-3 (rate 6.666666666666667 each, start-at 1790181358419, mode sut, targets http://10.146.0.10:8080)
+[rv-pbf-lg-1] 2026/09/23 16:42:35 done: scheduled=2556 recorded=2556 ok=2502 errors=map[http_403:32 http_503:22] drops=0 late_p99=119us max=228us cpu_busy_max=9.7%
+[rv-pbf-lg-2] 2026/09/23 16:42:36 done: scheduled=2543 recorded=2543 ok=2487 errors=map[http_403:32 http_503:24] drops=0 late_p99=124us max=204us cpu_busy_max=5.0%
+[rv-pbf-lg-3] 2026/09/23 16:42:35 done: scheduled=2516 recorded=2516 ok=2468 errors=map[http_403:32 http_503:16] drops=0 late_p99=119us max=156us cpu_busy_max=5.0%
+# f1u-020-poisson: strict FAIL | load-knee FAIL (sut, units=1, rate=20)
+
+checks: {'p99_T_fw_addon_lt_slo': False, 'infra_error_rate_le_budget': False, 'zero_schedule_drops': True, 'zero_safety_failures': True, 'run_valid': True}
+load-knee checks: {'p99_T_fw_addon_nohold_lt_slo': True, 'infra_error_rate_le_budget': False, 'zero_schedule_drops': True, 'zero_safety_failures': True, 'run_valid': True}
+offered 6154 (20.51/s) qualified 6028 (20.09/s) FP-blocks 76 (0.01235) infra 50 (0.008124796880077998) drops 0 safety 0
+infra reasons: {'http_503': 50, 'incomplete': 50, 'unjoined': 50, 'disposition_missing': 50, 'stage_canon_missing': 50, 'stage_det_missing': 50, 'stage_sem_missing': 50, 'stage_resolve_missing': 50, 'stage_dispatch_missing': 50, 'stage_out_missing': 50, 'stage_audit_missing': 50}
+infra detail: {'503 http_503 type=server_overloaded code=overloaded': 50}
+
+T_fw_addon: n=6028 p50=10.284 p90=15.0761 p99=53.2779 p99.9=71.2921 max=74.8098 mean=12.6468
+T_fw_addon_nohold: n=6028 p50=10.0398 p90=12.6432 p99=15.2876 p99.9=17.9689 max=21.5965 mean=9.4415
+T_fw_addon_sse: n=4215 p50=10.3958 p90=35.5855 p99=53.6571 p99.9=71.514 max=74.8098 mean=14.0725
+T_fw_addon_json: n=1813 p50=9.9132 p90=12.3728 p99=15.1061 p99.9=18.1876 max=21.5965 mean=9.3324
+T_addon_first_sse: n=4215 p50=10.0404 p90=13.2508 p99=29.8433 p99.9=33.6324 max=34.0144 mean=9.7414
+T_addon_total_sse: n=4215 p50=10.0777 p90=12.7526 p99=15.4912 p99.9=17.9689 max=21.0181 mean=9.4885
+T_addon_total_json: n=1813 p50=9.9132 p90=12.3728 p99=15.1061 p99.9=18.1876 max=21.5965 mean=9.3324
+T_release_lag_max: n=456 p50=49.7743 p90=53.597 p99=71.514 p99.9=74.8098 max=74.8098 mean=48.7967

@@ -1,0 +1,827 @@
+{
+ "schema": "rv-guard-recommendation/v1",
+ "generated_utc": "2026-09-23T09:58:46Z",
+ "evidence_dir": "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/guard-bench",
+ "measured_on": {
+  "vm": "GCE g2-standard-8: 1x NVIDIA L4 (24 GB, 72 W board power limit), 8 vCPU Intel Cascade Lake 2.2 GHz",
+  "zone": "asia-south1-c",
+  "driver": "580.178.04",
+  "image": "common-cu129-ubuntu-2204-nvidia-580-v20260909",
+  "note": "under sustained load the L4 sits at its 72 W cap and throttles SM clock (p50 ~1.4 GHz vs 2.04 GHz boost); numbers below are at that steady state"
+ },
+ "model": {
+  "use": "meta-llama/Llama-Prompt-Guard-2-22M",
+  "label": "class index 1 = MALICIOUS; score = softmax(logits)[1] (probe: attack p1=0.999, benign p1=0.0006; upstream config id2label {0: BENIGN, 1: MALICIOUS})",
+  "onnx_export": "torch 2.14.0 TorchScript exporter (dynamo=False), opset 17, dynamic [batch, seq], inputs input_ids/attention_mask int64, output logits fp32; ORT-CPU fp32 parity vs PyTorch fp32: 748/748 decisions, max |dp| 6e-6 (raw/export/export_report.json)",
+  "do_not_use_on_hot_path": "Llama-Prompt-Guard-2-86M: single-request latency on L4 is W1 5.9364 ms / W2 12.3667 ms p50 -> no p99<=10 ms point at W>=2"
+ },
+ "tokenizer": {
+  "load": "tokenizers.Tokenizer.from_file(tokenizer.json); call no_truncation() and no_padding() (the file ships truncation=512 + Fixed(512) padding enabled -> silent truncation otherwise)",
+  "window": "encode(add_special_tokens=False) -> windows of 510 content tokens -> [CLS]=1 + window + [SEP]=2, pad id 0 to 512",
+  "cost": "HF tokenizers single call: 1,024 tokens = 3.05 ms p50 on G2 Cascade Lake vCPU, 1.74 ms on C4 Emerald Rapids (raw/A/*/tok/tok_bench*.json) -- budget it on the gateway CPU, it is not inside the GPU numbers"
+ },
+ "guard_backend": {
+  "name": "local_gpu",
+  "runtime": {
+   "onnxruntime-gpu": "1.30.0",
+   "tensorrt": "tensorrt-cu13==10.16.1.11 (ORT 1.30 TRT EP links libnvinfer.so.10)",
+   "cuda": "13.x from pip nvidia-* wheels (onnxruntime-gpu[cuda,cudnn]); put tensorrt_libs + nvidia/*/lib on LD_LIBRARY_PATH; onnxruntime.preload_dlls()"
+  },
+  "session": {
+   "providers": [
+    "TensorrtExecutionProvider",
+    "CUDAExecutionProvider"
+   ],
+   "trt_provider_options": {
+    "trt_fp16_enable": true,
+    "trt_engine_cache_enable": true,
+    "trt_engine_cache_path": "<cache dir keyed by model sha256 + ORT/TRT version + GPU sm + profile>",
+    "trt_timing_cache_enable": true,
+    "trt_builder_optimization_level": 3,
+    "trt_max_workspace_size": 4294967296,
+    "trt_profile_min_shapes": "input_ids:1x512,attention_mask:1x512",
+    "trt_profile_opt_shapes": "input_ids:1x512,attention_mask:1x512",
+    "trt_profile_max_shapes": "input_ids:1x512,attention_mask:1x512"
+   },
+   "session_options": {
+    "graph_optimization_level": "ORT_ENABLE_ALL",
+    "intra_op_num_threads": 1,
+    "session.intra_op.allow_spinning": "0"
+   },
+   "must": [
+    "sess.disable_fallback()  # otherwise ORT silently re-creates the session on CUDA EP after a TRT error",
+    "assert sess.get_providers()[0] == 'TensorrtExecutionProvider' at readiness",
+    "warm the engine (>= 50 runs) before /readyz; no engine build after ready"
+   ]
+  },
+  "execution": "serial batch-1: each 510-token window is its own sess.run([1,512]) on the exact-shape engine; the W windows of a request run back-to-back on ONE dedicated inference thread per GPU; FIFO across requests; no cross-request batching",
+  "microbatcher": {
+   "max_batch_windows_B": 1,
+   "max_wait_us": 0
+  },
+  "why": {
+   "batch1_is_most_efficient": {
+    "closed_loop_windows_per_s_by_batch": {
+     "1": {
+      "service_p50_ms": 2.1455,
+      "windows_per_s": 466.0
+     },
+     "2": {
+      "service_p50_ms": 4.9306,
+      "windows_per_s": 405.0
+     },
+     "3": {
+      "service_p50_ms": 7.5242,
+      "windows_per_s": 399.0
+     },
+     "4": {
+      "service_p50_ms": 10.2682,
+      "windows_per_s": 391.2
+     },
+     "5": {
+      "service_p50_ms": 12.6557,
+      "windows_per_s": 395.2
+     },
+     "6": {
+      "service_p50_ms": 15.2688,
+      "windows_per_s": 391.9
+     },
+     "7": {
+      "service_p50_ms": 17.8348,
+      "windows_per_s": 391.0
+     },
+     "8": {
+      "service_p50_ms": 21.0213,
+      "windows_per_s": 380.4
+     },
+     "12": {
+      "service_p50_ms": 32.9691,
+      "windows_per_s": 363.7
+     },
+     "16": {
+      "service_p50_ms": 44.9762,
+      "windows_per_s": 355.8
+     },
+     "24": {
+      "service_p50_ms": 68.6402,
+      "windows_per_s": 349.3
+     },
+     "32": {
+      "service_p50_ms": 94.3207,
+      "windows_per_s": 339.0
+     },
+     "48": {
+      "service_p50_ms": 153.6852,
+      "windows_per_s": 312.3
+     },
+     "64": {
+      "service_p50_ms": 210.1081,
+      "windows_per_s": 304.2
+     }
+    },
+    "file": "raw/A/g2-1/Llama-Prompt-Guard-2-22M/capacity_trt_fp16_bucketed.json"
+   },
+   "dynamic_profile_engine_penalty": {
+    "static_1x512": {
+     "p50": 2.1519,
+     "p99": 2.198,
+     "max": 2.3678,
+     "n": 3000,
+     "file": "raw/A/g2-1/Llama-Prompt-Guard-2-22M/lat_trt_fp16_static.json"
+    },
+    "dyn_opt4": {
+     "p50": 3.0005,
+     "p99": 3.0544,
+     "max": 3.2583,
+     "n": 3000,
+     "file": "raw/A/g2-1/Llama-Prompt-Guard-2-22M/lat_trt_fp16_dyn_opt4.json"
+    },
+    "dyn_opt16": {
+     "p50": 3.5076,
+     "p99": 3.6307,
+     "max": 3.7353,
+     "n": 3000,
+     "file": "raw/A/g2-1/Llama-Prompt-Guard-2-22M/lat_trt_fp16_dyn_opt16.json"
+    }
+   },
+   "multi_profile_engine": "one engine with 7 profiles fails for any batch != profile 0 in ORT 1.30 TRT EP (IExecutionContext::enqueueV3 API Usage Error): use one exact-shape engine per shape",
+   "cross_request_batching": "no throughput gain (larger batches are less efficient on the power-capped L4) and it adds the wait + a longer batch to every request's latency; see throughput table",
+   "one_gpu_owner_process": {
+    "rule": "exactly ONE process owns each GPU session; N uvicorn workers must NOT each open their own session on the same L4 (with or without CUDA MPS): send windows to the owner over local IPC or run one worker per GPU",
+    "closed_loop_W2_by_process_count": [
+     {
+      "N": 4,
+      "mps": 0,
+      "aggregate_windows_per_s": 250.2,
+      "call_p50_ms": 16.1949
+     },
+     {
+      "N": 4,
+      "mps": 1,
+      "aggregate_windows_per_s": 213.2,
+      "call_p50_ms": 37.7804
+     },
+     {
+      "N": 8,
+      "mps": 0,
+      "aggregate_windows_per_s": 269.6,
+      "call_p50_ms": 59.9069
+     },
+     {
+      "N": 8,
+      "mps": 1,
+      "aggregate_windows_per_s": 186.4,
+      "call_p50_ms": 86.4146
+     }
+    ],
+    "single_process_reference": "466 windows/s closed loop at batch 1 (capacity_trt_fp16_bucketed.json)"
+   },
+   "window_execution_mode_one_request_in_flight": {
+    "batch_W2": {
+     "p50_ms": 5.3457,
+     "p99_ms": 5.5433
+    },
+    "serial_W2": {
+     "p50_ms": 4.6883,
+     "p99_ms": 4.7826
+    },
+    "streams_W2": {
+     "p50_ms": 5.5997,
+     "p99_ms": 5.9187
+    },
+    "batch_W3": {
+     "p50_ms": 8.2078,
+     "p99_ms": 8.5823
+    },
+    "serial_W3": {
+     "p50_ms": 7.0386,
+     "p99_ms": 7.2033
+    },
+    "streams_W3": {
+     "p50_ms": 8.4986,
+     "p99_ms": 8.8128
+    }
+   }
+  },
+  "engine_lifecycle": {
+   "cold_build_s_by_shape": {
+    "1x256": 55.0899,
+    "1x512": 53.1125,
+    "2x512": 43.0204,
+    "3x512": 42.9209,
+    "4x512": 45.7349,
+    "7x512": 58.1853
+   },
+   "warm_restart_process_start_to_first_inference_s": [
+    7.4959,
+    7.5159,
+    7.5015
+   ]
+  }
+ },
+ "measured_22M_single_request_latency_ms": {
+  "W1": {
+   "p50": 2.1519,
+   "p99": 2.198,
+   "max": 2.3678,
+   "n": 3000,
+   "file": "raw/A/g2-1/Llama-Prompt-Guard-2-22M/lat_trt_fp16_static.json"
+  },
+  "W2_batch": {
+   "p50": 4.9789,
+   "p99": 5.1189,
+   "max": 5.2345,
+   "n": 3000,
+   "file": "raw/A/g2-1/Llama-Prompt-Guard-2-22M/lat_trt_fp16_static.json"
+  },
+  "W3_batch": {
+   "p50": 7.88,
+   "p99": 8.0789,
+   "max": 8.1599,
+   "n": 3000,
+   "file": "raw/A/g2-1/Llama-Prompt-Guard-2-22M/lat_trt_fp16_static.json"
+  },
+  "W4_batch": {
+   "p50": 11.0098,
+   "p99": 11.2743,
+   "max": 11.3689,
+   "n": 3000,
+   "file": "raw/A/g2-1/Llama-Prompt-Guard-2-22M/lat_trt_fp16_static.json"
+  },
+  "W7_batch": {
+   "p50": 19.3876,
+   "p99": 20.5572,
+   "max": 21.8184,
+   "n": 3000,
+   "file": "raw/A/g2-1/Llama-Prompt-Guard-2-22M/lat_trt_fp16_static.json"
+  },
+  "W1_seq256": {
+   "p50": 1.12,
+   "p99": 1.15,
+   "max": 1.1958,
+   "n": 3000,
+   "file": "raw/A/g2-1/Llama-Prompt-Guard-2-22M/lat_trt_fp16_static.json"
+  }
+ },
+ "capacity_22M_one_L4_open_loop": {
+  "W2_serial1": {
+   "q_safe_p99<=5ms": 0.0,
+   "first_fail_p99<=5ms": 20.3,
+   "q_safe_p99<=8ms": 40.6,
+   "first_fail_p99<=8ms": 81.1,
+   "q_safe_p99<=10ms": 81.1,
+   "first_fail_p99<=10ms": 121.7,
+   "q_safe_p99<=15ms": 162.3,
+   "first_fail_p99<=15ms": 202.8,
+   "q_safe_p99<=20ms": 283.9,
+   "first_fail_p99<=20ms": 324.5,
+   "max_sustained_wps": 367.2,
+   "lowest_step_wps": 20.3,
+   "lowest_step_p99_ms": 7.3598,
+   "dir": "raw/A/g2-1/Llama-Prompt-Guard-2-22M/mb_trt_fp16_bucketed/W2_serial1"
+  },
+  "W3_serial1": {
+   "q_safe_p99<=5ms": 0.0,
+   "first_fail_p99<=5ms": 19.9,
+   "q_safe_p99<=8ms": 0.0,
+   "first_fail_p99<=8ms": 19.9,
+   "q_safe_p99<=10ms": 0.0,
+   "first_fail_p99<=10ms": 19.9,
+   "q_safe_p99<=15ms": 79.7,
+   "first_fail_p99<=15ms": 119.6,
+   "q_safe_p99<=20ms": 159.5,
+   "first_fail_p99<=20ms": 199.4,
+   "max_sustained_wps": 311.9,
+   "lowest_step_wps": 19.9,
+   "lowest_step_p99_ms": 10.927,
+   "dir": "raw/A/g2-1/Llama-Prompt-Guard-2-22M/mb_trt_fp16_bucketed/W3_serial1"
+  },
+  "headline_mix_serial1": {
+   "q_safe_p99<=5ms": 0.0,
+   "first_fail_p99<=5ms": 20.3,
+   "q_safe_p99<=8ms": 81.1,
+   "first_fail_p99<=8ms": 121.7,
+   "q_safe_p99<=10ms": 162.3,
+   "first_fail_p99<=10ms": 202.8,
+   "q_safe_p99<=15ms": 243.4,
+   "first_fail_p99<=15ms": 283.9,
+   "q_safe_p99<=20ms": 283.9,
+   "first_fail_p99<=20ms": 324.5,
+   "max_sustained_wps": 449.6,
+   "lowest_step_wps": 20.3,
+   "lowest_step_p99_ms": 6.1909,
+   "dir": "raw/A/g2-1/Llama-Prompt-Guard-2-22M/mb_trt_fp16_bucketed/Wheadline_serial1"
+  },
+  "W2_nobatch_batch2": {
+   "q_safe_p99<=5ms": 0.0,
+   "first_fail_p99<=5ms": 20.3,
+   "q_safe_p99<=8ms": 40.6,
+   "first_fail_p99<=8ms": 81.1,
+   "q_safe_p99<=10ms": 81.1,
+   "first_fail_p99<=10ms": 121.7,
+   "q_safe_p99<=15ms": 162.3,
+   "first_fail_p99<=15ms": 202.8,
+   "q_safe_p99<=20ms": 243.4,
+   "first_fail_p99<=20ms": 283.9,
+   "max_sustained_wps": 317.5,
+   "lowest_step_wps": 20.3,
+   "lowest_step_p99_ms": 7.3402,
+   "dir": "raw/A/g2-1/Llama-Prompt-Guard-2-22M/mb_trt_fp16_bucketed/W2_nobatch"
+  },
+  "knee_confirmations": {
+   "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/guard-bench/raw/A/g2-2/Llama-Prompt-Guard-2-22M/knee_serial1_W2_p99le10": {
+    "target_p99_ms": 10.0,
+    "knee_wps": 89.2,
+    "next_wps": 97.4,
+    "fine_sweep": [
+     {
+      "offered_wps": 89.2,
+      "p99": 8.8241,
+      "drops": 0,
+      "n": 1358
+     },
+     {
+      "offered_wps": 97.4,
+      "p99": 10.1313,
+      "drops": 0,
+      "n": 1405
+     },
+     {
+      "offered_wps": 105.6,
+      "p99": 9.3656,
+      "drops": 0,
+      "n": 1610
+     },
+     {
+      "offered_wps": 113.8,
+      "p99": 11.2992,
+      "drops": 0,
+      "n": 1700
+     }
+    ],
+    "knee_repeats": [
+     {
+      "p50": 4.105,
+      "p99": 9.1978,
+      "max": 19.2693,
+      "n": 13282,
+      "drops": 0,
+      "achieved_wps": 88.6,
+      "pass": true
+     },
+     {
+      "p50": 4.1159,
+      "p99": 9.2249,
+      "max": 17.3491,
+      "n": 13287,
+      "drops": 0,
+      "achieved_wps": 88.6,
+      "pass": true
+     },
+     {
+      "p50": 4.0974,
+      "p99": 9.2389,
+      "max": 15.8349,
+      "n": 13410,
+      "drops": 0,
+      "achieved_wps": 89.4,
+      "pass": true
+     }
+    ],
+    "next_step": [
+     {
+      "p50": 4.1137,
+      "p99": 9.6591,
+      "n": 14556,
+      "drops": 0,
+      "pass": true
+     }
+    ],
+    "knee_repeatable_pass": true
+   },
+   "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/guard-bench/raw/A/g2-2/Llama-Prompt-Guard-2-22M/knee_serial1_W2_p99le8": {
+    "target_p99_ms": 8.0,
+    "knee_wps": 41.0,
+    "next_wps": 49.0,
+    "fine_sweep": [
+     {
+      "offered_wps": 49.0,
+      "p99": 8.0686,
+      "drops": 0,
+      "n": 792
+     },
+     {
+      "offered_wps": 57.0,
+      "p99": 8.1524,
+      "drops": 0,
+      "n": 770
+     },
+     {
+      "offered_wps": 65.0,
+      "p99": 7.8319,
+      "drops": 0,
+      "n": 990
+     },
+     {
+      "offered_wps": 73.0,
+      "p99": 10.077,
+      "drops": 0,
+      "n": 1116
+     }
+    ],
+    "knee_repeats": [
+     {
+      "p50": 4.1752,
+      "p99": 7.8611,
+      "max": 16.0987,
+      "n": 6225,
+      "drops": 0,
+      "achieved_wps": 41.5,
+      "pass": true
+     },
+     {
+      "p50": 4.1685,
+      "p99": 7.768,
+      "max": 14.8275,
+      "n": 6098,
+      "drops": 0,
+      "achieved_wps": 40.7,
+      "pass": true
+     },
+     {
+      "p50": 4.1617,
+      "p99": 7.7494,
+      "max": 13.6466,
+      "n": 6130,
+      "drops": 0,
+      "achieved_wps": 40.9,
+      "pass": true
+     }
+    ],
+    "next_step": [
+     {
+      "p50": 4.1408,
+      "p99": 7.9725,
+      "n": 7366,
+      "drops": 0,
+      "pass": true
+     }
+    ],
+    "knee_repeatable_pass": true
+   },
+   "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/guard-bench/raw/A/g2-5/Llama-Prompt-Guard-2-22M/knee_serial1_headline_p99le10": {
+    "target_p99_ms": 10.0,
+    "knee_wps": 162.0,
+    "next_wps": 170.2,
+    "fine_sweep": [
+     {
+      "offered_wps": 170.2,
+      "p99": 10.5165,
+      "drops": 0,
+      "n": 3290
+     },
+     {
+      "offered_wps": 178.4,
+      "p99": 10.8814,
+      "drops": 0,
+      "n": 3419
+     },
+     {
+      "offered_wps": 186.6,
+      "p99": 11.2997,
+      "drops": 0,
+      "n": 3588
+     },
+     {
+      "offered_wps": 194.8,
+      "p99": 12.1902,
+      "drops": 0,
+      "n": 3704
+     }
+    ],
+    "knee_repeats": [
+     {
+      "p50": 4.0545,
+      "p99": 10.985,
+      "max": 26.9652,
+      "n": 31208,
+      "drops": 0,
+      "achieved_wps": 162.6,
+      "pass": false
+     },
+     {
+      "p50": 4.0536,
+      "p99": 10.4284,
+      "max": 22.059,
+      "n": 31033,
+      "drops": 0,
+      "achieved_wps": 161.7,
+      "pass": false
+     },
+     {
+      "p50": 4.051,
+      "p99": 10.8465,
+      "max": 22.0589,
+      "n": 31292,
+      "drops": 0,
+      "achieved_wps": 163.1,
+      "pass": false
+     }
+    ],
+    "next_step": [
+     {
+      "p50": 4.056,
+      "p99": 11.1312,
+      "n": 32741,
+      "drops": 0,
+      "pass": false
+     }
+    ],
+    "knee_repeatable_pass": false
+   },
+   "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/guard-bench/raw/A/g2-5/Llama-Prompt-Guard-2-22M/knee_serial1_headline_p99le8": {
+    "target_p99_ms": 8.0,
+    "knee_wps": 81.0,
+    "next_wps": 89.2,
+    "fine_sweep": [
+     {
+      "offered_wps": 89.2,
+      "p99": 8.3305,
+      "drops": 0,
+      "n": 1775
+     },
+     {
+      "offered_wps": 97.4,
+      "p99": 8.6755,
+      "drops": 0,
+      "n": 1816
+     },
+     {
+      "offered_wps": 105.6,
+      "p99": 8.2543,
+      "drops": 0,
+      "n": 2039
+     },
+     {
+      "offered_wps": 113.8,
+      "p99": 9.8229,
+      "drops": 0,
+      "n": 2163
+     }
+    ],
+    "knee_repeats": [
+     {
+      "p50": 4.0461,
+      "p99": 7.8882,
+      "max": 16.4378,
+      "n": 15527,
+      "drops": 0,
+      "achieved_wps": 80.4,
+      "pass": true
+     },
+     {
+      "p50": 4.0413,
+      "p99": 7.8781,
+      "max": 12.9287,
+      "n": 15383,
+      "drops": 0,
+      "achieved_wps": 79.6,
+      "pass": true
+     },
+     {
+      "p50": 4.0583,
+      "p99": 7.8645,
+      "max": 13.6608,
+      "n": 15596,
+      "drops": 0,
+      "achieved_wps": 80.7,
+      "pass": true
+     }
+    ],
+    "next_step": [
+     {
+      "p50": 4.0364,
+      "p99": 8.1206,
+      "n": 17128,
+      "drops": 1,
+      "pass": false
+     }
+    ],
+    "knee_repeatable_pass": true
+   }
+  },
+  "unit": "windows/s offered (Poisson); q_safe = highest step with p99 <= target, 0 drops, all complete"
+ },
+ "operating_points": {
+  "unit": "offered windows/s on ONE L4 (divide by mean windows/request for RPS: W2 -> /2, headline mix -> /1.556)",
+  "p99_le_5ms": {
+   "W1_only_prompts_le_510_tokens": {
+    "q_safe_p99<=5ms": 93.0,
+    "first_fail_p99<=5ms": 140.0,
+    "q_safe_p99<=8ms": 186.0,
+    "first_fail_p99<=8ms": 233.0,
+    "q_safe_p99<=10ms": 280.0,
+    "first_fail_p99<=10ms": 326.0,
+    "q_safe_p99<=15ms": 326.0,
+    "first_fail_p99<=15ms": 373.0,
+    "q_safe_p99<=20ms": 326.0,
+    "first_fail_p99<=20ms": 373.0,
+    "max_sustained_wps": 414.5,
+    "lowest_step_wps": 23.0,
+    "lowest_step_p99_ms": 3.6025,
+    "dir": "raw/A/g2-5/Llama-Prompt-Guard-2-22M/mb_trt_fp16_bucketed_g25/W1_serial1"
+   },
+   "W2_or_headline": "INFEASIBLE: W=2 p99 is 7.36 ms already at 20 windows/s (GPU idle most of the time); headline mix 6.19 ms at 20 w/s"
+  },
+  "p99_le_8ms": {
+   "W2_confirmed": {
+    "knee_wps": 41.0,
+    "repeats_p99_ms": [
+     7.8611,
+     7.768,
+     7.7494
+    ],
+    "repeatable_pass": true,
+    "next_wps": 49.0,
+    "next_p99_ms": [
+     7.9725
+    ],
+    "dir": "raw/A/g2-2/Llama-Prompt-Guard-2-22M/knee_serial1_W2_p99le8"
+   },
+   "headline_confirmed": {
+    "knee_wps": 81.0,
+    "repeats_p99_ms": [
+     7.8882,
+     7.8781,
+     7.8645
+    ],
+    "repeatable_pass": true,
+    "next_wps": 89.2,
+    "next_p99_ms": [
+     8.1206
+    ],
+    "dir": "raw/A/g2-5/Llama-Prompt-Guard-2-22M/knee_serial1_headline_p99le8"
+   }
+  },
+  "p99_le_10ms": {
+   "W2_confirmed": {
+    "knee_wps": 89.2,
+    "repeats_p99_ms": [
+     9.1978,
+     9.2249,
+     9.2389
+    ],
+    "repeatable_pass": true,
+    "next_wps": 97.4,
+    "next_p99_ms": [
+     9.6591
+    ],
+    "dir": "raw/A/g2-2/Llama-Prompt-Guard-2-22M/knee_serial1_W2_p99le10"
+   },
+   "headline_knee_attempt_162": {
+    "knee_wps": 162.0,
+    "repeats_p99_ms": [
+     10.985,
+     10.4284,
+     10.8465
+    ],
+    "repeatable_pass": false,
+    "next_wps": 170.2,
+    "next_p99_ms": [
+     11.1312
+    ],
+    "dir": "raw/A/g2-5/Llama-Prompt-Guard-2-22M/knee_serial1_headline_p99le10"
+   },
+   "headline_confirm_142": {
+    "steps": [
+     {
+      "offered_wps": 142.0,
+      "p99_ms": 10.0976,
+      "n": 27312,
+      "drops": 0,
+      "pass": false
+     },
+     {
+      "offered_wps": 142.0,
+      "p99_ms": 9.8048,
+      "n": 27202,
+      "drops": 0,
+      "pass": true
+     },
+     {
+      "offered_wps": 142.0,
+      "p99_ms": 10.0462,
+      "n": 27369,
+      "drops": 0,
+      "pass": false
+     },
+     {
+      "offered_wps": 162.0,
+      "p99_ms": 10.7756,
+      "n": 31209,
+      "drops": 0,
+      "pass": false
+     }
+    ],
+    "dir": "raw/A/g2-2/Llama-Prompt-Guard-2-22M/confirm_serial1_headline_142"
+   },
+   "headline_confirm_122": {
+    "steps": [
+     {
+      "offered_wps": 122.0,
+      "p99_ms": 9.325,
+      "n": 23431,
+      "drops": 0,
+      "pass": true
+     },
+     {
+      "offered_wps": 122.0,
+      "p99_ms": 9.15,
+      "n": 23259,
+      "drops": 0,
+      "pass": true
+     },
+     {
+      "offered_wps": 122.0,
+      "p99_ms": 9.3452,
+      "n": 23599,
+      "drops": 0,
+      "pass": true
+     },
+     {
+      "offered_wps": 142.0,
+      "p99_ms": 9.9606,
+      "n": 27289,
+      "drops": 0,
+      "pass": true
+     }
+    ],
+    "dir": "raw/A/g2-2/Llama-Prompt-Guard-2-22M/confirm_serial1_headline_122"
+   }
+  },
+  "summary_q_safe_windows_per_s_one_L4_22M": {
+   "p99<=5ms": {
+    "W1_only": "93 (ladder, 30 s steps; first fail 140)",
+    "W2": 0,
+    "headline_mix": 0
+   },
+   "p99<=8ms": {
+    "W2": "41 (3 x 300 s confirmed; 49 passed 300 s once, failed 30 s)",
+    "headline_mix": "81 (3 x 300 s confirmed; 89 fails)"
+   },
+   "p99<=10ms": {
+    "W2": "89 (3 x 300 s confirmed; 97 passed 300 s once, 114 failed)",
+    "headline_mix": "122 (3 x 300 s confirmed; 142 fails 2 of 4 x 300 s, 162 fails 4 of 4)"
+   },
+   "RPS": {
+    "p99<=8ms": {
+     "W2": 20.5,
+     "headline_mix": 52
+    },
+    "p99<=10ms": {
+     "W2": 44.6,
+     "headline_mix": 78
+    }
+   }
+  },
+  "batch_wait_setting_for_all_targets": {
+   "max_batch_windows_B": 1,
+   "max_wait_us": 0,
+   "evidence": "every B in {8,16,32,64} x wait in {0.5,1,2} ms grid point had q_safe(p99<=10 ms) <= 20 w/s vs 81 w/s without batching (summary/throughput_qsafe.csv)"
+  }
+ },
+ "alternatives_measured": {
+  "triton_26.05_trt_plan_loopback": {
+   "q_safe_p99<=5ms": 0.0,
+   "first_fail_p99<=5ms": 17.5,
+   "q_safe_p99<=8ms": 0.0,
+   "first_fail_p99<=8ms": 17.5,
+   "q_safe_p99<=10ms": 0.0,
+   "first_fail_p99<=10ms": 17.5,
+   "q_safe_p99<=15ms": 70.0,
+   "first_fail_p99<=15ms": 105.0,
+   "q_safe_p99<=20ms": 140.0,
+   "first_fail_p99<=20ms": 175.0,
+   "max_sustained_wps": 277.6,
+   "lowest_step_wps": 17.5,
+   "lowest_step_p99_ms": 10.122,
+   "dir": "raw/B/g2-2/Llama-Prompt-Guard-2-22M/triton_26.05/W2_nobatch"
+  },
+  "triton_offbox_c4_to_g2": {
+   "q_safe_p99<=5ms": 0.0,
+   "first_fail_p99<=5ms": 17.5,
+   "q_safe_p99<=8ms": 0.0,
+   "first_fail_p99<=8ms": 17.5,
+   "q_safe_p99<=10ms": 17.5,
+   "first_fail_p99<=10ms": 35.0,
+   "q_safe_p99<=15ms": 70.0,
+   "first_fail_p99<=15ms": 105.0,
+   "q_safe_p99<=20ms": 140.0,
+   "first_fail_p99<=20ms": 175.0,
+   "max_sustained_wps": 277.7,
+   "lowest_step_wps": 17.5,
+   "lowest_step_p99_ms": 9.651,
+   "dir": "raw/C/c4-1/Llama-Prompt-Guard-2-22M/W2_nobatch"
+  }
+ }
+}

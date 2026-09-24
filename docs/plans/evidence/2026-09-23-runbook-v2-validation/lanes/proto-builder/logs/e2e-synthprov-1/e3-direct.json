@@ -1,0 +1,1 @@
+{"json_finish": "stop", "json_words": 9, "models_listed": true, "stream_words": 10, "tool": "get_weather", "tool_args": {"limit": 5, "query": "list in idea from was rest step this one so each in", "ref": "synth-c6"}}

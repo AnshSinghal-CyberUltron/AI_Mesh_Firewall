@@ -1,0 +1,12 @@
+Running 20s test @ http://10.160.0.35:8300/v1/chat/completions
+  4 threads and 32 connections
+  Thread calibration: mean lat.: 4979.340ms, rate sampling interval: 17940ms
+  Thread calibration: mean lat.: 4978.499ms, rate sampling interval: 17940ms
+  Thread calibration: mean lat.: 4977.538ms, rate sampling interval: 17940ms
+  Thread calibration: mean lat.: 4977.223ms, rate sampling interval: 17940ms
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency    14.91s     2.86s   19.89s    57.73%
+    Req/Sec       -nan      -nan   0.00      0.00%
+  113859 requests in 20.00s, 41.05MB read
+Requests/sec:   5692.88
+Transfer/sec:      2.05MB

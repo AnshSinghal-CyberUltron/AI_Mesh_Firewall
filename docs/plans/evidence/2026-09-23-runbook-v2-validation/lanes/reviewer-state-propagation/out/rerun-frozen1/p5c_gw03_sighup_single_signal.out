@@ -1,0 +1,4 @@
+vendored gateway_v2, SIGHUP every 300 ms, run1 exit=3: {"result": "DEADLOCK", "main_thread_progress": 13142, "reloads_completed": 11, "pool_held": 0, "note": "main thread bloc
+vendored gateway_v2, SIGHUP every 300 ms, run2 exit=3: {"result": "DEADLOCK", "main_thread_progress": 329870, "reloads_completed": 12, "pool_held": 0, "note": "main thread blo
+vendored gateway_v2, SIGHUP every 300 ms, run3 exit=3: {"result": "DEADLOCK", "main_thread_progress": 13194, "reloads_completed": 11, "pool_held": 1, "note": "main thread bloc
+/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-state-propagation/vendor/gateway_v2/__init__.py

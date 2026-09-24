@@ -1,0 +1,22 @@
+rv-micro-sut-3 asia-south1-c c4-standard-8 10.160.15.205
+rv-micro-lg-6 asia-south1-c c4-standard-16 10.160.15.203
+rv-micro-edge-3 asia-south1-c c4-standard-8 10.160.15.202
+rv-micro-up-3 asia-south1-c c4-standard-8 10.160.15.201
+rv-micro-lg-7 asia-south1-c c4-standard-16 10.160.15.204
+SUT3=10.160.15.205
+LG6=10.160.15.203
+EDGE1=10.160.15.202
+UP1=10.160.15.201
+LG2=10.160.15.204
+up-3: SETUP_DONE role=py
+edge-3: SETUP_DONE role=edge
+sut-3: SETUP_DONE role=py
+lg-6: SETUP_DONE role=lg
+lg-7: SETUP_DONE role=lg
+prep ok: rv-micro-lg-6.asia-south1-c.c.ai-mesh-firewall.internal 16 vCPU
+/usr/bin/zstd
+d22d260723c31fb55a387080b853cd94ff922666807ba36845e0b7e962aa7fb3  /home/rv/olg
+prep ok: rv-micro-lg-7.asia-south1-c.c.ai-mesh-firewall.internal 16 vCPU
+/usr/bin/zstd
+d22d260723c31fb55a387080b853cd94ff922666807ba36845e0b7e962aa7fb3  /home/rv/olg
+SETUP_XCHECK_DONE

@@ -1,0 +1,42 @@
+== ub-050: mid-stream events with x_k = d_k - d_0 > 10 ms: next-piece release 0, stall 78; streams whose C4 max is a next-piece event 0, a stall 77
+   x_k bins (ms, lower edge): stall10:78
+   C4 p99 all qualified: as defined 20.023 ms; next-piece events re-charged as nx 20.023 ms (n=14755)
+== ub-078: mid-stream events with x_k = d_k - d_0 > 10 ms: next-piece release 0, stall 269; streams whose C4 max is a next-piece event 0, a stall 267
+   x_k bins (ms, lower edge): stall10:263, stall15:6
+   C4 p99 all qualified: as defined 21.531 ms; next-piece events re-charged as nx 21.531 ms (n=22982)
+== li-050: mid-stream events with x_k = d_k - d_0 > 10 ms: next-piece release 5, stall 1; streams whose C4 max is a next-piece event 5, a stall 1
+   x_k bins (ms, lower edge): next_piece15:1, next_piece20:4, stall20:1
+   C4 p99 all qualified: as defined 14.142 ms; next-piece events re-charged as nx 14.137 ms (n=14760)
+== li-078: mid-stream events with x_k = d_k - d_0 > 10 ms: next-piece release 0, stall 28; streams whose C4 max is a next-piece event 0, a stall 28
+   x_k bins (ms, lower edge): stall10:28
+   C4 p99 all qualified: as defined 14.988 ms; next-piece events re-charged as nx 14.988 ms (n=22978)
+== li-100: mid-stream events with x_k = d_k - d_0 > 10 ms: next-piece release 0, stall 51; streams whose C4 max is a next-piece event 0, a stall 50
+   x_k bins (ms, lower edge): stall10:51
+   C4 p99 all qualified: as defined 15.042 ms; next-piece events re-charged as nx 15.042 ms (n=29470)
+== li-150: mid-stream events with x_k = d_k - d_0 > 10 ms: next-piece release 0, stall 61; streams whose C4 max is a next-piece event 0, a stall 61
+   x_k bins (ms, lower edge): stall10:61
+   C4 p99 all qualified: as defined 16.642 ms; next-piece events re-charged as nx 16.642 ms (n=44223)
+== li-200: mid-stream events with x_k = d_k - d_0 > 10 ms: next-piece release 46, stall 477; streams whose C4 max is a next-piece event 25, a stall 351
+   x_k bins (ms, lower edge): next_piece15:10, next_piece20:36, stall10:162, stall15:79, stall20:32, stall25:53, stall30:76, stall35:65, stall40:10
+   C4 p99 all qualified: as defined 19.614 ms; next-piece events re-charged as nx 19.48 ms (n=58946)
+== li-200-r2: mid-stream events with x_k = d_k - d_0 > 10 ms: next-piece release 11, stall 206; streams whose C4 max is a next-piece event 4, a stall 178
+   x_k bins (ms, lower edge): next_piece15:2, next_piece20:9, stall10:129, stall15:17, stall20:7, stall25:17, stall30:23, stall35:6, stall40:7
+   C4 p99 all qualified: as defined 18.889 ms; next-piece events re-charged as nx 18.879 ms (n=58936)
+== li-200-r3: mid-stream events with x_k = d_k - d_0 > 10 ms: next-piece release 3, stall 85; streams whose C4 max is a next-piece event 1, a stall 85
+   x_k bins (ms, lower edge): next_piece15:3, stall10:77, stall15:6, stall35:2
+   C4 p99 all qualified: as defined 18.821 ms; next-piece events re-charged as nx 18.819 ms (n=58930)
+== li-250: mid-stream events with x_k = d_k - d_0 > 10 ms: next-piece release 100, stall 800; streams whose C4 max is a next-piece event 24, a stall 572
+   x_k bins (ms, lower edge): next_piece15:20, next_piece20:80, stall10:194, stall15:134, stall20:42, stall25:125, stall30:106, stall35:123, stall40:68, stall45:8
+   C4 p99 all qualified: as defined 23.963 ms; next-piece events re-charged as nx 23.631 ms (n=73667)
+== li-w025: mid-stream events with x_k = d_k - d_0 > 10 ms: next-piece release 0, stall 4; streams whose C4 max is a next-piece event 0, a stall 4
+   x_k bins (ms, lower edge): stall10:4
+   C4 p99 all qualified: as defined 21.651 ms; next-piece events re-charged as nx 21.651 ms (n=7328)
+== li-w050: mid-stream events with x_k = d_k - d_0 > 10 ms: next-piece release 1, stall 151; streams whose C4 max is a next-piece event 1, a stall 151
+   x_k bins (ms, lower edge): next_piece20:1, stall10:151
+   C4 p99 all qualified: as defined 25.395 ms; next-piece events re-charged as nx 25.394 ms (n=14607)
+== lin-078: mid-stream events with x_k = d_k - d_0 > 10 ms: next-piece release 3, stall 17; streams whose C4 max is a next-piece event 3, a stall 17
+   x_k bins (ms, lower edge): next_piece15:3, stall10:17
+   C4 p99 all qualified: as defined 14.776 ms; next-piece events re-charged as nx 14.772 ms (n=22975)
+== hb-on-20: mid-stream events with x_k = d_k - d_0 > 10 ms: next-piece release 0, stall 38; streams whose C4 max is a next-piece event 0, a stall 38
+   x_k bins (ms, lower edge): stall10:38
+   C4 p99 all qualified: as defined 20.49 ms; next-piece events re-charged as nx 20.49 ms (n=11822)

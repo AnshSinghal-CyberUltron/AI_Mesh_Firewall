@@ -1,0 +1,12 @@
+baseline: HTTP 200 disp=ALLOW stages=canon:E,det:E,sem:E,resolve:E,dispatch:E,out:E,audit:E in 0.11s
+SIGSTOP owner 2307555
+t= 0.0s readyz=[200, 200, 200, 200] | org-a: HTTP 403 disp=BLOCK stages=canon:E,det:E,sem:U,resolve:E,dispatch:S,out:S,audit:E in 2.03s | org-b: HTTP 200 disp=ALLOW stages=canon:E,det:E,sem:U,resolve:E,dispatch:E,out:E,audit:E in 0.07s
+t= 2.2s readyz=[503, 200, 503, 200] | org-a: HTTP 403 disp=BLOCK stages=canon:E,det:E,sem:U,resolve:E,dispatch:S,out:S,audit:E in 2.09s | org-b: HTTP 200 disp=ALLOW stages=canon:E,det:E,sem:U,resolve:E,dispatch:E,out:E,audit:E in 0.07s
+t= 4.3s readyz=[503, 503, 503, 503] | org-a: HTTP 403 disp=BLOCK stages=canon:E,det:E,sem:U,resolve:E,dispatch:S,out:S,audit:E in 0.01s | org-b: HTTP 200 disp=ALLOW stages=canon:E,det:E,sem:U,resolve:E,dispatch:E,out:E,audit:E in 0.07s
+t= 4.4s readyz=[503, 503, 503, 503] | org-a: HTTP 403 disp=BLOCK stages=canon:E,det:E,sem:U,resolve:E,dispatch:S,out:S,audit:E in 0.01s | org-b: HTTP 200 disp=ALLOW stages=canon:E,det:E,sem:U,resolve:E,dispatch:E,out:E,audit:E in 0.07s
+t= 4.5s readyz=[503, 503, 503, 503] | org-a: HTTP 403 disp=BLOCK stages=canon:E,det:E,sem:U,resolve:E,dispatch:S,out:S,audit:E in 0.01s | org-b: HTTP 200 disp=ALLOW stages=canon:E,det:E,sem:U,resolve:E,dispatch:E,out:E,audit:E in 0.07s
+t= 5.0s readyz=[503, 503, 503, 503] | org-a: HTTP 403 disp=BLOCK stages=canon:E,det:E,sem:U,resolve:E,dispatch:S,out:S,audit:E in 0.01s | org-b: HTTP 200 disp=ALLOW stages=canon:E,det:E,sem:U,resolve:E,dispatch:E,out:E,audit:E in 0.07s
+t= 6.0s readyz=[503, 503, 503, 503] | org-a: HTTP 403 disp=BLOCK stages=canon:E,det:E,sem:U,resolve:E,dispatch:S,out:S,audit:E in 0.01s | org-b: HTTP 200 disp=ALLOW stages=canon:E,det:E,sem:U,resolve:E,dispatch:E,out:E,audit:E in 0.07s
+t= 7.0s readyz=[503, 503, 503, 503] | org-a: HTTP 403 disp=BLOCK stages=canon:E,det:E,sem:U,resolve:E,dispatch:S,out:S,audit:E in 0.01s | org-b: HTTP 200 disp=ALLOW stages=canon:E,det:E,sem:U,resolve:E,dispatch:E,out:E,audit:E in 0.07s
+t= 8.0s readyz=[503, 503, 503, 503] | org-a: HTTP 403 disp=BLOCK stages=canon:E,det:E,sem:U,resolve:E,dispatch:S,out:S,audit:E in 0.01s | org-b: HTTP 200 disp=ALLOW stages=canon:E,det:E,sem:U,resolve:E,dispatch:E,out:E,audit:E in 0.07s
+after SIGCONT: HTTP 200 disp=ALLOW stages=canon:E,det:E,sem:E,resolve:E,dispatch:E,out:E,audit:E in 0.09s

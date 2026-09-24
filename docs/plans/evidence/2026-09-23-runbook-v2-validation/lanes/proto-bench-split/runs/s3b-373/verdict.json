@@ -1,0 +1,1 @@
+{"run": "s3b-373", "verdict": "FAIL", "rule": "C4 p99 < 20 ms, infra <= 0.1%, 0 drops", "c4_p99": 21.736, "c4_p999": 27.592, "c4_sse_p99": 22.3, "c4_json_p99": 19.205, "qualified_rps": 366.52, "infra_pct": 0.0107, "drops": 0, "json_total_p99": 19.205, "sse_total_p99": 19.294, "sse_first_p99": 48.011, "load_rule_verdict": "PASS"}

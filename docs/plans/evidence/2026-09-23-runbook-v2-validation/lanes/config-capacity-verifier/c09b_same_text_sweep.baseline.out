@@ -1,0 +1,13 @@
+SAME | verdict=redact | decision='email me at j***@a***.com' | wire='email me at j***@a***.com'
+SAME | verdict=redact | decision='call ***-***-0132 today' | wire='call ***-***-0132 today'
+SAME | verdict=redact | decision='phone: ***-***-3210' | wire='phone: ***-***-3210'
+SAME | verdict=redact | decision='card ****-****-****-1111 exp 12/29' | wire='card ****-****-****-1111 exp 12/29'
+SAME | verdict=redact | decision='ssn ***-**-6789' | wire='ssn ***-**-6789'
+SAME | verdict=redact | decision='key AKIA****MPLE' | wire='key AKIA****MPLE'
+SAME | verdict=redact | decision='token ghp_****6789' | wire='token ghp_****6789'
+SAME | verdict=redact | decision='IBAN [IBAN_CODE_REDACTED]' | wire='IBAN [IBAN_CODE_REDACTED]'
+SAME | verdict=redact | decision='[GOVERNMENT_ID_REDACTED]' | wire='[GOVERNMENT_ID_REDACTED]'
+SAME | verdict=allow  | decision='my password is hunter2!' | wire='my password is hunter2!'
+SAME | verdict=allow  | decision='server at [INTERNAL_IPV4_REDACTED] port 22' | wire='server at [INTERNAL_IPV4_REDACTED] port 22'
+SAME | verdict=redact | decision='acct 12345678901 [US_BANK_NUMBER_REDACTED]' | wire='acct 12345678901 [US_BANK_NUMBER_REDACTED]'
+differences: 0 of 12

@@ -1,0 +1,31 @@
+$ grep -rniE "schema_version|event_version|schemaVersion|payload_version|\"version\"|_version\b|contract_version|telemetry_version" gateway/ai_mesh_gateway/telemetry.py gateway/ai_mesh_gateway/telemetry_ops.py gateway/ai_mesh_gateway/telemetry_mongo.py shared/ai_mesh_shared/jobs/envelope.py
+exit=1 (1=none)
+$ sed -n 170,260p control/ai_mesh_control/policy/models.py | grep -niE "version|schema"
+exit=1 (1=none)
+$ grep -nE "version|schema" (control core/tasks.py + workers tasks/telemetry.py, _build_enforcement_metadata + drain)
+exit=1 (1=none)
+$ grep -rnE "schema_version|event_version" across gateway/ai_mesh_gateway control/ai_mesh_control workers shared (non-test) 
+control/ai_mesh_control/policy/compiler.py:220:            "bundle_schema_version": BUNDLE_SCHEMA_VERSION,
+exit=0
+$ cat -n docs/contracts/TelemetryEvent.v1.schema.json
+     1	{
+     2	  "$schema": "https://json-schema.org/draft/2020-12/schema",
+     3	  "$id": "https://zeroshield.ai/schemas/ai-mesh/TelemetryEvent.v1.json",
+     4	  "title": "TelemetryEventV1",
+     5	  "type": "object",
+     6	  "required": ["event_type", "action", "organization_id", "request_id"],
+     7	  "properties": {
+     8	    "event_type": { "type": "string" },
+     9	    "action": { "type": "string", "enum": ["allow", "block", "redact", "flag", "route"] },
+    10	    "organization_id": { "type": "integer", "minimum": 1 },
+    11	    "request_id": { "type": "string" },
+    12	    "user_id": { "type": ["integer", "null"] },
+    13	    "threat_type": { "type": "string" },
+    14	    "risk_score": { "type": "number" },
+    15	    "metadata": { "type": "object" }
+    16	  }
+    17	}
+$ grep -rn "TelemetryEvent.v1" (code, excl docs/.claude/node_modules)
+exit=1 (1=no code references)
+$ git log -1 --format="%h %ad %s" --date=short -- docs/contracts/TelemetryEvent.v1.schema.json
+85c90a76 2026-05-25 AI Mesh Firewall

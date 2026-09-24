@@ -1,0 +1,38 @@
+# GET http://127.0.0.1:8180/ (headers + body)
+HTTP/1.1 200 OK
+Vary: Origin
+Content-Type: text/html
+Cache-Control: no-cache
+Etag: W/"27f-9i9o9zyKSNG3ti9RH9scO+K0O8Q"
+Date: Wed, 23 Sep 2026 05:32:38 GMT
+Connection: keep-alive
+Keep-Alive: timeout=5
+Content-Length: 639
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <script type="module">import { injectIntoGlobalHook } from "/@react-refresh";
+injectIntoGlobalHook(window);
+window.$RefreshReg$ = () => {};
+window.$RefreshSig$ = () => (type) => type;</script>
+
+    <script type="module" src="/@vite/client"></script>
+
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <title>AI Mesh Firewall</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx?t=1789711656658"></script>
+  </body>
+</html>
+
+
+# docker inspect frontend-1: cmd/entrypoint/workdir/mounts
+Cmd=["sh","-c","npm install && npm run dev"] Entrypoint=["docker-entrypoint.sh"] WorkingDir=/app
+bind /home/contact_cyberultron_com/AI_Mesh_Firewall/frontend -> /app rw=true
+volume /var/lib/docker/volumes/51b0fa35dd163f117f1d271250c5765f5767096da1d1e2ff345b52e7926957db/_data -> /app/node_modules rw=true
+

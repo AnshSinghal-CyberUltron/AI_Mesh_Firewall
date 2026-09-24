@@ -1,0 +1,25 @@
+{
+ "run": "L1-r30",
+ "probes_total": 2416,
+ "probes_non200_total": 0,
+ "probe_statuses": {
+  "200": 2416
+ },
+ "probe_ms_max": 1577.293,
+ "seconds_with_client_errors": 256,
+ "seconds_errors_ge10_and_all_probes_200": 167,
+ "seconds_errors_ge_ok_and_all_probes_200": 84,
+ "client_errors_in_seconds_where_all_probes_200": 2819,
+ "client_errors_total": 2953,
+ "peak_second": {
+  "t": 374,
+  "ok": 13,
+  "err": 23,
+  "timeout": 23,
+  "http_503": 0,
+  "http_422": 0,
+  "probes": 1,
+  "probe_non200": 0,
+  "probe_max_ms": 659.296
+ }
+}

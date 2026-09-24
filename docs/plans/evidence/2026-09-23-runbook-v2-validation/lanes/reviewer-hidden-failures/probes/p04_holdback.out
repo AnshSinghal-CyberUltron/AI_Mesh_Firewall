@@ -1,0 +1,14 @@
+sample                       chunks max hold (chunks) = lag @ITL20 chars held>=1 chunk max per-chunk block stream CPU
+prose (control)                  34                 2         40 ms               82.1%             0.09 ms      0.00s  err=None
+markdown + URL                   37                15        300 ms               90.1%             0.03 ms      0.00s  err=None
+UUIDs                            84                36        720 ms               93.3%             0.74 ms      0.00s  err=None
+sha256 digest                    47                34        680 ms               91.7%             0.03 ms      0.00s  err=None
+file paths                       29                15        300 ms               94.7%             0.02 ms      0.00s  err=None
+numbers table                    64                 3         60 ms               59.2%             0.03 ms      0.00s  err=None
+python code                      46                 4         80 ms               71.4%             0.03 ms      0.00s  err=None
+json object                      39                 7        140 ms               73.7%             0.03 ms      0.00s  err=None
+base64 (2 KB data URI)         1402              1386      27720 ms               99.4%             0.56 ms      0.20s  err=None
+BIG base64 64KB               44764             44762     895240 ms              100.0%            16.22 ms    200.87s  err=None
+BIG prose 64KB (control)      16000                 1         20 ms               77.8%             0.07 ms      0.20s  err=None
+
+holdback ceiling per stream (contract.stream_buffer_bytes(active_streams)) on this host: 1 stream=47,390,109,696 | 1000 streams=47,390,109 (compared against len(pending) in CHARACTERS)

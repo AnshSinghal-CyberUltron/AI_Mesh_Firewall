@@ -1,0 +1,5 @@
+[2026-09-23 11:44:11 +0000] [3411] [INFO] Application startup complete.
+[2026-09-23 11:44:11 +0000] [3399] [INFO] Control socket listening at /run/user/1001/gunicorn.ctl
+[2026-09-23 11:44:11 +0000] [3414] [INFO] Started server process [3414]
+[2026-09-23 11:44:11 +0000] [3414] [INFO] Waiting for application startup.
+[2026-09-23 11:44:11 +0000] [3414] [INFO] Application startup complete.

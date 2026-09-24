@@ -1,0 +1,24 @@
+--- (a) Redis DOWN (connection refused)
+    auth                               -> 503 service_unavailable   [0.0s]
+    key TPM (rate_limiter:116)         -> (True, 0)   [0.0s]
+    model RPM (rate_limiter:169)       -> (True, 0)   [0.0s]
+    org TPM (rate_limiter:230)         -> (True, 0)   [0.0s]
+    circuit_breaker.check (:397-400)   -> should_block=True state=open   [0.0s]
+--- (0) Redis healthy (control)
+    auth                               -> ok   [0.0s]
+    key TPM (rate_limiter:116)         -> (True, 20)   [0.0s]
+    model RPM (rate_limiter:169)       -> (True, 0)   [0.0s]
+    org TPM (rate_limiter:230)         -> (True, 20)   [0.0s]
+    circuit_breaker.check (:397-400)   -> should_block=False state=closed   [0.0s]
+--- (b) Redis SLOW 1.5 s/command
+    auth                               -> ok   [1.5s]
+    key TPM (rate_limiter:116)         -> (True, 0)   [2.01s]
+    model RPM (rate_limiter:169)       -> (True, 0)   [2.0s]
+    org TPM (rate_limiter:230)         -> (True, 0)   [2.0s]
+    circuit_breaker.check (:397-400)   -> should_block=False state=closed   [1.5s]
+--- (c) Redis SLOW 2.5 s/command
+    auth                               -> 503 service_unavailable   [2.0s]
+    key TPM (rate_limiter:116)         -> (True, 0)   [2.0s]
+    model RPM (rate_limiter:169)       -> (True, 0)   [2.0s]
+    org TPM (rate_limiter:230)         -> (True, 0)   [2.0s]
+    circuit_breaker.check (:397-400)   -> should_block=False state=closed   [2.5s]

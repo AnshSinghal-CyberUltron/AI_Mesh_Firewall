@@ -1,0 +1,32 @@
+{
+ "kill_at_s": 5805075.141,
+ "before": {
+  "n": 20,
+  "sem_E": 20,
+  "sem_U": 0,
+  "shed_retries": 3,
+  "bad": []
+ },
+ "during": {
+  "n": 24,
+  "sem_E": 4,
+  "sem_U": 20,
+  "shed_retries": 0,
+  "bad": []
+ },
+ "after_kill": {
+  "n": 20,
+  "sem_E": 0,
+  "sem_U": 20,
+  "shed_retries": 0,
+  "bad": []
+ },
+ "recovered_after_s": 4.0,
+ "recovered": {
+  "n": 20,
+  "sem_E": 20,
+  "sem_U": 0,
+  "shed_retries": 0,
+  "bad": []
+ }
+}

@@ -1,0 +1,1 @@
+{"mode":"sut","run":"GO-r10","rate":10,"ramp_s":30,"warmup_s":60,"duration_s":300,"corpus":"headline-22M.jsonl","prov_flags":"-ttft 150ms -itl 20ms","extra":"","target":"http://10.160.15.226:8300","started_utc":"2026-09-23T13:36:23Z"}

@@ -1,0 +1,1 @@
+{"run": "s5b-466-r2", "verdict": "PASS", "rule": "C4 p99 < 20 ms, infra <= 0.1%, 0 drops", "c4_p99": 17.977, "c4_p999": 24.002, "c4_sse_p99": 18.682, "c4_json_p99": 15.121, "qualified_rps": 457.85, "infra_pct": 0.0, "drops": 0, "json_total_p99": 15.121, "sse_total_p99": 15.028, "sse_first_p99": 46.077, "load_rule_verdict": "PASS"}

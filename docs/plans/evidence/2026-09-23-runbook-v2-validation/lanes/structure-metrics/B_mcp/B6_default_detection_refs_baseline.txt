@@ -1,0 +1,19 @@
+### refs to mcp_default_detection_enabled / GATEWAY_MCP_DEFAULT_DETECTION across baseline export, excluding tests
+./gateway/ai_mesh_gateway/mcp_scan_orchestrator.py:228:def _mcp_default_detection_enabled() -> bool:
+./gateway/ai_mesh_gateway/mcp_scan_orchestrator.py:238:    (``mcp_default_detection_enabled``) with an env fallback
+./gateway/ai_mesh_gateway/mcp_scan_orchestrator.py:239:    (``GATEWAY_MCP_DEFAULT_DETECTION``) so the gate is reachable in unit tests / early
+./gateway/ai_mesh_gateway/mcp_scan_orchestrator.py:255:        if isinstance(cfg, dict) and "mcp_default_detection_enabled" in cfg:
+./gateway/ai_mesh_gateway/mcp_scan_orchestrator.py:256:            return _coerce_flag(cfg.get("mcp_default_detection_enabled"))
+./gateway/ai_mesh_gateway/mcp_scan_orchestrator.py:257:    return os.environ.get("GATEWAY_MCP_DEFAULT_DETECTION", "").strip().lower() in (
+./gateway/ai_mesh_gateway/mcp_scan_orchestrator.py:1551:    _run_presets = _mcp_default_detection_enabled()
+
+### in git tree at 2a657fad (all paths, excluding tests)
+2a657fad:gateway/ai_mesh_gateway/mcp_scan_orchestrator.py:228:def _mcp_default_detection_enabled() -> bool:
+2a657fad:gateway/ai_mesh_gateway/mcp_scan_orchestrator.py:238:    (``mcp_default_detection_enabled``) with an env fallback
+2a657fad:gateway/ai_mesh_gateway/mcp_scan_orchestrator.py:239:    (``GATEWAY_MCP_DEFAULT_DETECTION``) so the gate is reachable in unit tests / early
+2a657fad:gateway/ai_mesh_gateway/mcp_scan_orchestrator.py:255:        if isinstance(cfg, dict) and "mcp_default_detection_enabled" in cfg:
+2a657fad:gateway/ai_mesh_gateway/mcp_scan_orchestrator.py:256:            return _coerce_flag(cfg.get("mcp_default_detection_enabled"))
+2a657fad:gateway/ai_mesh_gateway/mcp_scan_orchestrator.py:257:    return os.environ.get("GATEWAY_MCP_DEFAULT_DETECTION", "").strip().lower() in (
+2a657fad:gateway/ai_mesh_gateway/mcp_scan_orchestrator.py:1551:    _run_presets = _mcp_default_detection_enabled()
+
+### docs mentions (count)

@@ -1,0 +1,8 @@
+used_memory:1336812448
+used_memory_human:1.25G
+rv:audit:org-a xlen=462985
+total_commands_processed:2887281
+total_net_input_bytes:2440913057
+total_net_output_bytes:47514112
+total_net_repl_input_bytes:0
+total_net_repl_output_bytes:0

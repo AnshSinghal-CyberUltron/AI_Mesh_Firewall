@@ -1,0 +1,1262 @@
+{
+ "as_of_utc": "2026-09-24T03:28:39.661980+00:00",
+ "basis": "on-demand list at each VM's region (Mumbai prices.json; Tokyo Catalog API); VM + boot disk + external IP; failed inserts free",
+ "successful_inserts": 138,
+ "failed_inserts_stockout": 39,
+ "still_running": 0,
+ "total_usd": 349.43,
+ "by_lane_usd": {
+  "guard": 18.55,
+  "harness": 27.85,
+  "micro": 19.4,
+  "pbf": 130.68,
+  "pbu": 8.91,
+  "proto": 30.31,
+  "split": 89.55,
+  "v1": 24.19
+ },
+ "vms": [
+  {
+   "name": "rv-guard-g2-2",
+   "zone": "asia-south1-c",
+   "machine_type": "g2-standard-8",
+   "create_utc": "2026-09-23T05:36:24.929507+00:00",
+   "delete_utc": "2026-09-23T09:54:18.348144+00:00",
+   "hours": 4.298,
+   "usd": 3.98
+  },
+  {
+   "name": "rv-guard-c4-1",
+   "zone": "asia-south1-c",
+   "machine_type": "c4-standard-8",
+   "create_utc": "2026-09-23T05:36:25.619713+00:00",
+   "delete_utc": "2026-09-23T08:36:53.460800+00:00",
+   "hours": 3.008,
+   "usd": 1.27
+  },
+  {
+   "name": "rv-guard-g2-1",
+   "zone": "asia-south1-c",
+   "machine_type": "g2-standard-8",
+   "create_utc": "2026-09-23T05:36:30.423379+00:00",
+   "delete_utc": "2026-09-23T08:55:05.048023+00:00",
+   "hours": 3.31,
+   "usd": 3.07
+  },
+  {
+   "name": "rv-guard-c4-2",
+   "zone": "asia-south1-c",
+   "machine_type": "c4-standard-8",
+   "create_utc": "2026-09-23T05:36:49.535527+00:00",
+   "delete_utc": "2026-09-23T07:24:19.412363+00:00",
+   "hours": 1.792,
+   "usd": 0.76
+  },
+  {
+   "name": "rv-guard-c4h-1",
+   "zone": "asia-south1-c",
+   "machine_type": "c4-highcpu-16",
+   "create_utc": "2026-09-23T05:36:50.305371+00:00",
+   "delete_utc": "2026-09-23T07:42:34.766559+00:00",
+   "hours": 2.096,
+   "usd": 1.51
+  },
+  {
+   "name": "rv-micro-up-1",
+   "zone": "asia-south1-c",
+   "machine_type": "c4-standard-8",
+   "create_utc": "2026-09-23T05:36:57.453317+00:00",
+   "delete_utc": "2026-09-23T09:53:58.703055+00:00",
+   "hours": 4.284,
+   "usd": 1.8
+  },
+  {
+   "name": "rv-micro-edge-1",
+   "zone": "asia-south1-c",
+   "machine_type": "c4-standard-8",
+   "create_utc": "2026-09-23T05:36:58.485487+00:00",
+   "delete_utc": "2026-09-23T09:53:56.454204+00:00",
+   "hours": 4.283,
+   "usd": 1.8
+  },
+  {
+   "name": "rv-micro-lg-1",
+   "zone": "asia-south1-c",
+   "machine_type": "c4-standard-16",
+   "create_utc": "2026-09-23T05:36:58.879195+00:00",
+   "delete_utc": "2026-09-23T09:12:59.576386+00:00",
+   "hours": 3.6,
+   "usd": 2.99
+  },
+  {
+   "name": "rv-micro-lg-2",
+   "zone": "asia-south1-c",
+   "machine_type": "c4-standard-16",
+   "create_utc": "2026-09-23T05:36:59.616119+00:00",
+   "delete_utc": "2026-09-23T09:53:58.337459+00:00",
+   "hours": 4.283,
+   "usd": 3.56
+  },
+  {
+   "name": "rv-micro-sut-1",
+   "zone": "asia-south1-c",
+   "machine_type": "c4-standard-8",
+   "create_utc": "2026-09-23T05:36:59.992293+00:00",
+   "delete_utc": "2026-09-23T09:13:01.472286+00:00",
+   "hours": 3.6,
+   "usd": 1.51
+  },
+  {
+   "name": "rv-micro-app-1",
+   "zone": "asia-south1-c",
+   "machine_type": "c4-standard-8",
+   "create_utc": "2026-09-23T05:37:00.257884+00:00",
+   "delete_utc": "2026-09-23T08:51:55.585998+00:00",
+   "hours": 3.249,
+   "usd": 1.37
+  },
+  {
+   "name": "rv-micro-redis-1",
+   "zone": "asia-south1-c",
+   "machine_type": "c4-standard-4",
+   "create_utc": "2026-09-23T05:37:01.274311+00:00",
+   "delete_utc": "2026-09-23T08:48:04.189686+00:00",
+   "hours": 3.184,
+   "usd": 0.68
+  },
+  {
+   "name": "rv-v1-sut-1",
+   "zone": "asia-south1-c",
+   "machine_type": "g2-standard-24",
+   "create_utc": "2026-09-23T05:37:58.146734+00:00",
+   "delete_utc": "2026-09-23T12:25:53.121130+00:00",
+   "hours": 6.799,
+   "usd": 14.42
+  },
+  {
+   "name": "rv-v1-prov-1",
+   "zone": "asia-south1-c",
+   "machine_type": "c4-standard-8",
+   "create_utc": "2026-09-23T05:52:19.589886+00:00",
+   "delete_utc": "2026-09-23T12:25:47.888991+00:00",
+   "hours": 6.558,
+   "usd": 2.77
+  },
+  {
+   "name": "rv-v1-lg-1",
+   "zone": "asia-south1-c",
+   "machine_type": "c4-standard-8",
+   "create_utc": "2026-09-23T05:52:29.900944+00:00",
+   "delete_utc": "2026-09-23T12:25:47.886906+00:00",
+   "hours": 6.555,
+   "usd": 2.77
+  },
+  {
+   "name": "rv-harness-prov-1",
+   "zone": "asia-south1-c",
+   "machine_type": "c4-highcpu-8",
+   "create_utc": "2026-09-23T06:16:31.372118+00:00",
+   "delete_utc": "2026-09-23T14:44:57.440870+00:00",
+   "hours": 8.474,
+   "usd": 3.09
+  },
+  {
+   "name": "rv-harness-lg-2",
+   "zone": "asia-south1-c",
+   "machine_type": "c4-highcpu-8",
+   "create_utc": "2026-09-23T06:16:31.706654+00:00",
+   "delete_utc": "2026-09-23T14:21:40.069830+00:00",
+   "hours": 8.086,
+   "usd": 2.95
+  },
+  {
+   "name": "rv-harness-lg-1",
+   "zone": "asia-south1-c",
+   "machine_type": "c4-highcpu-8",
+   "create_utc": "2026-09-23T06:16:31.795540+00:00",
+   "delete_utc": "2026-09-23T14:44:57.720013+00:00",
+   "hours": 8.474,
+   "usd": 3.09
+  },
+  {
+   "name": "rv-harness-prov-2",
+   "zone": "asia-south1-c",
+   "machine_type": "c4-highcpu-8",
+   "create_utc": "2026-09-23T06:16:32.408439+00:00",
+   "delete_utc": "2026-09-23T14:21:39.725247+00:00",
+   "hours": 8.085,
+   "usd": 2.95
+  },
+  {
+   "name": "rv-guard-g2-3",
+   "zone": "asia-south1-c",
+   "machine_type": "g2-standard-8",
+   "create_utc": "2026-09-23T06:18:19.013211+00:00",
+   "delete_utc": "2026-09-23T09:58:08.365149+00:00",
+   "hours": 3.664,
+   "usd": 3.39
+  },
+  {
+   "name": "rv-guard-g2-4",
+   "zone": "asia-south1-c",
+   "machine_type": "g2-standard-8",
+   "create_utc": "2026-09-23T06:23:43.575344+00:00",
+   "delete_utc": "2026-09-23T08:52:59.093982+00:00",
+   "hours": 2.488,
+   "usd": 2.3
+  },
+  {
+   "name": "rv-proto-unit-1",
+   "zone": "asia-south1-c",
+   "machine_type": "g2-standard-24",
+   "create_utc": "2026-09-23T06:34:45.187396+00:00",
+   "delete_utc": "2026-09-23T20:23:13.795156+00:00",
+   "hours": 13.808,
+   "usd": 29.28
+  },
+  {
+   "name": "rv-proto-prov-1",
+   "zone": "asia-south1-c",
+   "machine_type": "c4-standard-4",
+   "create_utc": "2026-09-23T06:34:48.011309+00:00",
+   "delete_utc": "2026-09-23T09:57:37.458699+00:00",
+   "hours": 3.38,
+   "usd": 0.72
+  },
+  {
+   "name": "rv-micro-lg-4",
+   "zone": "asia-south1-c",
+   "machine_type": "c4-standard-4",
+   "create_utc": "2026-09-23T06:47:04.489880+00:00",
+   "delete_utc": "2026-09-23T08:48:04.033060+00:00",
+   "hours": 2.017,
+   "usd": 0.43
+  },
+  {
+   "name": "rv-micro-lg-3",
+   "zone": "asia-south1-c",
+   "machine_type": "c4-standard-16",
+   "create_utc": "2026-09-23T06:47:04.888663+00:00",
+   "delete_utc": "2026-09-23T09:42:12.906951+00:00",
+   "hours": 2.919,
+   "usd": 2.43
+  },
+  {
+   "name": "rv-micro-sut-2",
+   "zone": "asia-south1-c",
+   "machine_type": "c4-standard-8",
+   "create_utc": "2026-09-23T06:47:08.561788+00:00",
+   "delete_utc": "2026-09-23T09:42:15.944268+00:00",
+   "hours": 2.919,
+   "usd": 1.23
+  },
+  {
+   "name": "rv-harness-prov-4",
+   "zone": "asia-south1-c",
+   "machine_type": "c4-highcpu-8",
+   "create_utc": "2026-09-23T06:59:42.588667+00:00",
+   "delete_utc": "2026-09-23T14:21:41.912209+00:00",
+   "hours": 7.366,
+   "usd": 2.69
+  },
+  {
+   "name": "rv-harness-prov-3",
+   "zone": "asia-south1-c",
+   "machine_type": "c4-highcpu-8",
+   "create_utc": "2026-09-23T06:59:42.632270+00:00",
+   "delete_utc": "2026-09-23T14:21:39.853728+00:00",
+   "hours": 7.366,
+   "usd": 2.68
+  },
+  {
+   "name": "rv-harness-lg-3",
+   "zone": "asia-south1-c",
+   "machine_type": "c4-highcpu-8",
+   "create_utc": "2026-09-23T06:59:44.006118+00:00",
+   "delete_utc": "2026-09-23T14:21:41.342086+00:00",
+   "hours": 7.366,
+   "usd": 2.68
+  },
+  {
+   "name": "rv-harness-lg-4",
+   "zone": "asia-south1-c",
+   "machine_type": "c4-highcpu-8",
+   "create_utc": "2026-09-23T06:59:44.072806+00:00",
+   "delete_utc": "2026-09-23T14:21:40.282034+00:00",
+   "hours": 7.366,
+   "usd": 2.68
+  },
+  {
+   "name": "rv-guard-g2-5",
+   "zone": "asia-south1-c",
+   "machine_type": "g2-standard-8",
+   "create_utc": "2026-09-23T07:00:32.407415+00:00",
+   "delete_utc": "2026-09-23T09:27:08.715108+00:00",
+   "hours": 2.443,
+   "usd": 2.26
+  },
+  {
+   "name": "rv-harness-proxy-1",
+   "zone": "asia-south1-c",
+   "machine_type": "c4-highcpu-8",
+   "create_utc": "2026-09-23T07:03:52.981671+00:00",
+   "delete_utc": "2026-09-23T14:44:57.565403+00:00",
+   "hours": 7.685,
+   "usd": 2.8
+  },
+  {
+   "name": "rv-micro-lg-5",
+   "zone": "asia-south1-c",
+   "machine_type": "c4-standard-4",
+   "create_utc": "2026-09-23T07:17:50.729597+00:00",
+   "delete_utc": "2026-09-23T07:42:52.484450+00:00",
+   "hours": 0.417,
+   "usd": 0.09
+  },
+  {
+   "name": "rv-micro-up-2",
+   "zone": "asia-south1-c",
+   "machine_type": "c4-standard-4",
+   "create_utc": "2026-09-23T07:18:10.247433+00:00",
+   "delete_utc": "2026-09-23T07:42:54.378797+00:00",
+   "hours": 0.412,
+   "usd": 0.09
+  },
+  {
+   "name": "rv-micro-edge-2",
+   "zone": "asia-south1-c",
+   "machine_type": "c4-standard-4",
+   "create_utc": "2026-09-23T07:18:10.657726+00:00",
+   "delete_utc": "2026-09-23T07:42:52.690937+00:00",
+   "hours": 0.412,
+   "usd": 0.09
+  },
+  {
+   "name": "rv-proto-unit-2",
+   "zone": "asia-south1-c",
+   "machine_type": "g2-standard-8",
+   "create_utc": "2026-09-23T07:29:43.366183+00:00",
+   "delete_utc": "2026-09-23T07:38:37.448856+00:00",
+   "hours": 0.148,
+   "usd": 0.14
+  },
+  {
+   "name": "rv-harness-lg-5",
+   "zone": "asia-south1-c",
+   "machine_type": "c4-highcpu-8",
+   "create_utc": "2026-09-23T08:12:43.270453+00:00",
+   "delete_utc": "2026-09-23T14:21:39.845391+00:00",
+   "hours": 6.149,
+   "usd": 2.24
+  },
+  {
+   "name": "rv-proto-prov-1",
+   "zone": "asia-south1-c",
+   "machine_type": "c4-standard-4",
+   "create_utc": "2026-09-23T10:58:12.842774+00:00",
+   "delete_utc": "2026-09-23T11:26:43.131152+00:00",
+   "hours": 0.475,
+   "usd": 0.1
+  },
+  {
+   "name": "rv-proto-unit-2",
+   "zone": "asia-south1-c",
+   "machine_type": "g2-standard-8",
+   "create_utc": "2026-09-23T11:23:48.569959+00:00",
+   "delete_utc": "2026-09-23T11:26:43.031360+00:00",
+   "hours": 0.048,
+   "usd": 0.04
+  },
+  {
+   "name": "rv-micro-up-3",
+   "zone": "asia-south1-c",
+   "machine_type": "c4-standard-8",
+   "create_utc": "2026-09-23T11:35:06.341121+00:00",
+   "delete_utc": "2026-09-23T11:52:21.772534+00:00",
+   "hours": 0.288,
+   "usd": 0.12
+  },
+  {
+   "name": "rv-micro-edge-3",
+   "zone": "asia-south1-c",
+   "machine_type": "c4-standard-8",
+   "create_utc": "2026-09-23T11:35:07.715839+00:00",
+   "delete_utc": "2026-09-23T11:52:17.800065+00:00",
+   "hours": 0.286,
+   "usd": 0.12
+  },
+  {
+   "name": "rv-micro-lg-7",
+   "zone": "asia-south1-c",
+   "machine_type": "c4-standard-16",
+   "create_utc": "2026-09-23T11:35:09.590461+00:00",
+   "delete_utc": "2026-09-23T11:52:17.008199+00:00",
+   "hours": 0.285,
+   "usd": 0.24
+  },
+  {
+   "name": "rv-micro-lg-6",
+   "zone": "asia-south1-c",
+   "machine_type": "c4-standard-16",
+   "create_utc": "2026-09-23T11:35:14.836603+00:00",
+   "delete_utc": "2026-09-23T12:15:11.276625+00:00",
+   "hours": 0.666,
+   "usd": 0.55
+  },
+  {
+   "name": "rv-micro-sut-3",
+   "zone": "asia-south1-c",
+   "machine_type": "c4-standard-8",
+   "create_utc": "2026-09-23T11:35:19.497800+00:00",
+   "delete_utc": "2026-09-23T12:15:10.811149+00:00",
+   "hours": 0.664,
+   "usd": 0.28
+  },
+  {
+   "name": "rv-pbu-lg-2",
+   "zone": "asia-south1-c",
+   "machine_type": "c4-highcpu-8",
+   "create_utc": "2026-09-23T11:40:38.813192+00:00",
+   "delete_utc": "2026-09-23T17:51:22.270723+00:00",
+   "hours": 6.179,
+   "usd": 2.25
+  },
+  {
+   "name": "rv-pbu-lg-1",
+   "zone": "asia-south1-c",
+   "machine_type": "c4-highcpu-8",
+   "create_utc": "2026-09-23T11:40:38.819246+00:00",
+   "delete_utc": "2026-09-23T17:51:22.239877+00:00",
+   "hours": 6.179,
+   "usd": 2.25
+  },
+  {
+   "name": "rv-pbu-prov-1",
+   "zone": "asia-south1-c",
+   "machine_type": "c4-highcpu-8",
+   "create_utc": "2026-09-23T11:40:38.821104+00:00",
+   "delete_utc": "2026-09-23T17:51:22.581018+00:00",
+   "hours": 6.179,
+   "usd": 2.25
+  },
+  {
+   "name": "rv-pbf-unit-1",
+   "zone": "asia-south1-b",
+   "machine_type": "g2-standard-8",
+   "create_utc": "2026-09-23T11:43:08.177566+00:00",
+   "delete_utc": "2026-09-23T11:57:18.151814+00:00",
+   "hours": 0.236,
+   "usd": 0.22
+  },
+  {
+   "name": "rv-pbf-unit-2",
+   "zone": "asia-northeast1-a",
+   "machine_type": "g2-standard-24",
+   "create_utc": "2026-09-23T11:54:32.425609+00:00",
+   "delete_utc": "2026-09-23T16:53:23.990243+00:00",
+   "hours": 4.981,
+   "usd": 13.0
+  },
+  {
+   "name": "rv-proto-gw-1",
+   "zone": "asia-south1-c",
+   "machine_type": "c4-standard-4",
+   "create_utc": "2026-09-23T11:54:48.837490+00:00",
+   "delete_utc": "2026-09-23T12:00:28.006776+00:00",
+   "hours": 0.094,
+   "usd": 0.02
+  },
+  {
+   "name": "rv-pbf-unit-4",
+   "zone": "asia-northeast1-a",
+   "machine_type": "g2-standard-24",
+   "create_utc": "2026-09-23T11:54:51.646692+00:00",
+   "delete_utc": "2026-09-23T16:53:25.538692+00:00",
+   "hours": 4.976,
+   "usd": 12.99
+  },
+  {
+   "name": "rv-pbf-unit-5",
+   "zone": "asia-northeast1-a",
+   "machine_type": "g2-standard-24",
+   "create_utc": "2026-09-23T11:54:51.817004+00:00",
+   "delete_utc": "2026-09-23T16:53:24.079386+00:00",
+   "hours": 4.976,
+   "usd": 12.99
+  },
+  {
+   "name": "rv-pbf-unit-3",
+   "zone": "asia-northeast1-a",
+   "machine_type": "g2-standard-24",
+   "create_utc": "2026-09-23T11:54:53.385817+00:00",
+   "delete_utc": "2026-09-23T16:53:26.015000+00:00",
+   "hours": 4.976,
+   "usd": 12.99
+  },
+  {
+   "name": "rv-pbf-prov-1",
+   "zone": "asia-northeast1-a",
+   "machine_type": "c4-highcpu-8",
+   "create_utc": "2026-09-23T11:55:28.226120+00:00",
+   "delete_utc": "2026-09-23T16:54:16.854428+00:00",
+   "hours": 4.98,
+   "usd": 2.24
+  },
+  {
+   "name": "rv-pbf-prov-2",
+   "zone": "asia-northeast1-a",
+   "machine_type": "c4-highcpu-8",
+   "create_utc": "2026-09-23T11:55:28.367812+00:00",
+   "delete_utc": "2026-09-23T16:54:16.846530+00:00",
+   "hours": 4.98,
+   "usd": 2.24
+  },
+  {
+   "name": "rv-pbf-lg-1",
+   "zone": "asia-northeast1-a",
+   "machine_type": "c4-highcpu-8",
+   "create_utc": "2026-09-23T11:55:28.776947+00:00",
+   "delete_utc": "2026-09-23T16:54:19.041781+00:00",
+   "hours": 4.981,
+   "usd": 2.24
+  },
+  {
+   "name": "rv-pbf-redis-1",
+   "zone": "asia-northeast1-a",
+   "machine_type": "c4-standard-8",
+   "create_utc": "2026-09-23T11:55:28.910546+00:00",
+   "delete_utc": "2026-09-23T16:54:18.773292+00:00",
+   "hours": 4.981,
+   "usd": 2.59
+  },
+  {
+   "name": "rv-pbf-edge-1",
+   "zone": "asia-northeast1-a",
+   "machine_type": "c4-highcpu-16",
+   "create_utc": "2026-09-23T11:55:29.058362+00:00",
+   "delete_utc": "2026-09-23T16:54:16.863392+00:00",
+   "hours": 4.98,
+   "usd": 4.41
+  },
+  {
+   "name": "rv-pbf-lg-3",
+   "zone": "asia-northeast1-a",
+   "machine_type": "c4-highcpu-8",
+   "create_utc": "2026-09-23T11:55:29.262241+00:00",
+   "delete_utc": "2026-09-23T16:54:16.887885+00:00",
+   "hours": 4.98,
+   "usd": 2.24
+  },
+  {
+   "name": "rv-pbf-lg-2",
+   "zone": "asia-northeast1-a",
+   "machine_type": "c4-highcpu-8",
+   "create_utc": "2026-09-23T11:55:29.296732+00:00",
+   "delete_utc": "2026-09-23T16:54:16.788534+00:00",
+   "hours": 4.98,
+   "usd": 2.24
+  },
+  {
+   "name": "rv-pbf-unit-6",
+   "zone": "asia-northeast1-a",
+   "machine_type": "g2-standard-8",
+   "create_utc": "2026-09-23T11:55:31.073388+00:00",
+   "delete_utc": "2026-09-23T16:26:53.679452+00:00",
+   "hours": 4.523,
+   "usd": 5.14
+  },
+  {
+   "name": "rv-pbf-unit-7",
+   "zone": "asia-northeast1-a",
+   "machine_type": "g2-standard-4",
+   "create_utc": "2026-09-23T11:55:44.810717+00:00",
+   "delete_utc": "2026-09-23T14:44:00.025250+00:00",
+   "hours": 2.804,
+   "usd": 2.66
+  },
+  {
+   "name": "rv-v1-sut-2",
+   "zone": "asia-south1-c",
+   "machine_type": "g2-standard-24",
+   "create_utc": "2026-09-23T12:29:56.260902+00:00",
+   "delete_utc": "2026-09-23T13:55:51.896395+00:00",
+   "hours": 1.432,
+   "usd": 3.04
+  },
+  {
+   "name": "rv-v1-lg-2",
+   "zone": "asia-south1-c",
+   "machine_type": "c4-standard-8",
+   "create_utc": "2026-09-23T12:29:57.087364+00:00",
+   "delete_utc": "2026-09-23T13:55:50.195709+00:00",
+   "hours": 1.431,
+   "usd": 0.6
+  },
+  {
+   "name": "rv-v1-prov-2",
+   "zone": "asia-south1-c",
+   "machine_type": "c4-standard-8",
+   "create_utc": "2026-09-23T12:29:57.318950+00:00",
+   "delete_utc": "2026-09-23T13:55:50.357948+00:00",
+   "hours": 1.431,
+   "usd": 0.6
+  },
+  {
+   "name": "rv-pbf-prov-3",
+   "zone": "asia-northeast1-a",
+   "machine_type": "c4-highcpu-8",
+   "create_utc": "2026-09-23T12:35:35.557735+00:00",
+   "delete_utc": "2026-09-23T16:27:44.454102+00:00",
+   "hours": 3.869,
+   "usd": 1.74
+  },
+  {
+   "name": "rv-pbf-redis-2",
+   "zone": "asia-northeast1-a",
+   "machine_type": "c4-standard-4",
+   "create_utc": "2026-09-23T12:35:35.778798+00:00",
+   "delete_utc": "2026-09-23T16:27:46.495706+00:00",
+   "hours": 3.87,
+   "usd": 1.03
+  },
+  {
+   "name": "rv-pbf-lg-4",
+   "zone": "asia-northeast1-a",
+   "machine_type": "c4-highcpu-8",
+   "create_utc": "2026-09-23T12:35:45.365182+00:00",
+   "delete_utc": "2026-09-23T16:27:46.514893+00:00",
+   "hours": 3.867,
+   "usd": 1.74
+  },
+  {
+   "name": "rv-pbf-unit-8",
+   "zone": "asia-northeast1-a",
+   "machine_type": "g2-standard-8",
+   "create_utc": "2026-09-23T13:26:16.611451+00:00",
+   "delete_utc": "2026-09-23T16:26:51.938499+00:00",
+   "hours": 3.01,
+   "usd": 3.42
+  },
+  {
+   "name": "rv-pbf-unit-9",
+   "zone": "asia-northeast1-a",
+   "machine_type": "g2-standard-8",
+   "create_utc": "2026-09-23T13:26:17.048119+00:00",
+   "delete_utc": "2026-09-23T16:26:52.283869+00:00",
+   "hours": 3.01,
+   "usd": 3.42
+  },
+  {
+   "name": "rv-pbf-edge-2",
+   "zone": "asia-northeast1-a",
+   "machine_type": "c4-highcpu-8",
+   "create_utc": "2026-09-23T13:51:39.974355+00:00",
+   "delete_utc": "2026-09-23T16:27:46.264709+00:00",
+   "hours": 2.602,
+   "usd": 1.17
+  },
+  {
+   "name": "rv-split-guard-1",
+   "zone": "asia-south1-c",
+   "machine_type": "g2-standard-4",
+   "create_utc": "2026-09-23T15:23:23.869477+00:00",
+   "delete_utc": "2026-09-23T18:33:36.955014+00:00",
+   "hours": 3.17,
+   "usd": 2.45
+  },
+  {
+   "name": "rv-split-prov-1",
+   "zone": "asia-south1-c",
+   "machine_type": "c4-highcpu-8",
+   "create_utc": "2026-09-23T15:24:11.729663+00:00",
+   "delete_utc": "2026-09-23T18:33:34.585563+00:00",
+   "hours": 3.156,
+   "usd": 1.15
+  },
+  {
+   "name": "rv-split-lg-1",
+   "zone": "asia-south1-c",
+   "machine_type": "c4-highcpu-8",
+   "create_utc": "2026-09-23T15:24:12.286306+00:00",
+   "delete_utc": "2026-09-23T18:33:34.621568+00:00",
+   "hours": 3.156,
+   "usd": 1.15
+  },
+  {
+   "name": "rv-split-gw-1",
+   "zone": "asia-south1-c",
+   "machine_type": "c4-highcpu-16",
+   "create_utc": "2026-09-23T15:24:19.742422+00:00",
+   "delete_utc": "2026-09-23T18:33:36.941870+00:00",
+   "hours": 3.155,
+   "usd": 2.27
+  },
+  {
+   "name": "rv-split-guard-2",
+   "zone": "asia-south1-c",
+   "machine_type": "g2-standard-4",
+   "create_utc": "2026-09-23T15:41:43.064863+00:00",
+   "delete_utc": "2026-09-23T18:33:44.126013+00:00",
+   "hours": 2.867,
+   "usd": 2.22
+  },
+  {
+   "name": "rv-pbf-lg-1",
+   "zone": "asia-northeast1-a",
+   "machine_type": "c4-highcpu-8",
+   "create_utc": "2026-09-23T16:58:59.625603+00:00",
+   "delete_utc": "2026-09-23T18:27:22.009556+00:00",
+   "hours": 1.473,
+   "usd": 0.66
+  },
+  {
+   "name": "rv-pbf-unit-5",
+   "zone": "asia-northeast1-a",
+   "machine_type": "g2-standard-24",
+   "create_utc": "2026-09-23T16:58:59.627311+00:00",
+   "delete_utc": "2026-09-23T18:18:08.903618+00:00",
+   "hours": 1.319,
+   "usd": 3.44
+  },
+  {
+   "name": "rv-pbf-unit-3",
+   "zone": "asia-northeast1-a",
+   "machine_type": "g2-standard-24",
+   "create_utc": "2026-09-23T16:58:59.841311+00:00",
+   "delete_utc": "2026-09-23T18:18:08.770354+00:00",
+   "hours": 1.319,
+   "usd": 3.44
+  },
+  {
+   "name": "rv-pbf-lg-3",
+   "zone": "asia-northeast1-a",
+   "machine_type": "c4-highcpu-8",
+   "create_utc": "2026-09-23T16:59:00.078850+00:00",
+   "delete_utc": "2026-09-23T18:27:22.601064+00:00",
+   "hours": 1.473,
+   "usd": 0.66
+  },
+  {
+   "name": "rv-pbf-unit-2",
+   "zone": "asia-northeast1-a",
+   "machine_type": "g2-standard-24",
+   "create_utc": "2026-09-23T16:59:00.132366+00:00",
+   "delete_utc": "2026-09-23T18:27:21.971790+00:00",
+   "hours": 1.473,
+   "usd": 3.84
+  },
+  {
+   "name": "rv-pbf-edge-1",
+   "zone": "asia-northeast1-a",
+   "machine_type": "c4-highcpu-16",
+   "create_utc": "2026-09-23T16:59:00.548511+00:00",
+   "delete_utc": "2026-09-23T18:27:20.392458+00:00",
+   "hours": 1.472,
+   "usd": 1.3
+  },
+  {
+   "name": "rv-pbf-prov-1",
+   "zone": "asia-northeast1-a",
+   "machine_type": "c4-highcpu-8",
+   "create_utc": "2026-09-23T16:59:00.574303+00:00",
+   "delete_utc": "2026-09-23T18:27:20.496022+00:00",
+   "hours": 1.472,
+   "usd": 0.66
+  },
+  {
+   "name": "rv-pbf-prov-2",
+   "zone": "asia-northeast1-a",
+   "machine_type": "c4-highcpu-8",
+   "create_utc": "2026-09-23T16:59:00.770141+00:00",
+   "delete_utc": "2026-09-23T18:27:20.178377+00:00",
+   "hours": 1.472,
+   "usd": 0.66
+  },
+  {
+   "name": "rv-pbf-redis-1",
+   "zone": "asia-northeast1-a",
+   "machine_type": "c4-standard-8",
+   "create_utc": "2026-09-23T16:59:00.919581+00:00",
+   "delete_utc": "2026-09-23T18:27:20.317461+00:00",
+   "hours": 1.472,
+   "usd": 0.77
+  },
+  {
+   "name": "rv-pbf-lg-2",
+   "zone": "asia-northeast1-a",
+   "machine_type": "c4-highcpu-8",
+   "create_utc": "2026-09-23T16:59:01.079619+00:00",
+   "delete_utc": "2026-09-23T18:27:20.192697+00:00",
+   "hours": 1.472,
+   "usd": 0.66
+  },
+  {
+   "name": "rv-pbf-unit-4",
+   "zone": "asia-northeast1-a",
+   "machine_type": "g2-standard-24",
+   "create_utc": "2026-09-23T16:59:01.134834+00:00",
+   "delete_utc": "2026-09-23T18:18:10.963869+00:00",
+   "hours": 1.319,
+   "usd": 3.44
+  },
+  {
+   "name": "rv-pbu-lg-3",
+   "zone": "asia-south1-c",
+   "machine_type": "c4-highcpu-8",
+   "create_utc": "2026-09-23T18:07:01.163957+00:00",
+   "delete_utc": "2026-09-23T19:59:13.910946+00:00",
+   "hours": 1.87,
+   "usd": 0.68
+  },
+  {
+   "name": "rv-pbu-lg-4",
+   "zone": "asia-south1-c",
+   "machine_type": "c4-highcpu-8",
+   "create_utc": "2026-09-23T18:07:01.197796+00:00",
+   "delete_utc": "2026-09-23T19:59:14.031423+00:00",
+   "hours": 1.87,
+   "usd": 0.68
+  },
+  {
+   "name": "rv-pbu-prov-2",
+   "zone": "asia-south1-c",
+   "machine_type": "c4-highcpu-8",
+   "create_utc": "2026-09-23T18:07:03.141322+00:00",
+   "delete_utc": "2026-09-23T19:59:13.946148+00:00",
+   "hours": 1.87,
+   "usd": 0.68
+  },
+  {
+   "name": "rv-pbf-lg-2",
+   "zone": "asia-northeast1-a",
+   "machine_type": "c4-highcpu-8",
+   "create_utc": "2026-09-23T18:31:24.633533+00:00",
+   "delete_utc": "2026-09-23T19:53:10.640384+00:00",
+   "hours": 1.363,
+   "usd": 0.61
+  },
+  {
+   "name": "rv-pbf-redis-1",
+   "zone": "asia-northeast1-a",
+   "machine_type": "c4-standard-8",
+   "create_utc": "2026-09-23T18:31:24.827487+00:00",
+   "delete_utc": "2026-09-23T19:53:08.637256+00:00",
+   "hours": 1.362,
+   "usd": 0.71
+  },
+  {
+   "name": "rv-pbf-unit-4",
+   "zone": "asia-northeast1-a",
+   "machine_type": "g2-standard-24",
+   "create_utc": "2026-09-23T18:31:24.865159+00:00",
+   "delete_utc": "2026-09-23T19:53:08.045173+00:00",
+   "hours": 1.362,
+   "usd": 3.55
+  },
+  {
+   "name": "rv-pbf-edge-1",
+   "zone": "asia-northeast1-a",
+   "machine_type": "c4-highcpu-16",
+   "create_utc": "2026-09-23T18:31:25.027166+00:00",
+   "delete_utc": "2026-09-23T19:53:07.894165+00:00",
+   "hours": 1.362,
+   "usd": 1.21
+  },
+  {
+   "name": "rv-pbf-unit-3",
+   "zone": "asia-northeast1-a",
+   "machine_type": "g2-standard-24",
+   "create_utc": "2026-09-23T18:31:25.533143+00:00",
+   "delete_utc": "2026-09-23T19:53:07.912905+00:00",
+   "hours": 1.362,
+   "usd": 3.55
+  },
+  {
+   "name": "rv-pbf-lg-3",
+   "zone": "asia-northeast1-a",
+   "machine_type": "c4-highcpu-8",
+   "create_utc": "2026-09-23T18:31:25.544621+00:00",
+   "delete_utc": "2026-09-23T19:53:07.874981+00:00",
+   "hours": 1.362,
+   "usd": 0.61
+  },
+  {
+   "name": "rv-pbf-prov-1",
+   "zone": "asia-northeast1-a",
+   "machine_type": "c4-highcpu-8",
+   "create_utc": "2026-09-23T18:31:25.880884+00:00",
+   "delete_utc": "2026-09-23T19:53:07.872607+00:00",
+   "hours": 1.362,
+   "usd": 0.61
+  },
+  {
+   "name": "rv-pbf-lg-1",
+   "zone": "asia-northeast1-a",
+   "machine_type": "c4-highcpu-8",
+   "create_utc": "2026-09-23T18:31:26.137204+00:00",
+   "delete_utc": "2026-09-23T19:53:07.748274+00:00",
+   "hours": 1.362,
+   "usd": 0.61
+  },
+  {
+   "name": "rv-pbf-prov-2",
+   "zone": "asia-northeast1-a",
+   "machine_type": "c4-highcpu-8",
+   "create_utc": "2026-09-23T18:31:26.831413+00:00",
+   "delete_utc": "2026-09-23T19:53:07.991160+00:00",
+   "hours": 1.361,
+   "usd": 0.61
+  },
+  {
+   "name": "rv-pbf-unit-5",
+   "zone": "asia-northeast1-a",
+   "machine_type": "g2-standard-24",
+   "create_utc": "2026-09-23T18:31:26.903932+00:00",
+   "delete_utc": "2026-09-23T19:53:13.357812+00:00",
+   "hours": 1.363,
+   "usd": 3.56
+  },
+  {
+   "name": "rv-pbf-unit-2",
+   "zone": "asia-northeast1-a",
+   "machine_type": "g2-standard-24",
+   "create_utc": "2026-09-23T18:31:27.189870+00:00",
+   "delete_utc": "2026-09-23T19:53:12.960648+00:00",
+   "hours": 1.363,
+   "usd": 3.56
+  },
+  {
+   "name": "rv-split-gw-3",
+   "zone": "asia-south1-c",
+   "machine_type": "c4-highcpu-16",
+   "create_utc": "2026-09-23T18:40:26.162995+00:00",
+   "delete_utc": "2026-09-23T18:44:48.293415+00:00",
+   "hours": 0.073,
+   "usd": 0.05
+  },
+  {
+   "name": "rv-split-edge-1",
+   "zone": "asia-south1-c",
+   "machine_type": "c4-highcpu-8",
+   "create_utc": "2026-09-23T18:40:26.232571+00:00",
+   "delete_utc": "2026-09-23T18:44:48.530775+00:00",
+   "hours": 0.073,
+   "usd": 0.03
+  },
+  {
+   "name": "rv-split-gw-1",
+   "zone": "asia-south1-c",
+   "machine_type": "c4-highcpu-16",
+   "create_utc": "2026-09-23T18:40:27.862041+00:00",
+   "delete_utc": "2026-09-23T18:44:48.438917+00:00",
+   "hours": 0.072,
+   "usd": 0.05
+  },
+  {
+   "name": "rv-split-redis-1",
+   "zone": "asia-south1-c",
+   "machine_type": "c4-standard-4",
+   "create_utc": "2026-09-23T18:40:28.890798+00:00",
+   "delete_utc": "2026-09-23T18:44:50.046618+00:00",
+   "hours": 0.073,
+   "usd": 0.02
+  },
+  {
+   "name": "rv-split-gw-2",
+   "zone": "asia-south1-c",
+   "machine_type": "c4-highcpu-16",
+   "create_utc": "2026-09-23T18:40:29.600646+00:00",
+   "delete_utc": "2026-09-23T18:44:50.364082+00:00",
+   "hours": 0.072,
+   "usd": 0.05
+  },
+  {
+   "name": "rv-split-lg-2",
+   "zone": "asia-south1-c",
+   "machine_type": "c4-highcpu-8",
+   "create_utc": "2026-09-23T18:40:41.216485+00:00",
+   "delete_utc": "2026-09-23T18:44:48.606885+00:00",
+   "hours": 0.069,
+   "usd": 0.03
+  },
+  {
+   "name": "rv-split-prov-2",
+   "zone": "asia-south1-c",
+   "machine_type": "c4-highcpu-8",
+   "create_utc": "2026-09-23T18:40:42.134022+00:00",
+   "delete_utc": "2026-09-23T18:44:48.826014+00:00",
+   "hours": 0.069,
+   "usd": 0.02
+  },
+  {
+   "name": "rv-split-prov-1",
+   "zone": "asia-south1-c",
+   "machine_type": "c4-highcpu-8",
+   "create_utc": "2026-09-23T18:40:42.480116+00:00",
+   "delete_utc": "2026-09-23T18:44:48.348453+00:00",
+   "hours": 0.068,
+   "usd": 0.02
+  },
+  {
+   "name": "rv-split-lg-1",
+   "zone": "asia-south1-c",
+   "machine_type": "c4-highcpu-8",
+   "create_utc": "2026-09-23T18:40:42.747759+00:00",
+   "delete_utc": "2026-09-23T18:44:48.351667+00:00",
+   "hours": 0.068,
+   "usd": 0.02
+  },
+  {
+   "name": "rv-split-guard-1",
+   "zone": "asia-south1-b",
+   "machine_type": "g2-standard-4",
+   "create_utc": "2026-09-23T18:43:09.582422+00:00",
+   "delete_utc": "2026-09-24T03:26:51.215860+00:00",
+   "hours": 8.728,
+   "usd": 6.75
+  },
+  {
+   "name": "rv-split-guard-2",
+   "zone": "asia-south1-b",
+   "machine_type": "g2-standard-4",
+   "create_utc": "2026-09-23T18:43:29.625826+00:00",
+   "delete_utc": "2026-09-24T03:26:49.279504+00:00",
+   "hours": 8.722,
+   "usd": 6.75
+  },
+  {
+   "name": "rv-split-guard-3",
+   "zone": "asia-south1-b",
+   "machine_type": "g2-standard-4",
+   "create_utc": "2026-09-23T18:43:29.735474+00:00",
+   "delete_utc": "2026-09-24T03:26:51.590884+00:00",
+   "hours": 8.723,
+   "usd": 6.75
+  },
+  {
+   "name": "rv-split-guard-5",
+   "zone": "asia-south1-b",
+   "machine_type": "g2-standard-4",
+   "create_utc": "2026-09-23T18:43:30.454453+00:00",
+   "delete_utc": "2026-09-23T21:08:03.997786+00:00",
+   "hours": 2.409,
+   "usd": 1.86
+  },
+  {
+   "name": "rv-split-guard-4",
+   "zone": "asia-south1-b",
+   "machine_type": "g2-standard-4",
+   "create_utc": "2026-09-23T18:43:30.823859+00:00",
+   "delete_utc": "2026-09-24T03:26:49.597112+00:00",
+   "hours": 8.722,
+   "usd": 6.75
+  },
+  {
+   "name": "rv-split-redis-1",
+   "zone": "asia-south1-b",
+   "machine_type": "c4-standard-4",
+   "create_utc": "2026-09-23T18:45:24.791022+00:00",
+   "delete_utc": "2026-09-24T03:26:51.345040+00:00",
+   "hours": 8.691,
+   "usd": 1.88
+  },
+  {
+   "name": "rv-split-gw-1",
+   "zone": "asia-south1-b",
+   "machine_type": "c4-highcpu-16",
+   "create_utc": "2026-09-23T18:45:30.259692+00:00",
+   "delete_utc": "2026-09-24T03:26:49.334798+00:00",
+   "hours": 8.689,
+   "usd": 6.24
+  },
+  {
+   "name": "rv-split-gw-3",
+   "zone": "asia-south1-b",
+   "machine_type": "c4-highcpu-16",
+   "create_utc": "2026-09-23T18:45:31.495783+00:00",
+   "delete_utc": "2026-09-24T03:26:49.185804+00:00",
+   "hours": 8.688,
+   "usd": 6.24
+  },
+  {
+   "name": "rv-split-gw-2",
+   "zone": "asia-south1-b",
+   "machine_type": "c4-highcpu-16",
+   "create_utc": "2026-09-23T18:45:41.277272+00:00",
+   "delete_utc": "2026-09-24T03:26:51.250847+00:00",
+   "hours": 8.686,
+   "usd": 6.24
+  },
+  {
+   "name": "rv-split-edge-1",
+   "zone": "asia-south1-b",
+   "machine_type": "c4-highcpu-8",
+   "create_utc": "2026-09-23T18:46:01.856645+00:00",
+   "delete_utc": "2026-09-24T03:26:51.387151+00:00",
+   "hours": 8.68,
+   "usd": 3.16
+  },
+  {
+   "name": "rv-split-lg-2",
+   "zone": "asia-south1-b",
+   "machine_type": "c4-highcpu-8",
+   "create_utc": "2026-09-23T18:46:13.220497+00:00",
+   "delete_utc": "2026-09-24T03:26:50.921873+00:00",
+   "hours": 8.677,
+   "usd": 3.16
+  },
+  {
+   "name": "rv-split-prov-1",
+   "zone": "asia-south1-b",
+   "machine_type": "c4-highcpu-8",
+   "create_utc": "2026-09-23T18:46:13.664658+00:00",
+   "delete_utc": "2026-09-24T03:26:52.301700+00:00",
+   "hours": 8.677,
+   "usd": 3.16
+  },
+  {
+   "name": "rv-split-prov-2",
+   "zone": "asia-south1-b",
+   "machine_type": "c4-highcpu-8",
+   "create_utc": "2026-09-23T18:46:13.839825+00:00",
+   "delete_utc": "2026-09-24T03:26:49.408068+00:00",
+   "hours": 8.677,
+   "usd": 3.16
+  },
+  {
+   "name": "rv-split-lg-1",
+   "zone": "asia-south1-b",
+   "machine_type": "c4-highcpu-8",
+   "create_utc": "2026-09-23T18:46:18.605892+00:00",
+   "delete_utc": "2026-09-24T03:26:51.509097+00:00",
+   "hours": 8.676,
+   "usd": 3.16
+  },
+  {
+   "name": "rv-pbf-lg-3",
+   "zone": "asia-northeast1-a",
+   "machine_type": "c4-highcpu-8",
+   "create_utc": "2026-09-23T19:55:35.765873+00:00",
+   "delete_utc": "2026-09-23T20:08:39.090865+00:00",
+   "hours": 0.218,
+   "usd": 0.1
+  },
+  {
+   "name": "rv-pbf-edge-1",
+   "zone": "asia-northeast1-a",
+   "machine_type": "c4-highcpu-16",
+   "create_utc": "2026-09-23T19:55:36.213731+00:00",
+   "delete_utc": "2026-09-23T20:08:40.783543+00:00",
+   "hours": 0.218,
+   "usd": 0.19
+  },
+  {
+   "name": "rv-pbf-unit-2",
+   "zone": "asia-northeast1-a",
+   "machine_type": "g2-standard-24",
+   "create_utc": "2026-09-23T19:55:36.736558+00:00",
+   "delete_utc": "2026-09-23T20:08:38.787354+00:00",
+   "hours": 0.217,
+   "usd": 0.57
+  },
+  {
+   "name": "rv-pbf-prov-1",
+   "zone": "asia-northeast1-a",
+   "machine_type": "c4-highcpu-8",
+   "create_utc": "2026-09-23T19:55:36.752492+00:00",
+   "delete_utc": "2026-09-23T20:08:38.577888+00:00",
+   "hours": 0.217,
+   "usd": 0.1
+  },
+  {
+   "name": "rv-pbf-redis-1",
+   "zone": "asia-northeast1-a",
+   "machine_type": "c4-standard-8",
+   "create_utc": "2026-09-23T19:55:36.974322+00:00",
+   "delete_utc": "2026-09-23T20:08:39.240722+00:00",
+   "hours": 0.217,
+   "usd": 0.11
+  },
+  {
+   "name": "rv-pbf-lg-1",
+   "zone": "asia-northeast1-a",
+   "machine_type": "c4-highcpu-8",
+   "create_utc": "2026-09-23T19:55:37.314574+00:00",
+   "delete_utc": "2026-09-23T20:08:39.830181+00:00",
+   "hours": 0.217,
+   "usd": 0.1
+  },
+  {
+   "name": "rv-pbf-lg-2",
+   "zone": "asia-northeast1-a",
+   "machine_type": "c4-highcpu-8",
+   "create_utc": "2026-09-23T19:55:37.629712+00:00",
+   "delete_utc": "2026-09-23T20:08:38.876821+00:00",
+   "hours": 0.217,
+   "usd": 0.1
+  },
+  {
+   "name": "rv-pbu-lg-5",
+   "zone": "asia-south1-c",
+   "machine_type": "c4-highcpu-8",
+   "create_utc": "2026-09-23T20:23:59.715136+00:00",
+   "delete_utc": "2026-09-23T20:29:41.289565+00:00",
+   "hours": 0.095,
+   "usd": 0.03
+  },
+  {
+   "name": "rv-pbu-prov-3",
+   "zone": "asia-south1-c",
+   "machine_type": "c4-highcpu-8",
+   "create_utc": "2026-09-23T20:23:59.760270+00:00",
+   "delete_utc": "2026-09-23T20:29:41.492323+00:00",
+   "hours": 0.095,
+   "usd": 0.03
+  },
+  {
+   "name": "rv-pbu-lg-6",
+   "zone": "asia-south1-c",
+   "machine_type": "c4-highcpu-8",
+   "create_utc": "2026-09-23T20:24:01.444073+00:00",
+   "delete_utc": "2026-09-23T20:29:41.485118+00:00",
+   "hours": 0.094,
+   "usd": 0.03
+  },
+  {
+   "name": "rv-split-guard-6",
+   "zone": "asia-south1-b",
+   "machine_type": "g2-standard-4",
+   "create_utc": "2026-09-23T20:43:36.902641+00:00",
+   "delete_utc": "2026-09-24T03:26:51.110369+00:00",
+   "hours": 6.721,
+   "usd": 5.2
+  },
+  {
+   "name": "rv-split-lg-3",
+   "zone": "asia-south1-b",
+   "machine_type": "c4-highcpu-8",
+   "create_utc": "2026-09-23T20:51:31.075204+00:00",
+   "delete_utc": "2026-09-24T03:26:51.373787+00:00",
+   "hours": 6.589,
+   "usd": 2.4
+  },
+  {
+   "name": "rv-split-gw-4",
+   "zone": "asia-south1-b",
+   "machine_type": "c4-highcpu-16",
+   "create_utc": "2026-09-23T20:51:32.336527+00:00",
+   "delete_utc": "2026-09-24T03:26:49.267612+00:00",
+   "hours": 6.588,
+   "usd": 4.73
+  },
+  {
+   "name": "rv-split-prov-3",
+   "zone": "asia-south1-b",
+   "machine_type": "c4-highcpu-8",
+   "create_utc": "2026-09-23T20:51:33.881195+00:00",
+   "delete_utc": "2026-09-24T03:26:51.492398+00:00",
+   "hours": 6.588,
+   "usd": 2.4
+  }
+ ]
+}

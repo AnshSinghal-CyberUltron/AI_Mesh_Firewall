@@ -1,0 +1,19 @@
+## variant v2_tc_all
+Success: no issues found in 78 source files
+mypy exit=0
+Contracts
+---------
+
+Analyzed 71 files, 38 dependencies.
+-----------------------------------
+
+Gateway v2 layers KEPT
+
+Contracts: 1 kept, 0 broken.
+lint-imports exit=0
+## smoke
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/design-consistency-prover/01-layers/v2_tc_all/gateway_v2/detect/base.py", line 43, in __post_init__
+    if not isinstance(self.category, Category):
+                                     ^^^^^^^^
+NameError: name 'Category' is not defined
+smoke exit=1

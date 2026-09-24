@@ -1,0 +1,19 @@
+{
+ "item": "Instrument honesty: injected 5 ms pre-dispatch delay and 30 ms mid-stream hold visible in the harness metrics",
+ "status": "PROVISIONAL: SP/harness/READY not yet present; binaries as in ../harness-sha256.txt",
+ "code": "rvproto with RV_GUARD_TOPOLOGY=owner (one guard-owner process, local_cpu PG2-22M; 2 HTTP workers over a Unix socket)",
+ "setup": "controller, functional scale: synthprov TTFT 150 ms / ITL 20 ms / sample-mod 1; olg 4 req/s x 60 s (+5 s warm-up), 70% SSE, light corpus (100-170 tokens), org-a key",
+ "analyzer_p50_ms": {
+  "direct_floor": {"T_fw_addon_json": 0.19, "T_addon_first": 0.16, "T_fw_addon_sse": 0.17},
+  "base": {"T_fw_addon_json": 85.3, "T_addon_first": 85.7, "T_fw_addon_sse": 123.8},
+  "predispatch5": {"T_fw_addon_json": 89.5, "T_addon_first": 89.6, "T_fw_addon_sse": 113.4},
+  "hold30": {"T_fw_addon_json": 85.2, "T_addon_first": 85.7, "T_fw_addon_sse": 135.8}
+ },
+ "json_addon_shift_predispatch5_minus_base_ms": {"p10": 4.8, "p25": 5.4, "p50": 4.2, "p75": 4.0, "p90": 3.8, "mean": 4.6},
+ "per_piece_median_lag_ms": {"base": {"46": 105.4, "47": 105.5, "48": 105.5, "49": 105.5},
+                              "predispatch5": {"46": 109.4, "47": 109.5, "48": 109.3, "49": 109.3},
+                              "hold30": {"46": 105.7, "47": 135.7, "48": 115.8, "49": 105.6}},
+ "validity": "all four runs valid=True, 0 schedule drops",
+ "note": "SSE p50 T_fw_addon is a per-stream max over ~170 streams at functional scale and does not order the runs; the per-piece lag and the JSON add-on shift are the signals",
+ "verdict": "PASS (provisional): +4.6 ms mean / +3.8..5.4 ms across JSON add-on quantiles and +3.9 ms per piece for the 5 ms delay; +30.2 ms at the held piece 47 for the 30 ms hold"
+}

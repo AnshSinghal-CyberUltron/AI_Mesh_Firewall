@@ -1,0 +1,3 @@
+{"t": 1790164468.692, "step": "B1 newer a-3 published", "org_a": "ExecutionPlan(version=a-3, pii.out=enforce/redact)"}
+{"t": 1790164470.194, "step": "B2 older a-2 published after a-3 (regress)", "org_a": "ExecutionPlan(version=a-2, pii.out=monitor/redact)"}
+{"t": 1790164472.696, "step": "B3 same version a-2, content changed to pii.out=enforce/block", "org_a": "ExecutionPlan(version=a-2, pii.out=monitor/redact)", "store_doc_pii_out": "block"}

@@ -1,0 +1,1 @@
+{"run": "s1-050", "verdict": "PASS", "rule": "C4 p99 < 20 ms, infra <= 0.1%, 0 drops", "c4_p99": 12.38, "c4_p999": 17.507, "c4_sse_p99": 12.499, "c4_json_p99": 10.239, "qualified_rps": 49.16, "infra_pct": 0.0, "drops": 0, "json_total_p99": 10.239, "sse_total_p99": 10.102, "sse_first_p99": 46.568, "load_rule_verdict": "PASS"}

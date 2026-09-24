@@ -1,0 +1,8 @@
+== 10.146.0.11 System time : 0.000000002 seconds fast of NTP time;Last offset : +0.000008200 seconds;RMS offset : 0.000031050 seconds;
+== 10.146.0.12 System time : 0.000000936 seconds fast of NTP time;Last offset : +0.000000989 seconds;RMS offset : 0.000018462 seconds;
+== 10.146.0.9 System time : 0.000008161 seconds fast of NTP time;Last offset : +0.000010815 seconds;RMS offset : 0.000021168 seconds;
+== 10.146.0.2 System time : 0.000003272 seconds fast of NTP time;Last offset : -0.000000725 seconds;RMS offset : 0.000423141 seconds;
+== 10.146.0.5 System time : 0.000004291 seconds slow of NTP time;Last offset : -0.000006764 seconds;RMS offset : 0.000320699 seconds;
+== 10.146.0.3 System time : 0.000000000 seconds fast of NTP time;Last offset : +0.000008111 seconds;RMS offset : 0.000066771 seconds;
+== 10.146.0.4 System time : 0.000006325 seconds slow of NTP time;Last offset : -0.000006891 seconds;RMS offset : 0.000254942 seconds;
+== 10.146.0.13 System time : 0.000005435 seconds slow of NTP time;Last offset : -0.000002811 seconds;RMS offset : 0.000021607 seconds;

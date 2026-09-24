@@ -1,0 +1,1 @@
+configured org rate = 2 req/s (burst 1); workers = 4; sent 40 in 0.69s -> admitted 5 (= 7.3 req/s), 429 = 35; allowed by the org limit over that window ~ 2

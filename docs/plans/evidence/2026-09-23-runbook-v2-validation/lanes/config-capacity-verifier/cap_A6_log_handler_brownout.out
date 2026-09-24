@@ -1,0 +1,3 @@
+log line 0: emit blocked caller for 1008 ms; TCP connections opened so far = 1
+log line 1: emit blocked caller for 1002 ms; TCP connections opened so far = 2
+log line 2: emit blocked caller for 1002 ms; TCP connections opened so far = 3

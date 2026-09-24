@@ -1,0 +1,3 @@
+{"t": 1790168257.662, "step": "client view of tenant bulk-00648 (store version k1), 32 fresh connections", "outcomes": {"503 shared_state_unavailable": 4, "403 plan_unknown_tenant": 6, "200 v=k0 disp=ALLOW": 15, "200 v=k1 disp=ALLOW": 7}}
+{"t": 1790168259.809, "step": "client view of tenant bulk-00649 (store version k1), 32 fresh connections", "outcomes": {"200 v=k1 disp=ALLOW": 17, "200 v=k0 disp=ALLOW": 15}}
+{"t": 1790168261.96, "step": "client view of tenant bulk-00586 (store version k1), 32 fresh connections", "outcomes": {"200 v=k1 disp=ALLOW": 10, "200 v=k0 disp=ALLOW": 22}}

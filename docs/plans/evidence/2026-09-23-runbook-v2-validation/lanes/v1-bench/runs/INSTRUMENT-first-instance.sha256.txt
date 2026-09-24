@@ -1,0 +1,20 @@
+Runs L1-*, L1b-*, L1c-*, SAT-r40, D-r1/10/25, verify20b were executed with the binaries below on rv-v1-lg-1 / rv-v1-prov-1 (pushed once at ~10:10 UTC, unchanged afterwards):
+== rv-v1-lg-1
+1ee6bb5f3665de1d6f42d67d83997b71f429d57a45525650a01b15bcdab39029  synthprov
+d22d260723c31fb55a387080b853cd94ff922666807ba36845e0b7e962aa7fb3  olg
+4a9ff4a106a48f18ad3470fcb000339c417f62d4671c134638b1fc04ff3b9685  rvproxy
+== rv-v1-prov-1
+1ee6bb5f3665de1d6f42d67d83997b71f429d57a45525650a01b15bcdab39029  synthprov
+d22d260723c31fb55a387080b853cd94ff922666807ba36845e0b7e962aa7fb3  olg
+4a9ff4a106a48f18ad3470fcb000339c417f62d4671c134638b1fc04ff3b9685  rvproxy
+synthprov rid_src {'nonce': 20} status/stream {(200, False): 6, (200, True): 14}
+
+olg manifests record harness_build_sha:
+L1-r1 5af9594a2631
+L1-r25 5af9594a2631
+L1-r30 5af9594a2631
+SAT-r40 5af9594a2631
+D-r25 5af9594a2631
+
+analyze.py used for all their analyses (harness git 7c4ee88; last commit touching analyze.py: fc5c983 2026-09-23 12:59:13 +0530):
+c9f89fe8862b254c1e6576c37a7f42bae67bd892e982a07b0c9cab64e95409bb  /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/harness/analyze.py

@@ -1,0 +1,4 @@
+rvproto layers (runbook order + bottom domain) KEPT
+resolver purity: resolve imports only domain KEPT
+
+Contracts: 2 kept, 0 broken.

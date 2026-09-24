@@ -1,0 +1,1 @@
+{"ready":true,"guard":{"ready":true,"backend":"remote(owner)","model_hash":"2bf20e0f71e3a41e9e8cc4e602e08c142855bcce0cc73e0b65000d816d70877c","detail":"owners 1/1 connected, share 1/2: 127.0.0.1:7070 pid=2657384 host=ai-mesh-firewall.asia-south1-c.c.ai-mesh-firewall.internal tokens_per_s=2170","error":null},"plans_loaded":true,"plans_fresh":true,"killswitch":"ok","worker":0}

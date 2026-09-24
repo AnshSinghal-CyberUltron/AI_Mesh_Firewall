@@ -1,0 +1,5 @@
+{
+  "schema": "amf.expected-diff.v1",
+  "notes": "GW02 ships an empty authorizing set. §10.2.2 rows are registered by the task that changes the behaviour, never after a differ run.",
+  "entries": []
+}

@@ -1,0 +1,1 @@
+{"run": "li34-520", "verdict": "PASS", "rule": "C4 p99 < 20 ms, infra <= 0.1%, 0 drops", "c4_p99": 17.374, "c4_p999": 23.552, "c4_sse_p99": 17.599, "c4_json_p99": 16.827, "qualified_rps": 510.87, "infra_pct": 0.0038, "drops": 0, "json_total_p99": 16.827, "sse_total_p99": 16.76, "sse_first_p99": 47.698, "load_rule_verdict": "PASS"}

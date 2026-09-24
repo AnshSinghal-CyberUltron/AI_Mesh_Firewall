@@ -1,0 +1,182 @@
+
+## 29.70%  Starlette BaseHTTPMiddleware / anyio task-group plumbing
+   top self (leaf) frames:
+      0.99%  cancel (anyio/_backends/_asyncio.py:646)
+      0.79%  is_disconnected (starlette/requests.py:322)
+      0.73%  __init__ (anyio/_backends/_asyncio.py:406)
+      0.73%  __call__ (starlette/middleware/base.py:232)
+      0.70%  receive_or_disconnect (starlette/middleware/base.py:117)
+   top inclusive frames (share of ALL non-idle samples whose stack passes through it):
+     14.61%  receive_or_disconnect (starlette/middleware/base.py)
+     13.98%  wrap (starlette/responses.py)
+     13.39%  is_disconnected (starlette/requests.py)
+     12.83%  stream_with_finalize (ai_mesh_gateway/stream_orchestration.py)
+     11.51%  stream_response (starlette/responses.py)
+
+## 26.83%  LiteLLM + OpenAI SDK + pydantic per-chunk objects + httpx
+   top self (leaf) frames:
+      1.86%  _setattr_handler (pydantic/main.py:1076)
+      1.32%  model_dump (pydantic/main.py:475)
+      0.64%  __getattr__ (pydantic/_internal/_model_construction.py:287)
+      0.62%  __setattr__ (pydantic/main.py:1048)
+      0.56%  __init__ (pydantic/main.py:263)
+   top inclusive frames (share of ALL non-idle samples whose stack passes through it):
+     23.73%  acompletion_stream (ai_mesh_gateway/llm_router.py)
+     23.69%  _provider_stream (ai_mesh_gateway/main.py)
+     23.60%  __aiter__ (ai_mesh_gateway/secure_streaming.py)
+     23.58%  stream_with_finalize (ai_mesh_gateway/stream_orchestration.py)
+     23.55%  stream_response (starlette/responses.py)
+
+## 10.40%  asyncio core
+   top self (leaf) frames:
+      0.62%  wait (asyncio/locks.py:215)
+      0.47%  create_task (asyncio/tasks.py:420)
+      0.45%  wait (asyncio/locks.py:209)
+      0.43%  wait (asyncio/locks.py:212)
+      0.42%  add (_weakrefset.py:85)
+   top inclusive frames (share of ALL non-idle samples whose stack passes through it):
+      4.66%  wrap (starlette/responses.py)
+      4.56%  is_disconnected (starlette/requests.py)
+      4.19%  wrap (starlette/middleware/base.py)
+      4.19%  receive_or_disconnect (starlette/middleware/base.py)
+      4.08%  stream_with_finalize (ai_mesh_gateway/stream_orchestration.py)
+
+## 9.08%  input scan / PII+secret redaction (scanner.py, patterns.py)
+   top self (leaf) frames:
+      1.78%  _detect_pii_core (ai_mesh_gateway/patterns.py:1156)
+      1.33%  _detect_secrets_core (ai_mesh_gateway/patterns.py:1225)
+      0.96%  sub (re/__init__.py:186)
+      0.79%  _iter_transport_decodes (ai_mesh_gateway/patterns.py:467)
+      0.44%  _detect_credential_exposure_core (ai_mesh_gateway/patterns.py:2031)
+   top inclusive frames (share of ALL non-idle samples whose stack passes through it):
+      8.69%  _worker (concurrent/futures/thread.py)
+      8.68%  run (concurrent/futures/thread.py)
+      6.84%  _scan_prompt_sync (ai_mesh_gateway/scanner.py)
+      4.87%  _iter_transport_decodes_canon (ai_mesh_gateway/patterns.py)
+      3.77%  detect_pii (ai_mesh_gateway/patterns.py)
+
+## 6.45%  policy engine (compiled regex/keyword rules)
+   top self (leaf) frames:
+      5.96%  _scan_all (ai_mesh_gateway/policy_engine.py:486)
+      0.17%  _loop (ai_mesh_gateway/policy_engine.py:306)
+      0.04%  <genexpr> (ai_mesh_gateway/policy_engine.py:688)
+      0.03%  _evaluate_rule (ai_mesh_gateway/policy_engine.py:687)
+      0.03%  <genexpr> (ai_mesh_gateway/policy_engine.py:781)
+   top inclusive frames (share of ALL non-idle samples whose stack passes through it):
+      5.97%  _loop (ai_mesh_gateway/policy_engine.py)
+      0.29%  _worker (concurrent/futures/thread.py)
+      0.29%  run (concurrent/futures/thread.py)
+      0.29%  _policy_check_cached (ai_mesh_gateway/main.py)
+      0.20%  evaluate (ai_mesh_gateway/policy_engine.py)
+
+## 4.31%  trace/telemetry building incl. its redaction
+   top self (leaf) frames:
+      0.36%  _iter_transport_decodes (ai_mesh_gateway/patterns.py:467)
+      0.33%  _redact_all_raw (ai_mesh_gateway/patterns.py:1621)
+      0.26%  _redact_all_raw (ai_mesh_gateway/patterns.py:1562)
+      0.17%  _candidate_keys (ai_mesh_gateway/patterns.py:1528)
+      0.17%  _redact_all_raw (ai_mesh_gateway/patterns.py:1579)
+   top inclusive frames (share of ALL non-idle samples whose stack passes through it):
+      3.70%  redact_all (ai_mesh_gateway/patterns.py)
+      3.68%  _redact_all_cached (ai_mesh_gateway/patterns.py)
+      3.21%  proxy_chat (ai_mesh_gateway/main.py)
+      3.21%  run_endpoint_function (fastapi/routing.py)
+      3.19%  app (fastapi/routing.py)
+
+## 4.05%  redis client
+   top self (leaf) frames:
+      0.61%  _read_from_socket (redis/_parsers/socket.py:64)
+      0.25%  send_packed_command (redis/connection.py:1313)
+      0.13%  handle_pubsub_push_response (redis/_parsers/resp3.py:174)
+      0.12%  read_response (redis/asyncio/connection.py:754)
+      0.11%  connect_check_health (redis/asyncio/connection.py:360)
+   top inclusive frames (share of ALL non-idle samples whose stack passes through it):
+      1.24%  read_response (redis/_parsers/resp3.py)
+      1.20%  run_endpoint_function (fastapi/routing.py)
+      1.19%  proxy_chat (ai_mesh_gateway/main.py)
+      1.18%  call_with_retry (redis/asyncio/retry.py)
+      1.17%  __call__ (ai_mesh_gateway/middleware.py)
+
+## 3.31%  gateway app code (main/stream_orchestration/llm_router/middleware ...)
+   top self (leaf) frames:
+      0.17%  readinto (socket.py:720)
+      0.16%  __aiter__ (ai_mesh_gateway/secure_streaming.py:328)
+      0.15%  stream_with_finalize (ai_mesh_gateway/stream_orchestration.py:873)
+      0.13%  __aiter__ (ai_mesh_gateway/secure_streaming.py:287)
+      0.08%  getaddrinfo (socket.py:978)
+   top inclusive frames (share of ALL non-idle samples whose stack passes through it):
+      1.60%  wrap (starlette/responses.py)
+      1.60%  stream_response (starlette/responses.py)
+      1.49%  stream_with_finalize (ai_mesh_gateway/stream_orchestration.py)
+      0.76%  __aiter__ (ai_mesh_gateway/secure_streaming.py)
+      0.62%  acompletion_stream (ai_mesh_gateway/llm_router.py)
+
+## 1.98%  json (de)serialisation
+   top self (leaf) frames:
+      0.75%  raw_decode (json/decoder.py:354)
+      0.35%  iterencode (json/encoder.py:258)
+      0.27%  decode (json/decoder.py:338)
+      0.07%  loads (json/__init__.py:346)
+      0.07%  iterencode (json/encoder.py:252)
+   top inclusive frames (share of ALL non-idle samples whose stack passes through it):
+      1.32%  stream_with_finalize (ai_mesh_gateway/stream_orchestration.py)
+      1.30%  stream_response (starlette/responses.py)
+      1.30%  wrap (starlette/responses.py)
+      1.06%  __aiter__ (ai_mesh_gateway/secure_streaming.py)
+      0.93%  loads (json/__init__.py)
+
+## 1.58%  output guard scan (secure_streaming._flush_buffer / output_guard.py)
+   top self (leaf) frames:
+      0.39%  submit (concurrent/futures/thread.py:179)
+      0.16%  sub (re/__init__.py:186)
+      0.14%  _detect_credential_exposure_core (ai_mesh_gateway/patterns.py:2031)
+      0.13%  _iter_transport_decodes (ai_mesh_gateway/patterns.py:467)
+      0.10%  _detect_ip_leakage_core (ai_mesh_gateway/patterns.py:1986)
+   top inclusive frames (share of ALL non-idle samples whose stack passes through it):
+      1.43%  inspect (ai_mesh_gateway/output_guard.py)
+      1.23%  __aiter__ (ai_mesh_gateway/secure_streaming.py)
+      1.21%  stream_with_finalize (ai_mesh_gateway/stream_orchestration.py)
+      1.20%  _flush_buffer (ai_mesh_gateway/secure_streaming.py)
+      1.18%  stream_response (starlette/responses.py)
+
+## 1.21%  logging
+   top self (leaf) frames:
+      0.89%  emit (logging/__init__.py:1163)
+      0.06%  findCaller (logging/__init__.py:1643)
+      0.03%  getLogger (logging/__init__.py:2157)
+      0.02%  emit (ai_mesh_shared/redis_log_handler.py:91)
+      0.02%  isEnabledFor (logging/__init__.py:1790)
+   top inclusive frames (share of ALL non-idle samples whose stack passes through it):
+      1.08%  _log (logging/__init__.py)
+      1.05%  info (logging/__init__.py)
+      0.98%  handle (logging/__init__.py)
+      0.97%  callHandlers (logging/__init__.py)
+      0.68%  _worker (concurrent/futures/thread.py)
+
+## 0.66%  uvicorn / h11 HTTP server
+   top self (leaf) frames:
+      0.13%  receive (uvicorn/protocols/http/httptools_impl.py:562)
+      0.10%  receive (uvicorn/protocols/http/httptools_impl.py:569)
+      0.08%  send (uvicorn/protocols/http/httptools_impl.py:539)
+      0.06%  receive (uvicorn/protocols/http/httptools_impl.py:576)
+      0.04%  send (uvicorn/protocols/http/httptools_impl.py:556)
+   top inclusive frames (share of ALL non-idle samples whose stack passes through it):
+      0.28%  wrapped_receive (starlette/middleware/base.py)
+      0.21%  receive_or_disconnect (starlette/middleware/base.py)
+      0.21%  wrap (starlette/middleware/base.py)
+      0.21%  is_disconnected (starlette/requests.py)
+      0.20%  wrap (starlette/responses.py)
+
+## 0.42%  other
+   top self (leaf) frames:
+      0.03%  get_origin (typing.py:2370)
+      0.02%  data_received (aiohttp/client_proto.py:326)
+      0.02%  _reschedule_timeout (aiohttp/client_proto.py:278)
+      0.02%  cast (typing.py:2195)
+      0.02%  current_async_library (sniffio/_impl.py:82)
+   top inclusive frames (share of ALL non-idle samples whose stack passes through it):
+      0.06%  _worker (concurrent/futures/thread.py)
+      0.03%  run (concurrent/futures/thread.py)
+      0.03%  data_received (aiohttp/client_proto.py)
+      0.02%  read (aiohttp/streams.py)
+      0.02%  __anext__ (aiohttp/streams.py)

@@ -1,0 +1,2 @@
+/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/micro-claims/claim3/c3_step.sh: line 35: wait: pid 1994929 is not a child of this shell
+xc_c3_B_keepalive_r30000: ok=9000000/9000000 err={} drops=777 p50=248.1 p99=382.2 p99.9=642.1 us | edge ActiveOpens/req=0.001 up PassiveOpens/req=0.001 | TW edge=1348 up=0 | cores edge=2.403 up=2.148 | PASS=False

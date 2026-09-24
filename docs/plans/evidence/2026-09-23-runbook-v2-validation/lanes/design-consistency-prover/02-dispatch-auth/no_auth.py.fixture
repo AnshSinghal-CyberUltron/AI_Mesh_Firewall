@@ -1,0 +1,10 @@
+"""LGW11-1 literal case: attempt dispatch WITHOUT an authorization value (mypy must reject)."""
+
+from __future__ import annotations
+
+from gateway_v2.dispatch.provider import ProviderClient, ProviderStream
+from gateway_v2.resolve.decision import Decision
+
+
+async def no_auth(client: ProviderClient, decision: Decision) -> ProviderStream:
+    return await client.open_stream(decision, b"raw")  # a Decision is not an authorization

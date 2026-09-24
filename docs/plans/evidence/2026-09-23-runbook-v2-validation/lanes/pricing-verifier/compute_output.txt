@@ -1,0 +1,224 @@
+fetched_at 2026-09-23T05:31:46Z
+
+== SHAPES (on-demand, asia-south1)
+g2-standard-4    vcpu= 4 mem=  16.0GiB gpu=1 $/h=0.735779 $/mo=   537.12  cpu/h=0.104046 ram/h=0.048757 gpu/h=0.582976  3yrCUDref=241.7  zones=a,b,c
+g2-standard-8    vcpu= 8 mem=  32.0GiB gpu=1 $/h=0.888583 $/mo=   648.67  cpu/h=0.208092 ram/h=0.097515 gpu/h=0.582976  3yrCUDref=291.9  zones=a,b,c
+g2-standard-12   vcpu=12 mem=  48.0GiB gpu=1 $/h=1.041387 $/mo=   760.21  cpu/h=0.312139 ram/h=0.146272 gpu/h=0.582976  3yrCUDref=342.1  zones=a,b,c
+g2-standard-16   vcpu=16 mem=  64.0GiB gpu=1 $/h=1.194190 $/mo=   871.76  cpu/h=0.416185 ram/h=0.195030 gpu/h=0.582976  3yrCUDref=392.29  zones=a,b,c
+g2-standard-24   vcpu=24 mem=  96.0GiB gpu=2 $/h=2.082773 $/mo=  1520.42  cpu/h=0.624277 ram/h=0.292544 gpu/h=1.165951  3yrCUDref=684.19  zones=a,b,c
+g2-standard-32   vcpu=32 mem= 128.0GiB gpu=1 $/h=1.805405 $/mo=  1317.95  cpu/h=0.832370 ram/h=0.390059 gpu/h=0.582976  3yrCUDref=593.08  zones=a,b,c
+g2-standard-48   vcpu=48 mem= 192.0GiB gpu=4 $/h=4.165547 $/mo=  3040.85  cpu/h=1.248555 ram/h=0.585089 gpu/h=2.331903  3yrCUDref=1368.38  zones=a,b,c
+c4-standard-4    vcpu= 4 mem=  15.0GiB gpu=0 $/h=0.205577 $/mo=   150.07  cpu/h=0.144144 ram/h=0.061433 gpu/h=0.000000  3yrCUDref=67.53  zones=a,b,c
+c4-standard-8    vcpu= 8 mem=  30.0GiB gpu=0 $/h=0.411154 $/mo=   300.14  cpu/h=0.288288 ram/h=0.122866 gpu/h=0.000000  3yrCUDref=135.06  zones=a,b,c
+c4-standard-16   vcpu=16 mem=  60.0GiB gpu=0 $/h=0.822307 $/mo=   600.28  cpu/h=0.576576 ram/h=0.245731 gpu/h=0.000000  3yrCUDref=270.13  zones=a,b,c
+c4-standard-32   vcpu=32 mem= 120.0GiB gpu=0 $/h=1.644614 $/mo=  1200.57  cpu/h=1.153152 ram/h=0.491462 gpu/h=0.000000  3yrCUDref=540.26  zones=a,b,c
+c4-highcpu-8     vcpu= 8 mem=  16.0GiB gpu=0 $/h=0.353816 $/mo=   258.29  cpu/h=0.288288 ram/h=0.065528 gpu/h=0.000000  3yrCUDref=116.23  zones=a,b,c
+c4-highcpu-16    vcpu=16 mem=  32.0GiB gpu=0 $/h=0.707633 $/mo=   516.57  cpu/h=0.576576 ram/h=0.131057 gpu/h=0.000000  3yrCUDref=232.46  zones=a,b,c
+c4-highcpu-32    vcpu=32 mem=  64.0GiB gpu=0 $/h=1.415265 $/mo=  1033.14  cpu/h=1.153152 ram/h=0.262113 gpu/h=0.000000  3yrCUDref=464.92  zones=a,b,c
+c4d-highcpu-8    vcpu= 8 mem=  15.0GiB gpu=0 $/h=0.330645 $/mo=   241.37  cpu/h=0.272093 ram/h=0.058552 gpu/h=0.000000  3yrCUDref=-  zones=b,c
+c4d-highcpu-16   vcpu=16 mem=  30.0GiB gpu=0 $/h=0.661290 $/mo=   482.74  cpu/h=0.544186 ram/h=0.117104 gpu/h=0.000000  3yrCUDref=-  zones=b,c
+c4d-highcpu-32   vcpu=32 mem=  60.0GiB gpu=0 $/h=1.322580 $/mo=   965.48  cpu/h=1.088371 ram/h=0.234209 gpu/h=0.000000  3yrCUDref=-  zones=b,c
+n2-standard-8    vcpu= 8 mem=  32.0GiB gpu=0 $/h=0.466576 $/mo=   340.60  cpu/h=0.303760 ram/h=0.162816 gpu/h=0.000000  3yrCUDref=-  zones=a,b,c
+n2-standard-16   vcpu=16 mem=  64.0GiB gpu=0 $/h=0.933152 $/mo=   681.20  cpu/h=0.607520 ram/h=0.325632 gpu/h=0.000000  3yrCUDref=-  zones=a,b,c
+n2-standard-4    vcpu= 4 mem=  16.0GiB gpu=0 $/h=0.233288 $/mo=   170.30  cpu/h=0.151880 ram/h=0.081408 gpu/h=0.000000  3yrCUDref=-  zones=a,b,c
+c3-standard-8    vcpu= 8 mem=  32.0GiB gpu=0 $/h=0.419345 $/mo=   306.12  cpu/h=0.288288 ram/h=0.131057 gpu/h=0.000000  3yrCUDref=-  zones=b,c
+c3-highcpu-8     vcpu= 8 mem=  16.0GiB gpu=0 $/h=0.353816 $/mo=   258.29  cpu/h=0.288288 ram/h=0.065528 gpu/h=0.000000  3yrCUDref=-  zones=c
+e2-standard-2    vcpu= 2 mem=   8.0GiB gpu=0 $/h=0.080484 $/mo=    58.75  cpu/h=0.052399 ram/h=0.028086 gpu/h=0.000000  3yrCUDref=-  zones=a,b,c
+e2-standard-4    vcpu= 4 mem=  16.0GiB gpu=0 $/h=0.160969 $/mo=   117.51  cpu/h=0.104797 ram/h=0.056172 gpu/h=0.000000  3yrCUDref=-  zones=a,b,c
+e2-standard-8    vcpu= 8 mem=  32.0GiB gpu=0 $/h=0.321937 $/mo=   235.01  cpu/h=0.209594 ram/h=0.112343 gpu/h=0.000000  3yrCUDref=-  zones=a,b,c
+
+== PER-NODE EXTRAS {"g2_boot_pd_balanced_200gib": 24.0, "g2_boot_pd_balanced_100gib": 12.0, "g2_boot_pd_ssd_100gib": 20.4, "c4_boot_hdb_60gib_default_provisioning_3360iops_230mibps": 10.56, "c4_boot_hdb_50gib_baseline_3000iops_140mibps": 4.15, "controller_boot_hdb_512gib_100000iops_2400mibps": 622.42, "external_ip_standard_vm": 3.65}
+
+== FIXED ITEMS
+      21.90  lb_regional_external_alb_up_to_5_rules  [22FA-9BFA-EC10] +$0.01/GiB inbound AND +$0.01/GiB outbound processed (7087-03B4-CF6F, 8625-A380-1224)
+      24.16  valkey_1x_shared_core_nano  [BBE1-7BC7-645D] node capacity per Google docs, not API
+      48.33  valkey_2x_shared_core_nano  [BBE1-7BC7-645D] 
+     216.37  valkey_2x_standard_small  [44CF-B864-F1F7] 
+     292.00  valkey_2x_highmem_medium (doc line 9 parity)  [DEEA-ABC3-D53D] 
+      45.99  redis_basic_1gib (M1)  [1A79-AA76-9403] tier sizes M1..M5 per Google docs, not API
+     135.05  redis_basic_5gib (M2)  [C0DE-CBF3-DEE8] 
+      80.30  redis_standard_ha_1gib (M1)  [E546-A818-9A77] 
+     255.50  redis_standard_ha_5gib (M2)  [F042-8822-7B79] 
+     550.42  redis_standard_ha_13gib (M3)  [7C7C-D23A-8C50] 
+     526.40  cloudsql_pg_ha_4vcpu_16gib_100gib (doc line 7 parity)  [65ED-2048-3203,34E0-9B1D-C80D,E77A-52C7-BB42] 
+     250.96  cloudsql_pg_ha_2vcpu_8gib_20gib  [65ED-2048-3203,34E0-9B1D-C80D,E77A-52C7-BB42] 
+     125.55  cloudsql_pg_zonal_2vcpu_8gib_20gib  [DF80-E0D1-CCE3,72C1-62A1-2C8B,42A1-880A-9B0F] 
+     117.51  control_plane_vm_e2-standard-4  [DFC1-04D4-B4A1,90AB-A7A8-F873] E2_CPUS quota in ai-mesh-firewall/asia-south1 reads limit=0
+     170.30  control_plane_vm_n2-standard-4 (list; SUD-eligible)  [3A1A-7CFC-5747,23FA-BF9A-7C7A] 
+     150.07  control_plane_vm_c4-standard-4  [70F1-D1A1-608C,BC60-A7D5-6A2C] 
+      12.00  control_plane_boot_pd_balanced_100gib  [C24C-88D9-75ED] 
+      51.00  mongo_chroma_data_250gib_pd_ssd (doc line 3 data part)  [FF66-41CB-DE90] 
+      30.00  mongo_chroma_data_250gib_pd_balanced  [C24C-88D9-75ED] 
+      73.00  gke_regional_cluster_fee  [B561-BFBD-1264] $0 if plain VMs/MIGs
+       1.95  artifact_registry_20gib  [8502-299A-ABAF] first 0.5 GiB free
+      15.00  cloud_monitoring_doc_parity  [A924-09D0-8854] unit: first 150 MiB free then $0.258/MiB; $15 = 208.1 MiB/mo (doc's quantity)
+      15.00  cloudsql_backups_doc_parity  [D737-A9D2-80AB] unit $0.096/GiB-mo; $15 = 156.25 GiB (doc's quantity)
+      18.00  snapshots_doc_parity  [A0EA-3B8B-0794] unit $0.052/GiB-mo regional, $0.083 multi-regional asia; $18 = 346 GiB regional (doc's quantity)
+       1.02  cloud_nat_per_vm_uptime (if NAT instead of VM IPs)  [32E2-4EFC-EF9F] per VM; +$0.045/GiB processed both directions (015F-5732-FFF0) + $3.65/mo per NAT IP (8515-9425-D2CE)
+
+== BUNDLES
+    1014.25  F-doc-parity (doc lines 4,7,8,9,14,15,17,18 + 250 GiB pd-ssd data disks, on-demand Mumbai)
+     329.50  F-lead-list (LB + Redis Standard HA 1 GiB + control-plane n2-standard-4 w/ 100 GiB pd-balanced + 250 GiB pd-balanced data + monitoring $15)
+
+== EGRESS reference points {"1024_GiB": {"standard_tier": 90.64, "premium_to_india": 122.88, "premium_to_americas": 122.88}, "10240_GiB": {"standard_tier": 1104.4, "premium_to_india": 1136.64, "premium_to_americas": 1136.64}, "16037_GiB": {"standard_tier": 1539.18, "premium_to_india": 1600.4, "premium_to_americas": 1629.39}, "51200_GiB": {"standard_tier": 4176.4, "premium_to_india": 4413.44, "premium_to_americas": 4618.24}, "102400_GiB": {"standard_tier": 8016.4, "premium_to_india": 8509.44, "premium_to_americas": 8970.24}}
+
+== DOC COST MATRIX RECOMPUTE
+ 1 GCE G2 x4 (96 vCPU + 384 GiB + 8 L4)                 doc=  2736.76 od=  6081.70 CUD=YES (exact)     | Doc value = 3-yr CUD SKUs C13C-86D2-4291/E2CF-A78E-CCC3/3D44-B7C2-56AD: 4x(24x0.0117052+96x0.001371301+2x0.262339046)x730 = $2736.76 (matches to the cent). On-demand: 4x(24x0.026011561+96x0.003047337+2x0.582975726)x730 = $6081.7. (1-yr CUD would be $3831.47.)
+ 2 NVIDIA L4 x8 (bundled)                               doc=     0.00 od=     0.00 CUD=n/a             | Correct: L4 is priced inside line 1 (SKU AE59-12DA-20E3 on-demand $0.582975726/GPU-h).
+ 3 Persistent disks 4x100 GiB pd-ssd + 250 GiB data     doc=    68.00 od=   132.60 CUD=no              | ERROR x2: $68.00 = 400 GiB x $0.17 = us-central1 pd-ssd (B188-61DD-52E4), not Mumbai ($0.204, FF66-41CB-DE90); and the 250 GiB data disk is not priced. Mumbai: 650 x 0.204 = $132.6 (all pd-ssd) or $111.6 with the 250 GiB on pd-balanced.
+ 4 Regional external ALB (Standard tier)                doc=    18.25 od=    21.90 CUD=no              | ERROR: $18.25 = 730 x $0.025 (global / us rate DEE3-C42E-3E4D). Mumbai regional ext ALB first-5-rules = $0.03/h (22FA-9BFA-EC10) = $21.90.
+ 5 Egress 16,037 GiB banded + LB bytes                  doc=  1090.32 od=  1699.60 CUD=no              | Doc arithmetic is internally consistent (824x0.085+9216x0.065+5797x0.045 = $929.97; +16,037x0.01 = $160.38), BUT the bands are not Mumbai's: SKU 4C3B-5563-1BF6 is 0-200 GiB free, 200-10,240 @ $0.11, 10,240-153,600 @ $0.075, >153,600 @ $0.07 (no 1,024 GiB break). Same 16037.61 GiB at Mumbai Standard tier = $1539.22; LB processing is billed on BOTH inbound (client request) and outbound (response) at $0.01/GiB each, and the prompt leg to the provider does not traverse the LB: resp 7577.03 GiB out + client-request 8460.58 GiB in (if request ~= prompt leg) = $160.38 (numerically = doc's $160.37). If the prompt leg leaves via Premium-tier VM IPs to US providers: $1752.38 egress instead of $1539.22.
+ 6 External IPs (LB + node addresses)                   doc=    15.00 od=    14.60 CUD=no              | OK: 4 VM IPs x $0.005/h (C054-7F72-A02E) x 730 = $14.60; IPs on forwarding rules are not charged (Google network-pricing page). First 720 IP-h/account/month free would lower it to $11.00.
+ 7 Cloud SQL Postgres HA 4 vCPU/16 GiB/100 GiB          doc=   273.91 od=   526.40 CUD=YES (inferred)  | On-demand Mumbai regional(HA): (4x0.0991 + 16x0.0168)x730 + 100x0.408 = $526.4. Doc's $273.91 reproduces to $0.02 as 0.48 x compute ($485.6) + storage $40.80 = $273.89 => a 52% compute discount (3-yr CUD rate); the catalog exposes no Cloud SQL commit SKUs to prove it.
+ 8 SQL backups (PITR)                                   doc=    15.00 od=    15.00 CUD=no              | Unit verified $0.096/GiB-mo (D737-A9D2-80AB) => $15 = 156.25 GiB; quantity is the doc's assumption (kept).
+ 9 Memorystore Valkey HA 2 x highmem-medium             doc=   175.20 od=   292.00 CUD=YES (inferred)  | Mumbai on-demand $0.20/node-h (DEEA-ABC3-D53D) x2 x730 = $292.0. Doc = $0.12/node-h = 0.60 x Mumbai; no region lists $0.12 on-demand (min $0.1923 Iowa) => 40% discount (3-yr CUD rate); no Memorystore commit SKUs in catalog.
+10 Control + Celery + MCP + PgBouncer (co-located)      doc=     0.00 od=     0.00 CUD=n/a             | $0 by co-location assumption (not a price claim).
+11 MongoDB (co-located)                                 doc=     0.00 od=     0.00 CUD=n/a             | Disk is supposed to be in line 3 but line 3 never priced it (see line 3).
+12 ChromaDB (co-located)                                doc=     0.00 od=     0.00 CUD=n/a             | Same as 11.
+13 SPA + nginx (co-located)                             doc=     0.00 od=     0.00 CUD=n/a             | $0 by co-location assumption.
+14 GKE regional cluster fee                             doc=    73.00 od=    73.00 CUD=no              | OK: $0.10/h (B561-BFBD-1264) x 730.
+15 Artifact Registry ~20 GB                             doc=    10.00 od=     1.95 CUD=no              | OVERSTATED: 8502-299A-ABAF = first 0.5 GiB free then $0.10/GiB-mo => 20 GiB = $1.95.
+16 Audit -> GCS                                         doc=    53.00 od=    60.49 CUD=no              | Doc uses $0.02/GiB; Mumbai Standard is $0.023/GiB-MONTH (2717-BEFE-3773): 2630.13 GiB (1 KiB x 2.758 B req) = $60.49 for ONE month of data held one month. It is storage, so it accumulates: R months of retention => R x that per month (Nearline $0.016, Coldline $0.006, Archive $0.0025 with lifecycle rules).
+17 Cloud Monitoring                                     doc=    15.00 od=    15.00 CUD=no              | Unit verified: first 150 MiB free then $0.258/MiB (A924-09D0-8854) => $15 = 208.1 MiB/mo; quantity is the doc's assumption (kept).
+18 Disk snapshots weekly                                doc=    18.00 od=    18.00 CUD=no              | Unit verified: $0.052/GiB-mo regional (A0EA-3B8B-0794) or $0.083 multi-regional asia (6E69-DD68-8DCA); $18 = 346 / 217 GiB; quantity unstated (kept).
+19 Cloud NAT (not bought)                               doc=     0.00 od=     0.00 CUD=n/a             | Claim '$0.045/GiB both ways' CONFIRMED: 015F-5732-FFF0 $0.045/GiB; Google doc: 'Price per GiB processed, inbound and outbound data transfer'.
+20 Cloud Armor (not bought)                             doc=     0.00 od=     0.00 CUD=n/a             | Claim '$15,180/mo' NOT REPRODUCIBLE: at the doc's 2,757,888,000 req/mo, Standard Cloud Armor = $0.75/M req (1A87-DEB9-C4BE) + $5/policy = $2073.42 (+$1/rule); regional $0.60/M (928E-CF60-E186) = $1659.73.
+21 Kafka/ClickHouse/BigQuery/Vertex (not bought)        doc=     0.00 od=     0.00 CUD=n/a             | $0.
+TOTAL doc=4561.44 on-demand=8952.24 ; doc 'G2 on-demand' claim 7906 recomputed=7906.38
+
+== §1 claims
+   ('Headroom $438.56', 438.56, 'arithmetic OK')
+   ('Unit $1.65 / million requests', 1.65, 'arithmetic OK')
+   ('G2 on-demand (no 3-yr CUD) $7,906', 7906.38, 'arithmetic OK but swaps ONLY line 1; lines 7 and 9 keep implied 3-yr CUD, lines 3/4/5/16 keep non-Mumbai rates')
+   ('Cloud Logging @1 KiB/req instead of GCS $5,798.44', 5798.5, 'arithmetic OK; unit $0.50/GiB after 50 GiB/project free (143F-A1B0-E0BE)')
+   ('Optional control plane on own nodes +$270', None, 'unit not stated; n2-standard-4 = $170.3, e2-standard-4 = $117.51 (+disk)')
+   ('Upside tenant provider in-region ~$3,970', 4042.88, "NOT reproducible exactly: removing the prompt leg under the doc's own bands gives this value")
+   ("Quota to 14 L4 (A', 1,862 RPS) $7,228.70", None, "see section8_model_check: doc's own formula gives a different value")
+   ('Traffic month vs compute month', None, 'doc prices compute at 730 h but traffic at 30 d = 720 h (2,592,000 s); traffic is understated 1.39% vs a 730 h month')
+
+== §8 model check
+   {'rps': 1064, 'doc_nodes': 4, 'formula_nodes': 4, 'doc_usd': 4561, 'doc_formula_recomputed_usd': 4560.9, 'on_demand_mumbai_usd': 8951.95}
+   {'rps': 1330, 'doc_nodes': 5, 'formula_nodes': 5, 'doc_usd': 5401, 'doc_formula_recomputed_usd': 5495.71, 'on_demand_mumbai_usd': 10852.28}
+   {'rps': 2000, 'doc_nodes': 8, 'formula_nodes': 8, 'doc_usd': 8188, 'doc_formula_recomputed_usd': 8187.74, 'on_demand_mumbai_usd': 16382.02}
+   {'rps': 5320, 'doc_nodes': 20, 'formula_nodes': 20, 'doc_usd': 19519, 'doc_formula_recomputed_usd': 19517.93, 'on_demand_mumbai_usd': 39357.17}
+   {'rps': 10000, 'doc_nodes': 38, 'formula_nodes': 38, 'doc_usd': 36251, 'doc_formula_recomputed_usd': 36249.74, 'on_demand_mumbai_usd': 73418.55}
+   {'rps': 1862, 'doc_nodes': 7, 'formula_nodes': 7, 'doc_usd': 7228.7, 'doc_formula_recomputed_usd': 7365.34, 'on_demand_mumbai_usd': 14652.93}
+
+== PER UNIT
+  g2-standard-4    {'node_usd_per_month_incl_disk_ip': 564.77, 'usd_per_L4_month': 564.77, 'usd_per_vcpu_month_vm_only': 134.28}
+  g2-standard-8    {'node_usd_per_month_incl_disk_ip': 676.32, 'usd_per_L4_month': 676.32, 'usd_per_vcpu_month_vm_only': 81.08}
+  g2-standard-12   {'node_usd_per_month_incl_disk_ip': 787.86, 'usd_per_L4_month': 787.86, 'usd_per_vcpu_month_vm_only': 63.35}
+  g2-standard-16   {'node_usd_per_month_incl_disk_ip': 899.41, 'usd_per_L4_month': 899.41, 'usd_per_vcpu_month_vm_only': 54.49}
+  g2-standard-24   {'node_usd_per_month_incl_disk_ip': 1548.07, 'usd_per_L4_month': 774.04, 'usd_per_vcpu_month_vm_only': 63.35}
+  g2-standard-32   {'node_usd_per_month_incl_disk_ip': 1345.6, 'usd_per_L4_month': 1345.6, 'usd_per_vcpu_month_vm_only': 41.19}
+  g2-standard-48   {'node_usd_per_month_incl_disk_ip': 3068.5, 'usd_per_L4_month': 767.13, 'usd_per_vcpu_month_vm_only': 63.35}
+  c4-standard-4    {'node_usd_per_month_incl_disk_ip': 164.28, 'usd_per_L4_month': None, 'usd_per_vcpu_month_vm_only': 37.52}
+  c4-standard-8    {'node_usd_per_month_incl_disk_ip': 314.35, 'usd_per_L4_month': None, 'usd_per_vcpu_month_vm_only': 37.52}
+  c4-standard-16   {'node_usd_per_month_incl_disk_ip': 614.49, 'usd_per_L4_month': None, 'usd_per_vcpu_month_vm_only': 37.52}
+  c4-standard-32   {'node_usd_per_month_incl_disk_ip': 1214.78, 'usd_per_L4_month': None, 'usd_per_vcpu_month_vm_only': 37.52}
+  c4-highcpu-8     {'node_usd_per_month_incl_disk_ip': 272.5, 'usd_per_L4_month': None, 'usd_per_vcpu_month_vm_only': 32.29}
+  c4-highcpu-16    {'node_usd_per_month_incl_disk_ip': 530.78, 'usd_per_L4_month': None, 'usd_per_vcpu_month_vm_only': 32.29}
+  c4-highcpu-32    {'node_usd_per_month_incl_disk_ip': 1047.35, 'usd_per_L4_month': None, 'usd_per_vcpu_month_vm_only': 32.29}
+  c4d-highcpu-8    {'node_usd_per_month_incl_disk_ip': 255.58, 'usd_per_L4_month': None, 'usd_per_vcpu_month_vm_only': 30.17}
+  c4d-highcpu-16   {'node_usd_per_month_incl_disk_ip': 496.95, 'usd_per_L4_month': None, 'usd_per_vcpu_month_vm_only': 30.17}
+  c4d-highcpu-32   {'node_usd_per_month_incl_disk_ip': 979.69, 'usd_per_L4_month': None, 'usd_per_vcpu_month_vm_only': 30.17}
+  n2-standard-8    {'node_usd_per_month_incl_disk_ip': 354.81, 'usd_per_L4_month': None, 'usd_per_vcpu_month_vm_only': 42.58}
+  n2-standard-16   {'node_usd_per_month_incl_disk_ip': 695.41, 'usd_per_L4_month': None, 'usd_per_vcpu_month_vm_only': 42.58}
+  n2-standard-4    {'node_usd_per_month_incl_disk_ip': 184.51, 'usd_per_L4_month': None, 'usd_per_vcpu_month_vm_only': 42.58}
+  c3-standard-8    {'node_usd_per_month_incl_disk_ip': 320.33, 'usd_per_L4_month': None, 'usd_per_vcpu_month_vm_only': 38.27}
+  c3-highcpu-8     {'node_usd_per_month_incl_disk_ip': 272.5, 'usd_per_L4_month': None, 'usd_per_vcpu_month_vm_only': 32.29}
+  e2-standard-2    {'node_usd_per_month_incl_disk_ip': 72.96, 'usd_per_L4_month': None, 'usd_per_vcpu_month_vm_only': 29.38}
+  e2-standard-4    {'node_usd_per_month_incl_disk_ip': 131.72, 'usd_per_L4_month': None, 'usd_per_vcpu_month_vm_only': 29.38}
+  e2-standard-8    {'node_usd_per_month_incl_disk_ip': 249.22, 'usd_per_L4_month': None, 'usd_per_vcpu_month_vm_only': 29.38}
+
+== FLEETS single-shape series (compute+boot disk+IP, no egress)
+   1 x g2-standard-24  L4= 2 vCPU= 24 fleet=$  1548.07  rem(doc-parity)=$  2437.68 (28017.07 GiB std)  rem(lead-list)=$  3122.43 (37147.07 GiB std)
+   2 x g2-standard-24  L4= 4 vCPU= 48 fleet=$  3096.14  rem(doc-parity)=$   889.61 (8287.36 GiB std)  rem(lead-list)=$  1574.36 (16506.13 GiB std)
+   3 x g2-standard-24  L4= 6 vCPU= 72 fleet=$  4644.21  rem(doc-parity)=$  -658.46 (0 GiB std)  rem(lead-list)=$    26.29 (439.0 GiB std)
+   4 x g2-standard-24  L4= 8 vCPU= 96 fleet=$  6192.28  rem(doc-parity)=$ -2206.53 (0 GiB std)  rem(lead-list)=$ -1521.78 (0 GiB std)
+   5 x g2-standard-24  L4=10 vCPU=120 fleet=$  7740.35  rem(doc-parity)=$ -3754.60 (0 GiB std)  rem(lead-list)=$ -3069.85 (0 GiB std)
+   6 x g2-standard-24  L4=12 vCPU=144 fleet=$  9288.42  rem(doc-parity)=$ -5302.67 (0 GiB std)  rem(lead-list)=$ -4617.92 (0 GiB std)
+   1 x g2-standard-8   L4= 1 vCPU=  8 fleet=$   676.32  rem(doc-parity)=$  3309.43 (39640.4 GiB std)  rem(lead-list)=$  3994.18 (48770.4 GiB std)
+   2 x g2-standard-8   L4= 2 vCPU= 16 fleet=$  1352.64  rem(doc-parity)=$  2633.11 (30622.8 GiB std)  rem(lead-list)=$  3317.86 (39752.8 GiB std)
+   3 x g2-standard-8   L4= 3 vCPU= 24 fleet=$  2028.96  rem(doc-parity)=$  1956.79 (21605.2 GiB std)  rem(lead-list)=$  2641.54 (30735.2 GiB std)
+   4 x g2-standard-8   L4= 4 vCPU= 32 fleet=$  2705.28  rem(doc-parity)=$  1280.47 (12587.6 GiB std)  rem(lead-list)=$  1965.22 (21717.6 GiB std)
+   5 x g2-standard-8   L4= 5 vCPU= 40 fleet=$  3381.60  rem(doc-parity)=$   604.15 (5692.27 GiB std)  rem(lead-list)=$  1288.90 (12700.0 GiB std)
+   6 x g2-standard-8   L4= 6 vCPU= 48 fleet=$  4057.92  rem(doc-parity)=$   -72.17 (0 GiB std)  rem(lead-list)=$   612.58 (5768.91 GiB std)
+   7 x g2-standard-8   L4= 7 vCPU= 56 fleet=$  4734.24  rem(doc-parity)=$  -748.49 (0 GiB std)  rem(lead-list)=$   -63.74 (0 GiB std)
+   8 x g2-standard-8   L4= 8 vCPU= 64 fleet=$  5410.56  rem(doc-parity)=$ -1424.81 (0 GiB std)  rem(lead-list)=$  -740.06 (0 GiB std)
+   9 x g2-standard-8   L4= 9 vCPU= 72 fleet=$  6086.88  rem(doc-parity)=$ -2101.13 (0 GiB std)  rem(lead-list)=$ -1416.38 (0 GiB std)
+  10 x g2-standard-8   L4=10 vCPU= 80 fleet=$  6763.20  rem(doc-parity)=$ -2777.45 (0 GiB std)  rem(lead-list)=$ -2092.70 (0 GiB std)
+  11 x g2-standard-8   L4=11 vCPU= 88 fleet=$  7439.52  rem(doc-parity)=$ -3453.77 (0 GiB std)  rem(lead-list)=$ -2769.02 (0 GiB std)
+  12 x g2-standard-8   L4=12 vCPU= 96 fleet=$  8115.84  rem(doc-parity)=$ -4130.09 (0 GiB std)  rem(lead-list)=$ -3445.34 (0 GiB std)
+  13 x g2-standard-8   L4=13 vCPU=104 fleet=$  8792.16  rem(doc-parity)=$ -4806.41 (0 GiB std)  rem(lead-list)=$ -4121.66 (0 GiB std)
+  14 x g2-standard-8   L4=14 vCPU=112 fleet=$  9468.48  rem(doc-parity)=$ -5482.73 (0 GiB std)  rem(lead-list)=$ -4797.98 (0 GiB std)
+  15 x g2-standard-8   L4=15 vCPU=120 fleet=$ 10144.80  rem(doc-parity)=$ -6159.05 (0 GiB std)  rem(lead-list)=$ -5474.30 (0 GiB std)
+  16 x g2-standard-8   L4=16 vCPU=128 fleet=$ 10821.12  rem(doc-parity)=$ -6835.37 (0 GiB std)  rem(lead-list)=$ -6150.62 (0 GiB std)
+   1 x g2-standard-4   L4= 1 vCPU=  4 fleet=$   564.77  rem(doc-parity)=$  3420.98 (41127.73 GiB std)  rem(lead-list)=$  4105.73 (50257.73 GiB std)
+   2 x g2-standard-4   L4= 2 vCPU=  8 fleet=$  1129.54  rem(doc-parity)=$  2856.21 (33597.47 GiB std)  rem(lead-list)=$  3540.96 (42727.47 GiB std)
+   3 x g2-standard-4   L4= 3 vCPU= 12 fleet=$  1694.31  rem(doc-parity)=$  2291.44 (26067.2 GiB std)  rem(lead-list)=$  2976.19 (35197.2 GiB std)
+   4 x g2-standard-4   L4= 4 vCPU= 16 fleet=$  2259.08  rem(doc-parity)=$  1726.67 (18536.93 GiB std)  rem(lead-list)=$  2411.42 (27666.93 GiB std)
+   5 x g2-standard-4   L4= 5 vCPU= 20 fleet=$  2823.85  rem(doc-parity)=$  1161.90 (11006.67 GiB std)  rem(lead-list)=$  1846.65 (20136.67 GiB std)
+   6 x g2-standard-4   L4= 6 vCPU= 24 fleet=$  3388.62  rem(doc-parity)=$   597.13 (5628.45 GiB std)  rem(lead-list)=$  1281.88 (12606.4 GiB std)
+   7 x g2-standard-4   L4= 7 vCPU= 28 fleet=$  3953.39  rem(doc-parity)=$    32.36 (494.18 GiB std)  rem(lead-list)=$   717.11 (6719.18 GiB std)
+   8 x g2-standard-4   L4= 8 vCPU= 32 fleet=$  4518.16  rem(doc-parity)=$  -532.41 (0 GiB std)  rem(lead-list)=$   152.34 (1584.91 GiB std)
+   9 x g2-standard-4   L4= 9 vCPU= 36 fleet=$  5082.93  rem(doc-parity)=$ -1097.18 (0 GiB std)  rem(lead-list)=$  -412.43 (0 GiB std)
+  10 x g2-standard-4   L4=10 vCPU= 40 fleet=$  5647.70  rem(doc-parity)=$ -1661.95 (0 GiB std)  rem(lead-list)=$  -977.20 (0 GiB std)
+  11 x g2-standard-4   L4=11 vCPU= 44 fleet=$  6212.47  rem(doc-parity)=$ -2226.72 (0 GiB std)  rem(lead-list)=$ -1541.97 (0 GiB std)
+  12 x g2-standard-4   L4=12 vCPU= 48 fleet=$  6777.24  rem(doc-parity)=$ -2791.49 (0 GiB std)  rem(lead-list)=$ -2106.74 (0 GiB std)
+  13 x g2-standard-4   L4=13 vCPU= 52 fleet=$  7342.01  rem(doc-parity)=$ -3356.26 (0 GiB std)  rem(lead-list)=$ -2671.51 (0 GiB std)
+  14 x g2-standard-4   L4=14 vCPU= 56 fleet=$  7906.78  rem(doc-parity)=$ -3921.03 (0 GiB std)  rem(lead-list)=$ -3236.28 (0 GiB std)
+  15 x g2-standard-4   L4=15 vCPU= 60 fleet=$  8471.55  rem(doc-parity)=$ -4485.80 (0 GiB std)  rem(lead-list)=$ -3801.05 (0 GiB std)
+  16 x g2-standard-4   L4=16 vCPU= 64 fleet=$  9036.32  rem(doc-parity)=$ -5050.57 (0 GiB std)  rem(lead-list)=$ -4365.82 (0 GiB std)
+
+== MAX GUARD NODES under $5,000 before egress
+  guard=g2-standard-4  gw=0xNone             doc-parity: n= 7 fleet=$3953.39 rem=$32.36 | lead-list: n= 8 fleet=$4518.16 rem=$152.34
+  guard=g2-standard-4  gw=1xc4-highcpu-8     doc-parity: n= 6 fleet=$3661.12 rem=$324.63 | lead-list: n= 7 fleet=$4225.89 rem=$444.61
+  guard=g2-standard-4  gw=2xc4-highcpu-8     doc-parity: n= 6 fleet=$3933.62 rem=$52.13 | lead-list: n= 7 fleet=$4498.39 rem=$172.11
+  guard=g2-standard-4  gw=3xc4-highcpu-8     doc-parity: n= 5 fleet=$3641.35 rem=$344.4 | lead-list: n= 6 fleet=$4206.12 rem=$464.38
+  guard=g2-standard-4  gw=4xc4-highcpu-8     doc-parity: n= 5 fleet=$3913.85 rem=$71.9 | lead-list: n= 6 fleet=$4478.62 rem=$191.88
+  guard=g2-standard-4  gw=1xc4-highcpu-16    doc-parity: n= 6 fleet=$3919.4 rem=$66.35 | lead-list: n= 7 fleet=$4484.17 rem=$186.33
+  guard=g2-standard-4  gw=2xc4-highcpu-16    doc-parity: n= 5 fleet=$3885.41 rem=$100.34 | lead-list: n= 6 fleet=$4450.18 rem=$220.32
+  guard=g2-standard-4  gw=3xc4-highcpu-16    doc-parity: n= 4 fleet=$3851.42 rem=$134.33 | lead-list: n= 5 fleet=$4416.19 rem=$254.31
+  guard=g2-standard-4  gw=4xc4-highcpu-16    doc-parity: n= 3 fleet=$3817.43 rem=$168.32 | lead-list: n= 4 fleet=$4382.2 rem=$288.3
+  guard=g2-standard-4  gw=1xc4-highcpu-32    doc-parity: n= 5 fleet=$3871.2 rem=$114.55 | lead-list: n= 6 fleet=$4435.97 rem=$234.53
+  guard=g2-standard-4  gw=2xc4-highcpu-32    doc-parity: n= 3 fleet=$3789.01 rem=$196.74 | lead-list: n= 4 fleet=$4353.78 rem=$316.72
+  guard=g2-standard-4  gw=3xc4-highcpu-32    doc-parity: n= 1 fleet=$3706.82 rem=$278.93 | lead-list: n= 2 fleet=$4271.59 rem=$398.91
+  guard=g2-standard-4  gw=4xc4-highcpu-32    doc-parity: n= 0 fleet=$None rem=$None | lead-list: n= 0 fleet=$None rem=$None
+  guard=g2-standard-4  gw=1xc4d-highcpu-8    doc-parity: n= 6 fleet=$3644.2 rem=$341.55 | lead-list: n= 7 fleet=$4208.97 rem=$461.53
+  guard=g2-standard-4  gw=2xc4d-highcpu-8    doc-parity: n= 6 fleet=$3899.78 rem=$85.97 | lead-list: n= 7 fleet=$4464.55 rem=$205.95
+  guard=g2-standard-4  gw=3xc4d-highcpu-8    doc-parity: n= 5 fleet=$3590.59 rem=$395.16 | lead-list: n= 6 fleet=$4155.36 rem=$515.14
+  guard=g2-standard-4  gw=4xc4d-highcpu-8    doc-parity: n= 5 fleet=$3846.17 rem=$139.58 | lead-list: n= 6 fleet=$4410.94 rem=$259.56
+  guard=g2-standard-4  gw=1xc4d-highcpu-16   doc-parity: n= 6 fleet=$3885.57 rem=$100.18 | lead-list: n= 7 fleet=$4450.34 rem=$220.16
+  guard=g2-standard-4  gw=2xc4d-highcpu-16   doc-parity: n= 5 fleet=$3817.75 rem=$168.0 | lead-list: n= 6 fleet=$4382.52 rem=$287.98
+  guard=g2-standard-4  gw=3xc4d-highcpu-16   doc-parity: n= 4 fleet=$3749.93 rem=$235.82 | lead-list: n= 5 fleet=$4314.7 rem=$355.8
+  guard=g2-standard-4  gw=4xc4d-highcpu-16   doc-parity: n= 3 fleet=$3682.11 rem=$303.64 | lead-list: n= 4 fleet=$4246.88 rem=$423.62
+  guard=g2-standard-4  gw=1xc4d-highcpu-32   doc-parity: n= 5 fleet=$3803.54 rem=$182.21 | lead-list: n= 6 fleet=$4368.31 rem=$302.19
+  guard=g2-standard-4  gw=2xc4d-highcpu-32   doc-parity: n= 3 fleet=$3653.69 rem=$332.06 | lead-list: n= 4 fleet=$4218.46 rem=$452.04
+  guard=g2-standard-4  gw=3xc4d-highcpu-32   doc-parity: n= 1 fleet=$3503.84 rem=$481.91 | lead-list: n= 3 fleet=$4633.38 rem=$37.12
+  guard=g2-standard-4  gw=4xc4d-highcpu-32   doc-parity: n= 0 fleet=$None rem=$None | lead-list: n= 1 fleet=$4483.53 rem=$186.97
+  guard=g2-standard-8  gw=0xNone             doc-parity: n= 5 fleet=$3381.6 rem=$604.15 | lead-list: n= 6 fleet=$4057.92 rem=$612.58
+  guard=g2-standard-8  gw=1xc4-highcpu-8     doc-parity: n= 5 fleet=$3654.1 rem=$331.65 | lead-list: n= 6 fleet=$4330.42 rem=$340.08
+  guard=g2-standard-8  gw=2xc4-highcpu-8     doc-parity: n= 5 fleet=$3926.6 rem=$59.15 | lead-list: n= 6 fleet=$4602.92 rem=$67.58
+  guard=g2-standard-8  gw=3xc4-highcpu-8     doc-parity: n= 4 fleet=$3522.78 rem=$462.97 | lead-list: n= 5 fleet=$4199.1 rem=$471.4
+  guard=g2-standard-8  gw=4xc4-highcpu-8     doc-parity: n= 4 fleet=$3795.28 rem=$190.47 | lead-list: n= 5 fleet=$4471.6 rem=$198.9
+  guard=g2-standard-8  gw=1xc4-highcpu-16    doc-parity: n= 5 fleet=$3912.38 rem=$73.37 | lead-list: n= 6 fleet=$4588.7 rem=$81.8
+  guard=g2-standard-8  gw=2xc4-highcpu-16    doc-parity: n= 4 fleet=$3766.84 rem=$218.91 | lead-list: n= 5 fleet=$4443.16 rem=$227.34
+  guard=g2-standard-8  gw=3xc4-highcpu-16    doc-parity: n= 3 fleet=$3621.3 rem=$364.45 | lead-list: n= 4 fleet=$4297.62 rem=$372.88
+  guard=g2-standard-8  gw=4xc4-highcpu-16    doc-parity: n= 2 fleet=$3475.76 rem=$509.99 | lead-list: n= 3 fleet=$4152.08 rem=$518.42
+  guard=g2-standard-8  gw=1xc4-highcpu-32    doc-parity: n= 4 fleet=$3752.63 rem=$233.12 | lead-list: n= 5 fleet=$4428.95 rem=$241.55
+  guard=g2-standard-8  gw=2xc4-highcpu-32    doc-parity: n= 2 fleet=$3447.34 rem=$538.41 | lead-list: n= 3 fleet=$4123.66 rem=$546.84
+  guard=g2-standard-8  gw=3xc4-highcpu-32    doc-parity: n= 1 fleet=$3818.37 rem=$167.38 | lead-list: n= 2 fleet=$4494.69 rem=$175.81
+  guard=g2-standard-8  gw=4xc4-highcpu-32    doc-parity: n= 0 fleet=$None rem=$None | lead-list: n= 0 fleet=$None rem=$None
+  guard=g2-standard-8  gw=1xc4d-highcpu-8    doc-parity: n= 5 fleet=$3637.18 rem=$348.57 | lead-list: n= 6 fleet=$4313.5 rem=$357.0
+  guard=g2-standard-8  gw=2xc4d-highcpu-8    doc-parity: n= 5 fleet=$3892.76 rem=$92.99 | lead-list: n= 6 fleet=$4569.08 rem=$101.42
+  guard=g2-standard-8  gw=3xc4d-highcpu-8    doc-parity: n= 4 fleet=$3472.02 rem=$513.73 | lead-list: n= 5 fleet=$4148.34 rem=$522.16
+  guard=g2-standard-8  gw=4xc4d-highcpu-8    doc-parity: n= 4 fleet=$3727.6 rem=$258.15 | lead-list: n= 5 fleet=$4403.92 rem=$266.58
+  guard=g2-standard-8  gw=1xc4d-highcpu-16   doc-parity: n= 5 fleet=$3878.55 rem=$107.2 | lead-list: n= 6 fleet=$4554.87 rem=$115.63
+  guard=g2-standard-8  gw=2xc4d-highcpu-16   doc-parity: n= 4 fleet=$3699.18 rem=$286.57 | lead-list: n= 5 fleet=$4375.5 rem=$295.0
+  guard=g2-standard-8  gw=3xc4d-highcpu-16   doc-parity: n= 3 fleet=$3519.81 rem=$465.94 | lead-list: n= 4 fleet=$4196.13 rem=$474.37
+  guard=g2-standard-8  gw=4xc4d-highcpu-16   doc-parity: n= 2 fleet=$3340.44 rem=$645.31 | lead-list: n= 3 fleet=$4016.76 rem=$653.74
+  guard=g2-standard-8  gw=1xc4d-highcpu-32   doc-parity: n= 4 fleet=$3684.97 rem=$300.78 | lead-list: n= 5 fleet=$4361.29 rem=$309.21
+  guard=g2-standard-8  gw=2xc4d-highcpu-32   doc-parity: n= 2 fleet=$3312.02 rem=$673.73 | lead-list: n= 4 fleet=$4664.66 rem=$5.84
+  guard=g2-standard-8  gw=3xc4d-highcpu-32   doc-parity: n= 1 fleet=$3615.39 rem=$370.36 | lead-list: n= 2 fleet=$4291.71 rem=$378.79
+  guard=g2-standard-8  gw=4xc4d-highcpu-32   doc-parity: n= 0 fleet=$None rem=$None | lead-list: n= 1 fleet=$4595.08 rem=$75.42

@@ -1,0 +1,42 @@
+     1	name: chat-pipeline-golden
+     2	
+     3	on:
+     4	  pull_request:
+     5	    paths:
+     6	      - 'gateway/ai_mesh_gateway/enforcement.py'
+     7	      - 'gateway/ai_mesh_gateway/policy_engine.py'
+     8	      - 'gateway/ai_mesh_gateway/bedrock_scanner.py'
+     9	      - 'gateway/ai_mesh_gateway/output_guard.py'
+    10	      - 'gateway/ai_mesh_gateway/llm_router.py'
+    11	      - 'gateway/ai_mesh_gateway/main.py'
+    12	      - 'gateway/tests/golden/**'
+    13	      - 'docs/pipeline/**'
+    14	  push:
+    15	    branches:
+    16	      - cursor/chat-pipeline-freeze
+    17	    paths:
+    18	      - 'gateway/**'
+    19	      - 'docs/pipeline/**'
+    20	
+    21	jobs:
+    22	  golden-freeze:
+    23	    runs-on: ubuntu-latest
+    24	    defaults:
+    25	      run:
+    26	        working-directory: gateway
+    27	    steps:
+    28	      - uses: actions/checkout@v4
+    29	      - uses: actions/setup-python@v5
+    30	        with:
+    31	          python-version: '3.12'
+    32	      - name: Install test deps
+    33	        run: |
+    34	          python -m venv .venv
+    35	          .venv/bin/pip install -q pytest pytest-asyncio fakeredis httpx
+    36	          .venv/bin/pip install -q -e ../shared
+    37	      - name: Enforcement + policy engine unit tests
+    38	        run: .venv/bin/python -m pytest ai_mesh_gateway/tests/test_enforcement.py ai_mesh_gateway/tests/test_policy_engine_redos_guard.py -q
+    39	      - name: Chat pipeline golden freeze (offline; live cases skipped)
+    40	        env:
+    41	          GATEWAY_LIVE: "0"
+    42	        run: .venv/bin/python -m pytest tests/golden -q

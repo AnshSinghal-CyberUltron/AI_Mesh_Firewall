@@ -1,0 +1,40 @@
+[provision] firewall config saved: {"firewall_enabled": true, "enforcement_mode": "block", "pii_detection_enabled": true, "content_filtering_enabled": true, "jailbreak_detection_enabled": true, "semantic_analysis_enabled": false, "tier2_enabled": false, "response_filtering_enabled": true, "output_pii_enabled": true, "output_pii_action": "redact", "output_credential_enabled": true, "output_credential_action": "redact", "output_policy_enabled": true, "rate_limit_enabled": true, "requests_per_minute": 100000000, "burst_limit": 1000000, "org_tpm_limit": 0}
+INFO 2026-09-23 05:53:02,728 signals 226 133708840835968 Synced GatewayAPIKey IUJbQLH2 to Redis (no expiry)
+INFO 2026-09-23 05:53:02,730 signals 226 133708840835968 Synced GatewayAPIKey IUJbQLH2 to Redis (no expiry)
+[provision] key prefix=IUJbQLH2 org=v1bench tpm=100000000
+INFO 2026-09-23 05:53:02,742 signals 226 133708840835968 LLMModelConfig synced to Redis (llm:model_configs:v1bench): 1 models
+INFO 2026-09-23 05:53:02,748 signals 226 133708840835968 LLMModelConfig synced to Redis (llm:model_configs:v1bench): 1 models
+[provision] model synth-1 provider=custom api_base=http://10.160.0.38:8080/v1 created=True
+INFO 2026-09-23 05:53:02,762 signals 226 133708840835968 ModelState synced 'synth-1' (status=active, risk=0.0) -> Redis key model_state:v1bench:synth-1
+INFO 2026-09-23 05:53:02,763 model_state_bootstrap 226 133708840835968 ModelState bootstrapped model=synth-1 org=v1bench
+v1bench: created=1 active_configs=1
+Done. Created 1 ModelState row(s).
+Policy package: org_policy_package_v1 v1.0.0 (57 policies, 160 rules) by domain: {'pipeline': 16, 'rag': 14, 'mcp': 14, 'vector': 13}
+INFO 2026-09-23 05:53:03,063 seed 226 133708840835968 Seeded policy package for org=2 (v1bench): {'policies_created': 44, 'policies_existing': 0, 'rules_added': 160, 'rules_updated': 0, 'vector_created': 13, 'vector_updated': 0}
+INFO 2026-09-23 05:53:03,069 compiler_signals 226 133708840835968 Scheduled debounced policy recompilation (trigger: Policy.post_save (created) on PKG2_PIPE_PII (PII Detection & Redaction))
+INFO 2026-09-23 05:53:03,103 vector_signals 226 133708840835968 Scheduled debounced vector policy recompilation (trigger: VectorCollectionPolicy.post_save (created) on v1bench/docs (pinecone) [deny])
+  org=2 (v1bench): policies +44 new / 0 existing, rules +160, vector +13
+Seeded policy package for 1 org(s).
+PII package: pii_comprehensive_v1 v1.0.0 (72 rules in catalog)
+INFO 2026-09-23 05:53:03,140 pii_seed 226 133708840835968 Seeded 72 PII package rule(s) for org=2 policy=PII_PKG_2 package=pii_comprehensive_v1
+  org=2 (v1bench): policy=PII_PKG_2 created rules=72 (+72 new)
+Seeded PII package for 1 org(s); 72 new rule(s) added.
+Built-in packs: zeroshield.builtin-packs v1.0.0 (10 families, 48 rules in catalog) — seeded DEFAULT-OFF (enabled=False)
+INFO 2026-09-23 05:53:03,167 builtin_packs_seed 226 133708840835968 Seeded 6 built-in rule(s) for org=2 family=prompt_injection policy=BUILTIN_PROMPT_INJECTION_2 (enabled=False)
+INFO 2026-09-23 05:53:03,174 builtin_packs_seed 226 133708840835968 Seeded 6 built-in rule(s) for org=2 family=jailbreak policy=BUILTIN_JAILBREAK_2 (enabled=False)
+INFO 2026-09-23 05:53:03,182 builtin_packs_seed 226 133708840835968 Seeded 5 built-in rule(s) for org=2 family=command_injection policy=BUILTIN_COMMAND_INJECTION_2 (enabled=False)
+INFO 2026-09-23 05:53:03,189 builtin_packs_seed 226 133708840835968 Seeded 3 built-in rule(s) for org=2 family=sql_injection policy=BUILTIN_SQL_INJECTION_2 (enabled=False)
+INFO 2026-09-23 05:53:03,196 builtin_packs_seed 226 133708840835968 Seeded 4 built-in rule(s) for org=2 family=data_leakage policy=BUILTIN_DATA_LEAKAGE_2 (enabled=False)
+INFO 2026-09-23 05:53:03,202 builtin_packs_seed 226 133708840835968 Seeded 2 built-in rule(s) for org=2 family=path_traversal policy=BUILTIN_PATH_TRAVERSAL_2 (enabled=False)
+INFO 2026-09-23 05:53:03,209 builtin_packs_seed 226 133708840835968 Seeded 4 built-in rule(s) for org=2 family=goal_hijacking policy=BUILTIN_GOAL_HIJACKING_2 (enabled=False)
+INFO 2026-09-23 05:53:03,216 builtin_packs_seed 226 133708840835968 Seeded 4 built-in rule(s) for org=2 family=tool_overreach policy=BUILTIN_TOOL_OVERREACH_2 (enabled=False)
+INFO 2026-09-23 05:53:03,224 builtin_packs_seed 226 133708840835968 Seeded 5 built-in rule(s) for org=2 family=vector_injection policy=BUILTIN_VECTOR_INJECTION_2 (enabled=False)
+INFO 2026-09-23 05:53:03,231 builtin_packs_seed 226 133708840835968 Seeded 9 built-in rule(s) for org=2 family=pii_secret policy=BUILTIN_PII_SECRET_2 (enabled=False)
+  org=2 (v1bench): 10 family package(s), +10 created, +48 new rule(s) (all enabled=False)
+Seeded built-in packs for 1 org(s); 10 new policy(ies), 48 new rule(s) added — all DEFAULT-OFF.
+[provision] builtin packs enabled=True (10 policies)
+INFO 2026-09-23 05:53:03,498 compiler 226 133708840835968 Compiled 56 enabled policies into bundle
+Compiled 56 enabled policies.
+INFO 2026-09-23 05:53:03,505 compiler 226 133708840835968 Pushed compiled policies to Redis (policies:compiled:default, version=1, policies=56, trigger=manual)
+Pushed to Redis (version=1, policies=56)
+[provision] policies org=56 enabled=56 pipeline_enabled=27

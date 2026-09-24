@@ -1,0 +1,217 @@
+3:Maximum qualified throughput under a $5,000/month deployment envelope · p99 <20 ms firewall overhead · local guard inference · organization-controlled security actions · OpenAI SDK + SSE compatibility · horizontally scalable backend · clean professional frontend + public landing experience
+5:| Execution authority This document is the consolidated execution runbook. It uses the September architecture/cost sources, the repository-backed V3 review, the measured Prompt Guard/TensorRT work reported in this project, and the later decisions that $5,000/month is the current deployment envelope—not a code-level ceiling. Historical 100k-RPS plans remain design evidence only; 100k is not the
+10:| $5k budget | Hard current deployment envelope. Reprice before purchase. Never hardcode this capacity in application logic. |
+11:| Latency | p99 <20 ms complete AI Mesh firewall-added overhead for the signed low-latency profile. |
+12:| Throughput | Maximize qualified RPS within $5k. Historical 1,064 RPS is a minimum planning floor to beat, not a software cap. |
+15:| Customer model | Organization-selected generation provider/BYOK remains allowed and is excluded from firewall-infrastructure cost/latency accounting. |
+25:| Final objective Build a horizontally scalable, low-latency AI security gateway whose code has no capacity assumption tied to the present $5,000 budget. Within the current budget, maximize qualified RPS while keeping p99 complete firewall overhead below 20 ms and preserving every enabled policy, SSE/OpenAI SDK semantics, tenant isolation, failure safety and auditable user control. |
+28:## 1.1 What counts as qualified throughput
+33:## 1.2 Latency contract
+36:| T_input | Owned time from request acceptance before auth through final input decision and provider-dispatch readiness. | Measured separately; included in total firewall overhead. |
+37:| T_release_lag | For SSE: upstream content-ready → corresponding safe downstream write completion, including buffering/guard work. | p99 and max recorded; cannot be hidden as provider time. |
+39:| T_fw_addon | Complete AI-Mesh-added critical-path time, excluding intrinsic customer-model generation. | p99 <20 ms for the signed low-latency profile. |
+40:| TTFT | Client-visible time to first content. | Reported, but not mislabeled as firewall overhead. |
+44:| Important output-mode rule Strict whole-response withholding and normal streaming are different products at the wire. A strict mode may wait for generation to finish before any content is released; it cannot inherit the low-latency SSE TTFT claim. Each output mode gets its own qualification profile. |
+48:- Current monthly infrastructure envelope: ≤$5,000 for the AI Mesh platform infrastructure; tenant model-token spend remains separate.
+49:- Historical reference point: 4 × G2 nodes / 8 × L4 / ~1,064 RPS / ~$4,561 per month. Treat this as a planning baseline that must be re-priced and re-measured, not a current quote or cap.
+50:- Primary optimization metrics: qualified RPS, RPS/L4, CPU ms/request, qualified RPS/vCPU, RPS/$1,000-month, p99 firewall overhead, error rate, GPU queue time and release lag.
+51:- Engineering target for the CPU gateway in isolation: demonstrate ≥300 qualified CPU-side RPS/vCPU if the signed full-security profile permits; 400–500 is a stretch target, not an assumed result.
+52:- 100k RPS remains a future scale-out architecture test only. The code must not contain a design ceiling below it; the present $5k fleet is not expected to deliver 100k completed chats.
+85:| No budget-coded ceilings | No MAX_RPS=1064, fixed GPU count, fixed workers=4, or queue sizes derived from today’s topology. Resource bounds come from cgroups, memory, FDs, measured service rate and deployment configuration. |
+111:| L2 — GPU staging | Release Docker images on the target GPU/runtime host; same synthetic provider. | Actual local-model placement, queue/batch curves, per-unit latency/capacity. | Closes local inference and single-unit capacity. |
+113:| L4 — production-like qualification | Frozen candidate, in-region load generators, production-shaped network, $5k-class resource envelope. | 30-minute plateaus, 2-hour soak, cost-qualified max RPS. | Primary release SLO. |
+139:| T14 | Reduce auth/quota/kill-switch/shared-state latency without losing truth | Hot path |
+143:| T18 | Measure one serving unit: p99, RPS/vCPU, RPS/L4 and safe saturation point | Performance |
+145:| T20 | Optimize and qualify the ≤$5k production envelope | Performance |
+204:Without a signed contract, a failing run can be made green by skipping a guard, changing a threshold, changing what <20 ms means or reclassifying a user action.
+206:- Sign p99 <20 ms complete firewall overhead for the low-latency profile; define exact input token bands, output mode, languages, allowed buffering and error ceiling.
+207:- Sign the current ≤$5,000/month deployment envelope and state explicitly that it is not encoded as an application capacity constant. Historical 1,064 RPS becomes the minimum planning floor to beat, not a cap.
+208:- Define qualified RPS, real-provider RPS, mixed-policy evaluation throughput, RPS/vCPU and RPS/L4 as separate metrics.
+210:- Define output modes: streaming/pre-release processing versus strict whole-response withholding. Declare which mode is covered by the <20 ms headline.
+223:- Low-latency output mode explicitly named.
+281:| Objective | Make the <20 ms number falsifiable and resistant to provider TTFT, buffering and hidden failure contamination. |
+295:| L03-1 | Provider TTFT sweep 50 ms → 500 ms → 2,000 ms with identical firewall work. | Reported firewall overhead remains approximately stable while client TTFT changes. | Firewall overhead tracks provider TTFT. |
+296:| L03-2 | Inject exactly 5 ms before provider dispatch and 7 ms in output enforcement. | ~12 ms appears in firewall-owned timing within frozen tolerance. | Injected work is missing or attributed to provider. |
+297:| L03-3 | Inject a 30 ms hold in the middle of SSE. | Release-lag metric shows the hold and low-latency profile fails. | Hold disappears inside provider/model time. |
+322:| Objective | Prove the fast local stack actually detects/redacts the supported behaviors before latency optimization is allowed to ship. |
+330:- Freeze calibration and held-out partitions before tuning thresholds. Report request-level FPR/recall; do not infer request FPR by multiplying per-window assumptions.
+332:- Keep PG2 injection classification separate from output harm taxonomy, sensitive-span detection, grounding and rewrite semantics.
+337:| L04-2 | Replay benign inline code/tool descriptions at low and moderate load. | No unapproved terminal false blocks. | Legacy broad rule still blocks benign developer traffic. |
+366:Current code has multiple defaulting paths and historical platform floors. A single compiled plan reduces latency, race conditions and inconsistent semantics.
+458:| L07-3 | Saturate Tier-1 with short/512/1024-token unique prompts. | CPU ms/request and tail improve without quality loss or thread explosion. | Throughput improves only by skipped checks or unbounded worker growth. |
+474:Keep the prior safe engine available as a controlled rollback, but do not claim the new latency profile if the slow path is silently re-enabled.
+492:- Keep rewrite as a separately declared capability: deterministic/local rewrite or an explicitly user-authorized extra customer-model call outside the low-latency profile.
+498:| L08-3 | Allow only the synthetic/customer generation endpoint and send normal chat. | Exactly one permitted generation dispatch; no second judge/rewrite call unless the user explicitly selected a non-low-latency feature. | Platform AI piggybacks on the provider allowlist. |
+521:| Objective | Turn the ~2.14 ms Prompt Guard TensorRT component result into a reproducible, scalable serving component with truthful queue/placement metrics. |
+525:A notebook/session.run microbenchmark does not prove release-container placement, sustained throughput, batching behavior, queue delay or multi-window request performance.
+527:- Pin model/tokenizer/export hashes and compare pristine reference logits/decisions against the chosen ONNX/TensorRT path over the held-out corpus.
+528:- Benchmark valid window counts W=1,2,3,4,7 and supported batch/concurrency combinations with H2D/D2H included; report p50/p95/p99 and windows/s. Keep tokenization separate but include it in gateway overhead.
+529:- Profile execution-provider graph placement separately; provider registration is not proof that major compute ran on TensorRT.
+531:- Key TensorRT engine caches by compatible model/runtime/GPU/profile; warm advertised shapes before ready.
+537:| L09-3 | Run sustained unique W1/W2/W4/W7 traffic while capturing queue+GPU execution. | Stable p99 and windows/s curve; no CPU fallback or NaNs. | Throughput inferred from 1/p50 or hidden fallback. |
+544:- q_safe windows/s and request-shape curves established.
+550:- raw latency/throughput arrays
+551:- ORT/TensorRT placement evidence
+554:Select the last validated local artifact/runtime. Never fall back to CPU or cloud silently while retaining the qualified latency badge.
+566:Output security is not “run PG2 again.” It may need sensitive-span detection, output taxonomy, grounding or other local capabilities, and strict blocking has different latency semantics from SSE.
+584:- Streaming and strict modes have separate latency semantics.
+620:| L11-5 | Slow client consumes one event every 500 ms. | Memory remains bounded and backpressure propagates. | Gateway buffers response unboundedly. |
+719:T14  Reduce auth/quota/kill-switch/shared-state latency without losing truth
+725:| Objective | Keep authoritative multi-tenant control while removing serial network waits that destroy p99 and scale. |
+729:Historical measurements showed shared-state RTTs could dominate the gateway even with fast models. Scaling gateway replicas is useless if one centralized path serializes every request.
+731:- Profile auth, quota, kill-switch and model-state calls separately: pool wait, network RTT, server execution and retry time.
+742:| L14-4 | Exhaust Redis pool / inject 50–200 ms latency. | Waits remain bounded and failure outcome is explicit; event loop remains responsive. | Unbounded queue/p99 collapse or fail-open. |
+749:- Pool waits/retries bounded inside latency budget.
+765:| Objective | Ensure logs, dashboards and analytics cannot add unpredictable chat latency or become a fleet-wide failure dependency. |
+779:| L15-1 | Add 500 ms latency/unavailability to audit sink under gateway load. | Gateway p99 changes within signed tolerance; queue/spill/loss is visible. | Chat event loop blocks on logging or memory grows unbounded. |
+781:| L15-3 | Open heavy dashboard analytics while gateway runs at 70–90% q_safe. | Gateway p99/resource profile remains within approved interference budget. | Dashboard query destabilizes serving fleet. |
+792:- sink-fault latency comparison
+846:| Objective | Fail predictably before saturation turns into seconds of latency, OOM or random 502s. |
+854:- Use deadlines based on the signed p99 budget. Reject/shed overload quickly with explicit codes and Retry-After where appropriate rather than increasing timeouts.
+860:| L17-1 | Offer 3× known safe rate for a bounded interval. | System sheds/rejects explicitly; p99 of admitted cohort stays bounded; no OOM. | Queues grow without bound or random reset/502 storm. |
+869:- Admitted cohort retains bounded latency.
+878:Lower admission and traffic rather than widening queues/timeouts. Never disable guards to regain throughput.
+880:T18  Measure one serving unit: p99, RPS/vCPU, RPS/L4 and safe saturation point
+886:| Objective | Find the real service-rate limits before sizing the $5k fleet. |
+890:The useful questions are how much CPU work each request consumes, how many guarded requests each L4 can sustain under the p99 budget, and where queues begin to dominate.
+893:- Sweep guard window count/batch/concurrency first to obtain q_safe windows/s and request-shape curves under the complete latency budget.
+894:- Sweep gateway CPU allocations (where feasible 1/2/4/8 vCPU) and worker/event-loop settings without changing semantics. Record actual cgroup CPU usage/throttling.
+895:- Use open-loop arrival-rate steps until the first repeatable p99/error/resource failure. Record both highest passing and adjacent failing rate.
+896:- Run profile/instrumentation separately from final measurements. Do not average per-worker p99; merge raw samples/histograms.
+900:| L18-1 | 1 vCPU equivalent gateway sweep with adequate guard capacity. | Measured qualified RPS/vCPU and CPU ms/request; no hidden CPU outside denominator. | Nominal vCPU claim based on host nproc or excludes serving sidecar CPU. |
+901:| L18-2 | Single L4 unique-request sweep across W1/W2/W4/W7 mix. | Highest passing RPS/L4 under p99<20 ms recorded. | Uses 1/p50, repeated cache hits or omits output work. |
+907:- q_safe per L4 and per-node rate known.
+908:- RPS/vCPU and CPU ms/request measured honestly.
+934:- Use the same open-loop workload and calculate scale efficiency = observed throughput / (single-unit throughput × unit count).
+935:- Measure p99, queue age, Redis/shared-state utilization, network/edge connections and cost at each scale point.
+941:| L19-2 | Run 2 units with same image and policy; double offered load progressively. | Capacity rises materially (target ≥1.7× before next bottleneck) without p99/security regression. | <1.5× or new correctness divergence without identified external bottleneck. |
+953:- throughput/p99 scaling curves
+960:T20  Optimize and qualify the ≤$5k production envelope
+974:- Maximize qualified RPS under ≤$5,000/month with declared HA/reserve assumptions. Historical 4×G2/8×L4/~$4,561 is the baseline to re-evaluate, not a fixed topology.
+975:- Compute qualified RPS/$1,000-month, RPS/L4, purchased-vCPU utilization, cost/million requests and headroom.
+980:| L20-1 | Deploy the chosen budget topology in production-like staging and run the highest qualified plateau. | All required controls + p99 target pass within verified monthly cost estimate. | Budget only passes by excluding required egress/control/audit or skipping guards. |
+981:| L20-2 | Run control/dashboard activity concurrently. | Co-located services do not push gateway outside p99/resource limits. | “Free spare CPU” assumption invalid. |
+982:| L20-3 | Recompute bill from measured bytes/RPS and dated vendor prices independently. | Second calculation agrees within signed tolerance and remains ≤$5k. | Old cost table copied despite different traffic/price. |
+987:- Verified ≤$5k monthly envelope.
+988:- Maximum qualified RPS under that envelope measured.
+1063:| L22-2 | Cycle OFF→MONITOR→ENFORCE for input and output detectors while 70% load runs. | Behavior changes without restarting gateway; p99/freshness stay within limits. | Setting saves but stale workers or hidden floor remains. |
+1088:| Objective | Produce the single source of truth for the release claim under the current $5k envelope. |
+1096:- Run a rate ladder to determine the candidate plateau, then three independent 30-minute qualification runs after warmup/restart. Use unique prompts and the full low-latency security profile.
+1098:- Run negative-control qualification with one required guard deliberately disabled in isolated staging; harness must FAIL even if RPS improves.
+1099:- Recompute cost/million and monthly cost from actual bytes and measured qualified RPS. Independent reviewer recomputes p99 and success counts from raw evidence.
+1103:| L23-1 | Three 30-minute all-permitted plateaus at candidate max qualified rate. | Every run: p99 T_fw_addon <20 ms, error ceiling met, zero safety breaches, zero schedule drops. | Any trial fails required stratum or guard coverage. |
+1104:| L23-2 | Worst-band prompt/output profile. | Profile-specific p99 and quality pass or is explicitly unqualified. | Mostly-short mix hides long-band failure. |
+1111:- Highest qualified RPS under ≤$5k established.
+1112:- p99 <20 ms passes every required run/stratum.
+1135:Controlled providers are required for causal latency/capacity proof, but actual provider integrations can reveal SDK, streaming, timeout and policy interactions that staging generators cannot.
+1141:- Record the exact tested provider throughput; do not extrapolate it to gateway capacity or another tenant.
+1146:| L24-2 | Direct vs gateway request sample. | Gateway behaves correctly; latency difference labeled carefully without false causal subtraction. | Provider TTFT presented as firewall tax. |
+1154:- Observed provider-supported rate/latency stated separately.
+1218:- Publish the measured max qualified RPS under the current $5k envelope, p50/p95/p99, RPS/vCPU, RPS/L4, CPU ms/request, cost/million and first failing bottleneck.
+1278:| S26 | Redis/Valkey fault | Latency/failover/disconnect. | Bounded safe behavior; no quota multiplication. |
+1283:| S31 | Single-unit rate sweep | Open-loop increasing RPS. | Highest passing + first failing point retained. |
+1285:| S33 | Dashboard contention | Heavy console analytics during load. | Serving p99/resource budget remains valid. |
+1286:| S34 | 30-minute qualification | Frozen candidate plateau. | p99<20ms + error/security gates in every run. |
+1291:| S39 | Cost recomputation | Rebuild monthly cost from measured bytes/resources. | ≤$5k with declared exclusions/headroom. |
+1310:| Latency | p99 complete firewall overhead <20 ms for every required low-latency stratum/trial. |
+1311:| Throughput | Maximum qualified RPS under ≤$5k measured with unique, fully guarded requests; historical 1,064 floor beaten or gap explicitly reported. |
+1312:| Efficiency | RPS/vCPU, CPU ms/request, RPS/L4, queue time and cost/million measured; denominator complete. |
+1316:| Budget | Current dated infrastructure estimate ≤$5,000/month with prompt egress, LB, state, audit/monitoring and required support assumptions declared. |
+1331:| TODAY ($5k envelope)
+1342:  higher qualified throughput with unchanged organization semantics and unchanged API/SSE contract |
+1347:| Gateway | RPS/replica, CPU, event-loop lag, active streams, p99 overhead | Add replicas/CPU; keep stateless image/config contract. | No |
+1348:| Local guard | Queue age, inference p99, windows/s, GPU utilization/VRAM | Add guard replicas/GPUs; tune deployment batch profile. | No |
+1350:| Provider/inference | TTFT, tokens/s, waiting requests, provider quota | Increase dedicated/provider capacity. | No |
+1357:| 2026-09-07-end-to-end-architecture-hld.md | Target topology and request/control separation; historical $5k operating point. |
+1358:| 2026-09-02-hot-path-cost-matrix.md | Corrected historical all-in cost and 1,064-RPS planning baseline; prompt egress correction. |
+1362:| User-reported TensorRT L4 test | ~2.14 ms p50 W1 component evidence only; T09/T18 must reproduce in release container and measure sustained multi-window throughput/p99. |
+1364:| TrueFoundry 2026 architecture/benchmark material | Comparison reference: in-memory enforcement/asynchronous logging and vendor-reported ~350 RPS/vCPU on a fake OpenAI upstream; not equivalent to AI Mesh full security. |
+1369:| Final interpretation AI Mesh is not being built as a 1,064-RPS product. It is being built as a horizontally scalable gateway whose first cost-constrained deployment happens to be ≤$5,000/month. The release claim is the maximum qualified RPS actually measured inside that envelope with p99 <20 ms and all selected controls operating. Future capacity growth must be a deployment/infrastructure
+1396:- Motion: 120-200 ms purposeful transitions only. No hover lift on every control. Respect prefers-reduced-motion and never animate high-density operational data unnecessarily.
+1405:| /app/overview | Operator home | System posture, qualified traffic, blocks/redactions, latency, provider health, urgent actions. |
+1422:| Trust / proof bar | Verified facts only. | Use measured latency/RPS/cost after T23; before qualification show qualitative capabilities, not placeholder “99.99%” or invented customer logos. |
+1427:| Deployment / resilience | Simple deployment options and scale story. | Today’s $5k envelope is not a code ceiling. Explain horizontal scaling without promising fleet numbers not yet qualified. |
+1439:| UI05 | Redesign overview dashboard around operator decisions | UI03, T03, T15 | Actionable KPIs, health, traffic, latency, urgent states |
+1618:| Claim audit | Compare visible performance/security claims to signed release evidence. | Every numeric claim has an evidence ID/date/profile. | Aspirational 100k, 99.99%, customer logos or unqualified <20 ms shown as fact. |
+1645:- Restructure overview into four zones: posture/health, traffic + actions, latency/provider reliability, and recent/high-priority findings.
+1682:- Create paginated/virtualized Requests table with time, status/action, model/provider, latency, org-scoped tags, stream/non-stream and risk/finding summary.
+1686:- Show T_fw_addon, provider time and release lag separately using T03 definitions. Never recompute a different frontend latency formula.
+1692:| Large dataset | Seed >=100k synthetic request records and browse/filter pages. | Stable memory/interaction; no full-table browser materialization. | Browser freezes or downloads unbounded dataset. |
+1709:- 100k-row browser profile
+1721:- Separate Input Guardrails and Output Guardrails. Output page must explicitly show streaming/pre-release versus strict withholding modes and their latency/behavior trade-offs.
+1839:- Run Lighthouse/Web Vitals in a controlled production build: target LCP <=2.5 s, CLS <=0.1, INP <=200 ms on the agreed test profile; record rather than silently waive if staging topology dominates.
+1915:- Run backend controlled load at the current qualified serving-unit/fleet plateau while Playwright executes a small but realistic operator flow. Measure whether dashboard/API demand moves gateway p99 or control memory materially.
+1923:| Load coexistence | Run dashboard/request explorer/policy publish while backend load is active. | Frontend/control activity stays within signed impact bound; gateway p99 remains qualified. | UI polling/queries materially destabilize gateway. |
+1997:| Data size | 0 rows, normal, >=100k synthetic request records for explorer, long names/labels, many models/connectors. |
+1998:| Network | Normal, slow/high-latency, interrupted save, client offline/reconnect, missing lazy chunk after deploy. |
+2123:| Injection/jailbreak detection | 3/10 same-family, 0/10 paraphrased | measured against corpus; published recall/FPR per posture | GW02 corpus, expected-diff ledger |
+2149:gateway-v2 is a single deployable process — not a microservice fan-out. Splitting auth, policy and scanning across HTTP hops would add round trips to a path with a 20 ms p99 budget. What changes is not the number of processes but the number of *boundaries inside* the process, and the direction in which they may be crossed.
+2159:| gateway_v2/ ├── edge/ │   ├── app.py                  ASGI app assembly, lifespan, routers │   ├── openai_chat.py          /v1/chat/completions, /v1/completions │   ├── openai_responses.py     /v1/responses │   ├── openai_misc.py          /v1/embeddings, /v1/models, /v1/moderations │   ├── mcp.py                  MCP JSON-RPC + REST surface │ 
+2168:| Separate auth/policy/scan microservices | Each hop costs a round trip against a 20 ms p99 budget. TrueFoundry's published 3–12 ms hop is in-process for exactly this reason. |
+2173:| Framework middleware for security | Four BaseHTTPMiddleware layers measured at 1.00 ms p50 / 4.70 p99. v2 uses pure-ASGI middleware and does security work in admit/, where it is timed. |
+2182:The timer starts in `edge/` at ①, before identity resolution. In v1, start = time.perf_counter() sits at main.py:7085 *inside* the handler, after AuthMiddleware has already performed its Redis round trip — so authentication latency is invisible to every trace, and stage_metrics["auth_ms"] at :7691 actually measures body parsing. §1.2's T_fw_addon cannot be measured honestly from a timer 
+2183:`model_output_ms` is measured, never derived. v1 computes it by subtraction (stream_orchestration.py:683: duration_ms - ttft_ms, explicitly excluding TTFT), so provider time-to-first-token lands in overhead_ms and is reported as firewall overhead. v2 timestamps provider-stream open and close directly. The reconciliation residual |wall − Σstages| is recorded signed, and a non-zero p50 fails
+2229:| class GuardBackend(Protocol):     async def classify(self, windows: Sequence[str], budget: Budget) -> Sequence[GuardResult]: ...     async def readiness(self) -> Readiness: ...   # includes model_hash     def capacity_hint(self) -> CapacityHint: ...  # windows/s, queue depth, batch profile |
+2232:detect/semantic/ calls this and knows nothing about CPU, GPU, TensorRT, Triton, batch size or replica count. The selection is deployment configuration. This is precisely what "no capacity assumption tied to the present budget" means in code: moving from one L4 to forty is a config change and a capacity_hint change, not a source edit.
+2253:| @dataclass(frozen=True, slots=True) class ResourceContract:     cpu_quota: float            # cgroup v2 cpu.max → v1 cfs_quota → sched_getaffinity     memory_limit: int           # cgroup memory.max → v1 limit → /proc/meminfo     fd_limit: int               # RLIMIT_NOFILE     guard_capacity: CapacityHint | None   # from GuardBackend.capacity_hint()     target_p99_ms: float        #
+2260:- The clamps are removed. asgi_threads capped at 32, scanner_pool at 16, vault_pool at 8, redis_pool at 256 are exactly the "capacity assumption in code" the objective forbids. Bounds become functions of measured service rate and the declared p99 target.
+2264:The §7 table remains the contract. What §10.6 adds is the mechanism that makes it true: because every bound is derived and every fleet boundary is an interface (GuardBackend, ProviderClient, StateStore, AuditSink), moving from four nodes to forty changes replica counts and a capacity_hint. There is no source file in which the number of GPUs, the number of workers, or the target RPS appears.
+2306:| GW10 | Implement semantic detection, windowing and the per-request FPR budget | Detection | GW08 |
+2415:Wire C3 scoring: recall and FPR per posture per family, with the paraphrase and developer-traffic families reported separately, because those two are where v1 is known to fail in opposite directions.
+2423:| LGW02-5 | Score v1 against C3. | Recall/FPR table per posture and family published, reproducing the known backtick and paraphrase results. | Corpus cannot reproduce known v1 behaviour — the corpus is wrong. |
+2449:Delete every clamp. Replace workers, queue_depth, pool_size and stream_buffer_bytes with functions of CPU quota, memory limit, fd limit, measured service rate and the deployment-declared target_p99_ms and utilization_cap.
+2573:| LGW06-5 | Inject 200 ms store latency. | Bounded timeout; declared posture; no unbounded pool growth. | Latency propagates to request latency without a bound. |
+2582:Store operation counters · revocation timing per replica · four-replica quota report with overshoot · outage matrix · latency-injection run · failover run.
+2641:Define GuardBackend per §10.5.4 with four implementations behind it: local_onnx (CPU, the default for development and CI), local_trt (in-process TensorRT), triton_grpc (node-local), remote_http (off-box burst). Selection is deployment configuration and the detector cannot observe which is active.
+2653:| LGW08-6 | Backend degrades to half throughput. | capacity_hint changes; admission bounds respond; no unbounded queue. | Bounds unchanged; queue grows. |
+2681:Score every detector against C3 and publish recall and FPR per family, with the developer-traffic family reported separately. This is where the backtick fix is proven rather than asserted.
+2691:| LGW09-6 | C3 scoring run. | Recall/FPR per family published; developer-traffic FPR materially below v1's. | Not measured, or no improvement. |
+2697:One canonicalization, one matcher, one redactor. Wire bytes verified against spans. Injection demoted to signal with ledger entry and C3 score. Per-family recall/FPR published.
+2704:## GW10 — Implement semantic detection, windowing and the per-request FPR budget
+2714:The model's published operating point is per window, not per request. A model quoted at 1% FPR at 512 tokens compounds across windows: at two windows a request sees 1 − 0.99² ≈ 1.99%, and at seven windows ≈ 6.79%. In an ENFORCE posture at 1,000 RPS that is roughly 20 false blocks per second at two windows. This number has never been published alongside the latency figure, and §10.2.2 
+2718:Implement the FPR budget: the plan declares a per-request FPR ceiling; the resolver's confidence threshold is derived from it and the actual window count. Exceeding the ceiling is a recorded condition with a declared behaviour, not a surprise.
+2725:| LGW10-2 | Measure FPR at 1, 2, 4 and 7 windows on the benign corpus. | Measured curve published and within the declared ceiling. | Not measured, or ceiling exceeded silently. |
+2726:| LGW10-3 | Batch versus serial at equal window count. | Batched; p99 within budget; serial path absent. | Serial loop on the hot path. |
+2727:| LGW10-4 | Multilingual corpus. | Per-language recall/FPR published. | English-only claim. |
+2733:Window count varies with tokenizer version → tokenizer hash is pinned and recorded. FPR ceiling forces a threshold that collapses recall → the trade is published and signed, never silently resolved in favour of the latency headline.
+2735:Windowing measured, not assumed. Per-request FPR published at every deployed window count. Batched inference. No silent truncation. Multilingual published separately.
+2737:Window-count distribution from real traffic · FPR curve · batch-versus-serial latency · multilingual scorecard · over-length rejection · tokenizer and model hashes.
+2739:Disable semantic rules by plan; deterministic detection continues. Stop if the per-request FPR at the deployed window count cannot be published.
+2741:Agent-executable against local_onnx. GPU-specific throughput belongs to GW20; this card is about correctness and the FPR budget.
+2827:| Objective | Make the output path use the same resolver as the input path, and make the two streaming modes honestly distinct at the wire and in the latency claim. |
+2835:Implement STRICT_WITHHOLD: no content released until the whole response is inspected. It is selected per plan, and its latency profile is qualified separately — it may not inherit the incremental TTFT claim.
+2837:Qualify each mode independently: release lag and first-content delay for incremental, completion overhead for strict.
+2845:| LGW13-5 | Latency for both modes at the same load. | Two separate profiles published; strict never quoted as incremental. | One number for both. |
+2852:One resolver for both phases. Two modes implemented, selectable, visibly distinct. Separate latency qualification. No truncation-as-block. Boundary safety in both.
+2854:Wire captures for both modes · UNAVAILABLE matrix · MONITOR run · two latency profiles · boundary tests · mode-visibility screenshots.
+2865:| Objective | Exactly one truthful decision record per phase, produced without blocking the request, and a timing instrument that cannot report the provider's latency as ours. |
+2869:Two defects meet here. The timer starts at main.py:7085 inside the handler, after auth middleware has already run, so stage_metrics["auth_ms"] at :7691 measures body parsing rather than authentication. And model_output_ms is derived by subtraction — stream_orchestration.py:683 computes duration_ms − ttft_ms, explicitly excluding TTFT — so provider time-to-first-token lands in overhead_m
+2872:Record the reconciliation residual wall − Σstages − provider signed. Export it as a histogram and fail CI at a non-zero p50. A clamp to zero is prohibited; it is what hid this class of error in v1.
+2880:| LGW14-1 | Recorder configured with 2,000 ms TTFT and zero firewall work. | T_fw_addon ≈ 0. | Addon tracks TTFT — the v1 defect. |
+2881:| LGW14-2 | Inject 5 ms auth, 5 ms input, 7 ms output delays. | Each appears in its own metric, within tolerance. | Any lands in the wrong bucket. |
+2882:| LGW14-3 | Inject a 30 ms mid-stream hold. | Appears in release lag; a sub-20 ms claim fails. | Hidden in provider time. |
+2896:Revert the instrument revision; measurement stops until it is restored. Stop all performance claims if the residual p50 is non-zero — every number produced under a broken instrument is void.
+3060:v1 has no admission control. --worker-connections 20000 is silently inert because uvicorn.workers.UvicornWorker does not read it, and rate limits bound arrival rate, not concurrency. The only asyncio.Semaphore in the codebase is in the stdio adapter. Under overload the system therefore has no defined behaviour: queues grow, p99 collapses, memory climbs.
+3063:Explicit overload response: a declared status with Retry-After and a request id, emitted before latency collapses, with a measured q_safe threshold.
+3070:| LGW19-1 | Offer 3× measured q_safe. | Explicit shedding; p99 for admitted requests stays within budget; no OOM. | Unbounded queueing or OOM. |
+3098:Every RPS-per-vCPU figure in this project's history is derived, and they span 1,700× — from 0.17 measured today to a struck 520 planning figure. This card replaces all of them with a measurement taken through the GW14 instrument.
+3100:Measure one unit under the signed full-security profile with unique prompts: p50 and p99 of T_fw_addon, T_release_lag, T_finalize; qualified RPS; CPU ms per request from cgroup accounting, not docker stats; RPS per allocated serving vCPU with a complete denominator including guard CPU; RPS per accelerator; guard queue time; q_safe.
+3104:Report the three efficiency denominators separately and never interchangeably: RPS per allocated serving vCPU, RPS per purchased node vCPU, and requests per consumed CPU-second.
+3108:| LGW20-1 | Single-unit sweep, full profile, unique prompts. | p99 T_fw_addon < 20 ms at the qualified rate; both boundary points recorded. | Budget missed with no published gap. |
+3109:| LGW20-2 | Reconciliation residual across the run. | p50 zero; distribution published. | Non-zero — the run is void. |
+3111:| LGW20-4 | Same image at 2, 4, 8, 16 vCPU. | Four distinct configurations from the contract; capacity tracks. | Any constant value. |
+3150:| LGW21-5 | Shadow overhead on v1. | Within the declared budget; v1 p99 unaffected. | Shadow degrades production. |
+3157:Zero UNEXPECTED and zero WIRE across the full window. Ledger complete and pre-dated. Coverage met. Shadow overhead within budget. Resource curves published.
+3159:Shadow report by bucket, surface and day · ledger with timestamps · convergence run · coverage matrix · overhead measurement · resource comparison.
+3217:Observe against pre-declared thresholds for error rate, p99 addon, security disposition distribution, provider call ratio and audit completeness. The disposition distribution matters as much as the latency: a sudden shift in block rate is a defect signal even when latency looks excellent.
+3257:Publish the honest capacity statement: measured qualified RPS at the measured p99, with posture, prompt band, percentile, window count and per-request FPR stated together. A defensible number with its caveats beats an indefensible one without.
+3290:| SB08 | Capacity derivation | Same image at 2/4/8/16 vCPU and two memory limits. | Every bound changes; none constant. |
+3300:| SB18 | Instrument honesty | Recorder at 2,000 ms TTFT with zero firewall work. | T_fw_addon ≈ 0; residual p50 zero. |
+3301:| SB19 | Mid-stream hold | 30 ms hold injected mid-stream. | Appears in release lag; a sub-20 ms claim fails. |
+3302:| SB20 | FPR publication | Benign corpus at 1/2/4/7 windows. | Per-request FPR published at every deployed window count. |
+3314:| Detection | C3 recall and FPR published per posture and family, including paraphrase and developer traffic. Every §10.2.2 change scored. |
+3315:| FPR | Per-request false-positive rate published at every deployed window count, not per window. |
+3317:| Instrument | Reconciliation residual p50 zero. Every performance number produced under it. |
+3332:The published capacity claim omits posture, prompt band, percentile, window count or per-request FPR.
+3346:| T09 local input inference | Absorbed into GW08 and GW10, extended with the pluggable backend and the per-request FPR budget. |
+3351:| T14 shared-state latency | Absorbed into GW06, extended with one posture table implemented once. |

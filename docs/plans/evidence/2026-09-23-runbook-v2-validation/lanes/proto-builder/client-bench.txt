@@ -1,0 +1,8 @@
+aiohttp/json/c1 {'cpu_us_per_req': 237.7, 'lat_p50_ms': 0.304, 'n': 2000}
+aiohttp/json/c32 {'cpu_us_per_req': 124.5, 'lat_p50_ms': 2.128, 'n': 2000}
+aiohttp/sse50/c1 {'cpu_us_per_req': 406.1, 'lat_p50_ms': 0.454, 'n': 600}
+aiohttp/sse50/c32 {'cpu_us_per_req': 232.7, 'lat_p50_ms': 4.385, 'n': 600}
+httpx/json/c1 {'cpu_us_per_req': 949.9, 'lat_p50_ms': 0.919, 'n': 2000}
+httpx/json/c32 {'cpu_us_per_req': 2658.8, 'lat_p50_ms': 47.461, 'n': 2000}
+httpx/sse50/c1 {'cpu_us_per_req': 1650.3, 'lat_p50_ms': 1.638, 'n': 600}
+httpx/sse50/c32 {'cpu_us_per_req': 3484.4, 'lat_p50_ms': 60.734, 'n': 600}

@@ -1,0 +1,44 @@
+{
+ "corpus": "/home/rv/rv/corpus-correctness-86M.jsonl",
+ "model": "/home/rv/rv/models/pg2-86M.onnx",
+ "n": 2000,
+ "seconds": 13.3,
+ "backend": {
+  "batch": 1,
+  "seq_buckets": [
+   512
+  ],
+  "providers": [
+   "TensorrtExecutionProvider",
+   "CPUExecutionProvider"
+  ]
+ },
+ "classes": {
+  "benign": 1600,
+  "injection": 100,
+  "pii": 200,
+  "secret": 100
+ },
+ "benign_fpr_at": {
+  "0.5": 0.01188,
+  "0.8": 0.005,
+  "0.9": 0.00313,
+  "0.95": 0.00187,
+  "0.99": 0.00063
+ },
+ "injection_recall_at": {
+  "0.5": 0.71,
+  "0.8": 0.68,
+  "0.9": 0.67,
+  "0.95": 0.64,
+  "0.99": 0.51
+ },
+ "windows_hist": {
+  "1": 2000
+ },
+ "fp_at_0.5": 100,
+ "fpr_at_0.5": 0.05,
+ "fpr_at_0.8": 0.0425,
+ "fpr_at_0.9": 0.04,
+ "p99_score": 0.9989
+}

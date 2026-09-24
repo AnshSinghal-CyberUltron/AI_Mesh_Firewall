@@ -1,0 +1,86 @@
+# commands run (read-only git):
+git -C /home/contact_cyberultron_com/AI_Mesh_Firewall log --oneline -S catalog_row_is_display_alias -- gateway/ai_mesh_gateway/main.py gateway/ai_mesh_gateway/llm_router.py
+2ed687a6 chore(revamp): snapshot T00–T02 lab tree and plans off ansh
+2a657fad fix(t01): honor PII-off as a true bypass and classify AKIA as secret
+
+grep -c catalog_row_is_display_alias in BASELINE copy:
+/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_router.py:0
+/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py:4
+
+baseline main.py:4741-4750
+        # Drop Title-Case display aliases (Haiku) that LiteLLM 404s. Keep empty
+        # model_id rows so isolation can fail closed with isolation_target_uncallable
+        # instead of a generic model_not_configured 404.
+        try:
+            from llm_router import catalog_row_is_display_alias as _display_alias_row
+        except ImportError:
+            from .llm_router import catalog_row_is_display_alias as _display_alias_row
+        if str(model.get("model_id") or "").strip() and _display_alias_row(model):
+            continue
+        eligible.append(model)
+
+git diff 2a657fad 2ed687a6 -- gateway/ai_mesh_gateway/llm_router.py
+diff --git a/gateway/ai_mesh_gateway/llm_router.py b/gateway/ai_mesh_gateway/llm_router.py
+index 95110bfa..979a3375 100644
+--- a/gateway/ai_mesh_gateway/llm_router.py
++++ b/gateway/ai_mesh_gateway/llm_router.py
+@@ -25,6 +25,48 @@ from ai_mesh_shared.litellm_byok import normalize_litellm_params
+ 
+ from ai_mesh_gateway.platform_models import is_platform_model_name
+ 
++
++def looks_like_display_alias(model_id: str) -> bool:
++    """True when a catalog id is a UI display name, not a LiteLLM/provider id.
++
++    Live Mesh scored ``Haiku`` (Title Case, no provider prefix) and dispatched it.
++    LiteLLM 404'd in milliseconds. Aliases with a provider path, version token, or
++    hyphenated slug (``google/gemini-2.0-flash``, ``gpt-4o-mini``, ``gemini-flash-cheap``)
++    are treated as real routing keys.
++    """
++    mid = (model_id or "").strip()
++    if not mid:
++        return True
++    if " " in mid:
++        return True
++    if "/" in mid or "\\" in mid or ":" in mid:
++        return False
++    if "." in mid:
++        return False
++    if "-" in mid or any(ch.isdigit() for ch in mid):
++        return False
++    return bool(mid[:1].isupper() and mid[1:].islower() and mid.isalpha())
++
++
++def looks_like_provider_model_id(model_id: str) -> bool:
++    mid = (model_id or "").strip()
++    if not mid:
++        return False
++    return not looks_like_display_alias(mid)
++
++
++def catalog_row_is_display_alias(model: dict | None) -> bool:
++    """True when a routing row would dispatch a UI alias (``Haiku``) to LiteLLM."""
++    if not isinstance(model, dict):
++        return False
++    name = str(model.get("model_name") or "").strip()
++    model_id = str(model.get("model_id") or "").strip()
++    upstream = model_id or name
++    params = model.get("litellm_params")
++    if isinstance(params, dict) and str(params.get("model") or "").strip():
++        upstream = str(params.get("model")).strip()
++    return looks_like_display_alias(name) or looks_like_display_alias(upstream)
++
+ from litellm.exceptions import (
+     APIConnectionError,
+     APIError,
+@@ -2133,6 +2175,10 @@ class LLMRouter:
+             model_id = str(model.get("model_id") or model_name)
+             if not model.get("is_active", True):
+                 continue
++            if is_platform_model_name(model_name) or is_platform_model_name(model_id):
++                continue
++            if catalog_row_is_display_alias(model):
++                continue
+             if unroutable and (
+                 model_name.strip().lower() in unroutable or model_id.strip().lower() in unroutable
+             ):

@@ -1,0 +1,11 @@
+2361: Fully agent-executable except the credential classification and revocation, which require a human with infrastructure authority. Agents must not print key material into logs, PR descriptions or task output.
+2435: Fully agent-executable. The agent may not add ledger entries; those require the human who authorizes the behaviour change, and the timestamp gate enforces it.
+2586: Agent-executable. The posture table is signed by a human before implementation; the agent implements it, it does not choose it.
+2627: Agent-executable, and the highest-scrutiny card in the track: human review is mandatory before merge. The agent must not add a convenience branch that returns an action outside the six documented steps.
+2935: Agent-executable. This is the first card whose completion is externally meaningful; human review before it is marked done.
+3163: Agent-executable for running and triage. Ledger authorization is human. The agent's output is a triaged diff report, not a decision to accept one.
+3202: Rehearsal execution is agent-assisted; the go/no-go decision is human and recorded.
+3239: Human-led. Agents may monitor and prepare artifacts; the shift and any rollback are executed by a human on-call.
+3368: This track is executed by coding agents with human gate review. The cards are written accordingly, and four rules govern how they are worked.
+3370: Machine-checkable exit criteria only. Every card exits on a command that returns a status, not on a judgement. That is why §10.2.3's structural rules are lints and AST gates rather than review conventions — an agent cannot be trusted to remember a con
+3372: Human authority is reserved at four points, and only four: the credential decision in GW00; every ledger entry in GW02 and GW21; the merge review for GW07, which is the one card where a subtle error is a security failure rather than a bug; and the go/no-

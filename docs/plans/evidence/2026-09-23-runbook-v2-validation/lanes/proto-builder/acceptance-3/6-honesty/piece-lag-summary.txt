@@ -1,0 +1,3 @@
+base piece45 105.5 piece47 105.5 piece48 105.4 piece50 105.5
+predispatch5 piece45 110.9 piece47 110.9 piece48 110.8 piece50 110.8
+hold30 piece45 105.0 piece47 134.9 piece48 115.0 piece50 104.8

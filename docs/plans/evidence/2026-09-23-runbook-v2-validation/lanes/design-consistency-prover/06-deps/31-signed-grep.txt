@@ -1,0 +1,27 @@
+2125: | Degraded scan | action becomes independent of verdict | explicit UNAVAILABLE finding status; organization's signed failure posture applies | GW07 |
+2126: | Org policy precedence | severity maximum | signed rule priority; org intent is authoritative within its scope | GW07 |
+2159: | gateway_v2/ ├── edge/ │   ├── app.py                  ASGI app assembly, lifespan, routers │   ├── openai_chat.py          /v1/chat/completions, /v1/completions │   ├── openai_responses.py    
+2183: `model_output_ms` is measured, never derived. v1 computes it by subtraction (stream_orchestration.py:683: duration_ms - ttft_ms, explicitly excluding TTFT), so provider time-to-first-token lands in overhead_ms and is reporte
+2205: | PLAN_UNAVAILABLE | The plan could not be loaded, is stale beyond its freshness bound, or failed validation. | Signed not-ready behaviour. Never another tenant's plan, never the platform default. |
+2344: | LGW00-1 | Attempt authentication with the exposed key against every system it could reach. | Access denied everywhere; rotation record signed by the infrastructure owner. | Any system still accepts it. |
+2355: Credential classified and, if genuine, revoked and rotated with a signed record. Baseline SHA published. gateway_v2/ exists, empty, with all five structural gates demonstrably failing on deliberately bad input and passing on
+2483: v1's proxy_chat mutates body in 28 places and writes a shared stage_metrics dict in 20, across 5,027 lines and 339 branches. effective_prompt is reassigned at five separate points, and scan_text is derived from it *after* th
+2507: Revert the type module; nothing depends on it yet. Stop if a stage cannot express its work as a returned value — that stage's design is wrong and it is redesigned, not exempted.
+2531: | LGW05-2 | Make the plan store unreachable for a known tenant. | PLAN_UNAVAILABLE; signed not-ready behaviour; never another tenant's or the platform posture. | Any inherited configuration. |
+2563: Kill-switch: age-bounded RAM snapshot with an explicit staleness ceiling. Past the ceiling, it is UNAVAILABLE and the signed posture applies. Kill-switch remains fail-closed and that is a platform-integrity property a tenant
+2586: Agent-executable. The posture table is signed by a human before implementation; the agent implements it, it does not choose it.
+2610: | LGW07-3 | Org action ALLOW, detector recommends BLOCK. | Resolves per signed rule semantics, not a severity max. Result matches the ledger entry. | Reproduces P1. |
+2695: Decode budget exhausted → explicit reject, never silent truncation. Pattern is a superset prefilter → verified by the precise matcher before a finding is emitted. Fix reduces recall on a real family → ledger records th
+2733: Window count varies with tokenizer version → tokenizer hash is pinned and recorded. FPR ceiling forces a threshold that collapses recall → the trade is published and signed, never silently resolved in favour of the laten
+2796: Never splice a fallback into a stream that has already emitted content. Before the first byte a signed retry may run; after it, the only truthful outcomes are clean termination or a declared error frame.
+2804: | LGW12-4 | Provider fails before first content. | Only the signed safe retry runs. | Unsafe retry. |
+2872: Record the reconciliation residual wall − Σstages − provider signed. Export it as a histogram and fail CI at a non-zero p50. A clamp to zero is prohibited; it is what hid this class of error in v1.
+2883: | LGW14-4 | Force a reconciliation mismatch. | Signed residual recorded; CI fails. | Clamped to zero. |
+2892: Clock starts pre-identity. Provider time measured. Signed residual with a CI gate. Four §1.2 metrics separately measured. One record per phase. Bounded audit with counted loss. No synchronous logging on the request path.
+3100: Measure one unit under the signed full-security profile with unique prompts: p50 and p99 of T_fw_addon, T_release_lag, T_finalize; qualified RPS; CPU ms per request from cgroup accounting, not docker stats; RPS per allocated
+3198: Timed runbook execution ×2 · rollback timing · in-flight captures · contention report · automatic-detection run · signed go/no-go checklist.
+3264: | LGW24-4 | Independent reviewer reproduces the headline numbers from the pack. | Reproduced within tolerance from the documented commands. | Not reproducible. |
+3272: v1 unreachable and deleted. External AI removed in the correct order and proven by egress denial. Dead code gone. Evidence pack reproducible by a third party. Capacity statement published with all caveats.
+3278: Agent-executable except credential revocation. The agent must not remove a credential before its code path is gone, even when the code appears unused.
+3286: | SB04 | Org precedence | Org ALLOW against a detector BLOCK recommendation. | Signed rule semantics, matching the ledger entry. Falsifies P1/P2. |
+3320: | Credentials | The GW00 exposure resolved and the rotation record signed. |

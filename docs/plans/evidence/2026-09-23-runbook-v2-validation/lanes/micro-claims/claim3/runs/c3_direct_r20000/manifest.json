@@ -1,0 +1,125 @@
+{
+ "config": {
+  "targets": [
+   "http://10.160.0.30:8300"
+  ],
+  "path": "/v1/chat/completions",
+  "corpus": "/home/rv/corpus_4k.jsonl",
+  "corpus_sha256": "eafeb5c8fc7b6fe8c97d2fbc09dec5c776f89f7b65e0acf47813d4f83a99e3bf",
+  "rate": 20000,
+  "duration_s": 300,
+  "warmup_s": 30,
+  "ramp_s": 5,
+  "arrival": "constant",
+  "seed": 1,
+  "sse_frac": 0,
+  "include_usage": true,
+  "lg_index": 0,
+  "lg_count": 1,
+  "run_tag": 182,
+  "run_id": "c3_direct_r20000",
+  "out_dir": "/home/rv/runs/c3_direct_r20000",
+  "sample_mod": 1000000,
+  "req_timeout_s": 120,
+  "drain_timeout_s": 120,
+  "drop_threshold_ns": 5000000,
+  "max_inflight": 0,
+  "max_requests": 0,
+  "heartbeat": "100us",
+  "start_at_unix_ms": 1790156779361,
+  "model_override": "",
+  "synth_headers": true,
+  "extra_header_names": [
+   "X-Forwarded-Proto"
+  ],
+  "gc_percent": 400,
+  "mem_limit_bytes": 0,
+  "dial_timeout_s": 10,
+  "auth_set": false,
+  "label": "c3_direct_r20000"
+ },
+ "counts": {
+  "conn_opens": 160,
+  "drops": 98,
+  "errors": 0,
+  "errors_by_class": {},
+  "max_inflight": 282,
+  "ok_done": 6650000,
+  "record_queue_blocked": 0,
+  "recorded": 6650000,
+  "scheduled": 6650000,
+  "sent": 6650000
+ },
+ "cpu_measure_phase": {
+  "busy_max": 15.094339622641506,
+  "busy_mean": 9.785053783244027,
+  "proc_max": 8.937462417970533,
+  "samples": 300
+ },
+ "epoch_offset_s": 4.380196306,
+ "host": {
+  "hostname": "rv-micro-lg-2.asia-south1-c.c.ai-mesh-firewall.internal",
+  "num_cpu": 16,
+  "gomaxprocs": 16,
+  "go_version": "go1.27.1",
+  "harness_build_sha": "df3209a2f020",
+  "kernel": "Linux version 7.0.0-1011-gcp (buildd@lcy02-amd64-099) (x86_64-linux-gnu-gcc-13 (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0, GNU ld (GNU Binutils for Ubuntu) 2.42) #11~24.04.1-Ubuntu SMP PREEMPT Tue Aug 11 20:14:48 UTC 2026",
+  "mem_total_kb": 61706780,
+  "lscpu": {
+   "CPU(s)": "16",
+   "Core(s) per socket": "8",
+   "Flags": "aes avx2 avx512f sha_ni amx_tile",
+   "Hypervisor vendor": "KVM",
+   "Model name": "INTEL(R) XEON(R) PLATINUM 8581C CPU @ 2.30GHz",
+   "NUMA node(s)": "1",
+   "Socket(s)": "1",
+   "Thread(s) per core": "2"
+  },
+  "gce": {
+   "image": "projects/ubuntu-os-cloud/global/images/ubuntu-2404-noble-amd64-v20260918",
+   "machine-type": "c4-standard-16",
+   "name": "rv-micro-lg-2",
+   "zone": "asia-south1-c"
+  },
+  "sysctl": {
+   "fs/file-max": "9223372036854775807",
+   "net/core/netdev_max_backlog": "1000",
+   "net/core/somaxconn": "65535",
+   "net/ipv4/ip_local_port_range": "1024\t65000",
+   "net/ipv4/tcp_max_syn_backlog": "4096",
+   "net/ipv4/tcp_tw_reuse": "1"
+  },
+  "nofile_limit": "1048576/1048576",
+  "start_utc": "2026-09-23T09:46:14.981780135Z"
+ },
+ "interrupted": false,
+ "lateness_us_all_phases": {
+  "max": 10233,
+  "p50": 23,
+  "p99": 113,
+  "p999": 160
+ },
+ "runtime": {
+  "/gc/cycles/total:gc-cycles": 898,
+  "/gc/heap/goal:bytes": 234862040,
+  "/gc/pauses:seconds": {
+   "count": 1796,
+   "max_ms": 0.16384,
+   "p50_ms": 0.057344,
+   "p9999_ms": 0.16384,
+   "p999_ms": 0.13107200000000002,
+   "p99_ms": 0.114688
+  },
+  "/sched/goroutines:goroutines": 167,
+  "/sched/latencies:seconds": {
+   "count": 10168402,
+   "max_ms": 5.24288,
+   "p50_ms": 0.000448,
+   "p9999_ms": 0.08192,
+   "p999_ms": 0.028672,
+   "p99_ms": 0.014336
+  }
+ },
+ "schedule_end_s": 334.999953943,
+ "start_wall_utc": "2026-09-23T09:46:19.361583933Z"
+}

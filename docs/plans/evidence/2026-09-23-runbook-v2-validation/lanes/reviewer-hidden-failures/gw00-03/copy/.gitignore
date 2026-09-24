@@ -1,0 +1,79 @@
+
+__pycache__/
+*.pyc
+.venv/
+.venv312/
+
+# Local AI-tool / agent working dirs (runtime state, not source)
+.claude/
+.claude-flow/
+.cursor/
+.swarm/
+.skill-workspace/
+
+node_modules/
+dist/
+*.egg-info/
+.pytest_cache/
+gateway/tests/golden/.live_session.json
+.coverage
+postgres_data/
+*.log
+.DS_Store
+
+# Verification run artifacts (may contain bearer tokens, payloads, screenshots)
+runs/verification/
+
+# EC2 static UI (synced from frontend/dist — not committed)
+deploy/static/
+
+# Terraform cache
+**/.terraform/*
+
+# State files
+*.tfstate
+*.tfstate.*
+
+# Crash logs
+crash.log
+
+# Keep dependency lock file
+!.terraform.lock.hcl
+
+# Personal scratch file at repo root — must never be committed (file stays local)
+/temp.py.env
+
+# Local env with secrets (never commit)
+.env
+.env.bak
+.env*
+!.env.example
+# Chat-stress session: runtime secrets must never be committed. The pre-commit
+# guard scripts/ralph/precommit-secret-scan.sh is the active enforcement.
+*.key
+*.secret
+.playwright-mcp/
+/tmp/
+.skill-workspace/scripts/ralph/mcp_sandbox/.pw-profile/
+scripts/ralph/mcp_sandbox/runs/
+scripts/ralph/.mcp_scale_manifest.json
+
+gateway/tests/golden/.live_session.json
+
+# Local QA secrets (never commit)
+docs/qa/*.local.md
+
+# Secrets / local machine artifacts (never commit)
+*.pem
+ai-mesh-key.pem
+# GW00 — extensionless OpenSSH/PEM filenames. LGW00-1 closed: git rm'd the
+# tracked private key; keep this pattern so it cannot be re-added.
+/ai-mesh-firewall
+/id_rsa
+/id_dsa
+/id_ecdsa
+/id_ed25519
+/id_ecdsa_sk
+/id_ed25519_sk
+/aws/
+awscliv2.zip

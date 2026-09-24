@@ -1,0 +1,64 @@
+13:27:25 recreate gateway, full profile (fresh workers after the overload runs)
+gateway=healthy GATEWAY_OUTPUT_GUARD_ENABLED=true
+      1 2026-09-23 13:27:48,354 [INFO] gateway: Output guard initialized
+      1 2026-09-23 13:27:48,581 [INFO] gateway: Output guard initialized
+      1 2026-09-23 13:27:48,724 [INFO] gateway: Output guard initialized
+      1 2026-09-23 13:27:48,829 [INFO] gateway: Output guard initialized
+      1 2026-09-23 13:27:48,893 [INFO] gateway: Output guard initialized
+      1 2026-09-23 13:27:49,019 [INFO] gateway: Output guard initialized
+      1 2026-09-23 13:27:49,088 [INFO] gateway: Output guard initialized
+      1 2026-09-23 13:27:49,160 [INFO] gateway: Output guard initialized
+      1 2026-09-23 13:27:49,505 [INFO] gateway: Output guard initialized
+      1 2026-09-23 13:27:49,518 [INFO] gateway: Output guard initialized
+      1 2026-09-23 13:27:49,590 [INFO] gateway: Output guard initialized
+      1 2026-09-23 13:27:50,136 [INFO] gateway: Output guard initialized
+      1 2026-09-23 13:27:50,226 [INFO] gateway: Output guard initialized
+      1 2026-09-23 13:27:50,291 [INFO] gateway: Output guard initialized
+      1 2026-09-23 13:27:50,297 [INFO] gateway: Output guard initialized
+      1 2026-09-23 13:27:50,386 [INFO] gateway: Output guard initialized
+      1 2026-09-23 13:27:50,419 [INFO] gateway: Output guard initialized
+      1 [gateway-entrypoint] WEB_CONCURRENCY=18 (source=detector)
+13:27:50 START warmup-json rate=20 extra=''
+13:29:42 DONE warmup-json
+| warmup-json | 20.00 | 20.00 | 0 (0.0000) | 0 | 806.9 | 1798.5 | 3633.8 | 5801.6 | 4059.5 | 172.9 | 472.7 | 3633.8 | 553.4 | 596.5 | 11.07 | 50.9 | 4272 | 30.1 / 74.9 | 1.0000 |
+13:29:42 START JSON-r10 rate=10 extra='-sse-frac 0.0'
+13:34:01 DONE JSON-r10
+| JSON-r10 | 10.00 | 10.00 | 0 (0.0000) | 0 | 79.8 | 130.9 | 218.7 | 288.1 | - | 79.8 | 218.7 | 218.7 | 87.1 | 144.4 | 0.87 | 6.4 | 4297 | 38.9 / 177.0 | 1.0000 |
+13:34:01 recreate gateway with output guard OFF
+gateway=healthy GATEWAY_OUTPUT_GUARD_ENABLED=false
+      1 [gateway-entrypoint] WEB_CONCURRENCY=18 (source=detector)
+13:34:32 START warmup-go rate=20 extra=''
+13:36:23 DONE warmup-go
+| warmup-go | 20.00 | 20.00 | 0 (0.0000) | 0 | 794.1 | 2032.3 | 6706.4 | 8677.7 | 7348.6 | 162.4 | 913.7 | 6706.4 | 544.5 | 593.4 | 10.89 | 50.3 | 4287 | 34.9 / 730.6 | 1.0000 |
+13:36:23 START GO-r10 rate=10 extra=''
+13:43:40 DONE GO-r10
+| GO-r10 | 10.00 | 10.00 | 0 (0.0000) | 0 | 744.3 | 1081.3 | 1605.4 | 2182.7 | 1719.6 | 119.9 | 330.1 | 1543.1 | 460.2 | 529.9 | 4.60 | 22.7 | 4316 | 20.1 / 47.8 | 1.0000 |
+13:43:40 recreate gateway with output guard ON (restore full profile)
+gateway=healthy GATEWAY_OUTPUT_GUARD_ENABLED=true
+      1 2026-09-23 13:44:03,941 [INFO] gateway: Output guard initialized
+      1 2026-09-23 13:44:03,963 [INFO] gateway: Output guard initialized
+      1 2026-09-23 13:44:03,982 [INFO] gateway: Output guard initialized
+      1 2026-09-23 13:44:04,244 [INFO] gateway: Output guard initialized
+      1 2026-09-23 13:44:04,974 [INFO] gateway: Output guard initialized
+      1 2026-09-23 13:44:05,188 [INFO] gateway: Output guard initialized
+      1 2026-09-23 13:44:05,296 [INFO] gateway: Output guard initialized
+      1 2026-09-23 13:44:05,641 [INFO] gateway: Output guard initialized
+      1 2026-09-23 13:44:05,825 [INFO] gateway: Output guard initialized
+      1 2026-09-23 13:44:06,106 [INFO] gateway: Output guard initialized
+      1 2026-09-23 13:44:06,133 [INFO] gateway: Output guard initialized
+      1 2026-09-23 13:44:06,152 [INFO] gateway: Output guard initialized
+      1 2026-09-23 13:44:06,295 [INFO] gateway: Output guard initialized
+      1 2026-09-23 13:44:06,592 [INFO] gateway: Output guard initialized
+      2 2026-09-23 13:44:06,612 [INFO] gateway: Output guard initialized
+      1 2026-09-23 13:44:06,629 [INFO] gateway: Output guard initialized
+      1 2026-09-23 13:44:06,888 [INFO] gateway: Output guard initialized
+      1 [gateway-entrypoint] WEB_CONCURRENCY=18 (source=detector)
+[fw] org=v1bench firewall_enabled=False
+13:44:18 START warmup-fwoff rate=20 extra=''
+13:46:06 DONE warmup-fwoff
+| warmup-fwoff | 20.00 | 13.98 | 361 (0.3008) | 0 | 204.0 | 873.9 | 2004.0 | 2508.3 | 2004.0 | - | - | 2004.0 | 333.9 | 365.1 | 6.68 | 31.2 | 4051 | 21.5 / 53.1 | 0.6992 |
+13:46:06 START FWOFF-r10 rate=10 extra=''
+13:53:16 DONE FWOFF-r10
+| FWOFF-r10 | 10.00 | 7.00 | 900 (0.3000) | 0 | 80.6 | 281.6 | 692.5 | 983.5 | 692.5 | - | - | 692.5 | 327.2 | 396.1 | 3.27 | 17.0 | 4094 | 17.1 / 231.3 | 0.7000 |
+[fw] org=v1bench firewall_enabled=True
+13:53:18 ALL DONE (profile restored: output guard on, firewall on)

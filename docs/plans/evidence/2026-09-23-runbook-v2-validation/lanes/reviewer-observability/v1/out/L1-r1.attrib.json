@@ -1,0 +1,12 @@
+{
+ "run": "L1-r1",
+ "events": 375,
+ "by_kind": {
+  "consistent|stream_complete": 262,
+  "consistent|request": 113
+ },
+ "client_corr_with_multiple_events": 0,
+ "extra_events_same_corr": 0,
+ "nonces_with_multiple_events": 0,
+ "examples": []
+}

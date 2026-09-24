@@ -1,0 +1,3 @@
+rv-split-guard-6 tree == rvproto-frozen-1
+{"host": "rv-split-guard-6", "index": 0, "pid": 1661, "tokens_per_s": 246359.95735787667, "model_hash": "2bf20e0f71e3a41e9e8cc4e602e08c142855bcce0cc73e0b65000d816d70877c", "provider": "TensorrtExecutionProvider", "endpoints": ["10.160.0.61:7070"], "queue_cap_tokens": 246359}
+GPU 0: NVIDIA L4 (UUID: GPU-7e465a47-5231-208b-eb71-c865e2407c88)

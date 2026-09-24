@@ -1,0 +1,80 @@
+sss...........FF....FF.................FF...F....F......F......F.F...... [ 80%]
+.Fx....x......F.F                                                        [100%]
+=============================== warnings summary ===============================
+../gateway/ai_mesh_gateway/main.py:6350
+  /home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/main.py:6350: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("startup")
+
+../gateway/.venv/lib/python3.14/site-packages/fastapi/applications.py:4598
+../gateway/.venv/lib/python3.14/site-packages/fastapi/applications.py:4598
+  /home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/fastapi/applications.py:4598: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    return self.router.on_event(event_type)  # ty: ignore[deprecated]
+
+../gateway/ai_mesh_gateway/main.py:6881
+  /home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/main.py:6881: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("shutdown")
+
+tests/openai_conformance/test_openai_sdk_compat.py::test_streaming_chunks_trace_frame_and_done
+  /home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/google/genai/types.py:42: DeprecationWarning: '_UnionGenericAlias' is deprecated and slated for removal in Python 3.17
+    VersionedUnionType = Union[builtin_types.UnionType, _UnionGenericAlias]
+
+tests/openai_conformance/test_openai_sdk_compat_live_uvicorn.py::test_live_chat_non_stream
+  /home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/websockets/legacy/__init__.py:6: DeprecationWarning: websockets.legacy is deprecated; see https://websockets.readthedocs.io/en/stable/howto/upgrade.html for upgrade instructions
+    warnings.warn(  # deprecated in 14.0 - 2024-11-09
+
+tests/openai_conformance/test_openai_sdk_compat_live_uvicorn.py::test_live_chat_non_stream
+  /home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/uvicorn/protocols/websockets/websockets_impl.py:17: DeprecationWarning: websockets.server.WebSocketServerProtocol is deprecated
+    from websockets.server import WebSocketServerProtocol
+
+tests/openai_conformance/test_openai_sdk_compat_live_uvicorn.py::test_live_chat_non_stream
+tests/openai_conformance/test_openai_sdk_compat_live_uvicorn.py::test_live_chat_stream_chunks_and_done
+tests/openai_conformance/test_openai_sdk_compat_live_uvicorn.py::test_live_responses_stream_typed_events
+tests/openai_conformance/test_openai_sdk_compat_live_uvicorn.py::test_live_block_raises_permission_denied
+tests/openai_conformance/test_openai_sdk_compat_live_uvicorn.py::test_live_request_id_header_present_and_matches_body
+tests/openai_conformance/test_openai_sdk_compat_live_uvicorn.py::test_live_blocked_stream_is_json_not_sse
+tests/openai_conformance/test_openai_sdk_compat_live_uvicorn.py::test_live_client_disconnect_midstream_then_server_responsive
+tests/openai_conformance/test_openai_sdk_compat_live_uvicorn.py::test_live_client_disconnect_midstream_then_server_responsive
+tests/openai_conformance/test_openai_sdk_compat_live_uvicorn.py::test_live_zero_token_scan_only_no_hang
+  /home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/scanner.py:1178: DeprecationWarning: 'asyncio.iscoroutinefunction' is deprecated and slated for removal in Python 3.16; use inspect.iscoroutinefunction() instead
+    return await loop.run_in_executor(
+
+tests/openai_conformance/test_openai_sdk_compat_live_uvicorn.py::test_live_chat_non_stream
+tests/openai_conformance/test_openai_sdk_compat_live_uvicorn.py::test_live_block_raises_permission_denied
+tests/openai_conformance/test_openai_sdk_compat_live_uvicorn.py::test_live_request_id_header_present_and_matches_body
+tests/openai_conformance/test_openai_sdk_compat_live_uvicorn.py::test_live_client_disconnect_midstream_then_server_responsive
+  /home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/scanner.py:1191: DeprecationWarning: 'asyncio.iscoroutinefunction' is deprecated and slated for removal in Python 3.16; use inspect.iscoroutinefunction() instead
+    return await loop.run_in_executor(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/openai_conformance/test_openai_sdk_compat.py::test_blocked_request_raises_api_status_error_with_zeroshield_body
+FAILED tests/openai_conformance/test_openai_sdk_compat.py::test_blocked_streaming_request_raises_before_sse
+FAILED tests/openai_conformance/test_openai_sdk_compat.py::test_responses_blocked_non_stream_raises_bad_request_error
+FAILED tests/openai_conformance/test_openai_sdk_compat.py::test_responses_blocked_stream_raises_before_sse
+FAILED tests/openai_conformance/test_openai_sdk_compat.py::test_error_fields_populated_on_block_D2
+FAILED tests/openai_conformance/test_openai_sdk_compat.py::test_error_request_id_present_on_block_D3
+FAILED tests/openai_conformance/test_openai_sdk_compat.py::test_error_param_null_on_content_block_A1
+FAILED tests/openai_conformance/test_openai_sdk_compat.py::test_legacy_completions_block_routes_through_firewall_D4
+FAILED tests/openai_conformance/test_openai_sdk_compat.py::test_c4_moderations_flags_injection
+FAILED tests/openai_conformance/test_openai_sdk_compat_live_uvicorn.py::test_live_block_raises_permission_denied
+FAILED tests/openai_conformance/test_openai_sdk_compat_live_uvicorn.py::test_live_blocked_stream_is_json_not_sse
+FAILED tests/openai_conformance/test_openai_sdk_compat_phase2.py::test_block_403_header_request_id_matches_body
+FAILED tests/openai_conformance/test_openai_sdk_compat_phase5_correlation.py::test_every_block_emits_enforcement_signal
+FAILED tests/openai_conformance/test_openai_sdk_compat_phase6_guards.py::test_stream_upstream_error_emits_error_event_not_clean_empty
+14 failed, 70 passed, 3 skipped, 2 xfailed, 20 warnings in 6.13s
+pytest_exit=1

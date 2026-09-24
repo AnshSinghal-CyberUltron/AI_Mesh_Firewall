@@ -1,0 +1,11 @@
+{"t": 1790164652.436, "step": "0 key valid, epoch=1, cache empty; request arrives (cache miss -> HGET)"}
+{"t": 1790164652.441, "step": "1 key REVOKED in the store (HDEL + INCR auth_epoch in one MULTI)", "store_has_key": false, "store_epoch": 2}
+{"t": 1790164652.441, "step": "2 background refresher saw epoch 2 -> cache cleared", "identity_epoch": 2, "cache_size": 0}
+{"t": 1790164652.453, "step": "3 the in-flight request completes", "verdict": "ADMITTED (Grant)", "cache_now_holds_revoked_key": true}
+{"t": 1790164653.454, "step": "4 +1s later: a NEW request with the revoked key", "verdict": "ADMITTED (Grant)", "store_has_key": false, "identity_epoch": 2}
+{"t": 1790164654.456, "step": "4 +2s later: a NEW request with the revoked key", "verdict": "ADMITTED (Grant)", "store_has_key": false, "identity_epoch": 2}
+{"t": 1790164655.457, "step": "4 +3s later: a NEW request with the revoked key", "verdict": "ADMITTED (Grant)", "store_has_key": false, "identity_epoch": 2}
+{"t": 1790164656.458, "step": "4 +4s later: a NEW request with the revoked key", "verdict": "ADMITTED (Grant)", "store_has_key": false, "identity_epoch": 2}
+{"t": 1790164657.459, "step": "4 +5s later: a NEW request with the revoked key", "verdict": "ADMITTED (Grant)", "store_has_key": false, "identity_epoch": 2}
+{"t": 1790164658.46, "step": "4 +6s later: a NEW request with the revoked key", "verdict": "ADMITTED (Grant)", "store_has_key": false, "identity_epoch": 2}
+{"proxy": {"t": 1790164658.4602242, "mode": "pass", "delay_ms": 0.0, "backend": 26379, "live_conns": 1, "blackholed_conns": 0, "selective": ["HGET", "rv:keys", 15.0], "accepted": 3, "selective_delays": 2, "blackholed": 0, "reset": 0}}

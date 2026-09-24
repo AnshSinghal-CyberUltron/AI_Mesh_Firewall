@@ -1,0 +1,14 @@
+== AMF_CONFORMANCE_APP=v2
+SKIPPED [1] tests/openai_conformance/test_openai_sdk_compat.py:1160: v2 has no OpenAI surface yet (GW15)
+SKIPPED [1] tests/openai_conformance/test_openai_sdk_compat.py:1169: v2 has no OpenAI surface yet (GW15)
+5 failed, 27 passed, 55 skipped, 2 xfailed, 20 warnings in 5.20s
+== AMF_CONFORMANCE_BASE_URL=http://127.0.0.1:9
+SKIPPED [1] tests/openai_conformance/test_openai_sdk_compat.py:1160: AMF_CONFORMANCE_BASE_URL set; ASGI stub suite is a different job
+SKIPPED [1] tests/openai_conformance/test_openai_sdk_compat.py:1169: AMF_CONFORMANCE_BASE_URL set; ASGI stub suite is a different job
+8 failed, 27 passed, 52 skipped, 2 xfailed, 20 warnings in 5.16s
+tests/openai_conformance/test_openai_sdk_compat_phase6_guards.py:4
+tests/openai_conformance/test_openai_sdk_compat_phase2.py:6
+tests/openai_conformance/test_openai_sdk_compat_live_uvicorn.py:4
+tests/openai_conformance/test_openai_sdk_compat_phase5_correlation.py:4
+tests/openai_conformance/test_openai_sdk_compat_phase2_adversarial.py:5
+tests/openai_conformance/test_openai_sdk_compat.py:7

@@ -1,0 +1,986 @@
+[
+ {
+  "scenario": "logprobs-secret",
+  "stream": true,
+  "rid": "p03-logprobs-secret-s-78c4d150",
+  "status": 200,
+  "elapsed_s": 0.099,
+  "x-rv-disposition": "ALLOW",
+  "x-rv-output": null,
+  "x-rv-stages": "canon:E,det:E,sem:E,resolve:E,dispatch:E,out:E,audit:E",
+  "bytes": 2800,
+  "canaries_in_raw_bytes": [
+   "aws",
+   "email"
+  ],
+  "canaries_after_zwsp_strip": [
+   "aws",
+   "email"
+  ],
+  "done": true,
+  "n_frames": 9,
+  "error_frames": [],
+  "content": {
+   "0": " key [REDACTED:secret.aws] mail [REDACTED:pii.email] end"
+  },
+  "reasoning": "",
+  "refusal": "",
+  "fn_args": "",
+  "tool_args": {},
+  "logprob_tokens": [
+   " key",
+   " AKIAQYLPMN5HHHFPZAM2",
+   " mail",
+   " alice.canary@example.com",
+   " end"
+  ],
+  "json_valid:fn_args": "INVALID: Expecting value: line 1 column 1 (char 0)"
+ },
+ {
+  "scenario": "logprobs-secret",
+  "stream": false,
+  "rid": "p03-logprobs-secret-j-6b160925",
+  "status": 200,
+  "elapsed_s": 0.064,
+  "x-rv-disposition": "ALLOW",
+  "x-rv-output": "REDACT",
+  "x-rv-stages": "canon:E,det:E,sem:E,resolve:E,dispatch:E,out:E,audit:E",
+  "bytes": 1359,
+  "canaries_in_raw_bytes": [
+   "aws",
+   "email"
+  ],
+  "canaries_after_zwsp_strip": [
+   "aws",
+   "email"
+  ],
+  "json_body": {
+   "id": "chatcmpl-edge-e217a4c66c6f38f0",
+   "object": "chat.completion",
+   "created": 1700000000,
+   "model": "gpt-4o-mini",
+   "choices": [
+    {
+     "index": 0,
+     "message": {
+      "role": "assistant",
+      "content": " key [REDACTED:secret.aws] mail [REDACTED:pii.email] end"
+     },
+     "finish_reason": "stop",
+     "logprobs": {
+      "content": [
+       {
+        "token": " key",
+        "logprob": -0.01,
+        "bytes": [
+         32,
+         107,
+         101,
+         121
+        ],
+        "top_logprobs": [
+         {
+          "token": " key",
+          "logprob": -0.01,
+          "bytes": [
+           32,
+           107,
+           101,
+           121
+          ]
+         }
+        ]
+       },
+       {
+        "token": " AKIAQYLPMN5HHHFPZAM2",
+        "logprob": -0.01,
+        "bytes": [
+         32,
+         65,
+         75,
+         73,
+         65,
+         81,
+         89,
+         76,
+         80,
+         77,
+         78,
+         53,
+         72,
+         72,
+         72,
+         70,
+         80,
+         90,
+         65,
+         77,
+         50
+        ],
+        "top_logprobs": [
+         {
+          "token": " AKIAQYLPMN5HHHFPZAM2",
+          "logprob": -0.01,
+          "bytes": [
+           32,
+           65,
+           75,
+           73,
+           65,
+           81,
+           89,
+           76,
+           80,
+           77,
+           78,
+           53,
+           72,
+           72,
+           72,
+           70,
+           80,
+           90,
+           65,
+           77,
+           50
+          ]
+         }
+        ]
+       },
+       {
+        "token": " mail",
+        "logprob": -0.01,
+        "bytes": [
+         32,
+         109,
+         97,
+         105,
+         108
+        ],
+        "top_logprobs": [
+         {
+          "token": " mail",
+          "logprob": -0.01,
+          "bytes": [
+           32,
+           109,
+           97,
+           105,
+           108
+          ]
+         }
+        ]
+       },
+       {
+        "token": " alice.canary@example.com",
+        "logprob": -0.01,
+        "bytes": [
+         32,
+         97,
+         108,
+         105,
+         99,
+         101,
+         46,
+         99,
+         97,
+         110,
+         97,
+         114,
+         121,
+         64,
+         101,
+         120,
+         97,
+         109,
+         112,
+         108,
+         101,
+         46,
+         99,
+         111,
+         109
+        ],
+        "top_logprobs": [
+         {
+          "token": " alice.canary@example.com",
+          "logprob": -0.01,
+          "bytes": [
+           32,
+           97,
+           108,
+           105,
+           99,
+           101,
+           46,
+           99,
+           97,
+           110,
+           97,
+           114,
+           121,
+           64,
+           101,
+           120,
+           97,
+           109,
+           112,
+           108,
+           101,
+           46,
+           99,
+           111,
+           109
+          ]
+         }
+        ]
+       },
+       {
+        "token": " end",
+        "logprob": -0.01,
+        "bytes": [
+         32,
+         101,
+         110,
+         100
+        ],
+        "top_logprobs": [
+         {
+          "token": " end",
+          "logprob": -0.01,
+          "bytes": [
+           32,
+           101,
+           110,
+           100
+          ]
+         }
+        ]
+       }
+      ],
+      "refusal": null
+     }
+    }
+   ],
+   "usage": {
+    "prompt_tokens": 10,
+    "completion_tokens": 12,
+    "total_tokens": 22
+   }
+  }
+ },
+ {
+  "scenario": "refusal-secret",
+  "stream": true,
+  "rid": "p03-refusal-secret-s-61810955",
+  "status": 200,
+  "elapsed_s": 0.073,
+  "x-rv-disposition": "ALLOW",
+  "x-rv-output": null,
+  "x-rv-stages": "canon:E,det:E,sem:E,resolve:E,dispatch:E,out:E,audit:E",
+  "bytes": 1421,
+  "canaries_in_raw_bytes": [
+   "email"
+  ],
+  "canaries_after_zwsp_strip": [
+   "email"
+  ],
+  "done": true,
+  "n_frames": 8,
+  "error_frames": [],
+  "content": {
+   "0": ""
+  },
+  "reasoning": "",
+  "refusal": "I cannot use AKIAQYLPMN5HHHFPZAM2 or alice.canary@example.com",
+  "fn_args": "",
+  "tool_args": {},
+  "logprob_tokens": [],
+  "json_valid:fn_args": "INVALID: Expecting value: line 1 column 1 (char 0)"
+ },
+ {
+  "scenario": "refusal-secret",
+  "stream": false,
+  "rid": "p03-refusal-secret-j-61eef56f",
+  "status": 200,
+  "elapsed_s": 0.063,
+  "x-rv-disposition": "ALLOW",
+  "x-rv-output": "ALLOW",
+  "x-rv-stages": "canon:E,det:E,sem:E,resolve:E,dispatch:E,out:E,audit:E",
+  "bytes": 360,
+  "canaries_in_raw_bytes": [
+   "aws",
+   "email"
+  ],
+  "canaries_after_zwsp_strip": [
+   "aws",
+   "email"
+  ],
+  "json_body": {
+   "id": "chatcmpl-edge-3c9557323bbb1c32",
+   "object": "chat.completion",
+   "created": 1700000000,
+   "model": "gpt-4o-mini",
+   "choices": [
+    {
+     "index": 0,
+     "message": {
+      "role": "assistant",
+      "content": null,
+      "refusal": "I cannot use the key AKIAQYLPMN5HHHFPZAM2 or mail alice.canary@example.com."
+     },
+     "finish_reason": "stop"
+    }
+   ],
+   "usage": {
+    "prompt_tokens": 10,
+    "completion_tokens": 12,
+    "total_tokens": 22
+   }
+  }
+ },
+ {
+  "scenario": "reasoning-secret",
+  "stream": true,
+  "rid": "p03-reasoning-secret-s-d60d791a",
+  "status": 200,
+  "elapsed_s": 0.073,
+  "x-rv-disposition": "ALLOW",
+  "x-rv-output": null,
+  "x-rv-stages": "canon:E,det:E,sem:E,resolve:E,dispatch:E,out:E,audit:E",
+  "bytes": 1677,
+  "canaries_in_raw_bytes": [
+   "aws",
+   "email"
+  ],
+  "canaries_after_zwsp_strip": [
+   "aws",
+   "email"
+  ],
+  "done": true,
+  "n_frames": 9,
+  "error_frames": [],
+  "content": {
+   "0": "Done."
+  },
+  "reasoning": "The user key is AKIAQYLPMN5HHHFPZAM2 and mail alice.canary@example.com.",
+  "refusal": "",
+  "fn_args": "",
+  "tool_args": {},
+  "logprob_tokens": [],
+  "json_valid:fn_args": "INVALID: Expecting value: line 1 column 1 (char 0)"
+ },
+ {
+  "scenario": "reasoning-secret",
+  "stream": false,
+  "rid": "p03-reasoning-secret-j-0da5ce50",
+  "status": 200,
+  "elapsed_s": 0.061,
+  "x-rv-disposition": "ALLOW",
+  "x-rv-output": "ALLOW",
+  "x-rv-stages": "canon:E,det:E,sem:E,resolve:E,dispatch:E,out:E,audit:E",
+  "bytes": 369,
+  "canaries_in_raw_bytes": [
+   "aws",
+   "email"
+  ],
+  "canaries_after_zwsp_strip": [
+   "aws",
+   "email"
+  ],
+  "json_body": {
+   "id": "chatcmpl-edge-40e117d98e09f676",
+   "object": "chat.completion",
+   "created": 1700000000,
+   "model": "gpt-4o-mini",
+   "choices": [
+    {
+     "index": 0,
+     "message": {
+      "role": "assistant",
+      "content": "Done.",
+      "reasoning_content": "The user key is AKIAQYLPMN5HHHFPZAM2 and mail alice.canary@example.com."
+     },
+     "finish_reason": "stop"
+    }
+   ],
+   "usage": {
+    "prompt_tokens": 10,
+    "completion_tokens": 12,
+    "total_tokens": 22
+   }
+  }
+ },
+ {
+  "scenario": "fncall-secret",
+  "stream": true,
+  "rid": "p03-fncall-secret-s-7593dcb9",
+  "status": 200,
+  "elapsed_s": 0.083,
+  "x-rv-disposition": "ALLOW",
+  "x-rv-output": null,
+  "x-rv-stages": "canon:E,det:E,sem:E,resolve:E,dispatch:E,out:E,audit:E",
+  "bytes": 2822,
+  "canaries_in_raw_bytes": [],
+  "canaries_after_zwsp_strip": [],
+  "done": true,
+  "n_frames": 14,
+  "error_frames": [],
+  "content": {
+   "0": ""
+  },
+  "reasoning": "",
+  "refusal": "",
+  "fn_args": "{\"to\": \"alice.canary@example.com\", \"key\": \"AKIAQYLPMN5HHHFPZAM2\"}",
+  "tool_args": {},
+  "logprob_tokens": [],
+  "json_valid:fn_args": true
+ },
+ {
+  "scenario": "fncall-secret",
+  "stream": false,
+  "rid": "p03-fncall-secret-j-0973cf29",
+  "status": 200,
+  "elapsed_s": 0.06,
+  "x-rv-disposition": "ALLOW",
+  "x-rv-output": "ALLOW",
+  "x-rv-stages": "canon:E,det:E,sem:E,resolve:E,dispatch:E,out:E,audit:E",
+  "bytes": 401,
+  "canaries_in_raw_bytes": [
+   "aws",
+   "email"
+  ],
+  "canaries_after_zwsp_strip": [
+   "aws",
+   "email"
+  ],
+  "json_body": {
+   "id": "chatcmpl-edge-08bdf3ece311f607",
+   "object": "chat.completion",
+   "created": 1700000000,
+   "model": "gpt-4o-mini",
+   "choices": [
+    {
+     "index": 0,
+     "message": {
+      "role": "assistant",
+      "content": null,
+      "function_call": {
+       "name": "send",
+       "arguments": "{\"to\": \"alice.canary@example.com\", \"key\": \"AKIAQYLPMN5HHHFPZAM2\"}"
+      }
+     },
+     "finish_reason": "function_call"
+    }
+   ],
+   "usage": {
+    "prompt_tokens": 10,
+    "completion_tokens": 12,
+    "total_tokens": 22
+   }
+  }
+ },
+ {
+  "scenario": "tool-secret-split",
+  "stream": true,
+  "rid": "p03-tool-secret-split-s-cada471e",
+  "status": 200,
+  "elapsed_s": 0.069,
+  "x-rv-disposition": "ALLOW",
+  "x-rv-output": null,
+  "x-rv-stages": "canon:E,det:E,sem:E,resolve:E,dispatch:E,out:E,audit:E",
+  "bytes": 1707,
+  "canaries_in_raw_bytes": [],
+  "canaries_after_zwsp_strip": [],
+  "done": true,
+  "n_frames": 8,
+  "error_frames": [],
+  "content": {
+   "0": ""
+  },
+  "reasoning": "",
+  "refusal": "",
+  "fn_args": "",
+  "tool_args": {
+   "0:0": "{\"to\": \"[REDACTED:pii.email]\", \"key\": \"[REDACTED:secret.aws]\", \"n\": 1}"
+  },
+  "logprob_tokens": [],
+  "json_valid:fn_args": "INVALID: Expecting value: line 1 column 1 (char 0)",
+  "json_valid:tool_args[0:0]": true
+ },
+ {
+  "scenario": "tool-secret",
+  "stream": false,
+  "rid": "p03-tool-secret-j-1c06b827",
+  "status": 200,
+  "elapsed_s": 0.06,
+  "x-rv-disposition": "ALLOW",
+  "x-rv-output": "REDACT",
+  "x-rv-stages": "canon:E,det:E,sem:E,resolve:E,dispatch:E,out:E,audit:E",
+  "bytes": 454,
+  "canaries_in_raw_bytes": [],
+  "canaries_after_zwsp_strip": [],
+  "json_body": {
+   "id": "chatcmpl-edge-c04b3af12d9cb9c4",
+   "object": "chat.completion",
+   "created": 1700000000,
+   "model": "gpt-4o-mini",
+   "choices": [
+    {
+     "index": 0,
+     "message": {
+      "role": "assistant",
+      "content": null,
+      "tool_calls": [
+       {
+        "id": "call_1",
+        "type": "function",
+        "function": {
+         "name": "send_mail",
+         "arguments": "{\"to\": \"[REDACTED:pii.email]\", \"key\": \"[REDACTED:secret.aws]\", \"n\": 1}"
+        }
+       }
+      ]
+     },
+     "finish_reason": "tool_calls"
+    }
+   ],
+   "usage": {
+    "prompt_tokens": 10,
+    "completion_tokens": 12,
+    "total_tokens": 22
+   }
+  },
+  "json_valid:tool_args": true
+ },
+ {
+  "scenario": "n2-secret",
+  "stream": true,
+  "rid": "p03-n2-secret-s-14a627e3",
+  "status": 200,
+  "elapsed_s": 0.072,
+  "x-rv-disposition": "ALLOW",
+  "x-rv-output": null,
+  "x-rv-stages": "canon:E,det:E,sem:E,resolve:E,dispatch:E,out:E,audit:E",
+  "bytes": 2004,
+  "canaries_in_raw_bytes": [],
+  "canaries_after_zwsp_strip": [],
+  "done": true,
+  "n_frames": 11,
+  "error_frames": [],
+  "content": {
+   "0": "first [REDACTED:pii.email] end",
+   "1": "second [REDACTED:secret.aws] end"
+  },
+  "reasoning": "",
+  "refusal": "",
+  "fn_args": "",
+  "tool_args": {},
+  "logprob_tokens": [],
+  "json_valid:fn_args": "INVALID: Expecting value: line 1 column 1 (char 0)"
+ },
+ {
+  "scenario": "n2-secret",
+  "stream": false,
+  "rid": "p03-n2-secret-j-c35fc15d",
+  "status": 200,
+  "elapsed_s": 0.06,
+  "x-rv-disposition": "ALLOW",
+  "x-rv-output": "REDACT",
+  "x-rv-stages": "canon:E,det:E,sem:E,resolve:E,dispatch:E,out:E,audit:E",
+  "bytes": 411,
+  "canaries_in_raw_bytes": [],
+  "canaries_after_zwsp_strip": [],
+  "json_body": {
+   "id": "chatcmpl-edge-c20bc5fa1dbf0f13",
+   "object": "chat.completion",
+   "created": 1700000000,
+   "model": "gpt-4o-mini",
+   "choices": [
+    {
+     "index": 0,
+     "message": {
+      "role": "assistant",
+      "content": "first [REDACTED:pii.email] end"
+     },
+     "finish_reason": "stop"
+    },
+    {
+     "index": 1,
+     "message": {
+      "role": "assistant",
+      "content": "second [REDACTED:secret.aws] end"
+     },
+     "finish_reason": "stop"
+    }
+   ],
+   "usage": {
+    "prompt_tokens": 10,
+    "completion_tokens": 12,
+    "total_tokens": 22
+   }
+  }
+ },
+ {
+  "scenario": "json-numeric-pii",
+  "stream": true,
+  "rid": "p03-json-numeric-pii-s-4716018c",
+  "status": 200,
+  "elapsed_s": 0.097,
+  "x-rv-disposition": "ALLOW",
+  "x-rv-output": null,
+  "x-rv-stages": "canon:E,det:E,sem:E,resolve:E,dispatch:E,out:E,audit:E",
+  "bytes": 2605,
+  "canaries_in_raw_bytes": [],
+  "canaries_after_zwsp_strip": [],
+  "done": true,
+  "n_frames": 14,
+  "error_frames": [],
+  "content": {
+   "0": "{\"name\": \"Alice\", \"card\": [REDACTED:pii.card], \"phone\": [REDACTED:pii.phone], \"ok\": true}"
+  },
+  "reasoning": "",
+  "refusal": "",
+  "fn_args": "",
+  "tool_args": {},
+  "logprob_tokens": [],
+  "json_valid:fn_args": "INVALID: Expecting value: line 1 column 1 (char 0)",
+  "json_valid:content[0]": "INVALID: Expecting value: line 1 column 28 (char 27)"
+ },
+ {
+  "scenario": "json-numeric-pii",
+  "stream": false,
+  "rid": "p03-json-numeric-pii-j-fb1caa6f",
+  "status": 200,
+  "elapsed_s": 0.062,
+  "x-rv-disposition": "ALLOW",
+  "x-rv-output": "REDACT",
+  "x-rv-stages": "canon:E,det:E,sem:E,resolve:E,dispatch:E,out:E,audit:E",
+  "bytes": 369,
+  "canaries_in_raw_bytes": [],
+  "canaries_after_zwsp_strip": [],
+  "json_body": {
+   "id": "chatcmpl-edge-b34de51d84139611",
+   "object": "chat.completion",
+   "created": 1700000000,
+   "model": "gpt-4o-mini",
+   "choices": [
+    {
+     "index": 0,
+     "message": {
+      "role": "assistant",
+      "content": "{\"name\": \"Alice\", \"card\": [REDACTED:pii.card], \"phone\": [REDACTED:pii.phone], \"ok\": true}"
+     },
+     "finish_reason": "stop"
+    }
+   ],
+   "usage": {
+    "prompt_tokens": 10,
+    "completion_tokens": 12,
+    "total_tokens": 22
+   }
+  },
+  "json_valid:choices[0].content": "INVALID: Expecting value: line 1 column 28 (char 27)"
+ },
+ {
+  "scenario": "zw-secret",
+  "stream": true,
+  "rid": "p03-zw-secret-s-6b578f44",
+  "status": 200,
+  "elapsed_s": 0.107,
+  "x-rv-disposition": "ALLOW",
+  "x-rv-output": null,
+  "x-rv-stages": "canon:E,det:E,sem:E,resolve:E,dispatch:E,out:E,audit:E",
+  "bytes": 3582,
+  "canaries_in_raw_bytes": [],
+  "canaries_after_zwsp_strip": [],
+  "done": true,
+  "n_frames": 19,
+  "error_frames": [],
+  "content": {
+   "0": "key A​K​I​A​Q​Y​L​P​M​N​5​H​H​H​F​P​Z​A​M​2 mail alice.canary​@​example.com end"
+  },
+  "reasoning": "",
+  "refusal": "",
+  "fn_args": "",
+  "tool_args": {},
+  "logprob_tokens": [],
+  "json_valid:fn_args": "INVALID: Expecting value: line 1 column 1 (char 0)"
+ },
+ {
+  "scenario": "zw-secret",
+  "stream": false,
+  "rid": "p03-zw-secret-j-bb0fa847",
+  "status": 200,
+  "elapsed_s": 0.065,
+  "x-rv-disposition": "ALLOW",
+  "x-rv-output": "ALLOW",
+  "x-rv-stages": "canon:E,det:E,sem:E,resolve:E,dispatch:E,out:E,audit:E",
+  "bytes": 391,
+  "canaries_in_raw_bytes": [],
+  "canaries_after_zwsp_strip": [
+   "aws",
+   "email"
+  ],
+  "json_body": {
+   "id": "chatcmpl-edge-d04cfad185aaf57d",
+   "object": "chat.completion",
+   "created": 1700000000,
+   "model": "gpt-4o-mini",
+   "choices": [
+    {
+     "index": 0,
+     "message": {
+      "role": "assistant",
+      "content": "key A​K​I​A​Q​Y​L​P​M​N​5​H​H​H​F​P​Z​A​M​2 mail alice.canary​@​example.com end"
+     },
+     "finish_reason": "stop"
+    }
+   ],
+   "usage": {
+    "prompt_tokens": 10,
+    "completion_tokens": 12,
+    "total_tokens": 22
+   }
+  }
+ },
+ {
+  "scenario": "spaced-secret",
+  "stream": true,
+  "rid": "p03-spaced-secret-s-2942eeff",
+  "status": 200,
+  "elapsed_s": 0.093,
+  "x-rv-disposition": "ALLOW",
+  "x-rv-output": null,
+  "x-rv-stages": "canon:E,det:E,sem:E,resolve:E,dispatch:E,out:E,audit:E",
+  "bytes": 2935,
+  "canaries_in_raw_bytes": [],
+  "canaries_after_zwsp_strip": [],
+  "done": true,
+  "n_frames": 16,
+  "error_frames": [],
+  "content": {
+   "0": "key A K I A Q Y L P M N 5 H H H F P Z A M 2 end"
+  },
+  "reasoning": "",
+  "refusal": "",
+  "fn_args": "",
+  "tool_args": {},
+  "logprob_tokens": [],
+  "json_valid:fn_args": "INVALID: Expecting value: line 1 column 1 (char 0)"
+ },
+ {
+  "scenario": "surrogate-split",
+  "stream": true,
+  "rid": "p03-surrogate-split-s-652dbfac",
+  "status": 200,
+  "elapsed_s": 0.067,
+  "x-rv-disposition": "ALLOW",
+  "x-rv-output": null,
+  "x-rv-stages": "canon:E,det:E,sem:E,resolve:E,dispatch:E,out:E,audit:E",
+  "bytes": 345,
+  "canaries_in_raw_bytes": [],
+  "canaries_after_zwsp_strip": [],
+  "done": false,
+  "n_frames": 2,
+  "error_frames": [
+   {
+    "message": "upstream stream ended abnormally",
+    "type": "stream_terminated",
+    "param": null,
+    "code": "upstream_stream_error"
+   }
+  ],
+  "content": {
+   "0": ""
+  },
+  "reasoning": "",
+  "refusal": "",
+  "fn_args": "",
+  "tool_args": {},
+  "logprob_tokens": [],
+  "json_valid:fn_args": "INVALID: Expecting value: line 1 column 1 (char 0)"
+ },
+ {
+  "scenario": "provider-error-frame",
+  "stream": true,
+  "rid": "p03-provider-error-frame-s-c70fd014",
+  "status": 200,
+  "elapsed_s": 0.071,
+  "x-rv-disposition": "ALLOW",
+  "x-rv-output": null,
+  "x-rv-stages": "canon:E,det:E,sem:E,resolve:E,dispatch:E,out:E,audit:E",
+  "bytes": 1068,
+  "canaries_in_raw_bytes": [
+   "aws"
+  ],
+  "canaries_after_zwsp_strip": [
+   "aws"
+  ],
+  "done": false,
+  "n_frames": 6,
+  "error_frames": [
+   {
+    "message": "upstream failure while processing key AKIAQYLPMN5HHHFPZAM2",
+    "type": "server_error",
+    "param": null,
+    "code": null
+   },
+   {
+    "message": "upstream stream ended abnormally",
+    "type": "stream_terminated",
+    "param": null,
+    "code": "upstream_stream_error"
+   }
+  ],
+  "content": {
+   "0": " tiger river "
+  },
+  "reasoning": "",
+  "refusal": "",
+  "fn_args": "",
+  "tool_args": {},
+  "logprob_tokens": [],
+  "json_valid:fn_args": "INVALID: Expecting value: line 1 column 1 (char 0)"
+ },
+ {
+  "scenario": "status-429",
+  "stream": false,
+  "rid": "p03-status-429-j-4a03f9bc",
+  "status": 502,
+  "elapsed_s": 0.034,
+  "x-rv-disposition": null,
+  "x-rv-output": null,
+  "x-rv-stages": null,
+  "bytes": 104,
+  "canaries_in_raw_bytes": [],
+  "canaries_after_zwsp_strip": [],
+  "json_body": {
+   "error": {
+    "message": "provider status 429",
+    "type": "upstream_error",
+    "param": null,
+    "code": "provider_error"
+   }
+  }
+ },
+ {
+  "scenario": "status-429",
+  "stream": true,
+  "rid": "p03-status-429-s-7e0814ba",
+  "status": 502,
+  "elapsed_s": 0.033,
+  "x-rv-disposition": null,
+  "x-rv-output": null,
+  "x-rv-stages": null,
+  "bytes": 104,
+  "canaries_in_raw_bytes": [],
+  "canaries_after_zwsp_strip": [],
+  "done": false,
+  "n_frames": 0,
+  "error_frames": [],
+  "content": {},
+  "reasoning": "",
+  "refusal": "",
+  "fn_args": "",
+  "tool_args": {},
+  "logprob_tokens": [],
+  "json_valid:fn_args": "INVALID: Expecting value: line 1 column 1 (char 0)"
+ },
+ {
+  "scenario": "",
+  "stream": true,
+  "rid": "p03--s-22b71669",
+  "status": 200,
+  "elapsed_s": 0.092,
+  "x-rv-disposition": "ALLOW",
+  "x-rv-output": null,
+  "x-rv-stages": "canon:E,det:E,sem:E,resolve:E,dispatch:E,out:E,audit:E",
+  "bytes": 3169,
+  "canaries_in_raw_bytes": [],
+  "canaries_after_zwsp_strip": [],
+  "done": true,
+  "n_frames": 17,
+  "error_frames": [],
+  "content": {
+   "0": " river cloud summer ocean north alpha candle north orbit forest cloud green"
+  },
+  "reasoning": "",
+  "refusal": "",
+  "fn_args": "",
+  "tool_args": {},
+  "logprob_tokens": [],
+  "json_valid:fn_args": "INVALID: Expecting value: line 1 column 1 (char 0)"
+ },
+ {
+  "scenario": "tool-secret-split",
+  "stream": true,
+  "sdk": {
+   "ok": true,
+   "events": 14,
+   "content": "",
+   "tool_calls": [
+    "{\"to\": \"[REDACTED:pii.email]\", \"key\": \"[REDACTED:secret.aws]\", \"n\": 1}"
+   ],
+   "parsed": "None"
+  }
+ },
+ {
+  "scenario": "json-numeric-pii",
+  "stream": true,
+  "sdk": {
+   "ok": true,
+   "events": 26,
+   "content": "{\"name\": \"Alice\", \"card\": [REDACTED:pii.card], \"phone\": [REDACTED:pii.phone], \"ok\": true}",
+   "tool_calls": [],
+   "parsed": "None"
+  }
+ },
+ {
+  "scenario": "json-numeric-pii",
+  "stream": false,
+  "sdk": {
+   "ok": true,
+   "content": "{\"name\": \"Alice\", \"card\": [REDACTED:pii.card], \"phone\": [REDACTED:pii.phone], \"ok\": true}",
+   "tool_calls": []
+  }
+ },
+ {
+  "scenario": "surrogate-split",
+  "stream": true,
+  "sdk": {
+   "ok": false,
+   "error": "APIError: upstream stream ended abnormally"
+  }
+ },
+ {
+  "scenario": "n2-secret",
+  "stream": true,
+  "sdk": {
+   "ok": true,
+   "events": 20,
+   "content": "first [REDACTED:pii.email] end",
+   "tool_calls": [],
+   "parsed": "None"
+  }
+ },
+ {
+  "scenario": "status-429",
+  "stream": false,
+  "sdk": {
+   "ok": false,
+   "error": "InternalServerError: Error code: 502 - {'error': {'message': 'provider status 429', 'type': 'upstream_error', 'param': None, 'code': 'provider_error'}}"
+  }
+ },
+ {
+  "scenario": "",
+  "stream": true,
+  "sdk": {
+   "ok": true,
+   "events": 31,
+   "content": " window lemon forest ocean garden candle orbit copper stone tiger cloud tiger",
+   "tool_calls": [],
+   "parsed": "None"
+  }
+ }
+]

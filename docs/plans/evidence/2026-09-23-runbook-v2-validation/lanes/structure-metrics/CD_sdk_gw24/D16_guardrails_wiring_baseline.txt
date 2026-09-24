@@ -1,0 +1,67 @@
+## python refs to GUARDRAILS / _SERVICE_URL / 8310 / scan/input|output (all export python incl tests)
+gateway/ai_mesh_gateway/tests/test_v2_streaming_parity_sdk.py:978:# ══════════════════════════ §1.4 — CONTEXT / MCP GUARDRAILS ══════
+## generic os.environ iteration (could pick up *_SERVICE_URL dynamically) in gateway non-test
+gateway/ai_mesh_gateway/mcp_stdio_adapter.py:84:    for p in os.environ.get("MCP_STDIO_PACKAGE_ALLOWLIST", "").split(",")
+gateway/ai_mesh_gateway/mcp_stdio_adapter.py:124:    for c in os.environ.get(
+## compose service definition for guardrails (docker-compose.yml 300-320)
+      VERTEX_TIER2_MODEL: ${VERTEX_TIER2_MODEL:-gemini-3.5-flash-lite}
+      GATEWAY_TIER2_CACHE_TTL_SECONDS: ${GATEWAY_TIER2_CACHE_TTL_SECONDS:-0}
+      # Capacity bench only. Default off. When 1, LiteLLM/BYOK is stubbed so
+      # /v1/chat/completions still runs the 9-stage pipeline minus provider RTT.
+      GATEWAY_LOADTEST_STUB_LLM: ${GATEWAY_LOADTEST_STUB_LLM:-0}
+      GUNICORN_WORKER_CONNECTIONS: ${GUNICORN_WORKER_CONNECTIONS:-20000}
+      GUARDRAILS_SERVICE_URL: http://guardrails:8310
+      MCP_BROKER_URL: http://mcp-broker:8311
+      MCP_BROKER_INTERNAL_KEY: ${MCP_BROKER_INTERNAL_KEY:-dev-mcp-broker-key-change-me}
+      # Sandbox path: broker delegates stdio MCP to per-org containers (S9+).
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8300/health', timeout=5)"]
+      interval: 15s
+      timeout: 6s
+      retries: 5
+      start_period: 60s
+
+  guardrails:
+    image: python:3.12-slim
+    working_dir: /app
+    command: ["sh", "-c", "pip install fastapi uvicorn && uvicorn main:app --host 0.0.0.0 --port 8310"]
+    volumes: ["./services/guardrails/src:/app"]
+    ports: ["8310:8310"]
+    profiles: ["services"]
+
+  mcp-sandbox-image:
+    profiles: ["services"]
+    image: ai-mesh/mcp-sandbox:latest
+    build:
+      context: .
+## prod compose 205-215
+      AI_MESH_CONTROL_URL: http://control:8000
+      AIGUARDX_BACKEND_URL: http://control:8000
+      # Internal control/LLM URLs are http:// — keep allow flag for Docker DNS only.
+      GATEWAY_ALLOW_HTTP: ${GATEWAY_ALLOW_HTTP:-1}
+      GATEWAY_INTERNAL_API_KEY: ${GATEWAY_INTERNAL_API_KEY:-}
+      METRICS_SCRAPER_KEY: ${METRICS_SCRAPER_KEY:-}
+      METRICS_ALLOW_OPEN: ${METRICS_ALLOW_OPEN:-false}
+      GUARDRAILS_SERVICE_URL: http://guardrails:8310
+      VECTOR_SERVICE_URL: http://vector-retrieval:8312
+      MCP_BROKER_URL: http://mcp-broker:8311
+      MCP_BROKER_INTERNAL_KEY: ${MCP_BROKER_INTERNAL_KEY:-}
+docker-compose.yml:308:  guardrails:
+docker-compose.prod.yml:265:  guardrails:
+## docker-compose.prod.yml guardrails service (baseline)
+
+  # ── MCP sidecars (always-on in prod — clear base `services` profile) ────────
+  guardrails:
+    <<: *restart_unless_stopped
+    profiles: !reset null
+    ports: !override ["127.0.0.1:8310:8310"]
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  vector-retrieval:
+    <<: *restart_unless_stopped
+## gateway depends_on guardrails?
+docker-compose.yml gateway.depends_on: ['control', 'redis', 'pgbouncer'] | guardrails profiles: ['services']

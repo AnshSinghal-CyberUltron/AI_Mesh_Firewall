@@ -1,0 +1,25 @@
+17:06:21 START s1p-153 rate=153 env=[LABEL=poisson_down_1guard OLG_EXTRA=-sample-mod 1 -arrival poisson]
+17:14:06 END s1p-153 FAIL q/s 151.14 infra% 0.2572 drops 0 p99 json 23.52 sse-total 23.507 sse-first 48.394
+17:14:06 START s1p-122 rate=122 env=[LABEL=poisson_down_1guard OLG_EXTRA=-sample-mod 1 -arrival poisson]
+17:21:50 END s1p-122 PASS q/s 120.22 infra% 0.0517 drops 0 p99 json 19.245 sse-total 19.178 sse-first 47.254
+17:21:50 RECONFIGURE gateway -> 2 guard owners
+GATEWAY NODE READY after 3s: 12/12 workers
+redis save=[]
+tree-ok
+{"ready":true,"guard":{"ready":true,"backend":"remote(owner)","model_hash":"2bf20e0f71e3a41e9e8cc4e602e08c142855bcce0cc73e0b65000d816d70877c","detail":"owners 2/2 connected, share 1/12: 10.160.15.228:7070 pid=1635 host=rv-split-guard-1 tokens_per_s=241430; 10.160.15.232:7070 pid=1714 host=rv-split-guard-2 tokens_per_s=237701","error":null},"plans_loaded":true,"plans_fresh":true,"killswitch":"ok","
+17:21:56 START s2-238 rate=238 env=[LABEL=ladder_2guards GUARDS=rv-split-guard-1 rv-split-guard-2]
+17:29:44 END s2-238 PASS q/s 233.86 infra% 0.0 drops 0 p99 json 11.53 sse-total 11.363 sse-first 45.752
+17:29:44 START s2-298 rate=298 env=[LABEL=ladder_2guards GUARDS=rv-split-guard-1 rv-split-guard-2]
+17:37:32 END s2-298 PASS q/s 293.08 infra% 0.0 drops 0 p99 json 12.971 sse-total 12.967 sse-first 46.872
+17:37:32 START s2-373 rate=373 env=[LABEL=ladder_2guards GUARDS=rv-split-guard-1 rv-split-guard-2]
+17:45:23 END s2-373 PASS q/s 366.61 infra% 0.0 drops 0 p99 json 15.597 sse-total 15.468 sse-first 47.314
+17:45:23 START s2-466 rate=466 env=[LABEL=ladder_2guards GUARDS=rv-split-guard-1 rv-split-guard-2]
+17:53:16 END s2-466 FAIL q/s 457.57 infra% 0.0687 drops 0 p99 json 23.171 sse-total 23.24 sse-first 49.826
+17:53:16 ladder stops at s2-466
+17:53:16 START s2-373-r2 rate=373 env=[LABEL=knee_repeat_2guards GUARDS=rv-split-guard-1 rv-split-guard-2]
+18:01:07 END s2-373-r2 PASS q/s 366.39 infra% 0.0 drops 0 p99 json 15.654 sse-total 15.499 sse-first 47.465
+18:01:07 START s2-373-r3 rate=373 env=[LABEL=knee_repeat_2guards GUARDS=rv-split-guard-1 rv-split-guard-2]
+18:08:57 END s2-373-r3 PASS q/s 366.38 infra% 0.0009 drops 0 p99 json 15.661 sse-total 15.626 sse-first 47.31
+18:08:57 START s2p-373 rate=373 env=[LABEL=knee_poisson_2guards GUARDS=rv-split-guard-1 rv-split-guard-2 OLG_EXTRA=-sample-mod 1 -arrival poisson]
+18:16:48 END s2p-373 FAIL q/s 365.07 infra% 0.2248 drops 0 p99 json 24.134 sse-total 24.367 sse-first 49.494
+18:16:48 CHAIN2 DONE

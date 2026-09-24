@@ -1,0 +1,28 @@
+== mcp_proxy.py:149 (baseline) exact line:
+            limits=httpx.Limits(max_connections=64, max_keepalive_connections=32),
+   grep hits:
+149:            limits=httpx.Limits(max_connections=64, max_keepalive_connections=32),
+== rate_limiter.py:44 (baseline) exact line:
+                max_connections=100,
+   grep hits:
+44:                max_connections=100,
+== mcp_oauth.py:477 (baseline) exact line:
+            redis_url, decode_responses=True, max_connections=50
+   grep hits:
+477:            redis_url, decode_responses=True, max_connections=50
+== vector_client.py:20 (baseline) exact line:
+DEFAULT_THREAD_POOL_SIZE = 4
+   grep hits:
+20:DEFAULT_THREAD_POOL_SIZE = 4
+== embedding_vault.py:45 (baseline) exact line:
+DEFAULT_THREAD_POOL_SIZE = 2
+   grep hits:
+45:DEFAULT_THREAD_POOL_SIZE = 2
+== llm_judge.py:25 (baseline) exact line:
+DEFAULT_THREAD_POOL_SIZE = 2
+   grep hits:
+25:DEFAULT_THREAD_POOL_SIZE = 2
+== context_guard.py:35 (baseline) exact line:
+DEFAULT_THREAD_POOL_SIZE = 4
+   grep hits:
+35:DEFAULT_THREAD_POOL_SIZE = 4

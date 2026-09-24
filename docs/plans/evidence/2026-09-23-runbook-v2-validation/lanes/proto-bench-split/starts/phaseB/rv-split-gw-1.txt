@@ -1,0 +1,3 @@
+setup rc=0
+rv-split-gw-1.asia-south1-b.c.ai-mesh-firewall.internal tree == rvproto-frozen-1
+Model name:                              INTEL(R) XEON(R) PLATINUM 8581C CPU @ 2.30GHz

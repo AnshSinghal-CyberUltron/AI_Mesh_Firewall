@@ -1,0 +1,8 @@
+W=1: 1-(0.99)^1 = 1.0000%  -> false blocks/s @1,000 RPS =  10.0  @1,064 RPS =  10.6
+W=2: 1-(0.99)^2 = 1.9900%  -> false blocks/s @1,000 RPS =  19.9  @1,064 RPS =  21.2
+W=3: 1-(0.99)^3 = 2.9701%  -> false blocks/s @1,000 RPS =  29.7  @1,064 RPS =  31.6
+W=4: 1-(0.99)^4 = 3.9404%  -> false blocks/s @1,000 RPS =  39.4  @1,064 RPS =  41.9
+W=7: 1-(0.99)^7 = 6.7935%  -> false blocks/s @1,000 RPS =  67.9  @1,064 RPS =  72.3
+Bounds WITHOUT the independence assumption (Frechet): max(p) <= P(any window FP) <= min(1, W*p)
+  W=2: between 1.00% (perfectly correlated windows) and 2.00% (mutually exclusive FPs)
+  W=7: between 1.00% (perfectly correlated windows) and 7.00% (mutually exclusive FPs)

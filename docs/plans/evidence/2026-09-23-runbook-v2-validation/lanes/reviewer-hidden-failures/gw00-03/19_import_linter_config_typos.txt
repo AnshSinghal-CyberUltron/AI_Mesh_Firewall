@@ -1,0 +1,20 @@
+=== upward import detect->edge + pyproject variant: singular ===
+61c61
+< [[tool.importlinter.contracts]]
+---
+> [[tool.importlinter.contract]]
+---------
+Analyzed 71 files, 37 dependencies.
+-----------------------------------
+Contracts: 0 kept, 0 broken.
+lint-imports exit=0
+=== upward import detect->edge + pyproject variant: layertypo ===
+65c65
+<     "gateway_v2.edge",
+---
+>     "gateway_v2.edges",
+╚══╩╩╩╣╔═╩══╩╝╚═╝╚═══╩╩╝╚╩═╩╩═╩╝
+  └──▶║║                    ▲ 
+      ╚╝────────────────────┘
+Missing layer 'gateway_v2.edges': module gateway_v2.edges does not exist.
+lint-imports exit=1

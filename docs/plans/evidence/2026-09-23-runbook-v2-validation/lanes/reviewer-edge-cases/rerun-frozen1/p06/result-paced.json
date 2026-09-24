@@ -1,0 +1,40 @@
+[
+ {
+  "rid": "p06-words-16384-1eff57",
+  "status": 200,
+  "chars_expected": 16384,
+  "chars_received": 17439,
+  "error": null,
+  "t_first_blob_s": 0.0498,
+  "t_total_s": 14.0607,
+  "scenario": "words",
+  "run_chars": 16384,
+  "chunk_chars": 4,
+  "itl_ms": 5,
+  "via": "http://127.0.0.1:8480",
+  "worker_cpu_s": 14.91,
+  "bystander_n": 187,
+  "bystander_p50_ms": 24.0,
+  "bystander_p99_ms": 35.0,
+  "bystander_max_ms": 43.1
+ },
+ {
+  "rid": "p06-base64-long-16384-175d53",
+  "status": 200,
+  "chars_expected": 16384,
+  "chars_received": 16384,
+  "error": null,
+  "t_first_blob_s": 21.0673,
+  "t_total_s": 21.0674,
+  "scenario": "base64-long",
+  "run_chars": 16384,
+  "chunk_chars": 4,
+  "itl_ms": 5,
+  "via": "http://127.0.0.1:8480",
+  "worker_cpu_s": 26.96,
+  "bystander_n": 282,
+  "bystander_p50_ms": 24.3,
+  "bystander_p99_ms": 35.6,
+  "bystander_max_ms": 42.9
+ }
+]

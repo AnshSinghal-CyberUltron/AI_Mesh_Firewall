@@ -1,0 +1,20 @@
+12:40:20 x8-20: olg started on rv-pbf-lg-4 (rate 20.0 each, start-at 1790167243997, mode sut, targets http://10.146.0.7:8400)
+[rv-pbf-lg-4] 2026/09/23 12:42:36 done: scheduled=1950 recorded=1950 ok=1926 errors=map[http_403:24] drops=0 late_p99=122us max=358us cpu_busy_max=10.6%
+# x8-20: strict FAIL | load-knee PASS (sut, units=1, rate=20)
+
+checks: {'p99_T_fw_addon_lt_slo': False, 'infra_error_rate_le_budget': True, 'zero_schedule_drops': True, 'zero_safety_failures': True, 'run_valid': True}
+load-knee checks: {'p99_T_fw_addon_nohold_lt_slo': True, 'infra_error_rate_le_budget': True, 'zero_schedule_drops': True, 'zero_safety_failures': True, 'run_valid': True}
+offered 1200 (20.0/s) qualified 1186 (19.77/s) FP-blocks 14 (0.01167) infra 0 (0.0) drops 0 safety 0
+infra reasons: {}
+infra detail: {}
+
+12:43:52 x8-40: olg started on rv-pbf-lg-4 (rate 40.0 each, start-at 1790167456020, mode sut, targets http://10.146.0.7:8400)
+[rv-pbf-lg-4] 2026/09/23 12:46:08 done: scheduled=3900 recorded=3900 ok=3842 errors=map[http_403:58] drops=0 late_p99=109us max=208us cpu_busy_max=17.6%
+# x8-40: strict FAIL | load-knee PASS (sut, units=1, rate=40)
+
+checks: {'p99_T_fw_addon_lt_slo': False, 'infra_error_rate_le_budget': True, 'zero_schedule_drops': True, 'zero_safety_failures': True, 'run_valid': True}
+load-knee checks: {'p99_T_fw_addon_nohold_lt_slo': True, 'infra_error_rate_le_budget': True, 'zero_schedule_drops': True, 'zero_safety_failures': True, 'run_valid': True}
+offered 2400 (40.0/s) qualified 2364 (39.4/s) FP-blocks 36 (0.015) infra 0 (0.0) drops 0 safety 0
+infra reasons: {}
+infra detail: {}
+

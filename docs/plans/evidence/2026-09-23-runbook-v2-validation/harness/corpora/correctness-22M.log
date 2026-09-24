@@ -1,0 +1,54 @@
+500/2000
+1000/2000
+1500/2000
+2000/2000
+{
+ "profile": "correctness",
+ "n": 2000,
+ "seed": 23,
+ "tokenizer": "Llama-Prompt-Guard-2-22M",
+ "tokenizer_sha256": "6eb983352e73f1697b883a8c3f6b66bdfa336ab3d29dd3687f8316d0ff2789c1",
+ "token_count_definition": "PG2 tokens, no special tokens, of system+'\\n'+user content with a real nonce",
+ "nonce_tokens": {
+  "22M": 15,
+  "86M": 15
+ },
+ "tokens_in": {
+  "min": 100,
+  "max": 512,
+  "mean": 305.86,
+  "deciles": [
+   142,
+   180,
+   223,
+   266,
+   302,
+   342,
+   387,
+   432,
+   473
+  ]
+ },
+ "max_tokens": {
+  "min": 50,
+  "max": 200,
+  "mean": 125.58
+ },
+ "classes": {
+  "pii": 200,
+  "benign": 1144,
+  "benign+email": 200,
+  "benign+split-aws": 199,
+  "injection": 100,
+  "secret": 100,
+  "benign+tool": 57
+ },
+ "tools_frac": 0.05,
+ "synth_in_text": false,
+ "verification": {
+  "recounted_with_random_nonce": 100,
+  "mismatches": 0
+ },
+ "corpus_sha256": "1f04a55bc7a6d8721c359bd051940e4ac0554c00c6aa732fab41fc21a1caaf41",
+ "benign_source": "/home/contact_cyberultron_com/AI_Mesh_Firewall/tests/detection_corpus/benign.jsonl"
+}

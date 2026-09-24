@@ -1,0 +1,71 @@
+{
+ "policy": "allkeys-lru",
+ "maxmemory_mb": 48,
+ "audit_records_written": 40000,
+ "audit_stream_len": 12819,
+ "used_memory_mb": 45.4,
+ "evicted_keys_total": 65,
+ "security_keys_EVICTED": {
+  "rv:plan:org-a": {
+   "after_audit_records": 13600,
+   "at_s": 0.25
+  },
+  "rv:budget:org-a": {
+   "after_audit_records": 13600,
+   "at_s": 0.25
+  },
+  "rv:plan:org-b": {
+   "after_audit_records": 13600,
+   "at_s": 0.25
+  },
+  "rv:budget:org-b": {
+   "after_audit_records": 13600,
+   "at_s": 0.25
+  },
+  "rv:plan:org-q": {
+   "after_audit_records": 13600,
+   "at_s": 0.25
+  },
+  "rv:budget:org-q": {
+   "after_audit_records": 13600,
+   "at_s": 0.25
+  },
+  "rv:plan_versions": {
+   "after_audit_records": 13600,
+   "at_s": 0.25
+  },
+  "rv:keys": {
+   "after_audit_records": 13600,
+   "at_s": 0.25
+  },
+  "rv:killswitch": {
+   "after_audit_records": 13600,
+   "at_s": 0.25
+  },
+  "rv:killswitch:org": {
+   "after_audit_records": 13600,
+   "at_s": 0.25
+  },
+  "rv:auth_epoch": {
+   "after_audit_records": 13600,
+   "at_s": 0.25
+  },
+  "auth:apikey:0000000000000000000000000000000000000000000000000000000000000000": {
+   "after_audit_records": 13600,
+   "at_s": 0.25
+  },
+  "auth:apikey:0000000000000000000000000000000000000000000000000000000000000001": {
+   "after_audit_records": 13600,
+   "at_s": 0.25
+  },
+  "kill_switch:acme:global": {
+   "after_audit_records": 13600,
+   "at_s": 0.25
+  },
+  "firewall:config:acme": {
+   "after_audit_records": 13600,
+   "at_s": 0.25
+  }
+ },
+ "security_keys_surviving": []
+}

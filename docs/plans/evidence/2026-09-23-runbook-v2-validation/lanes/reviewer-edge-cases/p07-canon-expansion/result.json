@@ -1,0 +1,136 @@
+{
+ "part_a_inprocess": [
+  {
+   "input": "ascii_1MiB",
+   "in_chars": 1048368,
+   "in_bytes_utf8": 1048368,
+   "canon_chars": 1048368,
+   "expansion": 1.0,
+   "canon_s": 0.0,
+   "peak_py_alloc_MB": 0.0,
+   "error": null
+  },
+  {
+   "input": "hindi_plain_1MiB",
+   "in_chars": 404040,
+   "in_bytes_utf8": 1048320,
+   "canon_chars": 404040,
+   "expansion": 1.0,
+   "canon_s": 1.593,
+   "peak_py_alloc_MB": 53.3,
+   "error": null
+  },
+  {
+   "input": "hindi_with_zwj_1MiB",
+   "in_chars": 400842,
+   "in_bytes_utf8": 1048356,
+   "canon_chars": 380286,
+   "expansion": 0.95,
+   "canon_s": 3.079,
+   "peak_py_alloc_MB": 86.5,
+   "error": null
+  },
+  {
+   "input": "emoji_zwj_family_1MiB",
+   "in_chars": 331062,
+   "in_bytes_utf8": 1048363,
+   "canon_chars": 220708,
+   "expansion": 0.67,
+   "canon_s": 2.561,
+   "peak_py_alloc_MB": 65.8,
+   "error": null
+  },
+  {
+   "input": "nfkc_expander_U+FDFA_1MiB",
+   "in_chars": 349458,
+   "in_bytes_utf8": 1048374,
+   "canon_chars": 6290244,
+   "expansion": 18.0,
+   "canon_s": 15.986,
+   "peak_py_alloc_MB": 617.4,
+   "error": null
+  },
+  {
+   "input": "nfkc_expander_U+3316_1MiB",
+   "in_chars": 349458,
+   "in_bytes_utf8": 1048374,
+   "canon_chars": 2096748,
+   "expansion": 6.0,
+   "canon_s": 7.791,
+   "peak_py_alloc_MB": 255.3,
+   "error": null
+  },
+  {
+   "input": "percent_4096_escapes",
+   "in_chars": 12293,
+   "in_bytes_utf8": 12293,
+   "canon_chars": 4101,
+   "expansion": 0.33,
+   "canon_s": 0.094,
+   "peak_py_alloc_MB": 0.9,
+   "error": null
+  },
+  {
+   "input": "percent_4097_escapes",
+   "in_chars": 12296,
+   "in_bytes_utf8": 12296,
+   "canon_chars": null,
+   "expansion": null,
+   "canon_s": 0.0,
+   "peak_py_alloc_MB": 0.6,
+   "error": "DecodeBudgetExceeded: percent-decode budget 4096 exceeded"
+  }
+ ],
+ "part_b_e2e": [
+  {
+   "input": "ascii_1MiB",
+   "body_bytes": 1048439,
+   "status": 413,
+   "error_code": "context_length_exceeded",
+   "elapsed_s": 0.471,
+   "worker_cpu_s": 1.13,
+   "bystander_n": 8,
+   "bystander_max_ms": 489.2
+  },
+  {
+   "input": "hindi_plain_1MiB",
+   "body_bytes": 1048391,
+   "status": 413,
+   "error_code": "context_length_exceeded",
+   "elapsed_s": 0.394,
+   "worker_cpu_s": 1.11,
+   "bystander_n": 9,
+   "bystander_max_ms": 400.0
+  },
+  {
+   "input": "hindi_with_zwj_1MiB",
+   "body_bytes": 1048427,
+   "status": 413,
+   "error_code": "context_length_exceeded",
+   "elapsed_s": 0.502,
+   "worker_cpu_s": 1.2,
+   "bystander_n": 9,
+   "bystander_max_ms": 509.5
+  },
+  {
+   "input": "emoji_zwj_family_1MiB",
+   "body_bytes": 1048434,
+   "status": 413,
+   "error_code": "context_length_exceeded",
+   "elapsed_s": 0.323,
+   "worker_cpu_s": 1.05,
+   "bystander_n": 9,
+   "bystander_max_ms": 330.1
+  },
+  {
+   "input": "nfkc_expander_U+FDFA_1MiB",
+   "body_bytes": 1048445,
+   "status": 413,
+   "error_code": "context_length_exceeded",
+   "elapsed_s": 6.795,
+   "worker_cpu_s": 7.37,
+   "bystander_n": 8,
+   "bystander_max_ms": 6785.3
+  }
+ ]
+}

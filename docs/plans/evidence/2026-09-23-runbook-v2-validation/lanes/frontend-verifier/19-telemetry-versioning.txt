@@ -1,0 +1,24 @@
+# version/schema fields on telemetry producer, EE model, drain builder
+telemetry.py: none
+36:    # gateway/ai_mesh_gateway/telemetry_ops.py:KNOWN_EVENT_CLASSES.
+38:    event_class = models.CharField(
+_build_enforcement_metadata: none
+
+# docs/contracts/TelemetryEvent.v1.schema.json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zeroshield.ai/schemas/ai-mesh/TelemetryEvent.v1.json",
+  "title": "TelemetryEventV1",
+  "type": "object",
+  "required": ["event_type", "action", "organization_id", "request_id"],
+  "properties": {
+    "event_type": { "type": "string" },
+    "action": { "type": "string", "enum": ["allow", "block", "redact", "flag", "route"] },
+    "organization_id": { "type": "integer", "minimum": 1 },
+    "request_id": { "type": "string" },
+    "user_id": { "type": ["integer", "null"] },
+    "threat_type": { "type": "string" },
+    "risk_score": { "type": "number" },
+    "metadata": { "type": "object" }
+  }
+}

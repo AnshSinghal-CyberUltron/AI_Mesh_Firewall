@@ -1,0 +1,113 @@
+ROOT=/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad
+--- enforcement.py:7-11
+7	Precedence (highest wins):
+8	  1. Org policy action for the matched category
+9	  2. Guard recommendation
+10	  3. Default action (typically ``allow``)
+11	
+--- enforcement.py:272-279
+272	        is_injection = threat in _INJECTION_THREAT_TYPES
+273	        if is_injection and normalize_action(guard_rec) == "block":
+274	            if (
+275	                not scan_block_on_injection
+276	                or (scanner_confidence or 0) < injection_threshold
+277	            ):
+278	                guard_rec = "monitor"
+279	        elif (
+--- enforcement.py:309-314
+309	        elif tier2_degraded and (_threat_is_pii_class or tier1_pii_detected):
+310	            action = "redact" if redaction_possible else "block"
+311	            blocked_by = None if redaction_possible else "input_scan"
+312	        elif tier2_degraded:
+313	            action = resolved if resolved != "allow" else "monitor"
+314	            blocked_by = None
+--- enforcement.py:388-388
+388	        if scan_degraded:
+--- enforcement.py:402-404
+402	            )
+403	
+404	        act = normalize_action(verdict_action)
+--- main.py:895-895
+895	def _scanner_kwargs_for_enforcement(verdict, *, recommendation: str | None = None) -> dict:
+--- main.py:935-936
+935	        if not is_data_floor and not is_tier2_injection and not is_tier2_block:
+936	            out = empty
+--- main.py:948-948
+948	    return out
+--- main.py:5447-5454
+5447	def _is_tier2_degraded_verdict(verdict) -> bool:
+5448	    if verdict is None:
+5449	        return False
+5450	    if verdict.tier != "tier_2":
+5451	        return False
+5452	    if verdict.threat_type == "bedrock_degraded":
+5453	        return True
+5454	    return str(getattr(verdict, "reason_code", "")).startswith("degraded")
+--- main.py:9450-9450
+9450	                tier2_degraded=_is_tier2_degraded_verdict(verdict),
+--- scanner.py:108-108
+108	_INJECTION_EXPLANATORY_CATEGORIES = frozenset({"prompt_injection", "jailbreak"})
+--- scanner.py:351-351
+351	        r"`[^`]+`",
+--- scanner.py:2118-2127
+2118	    @classmethod
+2119	    def _is_tier2_degraded(cls, meta: dict[str, Any], llm_guard: dict[str, Any]) -> bool:
+2120	        reason = str(meta.get("decision_reason", "")).lower()
+2121	        return bool(
+2122	            meta.get("parse_failed")
+2123	            or meta.get("error")
+2124	            or llm_guard.get("degraded")
+2125	            or reason.startswith("degraded")
+2126	            or reason in {"parse_failed", "client_error", "empty_response"}
+2127	        )
+--- scanner.py:2445-2446
+2445	        if self._is_tier2_degraded(meta, llm_guard):
+2446	            degraded_reason = reason_code or "bedrock_degraded"
+--- scanner.py:2463-2478
+2463	                return _bedrock_verdict(
+2464	                    action="block",
+2465	                    threat_type="scanner_degraded",
+2466	                    confidence=max(score, 0.5),
+2467	                    detail=degraded_detail + " (fail-closed: blocked by policy)",
+2468	                    tier="tier_2",
+2469	                    reason_code=degraded_reason + "_failclosed",
+2470	                )
+2471	            return _bedrock_verdict(
+2472	                action="flag",
+2473	                threat_type="scanner_degraded",
+2474	                confidence=max(score, 0.5),
+2475	                detail=degraded_detail,
+2476	                tier="tier_2",
+2477	                reason_code=degraded_reason,
+2478	            )
+--- scanner.py:2614-2618
+2614	            except Exception:
+2615	                BREAKER.record_result(org_slug, scanner_model_id, failure=True)
+2616	                if _tier2_output_fail_closed():
+2617	                    return _gemini_output_fail_closed_verdict()
+2618	                return tier1  # Bedrock fail-open
+--- scanner.py:2630-2633
+2630	        if _failed:
+2631	            if _tier2_output_fail_closed():
+2632	                return _gemini_output_fail_closed_verdict()
+2633	            return tier1  # degraded output scan -> fail-open to static verdict
+--- main.py:4745-4747
+4745	            from llm_router import catalog_row_is_display_alias as _display_alias_row
+4746	        except ImportError:
+4747	            from .llm_router import catalog_row_is_display_alias as _display_alias_row
+--- main.py:7708-7708
+7708	        inference_models = _filter_inference_eligible_models(routing_models)
+--- main.py:11022-11028
+11022	                _post_redact = _enforce_output(
+11023	                    verdict_action="redact",
+11024	                    verdict_threat_type=output_verdict.threat_type,
+11025	                    enforcement_mode=_og_enforcement_mode,
+11026	                    redaction_possible=_redact_changed,
+11027	                    pii_detection_enabled=_og_pii_enabled,
+11028	                )
+--- output_guard.py:1017-1021
+1017	                # M11: a degraded tier-2 OUTPUT scan (breaker open / parse fail)
+1018	                # comes back as a 'scanner_degraded' verdict — the output was NOT
+1019	                # confidently scanned. Mark degraded so it's visible downstream.
+1020	                if t2 is not None and str(getattr(t2, "threat_type", "")) == "scanner_degraded":
+1021	                    output_scan_degraded = True

@@ -1,0 +1,15 @@
+?   	rvharness/cmd/olg	[no test files]
+?   	rvharness/cmd/rvproxy	[no test files]
+ok  	rvharness/cmd/synthprov	0.005s
+ok  	rvharness/internal/rv	22.355s
+?   	rvharness/shared	[no test files]
+---
+    chatreq_test.go:242: 150000 random requests, 74061 accepted, all agree with encoding/json reference
+--- PASS: TestParseChatRequestDifferential (5.64s)
+--- PASS: TestParseChatRequestBufferReuse (0.00s)
+    jsonchunk_test.go:543: 200000 random chunks, 115327 accepted, all agree with encoding/json reference
+--- PASS: TestParseChunkDifferential (9.79s)
+--- PASS: FuzzParseChatRequest (0.00s)
+    --- PASS: FuzzParseChatRequest/seed#0 (0.00s)
+    --- PASS: FuzzParseChatRequest/seed#1 (0.00s)
+PASS

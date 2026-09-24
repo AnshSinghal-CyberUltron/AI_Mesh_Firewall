@@ -1,0 +1,17 @@
+2026/09/23 07:27:51 corpus: 1 entries sha256=448823b20303e035
+2026/09/23 07:27:51 waiting 3.825s for synchronized start
+2026/09/23 07:28:05 t=10s sched=91 inflight=22 ok=69 err=0 drops=0 conns=22
+2026/09/23 07:28:15 t=20s sched=190 inflight=21 ok=169 err=0 drops=0 conns=22
+2026/09/23 07:28:25 t=30s sched=291 inflight=22 ok=269 err=0 drops=0 conns=22
+2026/09/23 07:28:35 t=40s sched=390 inflight=21 ok=369 err=0 drops=0 conns=22
+2026/09/23 07:28:45 t=50s sched=491 inflight=22 ok=469 err=0 drops=0 conns=22
+2026/09/23 07:28:55 t=60s sched=591 inflight=21 ok=569 err=0 drops=0 conns=22
+2026/09/23 07:29:05 t=70s sched=691 inflight=21 ok=669 err=0 drops=0 conns=22
+2026/09/23 07:29:15 t=80s sched=791 inflight=22 ok=769 err=0 drops=0 conns=22
+2026/09/23 07:29:25 t=90s sched=891 inflight=21 ok=869 err=0 drops=0 conns=22
+2026/09/23 07:29:35 t=100s sched=991 inflight=21 ok=969 err=0 drops=0 conns=22
+2026/09/23 07:29:45 t=110s sched=1090 inflight=21 ok=1069 err=0 drops=0 conns=22
+2026/09/23 07:29:55 t=120s sched=1191 inflight=22 ok=1169 err=0 drops=0 conns=22
+2026/09/23 07:30:05 t=130s sched=1291 inflight=21 ok=1269 err=0 drops=0 conns=22
+2026/09/23 07:30:09 requests.jsonl close: sync /home/rv/runs/sse_A_gw_gzip/requests.jsonl: invalid argument
+2026/09/23 07:30:09 done: scheduled=1310 recorded=1310 ok=1310 errors=map[] drops=0 late_p99=116us max=137us cpu_busy_max=27.2%

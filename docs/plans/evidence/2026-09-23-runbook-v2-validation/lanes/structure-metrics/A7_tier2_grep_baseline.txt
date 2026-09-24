@@ -1,0 +1,68 @@
+./scanner.py:1137:        self.tier2_enabled = os.getenv("ENABLE_TIER2", "true").lower() in ("1", "true", "yes")
+./scanner.py:1138:        self._bedrock_scanner: BedrockScanner | None = BedrockScanner() if self.tier2_enabled else None
+./scanner.py:2192:              (``self.tier2_enabled`` from ENABLE_TIER2 env).
+./scanner.py:2196:        Callers MUST pass via identity (``org_config.get("tier2_enabled")``)
+./scanner.py:2221:        if org_tier2_override is None and not self.tier2_enabled:
+./scanner.py:2569:        (pass ``org_config.get("tier2_enabled")`` so ``None`` is preserved).
+./scanner.py:2574:        if org_tier2_override is None and not self.tier2_enabled:
+./rag_pipeline/query_stage.py:222:                    from config_sync import resolve_rag_tier2_enabled
+./rag_pipeline/query_stage.py:224:                    from gateway.ai_mesh_gateway.config_sync import resolve_rag_tier2_enabled
+./rag_pipeline/query_stage.py:226:                def resolve_rag_tier2_enabled(value):  # type: ignore[misc]
+./rag_pipeline/query_stage.py:228:            _t2 = resolve_rag_tier2_enabled(inp.policy.get("rag_tier2_enabled"))
+./output_guard.py:1010:        if _enabled("output_tier2_enabled", True) and self._scanner is not None:
+./output_guard.py:1014:                    org_tier2_override=cfg.get("tier2_enabled"),
+./mcp_scan_orchestrator.py:194:def _resolve_mcp_tier2_enabled(value: Any) -> bool:
+./mcp_scan_orchestrator.py:195:    """Resolve the nullable tri-state ``mcp_tier2_enabled`` to its EFFECTIVE value.
+./mcp_scan_orchestrator.py:199:    chat-path ``config_sync.resolve_tier2_enabled`` tri-state. ``None`` / absent
+./mcp_scan_orchestrator.py:206:        from config_sync import resolve_mcp_tier2_enabled  # type: ignore
+./mcp_scan_orchestrator.py:207:        return resolve_mcp_tier2_enabled(value)
+./mcp_scan_orchestrator.py:210:            from ai_mesh_gateway.config_sync import resolve_mcp_tier2_enabled  # type: ignore
+./mcp_scan_orchestrator.py:211:            return resolve_mcp_tier2_enabled(value)
+./mcp_scan_orchestrator.py:216:def _org_tier2_allowed(enabled_info: dict[str, Any] | None) -> bool:
+./mcp_scan_orchestrator.py:222:    ``_resolve_mcp_tier2_enabled``: absent / ``None`` / ``False`` / stale -> OFF;
+./mcp_scan_orchestrator.py:225:    return _resolve_mcp_tier2_enabled((enabled_info or {}).get("mcp_tier2_enabled"))
+./mcp_scan_orchestrator.py:1367:    tier2_ctrl = _effective_control(effective_controls, "tier2", scan_direction)
+./mcp_scan_orchestrator.py:1454:        if not tier2_ctrl.get("enabled", False):
+./mcp_scan_orchestrator.py:1525:    _scope_ctrl = tier1_ctrl if _tier1_enabled else tier2_ctrl
+./mcp_scan_orchestrator.py:1649:    if not tier2_ctrl.get("enabled", False):
+./mcp_scan_orchestrator.py:1658:    org_override = _org_tier2_allowed(enabled_info)
+./mcp_scan_orchestrator.py:1665:    strict_mode = tier2_ctrl.get("strict_mode") or "strict"
+./mcp_scan_orchestrator.py:1671:    tier2_action = _resolve_tier_action(tier2_ctrl, "monitor" if _policy_only else enforcement)
+./mcp_scan_orchestrator.py:1722:                "effective_control_id": tier2_ctrl.get("control_id"),
+./mcp_proxy.py:967:                "mcp_tier2_enabled": data.get("mcp_tier2_enabled"),
+./main.py:34:    from .config_sync import resolve_tier2_enabled, resolve_rag_tier2_enabled
+./main.py:45:    from config_sync import resolve_tier2_enabled, resolve_rag_tier2_enabled
+./main.py:1511:    (Tier-1) OR the resolved ``tier2_enabled`` toggle is on (Tier-2, opt-in,
+./main.py:1521:    ``resolve_tier2_enabled`` (config_sync, re-exported from config) is the single
+./main.py:1528:        return resolve_tier2_enabled((org_config or {}).get("tier2_enabled"))
+./main.py:9105:            org_tier2_override = org_config.get("tier2_enabled")
+./main.py:9114:            resolved_tier2_enabled = resolve_tier2_enabled(org_tier2_override)
+./main.py:9191:                if not resolved_tier2_enabled:
+./main.py:13895:                "rag_tier2_enabled",
+./main.py:14150:        _t2_on = resolve_rag_tier2_enabled(rag_policy.get("rag_tier2_enabled"))
+./main.py:14206:                    ) and resolve_rag_tier2_enabled(rag_policy.get("rag_tier2_enabled")) and INPUT_SCANNER is not None:
+./main.py:14754:        rag_tier2_enabled = resolve_rag_tier2_enabled(org_config.get("rag_tier2_enabled"))
+./main.py:14820:                if rag_tier2_enabled and INPUT_SCANNER is not None and action != "block":
+./config_sync.py:64:    "tier2_enabled", "mcp_tier2_enabled", "tier2_strict",
+./config_sync.py:71:    "rag_redaction_enabled", "rag_tier2_enabled", "threat_intel_enabled",
+./config_sync.py:108:_NULLABLE_KEYS: frozenset[str] = frozenset({"tier2_enabled", "mcp_tier2_enabled"})
+./config_sync.py:111:def resolve_tier2_enabled(value: Any) -> bool:
+./config_sync.py:112:    """Resolve the nullable tri-state ``tier2_enabled`` to its EFFECTIVE value.
+./config_sync.py:131:def resolve_mcp_tier2_enabled(value: Any) -> bool:
+./config_sync.py:132:    """Resolve the nullable tri-state ``mcp_tier2_enabled`` to its EFFECTIVE value.
+./config_sync.py:136:    ``mcp_tier2_enabled`` value is a tri-state (``_NULLABLE_KEYS``):
+./config_sync.py:142:          chat-path ``resolve_tier2_enabled``).
+./config_sync.py:145:    any stale non-bool) resolves ``False``. Mirrors ``resolve_tier2_enabled`` exactly
+./config_sync.py:151:def resolve_rag_tier2_enabled(value: Any) -> bool:
+./config_sync.py:157:    queries ONLY when the operator explicitly switched ``rag_tier2_enabled`` on.
+./config_sync.py:159:    Mirrors ``resolve_tier2_enabled``: only ``value is True`` resolves ON; every
+./config_sync.py:163:    ``rag_tier2_enabled`` is stored as a strict bool today (default False), but
+./config.py:360:    from .config_sync import resolve_tier2_enabled  # noqa: F401
+./config.py:363:        from config_sync import resolve_tier2_enabled  # type: ignore[no-redef]  # noqa: F401
+./config.py:365:        def resolve_tier2_enabled(value):  # type: ignore[misc]
+./config.py:374:    from .config_sync import resolve_rag_tier2_enabled  # noqa: F401
+./config.py:377:        from config_sync import resolve_rag_tier2_enabled  # type: ignore[no-redef]  # noqa: F401
+./config.py:379:        def resolve_rag_tier2_enabled(value):  # type: ignore[misc]
+./config.py:388:    from .config_sync import resolve_mcp_tier2_enabled  # noqa: F401
+./config.py:391:        from config_sync import resolve_mcp_tier2_enabled  # type: ignore[no-redef]  # noqa: F401
+./config.py:393:        def resolve_mcp_tier2_enabled(value):  # type: ignore[misc]

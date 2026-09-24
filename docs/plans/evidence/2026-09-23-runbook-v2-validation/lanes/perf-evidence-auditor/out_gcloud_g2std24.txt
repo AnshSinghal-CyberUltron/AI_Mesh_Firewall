@@ -1,0 +1,1 @@
+24	98304	{'guestAcceleratorCount': 2, 'guestAcceleratorType': 'nvidia-l4'}

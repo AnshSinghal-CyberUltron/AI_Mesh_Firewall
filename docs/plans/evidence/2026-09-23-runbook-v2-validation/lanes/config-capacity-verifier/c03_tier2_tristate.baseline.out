@@ -1,0 +1,11 @@
+TIER2_PROVIDER=bedrock: Tier-2 inference still uses Bedrock Converse (legacy). Set TIER2_PROVIDER=gemini to use the Gemini Developer API.
+ENABLE_TIER2=true -> InputScanner.tier2_enabled=True
+INPUT : resolve_tier2_enabled(None) = False -> chat path runs Tier-1-only scan_prompt
+INPUT : guard-model calls during Tier-1 scan_prompt = 0
+OUTPUT: OutputGuard.inspect(org tier2_enabled=None) guard-model calls = 1 [('ascan', 'Paris is the capital of France.')] | verdict action = allow
+OUTPUT: with tier2_enabled=False guard-model calls = 0
+ENABLE_TIER2=false -> InputScanner.tier2_enabled=False
+INPUT : resolve_tier2_enabled(None) = False -> chat path runs Tier-1-only scan_prompt
+INPUT : guard-model calls during Tier-1 scan_prompt = 0
+OUTPUT: OutputGuard.inspect(org tier2_enabled=None) guard-model calls = 0 [] | verdict action = allow
+OUTPUT: with tier2_enabled=False guard-model calls = 0

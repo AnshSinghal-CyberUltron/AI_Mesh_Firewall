@@ -1,0 +1,215 @@
+=== main.py 6470-6480
+    # keeps InputScanner/compile_pattern/redact_all), so it is always available; a
+    # zero-policy org still resolves to passthrough because Tier-1 detection is
+    # driven by the enabled policy set, not by whether the engine exists.
+    from scanner import InputScanner
+
+    INPUT_SCANNER = InputScanner(
+        thread_pool_size=CONFIG.get("scan_thread_pool_size", 4),
+        config=CONFIG,
+    )
+
+    # Shared async Redis client for kill-switch + telemetry
+=== main.py 6620-6682
+        VECTOR_POLICY_SYNC = VectorPolicySync(redis_url=CONFIG["redis_url"])
+        await VECTOR_POLICY_SYNC.start()
+
+        # NOTE: Chroma is now a per-org BYOK provider (the client connects their
+        # own Chroma server via VectorProviderConfig connection_url), resolved on
+        # demand in _resolve_vector_client / client_from_provider_config — it is
+        # NO LONGER a gateway-built-in env-wired default. The old CHROMA_URL
+        # startup registration was removed along with the bundled chromadb
+        # docker-compose service.
+
+        if CONFIG.get("pinecone_api_key"):
+            VECTOR_CLIENTS["pinecone"] = PineconeClient(
+                api_key=CONFIG["pinecone_api_key"],
+                environment=CONFIG.get("pinecone_environment", ""),
+                embedding_model=CONFIG.get("pinecone_embedding_model", "text-embedding-3-small"),
+                thread_pool_size=CONFIG.get("scan_thread_pool_size", 4),
+            )
+            LOG.info("Pinecone vector client registered")
+
+        if CONFIG.get("milvus_uri"):
+            VECTOR_CLIENTS["milvus"] = MilvusClient(
+                uri=CONFIG["milvus_uri"],
+                token=CONFIG.get("milvus_token", ""),
+                thread_pool_size=CONFIG.get("scan_thread_pool_size", 4),
+            )
+            LOG.info("Milvus vector client registered (uri=%s)", CONFIG["milvus_uri"])
+
+        CONTEXT_GUARD = ContextGuard(
+            thread_pool_size=CONFIG.get("scan_thread_pool_size", 4),
+        )
+
+        # ── Org-level vector provider credential sync ──
+        from vector_provider_sync import VectorProviderSync
+        VECTOR_PROVIDER_SYNC = VectorProviderSync(redis_url=CONFIG["redis_url"])
+        await VECTOR_PROVIDER_SYNC.start()
+
+        LOG.info(
+            "RAG Firewall initialized (vector_clients=%s, context_guard=enabled, provider_sync=%d)",
+            list(VECTOR_CLIENTS.keys()),
+            VECTOR_PROVIDER_SYNC.provider_count,
+        )
+
+        # ── Pipeline-Aware RAG Firewall (4-stage governed pipeline) ──
+        global RAG_PIPELINE
+        from rag_pipeline import RAGFirewallPipeline
+
+        _leakage_for_rag = None
+        if CONFIG.get("semantic_leakage_enabled", True) and REDIS_CLIENT is not None:
+            from leakage_detector import SemanticLeakageDetector
+            _leakage_for_rag = SemanticLeakageDetector(redis_client=REDIS_CLIENT)
+            LOG.info("Semantic leakage detector enabled")
+
+        # ── New detection layers ──
+        _llm_judge = None
+        if CONFIG.get("llm_judge_enabled", True):
+            from llm_judge import LLMJudge
+            _bedrock_model = CONFIG.get("llm_judge_model") or os.getenv("BEDROCK_MODEL", "global.anthropic.claude-haiku-4-5-20251001-v1:0")
+            _llm_judge = LLMJudge(model=_bedrock_model)
+            LOG.info("LLM Judge initialized (bedrock_model=%s)", _bedrock_model)
+
+        # Embedding Vault already initialized above (hoisted before InputScanner
+        # so it can be injected as the Tier-1.6 semantic-injection check).
+        # The same instance is reused here by the RAG pipeline.
+=== config.py 160-166
+    scan_buffer_max_bytes = _env_int(
+        "GATEWAY_SCAN_BUFFER_MAX_BYTES", 4096, min_value=64, max_value=10_485_760)
+    scan_thread_pool_size = _env_int(
+        "GATEWAY_SCAN_THREAD_POOL_SIZE", 4, min_value=1, max_value=256)
+    deep_scan_enabled = get_env("GATEWAY_DEEP_SCAN_ENABLED", "false").lower() in ("true", "1", "yes")
+    org_only_inference = get_env("GATEWAY_ORG_ONLY_INFERENCE", "true").lower() in ("true", "1", "yes")
+    litellm_default_model = (get_env("LITELLM_DEFAULT_MODEL", "") or "").strip()
+=== rag_collections.py 66-110
+        _ok, _why = _safe_vp(str(_conn_url))
+        if not _ok:
+            LOG.warning("Rejected org vector provider connection_url (SSRF guard): %s", _why)
+            return None, ""
+
+    try:
+        if provider_type == "pinecone" and cfg.get("api_key"):
+            return PineconeClient(
+                api_key=cfg["api_key"],
+                environment=cfg.get("environment", ""),
+                embedding_model=cfg.get("embedding_model", "text-embedding-3-small"),
+                embedding_api_key=cfg.get("embedding_api_key", ""),
+                reranker_model=cfg.get("reranker_model", ""),
+                # Per-org BYOK: list_collections returns ALL indexes on the org's
+                # own Pinecone account (no namespace-scoping — see _list_indexes_sync).
+                is_org_byok=True,
+            ), "pinecone"
+        # Chroma is now a per-org BYOK provider (the client connects their own
+        # Chroma server via connection_url) — NOT a gateway built-in. api_key, if
+        # set, is sent as the Chroma auth bearer token.
+        if provider_type == "chroma" and cfg.get("connection_url"):
+            return ChromaDBClient(
+                url=cfg["connection_url"],
+                auth_token=cfg.get("api_key", ""),
+            ), "chroma"
+        if provider_type in ("milvus", "custom") and cfg.get("connection_url"):
+            url = str(cfg["connection_url"])
+            if provider_type == "custom" and (url.startswith("http://") or url.startswith("https://")):
+                return ChromaDBClient(
+                    url=url,
+                    auth_token=cfg.get("api_key", ""),
+                ), "chroma"
+            return MilvusClient(
+                uri=url,
+                token=cfg.get("api_key", ""),
+            ), provider_type
+    except Exception:
+        LOG.warning(
+            "Failed to create org-level %s client",
+            provider_type,
+            exc_info=True,
+        )
+    return None, ""
+
+
+=== vector_routes.py 150-170
+                return None
+            except Exception as exc:  # noqa: BLE001 — never let import errors silently SSRF
+                LOG.exception(
+                    "url_safety validator failed; refusing custom provider: %s",
+                    exc,
+                )
+                return None
+
+            from vector_client import MilvusClient
+
+            return MilvusClient(
+                uri=safe.url,
+                token=(provider_config or {}).get("api_key", ""),
+            )
+    return None
+
+
+# M-10 — cross-tenant guard for user-supplied collection names.
+#
+# Every vector op is namespaced by the vector client as
+# ``{project_id}__{collection_name}`` (see vector_client._build_collection_name),
+=== main.py 13160-13210
+                _vp_ok, _why = _safe_vp(str(_conn_url))
+                if not _vp_ok:
+                    LOG.warning("Rejected org vector provider connection_url for org=%s (SSRF guard): %s", org_id, _why)
+            if _vp_ok:
+                from vector_client import PineconeClient, MilvusClient, ChromaDBClient
+                try:
+                    if resolved_type == "pinecone" and cfg.get("api_key"):
+                        return PineconeClient(
+                            api_key=cfg["api_key"],
+                            environment=cfg.get("environment", ""),
+                            embedding_model=_emb_override or cfg.get("embedding_model", "text-embedding-3-small"),
+                            embedding_api_key=cfg.get("embedding_api_key", ""),
+                            reranker_model=cfg.get("reranker_model", ""),
+                            is_org_byok=True,  # org's own key → list_collections returns all its indexes
+                            # RAG-32: the collection policy's pinned dimension,
+                            # enforced against the REAL vectors (fail-closed).
+                            embedding_dimension=(
+                                embedding_dimension_override
+                                or cfg.get("dimension")
+                                or cfg.get("embedding_dimension")
+                            ),
+                        ), "pinecone"
+                    elif resolved_type == "chroma" and cfg.get("connection_url"):
+                        # BYOK Chroma: the org connects their own Chroma server.
+                        return ChromaDBClient(
+                            url=cfg["connection_url"],
+                            auth_token=cfg.get("api_key", ""),
+                        ), "chroma"
+                    elif resolved_type == "milvus" and cfg.get("connection_url"):
+                        return MilvusClient(
+                            uri=cfg["connection_url"],
+                            token=cfg.get("api_key", ""),
+                        ), "milvus"
+                    elif resolved_type == "custom" and cfg.get("connection_url"):
+                        url = str(cfg["connection_url"])
+                        if url.startswith("http://") or url.startswith("https://"):
+                            return ChromaDBClient(
+                                url=url,
+                                auth_token=cfg.get("api_key", ""),
+                            ), "chroma"
+                        return MilvusClient(
+                            uri=url,
+                            token=cfg.get("api_key", ""),
+                        ), "custom"
+                except Exception:
+                    LOG.warning(
+                        "Failed to create org-level %s client for org=%s, falling back to default",
+                        resolved_type,
+                        org_id,
+                    )
+
+=== EmbeddingVault constructors
+scanner.py:1135:        # M9: legacy Tier-1.6 EmbeddingVault removed; param ignored.
+scanner.py:1459:        # M9: the legacy Tier-1.6 EmbeddingVault semantic-injection check was
+embedding_vault.py:219:class EmbeddingVault:
+embedding_vault.py:254:            "EmbeddingVault created (pg_enabled=%s, threshold=%.3f, model=%s, dim=%d)",
+main.py:6460:    # M9: the legacy EmbeddingVault (system pgvector attack-pattern store between
+tests/test_embedding_vault.py:1:"""Tests for EmbeddingVault failure handling (M-16).
+tests/test_embedding_vault.py:14:from embedding_vault import EmbeddingVault, VaultVerdict, _is_auth_error
+tests/test_embedding_vault.py:37:    v = EmbeddingVault(pg_dsn="postgresql://fake:fake@127.0.0.1:1/fake")
+rag_pipeline/pipeline.py:30:    from embedding_vault import EmbeddingVault
+rag_pipeline/pipeline.py:71:        embedding_vault: "EmbeddingVault | None" = None,

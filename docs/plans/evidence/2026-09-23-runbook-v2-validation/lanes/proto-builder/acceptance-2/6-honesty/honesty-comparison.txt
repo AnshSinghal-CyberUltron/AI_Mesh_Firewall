@@ -1,0 +1,4 @@
+direct        json: p50=0.2 p90=0.2 max=0.3 | first: p50=0.2 p90=0.2 max=0.3 | sse: p50=0.2 p90=0.2 max=0.5 | valid True drops 0 q 240 / 240 {}
+base          json: p50=84.5 p90=88.5 max=102.4 | first: p50=85.0 p90=88.7 max=107.8 | sse: p50=116.3 p90=130.9 max=162.9 | valid True drops 0 q 238 / 240 {'http_403': 2, 'incomplete': 2, 'unjoined': 2, 'disposition_BLOCK': 2, 'stage_dispatch_S': 2, 'stage_out_S': 2}
+predispatch5  json: p50=89.5 p90=93.1 max=127.3 | first: p50=90.0 p90=94.0 max=127.3 | sse: p50=128.3 p90=132.8 max=169.4 | valid True drops 0 q 238 / 240 {'http_403': 2, 'incomplete': 2, 'unjoined': 2, 'disposition_BLOCK': 2, 'stage_dispatch_S': 2, 'stage_out_S': 2}
+hold30        json: p50=84.5 p90=88.0 max=101.2 | first: p50=85.1 p90=88.6 max=113.8 | sse: p50=134.9 p90=138.5 max=165.3 | valid True drops 0 q 239 / 240 {'http_403': 1, 'incomplete': 1, 'unjoined': 1, 'disposition_BLOCK': 1, 'stage_dispatch_S': 1, 'stage_out_S': 1}

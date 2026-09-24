@@ -1,0 +1,5 @@
+fleet-075-r2 75 EDGE_VM=rv-pbf-edge-2 LGS=rv-pbf-lg-4 PROVS=rv-pbf-prov-3 REDIS_VM=rv-pbf-redis-2 UNITS="rv-pbf-unit-6 rv-pbf-unit-8 rv-pbf-unit-9" TARGETS=http://10.146.0.20:8080 LABEL=C-fleet-3xg2-8-knee-repeat
+fleet-075-r3 75 EDGE_VM=rv-pbf-edge-2 LGS=rv-pbf-lg-4 PROVS=rv-pbf-prov-3 REDIS_VM=rv-pbf-redis-2 UNITS="rv-pbf-unit-6 rv-pbf-unit-8 rv-pbf-unit-9" TARGETS=http://10.146.0.20:8080 LABEL=C-fleet-3xg2-8-knee-repeat
+fleet-075-poisson 75 EDGE_VM=rv-pbf-edge-2 LGS=rv-pbf-lg-4 PROVS=rv-pbf-prov-3 REDIS_VM=rv-pbf-redis-2 UNITS="rv-pbf-unit-6 rv-pbf-unit-8 rv-pbf-unit-9" TARGETS=http://10.146.0.20:8080 LABEL=C-fleet-3xg2-8-poisson OLG_EXTRA="-arrival poisson"
+fleet-030-poisson 30 EDGE_VM=rv-pbf-edge-2 LGS=rv-pbf-lg-4 PROVS=rv-pbf-prov-3 REDIS_VM=rv-pbf-redis-2 UNITS="rv-pbf-unit-6 rv-pbf-unit-8 rv-pbf-unit-9" TARGETS=http://10.146.0.20:8080 LABEL=C-fleet-3xg2-8-poisson OLG_EXTRA="-arrival poisson"
+direct-160-lg4 160 MODE=direct LGS=rv-pbf-lg-4 PROVS=rv-pbf-prov-3 AUTH=none LABEL=direct-floor-fleet-lane

@@ -1,0 +1,4 @@
+disposition: block deciding: ('r-inj',)
+mint for BLOCK -> None
+LGW04-3 runtime rejection needs the Category import at runtime: category 'prompt-injection' is not a plan.model.Category
+audit record: block

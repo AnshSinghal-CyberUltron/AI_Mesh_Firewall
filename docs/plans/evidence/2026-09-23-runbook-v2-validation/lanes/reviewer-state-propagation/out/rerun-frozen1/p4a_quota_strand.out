@@ -1,0 +1,1 @@
+{"t": 1790168007.898, "step": "strand result", "budget_set": 60000, "responses": {"200": 22, "429 insufficient_quota": 18}, "store_remaining": 0, "admitted_tokens_total": 5038, "stranded_in_worker_leases": 54962, "per_worker": {"0": {"held": 49070}, "1": {"held": 0}, "2": {"held": 0}, "3": {"held": 5892}, "all_workers": {"granted": 60000, "admitted": 5038, "rejected": 18}}}

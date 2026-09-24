@@ -1,0 +1,9 @@
+ROOT = /home/contact_cyberultron_com/AI_Mesh_Firewall
+  command_injection  rm -rf command chain                         compiles
+  command_injection  Command chain fetch (&& curl)                compiles
+  command_injection  Pipe into shell (| bash)                     compiles
+  command_injection  Command substitution $(...)                  compiles
+  command_injection  Backtick shell-injection (narrowed, G0.3)    DROPPED (pattern has a nested unbounded quantifier (possible ReDoS))
+regex rules in catalog: 46; silently dropped by gateway _compile_regex: 1
+python re.search(narrowed, attack) = True
+policy_engine.evaluate(attack, [narrowed-only bundle]).action = 'allow'

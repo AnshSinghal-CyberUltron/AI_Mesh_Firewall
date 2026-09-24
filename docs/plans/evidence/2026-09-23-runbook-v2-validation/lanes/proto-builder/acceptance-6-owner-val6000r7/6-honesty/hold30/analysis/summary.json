@@ -1,0 +1,224 @@
+{
+ "mode": "sut",
+ "policy": "enforce",
+ "phases": [
+  2
+ ],
+ "inputs": {
+  "client_files": [
+   "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-builder/acceptance-6-owner-val6000r7/6-honesty/hold30/olg/requests.jsonl"
+  ],
+  "provider_files": [
+   "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-builder/acceptance-6-owner-val6000r7/6-honesty/hold30/provider.jsonl"
+  ],
+  "corpus": "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-builder/acceptance-6-owner-val6000r7/6-honesty/light-corpus.jsonl"
+ },
+ "offered": 240,
+ "offered_rate_config": 4.0,
+ "measure_s": 60,
+ "achieved_offered_rps": 4.0,
+ "qualified": 240,
+ "expected_blocks": 0,
+ "errors": 0,
+ "qualified_rps": 4.0,
+ "error_rate": 0.0,
+ "error_reasons": {},
+ "error_examples": [],
+ "safety_failures": 0,
+ "safety_reasons": {},
+ "safety_examples": [],
+ "schedule": {
+  "drops": 0,
+  "drop_threshold_ms": 5.0,
+  "lateness": {
+   "n": 240,
+   "min": 0.0622,
+   "p50": 0.1147,
+   "p90": 0.1306,
+   "p99": 0.1505,
+   "p999": 0.1641,
+   "max": 0.1641,
+   "mean": 0.1156
+  }
+ },
+ "join": {
+  "joined": 240,
+  "by_nonce_fallback": 0,
+  "provider_records": 260,
+  "provider_rids_with_multiple_calls": 0,
+  "provider_orphans": null
+ },
+ "classes": {
+  "benign": 240
+ },
+ "phase_counts": {
+  "1": 20,
+  "2": 240
+ },
+ "T_addon_total": {
+  "n": 240,
+  "min": 40.8195,
+  "p50": 85.544,
+  "p90": 91.6216,
+  "p99": 107.3625,
+  "p999": 109.5511,
+  "max": 109.5511,
+  "mean": 72.851
+ },
+ "T_addon_first": {
+  "n": 240,
+  "min": 40.7965,
+  "p50": 85.5506,
+  "p90": 92.2577,
+  "p99": 107.3635,
+  "p999": 109.6809,
+  "max": 109.6809,
+  "mean": 73.0912
+ },
+ "T_release_lag_max": {
+  "n": 240,
+  "min": 41.5632,
+  "p50": 102.4237,
+  "p90": 139.0914,
+  "p99": 159.5584,
+  "p999": 167.1312,
+  "max": 167.1312,
+  "mean": 108.0969
+ },
+ "T_release_lag_max_arrival": {
+  "n": 240,
+  "min": 41.5632,
+  "p50": 98.2254,
+  "p90": 139.0441,
+  "p99": 157.2332,
+  "p999": 159.5584,
+  "max": 159.5584,
+  "mean": 107.3077
+ },
+ "T_fw_addon": {
+  "n": 240,
+  "min": 41.5632,
+  "p50": 102.4237,
+  "p90": 139.0914,
+  "p99": 159.5584,
+  "p999": 167.1312,
+  "max": 167.1312,
+  "mean": 108.0969
+ },
+ "T_fw_addon_sse": {
+  "n": 168,
+  "min": 83.379,
+  "p50": 135.4525,
+  "p90": 141.9431,
+  "p99": 162.7413,
+  "p999": 167.1312,
+  "max": 167.1312,
+  "mean": 124.4146
+ },
+ "T_fw_addon_json": {
+  "n": 72,
+  "min": 41.5632,
+  "p50": 85.0731,
+  "p90": 92.5535,
+  "p99": 108.9344,
+  "p999": 108.9344,
+  "max": 108.9344,
+  "mean": 70.0223
+ },
+ "release_lag_sampled_joined": 240,
+ "release_lag_unmappable": 0,
+ "client_ttft_sse": {
+  "n": 168,
+  "min": 190.8607,
+  "p50": 236.0563,
+  "p90": 242.28,
+  "p99": 257.4065,
+  "p999": 259.7283,
+  "max": 259.7283,
+  "mean": 224.4576
+ },
+ "provider_sched_err_last": {
+  "n": 240,
+  "min": 0.0036,
+  "p50": 0.0514,
+  "p90": 0.0919,
+  "p99": 0.1039,
+  "p999": 0.1049,
+  "max": 0.1049,
+  "mean": 0.0539
+ },
+ "provider_sched_err_max_per_stream": {
+  "n": 240,
+  "min": 0.0067,
+  "p50": 0.0605,
+  "p90": 0.1031,
+  "p99": 0.375,
+  "p999": 0.4228,
+  "max": 0.4228,
+  "mean": 0.0696
+ },
+ "provider_write_max": {
+  "n": 240,
+  "min": 0.0106,
+  "p50": 0.0508,
+  "p90": 0.0674,
+  "p99": 0.1889,
+  "p999": 1.0618,
+  "max": 1.0618,
+  "mean": 0.0515
+ },
+ "loadgen_cpu": [
+  {
+   "dir": "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-builder/acceptance-6-owner-val6000r7/6-honesty/hold30/olg",
+   "samples": 60,
+   "busy_max": 38.344929444289164,
+   "busy_mean": 15.77,
+   "machine": "c4-standard-16",
+   "zone": "asia-south1-c"
+  }
+ ],
+ "provider_cpu": {
+  "samples": 0,
+  "busy_max": null,
+  "busy_p95": null
+ },
+ "provider_stats": [],
+ "instrument_health": [
+  {
+   "proc": "olg",
+   "dir": "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-builder/acceptance-6-owner-val6000r7/6-honesty/hold30/olg",
+   "gc_cycles": 0,
+   "sched_latency_max_ms": 0.08192,
+   "tcp": null
+  }
+ ],
+ "completeness": [
+  {
+   "dir": "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-builder/acceptance-6-owner-val6000r7/6-honesty/hold30/olg",
+   "scheduled": 260,
+   "recorded": 260,
+   "interrupted": false
+  }
+ ],
+ "valid": true,
+ "invalid_reasons": [],
+ "per_second": null,
+ "thresholds": {
+  "slo_ms": 20.0,
+  "err_budget": 0.001,
+  "drop_ms": 5.0,
+  "sched_tol_ms": 1.0,
+  "cpu_max": 70.0
+ },
+ "verdict": {
+  "pass": false,
+  "checks": {
+   "p99_T_fw_addon_lt_slo": false,
+   "error_rate_le_budget": true,
+   "zero_schedule_drops": true,
+   "zero_safety_failures": true,
+   "run_valid": true,
+   "qualified_nonempty": true
+  }
+ }
+}

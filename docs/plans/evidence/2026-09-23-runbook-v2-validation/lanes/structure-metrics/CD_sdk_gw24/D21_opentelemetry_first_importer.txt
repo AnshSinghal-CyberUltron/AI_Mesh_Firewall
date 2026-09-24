@@ -1,0 +1,15 @@
+FIRST opentelemetry import: opentelemetry.sdk.metrics
+    <frozen importlib._bootstrap> 1342 _find_and_load_unlocked
+    <frozen importlib._bootstrap> 938 _load_unlocked
+    <frozen importlib._bootstrap_external> 759 exec_module
+    <frozen importlib._bootstrap> 491 _call_with_frames_removed
+    redis/observability/__init__.py 14 <module>
+    <stdin> 11 hook
+    <frozen importlib._bootstrap> 1371 _find_and_load
+    <frozen importlib._bootstrap> 1342 _find_and_load_unlocked
+    <frozen importlib._bootstrap> 938 _load_unlocked
+    <frozen importlib._bootstrap_external> 759 exec_module
+    <frozen importlib._bootstrap> 491 _call_with_frames_removed
+    redis/observability/providers.py 32 <module>
+uv.lock: chromadb 1.5.9 depends on ['opentelemetry-api', 'opentelemetry-exporter-otlp-proto-grpc', 'opentelemetry-sdk']
+uv.lock: gateway 0.1.0 depends on ['opentelemetry-api', 'opentelemetry-exporter-otlp', 'opentelemetry-sdk']

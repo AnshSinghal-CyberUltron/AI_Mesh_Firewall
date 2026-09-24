@@ -1,0 +1,65 @@
+{
+ "declared": {
+  "n": 8,
+  "names": {
+   "BEDROCK_ADJUDICATOR_MAX_TOKENS": [
+    ".env.ec2.sample:105"
+   ],
+   "BEDROCK_ADJUDICATOR_MODEL": [
+    ".env.ec2.sample:103"
+   ],
+   "BEDROCK_LOG_LEVEL": [
+    "docker-compose.observability.yml:40",
+    ".env.ec2.sample:132"
+   ],
+   "BEDROCK_LOG_PROMPT_PREVIEW": [
+    "docker-compose.observability.yml:41",
+    ".env.ec2.sample:133"
+   ],
+   "BEDROCK_MAX_TOKENS": [
+    ".env.ec2.sample:104"
+   ],
+   "BEDROCK_MODEL": [
+    "docker-compose.yml:251",
+    ".env.sample:25",
+    ".env.ec2.sample:107"
+   ],
+   "BEDROCK_REGION": [
+    "docker-compose.yml:250",
+    ".env.sample:24",
+    ".env.ec2.sample:100",
+    "scripts/perf/e2e/perf.env:21",
+    "infra/terraform/envs/prod/main.tf:183"
+   ],
+   "BEDROCK_TIER2_SCANNER_MODEL": [
+    ".env.ec2.sample:102"
+   ]
+  }
+ },
+ "declared_commented": {
+  "n": 1,
+  "names": {
+   "BEDROCK_TIMEOUT": [
+    ".env.ec2.sample:88"
+   ]
+  }
+ },
+ "interpolated": {
+  "n": 4,
+  "names": {
+   "BEDROCK_LOG_LEVEL": [
+    "docker-compose.observability.yml:40"
+   ],
+   "BEDROCK_LOG_PROMPT_PREVIEW": [
+    "docker-compose.observability.yml:41"
+   ],
+   "BEDROCK_MODEL": [
+    "docker-compose.yml:251"
+   ],
+   "BEDROCK_REGION": [
+    "docker-compose.yml:249",
+    "docker-compose.yml:250"
+   ]
+  }
+ }
+}

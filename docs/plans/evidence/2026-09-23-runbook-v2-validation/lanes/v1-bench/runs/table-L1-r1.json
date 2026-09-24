@@ -1,0 +1,59 @@
+[
+ {
+  "run": "L1-r1",
+  "offered_rps": 1.0,
+  "qualified_rps": 1.0,
+  "offered": 300,
+  "qualified": 300,
+  "errors": 0,
+  "error_rate": 0.0,
+  "error_reasons": {},
+  "drops": 0,
+  "late_p99_ms": 0.2812,
+  "fw_p50": 709.3873,
+  "fw_p90": 951.339,
+  "fw_p99": 1141.39,
+  "fw_p999": 1172.1488,
+  "sse_p50": 740.6939,
+  "sse_p99": 1143.8644,
+  "json_p50": 78.9408,
+  "json_p99": 118.7781,
+  "json_p999": 118.7781,
+  "total_p50": 87.014,
+  "total_p99": 292.7572,
+  "first_p50": 700.4137,
+  "first_p99": 1004.846,
+  "lag_p50": 1026.3423,
+  "lag_p99": 1172.1488,
+  "gw_cpu_ms_req": 497.178,
+  "stack_cpu_ms_req": 892.514,
+  "gw_cores": 0.497,
+  "gw_cores_1s_max": 0.911,
+  "host_util_pct": 3.95,
+  "gw_anon_mib_max": 4950.1,
+  "worker_rss_mib_max": 320.0,
+  "worker_cores": {
+   "n": 19,
+   "min": 0.0,
+   "p50": 0.002,
+   "max": 0.25
+  },
+  "probe_p99": 5.252,
+  "probe_max": 17.698,
+  "probe_fail": 0,
+  "audit_completeness": 1.0,
+  "verdict": {
+   "pass": false,
+   "checks": {
+    "p99_T_fw_addon_lt_slo": false,
+    "error_rate_le_budget": true,
+    "zero_schedule_drops": true,
+    "zero_safety_failures": true,
+    "run_valid": true,
+    "qualified_nonempty": true
+   }
+  },
+  "valid": true,
+  "checks": {}
+ }
+]

@@ -1,0 +1,1 @@
+2026/09/23 09:40:38 done: scheduled=1716875 recorded=1716875 ok=1251371 errors=map[eof_mid_stream:460151 transport:5353] drops=285 late_p99=111us max=20629us cpu_busy_max=26.6%

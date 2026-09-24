@@ -1,0 +1,24 @@
+{
+ "item": "Instrument honesty: injected 5 ms pre-dispatch delay and 30 ms mid-stream hold visible in the harness metrics",
+ "harness": "synthprov 2142dc95.., olg 4f48977e.., analyze.py c9f89fe8.. (commit 6e0bacb)",
+ "setup": "controller, functional scale: synthprov TTFT 150 ms / ITL 20 ms / sample-mod 1; rvproto local_cpu PG2-22M, 2 workers; olg 4 req/s x 60 s (+5 s warm-up), 70% SSE, light corpus (100-170 tokens), org-a key",
+ "analyzer_p50_ms": {
+  "direct_floor": {"T_fw_addon_json": 0.2, "T_addon_first": 0.2, "T_fw_addon_sse": 0.2},
+  "base": {"T_fw_addon_json": 83.4, "T_addon_first": 84.2, "T_fw_addon_sse": 123.0},
+  "predispatch5": {"T_fw_addon_json": 89.4, "T_addon_first": 89.6, "T_fw_addon_sse": 115.2},
+  "hold30": {"T_fw_addon_json": 83.6, "T_addon_first": 84.4, "T_fw_addon_sse": 134.4}
+ },
+ "per_piece_median_lag_ms (tools/piece_lag.py, analyzer definition, raw files)": {
+  "base": "104.0-104.2 at every piece 40-56",
+  "predispatch5": "109.3-109.5 at every piece 40-56 (+5.3)",
+  "hold30": "104.2-104.5 except piece 47 = 134.4 (+30.1) and piece 48 = 114.4 (+10.2)"
+ },
+ "gateway_internal": {"t_input_p50_ms": {"base": 83.36, "predispatch5": 88.6},
+                      "release_processing_max_ms": {"base": 0.23, "hold30": 31.07},
+                      "holdback_wait_p50_ms": 20.05},
+ "notes": ["per-stream max metrics (T_fw_addon_sse, T_release_lag_max) show the hold only by the amount it exceeds the stream's existing holdback maximum (~2 ITL for multi-token word runs): +11.4 ms at p50 in this run, +26.8 ms in the earlier run with the older synthprov build",
+           "SSE p50 in base includes 1-2 ITL of pattern-aware holdback (trailing word held until the next chunk proves it cannot become a match)",
+           "2 benign prompts blocked in base/predispatch5 by PG2-22M false positives (A.inj.sem); excluded from qualified, not an instrument issue"],
+ "validity": "all runs valid=True, 0 schedule drops",
+ "verdict": "PASS"
+}

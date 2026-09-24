@@ -1,0 +1,12 @@
+=== baseline gateway/ (non-test) concurrency primitives
+gateway/ai_mesh_gateway/mcp_stdio_adapter.py:109:_init_semaphore: "asyncio.Semaphore | None" = None
+gateway/ai_mesh_gateway/mcp_stdio_adapter.py:112:def _get_init_semaphore() -> asyncio.Semaphore:
+gateway/ai_mesh_gateway/mcp_stdio_adapter.py:115:        _init_semaphore = asyncio.Semaphore(_MAX_CONCURRENT_INITS)
+=== baseline shared/ + services/ (for context)
+services/mcp-broker/sandbox-image/agent/stdio_manager.py:77:_init_semaphore: asyncio.Semaphore | None = None
+services/mcp-broker/sandbox-image/agent/stdio_manager.py:270:def _get_init_semaphore() -> asyncio.Semaphore:
+services/mcp-broker/sandbox-image/agent/stdio_manager.py:273:        _init_semaphore = asyncio.Semaphore(_MAX_CONCURRENT_INITS)
+=== HEAD gateway/ (non-test)
+gateway/ai_mesh_gateway/mcp_stdio_adapter.py:109:_init_semaphore: "asyncio.Semaphore | None" = None
+gateway/ai_mesh_gateway/mcp_stdio_adapter.py:112:def _get_init_semaphore() -> asyncio.Semaphore:
+gateway/ai_mesh_gateway/mcp_stdio_adapter.py:115:        _init_semaphore = asyncio.Semaphore(_MAX_CONCURRENT_INITS)

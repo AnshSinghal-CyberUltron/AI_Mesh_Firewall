@@ -1,0 +1,39 @@
+# Harness analysis (direct, policy=none) — PASS
+
+| check | result |
+|---|---|
+| zero_schedule_drops | PASS |
+| zero_errors | PASS |
+| provider_p99_sched_err_within_tol | PASS |
+| loadgen_cpu_max_lt_limit | PASS |
+| run_valid | PASS |
+| all_joined | PASS |
+
+- offered: 3000 over 300 s = 10.0 req/s (configured 10.0)
+- qualified: 3000 (10.0 req/s); expected blocks: 0; errors: 0 (rate 0.0)
+- error reasons: {}
+- safety failures: 0 {}
+- schedule drops (>5.0 ms): 0; lateness ms: n=3000 p50=0.1048 p90=0.1256 p99=0.1486 p99.9=0.1726 max=0.2699 mean=0.1069
+- join: {'joined': 3000, 'by_nonce_fallback': 0, 'provider_records': 3750, 'provider_rids_with_multiple_calls': 0, 'provider_orphans': None}
+- valid: True []
+
+| metric (ms) | distribution |
+|---|---|
+| T_addon_total | n=3000 p50=63.0431 p90=205.8971 p99=617.4134 p99.9=981.4595 max=1186.4812 mean=94.3118 |
+| T_addon_first | n=3000 p50=34.4543 p90=108.7437 p99=289.2056 p99.9=370.0874 max=1180.9446 mean=51.2185 |
+| T_release_lag_max | n=287 p50=75.3946 p90=294.4288 p99=689.1159 p99.9=900.4156 max=900.4156 mean=146.8347 |
+| T_release_lag_max_arrival | n=287 p50=75.3946 p90=294.4288 p99=689.1159 p99.9=900.4156 max=900.4156 mean=146.8347 |
+| T_fw_addon | n=3000 p50=64.6036 p90=249.61 p99=618.238 p99.9=981.4595 max=1186.4812 mean=101.9844 |
+| T_fw_addon_sse | n=2100 p50=80.5518 p90=281.585 p99=692.5337 p99.9=983.5068 max=1186.4812 mean=130.5161 |
+| T_fw_addon_json | n=900 p50=20.5729 p90=72.217 p99=239.0534 p99.9=330.4139 max=330.4139 mean=35.4104 |
+| client_ttft_sse | n=2100 p50=187.3243 p90=274.1681 p99=452.2795 p99.9=524.5894 max=1331.0106 mean=208.0481 |
+| provider_sched_err_last | n=3000 p50=0.0555 p90=0.0911 p99=0.1007 p99.9=0.107 max=0.1143 mean=0.0546 |
+| provider_sched_err_max_per_stream | n=3000 p50=0.0624 p90=0.0997 p99=0.1242 p99.9=0.2031 max=0.2254 mean=0.0627 |
+| provider_write_max | n=3000 p50=0.0136 p90=0.019 p99=0.0308 p99.9=0.0497 max=0.1094 mean=0.0142 |
+
+- release lag: 287 sampled streams joined, 0 unmappable (content length differs)
+- loadgen CPU (measurement phase): [{'dir': '/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/v1-bench/runs/FWOFF-r10/rv-v1-lg-2/lg', 'samples': 300, 'busy_max': 16.49371713867005, 'busy_mean': 3.26, 'machine': 'c4-standard-8', 'zone': 'asia-south1-c'}]
+- provider CPU: {'samples': 412, 'busy_max': 16.485950958400576, 'busy_p95': 3.398130965861379}
+- completeness: [{'dir': '/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/v1-bench/runs/FWOFF-r10/rv-v1-lg-2/lg', 'scheduled': 3750, 'recorded': 3750, 'interrupted': False}]
+- health olg rv-v1-lg-2: gc_cycles=0 sched_latency_max_ms=0.08192 tcp={'TcpRetransSegs': 28, 'TcpExtTCPFastRetrans': 0, 'TcpExtTCPLossProbes': 28, 'TcpExtTCPTimeouts': 0, 'TcpOutSegs': 636225, 'TcpInSegs': 632087}
+- health synthprov rv-v1-prov-2: gc_cycles=0 sched_latency_max_ms=0.098304 tcp={'TcpRetransSegs': 1586, 'TcpExtTCPFastRetrans': 0, 'TcpExtTCPLossProbes': 1586, 'TcpExtTCPTimeouts': 0, 'TcpOutSegs': 607456, 'TcpInSegs': 599820}

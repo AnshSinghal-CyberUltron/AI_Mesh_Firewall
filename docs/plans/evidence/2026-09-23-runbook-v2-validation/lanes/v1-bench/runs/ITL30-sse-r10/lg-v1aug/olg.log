@@ -1,0 +1,26 @@
+2026/09/23 13:08:42 corpus: 5000 entries sha256=6b8420958f0cb22b
+2026/09/23 13:08:42 waiting 4.708s for synchronized start
+2026/09/23 13:08:56 t=10s sched=51 inflight=40 ok=11 err=0 drops=0 conns=39
+2026/09/23 13:09:06 t=20s sched=151 inflight=80 ok=71 err=0 drops=0 conns=80
+2026/09/23 13:09:16 t=30s sched=251 inflight=78 ok=173 err=0 drops=0 conns=88
+2026/09/23 13:09:26 t=40s sched=351 inflight=79 ok=272 err=0 drops=0 conns=88
+2026/09/23 13:09:36 t=50s sched=451 inflight=72 ok=379 err=0 drops=0 conns=88
+2026/09/23 13:09:46 t=60s sched=551 inflight=76 ok=475 err=0 drops=0 conns=88
+2026/09/23 13:09:56 t=70s sched=651 inflight=69 ok=582 err=0 drops=0 conns=88
+2026/09/23 13:10:06 t=80s sched=751 inflight=76 ok=675 err=0 drops=0 conns=88
+2026/09/23 13:10:16 t=90s sched=851 inflight=72 ok=779 err=0 drops=0 conns=88
+2026/09/23 13:10:26 t=100s sched=951 inflight=78 ok=873 err=0 drops=0 conns=92
+2026/09/23 13:10:36 t=110s sched=1051 inflight=78 ok=973 err=0 drops=0 conns=93
+2026/09/23 13:10:46 t=120s sched=1151 inflight=74 ok=1077 err=0 drops=0 conns=93
+2026/09/23 13:10:56 t=130s sched=1251 inflight=81 ok=1170 err=0 drops=0 conns=93
+2026/09/23 13:11:06 t=140s sched=1351 inflight=79 ok=1272 err=0 drops=0 conns=95
+2026/09/23 13:11:16 t=150s sched=1451 inflight=70 ok=1381 err=0 drops=0 conns=95
+2026/09/23 13:11:26 t=160s sched=1551 inflight=72 ok=1479 err=0 drops=0 conns=95
+2026/09/23 13:11:36 t=170s sched=1651 inflight=69 ok=1582 err=0 drops=0 conns=95
+2026/09/23 13:11:46 t=180s sched=1751 inflight=70 ok=1681 err=0 drops=0 conns=95
+2026/09/23 13:11:56 t=190s sched=1851 inflight=80 ok=1771 err=0 drops=0 conns=95
+2026/09/23 13:12:06 t=200s sched=1951 inflight=73 ok=1878 err=0 drops=0 conns=95
+2026/09/23 13:12:16 t=210s sched=2051 inflight=85 ok=1966 err=0 drops=0 conns=95
+2026/09/23 13:12:26 t=220s sched=2150 inflight=73 ok=2077 err=0 drops=0 conns=98
+2026/09/23 13:12:36 t=230s sched=2150 inflight=2 ok=2148 err=0 drops=0 conns=98
+2026/09/23 13:12:38 done: scheduled=2150 recorded=2150 ok=2150 errors=map[] drops=0 late_p99=151us max=320us cpu_busy_max=16.2%

@@ -1,0 +1,1 @@
+{"P1_INFO_noshim": {"s1_benign_nonstream": {"n": 20, "min": 1, "median": 1.0, "max": 1, "mean": 1}, "s2_benign_stream": {"n": 20, "min": 1, "median": 1.0, "max": 1, "mean": 1}, "s3_pii_nonstream": {"n": 20, "min": 1, "median": 1.0, "max": 1, "mean": 1}, "s4_injection_block": {"n": 20, "min": 1, "median": 1.0, "max": 1, "mean": 1}}, "blocked": 1, "blocked_unexpected": 0}

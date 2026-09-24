@@ -1,0 +1,8 @@
+goos: linux
+goarch: amd64
+pkg: rvharness/internal/rv
+cpu: INTEL(R) XEON(R) PLATINUM 8581C CPU @ 2.30GHz
+BenchmarkParseChunk-16           	 4037440	       563.3 ns/op	 520.14 MB/s	       0 B/op	       0 allocs/op
+BenchmarkEncodingJSONChunk-16    	 1000000	      2051 ns/op	 142.83 MB/s	      96 B/op	       4 allocs/op
+PASS
+ok  	rvharness/internal/rv	4.955s

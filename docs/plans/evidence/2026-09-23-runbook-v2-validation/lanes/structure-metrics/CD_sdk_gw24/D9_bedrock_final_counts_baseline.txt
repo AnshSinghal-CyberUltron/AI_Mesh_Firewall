@@ -1,0 +1,5 @@
+All BEDROCK_* string constants in non-test code are env-read call args: True
+(i) gateway runtime: names=17 sites=29
+     ['BEDROCK_ADJUDICATOR_MODEL', 'BEDROCK_DEPLOYMENT_PATH', 'BEDROCK_LOG_BACKUPS', 'BEDROCK_LOG_DIR', 'BEDROCK_LOG_JSON', 'BEDROCK_LOG_LEVEL', 'BEDROCK_LOG_MAX_MB', 'BEDROCK_LOG_OUTPUT_PREVIEW', 'BEDROCK_LOG_PREVIEW_CHARS', 'BEDROCK_LOG_PROMPT_PREVIEW', 'BEDROCK_LOG_RING_SIZE', 'BEDROCK_MAX_PROMPT_CHARS', 'BEDROCK_MAX_TOKENS', 'BEDROCK_MODEL', 'BEDROCK_REGION', 'BEDROCK_TIER2_SCANNER_MODEL', 'BEDROCK_TIMEOUT']
+(ii) all export non-test code: names=19 sites=41
+    names outside gateway runtime: ['BEDROCK_COMPONENT_LOG_LEVEL', 'BEDROCK_VERIFY_SSL'] [('control/ai_mesh_control/main_app/settings.py', 969), ('control/ai_mesh_control/security_engines/bedrock_client.py', 33)]

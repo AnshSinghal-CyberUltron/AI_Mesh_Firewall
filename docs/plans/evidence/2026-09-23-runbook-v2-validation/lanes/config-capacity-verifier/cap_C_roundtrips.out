@@ -1,0 +1,35 @@
+### BASELINE, 1 ms/round trip (steady state, Nagle off)
+injected server latency per round trip = 1.0 ms (PUBLISH not delayed)
+  auth GET (validate_api_key)      async round trips = 1   wall =    1.2 ms
+  kill-switch pipeline             async round trips = 1   wall =    3.3 ms
+  model_state GET (untimed)        async round trips = 1   wall =    1.2 ms
+  burst MULTI + RPM MULTI          async round trips = 2   wall =    2.5 ms
+  org TPM EVAL                     async round trips = 1   wall =    1.3 ms
+  key TPM EVAL                     async round trips = 1   wall =    3.5 ms
+TOTAL async Redis round trips in prefix = 7; wall = 13.0 ms (serial: each stage awaited before the next)
+server-side commands: {'GET': 5, 'MULTI': 2, 'INCRBY': 2, 'EXPIRE': 2, 'EXEC': 2, 'EVAL': 2, 'HELLO': 1, 'CLIENT': 3, 'PUBLISH': 1}
+sync PUBLISH (log lines -> RedisLogPublisher, blocking the loop) during prefix = 1
+
+### BASELINE, 5 ms/round trip
+injected server latency per round trip = 5.0 ms (PUBLISH not delayed)
+  auth GET (validate_api_key)      async round trips = 1   wall =    5.2 ms
+  kill-switch pipeline             async round trips = 1   wall =   15.3 ms
+  model_state GET (untimed)        async round trips = 1   wall =    5.2 ms
+  burst MULTI + RPM MULTI          async round trips = 2   wall =   10.6 ms
+  org TPM EVAL                     async round trips = 1   wall =    5.3 ms
+  key TPM EVAL                     async round trips = 1   wall =    7.6 ms
+TOTAL async Redis round trips in prefix = 7; wall = 49.2 ms (serial: each stage awaited before the next)
+server-side commands: {'GET': 5, 'MULTI': 2, 'INCRBY': 2, 'EXPIRE': 2, 'EXEC': 2, 'EVAL': 2, 'HELLO': 1, 'CLIENT': 3, 'PUBLISH': 1}
+sync PUBLISH (log lines -> RedisLogPublisher, blocking the loop) during prefix = 1
+
+### HEAD, 1 ms/round trip
+injected server latency per round trip = 1.0 ms (PUBLISH not delayed)
+  auth GET (validate_api_key)      async round trips = 1   wall =    1.2 ms
+  kill-switch pipeline             async round trips = 1   wall =    3.5 ms
+  model_state GET (untimed)        async round trips = 1   wall =    1.2 ms
+  burst MULTI + RPM MULTI          async round trips = 2   wall =    2.6 ms
+  org TPM EVAL                     async round trips = 1   wall =    1.2 ms
+  key TPM EVAL                     async round trips = 1   wall =    3.5 ms
+TOTAL async Redis round trips in prefix = 7; wall = 13.3 ms (serial: each stage awaited before the next)
+server-side commands: {'GET': 5, 'MULTI': 2, 'INCRBY': 2, 'EXPIRE': 2, 'EXEC': 2, 'EVAL': 2, 'HELLO': 1, 'CLIENT': 3, 'PUBLISH': 1}
+sync PUBLISH (log lines -> RedisLogPublisher, blocking the loop) during prefix = 1

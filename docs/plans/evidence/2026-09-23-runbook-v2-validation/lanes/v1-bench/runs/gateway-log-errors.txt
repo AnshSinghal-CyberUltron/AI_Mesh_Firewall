@@ -1,0 +1,13 @@
+L1-r1    ERROR=2     WARNING=0     CRITICAL=0         2 [ERROR] asyncio: Unclosed client session;
+L1-r2    ERROR=1     WARNING=0     CRITICAL=0         1 [ERROR] asyncio: Unclosed client session;
+L1-r5    ERROR=2     WARNING=0     CRITICAL=0         2 [ERROR] asyncio: Unclosed client session;
+L1-r10   ERROR=2     WARNING=0     CRITICAL=0         2 [ERROR] asyncio: Unclosed client session;
+L1-r15   ERROR=5     WARNING=0     CRITICAL=0         5 [ERROR] asyncio: Unclosed client session;
+L1-r20   ERROR=3     WARNING=0     CRITICAL=0         3 [ERROR] asyncio: Unclosed client session;
+L1-r25   ERROR=8     WARNING=0     CRITICAL=0         5 [ERROR] asyncio: Unclosed client session;      3 [ERROR] asyncio: Unclosed connector;
+L1-r30   ERROR=0     WARNING=0     CRITICAL=0   
+L1b-r1   ERROR=0     WARNING=0     CRITICAL=0   
+L1b-r25  ERROR=3     WARNING=0     CRITICAL=0         2 [ERROR] asyncio: Unclosed client session;      1 [ERROR] asyncio: Unclosed connector;
+L1c-r1   ERROR=0     WARNING=0     CRITICAL=0   
+L1c-r25  ERROR=11    WARNING=0     CRITICAL=0         7 [ERROR] asyncio: Unclosed client session;      4 [ERROR] asyncio: Unclosed connector;
+SAT-r40  ERROR=50    WARNING=0     CRITICAL=0        22 [ERROR] gateway.kill_switch: Kill-switch Redis check failed (fail-CLOSED): Too many connections;     20 [ERROR] gateway.model_state: Model state Redis check failed (fail-CLOSED): Too many connections;      4 [ERROR] asyncio: Unclosed connector;

@@ -1,0 +1,5 @@
+[2026-09-23 08:30:11 +0000] [17768] [INFO] Booting worker with pid: 17768
+[2026-09-23 08:30:11 +0000] [17768] [INFO] Started server process [17768]
+[2026-09-23 08:30:11 +0000] [17768] [INFO] Waiting for application startup.
+[2026-09-23 08:30:11 +0000] [17768] [INFO] Application startup complete.
+[2026-09-23 08:30:11 +0000] [17752] [INFO] Control socket listening at /run/user/1001/gunicorn.ctl

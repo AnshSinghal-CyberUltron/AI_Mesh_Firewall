@@ -1,0 +1,27 @@
+### tree with forbidden contract
+Contracts
+---------
+Analyzed 91 files, 97 dependencies.
+-----------------------------------
+Gateway v2 layers KEPT
+Only edge/ may import HTTP server frameworks BROKEN
+Contracts: 1 kept, 1 broken.
+----------------
+Broken contracts
+----------------
+Only edge/ may import HTTP server frameworks
+--------------------------------------------
+gateway_v2.admit is not allowed to import starlette:
+-   gateway_v2.admit.deny -> starlette (l.5)
+gateway_v2.detect is not allowed to import starlette:
+-   gateway_v2.detect.evil -> starlette (l.5)
+exit=1
+### pristine_fixed with forbidden contract
+Contracts
+---------
+Analyzed 88 files, 93 dependencies.
+-----------------------------------
+Gateway v2 layers KEPT
+Only edge/ may import HTTP server frameworks KEPT
+Contracts: 2 kept, 0 broken.
+exit=0

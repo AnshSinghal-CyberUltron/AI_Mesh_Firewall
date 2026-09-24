@@ -1,0 +1,73 @@
+[
+ {
+  "run": "L1-r30",
+  "offered_rps": 30.0,
+  "qualified_rps": 20.16,
+  "offered": 9000,
+  "qualified": 6047,
+  "errors": 2953,
+  "error_rate": 0.32811111111111113,
+  "error_reasons": {
+   "timeout": 2953,
+   "incomplete": 2953,
+   "content_mismatch": 2943,
+   "disposition_missing": 2235,
+   "stage_auth_missing": 2235,
+   "stage_kill_switch_missing": 2235,
+   "stage_rate_limit_missing": 2235,
+   "stage_policy_missing": 2235,
+   "stage_input_scan_missing": 2235,
+   "stage_model_routing_missing": 2235,
+   "stage_model_input_missing": 2235,
+   "stage_model_output_missing": 2235,
+   "stage_output_guardrail_missing": 2235
+  },
+  "drops": 0,
+  "late_p99_ms": 0.1153,
+  "fw_p50": 30263.863,
+  "fw_p90": 99722.8005,
+  "fw_p99": 113628.2079,
+  "fw_p999": 115781.1311,
+  "sse_p50": 74095.923,
+  "sse_p99": 114236.9702,
+  "json_p50": 2623.7945,
+  "json_p99": 4128.9487,
+  "json_p999": 4468.5853,
+  "total_p50": 30263.863,
+  "total_p99": 113628.2079,
+  "first_p50": 3991.4525,
+  "first_p99": 22360.1371,
+  "lag_p50": 31067.6531,
+  "lag_p99": 113674.3743,
+  "gw_cpu_ms_req": 596.507,
+  "stack_cpu_ms_req": 632.629,
+  "gw_cores": 17.895,
+  "gw_cores_1s_max": 18.238,
+  "host_util_pct": 80.24,
+  "gw_anon_mib_max": 6049.0,
+  "worker_rss_mib_max": 380.3,
+  "worker_cores": {
+   "n": 19,
+   "min": 0.0,
+   "p50": 0.99,
+   "max": 0.992
+  },
+  "probe_p99": 1375.817,
+  "probe_max": 1577.293,
+  "probe_fail": 0,
+  "audit_completeness": 0.801333,
+  "verdict": {
+   "pass": false,
+   "checks": {
+    "p99_T_fw_addon_lt_slo": false,
+    "error_rate_le_budget": false,
+    "zero_schedule_drops": true,
+    "zero_safety_failures": true,
+    "run_valid": true,
+    "qualified_nonempty": true
+   }
+  },
+  "valid": true,
+  "checks": {}
+ }
+]

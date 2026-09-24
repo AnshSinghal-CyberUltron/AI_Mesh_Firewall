@@ -1,0 +1,6 @@
+[A] analyzer: qualified=10000 errors=0 err_rate=0.0 p99 T_fw_addon=0.3 ms  checks={'p99_T_fw_addon_lt_slo': True, 'error_rate_le_budget': True} VERDICT=PASS
+[A] ground truth: 280/7000 SSE streams (4.0%) = 2.80% of all requests had a 40 ms added delay (only 40 of them sampled) -> true per-request p99 of worst added delay = 40.3 ms
+[B] analyzer: qualified=9990 errors=10 err_rate=0.001 p99 T_fw_addon=0.3 ms  checks={'p99_T_fw_addon_lt_slo': True, 'error_rate_le_budget': True} VERDICT=PASS
+[B] ground truth: over ALL offered requests with timeouts counted as +inf: p99 = 25.3 ms
+[C] pbu: strict pass=False (p99 T_fw_addon=100.3 ms) | load_knee_pass=True (p99 T_fw_addon_nohold=0.3 ms) | T_release_lag_max p50=100.3 ms
+[C] ground truth: EVERY SSE stream (70% of requests) had one piece delayed 100 ms mid-stream

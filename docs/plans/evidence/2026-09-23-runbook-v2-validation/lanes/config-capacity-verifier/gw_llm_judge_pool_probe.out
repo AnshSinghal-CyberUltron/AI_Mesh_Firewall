@@ -1,0 +1,4 @@
+=== BASELINE ===
+pool max_workers=2; 10 concurrent judge() x 200 ms Bedrock -> 1002 ms wall (parallel would be ~200 ms); verdict models: ['bedrock:global.anthropic.claude-haiku-4-5-20251001-v1:0']
+=== HEAD ===
+pool max_workers=2; 10 concurrent judge() x 200 ms Bedrock -> 1002 ms wall (parallel would be ~200 ms); verdict models: ['bedrock:global.anthropic.claude-haiku-4-5-20251001-v1:0']

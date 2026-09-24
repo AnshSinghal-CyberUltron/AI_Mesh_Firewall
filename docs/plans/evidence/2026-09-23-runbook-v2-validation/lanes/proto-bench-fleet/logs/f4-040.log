@@ -1,0 +1,18 @@
+13:42:16 f4-040: olg started on rv-pbf-lg-4 (rate 40.0 each, start-at 1790170959721, mode sut, targets http://10.146.0.14:8400)
+[rv-pbf-lg-4] 2026/09/23 13:49:17 done: scheduled=15000 recorded=15000 ok=14748 errors=map[http_403:251 http_503:1] drops=0 late_p99=107us max=481us cpu_busy_max=15.3%
+# f4-040: strict FAIL | load-knee FAIL (sut, units=1, rate=40)
+
+checks: {'p99_T_fw_addon_lt_slo': False, 'infra_error_rate_le_budget': True, 'zero_schedule_drops': True, 'zero_safety_failures': True, 'run_valid': True}
+load-knee checks: {'p99_T_fw_addon_nohold_lt_slo': False, 'infra_error_rate_le_budget': True, 'zero_schedule_drops': True, 'zero_safety_failures': True, 'run_valid': True}
+offered 12000 (40.0/s) qualified 11784 (39.28/s) FP-blocks 214 (0.01783) infra 2 (0.00016666666666666666) drops 0 safety 0
+infra reasons: {'block_on_unavailable_sem': 1, 'http_503': 1, 'incomplete': 1, 'unjoined': 1, 'disposition_missing': 1, 'stage_canon_missing': 1, 'stage_det_missing': 1, 'stage_sem_missing': 1, 'stage_resolve_missing': 1, 'stage_dispatch_missing': 1, 'stage_out_missing': 1, 'stage_audit_missing': 1}
+infra detail: {'403 http_403 type=policy_violation code=blocked_by_policy': 1, '503 http_503 type=server_overloaded code=overloaded': 1}
+
+T_fw_addon: n=11784 p50=11.2105 p90=19.0956 p99=56.413 p99.9=79.6752 max=144.5953 mean=14.1026
+T_fw_addon_nohold: n=11784 p50=10.8403 p90=14.8349 p99=21.2025 p99.9=39.5064 max=124.5195 mean=10.8403
+T_fw_addon_sse: n=8248 p50=11.3583 p90=39.4943 p99=59.4373 p99.9=82.1348 max=144.5953 mean=15.4902
+T_fw_addon_json: n=3536 p50=10.8393 p90=14.8505 p99=21.0352 p99.9=46.7705 max=124.5195 mean=10.8662
+T_addon_first_sse: n=8248 p50=10.6911 p90=14.6453 p99=30.6273 p99.9=39.4734 max=123.3121 mean=10.871
+T_addon_total_sse: n=8248 p50=10.8405 p90=14.8339 p99=21.2743 p99.9=28.9572 max=110.4928 mean=10.8292
+T_addon_total_json: n=3536 p50=10.8393 p90=14.8505 p99=21.0352 p99.9=46.7705 max=124.5195 mean=10.8662
+T_release_lag_max: n=861 p50=51.1087 p90=58.467 p99=78.7554 p99.9=144.5953 max=144.5953 mean=51.818

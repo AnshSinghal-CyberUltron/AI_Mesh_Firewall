@@ -1,0 +1,8 @@
+{"name": "rv-guard-g2-2", "zone": "asia-south1-c", "machine_type": "g2-standard-8", "lane": "guard", "create_utc": "2026-09-23T05:36:25Z", "delete_utc": "2026-09-23T09:54:18Z", "note": "gpu"}
+{"name": "rv-guard-c4-1", "zone": "asia-south1-c", "machine_type": "c4-standard-8", "lane": "guard", "create_utc": "2026-09-23T05:36:26Z", "delete_utc": "2026-09-23T08:36:53Z", "note": "cpu"}
+{"name": "rv-guard-g2-1", "zone": "asia-south1-c", "machine_type": "g2-standard-8", "lane": "guard", "create_utc": "2026-09-23T05:36:31Z", "delete_utc": "2026-09-23T08:55:05Z", "note": "gpu"}
+{"name": "rv-guard-c4-2", "zone": "asia-south1-c", "machine_type": "c4-standard-8", "lane": "guard", "create_utc": "2026-09-23T05:36:50Z", "delete_utc": "2026-09-23T07:24:19Z", "note": "cpu"}
+{"name": "rv-guard-c4h-1", "zone": "asia-south1-c", "machine_type": "c4-highcpu-16", "lane": "guard", "create_utc": "2026-09-23T05:36:51Z", "delete_utc": "2026-09-23T07:42:35Z", "note": "cpu"}
+{"name": "rv-guard-g2-3", "zone": "asia-south1-c", "machine_type": "g2-standard-8", "lane": "guard", "create_utc": "2026-09-23T06:18:20Z", "delete_utc": "2026-09-23T09:58:08Z", "note": "gpu"}
+{"name": "rv-guard-g2-4", "zone": "asia-south1-c", "machine_type": "g2-standard-8", "lane": "guard", "create_utc": "2026-09-23T06:23:44Z", "delete_utc": "2026-09-23T08:52:59Z", "note": "gpu"}
+{"name": "rv-guard-g2-5", "zone": "asia-south1-c", "machine_type": "g2-standard-8", "lane": "guard", "create_utc": "2026-09-23T07:00:33Z", "delete_utc": "2026-09-23T09:27:09Z", "note": "gpu"}

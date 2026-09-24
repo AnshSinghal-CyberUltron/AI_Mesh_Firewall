@@ -1,0 +1,1 @@
+{"P2b_INFO": {"s1_benign_nonstream": {"n": 20, "min": 3, "median": 3.0, "max": 3, "mean": 3}, "s2_benign_stream": {"n": 20, "min": 2, "median": 2.0, "max": 2, "mean": 2}, "s3_pii_nonstream": {"n": 20, "min": 4, "median": 4.0, "max": 4, "mean": 4}, "s4_injection_block": {"n": 20, "min": 2, "median": 2.0, "max": 2, "mean": 2}}, "blocked": 2, "blocked_unexpected": 0}

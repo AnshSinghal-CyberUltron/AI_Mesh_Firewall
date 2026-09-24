@@ -1,0 +1,3 @@
+raw distinct BEDROCK_* tokens in full 2a657fad tree: 27
+env-var union (code reads U config decls): 20 subset of tokens: True
+tokens that are NOT env vars (Python identifiers): 7 ['BEDROCK_BLOCK_ACTIONS', 'BEDROCK_BLOCK_THRESHOLD', 'BEDROCK_EMBEDDER', 'BEDROCK_FLAG_THRESHOLD', 'BEDROCK_LOG_RING', 'BEDROCK_MONITOR_ACTIONS', 'BEDROCK_REDACT_ACTIONS']

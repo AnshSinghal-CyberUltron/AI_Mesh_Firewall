@@ -1,0 +1,33 @@
+## every distinct per-request record source seen (measured requests, all cells); message = first seen
+(bedrock):0              bedrock                  DEBUG   func=None [first seen P2t2_DEBUG]
+    'BEDROCK OUTPUT   | reqid=0514ce8785c2 text={"findings": [], "risk_score": 0, "recommended_action": "allow"}'
+(bedrock):0              bedrock                  INFO    func=None [first seen P2t2_DEBUG]
+    'BEDROCK METRICS     | method=converse model=zeroshield-guard tokens=900→20 elapsed=0.000s ok=True'
+(bedrock):0              bedrock                  INFO    func=None [first seen P2t2_DEBUG]
+    'BEDROCK PROMPT   | reqid=0514ce8785c2 text=system: You are a security analysis engine. Your ONLY task is to analyze the TEXT provided by the user for potential security t'
+(bedrock):0              bedrock                  INFO    func=None [first seen P2t2_DEBUG]
+    'BEDROCK REQUEST  | reqid=0514ce8785c2 model=zeroshield-guard region=[region] payload=12037B prompt=11350→615 max_tokens=1024'
+(bedrock):0              bedrock                  INFO    func=None [first seen P2t2_DEBUG]
+    'BEDROCK RESPONSE | reqid=0514ce8785c2 status=OK elapsed=0.000s tokens_in=900 tokens_out=20 model=zeroshield-guard'
+(bedrock):0              bedrock                  INFO    func=None [first seen P2t2_DEBUG]
+    'BEDROCK SCAN RESULT | reqid=0514ce8785c2 risk=0 action=allow findings=0 llm_guard=0.00 degraded=False elapsed=0.002s'
+(bedrock):0              bedrock                  INFO    func=None [first seen P2t2_DEBUG]
+    'BEDROCK SCAN START  | reqid=0514ce8785c2 prompt=590→590 context=False model=zeroshield-guard max_tokens=1024'
+bedrock_client.py:543    gateway.bedrock_client   INFO    func=aconverse [first seen P2t2_DEBUG]
+    'Bedrock aconverse DONE: model=zeroshield-guard, call_site=tier2_scan, elapsed=0.000s, tokens_in=900, tokens_out=20'
+bedrock_client.py:548    gateway.bedrock_client   INFO    func=aconverse [first seen P2t2_DEBUG]
+    '{"call_site": "tier2_scan", "gateway_request_id": "0514ce8785c2", "x_amzn_request_id": "claim2a-fake-6", "tokens_out": 20, "client_init_ms": 0.0, "converse_ms": 0.0086557'
+main.py:10105            gateway                  INFO    func=proxy_chat [first seen P2_DEBUG]
+    'Chat routing selected model: gpt-4o-mini (requested=gpt-4o-mini, source=deterministic_weighted, reason=Deterministic weighted selection (risk=30%, cost=20%, latency=20%, '
+main.py:1046             gateway                  WARNING func=_build_safe_block_response [first seen P2b_DEBUG]
+    "[SECURITY_BLOCK] code=content_blocked, category=prompt_injection, request_id=zs-3edbf7073ef8, detail=Blocked by policy 'Block Injection', rule 'Ignore instructions'"
+main.py:11594            gateway                  INFO    func=proxy_chat [first seen P1_DEBUG]
+    "Token usage: <MagicMock name='mock.extract_usage()' id='132844655826256'> (model=gpt-4o-mini, user=1, project=orgorg-sdk-compat-proj-sdk-compat)"
+main.py:12039            gateway                  ERROR   func=proxy_chat [first seen P1_DEBUG_noshim]
+    'Unhandled error in proxy_chat Traceback (most recent call last):   File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54f'
+main.py:9549             gateway                  INFO    func=proxy_chat [first seen P1_DEBUG]
+    "PII/secret detected, redacting before LLM call (type=pii, patterns=['email', 'phone_us'], user=1)"
+rate_limiter.py:111      gateway.rate_limiter     INFO    func=check_rate_limit [first seen P2_DEBUG]
+    'RateLimit check: 11f92b86ac12 est=241 limit=10000000 result=[1, 316]'
+rate_limiter.py:274      gateway.rate_limiter     DEBUG   func=record_usage [first seen P2_DEBUG]
+    'RateLimit record_usage: 11f92b86ac12 delta=-226 (actual=15, est=241)'

@@ -1,0 +1,663 @@
+{
+ "mode": "sut",
+ "policy": "none",
+ "phases": [
+  2
+ ],
+ "inputs": {
+  "client_files": [
+   "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/v1-bench/runs/L1-r30/lg-v1aug/requests.jsonl"
+  ],
+  "provider_files": [
+   "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/v1-bench/runs/L1-r30/rv-v1-prov-1/prov/records.jsonl.zst"
+  ],
+  "corpus": "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/harness/corpora/headline-22M.jsonl"
+ },
+ "offered": 9000,
+ "offered_rate_config": 30.0,
+ "measure_s": 300,
+ "achieved_offered_rps": 30.0,
+ "qualified": 6047,
+ "expected_blocks": 0,
+ "errors": 2953,
+ "qualified_rps": 20.16,
+ "error_rate": 0.32811111111111113,
+ "error_reasons": {
+  "timeout": 2953,
+  "incomplete": 2953,
+  "content_mismatch": 2943,
+  "disposition_missing": 2235,
+  "stage_auth_missing": 2235,
+  "stage_kill_switch_missing": 2235,
+  "stage_rate_limit_missing": 2235,
+  "stage_policy_missing": 2235,
+  "stage_input_scan_missing": 2235,
+  "stage_model_routing_missing": 2235,
+  "stage_model_input_missing": 2235,
+  "stage_model_output_missing": 2235,
+  "stage_output_guardrail_missing": 2235
+ },
+ "error_examples": [
+  {
+   "rid": "6c9b4ed0-51bc-4986-8e9a-1db3f19c7f3f",
+   "reasons": [
+    "timeout",
+    "incomplete",
+    "content_mismatch",
+    "disposition_missing",
+    "stage_auth_missing",
+    "stage_kill_switch_missing",
+    "stage_rate_limit_missing",
+    "stage_policy_missing",
+    "stage_input_scan_missing",
+    "stage_model_routing_missing",
+    "stage_model_input_missing",
+    "stage_model_output_missing",
+    "stage_output_guardrail_missing"
+   ],
+   "status": 200,
+   "err_detail": "context deadline exceeded"
+  },
+  {
+   "rid": "6ed7b284-42e9-4c7d-8814-7b2d695d67a6",
+   "reasons": [
+    "timeout",
+    "incomplete",
+    "disposition_missing",
+    "stage_auth_missing",
+    "stage_kill_switch_missing",
+    "stage_rate_limit_missing",
+    "stage_policy_missing",
+    "stage_input_scan_missing",
+    "stage_model_routing_missing",
+    "stage_model_input_missing",
+    "stage_model_output_missing",
+    "stage_output_guardrail_missing"
+   ],
+   "status": 200,
+   "err_detail": "context deadline exceeded"
+  },
+  {
+   "rid": "1b2fe70e-40d2-450f-9f91-7bb897100703",
+   "reasons": [
+    "timeout",
+    "incomplete",
+    "content_mismatch",
+    "disposition_missing",
+    "stage_auth_missing",
+    "stage_kill_switch_missing",
+    "stage_rate_limit_missing",
+    "stage_policy_missing",
+    "stage_input_scan_missing",
+    "stage_model_routing_missing",
+    "stage_model_input_missing",
+    "stage_model_output_missing",
+    "stage_output_guardrail_missing"
+   ],
+   "status": 200,
+   "err_detail": "context deadline exceeded"
+  },
+  {
+   "rid": "85fffe21-2e16-4583-b062-8da2f7dc4f40",
+   "reasons": [
+    "timeout",
+    "incomplete",
+    "content_mismatch",
+    "disposition_missing",
+    "stage_auth_missing",
+    "stage_kill_switch_missing",
+    "stage_rate_limit_missing",
+    "stage_policy_missing",
+    "stage_input_scan_missing",
+    "stage_model_routing_missing",
+    "stage_model_input_missing",
+    "stage_model_output_missing",
+    "stage_output_guardrail_missing"
+   ],
+   "status": 200,
+   "err_detail": "context deadline exceeded"
+  },
+  {
+   "rid": "277949f7-68eb-4e3d-a035-898fde919dd9",
+   "reasons": [
+    "timeout",
+    "incomplete",
+    "content_mismatch"
+   ],
+   "status": 200,
+   "err_detail": "context deadline exceeded"
+  },
+  {
+   "rid": "a370ccc6-cbfb-4501-965d-04e2bbf4e827",
+   "reasons": [
+    "timeout",
+    "incomplete",
+    "content_mismatch"
+   ],
+   "status": 200,
+   "err_detail": "context deadline exceeded"
+  },
+  {
+   "rid": "4afa8a15-f075-4046-acbf-58a3111c69bd",
+   "reasons": [
+    "timeout",
+    "incomplete",
+    "content_mismatch",
+    "disposition_missing",
+    "stage_auth_missing",
+    "stage_kill_switch_missing",
+    "stage_rate_limit_missing",
+    "stage_policy_missing",
+    "stage_input_scan_missing",
+    "stage_model_routing_missing",
+    "stage_model_input_missing",
+    "stage_model_output_missing",
+    "stage_output_guardrail_missing"
+   ],
+   "status": 200,
+   "err_detail": "context deadline exceeded"
+  },
+  {
+   "rid": "ccd79529-381c-45d4-a4fc-129a2681f339",
+   "reasons": [
+    "timeout",
+    "incomplete",
+    "content_mismatch"
+   ],
+   "status": 200,
+   "err_detail": "context deadline exceeded"
+  },
+  {
+   "rid": "ce8235ab-1af7-4a48-ae18-2fb05ef89fcd",
+   "reasons": [
+    "timeout",
+    "incomplete",
+    "content_mismatch",
+    "disposition_missing",
+    "stage_auth_missing",
+    "stage_kill_switch_missing",
+    "stage_rate_limit_missing",
+    "stage_policy_missing",
+    "stage_input_scan_missing",
+    "stage_model_routing_missing",
+    "stage_model_input_missing",
+    "stage_model_output_missing",
+    "stage_output_guardrail_missing"
+   ],
+   "status": 200,
+   "err_detail": "context deadline exceeded"
+  },
+  {
+   "rid": "cb2f4f31-4568-471c-b5ba-2d7a183f24b5",
+   "reasons": [
+    "timeout",
+    "incomplete",
+    "content_mismatch",
+    "disposition_missing",
+    "stage_auth_missing",
+    "stage_kill_switch_missing",
+    "stage_rate_limit_missing",
+    "stage_policy_missing",
+    "stage_input_scan_missing",
+    "stage_model_routing_missing",
+    "stage_model_input_missing",
+    "stage_model_output_missing",
+    "stage_output_guardrail_missing"
+   ],
+   "status": 200,
+   "err_detail": "context deadline exceeded"
+  },
+  {
+   "rid": "a19e40df-d1be-4b9b-b41c-64c45f67e136",
+   "reasons": [
+    "timeout",
+    "incomplete",
+    "content_mismatch"
+   ],
+   "status": 200,
+   "err_detail": "context deadline exceeded"
+  },
+  {
+   "rid": "f7a2d87a-b66f-4ffa-bb74-53a589aee83a",
+   "reasons": [
+    "timeout",
+    "incomplete",
+    "content_mismatch",
+    "disposition_missing",
+    "stage_auth_missing",
+    "stage_kill_switch_missing",
+    "stage_rate_limit_missing",
+    "stage_policy_missing",
+    "stage_input_scan_missing",
+    "stage_model_routing_missing",
+    "stage_model_input_missing",
+    "stage_model_output_missing",
+    "stage_output_guardrail_missing"
+   ],
+   "status": 200,
+   "err_detail": "context deadline exceeded"
+  },
+  {
+   "rid": "da5c3184-2418-4ed6-9723-91755f64ae0d",
+   "reasons": [
+    "timeout",
+    "incomplete",
+    "content_mismatch",
+    "disposition_missing",
+    "stage_auth_missing",
+    "stage_kill_switch_missing",
+    "stage_rate_limit_missing",
+    "stage_policy_missing",
+    "stage_input_scan_missing",
+    "stage_model_routing_missing",
+    "stage_model_input_missing",
+    "stage_model_output_missing",
+    "stage_output_guardrail_missing"
+   ],
+   "status": 200,
+   "err_detail": "context deadline exceeded"
+  },
+  {
+   "rid": "074d436b-fe05-41e9-9711-2325a324cca0",
+   "reasons": [
+    "timeout",
+    "incomplete",
+    "content_mismatch",
+    "disposition_missing",
+    "stage_auth_missing",
+    "stage_kill_switch_missing",
+    "stage_rate_limit_missing",
+    "stage_policy_missing",
+    "stage_input_scan_missing",
+    "stage_model_routing_missing",
+    "stage_model_input_missing",
+    "stage_model_output_missing",
+    "stage_output_guardrail_missing"
+   ],
+   "status": 200,
+   "err_detail": "context deadline exceeded"
+  },
+  {
+   "rid": "1b5e5ab5-f085-407c-ae27-35e459ea8231",
+   "reasons": [
+    "timeout",
+    "incomplete",
+    "content_mismatch",
+    "disposition_missing",
+    "stage_auth_missing",
+    "stage_kill_switch_missing",
+    "stage_rate_limit_missing",
+    "stage_policy_missing",
+    "stage_input_scan_missing",
+    "stage_model_routing_missing",
+    "stage_model_input_missing",
+    "stage_model_output_missing",
+    "stage_output_guardrail_missing"
+   ],
+   "status": 200,
+   "err_detail": "context deadline exceeded"
+  },
+  {
+   "rid": "700fa3ad-2d8e-4863-a96f-870caf82b1f2",
+   "reasons": [
+    "timeout",
+    "incomplete",
+    "content_mismatch"
+   ],
+   "status": 200,
+   "err_detail": "context deadline exceeded"
+  },
+  {
+   "rid": "8c58efb1-1311-4207-acb5-43e3c5aa6fc3",
+   "reasons": [
+    "timeout",
+    "incomplete",
+    "content_mismatch",
+    "disposition_missing",
+    "stage_auth_missing",
+    "stage_kill_switch_missing",
+    "stage_rate_limit_missing",
+    "stage_policy_missing",
+    "stage_input_scan_missing",
+    "stage_model_routing_missing",
+    "stage_model_input_missing",
+    "stage_model_output_missing",
+    "stage_output_guardrail_missing"
+   ],
+   "status": 200,
+   "err_detail": "context deadline exceeded"
+  },
+  {
+   "rid": "e7cd76eb-cb18-4271-bf8b-bb605ac83285",
+   "reasons": [
+    "timeout",
+    "incomplete",
+    "content_mismatch",
+    "disposition_missing",
+    "stage_auth_missing",
+    "stage_kill_switch_missing",
+    "stage_rate_limit_missing",
+    "stage_policy_missing",
+    "stage_input_scan_missing",
+    "stage_model_routing_missing",
+    "stage_model_input_missing",
+    "stage_model_output_missing",
+    "stage_output_guardrail_missing"
+   ],
+   "status": 200,
+   "err_detail": "context deadline exceeded"
+  },
+  {
+   "rid": "2cbce387-bb23-4ab6-82b2-c5499d2e6769",
+   "reasons": [
+    "timeout",
+    "incomplete"
+   ],
+   "status": 200,
+   "err_detail": "context deadline exceeded"
+  },
+  {
+   "rid": "0ccadaaf-87d6-4ad3-8dc4-a1b667e4839a",
+   "reasons": [
+    "timeout",
+    "incomplete",
+    "content_mismatch"
+   ],
+   "status": 200,
+   "err_detail": "context deadline exceeded"
+  }
+ ],
+ "safety_failures": 0,
+ "safety_reasons": {},
+ "safety_examples": [],
+ "schedule": {
+  "drops": 0,
+  "drop_threshold_ms": 5.0,
+  "lateness": {
+   "n": 9000,
+   "min": 0.0243,
+   "p50": 0.0892,
+   "p90": 0.1009,
+   "p99": 0.1153,
+   "p999": 0.1411,
+   "max": 0.2425,
+   "mean": 0.0894
+  }
+ },
+ "join": {
+  "joined": 9000,
+  "by_nonce_fallback": 0,
+  "provider_records": 11250,
+  "provider_rids_with_multiple_calls": 0,
+  "provider_orphans": null
+ },
+ "classes": {
+  "benign": 9000
+ },
+ "phase_counts": {
+  "0": 450,
+  "1": 1800,
+  "2": 9000
+ },
+ "T_addon_total": {
+  "n": 6047,
+  "min": 536.2005,
+  "p50": 30263.863,
+  "p90": 99722.8005,
+  "p99": 113628.2079,
+  "p999": 115781.1311,
+  "max": 116661.515,
+  "mean": 40364.5469
+ },
+ "T_addon_first": {
+  "n": 6047,
+  "min": 536.2005,
+  "p50": 3991.4525,
+  "p90": 18258.8113,
+  "p99": 22360.1371,
+  "p999": 25184.2625,
+  "max": 26918.889,
+  "mean": 7850.7574
+ },
+ "T_release_lag_max": {
+  "n": 611,
+  "min": 580.4454,
+  "p50": 31067.6531,
+  "p90": 101590.2861,
+  "p99": 113674.3743,
+  "p999": 115920.515,
+  "max": 115920.515,
+  "mean": 41610.3388
+ },
+ "T_release_lag_max_arrival": {
+  "n": 611,
+  "min": 580.4454,
+  "p50": 31067.6531,
+  "p90": 101590.2861,
+  "p99": 113674.3743,
+  "p999": 115920.515,
+  "max": 115920.515,
+  "mean": 41610.3388
+ },
+ "T_fw_addon": {
+  "n": 6047,
+  "min": 536.2005,
+  "p50": 30263.863,
+  "p90": 99722.8005,
+  "p99": 113628.2079,
+  "p999": 115781.1311,
+  "max": 116661.515,
+  "mean": 40365.2827
+ },
+ "T_fw_addon_sse": {
+  "n": 3346,
+  "min": 8203.5056,
+  "p50": 74095.923,
+  "p90": 106269.9019,
+  "p99": 114236.9702,
+  "p999": 116196.9193,
+  "max": 116661.515,
+  "mean": 70972.0418
+ },
+ "T_fw_addon_json": {
+  "n": 2701,
+  "min": 536.2005,
+  "p50": 2623.7945,
+  "p90": 3633.5478,
+  "p99": 4128.9487,
+  "p999": 4468.5853,
+  "max": 4523.4996,
+  "mean": 2449.616
+ },
+ "release_lag_sampled_joined": 611,
+ "release_lag_unmappable": 297,
+ "client_ttft_sse": {
+  "n": 3346,
+  "min": 1470.0307,
+  "p50": 13250.3072,
+  "p90": 19481.0118,
+  "p99": 23584.7089,
+  "p999": 25564.3776,
+  "max": 27068.9391,
+  "mean": 12360.7861
+ },
+ "provider_sched_err_last": {
+  "n": 9000,
+  "min": 0.0004,
+  "p50": 0.0529,
+  "p90": 0.0893,
+  "p99": 0.1048,
+  "p999": 0.1203,
+  "max": 0.1559,
+  "mean": 0.0516
+ },
+ "provider_sched_err_max_per_stream": {
+  "n": 9000,
+  "min": 0.0008,
+  "p50": 0.0755,
+  "p90": 0.1135,
+  "p99": 0.1342,
+  "p999": 0.1737,
+  "max": 0.2162,
+  "mean": 0.0741
+ },
+ "provider_write_max": {
+  "n": 9000,
+  "min": 0.0045,
+  "p50": 0.0132,
+  "p90": 0.0198,
+  "p99": 0.0287,
+  "p999": 0.0465,
+  "max": 0.1598,
+  "mean": 0.0142
+ },
+ "loadgen_cpu": [
+  {
+   "dir": "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/v1-bench/runs/L1-r30/lg-v1aug",
+   "samples": 300,
+   "busy_max": 7.428601846224526,
+   "busy_mean": 4.19,
+   "machine": "c4-standard-8",
+   "zone": "asia-south1-c"
+  }
+ ],
+ "provider_cpu": {
+  "samples": 483,
+  "busy_max": 18.385981268348537,
+  "busy_p95": 6.158692198821402
+ },
+ "provider_stats": [
+  {
+   "build_sha": "5af9594a2631",
+   "bytes_out": 543067768,
+   "chunks": 1776092,
+   "client_gone": 0,
+   "cpu": {
+    "busy_max": 18.385981268348537,
+    "busy_mean": 4.73018081813402,
+    "proc_max": 3.6256093307809594,
+    "samples": 483
+   },
+   "faults": 0,
+   "gc_config": "gc=off memlimit=17.62GiB",
+   "host": {
+    "hostname": "rv-v1-prov-1.asia-south1-c.c.ai-mesh-firewall.internal",
+    "num_cpu": 8,
+    "gomaxprocs": 8,
+    "go_version": "go1.27.1",
+    "harness_build_sha": "5af9594a2631",
+    "kernel": "Linux version 7.0.0-1011-gcp (buildd@lcy02-amd64-099) (x86_64-linux-gnu-gcc-13 (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0, GNU ld (GNU Binutils for Ubuntu) 2.42) #11~24.04.1-Ubuntu SMP PREEMPT Tue Aug 11 20:14:48 UTC 2026",
+    "mem_total_kb": 30792984,
+    "lscpu": {
+     "CPU(s)": "8",
+     "Core(s) per socket": "4",
+     "Flags": "aes avx2 avx512f sha_ni amx_tile",
+     "Hypervisor vendor": "KVM",
+     "Model name": "INTEL(R) XEON(R) PLATINUM 8581C CPU @ 2.30GHz",
+     "NUMA node(s)": "1",
+     "Socket(s)": "1",
+     "Thread(s) per core": "2"
+    },
+    "gce": {
+     "image": "projects/ubuntu-os-cloud/global/images/ubuntu-2404-noble-amd64-v20260918",
+     "machine-type": "c4-standard-8",
+     "name": "rv-v1-prov-1",
+     "zone": "asia-south1-c"
+    },
+    "sysctl": {
+     "fs/file-max": "4194304",
+     "net/core/netdev_max_backlog": "250000",
+     "net/core/somaxconn": "65535",
+     "net/ipv4/ip_local_port_range": "1024\t65535",
+     "net/ipv4/tcp_max_syn_backlog": "65535",
+     "net/ipv4/tcp_tw_reuse": "1"
+    },
+    "nofile_limit": "1048576/1048576",
+    "start_utc": "2026-09-23T11:20:47.589867693Z"
+   },
+   "inflight": 0,
+   "itl_ms": 20,
+   "record_queue_blocked": 0,
+   "records": 11250,
+   "requests": 11250,
+   "runtime": {
+    "/gc/cycles/total:gc-cycles": 0,
+    "/gc/heap/goal:bytes": 18326597321,
+    "/gc/pauses:seconds": {
+     "count": 0
+    },
+    "/sched/goroutines:goroutines": 287,
+    "/sched/latencies:seconds": {
+     "count": 834741,
+     "max_ms": 0.098304,
+     "p50_ms": 6.400000000000001e-05,
+     "p9999_ms": 0.08192,
+     "p999_ms": 0.06553600000000001,
+     "p99_ms": 0.007168
+    }
+   },
+   "sample_mod": 10,
+   "sampled": 1147,
+   "sched_err_max_ns": 216249,
+   "status_2xx": 11250,
+   "status_4xx": 0,
+   "status_5xx": 0,
+   "streams_active": 0,
+   "ttft_ms": 150,
+   "uptime_s": 483.338193976,
+   "write_max_ns": 159799
+  }
+ ],
+ "instrument_health": [
+  {
+   "proc": "olg",
+   "dir": "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/v1-bench/runs/L1-r30/lg-v1aug",
+   "gc_cycles": 0,
+   "sched_latency_max_ms": 0.08192,
+   "tcp": null
+  },
+  {
+   "proc": "synthprov",
+   "dir": "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/v1-bench/runs/L1-r30/rv-v1-prov-1/prov",
+   "gc_cycles": 0,
+   "sched_latency_max_ms": 0.098304,
+   "tcp": {
+    "TcpRetransSegs": 24656,
+    "TcpExtTCPFastRetrans": 0,
+    "TcpExtTCPLossProbes": 24651,
+    "TcpExtTCPTimeouts": 6,
+    "TcpOutSegs": 1807801,
+    "TcpInSegs": 1473673
+   }
+  }
+ ],
+ "completeness": [
+  {
+   "dir": "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/v1-bench/runs/L1-r30/lg-v1aug",
+   "scheduled": 11250,
+   "recorded": 11250,
+   "interrupted": false
+  }
+ ],
+ "valid": true,
+ "invalid_reasons": [],
+ "per_second": null,
+ "thresholds": {
+  "slo_ms": 20.0,
+  "err_budget": 0.001,
+  "drop_ms": 5.0,
+  "sched_tol_ms": 1.0,
+  "cpu_max": 70.0
+ },
+ "verdict": {
+  "pass": false,
+  "checks": {
+   "p99_T_fw_addon_lt_slo": false,
+   "error_rate_le_budget": false,
+   "zero_schedule_drops": true,
+   "zero_safety_failures": true,
+   "run_valid": true,
+   "qualified_nonempty": true
+  }
+ }
+}

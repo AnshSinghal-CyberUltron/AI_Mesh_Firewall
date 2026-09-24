@@ -1,0 +1,84 @@
+=== e95f974d  lockfileVersion=3
+  react                        spec=^19.2.0      locked=19.2.6
+  react-dom                    spec=^19.2.0      locked=19.2.6
+  vite                         spec=^7.2.4       locked=7.3.3
+  tailwindcss                  spec=^4.1.18      locked=4.3.0
+  @tailwindcss/vite            spec=^4.1.18      locked=4.3.0
+  lucide-react                 spec=^0.562.0     locked=0.562.0
+  motion                       spec=^12.40.0     locked=12.40.0
+  framer-motion                spec=-            locked=12.40.0
+  echarts                      spec=^6.1.0       locked=6.1.0
+  echarts-for-react            spec=^3.0.6       locked=3.0.6
+  uplot                        spec=^1.6.32      locked=1.6.32
+  react-router-dom             spec=^7.6.1       locked=7.15.1
+  react-router                 spec=-            locked=7.15.1
+  @vitejs/plugin-react-swc     spec=^4.2.2       locked=4.3.1
+  @radix-ui/react-progress     spec=^1.1.8       locked=1.1.8
+  @radix-ui/react-slot         spec=^1.2.4       locked=1.2.4
+  class-variance-authority     spec=^0.7.1       locked=0.7.1
+  clsx                         spec=^2.1.1       locked=2.1.1
+  tailwind-merge               spec=^3.4.0       locked=3.6.0
+=== 2a657fad  lockfileVersion=3
+  react                        spec=^19.2.0      locked=19.2.6
+  react-dom                    spec=^19.2.0      locked=19.2.6
+  vite                         spec=^7.2.4       locked=7.3.3
+  tailwindcss                  spec=^4.1.18      locked=4.3.0
+  @tailwindcss/vite            spec=^4.1.18      locked=4.3.0
+  lucide-react                 spec=^0.562.0     locked=0.562.0
+  motion                       spec=^12.40.0     locked=12.40.0
+  framer-motion                spec=-            locked=12.40.0
+  echarts                      spec=^6.1.0       locked=6.1.0
+  echarts-for-react            spec=^3.0.6       locked=3.0.6
+  uplot                        spec=^1.6.32      locked=1.6.32
+  react-router-dom             spec=^7.6.1       locked=7.15.1
+  react-router                 spec=-            locked=7.15.1
+  @vitejs/plugin-react-swc     spec=^4.2.2       locked=4.3.1
+  @radix-ui/react-progress     spec=^1.1.8       locked=1.1.8
+  @radix-ui/react-slot         spec=^1.2.4       locked=1.2.4
+  class-variance-authority     spec=^0.7.1       locked=0.7.1
+  clsx                         spec=^2.1.1       locked=2.1.1
+  tailwind-merge               spec=^3.4.0       locked=3.6.0
+=== HEAD  lockfileVersion=3
+  react                        spec=^19.2.0      locked=19.2.6
+  react-dom                    spec=^19.2.0      locked=19.2.6
+  vite                         spec=^7.2.4       locked=7.3.3
+  tailwindcss                  spec=^4.1.18      locked=4.3.0
+  @tailwindcss/vite            spec=^4.1.18      locked=4.3.0
+  lucide-react                 spec=^0.562.0     locked=0.562.0
+  motion                       spec=^12.40.0     locked=12.40.0
+  framer-motion                spec=-            locked=12.40.0
+  echarts                      spec=^6.1.0       locked=6.1.0
+  echarts-for-react            spec=^3.0.6       locked=3.0.6
+  uplot                        spec=^1.6.32      locked=1.6.32
+  react-router-dom             spec=^7.6.1       locked=7.15.1
+  react-router                 spec=-            locked=7.15.1
+  @vitejs/plugin-react-swc     spec=^4.2.2       locked=4.3.1
+  @radix-ui/react-progress     spec=^1.1.8       locked=1.1.8
+  @radix-ui/react-slot         spec=^1.2.4       locked=1.2.4
+  class-variance-authority     spec=^0.7.1       locked=0.7.1
+  clsx                         spec=^2.1.1       locked=2.1.1
+  tailwind-merge               spec=^3.4.0       locked=3.6.0
+=== WORKTREE  lockfileVersion=3
+  react                        spec=^19.2.0      locked=19.2.6
+  react-dom                    spec=^19.2.0      locked=19.2.6
+  vite                         spec=^7.2.4       locked=7.3.3
+  tailwindcss                  spec=^4.1.18      locked=4.3.0
+  @tailwindcss/vite            spec=^4.1.18      locked=4.3.0
+  lucide-react                 spec=^0.562.0     locked=0.562.0
+  motion                       spec=^12.40.0     locked=12.40.0
+  framer-motion                spec=-            locked=12.40.0
+  echarts                      spec=^6.1.0       locked=6.1.0
+  echarts-for-react            spec=^3.0.6       locked=3.0.6
+  uplot                        spec=^1.6.32      locked=1.6.32
+  react-router-dom             spec=^7.6.1       locked=7.15.1
+  react-router                 spec=-            locked=7.15.1
+  @vitejs/plugin-react-swc     spec=^4.2.2       locked=4.3.1
+  @radix-ui/react-progress     spec=^1.1.8       locked=1.1.8
+  @radix-ui/react-slot         spec=^1.2.4       locked=1.2.4
+  class-variance-authority     spec=^0.7.1       locked=0.7.1
+  clsx                         spec=^2.1.1       locked=2.1.1
+  tailwind-merge               spec=^3.4.0       locked=3.6.0
+e95f974d 1d24901bef73fa6bbea23b9210a16250df995e37c8fc2d182ce5b45afc4239bd  -
+2a657fad 1d24901bef73fa6bbea23b9210a16250df995e37c8fc2d182ce5b45afc4239bd  -
+HEAD 1d24901bef73fa6bbea23b9210a16250df995e37c8fc2d182ce5b45afc4239bd  -
+WORKTREE 1d24901bef73fa6bbea23b9210a16250df995e37c8fc2d182ce5b45afc4239bd  -

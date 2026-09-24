@@ -1,0 +1,1 @@
+{"run": "s5b-582", "verdict": "FAIL", "rule": "C4 p99 < 20 ms, infra <= 0.1%, 0 drops", "c4_p99": 20.297, "c4_p999": 28.558, "c4_sse_p99": 21.381, "c4_json_p99": 16.673, "qualified_rps": 571.81, "infra_pct": 0.0017, "drops": 0, "json_total_p99": 16.673, "sse_total_p99": 16.415, "sse_first_p99": 47.551, "load_rule_verdict": "PASS"}

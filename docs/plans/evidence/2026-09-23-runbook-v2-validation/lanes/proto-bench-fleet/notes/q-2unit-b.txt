@@ -1,0 +1,6 @@
+f2u-100 100 UNITS="rv-pbf-unit-2 rv-pbf-unit-3" LABEL=A-2unit-ladder
+f2u-080 80 UNITS="rv-pbf-unit-2 rv-pbf-unit-3" LABEL=A-2unit-ladder
+CMD env NGINX_WORKERS=1 bash /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-bench-fleet/scripts/edge_set.sh 2unit-w1 "10.146.0.2:8400 10.146.0.5:8400"
+f2u-100-w1 100 UNITS="rv-pbf-unit-2 rv-pbf-unit-3" LABEL=A-2unit-DIAG-nginx-1-worker-global-RR
+CMD bash /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-bench-fleet/scripts/edge_set.sh 2unit "10.146.0.2:8400 10.146.0.5:8400"
+f2u-090 90 UNITS="rv-pbf-unit-2 rv-pbf-unit-3" LABEL=A-2unit-ladder

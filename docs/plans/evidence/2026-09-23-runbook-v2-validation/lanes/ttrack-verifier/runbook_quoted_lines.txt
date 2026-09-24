@@ -1,0 +1,45 @@
+18: | Proof | No task exits on unit tests alone. Required exit evidence is live Docker/staging, real wire bytes, real browser/API behavior, and controlled-load measurements. 
+21: Prepared: 16 September 2026   |   Reviewed repository baseline: ansh @ e95f974dc500414b8f4db28038977fa9bf7deb44 (must be re-pinned at T00 before implementation).
+51: - Engineering target for the CPU gateway in isolation: demonstrate ≥300 qualified CPU-side RPS/vCPU if the signed full-security profile permits; 400–500 is a stretch 
+64:               auth → quota/KS → policy transform → selected T1 → selected local semantic guard
+78: Local guard inference scales independently (CPU/GPU).
+85: | No budget-coded ceilings | No MAX_RPS=1064, fixed GPU count, fixed workers=4, or queue sizes derived from today’s topology. Resource bounds come from cgroups, memory,
+101: | Action | ALLOW, FLAG, REDACT, BLOCK, REWRITE where the capability genuinely supports it. | Schema validation, safe transformation requirement, and no false claim that a
+118: | Live-test rule Unit tests may protect regressions, but they do not close a task in this runbook. Every exit gate below names the live Docker/staging proof that must pas
+224: - No performance or quality threshold left to choose after benchmarking.
+734: - Pipeline only truly independent reads; do not reorder policy transformation and scanning dependencies.
+900: | L18-1 | 1 vCPU equivalent gateway sweep with adequate guard capacity. | Measured qualified RPS/vCPU and CPU ms/request; no hidden CPU outside denominator. | Nominal vCP
+941: | L19-2 | Run 2 units with same image and policy; double offered load progressively. | Capacity rises materially (target ≥1.7× before next bottleneck) without p99/secu
+2024: Baseline re-pinned for this section: ansh @ 2a657fad ("fix(t01): honor PII-off as a true bypass and classify AKIA as secret"), re-fetched and re-audited on 17 September 2
+2091: | Unset Tier-2 means opposite things on input and output | Input: resolve_tier2_enabled → value is True, default OFF (config_sync.py:111-128). Output: _enabled("output_
+2137: | No module outside resolve/ may produce a terminal security outcome. Detectors return findings; they do not raise HTTP responses, mutate the body, or short-circuit. | St
+2171: | Any platform-owned external AI | §1's locked position. The GuardBackend protocol has no remote-model implementation that is not the tenant's own. |
+2178: | client (OpenAI SDK)         │  POST /v1/chat/completions         ▼   ① edge/     t0 ← clock.now()        ← the timer starts HERE, before identity         │ 
+2196: | @dataclass(frozen=True, slots=True) class Rule:     rule_id: str     category: Category     mode: Mode                  # OFF | MONITOR | ENFORCE     action: Action    
+2216: | @dataclass(frozen=True, slots=True) class Decision:     disposition: Disposition          # ALLOW | FLAG | REDACT | BLOCK     transformations: tuple[Transformation, ...
+2260: - The clamps are removed. asgi_threads capped at 32, scanner_pool at 16, vault_pool at 8, redis_pool at 256 are exactly the "capacity assumption in code" the objective fo
+2357: Rotation record · branch diff and deployed-image correlation · CI run showing each gate failing on its negative fixture · two identical image digests · pinned SHA in 
+2374: Move the six conformance files into gateway_v2/contracts/openai_conformance/. Replace direct imports of the v1 app with a fixture that resolves the application under test
+2412: Reuse staging/t02/ from the revamp branch — a deterministic token-emitting upstream recorder with nginx, provisioning and teardown scripts already exists and is exactly
+2533: | LGW05-4 | Change a rule action at 70% load. | All ready replicas converge within the declared freshness bound; plan_snapshot_age_seconds proves it. | Any replica serves
+2563: Kill-switch: age-bounded RAM snapshot with an explicit staleness ceiling. Past the ceiling, it is UNAVAILABLE and the signed posture applies. Kill-switch remains fail-clo
+2570: | LGW06-2 | Revoke a key. | Rejected within the declared epoch bound on every replica. | Any replica still accepts past the bound. |
+2586: Agent-executable. The posture table is signed by a human before implementation; the agent implements it, it does not choose it.
+2641: Define GuardBackend per §10.5.4 with four implementations behind it: local_onnx (CPU, the default for development and CI), local_trt (in-process TensorRT), triton_grpc (
+2872: Record the reconciliation residual wall − Σstages − provider signed. Export it as a histogram and fail CI at a non-zero p50. A clamp to zero is prohibited; it is wha
+2935: Agent-executable. This is the first card whose completion is externally meaningful; human review before it is marked done.
+3026: Remove llm_judge and the Titan grounding embedder. Grounding, if selected, runs through GuardBackend against a local model. This is the last default-on external AI path a
+3110: | LGW20-3 | 1 → 2 → 4 units. | Material capacity growth; binding constraint named at each step; zero application changes. | Sub-linear with no named constraint, or a 
+3111: | LGW20-4 | Same image at 2, 4, 8, 16 vCPU. | Four distinct configurations from the contract; capacity tracks. | Any constant value. |
+3123: No rollback — measurement only. Stop and void every number if GW14's residual is non-zero at any point in the run.
+3239: Human-led. Agents may monitor and prepare artifacts; the shift and any rollback are executed by a human on-call.
+3254: Prove the local-only boundary with egress denial across every surface, every failure path, startup, restart, background jobs and retries. The criterion is zero attempted 
+3278: Agent-executable except credential revocation. The agent must not remove a credential before its code path is gone, even when the code appears unused.
+3317: | Instrument | Reconciliation residual p50 zero. Every performance number produced under it. |
+3319: | Local only | Zero attempted platform external-AI calls across all surfaces and failure paths. |
+3339: | T02 Docker staging and recorder | Retained and reused by GW02, which cherry-picks staging/t02/ rather than rebuilding it. |
+3349: | T12 SDK compatibility | Elevated to GW01 and promoted from a task to the frozen contract that gates every commit. |
+3353: | T16 edge hardening | Retained as deployment work, plus the nginx upstream/keepalive gap from §10.1.6. |
+3366: Sequencing: T00→T02 and T04 run first and serve both tracks. The GW track then replaces T03 and T05–T19. T20–T24 run on the v2 candidate. UI00–UI13 proceed in par
+3370: Machine-checkable exit criteria only. Every card exits on a command that returns a status, not on a judgement. That is why §10.2.3's structural rules are lints and AST g
+3372: Human authority is reserved at four points, and only four: the credential decision in GW00; every ledger entry in GW02 and GW21; the merge review for GW07, which is the o

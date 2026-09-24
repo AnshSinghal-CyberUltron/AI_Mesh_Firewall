@@ -1,0 +1,14 @@
+10:  1. cgroup v2  — ``cpu.max`` (quota/period) and ``memory.max`` at the process's
+13:  2. cgroup v1  — ``cpu/cpu.cfs_quota_us`` + ``cpu.cfs_period_us`` and
+14:     ``memory/memory.limit_in_bytes``.
+15:  3. Fallback   — ``os.sched_getaffinity(0)`` for CPUs and ``/proc/meminfo``
+129:        raw = _read_text(os.path.join(base, "cpu.max"))
+148:    quota = _read_text(os.path.join(mount, "cpu", "cpu.cfs_quota_us"))
+149:    period = _read_text(os.path.join(mount, "cpu", "cpu.cfs_period_us"))
+166:        return max(1, len(os.sched_getaffinity(0)))
+177:        raw = _read_text(os.path.join(base, "memory.max"))
+192:    raw = _read_text(os.path.join(mount, "memory", "memory.limit_in_bytes"))
+231:    """Process soft RLIMIT_NOFILE, or an explicit override.
+245:        soft, _hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+414:            cpu_budget = min(quota, float(affinity_cpus))
+435:            ram_bytes = min(cg_mem, phys) if phys else cg_mem

@@ -1,0 +1,74 @@
+{
+ "headline-22M": {
+  "benign_requests": 5000,
+  "fpr@0.5": 0.0192,
+  "self_flagged_snippets": [
+   "DELETE FROM sessions WHERE expires_at < NOW();"
+  ],
+  "requests_containing_self_flagged": 143,
+  "flagged_among_containing": 86,
+  "fpr_among_containing": 0.6014,
+  "flagged_among_not_containing": 10,
+  "fpr_among_not_containing": 0.00206
+ },
+ "worst-22M": {
+  "benign_requests": 2000,
+  "fpr@0.5": 0.0255,
+  "self_flagged_snippets": [
+   "DELETE FROM sessions WHERE expires_at < NOW();"
+  ],
+  "requests_containing_self_flagged": 83,
+  "flagged_among_containing": 44,
+  "fpr_among_containing": 0.5301,
+  "flagged_among_not_containing": 7,
+  "fpr_among_not_containing": 0.00365
+ },
+ "correctness-22M": {
+  "benign_requests": 1600,
+  "fpr@0.5": 0.00813,
+  "self_flagged_snippets": [
+   "DELETE FROM sessions WHERE expires_at < NOW();"
+  ],
+  "requests_containing_self_flagged": 20,
+  "flagged_among_containing": 11,
+  "fpr_among_containing": 0.55,
+  "flagged_among_not_containing": 2,
+  "fpr_among_not_containing": 0.00127
+ },
+ "headline-86M": {
+  "benign_requests": 5000,
+  "fpr@0.5": 0.0206,
+  "self_flagged_snippets": [
+   "DELETE FROM sessions WHERE expires_at < NOW();"
+  ],
+  "requests_containing_self_flagged": 142,
+  "flagged_among_containing": 77,
+  "fpr_among_containing": 0.5423,
+  "flagged_among_not_containing": 26,
+  "fpr_among_not_containing": 0.00535
+ },
+ "worst-86M": {
+  "benign_requests": 2000,
+  "fpr@0.5": 0.03,
+  "self_flagged_snippets": [
+   "DELETE FROM sessions WHERE expires_at < NOW();"
+  ],
+  "requests_containing_self_flagged": 83,
+  "flagged_among_containing": 47,
+  "fpr_among_containing": 0.5663,
+  "flagged_among_not_containing": 13,
+  "fpr_among_not_containing": 0.00678
+ },
+ "correctness-86M": {
+  "benign_requests": 1600,
+  "fpr@0.5": 0.01188,
+  "self_flagged_snippets": [
+   "DELETE FROM sessions WHERE expires_at < NOW();"
+  ],
+  "requests_containing_self_flagged": 20,
+  "flagged_among_containing": 11,
+  "fpr_among_containing": 0.55,
+  "flagged_among_not_containing": 8,
+  "fpr_among_not_containing": 0.00506
+ }
+}

@@ -1,0 +1,8 @@
+Query PII redaction failed (applying digit backstop): 'RecordingScanner' object has no attribute 'redact_pii'
+Query PII redaction failed (applying digit backstop): 'RecordingScanner' object has no attribute 'redact_pii'
+_RAG_GUARDRAIL_KEYS = ('prompt_injection_threshold', 'prompt_rewrite_threshold', 'prompt_downgrade_threshold', 'input_scan_enabled')
+/v1/vector/query (_build_rag_policy) policy keys=['_org_slug', 'prompt_downgrade_threshold', 'prompt_injection_threshold', 'prompt_rewrite_threshold']
+                                   scanner calls=['scan_prompt(Tier-1)']
+/v1/rag/query (main.py key set)    policy keys=['_org_slug', 'prompt_downgrade_threshold', 'prompt_injection_threshold', 'prompt_rewrite_threshold', 'rag_relevance_threshold', 'rag_tier2_enabled', 'tier2_strict']
+                                   scanner calls=['scan_prompt_with_tier2(Tier-2)']
+control-plane payload emits input_scan_enabled? -> no (removed in policy-driven-detection task 6.2; see control core/models.py build_gateway_payload)

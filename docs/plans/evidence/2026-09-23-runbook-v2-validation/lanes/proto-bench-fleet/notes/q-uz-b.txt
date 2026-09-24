@@ -1,0 +1,3 @@
+CMD env NGINX_ZONE=1 bash /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-bench-fleet/scripts/edge_set.sh uz-2unit "10.146.0.2:8400 10.146.0.5:8400"
+uz2-350 350 UNITS="rv-pbf-unit-2 rv-pbf-unit-3" LABEL=UZ-2unit-loadrule-ladder-zone
+uz2-300 300 UNITS="rv-pbf-unit-2 rv-pbf-unit-3" LABEL=UZ-2unit-loadrule-ladder-zone

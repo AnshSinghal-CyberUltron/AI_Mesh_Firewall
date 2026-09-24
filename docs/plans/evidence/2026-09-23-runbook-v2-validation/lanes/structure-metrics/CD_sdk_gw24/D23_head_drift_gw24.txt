@@ -1,0 +1,28 @@
+## git diff --stat 2a657fad HEAD for GW24/C-relevant paths
+ docker-compose.prod.yml                   |  9 +++--
+ gateway/ai_mesh_gateway/llm_router.py     | 46 ++++++++++++++++++++++
+ gateway/ai_mesh_gateway/pipeline_trace.py | 65 ++++++++++++++++++++++++++++++-
+ 3 files changed, 114 insertions(+), 6 deletions(-)
+(end stat)
+## HEAD uncommitted changes in those paths?
+(end status)
+## wc -l embedding_vault HEAD
+497 gateway/ai_mesh_gateway/embedding_vault.py
+## HEAD main.py:6465
+    _embedding_vault = None
+## HEAD refs to _scan_prompt_sync_disabled_builtin_default (tracked files)
+HEAD:gateway/ai_mesh_gateway/scanner.py:1282:    def _scan_prompt_sync_disabled_builtin_default(
+HEAD:gateway/ai_mesh_gateway/tests/test_pipeline_obfuscation_fp.py:31:# reference body ``_scan_prompt_sync_disabled_builtin_default``. Drive the tests through t
+HEAD:gateway/ai_mesh_gateway/tests/test_pipeline_obfuscation_fp.py:35:    return _SCANNER._scan_prompt_sync_disabled_builtin_default(text, False, None).action
+HEAD:gateway/ai_mesh_gateway/tests/test_pipeline_obfuscation_fp.py:39:    return _SCANNER._scan_prompt_sync_disabled_builtin_default(text, False, None).threat_t
+## HEAD GUARDRAILS_SERVICE_URL refs (tracked, excluding docs)
+HEAD:docker-compose.prod.yml:213:      GUARDRAILS_SERVICE_URL: http://guardrails:8310
+HEAD:docker-compose.yml:261:      GUARDRAILS_SERVICE_URL: http://guardrails:8310
+HEAD:scripts/test_docker_compose_prod.sh:109:    ("gateway", gw, "GUARDRAILS_SERVICE_URL", "http://guardrails:8310"),
+## HEAD opentelemetry in manifests + py
+HEAD:gateway/ai_mesh_gateway/pyproject.toml:25:    "opentelemetry-api>=1.20.0",
+HEAD:gateway/ai_mesh_gateway/pyproject.toml:26:    "opentelemetry-sdk>=1.20.0",
+HEAD:gateway/ai_mesh_gateway/pyproject.toml:27:    "opentelemetry-exporter-otlp>=1.20.0",
+HEAD:gateway/pyproject.toml:28:    "opentelemetry-api>=1.20.0",
+HEAD:gateway/pyproject.toml:29:    "opentelemetry-sdk>=1.20.0",
+HEAD:gateway/pyproject.toml:30:    "opentelemetry-exporter-otlp>=1.20.0",

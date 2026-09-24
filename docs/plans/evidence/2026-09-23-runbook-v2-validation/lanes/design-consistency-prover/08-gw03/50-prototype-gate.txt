@@ -1,0 +1,53 @@
+### prototype on hidden-literal fixture
+admit/hidden.py:12: capacity literal Semaphore(arg0)=64
+admit/hidden.py:13: capacity literal client_cls(max_connections)=64
+admit/hidden.py:14: capacity literal ThreadPoolExecutor(max_workers)=4
+admit/hidden.py:16: capacity literal Semaphore(arg0)=64
+admit/hidden.py:17: capacity literal Semaphore(value)=64
+admit/hidden.py:18: capacity literal LifoQueue(arg0)=64
+admit/hidden.py:19: capacity literal deque(maxlen)=64
+admit/hidden.py:20: capacity literal conn(limit)=100
+admit/hidden.py:21: capacity literal lim(max_keepalive_connections)=20
+admit/hidden.py:22: capacity literal Semaphore(arg0)=64
+admit/hidden.py:23: capacity literal ProcessPoolExecutor(arg0)=8
+admit/hidden.py:24: capacity literal run(limit_concurrency)=1000
+admit/hidden.py:25: capacity literal pool(max_connections)=64
+admit/hidden.py:6: capacity literal POOL=64
+admit/hidden.py:7: capacity literal MAX_CONNECTIONS=64
+admit/hidden.py:8: capacity literal DEFAULT_THREAD_POOL_SIZE=4
+admit/hidden.py:9: capacity literal dict['max_connections']=64
+detect/runtime/resources.py:2: capacity literal pool(max_connections)=512
+exit=1
+### prototype on pristine gateway_v2 (must be clean)
+OK: no capacity literals
+exit=0
+### prototype on v1 baseline: hits at the 7 cited sites
+context_guard.py:160: capacity literal default thread_pool_size=4
+context_guard.py:161: capacity literal ThreadPoolExecutor(max_workers)=4
+context_guard.py:35: capacity literal DEFAULT_THREAD_POOL_SIZE=4
+context_guard.py:46: capacity literal SNIPPET_MAX_CHARS=100
+context_guard.py:70: capacity literal _MAX_DOC_SCAN_LEN=1e+06
+embedding_vault.py:226: capacity literal default thread_pool_size=2
+embedding_vault.py:237: capacity literal ThreadPoolExecutor(max_workers)=2
+embedding_vault.py:45: capacity literal DEFAULT_THREAD_POOL_SIZE=2
+llm_judge.py:107: capacity literal dict['max_attempts']=2
+llm_judge.py:149: capacity literal dict['max_tokens']=300
+llm_judge.py:157: capacity literal dict['max_tokens']=300
+llm_judge.py:25: capacity literal DEFAULT_THREAD_POOL_SIZE=2
+llm_judge.py:80: capacity literal default thread_pool_size=2
+llm_judge.py:88: capacity literal ThreadPoolExecutor(max_workers)=2
+mcp_oauth.py:476: capacity literal from_url(max_connections)=50
+mcp_proxy.py:149: capacity literal Limits(max_connections)=64
+mcp_proxy.py:149: capacity literal Limits(max_keepalive_connections)=32
+mcp_proxy.py:4254: capacity literal _JSONRPC_RATE_LIMIT_CODE=-32000
+rate_limiter.py:41: capacity literal from_url(max_connections)=100
+vector_client.py:1086: capacity literal default thread_pool_size=4
+vector_client.py:108: capacity literal _COSINE_DISTANCE_MAX=2
+vector_client.py:1090: capacity literal ThreadPoolExecutor(max_workers)=4
+vector_client.py:109: capacity literal _UNIT_NORM_MAX_L2_SQ=4
+vector_client.py:20: capacity literal DEFAULT_THREAD_POOL_SIZE=4
+vector_client.py:31: capacity literal _EMBEDDING_MAX_L2_NORM=10000
+vector_client.py:341: capacity literal default thread_pool_size=4
+vector_client.py:345: capacity literal ThreadPoolExecutor(max_workers)=4
+vector_client.py:686: capacity literal default thread_pool_size=4
+vector_client.py:719: capacity literal ThreadPoolExecutor(max_workers)=4

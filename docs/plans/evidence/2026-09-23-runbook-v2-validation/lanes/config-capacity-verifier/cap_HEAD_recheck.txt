@@ -1,0 +1,13 @@
+files changed 2a657fad..HEAD among checked v1 files:
+(empty above = unchanged)
+HEAD main.py 6716-6730:
+    from ai_mesh_shared.redis_log_handler import RedisLogPublisher
+    gateway_logger.addHandler(_redis_log_publisher)
+    gateway_logger.setLevel(logging.DEBUG)
+HEAD mcp_proxy.py:149: limits=httpx.Limits(max_connections=64, max_keepalive_connections=32),
+HEAD rate_limiter.py:44: max_connections=100,
+HEAD mcp_oauth.py:477: redis_url, decode_responses=True, max_connections=50
+HEAD vector_client.py:20: DEFAULT_THREAD_POOL_SIZE = 4
+HEAD embedding_vault.py:45: DEFAULT_THREAD_POOL_SIZE = 2
+HEAD llm_judge.py:25: DEFAULT_THREAD_POOL_SIZE = 2
+HEAD context_guard.py:35: DEFAULT_THREAD_POOL_SIZE = 4

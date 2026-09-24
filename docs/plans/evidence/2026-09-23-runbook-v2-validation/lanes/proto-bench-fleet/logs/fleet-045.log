@@ -1,0 +1,18 @@
+14:50:51 fleet-045: olg started on rv-pbf-lg-4 (rate 45.0 each, start-at 1790175075028, mode sut, targets http://10.146.0.20:8080)
+[rv-pbf-lg-4] 2026/09/23 14:57:52 done: scheduled=16875 recorded=16875 ok=16574 errors=map[http_403:301] drops=0 late_p99=108us max=540us cpu_busy_max=17.9%
+Traceback (most recent call last):
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-bench-fleet/scripts/pbf_analyze.py", line 373, in <module>
+    raise SystemExit(main())
+                     ~~~~^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-bench-fleet/scripts/pbf_analyze.py", line 322, in main
+    s = P.classify(run, a.mode, stages, a.corpus, a.policy, a.slo_ms, a.err_budget, a.drop_ms)
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-bench-fleet/scripts/pbu_analyze_copy.py", line 163, in classify
+    k, m, reasons, saf = categorize(c, p, calls, args, exp, stages_req, nonce[c.get("nonce")] > 1,
+                         ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                                    mode, policy)
+                                    ^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-bench-fleet/scripts/pbu_analyze_copy.py", line 72, in categorize
+    outcome, reasons, m, saf = A.evaluate(c, p, calls, args, exp, stages_req, dup)
+                               ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/harness/analyze.py", line 404, in evaluate
+    disp, stages = extract_disposition(c, args.disposition_source)

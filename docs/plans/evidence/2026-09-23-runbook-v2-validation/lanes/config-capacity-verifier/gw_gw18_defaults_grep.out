@@ -1,0 +1,41 @@
+## grep RAG ranker/generator env in compose + control payload (BASELINE)
+(no hits)
+## HEAD
+(no hits)
+## config.py defaults (BASELINE)
+175:    rag_enabled = get_env("GATEWAY_RAG_ENABLED", "false").lower() in ("true", "1", "yes")
+181:    rag_ranker_enabled = get_env("GATEWAY_RAG_RANKER_ENABLED", "false").lower() in ("true", "1", "yes")
+182:    rag_generator_enabled = get_env("GATEWAY_RAG_GENERATOR_ENABLED", "false").lower() in ("true", "1", "yes")
+## compose GATEWAY_RAG_ENABLED
+/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/docker-compose.prod.yml:197:      GATEWAY_RAG_ENABLED: ${GATEWAY_RAG_ENABLED:-true}
+/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/docker-compose.yml:272:      GATEWAY_RAG_ENABLED: ${GATEWAY_RAG_ENABLED:-true}
+## vector_routes org_slug default
+647:        org_slug = middleware_auth.org_slug if middleware_auth else "default"
+## pipeline reads static config for stage flags
+223:        rag_ranker_on = bool(self._config.get("rag_ranker_enabled", False))
+224:        rag_generator_on = bool(self._config.get("rag_generator_enabled", False))
+232:            rag_ranker_on = True
+245:            rag_generator_on = True
+247:            rag_ranker_on = True
+6279:        gateway_config=CONFIG,
+6433:    CONFIG_SYNC = ConfigSync(redis_url=CONFIG["redis_url"], config=CONFIG)
+6477:        config=CONFIG,
+6509:        OUTPUT_GUARD = OutputGuard(scanner=INPUT_SCANNER, config=CONFIG)
+6705:            config=CONFIG,
+        RAG_PIPELINE = RAGFirewallPipeline(
+            input_scanner=INPUT_SCANNER,
+            context_guard=CONTEXT_GUARD,
+            leakage_detector=_leakage_for_rag,
+            vector_clients=VECTOR_CLIENTS,
+            circuit_breaker=CIRCUIT_BREAKER,
+            rate_limiter=RATE_LIMITER,
+            telemetry=TELEMETRY,
+            redis_client=REDIS_CLIENT,
+            config=CONFIG,
+            policy_sync=POLICY_SYNC,
+            llm_judge=_llm_judge,
+            embedding_vault=_embedding_vault,
+            canary_token_manager=_canary_manager,
+            intent_classifier=_intent_classifier,
+        )
+        LOG.info("RAG Firewall Pipeline initialized (stages=4, escalation_levels=3, detection_layers=%d)",

@@ -1,0 +1,291 @@
+{
+ "roots": [
+  "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway",
+  "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/shared",
+  "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/control",
+  "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/services",
+  "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/workers",
+  "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/scripts",
+  "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/tests"
+ ],
+ "exclude_tests": false,
+ "prefix": "BEDROCK_",
+ "n_files": 1070,
+ "distinct_names": 19,
+ "call_sites": 39,
+ "names": {
+  "BEDROCK_ADJUDICATOR_MODEL": [
+   {
+    "file": "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/platform_models.py",
+    "line": 108,
+    "via": "os.getenv",
+    "kind": "literal"
+   }
+  ],
+  "BEDROCK_COMPONENT_LOG_LEVEL": [
+   {
+    "file": "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/control/ai_mesh_control/main_app/settings.py",
+    "line": 969,
+    "via": "os.environ.get",
+    "kind": "literal"
+   }
+  ],
+  "BEDROCK_DEPLOYMENT_PATH": [
+   {
+    "file": "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/control/ai_mesh_control/security_engines/bedrock_scanner.py",
+    "line": 380,
+    "via": "os.getenv",
+    "kind": "literal"
+   },
+   {
+    "file": "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/bedrock_scanner.py",
+    "line": 728,
+    "via": "os.getenv",
+    "kind": "literal"
+   }
+  ],
+  "BEDROCK_LOG_BACKUPS": [
+   {
+    "file": "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/bedrock_logger.py",
+    "line": 38,
+    "via": "os.getenv",
+    "kind": "literal"
+   }
+  ],
+  "BEDROCK_LOG_DIR": [
+   {
+    "file": "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/bedrock_logger.py",
+    "line": 35,
+    "via": "os.getenv",
+    "kind": "literal"
+   },
+   {
+    "file": "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py",
+    "line": 6758,
+    "via": "os.getenv",
+    "kind": "literal"
+   }
+  ],
+  "BEDROCK_LOG_JSON": [
+   {
+    "file": "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/bedrock_logger.py",
+    "line": 39,
+    "via": "os.getenv",
+    "kind": "literal"
+   },
+   {
+    "file": "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py",
+    "line": 6760,
+    "via": "os.getenv",
+    "kind": "literal"
+   }
+  ],
+  "BEDROCK_LOG_LEVEL": [
+   {
+    "file": "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/bedrock_logger.py",
+    "line": 36,
+    "via": "os.getenv",
+    "kind": "literal"
+   },
+   {
+    "file": "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py",
+    "line": 6759,
+    "via": "os.getenv",
+    "kind": "literal"
+   }
+  ],
+  "BEDROCK_LOG_MAX_MB": [
+   {
+    "file": "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/bedrock_logger.py",
+    "line": 37,
+    "via": "os.getenv",
+    "kind": "literal"
+   }
+  ],
+  "BEDROCK_LOG_OUTPUT_PREVIEW": [
+   {
+    "file": "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/bedrock_logger.py",
+    "line": 42,
+    "via": "os.getenv",
+    "kind": "literal"
+   }
+  ],
+  "BEDROCK_LOG_PREVIEW_CHARS": [
+   {
+    "file": "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/bedrock_logger.py",
+    "line": 40,
+    "via": "os.getenv",
+    "kind": "literal"
+   }
+  ],
+  "BEDROCK_LOG_PROMPT_PREVIEW": [
+   {
+    "file": "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/bedrock_logger.py",
+    "line": 41,
+    "via": "os.getenv",
+    "kind": "literal"
+   }
+  ],
+  "BEDROCK_LOG_RING_SIZE": [
+   {
+    "file": "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/bedrock_logger.py",
+    "line": 45,
+    "via": "os.getenv",
+    "kind": "literal"
+   }
+  ],
+  "BEDROCK_MAX_PROMPT_CHARS": [
+   {
+    "file": "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/bedrock_scanner.py",
+    "line": 58,
+    "via": "os.getenv",
+    "kind": "literal"
+   }
+  ],
+  "BEDROCK_MAX_TOKENS": [
+   {
+    "file": "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/control/ai_mesh_control/security_engines/bedrock_scanner.py",
+    "line": 360,
+    "via": "os.getenv",
+    "kind": "literal"
+   },
+   {
+    "file": "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/bedrock_client.py",
+    "line": 632,
+    "via": "os.getenv",
+    "kind": "literal"
+   },
+   {
+    "file": "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/bedrock_client.py",
+    "line": 687,
+    "via": "os.getenv",
+    "kind": "literal"
+   },
+   {
+    "file": "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/shared/ai_mesh_shared/tier2_gemini_client.py",
+    "line": 189,
+    "via": "os.getenv",
+    "kind": "literal"
+   }
+  ],
+  "BEDROCK_MODEL": [
+   {
+    "file": "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/control/ai_mesh_control/security_engines/bedrock_client.py",
+    "line": 130,
+    "via": "os.getenv",
+    "kind": "literal"
+   },
+   {
+    "file": "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/control/ai_mesh_control/security_engines/bedrock_client.py",
+    "line": 268,
+    "via": "os.getenv",
+    "kind": "literal"
+   },
+   {
+    "file": "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/control/ai_mesh_control/security_engines/bedrock_scanner.py",
+    "line": 345,
+    "via": "os.getenv",
+    "kind": "literal"
+   },
+   {
+    "file": "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/bedrock_inference.py",
+    "line": 9,
+    "via": "os.getenv",
+    "kind": "literal"
+   },
+   {
+    "file": "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_judge.py",
+    "line": 83,
+    "via": "os.getenv",
+    "kind": "literal"
+   },
+   {
+    "file": "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/main.py",
+    "line": 6676,
+    "via": "os.getenv",
+    "kind": "literal"
+   },
+   {
+    "file": "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/platform_models.py",
+    "line": 101,
+    "via": "os.getenv",
+    "kind": "literal"
+   },
+   {
+    "file": "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/rag_pipeline/query_stage.py",
+    "line": 425,
+    "via": "os.getenv",
+    "kind": "literal"
+   }
+  ],
+  "BEDROCK_REGION": [
+   {
+    "file": "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/control/ai_mesh_control/main_app/settings.py",
+    "line": 407,
+    "via": "os.environ.get",
+    "kind": "literal"
+   },
+   {
+    "file": "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/control/ai_mesh_control/security_engines/bedrock_client.py",
+    "line": 129,
+    "via": "os.getenv",
+    "kind": "literal"
+   },
+   {
+    "file": "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/control/ai_mesh_control/security_engines/bedrock_client.py",
+    "line": 267,
+    "via": "os.getenv",
+    "kind": "literal"
+   },
+   {
+    "file": "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/bedrock_client.py",
+    "line": 224,
+    "via": "os.getenv",
+    "kind": "literal"
+   },
+   {
+    "file": "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/bedrock_client.py",
+    "line": 844,
+    "via": "os.getenv",
+    "kind": "literal"
+   },
+   {
+    "file": "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/llm_judge.py",
+    "line": 84,
+    "via": "os.getenv",
+    "kind": "literal"
+   }
+  ],
+  "BEDROCK_TIER2_SCANNER_MODEL": [
+   {
+    "file": "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/platform_models.py",
+    "line": 100,
+    "via": "os.getenv",
+    "kind": "literal"
+   }
+  ],
+  "BEDROCK_TIMEOUT": [
+   {
+    "file": "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/control/ai_mesh_control/security_engines/bedrock_client.py",
+    "line": 269,
+    "via": "os.getenv",
+    "kind": "literal"
+   },
+   {
+    "file": "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/bedrock_client.py",
+    "line": 846,
+    "via": "os.getenv",
+    "kind": "literal"
+   }
+  ],
+  "BEDROCK_VERIFY_SSL": [
+   {
+    "file": "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/control/ai_mesh_control/security_engines/bedrock_client.py",
+    "line": 33,
+    "via": "os.getenv",
+    "kind": "literal"
+   }
+  ]
+ },
+ "parse_errors": {}
+}

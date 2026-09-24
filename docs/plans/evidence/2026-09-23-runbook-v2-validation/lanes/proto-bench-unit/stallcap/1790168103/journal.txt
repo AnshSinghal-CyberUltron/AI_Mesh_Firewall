@@ -1,0 +1,325 @@
+Sep 23 12:55:03.295049 rv-proto-unit-1 sudo[70705]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60186
+Sep 23 12:55:03.295583 rv-proto-unit-1 sudo[70705]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:03.328659 rv-proto-unit-1 sudo[70705]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:03.342246 rv-proto-unit-1 sudo[70709]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60187
+Sep 23 12:55:03.342737 rv-proto-unit-1 sudo[70709]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:03.374510 rv-proto-unit-1 sudo[70709]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:03.538915 rv-proto-unit-1 sudo[70715]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60186
+Sep 23 12:55:03.539440 rv-proto-unit-1 sudo[70715]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:03.571651 rv-proto-unit-1 sudo[70715]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:03.582591 rv-proto-unit-1 sudo[70719]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60187
+Sep 23 12:55:03.583076 rv-proto-unit-1 sudo[70719]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:03.615269 rv-proto-unit-1 sudo[70719]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:03.779409 rv-proto-unit-1 sudo[70725]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60186
+Sep 23 12:55:03.779906 rv-proto-unit-1 sudo[70725]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:03.812115 rv-proto-unit-1 sudo[70725]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:03.823578 rv-proto-unit-1 sudo[70729]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60187
+Sep 23 12:55:03.824066 rv-proto-unit-1 sudo[70729]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:03.855800 rv-proto-unit-1 sudo[70729]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:04.020516 rv-proto-unit-1 sudo[70735]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60186
+Sep 23 12:55:04.021012 rv-proto-unit-1 sudo[70735]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:04.053262 rv-proto-unit-1 sudo[70735]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:04.064840 rv-proto-unit-1 sudo[70739]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60187
+Sep 23 12:55:04.065354 rv-proto-unit-1 sudo[70739]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:04.097129 rv-proto-unit-1 sudo[70739]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:04.261280 rv-proto-unit-1 sudo[70745]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60186
+Sep 23 12:55:04.261928 rv-proto-unit-1 sudo[70745]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:04.294314 rv-proto-unit-1 sudo[70745]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:04.305391 rv-proto-unit-1 sudo[70749]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60187
+Sep 23 12:55:04.305887 rv-proto-unit-1 sudo[70749]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:04.337600 rv-proto-unit-1 sudo[70749]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:04.502184 rv-proto-unit-1 sudo[70755]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60186
+Sep 23 12:55:04.502688 rv-proto-unit-1 sudo[70755]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:04.534679 rv-proto-unit-1 sudo[70755]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:04.545603 rv-proto-unit-1 sudo[70759]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60187
+Sep 23 12:55:04.546080 rv-proto-unit-1 sudo[70759]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:04.577169 rv-proto-unit-1 sudo[70759]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:04.740493 rv-proto-unit-1 sudo[70765]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60186
+Sep 23 12:55:04.741023 rv-proto-unit-1 sudo[70765]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:04.773018 rv-proto-unit-1 sudo[70765]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:04.782547 rv-proto-unit-1 sudo[70769]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60187
+Sep 23 12:55:04.783050 rv-proto-unit-1 sudo[70769]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:04.814088 rv-proto-unit-1 sudo[70769]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:04.977425 rv-proto-unit-1 sudo[70780]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60186
+Sep 23 12:55:04.978067 rv-proto-unit-1 sudo[70780]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:04.997637 rv-proto-unit-1 systemd[1]: Starting Update APT News...
+Sep 23 12:55:05.001138 rv-proto-unit-1 systemd[1]: Starting Update the local ESM caches...
+Sep 23 12:55:05.011362 rv-proto-unit-1 sudo[70780]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:05.021851 rv-proto-unit-1 sudo[70796]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60187
+Sep 23 12:55:05.022395 rv-proto-unit-1 sudo[70796]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:05.055897 rv-proto-unit-1 sudo[70796]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:05.136562 rv-proto-unit-1 systemd[1]: apt-news.service: Deactivated successfully.
+Sep 23 12:55:05.137039 rv-proto-unit-1 systemd[1]: Finished Update APT News.
+Sep 23 12:55:05.219133 rv-proto-unit-1 sudo[70921]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60186
+Sep 23 12:55:05.219636 rv-proto-unit-1 sudo[70921]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:05.251882 rv-proto-unit-1 sudo[70921]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:05.261657 rv-proto-unit-1 sudo[70948]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60187
+Sep 23 12:55:05.262177 rv-proto-unit-1 sudo[70948]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:05.294811 rv-proto-unit-1 sudo[70948]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:05.457713 rv-proto-unit-1 sudo[71077]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60186
+Sep 23 12:55:05.458236 rv-proto-unit-1 sudo[71077]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:05.490029 rv-proto-unit-1 sudo[71077]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:05.500228 rv-proto-unit-1 sudo[71096]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60187
+Sep 23 12:55:05.500700 rv-proto-unit-1 sudo[71096]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:05.532697 rv-proto-unit-1 sudo[71096]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:05.695338 rv-proto-unit-1 sudo[71240]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60186
+Sep 23 12:55:05.695835 rv-proto-unit-1 sudo[71240]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:05.728268 rv-proto-unit-1 sudo[71240]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:05.738262 rv-proto-unit-1 sudo[71269]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60187
+Sep 23 12:55:05.738752 rv-proto-unit-1 sudo[71269]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:05.771177 rv-proto-unit-1 sudo[71269]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:05.933906 rv-proto-unit-1 sudo[71307]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60186
+Sep 23 12:55:05.934622 rv-proto-unit-1 sudo[71307]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:05.966789 rv-proto-unit-1 sudo[71307]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:05.976519 rv-proto-unit-1 sudo[71311]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60187
+Sep 23 12:55:05.977007 rv-proto-unit-1 sudo[71311]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:06.010165 rv-proto-unit-1 sudo[71311]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:06.173435 rv-proto-unit-1 sudo[71349]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60186
+Sep 23 12:55:06.173936 rv-proto-unit-1 sudo[71349]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:06.206393 rv-proto-unit-1 sudo[71349]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:06.216991 rv-proto-unit-1 sudo[71373]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60187
+Sep 23 12:55:06.217555 rv-proto-unit-1 sudo[71373]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:06.249191 rv-proto-unit-1 systemd[1]: esm-cache.service: Deactivated successfully.
+Sep 23 12:55:06.249637 rv-proto-unit-1 systemd[1]: Finished Update the local ESM caches.
+Sep 23 12:55:06.250137 rv-proto-unit-1 sudo[71373]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:06.413476 rv-proto-unit-1 sudo[71391]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60186
+Sep 23 12:55:06.414040 rv-proto-unit-1 sudo[71391]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:06.446362 rv-proto-unit-1 sudo[71391]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:06.456105 rv-proto-unit-1 sudo[71395]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60187
+Sep 23 12:55:06.456595 rv-proto-unit-1 sudo[71395]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:06.488830 rv-proto-unit-1 sudo[71395]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:06.652590 rv-proto-unit-1 sudo[71401]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60186
+Sep 23 12:55:06.653195 rv-proto-unit-1 sudo[71401]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:06.685364 rv-proto-unit-1 sudo[71401]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:06.695169 rv-proto-unit-1 sudo[71405]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60187
+Sep 23 12:55:06.695657 rv-proto-unit-1 sudo[71405]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:06.727078 rv-proto-unit-1 sudo[71405]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:06.889866 rv-proto-unit-1 sudo[71411]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60186
+Sep 23 12:55:06.890378 rv-proto-unit-1 sudo[71411]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:06.922613 rv-proto-unit-1 sudo[71411]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:06.932997 rv-proto-unit-1 sudo[71415]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60187
+Sep 23 12:55:06.933489 rv-proto-unit-1 sudo[71415]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:06.964747 rv-proto-unit-1 sudo[71415]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:07.127615 rv-proto-unit-1 sudo[71421]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60186
+Sep 23 12:55:07.128125 rv-proto-unit-1 sudo[71421]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:07.160447 rv-proto-unit-1 sudo[71421]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:07.170279 rv-proto-unit-1 sudo[71425]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60187
+Sep 23 12:55:07.170761 rv-proto-unit-1 sudo[71425]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:07.203171 rv-proto-unit-1 sudo[71425]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:07.366343 rv-proto-unit-1 sudo[71432]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60186
+Sep 23 12:55:07.366852 rv-proto-unit-1 sudo[71432]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:07.399592 rv-proto-unit-1 sudo[71432]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:07.409391 rv-proto-unit-1 sudo[71438]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60187
+Sep 23 12:55:07.409899 rv-proto-unit-1 sudo[71438]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:07.443160 rv-proto-unit-1 sudo[71438]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:07.606057 rv-proto-unit-1 sudo[71445]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60186
+Sep 23 12:55:07.606573 rv-proto-unit-1 sudo[71445]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:07.639275 rv-proto-unit-1 sudo[71445]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:07.649131 rv-proto-unit-1 sudo[71449]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60187
+Sep 23 12:55:07.649617 rv-proto-unit-1 sudo[71449]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:07.681545 rv-proto-unit-1 sudo[71449]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:07.844588 rv-proto-unit-1 sudo[71456]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60186
+Sep 23 12:55:07.845109 rv-proto-unit-1 sudo[71456]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:07.877984 rv-proto-unit-1 sudo[71456]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:07.887974 rv-proto-unit-1 sudo[71460]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60187
+Sep 23 12:55:07.888480 rv-proto-unit-1 sudo[71460]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:07.920920 rv-proto-unit-1 sudo[71460]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:08.084432 rv-proto-unit-1 sudo[71466]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60186
+Sep 23 12:55:08.084933 rv-proto-unit-1 sudo[71466]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:08.118670 rv-proto-unit-1 sudo[71466]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:08.129152 rv-proto-unit-1 sudo[71470]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60187
+Sep 23 12:55:08.129649 rv-proto-unit-1 sudo[71470]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:08.162807 rv-proto-unit-1 sudo[71470]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:08.327355 rv-proto-unit-1 sudo[71477]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60186
+Sep 23 12:55:08.328056 rv-proto-unit-1 sudo[71477]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:08.360816 rv-proto-unit-1 sudo[71477]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:08.370988 rv-proto-unit-1 sudo[71481]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60187
+Sep 23 12:55:08.371496 rv-proto-unit-1 sudo[71481]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:08.403367 rv-proto-unit-1 sudo[71481]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:08.566561 rv-proto-unit-1 sudo[71487]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60186
+Sep 23 12:55:08.567077 rv-proto-unit-1 sudo[71487]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:08.599459 rv-proto-unit-1 sudo[71487]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:08.609617 rv-proto-unit-1 sudo[71491]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60187
+Sep 23 12:55:08.610180 rv-proto-unit-1 sudo[71491]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:08.641899 rv-proto-unit-1 sudo[71491]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:08.805081 rv-proto-unit-1 sudo[71497]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60186
+Sep 23 12:55:08.805631 rv-proto-unit-1 sudo[71497]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:08.838807 rv-proto-unit-1 sudo[71497]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:08.853567 rv-proto-unit-1 sudo[71501]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60187
+Sep 23 12:55:08.854074 rv-proto-unit-1 sudo[71501]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:08.888688 rv-proto-unit-1 sudo[71501]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:09.052250 rv-proto-unit-1 sudo[71507]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60186
+Sep 23 12:55:09.052744 rv-proto-unit-1 sudo[71507]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:09.073636 rv-proto-unit-1 OSConfigAgent[832]: 2026-09-23T12:55:09.0735Z OSConfigAgent Info: Writing inventory to guest attributes
+Sep 23 12:55:09.086100 rv-proto-unit-1 sudo[71507]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:09.096567 rv-proto-unit-1 sudo[71511]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60187
+Sep 23 12:55:09.097150 rv-proto-unit-1 sudo[71511]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:09.129973 rv-proto-unit-1 sudo[71511]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:09.296727 rv-proto-unit-1 sudo[71517]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60186
+Sep 23 12:55:09.297250 rv-proto-unit-1 sudo[71517]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:09.329506 rv-proto-unit-1 sudo[71517]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:09.339927 rv-proto-unit-1 sudo[71521]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60187
+Sep 23 12:55:09.340447 rv-proto-unit-1 sudo[71521]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:09.372713 rv-proto-unit-1 sudo[71521]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:09.538919 rv-proto-unit-1 sudo[71527]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60186
+Sep 23 12:55:09.539444 rv-proto-unit-1 sudo[71527]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:09.572014 rv-proto-unit-1 sudo[71527]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:09.582117 rv-proto-unit-1 sudo[71531]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60187
+Sep 23 12:55:09.582598 rv-proto-unit-1 sudo[71531]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:09.614874 rv-proto-unit-1 sudo[71531]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:09.778601 rv-proto-unit-1 sudo[71537]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60186
+Sep 23 12:55:09.779148 rv-proto-unit-1 sudo[71537]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:09.811673 rv-proto-unit-1 sudo[71537]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:09.821387 rv-proto-unit-1 sudo[71541]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60187
+Sep 23 12:55:09.821857 rv-proto-unit-1 sudo[71541]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:09.853335 rv-proto-unit-1 sudo[71541]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:10.016280 rv-proto-unit-1 sudo[71547]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60186
+Sep 23 12:55:10.016779 rv-proto-unit-1 sudo[71547]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:10.048936 rv-proto-unit-1 sudo[71547]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:10.060304 rv-proto-unit-1 sudo[71551]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60187
+Sep 23 12:55:10.060762 rv-proto-unit-1 sudo[71551]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:10.094206 rv-proto-unit-1 sudo[71551]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:10.258864 rv-proto-unit-1 sudo[71557]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60186
+Sep 23 12:55:10.259400 rv-proto-unit-1 sudo[71557]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:10.293370 rv-proto-unit-1 sudo[71557]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:10.302930 rv-proto-unit-1 sudo[71561]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60187
+Sep 23 12:55:10.303429 rv-proto-unit-1 sudo[71561]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:10.335036 rv-proto-unit-1 sudo[71561]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:10.498042 rv-proto-unit-1 sudo[71567]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60186
+Sep 23 12:55:10.498569 rv-proto-unit-1 sudo[71567]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:10.531137 rv-proto-unit-1 sudo[71567]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:10.541596 rv-proto-unit-1 sudo[71571]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60187
+Sep 23 12:55:10.542084 rv-proto-unit-1 sudo[71571]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:10.574367 rv-proto-unit-1 sudo[71571]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:10.737319 rv-proto-unit-1 sudo[71577]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60186
+Sep 23 12:55:10.737819 rv-proto-unit-1 sudo[71577]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:10.769903 rv-proto-unit-1 sudo[71577]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:10.780675 rv-proto-unit-1 sudo[71581]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60187
+Sep 23 12:55:10.781172 rv-proto-unit-1 sudo[71581]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:10.812385 rv-proto-unit-1 sudo[71581]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:10.975130 rv-proto-unit-1 sudo[71587]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60186
+Sep 23 12:55:10.975629 rv-proto-unit-1 sudo[71587]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:11.008206 rv-proto-unit-1 sudo[71587]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:11.018750 rv-proto-unit-1 sudo[71591]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60187
+Sep 23 12:55:11.019255 rv-proto-unit-1 sudo[71591]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:11.051339 rv-proto-unit-1 sudo[71591]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:11.214674 rv-proto-unit-1 sudo[71597]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60186
+Sep 23 12:55:11.215194 rv-proto-unit-1 sudo[71597]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:11.247568 rv-proto-unit-1 sudo[71597]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:11.258892 rv-proto-unit-1 sudo[71601]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60187
+Sep 23 12:55:11.259394 rv-proto-unit-1 sudo[71601]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:11.291615 rv-proto-unit-1 sudo[71601]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:11.455919 rv-proto-unit-1 sudo[71607]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60186
+Sep 23 12:55:11.456445 rv-proto-unit-1 sudo[71607]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:11.488526 rv-proto-unit-1 sudo[71607]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:11.499260 rv-proto-unit-1 sudo[71611]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60187
+Sep 23 12:55:11.499784 rv-proto-unit-1 sudo[71611]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:11.531853 rv-proto-unit-1 sudo[71611]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:11.696608 rv-proto-unit-1 sudo[71617]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60186
+Sep 23 12:55:11.697120 rv-proto-unit-1 sudo[71617]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:11.729615 rv-proto-unit-1 sudo[71617]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:11.739452 rv-proto-unit-1 sudo[71621]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60187
+Sep 23 12:55:11.739928 rv-proto-unit-1 sudo[71621]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:11.771723 rv-proto-unit-1 sudo[71621]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:11.935357 rv-proto-unit-1 sudo[71627]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60186
+Sep 23 12:55:11.935894 rv-proto-unit-1 sudo[71627]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:11.968063 rv-proto-unit-1 sudo[71627]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:11.979642 rv-proto-unit-1 sudo[71631]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60187
+Sep 23 12:55:11.980156 rv-proto-unit-1 sudo[71631]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:12.012678 rv-proto-unit-1 sudo[71631]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:12.175794 rv-proto-unit-1 sudo[71637]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60186
+Sep 23 12:55:12.176330 rv-proto-unit-1 sudo[71637]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:12.208677 rv-proto-unit-1 sudo[71637]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:12.219273 rv-proto-unit-1 sudo[71641]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60187
+Sep 23 12:55:12.219757 rv-proto-unit-1 sudo[71641]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:12.251635 rv-proto-unit-1 sudo[71641]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:12.414510 rv-proto-unit-1 sudo[71647]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60186
+Sep 23 12:55:12.415023 rv-proto-unit-1 sudo[71647]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:12.448200 rv-proto-unit-1 sudo[71647]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:12.460273 rv-proto-unit-1 sudo[71651]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60187
+Sep 23 12:55:12.460759 rv-proto-unit-1 sudo[71651]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:12.493851 rv-proto-unit-1 sudo[71651]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:12.657830 rv-proto-unit-1 sudo[71657]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60186
+Sep 23 12:55:12.658353 rv-proto-unit-1 sudo[71657]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:12.690650 rv-proto-unit-1 sudo[71657]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:12.702663 rv-proto-unit-1 sudo[71661]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60187
+Sep 23 12:55:12.703179 rv-proto-unit-1 sudo[71661]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:12.735814 rv-proto-unit-1 sudo[71661]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:12.899069 rv-proto-unit-1 sudo[71667]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60186
+Sep 23 12:55:12.899607 rv-proto-unit-1 sudo[71667]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:12.931822 rv-proto-unit-1 sudo[71667]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:12.941776 rv-proto-unit-1 sudo[71671]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60187
+Sep 23 12:55:12.942257 rv-proto-unit-1 sudo[71671]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:12.974466 rv-proto-unit-1 sudo[71671]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:13.138745 rv-proto-unit-1 sudo[71677]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60186
+Sep 23 12:55:13.139281 rv-proto-unit-1 sudo[71677]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:13.171862 rv-proto-unit-1 sudo[71677]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:13.181782 rv-proto-unit-1 sudo[71681]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60187
+Sep 23 12:55:13.182387 rv-proto-unit-1 sudo[71681]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:13.214828 rv-proto-unit-1 sudo[71681]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:13.379753 rv-proto-unit-1 sudo[71687]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60186
+Sep 23 12:55:13.380270 rv-proto-unit-1 sudo[71687]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:13.412900 rv-proto-unit-1 sudo[71687]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:13.422832 rv-proto-unit-1 sudo[71691]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60187
+Sep 23 12:55:13.423498 rv-proto-unit-1 sudo[71691]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:13.455627 rv-proto-unit-1 sudo[71691]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:13.618643 rv-proto-unit-1 sudo[71697]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60186
+Sep 23 12:55:13.619312 rv-proto-unit-1 sudo[71697]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:13.651391 rv-proto-unit-1 sudo[71697]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:13.661048 rv-proto-unit-1 sudo[71701]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60187
+Sep 23 12:55:13.661589 rv-proto-unit-1 sudo[71701]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:13.693027 rv-proto-unit-1 sudo[71701]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:13.857460 rv-proto-unit-1 sudo[71707]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60186
+Sep 23 12:55:13.857954 rv-proto-unit-1 sudo[71707]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:13.890661 rv-proto-unit-1 sudo[71707]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:13.901024 rv-proto-unit-1 sudo[71711]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60187
+Sep 23 12:55:13.901555 rv-proto-unit-1 sudo[71711]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:13.933147 rv-proto-unit-1 sudo[71711]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:14.097435 rv-proto-unit-1 sudo[71717]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60186
+Sep 23 12:55:14.097935 rv-proto-unit-1 sudo[71717]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:14.130275 rv-proto-unit-1 sudo[71717]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:14.139926 rv-proto-unit-1 sudo[71721]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60187
+Sep 23 12:55:14.140433 rv-proto-unit-1 sudo[71721]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:14.172535 rv-proto-unit-1 sudo[71721]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:14.336985 rv-proto-unit-1 sudo[71727]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60186
+Sep 23 12:55:14.337543 rv-proto-unit-1 sudo[71727]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:14.369389 rv-proto-unit-1 sudo[71727]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:14.380085 rv-proto-unit-1 sudo[71731]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60187
+Sep 23 12:55:14.380580 rv-proto-unit-1 sudo[71731]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:14.411708 rv-proto-unit-1 sudo[71731]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:14.574495 rv-proto-unit-1 sudo[71737]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60186
+Sep 23 12:55:14.575001 rv-proto-unit-1 sudo[71737]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:14.607478 rv-proto-unit-1 sudo[71737]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:14.618028 rv-proto-unit-1 sudo[71741]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60187
+Sep 23 12:55:14.618548 rv-proto-unit-1 sudo[71741]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:14.650277 rv-proto-unit-1 sudo[71741]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:14.814221 rv-proto-unit-1 sudo[71747]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60186
+Sep 23 12:55:14.814737 rv-proto-unit-1 sudo[71747]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:14.847112 rv-proto-unit-1 sudo[71747]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:14.857368 rv-proto-unit-1 sudo[71751]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60187
+Sep 23 12:55:14.857850 rv-proto-unit-1 sudo[71751]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:14.889932 rv-proto-unit-1 sudo[71751]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:15.053697 rv-proto-unit-1 sudo[71757]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60186
+Sep 23 12:55:15.054263 rv-proto-unit-1 sudo[71757]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:15.086586 rv-proto-unit-1 sudo[71757]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:15.096140 rv-proto-unit-1 sudo[71761]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60187
+Sep 23 12:55:15.096637 rv-proto-unit-1 sudo[71761]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:15.128454 rv-proto-unit-1 sudo[71761]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:15.291598 rv-proto-unit-1 sudo[71767]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60186
+Sep 23 12:55:15.292162 rv-proto-unit-1 sudo[71767]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:15.324512 rv-proto-unit-1 sudo[71767]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:15.336776 rv-proto-unit-1 sudo[71771]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60187
+Sep 23 12:55:15.337316 rv-proto-unit-1 sudo[71771]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:15.369835 rv-proto-unit-1 sudo[71771]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:15.533354 rv-proto-unit-1 sudo[71777]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60186
+Sep 23 12:55:15.533847 rv-proto-unit-1 sudo[71777]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:15.566723 rv-proto-unit-1 sudo[71777]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:15.577057 rv-proto-unit-1 sudo[71781]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60187
+Sep 23 12:55:15.577534 rv-proto-unit-1 sudo[71781]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:15.609357 rv-proto-unit-1 sudo[71781]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:15.776008 rv-proto-unit-1 sudo[71787]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60186
+Sep 23 12:55:15.776527 rv-proto-unit-1 sudo[71787]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:15.808767 rv-proto-unit-1 sudo[71787]: pam_unix(sudo:session): session closed for user root
+Sep 23 12:55:15.818716 rv-proto-unit-1 sudo[71791]:       rv : PWD=/home/rv ; USER=root ; COMMAND=/home/rv/pyspy/bin/py-spy dump --nonblocking --pid 60187
+Sep 23 12:55:15.819284 rv-proto-unit-1 sudo[71791]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1001)
+Sep 23 12:55:15.850971 rv-proto-unit-1 sudo[71791]: pam_unix(sudo:session): session closed for user root

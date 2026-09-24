@@ -1,0 +1,41 @@
+=== CONTROL: real pyproject, detect/windowing.py imports gateway_v2.edge ===
+step[sizes] rc=0 ::  
+step[http] rc=0 ::  
+step[mutable] rc=0 ::  
+step[capacity] rc=0 ::  
+step[imports] rc=1 ::  - gateway_v2.detect.windowing -> gateway_v2.edge.app (l.3) 
+step[ruff] rc=0 :: All checks passed! 
+step[mypy] rc=0 :: Success: no issues found in 78 source files 
+step[pytest] rc=0 :: .....................................ssss.....                           [100%] 42 passed, 4 skipped in 0.84s 
+JOB structural-gates => RED
+
+=== MUTATION A: layers reordered (edge moved to bottom) + same upward import ===
+65d64
+<     "gateway_v2.edge",
+74a74
+>     "gateway_v2.edge",
+step[sizes] rc=0 ::  
+step[http] rc=0 ::  
+step[mutable] rc=0 ::  
+step[capacity] rc=0 ::  
+step[imports] rc=0 ::  Contracts: 1 kept, 0 broken. 
+step[ruff] rc=0 :: All checks passed! 
+step[mypy] rc=0 :: Success: no issues found in 78 source files 
+step[pytest] rc=0 :: .....................................ssss.....                           [100%] 42 passed, 4 skipped in 0.85s 
+JOB structural-gates => GREEN
+
+=== MUTATION B: contracts table deleted + same upward import ===
+61,75d60
+< [[tool.importlinter.contracts]]
+< name = "Gateway v2 layers"
+< type = "layers"
+< layers = [
+step[sizes] rc=0 ::  
+step[http] rc=0 ::  
+step[mutable] rc=0 ::  
+step[capacity] rc=0 ::  
+step[imports] rc=0 ::  Contracts: 0 kept, 0 broken. 
+step[ruff] rc=0 :: All checks passed! 
+step[mypy] rc=0 :: Success: no issues found in 78 source files 
+step[pytest] rc=0 :: .....................................ssss.....                           [100%] 42 passed, 4 skipped in 0.85s 
+JOB structural-gates => GREEN

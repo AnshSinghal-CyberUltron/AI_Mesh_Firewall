@@ -1,0 +1,7 @@
+mcp_proxy.py:149       gateway/ai_mesh_gateway/mcp_proxy.py | limits=httpx.Limits(max_connections=64, max_keepalive_connections=32),
+rate_limiter.py:44     gateway/ai_mesh_gateway/rate_limiter.py | max_connections=100,
+mcp_oauth.py:477       gateway/ai_mesh_gateway/mcp_oauth.py | redis_url, decode_responses=True, max_connections=50
+vector_client.py:20    gateway/ai_mesh_gateway/vector_client.py | DEFAULT_THREAD_POOL_SIZE = 4
+embedding_vault.py:45  gateway/ai_mesh_gateway/embedding_vault.py | DEFAULT_THREAD_POOL_SIZE = 2
+llm_judge.py:25        gateway/ai_mesh_gateway/llm_judge.py | DEFAULT_THREAD_POOL_SIZE = 2
+context_guard.py:35    gateway/ai_mesh_gateway/context_guard.py | DEFAULT_THREAD_POOL_SIZE = 4

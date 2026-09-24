@@ -1,0 +1,101 @@
+diff -ru unit-orig/rvproto/edge/inspect.py unit-patched/rvproto/edge/inspect.py
+--- unit-orig/rvproto/edge/inspect.py	2026-09-23 17:24:03.506931997 +0530
++++ unit-patched/rvproto/edge/inspect.py	2026-09-23 17:24:57.240797273 +0530
+@@ -40,6 +40,20 @@
+         return hold_start(buf)
+ 
+ 
++class NoScanInspector(PlanInspector):
++    """EXPERIMENT ONLY (RV_EXP_OUTPUT_SCAN=off; proto-bench-unit holdback attribution): the
++    output phase detects nothing and holds nothing, so every upstream piece is released as it
++    arrives. Responses report the stage as out:S (skipped). Never a production posture."""
++
++    __slots__ = ()
++
++    def hits(self, text: str) -> list[Hit]:
++        return []
++
++    def hold_start(self, buf: str) -> int:
++        return len(buf)
++
++
+ class Verifier:
+     """PayloadVerifier: canonicalize + the same matcher, on the transformed texts."""
+ 
+diff -ru unit-orig/rvproto/edge/respond.py unit-patched/rvproto/edge/respond.py
+--- unit-orig/rvproto/edge/respond.py	2026-09-23 17:24:03.969931955 +0530
++++ unit-patched/rvproto/edge/respond.py	2026-09-23 17:24:57.240901141 +0530
+@@ -42,7 +42,7 @@
+         return await errors.send_error(send, errors.upstream("provider returned malformed JSON",
+                                                              "provider_protocol_error"), ctx.rid)
+     m.observe("t_output_scan_ns", now() - t_prov)
+-    stages = f"{res.stages},dispatch:E,out:E"
++    stages = f"{res.stages},dispatch:E,out:{'E' if st.s.exp_output_scan else 'S'}"
+     audited = _audit_output(st, ctx, jo.decision, "json", stages) and res.audited
+     stages = f"{stages},audit:{'E' if audited else 'U'}"
+     hdr = headers_for(ctx, res.decision.disposition.value, stages)
+@@ -60,7 +60,7 @@
+ async def respond_stream(st: State, ctx: Ctx, res: InputResult, resp: aiohttp.ClientResponse,
+                          send: Send, t_dispatch: int) -> None:
+     m = st.metrics
+-    stages = f"{res.stages},dispatch:E,out:E,audit:{'E' if res.audited else 'U'}"
++    stages = f"{res.stages},dispatch:E,out:{'E' if st.s.exp_output_scan else 'S'},audit:{'E' if res.audited else 'U'}"
+     hdr = [*SSE_HEADERS, (b"x-request-id", ctx.rid.encode()),
+            *headers_for(ctx, res.decision.disposition.value, stages)]
+     await send({"type": "http.response.start", "status": 200, "headers": hdr})
+diff -ru unit-orig/rvproto/edge/state.py unit-patched/rvproto/edge/state.py
+--- unit-orig/rvproto/edge/state.py	2026-09-23 17:24:03.740931975 +0530
++++ unit-patched/rvproto/edge/state.py	2026-09-23 17:24:57.240860743 +0530
+@@ -22,7 +22,7 @@
+ from rvproto.detect.matcher import Matcher
+ from rvproto.detect.semantic import SemanticDetector
+ from rvproto.dispatch.provider import ProviderClient
+-from rvproto.edge.inspect import PlanInspector, Verifier
++from rvproto.edge.inspect import NoScanInspector, PlanInspector, Verifier
+ from rvproto.plan.snapshot import PlanSnapshot
+ from rvproto.runtime import contract as rc
+ from rvproto.runtime.config import Settings, describe, load_settings
+@@ -61,7 +61,8 @@
+         key = (plan.org_id, plan.version)  # type: ignore[attr-defined]
+         ins = self.inspectors.get(key)
+         if ins is None:
+-            ins = self.inspectors[key] = PlanInspector(self.matcher, self.det, plan)  # type: ignore[arg-type]
++            cls = PlanInspector if self.s.exp_output_scan else NoScanInspector  # experiment flag
++            ins = self.inspectors[key] = cls(self.matcher, self.det, plan)  # type: ignore[arg-type]
+         return ins
+ 
+     def stream_ceiling(self) -> int:
+diff -ru unit-orig/rvproto/runtime/config.py unit-patched/rvproto/runtime/config.py
+--- unit-orig/rvproto/runtime/config.py	2026-09-23 17:24:03.273932018 +0530
++++ unit-patched/rvproto/runtime/config.py	2026-09-23 17:24:57.240734444 +0530
+@@ -49,6 +49,9 @@
+     ("RV_LEASE_CHUNK_TOKENS", ""),  # empty => contract-derived; set => logged deviation
+     ("RV_GUARD_TOPOLOGY", "in_process"),  # in_process (PROTO_SPEC) | owner (one process per GPU)
+     ("RV_GUARD_SOCKET_DIR", ""),  # empty => $XDG_RUNTIME_DIR/rv-guard-<port> (sun_path is 108 bytes)
++    # EXPERIMENT (proto-bench-unit holdback attribution only): off = the output phase
++    # scans and holds nothing (stage reported out:S). Never a production posture.
++    ("RV_EXP_OUTPUT_SCAN", "on"),
+ )
+ _SUN_PATH_MAX = 107  # sockaddr_un.sun_path minus the NUL terminator (Linux)
+ 
+@@ -94,6 +97,7 @@
+     lease_chunk_tokens: int | None
+     guard_topology: str
+     guard_socket_dir: str
++    exp_output_scan: bool
+     worker_index: int
+     defaulted: tuple[str, ...]
+ 
+@@ -156,9 +160,12 @@
+         lease_chunk_tokens=int(get["RV_LEASE_CHUNK_TOKENS"]) if get["RV_LEASE_CHUNK_TOKENS"].strip() else None,
+         guard_topology=get["RV_GUARD_TOPOLOGY"],
+         guard_socket_dir=get["RV_GUARD_SOCKET_DIR"] or _socket_dir(src, get["RV_PORT"]),
++        exp_output_scan=get["RV_EXP_OUTPUT_SCAN"].strip().lower() != "off",
+         worker_index=int(src.get("RV_WORKER_INDEX", "0")),
+         defaulted=defaulted,
+     )
++    if get["RV_EXP_OUTPUT_SCAN"].strip().lower() not in ("on", "off"):
++        raise ValueError(f"RV_EXP_OUTPUT_SCAN={get['RV_EXP_OUTPUT_SCAN']!r} (on | off)")
+     if s.guard_topology not in ("in_process", "owner"):
+         raise ValueError(f"RV_GUARD_TOPOLOGY={s.guard_topology!r} (in_process | owner)")
+     if s.guard_topology == "owner" and len(os.path.join(s.guard_socket_dir, "guard-99.sock").encode()) > _SUN_PATH_MAX:

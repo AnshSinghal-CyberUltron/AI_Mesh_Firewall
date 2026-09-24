@@ -1,0 +1,57 @@
+{
+ "scope": [
+  "shared"
+ ],
+ "n_files": 18,
+ "wrappers_detected": {},
+ "distinct_literal_names": 12,
+ "literal_call_sites": 12,
+ "dynamic_key_sites": 0,
+ "total_sites_incl_dynamic": 12,
+ "distinct_names_direct_only": 12,
+ "call_sites_direct_only": 12,
+ "by_kind": {
+  "environ.get": 7,
+  "getenv": 5
+ },
+ "names": {
+  "BEDROCK_MAX_TOKENS": [
+   "shared/ai_mesh_shared/tier2_gemini_client.py:189"
+  ],
+  "GOOGLE_API_KEY": [
+   "shared/ai_mesh_shared/tier2_gemini_client.py:59"
+  ],
+  "MCP_HOST_TOOLS_ALLOWLIST": [
+   "shared/ai_mesh_shared/mcp_host_tools.py:109"
+  ],
+  "MCP_HOST_TOOL_INSTALL_TIMEOUT": [
+   "shared/ai_mesh_shared/mcp_host_tools_runtime.py:18"
+  ],
+  "NPM_CONFIG_PREFIX": [
+   "shared/ai_mesh_shared/mcp_stdio_common.py:125"
+  ],
+  "PATH": [
+   "shared/ai_mesh_shared/mcp_stdio_common.py:119"
+  ],
+  "TIER2_PROVIDER": [
+   "shared/ai_mesh_shared/tier2_gemini_client.py:41"
+  ],
+  "UV_TOOL_BIN_DIR": [
+   "shared/ai_mesh_shared/mcp_stdio_common.py:121"
+  ],
+  "VECTOR_PROVIDER_ALLOW_PRIVATE": [
+   "shared/ai_mesh_shared/url_safety.py:151"
+  ],
+  "VERTEX_TIER2_MODEL": [
+   "shared/ai_mesh_shared/tier2_gemini_client.py:49"
+  ],
+  "ZEROSHIELD_MODEL_KEY_ENCRYPTION_KEY": [
+   "shared/ai_mesh_shared/llm_model_crypto.py:26"
+  ],
+  "npm_config_prefix": [
+   "shared/ai_mesh_shared/mcp_stdio_common.py:124"
+  ]
+ },
+ "dynamic_sites": [],
+ "writes": []
+}

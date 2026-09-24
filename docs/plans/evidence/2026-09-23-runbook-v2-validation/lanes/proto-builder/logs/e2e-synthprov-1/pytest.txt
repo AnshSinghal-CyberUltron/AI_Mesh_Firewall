@@ -1,0 +1,4 @@
+...............................s                                         [100%]
+=========================== short test summary info ============================
+SKIPPED [1] tests/e2e/test_e8_cancel_and_unready.py:46: run against a stack started with RV_GUARD_WARMUP_DELAY_S>0
+31 passed, 1 skipped in 31.35s

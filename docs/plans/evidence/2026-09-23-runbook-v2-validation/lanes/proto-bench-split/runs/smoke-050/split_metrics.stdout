@@ -1,0 +1,7 @@
+smoke-050 sut: PASS offered 1500 (50.0/s) qualified 1481 (49.37/s) infra 0 (0.0%) FP-blocks 19 drops 0
+  JSON_total      {'n': 448, 'n_inf': 0, 'p50': 6.992, 'p90': 8.568, 'p99': 10.75, 'p999': 11.023, 'max_finite': 11.023, 'mean_finite': 6.444}
+  SSE_total       {'n': 1033, 'n_inf': 0, 'p50': 7.088, 'p90': 8.417, 'p99': 10.638, 'p999': 12.219, 'max_finite': 12.626, 'mean_finite': 6.461}
+  SSE_first_tok1  {'n': 1033, 'n_inf': 0, 'p50': 26.944, 'p90': 28.47, 'p99': 45.307, 'p999': 49.894, 'max_finite': 50.012, 'mean_finite': 26.385}
+  SSE_strict      {'n': 1033, 'n_inf': 0, 'p50': 47.0, 'p90': 49.739, 'p99': 67.749, 'p999': 70.076, 'max_finite': 72.614, 'mean_finite': 46.297}
+  ALL_total       {'n': 1481, 'n_inf': 0, 'p50': 7.081, 'p90': 8.452, 'p99': 10.689, 'p999': 12.219, 'max_finite': 12.626, 'mean_finite': 6.456}
+  checks {'p99_json_total_lt_slo': True, 'p99_sse_total_lt_slo': True, 'infra_le_budget': True, 'zero_drops': True, 'records_complete': True} infra_reasons {} anomalies {}

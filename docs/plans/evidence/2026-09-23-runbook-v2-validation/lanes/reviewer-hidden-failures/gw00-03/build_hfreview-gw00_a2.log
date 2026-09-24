@@ -1,0 +1,59 @@
+#0 building with "default" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 1.68kB done
+#1 DONE 0.0s
+
+#2 resolve image config for docker-image://docker.io/docker/dockerfile:1.7@sha256:a57df69d0ea827fb7266491f2813635de6f17269be881f696fbfdf2d83dda33e
+#2 DONE 0.0s
+
+#3 docker-image://docker.io/docker/dockerfile:1.7@sha256:a57df69d0ea827fb7266491f2813635de6f17269be881f696fbfdf2d83dda33e
+#3 resolve docker.io/docker/dockerfile:1.7@sha256:a57df69d0ea827fb7266491f2813635de6f17269be881f696fbfdf2d83dda33e 0.0s done
+#3 CACHED
+
+#4 [internal] load metadata for docker.io/library/python:3.12-slim@sha256:78387bc3881b8273120a12ebe6c1ab22b018ccc2c9adf565ae1ac9b536e184ea
+#4 DONE 0.0s
+
+#5 [internal] load .dockerignore
+#5 transferring context: 487B done
+#5 DONE 0.0s
+
+#6 [internal] load build context
+#6 transferring context: 6.64kB done
+#6 DONE 0.0s
+
+#7 [stage-0 1/2] FROM docker.io/library/python:3.12-slim@sha256:78387bc3881b8273120a12ebe6c1ab22b018ccc2c9adf565ae1ac9b536e184ea
+#7 resolve docker.io/library/python:3.12-slim@sha256:78387bc3881b8273120a12ebe6c1ab22b018ccc2c9adf565ae1ac9b536e184ea 0.0s done
+#7 CACHED
+
+#8 [stage-0 2/2] RUN --mount=type=bind,source=gateway_v2/pyproject.toml,target=/tmp/src/pyproject.toml,ro     --mount=type=bind,source=gateway_v2/gateway_v2,target=/tmp/src/pkg,ro     --mount=type=bind,source=shared/ai_mesh_shared,target=/tmp/src/shared,ro     umask 022     && mkdir -p /opt/gateway_v2/gateway_v2 /opt/shared/ai_mesh_shared     && cp /tmp/src/pyproject.toml /opt/gateway_v2/pyproject.toml     && cp -R /tmp/src/pkg/. /opt/gateway_v2/gateway_v2/     && cp -R /tmp/src/shared/. /opt/shared/ai_mesh_shared/     && find /opt -xdev -exec touch -h -d "@1704067200" {} +     && pip install --no-cache-dir --no-compile         setuptools==75.8.2         wheel==0.45.1     && pip install --no-cache-dir --no-compile --no-build-isolation /opt/gateway_v2     && chown -R 0:0 /usr/local /opt     && find /usr/local /opt -xdev -exec touch -h -d "@1704067200" {} +
+#8 1.445 Collecting setuptools==75.8.2
+#8 1.554   Downloading setuptools-75.8.2-py3-none-any.whl.metadata (6.7 kB)
+#8 1.596 Collecting wheel==0.45.1
+#8 1.622   Downloading wheel-0.45.1-py3-none-any.whl.metadata (2.3 kB)
+#8 1.651 Downloading setuptools-75.8.2-py3-none-any.whl (1.2 MB)
+#8 1.782    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.2/1.2 MB 18.9 MB/s eta 0:00:00
+#8 1.808 Downloading wheel-0.45.1-py3-none-any.whl (72 kB)
+#8 1.822 Installing collected packages: wheel, setuptools
+#8 1.891 Successfully installed setuptools-75.8.2 wheel-0.45.1
+#8 3.046 Processing /opt/gateway_v2
+#8 3.048   Preparing metadata (pyproject.toml): started
+#8 3.829   Preparing metadata (pyproject.toml): finished with status 'done'
+#8 3.832 Building wheels for collected packages: gateway-v2
+#8 3.832   Building wheel for gateway-v2 (pyproject.toml): started
+#8 4.645   Building wheel for gateway-v2 (pyproject.toml): finished with status 'done'
+#8 4.646   Created wheel for gateway-v2: filename=gateway_v2-0.0.0-py3-none-any.whl size=33943 sha256=cf0369ae19d4935d9be71516517c05e7eb9d6b8982b5a3d4ab86609f4258eee8
+#8 4.646   Stored in directory: /tmp/pip-ephem-wheel-cache-d79h8_y9/wheels/dc/4e/bb/e99ce05f443a26d11e0503d90ea7b7aff15d0835cf58d26bac
+#8 4.650 Successfully built gateway-v2
+#8 4.658 Installing collected packages: gateway-v2
+#8 4.671 Successfully installed gateway-v2-0.0.0
+#8 DONE 6.7s
+
+#9 exporting to image
+#9 exporting layers
+#9 exporting layers 1.6s done
+#9 exporting manifest sha256:07bc9358368999aa1df2717089e13626a749745a90202392899e4ecb985a445f done
+#9 exporting config sha256:5a763ec27217694841dc3c8dc32aabf30c095859f760774020aba77afa03d0ff done
+#9 naming to docker.io/library/hfreview-gw00:a2 done
+#9 unpacking to docker.io/library/hfreview-gw00:a2 done
+#9 DONE 1.7s

@@ -1,0 +1,1 @@
+ssh -i /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/gcp/rv_ed25519 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR rv@10.160.0.46 '~/rv/venv/bin/python ~/rv/rvproto/tools/kill_owners.py'

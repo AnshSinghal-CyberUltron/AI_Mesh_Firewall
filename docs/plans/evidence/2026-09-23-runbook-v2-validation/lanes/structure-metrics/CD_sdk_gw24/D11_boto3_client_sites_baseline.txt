@@ -1,0 +1,15 @@
+gateway/ai_mesh_gateway/llm_judge.py:109:            self._client = boto3.client("bedrock-runtime", config=boto_config)
+gateway/ai_mesh_gateway/bedrock_client.py:239:        self._client = boto3.client("bedrock-runtime", config=boto_config)
+gateway/ai_mesh_gateway/bedrock_client.py:240:        # Lazy per-worker async runtime (aiobotocore). Created on first
+gateway/ai_mesh_gateway/bedrock_client.py:405:        """One aiobotocore bedrock-runtime client per worker. Fail closed."""
+gateway/ai_mesh_gateway/bedrock_client.py:417:                from aiobotocore.config import AioConfig
+gateway/ai_mesh_gateway/bedrock_client.py:418:                from aiobotocore.session import get_session
+gateway/ai_mesh_gateway/bedrock_client.py:421:                    "aiobotocore is required for native async Bedrock aconverse"
+gateway/ai_mesh_gateway/bedrock_client.py:424:                session = get_session()
+gateway/ai_mesh_gateway/bedrock_client.py:470:        Waits on sockets (aiobotocore), not a thread-pool executor.
+gateway/ai_mesh_gateway/bedrock_client.py:818:            bedrock_mgmt = boto3.client("bedrock", region_name=self.region)
+control/ai_mesh_control/security_engines/bedrock_client.py:141:        session = boto3.Session()
+control/ai_mesh_control/security_engines/bedrock_client.py:246:            bedrock_mgmt = boto3.client(
+control/ai_mesh_control/core/poc_views.py:69:            s3 = boto3.client(
+services/mcp-broker/sandbox-image/agent/upstream_manager.py:219:async def _get_session(
+services/mcp-broker/sandbox-image/agent/upstream_manager.py:601:    session = await _get_session(server_slug, transport, upstream, connect_timeout)

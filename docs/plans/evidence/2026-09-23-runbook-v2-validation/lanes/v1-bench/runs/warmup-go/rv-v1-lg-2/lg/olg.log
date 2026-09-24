@@ -1,0 +1,10 @@
+2026/09/23 13:34:34 corpus: 5000 entries sha256=6b8420958f0cb22b
+2026/09/23 13:34:34 waiting 4.711s for synchronized start
+2026/09/23 13:34:48 t=10s sched=101 inflight=70 ok=31 err=0 drops=0 conns=69
+2026/09/23 13:34:58 t=20s sched=301 inflight=124 ok=177 err=0 drops=0 conns=126
+2026/09/23 13:35:08 t=30s sched=501 inflight=104 ok=397 err=0 drops=0 conns=126
+2026/09/23 13:35:18 t=40s sched=701 inflight=99 ok=602 err=0 drops=0 conns=126
+2026/09/23 13:35:28 t=50s sched=901 inflight=109 ok=792 err=0 drops=0 conns=126
+2026/09/23 13:35:38 t=60s sched=1101 inflight=106 ok=995 err=0 drops=0 conns=126
+2026/09/23 13:35:48 t=70s sched=1300 inflight=119 ok=1181 err=0 drops=0 conns=126
+2026/09/23 13:35:57 done: scheduled=1300 recorded=1300 ok=1300 errors=map[] drops=0 late_p99=151us max=332us cpu_busy_max=6.3%

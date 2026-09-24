@@ -1,0 +1,24 @@
+total rows 748; labels {'malicious': 323, 'benign': 425}
+distinct ids 748; distinct texts 748; distinct normalized 748
+
+label     family                n uniq eval train origin (provenance prefix)     non-ascii max_chars
+benign    developer_traffic    75   75   11    64 {'hand_authored': 75}                  0        80
+benign    general_benign      350  350   78   272 {'hand_authored': 50, 'templated': 300}         0        83
+malicious command_injection    26   26    3    23 {'hand_authored': 26}                  0        59
+malicious data_leakage         38   38    6    32 {'hand_authored': 38}                  0        64
+malicious goal_hijacking       26   26    5    21 {'hand_authored': 26}                  0        65
+malicious jailbreak            38   38    6    32 {'hand_authored': 38}                  0        68
+malicious paraphrase           31   31    6    25 {'hand_authored': 31}                  0        93
+malicious path_traversal       26   26    2    24 {'hand_authored': 26}                  0        59
+malicious prompt_injection     60   60   10    50 {'hand_authored': 60}                  0        73
+malicious sql_injection        26   26    5    21 {'hand_authored': 26}                  0        61
+malicious tool_overreach       26   26    7    19 {'hand_authored': 26}                  0        63
+malicious vector_injection     26   26    4    22 {'hand_authored': 26}                  0        62
+
+malicious total 323 across 10 families; pattern-derived (provenance marker = a v1 ATTACK_PATTERNS family) = 292; paraphrase = 31
+benign total 425 developer_traffic 75
+families with PII/secret/credential labels: []
+rows with non-empty fake_fixtures: 0
+label fields available per row: ['fake_fixtures', 'family', 'id', 'label', 'provenance', 'split', 'text'] (no spans / expected action / org policy / provider-byte outcome)
+texts > 2000 chars (long-input/windowing cases): 0 | longest: 93
+texts with base64/hex/url-encoding shapes: 0

@@ -1,0 +1,1 @@
+FAIL typed auth error missing: Error: Connection error.

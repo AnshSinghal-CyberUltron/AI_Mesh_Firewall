@@ -1,0 +1,1 @@
+{"P2t2_DEBUG": {"s1_benign_nonstream": {"n": 20, "min": 13, "median": 13.0, "max": 13, "mean": 13}, "s2_benign_stream": {"n": 20, "min": 2, "median": 2.0, "max": 2, "mean": 2}, "s3_pii_nonstream": {"n": 20, "min": 14, "median": 14.0, "max": 14, "mean": 14}, "s4_injection_block": {"n": 20, "min": 13, "median": 13.0, "max": 13, "mean": 13}}, "blocked": 3, "blocked_unexpected": 0}

@@ -1,0 +1,14 @@
+guard-bench    rv-guard-g2-2      g2-standard-8   run=True  h=  0.168 vm/h=0.888582998 disk/h=0.032877 $0.16
+guard-bench    rv-guard-c4-1      c4-standard-8   run=True  h=  0.168 vm/h=0.4111536 disk/h=0.014466 $0.07
+guard-bench    rv-guard-g2-1      g2-standard-8   run=True  h=  0.166 vm/h=0.888582998 disk/h=0.032877 $0.15
+guard-bench    rv-guard-c4-2      c4-standard-8   run=True  h=  0.161 vm/h=0.4111536 disk/h=0.014466 $0.07
+guard-bench    rv-guard-c4h-1     c4-highcpu-16   run=True  h=  0.161 vm/h=0.70763264 disk/h=0.014466 $0.12
+micro-claims   rv-micro-up-1      c4-standard-8   run=True  h=  0.159 vm/h=0.4111536 disk/h=0.009644 $0.07
+micro-claims   rv-micro-edge-1    c4-standard-8   run=True  h=  0.159 vm/h=0.4111536 disk/h=0.009644 $0.07
+micro-claims   rv-micro-lg-1      c4-standard-16  run=True  h=  0.159 vm/h=0.8223072 disk/h=0.009644 $0.13
+micro-claims   rv-micro-lg-2      c4-standard-16  run=True  h=  0.158 vm/h=0.8223072 disk/h=0.009644 $0.13
+micro-claims   rv-micro-sut-1     c4-standard-8   run=True  h=  0.158 vm/h=0.4111536 disk/h=0.009644 $0.07
+micro-claims   rv-micro-app-1     c4-standard-8   run=True  h=  0.158 vm/h=0.4111536 disk/h=0.009644 $0.07
+micro-claims   rv-micro-redis-1   c4-standard-4   run=True  h=  0.158 vm/h=0.2055768 disk/h=0.009644 $0.03
+v1-bench       rv-v1-sut-1        g2-standard-24  run=True  h=  0.142 vm/h=2.082773268 disk/h=0.032877 $0.3
+TOTAL to date $1.44  current burn $9.1592/h  as of 2026-09-23T05:46:29Z

@@ -1,0 +1,20 @@
+Traceback (most recent call last):
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/pathlib.py", line 441, in __str__
+    return self._str
+           ^^^^^^^^^
+AttributeError: 'PosixPath' object has no attribute '_str'
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/contact_cyberultron_com/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/pathlib.py", line 555, in drive
+    return self._drv
+           ^^^^^^^^^
+AttributeError: 'PosixPath' object has no attribute '_drv'
+
+object address  : 0x7860bc901de0
+object refcount : 3
+object type     : 0x143deb8
+object type name: RecursionError
+object repr     : RecursionError('maximum recursion depth exceeded')
+lost sys.stderr

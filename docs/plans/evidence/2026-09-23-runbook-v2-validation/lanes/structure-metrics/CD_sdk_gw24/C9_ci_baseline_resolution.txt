@@ -1,0 +1,45 @@
+## uv pip compile of the baseline workflow's install set (py3.12)
+/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/shared
+    # via -r ci_baseline_requirements.in
+anyio==4.15.1
+    # via httpx
+certifi==2026.7.22
+    # via
+    #   httpcore
+    #   httpx
+fakeredis==2.38.0
+    # via -r ci_baseline_requirements.in
+h11==0.16.0
+    # via httpcore
+httpcore==1.0.9
+    # via httpx
+httpx==0.28.1
+    # via -r ci_baseline_requirements.in
+idna==3.20
+    # via
+    #   anyio
+    #   httpx
+iniconfig==2.3.0
+    # via pytest
+packaging==26.3
+    # via pytest
+pluggy==1.6.0
+    # via pytest
+pygments==2.21.0
+    # via pytest
+pytest==9.1.1
+    # via
+    #   -r ci_baseline_requirements.in
+    #   pytest-asyncio
+pytest-asyncio==1.4.0
+    # via -r ci_baseline_requirements.in
+redis==8.1.0
+    # via fakeredis
+sortedcontainers==2.4.0
+    # via fakeredis
+typing-extensions==4.16.0
+    # via
+    #   anyio
+    #   pytest-asyncio
+## openai present?
+openai NOT in resolved set

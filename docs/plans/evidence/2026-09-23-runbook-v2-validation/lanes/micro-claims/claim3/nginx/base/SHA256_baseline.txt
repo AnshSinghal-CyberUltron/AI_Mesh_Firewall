@@ -1,0 +1,2 @@
+a8ae76ebfcbed85ac7d661c470dbd0a406d660b80087952103f8fab21ffdce4e  /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/deploy/nginx.conf
+bb607271f4a10e5a832719c05fb0c25bc1d24b32922f05376cb61a6e3bf736a4  /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/deploy/nginx-ssl.conf

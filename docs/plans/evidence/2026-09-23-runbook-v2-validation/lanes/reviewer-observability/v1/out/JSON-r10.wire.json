@@ -1,0 +1,125 @@
+{
+ "run": "/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/v1-bench/runs/JSON-r10",
+ "mode": "direct",
+ "offered": 1800,
+ "phase_counts": {
+  "0": 50,
+  "1": 300,
+  "2": 1800
+ },
+ "provider_records": 2150,
+ "categories": {
+  "qualified": 1800
+ },
+ "infra_reasons": {},
+ "PUB_T_fw_addon": {
+  "n": 1800,
+  "n_inf": 0,
+  "p50": 79.839,
+  "p90": 130.925,
+  "p99": 218.716,
+  "p999": 288.142,
+  "max_finite": 314.425,
+  "mean_finite": 87.016
+ },
+ "PUB_sse": {
+  "n": 0
+ },
+ "PUB_json": {
+  "n": 1800,
+  "n_inf": 0,
+  "p50": 79.839,
+  "p90": 130.925,
+  "p99": 218.716,
+  "p999": 288.142,
+  "max_finite": 314.425,
+  "mean_finite": 87.016
+ },
+ "PUB_nohold_T_addon_total": {
+  "n": 1800,
+  "n_inf": 0,
+  "p50": 79.839,
+  "p90": 130.925,
+  "p99": 218.716,
+  "p999": 288.142,
+  "max_finite": 314.425,
+  "mean_finite": 87.016
+ },
+ "PUB_first_byte_sse": {
+  "n": 0
+ },
+ "C_T_fw_addon": {
+  "n": 1800,
+  "n_inf": 0,
+  "p50": 79.839,
+  "p90": 130.925,
+  "p99": 218.716,
+  "p999": 288.142,
+  "max_finite": 314.425,
+  "mean_finite": 87.016
+ },
+ "C_nohold": {
+  "n": 1800,
+  "n_inf": 0,
+  "p50": 79.839,
+  "p90": 130.925,
+  "p99": 218.716,
+  "p999": 288.142,
+  "max_finite": 314.425,
+  "mean_finite": 87.016
+ },
+ "ABC_T_fw_addon": {
+  "n": 182,
+  "n_inf": 0,
+  "p50": 83.171,
+  "p90": 138.19,
+  "p99": 194.484,
+  "p999": 226.309,
+  "max_finite": 226.309,
+  "mean_finite": 89.058
+ },
+ "ABC_sse": {
+  "n": 0
+ },
+ "ABC_json": {
+  "n": 182,
+  "n_inf": 0,
+  "p50": 83.171,
+  "p90": 138.19,
+  "p99": 194.484,
+  "p999": 226.309,
+  "max_finite": 226.309,
+  "mean_finite": 89.058
+ },
+ "ABC_nohold": {
+  "n": 182,
+  "n_inf": 0,
+  "p50": 83.171,
+  "p90": 138.19,
+  "p99": 194.484,
+  "p999": 226.309,
+  "max_finite": 226.309,
+  "mean_finite": 89.058
+ },
+ "sample_first_tok1_sse": {
+  "n": 0
+ },
+ "sample_first_byte_sse": {
+  "n": 0
+ },
+ "sample_lag": {
+  "n": 0
+ },
+ "hdr_addon_sse": {
+  "n": 0
+ },
+ "lone_first_event": {
+  "mappable": 182
+ },
+ "sampled_sse_offered": 0,
+ "sampled_sse_qualified_with_perchunk": 0,
+ "anomalies": {},
+ "blocks_client_total": {
+  "n": 0
+ }
+}

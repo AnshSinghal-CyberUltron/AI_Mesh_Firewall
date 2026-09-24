@@ -1,0 +1,33 @@
+--- trial 1 (SIGHUP every 3 ms) ---
+exit=3
+DEADLOCK: main thread stuck after ops=16780 hups=1140 reloads=1135
+  sighup_deadlock.py:66 in <module>
+  pools.py:32 in release
+  lifecycle.py:26 in handler
+  pools.py:82 in reload
+  pools.py:76 in apply
+  pools.py:40 in resize
+  lifecycle.py:26 in handler
+  pools.py:82 in reload
+--- trial 2 (SIGHUP every 3 ms) ---
+exit=3
+DEADLOCK: main thread stuck after ops=8099 hups=1142 reloads=1137
+  sighup_deadlock.py:65 in <module>
+  pools.py:26 in acquire
+  lifecycle.py:26 in handler
+  pools.py:82 in reload
+  pools.py:76 in apply
+  pools.py:40 in resize
+  lifecycle.py:26 in handler
+  pools.py:82 in reload
+--- trial 3 (SIGHUP every 3 ms) ---
+exit=3
+DEADLOCK: main thread stuck after ops=25099 hups=1139 reloads=1134
+  sighup_deadlock.py:65 in <module>
+  pools.py:26 in acquire
+  lifecycle.py:26 in handler
+  pools.py:82 in reload
+  pools.py:76 in apply
+  pools.py:40 in resize
+  lifecycle.py:26 in handler
+  pools.py:82 in reload

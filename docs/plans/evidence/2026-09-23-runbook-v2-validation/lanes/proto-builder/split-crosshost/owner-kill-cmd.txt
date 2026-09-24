@@ -1,0 +1,1 @@
+RV_GUARD_SOCKET_DIR=/run/user/1872320012/rv-guard-8400 /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/rvproto/.venv/bin/python /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/rvproto/tools/kill_owners.py

@@ -1,0 +1,13 @@
+### v1 mypy --strict
+gateway_v2/edge/forge.py:12: error: Incompatible return value type (got "Coroutine[Any, Any, ProviderStream]", expected "ProviderStream")  [return-value]
+gateway_v2/edge/forge.py:12: note: Maybe you forgot to use "await"?
+Found 1 error in 1 file (checked 79 source files)
+### v1 lint-imports (violations mentioning forge)
+Gateway v2 layers BROKEN
+Contracts: 0 kept, 1 broken.
+Broken contracts
+### v3 mypy --strict
+Success: no issues found in 86 source files
+### v3 lint-imports (violations mentioning forge)
+Gateway v2 layers KEPT
+Contracts: 1 kept, 0 broken.

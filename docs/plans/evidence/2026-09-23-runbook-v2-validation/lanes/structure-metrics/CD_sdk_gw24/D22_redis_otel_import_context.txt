@@ -1,0 +1,52 @@
+## venv redis version + redis/observability/providers.py 20-45
+redis 8.0.0
+     1	    otel.init(OTelConfig(enable_metrics=True))
+     2	"""
+     3	
+     4	import logging
+     5	from typing import Optional
+     6	
+     7	from redis.observability.config import OTelConfig
+     8	
+     9	logger = logging.getLogger(__name__)
+    10	
+    11	# Optional imports - OTel SDK may not be installed
+    12	try:
+    13	    from opentelemetry.sdk.metrics import MeterProvider
+    14	
+    15	    OTEL_AVAILABLE = True
+    16	except ImportError:
+    17	    OTEL_AVAILABLE = False
+    18	    MeterProvider = None
+    19	
+    20	# Global singleton instance
+    21	_global_provider_manager: Optional["OTelProviderManager"] = None
+    22	
+    23	
+    24	class OTelProviderManager:
+    25	    """
+    26	    Manages OpenTelemetry SDK providers and their lifecycle.
+## redis/observability/__init__.py 1-20
+     1	"""
+     2	OpenTelemetry observability module for redis-py.
+     3	
+     4	This module provides APIs for collecting and exporting Redis metrics using OpenTelemetry.
+     5	
+     6	Usage:
+     7	    from redis.observability import get_observability_instance, OTelConfig
+     8	
+     9	    otel = get_observability_instance()
+    10	    otel.init(OTelConfig())
+    11	"""
+    12	
+    13	from redis.observability.config import MetricGroup, OTelConfig, TelemetryOption
+    14	from redis.observability.providers import (
+    15	    ObservabilityInstance,
+    16	    get_observability_instance,
+    17	    reset_observability_instance,
+    18	)
+    19	
+    20	__all__ = [
+## uv.lock redis version + its deps
+chromadb 1.5.9 ['opentelemetry-api', 'opentelemetry-exporter-otlp-proto-grpc', 'opentelemetry-sdk'] {}
+redis 8.0.0 [] {}

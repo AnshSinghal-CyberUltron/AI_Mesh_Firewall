@@ -1,0 +1,5 @@
+distinct prompts per (surface,mode,tenant) cell: [2] cells: 20
+distinct normalized replay outcomes over all 50k: 2
+stream vs nonstream, same surface+prompt: 0/0 byte-identical outcomes (mode is ignored by replay)
+embeddings replay client_object: {'chat.completion'} (OpenAI embeddings object would be 'list')
+v1-oracle BLOCK count per surface: {'chat': 2500, 'completions': 2500, 'embeddings': 0, 'responses': 2500, 'mcp': 2500, 'rag': 0, 'vector': 2500}

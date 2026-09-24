@@ -1,0 +1,12 @@
+{
+  "schema": "amf.expected-diff.v1",
+  "entries": [
+    {
+      "rule_id": "P8-BACKTICK",
+      "row_id": "10.2.2-benign-inline-code",
+      "c3_score": "fpr=1.00",
+      "diff_signature": "disp:allow->redact|tx:->mask",
+      "commit_timestamp": 1790136662
+    }
+  ]
+}

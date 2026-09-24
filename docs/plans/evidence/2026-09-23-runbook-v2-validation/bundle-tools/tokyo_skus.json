@@ -1,0 +1,86 @@
+[
+ {
+  "desc": "Hyperdisk Balanced Capacity Confidential Mode in Tokyo",
+  "unit": "GiBy.mo",
+  "usd": 0.02,
+  "skuId": "24DC-2A7C-2352",
+  "effective": "2026-09-23T07:00:00Z"
+ },
+ {
+  "desc": "Asynchronous Replication Protection - Hyperdisk Balanced Capacity in Tokyo",
+  "unit": "GiBy.mo",
+  "usd": 0.0411,
+  "skuId": "5094-0EC5-944B",
+  "effective": "2026-09-23T07:00:00Z"
+ },
+ {
+  "desc": "G2 Instance Ram running in Tokyo",
+  "unit": "GiBy.h",
+  "usd": 0.003759429,
+  "skuId": "68F1-6598-F513",
+  "effective": "2026-09-23T07:00:00Z"
+ },
+ {
+  "desc": "Balanced PD Capacity in Japan",
+  "unit": "GiBy.mo",
+  "usd": 0.13,
+  "skuId": "6D8C-DF09-314D",
+  "effective": "2026-09-23T07:00:00Z"
+ },
+ {
+  "desc": "C4 Instance Core running in Tokyo",
+  "unit": "h",
+  "usd": 0.04449753,
+  "skuId": "717B-1607-EA4C",
+  "effective": "2026-09-23T07:00:00Z"
+ },
+ {
+  "desc": "Static Ip Charge in Japan",
+  "unit": "h",
+  "usd": 0.015,
+  "skuId": "7A91-88CA-899A",
+  "effective": "2026-09-23T07:00:00Z"
+ },
+ {
+  "desc": "C4 Instance Ram running in Tokyo",
+  "unit": "GiBy.h",
+  "usd": 0.00505718,
+  "skuId": "AA57-3709-A919",
+  "effective": "2026-09-23T07:00:00Z"
+ },
+ {
+  "desc": "C4 Instance Local SSD running in Tokyo",
+  "unit": "GiBy.mo",
+  "usd": 0.20547,
+  "skuId": "BE1D-B346-8C30",
+  "effective": "2026-09-23T07:00:00Z"
+ },
+ {
+  "desc": "Hyperdisk Balanced Capacity in Tokyo",
+  "unit": "GiBy.mo",
+  "usd": 0.102,
+  "skuId": "E536-B0BE-4647",
+  "effective": "2026-09-23T07:00:00Z"
+ },
+ {
+  "desc": "G2 Instance Core running in Tokyo",
+  "unit": "h",
+  "usd": 0.03208986,
+  "skuId": "ECDA-3E53-7A9E",
+  "effective": "2026-09-23T07:00:00Z"
+ },
+ {
+  "desc": "Regional Balanced PD Capacity in Japan",
+  "unit": "GiBy.mo",
+  "usd": 0.26,
+  "skuId": "F80E-BEC6-B2DF",
+  "effective": "2026-09-23T07:00:00Z"
+ },
+ {
+  "desc": "Nvidia L4 GPU running in Tokyo",
+  "unit": "h",
+  "usd": 0.7192037,
+  "skuId": "FDE8-86D4-B581",
+  "effective": "2026-09-23T07:00:00Z"
+ }
+]

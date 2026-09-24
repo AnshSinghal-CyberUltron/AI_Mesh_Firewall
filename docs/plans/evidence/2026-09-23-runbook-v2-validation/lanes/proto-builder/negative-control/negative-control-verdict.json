@@ -1,0 +1,15 @@
+{
+ "purpose": "Prove which tests genuinely exercise rvproto over TCP: rerun each suite with its base URL pointed at a CLOSED port (127.0.0.1:8499). A test that still passes is not evidence about the gateway.",
+ "rvproto_e2e_suite (tests/e2e, E2E_NEGATIVE_CONTROL=1 skips the fixture readiness probe)": {"failed": 51, "passed": 1, "skipped": 1,
+   "passed_test": "test_sdk_version_pinned (asserts the installed openai==2.38.0; never touches the gateway by design)",
+   "skipped_test": "test_guard_unready_at_startup_is_unavailable_not_clean (env-gated to a delayed-warm-up stack)",
+   "files": ["rvproto-e2e-closed-port.txt", "rvproto-e2e-closed-port.xml"]},
+ "rvproto_node_matrix (tests/e2e/node/rv_matrix.mjs)": {"exit": 2, "file": "rv-node-matrix-closed-port.txt"},
+ "repo_node_matrix (gateway_v2/tests/openai_conformance/node/openai_matrix.mjs)": {"exit": 1, "file": "repo-node-matrix-closed-port.txt"},
+ "adapted_live_uvicorn_copy (only live_url -> base URL)": {"failed": 8, "passed": 0, "file": "adapted-live-uvicorn-closed-port.txt"},
+ "repo_suite_tcp_mode_unmodified": {"failed": 8, "passed": 27, "skipped": 52, "xfailed": 2,
+   "base_url_driven": "only test_live_tcp_8300 (3 tests): all 3 FAIL on the closed port",
+   "not_base_url_driven": "27 passes incl. all 6 passing live-uvicorn tests boot ai_mesh_gateway.main in-process (confirms the controller's warning); the other 5 failures are GW01's recorded v1 deviations",
+   "file": "repo-suite-tcp-closed-port.txt"},
+ "conclusion": "Valid rvproto evidence = rvproto tests/e2e (incl. test_e9 ported assertions), rv_matrix.mjs, the adapted live-uvicorn copy, the repo Node matrix, and the 3 repo test_live_tcp_8300 tests. Nothing else in the repo suite's TCP mode is evidence about rvproto."
+}

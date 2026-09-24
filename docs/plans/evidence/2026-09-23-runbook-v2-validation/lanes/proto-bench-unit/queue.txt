@@ -1,0 +1,79 @@
+# PRIMARY ladder: PG2-22M local_gpu owner topology, org-a (FULL enforce), HEADLINE corpus, TTFT 150 / ITL 20, 70/30 SSE/JSON
+h22-025 25 headline-22M.jsonl LABEL=primary
+h22-050 50 headline-22M.jsonl LABEL=primary
+# metrics dir moved to tmpfs from here on (h22-025 showed a 380 ms guard-owner stall coincident with iowait)
+CMD bash /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-bench-unit/tools/unit_ctl.sh start p22-a local_gpu 22M
+p22-025 25 headline-22M.jsonl LABEL=primary
+CMD ssh -i /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/gcp/rv_ed25519 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR rv@10.160.0.46 'redis-cli config set save ""; redis-cli config get save'
+p22-050 50 headline-22M.jsonl LABEL=primary
+p22-100 100 headline-22M.jsonl LABEL=primary
+p22-200 200 headline-22M.jsonl LABEL=primary
+# knee refinement (+25% steps from 50; p22-100 failed the infra gate with 0.64% guard_queue sheds)
+p22-063 63 headline-22M.jsonl LABEL=primary_refine
+p22-078 78 headline-22M.jsonl LABEL=primary_refine
+# direct floor (loadgen -> synthprov, same workload) at the first-failing rate
+d-h-100 100 headline-22M.jsonl MODE=direct AUTH=none LABEL=direct_floor
+# (6) CORRECTNESS mix at ~50% of the knee, 10 min, org-a enforce
+c22-035 35 correctness-22M.jsonl DURATION=600 PBU_FLAGS="--policy enforce" LABEL=correctness
+# repeats at the provisional knee (78 passed with 0.085% sheds; 100 failed with 0.64%)
+p22-078-r2 78 headline-22M.jsonl LABEL=knee_repeat
+p22-078-r3 78 headline-22M.jsonl LABEL=knee_repeat
+# arrival-process sensitivity: same rate, Poisson arrivals (the per-worker guard bound sheds on overlap)
+p22p-078 78 headline-22M.jsonl OLG_EXTRA="-arrival poisson" LABEL=poisson
+# (2) re-run 25 RPS (p22-025 lost its SUT-side sampler: unit_sampler SyntaxError, fixed)
+p22-025b 25 headline-22M.jsonl LABEL=primary_rerun_sut_data
+p22p-025 25 headline-22M.jsonl OLG_EXTRA="-arrival poisson" LABEL=poisson
+# (7) GW19 overload: base 39/s for 9 min + burst 195/s for 3 min (3x the 78 RPS knee), probe Retry-After
+CMD bash /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-bench-unit/tools/pbu_overload.sh ovl-234 39 195 headline-22M.jsonl
+# (8) long streams: SSE-only, 400 tokens at ITL 30 ms, 100/s -> ~1,200 concurrent streams, 10 min
+l22-100 100 long400-22M.jsonl SSE_FRAC=1 PROV_FLAGS="-ttft 150ms -itl 30ms" DURATION=600 LABEL=long_streams
+# (5) WORST-BAND ladder (1,024 in / 400 out; 3 guard windows per request)
+w22-025 25 worst-22M.jsonl LABEL=worst_band
+w22-050 50 worst-22M.jsonl LABEL=worst_band
+w22-063 63 worst-22M.jsonl LABEL=worst_band
+# worst-band: 25 passed (p99 T_addon_total 19.0 ms), 50 failed (20.07 ms): repeats at 25, floor at 50
+w22-025-r2 25 worst-22M.jsonl LABEL=worst_band_repeat
+w22-025-r3 25 worst-22M.jsonl LABEL=worst_band_repeat
+d-w-050 50 worst-22M.jsonl MODE=direct AUTH=none LABEL=direct_floor_worst
+# RELAXED admission bounds (deployment declaration only, no code change): AMF_TARGET_P99_MS=100 widens the GW03
+# queue bounds 5x (per-worker guard cap ~2.6k padded tokens, owner cap ~23k); the guard deadline stays 20 ms
+CMD bash /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-bench-unit/tools/unit_ctl.sh start p22r local_gpu 22M AMF_TARGET_P99_MS=100 RV_GUARD_DEADLINE_MS=20
+p22r-100 100 headline-22M.jsonl LABEL=relaxed_bounds
+p22rp-150 150 headline-22M.jsonl OLG_EXTRA="-arrival poisson" LABEL=relaxed_bounds_poisson
+# UNBOUNDED admission (deployment declaration only): AMF_TARGET_P99_MS=1000 makes every GW03 queue bound ~1 s of guard
+# work (per-worker ~26k padded tokens, owner ~240k) so the per-worker bound cannot bind; guard deadline pinned at 20 ms,
+# so any request that waits >20 ms for the guard fails closed (sem:U -> BLOCK, counted as an infra error)
+CMD bash /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-bench-unit/tools/unit_ctl.sh start p22u local_gpu 22M AMF_TARGET_P99_MS=1000 RV_GUARD_DEADLINE_MS=20
+p22u-100 100 headline-22M.jsonl LABEL=unbounded_admission
+# CPU profile (py-spy --nonblocking, 90 s, 2 workers + owner 0) during the measurement phase of p22u-200
+CMD ssh -i /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/gcp/rv_ed25519 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR rv@10.160.0.46 'bash ~/rv/profile_later.sh 170 90'
+p22u-200 200 headline-22M.jsonl LABEL=unbounded_admission
+p22up-100 100 headline-22M.jsonl OLG_EXTRA="-arrival poisson" LABEL=unbounded_admission_poisson
+p22up-150 150 headline-22M.jsonl OLG_EXTRA="-arrival poisson" LABEL=unbounded_admission_poisson
+p22up-200 200 headline-22M.jsonl OLG_EXTRA="-arrival poisson" LABEL=unbounded_admission_poisson
+# (3) HOLDBACK attribution: SSE-only, 40/s (~50% of knee), every stream sampled; unit tree + RV_EXP_OUTPUT_SCAN flag
+CMD bash /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-bench-unit/tools/unit_patch.sh apply
+CMD bash /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-bench-unit/tools/unit_ctl.sh start hb-on local_gpu 22M
+hb-on-10 40 headline-22M.jsonl SSE_FRAC=1 PROV_FLAGS="-ttft 150ms -itl 10ms -sample-mod 1" OLG_EXTRA="-sample-mod 1" LABEL=holdback_on_itl10
+hb-on-20 40 headline-22M.jsonl SSE_FRAC=1 PROV_FLAGS="-ttft 150ms -itl 20ms -sample-mod 1" OLG_EXTRA="-sample-mod 1" LABEL=holdback_on_itl20
+hb-on-30 40 headline-22M.jsonl SSE_FRAC=1 PROV_FLAGS="-ttft 150ms -itl 30ms -sample-mod 1" OLG_EXTRA="-sample-mod 1" LABEL=holdback_on_itl30
+CMD bash /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-bench-unit/tools/unit_ctl.sh start hb-off local_gpu 22M RV_EXP_OUTPUT_SCAN=off
+hb-off-10 40 headline-22M.jsonl SSE_FRAC=1 PROV_FLAGS="-ttft 150ms -itl 10ms -sample-mod 1" OLG_EXTRA="-sample-mod 1" PROFILE_STAGES=canon,det,sem,resolve,dispatch,audit LABEL=holdback_off_itl10
+hb-off-20 40 headline-22M.jsonl SSE_FRAC=1 PROV_FLAGS="-ttft 150ms -itl 20ms -sample-mod 1" OLG_EXTRA="-sample-mod 1" PROFILE_STAGES=canon,det,sem,resolve,dispatch,audit LABEL=holdback_off_itl20
+hb-off-30 40 headline-22M.jsonl SSE_FRAC=1 PROV_FLAGS="-ttft 150ms -itl 30ms -sample-mod 1" OLG_EXTRA="-sample-mod 1" PROFILE_STAGES=canon,det,sem,resolve,dispatch,audit LABEL=holdback_off_itl30
+d-sse-040 40 headline-22M.jsonl MODE=direct AUTH=none SSE_FRAC=1 PROV_FLAGS="-ttft 150ms -itl 20ms -sample-mod 1" OLG_EXTRA="-sample-mod 1" LABEL=direct_floor_sse
+CMD bash /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-bench-unit/tools/unit_patch.sh restore
+# (4) VARIANT: PG2-86M local_gpu owner
+CMD bash /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-bench-unit/tools/unit_ctl.sh start m86 local_gpu 86M
+m86-025 25 headline-86M.jsonl LABEL=variant_86M
+m86-050 50 headline-86M.jsonl LABEL=variant_86M
+m86-078 78 headline-86M.jsonl LABEL=variant_86M
+# (4) VARIANT: PG2-22M triton_grpc (node-local Triton 26.05, dynamic batching, 1 instance per L4)
+CMD bash /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-bench-unit/tools/unit_ctl.sh start t22 triton_grpc 22M
+t22-025 25 headline-22M.jsonl LABEL=variant_triton
+t22-050 50 headline-22M.jsonl LABEL=variant_triton
+t22-078 78 headline-22M.jsonl LABEL=variant_triton
+t22-100 100 headline-22M.jsonl LABEL=variant_triton
+# end of lane: stop rvproto (and the Triton container) on unit-1; the VM itself stays up for other lanes
+CMD bash /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-bench-unit/tools/unit_ctl.sh stop final
+STOP

@@ -1,0 +1,35 @@
+{
+ "run": "b-quota-4k",
+ "kind": "quota",
+ "rate": 56,
+ "requests": 8961,
+ "status_counts": {
+  "200": 4187,
+  "403": 67,
+  "429": 4707
+ },
+ "budget_write": {
+  "op": "budget",
+  "args": [
+   "org-q",
+   "4000000"
+  ],
+  "t_send": 1790181048.6796787,
+  "t_reply": 1790181048.6801162,
+  "rtt_ms": 0.437,
+  "replies": [
+   "OK"
+  ]
+ },
+ "budget_tokens": 4000000,
+ "admitted_tokens": 3972424,
+ "lease_granted_tokens": 4000000,
+ "overshoot_tokens": -27576,
+ "overshoot_pct": -0.6894,
+ "stranded_tokens_held_by_workers_at_end": 27576,
+ "lease_refills": 5684,
+ "quota_rejected_refills": 4707,
+ "first_429_after_budget_s": 81.462,
+ "last_200_send_after_budget_s": 102.283,
+ "n_200_after_first_429": 139
+}

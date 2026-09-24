@@ -1,0 +1,5 @@
+### shipped HTTP AST gate (lint/check_http_outside_edge_resolve.py) on detect/evil.py + admit/deny.py
+exit=0
+### shipped import-linter contract
+Gateway v2 layers KEPT
+exit=0

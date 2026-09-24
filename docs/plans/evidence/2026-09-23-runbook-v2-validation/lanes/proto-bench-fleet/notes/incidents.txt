@@ -1,0 +1,5 @@
+2026-09-23T13:53:30Z NOTE: iptables ACCT chain on rv-pbf-unit-6 (10.146.0.7) was flushed/recreated at ~13:53Z during step f8-060-r2 (measurement window 13:52-13:57Z): that step's unit-side ACCT byte counters (wire.unit_ip_bytes_per_req) are INVALID; its qualification/latency/CPU numbers are unaffected.
+2026-09-23T13:53:40Z NOTE: step f1u-050's controller-side bash (pbf_step.sh) was killed at ~12:39Z after the script file was edited mid-run; the remote olg/synthprov/samplers were unaffected and the step was completed by pbf_finish.sh (logs/f1u-050.finish.log).
+2026-09-23T14:06:06Z aborted f2u-150 before its measurement phase (2-unit ladder re-planned downward after f2u-140 FAILED at 1.36% infra)
+2026-09-23T14:44:14Z NOTE: hostinfo.sh (lscpu, nvidia-smi -q, uv pip freeze, docker images) was run on units 10.146.0.2/.5 (during f2u-080-r2 measurement) and 10.146.0.7/.18/.19 (during fleet-090 measurement) at ~14:44Z; a brief CPU/driver blip may perturb those two steps. If either fails marginally it is re-run.
+2026-09-23T18:54:13Z aborted uz1-200 before its measurement phase (1-unit load-rule knee already bracketed: 150 PASS, 175 FAIL)

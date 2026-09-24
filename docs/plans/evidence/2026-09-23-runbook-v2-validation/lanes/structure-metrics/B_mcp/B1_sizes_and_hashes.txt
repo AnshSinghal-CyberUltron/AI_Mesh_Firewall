@@ -1,0 +1,28 @@
+== BASELINE
+  6250 311403 mcp_proxy.py
+  1752  93799 mcp_scan_orchestrator.py
+   281  10753 mcp_scan_targets.py
+   394  23133 config.py
+   454  17440 enforcement.py
+  9131 456528 total
+a4cba3652e9d4348fd57098c754ed44deb777e2108a43a136a56bb0f90a57b74  mcp_proxy.py
+cf01403ef317a6cad2da29fc8a6dab287f50b62748388c83263d55e2bcad7cf0  mcp_scan_orchestrator.py
+bedd8365747fad19a066d6434cb49d74813792d12fa5cb71edc1d0ea0df939f3  mcp_scan_targets.py
+082178b1a58395f39fe4735e707ef3560734501d5aee2fdae64956ac9b72aae6  config.py
+ba7c428b0b03fae113efb5c6aab7b6bf04c7df4ae8969f5130ae9a98fbcf90b0  config_sync.py
+937b2b32cdb9a1beba26669f67697bdfc6dcf1285a7b5302fef6e2903b8fae6e  enforcement.py
+== HEAD
+  6250 311403 mcp_proxy.py
+  1752  93799 mcp_scan_orchestrator.py
+   281  10753 mcp_scan_targets.py
+   394  23133 config.py
+   454  17440 enforcement.py
+  9131 456528 total
+a4cba3652e9d4348fd57098c754ed44deb777e2108a43a136a56bb0f90a57b74  mcp_proxy.py
+cf01403ef317a6cad2da29fc8a6dab287f50b62748388c83263d55e2bcad7cf0  mcp_scan_orchestrator.py
+bedd8365747fad19a066d6434cb49d74813792d12fa5cb71edc1d0ea0df939f3  mcp_scan_targets.py
+082178b1a58395f39fe4735e707ef3560734501d5aee2fdae64956ac9b72aae6  config.py
+ba7c428b0b03fae113efb5c6aab7b6bf04c7df4ae8969f5130ae9a98fbcf90b0  config_sync.py
+937b2b32cdb9a1beba26669f67697bdfc6dcf1285a7b5302fef6e2903b8fae6e  enforcement.py
+== git diff --stat 2a657fad HEAD (mcp files, config, enforcement)
+(empty diff above = identical)

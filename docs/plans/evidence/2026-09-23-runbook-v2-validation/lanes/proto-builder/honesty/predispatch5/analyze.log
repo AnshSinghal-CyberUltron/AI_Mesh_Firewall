@@ -1,0 +1,38 @@
+# Harness analysis (sut, policy=enforce) — FAIL
+
+| check | result |
+|---|---|
+| p99_T_fw_addon_lt_slo | FAIL |
+| error_rate_le_budget | PASS |
+| zero_schedule_drops | PASS |
+| zero_safety_failures | PASS |
+| run_valid | PASS |
+| qualified_nonempty | PASS |
+
+- offered: 240 over 60 s = 4.0 req/s (configured 4.0)
+- qualified: 240 (4.0 req/s); expected blocks: 0; errors: 0 (rate 0.0)
+- error reasons: {}
+- safety failures: 0 {}
+- schedule drops (>5.0 ms): 0; lateness ms: n=240 p50=0.1067 p90=0.1248 p99=0.1588 p99.9=0.1996 max=0.1996 mean=0.1093
+- join: {'joined': 240, 'by_nonce_fallback': 0, 'provider_records': 260, 'provider_rids_with_multiple_calls': 0, 'provider_orphans': None}
+- valid: True []
+
+| metric (ms) | distribution |
+|---|---|
+| T_addon_total | n=240 p50=89.208 p90=93.9337 p99=107.9959 p99.9=116.2936 max=116.2936 mean=76.9056 |
+| T_addon_first | n=240 p50=89.3261 p90=94.1271 p99=114.5021 p99.9=116.2945 max=116.2945 mean=77.1395 |
+| T_release_lag_max | n=240 p50=96.0157 p90=131.6321 p99=141.8259 p99.9=156.1473 max=156.1473 mean=100.7795 |
+| T_release_lag_max_arrival | n=240 p50=93.4758 p90=113.3851 p99=122.4011 p99.9=137.758 max=137.758 mean=91.2674 |
+| T_fw_addon | n=240 p50=96.0157 p90=131.6321 p99=141.8259 p99.9=156.1473 max=156.1473 mean=100.7795 |
+| T_fw_addon_sse | n=168 p50=112.7918 p90=132.412 p99=152.2468 p99.9=156.1473 max=156.1473 mean=111.8825 |
+| T_fw_addon_json | n=72 p50=88.8245 p90=93.4758 p99=107.9959 p99.9=107.9959 max=107.9959 mean=74.8725 |
+| client_ttft_sse | n=168 p50=239.4618 p90=244.4413 p99=266.1163 p99.9=266.3664 max=266.3664 mean=228.1666 |
+| provider_sched_err_last | n=240 p50=0.0571 p90=0.0952 p99=0.1036 p99.9=0.1162 max=0.1162 mean=0.0575 |
+| provider_sched_err_max_per_stream | n=240 p50=0.0645 p90=0.1045 p99=1.9645 p99.9=2.431 max=2.431 mean=0.1041 |
+| provider_write_max | n=240 p50=0.0377 p90=0.0555 p99=0.2341 p99.9=0.2925 max=0.2925 mean=0.0447 |
+
+- release lag: 240 sampled streams joined, 0 unmappable (content length differs)
+- loadgen CPU (measurement phase): [{'dir': '/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-builder/honesty/predispatch5/olg', 'samples': 60, 'busy_max': 29.72620599739244, 'busy_mean': 12.4, 'machine': 'c4-standard-16', 'zone': 'asia-south1-c'}]
+- provider CPU: {'samples': 0, 'busy_max': None, 'busy_p95': None}
+- completeness: [{'dir': '/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/proto-builder/honesty/predispatch5/olg', 'scheduled': 260, 'recorded': 260, 'interrupted': False}]
+

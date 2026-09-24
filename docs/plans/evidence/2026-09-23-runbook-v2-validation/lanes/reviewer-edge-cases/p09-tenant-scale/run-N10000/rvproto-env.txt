@@ -1,0 +1,14 @@
+AMF_TARGET_P99_MS=2000
+PYTHONPATH=/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-edge-cases/stack/vendor
+RV_ADMIN_HOOKS=1
+RV_GUARD_BACKEND=local_cpu
+RV_GUARD_CPU_THREADS=2
+RV_GUARD_DEADLINE_MS=5000
+RV_GUARD_MODEL=/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/rvproto/models/pg2-22M.onnx
+RV_GUARD_TOKENIZER=/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/models/Llama-Prompt-Guard-2-22M/tokenizer.json
+RV_HOST=127.0.0.1
+RV_METRICS_DIR=/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/reviewer-edge-cases/p09-tenant-scale/run-N10000/metrics
+RV_PORT=8480
+RV_PROVIDER_URL=http://127.0.0.1:18481
+RV_REDIS_URL=redis://127.0.0.1:16479/0
+WEB_CONCURRENCY=1

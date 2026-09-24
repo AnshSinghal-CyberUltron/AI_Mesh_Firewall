@@ -1,0 +1,2974 @@
+
+AI Mesh Firewall
+FINAL SCALABLE GATEWAY EXECUTION RUNBOOK
+Maximum qualified throughput under a $5,000/month deployment envelope · p99 <20 ms firewall overhead · local guard inference · organization-controlled security actions · OpenAI SDK + SSE compatibility · horizontally scalable backend · clean professional frontend + public landing experience
+Execution authority
+This document is the consolidated execution runbook. It uses the September architecture/cost sources, the repository-backed V3 review, the measured Prompt Guard/TensorRT work reported in this project, and the later decisions that $5,000/month is the current deployment envelope—not a code-level ceiling. Historical 100k-RPS plans remain design evidence only; 100k is not the current release KPI under the $5k cap.
+
+Locked dimension
+Final position
+$5k budget
+Hard current deployment envelope. Reprice before purchase. Never hardcode this capacity in application logic.
+Latency
+p99 <20 ms complete AI Mesh firewall-added overhead for the signed low-latency profile.
+Throughput
+Maximize qualified RPS within $5k. Historical 1,064 RPS is a minimum planning floor to beat, not a software cap.
+Scale
+Adding CPU/GPU replicas must increase capacity without changing application semantics or rewriting the gateway.
+Platform AI
+No Bedrock, Vertex/Gemini, hosted moderation, or other platform-owned external AI dependency for enforcement.
+Customer model
+Organization-selected generation provider/BYOK remains allowed and is excluded from firewall-infrastructure cost/latency accounting.
+User control
+Organization admin controls supported content-security detectors, modes, actions and thresholds. Platform integrity controls remain non-tenant-disableable.
+SSE / SDK
+OpenAI-compatible JSON and SSE must work through official Python and Node SDKs, including tool-call streaming, cancellation and [DONE].
+Proof
+No task exits on unit tests alone. Required exit evidence is live Docker/staging, real wire bytes, real browser/API behavior, and controlled-load measurements.
+
+Prepared: 16 September 2026   |   Reviewed repository baseline: ansh @ e95f974dc500414b8f4db28038977fa9bf7deb44 (must be re-pinned at T00 before implementation).
+
+1. Program definition and release equation
+Final objective
+Build a horizontally scalable, low-latency AI security gateway whose code has no capacity assumption tied to the present $5,000 budget. Within the current budget, maximize qualified RPS while keeping p99 complete firewall overhead below 20 ms and preserving every enabled policy, SSE/OpenAI SDK semantics, tenant isolation, failure safety and auditable user control.
+
+1.1 What counts as qualified throughput
+A qualified request is a real /v1 request through the production-shaped gateway path with authentication, organization configuration, applicable policy work, selected input controls, customer-provider dispatch for allow/redact traffic, selected output controls, finalization and audit enqueue.
+Policy blocks are correctness traffic and are reported separately; they do not inflate the all-permitted capacity headline.
+Health checks, scan-only calls, stubs, cached repeated prompts, skipped guards, malformed streams, 429/503s, cancelled calls and partial streams are not successful qualified completions.
+Real BYOK provider capacity is reported separately from controlled-provider firewall capacity. A customer provider quota is not AI Mesh gateway capacity.
+1.2 Latency contract
+Metric
+Definition
+Release rule
+T_input
+Owned time from request acceptance before auth through final input decision and provider-dispatch readiness.
+Measured separately; included in total firewall overhead.
+T_release_lag
+For SSE: upstream content-ready → corresponding safe downstream write completion, including buffering/guard work.
+p99 and max recorded; cannot be hidden as provider time.
+T_finalize
+Last upstream content-ready → terminal downstream completion/audit enqueue.
+Included.
+T_fw_addon
+Complete AI-Mesh-added critical-path time, excluding intrinsic customer-model generation.
+p99 <20 ms for the signed low-latency profile.
+TTFT
+Client-visible time to first content.
+Reported, but not mislabeled as firewall overhead.
+
+Important output-mode rule
+Strict whole-response withholding and normal streaming are different products at the wire. A strict mode may wait for generation to finish before any content is released; it cannot inherit the low-latency SSE TTFT claim. Each output mode gets its own qualification profile.
+
+1.3 Capacity and cost contract
+Current monthly infrastructure envelope: ≤$5,000 for the AI Mesh platform infrastructure; tenant model-token spend remains separate.
+Historical reference point: 4 × G2 nodes / 8 × L4 / ~1,064 RPS / ~$4,561 per month. Treat this as a planning baseline that must be re-priced and re-measured, not a current quote or cap.
+Primary optimization metrics: qualified RPS, RPS/L4, CPU ms/request, qualified RPS/vCPU, RPS/$1,000-month, p99 firewall overhead, error rate, GPU queue time and release lag.
+Engineering target for the CPU gateway in isolation: demonstrate ≥300 qualified CPU-side RPS/vCPU if the signed full-security profile permits; 400–500 is a stretch target, not an assumed result.
+100k RPS remains a future scale-out architecture test only. The code must not contain a design ceiling below it; the present $5k fleet is not expected to deliver 100k completed chats.
+2. Final architecture doctrine
+Organization Console / Control API        │  validate + compile        ▼Versioned Organization Execution Plan ──► local snapshots on gateway replicasOpenAI SDK / App        │        ▼Edge / LB ─► Stateless AI Mesh Gateway              auth → quota/KS → policy transform → selected T1 → selected local semantic guard                                               │                                               ▼                                     authoritative resolver                                  ALLOW / FLAG / REDACT / BLOCK                                               │                                      authorized provider call                                               │ SSE / JSON                                               ▼                                  selected local output controls                                               │                                               ▼                                             ClientLocal guard inference scales independently (CPU/GPU).Audit/telemetry/analytics are asynchronous and off the synchronous chat decision path.
+
+2.1 Non-negotiable scalable-code rules
+Rule
+Required design
+No budget-coded ceilings
+No MAX_RPS=1064, fixed GPU count, fixed workers=4, or queue sizes derived from today’s topology. Resource bounds come from cgroups, memory, FDs, measured service rate and deployment configuration.
+Stateless serving replicas
+No unique tenant policy or durable state lives only inside one gateway. Replicas are disposable.
+Compiled org plan
+User configuration is validated and compiled outside the request hot path into a versioned execution plan.
+One enforcement authority
+Detectors emit findings; one resolver applies the organization’s selected rules/actions. Detectors do not independently invent final transport outcomes.
+Local guard interface
+Gateway code invokes a stable local guard interface; deployment can scale from one accelerator to many without editing scanner semantics.
+Bounded everything
+Request queues, guard queues, connection pools, SSE buffers, audit queues and retries are bounded and observable. Bounds scale with resources; they are not unbounded or magic constants.
+Async I/O
+Provider waits, SSE sockets, audit enqueue and shared-state operations must not occupy one OS thread per in-flight chat.
+Control/data separation
+Cloud SQL/analytics/dashboard work stays off the synchronous /v1 path; policy/config arrives by snapshots/versioning.
+No hidden fallback
+Missing local model, missing tenant config or breaker-open state must never masquerade as a successful benign scan.
+
+2.2 Organization authority model
+Dimension
+Organization controls
+Platform retains
+Detection
+Enable/disable supported content detectors; select semantic features and thresholds within validated ranges.
+Whether auth, tenant isolation, request framing, resource limits and cross-tenant protections exist.
+Mode
+OFF, MONITOR, ENFORCE for supported content rules.
+Truthful reporting of skipped/unavailable checks.
+Action
+ALLOW, FLAG, REDACT, BLOCK, REWRITE where the capability genuinely supports it.
+Schema validation, safe transformation requirement, and no false claim that an unavailable detector ran.
+Failure posture
+Select from explicitly supported fail behavior for optional content controls.
+Missing auth/policy identity and platform-integrity failures cannot inherit another tenant or silently allow.
+Streaming mode
+Select qualified streaming vs strict whole-response mode where offered.
+Wire semantics must match the selected mode; already-released bytes cannot be retroactively blocked.
+
+3. Required live environments and proof levels
+Level
+Topology
+Purpose
+Exit authority
+L0 — source baseline
+Pinned Git commit + image/build provenance.
+Know exactly what code and artifacts are being evaluated.
+No performance claim.
+L1 — immutable Docker staging
+Gateway + control + frontend + Redis/Valkey + test DB + local guard runtime + nginx + synthetic OpenAI provider recorder.
+Functional wiring, user actions, bytes, SSE, SDK, timing algebra, failure injection.
+Closes most correctness tasks.
+L2 — GPU staging
+Release Docker images on the target GPU/runtime host; same synthetic provider.
+Actual local-model placement, queue/batch curves, per-unit latency/capacity.
+Closes local inference and single-unit capacity.
+L3 — multi-replica staging
+2→4 gateway replicas, multiple guard replicas/GPUs, shared state, production-shaped edge.
+Horizontal scaling, tenant isolation, shared-state bottlenecks, drains/failover.
+Closes scale and resilience architecture.
+L4 — production-like qualification
+Frozen candidate, in-region load generators, production-shaped network, $5k-class resource envelope.
+30-minute plateaus, 2-hour soak, cost-qualified max RPS.
+Primary release SLO.
+L5 — real-provider canary
+Authorized organization/provider with bounded traffic.
+SDK/provider compatibility and real-generation behavior.
+Does not redefine gateway capacity beyond tested provider quota.
+
+Live-test rule
+Unit tests may protect regressions, but they do not close a task in this runbook. Every exit gate below names the live Docker/staging proof that must pass.
+
+4. Execution order
+Frontend revamp integration: UI00-UI13 begins after T00/T01, can progress in parallel with backend work, and must reach UI12 before T22/T23 can pass. The redesign never substitutes mock data or visual polish for backend truth.
+Task
+Title
+Phase
+T00
+Freeze source/deployment identity and close critical repository/security unknowns
+Foundation
+T01
+Sign the final contracts: SLO, budget, user authority, output modes and scalable-code doctrine
+Foundation
+T02
+Build the immutable Docker/staging lab, synthetic provider recorder and evidence harness
+Foundation
+T03
+Repair end-to-end timing and benchmark eligibility
+Foundation
+T04
+Freeze the capability corpus and quality gates
+Foundation
+T05
+Compile organization policy into one versioned execution plan
+Core correctness
+T06
+Make one authoritative enforcement resolver control provider dispatch and output disposition
+Core correctness
+T07
+Make redaction/Tier-1 fast, deterministic and byte-verifiable
+Core correctness
+T08
+Establish a zero-platform-external-AI boundary
+Local AI
+T09
+Productionize local input semantic inference and lifecycle
+Local AI
+T10
+Productionize output security and explicit streaming/strict modes
+Local AI
+T11
+Prove SSE protocol correctness under normal, slow, malformed and failed streams
+Protocol
+T12
+Prove OpenAI Python/Node SDK compatibility against live staging
+Protocol
+T13
+Make routing, retry, fallback, cancellation and provider errors stream-safe
+Protocol
+T14
+Reduce auth/quota/kill-switch/shared-state latency without losing truth
+Hot path
+T15
+Move telemetry/analytics off the synchronous request path
+Hot path
+T16
+Harden the public edge, connection reuse, timeouts and long-lived SSE
+Hot path
+T17
+Implement resource-aware admission, bounded queues and backpressure
+Hot path
+T18
+Measure one serving unit: p99, RPS/vCPU, RPS/L4 and safe saturation point
+Performance
+T19
+Prove horizontal scaling with no application-code changes
+Performance
+T20
+Optimize and qualify the ≤$5k production envelope
+Performance
+T21
+Run resilience/chaos and rollback drills under load
+Resilience
+T22
+Prove real frontend control and tenant actions under concurrent load
+Resilience
+T23
+Run final staging qualification: repeated plateaus + soak + cost reconciliation
+Release
+T24
+Canary with an authorized real provider and customer-shaped traffic
+Release
+T25
+Remove legacy Bedrock/Vertex/Gemini paths, credentials and regression escape hatches
+Release
+T26
+Publish reproducible evidence, capacity limits and scale-up handoff
+Release
+
+
+T00  Freeze source/deployment identity and close critical repository/security unknowns
+Field
+Value
+Phase
+Foundation
+Depends on
+None
+Primary owner
+Backend lead + DevOps + security owner
+Objective
+Establish exactly which code, images, frontend build, policies, model artifacts and credentials will be tested; resolve any potentially exposed credential before new staging credentials are issued.
+
+Why this task exists
+Previous reviews found branch divergence and a potential tracked SSH private-key artifact. Performance or security work is invalid if the tested checkout is not the deployed build or if credentials may already be exposed.
+Implementation work
+Pin the execution branch/commit and record the full SHA. Re-fetch the current GitHub head; do not assume the September 12 reviewed commit is still the latest candidate.
+Build a source→image→container→frontend map: OCI digest/revision label, lockfile hashes, frontend asset hash, compose/Helm/IaC inputs, model/tokenizer/export hashes and rollback tuple.
+Privately classify the tracked OpenSSH-looking artifact. If genuine or uncertain, revoke/rotate the corresponding authorization before continuing and create a repository-history remediation ticket.
+Identify two synthetic organizations with opposite policies, one synthetic OpenAI-compatible provider recorder, the approved GPU staging host/cluster, and the approved load-generator network.
+Record current cloud topology/cost only as observed. Historical GCP/AWS prices and quotas are evidence, not current truth.
+Live acceptance tests — required to exit
+Test
+Live procedure
+PASS
+FAIL / stop
+L00-1
+From a clean checkout, build the candidate images and start a read-only staging copy; correlate a browser request ID to the expected gateway/container digest.
+Browser/API/container all map to the same commit and build manifest.
+Any stale frontend, bind-mounted source, unknown image revision or mixed environment.
+L00-2
+Recreate the staging stack on a second clean worker/VM from the manifest.
+Same image digests and functional smoke behavior.
+Manual package installs, docker cp, or undocumented local files required.
+L00-3
+Attempt login/use with the old/rotated test credential if applicable.
+Old credential rejected; authorized replacement works.
+Potentially exposed key remains trusted or provenance cannot be established.
+
+Exit criteria
+Pinned full commit SHA and immutable image tuple.
+Source/image/frontend/model manifest complete.
+Credential issue disposition recorded and, if needed, rotation verified.
+Authorized synthetic tenants, recorder and rollback artifacts identified.
+Evidence package
+environment-manifest.json
+image-digest and frontend-build report
+credential disposition record (private)
+source→runtime route map
+rollback tuple
+Rollback / stop rule
+No product behavior changes belong in T00. If identity cannot be proven, stop the program rather than optimizing an unknown deployment.
+
+T01  Sign the final contracts: SLO, budget, user authority, output modes and scalable-code doctrine
+Field
+Value
+Phase
+Foundation
+Depends on
+T00
+Primary owner
+Product owner + security owner + backend/ML leads
+Objective
+Freeze the rules that performance work is not allowed to redefine after results are seen.
+
+Why this task exists
+Without a signed contract, a failing run can be made green by skipping a guard, changing a threshold, changing what <20 ms means or reclassifying a user action.
+Implementation work
+Sign p99 <20 ms complete firewall overhead for the low-latency profile; define exact input token bands, output mode, languages, allowed buffering and error ceiling.
+Sign the current ≤$5,000/month deployment envelope and state explicitly that it is not encoded as an application capacity constant. Historical 1,064 RPS becomes the minimum planning floor to beat, not a cap.
+Define qualified RPS, real-provider RPS, mixed-policy evaluation throughput, RPS/vCPU and RPS/L4 as separate metrics.
+Freeze organization-controlled content actions: OFF/MONITOR/ENFORCE plus ALLOW/FLAG/REDACT/BLOCK/REWRITE only where supported. Define platform-integrity controls that remain mandatory.
+Define output modes: streaming/pre-release processing versus strict whole-response withholding. Declare which mode is covered by the <20 ms headline.
+Freeze quality thresholds, failure postures, overload behavior, queue limits policy and accepted versions of OpenAI Python/Node SDKs for conformance.
+Live acceptance tests — required to exit
+Test
+Live procedure
+PASS
+FAIL / stop
+L01-1
+In live staging, save each supported action/mode in the real UI/API, reload, and read the compiled gateway policy version.
+Stored value, compiled plan and runtime behavior mapping are unambiguous.
+UI label exists but no runtime mapping, or conflicting semantics remain.
+L01-2
+Create an intentionally unsupported capability/action combination.
+Control plane rejects it explicitly.
+It saves successfully and silently becomes allow/no-op.
+L01-3
+Attempt to set a content rule OFF while platform auth/tenant isolation remains enabled.
+Content rule is disabled; platform integrity remains enforced.
+Content rule secretly still acts, or tenant can disable service integrity.
+
+Exit criteria
+Signed acceptance-contract.json with non-null thresholds.
+Action/mode/failure matrix mapped to actual API fields.
+Low-latency output mode explicitly named.
+No performance or quality threshold left to choose after benchmarking.
+Evidence package
+signed contract
+action matrix
+capability ledger
+SDK version matrix
+budget/scaling doctrine
+Rollback / stop rule
+Restore test-tenant settings after validation. Contract changes require a versioned sign-off, never an informal benchmark exception.
+
+T02  Build the immutable Docker/staging lab, synthetic provider recorder and evidence harness
+Field
+Value
+Phase
+Foundation
+Depends on
+T00,T01
+Primary owner
+DevOps + QA + backend performance engineer
+Objective
+Create a production-shaped environment where real bytes, timing, SDK behavior and faults can be observed safely.
+
+Why this task exists
+The final gates require real containers and wire behavior. Jupyter microbenchmarks or mocked HTTP handlers cannot prove the gateway.
+Implementation work
+Create a separate staging project/namespace with candidate gateway, control, baked frontend, nginx/edge, Redis/Valkey, test DB, local guard runtime, audit sink and synthetic provider recorder.
+Build all images from pinned lockfiles; no source bind mounts for release proof. Record image digests and OCI revision labels.
+Implement an authenticated staging-only OpenAI-compatible provider that can emit deterministic JSON/SSE, tools, delays, malformed events, disconnects and input capture; expose its fault controls only inside staging.
+Implement a request-ID-correlated evidence collector recording provider input bytes, SSE receive/release events, guard calls, policy/model versions, queue timings and final action without printing synthetic secrets into normal metrics.
+Provide an open-loop backend load generator capable of exceeding the intended staging capacity, plus small Playwright/browser smoke tests. Browser load is never the primary performance generator.
+Live acceptance tests — required to exit
+Test
+Live procedure
+PASS
+FAIL / stop
+L02-1
+Destroy and recreate the staging project from clean images/config, preserving only approved test data.
+Stack returns healthy and all image/model hashes match manifest.
+Manual repair inside containers required.
+L02-2
+Send one ALLOW, one REDACT and one BLOCK through the real edge.
+Recorder sees one original-safe call, one sanitized call, and zero calls respectively.
+Labels pass while bytes/call counts disagree.
+L02-3
+Start the same candidate on a second staging host/namespace.
+Core smoke outcomes are identical.
+Environment depends on hidden host state.
+L02-4
+Attempt to call fault-control endpoints from production-shaped public route/wrong tenant.
+Denied/not installed.
+Fault controls are remotely reachable.
+
+Exit criteria
+One-command documented immutable staging recreation.
+Synthetic provider/recorder and open-loop loadgen operational.
+Request IDs join browser→gateway→guard→provider→audit.
+No production/customer data used.
+Evidence package
+staging topology
+compose/Helm manifests
+image/model digests
+recorder schema
+recreation log
+request-ID correlation bundle
+Rollback / stop rule
+Restore previous staging image tuple. Never use destructive volume deletion against shared/prod state.
+
+T03  Repair end-to-end timing and benchmark eligibility
+Field
+Value
+Phase
+Foundation
+Depends on
+T00,T01,T02
+Primary owner
+Instrumentation engineer + performance QA
+Objective
+Make the <20 ms number falsifiable and resistant to provider TTFT, buffering and hidden failure contamination.
+
+Why this task exists
+Earlier code and plans showed TTFT-contaminated addon calculations and clamped residuals. Every later performance claim depends on fixing this first.
+Implementation work
+Start the monotonic request epoch before authentication middleware work and record every owned interval: auth, shared state, policy, T1, guard queue/execution, dispatch, output scan/hold/release and finalization.
+Record provider intrinsic token-ready timing from the synthetic provider independently of gateway backpressure. Do not subtract cross-host absolute timestamps without bounded synchronization.
+Keep signed reconciliation residuals; invalid/missing timestamps fail the run. Do not max(0) a negative residual.
+Add eligibility flags: firewall-tax eligible, gateway-capacity eligible, real-provider eligible, expected-policy-block, incomplete-stream, cached, scan-only, degraded.
+Expose the same authoritative metrics in Scan Detail without recomputing different math in the frontend.
+Live acceptance tests — required to exit
+Test
+Live procedure
+PASS
+FAIL / stop
+L03-1
+Provider TTFT sweep 50 ms → 500 ms → 2,000 ms with identical firewall work.
+Reported firewall overhead remains approximately stable while client TTFT changes.
+Firewall overhead tracks provider TTFT.
+L03-2
+Inject exactly 5 ms before provider dispatch and 7 ms in output enforcement.
+~12 ms appears in firewall-owned timing within frozen tolerance.
+Injected work is missing or attributed to provider.
+L03-3
+Inject a 30 ms hold in the middle of SSE.
+Release-lag metric shows the hold and low-latency profile fails.
+Hold disappears inside provider/model time.
+L03-4
+Delete one required timestamp / force a negative residual.
+Harness marks run INVALID.
+Metric clamps to zero/green.
+L03-5
+Slow downstream client while producer remains fast.
+Backpressure time is distinguished from model compute and appears in release metrics.
+Slow client makes provider appear slow or disappears.
+
+Exit criteria
+Provider delay cannot contaminate firewall tax.
+Middle-stream holdback is visible.
+All started requests remain in failure/deadline accounting.
+Frontend and backend metrics reconcile within frozen tolerance.
+Evidence package
+timing contract
+raw per-request event log
+anti-cheating test captures
+residual histograms
+frontend reconciliation screenshots
+Rollback / stop rule
+If valid instrumentation is reverted, all performance claims are suspended. Never restore a known-invalid metric for convenience.
+
+T04  Freeze the capability corpus and quality gates
+Field
+Value
+Phase
+Foundation
+Depends on
+T01,T02
+Primary owner
+Security QA + ML engineer + reviewer
+Objective
+Prove the fast local stack actually detects/redacts the supported behaviors before latency optimization is allowed to ship.
+
+Why this task exists
+Speed cannot compensate for a detector that misses attacks or over-blocks normal developer traffic. Earlier evidence found both false negatives and false positives in deterministic rules.
+Implementation work
+Build and version a held-out corpus covering injection/jailbreak paraphrases, benign developer/code prompts, PII/secrets/credentials, encoded/split data, tools/MCP, multilingual cases, long inputs and output chunk-boundary cases.
+Label expected findings, spans, organization policy, actual final action and provider-byte outcome. Use synthetic values only.
+Freeze calibration and held-out partitions before tuning thresholds. Report request-level FPR/recall; do not infer request FPR by multiplying per-window assumptions.
+Map every user-visible detector/action to a named local capability and test family. Unsupported capability remains unavailable, not green.
+Keep PG2 injection classification separate from output harm taxonomy, sensitive-span detection, grounding and rewrite semantics.
+Live acceptance tests — required to exit
+Test
+Live procedure
+PASS
+FAIL / stop
+L04-1
+Replay a held-out sample through live staging, not direct model calls.
+Final action and provider bytes match labels.
+Model score is correct but gateway enforcement is wrong.
+L04-2
+Replay benign inline code/tool descriptions at low and moderate load.
+No unapproved terminal false blocks.
+Legacy broad rule still blocks benign developer traffic.
+L04-3
+Replay encoded/split secret fixtures across JSON fields and SSE boundaries.
+Expected transforms/blocks occur with correct spans.
+Fast path loses coverage or corrupts UTF-8.
+L04-4
+Replay long/middle attacks across window counts.
+Every approved input region is evaluated or rejected explicitly.
+Quiet truncation/head-tail shortcut.
+
+Exit criteria
+Held-out corpus hash frozen.
+Numerical quality gates signed by category/language.
+Every advertised policy has a local capability owner.
+No benchmark result can change labels/thresholds retroactively.
+Evidence package
+corpus manifest
+label audit
+held-out hashes
+live replay report
+capability coverage map
+Rollback / stop rule
+Do not rewrite held-out labels to make a candidate pass. Revert detector changes or mark the capability unsupported.
+
+T05  Compile organization policy into one versioned execution plan
+Field
+Value
+Phase
+Core correctness
+Depends on
+T01,T02,T04
+Primary owner
+Backend/control-plane engineer + security reviewer
+Objective
+Make the organization the authoritative owner of supported content-security behavior while eliminating scattered per-module config interpretation.
+
+Why this task exists
+Current code has multiple defaulting paths and historical platform floors. A single compiled plan reduces latency, race conditions and inconsistent semantics.
+Implementation work
+Define a versioned ExecutionPlan per organization: enabled detectors, modes, actions, thresholds, output mode, failure posture, allowed models and routing constraints.
+Compile/validate outside the request hot path; gateways receive immutable snapshots and pin one plan version per request.
+OFF means no work/effect needed solely for that optional rule. MONITOR means evaluate and record without that rule enforcing BLOCK/REDACT. ENFORCE applies the selected action.
+Distinguish explicitly empty valid config from missing/unavailable config. Never inherit another tenant/default plan for a known organization.
+Keep auth, tenant isolation, request limits and cross-tenant protections outside tenant-disablable content policy.
+Live acceptance tests — required to exit
+Test
+Live procedure
+PASS
+FAIL / stop
+L05-1
+For one detector, transition OFF→MONITOR→ENFORCE→OFF through the real frontend; send the same request after each change.
+Detector call counts, final action and policy version change exactly as configured.
+Switch saves but runtime behavior does not change or hidden floor persists.
+L05-2
+Two tenants use opposite actions on identical content at the same time.
+Each gets its own action and compiled version; no cross-talk.
+Global mutable threshold/action contaminates the other tenant.
+L05-3
+Interrupt policy/config sync and restart one gateway replica.
+Replica is not-ready/uses signed last-good behavior; never falls to another tenant/default.
+Scanless allow or foreign config.
+L05-4
+Miss one update notification and leave traffic running.
+Periodic reconcile converges within signed freshness bound.
+Stale plan persists indefinitely.
+
+Exit criteria
+Single runtime source of truth for organization content policy.
+Two-tenant concurrency and refresh tests pass.
+Plan version appears in every trace/audit decision.
+No optional rule can secretly enforce when OFF.
+Evidence package
+ExecutionPlan schema
+policy version timeline
+two-tenant captures
+missed-update recovery report
+UI persistence proof
+Rollback / stop rule
+Tenant isolation/config-readiness fixes are not rollback candidates. Contain traffic or use the last known secure build if availability regresses.
+
+T06  Make one authoritative enforcement resolver control provider dispatch and output disposition
+Field
+Value
+Phase
+Core correctness
+Depends on
+T04,T05
+Primary owner
+Backend/security engineer
+Objective
+Guarantee that detector findings cannot be discarded or independently rewritten before the final action.
+
+Why this task exists
+Repository review found cases where semantic findings could be filtered before enforcement and output degraded/block semantics could change across layers.
+Implementation work
+Normalize all detector results into findings with detector/version/category/score/span/status provenance; detectors do not send HTTP responses themselves.
+Pass findings and the pinned ExecutionPlan once into the resolver. Resolve conflicts by signed rule priority/action semantics, not a global severity max that overrides explicit user intent.
+Make input terminal BLOCK happen before any provider dispatch. REDACT validates transformed bytes before dispatch. FLAG remains metadata/review state plus the actual transport outcome.
+For output, propagate the resolved action through sanitizer/stream wrapper without later downgrades or contradictory raw verdict fields.
+Persist exactly one authoritative decision record per request phase and correlate it with provider/client bytes.
+Live acceptance tests — required to exit
+Test
+Live procedure
+PASS
+FAIL / stop
+L06-1
+Enabled semantic injection returns BLOCK with no regex-policy match.
+Provider recorder receives zero calls; final trace says BLOCK from the correct rule/model.
+Finding disappears and request is allowed.
+L06-2
+Same finding with organization action FLAG.
+Provider is called; finding is present; transport action is allow + flagged.
+Model recommendation silently becomes BLOCK.
+L06-3
+PII=REDACT plus Credentials=BLOCK on one prompt.
+Final transport BLOCK; no provider call; both findings retained.
+Redaction cancels independent block or duplicate terminal writers.
+L06-4
+Output model reports terminal BLOCK plus degraded metadata.
+Composed output pipeline preserves signed terminal behavior.
+Later generic degraded branch converts it to a different action without policy authority.
+
+Exit criteria
+Input semantic findings survive to resolver.
+Provider call count/bytes always match final input action.
+Output resolved action survives to wire.
+Single authoritative audit decision.
+Evidence package
+action matrix live report
+provider recorder calls
+output wire captures
+audit joins
+policy/detector version proof
+Rollback / stop rule
+Revert to last validated resolver path. Do not route around the resolver to restore availability.
+
+T07  Make redaction and Tier-1 fast, deterministic and byte-verifiable
+Field
+Value
+Phase
+Core correctness
+Depends on
+T03,T04,T06
+Primary owner
+Performance/backend + data-protection engineer
+Objective
+Remove repeated Python/regex work while preserving original-byte correctness and organization-selected actions.
+
+Why this task exists
+Tier-1 and repeated redaction were historical CPU ceilings. Fast approximate matching is unsafe if Unicode semantics or spans change.
+Implementation work
+Build one bounded canonicalization/decoding pipeline with an original-field/span map. Compile native multi-pattern structures outside request handling.
+Demote or narrow known false-positive injection patterns according to the frozen quality contract; keep sensitive-data/credential/DoS/transport findings where selected.
+Use native/Hyperscan-like matching as candidate discovery only when exact verification is needed. Validate Unicode/word-class semantics rather than assuming Python regex equivalence.
+Merge compatible spans and transform each content version once. Remove repeated redact_all calls from traces/telemetry.
+Bound decode depth, expansion ratio, regex work, fuzzy matching and input size. Unsafe/unmaskable mandatory redaction becomes deny, not raw pass-through.
+Live acceptance tests — required to exit
+Test
+Live procedure
+PASS
+FAIL / stop
+L07-1
+Replay complete redaction corpus through live gateway/recorder before and after the new engine.
+Mandatory spans and final provider bytes are equivalent except signed behavior changes.
+Any unapproved leak/span corruption.
+L07-2
+Send Unicode thin spaces, confusables, percent/HTML encoding and split secrets.
+Expected findings and sanitized bytes.
+ASCII-only port bypasses cases.
+L07-3
+Saturate Tier-1 with short/512/1024-token unique prompts.
+CPU ms/request and tail improve without quality loss or thread explosion.
+Throughput improves only by skipped checks or unbounded worker growth.
+L07-4
+Force redaction no-op/partial mask.
+Request/output follows signed fail behavior; raw value not forwarded.
+REDACT badge with unchanged bytes.
+
+Exit criteria
+Mandatory corpus passes at network boundary.
+Tier-1 CPU profile materially reduced and bounded.
+Redaction applies once per content version.
+No raw synthetic secret in provider/log/UI error paths.
+Evidence package
+pattern/native-engine manifest
+before/after CPU profiles
+span/byte captures
+quality report
+redaction pass counters
+Rollback / stop rule
+Keep the prior safe engine available as a controlled rollback, but do not claim the new latency profile if the slow path is silently re-enabled.
+
+T08  Establish a zero-platform-external-AI boundary
+Field
+Value
+Phase
+Local AI
+Depends on
+T00,T01,T02
+Primary owner
+Backend + DevOps + security owner
+Objective
+Ensure platform security decisions no longer depend on Bedrock, Vertex/Gemini, hosted moderation/judges or hidden external AI fallbacks.
+
+Why this task exists
+The reviewed commit still routes Tier-2 to Gemini or legacy Bedrock and retains other Bedrock consumers. Zero external AI must be proven at both code and network boundaries.
+Implementation work
+Inventory all platform AI call sites: input/output scanners, judge, embeddings/grounding, simulator, rewrite, background jobs, error/fallback paths and control-plane security engines.
+Define the permitted customer-generation egress separately from forbidden platform guard/judge egress. An organization provider hostname cannot be treated as permission for arbitrary security calls.
+Introduce a local capability registry/adapter. Missing local capability returns unavailable/unsupported, never an external fallback.
+Add runtime dependency counters and egress policy so staging can deny all platform guard destinations while allowing the synthetic/customer provider.
+Keep rewrite as a separately declared capability: deterministic/local rewrite or an explicitly user-authorized extra customer-model call outside the low-latency profile.
+Live acceptance tests — required to exit
+Test
+Live procedure
+PASS
+FAIL / stop
+L08-1
+Run every in-scope surface with Bedrock/Google AI egress denied at network level.
+Supported features continue locally; unsupported ones fail explicitly; zero attempted external guard calls.
+AccessDenied/connection attempts appear or requests silently allow.
+L08-2
+Exercise startup, restart, breaker, scheduled/background jobs, MCP/RAG and output failure paths.
+Zero forbidden-call counters across all paths.
+Hidden fallback appears only during failure/background work.
+L08-3
+Allow only the synthetic/customer generation endpoint and send normal chat.
+Exactly one permitted generation dispatch; no second judge/rewrite call unless the user explicitly selected a non-low-latency feature.
+Platform AI piggybacks on the provider allowlist.
+
+Exit criteria
+Complete call-site ledger.
+Network deny test shows zero forbidden attempts.
+Supported capabilities have local replacements; unsupported ones are explicit.
+No cloud-AI fallback in runtime config.
+Evidence package
+external-AI callgraph
+egress policy and counters
+denial-test traces
+capability registry
+background-path report
+Rollback / stop rule
+Before final removal, use only the last validated local build or contain traffic. Do not restore a hidden cloud judge after claiming local-only enforcement.
+
+T09  Productionize local input semantic inference and lifecycle
+Field
+Value
+Phase
+Local AI
+Depends on
+T02,T03,T04,T08
+Primary owner
+ML runtime + backend + DevOps
+Objective
+Turn the ~2.14 ms Prompt Guard TensorRT component result into a reproducible, scalable serving component with truthful queue/placement metrics.
+
+Why this task exists
+A notebook/session.run microbenchmark does not prove release-container placement, sustained throughput, batching behavior, queue delay or multi-window request performance.
+Implementation work
+Pin model/tokenizer/export hashes and compare pristine reference logits/decisions against the chosen ONNX/TensorRT path over the held-out corpus.
+Benchmark valid window counts W=1,2,3,4,7 and supported batch/concurrency combinations with H2D/D2H included; report p50/p95/p99 and windows/s. Keep tokenization separate but include it in gateway overhead.
+Profile execution-provider graph placement separately; provider registration is not proof that major compute ran on TensorRT.
+Define ownership: embedded process or node-local guard service. Expose queue depth, enqueue/start/end, model hash, readiness and cancellation. No engine compile/download after readiness.
+Key TensorRT engine caches by compatible model/runtime/GPU/profile; warm advertised shapes before ready.
+Live acceptance tests — required to exit
+Test
+Live procedure
+PASS
+FAIL / stop
+L09-1
+Cold-start a release container with empty engine cache.
+Replica remains unready until engine build/warmup finishes; no customer request triggers compile.
+Ready before warmup or first customer request compiles.
+L09-2
+Restart from valid cache five times, then corrupt/change runtime/profile.
+Valid cache starts predictably; incompatible cache rebuilds/unreadies safely.
+Incompatible engine reused.
+L09-3
+Run sustained unique W1/W2/W4/W7 traffic while capturing queue+GPU execution.
+Stable p99 and windows/s curve; no CPU fallback or NaNs.
+Throughput inferred from 1/p50 or hidden fallback.
+L09-4
+Cancel queued/active requests.
+Queue capacity/VRAM recover; cancelled work does not leak indefinitely.
+Cancelled requests consume unbounded GPU queue/contexts.
+
+Exit criteria
+Release-container parity passes.
+Actual GPU placement proven.
+q_safe windows/s and request-shape curves established.
+Readiness/cache/cancellation lifecycle proven.
+Evidence package
+runtime manifest
+model hashes
+parity report
+raw latency/throughput arrays
+ORT/TensorRT placement evidence
+cache/restart timelines
+Rollback / stop rule
+Select the last validated local artifact/runtime. Never fall back to CPU or cloud silently while retaining the qualified latency badge.
+
+T10  Productionize output security and explicit streaming/strict modes
+Field
+Value
+Phase
+Local AI
+Depends on
+T01,T03,T04,T07,T09
+Primary owner
+Streaming engineer + security/ML owner
+Objective
+Provide real output protection whose wire behavior matches the organization-selected action without silently destroying streaming.
+
+Why this task exists
+Output security is not “run PG2 again.” It may need sensitive-span detection, output taxonomy, grounding or other local capabilities, and strict blocking has different latency semantics from SSE.
+Implementation work
+Finalize the output capability ledger and choose local implementations for each supported policy. Do not advertise unsupported Haiku-era categories as preserved.
+Implement streaming mode with bounded lookbehind/coalescing and stateful boundary-safe redaction. Measure every upstream-receive → safe-client-write lag.
+Implement strict whole-response mode as a separate option with bounded response size and zero prohibited content released before final verdict.
+Keep completion-time observational checks labeled observational; they cannot retroactively block released bytes.
+On detector timeout/crash, follow the organization’s selected supported failure posture while reporting degraded/unavailable truthfully.
+Live acceptance tests — required to exit
+Test
+Live procedure
+PASS
+FAIL / stop
+L10-1
+Place synthetic secrets at every SSE chunk/UTF-8 boundary.
+Streaming redaction prevents leakage and preserves valid SSE/JSON.
+Split secret escapes or encoding breaks.
+L10-2
+Strict BLOCK with harmful content at start/middle/end.
+Client receives zero assistant content before terminal outcome.
+Any blocked content appears first.
+L10-3
+Streaming BLOCK after some safe chunks.
+Behavior matches the signed truncation/terminal contract and is not labeled whole-response withholding.
+Attempts to retroactively change HTTP 200 or claims zero-byte block.
+L10-4
+Kill output detector before first content, mid-stream and at finalization.
+Selected failure policy is applied consistently; unavailable scan not called benign.
+Fail-open skip or inconsistent stream/non-stream behavior.
+
+Exit criteria
+Every advertised output action is byte-proven.
+Streaming and strict modes have separate latency semantics.
+No output detector skip under load/failure.
+Output work is included in capacity accounting.
+Evidence package
+raw SSE captures
+client release timestamps
+output model/window counters
+capability/quality report
+strict-mode zero-byte proof
+Rollback / stop rule
+Restore the last validated local output guard or disable the unsupported capability explicitly. Never revert to silent output fail-open.
+
+T11  Prove SSE protocol correctness under normal, slow, malformed and failed streams
+Field
+Value
+Phase
+Protocol
+Depends on
+T02,T03,T10
+Primary owner
+Backend streaming engineer + edge QA
+Objective
+Make SSE a protocol contract rather than ad-hoc data strings.
+
+Why this task exists
+An OpenAI-compatible gateway must preserve incremental chunks, terminal semantics, backpressure and cancellation through proxies and security transforms.
+Implementation work
+Preserve text/event-stream framing; each data event contains valid chunk JSON or the terminal [DONE] marker for Chat Completions.
+Preserve chunk ordering, ids/model fields, role/content deltas, tool-call argument fragments, finish_reason and stream_options usage behavior where supported.
+Ensure proxies do not accidentally buffer the entire response; use bounded coalescing only when part of the signed output-security mode.
+After any client-visible bytes, never retry by appending a second provider response. Before any bytes, only retry/fallback under explicit safe routing rules.
+Propagate client disconnect/cancel upstream and to guard work. Enforce backpressure with bounded buffers.
+Live acceptance tests — required to exit
+Test
+Live procedure
+PASS
+FAIL / stop
+L11-1
+Synthetic provider emits 1-token chunks at fixed intervals. Capture raw socket/SSE client timings.
+Frames arrive incrementally in order and terminate correctly.
+Whole response arrives at once, merged/malformed frames, missing terminal.
+L11-2
+Provider streams fragmented tool_calls/function arguments.
+Official SDK reconstructs tool call correctly; gateway does not corrupt fragment order.
+JSON/tool fragments altered or dropped.
+L11-3
+Provider emits malformed SSE / clean EOF before completion.
+Gateway surfaces a protocol/stream error according to contract; no fabricated success.
+Malformed data becomes normal completion.
+L11-4
+Disconnect provider before first byte vs after several chunks.
+Pre-byte retry follows configured safe policy; post-byte path never splices a replacement answer.
+Second provider content appended after partial stream.
+L11-5
+Slow client consumes one event every 500 ms.
+Memory remains bounded and backpressure propagates.
+Gateway buffers response unboundedly.
+L11-6
+Cancel client after N chunks.
+Provider/guard work cancels and resource counters return to baseline.
+Orphan generation continues indefinitely.
+
+Exit criteria
+Wire-level SSE parser passes normal and failure cases.
+Bounded-buffer/backpressure and disconnect cleanup proven.
+No retry-after-release corruption.
+Release-lag metrics available for every emitted unit.
+Evidence package
+pcap/raw SSE transcripts
+producer/client timestamps
+buffer/FD/RSS curves
+disconnect cancellation trace
+tool-call stream capture
+Rollback / stop rule
+Revert to last wire-compatible streaming implementation; do not disable output security to regain chunking.
+
+T12  Prove OpenAI Python and Node SDK compatibility against live staging
+Field
+Value
+Phase
+Protocol
+Depends on
+T11
+Primary owner
+API compatibility engineer + QA
+Objective
+Guarantee that real clients can point their OpenAI SDK base URL at AI Mesh without custom parsing hacks.
+
+Why this task exists
+OpenAI-shaped JSON is insufficient. Official SDKs exercise request serialization, SSE parsing, tool-call accumulation, errors and cancellation behavior that curl misses.
+Implementation work
+Pin supported OpenAI Python and Node SDK versions in the compatibility matrix and run them against the public staging base URL with AI Mesh API keys.
+Cover synchronous and asynchronous clients, non-streaming Chat Completions, create(stream=True), higher-level chat completion stream helpers where available, and tool-call streaming.
+Validate request headers, model names, usage, finish_reason, error object shape/status, timeouts, cancellation and custom base_url/baseURL behavior.
+Add Responses API only if the product intentionally supports it; do not accidentally advertise compatibility because /v1/chat/completions works.
+Repeat the SDK suite through the production-shaped edge and while selected security actions alter/block/redact the request.
+Live acceptance tests — required to exit
+Test
+Live procedure
+PASS
+FAIL / stop
+L12-1
+Python OpenAI sync client: non-stream chat via base_url.
+Parsed ChatCompletion object matches contract.
+Custom wrapper required or fields malformed.
+L12-2
+Python sync + AsyncOpenAI stream on safe text.
+SDK iterates valid chunks and completes normally.
+SDK parser errors, duplicate/missing chunks or hang.
+L12-3
+Node OpenAI chat.completions.create({stream:true}).
+Async iterator completes and reconstructs output.
+Protocol incompatible with official Node SDK.
+L12-4
+Python/Node tool call with fragmented arguments.
+SDK surfaces one coherent tool call with correct finish_reason.
+Fragments corrupted or reordered.
+L12-5
+BLOCK/429/503/malformed-upstream cases.
+SDK receives documented status/error; no false successful completion.
+Gateway returns ad-hoc body the SDK misclassifies.
+L12-6
+Client timeout/cancel during SSE.
+SDK abort propagates; server/provider resources release.
+Server keeps orphan work or emits success audit.
+
+Exit criteria
+Official Python and Node SDKs pass the supported matrix without custom client code.
+Streaming/tool/error behaviors pass through the real edge.
+Supported/unsupported APIs are explicitly documented.
+Evidence package
+SDK versions/lockfiles
+live run logs
+request IDs
+tool stream transcripts
+error matrix
+edge endpoint/base URL proof
+Rollback / stop rule
+Preserve the last SDK-compatible API schema. Server-side security changes must remain backward compatible or be versioned deliberately.
+
+T13  Make routing, retry, fallback, cancellation and provider errors stream-safe
+Field
+Value
+Phase
+Protocol
+Depends on
+T05,T06,T11,T12
+Primary owner
+Routing/backend engineer
+Objective
+Keep deterministic routing and provider resilience without double generation, policy bypass or corrupt streams.
+
+Why this task exists
+Provider failures happen at different phases. A gateway must distinguish “nothing delivered yet” from “stream already visible.”
+Implementation work
+Keep routing deterministic and policy-driven; no external AI adjudicator. Apply allowed-model/compliance/sensitivity constraints before dispatch.
+Reuse pooled provider connections and explicit per-provider timeouts/circuit state; isolate organization/provider health where appropriate.
+Before first downstream byte, allow only the signed safe retry/fallback policy. After bytes, terminate consistently—never splice another answer.
+Carry idempotency/attempt IDs through audit and quota accounting; prevent duplicate authoritative events/provider calls from client retries.
+Propagate client cancellation through provider and local guards; settle quota/leases according to the signed contract.
+Live acceptance tests — required to exit
+Test
+Live procedure
+PASS
+FAIL / stop
+L13-1
+Primary provider 500 before first token with configured fallback.
+Exactly one fallback attempt if allowed; no duplicate client chunks.
+Multiple hidden retries or fallback ignores org model policy.
+L13-2
+Primary fails after 3 chunks.
+No second provider appended; stream terminates according to contract.
+Mixed responses.
+L13-3
+Two concurrent tenants have different allowed-model lists/fallback chains.
+Routing remains tenant-specific under failure.
+Global health state bypasses tenant policy.
+L13-4
+Client retries same request/idempotency key.
+Duplicate dispatch/audit behavior is explicit and bounded.
+Unnoticed double generation/charge.
+
+Exit criteria
+Deterministic routing only.
+Retry behavior depends on stream-delivery phase.
+No duplicate/mixed completion.
+Provider health/fallback remains tenant-policy compliant.
+Evidence package
+routing/fallback matrix
+provider recorder attempts
+SSE partial-failure captures
+quota/audit attempt joins
+Rollback / stop rule
+Disable unsafe fallback paths before weakening policy or stream correctness.
+
+T14  Reduce auth/quota/kill-switch/shared-state latency without losing truth
+Field
+Value
+Phase
+Hot path
+Depends on
+T03,T05,T17
+Primary owner
+Distributed systems/backend engineer
+Objective
+Keep authoritative multi-tenant control while removing serial network waits that destroy p99 and scale.
+
+Why this task exists
+Historical measurements showed shared-state RTTs could dominate the gateway even with fast models. Scaling gateway replicas is useless if one centralized path serializes every request.
+Implementation work
+Profile auth, quota, kill-switch and model-state calls separately: pool wait, network RTT, server execution and retry time.
+Cache/snapshot only data with explicit freshness semantics. Keep urgent revocation/kill-switch within a signed bound and reconcile missed updates.
+Use local GCRA/token-bucket for burst/RPM where semantics permit; keep organization/global token quota authoritative through a shared lease/atomic operation so N replicas do not multiply allowance.
+Pipeline only truly independent reads; do not reorder policy transformation and scanning dependencies.
+Bound pool waits and retries. Overload becomes explicit 429/503 according to cause, not a growing queue.
+Live acceptance tests — required to exit
+Test
+Live procedure
+PASS
+FAIL / stop
+L14-1
+Two gateway replicas hammer the same org quota.
+Combined admits never exceed signed global quota beyond defined lease tolerance.
+Each replica independently grants full quota.
+L14-2
+Flip kill switch while steady traffic runs.
+All replicas stop within signed freshness bound.
+Stale replica continues indefinitely.
+L14-3
+Drop pub/sub/notification channel.
+Periodic reconcile restores correct state within bound.
+Only live notifications maintain correctness.
+L14-4
+Exhaust Redis pool / inject 50–200 ms latency.
+Waits remain bounded and failure outcome is explicit; event loop remains responsive.
+Unbounded queue/p99 collapse or fail-open.
+
+Exit criteria
+Steady-state shared-state operations and freshness contract documented.
+Global quota remains global across replicas.
+Kill switch and auth revocation bounds proven.
+Pool waits/retries bounded inside latency budget.
+Evidence package
+shared-state call trace
+quota multi-replica report
+kill-switch timeline
+pool saturation curves
+error-code matrix
+Rollback / stop rule
+Restore the last safe authoritative state path and reduce traffic. Never trade global quota/kill-switch correctness for a faster chart.
+
+T15  Move telemetry and analytics off the synchronous request path
+Field
+Value
+Phase
+Hot path
+Depends on
+T03,T02
+Primary owner
+Observability/backend + control-plane engineer
+Objective
+Ensure logs, dashboards and analytics cannot add unpredictable chat latency or become a fleet-wide failure dependency.
+
+Why this task exists
+Synchronous Redis/DB logging and heavy dashboard queries turn observability into a data-plane dependency. Industry gateways keep this work asynchronous.
+Implementation work
+Replace synchronous request-path log publishing with a bounded async producer; define retry/spill/loss accounting separately from enqueue success.
+Persist one compact authoritative decision event plus content references rather than repeating full payloads across stages.
+Keep high-cardinality request data out of metrics labels. Cap metric cardinality and export fleet histograms/counters only.
+Push dashboard aggregates to bounded SQL/rollups and abort/debounce superseded browser requests. No raw unbounded ORM scans on co-located serving resources.
+Define what happens if audit durability is required by a particular compliance profile; do not silently fail chat or silently lose audit.
+Live acceptance tests — required to exit
+Test
+Live procedure
+PASS
+FAIL / stop
+L15-1
+Add 500 ms latency/unavailability to audit sink under gateway load.
+Gateway p99 changes within signed tolerance; queue/spill/loss is visible.
+Chat event loop blocks on logging or memory grows unbounded.
+L15-2
+Fill async audit buffer to limit.
+Signed overflow behavior occurs predictably.
+Unbounded memory or silent drop.
+L15-3
+Open heavy dashboard analytics while gateway runs at 70–90% q_safe.
+Gateway p99/resource profile remains within approved interference budget.
+Dashboard query destabilizes serving fleet.
+L15-4
+Reload Scan Detail after async persistence delay.
+UI shows pending/unavailable truthfully then resolves; no fabricated data.
+UI claims durable success before persistence or exposes raw secret.
+
+Exit criteria
+No synchronous analytics/log sink on hot path.
+Bounded async queues and loss accounting.
+Dashboard workload does not invalidate qualified gateway profile.
+Audit/UI request-ID correlation preserved.
+Evidence package
+publisher call audit
+sink-fault latency comparison
+queue/backlog charts
+dashboard contention run
+durable-ID reconciliation
+Rollback / stop rule
+Use version-compatible event readers/writers. Never restore raw secret copies or synchronous telemetry as a quick fix.
+
+T16  Harden the public edge, connection reuse, timeouts and long-lived SSE
+Field
+Value
+Phase
+Hot path
+Depends on
+T02,T11
+Primary owner
+Edge/SRE engineer
+Objective
+Make the network edge transparent to streaming, high connection counts, graceful drains and security requirements.
+
+Why this task exists
+Even correct application streaming fails if nginx/LB buffers, closes idle streams, churns backend connections or routes unknown hosts incorrectly.
+Implementation work
+Pin the real edge chain and keep chat/SDK traffic separate from the operator SPA/control edge where practical.
+Configure upstream keepalive/connection reuse, SSE proxy buffering off, appropriate gzip policy, idle/max-stream timeouts and graceful connection drain.
+Verify client HTTP/2 where supported and actual internal protocol behavior rather than assuming every hop is H2.
+Preserve security headers/host isolation without origin redirect loops behind TLS termination.
+Record connection/fd/SNAT behavior and capacity at load; edge must not be the hidden limiter before application capacity.
+Live acceptance tests — required to exit
+Test
+Live procedure
+PASS
+FAIL / stop
+L16-1
+Stream fixed-interval SSE through the full public staging edge with gzip identity/on/off as supported.
+Incremental release remains correct; no full buffering.
+Proxy batches/holds full response or corrupts stream.
+L16-2
+Run a controlled >350-second healthy stream.
+Stays alive under configured timeouts and ends cleanly.
+Unexpected LB/proxy timeout.
+L16-3
+Drain/restart one gateway replica during active streams.
+New traffic avoids unready replica; active streams follow signed drain behavior.
+Connections reset indiscriminately or new requests hit unready node.
+L16-4
+High connection/stream count with keepalive.
+FD/connection reuse behaves as designed; no SNAT/connect-timeout collapse.
+Backend opens one new TCP per request or edge saturates early.
+L16-5
+Unknown Host and security-header matrix.
+Unknown host rejected; intended host works with required headers.
+SPA/control served on unintended host or security config breaks SDK/SSE.
+
+Exit criteria
+SSE passes through real edge incrementally.
+Long-stream and graceful-drain behavior proven.
+Connection reuse/FD limits measured.
+Unknown-host/security-header posture retained.
+Evidence package
+raw edge SSE timing
+connection/FD metrics
+long-stream log
+drain timeline
+header/host matrix
+Rollback / stop rule
+Restore known-safe edge image/config through change control; never disable auth/host isolation or output security to recover health checks.
+
+T17  Implement resource-aware admission, bounded queues and backpressure
+Field
+Value
+Phase
+Hot path
+Depends on
+T02,T09,T11,T14
+Primary owner
+Backend + runtime + SRE
+Objective
+Fail predictably before saturation turns into seconds of latency, OOM or random 502s.
+
+Why this task exists
+A scalable gateway must bound concurrent memory/FD/GPU work yet derive limits from actual resources and service rates rather than today’s topology.
+Implementation work
+Derive worker count, request concurrency, queue capacity, FDs and memory budgets from cgroups/limits and measured per-request resource cost; deployment overrides remain explicit.
+Implement bounded gateway and per-tenant admission queues; local guard queue and SSE buffers are separately bounded. Expose queue depth/age.
+Use deadlines based on the signed p99 budget. Reject/shed overload quickly with explicit codes and Retry-After where appropriate rather than increasing timeouts.
+Propagate backpressure from slow client/output processing to upstream/provider reads. Cancellation removes queued/in-flight local work promptly.
+Scope circuit breakers so one tenant/direction fault does not degrade unrelated tenants unless the dependency is truly global.
+Live acceptance tests — required to exit
+Test
+Live procedure
+PASS
+FAIL / stop
+L17-1
+Offer 3× known safe rate for a bounded interval.
+System sheds/rejects explicitly; p99 of admitted cohort stays bounded; no OOM.
+Queues grow without bound or random reset/502 storm.
+L17-2
+Slow 10% of downstream clients heavily.
+Only their streams consume bounded buffers/backpressure; fleet memory plateaus.
+Slow clients cause fleet-wide memory growth.
+L17-3
+Fill guard queue while CPU gateway remains healthy.
+Admission/guard capacity error is explicit; no scan skip.
+Gateway keeps accepting then silently bypasses semantic guard.
+L17-4
+Tenant A causes breaker/overload condition.
+Tenant B healthy traffic remains within contract unless shared global dependency truly failed.
+Cross-tenant breaker contamination.
+
+Exit criteria
+Every queue/pool has a bound, metric and overload behavior.
+No OOM/resource leak at 3× offered load.
+Admitted cohort retains bounded latency.
+Backpressure/cancellation frees resources.
+Evidence package
+resource-budget calculation
+3× overload curves
+queue-age histograms
+RSS/FD/VRAM plateau
+tenant-isolation fault results
+Rollback / stop rule
+Lower admission and traffic rather than widening queues/timeouts. Never disable guards to regain throughput.
+
+T18  Measure one serving unit: p99, RPS/vCPU, RPS/L4 and safe saturation point
+Field
+Value
+Phase
+Performance
+Depends on
+T03,T07,T09,T10,T14,T15,T16,T17
+Primary owner
+Performance engineer + independent reviewer
+Objective
+Find the real service-rate limits before sizing the $5k fleet.
+
+Why this task exists
+The useful questions are how much CPU work each request consumes, how many guarded requests each L4 can sustain under the p99 budget, and where queues begin to dominate.
+Implementation work
+Freeze images, model artifacts, policy profile, input/output distributions, cache state and output mode. Use unique prompts and a controlled token-emitting provider.
+Sweep guard window count/batch/concurrency first to obtain q_safe windows/s and request-shape curves under the complete latency budget.
+Sweep gateway CPU allocations (where feasible 1/2/4/8 vCPU) and worker/event-loop settings without changing semantics. Record actual cgroup CPU usage/throttling.
+Use open-loop arrival-rate steps until the first repeatable p99/error/resource failure. Record both highest passing and adjacent failing rate.
+Run profile/instrumentation separately from final measurements. Do not average per-worker p99; merge raw samples/histograms.
+Live acceptance tests — required to exit
+Test
+Live procedure
+PASS
+FAIL / stop
+L18-1
+1 vCPU equivalent gateway sweep with adequate guard capacity.
+Measured qualified RPS/vCPU and CPU ms/request; no hidden CPU outside denominator.
+Nominal vCPU claim based on host nproc or excludes serving sidecar CPU.
+L18-2
+Single L4 unique-request sweep across W1/W2/W4/W7 mix.
+Highest passing RPS/L4 under p99<20 ms recorded.
+Uses 1/p50, repeated cache hits or omits output work.
+L18-3
+Increase offered rate across at least 5 steps to failure.
+Clear knee/queue growth and adjacent FAIL point retained.
+Only best burst published.
+L18-4
+Repeat highest passing point 3× after restart/warmup.
+Results repeat within signed variance.
+One lucky run or warm-cache artifact.
+
+Exit criteria
+q_safe per L4 and per-node rate known.
+RPS/vCPU and CPU ms/request measured honestly.
+Highest passing and first failing rate documented.
+No hidden loadgen bottleneck/schedule drops.
+Evidence package
+raw JSONL/histograms
+CPU/GPU/queue metrics
+rate sweep curves
+restart repeats
+loadgen headroom proof
+Rollback / stop rule
+Restore validated queue/batch/worker settings. Do not retune quality thresholds or disable output checks to rescue a rate point.
+
+T19  Prove horizontal scaling with no application-code changes
+Field
+Value
+Phase
+Performance
+Depends on
+T18,T14,T17
+Primary owner
+SRE + performance engineer
+Objective
+Show that added replicas/GPUs increase capacity without rewriting logic or changing tenant semantics.
+
+Why this task exists
+This is the core future-proofing requirement. A codebase that only scales after changing queue code, global locks or policy logic is not horizontally scalable.
+Implementation work
+Run the same immutable application image/config contract at 1,2 and 4 gateway serving units with proportionate guard capacity. Only deployment replica/resource values change.
+Keep shared state, policy versioning and tenant quotas identical. Verify no centralized Redis/control/audit bottleneck flattens the curve.
+Use the same open-loop workload and calculate scale efficiency = observed throughput / (single-unit throughput × unit count).
+Measure p99, queue age, Redis/shared-state utilization, network/edge connections and cost at each scale point.
+If scaling flattens, identify the next binding component and fix that interface rather than adding code paths per topology.
+Live acceptance tests — required to exit
+Test
+Live procedure
+PASS
+FAIL / stop
+L19-1
+Run 1 serving unit at 80–90% q_safe.
+Baseline stable and reproducible.
+Single-unit baseline not stable.
+L19-2
+Run 2 units with same image and policy; double offered load progressively.
+Capacity rises materially (target ≥1.7× before next bottleneck) without p99/security regression.
+<1.5× or new correctness divergence without identified external bottleneck.
+L19-3
+Run 4 units similarly.
+Near-linear scale continues until a named shared bottleneck; no code change.
+Requires application rewrite/per-node policy differences to scale.
+L19-4
+During scale test, flip one org policy and kill one replica.
+All ready replicas converge; traffic drains/rebalances.
+Stale config or single-replica state loss affects correctness.
+
+Exit criteria
+Same application image scales 1→2→4.
+Scaling efficiency curve and next bottleneck documented.
+No tenant/quota multiplication or cross-talk.
+Code contains no topology-specific capacity assumption.
+Evidence package
+1/2/4-unit manifests
+throughput/p99 scaling curves
+shared-state saturation metrics
+policy convergence timeline
+replica-failure capture
+Rollback / stop rule
+Scale back replicas via deployment controls. No code fork should exist solely for a smaller fleet.
+
+T20  Optimize and qualify the ≤$5k production envelope
+Field
+Value
+Phase
+Performance
+Depends on
+T18,T19
+Primary owner
+Infrastructure owner + performance engineer + cost approver
+Objective
+Choose the fastest fully qualified topology that fits today’s budget while keeping future scale-out code unchanged.
+
+Why this task exists
+The budget is a deployment constraint. We need to spend it on the binding resource, not copy an old 4-node shape after software/runtime improvements change the bottleneck.
+Implementation work
+Reprice current candidate cloud shapes, egress, LB, shared state, storage, monitoring and support. Keep customer model-token spend separate.
+Use T18/T19 measured q_safe, CPU demand and wire bytes to compare deployment shapes. Reuse spare CPU on GPU nodes only if control-plane interference tests remain green.
+Maximize qualified RPS under ≤$5,000/month with declared HA/reserve assumptions. Historical 4×G2/8×L4/~$4,561 is the baseline to re-evaluate, not a fixed topology.
+Compute qualified RPS/$1,000-month, RPS/L4, purchased-vCPU utilization, cost/million requests and headroom.
+Retain at least one safe rollback topology/image; budget cannot be “met” by deleting required monitoring/audit/security controls.
+Live acceptance tests — required to exit
+Test
+Live procedure
+PASS
+FAIL / stop
+L20-1
+Deploy the chosen budget topology in production-like staging and run the highest qualified plateau.
+All required controls + p99 target pass within verified monthly cost estimate.
+Budget only passes by excluding required egress/control/audit or skipping guards.
+L20-2
+Run control/dashboard activity concurrently.
+Co-located services do not push gateway outside p99/resource limits.
+“Free spare CPU” assumption invalid.
+L20-3
+Recompute bill from measured bytes/RPS and dated vendor prices independently.
+Second calculation agrees within signed tolerance and remains ≤$5k.
+Old cost table copied despite different traffic/price.
+L20-4
+Increase rate above qualified point without changing resources.
+First repeatable SLO miss identifies the real ceiling.
+Advertised capacity based on one-second burst.
+
+Exit criteria
+Verified ≤$5k monthly envelope.
+Maximum qualified RPS under that envelope measured.
+Cost per million and bottleneck stated.
+No application logic depends on the chosen node/GPU count.
+Evidence package
+dated pricing/cost workbook
+measured wire-byte model
+topology manifest
+qualification run
+above-ceiling failure point
+Rollback / stop rule
+Scale back to last qualified budget topology/image. Never reduce security coverage to keep a budget claim.
+
+T21  Run resilience, chaos and rollback drills under load
+Field
+Value
+Phase
+Resilience
+Depends on
+T17,T19,T20
+Primary owner
+SRE + security QA
+Objective
+Prove that component failures become bounded, truthful behavior rather than fleet-wide corruption or silent security bypass.
+
+Why this task exists
+Industry-grade gateways must survive or shed cleanly when replicas, caches, providers, local models and telemetry fail.
+Implementation work
+Approve a staging-only fault matrix with abort thresholds and named recovery operator.
+Inject one fault at a time at 60–80% qualified load, then selected combined faults after single-fault behavior is stable.
+Measure customer-visible status, policy action, leakage/provider dispatch, queue recovery, readiness, MTTR and cross-tenant blast radius.
+Rehearse immutable rollback with connection drain, compatible config/schema and local-only guard availability.
+Keep availability-under-failure separate from security-under-failure; a safe 503 is not full-rate success but is better than unsafe allow.
+Live acceptance tests — required to exit
+Test
+Live procedure
+PASS
+FAIL / stop
+L21-1
+Kill one gateway replica during SSE load.
+New traffic shifts; active streams follow drain/termination contract; no tenant state loss.
+Fleet outage or stale local-only state required.
+L21-2
+Kill one local guard replica/GPU or corrupt engine cache.
+Unready route removed; required checks follow failure policy; no external fallback.
+Scan skip/benign result.
+L21-3
+Fail/restart Redis/Valkey primary or block connectivity.
+Auth/quota/KS follow signed fail behavior and recover boundedly.
+Quota duplication, stale kill switch, indefinite hang.
+L21-4
+Blackhole audit/analytics sink.
+Serving path remains within contract or signed audit-fail policy; bounded queue.
+OOM or unaccounted silent loss.
+L21-5
+Slow/blackhole provider.
+Circuit/timeouts bounded; pre-byte fallback only as allowed; no post-byte splice.
+Queue collapse or mixed answer.
+L21-6
+Rollback candidate to previous image under live staging traffic.
+Known-safe version becomes ready and functional; old external AI path is not resurrected.
+Schema/config mismatch or unsafe fallback.
+
+Exit criteria
+Every declared fault has documented safe behavior and bounded recovery.
+Cross-tenant blast radius understood and within contract.
+Rollback actually works with live streams.
+No cloud-AI fallback appears during failure.
+Evidence package
+fault-matrix.json
+request/byte captures
+resource/recovery curves
+MTTR table
+rollback drill log
+Rollback / stop rule
+Abort load/fault injection immediately on safety invariant breach. Restore last known secure deployment and preserve failed evidence.
+
+T22  Prove redesigned frontend control and tenant actions under concurrent load
+Field
+Value
+Phase
+Resilience
+Depends on
+T05,T06,T10,T12,T20
+Primary owner
+Frontend engineer + browser QA + backend owner
+Objective
+Prove that the organization truly controls supported actions through the real product UI and that the UI remains truthful under load/failure.
+
+Why this task exists
+A polished interface is still unsafe if it misrepresents backend execution. The redesigned console must reconcile user intent, policy version, detector execution, provider bytes, audit data and displayed outcome while remaining usable under concurrent load.
+Implementation work
+Use the UI12-qualified redesigned production frontend against the production-like staging backend - no mocked network responses, dev-server-only proof or legacy UI fallback.
+For each supported detector/action, persist config, reload, capture compiled policy version, send the same fixture and join frontend/request ID to provider/audit evidence.
+Display final transport action, findings, mode, flag/review, detector executed/skipped/unavailable state, policy version and timing distinctly.
+Exercise policy updates while backend load is active and ensure changes apply within freshness bound without cross-tenant contamination.
+Keep browser analytics demand bounded so the UI cannot destabilize the serving fleet.
+Live acceptance tests — required to exit
+Test
+Live procedure
+PASS
+FAIL / stop
+L22-1
+Two tenants open consoles and set opposite actions; send identical fixture simultaneously.
+Each UI reflects its own backend/provider outcome and policy version.
+Cross-tenant control/state leakage.
+L22-2
+Cycle OFF→MONITOR→ENFORCE for input and output detectors while 70% load runs.
+Behavior changes without restarting gateway; p99/freshness stay within limits.
+Setting saves but stale workers or hidden floor remains.
+L22-3
+Trigger 403 policy, 429 quota, 503 degraded, partial SSE and redaction.
+UI distinguishes each; no “success” on infrastructure failure.
+Errors collapsed into generic allow/fail badge.
+L22-4
+Reload Scan Detail after event persistence and policy changes.
+Same request keeps immutable decision versions; no raw canary exposed.
+UI recomputes result from current policy or leaks secret.
+
+Exit criteria
+Organization controls are demonstrably authoritative.
+Frontend/backend/provider/audit agree per request.
+Concurrent tenants isolated.
+UI remains truthful under load and degraded states.
+Evidence package
+Playwright traces/screenshots
+sanitized network captures
+policy-version timeline
+provider/audit joins
+two-tenant concurrency proof
+Rollback / stop rule
+Frontend may roll back independently only if backend schema remains compatible. Never disable enforcement because an older UI cannot render a state.
+
+T23  Run final staging qualification: repeated plateaus, soak and cost reconciliation
+Field
+Value
+Phase
+Release
+Depends on
+T04,T12,T20,T21,T22
+Primary owner
+Performance QA + independent verifier
+Objective
+Produce the single source of truth for the release claim under the current $5k envelope.
+
+Why this task exists
+The release must pass correctness, protocol, security, cost and performance together, not in isolated demonstrations.
+Implementation work
+Freeze candidate images, policy/model/tokenizer/corpus hashes, edge config, topology and acceptance contract.
+Prove load generators and synthetic provider can exceed the intended offered rate without schedule drops or resource saturation.
+Run a rate ladder to determine the candidate plateau, then three independent 30-minute qualification runs after warmup/restart. Use unique prompts and the full low-latency security profile.
+Run a 2-hour soak at the highest qualified rate. Include representative input/output length strata and the signed stream/JSON mix.
+Run negative-control qualification with one required guard deliberately disabled in isolated staging; harness must FAIL even if RPS improves.
+Recompute cost/million and monthly cost from actual bytes and measured qualified RPS. Independent reviewer recomputes p99 and success counts from raw evidence.
+Live acceptance tests — required to exit
+Test
+Live procedure
+PASS
+FAIL / stop
+L23-1
+Three 30-minute all-permitted plateaus at candidate max qualified rate.
+Every run: p99 T_fw_addon <20 ms, error ceiling met, zero safety breaches, zero schedule drops.
+Any trial fails required stratum or guard coverage.
+L23-2
+Worst-band prompt/output profile.
+Profile-specific p99 and quality pass or is explicitly unqualified.
+Mostly-short mix hides long-band failure.
+L23-3
+2-hour soak.
+RSS/VRAM/FD/queue metrics plateau; no drift/leak/restart storm.
+Monotonic growth or degradation.
+L23-4
+Disable one required output/input guard in isolated staging.
+Harness marks run ineligible/FAIL regardless of HTTP 200 rate.
+Faster scanless run passes.
+L23-5
+Independent raw-data recomputation.
+Matches published percentiles/counts/cost denominator.
+Dashboard aggregation cannot be reproduced.
+
+Exit criteria
+Highest qualified RPS under ≤$5k established.
+p99 <20 ms passes every required run/stratum.
+OpenAI SDK/SSE and user-control gates remain green under load.
+Independent reviewer reproduces metrics.
+Evidence package
+frozen trial manifests
+raw JSONL/HDR histograms
+soak curves
+eligibility joins
+cost reconciliation
+independent recomputation log
+Rollback / stop rule
+If any required gate fails, publish measured limit/bottleneck and keep last qualified rate. Never relax security thresholds or metric definitions after seeing results.
+
+T24  Canary with an authorized real provider and customer-shaped traffic
+Field
+Value
+Phase
+Release
+Depends on
+T23
+Primary owner
+Release lead + SRE + product/security owner
+Objective
+Verify real BYOK/provider behavior without confusing provider quota with gateway capacity.
+
+Why this task exists
+Controlled providers are required for causal latency/capacity proof, but actual provider integrations can reveal SDK, streaming, timeout and policy interactions that staging generators cannot.
+Implementation work
+Choose one authorized provider/account/model with documented quota and a synthetic/non-sensitive canary tenant. Keep rate well below provider quota initially.
+Run non-stream and SSE via official OpenAI SDKs through AI Mesh with selected policies, tool calls if applicable, cancellation and error cases.
+Compare direct-provider and through-AI-Mesh client timings, while treating provider intrinsic timing as uncertain unless the provider exposes it.
+Advance canary traffic only after zero safety/compatibility regressions and acceptable tails. Keep customer/provider spend visible but outside firewall-infrastructure budget.
+Record the exact tested provider throughput; do not extrapolate it to gateway capacity or another tenant.
+Live acceptance tests — required to exit
+Test
+Live procedure
+PASS
+FAIL / stop
+L24-1
+Official Python/Node SDK against real provider through AI Mesh.
+Same supported SDK contract passes as staging.
+Provider-specific stream/tool shape breaks gateway.
+L24-2
+Direct vs gateway request sample.
+Gateway behaves correctly; latency difference labeled carefully without false causal subtraction.
+Provider TTFT presented as firewall tax.
+L24-3
+Provider rate-limit/error/cancel cases.
+AI Mesh surfaces consistent typed errors and cancels work.
+Hidden retries/splices or generic success.
+L24-4
+Small canary policy changes by org admin.
+Runtime behavior follows selected plan with no cross-tenant effect.
+Canary requires code/config fork.
+
+Exit criteria
+Real-provider SDK/stream compatibility passes.
+No external platform guard calls.
+Observed provider-supported rate/latency stated separately.
+Canary rollback path proven.
+Evidence package
+provider/account test manifest
+SDK logs
+direct-vs-gateway timing sample
+provider error matrix
+canary policy/action evidence
+Rollback / stop rule
+Return tenant to last qualified release/provider route. Do not disable mandatory controls to work around a provider incompatibility.
+
+T25  Remove legacy Bedrock/Vertex/Gemini paths, credentials and regression escape hatches
+Field
+Value
+Phase
+Release
+Depends on
+T08,T21,T24
+Primary owner
+Backend + DevOps + security owner
+Objective
+Make local-only enforcement permanent and prevent future code/config from silently re-enabling external AI.
+
+Why this task exists
+Final removal must happen after replacements and rollback are proven; deleting credentials first can produce hidden fail-open behavior or break unrelated AWS services.
+Implementation work
+Re-audit reachable platform AI call sites and remove obsolete Tier-2 clients/factories, legacy provider env vars, scheduled jobs and control-plane security-engine callers.
+Preserve unrelated SDK consumers (for example storage) rather than deleting broad dependencies by string match.
+Build local-only images and run the complete live scenario suite with platform cloud-AI credentials absent and egress denied.
+Only then remove narrowly scoped secrets/IAM/endpoint access through approved infrastructure change control. Rotate any exposed/retired credential as required.
+Add CI/static/runtime regression gates that fail if forbidden external-AI hosts/clients become reachable from enforcement code again.
+Live acceptance tests — required to exit
+Test
+Live procedure
+PASS
+FAIL / stop
+L25-1
+Run all staging surfaces with zero Bedrock/Google AI credentials and denied egress.
+Supported features pass; zero forbidden attempts.
+AccessDenied/connection attempts or silent allow.
+L25-2
+Exercise failure/background/startup paths after code cleanup.
+No hidden legacy fallback.
+Only errors reveal remaining dependency.
+L25-3
+Run unrelated AWS/storage/customer-provider features that should remain.
+Still functional.
+Over-broad cleanup breaks valid services.
+L25-4
+Inject a forbidden external-AI client/hostname in a test branch/config.
+Regression gate blocks build/deploy.
+Forbidden dependency can return unnoticed.
+
+Exit criteria
+No reachable platform external-AI enforcement path.
+Credentials removed only after callers.
+Unrelated services preserved.
+Regression gates prevent reintroduction.
+Evidence package
+final callgraph/static report
+zero-credential/egress live test
+IAM/secret change record
+preserved-service test
+regression-gate proof
+Rollback / stop rule
+Use the last validated local-only image. Permission restoration is separate change control and must not revive cloud-AI enforcement implicitly.
+
+T26  Publish reproducible evidence, capacity limits and scale-up handoff
+Field
+Value
+Phase
+Release
+Depends on
+T23,T24,T25
+Primary owner
+Independent verifier + release owner
+Objective
+Turn the release into a repeatable engineering artifact and make future budget increases deployment changes—not application rewrites.
+
+Why this task exists
+The final deliverable must state what is measured, what is not, and exactly how to add capacity without changing security semantics.
+Implementation work
+Package frozen manifests, raw qualification data, image/model/policy hashes, cost workbook, SDK/SSE compatibility, chaos results and reviewer sign-off.
+Publish the measured max qualified RPS under the current $5k envelope, p50/p95/p99, RPS/vCPU, RPS/L4, CPU ms/request, cost/million and first failing bottleneck.
+Document scale-up procedure: increase gateway replicas/CPU, guard replicas/GPUs, shared-state capacity and provider capacity; no application code changes expected unless a new bottleneck violates the existing service contract.
+Document autoscaling signals and safe bounds for gateway, guard and provider fleets; keep queue/buffer semantics invariant.
+Update architecture/Eraser sources to reflect actual process ownership and output mode. Clearly label unqualified profiles and real-provider limits.
+Require an independent engineer to rebuild staging and reproduce a representative qualification slice from the bundle.
+Live acceptance tests — required to exit
+Test
+Live procedure
+PASS
+FAIL / stop
+L26-1
+Independent rebuild from release manifest on a clean environment.
+Same images/models/config and core live tests pass.
+Requires undocumented setup/manual patches.
+L26-2
+Increase staging replicas/resources only and rerun a scaled load slice.
+Capacity rises according to documented scaling path; no code change.
+Scale-up requires changing application semantics.
+L26-3
+Recompute published percentiles/cost from raw files.
+Matches release report.
+Only dashboard screenshots support claims.
+
+Exit criteria
+Reproducibility bundle complete.
+Measured limits and exclusions explicit.
+Scale-up runbook demonstrates deployment-only growth path.
+Independent verifier signs the release evidence.
+Evidence package
+release-evidence.json
+raw data/archive hashes
+operations/scaling runbook
+architecture source/export
+independent replay report
+signed limits/exclusions
+Rollback / stop rule
+Withhold publication if evidence is incomplete. Keep last qualified capacity limit and failed results as engineering evidence.
+
+5. Cross-task live scenario catalog
+Use these scenarios as release artifacts, not demos
+Each scenario runs against immutable Docker/staging images and produces request-ID-correlated wire, provider, policy, model, audit and resource evidence. A screenshot or unit assertion alone never closes a scenario.
+
+ID
+Scenario
+Live setup
+Pass condition
+S01
+ALLOW baseline
+Benign input, required guards healthy, SSE and JSON.
+Exactly one provider dispatch; clean completion; all required checks executed.
+S02
+Input BLOCK
+Injection/credential fixture with organization action BLOCK.
+Zero provider dispatch; single decision/audit; SDK receives documented error.
+S03
+Input REDACT
+PII fixture with REDACT.
+Recorder sees sanitized payload; raw value absent from provider/log/UI errors.
+S04
+MONITOR
+Injection rule in MONITOR.
+Finding recorded; configured non-enforcing transport outcome; other mandatory controls still apply.
+S05
+FLAG
+Output/input finding with FLAG.
+Traffic outcome and flag/review state separately visible.
+S06
+Rule OFF
+Disable one optional detector.
+No call/work/effect solely for that detector; plan version changes.
+S07
+Conflicting rules
+PII redact + independent credential block.
+Block wins by signed rule semantics; findings preserved.
+S08
+Missing org config
+Known tenant with missing/unloaded plan.
+Not-ready/deny per contract; never another tenant/default.
+S09
+Local guard unavailable
+Kill guard service/GPU.
+Selected failure posture; no benign fabrication or cloud fallback.
+S10
+Long-input windows
+Attacks in first/middle/last window.
+All covered or explicit length reject; no silent truncation.
+S11
+SSE normal
+Fixed-rate safe chunks.
+Incremental valid chunks + terminal marker; release lag measured.
+S12
+SSE boundary redaction
+Secret split across chunks/UTF-8 boundary.
+No leak; valid protocol.
+S13
+Strict output BLOCK
+Unsafe whole response.
+Zero prohibited assistant bytes before terminal result.
+S14
+Malformed upstream SSE
+Broken event/json/clean EOF.
+Protocol error/degraded outcome; not success.
+S15
+Provider fail pre-byte
+Primary fails before first content.
+Only signed safe retry/fallback executes.
+S16
+Provider fail post-byte
+Primary fails after partial stream.
+No fallback splice; clean termination semantics.
+S17
+Client cancel
+Cancel after N chunks.
+Provider/guard work stops; resources return to baseline.
+S18
+Slow consumer
+Very slow SDK client.
+Bounded buffers; backpressure; no fleet memory growth.
+S19
+OpenAI Python sync
+base_url + chat completion.
+SDK returns typed completion.
+S20
+OpenAI Python async stream
+AsyncOpenAI streaming.
+Iterator completes; chunks valid.
+S21
+OpenAI Node stream
+Node async iterator.
+Chunks parse/complete without custom client code.
+S22
+Tool-call stream
+Fragmented tool args.
+SDK reconstructs exact tool call.
+S23
+Usage/finish reason
+Streaming usage + finish_reason.
+Fields arrive according to supported contract.
+S24
+Two-tenant isolation
+Opposite rules under concurrency.
+No config/finding/action leakage.
+S25
+Policy update under load
+Change action at 70% load.
+All ready replicas converge within freshness bound.
+S26
+Redis/Valkey fault
+Latency/failover/disconnect.
+Bounded safe behavior; no quota multiplication.
+S27
+Audit sink fault
+Slow/down/full queue.
+Bounded queue/spill/visible loss; gateway stable.
+S28
+Gateway kill/drain
+Terminate one replica.
+Traffic rebalances; expected stream behavior.
+S29
+Guard kill/cache corruption
+Kill local model or corrupt engine cache.
+Unready/fail policy; no cloud fallback.
+S30
+Overload 3×
+Offer 3× q_safe.
+Explicit shedding; no OOM/unbounded queues.
+S31
+Single-unit rate sweep
+Open-loop increasing RPS.
+Highest passing + first failing point retained.
+S32
+1→2→4 scale
+Same app image, more replicas/capacity.
+Material capacity growth without code changes.
+S33
+Dashboard contention
+Heavy console analytics during load.
+Serving p99/resource budget remains valid.
+S34
+30-minute qualification
+Frozen candidate plateau.
+p99<20ms + error/security gates in every run.
+S35
+2-hour soak
+Highest qualified rate.
+Resources plateau; no drift/restart storm.
+S36
+Zero external AI
+Deny Bedrock/Google AI egress.
+Zero forbidden attempts across all surfaces/failures.
+S37
+Real-provider canary
+Official SDK through authorized BYOK.
+Compatibility passes at tested provider quota.
+S38
+Rollback drill
+Redeploy prior local-only image.
+Ready/healthy, core actions preserved, no external AI regression.
+S39
+Cost recomputation
+Rebuild monthly cost from measured bytes/resources.
+≤$5k with declared exclusions/headroom.
+S40
+Scale-up rehearsal
+Add replicas/GPUs only.
+Capacity increases; application code unchanged.
+
+
+6. Final release gate
+Release PASS requires all rows
+A single failed safety/protocol/user-control gate blocks release even if the performance chart is excellent. A performance miss does not authorize weakening enabled controls.
+
+Gate
+PASS requirement
+Identity
+Candidate commit, images, frontend, policy and model hashes frozen and reproducible.
+Local-only enforcement
+Zero platform-owned Bedrock/Vertex/Gemini/hosted-AI attempts in normal and failure paths.
+User authority
+Organization settings change actual detector execution/action; OFF/MONITOR/ENFORCE semantics byte-proven.
+Input safety
+BLOCK → zero provider calls; REDACT → sanitized provider bytes; no hidden rule floors beyond signed platform integrity.
+Output safety
+Streaming/strict semantics match selected mode; no secret escapes chunk boundaries; failures truthful.
+SSE
+Official SDKs parse incremental chunks/tools/errors; no accidental buffering/spliced retry; [DONE]/terminal behavior correct.
+OpenAI SDK
+Pinned Python + Node SDK matrix passes through real edge.
+Latency
+p99 complete firewall overhead <20 ms for every required low-latency stratum/trial.
+Throughput
+Maximum qualified RPS under ≤$5k measured with unique, fully guarded requests; historical 1,064 floor beaten or gap explicitly reported.
+Efficiency
+RPS/vCPU, CPU ms/request, RPS/L4, queue time and cost/million measured; denominator complete.
+Scale
+1→2→4 serving units increase capacity materially with same application image/semantics.
+Resilience
+Fault matrix and rollback pass with no cross-tenant or fail-open security violation.
+Soak
+Three independent 30-minute plateaus + 2-hour soak pass; zero loadgen schedule drops at qualified plateau.
+Budget
+Current dated infrastructure estimate ≤$5,000/month with prompt egress, LB, state, audit/monitoring and required support assumptions declared.
+Evidence
+Independent reviewer recomputes raw percentiles/counts/cost and rebuilds representative staging proof.
+
+6.1 Stop conditions
+Any raw sensitive canary reaches a provider/client when selected policy required redaction/block.
+Any tenant receives another tenant’s policy, content, request ID or audit record.
+Any required local semantic check becomes a benign result merely because the model/service was unavailable.
+Any performance run hides queueing, provider TTFT, release holdback, schedule drops or failed/cancelled requests.
+Any external platform AI call appears after the local-only gate.
+Any queue/buffer grows without a configured bound or causes OOM/FD exhaustion.
+Any official SDK streaming test hangs, corrupts events or requires a private parser workaround.
+Any deployment meets the budget only by excluding required infrastructure or security work.
+7. How future budget increases should scale the system
+TODAY ($5k envelope)  same gateway image + same policy schema + same guard APIBUDGET INCREASE  ├─ add gateway replicas / CPU  ├─ add local guard replicas / GPUs  ├─ scale authoritative shared-state capacity  ├─ scale edge/load-balancer targets  └─ obtain more customer/dedicated provider capacityEXPECTED RESULT  higher qualified throughput with unchanged organization semantics and unchanged API/SSE contract
+
+Fleet
+Scale signal
+Scale action
+Application code change expected?
+Gateway
+RPS/replica, CPU, event-loop lag, active streams, p99 overhead
+Add replicas/CPU; keep stateless image/config contract.
+No
+Local guard
+Queue age, inference p99, windows/s, GPU utilization/VRAM
+Add guard replicas/GPUs; tune deployment batch profile.
+No
+Shared state
+Ops/s, pool wait, failover headroom
+Scale/cluster state service; retain same lease/snapshot semantics.
+No
+Provider/inference
+TTFT, tokens/s, waiting requests, provider quota
+Increase dedicated/provider capacity.
+No
+Audit/analytics
+Producer backlog, durable write lag
+Add partitions/workers/storage; remain async.
+No
+
+8. Source basis and precedence
+Source
+How this runbook uses it
+2026-09-07-end-to-end-architecture-hld.md
+Target topology and request/control separation; historical $5k operating point.
+2026-09-02-hot-path-cost-matrix.md
+Corrected historical all-in cost and 1,064-RPS planning baseline; prompt egress correction.
+2026-08-27-FINAL-evidence-based-hot-path-plan.md
+Detection defects, local GPU plan, measurement gates and window-count concerns.
+2026-08-25-FINAL-verification-and-platform-agnostic-scale-plan.md
+Ordering, tenant isolation, prefetch-not-fanout, frontend/analytics verification.
+Repository review: ansh @ e95f974dc500414b8f4db28038977fa9bf7deb44
+Current reviewed code still had Gemini/Bedrock paths, mixed policy semantics, output/timing inconsistencies and scalable-runtime work remaining. T00 must re-pin current head before execution.
+User-reported TensorRT L4 test
+~2.14 ms p50 W1 component evidence only; T09/T18 must reproduce in release container and measure sustained multi-window throughput/p99.
+OpenAI Python/Node official repositories/docs (checked 2026-09-16)
+SDK base URL and SSE streaming expectations used for T11/T12 live compatibility.
+TrueFoundry 2026 architecture/benchmark material
+Comparison reference: in-memory enforcement/asynchronous logging and vendor-reported ~350 RPS/vCPU on a fake OpenAI upstream; not equivalent to AI Mesh full security.
+Envoy Gateway / Envoy AI Gateway current docs
+Reference for production proxy/control-data separation, streaming timeouts/body processing and horizontally managed data-plane concepts.
+
+Final interpretation
+AI Mesh is not being built as a 1,064-RPS product. It is being built as a horizontally scalable gateway whose first cost-constrained deployment happens to be ≤$5,000/month. The release claim is the maximum qualified RPS actually measured inside that envelope with p99 <20 ms and all selected controls operating. Future capacity growth must be a deployment/infrastructure exercise, not an application rewrite.
+
+
+9. Frontend revamp: clean product experience, public landing page and operator console
+This track is part of the release program, not a later cosmetic project. It keeps the existing React/Vite application and backend APIs, but restructures the experience around clear information architecture, a restrained design system, truthful operational states and live end-to-end verification.
+Design intent
+Take inspiration from the clarity of modern AI infrastructure products such as TrueFoundry - strong product hierarchy, generous whitespace, code-first onboarding, clear proof points and progressive disclosure - while keeping an original ZeroShield visual identity. Do not copy TrueFoundry brand assets, wording or page composition. Product claims on the landing page must come from qualified AI Mesh evidence, never aspirational numbers.
+
+9.1 Codebase findings that drive the redesign
+Observed current code
+Why it matters
+Revamp direction
+React 19 + Vite 7 + Tailwind 4, with Lucide, Motion, ECharts/uPlot and reusable UI primitives.
+The stack is modern enough; a framework rewrite would add risk without fixing product structure.
+Keep React/Vite. Build a stricter design system, route-level code splitting and reusable page patterns.
+App.jsx protects / and switches most product views through ?tab=...; there is no public product landing route.
+The app lacks a clean public product story and durable resource-oriented URLs.
+Move console to /app/*; make / public; preserve legacy ?tab links via deterministic redirects.
+Sidebar exposes AI Mesh plus eight long nested module items, including technical 1.1-1.7 concepts.
+Navigation reflects implementation modules rather than operator jobs.
+Use task-oriented top-level navigation: Overview, Requests, Policies, Guardrails, Models, MCP/RAG, Simulator, Settings.
+AIMeshFirewallOverview.jsx is ~55 KB; AttackSimulatorPanel.jsx ~61 KB; Header/Sidebar are ~20 KB each.
+Large multi-purpose components increase visual inconsistency, regression risk and bundle coupling.
+Split by domain panels and routes; lazy-load heavy charts/simulator; keep state/data hooks separate from visual components.
+index.css imports three font families and uses radial gradients plus many module-specific color gradients.
+The current theme can feel visually noisy and inconsistent with an enterprise security gateway.
+One sans + one mono; neutral surfaces; one primary accent; semantic red/amber/green only for state. Remove rainbow module identity.
+Existing visual harness already covers 12 surfaces x 2 themes x 4 widths, overflow, leaks and console errors.
+There is valuable regression infrastructure to preserve.
+Extend it with redesigned routes, landing page, accessibility checks, browser matrix and production-bundle performance budgets.
+Firewall configuration already persists through /api/firewall/config/ and has per-section cards.
+The control plane can be redesigned without changing policy semantics.
+Recompose into a policy control center with progressive disclosure and explicit user-owned actions.
+
+9.2 Visual system and UX doctrine
+Enterprise neutral first: white / near-white and deep-slate surfaces; one primary brand accent. No module-specific rainbow gradients or decorative radial backgrounds inside the authenticated console.
+Semantic color only: green = healthy/success, amber = warning/degraded, red = block/error/danger, blue/teal = selection or informational state. Color is never the only carrier of meaning.
+Typography: one primary sans family plus one monospace family for code/IDs. Prefer self-hosted or system-safe delivery to avoid layout shifts and three separate external font requests.
+Layout: 8 px spacing system, restrained 8-12 px radii, subtle borders, low-elevation shadows, generous whitespace and clear section hierarchy. Avoid oversized 24-28 px card radii as a default.
+Motion: 120-200 ms purposeful transitions only. No hover lift on every control. Respect prefers-reduced-motion and never animate high-density operational data unnecessarily.
+Progressive disclosure: show the decision and current state first; advanced tuning, raw rules and technical traces expand on demand.
+Truth before polish: every status card must be backed by real API state. Unknown/unavailable is rendered explicitly; never replace missing data with optimistic copy.
+Operator efficiency: common jobs should be reachable in <=2 navigation actions from the app shell; destructive actions require context, confirmation and result evidence.
+9.3 Target information architecture and route contract
+Route
+Purpose
+Primary content
+/
+Public landing page
+Product story, OpenAI-compatible integration, local guardrails, org control, architecture, verified proof points, deployment options, CTA.
+/login
+Authentication
+Focused sign-in, SSO/OAuth, minimal distraction, clear tenant/product context.
+/app/overview
+Operator home
+System posture, qualified traffic, blocks/redactions, latency, provider health, urgent actions.
+/app/requests
+Traffic / trace explorer
+Search/filter requests, action/status, stage timing, provider, policy version, request detail drawer/page.
+/app/policies
+Policy control center
+Organization policy sets, rule enablement, OFF/MONITOR/ENFORCE, versions, drafts/publish/rollback.
+/app/guardrails/input
+Input controls
+Injection, PII/secrets, transformations, detector readiness, thresholds only where supported.
+/app/guardrails/output
+Output controls
+Streaming vs strict mode, BLOCK/REDACT/FLAG/REWRITE where supported, detector/failure semantics.
+/app/models
+Models and routing
+Connections, routing policy, failover, quotas, kill-switch / isolation, provider health.
+/app/mcp-rag
+MCP and RAG security
+Registries, connectors, sandbox/policy status, retrieved-content controls, grounding capability state.
+/app/simulator
+Safe test workspace
+Explicit scan-only vs generation modes, fixture selection, controlled load caps, result evidence.
+/app/settings
+Organization settings
+Members/RBAC, API keys, audit/retention, organization metadata, appearance.
+/app/profile
+Personal settings
+Profile, password/SSO status, sessions.
+
+Legacy compatibility: map existing /?tab=firewall-1-1 ... firewall-1-7, firewall-config, profile and settings URLs to the new routes with deterministic redirects. Preserve bookmarks during a defined deprecation window and instrument legacy-route usage before removal.
+9.4 Public landing page specification
+Section
+Required experience
+Content rule
+Hero
+Short value proposition, 1 primary CTA + 1 secondary CTA, restrained architecture visual.
+Suggested direction: “One secure gateway for every AI request.” Mention OpenAI-compatible access, local guardrails and organization-owned policy control. No unqualified performance numbers.
+Trust / proof bar
+Verified facts only.
+Use measured latency/RPS/cost after T23; before qualification show qualitative capabilities, not placeholder “99.99%” or invented customer logos.
+Product pillars
+4-6 simple cards.
+AI Gateway, Guardrails, Model Governance, MCP/RAG Security, Observability, Organization Policy Control.
+How it works
+Three-step diagram.
+App/SDK -> AI Mesh policy/security -> customer model -> output guard -> app. Distinguish customer provider from platform security inference.
+Code-first integration
+Copyable Python and Node snippets.
+Use real OpenAI SDK base_url patterns validated in T12. Code snippet must stay synchronized with supported API behavior.
+Control & governance
+Policy screenshots / interaction preview.
+Show user-owned OFF/MONITOR/ENFORCE and supported actions. Do not imply unsupported categories exist.
+Deployment / resilience
+Simple deployment options and scale story.
+Today’s $5k envelope is not a code ceiling. Explain horizontal scaling without promising fleet numbers not yet qualified.
+Final CTA + footer
+Open Console / Sign In / Docs / Contact.
+Clean, minimal footer with product, docs, security, privacy and status links.
+
+9.5 Frontend task index
+Task
+Work
+Depends on
+Exit proof
+UI00
+Freeze frontend baseline and user-flow inventory
+T00
+Baseline screenshots, route map, bundle/API waterfall, current visual-test report
+UI01
+Create the ZeroShield design system and remove theme noise
+UI00
+Tokens, primitives, typography, semantic states, component examples
+UI02
+Introduce public landing route and route-based console IA
+UI00, UI01, T01
+/ public, /app/* protected, legacy redirect map
+UI03
+Rebuild app shell, navigation, header and organization context
+UI01, UI02
+Task-oriented nav, org switch/search/account, responsive shell
+UI04
+Build the professional public landing page
+UI01, UI02, T12
+Hero, product pillars, architecture, SDK snippets, verified claims
+UI05
+Redesign overview dashboard around operator decisions
+UI03, T03, T15
+Actionable KPIs, health, traffic, latency, urgent states
+UI06
+Build Requests / Trace Explorer and truthful request detail
+UI03, T03, T07, T15
+Search/filter, stages, provider bytes/action/policy correlation
+UI07
+Rebuild Policies + Guardrails as the user-owned control center
+UI03, T05, T06, T10
+Progressive disclosure, action semantics, draft/publish/rollback
+UI08
+Redesign Models, routing, kill-switch, MCP/RAG and simulator
+UI03, T13, T14
+Clear domain pages, safe destructive controls, explicit simulator modes
+UI09
+Decompose monolithic frontend code and introduce route-level lazy loading
+UI03-UI08
+Smaller domain components, isolated data hooks, code splitting
+UI10
+Accessibility, responsive behavior, theme and performance hardening
+UI01, UI09
+WCAG AA, browser matrix, bundle/CWV budgets, no overflow/leaks
+UI11
+Extend visual + behavior regression harness for new routes
+UI02-UI10, T02
+Pinned Playwright, real-backend visual matrix, a11y and error-state gates
+UI12
+Run production-bundle Docker/staging E2E against real backend
+UI11, T18-T21
+Live policy actions, cross-tenant tests, load coexistence, degraded states
+UI13
+Canary the redesign and retire legacy UI/routes
+UI12, T22
+Usage/error telemetry, staged rollout, rollback, legacy redirect retirement
+
+UI00 - Freeze the current frontend baseline and operator-flow inventory
+Dependencies: T00. Must finish before visual implementation begins.
+Why this task exists
+The redesign must improve the actual product rather than replace working behavior with a prettier but incomplete shell. The current branch already has visual hardening and live-data fixes that must survive.
+Implementation work
+Pin frontend source SHA, package-lock hash, served asset hash and production-bundle build command. Record which branch/image the staging console actually serves.
+Capture current authenticated and unauthenticated routes, user roles, organization selection behavior, all major control forms, simulator paths and request-detail flows.
+Generate baseline screenshots at 1440, 1024, 768 and 375 px in both supported themes using the existing visual harness; capture console errors, overflow and network request counts.
+Record initial bundle/chunk sizes, first-load request waterfall, dashboard API request fan-out, hidden-tab polling behavior and current Core Web Vitals in staging.
+Inventory all components >15 KB and classify each by domain, data ownership and whether it should become a route, panel or primitive. Preserve existing live-data integrity fixes.
+Live Docker / staging acceptance tests - required to exit
+Scenario
+Live procedure
+PASS
+FAIL / stop
+Production bundle identity
+Serve the baked frontend through staging edge; match JS/CSS asset hashes to build manifest.
+Browser, source and image match.
+Stale/dev bundle or unknown asset provenance.
+Surface matrix
+Run current visual harness across all declared surfaces, widths and themes.
+Every baseline result recorded, including known defects.
+Missing surfaces or screenshots substituted for failed routes.
+Operator walkthrough
+Use a synthetic org to save policy, view request detail, run simulator, change model/routing and logout.
+All current jobs mapped with request IDs/API calls.
+A current capability has no mapped user flow.
+Demand profile
+Open overview, switch periods, hide tab, return, navigate quickly.
+Network fan-out/polling/cancellation baseline captured.
+Unable to explain duplicate or runaway requests.
+
+Failure scenarios that must be handled
+Wrong environment or stale SPA served by nginx/CDN.
+Frontend only works with Vite dev server.
+Existing visual regression fixes disappear in redesign planning.
+Current user-control/API fields are not inventoried before UI changes.
+Exit criteria
+Baseline manifest complete.
+All existing routes/jobs have an owner and destination in the new IA.
+Current visual/network/performance evidence archived.
+No unowned critical flow remains.
+Evidence package
+frontend-baseline.json
+route-and-flow-map.md
+baseline screenshots/report.json
+bundle-report.json
+network-waterfall.har (sanitized)
+component-size inventory
+Rollback / stop rule
+No functional changes. If provenance is unknown, stop and fix deployment identity first.
+UI01 - Create the ZeroShield design system and remove theme noise
+Dependencies: UI00.
+Why this task exists
+The present stylesheet mixes three font families, decorative gradients and many module-specific color identities. A professional gateway needs a coherent visual language that scales across dozens of states without becoming noisy.
+Implementation work
+Create a single token source for color, spacing, type, radius, elevation, motion and chart palettes. Default proposal: neutral slate/white surfaces, one primary blue/cyan family, semantic green/amber/red only for state.
+Reduce typography to one sans family and one monospace family. Prefer self-hosted or system-safe delivery; remove redundant Google Font imports and measure layout shift.
+Unify Button, Card, Input, Select, Dialog, Badge, Tabs/SegmentedControl, Table, EmptyState, Skeleton, Toast, Tooltip, PageHeader and Status components with explicit variants.
+Remove rainbow module gradients from authenticated surfaces. Module identity comes from icon + title + route, not a unique color family.
+Define light and dark themes from the same semantic tokens; dark mode is not a separately designed neon theme. Ensure semantic contrast and focus states remain clear.
+Create a small internal design-system showcase route available only in dev/staging for visual verification; exclude it from production navigation.
+Live Docker / staging acceptance tests - required to exit
+Scenario
+Live procedure
+PASS
+FAIL / stop
+Token coverage
+Render every primitive/state in the showcase through production CSS build.
+No raw ad-hoc colors needed for standard states.
+Components still require scattered hard-coded theme colors.
+Contrast
+Run automated contrast scan plus manual spot checks for text, controls, status badges and charts.
+WCAG AA for normal text/controls; focus visible.
+Any critical/serious contrast failure.
+Theme parity
+Toggle light/dark across showcase and key pages.
+Meaning and hierarchy preserved; no unreadable state.
+Status meaning changes or dark-only/light-only defects.
+Motion
+Enable reduced-motion OS setting and exercise interactions.
+Nonessential motion removed; no usability loss.
+Core navigation or state feedback depends on animation.
+
+Failure scenarios that must be handled
+Brand drift into a TrueFoundry clone.
+Status color becomes decorative and ambiguous.
+Dark theme introduces gradients/glows absent from light theme.
+Changing primitive APIs breaks existing form behavior.
+Exit criteria
+Token file and primitive APIs versioned.
+No rainbow module styling in new routes.
+AA contrast/focus gates green.
+Design review approves professional/consistent appearance before page migration.
+Evidence package
+design-tokens.md
+component showcase screenshots
+contrast report
+theme matrix
+migration guide from old classes/primitives
+Rollback / stop rule
+Feature-flag the new theme primitives. Old pages may keep old styles temporarily, but do not mix new tokens and legacy gradients within the same migrated page.
+UI02 - Introduce a public landing route and resource-oriented console routing
+Dependencies: UI00, UI01, T01.
+Why this task exists
+The current protected root plus query-tab navigation makes the product feel like one giant dashboard and leaves no real landing page. Resource routes improve clarity, deep links, testing and progressive loading.
+Implementation work
+Make / the public landing page. Move authenticated product surfaces under /app/* and keep /login and /oauth/callback public.
+Implement explicit route objects for overview, requests, policies, guardrails/input, guardrails/output, models, mcp-rag, simulator, settings and profile.
+Add legacy redirect mapping from every supported ?tab= value to the corresponding new route. Preserve existing query parameters that are meaningful to the destination.
+Use route-level lazy imports and Suspense/error boundaries. Keep auth/org checks at the protected app boundary, not duplicated in every page.
+Add not-found, forbidden, organization-required and service-unavailable pages that use real error state and recovery actions.
+Ensure browser back/forward, refresh and copied deep links work directly through nginx/public edge.
+Live Docker / staging acceptance tests - required to exit
+Scenario
+Live procedure
+PASS
+FAIL / stop
+Unauthenticated landing
+Open / with no token through public staging hostname.
+Landing renders; no protected APIs called.
+Redirect loop/login-only root or data leak.
+Protected deep link
+Open /app/policies with no token, authenticate, then return.
+Login flow preserves intended destination safely.
+User lands on wrong org/page or loses state.
+Legacy links
+Open each old /?tab=... URL.
+Deterministic redirect to matching new route.
+404, wrong module or silent fallback to overview.
+Edge refresh
+Hard refresh every new route through nginx/LB.
+200 app shell or expected auth flow; no server 404.
+Client-only routing works only via in-app navigation.
+
+Failure scenarios that must be handled
+Public page accidentally exposes tenant API calls.
+Legacy redirects allow arbitrary tab injection.
+Route migration breaks OAuth callback or stored redirect.
+Lazy chunk failure leaves blank screen without recovery.
+Exit criteria
+Public / works.
+All protected routes deep-link/refresh correctly.
+Legacy route map complete and instrumented.
+No protected data requested before auth/org resolution.
+Evidence package
+route manifest
+legacy redirect tests
+edge refresh matrix
+auth redirect traces
+chunk-load failure proof
+Rollback / stop rule
+Keep legacy query routing behind a compatibility adapter until UI13 shows negligible usage. Revert route shell without changing backend APIs if necessary.
+UI03 - Rebuild the authenticated app shell, navigation and organization context
+Dependencies: UI01, UI02.
+Why this task exists
+Operators need a calm shell that makes the product hierarchy obvious. Current navigation exposes technical module numbering and long labels, while header/sidebar logic has grown large and stateful.
+Implementation work
+Replace 1.1-1.7 navigation labels with task-oriented groups: Overview, Requests, Policies, Guardrails, Models & Routing, MCP & RAG, Simulator, Settings.
+Keep organization selector, environment/context, global search, docs/help and user menu in a compact top bar. System health appears as a concise status indicator, not a decorative always-green card.
+Use breadcrumbs and page headers for location; sidebar handles product areas only. Move secondary tabs into each domain page.
+Collapse mobile navigation into an accessible drawer with focus trap, Escape close and scroll lock. Desktop collapsed mode uses tooltips and no hover-only flyout dependency.
+Split Header and Sidebar into small presentational/navigation components plus hooks for auth/org/health; remove duplicated dark-mode class chains and conflicting style branches.
+Preserve organization/user role visibility rules and make unauthorized navigation items absent or disabled with an explainable reason according to product policy.
+Live Docker / staging acceptance tests - required to exit
+Scenario
+Live procedure
+PASS
+FAIL / stop
+Desktop navigation
+Navigate all top-level routes at 1440/1024 widths with keyboard and pointer.
+Active state/breadcrumb correct; <=2 actions to common jobs.
+Ambiguous active state, hidden route or hover-only access.
+Mobile drawer
+Run at 375/768, open/close drawer, tab through links and account menu.
+No background focus/scroll, Escape works, focus returns.
+Focus escapes or page becomes horizontally scrollable.
+Org context
+Switch synthetic org A/B with opposite policies.
+Header context, routes and data refresh consistently.
+Stale org data persists or cross-tenant state flashes.
+Health state
+Slow/fail backend health endpoint.
+Neutral checking/degraded/offline state shown truthfully.
+“Protected” stays green while backend is unreachable.
+
+Failure scenarios that must be handled
+Organization switch during in-flight data fetch.
+Role change invalidates current page.
+Mobile resize during open drawer.
+Health endpoint slow or unavailable.
+Exit criteria
+Navigation IA approved by product/security.
+Responsive shell passes keyboard/mobile tests.
+No cross-org stale UI.
+Header/sidebar complexity decomposed with no feature loss.
+Evidence package
+navigation screenshots
+keyboard trace
+org-switch network trace
+role matrix
+header/sidebar component map
+Rollback / stop rule
+Feature flag the new shell. If rollback occurs, keep new resource routes redirected to the legacy shell so bookmarks remain valid.
+UI04 - Build the clean professional public landing page
+Dependencies: UI01, UI02, T12.
+Why this task exists
+The product needs a credible public front door that explains what AI Mesh does before asking users to log in. The page should feel like a modern AI infrastructure product without copying another company’s identity.
+Implementation work
+Implement the landing sections in 9.4 with a restrained white/neutral visual system and a single brand accent. Keep hero copy short and developer-focused.
+Include a real OpenAI Python and Node integration snippet whose base_url/API path is validated by T12. Add copy buttons with accessible confirmation.
+Use an original lightweight architecture illustration built from ZeroShield components/branding; avoid third-party screenshots or copied TrueFoundry graphics.
+Only show quantitative proof points after they are sourced from release evidence. Until then, use capability claims such as OpenAI-compatible, local guard inference, organization-controlled policies and BYOK routing.
+Lazy-load below-the-fold visuals. Keep charts and authenticated dashboard libraries out of the landing initial chunk.
+Add appropriate metadata, social preview, favicon/branding, security/privacy links and clear Open Console / Sign In / Docs actions.
+Live Docker / staging acceptance tests - required to exit
+Scenario
+Live procedure
+PASS
+FAIL / stop
+Cold landing
+Load / in clean browser cache via staging CDN/LB.
+No auth required; fast stable render; no console errors.
+Dashboard bundle or protected API required for hero.
+CTA paths
+Exercise Open Console, Sign In, Docs and code copy.
+Each leads to valid destination; auth users enter app cleanly.
+Dead CTA or auth loop.
+Claim audit
+Compare visible performance/security claims to signed release evidence.
+Every numeric claim has an evidence ID/date/profile.
+Aspirational 100k, 99.99%, customer logos or unqualified <20 ms shown as fact.
+Responsive/SEO smoke
+Render 375/768/1440 and inspect metadata/headings.
+No overflow; one H1; sensible semantic structure.
+Hero clipped, heading hierarchy broken or unreadable mobile code block.
+
+Failure scenarios that must be handled
+Release evidence unavailable for metrics.
+Landing asset/CDN failure.
+Authenticated user returns to landing unexpectedly.
+Docs link/version diverges from SDK compatibility.
+Exit criteria
+Public landing route production-ready.
+No invented claims or copied competitor assets.
+SDK snippets verified.
+Landing performance budget passes UI10.
+Evidence package
+landing screenshots
+bundle waterfall
+claim-evidence ledger
+CTA trace
+metadata/SEO report
+Rollback / stop rule
+Landing can roll back independently to a minimal static page. Never route public traffic directly to the authenticated overview as an emergency workaround.
+UI05 - Redesign the overview dashboard around decisions, not decorative density
+Dependencies: UI03, T03, T15.
+Why this task exists
+The current overview contains many colorful module cards and charts. A professional security gateway home should answer: Is traffic protected? What changed? What needs action? How is the gateway performing?
+Implementation work
+Restructure overview into four zones: posture/health, traffic + actions, latency/provider reliability, and recent/high-priority findings.
+Remove one-card-per-module rainbow treatment. Use a small number of neutral KPI cards and charts with consistent visual scales.
+Make every metric link to a filtered destination (Requests, Policies, Models, Guardrails) so overview is a control surface, not a dead report.
+Use data freshness, last-updated time and degraded/unavailable states explicitly. Never display zero as a substitute for failed analytics.
+Keep chart count intentionally low. Lazy-load heavy analytics below the fold and cancel stale requests on period/filter changes.
+Add a “Needs attention” panel for policy not ready, local guard unavailable, provider degraded, kill-switch active, audit backlog and configuration draft.
+Live Docker / staging acceptance tests - required to exit
+Scenario
+Live procedure
+PASS
+FAIL / stop
+Normal org
+Seed representative synthetic traffic and open overview.
+KPIs reconcile to backend oracle and link to matching filters.
+Dashboard values disagree with raw source or link nowhere.
+Empty org
+Open org with no traffic.
+Useful empty state/onboarding; no fake trend lines.
+Zero-data shown as operational success.
+Backend analytics failure
+Force one analytics endpoint 500/timeout.
+Only affected panel shows error/degraded with retry.
+Whole page fails or displays zero.
+Rapid period changes
+Switch 1h/24h/7d/30d rapidly and hide tab.
+Superseded requests cancelled/deduped; no stale overwrite.
+Old response wins or request storm occurs.
+
+Failure scenarios that must be handled
+Very large datasets.
+Partial analytics outage.
+Policy/version changes while page visible.
+Hidden tab or slow client.
+Exit criteria
+Dashboard answers health/action questions without module-card clutter.
+Metrics reconcile to source data.
+Demand-side request amplification bounded.
+Responsive/visual/a11y gates green.
+Evidence package
+dashboard oracle comparison
+network concurrency trace
+empty/error screenshots
+link/filter reconciliation
+Rollback / stop rule
+Keep API contracts unchanged. A visual rollback must not restore unbounded polling or known data-integrity defects.
+UI06 - Build Requests / Trace Explorer and truthful request detail
+Dependencies: UI03, T03, T07, T15.
+Why this task exists
+An industry gateway is debugged request-by-request. Operators need a fast searchable trace explorer that makes final action, detector execution, policy version, provider timing and stream outcome obvious.
+Implementation work
+Create paginated/virtualized Requests table with time, status/action, model/provider, latency, org-scoped tags, stream/non-stream and risk/finding summary.
+Implement server-backed filters and URL-addressable query state: time range, action, detector, model, provider, error, policy version and request ID.
+Redesign request detail into sections: summary, action/findings, stage timing, policy snapshot, provider/stream metadata and authorized sanitized content references.
+Distinguish executed, skipped, unavailable and degraded detectors. Do not render skipped as “passed”.
+Show T_fw_addon, provider time and release lag separately using T03 definitions. Never recompute a different frontend latency formula.
+Use bounded pagination and lazy detail fetch. Do not fetch full raw metadata for every row.
+Live Docker / staging acceptance tests - required to exit
+Scenario
+Live procedure
+PASS
+FAIL / stop
+Trace reconciliation
+Send allow/redact/block/flag fixtures through staging and open each request ID.
+UI matches provider recorder, audit and backend trace.
+Badge/timing differs from backend evidence.
+Large dataset
+Seed >=100k synthetic request records and browse/filter pages.
+Stable memory/interaction; no full-table browser materialization.
+Browser freezes or downloads unbounded dataset.
+Authorization
+Attempt cross-org request ID and raw-content reference.
+404/403 according to contract; no metadata leak.
+Foreign record or timing/details visible.
+Partial stream
+Abort SSE after content release and inspect record.
+Partial/aborted state explicit; not shown as success/block-withheld.
+Wire outcome misrepresented.
+
+Failure scenarios that must be handled
+Trace missing stage timestamps.
+Content reference expired/unavailable.
+Audit record lags live trace.
+Request retried with multiple attempt IDs.
+Exit criteria
+Request explorer is source-of-truth friendly, fast and tenant-scoped.
+No unbounded client query.
+Timing/action semantics match T03/T06/T11.
+Cross-org canary test passes.
+Evidence package
+request explorer screenshots
+100k-row browser profile
+request-ID reconciliation matrix
+authorization captures
+Rollback / stop rule
+If detail schema changes, keep a versioned adapter. Never fall back to rendering raw backend payloads directly.
+UI07 - Rebuild Policies and Guardrails as the organization-owned control center
+Dependencies: UI03, T05, T06, T10.
+Why this task exists
+The user explicitly wants full control over content-security behavior. The frontend must make that authority understandable and exact, not bury it across many cards with ambiguous global modes.
+Implementation work
+Create a Policies page with versioned drafts, published version, last editor/time, diff/preview and rollback where backend supports it.
+For each supported rule, show OFF / MONITOR / ENFORCE and the supported transport action(s). Disable unsupported combinations with an explanation rather than hiding them.
+Separate Input Guardrails and Output Guardrails. Output page must explicitly show streaming/pre-release versus strict withholding modes and their latency/behavior trade-offs.
+Use progressive disclosure: common safe settings first; advanced thresholds/model details only when the backend exposes and supports them.
+Add an “Effective execution plan” preview showing what will actually run for this org, including detector readiness and failure behavior.
+On save/publish, confirm persisted config and applied gateway policy version. Never show success solely because the control API returned 200 if runtime propagation failed.
+Live Docker / staging acceptance tests - required to exit
+Scenario
+Live procedure
+PASS
+FAIL / stop
+OFF→MONITOR→ENFORCE→OFF
+Change one synthetic injection rule through each state, publish, send same fixture each time.
+Observed runtime exactly matches selection and policy version.
+Hidden detector/action or stale runtime behavior.
+Mixed actions
+Set PII=REDACT, credentials=BLOCK, injection=FLAG and send co-matching fixtures.
+Final transport action follows central resolver; all findings visible.
+One card silently overrides unrelated rules.
+Output mode
+Switch streaming vs strict mode and run output canary.
+UI describes and wire behavior matches selected mode.
+Strict mode leaks bytes or streaming is mislabeled whole-response block.
+Propagation failure
+Interrupt policy sync after publish.
+UI reports pending/degraded/not-applied; no false “Protected”.
+Save toast claims active state while gateway runs old version.
+
+Failure scenarios that must be handled
+Unsupported action combination.
+Detector unavailable.
+Policy conflict/version race.
+User navigates away with unsaved changes.
+Two admins edit same policy version concurrently.
+Exit criteria
+Every content-control choice is understandable and backend-verifiable.
+No hidden content-security floor is presented as user-controllable.
+Runtime version visible after publish.
+Mixed-action and failure tests pass.
+Evidence package
+policy UI screenshots
+action capability matrix
+version propagation trace
+wire/provider/audit joins
+conflict handling evidence
+Rollback / stop rule
+Keep server-side enforcement authoritative. If frontend rolls back, existing published policy remains unchanged and safe.
+UI08 - Redesign Models, routing, kill-switch, MCP/RAG and simulator workflows
+Dependencies: UI03, T13, T14.
+Why this task exists
+These are operational workflows with very different risk profiles. They should not be squeezed into generic cards or technical module numbering.
+Implementation work
+Create Models & Routing page with provider/model connections, health, routing strategy, fallback, quota and per-model isolation/kill-switch controls.
+Put destructive kill-switch/isolation actions in a clear emergency-control area with confirmation, target scope and resulting effective state.
+Combine MCP and RAG into one security area with separate sub-tabs for MCP registry/sandboxes and RAG/vector connections, each showing policy/readiness scope.
+Rebuild Simulator as an explicit test workspace: scan-only and generation are separate modes, with clear cost/side-effect labels and authorized maximum concurrency.
+Reuse the Requests explorer for simulator results instead of maintaining a separate visual language for findings.
+Replace vendor-specific leftovers such as “Bedrock Test” naming with capability-based local/runtime terminology after backend migration.
+Live Docker / staging acceptance tests - required to exit
+Scenario
+Live procedure
+PASS
+FAIL / stop
+Kill-switch
+Activate one synthetic model kill-switch during live allowed traffic.
+New matching traffic denied/rerouted exactly per contract; UI state updates within freshness bound.
+Wrong model/org affected or stale green state.
+Routing/fallback
+Degrade primary synthetic provider and observe controlled fallback.
+UI shows selected route/fallback reason/attempts accurately.
+Frontend shows requested model when another served without indication.
+MCP/RAG
+Run synthetic tool call and retrieved malicious/sensitive content.
+Correct domain findings/actions and tenant scope visible.
+Tool/RAG path bypass or cross-org data.
+Simulator modes
+Run scan-only then generation with same fixture.
+Scan-only causes zero provider call; generation records provider usage.
+UI claims scan-only while provider is billed/called.
+
+Failure scenarios that must be handled
+Provider connection missing secret.
+MCP server unreachable.
+Vector store slow.
+Emergency action confirmation dismissed/retried.
+Simulator burst exceeds approved cap.
+Exit criteria
+Operational domains are clear and separate.
+Dangerous actions have scope/evidence.
+Simulator modes are truthful.
+No old provider/vendor naming misrepresents local-only architecture.
+Evidence package
+routing/fallback traces
+kill-switch timeline
+MCP/RAG request joins
+simulator provider-call proof
+destructive-action screenshots
+Rollback / stop rule
+Roll back page composition without changing live routing/policy state. Destructive-action backend APIs remain protected independently of UI.
+UI09 - Decompose monolithic frontend code and add route-level lazy loading
+Dependencies: UI03-UI08.
+Why this task exists
+The current app imports many large pages/components directly. The revamp should improve maintainability and startup cost without a framework migration.
+Implementation work
+Split each domain into route component, data/query hooks, pure presentation components and shared primitives. Avoid >15-20 KB multi-purpose files unless justified by generated/static data.
+Use React.lazy/dynamic imports for public landing, authenticated domains, heavy charts and simulator. Keep app-shell/auth bundle small.
+Move API lifecycle logic out of visual components into named hooks/services with cancellation and dedupe semantics. Keep tenant/org context explicit in every query key.
+Standardize page shells, section headers, filter bars, data tables, drawers/detail panels, status banners and empty/error states.
+Remove dead/legacy frontend components only after route/use graph and visual/E2E coverage prove they are unused.
+Create bundle analyzer output in CI and fail on accidental imports that pull authenticated analytics/chart libraries into the landing chunk.
+Live Docker / staging acceptance tests - required to exit
+Scenario
+Live procedure
+PASS
+FAIL / stop
+Cold public bundle
+Load / and inspect chunks.
+No dashboard chart/simulator bundles downloaded before interaction.
+Large authenticated bundle eagerly loaded.
+Cold app route
+Load /app/policies directly after auth.
+Only shell + policy-route dependencies load initially.
+Overview/simulator bundles load unnecessarily.
+Rapid navigation
+Navigate across routes during slow chunk/network delivery.
+Loading/error boundaries stable; no stale data flash.
+Blank screen or mixed-org old route content.
+Dead-code removal
+Run route/visual/E2E suite after deleting legacy module component.
+No import/runtime regression.
+Removal breaks hidden workflow or legacy redirect.
+
+Failure scenarios that must be handled
+Lazy chunk 404 after deploy.
+Old client references removed hashed asset.
+Query cancellation on unmount.
+Shared component API drift.
+Exit criteria
+Route code splitting measured.
+No public-to-private bundle bleed.
+Large components decomposed where useful.
+Deployment handles hashed chunk cache safely.
+Evidence package
+bundle analyzer report
+chunk waterfall
+component map
+dead-code report
+navigation stress trace
+Rollback / stop rule
+Keep one previous frontend asset set available during rollout or configure cache strategy so old HTML never references deleted chunks.
+UI10 - Accessibility, responsive behavior, theme and frontend performance hardening
+Dependencies: UI01, UI09.
+Why this task exists
+A clean design is not complete if keyboard users, narrow screens or slower machines cannot operate it. This task sets measurable product-quality gates.
+Implementation work
+Adopt WCAG 2.2 AA as the default frontend accessibility target for the redesigned routes. Add semantic landmarks, label associations, focus management, table headers and live-region announcements where needed.
+Extend responsive matrix to 375, 768, 1024, 1440 and 1920 px. Test browser zoom 200% on core control flows and long labels/data.
+Pin a Playwright version in dev dependencies for release acceptance instead of relying on an arbitrary npx cache. Add axe-core or equivalent automated a11y checks while retaining manual keyboard verification.
+Set initial performance budgets after UI00 baseline. Default target direction: landing initial JS <=200 KB gzip, app shell <=350 KB gzip, route lazy chunks bounded; any exception documented with reason. Heavy chart code must be lazy.
+Run Lighthouse/Web Vitals in a controlled production build: target LCP <=2.5 s, CLS <=0.1, INP <=200 ms on the agreed test profile; record rather than silently waive if staging topology dominates.
+Keep no-horizontal-overflow, no-secret-in-DOM, no uncaught errors and both-theme gates from the current visual harness.
+Live Docker / staging acceptance tests - required to exit
+Scenario
+Live procedure
+PASS
+FAIL / stop
+Keyboard only
+Operate login, nav, policy edit/publish, request detail, simulator and kill-switch without mouse.
+Logical focus, visible focus, no trap except intended modal.
+Unreachable control or lost focus.
+Screen/a11y scan
+Run automated a11y on every route/state plus manual landmarks/names review.
+Zero serious/critical automated issues; manual critical flows pass.
+Serious/critical issue or unlabeled destructive control.
+Responsive/zoom
+Run width matrix + 200% zoom.
+No content loss/overlap/horizontal page overflow.
+Hidden action, clipped dialog/table, inaccessible drawer.
+Performance
+Cold-load landing and selected app routes with production assets under agreed network/CPU profile.
+Budgets and CWV target met or explicitly blocked before release.
+Performance regression ignored because backend is fast.
+
+Failure scenarios that must be handled
+Very long organization/model/policy names.
+Large numbers/time zones/locales.
+Reduced motion/high contrast.
+Slow CPU/network.
+Missing icon/font asset.
+Exit criteria
+Accessibility and responsive gates green.
+Performance budgets signed and passing.
+Theme parity stable.
+No leak/console/overflow regressions.
+Evidence package
+axe report
+keyboard checklist/video
+visual matrix
+Lighthouse/Web Vitals report
+bundle budget report
+Rollback / stop rule
+If a visual feature breaks a11y/performance gates, remove or simplify that feature; do not weaken the gate to preserve decoration.
+UI11 - Extend the visual and behavior regression harness for the redesigned product
+Dependencies: UI02-UI10, T02.
+Why this task exists
+The repository already has a valuable real-browser visual harness. The redesign should evolve it into a deterministic release gate rather than replace it with brittle pixel snapshots or mocked stories.
+Implementation work
+Update surfaces.json for every public/protected redesigned route and required states. Keep both themes and the existing width matrix; add 1920 if practical.
+Pin Playwright/Chromium versions in the release test image. Keep screenshot artifacts for human review but gate on semantic/behavior constraints rather than pixel-perfect equality.
+Add axe checks, keyboard smoke, route/deep-link validation, organization context, no-leak DOM scan, console/page errors, main overflow and chart/render presence.
+Add state fixtures through real APIs: normal, empty, loading, 400/401/403/429/503, policy pending, guard unavailable, provider degraded and partial stream.
+Run against the baked production frontend and real Docker control/gateway services; do not mock route responses for acceptance.
+Publish a single report that links screenshot, route, theme, width, API state and failure reason.
+Live Docker / staging acceptance tests - required to exit
+Scenario
+Live procedure
+PASS
+FAIL / stop
+Full matrix
+Run all routes x themes x widths against stable staging dataset.
+Zero gated regressions; screenshots produced.
+Any missing main, overflow, leak, console/page error or a11y critical.
+Error-state matrix
+Inject supported API failures via staging fault controls.
+Each page shows correct scoped recovery/error state.
+Generic green/zero fallback or whole-app crash.
+Auth expiry
+Expire token during app use.
+Safe re-auth flow; intended route preserved; no infinite request storm.
+Silent failures or protected content remains accessible.
+Chunk deploy
+Deploy new frontend while old tab remains open, then navigate to lazy route.
+Graceful reload/recovery on missing old chunk.
+White screen / unhandled chunk-load error.
+
+Failure scenarios that must be handled
+Staging DB pressure causes auth flake.
+Network resource failure.
+Theme persistence corruption.
+Old localStorage keys conflict with redesign.
+Exit criteria
+Regression harness covers all release routes/states.
+Pinned reproducible browser environment.
+No mocks in acceptance path.
+Reports actionable and linked to route/state evidence.
+Evidence package
+updated surfaces.json
+Playwright image manifest
+regression report
+screenshots
+fault-state matrix
+Rollback / stop rule
+Keep the previous harness until the new one passes the same old surfaces. Never delete regression coverage before equivalent new coverage exists.
+UI12 - Run production-bundle Docker/staging E2E against the real backend under load
+Dependencies: UI11, T18-T21.
+Why this task exists
+This is the frontend release gate. The redesigned console must prove real user control, correctness and stability while the gateway is doing meaningful work.
+Implementation work
+Build the exact production frontend image from the candidate commit and serve it through the staging nginx/LB chain against the candidate control/gateway/local-guard stack.
+Create two synthetic organizations with opposite policy/routing states and representative seeded traffic. Use real APIs and controlled provider recorder - no response mocks.
+Run browser flows for login, org switch, overview, request detail, policy OFF/MONITOR/ENFORCE, mixed actions, output mode, model/routing, kill-switch, MCP/RAG and simulator.
+Run backend controlled load at the current qualified serving-unit/fleet plateau while Playwright executes a small but realistic operator flow. Measure whether dashboard/API demand moves gateway p99 or control memory materially.
+Inject guard unavailable, policy propagation delay, analytics failure, provider failure, 429/503 overload and partial SSE while operators are using the UI.
+Reconcile every security-affecting UI action to persisted API config, applied policy version, provider recorder, request trace/audit and visible result.
+Live Docker / staging acceptance tests - required to exit
+Scenario
+Live procedure
+PASS
+FAIL / stop
+User authority
+For each supported content control run OFF→MONITOR→ENFORCE→OFF from UI, then same fixture.
+Actual detector/action/provider behavior follows UI selection exactly.
+Saved UI state differs from runtime.
+Cross-tenant
+Operate org A/B in separate browser contexts under concurrent traffic.
+No policy/data/request-ID bleed.
+Any foreign state/content appears.
+Load coexistence
+Run dashboard/request explorer/policy publish while backend load is active.
+Frontend/control activity stays within signed impact bound; gateway p99 remains qualified.
+UI polling/queries materially destabilize gateway.
+Degraded truth
+Inject guard/policy/provider/control failures.
+UI shows exact unavailable/degraded/pending state and recovery.
+Green/protected/allow displayed for unknown execution.
+Long session
+Operate for >=60 min with route/filter changes and hidden-tab periods.
+No monotonic memory/request growth; session/auth behavior correct.
+Leak, runaway polling or repeated stale data.
+
+Failure scenarios that must be handled
+Browser refresh during policy publish.
+Two admins edit concurrently.
+Gateway replica restart.
+Control worker recycle.
+Network drop during save.
+Stale service worker/browser cache if introduced.
+Exit criteria
+All critical operator journeys pass on production bundle/live backend.
+Frontend user-control evidence matches backend/provider/audit.
+No tenant leak or misleading degraded state.
+UI activity does not invalidate gateway performance envelope.
+Evidence package
+Playwright traces/screenshots
+sanitized HAR/network records
+policy-version timeline
+provider/audit joins
+load coexistence metrics
+browser memory/network profile
+Rollback / stop rule
+Frontend may roll back independently only when backend schema remains compatible. Never disable enforcement or revert tenant-isolation behavior because the new UI fails.
+UI13 - Canary the redesign and retire legacy UI/routes safely
+Dependencies: UI12, T22.
+Why this task exists
+A full visual rewrite should not be a one-shot cutover. Canary data is needed for hidden workflows, browser differences and operator adoption before removing compatibility paths.
+Implementation work
+Release the redesigned frontend behind a server-side or deployment-level cohort flag to internal/staging users first, then approved production cohorts.
+Track route errors, chunk-load failures, API error distribution, navigation dead ends, policy-save failures and old-route usage. Do not collect sensitive content for UX telemetry.
+Keep backend APIs and security semantics unchanged during the visual canary. Functional changes require their own task/gate.
+Advance 5%→25%→50%→100% only when live errors/critical workflows and support feedback meet the signed thresholds.
+Keep old frontend asset tuple and route compatibility available for immediate rollback during canary.
+After sustained 100% success, retire legacy ?tab renderer and dead components only after usage proves redirect paths are sufficient.
+Live Docker / staging acceptance tests - required to exit
+Scenario
+Live procedure
+PASS
+FAIL / stop
+Canary rollback
+Force a frontend-only defect in isolated canary and roll back asset/image.
+Backend state preserved; old UI remains compatible.
+Rollback requires policy/backend downgrade.
+Legacy bookmark
+Use stored old ?tab URL after 100% new UI rollout.
+Redirects correctly with telemetry.
+Broken bookmark/404.
+Browser mix
+Smoke supported Chrome/Firefox/WebKit or declared browser matrix.
+Critical flows pass in supported set.
+Unsupported behavior not documented or critical browser failure.
+100% observation
+Observe full rollout for signed period with support/error metrics.
+No unresolved critical UX/security truth defect.
+High save/route/chunk error or operator cannot complete critical workflow.
+
+Failure scenarios that must be handled
+Old/new asset cache mismatch.
+Frontend schema drift during backend deploy.
+Feature flag cohort changes mid-session.
+Legacy route still externally documented.
+Exit criteria
+100% redesigned UI stable for signed observation window.
+Legacy route usage low/understood.
+Rollback rehearsed.
+Old components removed only after evidence.
+Evidence package
+canary cohort report
+error/route telemetry
+rollback proof
+browser matrix
+legacy usage report
+final removal diff
+Rollback / stop rule
+Rollback the frontend image/cohort only. Keep backend policy/security state intact. Compatibility redirect stays until separately approved for removal.
+9.6 Cross-browser / responsive / live-state qualification matrix
+Dimension
+Required matrix
+Browsers
+Pinned Chromium for release gate; smoke current Firefox + WebKit/Safari-equivalent where supported by CI. Declare supported browser versions.
+Viewport
+375, 768, 1024, 1440, 1920 px; 200% zoom on critical forms and tables.
+Themes
+Light + dark if both remain supported. Theme switch must preserve semantic state and not reload/reset policy forms.
+Auth
+Logged out, normal org user, org admin, platform admin/superuser where product supports; expired token; revoked session.
+Org state
+Empty org, populated org, two opposite-policy orgs, policy-not-ready, pending publish, stale version.
+Gateway state
+Healthy, overloaded 429/503, local guard unavailable, provider degraded, kill-switch active, partial SSE, audit lag.
+Data size
+0 rows, normal, >=100k synthetic request records for explorer, long names/labels, many models/connectors.
+Network
+Normal, slow/high-latency, interrupted save, client offline/reconnect, missing lazy chunk after deploy.
+
+9.7 Frontend release exit gate
+Frontend release PASS only when all conditions are true
+Public landing is clean and factual; authenticated IA is task-oriented; organization controls are byte/runtime-verifiable; no cross-tenant state appears; visual/a11y/performance gates pass; production-bundle Playwright flows pass against live staging; degraded states remain truthful; frontend analytics/polling do not materially disturb the qualified gateway; legacy route rollback is proven.
+
+Do not declare the redesign done from screenshots or a dev-server demo.
+Do not ship invented performance/customer metrics on the landing page before T23 evidence exists.
+Do not change security semantics to make controls visually simpler; UI must represent the real resolver/action contract.
+Do not let marketing/landing assets pull charting, auth or tenant data into the public initial bundle.
+Do not use frontend-only state as the source of truth for policy, kill-switch, routing or guard readiness.
+T22 and T23 cannot pass until UI12 passes on the same candidate frontend/backend contract.
+9.8 Frontend source/reference basis
+Repository reviewed: AnshSinghal-CyberUltron/AI_Mesh_Firewall, branch ansh, commit e95f974dc500414b8f4db28038977fa9bf7deb44 (re-pin at T00 before implementation).
+Current frontend stack observed: React 19, Vite 7, Tailwind CSS 4, Motion, Lucide, ECharts/uPlot, existing UI primitives and visual regression harness.
+Current route behavior observed in App.jsx: protected / dashboard with ?tab= switching; public /login and /oauth/callback; no dedicated public landing route.
+Current visual regression harness already audits 12 surfaces across light/dark and 1440/1024/768/375 widths for overflow, leaks, JS errors and chart regressions. Extend rather than discard it.
+External design inspiration reviewed 16 September 2026: TrueFoundry public homepage, AI Gateway page and Product Tour. Use only high-level patterns such as module clarity, code-first onboarding, whitespace and progressive disclosure; retain original ZeroShield branding/copy.

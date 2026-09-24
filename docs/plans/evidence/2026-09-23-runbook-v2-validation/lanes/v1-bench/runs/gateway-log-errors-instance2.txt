@@ -1,0 +1,11 @@
+N-r1           ERROR=0      WARNING=0      CRITICAL=0   
+N-r10          ERROR=0      WARNING=0      CRITICAL=0   
+N-r25          ERROR=0      WARNING=0      CRITICAL=0   
+ITL10-sse-r10  ERROR=0      WARNING=0      CRITICAL=0   
+ITL20-sse-r10  ERROR=0      WARNING=0      CRITICAL=0   
+ITL30-sse-r10  ERROR=0      WARNING=0      CRITICAL=0   
+N-r50          ERROR=2021   WARNING=58     CRITICAL=0       995 [ERROR] gateway.model_state: Model state Redis check failed (fail-CLOSED): Too many connections;    952 [ERROR] gateway.kill_switch: Kill-switch Redis check failed (fail-CLOSED): Too many connections;     74 [ERROR] gateway.circuit_breaker: Circuit breaker check failed (fail-CLOSED): Too many connections;
+OVL-r100       ERROR=32404  WARNING=1845   CRITICAL=0     16371 [ERROR] gateway.model_state: Model state Redis check failed (fail-CLOSED): Too many connections;  14619 [ERROR] gateway.kill_switch: Kill-switch Redis check failed (fail-CLOSED): Too many connections;   1845 [WARNING] gateway: B1: excluded isolated/kill-switched models from routing candidates: ['synth-1'] (;
+JSON-r10       ERROR=0      WARNING=0      CRITICAL=0   
+GO-r10         ERROR=0      WARNING=0      CRITICAL=0   
+FWOFF-r10      ERROR=0      WARNING=0      CRITICAL=0   

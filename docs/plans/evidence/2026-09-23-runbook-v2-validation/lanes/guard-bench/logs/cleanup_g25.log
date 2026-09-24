@@ -1,0 +1,3 @@
+Deleted [https://www.googleapis.com/compute/v1/projects/ai-mesh-firewall/zones/asia-south1-c/instances/rv-guard-g2-5].
+[{"name": "rv-guard-g2-5", "zone": "asia-south1-c", "machine_type": "g2-standard-8", "lane": "guard", "create_utc": "2026-09-23T07:00:33Z", "delete_utc": "2026-09-23T09:27:09Z", "note": "gpu"}]
+G25_CLEANED

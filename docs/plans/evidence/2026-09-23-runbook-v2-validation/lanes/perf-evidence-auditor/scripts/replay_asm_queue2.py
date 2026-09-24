@@ -1,0 +1,47 @@
+import random, heapq
+random.seed(23)
+BERT_L4 = {1:2.092, 2:3.139, 4:5.739, 8:11.38, 16:23.02, 32:50.63}
+K = 3.00/2.092
+def L_win(w):
+    ks=sorted(BERT_L4)
+    if w in BERT_L4: return K*BERT_L4[w]
+    lo=max(k for k in ks if k<=w); hi=min([k for k in ks if k>=w], default=32)
+    if lo==hi: return K*BERT_L4[lo]
+    f=(w-lo)/(hi-lo); return K*(BERT_L4[lo]+f*(BERT_L4[hi]-BERT_L4[lo]))
+
+def sim_c(lam_rps, c=1, win_per_req=2, max_win_batch=8, n=300000, warm=30000):
+    """c GPU workers sharing ONE queue (Triton instance_group count=c on one node)."""
+    maxb=max(1,max_win_batch//win_per_req)
+    t=0.0; arr=[]
+    for _ in range(n):
+        t+=random.expovariate(lam_rps/1000.0); arr.append(t)
+    free=[0.0]*c; q=[]; i=0; soj=[]
+    ev=[]  # (time, worker) heap of free times
+    for w in range(c): heapq.heappush(ev,(0.0,w))
+    while i<len(arr) or q:
+        ft,w=heapq.heappop(ev)
+        # admit arrivals up to ft
+        while i<len(arr) and arr[i]<=ft and len(q)<maxb: q.append(arr[i]); i+=1
+        if not q:
+            if i>=len(arr): heapq.heappush(ev,(float('inf'),w)); 
+            if i>=len(arr):
+                if all(x[0]==float('inf') for x in ev): break
+                continue
+            ft=max(ft,arr[i]); q.append(arr[i]); i+=1
+            while i<len(arr) and arr[i]<=ft and len(q)<maxb: q.append(arr[i]); i+=1
+        b=len(q); dur=L_win(b*win_per_req); done=ft+dur
+        for a in q: soj.append(done-a)
+        q=[]; heapq.heappush(ev,(done,w))
+    soj=soj[warm:]; soj.sort()
+    return soj[len(soj)//2], soj[int(len(soj)*0.95)], soj[int(len(soj)*0.99)]
+
+CPU50, CPU99 = 1.6, 3.5
+print("Effect of POOLING GPUs behind one queue, and of the max-batch cap. 8 L4 total.")
+print("fleetRPS | layout                         | maxWinBatch | GPU p50 | GPU p95 | GPU p99 | tax p50 | tax p99")
+for fleet in (400, 800, 1064, 1400):
+    for c,nodes,label in ((1,8,"8 x g2-standard-4  (1 L4/node)"),(2,4,"4 x g2-standard-24 (2 L4/node)"),(4,2,"2 x g2-standard-48 (4 L4/node)")):
+        for mb in (4,8):
+            lam=fleet/nodes
+            p50,p95,p99=sim_c(lam,c=c,max_win_batch=mb)
+            print(f"{fleet:8d} | {label:30s} | {mb:11d} | {p50:7.2f} | {p95:7.2f} | {p99:7.2f} | {p50+CPU50:7.2f} | {p99+CPU99:7.2f}")
+    print()

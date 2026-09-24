@@ -1,0 +1,80 @@
+{
+ "build_sha": "5af9594a2631",
+ "bytes_out": 18557767,
+ "chunks": 60742,
+ "client_gone": 0,
+ "cpu": {
+  "busy_max": 17.69830482132606,
+  "busy_mean": 3.6917913855885662,
+  "proc_max": 2.875045856981419,
+  "samples": 401
+ },
+ "faults": 0,
+ "gc_config": "gc=off memlimit=17.62GiB",
+ "host": {
+  "hostname": "rv-v1-prov-1.asia-south1-c.c.ai-mesh-firewall.internal",
+  "num_cpu": 8,
+  "gomaxprocs": 8,
+  "go_version": "go1.27.1",
+  "harness_build_sha": "5af9594a2631",
+  "kernel": "Linux version 7.0.0-1011-gcp (buildd@lcy02-amd64-099) (x86_64-linux-gnu-gcc-13 (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0, GNU ld (GNU Binutils for Ubuntu) 2.42) #11~24.04.1-Ubuntu SMP PREEMPT Tue Aug 11 20:14:48 UTC 2026",
+  "mem_total_kb": 30792984,
+  "lscpu": {
+   "CPU(s)": "8",
+   "Core(s) per socket": "4",
+   "Flags": "aes avx2 avx512f sha_ni amx_tile",
+   "Hypervisor vendor": "KVM",
+   "Model name": "INTEL(R) XEON(R) PLATINUM 8581C CPU @ 2.30GHz",
+   "NUMA node(s)": "1",
+   "Socket(s)": "1",
+   "Thread(s) per core": "2"
+  },
+  "gce": {
+   "image": "projects/ubuntu-os-cloud/global/images/ubuntu-2404-noble-amd64-v20260918",
+   "machine-type": "c4-standard-8",
+   "name": "rv-v1-prov-1",
+   "zone": "asia-south1-c"
+  },
+  "sysctl": {
+   "fs/file-max": "4194304",
+   "net/core/netdev_max_backlog": "250000",
+   "net/core/somaxconn": "65535",
+   "net/ipv4/ip_local_port_range": "1024\t65535",
+   "net/ipv4/tcp_max_syn_backlog": "65535",
+   "net/ipv4/tcp_tw_reuse": "1"
+  },
+  "nofile_limit": "1048576/1048576",
+  "start_utc": "2026-09-23T10:27:53.48294354Z"
+ },
+ "inflight": 0,
+ "itl_ms": 20,
+ "record_queue_blocked": 0,
+ "records": 375,
+ "requests": 375,
+ "runtime": {
+  "/gc/cycles/total:gc-cycles": 0,
+  "/gc/heap/goal:bytes": 18339749806,
+  "/gc/pauses:seconds": {
+   "count": 0
+  },
+  "/sched/goroutines:goroutines": 11,
+  "/sched/latencies:seconds": {
+   "count": 510108,
+   "max_ms": 0.16384,
+   "p50_ms": 0.00006400000000000001,
+   "p9999_ms": 0.06553600000000001,
+   "p999_ms": 0.00256,
+   "p99_ms": 0.0010240000000000002
+  }
+ },
+ "sample_mod": 10,
+ "sampled": 40,
+ "sched_err_max_ns": 255195,
+ "status_2xx": 375,
+ "status_4xx": 0,
+ "status_5xx": 0,
+ "streams_active": 0,
+ "ttft_ms": 150,
+ "uptime_s": 401.703266262,
+ "write_max_ns": 55501
+}

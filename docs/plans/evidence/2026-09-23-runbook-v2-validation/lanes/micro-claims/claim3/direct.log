@@ -1,0 +1,7 @@
+/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/micro-claims/claim3/c3_step.sh: line 35: wait: pid 1734523 is not a child of this shell
+c3_direct_r400: ok=120000/120000 err={} drops=0 p50=123.0 p99=146.3 p99.9=241.2 us | edge ActiveOpens/req=0.0001 up PassiveOpens/req=0.0 | TW edge=0 up=0 | cores edge=0.014 up=0.047 | PASS=True
+/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/micro-claims/claim3/c3_step.sh: line 35: wait: pid 1746524 is not a child of this shell
+c3_direct_r5000: ok=1500000/1500000 err={} drops=0 p50=111.3 p99=134.7 p99.9=303.8 us | edge ActiveOpens/req=0.0 up PassiveOpens/req=0.0 | TW edge=0 up=0 | cores edge=0.008 up=0.327 | PASS=True
+/tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/micro-claims/claim3/c3_step.sh: line 35: wait: pid 1758609 is not a child of this shell
+c3_direct_r20000: ok=6000000/6000000 err={} drops=98 p50=122.8 p99=212.2 p99.9=305.0 us | edge ActiveOpens/req=0.0 up PassiveOpens/req=0.0 | TW edge=2 up=1 | cores edge=0.012 up=1.429 | PASS=False
+DIRECT DONE 2026-09-23T09:52:33Z

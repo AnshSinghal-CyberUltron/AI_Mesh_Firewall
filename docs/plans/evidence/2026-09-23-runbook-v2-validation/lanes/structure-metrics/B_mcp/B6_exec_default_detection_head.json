@@ -1,0 +1,25 @@
+{
+ "label": "HEAD",
+ "orchestrator_file": "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/mcp_scan_orchestrator.py",
+ "config_file": "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/config.py",
+ "env_GATEWAY_MCP_DEFAULT_DETECTION": null,
+ "env_keys_present": [
+  "HOME",
+  "LC_CTYPE",
+  "PATH",
+  "PYTHONPATH"
+ ],
+ "1_no_main_module_clean_env": false,
+ "load_config_has_key": false,
+ "load_config_n_keys": 75,
+ "2_main.CONFIG=load_config()_clean_env": false,
+ "3_main.CONFIG={}_clean_env": false,
+ "4_env='1'_CONFIG={}": true,
+ "4_env='true'_CONFIG={}": true,
+ "4_env='on'_CONFIG={}": true,
+ "4_env='0'_CONFIG={}": false,
+ "4_env='false'_CONFIG={}": false,
+ "4_env=''_CONFIG={}": false,
+ "5_CONFIG_key=True": true,
+ "5b_CONFIG_key=False_env=1": false
+}

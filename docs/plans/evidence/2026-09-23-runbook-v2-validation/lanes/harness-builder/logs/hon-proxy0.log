@@ -1,0 +1,26 @@
+2026/09/23 14:20:47 rvproxy 5af9594a2631 :9000 -> http://10.160.0.42:8080 pre-delay=0s hold-at=0 hold=30ms
+2026/09/23 14:20:48 synthprov 5af9594a2631 listening on :8080 (ttft=150ms itl=20ms sample-mod=1 hb=100µs gomaxprocs=8 gc=off memlimit=9.37GiB)
+14:20:49 olg started on rv-harness-lg-1 (rate 300.0 each, start-at 1790173269054)
+[rv-harness-lg-1] 2026/09/23 14:23:17 done: scheduled=34500 recorded=34500 ok=34500 errors=map[] drops=0 late_p99=109us max=682us cpu_busy_max=18.5%
+2026/09/23 14:23:22 final stats: requests=34500 records=34500 blocked=0
+172381567 records.jsonl
+2234 stats.json
+2026/09/23 14:23:23 rvproxy done: 34500 requests
+[rv-harness-proxy-1] compressed size 848K
+[rv-harness-prov-1] compressed size 60M
+[rv-harness-lg-1] compressed size 62M
+14:23:24 collected hon-proxy0 from rv-harness-lg-1 rv-harness-prov-1 rv-harness-proxy-1 into /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/evidence/harness-builder/runs/hon-proxy0
+# Harness analysis (sut, policy=none) — PASS
+
+| check | result |
+|---|---|
+| p99_T_fw_addon_lt_slo | PASS |
+| error_rate_le_budget | PASS |
+| zero_schedule_drops | PASS |
+| zero_safety_failures | PASS |
+| run_valid | PASS |
+| qualified_nonempty | PASS |
+
+- offered: 27000 over 90 s = 300.0 req/s (configured 300.0)
+- qualified: 27000 (300.0 req/s); expected blocks: 0; errors: 0 (rate 0.0)
+- error reasons: {}

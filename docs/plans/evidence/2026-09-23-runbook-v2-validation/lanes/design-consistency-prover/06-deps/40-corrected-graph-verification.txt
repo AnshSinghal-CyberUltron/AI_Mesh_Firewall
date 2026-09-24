@@ -1,0 +1,42 @@
+corrected graph cycles: none
+  GW01 L2383 needs ['T02'] -> OK 
+  GW02 L2412 needs ['T02'] -> OK 
+  GW02 L2423 needs ['T04'] -> OK 
+  GW03 L2459 needs ['GW06', 'GW11', 'GW12'] -> OK (relocated GW03->GW19)
+  GW04 L2494 needs ['GW05', 'GW08', 'GW11'] -> OK (relocated GW04->GW15)
+  GW04 L2496 needs ['GW14'] -> OK (relocated GW04->GW15)
+  GW05 L2532 needs ['GW07', 'GW13', 'GW15', 'GW16', 'GW17', 'GW18'] -> OK (relocated GW05->GW20)
+  GW05 L2536 needs ['UI07'] -> OK (relocated GW05->UI07)
+  GW06 L2572 needs ['GW05'] -> OK 
+  GW07 L2608 needs ['GW10', 'GW11', 'GW14'] -> OK (relocated GW07->GW15)
+  GW07 L2611 needs ['GW10', 'GW13'] -> OK (relocated GW07->GW15)
+  GW08 L2648 needs ['GW09', 'GW10'] -> OK (relocated GW08->GW15)
+  GW08 L2653 needs ['GW19'] -> OK (relocated GW08->GW19)
+  GW09 L2680 needs ['GW02', 'T04'] -> OK 
+  GW09 L2687 needs ['GW11', 'GW12', 'GW14', 'T02'] -> OK (relocated GW09->GW15)
+  GW10 L2725 needs ['T04'] -> OK 
+  GW10 L2727 needs ['T04'] -> OK 
+  GW11 L2764 needs ['GW09', 'T02'] -> OK (relocated GW11->GW15)
+  GW11 L2765 needs ['GW08'] -> OK 
+  GW11 L2758 needs ['GW03'] -> OK 
+  GW08 L2644 needs ['GW03'] -> OK 
+  GW12 L2803 needs ['GW08'] -> OK 
+  GW12 L2807 needs ['GW01', 'GW15'] -> OK (relocated GW12->GW15)
+  GW12 L2808 needs ['GW13', 'GW09', 'GW10'] -> OK (relocated GW12->GW13)
+  GW13 L2843 needs ['GW10'] -> OK 
+  GW13 L2845 needs ['GW14'] -> OK (relocated GW13->GW20)
+  GW13 L2846 needs ['GW09'] -> OK 
+  GW14 L2880 needs ['T02'] -> OK 
+  GW14 L2881 needs ['GW06', 'GW08', 'GW13'] -> OK 
+  GW15 L2912 needs ['GW06'] -> OK 
+  GW15 L2920 needs ['GW09', 'GW10'] -> OK 
+  GW15 L2923 needs ['GW02'] -> OK 
+  GW19 L3070 needs ['GW20'] -> OK (relocated GW19->GW20)
+  GW19 L3074 needs ['GW08'] -> OK 
+  GW23 L3360 needs ['T23'] -> OK 
+  GW24 L1169 needs ['T24'] -> OK 
+unsatisfied: none
+lanes converge at GW15: True
+GW16-18 rejoin at GW20 (not GW19): True | at GW19: False
+GW23 gated on T20/T21/T22/T23/UI12: {'T20': True, 'T21': True, 'T22': True, 'T23': True, 'UI12': True}
+longest GW chain to GW24: declared 14 | corrected 16

@@ -1,0 +1,53 @@
+{
+ "modules_importing_enforcement": [
+  "main.py",
+  "secure_streaming.py"
+ ],
+ "mcp_modules_importing_enforcement": [],
+ "enf.normalize_action('tag')": "tag",
+ "enf.action_rank('tag')": 0,
+ "enf.action_rank('allow')": 0,
+ "enf.action_rank('monitor')": 1,
+ "orch._is_observe_only_posture('tag')": true,
+ "orch._resolve_tier_action({'action':'inherit'}, 'tag')": "tag",
+ "enf.resolve_enforcement('flag', enforcement_mode='block')": "flag",
+ "enf.resolve_enforcement('redact', enforcement_mode='block')": "redact",
+ "verdict=flag posture=block": {
+  "mcp_orchestrator(legacy, policy_only=False)": "block",
+  "enforcement.resolve_enforcement": "flag"
+ },
+ "verdict=flag posture=redact": {
+  "mcp_orchestrator(legacy, policy_only=False)": "allow+finding(flag)",
+  "enforcement.resolve_enforcement": "flag"
+ },
+ "verdict=flag posture=monitor": {
+  "mcp_orchestrator(legacy, policy_only=False)": "allow+finding(flag)",
+  "enforcement.resolve_enforcement": "flag"
+ },
+ "verdict=redact posture=block": {
+  "mcp_orchestrator(legacy, policy_only=False)": "block",
+  "enforcement.resolve_enforcement": "redact"
+ },
+ "verdict=redact posture=redact": {
+  "mcp_orchestrator(legacy, policy_only=False)": "redact",
+  "enforcement.resolve_enforcement": "redact"
+ },
+ "verdict=redact posture=monitor": {
+  "mcp_orchestrator(legacy, policy_only=False)": "allow+finding(flag)",
+  "enforcement.resolve_enforcement": "redact"
+ },
+ "verdict=block posture=block": {
+  "mcp_orchestrator(legacy, policy_only=False)": "block",
+  "enforcement.resolve_enforcement": "block"
+ },
+ "verdict=block posture=redact": {
+  "mcp_orchestrator(legacy, policy_only=False)": "redact",
+  "enforcement.resolve_enforcement": "monitor"
+ },
+ "verdict=block posture=monitor": {
+  "mcp_orchestrator(legacy, policy_only=False)": "allow+finding(flag)",
+  "enforcement.resolve_enforcement": "monitor"
+ },
+ "orch._resolve_mcp_tier2_enabled is config_sync.resolve_mcp_tier2_enabled": false,
+ "cs.resolve_mcp_tier2_enabled.__code__ == cs.resolve_tier2_enabled.__code__ (bytecode)": true
+}

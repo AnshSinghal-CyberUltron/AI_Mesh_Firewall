@@ -1,0 +1,17 @@
+field carrying the AWS key                 | disposition | deciding rules | dispatched bytes | segments scanned
+control: user content                      | BLOCK       | A.secret.in    | none (403) | 1
+control: system content                    | BLOCK       | A.secret.in    | none (403) | 2
+control: tool_calls[].arguments            | BLOCK       | A.secret.in    | none (403) | 3
+assistant function_call.arguments (legacy) | ALLOW       | -              | KEY IN DISPATCHED BYTES | 2
+messages[].name                            | ALLOW       | -              | KEY IN DISPATCHED BYTES | 1
+assistant refusal field                    | ALLOW       | -              | KEY IN DISPATCHED BYTES | 3
+assistant content part type=refusal        | ALLOW       | -              | KEY IN DISPATCHED BYTES | 2
+tools[].function.description               | ALLOW       | -              | KEY IN DISPATCHED BYTES | 1
+tools[].function.parameters (enum/default) | ALLOW       | -              | KEY IN DISPATCHED BYTES | 1
+prediction.content (predicted outputs)     | ALLOW       | -              | KEY IN DISPATCHED BYTES | 1
+response_format.json_schema                | ALLOW       | -              | KEY IN DISPATCHED BYTES | 1
+user field                                 | ALLOW       | -              | KEY IN DISPATCHED BYTES | 1
+metadata values                            | ALLOW       | -              | KEY IN DISPATCHED BYTES | 1
+stop sequences                             | ALLOW       | -              | KEY IN DISPATCHED BYTES | 1
+web_search_options.user_location           | ALLOW       | -              | KEY IN DISPATCHED BYTES | 1
+duplicate JSON key (orjson keeps last)     | ALLOW       | -              | KEY IN DISPATCHED BYTES | 1

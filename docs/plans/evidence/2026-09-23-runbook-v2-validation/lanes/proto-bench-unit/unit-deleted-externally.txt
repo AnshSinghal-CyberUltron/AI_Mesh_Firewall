@@ -1,0 +1,12 @@
+# rv-proto-unit-1 deletion (not performed by proto-bench-unit), recorded 2026-09-23T20:28:43Z
+# last successful ssh by this lane: 2026-09-23T20:16:23Z (rvproto stopped, GPU 0 MiB, tree identical to lane start; see unit-final-state-phase2.txt)
+# 20:27Z li_deploy.sh apply for li-p-200: 'scp: Connection closed'; ssh to 10.160.0.46: connection timed out
+$ gcloud compute operations list --filter='targetLink~rv-proto-unit-1'
+TYPE    STATUS  TIMESTAMP                      END_TIME                       USER
+delete  DONE    2026-09-23T13:22:24.445-07:00  2026-09-23T13:23:13.781-07:00  24342156045-compute@developer.gserviceaccount.com
+insert  DONE    2026-09-22T23:34:36.999-07:00  2026-09-22T23:34:45.167-07:00  24342156045-compute@developer.gserviceaccount.com
+$ gcloud compute instances describe rv-proto-unit-1
+ERROR: (gcloud.compute.instances.describe) Could not fetch resource:
+ - The resource 'projects/ai-mesh-firewall/zones/asia-south1-c/instances/rv-proto-unit-1' was not found
+
+2026-09-23T20:23:13Z rv-proto-unit-1 was deleted by the CONTROLLER (team-lead session, shared compute service account) after the lane's 20:17Z final report; the lane's li-p-200 Poisson run therefore did not execute. — controller note

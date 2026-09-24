@@ -1,0 +1,3 @@
+scrape_s=
+  50183 3045864 /tmp/rvedge-metrics.txt
+plan_version_info series: 50003

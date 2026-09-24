@@ -1,0 +1,20 @@
+19:22:59 uz4-700: olg started on rv-pbf-lg-1 rv-pbf-lg-2 rv-pbf-lg-3 (rate 233.33333333333334 each, start-at 1790191402605, mode sut, targets http://10.146.0.10:8080)
+[rv-pbf-lg-1] 2026/09/23 19:30:00 done: scheduled=87500 recorded=87500 ok=86064 errors=map[http_403:1436] drops=0 late_p99=114us max=1390us cpu_busy_max=16.3%
+[rv-pbf-lg-2] 2026/09/23 19:30:00 done: scheduled=87500 recorded=87500 ok=85977 errors=map[http_403:1523] drops=0 late_p99=112us max=247us cpu_busy_max=16.1%
+[rv-pbf-lg-3] 2026/09/23 19:30:00 done: scheduled=87500 recorded=87500 ok=85975 errors=map[http_403:1525] drops=0 late_p99=115us max=318us cpu_busy_max=16.2%
+# uz4-700: strict FAIL | load-knee FAIL (sut, units=4, rate=700)
+
+checks: {'p99_T_fw_addon_lt_slo': False, 'infra_error_rate_le_budget': True, 'zero_schedule_drops': True, 'zero_safety_failures': True, 'run_valid': True}
+load-knee checks: {'p99_T_fw_addon_nohold_lt_slo': False, 'infra_error_rate_le_budget': True, 'zero_schedule_drops': True, 'zero_safety_failures': True, 'run_valid': True}
+offered 210000 (700.0/s) qualified 206405 (688.02/s) FP-blocks 3589 (0.01709) infra 6 (2.857142857142857e-05) drops 0 safety 0
+infra reasons: {'block_on_unavailable_sem': 6}
+infra detail: {'403 http_403 type=policy_violation code=blocked_by_policy': 6}
+
+T_fw_addon: n=206405 p50=48.2641 p90=55.7897 p99=72.921 p99.9=83.1772 max=122.4162 mean=39.3711
+T_fw_addon_nohold: n=206405 p50=11.3059 p90=15.0571 p99=20.4946 p99.9=26.8826 max=56.8192 mean=11.1255
+T_fw_addon_sse: n=144530 p50=51.2586 p90=57.6487 p99=73.8367 p99.9=87.0671 max=122.4162 mean=51.434
+T_fw_addon_json: n=61875 p50=11.3729 p90=15.1252 p99=20.5223 p99.9=27.0706 max=53.6525 mean=11.1941
+T_addon_first_sse: n=144530 p50=11.223 p90=15.3313 p99=30.3697 p99.9=37.4006 max=59.8636 mean=11.3378
+T_addon_total_sse: n=144530 p50=11.2795 p90=15.0247 p99=20.4822 p99.9=26.8417 max=56.8192 mean=11.0961
+T_addon_total_json: n=61875 p50=11.3729 p90=15.1252 p99=20.5223 p99.9=27.0706 max=53.6525 mean=11.1941
+T_release_lag_max: n=144530 p50=51.2586 p90=57.6487 p99=73.8367 p99.9=87.0671 max=122.4162 mean=51.434

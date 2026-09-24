@@ -1,0 +1,69 @@
+{
+ "run": "L1-r30",
+ "events": 8939,
+ "by_kind": {
+  "consistent|stream_complete": 5394,
+  "consistent|request": 3376,
+  "MISMATCH_corr_vs_content|stream_complete": 169
+ },
+ "client_corr_with_multiple_events": 89,
+ "extra_events_same_corr": 89,
+ "nonces_with_multiple_events": 0,
+ "examples": [
+  {
+   "event_id": 93754,
+   "et": "stream_complete",
+   "client_corr": "5f10064d-5ea7-4160-bc56-7d0153410967",
+   "corr_client_nonce": "(ref-cottage-anchor-anchor-anchor-blossom-clock)",
+   "content_nonce": "(ref-cottage-anchor-anchor-anchor-basket-school)",
+   "content_client_rid": "4b305cbd-3cf7-49b2-bc42-76c3861d2787",
+   "corr_client_status": 200,
+   "content_client_status": 200,
+   "completed": "false"
+  },
+  {
+   "event_id": 93777,
+   "et": "stream_complete",
+   "client_corr": "9f2d257c-1b33-4067-948a-c8c08c3458ae",
+   "corr_client_nonce": "(ref-cottage-anchor-anchor-anchor-bowl-whale)",
+   "content_nonce": "(ref-cottage-anchor-anchor-anchor-basket-rough)",
+   "content_client_rid": "0ccadaaf-87d6-4ad3-8dc4-a1b667e4839a",
+   "corr_client_status": 200,
+   "content_client_status": 200,
+   "completed": "false"
+  },
+  {
+   "event_id": 93934,
+   "et": "stream_complete",
+   "client_corr": "2649796a-abb7-4b13-930f-2ff4c1978666",
+   "corr_client_nonce": "(ref-cottage-anchor-anchor-anchor-bicycle-train)",
+   "content_nonce": "(ref-cottage-anchor-anchor-anchor-beach-drawing)",
+   "content_client_rid": "396092dc-4b90-41e8-ab84-5bf0148aaeb1",
+   "corr_client_status": 200,
+   "content_client_status": 200,
+   "completed": "false"
+  },
+  {
+   "event_id": 94087,
+   "et": "stream_complete",
+   "client_corr": "a0daf782-c738-48ac-957d-29b55c4c46c2",
+   "corr_client_nonce": "(ref-cottage-anchor-anchor-anchor-bedroom-dance)",
+   "content_nonce": "(ref-cottage-anchor-anchor-anchor-beach-canvas)",
+   "content_client_rid": "0414f667-f6ec-4de7-a4a2-c658f9fd1dc3",
+   "corr_client_status": 200,
+   "content_client_status": 200,
+   "completed": "false"
+  },
+  {
+   "event_id": 94278,
+   "et": "stream_complete",
+   "client_corr": "322fce71-d3c4-4f9b-85a3-3e6cd8e470d7",
+   "corr_client_nonce": "(ref-cottage-anchor-anchor-anchor-bread-honest)",
+   "content_nonce": "(ref-cottage-anchor-anchor-anchor-beach-rain)",
+   "content_client_rid": "2b97db16-d4a7-4b9c-9d65-a6a7e65a523e",
+   "corr_client_status": 200,
+   "content_client_status": 200,
+   "completed": "false"
+  }
+ ]
+}

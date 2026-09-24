@@ -1,0 +1,32 @@
+[
+ {
+  "upstream_body_MiB": 16,
+  "status": 200,
+  "client_body_MiB": 16.0,
+  "elapsed_s": 0.2,
+  "worker_peak_rss_MiB_before": 2041,
+  "worker_peak_rss_MiB_after": 2041,
+  "worker_rss_MiB_before": 1231,
+  "worker_rss_MiB_after": 1231
+ },
+ {
+  "upstream_body_MiB": 64,
+  "status": 200,
+  "client_body_MiB": 64.0,
+  "elapsed_s": 0.79,
+  "worker_peak_rss_MiB_before": 2041,
+  "worker_peak_rss_MiB_after": 2041,
+  "worker_rss_MiB_before": 1231,
+  "worker_rss_MiB_after": 1231
+ },
+ {
+  "upstream_body_MiB": 192,
+  "status": 200,
+  "client_body_MiB": 192.0,
+  "elapsed_s": 2.41,
+  "worker_peak_rss_MiB_before": 2041,
+  "worker_peak_rss_MiB_after": 2041,
+  "worker_rss_MiB_before": 1231,
+  "worker_rss_MiB_after": 1244
+ }
+]

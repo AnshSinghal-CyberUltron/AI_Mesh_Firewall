@@ -1,0 +1,21 @@
+w1_none_r318: ok=95400/95400 err={} drops=0 opens=0 p50=132.2 p99=188.2 p99.9=298.6 max=868.9 us | cpu_us/req=80.74 vm_cores=0.03
+w1_base4_r318: ok=95400/95400 err={} drops=0 opens=0 p50=595.1 p99=823.6 p99.9=7851.1 max=8163.5 us | cpu_us/req=662.93 vm_cores=0.223
+w1_v1stack_r318: ok=95400/95400 err={} drops=0 opens=0 p50=585.9 p99=806.4 p99.9=7892.9 max=8236.7 us | cpu_us/req=655.06 vm_cores=0.213
+w1_none_r636: ok=190800/190800 err={} drops=0 opens=1 p50=126.8 p99=194.3 p99.9=278.2 max=2701.9 us | cpu_us/req=77.39 vm_cores=0.06
+w1_base4_r636: ok=190800/190800 err={} drops=0 opens=3 p50=582.9 p99=2237.8 p99.9=8995.7 max=14756.3 us | cpu_us/req=650.71 vm_cores=0.425
+w1_v1stack_r636: ok=190800/190800 err={} drops=0 opens=0 p50=596.4 p99=2381.7 p99.9=9113.7 max=9616.3 us | cpu_us/req=667.76 vm_cores=0.429
+w1_none_r954: ok=286200/286200 err={} drops=0 opens=1 p50=125.7 p99=166.2 p99.9=292.6 max=2427.6 us | cpu_us/req=75.78 vm_cores=0.083
+w1_base4_r954: ok=286200/286200 err={} drops=0 opens=3 p50=574.8 p99=6216.2 p99.9=10696.6 max=13221.5 us | cpu_us/req=646.29 vm_cores=0.622
+w1_v1stack_r954: ok=286200/286200 err={} drops=0 opens=35 p50=589.9 p99=7417.4 p99.9=12090.0 max=50701.8 us | cpu_us/req=659.07 vm_cores=0.641
+w1_none_r1144: ok=343200/343200 err={} drops=0 opens=0 p50=130.5 p99=190.8 p99.9=294.9 max=10067.5 us | cpu_us/req=79.82 vm_cores=0.103
+w1_base4_r1144: ok=343200/343200 err={} drops=0 opens=0 p50=589.3 p99=8535.4 p99.9=12220.1 max=13743.8 us | cpu_us/req=652.7 vm_cores=0.751
+w1_v1stack_r1144: ok=343200/343200 err={} drops=0 opens=0 p50=595.3 p99=8847.6 p99.9=12551.3 max=13970.3 us | cpu_us/req=664.22 vm_cores=0.771
+w1_none_r5168: ok=1550400/1550400 err={} drops=0 opens=4 p50=123.8 p99=167.0 p99.9=314.3 max=6335.4 us | cpu_us/req=72.12 vm_cores=0.377
+w1_pure4_r5168: ok=1550400/1550400 err={} drops=0 opens=27 p50=125.8 p99=171.4 p99.9=310.1 max=204639.8 us | cpu_us/req=73.7 vm_cores=0.386
+w1_none_r10337: ok=3101100/3101100 err={} drops=0 opens=76 p50=124.8 p99=209.5 p99.9=355.1 max=203924.4 us | cpu_us/req=67.5 vm_cores=0.711
+w1_pure4_r10337: ok=3101100/3101100 err={} drops=18 opens=66 p50=125.0 p99=207.3 p99.9=324.8 max=13895.8 us | cpu_us/req=67.84 vm_cores=0.706
+w1_none_r15505: ok=4651500/4651500 err={} drops=86 opens=292 p50=182.5 p99=1153.6 p99.9=3019.0 max=204914.6 us | cpu_us/req=63.05 vm_cores=0.991
+w1_pure4_r15505: ok=4651500/4651500 err={} drops=212 opens=388 p50=175.9 p99=318.1 p99.9=1404.6 max=208610.3 us | cpu_us/req=62.6 vm_cores=0.982
+w1_none_r18606: ok=5488820/5581800 err={'eof_mid_stream': 92044, 'transport': 936} drops=4522 opens=88011 p50=608.0 p99=63593.7 p99.9=132025.0 max=7571396.7 us | cpu_us/req=53.72 vm_cores=1.005
+w1_pure4_r18606: ok=5070902/5581800 err={'eof_mid_stream': 510025, 'transport': 873} drops=5060 opens=504624 p50=42193.5 p99=72924.3 p99.9=102138.8 max=6266715.0 us | cpu_us/req=53.72 vm_cores=1.012
+PLAN DONE plan_w1.txt 2026-09-23T09:11:35Z

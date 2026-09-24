@@ -1,0 +1,11 @@
+baseline org-a: HTTP 200 canon:E,det:E,sem:E,resolve:E,dispatch:E,out:E,audit:E in 0.12s
+SIGSTOP guard owner pid 2284394
+readyz during the wedge: [200, 200, 200, 200]
+  org-b: client TIMEOUT after 8.0s (no response)
+  org-a: client TIMEOUT after 8.0s (no response)
+  org-a: client TIMEOUT after 8.0s (no response)
+  org-b: client TIMEOUT after 8.0s (no response)
+  org-a: client TIMEOUT after 8.0s (no response)
+  org-b: client TIMEOUT after 8.0s (no response)
+SIGCONT
+after SIGCONT org-a: HTTP 200 canon:E,det:E,sem:E,resolve:E,dispatch:E,out:E,audit:E in 0.09s

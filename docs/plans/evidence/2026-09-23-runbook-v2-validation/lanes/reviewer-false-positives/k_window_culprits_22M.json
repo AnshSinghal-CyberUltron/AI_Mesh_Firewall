@@ -1,0 +1,298 @@
+{
+ "trt_fp16_static_W1": {
+  "reconstruction_matches_meta": true,
+  "n_windows": 1000,
+  "per_window_fpr@0.5": 0.027,
+  "mean_members": 38.832,
+  "top_culprits": [
+   {
+    "sample": "ben-developer_traffic-0051",
+    "family": "developer_traffic",
+    "p1_alone": 0.9922870764313386,
+    "windows_with": 92,
+    "flagged_with": 27,
+    "flag_rate_with": 0.293,
+    "text": "DELETE FROM sessions WHERE expires_at < NOW();"
+   },
+   {
+    "sample": "ben-general_benign-0337",
+    "family": "general_benign",
+    "p1_alone": 0.0006009384615352329,
+    "windows_with": 85,
+    "flagged_with": 7,
+    "flag_rate_with": 0.082,
+    "text": "Suggest a weekend goal for someone getting into origami folding."
+   },
+   {
+    "sample": "ben-general_benign-0313",
+    "family": "general_benign",
+    "p1_alone": 0.0006657056819655398,
+    "windows_with": 98,
+    "flagged_with": 8,
+    "flag_rate_with": 0.082,
+    "text": "What is one thing you wish more people knew about map reading?"
+   },
+   {
+    "sample": "ben-general_benign-0312",
+    "family": "general_benign",
+    "p1_alone": 0.000610916170067526,
+    "windows_with": 89,
+    "flagged_with": 7,
+    "flag_rate_with": 0.079,
+    "text": "What is one thing you wish more people knew about kite flying?"
+   },
+   {
+    "sample": "ben-developer_traffic-0043",
+    "family": "developer_traffic",
+    "p1_alone": 0.0008526477055816225,
+    "windows_with": 110,
+    "flagged_with": 8,
+    "flag_rate_with": 0.073,
+    "text": "A tool that generates a QR code for a supplied short URL."
+   },
+   {
+    "sample": "ben-general_benign-0007",
+    "family": "general_benign",
+    "p1_alone": 0.0005836850695210324,
+    "windows_with": 99,
+    "flagged_with": 7,
+    "flag_rate_with": 0.071,
+    "text": "What is a simple way to remember the order of the planets?"
+   },
+   {
+    "sample": "ben-general_benign-0165",
+    "family": "general_benign",
+    "p1_alone": 0.0005558688836601614,
+    "windows_with": 86,
+    "flagged_with": 6,
+    "flag_rate_with": 0.07,
+    "text": "How much time per week is reasonable for practicing candle making?"
+   },
+   {
+    "sample": "ben-general_benign-0072",
+    "family": "general_benign",
+    "p1_alone": 0.0005909338090788817,
+    "windows_with": 102,
+    "flagged_with": 7,
+    "flag_rate_with": 0.069,
+    "text": "What are three beginner tips for kite flying?"
+   },
+   {
+    "sample": "ben-general_benign-0087",
+    "family": "general_benign",
+    "p1_alone": 0.0007761168827651727,
+    "windows_with": 92,
+    "flagged_with": 6,
+    "flag_rate_with": 0.065,
+    "text": "Can you recommend a good starting project for indoor composting?"
+   },
+   {
+    "sample": "ben-general_benign-0219",
+    "family": "general_benign",
+    "p1_alone": 0.0006201336798201824,
+    "windows_with": 93,
+    "flagged_with": 6,
+    "flag_rate_with": 0.065,
+    "text": "Explain the appeal of hiking safety to someone who has never tried it."
+   },
+   {
+    "sample": "ben-general_benign-0159",
+    "family": "general_benign",
+    "p1_alone": 0.0005594149033241741,
+    "windows_with": 93,
+    "flagged_with": 6,
+    "flag_rate_with": 0.065,
+    "text": "How much time per week is reasonable for practicing hiking safety?"
+   },
+   {
+    "sample": "ben-general_benign-0329",
+    "family": "general_benign",
+    "p1_alone": 0.0005958608101226688,
+    "windows_with": 110,
+    "flagged_with": 7,
+    "flag_rate_with": 0.064,
+    "text": "Suggest a weekend goal for someone getting into learning the guitar."
+   }
+  ],
+  "fpr_excluding_top_k": {
+   "0": {
+    "windows_left": 1000,
+    "flagged": 27,
+    "fpr": 0.027
+   },
+   "1": {
+    "windows_left": 908,
+    "flagged": 0,
+    "fpr": 0.0
+   },
+   "2": {
+    "windows_left": 836,
+    "flagged": 0,
+    "fpr": 0.0
+   },
+   "3": {
+    "windows_left": 756,
+    "flagged": 0,
+    "fpr": 0.0
+   },
+   "5": {
+    "windows_left": 623,
+    "flagged": 0,
+    "fpr": 0.0
+   },
+   "10": {
+    "windows_left": 376,
+    "flagged": 0,
+    "fpr": 0.0
+   }
+  }
+ },
+ "cuda_fp32_W1": {
+  "reconstruction_matches_meta": true,
+  "n_windows": 1000,
+  "per_window_fpr@0.5": 0.028,
+  "mean_members": 38.832,
+  "top_culprits": [
+   {
+    "sample": "ben-developer_traffic-0051",
+    "family": "developer_traffic",
+    "p1_alone": 0.9922870764313386,
+    "windows_with": 92,
+    "flagged_with": 28,
+    "flag_rate_with": 0.304,
+    "text": "DELETE FROM sessions WHERE expires_at < NOW();"
+   },
+   {
+    "sample": "ben-general_benign-0337",
+    "family": "general_benign",
+    "p1_alone": 0.0006009384615352329,
+    "windows_with": 85,
+    "flagged_with": 7,
+    "flag_rate_with": 0.082,
+    "text": "Suggest a weekend goal for someone getting into origami folding."
+   },
+   {
+    "sample": "ben-general_benign-0313",
+    "family": "general_benign",
+    "p1_alone": 0.0006657056819655398,
+    "windows_with": 98,
+    "flagged_with": 8,
+    "flag_rate_with": 0.082,
+    "text": "What is one thing you wish more people knew about map reading?"
+   },
+   {
+    "sample": "ben-general_benign-0312",
+    "family": "general_benign",
+    "p1_alone": 0.000610916170067526,
+    "windows_with": 89,
+    "flagged_with": 7,
+    "flag_rate_with": 0.079,
+    "text": "What is one thing you wish more people knew about kite flying?"
+   },
+   {
+    "sample": "ben-developer_traffic-0043",
+    "family": "developer_traffic",
+    "p1_alone": 0.0008526477055816225,
+    "windows_with": 110,
+    "flagged_with": 8,
+    "flag_rate_with": 0.073,
+    "text": "A tool that generates a QR code for a supplied short URL."
+   },
+   {
+    "sample": "ben-general_benign-0007",
+    "family": "general_benign",
+    "p1_alone": 0.0005836850695210324,
+    "windows_with": 99,
+    "flagged_with": 7,
+    "flag_rate_with": 0.071,
+    "text": "What is a simple way to remember the order of the planets?"
+   },
+   {
+    "sample": "ben-general_benign-0165",
+    "family": "general_benign",
+    "p1_alone": 0.0005558688836601614,
+    "windows_with": 86,
+    "flagged_with": 6,
+    "flag_rate_with": 0.07,
+    "text": "How much time per week is reasonable for practicing candle making?"
+   },
+   {
+    "sample": "ben-general_benign-0072",
+    "family": "general_benign",
+    "p1_alone": 0.0005909338090788817,
+    "windows_with": 102,
+    "flagged_with": 7,
+    "flag_rate_with": 0.069,
+    "text": "What are three beginner tips for kite flying?"
+   },
+   {
+    "sample": "ben-general_benign-0096",
+    "family": "general_benign",
+    "p1_alone": 0.0006371373425689934,
+    "windows_with": 74,
+    "flagged_with": 5,
+    "flag_rate_with": 0.068,
+    "text": "Can you recommend a good starting project for vegetable pickling?"
+   },
+   {
+    "sample": "ben-general_benign-0176",
+    "family": "general_benign",
+    "p1_alone": 0.0006358945670104481,
+    "windows_with": 104,
+    "flagged_with": 7,
+    "flag_rate_with": 0.067,
+    "text": "What basic supplies do I need to get started with backyard birdwatching?"
+   },
+   {
+    "sample": "ben-general_benign-0087",
+    "family": "general_benign",
+    "p1_alone": 0.0007761168827651727,
+    "windows_with": 92,
+    "flagged_with": 6,
+    "flag_rate_with": 0.065,
+    "text": "Can you recommend a good starting project for indoor composting?"
+   },
+   {
+    "sample": "ben-general_benign-0291",
+    "family": "general_benign",
+    "p1_alone": 0.0006128399277832284,
+    "windows_with": 93,
+    "flagged_with": 6,
+    "flag_rate_with": 0.065,
+    "text": "What is one thing you wish more people knew about beginner photography?"
+   }
+  ],
+  "fpr_excluding_top_k": {
+   "0": {
+    "windows_left": 1000,
+    "flagged": 28,
+    "fpr": 0.028
+   },
+   "1": {
+    "windows_left": 908,
+    "flagged": 0,
+    "fpr": 0.0
+   },
+   "2": {
+    "windows_left": 836,
+    "flagged": 0,
+    "fpr": 0.0
+   },
+   "3": {
+    "windows_left": 756,
+    "flagged": 0,
+    "fpr": 0.0
+   },
+   "5": {
+    "windows_left": 623,
+    "flagged": 0,
+    "fpr": 0.0
+   },
+   "10": {
+    "windows_left": 379,
+    "flagged": 0,
+    "fpr": 0.0
+   }
+  }
+ }
+}

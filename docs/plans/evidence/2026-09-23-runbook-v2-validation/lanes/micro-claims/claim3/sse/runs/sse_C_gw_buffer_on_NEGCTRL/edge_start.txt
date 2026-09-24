@@ -1,0 +1,2 @@
+nginx: configuration file /etc/nginx/nginx.conf test is successful
+edge started variant=C_buffer_on workers=4

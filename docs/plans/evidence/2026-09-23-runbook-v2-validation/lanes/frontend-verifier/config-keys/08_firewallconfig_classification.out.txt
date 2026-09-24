@@ -1,0 +1,79 @@
+serializer fields: 65  payload keys: 57
+classification counts: {'NOT_EMITTED_IN_PAYLOAD': 8, 'READ_PER_ORG': 48, 'READ_DEAD_PATH_ONLY': 1, 'NO_READ': 5, 'READ_VIA_HTTP_ONLY': 2, 'READ_GLOBAL_CONFIG_ONLY': 1}
+
+== NOT_EMITTED_IN_PAYLOAD (8)
+   organization                         -> -                                  
+   content_filtering_enabled            -> -                                  
+   jailbreak_detection_enabled          -> -                                  
+   response_filtering_enabled           -> -                                  
+   updated_at                           -> -                                  
+   connected_models                     -> -                                  
+   allowed_models_list                  -> -                                  
+   governance_stale_models              -> -                                  
+
+== NO_READ (5)
+   tier2_fail_closed_enabled            -> tier2_fail_closed_enabled          
+   tier2_stream_hold_timeout_ms         -> tier2_stream_hold_timeout_ms       
+   hallucination_grounding_model        -> hallucination_grounding_model      
+   vector_db_isolation                  -> vector_db_isolation                
+   retention_days                       -> retention_days                     
+
+== READ_DEAD_PATH_ONLY (1)
+   log_level                            -> log_level                          gw/config_sync.py:558[data]
+
+== READ_GLOBAL_CONFIG_ONLY (1)
+   rag_max_documents                    -> rag_default_max_results            gw/main.py:13522[CONFIG]; gw/main.py:13864[CONFIG]
+
+== READ_VIA_HTTP_ONLY (2)
+   mcp_tier2_enabled                    -> mcp_tier2_enabled                  gw/mcp_proxy.py:967[data]; gw/mcp_scan_orchestrator.py:225[)]
+   mcp_policy_only_enforcement          -> mcp_policy_only_enforcement        gw/mcp_proxy.py:976[data]; gw/mcp_proxy.py:977[data]; gw/mcp_scan_orchestrator.py:383[enabled_info]
+
+== READ_PER_ORG (48)
+   firewall_enabled                     -> firewall_enabled                   gw/main.py:7737[and org_config]; gw/main.py:7751[org_config]; gw/main.py:12496[bool(org_config]
+   enforcement_mode                     -> enforcement_mode                   gw/main.py:2639[org_config]; gw/main.py:3027[org_config]; gw/main.py:4405[str(org_config]
+   rate_limit_enabled                   -> rate_limit_enabled                 gw/main.py:8341[and org_config]
+   requests_per_minute                  -> requests_per_minute                gw/main.py:8397[org_config]; gw/rate_limit_enforcement.py:240[org_config]
+   burst_limit                          -> burst_limit                        gw/main.py:8350[org_config]; gw/rate_limit_enforcement.py:183[org_config]
+   org_tpm_limit                        -> org_tpm_limit                      gw/main.py:8475[int(org_cfg]; gw/main.py:8748[int(org_config]; gw/main.py:9767[int(org_config]
+   pii_detection_enabled                -> pii_detection_enabled              gw/main.py:960[org_config]; gw/main.py:962[org_config]
+   toxicity_threshold                   -> toxicity_threshold                 gw/main.py:9121[org_config]
+   blocked_keywords                     -> blocked_keywords                   gw/main.py:2020[)]; gw/main.py:8636[org_config]; gw/main.py:12868[org_config]
+   model_isolation_enabled              -> model_isolation_enabled            gw/main.py:7889[isabled and org_config]; gw/main.py:10442[isabled and org_config]
+   allowed_models                       -> allowed_models                     gw/main.py:7754[string_list(org_config]
+   default_model                        -> litellm_default_model              gw/main.py:4616[)]; gw/main.py:9031[org_config]
+   semantic_analysis_enabled            -> deep_scan_enabled                  gw/main.py:10501[if org_config]
+   tier2_execution_mode                 -> tier2_execution_mode               gw/main.py:7753[str(org_config]; gw/main.py:9083[str(org_config]
+   tier2_stream_hold_enabled            -> tier2_stream_hold_enabled          gw/main.py:9084[bool(org_config]
+   tier2_enabled                        -> tier2_enabled                      gw/main.py:1528[)]; gw/main.py:9105[org_config]; gw/output_guard.py:1014[cfg]
+   mcp_ext_scan_action                  -> mcp_ext_scan_action                gw/mcp_proxy.py:1262[(cfg]
+   tier2_strict                         -> tier2_strict                       gw/main.py:9118[bool(org_config]; gw/main.py:13896[]; gw/main.py:14213[bool(rag_policy]
+   prompt_injection_threshold           -> prompt_injection_threshold         gw/main.py:9455[org_config]; gw/main.py:9615[org_config]; gw/main.py:13879[]
+   factuality_check_enabled             -> hallucination_flag_enabled         gw/output_guard.py:961[cfg]; gw/output_guard.py:962[bool(cfg]
+   hallucination_grounding_mode         -> hallucination_grounding_mode       gw/output_guard.py:1523[str(cfg]
+   hallucination_grounding_threshold    -> hallucination_grounding_threshold  gw/output_guard.py:1392[cfg]; gw/output_guard.py:1399[cfg]
+   output_pii_enabled                   -> output_pii_enabled                 gw/output_guard.py:906[_enabled]; gw/output_guard.py:920[_enabled]; gw/output_guard.py:1187[_enabled]
+   output_pii_action                    -> output_pii_action                  gw/output_guard.py:906[_action]; gw/output_guard.py:923[_action]; gw/output_guard.py:1187[_action]
+   output_credential_enabled            -> output_credential_enabled          gw/output_guard.py:900[_enabled]; gw/output_guard.py:921[_enabled]; gw/output_guard.py:932[_enabled]
+   output_credential_action             -> output_credential_action           gw/output_guard.py:900[_action]; gw/output_guard.py:924[_action]; gw/output_guard.py:936[_action]
+   output_ip_leakage_enabled            -> output_ip_leakage_enabled          gw/output_guard.py:904[_enabled]; gw/output_guard.py:942[_enabled]; gw/output_guard.py:1191[_enabled]
+   output_ip_leakage_action             -> output_ip_leakage_action           gw/output_guard.py:904[_action]; gw/output_guard.py:1160[cfg]
+   output_policy_enabled                -> output_policy_enabled              gw/main.py:11378[ENT_ID) and org_config]; gw/output_guard.py:910[_enabled]
+   output_policy_action                 -> output_policy_action               gw/main.py:11406[tput_action(org_config]; gw/output_guard.py:910[_action]
+   output_hallucination_action          -> output_hallucination_action        gw/output_guard.py:908[_action]; gw/output_guard.py:968[_action]
+   output_incident_logging_enabled      -> output_incident_logging_enabled    gw/main.py:2703[bool(org_config]; gw/main.py:10881[bool(org_config]
+   max_response_tokens                  -> max_response_tokens                gw/main.py:8448[int(org_config]; gw/main.py:8690[org_config]
+   rag_enabled                          -> rag_enabled                        gw/main.py:2055[return oc]
+   rag_relevance_threshold              -> rag_relevance_threshold            gw/main.py:13885[]
+   rag_redaction_enabled                -> rag_redaction_enabled              gw/main.py:14746[bool(org_config]
+   rag_tier2_enabled                    -> rag_tier2_enabled                  gw/main.py:13895[]; gw/main.py:14150[er2_enabled(rag_policy]; gw/main.py:14206[er2_enabled(rag_policy]
+   threat_intel_enabled                 -> threat_intel_enabled               gw/main.py:7938[and org_config]
+   auto_block_threats                   -> auto_block_threats                 gw/main.py:7943[reshold and org_config]
+   threat_score_threshold               -> threat_score_threshold             gw/main.py:7942[org_config]
+   audit_logging_enabled                -> telemetry_enabled                  gw/main.py:6094[oc]; gw/main.py:6095[return bool(oc]
+   compliance_frameworks                -> compliance_frameworks              gw/main.py:2871[)]; gw/main.py:6160[)]; gw/main.py:9475[org_config]
+   routing_risk_weight                  -> routing_risk_weight                gw/main.py:3668[_weight]
+   routing_cost_weight                  -> routing_cost_weight                gw/main.py:3669[_weight]
+   routing_latency_weight               -> routing_latency_weight             gw/main.py:3670[_weight]
+   routing_priority_weight              -> routing_priority_weight            gw/main.py:3671[_weight]
+   default_data_sensitivity             -> default_data_sensitivity           gw/main.py:3598[org_config]
+   routing_enabled                      -> routing_enabled                    gw/main.py:3558[bool(org_config]; gw/main.py:3561[routing_preferences]; gw/main.py:3854[bool(routing_prefs]

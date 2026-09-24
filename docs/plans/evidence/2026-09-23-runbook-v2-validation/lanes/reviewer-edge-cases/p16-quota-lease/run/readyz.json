@@ -1,0 +1,1 @@
+{"ready":true,"guard":{"ready":true,"backend":"local_cpu","model_hash":"2bf20e0f71e3a41e9e8cc4e602e08c142855bcce0cc73e0b65000d816d70877c","detail":"ready providers=['CPUExecutionProvider'] tokens_per_s=1914","error":null},"plans_loaded":true,"plans_fresh":true,"killswitch":"ok","worker":1}

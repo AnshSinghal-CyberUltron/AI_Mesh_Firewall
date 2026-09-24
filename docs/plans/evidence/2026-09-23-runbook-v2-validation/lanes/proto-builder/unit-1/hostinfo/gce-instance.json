@@ -1,0 +1,7 @@
+{
+ "name": "rv-proto-unit-1",
+ "machineType": "projects/24342156045/machineTypes/g2-standard-24",
+ "zone": "projects/24342156045/zones/asia-south1-c",
+ "image": "projects/deeplearning-platform-release/global/images/common-cu129-ubuntu-2204-nvidia-580-v20260909",
+ "cpuPlatform": "Intel Cascade Lake"
+}

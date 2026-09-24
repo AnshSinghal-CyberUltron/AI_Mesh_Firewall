@@ -1,0 +1,601 @@
+{
+ "tcp_mode_unmodified": [
+  {
+   "file": "test_live_tcp_8300",
+   "test": "test_live_tcp_missing_key_is_authentication_error",
+   "result": "passed",
+   "target": "rvproto base URL (TCP)"
+  },
+  {
+   "file": "test_live_tcp_8300",
+   "test": "test_live_tcp_error_body_is_json_not_html",
+   "result": "passed",
+   "target": "rvproto base URL (TCP)"
+  },
+  {
+   "file": "test_live_tcp_8300",
+   "test": "test_live_tcp_mcp_rag_vector_not_html",
+   "result": "passed",
+   "target": "rvproto base URL (TCP)"
+  },
+  {
+   "file": "test_malformed_sse_frame",
+   "test": "test_malformed_sse_data_frame_fails_and_names_frame",
+   "result": "passed",
+   "target": "in-process v1 app (appctx/live_url/own server) - NOT the base URL"
+  },
+  {
+   "file": "test_mcp_rag_vector_shapes",
+   "test": "test_native_surfaces_unauthenticated_are_not_html[/v1/mcp]",
+   "result": "skipped",
+   "target": "skipped by suite conftest in TCP mode (in-process v1 ASGI fixture)"
+  },
+  {
+   "file": "test_mcp_rag_vector_shapes",
+   "test": "test_native_surfaces_unauthenticated_are_not_html[/v1/rag/query]",
+   "result": "skipped",
+   "target": "skipped by suite conftest in TCP mode (in-process v1 ASGI fixture)"
+  },
+  {
+   "file": "test_mcp_rag_vector_shapes",
+   "test": "test_native_surfaces_unauthenticated_are_not_html[/v1/vector/query]",
+   "result": "skipped",
+   "target": "skipped by suite conftest in TCP mode (in-process v1 ASGI fixture)"
+  },
+  {
+   "file": "test_mcp_rag_vector_shapes",
+   "test": "test_mcp_jsonrpc_authenticated_envelope_is_json",
+   "result": "skipped",
+   "target": "skipped by suite conftest in TCP mode (in-process v1 ASGI fixture)"
+  },
+  {
+   "file": "test_mcp_rag_vector_shapes",
+   "test": "test_rag_vector_authenticated_envelope_is_json[/v1/rag/query]",
+   "result": "skipped",
+   "target": "skipped by suite conftest in TCP mode (in-process v1 ASGI fixture)"
+  },
+  {
+   "file": "test_mcp_rag_vector_shapes",
+   "test": "test_rag_vector_authenticated_envelope_is_json[/v1/rag/ingest]",
+   "result": "skipped",
+   "target": "skipped by suite conftest in TCP mode (in-process v1 ASGI fixture)"
+  },
+  {
+   "file": "test_mcp_rag_vector_shapes",
+   "test": "test_rag_vector_authenticated_envelope_is_json[/v1/vector/query]",
+   "result": "skipped",
+   "target": "skipped by suite conftest in TCP mode (in-process v1 ASGI fixture)"
+  },
+  {
+   "file": "test_mcp_rag_vector_shapes",
+   "test": "test_stock_sdk_has_no_mcp_or_rag_methods",
+   "result": "skipped",
+   "target": "skipped by suite conftest in TCP mode (in-process v1 ASGI fixture)"
+  },
+  {
+   "file": "test_openai_sdk_compat",
+   "test": "test_non_streaming_parses_as_chat_completion",
+   "result": "skipped",
+   "target": "skipped by suite conftest in TCP mode (in-process v1 ASGI fixture)"
+  },
+  {
+   "file": "test_openai_sdk_compat",
+   "test": "test_streaming_chunks_trace_frame_and_done",
+   "result": "skipped",
+   "target": "skipped by suite conftest in TCP mode (in-process v1 ASGI fixture)"
+  },
+  {
+   "file": "test_openai_sdk_compat",
+   "test": "test_blocked_request_raises_api_status_error_with_zeroshield_body",
+   "result": "skipped",
+   "target": "skipped by suite conftest in TCP mode (in-process v1 ASGI fixture)"
+  },
+  {
+   "file": "test_openai_sdk_compat",
+   "test": "test_blocked_streaming_request_raises_before_sse",
+   "result": "skipped",
+   "target": "skipped by suite conftest in TCP mode (in-process v1 ASGI fixture)"
+  },
+  {
+   "file": "test_openai_sdk_compat",
+   "test": "test_invalid_api_key_raises_authentication_error",
+   "result": "skipped",
+   "target": "skipped by suite conftest in TCP mode (in-process v1 ASGI fixture)"
+  },
+  {
+   "file": "test_openai_sdk_compat",
+   "test": "test_responses_non_streaming_parses_as_response_object",
+   "result": "skipped",
+   "target": "skipped by suite conftest in TCP mode (in-process v1 ASGI fixture)"
+  },
+  {
+   "file": "test_openai_sdk_compat",
+   "test": "test_responses_streaming_events_and_text",
+   "result": "skipped",
+   "target": "skipped by suite conftest in TCP mode (in-process v1 ASGI fixture)"
+  },
+  {
+   "file": "test_openai_sdk_compat",
+   "test": "test_responses_mid_stream_failure_surfaces_typed_response_failed",
+   "result": "passed",
+   "target": "in-process v1 app (appctx/live_url/own server) - NOT the base URL"
+  },
+  {
+   "file": "test_openai_sdk_compat",
+   "test": "test_responses_blocked_non_stream_raises_bad_request_error",
+   "result": "skipped",
+   "target": "skipped by suite conftest in TCP mode (in-process v1 ASGI fixture)"
+  },
+  {
+   "file": "test_openai_sdk_compat",
+   "test": "test_responses_blocked_stream_raises_before_sse",
+   "result": "skipped",
+   "target": "skipped by suite conftest in TCP mode (in-process v1 ASGI fixture)"
+  },
+  {
+   "file": "test_openai_sdk_compat",
+   "test": "test_only_one_post_v1_responses_route",
+   "result": "skipped",
+   "target": "skipped by suite conftest in TCP mode (in-process v1 ASGI fixture)"
+  },
+  {
+   "file": "test_openai_sdk_compat",
+   "test": "test_v1_responses_first_match_wins_is_full_handler",
+   "result": "skipped",
+   "target": "skipped by suite conftest in TCP mode (in-process v1 ASGI fixture)"
+  },
+  {
+   "file": "test_openai_sdk_compat",
+   "test": "test_responses_non_string_model_returns_400",
+   "result": "skipped",
+   "target": "skipped by suite conftest in TCP mode (in-process v1 ASGI fixture)"
+  },
+  {
+   "file": "test_openai_sdk_compat",
+   "test": "test_chat_tool_calls_forwarded_and_parsed",
+   "result": "skipped",
+   "target": "skipped by suite conftest in TCP mode (in-process v1 ASGI fixture)"
+  },
+  {
+   "file": "test_openai_sdk_compat",
+   "test": "test_chat_response_format_json_schema",
+   "result": "skipped",
+   "target": "skipped by suite conftest in TCP mode (in-process v1 ASGI fixture)"
+  },
+  {
+   "file": "test_openai_sdk_compat",
+   "test": "test_chat_usage_block_present",
+   "result": "skipped",
+   "target": "skipped by suite conftest in TCP mode (in-process v1 ASGI fixture)"
+  },
+  {
+   "file": "test_openai_sdk_compat",
+   "test": "test_responses_store_retrieve_delete_roundtrip",
+   "result": "passed",
+   "target": "in-process v1 app (appctx/live_url/own server) - NOT the base URL"
+  },
+  {
+   "file": "test_openai_sdk_compat",
+   "test": "test_responses_input_items_listing",
+   "result": "passed",
+   "target": "in-process v1 app (appctx/live_url/own server) - NOT the base URL"
+  },
+  {
+   "file": "test_openai_sdk_compat",
+   "test": "test_responses_previous_response_id_replay",
+   "result": "passed",
+   "target": "in-process v1 app (appctx/live_url/own server) - NOT the base URL"
+  },
+  {
+   "file": "test_openai_sdk_compat",
+   "test": "test_responses_typed_stream_sequence_D5",
+   "result": "skipped",
+   "target": "skipped by suite conftest in TCP mode (in-process v1 ASGI fixture)"
+  },
+  {
+   "file": "test_openai_sdk_compat",
+   "test": "test_embeddings_single",
+   "result": "skipped",
+   "target": "skipped by suite conftest in TCP mode (in-process v1 ASGI fixture)"
+  },
+  {
+   "file": "test_openai_sdk_compat",
+   "test": "test_embeddings_batch",
+   "result": "skipped",
+   "target": "skipped by suite conftest in TCP mode (in-process v1 ASGI fixture)"
+  },
+  {
+   "file": "test_openai_sdk_compat",
+   "test": "test_models_list_returns_real_ids",
+   "result": "skipped",
+   "target": "skipped by suite conftest in TCP mode (in-process v1 ASGI fixture)"
+  },
+  {
+   "file": "test_openai_sdk_compat",
+   "test": "test_models_retrieve_by_id_D4",
+   "result": "skipped",
+   "target": "skipped by suite conftest in TCP mode (in-process v1 ASGI fixture)"
+  },
+  {
+   "file": "test_openai_sdk_compat",
+   "test": "test_error_model_not_allowed",
+   "result": "skipped",
+   "target": "skipped by suite conftest in TCP mode (in-process v1 ASGI fixture)"
+  },
+  {
+   "file": "test_openai_sdk_compat",
+   "test": "test_error_upstream_429_maps_to_rate_limit_error",
+   "result": "skipped",
+   "target": "skipped by suite conftest in TCP mode (in-process v1 ASGI fixture)"
+  },
+  {
+   "file": "test_openai_sdk_compat",
+   "test": "test_error_bad_body_raises_bad_request",
+   "result": "skipped",
+   "target": "skipped by suite conftest in TCP mode (in-process v1 ASGI fixture)"
+  },
+  {
+   "file": "test_openai_sdk_compat",
+   "test": "test_error_fields_populated_on_block_D2",
+   "result": "skipped",
+   "target": "skipped by suite conftest in TCP mode (in-process v1 ASGI fixture)"
+  },
+  {
+   "file": "test_openai_sdk_compat",
+   "test": "test_error_request_id_present_on_block_D3",
+   "result": "skipped",
+   "target": "skipped by suite conftest in TCP mode (in-process v1 ASGI fixture)"
+  },
+  {
+   "file": "test_openai_sdk_compat",
+   "test": "test_error_param_populated_on_bad_model_A1",
+   "result": "skipped",
+   "target": "skipped by suite conftest in TCP mode (in-process v1 ASGI fixture)"
+  },
+  {
+   "file": "test_openai_sdk_compat",
+   "test": "test_error_param_populated_on_bad_messages_A1",
+   "result": "skipped",
+   "target": "skipped by suite conftest in TCP mode (in-process v1 ASGI fixture)"
+  },
+  {
+   "file": "test_openai_sdk_compat",
+   "test": "test_error_param_populated_on_bad_sampling_A1",
+   "result": "skipped",
+   "target": "skipped by suite conftest in TCP mode (in-process v1 ASGI fixture)"
+  },
+  {
+   "file": "test_openai_sdk_compat",
+   "test": "test_error_param_null_on_content_block_A1",
+   "result": "skipped",
+   "target": "skipped by suite conftest in TCP mode (in-process v1 ASGI fixture)"
+  },
+  {
+   "file": "test_openai_sdk_compat",
+   "test": "test_error_request_id_present_across_error_classes",
+   "result": "skipped",
+   "target": "skipped by suite conftest in TCP mode (in-process v1 ASGI fixture)"
+  },
+  {
+   "file": "test_openai_sdk_compat",
+   "test": "test_unimplemented_surface_returns_clean_404",
+   "result": "skipped",
+   "target": "skipped by suite conftest in TCP mode (in-process v1 ASGI fixture)"
+  },
+  {
+   "file": "test_openai_sdk_compat",
+   "test": "test_legacy_completions_create_D4",
+   "result": "skipped",
+   "target": "skipped by suite conftest in TCP mode (in-process v1 ASGI fixture)"
+  },
+  {
+   "file": "test_openai_sdk_compat",
+   "test": "test_legacy_completions_batch_prompt_D4",
+   "result": "skipped",
+   "target": "skipped by suite conftest in TCP mode (in-process v1 ASGI fixture)"
+  },
+  {
+   "file": "test_openai_sdk_compat",
+   "test": "test_legacy_completions_block_routes_through_firewall_D4",
+   "result": "skipped",
+   "target": "skipped by suite conftest in TCP mode (in-process v1 ASGI fixture)"
+  },
+  {
+   "file": "test_openai_sdk_compat",
+   "test": "test_c1_success_chat_carries_request_id_header",
+   "result": "skipped",
+   "target": "skipped by suite conftest in TCP mode (in-process v1 ASGI fixture)"
+  },
+  {
+   "file": "test_openai_sdk_compat",
+   "test": "test_c1_success_streaming_carries_request_id_header",
+   "result": "skipped",
+   "target": "skipped by suite conftest in TCP mode (in-process v1 ASGI fixture)"
+  },
+  {
+   "file": "test_openai_sdk_compat",
+   "test": "test_c1_unmatched_v1_route_is_nested_envelope_with_request_id",
+   "result": "skipped",
+   "target": "skipped by suite conftest in TCP mode (in-process v1 ASGI fixture)"
+  },
+  {
+   "file": "test_openai_sdk_compat",
+   "test": "test_c1_malformed_json_body_is_nested_envelope_with_request_id",
+   "result": "skipped",
+   "target": "skipped by suite conftest in TCP mode (in-process v1 ASGI fixture)"
+  },
+  {
+   "file": "test_openai_sdk_compat",
+   "test": "test_c1_unhandled_exception_is_nested_500_with_request_id_no_traceback",
+   "result": "skipped",
+   "target": "skipped by suite conftest in TCP mode (in-process v1 ASGI fixture)"
+  },
+  {
+   "file": "test_openai_sdk_compat",
+   "test": "test_c4_moderations_benign_parses_with_request_id",
+   "result": "skipped",
+   "target": "skipped by suite conftest in TCP mode (in-process v1 ASGI fixture)"
+  },
+  {
+   "file": "test_openai_sdk_compat",
+   "test": "test_c4_moderations_flags_injection",
+   "result": "skipped",
+   "target": "skipped by suite conftest in TCP mode (in-process v1 ASGI fixture)"
+  },
+  {
+   "file": "test_openai_sdk_compat",
+   "test": "test_c4_moderations_missing_input_is_nested_envelope_with_request_id",
+   "result": "skipped",
+   "target": "skipped by suite conftest in TCP mode (in-process v1 ASGI fixture)"
+  },
+  {
+   "file": "test_openai_sdk_compat",
+   "test": "test_c4_audio_surface_returns_clean_404",
+   "result": "skipped",
+   "target": "skipped by suite conftest in TCP mode (in-process v1 ASGI fixture)"
+  },
+  {
+   "file": "test_openai_sdk_compat",
+   "test": "test_c4_models_retrieve_unknown_returns_404_with_request_id",
+   "result": "skipped",
+   "target": "skipped by suite conftest in TCP mode (in-process v1 ASGI fixture)"
+  },
+  {
+   "file": "test_openai_sdk_compat_live_uvicorn",
+   "test": "test_live_chat_non_stream",
+   "result": "passed",
+   "target": "in-process v1 app (appctx/live_url/own server) - NOT the base URL"
+  },
+  {
+   "file": "test_openai_sdk_compat_live_uvicorn",
+   "test": "test_live_chat_stream_chunks_and_done",
+   "result": "passed",
+   "target": "in-process v1 app (appctx/live_url/own server) - NOT the base URL"
+  },
+  {
+   "file": "test_openai_sdk_compat_live_uvicorn",
+   "test": "test_live_responses_stream_typed_events",
+   "result": "passed",
+   "target": "in-process v1 app (appctx/live_url/own server) - NOT the base URL"
+  },
+  {
+   "file": "test_openai_sdk_compat_live_uvicorn",
+   "test": "test_live_block_raises_permission_denied",
+   "result": "failed",
+   "target": "in-process v1 app (appctx/live_url/own server) - NOT the base URL"
+  },
+  {
+   "file": "test_openai_sdk_compat_live_uvicorn",
+   "test": "test_live_request_id_header_present_and_matches_body",
+   "result": "passed",
+   "target": "in-process v1 app (appctx/live_url/own server) - NOT the base URL"
+  },
+  {
+   "file": "test_openai_sdk_compat_live_uvicorn",
+   "test": "test_live_blocked_stream_is_json_not_sse",
+   "result": "failed",
+   "target": "in-process v1 app (appctx/live_url/own server) - NOT the base URL"
+  },
+  {
+   "file": "test_openai_sdk_compat_live_uvicorn",
+   "test": "test_live_client_disconnect_midstream_then_server_responsive",
+   "result": "passed",
+   "target": "in-process v1 app (appctx/live_url/own server) - NOT the base URL"
+  },
+  {
+   "file": "test_openai_sdk_compat_live_uvicorn",
+   "test": "test_live_zero_token_scan_only_no_hang",
+   "result": "passed",
+   "target": "in-process v1 app (appctx/live_url/own server) - NOT the base URL"
+  },
+  {
+   "file": "test_openai_sdk_compat_phase2",
+   "test": "test_max_completion_tokens_not_shadowed_by_injected_max_tokens",
+   "result": "passed",
+   "target": "in-process v1 app (appctx/live_url/own server) - NOT the base URL"
+  },
+  {
+   "file": "test_openai_sdk_compat_phase2",
+   "test": "test_max_completion_tokens_over_ceiling_is_rejected",
+   "result": "passed",
+   "target": "in-process v1 app (appctx/live_url/own server) - NOT the base URL"
+  },
+  {
+   "file": "test_openai_sdk_compat_phase2",
+   "test": "test_responses_adapter_forwards_response_format",
+   "result": "passed",
+   "target": "in-process v1 app (appctx/live_url/own server) - NOT the base URL"
+  },
+  {
+   "file": "test_openai_sdk_compat_phase2",
+   "test": "test_responses_adapter_forwards_sampling_penalties",
+   "result": "passed",
+   "target": "in-process v1 app (appctx/live_url/own server) - NOT the base URL"
+  },
+  {
+   "file": "test_openai_sdk_compat_phase2",
+   "test": "test_responses_adapter_forwards_top_logprobs",
+   "result": "passed",
+   "target": "in-process v1 app (appctx/live_url/own server) - NOT the base URL"
+  },
+  {
+   "file": "test_openai_sdk_compat_phase2",
+   "test": "test_block_403_header_request_id_matches_body",
+   "result": "failed",
+   "target": "in-process v1 app (appctx/live_url/own server) - NOT the base URL"
+  },
+  {
+   "file": "test_openai_sdk_compat_phase2",
+   "test": "test_chat_n_gt_1_returns_n_choices",
+   "result": "xfailed",
+   "target": "in-process v1 app (appctx/live_url/own server) - NOT the base URL"
+  },
+  {
+   "file": "test_openai_sdk_compat_phase2",
+   "test": "test_responses_adapter_handles_n",
+   "result": "passed",
+   "target": "in-process v1 app (appctx/live_url/own server) - NOT the base URL"
+  },
+  {
+   "file": "test_openai_sdk_compat_phase2",
+   "test": "test_chat_validation_400_populates_e_param",
+   "result": "passed",
+   "target": "in-process v1 app (appctx/live_url/own server) - NOT the base URL"
+  },
+  {
+   "file": "test_openai_sdk_compat_phase2",
+   "test": "test_success_200_header_request_id_matches_body_zeroshield",
+   "result": "passed",
+   "target": "in-process v1 app (appctx/live_url/own server) - NOT the base URL"
+  },
+  {
+   "file": "test_openai_sdk_compat_phase2",
+   "test": "test_upstream_429_carries_retry_after",
+   "result": "passed",
+   "target": "in-process v1 app (appctx/live_url/own server) - NOT the base URL"
+  },
+  {
+   "file": "test_openai_sdk_compat_phase2",
+   "test": "test_content_part_file_requires_payload",
+   "result": "xfailed",
+   "target": "in-process v1 app (appctx/live_url/own server) - NOT the base URL"
+  },
+  {
+   "file": "test_openai_sdk_compat_phase2_adversarial",
+   "test": "test_responses_adapter_maps_native_text_format",
+   "result": "passed",
+   "target": "in-process v1 app (appctx/live_url/own server) - NOT the base URL"
+  },
+  {
+   "file": "test_openai_sdk_compat_phase2_adversarial",
+   "test": "test_responses_adapter_forwards_logit_bias",
+   "result": "passed",
+   "target": "in-process v1 app (appctx/live_url/own server) - NOT the base URL"
+  },
+  {
+   "file": "test_openai_sdk_compat_phase2_adversarial",
+   "test": "test_responses_adapter_forwards_service_tier",
+   "result": "passed",
+   "target": "in-process v1 app (appctx/live_url/own server) - NOT the base URL"
+  },
+  {
+   "file": "test_openai_sdk_compat_phase2_adversarial",
+   "test": "test_responses_adapter_forwards_prediction",
+   "result": "passed",
+   "target": "in-process v1 app (appctx/live_url/own server) - NOT the base URL"
+  },
+  {
+   "file": "test_openai_sdk_compat_phase2_adversarial",
+   "test": "test_responses_adapter_forwards_truncation",
+   "result": "passed",
+   "target": "in-process v1 app (appctx/live_url/own server) - NOT the base URL"
+  },
+  {
+   "file": "test_openai_sdk_compat_phase5_correlation",
+   "test": "test_request_id_join_invariant_across_v1_matrix",
+   "result": "passed",
+   "target": "in-process v1 app (appctx/live_url/own server) - NOT the base URL"
+  },
+  {
+   "file": "test_openai_sdk_compat_phase5_correlation",
+   "test": "test_every_block_emits_enforcement_signal",
+   "result": "failed",
+   "target": "in-process v1 app (appctx/live_url/own server) - NOT the base URL"
+  },
+  {
+   "file": "test_openai_sdk_compat_phase6_guards",
+   "test": "test_missing_model_returns_400_invalid_request_param_model",
+   "result": "passed",
+   "target": "in-process v1 app (appctx/live_url/own server) - NOT the base URL"
+  },
+  {
+   "file": "test_openai_sdk_compat_phase6_guards",
+   "test": "test_stream_upstream_error_emits_error_event_not_clean_empty",
+   "result": "failed",
+   "target": "in-process v1 app (appctx/live_url/own server) - NOT the base URL"
+  }
+ ],
+ "live_uvicorn_adapted_to_rvproto": [
+  {
+   "file": "test_live_uvicorn_on_rvproto",
+   "test": "test_live_chat_non_stream",
+   "result": "passed",
+   "target": "rvproto base URL (only live_url fixture changed)",
+   "note": ""
+  },
+  {
+   "file": "test_live_uvicorn_on_rvproto",
+   "test": "test_live_chat_stream_chunks_and_done",
+   "result": "passed",
+   "target": "rvproto base URL (only live_url fixture changed)",
+   "note": ""
+  },
+  {
+   "file": "test_live_uvicorn_on_rvproto",
+   "test": "test_live_responses_stream_typed_events",
+   "result": "failed",
+   "target": "rvproto base URL (only live_url fixture changed)",
+   "note": "OUT OF SCOPE: /v1/responses not implemented (chat/models only)"
+  },
+  {
+   "file": "test_live_uvicorn_on_rvproto",
+   "test": "test_live_block_raises_permission_denied",
+   "result": "failed",
+   "target": "rvproto base URL (only live_url fixture changed)",
+   "note": "DELIBERATE: PROTO_SPEC mandates 403 for BLOCK; test expects v1's 400 content_filter"
+  },
+  {
+   "file": "test_live_uvicorn_on_rvproto",
+   "test": "test_live_request_id_header_present_and_matches_body",
+   "result": "failed",
+   "target": "rvproto base URL (only live_url fixture changed)",
+   "note": "DEVIATION: test requires v1's non-OpenAI body field zeroshield.request_id; rvproto returns x-request-id header only"
+  },
+  {
+   "file": "test_live_uvicorn_on_rvproto",
+   "test": "test_live_blocked_stream_is_json_not_sse",
+   "result": "failed",
+   "target": "rvproto base URL (only live_url fixture changed)",
+   "note": "DELIBERATE: body is JSON not SSE (property holds) but status is 403 per PROTO_SPEC, test expects 400"
+  },
+  {
+   "file": "test_live_uvicorn_on_rvproto",
+   "test": "test_live_client_disconnect_midstream_then_server_responsive",
+   "result": "passed",
+   "target": "rvproto base URL (only live_url fixture changed)",
+   "note": ""
+  },
+  {
+   "file": "test_live_uvicorn_on_rvproto",
+   "test": "test_live_zero_token_scan_only_no_hang",
+   "result": "passed",
+   "target": "rvproto base URL (only live_url fixture changed)",
+   "note": ""
+  }
+ ],
+ "node_matrix_repo_script": {
+  "result": "passed",
+  "output": "lgw01_3_node_ok http://127.0.0.1:8400"
+ },
+ "provider_fixture": "tools/devprov.py --fixture v1stub (byte-for-byte the suite's _fake_completion/_fake_stream)"
+}

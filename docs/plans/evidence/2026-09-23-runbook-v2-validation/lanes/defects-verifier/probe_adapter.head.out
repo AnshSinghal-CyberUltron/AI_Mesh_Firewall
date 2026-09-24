@@ -1,0 +1,98 @@
+[bedrock_logger] Cannot write to /var/log/bedrock: [Errno 13] Permission denied: '/var/log/bedrock'
+2026-09-23 10:44:16,105 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+{"ts": "2026-09-23T05:14:16.123962+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=be18800c3050 prompt=107\u2192107 context=True model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "be18800c3050", "prompt_len": 107, "truncated_len": 107, "has_context": true, "model": "zeroshield-guard", "max_tokens": 1024}}
+{"ts": "2026-09-23T05:14:16.124158+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN RESULT | reqid=be18800c3050 risk=20 action=monitor findings=1 llm_guard=0.20 degraded=False elapsed=0.000s", "data": {"event": "scan_result", "request_id": "be18800c3050", "risk_score": 20, "action": "monitor", "findings_count": 1, "findings_categories": ["OBF-01"], "llm_guard_score": 0.2, "degraded": false, "elapsed_s": 0.0, "tokens_in": 10, "tokens_out": 30}}
+{"ts": "2026-09-23T05:14:16.124233+00:00", "level": "WARNING", "logger": "bedrock", "msg": "BEDROCK RULE HIT    | rule=OBF-01 severity=medium reqid=be18800c3050 source=bedrock", "data": {"event": "rule_hit", "rule_id": "OBF-01", "severity": "medium", "source": "bedrock", "request_id": "be18800c3050"}}
+2026-09-23 10:44:16,453 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+{"ts": "2026-09-23T05:14:16.462202+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=23fc75c0f10b prompt=107\u2192107 context=True model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "23fc75c0f10b", "prompt_len": 107, "truncated_len": 107, "has_context": true, "model": "zeroshield-guard", "max_tokens": 1024}}
+{"ts": "2026-09-23T05:14:16.462366+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN RESULT | reqid=23fc75c0f10b risk=10 action=allow findings=1 llm_guard=0.10 degraded=False elapsed=0.000s", "data": {"event": "scan_result", "request_id": "23fc75c0f10b", "risk_score": 10, "action": "allow", "findings_count": 1, "findings_categories": ["OBF-01"], "llm_guard_score": 0.1, "degraded": false, "elapsed_s": 0.0, "tokens_in": 10, "tokens_out": 30}}
+{"ts": "2026-09-23T05:14:16.462433+00:00", "level": "WARNING", "logger": "bedrock", "msg": "BEDROCK RULE HIT    | rule=OBF-01 severity=low reqid=23fc75c0f10b source=bedrock", "data": {"event": "rule_hit", "rule_id": "OBF-01", "severity": "low", "source": "bedrock", "request_id": "23fc75c0f10b"}}
+2026-09-23 10:44:16,462 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+{"ts": "2026-09-23T05:14:16.471489+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=06e350371cf0 prompt=107\u2192107 context=True model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "06e350371cf0", "prompt_len": 107, "truncated_len": 107, "has_context": true, "model": "zeroshield-guard", "max_tokens": 1024}}
+{"ts": "2026-09-23T05:14:16.471603+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN RESULT | reqid=06e350371cf0 risk=55 action=allow findings=0 llm_guard=0.55 degraded=False elapsed=0.000s", "data": {"event": "scan_result", "request_id": "06e350371cf0", "risk_score": 55, "action": "allow", "findings_count": 0, "findings_categories": [], "llm_guard_score": 0.55, "degraded": false, "elapsed_s": 0.0, "tokens_in": 10, "tokens_out": 30}}
+2026-09-23 10:44:16,471 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+{"ts": "2026-09-23T05:14:16.480438+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=55f8168160eb prompt=107\u2192107 context=True model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "55f8168160eb", "prompt_len": 107, "truncated_len": 107, "has_context": true, "model": "zeroshield-guard", "max_tokens": 1024}}
+{"ts": "2026-09-23T05:14:16.480570+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN RESULT | reqid=55f8168160eb risk=20 action=block findings=1 llm_guard=0.20 degraded=False elapsed=0.000s", "data": {"event": "scan_result", "request_id": "55f8168160eb", "risk_score": 20, "action": "block", "findings_count": 1, "findings_categories": ["LLM01"], "llm_guard_score": 0.2, "degraded": false, "elapsed_s": 0.0, "tokens_in": 10, "tokens_out": 30}}
+{"ts": "2026-09-23T05:14:16.480632+00:00", "level": "WARNING", "logger": "bedrock", "msg": "BEDROCK RULE HIT    | rule=LLM01 severity=medium reqid=55f8168160eb source=bedrock", "data": {"event": "rule_hit", "rule_id": "LLM01", "severity": "medium", "source": "bedrock", "request_id": "55f8168160eb"}}
+2026-09-23 10:44:16,481 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+{"ts": "2026-09-23T05:14:16.489696+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=40304f14f527 prompt=107\u2192107 context=True model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "40304f14f527", "prompt_len": 107, "truncated_len": 107, "has_context": true, "model": "zeroshield-guard", "max_tokens": 1024}}
+{"ts": "2026-09-23T05:14:16.489812+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN RESULT | reqid=40304f14f527 risk=20 action=monitor findings=1 llm_guard=0.20 degraded=False elapsed=0.000s", "data": {"event": "scan_result", "request_id": "40304f14f527", "risk_score": 20, "action": "monitor", "findings_count": 1, "findings_categories": ["PII-01"], "llm_guard_score": 0.2, "degraded": false, "elapsed_s": 0.0, "tokens_in": 10, "tokens_out": 30}}
+{"ts": "2026-09-23T05:14:16.489877+00:00", "level": "WARNING", "logger": "bedrock", "msg": "BEDROCK RULE HIT    | rule=PII-01 severity=medium reqid=40304f14f527 source=bedrock", "data": {"event": "rule_hit", "rule_id": "PII-01", "severity": "medium", "source": "bedrock", "request_id": "40304f14f527"}}
+2026-09-23 10:44:16,490 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+{"ts": "2026-09-23T05:14:16.498623+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=d1a6680ea628 prompt=107\u2192107 context=True model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "d1a6680ea628", "prompt_len": 107, "truncated_len": 107, "has_context": true, "model": "zeroshield-guard", "max_tokens": 1024}}
+{"ts": "2026-09-23T05:14:16.498730+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN RESULT | reqid=d1a6680ea628 risk=30 action=block findings=1 llm_guard=0.30 degraded=False elapsed=0.000s", "data": {"event": "scan_result", "request_id": "d1a6680ea628", "risk_score": 30, "action": "block", "findings_count": 1, "findings_categories": ["LLM01"], "llm_guard_score": 0.3, "degraded": false, "elapsed_s": 0.0, "tokens_in": 10, "tokens_out": 30}}
+{"ts": "2026-09-23T05:14:16.498789+00:00", "level": "WARNING", "logger": "bedrock", "msg": "BEDROCK RULE HIT    | rule=LLM01 severity=medium reqid=d1a6680ea628 source=bedrock", "data": {"event": "rule_hit", "rule_id": "LLM01", "severity": "medium", "source": "bedrock", "request_id": "d1a6680ea628"}}
+2026-09-23 10:44:16,499 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+{"ts": "2026-09-23T05:14:16.507581+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=c0674c58d038 prompt=107\u2192107 context=True model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "c0674c58d038", "prompt_len": 107, "truncated_len": 107, "has_context": true, "model": "zeroshield-guard", "max_tokens": 1024}}
+{"ts": "2026-09-23T05:14:16.507685+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN RESULT | reqid=c0674c58d038 risk=30 action=block findings=1 llm_guard=0.30 degraded=False elapsed=0.000s", "data": {"event": "scan_result", "request_id": "c0674c58d038", "risk_score": 30, "action": "block", "findings_count": 1, "findings_categories": ["LLM01"], "llm_guard_score": 0.3, "degraded": false, "elapsed_s": 0.0, "tokens_in": 10, "tokens_out": 30}}
+{"ts": "2026-09-23T05:14:16.507748+00:00", "level": "WARNING", "logger": "bedrock", "msg": "BEDROCK RULE HIT    | rule=LLM01 severity=medium reqid=c0674c58d038 source=bedrock", "data": {"event": "rule_hit", "rule_id": "LLM01", "severity": "medium", "source": "bedrock", "request_id": "c0674c58d038"}}
+2026-09-23 10:44:16,507 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+{"ts": "2026-09-23T05:14:16.516380+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=b762cb6ca04c prompt=107\u2192107 context=True model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "b762cb6ca04c", "prompt_len": 107, "truncated_len": 107, "has_context": true, "model": "zeroshield-guard", "max_tokens": 1024}}
+{"ts": "2026-09-23T05:14:16.516488+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN RESULT | reqid=b762cb6ca04c risk=30 action=block findings=1 llm_guard=0.30 degraded=False elapsed=0.000s", "data": {"event": "scan_result", "request_id": "b762cb6ca04c", "risk_score": 30, "action": "block", "findings_count": 1, "findings_categories": ["LLM01"], "llm_guard_score": 0.3, "degraded": false, "elapsed_s": 0.0, "tokens_in": 10, "tokens_out": 30}}
+{"ts": "2026-09-23T05:14:16.516545+00:00", "level": "WARNING", "logger": "bedrock", "msg": "BEDROCK RULE HIT    | rule=LLM01 severity=medium reqid=b762cb6ca04c source=bedrock", "data": {"event": "rule_hit", "rule_id": "LLM01", "severity": "medium", "source": "bedrock", "request_id": "b762cb6ca04c"}}
+2026-09-23 10:44:16,516 [INFO] gateway.scanner: InputScanner initialized (thread_pool_size=2, bedrock_pool_size=16, attack_categories=9, pii_patterns=20)
+{"ts": "2026-09-23T05:14:16.525246+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN START  | reqid=efe89a60bc9c prompt=107\u2192107 context=True model=zeroshield-guard max_tokens=1024", "data": {"event": "scan_start", "request_id": "efe89a60bc9c", "prompt_len": 107, "truncated_len": 107, "has_context": true, "model": "zeroshield-guard", "max_tokens": 1024}}
+{"ts": "2026-09-23T05:14:16.525357+00:00", "level": "INFO", "logger": "bedrock", "msg": "BEDROCK SCAN RESULT | reqid=efe89a60bc9c risk=30 action=block findings=1 llm_guard=0.30 degraded=False elapsed=0.000s", "data": {"event": "scan_result", "request_id": "efe89a60bc9c", "risk_score": 30, "action": "block", "findings_count": 1, "findings_categories": ["LLM01"], "llm_guard_score": 0.3, "degraded": false, "elapsed_s": 0.0, "tokens_in": 10, "tokens_out": 30}}
+{"ts": "2026-09-23T05:14:16.525416+00:00", "level": "WARNING", "logger": "bedrock", "msg": "BEDROCK RULE HIT    | rule=LLM01 severity=medium reqid=efe89a60bc9c source=bedrock", "data": {"event": "rule_hit", "rule_id": "LLM01", "severity": "medium", "source": "bedrock", "request_id": "efe89a60bc9c"}}
+ROOT = /home/contact_cyberultron_com/AI_Mesh_Firewall
+_scanner_kwargs_for_enforcement spans main.py:895-948
+
+== threat-type sets ==
+main._PLATFORM_FLOOR_SCANNER_THREATS = ['credential', 'dos', 'pci', 'phi', 'pii', 'secret', 'sensitive_content']
+main._TIER2_INJECTION_THREATS        = ['goal_hijacking', 'injection', 'jailbreak', 'prompt_injection']
+enforcement._INJECTION_THREAT_TYPES  = ['goal_hijacking', 'jailbreak', 'prompt_injection']
+present in main only: ['injection'] | present in enforcement only: []
+enforcement.py:272-279 (the confidence/threshold gate):
+   272:         is_injection = threat in _INJECTION_THREAT_TYPES
+   273:         if is_injection and normalize_action(guard_rec) == "block":
+   274:             if (
+   275:                 not scan_block_on_injection
+   276:                 or (scanner_confidence or 0) < injection_threshold
+   277:             ):
+   278:                 guard_rec = "monitor"
+   279:         elif (
+
+== (1) Tier-2 guard responses through the REAL scanner (bedrock_scanner._complete_scan escalates any
+       threat-category / LLM01-class / high-severity finding to block, bedrock_scanner.py:205-246,907-911) ==
+[monitor rec, category obfuscation (medium)]
+   scanner verdict: 'flag'/'obfuscation'/'tier_2' conf=0.6 rec='monitor'
+   adapter all-None=True -> resolve_and_enforce action='allow'
+[allow rec + obfuscation finding (low)]
+   scanner verdict: 'flag'/'obfuscation'/'tier_2' conf=0.3 rec='allow'
+   adapter all-None=True -> resolve_and_enforce action='allow'
+[score 0.55, no findings (risk_score flag)]
+   scanner verdict: 'flag'/'risk_score'/'tier_2' conf=0.55 rec='allow'
+   adapter all-None=True -> resolve_and_enforce action='allow'
+[monitor rec, category data_leakage [escalated by scanner]]
+   scanner verdict: 'block'/'data_leakage'/'tier_2' conf=0.9 rec='block'
+   adapter all-None=False -> resolve_and_enforce action='block'
+[CONTROL monitor rec, category pii (medium, floor)]
+   scanner verdict: 'flag'/'pii'/'tier_2' conf=0.8 rec='monitor'
+   adapter all-None=False -> resolve_and_enforce action='redact'
+
+== (2) same-concept labels, identical low-confidence Tier-2 BLOCK (conf 0.30 < threshold 0.80) ==
+   injection         scanner verdict 'block'/'injection'/conf=0.3 -> adapter admits=True -> resolve_and_enforce 'block' (blocked_by='input_scan')
+   prompt_injection  scanner verdict 'block'/'prompt_injection'/conf=0.3 -> adapter admits=True -> resolve_and_enforce 'monitor' (blocked_by=None)
+   jailbreak         scanner verdict 'block'/'jailbreak'/conf=0.3 -> adapter admits=True -> resolve_and_enforce 'monitor' (blocked_by=None)
+   goal_hijacking    scanner verdict 'block'/'goal_hijacking'/conf=0.3 -> adapter admits=True -> resolve_and_enforce 'monitor' (blocked_by=None)
+
+== (3) constructed-verdict grid (ScanVerdict, tier='tier_2') through adapter + resolver ==
+   threat_type                       action   adapter   resolved
+   toxicity                          flag     DROPPED   allow
+   toxicity                          monitor  DROPPED   allow
+   data_leakage                      flag     DROPPED   allow
+   data_leakage                      monitor  DROPPED   allow
+   policy_violation                  flag     DROPPED   allow
+   policy_violation                  monitor  DROPPED   allow
+   risk_score                        flag     DROPPED   allow
+   risk_score                        monitor  DROPPED   allow
+   sensitive_information_disclosure  flag     DROPPED   allow
+   sensitive_information_disclosure  monitor  DROPPED   allow
+   scanner_degraded                  flag     DROPPED   allow
+   scanner_degraded                  monitor  DROPPED   allow
+   user_pii_like                     flag     kept      flag
+   user_pii_like                     monitor  kept      monitor
+   jailbreak                         flag     kept      flag
+   jailbreak                         monitor  kept      monitor
+   injection                         flag     kept      flag
+   injection                         monitor  kept      monitor

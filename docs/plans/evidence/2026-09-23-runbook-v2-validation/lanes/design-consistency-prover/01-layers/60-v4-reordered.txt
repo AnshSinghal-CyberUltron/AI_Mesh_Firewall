@@ -1,0 +1,12 @@
+Contracts
+---------
+Analyzed 71 files, 55 dependencies.
+-----------------------------------
+Gateway v2 layers KEPT
+Contracts: 1 kept, 0 broken.
+exit=0
+Gateway v2 layers BROKEN
+gateway_v2.detect is not allowed to import gateway_v2.resolve:
+- gateway_v2.detect.probe_resolve -> gateway_v2.resolve.resolver (l.1)
+gateway_v2.detect is not allowed to import gateway_v2.edge:
+- gateway_v2.detect.probe_edge -> gateway_v2.edge.app (l.1)

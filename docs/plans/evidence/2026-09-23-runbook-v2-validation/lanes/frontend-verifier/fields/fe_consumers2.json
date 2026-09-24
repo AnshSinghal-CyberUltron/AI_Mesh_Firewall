@@ -1,0 +1,984 @@
+{
+ "consumer_files": [
+  "components/AttackSimulatorPanel.jsx",
+  "components/DatabaseConnectionPanel.jsx",
+  "components/Firewall12EnterprisePage.jsx",
+  "components/LogDetailPage.jsx",
+  "components/MCPConnectorPanel.jsx",
+  "components/ModelConnectionPanel.jsx",
+  "components/ModelStatePanel.jsx",
+  "components/OWASPStatsPanel.jsx",
+  "components/OutputGovernancePanel.jsx",
+  "components/OutputGuardrailCharts.jsx",
+  "components/OutputGuardrailEngineCard.jsx",
+  "components/OutputPipelineTimeline.jsx",
+  "components/PolicyAnalyticsPanel.jsx",
+  "components/RAGAttackTrustSimulator.jsx",
+  "components/RAGFeatureTestPanel.jsx",
+  "components/RAGPipelineTelemetry.jsx",
+  "components/RoutingAuditPanel.jsx",
+  "components/SubmoduleResultsPage.jsx",
+  "components/firewall-module-utils.js",
+  "components/layout/Header.jsx",
+  "components/module-specific-log-charts.jsx",
+  "components/rag/CollectionManagerPanel.jsx",
+  "components/rag/SemanticSearchPanel.jsx",
+  "components/simulator/IsolationOpsSimulator.jsx",
+  "components/simulator/MCPGuardrailSimulator.jsx",
+  "components/simulator/ModelRoutingSimulator.jsx",
+  "components/simulator/RAGIngestionPanel.jsx",
+  "components/simulator/StageTimeline.jsx",
+  "components/simulator/simulatorResultUtils.js",
+  "hooks/useCollections.js",
+  "hooks/useFirewallData.js",
+  "hooks/useSimulatorEngine.js",
+  "pages/AIMeshFirewallOverview.jsx",
+  "utils/liveGateway.js",
+  "utils/outputGovernanceFeed.js",
+  "utils/pipelineTrace.js",
+  "utils/routingEventFields.js"
+ ],
+ "n_consumer_files": 37,
+ "bytes": 962702,
+ "F_size": 878,
+ "P_size": 192,
+ "F_and_P": [
+  "action",
+  "actions",
+  "auth_ms",
+  "auth_status",
+  "by_stage",
+  "candidate_count",
+  "compliance_tags",
+  "confidence",
+  "content",
+  "content_safety",
+  "data_sensitivity",
+  "decision_factors",
+  "decision_source",
+  "decision_source_label",
+  "detail",
+  "detection_tier",
+  "dominant_latency_ms",
+  "dominant_share_pct",
+  "dominant_stage",
+  "endpoint",
+  "endpoint_id",
+  "enforcement_source",
+  "evaluator_model",
+  "event_type",
+  "extra",
+  "fallback_chain",
+  "final_action",
+  "final_response",
+  "guard_action",
+  "guard_findings",
+  "guard_model",
+  "guard_reason",
+  "guard_summary",
+  "hints",
+  "incident_id",
+  "input_action",
+  "input_text",
+  "input_text_after",
+  "input_text_before",
+  "input_tokens",
+  "input_validation",
+  "input_was_redacted",
+  "intent",
+  "is_isolation_event",
+  "jailbreak_detected",
+  "key_prefix",
+  "kill_switch_ms",
+  "latency_breakdown",
+  "latency_ms",
+  "llm",
+  "matched_patterns",
+  "matched_policies",
+  "matched_rule_names",
+  "matched_rules",
+  "mcp",
+  "message",
+  "metadata",
+  "method",
+  "model",
+  "model_input_ms",
+  "module",
+  "module_id",
+  "name",
+  "org_routing_enabled",
+  "organization_id",
+  "original_model",
+  "output_guardrail_ms",
+  "output_text",
+  "output_tokens",
+  "output_withheld",
+  "output_withheld_reason",
+  "overhead_ms",
+  "owasp_code",
+  "pii_detected",
+  "pipeline_request_id",
+  "pipeline_stage",
+  "pipeline_trace",
+  "policy_ms",
+  "policy_summary",
+  "policy_violations",
+  "project_id",
+  "prompt",
+  "prompt_hash",
+  "prompt_in",
+  "prompt_in_operator_masked",
+  "prompt_injection_detected",
+  "prompt_lineage",
+  "prompt_out",
+  "prompt_preview",
+  "prompt_snippet",
+  "prompt_submitted",
+  "rate_limit",
+  "rate_limit_ms",
+  "rate_limit_status",
+  "reason",
+  "reason_code",
+  "recommended_action",
+  "redact_noop",
+  "redaction_display_note",
+  "remapped_from",
+  "request_id",
+  "requested_model",
+  "risk_score",
+  "route_destination",
+  "route_destination_label",
+  "routed_model",
+  "routing",
+  "routing_enabled",
+  "routing_reason",
+  "routing_score",
+  "scan_outcome",
+  "security_risk_score",
+  "selected_model",
+  "severity",
+  "share_pct",
+  "source",
+  "source_ip",
+  "stage",
+  "stage_latency_sum_ms",
+  "stages",
+  "status_code",
+  "threat_category",
+  "threat_type",
+  "tier",
+  "tier1_ms",
+  "tier2_ms",
+  "timestamp",
+  "tokens_used",
+  "total_latency_ms",
+  "total_ms",
+  "total_tokens",
+  "upstream_ms",
+  "user_agent",
+  "user_id",
+  "weights"
+ ],
+ "n_F_and_P": 135,
+ "F_and_Gany": 314,
+ "readers_per_field": {
+  "action": [
+   "components/AttackSimulatorPanel.jsx",
+   "components/DatabaseConnectionPanel.jsx",
+   "components/LogDetailPage.jsx",
+   "components/MCPConnectorPanel.jsx",
+   "components/ModelStatePanel.jsx",
+   "components/OutputGovernancePanel.jsx",
+   "components/OutputGuardrailEngineCard.jsx",
+   "components/OutputPipelineTimeline.jsx",
+   "components/RAGAttackTrustSimulator.jsx",
+   "components/RAGFeatureTestPanel.jsx",
+   "components/SubmoduleResultsPage.jsx",
+   "components/firewall-module-utils.js",
+   "components/module-specific-log-charts.jsx",
+   "components/rag/SemanticSearchPanel.jsx",
+   "components/simulator/MCPGuardrailSimulator.jsx",
+   "components/simulator/StageTimeline.jsx",
+   "components/simulator/simulatorResultUtils.js",
+   "hooks/useFirewallData.js",
+   "pages/AIMeshFirewallOverview.jsx",
+   "utils/liveGateway.js",
+   "utils/outputGovernanceFeed.js",
+   "utils/pipelineTrace.js",
+   "utils/routingEventFields.js"
+  ],
+  "actions": [
+   "components/LogDetailPage.jsx"
+  ],
+  "auth_ms": [
+   "utils/liveGateway.js"
+  ],
+  "auth_status": [
+   "components/LogDetailPage.jsx"
+  ],
+  "by_stage": [
+   "components/LogDetailPage.jsx",
+   "utils/pipelineTrace.js"
+  ],
+  "candidate_count": [
+   "components/RoutingAuditPanel.jsx",
+   "components/simulator/StageTimeline.jsx",
+   "utils/liveGateway.js"
+  ],
+  "compliance_tags": [
+   "components/AttackSimulatorPanel.jsx",
+   "components/LogDetailPage.jsx",
+   "components/MCPConnectorPanel.jsx",
+   "components/ModelConnectionPanel.jsx",
+   "components/OutputGovernancePanel.jsx",
+   "components/OutputPipelineTimeline.jsx",
+   "components/module-specific-log-charts.jsx",
+   "utils/liveGateway.js"
+  ],
+  "confidence": [
+   "components/OutputGovernancePanel.jsx",
+   "components/simulator/StageTimeline.jsx",
+   "utils/liveGateway.js"
+  ],
+  "content": [
+   "components/AttackSimulatorPanel.jsx",
+   "components/LogDetailPage.jsx",
+   "components/MCPConnectorPanel.jsx",
+   "components/OutputPipelineTimeline.jsx",
+   "components/RAGAttackTrustSimulator.jsx",
+   "components/rag/SemanticSearchPanel.jsx",
+   "components/simulator/IsolationOpsSimulator.jsx",
+   "components/simulator/RAGIngestionPanel.jsx",
+   "components/simulator/StageTimeline.jsx",
+   "utils/liveGateway.js"
+  ],
+  "content_safety": [
+   "components/LogDetailPage.jsx"
+  ],
+  "data_sensitivity": [
+   "components/RoutingAuditPanel.jsx"
+  ],
+  "decision_factors": [
+   "components/RoutingAuditPanel.jsx",
+   "components/simulator/StageTimeline.jsx",
+   "utils/liveGateway.js"
+  ],
+  "decision_source": [
+   "components/LogDetailPage.jsx",
+   "components/RoutingAuditPanel.jsx",
+   "components/simulator/StageTimeline.jsx",
+   "utils/liveGateway.js",
+   "utils/routingEventFields.js"
+  ],
+  "decision_source_label": [
+   "components/LogDetailPage.jsx",
+   "components/simulator/StageTimeline.jsx",
+   "utils/liveGateway.js"
+  ],
+  "detail": [
+   "components/AttackSimulatorPanel.jsx",
+   "components/DatabaseConnectionPanel.jsx",
+   "components/MCPConnectorPanel.jsx",
+   "components/ModelConnectionPanel.jsx",
+   "components/OutputGovernancePanel.jsx",
+   "components/OutputPipelineTimeline.jsx",
+   "components/RAGAttackTrustSimulator.jsx",
+   "components/RAGFeatureTestPanel.jsx",
+   "components/rag/SemanticSearchPanel.jsx",
+   "components/simulator/IsolationOpsSimulator.jsx",
+   "components/simulator/MCPGuardrailSimulator.jsx",
+   "components/simulator/StageTimeline.jsx",
+   "pages/AIMeshFirewallOverview.jsx",
+   "utils/liveGateway.js",
+   "utils/pipelineTrace.js"
+  ],
+  "detection_tier": [
+   "components/AttackSimulatorPanel.jsx",
+   "utils/liveGateway.js",
+   "utils/pipelineTrace.js"
+  ],
+  "dominant_latency_ms": [
+   "components/LogDetailPage.jsx",
+   "utils/pipelineTrace.js"
+  ],
+  "dominant_share_pct": [
+   "components/LogDetailPage.jsx",
+   "utils/pipelineTrace.js"
+  ],
+  "dominant_stage": [
+   "components/LogDetailPage.jsx",
+   "utils/pipelineTrace.js"
+  ],
+  "endpoint": [
+   "components/LogDetailPage.jsx",
+   "components/module-specific-log-charts.jsx",
+   "hooks/useSimulatorEngine.js"
+  ],
+  "endpoint_id": [
+   "components/LogDetailPage.jsx"
+  ],
+  "enforcement_source": [
+   "utils/liveGateway.js"
+  ],
+  "evaluator_model": [
+   "utils/liveGateway.js"
+  ],
+  "event_type": [
+   "components/LogDetailPage.jsx",
+   "components/OutputGuardrailEngineCard.jsx",
+   "components/firewall-module-utils.js",
+   "components/module-specific-log-charts.jsx",
+   "utils/outputGovernanceFeed.js",
+   "utils/routingEventFields.js"
+  ],
+  "extra": [
+   "components/LogDetailPage.jsx",
+   "components/OutputGovernancePanel.jsx",
+   "components/OutputPipelineTimeline.jsx",
+   "components/firewall-module-utils.js",
+   "components/module-specific-log-charts.jsx",
+   "utils/outputGovernanceFeed.js",
+   "utils/pipelineTrace.js",
+   "utils/routingEventFields.js"
+  ],
+  "fallback_chain": [
+   "components/RoutingAuditPanel.jsx",
+   "components/simulator/ModelRoutingSimulator.jsx",
+   "utils/liveGateway.js"
+  ],
+  "final_action": [
+   "components/AttackSimulatorPanel.jsx",
+   "components/DatabaseConnectionPanel.jsx",
+   "components/LogDetailPage.jsx",
+   "components/RAGAttackTrustSimulator.jsx",
+   "components/RAGFeatureTestPanel.jsx",
+   "components/rag/SemanticSearchPanel.jsx",
+   "components/simulator/IsolationOpsSimulator.jsx",
+   "components/simulator/simulatorResultUtils.js",
+   "utils/liveGateway.js",
+   "utils/pipelineTrace.js"
+  ],
+  "final_response": [
+   "utils/pipelineTrace.js"
+  ],
+  "guard_action": [
+   "components/AttackSimulatorPanel.jsx",
+   "utils/liveGateway.js"
+  ],
+  "guard_findings": [
+   "components/simulator/StageTimeline.jsx",
+   "utils/liveGateway.js"
+  ],
+  "guard_model": [
+   "components/AttackSimulatorPanel.jsx",
+   "components/simulator/StageTimeline.jsx",
+   "utils/liveGateway.js"
+  ],
+  "guard_reason": [
+   "components/AttackSimulatorPanel.jsx",
+   "components/simulator/StageTimeline.jsx",
+   "utils/liveGateway.js",
+   "utils/pipelineTrace.js"
+  ],
+  "guard_summary": [
+   "components/AttackSimulatorPanel.jsx",
+   "utils/liveGateway.js"
+  ],
+  "hints": [
+   "components/LogDetailPage.jsx",
+   "utils/pipelineTrace.js"
+  ],
+  "incident_id": [
+   "components/LogDetailPage.jsx"
+  ],
+  "input_action": [
+   "components/LogDetailPage.jsx"
+  ],
+  "input_text": [
+   "utils/pipelineTrace.js"
+  ],
+  "input_text_after": [
+   "utils/pipelineTrace.js"
+  ],
+  "input_text_before": [
+   "utils/pipelineTrace.js"
+  ],
+  "input_tokens": [
+   "components/LogDetailPage.jsx"
+  ],
+  "input_validation": [
+   "components/LogDetailPage.jsx"
+  ],
+  "input_was_redacted": [
+   "utils/pipelineTrace.js"
+  ],
+  "intent": [
+   "components/LogDetailPage.jsx"
+  ],
+  "is_isolation_event": [
+   "components/firewall-module-utils.js"
+  ],
+  "jailbreak_detected": [
+   "utils/pipelineTrace.js"
+  ],
+  "key_prefix": [
+   "components/LogDetailPage.jsx"
+  ],
+  "kill_switch_ms": [
+   "utils/liveGateway.js"
+  ],
+  "latency_breakdown": [
+   "utils/pipelineTrace.js"
+  ],
+  "latency_ms": [
+   "components/AttackSimulatorPanel.jsx",
+   "components/DatabaseConnectionPanel.jsx",
+   "components/LogDetailPage.jsx",
+   "components/MCPConnectorPanel.jsx",
+   "components/OutputGovernancePanel.jsx",
+   "components/OutputPipelineTimeline.jsx",
+   "components/RAGAttackTrustSimulator.jsx",
+   "components/RoutingAuditPanel.jsx",
+   "components/module-specific-log-charts.jsx",
+   "components/simulator/StageTimeline.jsx",
+   "utils/liveGateway.js",
+   "utils/pipelineTrace.js"
+  ],
+  "llm": [
+   "components/OWASPStatsPanel.jsx"
+  ],
+  "matched_patterns": [
+   "components/AttackSimulatorPanel.jsx",
+   "components/LogDetailPage.jsx",
+   "components/OutputGovernancePanel.jsx",
+   "components/OutputPipelineTimeline.jsx",
+   "components/module-specific-log-charts.jsx",
+   "components/simulator/StageTimeline.jsx",
+   "utils/liveGateway.js"
+  ],
+  "matched_policies": [
+   "components/MCPConnectorPanel.jsx",
+   "components/simulator/MCPGuardrailSimulator.jsx",
+   "components/simulator/StageTimeline.jsx",
+   "utils/liveGateway.js",
+   "utils/pipelineTrace.js"
+  ],
+  "matched_rule_names": [
+   "utils/pipelineTrace.js"
+  ],
+  "matched_rules": [
+   "components/simulator/MCPGuardrailSimulator.jsx",
+   "components/simulator/StageTimeline.jsx",
+   "utils/liveGateway.js",
+   "utils/pipelineTrace.js"
+  ],
+  "mcp": [
+   "components/OWASPStatsPanel.jsx"
+  ],
+  "message": [
+   "components/AttackSimulatorPanel.jsx",
+   "components/DatabaseConnectionPanel.jsx",
+   "components/LogDetailPage.jsx",
+   "components/MCPConnectorPanel.jsx",
+   "components/ModelConnectionPanel.jsx",
+   "components/OutputGuardrailCharts.jsx",
+   "components/OutputGuardrailEngineCard.jsx",
+   "components/RAGAttackTrustSimulator.jsx",
+   "components/RAGFeatureTestPanel.jsx",
+   "components/RAGPipelineTelemetry.jsx",
+   "components/layout/Header.jsx",
+   "components/rag/CollectionManagerPanel.jsx",
+   "components/rag/SemanticSearchPanel.jsx",
+   "components/simulator/IsolationOpsSimulator.jsx",
+   "components/simulator/MCPGuardrailSimulator.jsx",
+   "components/simulator/ModelRoutingSimulator.jsx",
+   "components/simulator/RAGIngestionPanel.jsx",
+   "hooks/useCollections.js",
+   "hooks/useFirewallData.js",
+   "hooks/useSimulatorEngine.js",
+   "utils/liveGateway.js"
+  ],
+  "metadata": [
+   "components/LogDetailPage.jsx",
+   "components/MCPConnectorPanel.jsx",
+   "components/OutputGovernancePanel.jsx",
+   "components/OutputGuardrailEngineCard.jsx",
+   "components/OutputPipelineTimeline.jsx",
+   "components/RAGAttackTrustSimulator.jsx",
+   "components/SubmoduleResultsPage.jsx",
+   "components/firewall-module-utils.js",
+   "components/module-specific-log-charts.jsx",
+   "components/rag/SemanticSearchPanel.jsx",
+   "components/simulator/MCPGuardrailSimulator.jsx",
+   "hooks/useFirewallData.js",
+   "utils/outputGovernanceFeed.js",
+   "utils/pipelineTrace.js",
+   "utils/routingEventFields.js"
+  ],
+  "method": [
+   "components/LogDetailPage.jsx",
+   "hooks/useSimulatorEngine.js"
+  ],
+  "model": [
+   "components/LogDetailPage.jsx",
+   "components/OutputGovernancePanel.jsx",
+   "components/OutputPipelineTimeline.jsx",
+   "components/SubmoduleResultsPage.jsx",
+   "components/firewall-module-utils.js",
+   "components/simulator/IsolationOpsSimulator.jsx",
+   "components/simulator/ModelRoutingSimulator.jsx",
+   "utils/liveGateway.js",
+   "utils/routingEventFields.js"
+  ],
+  "model_input_ms": [
+   "utils/liveGateway.js"
+  ],
+  "module": [
+   "components/firewall-module-utils.js",
+   "components/module-specific-log-charts.jsx",
+   "pages/AIMeshFirewallOverview.jsx"
+  ],
+  "module_id": [
+   "components/firewall-module-utils.js",
+   "components/module-specific-log-charts.jsx"
+  ],
+  "name": [
+   "components/AttackSimulatorPanel.jsx",
+   "components/DatabaseConnectionPanel.jsx",
+   "components/Firewall12EnterprisePage.jsx",
+   "components/LogDetailPage.jsx",
+   "components/MCPConnectorPanel.jsx",
+   "components/OWASPStatsPanel.jsx",
+   "components/OutputGuardrailCharts.jsx",
+   "components/RAGAttackTrustSimulator.jsx",
+   "components/RAGFeatureTestPanel.jsx",
+   "components/RAGPipelineTelemetry.jsx",
+   "components/SubmoduleResultsPage.jsx",
+   "components/module-specific-log-charts.jsx",
+   "components/rag/CollectionManagerPanel.jsx",
+   "components/rag/SemanticSearchPanel.jsx",
+   "components/simulator/MCPGuardrailSimulator.jsx",
+   "components/simulator/RAGIngestionPanel.jsx",
+   "components/simulator/StageTimeline.jsx",
+   "hooks/useCollections.js",
+   "hooks/useSimulatorEngine.js",
+   "pages/AIMeshFirewallOverview.jsx",
+   "utils/liveGateway.js",
+   "utils/outputGovernanceFeed.js",
+   "utils/pipelineTrace.js"
+  ],
+  "org_routing_enabled": [
+   "components/RoutingAuditPanel.jsx",
+   "utils/liveGateway.js"
+  ],
+  "organization_id": [
+   "components/LogDetailPage.jsx",
+   "components/firewall-module-utils.js"
+  ],
+  "original_model": [
+   "utils/liveGateway.js",
+   "utils/routingEventFields.js"
+  ],
+  "output_guardrail_ms": [
+   "utils/liveGateway.js"
+  ],
+  "output_text": [
+   "utils/pipelineTrace.js"
+  ],
+  "output_tokens": [
+   "components/LogDetailPage.jsx"
+  ],
+  "output_withheld": [
+   "utils/pipelineTrace.js"
+  ],
+  "output_withheld_reason": [
+   "utils/pipelineTrace.js"
+  ],
+  "overhead_ms": [
+   "components/LogDetailPage.jsx",
+   "utils/liveGateway.js",
+   "utils/pipelineTrace.js"
+  ],
+  "owasp_code": [
+   "components/LogDetailPage.jsx",
+   "components/SubmoduleResultsPage.jsx",
+   "components/firewall-module-utils.js"
+  ],
+  "pii_detected": [
+   "components/LogDetailPage.jsx",
+   "utils/pipelineTrace.js"
+  ],
+  "pipeline_request_id": [
+   "components/LogDetailPage.jsx",
+   "utils/outputGovernanceFeed.js"
+  ],
+  "pipeline_stage": [
+   "components/LogDetailPage.jsx",
+   "components/SubmoduleResultsPage.jsx",
+   "components/firewall-module-utils.js",
+   "components/module-specific-log-charts.jsx",
+   "utils/liveGateway.js"
+  ],
+  "pipeline_trace": [
+   "components/LogDetailPage.jsx",
+   "components/module-specific-log-charts.jsx",
+   "utils/liveGateway.js",
+   "utils/outputGovernanceFeed.js",
+   "utils/pipelineTrace.js"
+  ],
+  "policy_ms": [
+   "utils/liveGateway.js"
+  ],
+  "policy_summary": [
+   "components/RoutingAuditPanel.jsx",
+   "components/simulator/StageTimeline.jsx",
+   "utils/liveGateway.js",
+   "utils/routingEventFields.js"
+  ],
+  "policy_violations": [
+   "components/LogDetailPage.jsx"
+  ],
+  "project_id": [
+   "components/LogDetailPage.jsx",
+   "components/firewall-module-utils.js"
+  ],
+  "prompt": [
+   "components/AttackSimulatorPanel.jsx",
+   "components/LogDetailPage.jsx",
+   "components/OutputGovernancePanel.jsx",
+   "components/OutputPipelineTimeline.jsx",
+   "components/module-specific-log-charts.jsx",
+   "utils/liveGateway.js"
+  ],
+  "prompt_hash": [
+   "components/LogDetailPage.jsx"
+  ],
+  "prompt_in": [
+   "components/simulator/StageTimeline.jsx"
+  ],
+  "prompt_in_operator_masked": [
+   "components/simulator/StageTimeline.jsx"
+  ],
+  "prompt_injection_detected": [
+   "utils/pipelineTrace.js"
+  ],
+  "prompt_lineage": [
+   "components/OutputGovernancePanel.jsx",
+   "components/OutputPipelineTimeline.jsx"
+  ],
+  "prompt_out": [
+   "components/simulator/StageTimeline.jsx"
+  ],
+  "prompt_preview": [
+   "utils/liveGateway.js",
+   "utils/pipelineTrace.js"
+  ],
+  "prompt_snippet": [
+   "components/LogDetailPage.jsx",
+   "components/OutputGovernancePanel.jsx",
+   "components/OutputPipelineTimeline.jsx",
+   "utils/pipelineTrace.js"
+  ],
+  "prompt_submitted": [
+   "components/LogDetailPage.jsx",
+   "components/simulator/StageTimeline.jsx",
+   "utils/liveGateway.js",
+   "utils/pipelineTrace.js"
+  ],
+  "rate_limit": [
+   "utils/liveGateway.js"
+  ],
+  "rate_limit_ms": [
+   "utils/liveGateway.js"
+  ],
+  "rate_limit_status": [
+   "components/LogDetailPage.jsx"
+  ],
+  "reason": [
+   "components/LogDetailPage.jsx",
+   "components/MCPConnectorPanel.jsx",
+   "components/ModelStatePanel.jsx",
+   "components/rag/CollectionManagerPanel.jsx",
+   "components/simulator/MCPGuardrailSimulator.jsx",
+   "hooks/useCollections.js",
+   "utils/liveGateway.js",
+   "utils/pipelineTrace.js"
+  ],
+  "reason_code": [
+   "components/AttackSimulatorPanel.jsx",
+   "components/simulator/StageTimeline.jsx",
+   "utils/liveGateway.js"
+  ],
+  "recommended_action": [
+   "components/simulator/StageTimeline.jsx",
+   "utils/liveGateway.js",
+   "utils/pipelineTrace.js"
+  ],
+  "redact_noop": [
+   "components/simulator/StageTimeline.jsx",
+   "utils/outputGovernanceFeed.js",
+   "utils/pipelineTrace.js"
+  ],
+  "redaction_display_note": [
+   "components/simulator/StageTimeline.jsx"
+  ],
+  "remapped_from": [
+   "components/LogDetailPage.jsx"
+  ],
+  "request_id": [
+   "components/AttackSimulatorPanel.jsx",
+   "components/LogDetailPage.jsx",
+   "components/MCPConnectorPanel.jsx",
+   "utils/liveGateway.js",
+   "utils/outputGovernanceFeed.js"
+  ],
+  "requested_model": [
+   "components/LogDetailPage.jsx",
+   "components/SubmoduleResultsPage.jsx",
+   "components/simulator/StageTimeline.jsx",
+   "utils/liveGateway.js",
+   "utils/routingEventFields.js"
+  ],
+  "risk_score": [
+   "components/ModelConnectionPanel.jsx",
+   "components/ModelStatePanel.jsx",
+   "components/OutputGovernancePanel.jsx",
+   "components/OutputPipelineTimeline.jsx",
+   "components/PolicyAnalyticsPanel.jsx",
+   "components/module-specific-log-charts.jsx",
+   "components/simulator/ModelRoutingSimulator.jsx",
+   "components/simulator/StageTimeline.jsx",
+   "utils/liveGateway.js"
+  ],
+  "route_destination": [
+   "components/LogDetailPage.jsx",
+   "components/simulator/StageTimeline.jsx",
+   "utils/liveGateway.js"
+  ],
+  "route_destination_label": [
+   "components/LogDetailPage.jsx",
+   "components/simulator/StageTimeline.jsx",
+   "utils/liveGateway.js"
+  ],
+  "routed_model": [
+   "components/LogDetailPage.jsx",
+   "components/SubmoduleResultsPage.jsx",
+   "components/firewall-module-utils.js",
+   "utils/liveGateway.js",
+   "utils/routingEventFields.js"
+  ],
+  "routing": [
+   "components/LogDetailPage.jsx",
+   "utils/liveGateway.js",
+   "utils/pipelineTrace.js"
+  ],
+  "routing_enabled": [
+   "components/AttackSimulatorPanel.jsx",
+   "components/simulator/IsolationOpsSimulator.jsx"
+  ],
+  "routing_reason": [
+   "components/RoutingAuditPanel.jsx",
+   "components/simulator/ModelRoutingSimulator.jsx",
+   "components/simulator/StageTimeline.jsx",
+   "utils/liveGateway.js",
+   "utils/routingEventFields.js"
+  ],
+  "routing_score": [
+   "components/RoutingAuditPanel.jsx",
+   "components/simulator/StageTimeline.jsx",
+   "utils/liveGateway.js"
+  ],
+  "scan_outcome": [
+   "components/simulator/StageTimeline.jsx",
+   "utils/liveGateway.js",
+   "utils/pipelineTrace.js"
+  ],
+  "security_risk_score": [
+   "components/Firewall12EnterprisePage.jsx",
+   "components/LogDetailPage.jsx",
+   "components/OutputGovernancePanel.jsx",
+   "components/OutputPipelineTimeline.jsx",
+   "components/SubmoduleResultsPage.jsx",
+   "components/firewall-module-utils.js",
+   "components/module-specific-log-charts.jsx"
+  ],
+  "selected_model": [
+   "components/simulator/StageTimeline.jsx",
+   "utils/liveGateway.js",
+   "utils/routingEventFields.js"
+  ],
+  "severity": [
+   "components/Firewall12EnterprisePage.jsx",
+   "components/LogDetailPage.jsx",
+   "components/SubmoduleResultsPage.jsx",
+   "components/firewall-module-utils.js",
+   "hooks/useFirewallData.js"
+  ],
+  "share_pct": [
+   "components/LogDetailPage.jsx",
+   "utils/pipelineTrace.js"
+  ],
+  "source": [
+   "components/LogDetailPage.jsx",
+   "components/MCPConnectorPanel.jsx",
+   "components/ModelStatePanel.jsx",
+   "components/SubmoduleResultsPage.jsx",
+   "components/firewall-module-utils.js",
+   "components/module-specific-log-charts.jsx",
+   "components/simulator/RAGIngestionPanel.jsx",
+   "hooks/useFirewallData.js",
+   "utils/routingEventFields.js"
+  ],
+  "source_ip": [
+   "components/LogDetailPage.jsx"
+  ],
+  "stage": [
+   "components/LogDetailPage.jsx",
+   "components/OutputPipelineTimeline.jsx",
+   "components/RAGAttackTrustSimulator.jsx",
+   "components/RAGPipelineTelemetry.jsx",
+   "components/SubmoduleResultsPage.jsx",
+   "components/firewall-module-utils.js",
+   "components/module-specific-log-charts.jsx",
+   "components/simulator/StageTimeline.jsx",
+   "utils/outputGovernanceFeed.js",
+   "utils/pipelineTrace.js"
+  ],
+  "stage_latency_sum_ms": [
+   "components/LogDetailPage.jsx",
+   "utils/liveGateway.js",
+   "utils/pipelineTrace.js"
+  ],
+  "stages": [
+   "components/AttackSimulatorPanel.jsx",
+   "components/DatabaseConnectionPanel.jsx",
+   "components/LogDetailPage.jsx",
+   "components/RAGAttackTrustSimulator.jsx",
+   "components/RAGFeatureTestPanel.jsx",
+   "components/RAGPipelineTelemetry.jsx",
+   "components/module-specific-log-charts.jsx",
+   "components/rag/SemanticSearchPanel.jsx",
+   "components/simulator/StageTimeline.jsx",
+   "utils/liveGateway.js",
+   "utils/outputGovernanceFeed.js",
+   "utils/pipelineTrace.js"
+  ],
+  "status_code": [
+   "components/LogDetailPage.jsx"
+  ],
+  "threat_category": [
+   "components/OutputGovernancePanel.jsx",
+   "components/OutputGuardrailEngineCard.jsx",
+   "components/OutputPipelineTimeline.jsx",
+   "components/SubmoduleResultsPage.jsx",
+   "components/firewall-module-utils.js"
+  ],
+  "threat_type": [
+   "components/LogDetailPage.jsx",
+   "components/OutputGovernancePanel.jsx",
+   "components/OutputGuardrailEngineCard.jsx",
+   "components/OutputPipelineTimeline.jsx",
+   "components/RAGAttackTrustSimulator.jsx",
+   "components/firewall-module-utils.js",
+   "components/simulator/StageTimeline.jsx",
+   "utils/liveGateway.js",
+   "utils/pipelineTrace.js"
+  ],
+  "tier": [
+   "components/MCPConnectorPanel.jsx",
+   "components/simulator/StageTimeline.jsx",
+   "utils/liveGateway.js",
+   "utils/pipelineTrace.js"
+  ],
+  "tier1_ms": [
+   "utils/liveGateway.js"
+  ],
+  "tier2_ms": [
+   "utils/liveGateway.js"
+  ],
+  "timestamp": [
+   "components/LogDetailPage.jsx",
+   "components/MCPConnectorPanel.jsx",
+   "components/ModelStatePanel.jsx",
+   "components/OutputGovernancePanel.jsx",
+   "components/RAGAttackTrustSimulator.jsx",
+   "components/RoutingAuditPanel.jsx",
+   "components/SubmoduleResultsPage.jsx",
+   "components/firewall-module-utils.js",
+   "hooks/useFirewallData.js",
+   "utils/outputGovernanceFeed.js"
+  ],
+  "tokens_used": [
+   "components/module-specific-log-charts.jsx"
+  ],
+  "total_latency_ms": [
+   "components/AttackSimulatorPanel.jsx",
+   "components/RAGAttackTrustSimulator.jsx",
+   "components/RAGFeatureTestPanel.jsx",
+   "components/simulator/IsolationOpsSimulator.jsx",
+   "utils/liveGateway.js",
+   "utils/pipelineTrace.js"
+  ],
+  "total_ms": [
+   "components/AttackSimulatorPanel.jsx"
+  ],
+  "total_tokens": [
+   "components/LogDetailPage.jsx"
+  ],
+  "upstream_ms": [
+   "utils/liveGateway.js"
+  ],
+  "user_agent": [
+   "components/LogDetailPage.jsx"
+  ],
+  "user_id": [
+   "components/MCPConnectorPanel.jsx",
+   "components/RoutingAuditPanel.jsx"
+  ],
+  "weights": [
+   "components/RoutingAuditPanel.jsx",
+   "components/simulator/StageTimeline.jsx",
+   "utils/liveGateway.js"
+  ]
+ },
+ "v1_stage_name_literals": {
+  "auth": [
+   "utils/liveGateway.js"
+  ],
+  "kill_switch": [
+   "components/ModelStatePanel.jsx",
+   "components/firewall-module-utils.js",
+   "utils/liveGateway.js"
+  ],
+  "rate_limit": [
+   "components/AttackSimulatorPanel.jsx",
+   "utils/liveGateway.js"
+  ],
+  "policy": [
+   "components/simulator/StageTimeline.jsx",
+   "hooks/useFirewallData.js",
+   "utils/liveGateway.js"
+  ],
+  "input_scan": [
+   "components/simulator/StageTimeline.jsx",
+   "utils/liveGateway.js"
+  ],
+  "model_routing": [
+   "components/simulator/StageTimeline.jsx",
+   "utils/liveGateway.js",
+   "utils/pipelineTrace.js"
+  ],
+  "model_input": [
+   "utils/liveGateway.js"
+  ],
+  "model_output": [
+   "components/AttackSimulatorPanel.jsx",
+   "utils/liveGateway.js"
+  ],
+  "output_guardrail": [
+   "components/simulator/StageTimeline.jsx",
+   "utils/liveGateway.js",
+   "utils/outputGovernanceFeed.js"
+  ]
+ }
+}

@@ -1,0 +1,2 @@
+22M long-window t1 (all windows)=0.9453 -> recall ALL (np.float64(0.1672), 323) in-scope (np.float64(0.2512), 207) | t1 (windows w/o snippet)=0.0286 -> recall ALL (np.float64(0.3932), 323) in-scope (np.float64(0.5411), 207)
+86M long-window t1 (all windows)=0.9879 -> recall ALL (np.float64(0.2136), 323) in-scope (np.float64(0.3285), 207) | t1 (windows w/o snippet)=0.0273 -> recall ALL (np.float64(0.3591), 323) in-scope (np.float64(0.4831), 207)

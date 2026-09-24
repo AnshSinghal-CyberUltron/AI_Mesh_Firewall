@@ -1,0 +1,14 @@
+[
+ {
+  "label": "json-125s-via-gw",
+  "status": 502,
+  "elapsed_s": 120.05,
+  "body_head": "{\"error\":{\"message\":\"provider unreachable: SocketTimeoutError\",\"type\":\"upstream_error\",\"param\":null,\"code\":\"provider_error\"}}"
+ },
+ {
+  "label": "json-125s-direct",
+  "status": 200,
+  "elapsed_s": 125.03,
+  "body_head": "{\"id\":\"chatcmpl-edge-140bedbf9c3f6d56\",\"object\":\"chat.completion\",\"created\":1700000000,\"model\":\"gpt-4o-mini\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\" ocean bravo silver river\"},"
+ }
+]

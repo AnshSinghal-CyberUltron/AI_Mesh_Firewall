@@ -1,0 +1,18 @@
+15:07:42 fleet-075: olg started on rv-pbf-lg-4 (rate 75.0 each, start-at 1790176085945, mode sut, targets http://10.146.0.20:8080)
+[rv-pbf-lg-4] 2026/09/23 15:14:43 done: scheduled=28125 recorded=28125 ok=27665 errors=map[http_403:455 http_503:5] drops=0 late_p99=106us max=640us cpu_busy_max=8.5%
+# fleet-075: strict FAIL | load-knee PASS (sut, units=3, rate=75)
+
+checks: {'p99_T_fw_addon_lt_slo': False, 'infra_error_rate_le_budget': True, 'zero_schedule_drops': True, 'zero_safety_failures': True, 'run_valid': True}
+load-knee checks: {'p99_T_fw_addon_nohold_lt_slo': True, 'infra_error_rate_le_budget': True, 'zero_schedule_drops': True, 'zero_safety_failures': True, 'run_valid': True}
+offered 22500 (75.0/s) qualified 22116 (73.72/s) FP-blocks 379 (0.01684) infra 5 (0.00022222222222222223) drops 0 safety 0
+infra reasons: {'http_503': 4, 'incomplete': 4, 'unjoined': 4, 'disposition_missing': 4, 'stage_canon_missing': 4, 'stage_det_missing': 4, 'stage_sem_missing': 4, 'stage_resolve_missing': 4, 'stage_dispatch_missing': 4, 'stage_out_missing': 4, 'stage_audit_missing': 4, 'block_on_unavailable_sem': 1}
+infra detail: {'503 http_503 type=server_overloaded code=overloaded': 4, '403 http_403 type=policy_violation code=blocked_by_policy': 1}
+
+T_fw_addon: n=22116 p50=10.8276 p90=15.9622 p99=53.7463 p99.9=71.4245 max=87.7317 mean=13.1321
+T_fw_addon_nohold: n=22116 p50=10.53 p90=13.6184 p99=16.475 p99.9=20.9623 max=36.6762 mean=10.0453
+T_fw_addon_sse: n=15486 p50=10.9379 p90=32.2579 p99=54.914 p99.9=71.9895 max=87.7317 mean=14.4215
+T_fw_addon_json: n=6630 p50=10.579 p90=13.8075 p99=16.5543 p99.9=20.4935 max=22.7518 mean=10.1205
+T_addon_first_sse: n=15486 p50=10.4567 p90=13.9401 p99=30.1399 p99.9=34.856 max=50.9538 mean=10.2811
+T_addon_total_sse: n=15486 p50=10.5102 p90=13.5189 p99=16.431 p99.9=20.9722 max=36.6762 mean=10.0131
+T_addon_total_json: n=6630 p50=10.579 p90=13.8075 p99=16.5543 p99.9=20.4935 max=22.7518 mean=10.1205
+T_release_lag_max: n=1560 p50=50.1023 p90=54.8092 p99=71.9895 p99.9=80.8341 max=87.7317 mean=49.6901

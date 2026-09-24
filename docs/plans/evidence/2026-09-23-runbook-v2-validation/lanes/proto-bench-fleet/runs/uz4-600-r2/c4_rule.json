@@ -1,0 +1,122 @@
+{
+ "run": "uz4-600-r2",
+ "units": 4,
+ "rate": 600,
+ "pass_c4_rule": false,
+ "checks": {
+  "c4_p99_lt_20": false,
+  "infra_le_0.1pct": true,
+  "zero_drops": true,
+  "zero_safety": true,
+  "valid": true
+ },
+ "pass_load_rule": true,
+ "qualified_rps": 589.67,
+ "infra_pct": 0.0006,
+ "infra_reasons": {
+  "block_on_unavailable_sem": 1
+ },
+ "sem_U_blocks": 1,
+ "guard_deadline_expired": 1,
+ "guard_unavailable_findings": 1,
+ "sheds": {},
+ "fp_block_pct": 1.722,
+ "C4_p99_ms_offered_inf": 26.337,
+ "C4_p50_ms": 15.923,
+ "C4_n": 176901,
+ "C4_n_inf": 1,
+ "C4_sse_p99": 27.099,
+ "C4_json_p99": 19.072,
+ "c4_counts": {
+  "policy_block": 3099,
+  "sse": 123864,
+  "json": 53036,
+  "infra_or_unqualified": 1
+ },
+ "json_p99_ms_qualified": 19.0721,
+ "sse_total_p99_ms_qualified": 19.1872,
+ "load_rule_p99_T_addon_total": 19.1595,
+ "strict_T_fw_addon_p99_qualified": 72.6013,
+ "gpu_sm_mean_range": [
+  22.1,
+  23.4
+ ],
+ "cpu_ms_per_req": 34.615,
+ "gateway_cores": 20.7,
+ "per_unit_skew": {
+  "rv-pbf-unit-2": {
+   "worker_cpu_busiest": 0.286,
+   "worker_cpu_median": 0.249,
+   "worker_cpu_min": 0.199,
+   "conns_per_worker_meas_end": {
+    "total": 917,
+    "workers_with_conns": 18,
+    "min": 41,
+    "median": 51,
+    "max": 61
+   },
+   "admitted_max_over_mean": 1.172,
+   "gpu_sm_mean": [
+    22.1,
+    23.1
+   ]
+  },
+  "rv-pbf-unit-3": {
+   "worker_cpu_busiest": 0.3,
+   "worker_cpu_median": 0.263,
+   "worker_cpu_min": 0.232,
+   "conns_per_worker_meas_end": {
+    "total": 923,
+    "workers_with_conns": 18,
+    "min": 39,
+    "median": 52,
+    "max": 62
+   },
+   "admitted_max_over_mean": 1.159,
+   "gpu_sm_mean": [
+    22.3,
+    23.1
+   ]
+  },
+  "rv-pbf-unit-4": {
+   "worker_cpu_busiest": 0.297,
+   "worker_cpu_median": 0.25,
+   "worker_cpu_min": 0.204,
+   "conns_per_worker_meas_end": {
+    "total": 917,
+    "workers_with_conns": 18,
+    "min": 38,
+    "median": 51,
+    "max": 63
+   },
+   "admitted_max_over_mean": 1.247,
+   "gpu_sm_mean": [
+    23.4,
+    22.1
+   ]
+  },
+  "rv-pbf-unit-5": {
+   "worker_cpu_busiest": 0.308,
+   "worker_cpu_median": 0.256,
+   "worker_cpu_min": 0.21,
+   "conns_per_worker_meas_end": {
+    "total": 912,
+    "workers_with_conns": 18,
+    "min": 40,
+    "median": 49,
+    "max": 61
+   },
+   "admitted_max_over_mean": 1.248,
+   "gpu_sm_mean": [
+    22.4,
+    23.2
+   ]
+  }
+ },
+ "drops": 0,
+ "lateness_max_ms": 0.6262,
+ "loadgen_cpu_max": 14.2,
+ "redis_ops_s": 1790.3,
+ "redis_ping_p99_us": 614.9,
+ "edge_nginx_cores": 1.14
+}

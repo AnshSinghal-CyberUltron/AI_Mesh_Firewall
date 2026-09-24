@@ -1,0 +1,18 @@
+Redis unavailable during auth lookup: Error 111 connecting to 127.0.0.1:25579. Connect call failed ('127.0.0.1', 25579).
+Kill-switch Redis check failed (fail-CLOSED): Error 111 connecting to 127.0.0.1:25579. Connect call failed ('127.0.0.1', 25579).
+Model state Redis check failed (fail-CLOSED): Error 111 connecting to 127.0.0.1:25579. Connect call failed ('127.0.0.1', 25579).
+Burst rate check failed, skipping
+ConnectionRefusedError: [Errno 111] Connect call failed ('127.0.0.1', 25579)
+During handling of the above exception, another exception occurred:
+redis.exceptions.ConnectionError: Error 111 connecting to 127.0.0.1:25579. Connect call failed ('127.0.0.1', 25579).
+RPM check failed, skipping
+ConnectionRefusedError: [Errno 111] Connect call failed ('127.0.0.1', 25579)
+During handling of the above exception, another exception occurred:
+redis.exceptions.ConnectionError: Error 111 connecting to 127.0.0.1:25579. Connect call failed ('127.0.0.1', 25579).
+Org rate limit check failed (fail-OPEN, allowing): Error 111 connecting to 127.0.0.1:25579. Connect call failed ('127.0.0.1', 25579).
+Rate limit check failed (fail-OPEN, allowing): Error 111 connecting to 127.0.0.1:25579. Connect call failed ('127.0.0.1', 25579).
+1 auth (middleware.validate_api_key): (503, 'service_unavailable')
+2 kill-switch: {'is_killed': True, 'action': 'disable', 'scope': 'redis_unavailable'}
+3 model_state: suspended
+4 burst/RPM: None (request proceeds = fail-OPEN)
+5 org TPM: (True, 0)  6 key TPM: (True, 0)

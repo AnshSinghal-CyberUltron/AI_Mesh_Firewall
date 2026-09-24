@@ -1,0 +1,35 @@
+### baseline shared/redis_log_handler.py, 50 ms injected PUBLISH latency, 20 lines
+root level=INFO  gateway level=DEBUG  child effective=DEBUG  child.isEnabledFor(DEBUG)=True
+injected Redis PUBLISH latency = 50 ms; debug lines logged from a coroutine = 20
+wall time of the 20 logger.debug() calls = 1007.8 ms (expected if blocking ~ N x latency = 1000 ms)
+per-line cost = 50.4 ms
+ticker (5 ms period) max gap = 1012.9 ms; gaps > 100 ms: 1; ticks recorded during the logging window: 0; ticker gap spanning the logging window = 1012.9 ms
+PUBLISH commands received by server: 21 (expected 1 warmup + 20 = 21)
+DEBUG lines also written to root stdout handler despite GATEWAY_LOG_LEVEL=INFO: 21
+
+### 1 ms injected latency, 200 lines
+root level=INFO  gateway level=DEBUG  child effective=DEBUG  child.isEnabledFor(DEBUG)=True
+injected Redis PUBLISH latency = 1 ms; debug lines logged from a coroutine = 200
+wall time of the 200 logger.debug() calls = 227.5 ms (expected if blocking ~ N x latency = 200 ms)
+per-line cost = 1.1 ms
+ticker (5 ms period) max gap = 232.6 ms; gaps > 100 ms: 1; ticks recorded during the logging window: 0; ticker gap spanning the logging window = 232.6 ms
+PUBLISH commands received by server: 201 (expected 1 warmup + 200 = 201)
+DEBUG lines also written to root stdout handler despite GATEWAY_LOG_LEVEL=INFO: 201
+
+### 0 ms injected (pure loopback RTT), 1000 lines
+root level=INFO  gateway level=DEBUG  child effective=DEBUG  child.isEnabledFor(DEBUG)=True
+injected Redis PUBLISH latency = 0 ms; debug lines logged from a coroutine = 1000
+wall time of the 1000 logger.debug() calls = 136.6 ms (expected if blocking ~ N x latency = 0 ms)
+per-line cost = 0.1 ms
+ticker (5 ms period) max gap = 141.7 ms; gaps > 100 ms: 1; ticks recorded during the logging window: 0; ticker gap spanning the logging window = 141.7 ms
+PUBLISH commands received by server: 1001 (expected 1 warmup + 1000 = 1001)
+DEBUG lines also written to root stdout handler despite GATEWAY_LOG_LEVEL=INFO: 1001
+
+### HEAD shared (identical file), 50 ms, 20 lines
+root level=INFO  gateway level=DEBUG  child effective=DEBUG  child.isEnabledFor(DEBUG)=True
+injected Redis PUBLISH latency = 50 ms; debug lines logged from a coroutine = 20
+wall time of the 20 logger.debug() calls = 1006.7 ms (expected if blocking ~ N x latency = 1000 ms)
+per-line cost = 50.3 ms
+ticker (5 ms period) max gap = 1011.9 ms; gaps > 100 ms: 1; ticks recorded during the logging window: 0; ticker gap spanning the logging window = 1011.9 ms
+PUBLISH commands received by server: 21 (expected 1 warmup + 20 = 21)
+DEBUG lines also written to root stdout handler despite GATEWAY_LOG_LEVEL=INFO: 21

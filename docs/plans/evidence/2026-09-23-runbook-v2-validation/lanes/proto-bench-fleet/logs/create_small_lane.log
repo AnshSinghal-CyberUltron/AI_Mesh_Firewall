@@ -1,0 +1,6 @@
+12:35:36 created rv-pbf-prov-3 (c4-highcpu-8) in asia-northeast1-a ip=10.146.0.16
+12:35:46 created rv-pbf-lg-4 (c4-highcpu-8) in asia-northeast1-a ip=10.146.0.17
+prep ok: rv-pbf-prov-3.asia-northeast1-a.c.ai-mesh-firewall.internal 8 vCPU
+binaries ok on rv-pbf-prov-3.asia-northeast1-a.c.ai-mesh-firewall.internal
+prep ok: rv-pbf-lg-4.asia-northeast1-a.c.ai-mesh-firewall.internal 8 vCPU
+binaries ok on rv-pbf-lg-4.asia-northeast1-a.c.ai-mesh-firewall.internal

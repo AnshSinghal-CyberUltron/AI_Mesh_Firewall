@@ -1,0 +1,60 @@
+ROOT = /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad
+enforcement imported from: /tmp/claude-1872320012/-home-contact-cyberultron-com-AI-Mesh-Firewall/1b4d4994-cf08-4d34-a6cb-54fd36f36877/scratchpad/baseline-2a657fad/gateway/ai_mesh_gateway/enforcement.py
+
+== signatures ==
+resolve_enforcement(recommendation: 'str | None', *, org_policy_action: 'str | None' = None, enforcement_mode: 'str' = 'block', redaction_possible: 'bool' = True, default_action: 'str' = 'allow') -> 'str'
+max_action(*actions: 'str | None', default: 'str' = 'allow') -> 'str'
+enforce_output(*, verdict_action: 'str | None' = None, verdict_threat_type: 'str | None' = None, verdict_confidence: 'float | None' = None, verdict_detail: 'str | None' = None, verdict_matched_patterns: 'list | None' = None, verdict_compliance_tags: 'list | None' = None, scan_degraded: 'bool' = False, enforcement_mode: 'str' = 'block', is_streaming: 'bool' = False, exception: 'Exception | None' = None, redaction_possible: 'bool' = True, pii_detection_enabled: 'bool' = True) -> 'PipelineDecision'
+resolve_and_enforce(*, scanner_recommendation: 'str | None' = None, scanner_action: 'str | None' = None, scanner_threat_type: 'str | None' = None, scanner_confidence: 'float | None' = None, scanner_tier: 'str | None' = None, scanner_matched_patterns: 'list | None' = None, scanner_detail: 'str | None' = None, org_policy_action: 'str | None' = None, matched_rules: 'list[str] | None' = None, matched_policy_names: 'list[str] | None' = None, enforcement_mode: 'str' = 'block', tier2_degraded: 'bool' = False, tier1_pii_detected: 'bool' = False, redaction_possible: 'bool' = True, pii_detection_enabled: 'bool' = True, scan_block_on_injection: 'bool' = True, injection_threshold: 'float' = 0.8) -> 'PipelineDecision'
+
+== P1: resolve_enforcement(rec, org_policy_action='allow') ==
+resolve_enforcement('block', org_policy_action='allow') -> 'block'
+resolve_enforcement('flag', org_policy_action='allow') -> 'flag'
+resolve_enforcement('monitor', org_policy_action='allow') -> 'monitor'
+resolve_and_enforce(scanner=block/dos, org_policy_action='allow') -> 'block'
+
+== P2: max_action + docstring ==
+max_action('allow','block','allow') -> 'block'
+enforcement.py:7: Precedence (highest wins):
+enforcement.py:8:   1. Org policy action for the matched category
+enforcement.py:9:   2. Guard recommendation
+enforcement.py:10:   3. Default action (typically ``allow``)
+enforcement.py:11: 
+enforcement.py:114:     # Precedence: org policy > recommendation > default — take the max of the
+enforcement.py:115:     # available layers (policy layer omitted when None).
+enforcement.py:116:     candidates: list[str] = [rec, default]
+enforcement.py:117:     if policy:
+enforcement.py:118:         candidates.insert(0, policy)
+enforcement.py:119:     resolved = max_action(*candidates, default=default)
+
+== P3: enforce_output(verdict_action='block', scan_degraded=...) ==
+enforce_output(verdict_action='block', scan_degraded=True) -> type=PipelineDecision action='redact' degraded=True blocked_by=None
+enforce_output(verdict_action='block', scan_degraded=False) -> type=PipelineDecision action='block' degraded=False blocked_by='output_guard'
+
+== P6: full matrix verdict_action x scan_degraded ==
+verdict_action scan_degraded  resolved
+block          False          block
+block          True           redact
+flag           False          flag
+flag           True           redact
+allow          False          allow
+allow          True           redact
+redact         False          redact  (extra)
+redact         True           redact  (extra)
+rewrite        False          rewrite  (extra)
+rewrite        True           redact  (extra)
+None           False          allow  (extra)
+None           True           redact  (extra)
+
+== P6 line claim: degraded return precedes the first read of verdict_action ==
+`if scan_degraded:` block spans lines 388-402; its return at 395-402
+lines that READ verdict_action inside enforce_output: [404]
+enforcement.py:404: act = normalize_action(verdict_action)
+
+== P7: enforce_output(verdict_action='block', enforcement_mode=...) ==
+enforce_output(verdict_action='block', enforcement_mode='monitor') -> 'block'
+enforce_output(verdict_action='block', enforcement_mode='tag') -> 'block'
+enforce_output(verdict_action='block', enforcement_mode='observe') -> 'block'
+enforce_output(verdict_action='block', enforcement_mode='block') -> 'block'
+enforce_output kw-only params never read in its body: ['verdict_detail', 'verdict_matched_patterns', 'verdict_compliance_tags', 'enforcement_mode', 'is_streaming', 'pii_detection_enabled']
+input-path contrast resolve_enforcement('block', enforcement_mode='monitor') -> 'monitor'

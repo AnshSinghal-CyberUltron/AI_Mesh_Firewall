@@ -1,0 +1,7 @@
+d1-238 direct: PASS offered 71400 (238.0/s) qualified 71400 (238.0/s) infra 0 (0.0%) FP-blocks 0 drops 0
+  JSON_total      {'n': 21421, 'n_inf': 0, 'p50': 0.151, 'p90': 0.177, 'p99': 0.212, 'p999': 0.752, 'max_finite': 3.81, 'mean_finite': 0.154}
+  SSE_total       {'n': 49979, 'n_inf': 0, 'p50': 0.126, 'p90': 0.149, 'p99': 0.178, 'p999': 0.75, 'max_finite': 3.722, 'mean_finite': 0.129}
+  SSE_first_tok1  {'n': 49979, 'n_inf': 0, 'p50': 0.13, 'p90': 0.152, 'p99': 0.18, 'p999': 0.777, 'max_finite': 4.585, 'mean_finite': 0.134}
+  SSE_strict      {'n': 49979, 'n_inf': 0, 'p50': 0.156, 'p90': 0.18, 'p99': 0.65, 'p999': 3.137, 'max_finite': 5.75, 'mean_finite': 0.177}
+  ALL_total       {'n': 71400, 'n_inf': 0, 'p50': 0.132, 'p90': 0.163, 'p99': 0.199, 'p999': 0.75, 'max_finite': 3.81, 'mean_finite': 0.137}
+  checks {'zero_drops': True, 'zero_infra': True, 'records_complete': True} infra_reasons {} anomalies {}

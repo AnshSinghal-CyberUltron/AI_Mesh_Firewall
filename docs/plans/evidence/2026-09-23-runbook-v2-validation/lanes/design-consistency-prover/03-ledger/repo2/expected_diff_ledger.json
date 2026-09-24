@@ -1,0 +1,12 @@
+{
+  "schema": "amf.expected-diff.v1",
+  "entries": [
+    {
+      "rule_id": "P8",
+      "row_id": "10.2.2-benign-inline-code",
+      "c3_score": "x",
+      "diff_signature": "disp:allow->redact|tx:->mask",
+      "commit_timestamp": 1790133120
+    }
+  ]
+}

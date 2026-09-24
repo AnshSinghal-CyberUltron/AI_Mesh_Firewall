@@ -1,0 +1,284 @@
+distinct key-like literal patterns: 132
+[shared                ] '0::'
+      shared: shared/ai_mesh_shared/resource_budget.py:96
+[gateway               ] '127.0.0.1:8300'
+      gateway: gateway/ai_mesh_gateway/mcp_oauth.py:58
+[control               ] '2024-01-01T10:00:00'
+      control: control/ai_mesh_control/security_engines/owasp_agentic_detector.py:747
+[control               ] '2024-01-01T10:00:01'
+      control: control/ai_mesh_control/security_engines/owasp_agentic_detector.py:748
+[control               ] '2024-01-01T10:00:02'
+      control: control/ai_mesh_control/security_engines/owasp_agentic_detector.py:749
+[control               ] '2024-01-01T10:00:03'
+      control: control/ai_mesh_control/security_engines/owasp_agentic_detector.py:750
+[control               ] '2024-01-01T10:00:04'
+      control: control/ai_mesh_control/security_engines/owasp_agentic_detector.py:751
+[control               ] '2024-01-01T10:00:05'
+      control: control/ai_mesh_control/security_engines/owasp_agentic_detector.py:752
+[control               ] '2024-01-01T10:00:06'
+      control: control/ai_mesh_control/security_engines/owasp_agentic_detector.py:753
+[control               ] '2024-01-01T10:00:07'
+      control: control/ai_mesh_control/security_engines/owasp_agentic_detector.py:754
+[control               ] '2025-01-10T08:00:00Z'
+      control: control/ai_mesh_control/policy/views.py:241, control/ai_mesh_control/policy/views.py:242, control/ai_mesh_control/policy/views.py:298, control/ai_mesh_control/policy/views.py:146, control/ai_mesh_control/policy/views.py:147, control/ai_mesh_control/core/gateway_key_views.py:213, control/ai_mesh_control/core/gateway_key_views.py:214, control/ai_mesh_control/core/gateway_key_views.py:248 ...(+1)
+[control               ] '2025-01-10T08:30:00Z'
+      control: control/ai_mesh_control/policy/views.py:280, control/ai_mesh_control/policy/views.py:281
+[control               ] '2025-01-10T08:35:00Z'
+      control: control/ai_mesh_control/policy/views.py:294, control/ai_mesh_control/policy/views.py:295
+[control               ] '2025-01-10T09:00:00Z'
+      control: control/ai_mesh_control/policy/views.py:161
+[control               ] '2025-01-12T14:00:00Z'
+      control: control/ai_mesh_control/policy/views.py:299, control/ai_mesh_control/policy/views.py:162, control/ai_mesh_control/core/gateway_key_views.py:138, control/ai_mesh_control/core/gateway_key_views.py:139
+[control               ] '2025-01-15T10:30:00Z'
+      control: control/ai_mesh_control/policy/security_views.py:459, control/ai_mesh_control/policy/evaluation_views.py:1157, control/ai_mesh_control/core/gateway_key_views.py:247, control/ai_mesh_control/core/gateway_key_views.py:249, control/ai_mesh_control/core/gateway_key_views.py:122, control/ai_mesh_control/core/gateway_key_views.py:124
+[control               ] '2025-01-15T10:31:00Z'
+      control: control/ai_mesh_control/policy/evaluation_views.py:1170
+[control               ] '2025-12-31T23:59:59Z'
+      control: control/ai_mesh_control/core/gateway_key_views.py:187, control/ai_mesh_control/core/gateway_key_views.py:136
+[control               ] '2026-06-30T23:59:59Z'
+      control: control/ai_mesh_control/core/gateway_key_views.py:299
+[gateway               ] 'Matched:'
+      gateway: gateway/ai_mesh_gateway/mcp_scan_orchestrator.py:172, gateway/ai_mesh_gateway/mcp_proxy.py:1375, gateway/ai_mesh_gateway/mcp_proxy.py:1376
+[shared                ] 'MemTotal:'
+      shared: shared/ai_mesh_shared/resource_budget.py:209
+[gateway               ] 'amazon.titan-embed-text-v2:0'
+      gateway: gateway/ai_mesh_gateway/rag_pipeline/bedrock_embedder.py:117
+[control               ] 'analytics:rollup_refresh'
+      control: control/ai_mesh_control/policy/analytics_rollup_refresh.py:10
+[control+gateway       ] 'auth:apikey:'
+      control: control/ai_mesh_control/core/signals.py:45
+      gateway: gateway/ai_mesh_gateway/middleware.py:30
+[gateway               ] 'auth:apikey:{}'
+      gateway: gateway/ai_mesh_gateway/vector_routes.py:355
+[gateway+shared        ] 'authorization:'
+      gateway: gateway/ai_mesh_gateway/mcp_proxy.py:4486
+      shared: shared/ai_mesh_shared/mcp_stdio_common.py:146
+[gateway               ] 'bedrock:{}'
+      gateway: gateway/ai_mesh_gateway/llm_judge.py:209
+[gateway               ] 'circuit:*:{}*'
+      gateway: gateway/ai_mesh_gateway/main.py:16050
+[gateway               ] 'circuit:epoch:{}'
+      gateway: gateway/ai_mesh_gateway/circuit_breaker.py:122
+[gateway               ] 'circuit:errors:{}:{}'
+      gateway: gateway/ai_mesh_gateway/main.py:15977
+[gateway               ] 'circuit:half_open_gate:{}'
+      gateway: gateway/ai_mesh_gateway/circuit_breaker.py:119
+[gateway               ] 'circuit:open_at:{}'
+      gateway: gateway/ai_mesh_gateway/circuit_breaker.py:116
+[gateway               ] 'circuit:probe_admit:{}:{}'
+      gateway: gateway/ai_mesh_gateway/circuit_breaker.py:128
+[gateway               ] 'circuit:probes:{}'
+      gateway: gateway/ai_mesh_gateway/circuit_breaker.py:133
+[gateway               ] 'circuit:probes:{}:{}'
+      gateway: gateway/ai_mesh_gateway/circuit_breaker.py:125
+[gateway               ] 'circuit:state:'
+      gateway: gateway/ai_mesh_gateway/main.py:15967
+[gateway               ] 'circuit:state:*'
+      gateway: gateway/ai_mesh_gateway/main.py:15964
+[gateway               ] 'circuit:state:{}'
+      gateway: gateway/ai_mesh_gateway/circuit_breaker.py:113
+[gateway               ] 'circuit:total:{}:{}'
+      gateway: gateway/ai_mesh_gateway/main.py:15978
+[gateway               ] 'circuit:{}:{}:{}'
+      gateway: gateway/ai_mesh_gateway/circuit_breaker.py:110
+[gateway               ] 'context:'
+      gateway: gateway/ai_mesh_gateway/main.py:6950
+[gateway               ] 'credential:'
+      gateway: gateway/ai_mesh_gateway/kill_switch.py:16
+[gateway               ] 'data:'
+      gateway: gateway/ai_mesh_gateway/main.py:12163, gateway/ai_mesh_gateway/main.py:12165, gateway/ai_mesh_gateway/mcp_proxy.py:2009, gateway/ai_mesh_gateway/mcp_proxy.py:3617, gateway/ai_mesh_gateway/mcp_proxy.py:4102
+[control               ] 'django.conf:settings'
+      control: control/ai_mesh_control/main_app/celery_app.py:10
+[gateway               ] 'embed_error:{}'
+      gateway: gateway/ai_mesh_gateway/rag_pipeline/grounding_guard.py:283
+[control               ] 'enc:'
+      control: control/ai_mesh_control/policy/encrypted_fields.py:45
+[gateway               ] 'evidence:'
+      gateway: gateway/ai_mesh_gateway/main.py:774
+[gateway               ] 'ext:{}'
+      gateway: gateway/ai_mesh_gateway/mcp_proxy.py:2720, gateway/ai_mesh_gateway/mcp_proxy.py:2762, gateway/ai_mesh_gateway/mcp_proxy.py:3348, gateway/ai_mesh_gateway/mcp_proxy.py:3358
+[control+gateway       ] 'fd00:ec2::254'
+      control: control/ai_mesh_control/mcp_connector/_url_guard.py:30
+      gateway: gateway/ai_mesh_gateway/_url_guard.py:30
+[gateway               ] 'firewall:config'
+      gateway: gateway/ai_mesh_gateway/config_sync.py:24
+[gateway               ] 'firewall:config:'
+      gateway: gateway/ai_mesh_gateway/config_sync.py:25
+[control               ] 'firewall:config:{}'
+      control: control/ai_mesh_control/core/models.py:1373
+[control+shared        ] 'gateway:jobs'
+      control: control/ai_mesh_control/core/tasks.py:29
+      shared: shared/ai_mesh_shared/jobs/queues.py:2
+[control               ] 'gateway:{}'
+      control: control/ai_mesh_control/mcp_connector/views.py:225
+[gateway               ] 'global.anthropic.claude-haiku-4-5-20251001-v1:0'
+      gateway: gateway/ai_mesh_gateway/llm_judge.py:83, gateway/ai_mesh_gateway/main.py:6676, gateway/ai_mesh_gateway/platform_models.py:11, gateway/ai_mesh_gateway/rag_pipeline/query_stage.py:425
+[gateway               ] 'hnsw:space'
+      gateway: gateway/ai_mesh_gateway/vector_client.py:143, gateway/ai_mesh_gateway/vector_client.py:577, gateway/ai_mesh_gateway/vector_client.py:636
+[gateway               ] 'intent:{}'
+      gateway: gateway/ai_mesh_gateway/rag_pipeline/query_stage.py:104
+[control               ] 'kill_switch:*'
+      control: control/ai_mesh_control/core/management/commands/resync_kill_switches.py:50, control/ai_mesh_control/core/management/commands/resync_kill_switches.py:72
+[gateway               ] 'kill_switch:*:model:{}'
+      gateway: gateway/ai_mesh_gateway/circuit_breaker.py:243
+[control               ] 'kill_switch:{}:'
+      control: control/ai_mesh_control/core/redis_kill_switch_views.py:33
+[control               ] 'kill_switch:{}:credential:{}:model:{}'
+      control: control/ai_mesh_control/core/models.py:843
+[control               ] 'kill_switch:{}:global'
+      control: control/ai_mesh_control/core/models.py:840
+[control+gateway       ] 'kill_switch:{}:model:{}'
+      control: control/ai_mesh_control/core/models.py:844
+      gateway: gateway/ai_mesh_gateway/circuit_breaker.py:140
+[gateway               ] 'kill_switch:{}:{}'
+      gateway: gateway/ai_mesh_gateway/kill_switch.py:60
+[gateway               ] 'kill_switch:{}:{}{}'
+      gateway: gateway/ai_mesh_gateway/kill_switch.py:59
+[gateway               ] 'kill_switch:{}:{}{}:{}{}'
+      gateway: gateway/ai_mesh_gateway/kill_switch.py:56
+[gateway               ] 'leakage:cross:{}'
+      gateway: gateway/ai_mesh_gateway/leakage_detector.py:132
+[gateway               ] 'llm:model_configs'
+      gateway: gateway/ai_mesh_gateway/config_sync.py:26
+[gateway               ] 'llm:model_configs:'
+      gateway: gateway/ai_mesh_gateway/config_sync.py:27
+[control               ] 'llm:model_configs:{}'
+      control: control/ai_mesh_control/core/signals.py:483
+[gateway               ] 'llm_judge:{}'
+      gateway: gateway/ai_mesh_gateway/rag_pipeline/query_stage.py:492, gateway/ai_mesh_gateway/rag_pipeline/query_stage.py:478
+[control               ] 'llm_model:{}'
+      control: control/ai_mesh_control/core/llm_model_views.py:40, control/ai_mesh_control/core/llm_model_views.py:40
+[gateway+shared        ] 'logs:stream'
+      gateway: gateway/ai_mesh_gateway/log_buffer.py:146
+      shared: shared/ai_mesh_shared/redis_log_handler.py:17
+[gateway               ] 'mcp:*'
+      gateway: gateway/ai_mesh_gateway/mcp_oauth.py:621, gateway/ai_mesh_gateway/mcp_oauth.py:134, gateway/ai_mesh_gateway/mcp_oauth.py:153, gateway/ai_mesh_gateway/mcp_oauth.py:180
+[control+gateway       ] 'mcp:diag:'
+      control: control/ai_mesh_control/mcp_connector/views.py:658
+      gateway: gateway/ai_mesh_gateway/mcp_error_classifier.py:48
+[gateway               ] 'mcp:oauth:flow:{}'
+      gateway: gateway/ai_mesh_gateway/mcp_oauth_proxy.py:104
+[control+gateway       ] 'mcp:scan_ver'
+      control: control/ai_mesh_control/mcp_connector/signals.py:40
+      gateway: gateway/ai_mesh_gateway/mcp_proxy.py:650
+[gateway               ] 'mcp:toolcalls:{}'
+      gateway: gateway/ai_mesh_gateway/mcp_proxy.py:2162
+[control               ] 'mcp:{}'
+      control: control/ai_mesh_control/mcp_connector/views.py:2277, control/ai_mesh_control/mcp_connector/management/commands/backfill_mcp_events.py:124
+[gateway               ] 'model:'
+      gateway: gateway/ai_mesh_gateway/kill_switch.py:15
+[gateway               ] 'model_risk:{}:{}'
+      gateway: gateway/ai_mesh_gateway/model_state.py:156
+[gateway               ] 'model_risk_score:{}:{}'
+      gateway: gateway/ai_mesh_gateway/model_state.py:157
+[gateway               ] 'model_state:{}:*'
+      gateway: gateway/ai_mesh_gateway/main.py:12485
+[control+gateway       ] 'model_state:{}:{}'
+      control: control/ai_mesh_control/core/models.py:1879
+      gateway: gateway/ai_mesh_gateway/model_state.py:54, gateway/ai_mesh_gateway/model_state.py:247, gateway/ai_mesh_gateway/model_state.py:303, gateway/ai_mesh_gateway/main.py:10731, gateway/ai_mesh_gateway/main.py:10935, gateway/ai_mesh_gateway/main.py:10556, gateway/ai_mesh_gateway/circuit_breaker.py:150
+[control+gateway       ] 'openai.gpt-oss-120b-1:0'
+      control: control/ai_mesh_control/security_engines/bedrock_scanner.py:345, control/ai_mesh_control/security_engines/bedrock_client.py:130, control/ai_mesh_control/security_engines/bedrock_client.py:268
+      gateway: gateway/ai_mesh_gateway/bedrock_inference.py:22, gateway/ai_mesh_gateway/bedrock_inference.py:9
+[control               ] 'org:0'
+      control: control/ai_mesh_control/policy/rate_limit.py:14
+[control               ] 'org:{}'
+      control: control/ai_mesh_control/policy/rate_limit.py:14
+[control               ] 'organization:{}'
+      control: control/ai_mesh_control/auth/utils.py:84
+[gateway               ] 'passage:'
+      gateway: gateway/ai_mesh_gateway/main.py:6954
+[gateway               ] 'pinecone:{}'
+      gateway: gateway/ai_mesh_gateway/vector_client.py:973
+[control               ] 'policies:compile_lock:{org}'
+      control: control/ai_mesh_control/policy/compiler.py:53
+[control+gateway       ] 'policies:compiled'
+      control: control/ai_mesh_control/policy/compiler.py:32
+      gateway: gateway/ai_mesh_gateway/policy_sync.py:35
+[control               ] 'policies:pending_changes'
+      control: control/ai_mesh_control/policy/tasks.py:17, control/ai_mesh_control/policy/compiler_signals.py:30
+[control               ] 'policies:pending_orgs'
+      control: control/ai_mesh_control/policy/tasks.py:18, control/ai_mesh_control/policy/compiler_signals.py:31
+[control               ] 'policies:recompile_pending'
+      control: control/ai_mesh_control/policy/tasks.py:36, control/ai_mesh_control/policy/compiler_signals.py:62
+[control+gateway       ] 'policies:version'
+      control: control/ai_mesh_control/policy/compiler.py:33
+      gateway: gateway/ai_mesh_gateway/policy_sync.py:36
+[gateway               ] 'rag:{}'
+      gateway: gateway/ai_mesh_gateway/rag_pipeline/retriever_stage.py:82
+[gateway               ] 'rag_ctx:{}:'
+      gateway: gateway/ai_mesh_gateway/main.py:2527
+[gateway               ] 'rag_ctx:{}:{}'
+      gateway: gateway/ai_mesh_gateway/rag_pipeline/generator_stage.py:392
+[gateway               ] 'ratelimit:model:{}:{}:{}'
+      gateway: gateway/ai_mesh_gateway/rate_limiter.py:144
+[gateway               ] 'ratelimit:org:tpm:{}:{}'
+      gateway: gateway/ai_mesh_gateway/rate_limiter.py:218, gateway/ai_mesh_gateway/rate_limiter.py:302
+[control               ] 'ratelimit:policy_check:{}:{}'
+      control: control/ai_mesh_control/policy/rate_limit.py:29
+[gateway               ] 'ratelimit:tpm'
+      gateway: gateway/ai_mesh_gateway/rate_limiter.py:28
+[gateway               ] 'ratelimit:tpm:{}:{}'
+      gateway: gateway/ai_mesh_gateway/main.py:12516
+[gateway               ] 'ratelimit:{}:burst:{}'
+      gateway: gateway/ai_mesh_gateway/main.py:8352, gateway/ai_mesh_gateway/rate_limit_enforcement.py:185
+[gateway               ] 'ratelimit:{}:{}'
+      gateway: gateway/ai_mesh_gateway/main.py:8399, gateway/ai_mesh_gateway/rate_limit_enforcement.py:243
+[control               ] 'rules:'
+      control: control/ai_mesh_control/policy/policy_package/catalog.py:176
+[control               ] 'server:{}'
+      control: control/ai_mesh_control/mcp_connector/models.py:486
+[gateway               ] 'sha256:{}'
+      gateway: gateway/ai_mesh_gateway/main.py:2912
+[control               ] 'telemetry:dedupe:'
+      control: control/ai_mesh_control/core/tasks.py:635
+[control+gateway+shared] 'telemetry:events'
+      control: control/ai_mesh_control/core/tasks.py:28, control/ai_mesh_control/core/ingestion_views.py:27
+      gateway: gateway/ai_mesh_gateway/telemetry.py:28, gateway/ai_mesh_gateway/main.py:16838
+      shared: shared/ai_mesh_shared/jobs/queues.py:1
+[gateway               ] 'telemetry:stream'
+      gateway: gateway/ai_mesh_gateway/telemetry.py:29
+[control               ] 'tool:{}'
+      control: control/ai_mesh_control/mcp_connector/models.py:484
+[control               ] 'vector:pending_changes'
+      control: control/ai_mesh_control/policy/tasks.py:92, control/ai_mesh_control/policy/vector_signals.py:30
+[control+gateway       ] 'vector:policies:compiled'
+      control: control/ai_mesh_control/policy/vector_compiler.py:26
+      gateway: gateway/ai_mesh_gateway/vector_policy_sync.py:20
+[control+gateway       ] 'vector:policies:version'
+      control: control/ai_mesh_control/policy/vector_compiler.py:27
+      gateway: gateway/ai_mesh_gateway/vector_policy_sync.py:21
+[control+gateway       ] 'vector:providers:compiled'
+      control: control/ai_mesh_control/policy/vector_provider_signals.py:24
+      gateway: gateway/ai_mesh_gateway/vector_provider_sync.py:29
+[control+gateway       ] 'vector:providers:compiled:'
+      control: control/ai_mesh_control/policy/vector_provider_signals.py:34
+      gateway: gateway/ai_mesh_gateway/vector_provider_sync.py:36
+[control               ] 'vector:recompile_pending'
+      control: control/ai_mesh_control/policy/tasks.py:111, control/ai_mesh_control/policy/vector_signals.py:53
+[gateway               ] 'vectordb:{}'
+      gateway: gateway/ai_mesh_gateway/rag_pipeline/retriever_stage.py:108
+[gateway               ] 'vectordb:{}:{}'
+      gateway: gateway/ai_mesh_gateway/rag_pipeline/retriever_stage.py:106
+[control               ] 'zeroshield_gateway_key:{}'
+      control: control/ai_mesh_control/core/gateway_views.py:230, control/ai_mesh_control/core/gateway_views.py:263
+[control               ] 'zeroshield_isolation_playground_key:{}'
+      control: control/ai_mesh_control/core/gateway_views.py:331, control/ai_mesh_control/core/gateway_views.py:360, control/ai_mesh_control/core/gateway_views.py:405
+[gateway               ] '{}:*'
+      gateway: gateway/ai_mesh_gateway/policy_sync.py:307
+[control               ] '{}:00'
+      control: control/ai_mesh_control/policy/security_views.py:2602, control/ai_mesh_control/policy/analytics_views.py:280
+[gateway               ] '{}::'
+      gateway: gateway/ai_mesh_gateway/vector_policy_sync.py:84, gateway/ai_mesh_gateway/vector_policy_sync.py:130, gateway/ai_mesh_gateway/llm_router.py:1940, gateway/ai_mesh_gateway/vector_provider_sync.py:72
+[control+gateway       ] '{}::{}'
+      control: control/ai_mesh_control/policy/vector_provider_signals.py:51, control/ai_mesh_control/policy/vector_compiler.py:105
+      gateway: gateway/ai_mesh_gateway/llm_router.py:787, gateway/ai_mesh_gateway/llm_router.py:979, gateway/ai_mesh_gateway/llm_router.py:1216, gateway/ai_mesh_gateway/llm_router.py:1847, gateway/ai_mesh_gateway/llm_router.py:2059, gateway/ai_mesh_gateway/vector_provider_sync.py:64
+[control               ] '{}:drain_lock:{}'
+      control: control/ai_mesh_control/core/tasks.py:627
+[control               ] '{}:ip:{}'
+      control: control/ai_mesh_control/policy/rate_limit.py:18
+[control               ] '{}:processing:{}'
+      control: control/ai_mesh_control/core/tasks.py:621
+[control               ] '{}:user:{}'
+      control: control/ai_mesh_control/policy/rate_limit.py:17
+[control               ] '{}{}:{}:{}:{}'
+      control: control/ai_mesh_control/core/tasks.py:710

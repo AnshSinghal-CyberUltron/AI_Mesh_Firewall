@@ -1,0 +1,17 @@
+INFO 2026-09-23 05:53:26,537 apps 275 138608664058752 Scheduled policy + vector compile (3s delay)
+[provision] org v1bench id=2
+[provision] firewall config saved: {"firewall_enabled": true, "enforcement_mode": "block", "pii_detection_enabled": true, "content_filtering_enabled": true, "jailbreak_detection_enabled": true, "semantic_analysis_enabled": false, "tier2_enabled": false, "response_filtering_enabled": true, "output_pii_enabled": true, "output_pii_action": "redact", "output_credential_enabled": true, "output_credential_action": "redact", "output_policy_enabled": true, "rate_limit_enabled": true, "requests_per_minute": 100000000, "burst_limit": 1000000, "org_tpm_limit": 0}
+[provision] key prefix=m0MRXUQJ org=v1bench tpm=100000000
+[provision] model synth-1 provider=custom api_base=http://10.160.0.38:8080/v1 created=False
+[provision] builtin packs enabled=True (10 policies)
+INFO 2026-09-23 05:53:27,333 compiler 275 138608664058752 Compiled 56 enabled policies into bundle
+INFO 2026-09-23 05:53:27,341 compiler 275 138608664058752 Pushed compiled policies to Redis (policies:compiled:v1bench, version=1, policies=56, trigger=seed_policy_package)
+INFO 2026-09-23 05:53:27,350 vector_compiler 275 138608664058752 Compiled 13 enabled vector collection policies into bundle
+INFO 2026-09-23 05:53:27,356 vector_compiler 275 138608664058752 Pushed compiled vector policies to Redis (version=1, policies=13, trigger=seed_policy_package)
+[provision] policies org=56 enabled=56 pipeline_enabled=27
+policies:version:default
+policies:pending_changes
+policies:version:v1bench
+policies:pending_orgs
+policies:compiled:v1bench
+policies:compiled:default

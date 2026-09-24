@@ -1,0 +1,26 @@
+index, name, memory.used [MiB], utilization.gpu [%], clocks.current.sm [MHz], persistence_mode
+0, NVIDIA L4, 424 MiB, 0 %, 2040 MHz, Disabled
+1, NVIDIA L4, 424 MiB, 0 %, 2040 MHz, Disabled
+125477 /home/rv/rv/venv/bin/python -m rvproto.serve
+125537 /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 0
+125538 /home/rv/rv/venv/bin/python -m rvproto.serve --guard-owner 1
+125539 /home/rv/rv/venv/bin/python -m rvproto.serve --worker
+125540 /home/rv/rv/venv/bin/python -m rvproto.serve --worker
+125541 /home/rv/rv/venv/bin/python -m rvproto.serve --worker
+125542 /home/rv/rv/venv/bin/python -m rvproto.serve --worker
+125543 /home/rv/rv/venv/bin/python -m rvproto.serve --worker
+125544 /home/rv/rv/venv/bin/python -m rvproto.serve --worker
+125545 /home/rv/rv/venv/bin/python -m rvproto.serve --worker
+125546 /home/rv/rv/venv/bin/python -m rvproto.serve --worker
+125547 /home/rv/rv/venv/bin/python -m rvproto.serve --worker
+125548 /home/rv/rv/venv/bin/python -m rvproto.serve --worker
+125549 /home/rv/rv/venv/bin/python -m rvproto.serve --worker
+125550 /home/rv/rv/venv/bin/python -m rvproto.serve --worker
+125551 /home/rv/rv/venv/bin/python -m rvproto.serve --worker
+125552 /home/rv/rv/venv/bin/python -m rvproto.serve --worker
+125553 /home/rv/rv/venv/bin/python -m rvproto.serve --worker
+125554 /home/rv/rv/venv/bin/python -m rvproto.serve --worker
+125555 /home/rv/rv/venv/bin/python -m rvproto.serve --worker
+125556 /home/rv/rv/venv/bin/python -m rvproto.serve --worker
+127326 bash -c nvidia-smi --query-gpu=index,name,memory.used,utilization.gpu,clocks.sm,persistence_mode --format=csv; pgrep -af "rvproto.serve|tritonserver" | c
+tmpfs            48G  8.0K   48G   1% /dev/shm

@@ -1,0 +1,5 @@
+launcher 2257210 workers ['2257246', '2257247']; org-a budget left in Redis after 20 small requests: 948,640 of 1,000,000 (=51,360 tokens now sitting in worker-local leases)
+SIGKILL worker 2257246 (simulated OOM kill)
++3s: surviving workers=[]  launcher alive=False
+healthz: connection failed -> ConnectError
+org-a budget in Redis now: 948,640 (leases of dead workers are never returned)
