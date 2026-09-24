@@ -127,7 +127,7 @@ D["figures"] = [
          caption=("Node cost includes boot disk and external IP; fixed platform items ($329.50) and egress are excluded here. Off-box "
                   "pairs cost $1,089.14 (1 guard) and $1,653.91 (2 guards) per month, the $5k fleet's nodes $3,832.19, the g2-standard-24 "
                   "$1,548.07. The fleet earns less per dollar than a single pair because independently routed guard calls arrive in "
-                  "random bursts (C43). The plan's bar uses its own unmeasured 1,064 RPS.")),
+                  "bursts — queueing at ≈ two-thirds of the random-arrival level at fleet size (C43). The plan's bar uses its own unmeasured 1,064 RPS.")),
 ]
 
 D["facts_lede"] = ("Parsed directly from runbook v2.1 §0.2, so this page and the corrected document cannot disagree. \"Lane\" names the "
@@ -206,7 +206,7 @@ D["risks"] = [
     "The prototype is throwaway. It proves the architecture's cost and latency envelope and reproduces the plan's failure classes; it is "
     "not a starting codebase.",
 ]
-D["footer"] = ("Evidence bundle: <code>docs/plans/evidence/2026-09-23-runbook-v2-validation/</code> on branch <code>revamp</code> "
+D["footer"] = ("Evidence bundle: <code>docs/plans/evidence/2026-09-23-runbook-v2-validation/</code> on branch <code>revamp</code>, commit <code>f29ae862</code> "
                ". The corrected runbook is <code>AI_MESH_MASTER_RUNBOOK_v2.1_BACKEND_REWRITE.docx</code> in that bundle. "
                "Security hygiene (secret rotation) was out of scope by request.")
 

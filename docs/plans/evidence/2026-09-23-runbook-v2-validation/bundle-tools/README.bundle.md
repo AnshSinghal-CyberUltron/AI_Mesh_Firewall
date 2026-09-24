@@ -27,7 +27,7 @@ Cloud Billing Catalog API. Security hygiene (secret rotation) was out of scope b
 
 ## Raw data
 
-The complete per-request raw data (≈ 50 GB, already zstd-compressed) is in the private bucket
+The complete per-request raw data (≈ 59 GB, already zstd-compressed) is in the private bucket
 `gs://ai-mesh-firewall-rv-evidence-20260923` (project `ai-mesh-firewall`, public access prevention enforced).
 `EXCLUDED.tsv.zst` (zstd-compressed TSV) lists every file that is not in git with its size, sha256 and bucket location. `MANIFEST.sha256` covers
 every file in this directory. Text files larger than 256 KiB are stored as `.zst`.
