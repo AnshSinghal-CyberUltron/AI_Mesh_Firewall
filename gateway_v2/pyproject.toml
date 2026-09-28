@@ -72,4 +72,21 @@ layers = [
     "gateway_v2.audit",
     "gateway_v2.runtime",
     "gateway_v2.contracts",
+    "gateway_v2.domain",
+]
+
+[[tool.importlinter.contracts]]
+name = "Resolve imports only domain"
+type = "forbidden"
+source_modules = ["gateway_v2.resolve"]
+forbidden_modules = [
+    "gateway_v2.edge",
+    "gateway_v2.admit",
+    "gateway_v2.plan",
+    "gateway_v2.detect",
+    "gateway_v2.dispatch",
+    "gateway_v2.egress",
+    "gateway_v2.audit",
+    "gateway_v2.runtime",
+    "gateway_v2.contracts",
 ]

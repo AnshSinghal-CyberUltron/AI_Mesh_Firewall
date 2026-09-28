@@ -1,0 +1,25 @@
+{
+  "card": "GW04",
+  "baseline": "8ddb3db6cde7ba24f806bc94ab2bce3e8fa58122",
+  "branch": "revamp",
+  "locks": {
+    "scope": "follow v3; next card after GW03 is GW04",
+    "code_home": "gateway_v2",
+    "kill_switch": "cut_next_chunk",
+    "fresh_ms": 5000,
+    "pg_grace_ms": 16000,
+    "gcp": "no new spend; fleet A is planning only",
+    "holdback_relaxed": ["uuid", "sha256", "url", "base64"],
+    "production": "not touched",
+    "evidence": "use round-2 evidence, then delete; not deleted in this commit",
+    "git": "commit and push origin/revamp"
+  },
+  "lgw04_1": "PASS FrozenInstanceError",
+  "lgw04_2": "DEFERRED to GW15 (v2.1 C2)",
+  "lgw04_3": "PASS unknown category injection rejected",
+  "lgw04_4": "DEFERRED to GW15 (v2.1 C2). DecisionRecord still carries SKIPPED, EXECUTED, UNAVAILABLE as distinct statuses",
+  "lgw04_5": "PASS 10000 pure folds",
+  "pytest": "54 passed, 4 skipped",
+  "import_linter": "Gateway v2 layers KEPT; Resolve imports only domain KEPT",
+  "lgw00_1": "NOT claimed PASS"
+}

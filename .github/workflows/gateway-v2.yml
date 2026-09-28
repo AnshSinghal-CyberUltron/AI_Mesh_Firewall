@@ -27,6 +27,7 @@ jobs:
           .venv/bin/python -m lint.check_http_outside_edge_resolve gateway_v2
           .venv/bin/python -m lint.check_no_module_mutable gateway_v2
           .venv/bin/python -m lint.check_capacity_literals gateway_v2
+          .venv/bin/python -m lint.check_frozen_dataclasses gateway_v2
       - name: import-linter
         run: .venv/bin/lint-imports
       - name: ruff
