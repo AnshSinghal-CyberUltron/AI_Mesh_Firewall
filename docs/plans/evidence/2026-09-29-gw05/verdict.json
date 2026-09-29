@@ -1,0 +1,18 @@
+{
+  "card": "GW05",
+  "baseline_parent": "e503a718",
+  "lgw05_1": "PASS empty selection is ExecutionPlan rules=() integrity_locked=true",
+  "lgw05_2": "PASS known tenant store_unreachable is PlanUnavailable; unknown tenant is PlanUnknownTenant",
+  "lgw05_3": "PASS same rule on chat/mcp/rag/vector/embeddings and input/output",
+  "lgw05_4": "PASS two in-process replicas converge to the newer version and do not regress. Not a 70% production load run.",
+  "lgw05_5": "PASS pinned request stays on the first version after a later push",
+  "lgw05_6": "PASS 8 threads x 50 lookups, org-a rule a and org-b rule b, zero cross-reads",
+  "lgw05_7": "PASS compiler rejects STRICT_WITHHOLD and REWRITE with CompileError. Live console was not used.",
+  "last_known_good": "PASS served inside 5s freshness, PlanUnavailable after the bound",
+  "flush": "PASS forgotten plan stays PlanUnavailable plan_missing, not unknown tenant",
+  "pytest": "66 passed, 4 skipped",
+  "production": "not touched",
+  "gcp": "no new spend",
+  "lgw00_1": "NOT claimed PASS",
+  "deferred": "GW05b freshness stamp and GW05c O(changes) propagation are the next cards"
+}
