@@ -1648,3 +1648,93 @@ from the RC2 design that had 0 violations in 15 fault runs (R2-17). Only the sec
 | re-hydrator with a digest-free `diagnose` (S3) | **next (4b)** — compares `(version, feed_seq, count, on_count)` plus `ZCARD` and the index head; the O(records) digest runs only on a mismatch |
 | concrete psycopg `ControlDB` and redis `StatePublisher` / `StateStore` adapters | **4c** — this is where `redis>=8.1,<9` arrives (owner-confirmed); the logic above is already proven against the Protocols |
 | the `{rv2}:updates` nudge listener, ported from RC2's `PushListener` with its D2/R2-19 hardening and `accept` widened to all four kinds | **4c** |
+
+### Phase 4b / 4c files
+
+```
+gateway_v2/state_control/rehydrate.py                   NEW   Rehydrator: O(1) diagnose,
+                                                              occasional deep verify, repair
+gateway_v2/state_control/valkey.py                      NEW   ValkeyPublisher (sync, writer side)
+gateway_v2/state_control/pg.py                          NEW   PostgresControlDB / PostgresTx
+gateway_v2/gateway_v2/runtime/store_valkey.py           NEW   ValkeyStateStore (async, reader side)
+gateway_v2/state_control/publisher.py                   EDIT  StoredHead, stored_head, stored_index
+gateway_v2/state_control/writer.py                      EDIT  repair_epoch, manifest_for
+gateway_v2/pyproject.toml                               EDIT  redis>=8.1,<9; psycopg[binary]>=3.2;
+                                                              fakeredis>=2.26 (dev)
+gateway_v2/tests/state_control/test_lgw05c_rehydrate.py NEW   24 tests
+gateway_v2/tests/state_control/test_lgw05c_valkey.py    NEW   17 tests (fakeredis)
+gateway_v2/tests/state_control/test_lgw05c_pg.py        NEW   11 tests (skipped without AMF_PG_DSN)
+```
+
+### Re-hydration cost (4b)
+
+| Round | Postgres | Store | Records |
+|---|---|---|---|
+| healthy | 1 indexed counter row | `GET` + `ZCARD` + `ZREVRANGE 0 0` + `SCARD` | **0** |
+| healthy, deep (occasional) | + 1 snapshot | + `ZRANGE … WITHSCORES` | 0 bodies |
+| mismatch | 1 snapshot | `publish_kind` | all |
+
+Measured identical at 10 / 1 000 / 10 000 tenants: 1 head read, 0 index scans. `diagnose` catches,
+in O(1): a flushed store, an unverifiable manifest, an unpublished write, a store holding a
+version Postgres never issued, a lying count, a short index, and a missing engaged member.
+`verify` closes A10's residual — a missing index entry masked by an extra, which keeps the counts
+agreeing while the contents do not — on a slow cadence rather than by paying O(records) a second.
+
+### Adapter verification (4c)
+
+The twins prove the logic; these prove the command set.
+
+| Claim | How it was verified |
+|---|---|
+| a steady round is 3 commands | `fakeredis` with a command-recording wrapper: `["get", "zcard", "zrevrange"]`, 0 records read, with 200 records published |
+| no whole-collection read on the steady path | the same wrapper asserts `hgetall`/`hvals`/`keys`/`scan`/`smembers`/`zrange`/`sscan`/`hscan` never appear |
+| a write touches five keys | the fake server holds exactly the record container, index, engaged set and manifest, and nothing else |
+| every key is in one hash slot | every key in the server starts with the namespace tag |
+| the nudge carries kind and position | a real pub/sub subscriber receives `plan:1` |
+| a stale publisher cannot move the store backwards | two writers, one store: the behind-publisher gets `ok_publish_pending` and the stored position is unchanged |
+| `body` as text round-trips byte-exactly | **real Postgres**: the stored bytes equal `canonical_body(...)` and the record re-verifies |
+| counters are maintained incrementally | real Postgres: update is not a new record, offboard is not a removal |
+| the publish snapshot is lock-free (R2-04) | real Postgres: `snapshot()` completes while another transaction holds the counter row `FOR UPDATE` |
+| session bounds on every connection (R2-04) | real Postgres: `current_setting` returns 2s / 5s / 5s |
+
+The Postgres suite ran against a throwaway `postgres:16-alpine` container on port 55432, one
+schema per test, container removed afterwards. It skips unless `AMF_PG_DSN` is set, so neither CI
+nor a default local run needs a database.
+
+### A18 — a bug the live Postgres caught that no twin could
+
+psycopg's `options=` keyword **replaces** any `options` already in the DSN rather than merging
+with it. The adapter passed its four session bounds that way, which silently dropped a caller's
+`search_path` — discovered because the per-test schema isolation stopped working and counters
+leaked across tests. `PostgresControlDB` now reads the DSN's existing options with
+`conninfo_to_dict` and appends. The rc3-state-p0 README had specified "appended to any options
+already in the DSN"; it is now clear why that wording was there.
+
+This is the argument for running the adapter against a real server rather than asserting on SQL
+strings: no twin, mock or type checker would have found it.
+
+### Phase 4 status
+
+| Piece | Status |
+|---|---|
+| per-record publish, bulk path, counters, four honest outcomes | **done** (`adc8364a`) |
+| re-hydrator, O(1) diagnose + occasional deep verify + repair | **done** (`82fafc8c`) |
+| `ValkeyStateStore` (async reader) and `ValkeyPublisher` (sync writer) | **done** |
+| `PostgresControlDB`, bounded sessions, lock-free snapshot | **done**, verified live |
+| `{rv2}:updates` nudge listener (port of RC2 `PushListener`, D2/R2-19) | **deferred to 4d** — see below |
+
+### A19 — why the nudge listener is deferred rather than rushed
+
+The nudge is a **latency** optimisation, not a correctness mechanism: propagation is already
+bounded by the periodic round, which is now O(1), so the only thing the listener changes is how
+quickly a change is noticed inside that bound. Its value is real (it is also what fixes SP3a,
+kill switches and keys being poll-only in RC2), but its risk is concentrated entirely in the
+D2/R2-19 hardening it must preserve: redis-py's `listen()` reads a keepalive `ETIMEDOUT` as "no
+message" and spins the event loop until the kernel kills the worker. Porting that correctly needs
+the dead-connection detection (transport error, the no-wait spin signature, and silence past
+2 × ping), the equal-jitter backoff, the catch-up nudge after every re-subscribe, and a test that
+reproduces the spin signature — not a `pubsub().listen()` loop that looks right.
+
+Shipping it half-ported would put an OOM regression into the one component that is now on the
+availability path. It is the next step, and it is small, but it deserves its own commit with the
+partition regression test rather than being appended to this one.

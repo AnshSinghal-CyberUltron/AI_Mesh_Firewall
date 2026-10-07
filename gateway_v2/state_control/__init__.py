@@ -15,6 +15,7 @@ from state_control.db import (
     MemoryControlDB,
     advance,
 )
+from state_control.pg import PostgresControlDB, PostgresTx
 from state_control.publisher import (
     BrokenPublisher,
     MemoryStore,
@@ -28,6 +29,7 @@ from state_control.rehydrate import (
     RoundSummary,
 )
 from state_control.schema import RECORD_COLUMNS, SCHEMA
+from state_control.valkey import ValkeyPublisher
 from state_control.writer import (
     ERROR,
     OK,
@@ -54,12 +56,15 @@ __all__ = (
     "LoggedWrite",
     "MemoryControlDB",
     "MemoryStore",
+    "PostgresControlDB",
+    "PostgresTx",
     "Rehydrator",
     "RepairEvent",
     "RoundSummary",
     "StatePublisher",
     "StateWriter",
     "StoredHead",
+    "ValkeyPublisher",
     "WriteOutcome",
     "advance",
 )
