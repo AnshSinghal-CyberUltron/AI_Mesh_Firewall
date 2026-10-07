@@ -12,6 +12,7 @@ from gateway_v2.domain.decision import (
     most_restrictive,
 )
 from gateway_v2.domain.finding import Finding, FindingStatus, Span
+from gateway_v2.domain.identity import Principal
 from gateway_v2.domain.locks import FRESH_MS, PG_GRACE_MS, RELAXED_HOLDBACK_CLASSES, InFlightKill
 from gateway_v2.domain.plan import (
     Action,
@@ -58,6 +59,7 @@ __all__ = (
     "Phase",
     "PlanUnavailable",
     "PlanUnknownTenant",
+    "Principal",
     "RELAXED_HOLDBACK_CLASSES",
     "RequestContext",
     "Rule",
