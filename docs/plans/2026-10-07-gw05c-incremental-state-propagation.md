@@ -1885,3 +1885,110 @@ Still not claimed, and still phase 7: any latency or throughput number. Every fi
 count of commands, records, round trips or rounds. And the state layer is not yet wired into a
 serving process — `gateway_v2/edge/` is still stubs — which is the v3 rewrite's position, not a
 phase-4 omission.
+
+---
+
+### Phase 5 files
+
+```
+gateway_v2/lint/check_tenant_scale.py                NEW   the gate that makes R2-02
+                                                           un-reintroducible
+gateway_v2/gateway_v2/runtime/state_metrics.py       NEW   tenant-independent metric surface
+gateway_v2/gateway_v2/runtime/__init__.py            EDIT  exports
+gateway_v2/tests/gates/test_check_tenant_scale.py    NEW   13 tests, fed RC2's real shapes
+gateway_v2/tests/runtime/test_lgw05c_metrics.py      NEW   17 tests
+.github/workflows/gateway-v2.yml                     EDIT  the gate runs on the data plane
+```
+
+### A22 — phase 5 was mostly already done, and the plan said otherwise
+
+§16's phase 5 listed four removals. Three had already happened, which the audit confirmed rather
+than assumed:
+
+| §16 said | Actual state |
+|---|---|
+| delete the O(N) `reconcile` | gone in phase 3a |
+| fence `digest` / `verify_set` out of `plan`/`admit` with an import contract | they were never written into `gateway_v2` at all (A4), so there is nothing to fence |
+| remove `plan_version_info{org,version}` and the O(N) gauge rebuild | `gateway_v2` has **no metrics layer** — `audit/metrics.py` is a stub marked "empty until GW14". There were no per-org series to delete |
+| no eager full load at startup | the cold-start design is lazy by construction (`bootstrap_engaged` for the kill switch, lazy plans) |
+
+Two checks confirmed it rather than taking §16's word: the only whole-collection store command in
+the data plane is the one allowlisted `smembers`, and `PlanStore.known()` has **zero** callers in
+product code.
+
+So phase 5's real content is the two things that make the absence permanent.
+
+### The tenant-scale gate
+
+Every cause of R2-02 was a reasonable-looking line. That is why a reviewer let them through
+**twice** — round 1's C28 found the same shape and it came back in RC2. The gate therefore forbids
+the shapes, and its own tests feed it the lines that were really in RC2:
+
+| Shape | RC2 site | Gate test |
+|---|---|---|
+| `await client.hvals(keys.ks)` | `admit/state_v2.py:106`, twice a second | `test_the_killswitch_whole_set_refresh_fails` |
+| `await client.hgetall(keys.plan_index)` | `plan/snapshot_v2.py:80`, once a second | `test_the_plan_index_reconcile_fails` |
+| `for org_id in self._store.known()` | `plan/snapshot.py:38` in this very tree | `test_iterating_the_estate_fails` |
+
+Two rules, both exact: **whole-collection store commands** are forbidden in the data plane, and
+**`known()`** must not be called from product code. Fifteen commands are covered and every one is
+individually proven to fire. The single exemption is allowlisted by *(file, command)* pair, not by
+command — `smembers` elsewhere still fails — and a test pins the allowlist to exactly that one
+entry, so growing it is a reviewable event rather than a quiet edit. Defining `known()` is not
+calling it, a local function named `keys()` is not a store command, and the shipped bounded reads
+(`zcount`, `zrangebyscore`, `hmget`, `mget`, `zrevrange`, `zcard`) are all proven clean.
+
+`state_control` is **not** scanned, deliberately: the re-hydrator's repair and deep verify are
+O(records) by definition and run off the serving loop. That asymmetry is the design, and it has
+its own AST test asserting the write path cannot reach `publish_kind`.
+
+### The metric surface
+
+RC2 exported one series **per tenant** (`plan_version_info{org,version}`) plus one per engaged
+scope, and rebuilt that label set on the serving loop about once a second (F7). C28 measured
+50,003 series per worker at 50,000 tenants; the shared-memory gauge directory holds 512 per
+worker; R2-10 measured what a full directory does — HTTP 500 on 40% of new tenants' first
+requests.
+
+`StateMetricsRecorder` emits a **fixed** set of 47 series. The only label is `kind`, whose domain
+is a four-member enum, so the key set is a function of the enum alone:
+
+| Test | Asserts |
+|---|---|
+| `test_the_series_set_is_identical_at_three_and_twenty_five_thousand_tenants` | the GW05c requirement, directly |
+| `test_the_series_count_is_a_constant` | `len(series()) == SERIES_COUNT` |
+| `test_no_series_name_carries_a_tenant_identifier` | no `org-`, `org=`, `tenant` or `hash-` anywhere, and the only label domain is the enum |
+| `test_the_engaged_scopes_are_counted_not_named` | 40 engaged scopes produce **one** series |
+| `test_a_tenant_keyed_mapping_cannot_appear_in_a_reading` | structurally, every field is a scalar or the closed-enum map |
+| `test_a_round_is_recorded_without_reading_anything` | recording touches the store 0 times |
+| `test_cardinality_holds_at_every_scale` | 1 / 100 / 5,000 tenants |
+
+What replaced the per-tenant version series is `amf_state_lag{kind}`: `plan_version_info{org}`
+answered "what is org X serving", which is a query, not a metric; the metric question is how far
+behind the published position this worker is, and that is one number per kind. `lag` is clamped at
+zero, because R2-11 recorded counters publishing negative rates.
+
+### A23 — the metrics module broke the layer contract, and the fix is the better design
+
+`StateMetricsRecorder` first imported `admit.identity.CacheStats` and
+`admit.killswitch.KillSwitchView`. `import-linter` rejected it: `admit` sits **above** `runtime`,
+so that inverts the dependency. Rather than move the value types or flatten the signatures into
+six positional integers, the recorder now declares what it needs as two read-only Protocols
+(`IdentityStats`, `EngagedView`) and takes `stale` as a plain bool. `CacheStats` and
+`KillSwitchView` satisfy them structurally, unchanged.
+
+That is better than the import would have been: the recorder now states its requirement as
+"something with these six counters" rather than binding to a concrete class, and `EngagedView`
+makes the cardinality rule explicit in the type — it exposes `count` and `engaged`, and there is
+no way to ask it for the scope names.
+
+### Phase 5 state
+
+| Check | Result |
+|---|---|
+| tenant-scale gate on the data plane | clean; 13 tests prove it fires on RC2's shapes |
+| 5 AST gates × 2 trees | OK |
+| import-linter | 2 kept, 0 broken |
+| ruff, mypy `--strict` (108 files) | clean |
+| pytest | **330 passed, 32 skipped** |
+| CI gate job replayed verbatim | OK |

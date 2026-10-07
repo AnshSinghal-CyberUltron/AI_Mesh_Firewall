@@ -21,7 +21,7 @@ jobs:
         run: |
           python -m venv .venv
           .venv/bin/pip install -q -e ".[dev]"
-      - name: Size + HTTP AST + mutable-state + capacity-literal gates
+      - name: Size + HTTP AST + mutable-state + capacity + tenant-scale gates
         run: |
           for tree in gateway_v2 state_control; do
             .venv/bin/python -m lint.check_sizes "$tree"
@@ -30,6 +30,9 @@ jobs:
             .venv/bin/python -m lint.check_capacity_literals "$tree"
             .venv/bin/python -m lint.check_frozen_dataclasses "$tree"
           done
+          # R2-02 / 2.1-1: the data plane only. The control plane's repair path is
+          # O(records) by design and runs off the serving loop.
+          .venv/bin/python -m lint.check_tenant_scale gateway_v2
       - name: import-linter
         run: .venv/bin/lint-imports
       - name: ruff
