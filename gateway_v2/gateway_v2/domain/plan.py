@@ -75,6 +75,11 @@ class ExecutionPlan:
     required_detectors: frozenset[str]
     streaming_mode: StreamingMode
     integrity_locked: bool
+    feed_seq: int = 0
+    """Cursor position of the record this plan was compiled from. 0 = not store-sourced.
+
+    Provenance only. Ordering stays (epoch, sequence) — see is_newer.
+    """
 
     @property
     def version(self) -> str:
@@ -97,6 +102,13 @@ class PlanUnknownTenant:
 
 
 def is_newer(candidate: ExecutionPlan, current: ExecutionPlan) -> bool:
+    """Order a plan against itself by (epoch, sequence).
+
+    Deliberately NOT by feed_seq. feed_seq is the per-kind cursor space shared by every tenant,
+    so a write to another tenant advances it; using it here would declare an untouched plan
+    newer than itself. An epoch bump raises epoch, so (epoch, sequence) is already monotone
+    for one org.
+    """
     if candidate.org_id != current.org_id:
         return False
     if candidate.epoch != current.epoch:
