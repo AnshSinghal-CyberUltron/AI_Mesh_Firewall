@@ -23,15 +23,17 @@ jobs:
           .venv/bin/pip install -q -e ".[dev]"
       - name: Size + HTTP AST + mutable-state + capacity-literal gates
         run: |
-          .venv/bin/python -m lint.check_sizes gateway_v2
-          .venv/bin/python -m lint.check_http_outside_edge_resolve gateway_v2
-          .venv/bin/python -m lint.check_no_module_mutable gateway_v2
-          .venv/bin/python -m lint.check_capacity_literals gateway_v2
-          .venv/bin/python -m lint.check_frozen_dataclasses gateway_v2
+          for tree in gateway_v2 state_control; do
+            .venv/bin/python -m lint.check_sizes "$tree"
+            .venv/bin/python -m lint.check_http_outside_edge_resolve "$tree"
+            .venv/bin/python -m lint.check_no_module_mutable "$tree"
+            .venv/bin/python -m lint.check_capacity_literals "$tree"
+            .venv/bin/python -m lint.check_frozen_dataclasses "$tree"
+          done
       - name: import-linter
         run: .venv/bin/lint-imports
       - name: ruff
-        run: .venv/bin/ruff check gateway_v2 lint tests
+        run: .venv/bin/ruff check gateway_v2 state_control lint tests
       - name: mypy --strict
         run: .venv/bin/mypy --strict
       - name: v2 pytest (placeholder + negative fixtures)

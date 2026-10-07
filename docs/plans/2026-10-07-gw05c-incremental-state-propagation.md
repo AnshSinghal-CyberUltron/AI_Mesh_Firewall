@@ -1738,3 +1738,58 @@ reproduces the spin signature — not a `pubsub().listen()` loop that looks righ
 Shipping it half-ported would put an OOM regression into the one component that is now on the
 availability path. It is the next step, and it is small, but it deserves its own commit with the
 partition regression test rather than being appended to this one.
+
+### Phase 4 verification audit
+
+Asked whether phase 4 was actually complete and working, two gaps turned up. Both are closed.
+
+**Gap 1 — no test ran both real adapters together.** The Valkey suite substituted
+`MemoryControlDB` for the database; the Postgres suite substituted `MemoryStore` for the store.
+Each adapter was verified against the *other* plane's twin, so the seam BETWEEN them — where a
+schema, encoding or ordering mismatch would actually live — was never exercised.
+
+Closed by `tests/state_control/test_lgw05c_live_stack.py` (11 tests): `PostgresControlDB` +
+`ValkeyPublisher` + `ValkeyStateStore` + the real appliers, end to end.
+
+| Verified over both real adapters | |
+|---|---|
+| encoding seam | a unicode body signed into Postgres as text verifies out of Valkey as bytes, **byte-identical**, and the two `SignedRecord`s compare equal |
+| plan write → served | `plan_set` → worker round → `ExecutionPlan` served |
+| one change among 1,000 | 1 record applied, `feed_seq` 1,001 |
+| the whole write vocabulary | plan set, key add, engage, then disengage, revoke, offboard — each propagating, ending at `PlanUnknownTenant` and an evicted key |
+| cold start (gate G-04) | 501 ks records published, one engaged → a fresh worker reads **1** |
+| full fault loop | 25 plans → flush → `diagnose` says `missing` → worker fails closed with "manifest missing" → repair restores 25 → a fresh worker serves again → `diagnose` clean |
+| `ok_publish_pending` recovery | a write whose publish failed is durable, then published by the next round and served |
+| bulk onboard | 250 records converge in 5 bounded rounds, 250 known, `diagnose` clean |
+| rollback | `(epoch+1, 0)` propagates, the worker serves epoch 2, `diagnose` clean |
+
+**Gap 2 — CI did not gate `state_control`.** The workflow ran the five AST gates and `ruff` on
+`gateway_v2` only. `mypy` and `pytest` were already covered (both are config-driven), but a
+size, mutable-state, capacity-literal or frozen-dataclass regression in the control plane would
+have passed CI. I had been running them by hand, which is not a gate.
+
+Closed in `.github/workflows/gateway-v2.yml`: the gate step loops over `gateway_v2` and
+`state_control`, and `ruff check` includes both.
+
+**A20 — a behaviour the combined run exposed.** A kind that has never been written has no
+published manifest, so a worker polling it fails closed with "manifest missing" **forever**. The
+re-hydrator's first round publishes a signed EMPTY manifest for such a kind, which is what lets a
+worker short-circuit it instead of refusing every request. So a fresh deployment needs one
+re-hydrator round before gateways can serve — which is the readiness behaviour GW05b already
+declares, now pinned by a test rather than incidental.
+
+### Phase 4 final state
+
+| Check | Result |
+|---|---|
+| 5 AST gates × 2 trees | OK |
+| import-linter | 2 contracts kept, 0 broken |
+| ruff (`gateway_v2 state_control lint tests`) | clean |
+| mypy `--strict` | clean, 105 source files |
+| pytest, no database | **274 passed, 26 skipped** (26 = the two Postgres-dependent suites + 4 pre-existing GW00 skips) |
+| pytest, Postgres available | **296 passed, 4 skipped** |
+| clean-interpreter import of both packages | OK |
+| CI gate job replayed verbatim | OK |
+
+Not verified, and not claimed: anything about latency or throughput. Every number in this phase
+is a count of commands, records, round trips or rounds. C4 p99 is phase 7 and needs the lane.
