@@ -1586,3 +1586,65 @@ untouched here to keep this card's diff to propagation.
 | §11.6 / S7 | immutable snapshot swapped by atomic reference | unnecessary once the O(tenants) loop is gone. (A12) |
 | §16 phase 3 | "`plan/snapshot.py` — make the served snapshot immutable" | replaced by deleting `reconcile()` and adding `absorb()`. |
 | §15 | `test_lgw05_4` kept green unchanged | its 7 `reconcile()` call sites became `absorb("org-a", …)`. Every assertion is unchanged; only the mechanism that feeds the replicas changed, because that mechanism is what the card replaces. |
+
+### Phase 4a files
+
+```
+gateway_v2/state_control/__init__.py                 NEW   package surface
+gateway_v2/state_control/schema.py                   NEW   initial v3 DDL (3 tables)
+gateway_v2/state_control/db.py                       NEW   KindCounters, ControlDB/ControlTx
+                                                           Protocols, MemoryControlDB twin, advance()
+gateway_v2/state_control/publisher.py                NEW   StatePublisher Protocol, MemoryStore
+                                                           (publisher AND reader store), BrokenPublisher
+gateway_v2/state_control/writer.py                   NEW   StateWriter: put, put_many, domain ops,
+                                                           rollback, four honest outcomes
+gateway_v2/pyproject.toml                            EDIT  packages / ruff src / mypy files
+gateway_v2/tests/state_control/test_lgw05c_writer.py NEW   29 tests incl. the end-to-end loop
+```
+
+### A15 — `body` is `text`, not `jsonb`
+
+The obvious column type is the wrong one. The signature covers a record's canonical bytes, and
+`jsonb` normalises whitespace and key order on write, so a `jsonb` round trip would silently
+invalidate every signature in the store. Noted in `schema.py` at the column, because this is the
+kind of thing a later "tidy up the schema" change would undo.
+
+### A16 — no migration from RC2's `rv2_*` tables
+
+§17 specified additive `ALTER`s. There is no deployed v3 control-plane schema (`gateway_v2` had
+no database at all), so phase 4 ships the **initial DDL** instead: `amf_state_counter`,
+`amf_state_record`, `amf_state_log`. §17's `ALTER` list still applies to anyone porting the RC2
+prototype. `count` and `on_count` live on the counter row and are maintained inside the write
+transaction — computing them with `SELECT count(*)` per write would put the O(records) scan back
+on the write path, which is the defect being fixed.
+
+### A17 — the in-memory twin is a publisher AND a reader store
+
+`MemoryStore` satisfies both `state_control.StatePublisher` and
+`gateway_v2.runtime.state_feed.StateStore`. That is deliberate: it lets the **real** writer, the
+**real** `FeedReader` and the **real** appliers be driven against each other with no Postgres and
+no Valkey, so the propagation contract is exercised end to end rather than being asserted twice
+from two sets of assumptions. Nine end-to-end tests now cover plan write → serve, offboard →
+unknown tenant, kill-switch engage → enforced, cold start at 5,000 scopes, key revocation →
+single-key eviction, bulk onboard → bounded convergence, flush → fail closed → whole-kind restore
+→ recovery, a stale publisher losing to a newer generation, and a foreign signer being refused.
+
+### What phase 4a removed
+
+| RC2 | Now |
+|---|---|
+| every write republished the kind's complete record set: `DEL` + `HSET` of every record in one `MULTI` (3.5 MB / 23.8 ms at 10k keys; 17.4 MB / 124 ms at 50k, past the 25 ms request-path timeout; live publish p50 **1.72 s** at 25k tenants) | a write touches **5 keys**: the record, its index entry, the engaged set (ks only), the manifest, the nudge. Measured in the twin: **1 record write with 10,000 published**, and 6 domain operations produce 6 record writes and **0** whole-kind publishes |
+| no bulk path, so onboarding M tenants cost M whole-kind republishes — O(M²) store bytes | `put_many`: one transaction, one version bump, one manifest, **one nudge**, chunked writes, one score per record so each stays individually selectable |
+| `publish(kind)` reachable from every write | `publish_kind` reachable only from the repair path, enforced by an AST guard on which publisher methods `writer.py` can call |
+
+The four honest outcomes (`ok` / `ok_publish_pending` / `unknown` / `error`) are kept verbatim
+from the RC2 design that had 0 violations in 15 fault runs (R2-17). Only the second step changed.
+
+### Phase 4 remainder
+
+| Piece | Status |
+|---|---|
+| per-record publish, bulk path, counters, outcomes | **done** |
+| re-hydrator with a digest-free `diagnose` (S3) | **next (4b)** — compares `(version, feed_seq, count, on_count)` plus `ZCARD` and the index head; the O(records) digest runs only on a mismatch |
+| concrete psycopg `ControlDB` and redis `StatePublisher` / `StateStore` adapters | **4c** — this is where `redis>=8.1,<9` arrives (owner-confirmed); the logic above is already proven against the Protocols |
+| the `{rv2}:updates` nudge listener, ported from RC2's `PushListener` with its D2/R2-19 hardening and `accept` widened to all four kinds | **4c** |
