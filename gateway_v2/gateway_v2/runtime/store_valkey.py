@@ -48,6 +48,50 @@ def _as_bytes(value: object) -> bytes | None:
     return None
 
 
+class UnboundedStoreClient(RuntimeError):
+    """A store client with no operation timeout, or one too long to be useful."""
+
+
+def bounded_timeout_s(client: object) -> float | None:
+    """The client's per-operation timeout, or None when it has none.
+
+    Reaches into redis-py's connection kwargs because there is no public accessor. Returns None
+    rather than raising if the shape is unfamiliar, so a test double is never rejected.
+    """
+    pool = getattr(client, "connection_pool", None)
+    kwargs = getattr(pool, "connection_kwargs", None)
+    if not isinstance(kwargs, dict):
+        return None
+    timeout = kwargs.get("socket_timeout")
+    return float(timeout) if isinstance(timeout, (int, float)) else None
+
+
+def require_bounded_client(client: object, *, below_s: float) -> float:
+    """Refuse to start on a client whose reads can hang past the refresh period (C36).
+
+    A paused or partitioned store does not refuse connections -- it accepts them and never
+    answers. Without a per-operation timeout a refresh round simply never returns, so the
+    snapshot never ages, `state()` never reports STALE, and the fail-closed window that the whole
+    outage posture rests on silently does not exist. RC2 validated this at start-up and the
+    round-2 lanes measured the consequence of getting the relationship wrong: a timeout EQUAL to
+    the staleness ceiling produced fleet-wide fail-closed on every half-open failover.
+
+    Call this from the process start-up path, with `below_s` the refresh period.
+    """
+    timeout = bounded_timeout_s(client)
+    if timeout is None:
+        raise UnboundedStoreClient(
+            "the state store client has no socket_timeout: a partitioned store would hang a "
+            "refresh round forever instead of ageing the snapshot",
+        )
+    if timeout >= below_s:
+        raise UnboundedStoreClient(
+            f"the state store client's socket_timeout ({timeout}s) must be below the refresh "
+            f"period ({below_s}s), or a single slow round outlives the window it protects",
+        )
+    return timeout
+
+
 class ValkeyStateStore:
     """Satisfies `gateway_v2.runtime.state_feed.StateStore` over redis.asyncio.
 

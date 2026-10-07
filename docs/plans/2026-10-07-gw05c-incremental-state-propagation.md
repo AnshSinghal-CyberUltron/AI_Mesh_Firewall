@@ -1992,3 +1992,78 @@ no way to ask it for the scope names.
 | ruff, mypy `--strict` (108 files) | clean |
 | pytest | **330 passed, 32 skipped** |
 | CI gate job replayed verbatim | OK |
+
+---
+
+### Phase 6 files
+
+```
+gateway_v2/tests/state_control/test_lgw05c_drills.py   NEW   13 fault drills on real servers
+gateway_v2/gateway_v2/runtime/store_valkey.py          EDIT  require_bounded_client (see A24)
+scripts/gw05c_local_drills.sh                          NEW   provisions, runs, writes evidence,
+                                                             tears down
+docs/plans/evidence/2026-10-07-gw05c/verdict.json      NEW   the phase-6 verdict
+.gitignore                                             EDIT  junit artifacts stay local
+```
+
+### What was drilled, and against what
+
+`scripts/gw05c_local_drills.sh` provisions a throwaway **Postgres 16.15** and **Valkey 8.1.10**,
+runs every suite, and removes both containers on exit including on failure. One run:
+
+| | |
+|---|---|
+| gates (5 AST × 2 trees, tenant-scale, import-linter, ruff, mypy `--strict`) | clean |
+| suite with no infrastructure (the CI shape) | **330 passed, 45 skipped** |
+| suite with real Postgres + real Valkey | **371 passed, 4 skipped** |
+| fault drills | **13 passed** |
+
+| Drill | Asserts |
+|---|---|
+| store flush | fail closed with "manifest missing" → `diagnose` says `missing` → repair restores 50 → a fresh worker serves again |
+| regressed store | a worker that applied position 10 refuses a store republished at 4 (the sp1 *class*, without a replica) |
+| unpublished write | durable, invisible to a worker, then published by a re-hydrator round and served |
+| **store partition** (`docker pause`) | the round fails inside the operation timeout instead of hanging — measured **< 2 s** — then heals with no intervention |
+| **Postgres outage** (`docker pause`) | a store round still succeeds and the plan is still served; the re-hydrator reports per kind without raising; recovery after unpause |
+| **held row lock** (R2-04) | a flush is repaired to 30 records **while an idle `FOR UPDATE` is held**, in under 5 s. RC2 stalled for 38 s here |
+| concurrent writers | 60 threads → positions `1..60`, dense, no gap, no duplicate, counters exact |
+| **G-04 cold start** | 2,000 keys over 200 orgs + 201 kill-switch records → a fresh worker reads **1** engaged scope |
+| **bulk onboard** | 25,000 records in one transaction, converging in **13 bounded rounds**, none over budget |
+| steady round at 25,000 tenants | reads **zero** records |
+
+### A24 — the drills found a missing bound, not a bug
+
+Writing the partition drill exposed that **nothing enforced a per-operation timeout on the store
+client**. A paused store is not a refused connection: it accepts the socket and never answers. So
+without a timeout a refresh round never returns, the snapshot never ages, `state()` never reports
+STALE, and the fail-closed window the entire outage posture rests on silently does not exist. The
+drill would have hung rather than failed.
+
+`require_bounded_client(client, below_s=refresh_period)` is the C36 start-up validation, ported:
+it refuses a client with no `socket_timeout`, and refuses one at or above the refresh period —
+RC2 measured that mistake directly, a timeout equal to the staleness ceiling produced fleet-wide
+fail-closed on every half-open failover. Three tests cover it.
+
+**Wiring it into start-up is GW06's**, because `gateway_v2` has no process start-up path yet. The
+check exists and is proven; nothing calls it in anger. That is recorded rather than quietly left.
+
+### What phase 6 could NOT do locally, stated rather than faked
+
+| Scenario | Why it needs more than one machine |
+|---|---|
+| **L05c-1** (the card's exit criterion) | C4 p99 at 1k/10k/25k × phases A–D, 1 gateway × 12 workers + an L4 guard + two load generators. No assertion anywhere in phases 1–6 measures latency |
+| **sp1 / sp1-live** | a lagging *replica* and a promotion. The version-floor behaviour is covered by the `raise_floor` tests and the regressed-store drill; the failover itself is a lane scenario |
+| **sp2** | fail-closed depends on GW05b's signed freshness stamp, which is not implemented. Without it a worker legitimately serves its RAM snapshot, so there is nothing yet to assert. The drill pins today's behaviour instead |
+| **Valkey forced failover** | Memorystore does not offer it at all (R2-13, confirmed on the API). Its data-loss shape is the flush drill |
+| **Cloud SQL failover** | a managed-service operation; the `docker pause` outage drill is its local analogue |
+
+### Phase 6 state
+
+| Check | Result |
+|---|---|
+| all gates | clean |
+| pytest, no infrastructure | 330 passed, 45 skipped |
+| pytest, real Postgres + real Valkey | 371 passed, 4 skipped |
+| fault drills | 13 passed |
+| evidence | `docs/plans/evidence/2026-10-07-gw05c/verdict.json` |
+| containers after the run | none left; `blog-postgres` never touched |

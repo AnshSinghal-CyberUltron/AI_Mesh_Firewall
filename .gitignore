@@ -77,3 +77,6 @@ ai-mesh-key.pem
 /id_ed25519_sk
 /aws/
 awscliv2.zip
+
+# GW05c drill artifacts: regenerable by scripts/gw05c_local_drills.sh
+docs/plans/evidence/**/junit-*.xml

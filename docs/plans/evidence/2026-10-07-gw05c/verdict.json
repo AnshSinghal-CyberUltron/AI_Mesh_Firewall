@@ -1,0 +1,37 @@
+{
+  "card": "GW05c",
+  "phase": "6 (local fault drills)",
+  "postgres": "16.15",
+  "valkey": "8.1.10",
+  "gates": "5 AST x 2 trees + tenant-scale + import-linter + ruff + mypy --strict: clean",
+  "pytest_offline": {
+    "passed": 330,
+    "skipped": 45
+  },
+  "pytest_live": {
+    "passed": 371,
+    "skipped": 4
+  },
+  "drills": {
+    "passed": 13
+  },
+  "drilled": [
+    "store flush -> fail closed -> rehydrate -> serve",
+    "regressed store refused against an applied floor",
+    "unpublished write invisible until a rehydrator round",
+    "store partition (docker pause) bounded by the op timeout, then heal",
+    "postgres outage does not fail a store round; rehydrator reports per kind",
+    "rehydration completes under a held FOR UPDATE (R2-04)",
+    "60 concurrent writers leave a dense gap-free position sequence",
+    "G-04 cold start: 2,000 keys over 200 orgs, one engaged scope read",
+    "bulk onboard of 25,000 records in bounded rounds",
+    "steady round at 25,000 tenants reads zero records"
+  ],
+  "not_drilled_needs_lane": {
+    "L05c-1": "C4 p99 at 1k/10k/25k x phases A-D; needs 1 gw x 12 workers + L4 guard",
+    "sp1/sp1-live": "a lagging REPLICA and a promotion",
+    "sp2": "fail-closed depends on GW05b's signed freshness stamp (not implemented)",
+    "valkey_forced_failover": "not offered by Memorystore at all (R2-13)"
+  },
+  "latency_claims": "none. every assertion is a count, not a duration"
+}
