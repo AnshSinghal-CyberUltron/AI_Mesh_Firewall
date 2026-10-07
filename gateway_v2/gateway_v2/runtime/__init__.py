@@ -15,6 +15,13 @@ from gateway_v2.runtime.state_feed import (
     IndexPage,
     StateStore,
 )
+from gateway_v2.runtime.state_nudge import (
+    DEFAULT_KNOBS,
+    ListenerCounters,
+    NudgeListener,
+    PushKnobs,
+    parse_nudge,
+)
 from gateway_v2.runtime.state_sig import (
     canonical_body,
     decode_manifest,
@@ -43,6 +50,7 @@ from gateway_v2.runtime.store_keys import (
 
 __all__ = (
     "DEFAULT_BUDGET",
+    "DEFAULT_KNOBS",
     "DEFAULT_NAMESPACE",
     "ENGAGED_KINDS",
     "HASH_KINDS",
@@ -63,7 +71,10 @@ __all__ = (
     "HardwareSignals",
     "Head",
     "IndexPage",
+    "ListenerCounters",
+    "NudgeListener",
     "PoolKind",
+    "PushKnobs",
     "ResourceContract",
     "RoundReport",
     "StateStore",
@@ -81,5 +92,6 @@ __all__ = (
     "load_contract",
     "make_manifest",
     "make_record",
+    "parse_nudge",
     "record_matches_index",
 )

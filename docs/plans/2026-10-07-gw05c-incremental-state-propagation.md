@@ -1793,3 +1793,95 @@ declares, now pinned by a test rather than incidental.
 
 Not verified, and not claimed: anything about latency or throughput. Every number in this phase
 is a count of commands, records, round trips or rounds. C4 p99 is phase 7 and needs the lane.
+
+### Phase 4d files — closing phase 4
+
+```
+gateway_v2/gateway_v2/runtime/state_nudge.py            NEW   NudgeListener, PushKnobs,
+                                                              parse_nudge, ListenerCounters
+gateway_v2/gateway_v2/runtime/__init__.py               EDIT  exports
+gateway_v2/tests/runtime/test_lgw05c_nudge.py           NEW   26 tests incl. the D2 regression
+gateway_v2/tests/state_control/test_lgw05c_live_stack.py EDIT  real-Valkey mode + 4 more tests
+```
+
+### The nudge listener, and why it is not a `listen()` loop
+
+A nudge is a **latency** hint and never the feed: propagation is already bounded by the periodic
+O(1) round, and pub/sub is lossy by construction. What it does carry, which RC2 discarded, is
+`<kind>:<feed_seq>` — so a worker already at the announced position skips the round entirely and
+a nudge storm costs nothing. It also retires SP3a: in RC2 only plans were nudged, so kill
+switches and keys were poll-only.
+
+R2-19 / D2 is the reason this is ~250 lines rather than 20. redis-py's `listen()` re-reads its
+connection in a loop that never yields while the connection answers "no message" immediately — a
+keepalive `ETIMEDOUT` reads as "no message" — and it spun the event loop to out-of-memory on a
+24-worker fleet. A connection is therefore declared DEAD on three signatures:
+
+| Signature | Detection | Test |
+|---|---|---|
+| `error` | any transport fault, including a failing `subscribe` | `test_a_transport_fault_is_declared_dead`, `test_a_failing_subscribe_is_declared_dead_and_retried` |
+| `no_wait` | `get_message(timeout=poll)` returned nothing in under `poll/2`, three times running — detected by ELAPSED TIME, so it holds whatever the client library does | `test_an_immediately_answering_connection_is_declared_dead` |
+| `silent` | nothing at all for 2 × ping, a PING's own pong included | `test_a_silent_connection_is_declared_dead_after_two_pings` |
+
+And the properties that keep it from becoming the defect it replaces: a quiet connection is **not**
+dead (`test_a_quiet_connection_is_not_declared_dead`); a co-resident coroutine keeps running while
+the spin is being detected (`test_the_listener_never_blocks_the_loop_while_spinning` — 20/20 ticks);
+backoff is equal-jitter and capped, and a connection that lived restarts it; every subscription
+runs one unprompted catch-up nudge because whatever was published while away is lost; a failed
+catch-up is retried on each wakeup rather than waiting for the period; a burst coalesces into ONE
+nudge keeping the highest position per kind; a raising nudge does not kill the listener; and a
+malformed payload is dropped rather than raised, because a nudge is never trusted for correctness.
+
+All 26 tests run on an injected clock and sleep, so none of them waits on wall time.
+
+### Real-Valkey verification
+
+`test_lgw05c_live_stack.py` now uses a **real** Valkey when `AMF_VALKEY_URL` is set, with a
+per-test key namespace so a shared server cannot cross-contaminate, falling back to `fakeredis`
+otherwise. The same 17 tests therefore run both ways.
+
+Verified against **Valkey 8.1.10** (`valkey/valkey:8-alpine`) + **Postgres 16** together:
+
+| | |
+|---|---|
+| `WATCH`/`MULTI` publish-skip | a publisher behind the store is reported pending and the stored position does not move |
+| exclusive `ZRANGEBYSCORE` lower bound | a cursor at 3 gets `[4, 5]`, never re-applying 3 |
+| the published key set | exactly record container + index + engaged set + manifest, all in one hash slot |
+| hash-kind and key-kind coexistence | plan at its own key, two key records in one hash, index of 2 |
+| pub/sub nudge end to end | the writer publishes, a real `NudgeListener` receives `plan:1`, a round runs, the plan is served |
+| a forged manifest | never blocks a publish |
+| everything from the fakeredis run | identical results |
+
+**A21 — a harness defect the real server exposed.** Five live-stack tests passed on `fakeredis`
+and failed on real Valkey with `RuntimeError: Event loop is closed`. The cause was mine: each
+helper call used its own `asyncio.run()`, and a real `redis.asyncio` client binds its transport to
+the loop it was created on. `fakeredis` tolerated the reuse; a real client cannot. The tests now
+do all their async work inside a single `asyncio.run` and close their clients, which is also how a
+worker actually runs — one client, one loop, one process. No product code was wrong, but the
+suite had been asserting something it could not have caught.
+
+### Phase 4: closed
+
+| Piece | Status | Verified against |
+|---|---|---|
+| per-record publish, bulk path, counters, four outcomes | done | twins + real Postgres + real Valkey |
+| re-hydrator, O(1) diagnose, occasional deep verify, repair | done | twins + real Postgres + real Valkey |
+| `ValkeyStateStore` / `ValkeyPublisher` | done | fakeredis **and** Valkey 8.1.10 |
+| `PostgresControlDB`, bounded sessions, lock-free snapshot | done | Postgres 16 |
+| `NudgeListener` with the D2/R2-19 hardening | done | injected clock + real pub/sub |
+| CI gating both packages | done | gate job replayed verbatim |
+
+| Run | Result |
+|---|---|
+| no infrastructure | **300 passed, 32 skipped** |
+| real Postgres, fakeredis | **328 passed, 4 skipped** |
+| real Postgres + real Valkey | **328 passed, 4 skipped** |
+| 5 AST gates × 2 trees, import-linter, ruff, mypy --strict (106 files) | all clean |
+
+Containers used for verification were throwaway (`amf-gw05c-pg`, `amf-gw05c-valkey`) and removed;
+the pre-existing `blog-postgres` was never touched.
+
+Still not claimed, and still phase 7: any latency or throughput number. Every figure above is a
+count of commands, records, round trips or rounds. And the state layer is not yet wired into a
+serving process — `gateway_v2/edge/` is still stubs — which is the v3 rewrite's position, not a
+phase-4 omission.
