@@ -1,0 +1,302 @@
+{
+ "run": "/home/contact_cyberultron_com/rv-evidence-raw/r2-state/runs/rc2-b-2",
+ "kind": "flushall",
+ "build": "c36_on",
+ "code": "rc2",
+ "t_fault_ns": 1790252724110466035,
+ "t_fault_source": "kvcmd FLUSHALL send/reply midpoint (obs clock)",
+ "requests": 83701,
+ "by_source": {
+  "probe": 46201,
+  "olg": 37500
+ },
+ "outcomes_by_label_all": {
+  "G": {
+   "200": 9240
+  },
+  "K": {
+   "503:kill_switch_engaged": 9241
+  },
+  "N": {
+   "200": 46116,
+   "403:blocked_by_policy": 624
+  },
+  "P": {
+   "200": 9240
+  },
+  "R": {
+   "401:invalid_api_key": 9239,
+   "503:shared_state_unavailable": 1
+  }
+ },
+ "outcomes_by_label_after_fault": {
+  "G": {
+   "200": 5632
+  },
+  "K": {
+   "503:kill_switch_engaged": 5631
+  },
+  "N": {
+   "200": 29510,
+   "403:blocked_by_policy": 412
+  },
+  "P": {
+   "200": 5632
+  },
+  "R": {
+   "503:shared_state_unavailable": 1,
+   "401:invalid_api_key": 5630
+  }
+ },
+ "gap_window_60s_valid_outcomes": {
+  "200": 10219,
+  "403:blocked_by_policy": 101
+ },
+ "violations": {},
+ "strata_not_c36": {
+  "policy_blocks_403_blocked_by_policy": {
+   "pre": 212,
+   "gap60": 101,
+   "post": 311
+  },
+  "overload_503_owner_shed": {},
+  "valid_offered": {
+   "pre": 24034,
+   "gap60": 10320,
+   "post": 30866
+  }
+ },
+ "storm": {
+  "writes": 0,
+  "writes_failed": {},
+  "admitted_after_ack_plus_1s": 0,
+  "examples": [],
+  "propagation_s": {}
+ },
+ "monotonic": {
+  "per_gateway_post_fault_older_than_pre_max": 0,
+  "per_worker_regressions": 0,
+  "per_gateway_any_regression": 0,
+  "examples": []
+ },
+ "audit_admission_evidence": {
+  "killed_org_audit_records": 0,
+  "revoked_key_audit_records": 0
+ },
+ "audit": {
+  "admitted": 64596,
+  "tail_records": 65220,
+  "final_records": 41628,
+  "admitted_never_written": 0,
+  "admitted_missing_from_final_store": 23380,
+  "never_written_examples": []
+ },
+ "store": {
+  "flush_seen_at_s": 0.048607409,
+  "restored_at_s": 1.248603291,
+  "rehydrated_events": [
+   {
+    "kind": "key",
+    "reason": "missing",
+    "took_ms": 48.76,
+    "records": 25,
+    "detected_s": -0.000358131,
+    "restored_s": 0.048400141
+   },
+   {
+    "kind": "ks",
+    "reason": "missing",
+    "took_ms": 51.39,
+    "records": 15,
+    "detected_s": 0.048469517,
+    "restored_s": 0.099857677
+   },
+   {
+    "kind": "budget",
+    "reason": "missing",
+    "took_ms": 48.72,
+    "records": 14,
+    "detected_s": 0.099881229,
+    "restored_s": 0.148601869
+   },
+   {
+    "kind": "plan",
+    "reason": "missing",
+    "took_ms": 51.46,
+    "records": 14,
+    "detected_s": 1.188588557,
+    "restored_s": 1.240044557
+   }
+  ]
+ },
+ "rehydration_bound": {
+  "declared_s": 2.051,
+  "declared_formula": "RV_REHYDRATE_PERIOD_MS + took_ms + max(RV_KS_REFRESH_MS, RV_PLAN_RECONCILE_MS)",
+  "workers_with_notready_polls": 0,
+  "workers_total": 24,
+  "max_first_200_after_gap_s": null,
+  "store_restored_s": 1.248603291
+ },
+ "db_vs_store_post": {
+  "db_versions": {
+   "budget": "1.14",
+   "key": "1.26",
+   "ks": "1.15",
+   "plan": "1.26"
+  },
+  "store_versions": {
+   "plan": "1.26",
+   "key": "1.26",
+   "ks": "1.15",
+   "budget": "1.14"
+  },
+  "versions_equal": true,
+  "plan_records_equal": true,
+  "plan_db": {
+   "org-g": [
+    1,
+    25,
+    "6f38461dbb29b36dcfbf81c7409a1aa3564bca7474a3ed38c9f9279fab46cca6"
+   ],
+   "org-k": [
+    1,
+    26,
+    "3a12625e45094f49880ac91f03744d8de610d7147b236b4473448396be6d126f"
+   ],
+   "org-k10": [
+    1,
+    5,
+    "3c1b45869ecae7ffcb9071b865bcb5afd90919fa378f90f1ae8a5990095d268b"
+   ],
+   "org-k11": [
+    1,
+    6,
+    "8f6bde2b34fcf1549af189ed43b6577097bdaf968a224a8f68a0e160b0523bb8"
+   ],
+   "org-k2": [
+    1,
+    7,
+    "3258b06dc36de7c25715ec76f78c56de1fe460dc3e985dc5b0df908639cf3970"
+   ],
+   "org-k3": [
+    1,
+    8,
+    "cd39eaa020facb6afe96eac4942ad08c316dcef06568963752f047f17c195fb6"
+   ],
+   "org-k4": [
+    1,
+    9,
+    "9d7a5a10f1385f7acae740f12e3a1e62efb65198dd4ee2fed239e3c1e3528a31"
+   ],
+   "org-k5": [
+    1,
+    10,
+    "28b92b7242ba25ca38d29ad92996796b0242f3f0d6bae5c48963a18793cacd50"
+   ],
+   "org-k6": [
+    1,
+    11,
+    "ad615653c45b247942c4704281a4468614c3a7e1953087a0c86196dbc36f2861"
+   ],
+   "org-k7": [
+    1,
+    12,
+    "6ea16691b2650a900f7bf6e78e3bd0072417f0931e74e1e61324953b6844b1af"
+   ],
+   "org-k8": [
+    1,
+    13,
+    "4c088047f4226415901b5b2d299a6060a99eb7bb24ce9916dfb9a9cedb298578"
+   ],
+   "org-k9": [
+    1,
+    14,
+    "a0e017f426eadc5be63dbdf8fc217976004a184fbe681d81312b291bbabc663b"
+   ],
+   "org-n": [
+    1,
+    24,
+    "edf96b988bf2ce384fc6ef1dc84e7f8e4bcda70bc04668efae9b7f62f0f70dc4"
+   ],
+   "org-p": [
+    1,
+    23,
+    "3e2cde7860e2481af327af305a7aee216ec0aee7e268eaeb0f14daf356e099ba"
+   ]
+  },
+  "plan_store": {
+   "org-k4": [
+    1,
+    9,
+    "9d7a5a10f1385f7acae740f12e3a1e62efb65198dd4ee2fed239e3c1e3528a31"
+   ],
+   "org-k3": [
+    1,
+    8,
+    "cd39eaa020facb6afe96eac4942ad08c316dcef06568963752f047f17c195fb6"
+   ],
+   "org-k10": [
+    1,
+    5,
+    "3c1b45869ecae7ffcb9071b865bcb5afd90919fa378f90f1ae8a5990095d268b"
+   ],
+   "org-k6": [
+    1,
+    11,
+    "ad615653c45b247942c4704281a4468614c3a7e1953087a0c86196dbc36f2861"
+   ],
+   "org-k11": [
+    1,
+    6,
+    "8f6bde2b34fcf1549af189ed43b6577097bdaf968a224a8f68a0e160b0523bb8"
+   ],
+   "org-k": [
+    1,
+    26,
+    "3a12625e45094f49880ac91f03744d8de610d7147b236b4473448396be6d126f"
+   ],
+   "org-g": [
+    1,
+    25,
+    "6f38461dbb29b36dcfbf81c7409a1aa3564bca7474a3ed38c9f9279fab46cca6"
+   ],
+   "org-k9": [
+    1,
+    14,
+    "a0e017f426eadc5be63dbdf8fc217976004a184fbe681d81312b291bbabc663b"
+   ],
+   "org-k5": [
+    1,
+    10,
+    "28b92b7242ba25ca38d29ad92996796b0242f3f0d6bae5c48963a18793cacd50"
+   ],
+   "org-n": [
+    1,
+    24,
+    "edf96b988bf2ce384fc6ef1dc84e7f8e4bcda70bc04668efae9b7f62f0f70dc4"
+   ],
+   "org-k8": [
+    1,
+    13,
+    "4c088047f4226415901b5b2d299a6060a99eb7bb24ce9916dfb9a9cedb298578"
+   ],
+   "org-p": [
+    1,
+    23,
+    "3e2cde7860e2481af327af305a7aee216ec0aee7e268eaeb0f14daf356e099ba"
+   ],
+   "org-k2": [
+    1,
+    7,
+    "3258b06dc36de7c25715ec76f78c56de1fe460dc3e985dc5b0df908639cf3970"
+   ],
+   "org-k7": [
+    1,
+    12,
+    "6ea16691b2650a900f7bf6e78e3bd0072417f0931e74e1e61324953b6844b1af"
+   ]
+  }
+ },
+ "statepoll_polls": 38000,
+ "storewatch_polls": 9500
+}

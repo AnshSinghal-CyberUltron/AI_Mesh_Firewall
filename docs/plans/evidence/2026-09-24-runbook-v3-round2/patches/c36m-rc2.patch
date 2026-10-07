@@ -1,0 +1,1185 @@
+diff -ruN '--exclude=.venv' '--exclude=__pycache__' '--exclude=.hypothesis' '--exclude=.pytest_cache' '--exclude=.import_linter_cache' '--exclude=.run' '--exclude=*.pyc' rvproto2-c36m-rc2-base/rvproto/admit/quota.py rvproto2-c36m-rc2-work/rvproto/admit/quota.py
+--- rvproto2-c36m-rc2-base/rvproto/admit/quota.py	2026-09-24 11:28:28.000000000 +0530
++++ rvproto2-c36m-rc2-work/rvproto/admit/quota.py	2026-09-24 17:23:34.683791628 +0530
+@@ -10,7 +10,7 @@
+ 
+ import redis.asyncio as aioredis
+ 
+-from rvproto.runtime.metrics import Registry
++from rvproto.runtime.metrics import Registry, label
+ from rvproto.runtime.store import K2_BUDGET, K_BUDGET_PREFIX, LEASE_LUA, LEASE_LUA_V2
+ from rvproto.runtime.versioned import StoreDataUnavailable
+ 
+@@ -47,7 +47,7 @@
+         have = self._local.get(org, 0)
+         if have >= cost:
+             self._local[org] = have - cost
+-            self.metrics.inc(f'quota_admitted_tokens{{org="{org}"}}', cost)
++            self.metrics.inc(label("quota_admitted_tokens", org=org), cost)
+             return True
+         return False
+ 
+@@ -63,12 +63,12 @@
+             self.metrics.inc("lease_budget_missing")
+             raise StoreDataUnavailable(f"budget counter of {org} missing (store flushed; re-hydration pending)")
+         self.metrics.inc("lease_refills")
+-        self.metrics.inc(f'lease_granted_tokens{{org="{org}"}}', grant)
++        self.metrics.inc(label("lease_granted_tokens", org=org), grant)
+         have = self._local.get(org, 0) + grant
+         if have >= cost:
+             self._local[org] = have - cost
+-            self.metrics.inc(f'quota_admitted_tokens{{org="{org}"}}', cost)
++            self.metrics.inc(label("quota_admitted_tokens", org=org), cost)
+             return True
+         self._local[org] = have
+-        self.metrics.inc(f'quota_rejected{{org="{org}"}}')
++        self.metrics.inc(label("quota_rejected", org=org))
+         return False
+diff -ruN '--exclude=.venv' '--exclude=__pycache__' '--exclude=.hypothesis' '--exclude=.pytest_cache' '--exclude=.import_linter_cache' '--exclude=.run' '--exclude=*.pyc' rvproto2-c36m-rc2-base/rvproto/control/__main__.py rvproto2-c36m-rc2-work/rvproto/control/__main__.py
+--- rvproto2-c36m-rc2-base/rvproto/control/__main__.py	2026-09-24 15:59:00.000000000 +0530
++++ rvproto2-c36m-rc2-work/rvproto/control/__main__.py	2026-09-24 17:24:35.521896317 +0530
+@@ -43,7 +43,8 @@
+ def _writer() -> StateWriter:
+     db = PgDB(_env("RV_DATABASE_URL"))
+     r = sync_client(os.environ.get("RV_REDIS_URL", "redis://127.0.0.1:6379/0"), op_timeout_s=5.0)
+-    return StateWriter(db, r, _env("RV_STATE_HMAC_KEY").encode(), actor=os.environ.get("RV_ACTOR", "rvproto.control"))
++    return StateWriter(db, r, _env("RV_STATE_HMAC_KEY").encode(), actor=os.environ.get("RV_ACTOR", "rvproto.control"),
++                       resolve_s=float(os.environ.get("RV_WRITE_RESOLVE_S", "30")))
+ 
+ 
+ def _out(**kw: object) -> None:
+diff -ruN '--exclude=.venv' '--exclude=__pycache__' '--exclude=.hypothesis' '--exclude=.pytest_cache' '--exclude=.import_linter_cache' '--exclude=.run' '--exclude=*.pyc' rvproto2-c36m-rc2-base/rvproto/control/db.py rvproto2-c36m-rc2-work/rvproto/control/db.py
+--- rvproto2-c36m-rc2-base/rvproto/control/db.py	2026-09-24 15:58:37.000000000 +0530
++++ rvproto2-c36m-rc2-work/rvproto/control/db.py	2026-09-24 17:24:08.167393988 +0530
+@@ -10,6 +10,9 @@
+ for a rollback / a divergence repair), upsert the record, append the log row, bump the version.
+ A publish reads the version and the record set as ONE snapshot (version row FOR SHARE, which waits for a
+ writer holding it FOR UPDATE), so a manifest never claims a version its record set does not match.
++A write whose COMMIT answer is lost (CommitUnknown) is read back before it is reported (`logged`: again behind
++FOR SHARE on the version row, so a COMMIT still in flight on the old connection has ended first). A READ whose
++COMMIT answer is lost is simply complete: it wrote nothing and its rows were already read.
+ """
+ 
+ from __future__ import annotations
+@@ -44,7 +47,8 @@
+ 
+ class CommitUnknown(Exception):
+     """The connection failed DURING COMMIT: the write may or may not be durable (a failover mid-commit).
+-    The writer reports it as such -- never as a failure -- and the re-hydrator publishes whatever committed."""
++    The writer reads the outcome back from Postgres (DB.logged) and reports "unknown" only when Postgres cannot
++    answer within its resolve bound; the re-hydrator publishes whatever committed."""
+ 
+ 
+ class Tx(Protocol):
+@@ -62,7 +66,11 @@
+ 
+ 
+ class DB(Protocol):
+-    def tx(self) -> contextlib.AbstractContextManager[Tx]: ...
++    errors: tuple[type[BaseException], ...]  # what "the database is unavailable" raises
++
++    def tx(self, *, read_only: bool = False) -> contextlib.AbstractContextManager[Tx]: ...
++
++    def logged(self, kind: str, v: Version) -> list[str]: ...
+ 
+     def version(self, kind: str) -> Version: ...
+ 
+@@ -127,11 +135,13 @@
+ class PgDB:
+     """psycopg 3; one short-lived connection per operation (control-plane CLI / re-hydrator rates)."""
+ 
+-    def __init__(self, dsn: str) -> None:
++    def __init__(self, dsn: str, *, lock_timeout_ms: int = 2000) -> None:
+         import psycopg
+ 
+         self.psycopg = psycopg
+         self.dsn = dsn
++        self.errors = (psycopg.Error, CommitUnknown)
++        self.lock_timeout_ms = lock_timeout_ms  # logged(): wait for an in-flight writer of the kind, per attempt
+ 
+     def _conn(self) -> Any:
+         return self.psycopg.connect(self.dsn, connect_timeout=5, autocommit=False)
+@@ -143,8 +153,9 @@
+                 cur.execute("INSERT INTO rv2_version (kind, epoch, seq) VALUES (%s, 1, 0) ON CONFLICT DO NOTHING", (kind,))
+ 
+     @contextlib.contextmanager
+-    def tx(self) -> Iterator[_PgTx]:
+-        """An exception in the body rolls back (nothing durable). A failure of COMMIT itself is CommitUnknown."""
++    def tx(self, *, read_only: bool = False) -> Iterator[_PgTx]:
++        """An exception in the body rolls back (nothing durable). A failure of COMMIT itself is CommitUnknown,
++        except for a read_only transaction: its rows are read and it wrote nothing, so it is complete."""
+         c = self._conn()
+         try:
+             with c.cursor() as cur:
+@@ -152,7 +163,8 @@
+             try:
+                 c.commit()
+             except self.psycopg.Error as exc:
+-                raise CommitUnknown(f"{type(exc).__name__}: {exc}"[:300]) from exc
++                if not read_only:
++                    raise CommitUnknown(f"{type(exc).__name__}: {exc}"[:300]) from exc
+         except BaseException:
+             try:
+                 if not c.closed:
+@@ -164,17 +176,27 @@
+             c.close()
+ 
+     def version(self, kind: str) -> Version:
+-        with self.tx() as t:
++        with self.tx(read_only=True) as t:
+             return t.version(kind, lock=False)
+ 
+     def records(self, kind: str) -> list[dict[str, Any]]:
+-        with self.tx() as t:
++        with self.tx(read_only=True) as t:
+             return t.records(kind)
+ 
+     def snapshot(self, kind: str) -> tuple[Version, list[dict[str, Any]]]:
+-        with self.tx() as t:
++        with self.tx(read_only=True) as t:
+             return t.snapshot(kind)
+ 
++    def logged(self, kind: str, v: Version) -> list[str]:
++        """Signatures logged at (kind, v). The version row is locked FOR SHARE first: it waits (up to the lock
++        timeout) for a writer of `kind` still holding it, so a COMMIT in flight has ended (durable or rolled
++        back) before rv2_log is read; the answer is final."""
++        with self._conn() as c, c.cursor() as cur:
++            cur.execute("SELECT set_config('lock_timeout', %s, true)", (f"{self.lock_timeout_ms}ms",))
++            cur.execute("SELECT 1 FROM rv2_version WHERE kind = %s FOR SHARE", (kind,))
++            cur.execute("SELECT sig FROM rv2_log WHERE kind = %s AND epoch = %s AND seq = %s", (kind, v.epoch, v.seq))
++            return [str(r[0]) for r in cur.fetchall()]
++
+     def checkpoint(self, remaining: dict[str, tuple[int, Version]]) -> None:
+         with self._conn() as c, c.cursor() as cur:
+             for org, (n, v) in remaining.items():
+@@ -225,28 +247,42 @@
+ class MemDB:
+     """Transactional in-memory twin of PgDB (unit tests): a failed transaction leaves no trace."""
+ 
++    errors = (ConnectionError, CommitUnknown)
++
+     def __init__(self) -> None:
+         self.st = _MemState({k: Version(1, 0) for k in KINDS}, {}, [], {})
+         self.lock = threading.Lock()
+         self.fail_next = False  # test hook: the next transaction raises before commit
+         self.commit_unknown_next = False  # test hook: the next transaction commits, then its acknowledgement is lost
++        self.commit_lost_next = False  # test hook: the next COMMIT never reaches the server; its answer is lost too
++        self.down = 0  # test hook: the next `down` logged() reads fail (the database is still failing over)
+ 
+     def init_schema(self) -> None:
+         return None
+ 
+     @contextlib.contextmanager
+-    def tx(self) -> Iterator[_MemTx]:
++    def tx(self, *, read_only: bool = False) -> Iterator[_MemTx]:
+         with self.lock:
+             work = _MemState(dict(self.st.versions), dict(self.st.records), list(self.st.log), dict(self.st.checkpoints))
+             yield _MemTx(work)
+             if self.fail_next:
+                 self.fail_next = False
+                 raise ConnectionError("injected database failure")
++            if self.commit_lost_next:
++                self.commit_lost_next = False
++                raise CommitUnknown("injected: COMMIT never reached the server, its answer lost")
+             self.st = work
+             if self.commit_unknown_next:
+                 self.commit_unknown_next = False
+                 raise CommitUnknown("injected: connection lost during COMMIT")
+ 
++    def logged(self, kind: str, v: Version) -> list[str]:
++        if self.down > 0:
++            self.down -= 1
++            raise ConnectionError("injected: database unavailable")
++        with self.lock:
++            return [e["sig"] for e in self.st.log if e["kind"] == kind and (e["epoch"], e["seq"]) == (v.epoch, v.seq)]
++
+     def version(self, kind: str) -> Version:
+         return self.st.versions.get(kind, Version(1, 0))
+ 
+diff -ruN '--exclude=.venv' '--exclude=__pycache__' '--exclude=.hypothesis' '--exclude=.pytest_cache' '--exclude=.import_linter_cache' '--exclude=.run' '--exclude=*.pyc' rvproto2-c36m-rc2-base/rvproto/control/writer.py rvproto2-c36m-rc2-work/rvproto/control/writer.py
+--- rvproto2-c36m-rc2-base/rvproto/control/writer.py	2026-09-24 15:58:53.000000000 +0530
++++ rvproto2-c36m-rc2-work/rvproto/control/writer.py	2026-09-24 17:25:17.359672444 +0530
+@@ -5,10 +5,13 @@
+ the write is still durable; the re-hydrator (rehydrate.py) republishes within its period.
+ Every write reports one honest outcome (StateWriter.last, printed by the CLI):
+   ok                  committed and published
+-  ok_publish_pending  committed; the publish failed (any error, a Postgres failover included) and the
+-                      re-hydrator will publish it
+-  unknown             the connection failed DURING COMMIT: the write may be durable; `verify` / rv2_log tells
++  ok_publish_pending  committed; the publish failed (any error, a Postgres failover included) -- or, for a
++                      budget-set, the live counter write failed -- and the re-hydrator will publish it
++  unknown             the connection failed DURING COMMIT and Postgres could not be read back within
++                      resolve_s (RV_WRITE_RESOLVE_S): the write may be durable; rv2_log tells (version, hash)
+   error               not committed (the exception propagates; nothing to undo)
++A COMMIT whose answer is lost is read back from Postgres before anything is reported (_durable): durable ->
++ok / ok_publish_pending, not durable -> error (NotCommitted). Never a guess.
+ Publishes never move the store backwards: the set is read as one Postgres snapshot, and the MULTI/EXEC
+ runs under WATCH of the manifest, skipped when the store already holds a newer verified manifest (a slow
+ publisher of an older snapshot -- a writer racing the re-hydrator -- loses to the newer one).
+@@ -52,6 +55,10 @@
+ HASHES = (("key", K2_KEYS), ("ks", K2_KS), ("budget", K2_BUDGET_META))
+ 
+ 
++class NotCommitted(Exception):
++    """The COMMIT's answer was lost and Postgres, read back, shows the write did not land: nothing was written."""
++
++
+ def _log(event: str, **kw: object) -> None:
+     sys.stderr.write(json.dumps({"event": event, "t": time.time(), **kw}, default=str) + "\n")
+ 
+@@ -61,18 +68,20 @@
+ 
+ 
+ class StateWriter:
+-    def __init__(self, db: DB, r: redis.Redis, hmac_key: bytes, *, actor: str = "rvproto.control") -> None:
++    def __init__(self, db: DB, r: redis.Redis, hmac_key: bytes, *, actor: str = "rvproto.control",
++                 resolve_s: float = 30.0) -> None:
+         self.db = db
+         self.r = r
+         self.k = hmac_key
+         self.actor = actor
++        self.resolve_s = resolve_s  # bound on reading back a COMMIT whose answer was lost (RV_WRITE_RESOLVE_S)
+         self.last: dict[str, Any] = {}  # the outcome of the last write
+ 
+     # ---- the one write path ----
+     def put(self, kind: str, rkey: str, body: Any, *, deleted: bool = False, op: str = "put",
+             epoch_bump: bool = False) -> Version:
+         """The committed version. Raises when nothing was committed, or CommitUnknown (self.last status
+-        "unknown") when the commit's acknowledgement was lost."""
++        "unknown") when the commit's acknowledgement was lost AND Postgres could not be read back."""
+         self.last = {"status": "error", "kind": kind}
+         rec: dict[str, Any] = {}
+         nv: Version | None = None
+@@ -83,10 +92,20 @@
+                 rec = make_record(self.k, kind, rkey, body, nv, deleted=deleted, op=op)
+                 t.upsert(rec, self.actor)
+                 t.set_version(kind, nv)
+-        except CommitUnknown:
+-            self.last = {"status": "unknown", "kind": kind, "version": str(nv), "hash": rec.get("hash"),
+-                         "note": "the connection failed during COMMIT: check `verify` / rv2_log"}
+-            raise
++        except CommitUnknown as lost:
++            if nv is None or not rec:
++                raise
++            try:
++                durable = self._durable(kind, nv, rec["sig"], lost)
++            except CommitUnknown:
++                self.last = {"status": "unknown", "kind": kind, "version": str(nv), "hash": rec["hash"],
++                             "note": "the connection failed during COMMIT and Postgres could not be read back: "
++                                     "rv2_log tells (version, hash)"}
++                raise
++            if not durable:
++                self.last = {"status": "error", "kind": kind, "version": str(nv),
++                             "note": "the COMMIT's answer was lost; Postgres shows it did not land"}
++                raise NotCommitted(f"{kind} {nv}: COMMIT did not land ({lost})") from lost
+         _log("state_write", kind=kind, key=rkey if kind != "key" else rkey[:12] + "...", version=str(nv), op=op,
+              deleted=deleted)
+         assert nv is not None
+@@ -97,6 +116,26 @@
+             self.last["note"] = "committed to Postgres; the store publish failed; the re-hydrator will publish it"
+         return nv
+ 
++    def _durable(self, kind: str, v: Version, sig: str, lost: CommitUnknown) -> bool:
++        """The COMMIT's answer was lost with its connection: read the outcome back from Postgres (its log, behind
++        the kind's version-row lock), retrying while Postgres is still failing over, for up to resolve_s.
++        Raises CommitUnknown when Postgres does not answer in time."""
++        deadline, delay = time.monotonic() + self.resolve_s, 0.05
++        while True:
++            try:
++                durable = sig in self.db.logged(kind, v)
++            except self.db.errors as exc:
++                if time.monotonic() + delay > deadline:
++                    _log("state_commit_unknown", kind=kind, version=str(v), error=f"{type(exc).__name__}: {exc}"[:300],
++                         lost=str(lost))
++                    raise CommitUnknown(f"{lost} (and Postgres could not be read back within {self.resolve_s:g} s: "
++                                        f"{type(exc).__name__})") from exc
++                time.sleep(delay)
++                delay = min(2 * delay, 1.0)
++                continue
++            _log("state_commit_resolved", kind=kind, version=str(v), durable=durable, lost=str(lost))
++            return durable
++
+     def repair_epoch(self, kind: str) -> Version:
+         """The store holds a version Postgres never issued (divergence): move Postgres to a new epoch so the
+         republished state is newer than anything a gateway has applied (never a regression)."""
+@@ -191,13 +230,17 @@
+         v = self.put("budget", org, {"limit": tokens})
+         try:
+             self.r.mset({K2_BUDGET + org: tokens, K2_BUDGET_GEN + org: str(v)})
+-        except (redis.RedisError, OSError) as exc:
+-            _log("budget_counter_set_failed", org=org, error=repr(exc)[:200], note="the re-hydrator resets it")
++        except Exception as exc:  # noqa: BLE001 - committed: any failure here only delays the live counter
++            _log("budget_counter_set_failed", org=org, error=f"{type(exc).__name__}: {exc}"[:200],
++                 note="the re-hydrator resets it")
++            # the new budget is not live until the re-hydrator resets the counter: never report "ok"
++            self.last["status"] = "ok_publish_pending"
++            self.last["note"] = "committed; the live budget counter was not reset: the re-hydrator resets it"
+         return v
+ 
+     def rollback(self, log_id: int) -> Version:
+         """Restore the content of one logged write as a NEW, signed version at a new epoch."""
+-        with self.db.tx() as t:
++        with self.db.tx(read_only=True) as t:
+             entry = t.log_entry(log_id)
+         if entry is None:
+             raise KeyError(f"no log entry {log_id}")
+diff -ruN '--exclude=.venv' '--exclude=__pycache__' '--exclude=.hypothesis' '--exclude=.pytest_cache' '--exclude=.import_linter_cache' '--exclude=.run' '--exclude=*.pyc' rvproto2-c36m-rc2-base/rvproto/edge/ops.py rvproto2-c36m-rc2-work/rvproto/edge/ops.py
+--- rvproto2-c36m-rc2-base/rvproto/edge/ops.py	2026-09-24 15:56:24.000000000 +0530
++++ rvproto2-c36m-rc2-work/rvproto/edge/ops.py	2026-09-24 17:23:34.683862028 +0530
+@@ -15,7 +15,7 @@
+ from rvproto.edge.http import Receive, Scope, Send, bearer, header_map, request_id, send_bytes
+ from rvproto.edge.state import State
+ from rvproto.runtime import contract as rc
+-from rvproto.runtime.metrics import merge, prometheus, summarize
++from rvproto.runtime.metrics import label, merge, prometheus, summarize
+ from rvproto.runtime.store import StoreError
+ 
+ TEXT = (b"content-type", b"text/plain; version=0.0.4")
+@@ -51,9 +51,9 @@
+     g("audit_queue_oldest_age_seconds", age)
+     g("plan_snapshot_age_seconds", st.plans.age_s())
+     g("killswitch_snapshot_age_seconds", st.ks.age_s())
+-    want = {f'plan_version_info{{org="{org}",version="{version}"}}' for org, version in st.plans.versions().items()}
+-    want |= {f'killswitch_engaged{{scope="org",key="{org}"}}' for org in st.ks.orgs}
+-    want |= {f'killswitch_engaged{{scope="model",key="{model}"}}' for model in st.ks.models}
++    want = {label("plan_version_info", org=org, version=version) for org, version in st.plans.versions().items()}
++    want |= {label("killswitch_engaged", scope="org", key=org) for org in st.ks.orgs}
++    want |= {label("killswitch_engaged", scope="model", key=model) for model in st.ks.models}
+     for k in [k for k in st.metrics.gauge if k.startswith(("plan_version_info", "killswitch_engaged")) and k not in want]:
+         del st.metrics.gauge[k]  # only what changed: no directory churn in the shared-memory registry
+     for k in want:
+@@ -67,7 +67,7 @@
+         g("guard_queue_windows", windows)
+         g("guard_queue_oldest_age_seconds", gage)
+     for org, held in st.admission.lease.held().items():
+-        g(f'lease_held_tokens{{org="{org}"}}', held)
++        g(label("lease_held_tokens", org=org), held)
+ 
+ 
+ async def readiness(st: State) -> tuple[bool, dict[str, object]]:
+diff -ruN '--exclude=.venv' '--exclude=__pycache__' '--exclude=.hypothesis' '--exclude=.pytest_cache' '--exclude=.import_linter_cache' '--exclude=.run' '--exclude=*.pyc' rvproto2-c36m-rc2-base/rvproto/runtime/exporter.py rvproto2-c36m-rc2-work/rvproto/runtime/exporter.py
+--- rvproto2-c36m-rc2-base/rvproto/runtime/exporter.py	2026-09-24 16:02:29.000000000 +0530
++++ rvproto2-c36m-rc2-work/rvproto/runtime/exporter.py	2026-09-24 17:23:41.629697797 +0530
+@@ -26,7 +26,7 @@
+ 
+ import numpy as np
+ 
+-from rvproto.runtime.metrics import _NBUCKETS, merge, prometheus, quantile_of, summarize
++from rvproto.runtime.metrics import _NBUCKETS, label, merge, number, prometheus, quantile_of, summarize
+ from rvproto.runtime.shm_metrics import H_WORDS, HDR_WORDS, I_DIRLEN, I_DUMPREQ, I_GEN, MAGIC, SHM_DIR, DIR_BYTES
+ 
+ def _stem(role: str) -> str:
+@@ -371,10 +371,10 @@
+         owners = [e for seg, e in ex if seg.role == "o"]
+         text = prometheus(merge(workers)) if workers else ""
+         if owners:  # guard owners: their own series, told apart by role="owner" (per-owner gauges: worker=<i>)
+-            text += prometheus(merge(owners), extra='role="owner"')
++            text += prometheus(merge(owners), extra=(("role", "owner"),))
+         with self._lock:
+             sig = dict(self.signals)
+-        lines = [f'rv2_signal{{kind="{self.kind}",name="{k}"}} {v}' for k, v in sorted(sig.items())]
++        lines = [f"{label('rv2_signal', kind=self.kind, name=k)} {number(v)}" for k, v in sorted(sig.items())]
+         return text + "\n".join(lines) + "\n"
+ 
+     def json_all(self) -> dict[str, object]:
+diff -ruN '--exclude=.venv' '--exclude=__pycache__' '--exclude=.hypothesis' '--exclude=.pytest_cache' '--exclude=.import_linter_cache' '--exclude=.run' '--exclude=*.pyc' rvproto2-c36m-rc2-base/rvproto/runtime/metrics.py rvproto2-c36m-rc2-work/rvproto/runtime/metrics.py
+--- rvproto2-c36m-rc2-base/rvproto/runtime/metrics.py	2026-09-24 16:02:29.000000000 +0530
++++ rvproto2-c36m-rc2-work/rvproto/runtime/metrics.py	2026-09-24 17:24:08.167257191 +0530
+@@ -8,6 +8,8 @@
+ from __future__ import annotations
+ 
+ import json
++import math
++import numbers
+ import os
+ import re
+ import time
+@@ -163,32 +165,71 @@
+     return name, ""
+ 
+ 
+-def _series(base: str, labels: str, extra: str = "") -> str:
+-    """One series name in Prometheus text: a single `{...}` label set (the metric's own labels + `extra`)."""
++_NAME = re.compile(r"[a-zA-Z_:][a-zA-Z0-9_:]*")
++_PAIR = re.compile(r'\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*"((?:[^"\\\n]|\\[\\"n])*)"\s*(?:,|$)')
++Labels = tuple[tuple[str, object], ...]  # (name, value) pairs, values NOT yet escaped
++
++
++def _escape(value: object) -> str:
++    return str(value).replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
++
++
++def label(name: str, /, **labels: object) -> str:
++    """'name{k="v",...}' with every value escaped for the Prometheus text format (backslash, double quote,
++    newline). Org ids, plan versions and model names are operator data: they must never break a scrape."""
++    return name + "{" + ",".join(f'{k}="{_escape(v)}"' for k, v in labels.items()) + "}"
++
++
++def number(v: float) -> str:
++    """A sample value: integers as integers, floats as repr, non-finite values in Prometheus spelling."""
++    if isinstance(v, numbers.Integral):
++        return str(int(v))  # bool too: True -> 1
++    f = float(v)
++    if math.isnan(f):
++        return "NaN"
++    return ("+Inf" if f > 0 else "-Inf") if math.isinf(f) else repr(f)
++
++
++def _series(base: str, labels: str, extra: Labels = ()) -> str | None:
++    """One series name with ONE `{...}` label set: the metric's own labels (embedded in the name, already
++    escaped: label()) + `extra` (escaped here). None when the result would not be valid exposition."""
+     base = re.sub(r"[^a-zA-Z0-9_:]", "_", base)
+-    both = ",".join(x for x in (labels, extra) if x)
+-    return f"{base}{{{both}}}" if both else base
++    pairs: list[tuple[str, str]] = []
++    pos = 0
++    while pos < len(labels):
++        m = _PAIR.match(labels, pos)
++        if m is None:
++            return None
++        pairs.append((m.group(1), m.group(2)))
++        pos = m.end()
++    pairs += [(k, _escape(v)) for k, v in extra]
++    if not _NAME.fullmatch(base) or len({k for k, _ in pairs}) != len(pairs):
++        return None
++    body = ",".join(f'{k}="{v}"' for k, v in pairs)
++    return f"{base}{{{body}}}" if pairs else base
+ 
+ 
+-def prometheus(export: dict[str, object], *, extra: str = "") -> str:
++def prometheus(export: dict[str, object], *, extra: Labels = ()) -> str:
+     """Valid Prometheus exposition text (untyped samples): histograms as `rv_<name>{<labels>,stat=...}`,
+     counters as `rv_<name>_total{<labels>}`, gauges as `rv_<name>{<labels>}`; per-process gauges of a merged
+-    export carry `worker="<i>"`. `extra` labels every series (e.g. role="owner")."""
+-    lines: list[str] = []
++    export carry `worker="<i>"`. `extra` labels every series (e.g. role="owner"). A series whose name or
++    labels cannot be rendered validly is left out and counted in a `#` comment line: never an invalid scrape."""
++    rows: list[tuple[str | None, str]] = []
+     summary = summarize(export["hist"])  # type: ignore[arg-type]
+     for name, row in summary.items():
+         base, labels = _split(name)
+-        for key, val in row.items():
+-            lines.append(f"{_series('rv_' + base, labels, ','.join(x for x in (extra, f'stat="{key}"') if x))} {val:.6f}")
++        rows += [(_series("rv_" + base, labels, (*extra, ("stat", key))), f"{val:.6f}") for key, val in row.items()]
+     for name, c in sorted(export["count"].items()):  # type: ignore[union-attr]
+         base, labels = _split(name)
+-        lines.append(f"{_series('rv_' + base + '_total', labels, extra)} {c}")
++        rows.append((_series("rv_" + base + "_total", labels, extra), number(c)))
+     for name, g in sorted(export.get("gauge", {}).items()):  # type: ignore[union-attr]
+         base, labels = _split(name)
+-        lines.append(f"{_series('rv_' + base, labels, extra)} {g}")
++        rows.append((_series("rv_" + base, labels, extra), number(g)))
+     for pw in export.get("per_worker", []):  # type: ignore[union-attr]
+-        who = f'worker="{pw.get("worker")}"'
+         for name, g in sorted(pw.get("gauge", {}).items()):
+             base, labels = _split(name)
+-            lines.append(f"{_series('rv_' + base, labels, ','.join(x for x in (extra, who) if x))} {g}")
+-    return "\n".join(lines) + "\n"
+\ No newline at end of file
++            rows.append((_series("rv_" + base, labels, (*extra, ("worker", pw.get("worker")))), number(g)))
++    lines = [f"{series} {value}" for series, value in rows if series is not None]
++    if len(lines) < len(rows):
++        lines.append(f"# rvproto: {len(rows) - len(lines)} series left out (invalid name or labels)")
++    return "\n".join(lines) + "\n"
+diff -ruN '--exclude=.venv' '--exclude=__pycache__' '--exclude=.hypothesis' '--exclude=.pytest_cache' '--exclude=.import_linter_cache' '--exclude=.run' '--exclude=*.pyc' rvproto2-c36m-rc2-base/tests/functional/cutproxy.py rvproto2-c36m-rc2-work/tests/functional/cutproxy.py
+--- rvproto2-c36m-rc2-base/tests/functional/cutproxy.py	1970-01-01 05:30:00.000000000 +0530
++++ rvproto2-c36m-rc2-work/tests/functional/cutproxy.py	2026-09-24 17:30:40.113444880 +0530
+@@ -0,0 +1,77 @@
++#!/usr/bin/env python3
++"""TCP proxy for the item-4 functional runs. SIGUSR1 = cut EVERY live connection at once, both sides, with RST:
++what a failover or a network blip does to a COMMIT in flight (the server may or may not have received it; if it
++did, the write is durable and its answer is lost). Postgres itself stays up.
++
++  cutproxy.py LISTEN_PORT UPSTREAM_PORT PIDFILE [DELAY_MS]   (one JSON line per cut on stdout)
++Used by f_c36_writer.py runs: RV_DATABASE_URL points at LISTEN_PORT, a --fault runs `kill -USR1 <pid>`.
++DELAY_MS holds every client->server chunk that long, so a cut can land while a COMMIT is still in the proxy
++(never received: rolled back) as well as after Postgres has it (durable, answer lost).
++"""
++import asyncio
++import json
++import os
++import signal
++import socket
++import struct
++import sys
++import time
++
++
++async def pump(r: asyncio.StreamReader, w: asyncio.StreamWriter, delay_s: float = 0.0) -> None:
++    try:
++        while data := await r.read(65536):
++            if delay_s:
++                await asyncio.sleep(delay_s)
++            w.write(data)
++            await w.drain()
++    except (OSError, asyncio.IncompleteReadError):
++        pass
++    finally:
++        w.close()
++
++
++class Proxy:
++    def __init__(self, up: int, delay_s: float) -> None:
++        self.up, self.delay_s, self.live, self.cuts = up, delay_s, set(), 0
++
++    async def handle(self, cr: asyncio.StreamReader, cw: asyncio.StreamWriter) -> None:
++        try:
++            ur, uw = await asyncio.open_connection("127.0.0.1", self.up)
++        except OSError:
++            cw.transport.abort()
++            return
++        pair = (cw, uw)
++        self.live.add(pair)
++        try:
++            await asyncio.gather(pump(cr, uw, self.delay_s), pump(ur, cw))
++        finally:
++            self.live.discard(pair)
++
++    def cut(self) -> None:
++        self.cuts += 1
++        n = len(self.live)
++        for pair in list(self.live):
++            for w in pair:
++                sock = w.get_extra_info("socket")
++                try:
++                    sock.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, struct.pack("ii", 1, 0))
++                except (OSError, AttributeError):
++                    pass
++                w.transport.abort()
++        self.live.clear()
++        print(json.dumps({"cut": self.cuts, "connections": n, "t": time.time()}), flush=True)
++
++
++async def main() -> None:
++    listen, up, pidfile = int(sys.argv[1]), int(sys.argv[2]), sys.argv[3]
++    p = Proxy(up, float(sys.argv[4]) / 1000.0 if len(sys.argv) > 4 else 0.0)
++    srv = await asyncio.start_server(p.handle, "127.0.0.1", listen)
++    asyncio.get_running_loop().add_signal_handler(signal.SIGUSR1, p.cut)
++    with open(pidfile, "w") as f:
++        f.write(str(os.getpid()))
++    async with srv:
++        await srv.serve_forever()
++
++
++asyncio.run(main())
+diff -ruN '--exclude=.venv' '--exclude=__pycache__' '--exclude=.hypothesis' '--exclude=.pytest_cache' '--exclude=.import_linter_cache' '--exclude=.run' '--exclude=*.pyc' rvproto2-c36m-rc2-base/tests/functional/f_c36_writer.py rvproto2-c36m-rc2-work/tests/functional/f_c36_writer.py
+--- rvproto2-c36m-rc2-base/tests/functional/f_c36_writer.py	1970-01-01 05:30:00.000000000 +0530
++++ rvproto2-c36m-rc2-work/tests/functional/f_c36_writer.py	2026-09-24 17:31:02.538644364 +0530
+@@ -0,0 +1,238 @@
++"""F-C36-WRITER (RC2 item 4): control-plane writes across Postgres restarts and crashes, each reported outcome
++checked against Postgres itself.
++
++  python tests/functional/f_c36_writer.py --out DIR [--seconds 90] [--writers 4] [--rate 60] [--cli]
++         [--fault 'T:SHELL COMMAND' ...]            env: RV_DATABASE_URL, RV_REDIS_URL, RV_STATE_HMAC_KEY
++
++Writer i (a thread) sets the plan of its own org (org-fw<i>) to version "<nonce>.<i>.<n>", paced on a fixed grid
++(an attempt that would overlap the next slot skips it), through the library StateWriter or, with --cli, one
++`python -m rvproto.control plan-set` process per attempt. A re-hydrator runs throughout, as in production. Each
++--fault command runs at T seconds (e.g. `docker restart -t 2 PG`, `docker kill -s KILL PG && docker start PG`).
++Afterwards the re-hydrator runs until the store equals Postgres.
++PASS = every acknowledged ("ok", "ok_publish_pending") attempt is in rv2_log exactly once, at the version it
++reported; every "error" attempt is absent (false failures = 0); no plan version logged twice; (epoch, seq)
++unique in the plan log and strictly increasing with the log id; each writer's acknowledged versions strictly
++increase; the store equals Postgres after re-hydration. "unknown" attempts are listed with what Postgres holds
++(neither pass nor fail).
++Outcomes come from StateWriter.last (ok / ok_publish_pending / unknown / error; a CommitUnknown = unknown) or,
++with --cli, from the CLI's JSON line and exit code. RV_TREE (default: this checkout) selects the tree under test;
++a tree without statuses (pre-rc2) counts a return as "ok" and an exception as "error" (negative control).
++Connection cuts: tests/functional/cutproxy.py between the writers and Postgres, cut with `kill -USR1`.
++"""
++
++from __future__ import annotations
++
++import argparse
++import inspect
++import json
++import os
++import secrets
++import subprocess
++import sys
++import tempfile
++import threading
++import time
++from collections import Counter, defaultdict
++from pathlib import Path
++from typing import Any
++
++ROOT = Path(os.environ.get("RV_TREE") or Path(__file__).resolve().parents[2])  # RV_TREE: the tree under test
++sys.path.insert(0, str(ROOT))
++from rvproto.control.db import PgDB  # noqa: E402
++from rvproto.control.rehydrate import Rehydrator  # noqa: E402
++from rvproto.control.writer import StateWriter  # noqa: E402
++from rvproto.plan.fixtures import org_a  # noqa: E402
++from rvproto.runtime.storeconn import sync_client  # noqa: E402
++from rvproto.runtime.versioned import KINDS  # noqa: E402
++
++LOCK = threading.Lock()
++ACKED = ("ok", "publish_pending", "ok_publish_pending")  # committed: published / publish pending
++UNKNOWN_EXC = ("WriteOutcomeUnknown", "CommitUnknown")
++
++
++def _writer(actor: str) -> StateWriter:
++    kw: dict[str, Any] = {"resolve_s": 30.0} if "resolve_s" in inspect.signature(StateWriter).parameters else {}
++    return StateWriter(PgDB(os.environ["RV_DATABASE_URL"]), sync_client(os.environ["RV_REDIS_URL"], op_timeout_s=2.0),
++                       os.environ["RV_STATE_HMAC_KEY"].encode(), actor=actor, **kw)
++
++
++def _emit(f: Any, rec: dict[str, Any]) -> None:
++    with LOCK:
++        f.write(json.dumps(rec) + "\n")
++        f.flush()
++
++
++def _lib_attempt(w: StateWriter, doc: dict[str, Any]) -> dict[str, Any]:
++    try:
++        v = w.plan_set(doc)
++        status = getattr(v, "status", None) or getattr(w, "last", {}).get("status") or "ok"
++        return {"status": status, "state_version": str(v)}
++    except Exception as exc:  # noqa: BLE001 - the class and text are the evidence
++        unknown = type(exc).__name__ in UNKNOWN_EXC
++        return {"status": "unknown" if unknown else "error", "error": f"{type(exc).__name__}: {exc}"[:300]}
++
++
++def _cli_attempt(doc: dict[str, Any], docs: Path, actor: str) -> dict[str, Any]:
++    path = docs / f"{doc['version']}.json"
++    path.write_text(json.dumps(doc))
++    env = dict(os.environ, PYTHONPATH=str(ROOT), RV_ACTOR=actor)
++    p = subprocess.run([sys.executable, "-m", "rvproto.control", "plan-set", str(path)], capture_output=True, text=True,
++                       env=env, cwd=ROOT, timeout=120)
++    last = next((json.loads(x) for x in reversed(p.stdout.splitlines()) if x.startswith("{")), {})
++    status = last.get("status") or ("ok" if p.returncode == 0 else "error")  # pre-fix CLI: no status field
++    rec = {"status": status, "exit": p.returncode, "state_version": last.get("state_version")}
++    if p.returncode != 0:
++        rec["error"] = (last.get("error") or (p.stderr.strip().splitlines() or [""])[-1])[:300]
++    return rec
++
++
++def writer(i: int, a: argparse.Namespace, nonce: str, t0: float, out: Any, docs: Path) -> None:
++    actor = f"f-c36-writer-{i}"
++    w = None if a.cli else _writer(actor)
++    period = a.writers / a.rate
++    n = skipped = 0
++    while True:
++        slot = t0 + i * period / a.writers + n * period
++        if slot >= t0 + a.seconds:
++            break
++        now = time.monotonic()
++        if now < slot:
++            time.sleep(slot - now)
++        elif now - slot > period:
++            n, skipped = n + 1, skipped + 1
++            continue
++        n += 1
++        doc = org_a(version=f"{nonce}.{i}.{n}", org_id=f"org-fw{i}")
++        t_send = time.time()
++        rec = _cli_attempt(doc, docs, actor) if a.cli else _lib_attempt(w, doc)  # type: ignore[arg-type]
++        _emit(out, {"writer": i, "n": n, "version": doc["version"], "t_send": t_send, "t_ack": time.time(), **rec})
++    _emit(out, {"meta": "writer_done", "writer": i, "attempted": n - skipped, "skipped_slots": skipped})
++
++
++def faults(specs: list[str], t0: float, out: Any) -> None:
++    for spec in sorted(specs, key=lambda s: float(s.split(":", 1)[0])):
++        at, cmd = spec.split(":", 1)
++        time.sleep(max(0.0, t0 + float(at) - time.monotonic()))
++        t1 = time.time()
++        p = subprocess.run(cmd, shell=True, capture_output=True, text=True)
++        _emit(out, {"fault": cmd, "at_s": float(at), "t_start": t1, "t_end": time.time(), "rc": p.returncode,
++                    "err": p.stderr.strip()[-200:]})
++
++
++def rehydrator(stop: threading.Event, events: list[dict[str, Any]]) -> None:
++    rh: Rehydrator | None = None
++    while not stop.wait(1.0):
++        try:  # as Rehydrator.run(): a database failover or a store fault only delays the next round
++            if rh is None:
++                w = _writer("f-c36-rehydrator")
++                rh = Rehydrator(w.db, w.r, w, period_ms=1000, checkpoint_s=5)
++            events.extend(rh.check_once())
++        except Exception as exc:  # noqa: BLE001
++            events.append({"round_failed": f"{type(exc).__name__}: {exc}"[:200], "t": time.time()})
++
++
++def settle(deadline_s: float) -> tuple[dict[str, str | None], list[dict[str, Any]]]:
++    """Re-hydrate until the store equals Postgres for every kind (or the deadline)."""
++    end, last, events = time.monotonic() + deadline_s, {}, []  # type: ignore[var-annotated]
++    while time.monotonic() < end:
++        try:
++            w = _writer("f-c36-settle")
++            rh = Rehydrator(w.db, w.r, w, period_ms=1000, checkpoint_s=5, stale_grace_ms=0)
++            events.extend(rh.check_once())
++            last = {k: rh.diagnose(k) for k in KINDS}
++            if not any(last.values()):
++                return last, events
++        except Exception as exc:  # noqa: BLE001 - Postgres may still be recovering from the last fault
++            last = {"error": f"{type(exc).__name__}: {exc}"[:200]}
++        time.sleep(1.0)
++    return last, events
++
++
++def plan_log() -> list[tuple[int, str, int, int, str | None]]:
++    import psycopg
++
++    with psycopg.connect(os.environ["RV_DATABASE_URL"], connect_timeout=10) as c, c.cursor() as cur:
++        cur.execute("SELECT id, key, epoch, seq, body->>'version' FROM rv2_log WHERE kind = 'plan' ORDER BY id")
++        return [(int(r[0]), str(r[1]), int(r[2]), int(r[3]), r[4]) for r in cur.fetchall()]
++
++
++def check(attempts: list[dict[str, Any]], nonce: str, verify: dict[str, str | None]) -> dict[str, Any]:
++    log = plan_log()
++    mine: dict[str, list[tuple[int, int, int]]] = defaultdict(list)
++    for lid, _, e, s, ver in log:
++        if ver and ver.startswith(nonce + "."):
++            mine[ver].append((e, s, lid))
++    by = Counter(a["status"] for a in attempts)
++
++    def logged_as_acked(a: dict[str, Any]) -> bool:
++        rows = mine.get(a["version"], [])
++        return len(rows) == 1 and f"{rows[0][0]}.{rows[0][1]}" == a["state_version"]
++
++    lost = [a for a in attempts if a["status"] in ACKED and not logged_as_acked(a)]
++    false_failures = [a for a in attempts if a["status"] == "error" and a["version"] in mine]
++    unknown = [dict(a, in_postgres=a["version"] in mine) for a in attempts if a["status"] == "unknown"]
++    dup_versions = {v: len(x) for v, x in mine.items() if len(x) > 1}
++    dup_es = {f"{e}.{s}": n for (e, s), n in Counter((e, s) for _, _, e, s, _ in log).items() if n > 1}
++    ooo_log = sum(1 for p, q in zip(log, log[1:], strict=False) if (q[2], q[3]) <= (p[2], p[3]))
++    ooo_ack = 0
++    for i in {a["writer"] for a in attempts}:
++        acked = sorted((a for a in attempts if a["writer"] == i and a["status"] in ACKED), key=lambda a: a["t_ack"])
++        vs = [tuple(int(x) for x in a["state_version"].split(".")) for a in acked]
++        ooo_ack += sum(1 for p, q in zip(vs, vs[1:], strict=False) if q <= p)
++    fail_ms = sorted((a["t_ack"] - a["t_send"]) * 1000 for a in attempts if a["status"] in ("error", "unknown"))
++    res = {
++        "attempts": len(attempts), "by_status": dict(by), "in_postgres": len(mine),
++        "acknowledged_not_in_postgres": len(lost), "lost_examples": lost[:5],
++        "false_failures": len(false_failures), "false_failure_examples": false_failures[:5],
++        "unknown": unknown, "duplicate_versions": dup_versions, "duplicate_epoch_seq": dup_es,
++        "out_of_order_log": ooo_log, "out_of_order_acks": ooo_ack, "store_vs_postgres_after_rehydration": verify,
++        "error_classes": dict(Counter(a.get("error", "").split(":")[0] for a in attempts if a["status"] == "error")),
++        "failed_latency_ms_max": round(fail_ms[-1], 1) if fail_ms else None,
++    }
++    res["verdict"] = "PASS" if (not lost and not false_failures and not dup_versions and not dup_es and not ooo_log
++                                and not ooo_ack and not any(verify.values())) else "FAIL"
++    return res
++
++
++def main() -> int:
++    ap = argparse.ArgumentParser()
++    ap.add_argument("--out", required=True)
++    ap.add_argument("--seconds", type=float, default=90)
++    ap.add_argument("--writers", type=int, default=4)
++    ap.add_argument("--rate", type=float, default=60, help="attempts/s, all writers together")
++    ap.add_argument("--cli", action="store_true")
++    ap.add_argument("--fault", action="append", default=[])
++    a = ap.parse_args()
++    out_dir = Path(a.out)
++    out_dir.mkdir(parents=True, exist_ok=True)
++    nonce = secrets.token_hex(3)
++    PgDB(os.environ["RV_DATABASE_URL"]).init_schema()
++    events: list[dict[str, Any]] = []
++    stop = threading.Event()
++    with open(out_dir / "attempts.jsonl", "w") as out, open(out_dir / "faults.jsonl", "w") as fo, \
++            tempfile.TemporaryDirectory() as docs:
++        _emit(out, {"meta": "start", "nonce": nonce, "tree": str(ROOT), "cli": a.cli, "writers": a.writers,
++                    "rate": a.rate, "seconds": a.seconds, "faults": a.fault, "t": time.time()})
++        t0 = time.monotonic() + 1.0
++        threads = [threading.Thread(target=writer, args=(i, a, nonce, t0, out, Path(docs))) for i in range(a.writers)]
++        threads += [threading.Thread(target=faults, args=(a.fault, t0, fo), daemon=True),
++                    threading.Thread(target=rehydrator, args=(stop, events), daemon=True)]
++        for t in threads:
++            t.start()
++        for t in threads[: a.writers]:
++            t.join()
++        stop.set()
++    verify, settle_events = settle(90)
++    attempts = [json.loads(x) for x in (out_dir / "attempts.jsonl").read_text().splitlines()]
++    attempts = [x for x in attempts if "meta" not in x]
++    res = check(attempts, nonce, verify)
++    res.update(nonce=nonce, tree=str(ROOT), cli=a.cli, rehydrated_during=sum(1 for e in events if "kind" in e),
++               rehydrate_rounds_failed=sum(1 for e in events if "round_failed" in e),
++               rehydrated_at_settle=[e for e in settle_events if "kind" in e])
++    (out_dir / "verdict.json").write_text(json.dumps(res, indent=1, default=str))
++    print(json.dumps({k: v for k, v in res.items() if not k.endswith("examples")}, default=str))
++    return 0 if res["verdict"] == "PASS" else 1
++
++
++if __name__ == "__main__":
++    sys.exit(main())
+diff -ruN '--exclude=.venv' '--exclude=__pycache__' '--exclude=.hypothesis' '--exclude=.pytest_cache' '--exclude=.import_linter_cache' '--exclude=.run' '--exclude=*.pyc' rvproto2-c36m-rc2-base/tests/unit/test_c36_state.py rvproto2-c36m-rc2-work/tests/unit/test_c36_state.py
+--- rvproto2-c36m-rc2-base/tests/unit/test_c36_state.py	2026-09-24 15:59:23.000000000 +0530
++++ rvproto2-c36m-rc2-work/tests/unit/test_c36_state.py	2026-09-24 17:25:17.359774723 +0530
+@@ -23,7 +23,7 @@
+ from rvproto.admit.state_v2 import VersionedIdentity, VersionedKillSwitch
+ from rvproto.control.db import CommitUnknown, MemDB
+ from rvproto.control.rehydrate import Rehydrator
+-from rvproto.control.writer import StateWriter, key_hash
++from rvproto.control.writer import NotCommitted, StateWriter, key_hash
+ from rvproto.domain.plan import PlanUnavailable, PlanUnknownTenant
+ from rvproto.domain.request import ErrorSpec
+ from rvproto.plan.fixtures import tenants
+@@ -266,7 +266,8 @@
+ 
+ def test_write_outcomes_are_reported_honestly() -> None:
+     """ok / ok_publish_pending (committed, publish failed: e.g. Postgres failed over after the commit and the
+-    publish could not re-read it) / unknown (acknowledgement of COMMIT lost) / error (nothing committed)."""
++    publish could not re-read it) / error (nothing committed). A lost COMMIT acknowledgement is read back from
++    Postgres (durable -> ok, not durable -> error); unknown only while Postgres cannot be read back."""
+     _, r, _ = _stores()
+     db = MemDB()
+     w = StateWriter(db, r, K)
+@@ -283,10 +284,18 @@
+     db.snapshot = real  # type: ignore[method-assign]
+     assert w.last["status"] == "ok_publish_pending" and "re-hydrator" in w.last["note"]
+     assert any(x["key"] == "org:org-b" and not x["body"]["on"] and x["seq"] == v2.seq for x in db.records("ks"))
+-    db.commit_unknown_next = True
++    db.commit_unknown_next = True  # durable, its acknowledgement lost: read back from rv2_log -> ok
++    v3 = w.killswitch("org", "org-b", True)
++    assert w.last["status"] == "ok" and v3 > v2
++    db.commit_lost_next = True  # never landed, its acknowledgement lost: read back -> error, nothing written
++    with pytest.raises(NotCommitted):
++        w.killswitch("org", "org-b", False)
++    assert w.last["status"] == "error" and db.version("ks") == v3
++    db.commit_unknown_next, db.down, w.resolve_s = True, 10**6, 0.2  # Postgres cannot be read back: unknown
+     with pytest.raises(CommitUnknown):
+-        w.killswitch("org", "org-b", True)
+-    assert w.last["status"] == "unknown" and db.version("ks") > v2  # (in the twin it did commit)
++        w.killswitch("org", "org-b", False)
++    assert w.last["status"] == "unknown" and db.version("ks") > v3  # (in the twin it did commit)
++    db.down = 0
+     db.fail_next = True
+     with pytest.raises(ConnectionError):
+         w.killswitch("global", None, True)
+diff -ruN '--exclude=.venv' '--exclude=__pycache__' '--exclude=.hypothesis' '--exclude=.pytest_cache' '--exclude=.import_linter_cache' '--exclude=.run' '--exclude=*.pyc' rvproto2-c36m-rc2-base/tests/unit/test_c36_writer_readback.py rvproto2-c36m-rc2-work/tests/unit/test_c36_writer_readback.py
+--- rvproto2-c36m-rc2-base/tests/unit/test_c36_writer_readback.py	1970-01-01 05:30:00.000000000 +0530
++++ rvproto2-c36m-rc2-work/tests/unit/test_c36_writer_readback.py	2026-09-24 17:27:31.367057875 +0530
+@@ -0,0 +1,178 @@
++"""C36 writer honesty beyond rc2: never "ok" when something is still pending, never "unknown" when Postgres can
++answer.
++
++  budget-set whose live-counter write fails   ok_publish_pending (the new budget is not live until the
++                                              re-hydrator resets the counter), never "ok"
++  COMMIT answer lost, write durable           read back from rv2_log: ok (then published as usual)
++  COMMIT answer lost, write not durable       read back: error (NotCommitted), nothing written
++  COMMIT answer lost, Postgres unreadable     unknown (exit 3) after RV_WRITE_RESOLVE_S -- the only "unknown"
++  a READ whose COMMIT answer is lost          complete: its rows are read and it wrote nothing
++The in-memory Postgres twin + fakeredis; the real-Postgres runs (restarts, RST cuts, CLI) are
++tests/functional/f_c36_writer.py.
++"""
++
++from __future__ import annotations
++
++import io
++import json
++from contextlib import redirect_stdout
++from typing import Any
++
++import fakeredis
++import psycopg
++import pytest
++import redis
++
++from rvproto.control import __main__ as cli
++from rvproto.control.db import CommitUnknown, MemDB, PgDB
++from rvproto.control.rehydrate import Rehydrator
++from rvproto.control.writer import StateWriter
++from rvproto.runtime.store import K2_BUDGET, K2_BUDGET_GEN, K2_META
++from rvproto.runtime.versioned import Version, make_record, verify_meta
++
++K = b"test-hmac-key-not-a-secret"
++
++
++class NoMset:
++    """The store takes the publish (MULTI/EXEC), but the live budget-counter MSET fails."""
++
++    def __init__(self, r: Any) -> None:
++        self.r = r
++
++    def mset(self, *a: Any, **kw: Any) -> Any:
++        raise redis.ConnectionError("injected: the live-counter write is lost")
++
++    def __getattr__(self, name: str) -> Any:
++        return getattr(self.r, name)
++
++
++def _stack() -> tuple[fakeredis.FakeServer, fakeredis.FakeRedis, MemDB]:
++    server = fakeredis.FakeServer()
++    return server, fakeredis.FakeRedis(server=server), MemDB()
++
++
++def _store_version(r: Any, kind: str) -> Version:
++    m = verify_meta(K, kind, r.get(K2_META + kind), not_before=Version(0, 0))
++    return Version(m["epoch"], m["seq"])
++
++
++def _cli(monkeypatch: pytest.MonkeyPatch, w: StateWriter, *argv: str) -> tuple[int, dict[str, Any]]:
++    monkeypatch.setattr(cli, "_writer", lambda: w)
++    out = io.StringIO()
++    with redirect_stdout(out):
++        code = cli.main(list(argv))
++    return code, json.loads(out.getvalue().splitlines()[-1])
++
++
++def test_budget_set_whose_counter_write_fails_is_ok_publish_pending_never_ok(monkeypatch: pytest.MonkeyPatch) -> None:
++    _, r, db = _stack()
++    w = StateWriter(db, NoMset(r), K)
++    v = w.budget_set("org-a", 5000)
++    assert w.last["status"] == "ok_publish_pending" and _store_version(r, "budget") == v  # record published ...
++    assert r.get(K2_BUDGET + "org-a") is None  # ... the live counter not: the new budget is not in effect yet
++    code, out = _cli(monkeypatch, w, "budget-set", "org-b", "7")
++    assert (code, out["status"]) == (0, "ok_publish_pending"), out
++    Rehydrator(db, r, w, period_ms=100, checkpoint_s=5, stale_grace_ms=0).check_once()
++    assert int(r.get(K2_BUDGET + "org-a")) == 5000 and r.get(K2_BUDGET_GEN + "org-a").decode() == str(v)
++
++
++def test_a_lost_commit_answer_of_a_durable_write_is_read_back_as_ok_and_published() -> None:
++    _, r, db = _stack()
++    w = StateWriter(db, r, K)
++    w.killswitch("global", None, False)
++    db.commit_unknown_next = True  # the COMMIT is durable, its answer lost
++    v = w.killswitch("org", "org-a", True)  # rc2: CommitUnknown, "unknown"
++    assert w.last["status"] == "ok" and v == Version(1, 2) and _store_version(r, "ks") == v
++
++
++def test_a_lost_commit_answer_of_a_write_that_never_landed_is_read_back_as_error() -> None:
++    from rvproto.control.writer import NotCommitted
++
++    _, r, db = _stack()
++    w = StateWriter(db, r, K)
++    w.killswitch("global", None, False)
++    db.commit_lost_next = True  # the COMMIT never reached the server, its answer lost too
++    with pytest.raises(NotCommitted):
++        w.killswitch("org", "org-a", True)
++    assert w.last["status"] == "error" and db.version("ks") == Version(1, 1) and _store_version(r, "ks") == Version(1, 1)
++
++
++def test_unknown_only_while_postgres_cannot_be_read_back() -> None:
++    _, r, db = _stack()
++    w = StateWriter(db, r, K)
++    w.killswitch("global", None, False)
++    w.resolve_s = 0.2
++    db.commit_unknown_next, db.down = True, 10**6
++    with pytest.raises(CommitUnknown):
++        w.killswitch("org", "org-a", True)
++    assert w.last["status"] == "unknown" and w.last["version"] == "1.2"  # never "ok"
++    db.down = 3  # Postgres answers again after 3 failed reads: resolved, not unknown
++    w.resolve_s = 5.0
++    db.commit_unknown_next = True
++    w.killswitch("org", "org-b", True)
++    assert w.last["status"] == "ok" and db.down == 0
++
++
++def test_cli_exit_codes_after_read_back(monkeypatch: pytest.MonkeyPatch) -> None:
++    _, r, db = _stack()
++    w = StateWriter(db, r, K)
++    assert _cli(monkeypatch, w, "killswitch", "global", "off")[0] == 0
++    db.commit_unknown_next = True
++    assert _cli(monkeypatch, w, "killswitch", "org", "org-a", "on")[1]["status"] == "ok"
++    db.commit_lost_next = True
++    code, out = _cli(monkeypatch, w, "killswitch", "org", "org-b", "on")
++    assert (code, out["status"]) == (1, "error") and db.version("ks") == Version(1, 2), out
++    w.resolve_s, db.commit_unknown_next, db.down = 0.2, True, 10**6
++    code, out = _cli(monkeypatch, w, "killswitch", "org", "org-c", "on")
++    assert (code, out["status"]) == (3, "unknown"), out
++
++
++class _Cursor:
++    def __init__(self, rows: list[tuple[Any, ...]]) -> None:
++        self.rows = rows
++
++    def __enter__(self) -> _Cursor:
++        return self
++
++    def __exit__(self, *a: object) -> bool:
++        return False
++
++    def execute(self, *a: object) -> None:
++        return None
++
++    def fetchall(self) -> list[tuple[Any, ...]]:
++        return self.rows
++
++    def fetchone(self) -> tuple[Any, ...] | None:
++        return self.rows[0] if self.rows else None
++
++
++class _AnswerLost:
++    """A psycopg connection whose statements answer, but whose COMMIT answer is lost (the failover lands there)."""
++
++    closed = False
++
++    def __init__(self, rows: list[tuple[Any, ...]]) -> None:
++        self.rows = rows
++
++    def cursor(self) -> _Cursor:
++        return _Cursor(self.rows)
++
++    def commit(self) -> None:
++        raise psycopg.OperationalError("consuming input failed: server closed the connection unexpectedly")
++
++    def rollback(self) -> None:
++        raise psycopg.OperationalError("the connection is lost")
++
++    def close(self) -> None:
++        self.closed = True
++
++
++def test_a_read_whose_commit_answer_is_lost_is_complete_but_a_write_is_not() -> None:
++    rec = make_record(K, "key", "h1", {"key_id": "k", "org_id": "org-a", "rate_per_s": 1, "burst": 1}, Version(1, 1))
++    row = tuple(rec[c] for c in ("kind", "key", "epoch", "seq", "hash", "deleted", "op", "sig", "body"))
++    db = PgDB("postgresql://unused")
++    db._conn = lambda: _AnswerLost([row])  # type: ignore[method-assign]
++    assert [x["key"] for x in db.records("key")] == ["h1"]  # rc2: CommitUnknown -> key-revoke reported unknown
++    with pytest.raises(CommitUnknown), db.tx() as t:  # a WRITE whose COMMIT answer is lost stays undecided here
++        t.set_version("key", Version(1, 2))
+diff -ruN '--exclude=.venv' '--exclude=__pycache__' '--exclude=.hypothesis' '--exclude=.pytest_cache' '--exclude=.import_linter_cache' '--exclude=.run' '--exclude=*.pyc' rvproto2-c36m-rc2-base/tests/unit/test_prometheus_exposition.py rvproto2-c36m-rc2-work/tests/unit/test_prometheus_exposition.py
+--- rvproto2-c36m-rc2-base/tests/unit/test_prometheus_exposition.py	1970-01-01 05:30:00.000000000 +0530
++++ rvproto2-c36m-rc2-work/tests/unit/test_prometheus_exposition.py	2026-09-24 17:27:01.435060569 +0530
+@@ -0,0 +1,149 @@
++"""Every /metrics is valid Prometheus text exposition, whatever operators name their orgs, plans and models.
++
++The gateway, guard and unit node exporters (over their HTTP surface) and the worker's own /metrics route are
++parsed IN FULL by prometheus_client, and every parsed metric and label name is checked against the exposition
++grammar: prometheus_client 0.21.1 accepts rc1's `rv_gc_pause_ns{gen="0"}{stat="n"}` as a label named `}{stat`,
++so a parse alone proves nothing. Metrics come from the production producers (install_gc_probe, TokenLease, the
++owner counters, ops._gauges). Label values carry operator data -- an org id, a plan version, a model name -- so a
++double quote, a backslash or a newline must round-trip; and a series that cannot be rendered validly (a raw,
++unescaped name) is left out with a `#` comment instead of invalidating the whole scrape.
++"""
++
++from __future__ import annotations
++
++import gc
++import os
++import re
++import threading
++import time
++import urllib.request
++from collections.abc import Iterator
++from http.server import ThreadingHTTPServer
++from types import SimpleNamespace
++
++import fakeredis
++import pytest
++from prometheus_client.parser import text_string_to_metric_families
++
++from rvproto.admit.quota import TokenLease
++from rvproto.edge import ops
++from rvproto.edge.exporter_http import handler
++from rvproto.runtime.exporter import NodeExporter
++from rvproto.runtime.loopguard import install_gc_probe
++from rvproto.runtime.metrics import Registry, prometheus
++from rvproto.runtime.shm_metrics import ShmRegistry
++
++TAG = f"pe{os.getpid()}"
++ORG = 'org "q"\\x\nz'  # operator data in a label value: double quote, backslash, newline
++RAW = 'owner_shed_reason{reason="a"b"}'  # a series some future call site builds without escaping
++METRIC, LABEL = re.compile(r"[a-zA-Z_:][a-zA-Z0-9_:]*"), re.compile(r"[a-zA-Z_][a-zA-Z0-9_]*")
++Series = dict[tuple[str, tuple[tuple[str, str], ...]], float]
++
++
++def parse(text: str) -> Series:
++    """The whole exposition: one sample per non-comment line, every name valid, every series exactly once."""
++    out: Series = {}
++    for fam in text_string_to_metric_families(text):
++        for s in fam.samples:
++            assert METRIC.fullmatch(s.name) and all(LABEL.fullmatch(k) for k in s.labels), f"not exposition: {s}"
++            key = (s.name, tuple(sorted(s.labels.items())))
++            assert key not in out, f"duplicate series {key}"
++            out[key] = s.value
++    assert len(out) == sum(1 for x in text.splitlines() if x.strip() and not x.startswith("#"))
++    return out
++
++
++@pytest.fixture(autouse=True)
++def gc_probes() -> Iterator[None]:
++    n = len(gc.callbacks)
++    yield
++    del gc.callbacks[n:]  # install_gc_probe registers a process-wide callback
++
++
++def _worker(tag: str, i: int) -> ShmRegistry:
++    reg = ShmRegistry(i, tag=tag, role="w", slots=(96, 512, 512))
++    install_gc_probe(reg)  # gc_pause_ns{gen="0|1|2"}: rc1's two-label-set lines
++    gc.collect()
++    reg.observe("loop_lag_ns", 180_000 + i)
++    reg.inc("admitted", 5 + i)
++    lease = TokenLease(fakeredis.aioredis.FakeRedis(), reg, chunk_tokens=100)
++    lease._local[ORG] = 100
++    assert lease.try_local(ORG, 7)  # quota_admitted_tokens{org=<operator data>}
++    reg.set("worker_ready", 1.0)
++    return reg
++
++
++def _owner(tag: str, i: int) -> ShmRegistry:
++    reg = ShmRegistry(i, tag=tag, role="o", slots=(96, 512, 512))
++    install_gc_probe(reg)
++    gc.collect()
++    reg.inc("owner_requests", 40)
++    reg.inc('owner_shed_reason{reason="queue_bound"}')
++    reg.inc(RAW)
++    reg.set("owner_backlog_ns", 250_000.0)
++    return reg
++
++
++def _scrape(exp: NodeExporter) -> str:
++    srv = ThreadingHTTPServer(("127.0.0.1", 0), handler(exp))
++    threading.Thread(target=srv.serve_forever, daemon=True).start()
++    try:
++        with urllib.request.urlopen(f"http://127.0.0.1:{srv.server_address[1]}/metrics", timeout=10) as r:
++            assert r.headers["content-type"].startswith("text/plain; version=0.0.4")
++            return r.read().decode()
++    finally:
++        srv.shutdown()
++        srv.server_close()
++
++
++@pytest.mark.parametrize("kind", ["gateway", "guard", "unit"])
++def test_node_exporter_metrics_are_valid_exposition_with_operator_data(kind: str) -> None:
++    tag = f"{TAG}{kind[0]}"
++    workers = [] if kind == "guard" else [_worker(tag, 0), _worker(tag, 1)]
++    owners = [] if kind == "gateway" else [_owner(tag, 0), _owner(tag, 1)]
++    exp = NodeExporter(tag=tag, kind=kind, metrics_dir="", dump_s=0, host="127.0.0.1", port=0, export_s=60,
++                       draining=lambda: False, push=None)
++    try:
++        state: dict[str, object] = {"t": time.monotonic(), "ticks": {}, "merged": None, "owner": {}}
++        exp._signal_tick(state)
++        text = _scrape(exp)
++        s = parse(text)
++        assert {dict(k[1])["kind"] for k in s if k[0] == "rv2_signal"} == {kind}
++        if workers:
++            assert s[("rv_gc_pause_ns", (("gen", "2"), ("stat", "n")))] >= 2
++            assert s[("rv_quota_admitted_tokens_total", (("org", ORG),))] == 14  # the value round-trips
++            assert s[("rv_worker_ready", (("worker", "1"),))] == 1
++        if owners:
++            assert s[("rv_owner_requests_total", (("role", "owner"),))] == 80
++            assert s[("rv_owner_shed_reason_total", (("reason", "queue_bound"), ("role", "owner")))] == 2
++            assert "# rvproto: 1 series left out" in text  # the raw series: left out, the scrape stays valid
++    finally:
++        for reg in (*workers, *owners):
++            reg.close()
++        exp.cleanup()
++
++
++@pytest.mark.parametrize("shm", [False, True], ids=["c38-off", "c38-on"])
++def test_worker_metrics_route_is_valid_exposition_with_operator_data(shm: bool) -> None:
++    reg: Registry = ShmRegistry(3, tag=f"{TAG}r", role="w", slots=(96, 512, 512)) if shm else Registry(3)
++    try:
++        install_gc_probe(reg)
++        gc.collect()
++        ops._gauges(SimpleNamespace(  # type: ignore[arg-type]
++            metrics=reg, active_streams=1,
++            audit=SimpleNamespace(completeness=lambda: 1.0, produced=3, dropped=0, queue_stats=lambda: (0, 0.0)),
++            plans=SimpleNamespace(age_s=lambda: 0.2, versions=lambda: {ORG: 'v"2\\', "org-a": "a-1"}),
++            ks=SimpleNamespace(age_s=lambda: 0.1, orgs=frozenset({ORG}), models=frozenset({"m\nx"})),
++            gate=SimpleNamespace(gauges=lambda: {"inflight_requests": 1.0}), guard=SimpleNamespace(),
++            admission=SimpleNamespace(lease=SimpleNamespace(held=lambda: {ORG: 93}))))
++        reg.set("x_inf", float("inf"))
++        s = parse(prometheus(reg.export()))  # exactly what GET /metrics on the serving port returns
++        assert s[("rv_plan_version_info", (("org", ORG), ("version", 'v"2\\')))] == 1
++        assert s[("rv_plan_version_info", (("org", "org-a"), ("version", "a-1")))] == 1
++        assert s[("rv_killswitch_engaged", (("key", ORG), ("scope", "org")))] == 1
++        assert s[("rv_killswitch_engaged", (("key", "m\nx"), ("scope", "model")))] == 1
++        assert s[("rv_lease_held_tokens", (("org", ORG),))] == 93 and s[("rv_x_inf", ())] == float("inf")
++        assert s[("rv_gc_pause_ns", (("gen", "2"), ("stat", "n")))] >= 1
++    finally:
++        if isinstance(reg, ShmRegistry):
++            reg.close()

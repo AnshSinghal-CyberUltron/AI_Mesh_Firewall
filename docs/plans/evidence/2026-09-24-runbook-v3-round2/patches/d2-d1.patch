@@ -1,0 +1,1279 @@
+diff -ruN '--exclude=.venv' '--exclude=__pycache__' '--exclude=.hypothesis' '--exclude=.pytest_cache' '--exclude=.import_linter_cache' '--exclude=.run' '--exclude=*.pyc' rvproto2-d2base/rvproto/control/__main__.py rvproto2-d2work/rvproto/control/__main__.py
+--- rvproto2-d2base/rvproto/control/__main__.py	2026-09-24 13:15:39.919359322 +0530
++++ rvproto2-d2work/rvproto/control/__main__.py	2026-09-24 14:37:30.373311297 +0530
+@@ -23,12 +23,11 @@
+ import sys
+ import time
+ 
+-import redis
+-
+ from rvproto.control.db import PgDB
+ from rvproto.control.rehydrate import Rehydrator
+ from rvproto.control.writer import StateWriter, key_hash
+ from rvproto.plan.fixtures import tenants
++from rvproto.runtime.storeconn import sync_client
+ 
+ TEST_KEYS = (("sk-rv-org-a-0001", "key-a-1", "org-a"), ("sk-rv-org-b-0001", "key-b-1", "org-b"),
+              ("sk-rv-org-q-0001", "key-q-1", "org-q"))  # test keys (not secrets), as tools/seed.py
+@@ -43,7 +42,7 @@
+ 
+ def _writer() -> StateWriter:
+     db = PgDB(_env("RV_DATABASE_URL"))
+-    r = redis.Redis.from_url(os.environ.get("RV_REDIS_URL", "redis://127.0.0.1:6379/0"), socket_timeout=5)
++    r = sync_client(os.environ.get("RV_REDIS_URL", "redis://127.0.0.1:6379/0"), op_timeout_s=5.0)
+     return StateWriter(db, r, _env("RV_STATE_HMAC_KEY").encode(), actor=os.environ.get("RV_ACTOR", "rvproto.control"))
+ 
+ 
+diff -ruN '--exclude=.venv' '--exclude=__pycache__' '--exclude=.hypothesis' '--exclude=.pytest_cache' '--exclude=.import_linter_cache' '--exclude=.run' '--exclude=*.pyc' rvproto2-d2base/rvproto/detect/guard/discovery.py rvproto2-d2work/rvproto/detect/guard/discovery.py
+--- rvproto2-d2base/rvproto/detect/guard/discovery.py	2026-09-24 14:12:56.595241668 +0530
++++ rvproto2-d2work/rvproto/detect/guard/discovery.py	2026-09-24 14:37:19.150817684 +0530
+@@ -29,6 +29,7 @@
+ 
+ from rvproto.detect.guard import wire
+ from rvproto.runtime.store import K2_GUARD_OWNER, K2_GUARD_OWNERS, StoreError
++from rvproto.runtime.storeconn import client
+ 
+ 
+ @dataclass(frozen=True, slots=True)
+@@ -61,7 +62,8 @@
+ 
+ class OwnerRegistration:
+     def __init__(self, url: str, *, advertise: tuple[str, int], hello: dict[str, object], ttl_ms: float) -> None:
+-        self.r = aioredis.Redis.from_url(url, socket_timeout=1.0, socket_connect_timeout=1.0)
++        # a heartbeat round trip (op, connect) never outlasts the heartbeat period; transport faults => StoreError
++        self.r = client(url, pool_size=None, op_timeout_s=min(1.0, ttl_ms / 3000.0))
+         self.id = f"{advertise[0]}:{advertise[1]}"
+         self.doc = {"id": self.id, "addr": advertise[0], "port": advertise[1], "host": socket.gethostname(),
+                     **{k: hello[k] for k in ("index", "pid", "tokens_per_s", "model_hash") if k in hello},
+diff -ruN '--exclude=.venv' '--exclude=__pycache__' '--exclude=.hypothesis' '--exclude=.pytest_cache' '--exclude=.import_linter_cache' '--exclude=.run' '--exclude=*.pyc' rvproto2-d2base/rvproto/edge/state.py rvproto2-d2work/rvproto/edge/state.py
+--- rvproto2-d2base/rvproto/edge/state.py	2026-09-24 12:24:55.499719492 +0530
++++ rvproto2-d2work/rvproto/edge/state.py	2026-09-24 14:37:10.464687228 +0530
+@@ -32,6 +32,7 @@
+ from rvproto.runtime import contract as rc
+ from rvproto.runtime.config import Settings, describe, load_settings
+ from rvproto.runtime.metrics import Registry
++from rvproto.runtime.push import PushKnobs
+ from rvproto.runtime.shm_metrics import make_registry, metrics_tag
+ from rvproto.runtime.store import StoreError, connect, connect_background
+ 
+@@ -84,6 +85,7 @@
+ def _state_readers(s: Settings, metrics: Registry, redis: aioredis.Redis, redis_bg: aioredis.Redis) -> tuple[
+         Identity | VersionedIdentity, KillSwitch | VersionedKillSwitch, PlanSnapshot | VersionedPlanSnapshot]:
+     """C36 on: versioned, signed state (missing / regressed => 503); off: the frozen-1 readers."""
++    push = _push_knobs(s)
+     if s.v2.c36.on:
+         if not s.v2.c36.hmac_key:
+             raise ValueError("RV_FIX_C36=on needs RV_STATE_HMAC_KEY (the control plane's record signing key)")
+@@ -91,10 +93,17 @@
+         vid = VersionedIdentity(redis, k)
+         vks = VersionedKillSwitch(redis_bg, metrics, k, refresh_ms=s.ks_refresh_ms, stale_ms=s.ks_stale_ms, identity=vid)
+         return vid, vks, VersionedPlanSnapshot(redis_bg, metrics, k, reconcile_ms=s.plan_reconcile_ms,
+-                                               stale_ms=s.ks_stale_ms)
++                                               stale_ms=s.ks_stale_ms, push=push)
+     identity = Identity(redis)
+     ks = KillSwitch(redis_bg, metrics, refresh_ms=s.ks_refresh_ms, stale_ms=s.ks_stale_ms, on_epoch=identity.on_epoch)
+-    return identity, ks, PlanSnapshot(redis_bg, metrics, reconcile_ms=s.plan_reconcile_ms, stale_ms=s.ks_stale_ms)
++    return identity, ks, PlanSnapshot(redis_bg, metrics, reconcile_ms=s.plan_reconcile_ms, stale_ms=s.ks_stale_ms,
++                                      push=push)
++
++
++def _push_knobs(s: Settings) -> PushKnobs:
++    st = s.v2.store
++    return PushKnobs(ping_s=st.pubsub_ping_ms / 1000.0, backoff_s=(st.backoff_ms[0] / 1000.0, st.backoff_ms[1] / 1000.0),
++                     drain_max=st.pubsub_drain_max, op_timeout_s=st.bg_timeout_ms / 1000.0)
+ 
+ 
+ def _store_timeout_s(s: Settings, contract: rc.ResourceContract) -> float:
+@@ -113,8 +122,10 @@
+     bounds = rc.derive(contract, s)
+     metrics = make_registry(s.worker_index, on=s.v2.c38.on, tag=metrics_tag(str(s.port)), role="w",
+                             slots=s.v2.c38.shm_slots)
+-    redis = connect(s.redis_url, contract, bounds, timeout_s=_store_timeout_s(s, contract))
+-    redis_bg = connect_background(s.redis_url, contract, bounds)
++    # every store connection counts its own reconnects / dead sockets (store_reconnects_total, ...)
++    redis = connect(s.redis_url, contract, bounds, timeout_s=_store_timeout_s(s, contract), events=metrics.inc)
++    redis_bg = connect_background(s.redis_url, contract, bounds, timeout_s=s.v2.store.bg_timeout_ms / 1000.0,
++                                  events=metrics.inc)
+     identity, ks, plans = _state_readers(s, metrics, redis, redis_bg)
+     try:
+         await ks.refresh_once()
+diff -ruN '--exclude=.venv' '--exclude=__pycache__' '--exclude=.hypothesis' '--exclude=.pytest_cache' '--exclude=.import_linter_cache' '--exclude=.run' '--exclude=*.pyc' rvproto2-d2base/rvproto/plan/snapshot.py rvproto2-d2work/rvproto/plan/snapshot.py
+--- rvproto2-d2base/rvproto/plan/snapshot.py	2026-09-23 15:33:42.000000000 +0530
++++ rvproto2-d2work/rvproto/plan/snapshot.py	2026-09-24 14:44:06.181527102 +0530
+@@ -19,6 +19,7 @@
+ from rvproto.domain.plan import ExecutionPlan, PlanLookup, PlanUnavailable, PlanUnknownTenant
+ from rvproto.plan.compiler import PlanInvalid, compile_plan
+ from rvproto.runtime.metrics import Registry
++from rvproto.runtime.push import DEFAULT_PUSH, PushKnobs, PushListener
+ from rvproto.runtime.store import K_PLAN_CHANNEL, K_PLAN_PREFIX, K_PLAN_VERSIONS, StoreError
+ 
+ 
+@@ -28,8 +29,9 @@
+ 
+ class PlanSnapshot:
+     def __init__(self, r: aioredis.Redis, metrics: Registry, *, reconcile_ms: float,
+-                 stale_ms: float) -> None:
++                 stale_ms: float, push: PushKnobs = DEFAULT_PUSH) -> None:
+         self.r = r
++        self.push = PushListener(r, K_PLAN_CHANNEL, metrics, name="plan", knobs=push)
+         self.metrics = metrics
+         self.reconcile_s = reconcile_ms / 1000.0
+         self.stale_ns = int(stale_ms * 1e6)
+@@ -109,15 +111,19 @@
+             listener.cancel()
+ 
+     async def _listen(self) -> None:
+-        while True:
+-            try:
+-                ps = self.r.pubsub()
+-                await ps.subscribe(K_PLAN_CHANNEL)
+-                async for msg in ps.listen():
+-                    if msg.get("type") == "message":
+-                        await self.reconcile_once()
+-                        self.metrics.inc("plan_push_applied")
+-            except StoreError as exc:
+-                self.metrics.inc("plan_listen_errors")
+-                _log_error("plan_listen_error", exc)
+-                await asyncio.sleep(self.reconcile_s)
++        """Pub/sub nudges through runtime/push.py (never redis-py's listen(): D2)."""
++        await self.push.run(self._pushed, _any_message)
++
++    async def _pushed(self) -> bool:
++        try:
++            await self.reconcile_once()
++        except StoreError as exc:
++            self.metrics.inc("plan_reconcile_errors")
++            _log_error("plan_reconcile_error", exc)
++            return False  # the listener retries on its next wakeup
++        self.metrics.inc("plan_push_applied")
++        return True
++
++
++def _any_message(msg: dict[str, Any]) -> bool:
++    return msg.get("type") == "message"
+diff -ruN '--exclude=.venv' '--exclude=__pycache__' '--exclude=.hypothesis' '--exclude=.pytest_cache' '--exclude=.import_linter_cache' '--exclude=.run' '--exclude=*.pyc' rvproto2-d2base/rvproto/plan/snapshot_v2.py rvproto2-d2work/rvproto/plan/snapshot_v2.py
+--- rvproto2-d2base/rvproto/plan/snapshot_v2.py	2026-09-24 11:28:28.948680525 +0530
++++ rvproto2-d2work/rvproto/plan/snapshot_v2.py	2026-09-24 14:44:06.181488962 +0530
+@@ -22,6 +22,7 @@
+ from rvproto.domain.plan import ExecutionPlan, PlanLookup, PlanUnavailable, PlanUnknownTenant
+ from rvproto.plan.compiler import PlanInvalid, compile_plan
+ from rvproto.runtime.metrics import Registry
++from rvproto.runtime.push import DEFAULT_PUSH, PushKnobs, PushListener
+ from rvproto.runtime.store import K2_META, K2_PLAN, K2_PLAN_INDEX, K2_UPDATES, StoreError
+ from rvproto.runtime.versioned import ZERO, StoreDataUnavailable, digest, verify_meta, verify_record, version_of
+ 
+@@ -32,8 +33,9 @@
+ 
+ class VersionedPlanSnapshot:
+     def __init__(self, r: aioredis.Redis, metrics: Registry, hmac_key: bytes, *, reconcile_ms: float,
+-                 stale_ms: float) -> None:
++                 stale_ms: float, push: PushKnobs = DEFAULT_PUSH) -> None:
+         self.r = r
++        self.push = PushListener(r, K2_UPDATES, metrics, name="plan", knobs=push)
+         self.metrics = metrics
+         self.k = hmac_key
+         self.reconcile_s = reconcile_ms / 1000.0
+@@ -133,15 +135,19 @@
+             listener.cancel()
+ 
+     async def _listen(self) -> None:
+-        while True:
+-            try:
+-                ps = self.r.pubsub()
+-                await ps.subscribe(K2_UPDATES)
+-                async for msg in ps.listen():
+-                    if msg.get("type") == "message" and msg.get("data") in (b"plan", b"all"):
+-                        await self.reconcile_once()
+-                        self.metrics.inc("plan_push_applied")
+-            except StoreError as exc:
+-                self.metrics.inc("plan_listen_errors")
+-                _log("plan_listen_error", exc)
+-                await asyncio.sleep(self.reconcile_s)
++        """Pub/sub nudges through runtime/push.py (never redis-py's listen(): D2)."""
++        await self.push.run(self._pushed, _plan_nudge)
++
++    async def _pushed(self) -> bool:
++        try:
++            await self.reconcile_once()
++        except StoreError as exc:
++            self.metrics.inc("plan_reconcile_errors")
++            _log("plan_reconcile_error", exc)
++            return False  # the listener retries on its next wakeup
++        self.metrics.inc("plan_push_applied")
++        return True
++
++
++def _plan_nudge(msg: dict[str, object]) -> bool:
++    return msg.get("type") == "message" and msg.get("data") in (b"plan", b"all")
+diff -ruN '--exclude=.venv' '--exclude=__pycache__' '--exclude=.hypothesis' '--exclude=.pytest_cache' '--exclude=.import_linter_cache' '--exclude=.run' '--exclude=*.pyc' rvproto2-d2base/rvproto/runtime/config.py rvproto2-d2work/rvproto/runtime/config.py
+--- rvproto2-d2base/rvproto/runtime/config.py	2026-09-24 11:07:20.971833743 +0530
++++ rvproto2-d2work/rvproto/runtime/config.py	2026-09-24 14:36:55.589641336 +0530
+@@ -235,7 +235,9 @@
+         raise ValueError("RV_WINDOW_OVERLAP must be smaller than the window payload")
+     # a refresh period at (or near) the staleness ceiling makes a fresh snapshot read as stale
+     # for the duration of every refresh round trip; require a >= 2x margin, fail fast otherwise
+-    for name, period in (("RV_KS_REFRESH_MS", s.ks_refresh_ms), ("RV_PLAN_RECONCILE_MS", s.plan_reconcile_ms)):
++    # a background store round trip that times out (a partition) must fit well inside the staleness ceiling too
++    for name, period in (("RV_KS_REFRESH_MS", s.ks_refresh_ms), ("RV_PLAN_RECONCILE_MS", s.plan_reconcile_ms),
++                         ("RV_STORE_BG_TIMEOUT_MS", v2.store.bg_timeout_ms)):
+         if period * 2 > s.ks_stale_ms:
+             raise ValueError(f"{name}={period} must be <= RV_KS_STALE_MS/2 ({s.ks_stale_ms / 2})")
+     return s
+diff -ruN '--exclude=.venv' '--exclude=__pycache__' '--exclude=.hypothesis' '--exclude=.pytest_cache' '--exclude=.import_linter_cache' '--exclude=.run' '--exclude=*.pyc' rvproto2-d2base/rvproto/runtime/config_v2.py rvproto2-d2work/rvproto/runtime/config_v2.py
+--- rvproto2-d2base/rvproto/runtime/config_v2.py	2026-09-24 11:17:02.128251254 +0530
++++ rvproto2-d2work/rvproto/runtime/config_v2.py	2026-09-24 14:36:55.589574063 +0530
+@@ -58,6 +58,11 @@
+     ("RV_CLOUD_MONITORING", "off"),  # on: push the signals as Cloud Monitoring custom metrics
+     ("RV_MONITORING_RESOURCE", "gce_instance"),  # gce_instance | k8s_pod
+     ("RV_MONITORING_PREFIX", "custom.googleapis.com/rv2"),
++    # store links (D1/D2: gateway<->store partition): runtime/storeconn.py, runtime/push.py
++    ("RV_STORE_BG_TIMEOUT_MS", "1000"),  # background store op / connect / pool-wait timeout (<= RV_KS_STALE_MS/2)
++    ("RV_PUBSUB_PING_MS", "5000"),  # pub/sub liveness: PING after this much silence, dead after 2x
++    ("RV_STORE_BACKOFF_MS", "100,2000"),  # pub/sub re-subscribe backoff: first,cap (equal-jitter exponential)
++    ("RV_PUBSUB_DRAIN_MAX", "64"),  # pub/sub messages taken per wakeup (coalesced into one nudge)
+ )
+ 
+ 
+@@ -141,12 +146,21 @@
+ 
+ 
+ @dataclass(frozen=True, slots=True)
++class StoreLinks:
++    bg_timeout_ms: float
++    pubsub_ping_ms: float
++    backoff_ms: tuple[float, float]
++    pubsub_drain_max: int
++
++
++@dataclass(frozen=True, slots=True)
+ class V2:
+     c38: LoopIsolation
+     c10: Admission
+     c43: Routing
+     c36: Durable
+     signals: Signals
++    store: StoreLinks
+ 
+ 
+ def load_v2(get: dict[str, str], *, topology: str, static_addrs: bool) -> V2:
+@@ -207,7 +221,26 @@
+         prefix=get["RV_MONITORING_PREFIX"].rstrip("/"),
+     )
+     _check(c10)
+-    return V2(c38, c10, c43, c36, signals)
++    return V2(c38, c10, c43, c36, signals, _store_links(get))
++
++
++def _store_links(get: dict[str, str]) -> StoreLinks:
++    parts = tuple(float(x) for x in get["RV_STORE_BACKOFF_MS"].split(",") if x.strip())
++    links = StoreLinks(
++        bg_timeout_ms=float(get["RV_STORE_BG_TIMEOUT_MS"]),
++        pubsub_ping_ms=float(get["RV_PUBSUB_PING_MS"]),
++        backoff_ms=(parts[0], parts[-1]) if parts else (0.0, 0.0),
++        pubsub_drain_max=int(get["RV_PUBSUB_DRAIN_MAX"]),
++    )
++    if links.bg_timeout_ms <= 0:
++        raise ValueError("RV_STORE_BG_TIMEOUT_MS must be positive")
++    if links.pubsub_ping_ms <= 0:
++        raise ValueError("RV_PUBSUB_PING_MS must be positive")
++    if len(parts) != 2 or not 0 < parts[0] <= parts[1]:
++        raise ValueError(f"RV_STORE_BACKOFF_MS={get['RV_STORE_BACKOFF_MS']!r} needs first,cap with 0 < first <= cap")
++    if links.pubsub_drain_max < 1:
++        raise ValueError("RV_PUBSUB_DRAIN_MAX must be >= 1")
++    return links
+ 
+ 
+ def _shm_slots(raw: str) -> tuple[int, int, int]:
+@@ -226,7 +259,7 @@
+ 
+ def describe_v2(v: V2) -> dict[str, object]:
+     out: dict[str, object] = {}
+-    for group in ("c38", "c10", "c43", "c36", "signals"):
++    for group in ("c38", "c10", "c43", "c36", "signals", "store"):
+         g = getattr(v, group)
+         d = {f: getattr(g, f) for f in g.__slots__}  # type: ignore[attr-defined]
+         if group == "c36":
+diff -ruN '--exclude=.venv' '--exclude=__pycache__' '--exclude=.hypothesis' '--exclude=.pytest_cache' '--exclude=.import_linter_cache' '--exclude=.run' '--exclude=*.pyc' rvproto2-d2base/rvproto/runtime/push.py rvproto2-d2work/rvproto/runtime/push.py
+--- rvproto2-d2base/rvproto/runtime/push.py	1970-01-01 05:30:00.000000000 +0530
++++ rvproto2-d2work/rvproto/runtime/push.py	2026-09-24 14:44:06.181427371 +0530
+@@ -0,0 +1,161 @@
++"""Pub/sub nudges (plan updates) without redis-py's PubSub.listen() (D2).
++
++listen() re-reads its connection in a loop that never yields while the connection answers "no message" at
++once; on a dead socket it spun the event loop and grew memory until the kernel killed every worker. This
++listener polls with get_message(timeout=poll) and treats as a DEAD connection:
++  - any store or transport error (runtime/storeconn.py maps every transport fault to ConnectionError),
++  - repeated "no message" answers returned without waiting (the spin signature, whatever the client does),
++  - silence: no message at all (a PING's pong included) for 2 x RV_PUBSUB_PING_MS; a PING goes out after
++    RV_PUBSUB_PING_MS of silence, so a live connection is never silent that long.
++A dead connection is closed (its pooled connection released) and re-subscribed after an equal-jitter
++exponential backoff within RV_STORE_BACKOFF_MS; after every (re)subscription the caller's nudge runs once to
++catch up on whatever was published while it was away; a nudge that fails (the caller returns False: e.g. its
++reconcile met a pooled connection that died in the partition) is retried on every poll wakeup until it
++succeeds, so push recovery never waits for the periodic reconcile. At most RV_PUBSUB_DRAIN_MAX messages are taken per
++wakeup and they coalesce into ONE nudge (a nudge re-reads the complete state, so no message needs keeping):
++nothing is buffered here, the rest waits in the socket (redis-py reads one socket chunk per call, and the
++StreamReader pauses reading at twice its 64 KiB limit).
++Metrics: pubsub_dead (every connection declared dead), <name>_listen_errors (the pre-existing counter),
++<name>_pubsub_subscribed, <name>_nudge_failures.
++"""
++
++from __future__ import annotations
++
++import asyncio
++import json
++import random
++import sys
++import time
++from collections.abc import Awaitable, Callable
++from dataclasses import dataclass
++from typing import Any
++
++import redis.asyncio as aioredis
++
++from rvproto.runtime.metrics import Registry
++from rvproto.runtime.store import StoreError
++
++_FAST_NONE_LIMIT = 3  # consecutive "no message" answers that did not wait (a healthy read waits `poll`)
++_PING = b"rv-live"
++
++
++@dataclass(frozen=True, slots=True)
++class PushKnobs:
++    ping_s: float  # RV_PUBSUB_PING_MS
++    backoff_s: tuple[float, float]  # RV_STORE_BACKOFF_MS: first, cap
++    drain_max: int  # RV_PUBSUB_DRAIN_MAX
++    op_timeout_s: float  # RV_STORE_BG_TIMEOUT_MS: bounds closing a dead connection
++
++
++# = the V2_DEFAULTS knob defaults (a unit test keeps them equal); readers built without knobs still get push
++DEFAULT_PUSH = PushKnobs(ping_s=5.0, backoff_s=(0.1, 2.0), drain_max=64, op_timeout_s=1.0)
++
++
++def _log(event: str, **kw: object) -> None:
++    sys.stderr.write(json.dumps({"event": event, "t": time.time(), **kw}, default=str) + "\n")
++
++
++def _err(exc: BaseException | None) -> str | None:
++    """redis-py 8 exceptions repr() as their category only ("network:ConnectionError"): keep the message."""
++    return None if exc is None else f"{type(exc).__name__}: {exc}"[:300]
++
++
++class PushListener:
++    def __init__(self, r: aioredis.Redis, channel: str, metrics: Registry, *, name: str, knobs: PushKnobs) -> None:
++        self.r = r
++        self.channel = channel
++        self.metrics = metrics
++        self.name = name
++        self.k = knobs
++        self.poll_s = knobs.ping_s / 4
++        self._rng = random.Random()
++        self.subscribed = False
++
++    def backoff(self, attempt: int) -> float:
++        """Equal jitter: uniform in [d/2, d], d = min(cap, first * 2**(attempt-1))."""
++        first, cap = self.k.backoff_s
++        d = min(cap, first * 2 ** min(max(attempt - 1, 0), 30))
++        return d / 2 + self._rng.uniform(0, d / 2)
++
++    async def run(self, on_nudge: Callable[[], Awaitable[bool]], accept: Callable[[dict[str, Any]], bool]) -> None:
++        """on_nudge: re-read the state; True when it succeeded. accept(msg): does this message ask for a nudge."""
++        loop = asyncio.get_running_loop()
++        attempt = 0
++        while True:
++            ps = self.r.pubsub()
++            since: float | None = None
++            try:
++                await ps.subscribe(self.channel)
++                since = loop.time()
++                self.subscribed = True
++                self.metrics.inc(f"{self.name}_pubsub_subscribed")
++                pending = not await self._nudge(on_nudge)  # catch up: what was published while we were away is lost
++                await self._pump(ps, on_nudge, accept, pending)
++            except (*StoreError, RuntimeError) as exc:  # RuntimeError: e.g. "pubsub connection not set"
++                self._dead("error", exc)
++            finally:
++                self.subscribed = False
++                await self._close(ps)
++            lived = 0.0 if since is None else loop.time() - since
++            attempt = 1 if lived >= self.k.ping_s else attempt + 1  # a flapping store keeps backing off
++            await asyncio.sleep(self.backoff(attempt))
++
++    async def _pump(self, ps: Any, on_nudge: Callable[[], Awaitable[bool]],
++                    accept: Callable[[dict[str, Any]], bool], pending: bool) -> None:
++        """Deliver until the connection is dead (returns) or fails (raises). pending: a nudge is still owed."""
++        loop = asyncio.get_running_loop()
++        last_rx = pinged = loop.time()
++        fast = 0
++        while True:
++            t0 = loop.time()
++            msg = await ps.get_message(timeout=self.poll_s)
++            now = loop.time()
++            if pending and msg is None:
++                pending = not await self._nudge(on_nudge)
++            if msg is None:
++                if now - t0 < self.poll_s / 2:
++                    fast += 1
++                    await asyncio.sleep(0)  # never starve the loop, whatever the client library does
++                    if fast >= _FAST_NONE_LIMIT:
++                        return self._dead("no_wait")
++                else:
++                    fast = 0
++                if now - last_rx >= 2 * self.k.ping_s:
++                    return self._dead("silent")
++                if now - last_rx >= self.k.ping_s and now - pinged >= self.k.ping_s:
++                    await ps.ping(_PING)  # its pong (or any message) proves the connection alive
++                    pinged = now
++                continue
++            fast = 0
++            nudge = accept(msg) or pending
++            for _ in range(self.k.drain_max - 1):  # what is already buffered, bounded per wakeup
++                more = await ps.get_message(timeout=0)
++                if more is None:
++                    break
++                nudge = accept(more) or nudge
++            if nudge:
++                pending = not await self._nudge(on_nudge)
++            last_rx = loop.time()  # our own processing is not silence
++            await asyncio.sleep(0)  # a message flood must not monopolize the loop either
++
++    async def _nudge(self, on_nudge: Callable[[], Awaitable[bool]]) -> bool:
++        try:
++            return await on_nudge()
++        except asyncio.CancelledError:
++            raise
++        except Exception as exc:  # noqa: BLE001 - the caller counts its own store errors; nothing kills the listener
++            self.metrics.inc(f"{self.name}_nudge_failures")
++            _log(f"{self.name}_nudge_failed", error=_err(exc))
++            return False
++
++    def _dead(self, reason: str, exc: BaseException | None = None) -> None:
++        """Count and log one dead connection (the caller closes it and backs off)."""
++        self.metrics.inc("pubsub_dead")
++        self.metrics.inc(f"{self.name}_listen_errors")
++        _log(f"{self.name}_pubsub_dead", reason=reason, error=_err(exc))
++
++    async def _close(self, ps: Any) -> None:
++        try:
++            await asyncio.wait_for(ps.aclose(), self.k.op_timeout_s)
++        except (*StoreError, RuntimeError):
++            pass
+diff -ruN '--exclude=.venv' '--exclude=__pycache__' '--exclude=.hypothesis' '--exclude=.pytest_cache' '--exclude=.import_linter_cache' '--exclude=.run' '--exclude=*.pyc' rvproto2-d2base/rvproto/runtime/store.py rvproto2-d2work/rvproto/runtime/store.py
+--- rvproto2-d2base/rvproto/runtime/store.py	2026-09-24 14:13:20.860099977 +0530
++++ rvproto2-d2work/rvproto/runtime/store.py	2026-09-24 14:35:58.521978626 +0530
+@@ -1,4 +1,5 @@
+-"""Shared-state client (Redis). Pool size and op timeout derive from the contract."""
++"""Shared-state client (Redis). Pool size and op timeout derive from the contract; every connection is an
++Rv* connection built by storeconn.py (transport faults => StoreError, dead sockets never reused)."""
+ 
+ from __future__ import annotations
+ 
+@@ -6,6 +7,7 @@
+ from redis.exceptions import RedisError
+ 
+ from rvproto.runtime.contract import Bounds, ResourceContract
++from rvproto.runtime.storeconn import Events, client
+ from rvproto.runtime.versioned import StoreDataUnavailable
+ 
+ # C36: a missing / unverifiable / regressed copy of durable state is handled exactly like an outage
+@@ -59,25 +61,18 @@
+ """
+ 
+ 
+-def connect(url: str, contract: ResourceContract, bounds: Bounds, *, timeout_s: float | None = None) -> aioredis.Redis:
+-    """timeout_s: the request-path op timeout (C10: its own knob); None = the contract target (frozen-1)."""
++def connect(url: str, contract: ResourceContract, bounds: Bounds, *, timeout_s: float | None = None,
++            events: Events = None) -> aioredis.Redis:
++    """timeout_s: the request-path op timeout (C10: its own knob); None = the contract target (frozen-1).
++    It also bounds the connect and the wait for a pooled connection (storeconn.py: D1/D2 boundary)."""
+     if timeout_s is None:
+         timeout_s = contract.target_p99_ms / 1000.0
+-    pool = aioredis.BlockingConnectionPool.from_url(
+-        url,
+-        max_connections=bounds.redis_connections,
+-        timeout=timeout_s,
+-        socket_timeout=timeout_s,
+-        socket_connect_timeout=timeout_s,
+-        decode_responses=False,
+-    )
+-    return aioredis.Redis(connection_pool=pool)
+-
+-
+-def connect_background(url: str, contract: ResourceContract, bounds: Bounds) -> aioredis.Redis:
+-    """Background refreshers/writers: bounded by the same pool, longer op timeout
+-    (a multiple of the refresh period is not a capacity value)."""
+-    pool = aioredis.BlockingConnectionPool.from_url(
+-        url, max_connections=bounds.redis_connections, decode_responses=False
+-    )
+-    return aioredis.Redis(connection_pool=pool)
++    return client(url, pool_size=bounds.redis_connections, op_timeout_s=timeout_s, events=events)
++
++
++def connect_background(url: str, contract: ResourceContract, bounds: Bounds, *, timeout_s: float = 1.0,
++                       events: Events = None) -> aioredis.Redis:
++    """Background refreshers, audit writer, discovery and the pub/sub listener: every op, connect and pool wait
++    is bounded by timeout_s (RV_STORE_BG_TIMEOUT_MS), so a partition only ages the RAM snapshots and the first
++    round after a heal completes within one timeout (redis-py 8.1 default: 5 s op/connect, 20 s pool wait)."""
++    return client(url, pool_size=bounds.redis_connections, op_timeout_s=timeout_s, events=events)
+diff -ruN '--exclude=.venv' '--exclude=__pycache__' '--exclude=.hypothesis' '--exclude=.pytest_cache' '--exclude=.import_linter_cache' '--exclude=.run' '--exclude=*.pyc' rvproto2-d2base/rvproto/runtime/storeconn.py rvproto2-d2work/rvproto/runtime/storeconn.py
+--- rvproto2-d2base/rvproto/runtime/storeconn.py	1970-01-01 05:30:00.000000000 +0530
++++ rvproto2-d2work/rvproto/runtime/storeconn.py	2026-09-24 15:02:59.769833795 +0530
+@@ -0,0 +1,147 @@
++"""The store client boundary: every Redis/Valkey connection rvproto opens is built here (D1, D2).
++
++A socket that dies underneath a pooled connection (TCP keepalive ETIMEDOUT during a partition, a reset, a
++peer close) leaves redis-py 8.1 + uvloop with a closed transport and a StreamReader that re-raises the socket
++error on every read. Two defects followed from that:
++  D2  redis-py reads the socket's ETIMEDOUT as "no message yet" (asyncio.TimeoutError IS TimeoutError since
++      Python 3.11) whenever a read carries its own timeout, returns None without disconnecting, and a pub/sub
++      listen() loop re-reads the dead socket forever: the event loop never yields again and every re-raise
++      grows the stored exception's traceback (GBs in seconds -> OOM).
++  D1  the pool hands the dead connection out again; the next write raises uvloop's RuntimeError ("... the
++      handler is closed"), which no StoreError clause catches -> HTTP 500.
++The Rv* connection classes turn every transport fault into redis ConnectionError (a StoreError), and replace
++a dead socket on checkout (no I/O needed to see it) instead of handing it out. Every pool gets explicit op,
++connect and pool-wait timeouts and one retry policy: none (retry_on_timeout off, no PING health checks).
++The request path's store budget is one RV_STORE_TIMEOUT_MS; background loops retry on their own period, and
++a redis-level retry could duplicate a non-idempotent write (audit XADD). The pub/sub connection, the one
++connection that can sit idle for ever, has its own verified liveness PING (runtime/push.py).
++"""
++
++from __future__ import annotations
++
++from collections.abc import Callable
++from typing import Any
++
++import redis
++import redis.asyncio as aioredis
++from redis.asyncio.connection import (
++    AbstractConnection,
++    Connection,
++    SSLConnection,
++    UnixDomainSocketConnection,
++    parse_url,
++)
++from redis.asyncio.retry import Retry
++from redis.backoff import NoBackoff
++from redis.exceptions import ConnectionError as StoreConnectionError
++
++Events = Callable[[str], object] | None
++
++
++class _Resilient:
++    """Mixin over redis-py's asyncio connection classes (TCP, TLS, Unix socket)."""
++
++    _reader: Any
++    _writer: Any
++
++    def __init__(self, *args: Any, rv_events: Events = None, **kwargs: Any) -> None:
++        self._rv_events = rv_events
++        self._rv_connected_once = False
++        super().__init__(*args, **kwargs)
++
++    def _rv_emit(self, name: str) -> None:
++        if self._rv_events is not None:
++            self._rv_events(name)
++
++    def _rv_transport_dead(self) -> bool:
++        """The socket is gone although redis-py still counts the connection as connected."""
++        w, r = self._writer, self._reader
++        if w is None or r is None:
++            return False
++        return bool(w.transport.is_closing() or r.exception() is not None or r.at_eof())
++
++    def _rv_lost(self, what: str, exc: BaseException) -> StoreConnectionError:
++        return StoreConnectionError(f"Error while {what} {self._host_error()}: {exc!r}")  # type: ignore[attr-defined]
++
++    async def connect_check_health(self, check_health: bool = True, retry_socket_connect: bool = True) -> None:
++        if self._rv_transport_dead():  # never reuse a dead socket (pool checkout, pub/sub reconnect): replace it
++            self._rv_emit("store_dead_transports")
++            await self.disconnect(nowait=True)  # type: ignore[attr-defined]
++        had = self._writer
++        await super().connect_check_health(  # type: ignore[misc]
++            check_health=check_health, retry_socket_connect=retry_socket_connect)
++        if self._writer is not None and self._writer is not had:
++            if self._rv_connected_once:
++                self._rv_emit("store_reconnects")
++            self._rv_connected_once = True
++
++    async def send_packed_command(self, command: Any, check_health: bool = True) -> None:
++        if self._rv_transport_dead():  # disconnected => redis-py reconnects (bounded by socket_connect_timeout)
++            self._rv_emit("store_dead_transports")
++            await self.disconnect(nowait=True)  # type: ignore[attr-defined]
++        try:
++            await super().send_packed_command(command, check_health=check_health)  # type: ignore[misc]
++        except RuntimeError as exc:  # uvloop: write on a transport closed underneath us ("the handler is closed")
++            self._rv_emit("store_transport_errors")
++            raise self._rv_lost("writing to", exc) from exc
++
++    async def _read_response_from_parser(self, disable_decoding: bool = False,
++                                         push_request: bool | None = False) -> Any:
++        try:
++            return await super()._read_response_from_parser(  # type: ignore[misc]
++                disable_decoding=disable_decoding, push_request=push_request)
++        except TimeoutError as exc:
++            # Raised by the SOCKET (keepalive / user-timeout ETIMEDOUT): a read deadline expires outside this frame
++            # (CancelledError here). Left alone, redis-py would answer "no message yet" and never disconnect (D2).
++            self._rv_emit("store_dead_transports")
++            raise self._rv_lost("reading from", exc) from exc
++        except RuntimeError as exc:
++            self._rv_emit("store_transport_errors")
++            raise self._rv_lost("reading from", exc) from exc
++
++
++class RvConnection(_Resilient, Connection):
++    """redis:// (TCP)."""
++
++
++class RvSSLConnection(_Resilient, SSLConnection):
++    """rediss:// (TLS)."""
++
++
++class RvUnixConnection(_Resilient, UnixDomainSocketConnection):
++    """unix://."""
++
++
++def _rv_class(base: type[AbstractConnection]) -> type[AbstractConnection]:
++    if issubclass(base, SSLConnection):
++        return RvSSLConnection
++    if issubclass(base, UnixDomainSocketConnection):
++        return RvUnixConnection
++    return RvConnection
++
++
++def pool_kwargs(url: str, *, op_timeout_s: float, connect_timeout_s: float, events: Events) -> dict[str, Any]:
++    """Connection kwargs for `url`: the URL gives the endpoint, credentials, db and TLS options; this boundary owns
++    the connection class, the timeouts and the retry policy (they win over URL query options)."""
++    opts: dict[str, Any] = dict(parse_url(url))
++    opts["connection_class"] = _rv_class(opts.get("connection_class", Connection))
++    opts.update(socket_timeout=op_timeout_s, socket_connect_timeout=connect_timeout_s, retry_on_timeout=False,
++                retry=Retry(NoBackoff(), 0), health_check_interval=0, decode_responses=False, rv_events=events)
++    return opts
++
++
++def client(url: str, *, pool_size: int | None, op_timeout_s: float, events: Events = None,
++           pool_wait_s: float | None = None) -> aioredis.Redis:
++    """An asyncio client whose every op, connect and (pool_size set) wait for a pooled connection is bounded.
++    The client owns its pool: aclose() also closes the pool's sockets (as Redis.from_url did)."""
++    kw = pool_kwargs(url, op_timeout_s=op_timeout_s, connect_timeout_s=op_timeout_s, events=events)
++    if pool_size is None:
++        return aioredis.Redis.from_pool(aioredis.ConnectionPool(**kw))
++    wait = op_timeout_s if pool_wait_s is None else pool_wait_s
++    return aioredis.Redis.from_pool(aioredis.BlockingConnectionPool(max_connections=pool_size, timeout=wait, **kw))
++
++
++def sync_client(url: str, *, op_timeout_s: float) -> redis.Redis:
++    """Control plane (writer, re-hydrator): blocking sockets, no event loop; explicit op + connect timeouts."""
++    return redis.Redis.from_url(url, socket_timeout=op_timeout_s, socket_connect_timeout=op_timeout_s,
++                                retry_on_timeout=False, health_check_interval=0)
+diff -ruN '--exclude=.venv' '--exclude=__pycache__' '--exclude=.hypothesis' '--exclude=.pytest_cache' '--exclude=.import_linter_cache' '--exclude=.run' '--exclude=*.pyc' rvproto2-d2base/tests/unit/store_fault_child.py rvproto2-d2work/tests/unit/store_fault_child.py
+--- rvproto2-d2base/tests/unit/store_fault_child.py	1970-01-01 05:30:00.000000000 +0530
++++ rvproto2-d2work/tests/unit/store_fault_child.py	2026-09-24 14:44:24.927050210 +0530
+@@ -0,0 +1,330 @@
++"""Child process of test_store_resilience.py: ONE store-fault scenario on uvloop (as the gateway workers run).
++
++    python store_fault_child.py SCENARIO DEADLINE_S
++
++Prints one JSON result line. A watchdog THREAD ends the process at the deadline with ok=false and what it saw
++(the event loop may be blocked: that is the D2 failure). Runs against whichever rvproto tree is first on
++sys.path, so the base tree reproduces D1/D2 with the same scenarios.
++"""
++
++from __future__ import annotations
++
++import asyncio
++import errno
++import json
++import os
++import sys
++import threading
++import time
++from collections.abc import Callable
++from typing import Any
++
++import redis
++import uvloop
++
++sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
++from store_faults import Beat, FakeStore, PartitionProxy, keepalive_death, rss_mb  # noqa: E402
++
++from rvproto.admit.admission import Admission  # noqa: E402
++from rvproto.admit.quota import Gcra, TokenLease  # noqa: E402
++from rvproto.admit.state_v2 import VersionedIdentity, VersionedKillSwitch  # noqa: E402
++from rvproto.control.db import MemDB  # noqa: E402
++from rvproto.control.writer import StateWriter, key_hash  # noqa: E402
++from rvproto.domain.request import ErrorSpec  # noqa: E402
++from rvproto.plan.fixtures import tenants  # noqa: E402
++from rvproto.plan.snapshot_v2 import VersionedPlanSnapshot  # noqa: E402
++from rvproto.runtime import store  # noqa: E402
++from rvproto.runtime.metrics import Registry  # noqa: E402
++
++K = b"test-hmac-key-not-a-secret"
++KEY_A, KEY_B = "sk-rv-org-a-0001", "sk-rv-org-b-0001"
++UVLOOP_CLOSED = "unable to perform operation on <TCPTransport closed=True reading=False 0x0>; the handler is closed"
++BEAT = Beat()
++SEEN: dict[str, Any] = {"phase": "start", "rss0": 0.0}
++
++
++class _Contract:
++    target_p99_ms = 20.0
++
++
++class _Bounds:
++    redis_connections = 8
++
++
++def emit(**kw: Any) -> None:
++    sys.stdout.write(json.dumps(kw, default=str) + "\n")
++    sys.stdout.flush()
++
++
++def watchdog(deadline_s: float) -> None:
++    t_end = time.monotonic() + deadline_s
++    while time.monotonic() < t_end:
++        time.sleep(0.05)
++    stall = time.monotonic() - BEAT.last
++    emit(kind="result", ok=False, reason="deadline", phase=SEEN["phase"], loop_stalled_s=round(stall, 2),
++         rss_mb=round(rss_mb(), 1), rss_delta_mb=round(rss_mb() - SEEN["rss0"], 1))
++    os._exit(3)
++
++
++def writer(url: str) -> StateWriter:
++    w = StateWriter(MemDB(), redis.Redis.from_url(url), K)
++    w.key_add(KEY_A, "org-a", key_id="key-a-1", rate=1e6, burst=1e6)
++    w.key_add(KEY_B, "org-b", key_id="key-b-1", rate=1e6, burst=1e6)
++    for org, doc in tenants().items():
++        w.plan_set(doc)
++        w.budget_set(org, 10**9)
++        w.killswitch("org", org, False)
++    w.killswitch("global", None, False)
++    return w
++
++
++def bg_client(url: str, m: Registry, timeout_s: float) -> Any:
++    try:
++        return store.connect_background(url, _Contract(), _Bounds(), timeout_s=timeout_s, events=m.inc)  # type: ignore[arg-type]
++    except TypeError:  # base tree
++        return store.connect_background(url, _Contract(), _Bounds())  # type: ignore[arg-type]
++
++
++def rp_client(url: str, m: Registry, timeout_s: float) -> Any:
++    try:
++        return store.connect(url, _Contract(), _Bounds(), timeout_s=timeout_s, events=m.inc)  # type: ignore[arg-type]
++    except TypeError:  # base tree
++        return store.connect(url, _Contract(), _Bounds(), timeout_s=timeout_s)  # type: ignore[arg-type]
++
++
++def snapshot(r: Any, m: Registry, ping_s: float, op_s: float) -> VersionedPlanSnapshot:
++    try:
++        from rvproto.runtime.push import PushKnobs
++    except ImportError:  # base tree: listen()
++        return VersionedPlanSnapshot(r, m, K, reconcile_ms=60000, stale_ms=120000)
++    knobs = PushKnobs(ping_s=ping_s, backoff_s=(0.05, 0.3), drain_max=8, op_timeout_s=op_s)
++    return VersionedPlanSnapshot(r, m, K, reconcile_ms=60000, stale_ms=120000, push=knobs)  # type: ignore[call-arg]
++
++
++def track_pubsubs(r: Any) -> list[Any]:
++    made: list[Any] = []
++    orig = r.pubsub
++
++    def pubsub(*a: Any, **k: Any) -> Any:
++        ps = orig(*a, **k)
++        made.append(ps)
++        return ps
++
++    r.pubsub = pubsub
++    return made
++
++
++async def until(pred: Callable[[], bool], timeout_s: float) -> bool:
++    end = time.monotonic() + timeout_s
++    while time.monotonic() < end:
++        if pred():
++            return True
++        await asyncio.sleep(0.01)
++    return pred()
++
++
++def live(made: list[Any]) -> bool:
++    return bool(made) and made[-1].connection is not None and made[-1].subscribed
++
++
++async def pubsub_etimedout() -> dict[str, Any]:
++    """D2: the subscribed pub/sub socket dies (keepalive ETIMEDOUT); a plan update published afterwards
++    must still arrive by push (periodic reconcile is 60 s here), with the loop running and RSS flat."""
++    fs = FakeStore()
++    w, m = await asyncio.to_thread(writer, fs.url), Registry(0)  # blocking client: off the loop
++    r = bg_client(fs.url, m, 0.5)
++    made = track_pubsubs(r)
++    snap = snapshot(r, m, ping_s=0.5, op_s=0.5)
++    await snap.load_all()
++    task = asyncio.create_task(snap.run())
++    await until(lambda: live(made), 3.0)
++    await asyncio.sleep(0.2)
++    SEEN["rss0"], SEEN["phase"], BEAT.max_gap_ms = rss_mb(), "etimedout", 0.0
++    keepalive_death(made[-1].connection)
++    await asyncio.sleep(0.3)
++    SEEN["phase"] = "publish"
++    t_pub = time.monotonic()
++    await asyncio.to_thread(w.plan_set, dict(tenants()["org-a"], version="a-after-fault"))
++    ok = await until(lambda: snap.versions().get("org-a") == "a-after-fault", 5.0)
++    applied_s = time.monotonic() - t_pub
++    task.cancel()
++    return dict(ok=ok, push_applied_s=round(applied_s, 3), rss_delta_mb=round(rss_mb() - SEEN["rss0"], 1),
++                max_loop_gap_ms=round(BEAT.max_gap_ms, 1), pubsubs=len(made), counters=dict(m.count))
++
++
++async def pubsub_partition() -> dict[str, Any]:
++    """D2: a silent partition that outlives the pub/sub TCP connection (nothing sent, nothing closed). The
++    listener must declare the connection dead by its own liveness PING, keep retrying (bounded) through the
++    partition, and deliver again after the heal."""
++    fs = FakeStore()
++    proxy = PartitionProxy(fs.port)
++    w, m = await asyncio.to_thread(writer, fs.url), Registry(0)
++    r = bg_client(proxy.url, m, 0.3)
++    made = track_pubsubs(r)
++    snap = snapshot(r, m, ping_s=0.3, op_s=0.3)
++    await snap.load_all()
++    task = asyncio.create_task(snap.run())
++    await until(lambda: live(made), 3.0)
++    await asyncio.sleep(0.2)
++    SEEN["rss0"], SEEN["phase"], BEAT.max_gap_ms = rss_mb(), "partition", 0.0
++    proxy.partition()
++    await asyncio.sleep(2.0)
++    dead_in_partition, made_in_partition = m.count.get("pubsub_dead", 0), len(made)
++    SEEN["phase"] = "healed"
++    proxy.heal()
++    t_heal = time.monotonic()
++    await asyncio.to_thread(w.plan_set, dict(tenants()["org-a"], version="a-after-heal"))
++    ok = await until(lambda: snap.versions().get("org-a") == "a-after-heal", 5.0)
++    recovered_s = time.monotonic() - t_heal
++    task.cancel()
++    return dict(ok=ok, recovered_after_heal_s=round(recovered_s, 3), dead_in_partition=dead_in_partition,
++                pubsubs_in_partition=made_in_partition, rss_delta_mb=round(rss_mb() - SEEN["rss0"], 1),
++                max_loop_gap_ms=round(BEAT.max_gap_ms, 1), counters=dict(m.count))
++
++
++class _FakePubSub:
++    def __init__(self, owner: Any) -> None:
++        self.owner = owner
++
++    async def subscribe(self, channel: str) -> None:
++        return None
++
++    async def get_message(self, timeout: float | None = 0.0, **_: Any) -> dict[str, Any] | None:
++        self.owner.reads += 1
++        return {"type": "message", "data": b"plan"} if self.owner.flood else None  # never waits
++
++    async def ping(self, *_: Any) -> None:
++        return None
++
++    async def aclose(self) -> None:
++        return None
++
++
++class _FakeRedis:
++    def __init__(self, flood: bool) -> None:
++        self.flood = flood
++        self.made = 0
++        self.reads = 0
++
++    def pubsub(self) -> _FakePubSub:
++        self.made += 1
++        return _FakePubSub(self)
++
++
++async def listener_client_bugs() -> dict[str, Any]:
++    """Whatever the client library does: a get_message that answers "no message" without waiting (the D2
++    signature) is a dead connection, and a message flood is taken DRAIN_MAX per wakeup, one nudge each; the
++    event loop keeps running in both cases."""
++    from rvproto.runtime.push import PushKnobs, PushListener
++
++    out: dict[str, Any] = {}
++    for flood in (False, True):
++        m, fake, nudges = Registry(0), _FakeRedis(flood), [0]
++
++        async def nudge() -> bool:
++            nudges[0] += 1
++            return True
++
++        knobs = PushKnobs(ping_s=0.2, backoff_s=(0.01, 0.05), drain_max=8, op_timeout_s=0.1)
++        task = asyncio.create_task(PushListener(fake, "ch", m, name="t", knobs=knobs).run(nudge, lambda msg: True))
++        BEAT.max_gap_ms = 0.0
++        await asyncio.sleep(1.0)
++        task.cancel()
++        out["flood" if flood else "no_wait"] = dict(dead=m.count.get("pubsub_dead", 0), pubsubs=fake.made,
++                                                    reads=fake.reads, nudges=nudges[0],
++                                                    max_loop_gap_ms=round(BEAT.max_gap_ms, 1))
++    out["ok"] = True
++    return out
++
++
++async def d1_dead_pooled_connection() -> dict[str, Any]:
++    """D1: a pooled request-path connection whose socket died (keepalive ETIMEDOUT) must not be handed out:
++    the next store read reconnects instead of failing with uvloop's RuntimeError (HTTP 500)."""
++    fs = FakeStore()
++    await asyncio.to_thread(writer, fs.url)
++    m = Registry(0)
++    r = rp_client(fs.url, m, 0.25)
++    vid = VersionedIdentity(r, K)
++    first = await vid.fetch(key_hash(KEY_B))
++    keepalive_death(r.connection_pool._available_connections[-1])
++    await asyncio.sleep(0.05)
++    try:
++        p = await vid.fetch(key_hash(KEY_A))
++        outcome = "principal" if p is not None else "none"
++    except Exception as exc:  # noqa: BLE001 - the scenario reports what escaped
++        outcome = f"raised {type(exc).__name__}: {exc}"
++    return dict(ok=first is not None and outcome == "principal", outcome=outcome, counters=dict(m.count))
++
++
++def _inject(fault: str, conn: Any) -> None:
++    def raiser(exc: BaseException) -> Callable[..., Any]:
++        def f(*_: Any, **__: Any) -> Any:
++            raise exc
++
++        return f
++
++    async def aread(exc: BaseException) -> Any:
++        raise exc
++
++    if fault == "write_uvloop_closed":  # the exact D1 call site: self._writer.writelines(command)
++        conn._writer.writelines = raiser(RuntimeError(UVLOOP_CLOSED))
++    elif fault == "write_reset":
++        conn._writer.writelines = raiser(ConnectionResetError(errno.ECONNRESET, "Connection reset by peer"))
++    elif fault == "read_uvloop_closed":
++        conn._reader.read = lambda *_a, **_k: aread(RuntimeError(UVLOOP_CLOSED))
++    elif fault == "read_etimedout":
++        conn._reader.read = lambda *_a, **_k: aread(TimeoutError(errno.ETIMEDOUT, os.strerror(errno.ETIMEDOUT)))
++    elif fault == "keepalive_death":
++        keepalive_death(conn)
++
++
++async def _admit_once(fault: str, fs: FakeStore, proxy: PartitionProxy) -> str:
++    m = Registry(0)
++    url = {"store_refused": "redis://127.0.0.1:1/0", "store_silent": proxy.url}.get(fault, fs.url)
++    r, rb = rp_client(url, m, 0.25), bg_client(fs.url, m, 0.5)
++    vid = VersionedIdentity(r, K)
++    vks = VersionedKillSwitch(rb, m, K, refresh_ms=500, stale_ms=5000, identity=vid)
++    await vks.refresh_once()
++    lease = TokenLease(r, m, chunk_tokens=10**6, durable=True)
++    lease._local["org-a"] = 10**9  # fakeredis-over-TCP has no Lua: keep the lease off the store
++    adm = Admission(vid, vks, Gcra(), lease)  # type: ignore[arg-type]
++    if url == fs.url:
++        await vid.fetch(key_hash(KEY_B))  # one live pooled connection to break
++        _inject(fault, r.connection_pool._available_connections[-1])
++        await asyncio.sleep(0.05)
++    try:
++        out = await adm.admit(KEY_A, 100, "gpt-4o-mini")
++    except Exception as exc:  # noqa: BLE001 - an escaping exception is an HTTP 500
++        return f"raised {type(exc).__name__}: {exc}"
++    if isinstance(out, ErrorSpec):
++        return f"{out.status}:{out.code}"
++    return "grant"
++
++
++async def d1_admission_faults() -> dict[str, Any]:
++    """D1: every transport-level fault on the request path is 503 shared_state_unavailable (or, when the
++    socket was already dead before the call, a transparent reconnect and a grant), never an exception."""
++    fs = FakeStore()
++    await asyncio.to_thread(writer, fs.url)
++    proxy = PartitionProxy(fs.port)
++    proxy.partition()
++    faults = ("write_uvloop_closed", "write_reset", "read_uvloop_closed", "read_etimedout", "keepalive_death",
++              "store_refused", "store_silent")
++    outcomes = {f: await _admit_once(f, fs, proxy) for f in faults}
++    return dict(ok=not any(o.startswith("raised") for o in outcomes.values()), outcomes=outcomes)
++
++
++SCENARIOS = {f.__name__: f for f in (pubsub_etimedout, pubsub_partition, listener_client_bugs,
++                                     d1_dead_pooled_connection, d1_admission_faults)}
++
++
++async def main(name: str) -> None:
++    asyncio.create_task(BEAT.run())
++    res = await SCENARIOS[name]()
++    emit(kind="result", scenario=name, **res)
++
++
++if __name__ == "__main__":
++    threading.Thread(target=watchdog, args=(float(sys.argv[2]),), daemon=True).start()
++    uvloop.run(main(sys.argv[1]))
++    os._exit(0)
+diff -ruN '--exclude=.venv' '--exclude=__pycache__' '--exclude=.hypothesis' '--exclude=.pytest_cache' '--exclude=.import_linter_cache' '--exclude=.run' '--exclude=*.pyc' rvproto2-d2base/tests/unit/store_faults.py rvproto2-d2work/tests/unit/store_faults.py
+--- rvproto2-d2base/tests/unit/store_faults.py	1970-01-01 05:30:00.000000000 +0530
++++ rvproto2-d2work/tests/unit/store_faults.py	2026-09-24 14:39:40.110958890 +0530
+@@ -0,0 +1,122 @@
++"""Store fault injection for the D1/D2 tests: a real TCP store (fakeredis), a partition proxy, and the exact
++socket death uvloop reports when TCP keepalive gives up during a partition."""
++
++from __future__ import annotations
++
++import errno
++import os
++import select
++import socket
++import threading
++import time
++from typing import Any
++
++from fakeredis import TcpFakeServer
++
++
++class FakeStore:
++    """fakeredis over real TCP (RESP3 + hiredis, pub/sub, MULTI) in a thread of this process."""
++
++    def __init__(self) -> None:
++        self.srv = TcpFakeServer(("127.0.0.1", 0), server_type="redis")
++        self.port = int(self.srv.server_address[1])
++        threading.Thread(target=self.srv.serve_forever, daemon=True).start()
++
++    @property
++    def url(self) -> str:
++        return f"redis://127.0.0.1:{self.port}/0"
++
++    def close(self) -> None:
++        self.srv.shutdown()
++        self.srv.server_close()
++
++
++class PartitionProxy:
++    """TCP proxy in front of a store. partition(): every connection that exists stops forwarding FOR EVER (its
++    sockets stay open: nothing is sent, nothing is closed) and new connections are accepted but never answered,
++    i.e. a silent partition that outlives the TCP connections. heal(): new connections work again."""
++
++    def __init__(self, upstream_port: int) -> None:
++        self.up = ("127.0.0.1", upstream_port)
++        self.lsock = socket.create_server(("127.0.0.1", 0))
++        self.port = int(self.lsock.getsockname()[1])
++        self.cut = threading.Event()
++        self.generation = 0
++        self._held: list[socket.socket] = []
++        threading.Thread(target=self._accept, daemon=True).start()
++
++    @property
++    def url(self) -> str:
++        return f"redis://127.0.0.1:{self.port}/0"
++
++    def partition(self) -> None:
++        self.generation += 1
++        self.cut.set()
++
++    def heal(self) -> None:
++        self.cut.clear()
++
++    def _accept(self) -> None:
++        while True:
++            try:
++                c, _ = self.lsock.accept()
++            except OSError:
++                return
++            self._held.append(c)
++            if self.cut.is_set():
++                continue  # accepted by the kernel, never answered
++            u = socket.create_connection(self.up)
++            self._held.append(u)
++            gen = self.generation
++            for a, b in ((c, u), (u, c)):
++                threading.Thread(target=self._pump, args=(a, b, gen), daemon=True).start()
++
++    def _pump(self, src: socket.socket, dst: socket.socket, gen: int) -> None:
++        while self.generation == gen:
++            r, _, _ = select.select([src], [], [], 0.02)
++            if not r or self.generation != gen:
++                continue
++            try:
++                data = src.recv(65536)
++                if not data:
++                    return
++                dst.sendall(data)
++            except OSError:
++                return
++
++
++def keepalive_death(conn: Any) -> None:
++    """What uvloop does when TCP keepalive gives up on a socket during a partition (ETIMEDOUT): the transport
++    closes and the protocol's connection_lost(exc) stores the error in the StreamReader, while redis-py still
++    counts the connection as connected (uvloop closes first and calls connection_lost one loop turn later;
++    the end state is the same)."""
++    t = conn._writer.transport
++    t.get_protocol().connection_lost(TimeoutError(errno.ETIMEDOUT, os.strerror(errno.ETIMEDOUT)))
++    t.close()
++
++
++def rss_mb() -> float:
++    with open(f"/proc/{os.getpid()}/status") as f:
++        for line in f:
++            if line.startswith("VmRSS:"):
++                return int(line.split()[1]) / 1024.0
++    return -1.0
++
++
++class Beat:
++    """Event-loop progress: a 5 ms ticker; `max_gap_ms` is the longest the loop went without running it."""
++
++    def __init__(self) -> None:
++        self.n = 0
++        self.last = time.monotonic()
++        self.max_gap_ms = 0.0
++
++    async def run(self) -> None:
++        import asyncio
++
++        while True:
++            await asyncio.sleep(0.005)
++            now = time.monotonic()
++            self.max_gap_ms = max(self.max_gap_ms, (now - self.last) * 1e3)
++            self.last = now
++            self.n += 1
+diff -ruN '--exclude=.venv' '--exclude=__pycache__' '--exclude=.hypothesis' '--exclude=.pytest_cache' '--exclude=.import_linter_cache' '--exclude=.run' '--exclude=*.pyc' rvproto2-d2base/tests/unit/test_store_resilience.py rvproto2-d2work/tests/unit/test_store_resilience.py
+--- rvproto2-d2base/tests/unit/test_store_resilience.py	1970-01-01 05:30:00.000000000 +0530
++++ rvproto2-d2work/tests/unit/test_store_resilience.py	2026-09-24 14:42:16.617944952 +0530
+@@ -0,0 +1,147 @@
++"""D1/D2 (r2-chaos): a gateway<->store partition must never OOM a worker (pub/sub spin) nor surface as HTTP 500.
++
++Scenario tests run in a child process on uvloop (store_fault_child.py) against a real TCP store (fakeredis):
++a regression that spins the event loop cannot hang the session, and the child's watchdog reports what it
++saw. The same scenarios on the pre-fix tree reproduce both defects (evidence/r2-fix-d2).
++"""
++
++from __future__ import annotations
++
++import json
++import os
++import re
++import subprocess
++import sys
++from pathlib import Path
++from typing import Any
++
++import pytest
++from redis.exceptions import ConnectionError as RedisConnectionError
++
++from rvproto.detect.guard.discovery import OwnerRegistration
++from rvproto.runtime.config import load_settings
++from rvproto.runtime.metrics import Registry, prometheus
++from rvproto.runtime.push import DEFAULT_PUSH, PushKnobs
++from rvproto.runtime.store import StoreError, connect, connect_background
++from rvproto.runtime.storeconn import RvConnection, RvSSLConnection, RvUnixConnection, client, sync_client
++
++ROOT = Path(__file__).resolve().parents[2]
++CHILD = Path(__file__).with_name("store_fault_child.py")
++
++
++def _run(scenario: str, deadline_s: float = 20.0) -> dict[str, Any]:
++    env = dict(os.environ, PYTHONPATH=os.pathsep.join(p for p in (str(ROOT), os.environ.get("PYTHONPATH")) if p))
++    p = subprocess.run([sys.executable, str(CHILD), scenario, str(deadline_s)], capture_output=True, text=True,
++                       env=env, cwd=ROOT, timeout=deadline_s + 30)
++    results = [json.loads(x) for x in p.stdout.splitlines() if x.startswith("{") and '"kind": "result"' in x]
++    assert results, (p.returncode, p.stdout[-2000:], p.stderr[-4000:])
++    return results[-1]  # type: ignore[no-any-return]
++
++
++def test_d2_pubsub_socket_death_is_detected_and_push_resumes() -> None:
++    r = _run("pubsub_etimedout")
++    assert r["ok"], r
++    assert r["max_loop_gap_ms"] < 250 and r["rss_delta_mb"] < 20, r  # pre-fix: loop blocked, +500 MB in 3 s
++    assert r["counters"]["pubsub_dead"] >= 1 and r["pubsubs"] >= 2, r
++    assert r["counters"]["store_dead_transports"] >= 1 and r["counters"]["store_reconnects"] >= 1, r
++    assert r["push_applied_s"] < 2.0, r
++
++
++def test_d2_silent_partition_is_found_by_liveness_ping_and_heals() -> None:
++    r = _run("pubsub_partition")
++    assert r["ok"], r  # pre-fix: blocked on the dead socket for ever, the update never arrives
++    assert r["dead_in_partition"] >= 1 and r["pubsubs_in_partition"] >= 2, r  # detected, retried (bounded)
++    assert r["recovered_after_heal_s"] < 2.0, r
++    assert r["max_loop_gap_ms"] < 250 and r["rss_delta_mb"] < 20, r
++
++
++def test_d2_listener_survives_a_client_that_never_waits_and_a_message_flood() -> None:
++    r = _run("listener_client_bugs")
++    nw, fl = r["no_wait"], r["flood"]
++    assert nw["dead"] >= 3 and nw["pubsubs"] >= 3 and nw["nudges"] == nw["pubsubs"], nw  # catch-up per subscribe
++    assert nw["max_loop_gap_ms"] < 100, nw
++    assert fl["dead"] == 0 and fl["pubsubs"] == 1 and fl["reads"] >= 100, fl
++    assert fl["reads"] <= 8 * fl["nudges"] + 8, fl  # <= RV_PUBSUB_DRAIN_MAX messages per nudge
++    assert fl["max_loop_gap_ms"] < 100, fl
++
++
++def test_d1_a_dead_pooled_socket_is_replaced_not_handed_out() -> None:
++    r = _run("d1_dead_pooled_connection")
++    assert r["ok"], r  # pre-fix: RuntimeError "... the handler is closed" (HTTP 500)
++    assert r["counters"]["store_dead_transports"] >= 1 and r["counters"]["store_reconnects"] >= 1, r
++
++
++def test_d1_every_transport_fault_on_the_request_path_is_a_declared_503() -> None:
++    out = _run("d1_admission_faults")["outcomes"]
++    assert out.pop("keepalive_death") == "grant", out  # socket dead BEFORE the call: reconnected, served
++    assert set(out.values()) == {"503:shared_state_unavailable"}, out
++
++
++@pytest.mark.parametrize(("url", "cls"), [
++    ("redis://10.1.2.3:6379/3", RvConnection),
++    ("rediss://10.1.2.3:6380/0?ssl_cert_reqs=none", RvSSLConnection),
++    ("unix:///run/valkey.sock?db=2", RvUnixConnection),
++])
++def test_every_pool_bounds_ops_connects_and_waits_and_never_retries(url: str, cls: type) -> None:
++    class C:
++        target_p99_ms = 20.0
++
++    class B:
++        redis_connections = 7
++
++    for r, t in ((connect(url, C(), B(), timeout_s=0.025), 0.025),  # type: ignore[arg-type]
++                 (connect_background(url, C(), B(), timeout_s=1.0), 1.0),  # type: ignore[arg-type]
++                 (client(url, pool_size=None, op_timeout_s=0.5), 0.5)):
++        pool = r.connection_pool
++        kw = pool.connection_kwargs
++        assert pool.connection_class is cls
++        assert (kw["socket_timeout"], kw["socket_connect_timeout"]) == (t, t)
++        assert kw["health_check_interval"] == 0 and kw["retry_on_timeout"] is False
++        conn = pool.make_connection()
++        assert isinstance(conn, cls) and conn.retry.get_retries() == 0
++        if hasattr(pool, "timeout"):  # BlockingConnectionPool: waiting for a pooled connection is bounded too
++            assert pool.timeout == t and pool.max_connections == 7
++    assert "ssl_cert_reqs" in connect_background("rediss://h:6380/0?ssl_cert_reqs=none", C(), B()).connection_pool.connection_kwargs  # type: ignore[arg-type]
++
++
++def test_guard_registration_and_control_plane_clients_are_bounded() -> None:
++    reg = OwnerRegistration("redis://10.1.2.3:6379/0", advertise=("10.0.0.9", 7070), hello={}, ttl_ms=3000)
++    kw = reg.r.connection_pool.connection_kwargs
++    assert reg.r.connection_pool.connection_class is RvConnection and kw["socket_timeout"] == 1.0
++    assert kw["socket_connect_timeout"] == 1.0
++    skw = sync_client("redis://10.1.2.3:6379/0", op_timeout_s=5.0).connection_pool.connection_kwargs
++    assert (skw["socket_timeout"], skw["socket_connect_timeout"]) == (5.0, 5.0)
++
++
++def test_no_store_client_is_built_outside_the_boundary_and_no_listen_loop() -> None:
++    pkg = ROOT / "rvproto"
++    boundary = pkg / "runtime" / "storeconn.py"
++    ctor = re.compile(r"\bRedis\s*\(|\.from_url\s*\(|ConnectionPool\s*\(")
++    listen = re.compile(r"\.listen\(\)\s*:|in\s+\w+\.listen\(\)")
++    for p in pkg.rglob("*.py"):
++        text = p.read_text()
++        if p != boundary:
++            assert not ctor.search(text), f"{p}: build store clients with runtime/storeconn.py (D1/D2)"
++        assert not listen.search(text), f"{p}: pub/sub must use runtime/push.py, not listen() (D2)"
++
++
++def test_store_link_knobs_default_to_the_push_defaults_and_validate() -> None:
++    st = load_settings({}).v2.store
++    ms = PushKnobs(ping_s=st.pubsub_ping_ms / 1000, backoff_s=(st.backoff_ms[0] / 1000, st.backoff_ms[1] / 1000),
++                   drain_max=st.pubsub_drain_max, op_timeout_s=st.bg_timeout_ms / 1000)
++    assert ms == DEFAULT_PUSH
++    for bad in ({"RV_STORE_BG_TIMEOUT_MS": "0"}, {"RV_STORE_BG_TIMEOUT_MS": "3000"},  # > RV_KS_STALE_MS/2
++                {"RV_PUBSUB_PING_MS": "-1"}, {"RV_STORE_BACKOFF_MS": "500,100"}, {"RV_STORE_BACKOFF_MS": "100"},
++                {"RV_PUBSUB_DRAIN_MAX": "0"}):
++        with pytest.raises(ValueError):
++            load_settings(bad)
++
++
++def test_store_events_are_exported_as_the_named_prometheus_counters() -> None:
++    m = Registry(0)
++    for name in ("store_reconnects", "pubsub_dead", "store_dead_transports", "store_transport_errors"):
++        m.inc(name)
++    text = prometheus(m.export())
++    for name in ("rv_store_reconnects_total 1", "rv_pubsub_dead_total 1", "rv_store_dead_transports_total 1"):
++        assert name in text, text
++    assert issubclass(RedisConnectionError, StoreError)  # every mapped transport fault is caught as a StoreError

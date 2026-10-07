@@ -1,0 +1,236 @@
+r2-chaos lane decisions log (UTC). Every deviation from the READY harness / round-1 configs is recorded here.
+
+2026-09-24T05:40Z  Evidence layout: scripts/ (all tools, shipped with the evidence; each run also carries a frozen
+  scripts-snapshot/ via launch.sh), runs/ -> /home/contact_cyberultron_com/rv-evidence-raw/r2-chaos/runs (raw data,
+  off the RAM-backed /tmp), notes/, vm-ledger.jsonl.
+
+2026-09-24T05:45Z  Edge nginx (edge_conf.sh) deltas vs proto-bench-fleet/scripts/edge_conf.sh, each production-shaped
+  and needed so the edge itself does not dominate fault behaviour:
+  - passive health: max_fails=1 fail_timeout=5s; proxy_next_upstream error timeout (tries 2): only connection-level
+    failures are retried; a POST already written to a gateway is NEVER re-sent (nginx would need `non_idempotent`).
+    Round-1 used proxy_next_upstream off + max_fails=0 (benchmark config: every request routed to a dead gateway
+    would 502 for the whole outage). EDGE_RETRY=0 reproduces round-1 for comparison.
+  - upstream keepalive_timeout 60s < gateway keep-alive 75s (round-1 had both at 75s: reuse-vs-close race => rare 502).
+  - edge-generated 502/503/504 are OpenAI-style JSON envelopes (code edge_*); gateway responses pass untouched
+    (proxy_intercept_errors off). nginx's default is an HTML page, which would violate "well-formed OpenAI errors".
+  - JSON access log per request = edge attribution record (request id, upstream(s) tried, upstream status, timings).
+
+2026-09-24T05:47Z  Provider faults (fault 6) are applied to synthprov itself, never through an extra proxy hop (a
+  proxy would add latency to every request of the run):
+  - (a) kill = SIGKILL of synthprov, restarted as a new generation (fresh record dir) after 60 s. synthprov flushes
+    records every 1 s, so records of requests that completed <= ~1 s before the SIGKILL are lost -> those requests are
+    unjoinable and reported as such.
+  - (b) 5xx = SIGTERM synthprov (listeners close at once, in-flight streams complete) + faultsrv (scripts/tools/faultsrv,
+    Go, static) binds the same ports within ms and answers every request 500 + OpenAI envelope, recording x-request-id.
+  - (c) hang = SIGSTOP 60 s then SIGCONT (TCP stays up; kernel accepts into the backlog; no bytes flow).
+    Caveat for C4: requests accepted by the kernel while synthprov is stopped are only "received" by synthprov after
+    SIGCONT; their pre-receive wait is charged to T_addon (client clock) -> C4 inside the hang window is provider time.
+
+2026-09-24T05:52Z  Orchestrator bug found in the first direct dry run: editing chaos_run.sh while it ran made bash read
+  a shifted offset after the fault loop (syntax error at wind-down). Fix: launch.sh runs every chaos run from a frozen
+  snapshot of scripts/ (kept in RUN/scripts-snapshot); wind-down split into chaos_finish.sh (re-runnable by hand).
+
+2026-09-24T06:15Z  Direct-mode dry runs of the instrument path (olg -> synthprov, no SUT): runs dry-direct-f6{kill,5xx,hang}
+  (REPEATS=1, PRE/POST 40 s, fault 15 s, 200 RPS + 2 x 20/s probes). All three injectors behave as designed:
+  kill -> in-flight SSE streams end eof_mid_stream (598), JSON in flight -> transport EOF (285), new requests
+  connect-refused, ~11 requests unjoinable (records lost to SIGKILL), recovery 1 s after restart;
+  5xx -> swap gaps 10 ms (term->faultsrv bound) and 17 ms (faultsrv term->synthprov listening), in-flight streams
+  complete (1997/2000), every new request 500 + OpenAI envelope (3039);
+  hang -> no errors (client timeout 120 s > 15 s), C4 inside the window = provider stall (14.5 s), recovered 5 s after
+  SIGCONT. Analyzer windows fixed on this evidence: olg's end_ns of a broken stream is its LAST DATA arrival, so the
+  in-flight victims are selected by scheduled time [inject-10 s, inject) ("straddle"), and the steady baseline is
+  [inject-PRE, inject-10 s).
+  Analyzer validated against round-1 run proto-bench-split/runs/li34-520: identical classes (153262 qualified,
+  2732 policy, 6 posture) and identical C4 p99 17.374 / SSE 17.599 / JSON 16.827 ms vs c4_client_all.py --all.
+
+2026-09-24T06:20Z  r2-infra READY (06:05Z) findings adopted:
+  - Valkey has no manual failover; fault 1 = `--simulate-maintenance-event` (outage ~3.8 s about 6 min after the
+    call, op ~9 min). f1 polls the instance state to ACTIVE (= heal); the analyzer anchors TTD on the store-side
+    event (first failed PING / run_id change seen by the sampler from the unpartitioned controller). SLOT >= 600 s.
+  - Cloud SQL failover outage ~10 s; a new failover is rejected (409) for 1-2 min after one finishes -> f2 retries.
+  - VPC egress-deny rules are stateful and do NOT cut established pooled connections -> fault 5 uses host iptables
+    on the gateway VMs (OUTPUT/INPUT, plus DOCKER-USER when docker bridge networking is present).
+  - READY lists only rv-r2-pg + rv-r2-valkey (not mine). The chaos set does not exist yet: asked r2-infra.
+  L4: g2-standard-4 stock-out in asia-south1-a/-b/-c at 05:59Z (notes/zone-attempts.txt). Plan: dry runs with CPU
+  guard owners (local_cpu backend) at low load; acquire L4s when measured runs are greenlit.
+
+2026-09-24T06:30Z  SUT dry-run fleet (NOT the measured fleet): rvproto-2 dev tarball dcf4ac30 (r2-impl devvm, 06:20Z;
+  sut-artifacts/SHA256SUMS), systemd units (Restart=always, RestartSec=2, KillMode=control-group), 2 x n2-highcpu-16
+  gateways (asia-south1-c / -a; C4 regional quota 300 vCPU was exhausted by all lanes: 288-296 in use), 3 x
+  n2-standard-8 guard nodes on the local_cpu backend (L4 stock-out), edge c4-highcpu-16, control plane c4-standard-4
+  with LOCAL docker Valkey 8 + Postgres 16 (the managed chaos set does not exist yet). Dry-run-only knobs:
+  gateways RV_SLO_MS=1000, guards RV_GUARD_CPU_THREADS=8 RV_SLO_MS=1000 RV_OWNER_QUEUE_MS=3000 (a CPU owner needs
+  ~200-350 ms per 512-token window; with the default 20 ms SLO every request was UNAVAILABLE -> FAIL_CLOSED BLOCK).
+  Canary state through the SUT's own C36 writer (sut/cp_canaries.py): org-K kill switch ON, key R revoked, main org
+  org-a (FULL profile, FAIL_CLOSED PG2 rule), churn org org-c. Keys: secrets/keys.env (mode 600, never printed).
+
+2026-09-24T06:33Z  DEPLOYMENT HAZARD found + root-caused: systemd-logind RemoveIPC=yes (Ubuntu default) deleted the
+  SUT's /dev/shm segments (C38 shm metrics + node readiness file) at every ssh logout of user rv (the services' user).
+  Symptom: /readyz 503 on 3.2% of polls (153/4,837) with a stale node snapshot (workers=0), all workers, both gateways;
+  /dev/shm empty while the service ran. Fix in node_setup.sh: logind.conf.d RemoveIPC=no -> 400/400 readyz 200.
+  Reported to proto-builder and the controller (affects any VM lane running rvproto-2 as the ssh user).
+
+2026-09-24T06:40Z  FAIL_OPEN definition refined on dry-run evidence (dry-sut-f4): a request the provider received but
+  whose client got no response headers (gateway SIGKILLed mid-request -> edge 502) cannot show its stages to the client;
+  it is classified infra "dispatched_then_failed" and verified against the gateway's own INPUT audit record (all input
+  stages E => inspected). FAIL_OPEN = a 200 without a stage header, or any dispatch with a non-E inspection stage.
+
+2026-09-24T07:20Z  SUT dry runs of every injector (dev build dcf4ac30, CPU guards, local stores; 1 instance each, 6 RPS
+  main + 2 x 5/s canary probes; runs dry-sut-{f4,f3a,f3c,f5,f6a,f6b,f6c,f3b}). Mechanics all work. Observations on the
+  DEV build (re-verify on the PROVEN build before any claim):
+  - f4 gateway SIGKILL: systemd restart -> /readyz 200 after 4.7 s; streams in flight on the killed gateway end
+    eof_mid_stream at the client (14, HTTP-level break, detectable); JSON in flight -> edge 502 JSON envelope; no silent
+    truncation; 0 FAIL_OPEN; canaries 0 admits; output audit records of the 14 killed streams missing (input records ok).
+  - f3a owner SIGKILL: owner back in 3.7 s; 2 in-flight guard calls -> sem:U -> FAIL_CLOSED 403 blocked_by_policy
+    (not re-routed to another owner).
+  - f3c all guard nodes down 20 s: 152 x 403 posture blocks (FAIL_CLOSED), 0 FAIL_OPEN, gateways /readyz 503 for the
+    whole outage (an LB would see every backend unhealthy).
+  - f5 store partition 30 s (iptables): served from RAM ~4.4-4.8 s (RV_KS_STALE_MS 5000), then 503
+    kill_switch_unavailable; canaries 0 admits (org-K 503 kill_switch_engaged -> _unavailable; key-R 503
+    shared_state_unavailable); audit records LOST during the partition (28 input + 38 output); and ~9 s after the
+    heal EVERY gateway worker on BOTH gateways was OOM-killed (kernel: 1.1-1.8 GB anon RSS per worker vs ~180 MB
+    normal; n2-highcpu-16 = 16 GB) -> launcher drain -> systemd restart -> 71 edge 502 + 11 broken streams, recovery
+    ~43 s after heal. Root-cause run pending (procmon + py-spy).
+  - f6a provider SIGKILL: 20 in-flight SSE streams ended with the gateway's error frame (clean), JSON in flight -> 502
+    provider_error envelope; f6b 5xx -> 502 provider_error; f6c 20 s hang -> no errors (timeouts 120 s not reached).
+  - All non-200 responses carried OpenAI envelopes (edge 502s via the edge's JSON error pages).
+
+2026-09-24T07:21Z  Bulletin compliance: B4/B13 -> created my own store set rv-r2-chaos-pg (Cloud SQL PG16 HA, c/a),
+  rv-r2-chaos-kv (Valkey 8 highmem-medium 1+1, multi-zone, PSC) and rv-r2-chaos-redis (Memorystore Redis 7.2
+  STANDARD_HA 13 GB, PSA, c/a) for `failover --data-protection-mode=force-data-loss` (resource-ledger.jsonl).
+  B5 RemoveIPC=no already in node_setup. B6 -> harness (lg, prov), edge and control plane move to C4D; only the SUT
+  gateways stay C4. B7 iptables partitions. B15/B16 -> L4 via the r2-infra pool handover (asia-south1-c).
+
+2026-09-24T07:32Z  B6 harness re-validation on C4D (gen-2: rv-r2chaos-lg-2 / prov-2 = c4d-highcpu-8, asia-south1-c),
+  run direct-c4d-300: DIRECT olg -> synthprov, 300 RPS HEADLINE + 2 x 20/s probe streams (the chaos-run loadgen
+  profile), 30 s ramp + 60 s warm-up + 300 s: 90,000 measured requests all qualified, C4 p99 0.462 ms (SSE 0.493,
+  JSON 0.280), p99.9 3.571 ms; loadgen 0 drops, lateness p99 76 us / max 1.476 ms, CPU busy max 24.1%; provider
+  schedule error max 0.99 ms, CPU busy max 20.3%. PASS (floor for the measured chaos runs at <= 300 RPS).
+
+2026-09-24T09:05Z  Managed-store injector dry runs (dev build, CPU guards; runs dry-sut-f2, -f1, -f1b; switch_store.sh):
+  - f2 Cloud SQL failover + config churn (writer every 500 ms on cp-2, org-c probe 10/s): op 26.6 s, PG unavailable to
+    the unpartitioned sampler 11.6 s (+4.65..+16.25 s), postmaster restart at +16.45 s; churn 1229 writes, 27 failed
+    (13.0 s write gap from +4.2 s), 0 publish failures, write p50/p99 67/95 ms, served plan-version staleness 0.
+    Gateways unaffected (they never touch Postgres); canaries held.
+  - f1 Valkey simulate-maintenance: op 8.5 min; primary outage 3.6 s starting +499.5 s after the call ("role change
+    occurred" x19), run_id changed at +504.1 s; client impact small (2 shared_state_unavailable, 1 kill_switch_
+    unavailable, 1 plan_unavailable, 4 posture) -> note a 3.6 s store outage produced *_unavailable 503s although
+    RV_KS_STALE_MS=5000 (snapshot age = outage + reconnect lag); re-check on the RC.
+  - f1b Redis STANDARD_HA force-data-loss failover (SUT switched to rv-r2-chaos-redis; the re-hydrator republished
+    every kind into the empty instance: `control verify` ok): op 57 s, store outage 8.7 s (+16.9..+25.6 s); RAM
+    snapshot served until +4.46 s after the outage start, first 503 kill_switch_unavailable at +4.62 s (declared
+    bound 5 s held), then 41 kill_switch_unavailable + 17 plan_unavailable; 0 FAIL_OPEN; canaries held; AUDIT: 29
+    input + 35 output decision records lost (failed batches are dropped, not retried).
+2026-09-24T09:06:04Z B23 idle policy: stopped all r2chaos CPU VMs (gw-1/2, guard-1/2/3 [N2 CPU guards], edge-2, cp-2, lg-2, prov-2) while waiting for RC1 / PROVEN; restart + preflight + direct floor check before measuring
+2026-09-24T09:07:48Z controller (B23): rv-r2-chaos-pg activation-policy NEVER (stopped) while waiting for RC1/PROVEN; restore ALWAYS ~5 min before use. rv-r2-chaos-kv and -redis stay up (cannot be stopped).
+
+2026-09-24T09:10Z  Controller directives received (messages delayed up to ~50 min; bulletin is authoritative):
+  - Chaos set created by this lane (done 07:21Z; resource-ledger.jsonl). DB `rv2`, user `rv2app` (password generated
+    locally, secrets/chaos_pg.pass mode 600, sent to the Cloud SQL Admin API in a request-body file; no Secret Manager
+    secret, no IAM change). Delete all three at the end unless told otherwise.
+  - Store-failover fault runs against BOTH Valkey (simulate-maintenance, planned) and Redis STANDARD_HA
+    (failover --data-protection-mode=force-data-loss): f1 + f1b in part1.sh.
+  - Partitions use host iptables; SEPARATE FINDING to record: a VPC egress-deny rule is not a partition (stateful;
+    established pooled connections survive). Plan: one measured f5 `vpc` instance on the RC showing the SUT keeps
+    serving through the rule (plus r2-infra's drill evidence).
+  - Dev dry runs used dev tarball dcf4ac30 (06:20Z copy); the controller's B21 names a4858cb8 (07:20Z) with 3 known
+    bugs. Dev observations are "dev findings (fixed in RCn)", never claims.
+  - RC re-tests (controller): D2 partition-OOM + D1 500 are RC1 must-fixes -> measured partition at 30 s, 60 s and
+    120 s with per-worker RSS, worker survival, status mix during the gap, recovery after heal, audit completeness;
+    owner-death 403 (re-dispatch or retryable 503) and audit loss (local spool + replay) are RC2 fixes.
+  - Measured fleet: c4-highcpu-16 gateways + g2-standard-4 guards (L4 via l4-handover pool, then g2-standard-8);
+    if L4 stays out: store/partition/gateway/provider faults with CPU owners at a per-gateway load matched to the GPU
+    fleet, labelled; f3 = PENDING-L4 (never faked on CPU). Harness/edge/cp stay on the validated C4D copies.
+
+2026-09-24T09:20Z  Measured Part-1 fleet plan (fleet_measured.sh, run at the PROVEN greenlight, not before):
+  gateways 2 x c4-highcpu-16 in asia-south1-c and asia-south1-b (C4 quota 800 granted, B26); guards 3 x g2-standard-4
+  from the r2-infra L4 pool via l4_slot.sh (slot files r2chaos-1/-2 -> asia-south1-c, r2chaos-3 -> asia-south1-b,
+  default affinity ANY per B16); C4D harness/edge/cp (edge/cp/lg/prov in asia-south1-c) resumed per B23 with a floor
+  check; Cloud SQL back to ALWAYS + `control verify` (schema/seed intact) before canaries. Per-slot .recall files are
+  watched by the persistent bulletin monitor. GUARD_FALLBACK=cpu path kept for a stock-out (labelled; f3 PENDING-L4).
+
+2026-09-24T10:45Z  Bulletins B27-B30: RC1 cut (manifest 00259851, tarball rc1/rvproto2-rc1.tar.gz sha256 7b669712)
+  and functionally PASSED, but D2 (partition OOM) and D1 (500) are listed as RC1 gaps fixed in RC2 -> no chaos on RC1
+  (B1/B27: r2chaos waits for PROVEN = RC2/RC2.1; RC2 tarball ~11:45Z, functional PASS ~13:00Z). Plan: as soon as the
+  RC2 tarball is frozen, smoke the D2/D1 fixes on the dry-run fleet (1 partition of 45 s, CPU owners, low load; dev-style,
+  not a claim) to give proto-builder early feedback before PROVEN. B29(d): r2chaos takes its 3 pool slots FIRST at PROVEN,
+  zone b preferred -> guards b,b,c and gateways b + c (fleet_measured.sh updated).
+
+2026-09-24T12:10Z  GATE OPEN (B33): PROVEN = RC2, tarball rvproto2-rc2.tar.gz sha256 eb9d4da2...; manifest re-verified locally
+  (6093c8dd..., notes/rc2-manifest-verify.txt). rv-r2-chaos-pg -> ACTIVATION ALWAYS (RUNNABLE 12:14Z).
+  Measured fleet: rv-r2chaos-gw-1 c4-highcpu-16 asia-south1-b (10.160.0.31), gw-2 c4-highcpu-16 asia-south1-c
+  (10.160.0.36); L4 guards via l4-handover (B29(d), b,b,c): r2chaos-1 -> guard-1 b (10.160.0.28), r2chaos-2 -> guard-3
+  b (10.160.0.30), r2chaos-3 -> guard-2 c (10.160.0.45); released 12:13:03-12:13:28Z, created 12:13:19-12:13:38Z.
+  n2 dry-run gateways/guards deleted. C4D harness/edge/cp resumed.
+  Script fixes: fleet_measured.sh bare `wait` reaped the Cloud SQL patch job -> `wait $sqlp` exit 127 (fixed; FROM=deploy
+  resume). RC tarball layout differs from dev (tree at the root, no vendor/): USAGE.md "unpack to ~/rv2/rvproto" +
+  vendor from the dev tarball (identical to devvm/rvproto2-dev.tar.gz vendor/, 11 files, GATEWAY_V2_COMMIT 52a584e9)
+  -> node_setup.sh handles both layouts; vendor shipped as sut-artifacts/vendor-gateway_v2.tar.gz (2c3a92c7...).
+  New instruments for RC2's declared semantics: tools/hdrprobe.py (Retry-After / retry-after-ms / Connection per
+  status+code, 5/s per gateway + edge, fresh connection per request), sut/preflight.sh per run (build manifest on every
+  SUT VM == PROVEN, B5 RemoveIPC + shm segments + /readyz after logout polled from the loadgen, units + NRestarts,
+  GPU/owners, chrony offsets < 2 ms, control verify), analyzer/matrix criteria: Retry-After on declared 503s + no 500,
+  recovery <= 5 s after heal (partition) / after the store's own recovery (failover), workers survived + RSS growth
+  <= 64 MB. bounds.json += ks_stale_ms 5000, rehydrate_bound_ms 2100, gap_retry_after_s 2,
+  partition_recovery_after_heal_s 5 (USAGE.md s4 RC2).
+
+2026-09-24T12:24Z  RC2 deployed on the measured fleet (FROM=deploy): node setup ok on all 6 SUT VMs; control verify after the
+  Cloud SQL stop/start: plan/key/ks/budget ok (Postgres schema + seed intact); canaries re-written; owners listening
+  12:23:45-47Z (TRT engines built by ExecStartPre), gateways ready 12:23:49-50Z (12/12 workers each).
+  Edge still pointed at the deleted dry-run gateways -> edge_set.sh measured-rc2 (10.160.0.31:8400, 10.160.0.36:8400);
+  fleet_measured.sh now does this step itself.
+2026-09-24T12:27Z  Floor check m-floor-direct-600 (C4D harness DIRECT, 600 RPS HEADLINE + 2 x 20/s probe streams, 30 s ramp,
+  60 s warm-up, 180 s measured): 108,000 qualified, C4 p99 0.377 ms; harness analyze.py: 0 schedule drops, lateness
+  p99 0.072 ms / max 0.63 ms, loadgen CPU max 16.8% (c4d-highcpu-8), provider sched err p99 0.12 ms, CPU max 10.9%,
+  153,000/153,000 recorded, all joined -> PASS; the harness floor covers every chaos load level <= 600 RPS.
+2026-09-24T12:28Z  Preflight (sut/preflight.sh) 35/35 PASS: manifest 6093c8dd on all 6 SUT VMs, vendor 52a584e9, B5
+  RemoveIPC=no + shm segments unchanged + /readyz 20/20 from the loadgen after logout, units active NRestarts 0,
+  3 x NVIDIA L4 with 1 owner each, chrony offsets <= 7 us, control verify ok (notes/preflight-measured-1228Z/).
+
+2026-09-24T12:39Z  SMOKE m-smoke-f5-45 (RC2, measured fleet, 150 RPS, one 45 s iptables gateway<->store partition; label SMOKE):
+  D2 fixed at fleet scale: 24/24 workers survived, per-worker RSS growth max +1.6 MB (gw-1) / +3.2 MB (gw-2), NRestarts 0.
+  D1 fixed: 0 x 500 (main load + header probe). Header probe: Retry-After: 2 on 3,414/3,414 declared 503s. Last 200 at
+  +4.617 s (< ks_stale 5 s), 0 served past 5.5 s; errors ended ~1.7 s after heal (bound <= 5 s). FAIL_OPEN 0; canary
+  admits 0. Audit (known, RC3 spool): fault window 452 admitted w/o input record, 1,128 dispatched w/o output record.
+  OBSERVATION under investigation: 211 x 503 shared_state_unavailable from +0.15 s (before the declared 5 s RAM serving
+  window ends), almost all on gw-2 (zone c) from +0.15 s, gw-1 from +3 s. RC2 admission (admit/admission.py:58-65) does a
+  request-path store round trip when the worker's local budget lease (contract chunk 136,960 tokens) cannot cover the
+  request cost (len(body)//4 + max_tokens); a refill during an outage -> StoreError -> 503 shared_state_unavailable, and
+  the lease is left short, so every larger request on that worker fails until heal. Sampler (1 Hz /metrics.json of one
+  worker per gateway): gw-1 worker 3 lease 25,177 at -0.5 s -> 45 at +4.5 s, no refill until heal (+47.5 s). Why gw-2
+  failed from +0.15 s is still open. Instrument added: sampler --xmetrics (per-worker lease/rejections/routable from
+  every exporter at 1 Hz). Header-probe artefact fixed: it outlived the provider in chaos_finish (617 x 502
+  provider_error after the load ended) -> now stopped with the load; its whole-run summary is limited to the load window.
+2026-09-24T12:42Z  B37 (PHASE-F PASS 1) adds r2chaos Part 1: SP5 (f3 silent owner death: iptables DROP :7070 in+out on one
+  guard, + 36-worker variants f3s36/f3a36 via WEB_CONCURRENCY), SP3d (sp3d/sp3d.sh: 4 x 2,000-token SSE for org K3, kill
+  switch at +2 s), SP8 (faults/f8_owner_store.sh: guards<->store partition 60 s, fresh gateway process on gw-1:8500 at
+  +5 s, probed 10 Hz readyz + 5/s chat), M2 (m2_reconcile.py on f3/f5 runs), M4b (m4b_signals.py on f3/f4 runs), M7
+  (faults/m7_shm.sh: delete rv2m-8400-* + rv2-node-8400.json on gw-2, observe 60 s, restart), E2-08
+  (faults/e208_sql_flush.sh: Cloud SQL failover + FLUSHALL of the chaos Valkey 1 s after Postgres is first seen down,
+  via tools/flush_when_pg_down.py; the spec's literal "+3 s" would precede the measured SQL outage onset (+4.65 s in the
+  dry run), so the flush is keyed to the observed outage and its offset recorded). SP5 variants run at the matrix load
+  level (not "at the per-guard knee") so the counts compare across variants.
+
+2026-09-24T13:30Z  B39 harness incident check: my runs never execute harness/deploy/step.sh, create_vms.sh or push_bin.sh.
+  Runs live at the edit times: m-ladder-600 (13:04-13:10Z; step.sh edit 13:07:55Z, not used) and m-ladder-750
+  (13:15-13:23Z; lib.sh edit 13:19:55Z: lib.sh is sourced at script start, later invocations got the new copy). Both
+  completed with analysis; exit codes 0; no "syntax error" in any console; ~/rv/bin binaries untouched. No re-run needed.
+  Frozen a private copy of harness/deploy at 643e0f0 (clean tree) as scripts/harness-deploy/ (FROZEN_FROM.txt,
+  SHA256SUMS; one local patch: ledger() uses its own ledger.py); env.sh/chaos_finish/fleet_* now use it ($HD).
+2026-09-24T13:29Z  Ladder on the measured fleet (RC2 defaults, 2 x c4-highcpu-16 gw + 3 x L4, HEADLINE 70/30 SSE/JSON,
+  -sample-mod 1, 30 s ramp + 60 s warm-up + 180 s measured, probes off): 300 PASS 11.82 ms; 400 PASS 11.86; 500 PASS
+  13.13; 600 PASS 14.29; 675 PASS 16.14; 750 FAIL (3.21% 503 overloaded = owner CoDel sheds, 1 posture; guards at
+  ~250 req/s each, gpu_utilization 0.84, owner queue avg 3.6 ms). Knee in [675, 750) -> chaos level 450 RPS
+  (60-67% of the knee range); E2-08 at 50% of knee = 350 RPS. Harness floor re-validated at 1,100 RPS direct
+  (m-floor-direct-1100: 198,000 qualified, C4 p99 0.346 ms, 0 drops, lateness p99 0.073 ms, loadgen CPU max 26.5%).
+  A load LEVEL, not a capacity claim.
+
+2026-09-24T13:42Z  B40/B41 audit hygiene on the own chaos store (rv-r2-chaos-kv): at 13:38Z used_memory 5.48G / maxmemory
+  10.40G (volatile-lru), evicted_keys 0, rv:audit:org-a at its 2,000,000 cap (RV_AUDIT_STREAM_MAXLEN), org-c 6,422.
+  The 2 M cap also means a run longer than ~2 M records (f1 at 450 RPS ~3.6 M) would lose its own oldest records before
+  a post-run dump. Fix from the next run on: tools/audit_drain.py runs during every SUT run (controller, unpartitioned):
+  every 30 s XRANGE from the last exported id -> RUN/audit/audit.jsonl (same slim format as audit_dump.py), then
+  XTRIM MINID ~ <last id> LIMIT 10000 in a loop (never exact/unbounded); SIGTERM = final drain (collect hook); then the
+  collect hook UNLINKs rv:audit:* (B40). Tested on a throwaway stream rv:drtest:a in the chaos store: 15,000/15,000
+  exported (12,000 before + 3,000 during), trimmed to 0, unlinked. m-f5-30 (running on the old snapshot) is dumped by
+  time range as before; the next run's drainer trims its records after that dump.

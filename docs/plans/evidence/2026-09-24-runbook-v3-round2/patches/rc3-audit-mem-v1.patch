@@ -1,0 +1,784 @@
+diff -ruN '--exclude=.venv' '--exclude=__pycache__' '--exclude=.hypothesis' '--exclude=.pytest_cache' '--exclude=.import_linter_cache' '--exclude=.run' '--exclude=*.pyc' base/rvproto/audit/sink.py work/rvproto/audit/sink.py
+--- base/rvproto/audit/sink.py	2026-09-23 15:33:42.000000000 +0530
++++ work/rvproto/audit/sink.py	2026-09-24 18:30:21.419542321 +0530
+@@ -4,12 +4,21 @@
+ full queue the record is DROPPED AND COUNTED; audit_completeness_ratio =
+ written / produced is exported, never assumed 1. The queue bound is the
+ contract's queue_depth() at the writer's measured drain rate.
++
++Store memory (H1/SP7): audit streams never expire, so they are bounded by a memory budget for ALL of them
++(runtime/storemem.py: RV_AUDIT_STORE_BUDGET_MB, else RV_AUDIT_STORE_FRACTION x the store's maxmemory). Each batch
++XADDs, then XTRIMs every stream it touched to MAXLEN ~ budget / (tenants x store bytes per record), capped by
++RV_AUDIT_STREAM_MAXLEN; XTRIM returns what it removed, so trimming is counted exactly (audit_trimmed_records).
++Store bytes per record are tracked PER ORG (payload EWMA x 1.10 + 256 B, above what Valkey 8 / Redis 7 measure
++for a stream entry: payload + ~220 B), so each org's stream holds an equal byte share whatever its record size.
++Worker 0 also runs the store memory sampler beside the writer.
+ """
+ 
+ from __future__ import annotations
+ 
+ import asyncio
+ import time
++from collections.abc import Callable
+ 
+ import orjson
+ import redis.asyncio as aioredis
+@@ -17,21 +26,46 @@
+ from rvproto.domain.ports import DecisionRecord
+ from rvproto.runtime.metrics import Registry
+ from rvproto.runtime.store import K_AUDIT_PREFIX, StoreError
++from rvproto.runtime.storemem import MemorySampler
+ 
+ _CALIBRATION_RECORDS = 2000  # sample size for the drain-rate measurement
+ _CALIBRATION_STREAM = K_AUDIT_PREFIX + "_calibration"
++_ENTRY_FACTOR, _ENTRY_BYTES = 1.10, 256  # store bytes per stream entry, conservatively: payload x 1.10 + 256
++_SIZE_ALPHA = 0.02  # EWMA weight of one record's payload size
++_MIN_RETAIN = 100  # a per-org MAXLEN never below this (XTRIM ~ removes whole stream nodes)
+ 
+ 
+ class AuditSink:
+-    def __init__(self, r: aioredis.Redis, metrics: Registry, *, stream_maxlen: int) -> None:
++    def __init__(self, r: aioredis.Redis, metrics: Registry, *, stream_maxlen: int,
++                 org_count: Callable[[], int] | None = None) -> None:
+         self.r = r
+         self.metrics = metrics
+-        self.maxlen = stream_maxlen
++        self.maxlen = stream_maxlen  # per-org upper bound (RV_AUDIT_STREAM_MAXLEN)
++        self.org_count = org_count or (lambda: 1)  # tenants sharing the budget (the plan snapshot's orgs)
++        self.budget_bytes: int | None = None
++        self.payload_ewma: dict[str, float] = {}  # org -> payload bytes EWMA (bounded by the tenants)
++        self.sampler: MemorySampler | None = None  # worker 0 only
+         self.q: asyncio.Queue[tuple[int, DecisionRecord]] | None = None
+         self.produced = 0
+         self.dropped = 0
+         self.written = 0
+         self.failed = 0
++        self.trimmed = 0
++
++    def set_budget(self, budget_bytes: int | None, source: str = "") -> None:
++        """Bytes ALL audit streams may use in the store (None: RV_AUDIT_STREAM_MAXLEN only)."""
++        self.budget_bytes = budget_bytes
++        self.metrics.set("audit_budget_bytes", float(budget_bytes or 0))
++
++    def bytes_per_record(self, org: str) -> float:
++        return self.payload_ewma.get(org, 0.0) * _ENTRY_FACTOR + _ENTRY_BYTES
++
++    def stream_maxlen(self, org: str) -> int:
++        """The MAXLEN org's stream is trimmed to: an equal byte share of the budget per tenant."""
++        if self.budget_bytes is None or org not in self.payload_ewma:
++            return self.maxlen
++        per_org = self.budget_bytes / (max(1, self.org_count()) * self.bytes_per_record(org))
++        return max(_MIN_RETAIN, min(self.maxlen, int(per_org)))
+ 
+     async def calibrate(self) -> float:
+         """Measured records/s of one pipelined batch against the real store."""
+@@ -75,27 +109,51 @@
+         return self.written / self.produced if self.produced else 1.0
+ 
+     async def run(self) -> None:
++        """The batched writer; on worker 0 the store memory sampler runs beside it (cancelled with it)."""
+         assert self.q is not None
+-        q = self.q
++        if self.sampler is None:
++            return await self._write_loop(self.q)
++        async with asyncio.TaskGroup() as tg:
++            tg.create_task(self.sampler.run())
++            tg.create_task(self._write_loop(self.q))
++        return None
++
++    async def _write_loop(self, q: asyncio.Queue[tuple[int, DecisionRecord]]) -> None:
+         while True:
+             first = await q.get()
+             batch = [first[1]]
+             while not q.empty():
+                 batch.append(q.get_nowait()[1])
+-            pipe = self.r.pipeline(transaction=False)
+-            for rec in batch:
+-                pipe.xadd(K_AUDIT_PREFIX + rec.org_id, {"r": orjson.dumps(rec)},
+-                          maxlen=self.maxlen, approximate=True)
+-            t0 = time.perf_counter_ns()
+-            try:
+-                await pipe.execute()
+-                self.written += len(batch)
+-                self.metrics.inc("audit_written", len(batch))
+-            except StoreError:
+-                self.failed += len(batch)
+-                self.metrics.inc("audit_write_failed", len(batch))
+-            self.metrics.observe("audit_batch_write_ns", time.perf_counter_ns() - t0)
+-            self.metrics.set("audit_completeness_ratio", self.completeness())
++            await self._write(batch)
++
++    async def _write(self, batch: list[DecisionRecord]) -> None:
++        pipe = self.r.pipeline(transaction=False)
++        orgs: dict[str, None] = {}
++        for rec in batch:
++            payload = orjson.dumps(rec)
++            ewma = self.payload_ewma.get(rec.org_id)
++            self.payload_ewma[rec.org_id] = len(payload) if ewma is None else ewma + (len(payload) - ewma) * _SIZE_ALPHA
++            pipe.xadd(K_AUDIT_PREFIX + rec.org_id, {"r": payload})
++            orgs[rec.org_id] = None
++        maxlens = {org: self.stream_maxlen(org) for org in orgs}
++        for org, maxlen in maxlens.items():  # XTRIM (not XADD MAXLEN): it answers how many records it removed
++            pipe.xtrim(K_AUDIT_PREFIX + org, maxlen=maxlen, approximate=True)
++        t0 = time.perf_counter_ns()
++        try:
++            res = await pipe.execute()
++            self.written += len(batch)
++            self.metrics.inc("audit_written", len(batch))
++            trimmed = sum(int(x) for x in res[len(batch):])
++            if trimmed:
++                self.trimmed += trimmed
++                self.metrics.inc("audit_trimmed_records", trimmed)
++        except StoreError:
++            self.failed += len(batch)
++            self.metrics.inc("audit_write_failed", len(batch))
++        self.metrics.observe("audit_batch_write_ns", time.perf_counter_ns() - t0)
++        self.metrics.set("audit_completeness_ratio", self.completeness())
++        self.metrics.set("audit_stream_maxlen", min(maxlens.values()))  # the most constrained stream of the batch
++        self.metrics.set("audit_bytes_per_record", max(self.bytes_per_record(o) for o in orgs))
+ 
+     async def drain(self, timeout_s: float) -> None:
+         if self.q is None:
+diff -ruN '--exclude=.venv' '--exclude=__pycache__' '--exclude=.hypothesis' '--exclude=.pytest_cache' '--exclude=.import_linter_cache' '--exclude=.run' '--exclude=*.pyc' base/rvproto/edge/state.py work/rvproto/edge/state.py
+--- base/rvproto/edge/state.py	2026-09-24 16:00:19.000000000 +0530
++++ work/rvproto/edge/state.py	2026-09-24 18:23:31.058317237 +0530
+@@ -37,6 +37,7 @@
+ from rvproto.runtime.metrics import Registry
+ from rvproto.runtime.push import PushKnobs
+ from rvproto.runtime.shm_metrics import make_registry, metrics_tag
++from rvproto.runtime import storemem
+ from rvproto.runtime.store import StoreError, connect, connect_background
+ 
+ if TYPE_CHECKING:
+@@ -145,7 +146,7 @@
+     sem = SemanticDetector(s.guard_tokenizer, guard, window=s.window_tokens,
+                            overlap=s.window_overlap, max_windows=s.max_windows,
+                            model_hash=guard.model_hash)
+-    audit = AuditSink(redis_bg, metrics, stream_maxlen=s.audit_stream_maxlen)
++    audit = await audit_sink(s, metrics, redis_bg, plans)
+     audit_rate = await audit.calibrate()
+     bounds = rc.derive(contract, s, audit_rate=audit_rate)
+     assert bounds.audit_queue is not None
+@@ -177,6 +178,21 @@
+     return st
+ 
+ 
++async def audit_sink(s: Settings, metrics: Registry, redis_bg: aioredis.Redis,
++                     plans: PlanSnapshot | VersionedPlanSnapshot) -> AuditSink:
++    """H1/SP7: check the store's memory settings BEFORE the first write (ERROR + store_policy_unsafe=1 for an evicting
++    policy), then bound every audit stream by one memory budget shared by the tenants the plan snapshot knows.
++    Worker 0 samples the store's memory beside the writer and re-derives the budget if the store is resized."""
++    knobs = s.v2.audit
++    audit = AuditSink(redis_bg, metrics, stream_maxlen=s.audit_stream_maxlen, org_count=lambda: len(plans.versions()))
++    mem = await storemem.startup_check(redis_bg, metrics, knobs, worker=s.worker_index)
++    audit.set_budget(*storemem.audit_budget(knobs, mem))
++    if s.worker_index == 0:
++        audit.sampler = storemem.MemorySampler(
++            redis_bg, metrics, knobs, on_memory=lambda m: audit.set_budget(*storemem.audit_budget(knobs, m)))
++    return audit
++
++
+ async def start_guard(st: State) -> None:
+     """Warm the guard (TRT engine build can take minutes), then derive guard bounds."""
+     try:
+diff -ruN '--exclude=.venv' '--exclude=__pycache__' '--exclude=.hypothesis' '--exclude=.pytest_cache' '--exclude=.import_linter_cache' '--exclude=.run' '--exclude=*.pyc' base/rvproto/runtime/config.py work/rvproto/runtime/config.py
+--- base/rvproto/runtime/config.py	2026-09-24 15:43:03.000000000 +0530
++++ work/rvproto/runtime/config.py	2026-09-24 18:19:32.659738948 +0530
+@@ -41,7 +41,7 @@
+     ("RV_KS_REFRESH_MS", "500"),
+     ("RV_KS_STALE_MS", "5000"),
+     ("RV_PLAN_RECONCILE_MS", "1000"),
+-    ("RV_AUDIT_STREAM_MAXLEN", "2000000"),
++    ("RV_AUDIT_STREAM_MAXLEN", "2000000"),  # per-org UPPER bound; the effective one derives from the audit memory budget
+     ("RV_INJECT_PREDISPATCH_MS", "0"),
+     ("RV_INJECT_HOLD", ""),  # "<chunk_index>:<ms>"
+     ("RV_ADMIN_HOOKS", "0"),
+diff -ruN '--exclude=.venv' '--exclude=__pycache__' '--exclude=.hypothesis' '--exclude=.pytest_cache' '--exclude=.import_linter_cache' '--exclude=.run' '--exclude=*.pyc' base/rvproto/runtime/config_v2.py work/rvproto/runtime/config_v2.py
+--- base/rvproto/runtime/config_v2.py	2026-09-24 16:00:19.000000000 +0530
++++ work/rvproto/runtime/config_v2.py	2026-09-24 18:19:26.312414060 +0530
+@@ -75,6 +75,10 @@
+     ("RV_CONN_MAX_REQUESTS", "0"),  # `connection: close` on the response of the Nth request; 0 = off
+     ("RV_CONN_MAX_AGE_S", "0"),  # ... of the first request after the connection is T s old; 0 = off
+     ("RV_KEEPALIVE_S", "75"),  # uvicorn keep-alive timeout (serve.py)
++    # audit memory (H1/SP7: audit streams never expire; guard registrations are the only TTL keys): runtime/storemem.py
++    ("RV_AUDIT_STORE_BUDGET_MB", ""),  # store memory ALL audit streams may use; empty => FRACTION x the store's maxmemory
++    ("RV_AUDIT_STORE_FRACTION", "0.5"),  # share of maxmemory for audit when no explicit budget (the rest: state, registrations)
++    ("RV_STORE_MEMORY_SAMPLE_S", "10"),  # store INFO memory/stats sampling period for the gauges (worker 0, off the request path)
+ )
+ 
+ 
+@@ -188,6 +192,13 @@
+ 
+ 
+ @dataclass(frozen=True, slots=True)
++class AuditMemory:
++    budget_mb: float | None  # None: derived from the store's maxmemory
++    fraction: float
++    sample_s: float
++
++
++@dataclass(frozen=True, slots=True)
+ class V2:
+     c38: LoopIsolation
+     c10: Admission
+@@ -196,6 +207,7 @@
+     signals: Signals
+     store: StoreLinks
+     edge: EdgeConn
++    audit: AuditMemory
+ 
+ 
+ def load_v2(get: dict[str, str], *, topology: str, static_addrs: bool) -> V2:
+@@ -250,7 +262,20 @@
+                     keepalive_s=float(get["RV_KEEPALIVE_S"]))
+     if edge.max_requests < 0 or edge.max_age_s < 0:
+         raise ValueError("RV_CONN_MAX_REQUESTS / RV_CONN_MAX_AGE_S must be >= 0 (0 = off)")
+-    return V2(c38, c10, c43, c36, signals, _store_links(get), edge)
++    return V2(c38, c10, c43, c36, signals, _store_links(get), edge, _audit_memory(get))
++
++
++def _audit_memory(get: dict[str, str]) -> AuditMemory:
++    raw = get["RV_AUDIT_STORE_BUDGET_MB"].strip()
++    a = AuditMemory(budget_mb=float(raw) if raw else None, fraction=float(get["RV_AUDIT_STORE_FRACTION"]),
++                    sample_s=float(get["RV_STORE_MEMORY_SAMPLE_S"]))
++    if a.budget_mb is not None and a.budget_mb <= 0:
++        raise ValueError("RV_AUDIT_STORE_BUDGET_MB must be positive (empty = derived from the store's maxmemory)")
++    if not 0 < a.fraction <= 0.9:  # >= 10% of maxmemory stays for durable state and guard registrations
++        raise ValueError("RV_AUDIT_STORE_FRACTION must be in (0, 0.9]")
++    if a.sample_s <= 0:
++        raise ValueError("RV_STORE_MEMORY_SAMPLE_S must be positive")
++    return a
+ 
+ 
+ def _admission(get: dict[str, str]) -> Admission:
+@@ -321,7 +346,7 @@
+ 
+ def describe_v2(v: V2) -> dict[str, object]:
+     out: dict[str, object] = {}
+-    for group in ("c38", "c10", "c43", "c36", "signals", "store", "edge"):
++    for group in ("c38", "c10", "c43", "c36", "signals", "store", "edge", "audit"):
+         g = getattr(v, group)
+         d = {f: getattr(g, f) for f in g.__slots__}  # type: ignore[attr-defined]
+         if group == "c36":
+diff -ruN '--exclude=.venv' '--exclude=__pycache__' '--exclude=.hypothesis' '--exclude=.pytest_cache' '--exclude=.import_linter_cache' '--exclude=.run' '--exclude=*.pyc' base/rvproto/runtime/storemem.py work/rvproto/runtime/storemem.py
+--- base/rvproto/runtime/storemem.py	1970-01-01 05:30:00.000000000 +0530
++++ work/rvproto/runtime/storemem.py	2026-09-24 18:37:19.218128137 +0530
+@@ -0,0 +1,146 @@
++"""Store memory safety (H1/SP7): the startup self-check, the store memory gauges and the audit memory budget.
++
++Audit streams never expire, and the guard-owner registrations (SET PX, discovery) are the ONLY keys with a TTL.
++Under an evicting maxmemory-policy (volatile-*: Memorystore's default is volatile-lru; allkeys-*: evicts durable
++state too) a store that audit fills evicts exactly those registrations -- discovery 0/N, new gateways never ready
++-- and then refuses every write: audit, new lease counters, and the control plane's publishes, so a kill switch
++or a key revocation never reaches the gateways, which keep serving the old, still-valid snapshot.
++Defences: audit/sink.py keeps every audit stream inside a memory budget (this module derives it); every worker
++checks the policy at startup (ERROR log + store_policy_unsafe=1 for any evicting policy: run noeviction plus the
++bound); worker 0 samples INFO memory/stats every RV_STORE_MEMORY_SAMPLE_S off the request path and exports
++store_used_memory_bytes, store_maxmemory_bytes, store_memory_used_ratio, store_evicted_keys, store_policy_unsafe.
++INFO works on Memorystore, where CONFIG is restricted; CONFIG GET is only a fallback for the policy.
++"""
++
++from __future__ import annotations
++
++import asyncio
++import json
++import sys
++import time
++from collections.abc import Callable
++from dataclasses import dataclass
++from typing import Any
++
++from rvproto.runtime.config_v2 import AuditMemory
++from rvproto.runtime.metrics import Registry
++from rvproto.runtime.store import StoreError
++
++_MIB = 1 << 20
++
++
++@dataclass(frozen=True, slots=True)
++class StoreMemory:
++    used: int
++    maxmemory: int  # 0 = no limit
++    policy: str
++    evicted_keys: int
++
++
++def policy_unsafe(policy: str) -> bool:
++    """Any evicting policy can remove what the gateways need: volatile-* the registrations, allkeys-* also state."""
++    return policy.startswith(("volatile-", "allkeys-"))
++
++
++def _log(event: str, **kw: object) -> None:
++    sys.stderr.write(json.dumps({"event": event, "t": time.time(), **kw}, default=str) + "\n")
++    sys.stderr.flush()
++
++
++async def _config_policy(r: Any) -> str:
++    try:
++        got = await r.config_get("maxmemory-policy")
++    except StoreError:  # e.g. Memorystore: CONFIG is not available to clients
++        return ""
++    v = got.get("maxmemory-policy", got.get(b"maxmemory-policy", "")) if isinstance(got, dict) else ""
++    return v.decode() if isinstance(v, bytes) else str(v)
++
++
++async def read_memory(r: Any) -> StoreMemory:
++    """INFO memory + INFO stats (two small round trips). Raises StoreError."""
++    mem = await r.info("memory")
++    stats = await r.info("stats")
++    policy = str(mem.get("maxmemory_policy") or "") or await _config_policy(r)
++    return StoreMemory(used=int(mem.get("used_memory", 0)), maxmemory=int(mem.get("maxmemory", 0)),
++                       policy=policy, evicted_keys=int(stats.get("evicted_keys", 0)))
++
++
++def audit_budget(knobs: AuditMemory, mem: StoreMemory | None) -> tuple[int | None, str]:
++    """(bytes all audit streams may use, where it came from); None = unknown (RV_AUDIT_STREAM_MAXLEN only)."""
++    if knobs.budget_mb is not None:
++        return int(knobs.budget_mb * _MIB), "RV_AUDIT_STORE_BUDGET_MB"
++    if mem is not None and mem.maxmemory > 0:
++        return int(mem.maxmemory * knobs.fraction), f"RV_AUDIT_STORE_FRACTION={knobs.fraction} x maxmemory"
++    return None, "none (store maxmemory unknown or 0): audit bounded by RV_AUDIT_STREAM_MAXLEN only"
++
++
++def publish(metrics: Registry, mem: StoreMemory) -> None:
++    metrics.set("store_used_memory_bytes", mem.used)
++    metrics.set("store_maxmemory_bytes", mem.maxmemory)
++    metrics.set("store_memory_used_ratio", mem.used / mem.maxmemory if mem.maxmemory > 0 else 0.0)
++    metrics.set("store_evicted_keys", mem.evicted_keys)
++    metrics.set("store_policy_unsafe", 1.0 if policy_unsafe(mem.policy) else 0.0)
++
++
++async def startup_check(r: Any, metrics: Registry, knobs: AuditMemory, *, worker: int) -> StoreMemory | None:
++    """Every worker at startup: log the store's memory settings; ERROR for an evicting policy. Never fatal."""
++    try:
++        mem = await read_memory(r)
++    except StoreError as exc:
++        _log("store_memory_check_failed", worker=worker, error=f"{type(exc).__name__}: {exc}"[:300])
++        return None
++    publish(metrics, mem)
++    budget, source = audit_budget(knobs, mem)
++    _log("store_memory_check", worker=worker, used_memory=mem.used, maxmemory=mem.maxmemory,
++         maxmemory_policy=mem.policy, evicted_keys=mem.evicted_keys, audit_budget_bytes=budget, audit_budget=source)
++    if policy_unsafe(mem.policy):
++        _log("store_policy_unsafe", severity="ERROR", worker=worker, maxmemory_policy=mem.policy,
++             detail="an evicting maxmemory-policy removes the guard-owner registrations (the only TTL keys) first "
++                    "and, once full, refuses the control plane's publishes: set maxmemory-policy noeviction and keep "
++                    "audit inside RV_AUDIT_STORE_BUDGET_MB (store_policy_unsafe=1)")
++    if mem.maxmemory == 0:
++        _log("store_memory_unbounded", severity="WARNING", worker=worker, detail="store maxmemory is 0 (no limit): "
++             "set a limit and noeviction, or RV_AUDIT_STORE_BUDGET_MB, so audit cannot grow without bound")
++    elif budget is not None and budget > mem.maxmemory * 0.9:
++        _log("audit_budget_exceeds_store", severity="ERROR", worker=worker, audit_budget_bytes=budget,
++             maxmemory=mem.maxmemory, detail="RV_AUDIT_STORE_BUDGET_MB leaves < 10% of maxmemory for durable state "
++             "and guard registrations")
++    return mem
++
++
++class MemorySampler:
++    """INFO memory/stats every sample_s (worker 0, off the request path): gauges, and the fresh maxmemory to
++    on_memory (the audit budget follows a store resize)."""
++
++    def __init__(self, r: Any, metrics: Registry, knobs: AuditMemory,
++                 on_memory: Callable[[StoreMemory], None] | None = None) -> None:
++        self.r = r
++        self.metrics = metrics
++        self.period_s = knobs.sample_s
++        self.on_memory = on_memory
++        self._failing = False
++
++    async def sample_once(self) -> StoreMemory | None:
++        try:
++            mem = await read_memory(self.r)
++        except StoreError as exc:
++            self.metrics.inc("store_memory_sample_errors")
++            if not self._failing:  # log the first failure of a run of failures only
++                _log("store_memory_sample_failed", error=f"{type(exc).__name__}: {exc}"[:300])
++            self._failing = True
++            return None
++        self._failing = False
++        publish(self.metrics, mem)
++        if self.on_memory is not None:
++            self.on_memory(mem)
++        return mem
++
++    async def run(self) -> None:
++        while True:
++            await asyncio.sleep(self.period_s)
++            try:
++                await self.sample_once()
++            except asyncio.CancelledError:
++                raise
++            except Exception as exc:  # noqa: BLE001 - a sampler bug must never stop the audit writer beside it
++                _log("store_memory_sampler_error", error=f"{type(exc).__name__}: {exc}"[:300])
+diff -ruN '--exclude=.venv' '--exclude=__pycache__' '--exclude=.hypothesis' '--exclude=.pytest_cache' '--exclude=.import_linter_cache' '--exclude=.run' '--exclude=*.pyc' base/tests/functional/f_audit_mem.py work/tests/functional/f_audit_mem.py
+--- base/tests/functional/f_audit_mem.py	1970-01-01 05:30:00.000000000 +0530
++++ work/tests/functional/f_audit_mem.py	2026-09-24 18:25:53.424540631 +0530
+@@ -0,0 +1,173 @@
++"""F-AUDIT-MEM (H1/SP7): audit streams must not push the store to maxmemory, where an evicting policy evicts the
++guard-owner registrations (the only TTL keys) and every write -- the control plane's publishes included -- is
++refused, so a kill switch never reaches the gateways.
++
++  python tests/functional/f_audit_mem.py REDIS_URL [DRIVE_S=20]   (a PRIVATE store: it is FLUSHALLed)
++  env: RV_TREE (tree to test, default: the one holding this file), RV_AUDIT_* knobs are passed through
++
++Against a store with a small maxmemory (64 MB) and volatile-lru (Memorystore's default policy):
++- The gateway's own audit construction is used: edge.state.audit_sink() (startup check + memory budget + sampler)
++  where it exists, else the pre-fix AuditSink(stream_maxlen=RV_AUDIT_STREAM_MAXLEN).
++- 5 guard owners heartbeat as in production (discovery.OwnerRegistration: SET PX 3000 every 1 s).
++- Realistic 2.9 KB DecisionRecords (org-a / org-b) are emitted at 4,000/s for DRIVE_S: 3-4x maxmemory of audit.
++- Every 0.5 s: live registrations, a control-plane publish (writer.publish_safe), a lease refill (LEASE_LUA_V2),
++  INFO memory/stats.
++- At the end: a kill switch for org-b through the writer, then a gateway-style refresh.
++PASS: registrations 5/5 throughout, 0 evicted keys, 0 refused publishes / lease refills / audit writes,
++used_memory < maxmemory, and the kill switch is published and seen as engaged.
++Prints one JSON result line; exit 0 = PASS, 1 = FAIL.
++"""
++
++from __future__ import annotations
++
++import asyncio
++import json
++import os
++import sys
++import time
++import uuid
++from pathlib import Path
++from typing import Any
++
++import redis
++import redis.asyncio as aioredis
++import uvloop
++
++sys.path.insert(0, os.environ.get("RV_TREE") or str(Path(__file__).resolve().parents[2]))
++from rvproto.admit.quota import TokenLease  # noqa: E402
++from rvproto.admit.state_v2 import VersionedIdentity, VersionedKillSwitch  # noqa: E402
++from rvproto.audit.sink import AuditSink  # noqa: E402
++from rvproto.control.db import MemDB  # noqa: E402
++from rvproto.control.writer import StateWriter  # noqa: E402
++from rvproto.detect.guard.discovery import OwnerRegistration  # noqa: E402
++from rvproto.domain.ports import DecisionRecord  # noqa: E402
++from rvproto.plan.fixtures import tenants  # noqa: E402
++from rvproto.plan.snapshot_v2 import VersionedPlanSnapshot  # noqa: E402
++from rvproto.runtime import store  # noqa: E402
++from rvproto.runtime.config import load_settings  # noqa: E402
++from rvproto.runtime.metrics import Registry  # noqa: E402
++
++K = b"f-audit-mem-hmac-not-a-secret"
++OWNERS = 5
++RATE, TICK_S = 4000, 0.1
++
++
++class _Contract:
++    target_p99_ms = 20.0
++
++
++class _Bounds:
++    redis_connections = 16
++
++
++def record(org: str, i: int) -> DecisionRecord:
++    """A 2.9 KB input-phase record (the size r2 measured per audit record)."""
++    findings = tuple({"detector": f"det-{k}", "version": "2026.09", "category": "prompt_injection",
++                      "status": "executed", "confidence": 0.0123 * k, "spans": [[0, 17 * k, 17 * k + 43]],
++                      "evidence": f"{'e' * 131}{i:08d}"} for k in range(9))
++    return DecisionRecord(request_id=str(uuid.uuid4()), org_id=org, key_id=f"key-{org[-1]}-1", phase="input",
++                          plan_version=f"{org[-1]}-1", disposition="ALLOW", deciding_rules=("r-pii", "r-inj"),
++                          unavailable_detectors=(), findings=findings, verification="OK",
++                          stages="canon:E,det:E,sem:E,resolve:E,dispatch:E,out:E,audit:E", wall_ns=time.time_ns())
++
++
++def seed(url: str) -> StateWriter:
++    w = StateWriter(MemDB(), redis.Redis.from_url(url), K)
++    w.key_add("sk-rv-org-a-0001", "org-a", key_id="key-a-1", rate=1e6, burst=1e6)
++    for org, doc in tenants().items():
++        w.plan_set(doc)
++        w.budget_set(org, 10**12)
++        w.killswitch("org", org, False)
++    w.killswitch("global", None, False)
++    return w
++
++
++async def build_sink(url: str, m: Registry, plans: VersionedPlanSnapshot, r_bg: aioredis.Redis) -> AuditSink:
++    s = load_settings({**{k: v for k, v in os.environ.items() if k.startswith("RV_AUDIT_")},
++                       "RV_REDIS_URL": url, "RV_WORKER_INDEX": "0"})
++    try:
++        from rvproto.edge.state import audit_sink  # the gateway's own construction (with the fix)
++    except ImportError:
++        return AuditSink(r_bg, m, stream_maxlen=s.audit_stream_maxlen)  # pre-fix construction
++    return await audit_sink(s, m, r_bg, plans)
++
++
++async def probe(probe_r: aioredis.Redis, w: StateWriter, lease: TokenLease, ids: list[str]) -> dict[str, Any]:
++    alive = sum([bool(await probe_r.exists(store.K2_GUARD_OWNER + i)) for i in ids])
++    published = await asyncio.to_thread(w.publish_safe, "ks")
++    try:
++        await lease.refill("org-a", 1000)  # a counter DECRBY through LEASE_LUA_V2 (answered, not refused)
++        leased: bool | str = True
++    except store.StoreError as exc:
++        leased = f"{type(exc).__name__}: {exc}"[:80]
++    mem, stats = await probe_r.info("memory"), await probe_r.info("stats")
++    return {"t": round(time.monotonic(), 2), "regs_alive": alive, "publish_ok": published, "lease": leased,
++            "used_memory": int(mem["used_memory"]), "maxmemory": int(mem["maxmemory"]),
++            "policy": mem["maxmemory_policy"], "evicted_keys": int(stats["evicted_keys"])}
++
++
++async def main(url: str, drive_s: float) -> dict[str, Any]:
++    redis.Redis.from_url(url).flushall()
++    w = await asyncio.to_thread(seed, url)
++    m = Registry(0)
++    r_bg = store.connect_background(url, _Contract(), _Bounds())  # type: ignore[arg-type]
++    r_req = store.connect(url, _Contract(), _Bounds(), timeout_s=0.5)  # type: ignore[arg-type]
++    probe_r = aioredis.Redis.from_url(url)
++    plans = VersionedPlanSnapshot(r_bg, m, K, reconcile_ms=1000, stale_ms=5000)
++    await plans.load_all()
++    regs = [OwnerRegistration(url, advertise=(f"10.9.0.{i}", 7070), hello={"index": i, "pid": 1, "tokens_per_s": 1.0,
++                                                                           "model_hash": "m"}, ttl_ms=3000)
++            for i in range(OWNERS)]
++    tasks = [asyncio.create_task(g.run()) for g in regs]
++    sink = await build_sink(url, m, plans, r_bg)
++    sink.configure(20000)
++    tasks.append(asyncio.create_task(sink.run()))
++    lease = TokenLease(r_req, m, chunk_tokens=1000, durable=True)
++    await asyncio.sleep(1.5)  # first heartbeats
++    rows, n, t_end, next_probe = [], 0, time.monotonic() + drive_s, 0.0
++    ids = [g.id for g in regs]
++    while time.monotonic() < t_end:
++        for _ in range(int(RATE * TICK_S)):
++            sink.emit(record("org-a" if n % 2 else "org-b", n))
++            n += 1
++        if time.monotonic() >= next_probe:
++            rows.append(await probe(probe_r, w, lease, ids))
++            next_probe = time.monotonic() + 0.5
++        await asyncio.sleep(TICK_S)
++    await asyncio.sleep(1.0)
++    rows.append(await probe(probe_r, w, lease, ids))
++    await asyncio.to_thread(w.killswitch, "org", "org-b", True)  # the security consequence of H1
++    ks = VersionedKillSwitch(r_bg, m, K, refresh_ms=500, stale_ms=5000, identity=VersionedIdentity(r_bg, K))
++    try:
++        await ks.refresh_once()
++        enforced: bool | str = ks.org_killed("org-b")
++    except store.StoreError as exc:
++        enforced = f"refresh failed: {type(exc).__name__}"
++    xlen = {o: int(await probe_r.xlen(store.K_AUDIT_PREFIX + o)) for o in ("org-a", "org-b")}
++    for t in tasks:
++        t.cancel()
++    maxmem = rows[-1]["maxmemory"]
++    res = {
++        "tree": str(Path(sys.modules["rvproto"].__file__).resolve().parents[1]), "policy": rows[-1]["policy"], "maxmemory": maxmem, "records_emitted": n,
++        "audit_written": sink.written, "audit_write_failed": sink.failed, "audit_dropped": sink.dropped,
++        "audit_trimmed_records": getattr(sink, "trimmed", None), "xlen_end": xlen,
++        "regs_alive_min": min(r["regs_alive"] for r in rows), "evicted_keys_end": rows[-1]["evicted_keys"],
++        "publish_failures": sum(1 for r in rows if not r["publish_ok"]),
++        "lease_failures": sum(1 for r in rows if r["lease"] is not True),
++        "used_memory_max": max(r["used_memory"] for r in rows),
++        "killswitch_publish_status": (getattr(w, "last", None) or {}).get("status"), "killswitch_enforced": enforced,
++        "gauges": {k: v for k, v in m.gauge.items() if k.startswith(("store_", "audit_"))},
++        "counters": {k: v for k, v in m.count.items() if k.startswith(("audit_", "store_"))},
++        "timeline": rows,
++    }
++    res["PASS"] = (res["regs_alive_min"] == OWNERS and res["evicted_keys_end"] == 0 and res["publish_failures"] == 0
++                   and res["lease_failures"] == 0 and res["audit_write_failed"] == 0
++                   and res["used_memory_max"] < maxmem and res["killswitch_publish_status"] == "ok"
++                   and enforced is True)
++    return res
++
++
++if __name__ == "__main__":
++    out = uvloop.run(main(sys.argv[1], float(sys.argv[2]) if len(sys.argv) > 2 else 20.0))
++    print(json.dumps(out, default=str))
++    sys.exit(0 if out["PASS"] else 1)
+diff -ruN '--exclude=.venv' '--exclude=__pycache__' '--exclude=.hypothesis' '--exclude=.pytest_cache' '--exclude=.import_linter_cache' '--exclude=.run' '--exclude=*.pyc' base/tests/unit/test_audit_memory.py work/tests/unit/test_audit_memory.py
+--- base/tests/unit/test_audit_memory.py	1970-01-01 05:30:00.000000000 +0530
++++ work/tests/unit/test_audit_memory.py	2026-09-24 18:37:19.218190414 +0530
+@@ -0,0 +1,191 @@
++"""H1/SP7: audit streams inside a store memory budget, the startup policy check, the store memory gauges.
++
++The end-to-end proof against a real Valkey 8 (maxmemory 64 MB, volatile-lru: registrations evicted and publishes
++refused on RC2; neither with the budget) is tests/functional/f_audit_mem.py.
++"""
++
++from __future__ import annotations
++
++import asyncio
++import json
++from typing import Any
++
++import fakeredis
++import pytest
++from redis.exceptions import ConnectionError as RedisConnectionError
++
++from rvproto.audit.sink import AuditSink
++from rvproto.domain.ports import DecisionRecord
++from rvproto.runtime import storemem
++from rvproto.runtime.config import load_settings
++from rvproto.runtime.config_v2 import AuditMemory, describe_v2
++from rvproto.runtime.metrics import Registry
++from rvproto.runtime.store import K_AUDIT_PREFIX
++
++MIB = 1 << 20
++POLICIES = ("noeviction", "volatile-lru", "volatile-lfu", "volatile-random", "volatile-ttl", "allkeys-lru",
++            "allkeys-lfu", "allkeys-random")
++
++
++def _rec(org: str, i: int, pad: int = 600) -> DecisionRecord:
++    return DecisionRecord(request_id=f"rid-{i}", org_id=org, key_id="k", phase="input", plan_version="v1",
++                          disposition="ALLOW", deciding_rules=(), unavailable_detectors=(),
++                          findings=({"evidence": "e" * pad},), verification="OK", stages="canon:E", wall_ns=i)
++
++
++class _Store:
++    """INFO memory / INFO stats / CONFIG GET as a Valkey answers them (redis-py parses INFO into dicts)."""
++
++    def __init__(self, policy: str | None, used: int = 10 * MIB, maxmemory: int = 64 * MIB, evicted: int = 0,
++                 config: bool = True, down: bool = False) -> None:
++        self.policy, self.used, self.maxmemory, self.evicted = policy, used, maxmemory, evicted
++        self.config, self.down = config, down
++
++    async def info(self, section: str) -> dict[str, Any]:
++        if self.down:
++            raise RedisConnectionError("store unreachable")
++        if section == "memory":
++            d: dict[str, Any] = {"used_memory": self.used, "maxmemory": self.maxmemory}
++            if self.policy is not None:
++                d["maxmemory_policy"] = self.policy
++            return d
++        return {"evicted_keys": self.evicted}
++
++    async def config_get(self, name: str) -> dict[bytes, bytes]:
++        if not self.config:  # Memorystore: CONFIG is not available to clients
++            raise RedisConnectionError("unknown command 'CONFIG'")
++        return {b"maxmemory-policy": b"allkeys-lru"}
++
++
++def _knobs(budget_mb: float | None = None, fraction: float = 0.5, sample_s: float = 10.0) -> AuditMemory:
++    return AuditMemory(budget_mb=budget_mb, fraction=fraction, sample_s=sample_s)
++
++
++def test_every_evicting_policy_is_unsafe_and_only_noeviction_is_safe() -> None:
++    assert [p for p in POLICIES if not storemem.policy_unsafe(p)] == ["noeviction"]
++
++
++async def test_read_memory_uses_info_and_falls_back_to_config_get_for_the_policy() -> None:
++    mem = await storemem.read_memory(_Store("volatile-lru", used=5, maxmemory=9, evicted=3))
++    assert mem == storemem.StoreMemory(used=5, maxmemory=9, policy="volatile-lru", evicted_keys=3)
++    assert (await storemem.read_memory(_Store(None))).policy == "allkeys-lru"  # INFO without it: CONFIG GET
++    assert (await storemem.read_memory(_Store(None, config=False))).policy == ""  # neither: unknown, not unsafe
++
++
++def test_audit_budget_is_explicit_else_a_fraction_of_maxmemory_else_unknown() -> None:
++    mem = storemem.StoreMemory(used=0, maxmemory=100 * MIB, policy="noeviction", evicted_keys=0)
++    assert storemem.audit_budget(_knobs(budget_mb=8), mem)[0] == 8 * MIB
++    assert storemem.audit_budget(_knobs(fraction=0.25), mem)[0] == 25 * MIB
++    assert storemem.audit_budget(_knobs(), storemem.StoreMemory(0, 0, "noeviction", 0))[0] is None  # no limit
++    assert storemem.audit_budget(_knobs(), None)[0] is None  # store unreachable at startup
++
++
++@pytest.mark.parametrize("policy", POLICIES)
++async def test_startup_check_flags_an_evicting_policy_with_an_error_log_and_a_gauge(
++        policy: str, capsys: pytest.CaptureFixture[str]) -> None:
++    m = Registry(0)
++    mem = await storemem.startup_check(_Store(policy), m, _knobs(), worker=0)
++    assert mem is not None and mem.policy == policy
++    events = [json.loads(x) for x in capsys.readouterr().err.splitlines() if x.startswith("{")]
++    unsafe = [e for e in events if e["event"] == "store_policy_unsafe"]
++    assert m.gauge["store_policy_unsafe"] == (0.0 if policy == "noeviction" else 1.0)
++    assert (unsafe == []) == (policy == "noeviction")
++    assert all(e["severity"] == "ERROR" for e in unsafe)
++    assert m.gauge["store_memory_used_ratio"] == pytest.approx(10 / 64)
++
++
++async def test_startup_check_warns_about_an_unlimited_store_and_an_oversized_budget(
++        capsys: pytest.CaptureFixture[str]) -> None:
++    await storemem.startup_check(_Store("noeviction", maxmemory=0), Registry(0), _knobs(), worker=0)
++    await storemem.startup_check(_Store("noeviction", maxmemory=64 * MIB), Registry(0), _knobs(budget_mb=60), worker=0)
++    events = {e["event"]: e for e in (json.loads(x) for x in capsys.readouterr().err.splitlines() if x.startswith("{"))}
++    assert events["store_memory_unbounded"]["severity"] == "WARNING"
++    assert events["audit_budget_exceeds_store"]["severity"] == "ERROR"
++
++
++async def test_startup_check_never_fails_startup_when_the_store_is_unreachable() -> None:
++    m = Registry(0)
++    assert await storemem.startup_check(_Store("noeviction", down=True), m, _knobs(), worker=1) is None
++    assert "store_policy_unsafe" not in m.gauge
++
++
++async def test_sampler_publishes_gauges_rederives_the_budget_and_survives_errors(
++        capsys: pytest.CaptureFixture[str]) -> None:
++    m, seen = Registry(0), []
++    st = _Store("noeviction", used=32 * MIB, maxmemory=128 * MIB, evicted=7)
++    sampler = storemem.MemorySampler(st, m, _knobs(sample_s=0.01), on_memory=seen.append)
++    await sampler.sample_once()
++    assert (m.gauge["store_used_memory_bytes"], m.gauge["store_maxmemory_bytes"]) == (32 * MIB, 128 * MIB)
++    assert m.gauge["store_memory_used_ratio"] == 0.25 and m.gauge["store_evicted_keys"] == 7
++    assert seen[-1].maxmemory == 128 * MIB
++    st.down = True
++    for _ in range(3):
++        assert await sampler.sample_once() is None
++    assert m.count["store_memory_sample_errors"] == 3
++    assert capsys.readouterr().err.count("store_memory_sample_failed") == 1  # one log per run of failures
++    task = asyncio.create_task(sampler.run())
++    await asyncio.sleep(0.05)
++    assert not task.done()  # errors never end the loop
++    task.cancel()
++
++
++def test_per_org_maxlen_is_an_equal_byte_share_of_the_budget_whatever_the_record_size() -> None:
++    sink = AuditSink(fakeredis.aioredis.FakeRedis(), Registry(0), stream_maxlen=2_000_000, org_count=lambda: 4)
++    assert sink.stream_maxlen("org-a") == 2_000_000  # no budget: the frozen per-org bound
++    sink.set_budget(64 * MIB)
++    assert sink.stream_maxlen("org-a") == 2_000_000  # no record of org-a seen yet
++    sink.payload_ewma.update({"org-a": 2900.0, "org-b": 29000.0})
++    for org, size in (("org-a", 2900), ("org-b", 29000)):
++        assert sink.bytes_per_record(org) == pytest.approx(size * 1.10 + 256)
++        assert sink.stream_maxlen(org) == int(64 * MIB / (4 * (size * 1.10 + 256)))
++        share, bpr = 16 * MIB, sink.bytes_per_record(org)
++        assert share - bpr < sink.stream_maxlen(org) * bpr <= share  # an equal byte share, floored to whole records
++    sink.set_budget(1)
++    assert sink.stream_maxlen("org-a") == 100  # never below the retention floor
++    sink.set_budget(10**15)
++    assert sink.stream_maxlen("org-a") == 2_000_000  # never above RV_AUDIT_STREAM_MAXLEN
++
++
++async def test_writer_trims_every_stream_it_touches_to_its_share_and_counts_what_it_removed() -> None:
++    r, m = fakeredis.aioredis.FakeRedis(), Registry(0)
++    sink = AuditSink(r, m, stream_maxlen=2_000_000, org_count=lambda: 2)
++    budget = 2 * 1200 * (700 * 1.10 + 256)  # ~1,200 records of ~700 bytes per org
++    sink.set_budget(int(budget))
++    for n in range(60):  # 3,000 records per org; org-b's records are ~9x larger
++        await sink._write([_rec("org-a", n * 100 + i) if i % 2 else _rec("org-b", n * 100 + i, pad=6000)
++                           for i in range(100)])
++    lens = {o: await r.xlen(K_AUDIT_PREFIX + o) for o in ("org-a", "org-b")}
++    for org, n in lens.items():
++        assert n <= sink.stream_maxlen(org), (org, n)
++        bpr = sink.bytes_per_record(org)
++        assert budget / 2 - bpr < sink.stream_maxlen(org) * bpr <= budget / 2  # equal byte shares
++    assert lens["org-a"] > 5 * lens["org-b"]  # the larger records get proportionally fewer entries
++    assert sink.written == 6000 and sink.failed == 0
++    assert m.count["audit_trimmed_records"] == sink.trimmed == 6000 - sum(lens.values())  # exact, from XTRIM
++    assert m.gauge["audit_stream_maxlen"] == sink.stream_maxlen("org-b")  # the most constrained stream
++    assert m.gauge["audit_budget_bytes"] == int(budget) and m.gauge["audit_bytes_per_record"] > 6000
++
++
++async def test_the_sampler_runs_beside_the_writer_and_stops_with_it() -> None:
++    m = Registry(0)
++    sink = AuditSink(fakeredis.aioredis.FakeRedis(), m, stream_maxlen=1000)
++    sink.configure(10)
++    sink.sampler = storemem.MemorySampler(_Store("noeviction"), m, _knobs(sample_s=0.01))
++    task = asyncio.create_task(sink.run())
++    sink.emit(_rec("org-a", 1))
++    await asyncio.sleep(0.1)
++    assert sink.written == 1 and "store_used_memory_bytes" in m.gauge
++    task.cancel()
++    with pytest.raises(asyncio.CancelledError):
++        await task
++
++
++def test_audit_memory_knobs_default_parse_and_validate() -> None:
++    a = load_settings({}).v2.audit
++    assert (a.budget_mb, a.fraction, a.sample_s) == (None, 0.5, 10.0)
++    assert load_settings({"RV_AUDIT_STORE_BUDGET_MB": "512"}).v2.audit.budget_mb == 512.0
++    assert "audit" in describe_v2(load_settings({}).v2)
++    for bad in ({"RV_AUDIT_STORE_BUDGET_MB": "0"}, {"RV_AUDIT_STORE_FRACTION": "0.95"},
++                {"RV_AUDIT_STORE_FRACTION": "0"}, {"RV_STORE_MEMORY_SAMPLE_S": "0"}):
++        with pytest.raises(ValueError):
++            load_settings(bad)

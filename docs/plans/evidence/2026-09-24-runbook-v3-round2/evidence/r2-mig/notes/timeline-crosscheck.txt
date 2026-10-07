@@ -1,0 +1,7 @@
+timeline.py vs c4_client_all.py --all (proto-bench-split raw runs), 2026-09-24T05:38:55Z
+== s1-191
+c4_client_all: (computed live, see transcript: identical p50/p90/p99/p999/max for all/SSE/JSON)
+timeline.py : {'offered': 57300, 'qualified': 56313, 'policy': 987, 'infra': 0} {'n': 56313, 'n_inf': 0, 'p50': 8.116, 'p90': 11.25, 'p99': 13.853, 'p999': 19.789, 'max_finite': 30.726}
+== li34-582
+c4_client_all: {'policy_block': 3018, 'json': 51414, 'sse': 120147, 'infra_or_unqualified': 21} {'n': 171582, 'n_inf': 21, 'p50': 8.468, 'p90': 12.644, 'p99': 19.455, 'p999': 28.274, 'max_finite': 47.99, 'mean_finite': 8.791}
+timeline.py : {'offered': 174600, 'qualified': 171561, 'policy': 3018, 'infra': 21} {'n': 171582, 'n_inf': 21, 'p50': 8.468, 'p90': 12.644, 'p99': 19.455, 'p999': 28.274, 'max_finite': 47.99}

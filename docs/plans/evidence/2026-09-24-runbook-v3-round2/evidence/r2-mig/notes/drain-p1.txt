@@ -1,0 +1,17 @@
+probe template p1 (synthprov on COS, c4-highcpu-16, --graceful-shutdown max 3m), backend service connection draining 300 s
+resize rv-r2mig-gw 2 -> 1 at 2026-09-24T05:57:20Z (notes/actions.log); poller transitions (raw events/probe-p1/mig.jsonl):
+  2026-09-24T05:43:25.548Z target 2 [('xjz2', 'RUNNING', 'NONE', None), ('7224', 'RUNNING', 'NONE', None)]
+  2026-09-24T05:44:20.550Z target 2 [('xjz2', 'RUNNING', 'NONE', 'UNHEALTHY'), ('7224', 'RUNNING', 'NONE', 'UNHEALTHY')]
+  2026-09-24T05:45:31.067Z target 2 [('xjz2', 'RUNNING', 'NONE', 'UNHEALTHY'), ('7224', 'RUNNING', 'NONE', 'HEALTHY')]
+  2026-09-24T05:45:36.068Z target 2 [('xjz2', 'RUNNING', 'NONE', 'HEALTHY'), ('7224', 'RUNNING', 'NONE', 'HEALTHY')]
+  2026-09-24T05:57:20.447Z target 1 [('xjz2', 'RUNNING', 'NONE', 'HEALTHY'), ('7224', 'RUNNING', 'DELETING', 'HEALTHY')]
+  2026-09-24T06:03:22.762Z target 1 [('xjz2', 'RUNNING', 'NONE', 'HEALTHY'), ('7224', 'PENDING_STOP', 'DELETING', None)]
+  2026-09-24T06:06:23.074Z target 1 [('xjz2', 'RUNNING', 'NONE', 'HEALTHY'), ('7224', 'STOPPING', 'DELETING', None)]
+  2026-09-24T06:06:38.075Z target 1 [('xjz2', 'RUNNING', 'NONE', 'HEALTHY')]
+TYPE    STATUS  TIMESTAMP                      START_TIME                     END_TIME
+insert  DONE    2026-09-23T22:43:13.950-07:00  2026-09-23T22:43:14.106-07:00  2026-09-23T22:43:22.350-07:00
+delete  DONE    2026-09-23T23:03:20.870-07:00  2026-09-23T23:03:20.948-07:00  2026-09-23T23:06:39.428-07:00
+Reading: DELETING at 05:57:20 (LB stops new requests) -> delete operation starts 06:03:20.9 (= 300 s draining + ~60 s,
+as documented: "operations that delete the instance are delayed by at least [the draining timeout]" + "up to 60 seconds")
+-> PENDING_STOP 06:03:22 .. STOPPING 06:06:23 (= the full 3 min graceful-shutdown max duration; shutdown scripts run
+only after it) -> gone 06:06:39. Resize-to-gone 9 min 19 s. Decision: templates p3+ drop --graceful-shutdown.

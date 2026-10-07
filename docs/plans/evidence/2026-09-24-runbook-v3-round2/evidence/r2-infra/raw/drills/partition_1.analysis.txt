@@ -1,0 +1,10 @@
+probe records 703 span -10.744 .. 106.012 s rel. to VPC rule create call
+VPC EGRESS DENY rule: create call 0 create returned +8.208 delete call +65.099 delete returned +70.836
+host iptables DROP: inserted +95.968, removed +102.006 (rel. VPC create call)
+vk_new_ok      fail window: first_fail +4.777 last_fail +67.937 n=46 first_ok_after +68.84
+vk_new_ok      fail window: first_fail +98.801 last_fail +98.801 n=1 first_ok_after +102.307
+pg_new_ok      fail window: first_fail +4.777 last_fail +66.533 n=45 first_ok_after +67.937
+pg_new_ok      fail window: first_fail +98.801 last_fail +98.801 n=1 first_ok_after +102.307
+vk_persist_ok  fail window: first_fail +96.077 last_fail +101.806 n=8 first_ok_after +102.307
+pg_persist_ok  fail window: first_fail +96.077 last_fail +106.012 n=46 first_ok_after never (probe ended)
+persistent-conn error kinds: {('TimeoutError', 'OperationalError: could not receive data from server: Connection timed out\nSSL SYSCALL error: Conn'), ('TimeoutError', 'closed'), (None, 'closed')}

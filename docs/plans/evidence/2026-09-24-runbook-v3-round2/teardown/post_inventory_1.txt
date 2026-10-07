@@ -1,0 +1,53 @@
+2026-09-24T18:01:29Z
+== instances (all zones)
+ai-mesh-firewall	asia-south1-c	RUNNING
+== MIGs
+== GKE
+== disks
+ai-mesh-firewall	asia-south1-c	512	ai-mesh-firewall
+== images (custom)
+== machine images
+== snapshots
+aiguardx-ws2022-tes-us-central1-a-20260915113953-xmorzdbs	aiguardx-ws2022-test
+aiguardx-ws2022-tes-us-central1-a-20260916113953-0rzbol73	aiguardx-ws2022-test
+aiguardx-ws2022-tes-us-central1-a-20260917113953-h4jqw83f	aiguardx-ws2022-test
+aiguardx-ws2022-tes-us-central1-a-20260918113953-07qwon59	aiguardx-ws2022-test
+== reservations
+== commitments
+== addresses
+rv-r2-psa-range	10.60.0.0	RESERVED
+ai-mesh	8.231.115.48	IN_USE
+== forwarding rules
+== backend services
+== health checks
+== target proxies/pools/urlmaps
+== NEGs
+== instance templates
+== firewall rules
+allow-demo-ui-from-dev
+allow-fireflies-8600
+cyberultron-aimesh-vpc-allow-custom
+cyberultron-aimesh-vpc-allow-icmp
+cyberultron-aimesh-vpc-allow-ssh
+default-allow-http
+default-allow-https
+default-allow-icmp
+default-allow-internal
+default-allow-rdp
+default-allow-ssh
+== SQL
+== Valkey
+== Redis
+== SCP
+rv-r2-scp-memorystore
+== secrets
+== AR
+== buckets
+ai-mesh-firewall-rv-evidence-20260923
+== run/functions
+API [run.googleapis.com] not enabled on project [ai-mesh-firewall]. Would you 
+like to enable and retry (this will take a few minutes)? (y/N)?  
+ERROR: (gcloud.run.services.list) PERMISSION_DENIED: Cloud Run Admin API has not been used in project ai-mesh-firewall before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/run.googleapis.com/overview?project=ai-mesh-firewall then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry. This command is authenticated as 24342156045-compute@developer.gserviceaccount.com which is the active account specified by the [core/account] property.
+API [cloudfunctions.googleapis.com] not enabled on project [ai-mesh-firewall]. 
+Would you like to enable and retry (this will take a few minutes)? (y/N)?  
+ERROR: (gcloud.functions.list) [24342156045-compute@developer.gserviceaccount.com] does not have permission to access projects instance [ai-mesh-firewall] (or it may not exist): Cloud Functions API has not been used in project ai-mesh-firewall before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/cloudfunctions.googleapis.com/overview?project=ai-mesh-firewall then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry. This command is authenticated as 24342156045-compute@developer.gserviceaccount.com which is the active account specified by the [core/account] property.

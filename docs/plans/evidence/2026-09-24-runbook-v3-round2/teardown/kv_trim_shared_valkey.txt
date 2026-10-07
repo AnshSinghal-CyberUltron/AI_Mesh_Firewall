@@ -1,0 +1,11 @@
+2026-09-24T13:30:15Z BEFORE: used_memory=6.20GiB maxmemory=10.40GiB policy=volatile-lru evicted_keys=0
+2026-09-24T13:30:15Z db1 rv:audit:org-a: xlen 1396674 -> 1386678 (XTRIM MAXLEN ~ 200000 removed 10000)
+2026-09-24T13:30:15Z db2 rv:audit:org-a: xlen 873469 -> 863469 (XTRIM MAXLEN ~ 200000 removed 10000)
+2026-09-24T13:30:15Z db3 rv:audit:org-a: xlen 0 -> 0 (XTRIM MAXLEN ~ 200000 removed 0)
+2026-09-24T13:30:17Z AFTER: used_memory=6.15GiB maxmemory=10.40GiB policy=volatile-lru evicted_keys=0
+2026-09-24T13:30:39Z LOOP-START: used_memory=6.21GiB evicted_keys=0
+2026-09-24T13:30:42Z db1 rv:audit:org-a: xlen 1406759 -> 209367 in 120 calls (LIMIT 10000, 20 ms apart; worst call 11.1 ms client-side)
+2026-09-24T13:30:44Z db2 rv:audit:org-a: xlen 867608 -> 208203 in 66 calls (LIMIT 10000, 20 ms apart; worst call 18.8 ms client-side)
+2026-09-24T13:30:46Z LOOP-END: used_memory=1.26GiB evicted_keys=0
+2026-09-24T13:35:20Z AUDITGUARD ok used=2.76GiB (27%) evicted=0
+2026-09-24T14:35:20Z AUDITGUARD ok used=0.14GiB (1%) evicted=0

@@ -1,0 +1,63 @@
+{
+ "file": "raw/drills/drill_pg_1.jsonl",
+ "attempts": 2001,
+ "t_first": 1790228629.001,
+ "t_last": 1790228830.395,
+ "trigger": null,
+ "db": {
+  "failed_attempts": 190,
+  "error_classes": {
+   "OperationalError": 190
+  },
+  "windows": [
+   {
+    "first_fail": 1790228653.431,
+    "last_fail": 1790228663.693,
+    "failed_attempts": 98,
+    "first_ok_after": 1790228663.793,
+    "unavailable_s": 10.362,
+    "since_trigger_s": null
+   },
+   {
+    "first_fail": 1790228789.95,
+    "last_fail": 1790228799.657,
+    "failed_attempts": 92,
+    "first_ok_after": 1790228799.757,
+    "unavailable_s": 9.807,
+    "since_trigger_s": null
+   }
+  ]
+ },
+ "topology_changes": [
+  {
+   "t": 1790228629.001,
+   "field": "addr",
+   "from": null,
+   "to": "10.60.0.2/32"
+  },
+  {
+   "t": 1790228629.001,
+   "field": "in_recovery",
+   "from": null,
+   "to": false
+  },
+  {
+   "t": 1790228629.001,
+   "field": "postmaster_start",
+   "from": null,
+   "to": "2026-09-24 05:33:04.09812+00"
+  },
+  {
+   "t": 1790228663.793,
+   "field": "postmaster_start",
+   "from": "2026-09-24 05:33:04.09812+00",
+   "to": "2026-09-24 05:44:23.406287+00"
+  },
+  {
+   "t": 1790228799.757,
+   "field": "postmaster_start",
+   "from": "2026-09-24 05:44:23.406287+00",
+   "to": "2026-09-24 05:46:37.993497+00"
+  }
+ ]
+}

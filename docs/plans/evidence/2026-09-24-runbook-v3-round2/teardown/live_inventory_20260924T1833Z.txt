@@ -1,0 +1,38 @@
+# Live read-only re-check of project ai-mesh-firewall, 2026-09-24T18:33:17Z (controller, gcloud --format='value(name)').
+# "<none>" = empty list. Only the controller VM (ai-mesh-firewall), its disk, its static IP (ai-mesh) and another
+# product's aiguardx snapshots remain; none are round-2 test resources.
+compute instances list                                     ai-mesh-firewall
+compute disks list                                         ai-mesh-firewall
+compute snapshots list                                     aiguardx-ws2022-tes-us-central1-a-20260915113953-xmorzdbs aiguardx-ws2022-tes-us-central1-a-20260916113953-0rzbol73 aiguardx-ws2022-tes-us-central1-a-20260917113953-h4jqw83f aiguardx-ws2022-tes-us-central1-a-20260918113953-07qwon5 (output truncated at 230 chars)
+compute images list --no-standard-images                   <none>
+compute machine-images list                                <none>
+compute instance-templates list                            <none>
+compute instance-groups list                               <none>
+compute reservations list                                  <none>
+compute commitments list                                   <none>
+compute addresses list                                     ai-mesh
+compute forwarding-rules list                              <none>
+compute backend-services list                              <none>
+compute target-pools list                                  <none>
+compute health-checks list                                 <none>
+compute network-endpoint-groups list                       <none>
+compute routers list                                       <none>
+compute ssl-certificates list                              <none>
+container clusters list                                    <none>
+sql instances list                                         <none>
+sql backups list --instance=-                              <none>
+redis instances list --region asia-south1                  <none>
+memorystore instances list --location asia-south1          <none>
+redis instances list --region asia-northeast1              <none>
+memorystore instances list --location asia-northeast1      <none>
+redis instances list --region asia-northeast3              <none>
+memorystore instances list --location asia-northeast3      <none>
+artifacts repositories list (all locations)                <none>
+storage buckets list                                       <none>
+secrets list                                               <none>
+network-connectivity service-connection-policies list --region asia-south1 <none>
+
+# VPC peering servicenetworking-googleapis-com (network default) is still ACTIVE: its deletion at 18:3xZ failed with
+# FLOW_SN_DC_RESOURCE_PREVENTING_DELETE_CONNECTION (Google has not yet released the deleted Cloud SQL instances'
+# producer resources). A peering has no charge. Retry later:
+#   gcloud services vpc-peerings delete --service=servicenetworking.googleapis.com --network=default --project ai-mesh-firewall

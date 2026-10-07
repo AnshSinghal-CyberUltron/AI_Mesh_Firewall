@@ -1,0 +1,1855 @@
+diff -ruN a/rvproto/admit/state_v2.py b/rvproto/admit/state_v2.py
+--- a/rvproto/admit/state_v2.py	2026-09-24 19:07:53.073338931 +0530
++++ b/rvproto/admit/state_v2.py	2026-09-24 19:07:53.074441135 +0530
+@@ -12,6 +12,14 @@
+ manifest present and no record => 401 (never issued); explicit OFF record => 401 (revoked). A fetched
+ principal enters the cache only when the manifest version is the one this process has applied
+ (epoch-checked cache fill), so a stale replica cannot re-admit a key revoked at a newer version.
++Freshness (RC3, runtime/versioned.py StampView, shared with the plan snapshot): every kill-switch refresh
++reads the re-hydrator's signed stamp in the same MULTI. The floor of every manifest is the newer of what
++this process applied and what the stamp verified, so a NEW process never applies a manifest older than a
++verified one (SP1). While the newest stamp seen is older than RV_STATE_FRESH_MS (no re-hydrator, the store
++unreachable, a replica behind), state() is "stale", no cached principal is used and fetch() raises: every
++request is refused 503 kill_switch_unavailable (/v1/models: shared_state_unavailable) with Retry-After, and
++/readyz is 503 -- a new process from start until its first fresh stamp. Meanwhile, with the store healthy,
++the refresh re-reads the stamp every 100 ms instead of RV_KS_REFRESH_MS.
+ """
+ 
+ from __future__ import annotations
+@@ -26,16 +34,33 @@
+ 
+ from rvproto.domain.request import Principal
+ from rvproto.runtime.metrics import Registry
+-from rvproto.runtime.store import K2_KEYS, K2_KS, K2_META, StoreError
+-from rvproto.runtime.versioned import ZERO, StoreDataUnavailable, Version, verify_meta, verify_record, verify_set, version_of
++from rvproto.runtime.store import K2_KEYS, K2_KS, K2_META, K2_STAMP, StoreError
++from rvproto.runtime.versioned import (
++    ZERO,
++    StampView,
++    StoreDataUnavailable,
++    Version,
++    verify_meta,
++    verify_record,
++    verify_set,
++    version_of,
++)
++
++
++def _log(event: str, **kw: object) -> None:
++    sys.stderr.write(json.dumps({"event": event, "t": time.time(), **kw}, default=str) + "\n")
+ 
+ 
+ class VersionedIdentity:
+-    def __init__(self, r: aioredis.Redis, hmac_key: bytes) -> None:
++    def __init__(self, r: aioredis.Redis, hmac_key: bytes, *, stamp: StampView | None = None) -> None:
+         self.r = r
+         self.k = hmac_key
+         self._cache: dict[str, Principal] = {}
+         self.version = ZERO  # the key manifest version this process has applied
++        self.stamp = stamp  # RC3 freshness stamp; None = not enforced (rc2)
++
++    def floor(self) -> Version:
++        return self.version if self.stamp is None else self.stamp.floor("key", self.version)
+ 
+     def on_epoch(self, v: Version) -> None:
+         if v > self.version:
+@@ -43,16 +68,21 @@
+             self.version = v
+ 
+     def cached(self, api_key: str) -> tuple[str, Principal | None]:
++        """No cached principal is trusted while the state is not fresh (a revocation may be the unpublished part)."""
+         h = hashlib.sha256(api_key.encode()).hexdigest()
++        if self.stamp is not None and not self.stamp.fresh():
++            return h, None
+         return h, self._cache.get(h)
+ 
+     async def fetch(self, key_hash: str) -> Principal | None:
+         """One shared-state round trip. Raises StoreError (incl. StoreDataUnavailable) on outage/gap."""
++        if self.stamp is not None and not self.stamp.fresh():
++            raise StoreDataUnavailable(self.stamp.unverified())
+         pipe = self.r.pipeline(transaction=True)
+         pipe.hget(K2_KEYS, key_hash)
+         pipe.get(K2_META + "key")
+         raw, meta_raw = await pipe.execute()
+-        meta = verify_meta(self.k, "key", meta_raw, not_before=self.version)
++        meta = verify_meta(self.k, "key", meta_raw, not_before=self.floor())
+         mv = version_of(meta)
+         if raw is None:
+             return None  # the manifest proves the store is complete: this key was never issued
+@@ -79,19 +109,26 @@
+         self.refresh_s = refresh_ms / 1000.0
+         self.stale_ns = int(stale_ms * 1e6)
+         self.identity = identity
++        self.stamp = identity.stamp  # one freshness view per process
+         self.engaged = False
+         self.orgs: frozenset[str] = frozenset()
+         self.models: frozenset[str] = frozenset()
+         self.version = ZERO
+         self.last_ok_ns = 0
++        self._verified: bool | None = None  # the freshness last logged (transitions only)
++        # store reachable but state not verified (start-up, after an outage): look for the next stamp sooner
++        self.recheck_s = min(self.refresh_s, 0.1)
+ 
+     def age_s(self) -> float:
+         return (time.perf_counter_ns() - self.last_ok_ns) / 1e9
+ 
+     def state(self) -> str:
+-        """'ok' | 'engaged' | 'stale' -- evaluated from RAM only."""
++        """'ok' | 'engaged' | 'stale' -- evaluated from RAM only (stale: the snapshot is older than its
++        ceiling, or the state was not verified against Postgres within RV_STATE_FRESH_MS)."""
+         if time.perf_counter_ns() - self.last_ok_ns > self.stale_ns:
+             return "stale"
++        if self.stamp is not None and not self.stamp.fresh():
++            return "stale"
+         return "engaged" if self.engaged else "ok"
+ 
+     def org_killed(self, org: str) -> bool:
+@@ -105,13 +142,19 @@
+         pipe.get(K2_META + "ks")
+         pipe.hvals(K2_KS)
+         pipe.get(K2_META + "key")
+-        meta_raw, raws, key_meta_raw = await pipe.execute()
+-        meta = verify_meta(self.k, "ks", meta_raw, not_before=self.version)
++        if self.stamp is not None:
++            pipe.get(K2_STAMP)
++        meta_raw, raws, key_meta_raw, *stamp_raw = await pipe.execute()
++        floor = self.version
++        if self.stamp is not None:
++            self._observe(stamp_raw[0])
++            floor = self.stamp.floor("ks", self.version)
++        meta = verify_meta(self.k, "ks", meta_raw, not_before=floor)
+         recs = {r["key"]: r for r in verify_set(self.k, "ks", meta, raws)}
+         glob = recs.get("global")
+         if glob is None or glob["deleted"]:
+             raise StoreDataUnavailable("global kill-switch record missing (every scope needs an explicit record)")
+-        key_meta = verify_meta(self.k, "key", key_meta_raw, not_before=self.identity.version)
++        key_meta = verify_meta(self.k, "key", key_meta_raw, not_before=self.identity.floor())
+         live = {k: bool(r["body"]["on"]) for k, r in recs.items() if not r["deleted"]}
+         self.engaged = live["global"]
+         self.orgs = frozenset(k[4:] for k, on in live.items() if on and k.startswith("org:"))
+@@ -120,15 +163,37 @@
+         self.identity.on_epoch(version_of(key_meta))
+         self.last_ok_ns = time.perf_counter_ns()
+ 
++    def _observe(self, raw: bytes | None) -> None:
++        assert self.stamp is not None
++        if not self.stamp.observe(raw):
++            self.metrics.inc("state_stamp_missing" if raw is None else "state_stamp_invalid")
++        self.metrics.set("state_stamp_verified_at_seconds", self.stamp.verified_at)
++
++    def note_freshness(self) -> None:
++        """Gauge + a log line on every transition (fresh <-> not fresh), whatever the refresh outcome."""
++        if self.stamp is None:
++            return
++        fresh = self.stamp.fresh()
++        self.metrics.set("state_stamp_fresh", 1 if fresh else 0)
++        if fresh != self._verified:
++            if not fresh and self._verified:  # a lapse (a new process's wait for its first stamp is not one)
++                self.metrics.inc("state_unverified_transitions")
++            _log("state_verified" if fresh else "state_unverified", age_s=round(self.stamp.age_s(), 3),
++                 by=self.stamp.by, detail=None if fresh else self.stamp.unverified())
++            self._verified = fresh
++
+     async def run(self) -> None:
+         while True:
++            ok = False
+             try:
+                 await self.refresh_once()
+                 self.metrics.inc("background_round_trips")
++                ok = True
+             except StoreError as exc:
+                 self.metrics.inc("killswitch_refresh_errors")
+                 if isinstance(exc, StoreDataUnavailable):
+                     self.metrics.inc("state_unavailable_refreshes")
+-                sys.stderr.write(json.dumps({"event": "killswitch_refresh_error", "t": time.time(),
+-                                             "error": repr(exc)[:300]}) + "\n")
+-            await asyncio.sleep(self.refresh_s)
++                _log("killswitch_refresh_error", error=repr(exc)[:300])
++            self.note_freshness()
++            waiting = ok and self.stamp is not None and not self.stamp.fresh()  # healthy store, stamp not yet fresh
++            await asyncio.sleep(self.recheck_s if waiting else self.refresh_s)
+diff -ruN a/rvproto/control/__main__.py b/rvproto/control/__main__.py
+--- a/rvproto/control/__main__.py	2026-09-24 19:07:53.081447451 +0530
++++ b/rvproto/control/__main__.py	2026-09-24 19:07:53.082460479 +0530
+@@ -13,6 +13,10 @@
+   python -m rvproto.control rehydrate [--once]            (the re-hydrator; --once = one check, print events)
+   python -m rvproto.control verify                         (store vs Postgres per kind; exit 1 on divergence)
+ API keys are never printed; outputs name the key by the first 12 hex digits of its sha256.
++Postgres session bounds (every command; ms, 0 = no limit): RV_PG_LOCK_TIMEOUT_MS 2000, RV_PG_STATEMENT_TIMEOUT_MS
++5000, RV_PG_IDLE_TX_TIMEOUT_MS 5000, RV_PG_TCP_USER_TIMEOUT_MS 5000. The re-hydrator signs its freshness stamps
++as RV_REHYDRATOR_ID (default hostname:pid); run two, in different zones (gateways fail closed when no stamp is
++fresher than their RV_STATE_FRESH_MS).
+ """
+ 
+ from __future__ import annotations
+@@ -20,6 +24,7 @@
+ import argparse
+ import json
+ import os
++import socket
+ import sys
+ import time
+ 
+@@ -40,8 +45,26 @@
+     return v
+ 
+ 
++def _ms(name: str, default: str) -> int:
++    raw = os.environ.get(name, default)
++    try:
++        v = int(raw)
++    except ValueError:
++        v = -1
++    if v < 0:
++        raise SystemExit(f"{name}={raw!r} must be an integer >= 0 (ms; 0 = no limit)")
++    return v
++
++
++def _db() -> PgDB:
++    return PgDB(_env("RV_DATABASE_URL"), lock_timeout_ms=_ms("RV_PG_LOCK_TIMEOUT_MS", "2000"),
++                statement_timeout_ms=_ms("RV_PG_STATEMENT_TIMEOUT_MS", "5000"),
++                idle_tx_timeout_ms=_ms("RV_PG_IDLE_TX_TIMEOUT_MS", "5000"),
++                tcp_user_timeout_ms=_ms("RV_PG_TCP_USER_TIMEOUT_MS", "5000"))
++
++
+ def _writer() -> StateWriter:
+-    db = PgDB(_env("RV_DATABASE_URL"))
++    db = _db()
+     r = sync_client(os.environ.get("RV_REDIS_URL", "redis://127.0.0.1:6379/0"), op_timeout_s=5.0)
+     return StateWriter(db, r, _env("RV_STATE_HMAC_KEY").encode(), actor=os.environ.get("RV_ACTOR", "rvproto.control"),
+                        resolve_s=float(os.environ.get("RV_WRITE_RESOLVE_S", "30")))
+@@ -121,7 +144,7 @@
+     sub.add_parser("verify")
+     a = ap.parse_args(argv)
+     if a.cmd == "init-db":
+-        PgDB(_env("RV_DATABASE_URL")).init_schema()
++        _db().init_schema()
+         _out(init_db="ok")
+         return 0
+     w = _writer()
+@@ -167,7 +190,8 @@
+     elif a.cmd == "rehydrate":
+         rh = Rehydrator(w.db, w.r, w, period_ms=float(os.environ.get("RV_REHYDRATE_PERIOD_MS", "1000")),
+                         checkpoint_s=float(os.environ.get("RV_BUDGET_CHECKPOINT_S", "5")),
+-                        stale_grace_ms=float(os.environ.get("RV_REHYDRATE_STALE_GRACE_MS", "250")))
++                        stale_grace_ms=float(os.environ.get("RV_REHYDRATE_STALE_GRACE_MS", "250")),
++                        name=os.environ.get("RV_REHYDRATOR_ID") or f"{socket.gethostname()}:{os.getpid()}")
+         if a.once:
+             _out(events=rh.check_once())
+         else:
+diff -ruN a/rvproto/control/db.py b/rvproto/control/db.py
+--- a/rvproto/control/db.py	2026-09-24 19:07:53.089539469 +0530
++++ b/rvproto/control/db.py	2026-09-24 19:07:53.090567620 +0530
+@@ -8,11 +8,16 @@
+ 
+ Every write runs in one transaction: lock the kind's version row, take (epoch, seq + 1) (or (epoch + 1, 0)
+ for a rollback / a divergence repair), upsert the record, append the log row, bump the version.
+-A publish reads the version and the record set as ONE snapshot (version row FOR SHARE, which waits for a
+-writer holding it FOR UPDATE), so a manifest never claims a version its record set does not match.
+-A write whose COMMIT answer is lost (CommitUnknown) is read back before it is reported (`logged`: again behind
++A publish reads the version and the record set as ONE snapshot: a REPEATABLE READ, READ ONLY transaction
++(one MVCC snapshot for both statements, no locks taken or waited for), so a manifest never claims a version
++its record set does not match, and a writer holding its version row FOR UPDATE -- stalled, partitioned, or
++an operator's open psql session -- never delays a publish or a re-hydration (H7): they publish the last
++committed state and the writer publishes its own commit.
++A write whose COMMIT answer is lost (CommitUnknown) is read back before it is reported (`logged`: behind
+ FOR SHARE on the version row, so a COMMIT still in flight on the old connection has ended first). A READ whose
+ COMMIT answer is lost is simply complete: it wrote nothing and its rows were already read.
++Every Postgres session is bounded (PgDB): lock_timeout, statement_timeout, idle_in_transaction_session_timeout
++and tcp_user_timeout (server and client) plus client keepalives.
+ """
+ 
+ from __future__ import annotations
+@@ -97,10 +102,14 @@
+         self.cur = cur
+ 
+     def version(self, kind: str, *, lock: bool) -> Version:
+-        self.cur.execute("INSERT INTO rv2_version (kind, epoch, seq) VALUES (%s, 1, 0) ON CONFLICT DO NOTHING", (kind,))
++        """lock: the writer's FOR UPDATE (the row is created first); else a plain read (a kind never written
++        is at its initial version 1.0)."""
++        if lock:
++            self.cur.execute("INSERT INTO rv2_version (kind, epoch, seq) VALUES (%s, 1, 0) ON CONFLICT DO NOTHING",
++                             (kind,))
+         self.cur.execute("SELECT epoch, seq FROM rv2_version WHERE kind = %s" + (" FOR UPDATE" if lock else ""), (kind,))
+-        epoch, seq = self.cur.fetchone()
+-        return Version(int(epoch), int(seq))
++        row = self.cur.fetchone()
++        return Version(1, 0) if row is None else Version(int(row[0]), int(row[1]))
+ 
+     def set_version(self, kind: str, v: Version) -> None:
+         self.cur.execute("UPDATE rv2_version SET epoch = %s, seq = %s WHERE kind = %s", (v.epoch, v.seq, kind))
+@@ -121,10 +130,8 @@
+         return [_row(r) for r in self.cur.fetchall()]
+ 
+     def snapshot(self, kind: str) -> tuple[Version, list[dict[str, Any]]]:
+-        self.cur.execute("INSERT INTO rv2_version (kind, epoch, seq) VALUES (%s, 1, 0) ON CONFLICT DO NOTHING", (kind,))
+-        self.cur.execute("SELECT epoch, seq FROM rv2_version WHERE kind = %s FOR SHARE", (kind,))
+-        epoch, seq = self.cur.fetchone()
+-        return Version(int(epoch), int(seq)), self.records(kind)
++        """Consistent only inside a read_only transaction (REPEATABLE READ: one snapshot for both reads)."""
++        return self.version(kind, lock=False), self.records(kind)
+ 
+     def log_entry(self, log_id: int) -> dict[str, Any] | None:
+         self.cur.execute(f"SELECT {_REC_COLS} FROM rv2_log WHERE id = %s", (log_id,))
+@@ -133,18 +140,39 @@
+ 
+ 
+ class PgDB:
+-    """psycopg 3; one short-lived connection per operation (control-plane CLI / re-hydrator rates)."""
++    """psycopg 3; one short-lived connection per operation (control-plane CLI / re-hydrator rates).
++    Every session is bounded (H7; env knobs in control/__main__.py; 0 = no limit, the server default):
++      lock_timeout_ms       a writer queued behind a held version row fails (error, nothing committed) instead
++                            of waiting forever; logged()'s wait for an in-flight COMMIT
++      statement_timeout_ms  any statement (a large snapshot included)
++      idle_tx_timeout_ms    the server ends OUR session when it stalls inside a transaction (a stopped or
++                            partitioned writer) and releases its locks; its COMMIT then reads back as not landed
++      tcp_user_timeout_ms   unacknowledged data (server and client side); client keepalives detect a dead peer
++                            while waiting for an answer
++    """
+ 
+-    def __init__(self, dsn: str, *, lock_timeout_ms: int = 2000) -> None:
++    def __init__(self, dsn: str, *, lock_timeout_ms: int = 2000, statement_timeout_ms: int = 5000,
++                 idle_tx_timeout_ms: int = 5000, tcp_user_timeout_ms: int = 5000) -> None:
+         import psycopg
++        from psycopg.conninfo import conninfo_to_dict
+ 
+         self.psycopg = psycopg
+         self.dsn = dsn
+         self.errors = (psycopg.Error, CommitUnknown)
+-        self.lock_timeout_ms = lock_timeout_ms  # logged(): wait for an in-flight writer of the kind, per attempt
++        self.lock_timeout_ms = lock_timeout_ms
++        gucs = (("lock_timeout", lock_timeout_ms), ("statement_timeout", statement_timeout_ms),
++                ("idle_in_transaction_session_timeout", idle_tx_timeout_ms), ("tcp_user_timeout", tcp_user_timeout_ms))
++        for name, ms in gucs:
++            if int(ms) < 0:
++                raise ValueError(f"{name} must be >= 0 ms (0 = no limit)")
++        own = conninfo_to_dict(dsn).get("options") or ""  # the DSN's own options are kept
++        self.options = " ".join([str(own), *(f"-c {name}={int(ms)}" for name, ms in gucs)]).strip()
++        self.tcp_user_timeout_ms = int(tcp_user_timeout_ms)
+ 
+     def _conn(self) -> Any:
+-        return self.psycopg.connect(self.dsn, connect_timeout=5, autocommit=False)
++        return self.psycopg.connect(self.dsn, connect_timeout=5, autocommit=False, options=self.options,
++                                    tcp_user_timeout=self.tcp_user_timeout_ms, keepalives=1, keepalives_idle=5,
++                                    keepalives_interval=1, keepalives_count=3)
+ 
+     def init_schema(self) -> None:
+         with self._conn() as c, c.cursor() as cur:
+@@ -155,8 +183,12 @@
+     @contextlib.contextmanager
+     def tx(self, *, read_only: bool = False) -> Iterator[_PgTx]:
+         """An exception in the body rolls back (nothing durable). A failure of COMMIT itself is CommitUnknown,
+-        except for a read_only transaction: its rows are read and it wrote nothing, so it is complete."""
++        except for a read_only transaction: its rows are read and it wrote nothing, so it is complete.
++        read_only runs REPEATABLE READ, READ ONLY: one snapshot, no locks."""
+         c = self._conn()
++        if read_only:
++            c.isolation_level = self.psycopg.IsolationLevel.REPEATABLE_READ
++            c.read_only = True
+         try:
+             with c.cursor() as cur:
+                 yield _PgTx(cur)
+@@ -192,7 +224,6 @@
+         timeout) for a writer of `kind` still holding it, so a COMMIT in flight has ended (durable or rolled
+         back) before rv2_log is read; the answer is final."""
+         with self._conn() as c, c.cursor() as cur:
+-            cur.execute("SELECT set_config('lock_timeout', %s, true)", (f"{self.lock_timeout_ms}ms",))
+             cur.execute("SELECT 1 FROM rv2_version WHERE kind = %s FOR SHARE", (kind,))
+             cur.execute("SELECT sig FROM rv2_log WHERE kind = %s AND epoch = %s AND seq = %s", (kind, v.epoch, v.seq))
+             return [str(r[0]) for r in cur.fetchall()]
+diff -ruN a/rvproto/control/rehydrate.py b/rvproto/control/rehydrate.py
+--- a/rvproto/control/rehydrate.py	2026-09-24 19:07:53.097313228 +0530
++++ b/rvproto/control/rehydrate.py	2026-09-24 19:07:53.098326331 +0530
+@@ -17,6 +17,14 @@
+ Every restore is logged as {"event": "rehydrated", kind, reason, detected_at, restored_at, took_ms,
+ records}; the re-hydration bound = detection period + took_ms (the gap as clients see it starts at the
+ fault and ends at restored_at plus one gateway refresh period).
++Freshness stamp (RC3, runtime/versioned.py): a round in which EVERY kind was found equal to Postgres or
++restored writes a signed stamp {verified_at = the round's start, versions = the Postgres versions it
++verified, by = RV_REHYDRATOR_ID}; gateways refuse state not verified within RV_STATE_FRESH_MS. A round
++with any error writes none (logged once: state_stamp_withheld), so freshness lapses rather than being
++claimed. One kind's database or store error never stalls the other kinds (H7), and publishes read a
++lock-free snapshot (control/db.py), so a writer holding its version row does not delay re-hydration.
++Two or more re-hydrators may run at once (WATCH-guarded publishes, compare-and-set budget repairs, a
++stamp never replaced by an older one): run one per zone.
+ """
+ 
+ from __future__ import annotations
+@@ -26,12 +34,23 @@
+ import time
+ from typing import Any
+ 
++import orjson
+ import redis
+ 
+ from rvproto.control.db import DB
+ from rvproto.control.writer import StateWriter
+-from rvproto.runtime.store import K2_BUDGET, K2_BUDGET_GEN, K2_META
+-from rvproto.runtime.versioned import KINDS, ZERO, StoreDataUnavailable, Version, digest, verify_meta, version_of
++from rvproto.runtime.store import K2_BUDGET, K2_BUDGET_GEN, K2_META, K2_STAMP
++from rvproto.runtime.versioned import (
++    KINDS,
++    ZERO,
++    StoreDataUnavailable,
++    Version,
++    digest,
++    make_stamp,
++    verify_meta,
++    verify_stamp,
++    version_of,
++)
+ 
+ # KEYS counter, gen; ARGV expected gen ("" = none), value, new gen, mode (missing | reset | gen)
+ BUDGET_CAS = """
+@@ -52,53 +71,63 @@
+ 
+ class Rehydrator:
+     def __init__(self, db: DB, r: redis.Redis, writer: StateWriter, *, period_ms: float, checkpoint_s: float,
+-                 stale_grace_ms: float = 250.0) -> None:
++                 stale_grace_ms: float = 250.0, name: str = "rehydrator") -> None:
+         self.db = db
+         self.r = r
+         self.w = writer
+         self.period_s = period_ms / 1000.0
+         self.checkpoint_s = checkpoint_s
+         self.stale_grace_s = stale_grace_ms / 1000.0
++        self.name = name  # RV_REHYDRATOR_ID: which re-hydrator stamped (gateways log it)
+         self.events: list[dict[str, Any]] = []
++        self.stamped: dict[str, Any] | None = None  # the last stamp this re-hydrator wrote
++        self._withheld = False
+         self._cas = r.register_script(BUDGET_CAS)
+ 
+     def diagnose(self, kind: str) -> str | None:
+         """None when the store's copy of `kind` equals Postgres; else the reason to restore."""
+-        pg_v, recs = self.db.snapshot(kind)
++        return self._diagnose(kind)[0]
++
++    def _diagnose(self, kind: str) -> tuple[str | None, Version]:
++        """(reason, the Postgres version compared). The store is read BEFORE Postgres: a write committed and
++        published in between then reads as "stale" (re-checked after the grace), never as "store_ahead"
++        (which would bump the epoch for nothing)."""
+         raw = self.r.get(K2_META + kind)
++        pg_v, recs = self.db.snapshot(kind)
+         if raw is None:
+-            return "missing"
++            return "missing", pg_v
+         try:
+             meta = verify_meta(self.w.k, kind, raw, not_before=ZERO)
+         except StoreDataUnavailable:
+-            return "invalid"
++            return "invalid", pg_v
+         sv = version_of(meta)
+         if sv > pg_v:
+-            return "store_ahead"
++            return "store_ahead", pg_v
+         if sv < pg_v:
+-            return "stale"
++            return "stale", pg_v
+         if int(meta["count"]) != len(recs) or meta["digest"] != digest(recs):
+-            return "digest"
+-        return None
++            return "digest", pg_v
++        return None, pg_v
+ 
+     def check_once(self) -> list[dict[str, Any]]:
+         out = []
++        round_t0 = time.time()
++        verified: dict[str, Version] = {}
+         for kind in KINDS:
+             t0 = time.time()
+             try:
+-                reason = self.diagnose(kind)
++                reason, pg_v = self._diagnose(kind)
+                 if reason == "stale" and self.stale_grace_s > 0:
+                     time.sleep(self.stale_grace_s)
+-                    reason = self.diagnose(kind)
+-                if reason is None:
+-                    continue
++                    reason, pg_v = self._diagnose(kind)
+                 if reason == "store_ahead":
+                     self.w.repair_epoch(kind)
+-                n = self.w.publish(kind)
+-            except (redis.RedisError, OSError, StoreDataUnavailable) as exc:
++                n = None if reason is None else self.w.publish(kind)
++            except (redis.RedisError, OSError, StoreDataUnavailable, *self.db.errors) as exc:
+                 _log("rehydrate_error", kind=kind, error=repr(exc)[:300])
+                 continue
+-            if n is None:  # a newer publish landed first: nothing to restore
++            verified[kind] = pg_v  # the store now holds >= pg_v, and pg_v covers every commit before round_t0
++            if n is None:  # equal already, or a newer publish landed first: nothing to restore
+                 continue
+             t1 = time.time()
+             ev = {"kind": kind, "reason": reason, "detected_at": t0, "restored_at": t1,
+@@ -107,14 +136,58 @@
+             out.append(ev)
+         try:
+             done = self.repair_budgets()
+-        except (redis.RedisError, OSError) as exc:
++        except (redis.RedisError, OSError, *self.db.errors) as exc:
+             _log("rehydrate_error", kind="budget_counters", error=repr(exc)[:300])
+         else:
+             if done:
+                 _log("rehydrated_budget_counters", repairs=done)
+         self.events.extend(out)
++        self._stamp(round_t0, verified)
+         return out
+ 
++    def _stamp(self, t0: float, verified: dict[str, Version]) -> None:
++        """Write the freshness stamp when every kind was verified this round; never replace a newer one."""
++        missing = [k for k in KINDS if k not in verified]
++        if missing:
++            if not self._withheld:
++                _log("state_stamp_withheld", kinds=missing, by=self.name,
++                     note="not every kind verified: gateways fail closed once the last stamp is RV_STATE_FRESH_MS old")
++            self._withheld = True
++            return
++        stamp = make_stamp(self.w.k, t0, verified, self.name)
++        try:
++            self._put_stamp(stamp)
++        except (redis.RedisError, OSError) as exc:
++            _log("rehydrate_error", kind="stamp", error=repr(exc)[:300])
++            self._withheld = True
++            return
++        if self.stamped is None or self._withheld:
++            _log("state_stamp_resumed" if self._withheld else "state_stamp_first", by=self.name,
++                 verified_at=t0, took_ms=round((time.time() - t0) * 1000, 2),
++                 versions={k: str(v) for k, v in verified.items()})
++        self._withheld = False
++        self.stamped = stamp
++
++    def _put_stamp(self, stamp: dict[str, Any]) -> None:
++        ours = stamp["verified_at_ms"] / 1000.0
++        with self.r.pipeline(transaction=True) as pipe:
++            for _ in range(5):
++                try:
++                    pipe.watch(K2_STAMP)
++                    cur = pipe.get(K2_STAMP)
++                    try:
++                        if cur is not None and verify_stamp(self.w.k, cur).verified_at >= ours:
++                            return  # another re-hydrator verified later than this round started
++                    except StoreDataUnavailable:
++                        pass  # a forged or malformed stamp is overwritten
++                    pipe.multi()
++                    pipe.set(K2_STAMP, orjson.dumps(stamp))
++                    pipe.execute()
++                    return
++                except redis.WatchError:  # another re-hydrator stamped in between: re-check
++                    continue
++        raise redis.RedisError("stamp kept racing other re-hydrators")
++
+     def budget_repairs(self) -> list[tuple[str, str, int, Version, str]]:
+         """(org, mode, value, version, expected tag) for every live budget whose store counter does not count
+         down the current budget record: missing, untagged (adopt it) or of an older budget (reset)."""
+@@ -163,9 +236,12 @@
+         return len(rows)
+ 
+     def run(self) -> None:
+-        _log("rehydrator_start", period_s=self.period_s, checkpoint_s=self.checkpoint_s)
++        """Fixed-rate rounds: a slow or stuck round (a store or database outage) is followed by the next one at
++        once, so the first stamp after the fault is not a full period late."""
++        _log("rehydrator_start", period_s=self.period_s, checkpoint_s=self.checkpoint_s, by=self.name)
+         last_cp = 0.0
+         while True:
++            started = time.monotonic()
+             try:  # a database failover (Cloud SQL) or a store fault only delays the next round
+                 self.check_once()
+                 if time.monotonic() - last_cp >= self.checkpoint_s:
+@@ -173,4 +249,4 @@
+                     self.checkpoint()
+             except Exception as exc:  # noqa: BLE001 - psycopg / redis / network errors alike
+                 _log("rehydrate_round_failed", error=repr(exc)[:300])
+-            time.sleep(self.period_s)
++            time.sleep(max(0.0, self.period_s - (time.monotonic() - started)))
+diff -ruN a/rvproto/edge/state.py b/rvproto/edge/state.py
+--- a/rvproto/edge/state.py	2026-09-24 19:07:53.105154725 +0530
++++ b/rvproto/edge/state.py	2026-09-24 19:07:53.106220187 +0530
+@@ -38,6 +38,7 @@
+ from rvproto.runtime.push import PushKnobs
+ from rvproto.runtime.shm_metrics import make_registry, metrics_tag
+ from rvproto.runtime.store import StoreError, connect, connect_background
++from rvproto.runtime.versioned import StampView
+ 
+ if TYPE_CHECKING:
+     from rvproto.detect.guard.factory import GuardImpl
+@@ -96,10 +97,11 @@
+         if not s.v2.c36.hmac_key:
+             raise ValueError("RV_FIX_C36=on needs RV_STATE_HMAC_KEY (the control plane's record signing key)")
+         k = s.v2.c36.hmac_key.encode()
+-        vid = VersionedIdentity(redis, k)
++        stamp = StampView(k, fresh_ms=s.v2.c36.fresh_ms)  # RC3: one freshness view per worker
++        vid = VersionedIdentity(redis, k, stamp=stamp)
+         vks = VersionedKillSwitch(redis_bg, metrics, k, refresh_ms=s.ks_refresh_ms, stale_ms=s.ks_stale_ms, identity=vid)
+         return vid, vks, VersionedPlanSnapshot(redis_bg, metrics, k, reconcile_ms=s.plan_reconcile_ms,
+-                                               stale_ms=s.ks_stale_ms, push=push)
++                                               stale_ms=s.ks_stale_ms, push=push, stamp=stamp)
+     identity = Identity(redis)
+     ks = KillSwitch(redis_bg, metrics, refresh_ms=s.ks_refresh_ms, stale_ms=s.ks_stale_ms, on_epoch=identity.on_epoch)
+     return identity, ks, PlanSnapshot(redis_bg, metrics, reconcile_ms=s.plan_reconcile_ms, stale_ms=s.ks_stale_ms,
+diff -ruN a/rvproto/plan/snapshot_v2.py b/rvproto/plan/snapshot_v2.py
+--- a/rvproto/plan/snapshot_v2.py	2026-09-24 19:07:53.112815825 +0530
++++ b/rvproto/plan/snapshot_v2.py	2026-09-24 19:07:53.113781416 +0530
+@@ -7,6 +7,12 @@
+ (503) after the staleness ceiling, never PLAN_UNKNOWN_TENANT (403). An org disappears only through an
+ explicit OFF record (deleted=true: offboarded); an org absent from a verified, complete index was never
+ onboarded (403 is then correct).
++Single-flight (SP6): the push listener and the periodic loop both call reconcile(); reconciles never
++overlap (a slower one can no longer swap in an older snapshot or move the version back), and a caller
++whose trigger is covered by a reconcile that STARTED after it returns without another read.
++Freshness (RC3): the reconcile reads the re-hydrator's signed stamp in the same MULTI (the manifest floor
++is the newer of what this process applied and what the stamp verified); while the newest stamp seen is
++older than RV_STATE_FRESH_MS every org is PLAN_UNAVAILABLE and fresh() is False (/readyz 503).
+ """
+ 
+ from __future__ import annotations
+@@ -23,8 +29,16 @@
+ from rvproto.plan.compiler import PlanInvalid, compile_plan
+ from rvproto.runtime.metrics import Registry
+ from rvproto.runtime.push import DEFAULT_PUSH, PushKnobs, PushListener
+-from rvproto.runtime.store import K2_META, K2_PLAN, K2_PLAN_INDEX, K2_UPDATES, StoreError
+-from rvproto.runtime.versioned import ZERO, StoreDataUnavailable, digest, verify_meta, verify_record, version_of
++from rvproto.runtime.store import K2_META, K2_PLAN, K2_PLAN_INDEX, K2_STAMP, K2_UPDATES, StoreError
++from rvproto.runtime.versioned import (
++    ZERO,
++    StampView,
++    StoreDataUnavailable,
++    digest,
++    verify_meta,
++    verify_record,
++    version_of,
++)
+ 
+ 
+ def _log(event: str, exc: BaseException) -> None:
+@@ -33,7 +47,7 @@
+ 
+ class VersionedPlanSnapshot:
+     def __init__(self, r: aioredis.Redis, metrics: Registry, hmac_key: bytes, *, reconcile_ms: float,
+-                 stale_ms: float, push: PushKnobs = DEFAULT_PUSH) -> None:
++                 stale_ms: float, push: PushKnobs = DEFAULT_PUSH, stamp: StampView | None = None) -> None:
+         self.r = r
+         self.push = PushListener(r, K2_UPDATES, metrics, name="plan", knobs=push)
+         self.metrics = metrics
+@@ -46,6 +60,10 @@
+         self.version = ZERO
+         self._last_ok_ns = 0
+         self.loaded = False
++        self.stamp = stamp  # RC3 freshness stamp (shared with the kill-switch reader); None = not enforced
++        self._lock = asyncio.Lock()
++        self._asked = 0  # reconcile triggers so far
++        self._covered = 0  # the newest trigger a completed reconcile started after
+ 
+     def versions(self) -> dict[str, str]:
+         return {org: p.version for org, p in self._plans.items()}
+@@ -54,11 +72,14 @@
+         return (time.perf_counter_ns() - self._last_ok_ns) / 1e9
+ 
+     def fresh(self) -> bool:
+-        return self.loaded and time.perf_counter_ns() - self._last_ok_ns <= self.stale_ns
++        return (self.loaded and time.perf_counter_ns() - self._last_ok_ns <= self.stale_ns
++                and (self.stamp is None or self.stamp.fresh()))
+ 
+     def get(self, org_id: str) -> PlanLookup:
+         if time.perf_counter_ns() - self._last_ok_ns > self.stale_ns:
+             return PlanUnavailable(org_id, "plan snapshot older than the staleness ceiling")
++        if self.stamp is not None and not self.stamp.fresh():
++            return PlanUnavailable(org_id, self.stamp.unverified())
+         plan = self._plans.get(org_id)
+         if plan is not None:
+             return plan
+@@ -68,18 +89,36 @@
+ 
+     async def load_all(self) -> None:
+         try:
+-            await self.reconcile_once()
++            await self.reconcile()
+         except StoreError as exc:  # start anyway: the snapshot is stale => PLAN_UNAVAILABLE, never 403
+             self.metrics.inc("plan_reconcile_errors")
+             _log("plan_initial_load_failed", exc)
+         self.loaded = True
+ 
++    async def reconcile(self) -> None:
++        """Single-flight reconcile_once (SP6). Raises what reconcile_once raises."""
++        self._asked += 1
++        mine = self._asked
++        async with self._lock:
++            if self._covered >= mine:
++                self.metrics.inc("plan_reconcile_coalesced")
++                return
++            start = self._asked
++            await self.reconcile_once()
++            self._covered = start
++
+     async def reconcile_once(self) -> None:
+         pipe = self.r.pipeline(transaction=True)
+         pipe.get(K2_META + "plan")
+         pipe.hgetall(K2_PLAN_INDEX)
+-        meta_raw, index_raw = await pipe.execute()
+-        meta = verify_meta(self.k, "plan", meta_raw, not_before=self.version)
++        if self.stamp is not None:
++            pipe.get(K2_STAMP)
++        meta_raw, index_raw, *stamp_raw = await pipe.execute()
++        floor = self.version
++        if self.stamp is not None:
++            self.stamp.observe(stamp_raw[0])
++            floor = self.stamp.floor("plan", self.version)
++        meta = verify_meta(self.k, "plan", meta_raw, not_before=floor)
+         index = {k.decode(): orjson.loads(v) for k, v in index_raw.items()}
+         entries = list(index.values())
+         if len(entries) != int(meta["count"]) or digest(entries) != meta["digest"]:
+@@ -98,6 +137,8 @@
+         vanished = [o for o in plans if o not in index]
+         if vanished:
+             raise StoreDataUnavailable(f"plans of {vanished} vanished without an OFF record")
++        if version_of(meta) < self.version:  # never swap in an older snapshot (callers are single-flight anyway)
++            raise StoreDataUnavailable(f"plan manifest {version_of(meta)} is older than {self.version} applied meanwhile")
+         self._plans, self._invalid, self._applied = plans, invalid, applied
+         self.version = version_of(meta)
+         self._last_ok_ns = time.perf_counter_ns()
+@@ -126,7 +167,7 @@
+         try:
+             while True:
+                 try:
+-                    await self.reconcile_once()
++                    await self.reconcile()
+                 except StoreError as exc:
+                     self.metrics.inc("plan_reconcile_errors")
+                     _log("plan_reconcile_error", exc)
+@@ -140,7 +181,7 @@
+ 
+     async def _pushed(self) -> bool:
+         try:
+-            await self.reconcile_once()
++            await self.reconcile()
+         except StoreError as exc:
+             self.metrics.inc("plan_reconcile_errors")
+             _log("plan_reconcile_error", exc)
+diff -ruN a/rvproto/runtime/config_v2.py b/rvproto/runtime/config_v2.py
+--- a/rvproto/runtime/config_v2.py	2026-09-24 19:07:53.120443964 +0530
++++ b/rvproto/runtime/config_v2.py	2026-09-24 19:07:53.121429660 +0530
+@@ -61,6 +61,8 @@
+     ("RV_DATABASE_URL", ""),  # Postgres DSN (control-plane writer and re-hydrator only)
+     ("RV_REHYDRATE_PERIOD_MS", "1000"),
+     ("RV_BUDGET_CHECKPOINT_S", "5"),
++    ("RV_STATE_FRESH_MS", "3000"),  # refuse (503) state the re-hydrators have not verified against Postgres for
++    #                                 this long (their signed freshness stamp); 0 = not enforced (rc2)
+     # autoscaling signals
+     ("RV_EXPORT_S", "10"),  # exporter window for loop-lag / queue / CPU signals
+     ("RV_CLOUD_MONITORING", "off"),  # on: push the signals as Cloud Monitoring custom metrics
+@@ -162,6 +164,7 @@
+     database_url: str
+     rehydrate_period_ms: float
+     budget_checkpoint_s: float
++    fresh_ms: float
+ 
+ 
+ @dataclass(frozen=True, slots=True)
+@@ -235,7 +238,13 @@
+         database_url=get["RV_DATABASE_URL"],
+         rehydrate_period_ms=float(get["RV_REHYDRATE_PERIOD_MS"]),
+         budget_checkpoint_s=float(get["RV_BUDGET_CHECKPOINT_S"]),
++        fresh_ms=float(get["RV_STATE_FRESH_MS"]),
+     )
++    if c36.rehydrate_period_ms <= 0:
++        raise ValueError("RV_REHYDRATE_PERIOD_MS must be positive")
++    if c36.fresh_ms != 0 and c36.fresh_ms < 2 * c36.rehydrate_period_ms:
++        raise ValueError(f"RV_STATE_FRESH_MS={c36.fresh_ms:g} must be 0 (off) or >= 2 x RV_REHYDRATE_PERIOD_MS "
++                         f"({2 * c36.rehydrate_period_ms:g}): a stamp is up to one period plus one round old")
+     res = get["RV_MONITORING_RESOURCE"].strip()
+     if res not in ("gce_instance", "k8s_pod"):
+         raise ValueError(f"RV_MONITORING_RESOURCE={res!r} (gce_instance | k8s_pod)")
+diff -ruN a/rvproto/runtime/store.py b/rvproto/runtime/store.py
+--- a/rvproto/runtime/store.py	2026-09-24 19:07:53.127794062 +0530
++++ b/rvproto/runtime/store.py	2026-09-24 19:07:53.128762427 +0530
+@@ -37,6 +37,7 @@
+ K2_BUDGET_META = K2 + "budget_meta"  # hash org -> signed {"limit": n} record (C36)
+ K2_BUDGET_GEN = K2 + "budget_gen:"  # + org: "epoch.seq" of the budget record the counter was set from (C36)
+ K2_UPDATES = K2 + "updates"  # pub/sub: kind names after a write or a re-hydration (C36)
++K2_STAMP = K2 + "stamp"  # signed freshness stamp {verified_at_ms, versions, by, sig}: re-hydrator rounds (C36)
+ K2_GUARD_OWNERS = K2 + "guard:owners"  # set of owner ids (discovery)
+ K2_GUARD_OWNER = K2 + "guard:owner:"  # + id: owner registration with a TTL (discovery)
+ 
+diff -ruN a/rvproto/runtime/versioned.py b/rvproto/runtime/versioned.py
+--- a/rvproto/runtime/versioned.py	2026-09-24 19:07:53.135526007 +0530
++++ b/rvproto/runtime/versioned.py	2026-09-24 19:07:53.136494134 +0530
+@@ -12,12 +12,27 @@
+ when a manifest is missing, its signature or digest does not verify, or its version is older than a
+ version this process has already applied (a failed-over replica or a partial restore) -- never as
+ "no such tenant", "invalid key" or "switch off".
++
++Freshness stamp (RC3): every re-hydrator round that found every kind's store copy equal to Postgres (or
++restored it) writes a signed stamp {verified_at_ms, versions, by}: at verified_at (the round's START) the
++store held at least `versions`, and those include every write committed before verified_at. A gateway
++process (StampView) keeps the newest stamp it has seen: its per-kind floor starts from the stamp (a new
++process never applies a manifest older than a verified one), and state not verified within
++RV_STATE_FRESH_MS is refused (declared 503), so a committed write is enforced -- or the gateway fails
++closed -- at most RV_STATE_FRESH_MS after its commit, whatever lost it (a failed publish with no
++re-hydrator, a lagging replica, a store outage). A NEW process trusts only a stamp from a round that
++started after the process did: after a failover to a lagging replica, a recreated gateway serves nothing
++until a re-hydrator has compared THAT store with Postgres (and republished what the replica lost) -- the
++cost is up to one re-hydrator round of extra start-up. The age is the gateway's wall clock minus
++verified_at (both NTP-synced); a stamp from further in the future than RV_STATE_FRESH_MS is not fresh.
+ """
+ 
+ from __future__ import annotations
+ 
+ import hashlib
+ import hmac
++import time
++from collections.abc import Callable
+ from dataclasses import dataclass
+ from typing import Any
+ 
+@@ -123,3 +138,92 @@
+     if any(version_of(r) > mv for r in recs):
+         raise StoreDataUnavailable(f"{kind} record newer than its manifest {mv}")
+     return recs
++
++
++@dataclass(frozen=True, slots=True)
++class Stamp:
++    verified_at: float  # seconds (wall clock of the re-hydrator at its round's start)
++    versions: dict[str, Version]
++    by: str
++
++
++def _stamp_mac(key: bytes, body: dict[str, Any]) -> str:
++    return _mac(key, "stamp\n" + canonical(body).decode())
++
++
++def make_stamp(key: bytes, verified_at: float, versions: dict[str, Version], by: str) -> dict[str, Any]:
++    body = {"verified_at_ms": int(verified_at * 1000), "versions": {k: [v.epoch, v.seq] for k, v in versions.items()},
++            "by": by}
++    return {**body, "sig": _stamp_mac(key, body)}
++
++
++def verify_stamp(key: bytes, raw: bytes | str) -> Stamp:
++    try:
++        d = orjson.loads(raw)
++        body = {"verified_at_ms": d["verified_at_ms"], "versions": d["versions"], "by": d["by"]}
++        ok = hmac.compare_digest(d["sig"], _stamp_mac(key, body))
++        stamp = Stamp(int(d["verified_at_ms"]) / 1000.0,
++                      {str(k): Version(int(e), int(s)) for k, (e, s) in d["versions"].items()}, str(d["by"]))
++    except (KeyError, TypeError, ValueError, AttributeError) as exc:
++        raise StoreDataUnavailable(f"freshness stamp malformed: {exc}") from exc
++    if not ok:
++        raise StoreDataUnavailable("freshness stamp fails its signature")
++    return stamp
++
++
++class StampView:
++    """The newest verified freshness stamp this process has seen (one per gateway worker, shared by its
++    identity, kill-switch and plan readers). Floors only rise and verified_at only moves forward: a stamp
++    from a lagging replica or a slower second re-hydrator never lowers either. A missing, malformed or
++    forged stamp changes nothing (the view then ages into "not fresh"). fresh_ms 0 = freshness not enforced
++    (the floors still apply)."""
++
++    def __init__(self, hmac_key: bytes, *, fresh_ms: float, started_at: float | None = None,
++                 clock: Callable[[], float] = time.time) -> None:
++        self.k = hmac_key
++        self.fresh_s = fresh_ms / 1000.0
++        self.clock = clock  # wall clock (tests inject one)
++        # stamps are ms-granular: a round started in this process's start millisecond counts as after it
++        self.started_at = int((clock() if started_at is None else started_at) * 1000) / 1000.0
++        self.verified_at = 0.0  # of the newest stamp seen; 0 = none yet
++        self.by = ""
++        self.invalid = 0
++        self._floor: dict[str, Version] = {}
++
++    def observe(self, raw: bytes | None) -> bool:
++        """True when `raw` is a valid stamp (applied); False when absent or invalid."""
++        if raw is None:
++            return False
++        try:
++            s = verify_stamp(self.k, raw)
++        except StoreDataUnavailable:
++            self.invalid += 1
++            return False
++        for kind, v in s.versions.items():
++            if v > self._floor.get(kind, ZERO):
++                self._floor[kind] = v
++        if s.verified_at > self.verified_at:
++            self.verified_at, self.by = s.verified_at, s.by
++        return True
++
++    def floor(self, kind: str, applied: Version) -> Version:
++        """The oldest manifest version of `kind` this process may apply."""
++        return max(applied, self._floor.get(kind, ZERO))
++
++    def age_s(self, now: float | None = None) -> float:
++        return (self.clock() if now is None else now) - self.verified_at
++
++    def fresh(self, now: float | None = None) -> bool:
++        if self.fresh_s <= 0:
++            return True
++        return self.verified_at >= self.started_at and abs(self.age_s(now)) <= self.fresh_s
++
++    def unverified(self) -> str:
++        """Why the state is refused (for the StoreDataUnavailable / PlanUnavailable detail)."""
++        if self.verified_at <= 0:
++            return "no freshness stamp seen yet (state not verified against Postgres; is a re-hydrator running?)"
++        if self.verified_at < self.started_at:
++            return (f"waiting for a freshness stamp from a re-hydrator round that started after this process "
++                    f"(newest seen: {self.age_s():.1f} s old, by {self.by})")
++        return (f"state last verified against Postgres {self.age_s():.1f} s ago by {self.by} "
++                f"(RV_STATE_FRESH_MS {self.fresh_s * 1000:g}); re-hydrators absent or the store unreachable")
+diff -ruN a/tests/functional/cutproxy.py b/tests/functional/cutproxy.py
+--- a/tests/functional/cutproxy.py	2026-09-24 19:07:53.143108411 +0530
++++ b/tests/functional/cutproxy.py	2026-09-24 19:07:53.144102336 +0530
+@@ -3,10 +3,12 @@
+ what a failover or a network blip does to a COMMIT in flight (the server may or may not have received it; if it
+ did, the write is durable and its answer is lost). Postgres itself stays up.
+ 
+-  cutproxy.py LISTEN_PORT UPSTREAM_PORT PIDFILE [DELAY_MS]   (one JSON line per cut on stdout)
++  cutproxy.py LISTEN_PORT UPSTREAM_PORT PIDFILE [DELAY_MS [FAILOVER_PORT]]   (one JSON line per cut on stdout)
+ Used by f_c36_writer.py runs: RV_DATABASE_URL points at LISTEN_PORT, a --fault runs `kill -USR1 <pid>`.
+ DELAY_MS holds every client->server chunk that long, so a cut can land while a COMMIT is still in the proxy
+ (never received: rolled back) as well as after Postgres has it (durable, answer lost).
++SIGUSR2 = failover (f_c36_fresh.py): cut every connection and send new ones to FAILOVER_PORT (the promoted
++replica behind the same endpoint, as a managed store's failover looks to its clients).
+ """
+ import asyncio
+ import json
+@@ -60,7 +62,11 @@
+                     pass
+                 w.transport.abort()
+         self.live.clear()
+-        print(json.dumps({"cut": self.cuts, "connections": n, "t": time.time()}), flush=True)
++        print(json.dumps({"cut": self.cuts, "connections": n, "t": time.time(), "upstream": self.up}), flush=True)
++
++    def failover(self, port: int) -> None:
++        self.up = port
++        self.cut()
+ 
+ 
+ async def main() -> None:
+@@ -68,6 +74,8 @@
+     p = Proxy(up, float(sys.argv[4]) / 1000.0 if len(sys.argv) > 4 else 0.0)
+     srv = await asyncio.start_server(p.handle, "127.0.0.1", listen)
+     asyncio.get_running_loop().add_signal_handler(signal.SIGUSR1, p.cut)
++    if len(sys.argv) > 5:
++        asyncio.get_running_loop().add_signal_handler(signal.SIGUSR2, p.failover, int(sys.argv[5]))
+     with open(pidfile, "w") as f:
+         f.write(str(os.getpid()))
+     async with srv:
+diff -ruN a/tests/functional/f_c36_fresh.py b/tests/functional/f_c36_fresh.py
+--- a/tests/functional/f_c36_fresh.py	1970-01-01 05:30:00.000000000 +0530
++++ b/tests/functional/f_c36_fresh.py	2026-09-24 19:07:53.150449313 +0530
+@@ -0,0 +1,497 @@
++"""F-C36-FRESH (RC3 state layer) on real Postgres + Valkey: control-plane CLI processes, re-hydrators and gateway
++workers (`python -m rvproto.serve --worker`) of the tree under test; rc2 is the negative control (same script).
++
++  RV_TREE=<tree> RV_PG_ADMIN=<postgres dsn, db postgres> RV_VALKEY_A=<port> [RV_VALKEY_B=<port>] \\
++  RV_GUARD_TOKENIZER=<tokenizer.json> python tests/functional/f_c36_fresh.py sp1|sp1-live|sp2|lock|absent OUT_DIR
++
++Every scenario gets its own database; the store is reached through cutproxy.py (SIGUSR2 = failover). Keys (CLI seed):
++G sk-rv-org-a-0001 (valid), K sk-rv-org-b-0001 (org-b gets KILLED), R sk-rv-org-q-0001 (gets REVOKED). The guard
++and the provider are closed ports: a request that passes admission fails later with a non-admission code, so
++"served" = 200 or any code outside ADMISSION; /v1/models is identity only (200 = admitted).
++  sp1       reviewer repro_regressed_store_new_process: A replicates to B; B stops replicating; write set B (revoke R,
++            kill org-b) lands on A; the re-hydrator stops; failover to B (lost write set B); a NEW gateway starts.
++            PASS: over the hold neither the new nor the old gateway admits R or serves K; after a re-hydrator is
++            back both enforce R (401) and K (kill_switch_engaged). rc2: the new process admits R and serves K.
++  sp1-live  the same with the re-hydrator running through the failover (rc2's exposure is then a race).
++  sp2       reviewer repro_publish_pending_no_rehydrator: re-hydrator killed, then revoke R + kill org-b with the
++            writer's store path dead (ok_publish_pending). PASS: served stale for at most RV_STATE_FRESH_MS (+ one
++            refresh) after the last stamp, then only 503 with Retry-After; enforced once a re-hydrator is back.
++  lock      H7: an operator session holds rv2_version(ks) FOR UPDATE (idle in transaction), then FLUSHALL. PASS:
++            every kind re-hydrated within one round (<= 2.5 s) while the lock is held; a writer of ks behind the
++            lock ends within RV_PG_LOCK_TIMEOUT_MS + 1 s, reported "error". rc2: blocked until the release.
++  absent    two re-hydrators: one killed (no 503), then both: time to global 503; restart: time to recovery (x5).
++  pgdown    two re-hydrators, Postgres frozen 10 s (docker pause RV_PG_CONTAINER: connections hang, TCP stays up):
++            the stamps stop, so the gateways fail closed RV_STATE_FRESH_MS after the last one; recovery after thaw.
++  storeblip Valkey frozen 3.8 s (docker pause RV_VALKEY_CONTAINER; the Memorystore maintenance blip measured in
++            round 2): the 503 time of a cached key, rc2 (kill-switch ceiling 5 s) vs RC3 (stamp age 3 s). A measure.
++"""
++
++from __future__ import annotations
++
++import json
++import os
++import random
++import signal
++import socket
++import subprocess
++import sys
++import time
++from pathlib import Path
++from typing import Any
++
++import httpx
++import psycopg
++import redis
++
++TREE = Path(os.environ["RV_TREE"]).resolve()
++PY = os.environ.get("RV_PY", sys.executable)
++HERE = Path(__file__).resolve().parent
++HMAC = "f-c36-fresh-test-key-not-a-secret"
++KEYS = {"G": "sk-rv-org-a-0001", "K": "sk-rv-org-b-0001", "R": "sk-rv-org-q-0001"}
++ADMISSION = {"invalid_api_key", "kill_switch_engaged", "kill_switch_unavailable", "shared_state_unavailable",
++             "plan_unavailable", "plan_unknown_tenant", "rate_limit_exceeded", "insufficient_quota"}
++BODY = {"model": "gpt-4o-mini", "max_tokens": 8, "messages": [{"role": "user", "content": "hello"}]}
++FRESH_S = 3.0  # RV_STATE_FRESH_MS default
++STAMP = "{rv2}:stamp"
++
++
++def _port() -> int:
++    with socket.socket() as s:
++        s.bind(("127.0.0.1", 0))
++        return int(s.getsockname()[1])
++
++
++class Stack:
++    def __init__(self, out: Path, name: str, *, failover: bool = False) -> None:
++        self.out, self.procs, self.gw = out, {}, {}
++        out.mkdir(parents=True, exist_ok=True)
++        self.va = int(os.environ["RV_VALKEY_A"])
++        self.vb = int(os.environ["RV_VALKEY_B"]) if failover else None
++        self.proxy_port, pidfile = _port(), out / "proxy.pid"
++        pidfile.unlink(missing_ok=True)
++        self.start("proxy", [PY, str(HERE / "cutproxy.py"), str(self.proxy_port), str(self.va), str(pidfile), "0",
++                             *([str(self.vb)] if self.vb else [])])
++        while not pidfile.exists() or not pidfile.read_text():
++            time.sleep(0.05)
++        self.proxy_pid = int(pidfile.read_text())
++        admin = os.environ["RV_PG_ADMIN"]
++        self.db = f"f_fresh_{name}_{os.getpid()}_{int(time.time())}"
++        with psycopg.connect(admin, autocommit=True) as c:
++            c.execute(f"CREATE DATABASE {self.db}")
++        self.dsn = admin.rsplit("/", 1)[0] + "/" + self.db
++        self.env = {"PYTHONPATH": str(TREE), "RV_DATABASE_URL": self.dsn, "RV_STATE_HMAC_KEY": HMAC,
++                    "RV_REDIS_URL": f"redis://127.0.0.1:{self.proxy_port}/0"}
++        self.direct = redis.Redis(port=self.va)
++        self.tag = f"ff{os.getpid()}"
++
++    def start(self, name: str, args: list[str], **env: str) -> subprocess.Popen[bytes]:
++        log = open(self.out / f"{name}.log", "ab")  # noqa: SIM115
++        p = subprocess.Popen(args, cwd=TREE, env={**os.environ, **getattr(self, "env", {}), **env}, stdout=log,
++                             stderr=subprocess.STDOUT)
++        self.procs[name] = p
++        return p
++
++    def kill(self, name: str) -> float:
++        self.procs[name].send_signal(signal.SIGKILL)
++        self.procs[name].wait()
++        return time.time()
++
++    def cli(self, *args: str, **env: str) -> tuple[int, dict[str, Any], float]:
++        t0 = time.time()
++        p = subprocess.run([PY, "-m", "rvproto.control", *args], cwd=TREE, env={**os.environ, **self.env, **env},
++                           capture_output=True, text=True, timeout=120)
++        with open(self.out / "cli.log", "a") as f:
++            f.write(json.dumps({"args": list(args[:1]) + ["<key>" if a.startswith("sk-") else a for a in args[1:]],
++                                "rc": p.returncode}) + "\n" + p.stderr[-4000:] + "\n")
++        lines = [ln for ln in p.stdout.splitlines() if ln.startswith("{")]
++        return p.returncode, (json.loads(lines[-1]) if lines else {}), time.time() - t0
++
++    def rehydrator(self, name: str) -> None:
++        self.start(name, [PY, "-m", "rvproto.control", "rehydrate"], RV_REHYDRATOR_ID=name)
++
++    def gateway(self, name: str, idx: int) -> int:
++        port = _port()
++        self.start(name, [PY, "-m", "rvproto.serve", "--worker"], RV_HOST="127.0.0.1", RV_PORT=str(port),
++                   RV_FIX_C36="on", RV_STORE_TIMEOUT_MS="200", RV_GUARD_TOPOLOGY="remote", RV_GUARD_DISCOVERY="static",
++                   RV_GUARD_OWNER_ADDRS=f"127.0.0.1:{_port()}", RV_PROVIDER_URL=f"http://127.0.0.1:{_port()}",
++                   RV_GUARD_TOKENIZER=os.environ["RV_GUARD_TOKENIZER"], RV_DRAIN_ACCEPT_S="0", RV_EXPORTER_PORT="0",
++                   RV_WORKER_INDEX=str(idx), RV_METRICS_TAG=f"{self.tag}{idx}")
++        end = time.monotonic() + 60
++        while True:
++            try:
++                if httpx.get(f"http://127.0.0.1:{port}/healthz", timeout=2).status_code == 200:
++                    break
++            except httpx.TransportError:
++                pass
++            assert self.procs[name].poll() is None and time.monotonic() < end, f"{name} did not start"
++            time.sleep(0.1)
++        self.gw[name] = port
++        return port
++
++    def close(self) -> None:
++        for p in self.procs.values():
++            if p.poll() is None:
++                p.send_signal(signal.SIGKILL)
++                p.wait()
++        for p in Path("/dev/shm").glob(f"*{self.tag}*"):
++            p.unlink(missing_ok=True)
++        with psycopg.connect(os.environ["RV_PG_ADMIN"], autocommit=True) as c:
++            c.execute(f"DROP DATABASE IF EXISTS {self.db} WITH (FORCE)")
++
++
++def probe(port: int, what: str, key: str) -> dict[str, Any]:
++    t = time.time()
++    try:
++        if what == "models":
++            r = httpx.get(f"http://127.0.0.1:{port}/v1/models", headers={"authorization": f"Bearer {key}"}, timeout=5)
++        else:
++            r = httpx.post(f"http://127.0.0.1:{port}/v1/chat/completions", json=BODY, timeout=5,
++                           headers={"authorization": f"Bearer {key}"})
++        code = ""
++        if r.status_code != 200:
++            try:
++                code = r.json()["error"]["code"]
++            except (ValueError, KeyError, TypeError):
++                code = r.text[:40]
++        out = {"t": t, "status": r.status_code, "code": code, "retry_after": r.headers.get("retry-after")}
++    except httpx.TransportError as exc:
++        out = {"t": t, "status": 0, "code": type(exc).__name__, "retry_after": None}
++    out["served"] = out["status"] == 200 or (out["status"] != 0 and out["code"] not in ADMISSION)
++    return out
++
++
++def state(port: int) -> dict[str, Any]:
++    b = httpx.get(f"http://127.0.0.1:{port}/readyz", timeout=5).json()
++    return {"plans_fresh": b.get("plans_fresh"), "killswitch": b.get("killswitch")}
++
++
++def run_probes(st: Stack, gws: list[str], seconds: float, rec: list[dict[str, Any]], phase: str,
++               plan: tuple[tuple[str, str], ...] = (("models", "R"), ("chat", "K"), ("chat", "G"))) -> None:
++    end = time.time() + seconds
++    while time.time() < end:
++        for gw in gws:
++            for what, k in plan:
++                rec.append({"phase": phase, "gw": gw, "what": what, "key": k, **probe(st.gw[gw], what, KEYS[k])})
++        time.sleep(0.02)
++
++
++def wait_for(cond: Any, seconds: float) -> float | None:
++    t0, end = time.time(), time.time() + seconds
++    while time.time() < end:
++        if cond():
++            return time.time() - t0
++        time.sleep(0.05)
++    return None
++
++
++def enforced(st: Stack, gw: str) -> bool:
++    return (probe(st.gw[gw], "models", KEYS["R"])["status"] == 401
++            and probe(st.gw[gw], "chat", KEYS["K"])["code"] == "kill_switch_engaged"
++            and probe(st.gw[gw], "chat", KEYS["G"])["served"])
++
++
++def last_stamp(st: Stack) -> float | None:
++    raw = st.direct.get(STAMP)
++    return None if raw is None else json.loads(raw)["verified_at_ms"] / 1000.0
++
++
++def served(rec: list[dict[str, Any]], **match: Any) -> int:
++    return sum(1 for x in rec if x["served"] and all(x[k] == v for k, v in match.items()))
++
++
++def admitted_r(rec: list[dict[str, Any]], **match: Any) -> int:
++    return sum(1 for x in rec if x["what"] == "models" and x["key"] == "R" and x["status"] == 200
++               and all(x[k] == v for k, v in match.items()))
++
++
++def boot(st: Stack, gws: dict[str, int], rehydrators: tuple[str, ...]) -> dict[str, Any]:
++    rc, seeded, _ = st.cli("init-db")
++    assert rc == 0, "init-db failed"
++    rc, seeded, _ = st.cli("seed")
++    assert rc == 0, "seed failed"
++    for name in rehydrators:
++        st.rehydrator(name)
++    for name, idx in gws.items():
++        st.gateway(name, idx)
++    ready = {gw: wait_for(lambda gw=gw: state(st.gw[gw]) == {"plans_fresh": True, "killswitch": "ok"}
++                          and probe(st.gw[gw], "chat", KEYS["G"])["served"], 20) for gw in gws}
++    assert all(v is not None for v in ready.values()), f"gateways not serving: {ready}"
++    return {"ready_s": ready}
++
++
++def sp1(st: Stack, live: bool) -> dict[str, Any]:
++    ra, rb = st.direct, redis.Redis(port=st.vb)
++    rb.replicaof("no", "one")
++    rb.flushall()
++    ra.flushall()
++    rb.replicaof("127.0.0.1", st.va)
++    assert wait_for(lambda: rb.info("replication").get("master_link_status") == "up", 15) is not None
++    info = boot(st, {"gw-old": 0}, ("rh-1",))
++    time.sleep(1.5)  # a few stamps replicate
++    def synced() -> bool:
++        rep = rb.info("replication")
++        return int(rep.get("slave_repl_offset", rep.get("replica_repl_offset", -1))) >= int(
++            ra.info("replication")["master_repl_offset"])
++
++    assert wait_for(synced, 5) is not None
++    rb.replicaof("no", "one")  # B stops replicating: it keeps write set A (and the stamps so far)
++    outs = [st.cli("key-revoke", KEYS["R"])[1].get("status"), st.cli("killswitch", "org", "org-b", "on")[1].get("status")]
++    info["write_set_b"] = outs
++    info["old_applied_s"] = wait_for(lambda: enforced(st, "gw-old"), 5)
++    if not live:
++        st.kill("rh-1")
++    t_fail = time.time()
++    os.kill(st.proxy_pid, signal.SIGUSR2)  # failover: the endpoint now reaches B, which lost write set B
++    st.gateway("gw-new", 1)  # a recreated gateway: a NEW process after the failover
++    info["new_started_after_failover_s"] = round(time.time() - t_fail, 2)
++    rec: list[dict[str, Any]] = []
++    run_probes(st, ["gw-new", "gw-old"], 8.0, rec, "failover")
++    if not live:
++        st.rehydrator("rh-2")
++    t_back = time.time()
++    conv = {gw: wait_for(lambda gw=gw: enforced(st, gw), 10) for gw in ("gw-new", "gw-old")}
++    run_probes(st, ["gw-new", "gw-old"], 2.0, rec, "after")
++    info.update({
++        "hold_s": 8.0, "rehydrator_during_failover": live, "probes": len(rec),
++        "new_R_admitted": admitted_r(rec, gw="gw-new", phase="failover"),
++        "new_K_served": served(rec, gw="gw-new", key="K", phase="failover"),
++        "old_R_admitted": admitted_r(rec, gw="gw-old", phase="failover"),
++        "old_K_served": served(rec, gw="gw-old", key="K", phase="failover"),
++        "new_codes": _codes(rec, gw="gw-new", phase="failover"),
++        "converged_s_after_rehydrator": conv, "rehydrator_back_at": t_back,
++        "after_R_admitted": admitted_r(rec, phase="after"), "after_K_served": served(rec, key="K", phase="after")})
++    info["pass"] = (info["new_R_admitted"] == 0 and info["new_K_served"] == 0 and info["old_R_admitted"] == 0
++                    and info["old_K_served"] == 0 and all(v is not None for v in conv.values())
++                    and info["after_R_admitted"] == 0 and info["after_K_served"] == 0)
++    _dump(st, rec)
++    return info
++
++
++def _codes(rec: list[dict[str, Any]], **match: Any) -> dict[str, int]:
++    out: dict[str, int] = {}
++    for x in rec:
++        if all(x[k] == v for k, v in match.items()):
++            key = f"{x['what']}:{x['key']}:{x['status']}:{x['code'] if not x['served'] else 'served'}"
++            out[key] = out.get(key, 0) + 1
++    return dict(sorted(out.items()))
++
++
++def _dump(st: Stack, rec: list[dict[str, Any]]) -> None:
++    with open(st.out / "probes.jsonl", "w") as f:
++        for x in rec:
++            f.write(json.dumps(x) + "\n")
++
++
++def sp2(st: Stack) -> dict[str, Any]:
++    st.direct.flushall()
++    info = boot(st, {"gw-0": 0}, ("rh-1",))
++    t_kill = st.kill("rh-1")
++    stamp = last_stamp(st)
++    dead = "redis://127.0.0.1:1/0"  # the writer's store path is down (the gateways' is not)
++    info["writer"] = [st.cli("key-revoke", KEYS["R"], RV_REDIS_URL=dead)[:2],
++                      st.cli("killswitch", "org", "org-b", "on", RV_REDIS_URL=dead)[:2]]
++    t_writes = time.time()
++    rec: list[dict[str, Any]] = []
++    run_probes(st, ["gw-0"], 10.0, rec, "no-rehydrator")
++    bad = [x for x in rec if x["served"] and x["key"] in ("R", "K")]
++    closed = [x for x in rec if x["status"] == 503 and x["code"] in ("kill_switch_unavailable", "shared_state_unavailable")]
++    first_closed = min((x["t"] for x in closed), default=None)
++    info.update({"rehydrator_killed_at": t_kill, "last_stamp_verified_at": stamp, "writes_done_at": t_writes,
++                 "stale_served_R_or_K": len(bad), "last_stale_served_after_writes_s":
++                     round(max(x["t"] for x in bad) - t_writes, 3) if bad else None,
++                 "first_fail_closed_after_writes_s": round(first_closed - t_writes, 3) if first_closed else None,
++                 "first_fail_closed_after_stamp_s": round(first_closed - stamp, 3) if first_closed and stamp else None,
++                 "served_after_fail_closed": sum(1 for x in rec if first_closed and x["t"] > first_closed + 0.05
++                                                 and (x["served"] or x["status"] == 200)),
++                 "retry_after_on_fail_closed": sorted({str(x["retry_after"]) for x in closed}),
++                 "codes": _codes(rec)})
++    st.rehydrator("rh-2")
++    info["enforced_s_after_rehydrator"] = wait_for(lambda: enforced(st, "gw-0"), 10)
++    info["pass"] = (first_closed is not None and stamp is not None and first_closed - stamp <= FRESH_S + 0.6
++                    and info["served_after_fail_closed"] == 0 and "None" not in info["retry_after_on_fail_closed"]
++                    and info["enforced_s_after_rehydrator"] is not None)
++    _dump(st, rec)
++    return info
++
++
++def lock(st: Stack) -> dict[str, Any]:
++    st.direct.flushall()
++    info = boot(st, {"gw-0": 0}, ("rh-1",))
++    info["session_bounds"] = _session_bounds(st)
++    hold = psycopg.connect(st.dsn)  # an operator's psql session: no timeouts, then idle in transaction
++    hold.execute("SELECT * FROM rv2_version WHERE kind = 'ks' FOR UPDATE")
++    t0 = time.time()
++    writer = subprocess.Popen([PY, "-m", "rvproto.control", "killswitch", "model", "gpt-x", "on"], cwd=TREE,
++                              env={**os.environ, **st.env}, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
++    st.direct.flushall()
++    t_flush = time.time()
++    kinds = ("plan", "key", "ks", "budget")
++    restored: dict[str, float | None] = {}
++    end = t_flush + 12.0
++    rec: list[dict[str, Any]] = []
++    writer_end: float | None = None
++    while time.time() < end:
++        if writer_end is None and writer.poll() is not None:
++            writer_end = time.time()
++        for k in kinds:
++            if k not in restored and st.direct.get("{rv2}:meta:" + k) is not None:
++                restored[k] = round(time.time() - t_flush, 3)
++        rec.append({"phase": "locked", "gw": "gw-0", "what": "chat", "key": "G", **probe(st.gw["gw-0"], "chat", KEYS["G"])})
++        time.sleep(0.05)
++    writer_done = writer_end is not None or writer.poll() is not None
++    hold.rollback()
++    t_release = time.time()
++    hold.close()
++    out, _ = writer.communicate(timeout=30)
++    t_writer = writer_end or time.time()
++    status = next((json.loads(ln) for ln in out.splitlines() if ln.startswith("{")), {})
++    refused = [x["t"] - t_flush for x in rec if x["t"] > t_flush and not x["served"]]
++    info.update({"restored_s_after_flush": {k: restored.get(k) for k in kinds},
++                 "g_refused": len(refused), "g_last_refused_s_after_flush": round(max(refused), 3) if refused else None,
++                 "writer_ended_while_locked": writer_done, "writer_status": status.get("status"),
++                 "writer_error": (status.get("error") or "")[:120], "writer_rc": writer.returncode,
++                 "writer_took_s": round(t_writer - t0, 2), "lock_held_s": round(t_release - t0, 2),
++                 "codes": _codes(rec)})
++    info["pass"] = (all(v is not None and v <= 2.5 for v in info["restored_s_after_flush"].values())
++                    and (not refused or max(refused) <= 3.5) and writer_done and info["writer_status"] == "error"
++                    and info["writer_took_s"] <= 2.0 + 1.5)
++    _dump(st, rec)
++    return info
++
++
++def _session_bounds(st: Stack) -> dict[str, str]:
++    code = ("import json, os\nfrom rvproto.control.db import PgDB\nc = PgDB(os.environ['RV_DATABASE_URL'])._conn()\n"
++            "print(json.dumps({g: c.execute(f'SHOW {g}').fetchone()[0] for g in ('lock_timeout', 'statement_timeout', "
++            "'idle_in_transaction_session_timeout', 'tcp_user_timeout')}))")
++    p = subprocess.run([PY, "-c", code], cwd=TREE, env={**os.environ, **st.env}, capture_output=True, text=True)
++    return json.loads(p.stdout) if p.returncode == 0 else {"error": p.stderr[-200:]}
++
++
++def recovered(st: Stack, gws: list[str], t0: float, seconds: float) -> dict[str, float | None]:
++    """Seconds from t0 to each gateway's first served G (probed round-robin, so each is measured on its own)."""
++    first: dict[str, float | None] = {gw: None for gw in gws}
++    end = time.time() + seconds
++    while time.time() < end and any(v is None for v in first.values()):
++        for gw in gws:
++            if first[gw] is None and probe(st.gw[gw], "chat", KEYS["G"])["served"]:
++                first[gw] = round(time.time() - t0, 3)
++        time.sleep(0.01)
++    return first
++
++
++def absent(st: Stack, reps: int = 5) -> dict[str, Any]:
++    st.direct.flushall()
++    info = boot(st, {"gw-0": 0, "gw-1": 1}, ("rh-1", "rh-2"))
++    gws = ["gw-0", "gw-1"]
++    rec: list[dict[str, Any]] = []
++    st.kill("rh-1")  # one of two re-hydrators lost: nothing may fail closed
++    run_probes(st, gws, 5.0, rec, "one-rehydrator", (("chat", "G"),))
++    info["one_rehydrator_503s"] = sum(1 for x in rec if x["status"] == 503)
++    st.rehydrator("rh-1")
++    runs = []
++    for i in range(reps):
++        time.sleep(3.0 + random.random())  # a random phase against the re-hydrators' rounds
++        stamp = last_stamp(st)
++        t_kill = max(st.kill("rh-1"), st.kill("rh-2"))
++        stamp = last_stamp(st) or stamp
++        r: list[dict[str, Any]] = []
++        end = t_kill + 8.0
++        while time.time() < end:
++            run_probes(st, gws, 0.001, r, f"absent-{i}", (("chat", "G"),))
++        first = {gw: min((x["t"] for x in r if x["gw"] == gw and x["status"] == 503), default=None) for gw in gws}
++        last_served = max((x["t"] for x in r if x["served"]), default=None)
++        t_back = time.time()
++        st.rehydrator("rh-1")
++        st.rehydrator("rh-2")
++        back = recovered(st, gws, t_back, 10)
++        runs.append({
++            "stamp_age_at_kill_s": round(t_kill - stamp, 3) if stamp else None,
++            "first_503_after_kill_s": {g: round(v - t_kill, 3) if v else None for g, v in first.items()},
++            "first_503_after_last_stamp_s": {g: round(v - stamp, 3) if v and stamp else None for g, v in first.items()},
++            "global_503_after_kill_s": round(last_served - t_kill, 3) if last_served else None,
++            "served_after_first_503": sum(1 for x in r if x["served"] and all(first.values())
++                                          and x["t"] > max(v for v in first.values() if v) + 0.05),
++            "retry_after": sorted({str(x["retry_after"]) for x in r if x["status"] == 503}),
++            "codes": _codes(r), "recovered_s_after_restart": back, "restarted_at": t_back})
++        rec.extend(r)
++    info["runs"] = runs
++    info["pass"] = info["one_rehydrator_503s"] == 0 and all(
++        all(v is not None and v <= FRESH_S + 0.6 for v in x["first_503_after_last_stamp_s"].values())
++        and x["served_after_first_503"] == 0 and all(v is not None for v in x["recovered_s_after_restart"].values())
++        for x in runs)
++    _dump(st, rec)
++    return info
++
++
++def storeblip(st: Stack) -> dict[str, Any]:
++    st.direct.flushall()
++    info = boot(st, {"gw-0": 0}, ("rh-1", "rh-2"))
++    rec: list[dict[str, Any]] = []
++    run_probes(st, ["gw-0"], 2.0, rec, "before", (("chat", "G"),))
++    stamp = last_stamp(st)
++    subprocess.run(["docker", "pause", os.environ["RV_VALKEY_CONTAINER"]], check=True, capture_output=True)
++    t_down = time.time()
++    try:
++        run_probes(st, ["gw-0"], 3.8, rec, "store-frozen", (("chat", "G"),))
++    finally:
++        subprocess.run(["docker", "unpause", os.environ["RV_VALKEY_CONTAINER"]], check=True, capture_output=True)
++    t_up = time.time()
++    run_probes(st, ["gw-0"], 4.0, rec, "after", (("chat", "G"),))
++    refused = [x for x in rec if x["t"] >= t_down and not x["served"]]
++    info.update({"store_frozen_s": round(t_up - t_down, 2),
++                 "stamp_age_at_freeze_s": round(t_down - stamp, 3) if stamp else None,
++                 "first_refused_after_freeze_s": round(refused[0]["t"] - t_down, 3) if refused else None,
++                 "last_refused_after_thaw_s": round(refused[-1]["t"] - t_up, 3) if refused else None,
++                 "refused_span_s": round(refused[-1]["t"] - refused[0]["t"], 3) if refused else 0.0,
++                 "codes_frozen": _codes(rec, phase="store-frozen"), "codes_after": _codes(rec, phase="after")})
++    info["pass"] = True  # a measurement (the trade-off), not a correctness check
++    _dump(st, rec)
++    return info
++
++
++def pgdown(st: Stack) -> dict[str, Any]:
++    st.direct.flushall()
++    info = boot(st, {"gw-0": 0}, ("rh-1", "rh-2"))
++    rec: list[dict[str, Any]] = []
++    run_probes(st, ["gw-0"], 2.0, rec, "before", (("chat", "G"),))
++    stamp = last_stamp(st)
++    pg = os.environ["RV_PG_CONTAINER"]
++    subprocess.run(["docker", "pause", pg], check=True, capture_output=True)
++    t_down = time.time()
++    try:
++        run_probes(st, ["gw-0"], 10.0, rec, "pg-frozen", (("chat", "G"),))
++    finally:
++        subprocess.run(["docker", "unpause", pg], check=True, capture_output=True)
++    t_up = time.time()
++    back = recovered(st, ["gw-0"], t_up, 20)
++    run_probes(st, ["gw-0"], 2.0, rec, "after", (("chat", "G"),))
++    first = min((x["t"] for x in rec if x["status"] == 503), default=None)
++    info.update({"pg_frozen_s": round(t_up - t_down, 2),
++                 "stamp_age_at_freeze_s": round(t_down - stamp, 3) if stamp else None,
++                 "first_503_after_freeze_s": round(first - t_down, 3) if first else None,
++                 "first_503_after_last_stamp_s": round(first - stamp, 3) if first and stamp else None,
++                 "recovered_s_after_thaw": back, "codes_frozen": _codes(rec, phase="pg-frozen"),
++                 "codes_after": _codes(rec, phase="after")})
++    info["pass"] = (first is not None and stamp is not None and first - stamp <= FRESH_S + 0.6 and back["gw-0"] is not None
++                    and back["gw-0"] <= 3.0)
++    _dump(st, rec)
++    return info
++
++
++def main() -> int:
++    scenario, out = sys.argv[1], Path(sys.argv[2])
++    st = Stack(out, scenario.replace("-", "_"), failover=scenario.startswith("sp1"))
++    try:
++        info = {"sp1": lambda: sp1(st, False), "sp1-live": lambda: sp1(st, True), "sp2": lambda: sp2(st),
++                "lock": lambda: lock(st), "absent": lambda: absent(st), "pgdown": lambda: pgdown(st),
++                "storeblip": lambda: storeblip(st)}[scenario]()
++    finally:
++        st.close()
++    info = {"scenario": scenario, "tree": str(TREE), **info}
++    (out / "summary.json").write_text(json.dumps(info, indent=1, default=str))
++    print(json.dumps({"scenario": scenario, "tree": TREE.name, "pass": info["pass"]}))
++    return 0 if info["pass"] else 1
++
++
++if __name__ == "__main__":
++    sys.exit(main())
+diff -ruN a/tests/unit/test_c36_freshness.py b/tests/unit/test_c36_freshness.py
+--- a/tests/unit/test_c36_freshness.py	1970-01-01 05:30:00.000000000 +0530
++++ b/tests/unit/test_c36_freshness.py	2026-09-24 19:07:53.156963337 +0530
+@@ -0,0 +1,417 @@
++"""RC3 state layer: signed freshness stamp (SP1/SP2), re-hydrator isolation (H7), single-flight plan reconcile (SP6).
++
++The reviewer's reproductions (evidence/reviewer-state-propagation/r2pass1) run here on fakeredis + the in-memory
++Postgres twin, each with its rc2 negative control (readers without a stamp); tests/functional/f_c36_fresh.py runs
++them against real Postgres + Valkey processes.
++"""
++
++from __future__ import annotations
++
++import asyncio
++import time
++from typing import Any
++
++import fakeredis
++import orjson
++import pytest
++
++from rvproto.admit.admission import Admission
++from rvproto.admit.quota import Gcra, TokenLease
++from rvproto.admit.state_v2 import VersionedIdentity, VersionedKillSwitch
++from rvproto.control.db import MemDB, PgDB
++from rvproto.control.rehydrate import Rehydrator
++from rvproto.control.writer import StateWriter, key_hash
++from rvproto.domain.plan import PlanUnavailable
++from rvproto.domain.request import ErrorSpec
++from rvproto.plan.fixtures import tenants
++from rvproto.plan.snapshot_v2 import VersionedPlanSnapshot
++from rvproto.runtime.metrics import Registry
++from rvproto.runtime.store import K2_META, K2_PLAN, K2_STAMP
++from rvproto.runtime.versioned import (
++    ZERO,
++    StampView,
++    StoreDataUnavailable,
++    Version,
++    make_meta,
++    make_stamp,
++    verify_stamp,
++)
++
++K = b"test-hmac-key-not-a-secret"
++KEY_R, KEY_G = "sk-fresh-revoked-R", "sk-fresh-valid-G"
++MODEL = "gpt-4o-mini"
++
++
++def _stores() -> tuple[fakeredis.FakeServer, fakeredis.FakeRedis, fakeredis.aioredis.FakeRedis]:
++    server = fakeredis.FakeServer()
++    return server, fakeredis.FakeRedis(server=server), fakeredis.aioredis.FakeRedis(server=server)
++
++
++def _seed(w: StateWriter) -> None:
++    w.killswitch("global", None, False)
++    w.killswitch("org", "org-a", False)
++    w.key_add(KEY_R, "org-a", key_id="k-R", rate=1e6, burst=1e6)
++    w.key_add(KEY_G, "org-b", key_id="k-G", rate=1e6, burst=1e6)
++    for org, doc in tenants().items():
++        w.plan_set(doc)
++        w.budget_set(org, 10**9)
++
++
++class _Gateway:
++    """One gateway worker's C36 readers + admission; stamp=None is rc2 (no freshness)."""
++
++    def __init__(self, ar: Any, *, fresh_ms: float | None = 3000, clock: Any = time.time) -> None:
++        self.stamp = None if fresh_ms is None else StampView(K, fresh_ms=fresh_ms, clock=clock)
++        self.ident = VersionedIdentity(ar, K, stamp=self.stamp)
++        self.ks = VersionedKillSwitch(ar, Registry(0), K, refresh_ms=100, stale_ms=5000, identity=self.ident)
++        self.plans = VersionedPlanSnapshot(ar, Registry(0), K, reconcile_ms=100, stale_ms=5000, stamp=self.stamp)
++        self.adm = Admission(self.ident, self.ks, Gcra(), TokenLease(ar, Registry(0), chunk_tokens=100, durable=True),
++                             2.0)
++
++    async def refresh(self) -> None:
++        for step in (self.ks.refresh_once, self.plans.load_all if not self.plans.loaded else self.plans.reconcile):
++            try:
++                await step()
++            except StoreDataUnavailable:
++                pass  # the RAM snapshot is kept (it ages)
++
++    async def outcome(self, api_key: str) -> str:
++        """'200' | '401' | '503 <code>' as the edge would answer (admission only)."""
++        self.ident._cache.clear()  # every probe is a cache miss: the store answers
++        got = await self.adm.admit(api_key, 10, MODEL)
++        if isinstance(got, ErrorSpec):
++            return f"{got.status} {got.code}" if got.status == 503 else str(got.status)
++        return "200"
++
++    def ready(self) -> bool:  # edge/ops.readiness without the guard: plans fresh and kill switch not stale
++        return self.plans.fresh() and self.ks.state() != "stale"
++
++
++def _dump(r: fakeredis.FakeRedis) -> dict[bytes, bytes]:
++    return {k: r.dump(k) for k in r.scan_iter("{rv2}:*")}
++
++
++def _restore(r: fakeredis.FakeRedis, snap: dict[bytes, bytes]) -> None:
++    r.flushall()
++    for k, v in snap.items():
++        r.restore(k, 0, v, replace=True)
++
++
++def test_stamp_is_signed_and_rejects_tampering() -> None:
++    now = time.time()
++    raw = orjson.dumps(make_stamp(K, now, {"ks": Version(1, 3), "key": Version(2, 0)}, "rh-a"))
++    s = verify_stamp(K, raw)
++    assert s.versions == {"ks": Version(1, 3), "key": Version(2, 0)} and s.by == "rh-a" and abs(s.verified_at - now) < 0.002
++    for field, value in (("verified_at_ms", int(now * 1000) + 60_000), ("versions", {"ks": [9, 9]}), ("by", "x")):
++        forged = dict(orjson.loads(raw), **{field: value})
++        with pytest.raises(StoreDataUnavailable, match="signature"):
++            verify_stamp(K, orjson.dumps(forged))
++    with pytest.raises(StoreDataUnavailable, match="signature"):
++        verify_stamp(b"another-key", raw)
++    for junk in (b"{", b"[]", orjson.dumps(make_meta(K, "ks", Version(1, 1), [])), orjson.dumps({"versions": 3})):
++        with pytest.raises(StoreDataUnavailable):
++            verify_stamp(K, junk)
++
++
++def test_stamp_view_floors_only_rise_and_freshness_is_bounded_both_ways() -> None:
++    v = StampView(K, fresh_ms=3000, started_at=100.0)
++    assert not v.fresh(now=100.0) and "no freshness stamp" in v.unverified()
++    assert v.observe(orjson.dumps(make_stamp(K, 99.5, {"ks": Version(1, 3)}, "a")))
++    assert v.floor("ks", ZERO) == Version(1, 3) and v.floor("plan", Version(1, 1)) == Version(1, 1)
++    assert not v.fresh(now=100.2) and "started after this process" in v.unverified()  # pre-start round
++    assert v.observe(orjson.dumps(make_stamp(K, 100.5, {"ks": Version(1, 2)}, "b")))  # slower 2nd re-hydrator
++    assert v.floor("ks", ZERO) == Version(1, 3) and v.verified_at == 100.5 and v.by == "b"
++    assert v.fresh(now=101.0) and v.fresh(now=103.5) and not v.fresh(now=103.6)
++    assert v.observe(orjson.dumps(make_stamp(K, 100.1, {"ks": Version(1, 4)}, "c")))  # older round, newer version
++    assert v.verified_at == 100.5 and v.floor("ks", ZERO) == Version(1, 4)
++    assert not v.observe(None) and v.invalid == 0
++    assert not v.observe(orjson.dumps(make_stamp(b"forger", 105.0, {"ks": Version(9, 9)}, "x")))
++    assert v.invalid == 1 and v.verified_at == 100.5 and v.floor("ks", ZERO) == Version(1, 4)
++    skew = StampView(K, fresh_ms=3000, started_at=100.0)
++    skew.observe(orjson.dumps(make_stamp(K, 110.0, {}, "a")))  # 9.5 s in this host's future: a clock problem
++    assert not skew.fresh(now=100.5) and skew.fresh(now=108.0)
++    assert StampView(K, fresh_ms=0).fresh()  # RV_STATE_FRESH_MS=0: not enforced (rc2)
++
++
++class _FlakyDB(MemDB):
++    """Postgres answers every kind but `broken` (a statement timeout / lock timeout on that kind only)."""
++
++    broken: str | None = None
++
++    def snapshot(self, kind: str) -> tuple[Version, list[dict[str, Any]]]:
++        if kind == self.broken:
++            raise ConnectionError(f"injected: canceling statement due to lock timeout ({kind})")
++        return super().snapshot(kind)
++
++
++def test_rehydrator_stamps_only_fully_verified_rounds_and_one_kind_never_stalls_the_others() -> None:
++    _, r, _ = _stores()
++    db = _FlakyDB()
++    w = StateWriter(db, r, K)
++    _seed(w)
++    rh = Rehydrator(db, r, w, period_ms=100, checkpoint_s=5, name="rh-a")
++    r.flushall()
++    db.broken = "ks"
++    events = rh.check_once()
++    assert {e["kind"] for e in events} == {"plan", "key", "budget"}  # rc2 stalled here (FOR SHARE, no timeout)
++    assert r.get(K2_STAMP) is None and rh.stamped is None  # not every kind verified: no stamp
++    db.broken = None
++    t0 = time.time()
++    assert [e["kind"] for e in rh.check_once()] == ["ks"]
++    s = verify_stamp(K, r.get(K2_STAMP))
++    assert s.by == "rh-a" and t0 - 0.001 <= s.verified_at <= time.time()
++    assert s.versions == {kind: db.version(kind) for kind in ("plan", "key", "ks", "budget")}
++    assert rh.check_once() == [] and verify_stamp(K, r.get(K2_STAMP)).verified_at >= s.verified_at  # heartbeat
++
++
++def test_two_rehydrators_never_replace_a_newer_stamp() -> None:
++    _, r, _ = _stores()
++    db = MemDB()
++    w = StateWriter(db, r, K)
++    _seed(w)
++    a = Rehydrator(db, r, w, period_ms=100, checkpoint_s=5, name="rh-a")
++    b = Rehydrator(db, r, w, period_ms=100, checkpoint_s=5, name="rh-b")
++    a_started = time.time() - 0.5  # rh-a's round started earlier and finishes last
++    b.check_once()
++    newer = r.get(K2_STAMP)
++    a._stamp(a_started, {k: db.version(k) for k in ("plan", "key", "ks", "budget")})
++    assert r.get(K2_STAMP) == newer and verify_stamp(K, newer).by == "rh-b"
++    r.set(K2_STAMP, orjson.dumps(make_stamp(b"forger", time.time() + 60, {}, "x")))  # forged: overwritten
++    a.check_once()
++    assert verify_stamp(K, r.get(K2_STAMP)).by == "rh-a"
++
++
++async def test_sp1_new_process_after_failover_to_lagging_replica_serves_nothing_until_reverified() -> None:
++    """repro_regressed_store_new_process: write set A, a replica snapshot, write set B (revoke R, kill org-a),
++    failover to the replica. rc2: a NEW process admits R and serves the killed org. RC3: it answers 503 until
++    a re-hydrator round that started after it has republished B; then R is 401 and org-a is killed."""
++    _, r, ar = _stores()
++    db = MemDB()
++    w = StateWriter(db, r, K)
++    _seed(w)
++    old = _Gateway(ar)
++    rh = Rehydrator(db, r, w, period_ms=100, checkpoint_s=5, stale_grace_ms=0, name="rh-a")
++    rh.check_once()
++    lagging = _dump(r)  # what the replica has: write set A + the stamp of that round
++    w.key_revoke(KEY_R)
++    w.killswitch("org", "org-a", True)
++    rh.check_once()
++    await old.refresh()
++    assert await old.outcome(KEY_R) == "401" and await old.outcome(KEY_G) == "200" and old.ks.org_killed("org-a")
++    _restore(r, lagging)  # failover: the promoted replica lost write set B
++    time.sleep(0.01)  # the new processes start after the failover (as recreated gateways do)
++    new, rc2 = _Gateway(ar), _Gateway(ar, fresh_ms=None)
++    for gw in (old, new, rc2):
++        await gw.refresh()
++    assert await rc2.outcome(KEY_R) == "200" and not rc2.ks.org_killed("org-a")  # the rc2 defect (SP1)
++    assert await old.outcome(KEY_R) == "503 shared_state_unavailable" and old.ks.org_killed("org-a")
++    for key in (KEY_R, KEY_G):  # the new process refuses everything: never 200 for R, never serves org-a
++        assert await new.outcome(key) == "503 kill_switch_unavailable"
++    assert not new.ready() and isinstance(new.plans.get("org-a"), PlanUnavailable)
++    time.sleep(0.01)
++    assert {e["kind"] for e in rh.check_once()} >= {"key", "ks"}  # the re-hydrator restores write set B
++    for gw in (old, new, rc2):
++        await gw.refresh()
++    for gw in (old, new):
++        assert gw.ready() and await gw.outcome(KEY_R) == "401" and await gw.outcome(KEY_G) == "200"
++        assert gw.ks.org_killed("org-a")
++
++
++async def test_sp2_unpublished_revocation_and_kill_switch_fail_closed_after_fresh_ms_without_rehydrator() -> None:
++    """repro_publish_pending_no_rehydrator: committed, publish failed (ok_publish_pending), no re-hydrator.
++    rc2: served stale forever. RC3: served stale for < RV_STATE_FRESH_MS, then 503 with Retry-After."""
++    _, r, ar = _stores()
++    db = MemDB()
++    w = StateWriter(db, r, K)
++    _seed(w)
++    clock = [time.time()]
++    gw, rc2 = _Gateway(ar, clock=lambda: clock[0]), _Gateway(ar, fresh_ms=None)
++    Rehydrator(db, r, w, period_ms=100, checkpoint_s=5).check_once()  # the last round before it stops
++    stamped = verify_stamp(K, r.get(K2_STAMP)).verified_at
++    down = fakeredis.FakeServer()
++    down.connected = False  # the store is unreachable FOR THE WRITER
++    dead = StateWriter(db, fakeredis.FakeRedis(server=down), K)
++    dead.key_revoke(KEY_R)
++    assert dead.last["status"] == "ok_publish_pending"
++    dead.killswitch("org", "org-a", True)
++    assert dead.last["status"] == "ok_publish_pending"
++    clock[0] = stamped + 2.9
++    for g in (gw, rc2):
++        await g.refresh()
++    assert await gw.outcome(KEY_R) == "200" and not gw.ks.org_killed("org-a")  # the bounded exposure
++    await gw.ident.fetch(key_hash(KEY_G))
++    assert gw.ident.cached(KEY_G)[1] is not None
++    clock[0] = stamped + 3.01
++    await gw.refresh()
++    for key in (KEY_R, KEY_G):
++        got = await gw.adm.admit(key, 10, MODEL)
++        assert isinstance(got, ErrorSpec) and (got.status, got.code, got.retry_after_s) == (
++            503, "kill_switch_unavailable", 2.0)
++    with pytest.raises(StoreDataUnavailable, match="last verified"):
++        await gw.ident.fetch(key_hash(KEY_R))  # /v1/models: 503 shared_state_unavailable
++    assert gw.ident.cached(KEY_G)[1] is None  # nor is a principal cached before the lapse trusted
++    assert not gw.ready() and isinstance(gw.plans.get("org-b"), PlanUnavailable)
++    assert await rc2.outcome(KEY_R) == "200" and not rc2.ks.org_killed("org-a")  # rc2: forever
++    Rehydrator(db, r, w, period_ms=100, checkpoint_s=5, stale_grace_ms=0).check_once()  # a re-hydrator is back
++    clock[0] = time.time()
++    await gw.refresh()
++    assert gw.ready() and await gw.outcome(KEY_R) == "401" and gw.ks.org_killed("org-a")
++
++
++async def test_a_manifest_below_the_stamp_is_refused_even_by_a_new_process() -> None:
++    """A store whose stamp is newer than one kind's manifest (a partial restore of old keys): refused, never applied."""
++    _, r, ar = _stores()
++    db = MemDB()
++    w = StateWriter(db, r, K)
++    _seed(w)
++    old_ks = r.get(K2_META + "ks"), r.hgetall("{rv2}:ks")
++    w.killswitch("org", "org-a", True)
++    gw = _Gateway(ar)
++    Rehydrator(db, r, w, period_ms=100, checkpoint_s=5).check_once()
++    r.set(K2_META + "ks", old_ks[0])
++    r.delete("{rv2}:ks")
++    r.hset("{rv2}:ks", mapping=old_ks[1])
++    with pytest.raises(StoreDataUnavailable, match="older than"):
++        await gw.ks.refresh_once()
++    assert gw.ks.state() == "stale"  # never refreshed: nothing was applied from the partial restore
++
++
++async def test_sp6_concurrent_reconciles_never_roll_the_plan_back() -> None:
++    """A push-triggered reconcile that read plan v2 finishes AFTER one that applied v3. rc2 (both ran at once)
++    swapped v2 back in and moved the version backwards; single-flight never does."""
++    _, r, ar = _stores()
++    db = MemDB()
++    w = StateWriter(db, r, K)
++    _seed(w)
++    plans = VersionedPlanSnapshot(ar, Registry(0), K, reconcile_ms=100, stale_ms=5000)  # type: ignore[arg-type]
++    await plans.load_all()
++    doc = tenants()["org-a"]
++    real_get, first = ar.get, [True]
++
++    async def slow_after_read(key: str) -> Any:
++        raw = await real_get(key)
++        if key == K2_PLAN + "org-a" and first[0]:
++            first[0] = False
++            await asyncio.sleep(0.1)  # this reconcile read v2 and stalls before swapping
++        return raw
++
++    ar.get = slow_after_read  # type: ignore[method-assign]
++    w.plan_set(dict(doc, version="a-2"))
++    a = asyncio.create_task(plans._pushed())
++    await asyncio.sleep(0.02)
++    w.plan_set(dict(doc, version="a-3"))
++    v3 = db.version("plan")
++    b = asyncio.create_task(plans._pushed())
++    await asyncio.gather(a, b)
++    assert plans.version == v3 and plans.get("org-a").version == "a-3"  # type: ignore[union-attr]
++
++
++async def test_single_flight_coalesces_triggers_that_a_later_reconcile_covers() -> None:
++    _, r, ar = _stores()
++    w = StateWriter(MemDB(), r, K)
++    _seed(w)
++    metrics = Registry(0)
++    plans = VersionedPlanSnapshot(ar, metrics, K, reconcile_ms=100, stale_ms=5000)  # type: ignore[arg-type]
++    reads = [0]
++    real = plans.reconcile_once
++
++    async def counted() -> None:
++        reads[0] += 1
++        await asyncio.sleep(0.02)
++        await real()
++
++    plans.reconcile_once = counted  # type: ignore[method-assign]
++    await asyncio.gather(*(plans.reconcile() for _ in range(6)))
++    assert reads[0] == 2 and metrics.count["plan_reconcile_coalesced"] == 4
++
++
++class _Recorder:
++    """A psycopg connection that records its settings and statements."""
++
++    def __init__(self, log: list[Any]) -> None:
++        self.log, self.closed = log, False
++        self.isolation_level: Any = None
++        self.read_only: Any = None
++
++    def cursor(self) -> _Recorder:
++        return self
++
++    def __enter__(self) -> _Recorder:
++        return self
++
++    def __exit__(self, *a: object) -> bool:
++        return False
++
++    def execute(self, sql: str, *a: object) -> None:
++        self.log.append((sql, self.isolation_level, self.read_only))
++
++    def fetchone(self) -> tuple[int, int]:
++        return (3, 7)
++
++    def fetchall(self) -> list[Any]:
++        return []
++
++    def commit(self) -> None: ...
++
++    def rollback(self) -> None: ...
++
++    def close(self) -> None:
++        self.closed = True
++
++
++def test_postgres_sessions_are_bounded_and_publish_snapshots_take_no_locks(monkeypatch: pytest.MonkeyPatch) -> None:
++    db = PgDB("postgresql://u@h/db?options=-c%20search_path%3Drv", lock_timeout_ms=1500, statement_timeout_ms=4000,
++              idle_tx_timeout_ms=3000, tcp_user_timeout_ms=2500)
++    seen: dict[str, Any] = {}
++    log: list[Any] = []
++
++    def connect(dsn: str, **kw: Any) -> _Recorder:
++        seen.update(kw, dsn=dsn)
++        return _Recorder(log)
++
++    monkeypatch.setattr(db.psycopg, "connect", connect)
++    assert db.snapshot("ks") == (Version(3, 7), [])
++    assert seen["options"].split(" -c ") == ["-c search_path=rv", "lock_timeout=1500", "statement_timeout=4000",
++                                             "idle_in_transaction_session_timeout=3000", "tcp_user_timeout=2500"]
++    assert seen["tcp_user_timeout"] == 2500 and seen["keepalives"] == 1 and seen["connect_timeout"] == 5
++    assert all(iso == db.psycopg.IsolationLevel.REPEATABLE_READ and ro is True for _, iso, ro in log)
++    assert not any("FOR SHARE" in sql or "INSERT" in sql for sql, _, _ in log)  # waits for no writer (H7)
++    with pytest.raises(ValueError, match="idle_in_transaction_session_timeout"):
++        PgDB("", idle_tx_timeout_ms=-1)
++
++
++class _RacingDB(MemDB):
++    """A writer commits and publishes right after the re-hydrator's Postgres snapshot of `ks`."""
++
++    race: Any = None
++
++    def snapshot(self, kind: str) -> tuple[Version, list[dict[str, Any]]]:
++        snap = super().snapshot(kind)
++        if kind == "ks" and self.race is not None:
++            race, self.race = self.race, None
++            race()
++        return snap
++
++
++def test_rehydrator_reads_the_store_first_so_a_racing_write_is_never_store_ahead() -> None:
++    _, r, _ = _stores()
++    db = _RacingDB()
++    w = StateWriter(db, r, K)
++    _seed(w)
++    rh = Rehydrator(db, r, w, period_ms=100, checkpoint_s=5, stale_grace_ms=0)
++    db.race = lambda: w.killswitch("org", "org-a", True)
++    assert rh.check_once() == []  # rc2 read Postgres first: "store_ahead" and a needless epoch bump
++    assert db.version("ks").epoch == 1
++
++
++def test_fresh_ms_must_cover_a_rehydrator_period(monkeypatch: pytest.MonkeyPatch) -> None:
++    from rvproto.runtime.config import load_settings
++
++    monkeypatch.setenv("RV_STATE_FRESH_MS", "1500")
++    with pytest.raises(ValueError, match="RV_STATE_FRESH_MS"):
++        load_settings()
++    for ok in ("0", "2000", "3000"):
++        monkeypatch.setenv("RV_STATE_FRESH_MS", ok)
++        assert load_settings().v2.c36.fresh_ms == float(ok)
++    monkeypatch.delenv("RV_STATE_FRESH_MS")
++    assert load_settings().v2.c36.fresh_ms == 3000.0

@@ -1,0 +1,13 @@
+| run | (a) windowed t_input p99 (n) | (b) lifetime t_input p99 at meas_end (n) [at meas_start] | (c) client C4 p99 (n) | C4 - windowed | C4 - lifetime |
+|---|---|---|---|---|---|
+| c38r2-1-200-r1 | 14.877 (59902) | 15.008 (75000) [15.008] | 18.445 (58964) | 3.568 | 3.437 |
+| c38r2-1-200-r2 | 15.008 (59879) | 15.008 (150000) [15.008] | 18.223 (58982) | 3.215 | 3.215 |
+| c38r2-1-200-r3 | 15.008 (59869) | 15.008 (225000) [15.008] | 18.171 (58929) | 3.163 | 3.163 |
+| c38r2-1-250 | 15.925 (74866) | 15.401 (318750) [15.139] | 19.326 (73663) | 3.401 | 3.925 |
+scrape metrics-c38r2-1-200-r3-1.txt: t=1790253457.6102962 /metrics lifetime p99 15.007744 n 171926.0 | dump copy p99 None n 0
+scrape metrics-c38r2-1-200-r3-2.txt: t=1790253715.0322359 /metrics lifetime p99 15.007744 n 223419.0 | dump copy p99 None n 0
+scrape metrics-c38r2-1-200-r3-b-1.txt: t=1790253715.0310967 /metrics lifetime p99 15.007744 n 223418.0 | dump copy p99 15.008 n 223318
+scrape metrics-c38r2-1-250-1.txt: t=1790253954.1004844 /metrics lifetime p99 15.138815 n 244162.0 | dump copy p99 15.139 n 244087
+scrape metrics-c38r2-1-250-2.txt: t=1790254250.155204 /metrics lifetime p99 15.40096 n 318179.0 | dump copy p99 15.401 n 317988
+c38r2-1-200-r3: 257.4 s apart: lifetime /metrics p99 15.007744 -> 15.007744 (change 0.0 ms, n 171926.0 -> 223419.0)
+c38r2-1-250: 296.1 s apart: lifetime /metrics p99 15.138815 -> 15.40096 (change 0.262 ms, n 244162.0 -> 318179.0); windowed p99 over the same interval 15.925 (n 73901)

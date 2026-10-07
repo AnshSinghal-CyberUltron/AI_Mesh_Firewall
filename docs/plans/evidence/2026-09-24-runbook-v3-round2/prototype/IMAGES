@@ -1,0 +1,44 @@
+rvproto-2 container images (Artifact Registry asia-south1-docker.pkg.dev/ai-mesh-firewall/rv-r2). Pin by DIGEST.
+
+RC2 (manifest 6093c8dd10bd12f5d5058a963ac9db3ed9768985c4907d73d3a5272c01cff0fc, tag rvproto2-rc2), built 2026-09-24T12:05Z
+on rv-r2impl-dev-2 by deploy/images/build.sh from a tree verified == the RC2 manifest; the manifest re-verified
+inside both images; container smoke PASS (functional/rc2/container_smoke_rvproto2-rc2.out):
+  gateway  asia-south1-docker.pkg.dev/ai-mesh-firewall/rv-r2/gateway@sha256:c4c63287b4eea4255312627143a8b595424f26d85cee6fed1c2b30ac1e77b5e2
+  guard    asia-south1-docker.pkg.dev/ai-mesh-firewall/rv-r2/guard@sha256:a7e6165a33bcfd3f474dba7f663a43419de89eb3f286a31bbe9b845d6c6cccd3
+
+RC1 (manifest 002598514a2bd4b494ad0df8e7e4ffaac589d79a26aa139ebd4fcf78280a25a0, frozen by the controller, bulletin B27):
+  gateway  asia-south1-docker.pkg.dev/ai-mesh-firewall/rv-r2/gateway@sha256:69f56e8d669a3dcae206b0164364e48396496694550e8f6069450b80d4ed79b4
+  guard    asia-south1-docker.pkg.dev/ai-mesh-firewall/rv-r2/guard@sha256:2f2c292c65324d6a8c0aa7622bddbde838017207f1e49119d57f234e553ce4e7
+
+-- below: the pre-RC record (tag rvproto2-20260924; its later pushes are NOT an RC) --
+rvproto-2 container images (Artifact Registry asia-south1-docker.pkg.dev/ai-mesh-firewall/rv-r2)
+built 2026-09-24T10:01Z on rv-r2impl-dev-1 by rvproto2/deploy/images/build.sh from the tree whose manifest is
+SP/rvproto2/VERSION (manifest_sha256 b910f629ace4702a5fc954c4e6bda1cead7206c554a6c66eaa654aa83e8783d6), tag rvproto2-20260924
+
+USE THESE (pin by digest):
+  gateway  asia-south1-docker.pkg.dev/ai-mesh-firewall/rv-r2/gateway@sha256:ed58fe882d7248edbb42113d9fc6c69e896eafaa873cc58ae2904837308528b3
+  guard    asia-south1-docker.pkg.dev/ai-mesh-firewall/rv-r2/guard@sha256:96e5dd4a60f496ae4cf8926fcbf651fb35fe16ee4d94104bf807097728f7faab
+
+gateway: python:3.12-slim-bookworm, CPU; 481 MB (110 MB compressed). Modes: gateway (default), control ..., rehydrator, shell.
+guard:   python:3.12-slim-bookworm + pip CUDA 13 / cuDNN 9 / TensorRT 10.16.1.11 / ONNX Runtime 1.30 (TensorRT EP);
+         13.8 GB (5.9 GB compressed). PG2-22M + tokenizer; built-in TensorRT engine cache for sm_89 (L4): the exact
+         1x512 fp16 PG2-22M engine + timing cache (a container on an L4 loads it in 9.1 s: 239.5k tok/s; another
+         GPU builds its own at start). Modes: guard (default), unit, prebuild, control ..., rehydrator, shell.
+         Host: NVIDIA driver >= 580 and nvidia-container-toolkit (`--gpus all`).
+measured on the dev VM (g2-standard-8, asia-south1-b): cold pull of the guard image 107.4 s; gateway 3.7 s with
+base layers present; guard container start -> owner ready ~15-19 s; build+push after a code change 64 s (cached
+pip layer).
+
+MIG: deploy/images/mig-startup.sh (startup-script) + mig-shutdown.sh (shutdown-script); see USAGE.md "Managed
+instance groups".
+
+Superseded tags pushed during this lane (do not use):
+  rc1  stale metric dump files merged into /metrics/all; a store flush dropped the guard fleet; a flush
+       restored a budget checkpoint older than the last budget-set
+  rc2  the same two store-flush defects
+  rc3  concurrent metric dumps could fail GET /dump (shared temporary file name)
+  rvproto2-20260924, earlier pushes of the same tag (gateway@sha256:69f56e8d... / guard@sha256:2f2c292c...,
+       then gateway@sha256:b689d114... / guard@sha256:19be1b06...): same serving code; the final push adds the
+       last functional-test harness edits and the fixed MIG startup script (Secret Manager JSON parsing). The tag
+       now points at the final push
+All fixed in rvproto2-20260924.

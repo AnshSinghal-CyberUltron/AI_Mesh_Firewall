@@ -1,0 +1,140 @@
+== MIGs
+NAME                                    BASENAME       SIZE  TARGET_SIZE
+rv-r2mig-guard                          asia-south1    4     4
+rv-r2mig-gw                             asia-south1    1     1
+gke-rv-r2gke-gpuod-2dff6272-grp         asia-south1-b  0     0
+gke-rv-r2gke-gpures-d00c5687-grp        asia-south1-b  1     1
+gke-rv-r2gke-gw-739ab374-grp            asia-south1-b  0     0
+gke-rv-r2gke-gpuod-af2fb331-grp         asia-south1-a  0     0
+gke-rv-r2gke-gw-b603c6b9-grp            asia-south1-a  0     0
+gke-rv-r2gke-default-pool-4cd01da1-grp  asia-south1-c  1     1
+gke-rv-r2gke-gpuod-e5b7ae22-grp         asia-south1-c  0     0
+gke-rv-r2gke-gpures-b33b60b4-grp        asia-south1-c  0     0
+gke-rv-r2gke-gw-e2430526-grp            asia-south1-c  1     1
+gke-rv-r2gke-sysnowi-9d174105-grp       asia-south1-c  1     1
+== unmanaged IGs
+NAME                ZONE           INSTANCES
+rv-r2edge-ig-nginx  asia-south1-c  1
+rv-r2edge-ig-prov   asia-south1-c  2
+== GKE
+NAME      LOCATION     STATUS   CURRENT_NODE_COUNT
+rv-r2gke  asia-south1  RUNNING  4
+== SQL
+NAME            AVAILABILITY_TYPE  STATUS    DELETION_PROTECTION_ENABLED
+rv-r2-state-pg  REGIONAL           RUNNABLE  False
+rv-r2-chaos-pg  REGIONAL           RUNNABLE  False
+rv-r2-pg        REGIONAL           RUNNABLE  False
+rv-r2-scale-pg  ZONAL              RUNNABLE  False
+== Valkey
+NAME            STATE
+rv-r2-state-kv  ACTIVE
+rv-r2-scale-kv  ACTIVE
+rv-r2-valkey    ACTIVE
+rv-r2-chaos-kv  ACTIVE
+== Redis
+INSTANCE_NAME      STATUS  TIER
+rv-r2-chaos-redis  READY   STANDARD_HA
+rv-r2-state-redis  READY   STANDARD_HA
+== Reservations
+NAME            ZONE           COUNT  IN_USE_COUNT
+rv-r2-l4pool-b  asia-south1-b  7      7
+rv-r2-l4pool-a  asia-south1-a  1      0
+rv-r2-l4pool-c  asia-south1-c  7      7
+== Forwarding rules
+NAME                                              REGION       IP_ADDRESS      TARGET                                          BACKEND_SERVICE
+a40693d460fc74579bbbae0f0e873c7e                  asia-south1  34.180.15.30                                                    k8s2-p9mrw181-rv-rv-gateway-nlb-7k2utn1v
+gkegw1-p9mr-rv-rv-gw-vikxtfnn2r1i                 asia-south1  35.200.146.7    gkegw1-p9mr-rv-rv-gw-utt8214r6qug
+rv-r2edge-fr-alb                                  asia-south1  34.93.149.83    rv-r2edge-thp-alb
+rv-r2edge-fr-ilb                                  asia-south1  10.160.0.86                                                     rv-r2edge-bes-ilb
+rv-r2edge-fr-nlbn                                 asia-south1  35.200.183.99                                                   rv-r2edge-bes-nlbn
+rv-r2edge-fr-nlbx                                 asia-south1  35.200.241.121                                                  rv-r2edge-bes-nlbx
+rv-r2mig-fr                                       asia-south1  34.14.160.230   rv-r2mig-thp
+rv-r2mig-fr-nlb                                   asia-south1  35.234.213.2                                                    rv-r2mig-bes-nlb
+sca-auto-fr-185cd84b-1d8e-4a73-a31b-7a0e7537f4b7  asia-south1  10.61.0.3       gcp-memorystore-auto-d0f91224e0a1b042-psc-sa
+sca-auto-fr-35897653-211e-4dd1-9fa0-2fd73ec438f1  asia-south1  10.61.0.14      gcp-memorystore-auto-aacf80c568ce0b4e-psc-sa-2
+sca-auto-fr-56142b63-80fc-4611-a022-7c82968b834e  asia-south1  10.61.0.12      gcp-memorystore-auto-c11dfbb1a8520fed-psc-sa
+sca-auto-fr-5c586ea6-78ee-4fb3-8bf9-45d3f2d21124  asia-south1  10.61.0.16      gcp-memorystore-auto-a41e4f41960fc504-psc-sa
+sca-auto-fr-9ef1ed33-c64f-40d5-92a4-74943e11dab6  asia-south1  10.61.0.15      gcp-memorystore-auto-aacf80c568ce0b4e-psc-sa
+sca-auto-fr-b15c4513-be1f-4246-94b7-816fc1c75325  asia-south1  10.61.0.2       gcp-memorystore-auto-d0f91224e0a1b042-psc-sa-2
+sca-auto-fr-c98c0c9f-79ce-4c0e-9dc2-80d29b3336f2  asia-south1  10.61.0.17      gcp-memorystore-auto-a41e4f41960fc504-psc-sa-2
+sca-auto-fr-edda26b4-81e7-4f51-968c-e42b292d0fe3  asia-south1  10.61.0.13      gcp-memorystore-auto-c11dfbb1a8520fed-psc-sa-2
+== Backend services
+NAME                                        REGION       LOAD_BALANCING_SCHEME
+gkegw1-p9mr-rv-gw-serve404-80-eniykmsl4m0b  asia-south1  EXTERNAL_MANAGED
+gkegw1-p9mr-rv-gw-serve500-80-b1l3kuhuloyp  asia-south1  EXTERNAL_MANAGED
+gkegw1-p9mr-rv-lbcheck-8080-qza4efimiyrp    asia-south1  EXTERNAL_MANAGED
+k8s2-p9mrw181-rv-rv-gateway-nlb-7k2utn1v    asia-south1  EXTERNAL
+rv-r2edge-bes-alb                           asia-south1  EXTERNAL_MANAGED
+rv-r2edge-bes-ilb                           asia-south1  INTERNAL
+rv-r2edge-bes-nlbn                          asia-south1  EXTERNAL
+rv-r2edge-bes-nlbx                          asia-south1  EXTERNAL
+rv-r2mig-bes-gw                             asia-south1  EXTERNAL_MANAGED
+rv-r2mig-bes-nlb                            asia-south1  EXTERNAL
+== Target pools/proxies/url maps
+gkegw1-p9mr-rv-rv-gw-utt8214r6qug	asia-south1
+rv-r2edge-thp-alb	asia-south1
+rv-r2mig-thp	asia-south1
+gkegw1-p9mr-rv-rv-gw-utt8214r6qug	asia-south1
+rv-r2edge-um-alb	asia-south1
+rv-r2mig-urlmap	asia-south1
+== Health checks
+gkegw1-p9mr-rv-gw-serve404-80-eniykmsl4m0b	asia-south1
+gkegw1-p9mr-rv-gw-serve500-80-b1l3kuhuloyp	asia-south1
+gkegw1-p9mr-rv-lbcheck-8080-qza4efimiyrp	asia-south1
+k8s2-p9mrw181-rv-rv-gateway-nlb-7k2utn1v	asia-south1
+rv-r2edge-hc-8090	asia-south1
+rv-r2edge-hc-8104	asia-south1
+rv-r2edge-hc-8105	asia-south1
+rv-r2edge-hc-8106	asia-south1
+rv-r2mig-hc-gw	asia-south1
+rv-r2mig-hc-nlb	asia-south1
+== NEGs
+k8s1-dfefcc0c-rv-lbcheck-8080-4644c594	asia-south1-b		0
+k8s2-p9mrw181-rv-rv-gateway-nlb-7k2utn1v	asia-south1-b		0
+k8s1-dfefcc0c-rv-lbcheck-8080-4644c594	asia-south1-c		0
+k8s2-p9mrw181-rv-rv-gateway-nlb-7k2utn1v	asia-south1-c		1
+== Addresses
+NAME                                                REGION       ADDRESS         STATUS    ADDRESS_TYPE  PURPOSE
+rv-r2-psa-range                                                  10.60.0.0       RESERVED  INTERNAL      VPC_PEERING
+ai-mesh                                             asia-south1  8.231.115.48    IN_USE    EXTERNAL
+rv-r2edge-ip-alb                                    asia-south1  34.93.149.83    IN_USE    EXTERNAL
+rv-r2edge-ip-lg-1                                   asia-south1  34.93.52.206    IN_USE    EXTERNAL
+rv-r2edge-ip-lg-2                                   asia-south1  34.93.84.192    IN_USE    EXTERNAL
+rv-r2edge-ip-nlbn                                   asia-south1  35.200.183.99   IN_USE    EXTERNAL
+rv-r2edge-ip-nlbx                                   asia-south1  35.200.241.121  IN_USE    EXTERNAL
+rv-r2gke-ip                                         asia-south1  35.200.146.7    IN_USE    EXTERNAL
+rv-r2mig-ip                                         asia-south1  34.14.160.230   IN_USE    EXTERNAL
+rv-r2mig-ip-nlb                                     asia-south1  35.234.213.2    IN_USE    EXTERNAL
+sca-auto-addr-0515abca-0bf9-4284-bde3-4fb160ce68fc  asia-south1  10.61.0.15      IN_USE    INTERNAL      GCE_ENDPOINT
+sca-auto-addr-3afa6ea4-e58b-4224-9258-9aaae14c5ccd  asia-south1  10.61.0.2       IN_USE    INTERNAL      GCE_ENDPOINT
+sca-auto-addr-59e41c82-3ea6-49b2-a22d-6d66ac31bc2f  asia-south1  10.61.0.14      IN_USE    INTERNAL      GCE_ENDPOINT
+sca-auto-addr-6bb31efb-621f-4f7f-aa24-7dd5f5d9623c  asia-south1  10.61.0.17      IN_USE    INTERNAL      GCE_ENDPOINT
+sca-auto-addr-6bc61ddc-7eb1-4a33-a3fc-2a8ca30d70e7  asia-south1  10.61.0.12      IN_USE    INTERNAL      GCE_ENDPOINT
+sca-auto-addr-ac2b6654-97ec-43d6-97ff-3b2cd8369f08  asia-south1  10.61.0.13      IN_USE    INTERNAL      GCE_ENDPOINT
+sca-auto-addr-c9f9348c-7e19-4bfa-a8e8-ec8bb48d1782  asia-south1  10.61.0.16      IN_USE    INTERNAL      GCE_ENDPOINT
+sca-auto-addr-d3d91eb5-9796-487d-9e60-14581396894c  asia-south1  10.61.0.3       IN_USE    INTERNAL      GCE_ENDPOINT
+== Instance templates
+rv-r2mig-guard-tpl-g0 rv-r2mig-guard-tpl-v1 rv-r2mig-guard-tpl-v2 rv-r2mig-guard-tpl-v2od rv-r2mig-gw-tpl-p1 rv-r2mig-gw-tpl-p3 rv-r2mig-gw-tpl-p4 rv-r2mig-gw-tpl-v1 rv-r2mig-gw-tpl-v2 rv-r2mig-gw-tpl-v2off rv-r2mig-gw-tpl-v3 gke-rv-r2gke-default-pool-4cd01da1 gke-rv-r2gke-gpuod-2dff6272 gke-rv-r2gke-gpuod-af2fb331 gke-rv-r2gke-gpuod-e5b7ae22 gke-rv-r2gke-gpures-b33b60b4 gke-rv-r2gke-gpures-d00c5687 gke-rv-r2gke-gw-739ab374 gke-rv-r2gke-gw-b603c6b9 gke-rv-r2gke-gw-e2430526 gke-rv-r2gke-sysnowi-9d174105 
+== Images
+rv-proto-unit-img-20260923f	200
+rv-r2mig-guard-img-rc2	200
+== Snapshots
+aiguardx-ws2022-tes-us-central1-a-20260915113953-xmorzdbs	50
+aiguardx-ws2022-tes-us-central1-a-20260916113953-0rzbol73	50
+aiguardx-ws2022-tes-us-central1-a-20260917113953-h4jqw83f	50
+aiguardx-ws2022-tes-us-central1-a-20260918113953-07qwon59	50
+== Unattached disks
+== Firewall rules (non-default)
+allow-demo-ui-from-dev allow-fireflies-8600 cyberultron-aimesh-vpc-allow-custom cyberultron-aimesh-vpc-allow-icmp cyberultron-aimesh-vpc-allow-ssh gke-rv-r2gke-6e6bc8f1-all gke-rv-r2gke-6e6bc8f1-vms gkegw1-p9mr-l7-default-asia-south1 k8s2-p9mrw181-rv-rv-gateway-nlb-7k2utn1v k8s2-p9mrw181-rv-rv-gateway-nlb-7k2utn1v-deny k8s2-p9mrw181-rv-rv-gateway-nlb-7k2utn1v-fw rv-r2-allow-lb-health-checks rv-r2-allow-proxy-only-subnet rv-r2edge-fw-ext rv-r2edge-fw-proxy rv-r2gke-lb-to-pods rv-r2gke-pods-to-harness rv-r2mig-fw-nlb 
+== Routers/NAT
+== Service connection policies
+rv-r2-scp-memorystore
+== Secrets
+rv-r2-pg-app-password rv-r2-pg-postgres-password rv-r2mig-database-url rv-r2mig-state-hmac 
+== AR repos
+Listing items under project ai-mesh-firewall, across all locations.
+
+REPOSITORY  LOCATION  SIZE (MB)
+rv-r2                 17511.264
+== Buckets
+ai-mesh-firewall-rv-evidence-20260923

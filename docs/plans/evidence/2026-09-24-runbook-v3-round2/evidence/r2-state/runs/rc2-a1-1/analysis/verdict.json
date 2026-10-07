@@ -1,0 +1,388 @@
+{
+ "run": "/home/contact_cyberultron_com/rv-evidence-raw/r2-state/runs/rc2-a1-1",
+ "kind": "failover",
+ "build": "c36_on",
+ "code": "rc2",
+ "t_fault_ns": 1790257524093720703,
+ "t_fault_source": "storewatch first error after the API call",
+ "requests": 176101,
+ "by_source": {
+  "probe": 96601,
+  "olg": 79500
+ },
+ "outcomes_by_label_all": {
+  "G": {
+   "200": 19318,
+   "503:plan_unavailable": 2
+  },
+  "K": {
+   "503:kill_switch_engaged": 19321
+  },
+  "N": {
+   "200": 97341,
+   "503:plan_unavailable": 13,
+   "403:blocked_by_policy": 1362,
+   "503:shared_state_unavailable": 104
+  },
+  "P": {
+   "200": 19318,
+   "503:plan_unavailable": 2
+  },
+  "R": {
+   "401:invalid_api_key": 19211,
+   "503:shared_state_unavailable": 109
+  }
+ },
+ "outcomes_by_label_after_fault": {
+  "G": {
+   "200": 9112,
+   "503:plan_unavailable": 2
+  },
+  "K": {
+   "503:kill_switch_engaged": 9115
+  },
+  "N": {
+   "200": 47138,
+   "503:plan_unavailable": 13,
+   "503:shared_state_unavailable": 104,
+   "403:blocked_by_policy": 676
+  },
+  "P": {
+   "200": 9113,
+   "503:plan_unavailable": 2
+  },
+  "R": {
+   "503:shared_state_unavailable": 108,
+   "401:invalid_api_key": 9006
+  }
+ },
+ "gap_window_60s_valid_outcomes": {
+  "200": 10081,
+  "503:plan_unavailable": 17,
+  "503:shared_state_unavailable": 104,
+  "403:blocked_by_policy": 118
+ },
+ "violations": {},
+ "strata_not_c36": {
+  "policy_blocks_403_blocked_by_policy": {
+   "pre": 686,
+   "gap60": 118,
+   "post": 558
+  },
+  "overload_503_owner_shed": {},
+  "valid_offered": {
+   "pre": 71300,
+   "gap60": 10320,
+   "post": 55840
+  }
+ },
+ "storm": {
+  "writes": 0,
+  "writes_failed": {},
+  "admitted_after_ack_plus_1s": 0,
+  "examples": [],
+  "propagation_s": {}
+ },
+ "monotonic": {
+  "per_gateway_post_fault_older_than_pre_max": 0,
+  "per_worker_regressions": 0,
+  "per_gateway_any_regression": 0,
+  "examples": []
+ },
+ "audit_admission_evidence": {
+  "killed_org_audit_records": 0,
+  "revoked_key_audit_records": 0
+ },
+ "audit": {
+  "admitted": 135977,
+  "tail_records": 136964,
+  "final_records": 202184,
+  "admitted_never_written": 370,
+  "admitted_missing_from_final_store": 370,
+  "never_written_examples": [
+   {
+    "rid": "4b75f4d9-4e39-4671-855d-fd8aff2cd956",
+    "src": "probe",
+    "label": "N",
+    "gw": "10.160.15.195",
+    "worker": "7",
+    "oc": "200",
+    "retry_after": null,
+    "ver": "n.1018",
+    "t_rel_s": -0.072398849
+   },
+   {
+    "rid": "5071f2ad-1cb8-4492-b9d7-4b4d65033dfe",
+    "src": "probe",
+    "label": "N",
+    "gw": "10.160.15.201",
+    "worker": "5",
+    "oc": "200",
+    "retry_after": null,
+    "ver": "n.1018",
+    "t_rel_s": -0.064012419
+   },
+   {
+    "rid": "dfdc4e1e-14c5-4caa-a9dc-9e40be7549a0",
+    "src": "probe",
+    "label": "G",
+    "gw": "10.160.15.195",
+    "worker": "9",
+    "oc": "200",
+    "retry_after": null,
+    "ver": "g.1018",
+    "t_rel_s": -0.022800221
+   },
+   {
+    "rid": "78f69432-f1f5-4145-864a-c13b203752f1",
+    "src": "probe",
+    "label": "G",
+    "gw": "10.160.15.201",
+    "worker": "1",
+    "oc": "200",
+    "retry_after": null,
+    "ver": "g.1018",
+    "t_rel_s": -0.0138731
+   },
+   {
+    "rid": "92243785-c73f-41b4-90cb-b5f9110f345c",
+    "src": "probe",
+    "label": "P",
+    "gw": "10.160.15.195",
+    "worker": "1",
+    "oc": "200",
+    "retry_after": null,
+    "ver": "p.0104",
+    "t_rel_s": -0.005707872
+   },
+   {
+    "rid": "0d40aee0-9cde-4909-b610-af55a5065d42",
+    "src": "probe",
+    "label": "P",
+    "gw": "10.160.15.201",
+    "worker": "9",
+    "oc": "200",
+    "retry_after": null,
+    "ver": "p.0104",
+    "t_rel_s": 0.002484497
+   },
+   {
+    "rid": "368b92e6-62f8-4435-88f1-0fc02fa8db36",
+    "src": "probe",
+    "label": "N",
+    "gw": "10.160.15.195",
+    "worker": "2",
+    "oc": "200",
+    "retry_after": null,
+    "ver": "n.1018",
+    "t_rel_s": 0.010603145
+   },
+   {
+    "rid": "1716ee1d-ff95-4c8c-ac22-a384593c3b46",
+    "src": "probe",
+    "label": "N",
+    "gw": "10.160.15.201",
+    "worker": "10",
+    "oc": "200",
+    "retry_after": null,
+    "ver": "n.1018",
+    "t_rel_s": 0.019576274
+   }
+  ]
+ },
+ "store": {
+  "flush_seen_at_s": 0.0,
+  "restored_at_s": 4.35000081,
+  "rehydrated_events": []
+ },
+ "rehydration_bound": {
+  "declared_s": 2.0,
+  "declared_formula": "RV_REHYDRATE_PERIOD_MS + took_ms + max(RV_KS_REFRESH_MS, RV_PLAN_RECONCILE_MS)",
+  "workers_with_notready_polls": 3,
+  "workers_total": 24,
+  "max_first_200_after_gap_s": 5.668694079,
+  "store_restored_s": 4.35000081
+ },
+ "db_vs_store_post": {
+  "db_versions": {
+   "budget": "1.14",
+   "key": "1.26",
+   "ks": "1.15",
+   "plan": "4.6128"
+  },
+  "store_versions": {
+   "plan": "4.6128",
+   "key": "1.26",
+   "ks": "1.15",
+   "budget": "1.14"
+  },
+  "versions_equal": true,
+  "plan_records_equal": true,
+  "plan_db": {
+   "org-g": [
+    4,
+    5629,
+    "786ff133ce0dc869f529623292837901d3d302ebb666c78d86391cf2aeb9db01"
+   ],
+   "org-k": [
+    4,
+    5634,
+    "2ea4756c56447c7cd5f2107929b36bca2e7187710829878be0fe359e9e87fac0"
+   ],
+   "org-k10": [
+    1,
+    5,
+    "3c1b45869ecae7ffcb9071b865bcb5afd90919fa378f90f1ae8a5990095d268b"
+   ],
+   "org-k11": [
+    1,
+    6,
+    "8f6bde2b34fcf1549af189ed43b6577097bdaf968a224a8f68a0e160b0523bb8"
+   ],
+   "org-k2": [
+    1,
+    7,
+    "3258b06dc36de7c25715ec76f78c56de1fe460dc3e985dc5b0df908639cf3970"
+   ],
+   "org-k3": [
+    1,
+    8,
+    "cd39eaa020facb6afe96eac4942ad08c316dcef06568963752f047f17c195fb6"
+   ],
+   "org-k4": [
+    1,
+    9,
+    "9d7a5a10f1385f7acae740f12e3a1e62efb65198dd4ee2fed239e3c1e3528a31"
+   ],
+   "org-k5": [
+    1,
+    10,
+    "28b92b7242ba25ca38d29ad92996796b0242f3f0d6bae5c48963a18793cacd50"
+   ],
+   "org-k6": [
+    1,
+    11,
+    "ad615653c45b247942c4704281a4468614c3a7e1953087a0c86196dbc36f2861"
+   ],
+   "org-k7": [
+    1,
+    12,
+    "6ea16691b2650a900f7bf6e78e3bd0072417f0931e74e1e61324953b6844b1af"
+   ],
+   "org-k8": [
+    1,
+    13,
+    "4c088047f4226415901b5b2d299a6060a99eb7bb24ce9916dfb9a9cedb298578"
+   ],
+   "org-k9": [
+    1,
+    14,
+    "a0e017f426eadc5be63dbdf8fc217976004a184fbe681d81312b291bbabc663b"
+   ],
+   "org-n": [
+    4,
+    5624,
+    "6c1d33fc4b11da438ef079c75a68f543b23ce0467007194c374b6db59061bba3"
+   ],
+   "org-p": [
+    4,
+    6128,
+    "95f2f7e1ce099faf148cb3010a7a2b75423fa70a5ebbc628934f9cee1dfabd0c"
+   ],
+   "org-w": [
+    4,
+    6125,
+    "c171a5a7157d990f71ee5592acc52011fa4b392febd7531cbc50ea45491e599d"
+   ],
+   "org-w2": [
+    4,
+    518,
+    "526193d500cf792d436fc059d65226107de3b4131c422c3895cf913c654c0dbf"
+   ]
+  },
+  "plan_store": {
+   "org-n": [
+    4,
+    5624,
+    "6c1d33fc4b11da438ef079c75a68f543b23ce0467007194c374b6db59061bba3"
+   ],
+   "org-k7": [
+    1,
+    12,
+    "6ea16691b2650a900f7bf6e78e3bd0072417f0931e74e1e61324953b6844b1af"
+   ],
+   "org-k": [
+    4,
+    5634,
+    "2ea4756c56447c7cd5f2107929b36bca2e7187710829878be0fe359e9e87fac0"
+   ],
+   "org-w": [
+    4,
+    6125,
+    "c171a5a7157d990f71ee5592acc52011fa4b392febd7531cbc50ea45491e599d"
+   ],
+   "org-p": [
+    4,
+    6128,
+    "95f2f7e1ce099faf148cb3010a7a2b75423fa70a5ebbc628934f9cee1dfabd0c"
+   ],
+   "org-g": [
+    4,
+    5629,
+    "786ff133ce0dc869f529623292837901d3d302ebb666c78d86391cf2aeb9db01"
+   ],
+   "org-k8": [
+    1,
+    13,
+    "4c088047f4226415901b5b2d299a6060a99eb7bb24ce9916dfb9a9cedb298578"
+   ],
+   "org-k10": [
+    1,
+    5,
+    "3c1b45869ecae7ffcb9071b865bcb5afd90919fa378f90f1ae8a5990095d268b"
+   ],
+   "org-k5": [
+    1,
+    10,
+    "28b92b7242ba25ca38d29ad92996796b0242f3f0d6bae5c48963a18793cacd50"
+   ],
+   "org-k3": [
+    1,
+    8,
+    "cd39eaa020facb6afe96eac4942ad08c316dcef06568963752f047f17c195fb6"
+   ],
+   "org-k2": [
+    1,
+    7,
+    "3258b06dc36de7c25715ec76f78c56de1fe460dc3e985dc5b0df908639cf3970"
+   ],
+   "org-k4": [
+    1,
+    9,
+    "9d7a5a10f1385f7acae740f12e3a1e62efb65198dd4ee2fed239e3c1e3528a31"
+   ],
+   "org-k6": [
+    1,
+    11,
+    "ad615653c45b247942c4704281a4468614c3a7e1953087a0c86196dbc36f2861"
+   ],
+   "org-k11": [
+    1,
+    6,
+    "8f6bde2b34fcf1549af189ed43b6577097bdaf968a224a8f68a0e160b0523bb8"
+   ],
+   "org-w2": [
+    4,
+    518,
+    "526193d500cf792d436fc059d65226107de3b4131c422c3895cf913c654c0dbf"
+   ],
+   "org-k9": [
+    1,
+    14,
+    "a0e017f426eadc5be63dbdf8fc217976004a184fbe681d81312b291bbabc663b"
+   ]
+  }
+ },
+ "statepoll_polls": 71600,
+ "storewatch_polls": 17889
+}

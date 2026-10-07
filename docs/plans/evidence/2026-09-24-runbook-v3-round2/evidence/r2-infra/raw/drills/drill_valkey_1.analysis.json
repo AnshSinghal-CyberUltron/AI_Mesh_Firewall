@@ -1,0 +1,79 @@
+{
+ "file": "raw/drills/drill_valkey_1.jsonl",
+ "attempts": 6238,
+ "t_first": 1790228629.015,
+ "t_last": 1790229253.766,
+ "trigger": 1790228655.477,
+ "primary": {
+  "failed_attempts": 38,
+  "error_classes": {
+   "ConnectionError": 1,
+   "ResponseError": 37
+  },
+  "windows": [
+   {
+    "first_fail": 1790229001.513,
+    "last_fail": 1790229005.218,
+    "failed_attempts": 38,
+    "first_ok_after": 1790229005.318,
+    "unavailable_s": 3.805,
+    "since_trigger_s": 346.036
+   }
+  ]
+ },
+ "reader": {
+  "failed_attempts": 0,
+  "error_classes": {},
+  "windows": []
+ },
+ "topology_changes": [
+  {
+   "t": 1790228629.015,
+   "field": "p_zone",
+   "from": null,
+   "to": "asia-south1-b"
+  },
+  {
+   "t": 1790228629.015,
+   "field": "p_run_id",
+   "from": null,
+   "to": "b51d4c57a4dc"
+  },
+  {
+   "t": 1790228629.015,
+   "field": "p_role",
+   "from": null,
+   "to": "master"
+  },
+  {
+   "t": 1790228629.015,
+   "field": "r_zone",
+   "from": null,
+   "to": "asia-south1-c"
+  },
+  {
+   "t": 1790228629.015,
+   "field": "r_run_id",
+   "from": null,
+   "to": "5cdefc025961"
+  },
+  {
+   "t": 1790228629.015,
+   "field": "r_role",
+   "from": null,
+   "to": "slave"
+  },
+  {
+   "t": 1790229005.719,
+   "field": "p_zone",
+   "from": "asia-south1-b",
+   "to": "asia-south1-c"
+  },
+  {
+   "t": 1790229005.719,
+   "field": "p_run_id",
+   "from": "b51d4c57a4dc",
+   "to": "c41d7309a3d3"
+  }
+ ]
+}

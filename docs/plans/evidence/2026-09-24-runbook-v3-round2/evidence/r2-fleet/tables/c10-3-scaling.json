@@ -1,0 +1,77 @@
+[
+ {
+  "units": 1,
+  "knee_rate": 130,
+  "knee_runs": [
+   "u1-130"
+  ],
+  "qualified_rps_mean": 127.71,
+  "c4_p99_at_knee": [
+   11.699
+  ],
+  "infra_pct_at_knee": [
+   0.0641
+  ],
+  "next_rung": {
+   "run": "u1-140",
+   "rate": 140,
+   "verdict": "FAIL",
+   "c4_p99": 12.8,
+   "infra_pct": 0.6929
+  },
+  "eff_offered": 1.0,
+  "eff_served": 1.0,
+  "knee_per_guard": 130.0,
+  "meets_0_95": null
+ },
+ {
+  "units": 2,
+  "knee_rate": 280,
+  "knee_runs": [
+   "u2-280"
+  ],
+  "qualified_rps_mean": 274.64,
+  "c4_p99_at_knee": [
+   12.031
+  ],
+  "infra_pct_at_knee": [
+   0.1
+  ],
+  "next_rung": {
+   "run": "u2-300",
+   "rate": 300,
+   "verdict": "FAIL",
+   "c4_p99": 12.323,
+   "infra_pct": 0.2322
+  },
+  "eff_offered": 1.077,
+  "eff_served": 1.075,
+  "knee_per_guard": 140.0,
+  "meets_0_95": true
+ },
+ {
+  "units": 4,
+  "knee_rate": 520,
+  "knee_runs": [
+   "u4-520"
+  ],
+  "qualified_rps_mean": 511.03,
+  "c4_p99_at_knee": [
+   12.205
+  ],
+  "infra_pct_at_knee": [
+   0.0365
+  ],
+  "next_rung": {
+   "run": "u4-560",
+   "rate": 560,
+   "verdict": "FAIL",
+   "c4_p99": 12.33,
+   "infra_pct": 0.1071
+  },
+  "eff_offered": 1.0,
+  "eff_served": 1.0,
+  "knee_per_guard": 130.0,
+  "meets_0_95": true
+ }
+]

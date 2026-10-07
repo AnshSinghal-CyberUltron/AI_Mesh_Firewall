@@ -1,0 +1,169 @@
+=== sp1
+--- rc2: pass=False
+  new_R_admitted: 146
+  new_K_served: 146
+  old_R_admitted: 0
+  old_K_served: 0
+  new_codes: {"chat:G:403:served": 146, "chat:K:502:served": 146, "models:R:200:served": 146}
+  converged_s_after_rehydrator: {"gw-new": 1.0201737880706787, "gw-old": 0.0158233642578125}
+--- rc3: pass=True
+  new_R_admitted: 0
+  new_K_served: 0
+  old_R_admitted: 0
+  old_K_served: 0
+  new_codes: {"chat:G:503:kill_switch_unavailable": 153, "chat:K:503:kill_switch_unavailable": 153, "models:R:503:shared_state_unavailable": 153}
+  converged_s_after_rehydrator: {"gw-new": 0.9153456687927246, "gw-old": 0.3497166633605957}
+--- rc3-on-523ecb8: pass=True
+  new_R_admitted: 0
+  new_K_served: 0
+  old_R_admitted: 0
+  old_K_served: 0
+  new_codes: {"chat:G:503:kill_switch_unavailable": 113, "chat:K:503:kill_switch_unavailable": 113, "models:R:503:shared_state_unavailable": 113}
+  converged_s_after_rehydrator: {"gw-new": 1.004307508468628, "gw-old": 0.29456257820129395}
+=== sp1-live
+--- rc2: pass=False
+  new_R_admitted: 10
+  new_K_served: 19
+  old_R_admitted: 0
+  old_K_served: 0
+  new_codes: {"chat:G:403:served": 146, "chat:K:502:served": 19, "chat:K:503:kill_switch_engaged": 127, "models:R:200:served": 10, "models:R:401:invalid_api_key": 136}
+  converged_s_after_rehydrator: {"gw-new": 0.015433788299560547, "gw-old": 0.020332813262939453}
+--- rc3: pass=True
+  new_R_admitted: 0
+  new_K_served: 0
+  old_R_admitted: 0
+  old_K_served: 0
+  new_codes: {"chat:G:403:served": 126, "chat:G:503:kill_switch_unavailable": 11, "chat:K:503:kill_switch_engaged": 126, "chat:K:503:kill_switch_unavailable": 11, "models:R:401:invalid_api_key": 126, "models:R:503:shared_state_unavailable": 11}
+  converged_s_after_rehydrator: {"gw-new": 0.01625657081604004, "gw-old": 0.016274213790893555}
+--- rc3-on-523ecb8: pass=True
+  new_R_admitted: 0
+  new_K_served: 0
+  old_R_admitted: 0
+  old_K_served: 0
+  new_codes: {"chat:G:403:served": 104, "chat:G:503:kill_switch_unavailable": 8, "chat:K:503:kill_switch_engaged": 104, "chat:K:503:kill_switch_unavailable": 8, "models:R:401:invalid_api_key": 104, "models:R:503:shared_state_unavailable": 8}
+  converged_s_after_rehydrator: {"gw-new": 0.023586750030517578, "gw-old": 0.023171663284301758}
+=== sp2
+--- rc2: pass=False
+  writer: [[0, "ok_publish_pending"], [0, "ok_publish_pending"]]
+  stale_served_R_or_K: 528
+  last_stale_served_after_writes_s: 9.998
+  first_fail_closed_after_writes_s: null
+  first_fail_closed_after_stamp_s: null
+  served_after_fail_closed: 0
+  retry_after_on_fail_closed: []
+  enforced_s_after_rehydrator: 1.015721082687378
+--- rc3: pass=True
+  writer: [[0, "ok_publish_pending"], [0, "ok_publish_pending"]]
+  stale_served_R_or_K: 120
+  last_stale_served_after_writes_s: 2.353
+  first_fail_closed_after_writes_s: 2.384
+  first_fail_closed_after_stamp_s: 3.002
+  served_after_fail_closed: 0
+  retry_after_on_fail_closed: ["2"]
+  enforced_s_after_rehydrator: 0.8594882488250732
+--- rc3-on-523ecb8: pass=True
+  writer: [[0, "ok_publish_pending"], [0, "ok_publish_pending"]]
+  stale_served_R_or_K: 94
+  last_stale_served_after_writes_s: 2.117
+  first_fail_closed_after_writes_s: 2.154
+  first_fail_closed_after_stamp_s: 3.0
+  served_after_fail_closed: 0
+  retry_after_on_fail_closed: ["2"]
+  enforced_s_after_rehydrator: 1.0831224918365479
+=== lock
+--- rc2: pass=False
+  session_bounds: {"lock_timeout": "0", "statement_timeout": "0", "idle_in_transaction_session_timeout": "0", "tcp_user_timeout": "0"}
+  restored_s_after_flush: {"plan": 0.398, "key": 0.454, "ks": null, "budget": null}
+  g_refused: 127
+  g_last_refused_s_after_flush: 11.973
+  writer_status: "ok"
+  writer_error: ""
+  writer_took_s: 12.08
+  lock_held_s: 12.03
+--- rc3: pass=True
+  session_bounds: {"lock_timeout": "2s", "statement_timeout": "5s", "idle_in_transaction_session_timeout": "5s", "tcp_user_timeout": "5000"}
+  restored_s_after_flush: {"plan": 0.731, "key": 0.731, "ks": 0.731, "budget": 0.786}
+  g_refused: 0
+  g_last_refused_s_after_flush: null
+  writer_status: "error"
+  writer_error: "LockNotAvailable: canceling statement due to lock timeout\nCONTEXT:  while locking tuple (0,17) in relation \"rv2_version\""
+  writer_took_s: 2.24
+  lock_held_s: 12.03
+--- rc3-on-523ecb8: pass=True
+  session_bounds: {"lock_timeout": "2s", "statement_timeout": "5s", "idle_in_transaction_session_timeout": "5s", "tcp_user_timeout": "5000"}
+  restored_s_after_flush: {"plan": 0.542, "key": 0.601, "ks": 0.601, "budget": 0.601}
+  g_refused: 0
+  g_last_refused_s_after_flush: null
+  writer_status: "error"
+  writer_error: "LockNotAvailable: canceling statement due to lock timeout\nCONTEXT:  while locking tuple (0,17) in relation \"rv2_version\""
+  writer_took_s: 2.25
+  lock_held_s: 12.06
+=== absent
+--- rc2: pass=False
+  one_rehydrator_503s: 0
+  run 0: stamp_age_at_kill None first_503_after_kill {'gw-0': None, 'gw-1': None} after_last_stamp {'gw-0': None, 'gw-1': None} served_after_first_503 0 retry_after [] recovered_after_restart {'gw-0': 0.006, 'gw-1': 0.011}
+  run 1: stamp_age_at_kill None first_503_after_kill {'gw-0': None, 'gw-1': None} after_last_stamp {'gw-0': None, 'gw-1': None} served_after_first_503 0 retry_after [] recovered_after_restart {'gw-0': 0.006, 'gw-1': 0.012}
+  run 2: stamp_age_at_kill None first_503_after_kill {'gw-0': None, 'gw-1': None} after_last_stamp {'gw-0': None, 'gw-1': None} served_after_first_503 0 retry_after [] recovered_after_restart {'gw-0': 0.007, 'gw-1': 0.013}
+  run 3: stamp_age_at_kill None first_503_after_kill {'gw-0': None, 'gw-1': None} after_last_stamp {'gw-0': None, 'gw-1': None} served_after_first_503 0 retry_after [] recovered_after_restart {'gw-0': 0.007, 'gw-1': 0.013}
+  run 4: stamp_age_at_kill None first_503_after_kill {'gw-0': None, 'gw-1': None} after_last_stamp {'gw-0': None, 'gw-1': None} served_after_first_503 0 retry_after [] recovered_after_restart {'gw-0': 0.006, 'gw-1': 0.011}
+--- rc3: pass=True
+  one_rehydrator_503s: 0
+  run 0: stamp_age_at_kill 0.45 first_503_after_kill {'gw-0': 2.567, 'gw-1': 2.572} after_last_stamp {'gw-0': 3.017, 'gw-1': 3.022} served_after_first_503 0 retry_after ['2'] recovered_after_restart {'gw-0': 0.306, 'gw-1': 0.326}
+  run 1: stamp_age_at_kill 0.53 first_503_after_kill {'gw-0': 2.482, 'gw-1': 2.487} after_last_stamp {'gw-0': 3.012, 'gw-1': 3.017} served_after_first_503 0 retry_after ['2'] recovered_after_restart {'gw-0': 0.281, 'gw-1': 0.298}
+  run 2: stamp_age_at_kill 0.065 first_503_after_kill {'gw-0': 2.966, 'gw-1': 2.941} after_last_stamp {'gw-0': 3.032, 'gw-1': 3.006} served_after_first_503 0 retry_after ['2'] recovered_after_restart {'gw-0': 0.393, 'gw-1': 0.402}
+  run 3: stamp_age_at_kill 0.64 first_503_after_kill {'gw-0': 2.352, 'gw-1': 2.36} after_last_stamp {'gw-0': 2.992, 'gw-1': 3.0} served_after_first_503 0 retry_after ['2'] recovered_after_restart {'gw-0': 0.379, 'gw-1': 0.361}
+  run 4: stamp_age_at_kill 0.081 first_503_after_kill {'gw-0': 2.927, 'gw-1': 2.935} after_last_stamp {'gw-0': 3.008, 'gw-1': 3.016} served_after_first_503 0 retry_after ['2'] recovered_after_restart {'gw-0': 0.429, 'gw-1': 0.409}
+--- rc3-on-523ecb8: pass=True
+  one_rehydrator_503s: 0
+  run 0: stamp_age_at_kill 0.218 first_503_after_kill {'gw-0': 2.774, 'gw-1': 2.782} after_last_stamp {'gw-0': 2.993, 'gw-1': 3.001} served_after_first_503 0 retry_after ['2'] recovered_after_restart {'gw-0': 0.38, 'gw-1': 0.361}
+  run 1: stamp_age_at_kill 0.965 first_503_after_kill {'gw-0': 2.067, 'gw-1': 2.038} after_last_stamp {'gw-0': 3.032, 'gw-1': 3.003} served_after_first_503 0 retry_after ['2'] recovered_after_restart {'gw-0': 0.327, 'gw-1': 0.39}
+  run 2: stamp_age_at_kill 0.278 first_503_after_kill {'gw-0': 2.737, 'gw-1': 2.745} after_last_stamp {'gw-0': 3.015, 'gw-1': 3.023} served_after_first_503 0 retry_after ['2'] recovered_after_restart {'gw-0': 0.287, 'gw-1': 0.331}
+  run 3: stamp_age_at_kill 0.653 first_503_after_kill {'gw-0': 2.359, 'gw-1': 2.366} after_last_stamp {'gw-0': 3.012, 'gw-1': 3.019} served_after_first_503 0 retry_after ['2'] recovered_after_restart {'gw-0': 0.414, 'gw-1': 0.395}
+  run 4: stamp_age_at_kill 0.283 first_503_after_kill {'gw-0': 2.733, 'gw-1': 2.741} after_last_stamp {'gw-0': 3.016, 'gw-1': 3.024} served_after_first_503 0 retry_after ['2'] recovered_after_restart {'gw-0': 0.321, 'gw-1': 0.267}
+=== pgdown
+--- rc2: pass=False
+  pg_frozen_s: 10.03
+  stamp_age_at_freeze_s: null
+  first_503_after_freeze_s: null
+  first_503_after_last_stamp_s: null
+  recovered_s_after_thaw: {"gw-0": 0.005}
+  codes_frozen: {"chat:G:403:served": 385}
+--- rc3: pass=True
+  pg_frozen_s: 10.08
+  stamp_age_at_freeze_s: 0.222
+  first_503_after_freeze_s: 2.78
+  first_503_after_last_stamp_s: 3.002
+  recovered_s_after_thaw: {"gw-0": 0.231}
+  codes_frozen: {"chat:G:403:served": 94, "chat:G:503:kill_switch_unavailable": 246}
+--- rc3-on-523ecb8: pass=True
+  pg_frozen_s: 10.05
+  stamp_age_at_freeze_s: 0.162
+  first_503_after_freeze_s: 2.847
+  first_503_after_last_stamp_s: 3.009
+  recovered_s_after_thaw: {"gw-0": 0.152}
+  codes_frozen: {"chat:G:403:served": 107, "chat:G:503:kill_switch_unavailable": 275}
+=== storeblip
+--- rc2: pass=True
+  store_frozen_s: 3.84
+  stamp_age_at_freeze_s: null
+  first_refused_after_freeze_s: null
+  last_refused_after_thaw_s: null
+  refused_span_s: 0.0
+  codes_frozen: {"chat:G:403:served": 142}
+  codes_after: {"chat:G:403:served": 148}
+--- rc3: pass=True
+  store_frozen_s: 3.85
+  stamp_age_at_freeze_s: 0.141
+  first_refused_after_freeze_s: 2.832
+  last_refused_after_thaw_s: 0.179
+  refused_span_s: 1.195
+  codes_frozen: {"chat:G:403:served": 94, "chat:G:503:kill_switch_unavailable": 36}
+  codes_after: {"chat:G:403:served": 132, "chat:G:503:kill_switch_unavailable": 7}
+--- rc3-on-523ecb8: pass=True
+  store_frozen_s: 3.85
+  stamp_age_at_freeze_s: 0.123
+  first_refused_after_freeze_s: 2.876
+  last_refused_after_thaw_s: 0.18
+  refused_span_s: 1.151
+  codes_frozen: {"chat:G:403:served": 108, "chat:G:503:kill_switch_unavailable": 37}
+  codes_after: {"chat:G:403:served": 145, "chat:G:503:kill_switch_unavailable": 8}

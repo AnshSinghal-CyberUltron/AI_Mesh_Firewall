@@ -1,0 +1,67 @@
+RE-CHECK: "Memorystore for Valkey has no manual failover" (controller task FP7, reviewer-false-positives §7)
+Written 2026-09-24 ~12:50Z by r2-infra. Project ai-mesh-firewall, asia-south1. No token is printed anywhere.
+Raw artefacts: raw/failover_recheck/
+
+VERDICT: CONFIRMED, now on valid evidence. The earlier evidence files were invalid, as the reviewer said.
+  The Memorystore (Valkey) API has NO failover, switchover or promote RPC on projects.locations.instances in
+  v1, v1beta or v1alpha. gcloud has no such verb in GA, beta or alpha. The Valkey FAILOVER command is on
+  Google's documented blocked list and returns NOPERM. The only operator-triggered role change remains
+  `gcloud memorystore instances update <id> --location=<region> --simulate-maintenance-event`.
+
+WHY THE OLD EVIDENCE WAS INVALID (reviewer correct)
+  - raw/valkey_acl_probe.txt: every line is NOPERM 'acl|dryrun' because ACL DRYRUN ITSELF is blocked.
+    Google's "Blocked commands" list includes "ACL | DRYRUN" (raw/failover_recheck/doc_supported-commands.txt).
+    That file therefore says nothing about FAILOVER or any other command.
+  - raw/memorystore_v1{,beta,alpha}_discovery.json are 403 error bodies, not API listings.
+  - The claim was actually based on the gcloud-bundled generated clients and a direct command probe. Neither
+    was saved as a separate file. Both are recorded below.
+
+(1) API SURFACE. The discovery documents are not retrievable with this project's credentials, so I show
+    method existence directly instead.
+  1a. GET https://memorystore.googleapis.com/$discovery/rest?version={v1,v1beta,v1alpha} with Authorization: Bearer
+      returns 403 "Method doesn't allow unregistered callers" (raw/failover_recheck/discovery_*_hdr.json).
+      Adding X-Goog-User-Project: ai-mesh-firewall returns 403 USER_PROJECT_DENIED "...serviceusage.services.use"
+      (discovery_*_hdr+userproject.json). The public directory www.googleapis.com/discovery/v1/apis?name=memorystore
+      lists nothing (discovery_v1_directory.json).
+      Control: the same bearer token lists instances fine (HTTP 200: rv-r2-state-kv, rv-r2-valkey, rv-r2-chaos-kv;
+      list_instances.json).
+  1b. METHOD-EXISTENCE PROBE against a NON-EXISTENT instance (rv-r2-nonexistent-kv), so no real instance could be
+      affected (raw/failover_recheck/probe_matrix.txt):
+        v1/v1beta/v1alpha  :failover  :switchover  :promote  :triggerFailover
+                           -> HTTP 404 HTML from the Google front end: "The requested URL
+                              /v1/projects/ai-mesh-firewall/locations/asia-south1/instances/rv-r2-nonexistent-kv:failover
+                              was not found on this server."  => no such RPC routed by the API
+        v1/v1beta/v1alpha  :backup  :rescheduleMaintenance   (methods that DO exist)
+                           -> HTTP 404 JSON NOT_FOUND "Resource '.../instances/rv-r2-nonexistent-kv' was not found"
+                              => the method is routed; only the resource is missing
+      POSITIVE CONTROL: Memorystore for REDIS  POST redis.googleapis.com/v1/.../instances/rv-r2-nonexistent-redis:failover
+                        -> HTTP 404 JSON NOT_FOUND "Resource ... was not found" (probe_redis_failover.json)
+                        => a real failover RPC answers exactly like the Valkey :backup control.
+  1c. gcloud-bundled generated clients (raw/failover_recheck/sdk_generated_client_methods.txt). These are
+      generated from the discovery documents. memorystore v1, v1beta and v1alpha projects.locations.instances
+      methods are:
+        addTokenAuthUser backup create delete finishMigration get getCertificateAuthority list patch
+        rescheduleMaintenance startMigration
+      Failover-like: NONE. For comparison, the redis v1 client has redis.projects.locations.instances.failover.
+
+(2) gcloud verbs (raw/failover_recheck/gcloud_memorystore_instances_verbs.txt; Google Cloud SDK 586.0.0).
+    GA, beta and alpha all list the same verbs:
+      backup create create-token-auth-user delete describe finish-migration get-certificate-authority
+      get-shared-regional-certificate-authority list reschedule-maintenance start-migration update
+    There is no failover verb. The only role-change lever is `update --simulate-maintenance-event`. Google's docs
+    describe it as "performing planned failovers on all nodes within the instance"
+    (raw/failover_recheck/doc_simulate-maintenance.txt).
+
+(3) Valkey FAILOVER command
+  - Google doc "Supported and blocked commands" (raw/failover_recheck/doc_supported-commands.txt):
+    "Blocked commands. Memorystore for Valkey supports all Valkey 7.2 commands, except for the commands that are
+    listed in this section. For these blocked commands, Memorystore for Valkey returns a NOPERM error."
+    The list includes ... DEBUG, FAILOVER, CLUSTER | FAILOVER, SHUTDOWN, REPLICAOF, SLAVEOF, ACL | DRYRUN ...
+  - Direct probe, VALID (the NOPERM names the command itself). raw/valkey_command_probe.txt:33-34,
+    rv-r2-valkey primary 10.61.0.3, 2026-09-24T05:41:56Z:
+      > FAILOVER ABORT
+      NOPERM User default has no permissions to run the 'failover' command
+    FAILOVER ABORT was used because it is non-disruptive even if permitted.
+    The same file and raw/valkey_functional_check.txt:58-59 also show direct NOPERM for 'config|get',
+    'client|pause' and 'shutdown', and ERR for DEBUG.
+  - Optional probe on rv-r2-chaos-kv: requested from r2-chaos (coordination), see the ADDENDUM below if it is run.

@@ -1,0 +1,305 @@
+{
+ "run": "/home/contact_cyberultron_com/rv-evidence-raw/r2-state/runs/rc2-b-3",
+ "kind": "flushall",
+ "build": "c36_on",
+ "code": "rc2",
+ "t_fault_ns": 1790253218559862201,
+ "t_fault_source": "kvcmd FLUSHALL send/reply midpoint (obs clock)",
+ "requests": 83701,
+ "by_source": {
+  "probe": 46201,
+  "olg": 37500
+ },
+ "outcomes_by_label_all": {
+  "G": {
+   "200": 9240
+  },
+  "K": {
+   "503:kill_switch_engaged": 9241
+  },
+  "N": {
+   "200": 46120,
+   "403:blocked_by_policy": 616,
+   "503:shared_state_unavailable": 4
+  },
+  "P": {
+   "200": 9240
+  },
+  "R": {
+   "401:invalid_api_key": 9227,
+   "503:shared_state_unavailable": 13
+  }
+ },
+ "outcomes_by_label_after_fault": {
+  "G": {
+   "200": 5632
+  },
+  "K": {
+   "503:kill_switch_engaged": 5631
+  },
+  "N": {
+   "200": 29513,
+   "503:shared_state_unavailable": 4,
+   "403:blocked_by_policy": 406
+  },
+  "P": {
+   "200": 5632
+  },
+  "R": {
+   "503:shared_state_unavailable": 13,
+   "401:invalid_api_key": 5618
+  }
+ },
+ "gap_window_60s_valid_outcomes": {
+  "200": 10216,
+  "503:shared_state_unavailable": 4,
+  "403:blocked_by_policy": 100
+ },
+ "violations": {},
+ "strata_not_c36": {
+  "policy_blocks_403_blocked_by_policy": {
+   "pre": 210,
+   "gap60": 100,
+   "post": 306
+  },
+  "overload_503_owner_shed": {},
+  "valid_offered": {
+   "pre": 24033,
+   "gap60": 10320,
+   "post": 30867
+  }
+ },
+ "storm": {
+  "writes": 0,
+  "writes_failed": {},
+  "admitted_after_ack_plus_1s": 0,
+  "examples": [],
+  "propagation_s": {}
+ },
+ "monotonic": {
+  "per_gateway_post_fault_older_than_pre_max": 0,
+  "per_worker_regressions": 0,
+  "per_gateway_any_regression": 0,
+  "examples": []
+ },
+ "audit_admission_evidence": {
+  "killed_org_audit_records": 0,
+  "revoked_key_audit_records": 0
+ },
+ "audit": {
+  "admitted": 64600,
+  "tail_records": 65216,
+  "final_records": 41624,
+  "admitted_never_written": 0,
+  "admitted_missing_from_final_store": 23382,
+  "never_written_examples": []
+ },
+ "store": {
+  "flush_seen_at_s": 0.009895508,
+  "restored_at_s": 0.609892592,
+  "rehydrated_events": [
+   {
+    "kind": "plan",
+    "reason": "missing",
+    "took_ms": 50.74,
+    "records": 14,
+    "detected_s": 0.404442439,
+    "restored_s": 0.455180103
+   },
+   {
+    "kind": "key",
+    "reason": "missing",
+    "took_ms": 52.16,
+    "records": 25,
+    "detected_s": 0.455234887,
+    "restored_s": 0.507394119
+   },
+   {
+    "kind": "ks",
+    "reason": "missing",
+    "took_ms": 56.25,
+    "records": 15,
+    "detected_s": 0.507419463,
+    "restored_s": 0.563666247
+   },
+   {
+    "kind": "budget",
+    "reason": "missing",
+    "took_ms": 55.8,
+    "records": 14,
+    "detected_s": 0.563690055,
+    "restored_s": 0.619489351
+   }
+  ]
+ },
+ "rehydration_bound": {
+  "declared_s": 2.056,
+  "declared_formula": "RV_REHYDRATE_PERIOD_MS + took_ms + max(RV_KS_REFRESH_MS, RV_PLAN_RECONCILE_MS)",
+  "workers_with_notready_polls": 0,
+  "workers_total": 24,
+  "max_first_200_after_gap_s": null,
+  "store_restored_s": 0.609892592
+ },
+ "db_vs_store_post": {
+  "db_versions": {
+   "budget": "1.14",
+   "key": "1.26",
+   "ks": "1.15",
+   "plan": "1.32"
+  },
+  "store_versions": {
+   "plan": "1.32",
+   "key": "1.26",
+   "ks": "1.15",
+   "budget": "1.14"
+  },
+  "versions_equal": true,
+  "plan_records_equal": true,
+  "plan_db": {
+   "org-g": [
+    1,
+    31,
+    "56bbc1e74191d0ed97ec0059d2a9ad7fe964cbe008b29f8a0251d8f7bcc5e949"
+   ],
+   "org-k": [
+    1,
+    32,
+    "a07135b12e8224d474ebe76ff737ac8e727437c9f40b8128f26430b0918060ed"
+   ],
+   "org-k10": [
+    1,
+    5,
+    "3c1b45869ecae7ffcb9071b865bcb5afd90919fa378f90f1ae8a5990095d268b"
+   ],
+   "org-k11": [
+    1,
+    6,
+    "8f6bde2b34fcf1549af189ed43b6577097bdaf968a224a8f68a0e160b0523bb8"
+   ],
+   "org-k2": [
+    1,
+    7,
+    "3258b06dc36de7c25715ec76f78c56de1fe460dc3e985dc5b0df908639cf3970"
+   ],
+   "org-k3": [
+    1,
+    8,
+    "cd39eaa020facb6afe96eac4942ad08c316dcef06568963752f047f17c195fb6"
+   ],
+   "org-k4": [
+    1,
+    9,
+    "9d7a5a10f1385f7acae740f12e3a1e62efb65198dd4ee2fed239e3c1e3528a31"
+   ],
+   "org-k5": [
+    1,
+    10,
+    "28b92b7242ba25ca38d29ad92996796b0242f3f0d6bae5c48963a18793cacd50"
+   ],
+   "org-k6": [
+    1,
+    11,
+    "ad615653c45b247942c4704281a4468614c3a7e1953087a0c86196dbc36f2861"
+   ],
+   "org-k7": [
+    1,
+    12,
+    "6ea16691b2650a900f7bf6e78e3bd0072417f0931e74e1e61324953b6844b1af"
+   ],
+   "org-k8": [
+    1,
+    13,
+    "4c088047f4226415901b5b2d299a6060a99eb7bb24ce9916dfb9a9cedb298578"
+   ],
+   "org-k9": [
+    1,
+    14,
+    "a0e017f426eadc5be63dbdf8fc217976004a184fbe681d81312b291bbabc663b"
+   ],
+   "org-n": [
+    1,
+    30,
+    "a03f373bb4eb6d6b3ffdc9ad783e473e1b85ca901d58b488c0596b2dbfa3549e"
+   ],
+   "org-p": [
+    1,
+    29,
+    "a72e565895a5e4a6a734c294f379770aeba0cf88f1e1e2dc8fe96639ec72dbdc"
+   ]
+  },
+  "plan_store": {
+   "org-k4": [
+    1,
+    9,
+    "9d7a5a10f1385f7acae740f12e3a1e62efb65198dd4ee2fed239e3c1e3528a31"
+   ],
+   "org-k3": [
+    1,
+    8,
+    "cd39eaa020facb6afe96eac4942ad08c316dcef06568963752f047f17c195fb6"
+   ],
+   "org-k10": [
+    1,
+    5,
+    "3c1b45869ecae7ffcb9071b865bcb5afd90919fa378f90f1ae8a5990095d268b"
+   ],
+   "org-k6": [
+    1,
+    11,
+    "ad615653c45b247942c4704281a4468614c3a7e1953087a0c86196dbc36f2861"
+   ],
+   "org-k11": [
+    1,
+    6,
+    "8f6bde2b34fcf1549af189ed43b6577097bdaf968a224a8f68a0e160b0523bb8"
+   ],
+   "org-k": [
+    1,
+    32,
+    "a07135b12e8224d474ebe76ff737ac8e727437c9f40b8128f26430b0918060ed"
+   ],
+   "org-g": [
+    1,
+    31,
+    "56bbc1e74191d0ed97ec0059d2a9ad7fe964cbe008b29f8a0251d8f7bcc5e949"
+   ],
+   "org-k9": [
+    1,
+    14,
+    "a0e017f426eadc5be63dbdf8fc217976004a184fbe681d81312b291bbabc663b"
+   ],
+   "org-k5": [
+    1,
+    10,
+    "28b92b7242ba25ca38d29ad92996796b0242f3f0d6bae5c48963a18793cacd50"
+   ],
+   "org-n": [
+    1,
+    30,
+    "a03f373bb4eb6d6b3ffdc9ad783e473e1b85ca901d58b488c0596b2dbfa3549e"
+   ],
+   "org-k8": [
+    1,
+    13,
+    "4c088047f4226415901b5b2d299a6060a99eb7bb24ce9916dfb9a9cedb298578"
+   ],
+   "org-p": [
+    1,
+    29,
+    "a72e565895a5e4a6a734c294f379770aeba0cf88f1e1e2dc8fe96639ec72dbdc"
+   ],
+   "org-k2": [
+    1,
+    7,
+    "3258b06dc36de7c25715ec76f78c56de1fe460dc3e985dc5b0df908639cf3970"
+   ],
+   "org-k7": [
+    1,
+    12,
+    "6ea16691b2650a900f7bf6e78e3bd0072417f0931e74e1e61324953b6844b1af"
+   ]
+  }
+ },
+ "statepoll_polls": 38000,
+ "storewatch_polls": 9500
+}

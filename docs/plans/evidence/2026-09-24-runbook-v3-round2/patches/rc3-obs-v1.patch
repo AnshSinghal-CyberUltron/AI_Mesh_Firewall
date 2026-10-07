@@ -1,0 +1,825 @@
+diff -ruN '--exclude=.venv' '--exclude=__pycache__' '--exclude=.hypothesis' '--exclude=.pytest_cache' '--exclude=.import_linter_cache' '--exclude=.run' '--exclude=*.pyc' base/rvproto/runtime/exporter.py work/rvproto/runtime/exporter.py
+--- base/rvproto/runtime/exporter.py	2026-09-24 18:44:47.356735324 +0530
++++ work/rvproto/runtime/exporter.py	2026-09-24 19:11:52.503402190 +0530
+@@ -6,9 +6,12 @@
+             (the process only stamps a request word in its segment), on the launcher's SIGUSR1, on GET /dump
+   HTTP      RV_EXPORTER_HOST:RV_EXPORTER_PORT  /metrics (Prometheus text: merged histograms, counters,
+             per-process gauges, autoscaling signals)  /metrics.json  /signals  /dump
+-  signals   every RV_EXPORT_S: window loop-lag p99/p99.9, CPU cores busy (from /proc), request rate,
++  signals   every RV_EXPORT_S (window_s): window loop-lag p99/p99.9, CPU cores busy (from /proc), request rate,
+             active streams / inflight, owner queue (windows, ms: time-averaged from the owners'
+-            backlog integrals), GPU utilisation (nvidia-smi); optionally pushed to Cloud Monitoring
++            backlog integrals), gpu_busy_pct (owner execution time over the window, percent);
++            optionally pushed to Cloud Monitoring. Every windowed signal is reset-safe (runtime/windows.py):
++            a restarted worker/owner never yields a negative window, and a signal without a baseline is left
++            out, never 0.0. gpu_utilization (one nvidia-smi sample, a fraction) is DEPRECATED: not for scaling.
+ """
+ 
+ from __future__ import annotations
+@@ -26,8 +29,9 @@
+ 
+ import numpy as np
+ 
+-from rvproto.runtime.metrics import _NBUCKETS, label, merge, number, prometheus, quantile_of, summarize
++from rvproto.runtime.metrics import Part, label, merge, number, quantile_of, render, summarize
+ from rvproto.runtime.shm_metrics import H_WORDS, HDR_WORDS, I_DIRLEN, I_DUMPREQ, I_GEN, MAGIC, SHM_DIR, DIR_BYTES
++from rvproto.runtime.windows import ProcSample, Window
+ 
+ def _stem(role: str) -> str:
+     return {"w": "worker", "o": "owner"}.get(role, role)
+@@ -58,6 +62,10 @@
+     def pid(self) -> int:
+         return int(self.head[2])
+ 
++    @property
++    def started_ns(self) -> int:
++        return int(self.head[9])
++
+     def alive(self) -> bool:
+         try:
+             os.kill(self.pid, 0)
+@@ -143,20 +151,6 @@
+         return []
+ 
+ 
+-def _hist_delta(new: dict[str, object] | None, old: dict[str, object] | None) -> tuple[list[int], int, int]:
+-    """Bucket counts of (new - old) for one merged histogram export (dense list)."""
+-    counts = [0] * _NBUCKETS
+-    if new is None:
+-        return counts, 0, 0
+-    for k, v in new["b"].items():  # type: ignore[union-attr]
+-        counts[int(k)] += v
+-    if old is not None:
+-        for k, v in old["b"].items():  # type: ignore[union-attr]
+-            counts[int(k)] -= v
+-    n = int(new["n"]) - (int(old["n"]) if old is not None else 0)  # type: ignore[call-overload]
+-    return counts, n, int(new["max"])  # type: ignore[call-overload]
+-
+-
+ class NodeExporter:
+     def __init__(self, *, tag: str, kind: str, metrics_dir: str, dump_s: float, host: str, port: int,
+                  export_s: float, draining: Callable[[], bool], push: Callable[[dict[str, float]], None] | None,
+@@ -289,20 +283,28 @@
+             tmp.replace(p)
+ 
+     def _signal_loop(self) -> None:
+-        st: dict[str, object] = {"t": time.monotonic(), "ticks": {}, "merged": None, "owner": {}}
++        st: dict[str, object] = {"t": time.monotonic(), "ticks": {}, "procs": {}, "t_ns": None}
+         while not self._stop.wait(self.export_s):
+             self._guarded("signals", lambda: self._signal_tick(st))
+ 
+     def _signal_tick(self, st: dict[str, object]) -> None:
+-        now = time.monotonic()
++        now, t_ns = time.monotonic(), time.time_ns()
+         ex = self.exports()
+         ticks = {seg.pid: _cpu_ticks(seg.pid) for seg, _ in ex}
++        procs = {seg.path.name: ProcSample(seg.path.name, seg.role, seg.pid, seg.started_ns,
++                                           e["count"], e["hist"])  # type: ignore[arg-type]
++                 for seg, e in ex}
++        prev, prev_t = st.get("procs", {}), st.get("t_ns")  # none yet: the first window has no baseline
++        win = {r: Window(prev, prev_t, [x for x in procs.values() if x.role == r])  # type: ignore[arg-type]
++               for r in ("w", "o")}
+         workers = [e for seg, e in ex if seg.role == "w"]
+-        owners = [(seg, e) for seg, e in ex if seg.role == "o"]
++        owners = [e for seg, e in ex if seg.role == "o"]
++        born = {c.pid for w in win.values() for p, c in w.pairs if p is None}  # started inside this window
+         merged = merge(workers) if workers else None
+-        sig = self._window(now - st["t"], merged, st["merged"], ticks, st["ticks"], owners, st["owner"])  # type: ignore[operator,arg-type]
++        sig = self._window(now - st["t"], win["w"], win["o"], merged, owners,  # type: ignore[operator]
++                           ticks, st["ticks"], born)  # type: ignore[arg-type]
+         sig["exporter_loop_errors"] = float(self.loop_errors)
+-        st.update(t=now, ticks=ticks, merged=merged, owner={seg.path.name: e for seg, e in owners})
++        st.update(t=now, t_ns=t_ns, ticks=ticks, procs=procs)
+         if self.push is not None:
+             try:
+                 self.push(sig)
+@@ -313,69 +315,71 @@
+         with self._lock:
+             self.signals = sig
+ 
+-    def _window(self, dt: float, merged: dict[str, object] | None, prev: dict[str, object] | None,
+-                ticks: dict[int, int | None], prev_ticks: dict[int, int | None],
+-                owners: list[tuple[Segment, dict[str, object]]], prev_owner: dict[str, object]) -> dict[str, float]:
++    def _window(self, dt: float, workers: Window, owners: Window, merged: dict[str, object] | None,
++                owner_ex: list[dict[str, object]], ticks: dict[int, int | None],
++                prev_ticks: dict[int, int | None], born: set[int]) -> dict[str, float]:
++        """One window's signals. Rates and averages come from reset-safe per-process increases (Window): a signal
++        with no contributing process (the exporter's first window, a node without workers) is left out. CPU
++        likewise: a process's ticks since its previous sample, or all of them when it started in the window."""
+         hz = os.sysconf("SC_CLK_TCK")
+         sig: dict[str, float] = {"window_s": dt, "draining": 1.0 if self.draining() else 0.0,
+                                  "node_cpus": float(os.cpu_count() or 1)}
+-        busy = sum((t - prev_ticks[p]) for p, t in ticks.items() if t is not None and prev_ticks.get(p) is not None)
+-        sig["cpu_cores_busy"] = busy / hz / dt if dt > 0 else 0.0
+-        sig["cpu_utilization"] = sig["cpu_cores_busy"] / sig["node_cpus"]
++        cpu = [max(0, t - (prev_ticks.get(p) or 0)) for p, t in ticks.items()
++               if t is not None and (prev_ticks.get(p) is not None or p in born)]
++        if cpu and dt > 0:
++            sig["cpu_cores_busy"] = sum(cpu) / hz / dt
++            sig["cpu_utilization"] = sig["cpu_cores_busy"] / sig["node_cpus"]
++        lag = workers.hist("loop_lag_ns")
++        if lag is not None and lag[1] > 0:
++            sig["loop_lag_p99_ms"] = quantile_of(lag[0], lag[1], 0.99, lag[2]) / 1e6
++            sig["loop_lag_p999_ms"] = quantile_of(lag[0], lag[1], 0.999, lag[2]) / 1e6
++        adm = workers.counter("admitted")
++        if adm is not None and dt > 0:
++            sig["requests_per_s"] = adm / dt
+         if merged is not None:
+-            counts, n, vmax = _hist_delta(merged["hist"].get("loop_lag_ns"), (prev or {"hist": {}})["hist"].get("loop_lag_ns"))  # type: ignore[union-attr]
+-            sig["loop_lag_p99_ms"] = quantile_of(counts, n, 0.99, vmax) / 1e6
+-            sig["loop_lag_p999_ms"] = quantile_of(counts, n, 0.999, vmax) / 1e6
+-            adm = merged["count"].get("admitted", 0)  # type: ignore[union-attr]
+-            prev_adm = (prev or {"count": {}})["count"].get("admitted", 0)  # type: ignore[union-attr]
+-            sig["requests_per_s"] = (adm - prev_adm) / dt if dt > 0 and prev is not None else 0.0
+             gauges = [pw.get("gauge", {}) for pw in merged.get("per_worker", [])]  # type: ignore[union-attr]
+             for g in ("active_streams", "inflight_requests"):
+                 sig[g] = float(sum(x.get(g, 0.0) for x in gauges))
+-        if owners:
+-            self._owner_signals(sig, dt, owners, prev_owner)
++        if owner_ex:
++            self._owner_signals(sig, dt, owners, owner_ex)
+         if self.kind in ("guard", "unit"):
+-            util = _gpu_util()
++            util = _gpu_util()  # DEPRECATED (one instantaneous sample, a fraction): scale on gpu_busy_pct
+             if util:
+                 sig["gpu_utilization"] = sum(util) / len(util) / 100.0
+                 sig["gpus"] = float(len(util))
+         return sig
+ 
+     @staticmethod
+-    def _owner_signals(sig: dict[str, float], dt: float, owners: list[tuple[Segment, dict[str, object]]],
+-                       prev_owner: dict[str, object]) -> None:
+-        q_ns = q_win = reqs = sheds = 0.0
+-        q_now = []
+-        for seg, e in owners:
+-            c, g = e["count"], e["gauge"]  # type: ignore[index]
+-            p = prev_owner.get(seg.path.name)
+-            pc = p["count"] if p is not None else {}  # type: ignore[index]
+-            q_ns += (c.get("owner_backlog_ns_x_s", 0) - pc.get("owner_backlog_ns_x_s", 0))  # type: ignore[union-attr]
+-            q_win += (c.get("owner_windows_x_ms", 0) - pc.get("owner_windows_x_ms", 0)) / 1000.0  # type: ignore[union-attr]
+-            reqs += c.get("owner_requests", 0) - pc.get("owner_requests", 0)  # type: ignore[union-attr]
+-            sheds += c.get("owner_shed", 0) - pc.get("owner_shed", 0)  # type: ignore[union-attr]
+-            q_now.append(g.get("owner_backlog_ns", 0.0) / 1e6)  # type: ignore[union-attr]
+-        n = len(owners)
+-        if dt > 0 and prev_owner:
+-            sig["owner_queue_ms_avg"] = q_ns / dt / 1e6 / n
+-            sig["owner_queue_windows_avg"] = q_win / dt / n
+-            sig["owner_requests_per_s"] = reqs / dt
+-            sig["owner_shed_per_s"] = sheds / dt
++    def _owner_signals(sig: dict[str, float], dt: float, owners: Window, owner_ex: list[dict[str, object]]) -> None:
++        """Averages over the owners with a baseline; gpu_busy_pct = owner execution time (guard_exec_ns: every
++        batch the owner ran on its engine) per owner over the window, in percent (window: window_s)."""
++        n = owners.n
++        if n and dt > 0:
++            sig["owner_queue_ms_avg"] = (owners.counter("owner_backlog_ns_x_s") or 0) / dt / 1e6 / n
++            sig["owner_queue_windows_avg"] = (owners.counter("owner_windows_x_ms") or 0) / 1000.0 / dt / n
++            sig["owner_requests_per_s"] = (owners.counter("owner_requests") or 0) / dt
++            sig["owner_shed_per_s"] = (owners.counter("owner_shed") or 0) / dt
++            sig["gpu_busy_pct"] = min(100.0, 100.0 * (owners.hist_sum("guard_exec_ns") or 0) / (dt * 1e9 * n))
++        q_now = [e["gauge"].get("owner_backlog_ns", 0.0) / 1e6 for e in owner_ex]  # type: ignore[union-attr]
+         sig["owner_queue_ms_now_max"] = max(q_now) if q_now else 0.0
+-        sig["owners"] = float(n)
++        sig["owners"] = float(len(owner_ex))
+ 
+     # ---- HTTP ----
+     def render(self) -> str:
++        """Typed exposition: worker and owner series of one name form ONE family (owners: role="owner"), and
++        the signals the `rv2_signal` gauge family (M4a)."""
+         ex = self.exports()
+         workers = [e for seg, e in ex if seg.role == "w"]
+         owners = [e for seg, e in ex if seg.role == "o"]
+-        text = prometheus(merge(workers)) if workers else ""
+-        if owners:  # guard owners: their own series, told apart by role="owner" (per-owner gauges: worker=<i>)
+-            text += prometheus(merge(owners), extra=(("role", "owner"),))
++        parts: list[Part] = []
++        if workers:
++            parts.append((merge(workers), ()))
++        if owners:
++            parts.append((merge(owners), (("role", "owner"),)))
+         with self._lock:
+             sig = dict(self.signals)
+-        lines = [f"{label('rv2_signal', kind=self.kind, name=k)} {number(v)}" for k, v in sorted(sig.items())]
+-        return text + "\n".join(lines) + "\n"
++        return render(parts, samples=[(label("rv2_signal", kind=self.kind, name=k), "gauge", number(v))
++                                      for k, v in sorted(sig.items())])
+ 
+     def json_all(self) -> dict[str, object]:
+         ex = self.exports()
+diff -ruN '--exclude=.venv' '--exclude=__pycache__' '--exclude=.hypothesis' '--exclude=.pytest_cache' '--exclude=.import_linter_cache' '--exclude=.run' '--exclude=*.pyc' base/rvproto/runtime/metrics.py work/rvproto/runtime/metrics.py
+--- base/rvproto/runtime/metrics.py	2026-09-24 18:44:47.356805251 +0530
++++ work/rvproto/runtime/metrics.py	2026-09-24 19:11:46.325601426 +0530
+@@ -13,6 +13,7 @@
+ import os
+ import re
+ import time
++from collections.abc import Iterable, Iterator
+ from pathlib import Path
+ 
+ SUB = 6
+@@ -209,27 +210,64 @@
+     return f"{base}{{{body}}}" if pairs else base
+ 
+ 
+-def prometheus(export: dict[str, object], *, extra: Labels = ()) -> str:
+-    """Valid Prometheus exposition text (untyped samples): histograms as `rv_<name>{<labels>,stat=...}`,
+-    counters as `rv_<name>_total{<labels>}`, gauges as `rv_<name>{<labels>}`; per-process gauges of a merged
+-    export carry `worker="<i>"`. `extra` labels every series (e.g. role="owner"). A series whose name or
+-    labels cannot be rendered validly is left out and counted in a `#` comment line: never an invalid scrape."""
+-    rows: list[tuple[str | None, str]] = []
+-    summary = summarize(export["hist"])  # type: ignore[arg-type]
+-    for name, row in summary.items():
++Part = tuple[dict[str, object], Labels]  # an export + the labels added to every one of its series
++Sample = tuple[str, str, str]  # (series built with label(), Prometheus type, value) added beside the exports
++
++
++def _rows(export: dict[str, object], extra: Labels) -> Iterator[tuple[str | None, str, str]]:
++    """(series, or None when it cannot be rendered validly; Prometheus type; value) of every sample of an export."""
++    for name, row in summarize(export["hist"]).items():  # type: ignore[arg-type]
+         base, labels = _split(name)
+-        rows += [(_series("rv_" + base, labels, (*extra, ("stat", key))), f"{val:.6f}") for key, val in row.items()]
++        for key, val in row.items():  # computed statistics that go up and down: gauges, not `_bucket` samples
++            yield _series("rv_" + base, labels, (*extra, ("stat", key))), "gauge", f"{val:.6f}"
+     for name, c in sorted(export["count"].items()):  # type: ignore[union-attr]
+         base, labels = _split(name)
+-        rows.append((_series("rv_" + base + "_total", labels, extra), number(c)))
++        yield _series("rv_" + base + "_total", labels, extra), "counter", number(c)
+     for name, g in sorted(export.get("gauge", {}).items()):  # type: ignore[union-attr]
+         base, labels = _split(name)
+-        rows.append((_series("rv_" + base, labels, extra), number(g)))
++        yield _series("rv_" + base, labels, extra), "gauge", number(g)
+     for pw in export.get("per_worker", []):  # type: ignore[union-attr]
+         for name, g in sorted(pw.get("gauge", {}).items()):
+             base, labels = _split(name)
+-            rows.append((_series("rv_" + base, labels, (*extra, ("worker", pw.get("worker")))), number(g)))
+-    lines = [f"{series} {value}" for series, value in rows if series is not None]
+-    if len(lines) < len(rows):
+-        lines.append(f"# rvproto: {len(rows) - len(lines)} series left out (invalid name or labels)")
+-    return "\n".join(lines) + "\n"
++            yield _series("rv_" + base, labels, (*extra, ("worker", pw.get("worker")))), "gauge", number(g)
++
++
++def render(parts: Iterable[Part], *, samples: Iterable[Sample] = ()) -> str:
++    """Valid, TYPED Prometheus text exposition (text/plain; version=0.0.4) of every part, plus `samples`.
++    Every family -- all series sharing a metric name, from whichever part (worker or owner) -- is ONE group under
++    ONE `# TYPE` line: counters `rv_<name>_total` are `counter`; gauges, per-process gauges (`worker="<i>"`) and
++    the histogram statistics `rv_<name>{stat=...}` (computed values, not `_bucket`/`_sum`/`_count` samples) are
++    `gauge`. Untyped samples are stored as `.../unknown` by Google Managed Prometheus, where an HPA asking for a
++    gauge finds nothing (M4a). A series that cannot be rendered validly, repeats, or clashes with its family's
++    type is left out and counted in a `#` comment line: never an invalid scrape."""
++    fams: dict[str, tuple[str, list[str]]] = {}
++    seen: set[str] = set()
++    total = 0
++
++    def add(series: str | None, typ: str, value: str) -> None:
++        nonlocal total
++        total += 1
++        if series is None or series in seen:
++            return
++        t, lines = fams.setdefault(series.split("{", 1)[0], (typ, []))
++        if t == typ:
++            seen.add(series)
++            lines.append(f"{series} {value}")
++
++    for export, extra in parts:
++        for row in _rows(export, extra):
++            add(*row)
++    for series, typ, value in samples:
++        add(_series(*_split(series)), typ, value)
++    out: list[str] = []
++    for fam, (typ, lines) in sorted(fams.items()):
++        if lines:
++            out += [f"# TYPE {fam} {typ}", *lines]
++    if len(seen) < total:
++        out.append(f"# rvproto: {total - len(seen)} series left out (invalid name or labels, repeated, or type clash)")
++    return "\n".join(out) + "\n"
++
++
++def prometheus(export: dict[str, object], *, extra: Labels = ()) -> str:
++    """One export as typed exposition (the worker's own /metrics); see render()."""
++    return render([(export, extra)])
+diff -ruN '--exclude=.venv' '--exclude=__pycache__' '--exclude=.hypothesis' '--exclude=.pytest_cache' '--exclude=.import_linter_cache' '--exclude=.run' '--exclude=*.pyc' base/rvproto/runtime/monitoring.py work/rvproto/runtime/monitoring.py
+--- base/rvproto/runtime/monitoring.py	2026-09-24 11:33:33.000000000 +0530
++++ work/rvproto/runtime/monitoring.py	2026-09-24 18:56:06.377984830 +0530
+@@ -2,7 +2,8 @@
+ exporter thread (never a serving loop) once per RV_EXPORT_S window.
+ 
+ Metric types: <RV_MONITORING_PREFIX>/<kind>/<signal>, e.g. custom.googleapis.com/rv2/gateway/loop_lag_p99_ms,
+-custom.googleapis.com/rv2/guard/owner_queue_ms_avg, custom.googleapis.com/rv2/guard/gpu_utilization.
++custom.googleapis.com/rv2/guard/owner_queue_ms_avg, custom.googleapis.com/rv2/guard/gpu_busy_pct
++(percent of window_s; gpu_utilization, one nvidia-smi sample as a fraction, is deprecated).
+ Monitored resource: gce_instance (MIG autoscaler: per-instance utilisation target) from the metadata
+ server, or k8s_pod (GKE HPA through the custom-metrics adapter) from RV_K8S_{PROJECT,LOCATION,CLUSTER,
+ NAMESPACE,POD}. Auth: the instance's / pod's service account token from the metadata server.
+@@ -22,7 +23,8 @@
+ MD = "http://metadata.google.internal/computeMetadata/v1/"
+ PUSHED = ("loop_lag_p99_ms", "loop_lag_p999_ms", "cpu_utilization", "cpu_cores_busy", "requests_per_s",
+           "active_streams", "inflight_requests", "owner_queue_ms_avg", "owner_queue_windows_avg",
+-          "owner_queue_ms_now_max", "owner_requests_per_s", "owner_shed_per_s", "gpu_utilization", "draining")
++          "owner_queue_ms_now_max", "owner_requests_per_s", "owner_shed_per_s", "gpu_busy_pct", "gpu_utilization",
++          "window_s", "draining")
+ 
+ 
+ def _md(path: str) -> str:
+diff -ruN '--exclude=.venv' '--exclude=__pycache__' '--exclude=.hypothesis' '--exclude=.pytest_cache' '--exclude=.import_linter_cache' '--exclude=.run' '--exclude=*.pyc' base/rvproto/runtime/windows.py work/rvproto/runtime/windows.py
+--- base/rvproto/runtime/windows.py	1970-01-01 05:30:00.000000000 +0530
++++ work/rvproto/runtime/windows.py	2026-09-24 18:56:06.377917801 +0530
+@@ -0,0 +1,86 @@
++"""Reset-safe windowed increases for the node exporter's signals (M4b), with Prometheus counter semantics.
++
++Every worker / owner process keeps its own cumulative counters and histograms in its segment, and a restarted
++process starts again from zero under the same segment name. A window's increase is therefore summed PER
++PROCESS, against that process's own previous sample:
++  - the same process (pid and start time) as at the previous sample: cur - prev, or cur when cur < prev (a reset);
++  - a process that started after the previous sample (a new or restarted worker / owner): all of cur;
++  - a process with no baseline (first seen, started earlier: e.g. the exporter's own first window): nothing.
++An increase is never negative, and a signal with no contributing process is left out, never published as 0.0
++(before: a restart read as a negative rate, and an exporter restart as an idle node).
++"""
++
++from __future__ import annotations
++
++from dataclasses import dataclass
++
++from rvproto.runtime.metrics import _NBUCKETS
++
++
++@dataclass(frozen=True, slots=True)
++class ProcSample:
++    key: str  # segment name (role + index): the same after a restart
++    role: str  # "w" | "o"
++    pid: int
++    started_ns: int  # the process's start, wall clock (segment header)
++    count: dict[str, int]
++    hist: dict[str, dict[str, object]]  # Histogram.export() format
++
++
++def _inc(cur: int, prev: int | None) -> int:
++    return cur if prev is None or cur < prev else cur - prev
++
++
++class Window:
++    """The increases of one exporter window, over the processes of one role that have a baseline."""
++
++    def __init__(self, prev: dict[str, ProcSample], prev_t_ns: int | None, cur: list[ProcSample]) -> None:
++        self.pairs: list[tuple[ProcSample | None, ProcSample]] = []
++        for c in cur:
++            p = prev.get(c.key)
++            if p is not None and (p.pid, p.started_ns) == (c.pid, c.started_ns):
++                self.pairs.append((p, c))
++            elif prev_t_ns is not None and c.started_ns >= prev_t_ns:
++                self.pairs.append((None, c))  # born inside the window: everything it counted is new
++
++    @property
++    def n(self) -> int:
++        """Processes that contribute to this window."""
++        return len(self.pairs)
++
++    def counter(self, name: str) -> int | None:
++        if not self.pairs:
++            return None
++        return sum(_inc(c.count.get(name, 0), None if p is None else p.count.get(name, 0)) for p, c in self.pairs)
++
++    def hist_sum(self, name: str) -> int | None:
++        """Increase of a histogram's value sum (e.g. total execution ns)."""
++        if not self.pairs:
++            return None
++        out = 0
++        for p, c in self.pairs:
++            h, ph = c.hist.get(name), None if p is None else p.hist.get(name)
++            if h is None:
++                continue
++            reset = ph is None or int(h["n"]) < int(ph["n"])  # type: ignore[call-overload]
++            out += int(h["sum"]) if reset else int(h["sum"]) - int(ph["sum"])  # type: ignore[call-overload,index]
++        return out
++
++    def hist(self, name: str) -> tuple[list[int], int, int] | None:
++        """(bucket counts, n, max) of the window's samples of a histogram, summed over processes."""
++        if not self.pairs:
++            return None
++        counts, n, vmax = [0] * _NBUCKETS, 0, 0
++        for p, c in self.pairs:
++            h, ph = c.hist.get(name), None if p is None else p.hist.get(name)
++            if h is None:
++                continue
++            reset = ph is None or int(h["n"]) < int(ph["n"])  # type: ignore[call-overload]
++            for k, v in h["b"].items():  # type: ignore[union-attr]
++                counts[int(k)] += v
++            if not reset:
++                for k, v in ph["b"].items():  # type: ignore[index,union-attr]
++                    counts[int(k)] -= v
++            n += int(h["n"]) - (0 if reset else int(ph["n"]))  # type: ignore[call-overload,index]
++            vmax = max(vmax, int(h["max"]))  # type: ignore[call-overload]
++        return counts, n, vmax
+diff -ruN '--exclude=.venv' '--exclude=__pycache__' '--exclude=.hypothesis' '--exclude=.pytest_cache' '--exclude=.import_linter_cache' '--exclude=.run' '--exclude=*.pyc' base/tests/unit/test_prometheus_types.py work/tests/unit/test_prometheus_types.py
+--- base/tests/unit/test_prometheus_types.py	1970-01-01 05:30:00.000000000 +0530
++++ work/tests/unit/test_prometheus_types.py	2026-09-24 19:00:16.764537067 +0530
+@@ -0,0 +1,180 @@
++"""Every /metrics family is TYPED (M4a): exactly one `# TYPE` line per family, followed by all of its samples.
++
++RC2 exposed untyped samples. prometheus_client parses those as type "unknown", and Google Managed Prometheus stores
++them as prometheus.googleapis.com/<name>/unknown, so the HPA's `rv2_signal|gauge` query finds nothing (r2-gke).
++The gateway, guard and unit node exporters (through their HTTP surface) and the worker's own GET /metrics route
++are parsed by prometheus_client. The suite runs under 0.21.1 (the venv) and 0.25.0 (PYTHONPATH), and the text is
++checked directly as well: a family typed twice, a family split into two groups, or a sample outside its family's
++TYPE group fails the test.
++"""
++
++from __future__ import annotations
++
++import asyncio
++import gc
++import os
++import threading
++import time
++import urllib.request
++from collections.abc import Iterator
++from http.server import ThreadingHTTPServer
++from importlib.metadata import version
++from types import SimpleNamespace
++
++import pytest
++from prometheus_client.parser import text_string_to_metric_families
++
++from rvproto.edge import ops
++from rvproto.edge.exporter_http import handler
++from rvproto.runtime.exporter import NodeExporter
++from rvproto.runtime.loopguard import install_gc_probe
++from rvproto.runtime.metrics import Registry, label
++from rvproto.runtime.shm_metrics import ShmRegistry
++
++TAG = f"pt{os.getpid()}"
++PC = version("prometheus_client")
++
++
++def typed(text: str) -> dict[str, str]:
++    """{family: type} as prometheus_client parses the exposition (counter families drop `_total`), cross-checked
++    against the `# TYPE` lines. Fails on an untyped family, a family typed twice or split, or a sample outside
++    its family's TYPE group."""
++    parsed: dict[str, str] = {}
++    for fam in text_string_to_metric_families(text):
++        assert fam.type in ("counter", "gauge"), f"prometheus_client {PC}: {fam.name} parsed as {fam.type!r}"
++        assert fam.name not in parsed, f"prometheus_client {PC}: family {fam.name} appears twice (split)"
++        parsed[fam.name] = fam.type
++    declared: dict[str, str] = {}
++    cur = None
++    for line in text.splitlines():
++        if line.startswith("# TYPE "):
++            _, _, name, typ = line.split(" ")
++            assert name not in declared, f"{name}: typed twice"
++            declared[name], cur = typ, name
++        elif line.strip() and not line.startswith("#"):
++            name = line.split("{", 1)[0].split(" ", 1)[0]
++            assert name == cur, f"{name}: sample outside its family's TYPE group ({cur})"
++    assert {n.removesuffix("_total") if t == "counter" else n: t for n, t in declared.items()} == parsed
++    return parsed
++
++
++@pytest.fixture(autouse=True)
++def gc_probes() -> Iterator[None]:
++    n = len(gc.callbacks)
++    yield
++    del gc.callbacks[n:]  # install_gc_probe registers a process-wide callback
++
++
++def _worker(tag: str, i: int) -> ShmRegistry:
++    reg = ShmRegistry(i, tag=tag, role="w", slots=(96, 512, 512))
++    install_gc_probe(reg)  # gc_pause_ns{gen=...}: a histogram with labels
++    gc.collect()
++    reg.observe("loop_lag_ns", 180_000 + i)
++    reg.inc("admitted", 5 + i)
++    reg.inc(label("quota_admitted_tokens", org="org-a"), 7)
++    reg.set("worker_ready", 1.0)  # a per-process gauge: worker="<i>" after the merge
++    reg.set(label("plan_version_info", org="org-a", version="a-1"), 1.0)
++    return reg
++
++
++def _owner(tag: str, i: int) -> ShmRegistry:
++    reg = ShmRegistry(i, tag=tag, role="o", slots=(96, 512, 512))
++    install_gc_probe(reg)
++    gc.collect()
++    reg.inc("owner_requests", 40)
++    reg.inc("admitted", 1)  # the same family as the workers' counter: role="owner", ONE group
++    reg.inc(label("owner_shed_reason", reason="queue_bound"))
++    reg.observe("guard_exec_ns", 2_000_000)
++    reg.set("owner_backlog_ns", 250_000.0)
++    return reg
++
++
++def _scrape(exp: NodeExporter) -> str:
++    srv = ThreadingHTTPServer(("127.0.0.1", 0), handler(exp))
++    threading.Thread(target=srv.serve_forever, daemon=True).start()
++    try:
++        with urllib.request.urlopen(f"http://127.0.0.1:{srv.server_address[1]}/metrics", timeout=10) as r:
++            return r.read().decode()
++    finally:
++        srv.shutdown()
++        srv.server_close()
++
++
++@pytest.mark.parametrize("kind", ["gateway", "guard", "unit"])
++def test_node_exporter_families_are_all_typed(kind: str) -> None:
++    tag = f"{TAG}{kind[0]}"
++    workers = [] if kind == "guard" else [_worker(tag, 0), _worker(tag, 1)]
++    owners = [] if kind == "gateway" else [_owner(tag, 0), _owner(tag, 1)]
++    exp = NodeExporter(tag=tag, kind=kind, metrics_dir="", dump_s=0, host="127.0.0.1", port=0, export_s=60,
++                       draining=lambda: False, push=None)
++    try:
++        state: dict[str, object] = {"t": time.monotonic(), "ticks": {}, "merged": None, "owner": {}}  # RC2 keys too
++        exp._signal_tick(state)
++        for reg in (*workers, *owners):
++            reg.inc("admitted", 2)
++        exp._signal_tick(state)  # a second window: the rates exist too
++        fams = typed(_scrape(exp))
++        assert fams["rv2_signal"] == "gauge"  # what the HPA asks for: prometheus.googleapis.com|rv2_signal|gauge
++        assert fams["rv_admitted"] == "counter"  # workers' and owners' series under ONE # TYPE
++        assert fams["rv_gc_pause_ns"] == "gauge"  # histogram statistics: computed values, not _bucket samples
++        if workers:
++            assert fams["rv_loop_lag_ns"] == "gauge" and fams["rv_worker_ready"] == "gauge"
++            assert fams["rv_quota_admitted_tokens"] == "counter" and fams["rv_plan_version_info"] == "gauge"
++        if owners:
++            assert fams["rv_owner_requests"] == "counter" and fams["rv_owner_shed_reason"] == "counter"
++            assert fams["rv_guard_exec_ns"] == "gauge" and fams["rv_owner_backlog_ns"] == "gauge"
++    finally:
++        for reg in (*workers, *owners):
++            reg.close()
++        exp.cleanup()
++
++
++def _serve(reg: Registry, path: str) -> tuple[int, dict[bytes, bytes], bytes]:
++    """GET `path` through the worker's ops routes (ops.handle), as the serving port answers it."""
++    st = SimpleNamespace(
++        metrics=reg, active_streams=1,
++        audit=SimpleNamespace(completeness=lambda: 1.0, produced=3, dropped=0, queue_stats=lambda: (0, 0.0)),
++        plans=SimpleNamespace(age_s=lambda: 0.2, versions=lambda: {"org-a": "a-1"}),
++        ks=SimpleNamespace(age_s=lambda: 0.1, orgs=frozenset({"org-a"}), models=frozenset({"m-1"})),
++        gate=SimpleNamespace(gauges=lambda: {"inflight_requests": 1.0}), guard=SimpleNamespace(),
++        admission=SimpleNamespace(lease=SimpleNamespace(held=lambda: {"org-a": 93})))
++    sent: list[dict[str, object]] = []
++
++    async def send(msg: dict[str, object]) -> None:
++        sent.append(msg)
++
++    async def receive() -> dict[str, object]:
++        return {"type": "http.request", "body": b"", "more_body": False}
++
++    assert asyncio.run(ops.handle(st, {"path": path, "method": "GET"}, receive, send))  # type: ignore[arg-type]
++    return sent[0]["status"], dict(sent[0]["headers"]), sent[1]["body"]  # type: ignore[arg-type,return-value]
++
++
++@pytest.mark.parametrize("shm", [False, True], ids=["c38-off", "c38-on"])
++def test_worker_metrics_route_families_are_all_typed(shm: bool) -> None:
++    reg: Registry = ShmRegistry(3, tag=f"{TAG}r", role="w", slots=(96, 512, 512)) if shm else Registry(3)
++    try:
++        install_gc_probe(reg)
++        gc.collect()
++        reg.observe("loop_lag_ns", 90_000)
++        reg.inc("admitted", 4)
++        status, headers, body = _serve(reg, "/metrics")
++        assert status == 200 and headers[b"content-type"].startswith(b"text/plain; version=0.0.4")
++        fams = typed(body.decode())
++        assert fams["rv_admitted"] == "counter" and fams["rv_loop_lag_ns"] == "gauge"
++        assert fams["rv_plan_version_info"] == "gauge" and fams["rv_lease_held_tokens"] == "gauge"
++        assert fams["rv_audit_completeness_ratio"] == "gauge"
++    finally:
++        if isinstance(reg, ShmRegistry):
++            reg.close()
++
++
++def test_a_type_clash_or_a_repeat_is_left_out_and_counted_never_a_second_type() -> None:
++    """One family, one type: a gauge that reuses a counter's series name is left out (counted), not re-typed."""
++    from rvproto.runtime.metrics import render
++
++    text = render([({"hist": {}, "count": {"x": 1}, "gauge": {}}, ())],
++                  samples=[("rv_x_total", "gauge", "2"), ("rv_x_total", "counter", "3"), ("rv2_signal", "gauge", "1")])
++    fams = typed(text)
++    assert fams == {"rv_x": "counter", "rv2_signal": "gauge"}
++    assert "rv_x_total 1" in text and "# rvproto: 2 series left out" in text
+diff -ruN '--exclude=.venv' '--exclude=__pycache__' '--exclude=.hypothesis' '--exclude=.pytest_cache' '--exclude=.import_linter_cache' '--exclude=.run' '--exclude=*.pyc' base/tests/unit/test_signal_windows.py work/tests/unit/test_signal_windows.py
+--- base/tests/unit/test_signal_windows.py	1970-01-01 05:30:00.000000000 +0530
++++ work/tests/unit/test_signal_windows.py	2026-09-24 19:11:05.903187419 +0530
+@@ -0,0 +1,212 @@
++"""Reset-safe windowed signals (M4b) and GPU busy measured over the window (M4c), across real process restarts.
++
++A worker's or an owner's counters live in its own shared-memory segment, and they start again from zero when the
++process restarts. The launcher restarts a dead owner in place, under the same segment name. RC2 computed a window's
++increase as (counters now) - (previous sample, matched by segment name), which fails three ways:
++  - an owner restart gave one NEGATIVE window of owner_requests_per_s (and of owner_shed_per_s and
++    owner_queue_ms_avg);
++  - a worker restart gave a negative requests_per_s;
++  - an exporter restart published requests_per_s = 0.0, which an autoscaler reads as an idle node.
++In these tests, real child processes own the segments. A restart is a SIGKILL followed by a new child with the same
++index: a new pid, a new start time, and counters from zero. The expected behaviour is Prometheus counter semantics,
++applied per process:
++  - each window reports its true increase, never a negative one;
++  - a signal with no baseline is left out, never published as 0.0;
++  - gpu_busy_pct is the owners' engine execution time over the window, in percent.
++"""
++
++from __future__ import annotations
++
++import os
++import subprocess
++import sys
++import time
++from collections.abc import Iterator
++from pathlib import Path
++
++import pytest
++
++from rvproto.runtime.exporter import NodeExporter
++
++ROOT = Path(__file__).resolve().parents[2]
++TAG = f"sw{os.getpid()}"
++CHILD = """
++import sys
++from rvproto.runtime.shm_metrics import ShmRegistry
++reg = ShmRegistry(int(sys.argv[3]), tag=sys.argv[1], role=sys.argv[2], slots=(16, 32, 32))
++print("up", flush=True)
++for line in sys.stdin:
++    op, name, v = line.split()
++    reg.inc(name, int(v)) if op == "inc" else reg.observe(name, int(v))
++    print("ok", flush=True)
++"""
++
++
++class Proc:
++    """A worker / owner stand-in: a real process that owns a C38 segment; do() applies updates and waits for them."""
++
++    def __init__(self, tag: str, role: str, index: int) -> None:
++        self.p = subprocess.Popen([sys.executable, "-c", CHILD, tag, role, str(index)], cwd=ROOT,
++                                  stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
++        assert self.p.stdout is not None and self.p.stdout.readline().strip() == "up"
++
++    def do(self, *ops: tuple[str, str, int]) -> None:
++        assert self.p.stdin is not None and self.p.stdout is not None
++        self.p.stdin.write("".join(f"{op} {name} {v}\n" for op, name, v in ops))
++        self.p.stdin.flush()
++        assert [self.p.stdout.readline().strip() for _ in ops] == ["ok"] * len(ops)
++
++    def crash(self) -> None:
++        """SIGKILL: the process is gone, its segment file stays behind (as after a real crash)."""
++        self.p.kill()
++        self.p.wait()
++
++
++def _exporter(tag: str) -> NodeExporter:
++    return NodeExporter(tag=tag, kind="unit", metrics_dir="", dump_s=0, host="127.0.0.1", port=0, export_s=60,
++                        draining=lambda: False, push=None)
++
++
++def _tick(exp: NodeExporter, st: dict[str, object]) -> dict[str, float]:
++    exp._signal_tick(st)
++    return dict(exp.signals)
++
++
++def _increase(sig: dict[str, float], rate: str) -> float:
++    """The window's increase behind a per-second rate (window_s states the window)."""
++    return sig[rate] * sig["window_s"]
++
++
++class Node:
++    """One node: its exporter, its worker / owner processes, and the exporter's signal-loop state."""
++
++    def __init__(self, tag: str) -> None:
++        self.tag, self.exp = tag, _exporter(tag)
++        self.procs: list[Proc] = []
++        self.st: dict[str, object] = {"t": time.monotonic(), "ticks": {}, "merged": None, "owner": {}}  # RC2 keys too
++
++    def start(self, role: str, index: int = 0) -> Proc:
++        p = Proc(self.tag, role, index)
++        self.procs.append(p)
++        return p
++
++    def tick(self) -> dict[str, float]:
++        return _tick(self.exp, self.st)
++
++
++@pytest.fixture
++def node(request: pytest.FixtureRequest) -> Iterator[Node]:
++    n = Node(f"{TAG}{request.node.name.split('_')[2]}")  # one tag per test: no shared segments
++    try:
++        yield n
++    finally:
++        for p in n.procs:
++            p.crash()
++        n.exp.cleanup()
++
++
++def test_a_first_window_leaves_the_rates_out_never_zero(node: Node) -> None:
++    w, o = node.start("w"), node.start("o")
++    w.do(("inc", "admitted", 1000))
++    o.do(("inc", "owner_requests", 5000), ("obs", "guard_exec_ns", 900_000_000))
++    sig = node.tick()  # the exporter's first window (a node or exporter restart): no baseline
++    rates = ("requests_per_s", "owner_requests_per_s", "owner_shed_per_s", "gpu_busy_pct", "cpu_cores_busy",
++             "cpu_utilization")
++    assert not {k: sig[k] for k in rates if k in sig}  # RC2: requests_per_s and cpu_* 0.0, an idle node
++    w.do(("inc", "admitted", 50))
++    sig = node.tick()
++    assert _increase(sig, "requests_per_s") == pytest.approx(50) and sig["cpu_cores_busy"] >= 0.0
++    # an exporter restart: the new exporter's first window leaves the rates out again (RC2: requests_per_s 0.0)
++    sig = _tick(_exporter(node.tag), {"t": time.monotonic(), "ticks": {}, "merged": None, "owner": {}})
++    assert not {k: sig[k] for k in rates if k in sig}
++
++
++def test_a_worker_or_owner_restart_never_gives_a_negative_window(node: Node) -> None:
++    w, o = node.start("w"), node.start("o")
++    w.do(("inc", "admitted", 1000))
++    o.do(("inc", "owner_requests", 5000), ("inc", "owner_shed", 40))
++    node.tick()
++    w.do(("inc", "admitted", 50))
++    o.do(("inc", "owner_requests", 30))
++    sig = node.tick()
++    assert _increase(sig, "requests_per_s") == pytest.approx(50)
++    assert _increase(sig, "owner_requests_per_s") == pytest.approx(30)
++    assert _increase(sig, "owner_shed_per_s") == pytest.approx(0)
++
++    # both crash and are restarted in place: the same segment names, counters from zero
++    w.crash()
++    o.crash()
++    w, o = node.start("w"), node.start("o")
++    w.do(("inc", "admitted", 3))
++    o.do(("inc", "owner_requests", 7), ("inc", "owner_shed", 1))
++    sig = node.tick()
++    got = {k: _increase(sig, k) for k in ("requests_per_s", "owner_requests_per_s", "owner_shed_per_s")}
++    # RC2: 3 - 1050 = -1047, 7 - 5030 = -5023, 1 - 40 = -39 (the new process's count minus the old one's)
++    assert got == pytest.approx({"requests_per_s": 3, "owner_requests_per_s": 7, "owner_shed_per_s": 1})
++    assert sig["owner_queue_ms_avg"] >= 0.0 and sig["owner_queue_windows_avg"] >= 0.0
++    assert sig["cpu_cores_busy"] > 0.0  # the restarted processes' CPU (their start-up) is in this window
++
++    # the next window pairs the NEW processes with their own previous samples
++    w.do(("inc", "admitted", 11))
++    o.do(("inc", "owner_requests", 13))
++    sig = node.tick()
++    assert _increase(sig, "requests_per_s") == pytest.approx(11)
++    assert _increase(sig, "owner_requests_per_s") == pytest.approx(13)
++
++
++def test_gpu_busy_pct_is_owner_execution_time_over_the_window(node: Node) -> None:
++    o = node.start("o")
++    o.do(("obs", "guard_exec_ns", 900_000_000))
++    node.tick()
++    o.do(("obs", "guard_exec_ns", 20_000_000), ("obs", "guard_exec_ns", 4_000_000))
++    sig = node.tick()
++    assert sig["gpu_busy_pct"] == pytest.approx(min(100.0, 100 * 24e6 / (sig["window_s"] * 1e9)))  # percent
++    o.crash()
++    o = node.start("o")
++    o.do(("obs", "guard_exec_ns", 5_000_000))
++    sig = node.tick()  # restarted: all of the new owner's execution time is in this window
++    assert sig["gpu_busy_pct"] == pytest.approx(min(100.0, 100 * 5e6 / (sig["window_s"] * 1e9)))
++    sig = node.tick()
++    assert sig["gpu_busy_pct"] == 0.0  # an idle engine over a whole window: a measured 0, not a missing value
++    o.do(("obs", "guard_exec_ns", 10**12))  # more execution time than the window holds: capped at 100
++    assert node.tick()["gpu_busy_pct"] == 100.0
++
++
++def _ps(key: str, pid: int, started: int, admitted: int, hist: dict[str, object] | None = None) -> object:
++    from rvproto.runtime.windows import ProcSample
++
++    return ProcSample(key, key[0], pid, started, {"admitted": admitted}, {"exec_ns": hist} if hist else {})
++
++
++def _h(n: int, total: int, buckets: dict[str, int]) -> dict[str, object]:
++    return {"n": n, "sum": total, "max": 50, "min": 1, "b": buckets}
++
++
++def test_window_counts_each_process_against_its_own_previous_sample() -> None:
++    from rvproto.runtime.windows import Window
++
++    prev = {"w0": _ps("w0", 10, 100, 500), "w1": _ps("w1", 11, 100, 800), "w2": _ps("w2", 12, 100, 50),
++            "w4": _ps("w4", 14, 100, 70)}
++    cur = [_ps("w0", 10, 100, 520),  # the same process: +20
++           _ps("w1", 21, 250, 5),  # restarted after the previous sample (taken at 200): all 5 are new
++           _ps("w2", 12, 100, 40),  # the same process, and its counter went DOWN: a reset, so +40
++           _ps("w3", 30, 150, 99),  # first seen, but started BEFORE the previous sample: no baseline, left out
++           _ps("w4", 14, 180, 3)]  # a reused pid with a new start time: a new process, started before 200
++    win = Window(prev, 200, cur)  # type: ignore[arg-type]
++    assert win.n == 3 and win.counter("admitted") == 20 + 5 + 40
++    assert win.counter("never_counted") == 0  # processes contribute, the counter did not move: a real 0
++    assert Window({}, None, cur).counter("admitted") is None  # type: ignore[arg-type]  # no baseline at all
++    assert Window(prev, 200, []).counter("admitted") is None  # type: ignore[arg-type]  # no process left
++
++
++def test_window_histograms_reset_per_process() -> None:
++    from rvproto.runtime.windows import Window
++
++    prev = {"o0": _ps("o0", 10, 100, 0, _h(10, 1000, {"3": 10})), "o1": _ps("o1", 11, 100, 0, _h(8, 800, {"4": 8}))}
++    cur = [_ps("o0", 10, 100, 0, _h(14, 1600, {"3": 12, "5": 2})),  # +4 samples, +600 ns
++           _ps("o1", 11, 100, 0, _h(2, 90, {"2": 2}))]  # n went down: a reset, all of it is new
++    win = Window(prev, 200, cur)  # type: ignore[arg-type]
++    assert win.hist_sum("exec_ns") == 600 + 90
++    counts, n, _ = win.hist("exec_ns")  # type: ignore[misc]
++    assert n == 6 and counts[2] == 2 and counts[3] == 2 and counts[5] == 2 and counts[4] == 0
++    assert min(counts) >= 0
+diff -ruN '--exclude=.venv' '--exclude=__pycache__' '--exclude=.hypothesis' '--exclude=.pytest_cache' '--exclude=.import_linter_cache' '--exclude=.run' '--exclude=*.pyc' base/tests/unit/test_v2_fixes.py work/tests/unit/test_v2_fixes.py
+--- base/tests/unit/test_v2_fixes.py	2026-09-24 16:02:47.000000000 +0530
++++ work/tests/unit/test_v2_fixes.py	2026-09-24 18:57:00.876628758 +0530
+@@ -210,7 +210,8 @@
+             key = (smp.name, frozenset(smp.labels.items()))
+             assert key not in seen, f"duplicate series {key}"
+             seen[key] = smp.value
+-    assert len(seen) == sum(1 for line in text.splitlines() if line.strip()), "a line was not parsed as one sample"
++    assert len(seen) == sum(1 for line in text.splitlines() if line.strip() and not line.startswith("#")), \
++        "a line was not parsed as one sample"
+     return seen
+ 
+ 
