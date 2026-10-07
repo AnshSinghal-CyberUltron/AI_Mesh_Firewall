@@ -164,6 +164,43 @@ class FeedReader:
             truncated=truncated,
         )
 
+    async def bootstrap_engaged(
+        self,
+        kind: StateKind,
+        cursor: Cursor,
+    ) -> tuple[Manifest, tuple[SignedRecord, ...]]:
+        """Cold start a kind from its published ENGAGED set. O(engaged), not O(records).
+
+        A cold reader cannot use the delta path: its cursor is at zero, so the delta is the whole
+        kind. For the kill switch that is O(tenants) at startup — finding F5, and gate G-04's
+        "0 x 503 on new gateways". The engaged set is the subset that actually changes a decision,
+        so a worker reads that instead and jumps its cursor straight to the attested position.
+
+        Completeness is the caller's to check: the manifest's signed `on_count` against what the
+        caller holds after adopting these records. Returning the records rather than a count keeps
+        the fail-closed decision with the component that serves requests.
+        """
+        manifest = await self._read_head(kind, cursor)
+        scopes = await self._store.engaged(kind)
+        if not scopes:
+            return manifest, ()
+        raws = await self._store.records(kind, scopes)
+        if len(raws) != len(scopes):
+            raise StoreDataUnavailable(
+                f"{kind.value} store returned {len(raws)} values for {len(scopes)} engaged scopes",
+            )
+        out: list[SignedRecord] = []
+        for scope, raw in zip(scopes, raws, strict=True):
+            record = decode_record(self._secret, kind, raw)
+            if record.key != scope:
+                raise StoreDataUnavailable(
+                    f"{kind.value} engaged scope {scope!r} resolved to {record.key!r}",
+                )
+            if record.feed_seq > manifest.feed_seq:
+                continue  # above the attested generation: a publish in flight
+            out.append(record)
+        return manifest, tuple(out)
+
     async def _read_head(self, kind: StateKind, cursor: Cursor) -> Manifest:
         head = await self._store.head(kind)
         manifest = decode_manifest(

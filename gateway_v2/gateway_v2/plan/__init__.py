@@ -1,6 +1,11 @@
 """Plan compile, snapshot, incremental apply, and the single surface lookup."""
 from gateway_v2.plan.compiler import CompileError, RuleDraft, compile_plan, detector_id
-from gateway_v2.plan.delta import ApplyOutcome, PlanDeltaApplier, plan_from_record
+from gateway_v2.plan.delta import (
+    ApplyOutcome,
+    PlanDeltaApplier,
+    plan_applier,
+    plan_from_record,
+)
 from gateway_v2.plan.document import (
     PlanDocument,
     decode_plan_body,
@@ -25,6 +30,7 @@ __all__ = (
     "detector_id",
     "encode_plan_body",
     "lookup_plan",
+    "plan_applier",
     "plan_body_of",
     "plan_from_record",
     "rule_applies",

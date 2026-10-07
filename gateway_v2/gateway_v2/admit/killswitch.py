@@ -32,6 +32,7 @@ from enum import StrEnum
 
 from gateway_v2.domain.locks import FRESH_MS
 from gateway_v2.domain.state import SignedRecord, StateKind, StoreDataUnavailable
+from gateway_v2.runtime.state_feed import FeedRound
 
 GLOBAL_SCOPE = "global"
 ORG_PREFIX = "org:"
@@ -225,3 +226,34 @@ def engaged_scopes(records: Iterable[SignedRecord], attested_feed_seq: int) -> t
         for record in records
         if record.feed_seq <= attested_feed_seq and scope_is_on(record)
     )
+
+
+def killswitch_applier(snapshot: KillSwitchSnapshot) -> Callable[[FeedRound], None]:
+    """Bind a snapshot to the round shape the synchroniser drives.
+
+    `attested_engaged` is passed only on a COMPLETE round. A truncated round holds a partial
+    view, which legitimately disagrees with the manifest, and checking it there would fail the
+    fleet closed in the middle of a bulk publish.
+    """
+
+    def apply(round_: FeedRound) -> None:
+        snapshot.apply(
+            round_.records,
+            attested_feed_seq=round_.manifest.feed_seq,
+            attested_engaged=None if round_.truncated else round_.manifest.on_count,
+        )
+
+    return apply
+
+
+def killswitch_adopter(snapshot: KillSwitchSnapshot) -> Callable[[FeedRound], None]:
+    """Bind a snapshot to the O(engaged) cold start."""
+
+    def adopt(round_: FeedRound) -> None:
+        snapshot.adopt(
+            round_.records,
+            attested_feed_seq=round_.manifest.feed_seq,
+            attested_engaged=round_.manifest.on_count,
+        )
+
+    return adopt

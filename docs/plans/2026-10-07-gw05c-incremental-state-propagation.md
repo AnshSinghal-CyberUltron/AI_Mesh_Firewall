@@ -1428,7 +1428,9 @@ commit so the manifest format is written once, not twice.
 |---|---|---|
 | 1 — state / version model | **done** (`790930e1`) | `domain/state.py`, `runtime/state_sig.py`; 29 new tests; **95 passed, 4 skipped** (baseline 66/4); all 5 AST gates OK, import-linter 2 kept / 0 broken, ruff clean, mypy --strict clean on 90 files |
 | 2 — change feed (Protocol + logic + fake) | **done** | `runtime/store_keys.py`, `runtime/state_feed.py`; 25 new tests; **120 passed, 4 skipped**; gates as above, mypy --strict clean on 92 files |
-| 3 — worker incremental synchronisation | pending | — |
+| 3a — plan delta, O(tenants) reconcile deleted | **done** (`6d16e68a`) | `plan/document.py`, `plan/delta.py`; `ReplicaSnapshot.reconcile` removed, `absorb(org_id)` added; `PlanStore.offboard`; **144 passed, 4 skipped** |
+| 3b/3c — kill switch and identity on the delta | **done** (`b4813b05`) | `admit/killswitch.py`, `admit/identity.py`, `domain/identity.py`; **187 passed, 4 skipped** |
+| 3d — cursor ownership, bounded rounds, offload | **done** | `runtime/state_task.py`, `FeedReader.bootstrap_engaged`, three applier adapters; **205 passed, 4 skipped**, mypy --strict on 96 files |
 | 4 — control-plane per-record publish | pending | blocked on A8 confirmation |
 | 5 — remove full-refresh paths | pending | — |
 | 6 — testing | pending | — |
@@ -1517,3 +1519,70 @@ exact boundary.
 previous `version` when the round was truncated by the delta budget. Raising the version floor
 before the attested generation is fully applied would let a later regress go undetected. Pinned by
 `test_the_budget_truncates_and_asks_to_run_again`.
+
+### Phase 3 files
+
+```
+gateway_v2/gateway_v2/plan/document.py            NEW   PlanDocument, encode/decode_plan_body
+gateway_v2/gateway_v2/plan/delta.py               NEW   PlanDeltaApplier, plan_from_record,
+                                                        plan_applier, ApplyOutcome
+gateway_v2/gateway_v2/plan/snapshot.py            EDIT  reconcile() DELETED; absorb(org_id) added
+gateway_v2/gateway_v2/plan/store.py               EDIT  offboard(); known() marked O(tenants)
+gateway_v2/gateway_v2/admit/killswitch.py         NEW   KillSwitchSnapshot (was a 3-line stub)
+gateway_v2/gateway_v2/admit/identity.py           NEW   IdentityCache (was a 3-line stub)
+gateway_v2/gateway_v2/domain/identity.py          NEW   Principal
+gateway_v2/gateway_v2/runtime/state_feed.py       EDIT  bootstrap_engaged() — O(engaged) cold start
+gateway_v2/gateway_v2/runtime/state_task.py       NEW   StateSynchroniser, DeltaBudget, RoundReport
+gateway_v2/tests/plan/test_lgw05c_delta.py        NEW   24 tests
+gateway_v2/tests/admit/test_lgw05c_killswitch.py  NEW   19 tests
+gateway_v2/tests/admit/test_lgw05c_identity.py    NEW   24 tests
+gateway_v2/tests/runtime/test_lgw05c_sync.py      NEW   18 tests
+gateway_v2/tests/plan/test_lgw05.py               EDIT  7 reconcile call sites -> absorb
+```
+
+### What phase 3 actually removed
+
+| RC2 / pre-GW05c | Now |
+|---|---|
+| `ReplicaSnapshot.reconcile()` iterating `PlanStore.known()` (a sort of every tenant) once a second, holding the lock request-path `lookup()` needs | `absorb(org_id)`, O(1), called by the delta applier for exactly the tenants whose records changed |
+| Kill switch rebuilt from the complete record set every 500 ms (203–223 ms of loop block at 25k, `ks_cpu/ks_ms ≈ 0.9`) | engaged set moved by the delta; `attested_engaged` checked in O(1) on every complete round |
+| Kill-switch cold start reading every record | `bootstrap_engaged()` reading the published engaged set — **1 record read with 25,000 published**, cursor jumps straight to the attested head |
+| Any key write dropping every principal on every worker | per-key eviction from the key delta |
+| One store read per cold-cache request (`trips/req` 0.134 → 0.986 in phase B) | single-flight: **50 concurrent callers for one cold key make 1 read** |
+| One store read per never-issued key (C26: 5,000 keys → 5,000 reads) | negative cache, invalidated by the key delta |
+| Unbounded delta work per round | `DeltaBudget(records=256, offload_above=32)`; above the threshold the apply runs in a GIL-releasing thread |
+| A failure in one kind stalling the others | `drain_all` isolates per kind and reports, raising for none (H7) |
+
+### A12 — the immutable-snapshot refactor turned out to be unnecessary
+
+§11.6 and S7 called for making the served snapshot an immutable object swapped by atomic
+reference, because `reconcile()` held `ReplicaSnapshot._lock` for the whole O(tenants) loop while
+request-path `lookup()` needed the same lock. With the loop deleted, every remaining critical
+section is O(1), so the lock is no longer a contention point and the refactor would be churn
+without a measurable benefit. Dropped; S7 is closed by the deletion, not by the rewrite.
+
+### A13 — `Applier` returns `object`, not `None`
+
+`plan_applier` has a genuinely useful return value (`ApplyOutcome`, for metrics:
+applied / offboarded / skipped / rejected), while the kill-switch and identity appliers return
+nothing. Typing the alias as `Callable[[FeedRound], object]` lets an applier report an outcome
+without the synchroniser knowing its shape, and avoids the variance workaround a `-> None` alias
+forces at every call site.
+
+### A14 — found while testing, not fixed here: `ReplicaSnapshot._pins` never shrinks
+
+`pin(request_id, org_id)` records a plan per request id and nothing ever removes it, so the dict
+grows without bound for the life of the process — one entry per request served. It is O(requests),
+not O(tenants), so it is outside R2-02, and releasing a pin needs a request-completion hook in
+`edge/`, which is GW05/GW06 wiring rather than state propagation. **Flagged for GW06**, deliberately
+untouched here to keep this card's diff to propagation.
+
+### Defects in the plan corrected during phase 3
+
+| § | Said | Correct |
+|---|---|---|
+| §11.1 | "extend `is_newer` to break ties on `feed_seq`" | wrong — `feed_seq` is a per-kind cursor shared by every tenant, so another tenant's write advances it. Plan ordering stays `(epoch, sequence)`. (A2) |
+| §11.5 | manifest-last makes a bulk publish safe under strict `ZCARD == count` | would have fail-closed the fleet on every bulk onboard. The index may run ahead; the reader bounds everything by the manifest and proves completeness with `ZCOUNT(-inf, feed_seq)`. (A10) |
+| §11.6 / S7 | immutable snapshot swapped by atomic reference | unnecessary once the O(tenants) loop is gone. (A12) |
+| §16 phase 3 | "`plan/snapshot.py` — make the served snapshot immutable" | replaced by deleting `reconcile()` and adding `absorb()`. |
+| §15 | `test_lgw05_4` kept green unchanged | its 7 `reconcile()` call sites became `absorb("org-a", …)`. Every assertion is unchanged; only the mechanism that feeds the replicas changed, because that mechanism is what the card replaces. |

@@ -35,6 +35,7 @@ from dataclasses import dataclass
 
 from gateway_v2.domain.identity import Principal
 from gateway_v2.domain.state import SignedRecord, StateKind, StoreDataUnavailable
+from gateway_v2.runtime.state_feed import FeedRound
 
 DEFAULT_CAPACITY = 50_000
 DEFAULT_NEGATIVE_TTL_S = 2.0
@@ -219,3 +220,19 @@ class IdentityCache:
         self._negative.move_to_end(key_hash)
         while len(self._negative) > self._capacity:
             self._negative.popitem(last=False)
+
+
+def identity_applier(cache: IdentityCache) -> Callable[[FeedRound], None]:
+    """Bind a cache to the round shape the synchroniser drives.
+
+    A round with no key changes still calls `mark_applied`, because that position is what a
+    later cache fill is checked against (C36's epoch-checked fill).
+    """
+
+    def apply(round_: FeedRound) -> None:
+        if round_.records:
+            cache.on_delta(round_.records, round_.manifest.feed_seq)
+        else:
+            cache.mark_applied(round_.manifest.feed_seq)
+
+    return apply

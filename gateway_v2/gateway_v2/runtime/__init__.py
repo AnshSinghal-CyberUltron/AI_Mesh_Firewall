@@ -25,6 +25,14 @@ from gateway_v2.runtime.state_sig import (
     make_record,
     record_matches_index,
 )
+from gateway_v2.runtime.state_task import (
+    DEFAULT_BUDGET,
+    MAX_DRAIN_ROUNDS,
+    Applier,
+    DeltaBudget,
+    RoundReport,
+    StateSynchroniser,
+)
 from gateway_v2.runtime.store_keys import (
     DEFAULT_NAMESPACE,
     ENGAGED_KINDS,
@@ -34,15 +42,19 @@ from gateway_v2.runtime.store_keys import (
 )
 
 __all__ = (
+    "DEFAULT_BUDGET",
     "DEFAULT_NAMESPACE",
     "ENGAGED_KINDS",
     "HASH_KINDS",
     "KEYS",
+    "MAX_DRAIN_ROUNDS",
     "START",
+    "Applier",
     "CapacityHint",
     "CapacityUnavailable",
     "CapacityUnset",
     "Cursor",
+    "DeltaBudget",
     "DetectHooks",
     "DummyPool",
     "FeedReader",
@@ -53,7 +65,9 @@ __all__ = (
     "IndexPage",
     "PoolKind",
     "ResourceContract",
+    "RoundReport",
     "StateStore",
+    "StateSynchroniser",
     "StoreKeys",
     "canonical_body",
     "decode_manifest",

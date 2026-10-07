@@ -28,6 +28,7 @@ from gateway_v2.plan.compiler import CompileError, compile_plan
 from gateway_v2.plan.document import decode_plan_body
 from gateway_v2.plan.snapshot import ReplicaSnapshot
 from gateway_v2.plan.store import PlanStore
+from gateway_v2.runtime.state_feed import FeedRound
 
 
 @dataclass(frozen=True, slots=True)
@@ -124,3 +125,18 @@ class PlanDeltaApplier:
         if not isinstance(current, ExecutionPlan):
             return False
         return not is_newer(plan, current)
+
+
+def plan_applier(
+    store: PlanStore,
+    snapshot: ReplicaSnapshot | None = None,
+    *,
+    clock: Callable[[], float] = time.time,
+) -> Callable[[FeedRound], ApplyOutcome]:
+    """Bind a store and snapshot to the round shape the synchroniser drives."""
+    applier = PlanDeltaApplier(store, snapshot, clock=clock)
+
+    def apply(round_: FeedRound) -> ApplyOutcome:
+        return applier.apply(round_.records)
+
+    return apply
