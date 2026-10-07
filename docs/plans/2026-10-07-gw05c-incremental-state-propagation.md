@@ -2067,3 +2067,83 @@ check exists and is proven; nothing calls it in anger. That is recorded rather t
 | fault drills | 13 passed |
 | evidence | `docs/plans/evidence/2026-10-07-gw05c/verdict.json` |
 | containers after the run | none left; `blog-postgres` never touched |
+
+---
+
+## 26. Phase 7, in part: the two criteria that do not need a lane
+
+L05c-1 has five pass criteria. Three need the full request path under offered load with a guard,
+and `gateway_v2/edge/` is still stubs, so they are doubly blocked — no lane AND no serving path.
+Two are properties of the propagation layer alone and were measured on one machine against real
+**Postgres 16.15** and real **Valkey 8.1.10**.
+
+```
+scripts/gw05c_propagation_bench.py                           NEW
+docs/plans/evidence/2026-10-07-gw05c/propagation-bench.json  NEW
+```
+
+| L05c-1 criterion | Status |
+|---|---|
+| C4 p99 < 20 ms | **needs a lane** — and a serving path, which does not exist |
+| infra ≤ 0.1% | **needs a lane** |
+| Loop lag p99.9 ≤ 5 ms | **needs a lane** |
+| Store publish per write ≤ 25 ms | **measured, passes** |
+| Kill-switch refresh flat within ±20% of 1k | **measured, passes** |
+
+### Kill-switch refresh — the R2-02 headline
+
+| Tenants | Wall p50 | CPU p50 | RC2 | Ratio vs 1k |
+|---|---|---|---|---|
+| 1 000 | **0.272 ms** | 0.238 ms | 8.5 ms | 1.000 |
+| 10 000 | **0.276 ms** | 0.243 ms | 75.0 ms | 1.021 |
+| 25 000 | **0.298 ms** | 0.255 ms | 213.0 ms | **1.071** |
+
+300 samples per level. RC2 went 8.5 → 213 ms, a factor of 25 across the same range; this moves
+7.1 % and the criterion allows 20 %. CPU is reported alongside wall because RC2's defect was CPU
+(`ks_cpu / ks_ms ≈ 0.9`), and CPU is flat too — which is the actual claim: the work does not
+depend on the estate.
+
+### Store publish per write
+
+| Tenants | Phase | p50 | p99 | max | Records per publish |
+|---|---|---|---|---|---|
+| 1 000 | B key_add / C plan_set / D killswitch | 0.69–0.72 ms | ≤ 1.04 ms | ≤ 1.04 ms | 1 |
+| 10 000 | B / C / D | 0.70–0.76 ms | ≤ 1.16 ms | ≤ 1.16 ms | 1 |
+| 25 000 | B / C / D | 0.70–0.72 ms | ≤ 1.30 ms | ≤ 1.30 ms | 1 |
+
+60 writes per phase per level, matching E2-01's 60 writes over a 300 s phase. Budget is 25 ms.
+RC2 measured p50 30–76 ms at 1k — already failing — rising to 255–1 724 ms at 25k. Flat here, and
+`records_per_publish` is `1` in all nine cells, which is the structural claim holding under
+measurement rather than only under test.
+
+### What this measurement is not
+
+Not L05c-1, and it must not be quoted as it. One machine, store on loopback, no gateway process,
+no guard, no offered load, no twelve workers competing for a loop. The asymmetry matters:
+
+- **Publish latency here is optimistic.** A loopback round trip is far cheaper than a cross-zone
+  Memorystore one and nothing contends for the store. A pass is necessary, not sufficient; a
+  failure would have been conclusive.
+- **The flatness ratio is scale-invariant.** If a round costs the same at 1k and 25k, it is
+  because the work does not depend on the estate, and that reason does not change on a bigger
+  machine or under load.
+
+### A25 — two numbers that are honest to report rather than bury
+
+| Measured | Reading |
+|---|---|
+| First-start catch-up: **0.09 / 0.93 / 2.40 s** at 1k / 10k / 25k | This DOES scale with the estate, necessarily: a cold worker with no cursor has to apply every record once. It is bounded per round by the delta budget, runs off the request path, and plans can be loaded lazily instead. Reported because "nothing scales with tenants" would be false as stated — the steady state does not, a cold start does, once. |
+| Write end-to-end p99 **20.2 ms** vs store publish p99 **1.3 ms** | The difference is almost entirely `PostgresControlDB` opening a connection per operation. At E2-01's write rate (one write every 5 s) that is irrelevant and it is on no serving path, but it would misattribute the publish number if left folded in — which is why the bench times the publisher separately. Connection pooling is the fix if the control plane ever needs write throughput. |
+
+### Phase 7 state
+
+| | |
+|---|---|
+| 2 of 5 L05c-1 criteria | measured on real infrastructure, both pass with margin |
+| 3 of 5 | blocked on a lane, and on `edge/` existing at all |
+| evidence | `docs/plans/evidence/2026-10-07-gw05c/propagation-bench.json` |
+| latency claims made anywhere else in this card | none — everything else is a count |
+
+The card cannot formally exit without the full L05c-1 run. What these numbers change is the risk
+of attempting it: the two criteria that RC2 failed at *every* tenant level now pass flat, so a
+lane run is a confirmation exercise rather than a discovery one.
