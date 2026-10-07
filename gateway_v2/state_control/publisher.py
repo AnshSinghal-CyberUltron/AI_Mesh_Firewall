@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import threading
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from typing import Protocol
 
 from gateway_v2.domain.state import (
@@ -38,11 +39,34 @@ from gateway_v2.runtime.state_feed import Head, IndexPage
 from gateway_v2.runtime.state_sig import encode_manifest, encode_record
 
 
+@dataclass(frozen=True, slots=True)
+class StoredHead:
+    """What the re-hydrator reads to decide whether the store agrees with Postgres.
+
+    Every field is O(1) to obtain (`GET`, `ZCARD`, `ZREVRANGE 0 0`, `SCARD`), which is what makes
+    a round that finds nothing wrong cost nothing. RC2 read the whole kind from Postgres AND
+    digested it on every round of every kind, once a second.
+    """
+
+    manifest_raw: bytes | None
+    index_count: int
+    index_top: int
+    engaged_count: int
+
+
 class StatePublisher(Protocol):
-    """What the writer needs from the store. Deliberately small."""
+    """What the writer and the re-hydrator need from the store. Deliberately small."""
 
     def stored_feed_seq(self, kind: StateKind) -> int | None:
         """The position the store already holds, or None when it holds nothing verifiable."""
+        ...
+
+    def stored_head(self, kind: StateKind) -> StoredHead:
+        """The published head, in O(1). The re-hydrator's per-round read."""
+        ...
+
+    def stored_index(self, kind: StateKind) -> Mapping[str, int]:
+        """key -> feed_seq for every index entry. O(records): the DEEP verification path only."""
         ...
 
     def publish_record(
@@ -96,12 +120,30 @@ class MemoryStore:
         self.nudges: list[tuple[StateKind, int]] = []
         self.whole_kind_publishes: int = 0
         self.record_writes: int = 0
+        self.head_reads: int = 0
+        self.index_scans: int = 0
 
     # --- publisher side ------------------------------------------------------------------------
 
     def stored_feed_seq(self, kind: StateKind) -> int | None:
         with self._lock:
             return self._feed_seq.get(kind)
+
+    def stored_head(self, kind: StateKind) -> StoredHead:
+        with self._lock:
+            self.head_reads += 1
+            index = self._index.get(kind, {})
+            return StoredHead(
+                manifest_raw=self._manifests.get(kind),
+                index_count=len(index),
+                index_top=max(index.values(), default=0),
+                engaged_count=len(self._engaged.get(kind, set())),
+            )
+
+    def stored_index(self, kind: StateKind) -> Mapping[str, int]:
+        with self._lock:
+            self.index_scans += 1
+            return dict(self._index.get(kind, {}))
 
     def publish_record(
         self,
@@ -236,6 +278,8 @@ class MemoryStore:
         self.nudges = []
         self.whole_kind_publishes = 0
         self.record_writes = 0
+        self.head_reads = 0
+        self.index_scans = 0
 
 
 class BrokenPublisher:
@@ -247,6 +291,14 @@ class BrokenPublisher:
     def stored_feed_seq(self, kind: StateKind) -> int | None:
         del kind
         return None
+
+    def stored_head(self, kind: StateKind) -> StoredHead:
+        del kind
+        raise ConnectionError("injected store failure")
+
+    def stored_index(self, kind: StateKind) -> Mapping[str, int]:
+        del kind
+        raise ConnectionError("injected store failure")
 
     def publish_record(
         self,

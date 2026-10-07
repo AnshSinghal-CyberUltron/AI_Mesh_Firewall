@@ -181,6 +181,28 @@ class StateWriter:
         """`off` is an explicit record too, and it is what keeps `on_count` honest."""
         return self.put(StateKind.KS, scope, {"on": on}, engaged=on)
 
+    def repair_epoch(self, kind: StateKind) -> KindCounters:
+        """Move Postgres to a new epoch when the STORE holds a version it never issued.
+
+        A divergence (a restore from a stray backup, a rogue publisher) can leave the store
+        ahead. Republishing the current content at the current version would be a REGRESS from
+        the point of view of a gateway that already applied the higher one, and C36 refuses a
+        regress by design, so the fleet would reject the repair. Bumping the epoch first makes
+        the republished state unambiguously newer than anything any process has applied.
+        """
+        with self._db.tx() as tx:
+            counters = tx.counters(kind, lock=True)
+            moved = advance(counters, epoch_bump=True, is_new=False, engaged_delta=0)
+            tx.set_counters(kind, moved)
+        LOG.warning(
+            "state epoch repaired kind=%s version=%s", kind.value, moved.version,
+        )
+        return moved
+
+    def manifest_for(self, kind: StateKind, counters: KindCounters) -> Manifest:
+        """Sign a manifest for counters read elsewhere. The re-hydrator's repair path."""
+        return self._manifest(kind, counters)
+
     def rollback(self, log_id: int) -> WriteOutcome:
         """Restore one logged write as a NEW signed version at a new epoch. Never a regress."""
         with self._db.tx() as tx:

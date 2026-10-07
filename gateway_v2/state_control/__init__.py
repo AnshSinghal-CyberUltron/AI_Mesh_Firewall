@@ -15,7 +15,18 @@ from state_control.db import (
     MemoryControlDB,
     advance,
 )
-from state_control.publisher import BrokenPublisher, MemoryStore, StatePublisher
+from state_control.publisher import (
+    BrokenPublisher,
+    MemoryStore,
+    StatePublisher,
+    StoredHead,
+)
+from state_control.rehydrate import (
+    ALL_KINDS,
+    Rehydrator,
+    RepairEvent,
+    RoundSummary,
+)
 from state_control.schema import RECORD_COLUMNS, SCHEMA
 from state_control.writer import (
     ERROR,
@@ -27,6 +38,7 @@ from state_control.writer import (
 )
 
 __all__ = (
+    "ALL_KINDS",
     "ERROR",
     "OK",
     "OK_PUBLISH_PENDING",
@@ -42,8 +54,12 @@ __all__ = (
     "LoggedWrite",
     "MemoryControlDB",
     "MemoryStore",
+    "Rehydrator",
+    "RepairEvent",
+    "RoundSummary",
     "StatePublisher",
     "StateWriter",
+    "StoredHead",
     "WriteOutcome",
     "advance",
 )
