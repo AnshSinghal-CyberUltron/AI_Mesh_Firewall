@@ -32,13 +32,19 @@ class ReplicaSnapshot:
         self._served_at: dict[str, float] = {}
         self._pins: dict[str, ExecutionPlan] = {}
 
-    def reconcile(self, now: float | None = None) -> None:
+    def absorb(self, org_id: str, now: float | None = None) -> None:
+        """Refresh last-known-good for ONE tenant. O(1).
+
+        GW05c replaced a periodic `reconcile()` that iterated every known tenant — O(tenants) on
+        the serving loop, once a second, 72 ms per round at 25,000 tenants (R2-02). The delta
+        applier calls this for exactly the tenants whose records changed, so the cost of staying
+        current is proportional to changes, not to the size of the estate.
+        """
         moment = self._clock() if now is None else now
         with self._lock:
-            for org_id in self._store.known():
-                self._absorb(org_id, moment)
+            self._absorb_locked(org_id, moment)
 
-    def _absorb(self, org_id: str, moment: float) -> None:
+    def _absorb_locked(self, org_id: str, moment: float) -> None:
         state = self._store.read(org_id)
         if not isinstance(state, ExecutionPlan):
             return

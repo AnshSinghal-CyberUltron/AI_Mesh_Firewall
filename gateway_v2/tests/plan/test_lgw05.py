@@ -102,7 +102,7 @@ def test_lgw05_3_same_rules_on_every_surface_and_phase() -> None:
     store = PlanStore()
     store.put(plan)
     snap = ReplicaSnapshot(store, clock=lambda: 10.0)
-    snap.reconcile(10.0)
+    snap.absorb("org-a", 10.0)
     seen = set()
     for surface in SURFACES:
         state = lookup_plan(snap, "org-a", surface)
@@ -116,17 +116,22 @@ def test_lgw05_3_same_rules_on_every_surface_and_phase() -> None:
 
 
 def test_lgw05_4_replicas_converge_without_regressing() -> None:
+    """GW05c: convergence is driven per tenant (absorb), not by an O(tenants) reconcile.
+
+    The assertions are unchanged from GW05 — two replicas reach the newer version and neither
+    regresses. Only the mechanism that feeds them changed.
+    """
     store = PlanStore()
     first = _compile("org-a", (_draft(action=Action.FLAG),), at=1.0)
     store.put(first)
     left = ReplicaSnapshot(store, clock=lambda: 1.0)
     right = ReplicaSnapshot(store, clock=lambda: 1.0)
-    left.reconcile(1.0)
-    right.reconcile(1.0)
+    left.absorb("org-a", 1.0)
+    right.absorb("org-a", 1.0)
     second = _compile("org-a", (_draft(action=Action.BLOCK),), previous=first, at=2.0)
     store.put(second)
-    left.reconcile(2.0)
-    right.reconcile(2.0)
+    left.absorb("org-a", 2.0)
+    right.absorb("org-a", 2.0)
     assert left.lookup("org-a", 2.0).version == second.version  # type: ignore[union-attr]
     assert right.lookup("org-a", 2.0).version == second.version  # type: ignore[union-attr]
     assert left.age_seconds("org-a", 2.0) == 0.0
@@ -142,7 +147,7 @@ def test_lgw05_5_pin_ignores_a_later_push() -> None:
     assert isinstance(pinned, ExecutionPlan)
     second = _compile("org-a", (_draft(action=Action.BLOCK),), previous=first, at=6.0)
     store.put(second)
-    snap.reconcile(6.0)
+    snap.absorb("org-a", 6.0)
     assert snap.lookup("org-a", 6.0).version == second.version  # type: ignore[union-attr]
     held = snap.pinned("req-1")
     assert held is not None
@@ -199,7 +204,7 @@ def test_last_known_good_expires() -> None:
     store = PlanStore()
     store.put(_compile("org-a", (_draft(),)))
     snap = ReplicaSnapshot(store, clock=lambda: 0.0)
-    snap.reconcile(0.0)
+    snap.absorb("org-a", 0.0)
     store.mark_unreachable("org-a")
     assert isinstance(snap.lookup("org-a", 1.0), ExecutionPlan)
     later = snap.lookup("org-a", 1.0 + (FRESH_MS / 1000) + 0.1)
