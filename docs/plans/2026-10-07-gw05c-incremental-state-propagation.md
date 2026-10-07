@@ -1426,8 +1426,8 @@ commit so the manifest format is written once, not twice.
 
 | Phase | Status | Evidence |
 |---|---|---|
-| 1 — state / version model | **done** | `domain/state.py`, `runtime/state_sig.py`; 29 new tests; **95 passed, 4 skipped** (baseline 66/4); all 5 AST gates OK, import-linter 2 kept / 0 broken, ruff clean, mypy --strict clean on 90 files |
-| 2 — change feed (Protocol + logic + fake) | next | — |
+| 1 — state / version model | **done** (`790930e1`) | `domain/state.py`, `runtime/state_sig.py`; 29 new tests; **95 passed, 4 skipped** (baseline 66/4); all 5 AST gates OK, import-linter 2 kept / 0 broken, ruff clean, mypy --strict clean on 90 files |
+| 2 — change feed (Protocol + logic + fake) | **done** | `runtime/store_keys.py`, `runtime/state_feed.py`; 25 new tests; **120 passed, 4 skipped**; gates as above, mypy --strict clean on 92 files |
 | 3 — worker incremental synchronisation | pending | — |
 | 4 — control-plane per-record publish | pending | blocked on A8 confirmation |
 | 5 — remove full-refresh paths | pending | — |
@@ -1455,3 +1455,65 @@ cursor derived from `seq` (the mistake it exists to catch) cannot select a rollb
 `_tamper()` helper that **fails if its target byte string is absent**, so a future envelope change
 cannot silently turn the tamper battery into a no-op — the dead-oracle failure mode this repository
 has hit before (CHG-0009, CHG-0012, CHG-0029).
+
+### Phase 2 files
+
+```
+gateway_v2/gateway_v2/runtime/store_keys.py    NEW   StoreKeys (namespaced, single hash slot),
+                                                     HASH_KINDS, ENGAGED_KINDS, KEYS
+gateway_v2/gateway_v2/runtime/state_feed.py    NEW   Head, IndexPage, Cursor, START, FeedRound,
+                                                     StateStore Protocol, FeedReader.poll
+gateway_v2/gateway_v2/runtime/__init__.py      EDIT  exports
+gateway_v2/tests/runtime/test_lgw05c_feed.py   NEW   25 tests incl. the cost-shape guard
+```
+
+### Round shape delivered
+
+| Round | Trips | Commands | Records read |
+|---|---|---|---|
+| steady state (nothing changed) | **1** | `GET`, `ZCARD`, `ZREVRANGE` | **0** |
+| one record changed | 3 | + `ZCOUNT`, `ZRANGEBYSCORE`, `MGET` | 1 |
+| N records changed | 3 | the same six | min(N, budget) |
+
+Asserted equal at 1 000 / 10 000 / 25 000 tenants by
+`test_steady_state_cost_is_identical_at_one_thousand_and_twenty_five_thousand`, and the guard test
+`test_steady_state_at_ten_thousand_tenants_reads_no_records` pins records-read at 0 and the command
+list at exactly three. Negative control run: a reader that ignores its cursor (RC2's behaviour)
+reads **10 000** records on the same fixture, so the guard is load-bearing, not decorative.
+
+### A10 — correction to §11.5's publish ordering claim
+
+§11.5 said a bulk publish is safe because the manifest is written last, so "a reader either sees
+the old manifest (and skips, because `feed_seq` has not moved) or the new one (and the index is
+already complete)". That is not sufficient, and taken with §11.2's strict `ZCARD == count` /
+`top_score == feed_seq` checks it would have caused a **fleet-wide fail-closed window on every
+bulk onboard**: a reader seeing the old manifest with new index entries already present finds
+`index_top > manifest.feed_seq` and `index_count > manifest.count`, and strict equality rejects
+both.
+
+The feed reader as built treats the manifest as the only attestation and bounds everything by it:
+
+| Check | Relation | Why this direction |
+|---|---|---|
+| `index_top >= manifest.feed_seq` | index may be AHEAD, never behind | behind means the manifest attests writes the index cannot name, so the reader would miss them |
+| `index_count >= manifest.count` | cheap screen, every round | in-flight extras only make it larger, so it cannot false-positive |
+| `ZCOUNT(-inf, manifest.feed_seq) == manifest.count` | **exact**, on any round that reads a delta | counting only at or below the attested position is immune to in-flight extras, which a plain `ZCARD` comparison is not |
+| delta read bounded by `manifest.feed_seq` | — | the reader applies exactly the generation the manifest attests and nothing above it |
+
+Pinned by `test_a_bulk_publish_in_flight_does_not_fail_closed` (three index entries ahead of the
+manifest; the reader applies only the attested one) and
+`test_a_missing_entry_masked_by_an_extra_is_caught_on_a_delta_round` (the case a `ZCARD` check
+would pass and the exact count rejects).
+
+**Residual, stated for the evidence package:** on a short-circuit round completeness rests on
+`index_count >= manifest.count`, so one missing entry masked by one in-flight extra is not caught
+until the next round that reads a delta. The re-hydrator's full digest comparison, off the serving
+loop, is the backstop. This is the narrower-completeness-proof trade of §21 row 1, now with its
+exact boundary.
+
+### A11 — a partial round does not raise the version floor
+
+`FeedRound.cursor` advances its `feed_seq` to the last record actually applied, but keeps the
+previous `version` when the round was truncated by the delta budget. Raising the version floor
+before the attested generation is fully applied would let a later regress go undetected. Pinned by
+`test_the_budget_truncates_and_asks_to_run_again`.
