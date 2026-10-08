@@ -13,6 +13,20 @@ consistent generation without waiting for anybody, which is all a republish need
 Counters live in one row per kind and are updated inside the write transaction. That is what
 keeps a publish O(1): `count` and `on_count` are maintained incrementally rather than recomputed
 by scanning the kind, which is the R2-02 defect.
+
+THE DSN MUST POINT AT THE PRIMARY. A read replica is forbidden here, for the re-hydrator as much
+as for the writer, and the reason is not performance.
+
+GW05b's freshness stamp is an assertion about durable truth: "at this moment the store held at
+least these versions, and they cover every write committed before it". A re-hydrator reading a
+replica would issue that assertion against a view that is itself behind the writer, and every
+gateway in the fleet would then trust it -- which is R2-03's SP1 reproduced one tier up, by the
+component built to prevent it. The gateway data plane never reads Postgres at all (grep: no
+psycopg import anywhere under `gateway_v2/`), so there is no read traffic here to offload and no
+latency argument to weigh against that.
+
+If a future change wants a replica for cost or for analytics, it needs a separate connection and
+a separate class. Do not add a replica DSN to this one.
 """
 
 from __future__ import annotations

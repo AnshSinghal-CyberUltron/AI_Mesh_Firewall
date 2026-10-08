@@ -1,0 +1,200 @@
+# Prometheus alert rules — GW05b state freshness (R2-03, R2-04).
+#
+# NOT LOADED YET, and deliberately absent from prometheus-scrape.example.yml's `rule_files`.
+# These rules read the `amf_state_*` family, which only the v3 gateway_v2 tree exports, and that
+# tree has no deployment: gateway_v2/edge/ is still stubs, so nothing serves /metrics. Wiring
+# these up is part of GW06's work, alongside the /readyz predicate.
+#
+# They ship with the card rather than after it because the alarm thresholds ARE part of the
+# design. The freshness bound is 5 s and the Postgres ride-through is 16 s (both owner-locked in
+# gateway_v2/domain/locks.py); an alert that fires at some unrelated number would quietly
+# redefine the contract the card was signed on.
+#
+# Severity convention, and why freshness is only a warning at the gateway:
+#   A gateway that loses freshness FAILS CLOSED by design. It is not serving bad data -- it is
+#   refusing to serve, loudly, with 503 + Retry-After. So the page-worthy condition is the
+#   CAUSE (no re-hydrator is stamping) rather than the symptom, and the symptom is a warning
+#   that confirms the fail-closed path actually engaged.
+groups:
+  - name: amf-state-freshness
+    rules:
+      # --- the cause: verification has stopped ---------------------------------------------
+      - alert: StateNeverVerified
+        expr: max(amf_state_stamp_age_seconds) == -1
+        for: 2m
+        labels:
+          severity: critical
+          service: gateway
+        annotations:
+          summary: "No gateway has ever seen a freshness stamp"
+          description: >-
+            amf_state_stamp_age_seconds is the -1 sentinel, so no worker has read a valid stamp
+            since start-up. Either no re-hydrator is running, or RV/AMF state signing keys
+            differ between the control plane and the gateways. Every request is being refused
+            with 503 kill_switch_unavailable. Check the re-hydrator instances first, then
+            amf_state_stamp_invalid_total: a non-zero invalid count with a zero missing count
+            means the stamp is present but signed with another key.
+
+      - alert: StateVerificationStale
+        expr: max(amf_state_stamp_age_seconds) > 4
+        for: 1m
+        labels:
+          severity: critical
+          service: gateway
+        annotations:
+          summary: "State has not been verified against Postgres for >4s"
+          description: >-
+            Fires BEFORE the 5 s freshness bound, so there is a window to act before the fleet
+            fails closed. A re-hydrator round plus a gateway refresh is 1.5 s at the shipped
+            periods, so a sustained 4 s means stamping has stopped rather than slowed.
+
+      - alert: StateStampInvalid
+        expr: increase(amf_state_stamp_invalid_total[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+          service: gateway
+        annotations:
+          summary: "A freshness stamp failed its signature"
+          description: >-
+            A stamp was present and did not verify. Benign cause: a signing-key rotation that
+            reached one plane and not the other. Non-benign cause: somebody can write
+            {rv2}:stamp. Treat as a security event until the key rotation is confirmed. The
+            gateway is failing closed either way.
+
+      # --- clock skew: the one dependency the design cannot remove --------------------------
+      - alert: StateClockSkew
+        expr: min(amf_state_stamp_age_seconds) < -1
+        for: 1m
+        labels:
+          severity: critical
+          service: gateway
+        annotations:
+          summary: "Freshness age is negative: gateway and re-hydrator clocks disagree"
+          description: >-
+            amf_state_stamp_age_seconds is (gateway wall clock - re-hydrator verified_at), so a
+            negative value means the clocks have drifted apart. Skew in this direction EXTENDS
+            the exposure window by the skew, and only gross cases (beyond the 5 s bound) fail
+            closed. Check NTP on both tiers. This gauge is deliberately not clamped at zero.
+
+      # --- the Postgres ride-through -------------------------------------------------------
+      - alert: StateRidingOutPostgresOutage
+        expr: max(amf_state_stamp_degraded) == 1
+        for: 30s
+        labels:
+          severity: warning
+          service: gateway
+        annotations:
+          summary: "Freshness is being claimed on a Postgres ride-through"
+          description: >-
+            The newest stamp is degraded: a re-hydrator could not reach Postgres and is
+            re-asserting the last verified cursors. This is the designed response to a Cloud SQL
+            failover (11-16 s) and is NOT an outage. It is bounded at 16 s (PG_GRACE_MS), after
+            which the fleet fails closed, so escalate if it persists past ~20 s.
+
+      - alert: StateRideThroughNearExpiry
+        expr: max(amf_state_stamp_degraded) == 1 and max(amf_state_stamp_age_seconds) > 12
+        for: 0m
+        labels:
+          severity: critical
+          service: gateway
+        annotations:
+          summary: "Postgres ride-through is close to its 16s limit"
+          description: >-
+            A degraded claim has been running for more than 12 s of the 16 s window. When it
+            expires the whole fleet fails closed. This is a Postgres availability incident, not
+            a gateway one.
+
+      # --- the symptom: confirms fail-closed engaged ---------------------------------------
+      - alert: StateFailedClosed
+        expr: min(amf_state_stamp_fresh) == 0
+        for: 1m
+        labels:
+          severity: warning
+          service: gateway
+        annotations:
+          summary: "At least one gateway worker is refusing requests (unverified state)"
+          description: >-
+            Confirms the fail-closed path engaged. Expected transiently on a new process, which
+            must wait for a re-hydrator round that STARTED after it did (I3) -- so a brief
+            firing during a deploy or scale-out is normal. Sustained firing means pair this with
+            StateVerificationStale and treat that as the incident.
+
+      - alert: StateFreshnessFlapping
+        expr: increase(amf_state_unverified_transitions_total[15m]) > 3
+        for: 0m
+        labels:
+          severity: warning
+          service: gateway
+        annotations:
+          summary: "Freshness is flapping"
+          description: >-
+            More than three fresh -> not-fresh lapses in 15 minutes. A new process's first wait
+            is NOT counted here, so this is real flapping: a re-hydrator round slower than
+            (fresh_ms - period), an overloaded store, or clock jitter.
+
+      # --- the deep comparison --------------------------------------------------------------
+      - alert: StateDeepVerificationLapsed
+        expr: max(amf_state_stamp_deep_age_seconds) > 600
+        for: 5m
+        labels:
+          severity: warning
+          service: gateway
+        annotations:
+          summary: "No deep index comparison for >10 minutes"
+          description: >-
+            The O(1) round compares versions, positions and counts. It cannot see a missing
+            index entry masked by an extra one -- the deep round is what catches that, and it
+            runs every 60th round by default (about once a minute). A long gap means the deep
+            pass is failing or the cadence is misconfigured. Not urgent: record signatures still
+            pair each record with the index entry that selected it.
+
+  - name: amf-state-control-plane
+    rules:
+      # The direct SP2 detector. Belongs to the control plane, not the gateway: a write that is
+      # durable-but-unpublished is invisible to every gateway by construction, which is the
+      # whole defect. Requires the re-hydrator to export its own counters (GW06/GW14d).
+      - alert: StatePublishPending
+        expr: max(amf_state_publish_pending_oldest_seconds) > 2
+        for: 1m
+        labels:
+          severity: critical
+          service: control-plane
+        annotations:
+          summary: "A committed state write has been unpublished for >2s"
+          description: >-
+            R2-04's required alarm. The writer commits to Postgres and then publishes; if the
+            publish fails the write is `ok_publish_pending` and only a re-hydrator will carry
+            it. Older than one re-hydrator period (1 s) means no re-hydrator is picking it up.
+            Gateways will fail closed at the freshness bound, so this is the alert that explains
+            WHY. Query shape if the counter is unavailable: the oldest row in amf_state_log
+            whose published flag is false.
+
+      - alert: StateStampWithheld
+        expr: increase(amf_state_stamp_withheld_total[5m]) > 0
+        for: 1m
+        labels:
+          severity: critical
+          service: control-plane
+        annotations:
+          summary: "A re-hydrator round could not verify every kind"
+          description: >-
+            A round that cannot verify all four kinds writes NO stamp, by design: stamping the
+            kinds that worked would let one permanently broken kind hide behind a fresh-looking
+            claim. The withheld log line names the failing kinds. If this persists past the
+            freshness bound the fleet fails closed.
+
+      - alert: StateRehydratorSingleInstance
+        expr: count(up{job="amf-state-rehydrator"} == 1) < 2
+        for: 5m
+        labels:
+          severity: critical
+          service: control-plane
+        annotations:
+          summary: "Fewer than two re-hydrators are running"
+          description: >-
+            R2-04 requires >= 2 in >= 2 zones. One is a single point of global non-enforcement,
+            and round 2 lost its only one to an idle-stop watchdog (ledger 09:06Z, instance
+            rv-r2state-cp-1). Concurrency is safe: publishes are WATCH-guarded, budget repairs
+            are compare-and-set, and a stamp is never replaced by an older one. Verify the idle
+            watchdog's exclusion list still names both instances.
