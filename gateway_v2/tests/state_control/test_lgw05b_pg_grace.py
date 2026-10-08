@@ -234,7 +234,13 @@ def test_a_store_rolled_back_below_the_anchor_voids_the_ride_through(
     )
 
     lab.store.publish_kind(
-        StateKind.PLAN, records[:1], lab.writer.manifest_for(StateKind.PLAN, behind), engaged,
+        StateKind.PLAN,
+        records[:1],
+        lab.writer.manifest_for(StateKind.PLAN, behind),
+        engaged,
+        # A deliberate ROLLBACK of the store. `publish_kind` refuses a regress unless asked
+        # (R2-04), so a test that forces one has to declare it.
+        allow_regress=True,
     )
     lab.db.down = True
     lab.advance(1.0)
@@ -321,10 +327,12 @@ def test_a_data_fault_is_not_ridden_out() -> None:
         records: Sequence[SignedRecord],
         manifest: Manifest,
         engaged: Sequence[str] = (),
+        *,
+        allow_regress: bool = False,
     ) -> bool:
         if kind is StateKind.PLAN:
             raise ConnectionError("injected store failure")
-        return original(kind, records, manifest, engaged)
+        return original(kind, records, manifest, engaged, allow_regress=allow_regress)
 
     lab.store.forget_manifest(StateKind.PLAN)
     lab.store.publish_kind = refuse  # type: ignore[method-assign]

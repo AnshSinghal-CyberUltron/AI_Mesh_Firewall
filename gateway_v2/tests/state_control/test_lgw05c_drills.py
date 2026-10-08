@@ -287,7 +287,13 @@ def test_drill_a_regressed_store_is_refused(drill: Drill) -> None:
             on_count=counters.on_count,
         )
         drill.publisher.publish_kind(
-            StateKind.PLAN, records[:4], drill.writer.manifest_for(StateKind.PLAN, older), engaged,
+            StateKind.PLAN,
+            records[:4],
+            drill.writer.manifest_for(StateKind.PLAN, older),
+            engaged,
+            # A deliberate ROLLBACK of the store, which is what this drill is about.
+            # `publish_kind` refuses a regress unless asked (R2-04).
+            allow_regress=True,
         )
 
         refused = await worker.round_once(StateKind.PLAN)
@@ -456,18 +462,31 @@ def test_drill_rehydration_under_a_held_row_lock(drill: Drill) -> None:
     The publish snapshot is REPEATABLE READ READ ONLY and takes no lock, so a restore must
     complete while the lock is still held.
     """
+    import psycopg
+
     for position in range(1, 31):
         drill.writer.plan_set(f"org-{position}", _plan_body(f"org-{position}"))
     drill.drop_store()
 
-    with drill.db.tx() as holding:
-        holding.counters(StateKind.PLAN, lock=True)  # held open for the whole repair
+    # The holder must NOT come from `drill.db`. Since R2-04 made the session bounds actually
+    # reach the server, a holder opened through `PostgresControlDB` is itself terminated by
+    # `idle_in_transaction_session_timeout` (5 s) -- so a `took_s < 5.0` assertion would pass
+    # whether the repair completed under the lock or merely outlived the holder, which is exactly
+    # the distinction this drill exists to prove. A raw connection carries none of our options.
+    with psycopg.connect(DSN, autocommit=False) as holder, holder.cursor() as cursor:
+        cursor.execute(f'SET search_path TO "{drill.schema}"')
+        cursor.execute("SELECT 1 FROM amf_state_counter WHERE kind = 'plan' FOR UPDATE")
         started = time.monotonic()
         summary = drill.rehydrator.round_once()
         took_s = time.monotonic() - started
+        still_held = not holder.closed
+        holder.rollback()
 
+    assert still_held, "the lock must still have been held when the repair finished"
     assert [e.records for e in summary.repairs if e.kind is StateKind.PLAN] == [30]
-    assert took_s < 5.0, f"repair waited {took_s:.2f}s behind a held lock"
+    # Well under the 5 s idle-transaction bound, so the result cannot be explained by the
+    # holder's session being killed. The reference figure on Cloud SQL is 0.54-0.79 s.
+    assert took_s < 2.0, f"repair waited {took_s:.2f}s behind a held lock"
     assert drill.rehydrator.diagnose(StateKind.PLAN) is None
 
 

@@ -78,24 +78,82 @@ class ControlPlaneUnavailable(Exception):
     """
 
 
-def _db_faults() -> tuple[type[BaseException], ...]:
+BOUND_LOCK = "lock_timeout"
+BOUND_STATEMENT = "statement_timeout"
+FAULT_OUTAGE = "outage"
+FAULT_ERROR = "error"
+FAULT_CATEGORIES = (BOUND_LOCK, BOUND_STATEMENT, FAULT_OUTAGE, FAULT_ERROR)
+"""Why a kind failed a round, as a closed set a metric can count. Never tenant-derived."""
+
+
+class ControlPlaneBoundExceeded(Exception):
+    """A declared R2-04 session bound fired: `lock_timeout` or `statement_timeout`.
+
+    Deliberately NOT a `ControlPlaneUnavailable`, and that distinction is the whole point. The
+    database answered — it said "no, not within the bound you gave me" — so this is a bounded
+    fault, not an outage, and the ride-through must NOT cover it.
+
+    It used to. `_db_faults` caught `psycopg.Error`, the ancestor of every database error, so a
+    `lock_timeout` expiry set `db_down=True`, reached `_ride_through`, and minted a DEGRADED stamp
+    re-asserting cursors nothing had compared — telling the whole fleet state was fresh for up to
+    PG_GRACE_MS. That is R2-04's own defect (H7) wearing the mechanism built for Cloud SQL
+    failovers: bounded where RC2 was unbounded, but silent where RC2 was obvious.
+
+    The honest outcome is to withhold the stamp and let freshness lapse, which is what every
+    other unverified kind already does.
+    """
+
+    def __init__(self, message: str, *, bound: str) -> None:
+        super().__init__(message)
+        self.bound = bound
+        """Which bound fired, so an alarm can tell a held lock from a slow query."""
+
+
+def _bound_faults() -> tuple[type[BaseException], ...]:
+    """The declared bounds firing. Checked BEFORE the outage classes, which they subclass.
+
+    Both are `OperationalError` descendants in psycopg's SQLSTATE mapping (55P03 lock_not_available,
+    57014 query_canceled), so order of `except` clauses — not class membership — is what separates
+    them from a real outage.
+    """
+    try:
+        from psycopg import errors
+    except ImportError:  # pragma: no cover - psycopg is a declared dependency
+        return ()
+    return (errors.LockNotAvailable, errors.QueryCanceled)
+
+
+def _outage_faults() -> tuple[type[BaseException], ...]:
     """Error classes that mean "the database did not answer", not "the database said no".
 
     Discovered lazily, like the store adapter's WATCH errors: `MemoryControlDB` needs no
     psycopg, so importing it at module scope would make the twin depend on a driver it does not
     use. `ConnectionError` and `TimeoutError` are both `OSError`, so the twin's injected failure
     is covered by the first entry.
+
+    `OperationalError` rather than `Error`: the latter is the base of EVERY database error, so it
+    swept up the declared bounds above and every programming error besides. A missing table is not
+    an outage and must never be ridden out — the class docstring on `ControlPlaneUnavailable` has
+    always said so, and until now the code did the opposite.
     """
     faults: list[type[BaseException]] = [OSError]
     try:
         import psycopg
     except ImportError:  # pragma: no cover - psycopg is a declared dependency
         return tuple(faults)
-    faults.append(psycopg.Error)
+    faults.append(psycopg.OperationalError)
     return tuple(faults)
 
 
-_DB_FAULTS = _db_faults()
+_BOUND_FAULTS = _bound_faults()
+_OUTAGE_FAULTS = _outage_faults()
+
+
+def _bound_of(exc: BaseException) -> str:
+    """Which declared bound this is. `_bound_faults` returns lock first, by construction."""
+    if _BOUND_FAULTS and isinstance(exc, _BOUND_FAULTS[0]):
+        return BOUND_LOCK
+    return BOUND_STATEMENT
 
 
 @dataclass(frozen=True, slots=True)
@@ -127,6 +185,21 @@ class RoundSummary:
 
     stamp_race_lost: bool = False
     """Minted, but the store already held a newer one. Healthy when two re-hydrators run."""
+
+    publish_pending_s: float = 0.0
+    """Age of the oldest committed-but-unpublished write seen this round, across all kinds.
+
+    R2-04's named alarm (`StatePublishPending`). Zero when nothing is pending, which is a real
+    answer rather than a sentinel: a healthy estate's oldest pending write is genuinely none.
+    """
+
+    faults: tuple[tuple[StateKind, str], ...] = ()
+    """Per failed kind, WHY, as one of `FAULT_CATEGORIES`.
+
+    `errors` carries the human detail and is what a log line wants; this carries the category and
+    is what a counter wants. Parsing a category back out of a message is how a metric starts
+    depending on the wording of an exception.
+    """
 
     @property
     def ok(self) -> bool:
@@ -192,7 +265,7 @@ class Rehydrator:
         """None when the store agrees with Postgres. Reads no records and no bodies."""
         return self._diagnose(kind)[0]
 
-    def _diagnose(self, kind: StateKind) -> tuple[str | None, KindCounters]:
+    def _diagnose(self, kind: StateKind) -> tuple[str | None, KindCounters, int]:
         """`(reason, the Postgres counters compared)`. The store is read BEFORE Postgres.
 
         That order is load-bearing. A write that commits and publishes BETWEEN the two reads
@@ -203,16 +276,21 @@ class Rehydrator:
 
         GW05b also needs the counters themselves: they are the cursor the freshness stamp
         attests for this kind, so `diagnose` can no longer throw them away.
+
+        The third member is the position the STORE currently attests, which R2-04's
+        `ok_publish_pending` alarm needs: a write above it is committed and unpublished. It is
+        returned rather than re-read, because re-reading the manifest to compute an alarm would
+        double the I/O of an O(1) round.
         """
         head = self._publisher.stored_head(kind)
         counters = self._counters(kind)
         if head.manifest_raw is None:
-            return MISSING, counters
+            return MISSING, counters, 0
         try:
             manifest = decode_manifest(self._secret, kind, head.manifest_raw, not_before=ZERO)
         except StoreDataUnavailable:
-            return INVALID, counters
-        return self._compare(kind, manifest, head, counters), counters
+            return INVALID, counters, 0
+        return self._compare(kind, manifest, head, counters), counters, manifest.feed_seq
 
     def _compare(
         self,
@@ -256,7 +334,11 @@ class Rehydrator:
     def _counters(self, kind: StateKind) -> KindCounters:
         try:
             return self._db.counters(kind)
-        except _DB_FAULTS as exc:
+        except _BOUND_FAULTS as exc:
+            raise ControlPlaneBoundExceeded(
+                f"{kind.value} counters: {exc}", bound=_bound_of(exc),
+            ) from exc
+        except _OUTAGE_FAULTS as exc:
             raise ControlPlaneUnavailable(f"{kind.value} counters: {exc}") from exc
 
     def _snapshot(
@@ -265,7 +347,11 @@ class Rehydrator:
     ) -> tuple[KindCounters, tuple[SignedRecord, ...], tuple[str, ...]]:
         try:
             return self._db.snapshot(kind)
-        except _DB_FAULTS as exc:
+        except _BOUND_FAULTS as exc:
+            raise ControlPlaneBoundExceeded(
+                f"{kind.value} snapshot: {exc}", bound=_bound_of(exc),
+            ) from exc
+        except _OUTAGE_FAULTS as exc:
             raise ControlPlaneUnavailable(f"{kind.value} snapshot: {exc}") from exc
 
     # --- repair ---------------------------------------------------------------------------------
@@ -277,7 +363,11 @@ class Rehydrator:
             self._writer.repair_epoch(kind)
         counters, records, engaged = self._snapshot(kind)
         manifest = self._writer.manifest_for(kind, counters)
-        self._publisher.publish_kind(kind, records, manifest, engaged)
+        # ONLY the store_ahead repair may move the manifest backwards; every other reason
+        # stays guarded so a second re-hydrator cannot overwrite a newer generation.
+        self._publisher.publish_kind(
+            kind, records, manifest, engaged, allow_regress=reason == STORE_AHEAD,
+        )
         event = RepairEvent(
             kind=kind,
             reason=reason,
@@ -303,11 +393,17 @@ class Rehydrator:
         repairs: list[RepairEvent] = []
         healthy: list[StateKind] = []
         errors: list[tuple[StateKind, str]] = []
+        faults: list[tuple[StateKind, str]] = []
         verified: dict[StateKind, Cursor] = {}
         db_down = False
+        pending_s = 0.0
         for kind in self._kinds:
             try:
-                reason, counters = self._reason(kind, deep=deep)
+                reason, counters, published = self._reason(kind, deep=deep)
+                pending_s = max(
+                    pending_s,
+                    self._pending_age_s(kind, published, counters, started_at),
+                )
                 if reason is None:
                     healthy.append(kind)
                     verified[kind] = Cursor(counters.version, counters.feed_seq)
@@ -315,13 +411,26 @@ class Rehydrator:
                     event = self.repair(kind, reason)
                     repairs.append(event)
                     verified[kind] = event.cursor
+            except ControlPlaneBoundExceeded as exc:
+                # A declared bound fired. `db_down` stays FALSE, so the ride-through cannot
+                # cover it and the stamp is withheld rather than minted degraded (R2-04).
+                LOG.warning(
+                    "declared control-plane bound fired for kind=%s: %s "
+                    "(stamp withheld; this is a bounded fault, not a postgres outage)",
+                    kind.value,
+                    exc,
+                )
+                errors.append((kind, f"ControlPlaneBoundExceeded: {exc}"))
+                faults.append((kind, exc.bound))
             except ControlPlaneUnavailable as exc:
                 db_down = True
                 LOG.warning("postgres unavailable for kind=%s: %s", kind.value, exc)
                 errors.append((kind, f"ControlPlaneUnavailable: {exc}"))
+                faults.append((kind, FAULT_OUTAGE))
             except Exception as exc:  # noqa: BLE001 - store, driver and OS errors alike
                 LOG.warning("rehydrate round failed for kind=%s: %s", kind.value, exc)
                 errors.append((kind, f"{type(exc).__name__}: {exc}"))
+                faults.append((kind, FAULT_ERROR))
         minted, won = self._stamp(started_at, verified, deep=deep, db_down=db_down)
         return RoundSummary(
             repairs=tuple(repairs),
@@ -329,17 +438,48 @@ class Rehydrator:
             errors=tuple(errors),
             stamped=minted,
             stamp_race_lost=minted is not None and not won,
+            faults=tuple(faults),
+            publish_pending_s=pending_s,
         )
 
-    def _reason(self, kind: StateKind, *, deep: bool) -> tuple[str | None, KindCounters]:
-        reason, counters = self._diagnose(kind)
+    def _reason(
+        self, kind: StateKind, *, deep: bool,
+    ) -> tuple[str | None, KindCounters, int]:
+        reason, counters, published = self._diagnose(kind)
         if reason == STALE and self._stale_grace_s > 0:
             # A writer publishes right after its commit; that in-flight publish is not a fault.
             self._sleep(self._stale_grace_s)
-            reason, counters = self._diagnose(kind)
+            reason, counters, published = self._diagnose(kind)
         if reason is not None:
-            return reason, counters
-        return (self.verify(kind) if deep else None), counters
+            return reason, counters, published
+        return (self.verify(kind) if deep else None), counters, published
+
+    def _pending_age_s(
+        self, kind: StateKind, published: int, counters: KindCounters, now: float,
+    ) -> float:
+        """How long the oldest committed-but-unpublished write of this kind has waited.
+
+        Queried ONLY when Postgres is ahead of the store, so a healthy round pays nothing. A
+        healthy re-hydrator also keeps this below one period by definition — it publishes the
+        pending write itself — which is exactly why the alarm threshold is "older than one
+        period": past that, nothing is picking it up.
+
+        `now` is the ROUND's start, already read by `round_once`, rather than a fresh
+        `self._clock()` call. Two reasons: the age is then measured from the same instant the
+        stamp's `verified_at` is, and an alarm input must not change how many times the clock is
+        read -- several tests pin a round's clock consumption exactly, and an observability
+        addition that perturbed it would be changing behaviour in order to measure behaviour.
+        """
+        if counters.feed_seq <= published:
+            return 0.0
+        try:
+            written_at = self._db.oldest_unpublished_at(kind, published)
+        except Exception as exc:  # noqa: BLE001 - an alarm input must never fail a round
+            LOG.warning("could not measure the unpublished age for %s: %s", kind.value, exc)
+            return 0.0
+        if written_at is None:
+            return 0.0
+        return max(now - written_at, 0.0)
 
     # --- the freshness stamp (GW05b) -----------------------------------------------------------
 

@@ -702,6 +702,9 @@ def test_a_FRESH_gateway_refuses_a_rolled_back_store_over_valkey() -> None:
         records[:2],
         lab.writer.manifest_for(StateKind.PLAN, behind),
         engaged,
+        # A deliberate ROLLBACK of the store. `publish_kind` refuses a regress unless asked
+        # (R2-04), so a test that forces one has to declare it.
+        allow_regress=True,
     )
     fresh_worker = lab.sync_task()
 
@@ -726,6 +729,9 @@ def test_without_the_stamp_the_same_fresh_gateway_accepts_the_rollback() -> None
         records[:2],
         lab.writer.manifest_for(StateKind.PLAN, behind),
         engaged,
+        # A deliberate ROLLBACK of the store. `publish_kind` refuses a regress unless asked
+        # (R2-04), so a test that forces one has to declare it.
+        allow_regress=True,
     )
     store = ValkeyStateStore(fakeredis.FakeAsyncRedis(server=lab.server), lab.keys)
 

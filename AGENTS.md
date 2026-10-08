@@ -173,6 +173,34 @@
  input_scan=redact on intentional noop. LIVE input_scan REDACT + masked prompt forwarded. 7 new
  tests. Gate: 2009 full suite. Evidence: mcp-parallel/findings/pipeline-p12-live-proof.json.
 
+## R2-04 / GW05 state re-hydration changelog
+- R2-04 (2026-10-08) — REHYDRATOR LOCK STALL + CONTROL-PLANE PG HARDENING, local half CLOSED.
+  (1) The four session bounds reached NO backend in the endorsed topology: `pg.py` passed them as
+  the libpq `options` startup parameter and PgBouncer's `IGNORE_STARTUP_PARAMETERS` includes
+  `options`. Measured through a real pgbouncer: all four reported `0`, and a 300ms
+  statement_timeout let `pg_sleep(2)` run. FIX: `SET LOCAL` authoritative + client-side
+  `tcp_user_timeout` + keepalives + `verify_bounds()` read-back, fatal at start-up.
+  (2) `_db_faults` caught `psycopg.Error` (every DB error), so a `lock_timeout` expiry set
+  `db_down=True`, reached `_ride_through` and minted a DEGRADED stamp claiming freshness for up to
+  PG_GRACE_MS=16s — H7 inside the mechanism built for Cloud SQL failovers. FIX:
+  `ControlPlaneBoundExceeded` vs `ControlPlaneUnavailable`; a fired bound withholds the stamp.
+  (3) No re-hydrator process existed and `state_control` was not in any image. FIX:
+  `state_control/service.py` + `__main__.py` + `metrics.py`, Dockerfile copy, two named services in
+  base + prod with a dedicated `ai-mesh-state-control` image, identity-based idle-stop exemption
+  asserted in CI (negative control verified).
+  (4) `publish_kind` was unguarded for all nine repair reasons, so two re-hydrators could regress a
+  manifest. FIX: `allow_regress` scoped to the `store_ahead` repair; the in-memory twin had no
+  guard at all and now matches the product.
+  (5) `ok_publish_pending` alarm got a producer with no schema change
+  (`MIN(updated_at) WHERE feed_seq > published`).
+  OPEN (not closable locally): >= 2 ZONES (declared as labels; needs two single-zone MIGs) and
+  L05b-3/4/6 + G-14 on the cloud lane. FOUND, NOT FIXED: a pre-existing GW05c/R2-02 defect — after
+  a `store_ahead` repair the kind loops forever on `INDEX`, republishing the whole kind every
+  period; recorded as a strict xfail.
+  VERIFY: 607 offline / 665 live passed; `mypy --strict`, ruff, import-linter, 5 AST gates x 2 trees
+  clean. Plan: docs/plans/2026-10-08-r2-04-gw05-rehydrator-lock-and-pg-hardening.md.
+  Evidence: docs/plans/evidence/2026-10-08-r2-04/.
+
 ## MCP Hardening BACKSTOP changelog
 - Parallel Claude + Cursor sessions harden the multi-tenant MCP gateway. **Every hardening change is
   logged to four memories in the SAME commit:** Ruflo (`mcp__ruflo__memory_store`

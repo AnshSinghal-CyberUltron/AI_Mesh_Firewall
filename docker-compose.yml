@@ -472,6 +472,89 @@ services:
       control: { condition: service_healthy }
       demo: { condition: service_started }
 
+  # --- GW05b / R2-04: control-plane state re-hydrators -------------------------------------
+  # TWO of them, and that is the requirement, not a preference. The runbook's R2-04 row reads
+  # "runs >= 2 re-hydrators in >= 2 zones (proven safe concurrently); and never lets an
+  # idle-stop policy touch them". One re-hydrator is a single point of GLOBAL non-enforcement:
+  # when it stops, nothing compares the store with Postgres, no freshness stamp is written, and
+  # every gateway in the fleet fails closed at AMF_STATE_FRESH_MS. Round 2 lost its only one to
+  # an idle watchdog (ledger 09:06Z, instance rv-r2state-cp-1) and that is the whole argument.
+  #
+  # Concurrency is safe WITHOUT a leader election, which is why none is configured: publishes
+  # are WATCH-guarded, a freshness stamp is never replaced by an older one, and losing the stamp
+  # race is the expected healthy outcome about half the time. A lease would turn redundancy into
+  # a new single point of failure with a failover window.
+  #
+  # Two NAMED services rather than `deploy.replicas: 2`: replicas share one placement
+  # constraint by construction, and the requirement is two ZONES. Named services map 1:1 onto
+  # the per-zone MIGs or systemd units of a cloud deployment and give Prometheus distinct
+  # `instance` labels, which is what StateRehydratorSingleInstance counts.
+  #
+  # ON ONE HOST zone-a/zone-b are LABELS, NOT ISOLATION. This stack does not provide zone
+  # redundancy and must not be described as doing so; see §13.3 of
+  # docs/plans/2026-10-08-r2-04-gw05-rehydrator-lock-and-pg-hardening.md for the cloud spec.
+  state-rehydrator-a: &state-rehydrator
+    build:
+      context: .
+      dockerfile: gateway_v2/Dockerfile
+    command: ["python", "-m", "state_control"]
+    restart: unless-stopped
+    environment: &state-rehydrator-env
+      # The DSN MUST point at the PRIMARY. A replica is forbidden here for the re-hydrator as
+      # much as for the writer: a freshness stamp asserts "the store held at least these
+      # versions, covering every write committed before now", and a replica view is itself
+      # behind the writer. See the docstring of state_control/pg.py.
+      AMF_STATE_PG_DSN: postgresql://${POSTGRES_USER:-ai_mesh_firewall}:${POSTGRES_PASSWORD:-ai_mesh_firewall}@pgbouncer:6432/${POSTGRES_DB:-ai_mesh_firewall}
+      AMF_STATE_VALKEY_URL: redis://redis:6379/0
+      # MUST match the gateways' signing key, or every stamp fails its signature, the fleet
+      # fails closed, and StateStampInvalid fires. No default on purpose.
+      AMF_STATE_HMAC_KEY: ${AMF_STATE_HMAC_KEY:?AMF_STATE_HMAC_KEY is required and must match the gateways}
+      AMF_REHYDRATE_PERIOD_MS: ${AMF_REHYDRATE_PERIOD_MS:-1000}
+      AMF_REHYDRATE_DEEP_EVERY: ${AMF_REHYDRATE_DEEP_EVERY:-60}
+      # Re-hydrator session bounds are TIGHTER than the writer's defaults: four kinds must fit
+      # inside the freshness bound, so a round cannot be allowed to spend 5 s per statement.
+      AMF_PG_LOCK_TIMEOUT_MS: ${AMF_PG_LOCK_TIMEOUT_MS:-250}
+      AMF_PG_STATEMENT_TIMEOUT_MS: ${AMF_PG_STATEMENT_TIMEOUT_MS:-800}
+      AMF_PG_IDLE_TX_TIMEOUT_MS: ${AMF_PG_IDLE_TX_TIMEOUT_MS:-5000}
+      AMF_PG_TCP_USER_TIMEOUT_MS: ${AMF_PG_TCP_USER_TIMEOUT_MS:-2000}
+      AMF_PG_CONNECT_TIMEOUT_S: ${AMF_PG_CONNECT_TIMEOUT_S:-2}
+      AMF_REHYDRATOR_METRICS_PORT: "9108"
+      # Distinct per instance. It travels in the stamp's `by` field, so an operator can see
+      # which re-hydrator last verified. The default (hostname:pid) is already distinct per
+      # container; these are set explicitly so the names are stable across restarts.
+      AMF_REHYDRATOR_ID: rehydrator-a
+      AMF_DEPLOY_ZONE: zone-a
+    depends_on:
+      pgbouncer: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://127.0.0.1:9108/healthz', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    labels:
+      # IDENTITY-based idle-stop exemption. R2-24 and runbook §3 make an idle watchdog
+      # MANDATORY on every validation environment, so the rehydrators cannot be protected by
+      # removing it -- only by naming them. It must key on THIS LABEL and never on activity: an
+      # O(1) round is nearly idle by design, so any CPU or request-rate heuristic will classify
+      # a perfectly healthy re-hydrator as idle, correctly, and stop it. That is exactly how the
+      # 09:06Z incident happened. Asserted by tests/gates/test_r2_04_deployment.py.
+      ai-mesh.idle-stop: "exempt"
+      ai-mesh.role: "control-plane-rehydrator"
+      ai-mesh.criticality: "fleet-availability"
+
+  state-rehydrator-b:
+    <<: *state-rehydrator
+    environment:
+      <<: *state-rehydrator-env
+      AMF_REHYDRATOR_ID: rehydrator-b
+      AMF_DEPLOY_ZONE: zone-b
+    labels:
+      ai-mesh.idle-stop: "exempt"
+      ai-mesh.role: "control-plane-rehydrator"
+      ai-mesh.criticality: "fleet-availability"
+
 volumes:
   postgres_data:
   redis_data:

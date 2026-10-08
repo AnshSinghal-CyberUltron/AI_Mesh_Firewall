@@ -641,6 +641,9 @@ def test_lgw05b_a_fresh_worker_refuses_a_rolled_back_store(stack: Stack) -> None
         records[:2],
         stack.writer.manifest_for(StateKind.PLAN, behind),
         engaged,
+        # A deliberate ROLLBACK of the store. `publish_kind` refuses a regress unless asked
+        # (R2-04), so a test that forces one has to declare it.
+        allow_regress=True,
     )
     view = _stamp_view(stack, moment, started_at=999.0)
 
@@ -669,6 +672,9 @@ def test_lgw05b_without_a_stamp_the_same_worker_serves_the_rollback(stack: Stack
         records[:2],
         stack.writer.manifest_for(StateKind.PLAN, behind),
         engaged,
+        # A deliberate ROLLBACK of the store. `publish_kind` refuses a regress unless asked
+        # (R2-04), so a test that forces one has to declare it.
+        allow_regress=True,
     )
 
     async def body() -> None:

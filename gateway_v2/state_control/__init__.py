@@ -15,7 +15,12 @@ from state_control.db import (
     MemoryControlDB,
     advance,
 )
-from state_control.pg import PostgresControlDB, PostgresTx
+from state_control.pg import (
+    BOUND_NAMES,
+    ControlPlaneBoundsNotApplied,
+    PostgresControlDB,
+    PostgresTx,
+)
 from state_control.publisher import (
     BrokenPublisher,
     MemoryStore,
@@ -24,6 +29,8 @@ from state_control.publisher import (
 )
 from state_control.rehydrate import (
     ALL_KINDS,
+    ControlPlaneBoundExceeded,
+    ControlPlaneUnavailable,
     Rehydrator,
     RepairEvent,
     RoundSummary,
@@ -41,6 +48,7 @@ from state_control.writer import (
 
 __all__ = (
     "ALL_KINDS",
+    "BOUND_NAMES",
     "ERROR",
     "OK",
     "OK_PUBLISH_PENDING",
@@ -51,6 +59,9 @@ __all__ = (
     "BrokenPublisher",
     "CommitUnknown",
     "ControlDB",
+    "ControlPlaneBoundExceeded",
+    "ControlPlaneBoundsNotApplied",
+    "ControlPlaneUnavailable",
     "ControlTx",
     "KindCounters",
     "LoggedWrite",

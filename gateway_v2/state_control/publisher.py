@@ -97,8 +97,22 @@ class StatePublisher(Protocol):
         records: Sequence[SignedRecord],
         manifest: Manifest,
         engaged: Sequence[str] = (),
+        *,
+        allow_regress: bool = False,
     ) -> bool:
-        """Replace a kind wholesale. RE-HYDRATOR ONLY: this is the O(records) path."""
+        """Replace a kind wholesale. RE-HYDRATOR ONLY: this is the O(records) path.
+
+        `allow_regress` lets this publish move the manifest BACKWARDS, and exactly one caller may
+        pass it: the `store_ahead` repair. That path exists because the store holds a `feed_seq`
+        Postgres never issued, so a guarded publish of the (lower) Postgres position would be
+        refused and the divergence would never heal -- `repair` bumps the epoch first, but
+        `_is_ahead` compares `feed_seq`, which an epoch bump does not lift above the store's.
+
+        It defaults to False because every OTHER repair reason must stay guarded. With two
+        re-hydrators running (R2-04's own HA clause) an unguarded whole-kind publish lets a slower
+        instance's stale snapshot overwrite a newer generation; readers refuse a regress by design,
+        so the kind would go unreadable until the next round. Bounded, but self-inflicted.
+        """
         ...
 
     def read_stamp(self) -> bytes | None:
@@ -134,6 +148,7 @@ class MemoryStore:
         self._stamped: Stamp | None = None
         self.nudges: list[tuple[StateKind, int]] = []
         self.whole_kind_publishes: int = 0
+        self.whole_kind_publishes_refused: int = 0
         self.record_writes: int = 0
         self.head_reads: int = 0
         self.index_scans: int = 0
@@ -204,8 +219,15 @@ class MemoryStore:
         records: Sequence[SignedRecord],
         manifest: Manifest,
         engaged: Sequence[str] = (),
+        *,
+        allow_regress: bool = False,
     ) -> bool:
         with self._lock:
+            if not allow_regress and self._is_ahead(kind, manifest):
+                # The twin used to accept this unconditionally, which made it MORE permissive
+                # than the product: a regress bug could not reproduce in the offline suite.
+                self.whole_kind_publishes_refused += 1
+                return False
             self.whole_kind_publishes += 1
             self._records[kind] = {}
             self._index[kind] = {}
@@ -329,6 +351,7 @@ class MemoryStore:
     def reset_counters(self) -> None:
         self.nudges = []
         self.whole_kind_publishes = 0
+        self.whole_kind_publishes_refused = 0
         self.record_writes = 0
         self.head_reads = 0
         self.index_scans = 0
@@ -383,8 +406,10 @@ class BrokenPublisher:
         records: Sequence[SignedRecord],
         manifest: Manifest,
         engaged: Sequence[str] = (),
+        *,
+        allow_regress: bool = False,
     ) -> bool:
-        del kind, records, manifest, engaged
+        del kind, records, manifest, engaged, allow_regress
         self.attempts += 1
         raise ConnectionError("injected store failure")
 

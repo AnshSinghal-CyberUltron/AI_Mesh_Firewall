@@ -13,13 +13,20 @@ ENV SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH} \
 
 # Bind-mount sources into a single RUN so COPY directory mtimes (build clock)
 # never enter a layer. Touch to SOURCE_DATE_EPOCH before the layer is committed.
+# `state_control` is the control plane (the re-hydrator process, `python -m state_control`). It
+# was absent until R2-04: pyproject already declared include=["state_control*"] and psycopg, so
+# the package was importable from a source checkout and missing from every image — which is why
+# the "≥ 2 re-hydrators in ≥ 2 zones" clause had nothing to deploy.
 RUN --mount=type=bind,source=gateway_v2/pyproject.toml,target=/tmp/src/pyproject.toml,ro \
     --mount=type=bind,source=gateway_v2/gateway_v2,target=/tmp/src/pkg,ro \
+    --mount=type=bind,source=gateway_v2/state_control,target=/tmp/src/control,ro \
     --mount=type=bind,source=shared/ai_mesh_shared,target=/tmp/src/shared,ro \
     umask 022 \
-    && mkdir -p /opt/gateway_v2/gateway_v2 /opt/shared/ai_mesh_shared \
+    && mkdir -p /opt/gateway_v2/gateway_v2 /opt/gateway_v2/state_control \
+        /opt/shared/ai_mesh_shared \
     && cp /tmp/src/pyproject.toml /opt/gateway_v2/pyproject.toml \
     && cp -R /tmp/src/pkg/. /opt/gateway_v2/gateway_v2/ \
+    && cp -R /tmp/src/control/. /opt/gateway_v2/state_control/ \
     && cp -R /tmp/src/shared/. /opt/shared/ai_mesh_shared/ \
     && find /opt -xdev -exec touch -h -d "@${SOURCE_DATE_EPOCH}" {} + \
     && pip install --no-cache-dir --no-compile \

@@ -18,7 +18,9 @@
 # This overlay covers EVERY service defined in docker-compose.yml:
 #   always-on: postgres, pgbouncer, redis, rabbitmq, control, gateway, workers,
 #              workers-beat, mcp-sandbox-image, mcp-broker, guardrails,
-#              vector-retrieval, nginx, demo
+#              vector-retrieval, nginx, demo,
+#              state-rehydrator-a + state-rehydrator-b (GW05b/R2-04: BOTH, always;
+#              one is a single point of global non-enforcement, none fails the fleet closed)
 #   profile:   chromadb (chroma), mongo (telemetry-pilot), mcp-stub (mcp-stub),
 #              frontend (dev-frontend), transport stubs (transport-stubs),
 #              postgres-exporter (observability)
@@ -32,6 +34,14 @@ x-restart: &restart_unless_stopped
 
 x-ecr-gateway: &ecr_gateway_image
   image: ${ECR_REGISTRY:?set ECR_REGISTRY}/ai-mesh-gateway:${IMAGE_TAG:-latest}
+  pull_policy: always
+  build: !reset null
+# GW05b / R2-04. A SEPARATE image from ai-mesh-gateway on purpose: that one is built from
+# gateway/Dockerfile (the v1 gateway) and contains no `state_control`, so a re-hydrator pointed
+# at it could not start -- and with none running, nothing stamps and the fleet fails closed.
+# Built from gateway_v2/Dockerfile by infra/scripts/build-push-images.sh.
+x-ecr-state-control: &ecr_state_control_image
+  image: ${ECR_REGISTRY:?set ECR_REGISTRY}/ai-mesh-state-control:${IMAGE_TAG:-latest}
   pull_policy: always
   build: !reset null
 
@@ -280,6 +290,32 @@ services:
       resources:
         limits:
           memory: 256M
+
+  # --- GW05b / R2-04: BOTH re-hydrators are always-on in prod ------------------------------
+  # Running ONE is a single point of global non-enforcement, and running NONE means no
+  # freshness stamp at all, which fails the whole fleet closed at AMF_STATE_FRESH_MS. So both
+  # are listed here deliberately, and neither may be dropped to save a container.
+  #
+  # Small on purpose: the round is O(1) per kind since GW05c (four indexed counter reads and
+  # four O(1) store head reads per period), and the deep pass is the only O(records) work --
+  # it runs off the critical path on a 60-round cadence. 192 MiB is generous for that.
+  #
+  # NOTE the honest limit of a single-host overlay: these two share one machine, so this gives
+  # PROCESS redundancy, not ZONE redundancy. R2-04's ">= 2 zones" needs two instances in two
+  # availability zones of the Cloud SQL primary's region -- see §13 of
+  # docs/plans/2026-10-08-r2-04-gw05-rehydrator-lock-and-pg-hardening.md. Do not read this
+  # block as satisfying that clause.
+  state-rehydrator-a: &prod_rehydrator
+    <<: [*restart_unless_stopped, *ecr_state_control_image]
+    build: !reset null
+    profiles: !reset null
+    deploy:
+      resources:
+        limits:
+          memory: 192M
+
+  state-rehydrator-b:
+    <<: *prod_rehydrator
 
   mcp-sandbox-image:
     <<: [*restart_unless_stopped, *ecr_mcp_sandbox_image]

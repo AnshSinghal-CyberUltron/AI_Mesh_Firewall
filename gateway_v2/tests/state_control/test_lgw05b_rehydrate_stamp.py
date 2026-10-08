@@ -237,10 +237,12 @@ def test_one_kinds_failure_does_not_stop_its_siblings() -> None:
         records: Sequence[SignedRecord],
         manifest: Manifest,
         engaged: Sequence[str] = (),
+        *,
+        allow_regress: bool = False,
     ) -> bool:
         if kind is StateKind.PLAN:
             raise ConnectionError("injected store failure")
-        return original(kind, records, manifest, engaged)
+        return original(kind, records, manifest, engaged, allow_regress=allow_regress)
 
     store.publish_kind = plan_cannot_restore  # type: ignore[method-assign]
 

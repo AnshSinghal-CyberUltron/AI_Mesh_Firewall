@@ -200,8 +200,15 @@ class ValkeyPublisher:
         records: Sequence[SignedRecord],
         manifest: Manifest,
         engaged: Sequence[str] = (),
+        *,
+        allow_regress: bool = False,
     ) -> bool:
-        """RE-HYDRATOR ONLY. O(records) by definition: the whole kind is the change."""
+        """RE-HYDRATOR ONLY. O(records) by definition: the whole kind is the change.
+
+        Guarded unless `allow_regress`, which only the `store_ahead` repair may pass. This used
+        to be unconditionally unguarded, so with two re-hydrators a slower instance's stale
+        snapshot could move the manifest backwards (R2-04).
+        """
 
         def stage(pipe: Any) -> None:
             pipe.delete(self._keys.index(kind))
@@ -216,8 +223,13 @@ class ValkeyPublisher:
             if engaged:
                 pipe.sadd(self._keys.engaged(kind), *engaged)
 
-        LOG.warning("republishing kind=%s records=%d", kind.value, len(records))
-        return self._guarded(kind, manifest, stage, guard=False)
+        LOG.warning(
+            "republishing kind=%s records=%d allow_regress=%s",
+            kind.value,
+            len(records),
+            allow_regress,
+        )
+        return self._guarded(kind, manifest, stage, guard=not allow_regress)
 
     # --- internals -----------------------------------------------------------------------------
 
