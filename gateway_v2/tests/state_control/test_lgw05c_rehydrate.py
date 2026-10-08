@@ -348,7 +348,8 @@ def test_a_kind_failing_does_not_stop_another() -> None:
 
 
 def test_a_repair_event_carries_its_timings() -> None:
-    moments = iter([10.0, 10.5])
+    # Reading 1 is the round's start (GW05b stamps at it); 2 and 3 bracket the repair.
+    moments = iter([9.5, 10.0, 10.5])
     db = MemoryControlDB()
     store = MemoryStore()
     writer = StateWriter(db, store, SECRET)

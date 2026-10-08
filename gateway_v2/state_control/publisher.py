@@ -33,10 +33,11 @@ from typing import Protocol
 from gateway_v2.domain.state import (
     Manifest,
     SignedRecord,
+    Stamp,
     StateKind,
 )
 from gateway_v2.runtime.state_feed import Head, IndexPage
-from gateway_v2.runtime.state_sig import encode_manifest, encode_record
+from gateway_v2.runtime.state_sig import encode_manifest, encode_record, encode_stamp
 
 
 @dataclass(frozen=True, slots=True)
@@ -100,6 +101,18 @@ class StatePublisher(Protocol):
         """Replace a kind wholesale. RE-HYDRATOR ONLY: this is the O(records) path."""
         ...
 
+    def read_stamp(self) -> bytes | None:
+        """The raw freshness stamp, or None when the store holds none."""
+        ...
+
+    def put_stamp(self, stamp: Stamp) -> bool:
+        """Write the stamp unless the store holds one verified at or after this round.
+
+        False means another re-hydrator verified later and its stamp stands -- the expected,
+        healthy outcome about half the time when two are running (GW05b, R2-04).
+        """
+        ...
+
 
 class MemoryStore:
     """In-memory twin: a publisher for the writer AND a StateStore for the reader.
@@ -117,11 +130,15 @@ class MemoryStore:
         self._index: dict[StateKind, dict[str, int]] = {}
         self._engaged: dict[StateKind, set[str]] = {}
         self._feed_seq: dict[StateKind, int] = {}
+        self._stamp: bytes | None = None
+        self._stamped: Stamp | None = None
         self.nudges: list[tuple[StateKind, int]] = []
         self.whole_kind_publishes: int = 0
         self.record_writes: int = 0
         self.head_reads: int = 0
         self.index_scans: int = 0
+        self.stamp_writes: int = 0
+        self.stamp_races_lost: int = 0
 
     # --- publisher side ------------------------------------------------------------------------
 
@@ -196,6 +213,28 @@ class MemoryStore:
             for record in records:
                 self._write_locked(record, None)
             self._commit_locked(kind, manifest)
+        return True
+
+    def read_stamp(self) -> bytes | None:
+        with self._lock:
+            return self._stamp
+
+    def put_stamp(self, stamp: Stamp) -> bool:
+        """Never replaces a stamp verified at or after this one. The lock is the WATCH.
+
+        Compares against the decoded stamp this twin last wrote rather than re-decoding the
+        bytes, because the twin holds no signing secret and an UNVERIFIED timestamp must never
+        decide anything: a forged far-future stamp would otherwise block every real one.
+        `poison_stamp` is how a test puts unverifiable bytes in the store.
+        """
+        with self._lock:
+            held = self._stamped
+            if held is not None and held.verified_at >= stamp.verified_at:
+                self.stamp_races_lost += 1
+                return False
+            self._stamp = encode_stamp(stamp)
+            self._stamped = stamp
+            self.stamp_writes += 1
         return True
 
     def _is_ahead(self, kind: StateKind, manifest: Manifest) -> bool:
@@ -273,6 +312,14 @@ class MemoryStore:
             self._index.clear()
             self._engaged.clear()
             self._feed_seq.clear()
+            self._stamp = None
+            self._stamped = None
+
+    def poison_stamp(self, raw: bytes) -> None:
+        """Put bytes in the stamp slot that no secret will verify, as a flush or a forge would."""
+        with self._lock:
+            self._stamp = raw
+            self._stamped = None
 
     def reset_counters(self) -> None:
         self.nudges = []
@@ -280,6 +327,8 @@ class MemoryStore:
         self.record_writes = 0
         self.head_reads = 0
         self.index_scans = 0
+        self.stamp_writes = 0
+        self.stamp_races_lost = 0
 
 
 class BrokenPublisher:
@@ -331,5 +380,13 @@ class BrokenPublisher:
         engaged: Sequence[str] = (),
     ) -> bool:
         del kind, records, manifest, engaged
+        self.attempts += 1
+        raise ConnectionError("injected store failure")
+
+    def read_stamp(self) -> bytes | None:
+        raise ConnectionError("injected store failure")
+
+    def put_stamp(self, stamp: Stamp) -> bool:
+        del stamp
         self.attempts += 1
         raise ConnectionError("injected store failure")

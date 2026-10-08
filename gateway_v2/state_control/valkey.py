@@ -32,10 +32,17 @@ from gateway_v2.domain.state import (
     ZERO,
     Manifest,
     SignedRecord,
+    Stamp,
     StateKind,
     StoreDataUnavailable,
 )
-from gateway_v2.runtime.state_sig import decode_manifest, encode_manifest, encode_record
+from gateway_v2.runtime.state_sig import (
+    decode_manifest,
+    decode_stamp,
+    encode_manifest,
+    encode_record,
+    encode_stamp,
+)
 from gateway_v2.runtime.store_keys import HASH_KINDS, KEYS, StoreKeys
 from state_control.publisher import StoredHead
 
@@ -92,6 +99,59 @@ class ValkeyPublisher:
         """O(records). The DEEP verification path only."""
         entries = self._client.zrange(self._keys.index(kind), 0, -1, withscores=True)
         return {_text(member): int(score) for member, score in entries}
+
+    def read_stamp(self) -> bytes | None:
+        raw = self._client.get(self._keys.stamp)
+        return raw if isinstance(raw, bytes) else None
+
+    # --- the freshness stamp -------------------------------------------------------------------
+
+    def put_stamp(self, stamp: Stamp) -> bool:
+        """WATCH-guarded, so a slower re-hydrator never replaces a newer round's stamp.
+
+        Two or more re-hydrators run at once by design (R2-04: one is a single point of global
+        non-enforcement), and their rounds start at slightly different moments. Without the
+        guard, the slower one's `SET` would land last and move `verified_at` BACKWARDS, which is
+        the one thing a freshness clock must never do.
+
+        A held stamp that does not verify is OVERWRITTEN rather than respected. Trusting its
+        timestamp would let anyone who can write the key once plant an un-decodable far-future
+        value and block every genuine stamp from then on.
+        """
+        name = self._keys.stamp
+        payload = encode_stamp(stamp)
+        with self._client.pipeline() as pipe:
+            for _ in range(WATCH_ATTEMPTS):
+                try:
+                    pipe.watch(name)
+                    if self._stamp_is_newer(pipe.get(name), stamp):
+                        pipe.reset()
+                        return False
+                    pipe.multi()
+                    pipe.set(name, payload)
+                    pipe.execute()
+                    return True
+                except _WATCH_ERRORS:
+                    continue
+        raise RuntimeError("freshness stamp kept racing other re-hydrators")
+
+    def _stamp_is_newer(self, raw: object, stamp: Stamp) -> bool:
+        if not isinstance(raw, (bytes, str)):
+            return False
+        try:
+            held = decode_stamp(self._secret, raw)
+        except StoreDataUnavailable:
+            LOG.warning("replacing an unverifiable freshness stamp")
+            return False
+        if held.verified_at < stamp.verified_at:
+            return False
+        LOG.info(
+            "stamp skipped: %s verified at %.3f, this round started at %.3f",
+            held.by,
+            held.verified_at,
+            stamp.verified_at,
+        )
+        return True
 
     # --- writes --------------------------------------------------------------------------------
 
