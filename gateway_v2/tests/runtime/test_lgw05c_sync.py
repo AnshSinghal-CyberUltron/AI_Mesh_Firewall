@@ -21,12 +21,12 @@ from gateway_v2.admit.killswitch import (
 )
 from gateway_v2.domain.identity import Principal
 from gateway_v2.domain.plan import ExecutionPlan, StreamingMode
-from gateway_v2.domain.state import StateKind, Version
+from gateway_v2.domain.state import START, Cursor, StateKind, Version
 from gateway_v2.plan.delta import plan_applier
 from gateway_v2.plan.document import PlanDocument, encode_plan_body
 from gateway_v2.plan.snapshot import ReplicaSnapshot
 from gateway_v2.plan.store import PlanStore
-from gateway_v2.runtime.state_feed import START, Cursor, FeedReader, FeedRound
+from gateway_v2.runtime.state_feed import FeedReader, FeedRound
 from gateway_v2.runtime.state_sig import make_record
 from gateway_v2.runtime.state_task import (
     DeltaBudget,

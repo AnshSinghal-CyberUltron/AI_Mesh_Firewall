@@ -45,12 +45,11 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from gateway_v2.domain.state import (
-    ZERO,
+    Cursor,
     Manifest,
     SignedRecord,
     StateKind,
     StoreDataUnavailable,
-    Version,
 )
 from gateway_v2.runtime.state_sig import decode_manifest, decode_record, record_matches_index
 
@@ -72,21 +71,6 @@ class IndexPage:
     entries: tuple[tuple[str, int], ...]
     total_at_or_below: int
     """Entries whose score is at or below the attested position. The exact completeness proof."""
-
-
-@dataclass(frozen=True, slots=True)
-class Cursor:
-    """How far a reader has applied a kind. Floors only rise; GW05b raises them from a stamp."""
-
-    version: Version
-    feed_seq: int
-
-    def advanced(self, version: Version, feed_seq: int) -> Cursor:
-        return Cursor(version=version, feed_seq=feed_seq)
-
-
-START = Cursor(version=ZERO, feed_seq=0)
-"""A reader with no stamp and nothing applied."""
 
 
 @dataclass(frozen=True, slots=True)

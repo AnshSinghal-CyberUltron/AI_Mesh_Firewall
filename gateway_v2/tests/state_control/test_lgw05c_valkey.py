@@ -19,12 +19,12 @@ import pytest
 
 from gateway_v2.admit.killswitch import KillSwitchSnapshot, killswitch_adopter
 from gateway_v2.domain.plan import ExecutionPlan, StreamingMode
-from gateway_v2.domain.state import StateKind, StoreDataUnavailable
+from gateway_v2.domain.state import START, StateKind, StoreDataUnavailable
 from gateway_v2.plan.delta import plan_applier
 from gateway_v2.plan.document import PlanDocument, encode_plan_body
 from gateway_v2.plan.snapshot import ReplicaSnapshot
 from gateway_v2.plan.store import PlanStore
-from gateway_v2.runtime.state_feed import START, FeedReader
+from gateway_v2.runtime.state_feed import FeedReader
 from gateway_v2.runtime.state_task import DeltaBudget, StateSynchroniser
 from gateway_v2.runtime.store_keys import StoreKeys
 from gateway_v2.runtime.store_valkey import ValkeyStateStore

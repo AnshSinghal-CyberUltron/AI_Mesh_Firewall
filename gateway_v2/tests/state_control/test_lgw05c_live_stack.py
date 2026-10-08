@@ -195,7 +195,7 @@ def test_a_record_signed_into_postgres_verifies_out_of_valkey(stack: Stack) -> N
     )
 
     reader = FeedReader(ValkeyStateStore(stack.async_client(), stack.keys), SECRET)
-    from gateway_v2.runtime.state_feed import START
+    from gateway_v2.domain.state import START
 
     round_ = _run(reader.poll(StateKind.BUDGET, START, limit=10))
 
@@ -491,8 +491,7 @@ def test_an_exclusive_lower_bound_does_not_re_apply_the_cursor_record(stack: Sta
     for position in range(1, 6):
         stack.writer.plan_set(f"org-{position}", _plan_body(f"org-{position}"))
     reader = FeedReader(ValkeyStateStore(stack.async_client(), stack.keys), SECRET)
-    from gateway_v2.domain.state import Version
-    from gateway_v2.runtime.state_feed import Cursor
+    from gateway_v2.domain.state import Cursor, Version
 
     round_ = _run(
         reader.poll(StateKind.PLAN, Cursor(Version(1, 3), 3), limit=10),

@@ -29,9 +29,12 @@ from gateway_v2.domain.plan import (
     is_newer,
 )
 from gateway_v2.domain.state import (
+    START,
     ZERO,
+    Cursor,
     Manifest,
     SignedRecord,
+    Stamp,
     StateKind,
     StateOp,
     StoreDataUnavailable,
@@ -39,10 +42,12 @@ from gateway_v2.domain.state import (
 )
 
 __all__ = (
+    "START",
     "TEXT_CHANNELS",
     "ZERO",
     "Action",
     "Category",
+    "Cursor",
     "Decision",
     "DecisionRecord",
     "Disposition",
@@ -67,6 +72,7 @@ __all__ = (
     "SignedRecord",
     "Span",
     "StageStep",
+    "Stamp",
     "StateKind",
     "StateOp",
     "StoreDataUnavailable",

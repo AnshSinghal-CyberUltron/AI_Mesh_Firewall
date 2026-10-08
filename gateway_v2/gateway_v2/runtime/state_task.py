@@ -23,8 +23,8 @@ import asyncio
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
 
-from gateway_v2.domain.state import StateKind, StoreDataUnavailable
-from gateway_v2.runtime.state_feed import START, Cursor, FeedReader, FeedRound
+from gateway_v2.domain.state import START, Cursor, StateKind, StoreDataUnavailable
+from gateway_v2.runtime.state_feed import FeedReader, FeedRound
 
 Applier = Callable[[FeedRound], object]
 """Applies one round's records. Synchronous, so it may be handed to a worker thread.

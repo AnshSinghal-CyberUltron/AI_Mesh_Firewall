@@ -15,20 +15,16 @@ from collections.abc import Awaitable, Sequence
 import pytest
 
 from gateway_v2.domain.state import (
+    START,
     ZERO,
+    Cursor,
     SignedRecord,
     StateKind,
     StateOp,
     StoreDataUnavailable,
     Version,
 )
-from gateway_v2.runtime.state_feed import (
-    START,
-    Cursor,
-    FeedReader,
-    Head,
-    IndexPage,
-)
+from gateway_v2.runtime.state_feed import FeedReader, Head, IndexPage
 from gateway_v2.runtime.state_sig import encode_manifest, encode_record, make_manifest, make_record
 from gateway_v2.runtime.store_keys import HASH_KINDS, StoreKeys
 

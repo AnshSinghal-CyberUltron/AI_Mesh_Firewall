@@ -12,8 +12,13 @@ trust an incremental update:
   reader's cursor means the published copy went backwards, so the delta the reader would compute
   would be empty and it would serve stale state believing it was current.
 
-The signature domains are versioned (`rec2`, `meta2`). A payload signed under an older domain
-fails verification rather than being silently reinterpreted.
+GW05b's freshness stamp is signed here too, and for one reason: `state_control` may import only
+`domain.state` and this module, so there is exactly ONE signing implementation for both planes.
+A stamp signed by the re-hydrator and verified by a gateway cannot drift.
+
+The signature domains are versioned (`rec2`, `meta2`, `stamp2`). A payload signed under an older
+domain, or under a sibling's domain, fails verification rather than being silently reinterpreted
+-- a stamp envelope and a manifest envelope must never be substitutable under the same key.
 """
 
 from __future__ import annotations
@@ -24,8 +29,10 @@ import json
 from collections.abc import Mapping
 
 from gateway_v2.domain.state import (
+    Cursor,
     Manifest,
     SignedRecord,
+    Stamp,
     StateKind,
     StateOp,
     StoreDataUnavailable,
@@ -34,6 +41,10 @@ from gateway_v2.domain.state import (
 
 RECORD_DOMAIN = "rec2"
 MANIFEST_DOMAIN = "meta2"
+STAMP_DOMAIN = "stamp2"
+
+STAMP_WHERE = "freshness stamp"
+"""Error prose for stamp decoding. A stamp is namespace-wide, so it carries no kind."""
 
 
 def canonical_body(body: Mapping[str, object]) -> bytes:
@@ -100,6 +111,47 @@ def manifest_signature(
     return _mac(secret, "\n".join(parts))
 
 
+def stamp_millis(seconds: float) -> int:
+    """Millisecond granularity, which is what both the signature and the envelope carry.
+
+    The stamp's timestamp is signed as an INTEGER. Signing the float would make every signature
+    depend on float text formatting staying identical across Python versions and across the two
+    planes -- the same coupling the canonical record body exists to remove.
+    """
+    return int(seconds * 1000)
+
+
+def stamp_signature(
+    secret: bytes,
+    verified_at_ms: int,
+    cursors: Mapping[StateKind, Cursor],
+    by: str,
+    *,
+    deep: bool,
+    degraded: bool,
+) -> str:
+    """Sign a freshness stamp. Cursors are sorted by kind, so the input is order-independent.
+
+    The cursor count is signed as its own part, which makes the layout self-describing: a
+    newline smuggled into `by` cannot shift the field boundaries into a second valid reading of
+    some other legitimately signed stamp. `make_stamp` rejects such a `by` outright as well.
+    """
+    parts = [
+        STAMP_DOMAIN,
+        str(verified_at_ms),
+        by,
+        str(int(deep)),
+        str(int(degraded)),
+        str(len(cursors)),
+    ]
+    for kind in sorted(cursors, key=lambda entry: entry.value):
+        cursor = cursors[kind]
+        parts.append(
+            f"{kind.value}={cursor.version.epoch}.{cursor.version.seq}:{cursor.feed_seq}",
+        )
+    return _mac(secret, "\n".join(parts))
+
+
 def make_record(
     secret: bytes,
     kind: StateKind,
@@ -146,6 +198,43 @@ def make_manifest(
     )
 
 
+def make_stamp(
+    secret: bytes,
+    verified_at: float,
+    cursors: Mapping[StateKind, Cursor],
+    by: str,
+    *,
+    deep: bool = False,
+    degraded: bool = False,
+) -> Stamp:
+    """Build a signed stamp. Refuses to mint one that a reader would have to refuse.
+
+    Every rejection here is a fail-closed decision made at the WRITER, so an unusable stamp is
+    never published: a partial stamp would leave an uncovered kind floored at ZERO while the
+    process believed itself verified, which is SP1 for that kind.
+    """
+    if "\n" in by:
+        raise ValueError("rehydrator id must not contain a newline")
+    covered = dict(cursors)
+    missing = sorted(kind.value for kind in StateKind if kind not in covered)
+    if missing:
+        raise ValueError(f"a stamp must cover every kind; missing {', '.join(missing)}")
+    verified_at_ms = stamp_millis(verified_at)
+    if verified_at_ms < 0:
+        raise ValueError(f"verified_at {verified_at} is before the epoch")
+    return Stamp(
+        # Snap to the millisecond that was actually signed, so a stamp equals its own round trip.
+        verified_at=verified_at_ms / 1000,
+        cursors=covered,
+        by=by,
+        deep=deep,
+        degraded=degraded,
+        signature=stamp_signature(
+            secret, verified_at_ms, covered, by, deep=deep, degraded=degraded,
+        ),
+    )
+
+
 def encode_record(record: SignedRecord) -> bytes:
     """The stored envelope. `body` is the canonical text, so the signed bytes round-trip exactly."""
     envelope = {
@@ -176,60 +265,82 @@ def encode_manifest(manifest: Manifest) -> bytes:
     return json.dumps(envelope, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
 
 
-def _envelope(kind: StateKind, raw: bytes | str | None, what: str) -> Mapping[str, object]:
+def encode_stamp(stamp: Stamp) -> bytes:
+    """The stored envelope for `{rv2}:stamp`. One key for the whole namespace."""
+    envelope = {
+        "verified_at_ms": stamp_millis(stamp.verified_at),
+        "cursors": {
+            kind.value: [cursor.version.epoch, cursor.version.seq, cursor.feed_seq]
+            for kind, cursor in sorted(stamp.cursors.items(), key=lambda item: item[0].value)
+        },
+        "by": stamp.by,
+        "deep": stamp.deep,
+        "degraded": stamp.degraded,
+        "sig": stamp.signature,
+    }
+    return json.dumps(envelope, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+
+
+def _envelope(raw: bytes | str | None, where: str) -> Mapping[str, object]:
+    """`where` already names what is being decoded, e.g. "ks manifest", "freshness stamp"."""
     if raw is None:
         raise StoreDataUnavailable(
-            f"{kind.value} {what} missing (store empty, flushed or not yet re-hydrated)",
+            f"{where} missing (store empty, flushed or not yet re-hydrated)",
         )
     try:
         parsed: object = json.loads(raw)
     except (ValueError, UnicodeDecodeError) as exc:
-        raise StoreDataUnavailable(f"{kind.value} {what} is not valid JSON: {exc}") from exc
+        raise StoreDataUnavailable(f"{where} is not valid JSON: {exc}") from exc
     if not isinstance(parsed, dict):
-        raise StoreDataUnavailable(f"{kind.value} {what} is not a JSON object")
+        raise StoreDataUnavailable(f"{where} is not a JSON object")
     return parsed
 
 
-def _text(env: Mapping[str, object], name: str, kind: StateKind, what: str) -> str:
+def _text(env: Mapping[str, object], name: str, where: str) -> str:
     value = env.get(name)
     if not isinstance(value, str):
-        raise StoreDataUnavailable(f"{kind.value} {what} field {name!r} is not a string")
+        raise StoreDataUnavailable(f"{where} field {name!r} is not a string")
     return value
 
 
-def _whole(env: Mapping[str, object], name: str, kind: StateKind, what: str) -> int:
-    value = env.get(name)
+def _whole_value(value: object, where: str) -> int:
+    """`bool` is an `int` in Python, so it is excluded explicitly: `True` is not a version."""
     if isinstance(value, bool) or not isinstance(value, int):
-        raise StoreDataUnavailable(f"{kind.value} {what} field {name!r} is not an integer")
+        raise StoreDataUnavailable(f"{where} is not an integer")
     if value < 0:
-        raise StoreDataUnavailable(f"{kind.value} {what} field {name!r} is negative")
+        raise StoreDataUnavailable(f"{where} is negative")
     return value
 
 
-def _flag(env: Mapping[str, object], name: str, kind: StateKind, what: str) -> bool:
+def _whole(env: Mapping[str, object], name: str, where: str) -> int:
+    return _whole_value(env.get(name), f"{where} field {name!r}")
+
+
+def _flag(env: Mapping[str, object], name: str, where: str) -> bool:
     value = env.get(name)
     if not isinstance(value, bool):
-        raise StoreDataUnavailable(f"{kind.value} {what} field {name!r} is not a boolean")
+        raise StoreDataUnavailable(f"{where} field {name!r} is not a boolean")
     return value
 
 
 def decode_record(secret: bytes, kind: StateKind, raw: bytes | str | None) -> SignedRecord:
     """Verify one record. Any defect is UNAVAILABLE, never a benign empty value."""
-    env = _envelope(kind, raw, "record")
-    if _text(env, "kind", kind, "record") != kind.value:
+    where = f"{kind.value} record"
+    env = _envelope(raw, where)
+    if _text(env, "kind", where) != kind.value:
         raise StoreDataUnavailable(f"{kind.value} record carries another kind")
-    key = _text(env, "key", kind, "record")
+    key = _text(env, "key", where)
     version = Version(
-        epoch=_whole(env, "epoch", kind, "record"),
-        seq=_whole(env, "seq", kind, "record"),
+        epoch=_whole(env, "epoch", where),
+        seq=_whole(env, "seq", where),
     )
-    feed_seq = _whole(env, "feed_seq", kind, "record")
-    content_hash = _text(env, "hash", kind, "record")
-    deleted = _flag(env, "deleted", kind, "record")
-    signature = _text(env, "sig", kind, "record")
-    body = _text(env, "body", kind, "record").encode("utf-8")
+    feed_seq = _whole(env, "feed_seq", where)
+    content_hash = _text(env, "hash", where)
+    deleted = _flag(env, "deleted", where)
+    signature = _text(env, "sig", where)
+    body = _text(env, "body", where).encode("utf-8")
     try:
-        op = StateOp(_text(env, "op", kind, "record"))
+        op = StateOp(_text(env, "op", where))
     except ValueError as exc:
         raise StoreDataUnavailable(f"{kind.value} record {key!r} has an unknown op") from exc
     if body_hash(body) != content_hash:
@@ -261,17 +372,18 @@ def decode_manifest(
     feed_floor: int = 0,
 ) -> Manifest:
     """Verify a kind's head and refuse anything older than this process has already applied."""
-    env = _envelope(kind, raw, "manifest")
-    if _text(env, "kind", kind, "manifest") != kind.value:
+    where = f"{kind.value} manifest"
+    env = _envelope(raw, where)
+    if _text(env, "kind", where) != kind.value:
         raise StoreDataUnavailable(f"{kind.value} manifest carries another kind")
     version = Version(
-        epoch=_whole(env, "epoch", kind, "manifest"),
-        seq=_whole(env, "seq", kind, "manifest"),
+        epoch=_whole(env, "epoch", where),
+        seq=_whole(env, "seq", where),
     )
-    feed_seq = _whole(env, "feed_seq", kind, "manifest")
-    count = _whole(env, "count", kind, "manifest")
-    on_count = _whole(env, "on_count", kind, "manifest")
-    signature = _text(env, "sig", kind, "manifest")
+    feed_seq = _whole(env, "feed_seq", where)
+    count = _whole(env, "count", where)
+    on_count = _whole(env, "on_count", where)
+    signature = _text(env, "sig", where)
     expected = manifest_signature(secret, kind, version, feed_seq, count, on_count)
     if not hmac.compare_digest(signature, expected):
         raise StoreDataUnavailable(f"{kind.value} manifest fails its signature")
@@ -293,6 +405,64 @@ def decode_manifest(
         feed_seq=feed_seq,
         count=count,
         on_count=on_count,
+        signature=signature,
+    )
+
+
+def _stamp_cursors(env: Mapping[str, object]) -> dict[StateKind, Cursor]:
+    """Parse the per-kind cursors and refuse a stamp that does not cover every kind."""
+    raw = env.get("cursors")
+    if not isinstance(raw, dict):
+        raise StoreDataUnavailable(f"{STAMP_WHERE} field 'cursors' is not an object")
+    out: dict[StateKind, Cursor] = {}
+    for name, triple in raw.items():
+        try:
+            kind = StateKind(name)
+        except ValueError as exc:
+            raise StoreDataUnavailable(
+                f"{STAMP_WHERE} names an unknown kind {name!r}",
+            ) from exc
+        if not isinstance(triple, list) or len(triple) != 3:
+            raise StoreDataUnavailable(
+                f"{STAMP_WHERE} cursor for {kind.value} is not [epoch, seq, feed_seq]",
+            )
+        where = f"{STAMP_WHERE} cursor for {kind.value}"
+        numbers = [_whole_value(value, where) for value in triple]
+        out[kind] = Cursor(version=Version(numbers[0], numbers[1]), feed_seq=numbers[2])
+    missing = sorted(kind.value for kind in StateKind if kind not in out)
+    if missing:
+        raise StoreDataUnavailable(
+            f"{STAMP_WHERE} does not cover {', '.join(missing)}: an uncovered kind would sit at "
+            "zero while the process believed its state verified",
+        )
+    return out
+
+
+def decode_stamp(secret: bytes, raw: bytes | str | None) -> Stamp:
+    """Verify a freshness stamp. Missing, partial, malformed or forged are all UNAVAILABLE.
+
+    The caller separates ABSENT from INVALID for metrics -- a missing stamp usually means no
+    re-hydrator is running, while an invalid one is a security signal -- by testing `raw is None`
+    before it gets here, rather than by catching a second exception type.
+    """
+    env = _envelope(raw, STAMP_WHERE)
+    verified_at_ms = _whole(env, "verified_at_ms", STAMP_WHERE)
+    cursors = _stamp_cursors(env)
+    by = _text(env, "by", STAMP_WHERE)
+    deep = _flag(env, "deep", STAMP_WHERE)
+    degraded = _flag(env, "degraded", STAMP_WHERE)
+    signature = _text(env, "sig", STAMP_WHERE)
+    expected = stamp_signature(
+        secret, verified_at_ms, cursors, by, deep=deep, degraded=degraded,
+    )
+    if not hmac.compare_digest(signature, expected):
+        raise StoreDataUnavailable(f"{STAMP_WHERE} fails its signature")
+    return Stamp(
+        verified_at=verified_at_ms / 1000,
+        cursors=cursors,
+        by=by,
+        deep=deep,
+        degraded=degraded,
         signature=signature,
     )
 

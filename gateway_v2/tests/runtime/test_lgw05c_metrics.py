@@ -17,12 +17,12 @@ import pytest
 from gateway_v2.admit.identity import IdentityCache, identity_applier
 from gateway_v2.admit.killswitch import KillSwitchSnapshot, KillSwitchState, killswitch_applier
 from gateway_v2.domain.plan import StreamingMode
-from gateway_v2.domain.state import StateKind, Version
+from gateway_v2.domain.state import Cursor, StateKind, Version
 from gateway_v2.plan.delta import plan_applier
 from gateway_v2.plan.document import PlanDocument, encode_plan_body
 from gateway_v2.plan.snapshot import ReplicaSnapshot
 from gateway_v2.plan.store import PlanStore
-from gateway_v2.runtime.state_feed import Cursor, FeedReader
+from gateway_v2.runtime.state_feed import FeedReader
 from gateway_v2.runtime.state_metrics import (
     PREFIX,
     SERIES_COUNT,
