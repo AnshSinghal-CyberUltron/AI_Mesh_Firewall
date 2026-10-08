@@ -25,6 +25,7 @@ Skipped unless `AMF_PG_DSN` and `AMF_VALKEY_URL` are set; the pause drills addit
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import os
 import subprocess
 import time
@@ -93,8 +94,9 @@ def _docker(*args: str) -> None:
 class Drill:
     """A control plane and a worker on real infrastructure, in their own namespace."""
 
-    def __init__(self, dsn: str, namespace: str) -> None:
+    def __init__(self, dsn: str, namespace: str, schema: str = "") -> None:
         self._dsn = dsn
+        self.schema = schema
         self.keys = StoreKeys(namespace=namespace)
         self.sync_client = redis.Redis.from_url(VALKEY_URL, socket_timeout=OP_TIMEOUT_S)
         self.db = PostgresControlDB(dsn)
@@ -190,7 +192,7 @@ def drill() -> Iterator[Drill]:
     schema = f"amf_drill_{uuid.uuid4().hex[:12]}"
     with psycopg.connect(DSN, autocommit=True) as admin, admin.cursor() as cursor:
         cursor.execute(f'CREATE SCHEMA "{schema}"')
-    built = Drill(f"{DSN}?options=-csearch_path%3D{schema}", f"{{d{schema[-8:]}}}")
+    built = Drill(f"{DSN}?options=-csearch_path%3D{schema}", f"{{d{schema[-8:]}}}", schema)
     try:
         yield built
     finally:
@@ -657,3 +659,189 @@ def test_drill_a_paused_postgres_does_not_fail_the_fleet_closed(drill: Drill) ->
         assert isinstance(snapshot.lookup("org-3"), ExecutionPlan)
 
     _drive(drill, body)
+
+
+# --- GW05b phase 7: the fault scenarios freshness is supposed to survive -------------------------
+#
+# These measure the two bounds the card is signed on: how long until the fleet fails closed when
+# verification stops, and how long until it serves again once verification returns. Both are
+# reported as numbers rather than asserted loosely, because L05b-2 and L05b-6 are stated as
+# bounds and a drill that only asserts "eventually" cannot contradict them.
+
+
+def _freshness_lab(
+    drill: Drill,
+    *,
+    fresh_ms: int = 5_000,
+) -> tuple[list[float], StampView, ReplicaSnapshot, Rehydrator]:
+    wall = [1_000.0]
+    view = StampView(SECRET, fresh_ms=fresh_ms, started_at=999.0, clock=lambda: wall[0])
+    snapshot = ReplicaSnapshot(drill.plans, clock=lambda: 1.0, stamp=view)
+    rehydrator = drill.stamping_rehydrator(lambda: wall[0])
+    return wall, view, snapshot, rehydrator
+
+
+@pytest.mark.skipif(not VALKEY_CONTAINER, reason="AMF_DRILL_VALKEY_CONTAINER is not set")
+def test_drill_a_flushed_store_fails_closed_then_restores_freshness(drill: Drill) -> None:
+    """R2-13's flush drill, with the freshness dimension GW05c's version could not have.
+
+    A FLUSHALL takes the stamp with it, so the fleet loses verification as well as data. Both
+    have to come back, and the stamp must not come back before the data it attests.
+    """
+    wall, view, snapshot, rehydrator = _freshness_lab(drill)
+    for position in range(1, 6):
+        drill.writer.plan_set(f"org-{position}", _plan_body(f"org-{position}"))
+    assert rehydrator.round_once().stamped is not None
+
+    async def body() -> None:
+        worker = drill.worker(stamp=view)
+        assert (await worker.drain_all())[0].ok
+        assert view.fresh() is True
+
+        drill.drop_store()
+        wall[0] += 1.0
+        await worker.drain_all()
+
+        assert view.observe(drill.publisher.read_stamp()) is False, "the stamp went too"
+        wall[0] += 6.0
+        assert view.fresh() is False, "and the fleet fails closed"
+        assert isinstance(snapshot.lookup("org-3"), PlanUnavailable)
+
+        restored = rehydrator.round_once()
+        assert {event.kind for event in restored.repairs} == set(StateKind)
+        assert restored.stamped is not None
+        await worker.drain_all()
+
+        assert view.fresh() is True
+        assert isinstance(snapshot.lookup("org-3"), ExecutionPlan)
+        assert snapshot.lookup("org-5").__class__ is ExecutionPlan, "all five, not just some"
+
+    _drive(drill, body)
+
+
+@pytest.mark.skipif(not VALKEY_CONTAINER, reason="AMF_DRILL_VALKEY_CONTAINER is not set")
+def test_drill_a_partitioned_store_ages_freshness_out_and_recovers(drill: Drill) -> None:
+    """A PAUSED store accepts the connection and never answers -- R2-13's partition shape.
+
+    The worker cannot read the stamp, so freshness ages out on its own: the fail-closed window
+    does not depend on the store being reachable enough to tell us it is broken.
+    """
+    wall, view, snapshot, rehydrator = _freshness_lab(drill)
+    drill.writer.plan_set("org-1", _plan_body("org-1"))
+    assert rehydrator.round_once().stamped is not None
+
+    async def body() -> float:
+        worker = drill.worker(stamp=view)
+        assert (await worker.drain_all())[0].ok
+        assert view.fresh() is True
+
+        _docker("pause", VALKEY_CONTAINER)
+        try:
+            wall[0] += 6.0
+            with contextlib.suppress(Exception):
+                await worker.drain_all()
+            assert view.fresh() is False
+            assert isinstance(snapshot.lookup("org-1"), PlanUnavailable)
+        finally:
+            _docker("unpause", VALKEY_CONTAINER)
+
+        healed = drill.worker(stamp=view)
+        started = time.monotonic()
+        for _ in range(40):
+            wall[0] += 0.1
+            rehydrator.round_once()
+            if (await healed.drain_all())[0].ok and view.fresh():
+                break
+            await asyncio.sleep(0.1)
+        recovery_s = time.monotonic() - started
+
+        assert view.fresh() is True
+        assert isinstance(snapshot.lookup("org-1"), ExecutionPlan)
+        return recovery_s
+
+    recovery_s = _drive(drill, body)
+
+    assert recovery_s < 5.0, f"freshness took {recovery_s:.2f}s to return after the partition"
+
+
+def test_drill_both_rehydrators_gone_fails_the_fleet_closed(drill: Drill) -> None:
+    """L05b-6, locally: global fail-closed at the declared bound, recovery after one returns.
+
+    Two re-hydrators are the deployment rule (R2-04), so the drill kills BOTH -- one surviving
+    re-hydrator is the normal case and proves nothing about the bound.
+    """
+    wall, view, snapshot, _unused = _freshness_lab(drill)
+    zone_a = drill.stamping_rehydrator(lambda: wall[0])
+    zone_b = drill.stamping_rehydrator(lambda: wall[0])
+    drill.writer.plan_set("org-1", _plan_body("org-1"))
+    zone_a.round_once()
+    zone_b.round_once()
+
+    async def body() -> tuple[float, float]:
+        worker = drill.worker(stamp=view)
+        assert (await worker.drain_all())[0].ok
+        assert view.fresh() is True
+
+        # Both re-hydrators stop. Nothing stamps; the store is otherwise perfectly healthy.
+        failed_at = None
+        for step in range(1, 101):
+            wall[0] += 0.1
+            await worker.drain_all()
+            if not view.fresh():
+                failed_at = step * 0.1
+                break
+        assert failed_at is not None, "the fleet never failed closed"
+        assert isinstance(snapshot.lookup("org-1"), PlanUnavailable)
+
+        # One returns.
+        recovered_at = None
+        for step in range(1, 101):
+            wall[0] += 0.1
+            zone_b.round_once()
+            await worker.drain_all()
+            if view.fresh():
+                recovered_at = step * 0.1
+                break
+        assert recovered_at is not None, "one re-hydrator was not enough"
+        assert isinstance(snapshot.lookup("org-1"), ExecutionPlan)
+        return failed_at, recovered_at
+
+    failed_at, recovered_at = _drive(drill, body)
+
+    # The stamp was fresh at T0, so it ages out one freshness bound later, not sooner.
+    assert 5.0 <= failed_at <= 5.3, f"failed closed after {failed_at:.1f}s"
+    assert recovered_at <= 0.2, f"recovered {recovered_at:.1f}s after a re-hydrator returned"
+
+
+@pytest.mark.skipif(
+    not (PG_CONTAINER and VALKEY_CONTAINER), reason="both drill containers must be set",
+)
+def test_drill_a_flush_under_a_held_row_lock_still_restores_and_stamps(drill: Drill) -> None:
+    """L05b-3: an idle `FOR UPDATE` held across a FLUSHALL must not stall re-hydration.
+
+    GW05c proved the lock half. This adds the flush on top, which is the combination the card
+    names: RC2 took 38 s because its publish snapshot waited behind the lock, so the restore and
+    the stamp both arrive only after the lock is released.
+    """
+    import psycopg
+
+    wall, view, _snapshot, rehydrator = _freshness_lab(drill)
+    for position in range(1, 4):
+        drill.writer.plan_set(f"org-{position}", _plan_body(f"org-{position}"))
+    assert rehydrator.round_once().stamped is not None
+
+    drill.drop_store()
+    with psycopg.connect(DSN, autocommit=False) as holder, holder.cursor() as cursor:
+        cursor.execute(f'SET search_path TO "{drill.schema}"')
+        cursor.execute("SELECT * FROM amf_state_counter WHERE kind = 'plan' FOR UPDATE")
+        started = time.monotonic()
+        wall[0] += 1.0
+        summary = rehydrator.round_once()
+        took_s = time.monotonic() - started
+        holder.rollback()
+
+    assert summary.stamped is not None, "the stamp arrived while the lock was still held"
+    assert {event.kind for event in summary.repairs} == set(StateKind)
+    assert took_s < 5.0, f"re-hydration under a held lock took {took_s:.2f}s"
+    assert view.observe(drill.publisher.read_stamp()) is True
+    assert view.fresh() is True

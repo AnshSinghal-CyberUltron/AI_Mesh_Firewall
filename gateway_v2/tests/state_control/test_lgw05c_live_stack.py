@@ -42,7 +42,14 @@ from gateway_v2.plan.document import PlanDocument, encode_plan_body
 from gateway_v2.plan.snapshot import ReplicaSnapshot
 from gateway_v2.plan.store import PlanStore
 from gateway_v2.runtime.state_feed import FeedReader
-from gateway_v2.runtime.state_task import DeltaBudget, RoundReport, StateSynchroniser
+from gateway_v2.runtime.state_sig import decode_stamp
+from gateway_v2.runtime.state_stamp import StampView
+from gateway_v2.runtime.state_task import (
+    DEFAULT_BUDGET,
+    DeltaBudget,
+    RoundReport,
+    StateSynchroniser,
+)
 from gateway_v2.runtime.store_keys import StoreKeys
 from gateway_v2.runtime.store_valkey import ValkeyStateStore
 from state_control.pg import PostgresControlDB
@@ -128,7 +135,12 @@ class Stack:
         if found:
             self.sync_client.delete(*found)
 
-    def worker(self, *, budget: DeltaBudget | None = None) -> StateSynchroniser:
+    def worker(
+        self,
+        *,
+        budget: DeltaBudget | None = None,
+        stamp: StampView | None = None,
+    ) -> StateSynchroniser:
         """A fresh worker process, as a restart or a scale-out would create."""
         reader = ValkeyStateStore(self.async_client(), self.keys)
         return StateSynchroniser(
@@ -138,7 +150,25 @@ class Stack:
                 StateKind.KS: killswitch_applier(self.switches),
                 StateKind.KEY: identity_applier(self.identities),
             },
-            **({} if budget is None else {"budget": budget}),
+            budget=DEFAULT_BUDGET if budget is None else budget,
+            stamp=stamp,
+        )
+
+    def stamping_rehydrator(
+        self,
+        clock: Callable[[], float],
+        *,
+        name: str = "stack-rehydrator:1",
+    ) -> Rehydrator:
+        """All FOUR kinds, so it may write a stamp. `self.rehydrator` covers three by design.
+
+        `clock` is required: `verified_at` is the re-hydrator's wall clock and the age is the
+        reader's, so a test that stamps with `time.time()` and reads with an injected clock
+        measures an age of about -1.8e9 s and fails closed.
+        """
+        return Rehydrator(
+            self.db, self.publisher, self.writer, SECRET,
+            stale_grace_s=0.0, clock=clock, name=name,
         )
 
 
@@ -538,3 +568,171 @@ def test_a_hash_kind_and_a_key_kind_coexist_on_a_real_server(stack: Stack) -> No
     assert stack.sync_client.exists(stack.keys.record_key(StateKind.PLAN, "org-a")) == 1
     assert stack.sync_client.hlen(stack.keys.record_hash(StateKind.KEY)) == 2
     assert stack.sync_client.zcard(stack.keys.index(StateKind.KEY)) == 2
+
+
+# --- GW05b phase 7: freshness across both real adapters ------------------------------------------
+#
+# Phase 3 drove the stamp loop over fakeredis, which executes the real command set but is not the
+# seam this suite exists for. These run the whole thing across PostgresControlDB and a real (or
+# fake, when AMF_VALKEY_URL is unset) Valkey at once: the re-hydrator compares Postgres with the
+# store and stamps, and a gateway worker on a separate async client reads that stamp and raises
+# its floor from it.
+#
+# Everything async stays inside ONE `asyncio.run` per test. A real redis.asyncio client binds its
+# transport to the loop it was created on, so a client-per-helper-call harness fails with
+# "Event loop is closed" against a real server while passing on fakeredis.
+
+GW05B_SECRET_MISMATCH = b"gw05b-not-the-signing-secret"
+
+
+def _stamp_view(stack: Stack, moment: list[float], *, started_at: float) -> StampView:
+    return StampView(
+        SECRET, fresh_ms=5_000, started_at=started_at, clock=lambda: moment[0],
+    )
+
+
+def test_lgw05b_a_rehydrators_stamp_crosses_both_adapters(stack: Stack) -> None:
+    """Postgres is compared, the stamp lands in the store, and a worker raises its floor."""
+    moment = [1_000.0]
+    rehydrator = stack.stamping_rehydrator(lambda: moment[0])
+    for position in range(1, 4):
+        assert stack.writer.plan_set(f"org-{position}", _plan_body(f"org-{position}")).status == OK
+
+    minted = rehydrator.round_once().stamped
+    assert minted is not None and minted.degraded is False
+
+    view = _stamp_view(stack, moment, started_at=999.0)
+
+    async def body() -> None:
+        worker = stack.worker(stamp=view)
+        reports = {report.kind: report for report in await worker.drain_all()}
+        assert all(report.ok for report in reports.values()), reports
+        assert view.fresh() is True
+        assert view.by == "stack-rehydrator:1"
+        plan_floor = worker.floor(StateKind.PLAN)
+        assert plan_floor.feed_seq == stack.db.counters(StateKind.PLAN).feed_seq
+        assert isinstance(stack.snapshot.lookup("org-2"), ExecutionPlan)
+        await stack.aclose()
+
+    _run(body())
+
+    assert dict(minted.cursors).keys() == set(StateKind), "every kind, or it is not a stamp"
+
+
+def test_lgw05b_a_fresh_worker_refuses_a_rolled_back_store(stack: Stack) -> None:
+    """SP1 across both real adapters, with a worker that has applied NOTHING.
+
+    A worker that had already drained would refuse the rollback from its own cursor, stamp or
+    no stamp. Freshness is only load-bearing for the process that starts up into the fault --
+    which, after a failover, is most of them.
+    """
+    moment = [1_000.0]
+    rehydrator = stack.stamping_rehydrator(lambda: moment[0])
+    for position in range(1, 6):
+        stack.writer.plan_set(f"org-{position}", _plan_body(f"org-{position}"))
+    assert rehydrator.round_once().stamped is not None
+
+    counters, records, engaged = stack.db.snapshot(StateKind.PLAN)
+    behind = type(counters)(
+        version=records[1].version, feed_seq=2, count=2, on_count=counters.on_count,
+    )
+    stack.publisher.publish_kind(
+        StateKind.PLAN,
+        records[:2],
+        stack.writer.manifest_for(StateKind.PLAN, behind),
+        engaged,
+    )
+    view = _stamp_view(stack, moment, started_at=999.0)
+
+    async def body() -> None:
+        fresh_worker = stack.worker(stamp=view)
+        reports = {report.kind: report for report in await fresh_worker.drain_all()}
+        assert fresh_worker.cursor(StateKind.PLAN).feed_seq == 0, "it applied nothing"
+        assert reports[StateKind.PLAN].ok is False
+        assert "older than" in (reports[StateKind.PLAN].error or "")
+        assert isinstance(stack.plans.read("org-5"), PlanUnknownTenant), "never served"
+        await stack.aclose()
+
+    _run(body())
+
+
+def test_lgw05b_without_a_stamp_the_same_worker_serves_the_rollback(stack: Stack) -> None:
+    """The control. This is R2-03 as GW05c leaves it, across the real adapters."""
+    for position in range(1, 6):
+        stack.writer.plan_set(f"org-{position}", _plan_body(f"org-{position}"))
+    counters, records, engaged = stack.db.snapshot(StateKind.PLAN)
+    behind = type(counters)(
+        version=records[1].version, feed_seq=2, count=2, on_count=counters.on_count,
+    )
+    stack.publisher.publish_kind(
+        StateKind.PLAN,
+        records[:2],
+        stack.writer.manifest_for(StateKind.PLAN, behind),
+        engaged,
+    )
+
+    async def body() -> None:
+        unstamped = stack.worker()
+        report = (await unstamped.drain_all())[0]
+        assert report.ok is True
+        assert isinstance(stack.plans.read("org-1"), ExecutionPlan), "the stale generation"
+        await stack.aclose()
+
+    _run(body())
+
+
+def test_lgw05b_two_rehydrators_never_move_the_clock_backwards(stack: Stack) -> None:
+    """R2-04 requires two in two zones, so the WATCH guard runs against a real store here.
+
+    Their rounds start at slightly different moments, and the slower one's write must not lower
+    `verified_at` -- the one thing a freshness clock may never do.
+    """
+    moment_a = [1_000.0]
+    moment_b = [1_000.0]
+    zone_a = stack.stamping_rehydrator(lambda: moment_a[0], name="zone-a:1")
+    zone_b = stack.stamping_rehydrator(lambda: moment_b[0], name="zone-b:1")
+    stack.writer.plan_set("org-a", _plan_body("org-a"))
+
+    seen: list[float] = []
+    for round_number in range(50):
+        # B runs slightly behind A, and on alternate rounds they swap order.
+        moment_a[0] = 1_000.0 + round_number
+        moment_b[0] = moment_a[0] - 0.25
+        first, second = (zone_a, zone_b) if round_number % 2 else (zone_b, zone_a)
+        first.round_once()
+        second.round_once()
+        held = decode_stamp(SECRET, stack.publisher.read_stamp())
+        seen.append(held.verified_at)
+
+    assert seen == sorted(seen), "verified_at is monotonic across both re-hydrators"
+    assert seen[-1] == moment_a[0], "and ends at the newer round, whichever wrote last"
+
+
+def test_lgw05b_a_forged_stamp_in_a_real_store_never_wedges_freshness(stack: Stack) -> None:
+    """Planting un-decodable bytes must not block every genuine stamp from then on."""
+    moment = [1_000.0]
+    rehydrator = stack.stamping_rehydrator(lambda: moment[0])
+    stack.writer.plan_set("org-a", _plan_body("org-a"))
+    stack.sync_client.set(
+        stack.keys.stamp, b'{"verified_at_ms":99999999999999,"by":"x","sig":"forged"}',
+    )
+
+    assert rehydrator.round_once().stamped is not None
+
+    view = _stamp_view(stack, moment, started_at=999.0)
+    assert view.observe(stack.publisher.read_stamp()) is True
+    assert view.fresh() is True
+
+
+def test_lgw05b_a_rotated_signing_secret_fails_the_reader_closed(stack: Stack) -> None:
+    """A stamp nobody can verify must age the fleet out, not be quietly ignored."""
+    moment = [1_000.0]
+    stack.stamping_rehydrator(lambda: moment[0]).round_once()
+    stranger = StampView(
+        GW05B_SECRET_MISMATCH, fresh_ms=5_000, started_at=999.0, clock=lambda: moment[0],
+    )
+
+    assert stranger.observe(stack.publisher.read_stamp()) is False
+
+    assert stranger.invalid == 1
+    assert stranger.fresh() is False

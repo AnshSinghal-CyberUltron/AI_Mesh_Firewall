@@ -1,0 +1,24 @@
+==> baseline (every suite must pass before any control is applied)
+  591 passed, 4 skipped in 101.52s (0:01:41)
+==> phase 3: the floor
+  bites       the floor is never passed to poll  ->  5 failed, 55 passed in 3.25s
+  bites       the floor is collapsed back into the cursor  ->  8 failed, 34 passed in 0.53s
+  bites       the valkey adapter never finds the stamp  ->  3 failed, 39 passed in 0.49s
+==> phase 4: the per-kind posture
+  bites       a cached principal is served while unverified  ->  3 failed, 21 passed in 0.18s
+  bites       the kill switch ignores the stamp  ->  3 failed, 21 passed in 0.19s
+  bites       a plan is served while unverified  ->  4 failed, 20 passed in 0.18s
+==> phase 5: the postgres ride-through
+  bites       the ride-through never applies  ->  9 failed, 14 passed in 0.42s
+  bites       the window is anchored on the last WRITTEN stamp  ->  2 failed, 21 passed in 0.43s
+  bites       a store that lost data still rides through  ->  2 failed, 21 passed in 0.43s
+==> phase 2: honest silence
+  bites       a partial round stamps the kinds that worked  ->  4 failed, 31 passed in 0.58s
+==> phase 6: cadence and logging
+  bites       the recheck cadence is flattened  ->  2 failed, 38 passed in 0.26s
+  bites       freshness is logged on every call, not on transitions  ->  3 failed, 37 passed in 0.26s
+==> phase 1: the start gate
+  bites       a pre-start stamp is treated as fresh (I3 removed)  ->  1 failed, 65 passed in 0.59s
+  bites       a stamp need not cover every kind  ->  4 failed, 40 passed in 0.17s
+
+==> all controls bite: every clause of the fix is load-bearing

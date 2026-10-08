@@ -1,0 +1,28 @@
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.1.1, pluggy-1.6.0 -- /home/suraj/Documents/zeroshield/AI_Mesh_Firewall/gateway_v2/.venv/bin/python
+cachedir: .pytest_cache
+rootdir: /home/suraj/Documents/zeroshield/AI_Mesh_Firewall/gateway_v2
+configfile: pyproject.toml
+collecting ... collected 19 items
+
+tests/state_control/test_lgw05c_drills.py::test_a_client_without_a_timeout_is_refused PASSED [  5%]
+tests/state_control/test_lgw05c_drills.py::test_a_timeout_at_or_above_the_refresh_period_is_refused PASSED [ 10%]
+tests/state_control/test_lgw05c_drills.py::test_a_bounded_client_is_accepted PASSED [ 15%]
+tests/state_control/test_lgw05c_drills.py::test_drill_flush_fails_closed_then_rehydrates PASSED [ 21%]
+tests/state_control/test_lgw05c_drills.py::test_drill_a_regressed_store_is_refused PASSED [ 26%]
+tests/state_control/test_lgw05c_drills.py::test_an_unpublished_write_is_invisible_until_a_round PASSED [ 31%]
+tests/state_control/test_lgw05c_drills.py::test_an_unpublished_write_fails_the_gateway_closed_within_the_bound PASSED [ 36%]
+tests/state_control/test_lgw05c_drills.py::test_drill_store_partition_and_heal PASSED [ 42%]
+tests/state_control/test_lgw05c_drills.py::test_drill_postgres_outage_does_not_stop_serving PASSED [ 47%]
+tests/state_control/test_lgw05c_drills.py::test_drill_rehydration_under_a_held_row_lock PASSED [ 52%]
+tests/state_control/test_lgw05c_drills.py::test_drill_concurrent_writers_leave_no_gap PASSED [ 57%]
+tests/state_control/test_lgw05c_drills.py::test_drill_g04_cold_start_with_two_thousand_keys_over_two_hundred_orgs PASSED [ 63%]
+tests/state_control/test_lgw05c_drills.py::test_drill_bulk_onboard_of_twenty_five_thousand_records PASSED [ 68%]
+tests/state_control/test_lgw05c_drills.py::test_drill_a_steady_round_at_twenty_five_thousand_is_three_commands PASSED [ 73%]
+tests/state_control/test_lgw05c_drills.py::test_drill_a_paused_postgres_does_not_fail_the_fleet_closed PASSED [ 78%]
+tests/state_control/test_lgw05c_drills.py::test_drill_a_flushed_store_fails_closed_then_restores_freshness PASSED [ 84%]
+tests/state_control/test_lgw05c_drills.py::test_drill_a_partitioned_store_ages_freshness_out_and_recovers PASSED [ 89%]
+tests/state_control/test_lgw05c_drills.py::test_drill_both_rehydrators_gone_fails_the_fleet_closed PASSED [ 94%]
+tests/state_control/test_lgw05c_drills.py::test_drill_a_flush_under_a_held_row_lock_still_restores_and_stamps PASSED [100%]
+
+======================== 19 passed in 77.45s (0:01:17) =========================
