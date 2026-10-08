@@ -33,6 +33,7 @@ from enum import StrEnum
 from gateway_v2.domain.locks import FRESH_MS
 from gateway_v2.domain.state import SignedRecord, StateKind, StoreDataUnavailable
 from gateway_v2.runtime.state_feed import FeedRound
+from gateway_v2.runtime.state_stamp import StampView
 
 GLOBAL_SCOPE = "global"
 ORG_PREFIX = "org:"
@@ -93,25 +94,53 @@ class KillSwitchSnapshot:
         *,
         stale_ms: int = FRESH_MS,
         clock: Callable[[], float] = time.monotonic,
+        stamp: StampView | None = None,
     ) -> None:
         self._stale_s = stale_ms / 1000
         self._clock = clock
+        self._stamp = stamp
         self._lock = threading.Lock()
         self._engaged = False
         self._orgs: set[str] = set()
         self._models: set[str] = set()
         self._feed_seq = 0
-        self._verified_at: float | None = None
+        # NOT `_verified_at`. This is a MONOTONIC reading of when this process last read the
+        # store successfully -- nothing was verified against anything. The stamp's `verified_at`
+        # is the wall-clock moment a re-hydrator compared the store with Postgres, and conflating
+        # the two names is how SP2 stayed invisible: a refresh kept "verifying" a store that had
+        # been wrong for a minute.
+        self._refreshed_at: float | None = None
 
     # --- request path: RAM only ----------------------------------------------------------------
 
     def state(self, now: float | None = None) -> KillSwitchState:
+        """`ok` | `engaged` | `stale`, from RAM. Two independent ways to be stale.
+
+        The local one asks "did I read the store recently". The stamp asks "was that store
+        checked against Postgres recently". Both are needed, and they fail in different
+        scenarios: a wedged refresh trips the first and not the second, while an unpublished
+        committed write (SP2) or a lagging replica (SP1) trips the second and not the first.
+        """
         moment = self._clock() if now is None else now
         with self._lock:
-            verified = self._verified_at
-            if verified is None or moment - verified > self._stale_s:
+            refreshed = self._refreshed_at
+            if refreshed is None or moment - refreshed > self._stale_s:
                 return KillSwitchState.STALE
-            return KillSwitchState.ENGAGED if self._engaged else KillSwitchState.OK
+            engaged = self._engaged
+        if self._stamp is not None and not self._stamp.fresh():
+            return KillSwitchState.STALE
+        return KillSwitchState.ENGAGED if engaged else KillSwitchState.OK
+
+    def unavailable_reason(self) -> str | None:
+        """Why `state()` is STALE, or None when it is not. For the 503 detail and the log."""
+        if self.state() is not KillSwitchState.STALE:
+            return None
+        if self._stamp is not None and not self._stamp.fresh():
+            return self._stamp.unverified()
+        age = self.refresh_age_seconds()
+        if age is None:
+            return "the kill-switch snapshot has never been loaded"
+        return f"the kill-switch snapshot is {age:.1f} s old, over its {self._stale_s:g} s ceiling"
 
     def org_killed(self, org_id: str) -> bool:
         with self._lock:
@@ -130,10 +159,11 @@ class KillSwitchSnapshot:
                 feed_seq=self._feed_seq,
             )
 
-    def age_seconds(self, now: float | None = None) -> float | None:
+    def refresh_age_seconds(self, now: float | None = None) -> float | None:
+        """Since this process last read the store. NOT since the store was verified."""
         moment = self._clock() if now is None else now
         with self._lock:
-            return None if self._verified_at is None else moment - self._verified_at
+            return None if self._refreshed_at is None else moment - self._refreshed_at
 
     # --- refresh path: O(changes), or O(engaged) once ------------------------------------------
 
@@ -192,7 +222,7 @@ class KillSwitchSnapshot:
                     f"{attested_engaged}",
                 )
         self._feed_seq = max(self._feed_seq, attested_feed_seq)
-        self._verified_at = moment
+        self._refreshed_at = moment
 
     def _set_scope(self, scope: str, on: bool) -> None:
         if scope == GLOBAL_SCOPE:

@@ -19,6 +19,7 @@ from gateway_v2.admit.killswitch import (
 )
 from gateway_v2.domain.state import SignedRecord, StateKind, StateOp, StoreDataUnavailable, Version
 from gateway_v2.runtime.state_sig import make_record
+from gateway_v2.runtime.state_stamp import StampView
 
 SECRET = b"gw05c-ks-test-secret"
 
@@ -60,10 +61,19 @@ def test_the_snapshot_structurally_cannot_read_the_store() -> None:
     """
     parameters = set(inspect.signature(KillSwitchSnapshot.__init__).parameters) - {"self"}
 
-    assert parameters == {"stale_ms", "clock"}
-    for method in ("apply", "adopt", "state", "org_killed", "model_killed", "view"):
+    # `stamp` is GW05b's freshness VIEW: it is handed raw bytes by the synchroniser and holds no
+    # client, so it cannot become an I/O backdoor. The assertion below pins that.
+    assert parameters == {"stale_ms", "clock", "stamp"}
+    for method in (
+        "apply", "adopt", "state", "org_killed", "model_killed", "view", "unavailable_reason",
+    ):
         source = inspect.getsource(getattr(KillSwitchSnapshot, method))
         assert "await" not in source, f"{method} must not perform I/O"
+    assert not [
+        name
+        for name, member in inspect.getmembers(StampView, inspect.isfunction)
+        if inspect.iscoroutinefunction(member)
+    ], "the freshness view must stay synchronous: it is read on the request path"
 
 
 def test_a_round_with_no_changes_keeps_the_snapshot_fresh() -> None:
@@ -81,7 +91,7 @@ def test_a_round_with_no_changes_keeps_the_snapshot_fresh() -> None:
     assert snap.state(100.1) is KillSwitchState.OK
     assert snap.org_killed("acme") is True
     assert snap.view().count == 1
-    assert snap.age_seconds(100.1) == 0.0, "an empty round still proves freshness"
+    assert snap.refresh_age_seconds(100.1) == 0.0, "an empty round still proves freshness"
 
 
 def test_cold_start_is_built_only_from_the_engaged_records_given() -> None:

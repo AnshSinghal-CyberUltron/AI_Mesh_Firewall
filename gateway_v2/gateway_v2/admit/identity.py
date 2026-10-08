@@ -36,6 +36,7 @@ from dataclasses import dataclass
 from gateway_v2.domain.identity import Principal
 from gateway_v2.domain.state import SignedRecord, StateKind, StoreDataUnavailable
 from gateway_v2.runtime.state_feed import FeedRound
+from gateway_v2.runtime.state_stamp import StampView
 
 DEFAULT_CAPACITY = 50_000
 DEFAULT_NEGATIVE_TTL_S = 2.0
@@ -101,12 +102,14 @@ class IdentityCache:
         capacity: int = DEFAULT_CAPACITY,
         negative_ttl_s: float = DEFAULT_NEGATIVE_TTL_S,
         clock: Callable[[], float] = time.monotonic,
+        stamp: StampView | None = None,
     ) -> None:
         if capacity <= 0:
             raise ValueError("identity cache capacity must be positive")
         self._capacity = capacity
         self._negative_ttl_s = negative_ttl_s
         self._clock = clock
+        self._stamp = stamp
         self._held: OrderedDict[str, Principal] = OrderedDict()
         self._negative: OrderedDict[str, float] = OrderedDict()
         self._inflight: dict[str, asyncio.Task[Principal | None]] = {}
@@ -116,14 +119,41 @@ class IdentityCache:
 
     # --- request path --------------------------------------------------------------------------
 
+    def unverified(self) -> str | None:
+        """Why identity must not be served from RAM, or None when it may be."""
+        if self._stamp is None or self._stamp.fresh():
+            return None
+        return self._stamp.unverified()
+
     def cached(self, key_hash: str) -> Principal | None:
+        """A held principal, or None -- including when state is unverified.
+
+        **This suppression is the fix, not a refinement.** Fail-closed that exempts the fast path
+        does nothing, because the fast path is where the traffic is: a warm worker would keep
+        admitting a revoked key from RAM for as long as the revocation stayed unpublished, which
+        is SP2's 60 s with no 503. The revocation may be precisely the part that was not
+        verified, so while unverified nothing cached is trusted.
+
+        The entry is SUPPRESSED, not evicted. The state is probably fine and will be verified
+        again within a round or two; dropping 50,000 principals on a blip would turn a freshness
+        lapse into a fetch stampede the moment it cleared (SP11's shape).
+        """
+        if self.unverified() is not None:
+            return None
         held = self._held.get(key_hash)
         if held is not None:
             self._held.move_to_end(key_hash)
         return held
 
     def denied(self, key_hash: str, now: float | None = None) -> bool:
-        """True while a never-issued key is still negatively cached."""
+        """True while a never-issued key is still negatively cached.
+
+        False while unverified, and the asymmetry is deliberate: a `key_add` may be the
+        unpublished write, so answering from the negative cache would 401 a key that is actually
+        valid. Failing closed here means 503, not 401 -- `resolve` refuses before anyone asks.
+        """
+        if self.unverified() is not None:
+            return False
         expires = self._negative.get(key_hash)
         if expires is None:
             return False
@@ -134,7 +164,14 @@ class IdentityCache:
         return True
 
     async def resolve(self, key_hash: str, fetch: Fetch) -> Principal | None:
-        """Cache, negative cache, or ONE shared store read. Never K reads for K callers."""
+        """Cache, negative cache, or ONE shared store read. Never K reads for K callers.
+
+        Raises StoreDataUnavailable while state is unverified, so the request fails closed with
+        a 503 rather than resolving against data nobody has checked.
+        """
+        reason = self.unverified()
+        if reason is not None:
+            raise StoreDataUnavailable(reason)
         held = self.cached(key_hash)
         if held is not None:
             return held

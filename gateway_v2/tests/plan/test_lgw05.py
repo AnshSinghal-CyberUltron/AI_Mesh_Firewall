@@ -134,8 +134,8 @@ def test_lgw05_4_replicas_converge_without_regressing() -> None:
     right.absorb("org-a", 2.0)
     assert left.lookup("org-a", 2.0).version == second.version  # type: ignore[union-attr]
     assert right.lookup("org-a", 2.0).version == second.version  # type: ignore[union-attr]
-    assert left.age_seconds("org-a", 2.0) == 0.0
-    assert (left.age_seconds("org-a", 2.0) or 0) < FRESH_MS / 1000
+    assert left.refresh_age_seconds("org-a", 2.0) == 0.0
+    assert (left.refresh_age_seconds("org-a", 2.0) or 0) < FRESH_MS / 1000
 
 
 def test_lgw05_5_pin_ignores_a_later_push() -> None:

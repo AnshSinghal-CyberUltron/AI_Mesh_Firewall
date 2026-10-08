@@ -29,20 +29,26 @@ import os
 import subprocess
 import time
 import uuid
-from collections.abc import Awaitable, Iterator
+from collections.abc import Awaitable, Callable, Iterator
 
 import pytest
 import redis
 import redis.asyncio
 
 from gateway_v2.admit.killswitch import KillSwitchSnapshot, killswitch_adopter
-from gateway_v2.domain.plan import ExecutionPlan, StreamingMode
+from gateway_v2.domain.plan import (
+    ExecutionPlan,
+    PlanUnavailable,
+    PlanUnknownTenant,
+    StreamingMode,
+)
 from gateway_v2.domain.state import START, Cursor, StateKind, Version
 from gateway_v2.plan.delta import plan_applier
 from gateway_v2.plan.document import PlanDocument, encode_plan_body
 from gateway_v2.plan.snapshot import ReplicaSnapshot
 from gateway_v2.plan.store import PlanStore
 from gateway_v2.runtime.state_feed import FeedReader
+from gateway_v2.runtime.state_stamp import StampView
 from gateway_v2.runtime.state_task import DeltaBudget, StateSynchroniser
 from gateway_v2.runtime.store_keys import StoreKeys
 from gateway_v2.runtime.store_valkey import (
@@ -106,12 +112,37 @@ class Drill:
         self._clients.append(client)
         return client
 
-    def worker(self, *, budget: DeltaBudget | None = None) -> StateSynchroniser:
+    def worker(
+        self,
+        *,
+        budget: DeltaBudget | None = None,
+        stamp: StampView | None = None,
+    ) -> StateSynchroniser:
         reader = ValkeyStateStore(self.async_client(), self.keys)
         return StateSynchroniser(
             FeedReader(reader, SECRET),
             {StateKind.PLAN: plan_applier(self.plans, self.snapshot, clock=lambda: 1.0)},
+            stamp=stamp,
             **({} if budget is None else {"budget": budget}),
+        )
+
+    def stamping_rehydrator(self, clock: Callable[[], float]) -> Rehydrator:
+        """A re-hydrator over ALL FOUR kinds, so it is allowed to write a freshness stamp.
+
+        `self.rehydrator` deliberately watches two kinds, which is enough for the GW05c drills
+        and -- by GW05b's own rule -- not enough to make the whole-store claim a stamp makes. An
+        untouched kind diagnoses as MISSING and is repaired to an empty published kind, so a
+        four-kind round verifies even on an estate that has only ever had plans written.
+
+        `clock` is required rather than defaulted, and the reason is the freshness design's one
+        real dependency: `verified_at` is the re-hydrator's wall clock and the age is the
+        gateway's, so a test that stamps with `time.time()` and reads with a fake clock measures
+        an age of about -1.8e9 seconds and fails closed. That is the NTP coupling the module
+        docstring warns about, reproduced in miniature.
+        """
+        return Rehydrator(
+            self.db, self.publisher, self.writer, SECRET,
+            stale_grace_s=0.0, clock=clock, name="drill-rehydrator:1",
         )
 
     async def aclose(self) -> None:
@@ -243,7 +274,12 @@ def test_drill_a_regressed_store_is_refused(drill: Drill) -> None:
 
 
 def test_an_unpublished_write_is_invisible_until_a_round(drill: Drill) -> None:
-    """Today's behaviour, pinned. GW05b's stamp is what will make this fail CLOSED (sp2)."""
+    """SP2's MECHANISM, pinned, and the negative control for the drill below.
+
+    Without a freshness stamp this is R2-03 exactly: the write is durable, the store never hears
+    about it, every drain reports `ok`, and nothing ages. The gateway is not wrong about the
+    store -- it is wrong about the store being worth trusting.
+    """
     from state_control.publisher import BrokenPublisher
 
     drill.writer.plan_set("org-a", _plan_body("org-a"))
@@ -262,6 +298,60 @@ def test_an_unpublished_write_is_invisible_until_a_round(drill: Drill) -> None:
 
     assert pending.durable is True and pending.published is False
     assert isinstance(drill.plans.read("org-b"), ExecutionPlan)
+
+
+def test_an_unpublished_write_fails_the_gateway_closed_within_the_bound(drill: Drill) -> None:
+    """SP2, inverted. With a stamp, an unpublished commit becomes a 503 instead of silence.
+
+    The sequence is the one the reviewer measured: a write commits, its publish fails, no
+    re-hydrator is running. RC2 served happily for 60 s. Here the stamp simply stops being
+    refreshed, so within FRESH_MS every kind refuses -- including the plan the worker is
+    holding, because the write that superseded it is exactly what nobody can see.
+
+    Recovery is the second half: once a re-hydrator returns it republishes the pending write AND
+    stamps, so one gateway cycle restores service.
+    """
+    from state_control.publisher import BrokenPublisher
+
+    wall = [1_000.0]
+    view = StampView(SECRET, fresh_ms=5_000, started_at=999.0, clock=lambda: wall[0])
+    snapshot = ReplicaSnapshot(drill.plans, clock=lambda: 1.0, stamp=view)
+    rehydrator = drill.stamping_rehydrator(lambda: wall[0])
+
+    drill.writer.plan_set("org-a", _plan_body("org-a"))
+    assert rehydrator.round_once().stamped is not None, "a re-hydrator is alive"
+
+    async def body() -> None:
+        worker = drill.worker(stamp=view)
+        assert (await worker.drain_all())[0].ok
+        assert isinstance(snapshot.lookup("org-a"), ExecutionPlan)
+
+        # A write commits and its publish fails. The re-hydrator is gone, so nothing
+        # republishes it and nothing stamps.
+        pending = StateWriter(drill.db, BrokenPublisher(), SECRET).plan_set(
+            "org-b", _plan_body("org-b"),
+        )
+        assert pending.durable is True and pending.published is False
+        assert (await worker.drain_all())[0].ok, "the store itself looks perfectly healthy"
+        assert isinstance(snapshot.lookup("org-a"), ExecutionPlan), "and still serves"
+
+        wall[0] += 6.0
+        await worker.drain_all()
+
+        assert view.fresh() is False
+        held = snapshot.lookup("org-a")
+        assert isinstance(held, PlanUnavailable), "a held plan is refused, not served"
+        assert not isinstance(held, PlanUnknownTenant), "and never as 403 complete-onboarding"
+
+        # The re-hydrator returns: it republishes the pending write and stamps again.
+        assert rehydrator.round_once().stamped is not None
+        await worker.drain_all()
+
+        assert view.fresh() is True
+        assert isinstance(snapshot.lookup("org-a"), ExecutionPlan)
+        assert isinstance(snapshot.lookup("org-b"), ExecutionPlan), "the pending write landed"
+
+    _drive(drill, body)
 
 
 # --- outages -------------------------------------------------------------------------------------
