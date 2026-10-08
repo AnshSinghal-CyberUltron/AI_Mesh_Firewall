@@ -157,3 +157,7 @@ class ValkeyStateStore:
         """O(engaged). The cold-start read that replaces reading the whole kind."""
         members = await self._client.smembers(self._keys.engaged(kind))
         return tuple(sorted(_as_text(member) for member in members))
+
+    async def stamp(self) -> bytes | None:
+        """One GET of one key. Constant per cycle, whatever the estate or the kind count."""
+        return _as_bytes(await self._client.get(self._keys.stamp))

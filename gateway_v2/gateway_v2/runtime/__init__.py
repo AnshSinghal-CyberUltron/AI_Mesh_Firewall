@@ -50,6 +50,12 @@ from gateway_v2.runtime.state_sig import (
     stamp_millis,
     stamp_signature,
 )
+from gateway_v2.runtime.state_stamp import (
+    FRESHNESS_NOT_ENFORCED,
+    NO_STAMP_SEEN,
+    StampView,
+    state_ready,
+)
 from gateway_v2.runtime.state_task import (
     DEFAULT_BUDGET,
     MAX_DRAIN_ROUNDS,
@@ -71,10 +77,12 @@ __all__ = (
     "DEFAULT_KNOBS",
     "DEFAULT_NAMESPACE",
     "ENGAGED_KINDS",
+    "FRESHNESS_NOT_ENFORCED",
     "HASH_KINDS",
     "KEYS",
     "MANIFEST_DOMAIN",
     "MAX_DRAIN_ROUNDS",
+    "NO_STAMP_SEEN",
     "PREFIX",
     "RECORD_DOMAIN",
     "SERIES_COUNT",
@@ -104,6 +112,7 @@ __all__ = (
     "PushKnobs",
     "ResourceContract",
     "RoundReport",
+    "StampView",
     "StateMetrics",
     "StateMetricsRecorder",
     "StateStore",
@@ -128,4 +137,5 @@ __all__ = (
     "record_matches_index",
     "stamp_millis",
     "stamp_signature",
+    "state_ready",
 )

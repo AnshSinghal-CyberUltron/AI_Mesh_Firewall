@@ -297,6 +297,11 @@ class MemoryStore:
         with self._lock:
             return tuple(sorted(self._engaged.get(kind, set())))
 
+    async def stamp(self) -> bytes | None:
+        """The reader-side view of the same slot `put_stamp` writes."""
+        with self._lock:
+            return self._stamp
+
     # --- fault injection for tests -------------------------------------------------------------
 
     def forget_manifest(self, kind: StateKind) -> None:

@@ -45,6 +45,7 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from gateway_v2.domain.state import (
+    START,
     Cursor,
     Manifest,
     SignedRecord,
@@ -115,6 +116,14 @@ class StateStore(Protocol):
         """Members of the kind's engaged set. O(engaged), used on a cold start."""
         ...
 
+    async def stamp(self) -> bytes | None:
+        """The raw freshness stamp, or None when the store holds none.
+
+        ONE key for the whole namespace, not one per kind, so a cycle costs one `GET` however
+        many kinds a worker tracks. Verification is `StampView`'s, not the store's.
+        """
+        ...
+
 
 class FeedReader:
     """Turns a cursor into the records that changed. Holds no state: the caller owns the cursor."""
@@ -123,11 +132,37 @@ class FeedReader:
         self._store = store
         self._secret = secret
 
-    async def poll(self, kind: StateKind, cursor: Cursor, *, limit: int) -> FeedRound:
-        """One round. Raises StoreDataUnavailable; never returns a partially trusted view."""
+    async def read_stamp(self) -> bytes | None:
+        """Pass the raw freshness stamp through. Verifying it belongs to whoever owns the floor.
+
+        A reader cannot verify its own floor: `poll` is handed a cursor and trusts it. So the
+        stamp is carried past this class untouched, to `StampView`, which is the thing that
+        decides what a floor may become.
+        """
+        return await self._store.stamp()
+
+    async def poll(
+        self,
+        kind: StateKind,
+        cursor: Cursor,
+        *,
+        limit: int,
+        floor: Cursor = START,
+    ) -> FeedRound:
+        """One round. Raises StoreDataUnavailable; never returns a partially trusted view.
+
+        `cursor` is where this reader IS; `floor` is the oldest generation it may accept. They
+        are separate because GW05b's stamp raises the second without the first: a process that
+        has applied nothing may still know -- from a signed stamp -- that the store should be at
+        position 10,000, and it must refuse anything older while still READING those 10,000
+        records. Collapsing the two would make a fresh process short-circuit on its first round
+        and hold no state at all, which for plans means every tenant resolves as "unknown
+        tenant" (403, complete onboarding) instead of being served -- the exact answer C36
+        forbids.
+        """
         if limit <= 0:
             raise ValueError("delta limit must be positive")
-        manifest = await self._read_head(kind, cursor)
+        manifest = await self._read_head(kind, cursor, floor)
         if manifest.feed_seq == cursor.feed_seq:
             return FeedRound(kind, manifest, (), cursor, truncated=False)
         page = await self._read_page(kind, manifest, cursor, limit)
@@ -152,6 +187,7 @@ class FeedReader:
         self,
         kind: StateKind,
         cursor: Cursor,
+        floor: Cursor = START,
     ) -> tuple[Manifest, tuple[SignedRecord, ...]]:
         """Cold start a kind from its published ENGAGED set. O(engaged), not O(records).
 
@@ -164,7 +200,7 @@ class FeedReader:
         caller holds after adopting these records. Returning the records rather than a count keeps
         the fail-closed decision with the component that serves requests.
         """
-        manifest = await self._read_head(kind, cursor)
+        manifest = await self._read_head(kind, cursor, floor)
         scopes = await self._store.engaged(kind)
         if not scopes:
             return manifest, ()
@@ -185,14 +221,21 @@ class FeedReader:
             out.append(record)
         return manifest, tuple(out)
 
-    async def _read_head(self, kind: StateKind, cursor: Cursor) -> Manifest:
+    async def _read_head(
+        self,
+        kind: StateKind,
+        cursor: Cursor,
+        floor: Cursor = START,
+    ) -> Manifest:
         head = await self._store.head(kind)
         manifest = decode_manifest(
             self._secret,
             kind,
             head.manifest_raw,
-            not_before=cursor.version,
-            feed_floor=cursor.feed_seq,
+            # The higher of what this process applied and what a stamp verified. Both bounds
+            # matter: a partial restore can leave an older POSITION under an equal version.
+            not_before=max(cursor.version, floor.version),
+            feed_floor=max(cursor.feed_seq, floor.feed_seq),
         )
         if head.index_top < manifest.feed_seq:
             raise StoreDataUnavailable(

@@ -43,6 +43,7 @@ class FakeStore:
         self._index: dict[StateKind, dict[str, int]] = {}
         self._records: dict[StateKind, dict[str, bytes]] = {}
         self._engaged: dict[StateKind, set[str]] = {}
+        self.stamp_raw: bytes | None = None
         self.commands: list[str] = []
         self.trips: int = 0
         self.records_read: int = 0
@@ -129,6 +130,14 @@ class FakeStore:
         self.commands.append("smembers")
         self.trips += 1
         return tuple(sorted(self._engaged.get(kind, set())))
+
+    async def stamp(self) -> bytes | None:
+        self.commands.append("get")
+        self.trips += 1
+        return self.stamp_raw
+
+    def put_stamp_raw(self, raw: bytes | None) -> None:
+        self.stamp_raw = raw
 
 
 def _record(

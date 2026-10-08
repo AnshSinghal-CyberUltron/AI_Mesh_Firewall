@@ -25,6 +25,7 @@ from dataclasses import dataclass
 
 from gateway_v2.domain.state import START, Cursor, StateKind, StoreDataUnavailable
 from gateway_v2.runtime.state_feed import FeedReader, FeedRound
+from gateway_v2.runtime.state_stamp import StampView
 
 Applier = Callable[[FeedRound], object]
 """Applies one round's records. Synchronous, so it may be handed to a worker thread.
@@ -90,6 +91,7 @@ class StateSynchroniser:
         *,
         budget: DeltaBudget = DEFAULT_BUDGET,
         offload: Offload = _in_thread,
+        stamp: StampView | None = None,
     ) -> None:
         if budget.records <= 0:
             raise ValueError("delta budget must be positive")
@@ -97,21 +99,35 @@ class StateSynchroniser:
         self._appliers = dict(appliers)
         self._budget = budget
         self._offload = offload
+        self._stamp = stamp
         self._cursors: dict[StateKind, Cursor] = {kind: START for kind in appliers}
+        self._floors: dict[StateKind, Cursor] = {kind: START for kind in appliers}
 
     def cursor(self, kind: StateKind) -> Cursor:
+        """Where this process IS: the generation it has actually applied."""
         return self._cursors.get(kind, START)
 
-    def raise_floor(self, kind: StateKind, floor: Cursor) -> None:
-        """Raise a cursor without applying anything. GW05b's freshness stamp calls this.
+    def floor(self, kind: StateKind) -> Cursor:
+        """The oldest generation this process may ACCEPT. Raised by GW05b's stamp."""
+        return self._floors.get(kind, START)
 
-        A process must not start from zero on a lagging replica: the floor is the higher of what
-        it has applied and what a stamp verified. Floors only rise.
+    def raise_floor(self, kind: StateKind, floor: Cursor) -> None:
+        """Raise the acceptance floor without claiming anything was applied.
+
+        The distinction is the whole point and it is easy to collapse by accident. A process
+        must not start from zero on a lagging replica, so a signed stamp raises what it will
+        ACCEPT. It must not also move the read cursor: a fresh process that jumped its cursor to
+        the stamp's position would short-circuit its first round, apply nothing, and then serve
+        `PlanUnknownTenant` -- a 403 telling healthy tenants to complete onboarding -- for every
+        org until the next write happened to touch it.
+
+        Floors only rise, and a stamp whose version and position disagree about direction is
+        refused outright rather than adopted by halves.
         """
-        current = self.cursor(kind)
+        current = self.floor(kind)
         if floor.feed_seq < current.feed_seq or floor.version < current.version:
             return
-        self._cursors[kind] = floor
+        self._floors[kind] = floor
 
     async def round_once(self, kind: StateKind) -> RoundReport:
         """One bounded round. Reports a failure instead of raising, so siblings keep running."""
@@ -120,7 +136,9 @@ class StateSynchroniser:
             raise KeyError(f"no applier registered for {kind.value}")
         cursor = self.cursor(kind)
         try:
-            round_ = await self._reader.poll(kind, cursor, limit=self._budget.records)
+            round_ = await self._reader.poll(
+                kind, cursor, limit=self._budget.records, floor=self.floor(kind),
+            )
         except StoreDataUnavailable as exc:
             return RoundReport(kind, cursor, 0, truncated=False, offloaded=False, error=str(exc))
         offloaded = len(round_.records) > self._budget.offload_above
@@ -150,8 +168,34 @@ class StateSynchroniser:
             rounds += 1
         return report
 
+    async def observe_stamp(self) -> bool:
+        """Read the freshness stamp and raise every kind's floor from it. GW05b's call site.
+
+        **This runs before any kind is polled, and the order is the fix rather than an
+        optimisation.** `poll` hands the cursor's version and position to `decode_manifest` as
+        the anti-regress floor, so a floor raised AFTER a round arrives exactly one round too
+        late -- and the round it missed is the first one a fresh process runs, which is precisely
+        the SP1 window. A `raise_floor` after the fact would look right in review and fix
+        nothing.
+
+        Returns whether a stamp was adopted. A missing or forged one changes no floor, so the
+        process keeps whatever it had and ages into "not fresh" on its own.
+        """
+        if self._stamp is None:
+            return False
+        adopted = self._stamp.observe(await self._reader.read_stamp())
+        for kind in self._appliers:
+            self.raise_floor(kind, self._stamp.floor(kind))
+        return adopted
+
     async def drain_all(self, *, max_rounds: int = MAX_DRAIN_ROUNDS) -> tuple[RoundReport, ...]:
-        """Every registered kind, isolated: one kind's failure never stops another."""
+        """One cycle: observe the stamp, then drain every kind, isolated.
+
+        This is the product entry point, and the only place the stamp is read. `round_once` and
+        `drain` are the per-kind primitives underneath it and assume the floor is already
+        current, so product code schedules THIS.
+        """
+        await self.observe_stamp()
         return tuple(
             [await self.drain(kind, max_rounds=max_rounds) for kind in self._appliers],
         )
@@ -164,7 +208,9 @@ class StateSynchroniser:
         """Cold start a kind from its engaged set, O(engaged), and jump the cursor to it."""
         cursor = self.cursor(kind)
         try:
-            manifest, records = await self._reader.bootstrap_engaged(kind, cursor)
+            manifest, records = await self._reader.bootstrap_engaged(
+                kind, cursor, self.floor(kind),
+            )
             round_ = FeedRound(
                 kind=kind,
                 manifest=manifest,

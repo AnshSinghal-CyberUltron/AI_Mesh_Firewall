@@ -372,14 +372,16 @@ def test_an_unregistered_kind_is_a_programming_error() -> None:
 
 
 def test_a_floor_can_only_rise() -> None:
+    """GW05b separated the acceptance FLOOR from the read CURSOR; this asserts the floor."""
     store = FakeStore()
     sync, _plans, _switches, _cache = _wire(store)
 
     sync.raise_floor(StateKind.PLAN, Cursor(Version(1, 9), 9))
-    assert sync.cursor(StateKind.PLAN) == Cursor(Version(1, 9), 9)
+    assert sync.floor(StateKind.PLAN) == Cursor(Version(1, 9), 9)
 
     sync.raise_floor(StateKind.PLAN, Cursor(Version(1, 4), 4))
-    assert sync.cursor(StateKind.PLAN) == Cursor(Version(1, 9), 9), "floors never fall"
+    assert sync.floor(StateKind.PLAN) == Cursor(Version(1, 9), 9), "floors never fall"
+    assert sync.cursor(StateKind.PLAN) == START, "and a floor applies nothing"
 
 
 def test_a_floor_makes_a_lagging_replica_unavailable() -> None:
