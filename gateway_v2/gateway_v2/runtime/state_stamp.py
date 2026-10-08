@@ -48,9 +48,10 @@ processes on different hosts.
 
 from __future__ import annotations
 
+import logging
 import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 
 from gateway_v2.domain.locks import FRESH_MS
 from gateway_v2.domain.state import (
@@ -61,11 +62,24 @@ from gateway_v2.domain.state import (
 )
 from gateway_v2.runtime.state_sig import decode_stamp
 
+LOG = logging.getLogger("amf.state.freshness")
+
 NO_STAMP_SEEN = (
     "no freshness stamp seen yet: the store has not been compared with Postgres "
     "(is a re-hydrator running?)"
 )
 FRESHNESS_NOT_ENFORCED = "state freshness is not enforced"
+
+RECHECK_S = 0.1
+"""How often to look for a usable stamp while the store answers but freshness is not yet met.
+
+Only ever shortens the wait of a process that is NOT serving: once fresh, the cadence returns to
+the normal refresh period and the steady state is untouched. This is what bounds a new process's
+extra start-up at one re-hydrator round plus 100 ms, and it is deliberately preferred over a
+pub/sub nudge for the stamp -- a nudge would buy at most one refresh period against a 5 s budget
+while adding a constant publish rate proportional to re-hydrators times workers (R2-23's cost
+class), and it would do nothing for the case that actually matters, which is start-up.
+"""
 
 
 class StampView:
@@ -102,6 +116,8 @@ class StampView:
         self._floor: dict[StateKind, Cursor] = {}
         self._missing = 0
         self._invalid = 0
+        self._logged: bool | None = None  # the freshness last logged; None = nothing yet
+        self._lapses = 0
 
     # --- the refresh path ----------------------------------------------------------------------
 
@@ -207,6 +223,55 @@ class StampView:
             f"{self._fresh_s:g} s bound: re-hydrators absent or the store unreachable"
         )
 
+    # --- the refresh path, once per cycle -------------------------------------------------------
+
+    def note_freshness(self, now: float | None = None) -> bool | None:
+        """Log a freshness TRANSITION, if there was one. Returns the new value, or None.
+
+        Called once per cycle from the refresh path, never from `fresh()`. `fresh()` is on the
+        request path, so logging there would produce a line per request -- which is C31's
+        "instrumentation on the serving loop" defect, and it would also bury the one event an
+        operator needs to see under the noise of it still being true.
+
+        A NEW process waiting for its first stamp is not a lapse. Counting it as one would make
+        every deploy and every autoscale event look like an incident.
+        """
+        fresh = self.fresh(now)
+        with self._lock:
+            previous = self._logged
+            if fresh == previous:
+                return None
+            lapsed = previous is True and not fresh
+            if lapsed:
+                self._lapses += 1
+            self._logged = fresh
+            age = None if self._verified_at is None else (
+                (self._clock() if now is None else now) - self._verified_at
+            )
+            by = self._by
+        if fresh:
+            LOG.info(
+                "state_verified age_s=%s by=%s",
+                "unknown" if age is None else f"{age:.3f}",
+                by or "unknown",
+            )
+        else:
+            LOG.warning("state_unverified detail=%s", self.unverified())
+        return fresh
+
+    def recheck_s(self, period_s: float, *, store_answered: bool) -> float:
+        """How long until the next cycle. Shorter only while this process cannot serve.
+
+        A process that has read the store successfully but has no usable stamp yet is not
+        serving anything, so polling it harder costs nothing anyone is waiting on and saves up
+        to a full period of start-up. A process that could not reach the store at all waits the
+        normal period: hammering an unreachable store is how a partition becomes a thundering
+        herd.
+        """
+        if not store_answered or self.fresh():
+            return period_s
+        return min(period_s, RECHECK_S)
+
     # --- operator-visible counters --------------------------------------------------------------
 
     @property
@@ -234,6 +299,17 @@ class StampView:
     def invalid(self) -> int:
         with self._lock:
             return self._invalid
+
+    @property
+    def lapses(self) -> int:
+        """Fresh -> not-fresh transitions. A new process's first wait is NOT one."""
+        with self._lock:
+            return self._lapses
+
+    def floors(self) -> Mapping[StateKind, Cursor]:
+        """Every kind's floor. For the per-kind gauge; at most one entry per enum member."""
+        with self._lock:
+            return dict(self._floor)
 
     @property
     def enforced(self) -> bool:

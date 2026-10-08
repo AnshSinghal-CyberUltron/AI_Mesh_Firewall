@@ -31,10 +31,10 @@ can become the thing it is measuring.
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from typing import Protocol
 
-from gateway_v2.domain.state import StateKind
+from gateway_v2.domain.state import Cursor, StateKind
 from gateway_v2.runtime.state_nudge import ListenerCounters
 from gateway_v2.runtime.state_task import RoundReport
 
@@ -86,6 +86,48 @@ class EngagedView(Protocol):
         ...
 
 
+class FreshnessView(Protocol):
+    """What a reading needs from GW05b's `StampView`.
+
+    Structural like its siblings, for a different reason: `StampView` is in this same layer, so
+    the import would be legal -- but declaring the surface keeps the recorder testable with a
+    plain stub and keeps the metrics layer from reaching for anything the contract does not
+    promise, such as the stamp's raw bytes.
+    """
+
+    def fresh(self, now: float | None = None) -> bool:
+        ...
+
+    def age_seconds(self, now: float | None = None) -> float | None:
+        ...
+
+    def deep_age_seconds(self, now: float | None = None) -> float | None:
+        ...
+
+    def floors(self) -> Mapping[StateKind, Cursor]:
+        ...
+
+    @property
+    def verified_at(self) -> float | None:
+        ...
+
+    @property
+    def degraded(self) -> bool:
+        ...
+
+    @property
+    def missing(self) -> int:
+        ...
+
+    @property
+    def invalid(self) -> int:
+        ...
+
+    @property
+    def lapses(self) -> int:
+        ...
+
+
 @dataclass(frozen=True, slots=True)
 class KindMetrics:
     """One state kind. Every field is a scalar, so a kind cannot grow a dimension."""
@@ -134,6 +176,29 @@ class NudgeMetrics:
 
 
 @dataclass(frozen=True, slots=True)
+class FreshnessMetrics:
+    """GW05b. The single most important operational reading in the state subsystem.
+
+    `fresh` is what an alarm pages on. `age_seconds` is what it trends towards the bound -- and
+    it must be alarmed on going NEGATIVE as well, because that means the gateway's clock and the
+    re-hydrator's have drifted apart, which is the one dependency this design cannot remove.
+    """
+
+    fresh: int = 0
+    age_seconds: float = -1.0
+    """Seconds since the state was verified. -1 means no stamp has ever been seen."""
+
+    verified_at_seconds: float = 0.0
+    deep_age_seconds: float = -1.0
+    degraded: int = 0
+    missing: int = 0
+    invalid: int = 0
+    lapses: int = 0
+    floors: Mapping[StateKind, int] = field(default_factory=dict)
+    """Per kind, the stamp-derived floor position. Proves I2 holds in a live run."""
+
+
+@dataclass(frozen=True, slots=True)
 class StateMetrics:
     """A full reading. `by_kind` is keyed by a closed enum, so it holds at most four entries."""
 
@@ -141,6 +206,7 @@ class StateMetrics:
     identity: IdentityMetrics
     killswitch: KillSwitchMetrics
     nudge: NudgeMetrics
+    freshness: FreshnessMetrics = field(default_factory=FreshnessMetrics)
 
     def series(self) -> dict[str, float]:
         """The flat, label-resolved series a registry would publish.
@@ -161,6 +227,7 @@ class StateMetrics:
             out[f"{PREFIX}_cursor{tag}"] = metrics.cursor
             out[f"{PREFIX}_attested{tag}"] = metrics.attested
             out[f"{PREFIX}_lag{tag}"] = metrics.lag
+            out[f"{PREFIX}_floor{tag}"] = self.freshness.floors.get(kind, 0)
         out[f"{PREFIX}_identity_held"] = self.identity.held
         out[f"{PREFIX}_identity_negative"] = self.identity.negative
         out[f"{PREFIX}_identity_inflight"] = self.identity.inflight
@@ -178,11 +245,26 @@ class StateMetrics:
         out[f"{PREFIX}_nudge_failures_total"] = self.nudge.nudge_failures
         out[f"{PREFIX}_nudge_messages_total"] = self.nudge.messages
         out[f"{PREFIX}_nudge_pings_total"] = self.nudge.pings
+        out[f"{PREFIX}_stamp_fresh"] = self.freshness.fresh
+        out[f"{PREFIX}_stamp_age_seconds"] = self.freshness.age_seconds
+        out[f"{PREFIX}_stamp_verified_at_seconds"] = self.freshness.verified_at_seconds
+        out[f"{PREFIX}_stamp_deep_age_seconds"] = self.freshness.deep_age_seconds
+        out[f"{PREFIX}_stamp_degraded"] = self.freshness.degraded
+        out[f"{PREFIX}_stamp_missing_total"] = self.freshness.missing
+        out[f"{PREFIX}_stamp_invalid_total"] = self.freshness.invalid
+        out[f"{PREFIX}_unverified_transitions_total"] = self.freshness.lapses
         return out
 
 
-SERIES_COUNT = 8 * len(StateKind) + 6 + 3 + 6
-"""How many series this surface can ever produce. A constant, by construction."""
+SERIES_COUNT = 9 * len(StateKind) + 6 + 3 + 6 + 8
+"""How many series this surface can ever produce. A constant, by construction.
+
+`9 *` is the eight per-kind round metrics plus GW05b's per-kind floor; the trailing `+ 8` is
+freshness. R2-10 is the reason this is a fixed expression rather than a count of whatever
+happens to be emitted: a full metric directory made 40% of new tenants' first requests fail
+with HTTP 500, so a series whose existence depends on tenant count must not be addable by
+accident.
+"""
 
 
 class StateMetricsRecorder:
@@ -193,6 +275,7 @@ class StateMetricsRecorder:
         self._identity = IdentityMetrics()
         self._killswitch = KillSwitchMetrics()
         self._nudge = NudgeMetrics()
+        self._freshness = FreshnessMetrics()
 
     def observe_round(self, report: RoundReport, *, attested: int | None = None) -> None:
         """One round. Takes the report the synchroniser already produced, so nothing is re-read."""
@@ -239,10 +322,38 @@ class StateMetricsRecorder:
             pings=counters.pings,
         )
 
+    def observe_freshness(self, view: FreshnessView) -> None:
+        """One reading of GW05b's freshness view. Ages are -1 when nothing has been seen.
+
+        A sentinel rather than an omitted series, because a series that appears and disappears
+        cannot be alarmed on and cannot be rate-computed (R2-11: "no baseline => omit" applies
+        to counters, not to a gauge whose absence is itself the signal).
+        """
+        self._freshness = FreshnessMetrics(
+            fresh=1 if view.fresh() else 0,
+            age_seconds=_or_absent(view.age_seconds()),
+            verified_at_seconds=view.verified_at or 0.0,
+            deep_age_seconds=_or_absent(view.deep_age_seconds()),
+            degraded=1 if view.degraded else 0,
+            missing=view.missing,
+            invalid=view.invalid,
+            lapses=view.lapses,
+            floors={kind: cursor.feed_seq for kind, cursor in view.floors().items()},
+        )
+
     def snapshot(self) -> StateMetrics:
         return StateMetrics(
             by_kind=dict(self._kinds),
             identity=self._identity,
             killswitch=self._killswitch,
             nudge=self._nudge,
+            freshness=self._freshness,
         )
+
+
+ABSENT = -1.0
+"""Gauge value for "this has never happened", so the series exists from the first scrape."""
+
+
+def _or_absent(value: float | None) -> float:
+    return ABSENT if value is None else value

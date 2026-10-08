@@ -28,6 +28,14 @@ from gateway_v2.domain.plan import (
     Surface,
     is_newer,
 )
+from gateway_v2.domain.posture import (
+    BUDGET_UNAVAILABLE,
+    KILL_SWITCH_UNAVAILABLE,
+    MIN_RETRY_AFTER_S,
+    PLAN_UNAVAILABLE,
+    SHARED_STATE_UNAVAILABLE,
+    gap_retry_after_s,
+)
 from gateway_v2.domain.state import (
     START,
     ZERO,
@@ -40,11 +48,18 @@ from gateway_v2.domain.state import (
     StoreDataUnavailable,
     Version,
 )
+from gateway_v2.domain.state_knobs import DEFAULT_KNOBS, StateKnobs
 
 __all__ = (
     "START",
     "TEXT_CHANNELS",
     "ZERO",
+    "BUDGET_UNAVAILABLE",
+    "DEFAULT_KNOBS",
+    "KILL_SWITCH_UNAVAILABLE",
+    "MIN_RETRY_AFTER_S",
+    "PLAN_UNAVAILABLE",
+    "SHARED_STATE_UNAVAILABLE",
     "Action",
     "Category",
     "Cursor",
@@ -74,6 +89,7 @@ __all__ = (
     "StageStep",
     "Stamp",
     "StateKind",
+    "StateKnobs",
     "StateOp",
     "StoreDataUnavailable",
     "StreamingMode",
@@ -82,6 +98,7 @@ __all__ = (
     "Transformation",
     "Version",
     "apply_stage",
+    "gap_retry_after_s",
     "is_newer",
     "most_restrictive",
     "parse_category",

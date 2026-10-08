@@ -94,7 +94,8 @@ def test_the_series_count_is_a_constant() -> None:
     _s, recorder, _a = _wire(1_000)
 
     assert len(recorder.snapshot().series()) == SERIES_COUNT
-    assert SERIES_COUNT == 8 * len(StateKind) + 15
+    # 9 per kind (8 round metrics + GW05b's floor), 15 scalars, 8 freshness.
+    assert SERIES_COUNT == 9 * len(StateKind) + 15 + 8
 
 
 def test_no_series_name_carries_a_tenant_identifier() -> None:

@@ -14,9 +14,12 @@ from gateway_v2.runtime.state_feed import (
     StateStore,
 )
 from gateway_v2.runtime.state_metrics import (
+    ABSENT,
     PREFIX,
     SERIES_COUNT,
     EngagedView,
+    FreshnessMetrics,
+    FreshnessView,
     IdentityMetrics,
     IdentityStats,
     KillSwitchMetrics,
@@ -53,6 +56,7 @@ from gateway_v2.runtime.state_sig import (
 from gateway_v2.runtime.state_stamp import (
     FRESHNESS_NOT_ENFORCED,
     NO_STAMP_SEEN,
+    RECHECK_S,
     StampView,
     state_ready,
 )
@@ -71,8 +75,15 @@ from gateway_v2.runtime.store_keys import (
     KEYS,
     StoreKeys,
 )
+from gateway_v2.runtime.store_valkey import (
+    UnboundedStoreClient,
+    ValkeyStateStore,
+    bounded_timeout_s,
+    require_bounded_client,
+)
 
 __all__ = (
+    "ABSENT",
     "DEFAULT_BUDGET",
     "DEFAULT_KNOBS",
     "DEFAULT_NAMESPACE",
@@ -84,6 +95,7 @@ __all__ = (
     "MAX_DRAIN_ROUNDS",
     "NO_STAMP_SEEN",
     "PREFIX",
+    "RECHECK_S",
     "RECORD_DOMAIN",
     "SERIES_COUNT",
     "STAMP_DOMAIN",
@@ -97,6 +109,8 @@ __all__ = (
     "EngagedView",
     "FeedReader",
     "FeedRound",
+    "FreshnessMetrics",
+    "FreshnessView",
     "GatewayRuntime",
     "HardwareSignals",
     "Head",
@@ -118,6 +132,9 @@ __all__ = (
     "StateStore",
     "StateSynchroniser",
     "StoreKeys",
+    "UnboundedStoreClient",
+    "ValkeyStateStore",
+    "bounded_timeout_s",
     "canonical_body",
     "decode_manifest",
     "decode_record",
@@ -135,6 +152,7 @@ __all__ = (
     "make_stamp",
     "parse_nudge",
     "record_matches_index",
+    "require_bounded_client",
     "stamp_millis",
     "stamp_signature",
     "state_ready",

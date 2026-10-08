@@ -20,7 +20,7 @@ partially applied generation is never mistaken for a complete one.
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Awaitable, Callable, Mapping
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
 
 from gateway_v2.domain.state import START, Cursor, StateKind, StoreDataUnavailable
@@ -186,7 +186,27 @@ class StateSynchroniser:
         adopted = self._stamp.observe(await self._reader.read_stamp())
         for kind in self._appliers:
             self.raise_floor(kind, self._stamp.floor(kind))
+        # Once per cycle, on the refresh path. `fresh()` is read per REQUEST, so a transition
+        # log belongs here and nowhere near it.
+        self._stamp.note_freshness()
         return adopted
+
+    def next_delay_s(
+        self,
+        reports: Sequence[RoundReport],
+        *,
+        period_s: float,
+    ) -> float:
+        """How long the caller should wait before the next cycle.
+
+        Shorter than the period only while this process has a working store connection and no
+        usable stamp -- in other words while it is not serving anything, so the extra polling
+        costs nothing anyone is waiting on. GW06's loop calls this; there is no loop here on
+        purpose, because the serving process owns its own scheduling.
+        """
+        if self._stamp is None:
+            return period_s
+        return self._stamp.recheck_s(period_s, store_answered=any(r.ok for r in reports))
 
     async def drain_all(self, *, max_rounds: int = MAX_DRAIN_ROUNDS) -> tuple[RoundReport, ...]:
         """One cycle: observe the stamp, then drain every kind, isolated.
