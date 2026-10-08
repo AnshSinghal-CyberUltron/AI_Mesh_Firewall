@@ -36,6 +36,7 @@ import redis
 import redis.asyncio
 
 from gateway_v2.admit.killswitch import KillSwitchSnapshot, killswitch_adopter
+from gateway_v2.domain.locks import PG_GRACE_MS
 from gateway_v2.domain.plan import (
     ExecutionPlan,
     PlanUnavailable,
@@ -49,13 +50,14 @@ from gateway_v2.plan.snapshot import ReplicaSnapshot
 from gateway_v2.plan.store import PlanStore
 from gateway_v2.runtime.state_feed import FeedReader
 from gateway_v2.runtime.state_stamp import StampView
-from gateway_v2.runtime.state_task import DeltaBudget, StateSynchroniser
+from gateway_v2.runtime.state_task import DEFAULT_BUDGET, DeltaBudget, StateSynchroniser
 from gateway_v2.runtime.store_keys import StoreKeys
 from gateway_v2.runtime.store_valkey import (
     UnboundedStoreClient,
     ValkeyStateStore,
     require_bounded_client,
 )
+from state_control.db import ControlDB
 from state_control.pg import PostgresControlDB
 from state_control.rehydrate import MISSING, Rehydrator
 from state_control.valkey import ValkeyPublisher
@@ -92,6 +94,7 @@ class Drill:
     """A control plane and a worker on real infrastructure, in their own namespace."""
 
     def __init__(self, dsn: str, namespace: str) -> None:
+        self._dsn = dsn
         self.keys = StoreKeys(namespace=namespace)
         self.sync_client = redis.Redis.from_url(VALKEY_URL, socket_timeout=OP_TIMEOUT_S)
         self.db = PostgresControlDB(dsn)
@@ -123,10 +126,31 @@ class Drill:
             FeedReader(reader, SECRET),
             {StateKind.PLAN: plan_applier(self.plans, self.snapshot, clock=lambda: 1.0)},
             stamp=stamp,
-            **({} if budget is None else {"budget": budget}),
+            budget=DEFAULT_BUDGET if budget is None else budget,
         )
 
-    def stamping_rehydrator(self, clock: Callable[[], float]) -> Rehydrator:
+    def tightly_bounded_db(self) -> PostgresControlDB:
+        """The same database behind shorter session bounds, for outage drills.
+
+        A PAUSED container accepts the connection and never answers, so each operation costs its
+        full timeout: at the shipped 5 s that is 20 s per four-kind round, and a drill that
+        needs several rounds does not fit in any sensible budget. Measured here: 5.0 s per call
+        at the defaults, 2.0 s at these. The bounds are what a 1 s re-hydrator period would be
+        tuned to anyway -- the shipped defaults suit the writer, not this loop.
+        """
+        return PostgresControlDB(
+            self._dsn,
+            connect_timeout_s=1,
+            statement_timeout_ms=1_000,
+            tcp_user_timeout_ms=1_000,
+        )
+
+    def stamping_rehydrator(
+        self,
+        clock: Callable[[], float],
+        *,
+        db: ControlDB | None = None,
+    ) -> Rehydrator:
         """A re-hydrator over ALL FOUR kinds, so it is allowed to write a freshness stamp.
 
         `self.rehydrator` deliberately watches two kinds, which is enough for the GW05c drills
@@ -141,7 +165,7 @@ class Drill:
         docstring warns about, reproduced in miniature.
         """
         return Rehydrator(
-            self.db, self.publisher, self.writer, SECRET,
+            db or self.db, self.publisher, self.writer, SECRET,
             stale_grace_s=0.0, clock=clock, name="drill-rehydrator:1",
         )
 
@@ -568,3 +592,68 @@ def _drive[T](drill: Drill, body: object) -> T:
             await drill.aclose()
 
     return asyncio.run(wrapped())
+
+
+@pytest.mark.skipif(not PG_CONTAINER, reason="AMF_DRILL_PG_CONTAINER is not set")
+def test_drill_a_paused_postgres_does_not_fail_the_fleet_closed(drill: Drill) -> None:
+    """GW05b phase 5 against a real paused database: the local analogue of L05b-4.
+
+    Phase 4 made every kind refuse unverified state, which on its own turns a routine 11-16 s
+    Cloud SQL failover into a fleet-wide 503 -- the reference patch measured about 7.4 s of
+    global 503 on a 10 s freeze. This drill is the one that would catch that regression: a
+    PAUSED Postgres container accepts connections and never answers, which is the failover
+    shape, and the gateway must stay fresh throughout.
+
+    The clock is injected so the drill does not have to sit through 16 s of real time, but the
+    database outage, the store and the re-hydrator are all real.
+    """
+    wall = [1_000.0]
+    view = StampView(SECRET, fresh_ms=5_000, started_at=999.0, clock=lambda: wall[0])
+    snapshot = ReplicaSnapshot(drill.plans, clock=lambda: 1.0, stamp=view)
+    rehydrator = drill.stamping_rehydrator(
+        lambda: wall[0], db=drill.tightly_bounded_db(),
+    )
+
+    for position in range(1, 6):
+        drill.writer.plan_set(f"org-{position}", _plan_body(f"org-{position}"))
+    assert rehydrator.round_once().stamped is not None
+
+    async def body() -> None:
+        worker = drill.worker(stamp=view)
+        assert (await worker.drain_all())[0].ok
+        assert isinstance(snapshot.lookup("org-3"), ExecutionPlan)
+
+        _docker("pause", PG_CONTAINER)
+        try:
+            # Two rounds across 8 s: past the 5 s freshness bound, inside the 16 s grace.
+            for _ in range(2):
+                wall[0] += 4.0
+                summary = rehydrator.round_once()
+                assert summary.ok is False, "the round genuinely failed"
+                stamp = summary.stamped
+                assert stamp is not None and stamp.degraded is True
+                await worker.drain_all()
+                assert view.fresh() is True
+                assert isinstance(snapshot.lookup("org-3"), ExecutionPlan)
+
+            # Past the grace, the fleet is allowed -- required -- to fail closed.
+            wall[0] += PG_GRACE_MS / 1000
+            rehydrator.round_once()
+            await worker.drain_all()
+            assert view.fresh() is False
+            assert isinstance(snapshot.lookup("org-3"), PlanUnavailable)
+        finally:
+            _docker("unpause", PG_CONTAINER)
+
+        wall[0] += 1.0
+        for _ in range(40):
+            if rehydrator.round_once().stamped is not None:
+                break
+            await asyncio.sleep(0.1)
+        await worker.drain_all()
+
+        assert view.fresh() is True, "and recovers once the database answers again"
+        assert view.degraded is False
+        assert isinstance(snapshot.lookup("org-3"), ExecutionPlan)
+
+    _drive(drill, body)

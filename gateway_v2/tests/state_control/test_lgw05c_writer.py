@@ -32,7 +32,12 @@ from gateway_v2.plan.document import PlanDocument, encode_plan_body
 from gateway_v2.plan.snapshot import ReplicaSnapshot
 from gateway_v2.plan.store import PlanStore
 from gateway_v2.runtime.state_feed import FeedReader
-from gateway_v2.runtime.state_task import DeltaBudget, RoundReport, StateSynchroniser
+from gateway_v2.runtime.state_task import (
+    DEFAULT_BUDGET,
+    DeltaBudget,
+    RoundReport,
+    StateSynchroniser,
+)
 from state_control.db import ZERO_COUNTERS, CommitUnknown, MemoryControlDB, advance
 from state_control.publisher import BrokenPublisher, MemoryStore
 from state_control.writer import OK, OK_PUBLISH_PENDING, StateWriter
@@ -73,7 +78,7 @@ class Gateway:
                 StateKind.KS: killswitch_applier(self.switches),
                 StateKind.KEY: identity_applier(self.keys),
             },
-            **({} if budget is None else {"budget": budget}),
+            budget=DEFAULT_BUDGET if budget is None else budget,
         )
 
     def poll(self, kind: StateKind) -> RoundReport:
