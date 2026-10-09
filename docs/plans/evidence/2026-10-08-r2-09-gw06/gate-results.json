@@ -1,0 +1,132 @@
+{
+  "card": "R2-09 / R2-14 / R2-19 / GW06",
+  "title": "Org budget lease + local GCRA, retry-once, store-connection boundary",
+  "date": "2026-10-08",
+  "scope": "local",
+  "severity": {
+    "R2-09": "HIGH",
+    "R2-14": "MEDIUM",
+    "R2-19": "HIGH (confirm + regression-test)"
+  },
+  "plan": "docs/plans/2026-10-08-r2-09-r2-14-r2-19-gw06-budget-lease.md",
+  "gates": {
+    "pytest_full_offline_suite": {
+      "command": ".venv/bin/python -m pytest tests/ -q -p no:randomly",
+      "passed": 1131,
+      "skipped": 93,
+      "xfailed": 1,
+      "failed": 0,
+      "PASS": true,
+      "note": "full gateway_v2 offline suite; no regressions"
+    },
+    "pytest_lgw06_subset": {
+      "command": ".venv/bin/python -m pytest tests/ -k lgw06 -q -p no:randomly",
+      "passed": 74,
+      "deselected": 1151,
+      "failed": 0,
+      "PASS": true
+    },
+    "pytest_admit_package": {
+      "command": ".venv/bin/python -m pytest tests/admit/ -q -p no:randomly",
+      "passed": 223,
+      "failed": 0,
+      "PASS": true
+    },
+    "mypy_strict": {
+      "command": ".venv/bin/mypy --strict gateway_v2",
+      "source_files": 109,
+      "issues": 0,
+      "PASS": true
+    },
+    "ruff": {
+      "command": ".venv/bin/ruff check gateway_v2 tests",
+      "issues": 0,
+      "PASS": true
+    },
+    "import_linter": {
+      "command": ".venv/bin/lint-imports",
+      "files_analyzed": 109,
+      "dependencies_analyzed": 154,
+      "contracts_kept": 2,
+      "contracts_broken": 0,
+      "contracts": ["Gateway v2 layers", "Resolve imports only domain"],
+      "PASS": true
+    },
+    "ast_gate_suite": {
+      "command": ".venv/bin/python -m pytest tests/gates/ -q -p no:randomly",
+      "passed": 79,
+      "failed": 0,
+      "gates": ["capacity-literal", "sizes", "http", "frozen", "mutable", "import_linter"],
+      "PASS": true
+    }
+  },
+  "local_gates": {
+    "LGW06-3_multi_replica_no_multiplication": {
+      "replicas_share_one_fakeredis_pool": true,
+      "arrivals_per_scenario_min": 10000,
+      "aggregate_admission_bound": "<= limit + overshoot (overshoot = at most one in-flight chunk per worker)",
+      "overshoot_published_and_read_back": true,
+      "no_replica_multiplication": "aggregate strictly below limit * workers for workers > 1",
+      "chunk": "real contract-derived (derive_lease_chunk over from_signals ResourceContract + injected q_safe)",
+      "requirement": "11.1",
+      "property": 1,
+      "PASS": true
+    },
+    "LGW06-5_injected_200ms_latency": {
+      "injected_latency_ms": 200,
+      "modelled_as": "injected-clock advance (not a wall-clock sleep)",
+      "bounded_timeout_contract_bites": "modelled 200ms op > bounded per-op timeout (25ms, below the 0.5s refresh period)",
+      "declared_posture_holds": "admit while budget, budget_unavailable on exhaustion",
+      "pool_bounded": "request path creates 0 connections and advances the clock by 0 (no store op on the hot path)",
+      "requirement": "11.2",
+      "PASS": true
+    },
+    "R2-09_partition_behaviour": {
+      "spends_remaining_lease_then": "budget_unavailable",
+      "never_returns": "shared_state_unavailable",
+      "should_retry": false,
+      "retry_after_s_min": 1.0,
+      "request_path_store_calls": 0,
+      "requirement": "11.3",
+      "properties": [4, 5],
+      "PASS": true
+    },
+    "partition_regression_45s": {
+      "file": "tests/runtime/test_lgw06_partition_regression.py",
+      "D2_keepalive_etimedout_surfaced_not_silence": true,
+      "D2_no_unbounded_memory_spin": true,
+      "D1_dead_socket_reconnects_not_500": true,
+      "R2-09_budget_posture_and_no_request_path_refill": true,
+      "requirement": "9.1-9.4, 10.1-10.4",
+      "property": 7,
+      "PASS": true
+    }
+  },
+  "correctness_properties": {
+    "count": 10,
+    "idiom": "seeded random.Random loop >= 10000 iterations (no hypothesis dependency), async via asyncio.run",
+    "mapping": {
+      "1": "No replica multiplication (7.1, 7.2, 7.3)",
+      "2": "Unspent budget is always returned (3.3, 3.4, 3.5)",
+      "3": "Stale generation is never spent (6.1-6.4, 13.4)",
+      "4": "Budget outage is narrow (5.1-5.6)",
+      "5": "Refill is never on the request path (4.1-4.5)",
+      "6": "Idempotent read retries at most once (8.1-8.4, R2-14)",
+      "7": "Partition / store boundary D2+D1+R2-09 (9.x, 10.x, R2-19)",
+      "8": "GCRA bounds burst and rate (1.1, 1.3, 1.4)",
+      "9": "Lease chunk is contract-derived (2.1-2.5)",
+      "10": "Fail-closed under error (13.1-13.4)"
+    },
+    "all_pass": true
+  },
+  "harness_note": "in-process injected-clock simulation over fakeredis (not a wall-clock fleet); every measured number is deterministic and not sensitive to CI wall-clock jitter",
+  "known_benign_warning": "RuntimeWarning: coroutine 'BudgetLease._refill' was never awaited in the lease property tests (undrained single-flight refill coroutines) — NOT a failure; full offline suite is 1131 passed / 0 failed",
+  "atomic_primitive_note": "the atomic acquire/return uses an optimistic WATCH/MULTI transaction (bounded by _MAX_CAS_TRIES=16), not Lua EVAL, because fakeredis 2.39 lacks EVAL; real Valkey implements WATCH/MULTI identically and Property 1 proves the no-multiplication invariant regardless of the primitive",
+  "deferred_cloud_gates": {
+    "full_live_four_replica_fleet_quota_run": "deferred (needs fleet lane + serving gateway; rewrite-tree entrypoint is a stub) — represented locally by LGW06-3 [Req 11.4]",
+    "live_store_failover_LGW06-6": "deferred (needs a real Valkey/Memorystore primary failover) — represented locally by the fakeredis partition equivalents [Req 11.4]",
+    "real_cross_zone_rto_measurement": "deferred (the ~200ms min TCP RTO is modelled as a deterministic injected-clock latency, not measured against real cross-zone sockets) [Req 11.4]"
+  },
+  "r2_14_deployment_dependency": "gateway placement in the store primary's zone is a deployment dependency, not code; the code-side requirement is the retry-once-on-idempotent-read-timeout (_IDEMPOTENT_READ_RETRIES=1), implemented and tested by Property 6 (Req 8.4)",
+  "r2_19_confirm_only": "confirm + regression-test only; state_nudge.py already contained the D2 fix and NudgeListener was left intact; no D1 gap found in store_valkey.py so no guard was added; the 45s partition regression is the new artifact proving D2 + D1 + R2-09"
+}

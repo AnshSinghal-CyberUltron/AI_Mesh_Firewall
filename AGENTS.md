@@ -356,6 +356,62 @@
   Plan: docs/plans/2026-10-08-r2-07-r2-08-gw19-admission-control.md.
   Evidence: docs/plans/evidence/2026-10-08-r2-07-gw19/.
 
+## R2-09 / R2-14 / R2-19 / GW06 budget-lease changelog
+- R2-09 / R2-14 / R2-19 (2026-10-08) — ORG BUDGET LEASE + LOCAL GCRA + RETRY-ONCE + STORE BOUNDARY,
+  local half CLOSED. Severity HIGH (R2-09) / MEDIUM (R2-14) / HIGH (R2-19, confirm + regression-test).
+  Three defects on the budget/quota/store-connection path: (R2-09) lease refills ran ON the request
+  path → a store partition failed large prompts from +0.15 s instead of after the declared 5 s RAM
+  window (RC2: 211 × HTTP 503 shared_state_unavailable INSIDE the window, a budget-counter problem
+  reported as a global outage); (R2-14) ~1e-4 of cross-zone round trips hit the 200 ms min TCP RTO
+  over the 25 ms request-path timeout with no retry; (R2-19) a keepalive ETIMEDOUT read as "no
+  message" spun the push listener to OOM (D2) and a dead pooled socket answered 500 (D1). FIX: org
+  budget = a shared store-backed lease SPENT LOCALLY; Low_Watermark Async_Refill OFF the request
+  path; store outage spends Remaining_Lease then refuses ONLY quota with the narrow budget_unavailable
+  (never shared_state_unavailable); generation-tagged + revoke-on-change; TTL-reclaimed on crash;
+  NEVER multiplied by worker/replica. Built bottom-up on the import-linter layer contract (`admit`
+  imports only runtime+domain; BudgetVerdict is a value, `edge` renders — no HTTP object in admit).
+  Injected clock + injected store client (fakeredis) + injected refill spawn throughout.
+  (1) `runtime/store_keys.py` — budget_remaining/budget_generation/budget_lease(org,worker) under the
+  `{rv2}` hash tag (one slot, cluster-safe), distinct from the published StateKind.BUDGET config.
+  (2) `admit/gcra.py` — pure LocalGCRA (GcraParams rate_per_s/burst, injected clock TAT carrier, no
+  store round trip; advances TAT only on admit). Property 8.
+  (3) `admit/lease.py` — store-backed BudgetLease: atomic acquire via WATCH/MULTI (NOT Lua EVAL —
+  fakeredis 2.39 lacks EVAL; real Valkey identical; `_MAX_CAS_TRIES=16`); grant=min(pool,chunk) never
+  over-grants; `try_spend` SYNCHRONOUS + LOCAL (no store read) with single-flight off-path refill via
+  injected spawn; return_unspent + TTL reclaim on the store's clock; retry-once idempotent read
+  (`_IDEMPOTENT_READ_RETRIES=1`). Properties 1/2/3/5/6.
+  (4) `admit/grant.py` — frozen BudgetVerdict (code=posture.BUDGET_UNAVAILABLE, retry_after_s via
+  gap_retry_after_s ≥ MIN_RETRY_AFTER_S, should_retry=False, request_id; no HTTP object) + budget_verdict.
+  (5) `admit/quota.py` — derive_lease_chunk(contract,*,q_safe) [raw=ceil(q_safe·target_p99_ms/1000);
+  chunk=min(raw,queue_depth); watermark=min(floor(0.25·chunk),chunk−1)] + derive_low_watermark +
+  QuotaComponent façade (GCRA-first then budget, fail-closed, owns ONLY budget_unavailable, no store
+  I/O on the request path); derive_bounds (GW19) unchanged; NO capacity literal (reused AST gate).
+  Properties 4/9/10.
+  (6) `admit/metrics.py` — QuotaMetrics producer, label-free, seeded zero: amf_quota_lease_overshoot
+  / amf_quota_async_refill_total / amf_quota_budget_unavailable_total; GW14d publishes.
+  (7) R2-19 is CONFIRM + REGRESSION-TEST, not a rewrite: state_nudge.py ALREADY had the D2 fix
+  (keepalive-ETIMEDOUT-not-silence; signatures error/no_wait/silent; FAST_NONE_LIMIT=3; reconnect-
+  after-backoff) and NudgeListener was LEFT INTACT; no D1 gap found in store_valkey.py (redis-py pool
+  reconnects) so NO guard was added. tests/runtime/test_lgw06_partition_regression.py (45 s partition,
+  Property 7) proves D2 + D1 + R2-09.
+  OPEN (DEFERRED CLOUD/SCALE GATES, out of local scope — no cloud resources): the full live
+  four-replica fleet quota run / full LGW06-3 (represented locally by N in-process replicas over one
+  fakeredis), the live store failover LGW06-6, and real cross-zone RTO measurement (modelled as a
+  deterministic injected-clock latency). R2-14 gateway zone placement (gateway in the store primary's
+  zone) = a DEPLOYMENT DEPENDENCY, not code; the code-side requirement is the retry-once-on-idempotent-
+  read-timeout, which IS implemented + tested (Property 6). KNOWN BENIGN WARNING: "coroutine
+  'BudgetLease._refill' was never awaited" in the lease property tests (undrained single-flight refill
+  coroutines) — NOT a failure.
+  VERIFY: 1131 full offline suite (93 skipped, 1 xfailed, 0 failed) / 74 lgw06-subset / 223
+  admit-package / 79 AST gates passed; `mypy --strict` 109 files, ruff, import-linter 2/2 kept (109
+  files/154 deps). 10 correctness properties as seeded ≥ 10,000-iteration tests (house idiom, no
+  hypothesis). LGW06-3: aggregate ≤ limit+overshoot, overshoot published, aggregate ≪ limit×workers
+  (no multiplication). LGW06-5: 200 ms injected latency → bounded-timeout bites, posture holds,
+  request path creates 0 connections (no store op on the hot path). R2-09 partition: spends
+  Remaining_Lease then budget_unavailable (never shared_state_unavailable), request-path store calls 0.
+  Plan: docs/plans/2026-10-08-r2-09-r2-14-r2-19-gw06-budget-lease.md.
+  Evidence: docs/plans/evidence/2026-10-08-r2-09-gw06/.
+
 ## MCP Hardening BACKSTOP changelog
 - Parallel Claude + Cursor sessions harden the multi-tenant MCP gateway. **Every hardening change is
   logged to four memories in the SAME commit:** Ruflo (`mcp__ruflo__memory_store`
