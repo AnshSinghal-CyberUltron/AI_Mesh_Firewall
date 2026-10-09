@@ -14,9 +14,9 @@ same measured reasons:
   no per-tenant series can ever be created. "Which stream produced these" is a query the trace
   answers, not a metric.
 * **Counters use real zeros, never absence (R12.3).** ``detector_invocations``, the release-lag
-  histogram, ``buffer_high_water``, ``active_stream_memory_bound``, ``withheld_total`` and
-  ``fail_open_total`` all exist from the first snapshot as ``0`` so "no invocations / no
-  withholdings / no fail-opens" and "no series" cannot look the same to an alarm.
+  histogram, ``buffer_high_water``, ``active_stream_memory_bound``, the loop-lag histogram,
+  ``withheld_total`` and ``fail_open_total`` all exist from the first snapshot as ``0`` so "no
+  invocations / no withholdings / no fail-opens" and "no series" cannot look the same to an alarm.
 
 ``fail_open_total`` in particular is pinned at ``0`` and there is NO path that increments it: GW12
 fails closed everywhere (R15.1/R15.2) — an uncomputable export is recorded as a WITHHOLDING via
@@ -52,9 +52,10 @@ __all__ = (
 PREFIX = "amf_stream"
 """Prefix for the per-request streaming series (GW12 / R12). The fixed, LABEL-FREE series are
 ``amf_stream_detector_invocations``, ``amf_stream_release_lag_ms`` (histogram),
-``amf_stream_buffer_high_water``, ``amf_stream_active_memory_bound``, ``amf_stream_withheld_total``
-and ``amf_stream_fail_open_total`` — none tenant-derived (R12.3). It sits alongside the
-``amf_quota`` STREAM/QUOTA producer prefixes used by the other label-free producers."""
+``amf_stream_buffer_high_water``, ``amf_stream_active_memory_bound``, ``amf_stream_loop_lag_ms``
+(histogram), ``amf_stream_withheld_total`` and ``amf_stream_fail_open_total`` — none
+tenant-derived (R12.3). It sits alongside the ``amf_quota`` STREAM/QUOTA producer prefixes used by
+the other label-free producers."""
 
 _NS_PER_MS = 1_000_000
 """Nanoseconds per millisecond. Release-lag samples arrive in ns and are published in ms, mirroring
@@ -84,6 +85,15 @@ class PerRequestReading:
     ``active_stream_memory_bound`` is the exported ``Active_Streams × stream_buffer_bytes``
     aggregate bound in bytes (R5.6), observed as a value whenever the Active_Streams count changes.
 
+    ``loop_lag_ms`` is the serving-loop scheduling-lag distribution (R13.4 / C38): the delay
+    between when a cooperative yield point was reached and when the loop actually resumed it — the
+    quantity that grows when one stream's CPU-bound work (a holdback/error-frame scan) is NOT
+    offloaded and starves another stream's latency. It carries the same :class:`Histogram`
+    percentile-on-read discipline as ``release_lag_ms`` and is a label-free SLO INPUT: a publisher
+    (GW14d) turns its p99 into the serving-loop-lag SLO signal. Observed by the executor-offload
+    seam (``edge.executor``) around the point it hands CPU-bound scan work to the GIL-releasing
+    executor, so the measurement reflects exactly the loop time the offload gives back.
+
     ``withheld_total`` is the count of per-request exports that could not be computed and were
     recorded as a withholding (R12.4) — a real zero from the first snapshot. ``fail_open_total`` is
     pinned at ``0`` and no correct path increments it (R15.3); it is the series Property 7 reads.
@@ -93,6 +103,7 @@ class PerRequestReading:
     release_lag_ms: Histogram
     buffer_high_water: int
     active_stream_memory_bound: int
+    loop_lag_ms: Histogram
     withheld_total: int
     fail_open_total: int
 
@@ -122,6 +133,7 @@ class PerRequestExports:
         self._release_lag_ms = Histogram()
         self._buffer_high_water = 0
         self._active_stream_memory_bound = 0
+        self._loop_lag_ms = Histogram()
         self._withheld_total = 0
         self._fail_open_total = 0
 
@@ -161,6 +173,17 @@ class PerRequestExports:
         """
         self._active_stream_memory_bound = nbytes
 
+    def observe_loop_lag_ns(self, nanos: int) -> None:
+        """Record one serving-loop scheduling-lag sample in nanoseconds (R13.4 / C38). O(1).
+
+        The sample is the delay between a cooperative yield point being reached and the loop
+        resuming it — measured by the executor-offload seam around the hand-off of CPU-bound scan
+        work to the GIL-releasing executor. It is converted to whole milliseconds and appended to
+        the loop-lag histogram; percentiles are computed on read in :meth:`snapshot`, never here.
+        This is the SLO input (R13.4): a publisher turns the p99 into the serving-loop-lag signal.
+        """
+        self._loop_lag_ms.observe(_ns_to_ms(nanos))
+
     def record_withheld(self) -> None:
         """Record that a per-request export could not be computed — a withholding (R12.4). O(1).
 
@@ -184,6 +207,7 @@ class PerRequestExports:
             release_lag_ms=self._release_lag_ms,
             buffer_high_water=self._buffer_high_water,
             active_stream_memory_bound=self._active_stream_memory_bound,
+            loop_lag_ms=self._loop_lag_ms,
             withheld_total=self._withheld_total,
             fail_open_total=self._fail_open_total,
         )

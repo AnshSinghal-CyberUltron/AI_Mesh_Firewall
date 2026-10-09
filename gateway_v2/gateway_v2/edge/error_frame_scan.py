@@ -54,14 +54,25 @@ complete and the stream was terminated") — the honest cause for a frame withhe
 because its scan could not finish, and the same spelling so the two sides of the
 stream cannot disagree (the C37 join failure).
 
+**Off the serving loop (C38 / R13.1).** The whole-text scan is CPU-bound, and the
+error frame is handled at an ``await``-able boundary (``_as_chunks`` is an async
+generator), so :func:`scan_error_frame_offloaded` runs it on the GIL-releasing
+executor sized by ``ResourceContract`` (``edge.executor.ScanExecutor``) rather
+than inline on the forwarding loop. One stream's expensive error-frame scan then
+cannot starve another stream's latency (R13.3), and the executor records the
+serving-loop lag around the hand-off as the R13.4 SLO input. The synchronous
+:func:`scan_error_frame` stays the single source of the fail-closed decision; the
+offload wrapper only chooses WHERE it runs.
+
 **Layering.** ``edge`` may import ``egress`` (``OutputResolver`` / ``apply_decision``
-/ ``OutputBlocked``) and ``domain`` (``Decision`` / ``Finding`` / ``posture``)
-below it. The findings scanner is a plain injected callable (the same
-``Callable[[str], Sequence[Finding]]`` shape as ``egress.stream.Detector``), so
-this module adds no ``edge → detect`` import edge and ``egress`` still never
-imports ``detect``. No HTTP object is constructed here — a withheld frame returns
-a value-code the handler renders (the codes-vs-render boundary is untouched). No
-module-level mutable, no capacity literal.
+/ ``OutputBlocked``), ``runtime`` (the ``PerRequestExports`` producer, the
+``ScanExecutor``'s contract-derived sizing) and ``domain`` (``Decision`` /
+``Finding`` / ``posture``) below it. The findings scanner is a plain injected
+callable (the same ``Callable[[str], Sequence[Finding]]`` shape as
+``egress.stream.Detector``), so this module adds no ``edge → detect`` import edge
+and ``egress`` still never imports ``detect``. No HTTP object is constructed here —
+a withheld frame returns a value-code the handler renders (the codes-vs-render
+boundary is untouched). No module-level mutable, no capacity literal.
 """
 
 from __future__ import annotations
@@ -70,7 +81,9 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
 from gateway_v2.domain import Finding
+from gateway_v2.edge.executor import ScanExecutor
 from gateway_v2.egress.output_guard import OutputBlocked, OutputResolver, apply_decision
+from gateway_v2.runtime.stream_metrics import PerRequestExports
 
 __all__ = (
     "BLOCK_CODE",
@@ -78,6 +91,7 @@ __all__ = (
     "ErrorFrameOutcome",
     "ErrorFrameScanner",
     "scan_error_frame",
+    "scan_error_frame_offloaded",
 )
 
 #: The injected findings-producing scanner for an error frame. Same shape as the
@@ -185,3 +199,34 @@ def scan_error_frame(
         return ErrorFrameOutcome(forward_text=None, withheld_code=SCAN_ERROR_CODE)
 
     return ErrorFrameOutcome(forward_text=forward_text, withheld_code=None)
+
+
+async def scan_error_frame_offloaded(
+    frame: str,
+    *,
+    scanner: ErrorFrameScanner,
+    resolver: OutputResolver,
+    executor: ScanExecutor,
+    exports: PerRequestExports | None = None,
+) -> ErrorFrameOutcome:
+    """Scan an error frame OFF the serving loop via the GIL-releasing executor (C38 / R13.1).
+
+    The error-frame scan is CPU-bound (scan + single-pass decision apply) and runs at an
+    ``await``-able boundary — ``edge/routes.py::_as_chunks`` is an async generator — so unlike the
+    shipped ``StreamPipeline`` per-delta scan (which the pure synchronous release loop calls
+    inline) it CAN be handed to a worker thread without rebuilding any shipped loop. This wrapper
+    does exactly that: it offloads the whole :func:`scan_error_frame` call through
+    :meth:`ScanExecutor.run`, so a large or deliberately expensive error frame does not block the
+    forwarding loop's other streams (R13.1 / R13.3), and the executor records the serving-loop lag
+    around the hand-off as the R13.4 SLO input.
+
+    The offloaded callable is :func:`scan_error_frame` unchanged — it already fails CLOSED on a
+    scan/decision error (returning a withholding outcome rather than raising), so moving it to a
+    worker thread does not change the fail-closed contract (R11.4 / R15.2): no raw frame byte is
+    ever forwarded on a failure whether the scan ran on the loop or on a worker. Byte-linearity
+    (R11.5) is preserved — the offload is one call, not a per-byte rescan.
+    """
+    return await executor.run(
+        lambda: scan_error_frame(frame, scanner=scanner, resolver=resolver),
+        exports=exports,
+    )

@@ -23,6 +23,12 @@ What this assembles (R2.1):
   R13.2): the handler offloads the (CPU-bound, O(samples)) snapshot via ``asyncio.to_thread`` so
   a scrape never blocks the forwarding loop.
 
+C38 serving-loop discipline (R13.1) is assembled here too: ``build_app`` constructs the one
+:class:`~gateway_v2.edge.executor.ScanExecutor` — a GIL-releasing thread pool sized by
+``contract.pool_size(PoolKind.SCANNER)`` (no literal) — and injects it into the chat route so the
+CPU-bound error-frame scan runs on a worker thread, not inline on the forwarding loop; the pool is
+released on ``lifespan.shutdown``.
+
 ``edge`` is the top layer, so this module may import every layer below. The scanner and the
 ``ProviderClient`` are injected into :func:`build_app` and handed to the chat route (above
 ``detect`` — the correct injection site; ``egress`` must never import ``detect``, R14.1/R14.2).
@@ -50,6 +56,7 @@ from gateway_v2.domain import Finding
 from gateway_v2.edge import errors
 from gateway_v2.edge.cancel import InFlightControlSource, InFlightSnapshot
 from gateway_v2.edge.error_frame_scan import ErrorFrameScanner
+from gateway_v2.edge.executor import ScanExecutor
 from gateway_v2.edge.routes import (
     ASGIReceive,
     ASGIScope,
@@ -143,6 +150,11 @@ def build_app(
     drives startup/shutdown.
     """
     cfg, _cfg_logs = load_holdback_config()
+    # C38 serving-loop discipline (R13.1): the GIL-releasing executor the CPU-bound scan work is
+    # offloaded to, sized by `contract.pool_size(PoolKind.SCANNER)` — no thread-count literal here.
+    # Built once at assembly (off the request path) and shared across every stream; released on
+    # lifespan shutdown.
+    scan_executor = ScanExecutor(contract=contract)
     chat = ChatRoute(
         contract=contract,
         provider=provider,
@@ -154,6 +166,7 @@ def build_app(
         control=control if control is not None else _NoControlSource(),
         clock=clock,
         error_scanner=error_scanner if error_scanner is not None else _no_error_findings,
+        executor=scan_executor,
     )
     routes = build_routes(chat)
     probe: ReadinessProbe = readiness if readiness is not None else _always_ready
@@ -162,6 +175,7 @@ def build_app(
         metrics_registry=metrics_registry,
         readiness=probe,
         clock=clock,
+        executor=scan_executor,
     )
     return skin.asgi
 
@@ -183,6 +197,7 @@ class _ServingSkin:
     metrics_registry: MetricsRegistry
     readiness: ReadinessProbe
     clock: Callable[[], float]
+    executor: ScanExecutor
 
     async def asgi(self, scope: ASGIScope, receive: ASGIReceive, send: ASGISend) -> None:
         """The ASGI 3.0 entry point: dispatch by ``scope["type"]``.
@@ -214,6 +229,8 @@ class _ServingSkin:
             if message_type == "lifespan.startup":
                 await send({"type": "lifespan.startup.complete"})
             elif message_type == "lifespan.shutdown":
+                # Release the C38 scan executor's worker pool on a clean shutdown (R13.1).
+                self.executor.shutdown()
                 await send({"type": "lifespan.shutdown.complete"})
                 return
 

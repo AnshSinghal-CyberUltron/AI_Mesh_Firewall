@@ -50,7 +50,8 @@ from gateway_v2.dispatch.provider import ProviderClient, UpstreamEvent, Upstream
 from gateway_v2.dispatch.routing import DispatchRouter
 from gateway_v2.edge import errors
 from gateway_v2.edge.cancel import InFlightControl, InFlightControlSource, KillLatch
-from gateway_v2.edge.error_frame_scan import ErrorFrameScanner, scan_error_frame
+from gateway_v2.edge.error_frame_scan import ErrorFrameScanner, scan_error_frame_offloaded
+from gateway_v2.edge.executor import ScanExecutor
 from gateway_v2.edge.stream_control import FirstByteLatch, StreamAttempt, run_with_no_splice
 from gateway_v2.edge.stream_timeouts import StreamTimeout, StreamTimeouts
 from gateway_v2.edge.wire.sse import SSEEncoder
@@ -158,6 +159,15 @@ class ChatRoute:
     through the injected seam while ``egress`` stays free of a ``detect`` import. It produces
     completed findings over an error frame's whole text; the handler resolves them through the
     same ``resolver`` + ``apply_decision`` the content path uses.
+
+    ``executor`` is the C38 serving-loop-discipline seam (``edge.executor.ScanExecutor``, sized by
+    ``ResourceContract``): the CPU-bound error-frame scan — which runs at an ``await``-able chunk
+    boundary in :func:`_as_chunks` — is handed to the GIL-releasing executor so one stream's scan
+    cannot starve another's latency (R13.1 / R13.3), and the executor records serving-loop lag as
+    the R13.4 SLO input. The shipped ``StreamPipeline`` per-delta holdback scan is called
+    SYNCHRONOUSLY inside the pure release loop and is NOT offloaded here (offloading it would
+    rebuild the shipped GW12b loop body — a documented GW13 follow-up); the executor + sizing +
+    loop-lag SLO input are nonetheless in place now.
     """
 
     contract: ResourceContract
@@ -170,6 +180,7 @@ class ChatRoute:
     control: InFlightControlSource
     clock: Callable[[], float]
     error_scanner: ErrorFrameScanner
+    executor: ScanExecutor
 
     async def handle(self, scope: ASGIScope, receive: ASGIReceive, send: ASGISend) -> None:
         """Stream a chat completion end-to-end over the shipped egress pipeline (R2.2, R7).
@@ -379,6 +390,7 @@ class ChatRoute:
                     scanner=self.error_scanner,
                     resolver=self.resolver,
                     kill_latch=kill_latch,
+                    executor=self.executor,
                 ),
             )
             await pipeline.run(chunks, sink, kill_latch)
@@ -535,24 +547,29 @@ class _ErrorFrameScan:
     scanner: ErrorFrameScanner
     resolver: OutputResolver
     kill_latch: KillLatch
+    executor: ScanExecutor
 
 
-def _forward_error_frame(frame: str, error_scan: _ErrorFrameScan) -> str | None:
+async def _forward_error_frame(frame: str, error_scan: _ErrorFrameScan) -> str | None:
     """Scan a mid-stream error frame; return the bytes to forward, or ``None`` to withhold (R11).
 
-    Runs the single whole-text scan + decision via
-    :func:`~gateway_v2.edge.error_frame_scan.scan_error_frame` (byte-linear, R11.5). A REDACT/ALLOW
-    outcome returns the frame text with the decided redactions applied — the only bytes of the
-    frame that ever leave the gateway (R11.2). A WITHHELD outcome (BLOCK → ``output_blocked``,
-    R11.3; scan error → ``scan_failure``, R11.4, fail closed) flips the shared :class:`KillLatch`
-    with the terminal posture code and returns ``None``, so the caller stops the source and the
-    handler renders the declared ``Error_Frame`` from the latch reason. No raw error-frame byte is
-    forwarded on a withhold (R15.1/R15.2).
+    Runs the single whole-text scan + decision OFF the serving loop via
+    :func:`~gateway_v2.edge.error_frame_scan.scan_error_frame_offloaded` (C38 / R13.1): the
+    CPU-bound scan is handed to the contract-sized GIL-releasing executor so one stream's error
+    frame cannot starve another stream's latency, and the executor records the serving-loop lag as
+    the R13.4 SLO input. The scan itself is byte-linear and fails closed exactly as before (R11.5 /
+    R11.4). A REDACT/ALLOW outcome returns the frame text with the decided redactions applied — the
+    only bytes of the frame that ever leave the gateway (R11.2). A WITHHELD outcome (BLOCK →
+    ``output_blocked``, R11.3; scan error → ``scan_failure``, R11.4, fail closed) flips the shared
+    :class:`KillLatch` with the terminal posture code and returns ``None``, so the caller stops the
+    source and the handler renders the declared ``Error_Frame`` from the latch reason. No raw
+    error-frame byte is forwarded on a withhold (R15.1/R15.2).
     """
-    outcome = scan_error_frame(
+    outcome = await scan_error_frame_offloaded(
         frame,
         scanner=error_scan.scanner,
         resolver=error_scan.resolver,
+        executor=error_scan.executor,
     )
     if outcome.withheld_code is not None:
         error_scan.kill_latch.kill(outcome.withheld_code)
@@ -632,7 +649,7 @@ async def _as_chunks(
         # the kill latch is flipped with the terminal code and the source stops, so no byte of the
         # frame is forwarded and the handler renders the declared Error_Frame from the latch.
         if event.error_frame is not None:
-            forwarded = _forward_error_frame(event.error_frame, error_scan)
+            forwarded = await _forward_error_frame(event.error_frame, error_scan)
             if forwarded is None:
                 return  # withheld: latch carries the terminal code (R11.3 / R11.4)
             nbytes = len(forwarded.encode("utf-8"))
