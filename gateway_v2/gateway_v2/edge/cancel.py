@@ -34,8 +34,12 @@ threaded through ``on_disconnect`` + the task-10 triggers) is task 10's job, not
 signal within ``contract.cancellation_bound_s()`` force-releases the provider connection and the
 buffered state (the kill latch is flipped unconditionally, and ``provider.abort`` is retried to
 completion out of band) and records the stream as a bound-exceeded cancellation -- it NEVER leaves
-the provider reading. The buffered bytes are released in every path and none are forwarded
-downstream (R6.6).
+the provider reading. The buffered bytes are released in EVERY path -- a clean abort within the
+bound, a timeout force-release, OR an abort that RAISES within the bound -- and none are forwarded
+downstream (R6.6). An abort that errors within the bound is treated as within-bound-but-errored
+(``bound_exceeded=False``), NOT a bound breach: it did not time out, the latch has already cut the
+stream, so the error is swallowed and ``on_disconnect`` still releases the buffer and exports the
+per-stream interval. Only a genuine timeout records ``bound_exceeded=True``.
 
 **Layering.** ``edge`` is the top layer; it may import ``dispatch`` (the ``ProviderClient``),
 ``egress`` (the ``Coalescer``) and ``runtime`` (the ``ResourceContract`` + per-request exports)
@@ -277,6 +281,15 @@ class CancellationController:
         completes within the bound and ``True`` when it does not -- a bound-exceeded cancellation
         that force-releases the connection (R6.4): the abort coroutine is left to run to completion
         out of band (the latch has already cut the stream) so the provider is never left reading.
+
+        An abort that RAISES a non-timeout exception WITHIN the bound did NOT exceed the bound: it
+        failed fast, before the timeout, so it is NOT a bound-exceeded force-release. The latch has
+        already flipped (the stream is cut), so the abort error is swallowed here (there is no
+        logger in this module) and ``False`` is returned -- the kill is treated as
+        within-bound-but-errored, never as ``bound_exceeded``. Swallowing is what lets the caller
+        (:meth:`on_disconnect`) still run its buffer-release + per-stream interval export in EVERY
+        path (success, timeout, OR abort error), so no buffered byte is ever forwarded downstream
+        (R6.4/R6.6). The provider connection is still cut by the already-flipped latch.
         """
         # Signal the guard seam first and unconditionally: a cut must take effect at the next chunk
         # boundary even if the provider abort stalls (R6.2, fail-closed). A disconnect emits NO
@@ -295,6 +308,15 @@ class CancellationController:
             # shielded abort finish out of band so the provider connection is released and never
             # left reading. The buffered state is released by the caller in all paths.
             return True
+        except Exception:  # noqa: BLE001 - abort error is within-bound-but-errored, fail closed
+            # The abort RAISED within the bound (not a timeout): it failed fast, so this is NOT a
+            # bound-exceeded cancellation. The latch has already flipped (the stream is cut), so
+            # swallow the abort error -- there is no logger here -- and return `False`. The caller
+            # still releases the buffer and exports the interval in this path too (the module's
+            # "released in every path: success, timeout, OR abort error" contract), so no buffered
+            # byte is forwarded (R6.4/R6.6). Returning `True` here would misreport an abort failure
+            # as a bound breach.
+            return False
         return False
 
 

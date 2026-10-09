@@ -123,21 +123,43 @@ class ControllableClock:
         return now
 
 
+class AbortMode:
+    """The three deterministic ``abort()`` behaviours a scenario drives.
+
+    * ``FAST`` — returns immediately, completes within any positive bound (``bound_exceeded``
+      False).
+    * ``SLOW`` — blocks forever on an :class:`asyncio.Event`, so the controller's
+      ``asyncio.wait_for`` ALWAYS times out and the bound-exceeded branch is reached
+      deterministically (``bound_exceeded`` True), no wall-clock race.
+    * ``RAISE`` — raises ``RuntimeError`` immediately, WITHIN the bound (it fails fast, never times
+      out). The controller must swallow the abort error, still cut the stream + release the buffer,
+      and record it as within-bound-but-errored (``bound_exceeded`` False) — the fail-closed
+      "released in every path (success, timeout, OR abort error)" contract (R6.4/R6.6).
+    """
+
+    FAST = "fast"
+    SLOW = "slow"
+    RAISE = "raise"
+
+
 class StubAbortProvider:
-    """An abortable provider whose ``abort()`` is fast or blocks forever (deterministic).
+    """An abortable provider whose ``abort()`` is fast, blocks forever, or raises (deterministic).
 
     ``open`` is unused by the cancellation path (the controller only aborts), so it yields nothing.
     ``abort`` sets a one-way latch so the test can assert the provider was cut (R6.1). When
-    ``slow`` is set, ``abort`` additionally blocks on an :class:`asyncio.Event` that the scenario
-    never sets until it drains the shielded abort task — so the controller's ``asyncio.wait_for``
-    on the abort ALWAYS times out and the bound-exceeded branch is reached deterministically (no
-    wall-clock race). A fast abort returns immediately and completes within any positive bound.
+    ``mode`` is ``SLOW``, ``abort`` additionally blocks on an :class:`asyncio.Event` that the
+    scenario never sets until it drains the shielded abort task — so the controller's
+    ``asyncio.wait_for`` on the abort ALWAYS times out and the bound-exceeded branch is reached
+    deterministically (no wall-clock race). When ``mode`` is ``RAISE``, ``abort`` raises
+    ``RuntimeError`` immediately — WITHIN the bound — so the controller's non-timeout fail-closed
+    branch is reached deterministically. A ``FAST`` abort returns immediately and completes within
+    any positive bound.
     """
 
-    __slots__ = ("_released", "aborted", "slow")
+    __slots__ = ("_released", "aborted", "mode")
 
-    def __init__(self, *, slow: bool) -> None:
-        self.slow = slow
+    def __init__(self, *, mode: str) -> None:
+        self.mode = mode
         self.aborted = False
         self._released = asyncio.Event()
 
@@ -150,7 +172,11 @@ class StubAbortProvider:
 
     async def abort(self) -> None:
         self.aborted = True
-        if self.slow:
+        if self.mode == AbortMode.RAISE:
+            # Fails fast, WITHIN the bound: the controller must swallow this, still cut + release,
+            # and NOT report bound_exceeded (it did not time out).
+            raise RuntimeError("provider abort failed within the bound")
+        if self.mode == AbortMode.SLOW:
             # Never completes until the scenario drains us: wait_for on this ALWAYS times out,
             # so bound_exceeded is True deterministically rather than by a timing race.
             await self._released.wait()
@@ -165,14 +191,20 @@ def test_cancellation_within_bound() -> None:
     print(f"test_cancellation_within_bound seed={_SEED:#x} iterations={_ITERATIONS}")
 
     for i in range(_ITERATIONS):
-        slow = rng.random() < 0.5
-        # The bound is DERIVED from `target_p99_ms` (`cancellation_bound_s = p99_s * 3`). The two
-        # cases pick the SLO so the real `asyncio.wait_for` timeout the controller uses is
-        # unambiguous — the deterministic verdict never rides a wall-clock race:
+        # Three deterministic abort modes, each exercising a distinct controller branch:
+        #   * SLOW  → blocks forever → wait_for times out → bound_exceeded True (force-release);
+        #   * RAISE → raises within the bound → fail-closed swallow → bound_exceeded False;
+        #   * FAST  → returns immediately → completes within the bound → bound_exceeded False.
+        mode = rng.choice([AbortMode.SLOW, AbortMode.RAISE, AbortMode.FAST])
+        slow = mode == AbortMode.SLOW
+        # The bound is DERIVED from `target_p99_ms` (`cancellation_bound_s = p99_s * 3`). The cases
+        # pick the SLO so the real `asyncio.wait_for` timeout the controller uses is unambiguous —
+        # the deterministic verdict never rides a wall-clock race:
         #   * slow  → a sub-millisecond bound so the guaranteed timeout (the abort blocks forever)
         #             fires fast and the whole 10k-iter sweep stays quick;
-        #   * fast  → a comfortably large bound (tens of ms) so an immediately-completing abort
-        #             always finishes inside it, well above any event-loop scheduling jitter.
+        #   * fast / raise → a comfortably large bound (tens of ms) so an immediately-completing or
+        #             immediately-raising abort always resolves inside it, well above any
+        #             event-loop scheduling jitter (RAISE fails fast, never reaching the timeout).
         if slow:
             target_p99_ms = rng.uniform(0.001, 0.05)
         else:
@@ -199,7 +231,7 @@ def test_cancellation_within_bound() -> None:
         credit.spend(granted)
         assert credit.outstanding() == 0
 
-        provider = StubAbortProvider(slow=slow)
+        provider = StubAbortProvider(mode=mode)
         kill_latch = KillLatch()
         metrics = PerRequestExports()
         clock = ControllableClock()
@@ -232,17 +264,22 @@ def test_cancellation_within_bound() -> None:
             await asyncio.sleep(0)
             return result
 
+        # The scenario must NOT propagate an abort error out of on_disconnect even in the RAISE
+        # mode — a disconnect handler that raised would skip the caller's buffer-release + export.
         outcome = _run(scenario())
 
-        ctx = f"i={i} seed={_SEED:#x} slow={slow} bound_s={bound_s:g}"
+        ctx = f"i={i} seed={_SEED:#x} mode={mode} bound_s={bound_s:g}"
 
-        # R6.2: the kill latch is flipped — the in-flight guard seam is cut, probe is true.
+        # R6.2: the kill latch is flipped — the in-flight guard seam is cut, probe is true. This
+        # must hold even when the abort RAISED: the latch flips BEFORE the abort is awaited.
         assert kill_latch.is_killed(), f"{ctx} kill latch not set"
         assert kill_latch() is True, f"{ctx} kill probe not true"
-        # R6.1: the provider was aborted (even on the force-release / slow path).
+        # R6.1: the provider was aborted (even on the force-release / slow path AND the raise path).
         assert provider.aborted, f"{ctx} provider not aborted"
 
         # R6.6: buffered bytes released back to the pool; nothing left buffered, nothing forwarded.
+        # Released in EVERY path — success, timeout, OR abort error — so the RAISE mode must still
+        # drain the buffer to baseline (the fix: on_disconnect proceeds past the swallowed error).
         assert coalescer.buffered() == 0, f"{ctx} buffer not released to baseline"
         assert outcome.released_bytes == buffered_at_disconnect, (
             f"{ctx} released_bytes={outcome.released_bytes} != buffered-at-disconnect "
@@ -258,13 +295,16 @@ def test_cancellation_within_bound() -> None:
         )
 
         # R6.3 / R6.4: within-bound vs force-release verdict, and the provider is cut either way.
+        # Only a genuine TIMEOUT (slow abort) is bound-exceeded; an abort that RAISES within the
+        # bound failed fast and is within-bound-but-errored (bound_exceeded False), as is a fast
+        # abort that completes.
         if slow:
             assert outcome.bound_exceeded is True, (
                 f"{ctx} slow abort should be a bound-exceeded (force-release) cancellation"
             )
         else:
             assert outcome.bound_exceeded is False, (
-                f"{ctx} fast abort should complete within the derived bound"
+                f"{ctx} non-timeout abort (fast or raise) must not be bound-exceeded"
             )
 
         # The cancellation is exported per cancelled stream (R6.5): a release-lag sample recorded.

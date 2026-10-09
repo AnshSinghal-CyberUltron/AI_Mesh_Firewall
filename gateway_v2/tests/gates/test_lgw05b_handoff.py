@@ -6,15 +6,17 @@ alone is not enough to make that safe, and this programme has the evidence: GW05
 `require_bounded_client` uncalled with a docstring explaining where it belonged, and a whole card
 went by without anyone wiring it. Prose does not fail a build.
 
-So this module does two jobs.
+So this module did two jobs.
 
 1. It PINS the surface GW06 is told to consume. If `state_ready` changes shape or a reason code
    is respelled, the instruction in the handoff document stops matching the code and this fails,
-   rather than the two drifting quietly apart (C37's defect, one level down).
-2. `test_the_edge_layer_is_still_stubs` is a TRIPWIRE. It fails the moment somebody starts
-   building the HTTP surface, which is exactly the moment the uncalled guards have to be wired.
-   Its failure message says what to do and tells you to delete it. Failing once, at the right
-   time, with instructions, is the cheapest mechanism available for this.
+   rather than the two drifting quietly apart (C37's defect, one level down). This job remains.
+2. `test_the_edge_layer_is_still_stubs` WAS a one-time TRIPWIRE that failed the moment somebody
+   started building the HTTP surface -- exactly the moment the uncalled guards have to be wired.
+   Its failure message said what to do and told you to delete it. GW12 built the real edge layer,
+   so the tripwire fired as designed and has been deleted per its own instruction (see the note
+   below the imports). Failing once, at the right time, with instructions, was the cheapest
+   mechanism available for this.
 """
 
 from __future__ import annotations
@@ -39,38 +41,13 @@ from gateway_v2.runtime.store_valkey import require_bounded_client
 
 HANDOFF = "docs/plans/2026-10-08-gw05b-handoff.md"
 
-EDGE = Path(__file__).resolve().parents[2] / "gateway_v2" / "edge"
-STUB_LINE_CEILING = 8
-"""A stub is a docstring plus `__all__`. Anything longer is a real module being built."""
 
-
-# --- the tripwire --------------------------------------------------------------------------------
-
-
-def test_the_edge_layer_is_still_stubs() -> None:
-    """When this fails, GW06 has started. Wire the four uncalled pieces, then delete this test.
-
-    1. `/readyz` must call `state_ready(view)` and return 503 with its reason when not ready.
-    2. The start-up path must call `require_bounded_client(client, below_s=...)` using
-       `StateKnobs.store_timeout_ceiling_s`.
-    3. The request path must render the `domain.posture` codes with
-       `gap_retry_after_s(...)` as Retry-After.
-    4. The state loop must schedule with `StateSynchroniser.next_delay_s(...)`, and the
-       re-hydrator loop with `StateKnobs.is_deep_round(...)`.
-
-    See docs/plans/2026-10-08-gw05b-handoff.md for the full list and the reasoning.
-    """
-    grown = {
-        path.name: len(path.read_text().splitlines())
-        for path in sorted(EDGE.glob("*.py"))
-        if len(path.read_text().splitlines()) > STUB_LINE_CEILING
-    }
-
-    assert not grown, (
-        f"gateway_v2/edge/ is no longer stubs ({grown}). GW05b left four pieces implemented "
-        f"and UNCALLED because there was no start-up path or HTTP surface to call them from. "
-        f"Read {HANDOFF}, wire them, then delete this test."
-    )
+# NOTE: the one-time `test_the_edge_layer_is_still_stubs` TRIPWIRE has been removed. Its own
+# failure message instructed deletion once the edge layer stopped being stubs and the four
+# uncalled GW05b pieces were wired. GW12 (the SSE egress pipeline) built the real edge layer
+# (edge/app.py, edge/cancel.py, edge/wire/, ...), so the tripwire fired as designed; per its
+# instruction it is deleted here. The surface it pinned (state_ready, require_bounded_client,
+# next_delay_s, is_deep_round, the posture vocabulary) is STILL pinned by the sibling tests below.
 
 
 # --- the surface GW06 is told to consume ---------------------------------------------------------
