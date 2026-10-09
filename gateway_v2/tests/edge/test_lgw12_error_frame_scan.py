@@ -30,7 +30,11 @@ from gateway_v2.domain import (
     Span,
     Transformation,
 )
-from gateway_v2.edge.error_frame_scan import scan_error_frame
+from gateway_v2.edge.error_frame_scan import (
+    BLOCK_CODE,
+    SCAN_ERROR_CODE,
+    scan_error_frame,
+)
 from gateway_v2.egress.output_guard import REDACTION_PLACEHOLDER
 
 # --------------------------------------------------------------------------- #
@@ -250,4 +254,307 @@ def test_property5_byte_linearity() -> None:
         expected = 2.0 * work_n
         assert abs(work_2n - expected) <= 0.01 * expected, (
             f"seed={seed:#x} iter={i} work_2n={work_2n} not within 1% of {expected}"
+        )
+
+
+# --------------------------------------------------------------------------- #
+# Feature: sse-egress-pipeline, Property 6: Fail-closed-on-scan-error
+# Validates: Requirements 11.4, 15.2
+#
+# For any injected scan error, NO raw byte of the affected error frame is
+# forwarded. `scan_error_frame` must WITHHOLD (forward_text is None, withheld is
+# True, withheld_code set) whenever the scan, the resolve, or the apply step
+# cannot be completed, and whenever the decision BLOCKs the frame. Because a
+# withheld outcome carries `forward_text is None`, there is literally nothing
+# forwarded — so no raw frame text and no secret-looking substring in the frame
+# can leak on a failure.
+#
+# The property is exercised three ways over random frames (many of which embed a
+# secret-looking substring the fail-open bug would leak):
+#   1. the injected scanner RAISES            -> withheld_code == SCAN_ERROR_CODE
+#   2. the injected resolver.decide RAISES    -> withheld_code == SCAN_ERROR_CODE
+#   3. the resolver returns a BLOCK Decision  -> withheld_code == BLOCK_CODE
+#      (so `apply_decision` raises OutputBlocked)
+# Each withhold case asserts forward_text is None AND the raw frame text / secret
+# substring is absent from the outcome. The contrast case (an ALLOW/REDACT
+# resolver that never raises) asserts forward_text IS returned and the frame is
+# NOT withheld, proving the withhold is specific to the failure, not universal.
+# --------------------------------------------------------------------------- #
+
+
+class _FcInjectedScanError(RuntimeError):
+    """A distinctive exception the fail-closed scanner/resolver raises."""
+
+
+@dataclass(slots=True)
+class _FcRaisingScanner:
+    """A findings scanner that always raises when invoked (case 1)."""
+
+    def __call__(self, frame: str) -> Sequence[Finding]:
+        raise _FcInjectedScanError("injected scanner failure")
+
+
+@dataclass(slots=True)
+class _FcRaisingResolver:
+    """A resolver whose ``decide`` always raises (case 2).
+
+    The scanner runs cleanly (returns no findings) so the failure is isolated to
+    the resolve step; `scan_error_frame` must still withhold fail-closed.
+    """
+
+    def decide(self, matches: Sequence[Finding]) -> Decision:
+        raise _FcInjectedScanError("injected resolver failure")
+
+
+@dataclass(slots=True)
+class _FcCleanScanner:
+    """A scanner that returns no findings — used to isolate the resolver/BLOCK paths."""
+
+    def __call__(self, frame: str) -> Sequence[Finding]:
+        return ()
+
+
+@dataclass(slots=True)
+class _FcBlockingResolver:
+    """A resolver that returns a BLOCK Decision so `apply_decision` raises OutputBlocked (case 3).
+
+    The Decision carries a single BLOCK per-finding disposition so its overall
+    disposition is the most-restrictive BLOCK (satisfying `Decision.__post_init__`),
+    which is exactly what the shipped `apply_decision` turns into `OutputBlocked`.
+    """
+
+    detector: str = "card"
+
+    def decide(self, matches: Sequence[Finding]) -> Decision:
+        per_finding = (
+            FindingDisposition(detector=self.detector, disposition=Disposition.BLOCK),
+        )
+        return Decision(
+            disposition=Disposition.BLOCK,
+            per_finding=per_finding,
+            transformations=(),
+            findings=tuple(matches),
+            plan_version="fc-test",
+            deciding_rules=(self.detector,),
+            unavailable_detectors=(),
+        )
+
+
+@dataclass(slots=True)
+class _FcAllowRedactResolver:
+    """Contrast resolver: never raises, forwards (ALLOW with no findings, or REDACT).
+
+    When the clean-forward scanner surfaces a sentinel span it REDACTs it;
+    otherwise the decision is ALLOW. Either way the frame is forwarded (never
+    withheld), proving the withhold in the failure cases is specific, not
+    universal.
+    """
+
+    def decide(self, matches: Sequence[Finding]) -> Decision:
+        per_finding: list[FindingDisposition] = []
+        transformations: list[Transformation] = []
+        for finding in matches:
+            if finding.status is not FindingStatus.EXECUTED:
+                per_finding.append(
+                    FindingDisposition(
+                        detector=finding.detector,
+                        disposition=Disposition.ALLOW,
+                    ),
+                )
+                continue
+            per_finding.append(
+                FindingDisposition(
+                    detector=finding.detector,
+                    disposition=Disposition.REDACT,
+                ),
+            )
+            for span in finding.spans:
+                transformations.append(
+                    Transformation(
+                        kind="redact",
+                        span=span,
+                        replacement=REDACTION_PLACEHOLDER,
+                    ),
+                )
+        if not per_finding:
+            overall = Disposition.ALLOW
+        else:
+            overall = (
+                Disposition.REDACT
+                if any(fd.disposition is Disposition.REDACT for fd in per_finding)
+                else Disposition.ALLOW
+            )
+        deciding = tuple(
+            fd.detector
+            for fd in per_finding
+            if fd.disposition is not Disposition.ALLOW
+        )
+        return Decision(
+            disposition=overall,
+            per_finding=tuple(per_finding),
+            transformations=tuple(transformations),
+            findings=tuple(matches),
+            plan_version="fc-test",
+            deciding_rules=deciding,
+            unavailable_detectors=(),
+        )
+
+
+@dataclass(slots=True)
+class _FcContrastScanner:
+    """Clean-forward scanner for the contrast case: a single whole-frame span.
+
+    Keeps the contrast path simple and deterministic — the frame is forwarded
+    (ALLOW when empty, REDACT when non-empty), never raised and never blocked.
+    """
+
+    detector_class: str = "email"
+
+    def __call__(self, frame: str) -> Sequence[Finding]:
+        if not frame:
+            return ()
+        return (
+            Finding(
+                detector=self.detector_class,
+                detector_version="fc-test",
+                category=Category.PII,
+                status=FindingStatus.EXECUTED,
+                confidence=1.0,
+                spans=(Span(start=0, end=len(frame)),),
+                evidence=None,
+            ),
+        )
+
+
+# Secret-looking fragments embedded into random frames: if the fail-closed
+# contract broke and raw bytes leaked, these are the substrings a leak check
+# would catch in the forwarded text. In every withhold case forward_text is
+# None, so none of these can appear in the outcome.
+_FC_SECRETS = (
+    "AKIAIOSFODNN7EXAMPLE",
+    "sk-live-0123456789abcdef",
+    "ghp_wXyZ1234567890abcdefABCDEF",
+    "4111111111111111",
+    "postgres://user:p4ssw0rd@db.internal:5432/app",
+    "eyJhbGciOiJIUzI1NiJ9.payload.signature",
+)
+_FC_ALPHABET = "abcdefghijklmnopqrstuvwxyz ABCDEF0123456789.:/-_@"
+
+
+def _fc_frame(rng: random.Random) -> str:
+    """One random error-frame body, often embedding a secret-looking substring.
+
+    Mixes plain prose with — on ~70% of iterations — one of the `_FC_SECRETS`
+    spliced in at a random position, so the leak assertions exercise frames that
+    the fail-open bug would actually leak.
+    """
+    length = rng.randint(0, 60)
+    body = "".join(rng.choice(_FC_ALPHABET) for _ in range(length))
+    if rng.random() < 0.7:
+        secret = rng.choice(_FC_SECRETS)
+        cut = rng.randint(0, len(body))
+        return body[:cut] + secret + body[cut:]
+    return body
+
+
+def _fc_assert_withheld(
+    outcome: object,
+    *,
+    expected_code: str,
+    frame: str,
+    seed: int,
+    iteration: int,
+    case: str,
+) -> None:
+    """Assert a withheld outcome forwards nothing and leaks no raw frame byte."""
+    # Typed access without importing the type name twice: the outcome is the
+    # ErrorFrameOutcome `scan_error_frame` returns.
+    withheld = outcome.withheld  # type: ignore[attr-defined]
+    withheld_code = outcome.withheld_code  # type: ignore[attr-defined]
+    forward_text = outcome.forward_text  # type: ignore[attr-defined]
+    ctx = f"seed={seed:#x} iter={iteration} case={case}"
+    assert withheld is True, f"{ctx} expected withheld, got withheld={withheld}"
+    assert withheld_code == expected_code, (
+        f"{ctx} expected code={expected_code!r}, got {withheld_code!r}"
+    )
+    # The whole of the fail-closed guarantee: there is literally nothing
+    # forwarded, so neither the raw frame nor any secret substring can leak.
+    assert forward_text is None, f"{ctx} forward_text must be None on withhold"
+    for secret in _FC_SECRETS:
+        if secret in frame:
+            assert forward_text is None or secret not in forward_text, (
+                f"{ctx} secret substring leaked into forwarded text"
+            )
+
+
+def test_property6_fail_closed_on_scan_error() -> None:
+    seed = 0x12_06
+    rng = random.Random(seed)
+    print(f"test_property6_fail_closed_on_scan_error seed={seed:#x}")  # noqa: T201
+    iterations = 10_000
+
+    raising_scanner = _FcRaisingScanner()
+    raising_resolver = _FcRaisingResolver()
+    clean_scanner = _FcCleanScanner()
+    blocking_resolver = _FcBlockingResolver()
+    contrast_scanner = _FcContrastScanner()
+    allow_redact_resolver = _FcAllowRedactResolver()
+
+    for i in range(iterations):
+        frame = _fc_frame(rng)
+
+        # Case 1: the scanner raises -> withhold fail-closed (SCAN_ERROR_CODE).
+        outcome1 = scan_error_frame(
+            frame, scanner=raising_scanner, resolver=allow_redact_resolver,
+        )
+        _fc_assert_withheld(
+            outcome1,
+            expected_code=SCAN_ERROR_CODE,
+            frame=frame,
+            seed=seed,
+            iteration=i,
+            case="scanner-raises",
+        )
+
+        # Case 2: the resolver.decide raises -> withhold fail-closed (SCAN_ERROR_CODE).
+        outcome2 = scan_error_frame(
+            frame, scanner=clean_scanner, resolver=raising_resolver,
+        )
+        _fc_assert_withheld(
+            outcome2,
+            expected_code=SCAN_ERROR_CODE,
+            frame=frame,
+            seed=seed,
+            iteration=i,
+            case="resolver-raises",
+        )
+
+        # Case 3: the decision BLOCKs -> apply_decision raises OutputBlocked ->
+        # withhold with BLOCK_CODE.
+        outcome3 = scan_error_frame(
+            frame, scanner=clean_scanner, resolver=blocking_resolver,
+        )
+        _fc_assert_withheld(
+            outcome3,
+            expected_code=BLOCK_CODE,
+            frame=frame,
+            seed=seed,
+            iteration=i,
+            case="decision-blocks",
+        )
+
+        # Contrast: a resolver/scanner that never fails forwards the frame (not
+        # withheld). Proves the withhold above is SPECIFIC to the failure, not a
+        # universal "always withhold" behaviour.
+        outcome_ok = scan_error_frame(
+            frame, scanner=contrast_scanner, resolver=allow_redact_resolver,
+        )
+        assert not outcome_ok.withheld, (
+            f"seed={seed:#x} iter={i} contrast path must forward, not withhold"
+        )
+        assert outcome_ok.withheld_code is None, (
+            f"seed={seed:#x} iter={i} contrast path must have no withheld_code"
+        )
+        assert outcome_ok.forward_text is not None, (
+            f"seed={seed:#x} iter={i} contrast path must return forward_text"
         )
