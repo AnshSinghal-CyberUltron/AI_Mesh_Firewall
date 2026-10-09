@@ -49,6 +49,7 @@ from gateway_v2.detect.windowing import max_pattern_length
 from gateway_v2.dispatch.provider import ProviderClient, UpstreamEvent, UpstreamRequest
 from gateway_v2.dispatch.routing import DispatchRouter
 from gateway_v2.edge import errors
+from gateway_v2.edge.cancel import InFlightControl, InFlightControlSource, KillLatch
 from gateway_v2.edge.stream_control import FirstByteLatch, StreamAttempt, run_with_no_splice
 from gateway_v2.edge.wire.sse import SSEEncoder
 from gateway_v2.egress.backpressure import Coalescer
@@ -157,6 +158,8 @@ class ChatRoute:
     cfg: HoldbackConfig
     router: DispatchRouter
     active_streams: Callable[[], int]
+    control: InFlightControlSource
+    clock: Callable[[], float]
 
     async def handle(self, scope: ASGIScope, receive: ASGIReceive, send: ASGISend) -> None:
         """Stream a chat completion end-to-end over the shipped egress pipeline (R2.2, R7).
@@ -192,7 +195,7 @@ class ChatRoute:
         encoder: SSEEncoder,
         coalescer: Coalescer,
     ) -> None:
-        """Drive the egress pipeline under the no-splice gate and serialise frames onto SSE (R7).
+        """Drive the egress pipeline under the no-splice gate + in-flight control (R7, R10).
 
         A per-request :class:`FirstByteLatch` gates retry/fallback: the shared ``_sink`` sets the
         latch the instant the FIRST content byte is released downstream (R7.2), and
@@ -200,13 +203,33 @@ class ChatRoute:
         while the latch is unset (R7.1/R7.3). Each attempt opens the injected ``ProviderClient``
         for the routed destination, adapts its events to the shipped ``UpstreamChunk`` transport,
         and runs the shipped ``StreamPipeline`` release loop; released ``DownstreamFrame``s are
-        encoded by the one ``SSEEncoder``. A frame carrying an ``error_code`` renders the declared
-        terminal ``Error_Frame`` and no content follows it. On a clean finish the terminal
-        ``[DONE]`` marker is emitted; when every eligible attempt failed before the first byte the
-        caller rendered no byte and the stream closes without a splice (R7.4).
+        encoded by the one ``SSEEncoder``.
+
+        **In-flight control (R10).** A per-request :class:`KillLatch` replaces the old
+        always-false ``_never_killed`` probe and is handed straight to ``pipeline.run`` as the
+        ``killed()`` seam. An :class:`InFlightControl`, built over the injected control source and
+        the derived bounds, is evaluated at EACH chunk boundary (in :func:`_as_chunks`): a fired
+        trigger (max duration, kill switch, key revocation, plan change, or a stale/unavailable
+        snapshot that fails closed) flips the SAME latch with its posture code and stops the chunk
+        source, so no further upstream bytes are forwarded after the cut (R10.7). Because the thin
+        handler runs the pipeline in pass-through mode (which does not itself render a terminal
+        frame), the handler reads :meth:`KillLatch.reason` after the run and emits the matching
+        declared ``Error_Frame`` (``STREAM_MAX_DURATION`` / ``STREAM_KILLED`` /
+        ``STREAM_KEY_REVOKED`` / ``STREAM_PLAN_CHANGED`` / ``STREAM_SNAPSHOT_STALE``) itself.
+
+        On a clean finish the terminal ``[DONE]`` marker is emitted; when every eligible attempt
+        failed before the first byte the caller rendered no byte and the stream closes without a
+        splice (R7.4).
         """
         latch = FirstByteLatch()
         sent_terminal = _TerminalLatch()
+        kill_latch = KillLatch()
+        control = InFlightControl(
+            source=self.control,
+            contract=self.contract,
+            clock=self.clock,
+            kill_latch=kill_latch,
+        )
 
         async def _sink(frame: DownstreamFrame) -> None:
             if sent_terminal.is_set():
@@ -223,11 +246,36 @@ class ChatRoute:
         offered = _TerminalLatch()
 
         def _factory() -> StreamAttempt | None:
-            return self._next_attempt(offered, latch, _sink, coalescer)
+            return self._next_attempt(offered, latch, _sink, coalescer, kill_latch, control)
 
         await run_with_no_splice(latch, _factory)
-        if not sent_terminal.is_set() and not encoder.terminated:
-            await _send_sse(send, encoder.done())
+        await self._finish_stream(send, encoder, kill_latch, sent_terminal)
+
+    async def _finish_stream(
+        self,
+        send: ASGISend,
+        encoder: SSEEncoder,
+        kill_latch: KillLatch,
+        sent_terminal: _TerminalLatch,
+    ) -> None:
+        """Close the stream: render an in-flight cut's ``Error_Frame`` or the ``[DONE]`` marker.
+
+        If an in-flight trigger cut the stream (R10), the per-request :class:`KillLatch` carries
+        the reason posture code the FIRST trigger set; the handler renders it as the declared
+        terminal ``Error_Frame`` here (the pass-through pipeline does not emit one of its own), so
+        a max-duration cut shows ``STREAM_MAX_DURATION`` and a key revocation shows
+        ``STREAM_KEY_REVOKED`` (R10.2-R10.6). No content frame follows the terminal frame
+        (``sent_terminal`` guards against a double terminal). Only when nothing was cut and no
+        terminal has been emitted does the clean ``[DONE]`` marker close the stream.
+        """
+        if sent_terminal.is_set() or encoder.terminated:
+            return
+        reason = kill_latch.reason()
+        if reason is not None:
+            await _send_sse(send, encoder.error(reason))
+            sent_terminal.set()
+            return
+        await _send_sse(send, encoder.done())
 
     def _next_attempt(
         self,
@@ -235,6 +283,8 @@ class ChatRoute:
         latch: FirstByteLatch,
         sink: Send,
         coalescer: Coalescer,
+        kill_latch: KillLatch,
+        control: InFlightControl,
     ) -> StreamAttempt | None:
         """Yield the next eligible stream attempt, or ``None`` when none remains (R7.1).
 
@@ -244,6 +294,10 @@ class ChatRoute:
         byte-less failure is NOT retried against the same provider forever and there is nothing
         further to splice. :func:`run_with_no_splice` only invokes this factory while the first-byte
         latch still permits a retry, so a fresh attempt is impossible once a byte is on the wire.
+
+        The attempt hands the per-request :class:`KillLatch` to ``pipeline.run`` as the ``killed()``
+        seam and threads the :class:`InFlightControl` into :func:`_as_chunks`, which evaluates every
+        R10 trigger at each chunk boundary (R10.2-R10.7).
         """
         if offered.is_set():
             return None
@@ -252,8 +306,8 @@ class ChatRoute:
         async def _attempt() -> bool:
             pipeline = self._build_pipeline()
             request = UpstreamRequest(destination=self._destination(), body=_EMPTY_BODY)
-            chunks = _as_chunks(self.provider.open(request), coalescer)
-            await pipeline.run(chunks, sink, _never_killed)
+            chunks = _as_chunks(self.provider.open(request), coalescer, control)
+            await pipeline.run(chunks, sink, kill_latch)
             # The sink set the first-byte latch the instant a content byte went out; report that
             # as the "released a byte" signal so run_with_no_splice closes the gate (R7.2/R7.4).
             return latch.is_set()
@@ -376,11 +430,6 @@ async def _end_sse(send: ASGISend) -> None:
     await send({"type": "http.response.body", "body": b"", "more_body": False})
 
 
-def _never_killed() -> bool:
-    """The kill probe for the thin handler: the in-flight-kill controller is GW10."""
-    return False
-
-
 class _TerminalLatch:
     """A one-way latch so a terminal SSE frame is emitted at most once per stream."""
 
@@ -399,8 +448,9 @@ class _TerminalLatch:
 async def _as_chunks(
     events: AsyncIterator[UpstreamEvent],
     coalescer: Coalescer,
+    control: InFlightControl,
 ) -> AsyncIterator[UpstreamChunk]:
-    """Adapt a provider event stream to the shipped ``UpstreamChunk`` source, bounded.
+    """Adapt a provider event stream to the shipped ``UpstreamChunk`` source, bounded + cut-aware.
 
     Each :class:`~gateway_v2.dispatch.provider.UpstreamEvent` becomes an ``UpstreamChunk`` the
     pipeline consumes. Before a chunk is forwarded, its payload bytes are offered to the bounded
@@ -408,7 +458,22 @@ async def _as_chunks(
     derived high-water) and the chunk waits by being released as it is handed on. The thin
     handler releases immediately after offering so the bounded buffer is exercised without a
     real slow-consumer loop (GW9/GW13 wire the credit-paced consumer).
+
+    **In-flight control at the chunk boundary (R10.2-R10.7).** Each yielded ``UpstreamChunk`` IS a
+    chunk boundary, so the :class:`InFlightControl` is evaluated here, BEFORE the next chunk is
+    forwarded. A fired trigger (max duration, kill switch, key revocation, plan change, or a
+    stale/unavailable snapshot that fails closed) flips the shared :class:`KillLatch` with its
+    posture code; this adapter then stops the source (``return``), so no further upstream chunk
+    bytes are forwarded to the caller after the cut (R10.7). The cut therefore takes effect no
+    later than the next chunk boundary (``InFlightKill.CUT_NEXT_CHUNK``), within the derived
+    ``max_cut_latency_s()`` budget. The pass-through pipeline does not render a terminal frame on a
+    killed source, so the handler reads the latch reason afterwards and emits the matching
+    ``Error_Frame`` (see :meth:`ChatRoute._finish_stream`).
     """
+    # Evaluate before the first chunk too: a max-duration/stale/kill signal already true at stream
+    # start must cut before any upstream byte is forwarded (R10.7, fail-closed).
+    if control.evaluate() is not None:
+        return
     async for event in events:
         text = "".join(delta for _, delta in event.text_deltas)
         nbytes = len(text.encode("utf-8"))
@@ -416,4 +481,8 @@ async def _as_chunks(
         yield UpstreamChunk(text_deltas=event.text_deltas, final=event.final)
         coalescer.release(nbytes)
         if event.final:
+            return
+        # Chunk boundary: poll every R10 trigger. A fired trigger stops the source so no further
+        # upstream bytes reach the caller after the cut (R10.7).
+        if control.evaluate() is not None:
             return

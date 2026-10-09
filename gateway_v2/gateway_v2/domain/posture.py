@@ -53,6 +53,16 @@ MIN_RETRY_AFTER_S = 1.0
 # `stream_killed` (the `InFlightKill.CUT_NEXT_CHUNK` seam), `scan_failure` and `output_blocked`
 # already live on the `egress/stream.py` pipeline and are REUSED unchanged -- not redefined here.
 
+STREAM_KILLED = "stream_killed"
+"""R10.3 / disconnect: the pre-existing `InFlightKill.CUT_NEXT_CHUNK` terminal code.
+
+This is the SAME spelling the shipped `egress/stream.py` pipeline already emits for a kill
+(`_cut_on_kill` -> `error="killed"` renders through here as `stream_killed`). It is named here
+so the one shared vocabulary carries it and the kill-switch trigger (R10.3) and the
+disconnect-driven latch reuse ONE spelling rather than inventing a second (the C37 join failure).
+Not a new code -- the single-spelled home for the reused one.
+"""
+
 STREAM_INTER_CHUNK_TIMEOUT = "stream_inter_chunk_timeout"
 """R9.2: upstream stalled between chunks past `inter_chunk_timeout_s()`. Terminate + release."""
 

@@ -47,6 +47,7 @@ from typing import Protocol, runtime_checkable
 from gateway_v2.dispatch.provider import ProviderClient
 from gateway_v2.dispatch.routing import DispatchRouter
 from gateway_v2.edge import errors
+from gateway_v2.edge.cancel import InFlightControlSource, InFlightSnapshot
 from gateway_v2.edge.routes import (
     ASGIReceive,
     ASGIScope,
@@ -113,6 +114,7 @@ def build_app(
     clock: Callable[[], float],
     readiness: ReadinessProbe | None = None,
     active_streams: Callable[[], int] | None = None,
+    control: InFlightControlSource | None = None,
 ) -> ASGIApplication:
     """Assemble the raw-ASGI serving skin (R2.1).
 
@@ -123,7 +125,11 @@ def build_app(
     per-stream buffer high-water derive from ``contract`` (no literal). ``readiness`` defaults to
     an always-ready probe for an unwired deployment (parity with ``state_ready(None)``);
     ``active_streams`` defaults to a single-stream count when a live concurrency counter is not
-    yet wired (GW19 supplies the real one).
+    yet wired (GW19 supplies the real one). ``control`` is the in-flight control source the chat
+    handler polls at each chunk boundary (R10); it defaults to a fresh/available/all-clear source
+    so a deployment that has not wired the kill-switch / revocation / plan feed (a GW05/GW06
+    integration) still runs under the max-stream-duration deadline, which is driven by ``clock``
+    vs the contract alone.
 
     Returns the ``async def app(scope, receive, send)`` callable. The function is pure assembly:
     it reads no store and starts no task — the lifespan handler is where a conforming server
@@ -138,6 +144,8 @@ def build_app(
         cfg=cfg,
         router=DispatchRouter(),
         active_streams=active_streams if active_streams is not None else _one_stream,
+        control=control if control is not None else _NoControlSource(),
+        clock=clock,
     )
     routes = build_routes(chat)
     probe: ReadinessProbe = readiness if readiness is not None else _always_ready
@@ -323,6 +331,30 @@ def _one_stream() -> int:
     counter reports, not a configured bound.
     """
     return 1
+
+
+class _NoControlSource:
+    """The default in-flight control source when the control-plane feed is not yet wired.
+
+    Reports a FRESH, AVAILABLE snapshot with every signal clear, so a stream runs under the
+    max-duration deadline alone until GW05/GW06 inject the real kill-switch / revocation / plan
+    feed. ``age_s=0.0`` keeps it inside any derived ``max_snapshot_age_s()`` (so it is not treated
+    as stale), and ``available=True`` means it does not trip the fail-closed path for a deployment
+    that simply has not wired the control plane yet. A real source replaces this with the signed
+    snapshot read; the max-stream-duration trigger is active regardless, since that bound is purely
+    the injected clock vs the contract.
+    """
+
+    __slots__ = ()
+
+    def snapshot(self) -> InFlightSnapshot:
+        return InFlightSnapshot(
+            available=True,
+            age_s=0.0,
+            kill_switch_engaged=False,
+            key_revoked=False,
+            plan_changed=False,
+        )
 
 
 # --------------------------------------------------------------------------- #
