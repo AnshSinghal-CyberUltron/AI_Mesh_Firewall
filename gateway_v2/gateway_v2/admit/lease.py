@@ -43,6 +43,27 @@ never reads the store (Req 4.2; Property 5). ``acquire`` and ``return_unspent`` 
 store-touching methods; ``acquire`` runs at construction and from the off-path refill task, never
 from ``try_spend``. The only mutable state is the per-instance ``_LeaseState`` carrier — there is
 no module-level mutable state, and the config / result types are frozen slotted dataclasses.
+
+Retry-once-on-idempotent-read boundary (R2-14)
+----------------------------------------------
+Roughly ``1e-4`` of **cross-zone** store round trips hit the ~200 ms minimum TCP RTO, over the
+25 ms request-path per-op timeout (``bounded_timeout_s`` on the injected client). The correction
+register's R2-14 has two halves:
+
+* **A deployment dependency, not code.** The durable fix is to place the gateways in the store
+  primary's zone so a round trip is never cross-zone — that removes the RTO spike at the source.
+  This module cannot assert topology; it only documents the dependency.
+* **The code-side requirement — retry once on an idempotent read timeout.** An ``Idempotent_Read``
+  (a store read with *no side effects*, e.g. a plain ``GET`` of the Budget_Generation) that times
+  out is retried **at most once**; a second timeout **surfaces** (Req 8.1, 8.3). A **mutating**
+  operation — the atomic WATCH/MULTI acquire/return (``DECRBY``/``SET``/``INCRBY``/``DEL``) — is
+  **never** retried on timeout (Req 8.2): a retry could double-apply the decrement or the return,
+  so a timeout there surfaces to the caller and the off-path refill reschedules a fresh attempt
+  later. ``_read_once_retrying`` is the ONLY retry surface; it wraps a single genuinely idempotent
+  read (``read_generation``) and nothing else — never the transaction.
+
+Fail-closed: a surfaced timeout propagates to the caller (the façade's catch-all refuses), so a
+persistent store outage never admits — it degrades to ``budget_unavailable`` or a refusal.
 """
 
 from __future__ import annotations
@@ -50,11 +71,14 @@ from __future__ import annotations
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import Any, Protocol
+from typing import Any, Protocol, TypeVar
 
+from redis.exceptions import TimeoutError as RedisTimeoutError
 from redis.exceptions import WatchError
 
 from gateway_v2.runtime.store_keys import KEYS, StoreKeys
+
+_T = TypeVar("_T")
 
 __all__ = (
     "BudgetLease",
@@ -73,6 +97,28 @@ Not a capacity position: it is the retry budget for the WATCH/MULTI compare-and-
 ``EVAL`` equivalent), so a pathologically contended pool cannot spin the off-path refill task
 forever. A real store commits the ``EVAL`` in one shot; this bound exists only because the
 optimistic equivalent can lose the race and must give up rather than loop unboundedly.
+"""
+
+_IDEMPOTENT_READ_RETRIES = 1
+"""R2-14: an Idempotent_Read is retried **at most once** on a store timeout.
+
+Not a capacity position: it is the retry budget for a side-effect-free read (``read_generation``).
+``1`` means the read is attempted twice at most — the original plus a single retry — and a second
+timeout surfaces (Req 8.1, 8.3). A mutating acquire/return is **never** routed through this and is
+never retried on timeout (Req 8.2).
+"""
+
+_STORE_TIMEOUT_ERRORS: tuple[type[BaseException], ...] = (
+    RedisTimeoutError,
+    TimeoutError,
+)
+"""The timeout signatures a bounded store read can raise.
+
+``redis.exceptions.TimeoutError`` is what redis-py raises when ``socket_timeout`` fires; the builtin
+``TimeoutError`` (which ``asyncio.TimeoutError`` aliases on 3.11+, and which ``fakeredis`` /
+``asyncio.wait_for`` raise) covers the OS-level ``ETIMEDOUT`` and the event-loop timeout path. A
+non-timeout store error is NOT retried — it is not a transient TCP RTO spike, so it surfaces
+immediately.
 """
 
 
@@ -235,6 +281,44 @@ class BudgetLease:
         """Whether an Async_Refill is currently in flight (the single-flight guard)."""
         return self._state.refill_in_flight
 
+    # --- store-touching: idempotent read with retry-once boundary (R2-14) --------------------- #
+
+    async def _read_once_retrying(
+        self,
+        coro_factory: Callable[[], Awaitable[_T]],
+    ) -> _T:
+        """Run a single **idempotent** store read, retrying **at most once** on a timeout (R2-14).
+
+        ``coro_factory`` must build a fresh awaitable for one *side-effect-free* read (a plain
+        ``GET``), so retrying it cannot double-apply anything. On a store timeout
+        (``_STORE_TIMEOUT_ERRORS``) the read is retried exactly once; a **second** timeout is
+        re-raised so it surfaces to the caller (Req 8.1, 8.3). A non-timeout error is never retried
+        — only the transient cross-zone TCP RTO spike is (Req 8.1). This is the ONLY retry surface
+        in the module: the mutating WATCH/MULTI acquire/return are **never** routed through it
+        (Req 8.2), so a timeout on a mutating op surfaces and the off-path refill reschedules.
+        """
+        attempts_left = _IDEMPOTENT_READ_RETRIES
+        while True:
+            try:
+                return await coro_factory()
+            except _STORE_TIMEOUT_ERRORS:
+                if attempts_left <= 0:
+                    # The single retry also timed out: surface rather than retry again (Req 8.3).
+                    raise
+                attempts_left -= 1
+
+    async def read_generation(self) -> int:
+        """Read the store's current Budget_Generation. Idempotent (no side effects), retry-once.
+
+        A plain ``GET`` of the generation key, routed through ``_read_once_retrying`` so a transient
+        cross-zone timeout is retried once (Req 8.1) and a second timeout surfaces (Req 8.3). This
+        is the lease's representative Idempotent_Read surface — a generation pre-check the façade or
+        the refill path can use to re-read the generation **without** entering the mutating
+        transaction. It never decrements the pool, sets a lease, or writes anything.
+        """
+        generation_key = self._keys.budget_generation(self._config.org)
+        return _as_int(await self._read_once_retrying(lambda: self._client.get(generation_key)))
+
     # --- store-touching: acquire -------------------------------------------------------------- #
 
     async def acquire(self, generation: int) -> bool:
@@ -300,6 +384,11 @@ class BudgetLease:
                     # A concurrent worker touched the pool or generation between the WATCH and the
                     # EXEC: retry the whole optimistic cycle. This is the only path a real EVAL
                     # would not have, and it never over-grants — the retry re-reads the pool.
+                    #
+                    # NOTE (R2-14 / Req 8.2): only a WatchError retries here. A store **timeout**
+                    # inside this mutating WATCH/MULTI is NOT caught and propagates out of
+                    # ``acquire`` unretried — a retry could double-apply the DECRBY/SET. The timeout
+                    # surfaces; the off-path refill reschedules a fresh attempt later.
                     continue
                 else:
                     return grant, current_gen
@@ -406,6 +495,8 @@ class BudgetLease:
                     pipe.delete(lease_key)
                     await pipe.execute()
                 except WatchError:
+                    # Only contention retries. A store timeout on this mutating return propagates
+                    # unretried (R2-14 / Req 8.2): a retried INCRBY could double-return the budget.
                     continue
                 else:
                     break

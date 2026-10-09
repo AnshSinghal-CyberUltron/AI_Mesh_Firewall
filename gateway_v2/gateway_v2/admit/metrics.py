@@ -42,13 +42,21 @@ from gateway_v2.runtime.holdback_metrics import Histogram
 __all__ = (
     "PREFIX",
     "QUEUE_NAMES",
+    "QUOTA_PREFIX",
     "AdmissionMetrics",
     "AdmissionReading",
     "QueueReport",
+    "QuotaMetrics",
+    "QuotaReading",
     "ShedReason",
 )
 
 PREFIX = "amf_admit"
+
+QUOTA_PREFIX = "amf_quota"
+"""Prefix for the budget-lease quota series (R2-09 / GW06). The three fixed series are
+``amf_quota_lease_overshoot``, ``amf_quota_async_refill_total`` and
+``amf_quota_budget_unavailable_total`` — fixed, LABEL-FREE, and never tenant-derived (R12.2)."""
 
 
 QUEUE_NAMES: tuple[str, ...] = ("request", "guard", "dispatch", "egress", "audit")
@@ -178,4 +186,95 @@ class AdmissionMetrics:
             admitted_total=self._admitted_total,
             shed_total=MappingProxyType(dict(self._shed_total)),
             fail_open_total=self._fail_open_total,
+        )
+
+
+# --------------------------------------------------------------------------- #
+# Budget-lease quota producer (R2-09, GW06) — producer-only, label-free
+# --------------------------------------------------------------------------- #
+
+
+@dataclass(frozen=True, slots=True)
+class QuotaReading:
+    """A frozen reading of the budget-lease quota producer. Every series is LABEL-FREE (R12.2).
+
+    The three fixed series the design names (Req 12.4), each present from the FIRST snapshot so
+    "no refills / no refusals" and "series absent" cannot look the same to an alarm (Req 12.3):
+
+    * ``lease_overshoot`` — ``amf_quota_lease_overshoot``, the declared aggregate overshoot a worker
+      can hold in flight (Req 7.4). A gauge the operator reads to see the ``limit + overshoot``
+      bound; it is a value the producer is told once (``set_overshoot``) and reports, seeded ``0``.
+    * ``async_refill_total`` — ``amf_quota_async_refill_total``, the count of Async_Refills that ran
+      off the request path (bumped by :meth:`QuotaMetrics.observe_async_refill`).
+    * ``budget_unavailable_total`` — ``amf_quota_budget_unavailable_total``, the count of
+      ``budget_unavailable`` refusals (bumped by :meth:`QuotaMetrics.observe_budget_unavailable`).
+
+    None of the three carries a tenant-derived (owner / org) dimension — the producer exposes no
+    such parameter, so no per-tenant series can ever be created (R2-10 / R12.2).
+    """
+
+    lease_overshoot: int
+    async_refill_total: int
+    budget_unavailable_total: int
+
+
+class QuotaMetrics:
+    """Producer for the budget-lease quota series. O(1) observe; reads nothing on the hot path.
+
+    Mirrors the :class:`AdmissionMetrics` producer-vs-publisher split: it emits a FIXED set of
+    label-free series with no tenant-derived dimension, and GW14d owns the ``# TYPE`` exposition and
+    fleet-wide publication. Every series is seeded to ``0`` at construction (real zeros, never
+    absence — Req 12.3), so the first ``snapshot`` already reports all three.
+
+    This producer structurally satisfies **both** hooks the already-written code duck-types against:
+
+    * :meth:`observe_async_refill` — called by
+      :meth:`gateway_v2.admit.lease.BudgetLease._refill` (so a ``QuotaMetrics`` satisfies
+      :class:`gateway_v2.admit.lease.QuotaMetricsLike`).
+    * :meth:`observe_budget_unavailable` — called best-effort by
+      :meth:`gateway_v2.admit.quota.QuotaComponent._refuse`.
+
+    No method accepts an ``owner`` / ``org`` / ``tenant`` parameter — the label set is fixed and
+    finite (R12.2). ``set_overshoot`` publishes the declared aggregate overshoot (Req 7.4) once from
+    the façade/bounds derivation; ``snapshot`` is the only reader and returns a frozen
+    :class:`QuotaReading` that cannot drift under later observations.
+    """
+
+    def __init__(self) -> None:
+        # Real zeros from the first snapshot (R12.3): "no refills / no refusals / overshoot 0" is a
+        # reported value, never an absent series.
+        self._lease_overshoot = 0
+        self._async_refill_total = 0
+        self._budget_unavailable_total = 0
+
+    def set_overshoot(self, overshoot: int) -> None:
+        """Publish the declared aggregate lease overshoot (Req 7.4). O(1), overwrites the gauge.
+
+        The façade/bounds derivation tells the producer the declared ``limit + overshoot`` bound
+        once (at most one in-flight chunk per worker/replica); the producer reports it so the
+        aggregate bound is observable (Req 7.4 / 12.4). A gauge, not a counter: the latest value
+        wins. A negative value is rejected — the overshoot is a non-negative declared count.
+        """
+        if overshoot < 0:
+            raise ValueError(f"overshoot must be a non-negative declared count, got {overshoot!r}")
+        self._lease_overshoot = overshoot
+
+    def observe_async_refill(self) -> None:
+        """Record that one Async_Refill ran off the request path. O(1), no I/O (Req 12.4)."""
+        self._async_refill_total += 1
+
+    def observe_budget_unavailable(self) -> None:
+        """Record one ``budget_unavailable`` refusal. O(1), no I/O (Req 12.4)."""
+        self._budget_unavailable_total += 1
+
+    def snapshot(self) -> QuotaReading:
+        """Build the current reading — the only method that reads the accumulated state.
+
+        Returns a frozen :class:`QuotaReading` carrying all three fixed series; the counters are
+        copied by value so the returned reading cannot drift under later observations.
+        """
+        return QuotaReading(
+            lease_overshoot=self._lease_overshoot,
+            async_refill_total=self._async_refill_total,
+            budget_unavailable_total=self._budget_unavailable_total,
         )
