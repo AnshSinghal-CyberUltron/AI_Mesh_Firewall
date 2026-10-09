@@ -51,6 +51,7 @@ from gateway_v2.dispatch.routing import DispatchRouter
 from gateway_v2.edge import errors
 from gateway_v2.edge.cancel import InFlightControl, InFlightControlSource, KillLatch
 from gateway_v2.edge.stream_control import FirstByteLatch, StreamAttempt, run_with_no_splice
+from gateway_v2.edge.stream_timeouts import StreamTimeout, StreamTimeouts
 from gateway_v2.edge.wire.sse import SSEEncoder
 from gateway_v2.egress.backpressure import Coalescer
 from gateway_v2.egress.output_guard import OutputResolver
@@ -217,6 +218,17 @@ class ChatRoute:
         declared ``Error_Frame`` (``STREAM_MAX_DURATION`` / ``STREAM_KILLED`` /
         ``STREAM_KEY_REVOKED`` / ``STREAM_PLAN_CHANGED`` / ``STREAM_SNAPSHOT_STALE``) itself.
 
+        **Bounded timeouts (C27 / R9).** A per-request :class:`StreamTimeouts` wraps the serving
+        loop's two awaits with the three derived C27 bounds — a sibling cut to the R10 triggers
+        that flips the SAME :class:`KillLatch` so the terminal frame renders at the ONE terminal
+        site. The inter-chunk bound (R9.2) wraps the provider's next-event await in
+        :func:`_as_chunks`; the write (R9.4) + push-only idle (R9.3) bounds wrap the downstream
+        ``send`` in ``_sink``. A breach flips the latch with its code and raises
+        :class:`StreamTimeout`, which the no-splice driver surfaces as a byte-less-or-terminal
+        failure; :meth:`_finish_stream` then renders the latch's timeout code as the declared
+        ``Error_Frame`` (``STREAM_INTER_CHUNK_TIMEOUT`` / ``STREAM_IDLE_TIMEOUT`` /
+        ``STREAM_WRITE_TIMEOUT``).
+
         On a clean finish the terminal ``[DONE]`` marker is emitted; when every eligible attempt
         failed before the first byte the caller rendered no byte and the stream closes without a
         splice (R7.4).
@@ -230,26 +242,60 @@ class ChatRoute:
             clock=self.clock,
             kill_latch=kill_latch,
         )
+        timeouts = StreamTimeouts(
+            contract=self.contract,
+            kill_latch=kill_latch,
+            clock=self.clock,
+        )
 
         async def _sink(frame: DownstreamFrame) -> None:
             if sent_terminal.is_set():
                 return
-            if frame.error_code is not None:
-                await _send_sse(send, encoder.error(frame.error_code))
+            error_code = frame.error_code
+            if error_code is not None:
+                # The terminal error write is bounded by the write/idle timeout too (R9.3/R9.4)
+                # so a client that stops reading cannot wedge the stream on the terminal frame.
+                await timeouts.send(lambda: _send_sse(send, encoder.error(error_code)))
                 sent_terminal.set()
                 return
             # The first released content byte closes the no-splice gate (R7.2): once a byte is on
             # the wire the orchestration will never attempt a second upstream response (R7.4).
             latch.set_on_release()
-            await _send_sse(send, encoder.content(frame))
+            # Each downstream content write is bounded by the Write_Timeout, and the inter-write
+            # gap by the Idle_Timeout (R9.3/R9.4); a breach flips the kill latch + raises.
+            await timeouts.send(lambda: _send_sse(send, encoder.content(frame)))
 
         offered = _TerminalLatch()
 
         def _factory() -> StreamAttempt | None:
-            return self._next_attempt(offered, latch, _sink, coalescer, kill_latch, control)
+            return self._next_attempt(
+                offered, latch, _sink, coalescer, kill_latch, control, timeouts
+            )
 
-        await run_with_no_splice(latch, _factory)
+        await self._run_attempts(latch, _factory)
         await self._finish_stream(send, encoder, kill_latch, sent_terminal)
+
+    async def _run_attempts(
+        self,
+        latch: FirstByteLatch,
+        factory: Callable[[], StreamAttempt | None],
+    ) -> None:
+        """Drive the no-splice attempt loop, swallowing a timeout cut as a terminal failure (R9).
+
+        :func:`run_with_no_splice` re-raises a post-first-byte failure (R7.3). A C27 timeout is a
+        legitimate terminal cut, not a splice candidate: it has already flipped the per-request
+        :class:`KillLatch` with its posture code, so the stream must terminate and render that
+        code — never retry. Catching :class:`StreamTimeout` here lets the loop fall through to
+        :meth:`_finish_stream`, which reads the latch reason and emits the declared timeout
+        ``Error_Frame`` at the single terminal site (R9.2–R9.4, fail closed: the resources are
+        released as the loop unwinds).
+        """
+        try:
+            await run_with_no_splice(latch, factory)
+        except StreamTimeout:
+            # The latch already carries the timeout reason; _finish_stream renders it. The raise
+            # exists only to unwind the stalled await — resources release as the loop exits.
+            return
 
     async def _finish_stream(
         self,
@@ -260,13 +306,20 @@ class ChatRoute:
     ) -> None:
         """Close the stream: render an in-flight cut's ``Error_Frame`` or the ``[DONE]`` marker.
 
-        If an in-flight trigger cut the stream (R10), the per-request :class:`KillLatch` carries
-        the reason posture code the FIRST trigger set; the handler renders it as the declared
-        terminal ``Error_Frame`` here (the pass-through pipeline does not emit one of its own), so
-        a max-duration cut shows ``STREAM_MAX_DURATION`` and a key revocation shows
-        ``STREAM_KEY_REVOKED`` (R10.2-R10.6). No content frame follows the terminal frame
-        (``sent_terminal`` guards against a double terminal). Only when nothing was cut and no
+        If an in-flight trigger cut the stream (R10) OR a C27 timeout tripped (R9.2-R9.4), the
+        per-request :class:`KillLatch` carries the reason posture code the FIRST cut set; the
+        handler renders it as the declared terminal ``Error_Frame`` here (the pass-through
+        pipeline does not emit one of its own), so a max-duration cut shows ``STREAM_MAX_DURATION``,
+        a key revocation shows ``STREAM_KEY_REVOKED`` (R10.2-R10.6), and a stall shows
+        ``STREAM_INTER_CHUNK_TIMEOUT`` / ``STREAM_IDLE_TIMEOUT`` / ``STREAM_WRITE_TIMEOUT``
+        (R9.2-R9.4) — one terminal site for every cut reason. No content frame follows the terminal
+        frame (``sent_terminal`` guards against a double terminal). Only when nothing was cut and no
         terminal has been emitted does the clean ``[DONE]`` marker close the stream.
+
+        The in-loop content/error writes in ``_sink`` are the ones bounded by the Write_Timeout +
+        Idle_Timeout (R9.3/R9.4); this terminal close is a best-effort final marker emitted after
+        the resources have already been released by the unwinding loop, so it uses the plain
+        ``_send_sse`` and never re-raises a timeout past the handler.
         """
         if sent_terminal.is_set() or encoder.terminated:
             return
@@ -285,6 +338,7 @@ class ChatRoute:
         coalescer: Coalescer,
         kill_latch: KillLatch,
         control: InFlightControl,
+        timeouts: StreamTimeouts,
     ) -> StreamAttempt | None:
         """Yield the next eligible stream attempt, or ``None`` when none remains (R7.1).
 
@@ -296,8 +350,9 @@ class ChatRoute:
         latch still permits a retry, so a fresh attempt is impossible once a byte is on the wire.
 
         The attempt hands the per-request :class:`KillLatch` to ``pipeline.run`` as the ``killed()``
-        seam and threads the :class:`InFlightControl` into :func:`_as_chunks`, which evaluates every
-        R10 trigger at each chunk boundary (R10.2-R10.7).
+        seam and threads the :class:`InFlightControl` + :class:`StreamTimeouts` into
+        :func:`_as_chunks`, which evaluates every R10 trigger at each chunk boundary (R10.2-R10.7)
+        and bounds the next-upstream-event await by the Inter_Chunk_Timeout (R9.2).
         """
         if offered.is_set():
             return None
@@ -306,7 +361,7 @@ class ChatRoute:
         async def _attempt() -> bool:
             pipeline = self._build_pipeline()
             request = UpstreamRequest(destination=self._destination(), body=_EMPTY_BODY)
-            chunks = _as_chunks(self.provider.open(request), coalescer, control)
+            chunks = _as_chunks(self.provider.open(request), coalescer, control, timeouts)
             await pipeline.run(chunks, sink, kill_latch)
             # The sink set the first-byte latch the instant a content byte went out; report that
             # as the "released a byte" signal so run_with_no_splice closes the gate (R7.2/R7.4).
@@ -449,6 +504,7 @@ async def _as_chunks(
     events: AsyncIterator[UpstreamEvent],
     coalescer: Coalescer,
     control: InFlightControl,
+    timeouts: StreamTimeouts,
 ) -> AsyncIterator[UpstreamChunk]:
     """Adapt a provider event stream to the shipped ``UpstreamChunk`` source, bounded + cut-aware.
 
@@ -469,12 +525,30 @@ async def _as_chunks(
     ``max_cut_latency_s()`` budget. The pass-through pipeline does not render a terminal frame on a
     killed source, so the handler reads the latch reason afterwards and emits the matching
     ``Error_Frame`` (see :meth:`ChatRoute._finish_stream`).
+
+    **Inter-chunk timeout at the same boundary (R9.2).** The ``await`` on the provider's NEXT
+    event is wrapped by :meth:`StreamTimeouts.next_event` in ``asyncio.wait_for`` with the derived
+    ``inter_chunk_timeout_s()`` (no literal, R9.5). If the next upstream chunk does not arrive in
+    time, the stalled read is cancelled, the shared :class:`KillLatch` is flipped with
+    ``STREAM_INTER_CHUNK_TIMEOUT``, and :class:`StreamTimeout` propagates out of this generator so
+    the pipeline + serving loop unwind and release resources — the handler then renders the
+    declared ``Error_Frame`` from the latch reason (R9.2, fail closed). The iterator is driven by
+    an explicit ``__anext__`` so the per-event await is the thing bounded; ``StopAsyncIteration``
+    ends the stream normally.
     """
     # Evaluate before the first chunk too: a max-duration/stale/kill signal already true at stream
     # start must cut before any upstream byte is forwarded (R10.7, fail-closed).
     if control.evaluate() is not None:
         return
-    async for event in events:
+    iterator = events.__aiter__()
+    while True:
+        # Bound the wait for the NEXT upstream event by the Inter_Chunk_Timeout (R9.2). Driving
+        # __anext__ explicitly (rather than `async for`) is what lets the per-event await be
+        # wrapped; a breach raises StreamTimeout (latch already flipped) and unwinds the stream.
+        try:
+            event = await timeouts.next_event(iterator.__anext__())
+        except StopAsyncIteration:
+            return
         text = "".join(delta for _, delta in event.text_deltas)
         nbytes = len(text.encode("utf-8"))
         coalescer.offer(nbytes)
