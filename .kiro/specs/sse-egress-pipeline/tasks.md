@@ -36,8 +36,8 @@ modules and the shipped house idiom). All code targets `mypy --strict` + `ruff` 
 
 ## Tasks
 
-- [ ] 1. Capacity authority — `runtime/resources.py` derivations (bottom of the build order)
-  - [ ] 1.1 Add the GW12 `ResourceContract` derivations
+- [x] 1. Capacity authority — `runtime/resources.py` derivations (bottom of the build order)
+  - [x] 1.1 Add the GW12 `ResourceContract` derivations
     - Add module-level literals `_INTER_CHUNK_TIMEOUT_MULT`, `_IDLE_TIMEOUT_MULT`,
       `_WRITE_TIMEOUT_MULT`, `_MAX_STREAM_DURATION_MULT`, `_MAX_CUT_LATENCY_MULT`,
       `_MAX_SNAPSHOT_AGE_MULT`, `_CANCEL_BOUND_MULT` (the ONLY module permitted capacity
@@ -55,7 +55,7 @@ modules and the shipped house idiom). All code targets `mypy --strict` + `ruff` 
     - _Design: Components §1, Data Models (derivation formulas)_
     - _Requirements: 9.1, 9.5, 10.1, 16.5_
 
-  - [ ]* 1.2 Write unit tests for the derivation formulas and fail-closed floors
+  - [x]* 1.2 Write unit tests for the derivation formulas and fail-closed floors
     - `tests/runtime/test_lgw12_resources.py`: assert each method equals `p99_s × mult`, that
       a non-positive derivation raises `CapacityUnavailable`, and that `snapshot()` surfaces
       every new field
@@ -63,8 +63,8 @@ modules and the shipped house idiom). All code targets `mypy --strict` + `ruff` 
     - _Design: Testing Strategy (supporting unit tests)_
     - _Requirements: 9.1, 10.1_
 
-- [ ] 2. Stream posture codes — `domain/posture.py` (codes only, bottom layer)
-  - [ ] 2.1 Add the GW12 value-codes
+- [x] 2. Stream posture codes — `domain/posture.py` (codes only, bottom layer)
+  - [x] 2.1 Add the GW12 value-codes
     - Add `STREAM_INTER_CHUNK_TIMEOUT`, `STREAM_IDLE_TIMEOUT`, `STREAM_WRITE_TIMEOUT`,
       `STREAM_MAX_DURATION`, `STREAM_KEY_REVOKED`, `STREAM_PLAN_CHANGED`,
       `STREAM_SNAPSHOT_STALE`, `STREAM_MALFORMED_UPSTREAM`, `STREAM_BUFFER_UNAVAILABLE` as
@@ -74,14 +74,14 @@ modules and the shipped house idiom). All code targets `mypy --strict` + `ruff` 
     - _Design: Components §7 (new posture codes), House conventions_
     - _Requirements: 3.3, 9.2, 10.2_
 
-  - [ ]* 2.2 Write unit tests for code uniqueness and single-spelling
+  - [x]* 2.2 Write unit tests for code uniqueness and single-spelling
     - `tests/domain/test_lgw12_posture.py`: assert each new code is a unique non-empty string
       and no duplicate spelling exists across the module
     - _Design: Error Handling (codes-vs-render boundary)_
     - _Requirements: 3.3_
 
-- [ ] 3. Bounded coalescer + credit flow control — `egress/backpressure.py`
-  - [ ] 3.1 Implement `Coalescer` and `CreditFlowControl`
+- [x] 3. Bounded coalescer + credit flow control — `egress/backpressure.py`
+  - [x] 3.1 Implement `Coalescer` and `CreditFlowControl`
     - Frozen slotted `CreditState(granted, consumed)` (outstanding derived, never stored) and
       `CoalescerVerdict(code, high_water)`; imports only `runtime` + `domain` (below `detect`)
     - `Coalescer.high_water()` returns `contract.stream_buffer_bytes(active_streams())` — NO
@@ -97,34 +97,34 @@ modules and the shipped house idiom). All code targets `mypy --strict` + `ruff` 
     - _Design: Components §2, Data Models (CreditState/CoalescerVerdict)_
     - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 5.1, 5.2, 5.3, 5.5, 5.7_
 
-  - [ ]* 3.2 Write property test for the memory-bound invariant
+  - [x]* 3.2 Write property test for the memory-bound invariant
     - `tests/egress/test_lgw12_coalescer.py` — **Property 1: Memory-bound invariant**
     - **Validates: Requirements 4.4, 5.3, 5.4**; seeded `random.Random` ≥10,000 iters, no
       hypothesis: total buffered ≤ `active_streams × stream_buffer_bytes(active_streams)` at
       every observation point; also assert fail-closed admit below 1 byte (R4.5)
     - _Design: Correctness Properties → Property 1_
 
-  - [ ]* 3.3 Write property test for credit conservation
+  - [x]* 3.3 Write property test for credit conservation
     - `tests/egress/test_lgw12_credit.py` — **Property 2: Credit conservation**
     - **Validates: Requirements 5.7**; ≥10,000 iters: outstanding + consumed = granted with
       zero deviation; grant-exactly-N and grant-zero-when-idle covered
     - _Design: Correctness Properties → Property 2_
 
-- [ ] 4. Dispatch layer — `dispatch/transform.py`, `dispatch/routing.py`, `dispatch/provider.py`
-  - [ ] 4.1 Implement `Transform` (byte-verified round-trip)
+- [x] 4. Dispatch layer — `dispatch/transform.py`, `dispatch/routing.py`, `dispatch/provider.py`
+  - [x] 4.1 Implement `Transform` (byte-verified round-trip)
     - `dispatch/transform.py`: `to_provider(GatewayRequest) -> UpstreamRequest` and
       `from_provider(UpstreamEvent) -> DownstreamFrame`; round-trip of a well-formed payload
       is equivalent; pure, no clock/rng/I/O
     - _Design: Components §5_
     - _Requirements: 8.4_
 
-  - [ ] 4.2 Implement `DispatchRouter` (deterministic selection)
+  - [x] 4.2 Implement `DispatchRouter` (deterministic selection)
     - `dispatch/routing.py`: `select(plan) -> str` is a pure function of plan inputs; identical
       plan → identical destination; no clock/rng/I/O
     - _Design: Components §4_
     - _Requirements: 8.3_
 
-  - [ ] 4.3 Implement `ProviderClient` protocol + `StubProviderClient`
+  - [x] 4.3 Implement `ProviderClient` protocol + `StubProviderClient`
     - `dispatch/provider.py`: `@runtime_checkable ProviderClient` with `open(UpstreamRequest)
       -> AsyncIterator[UpstreamEvent]` and `async abort()`; frozen slotted `UpstreamRequest`
       and `UpstreamEvent(text_deltas, final, error_frame)`
@@ -133,7 +133,7 @@ modules and the shipped house idiom). All code targets `mypy --strict` + `ruff` 
     - _Design: Components §3, Data Models (UpstreamRequest/UpstreamEvent)_
     - _Requirements: 8.1, 8.2, 8.5, 8.6_
 
-  - [ ]* 4.4 Write determinism + round-trip + abort unit tests
+  - [x]* 4.4 Write determinism + round-trip + abort unit tests
     - `tests/dispatch/test_lgw12_routing.py`: identical plan → identical destination
     - `tests/dispatch/test_lgw12_transform.py` — **Property 8 (transform half): round-trip**
     - **Validates: Requirements 8.4**; ≥10,000 iters, no hypothesis
@@ -142,8 +142,8 @@ modules and the shipped house idiom). All code targets `mypy --strict` + `ruff` 
     - _Design: Correctness Properties → Property 8; Testing Strategy_
     - _Requirements: 8.1, 8.2, 8.3, 8.5_
 
-- [ ] 5. SSE codec + state machine — `edge/wire/sse.py`
-  - [ ] 5.1 Implement `SSEEncoder` and `SSEDecoder`
+- [x] 5. SSE codec + state machine — `edge/wire/sse.py`
+  - [x] 5.1 Implement `SSEEncoder` and `SSEDecoder`
     - `edge/wire/sse.py` (the ONLY layer allowed to render SSE): frozen slotted `SSEChunk`,
       `SSEChoice`, `SSEErrorFrame`
     - `SSEEncoder.content(frame)` → `data: {json}\n\n`; `done()` → `data: [DONE]\n\n`;
@@ -155,26 +155,26 @@ modules and the shipped house idiom). All code targets `mypy --strict` + `ruff` 
     - _Design: Components §6, Data Models (SSEChunk/SSEChoice/SSEErrorFrame)_
     - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6_
 
-  - [ ]* 5.2 Write property test for codec round-trip
+  - [x]* 5.2 Write property test for codec round-trip
     - `tests/edge/test_lgw12_sse_codec.py` — **Property 8: SSE codec round-trip**
     - **Validates: Requirements 1.6, 8.4**; ≥10,000 iters: decode-then-encode of a well-formed
       content frame yields an equivalent `DownstreamFrame`
     - _Design: Correctness Properties → Property 8_
 
-  - [ ]* 5.3 Write property test for split-surrogate confluence
+  - [x]* 5.3 Write property test for split-surrogate confluence
     - `tests/edge/test_lgw12_sse_codec.py` — **Property 9: Split-surrogate confluence**
     - **Validates: Requirements 1.4**; ≥10,000 iters: decoding the same byte stream under all
       chunk-boundary placements (including boundaries splitting a surrogate escape) yields the
       same code points; also assert `malformed()` fail-closed on undecodable bytes (R1.5)
     - _Design: Correctness Properties → Property 9_
 
-- [ ] 6. Checkpoint — lower layers green
+- [x] 6. Checkpoint — lower layers green
   - Ensure all tests pass, ask the user if questions arise. Run `mypy --strict`, `ruff`,
     `lint-imports`, and `check_capacity_literals`/`check_no_module_mutable`/
     `check_frozen_dataclasses` over `runtime`/`domain`/`egress`/`dispatch`/`edge/wire`.
 
-- [ ] 7. Error envelope + ASGI app assembly — `edge/errors.py`, `edge/app.py`
-  - [ ] 7.1 Implement `Error_Envelope`
+- [x] 7. Error envelope + ASGI app assembly — `edge/errors.py`, `edge/app.py`
+  - [x] 7.1 Implement `Error_Envelope`
     - `edge/errors.py`: the single value-code → HTTP/SSE renderer; `_ENVELOPE` table as a
       `MappingProxyType`; `render(code, as_sse)` maps a code to a declared HTTP status + SSE
       `Error_Frame`; an unmapped code renders a declared generic error, never raw internal
@@ -182,7 +182,7 @@ modules and the shipped house idiom). All code targets `mypy --strict` + `ruff` 
     - _Design: Components §7 (Error_Envelope), Error Handling (codes-vs-render)_
     - _Requirements: 3.1, 3.2, 3.3, 3.4_
 
-  - [ ] 7.2 Implement `build_app` ASGI assembly
+  - [x] 7.2 Implement `build_app` ASGI assembly
     - `edge/app.py`: `build_app(contract, provider, scanner, resolver, metrics_registry,
       clock)` assembles router + lifespan + `/metrics` + `/readyz`, replacing `app = None`
     - Wire the streaming chat route to the coalescer + injected `StreamPipeline` (scanner +
@@ -195,7 +195,7 @@ modules and the shipped house idiom). All code targets `mypy --strict` + `ruff` 
     - _Design: Components §7 (ASGI_App), Architecture (layer map)_
     - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 14.1, 14.2_
 
-  - [ ]* 7.3 Write unit tests for the envelope and app plumbing
+  - [x]* 7.3 Write unit tests for the envelope and app plumbing
     - `tests/edge/test_lgw12_errors.py`: envelope mapping + generic fallback for an unmapped
       code (R3.4)
     - `tests/edge/test_lgw12_app.py`: router registers chat + placeholders, `/readyz` names
@@ -203,8 +203,8 @@ modules and the shipped house idiom). All code targets `mypy --strict` + `ruff` 
     - _Design: Testing Strategy (supporting unit tests)_
     - _Requirements: 2.1, 2.4, 2.5, 2.6, 3.4_
 
-- [ ] 8. First-byte latch — `edge`
-  - [ ] 8.1 Implement `FirstByteLatch` and wire the no-splice gate
+- [x] 8. First-byte latch — `edge`
+  - [x] 8.1 Implement `FirstByteLatch` and wire the no-splice gate
     - Mutable slotted one-way `FirstByteLatch` (documented exception): `may_retry()` true only
       while unset; `set_on_release()` flips on the first released content byte; after set, an
       upstream failure yields clean termination or a declared `Error_Frame`, never a spliced
@@ -214,15 +214,15 @@ modules and the shipped house idiom). All code targets `mypy --strict` + `ruff` 
     - _Design: Components §9, Data Models (FirstByteLatch)_
     - _Requirements: 7.1, 7.2, 7.3, 7.4_
 
-  - [ ]* 8.2 Write property test for no-post-first-byte-splice
+  - [x]* 8.2 Write property test for no-post-first-byte-splice
     - `tests/edge/test_lgw12_first_byte_latch.py` — **Property 3: No-post-first-byte-splice**
     - **Validates: Requirements 7.3, 7.4**; ≥10,000 iters: once set, downstream carries bytes
       from at most one upstream response and a splice attempt does not alter the first
       response's bytes
     - _Design: Correctness Properties → Property 3_
 
-- [ ] 9. Cancellation controller — `edge/cancel.py`
-  - [ ] 9.1 Implement `CancellationController`
+- [x] 9. Cancellation controller — `edge/cancel.py`
+  - [x] 9.1 Implement `CancellationController`
     - `edge/cancel.py`: frozen slotted `CancelOutcome(elapsed_ms, bound_exceeded,
       released_bytes)`; `on_disconnect()` starts the clock, calls `provider.abort()` AND sets
       `killed() → True` within `contract.cancellation_bound_s()`, stops upstream reads,
@@ -234,15 +234,15 @@ modules and the shipped house idiom). All code targets `mypy --strict` + `ruff` 
     - _Design: Components §8, Control path diagram, Data Models (CancelOutcome)_
     - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5, 6.6_
 
-  - [ ]* 9.2 Write property test for cancellation-within-bound
+  - [x]* 9.2 Write property test for cancellation-within-bound
     - `tests/edge/test_lgw12_cancellation.py` — **Property 4: Cancellation-within-bound**
     - **Validates: Requirements 6.3, 6.5, 6.6**; ≥10,000 iters, async via `asyncio.run`:
       disconnect injected at any chunk boundary completes within `cancellation_bound_s()` and
       buffered bytes + credit return to baseline
     - _Design: Correctness Properties → Property 4_
 
-- [ ] 10. In-flight control + max stream duration (C24) — drive the `CUT_NEXT_CHUNK` seam
-  - [ ] 10.1 Implement the in-flight control triggers
+- [x] 10. In-flight control + max stream duration (C24) — drive the `CUT_NEXT_CHUNK` seam
+  - [x] 10.1 Implement the in-flight control triggers
     - In the controller (reusing `edge/cancel.py` + the shipped `InFlightKill.CUT_NEXT_CHUNK`
       seam): `max_stream_duration_s()`, kill switch, key revocation, plan change, and
       stale/unavailable snapshot (age > `max_snapshot_age_s()`) all drive `killed()` within
@@ -252,15 +252,15 @@ modules and the shipped house idiom). All code targets `mypy --strict` + `ruff` 
     - _Design: Components §8 (one seam, many triggers), Error Handling table_
     - _Requirements: 10.2, 10.3, 10.4, 10.5, 10.6, 10.7_
 
-  - [ ]* 10.2 Write unit tests mapping each R10 trigger to a cut + Error_Frame
+  - [x]* 10.2 Write unit tests mapping each R10 trigger to a cut + Error_Frame
     - `tests/edge/test_lgw12_inflight_control.py`: one test per trigger asserts a
       `CUT_NEXT_CHUNK` within `max_cut_latency_s()`, the correct code, no post-cut bytes, and
       fail-closed on a stale/missing snapshot
     - _Design: Error Handling table_
     - _Requirements: 10.2, 10.3, 10.4, 10.5, 10.6, 10.7_
 
-- [ ] 11. C27 timeout enforcement wiring
-  - [ ] 11.1 Wire inter-chunk / idle / write timeouts
+- [x] 11. C27 timeout enforcement wiring
+  - [x] 11.1 Wire inter-chunk / idle / write timeouts
     - In the controller/serving loop: compare against `inter_chunk_timeout_s()`,
       `idle_timeout_s()`, `write_timeout_s()`; on breach terminate with the matching declared
       `Error_Frame` (`STREAM_INTER_CHUNK_TIMEOUT`/`STREAM_IDLE_TIMEOUT`/`STREAM_WRITE_TIMEOUT`)
@@ -268,7 +268,7 @@ modules and the shipped house idiom). All code targets `mypy --strict` + `ruff` 
     - _Design: Components §1, Error Handling table_
     - _Requirements: 9.2, 9.3, 9.4, 9.5_
 
-  - [ ]* 11.2 Write property test for timeout termination
+  - [x]* 11.2 Write property test for timeout termination
     - `tests/runtime/test_lgw12_timeouts.py` (+ a stall case in
       `tests/edge/test_lgw12_cancellation.py`) — **Property 10: Timeout termination**
     - **Validates: Requirements 9.2, 9.3, 9.4**; ≥10,000 iters, async via `asyncio.run`: any
@@ -276,8 +276,8 @@ modules and the shipped house idiom). All code targets `mypy --strict` + `ruff` 
       resources
     - _Design: Correctness Properties → Property 10_
 
-- [ ] 12. Mid-stream provider error-frame scanning
-  - [ ] 12.1 Implement the error-frame scan loop
+- [x] 12. Mid-stream provider error-frame scanning
+  - [x] 12.1 Implement the error-frame scan loop
     - In the SSE read loop (`edge`/`dispatch`, above `detect`), reusing the injected
       `OutputResolver` + `apply_decision`: when `UpstreamEvent.error_frame is not None`, scan
       the frame through the injected scanner BEFORE forwarding any byte; `redact` → forward
@@ -287,20 +287,20 @@ modules and the shipped house idiom). All code targets `mypy --strict` + `ruff` 
     - _Design: Components §10, Error Handling table_
     - _Requirements: 11.1, 11.2, 11.3, 11.4, 11.5, 14.1, 15.1, 15.2_
 
-  - [ ]* 12.2 Write property test for byte-linearity of mid-stream scan
+  - [x]* 12.2 Write property test for byte-linearity of mid-stream scan
     - `tests/edge/test_lgw12_error_frame_scan.py` — **Property 5: Byte-linearity of mid-stream
       scan**
     - **Validates: Requirements 11.5**; ≥10,000 iters: `cost(2n) ≈ 2·cost(n)` within tolerance
     - _Design: Correctness Properties → Property 5_
 
-  - [ ]* 12.3 Write property test for fail-closed-on-scan-error
+  - [x]* 12.3 Write property test for fail-closed-on-scan-error
     - `tests/edge/test_lgw12_error_frame_scan.py` — **Property 6: Fail-closed-on-scan-error**
     - **Validates: Requirements 11.4, 15.2**; ≥10,000 iters: for any injected scan error no raw
       bytes of the affected frame are forwarded
     - _Design: Correctness Properties → Property 6_
 
-- [ ] 13. Per-request exports — `runtime/stream_metrics.py` (HoldbackMetrics split)
-  - [ ] 13.1 Implement `PerRequestExports`
+- [x] 13. Per-request exports — `runtime/stream_metrics.py` (HoldbackMetrics split)
+  - [x] 13.1 Implement `PerRequestExports`
     - New producer-only, label-free reading alongside `HoldbackMetrics` (zeros-not-absence,
       percentiles on read, publisher separate): frozen slotted `PerRequestReading(
       detector_invocations, release_lag_ms, buffer_high_water, active_stream_memory_bound)`
@@ -313,20 +313,20 @@ modules and the shipped house idiom). All code targets `mypy --strict` + `ruff` 
     - _Design: Components §11, House conventions_
     - _Requirements: 5.6, 12.1, 12.2, 12.3, 12.4, 15.3_
 
-  - [ ]* 13.2 Write property test for no-FAIL_OPEN
+  - [x]* 13.2 Write property test for no-FAIL_OPEN
     - `tests/egress/test_lgw12_fail_closed.py` — **Property 7: No-FAIL_OPEN**
     - **Validates: Requirements 15.3**; ≥10,000 iters including every injected fault (scan
       error, timeout, cancel): the `FAIL_OPEN` counter stays zero
     - _Design: Correctness Properties → Property 7_
 
-  - [ ]* 13.3 Write unit tests for the export surface
+  - [x]* 13.3 Write unit tests for the export surface
     - `tests/runtime/test_lgw12_stream_metrics.py`: zeros-not-absence, label-free,
       detector-count matches schedule, withholding recorded on an uncomputable value
     - _Design: Testing Strategy_
     - _Requirements: 12.1, 12.2, 12.3, 12.4_
 
-- [ ] 14. C38 serving-loop discipline
-  - [ ] 14.1 Offload CPU-bound work off the serving loop
+- [x] 14. C38 serving-loop discipline
+  - [x] 14.1 Offload CPU-bound work off the serving loop
     - Run tokenization + scanning in a GIL-releasing executor (`loop.run_in_executor`, executor
       sized by `ResourceContract`, no literal), not inline; `/metrics` exposition computed off
       the loop; treat serving-loop lag as an SLO input; the forwarding loop runs no single
@@ -334,29 +334,29 @@ modules and the shipped house idiom). All code targets `mypy --strict` + `ruff` 
     - _Design: Components §12, House conventions_
     - _Requirements: 13.1, 13.2, 13.4, 13.5_
 
-  - [ ]* 14.2 Write CPU-burst isolation test
+  - [x]* 14.2 Write CPU-burst isolation test
     - `tests/edge/test_lgw12_serving_loop.py`: a CPU burst injected mid-stream keeps other
       concurrent streams' worst-chunk p99 within the derived budget
     - _Design: Correctness Properties context; Requirements 13.3_
     - _Requirements: 13.3_
 
-- [ ] 15. Local acceptance harness (LGW12-1, LGW12-7)
-  - [ ] 15.1 Build the N-stream memory-plateau harness (LGW12-1 local equivalent)
+- [x] 15. Local acceptance harness (LGW12-1, LGW12-7)
+  - [x] 15.1 Build the N-stream memory-plateau harness (LGW12-1 local equivalent)
     - `tests/egress/test_lgw12_concurrency.py`: N in-process streams over the injected harness
       assert `total buffered ≤ Active_Streams × stream_buffer_bytes(active_streams)` and
       buffered memory does not grow (pattern: shipped `test_lgw12b_concurrency.py`)
     - _Design: Local acceptance equivalents, Deferred gates (LGW12-1)_
     - _Requirements: 16.1_
 
-  - [ ] 15.2 Build the in-process ASGI conformance harness (LGW12-7 local equivalent)
+  - [x] 15.2 Build the in-process ASGI conformance harness (LGW12-7 local equivalent)
     - `tests/edge/test_lgw12_asgi_conformance.py`: in-process ASGI transport + recorded-frame
       checks for the `data: [DONE]` terminal marker, the `Error_Frame` shape, and
       split-surrogate decoding
     - _Design: Local acceptance equivalents, Deferred gates (LGW12-7)_
     - _Requirements: 16.2_
 
-- [ ] 16. Documentation + changelog (GW-card closure style; NO four-memory mirrors)
-  - [ ] 16.1 Write the plan doc, evidence dir, and AGENTS.md pointer
+- [x] 16. Documentation + changelog (GW-card closure style; NO four-memory mirrors)
+  - [x] 16.1 Write the plan doc, evidence dir, and AGENTS.md pointer
     - Create `docs/plans/<date>-gw12-sse-egress-pipeline.md` (scope, build order, what wires
       into GW12b, deferred gates); create `docs/plans/evidence/<date>-gw12/README.md` +
       `gate-results.json` (recorded gate output)
@@ -368,8 +368,8 @@ modules and the shipped house idiom). All code targets `mypy --strict` + `ruff` 
     - _Design: Deferred cloud / scale gates_
     - _Requirements: 16.3_
 
-- [ ] 17. Final verification gate
-  - [ ] 17.1 Run the full gate and reconcile evidence
+- [x] 17. Final verification gate
+  - [x] 17.1 Run the full gate and reconcile evidence
     - Run the full `gateway_v2` pytest suite + the `lgw12` subset; `mypy --strict`; `ruff`;
       `lint-imports`; and ALL AST gates: `check_capacity_literals`, `check_no_module_mutable`,
       `check_frozen_dataclasses`, `check_http_outside_edge_resolve`, `check_tenant_scale`,
@@ -379,7 +379,7 @@ modules and the shipped house idiom). All code targets `mypy --strict` + `ruff` 
     - _Design: AST / lint gates, Testing Strategy_
     - _Requirements: 14.1, 14.2, 14.3, 16.4, 16.5_
 
-- [ ] 18. Final checkpoint
+- [x] 18. Final checkpoint
   - Ensure all tests pass, ask the user if questions arise.
 
 ## Notes
