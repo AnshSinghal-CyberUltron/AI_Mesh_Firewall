@@ -258,6 +258,51 @@
   Plan: docs/plans/2026-10-08-r2-05-gw14c-audit-memory-and-durability.md.
   Evidence: docs/plans/evidence/2026-10-08-r2-05/.
 
+## R2-06 / GW12b bounded holdback changelog
+- R2-06 (2026-10-08) — BOUNDED HOLDBACK, local half CLOSED.
+  The owner-signed "≤ 3 upstream tokens held" was unimplemented: UUID held 36 tokens, sha256 34,
+  URL 15, base64 whole, 17 ms/chunk loop block at 16 KB; C4 hid the holds by construction (a byte
+  waiting on upstream disambiguation was never charged to gateway compute). FIX: hold the MINIMAL
+  suffix, hard-cap it in upstream tokens, bound per-chunk rescan to a window, publish a held-tokens
+  histogram with SPLIT latency accounting, carry a documented per-pattern trade-off; engages only
+  under an enforcing OUTPUT rule.
+  (1) `detect/windowing.py` — single `Window` definition, trailing `window_slice` inspecting ≤
+  `Window` bytes, no block on short buffers (R4).
+  (2) `detect/holdback.py` — `TokenIndex` (`_WORD` runs; UUID = 1 token), `hold_start` +
+  `classify_hold`, frozen `TRADE_OFF` table, `scan` with word-class token-cap FORCE-RELEASE of the
+  oldest tokens and a relaxed-class `2 * cap` ceiling → overflow (R1/R3/R6). Pure, property-testable.
+  (3) `runtime/holdback_config.py` — `RV_HOLDBACK_MAX_TOKENS` default 3, range 1–100, non-integer /
+  <1 / >100 → default 3 + warning naming the value (R1).
+  (4) `runtime/holdback_metrics.py` — label-free producer: held-tokens histogram + SEPARATE
+  `T_release_processing` (p99 < 20 ms) and `T_holdback_wait` + unbroken-run byte ceiling (R4/R5).
+  (5) `egress/output_guard.py` — `enforcing_output_rules`, `OutputResolver` protocol, `apply_decision`
+  (fail-closed on uncovered redaction / BLOCK) (R2/R3).
+  (6) `egress/stream.py` — thin INJECTABLE `StreamPipeline` (chunks + decision + kill injected);
+  release loop; force-release trade-off state machine (redact-remainder vs terminate; fail-closed
+  `holdback_overflow`/`undefined_tradeoff`/`scan_failure`/`output_blocked`); in-flight kill
+  `InFlightKill.CUT_NEXT_CHUNK` (R3/R6/R7).
+  (7) `egress/holdback_tradeoff.py` — egress-side mirror of the `detect.holdback.TRADE_OFF` outcome
+  (the `egress → detect` edge is forbidden), pinned to the detect table by a drift test.
+  Trade-off table (R6.1, exactly one outcome each): aws/api_token/email/uuid/sha256/url/base64 →
+  redact-remainder; jwt/card → terminate.
+  OPEN (DEFERRED CLOUD GATES, out of local scope — no cloud resources): the full 200 RPS fleet
+  capacity run (L12b-2) and GW20b fleet certification (R10.5).
+  FOUND, NOT FIXED: the placeholder `detect.holdback` scanner is NON-CONFLUENT for some
+  delimiter-containing classes (url/uuid/card/jwt/api_token) — a `:`/`/`/`.`/`-`-delimited prefix can
+  release before a match completes, so the redaction byte-boundary is split-dependent for those
+  classes; the SAFETY invariant (no raw leak, Property 1) holds UNCONDITIONALLY; byte-boundary
+  confluence is tracked for the GW07/GW08 real detector. `classify_hold` is a conservative
+  placeholder (over-holds, safe); the egress harness is thin (GW13 wires the real SSE transport);
+  `backpressure.py`/`strict.py` stay stubs.
+  VERIFY: 955 offline / 141 lgw12b-subset passed; `mypy --strict` 102 files, ruff, import-linter 2/2
+  kept, size/mutable AST gates clean. 8 correctness properties as seeded ≥ 10,000-iteration tests
+  (house idiom, no hypothesis). L12b-1 replay 24/24 combos (max word-class hold ≤ 1–2 tokens vs cap
+  3, inspected bytes = 64 = Window, per-chunk p99 14–37 µs ≪ 0.5 ms). L12b-3 detector regression 8
+  tests (raw never leaked across 5 classes × ≥ 3 split offsets, byte-identical outcome). L12b-2 LOCAL
+  equivalent co-runner median delta ≈ 0 ms, O(window) isolation.
+  Plan: docs/plans/2026-10-08-r2-06-gw12b-bounded-holdback.md.
+  Evidence: docs/plans/evidence/2026-10-08-r2-06/.
+
 ## MCP Hardening BACKSTOP changelog
 - Parallel Claude + Cursor sessions harden the multi-tenant MCP gateway. **Every hardening change is
   logged to four memories in the SAME commit:** Ruflo (`mcp__ruflo__memory_store`
