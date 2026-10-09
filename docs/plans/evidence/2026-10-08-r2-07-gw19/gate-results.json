@@ -1,0 +1,138 @@
+{
+  "card": "R2-07 / R2-08 (+ R2-18) / GW19",
+  "title": "Admission control, overload semantics, graceful drain",
+  "date": "2026-10-08",
+  "scope": "local",
+  "severity": {
+    "R2-07": "HIGH",
+    "R2-08": "HIGH",
+    "R2-18": "MEDIUM"
+  },
+  "plan": "docs/plans/2026-10-08-r2-07-r2-08-gw19-admission-control.md",
+  "gates": {
+    "pytest_full_offline_suite": {
+      "command": ".venv/bin/python -m pytest tests/ -q -p no:randomly",
+      "passed": 1057,
+      "skipped": 93,
+      "xfailed": 1,
+      "failed": 0,
+      "PASS": true,
+      "note": "full gateway_v2 offline suite re-run at the task-18 final verification gate; no regressions"
+    },
+    "pytest_lgw19_subset": {
+      "command": ".venv/bin/python -m pytest tests/ -k lgw19 -q -p no:randomly",
+      "passed": 99,
+      "deselected": 1052,
+      "failed": 0,
+      "PASS": true
+    },
+    "pytest_admit_package": {
+      "command": ".venv/bin/python -m pytest tests/admit/ -q -p no:randomly",
+      "passed": 163,
+      "failed": 0,
+      "PASS": true
+    },
+    "mypy_strict": {
+      "command": ".venv/bin/mypy --strict gateway_v2",
+      "source_files": 107,
+      "issues": 0,
+      "PASS": true
+    },
+    "ruff": {
+      "command": ".venv/bin/ruff check gateway_v2",
+      "issues": 0,
+      "PASS": true
+    },
+    "import_linter": {
+      "command": ".venv/bin/lint-imports",
+      "files_analyzed": 107,
+      "dependencies_analyzed": 150,
+      "contracts_kept": 2,
+      "contracts_broken": 0,
+      "contracts": ["Gateway v2 layers", "Resolve imports only domain"],
+      "PASS": true
+    },
+    "ast_capacity_literal_gate": {
+      "command": ".venv/bin/python -m pytest tests/gates/test_lgw19_admit_capacity_literals.py -q -p no:randomly",
+      "passed": 3,
+      "failed": 0,
+      "rule": "no numeric capacity literal in admit/ except via a ResourceContract call",
+      "PASS": true
+    }
+  },
+  "local_gates": {
+    "LGW19-1_three_times_q_safe_burst": {
+      "offered_load_multiple_of_q_safe": 3,
+      "shed_fraction_approx": 0.667,
+      "admitted_p99_ms": 1.0,
+      "slo_budget_ms": 20.0,
+      "peak_request_queue_depth": "equals declared cap (bounded memory)",
+      "fail_open_total": 0,
+      "requirement": "12.2",
+      "properties": [2, 4],
+      "PASS": true
+    },
+    "LGW19-4_concurrency_cap_binds": {
+      "cap_binds": true,
+      "observable_via": ["queue_report", "metrics"],
+      "inert_as_v1": false,
+      "requirement": "12.6",
+      "PASS": true
+    },
+    "LGW19-2_open_loop_ramp": {
+      "highest_passing_rate_req_s": 2000,
+      "first_failing_rate_req_s": 2500,
+      "budget_ms": 20.0,
+      "requirement": "12.3",
+      "PASS": true
+    },
+    "LGW19-5_guard_rate_halved_midrun": {
+      "shed_fraction_before": 0.166,
+      "shed_fraction_after": 0.582,
+      "queue_age_bounded": true,
+      "requirement": "12.4",
+      "PASS": true
+    },
+    "LGW19-6_slow_consumer_backpressure": {
+      "slow_consumer_fraction": 0.5,
+      "backpressure_engaged": true,
+      "memory_bounded": true,
+      "fast_consumers_unaffected": true,
+      "requirement": "12.5",
+      "property": 4,
+      "PASS": true
+    },
+    "G-06_local_sdk_retry_amplification": {
+      "sdk_max_retries": 2,
+      "our_amplification_factor": 1.0,
+      "g06_bound": 1.5,
+      "baseline_6_to_11ms_amplification_min": 2.6,
+      "baseline_6_to_11ms_amplification_approx": 3.0,
+      "requirement": "6.5",
+      "property": 8,
+      "PASS": true
+    },
+    "G-15_local_post_heal_recovery": {
+      "recovery_time_s_approx": 0.055,
+      "recovery_budget_s": 10.0,
+      "fail_open_total": 0,
+      "requirement": "11.1",
+      "property": 9,
+      "PASS": true
+    }
+  },
+  "correctness_properties": {
+    "count": 10,
+    "idiom": "seeded random.Random loop >= 10000 iterations (no hypothesis dependency)",
+    "all_pass": true
+  },
+  "harness_note": "in-process injected-clock open-loop simulation (not a wall-clock fleet); every measured number is deterministic and not sensitive to CI wall-clock jitter",
+  "deferred_cloud_gates": {
+    "full_live_fleet_3x_q_safe_run": "deferred (needs fleet lane + serving gateway; rewrite-tree entrypoint is a stub) [Req 12.7]",
+    "GW20_live_q_safe_measurement": "deferred (q_safe is injected; live guard-rate measured by card GW20 and fed back) [Req 12.7]",
+    "live_G-06_real_openai_sdk": "deferred (represented locally by the SDK-retry-semantics simulation) [Req 12.7]",
+    "live_G-15_post_heal_certification": "deferred (represented locally by the injected-clock recovery test) [Req 11.2]"
+  },
+  "serving_entrypoint_dependency": "removal of the inert --worker-connections flag, migration off the deprecated uvicorn worker class, and real OS process supervision belong to the serving-entrypoint card (Req 3.4 / 9); this card ships the WorkerSupervisor seam + the observable cap only",
+  "found_not_fixed": "a ms/seconds unit bug in the sojourn accounting that the per-owner fairness property (Property 3) caught is now FIXED; post-heal recovery is cross-component (lease-refill storm -> GW06; cold identity caches / store re-hydration -> GW05 — this card owns only the admission backlog drain + bounded audit queue); the egress transport/backpressure wiring is GW13 (admission owns only the admission-side slot/credit bound)"
+}

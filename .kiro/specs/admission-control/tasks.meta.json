@@ -1,0 +1,570 @@
+{
+  "pbtResults": {
+    "4.2 Property test — Retry-After floor and should-retry": {
+      "status": "passed",
+      "lastRunTimestamp": 1791533108799
+    }
+  },
+  "executionHistory": {
+    "1.1 Add `OVERLOAD_SHED` to `gateway_v2/gateway_v2/domain/posture.py`": [
+      {
+        "executionId": "ebb066ca-3d08-4fbb-a375-e3726eb70548",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791532375052
+      },
+      {
+        "executionId": "ebb066ca-3d08-4fbb-a375-e3726eb70548",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791532399814
+      },
+      {
+        "executionId": "ebb066ca-3d08-4fbb-a375-e3726eb70548",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791532764164
+      }
+    ],
+    "2.1 Define `CoDelParams`, `CoDelReason`, `CoDelDecision`": [
+      {
+        "executionId": "ebb066ca-3d08-4fbb-a375-e3726eb70548",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791532375087
+      },
+      {
+        "executionId": "ebb066ca-3d08-4fbb-a375-e3726eb70548",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791532400641
+      },
+      {
+        "executionId": "ebb066ca-3d08-4fbb-a375-e3726eb70548",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791532771749
+      }
+    ],
+    "2.2 Implement `CoDelController` with injected clock": [
+      {
+        "executionId": "ebb066ca-3d08-4fbb-a375-e3726eb70548",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791532375152
+      },
+      {
+        "executionId": "ebb066ca-3d08-4fbb-a375-e3726eb70548",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791532767018
+      }
+    ],
+    "3. Checkpoint — pure CoDel core": [
+      {
+        "executionId": "ebb066ca-3d08-4fbb-a375-e3726eb70548",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791532375194
+      },
+      {
+        "executionId": "ebb066ca-3d08-4fbb-a375-e3726eb70548",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791532773190
+      }
+    ],
+    "4.1 Define `ShedVerdict`, `Admitted`, and the jitter helper": [
+      {
+        "executionId": "ebb066ca-3d08-4fbb-a375-e3726eb70548",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791532375225
+      },
+      {
+        "executionId": "ebb066ca-3d08-4fbb-a375-e3726eb70548",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791532785674
+      },
+      {
+        "executionId": "ebb066ca-3d08-4fbb-a375-e3726eb70548",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791533222896
+      }
+    ],
+    "5.1 Define `AdmissionBounds` and `derive_bounds`": [
+      {
+        "executionId": "ebb066ca-3d08-4fbb-a375-e3726eb70548",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791532375256
+      },
+      {
+        "executionId": "ebb066ca-3d08-4fbb-a375-e3726eb70548",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791532786989
+      },
+      {
+        "executionId": "ebb066ca-3d08-4fbb-a375-e3726eb70548",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791533226779
+      }
+    ],
+    "6.1 Define `AdmissionMetrics` and `QueueReport`": [
+      {
+        "executionId": "ebb066ca-3d08-4fbb-a375-e3726eb70548",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791532375289
+      },
+      {
+        "executionId": "ebb066ca-3d08-4fbb-a375-e3726eb70548",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791532787755
+      },
+      {
+        "executionId": "ebb066ca-3d08-4fbb-a375-e3726eb70548",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791533230281
+      }
+    ],
+    "7. Checkpoint — pure value/bounds/metrics layer": [
+      {
+        "executionId": "ebb066ca-3d08-4fbb-a375-e3726eb70548",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791532375319
+      },
+      {
+        "executionId": "ebb066ca-3d08-4fbb-a375-e3726eb70548",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791533229078
+      }
+    ],
+    "8.1 Implement `Bounded_Queue` depth/age accounting": [
+      {
+        "executionId": "ebb066ca-3d08-4fbb-a375-e3726eb70548",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791532375352
+      },
+      {
+        "executionId": "ebb066ca-3d08-4fbb-a375-e3726eb70548",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791533252800
+      },
+      {
+        "executionId": "ebb066ca-3d08-4fbb-a375-e3726eb70548",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791534690907
+      }
+    ],
+    "8.3 Implement the per-owner registry": [
+      {
+        "executionId": "ebb066ca-3d08-4fbb-a375-e3726eb70548",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791532375382
+      },
+      {
+        "executionId": "ebb066ca-3d08-4fbb-a375-e3726eb70548",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791534675753
+      }
+    ],
+    "9.1 Implement the admit path": [
+      {
+        "executionId": "ebb066ca-3d08-4fbb-a375-e3726eb70548",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791532375416
+      },
+      {
+        "executionId": "ebb066ca-3d08-4fbb-a375-e3726eb70548",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791534690245
+      }
+    ],
+    "10.1 Implement `DrainState`, `DrainReport`, and `AdmissionController.drain`": [
+      {
+        "executionId": "ebb066ca-3d08-4fbb-a375-e3726eb70548",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791532375451
+      },
+      {
+        "executionId": "ebb066ca-3d08-4fbb-a375-e3726eb70548",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791534689219
+      }
+    ],
+    "11.1 Implement the supervisor abstraction": [
+      {
+        "executionId": "ebb066ca-3d08-4fbb-a375-e3726eb70548",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791532375484
+      },
+      {
+        "executionId": "ebb066ca-3d08-4fbb-a375-e3726eb70548",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791534687792
+      }
+    ],
+    "12.1 Implement credit-based bounded stream-slot buffering": [
+      {
+        "executionId": "ebb066ca-3d08-4fbb-a375-e3726eb70548",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791532375519
+      },
+      {
+        "executionId": "ebb066ca-3d08-4fbb-a375-e3726eb70548",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791534686602
+      }
+    ],
+    "13. Checkpoint — event-loop seam complete": [
+      {
+        "executionId": "ebb066ca-3d08-4fbb-a375-e3726eb70548",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791532375553
+      },
+      {
+        "executionId": "ebb066ca-3d08-4fbb-a375-e3726eb70548",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791534685505
+      }
+    ],
+    "14. Build the in-process open-loop `Load_Harness` and local acceptance gates": [
+      {
+        "executionId": "ebb066ca-3d08-4fbb-a375-e3726eb70548",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791532375584
+      },
+      {
+        "executionId": "ebb066ca-3d08-4fbb-a375-e3726eb70548",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791536232867
+      }
+    ],
+    "14.1 Implement the `Load_Harness` and LGW19-1 / LGW19-4": [
+      {
+        "executionId": "ebb066ca-3d08-4fbb-a375-e3726eb70548",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791532375618
+      },
+      {
+        "executionId": "ebb066ca-3d08-4fbb-a375-e3726eb70548",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791534724047
+      },
+      {
+        "executionId": "ebb066ca-3d08-4fbb-a375-e3726eb70548",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791536231831
+      }
+    ],
+    "14.2 Implement LGW19-2 (open-loop sweep) and LGW19-5 (guard rate halved)": [
+      {
+        "executionId": "ebb066ca-3d08-4fbb-a375-e3726eb70548",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791532375652
+      },
+      {
+        "executionId": "ebb066ca-3d08-4fbb-a375-e3726eb70548",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791536230399
+      }
+    ],
+    "14.3 Implement LGW19-6 (slow-consumer backpressure acceptance)": [
+      {
+        "executionId": "ebb066ca-3d08-4fbb-a375-e3726eb70548",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791532375686
+      },
+      {
+        "executionId": "ebb066ca-3d08-4fbb-a375-e3726eb70548",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791536229005
+      }
+    ],
+    "14.4 Implement the local SDK-retry-amplification simulation (G-06 local)": [
+      {
+        "executionId": "ebb066ca-3d08-4fbb-a375-e3726eb70548",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791532375721
+      },
+      {
+        "executionId": "ebb066ca-3d08-4fbb-a375-e3726eb70548",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791536227537
+      }
+    ],
+    "14.5 Implement the injected-clock post-heal recovery gate (G-15 local)": [
+      {
+        "executionId": "ebb066ca-3d08-4fbb-a375-e3726eb70548",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791532375811
+      },
+      {
+        "executionId": "ebb066ca-3d08-4fbb-a375-e3726eb70548",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791536226511
+      }
+    ],
+    "15.1 Export the admission public API from `admit/__init__.py`": [
+      {
+        "executionId": "ebb066ca-3d08-4fbb-a375-e3726eb70548",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791532375845
+      },
+      {
+        "executionId": "ebb066ca-3d08-4fbb-a375-e3726eb70548",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791536245154
+      },
+      {
+        "executionId": "ebb066ca-3d08-4fbb-a375-e3726eb70548",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791536621378
+      }
+    ],
+    "16. Checkpoint — local harness and gates complete": [
+      {
+        "executionId": "ebb066ca-3d08-4fbb-a375-e3726eb70548",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791532375879
+      },
+      {
+        "executionId": "ebb066ca-3d08-4fbb-a375-e3726eb70548",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791536620584
+      }
+    ],
+    "17. Documentation + R2-07/R2-08 changelog (mirror the R2-06 closure)": [
+      {
+        "executionId": "ebb066ca-3d08-4fbb-a375-e3726eb70548",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791532375915
+      },
+      {
+        "executionId": "ebb066ca-3d08-4fbb-a375-e3726eb70548",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791536634693
+      },
+      {
+        "executionId": "ebb066ca-3d08-4fbb-a375-e3726eb70548",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791537289303
+      }
+    ],
+    "18. Final local verification gate": [
+      {
+        "executionId": "ebb066ca-3d08-4fbb-a375-e3726eb70548",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791532375949
+      },
+      {
+        "executionId": "ebb066ca-3d08-4fbb-a375-e3726eb70548",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791537302386
+      },
+      {
+        "executionId": "ebb066ca-3d08-4fbb-a375-e3726eb70548",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791537793425
+      }
+    ],
+    "1. Add the `OVERLOAD_SHED` posture code (codes-only, shared vocabulary)": [
+      {
+        "executionId": "ebb066ca-3d08-4fbb-a375-e3726eb70548",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791532764203
+      }
+    ],
+    "1.2 Unit test the new code + `MIN_RETRY_AFTER_S` reuse": [
+      {
+        "executionId": "ebb066ca-3d08-4fbb-a375-e3726eb70548",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791532765591
+      }
+    ],
+    "2.3 Property test — CoDel quiescence": [
+      {
+        "executionId": "ebb066ca-3d08-4fbb-a375-e3726eb70548",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791532768072
+      }
+    ],
+    "2.4 Property test — shedding under sustained overload (CoDel half)": [
+      {
+        "executionId": "ebb066ca-3d08-4fbb-a375-e3726eb70548",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791532769292
+      }
+    ],
+    "2.5 Unit tests — constants, hard cap, clock injection, prompt-size independence": [
+      {
+        "executionId": "ebb066ca-3d08-4fbb-a375-e3726eb70548",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791532770319
+      }
+    ],
+    "2. Implement the pure CoDel state machine (`admit/codel.py`, new)": [
+      {
+        "executionId": "ebb066ca-3d08-4fbb-a375-e3726eb70548",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791532771804
+      }
+    ],
+    "4.2 Property test — Retry-After floor and should-retry": [
+      {
+        "executionId": "ebb066ca-3d08-4fbb-a375-e3726eb70548",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791533221471
+      }
+    ],
+    "4. Implement `ShedVerdict` + Retry-After jitter (`admit/grant.py`, fill)": [
+      {
+        "executionId": "ebb066ca-3d08-4fbb-a375-e3726eb70548",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791533223007
+      }
+    ],
+    "5.2 Unit tests — each queue→contract-method mapping + refuse-to-start": [
+      {
+        "executionId": "ebb066ca-3d08-4fbb-a375-e3726eb70548",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791533224323
+      }
+    ],
+    "5.3 AST capacity-literal gate for `admit/`": [
+      {
+        "executionId": "ebb066ca-3d08-4fbb-a375-e3726eb70548",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791533225555
+      }
+    ],
+    "5. Implement bounds derivation (`admit/quota.py`, fill)": [
+      {
+        "executionId": "ebb066ca-3d08-4fbb-a375-e3726eb70548",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791533226831
+      }
+    ],
+    "6.2 Unit tests — label-free series, real-zero counters, O(1) observe": [
+      {
+        "executionId": "ebb066ca-3d08-4fbb-a375-e3726eb70548",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791533228234
+      }
+    ],
+    "6. Implement producer-only, label-free metrics (`admit/metrics.py`, new)": [
+      {
+        "executionId": "ebb066ca-3d08-4fbb-a375-e3726eb70548",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791533230330
+      }
+    ],
+    "8.2 Property test — queue-depth bound": [
+      {
+        "executionId": "ebb066ca-3d08-4fbb-a375-e3726eb70548",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791534674500
+      }
+    ],
+    "8.4 Property test — per-tenant fairness": [
+      {
+        "executionId": "ebb066ca-3d08-4fbb-a375-e3726eb70548",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791534676937
+      }
+    ],
+    "9.2 Property test — no abandonment": [
+      {
+        "executionId": "ebb066ca-3d08-4fbb-a375-e3726eb70548",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791534678399
+      }
+    ],
+    "9.3 Property test — error conditions fail closed": [
+      {
+        "executionId": "ebb066ca-3d08-4fbb-a375-e3726eb70548",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791534679292
+      }
+    ],
+    "10.2 Property test — drain terminal guarantee": [
+      {
+        "executionId": "ebb066ca-3d08-4fbb-a375-e3726eb70548",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791534680226
+      }
+    ],
+    "10.3 Unit tests — drain transitions, ordering, injected clock": [
+      {
+        "executionId": "ebb066ca-3d08-4fbb-a375-e3726eb70548",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791534681642
+      }
+    ],
+    "11.2 Unit tests — isolation + respawn + peers keep admitting": [
+      {
+        "executionId": "ebb066ca-3d08-4fbb-a375-e3726eb70548",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791534683081
+      }
+    ],
+    "12.2 Unit tests — bounded memory, fast consumers unaffected": [
+      {
+        "executionId": "ebb066ca-3d08-4fbb-a375-e3726eb70548",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791534684313
+      }
+    ],
+    "12. Implement admission-side backpressure (`admit/admission.py`)": [
+      {
+        "executionId": "ebb066ca-3d08-4fbb-a375-e3726eb70548",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791534686657
+      }
+    ],
+    "11. Implement the `WorkerSupervisor` seam (`admit/admission.py`)": [
+      {
+        "executionId": "ebb066ca-3d08-4fbb-a375-e3726eb70548",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791534687843
+      }
+    ],
+    "10. Implement the drain state machine (`admit/admission.py`)": [
+      {
+        "executionId": "ebb066ca-3d08-4fbb-a375-e3726eb70548",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791534689278
+      }
+    ],
+    "9. Implement `AdmissionController.admit` (event-loop seam)": [
+      {
+        "executionId": "ebb066ca-3d08-4fbb-a375-e3726eb70548",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791534690308
+      }
+    ],
+    "8. Implement the bounded queues and per-owner registry (`admit/admission.py`, new)": [
+      {
+        "executionId": "ebb066ca-3d08-4fbb-a375-e3726eb70548",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791534690969
+      }
+    ],
+    "14.5a Property test — post-heal recovery bound": [
+      {
+        "executionId": "ebb066ca-3d08-4fbb-a375-e3726eb70548",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791536231875
+      }
+    ],
+    "14.4a Property test — retry-amplification bound": [
+      {
+        "executionId": "ebb066ca-3d08-4fbb-a375-e3726eb70548",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791536244329
+      }
+    ],
+    "15.2 Edge-seam rendering test (503 boundary)": [
+      {
+        "executionId": "ebb066ca-3d08-4fbb-a375-e3726eb70548",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791536619115
+      }
+    ],
+    "15. Wire the controller into the `admit` package surface": [
+      {
+        "executionId": "ebb066ca-3d08-4fbb-a375-e3726eb70548",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791536621433
+      }
+    ]
+  }
+}

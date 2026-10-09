@@ -303,6 +303,59 @@
   Plan: docs/plans/2026-10-08-r2-06-gw12b-bounded-holdback.md.
   Evidence: docs/plans/evidence/2026-10-08-r2-06/.
 
+## R2-07 / R2-08 / GW19 admission control changelog
+- R2-07 / R2-08 (+ R2-18) (2026-10-08) — ADMISSION CONTROL + OVERLOAD SEMANTICS + GRACEFUL DRAIN,
+  local half CLOSED. Severity HIGH (R2-07/R2-08) / MEDIUM (R2-18).
+  No admission control existed: queues grew unbounded, p99 collapsed, never recovered. The GW03
+  per-worker cap broke the SLO under overload (~20 ms event-loop floor) and never recovered; a 12 ms
+  instantaneous bound shed long prompts first; a tenant-blind FIFO let one tenant shed another 30/30;
+  sheds carried a 6–11 ms Retry-After → OpenAI SDK retried 2× → ~2.6× amplification; post-heal C4
+  took 10–180 s. FIX: per-owner CoDel admission; admitted work answered late, NEVER abandoned;
+  explicit 503 + jittered Retry-After ≥ 1 s + x-should-retry:false; bounded queues w/ exported
+  depth+age; SIGTERM drain state machine; worker-crash isolate+respawn seam; slow-consumer
+  backpressure; bounded post-heal recovery. Built bottom-up on the import-linter layer contract
+  (`admit` imports only runtime+domain; returns a frozen ShedVerdict, `edge` renders the 503 — no
+  HTTP object in admit). Injected clock + injected random.Random throughout.
+  (1) `domain/posture.py` — `OVERLOAD_SHED` code (codes-only); REUSES `MIN_RETRY_AFTER_S=1.0` (not
+  redefined).
+  (2) `admit/codel.py` — pure per-owner CoDel: target 5 ms / interval 100 ms / hard cap 60 ms,
+  `sqrt(count)` backoff, hard-cap short-circuit, quiescence reset; decision from sojourn + CoDel
+  state ONLY, never prompt size (no 12 ms bound).
+  (3) `admit/grant.py` — `ShedVerdict(code,retry_after_s,should_retry=False,request_id)` + `Admitted`
+  + `shed_retry_after_s` (≥ 1 s jitter → never the 6–11 ms band).
+  (4) `admit/quota.py` — `derive_bounds` from `ResourceContract` + injected `q_safe`; refuse-to-start
+  (`CapacityUnset`) if `q_safe` unset; NO capacity literal in admit (AST gate).
+  (5) `admit/metrics.py` — producer-only LABEL-FREE: per-queue depth/age, admitted/shed totals,
+  `fail_open_total` pinned 0.
+  (6) `admit/queues.py` — `BoundedQueue` (shed-at-the-door, oldest-age) + `BackpressureBuffer`
+  (credit/byte bound).
+  (7) `admit/supervisor.py` — `WorkerSupervisor` seam (isolate + injected respawn; real OS
+  supervision = serving-entrypoint card).
+  (8) `admit/admission.py` — `AdmissionController`: per-owner registry (guard owner same factory),
+  admit path (fail-closed shed), drain state machine (ACCEPTING→DRAINING→TERMINATING→FLUSHED→EXITED,
+  Declared_Termination never truncated), backpressure.
+  (9) `admit/__init__.py` — public surface for `edge`.
+  OPEN (DEFERRED CLOUD/SCALE GATES, out of local scope): full live fleet 3×-`q_safe` run, GW20 live
+  `q_safe` measurement feeding this card, live G-06 (real OpenAI SDK), live G-15 post-heal cert
+  (R12.7/R11.2). SERVING-ENTRYPOINT-CARD DEPENDENCY (R3.4/R9): removing the inert
+  `--worker-connections`, migrating off the deprecated uvicorn worker class, and REAL OS process
+  supervision — this card ships the WorkerSupervisor seam + the observable cap only.
+  FOUND, NOT FIXED: a ms/seconds unit bug the fairness property (P3) caught is now FIXED; the harness
+  is an in-process injected-clock simulation (deterministic, not wall-clock); post-heal recovery is
+  cross-component (lease-refill storm → GW06; cold identity caches → GW05 — this card owns only the
+  admission backlog drain + bounded audit queue); egress transport/backpressure wiring is GW13.
+  VERIFY: 1057 full offline suite (93 skipped, 1 xfailed, 0 failed) / 99 lgw19-subset /
+  163 admit-package passed; `mypy --strict` 107 files, ruff,
+  import-linter 2/2 kept (107 files/150 deps), AST capacity-literal gate 3 passed. 10 correctness
+  properties as seeded ≥ 10,000-iteration tests (house idiom, no hypothesis). LGW19-1 (3× q_safe):
+  ~66.7% shed, admitted p99 1.0 ms within 20 ms SLO, peak depth = cap, 0 FAIL_OPEN. LGW19-4 cap binds
+  + observable. LGW19-2 highest-pass 2000 req/s / first-fail 2500 req/s. LGW19-5 shed 16.6%→58.2% on
+  halved guard rate, queue age bounded. LGW19-6 backpressure + bounded memory + fast consumers
+  unaffected. G-06 local amplification 1.0× (bound 1.5×) vs 6–11 ms baseline ≥ 2.6×. G-15 local
+  recovery ~0.055 s (budget 10 s).
+  Plan: docs/plans/2026-10-08-r2-07-r2-08-gw19-admission-control.md.
+  Evidence: docs/plans/evidence/2026-10-08-r2-07-gw19/.
+
 ## MCP Hardening BACKSTOP changelog
 - Parallel Claude + Cursor sessions harden the multi-tenant MCP gateway. **Every hardening change is
   logged to four memories in the SAME commit:** Ruflo (`mcp__ruflo__memory_store`

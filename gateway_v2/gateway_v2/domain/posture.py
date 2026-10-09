@@ -32,6 +32,15 @@ remaining lease and then refuses only quota, because treating it as global would
 problem into an outage.
 """
 
+OVERLOAD_SHED = "overload_shed"
+"""R2-07/R2-08: admission shed under overload. Code only -- `edge` owns the HTTP 503 mapping.
+
+Emitted when the CoDel admission controller sheds a request at the door. Like the `*_UNAVAILABLE`
+codes above, this carries no status, message or `ErrorSpec`: `admit` returns a `ShedVerdict`
+bearing this code and `edge` renders the 503 + `Retry-After` + `x-should-retry: false`. Living in
+the one shared vocabulary stops `admit` from inventing a second spelling (the C37 join failure).
+"""
+
 MIN_RETRY_AFTER_S = 1.0
 """R2-08: sheds carrying 6-11 ms of retry-after made the OpenAI SDK retry almost immediately."""
 
