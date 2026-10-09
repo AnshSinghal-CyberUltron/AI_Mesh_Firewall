@@ -40,14 +40,16 @@ bounds all derive from the injected ``ResourceContract``.
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
 
 from gateway_v2.dispatch.provider import ProviderClient
 from gateway_v2.dispatch.routing import DispatchRouter
+from gateway_v2.domain import Finding
 from gateway_v2.edge import errors
 from gateway_v2.edge.cancel import InFlightControlSource, InFlightSnapshot
+from gateway_v2.edge.error_frame_scan import ErrorFrameScanner
 from gateway_v2.edge.routes import (
     ASGIReceive,
     ASGIScope,
@@ -115,6 +117,7 @@ def build_app(
     readiness: ReadinessProbe | None = None,
     active_streams: Callable[[], int] | None = None,
     control: InFlightControlSource | None = None,
+    error_scanner: ErrorFrameScanner | None = None,
 ) -> ASGIApplication:
     """Assemble the raw-ASGI serving skin (R2.1).
 
@@ -129,7 +132,11 @@ def build_app(
     handler polls at each chunk boundary (R10); it defaults to a fresh/available/all-clear source
     so a deployment that has not wired the kill-switch / revocation / plan feed (a GW05/GW06
     integration) still runs under the max-stream-duration deadline, which is driven by ``clock``
-    vs the contract alone.
+    vs the contract alone. ``error_scanner`` is the findings-producing detector a mid-stream
+    provider error frame is scanned through before any byte is forwarded (R11); it is injected
+    HERE (above ``detect``) and defaults to a no-findings scanner (forward unchanged) for a
+    deployment that has not yet wired GW07/GW08's detector — a withhold only ever follows a BLOCK
+    decision or a scan error, so the default is not a fail-open hole.
 
     Returns the ``async def app(scope, receive, send)`` callable. The function is pure assembly:
     it reads no store and starts no task — the lifespan handler is where a conforming server
@@ -146,6 +153,7 @@ def build_app(
         active_streams=active_streams if active_streams is not None else _one_stream,
         control=control if control is not None else _NoControlSource(),
         clock=clock,
+        error_scanner=error_scanner if error_scanner is not None else _no_error_findings,
     )
     routes = build_routes(chat)
     probe: ReadinessProbe = readiness if readiness is not None else _always_ready
@@ -321,6 +329,20 @@ def _path(scope: ASGIScope) -> str:
 def _always_ready() -> tuple[bool, str | None]:
     """The default readiness probe for an unwired deployment (parity with ``state_ready(None)``)."""
     return True, None
+
+
+def _no_error_findings(_frame: str) -> Sequence[Finding]:
+    """The default error-frame findings scanner when GW07/GW08's detector is not yet wired.
+
+    Returns NO findings, so a mid-stream error frame resolves to ALLOW and is forwarded unchanged
+    (R11.2) — the same thin-handler posture as the content path, which runs the shipped pipeline
+    with ``detector=None`` (no findings) until GW15 wires the real detector. This is NOT a
+    fail-open hole: a withhold only happens on a BLOCK decision or a scan error (R11.3/R11.4), and
+    the default scanner never raises; a deployment that must guard error frames injects the real
+    findings detector through :func:`build_app`'s ``error_scanner`` (above ``detect``), at which
+    point a secret in an error frame is redacted/blocked exactly as in released content.
+    """
+    return ()
 
 
 def _one_stream() -> int:

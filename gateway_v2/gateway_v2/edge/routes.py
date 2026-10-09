@@ -50,6 +50,7 @@ from gateway_v2.dispatch.provider import ProviderClient, UpstreamEvent, Upstream
 from gateway_v2.dispatch.routing import DispatchRouter
 from gateway_v2.edge import errors
 from gateway_v2.edge.cancel import InFlightControl, InFlightControlSource, KillLatch
+from gateway_v2.edge.error_frame_scan import ErrorFrameScanner, scan_error_frame
 from gateway_v2.edge.stream_control import FirstByteLatch, StreamAttempt, run_with_no_splice
 from gateway_v2.edge.stream_timeouts import StreamTimeout, StreamTimeouts
 from gateway_v2.edge.wire.sse import SSEEncoder
@@ -150,6 +151,13 @@ class ChatRoute:
     and ``provider`` are injected HERE, in ``edge`` (above ``detect``), which is the correct
     injection site — ``egress`` must never import ``detect`` (R14.1/R14.2). ``active_streams``
     is the live concurrency count the coalescer's derived high-water reads.
+
+    ``error_scanner`` is the findings-producing scanner for a mid-stream provider error frame
+    (R11): also injected HERE, above ``detect``, so the error-frame scan step
+    (:func:`~gateway_v2.edge.error_frame_scan.scan_error_frame`) can run the real detector
+    through the injected seam while ``egress`` stays free of a ``detect`` import. It produces
+    completed findings over an error frame's whole text; the handler resolves them through the
+    same ``resolver`` + ``apply_decision`` the content path uses.
     """
 
     contract: ResourceContract
@@ -161,6 +169,7 @@ class ChatRoute:
     active_streams: Callable[[], int]
     control: InFlightControlSource
     clock: Callable[[], float]
+    error_scanner: ErrorFrameScanner
 
     async def handle(self, scope: ASGIScope, receive: ASGIReceive, send: ASGISend) -> None:
         """Stream a chat completion end-to-end over the shipped egress pipeline (R2.2, R7).
@@ -361,7 +370,17 @@ class ChatRoute:
         async def _attempt() -> bool:
             pipeline = self._build_pipeline()
             request = UpstreamRequest(destination=self._destination(), body=_EMPTY_BODY)
-            chunks = _as_chunks(self.provider.open(request), coalescer, control, timeouts)
+            chunks = _as_chunks(
+                self.provider.open(request),
+                coalescer,
+                control,
+                timeouts,
+                error_scan=_ErrorFrameScan(
+                    scanner=self.error_scanner,
+                    resolver=self.resolver,
+                    kill_latch=kill_latch,
+                ),
+            )
             await pipeline.run(chunks, sink, kill_latch)
             # The sink set the first-byte latch the instant a content byte went out; report that
             # as the "released a byte" signal so run_with_no_splice closes the gate (R7.2/R7.4).
@@ -500,11 +519,54 @@ class _TerminalLatch:
         return self._set
 
 
+@dataclass(frozen=True, slots=True)
+class _ErrorFrameScan:
+    """The injected glue the chunk adapter needs to scan a mid-stream error frame (R11).
+
+    Bundles the three pieces :func:`_as_chunks` threads into the error-frame scan step so the
+    adapter's signature stays small: the findings ``scanner`` and the ``resolver`` (both injected
+    into :class:`ChatRoute` above ``detect``, so ``egress`` never imports ``detect`` — R14.1) and
+    the per-request :class:`KillLatch` a WITHHELD frame flips with its terminal posture code. The
+    handler's :meth:`ChatRoute._finish_stream` then renders that code as the declared
+    ``Error_Frame`` at the single terminal site — the same seam a timeout / in-flight cut uses.
+    Frozen + slotted: a per-attempt value, not mutable state.
+    """
+
+    scanner: ErrorFrameScanner
+    resolver: OutputResolver
+    kill_latch: KillLatch
+
+
+def _forward_error_frame(frame: str, error_scan: _ErrorFrameScan) -> str | None:
+    """Scan a mid-stream error frame; return the bytes to forward, or ``None`` to withhold (R11).
+
+    Runs the single whole-text scan + decision via
+    :func:`~gateway_v2.edge.error_frame_scan.scan_error_frame` (byte-linear, R11.5). A REDACT/ALLOW
+    outcome returns the frame text with the decided redactions applied — the only bytes of the
+    frame that ever leave the gateway (R11.2). A WITHHELD outcome (BLOCK → ``output_blocked``,
+    R11.3; scan error → ``scan_failure``, R11.4, fail closed) flips the shared :class:`KillLatch`
+    with the terminal posture code and returns ``None``, so the caller stops the source and the
+    handler renders the declared ``Error_Frame`` from the latch reason. No raw error-frame byte is
+    forwarded on a withhold (R15.1/R15.2).
+    """
+    outcome = scan_error_frame(
+        frame,
+        scanner=error_scan.scanner,
+        resolver=error_scan.resolver,
+    )
+    if outcome.withheld_code is not None:
+        error_scan.kill_latch.kill(outcome.withheld_code)
+        return None
+    return outcome.forward_text
+
+
 async def _as_chunks(
     events: AsyncIterator[UpstreamEvent],
     coalescer: Coalescer,
     control: InFlightControl,
     timeouts: StreamTimeouts,
+    *,
+    error_scan: _ErrorFrameScan,
 ) -> AsyncIterator[UpstreamChunk]:
     """Adapt a provider event stream to the shipped ``UpstreamChunk`` source, bounded + cut-aware.
 
@@ -535,6 +597,20 @@ async def _as_chunks(
     declared ``Error_Frame`` from the latch reason (R9.2, fail closed). The iterator is driven by
     an explicit ``__anext__`` so the per-event await is the thing bounded; ``StopAsyncIteration``
     ends the stream normally.
+
+    **Mid-stream error-frame scanning (R11).** A provider event whose ``error_frame`` is set
+    carries an untrusted free-text error body that can hold a secret (a connection string, a
+    token in a stack trace). BEFORE any byte of it is forwarded (R11.1) it is scanned through
+    :func:`~gateway_v2.edge.error_frame_scan.scan_error_frame` (the injected findings ``scanner``
+    + the same ``resolver`` / ``apply_decision`` the content path uses). The outcome drives one
+    of two paths: a REDACT/ALLOW decision forwards the frame with the decided redactions applied
+    as a FINAL content ``UpstreamChunk`` (R11.2 — the only bytes of the frame that ever leave the
+    gateway), while a BLOCK (R11.3) or a scan error (R11.4, fail closed) withholds the frame
+    entirely, flips the shared :class:`KillLatch` with its terminal posture code
+    (``output_blocked`` / ``scan_failure``), and stops the source so no byte is forwarded — the
+    handler then renders the declared ``Error_Frame`` from the latch reason. The scan is a single
+    whole-text pass (byte-linear, R11.5). An error frame is terminal either way, so the adapter
+    returns after handling it.
     """
     # Evaluate before the first chunk too: a max-duration/stale/kill signal already true at stream
     # start must cut before any upstream byte is forwarded (R10.7, fail-closed).
@@ -549,6 +625,22 @@ async def _as_chunks(
             event = await timeouts.next_event(iterator.__anext__())
         except StopAsyncIteration:
             return
+
+        # Mid-stream provider error frame (R11): scan it BEFORE forwarding any byte. A REDACT/ALLOW
+        # decision forwards the (possibly masked) frame as a FINAL content chunk and ends the
+        # stream (R11.2); a BLOCK (R11.3) or a scan error (R11.4) withholds the frame entirely —
+        # the kill latch is flipped with the terminal code and the source stops, so no byte of the
+        # frame is forwarded and the handler renders the declared Error_Frame from the latch.
+        if event.error_frame is not None:
+            forwarded = _forward_error_frame(event.error_frame, error_scan)
+            if forwarded is None:
+                return  # withheld: latch carries the terminal code (R11.3 / R11.4)
+            nbytes = len(forwarded.encode("utf-8"))
+            coalescer.offer(nbytes)
+            yield UpstreamChunk(text_deltas=(("content", forwarded),), final=True)
+            coalescer.release(nbytes)
+            return
+
         text = "".join(delta for _, delta in event.text_deltas)
         nbytes = len(text.encode("utf-8"))
         coalescer.offer(nbytes)
