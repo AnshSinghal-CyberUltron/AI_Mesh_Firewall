@@ -27,12 +27,19 @@ from __future__ import annotations
 import random
 from dataclasses import dataclass
 
-from gateway_v2.domain.posture import MIN_RETRY_AFTER_S, OVERLOAD_SHED
+from gateway_v2.domain.posture import (
+    BUDGET_UNAVAILABLE,
+    MIN_RETRY_AFTER_S,
+    OVERLOAD_SHED,
+    gap_retry_after_s,
+)
 
 __all__ = (
     "Admitted",
+    "BudgetVerdict",
     "ResourceGrant",
     "ShedVerdict",
+    "budget_verdict",
     "shed_retry_after_s",
     "shed_verdict",
 )
@@ -112,6 +119,56 @@ def shed_verdict(rng: random.Random, request_id: str) -> ShedVerdict:
     return ShedVerdict(
         code=OVERLOAD_SHED,
         retry_after_s=shed_retry_after_s(rng),
+        should_retry=False,
+        request_id=request_id,
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class BudgetVerdict:
+    """The budget-refusal payload emitted when the org token budget is exhausted (R2-09, GW06).
+
+    Mirrors ``ShedVerdict`` exactly: a **code/value, not an HTTP object**. ``edge`` renders the
+    HTTP 503, the ``Retry-After: ceil(retry_after_s)`` header, the ``x-should-retry: false``
+    header, and echoes ``request_id`` from this verdict. ``code`` is always
+    ``posture.BUDGET_UNAVAILABLE`` (the one shared posture vocabulary, so ``admit`` never invents a
+    second spelling — see ``domain/posture.py``).
+
+    The budget posture is deliberately NARROWER than ``shared_state_unavailable``: it refuses only
+    quota after the Remaining_Lease is spent, never the whole request path. ``should_retry`` is
+    **always ``False`` on a budget refusal**: paired with the ≥ ``MIN_RETRY_AFTER_S`` jitter-free
+    ``retry_after_s`` from ``gap_retry_after_s`` it tells a retrying SDK client not to amplify load
+    (Req 5.6, R2-08). This component constructs **no** HTTP object.
+    """
+
+    code: str
+    retry_after_s: float
+    should_retry: bool
+    request_id: str
+
+
+def budget_verdict(
+    request_id: str,
+    *,
+    rehydrate_period_ms: float = 0.0,
+    refresh_ms: float = 0.0,
+) -> BudgetVerdict:
+    """Build a ``BudgetVerdict`` for a budget-exhausted request (convenience constructor).
+
+    ``code`` is ``posture.BUDGET_UNAVAILABLE`` and ``should_retry`` is ``False`` (always, on a
+    budget refusal). ``retry_after_s`` is ``gap_retry_after_s(rehydrate_period_ms=...,
+    refresh_ms=...)``: one re-hydrator period plus one gateway refresh period, floored at
+    ``MIN_RETRY_AFTER_S`` by the helper (Req 5.5, 5.6). The façade passes the periods it knows; the
+    defaults of ``0.0`` collapse the gap to the ``MIN_RETRY_AFTER_S`` floor, so the result is always
+    ``>= MIN_RETRY_AFTER_S`` and can never land in the sub-second band that amplified SDK retries.
+    No HTTP object is constructed — ``edge`` renders the 503 from this value.
+    """
+    return BudgetVerdict(
+        code=BUDGET_UNAVAILABLE,
+        retry_after_s=gap_retry_after_s(
+            rehydrate_period_ms=rehydrate_period_ms,
+            refresh_ms=refresh_ms,
+        ),
         should_retry=False,
         request_id=request_id,
     )
