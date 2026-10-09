@@ -1,0 +1,112 @@
+{
+  "card": "GW12",
+  "title": "SSE egress pipeline with bounded buffers, backpressure and real cancellation",
+  "date": "2026-10-09",
+  "phase": "Protocol",
+  "scope": "local",
+  "depends": ["GW03", "GW11"],
+  "required_by": ["GW13", "GW14", "GW16b", "GW19"],
+  "spec": ".kiro/specs/sse-egress-pipeline/",
+  "plan": "docs/plans/2026-10-09-gw12-sse-egress-pipeline.md",
+  "commit_range": { "spec": "f3584151", "final_fix": "2a0a9170", "commits": 16, "branch": "suraj-revamp" },
+  "gates": {
+    "pytest_full_offline_suite": {
+      "command": ".venv/bin/python -m pytest tests/ -q -p no:randomly",
+      "passed": 1194,
+      "skipped": 93,
+      "xfailed": 1,
+      "failed": 0,
+      "PASS": true,
+      "note": "full gateway_v2 offline suite at the task-17 final verification gate; no regressions"
+    },
+    "pytest_lgw12_subset": {
+      "command": ".venv/bin/python -m pytest tests/ -k lgw12 -q -p no:randomly",
+      "passed": 205,
+      "deselected": 1083,
+      "failed": 0,
+      "PASS": true
+    },
+    "mypy_strict": {
+      "command": ".venv/bin/mypy --strict gateway_v2",
+      "source_files": 117,
+      "issues": 0,
+      "PASS": true
+    },
+    "ruff": {
+      "command": ".venv/bin/ruff check gateway_v2 tests",
+      "issues": 0,
+      "PASS": true
+    },
+    "import_linter": {
+      "command": ".venv/bin/lint-imports",
+      "files_analyzed": 117,
+      "dependencies_analyzed": 211,
+      "contracts_kept": 2,
+      "contracts_broken": 0,
+      "no_egress_to_detect_edge": true,
+      "layer_order_intact": true,
+      "PASS": true
+    },
+    "pytest_ast_gates": {
+      "command": ".venv/bin/python -m pytest tests/gates/ -q -p no:randomly",
+      "passed": 78,
+      "failed": 0,
+      "PASS": true
+    },
+    "ast_gate_clis": {
+      "command": "each gate CLI run standalone",
+      "gates": {
+        "check_capacity_literals": 0,
+        "check_no_module_mutable": 0,
+        "check_frozen_dataclasses": 0,
+        "check_http_outside_edge_resolve": 0,
+        "check_tenant_scale": 0
+      },
+      "rule": "every AST gate CLI exits 0 (no capacity literal outside runtime/resources.py; no module-level mutable; frozen value types; HTTP objects only in edge/resolve; no tenant-scale leak)",
+      "PASS": true
+    }
+  },
+  "correctness_properties": {
+    "count": 10,
+    "idiom": "seeded random.Random loop >= 10000 iterations (no hypothesis dependency), async via asyncio.run",
+    "all_pass": true,
+    "properties": {
+      "1": { "name": "Memory-bound invariant", "where": "tests/egress/test_lgw12_coalescer.py", "validates": ["4.4", "5.3", "5.4"] },
+      "2": { "name": "Credit conservation", "where": "tests/egress/test_lgw12_credit.py", "validates": ["5.7"] },
+      "3": { "name": "No-post-first-byte-splice", "where": "tests/edge/test_lgw12_first_byte_latch.py", "validates": ["7.3", "7.4"] },
+      "4": { "name": "Cancellation-within-bound", "where": "tests/edge/test_lgw12_cancellation.py", "validates": ["6.3", "6.5", "6.6"] },
+      "5": { "name": "Byte-linearity of mid-stream scan", "where": "tests/edge/test_lgw12_error_frame_scan.py", "validates": ["11.5"] },
+      "6": { "name": "Fail-closed-on-scan-error", "where": "tests/edge/test_lgw12_error_frame_scan.py", "validates": ["11.4", "15.2"] },
+      "7": { "name": "No-FAIL_OPEN", "where": "tests/egress/test_lgw12_fail_closed.py", "validates": ["15.3"] },
+      "8": { "name": "SSE codec + transform round-trip", "where": "tests/edge/test_lgw12_sse_codec.py, tests/dispatch/test_lgw12_transform.py", "validates": ["1.6", "8.4"] },
+      "9": { "name": "Split-surrogate confluence", "where": "tests/edge/test_lgw12_sse_codec.py", "validates": ["1.4"] },
+      "10": { "name": "Timeout termination", "where": "tests/runtime/test_lgw12_timeouts.py (+ cancellation stall case)", "validates": ["9.2", "9.3", "9.4"] }
+    }
+  },
+  "local_gates": {
+    "LGW12-1_memory_plateau": {
+      "local_equivalent": "tests/egress/test_lgw12_concurrency.py",
+      "shape": "N in-process streams; total buffered <= active_streams * stream_buffer_bytes(active_streams) at every observation point; buffered memory does not grow with stream length",
+      "requirement": "16.1",
+      "PASS": true
+    },
+    "LGW12-7_both_sdk_conformance": {
+      "local_equivalent": "tests/edge/test_lgw12_asgi_conformance.py",
+      "shape": "in-process ASGI transport; recorded-frame checks for data: [DONE] terminal marker, Error_Frame shape, split-surrogate decoding",
+      "requirement": "16.2",
+      "PASS": true
+    }
+  },
+  "harness_note": "all clocks, RNGs, scanners and provider sockets are injected; the provider is StubProviderClient (in-process, no socket); every property runs under a seeded random.Random so results are deterministic and not sensitive to CI wall-clock jitter",
+  "known_benign_warning": "R2-09 'coroutine BudgetLease._refill was never awaited' (undrained single-flight refill coroutines in the budget-lease property tests) — unrelated to GW12, carried from the GW06 card, not a failure",
+  "deferred_cloud_gates": {
+    "LGW12-1_full_1000_stream_memory_plateau": "deferred (needs the fleet lane + a real serving gateway); represented locally by tests/egress/test_lgw12_concurrency.py [Req 16.1]",
+    "LGW12-7_real_tcp_both_sdk_conformance": "deferred (needs real TCP sockets + OpenAI Python and Node SDKs); represented locally by tests/edge/test_lgw12_asgi_conformance.py [Req 16.2]",
+    "200_rps_fleet_certification": "deferred cloud gate (full live LGW12-1/2/3); represented locally by the scaled-down in-process harness"
+  },
+  "gw13_follow_ups": "the per-delta holdback scan stays INLINE in the shipped StreamPipeline release loop (offloading it would re-architect the shipped GW12b loop — out of scope); the error-frame scan IS offloaded and /metrics IS off-loop; STRICT_WITHHOLD + the INCREMENTAL mode switch are GW13 (egress/strict.py still stubbed)",
+  "thin_handler_note": "the streaming chat handler is THIN by design — full /v1/chat/completions semantics (request parse, plan resolution, auth, admission, real for_plan output enforcement) are GW15/GW16; GW12 proves the wiring end-to-end in pass-through mode",
+  "found_fixed": "a fail-closed defect found during Property-7 work is now FIXED: CancellationController fails closed on an abort() that RAISES within the bound (buffer still released, not misreported as bound-exceeded)",
+  "tripwire_deletion": "the GW05b edge-stub tripwire test (test_the_edge_layer_is_still_stubs) was DELETED per its own instruction now the edge layer exists; its 14 sibling handoff tests still pass; the 'four uncalled pieces' it referenced are a GW06 wiring concern",
+  "no_framework_note": "no real HTTP framework was added (raw ASGI 3.0 app); the real provider socket is a stub (StubProviderClient) — a real upstream client is a deferred live gate"
+}

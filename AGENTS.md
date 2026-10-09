@@ -412,6 +412,57 @@
   Plan: docs/plans/2026-10-08-r2-09-r2-14-r2-19-gw06-budget-lease.md.
   Evidence: docs/plans/evidence/2026-10-08-r2-09-gw06/.
 
+## GW12 / SSE egress pipeline changelog
+- GW12 (2026-10-09) — SSE EGRESS PIPELINE (bounded buffers + backpressure + real cancellation),
+  local half CLOSED. Protocol phase; depends GW03/GW11; required by GW13/GW14/GW16b/GW19. Stands up
+  the serving skin AROUND the shipped bounded-holdback engine (GW12b/R2-06 — StreamPipeline,
+  detect/holdback, holdback_config/metrics, InFlightKill.CUT_NEXT_CHUNK), which this card WIRED INTO,
+  not rebuilt. Built bottom-up on the import-linter layer contract (edge > admit > plan > detect >
+  resolve > dispatch > egress > audit > runtime > contracts > domain), fail-closed everywhere
+  (FAIL_OPEN pinned 0), no capacity literal outside runtime/resources.py, egress NEVER imports detect
+  (scanner + ProviderClient injected from edge/dispatch above detect). (1) runtime/resources.py — C27
+  inter_chunk/idle/write + C24 max_stream_duration/max_cut_latency/max_snapshot_age + R6
+  cancellation_bound derived from target_p99_ms (only module w/ capacity literals); snapshot()
+  extended. (2) domain/posture.py — 9 stream codes + STREAM_KILLED single-spelling (codes only).
+  (3) egress/backpressure.py — bounded Coalescer + CreditFlowControl: high-water from
+  stream_buffer_bytes, credit only on downstream consume, fail-closed below 1 byte (P1 memory-bound +
+  P2 credit conservation). (4) dispatch/{provider,routing,transform}.py — ProviderClient protocol +
+  abort + StubProviderClient; deterministic DispatchRouter; byte-verified Transform round-trip (P8).
+  (5) edge/wire/sse.py — SSEEncoder ([DONE] + declared Error_Frame, no-content-after-error state
+  machine) + SSEDecoder (split-surrogate buffering, malformed() fail-closed latch) (P8 round-trip +
+  P9 split-surrogate confluence). (6) edge/errors.py — single Error_Envelope value-code → HTTP/SSE
+  (MappingProxyType, generic fallback for unmapped codes). (7) edge/app.py + edge/routes.py — raw-ASGI
+  app (no framework): router, lifespan, off-loop /metrics, /readyz, live streaming chat route,
+  registered-for-later placeholders. (8) edge/stream_control.py — FirstByteLatch + run_with_no_splice
+  (no post-first-byte splice, P3). (9) edge/cancel.py — CancellationController (disconnect →
+  provider.abort() + killed() within cancellation_bound_s, buffer+credit released, FIXED to fail
+  closed on abort-raises-within-bound) + KillLatch + InFlightControl (C24 max-duration/kill-switch/
+  key-revocation/plan-change/stale-snapshot → the one KillLatch, fail-closed-first) (P4). (10)
+  edge/stream_timeouts.py — StreamTimeouts C27 bounds flipping the KillLatch (P10). (11)
+  edge/error_frame_scan.py — mid-stream provider error-frame scan-before-forward (redact/withhold/
+  fail-closed, byte-linear, offloaded) (P5 byte-linearity + P6 fail-closed-on-scan-error). (12)
+  edge/executor.py — ScanExecutor sized by pool_size(SCANNER), off-loop scan, loop-lag SLO input
+  (C38). (13) runtime/stream_metrics.py — PerRequestExports producer (label-free, zeros-not-absence,
+  FAIL_OPEN pinned 0) (P7 no-FAIL_OPEN). 10 correctness properties as seeded random.Random ≥10,000-
+  iteration tests (house idiom, no hypothesis, asyncio.run). OPEN (DEFERRED CLOUD GATES, out of local
+  scope): LGW12-1 full 1,000-stream plateau (local = tests/egress/test_lgw12_concurrency.py), LGW12-7
+  real-TCP both-SDK conformance (local = tests/edge/test_lgw12_asgi_conformance.py), 200 RPS fleet
+  cert. GW13 FOLLOW-UPS: per-delta holdback scan stays INLINE in the shipped StreamPipeline loop
+  (offload would re-architect GW12b — out of scope; error-frame scan IS offloaded, /metrics IS
+  off-loop); thin chat handler (full /v1/chat/completions = GW15/GW16, GW12 proves wiring in
+  pass-through); STRICT_WITHHOLD + INCREMENTAL switch = GW13 (egress/strict.py stubbed). FOUND+FIXED:
+  CancellationController fails closed on abort-raises-within-bound. The GW05b edge-stub tripwire
+  (test_the_edge_layer_is_still_stubs) was DELETED per its own instruction (14 sibling handoff tests
+  still pass); its "four uncalled pieces" are a GW06 wiring concern. No real HTTP framework added (raw
+  ASGI 3.0); real provider socket is a stub (deferred live gate). KNOWN BENIGN WARNING: R2-09
+  "coroutine 'BudgetLease._refill' was never awaited" (unrelated to GW12). VERIFY: 1194 full offline
+  suite (93 skipped, 1 xfailed, 0 failed) / 205 lgw12-subset / 78 AST-gate suite passed; `mypy
+  --strict` 117 files, ruff, import-linter 2/2 kept (117 files/211 deps, no egress→detect edge), each
+  AST gate CLI (capacity_literals/no_module_mutable/frozen_dataclasses/http_outside_edge_resolve/
+  tenant_scale) exits 0. Commit range suraj-revamp f3584151 (spec) → 2a0a9170 (final fix), 16 commits.
+  Plan: docs/plans/2026-10-09-gw12-sse-egress-pipeline.md.
+  Evidence: docs/plans/evidence/2026-10-09-gw12/.
+
 ## MCP Hardening BACKSTOP changelog
 - Parallel Claude + Cursor sessions harden the multi-tenant MCP gateway. **Every hardening change is
   logged to four memories in the SAME commit:** Ruflo (`mcp__ruflo__memory_store`
