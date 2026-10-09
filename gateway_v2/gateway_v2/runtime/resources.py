@@ -15,6 +15,18 @@ _DEFAULT_TARGET_P99_MS = 20.0
 _DEFAULT_UTILIZATION_CAP = 0.75
 _DEFAULT_PER_WORKER_RSS = 400 * 1024 * 1024
 _MS_PER_S = 1000.0
+
+# GW12 stream-serving derivations. Each timeout/duration/bound is a multiple of the request-path
+# SLO (`target_p99_ms`), so there is one capacity authority and no caller holds a literal. This is
+# the only module `lint/check_capacity_literals.py` exempts.
+_INTER_CHUNK_TIMEOUT_MULT = 50.0  # inter-chunk budget = p99 x mult
+_IDLE_TIMEOUT_MULT = 150.0  # downstream idle budget
+_WRITE_TIMEOUT_MULT = 25.0  # single downstream write budget
+_MAX_STREAM_DURATION_MULT = 15000.0  # wall-clock stream lifetime
+_MAX_CUT_LATENCY_MULT = 2.0  # a cut must complete within p99 x mult
+_MAX_SNAPSHOT_AGE_MULT = 1.0  # control-plane snapshot freshness vs p99
+_CANCEL_BOUND_MULT = 3.0  # disconnect -> full-kill budget
+
 _AUDIT_QUEUE_MEMORY_SHARE = 0.02
 """Share of a worker's usable memory the audit queue may occupy (GW14c).
 
@@ -116,6 +128,43 @@ class ResourceContract:
         if n < 1:
             raise CapacityUnavailable("stream buffer below minimum to serve")
         return n
+
+    def _stream_timeout_s(self, mult: float) -> float:
+        """GW12: a stream timeout/duration/bound derived from the request-path SLO.
+
+        value = p99_s x mult, clamped up to a derived floor of one p99 period (no stream bound
+        may be shorter than a single SLO unit of work), and fails closed with
+        `CapacityUnavailable` on a non-positive result -- matching the shipped
+        `stream_buffer_bytes` contract. `target_p99_ms` is positive by construction
+        (`from_signals` refuses to start otherwise), so the floor is positive; the guard is the
+        same defensive fail-closed stance the rest of the contract takes.
+        """
+        p99_s = self.target_p99_ms / _MS_PER_S
+        value = max(p99_s * mult, p99_s)
+        if value <= 0:
+            raise CapacityUnavailable("stream timeout below minimum to serve")
+        return value
+
+    def inter_chunk_timeout_s(self) -> float:
+        return self._stream_timeout_s(_INTER_CHUNK_TIMEOUT_MULT)
+
+    def idle_timeout_s(self) -> float:
+        return self._stream_timeout_s(_IDLE_TIMEOUT_MULT)
+
+    def write_timeout_s(self) -> float:
+        return self._stream_timeout_s(_WRITE_TIMEOUT_MULT)
+
+    def max_stream_duration_s(self) -> float:
+        return self._stream_timeout_s(_MAX_STREAM_DURATION_MULT)
+
+    def max_cut_latency_s(self) -> float:
+        return self._stream_timeout_s(_MAX_CUT_LATENCY_MULT)
+
+    def max_snapshot_age_s(self) -> float:
+        return self._stream_timeout_s(_MAX_SNAPSHOT_AGE_MULT)
+
+    def cancellation_bound_s(self) -> float:
+        return self._stream_timeout_s(_CANCEL_BOUND_MULT)
 
     def audit_queue_depth(self, drain_rate_per_s: float, bytes_per_record: int) -> int:
         """GW14c: how many audit records the producer's queue may hold.
@@ -282,6 +331,13 @@ def snapshot(contract: ResourceContract, logs: tuple[str, ...]) -> dict[str, obj
         "queue_depth": contract.queue_depth(rate),
         "connection_budget": contract.connection_budget(),
         "stream_buffer_bytes": contract.stream_buffer_bytes(1),
+        "inter_chunk_timeout_s": contract.inter_chunk_timeout_s(),
+        "idle_timeout_s": contract.idle_timeout_s(),
+        "write_timeout_s": contract.write_timeout_s(),
+        "max_stream_duration_s": contract.max_stream_duration_s(),
+        "max_cut_latency_s": contract.max_cut_latency_s(),
+        "max_snapshot_age_s": contract.max_snapshot_age_s(),
+        "cancellation_bound_s": contract.cancellation_bound_s(),
         "pools": pools,
         "logs": list(logs),
     }

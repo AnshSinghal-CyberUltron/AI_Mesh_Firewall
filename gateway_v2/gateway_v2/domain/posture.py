@@ -45,6 +45,42 @@ MIN_RETRY_AFTER_S = 1.0
 """R2-08: sheds carrying 6-11 ms of retry-after made the OpenAI SDK retry almost immediately."""
 
 
+# -- GW12 SSE egress stream codes -------------------------------------------------------------
+# Terminal codes for the streaming egress path. Codes only -- `edge` owns the HTTP mapping and
+# the SSE `Error_Frame` rendering; `egress`/`dispatch` return these value-codes (R3.3). Timeouts
+# (R9) and the fail-closed cut triggers (R10) each map to exactly one spelling so the two sides
+# of the stream cannot disagree (the C37 join failure). The pre-existing terminal codes
+# `stream_killed` (the `InFlightKill.CUT_NEXT_CHUNK` seam), `scan_failure` and `output_blocked`
+# already live on the `egress/stream.py` pipeline and are REUSED unchanged -- not redefined here.
+
+STREAM_INTER_CHUNK_TIMEOUT = "stream_inter_chunk_timeout"
+"""R9.2: upstream stalled between chunks past `inter_chunk_timeout_s()`. Terminate + release."""
+
+STREAM_IDLE_TIMEOUT = "stream_idle_timeout"
+"""R9.3: downstream idle past `idle_timeout_s()`. Terminate + release resources."""
+
+STREAM_WRITE_TIMEOUT = "stream_write_timeout"
+"""R9.4: a single downstream write blocked past `write_timeout_s()`. Terminate + release."""
+
+STREAM_MAX_DURATION = "stream_max_duration"
+"""R10.2: wall-clock lifetime hit `max_stream_duration_s()`. `CUT_NEXT_CHUNK` + `Error_Frame`."""
+
+STREAM_KEY_REVOKED = "stream_key_revoked"
+"""R10: key revoked mid-stream. Drives `killed()` fail-closed through the one cut seam."""
+
+STREAM_PLAN_CHANGED = "stream_plan_changed"
+"""R10: plan snapshot changed mid-stream. Fail-closed cut via the same `killed()` seam."""
+
+STREAM_SNAPSHOT_STALE = "stream_snapshot_stale"
+"""R10: control-plane snapshot aged past `max_snapshot_age_s()`. Fail-closed cut, never "off"."""
+
+STREAM_MALFORMED_UPSTREAM = "stream_malformed_upstream"
+"""R11: upstream SSE could not be decoded into a valid frame. Terminate + `Error_Frame`."""
+
+STREAM_BUFFER_UNAVAILABLE = "stream_buffer_unavailable"
+"""R4.5: coalescer high-water < 1 byte (`stream_buffer_bytes` raised). Fail closed, buffer zero."""
+
+
 def gap_retry_after_s(*, rehydrate_period_ms: float, refresh_ms: float) -> float:
     """How long a client should wait out a shared-state gap (C36).
 
