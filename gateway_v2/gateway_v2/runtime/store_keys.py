@@ -13,6 +13,11 @@ or a Lua script stays in ONE slot on a cluster-mode store.
   because C36 requires an explicit OFF record for every scope, but the ENGAGED subset is normally
   empty or tiny. Publishing it separately is what makes a cold start O(engaged) instead of
   O(tenants), and `on_count` in the signed manifest is what keeps that fail-closed.
+
+`audit:<org>` is GW14c's addition, and it is the one key family here that does NOT hold security
+state. It is in this layout anyway because R2-05 is precisely the discovery that audit and state
+share a store and that nothing was accounting for it: putting the audit streams somewhere this
+module cannot see them is how the budget stops being enforceable.
 """
 
 from __future__ import annotations
@@ -56,6 +61,32 @@ class StoreKeys:
         if kind in HASH_KINDS:
             raise ValueError(f"{kind.value} records are hash-stored")
         return f"{self.namespace}:{kind.value}:{key}"
+
+    def audit_stream(self, org: str) -> str:
+        """One audit stream per tenant (GW14c). Keyed per org because the budget is per org.
+
+        It carries the namespace hash tag like everything else, so one pipelined batch of
+        `XADD`s and `XTRIM`s across several tenants stays a single round trip on a cluster-mode
+        store. The trade is that audit then lands in the namespace's slot rather than spreading
+        across shards; on the signed topology (Memorystore for Valkey 8 HA, not a sharded
+        cluster) that is a non-question, and the budget is read from that instance's `maxmemory`
+        either way. A sharded deployment would have to read `maxmemory` per node, which is a
+        statement about that topology rather than about this key.
+        """
+        if not org:
+            raise ValueError("an audit stream needs an org: an unattributed record cannot be "
+                             "budgeted, trimmed per tenant, or exported to the right place")
+        return f"{self.namespace}:audit:{org}"
+
+    @property
+    def audit_prefix(self) -> str:
+        """The prefix an operator or an exporter scans for audit streams."""
+        return f"{self.namespace}:audit:"
+
+    def audit_org(self, key: str) -> str | None:
+        """The org an audit stream key belongs to, or None if it is not one of ours."""
+        prefix = self.audit_prefix
+        return key[len(prefix):] or None if key.startswith(prefix) else None
 
     @property
     def updates(self) -> str:

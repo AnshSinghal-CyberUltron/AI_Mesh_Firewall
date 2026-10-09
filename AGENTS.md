@@ -201,6 +201,63 @@
   clean. Plan: docs/plans/2026-10-08-r2-04-gw05-rehydrator-lock-and-pg-hardening.md.
   Evidence: docs/plans/evidence/2026-10-08-r2-04/.
 
+## R2-05 / GW14c audit memory and durability changelog
+- R2-05 (2026-10-08) — AUDIT MEMORY BUDGET + DURABLE SINK, local half CLOSED.
+  (1) Audit shared the hot store with no byte accounting: RC2's `MAXLEN 2,000,000` per org is a
+  RECORD count (≈5.4 GiB/tenant at 2.7 KB), so it could never engage before the store filled —
+  1.48 → 6.42 GiB in 51 min live. FIX: a global byte budget
+  (`AMF_AUDIT_STORE_BUDGET_MB`, else `AMF_AUDIT_STORE_FRACTION` 0.5 × `maxmemory`, re-read every
+  10 s) divided into a per-org approximate `MAXLEN` by a PER-ORG byte model, so each tenant holds
+  an equal BYTE share rather than an equal record share.
+  (2) `XTRIM`, not `XADD MAXLEN`: XTRIM returns what it removed, so `audit_trimmed_records` is
+  exact. That return value is the whole of the M3 fix; an AST-level test forbids moving the cap
+  back onto the append.
+  (3) **CORRECTED THE REFERENCE PATCH.** `rc3-audit-mem-v1`'s model (`payload × 1.10 + 256 B`)
+  UNDER-charges at 2 KB, 4 KB and 8 KB — the real per-entry cost oscillates with the allocator's
+  size classes (ratio 1.03–1.26), and the reference sampled 2.9 KB and 6 KB, two of the cheap
+  points. An under-charging model derives a MAXLEN that is too long, so the store fills while
+  every gauge reports the bound holding. `ENTRY_FACTOR` is now 1.35; the live gate asserts the
+  model stays above both `used_memory` Δ and `MEMORY USAGE` at eight sizes.
+  (4) Store-policy self-check (`INFO memory`, `CONFIG GET` only as fallback since Memorystore
+  restricts CONFIG) logging the eviction finding at ERROR *with* the remediation, including that
+  `noeviction` alone does not fix it; memory gauges sampled on worker 0 off the request path.
+  (5) Durable Postgres sink + exporter (`python -m audit_control`, R2-04's service shape incl. the
+  image-copy lesson) with the card's acknowledged-vs-durable high-water mark and EXACT
+  `records_lost = acknowledged − durable − pending`. My first version derived loss from the trim
+  count and was wrong on a FLUSH (reports 100 lost where 36 are lost, because a flush removes the
+  already-durable records too). `audit_completeness_ratio` is sourced from DURABLE and nothing
+  else; the sink's separate `acknowledged_ratio` is what makes the M3 window visible.
+  (6) `Finding.evidence` is never serialized — an audit stream is append-only, exported and
+  retained, so evidence would put the user's secret at rest in three places and undo the
+  redaction the pipeline just performed. Span offsets are kept; they locate without reproducing.
+  (7) C40: sheds and admission rejects get records, each with a reason (M2) and `retry_after_ms`
+  (R2-08), and completeness is measured against ADMITTED requests.
+  (8) The AST capacity gate caught a literal queue depth; the bound now comes from a new
+  `ResourceContract.audit_queue_depth(drain_rate, bytes_per_record)` — deliberately not
+  `queue_depth()`, whose slots are in-flight REQUESTS bounded by `per_worker_rss`.
+  SINK CHOICE (the card says choose and price here): **Postgres** — already in the signed fleet
+  ($526.40/mo Cloud SQL HA), inherits R2-04's verified session bounds via `pg.cursor_tx()`, and
+  has measured failure behaviour (failover 11.6–15.5 s loaded, 0 acknowledged writes lost). Disk
+  sizing + retention is an OWNER DECISION pending the signed capacity.
+  OPEN: L14c-2 (1 h at the fleet Poisson knee — needs GW12's serving path and a signed knee);
+  L14c-1's "0 refused lease refills" (NOT asserted — `admit/quota.py` is a stub, GW19); the
+  guard-registration victim is a declared `SET … PX 3000` surrogate (GW08), so the control arms
+  reproduce the chain via 23 evictions + 50,000 refused writes but not "registrations 0/5".
+  FOUND, NOT FIXED: `state_control/valkey.py:100` trips `check_tenant_scale` — pre-existing, on
+  the re-hydrator's deliberately O(records) deep-verify path.
+  ALSO OPEN: nothing EMITS an audit record yet — `edge/app.py` is a stub (GW12), so the bound is
+  around a path that carries no traffic; GW14's timing instrument is deliberately untouched.
+  `audit_control` sits outside the import-linter layer contract (`root_packages=["gateway_v2"]`),
+  same position as `state_control`; both are mypy-strict covered.
+  VERIFY: 814 offline / 13 live Valkey / 13 live Postgres 16 (`AMF_PG_DSN`, schema + ON CONFLICT
+  idempotence + one-transaction page/cursor + exact bytes + parsed-id ordering) / 4 L14c-1 arms
+  passed; `mypy --strict`, ruff, import-linter 2/2, AST gates × 3 trees clean. L14c-1: bounded 5/5 regs, 0 evicted, 0 refused
+  publishes, 0 refused writes, 65,732 trimmed, 13.9/64 MiB; unbounded control 64.0/64 MiB with
+  50,000 writes + 4 publishes refused and 23 keys evicted. L14c-3: flush → 36 lost exactly,
+  completeness 0.64 (read 1.0 before).
+  Plan: docs/plans/2026-10-08-r2-05-gw14c-audit-memory-and-durability.md.
+  Evidence: docs/plans/evidence/2026-10-08-r2-05/.
+
 ## MCP Hardening BACKSTOP changelog
 - Parallel Claude + Cursor sessions harden the multi-tenant MCP gateway. **Every hardening change is
   logged to four memories in the SAME commit:** Ruflo (`mcp__ruflo__memory_store`

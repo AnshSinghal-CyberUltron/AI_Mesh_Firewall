@@ -382,6 +382,37 @@ class PostgresControlDB:
             cursor.execute(SCHEMA)
 
     @contextlib.contextmanager
+    def cursor_tx(self) -> Iterator[Any]:
+        """The same bounded transaction, yielding the RAW cursor. GW14c's seam.
+
+        The audit sink (`audit_control/`) needs the four session bounds and the commit semantics
+        this class already proves, over a different schema. Exposing the cursor is the smaller of
+        the two available mistakes: the alternative is a second copy of the bounds, and this
+        module's own docstring says why — *"three spellings of four numbers is how one of them
+        drifts"*. `verify_bounds()` therefore covers the audit sink too, which is the point.
+
+        Callers get no state-specific helpers and no schema knowledge, so nothing about the
+        control plane's tables leaks through this seam.
+        """
+        connection = self._connect()
+        try:
+            with connection.cursor() as cursor:
+                self._apply_bounds(cursor)
+                yield cursor
+            try:
+                connection.commit()
+            except self._psycopg.Error as exc:
+                raise CommitUnknown(f"{type(exc).__name__}: {exc}"[:300]) from exc
+        except BaseException:
+            with contextlib.suppress(self._psycopg.Error):
+                if not connection.closed:
+                    connection.rollback()
+            raise
+        finally:
+            with contextlib.suppress(self._psycopg.Error):
+                connection.close()
+
+    @contextlib.contextmanager
     def tx(self) -> Iterator[PostgresTx]:
         """An exception in the body rolls back. A failure OF the commit is CommitUnknown."""
         connection = self._connect()

@@ -17,16 +17,22 @@ ENV SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH} \
 # was absent until R2-04: pyproject already declared include=["state_control*"] and psycopg, so
 # the package was importable from a source checkout and missing from every image — which is why
 # the "≥ 2 re-hydrators in ≥ 2 zones" clause had nothing to deploy.
+# `audit_control` is GW14c's audit exporter (`python -m audit_control`), copied here for exactly
+# the same reason: R2-05's "durable sink with an acknowledged-vs-durable high-water mark" is a
+# statement about a running process, and a package in pyproject but not in the image is how that
+# requirement silently has nothing to attach to. The image test asserts it is importable.
 RUN --mount=type=bind,source=gateway_v2/pyproject.toml,target=/tmp/src/pyproject.toml,ro \
     --mount=type=bind,source=gateway_v2/gateway_v2,target=/tmp/src/pkg,ro \
     --mount=type=bind,source=gateway_v2/state_control,target=/tmp/src/control,ro \
+    --mount=type=bind,source=gateway_v2/audit_control,target=/tmp/src/audit,ro \
     --mount=type=bind,source=shared/ai_mesh_shared,target=/tmp/src/shared,ro \
     umask 022 \
     && mkdir -p /opt/gateway_v2/gateway_v2 /opt/gateway_v2/state_control \
-        /opt/shared/ai_mesh_shared \
+        /opt/gateway_v2/audit_control /opt/shared/ai_mesh_shared \
     && cp /tmp/src/pyproject.toml /opt/gateway_v2/pyproject.toml \
     && cp -R /tmp/src/pkg/. /opt/gateway_v2/gateway_v2/ \
     && cp -R /tmp/src/control/. /opt/gateway_v2/state_control/ \
+    && cp -R /tmp/src/audit/. /opt/gateway_v2/audit_control/ \
     && cp -R /tmp/src/shared/. /opt/shared/ai_mesh_shared/ \
     && find /opt -xdev -exec touch -h -d "@${SOURCE_DATE_EPOCH}" {} + \
     && pip install --no-cache-dir --no-compile \

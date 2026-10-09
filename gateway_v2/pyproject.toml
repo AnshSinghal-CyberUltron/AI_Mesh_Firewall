@@ -23,7 +23,7 @@ dev = [
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["gateway_v2*", "state_control*", "lint*"]
+include = ["gateway_v2*", "state_control*", "audit_control*", "lint*"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
@@ -33,7 +33,7 @@ addopts = "--ignore=tests/openai_conformance --ignore=tests/parity"
 [tool.ruff]
 target-version = "py312"
 line-length = 100
-src = ["gateway_v2", "state_control", "lint", "tests"]
+src = ["gateway_v2", "state_control", "audit_control", "lint", "tests"]
 extend-exclude = [
     "tests/openai_conformance/test_openai_sdk_compat.py",
     "tests/openai_conformance/test_openai_sdk_compat_live_uvicorn.py",
@@ -48,12 +48,12 @@ extend-exclude = [
 select = ["E", "F", "I", "UP"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["gateway_v2", "state_control", "lint"]
+known-first-party = ["gateway_v2", "state_control", "audit_control", "lint"]
 
 [tool.mypy]
 python_version = "3.12"
 strict = true
-files = ["gateway_v2", "state_control", "lint"]
+files = ["gateway_v2", "state_control", "audit_control", "lint"]
 
 [[tool.mypy.overrides]]
 module = ["ai_mesh_gateway.*"]

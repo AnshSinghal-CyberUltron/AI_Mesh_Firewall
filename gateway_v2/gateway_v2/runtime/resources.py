@@ -15,6 +15,13 @@ _DEFAULT_TARGET_P99_MS = 20.0
 _DEFAULT_UTILIZATION_CAP = 0.75
 _DEFAULT_PER_WORKER_RSS = 400 * 1024 * 1024
 _MS_PER_S = 1000.0
+_AUDIT_QUEUE_MEMORY_SHARE = 0.02
+"""Share of a worker's usable memory the audit queue may occupy (GW14c).
+
+Audit is not the product. 2% of the usable limit is enough to ride out a store blip of several
+SLO periods at realistic drain rates, and small enough that a queue sized by a fast drain rate
+cannot OOM the worker it exists to keep serving.
+"""
 
 
 @dataclass(frozen=True, slots=True)
@@ -108,6 +115,45 @@ class ResourceContract:
         n = math.floor(self.memory_limit * self.utilization_cap / streams)
         if n < 1:
             raise CapacityUnavailable("stream buffer below minimum to serve")
+        return n
+
+    def audit_queue_depth(self, drain_rate_per_s: float, bytes_per_record: int) -> int:
+        """GW14c: how many audit records the producer's queue may hold.
+
+        GW14 states the bound as "the contract's `queue_depth()` at the writer's measured drain
+        rate", and it is deliberately NOT `queue_depth()` itself: that one is bounded by
+        `per_worker_rss`, because its slots are in-flight REQUESTS. An audit record is a few KB,
+        so sizing a record queue by a worker's RSS would give a depth of tens and drop audit
+        under any load at all.
+
+        Two bounds, and the smaller wins:
+
+        * **Time.** `drain_rate x stall_budget`, where the stall budget is the request-path SLO
+          divided by the utilisation cap. A queue depth IS a stall budget: it is how long the
+          writer may be stuck before `emit` starts dropping, and a store blip longer than that
+          is a loss event that has to be counted rather than absorbed.
+        * **Memory.** The share of the worker's memory the queue may occupy, over the bytes a
+          record costs. Without this a high drain rate would authorise a queue that OOMs the
+          worker it is protecting — trading a counted audit loss for an uncounted request loss.
+
+        `drain_rate_per_s` comes from `AuditSink.calibrate()` against the real store, so the
+        depth is measured rather than assumed.
+        """
+        if drain_rate_per_s <= 0:
+            raise CapacityUnavailable("audit drain rate must be positive")
+        if bytes_per_record < 1:
+            raise CapacityUnavailable("audit bytes per record must be positive")
+        stall_budget_s = (self.target_p99_ms / _MS_PER_S) / self.utilization_cap
+        by_time = math.ceil(drain_rate_per_s * stall_budget_s)
+        queue_memory = self.memory_limit * self.utilization_cap * _AUDIT_QUEUE_MEMORY_SHARE
+        by_memory = math.floor(queue_memory / bytes_per_record)
+        n = min(by_time, by_memory)
+        if n < 1:
+            raise CapacityUnavailable(
+                f"audit queue depth below minimum to serve (time={by_time} memory={by_memory}): "
+                "the worker cannot hold even one record, so every record would be dropped and "
+                "counted -- fix the memory limit or the record size before starting",
+            )
         return n
 
 

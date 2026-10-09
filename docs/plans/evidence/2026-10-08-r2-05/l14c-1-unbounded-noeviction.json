@@ -1,0 +1,17 @@
+{
+  "bounded": false,
+  "policy": "noeviction",
+  "maxmemory": 67108864,
+  "used_memory_end": 67106248,
+  "records_emitted": 70000,
+  "audit_written": 20000,
+  "audit_write_failed": 50000,
+  "audit_dropped": 0,
+  "audit_trimmed": 0,
+  "registrations_alive_min": 5,
+  "heartbeats_refused": 0,
+  "publish_failures": 0,
+  "evicted_keys_end": 0,
+  "probes": 5,
+  "PASS": false
+}

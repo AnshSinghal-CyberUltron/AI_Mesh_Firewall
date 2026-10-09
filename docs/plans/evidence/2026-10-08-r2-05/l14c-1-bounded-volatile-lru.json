@@ -1,0 +1,17 @@
+{
+  "bounded": true,
+  "policy": "volatile-lru",
+  "maxmemory": 67108864,
+  "used_memory_end": 14598872,
+  "records_emitted": 70000,
+  "audit_written": 70000,
+  "audit_write_failed": 0,
+  "audit_dropped": 0,
+  "audit_trimmed": 65732,
+  "registrations_alive_min": 5,
+  "heartbeats_refused": 0,
+  "publish_failures": 0,
+  "evicted_keys_end": 0,
+  "probes": 5,
+  "PASS": true
+}
