@@ -49,12 +49,14 @@ from gateway_v2.detect.windowing import max_pattern_length
 from gateway_v2.dispatch.provider import ProviderClient, UpstreamEvent, UpstreamRequest
 from gateway_v2.dispatch.routing import DispatchRouter
 from gateway_v2.edge import errors
+from gateway_v2.edge.stream_control import FirstByteLatch, StreamAttempt, run_with_no_splice
 from gateway_v2.edge.wire.sse import SSEEncoder
 from gateway_v2.egress.backpressure import Coalescer
 from gateway_v2.egress.output_guard import OutputResolver
 from gateway_v2.egress.stream import (
     DownstreamFrame,
     ScanProtocol,
+    Send,
     StreamPipeline,
     UpstreamChunk,
 )
@@ -157,7 +159,7 @@ class ChatRoute:
     active_streams: Callable[[], int]
 
     async def handle(self, scope: ASGIScope, receive: ASGIReceive, send: ASGISend) -> None:
-        """Stream a chat completion end-to-end over the shipped egress pipeline (R2.2).
+        """Stream a chat completion end-to-end over the shipped egress pipeline (R2.2, R7).
 
         Thin by design (full semantics are GW15/GW16): it proves the wiring is live. The
         coalescer admit fails CLOSED when the derived per-stream high-water is below one byte
@@ -166,6 +168,12 @@ class ChatRoute:
         ``StreamPipeline`` release loop. A terminal ``[DONE]`` closes the stream. Any value-code
         the pipeline emits (a frame ``error_code``) renders as a declared SSE ``Error_Frame``
         through the single envelope.
+
+        The :class:`~gateway_v2.edge.stream_control.FirstByteLatch` is created HERE, above the
+        egress loop, and threaded into the stream orchestration so the no-splice gate (R7) is
+        enforced before any provider hand-off: a signed safe retry/fallback runs only while the
+        latch is unset, the first released content byte sets it, and after that the stream only
+        terminates / errors — a second upstream response is never spliced in (R7.4).
         """
         coalescer = Coalescer(contract=self.contract, active_streams=self.active_streams)
         verdict = coalescer.admit()
@@ -184,15 +192,20 @@ class ChatRoute:
         encoder: SSEEncoder,
         coalescer: Coalescer,
     ) -> None:
-        """Drive the shipped ``StreamPipeline`` and serialise its frames onto the SSE channel.
+        """Drive the egress pipeline under the no-splice gate and serialise frames onto SSE (R7).
 
-        The provider is opened for the routed destination, its events are adapted to the
-        shipped ``UpstreamChunk`` transport, and the pipeline's released ``DownstreamFrame``s
-        are encoded by the one ``SSEEncoder``. A frame carrying an ``error_code`` is rendered as
-        the declared terminal ``Error_Frame`` and no content follows it (the encoder goes
-        terminal). On a clean finish the terminal ``[DONE]`` marker is emitted.
+        A per-request :class:`FirstByteLatch` gates retry/fallback: the shared ``_sink`` sets the
+        latch the instant the FIRST content byte is released downstream (R7.2), and
+        :func:`run_with_no_splice` only ever requests a fresh attempt (a fresh provider response)
+        while the latch is unset (R7.1/R7.3). Each attempt opens the injected ``ProviderClient``
+        for the routed destination, adapts its events to the shipped ``UpstreamChunk`` transport,
+        and runs the shipped ``StreamPipeline`` release loop; released ``DownstreamFrame``s are
+        encoded by the one ``SSEEncoder``. A frame carrying an ``error_code`` renders the declared
+        terminal ``Error_Frame`` and no content follows it. On a clean finish the terminal
+        ``[DONE]`` marker is emitted; when every eligible attempt failed before the first byte the
+        caller rendered no byte and the stream closes without a splice (R7.4).
         """
-        pipeline = self._build_pipeline()
+        latch = FirstByteLatch()
         sent_terminal = _TerminalLatch()
 
         async def _sink(frame: DownstreamFrame) -> None:
@@ -202,13 +215,50 @@ class ChatRoute:
                 await _send_sse(send, encoder.error(frame.error_code))
                 sent_terminal.set()
                 return
+            # The first released content byte closes the no-splice gate (R7.2): once a byte is on
+            # the wire the orchestration will never attempt a second upstream response (R7.4).
+            latch.set_on_release()
             await _send_sse(send, encoder.content(frame))
 
-        request = UpstreamRequest(destination=self._destination(), body=_EMPTY_BODY)
-        chunks = _as_chunks(self.provider.open(request), coalescer)
-        await pipeline.run(chunks, _sink, _never_killed)
+        offered = _TerminalLatch()
+
+        def _factory() -> StreamAttempt | None:
+            return self._next_attempt(offered, latch, _sink, coalescer)
+
+        await run_with_no_splice(latch, _factory)
         if not sent_terminal.is_set() and not encoder.terminated:
             await _send_sse(send, encoder.done())
+
+    def _next_attempt(
+        self,
+        offered: _TerminalLatch,
+        latch: FirstByteLatch,
+        sink: Send,
+        coalescer: Coalescer,
+    ) -> StreamAttempt | None:
+        """Yield the next eligible stream attempt, or ``None`` when none remains (R7.1).
+
+        The thin handler has exactly ONE signed upstream to try (GW15 adds the signed fallback
+        chain), so the first call returns an attempt and every later call returns ``None`` — the
+        ``offered`` one-way latch records that the sole provider response has been handed out, so a
+        byte-less failure is NOT retried against the same provider forever and there is nothing
+        further to splice. :func:`run_with_no_splice` only invokes this factory while the first-byte
+        latch still permits a retry, so a fresh attempt is impossible once a byte is on the wire.
+        """
+        if offered.is_set():
+            return None
+        offered.set()
+
+        async def _attempt() -> bool:
+            pipeline = self._build_pipeline()
+            request = UpstreamRequest(destination=self._destination(), body=_EMPTY_BODY)
+            chunks = _as_chunks(self.provider.open(request), coalescer)
+            await pipeline.run(chunks, sink, _never_killed)
+            # The sink set the first-byte latch the instant a content byte went out; report that
+            # as the "released a byte" signal so run_with_no_splice closes the gate (R7.2/R7.4).
+            return latch.is_set()
+
+        return _attempt
 
     def _build_pipeline(self) -> StreamPipeline:
         """Construct a pass-through ``StreamPipeline`` wired to the injected scanner/resolver.
