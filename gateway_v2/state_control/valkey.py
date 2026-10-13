@@ -161,11 +161,12 @@ class ValkeyPublisher:
         manifest: Manifest,
         *,
         engaged: bool | None = None,
+        nudge: bool = True,
     ) -> bool:
         def stage(pipe: Any) -> None:
             self._stage_record(pipe, record, engaged)
 
-        return self._guarded(record.kind, manifest, stage)
+        return self._guarded(record.kind, manifest, stage, nudge=nudge)
 
     def publish_batch(
         self,
@@ -174,6 +175,7 @@ class ValkeyPublisher:
         *,
         engaged: Mapping[str, bool] | None = None,
         chunk: int = 500,
+        nudge: bool = True,
     ) -> bool:
         """Records in bounded chunks, then the manifest under WATCH.
 
@@ -192,7 +194,16 @@ class ValkeyPublisher:
                     flag = None if engaged is None else engaged.get(record.key)
                     self._stage_record(pipe, record, flag)
                 pipe.execute()
-        return self._guarded(kind, manifest, lambda pipe: None)
+        return self._guarded(kind, manifest, lambda pipe: None, nudge=nudge)
+
+    def emit_nudge(self, kind: StateKind, feed_seq: int) -> None:
+        """A bare `PUBLISH` of `"<kind>:<feed_seq>"` on the updates channel, outside any MULTI.
+
+        A latency hint only; never load-bearing. Separated from the Durable_Write so a coalescer
+        can bound the push rate per owner without touching durability. The channel and the payload
+        are byte-identical to the inline nudge `_guarded` emits (see `_nudge_payload`).
+        """
+        self._client.publish(self._keys.updates, self._nudge_payload(kind, feed_seq))
 
     def publish_kind(
         self,
@@ -248,6 +259,14 @@ class ValkeyPublisher:
         else:
             pipe.srem(name, record.key)
 
+    def _nudge_payload(self, kind: StateKind, feed_seq: int) -> str:
+        """The nudge wire payload `"<kind>:<feed_seq>"`, parsed by `parse_nudge`.
+
+        One home for the format string so the inline nudge in `_guarded` and the standalone
+        `emit_nudge` produce byte-identical payloads.
+        """
+        return f"{kind.value}:{feed_seq}"
+
     def _guarded(
         self,
         kind: StateKind,
@@ -255,8 +274,15 @@ class ValkeyPublisher:
         stage: Any,
         *,
         guard: bool = True,
+        nudge: bool = True,
     ) -> bool:
-        """Stage, then write the manifest LAST, refusing to move it backwards."""
+        """Stage, then write the manifest LAST, refusing to move it backwards.
+
+        The durable WATCH/MULTI staging (`SET`/`HSET` + `ZADD` + `SADD`/`SREM` + manifest `SET`)
+        is byte-identical whatever `nudge` is; only the trailing `PUBLISH` is conditional, so a
+        coalescer can suppress the inline nudge (`nudge=False`) and emit the coalesced one itself
+        via `emit_nudge`.
+        """
         name = self._keys.manifest(kind)
         with self._client.pipeline() as pipe:
             for _ in range(WATCH_ATTEMPTS):
@@ -268,7 +294,11 @@ class ValkeyPublisher:
                     pipe.multi()
                     stage(pipe)
                     pipe.set(name, encode_manifest(manifest))
-                    pipe.publish(self._keys.updates, f"{kind.value}:{manifest.feed_seq}")
+                    if nudge:
+                        pipe.publish(
+                            self._keys.updates,
+                            self._nudge_payload(kind, manifest.feed_seq),
+                        )
                     pipe.execute()
                     return True
                 except _WATCH_ERRORS:
