@@ -49,6 +49,7 @@ from gateway_v2.domain.state_knobs import (
 )
 from gateway_v2.runtime.store_keys import DEFAULT_NAMESPACE, StoreKeys
 from gateway_v2.runtime.store_valkey import require_bounded_client
+from state_control.coalescer import CoalesceConfig, CoalescingPublisher
 from state_control.metrics import RehydrationMetricsRecorder, render
 from state_control.pg import PostgresControlDB
 from state_control.rehydrate import (
@@ -193,9 +194,19 @@ class _Handler(BaseHTTPRequestHandler):
 class RehydratorService:
     """One re-hydrator process: a bounded loop, a metrics surface, and a clean stop."""
 
-    def __init__(self, config: ServiceConfig, rehydrator: Rehydrator) -> None:
+    def __init__(
+        self,
+        config: ServiceConfig,
+        rehydrator: Rehydrator,
+        coalescer: CoalescingPublisher | None = None,
+    ) -> None:
         self._config = config
         self._rehydrator = rehydrator
+        # The writer's publisher is a CoalescingPublisher (wired by `build`); the service loop
+        # flushes it each round and on shutdown. It is Optional so a directly-constructed service
+        # (e.g. a test that builds `RehydratorService(config, rehydrator)`) stays unchanged — when
+        # None, the flush hooks are no-ops and the write path behaves exactly as the bare one.
+        self._coalescer = coalescer
         self._recorder = RehydrationMetricsRecorder()
         self._stop = threading.Event()
         self._round = 0
@@ -222,7 +233,19 @@ class RehydratorService:
         )
         require_bounded_client(client, below_s=config.knobs.store_timeout_ceiling_s)
         publisher = ValkeyPublisher(client, config.secret, StoreKeys(config.namespace))
-        writer = StateWriter(db, publisher, config.secret)
+        # R2-23 / C43: the WRITER publishes through a per-owner nudge coalescer so a burst of
+        # writes to one owner collapses to a bounded number of pushes per window. The coalescer
+        # derives its bound/window from the single declared authority (StateKnobs) and never
+        # touches durability — it only coalesces the lossy nudge. StateWriter is unchanged; it
+        # depends only on the StatePublisher protocol, which CoalescingPublisher satisfies.
+        coalescing = CoalescingPublisher(
+            publisher,
+            CoalesceConfig.from_knobs(config.knobs),
+            clock=time.monotonic,
+        )
+        writer = StateWriter(db, coalescing, config.secret)
+        # The re-hydrator keeps the BARE publisher: its wholesale `publish_kind` restore must NOT
+        # be coalesced (R2-04 HA — a re-hydrator's restore is the change and emits its own nudge).
         rehydrator = Rehydrator(
             db,
             publisher,
@@ -232,7 +255,7 @@ class RehydratorService:
             fresh_ms=config.knobs.fresh_ms,
             pg_grace_ms=config.knobs.pg_grace_ms,
         )
-        return cls(config, rehydrator)
+        return cls(config, rehydrator, coalescer=coalescing)
 
     # --- the loop -------------------------------------------------------------------------------
 
@@ -275,11 +298,25 @@ class RehydratorService:
             while not self._stop.is_set():
                 started = time.monotonic()
                 self.round_once()
+                # Flush any held nudge whose Coalesce_Window has elapsed, so a quiesced owner's
+                # final held nudge goes out this round (well inside the Freshness_Window). Use the
+                # SAME clock source the coalescer was built with (time.monotonic) so the window
+                # math agrees. A no-op when no coalescer is wired. flush_due never raises.
+                if self._coalescer is not None:
+                    self._coalescer.flush_due(time.monotonic())
                 # Sleep the REMAINDER of the period, so a slow round does not push the cadence
                 # out: the freshness bound is measured from the round's start, not its end.
                 elapsed = time.monotonic() - started
                 self._stop.wait(max(config.period_s - elapsed, 0.0))
         finally:
+            # Shutdown fail-safe (Req 6.3): flush every held pending position regardless of window
+            # so a pending Highest_Feed_Seq is not discarded. flush_all swallows per-entry failures
+            # and never raises, but guard it defensively so a flush can never block clean shutdown.
+            if self._coalescer is not None:
+                try:
+                    self._coalescer.flush_all()
+                except Exception:  # noqa: BLE001 - a flush must never prevent clean shutdown
+                    LOG.warning("coalescer flush_all on shutdown failed", exc_info=True)
             self._recorder.stopping()
             if server is not None:
                 server.shutdown()
