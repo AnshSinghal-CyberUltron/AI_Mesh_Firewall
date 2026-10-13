@@ -79,6 +79,13 @@ from gateway_v2.egress.output_guard import MinimalOutputResolver
 from gateway_v2.egress.stream import DownstreamFrame
 from gateway_v2.runtime.kinds import HardwareSignals
 from gateway_v2.runtime.resources import ResourceContract, from_signals
+from tests.edge._chat_lifecycle_fixtures import (
+    AdmittingAdmission,
+    AdmittingBudget,
+    ResolvingIdentity,
+    chat_body,
+    warm_snapshot_source,
+)
 
 # --------------------------------------------------------------------------- #
 # Fixtures: the real ASGI app with every dependency injected (no socket).
@@ -86,6 +93,9 @@ from gateway_v2.runtime.resources import ResourceContract, from_signals
 
 _SEED = 0x1507
 _CHAT_PATH = "/v1/chat/completions"
+#: A well-formed OpenAI chat body (with the required ``model`` field) the §10.4 parser accepts;
+#: a ``model``-less body is off-contract and the lifecycle refuses it before any provider contact.
+_WELL_FORMED_BODY = chat_body(content="Say hello politely.", model="gpt-4o-mini", stream=True)
 
 
 def _contract() -> ResourceContract:
@@ -186,6 +196,16 @@ def _build(
     content scanner is the shipped pure ``detect.holdback.scan``; the resolver is the shipped
     :class:`MinimalOutputResolver`; metrics + clock are the local stubs above. ``build_app``
     returns the genuine ``async def app(scope, receive, send)`` callable the transport drives.
+
+    **GW15 §10.4 lifecycle (reconciled by task 7.1).** ``build_app``'s DEFAULT lifecycle deps
+    are fail-CLOSED (an unwired app refuses every request with zero provider calls), so to drive
+    the REAL streaming surface these conformance checks inject PASSING deps — a resolving
+    identity, a warmed plan snapshot, always-admit admission + budget — from the shared
+    :mod:`tests.edge._chat_lifecycle_fixtures`. With these wired, a well-formed OpenAI body (sent
+    by :func:`_drive`) runs the full §10.4 pipeline and reaches the shipped egress orchestration,
+    which is exactly what these recorded-frame SSE conformance assertions exercise. The input
+    detector is left at ``build_app``'s no-findings default (no input BLOCK), so the content /
+    error-frame paths under test are driven by the OUTPUT scanner, unchanged.
     """
     provider = StubProviderClient(script=tuple(script), rng=random.Random(_SEED))
     return build_app(
@@ -196,6 +216,10 @@ def _build(
         metrics_registry=_StubMetrics(),
         clock=_Clock(),
         error_scanner=error_scanner if error_scanner is not None else _no_error_findings,
+        identity=ResolvingIdentity(),
+        snapshot_source=warm_snapshot_source(),
+        admission=AdmittingAdmission(),
+        quota=AdmittingBudget(),
     )
 
 
@@ -265,11 +289,14 @@ class _Transport:
         return frames
 
 
-def _drive(app: object, *, body: bytes = b"{}") -> _Transport:
+def _drive(app: object, *, body: bytes = _WELL_FORMED_BODY) -> _Transport:
     """Drive one in-process request through ``app`` and return the recording transport.
 
     ``asyncio.run`` runs the ASGI callable to completion against the scripted
-    receive + recording send, exactly as a server would for one connection.
+    receive + recording send, exactly as a server would for one connection. The default
+    ``body`` is a well-formed OpenAI chat body (with ``model`` + ``stream: true``) the §10.4
+    lifecycle accepts and dispatches to the streaming path; a ``model``-less body would be
+    refused before the provider is opened (the OpenAI SDK always sends ``model``).
     """
     transport = _Transport(body=body)
 

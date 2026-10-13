@@ -38,10 +38,20 @@ from gateway_v2.edge.wire.sse import DONE_MARKER
 from gateway_v2.egress.output_guard import MinimalOutputResolver
 from gateway_v2.runtime.kinds import HardwareSignals
 from gateway_v2.runtime.resources import ResourceContract, from_signals
+from tests.edge._chat_lifecycle_fixtures import (
+    AdmittingAdmission,
+    AdmittingBudget,
+    ResolvingIdentity,
+    chat_body,
+    warm_snapshot_source,
+)
 
 _SEED = 0x6A12
 _CHAT_PATH = "/v1/chat/completions"
 _METRICS_BODY = "# gateway_v2 metrics\namf_up 1\n"
+#: A well-formed OpenAI chat body (with ``model`` + ``stream: true``) the §10.4 lifecycle accepts
+#: and dispatches to the streaming path; a ``model``-less body is refused before any provider call.
+_WELL_FORMED_STREAM_BODY = chat_body(content="Stream me a greeting.", stream=True)
 
 
 # --------------------------------------------------------------------------- #
@@ -130,6 +140,15 @@ def _build(
         clock=_Clock(),
         readiness=readiness,
         error_scanner=_no_error_findings,
+        # GW15 §10.4 (reconciled by task 7.1): inject PASSING lifecycle deps so a well-formed
+        # chat request runs the full pipeline and reaches the shipped streaming handler. The
+        # readiness / metrics / placeholder / lifespan tests do not hit the chat path, so these
+        # deps are inert for them; the chat-route test (below) sends a well-formed body and asserts
+        # the live 200 SSE stream.
+        identity=ResolvingIdentity(),
+        snapshot_source=warm_snapshot_source(),
+        admission=AdmittingAdmission(),
+        quota=AdmittingBudget(),
     )
 
 
@@ -297,7 +316,7 @@ def test_chat_route_registered_streams_sse_200() -> None:
     ``200 text/event-stream`` and ends with the terminal ``[DONE]`` marker.
     """
     app = _build(script=_content_script())
-    transport = _drive_http(app, "POST", _CHAT_PATH)
+    transport = _drive_http(app, "POST", _CHAT_PATH, body=_WELL_FORMED_STREAM_BODY)
 
     assert transport.status() == 200, f"chat route did not start 200: {transport.status()}"
     assert transport.headers().get("content-type") == "text/event-stream", (
