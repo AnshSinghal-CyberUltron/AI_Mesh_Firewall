@@ -35,6 +35,44 @@ SLO periods at realistic drain rates, and small enough that a queue sized by a f
 cannot OOM the worker it exists to keep serving.
 """
 
+# GW14d observability-contract derivations. The metrics Cardinality_Directory capacity, its
+# bounded top-K slot count, the windowed-histogram window length, and the structured event-log
+# rate are all functions of existing contract fields, so there is one capacity authority and no
+# `edge` module holds a literal. This is the only module `lint/check_capacity_literals.py`
+# exempts.
+_METRICS_DIRECTORY_SLOTS_MULT = 4.0  # directory capacity = connection_budget x mult
+"""Per-tenant cardinality slots as a multiple of the connection budget (R2-10 / R2.7).
+
+The directory sizes "how many distinct tenants may each keep their own metric slot", and a tenant
+is observed through a connection, so the connection budget is the natural scale. A small multiple
+of it lets the busiest tenants each hold a slot while bounding the directory by construction;
+everything beyond it collapses to `other` + the Overflow_Counter rather than growing the series
+set, which is exactly the R2-10 defect this closes.
+"""
+_METRICS_TOP_K_FRACTION = 0.25  # K = floor(fraction x metrics_directory_slots())
+"""Fraction of the directory capacity that keeps an INDIVIDUAL per-tenant series (R3.3).
+
+K is the bound on named per-tenant visibility (top-K + one `other`). It is a fixed fraction of the
+directory capacity so it never changes with the observed tenant count, and strictly below the
+capacity so the directory can admit a tenant without that tenant necessarily earning its own
+exported series.
+"""
+_METRICS_WINDOW_MULT = 15000.0  # window_s = (target_p99_ms / 1000) x mult
+"""Windowed-histogram window length as a multiple of the request-path SLO (R4.2).
+
+The server-side C4 add-on histogram must track the client synthetic over the SAME window, so the
+window is derived from the one SLO authority rather than a wall-clock literal. The multiple yields
+a several-minute window at the default 20 ms SLO — long enough for a stable p99, short enough that
+a transient does not haunt the quantile — matching the GW12 `_MAX_STREAM_DURATION_MULT` scale.
+"""
+_EVENT_LOG_RATE_MULT = 2.0  # lines/window = workers x mult
+"""Structured-event-log lines per class per window as a multiple of worker count (R9.3).
+
+Each worker can independently hit a client-error class, so the per-class per-window line budget
+scales with the worker count. A small multiple keeps every error class traceable to a concrete log
+line while bounding the volume a burst of identical events can produce — the Rate_Limited contract.
+"""
+
 
 @dataclass(frozen=True, slots=True)
 class ResourceContract:
@@ -203,6 +241,59 @@ class ResourceContract:
                 "the worker cannot hold even one record, so every record would be dropped and "
                 "counted -- fix the memory limit or the record size before starting",
             )
+        return n
+
+    def metrics_directory_slots(self) -> int:
+        """GW14d: Cardinality_Directory capacity — how many tenants may each hold a slot.
+
+        Derived from `connection_budget()` (a tenant is observed through a connection), not a
+        literal, so the capacity authority stays in this module (R2-10 / R2.7, R3.3). Fails closed
+        with `CapacityUnavailable` if the derived value is below one slot — a directory that cannot
+        hold even a single tenant could never admit one, matching the fail-closed stance every
+        shipped contract method takes.
+        """
+        n = math.floor(self.connection_budget() * _METRICS_DIRECTORY_SLOTS_MULT)
+        if n < 1:
+            raise CapacityUnavailable("metrics directory slots below minimum to serve")
+        return n
+
+    def metrics_top_k(self) -> int:
+        """GW14d: K — the bounded count of INDIVIDUAL per-tenant series (R3.3).
+
+        A fixed fraction of `metrics_directory_slots()`, so K never changes with the observed
+        tenant count, and `metrics_top_k() <= metrics_directory_slots()` holds by construction
+        (fraction in (0, 1]). Fails closed with `CapacityUnavailable` if the derived K is below
+        one, matching every shipped contract method.
+        """
+        n = math.floor(self.metrics_directory_slots() * _METRICS_TOP_K_FRACTION)
+        if n < 1:
+            raise CapacityUnavailable("metrics top-K below minimum to serve")
+        return n
+
+    def metrics_window_s(self) -> float:
+        """GW14d: windowed-histogram window length in seconds (R4.2).
+
+        value = p99_s x mult. The server-side C4 add-on window is derived from the one request-path
+        SLO authority so it can track the client synthetic over the SAME window. `target_p99_ms` is
+        positive by construction (`from_signals` refuses to start otherwise); the fail-closed guard
+        on a non-positive window is the same defensive stance the rest of the contract takes.
+        """
+        value = (self.target_p99_ms / _MS_PER_S) * _METRICS_WINDOW_MULT
+        if value <= 0:
+            raise CapacityUnavailable("metrics window below minimum to serve")
+        return value
+
+    def event_log_rate(self) -> int:
+        """GW14d: structured-event-log lines per class per window (R9.3).
+
+        value = workers x mult. Each worker can independently hit a client-error class, so the
+        per-class per-window line budget scales with the worker count. Fails closed with
+        `CapacityUnavailable` if the derived rate is below one line — a class that could never emit
+        even one line would be invisible — matching every shipped contract method.
+        """
+        n = math.floor(self.workers() * _EVENT_LOG_RATE_MULT)
+        if n < 1:
+            raise CapacityUnavailable("event log rate below minimum to serve")
         return n
 
 
