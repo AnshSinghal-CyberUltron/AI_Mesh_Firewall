@@ -73,6 +73,49 @@ scales with the worker count. A small multiple keeps every error class traceable
 line while bounding the volume a burst of identical events can produce — the Rate_Limited contract.
 """
 
+# GW15 Pre_Identity_Clock pre-check bounds (C26). The three cheap pre-checks — raw request size,
+# a cheap expansion-ratio proxy, and a structural part count — reject oversized / expansion-bomb /
+# too-many-parts requests BEFORE the auth-independent heavy canonicalization (an 18x NFKC-expanding
+# 1 MiB body cost 7.4 s of CPU in the register). Their bounds derive from existing contract fields
+# (or are principled module constants with a documented rationale) so there is one capacity
+# authority and `edge` holds no literal — this is the only module `lint/check_capacity_literals.py`
+# exempts.
+_MAX_REQUEST_BYTES_SHARE = 0.0025
+"""Share of a single worker's RSS a raw request body may occupy before the cheap size pre-check
+rejects it (C26, R3).
+
+The size pre-check caps the raw bytes a request may cost before any canonicalization. A request
+body is transient per-request state, so its ceiling is naturally a small share of the per-request
+memory a worker budgets (`per_worker_rss`): at the 400 MiB default this yields a ~1 MiB cap, the
+exact scale at which the register's 18x-expanding body became a 7.4 s CPU event — large enough for
+a legitimate multi-message chat completion, small enough that an oversized body is rejected before
+it can drive heavy work. Derived from the contract rather than a wall-clock byte literal so the
+cap tracks the deployment's declared per-worker memory.
+"""
+_MAX_EXPANSION_RATIO = 4.0
+"""Maximum cheap expansion-ratio proxy a request may show before the pre-check rejects it (C26, R3).
+
+The expansion-ratio pre-check caps a cheap O(n) proxy for how much a body would grow under full
+canonicalization (NFKC fold), computed BEFORE that canonicalization runs — the register's
+pathological case was an 18x NFKC expansion of a 1 MiB body. A dimensionless multiplier (not a
+function of CPU/memory): legitimate text, even with heavy multi-byte UTF-8 and some fullwidth or
+compatibility code points, stays well under a 4x cheap-proxy estimate, while an expansion bomb
+engineered to blow up under NFKC trips far above it. A principled constant with this documented
+rationale rather than an arbitrary number; it lives here (not in `edge`) so there is one capacity
+authority.
+"""
+_MAX_REQUEST_PARTS_MULT = 256
+"""Structural message/content-part count ceiling as a multiple of the worker count (C26, R3).
+
+The part-count pre-check caps the number of message / content-part elements a cheap structural
+scan finds, rejecting a request whose part count alone would make canonicalization + per-channel
+folding expensive regardless of total size. It scales with `workers()` — more serving capacity
+tolerates a proportionally larger structural fan-out per request — with a multiple sized so a
+normal conversation (system + a few hundred user/assistant/tool turns and their content parts)
+passes while a part-count flood is rejected before the fold walks every element. Derived from the
+contract (via `workers()`) so the ceiling tracks deployment capacity and `edge` holds no literal.
+"""
+
 
 @dataclass(frozen=True, slots=True)
 class ResourceContract:
@@ -294,6 +337,44 @@ class ResourceContract:
         n = math.floor(self.workers() * _EVENT_LOG_RATE_MULT)
         if n < 1:
             raise CapacityUnavailable("event log rate below minimum to serve")
+        return n
+
+    def max_request_bytes(self) -> int:
+        """GW15 C26: maximum raw request-body bytes the cheap size pre-check admits (R3).
+
+        A small share of a single worker's RSS (`per_worker_rss x _MAX_REQUEST_BYTES_SHARE`): a
+        request body is transient per-request state, so its ceiling scales with the per-request
+        memory a worker budgets, not a wall-clock byte literal. Fails closed with
+        `CapacityUnavailable` if the derived cap is below one byte — a surface that could not admit
+        even a single byte could never serve — matching every shipped contract method.
+        """
+        n = math.floor(self.per_worker_rss * _MAX_REQUEST_BYTES_SHARE)
+        if n < 1:
+            raise CapacityUnavailable("max request bytes below minimum to serve")
+        return n
+
+    def max_expansion_ratio(self) -> float:
+        """GW15 C26: maximum cheap expansion-ratio proxy the pre-check admits (R3).
+
+        A dimensionless multiplier (`_MAX_EXPANSION_RATIO`) bounding a cheap O(n) estimate of how
+        much a body would grow under full canonicalization, checked BEFORE that canonicalization
+        runs — the register's expansion bomb was an 18x NFKC fold. Not a function of CPU/memory;
+        a principled constant with its rationale documented at the constant. The accessor exists so
+        `edge` reads the bound through the contract and holds no literal of its own.
+        """
+        return _MAX_EXPANSION_RATIO
+
+    def max_request_parts(self) -> int:
+        """GW15 C26: maximum message/content-part count the structural pre-check admits (R3).
+
+        `workers() x _MAX_REQUEST_PARTS_MULT`: the structural fan-out a request may carry scales
+        with serving capacity. Fails closed with `CapacityUnavailable` if the derived ceiling is
+        below one part — a surface that could not admit even a single part could never serve a
+        request — matching every shipped contract method.
+        """
+        n = self.workers() * _MAX_REQUEST_PARTS_MULT
+        if n < 1:
+            raise CapacityUnavailable("max request parts below minimum to serve")
         return n
 
 
