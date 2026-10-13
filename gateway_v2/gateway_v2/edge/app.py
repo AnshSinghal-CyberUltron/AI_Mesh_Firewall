@@ -52,11 +52,22 @@ from typing import Protocol, runtime_checkable
 
 from gateway_v2.dispatch.provider import ProviderClient
 from gateway_v2.dispatch.routing import DispatchRouter
+from gateway_v2.dispatch.transform import Transform
 from gateway_v2.domain import Finding
 from gateway_v2.edge import errors
 from gateway_v2.edge.cancel import InFlightControlSource, InFlightSnapshot
+from gateway_v2.edge.chat_deps import (
+    AdmissionDecider,
+    BudgetDecider,
+    InputDetector,
+    fail_closed_admission,
+    fail_closed_budget,
+    no_findings_detector,
+    unresolved_snapshot_source,
+)
 from gateway_v2.edge.error_frame_scan import ErrorFrameScanner
 from gateway_v2.edge.executor import ScanExecutor
+from gateway_v2.edge.identity_resolver import IdentityResolver, fail_closed_resolver
 from gateway_v2.edge.readiness import (
     METRICS_DIRECTORY_REASON,
     DirectoryGate,
@@ -71,11 +82,14 @@ from gateway_v2.edge.routes import (
     build_routes,
     emit_response,
 )
+from gateway_v2.edge.wire.openai import OpenAIRequestParser, OpenAIResponseRenderer
 from gateway_v2.egress.output_guard import OutputResolver
 from gateway_v2.egress.stream import ScanProtocol
-from gateway_v2.runtime.holdback_config import load_holdback_config
+from gateway_v2.plan.snapshot import ReplicaSnapshot
+from gateway_v2.runtime.holdback_config import HoldbackConfig, load_holdback_config
 from gateway_v2.runtime.resources import ResourceContract
 from gateway_v2.runtime.state_stamp import StampView
+from gateway_v2.runtime.stream_metrics import PerRequestExports
 
 __all__ = (
     "ASGIApplication",
@@ -151,6 +165,12 @@ def build_app(
     active_streams: Callable[[], int] | None = None,
     control: InFlightControlSource | None = None,
     error_scanner: ErrorFrameScanner | None = None,
+    input_detector: InputDetector | None = None,
+    identity: IdentityResolver | None = None,
+    snapshot_source: Callable[[], ReplicaSnapshot] | None = None,
+    admission: AdmissionDecider | None = None,
+    quota: BudgetDecider | None = None,
+    exports: PerRequestExports | None = None,
 ) -> ASGIApplication:
     """Assemble the raw-ASGI serving skin (R2.1).
 
@@ -197,9 +217,19 @@ def build_app(
     (R10.3) are UNCHANGED — this wiring only composes the probe handed into the existing
     ``readiness`` seam.
 
-    Returns the ``async def app(scope, receive, send)`` callable. The function is pure assembly:
-    it reads no store and starts no task — the lifespan handler is where a conforming server
-    drives startup/shutdown.
+    **GW15 §10.4 chat-surface wiring (task 6.1, R11 / R14).** The single :class:`ChatRoute` is
+    built ONCE here via :func:`_build_chat_route`, with every §10.4 lifecycle dependency
+    constructed at boot and threaded onto the frozen route (nothing request-scoped is stored on it,
+    so two-tenant isolation holds, R13); each unwired dep (``input_detector`` / ``identity`` /
+    ``snapshot_source`` / ``admission`` / ``quota`` / ``exports``) falls back to its fail-closed
+    default — see :func:`_build_chat_route` for the per-dep contract. Every GW15 dep is INJECTED
+    (the shipped injection pattern) so production hands in the real GW07/GW08 detector, the served
+    snapshot source, the GW19/GW06 deciders, and the identity resolver, while a test injects fakes.
+
+    ``build_app`` stays pure assembly (no store read, no task spawned) and the serving bounds all
+    derive from the injected ``ResourceContract`` / ``HoldbackConfig`` with no capacity literal in
+    ``edge``. Returns the ``async def app(scope, receive, send)`` callable — the lifespan handler is
+    where a conforming server drives startup/shutdown.
     """
     cfg, _cfg_logs = load_holdback_config()
     # C38 serving-loop discipline (R13.1): the GIL-releasing executor the CPU-bound scan work is
@@ -207,18 +237,23 @@ def build_app(
     # Built once at assembly (off the request path) and shared across every stream; released on
     # lifespan shutdown.
     scan_executor = ScanExecutor(contract=contract)
-    chat = ChatRoute(
+    chat = _build_chat_route(
         contract=contract,
         provider=provider,
         scanner=scanner,
         resolver=resolver,
         cfg=cfg,
-        router=DispatchRouter(),
-        active_streams=active_streams if active_streams is not None else _one_stream,
-        control=control if control is not None else _NoControlSource(),
         clock=clock,
-        error_scanner=error_scanner if error_scanner is not None else _no_error_findings,
-        executor=scan_executor,
+        scan_executor=scan_executor,
+        active_streams=active_streams,
+        control=control,
+        error_scanner=error_scanner,
+        input_detector=input_detector,
+        identity=identity,
+        snapshot_source=snapshot_source,
+        admission=admission,
+        quota=quota,
+        exports=exports,
     )
     routes = build_routes(chat)
     probe = _resolve_readiness(
@@ -232,6 +267,85 @@ def build_app(
         executor=scan_executor,
     )
     return skin.asgi
+
+
+def _build_chat_route(
+    *,
+    contract: ResourceContract,
+    provider: ProviderClient,
+    scanner: ScanProtocol,
+    resolver: OutputResolver,
+    cfg: HoldbackConfig,
+    clock: Callable[[], float],
+    scan_executor: ScanExecutor,
+    active_streams: Callable[[], int] | None,
+    control: InFlightControlSource | None,
+    error_scanner: ErrorFrameScanner | None,
+    input_detector: InputDetector | None,
+    identity: IdentityResolver | None,
+    snapshot_source: Callable[[], ReplicaSnapshot] | None,
+    admission: AdmissionDecider | None,
+    quota: BudgetDecider | None,
+    exports: PerRequestExports | None,
+) -> ChatRoute:
+    """Construct the single :class:`ChatRoute` with every §10.4 dep (task 6.1, R11 / R14).
+
+    Pulled out of :func:`build_app` so each stays well under the function-size gate; the wiring is
+    byte-for-byte the shipped construction. The frozen route holds nothing request-scoped, so
+    two-tenant isolation holds (R13). Each unwired dep falls back to its fail-closed default:
+
+    * ``input_detector`` — the real GW07/GW08 findings-producing detector
+      (``Callable[[str], Sequence[Finding]]``) injected HERE in ``edge`` (above ``detect``, so
+      ``egress`` never names ``detect``, R7.5/R14.1); the input scan runs it over every folded
+      Input_Channel (R11.1). Defaults to the fail-closed :func:`no_findings_detector` for an
+      unwired deployment — not a fail-open hole, because the lifecycle's fail-closed ``identity`` /
+      ``admission`` defaults refuse an unwired route in an earlier phase (zero provider calls).
+    * ``provider`` — the ``StubProviderClient`` in-process substitute locally (R11.2); the real
+      HTTP/SSE socket is a DEFERRED live gate and is NOT constructed here.
+    * ``identity`` — the GW05b/c :class:`IdentityResolver` (``principal_of`` + the freshness
+      stamp), defaulting to the fail-closed :data:`fail_closed_resolver` (every request refuses
+      with the declared auth code, zero provider calls, R4.2/R4.3).
+    * ``snapshot_source`` — the served :class:`ReplicaSnapshot` source for the ONE plan round trip
+      (R3.3), defaulting to :func:`unresolved_snapshot_source` (an unresolved plan refuses, R2.4).
+    * ``admission`` / ``quota`` — the GW19 admission + GW06 budget deciders, defaulting to the
+      fail-closed :data:`fail_closed_admission` (always sheds first) / :data:`fail_closed_budget`.
+    * ``exports`` — the GW14d :class:`PerRequestExports` per-request telemetry producer (R14),
+      built ONCE here (or the injected one threaded through). Every terminal outcome
+      (allowed / shed / budget-refused / input-blocked / output-redacted / output-blocked /
+      errored) populates its admission / budget / input- / output-enforcement dimensions through
+      this ONE producer; ``fail_open_total`` is pinned at zero and no raw request/response content
+      is ever placed in an export field (R14.1-R14.4). Defaults to a fresh
+      :class:`PerRequestExports` so an unwired deployment still carries a live producer.
+    """
+    # The GW14d per-request telemetry producer, built ONCE at boot and threaded onto the single
+    # route (R14). Every terminal outcome populates its dimensions through this one producer;
+    # ``fail_open_total`` is pinned at zero and no raw request/response content ever reaches it.
+    request_exports = exports if exports is not None else PerRequestExports()
+    return ChatRoute(
+        contract=contract,
+        provider=provider,
+        scanner=scanner,
+        resolver=resolver,
+        cfg=cfg,
+        router=DispatchRouter(),
+        active_streams=active_streams if active_streams is not None else _one_stream,
+        control=control if control is not None else _NoControlSource(),
+        clock=clock,
+        error_scanner=error_scanner if error_scanner is not None else _no_error_findings,
+        executor=scan_executor,
+        # --- GW15 §10.4 lifecycle deps, constructed once at boot (task 6.1) ---
+        parser=OpenAIRequestParser(),
+        renderer=OpenAIResponseRenderer(),
+        transform=Transform(),
+        input_detector=input_detector if input_detector is not None else no_findings_detector,
+        identity=identity if identity is not None else fail_closed_resolver,
+        snapshot_source=(
+            snapshot_source if snapshot_source is not None else unresolved_snapshot_source
+        ),
+        admission=admission if admission is not None else fail_closed_admission,
+        quota=quota if quota is not None else fail_closed_budget,
+        exports=request_exports,
+    )
 
 
 # --------------------------------------------------------------------------- #

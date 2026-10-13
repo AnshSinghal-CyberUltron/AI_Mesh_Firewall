@@ -8,23 +8,28 @@ operational endpoints, ``routes.py`` owns the chat handler + the registered-for-
 placeholders and the shared ``emit_response`` helper that writes an ``edge.errors.HTTPResponse``
 onto the ASGI ``send`` channel.
 
-Everything here is ``edge`` (the top layer), so it may import every layer below:
-``dispatch`` (the ``ProviderClient`` + router + transform), ``egress`` (the shipped
-``StreamPipeline`` + ``Coalescer``), ``detect`` (the holdback scan core + token counter — the
-one correct injection site, since ``edge`` sits above ``detect`` while ``egress`` must not
-import it), and ``runtime`` (the holdback config + the ``Window`` bound). The scanner and the
-``ProviderClient`` are *injected* through :class:`ChatRoute` so the wiring never reaches around
+Everything here is ``edge`` (the top layer), so it imports every layer below; the scanner, the
+input detector, and the ``ProviderClient`` are *injected* through :class:`ChatRoute` (``edge``
+sits above ``detect`` while ``egress`` must not import it), so the wiring never reaches around
 the layer contract.
 
-**Thin chat handler.** The full ``/v1/chat/completions`` semantics (request parsing, plan
-resolution, auth, admission, the end-to-end holdback + output-guard decision) are GW15/GW16.
-What this handler proves is the *wiring*: it routes a request through the deterministic
-``DispatchRouter``, opens the injected abortable ``ProviderClient``, feeds upstream events
-through the bounded ``Coalescer`` (fail-closed admit) and the shipped ``StreamPipeline`` release
-loop, and serialises each released ``DownstreamFrame`` with the one ``SSEEncoder`` the error
-envelope also uses — ending with the terminal ``data: [DONE]`` marker. A rejected coalescer
-admit, or any value-code raised below, renders through the single :mod:`edge.errors`
-``Error_Envelope`` as a declared SSE ``Error_Frame`` (never a raw framework 500).
+**The real chat handler (GW15).** :meth:`ChatRoute.handle` runs the full §10.4 request lifecycle
+(cheap pre-checks → SDK parse → auth → the ONE plan round trip → admission → budget → the INPUT
+scan with a BLOCK short-circuit) through a per-request
+:class:`~gateway_v2.edge.openai_chat.ChatSurface` BEFORE any provider is opened — a refusal
+makes zero provider calls. On a proceed outcome it dispatches on the parsed ``streaming``
+disposition: a streaming request runs the shipped egress orchestration below with the
+plan-derived destination + the transformed body + plan-aware output enforcement; a
+non-streaming request collects the whole upstream, enforces it, and renders ONE OpenAI JSON via
+``ChatSurface.collect_and_render``. Every refusal — pre-parse, post-parse, or an in-stream cut —
+renders through the single :mod:`edge.errors` ``Error_Envelope`` (an HTTP body for a
+non-streaming request, a declared SSE ``Error_Frame`` for a streaming one), never a raw
+framework 500. The ``ChatSurface`` is built per call (``ChatSurface(deps=self)``) and every
+latch / in-flight / timeout value is per-request, so nothing request-scoped is shared on the
+frozen :class:`ChatRoute` (two-tenant isolation, R13).
+
+The GW15 §10.4 dependency surfaces + their fail-closed defaults live in the sibling
+:mod:`gateway_v2.edge.chat_deps`, imported here.
 
 **Placeholders (R2.3).** ``/v1/responses``, the misc OpenAI surface, the MCP surface and the
 RAG/vector surface are *registered* here so the route table is complete and a later card wires
@@ -40,39 +45,73 @@ injected ``ResourceContract`` / ``HoldbackConfig`` and never from a literal here
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator, Awaitable, Callable, Mapping
+from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
-from types import MappingProxyType
 
 from gateway_v2.detect.holdback import TokenIndex
 from gateway_v2.detect.windowing import max_pattern_length
-from gateway_v2.dispatch.provider import ProviderClient, UpstreamEvent, UpstreamRequest
+from gateway_v2.dispatch.provider import ProviderClient, UpstreamRequest
 from gateway_v2.dispatch.routing import DispatchRouter
+from gateway_v2.dispatch.transform import Transform
+from gateway_v2.domain.plan import ExecutionPlan
+from gateway_v2.domain.posture import PLAN_UNAVAILABLE
 from gateway_v2.edge import errors
+from gateway_v2.edge.asgi_sse import (
+    ASGIReceive,
+    ASGIScope,
+    ASGISend,
+)
+from gateway_v2.edge.asgi_sse import ErrorFrameScan as _ErrorFrameScan
+from gateway_v2.edge.asgi_sse import TerminalLatch as _TerminalLatch
+from gateway_v2.edge.asgi_sse import as_chunks as _as_chunks
+from gateway_v2.edge.asgi_sse import end_sse as _end_sse
+from gateway_v2.edge.asgi_sse import read_body as _read_body
+from gateway_v2.edge.asgi_sse import send_sse as _send_sse
+from gateway_v2.edge.asgi_sse import start_sse as _start_sse
 from gateway_v2.edge.cancel import InFlightControl, InFlightControlSource, KillLatch
-from gateway_v2.edge.error_frame_scan import ErrorFrameScanner, scan_error_frame_offloaded
+from gateway_v2.edge.chat_deps import (
+    AdmissionDecider,
+    BudgetDecider,
+    InputDetector,
+    fail_closed_admission,
+    fail_closed_budget,
+    no_findings_detector,
+    unresolved_snapshot_source,
+)
+from gateway_v2.edge.error_frame_scan import ErrorFrameScanner
 from gateway_v2.edge.executor import ScanExecutor
+from gateway_v2.edge.identity_resolver import IdentityResolver, fail_closed_resolver
 from gateway_v2.edge.stream_control import FirstByteLatch, StreamAttempt, run_with_no_splice
 from gateway_v2.edge.stream_timeouts import StreamTimeout, StreamTimeouts
+from gateway_v2.edge.wire.openai import (
+    CanonicalRequest,
+    OpenAIRequestParser,
+    OpenAIResponseRenderer,
+)
 from gateway_v2.edge.wire.sse import SSEEncoder
 from gateway_v2.egress.backpressure import Coalescer
 from gateway_v2.egress.output_guard import OutputResolver
 from gateway_v2.egress.stream import (
     DownstreamFrame,
+    EnforcementUndetermined,
     ScanProtocol,
     Send,
     StreamPipeline,
-    UpstreamChunk,
 )
+from gateway_v2.plan.snapshot import ReplicaSnapshot
 from gateway_v2.runtime.holdback_config import HoldbackConfig
 from gateway_v2.runtime.holdback_metrics import HoldbackMetrics
 from gateway_v2.runtime.resources import ResourceContract
+from gateway_v2.runtime.stream_metrics import PerRequestExports
 
 __all__ = (
     "ASGIReceive",
     "ASGIScope",
     "ASGISend",
+    "AdmissionDecider",
+    "BudgetDecider",
     "ChatRoute",
+    "InputDetector",
     "RouteHandler",
     "RouteTable",
     "build_routes",
@@ -80,19 +119,9 @@ __all__ = (
 )
 
 # --------------------------------------------------------------------------- #
-# Minimal ASGI 3.0 type aliases (the repo pulls in no framework; see module doc).
+# Route-table type aliases (the ASGI 3.0 primitives live in ``edge.asgi_sse``).
 # --------------------------------------------------------------------------- #
 
-#: An ASGI connection scope — the ``{"type": ..., "method": ..., "path": ...}`` mapping the
-#: server hands the application. Typed as a read-only ``Mapping`` because the application never
-#: mutates it.
-ASGIScope = Mapping[str, object]
-#: The ASGI ``receive`` awaitable: pulls the next event (request body chunk, ``http.disconnect``)
-#: off the connection. Each event is a plain ``{"type": ...}`` mapping.
-ASGIReceive = Callable[[], Awaitable[Mapping[str, object]]]
-#: The ASGI ``send`` awaitable: pushes a response event (``http.response.start`` /
-#: ``http.response.body``) onto the connection.
-ASGISend = Callable[[Mapping[str, object]], Awaitable[None]]
 #: A route handler: given the ``scope`` and the two channels, it drives the whole response.
 RouteHandler = Callable[[ASGIScope, ASGIReceive, ASGISend], Awaitable[None]]
 #: The assembled route table: ``(method, path) -> handler``. Built inside :func:`build_routes`
@@ -139,8 +168,17 @@ async def _emit_error_code(send: ASGISend, code: str) -> None:
 
 
 # --------------------------------------------------------------------------- #
-# The streaming chat route (R2.2) — thin wiring over the shipped pipeline.
+# The chat route (R2.2) — the real GW15 handler over the shipped egress pipeline.
 # --------------------------------------------------------------------------- #
+#
+# The GW15 §10.4 dependency SURFACES the lifecycle reads — the ``AdmissionDecider`` /
+# ``BudgetDecider`` narrow protocols, the ``InputDetector`` callable shape, and their fail-closed
+# default implementations (``fail_closed_admission`` / ``fail_closed_budget`` /
+# ``no_findings_detector`` / ``unresolved_snapshot_source``) — live in the sibling
+# :mod:`gateway_v2.edge.chat_deps` and are imported above. ``ChatRoute`` carries each as a
+# fail-closed default so every existing construction keeps compiling until a boot card injects the
+# real GW19 / GW06 / GW07-08 components; an unwired route sheds at admission (zero provider calls)
+# before the budget or input phases ever matter.
 
 
 @dataclass(frozen=True, slots=True)
@@ -160,14 +198,11 @@ class ChatRoute:
     completed findings over an error frame's whole text; the handler resolves them through the
     same ``resolver`` + ``apply_decision`` the content path uses.
 
-    ``executor`` is the C38 serving-loop-discipline seam (``edge.executor.ScanExecutor``, sized by
-    ``ResourceContract``): the CPU-bound error-frame scan — which runs at an ``await``-able chunk
-    boundary in :func:`_as_chunks` — is handed to the GIL-releasing executor so one stream's scan
-    cannot starve another's latency (R13.1 / R13.3), and the executor records serving-loop lag as
-    the R13.4 SLO input. The shipped ``StreamPipeline`` per-delta holdback scan is called
-    SYNCHRONOUSLY inside the pure release loop and is NOT offloaded here (offloading it would
-    rebuild the shipped GW12b loop body — a documented GW13 follow-up); the executor + sizing +
-    loop-lag SLO input are nonetheless in place now.
+    ``executor`` is the C38 serving-loop-discipline seam (``ScanExecutor``, sized by
+    ``ResourceContract``): the CPU-bound error-frame scan is handed to the GIL-releasing executor
+    so one stream's scan cannot starve another's latency (R13.1/R13.3) and serving-loop lag is
+    recorded as the R13.4 SLO input. (The shipped per-delta holdback scan stays synchronous in the
+    pure release loop — offloading it is a GW13 follow-up.)
     """
 
     contract: ResourceContract
@@ -181,17 +216,114 @@ class ChatRoute:
     clock: Callable[[], float]
     error_scanner: ErrorFrameScanner
     executor: ScanExecutor
+    # --- GW15 §10.4 lifecycle deps ---
+    #
+    # The seams the ``ChatSurface`` lifecycle reads, each a fail-closed default defined in
+    # ``edge/chat_deps.py`` (an unwired route refuses — admission sheds first, zero provider
+    # calls). ``admission`` / ``quota`` are the narrow ``AdmissionDecider`` / ``BudgetDecider``
+    # protocols the shipped ``AdmissionController`` / ``QuotaComponent`` satisfy structurally.
+    # Every field is stateless or per-request-rebuilt, so the frozen route carries no
+    # request-scoped state (two-tenant isolation, R13).
+    parser: OpenAIRequestParser = OpenAIRequestParser()
+    identity: IdentityResolver = fail_closed_resolver
+    snapshot_source: Callable[[], ReplicaSnapshot] = unresolved_snapshot_source
+    renderer: OpenAIResponseRenderer = OpenAIResponseRenderer()
+    admission: AdmissionDecider = fail_closed_admission
+    quota: BudgetDecider = fail_closed_budget
+    input_detector: InputDetector = no_findings_detector
+    transform: Transform = Transform()
+    #: The GW14d per-request telemetry producer (R14). Every terminal outcome
+    #: (allowed / shed / budget-refused / input-blocked / output-redacted /
+    #: output-blocked / errored) populates its admission / budget / input- /
+    #: output-enforcement dimensions through this one producer; ``fail_open_total``
+    #: is pinned at zero and no raw request/response content is ever placed in an
+    #: export field (R14.1-R14.4). It defaults to a fresh :class:`PerRequestExports`
+    #: so every existing construction keeps compiling until the boot card
+    #: (``edge/app.py``, task 6.1) injects the process producer; the boot wiring
+    #: replaces this default and threads the dimensions on each terminal outcome.
+    exports: PerRequestExports = PerRequestExports()
 
     async def handle(self, scope: ASGIScope, receive: ASGIReceive, send: ASGISend) -> None:
-        """Stream a chat completion end-to-end over the shipped egress pipeline (R2.2, R7).
+        """Serve a chat/completions request end-to-end (R2.2, R7, R10, §10.4).
 
-        Thin by design (full semantics are GW15/GW16): it proves the wiring is live. The
-        coalescer admit fails CLOSED when the derived per-stream high-water is below one byte
+        Assembles the request ``body`` from the ASGI ``receive`` channel, then runs the full
+        §10.4 pre-provider lifecycle through a per-request
+        :class:`~gateway_v2.edge.openai_chat.ChatSurface` (``ChatSurface(deps=self)``): cheap
+        pre-checks → SDK parse → auth → the ONE plan round trip → admission → budget → the INPUT
+        scan with a BLOCK short-circuit. Every phase runs BEFORE any provider is opened, so a
+        refusal makes zero provider calls (R7.2).
+
+        * **Refuse** (``outcome.refuse_code`` set): render the declared value-code through the
+          single ``edge/errors`` ``Error_Envelope`` and stop — a pre-parse refusal (``req is
+          None``: a malformed / oversized body is not a stream yet) renders as an HTTP body, a
+          post-parse refusal renders as a declared SSE ``Error_Frame`` when the parsed request
+          asked to stream (``req.streaming``) and otherwise as an HTTP body (R12.1).
+        * **Proceed** (``refuse_code is None``): dispatch on the parsed ``streaming`` disposition
+          — a streaming request runs the shipped egress orchestration (:meth:`_stream`) with the
+          plan-derived ``destination``, the transformed ``body``, and plan-aware output enforcement
+          (``StreamPipeline.for_plan``); a non-streaming request collects the whole upstream,
+          enforces it, and renders ONE OpenAI JSON via ``ChatSurface.collect_and_render`` (R9).
+
+        The ``ChatSurface`` and every per-request latch / in-flight / timeout value are built here,
+        per call, so nothing request-scoped is shared on the frozen route (two-tenant isolation,
+        R13). ``ChatSurface`` is imported inside the method because ``edge/openai_chat.py`` imports
+        from THIS module at module level — a top-level import of it here would cycle.
+        """
+        from gateway_v2.edge.openai_chat import ChatSurface
+
+        body = await _read_body(receive)
+        req, outcome = await ChatSurface(deps=self).run_lifecycle(scope, body)
+        if outcome.refuse_code is not None:
+            await self._render_refusal(send, req, outcome.refuse_code)
+            return
+        # Proceed: the lifecycle guarantees all three provider inputs are set on a non-refusal.
+        plan = outcome.plan
+        destination = outcome.destination
+        upstream_body = outcome.body
+        assert plan is not None and destination is not None and upstream_body is not None
+        assert req is not None  # parse succeeded on any proceed outcome
+        if req.streaming:
+            await self._stream_response(send, plan, destination, upstream_body)
+            return
+        await ChatSurface(deps=self).collect_and_render(
+            req, plan, destination, upstream_body, send
+        )
+
+    async def _render_refusal(
+        self, send: ASGISend, req: CanonicalRequest | None, code: str
+    ) -> None:
+        """Render a §10.4 refusal through the single ``Error_Envelope`` (R12.1).
+
+        A pre-parse refusal (``req is None`` — a malformed / oversized body never became a stream)
+        renders as an HTTP body; a post-parse refusal renders as a declared SSE ``Error_Frame``
+        when the parsed request asked to stream (``req.streaming``) and otherwise as an HTTP body.
+        Either way the one ``edge/errors`` envelope maps the value-code, so an unmapped code still
+        renders a declared generic error rather than a raw framework 500.
+        """
+        if req is not None and req.streaming:
+            await _start_sse(send)
+            await _send_sse(send, errors.render_sse(code))
+            await _end_sse(send)
+            return
+        await _emit_error_code(send, code)
+
+    async def _stream_response(
+        self,
+        send: ASGISend,
+        plan: ExecutionPlan,
+        destination: str,
+        body: Mapping[str, object],
+    ) -> None:
+        """Open the SSE response + drive the shipped egress orchestration (R2.2, R7, R10).
+
+        Reached only on a proceed outcome for a streaming request. The coalescer admit fails
+        CLOSED when the derived per-stream high-water is below one byte
         (``STREAM_BUFFER_UNAVAILABLE``); on admit, a per-request ``SSEEncoder`` is the pipeline's
-        downstream ``send`` sink and the injected ``ProviderClient``'s events feed the
-        ``StreamPipeline`` release loop. A terminal ``[DONE]`` closes the stream. Any value-code
-        the pipeline emits (a frame ``error_code``) renders as a declared SSE ``Error_Frame``
-        through the single envelope.
+        downstream ``send`` sink and the injected ``ProviderClient``'s events — opened to the
+        plan-derived ``destination`` with the transformed ``body`` — feed the ``StreamPipeline``
+        release loop built via ``for_plan(plan, ...)`` so output enforcement reflects the resolved
+        plan. A terminal ``[DONE]`` closes the stream; any value-code the pipeline emits renders as
+        a declared SSE ``Error_Frame`` through the single envelope.
 
         The :class:`~gateway_v2.edge.stream_control.FirstByteLatch` is created HERE, above the
         egress loop, and threaded into the stream orchestration so the no-splice gate (R7) is
@@ -207,7 +339,7 @@ class ChatRoute:
             await _send_sse(send, errors.render_sse(verdict.code))
             await _end_sse(send)
             return
-        await self._stream(send, encoder, coalescer)
+        await self._stream(send, encoder, coalescer, plan, destination, body)
         await _end_sse(send)
 
     async def _stream(
@@ -215,43 +347,27 @@ class ChatRoute:
         send: ASGISend,
         encoder: SSEEncoder,
         coalescer: Coalescer,
+        plan: ExecutionPlan,
+        destination: str,
+        body: Mapping[str, object],
     ) -> None:
         """Drive the egress pipeline under the no-splice gate + in-flight control (R7, R10).
 
-        A per-request :class:`FirstByteLatch` gates retry/fallback: the shared ``_sink`` sets the
-        latch the instant the FIRST content byte is released downstream (R7.2), and
-        :func:`run_with_no_splice` only ever requests a fresh attempt (a fresh provider response)
-        while the latch is unset (R7.1/R7.3). Each attempt opens the injected ``ProviderClient``
-        for the routed destination, adapts its events to the shipped ``UpstreamChunk`` transport,
-        and runs the shipped ``StreamPipeline`` release loop; released ``DownstreamFrame``s are
-        encoded by the one ``SSEEncoder``.
+        A per-request :class:`FirstByteLatch` gates retry/fallback: ``_sink`` sets it the instant
+        the FIRST content byte is released (R7.2), and :func:`run_with_no_splice` requests a fresh
+        attempt only while it is unset (R7.1/R7.3). Each attempt opens the injected
+        ``ProviderClient`` for the routed destination and runs the shipped ``StreamPipeline``
+        release loop; released frames are encoded by the one ``SSEEncoder``.
 
-        **In-flight control (R10).** A per-request :class:`KillLatch` replaces the old
-        always-false ``_never_killed`` probe and is handed straight to ``pipeline.run`` as the
-        ``killed()`` seam. An :class:`InFlightControl`, built over the injected control source and
-        the derived bounds, is evaluated at EACH chunk boundary (in :func:`_as_chunks`): a fired
-        trigger (max duration, kill switch, key revocation, plan change, or a stale/unavailable
-        snapshot that fails closed) flips the SAME latch with its posture code and stops the chunk
-        source, so no further upstream bytes are forwarded after the cut (R10.7). Because the thin
-        handler runs the pipeline in pass-through mode (which does not itself render a terminal
-        frame), the handler reads :meth:`KillLatch.reason` after the run and emits the matching
-        declared ``Error_Frame`` (``STREAM_MAX_DURATION`` / ``STREAM_KILLED`` /
-        ``STREAM_KEY_REVOKED`` / ``STREAM_PLAN_CHANGED`` / ``STREAM_SNAPSHOT_STALE``) itself.
+        **In-flight control (R10).** A per-request :class:`KillLatch` is the ``killed()`` seam; an
+        :class:`InFlightControl` evaluated at each chunk boundary (:func:`_as_chunks`) flips it on a
+        fired trigger and stops the source (R10.7). **Bounded timeouts (C27/R9).** A per-request
+        :class:`StreamTimeouts` bounds the next-event await (R9.2) and the downstream write + idle
+        (R9.3/R9.4), flipping the SAME latch on a breach. Either way :meth:`_finish_stream` renders
+        the latch's posture code as the declared terminal ``Error_Frame`` at the ONE terminal site.
 
-        **Bounded timeouts (C27 / R9).** A per-request :class:`StreamTimeouts` wraps the serving
-        loop's two awaits with the three derived C27 bounds — a sibling cut to the R10 triggers
-        that flips the SAME :class:`KillLatch` so the terminal frame renders at the ONE terminal
-        site. The inter-chunk bound (R9.2) wraps the provider's next-event await in
-        :func:`_as_chunks`; the write (R9.4) + push-only idle (R9.3) bounds wrap the downstream
-        ``send`` in ``_sink``. A breach flips the latch with its code and raises
-        :class:`StreamTimeout`, which the no-splice driver surfaces as a byte-less-or-terminal
-        failure; :meth:`_finish_stream` then renders the latch's timeout code as the declared
-        ``Error_Frame`` (``STREAM_INTER_CHUNK_TIMEOUT`` / ``STREAM_IDLE_TIMEOUT`` /
-        ``STREAM_WRITE_TIMEOUT``).
-
-        On a clean finish the terminal ``[DONE]`` marker is emitted; when every eligible attempt
-        failed before the first byte the caller rendered no byte and the stream closes without a
-        splice (R7.4).
+        On a clean finish the terminal ``[DONE]`` marker is emitted; a byte-less failure of every
+        eligible attempt closes the stream without a splice (R7.4).
         """
         latch = FirstByteLatch()
         sent_terminal = _TerminalLatch()
@@ -289,7 +405,16 @@ class ChatRoute:
 
         def _factory() -> StreamAttempt | None:
             return self._next_attempt(
-                offered, latch, _sink, coalescer, kill_latch, control, timeouts
+                offered,
+                latch,
+                _sink,
+                coalescer,
+                kill_latch,
+                control,
+                timeouts,
+                plan,
+                destination,
+                body,
             )
 
         await self._run_attempts(latch, _factory)
@@ -359,28 +484,43 @@ class ChatRoute:
         kill_latch: KillLatch,
         control: InFlightControl,
         timeouts: StreamTimeouts,
+        plan: ExecutionPlan,
+        destination: str,
+        body: Mapping[str, object],
     ) -> StreamAttempt | None:
         """Yield the next eligible stream attempt, or ``None`` when none remains (R7.1).
 
-        The thin handler has exactly ONE signed upstream to try (GW15 adds the signed fallback
-        chain), so the first call returns an attempt and every later call returns ``None`` — the
-        ``offered`` one-way latch records that the sole provider response has been handed out, so a
-        byte-less failure is NOT retried against the same provider forever and there is nothing
-        further to splice. :func:`run_with_no_splice` only invokes this factory while the first-byte
-        latch still permits a retry, so a fresh attempt is impossible once a byte is on the wire.
+        There is exactly ONE signed upstream to try (a signed fallback chain is a later card), so
+        the first call returns an attempt and every later call returns ``None`` — the ``offered``
+        one-way latch records that the sole provider response has been handed out, so a byte-less
+        failure is NOT retried against the same provider forever and there is nothing further to
+        splice. :func:`run_with_no_splice` only invokes this factory while the first-byte latch
+        still permits a retry, so a fresh attempt is impossible once a byte is on the wire.
 
-        The attempt hands the per-request :class:`KillLatch` to ``pipeline.run`` as the ``killed()``
-        seam and threads the :class:`InFlightControl` + :class:`StreamTimeouts` into
-        :func:`_as_chunks`, which evaluates every R10 trigger at each chunk boundary (R10.2-R10.7)
-        and bounds the next-upstream-event await by the Inter_Chunk_Timeout (R9.2).
+        The attempt builds the release loop via ``StreamPipeline.for_plan(plan, ...)`` — the
+        resolved ``ExecutionPlan`` drives the enforcing-output set (R2.3), replacing the old
+        pass-through flag — opens the injected ``ProviderClient`` to the plan-derived
+        ``destination`` with the transformed ``body`` (replacing the old ``_DEFAULT_DESTINATION`` /
+        ``_EMPTY_BODY`` stand-ins, R2.2 / R8.4), hands the per-request :class:`KillLatch` to
+        ``pipeline.run`` as the ``killed()`` seam, and threads the :class:`InFlightControl` +
+        :class:`StreamTimeouts` into :func:`_as_chunks` (every R10 trigger at each chunk boundary,
+        R10.2-R10.7; the Inter_Chunk_Timeout on the next-event await, R9.2).
         """
         if offered.is_set():
             return None
         offered.set()
 
         async def _attempt() -> bool:
-            pipeline = self._build_pipeline()
-            request = UpstreamRequest(destination=self._destination(), body=_EMPTY_BODY)
+            try:
+                pipeline = self._build_pipeline(plan)
+            except EnforcementUndetermined:
+                # Defensive: the proceed outcome carries a resolved plan, so `for_plan` resolves
+                # the enforcing-output set without raising. Were the enforcement state ever
+                # undetermined, fail CLOSED — flip the kill latch with the declared
+                # ``plan_unavailable`` code and release no byte; `_finish_stream` renders it (R2.4).
+                kill_latch.kill(PLAN_UNAVAILABLE)
+                return latch.is_set()
+            request = UpstreamRequest(destination=destination, body=body)
             chunks = _as_chunks(
                 self.provider.open(request),
                 coalescer,
@@ -400,34 +540,26 @@ class ChatRoute:
 
         return _attempt
 
-    def _build_pipeline(self) -> StreamPipeline:
-        """Construct a pass-through ``StreamPipeline`` wired to the injected scanner/resolver.
+    def _build_pipeline(self, plan: ExecutionPlan) -> StreamPipeline:
+        """Construct the ``StreamPipeline`` with plan-derived output enforcement (R2.3).
 
-        A thin handler runs the pipeline in its shipped pass-through mode (``enforcing_output``
-        false): it proves the release loop + scanner/resolver + token counter + ``Window`` are
-        all wired without needing GW15 plan resolution to compute the enforcing-output set. The
-        ``Window`` and the holdback cap both derive from the injected contract/config — no
-        literal. GW15 swaps the pass-through flag for a real ``for_plan`` resolution.
+        Builds the release loop via ``StreamPipeline.for_plan(plan, ...)``, which resolves the
+        enforcing-output set ONCE before the first chunk from ``enforcing_output_rules(plan)`` (a
+        non-empty set engages the holdback cap + byte ceiling; an empty set passes through) and
+        raises :class:`EnforcementUndetermined` fail-closed on an unresolved plan — replacing the
+        old hard-coded ``enforcing_output=False`` pass-through. The scanner / resolver / token
+        counter are the injected seams, and the ``Window`` + holdback cap derive from the injected
+        contract/config (no literal).
         """
-        return StreamPipeline(
+        return StreamPipeline.for_plan(
+            plan,
             scanner=self.scanner,
             resolver=self.resolver,
             token_index=TokenIndex(),
             cfg=self.cfg,
             metrics=HoldbackMetrics(),
-            enforcing_output=False,
             window=max_pattern_length(),
         )
-
-    def _destination(self) -> str:
-        """The upstream destination for this request.
-
-        A thin handler has no resolved ``ExecutionPlan`` yet (GW15 parses the request into one),
-        so it returns the router's deterministic selection stand-in: an empty-plan destination is
-        out of scope here, so the handler names the provider's default destination. The point of
-        the wiring is that the ``DispatchRouter`` IS the selection authority once a plan exists.
-        """
-        return _DEFAULT_DESTINATION
 
 
 # --------------------------------------------------------------------------- #
@@ -473,199 +605,3 @@ def build_routes(chat: ChatRoute) -> RouteTable:
         ("POST", "/v1/rag/query"): _placeholder("rag"),
         ("POST", "/v1/vector/query"): _placeholder("vector"),
     }
-
-
-# --------------------------------------------------------------------------- #
-# Small internal helpers (SSE framing on the ASGI channel; adapters).
-# --------------------------------------------------------------------------- #
-
-#: SSE content type with the ``no-cache`` + ``keep-alive`` headers a streaming client expects.
-_SSE_HEADERS: tuple[tuple[bytes, bytes], ...] = (
-    (b"content-type", b"text/event-stream"),
-    (b"cache-control", b"no-cache"),
-    (b"connection", b"keep-alive"),
-)
-
-#: The empty provider body a thin handler submits (GW15 packs the real request). A
-#: ``MappingProxyType`` so the one module-level mapping is immutable (gated by
-#: ``check_no_module_mutable``) — a frozen value, not a mutable table.
-_EMPTY_BODY: Mapping[str, object] = MappingProxyType({})
-
-#: The default upstream destination a thin handler names (GW15 derives it from the plan).
-_DEFAULT_DESTINATION = "amf://upstream/default"
-
-
-async def _start_sse(send: ASGISend) -> None:
-    """Open a ``200`` SSE response on the ASGI channel (``more_body`` keeps it streaming)."""
-    await send(
-        {
-            "type": "http.response.start",
-            "status": 200,
-            "headers": list(_SSE_HEADERS),
-        }
-    )
-
-
-async def _send_sse(send: ASGISend, frame: bytes) -> None:
-    """Write one SSE frame as a non-terminal ``http.response.body`` event (``more_body`` set)."""
-    await send({"type": "http.response.body", "body": frame, "more_body": True})
-
-
-async def _end_sse(send: ASGISend) -> None:
-    """Close the SSE response with an empty terminal body event (``more_body`` cleared)."""
-    await send({"type": "http.response.body", "body": b"", "more_body": False})
-
-
-class _TerminalLatch:
-    """A one-way latch so a terminal SSE frame is emitted at most once per stream."""
-
-    __slots__ = ("_set",)
-
-    def __init__(self) -> None:
-        self._set = False
-
-    def set(self) -> None:
-        self._set = True
-
-    def is_set(self) -> bool:
-        return self._set
-
-
-@dataclass(frozen=True, slots=True)
-class _ErrorFrameScan:
-    """The injected glue the chunk adapter needs to scan a mid-stream error frame (R11).
-
-    Bundles the three pieces :func:`_as_chunks` threads into the error-frame scan step so the
-    adapter's signature stays small: the findings ``scanner`` and the ``resolver`` (both injected
-    into :class:`ChatRoute` above ``detect``, so ``egress`` never imports ``detect`` — R14.1) and
-    the per-request :class:`KillLatch` a WITHHELD frame flips with its terminal posture code. The
-    handler's :meth:`ChatRoute._finish_stream` then renders that code as the declared
-    ``Error_Frame`` at the single terminal site — the same seam a timeout / in-flight cut uses.
-    Frozen + slotted: a per-attempt value, not mutable state.
-    """
-
-    scanner: ErrorFrameScanner
-    resolver: OutputResolver
-    kill_latch: KillLatch
-    executor: ScanExecutor
-
-
-async def _forward_error_frame(frame: str, error_scan: _ErrorFrameScan) -> str | None:
-    """Scan a mid-stream error frame; return the bytes to forward, or ``None`` to withhold (R11).
-
-    Runs the single whole-text scan + decision OFF the serving loop via
-    :func:`~gateway_v2.edge.error_frame_scan.scan_error_frame_offloaded` (C38 / R13.1): the
-    CPU-bound scan is handed to the contract-sized GIL-releasing executor so one stream's error
-    frame cannot starve another stream's latency, and the executor records the serving-loop lag as
-    the R13.4 SLO input. The scan itself is byte-linear and fails closed exactly as before (R11.5 /
-    R11.4). A REDACT/ALLOW outcome returns the frame text with the decided redactions applied — the
-    only bytes of the frame that ever leave the gateway (R11.2). A WITHHELD outcome (BLOCK →
-    ``output_blocked``, R11.3; scan error → ``scan_failure``, R11.4, fail closed) flips the shared
-    :class:`KillLatch` with the terminal posture code and returns ``None``, so the caller stops the
-    source and the handler renders the declared ``Error_Frame`` from the latch reason. No raw
-    error-frame byte is forwarded on a withhold (R15.1/R15.2).
-    """
-    outcome = await scan_error_frame_offloaded(
-        frame,
-        scanner=error_scan.scanner,
-        resolver=error_scan.resolver,
-        executor=error_scan.executor,
-    )
-    if outcome.withheld_code is not None:
-        error_scan.kill_latch.kill(outcome.withheld_code)
-        return None
-    return outcome.forward_text
-
-
-async def _as_chunks(
-    events: AsyncIterator[UpstreamEvent],
-    coalescer: Coalescer,
-    control: InFlightControl,
-    timeouts: StreamTimeouts,
-    *,
-    error_scan: _ErrorFrameScan,
-) -> AsyncIterator[UpstreamChunk]:
-    """Adapt a provider event stream to the shipped ``UpstreamChunk`` source, bounded + cut-aware.
-
-    Each :class:`~gateway_v2.dispatch.provider.UpstreamEvent` becomes an ``UpstreamChunk`` the
-    pipeline consumes. Before a chunk is forwarded, its payload bytes are offered to the bounded
-    ``Coalescer``: an ``offer`` that returns ``False`` is backpressure (the buffer reached the
-    derived high-water) and the chunk waits by being released as it is handed on. The thin
-    handler releases immediately after offering so the bounded buffer is exercised without a
-    real slow-consumer loop (GW9/GW13 wire the credit-paced consumer).
-
-    **In-flight control at the chunk boundary (R10.2-R10.7).** Each yielded ``UpstreamChunk`` IS a
-    chunk boundary, so the :class:`InFlightControl` is evaluated here, BEFORE the next chunk is
-    forwarded. A fired trigger (max duration, kill switch, key revocation, plan change, or a
-    stale/unavailable snapshot that fails closed) flips the shared :class:`KillLatch` with its
-    posture code; this adapter then stops the source (``return``), so no further upstream chunk
-    bytes are forwarded to the caller after the cut (R10.7). The cut therefore takes effect no
-    later than the next chunk boundary (``InFlightKill.CUT_NEXT_CHUNK``), within the derived
-    ``max_cut_latency_s()`` budget. The pass-through pipeline does not render a terminal frame on a
-    killed source, so the handler reads the latch reason afterwards and emits the matching
-    ``Error_Frame`` (see :meth:`ChatRoute._finish_stream`).
-
-    **Inter-chunk timeout at the same boundary (R9.2).** The ``await`` on the provider's NEXT
-    event is wrapped by :meth:`StreamTimeouts.next_event` in ``asyncio.wait_for`` with the derived
-    ``inter_chunk_timeout_s()`` (no literal, R9.5). If the next upstream chunk does not arrive in
-    time, the stalled read is cancelled, the shared :class:`KillLatch` is flipped with
-    ``STREAM_INTER_CHUNK_TIMEOUT``, and :class:`StreamTimeout` propagates out of this generator so
-    the pipeline + serving loop unwind and release resources — the handler then renders the
-    declared ``Error_Frame`` from the latch reason (R9.2, fail closed). The iterator is driven by
-    an explicit ``__anext__`` so the per-event await is the thing bounded; ``StopAsyncIteration``
-    ends the stream normally.
-
-    **Mid-stream error-frame scanning (R11).** A provider event whose ``error_frame`` is set
-    carries an untrusted free-text error body that can hold a secret (a connection string, a
-    token in a stack trace). BEFORE any byte of it is forwarded (R11.1) it is scanned through
-    :func:`~gateway_v2.edge.error_frame_scan.scan_error_frame` (the injected findings ``scanner``
-    + the same ``resolver`` / ``apply_decision`` the content path uses). The outcome drives one
-    of two paths: a REDACT/ALLOW decision forwards the frame with the decided redactions applied
-    as a FINAL content ``UpstreamChunk`` (R11.2 — the only bytes of the frame that ever leave the
-    gateway), while a BLOCK (R11.3) or a scan error (R11.4, fail closed) withholds the frame
-    entirely, flips the shared :class:`KillLatch` with its terminal posture code
-    (``output_blocked`` / ``scan_failure``), and stops the source so no byte is forwarded — the
-    handler then renders the declared ``Error_Frame`` from the latch reason. The scan is a single
-    whole-text pass (byte-linear, R11.5). An error frame is terminal either way, so the adapter
-    returns after handling it.
-    """
-    # Evaluate before the first chunk too: a max-duration/stale/kill signal already true at stream
-    # start must cut before any upstream byte is forwarded (R10.7, fail-closed).
-    if control.evaluate() is not None:
-        return
-    iterator = events.__aiter__()
-    while True:
-        # Bound the wait for the NEXT upstream event by the Inter_Chunk_Timeout (R9.2). Driving
-        # __anext__ explicitly (rather than `async for`) is what lets the per-event await be
-        # wrapped; a breach raises StreamTimeout (latch already flipped) and unwinds the stream.
-        try:
-            event = await timeouts.next_event(iterator.__anext__())
-        except StopAsyncIteration:
-            return
-
-        # Mid-stream provider error frame (R11): scan it BEFORE forwarding any byte. A REDACT/ALLOW
-        # decision forwards the (possibly masked) frame as a FINAL content chunk and ends the
-        # stream (R11.2); a BLOCK (R11.3) or a scan error (R11.4) withholds the frame entirely —
-        # the kill latch is flipped with the terminal code and the source stops, so no byte of the
-        # frame is forwarded and the handler renders the declared Error_Frame from the latch.
-        if event.error_frame is not None:
-            forwarded = await _forward_error_frame(event.error_frame, error_scan)
-            if forwarded is None:
-                return  # withheld: latch carries the terminal code (R11.3 / R11.4)
-            nbytes = len(forwarded.encode("utf-8"))
-            coalescer.offer(nbytes)
-            yield UpstreamChunk(text_deltas=(("content", forwarded),), final=True)
-            coalescer.release(nbytes)
-            return
-
-        text = "".join(delta for _, delta in event.text_deltas)
-        nbytes = len(text.encode("utf-8"))
-        coalescer.offer(nbytes)
-        yield UpstreamChunk(text_deltas=event.text_deltas, final=event.final)
-        coalescer.release(nbytes)
-        if event.final:
-            return
-        # Chunk boundary: poll every R10 trigger. A fired trigger stops the source so no further
-        # upstream bytes reach the caller after the cut (R10.7).
-        if control.evaluate() is not None:
-            return
