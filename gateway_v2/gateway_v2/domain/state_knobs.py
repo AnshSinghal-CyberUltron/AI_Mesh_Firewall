@@ -27,6 +27,16 @@ DEFAULT_REHYDRATE_PERIOD_MS = 1_000
 DEFAULT_REFRESH_PERIOD_MS = 500
 DEFAULT_DEEP_EVERY = 60
 
+DEFAULT_COALESCE_WINDOW_MS = 250
+"""Window within which one owner's nudges collapse. A quarter of the default rehydrate period:
+long enough to fold a human-driven edit burst, short enough to stay well under the Freshness_Window
+(1500 ms at defaults). A latency knob on a lossy hint, never a capacity position."""
+
+DEFAULT_PER_OWNER_PUSH_BOUND = 1
+"""Pushes per owner per window. One is the natural coalesced target (a single nudge carrying the
+Highest_Feed_Seq); it is the push-count analogue of the read side's 'keep the highest position'.
+A protocol constant, not a capacity position; named here so it has ONE declared home."""
+
 
 @dataclass(frozen=True, slots=True)
 class StateKnobs:
@@ -47,6 +57,21 @@ class StateKnobs:
     deep_every: int = DEFAULT_DEEP_EVERY
     """Run the O(records) index comparison every Nth re-hydrator round."""
 
+    coalesce_window_ms: int = DEFAULT_COALESCE_WINDOW_MS
+    """How long one owner's publish-side nudges are collapsed before a push is forced out.
+
+    A latency knob on the lossy nudge hint, not a capacity position: it only shortens how long a
+    worker may wait on the periodic round, and must stay <= the Freshness_Window so a merged nudge
+    can never outlive the backstop.
+    """
+
+    per_owner_push_bound: int = DEFAULT_PER_OWNER_PUSH_BOUND
+    """Maximum nudge pushes emitted for one owner within one coalesce window.
+
+    One is the coalesced target -- a single nudge carrying the highest feed_seq. The push-count
+    analogue of the read side keeping only the highest position.
+    """
+
     def __post_init__(self) -> None:
         if self.rehydrate_period_ms <= 0:
             raise ValueError("rehydrate_period_ms must be positive")
@@ -58,6 +83,21 @@ class StateKnobs:
             raise ValueError("fresh_ms must not be negative")
         if self.pg_grace_ms < 0:
             raise ValueError("pg_grace_ms must not be negative")
+        if self.coalesce_window_ms < 0:
+            raise ValueError("coalesce_window_ms must not be negative")
+        if self.per_owner_push_bound < 1:
+            raise ValueError("per_owner_push_bound must be >= 1")
+        # Freshness_Window check: a nudge window longer than the periodic-round backstop would let
+        # a merged or dropped nudge outlive the window within which the round must deliver the
+        # write. enforcement_bound_s (rehydrate + refresh period) IS the Freshness_Window, and both
+        # periods are validated positive above, so this is safe to read here. Equality is accepted;
+        # only a strictly longer window is refused.
+        if self.coalesce_window_ms > self.enforcement_bound_s * 1000:
+            raise ValueError(
+                f"coalesce_window_ms={self.coalesce_window_ms} must be <= the Freshness_Window "
+                f"({self.enforcement_bound_s * 1000:.0f} ms = rehydrate + refresh period): a "
+                "merged nudge would otherwise outlive the periodic-round backstop",
+            )
         if self.fresh_ms == 0:
             return  # freshness off: the relationships below are about enforcing it
         if self.fresh_ms < 2 * self.rehydrate_period_ms:
