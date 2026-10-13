@@ -1,0 +1,222 @@
+# Local Worklist — v3 Backend Rewrite (`gateway_v2/`)
+
+**Purpose.** A single pick-one-by-one worklist of everything from
+`AI_MESH_MASTER_RUNBOOK_v3_BACKEND_REWRITE.md` that can be **built, fixed, and verified LOCALLY**
+(no cloud, no GPU, no fleet) in the `gateway_v2/` tree. The runbook is the source of truth for
+*what* and *why*; this file is the source of truth for *what is doable locally now, in what order,
+and what is already done*.
+
+**Standard (the "clean" rule).** Every item here is either:
+- **category 1** — code is cloud-complete, only a live gate is deferred; or
+- **category 2** — a real documented seam, the cloud piece is a separate card.
+
+We do **NOT** add **category 3** work (can't write honest code without the cloud surface) to this
+list. Category-3 items are parked in the "Deferred — cloud/GPU/fleet only" section at the bottom so
+the boundary stays visible.
+
+**How to use.** Pick the top unstarted item under "Buildable locally — not yet done", run the
+spec workflow (requirements → design → tasks → Run-All-Tasks), commit per-layer on `suraj-revamp`,
+then mark it DONE here and in the runbook. Verification for every item is the offline `pytest`
+suite + `mypy --strict` + `ruff` + `import-linter` + the AST gates — the same gate every shipped
+card used.
+
+Legend: ✅ DONE (local half closed) · 🔜 BUILDABLE NOW · ⛔ BLOCKED (needs a prerequisite card) ·
+☁️ DEFERRED (cloud/GPU/fleet only).
+
+---
+
+## A. Already DONE — local half closed (shipped + verified on `suraj-revamp`)
+
+These are here for reference and to show what each later item can build on. Evidence: the matching
+`docs/plans/` plan docs + `docs/plans/evidence/` + the AGENTS.md changelog sections.
+
+| Register / card | What shipped | Evidence |
+|---|---|---|
+| ✅ R2-02 (GW05c) | Incremental O(changes) state propagation; per-record publish; per-key cache invalidation | AGENTS.md R2-04/GW05 + state_control |
+| ✅ R2-03 (GW05b) | Signed freshness stamp; trust-only-newer-stamp; fail-closed per kind | docs/plans 2026-10-08-r2-04 |
+| ✅ R2-04 (GW05b) | PG session bounds (SET LOCAL + verify_bounds); ≥2 re-hydrators; idle-stop exemption | docs/plans 2026-10-08-r2-04 |
+| ✅ R2-05 (GW14c) | Audit memory budget (byte-accounted XTRIM); durable Postgres sink; completeness ratio | docs/plans 2026-10-08-r2-05 |
+| ✅ R2-06 (GW12b) | Bounded holdback (≤ cap upstream tokens); held-tokens histogram; trade-off table | docs/plans 2026-10-08-r2-06 |
+| ✅ R2-07 / R2-08 / R2-18 (GW19) | Per-owner CoDel admission; 503 + Retry-After ≥ 1 s + x-should-retry; drain; post-heal recovery | docs/plans 2026-10-08-r2-07-r2-08-gw19 |
+| ✅ R2-09 / R2-14 / R2-19 (GW06) | Org budget lease spent locally; async refill off the request path; retry-once; store boundary | docs/plans 2026-10-08-r2-09 |
+| ✅ R2-17 (GW05) | C36 design confirmed (no code change) | runbook §0.3 |
+| ✅ GW12 (keystone, not an R2 item) | SSE egress pipeline: bounded buffers, backpressure, real cancellation, timeouts | docs/plans 2026-10-09-gw12 |
+| ✅ R2-10 ★ / R2-11 (GW14d) | Unified typed exposition; bounded tenant directory; windowed C4 SLO histogram; reset-safe rates; rejected{status,reason}; posture-vs-BLOCK; /readyz on metrics dir | docs/plans 2026-10-10-gw14d |
+| ✅ R2-23 (push-coalescing) | Per-owner publish-nudge coalescer; durability never coalesced; microbenchmark; verification obligation | docs/plans 2026-10-11-r2-23-push-coalescing |
+
+---
+
+## B. Buildable locally — NOT yet done (the actual worklist, in recommended order)
+
+Each row is a self-contained card. "Local verification" is what proves it without cloud. "Live
+gate (deferred)" is the cloud half that is explicitly NOT in scope for the local build.
+
+### B1. 🔜 GW15 — the real `/v1/chat/completions` + `/v1/completions` handler  **(keystone — do first)**
+- **Why.** `edge/openai_chat.py` is empty ("empty until GW15/GW16"); `edge/routes.py` is a THIN
+  wiring proof that explicitly defers request parsing, auth, plan resolution, admission, and the
+  end-to-end input-scan → model-call → output-guard decision. This card builds the real request
+  path and ties together every data-plane mechanism already shipped (A, above). Nothing else in
+  the serving half can be driven until this exists.
+- **Scope.** OpenAI request parsing + the shared request/response value types; API-key → identity
+  via the shipped state cache; plan resolution; wire the shipped **GW19 CoDel admission** in front;
+  wire the shipped **GW06 budget lease**; run the shipped **GW12b holdback + output guard** pipeline;
+  emit the SSE response through the shipped `edge/wire` encoder; honest `WriteOutcome`/error mapping.
+- **Local verification.** The existing `tests/openai_conformance/` SDK compat harness +
+  `StubProviderClient`; property/unit tests per the house idiom; the full gate.
+- **Live gate (deferred).** None of its own — it is driven by the fleet run later. Category 1.
+- **Depends on.** The shipped A-items (admission, lease, holdback, observability, state) — all done.
+
+### B2. 🔜 GW16 — misc OpenAI surfaces + request/response typing
+- **Why.** `edge/openai_misc.py` is empty ("empty until GW16"). `/v1/embeddings`, `/v1/models`,
+  `/v1/moderations`, and the shared OpenAI typing `edge/wire` says "land later (GW01/GW15+)".
+- **Scope.** The three misc routes + the OpenAI request/response types GW15 also needs (coordinate
+  with B1; may fold the typing into B1 and keep only the routes here).
+- **Local verification.** SDK compat tests (the harness already exercises moderations/models/audio).
+- **Depends on.** B1 (shares the typing). Category 1.
+
+### B3. 🔜 Serving entrypoint — real ASGI host + worker model
+- **Why.** `edge/app.py` `build_app()` exists but nothing hosts it (`app = None` default). GW19's
+  notes name a "serving-entrypoint card": remove the inert `--worker-connections`, migrate off the
+  deprecated uvicorn worker class, add REAL OS process supervision behind the shipped
+  `WorkerSupervisor` seam.
+- **Scope.** An actual ASGI server (uvicorn/hypercorn or a raw asyncio server) hosting `build_app`,
+  with the worker model GW19 assumes; wire the `WorkerSupervisor` to real process supervision.
+- **Local verification.** A real localhost HTTP client hitting the running server; the SDK compat
+  harness over a live local socket; `/readyz` + `/metrics` reachable.
+- **Live gate (deferred).** Fleet-scale worker behaviour under overload (that's the GW20 run).
+  Category 2 (the supervision seam is real; the OS-level supervision is the deployable piece).
+- **Depends on.** B1 (something to serve).
+
+### B4. 🔜 GW17 / GW18 — provider egress client + dispatch routing
+- **Why.** `dispatch/provider.py` is a `StubProviderClient` with "the real-socket path is a DEFERRED
+  live gate." The real provider client (HTTP/socket to the upstream LLM or the guard model service)
+  and the dispatch routing to the guard tier do not exist.
+- **Scope.** The real `ProviderClient` implementation + its injection seam; the `DispatchRouter`
+  selection to the real upstream. The CLIENT CODE and seam are local-buildable; the live socket is
+  the deferred gate.
+- **Local verification.** The client driven against a LOCAL fake upstream (an aiohttp/asyncio stub
+  server that speaks the provider's SSE shape); byte-verified transform round-trip (already a GW12
+  property); abort/cancel paths.
+- **Live gate (deferred).** The real socket to the real provider / real guard — a live gate.
+  Category 2 (seam real, live socket deferred).
+- **Depends on.** B1.
+- **OPEN QUESTION for the owner:** is the upstream a real external LLM provider, or your own
+  guard/model service? This decides what the fake upstream mimics.
+
+### B5. 🔜 GW16b — edge TLS termination + firewall-added-delta SLO definition
+- **Why.** R2-12 proved passthrough NLB adds nothing, ALB adds 8–10 ms (rejected for token streams).
+  The edge contract: TLS 1.3 terminated in the gateway tier, connection recycling
+  (`RV_CONN_MAX_AGE_S`, 30 s), and the SLO defined as the firewall-added delta vs a direct path.
+- **Scope (local half only).** The TLS-termination config/code in the gateway tier + the
+  delta-measurement DEFINITION (how C4 is computed as a delta). The NLB itself, TLS cost at the edge
+  (G-10), and internet-vantage latency (G-11) are cloud gates.
+- **Local verification.** TLS handshake against a local server; the delta definition unit-tested
+  against recorded direct-vs-through latencies.
+- **Live gate (deferred).** G-10 (TLS cost at 600 RPS), G-11 (internet-vantage), G-13 (store gap
+  behind a health-checked NLB). Category 2.
+- **Depends on.** B3 (a running server to terminate TLS at).
+
+### B6. 🔜 R2-21 — load harness v2.3 (the measurement instrument)
+- **Why.** No load/capacity harness exists in `gateway_v2`. R2-01 and gates G-01/05/06/09 all need
+  it. The round-2 harness is an external tool; this builds the local-runnable equivalent.
+- **Scope.** A client program generating the GW20b strata: **Poisson arrivals** (the core of R2-01),
+  **multi-key** (≥ 2,000 keys over ≥ 200 orgs), **long-prompt corpora** (1 / 5 / 25% of 4–7k-token
+  prompts), **SDK-retry clients** (+ aggressive), **secret-shaped outputs**, **tenant scale ≥ 10k**;
+  plus the C4 measurement (worst chunk per stream, client-side, holdback excluded) and the ladder /
+  report format (≤ 10% steps, 3/3 repeats, per-run GPU-busy windowed / owner queue wait / loop lag /
+  reason mix).
+- **Local verification.** Run the FULL Poisson ladder against a single local gateway (B1+B3) + a
+  LOCAL fake guard (B4's fake upstream): prove the harness produces correct arrival distributions,
+  strata, and C4 numbers — the dry-run that de-risks the one-shot cloud run. This is the biggest
+  cost-saver: when the GPU fleet lights up you are measuring, not debugging.
+- **Live gate (deferred).** The actual fleet-scale knee numbers (R2-01), autoscaling (G-01),
+  retry amplification at fleet scale (G-06), the integrated re-measure (G-09). Category 1 (the
+  harness is complete; only the fleet it drives is cloud).
+- **Depends on.** B1, B3, B4 (needs a real local endpoint + a fake guard to drive).
+
+### B7. 🔜 R2-20 (partial) — immutable harness release hygiene
+- **Why.** R2-20: "the harness is released immutably (as bin/v2.N) and runs from frozen copies"
+  (editing a running harness in place killed a measurement). The `/dev/shm` RemoveIPC half is HOST
+  config, not code — out of scope.
+- **Scope (local half).** A release/versioning mechanism for the B6 harness (frozen, immutable
+  `bin/v2.N` copies; a build step that stamps a version; a guard against running a mutated copy).
+- **Local verification.** A test that a frozen harness build is byte-stable and that an in-place
+  edit is rejected / detected.
+- **Depends on.** B6 (the harness it versions). Category 1 (small).
+
+### B8. 🔜 R2-13 (partial) — the flush chaos drill + declared failure behaviour doc
+- **Why.** R2-13 asks to publish the declared store-failure behaviour and run chaos drills (flush /
+  partition / forced-failover). The **flush** drill is locally runnable against the shipped
+  `MemoryStore` / fakeredis twins; partition + forced-failover are cloud.
+- **Scope (local half).** A local flush-drill test (store flush → re-hydrator restore within the
+  bound, 0 violations) + a short "declared failure behaviour" doc section.
+- **Local verification.** The flush-drill test against the in-memory / fakeredis twins (we already
+  have `MemoryControlDB` + the re-hydrator).
+- **Live gate (deferred).** Partition + Redis forced-failover drills (G-13 / real stores), the
+  Cloud SQL + store overlap (G-14). Category 2.
+- **Depends on.** nothing new (the re-hydrator + twins are shipped). NARROW — low value; optional.
+
+### B9. 🔜 R2-24 (partial) — validation-environment watchdog utilities
+- **Why.** R2-24: idle watchdog, burn-rate monitor, store-memory alarm, audit guard, owner-visible
+  teardown rule. The store-memory alarm partly exists (GW14c). The rest are local-codeable
+  monitoring utilities, though they are ops tooling that only earns its keep against a running env.
+- **Scope (local half).** Standalone monitor utilities (store-memory alarm wired to the GW14c
+  budget; an audit-backlog guard) with injected clocks so they're unit-testable.
+- **Local verification.** Unit tests driving the alarms past their thresholds on injected inputs.
+- **Depends on.** nothing new. LOW priority — ops tooling; thin local value. Optional.
+
+---
+
+## C. Recommended order (why this sequence)
+
+```
+B1 GW15 (chat handler)         ← keystone; unblocks everything
+   └─► B2 GW16 (misc + typing)
+   └─► B3 serving entrypoint    ← something to host B1
+          └─► B4 GW17/18 (provider egress + fake upstream)
+                 └─► B5 GW16b (TLS + delta def)
+                 └─► B6 R2-21 harness v2.3
+                        └─► B7 R2-20 harness release hygiene
+                        └─► local Poisson dry-run (1 gateway + fake guard)   ← the cloud-cost saver
+B8 R2-13 flush drill   ← independent, optional, narrow
+B9 R2-24 watchdogs     ← independent, optional, ops
+```
+
+**The gate that unlocks the cloud one-shot:** after B1–B6 are built and the local Poisson dry-run
+passes (one gateway + a fake guard driven through the full ladder), the cloud run becomes a pure
+measurement — provision 3× c4-highcpu-16 + 4× g2-standard-4 + passthrough NLB + Cloud SQL 16 HA +
+Memorystore Valkey 8 HA + a load-gen, and capture R2-01 (the Poisson knee) + G-01/05/06/09 in one
+sitting. See the GPU/instance config in the chat history (GCP primary; AWS g6=L4 fallback).
+
+---
+
+## D. Deferred — cloud / GPU / fleet only (NOT local work; parked for visibility)
+
+These are category-3 (can't write honest local code) or pure measurement/ops/hardware. Do NOT add
+them to the local worklist.
+
+| Register / gate | Why it is cloud-only |
+|---|---|
+| ☁️ R2-01 (GW20/GW20b) | The Poisson knee is a MEASUREMENT at fleet scale (≥3 gateways + ≥4 guards). Needs B1–B6 built first, then a real fleet. The local half is "build the serving path + harness" (B1–B6); the number itself is cloud. |
+| ☁️ R2-12 live halves (GW16b) | NLB bake-off, TLS edge cost (G-10), internet-vantage latency (G-11), store-gap-behind-NLB (G-13) — real cloud networking + a live edge. |
+| ☁️ R2-15 (GW25) | GPU capacity ops: reserved L4 baseline, capture procedure, T4 fallback, failover region — GCP reservations/quotas/hardware. |
+| ☁️ R2-16 (GW20) | MIG vs GKE platform step tests, DCGM, HPA, drain timing — "the step tests themselves were not run"; real platforms. |
+| ☁️ R2-22 ★ (GW23 / UI) | Console regressions — live in the UI / old v1 product, a DIFFERENT codebase, not `gateway_v2`. |
+| ☁️ Gates G-01, G-02, G-03, G-10..G-15 | Autoscaling, drain-with-long-streams, guard rollout, TLS, internet, zone loss, store-behind-NLB, PG+store overlap, post-heal recovery — all require the fleet/stores/GPUs. The CODE each exercises is in B1–B6; the gate run is cloud. |
+
+---
+
+## E. Open questions for the owner (resolve before/while building B-items)
+
+1. **Upstream identity (blocks B4 scope).** Is the provider a real external LLM API, or your own
+   guard/model service? Determines the real `ProviderClient` and the local fake.
+2. **Serving entrypoint choice (B3).** uvicorn (migrate off the deprecated worker class) vs a raw
+   asyncio server? The runbook flags the deprecated uvicorn worker class as something to leave.
+3. **Scope granularity.** Keep B1/B2/B4 as separate cards (recommended — each independently
+   verifiable), or fold into one "serving path" card?
+
+---
+
+_Last updated: 2026-10-11. Companion to `docs/AI_MESH_MASTER_RUNBOOK_v3_BACKEND_REWRITE.md`
+(the source of truth for what/why). Completion is mirrored in the runbook's §0.3 corrections
+register and §0.5 open-gates table._
