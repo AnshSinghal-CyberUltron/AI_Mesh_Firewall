@@ -516,6 +516,58 @@
   486b0b42 (tests), 7 per-layer commits. Plan: docs/plans/2026-10-10-gw14d-observability-contract.md.
   Evidence: docs/plans/evidence/2026-10-10-gw14d/.
 
+## R2-23 / push-coalescing changelog
+- R2-23 (2026-10-11) — PER-OWNER PUSH-NUDGE COALESCING (C43 push cost), local half CLOSED. Impact
+  MEDIUM; depends GW05c; fix before GW19. HONEST FRAMING: the original "72 pushes per request at 36
+  workers" is a v1/RC2 per-worker-per-request serving-path property, ALREADY GONE by construction in
+  gateway_v2 (write side emits exactly ONE PUBLISH per record write + ONE manifest-last PUBLISH per
+  batch; read-side NudgeListener already coalesces drain_max=64->1 with cursor skip-if-at-or-past; NO
+  serving-path publish at all). So Requirement 1 is a VERIFICATION OBLIGATION (a standing regression
+  tripwire), NOT a re-fix. What genuinely remained + what this card builds: a per-owner, publish-side
+  nudge coalescer bounding how many PUBLISHes one owner's WRITE BURST drives, + the microbenchmark the
+  register names. The coalescer is a thin StatePublisher DECORATOR that coalesces ONLY the lossy nudge
+  and NEVER the Durable_Write; the periodic O(1) round is the correctness backstop (a merged/dropped
+  nudge costs only latency, bounded by the Freshness_Window). Lives in state_control (OUTSIDE
+  root_packages, like the publisher it wraps), imports gateway_v2.domain.state_knobs (the allowed
+  state_control->gateway_v2.domain direction). (1) domain/state_knobs.py — coalesce_window_ms +
+  per_owner_push_bound knobs (named-constant defaults DEFAULT_COALESCE_WINDOW_MS=250 /
+  DEFAULT_PER_OWNER_PUSH_BOUND=1, no bare literal at the field) + fail-at-start validation incl.
+  window<=enforcement_bound_s (the Freshness_Window; == accepted). (2) state_control/publisher.py —
+  StatePublisher protocol gains emit_nudge(kind,feed_seq) + nudge: bool=True on publish_record/
+  publish_batch so the durable write can skip its inline PUBLISH; MemoryStore gates .nudges on the
+  flag (durable state + record_writes identical regardless), BrokenPublisher.emit_nudge raises.
+  nudge=True default keeps every existing caller unchanged. (3) state_control/valkey.py — _guarded
+  makes ONLY the trailing pipe.publish conditional on nudge (durable WATCH/MULTI byte-identical,
+  manifest-last); emit_nudge is a bare standalone PUBLISH; shared _nudge_payload keeps inline +
+  emit_nudge byte-identical so parse_nudge round-trips both. (4) state_control/coalescer.py (NEW) —
+  CoalescerCounters (frozen label-free, two series, mirrors ListenerCounters), CoalesceConfig.from_knobs
+  (authority-derived bound/window, window<=freshness re-validation), _PendingNudge per-(owner,kind)
+  accounting, CoalescingPublisher: reads + publish_kind pass through UNCOALESCED; publish_record/
+  publish_batch delegate the Durable_Write with nudge=False FIRST and RETURN the inner bool unchanged
+  (writer WriteOutcome untouched), THEN coalesce inside a swallow-everything guard (a push failure
+  NEVER changes a WriteOutcome, Req 6); emit at most per_owner_push_bound pushes/window carrying
+  Highest_Feed_Seq; monotonic guard suppresses a position <= highest_announced (counts pushes_saved,
+  never on the wire); three-layer flush (window-roll + flush_due per round + flush_all on shutdown),
+  fail-safe per-entry swallow, idempotent on a quiesced owner. (5) state_control/service.py — build()
+  wraps the WRITER's publisher in the coalescer (clock=time.monotonic), keeps the re-hydrator on the
+  BARE publisher (publish_kind wholesale restore must NOT be coalesced, R2-04 HA), flush_due(now) each
+  round + flush_all() on shutdown (defensively guarded). StateWriter UNCHANGED (depends only on the
+  protocol). 10 correctness properties as seeded random.Random >=10,000-iteration tests (house idiom,
+  no hypothesis; seeds 0xc0a01-0xc0a10). MICROBENCHMARK (Req 8, local representative of the deferred
+  knee re-measure): un-coalesced vs coalesced over a MemoryStore twin + injected clock, byte-
+  reproducible — 46 pushes saved (72->26) on a ~72-write per-owner burst, Durable_Write parity 72==72,
+  CPU-ms-shape proxy in the register's units. OPEN (DEFERRED CLOUD GATE): the fleet Knee_Re_Measure
+  (36 workers / real Valkey / real request load) — declared OPEN, the microbenchmark does NOT close it
+  (a test guards that). FOUND+FIXED: two TEST-harness bugs (counting the window-close catch-up as an
+  in-window push) — fixed in the tests, no product bug, no property weakened; the coalescer matches
+  design §4. KNOWN FINDING: pre-existing documented R2-05/GW05c check_tenant_scale finding at
+  state_control/valkey.py:100 unrelated + untouched. VERIFY: 23 R2-23 new tests (10 property + 6
+  verification + 7 microbench) + 188 tests/state_control full suite (58 skipped, 1 xfailed, no
+  regression) passed; mypy --strict 153 files, ruff, import-linter 2/2 kept, capacity-literals gate
+  over gateway_v2 PASS. Commit range suraj-revamp a3ea0dfb (state_knobs) -> bfb0ebe0 (tests), 6
+  per-layer commits. Plan: docs/plans/2026-10-11-r2-23-push-coalescing.md.
+  Evidence: docs/plans/evidence/2026-10-11-r2-23-push-coalescing/.
+
 ## MCP Hardening BACKSTOP changelog
 - Parallel Claude + Cursor sessions harden the multi-tenant MCP gateway. **Every hardening change is
   logged to four memories in the SAME commit:** Ruflo (`mcp__ruflo__memory_store`

@@ -1,0 +1,61 @@
+{
+  "card": "R2-23",
+  "title": "Per-owner push-nudge coalescing (C43 push cost)",
+  "fixes": ["R2-23"],
+  "date": "2026-10-11",
+  "branch": "suraj-revamp",
+  "impact": "MEDIUM",
+  "local_half": "CLOSED",
+  "commits": [
+    "a3ea0dfb feat(r2-23): StateKnobs coalesce-window + per-owner-push-bound authority",
+    "6d59f8b7 feat(r2-23): separate the nudge from the durable write on StatePublisher",
+    "18f76bb1 feat(r2-23): make the inline PUBLISH conditional in ValkeyPublisher",
+    "da03c2d4 feat(r2-23): the per-owner nudge coalescer (state_control/coalescer.py)",
+    "36ded32c feat(r2-23): wire the coalescer into the re-hydrator service",
+    "bfb0ebe0 test(r2-23): 10 property suites + verification obligation + microbenchmark"
+  ],
+  "gates": {
+    "new_test_sweep": { "passed": 23, "note": "10 property + 6 verification + 7 microbench" },
+    "state_control_suite": { "passed": 188, "skipped": 58, "xfailed": 1, "note": "full suite, no regression; skips are real-infra buckets, xfail is the documented GW05c strict xfail" },
+    "mypy_strict": { "clean": true, "source_files": 153 },
+    "ruff": { "clean": true },
+    "import_linter": { "contracts_kept": 2, "broken": 0 },
+    "capacity_literals_gate": "pass"
+  },
+  "properties": [
+    { "id": 1, "title": "Per-owner push bound; last push carries max feed_seq", "file": "tests/state_control/test_coalescer_properties.py", "seed": "0xc0a01", "iterations": 10000, "status": "pass" },
+    { "id": 2, "title": "Durable writes equal N; durable state byte-identical to the bare path", "file": "tests/state_control/test_coalescer_properties.py", "seed": "0xc0a02", "iterations": 10000, "status": "pass" },
+    { "id": 3, "title": "Reader never ends below the latest committed feed_seq", "file": "tests/state_control/test_coalescer_properties.py", "seed": "0xc0a03", "iterations": 10000, "status": "pass" },
+    { "id": 4, "title": "Monotonic announced position; no regressive push on the wire", "file": "tests/state_control/test_coalescer_properties.py", "seed": "0xc0a04", "iterations": 10000, "status": "pass" },
+    { "id": 5, "title": "Per-owner isolation across interleaved multi-owner workloads", "file": "tests/state_control/test_coalescer_properties.py", "seed": "0xc0a05", "iterations": 10000, "status": "pass" },
+    { "id": 6, "title": "Coalescing is idempotent on a quiesced owner", "file": "tests/state_control/test_coalescer_properties.py", "seed": "0xc0a06", "iterations": 10000, "status": "pass" },
+    { "id": 7, "title": "Fail-safe never costs durability or freshness", "file": "tests/state_control/test_coalescer_properties.py", "seed": "0xc0a07", "iterations": 10000, "status": "pass" },
+    { "id": 8, "title": "Window bound derives from the authority; over-long window refused", "file": "tests/state_control/test_coalescer_properties.py", "seed": "0xc0a08", "iterations": 10000, "status": "pass" },
+    { "id": 9, "title": "Confluence of write ordering", "file": "tests/state_control/test_coalescer_properties.py", "seed": "0xc0a09", "iterations": 10000, "status": "pass" },
+    { "id": 10, "title": "Push count independent of worker and request count", "file": "tests/state_control/test_coalescer_properties.py", "seed": "0xc0a10", "iterations": 10000, "status": "pass" }
+  ],
+  "microbenchmark": {
+    "file": "tests/state_control/test_lgw23_microbench.py",
+    "seed": 2023,
+    "total_writes": 72,
+    "uncoalesced_pushes": 72,
+    "coalesced_pushes": 26,
+    "pushes_saved": 46,
+    "durable_write_parity": "OK (72 == 72)",
+    "cpu_ms_shape_proxy": "per-push shape in the R2-23 baseline units (+2.3 CPU-ms / 72 pushes); NOT a wall-clock measurement",
+    "status": "pass"
+  },
+  "verification_obligation": {
+    "file": "tests/state_control/test_push_verification.py",
+    "detail": "one PUBLISH per write/batch; AST tripwire that no serving package reaches the write-side publish surface; push count a function of W and O only, invariant to simulated N and R",
+    "status": "pass"
+  },
+  "deferred_cloud_gates": [
+    "Knee_Re_Measure (Req 9): fleet-scale push-cost re-measurement at the capacity knee (36 workers / real Valkey / real request load). OPEN. The microbenchmark is its local representative and does not close it."
+  ],
+  "known_findings": [
+    "The per-request/per-worker 72-pushes defect is already closed by GW05c; R2-23 verifies it (Req 1 tripwire), it does not re-fix it.",
+    "Two test-harness bugs (counting the window-close catch-up as an in-window push) were found and fixed in the tests; no product bug, no property weakened.",
+    "Pre-existing documented R2-05/GW05c check_tenant_scale finding at state_control/valkey.py:100 is unrelated and untouched."
+  ]
+}
