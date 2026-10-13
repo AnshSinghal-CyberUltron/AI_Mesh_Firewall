@@ -20,6 +20,15 @@ dev = [
     "mypy>=1.11",
     "import-linter>=2.1",
 ]
+# GW15 in-process conformance subset deps (``tests/openai_conformance/test_gw15_chat_surface_v2.py``):
+# the UNMODIFIED stock OpenAI Python SDK + httpx (the in-process ASGITransport) + pytest-asyncio.
+# The subset ``importorskip``s ``openai`` / ``httpx``, so these are optional — a tree without them
+# skips the subset cleanly rather than failing collection. Install with ``.[dev,conformance]``.
+conformance = [
+    "openai>=1.0",
+    "httpx>=0.27",
+    "pytest-asyncio>=0.23",
+]
 
 [tool.setuptools.packages.find]
 where = ["."]
@@ -28,7 +37,28 @@ include = ["gateway_v2*", "state_control*", "audit_control*", "lint*"]
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
-addopts = "--ignore=tests/openai_conformance --ignore=tests/parity"
+# The GW15 in-process conformance subset (``tests/openai_conformance/test_gw15_chat_surface_v2.py``)
+# runs against the v2 Chat_Surface with the unmodified OpenAI SDK + ``StubProviderClient`` and is
+# collected by default (it ``importorskip``s the SDK, so a tree without ``openai`` skips cleanly;
+# it carries its own ``pytest.mark.asyncio`` so pytest-asyncio's default strict mode drives it).
+# The remaining ``tests/openai_conformance/*`` files are the V1 SDK-compat suite + the DEFERRED
+# live gates (real-TCP / Node SDK / uvicorn / the C2 replay): they target the v1 ``ai_mesh_gateway``
+# app (a separate CI job installs the v1 deps + PYTHONPATH) or stand up a real socket, so they stay
+# ignored here. ``tests/parity`` is the v1 parity harness, also a separate job.
+addopts = """
+    --ignore=tests/parity
+    --ignore=tests/openai_conformance/stub_server.py
+    --ignore=tests/openai_conformance/node
+    --ignore=tests/openai_conformance/test_live_tcp_8300.py
+    --ignore=tests/openai_conformance/test_malformed_sse_frame.py
+    --ignore=tests/openai_conformance/test_mcp_rag_vector_shapes.py
+    --ignore=tests/openai_conformance/test_openai_sdk_compat.py
+    --ignore=tests/openai_conformance/test_openai_sdk_compat_live_uvicorn.py
+    --ignore=tests/openai_conformance/test_openai_sdk_compat_phase2.py
+    --ignore=tests/openai_conformance/test_openai_sdk_compat_phase2_adversarial.py
+    --ignore=tests/openai_conformance/test_openai_sdk_compat_phase5_correlation.py
+    --ignore=tests/openai_conformance/test_openai_sdk_compat_phase6_guards.py
+"""
 
 [tool.ruff]
 target-version = "py312"
