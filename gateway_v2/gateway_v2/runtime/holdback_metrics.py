@@ -37,6 +37,7 @@ from typing import Protocol
 
 __all__ = (
     "PREFIX",
+    "SERIES_COUNT",
     "Histogram",
     "HoldbackMetrics",
     "HoldbackReading",
@@ -210,3 +211,21 @@ class HoldbackMetrics:
             overflow_total=self._overflow_total,
             forced_release_total=self._forced_release_total,
         )
+
+
+SERIES_COUNT = 4 + 3 * 3
+"""How many series this surface can ever produce. A constant, by construction.
+
+Four scalars + three histogram families. The scalars are ``unbroken_run_bytes_max`` (gauge),
+``incomplete_streams_total``, ``overflow_total`` and ``forced_release_total`` (counters). The
+``3 * 3`` is the three ``Histogram`` families — ``held_tokens_hist``, ``release_processing_ms``
+and ``holdback_wait_ms`` — each of which the GW14d Publisher renders as three native Prometheus
+series (``_bucket`` + ``_sum`` + ``_count``), matching the SERIES_COUNT composition in the
+observability-contract design (§SERIES_COUNT composition) and the audit/state producer convention.
+
+R2-10 is the reason this is a fixed expression rather than ``len(...)`` of whatever happens to be
+emitted: a full shared-memory metric directory made 40% of new tenants' first requests return
+HTTP 500 after per-org series were exported, so a series whose existence depends on the estate
+must fail a gate instead of shipping. The GW14d test asserts the rendered family count agrees
+with this constant.
+"""

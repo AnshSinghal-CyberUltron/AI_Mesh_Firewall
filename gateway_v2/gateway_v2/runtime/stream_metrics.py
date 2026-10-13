@@ -126,6 +126,25 @@ class PerRequestExports:
     parameter, so the label set stays fixed and finite (R12.3).
     """
 
+    SERIES_COUNT = 5 + 2 * 3
+    """How many series this surface can ever produce. A constant, by construction.
+
+    Five scalars — ``detector_invocations``, ``buffer_high_water``, ``active_memory_bound``,
+    ``withheld_total`` and ``fail_open_total`` — plus the two ``Histogram`` families
+    ``release_lag_ms`` and ``loop_lag_ms``, each of which the publisher (GW14d) renders as a
+    native Prometheus histogram: a ``_bucket`` family, a ``_sum`` and a ``_count`` = 3 series
+    apiece. So ``2 * 3`` for the two histograms.
+
+    R2-10 is why this is a fixed expression rather than ``len(series())`` or a count of
+    whatever happens to be emitted: a full shared-memory metric directory made 40% of new
+    tenants' first requests return HTTP 500 once one series was exported per org, so a series
+    whose existence depends on the tenant count must fail this gate instead of shipping. The
+    GW14d publisher asserts the rendered family count equals this expression
+    (design §SERIES_COUNT) and sums this term into its own ``SERIES_COUNT`` composition — the
+    native-bucket expansion is accounted for here at the producer, matching the audit/state
+    convention.
+    """
+
     def __init__(self) -> None:
         # Real zeros from the first snapshot (R12.3): "no invocations / no withholdings / no
         # fail-opens / bound 0" is a reported value, never an absent series.

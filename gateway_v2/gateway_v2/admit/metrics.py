@@ -137,6 +137,25 @@ class AdmissionMetrics:
     asserts against (Req 13.2).
     """
 
+    SERIES_COUNT = 2 * len(QUEUE_NAMES) + 3 + 1 + len(ShedReason) + 1
+    """How many series this producer can ever emit. A constant, by construction.
+
+    ``2 * len(QUEUE_NAMES)`` is the per-queue depth + oldest-age pair for each fixed queue
+    (``request`` / ``guard`` / ``dispatch`` / ``egress`` / ``audit``); ``+ 3`` is the single
+    ``oldest_age_s_hist`` ``Histogram`` family rendered by GW14d as ``_bucket`` + ``_sum`` +
+    ``_count`` (a histogram family counts as its three native-exposition series under the
+    renderer's chosen bucket set — R1.4: the ``_bucket`` set shares one base name); ``+ 1`` is
+    ``admitted_total``; ``len(ShedReason)`` is the one real-zero ``shed_total`` bucket per fixed
+    shed reason; the trailing ``+ 1`` is ``fail_open_total``.
+
+    R2-10 is why this is a fixed expression rather than ``len(series())``: a full metric directory
+    made 40% of new tenants' first requests fail with HTTP 500, so a series whose existence depends
+    on the tenant count must fail the gate (task 2.2 asserts this expression equals the rendered
+    family count) instead of shipping. The label set here is fixed and finite — the fixed queue
+    names and the ``ShedReason`` enum — never tenant-derived, so this count never moves with the
+    estate size.
+    """
+
     def __init__(self) -> None:
         self._admitted_total = 0
         self._shed_total: dict[str, int] = {reason.value: 0 for reason in ShedReason}
@@ -238,6 +257,21 @@ class QuotaMetrics:
     finite (R12.2). ``set_overshoot`` publishes the declared aggregate overshoot (Req 7.4) once from
     the façade/bounds derivation; ``snapshot`` is the only reader and returns a frozen
     :class:`QuotaReading` that cannot drift under later observations.
+    """
+
+    SERIES_COUNT = 1 + 1 + 1
+    """How many series this producer can ever emit. A constant, by construction.
+
+    The three fixed, label-free scalar series the design names (Req 12.4): ``lease_overshoot``
+    (``amf_quota_lease_overshoot`` gauge), ``async_refill_total``
+    (``amf_quota_async_refill_total`` counter) and ``budget_unavailable_total``
+    (``amf_quota_budget_unavailable_total`` counter). None is a ``Histogram``, so there is no
+    ``_bucket`` + ``_sum`` + ``_count`` expansion here — each term is one scalar family.
+
+    R2-10 is why this is a fixed expression rather than ``len(series())``: no method on this
+    producer accepts an ``owner`` / ``org`` / ``tenant`` parameter, so the label set is fixed and
+    finite (R12.2) and the count cannot move with the estate size; task 2.2 asserts this expression
+    equals the rendered family count so a tenant-derived series fails the gate instead of shipping.
     """
 
     def __init__(self) -> None:
