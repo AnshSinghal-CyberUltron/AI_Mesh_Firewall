@@ -2,7 +2,7 @@
   "bounded": true,
   "policy": "noeviction",
   "maxmemory": 67108864,
-  "used_memory_end": 14597680,
+  "used_memory_end": 14597360,
   "records_emitted": 70000,
   "audit_written": 70000,
   "audit_write_failed": 0,

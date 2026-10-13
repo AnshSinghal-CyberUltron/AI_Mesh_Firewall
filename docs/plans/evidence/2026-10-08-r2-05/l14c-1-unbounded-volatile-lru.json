@@ -2,7 +2,7 @@
   "bounded": false,
   "policy": "volatile-lru",
   "maxmemory": 67108864,
-  "used_memory_end": 67132704,
+  "used_memory_end": 67133336,
   "records_emitted": 70000,
   "audit_written": 20000,
   "audit_write_failed": 50000,
