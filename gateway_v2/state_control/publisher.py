@@ -76,8 +76,14 @@ class StatePublisher(Protocol):
         manifest: Manifest,
         *,
         engaged: bool | None = None,
+        nudge: bool = True,
     ) -> bool:
-        """One record, its index entry, the manifest and a nudge. False = the store is ahead."""
+        """One record, its index entry, the manifest and a nudge. False = the store is ahead.
+
+        `nudge` defaults to True, so every existing caller is unchanged. A coalescer passes
+        `nudge=False` to do the Durable_Write + manifest WITHOUT the inline PUBLISH, then emits
+        the (possibly coalesced) nudge itself via `emit_nudge`.
+        """
         ...
 
     def publish_batch(
@@ -87,8 +93,21 @@ class StatePublisher(Protocol):
         *,
         engaged: Mapping[str, bool] | None = None,
         chunk: int = 500,
+        nudge: bool = True,
     ) -> bool:
-        """Many records in bounded chunks, manifest last, ONE nudge."""
+        """Many records in bounded chunks, manifest last, ONE nudge.
+
+        `nudge` defaults to True; `nudge=False` performs the Durable_Write + manifest only,
+        leaving the nudge to a coalescer's `emit_nudge`.
+        """
+        ...
+
+    def emit_nudge(self, kind: StateKind, feed_seq: int) -> None:
+        """Emit exactly one PUBLISH of '<kind>:<feed_seq>' on the updates channel.
+
+        A latency hint only; never load-bearing. Separated from the Durable_Write so a
+        coalescer can bound the push rate per owner without touching durability.
+        """
         ...
 
     def publish_kind(
@@ -183,12 +202,13 @@ class MemoryStore:
         manifest: Manifest,
         *,
         engaged: bool | None = None,
+        nudge: bool = True,
     ) -> bool:
         with self._lock:
             if self._is_ahead(record.kind, manifest):
                 return False
             self._write_locked(record, engaged)
-            self._commit_locked(record.kind, manifest)
+            self._commit_locked(record.kind, manifest, nudge=nudge)
         return True
 
     def publish_batch(
@@ -198,6 +218,7 @@ class MemoryStore:
         *,
         engaged: Mapping[str, bool] | None = None,
         chunk: int = 500,
+        nudge: bool = True,
     ) -> bool:
         if not records:
             return True
@@ -210,8 +231,18 @@ class MemoryStore:
                     flag = None if engaged is None else engaged.get(record.key)
                     self._write_locked(record, flag)
             # Manifest last: a reader either skips or sees a complete generation.
-            self._commit_locked(kind, manifest)
+            self._commit_locked(kind, manifest, nudge=nudge)
         return True
+
+    def emit_nudge(self, kind: StateKind, feed_seq: int) -> None:
+        """Append one `(kind, feed_seq)` nudge -- the same shape the inline nudge records.
+
+        A latency hint only; never load-bearing. The coalescer calls this after a
+        `nudge=False` Durable_Write to put the (possibly coalesced) position on the twin's
+        `nudges` list exactly as an inline nudge would.
+        """
+        with self._lock:
+            self.nudges.append((kind, feed_seq))
 
     def publish_kind(
         self,
@@ -275,10 +306,14 @@ class MemoryStore:
         else:
             target.discard(record.key)
 
-    def _commit_locked(self, kind: StateKind, manifest: Manifest) -> None:
+    def _commit_locked(self, kind: StateKind, manifest: Manifest, *, nudge: bool = True) -> None:
+        # Durable state (manifest + feed_seq) is written REGARDLESS of the nudge flag; only the
+        # lossy latency hint on `.nudges` is conditional, so a coalescer's `nudge=False` write is
+        # byte-identical in durable state and differs ONLY in whether a nudge was appended.
         self._manifests[kind] = encode_manifest(manifest)
         self._feed_seq[kind] = manifest.feed_seq
-        self.nudges.append((kind, manifest.feed_seq))
+        if nudge:
+            self.nudges.append((kind, manifest.feed_seq))
 
     # --- reader side (gateway_v2.runtime.state_feed.StateStore) --------------------------------
 
@@ -383,8 +418,9 @@ class BrokenPublisher:
         manifest: Manifest,
         *,
         engaged: bool | None = None,
+        nudge: bool = True,
     ) -> bool:
-        del record, manifest, engaged
+        del record, manifest, engaged, nudge
         self.attempts += 1
         raise ConnectionError("injected store failure")
 
@@ -395,8 +431,14 @@ class BrokenPublisher:
         *,
         engaged: Mapping[str, bool] | None = None,
         chunk: int = 500,
+        nudge: bool = True,
     ) -> bool:
-        del records, manifest, engaged, chunk
+        del records, manifest, engaged, chunk, nudge
+        self.attempts += 1
+        raise ConnectionError("injected store failure")
+
+    def emit_nudge(self, kind: StateKind, feed_seq: int) -> None:
+        del kind, feed_seq
         self.attempts += 1
         raise ConnectionError("injected store failure")
 
