@@ -463,6 +463,59 @@
   Plan: docs/plans/2026-10-09-gw12-sse-egress-pipeline.md.
   Evidence: docs/plans/evidence/2026-10-09-gw12/.
 
+## GW14d / observability contract changelog
+- GW14d (2026-10-10) — OBSERVABILITY CONTRACT (unified typed exposition + bounded cardinality +
+  windowed SLO), local half CLOSED. Fixes R2-10 ★ (CRITICAL: metric registration on the request path
+  could RAISE — ~40% of a new tenant's first requests 500 at ~480 UUID tenants, per-org series
+  truncated at 512/worker) + R2-11 (HIGH: server view could not certify the SLO — 3.2–5.8ms under-read
+  via lifetime quantiles, untyped exposition blinded the HPA, counter resets published negative rates,
+  rejected_503 merged causes, plan_unavailable uncounted, FAIL_CLOSED counted as policy BLOCK, audit
+  loss invisible). Observability phase; depends GW14/GW05c; required by GW20/T20/UI05. UNIFIES the six
+  shipped label-free PRODUCERS behind one Publisher implementing MetricsRegistry.exposition() (the
+  contract edge/app.py already consumed, nothing provided) — producers READ, not rebuilt. Built
+  bottom-up on the layer contract; Publisher lives in edge (only layer above admit; already owns
+  /metrics+/readyz+the MetricsRegistry protocol; already wires state_control across root_packages).
+  Fail-closed everywhere, no capacity literal outside runtime/resources.py, NO tenant-derived label on
+  any producer series (top-K+other is the ONLY per-tenant visibility, bounded by construction).
+  (1) runtime/resources.py — metrics_directory_slots/metrics_top_k/metrics_window_s/event_log_rate,
+  derivations of existing fields w/ documented _MULT/_FRACTION, fail-closed; only new capacity literals.
+  (2) admit/stream/holdback — fixed SERIES_COUNT (20/3, 11, 13; a histogram counts as its 3 native
+  series), matching the audit/state convention (R15). (3) edge/render.py — the one Prometheus renderer
+  + inverse parser: # TYPE per family (suffix rule reused from audit), native _bucket/_sum/_count +
+  terminal +Inf, de-dup, byte-stable, render(parse(render(x)))==render(x) (P8). (4) edge/cardinality.py
+  — the R2-10 core: observe() NEVER raises, size-check-before-insert, top-K + other + Overflow_Counter,
+  deterministic (mag desc, key asc) tie-break (P1 no-raise, P3 top-K+conservation). (5) edge/windowed.py
+  — rolling-window C4 add-on histogram (in-window quantiles ONLY, defined empty value, DISTINCT from the
+  lifetime Histogram) + generic windowed-busy gauge (external samples, # TYPE gauge w/ no sample, NO GPU
+  source fabricated) (P4 within 0.5ms). (6) edge/rates.py — reset-safe rates: no-baseline / counter-went-
+  backwards => OMIT, never negative; ABSENT sentinel gauges pass through (P5). (7) edge/counters.py —
+  rejected{status,reason} (reason from audit.record vocab) + per-posture counters (exact domain.posture
+  spellings), real zeros, distinct from policy BLOCK, out-of-vocab => indicator never a merged
+  rejected_503 (P6 distinct, P7 real-zeros). (8) edge/event_log.py — per-class rate-limited (bound from
+  contract), counter increments even when a line is suppressed, record() takes NO raw-content param so
+  no byte/secret can leak by construction (P10 bounded+no-leak). (9) edge/readiness.py —
+  make_metrics_readiness gates state_ready(view) FIRST, then directory.available(), extends not replaces
+  (P11). (10) edge/publisher.py — the keystone: six explicit guarded per-producer adapters (flat series()
+  audit/state_control/state_metrics; Reading snapshot() admit/quota/stream/holdback), per-producer
+  failure isolation (producer_read_failures_total), observe_* request-path NEVER raise, fixed SERIES_COUNT
+  asserted == rendered count, invariant to tenant count (P2). (11) edge/app.py — MetricsDirectorySource
+  protocol discriminates the Publisher from a plain registry; /readyz composed state-first then directory;
+  /metrics to_thread offload + /readyz 503 path UNCHANGED; backward-compatible (R1.8/R10.3). 11 correctness
+  properties as seeded random.Random >=10,000-iteration tests (house idiom, no hypothesis). OPEN (DEFERRED
+  CLOUD GATES): L14d-2 full 20,000-tenant live scale (local = tests/edge/test_tenant_scale_harness.py),
+  L14d-4 HPA ScalingActive, the synthetic-client/provider-canary production SLO (C39). SCOPE DECISIONS:
+  rc3-obs-v1 is a spec reference only (no Prometheus client lib — reimplemented in the gateway_v2 idiom);
+  windowed-busy MECHANISM in scope, GPU DATA SOURCE out (none fabricated); "metrics shared memory" modelled
+  as the in-memory CardinalityDirectory availability, not a new mmap. FOUND+FIXED: one Property-4
+  TEST-harness ordering bug (generator appended out-of-window samples with an earlier clock, violating the
+  deque monotone-forward contract) — fixed in the TEST, no product bug, no property weakened. KNOWN
+  FINDING: the pre-existing documented R2-05 check_tenant_scale state_control finding at valkey.py:100 is
+  unrelated and untouched (state_control tree, not gateway_v2). VERIFY: 38 GW14d new-test sweep / 75
+  tests/edge (shipped GW12 + 17 new, no regression) passed; `mypy --strict` 152 files, ruff, import-linter
+  2/2 kept, five AST gates over gateway_v2 each exit 0. Commit range suraj-revamp 380a146c (resources) →
+  486b0b42 (tests), 7 per-layer commits. Plan: docs/plans/2026-10-10-gw14d-observability-contract.md.
+  Evidence: docs/plans/evidence/2026-10-10-gw14d/.
+
 ## MCP Hardening BACKSTOP changelog
 - Parallel Claude + Cursor sessions harden the multi-tenant MCP gateway. **Every hardening change is
   logged to four memories in the SAME commit:** Ruflo (`mcp__ruflo__memory_store`

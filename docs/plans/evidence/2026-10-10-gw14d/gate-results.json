@@ -1,0 +1,55 @@
+{
+  "card": "GW14d",
+  "title": "Observability contract — unified typed exposition, bounded cardinality, windowed SLO",
+  "fixes": ["R2-10", "R2-11"],
+  "date": "2026-10-10",
+  "branch": "suraj-revamp",
+  "local_half": "CLOSED",
+  "commits": [
+    "380a146c feat(gw14d): ResourceContract metrics-directory/window/event-log derivations",
+    "ab991d38 feat(gw14d): fixed SERIES_COUNT on admit/stream/holdback producers",
+    "e0705bdb feat(gw14d): Prometheus renderer + inverse parser (edge/render.py)",
+    "5fcd9163 feat(gw14d): the six observability mechanisms (edge)",
+    "7aeb34e8 feat(gw14d): the Publisher — merge, type, expose (edge/publisher.py)",
+    "c47ced4d feat(gw14d): wire the Publisher + metrics-directory readiness into build_app",
+    "486b0b42 test(gw14d): 11 property suites (>=10k iters) + unit/integration/scale harness"
+  ],
+  "gates": {
+    "new_test_sweep": { "passed": 38 },
+    "edge_suite": { "passed": 75, "note": "shipped GW12 tests + 17 new GW14d edge tests, no regression" },
+    "mypy_strict": { "clean": true, "source_files": 152 },
+    "ruff": { "clean": true },
+    "import_linter": { "contracts_kept": 2, "broken": 0 },
+    "ast_gates": {
+      "capacity_literals": "pass",
+      "no_module_mutable": "pass",
+      "frozen_dataclasses": "pass",
+      "http_outside_edge_resolve": "pass",
+      "tenant_scale": "pass"
+    }
+  },
+  "properties": [
+    { "id": 1, "title": "No request-path raise on overflow", "file": "tests/edge/test_publisher_overflow_property.py", "seed": "0x0b5e0001", "iterations": 10000, "status": "pass" },
+    { "id": 2, "title": "Exposition is bounded and fully typed", "file": "tests/edge/test_publisher_exposition_count_property.py", "seed": "0x0b5e0002", "iterations": 10000, "status": "pass" },
+    { "id": 3, "title": "Top-K preserves the largest magnitudes (+ conservation)", "file": "tests/edge/test_cardinality_topk_property.py", "seed": "0x0b5e0003", "iterations": 10000, "status": "pass" },
+    { "id": 4, "title": "Windowed p99 tracks the injected window (<= 0.5 ms)", "file": "tests/edge/test_windowed_histogram_property.py", "seed": "0x0b5e0004", "iterations": 10000, "status": "pass" },
+    { "id": 5, "title": "Reset-safe rate omits rather than publishes a negative", "file": "tests/edge/test_reset_safe_rate_property.py", "seed": "0x0b5e0005", "iterations": 10000, "status": "pass" },
+    { "id": 6, "title": "Each posture code / admission reason has its own counter distinct from policy BLOCK", "file": "tests/edge/test_counters_distinct_property.py", "seed": "0x0b5e0006", "iterations": 10000, "status": "pass" },
+    { "id": 7, "title": "Real zeros never absent", "file": "tests/edge/test_real_zeros_property.py", "seed": "0x0b5e0007", "iterations": 10000, "status": "pass" },
+    { "id": 8, "title": "Round-trip of the exposition text", "file": "tests/edge/test_exposition_roundtrip_property.py", "seed": "0x0b5e0008", "iterations": 10000, "status": "pass" },
+    { "id": 9, "title": "Directory capacity derives from the contract, never a literal", "file": "tests/runtime/test_capacity_derivation_property.py", "seed": "0x0b5e0009", "iterations": 10000, "status": "pass" },
+    { "id": 10, "title": "Event-log emission is bounded and never leaks", "file": "tests/edge/test_event_log_property.py", "seed": "0x0b5e000a", "iterations": 10000, "status": "pass" },
+    { "id": 11, "title": "Readiness composition gates state first", "file": "tests/edge/test_readiness_composition_property.py", "seed": "0x0b5e000b", "iterations": 10000, "status": "pass" }
+  ],
+  "local_acceptance": {
+    "L14d-2": { "file": "tests/edge/test_tenant_scale_harness.py", "detail": "2,000 UUID tenants at default slots + 20,000 at a raised-slot contract; zero metric-attributable failures; over-capacity counted exactly in the Overflow_Counter", "status": "pass" }
+  },
+  "deferred_cloud_gates": [
+    "L14d-2 full 20,000-tenant live scale (real serving gateway + fleet lane)",
+    "L14d-4 GKE autoscaler ScalingActive (live HPA resolving the typed gauge families)",
+    "production SLO from the black-box synthetic client + provider canary (C39 retained)"
+  ],
+  "known_findings": [
+    "Pre-existing, documented R2-05 finding: check_tenant_scale trips on state_control/valkey.py:100 (the re-hydrator deep-verify path). On the state_control tree, unrelated to GW14d, untouched."
+  ]
+}
