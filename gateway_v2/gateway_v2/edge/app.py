@@ -57,6 +57,11 @@ from gateway_v2.edge import errors
 from gateway_v2.edge.cancel import InFlightControlSource, InFlightSnapshot
 from gateway_v2.edge.error_frame_scan import ErrorFrameScanner
 from gateway_v2.edge.executor import ScanExecutor
+from gateway_v2.edge.readiness import (
+    METRICS_DIRECTORY_REASON,
+    DirectoryGate,
+    make_metrics_readiness,
+)
 from gateway_v2.edge.routes import (
     ASGIReceive,
     ASGIScope,
@@ -70,9 +75,11 @@ from gateway_v2.egress.output_guard import OutputResolver
 from gateway_v2.egress.stream import ScanProtocol
 from gateway_v2.runtime.holdback_config import load_holdback_config
 from gateway_v2.runtime.resources import ResourceContract
+from gateway_v2.runtime.state_stamp import StampView
 
 __all__ = (
     "ASGIApplication",
+    "MetricsDirectorySource",
     "MetricsRegistry",
     "ReadinessProbe",
     "app",
@@ -94,6 +101,24 @@ class MetricsRegistry(Protocol):
     """
 
     def exposition(self) -> str: ...
+
+
+@runtime_checkable
+class MetricsDirectorySource(Protocol):
+    """A :class:`MetricsRegistry` that ALSO backs the ``/readyz`` metrics-directory gate (R10).
+
+    GW14d's concrete registry — :class:`gateway_v2.edge.publisher.Publisher` — owns a bounded
+    Cardinality_Directory whose availability is the metrics half of ``/readyz`` (Requirement 10).
+    A registry that exposes ``directory() -> DirectoryGate`` lets :func:`build_app` compose the
+    metrics-directory gate (via :func:`gateway_v2.edge.readiness.make_metrics_readiness`) ON TOP OF
+    the state-dependency gate, gating state first then the directory. A plain registry (only
+    ``exposition()``) does NOT satisfy this protocol, so the composition is skipped and the existing
+    ``readiness`` behaviour is left exactly as it was — the backward-compatible fallback.
+    """
+
+    def exposition(self) -> str: ...
+
+    def directory(self) -> DirectoryGate: ...
 
 
 #: The readiness probe ``/readyz`` consults (R2.4/R2.5). ``(ready, reason)``: ``reason`` is
@@ -122,6 +147,7 @@ def build_app(
     metrics_registry: MetricsRegistry,
     clock: Callable[[], float],
     readiness: ReadinessProbe | None = None,
+    state_view: StampView | None = None,
     active_streams: Callable[[], int] | None = None,
     control: InFlightControlSource | None = None,
     error_scanner: ErrorFrameScanner | None = None,
@@ -144,6 +170,32 @@ def build_app(
     HERE (above ``detect``) and defaults to a no-findings scanner (forward unchanged) for a
     deployment that has not yet wired GW07/GW08's detector — a withhold only ever follows a BLOCK
     decision or a scan error, so the default is not a fail-open hole.
+
+    **GW14d metrics-directory readiness wiring (task 12.1, R1.8 / R10.3).** The ``metrics_registry``
+    stays an INJECTED parameter — the shipped injection pattern — so a deployment constructs the
+    concrete :class:`gateway_v2.edge.publisher.Publisher` from the producers it already owns
+    (``admit`` owns AdmissionMetrics/QuotaMetrics, ``audit`` owns AuditMetrics, ``state_control``
+    owns RehydrationMetrics, ``runtime`` owns StateMetrics/PerRequestExports/HoldbackMetrics) and
+    passes it in. ``build_app`` then COMPOSES the ``/readyz`` metrics gate without re-constructing
+    anything: when the injected registry is a :class:`MetricsDirectorySource` (the Publisher
+    exposes ``directory()``), the metrics-directory gate is layered on top of the state gate per
+    Requirement 10 — state is gated FIRST (``state_ready(state_view)``), then the directory, naming
+    ``metrics_directory`` as the unavailable dependency when the directory is down. The composition
+    is resolved by :func:`_resolve_readiness`:
+
+    * an explicitly-passed ``readiness`` is honoured as the FIRST (state-equivalent) gate and the
+      metrics-directory gate is appended after it (so a deployment that already composed its own
+      state probe keeps it, extended by the directory gate);
+    * with no explicit ``readiness`` and a directory-bearing registry, the probe is exactly
+      :func:`gateway_v2.edge.readiness.make_metrics_readiness` over ``state_view`` + the registry's
+      directory;
+    * a plain registry (``exposition()`` only, e.g. a test stub) OR an explicit ``readiness`` with
+      a plain registry falls back UNCHANGED to the prior behaviour — the directory gate is simply
+      not available to compose, so no caller or test that passes a plain registry is affected.
+
+    The ``/metrics`` ``asyncio.to_thread`` offload (R1.8) and the ``/readyz`` 503 render path
+    (R10.3) are UNCHANGED — this wiring only composes the probe handed into the existing
+    ``readiness`` seam.
 
     Returns the ``async def app(scope, receive, send)`` callable. The function is pure assembly:
     it reads no store and starts no task — the lifespan handler is where a conforming server
@@ -169,7 +221,9 @@ def build_app(
         executor=scan_executor,
     )
     routes = build_routes(chat)
-    probe: ReadinessProbe = readiness if readiness is not None else _always_ready
+    probe = _resolve_readiness(
+        readiness=readiness, metrics_registry=metrics_registry, state_view=state_view
+    )
     skin = _ServingSkin(
         routes=routes,
         metrics_registry=metrics_registry,
@@ -346,6 +400,78 @@ def _path(scope: ASGIScope) -> str:
 def _always_ready() -> tuple[bool, str | None]:
     """The default readiness probe for an unwired deployment (parity with ``state_ready(None)``)."""
     return True, None
+
+
+def _resolve_readiness(
+    *,
+    readiness: ReadinessProbe | None,
+    metrics_registry: MetricsRegistry,
+    state_view: StampView | None,
+) -> ReadinessProbe:
+    """Compose the ``/readyz`` probe: state FIRST, then the metrics directory (R10, task 12.1).
+
+    The resolution mirrors the backward-compatibility contract documented on :func:`build_app`:
+
+    * **Directory-bearing registry (the GW14d Publisher).** When ``metrics_registry`` is a
+      :class:`MetricsDirectorySource` (it exposes ``directory()``), the metrics-directory gate is
+      composed on top of the state gate:
+
+      - no explicit ``readiness`` ⇒ the probe is exactly
+        :func:`~gateway_v2.edge.readiness.make_metrics_readiness` over ``state_view`` + the
+        registry's directory (state gated first, then the directory — R10.4/R10.1);
+      - an explicit ``readiness`` ⇒ that probe is the FIRST (state-equivalent) gate and the
+        directory gate is appended after it, so a deployment that already composed its own state
+        probe keeps it, extended by the directory availability gate (R10.5: both evaluated, state
+        first).
+
+    * **Plain registry (``exposition()`` only).** No directory is available to compose, so the
+      prior behaviour is returned UNCHANGED: the explicit ``readiness`` if given, else
+      :func:`_always_ready`. Every existing caller/test that injects a plain registry is therefore
+      untouched.
+    """
+    directory = _registry_directory(metrics_registry)
+    if directory is None:
+        # No metrics directory to gate on — prior behaviour, byte-for-byte unchanged.
+        return readiness if readiness is not None else _always_ready
+    if readiness is None:
+        # The canonical composition: state_ready(state_view) first, then the directory (R10).
+        return make_metrics_readiness(state_view, directory)
+    # An explicit state probe is honoured FIRST; the directory gate extends it (R10.4/R10.5).
+    return _compose_directory_after(readiness, directory)
+
+
+def _registry_directory(metrics_registry: MetricsRegistry) -> DirectoryGate | None:
+    """The registry's metrics directory if it is a :class:`MetricsDirectorySource`, else ``None``.
+
+    A plain :class:`MetricsRegistry` (only ``exposition()``) returns ``None`` so the caller falls
+    back to the prior readiness behaviour. The concrete GW14d Publisher returns its backing
+    Cardinality_Directory, which satisfies :class:`~gateway_v2.edge.readiness.DirectoryGate`.
+    """
+    if isinstance(metrics_registry, MetricsDirectorySource):
+        return metrics_registry.directory()
+    return None
+
+
+def _compose_directory_after(
+    base: ReadinessProbe, directory: DirectoryGate
+) -> ReadinessProbe:
+    """A probe that runs ``base`` FIRST, then the metrics-directory gate (R10.4/R10.5).
+
+    When ``base`` reports not ready, its reason wins and the directory is not consulted (state
+    gated first, exactly one reason — R10.4). Only when ``base`` is ready is the directory checked;
+    an unavailable directory yields ``(False, METRICS_DIRECTORY_REASON)`` (R10.1/R10.3). Both gates
+    are evaluated every call (R10.5): the closure caches no verdict.
+    """
+
+    def probe() -> tuple[bool, str | None]:
+        ready, reason = base()
+        if not ready:
+            return False, reason
+        if not directory.available():
+            return False, METRICS_DIRECTORY_REASON
+        return True, None
+
+    return probe
 
 
 def _no_error_findings(_frame: str) -> Sequence[Finding]:
