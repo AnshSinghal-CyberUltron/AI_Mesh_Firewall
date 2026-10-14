@@ -47,6 +47,7 @@ These are here for reference and to show what each later item can build on. Evid
 | ✅ GW16 (B2, misc surfaces) | `/v1/embeddings` (full billable lifecycle), `/v1/models` + `/v1/models/{id}`, `/v1/moderations`; misc wire codec/renderer + moderation mapping; catalog injection seam; in-process stock-SDK conformance subset | `.kiro/specs/chat-surface-gw16-misc` |
 | ✅ B3 (serving entrypoint) | uvicorn multiprocess host for `build_app` (`edge/serve.py`): honest fail-closed boot, `interface=asgi3`, `workers=contract.workers()`, SIGTERM→GW19 drain, `WorkerSupervisor` respawn seam, `serve` extra; real-socket conformance (stock SDK + curl + `/readyz` + `/metrics` + worker crash + SIGTERM drain) | `.kiro/specs/serving-entrypoint-gw-b3` |
 | ✅ B4 (GW17/GW18, provider egress + routing) | Real streaming HTTP/SSE `HttpProviderClient` (generation egress, drops in behind the shipped `ProviderClient` seam; httpx under the `conformance` extra) + C43 load-aware `GuardRouter` (min-queue-wait over an injected load snapshot) + two `resources.py` capacity accessors; local verification against a `Fake_Upstream`/`Fake_Guard` incl. an end-to-end stock-SDK completion through the real client via `build_app` | `.kiro/specs/provider-egress-gw-b4` |
+| ✅ B5 (GW16b, edge + delta SLO) | nginx edge: upstream keepalive (64/30s/1000) fixes 0.9986 conns/req + 502 above ~420 RPS; SSE transparency (`X-Accel-Buffering no`, `proxy_read_timeout 400s`); unknown-Host `default_server` 403; 5 security headers; `server_tokens off`. Firewall-added-delta SLO as a testable `runtime/latency_slo.py` (client-side delta vs direct path, ~40ms lost-segment tail-trim, NOT the gateway histogram) bound from `contract.target_p99_ms`. Docker edge harness (`nginx:1.30-alpine`, envsubst `B3_UPSTREAM`); static keepalive grep gate + docker-gated live L16b-1/-3/-6/-4 (L16b-1 = 0.0067 conns/req) | `.kiro/specs/edge-gw16b` |
 
 ---
 
@@ -111,20 +112,14 @@ gate (deferred)" is the cloud half that is explicitly NOT in scope for the local
 - **OPEN QUESTION for the owner:** is the upstream a real external LLM provider, or your own
   guard/model service? This decides what the fake upstream mimics.
 
-### B5. 🔜 GW16b — edge TLS termination + firewall-added-delta SLO definition  **(NEXT)**
-- **Why.** R2-12 proved passthrough NLB adds nothing, ALB adds 8–10 ms (rejected for token streams).
-  The edge contract: TLS 1.3 terminated in the gateway tier, connection recycling
-  (`RV_CONN_MAX_AGE_S`, 30 s), and the SLO defined as the firewall-added delta vs a direct path.
-- **Scope (local half only).** The TLS-termination config/code in the gateway tier + the
-  delta-measurement DEFINITION (how C4 is computed as a delta). The NLB itself, TLS cost at the edge
-  (G-10), and internet-vantage latency (G-11) are cloud gates.
-- **Local verification.** TLS handshake against a local server; the delta definition unit-tested
-  against recorded direct-vs-through latencies.
-- **Live gate (deferred).** G-10 (TLS cost at 600 RPS), G-11 (internet-vantage), G-13 (store gap
-  behind a health-checked NLB). Category 2.
-- **Depends on.** B3 (a running server to terminate TLS at).
+### B5. ✅ GW16b — production edge + firewall-added-delta SLO definition  **(DONE)**
+- **DONE (2026).** Shipped + full gate green on `suraj-revamp` (1582 passed / 95 skipped / 1 xfailed, full suite incl. the docker-gated live edge subset; mypy --strict 166 files, ruff, import-linter 2/2, 6 AST gates, `unscanned_channels()==()`, static edge keepalive gate OK); 4 per-layer commits. Spec: `.kiro/specs/edge-gw16b`. Built per runbook §601 (NOT the worklist one-liner): the edge is an **nginx** tier (host nginx absent; runs via Docker), NOT TLS-termination code in the gateway — TLS cost is the deferred G-10 gate.
+- **What shipped.** `deploy/edge/gateway-edge.conf` (upstream keepalive 64/30s/1000-req fixing the 0.9986 conns/req + 502-above-~420-RPS problem; SSE transparency via `proxy_http_version 1.1` + `Connection ""` + `X-Accel-Buffering no` + `proxy_read_timeout 400s`; unknown-Host `default_server` → 403; `server_tokens off`) + `security-headers.inc` (5 headers, byte-identical to v1 deploy). `runtime/latency_slo.py` defines C4 as the **client-side firewall-added delta** vs a direct path (symmetric ~40ms lost-segment tail-trim, nearest-rank p99, fail-closed on missing direct baseline), bound from `contract.target_p99_ms` — explicitly NOT the gateway histogram (under-reads 3.2–5.8ms). Docker harness: `Dockerfile.edge` (`nginx:1.30-alpine`, `NGINX_ENVSUBST_FILTER=B3_UPSTREAM` so nginx `$vars` survive) + `docker-compose.edge.yml` + `README.md` (Edge_Drain_Contract: `RV_CONN_MAX_AGE_S` 30s, 300s NLB pre-drain → 375s streams).
+- **Local verification.** `test_latency_slo.py` (16 tests, 6 seeded properties + AST no-histogram proof); `test_edge_config_gate.py` + `check_edge_keepalive.sh` static grep gate; docker-gated `test_edge_live_l16b.py` driving the REAL nginx edge over a purpose-built framework-free ASGI upstream — L16b-1 keepalive (0.0067 conns/req), L16b-3 SSE passthrough + injected hold, L16b-6 unknown-Host 403 + headers, L16b-4 request passthrough; skips cleanly with `AMF_EDGE_DOCKER=0`.
+- **Live gate (deferred).** G-10 (TLS cost at 600 RPS), G-11 (internet-vantage), G-13 (store gap behind a health-checked NLB). Category 2.
+- **Depends on.** B3 (a running server for the edge to proxy to).
 
-### B6. 🔜 R2-21 — load harness v2.3 (the measurement instrument)
+### B6. 🔜 R2-21 — load harness v2.3 (the measurement instrument)  **(NEXT)**
 - **Why.** No load/capacity harness exists in `gateway_v2`. R2-01 and gates G-01/05/06/09 all need
   it. The round-2 harness is an external tool; this builds the local-runnable equivalent.
 - **Scope.** A client program generating the GW20b strata: **Poisson arrivals** (the core of R2-01),
