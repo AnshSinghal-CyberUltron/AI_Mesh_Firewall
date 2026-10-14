@@ -1,0 +1,601 @@
+{
+  "pbtResults": {},
+  "executionHistory": {
+    "1.1 Add the `embeddings_input` and `moderations_input` scanned channel entries": [
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791950792052
+      },
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791950808407
+      },
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791950997808
+      }
+    ],
+    "2.1 Add the two new declared value-codes and the misc request types": [
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791950792121
+      },
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791951012394
+      },
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791951284963
+      }
+    ],
+    "2.2 Implement `MiscRequestParser.parse_embeddings` / `parse_moderations`": [
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791950792159
+      },
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791951298890
+      },
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791951518169
+      }
+    ],
+    "2.3 Implement `fold_misc_input` + import-time `_assert_misc_fold_total` (C21)": [
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791950792197
+      },
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791951527874
+      },
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791951748288
+      }
+    ],
+    "2.4 Implement `MiscResponseRenderer` + the moderation category map": [
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791950792229
+      },
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791951764563
+      },
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791952362025
+      }
+    ],
+    "3.1 Add the two `_ENVELOPE` entries": [
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791950792283
+      },
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791951011725
+      },
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791951286433
+      }
+    ],
+    "4.1 Add `CatalogSource` Protocol, `CatalogModel`, and `empty_catalog_source`": [
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791950792349
+      },
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791951010397
+      },
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791951287220
+      }
+    ],
+    "5.1 Implement `MiscRoute` injected-deps value": [
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791950792387
+      },
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791951765588
+      },
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791952362808
+      }
+    ],
+    "5.2 Implement `EmbeddingsSurface.handle` — full billable lifecycle with the BLOCK gate": [
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791950792423
+      },
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791952379007
+      },
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791953696926
+      }
+    ],
+    "5.3 Implement `ModerationsSurface.handle` — scan-only, no provider": [
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791950792461
+      },
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791953734780
+      },
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791955154475
+      }
+    ],
+    "5.4 Implement `ModelsSurface.handle_list` / `handle_retrieve` — catalog lookup, no scan, no provider": [
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791950792496
+      },
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791955155941
+      },
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791955663103
+      }
+    ],
+    "6. Checkpoint — channels + codec + envelope + catalog + handlers green": [
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791950792530
+      },
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791956988203
+      }
+    ],
+    "7.1 Replace the three `_placeholder` entries and add the `prefix_routes` table": [
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791950792567
+      },
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791956996901
+      },
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791957832248
+      }
+    ],
+    "8.1 Add the one prefix-match step in `_http` + `_match_prefix`, build `MiscRoute` at boot": [
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791950792602
+      },
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791957833654
+      },
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791958308825
+      }
+    ],
+    "9. Checkpoint — routes + matcher + boot wired, misc surfaces live": [
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791950792645
+      },
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791961642602
+      }
+    ],
+    "10.1 Extend the in-process conformance subset for the misc scenarios": [
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791950792690
+      },
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791959745448
+      },
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791960712169
+      }
+    ],
+    "11.1 Run the full gate and reconcile": [
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791950792721
+      },
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791960733214
+      },
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791961609461
+      }
+    ],
+    "12. Final checkpoint": [
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791950792751
+      },
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791961643416
+      }
+    ],
+    "1.2 Write channel-enumeration smoke test": [
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791950986146
+      },
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791950997189
+      }
+    ],
+    "1. New scannable input channels (C21 foundation) — `domain/channels.py` (MODIFY, bottom of the build order)": [
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791950997865
+      }
+    ],
+    "3. Error envelope entries — `edge/errors.py` (MODIFY, Decision 1)": [
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791951286460
+      }
+    ],
+    "4. Catalog seam types — `edge/app.py` (MODIFY, catalog types + default)": [
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791951287249
+      }
+    ],
+    "2. Misc OpenAI codec — `edge/wire/openai_misc.py` (NEW, sibling under 800 lines — Decision 3)": [
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791952362064
+      }
+    ],
+    "5. The three Surface handlers — `edge/openai_misc.py` (FILLED, replaces `__all__ = ()`)": [
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791955663161
+      }
+    ],
+    "5.5 Write property test for a BLOCK embeddings input → zero provider calls": [
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791955689930
+      },
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791956176071
+      }
+    ],
+    "5.7 Write property test for uncomputable scan/decision fail-closed, FAIL_OPEN zero": [
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791955691917
+      },
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791956192152
+      }
+    ],
+    "5.8 Write property test for identity fail-closed": [
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791955692780
+      },
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791956174660
+      }
+    ],
+    "5.11 Write property test for unknown model id → not-found, zero provider calls": [
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791955694170
+      },
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791956193688
+      }
+    ],
+    "5.12 Write property test for content-free exports with FAIL_OPEN zero": [
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791955695199
+      },
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791956173874
+      }
+    ],
+    "5.6 Write property test for C22 most-restrictive BLOCK": [
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791956177503
+      }
+    ],
+    "5.9 Write property test for pre-provider refusal short-circuit": [
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791956178336
+      }
+    ],
+    "5.10 Write property test for the single shared-state access": [
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791956194918
+      },
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791956892206
+      }
+    ],
+    "5.13 Write per-surface wiring/edge-case unit tests": [
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791956195761
+      },
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791956890870
+      }
+    ],
+    "7. Route-table wiring — `edge/routes.py` (MODIFY)": [
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791957832286
+      }
+    ],
+    "8. ASGI matcher + boot wiring — `edge/app.py` (MODIFY, Decision 2)": [
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791958308860
+      }
+    ],
+    "7.2 Write route-table wiring unit tests": [
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791958325367
+      },
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791958990959
+      }
+    ],
+    "8.2 Write property test for `/v1/models/{id}` path-parameter matching": [
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791958326281
+      },
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791958992291
+      }
+    ],
+    "8.3 Write property test for the single Error_Envelope rendering": [
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791958327414
+      },
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791958990187
+      }
+    ],
+    "2.5 Write property test for misc parse/render round-trip": [
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791959042776
+      },
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791959299797
+      }
+    ],
+    "2.6 Write property test for malformed misc body → declared code": [
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791959044306
+      },
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791959301227
+      }
+    ],
+    "2.7 Write property test for misc input fold totality + order (C21)": [
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791959047071
+      },
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791959302679
+      }
+    ],
+    "2.8 Write property test for embeddings batch index order": [
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791959047498
+      },
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791959303688
+      }
+    ],
+    "2.9 Write property test for models-list rendering": [
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791959047557
+      },
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791959304756
+      }
+    ],
+    "2.10 Write property test for moderation category fidelity": [
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791959313108
+      },
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791959673357
+      }
+    ],
+    "2.11 Write malformed-body and firewall-extra unit tests": [
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791959313922
+      },
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791959672530
+      }
+    ],
+    "8.4 Write matcher-edge-case and boot-wiring unit tests": [
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791959314955
+      },
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791959671507
+      }
+    ],
+    "10. Conformance harness extension (in-process subset; live gates deferred)": [
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791960712242
+      }
+    ],
+    "11. Final verification gate": [
+      {
+        "executionId": "857d492a-92a5-4787-bf98-65e11012bbff",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791961609503
+      }
+    ]
+  }
+}
