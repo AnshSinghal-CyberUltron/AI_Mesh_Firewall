@@ -155,6 +155,13 @@ _ENVELOPE: Mapping[str, tuple[int, str]] = MappingProxyType(
         "stream_killed": (503, "service_unavailable"),
         "scan_failure": (403, "gateway_error"),
         "output_blocked": (403, "gateway_error"),
+        # -- GW16 misc-surface client-facing codes (Decision 1, R7.3/R9.1) ----
+        # Value-codes declared in edge/wire/openai_misc.py (MISSING_REQUIRED_PARAMETER
+        # / MODEL_NOT_FOUND); keyed here as literal strings (matching the existing
+        # literal-string keys above) so this render table takes no upward import.
+        # The 400/404 are response-status codes, not capacity-position literals.
+        "missing_required_parameter": (400, "invalid_request_error"),
+        "model_not_found": (404, "not_found_error"),
         # -- Pre-existing posture codes (R2 cards) ----------------------------
         posture.PLAN_UNAVAILABLE: (503, "service_unavailable"),
         posture.KILL_SWITCH_UNAVAILABLE: (503, "service_unavailable"),
