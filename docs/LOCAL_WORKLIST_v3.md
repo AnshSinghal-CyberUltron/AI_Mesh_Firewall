@@ -43,6 +43,8 @@ These are here for reference and to show what each later item can build on. Evid
 | ✅ GW12 (keystone, not an R2 item) | SSE egress pipeline: bounded buffers, backpressure, real cancellation, timeouts | docs/plans 2026-10-09-gw12 |
 | ✅ R2-10 ★ / R2-11 (GW14d) | Unified typed exposition; bounded tenant directory; windowed C4 SLO histogram; reset-safe rates; rejected{status,reason}; posture-vs-BLOCK; /readyz on metrics dir | docs/plans 2026-10-10-gw14d |
 | ✅ R2-23 (push-coalescing) | Per-owner publish-nudge coalescer; durability never coalesced; microbenchmark; verification obligation | docs/plans 2026-10-11-r2-23-push-coalescing |
+| ✅ GW15 (B1, chat surface) | Real `/v1/chat/completions` + `/v1/completions`: OpenAI parse/render, identity → plan → CoDel admission → budget lease → input scan → holdback/output guard → SSE; stock-SDK conformance subset | `.kiro/specs/chat-surface-gw15` |
+| ✅ GW16 (B2, misc surfaces) | `/v1/embeddings` (full billable lifecycle), `/v1/models` + `/v1/models/{id}`, `/v1/moderations`; misc wire codec/renderer + moderation mapping; catalog injection seam; in-process stock-SDK conformance subset | `.kiro/specs/chat-surface-gw16-misc` |
 
 ---
 
@@ -51,7 +53,8 @@ These are here for reference and to show what each later item can build on. Evid
 Each row is a self-contained card. "Local verification" is what proves it without cloud. "Live
 gate (deferred)" is the cloud half that is explicitly NOT in scope for the local build.
 
-### B1. 🔜 GW15 — the real `/v1/chat/completions` + `/v1/completions` handler  **(keystone — do first)**
+### B1. ✅ GW15 — the real `/v1/chat/completions` + `/v1/completions` handler  **(DONE — keystone)**
+- **DONE (2026).** Shipped + full gate green on `suraj-revamp`; see section A. Spec: `.kiro/specs/chat-surface-gw15`.
 - **Why.** `edge/openai_chat.py` is empty ("empty until GW15/GW16"); `edge/routes.py` is a THIN
   wiring proof that explicitly defers request parsing, auth, plan resolution, admission, and the
   end-to-end input-scan → model-call → output-guard decision. This card builds the real request
@@ -66,7 +69,8 @@ gate (deferred)" is the cloud half that is explicitly NOT in scope for the local
 - **Live gate (deferred).** None of its own — it is driven by the fleet run later. Category 1.
 - **Depends on.** The shipped A-items (admission, lease, holdback, observability, state) — all done.
 
-### B2. 🔜 GW16 — misc OpenAI surfaces + request/response typing
+### B2. ✅ GW16 — misc OpenAI surfaces + request/response typing  **(DONE)**
+- **DONE (2026).** Shipped + full gate green on `suraj-revamp` (1495 passed, 10-scenario conformance subset, mypy/ruff/import-linter/6 AST gates, `unscanned_channels()==()`); 6 per-layer commits. Spec: `.kiro/specs/chat-surface-gw16-misc`. The OpenAI typing was NOT folded into B1 — misc typing lives in `edge/wire/openai_misc.py` (sibling to `openai.py`) to stay under the size gate.
 - **Why.** `edge/openai_misc.py` is empty ("empty until GW16"). `/v1/embeddings`, `/v1/models`,
   `/v1/moderations`, and the shared OpenAI typing `edge/wire` says "land later (GW01/GW15+)".
 - **Scope.** The three misc routes + the OpenAI request/response types GW15 also needs (coordinate
@@ -74,7 +78,7 @@ gate (deferred)" is the cloud half that is explicitly NOT in scope for the local
 - **Local verification.** SDK compat tests (the harness already exercises moderations/models/audio).
 - **Depends on.** B1 (shares the typing). Category 1.
 
-### B3. 🔜 Serving entrypoint — real ASGI host + worker model
+### B3. 🔜 Serving entrypoint — real ASGI host + worker model  **(NEXT)**
 - **Why.** `edge/app.py` `build_app()` exists but nothing hosts it (`app = None` default). GW19's
   notes name a "serving-entrypoint card": remove the inert `--worker-connections`, migrate off the
   deprecated uvicorn worker class, add REAL OS process supervision behind the shipped
@@ -217,6 +221,6 @@ them to the local worklist.
 
 ---
 
-_Last updated: 2026-10-11. Companion to `docs/AI_MESH_MASTER_RUNBOOK_v3_BACKEND_REWRITE.md`
+_Last updated: 2026-10-12. Companion to `docs/AI_MESH_MASTER_RUNBOOK_v3_BACKEND_REWRITE.md`
 (the source of truth for what/why). Completion is mirrored in the runbook's §0.3 corrections
 register and §0.5 open-gates table._
