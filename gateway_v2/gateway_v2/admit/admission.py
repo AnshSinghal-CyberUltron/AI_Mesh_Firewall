@@ -32,9 +32,10 @@ and no module-level mutable state.
 
 from __future__ import annotations
 
+import asyncio
 import random
 import time
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from enum import StrEnum
 
@@ -54,6 +55,10 @@ __all__ = (
 )
 
 _MS_PER_S = 1000.0
+# Poll granularity for the drain in-flight wait. An operational wait-granularity cap (not a
+# capacity-position bound): each poll sleeps at most this long, or the window remaining, whichever
+# is smaller, so a short window is honoured exactly and a long one is re-checked periodically.
+_DRAIN_POLL_S = 0.05
 
 
 class DrainState(StrEnum):
@@ -321,7 +326,13 @@ class AdmissionController:
         if stream is not None:
             stream.finished = True
 
-    async def drain(self) -> DrainReport:
+    async def drain(
+        self,
+        *,
+        accept_grace_s: float = 0.0,
+        drain_window_s: float | None = None,
+        sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+    ) -> DrainReport:
         """Run the graceful-drain state machine on SIGTERM; return the published report (Req 8).
 
         Transitions ``ACCEPTING -> DRAINING`` (stop accepting new requests, Req 8.1), finishes
@@ -330,9 +341,25 @@ class AdmissionController:
         a truncated one (Req 8.3 / Property 7). It then flushes the audit queue before exit
         (Req 8.4) and publishes the measured drain duration (Req 8.5). All timing reads the injected
         clock so the machine is deterministic under test (Req 8.6).
+
+        The two optional keyword-only parameters map the B3 serving entrypoint's two-phase shutdown
+        (``RV_DRAIN_ACCEPT_S`` then ``RV_DRAIN_S``) onto this machine without redefining it:
+
+        * ``accept_grace_s`` -- a stop-accepting hold held inside ``DRAINING`` before the in-flight
+          wait begins (the ``RV_DRAIN_ACCEPT_S`` period).
+        * ``drain_window_s`` -- the budget to wait for in-flight streams to finish before declaring
+          terminations (the ``RV_DRAIN_S`` ``Drain_Window``); ``None`` keeps the shipped immediate
+          transition.
+        * ``sleep`` -- the awaitable wait primitive, injected for deterministic tests.
+
+        Every added step is a no-op at the defaults (``accept_grace_s=0.0`` and
+        ``drain_window_s=None``), so the shipped immediate ``DRAINING -> TERMINATING`` transition is
+        preserved exactly.
         """
         start = self._clock()
         self._state = DrainState.DRAINING  # stop accepting new requests (Req 8.1)
+
+        await self._await_in_flight(start, accept_grace_s, drain_window_s, sleep)
 
         self._state = DrainState.TERMINATING
         terminations = self._declare_terminations()
@@ -347,6 +374,36 @@ class AdmissionController:
             declared_terminations=terminations,
             audit_flushed=audit_flushed,
         )
+
+    async def _await_in_flight(
+        self,
+        start: float,
+        accept_grace_s: float,
+        drain_window_s: float | None,
+        sleep: Callable[[float], Awaitable[None]],
+    ) -> None:
+        """Hold ``accept_grace_s`` then wait up to ``drain_window_s`` for in-flight (Req 8.2).
+
+        A no-op at the defaults (``accept_grace_s=0.0``, ``drain_window_s=None``): the
+        stop-accepting hold is skipped and no in-flight wait runs, collapsing to the shipped
+        immediate transition. Otherwise it holds the stop-accepting grace, then polls ``_in_flight``
+        for all streams finished with an ``await sleep(...)`` bounded by the window remaining
+        measured off the injected clock, using the injected ``sleep`` for the wait granularity.
+        """
+        if accept_grace_s > 0.0:
+            await sleep(accept_grace_s)
+        if drain_window_s is None:
+            return
+        deadline = start + accept_grace_s + drain_window_s
+        while not self._all_in_flight_finished():
+            remaining = deadline - self._clock()
+            if remaining <= 0.0:
+                return
+            await sleep(min(_DRAIN_POLL_S, remaining))
+
+    def _all_in_flight_finished(self) -> bool:
+        """``True`` when every tracked in-flight stream has finished on its own."""
+        return all(stream.finished for stream in self._in_flight.values())
 
     def _declare_terminations(self) -> tuple[DeclaredTermination, ...]:
         """One declared-termination marker per unfinished in-flight stream (Req 8.3 / Property 7).
