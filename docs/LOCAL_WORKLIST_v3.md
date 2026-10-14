@@ -45,6 +45,7 @@ These are here for reference and to show what each later item can build on. Evid
 | ✅ R2-23 (push-coalescing) | Per-owner publish-nudge coalescer; durability never coalesced; microbenchmark; verification obligation | docs/plans 2026-10-11-r2-23-push-coalescing |
 | ✅ GW15 (B1, chat surface) | Real `/v1/chat/completions` + `/v1/completions`: OpenAI parse/render, identity → plan → CoDel admission → budget lease → input scan → holdback/output guard → SSE; stock-SDK conformance subset | `.kiro/specs/chat-surface-gw15` |
 | ✅ GW16 (B2, misc surfaces) | `/v1/embeddings` (full billable lifecycle), `/v1/models` + `/v1/models/{id}`, `/v1/moderations`; misc wire codec/renderer + moderation mapping; catalog injection seam; in-process stock-SDK conformance subset | `.kiro/specs/chat-surface-gw16-misc` |
+| ✅ B3 (serving entrypoint) | uvicorn multiprocess host for `build_app` (`edge/serve.py`): honest fail-closed boot, `interface=asgi3`, `workers=contract.workers()`, SIGTERM→GW19 drain, `WorkerSupervisor` respawn seam, `serve` extra; real-socket conformance (stock SDK + curl + `/readyz` + `/metrics` + worker crash + SIGTERM drain) | `.kiro/specs/serving-entrypoint-gw-b3` |
 
 ---
 
@@ -78,7 +79,8 @@ gate (deferred)" is the cloud half that is explicitly NOT in scope for the local
 - **Local verification.** SDK compat tests (the harness already exercises moderations/models/audio).
 - **Depends on.** B1 (shares the typing). Category 1.
 
-### B3. 🔜 Serving entrypoint — real ASGI host + worker model  **(NEXT)**
+### B3. ✅ Serving entrypoint — real ASGI host + worker model  **(DONE)**
+- **DONE (2026).** Shipped + full gate green on `suraj-revamp` (1530 passed / 95 skipped / 1 xfailed; mypy/ruff/import-linter/6 AST gates; `unscanned_channels()==()`); 6 per-layer commits. Spec: `.kiro/specs/serving-entrypoint-gw-b3`. Host = **uvicorn** multiprocess supervisor (`uvicorn.run(..., workers=N, factory=True, interface=asgi3)`), so `config.workers` is genuinely honored (the real-socket tests caught + fixed a bound-method ASGI3 mis-detection AND `Server.run()` ignoring `workers`). Manually verified: a booted 2-worker server serves `/readyz`+`/metrics`, fail-closes data-plane requests with 503 JSON envelopes (identity/provider deferred), survives a worker kill, and drains cleanly on SIGTERM.
 - **Why.** `edge/app.py` `build_app()` exists but nothing hosts it (`app = None` default). GW19's
   notes name a "serving-entrypoint card": remove the inert `--worker-connections`, migrate off the
   deprecated uvicorn worker class, add REAL OS process supervision behind the shipped
@@ -91,7 +93,7 @@ gate (deferred)" is the cloud half that is explicitly NOT in scope for the local
   Category 2 (the supervision seam is real; the OS-level supervision is the deployable piece).
 - **Depends on.** B1 (something to serve).
 
-### B4. 🔜 GW17 / GW18 — provider egress client + dispatch routing
+### B4. 🔜 GW17 / GW18 — provider egress client + dispatch routing  **(NEXT)**
 - **Why.** `dispatch/provider.py` is a `StubProviderClient` with "the real-socket path is a DEFERRED
   live gate." The real provider client (HTTP/socket to the upstream LLM or the guard model service)
   and the dispatch routing to the guard tier do not exist.
@@ -221,6 +223,6 @@ them to the local worklist.
 
 ---
 
-_Last updated: 2026-10-12. Companion to `docs/AI_MESH_MASTER_RUNBOOK_v3_BACKEND_REWRITE.md`
+_Last updated: 2026-10-13. Companion to `docs/AI_MESH_MASTER_RUNBOOK_v3_BACKEND_REWRITE.md`
 (the source of truth for what/why). Completion is mirrored in the runbook's §0.3 corrections
 register and §0.5 open-gates table._
