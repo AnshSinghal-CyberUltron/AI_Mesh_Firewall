@@ -1,0 +1,378 @@
+{
+  "pbtResults": {},
+  "executionHistory": {
+    "1.1 Implement `ServingConfig` + `load_serving_config(env)`": [
+      {
+        "executionId": "a0517264-9658-4bef-a330-a2e25002af53",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791965670807
+      },
+      {
+        "executionId": "a0517264-9658-4bef-a330-a2e25002af53",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791965684229
+      },
+      {
+        "executionId": "a0517264-9658-4bef-a330-a2e25002af53",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791966538445
+      }
+    ],
+    "2.1 Extend `drain()` with two optional keyword-only params + injected sleep": [
+      {
+        "executionId": "a0517264-9658-4bef-a330-a2e25002af53",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791965670864
+      },
+      {
+        "executionId": "a0517264-9658-4bef-a330-a2e25002af53",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791965685357
+      },
+      {
+        "executionId": "a0517264-9658-4bef-a330-a2e25002af53",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791966539462
+      }
+    ],
+    "3.1 Implement `build_boot_dependencies` + the Fail_Closed_Fallback table": [
+      {
+        "executionId": "a0517264-9658-4bef-a330-a2e25002af53",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791965670953
+      },
+      {
+        "executionId": "a0517264-9658-4bef-a330-a2e25002af53",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791966549112
+      },
+      {
+        "executionId": "a0517264-9658-4bef-a330-a2e25002af53",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791966985782
+      }
+    ],
+    "3.2 Implement `build_uvicorn_config` (factory mode, modern loop, no deprecated options)": [
+      {
+        "executionId": "a0517264-9658-4bef-a330-a2e25002af53",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791965670999
+      },
+      {
+        "executionId": "a0517264-9658-4bef-a330-a2e25002af53",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791966992137
+      },
+      {
+        "executionId": "a0517264-9658-4bef-a330-a2e25002af53",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791967174210
+      }
+    ],
+    "3.3 Implement `install_drain_hook` (SIGTERM → GW19 drain, two-phase + max-duration clamp)": [
+      {
+        "executionId": "a0517264-9658-4bef-a330-a2e25002af53",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791965671046
+      },
+      {
+        "executionId": "a0517264-9658-4bef-a330-a2e25002af53",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791967180121
+      },
+      {
+        "executionId": "a0517264-9658-4bef-a330-a2e25002af53",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791967354079
+      }
+    ],
+    "3.4 Implement `main(argv)` — orchestrate boot, refuse-to-start, run the server": [
+      {
+        "executionId": "a0517264-9658-4bef-a330-a2e25002af53",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791965671094
+      },
+      {
+        "executionId": "a0517264-9658-4bef-a330-a2e25002af53",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791967362065
+      },
+      {
+        "executionId": "a0517264-9658-4bef-a330-a2e25002af53",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791967615510
+      }
+    ],
+    "4.1 Provide the real `respawn` adapter to `WorkerSupervisor`": [
+      {
+        "executionId": "a0517264-9658-4bef-a330-a2e25002af53",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791965671142
+      },
+      {
+        "executionId": "a0517264-9658-4bef-a330-a2e25002af53",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791967624132
+      },
+      {
+        "executionId": "a0517264-9658-4bef-a330-a2e25002af53",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791967808369
+      }
+    ],
+    "5.1 Add the `serve` optional-dependency extra and the live-TCP addopts change": [
+      {
+        "executionId": "a0517264-9658-4bef-a330-a2e25002af53",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791965671205
+      },
+      {
+        "executionId": "a0517264-9658-4bef-a330-a2e25002af53",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791967625273
+      },
+      {
+        "executionId": "a0517264-9658-4bef-a330-a2e25002af53",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791967809399
+      }
+    ],
+    "6. Checkpoint — config + drain extension + host + supervision + packaging green": [
+      {
+        "executionId": "a0517264-9658-4bef-a330-a2e25002af53",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791965671279
+      },
+      {
+        "executionId": "a0517264-9658-4bef-a330-a2e25002af53",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791968244257
+      },
+      {
+        "executionId": "a0517264-9658-4bef-a330-a2e25002af53",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791968816468
+      }
+    ],
+    "7.1 Add the child-process boot fixture + stock-SDK surface exercises over the real socket": [
+      {
+        "executionId": "a0517264-9658-4bef-a330-a2e25002af53",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791965671328
+      },
+      {
+        "executionId": "a0517264-9658-4bef-a330-a2e25002af53",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791968860866
+      },
+      {
+        "executionId": "a0517264-9658-4bef-a330-a2e25002af53",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791969556838
+      }
+    ],
+    "7.2 Turn on `test_live_tcp_8300.py` against `gateway_v2` + run the harness subset live": [
+      {
+        "executionId": "a0517264-9658-4bef-a330-a2e25002af53",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791965671384
+      },
+      {
+        "executionId": "a0517264-9658-4bef-a330-a2e25002af53",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791969566202
+      },
+      {
+        "executionId": "a0517264-9658-4bef-a330-a2e25002af53",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791970496350
+      }
+    ],
+    "8.1 Verify each Deferred_Seam is named next to the fallback it leaves in place": [
+      {
+        "executionId": "a0517264-9658-4bef-a330-a2e25002af53",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791965671494
+      },
+      {
+        "executionId": "a0517264-9658-4bef-a330-a2e25002af53",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791971878833
+      },
+      {
+        "executionId": "a0517264-9658-4bef-a330-a2e25002af53",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791972049901
+      }
+    ],
+    "9.1 Run the full gate and map evidence to the §10.9 card format": [
+      {
+        "executionId": "a0517264-9658-4bef-a330-a2e25002af53",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791965671543
+      },
+      {
+        "executionId": "a0517264-9658-4bef-a330-a2e25002af53",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791972057305
+      },
+      {
+        "executionId": "a0517264-9658-4bef-a330-a2e25002af53",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791972649271
+      }
+    ],
+    "10. Final checkpoint": [
+      {
+        "executionId": "a0517264-9658-4bef-a330-a2e25002af53",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791965671637
+      },
+      {
+        "executionId": "a0517264-9658-4bef-a330-a2e25002af53",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791972656752
+      }
+    ],
+    "1. Serving config surface — `runtime/serving_config.py` (NEW, bottom of the build order)": [
+      {
+        "executionId": "a0517264-9658-4bef-a330-a2e25002af53",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791966538480
+      }
+    ],
+    "2. Minimal behaviour-preserving `AdmissionController.drain()` extension — `admit/admission.py` (MODIFY)": [
+      {
+        "executionId": "a0517264-9658-4bef-a330-a2e25002af53",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791966539533
+      }
+    ],
+    "1.2 Write property test for Serving_Config parse totality + defaulting (PBT)": [
+      {
+        "executionId": "a0517264-9658-4bef-a330-a2e25002af53",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791966550523
+      },
+      {
+        "executionId": "a0517264-9658-4bef-a330-a2e25002af53",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791966980814
+      }
+    ],
+    "1.3 Write config example/unit tests": [
+      {
+        "executionId": "a0517264-9658-4bef-a330-a2e25002af53",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791966551957
+      },
+      {
+        "executionId": "a0517264-9658-4bef-a330-a2e25002af53",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791966981677
+      }
+    ],
+    "2.2 Write property test for the extended drain termination set + duration clamp (PBT)": [
+      {
+        "executionId": "a0517264-9658-4bef-a330-a2e25002af53",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791966553360
+      },
+      {
+        "executionId": "a0517264-9658-4bef-a330-a2e25002af53",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791966983167
+      }
+    ],
+    "2.3 Assert the extension is a no-op at defaults (shipped-behaviour regression)": [
+      {
+        "executionId": "a0517264-9658-4bef-a330-a2e25002af53",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791966554276
+      },
+      {
+        "executionId": "a0517264-9658-4bef-a330-a2e25002af53",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791966984485
+      }
+    ],
+    "3. The serving host — `edge/serve.py` (NEW)": [
+      {
+        "executionId": "a0517264-9658-4bef-a330-a2e25002af53",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791967615564
+      }
+    ],
+    "4. Real OS worker-supervision wiring — `edge/serve.py` (MODIFY) + `admit/supervisor.py` seam": [
+      {
+        "executionId": "a0517264-9658-4bef-a330-a2e25002af53",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791967808436
+      }
+    ],
+    "5. Packaging — `pyproject.toml` `serve` optional extra (MODIFY)": [
+      {
+        "executionId": "a0517264-9658-4bef-a330-a2e25002af53",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791967809439
+      }
+    ],
+    "3.5 Write boot-deps + uvicorn-config + refuse-to-start unit tests": [
+      {
+        "executionId": "a0517264-9658-4bef-a330-a2e25002af53",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791967816146
+      },
+      {
+        "executionId": "a0517264-9658-4bef-a330-a2e25002af53",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791968234168
+      }
+    ],
+    "4.2 Write isolate/respawn/peers-keep-admitting unit tests with a fake crash": [
+      {
+        "executionId": "a0517264-9658-4bef-a330-a2e25002af53",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791967817467
+      },
+      {
+        "executionId": "a0517264-9658-4bef-a330-a2e25002af53",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791968235475
+      }
+    ],
+    "7. Real-socket OpenAI conformance — `tests/openai_conformance/` (MODIFY/NEW)": [
+      {
+        "executionId": "a0517264-9658-4bef-a330-a2e25002af53",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791970496386
+      }
+    ],
+    "7.3 Real OS worker crash-and-respawn integration assertion": [
+      {
+        "executionId": "a0517264-9658-4bef-a330-a2e25002af53",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791970517915
+      },
+      {
+        "executionId": "a0517264-9658-4bef-a330-a2e25002af53",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791971870319
+      }
+    ],
+    "8. Deferred seams recorded as named comments — `edge/serve.py` (doc/verification task)": [
+      {
+        "executionId": "a0517264-9658-4bef-a330-a2e25002af53",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791972049955
+      }
+    ],
+    "9. Final verification gate": [
+      {
+        "executionId": "a0517264-9658-4bef-a330-a2e25002af53",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791972649307
+      }
+    ]
+  }
+}
