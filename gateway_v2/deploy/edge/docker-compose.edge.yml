@@ -1,0 +1,31 @@
+# Local_Edge_Harness (GW16b, B5, design decision #3 / R6.1).
+#
+# Stands the V2_Edge (nginx) in front of a running B3_Gateway over loopback — there is NO local
+# NLB. The one `edge` service is the nginx container built from Dockerfile.edge; the B3 gateway
+# is NOT a compose service. The test harness launches B3 as a local uvicorn process on the HOST
+# (the shipped gateway_v2/gateway_v2/edge/serve.py, `python -m ...`/serve.py on 127.0.0.1:8300).
+#
+# The containerized nginx reaches that HOST process via host.docker.internal:
+#   - extra_hosts maps host.docker.internal → the host gateway IP (host-gateway), so the
+#     container can dial back out to the host loopback service.
+#   - B3_UPSTREAM points the upstream block (server ${B3_UPSTREAM};) at that host:port; the
+#     entrypoint envsubst resolves it on start (only B3_UPSTREAM is substituted — the nginx
+#     $vars survive, see Dockerfile.edge NGINX_ENVSUBST_FILTER).
+#
+# Host port 8088 → container 80 (8088 chosen to avoid colliding with common local ports such as
+# 80/443/3000/8000/8080/8300); the harness and the L16b live tests hit the edge on 127.0.0.1:8088.
+services:
+  edge:
+    build:
+      # Build context = this directory so Dockerfile.edge's COPY gateway-edge.conf /
+      # COPY security-headers.inc resolve.
+      context: .
+      dockerfile: Dockerfile.edge
+    ports:
+      - "8088:80"
+    environment:
+      # The host B3 uvicorn process the test harness starts on 127.0.0.1:8300.
+      B3_UPSTREAM: "host.docker.internal:8300"
+    extra_hosts:
+      # Lets the containerized nginx reach the B3 process running on the HOST loopback.
+      - "host.docker.internal:host-gateway"

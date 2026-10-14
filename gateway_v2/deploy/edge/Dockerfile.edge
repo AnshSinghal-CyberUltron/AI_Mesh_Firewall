@@ -1,0 +1,46 @@
+# v2 edge nginx image for the gateway_v2 serving path (GW16b, B5).
+# Builds the V2_Edge (upstream keepalive + SSE transparency + unknown-Host 403 + security
+# headers) from the stock nginx image, so the shipped /docker-entrypoint.d/ templating resolves
+# ${B3_UPSTREAM} on container start. The v1 deploy/Dockerfile.nginx is reference only — not edited.
+#
+# Build context = gateway_v2/deploy/edge/ (the COPYs below are relative to this directory):
+#   docker build -f gateway_v2/deploy/edge/Dockerfile.edge -t <tag> gateway_v2/deploy/edge
+FROM nginx:1.30-alpine
+
+# The stock image auto-loads only conf.d/*.conf. Its bundled default.conf ships a
+# `listen 80 default_server;` server that would collide with our own default_server
+# unknown-Host 403 catch-all — remove it so only our conf is loaded.
+RUN rm -f /etc/nginx/conf.d/default.conf
+
+# gateway-edge.conf lands as a *.template under /etc/nginx/templates/ so the stock image's
+# /docker-entrypoint.d/20-envsubst-on-templates.sh runs envsubst on it at container start and
+# writes the resolved result to /etc/nginx/conf.d/gateway-edge.conf (which nginx then loads).
+# NGINX_ENVSUBST_OUTPUT_DIR defaults to /etc/nginx/conf.d; set explicitly for clarity.
+# The output filename is the template name minus the .template suffix → gateway-edge.conf.
+COPY gateway-edge.conf /etc/nginx/templates/gateway-edge.conf.template
+
+# The security-header set is included by the conf at /etc/nginx/edge/security-headers.inc.
+# Kept OUT of conf.d/ so nginx does not try to auto-load the .inc as a standalone config
+# (only conf.d/*.conf is auto-included).
+COPY security-headers.inc /etc/nginx/edge/security-headers.inc
+
+# CRITICAL: restrict envsubst to ONLY ${B3_UPSTREAM}. Without this filter the stock entrypoint
+# substitutes EVERY $VAR in the template, which would eat the nginx runtime variables the conf
+# relies on ($host, $remote_addr, $scheme, $proxy_add_x_forwarded_for, $http_upgrade, ...) and
+# produce a broken config. The filter is a space/newline-separated allow-list of names; listing
+# only B3_UPSTREAM leaves every nginx $var untouched.
+ENV NGINX_ENVSUBST_FILTER="B3_UPSTREAM"
+ENV NGINX_ENVSUBST_OUTPUT_DIR="/etc/nginx/conf.d"
+
+# Default upstream for the Local_Edge_Harness: the B3 uvicorn process on the host, reached via
+# host.docker.internal (compose adds the host-gateway extra_host). Overridden by -e B3_UPSTREAM.
+ENV B3_UPSTREAM="host.docker.internal:8300"
+
+# NOTE: no build-time `nginx -t` here — ${B3_UPSTREAM} is not substituted at build time (the
+# entrypoint templates on container START), so `nginx -t` on the raw template would fail on the
+# unresolved `server ${B3_UPSTREAM};`. The stock entrypoint runs envsubst and nginx then
+# validates the resolved conf at startup; a malformed conf fails the container start. (A
+# build-time sanity check would require envsubst'ing a dummy B3_UPSTREAM first — omitted to keep
+# the Dockerfile simple and correct.)
+
+EXPOSE 80
