@@ -123,6 +123,42 @@ def _stub_provider() -> StubProviderClient:
     constructed here. The stub replays an empty script and never opens a socket; its injected
     ``rng`` is a fresh deterministic source (never shared) kept only for parity with the real
     provider's injected-randomness contract.
+
+    **B4 drop-in seam (verified, no code here — provider-egress-gw-b4 §C5/§C6, R5/R7.1/R7.2).**
+    The real generation-egress client is
+    :class:`~gateway_v2.dispatch.http_provider.HttpProviderClient`. It structurally satisfies the
+    shipped ``@runtime_checkable``
+    :class:`~gateway_v2.dispatch.provider.ProviderClient` Protocol (``open`` + ``async abort``), so
+    a deployment that wants real completions injects it through the SAME
+    :func:`~gateway_v2.edge.app.build_app` ``provider=`` keyword this stub uses — with ZERO change
+    to ``build_app``'s or :func:`build_boot_dependencies`' signature (R7.1). The stub stays the
+    honest-boot default (R7.2); no real socket is constructed in the local half. Because
+    ``HttpProviderClient.__init__`` takes an INJECTED ``decoder_factory`` (``dispatch`` may not
+    import ``edge``), the deployment passes the shipped
+    :class:`~gateway_v2.edge.wire.sse.SSEDecoder` as that ``decoder_factory`` — ``edge`` can import
+    both ``dispatch.http_provider`` and ``edge.wire.sse``, so the decoder is wired in at the
+    injection site, preserving the import-linter layer contract. No ``build_boot_dependencies``
+    factory is added here: ``build_app(provider=...)`` already accepts the real client directly, so
+    a deployment constructs ``HttpProviderClient`` itself rather than through dead boot wiring.
+
+    **Generation-vs-guard split (verified — §C5, R5.1/R5.2/R5.3).** The two egress upstreams are
+    structurally distinct and already correctly wired. GENERATION egress (chat / embeddings) flows
+    to the ``Generation_Provider`` through this injected ``ProviderClient``, with
+    ``UpstreamRequest.destination`` chosen by the shipped pure
+    :class:`~gateway_v2.dispatch.routing.DispatchRouter` (R5.1) — the BYOK provider is
+    organization-owned and excluded from firewall cost/latency accounting (R1.6/R8.4). The GUARD
+    tier is a SEPARATE upstream: the C43 load-aware
+    :class:`~gateway_v2.dispatch.guard_routing.GuardRouter` selects a self-hosted ``Guard_Pool``
+    member (never a platform-owned external AI — runbook *Platform AI*, R5.2/R5.3) reached over the
+    split-topology TCP path, with ``owner_queue_bound_s`` passed from
+    ``contract.owner_queue_bound_s()`` at the wiring site (no literal in ``dispatch``, R9.3).
+
+    **GuardRouter guard-egress + detector are GW07/GW08 (named, NOT built here — §C5, R5.4).** B4
+    provides the guard-ROUTING selection and the guard-egress SEAM only; the actual detector-model
+    CALL on the request path that turns a ``GuardRouter``-selected destination into findings is
+    GW07/GW08 request-path wiring (deferred). B4 adds NO new request-path guard call and NO
+    ``egress -> detect`` edge; the selection stays exercisable against a ``Fake_Guard`` with no
+    real detector present.
     """
     empty_script: tuple[UpstreamEvent, ...] = ()
     return StubProviderClient(script=empty_script, rng=random.Random(0))
