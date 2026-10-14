@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 import os
+import warnings
 from dataclasses import dataclass
 
 from gateway_v2.runtime.cgroup import DetectHooks, detect_with_hooks
@@ -15,6 +16,29 @@ _DEFAULT_TARGET_P99_MS = 20.0
 _DEFAULT_UTILIZATION_CAP = 0.75
 _DEFAULT_PER_WORKER_RSS = 400 * 1024 * 1024
 _MS_PER_S = 1000.0
+
+# B4 (GW17-18 / C43) dispatch-routing capacity bounds. These are owner-queue / guard-wait
+# positions the `dispatch` layer reads through the contract so no caller holds a literal; the
+# derivation lives here because this is the only module `lint/check_capacity_literals.py` exempts.
+_OWNER_QUEUE_ENV_KEY = "RV_OWNER_QUEUE_MS"
+_DEFAULT_OWNER_QUEUE_MS = 20.0
+"""C43 owner-queue bound default in milliseconds (runbook RC-measured `RV_OWNER_QUEUE_MS=20`).
+
+An operational env knob, not a derivation of the SLO: the runbook's load-aware guard routing is
+measured against a ~20 ms owner-queue bound ("760 x3 PASS, 190 per guard, 20 ms owner bound").
+`owner_queue_bound_s()` reads `RV_OWNER_QUEUE_MS` with this measured default and warns-and-defaults
+on an unparseable or non-positive override, the same env to value idiom `load_contract` /
+`holdback_config` use. It lives here (not in `dispatch`) so `GuardRouter` holds no literal.
+"""
+_CODEL_HARD_CAP_MS = 60.0
+"""CoDel admission hard cap in milliseconds (GW19 / R2-07).
+
+The admission controller's CoDel hard cap. The GW19 guard-wait budget is `max(100, cap + 40)` ms
+with `cap` this hard cap; `guard_wait_budget_s()` derives the budget from this capacity position so
+both operands stay in the one capacity-authority module and no caller inlines either number.
+"""
+_GUARD_WAIT_FLOOR_MS = 100.0  # GW19 guard-wait budget floor: max(floor, cap + headroom)
+_GUARD_WAIT_HEADROOM_MS = 40.0  # GW19 guard-wait headroom added above the CoDel hard cap
 
 # GW12 stream-serving derivations. Each timeout/duration/bound is a multiple of the request-path
 # SLO (`target_p99_ms`), so there is one capacity authority and no caller holds a literal. This is
@@ -247,6 +271,30 @@ class ResourceContract:
     def cancellation_bound_s(self) -> float:
         return self._stream_timeout_s(_CANCEL_BOUND_MULT)
 
+    def owner_queue_bound_s(self) -> float:
+        """B4 (C43): the `RV_OWNER_QUEUE_MS` owner-queue bound, in seconds.
+
+        An operational env knob read with the runbook RC-measured default (~20 ms), returned in
+        seconds (20 ms -> 0.020) so `GuardRouter` consumes it alongside `cancellation_bound_s()`
+        and holds no literal. An unset key uses the measured default; a present-but-unparseable or
+        non-positive value warns naming the rejected value and falls back to the default -- the
+        same warn-and-default stance `load_contract` / `holdback_config` take. Reads
+        `os.environ` directly (no new contract field) because this is a dispatch-routing env knob,
+        not a hardware/SLO signal threaded through `from_signals`.
+        """
+        return _parse_owner_queue_ms(os.environ.get(_OWNER_QUEUE_ENV_KEY)) / _MS_PER_S
+
+    def guard_wait_budget_s(self) -> float:
+        """B4 (GW19 / R2-07): the guard-wait budget `max(100, cap + 40)` ms, in seconds.
+
+        `cap` is the CoDel admission hard cap (`_CODEL_HARD_CAP_MS`); the budget is the larger of a
+        floor and the hard cap plus a fixed headroom. Both operands are capacity positions declared
+        in this module, so the derivation lives with the one capacity authority and `dispatch`
+        inlines neither number. At the signed defaults this is `max(0.100, 0.060 + 0.040) = 0.100`.
+        """
+        budget_ms = max(_GUARD_WAIT_FLOOR_MS, _CODEL_HARD_CAP_MS + _GUARD_WAIT_HEADROOM_MS)
+        return budget_ms / _MS_PER_S
+
     def audit_queue_depth(self, drain_rate_per_s: float, bytes_per_record: int) -> int:
         """GW14c: how many audit records the producer's queue may hold.
 
@@ -388,6 +436,35 @@ def _parse_override(raw: str | None) -> int | None:
     if raw is None or not raw.strip():
         return None
     return int(raw.strip())
+
+
+def _parse_owner_queue_ms(raw: str | None) -> float:
+    """Parse `RV_OWNER_QUEUE_MS` in milliseconds, warn-and-default on a rejected value.
+
+    An unset / blank key returns the measured default silently. A non-numeric or non-positive
+    value falls back to the default and emits a `warnings.warn` naming the rejected value, the same
+    stance `load_contract` / `holdback_config` take for an invalid env knob.
+    """
+    if raw is None or not raw.strip():
+        return _DEFAULT_OWNER_QUEUE_MS
+    stripped = raw.strip()
+    try:
+        value = float(stripped)
+    except ValueError:
+        warnings.warn(
+            f"{_OWNER_QUEUE_ENV_KEY}={stripped!r} is not a number; "
+            f"using default owner-queue bound {_DEFAULT_OWNER_QUEUE_MS} ms",
+            stacklevel=2,
+        )
+        return _DEFAULT_OWNER_QUEUE_MS
+    if value <= 0 or math.isnan(value) or math.isinf(value):
+        warnings.warn(
+            f"{_OWNER_QUEUE_ENV_KEY}={value} is not positive-finite; "
+            f"using default owner-queue bound {_DEFAULT_OWNER_QUEUE_MS} ms",
+            stacklevel=2,
+        )
+        return _DEFAULT_OWNER_QUEUE_MS
+    return value
 
 
 def from_signals(
