@@ -1,0 +1,339 @@
+{
+  "pbtResults": {},
+  "executionHistory": {
+    "1.1 Add `owner_queue_bound_s()` and `guard_wait_budget_s()` to `ResourceContract`": [
+      {
+        "executionId": "b8bdb38f-2b9b-4042-b068-3d0953e646aa",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791974921972
+      },
+      {
+        "executionId": "b8bdb38f-2b9b-4042-b068-3d0953e646aa",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791974942378
+      },
+      {
+        "executionId": "b8bdb38f-2b9b-4042-b068-3d0953e646aa",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791975101475
+      }
+    ],
+    "2.1 Implement `GuardLoad` + `Load_Snapshot` value types and `GuardRouter.select`": [
+      {
+        "executionId": "b8bdb38f-2b9b-4042-b068-3d0953e646aa",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791974922008
+      },
+      {
+        "executionId": "b8bdb38f-2b9b-4042-b068-3d0953e646aa",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791975118604
+      },
+      {
+        "executionId": "b8bdb38f-2b9b-4042-b068-3d0953e646aa",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791975428998
+      }
+    ],
+    "3.1 Implement `HttpProviderClient.open` — streaming HTTP/SSE through the injected decoder": [
+      {
+        "executionId": "b8bdb38f-2b9b-4042-b068-3d0953e646aa",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791974922059
+      },
+      {
+        "executionId": "b8bdb38f-2b9b-4042-b068-3d0953e646aa",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791975120054
+      },
+      {
+        "executionId": "b8bdb38f-2b9b-4042-b068-3d0953e646aa",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791975430297
+      }
+    ],
+    "3.2 Implement `HttpProviderClient.abort` — cut the in-flight read within the bound, idempotent": [
+      {
+        "executionId": "b8bdb38f-2b9b-4042-b068-3d0953e646aa",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791974922084
+      },
+      {
+        "executionId": "b8bdb38f-2b9b-4042-b068-3d0953e646aa",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791975441310
+      },
+      {
+        "executionId": "b8bdb38f-2b9b-4042-b068-3d0953e646aa",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791975651891
+      }
+    ],
+    "4. Checkpoint — resources accessors + guard routing + http client green": [
+      {
+        "executionId": "b8bdb38f-2b9b-4042-b068-3d0953e646aa",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791974922110
+      },
+      {
+        "executionId": "b8bdb38f-2b9b-4042-b068-3d0953e646aa",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791976111129
+      },
+      {
+        "executionId": "b8bdb38f-2b9b-4042-b068-3d0953e646aa",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791976136715
+      }
+    ],
+    "5.1 Build the `Fake_Upstream` + `Fake_Guard` harness": [
+      {
+        "executionId": "b8bdb38f-2b9b-4042-b068-3d0953e646aa",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791974922136
+      },
+      {
+        "executionId": "b8bdb38f-2b9b-4042-b068-3d0953e646aa",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791975666487
+      },
+      {
+        "executionId": "b8bdb38f-2b9b-4042-b068-3d0953e646aa",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791976099427
+      }
+    ],
+    "6.1 Wire the real client behind the shipped seam and the GuardRouter guard-egress seam": [
+      {
+        "executionId": "b8bdb38f-2b9b-4042-b068-3d0953e646aa",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791974922164
+      },
+      {
+        "executionId": "b8bdb38f-2b9b-4042-b068-3d0953e646aa",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791976560840
+      },
+      {
+        "executionId": "b8bdb38f-2b9b-4042-b068-3d0953e646aa",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791976740038
+      }
+    ],
+    "7.1 Confirm `httpx` is available under the `conformance` extra (reuse, no duplicate pin)": [
+      {
+        "executionId": "b8bdb38f-2b9b-4042-b068-3d0953e646aa",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791974922199
+      },
+      {
+        "executionId": "b8bdb38f-2b9b-4042-b068-3d0953e646aa",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791976747935
+      },
+      {
+        "executionId": "b8bdb38f-2b9b-4042-b068-3d0953e646aa",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791977478892
+      }
+    ],
+    "8.1 Verify each Deferred_Seam is named next to the code it leaves unscaffolded": [
+      {
+        "executionId": "b8bdb38f-2b9b-4042-b068-3d0953e646aa",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791974922252
+      },
+      {
+        "executionId": "b8bdb38f-2b9b-4042-b068-3d0953e646aa",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791977486599
+      },
+      {
+        "executionId": "b8bdb38f-2b9b-4042-b068-3d0953e646aa",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791977603638
+      }
+    ],
+    "9.1 Run the full gate and map evidence to the §10.9 card format": [
+      {
+        "executionId": "b8bdb38f-2b9b-4042-b068-3d0953e646aa",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791974922278
+      },
+      {
+        "executionId": "b8bdb38f-2b9b-4042-b068-3d0953e646aa",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791977610582
+      },
+      {
+        "executionId": "b8bdb38f-2b9b-4042-b068-3d0953e646aa",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791978194676
+      }
+    ],
+    "10. Final checkpoint": [
+      {
+        "executionId": "b8bdb38f-2b9b-4042-b068-3d0953e646aa",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791974922306
+      },
+      {
+        "executionId": "b8bdb38f-2b9b-4042-b068-3d0953e646aa",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791978200324
+      }
+    ],
+    "1. Derived capacity accessors — `runtime/resources.py` (MODIFY, bottom of the build order)": [
+      {
+        "executionId": "b8bdb38f-2b9b-4042-b068-3d0953e646aa",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791975101501
+      }
+    ],
+    "1.2 Write unit/property test for the two accessors": [
+      {
+        "executionId": "b8bdb38f-2b9b-4042-b068-3d0953e646aa",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791975120928
+      },
+      {
+        "executionId": "b8bdb38f-2b9b-4042-b068-3d0953e646aa",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791975427832
+      }
+    ],
+    "2. C43 load-aware guard routing — `dispatch/guard_routing.py` (NEW)": [
+      {
+        "executionId": "b8bdb38f-2b9b-4042-b068-3d0953e646aa",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791975429058
+      }
+    ],
+    "2.2 Write property test for min-queue-wait selection (PBT)": [
+      {
+        "executionId": "b8bdb38f-2b9b-4042-b068-3d0953e646aa",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791975442761
+      },
+      {
+        "executionId": "b8bdb38f-2b9b-4042-b068-3d0953e646aa",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791975653255
+      }
+    ],
+    "2.3 Write property test for determinism given inputs (PBT)": [
+      {
+        "executionId": "b8bdb38f-2b9b-4042-b068-3d0953e646aa",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791975443729
+      },
+      {
+        "executionId": "b8bdb38f-2b9b-4042-b068-3d0953e646aa",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791975654301
+      }
+    ],
+    "3. Real generation-egress client — `dispatch/http_provider.py` (NEW)": [
+      {
+        "executionId": "b8bdb38f-2b9b-4042-b068-3d0953e646aa",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791975651964
+      }
+    ],
+    "3.3 Write Transform byte-identity round-trip property test (PBT)": [
+      {
+        "executionId": "b8bdb38f-2b9b-4042-b068-3d0953e646aa",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791975665418
+      },
+      {
+        "executionId": "b8bdb38f-2b9b-4042-b068-3d0953e646aa",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791976098337
+      }
+    ],
+    "5. Local fake upstreams + integration — `tests/dispatch/` (NEW)": [
+      {
+        "executionId": "b8bdb38f-2b9b-4042-b068-3d0953e646aa",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791976099458
+      }
+    ],
+    "5.2 Write terminal final-flag property test against the Fake_Upstream (PBT)": [
+      {
+        "executionId": "b8bdb38f-2b9b-4042-b068-3d0953e646aa",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791976138104
+      },
+      {
+        "executionId": "b8bdb38f-2b9b-4042-b068-3d0953e646aa",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791976548711
+      }
+    ],
+    "5.3 Write http-client integration tests against the Fake_Upstream (open/stream/final, R11, abort, malformed)": [
+      {
+        "executionId": "b8bdb38f-2b9b-4042-b068-3d0953e646aa",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791976139514
+      },
+      {
+        "executionId": "b8bdb38f-2b9b-4042-b068-3d0953e646aa",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791976550065
+      }
+    ],
+    "5.4 Write Fake_Guard routing integration test": [
+      {
+        "executionId": "b8bdb38f-2b9b-4042-b068-3d0953e646aa",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791976140351
+      },
+      {
+        "executionId": "b8bdb38f-2b9b-4042-b068-3d0953e646aa",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791976550961
+      }
+    ],
+    "6. Generation-vs-guard split + `build_app(provider=...)` injection wiring — `edge` seam": [
+      {
+        "executionId": "b8bdb38f-2b9b-4042-b068-3d0953e646aa",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791976740069
+      }
+    ],
+    "6.2 Write boot/wiring integration tests for the injection seam": [
+      {
+        "executionId": "b8bdb38f-2b9b-4042-b068-3d0953e646aa",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791976747006
+      },
+      {
+        "executionId": "b8bdb38f-2b9b-4042-b068-3d0953e646aa",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791977478023
+      }
+    ],
+    "7. Packaging — `pyproject.toml` provider HTTP client extra (verify/decide)": [
+      {
+        "executionId": "b8bdb38f-2b9b-4042-b068-3d0953e646aa",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791977478921
+      }
+    ],
+    "8. Deferred seams recorded as named comments — `dispatch/http_provider.py` + `dispatch/guard_routing.py` (doc/verification task)": [
+      {
+        "executionId": "b8bdb38f-2b9b-4042-b068-3d0953e646aa",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791977603668
+      }
+    ],
+    "9. Final verification gate": [
+      {
+        "executionId": "b8bdb38f-2b9b-4042-b068-3d0953e646aa",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791978194769
+      }
+    ]
+  }
+}
