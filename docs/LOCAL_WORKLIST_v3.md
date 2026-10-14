@@ -46,6 +46,7 @@ These are here for reference and to show what each later item can build on. Evid
 | ✅ GW15 (B1, chat surface) | Real `/v1/chat/completions` + `/v1/completions`: OpenAI parse/render, identity → plan → CoDel admission → budget lease → input scan → holdback/output guard → SSE; stock-SDK conformance subset | `.kiro/specs/chat-surface-gw15` |
 | ✅ GW16 (B2, misc surfaces) | `/v1/embeddings` (full billable lifecycle), `/v1/models` + `/v1/models/{id}`, `/v1/moderations`; misc wire codec/renderer + moderation mapping; catalog injection seam; in-process stock-SDK conformance subset | `.kiro/specs/chat-surface-gw16-misc` |
 | ✅ B3 (serving entrypoint) | uvicorn multiprocess host for `build_app` (`edge/serve.py`): honest fail-closed boot, `interface=asgi3`, `workers=contract.workers()`, SIGTERM→GW19 drain, `WorkerSupervisor` respawn seam, `serve` extra; real-socket conformance (stock SDK + curl + `/readyz` + `/metrics` + worker crash + SIGTERM drain) | `.kiro/specs/serving-entrypoint-gw-b3` |
+| ✅ B4 (GW17/GW18, provider egress + routing) | Real streaming HTTP/SSE `HttpProviderClient` (generation egress, drops in behind the shipped `ProviderClient` seam; httpx under the `conformance` extra) + C43 load-aware `GuardRouter` (min-queue-wait over an injected load snapshot) + two `resources.py` capacity accessors; local verification against a `Fake_Upstream`/`Fake_Guard` incl. an end-to-end stock-SDK completion through the real client via `build_app` | `.kiro/specs/provider-egress-gw-b4` |
 
 ---
 
@@ -93,7 +94,8 @@ gate (deferred)" is the cloud half that is explicitly NOT in scope for the local
   Category 2 (the supervision seam is real; the OS-level supervision is the deployable piece).
 - **Depends on.** B1 (something to serve).
 
-### B4. 🔜 GW17 / GW18 — provider egress client + dispatch routing  **(NEXT)**
+### B4. ✅ GW17 / GW18 — provider egress client + dispatch routing  **(DONE)**
+- **DONE (2026).** Shipped + full gate green on `suraj-revamp` (1559 passed / 95 skipped / 1 xfailed; mypy/ruff/import-linter/6 AST gates; `unscanned_channels()==()`); 6 per-layer commits. Spec: `.kiro/specs/provider-egress-gw-b4`. Two upstreams per the runbook: the generation provider is organization-selected / BYOK (OpenAI-compatible, excluded from firewall cost/latency accounting) reached by the real `HttpProviderClient`; the enforcement guard is the self-hosted pool reached by the C43 `GuardRouter` over the split-topology TCP. B4 built generation egress + C43 guard ROUTING + the guard-egress seam; the real detector model CALL stays GW07/GW08. The real BYOK socket + real GPU guard fleet (GW25) + fleet-scale C43 capacity (GW20/GW20b) remain deferred live gates. Verified end-to-end: a stock-SDK chat request streamed a real completion through `HttpProviderClient` to a local fake upstream via `build_app`.
 - **Why.** `dispatch/provider.py` is a `StubProviderClient` with "the real-socket path is a DEFERRED
   live gate." The real provider client (HTTP/socket to the upstream LLM or the guard model service)
   and the dispatch routing to the guard tier do not exist.
@@ -109,7 +111,7 @@ gate (deferred)" is the cloud half that is explicitly NOT in scope for the local
 - **OPEN QUESTION for the owner:** is the upstream a real external LLM provider, or your own
   guard/model service? This decides what the fake upstream mimics.
 
-### B5. 🔜 GW16b — edge TLS termination + firewall-added-delta SLO definition
+### B5. 🔜 GW16b — edge TLS termination + firewall-added-delta SLO definition  **(NEXT)**
 - **Why.** R2-12 proved passthrough NLB adds nothing, ALB adds 8–10 ms (rejected for token streams).
   The edge contract: TLS 1.3 terminated in the gateway tier, connection recycling
   (`RV_CONN_MAX_AGE_S`, 30 s), and the SLO defined as the firewall-added delta vs a direct path.
@@ -223,6 +225,6 @@ them to the local worklist.
 
 ---
 
-_Last updated: 2026-10-13. Companion to `docs/AI_MESH_MASTER_RUNBOOK_v3_BACKEND_REWRITE.md`
+_Last updated: 2026-10-14. Companion to `docs/AI_MESH_MASTER_RUNBOOK_v3_BACKEND_REWRITE.md`
 (the source of truth for what/why). Completion is mirrored in the runbook's §0.3 corrections
 register and §0.5 open-gates table._
