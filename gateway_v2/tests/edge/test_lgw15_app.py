@@ -35,9 +35,11 @@ from gateway_v2.dispatch.provider import ProviderClient, StubProviderClient, Ups
 from gateway_v2.dispatch.routing import DispatchRouter
 from gateway_v2.dispatch.transform import Transform
 from gateway_v2.domain import Finding
-from gateway_v2.edge.app import build_app
+from gateway_v2.edge.app import build_app, empty_catalog_source
+from gateway_v2.edge.openai_misc import MiscRoute
 from gateway_v2.edge.routes import ChatRoute, build_routes
 from gateway_v2.edge.wire.openai import OpenAIRequestParser, OpenAIResponseRenderer
+from gateway_v2.edge.wire.openai_misc import MiscResponseRenderer
 from gateway_v2.egress.output_guard import MinimalOutputResolver
 from gateway_v2.runtime.kinds import HardwareSignals
 from gateway_v2.runtime.resources import ResourceContract, from_signals
@@ -51,12 +53,11 @@ _CHAT_ROUTES: tuple[tuple[str, str], ...] = (
     ("POST", "/v1/completions"),
 )
 
-#: GW16/17/18 (and misc) surfaces registered as declared not-implemented placeholders (R2.3).
+#: GW17/18 surfaces still registered as declared not-implemented placeholders (R2.3). GW16
+#: replaced the three misc placeholders (embeddings / models / moderations) with real handlers,
+#: so they are no longer in this set.
 _PLACEHOLDER_ROUTES: tuple[tuple[str, str], ...] = (
     ("POST", "/v1/responses"),
-    ("POST", "/v1/embeddings"),
-    ("GET", "/v1/models"),
-    ("POST", "/v1/moderations"),
     ("POST", "/v1/mcp"),
     ("POST", "/v1/rag/query"),
     ("POST", "/v1/vector/query"),
@@ -121,6 +122,21 @@ def _no_error_findings(_frame: str) -> Sequence[Finding]:
     return ()
 
 
+def _misc_route(provider: ProviderClient) -> MiscRoute:
+    """A fail-closed :class:`MiscRoute` for introspecting ``build_routes`` (GW16 task 7.1).
+
+    Carries the injected stub ``provider`` + the required ``renderer`` / ``catalog`` / ``clock``;
+    every security dep falls back to its shipped fail-closed default, so the misc surfaces this
+    route wires refuse by default (never a fail-open hole).
+    """
+    return MiscRoute(
+        provider=provider,
+        clock=_Clock(),
+        renderer=MiscResponseRenderer(),
+        catalog=empty_catalog_source,
+    )
+
+
 def _build_app(provider: ProviderClient) -> object:
     """Assemble the REAL ASGI app with the injected ``provider`` (no socket)."""
     return build_app(
@@ -150,7 +166,7 @@ def test_build_routes_from_boot_chatroute_wires_the_two_chat_paths_to_one_handle
     route = _boot_chatroute(provider)
     assert isinstance(route, ChatRoute), "boot did not build a ChatRoute"
 
-    table = build_routes(route)
+    table, _prefix = build_routes(route, _misc_route(provider))
     for key in _CHAT_ROUTES:
         assert key in table, f"chat route {key!r} is not registered"
         assert table[key] == route.handle, (
