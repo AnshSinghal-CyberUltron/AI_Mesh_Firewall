@@ -18,6 +18,12 @@ TEXT_CHANNELS: tuple[TextChannel, ...] = (
     TextChannel("content_part_text", "messages[].content[].text", True),
     TextChannel("tool_arguments", "messages[].tool_calls[].function.arguments", True),
     TextChannel("function_arguments", "messages[].function_call.arguments", True),
+    # GW16 misc INPUT channels (C21): embeddings/moderations ``input`` field. Their
+    # ``sdk_path`` is a DISJOINT scope -- it starts with neither ``messages[]`` (the
+    # chat-input scope GW15's ``_input_channel_names()`` filters on) nor ``choices[]``
+    # (the output scope). ``scanned=True`` keeps ``unscanned_channels()`` empty (R3.3).
+    TextChannel("embeddings_input", "input", True),
+    TextChannel("moderations_input", "input[]", True),
     TextChannel("output_content", "choices[].message.content", True),
     TextChannel("output_refusal", "choices[].message.refusal", True),
     TextChannel("output_reasoning", "choices[].message.reasoning_content", True),
