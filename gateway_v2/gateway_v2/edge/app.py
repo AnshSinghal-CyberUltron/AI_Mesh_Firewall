@@ -67,7 +67,12 @@ from gateway_v2.edge.chat_deps import (
 )
 from gateway_v2.edge.error_frame_scan import ErrorFrameScanner
 from gateway_v2.edge.executor import ScanExecutor
-from gateway_v2.edge.identity_resolver import IdentityResolver, fail_closed_resolver
+from gateway_v2.edge.identity_resolver import (
+    IdentityResolver,
+    TenantIdentity,
+    fail_closed_resolver,
+)
+from gateway_v2.edge.openai_misc import MiscRoute
 from gateway_v2.edge.readiness import (
     METRICS_DIRECTORY_REASON,
     DirectoryGate,
@@ -78,11 +83,13 @@ from gateway_v2.edge.routes import (
     ASGIScope,
     ASGISend,
     ChatRoute,
+    RouteHandler,
     RouteTable,
     build_routes,
     emit_response,
 )
 from gateway_v2.edge.wire.openai import OpenAIRequestParser, OpenAIResponseRenderer
+from gateway_v2.edge.wire.openai_misc import MiscResponseRenderer
 from gateway_v2.egress.output_guard import OutputResolver
 from gateway_v2.egress.stream import ScanProtocol
 from gateway_v2.plan.snapshot import ReplicaSnapshot
@@ -93,11 +100,14 @@ from gateway_v2.runtime.stream_metrics import PerRequestExports
 
 __all__ = (
     "ASGIApplication",
+    "CatalogModel",
+    "CatalogSource",
     "MetricsDirectorySource",
     "MetricsRegistry",
     "ReadinessProbe",
     "app",
     "build_app",
+    "empty_catalog_source",
 )
 
 # --------------------------------------------------------------------------- #
@@ -133,6 +143,63 @@ class MetricsDirectorySource(Protocol):
     def exposition(self) -> str: ...
 
     def directory(self) -> DirectoryGate: ...
+
+
+@dataclass(frozen=True, slots=True)
+class CatalogModel:
+    """One entry of the Allowed_Model_Catalog in the OpenAI ``model`` shape (R7.1/R7.2).
+
+    The org/plan-derived model the ``GET /v1/models`` list and ``GET /v1/models/{id}`` retrieve
+    surfaces render (GW16). ``id`` is the model id the stock SDK's ``models.retrieve(id)`` names;
+    ``created`` is the Unix-second creation stamp the OpenAI shape carries; ``owned_by`` is the
+    owning org/vendor. Frozen + slotted: an immutable value built by the catalog backend, never
+    mutated by a surface. ``created`` is an epoch-second timestamp the backend supplies, not a
+    capacity-position bound.
+    """
+
+    id: str
+    created: int
+    owned_by: str
+
+
+@runtime_checkable
+class CatalogSource(Protocol):
+    """The injected Allowed_Model_Catalog source, resolved against Tenant_Identity (R7.4).
+
+    The seam the GW16 Models_Surface reads its allowed-model catalog from, mirroring the shipped
+    injected-dependency discipline (the detector / resolver / provider are injected the same way).
+    ``catalog_for`` returns the ordered tuple of :class:`CatalogModel` the request's identity may
+    see; the surface renders it as the OpenAI list / retrieve shape and renders ``model_not_found``
+    for an id absent from the tuple. The real org/plan-derived backend is a DEFERRED seam (R11.3);
+    :data:`empty_catalog_source` is the honest-empty default until it is wired.
+    """
+
+    def catalog_for(self, identity: TenantIdentity) -> tuple[CatalogModel, ...]: ...
+
+
+class _EmptyCatalogSource:
+    """A :class:`CatalogSource` that returns no models — the honest-empty default.
+
+    The default ``MiscRoute.catalog`` for a deployment / test that has not yet wired the real
+    org/plan-derived catalog backend (R7.4/R11.3). It returns an EMPTY catalog for every identity,
+    so ``GET /v1/models`` lists nothing and every ``GET /v1/models/{id}`` retrieve resolves to
+    ``model_not_found`` — honest rather than fabricating a model that does not exist. ``__slots__``
+    so there is no instance state; a single shared instance (:data:`empty_catalog_source`) is safe
+    to reuse.
+    """
+
+    __slots__ = ()
+
+    def catalog_for(self, identity: TenantIdentity) -> tuple[CatalogModel, ...]:
+        """Return the empty catalog for any identity (honest-empty default)."""
+        del identity
+        return ()
+
+
+#: The shared honest-empty default catalog source. An immutable, stateless instance (not a
+#: module-level mutable), used as the ``MiscRoute.catalog`` default until the real org/plan-derived
+#: backend is wired at boot (GW16 task 8.1). Every retrieve against it is a ``model_not_found``.
+empty_catalog_source: CatalogSource = _EmptyCatalogSource()
 
 
 #: The readiness probe ``/readyz`` consults (R2.4/R2.5). ``(ready, reason)``: ``reason`` is
@@ -171,6 +238,7 @@ def build_app(
     admission: AdmissionDecider | None = None,
     quota: BudgetDecider | None = None,
     exports: PerRequestExports | None = None,
+    catalog: CatalogSource | None = None,
 ) -> ASGIApplication:
     """Assemble the raw-ASGI serving skin (R2.1).
 
@@ -192,30 +260,16 @@ def build_app(
     decision or a scan error, so the default is not a fail-open hole.
 
     **GW14d metrics-directory readiness wiring (task 12.1, R1.8 / R10.3).** The ``metrics_registry``
-    stays an INJECTED parameter — the shipped injection pattern — so a deployment constructs the
-    concrete :class:`gateway_v2.edge.publisher.Publisher` from the producers it already owns
-    (``admit`` owns AdmissionMetrics/QuotaMetrics, ``audit`` owns AuditMetrics, ``state_control``
-    owns RehydrationMetrics, ``runtime`` owns StateMetrics/PerRequestExports/HoldbackMetrics) and
-    passes it in. ``build_app`` then COMPOSES the ``/readyz`` metrics gate without re-constructing
-    anything: when the injected registry is a :class:`MetricsDirectorySource` (the Publisher
-    exposes ``directory()``), the metrics-directory gate is layered on top of the state gate per
-    Requirement 10 — state is gated FIRST (``state_ready(state_view)``), then the directory, naming
-    ``metrics_directory`` as the unavailable dependency when the directory is down. The composition
-    is resolved by :func:`_resolve_readiness`:
+    stays an INJECTED parameter; :func:`_resolve_readiness` COMPOSES the ``/readyz`` metrics gate
+    without re-constructing anything (state gated FIRST, then the directory when the registry is a
+    :class:`MetricsDirectorySource`; a plain registry falls back UNCHANGED). The ``/metrics``
+    ``asyncio.to_thread`` offload (R1.8) and the ``/readyz`` 503 render path (R10.3) are UNCHANGED.
 
-    * an explicitly-passed ``readiness`` is honoured as the FIRST (state-equivalent) gate and the
-      metrics-directory gate is appended after it (so a deployment that already composed its own
-      state probe keeps it, extended by the directory gate);
-    * with no explicit ``readiness`` and a directory-bearing registry, the probe is exactly
-      :func:`gateway_v2.edge.readiness.make_metrics_readiness` over ``state_view`` + the registry's
-      directory;
-    * a plain registry (``exposition()`` only, e.g. a test stub) OR an explicit ``readiness`` with
-      a plain registry falls back UNCHANGED to the prior behaviour — the directory gate is simply
-      not available to compose, so no caller or test that passes a plain registry is affected.
-
-    The ``/metrics`` ``asyncio.to_thread`` offload (R1.8) and the ``/readyz`` 503 render path
-    (R10.3) are UNCHANGED — this wiring only composes the probe handed into the existing
-    ``readiness`` seam.
+    **GW16 misc-surface wiring (task 7.1/8.1/10.1).** The single :class:`MiscRoute` is built via
+    :func:`_build_misc_route`; ``build_routes(chat, misc)`` returns the exact table + the
+    ``/v1/models/{id}`` prefix table, both held on the skin. ``catalog`` is the injected
+    :class:`CatalogSource` the Models surface lists/retrieves from (default
+    :data:`empty_catalog_source`, honest-empty — a test injects a scripted catalog, R7.4/R11.3).
 
     **GW15 §10.4 chat-surface wiring (task 6.1, R11 / R14).** The single :class:`ChatRoute` is
     built ONCE here via :func:`_build_chat_route`, with every §10.4 lifecycle dependency
@@ -255,12 +309,25 @@ def build_app(
         quota=quota,
         exports=exports,
     )
-    routes = build_routes(chat)
+    misc = _build_misc_route(
+        provider=provider,
+        resolver=resolver,
+        clock=clock,
+        input_detector=input_detector,
+        identity=identity,
+        snapshot_source=snapshot_source,
+        admission=admission,
+        quota=quota,
+        exports=exports,
+        catalog=catalog,
+    )
+    exact, prefix = build_routes(chat, misc)
     probe = _resolve_readiness(
         readiness=readiness, metrics_registry=metrics_registry, state_view=state_view
     )
     skin = _ServingSkin(
-        routes=routes,
+        routes=exact,
+        prefix_routes=prefix,
         metrics_registry=metrics_registry,
         readiness=probe,
         clock=clock,
@@ -348,6 +415,54 @@ def _build_chat_route(
     )
 
 
+def _build_misc_route(
+    *,
+    provider: ProviderClient,
+    resolver: OutputResolver,
+    clock: Callable[[], float],
+    input_detector: InputDetector | None,
+    identity: IdentityResolver | None,
+    snapshot_source: Callable[[], ReplicaSnapshot] | None,
+    admission: AdmissionDecider | None,
+    quota: BudgetDecider | None,
+    exports: PerRequestExports | None,
+    catalog: CatalogSource | None,
+) -> MiscRoute:
+    """Construct the single :class:`MiscRoute` for the three GW16 misc surfaces (task 7.1/8.1).
+
+    Built ONCE at boot the same way :func:`_build_chat_route` builds the chat route, and shared
+    across requests (the frozen route holds nothing request-scoped, so two-tenant isolation holds).
+    The ``input_detector`` (``detect``) / ``resolver`` (``egress``) / ``provider`` (``dispatch``) /
+    ``catalog`` (``edge/app.py``) are injected HERE in ``edge`` — above ``detect`` — so ``egress``
+    never imports ``detect`` (R4.5). Each unwired security dep falls back to its shipped
+    fail-closed default (identity refuses, admission sheds, budget refuses, the snapshot resolves
+    ``PlanUnknownTenant``); the injected ``catalog`` is threaded through (``None`` ⇒ the
+    honest-empty :data:`empty_catalog_source`, every retrieve ``model_not_found``) and ``renderer``
+    defaults to the stateless :class:`~gateway_v2.edge.wire.openai_misc.MiscResponseRenderer`.
+
+    The real ``_http`` prefix-match step that routes ``GET /v1/models/{id}`` onto the prefix table
+    is wired in task 8.1; this helper only constructs the route value so the ``build_routes(chat,
+    misc)`` call site compiles and the exact-match misc routes (embeddings / models-list /
+    moderations) go live.
+    """
+    request_exports = exports if exports is not None else PerRequestExports()
+    return MiscRoute(
+        provider=provider,
+        clock=clock,
+        renderer=MiscResponseRenderer(),
+        catalog=catalog if catalog is not None else empty_catalog_source,
+        identity=identity if identity is not None else fail_closed_resolver,
+        admission=admission if admission is not None else fail_closed_admission,
+        quota=quota if quota is not None else fail_closed_budget,
+        snapshot_source=(
+            snapshot_source if snapshot_source is not None else unresolved_snapshot_source
+        ),
+        resolver=resolver,
+        input_detector=input_detector if input_detector is not None else no_findings_detector,
+        exports=request_exports,
+    )
+
+
 # --------------------------------------------------------------------------- #
 # The serving skin: the ASGI protocol loop + the two operational endpoints.
 # --------------------------------------------------------------------------- #
@@ -362,6 +477,11 @@ class _ServingSkin:
     """
 
     routes: RouteTable
+    #: The longest-prefix ``(method, prefix) -> handler`` table (Decision 2). Built function-local
+    #: in :func:`build_routes` and threaded on here the same way ``routes`` is. GW16 task 7.1 holds
+    #: it; the ``_http`` prefix-match step that consults it for ``GET /v1/models/{id}`` is wired in
+    #: task 8.1.
+    prefix_routes: RouteTable
     metrics_registry: MetricsRegistry
     readiness: ReadinessProbe
     clock: Callable[[], float]
@@ -420,9 +540,37 @@ class _ServingSkin:
             return
         handler = self.routes.get((method, path))
         if handler is None:
+            prefixed = self._match_prefix(method, path)
+            if prefixed is not None:
+                # The prefixed handler reads ``scope["path"]`` to extract the ``{id}`` (Decision 2).
+                await prefixed(scope, receive, send)
+                return
             await emit_response(send, errors.render_not_implemented(path))
             return
         await handler(scope, receive, send)
+
+    def _match_prefix(self, method: str, path: str) -> RouteHandler | None:
+        """Longest-prefix match over ``prefix_routes`` (Decision 2); ``None`` on no match.
+
+        Returns the handler of the LONGEST registered ``(method, prefix)`` whose ``prefix`` is a
+        PROPER prefix of ``path`` (``path`` starts with ``prefix`` AND ``len(path) > len(prefix)``,
+        a NON-EMPTY trailing segment). The handler reads ``scope["path"]`` to extract the ``{id}``.
+        An empty trailing segment (``/v1/models/`` exactly) does NOT match → falls through to
+        ``not_implemented``, keeping the exact ``/v1/models`` key as the list route. Runs ONLY on an
+        exact-match miss, so no other route's behaviour changes.
+        """
+        best: RouteHandler | None = None
+        best_len = -1
+        for (route_method, prefix), route_handler in self.prefix_routes.items():
+            if (
+                route_method == method
+                and path.startswith(prefix)
+                and len(path) > len(prefix)
+                and len(prefix) > best_len
+            ):
+                best = route_handler
+                best_len = len(prefix)
+        return best
 
     async def _readyz(self, send: ASGISend) -> None:
         """``/readyz``: ``200`` when ready, else ``503`` naming the unavailable dep (R2.4/R2.5).

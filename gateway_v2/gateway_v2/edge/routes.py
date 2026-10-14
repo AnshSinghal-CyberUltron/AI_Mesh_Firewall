@@ -81,6 +81,12 @@ from gateway_v2.edge.chat_deps import (
 from gateway_v2.edge.error_frame_scan import ErrorFrameScanner
 from gateway_v2.edge.executor import ScanExecutor
 from gateway_v2.edge.identity_resolver import IdentityResolver, fail_closed_resolver
+from gateway_v2.edge.openai_misc import (
+    EmbeddingsSurface,
+    MiscRoute,
+    ModerationsSurface,
+)
+from gateway_v2.edge.openai_misc_models import ModelsSurface
 from gateway_v2.edge.stream_control import FirstByteLatch, StreamAttempt, run_with_no_splice
 from gateway_v2.edge.stream_timeouts import StreamTimeout, StreamTimeouts
 from gateway_v2.edge.wire.openai import (
@@ -112,6 +118,7 @@ __all__ = (
     "BudgetDecider",
     "ChatRoute",
     "InputDetector",
+    "MiscRoute",
     "RouteHandler",
     "RouteTable",
     "build_routes",
@@ -587,21 +594,36 @@ def _placeholder(surface: str) -> RouteHandler:
 # --------------------------------------------------------------------------- #
 
 
-def build_routes(chat: ChatRoute) -> RouteTable:
-    """Assemble the ``(method, path) -> handler`` table (R2.2/R2.3).
+def build_routes(chat: ChatRoute, misc: MiscRoute) -> tuple[RouteTable, RouteTable]:
+    """Assemble the two route tables: the exact ``(method, path)`` table + the prefix table.
 
-    The streaming chat route is wired to the live handler; the responses/misc/MCP/RAG surfaces
-    are registered as declared not-implemented placeholders. Built as a function local (returned
-    as a read-only ``Mapping``) so there is no module-level mutable table (gated).
+    GW16 wires the three misc surfaces live (R1.1): ``POST /v1/embeddings`` →
+    :meth:`EmbeddingsSurface.handle`, ``GET /v1/models`` → :meth:`ModelsSurface.handle_list`,
+    ``POST /v1/moderations`` → :meth:`ModerationsSurface.handle`, each built per-request over the
+    injected :class:`MiscRoute` (``Surface(deps=misc)``, parity with ``ChatSurface(deps=self)``).
+    The GW15 chat/completions routes are untouched and the responses/MCP/RAG/vector surfaces stay
+    declared ``not_implemented`` placeholders (R1.3).
+
+    ``GET /v1/models/{id}`` (retrieve) cannot be a static exact key, so a SECOND function-local
+    ``prefix`` table binds ``("GET", "/v1/models/")`` → :meth:`ModelsSurface.handle_retrieve`
+    (Decision 2); the matcher (``edge/app.py::_http``, task 8.1) consults it only AFTER an
+    exact-match miss and the retrieve handler extracts the ``{id}`` from ``scope["path"]``.
+
+    Both tables are built as function locals (returned as read-only ``Mapping`` values) so there is
+    no module-level mutable table (R1.4). Returns ``(exact, prefix)``.
     """
-    return {
+    exact: RouteTable = {
         ("POST", "/v1/chat/completions"): chat.handle,
         ("POST", "/v1/completions"): chat.handle,
         ("POST", "/v1/responses"): _placeholder("responses"),
-        ("POST", "/v1/embeddings"): _placeholder("embeddings"),
-        ("GET", "/v1/models"): _placeholder("models"),
-        ("POST", "/v1/moderations"): _placeholder("moderations"),
+        ("POST", "/v1/embeddings"): EmbeddingsSurface(deps=misc).handle,
+        ("GET", "/v1/models"): ModelsSurface(deps=misc).handle_list,
+        ("POST", "/v1/moderations"): ModerationsSurface(deps=misc).handle,
         ("POST", "/v1/mcp"): _placeholder("mcp"),
         ("POST", "/v1/rag/query"): _placeholder("rag"),
         ("POST", "/v1/vector/query"): _placeholder("vector"),
     }
+    prefix: RouteTable = {
+        ("GET", "/v1/models/"): ModelsSurface(deps=misc).handle_retrieve,
+    }
+    return exact, prefix
