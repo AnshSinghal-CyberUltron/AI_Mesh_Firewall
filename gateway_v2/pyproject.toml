@@ -29,6 +29,15 @@ conformance = [
     "httpx>=0.27",
     "pytest-asyncio>=0.23",
 ]
+# B3 Serving_Entrypoint host deps (``gateway_v2/edge/serve.py`` hosts ``build_app`` under uvicorn).
+# ``uvicorn[standard]`` pulls uvloop + httptools for the modern ``loop="auto"``/``http="auto"`` config.
+# ``serve.py`` lazy-imports uvicorn inside ``main`` (ImportError → ``pip install 'gateway-v2[serve]'``
+# hint), so the base package stays framework-free (``[project].dependencies`` is ``psycopg`` + ``redis``
+# only) and a tree that only runs the pure suite is unaffected — mirroring the optional ``conformance``
+# extra above.
+serve = [
+    "uvicorn[standard]>=0.30",
+]
 
 [tool.setuptools.packages.find]
 where = ["."]
@@ -44,12 +53,22 @@ testpaths = ["tests"]
 # The remaining ``tests/openai_conformance/*`` files are the V1 SDK-compat suite + the DEFERRED
 # live gates (real-TCP / Node SDK / uvicorn / the C2 replay): they target the v1 ``ai_mesh_gateway``
 # app (a separate CI job installs the v1 deps + PYTHONPATH) or stand up a real socket, so they stay
-# ignored here. ``tests/parity`` is the v1 parity harness, also a separate job.
+# ignored here.
+# B3 note (task 7.2 — DONE): ``test_live_tcp_8300.py`` is turned ON here (its ``--ignore`` line is
+# removed, so it is COLLECTED). It no longer hard-imports ``openai`` + ``httpx`` at module scope —
+# task 7.2 converted those to ``pytest.importorskip`` — so on a framework-free ``.[dev]`` tree it
+# skips cleanly at collection instead of ERRORing. Its ``pytest.mark.skipif`` on
+# ``AMF_CONFORMANCE_BASE_URL`` additionally skips it at run-time when no live server URL is wired, so
+# the default framework-free ``pytest`` run (no conformance extra, env unset) stays green: the module
+# importorskips the SDK and the skipif leaves it unselected. Its RUN-GREEN counterpart lives in
+# ``test_b3_live_serve.py`` (the booted gateway_v2 child + the same R5.5 SDK-visible contract over
+# the real socket). ``test_openai_sdk_compat_live_uvicorn.py`` below targets the OLD v1 gateway
+# (``ai_mesh_gateway.main``), NOT gateway_v2 — it is out of B3 scope and stays ignored.
+# ``tests/parity`` is the v1 parity harness, also a separate job.
 addopts = """
     --ignore=tests/parity
     --ignore=tests/openai_conformance/stub_server.py
     --ignore=tests/openai_conformance/node
-    --ignore=tests/openai_conformance/test_live_tcp_8300.py
     --ignore=tests/openai_conformance/test_malformed_sse_frame.py
     --ignore=tests/openai_conformance/test_mcp_rag_vector_shapes.py
     --ignore=tests/openai_conformance/test_openai_sdk_compat.py
