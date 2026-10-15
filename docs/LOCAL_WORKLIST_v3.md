@@ -200,6 +200,26 @@ sitting. See the GPU/instance config in the chat history (GCP primary; AWS g6=L4
 
 ---
 
+## C2. Backend clean-room detection chain (ACTIVE local track — post-B9)
+
+The B1–B9 serving-path optionals are done. The remaining locally-buildable backend work is the
+clean-room **detection + resolver** core; per-card status now lives in the runbook §10.8 task
+index (Local-status column). Done so far on this track: **GW07 — the single pure resolver**
+(`resolve/`, §10.5.3 + C22, runbook-strict MONITOR non-enforcing incl. posture; name-free
+tie-break; REWRITE→REDACT interim). The next cards:
+
+| Card | What | Local? |
+|---|---|---|
+| ✅ GW07 | Single pure `resolve(findings, plan, phase)` — the one decision authority | DONE (local half) |
+| 🔜 GW08 | Detector framework + `GuardBackend` interface (CPU `local_onnx` is the CI default) | NEXT — `detect/` is a 3-line stub; local-buildable |
+| 🔜 GW09 | Deterministic PII/secret/credential detectors + byte-verified redaction | BUILDABLE — pure, local; depends GW08 |
+| 🟡 GW10 | Semantic windowing + per-request FPR budget + unsupported-language posture | PARTIAL — framework/windowing local; the guard-model CALL is cloud/GPU (GW25) |
+
+GW08 is the recommended next pick: it unblocks GW09/GW10 and the real detector wiring behind the
+shipped `OutputResolver` seam, and its CPU `local_onnx` backend keeps the track off the GPU fleet.
+
+---
+
 ## D. Deferred — cloud / GPU / fleet only (NOT local work; parked for visibility)
 
 These are category-3 (can't write honest local code) or pure measurement/ops/hardware. Do NOT add
@@ -227,6 +247,6 @@ them to the local worklist.
 
 ---
 
-_Last updated: 2026-10-14. Companion to `docs/AI_MESH_MASTER_RUNBOOK_v3_BACKEND_REWRITE.md`
+_Last updated: 2026-10-20. Companion to `docs/AI_MESH_MASTER_RUNBOOK_v3_BACKEND_REWRITE.md`
 (the source of truth for what/why). Completion is mirrored in the runbook's §0.3 corrections
 register and §0.5 open-gates table._
