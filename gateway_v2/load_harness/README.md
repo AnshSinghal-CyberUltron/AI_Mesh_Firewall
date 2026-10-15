@@ -1,7 +1,10 @@
 # load_harness — B6 / R2-21 (load harness v2.3: open-loop Poisson load + measurement)
 
 This package is the **local half** of **GW20b** (R2-21): "harness v2.3", the open-loop Poisson
-load-and-measurement instrument for the `gateway_v2` serving path. It generates open-loop arrivals
+load-and-measurement instrument for the `gateway_v2` serving path. (The release version — `v2.3`
+above — is **not an independent literal**: it is the value of the single `HARNESS_VERSION` stamp in
+`load_harness/version.py`, the one authority. This README derives from that stamp and is not a
+second source of truth; a release-version change happens only in `version.py` — B7 / R2-20, Req 1.4.) It generates open-loop arrivals
 under an injected clock + injected `random.Random`, mixes in the five GW20b strata, collects
 client-side C4, climbs a ≤ 10%-step rate ladder with 3 repeats, and emits the GW20b per-run report —
 then drives a local **dry-run** against one gateway booted by B1's `build_app` and hosted by B3's

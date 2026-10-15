@@ -1,4 +1,4 @@
-"""B6 / R2-21 — load harness v2.3: the open-loop Poisson load-and-measurement instrument.
+"""B6 / R2-21 — load harness: the open-loop Poisson load-and-measurement instrument.
 
 The local half of the GW20b capacity instrument for the `gateway_v2` serving path. It generates
 open-loop Poisson (and constant) arrivals under an injected clock + injected `random.Random`,
@@ -19,6 +19,18 @@ The one allowed import edge. The harness imports DOWNWARD into `gateway_v2` only
 so no serving-path edge is added and `lint-imports` stays contracts-kept. The harness holds no
 capacity-position literal (the pass bound is read from `ResourceContract.target_p99_ms`) and no
 module-level mutable; its value types are frozen + slots.
+
+Release version (B7 / R2-20, partial — Req 1.4). The authoritative harness release version lives
+in `load_harness/version.py` as the single `HARNESS_VERSION` stamp; it is NOT restated as a
+separate literal here. ``__version__`` below derives from that one stamp (`str(HARNESS_VERSION)`),
+so a release-version change happens in exactly one place and nothing can diverge (the
+single-authority invariant, Property 6).
 """
 
-__all__: tuple[str, ...] = ()
+from load_harness.version import HARNESS_VERSION
+
+#: The package release version, DERIVED from the single `HARNESS_VERSION` stamp in `version.py`
+#: (never a second hardcoded literal, Req 1.4).
+__version__: str = str(HARNESS_VERSION)
+
+__all__: tuple[str, ...] = ("__version__",)
