@@ -1,0 +1,126 @@
+{
+  "pbtResults": {},
+  "executionHistory": {
+    "1. Implement the resolve-layer production code in one pass": [
+      {
+        "executionId": "1bac7c05-6d3e-4c84-9893-a8d0977e6dd4",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792056259977
+      },
+      {
+        "executionId": "1bac7c05-6d3e-4c84-9893-a8d0977e6dd4",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792056271216
+      },
+      {
+        "executionId": "1bac7c05-6d3e-4c84-9893-a8d0977e6dd4",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792056632160
+      }
+    ],
+    "3. Run the GW07 verification gate": [
+      {
+        "executionId": "1bac7c05-6d3e-4c84-9893-a8d0977e6dd4",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792056260006
+      },
+      {
+        "executionId": "1bac7c05-6d3e-4c84-9893-a8d0977e6dd4",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792057023374
+      },
+      {
+        "executionId": "1bac7c05-6d3e-4c84-9893-a8d0977e6dd4",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792057850295
+      }
+    ],
+    "4. Final checkpoint": [
+      {
+        "executionId": "1bac7c05-6d3e-4c84-9893-a8d0977e6dd4",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792056260031
+      },
+      {
+        "executionId": "1bac7c05-6d3e-4c84-9893-a8d0977e6dd4",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792057855100
+      }
+    ],
+    "2. Write the single resolver test file in one pass": [
+      {
+        "executionId": "1bac7c05-6d3e-4c84-9893-a8d0977e6dd4",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792056638661
+      },
+      {
+        "executionId": "1bac7c05-6d3e-4c84-9893-a8d0977e6dd4",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792057002199
+      }
+    ],
+    "2.1 Write the seeded generator strategy + per-iteration structural-invariants bundle": [
+      {
+        "executionId": "1bac7c05-6d3e-4c84-9893-a8d0977e6dd4",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792057007878
+      }
+    ],
+    "2.2 Write Property 1 — no non-derivable disposition": [
+      {
+        "executionId": "1bac7c05-6d3e-4c84-9893-a8d0977e6dd4",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792057008837
+      }
+    ],
+    "2.3 Write Property 2 — adding a MONITOR rule never changes the disposition": [
+      {
+        "executionId": "1bac7c05-6d3e-4c84-9893-a8d0977e6dd4",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792057010244
+      }
+    ],
+    "2.4 Write Property 3 — adding a SKIPPED finding never changes the disposition": [
+      {
+        "executionId": "1bac7c05-6d3e-4c84-9893-a8d0977e6dd4",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792057011656
+      }
+    ],
+    "2.5 Write Property 4 — determinism": [
+      {
+        "executionId": "1bac7c05-6d3e-4c84-9893-a8d0977e6dd4",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792057013064
+      }
+    ],
+    "2.6 Write Property 5 — adding a REDACT/FLAG/ALLOW rule never removes a BLOCK": [
+      {
+        "executionId": "1bac7c05-6d3e-4c84-9893-a8d0977e6dd4",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792057014508
+      }
+    ],
+    "2.7 Write Property 6 — renaming rules never changes the disposition": [
+      {
+        "executionId": "1bac7c05-6d3e-4c84-9893-a8d0977e6dd4",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792057015399
+      }
+    ],
+    "2.8 Write the LGW07 example tests": [
+      {
+        "executionId": "1bac7c05-6d3e-4c84-9893-a8d0977e6dd4",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792057016844
+      }
+    ],
+    "2.9 Write the edge/identity example tests": [
+      {
+        "executionId": "1bac7c05-6d3e-4c84-9893-a8d0977e6dd4",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792057017834
+      }
+    ]
+  }
+}
