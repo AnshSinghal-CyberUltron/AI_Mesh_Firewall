@@ -1,0 +1,565 @@
+{
+  "pbtResults": {
+    "4.9 Property test — retry honors `x-should-retry: false` and reports amplification (PBT)": {
+      "status": "passed",
+      "lastRunTimestamp": 1791988237709
+    },
+    "6.3 Property test — C4 reconciliation matches `latency_slo` (PBT)": {
+      "status": "passed",
+      "lastRunTimestamp": 1791993674396
+    }
+  },
+  "executionHistory": {
+    "1.1 Edit `pyproject.toml` + create the package skeleton": [
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791986007819
+      },
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791986022273
+      },
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791986689625
+      }
+    ],
+    "2.1 Implement the frozen run-spec value types + operational constants": [
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791986007872
+      },
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791986695593
+      },
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791987524374
+      }
+    ],
+    "3.1 Implement the Poisson + constant arrival schedule under injected clock + rng": [
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791986007929
+      },
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791987532254
+      },
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791987859516
+      }
+    ],
+    "4.1 Multi-key stratum — `strata/keys.py`": [
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791986007983
+      },
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791987533679
+      },
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791987860891
+      }
+    ],
+    "4.2 Long-prompt corpus stratum — `strata/prompts.py`": [
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791986008034
+      },
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791987535096
+      },
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791987862276
+      }
+    ],
+    "4.3 SDK-retry client stratum — `strata/retry.py`": [
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791986008087
+      },
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791987536019
+      },
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791987863736
+      }
+    ],
+    "4.4 Secret-shaped-output stratum — `strata/secret_output.py`": [
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791986008142
+      },
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791987537110
+      },
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791987864597
+      }
+    ],
+    "4.5 Tenant-scale stratum — `strata/tenants.py`": [
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791986008223
+      },
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791987891932
+      },
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791988071396
+      }
+    ],
+    "4.6 Request-plan composer — `request_plan.py`": [
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791986008311
+      },
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791988079249
+      },
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791988301405
+      }
+    ],
+    "5. Gate — pure core (packaging + config + arrivals + strata + request-plan) green": [
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791986008356
+      },
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791988815270
+      }
+    ],
+    "6.1 Implement the C4 collector delegating p99 / tail-exclusion / delta to `latency_slo`": [
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791986008408
+      },
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791988334763
+      },
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791988752804
+      }
+    ],
+    "7.1 Implement the rate ladder — `ladder.py`": [
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791986008464
+      },
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791988336194
+      },
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791988756555
+      }
+    ],
+    "7.2 Implement the per-run report — `report.py`": [
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791986008519
+      },
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791988338345
+      },
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791988751422
+      }
+    ],
+    "8.1 Implement the async open-loop dispatcher — `driver.py`": [
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791986008570
+      },
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791988825292
+      },
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791989322417
+      }
+    ],
+    "8.2 Implement the `python -m load_harness` entrypoint — `__main__.py`": [
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791986008624
+      },
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791989331424
+      },
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791989710297
+      }
+    ],
+    "9. Gate — collector + ladder + report + driver green": [
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791986008673
+      },
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791990176333
+      }
+    ],
+    "10.1 Implement the dry-run orchestration — `dryrun.py`": [
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791986008722
+      },
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791990182419
+      },
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791991808009
+      }
+    ],
+    "11. Gate — dry-run green (local integration de-risks the cloud one-shot)": [
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791986008775
+      },
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791992266870
+      }
+    ],
+    "12.1 Write the harness README + name every Deferred_Cloud_Gate": [
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791986008836
+      },
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791992267958
+      },
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791992434532
+      }
+    ],
+    "13.1 Run the full gate and map evidence to the card format": [
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791986008888
+      },
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791992441994
+      },
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791993116968
+      }
+    ],
+    "14. Final checkpoint": [
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791986008943
+      },
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791993117820
+      }
+    ],
+    "1. Packaging + `load_harness/` package skeleton (built first so mypy/ruff/packaging see it)": [
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791986689655
+      }
+    ],
+    "2. Pure run-spec config + named operational constants — `config.py`": [
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791987524440
+      }
+    ],
+    "3. Open-loop arrival generator — `arrivals.py`": [
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791987859575
+      }
+    ],
+    "3.2 Property test — Poisson arrivals match the configured process (PBT)": [
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791988080634
+      },
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791988305271
+      }
+    ],
+    "4.8 Property test — key/org/tenant populations honor their floors (PBT)": [
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791988082092
+      },
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791988304284
+      }
+    ],
+    "4.9 Property test — retry honors `x-should-retry: false` and reports amplification (PBT)": [
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791988083332
+      },
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791988302935
+      }
+    ],
+    "4. The five strata generators + request-plan composer": [
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791988301471
+      }
+    ],
+    "4.7 Property test — strata shares converge to configured shares (PBT)": [
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791988324517
+      },
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791988755470
+      }
+    ],
+    "4.10 Property test — determinism: same seed + clock ⇒ identical schedule + strata (PBT)": [
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791988325478
+      },
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791988754603
+      }
+    ],
+    "6. Client-side C4 collector — `c4.py` (reuses `runtime/latency_slo`)": [
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791988752853
+      }
+    ],
+    "7. Rate ladder + per-run report": [
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791988756596
+      }
+    ],
+    "7.4 Unit tests — report + ladder edge cases": [
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791988826126
+      },
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791989320044
+      }
+    ],
+    "7.3 Property test — ladder highest-pass / first-fail invariants (PBT)": [
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791988827361
+      },
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791989321408
+      }
+    ],
+    "8.3 Property test — open-loop independence from server speed (PBT, async)": [
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791989332454
+      },
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791989711340
+      }
+    ],
+    "8. Async open-loop driver + entrypoint": [
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791989710357
+      }
+    ],
+    "8.4 Property test — schedule-drop accounting is exact (PBT, async)": [
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791989717495
+      },
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791990124058
+      }
+    ],
+    "10. Local dry-run against B1 + B3 + B4 fake guard — `dryrun.py` + integration test": [
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791991808050
+      }
+    ],
+    "10.2 Integration test — full Poisson ladder against the booted local gateway": [
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791991817248
+      },
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791992202306
+      }
+    ],
+    "12. Docs + deferred-cloud-gate recording — `load_harness/README.md`": [
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791992434569
+      }
+    ],
+    "13. Final verification gate": [
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791993117014
+      }
+    ],
+    "6.2 Property test — C4 is the worst chunk, holdback-excluded, errors `+∞` (PBT)": [
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791993143031
+      },
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791993300223
+      }
+    ],
+    "6.3 Property test — C4 reconciliation matches `latency_slo` (PBT)": [
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791993301142
+      },
+      {
+        "executionId": "06b83874-b017-4bf4-a21f-4dfbef00431d",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791993700243
+      }
+    ]
+  }
+}
