@@ -42,6 +42,9 @@ serve = [
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["gateway_v2*", "state_control*", "audit_control*", "load_harness*", "lint*"]
+# B7/R2-20: a Frozen_Release (load_harness/bin/<version>/) is a data-only tar+json build artifact,
+# not an importable package. Exclude it so a stray .py there can never be discovered as a package.
+exclude = ["load_harness.bin*"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
@@ -91,6 +94,7 @@ extend-exclude = [
     "tests/openai_conformance/test_openai_sdk_compat_phase5_correlation.py",
     "tests/openai_conformance/test_openai_sdk_compat_phase6_guards.py",
     "tests/openai_conformance/stub_server.py",
+    "load_harness/bin",
 ]
 
 [tool.ruff.lint]
@@ -103,6 +107,8 @@ known-first-party = ["gateway_v2", "state_control", "audit_control", "load_harne
 python_version = "3.12"
 strict = true
 files = ["gateway_v2", "state_control", "audit_control", "load_harness", "lint"]
+# B7/R2-20: never type-check a Frozen_Release (data-only tar+json artifact under load_harness/bin/).
+exclude = ["load_harness/bin/"]
 
 [[tool.mypy.overrides]]
 module = ["ai_mesh_gateway.*"]

@@ -80,3 +80,8 @@ awscliv2.zip
 
 # GW05c drill artifacts: regenerable by scripts/gw05c_local_drills.sh
 docs/plans/evidence/**/junit-*.xml
+
+# B7/R2-20: immutable harness Frozen_Release build artifacts. Reproducible from source via
+# `python -m load_harness.release freeze` (byte-stable), so not committed — keeps a frozen,
+# .py-less tar+json archive out of git, review, and tooling scope.
+gateway_v2/load_harness/bin/
