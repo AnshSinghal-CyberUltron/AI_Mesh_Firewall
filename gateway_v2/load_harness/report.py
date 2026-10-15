@@ -63,8 +63,36 @@ from typing import ClassVar
 __all__ = (
     "GpuBusy",
     "ReasonMix",
+    "RunProvenance",
     "RunReport",
 )
+
+
+@dataclass(frozen=True, slots=True)
+class RunProvenance:
+    """The immutable harness release a run was measured under (B7 / R2-20).
+
+    A capacity number is only trustworthy if it is attributable to a known, unmodified harness
+    release — the exact failure R2-20 cites (editing shared harness scripts in place killed a
+    running measurement). ``RunProvenance`` attributes a run to an exact immutable Frozen_Release so
+    the resulting :class:`RunReport` is tied to a specific released version rather than inferred
+    from a docstring (Req 5.1).
+
+    It carries plain ``str`` / ``bool`` values only — the Version_Stamp identifier and the aggregate
+    content digest as strings, and the Integrity_Guard verdict as a bool — never a ``FrozenRelease``
+    object, so ``report.py`` stays free of a ``release.py`` dependency and no import cycle is
+    introduced. Frozen + slots so a report's provenance is an immutable value (Req 6.2).
+
+    - ``harness_version`` — the Frozen_Release's Version_Stamp (e.g. ``"v2.3"``) the run ran as.
+    - ``aggregate_sha256`` — the verified aggregate content digest of the release that produced the
+      run.
+    - ``integrity_intact`` — the Integrity_Guard verdict at run time (Req 5.2): ``True`` when the
+      release verified intact.
+    """
+
+    harness_version: str
+    aggregate_sha256: str
+    integrity_intact: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -207,6 +235,12 @@ class RunReport:
 
     Arrival mode (Req 1.6): ``arrival_mode_constant`` is ``True`` when the run used constant
     arrivals, so its published limits are labeled upper bounds.
+
+    Run provenance (B7 / R2-20; Req 5.1, 5.4): ``provenance`` is an OPTIONAL :class:`RunProvenance`
+    recording the exact immutable harness release the run was measured under, so a report is
+    attributable to a known, unmodified release. It is additive and defaults to ``None`` — every
+    existing construction site that does not supply provenance keeps working — so a run that records
+    no provenance (an un-provenanced offline run) is simply ``provenance is None``.
     """
 
     c4_p99_ms: float
@@ -224,3 +258,4 @@ class RunReport:
     distinct_tenants: int
     gpu_busy: GpuBusy
     arrival_mode_constant: bool
+    provenance: RunProvenance | None = None

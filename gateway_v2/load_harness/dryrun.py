@@ -55,8 +55,10 @@ import random
 import statistics
 from collections.abc import Sequence
 from dataclasses import dataclass
+from pathlib import Path
 
 from gateway_v2.runtime.resources import ResourceContract, load_contract
+from load_harness import release
 from load_harness._dryrun_app import (
     AsgiStreamClient,
     DryRunDependencyMissing,
@@ -69,16 +71,27 @@ from load_harness.c4 import C4Summary, summarize
 from load_harness.config import ArrivalMode, RunSpec
 from load_harness.driver import OfferedRun, measure_headroom, run_offered
 from load_harness.ladder import LadderResult, RunOutcome, evaluate_ladder, next_rate
-from load_harness.report import GpuBusy, ReasonMix, RunReport
+from load_harness.release import (
+    FrozenRelease,
+    IntegrityManifest,
+    ManifestEntry,
+    MutatedCopyError,
+    file_content_sha256,
+    iter_source_files,
+    verify,
+)
+from load_harness.report import GpuBusy, ReasonMix, RunProvenance, RunReport
 from load_harness.request_plan import PlannedRequest, Populations, plan_requests
 from load_harness.strata import keys as keys_stratum
 from load_harness.strata import prompts as prompts_stratum
 from load_harness.strata import retry as retry_stratum
 from load_harness.strata import tenants as tenants_stratum
+from load_harness.version import HARNESS_VERSION
 
 __all__ = (
     "DryRunDependencyMissing",
     "DryRunResult",
+    "MutatedCopyError",
     "VerificationOutcomes",
     "attach_asgi",
     "build_dry_run_app",
@@ -304,6 +317,78 @@ def _build_verification(
     )
 
 
+# ---- Run provenance (B7 / R2-20) ----------------------------------------------------------------
+
+
+def _live_package_root() -> Path:
+    """The LIVE ``load_harness/`` package directory — the dir that contains ``release.py``.
+
+    The default local dry-run runs from the live source tree (not a frozen ``bin/`` copy), so the
+    attributable aggregate is computed over the live package. ``release.__file__`` is
+    ``.../load_harness/release.py``; its parent is the package root :func:`iter_source_files`
+    enumerates. Resolved once per dry-run (the source does not change mid-run).
+    """
+    return Path(release.__file__).resolve().parent
+
+
+def _live_source_aggregate(package_root: Path) -> str:
+    """The aggregate content digest of the LIVE ``load_harness/`` source (Req 5.1).
+
+    Computed the SAME way :func:`load_harness.release.freeze` builds a manifest: enumerate the
+    canonical source set (:func:`iter_source_files`), digest each file's CONTENT bytes
+    (:func:`file_content_sha256`), and fold them through the one
+    :meth:`IntegrityManifest.compute_aggregate` rule. So a live-tree run's provenance digest equals
+    the aggregate a freeze of the same source would record — the report is attributable to the exact
+    live source it ran against, even though no frozen artifact exists.
+    """
+    entries = tuple(
+        ManifestEntry(
+            relpath=relpath.as_posix(),
+            sha256=file_content_sha256(package_root / relpath),
+        )
+        for relpath in iter_source_files(package_root)
+    )
+    return IntegrityManifest.compute_aggregate(entries)
+
+
+def _resolve_provenance(frozen: FrozenRelease | None) -> RunProvenance:
+    """Resolve the :class:`RunProvenance` a dry-run attaches to every report (Req 5.1-5.3, 4.5).
+
+    Two paths, exactly as the design's Run-provenance / Error-Handling sections specify:
+
+    - ``frozen is None`` (the DEFAULT local dry-run from the live tree): there is no frozen artifact
+      to verify, so integrity is honestly ``True`` for the live source — attach
+      :data:`HARNESS_VERSION` + the live-source aggregate digest with ``integrity_intact=True`` so a
+      report is always attributable without ever claiming to be a frozen release it is not.
+    - ``frozen is not None`` (a run pointed at a ``bin/<version>/`` Frozen_Release): verify it FIRST
+      via :func:`load_harness.release.verify`; on :attr:`IntegrityResult.is_mutated_copy` raise
+      :class:`MutatedCopyError` to REFUSE the run (never record a result as the released version,
+      Req 5.3, 4.5); when intact, attach the frozen release's stamped version + the verified
+      aggregate digest with ``integrity_intact=True`` (Req 5.1, 5.2).
+    """
+    if frozen is None:
+        return RunProvenance(
+            harness_version=str(HARNESS_VERSION),
+            aggregate_sha256=_live_source_aggregate(_live_package_root()),
+            integrity_intact=True,
+        )
+    result = verify(frozen)
+    if result.is_mutated_copy:
+        raise MutatedCopyError(
+            f"refusing run from frozen release {frozen.version!r}: mutated copy "
+            f"(mutated={result.mutated_files} missing={result.missing_files} "
+            f"extra={result.extra_files})"
+        )
+    aggregate = IntegrityManifest.from_json(
+        frozen.manifest_path.read_text(encoding="utf-8")
+    ).aggregate_sha256
+    return RunProvenance(
+        harness_version=frozen.version,
+        aggregate_sha256=aggregate,
+        integrity_intact=True,
+    )
+
+
 # ---- Per-rate run + report ----------------------------------------------------------------------
 
 
@@ -382,6 +467,7 @@ def _build_report(
     offered: OfferedRun,
     planned: Sequence[PlannedRequest],
     c4: C4Summary,
+    provenance: RunProvenance | None = None,
 ) -> RunReport:
     """Build the GW20b per-run :class:`RunReport` for one offered rate (Req 11, Req 3–7, Req 1.6).
 
@@ -393,6 +479,11 @@ def _build_report(
     none, so they are 0.0 (an honest zero, not fabricated), and GPU-busy is the explicit UNAVAILABLE
     sentinel (Req 11.6 / 15.2). ``reason_mix`` is built from the offered run's terminal outcomes
     (admitted vs errored, Req 11.4). ``arrival_mode_constant`` is False (Poisson ladder, Req 12.2).
+
+    ``provenance`` (B7 / R2-20; Req 5.1) is the :class:`RunProvenance` the run resolved ONCE at the
+    top of :func:`run_dry_run_async` (the live-source stamp + aggregate, or a verified frozen
+    release) and threads onto every per-rate report so each is attributable to the exact release it
+    ran under; it defaults to ``None`` so this builder stays additive and non-breaking.
     """
     total = len(offered.records)
     errored = sum(1 for r in offered.records if r.outcome.errored)
@@ -420,6 +511,7 @@ def _build_report(
         distinct_tenants=distinct_tenants,
         gpu_busy=GpuBusy.UNAVAILABLE,
         arrival_mode_constant=False,
+        provenance=provenance,
     )
 
 
@@ -432,6 +524,7 @@ async def run_dry_run_async(
     *,
     contract: ResourceContract,
     max_steps: int = 3,
+    frozen: FrozenRelease | None = None,
 ) -> DryRunResult:
     """Run the full Poisson rate ladder end to end against the booted gateway (Req 12).
 
@@ -445,10 +538,21 @@ async def run_dry_run_async(
     secret-shaped bytes through the real holdback path at the configured share; the realized
     secret-shaped share + the honest holdback-mechanism-not-detector note are recorded (Req 6).
 
+    Run provenance (Req 5.1-5.3, 4.5): before measuring, the run resolves a :class:`RunProvenance`
+    ONCE via :func:`_resolve_provenance` and threads it onto EVERY per-rate :class:`RunReport` so a
+    report is always attributable to the exact release it ran under. The OPTIONAL ``frozen``
+    parameter selects which release: left ``None`` (the default) the run attributes to the LIVE
+    source tree — :data:`HARNESS_VERSION` + the live-source aggregate digest, ``integrity_intact``
+    ``True`` (honest for a non-frozen local run); pointed at a ``bin/<version>/`` Frozen_Release the
+    run verifies it FIRST and raises :class:`MutatedCopyError` on a Mutated_Copy (refusing the run,
+    recording nothing as the released version) or attributes to the frozen stamp + verified digest
+    when intact. ``frozen`` defaults to ``None`` so every existing caller is unchanged.
+
     ``max_steps`` bounds the ladder for the local de-risk (the real knee search is a cloud gate);
     the ``planned`` tuple's length sets the per-rate offered request count. The httpx client is
     closed on exit.
     """
+    provenance = _resolve_provenance(frozen)
     count = len(planned)
     rng = random.Random(run_spec.seed)
     app = build_dry_run_app(contract, build_provider(run_spec, rng))
@@ -481,6 +585,7 @@ async def run_dry_run_async(
                     offered=offered,
                     planned=step_plan,
                     c4=c4,
+                    provenance=provenance,
                 )
             )
             c4_summaries.append(c4)
