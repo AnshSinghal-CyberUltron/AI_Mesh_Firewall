@@ -151,7 +151,8 @@ gate (deferred)" is the cloud half that is explicitly NOT in scope for the local
   edit is rejected / detected.
 - **Depends on.** B6 (the harness it versions). Category 1 (small).
 
-### B8. 🔜 R2-13 (partial) — the flush chaos drill + declared failure behaviour doc  **(NEXT)**
+### B8. ✅ R2-13 (partial) — the flush chaos drill + declared failure behaviour doc  **(DONE)**
+- **DONE (2026-10-18).** Shipped + full gate green on `suraj-revamp` (flush drill **10 passed**; full offline suite **1697 passed / 95 skipped / 1 xfailed** = B7's 1687 baseline + the 10 new flush-drill tests, confirming the test-only addition broke nothing; mypy --strict 185 files, ruff, import-linter 2/2, 6 AST gates, `unscanned_channels()==()`). 2 commits (`test(gw-b8)` the drill, `docs(gw-b8)` the doc + spec). Spec: `.kiro/specs/flush-drill-r2-13`. Ships ONLY a test + a co-located doc, no production code: `tests/state_control/test_flush_drill_r2_13.py` generalizes the shipped single-example flush→restore (`test_lgw05b_rehydrate_stamp.py`) into a seeded, randomized, multi-kind property drill (3 helpers `_lab`/`_seed_random`/`_restored_matches_durable` + 5 property tests at ≥10,000 iters, no hypothesis + 5 example/integration tests): `MemoryStore.flush` wipes the published copy, one `Rehydrator.round_once(deep=True)` restores every kind from the untouched durable `MemoryControlDB` with **0 Restore_Violations** (position, counts, engaged-set size and the full per-key index), bounded by a deterministic ONE round — never a wall-clock figure. `state_control/docs/declared-failure-behaviour.md` publishes the C36 store-failure semantics + the local-vs-deferred drill table. L05b-3 modelled honestly (no faked `FOR UPDATE` lock). Partition + Redis forced-failover (G-13) and the ≈2.05 s wall-clock cert (T21) stay deferred.
 - **Why.** R2-13 asks to publish the declared store-failure behaviour and run chaos drills (flush /
   partition / forced-failover). The **flush** drill is locally runnable against the shipped
   `MemoryStore` / fakeredis twins; partition + forced-failover are cloud.
@@ -163,7 +164,7 @@ gate (deferred)" is the cloud half that is explicitly NOT in scope for the local
   Cloud SQL + store overlap (G-14). Category 2.
 - **Depends on.** nothing new (the re-hydrator + twins are shipped). NARROW — low value; optional.
 
-### B9. 🔜 R2-24 (partial) — validation-environment watchdog utilities
+### B9. 🔜 R2-24 (partial) — validation-environment watchdog utilities  **(NEXT)**
 - **Why.** R2-24: idle watchdog, burn-rate monitor, store-memory alarm, audit guard, owner-visible
   teardown rule. The store-memory alarm partly exists (GW14c). The rest are local-codeable
   monitoring utilities, though they are ops tooling that only earns its keep against a running env.
