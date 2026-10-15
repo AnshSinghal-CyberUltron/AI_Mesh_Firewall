@@ -48,6 +48,7 @@ These are here for reference and to show what each later item can build on. Evid
 | ✅ B3 (serving entrypoint) | uvicorn multiprocess host for `build_app` (`edge/serve.py`): honest fail-closed boot, `interface=asgi3`, `workers=contract.workers()`, SIGTERM→GW19 drain, `WorkerSupervisor` respawn seam, `serve` extra; real-socket conformance (stock SDK + curl + `/readyz` + `/metrics` + worker crash + SIGTERM drain) | `.kiro/specs/serving-entrypoint-gw-b3` |
 | ✅ B4 (GW17/GW18, provider egress + routing) | Real streaming HTTP/SSE `HttpProviderClient` (generation egress, drops in behind the shipped `ProviderClient` seam; httpx under the `conformance` extra) + C43 load-aware `GuardRouter` (min-queue-wait over an injected load snapshot) + two `resources.py` capacity accessors; local verification against a `Fake_Upstream`/`Fake_Guard` incl. an end-to-end stock-SDK completion through the real client via `build_app` | `.kiro/specs/provider-egress-gw-b4` |
 | ✅ B5 (GW16b, edge + delta SLO) | nginx edge: upstream keepalive (64/30s/1000) fixes 0.9986 conns/req + 502 above ~420 RPS; SSE transparency (`X-Accel-Buffering no`, `proxy_read_timeout 400s`); unknown-Host `default_server` 403; 5 security headers; `server_tokens off`. Firewall-added-delta SLO as a testable `runtime/latency_slo.py` (client-side delta vs direct path, ~40ms lost-segment tail-trim, NOT the gateway histogram) bound from `contract.target_p99_ms`. Docker edge harness (`nginx:1.30-alpine`, envsubst `B3_UPSTREAM`); static keepalive grep gate + docker-gated live L16b-1/-3/-6/-4 (L16b-1 = 0.0067 conns/req) | `.kiro/specs/edge-gw16b` |
+| ✅ B6 (R2-21, load harness v2.3) | New top-level `load_harness/` sibling package (outside the import-linter layer contract, like `state_control`/`audit_control`): **open-loop Poisson** arrivals (inverse-CDF, injected clock+seed) + the five GW20b **strata** (multi-key >=2k/>=200, long-prompt 4-7k@1/5/25%, SDK-retry honoring `x-should-retry:false`+amplification, secret-shaped output, tenant-scale >=10k); **client-side C4** (worst-chunk, holdback-excluded, errors=+inf) that DELEGATES p99/tail/delta to the shipped `runtime/latency_slo` (B5); **ladder** (<=10% steps, 3/3 repeats, highest-pass/first-fail, generator-bound excluded); GW20b per-run **report** (`GpuBusy.UNAVAILABLE` sentinel); async **open-loop driver** (one task/arrival, gather-once) + schedule-drop + headroom self-proof; `python -m load_harness`. **Dry-run** boots `build_app` with a scripted `StubProviderClient` over in-process `httpx.ASGITransport` (non-TLS), runs the full Poisson ladder, verifies arrival distribution / strata shares / C4; secret-shaped bytes flow through the real GW12b holdback path. 10 seeded >=10k-iter properties + units + live dry-run (62 passed) | `.kiro/specs/load-harness-r2-21` |
 
 ---
 
@@ -119,7 +120,8 @@ gate (deferred)" is the cloud half that is explicitly NOT in scope for the local
 - **Live gate (deferred).** G-10 (TLS cost at 600 RPS), G-11 (internet-vantage), G-13 (store gap behind a health-checked NLB). Category 2.
 - **Depends on.** B3 (a running server for the edge to proxy to).
 
-### B6. 🔜 R2-21 — load harness v2.3 (the measurement instrument)  **(NEXT)**
+### B6. ✅ R2-21 — load harness v2.3 (the measurement instrument)  **(DONE)**
+- **DONE (2026).** Shipped + full gate green on `suraj-revamp` (full offline suite **1631 passed / 100 skipped / 1 xfailed**, +49 harness tests over the B5 baseline; mypy --strict 183 files, ruff, import-linter 2/2, 6 AST gates, `unscanned_channels()==()`); 5 per-layer commits. Spec: `.kiro/specs/load-harness-r2-21`. Built per runbook GW20/GW20b §601... — the LOCAL half of the GW20b capacity instrument. `load_harness/` is a top-level sibling OUTSIDE `root_packages` (no serving-path edge; one allowed downward edge into `runtime.latency_slo` + `ResourceContract`). Open-loop honesty verified end-to-end: a slow server never throttles the offered rate; schedule drops fail the run; generator-bound runs are excluded from the knee. The live ASGITransport dry-run drove real streams through the booted gateway (arrival/strata/C4 verifications clean; secret-shaped bytes through the real holdback mechanism — NOT the GW07/GW08 detector, a named deferred seam).
 - **Why.** No load/capacity harness exists in `gateway_v2`. R2-01 and gates G-01/05/06/09 all need
   it. The round-2 harness is an external tool; this builds the local-runnable equivalent.
 - **Scope.** A client program generating the GW20b strata: **Poisson arrivals** (the core of R2-01),
@@ -137,7 +139,7 @@ gate (deferred)" is the cloud half that is explicitly NOT in scope for the local
   harness is complete; only the fleet it drives is cloud).
 - **Depends on.** B1, B3, B4 (needs a real local endpoint + a fake guard to drive).
 
-### B7. 🔜 R2-20 (partial) — immutable harness release hygiene
+### B7. 🔜 R2-20 (partial) — immutable harness release hygiene  **(NEXT)**
 - **Why.** R2-20: "the harness is released immutably (as bin/v2.N) and runs from frozen copies"
   (editing a running harness in place killed a measurement). The `/dev/shm` RemoveIPC half is HOST
   config, not code — out of scope.
