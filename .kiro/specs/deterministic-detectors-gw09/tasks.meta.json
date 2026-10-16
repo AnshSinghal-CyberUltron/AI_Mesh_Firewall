@@ -1,0 +1,251 @@
+{
+  "pbtResults": {},
+  "executionHistory": {
+    "1. Implement the single canonicalization pass, span map, and bounded decode budget": [
+      {
+        "executionId": "724c3457-381f-4b73-b8af-c1447d562f81",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792069390543
+      },
+      {
+        "executionId": "724c3457-381f-4b73-b8af-c1447d562f81",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792069398888
+      },
+      {
+        "executionId": "724c3457-381f-4b73-b8af-c1447d562f81",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792069769264
+      }
+    ],
+    "2. Implement the versioned, hashed deterministic ruleset": [
+      {
+        "executionId": "724c3457-381f-4b73-b8af-c1447d562f81",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792069390648
+      },
+      {
+        "executionId": "724c3457-381f-4b73-b8af-c1447d562f81",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792069400036
+      },
+      {
+        "executionId": "724c3457-381f-4b73-b8af-c1447d562f81",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792070030940
+      }
+    ],
+    "3. Implement the single combined-alternation matcher": [
+      {
+        "executionId": "724c3457-381f-4b73-b8af-c1447d562f81",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792069390719
+      },
+      {
+        "executionId": "724c3457-381f-4b73-b8af-c1447d562f81",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792070136267
+      },
+      {
+        "executionId": "724c3457-381f-4b73-b8af-c1447d562f81",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792070353119
+      }
+    ],
+    "4. Implement the one byte-verified redactor and reusable verify": [
+      {
+        "executionId": "724c3457-381f-4b73-b8af-c1447d562f81",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792069390760
+      },
+      {
+        "executionId": "724c3457-381f-4b73-b8af-c1447d562f81",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792070373371
+      },
+      {
+        "executionId": "724c3457-381f-4b73-b8af-c1447d562f81",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792070527615
+      }
+    ],
+    "5. Implement the concrete Detector classes and package exports": [
+      {
+        "executionId": "724c3457-381f-4b73-b8af-c1447d562f81",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792069390817
+      },
+      {
+        "executionId": "724c3457-381f-4b73-b8af-c1447d562f81",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792070536679
+      },
+      {
+        "executionId": "724c3457-381f-4b73-b8af-c1447d562f81",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792070848182
+      }
+    ],
+    "6. Write the §10.2.2 Ledger_Note (markdown deliverable, no code)": [
+      {
+        "executionId": "724c3457-381f-4b73-b8af-c1447d562f81",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792069390887
+      },
+      {
+        "executionId": "724c3457-381f-4b73-b8af-c1447d562f81",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792069401273
+      },
+      {
+        "executionId": "724c3457-381f-4b73-b8af-c1447d562f81",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792070125668
+      }
+    ],
+    "8. Checkpoint — ensure all tests pass": [
+      {
+        "executionId": "724c3457-381f-4b73-b8af-c1447d562f81",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792069390919
+      },
+      {
+        "executionId": "724c3457-381f-4b73-b8af-c1447d562f81",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792073145538
+      }
+    ],
+    "9. Run the GW09 exit gate": [
+      {
+        "executionId": "724c3457-381f-4b73-b8af-c1447d562f81",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792069390952
+      },
+      {
+        "executionId": "724c3457-381f-4b73-b8af-c1447d562f81",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792073180665
+      },
+      {
+        "executionId": "724c3457-381f-4b73-b8af-c1447d562f81",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792073200363
+      }
+    ],
+    "10. Final checkpoint — ensure the deliverable is complete": [
+      {
+        "executionId": "724c3457-381f-4b73-b8af-c1447d562f81",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792069390988
+      },
+      {
+        "executionId": "724c3457-381f-4b73-b8af-c1447d562f81",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792073201273
+      }
+    ],
+    "7. Write the single GW09 test file and sibling fixture corpus": [
+      {
+        "executionId": "724c3457-381f-4b73-b8af-c1447d562f81",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792070866904
+      },
+      {
+        "executionId": "724c3457-381f-4b73-b8af-c1447d562f81",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792073080449
+      }
+    ],
+    "7.1 Property 1 — purity and determinism": [
+      {
+        "executionId": "724c3457-381f-4b73-b8af-c1447d562f81",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792073107212
+      }
+    ],
+    "7.2 Property 2 — span soundness end-to-end": [
+      {
+        "executionId": "724c3457-381f-4b73-b8af-c1447d562f81",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792073108383
+      }
+    ],
+    "7.3 Property 3 — injection and command emit signal only": [
+      {
+        "executionId": "724c3457-381f-4b73-b8af-c1447d562f81",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792073109781
+      }
+    ],
+    "7.4 Property 4 — canonicalization never silently misses": [
+      {
+        "executionId": "724c3457-381f-4b73-b8af-c1447d562f81",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792073111196
+      }
+    ],
+    "7.5 Property 5 — decode budget is monotonic and precedes the heavy work": [
+      {
+        "executionId": "724c3457-381f-4b73-b8af-c1447d562f81",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792073112130
+      }
+    ],
+    "7.6 Property 6 — single-pass matcher equals the per-family union": [
+      {
+        "executionId": "724c3457-381f-4b73-b8af-c1447d562f81",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792073113539
+      }
+    ],
+    "7.7 Property 7 — detector_version is a deterministic hash of the ruleset": [
+      {
+        "executionId": "724c3457-381f-4b73-b8af-c1447d562f81",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792073115065
+      }
+    ],
+    "7.8 Property 8 — redactor verify is sound, and a no-op fails closed": [
+      {
+        "executionId": "724c3457-381f-4b73-b8af-c1447d562f81",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792073116387
+      }
+    ],
+    "7.9 LGW09-1 example — five benign inline-code prompts, zero terminal blocks": [
+      {
+        "executionId": "724c3457-381f-4b73-b8af-c1447d562f81",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792073118219
+      }
+    ],
+    "7.10 LGW09-3 example — secret split across chunk + UTF-8 boundary": [
+      {
+        "executionId": "724c3457-381f-4b73-b8af-c1447d562f81",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792073119028
+      }
+    ],
+    "7.11 LGW09-4 example — obfuscated/encoded PII detected or explicitly rejected": [
+      {
+        "executionId": "724c3457-381f-4b73-b8af-c1447d562f81",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792073142118
+      }
+    ],
+    "7.12 LGW09-5 example — no-op transformation detected pre-dispatch": [
+      {
+        "executionId": "724c3457-381f-4b73-b8af-c1447d562f81",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792073143066
+      }
+    ],
+    "7.13 LGW09-6 example — C3 scoring run publishes per-family recall/FPR": [
+      {
+        "executionId": "724c3457-381f-4b73-b8af-c1447d562f81",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792073144467
+      }
+    ]
+  }
+}
