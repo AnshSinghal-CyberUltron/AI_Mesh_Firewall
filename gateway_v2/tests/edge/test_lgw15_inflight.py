@@ -154,11 +154,15 @@ def _finish_terminal_code(latch: KillLatch) -> bytes:
     arguments and never touches ``self``, so no route need be constructed to exercise the single
     terminal site in isolation.
     """
-    from gateway_v2.edge.routes import ChatRoute
+    from gateway_v2.edge.routes import ChatRoute, _ProducedModeHolder
 
     encoder = SSEEncoder()
     sent_terminal = _TerminalLatch()
     capture = _SSECapture()
+    # A fresh holder with no captured stats (no attempt completed in this isolated terminal-site
+    # drive), so the GW13 Produced_Mode trace frame is NOT emitted and the single terminal site
+    # still renders exactly one frame — the clean [DONE] or the declared cut Error_Frame.
+    produced = _ProducedModeHolder()
 
     async def _drive() -> None:
         await ChatRoute._finish_stream(
@@ -167,6 +171,7 @@ def _finish_terminal_code(latch: KillLatch) -> bytes:
             encoder,
             latch,
             sent_terminal,
+            produced,
         )
 
     asyncio.run(_drive())

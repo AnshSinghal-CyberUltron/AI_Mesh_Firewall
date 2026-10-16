@@ -350,12 +350,12 @@ def test_a_malformed_body_is_a_compile_error(body: bytes) -> None:
         decode_plan_body(body)
 
 
-def test_strict_withhold_is_rejected_on_apply_not_served_as_incremental() -> None:
-    """LGW05-7: a selection the resolver cannot represent must not be silently downgraded.
+def test_strict_withhold_applies_and_is_served_as_strict_not_downgraded() -> None:
+    """LGW05-7: a tenant is never silently downgraded to a DIFFERENT streaming mode.
 
-    `strict_withhold` is a real StreamingMode member, so the document decodes; the compiler is
-    the authority that refuses it. The tenant is left PLAN_UNAVAILABLE, never served a different
-    streaming mode than it asked for.
+    GW13 (Requirement 4) made STRICT_WITHHOLD a supported streaming mode, so the compiler now
+    accepts it and the applier lands it. The preserved safety property is unchanged: the tenant
+    is served the mode it asked for (strict_withhold), never silently downgraded to incremental.
     """
     store = PlanStore()
     applier = PlanDeltaApplier(store, clock=lambda: 1.0)
@@ -366,6 +366,8 @@ def test_strict_withhold_is_rejected_on_apply_not_served_as_incremental() -> Non
 
     outcome = applier.apply([record])
 
-    assert [org for org, _ in outcome.rejected] == ["org-a"]
-    assert "not available yet" in outcome.rejected[0][1]
-    assert isinstance(store.read("org-a"), PlanUnavailable)
+    assert outcome.rejected == ()
+    assert outcome.applied == ("org-a",)
+    served = store.read("org-a")
+    assert isinstance(served, ExecutionPlan)
+    assert served.streaming_mode is StreamingMode.STRICT_WITHHOLD

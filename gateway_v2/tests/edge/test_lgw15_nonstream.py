@@ -61,7 +61,7 @@ def test_property_14_non_streaming_returns_one_enforced_openai_json() -> None:
     )
     from gateway_v2.domain.category import Category
     from gateway_v2.domain.finding import Finding, FindingStatus, Span
-    from gateway_v2.domain.plan import Surface
+    from gateway_v2.domain.plan import ExecutionPlan, StreamingMode, Surface
     from gateway_v2.edge.openai_chat import ChatSurface
     from gateway_v2.edge.wire.openai import CanonicalRequest, OpenAIResponseRenderer
     from gateway_v2.egress.output_guard import (
@@ -237,10 +237,24 @@ def test_property_14_non_streaming_returns_one_enforced_openai_json() -> None:
         surface = ChatSurface(deps=deps)  # type: ignore[arg-type]
         send = _P14RecordingSend(events=[])
 
+        # A resolvable INCREMENTAL plan: the injected resolver carries the output enforcement;
+        # ``collect_and_render`` reads ``plan.streaming_mode`` only to stamp the Produced_Mode
+        # header (GW13 C5/R5), so a minimal plan is sufficient here.
+        plan = ExecutionPlan(
+            org_id="p14-org",
+            epoch=1,
+            sequence=1,
+            content_hash="p14" + "0" * 61,
+            compiled_at=0.0,
+            rules=(),
+            required_detectors=frozenset(),
+            streaming_mode=StreamingMode.INCREMENTAL,
+            integrity_locked=False,
+        )
         asyncio.run(
             surface.collect_and_render(
                 req,
-                plan=None,  # type: ignore[arg-type]  # the injected resolver carries enforcement
+                plan=plan,
                 destination="p14-upstream",
                 body={},
                 send=send,
@@ -407,7 +421,7 @@ def test_p46_nonstream_block_emits_declared_error_envelope_not_raw_error() -> No
     from gateway_v2.domain.category import Category
     from gateway_v2.domain.decision import Decision, Disposition, FindingDisposition
     from gateway_v2.domain.finding import Finding, FindingStatus
-    from gateway_v2.domain.plan import Surface
+    from gateway_v2.domain.plan import ExecutionPlan, StreamingMode, Surface
     from gateway_v2.edge import errors
     from gateway_v2.edge.openai_chat import REFUSE_OUTPUT_BLOCKED, ChatSurface
     from gateway_v2.edge.wire.openai import CanonicalRequest, OpenAIResponseRenderer
@@ -506,12 +520,24 @@ def test_p46_nonstream_block_emits_declared_error_envelope_not_raw_error() -> No
     )
     surface = ChatSurface(deps=deps)  # type: ignore[arg-type]
 
-    # ``plan`` is unused by ``collect_and_render`` (the injected resolver carries
-    # enforcement); any sentinel is fine since the signature only forwards it.
+    # A resolvable plan: ``collect_and_render`` refuses on the BLOCK before the Produced_Mode
+    # stamp, but a real plan keeps the call type-correct (the injected resolver carries the
+    # enforcement; the plan's ``streaming_mode`` only feeds the success-path header, GW13 C5).
+    plan = ExecutionPlan(
+        org_id="p46-org",
+        epoch=1,
+        sequence=1,
+        content_hash="p46" + "0" * 61,
+        compiled_at=0.0,
+        rules=(),
+        required_detectors=frozenset(),
+        streaming_mode=StreamingMode.INCREMENTAL,
+        integrity_locked=False,
+    )
     asyncio.run(
         surface.collect_and_render(
             req,
-            plan=None,  # type: ignore[arg-type]
+            plan=plan,
             destination="dest",
             body={"model": "gpt-test"},
             send=_p46_send,
@@ -569,7 +595,7 @@ def test_p46_nonstream_scan_failure_renders_declared_envelope_not_raw_error() ->
     from gateway_v2.dispatch.provider import StubProviderClient, UpstreamEvent
     from gateway_v2.domain.decision import Decision
     from gateway_v2.domain.finding import Finding
-    from gateway_v2.domain.plan import Surface
+    from gateway_v2.domain.plan import ExecutionPlan, StreamingMode, Surface
     from gateway_v2.edge import errors
     from gateway_v2.edge.openai_chat import REFUSE_INPUT_SCAN_FAILURE, ChatSurface
     from gateway_v2.edge.wire.openai import CanonicalRequest, OpenAIResponseRenderer
@@ -618,10 +644,23 @@ def test_p46_nonstream_scan_failure_renders_declared_envelope_not_raw_error() ->
     )
     surface = ChatSurface(deps=deps)  # type: ignore[arg-type]
 
+    # A resolvable plan: ``collect_and_render`` refuses on the scan-failure before the
+    # Produced_Mode stamp, but a real plan keeps the call type-correct (GW13 C5).
+    plan = ExecutionPlan(
+        org_id="p46-org",
+        epoch=1,
+        sequence=1,
+        content_hash="p46" + "0" * 61,
+        compiled_at=0.0,
+        rules=(),
+        required_detectors=frozenset(),
+        streaming_mode=StreamingMode.INCREMENTAL,
+        integrity_locked=False,
+    )
     asyncio.run(
         surface.collect_and_render(
             req,
-            plan=None,  # type: ignore[arg-type]
+            plan=plan,
             destination="dest",
             body={"model": "gpt-test"},
             send=_p46_send2,

@@ -185,9 +185,14 @@ def test_lgw05_6_concurrent_tenants_do_not_leak() -> None:
     assert {rule for org, rule in found if org == "org-b"} == {"b"}
 
 
-def test_lgw05_7_unsupported_selection_is_rejected() -> None:
-    with pytest.raises(CompileError, match="incremental"):
-        compile_plan("org-a", (), streaming_mode=StreamingMode.STRICT_WITHHOLD, compiled_at=1.0)
+def test_lgw05_7_unsupported_action_rejected_strict_withhold_accepted() -> None:
+    # GW13 (Requirement 4) made STRICT_WITHHOLD a supported streaming mode, so the former
+    # "STRICT_WITHHOLD is rejected" assertion is replaced by the positive acceptance below.
+    plan = compile_plan(
+        "org-a", (), streaming_mode=StreamingMode.STRICT_WITHHOLD, compiled_at=1.0,
+    )
+    assert plan.streaming_mode is StreamingMode.STRICT_WITHHOLD
+    # Still a valid guard: an unsupported rule ACTION (not a streaming mode) is rejected.
     with pytest.raises(CompileError, match="not supported"):
         _compile("org-a", (_draft(action=Action.REWRITE),))
 

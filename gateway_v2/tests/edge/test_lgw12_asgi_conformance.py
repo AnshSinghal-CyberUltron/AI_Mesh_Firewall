@@ -72,6 +72,7 @@ from gateway_v2.edge.app import build_app
 from gateway_v2.edge.wire.sse import (
     CHUNK_OBJECT,
     DONE_MARKER,
+    TRACE_EVENT,
     SSEDecoder,
     SSEEncoder,
 )
@@ -86,6 +87,18 @@ from tests.edge._chat_lifecycle_fixtures import (
     chat_body,
     warm_snapshot_source,
 )
+
+#: The GW13 Produced_Mode trace frame prefix: a NON-CONTENT ``amf.trace`` meta frame the
+#: streaming chat path emits just before the terminal ``[DONE]`` marker. It is NOT a
+#: ``chat.completion.chunk`` content frame, so the content-frame conformance checks exclude it
+#: (they still require every genuine content frame to parse as a chunk carrying the exact deltas).
+_TRACE_FRAME_PREFIX = b"event: " + TRACE_EVENT.encode("ascii")
+
+
+def _is_content_frame(frame: bytes) -> bool:
+    """A captured SSE frame is content iff it is neither the terminal marker nor a trace frame."""
+    return frame != DONE_MARKER and not frame.startswith(_TRACE_FRAME_PREFIX)
+
 
 # --------------------------------------------------------------------------- #
 # Fixtures: the real ASGI app with every dependency injected (no socket).
@@ -411,8 +424,9 @@ def test_content_frames_are_parseable_chat_completion_chunks() -> None:
     transport = _drive(_build(script=_content_script()))
     frames = transport.body_frames()
 
-    # Every SSE frame before the terminal [DONE] is a content frame.
-    content_frames = [f for f in frames if f != DONE_MARKER]
+    # Every SSE frame before the terminal [DONE] is a content frame, except the GW13
+    # non-content ``amf.trace`` Produced_Mode meta frame emitted just before [DONE].
+    content_frames = [f for f in frames if _is_content_frame(f)]
     assert content_frames, f"no content frames recorded: {frames!r}"
 
     recovered: list[str] = []
