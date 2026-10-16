@@ -90,6 +90,12 @@ STREAM_MALFORMED_UPSTREAM = "stream_malformed_upstream"
 STREAM_BUFFER_UNAVAILABLE = "stream_buffer_unavailable"
 """R4.5: coalescer high-water < 1 byte (`stream_buffer_bytes` raised). Fail closed, buffer zero."""
 
+STREAM_STRICT_BUFFER_OVERFLOW = "strict_buffer_overflow"
+"""R9.5: STRICT accumulation exceeded `ResourceContract.stream_buffer_bytes`.
+
+Fail closed, zero content; `edge` owns the HTTP/SSE rendering.
+"""
+
 
 def gap_retry_after_s(*, rehydrate_period_ms: float, refresh_ms: float) -> float:
     """How long a client should wait out a shared-state gap (C36).

@@ -60,7 +60,7 @@ from gateway_v2.domain.posture import BUDGET_UNAVAILABLE
 from gateway_v2.edge import errors
 from gateway_v2.edge.error_frame_scan import SCAN_ERROR_CODE
 from gateway_v2.edge.identity_resolver import TenantIdentity
-from gateway_v2.edge.openai_nonstream import collect_and_enforce
+from gateway_v2.edge.openai_nonstream import collect_and_enforce, ok_response
 from gateway_v2.edge.routes import ASGIScope, ASGISend, emit_response
 from gateway_v2.edge.wire.openai import CanonicalRequest, MalformedRequest
 from gateway_v2.plan.lookup import lookup_plan
@@ -213,12 +213,6 @@ REFUSE_UNSUPPORTED_SURFACE = "unsupported_surface"
 #: while the real check is unimplemented. Replaced by each later sub-task's body;
 #: never returned once a phase is filled.
 REFUSE_LIFECYCLE_INCOMPLETE = "lifecycle_incomplete"
-
-
-# Non-streaming success-response constants (task 4.1): response-shape, NOT capacity literals.
-_OK_HTTP_STATUS = 200
-_JSON_MEDIA_TYPE = "application/json"
-_CONTENT_TYPE_HEADER = "content-type"
 
 
 # --------------------------------------------------------------------------- #
@@ -776,9 +770,9 @@ class ChatSurface:
         enforce ⇒ ONE ``chat.completion`` JSON via ``deps.renderer.non_stream_body``.
         Every reply leaves through the single ``emit_response(send, HTTPResponse)``
         path, so an unmapped value-code still renders the declared generic
-        ``Error_Envelope`` body (R9.2). ``plan`` is applied by the injected resolver.
+        ``Error_Envelope`` body (R9.2). ``plan`` output enforcement is applied by the
+        injected resolver; its mode is stamped as ``x-amf-produced-mode`` (GW13 C5/R5).
         """
-        del plan  # the injected resolver carries the plan's output enforcement.
         enforced = await collect_and_enforce(
             self._deps,
             destination,
@@ -790,11 +784,5 @@ class ChatSurface:
             await emit_response(send, errors.render_http(enforced.refuse_code))
             return
         json_body = self._deps.renderer.non_stream_body(req, enforced.deltas)
-        await emit_response(
-            send,
-            errors.HTTPResponse(
-                status=_OK_HTTP_STATUS,
-                body=json_body,
-                headers=((_CONTENT_TYPE_HEADER, _JSON_MEDIA_TYPE),),
-            ),
-        )
+        # Stamp the Produced_Mode header from the plan's SELECTED mode (GW13 C5/R5).
+        await emit_response(send, ok_response(json_body, plan.streaming_mode.value))

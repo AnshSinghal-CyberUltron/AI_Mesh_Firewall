@@ -17,7 +17,7 @@ from gateway_v2.domain.plan import (
     Surface,
 )
 
-SUPPORTED_STREAMING = frozenset({StreamingMode.INCREMENTAL})
+SUPPORTED_STREAMING = frozenset({StreamingMode.INCREMENTAL, StreamingMode.STRICT_WITHHOLD})
 SUPPORTED_ACTIONS = frozenset(
     {Action.ALLOW, Action.FLAG, Action.REDACT, Action.BLOCK},
 )

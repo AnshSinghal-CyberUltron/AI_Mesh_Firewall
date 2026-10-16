@@ -54,7 +54,6 @@ from __future__ import annotations
 import time
 from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
 from dataclasses import dataclass, field
-from typing import Protocol, runtime_checkable
 
 from gateway_v2.domain import (
     ExecutionPlan,
@@ -62,6 +61,7 @@ from gateway_v2.domain import (
     InFlightKill,
     PlanUnavailable,
     PlanUnknownTenant,
+    StreamingMode,
 )
 from gateway_v2.egress.holdback_tradeoff import (
     TRADE_OFF_OUTCOMES,
@@ -78,6 +78,11 @@ from gateway_v2.egress.output_guard import (
     OutputResolver,
     apply_decision,
     enforcing_output_rules,
+)
+from gateway_v2.egress.transport import (
+    ScanProtocol,
+    ScanResultLike,
+    TokenCounterProtocol,
 )
 from gateway_v2.runtime.holdback_config import HoldbackConfig
 from gateway_v2.runtime.holdback_metrics import HoldbackMetrics
@@ -168,79 +173,12 @@ KillSignal = Callable[[], bool]
 Detector = Callable[[str], Sequence[Finding]]
 
 
-# --------------------------------------------------------------------------- #
-# Structural protocols for the INJECTED scanner / token counter (task 7.1).
-#
-# These describe exactly what the pipeline needs from `gateway_v2.detect` WITHOUT
-# importing it (the layer contract forbids an egress -> detect edge). The real
-# `detect.holdback.ScanResult` / `scan` / `TokenIndex` satisfy these structurally
-# and are injected by the tests.
-# --------------------------------------------------------------------------- #
-
-
-@runtime_checkable
-class ScanResultLike(Protocol):
-    """The structural shape of a scanner result the pipeline reads.
-
-    Mirrors ``detect.holdback.ScanResult`` field-for-field without importing it.
-    ``hold_index`` is the earliest held byte (``buf[:hold_index]`` is releasable);
-    ``held_class`` is the pattern class forcing the hold (or ``None``);
-    ``is_relaxed`` is whether that class is relaxed; ``forced_release`` /
-    ``forced_release_index`` carry the word-class cap force-release accounting;
-    ``overflow`` signals a relaxed-class ceiling breach (handled by task 9).
-    """
-
-    @property
-    def hold_index(self) -> int: ...
-    @property
-    def held_class(self) -> str | None: ...
-    @property
-    def is_relaxed(self) -> bool: ...
-    @property
-    def forced_release(self) -> bool: ...
-    @property
-    def forced_release_index(self) -> int: ...
-    @property
-    def overflow(self) -> bool: ...
-
-
-class ScanProtocol(Protocol):
-    """The injected scanner: a callable matching the pure holdback-scan core.
-
-    Mirrors ``detect.holdback.scan`` exactly (a pure function of the pending
-    buffer, the final flag, the hold cap, the injected token counter, and the
-    window). The ``gateway_v2.detect.holdback.scan`` *function* satisfies this
-    structurally, so a test injects it directly.
-
-    It is a plain callable, not an object with a ``.scan`` attribute, on purpose:
-    the data-plane tenant-scale gate forbids an attribute call named ``scan`` (a
-    Redis ``SCAN`` over a whole collection), and the holdback scan is not a store
-    read. The Callable form describes the same surface free of that false-positive.
-    """
-
-    def __call__(
-        self,
-        buf: str,
-        *,
-        final: bool,
-        hold_cap_tokens: int,
-        token_index: TokenCounterProtocol,
-        window: int,
-    ) -> ScanResultLike: ...
-
-
-@runtime_checkable
-class TokenCounterProtocol(Protocol):
-    """The injected upstream-token counter.
-
-    Mirrors ``detect.holdback.TokenIndex``: ``tokens_in`` counts the held
-    Upstream_Tokens in a slice (the quantity the cap and histogram bound), and
-    ``token_boundaries`` gives the start index of each token run so the oldest
-    tokens can be force-released.
-    """
-
-    def tokens_in(self, s: str) -> int: ...
-    def token_boundaries(self, s: str) -> list[int]: ...
+# The structural protocols for the INJECTED scanner / token counter --
+# ``ScanResultLike``, ``ScanProtocol``, ``TokenCounterProtocol`` -- were extracted
+# to the sibling ``egress.transport`` module (to keep this file under the
+# ``check_sizes`` module-length gate) and imported above. They are kept in this
+# module's ``__all__`` so every existing ``from gateway_v2.egress.stream import
+# ScanProtocol/ScanResultLike/TokenCounterProtocol`` re-export keeps resolving.
 
 
 # --------------------------------------------------------------------------- #
@@ -360,6 +298,15 @@ class StreamStats:
     are the two SEPARATE latency series (R4.6/R4.7/R5.3): gateway compute vs.
     time a released byte waited on disambiguating upstream bytes. ``incomplete``
     flags an abnormal termination (R5.2); ``error`` carries the terminal code.
+
+    ``produced_mode`` is the SELECTED streaming mode this pipeline ran -- always
+    ``StreamingMode.INCREMENTAL`` for ``StreamPipeline`` (the edge/factory stamps
+    it, the default is correct for this pipeline), reported as the Produced_Mode
+    at the wire (R5.2). ``degenerated_to_strict`` is the per-response trace fact
+    (R6.2): ``True`` iff this incremental run released no content frame before the
+    final chunk was processed yet did carry content (a single final chunk, or an
+    all-held stream flushed only at ``final``) -- it is NOT a mode change, the
+    tenant is still on INCREMENTAL, it merely had no streaming opportunity.
     """
 
     upstream_chunks: int = 0
@@ -371,6 +318,8 @@ class StreamStats:
     done: bool = False
     incomplete: bool = False
     error: str | None = None
+    produced_mode: StreamingMode = StreamingMode.INCREMENTAL
+    degenerated_to_strict: bool = False
 
 
 # --------------------------------------------------------------------------- #
@@ -515,9 +464,20 @@ class StreamPipeline:
     ) -> StreamStats:
         """Drive the scanner per text stream, release and redact, flush on final."""
         texts: dict[str, _Text] = {}
+        # Degenerate_To_Strict observable (C6/R6.2). ``frames_out`` counts CONTENT
+        # frames only (``_emit`` bumps it; ``_terminate`` never does), so capturing
+        # it just before the final chunk's deltas are processed records exactly the
+        # content frames released STRICTLY BEFORE the final chunk. A single
+        # ``final=True`` first chunk, or an all-held stream flushed only at
+        # ``final``, leaves this at 0; a stream that released a content frame
+        # earlier leaves it > 0.
+        frames_out_before_final = 0
         try:
             async for chunk in chunks:
                 stats.upstream_chunks += 1
+
+                if chunk.final:
+                    frames_out_before_final = stats.frames_out
 
                 # In-flight kill (task 10, R7). Checked at the chunk boundary --
                 # the delivery of one complete upstream chunk -- so the cut takes
@@ -570,6 +530,14 @@ class StreamPipeline:
             stats.incomplete = True
             self._metrics.observe_stream_incomplete(stats)
             raise
+
+        # Degenerate_To_Strict (C6/R6.2): no content frame was released before the
+        # final chunk was processed (``frames_out_before_final == 0``) AND content
+        # was present overall (``stats.frames_out > 0``, i.e. the whole response
+        # cleared and emitted at least one content frame on/after ``final``). A
+        # genuinely empty response (no content frame at all) is NOT degenerate --
+        # it is just empty -- so the ``> 0`` guard keeps it ``False``.
+        stats.degenerated_to_strict = frames_out_before_final == 0 and stats.frames_out > 0
 
         stats.done = True
         self._metrics.observe_stream_complete(stats)

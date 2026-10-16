@@ -151,6 +151,8 @@ _ENVELOPE: Mapping[str, tuple[int, str]] = MappingProxyType(
         posture.STREAM_SNAPSHOT_STALE: (503, "service_unavailable"),
         posture.STREAM_MALFORMED_UPSTREAM: (502, "gateway_error"),
         posture.STREAM_BUFFER_UNAVAILABLE: (503, "service_unavailable"),
+        # -- GW13 STRICT_WITHHOLD buffer overflow (R9.5) ----------------------
+        posture.STREAM_STRICT_BUFFER_OVERFLOW: (503, "service_unavailable"),
         # -- Pre-existing egress terminal codes (reused unchanged) ------------
         "stream_killed": (503, "service_unavailable"),
         "scan_failure": (403, "gateway_error"),

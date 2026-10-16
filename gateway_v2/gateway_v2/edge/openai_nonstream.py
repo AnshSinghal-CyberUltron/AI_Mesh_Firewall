@@ -40,6 +40,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from gateway_v2.dispatch.provider import UpstreamRequest
+from gateway_v2.edge import errors
 from gateway_v2.egress.output_guard import OutputBlocked, apply_decision
 
 if TYPE_CHECKING:
@@ -48,6 +49,7 @@ if TYPE_CHECKING:
 __all__ = (
     "EnforcedOutput",
     "collect_and_enforce",
+    "ok_response",
 )
 
 #: The output-content channel a mid-stream provider ``error_frame`` folds into, so a
@@ -55,6 +57,32 @@ __all__ = (
 #: spelling the ``OpenAIResponseRenderer`` maps to ``message.content``. A channel name,
 #: not a capacity literal.
 _OUTPUT_CONTENT_CHANNEL = "output_content"
+
+# Non-streaming success-response shape (response-shape constants, NOT capacity literals).
+_OK_HTTP_STATUS = 200
+_JSON_MEDIA_TYPE = "application/json"
+_CONTENT_TYPE_HEADER = "content-type"
+#: Produced_Mode response header on the non-streaming chat path (GW13 C5/R5). A header name.
+_PRODUCED_MODE_HEADER = "x-amf-produced-mode"
+
+
+def ok_response(json_body: bytes, produced_mode: str) -> errors.HTTPResponse:
+    """Build the ``200`` non-streaming JSON response, stamping Produced_Mode (GW13 C5/R5).
+
+    The non-streaming path is strict-shaped by nature (the whole response is inspected
+    before any byte is emitted), so ``produced_mode`` is the plan's SELECTED
+    ``streaming_mode`` value (``incremental`` / ``strict_withhold``), carried as the
+    ``x-amf-produced-mode`` response header alongside the JSON content type so a caller
+    of the backend response path reads which mode produced the response (R5.1/R5.4).
+    """
+    return errors.HTTPResponse(
+        status=_OK_HTTP_STATUS,
+        body=json_body,
+        headers=(
+            (_CONTENT_TYPE_HEADER, _JSON_MEDIA_TYPE),
+            (_PRODUCED_MODE_HEADER, produced_mode),
+        ),
+    )
 
 
 @dataclass(frozen=True, slots=True)

@@ -97,18 +97,22 @@ from gateway_v2.edge.wire.openai import (
 from gateway_v2.edge.wire.sse import SSEEncoder
 from gateway_v2.egress.backpressure import Coalescer
 from gateway_v2.egress.output_guard import OutputResolver
+from gateway_v2.egress.select import select_pipeline
 from gateway_v2.egress.stream import (
     DownstreamFrame,
     EnforcementUndetermined,
     ScanProtocol,
     Send,
     StreamPipeline,
+    StreamStats,
 )
+from gateway_v2.egress.strict import StrictStats, StrictWithholdPipeline
 from gateway_v2.plan.snapshot import ReplicaSnapshot
 from gateway_v2.runtime.holdback_config import HoldbackConfig
 from gateway_v2.runtime.holdback_metrics import HoldbackMetrics
 from gateway_v2.runtime.resources import ResourceContract
 from gateway_v2.runtime.stream_metrics import PerRequestExports
+from gateway_v2.runtime.strict_metrics import StrictMetrics
 
 __all__ = (
     "ASGIReceive",
@@ -186,6 +190,26 @@ async def _emit_error_code(send: ASGISend, code: str) -> None:
 # fail-closed default so every existing construction keeps compiling until a boot card injects the
 # real GW19 / GW06 / GW07-08 components; an unwired route sheds at admission (zero provider calls)
 # before the budget or input phases ever matter.
+
+
+class _ProducedModeHolder:
+    """A per-request mutable sink for the pipeline's returned stats (GW13 C5).
+
+    Both ``StreamPipeline.run`` and ``StrictWithholdPipeline.run`` return a stats
+    value carrying ``produced_mode`` (and, on the INCREMENTAL side,
+    ``degenerated_to_strict``). The ``_attempt`` coroutine captures that return and
+    stashes it here so :meth:`ChatRoute._finish_stream` can emit the Produced_Mode
+    trace frame on the wire just before the terminal ``[DONE]`` marker. It is a
+    per-request LOCAL instance built in :meth:`ChatRoute._stream` (never a
+    module-level mutable, gated), so nothing request-scoped is shared on the frozen
+    route. ``stats`` is ``None`` until an attempt completed (a byte-less failure of
+    every attempt leaves it unset, in which case no trace frame is emitted).
+    """
+
+    __slots__ = ("stats",)
+
+    def __init__(self) -> None:
+        self.stats: StreamStats | StrictStats | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -379,6 +403,7 @@ class ChatRoute:
         latch = FirstByteLatch()
         sent_terminal = _TerminalLatch()
         kill_latch = KillLatch()
+        produced = _ProducedModeHolder()
         control = InFlightControl(
             source=self.control,
             contract=self.contract,
@@ -422,10 +447,11 @@ class ChatRoute:
                 plan,
                 destination,
                 body,
+                produced,
             )
 
         await self._run_attempts(latch, _factory)
-        await self._finish_stream(send, encoder, kill_latch, sent_terminal)
+        await self._finish_stream(send, encoder, kill_latch, sent_terminal, produced)
 
     async def _run_attempts(
         self,
@@ -455,6 +481,7 @@ class ChatRoute:
         encoder: SSEEncoder,
         kill_latch: KillLatch,
         sent_terminal: _TerminalLatch,
+        produced: _ProducedModeHolder,
     ) -> None:
         """Close the stream: render an in-flight cut's ``Error_Frame`` or the ``[DONE]`` marker.
 
@@ -472,6 +499,15 @@ class ChatRoute:
         Idle_Timeout (R9.3/R9.4); this terminal close is a best-effort final marker emitted after
         the resources have already been released by the unwinding loop, so it uses the plain
         ``_send_sse`` and never re-raises a timeout past the handler.
+
+        **Produced_Mode stamp (GW13 C5/R5).** On a CLEAN completion, a NON-CONTENT
+        ``amf.trace`` meta frame carrying ``produced_mode`` (and the INCREMENTAL
+        ``degenerated_to_strict`` fact) is emitted from the captured pipeline stats
+        just BEFORE the terminal ``[DONE]`` marker, so the two modes are visibly
+        distinct at the wire (R5.1-R5.3). It is trace, not content, and precedes the
+        terminal marker, so the "no content frame after a terminal frame" invariant
+        is untouched. When every attempt failed byte-less the holder carries no stats
+        and no trace frame is emitted (there was no produced response to stamp).
         """
         if sent_terminal.is_set() or encoder.terminated:
             return
@@ -480,7 +516,40 @@ class ChatRoute:
             await _send_sse(send, encoder.error(reason))
             sent_terminal.set()
             return
+        # Called on the class (not ``self``) so the terminal site stays usable with ``self``
+        # unbound — the Produced_Mode stamp reads only the ``produced`` holder, never ``self``.
+        await ChatRoute._emit_produced_mode(send, encoder, produced)
         await _send_sse(send, encoder.done())
+
+    @staticmethod
+    async def _emit_produced_mode(
+        send: ASGISend,
+        encoder: SSEEncoder,
+        produced: _ProducedModeHolder,
+    ) -> None:
+        """Emit the Produced_Mode trace frame from the captured stats (GW13 C5/R5).
+
+        Reads the stats the completing attempt stashed on ``produced``: the
+        ``produced_mode`` is the SELECTED streaming mode the pipeline ran
+        (``incremental`` / ``strict_withhold``, R5.2/R5.3) and
+        ``degenerated_to_strict`` is the INCREMENTAL per-response trace fact (R6.2) —
+        ``StrictStats`` carries no such flag, so a STRICT run stamps ``False`` by
+        construction. Emitted as the one non-content ``amf.trace`` frame; a holder
+        with no stats (every attempt failed byte-less) emits nothing.
+        """
+        stats = produced.stats
+        if stats is None:
+            return
+        degenerated = getattr(stats, "degenerated_to_strict", False)
+        await _send_sse(
+            send,
+            encoder.trace(
+                {
+                    "produced_mode": stats.produced_mode.value,
+                    "degenerated_to_strict": degenerated,
+                }
+            ),
+        )
 
     def _next_attempt(
         self,
@@ -494,6 +563,7 @@ class ChatRoute:
         plan: ExecutionPlan,
         destination: str,
         body: Mapping[str, object],
+        produced: _ProducedModeHolder,
     ) -> StreamAttempt | None:
         """Yield the next eligible stream attempt, or ``None`` when none remains (R7.1).
 
@@ -504,9 +574,11 @@ class ChatRoute:
         splice. :func:`run_with_no_splice` only invokes this factory while the first-byte latch
         still permits a retry, so a fresh attempt is impossible once a byte is on the wire.
 
-        The attempt builds the release loop via ``StreamPipeline.for_plan(plan, ...)`` — the
-        resolved ``ExecutionPlan`` drives the enforcing-output set (R2.3), replacing the old
-        pass-through flag — opens the injected ``ProviderClient`` to the plan-derived
+        The attempt builds the pipeline via ``select_pipeline(plan, ...)`` (GW13 C4) — the
+        resolved ``ExecutionPlan.streaming_mode`` selects the INCREMENTAL ``StreamPipeline`` or
+        the STRICT_WITHHOLD ``StrictWithholdPipeline`` and drives the enforcing-output set (R2.3),
+        replacing the old pass-through flag — opens the injected ``ProviderClient`` to the
+        plan-derived
         ``destination`` with the transformed ``body`` (replacing the old ``_DEFAULT_DESTINATION`` /
         ``_EMPTY_BODY`` stand-ins, R2.2 / R8.4), hands the per-request :class:`KillLatch` to
         ``pipeline.run`` as the ``killed()`` seam, and threads the :class:`InFlightControl` +
@@ -540,32 +612,48 @@ class ChatRoute:
                     executor=self.executor,
                 ),
             )
-            await pipeline.run(chunks, sink, kill_latch)
+            # Capture the returned stats so the Produced_Mode trace frame can be stamped on the
+            # wire from the SELECTED mode + the INCREMENTAL degenerate fact (GW13 C5/R5). Both
+            # StreamPipeline.run and StrictWithholdPipeline.run return a stats value carrying
+            # ``produced_mode``, so the holder reads it uniformly regardless of mode.
+            produced.stats = await pipeline.run(chunks, sink, kill_latch)
             # The sink set the first-byte latch the instant a content byte went out; report that
             # as the "released a byte" signal so run_with_no_splice closes the gate (R7.2/R7.4).
             return latch.is_set()
 
         return _attempt
 
-    def _build_pipeline(self, plan: ExecutionPlan) -> StreamPipeline:
-        """Construct the ``StreamPipeline`` with plan-derived output enforcement (R2.3).
+    def _build_pipeline(self, plan: ExecutionPlan) -> StreamPipeline | StrictWithholdPipeline:
+        """Construct the pipeline the resolved plan selected (GW13 C4; R1.3/R1.4/R2.3).
 
-        Builds the release loop via ``StreamPipeline.for_plan(plan, ...)``, which resolves the
-        enforcing-output set ONCE before the first chunk from ``enforcing_output_rules(plan)`` (a
-        non-empty set engages the holdback cap + byte ceiling; an empty set passes through) and
-        raises :class:`EnforcementUndetermined` fail-closed on an unresolved plan — replacing the
-        old hard-coded ``enforcing_output=False`` pass-through. The scanner / resolver / token
-        counter are the injected seams, and the ``Window`` + holdback cap derive from the injected
-        contract/config (no literal).
+        Delegates to the ONE ``select_pipeline`` factory keyed off
+        ``plan.streaming_mode``: an INCREMENTAL plan builds the shipped
+        ``StreamPipeline.for_plan`` release loop; a STRICT_WITHHOLD plan builds the
+        GW13 ``StrictWithholdPipeline.for_plan`` whole-response accumulator — both
+        resolving the enforcing-output set ONCE before the first chunk from
+        ``enforcing_output_rules(plan)`` and raising :class:`EnforcementUndetermined`
+        fail-closed on an unresolved plan. The one ``OutputResolver`` seam and the
+        injected ``detector`` are passed identically to both, so output enforcement
+        folds through the same resolver at ``Phase.OUTPUT`` regardless of mode.
+
+        The INCREMENTAL ``Window`` + holdback cap derive from the injected
+        contract/config and the STRICT buffer high-water from
+        ``contract.stream_buffer_bytes(active_streams())`` — no capacity literal
+        here. The completed-match source is the injected detector, which today is
+        ``None`` (the thin harness, matching the shipped ``for_plan`` call); a boot
+        card wiring the GW07/GW08 detector threads it in without reshaping this seam.
         """
-        return StreamPipeline.for_plan(
+        return select_pipeline(
             plan,
             scanner=self.scanner,
-            resolver=self.resolver,
             token_index=TokenIndex(),
             cfg=self.cfg,
             metrics=HoldbackMetrics(),
             window=max_pattern_length(),
+            resolver=self.resolver,
+            detector=None,
+            max_buffer_bytes=self.contract.stream_buffer_bytes(self.active_streams()),
+            strict_metrics=StrictMetrics(),
         )
 
 
