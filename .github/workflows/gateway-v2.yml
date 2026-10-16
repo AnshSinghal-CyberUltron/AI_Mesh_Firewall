@@ -71,6 +71,30 @@ jobs:
               raise SystemExit("LGW00-2 FAIL: scanner accepted an OpenSSH header")
           print("lgw00_2_rejected", blob.name)
           PY
+      - name: GW00 Req 1.1 throwaway bare PKCS#8 header (not committed)
+        working-directory: gateway_v2
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import sys
+          sys.path.insert(0, ".")
+          from lint.check_secret_headers import scan_paths
+          # Assemble the bare PKCS#8 header from fragments so this workflow file
+          # never contains the literal header string (mirrors how the scanner
+          # assembles its needle and how the OpenSSH check assembles above).
+          begin = "BEGIN " + "PRIVATE KEY"
+          header = "-----" + begin + "-----\n"
+          footer = "-----END " + "PRIVATE KEY-----\n"
+          blob = Path("/tmp/lgw00-pkcs8")
+          blob.write_text(
+              header + "GW00-REQ-1-1-CI-FIXTURE-NOT-A-REAL-KEY\n" + footer,
+              encoding="utf-8",
+          )
+          hits = scan_paths([blob], allowlist=set())
+          if not hits:
+              raise SystemExit("GW00 FAIL: scanner accepted a bare PKCS#8 header")
+          print("gw00_pkcs8_rejected", blob.name)
+          PY
 
   image-digest:
     runs-on: ubuntu-latest
