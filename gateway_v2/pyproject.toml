@@ -116,6 +116,11 @@ ignore_missing_imports = true
 
 [tool.importlinter]
 root_packages = ["gateway_v2"]
+# C11 / R10.4-10.5: the "No HTTP framework outside edge" forbidden contract names the
+# external modules starlette/fastapi, so import-linter requires external-package scanning
+# at the top level. They are not runtime dependencies (the raw-ASGI edge imports neither),
+# so the contract is trivially kept — it asserts the intent per C11.
+include_external_packages = true
 
 [[tool.importlinter.contracts]]
 name = "Gateway v2 layers"
@@ -149,3 +154,20 @@ forbidden_modules = [
     "gateway_v2.runtime",
     "gateway_v2.contracts",
 ]
+
+[[tool.importlinter.contracts]]
+name = "No HTTP framework outside edge"
+type = "forbidden"
+source_modules = [
+    "gateway_v2.admit",
+    "gateway_v2.plan",
+    "gateway_v2.detect",
+    "gateway_v2.resolve",
+    "gateway_v2.dispatch",
+    "gateway_v2.egress",
+    "gateway_v2.audit",
+    "gateway_v2.runtime",
+    "gateway_v2.contracts",
+    "gateway_v2.domain",
+]
+forbidden_modules = ["starlette", "fastapi"]

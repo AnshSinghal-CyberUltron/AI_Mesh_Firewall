@@ -6,10 +6,12 @@ module in this package imports ONLY ``gateway_v2.domain`` (the "Resolve imports
 only domain" import-linter contract).
 """
 
+from gateway_v2.resolve.authorize import authorize
 from gateway_v2.resolve.decision import PlanResolver
 from gateway_v2.resolve.resolver import resolve
 
 __all__ = (
     "PlanResolver",
+    "authorize",
     "resolve",
 )

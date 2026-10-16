@@ -29,6 +29,7 @@ jobs:
             .venv/bin/python -m lint.check_no_module_mutable "$tree"
             .venv/bin/python -m lint.check_capacity_literals "$tree"
             .venv/bin/python -m lint.check_frozen_dataclasses "$tree"
+            .venv/bin/python -m lint.check_dispatch_provenance "$tree"
           done
           # R2-02 / 2.1-1: the data plane only. The control plane's repair path is
           # O(records) by design and runs off the serving loop.

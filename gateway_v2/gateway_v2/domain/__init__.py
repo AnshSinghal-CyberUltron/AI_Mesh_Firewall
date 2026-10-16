@@ -11,6 +11,7 @@ from gateway_v2.domain.decision import (
     Transformation,
     most_restrictive,
 )
+from gateway_v2.domain.dispatch_authorization import DispatchAuthorization
 from gateway_v2.domain.finding import Finding, FindingStatus, Span
 from gateway_v2.domain.identity import Principal
 from gateway_v2.domain.locks import FRESH_MS, PG_GRACE_MS, RELAXED_HOLDBACK_CLASSES, InFlightKill
@@ -67,6 +68,7 @@ __all__ = (
     "Cursor",
     "Decision",
     "DecisionRecord",
+    "DispatchAuthorization",
     "Disposition",
     "ExecutionPlan",
     "FRESH_MS",
