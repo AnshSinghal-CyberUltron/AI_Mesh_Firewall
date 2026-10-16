@@ -1,0 +1,128 @@
+{
+  "pbtResults": {},
+  "executionHistory": {
+    "1. Harden the CI_Scanner (`gateway_v2/lint/check_secret_headers.py`) to content-first detection with a path-pattern Content_Allowlist": [
+      {
+        "executionId": "7e9a2b4b-8ea8-4f78-b578-1d00446a3436",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792147571305
+      },
+      {
+        "executionId": "7e9a2b4b-8ea8-4f78-b578-1d00446a3436",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792147580053
+      },
+      {
+        "executionId": "7e9a2b4b-8ea8-4f78-b578-1d00446a3436",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792147780552
+      }
+    ],
+    "2. Harden the Precommit_Guard (`scripts/ralph/precommit-secret-scan.sh` part (3))": [
+      {
+        "executionId": "7e9a2b4b-8ea8-4f78-b578-1d00446a3436",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792147571412
+      },
+      {
+        "executionId": "7e9a2b4b-8ea8-4f78-b578-1d00446a3436",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792147789218
+      },
+      {
+        "executionId": "7e9a2b4b-8ea8-4f78-b578-1d00446a3436",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792147929523
+      }
+    ],
+    "3. Strengthen the `secret-headers` CI job (`.github/workflows/gateway-v2.yml`)": [
+      {
+        "executionId": "7e9a2b4b-8ea8-4f78-b578-1d00446a3436",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792147571513
+      },
+      {
+        "executionId": "7e9a2b4b-8ea8-4f78-b578-1d00446a3436",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792147790041
+      },
+      {
+        "executionId": "7e9a2b4b-8ea8-4f78-b578-1d00446a3436",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792147930383
+      }
+    ],
+    "5. Add the bash scratch-repo guard test (new co-located Python file, separate from the main gate file)": [
+      {
+        "executionId": "7e9a2b4b-8ea8-4f78-b578-1d00446a3436",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792147571611
+      },
+      {
+        "executionId": "7e9a2b4b-8ea8-4f78-b578-1d00446a3436",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792147947859
+      },
+      {
+        "executionId": "7e9a2b4b-8ea8-4f78-b578-1d00446a3436",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792148177575
+      }
+    ],
+    "6. Run the authoritative exit gate": [
+      {
+        "executionId": "7e9a2b4b-8ea8-4f78-b578-1d00446a3436",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792147571659
+      },
+      {
+        "executionId": "7e9a2b4b-8ea8-4f78-b578-1d00446a3436",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792148183970
+      },
+      {
+        "executionId": "7e9a2b4b-8ea8-4f78-b578-1d00446a3436",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792149045248
+      }
+    ],
+    "7. Final checkpoint": [
+      {
+        "executionId": "7e9a2b4b-8ea8-4f78-b578-1d00446a3436",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792147571694
+      },
+      {
+        "executionId": "7e9a2b4b-8ea8-4f78-b578-1d00446a3436",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792149045953
+      }
+    ],
+    "4. Extend the single Python gate-test file `gateway_v2/tests/gates/test_secret_headers.py` (ONE task, delivered in one pass)": [
+      {
+        "executionId": "7e9a2b4b-8ea8-4f78-b578-1d00446a3436",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792147948987
+      },
+      {
+        "executionId": "7e9a2b4b-8ea8-4f78-b578-1d00446a3436",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792148175121
+      }
+    ],
+    "4.1 Add the header-detection + path-category matrix (serialized, same file)": [
+      {
+        "executionId": "7e9a2b4b-8ea8-4f78-b578-1d00446a3436",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792148175071
+      }
+    ],
+    "4.2 Add T-ZERO and T-NO-MATERIAL (serialized, same file)": [
+      {
+        "executionId": "7e9a2b4b-8ea8-4f78-b578-1d00446a3436",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792148176303
+      }
+    ]
+  }
+}
