@@ -246,20 +246,28 @@ class LifecycleOutcome:
     destination: str | None
     body: Mapping[str, object] | None
     refuse_code: str | None
+    #: The gateway-minted per-request id (:meth:`ChatSurface._request_id`) set on a refusal
+    #: that occurs AFTER identity resolution (admit / budget / input-block), so the rendered
+    #: ``Error_Envelope`` body + the ``x-request-id`` header echo the SAME id the admission /
+    #: budget verdicts carry. ``None`` for a pre-identity refusal (pre-checks / parse /
+    #: identity / plan) — that render site has no id, so the envelope renders ``request_id: null``.
+    request_id: str | None = None
 
 
-def _refused(code: str) -> LifecycleOutcome:
+def _refused(code: str, *, request_id: str | None = None) -> LifecycleOutcome:
     """Build a fail-closed refusal outcome carrying ``code`` (zero provider calls).
 
     The one constructor for the refuse shape: ``refuse_code`` set, every provider
     input ``None``, so a refusing phase cannot accidentally leave a half-populated
-    outcome that a later step might forward. Pure.
+    outcome that a later step might forward. ``request_id`` is threaded when the
+    refusing phase ran after identity resolution; ``None`` for a pre-identity refusal. Pure.
     """
     return LifecycleOutcome(
         plan=None,
         destination=None,
         body=None,
         refuse_code=code,
+        request_id=request_id,
     )
 
 
@@ -361,22 +369,26 @@ class ChatSurface:
         if plan is None:
             return req, _refused(REFUSE_PLAN_UNAVAILABLE)
 
+        # Identity resolved: a refusal below echoes the minted per-request id into the
+        # Error_Envelope + the x-request-id header (the id the admit / budget verdicts carry).
+        request_id = self._request_id(identity, req)
+
         # Phase 5 — admission (task 2.4). A ShedVerdict fails closed with its code.
         admit_refuse = await self._admit(identity, req)
         if admit_refuse is not None:
-            return req, _refused(admit_refuse)
+            return req, _refused(admit_refuse, request_id=request_id)
 
         # Phase 6 — budget lease spend (task 2.4). A BudgetVerdict fails closed.
         budget_refuse = await self._budget(identity, req)
         if budget_refuse is not None:
-            return req, _refused(budget_refuse)
+            return req, _refused(budget_refuse, request_id=request_id)
 
         # Phase 7 — INPUT scan + the BLOCK short-circuit (task 2.4), the LAST step
         # before any provider contact: a BLOCK disposition refuses here, so a
         # blocked request makes zero provider calls (R7.1 / R7.2).
         input_refuse = self._input_scan(req)
         if input_refuse is not None:
-            return req, _refused(input_refuse)
+            return req, _refused(input_refuse, request_id=request_id)
 
         # All seven phases passed: build the proceed outcome (destination + body).
         return req, self._proceed(plan, req)

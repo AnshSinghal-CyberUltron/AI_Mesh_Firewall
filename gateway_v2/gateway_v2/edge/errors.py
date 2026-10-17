@@ -70,6 +70,13 @@ __all__ = (
 
 _JSON_MEDIA_TYPE = "application/json"
 
+#: The response header the stock ``openai`` SDK reads ``err.request_id`` from (the
+#: ``x-request-id`` RESPONSE header, NOT the body). The body ALSO carries a
+#: ``request_id`` field (the shared wire contract checks the body envelope; the SDK
+#: reads the header), so this module sets BOTH consistently from the one id when a
+#: render site has one. A plain header-name string, not a capacity-position literal.
+_REQUEST_ID_HEADER = "x-request-id"
+
 #: Status rendered for a value-code with no declared envelope entry (R3.4). A
 #: ``500`` (not a ``4xx``) because an unmapped code is an internal gap, not a
 #: client error; the body stays generic so no internal detail leaks.
@@ -157,6 +164,18 @@ _ENVELOPE: Mapping[str, tuple[int, str]] = MappingProxyType(
         "stream_killed": (503, "service_unavailable"),
         "scan_failure": (403, "gateway_error"),
         "output_blocked": (403, "gateway_error"),
+        # -- GW15/GW16 INPUT content block (openai-conformance-gw01-local, §10.2.2) --
+        # The §10.2.2 deliberate-diff table makes v2's input/streaming block a CHOSEN
+        # behaviour whose disposition the conformance suite asserts via the
+        # Expected_Diff_Ledger WITHOUT forcing v1's. The frozen OpenAI wire contract
+        # for a CONTENT block is HTTP 400 + ``invalid_request_error`` (the stock SDK's
+        # ``BadRequestError`` category); the v2 posture value-code is ``input_blocked``.
+        # Reconciled here: the HTTP STATUS is the frozen 400 and the ``error.type`` is
+        # the frozen ``invalid_request_error``, while the body ``code`` stays the v2
+        # posture spelling ``input_blocked`` (what the v2 cells assert and what the
+        # ledger's v2 side represents). ``output_blocked`` keeps its existing 403
+        # mapping unchanged. The 400 is a response-status code, not a capacity literal.
+        "input_blocked": (400, "invalid_request_error"),
         # -- GW16 misc-surface client-facing codes (Decision 1, R7.3/R9.1) ----
         # Value-codes declared in edge/wire/openai_misc.py (MISSING_REQUIRED_PARAMETER
         # / MODEL_NOT_FOUND); keyed here as literal strings (matching the existing
@@ -179,17 +198,59 @@ _ENVELOPE: Mapping[str, tuple[int, str]] = MappingProxyType(
 # --------------------------------------------------------------------------- #
 
 
-def _http_body(error_type: str, code: str, message: str) -> bytes:
+def _http_body(
+    error_type: str,
+    code: str,
+    message: str,
+    *,
+    param: str | None = None,
+    request_id: str | None = None,
+) -> bytes:
     """Serialise the declared ``{"error": {...}}`` HTTP JSON body.
 
-    Mirrors the SSE ``SSEErrorFrame.as_json_obj`` shape (``message`` / ``type`` /
-    ``code``) so a client that parses either rendering sees the same structure.
+    The body carries the full OpenAI error-object shape a stock SDK caller reads:
+    ``message`` / ``type`` / ``code`` (mirrored from the SSE
+    ``SSEErrorFrame.as_json_obj`` shape so either rendering parses the same) PLUS
+    ``param`` and ``request_id``. ``param`` is OpenAI-nullable — JSON ``null`` when the
+    error is not field-specific — and ``request_id`` is the request correlation id,
+    rendered as JSON ``null`` at a render site that genuinely has no id yet (a
+    pre-identity failure). The SDK reads ``err.param`` / ``err.code`` / ``err.type`` /
+    ``err.message`` from this body and ``err.request_id`` from the ``x-request-id``
+    RESPONSE header (set alongside, see :func:`render_http`).
     """
-    body = {"error": {"message": message, "type": error_type, "code": code}}
+    body = {
+        "error": {
+            "message": message,
+            "type": error_type,
+            "code": code,
+            "param": param,
+            "request_id": request_id,
+        }
+    }
     return json.dumps(body, separators=(",", ":")).encode("utf-8")
 
 
-def render_http(code: str) -> HTTPResponse:
+def _error_headers(request_id: str | None) -> tuple[tuple[str, str], ...]:
+    """Build the HTTP response headers for an error body, SDK-faithfully.
+
+    Always carries ``content-type: application/json``; when ``request_id`` is present
+    it ALSO carries the ``x-request-id`` response header the stock ``openai`` SDK reads
+    ``err.request_id`` from, so the header and the body ``request_id`` field agree. A
+    render site with no id (a pre-identity failure) sets no header (and the body field
+    is JSON ``null``).
+    """
+    headers: tuple[tuple[str, str], ...] = (("content-type", _JSON_MEDIA_TYPE),)
+    if request_id is not None:
+        headers = (*headers, (_REQUEST_ID_HEADER, request_id))
+    return headers
+
+
+def render_http(
+    code: str,
+    *,
+    param: str | None = None,
+    request_id: str | None = None,
+) -> HTTPResponse:
     """Render a value-code to a declared :class:`HTTPResponse` (R3.2).
 
     A code with a declared :data:`_ENVELOPE` entry renders that status; the JSON
@@ -199,25 +260,30 @@ def render_http(code: str) -> HTTPResponse:
     with a fixed ``gateway_error`` body -- and NEVER substitutes the raw code into
     the ``message`` (R3.4). In both cases the structured ``code`` field echoes the
     originating code so the trace keeps the single spelling.
+
+    The body carries ``param`` (OpenAI-nullable; ``None`` -> JSON ``null`` when the
+    error is not field-specific) and ``request_id`` (``None`` -> JSON ``null`` at a
+    render site that has no id yet). When a ``request_id`` is supplied, the
+    ``x-request-id`` response header is set alongside the body field so the stock SDK
+    reads it from the header and the two never disagree.
     """
+    headers = _error_headers(request_id)
     entry = _ENVELOPE.get(code)
     if entry is None:
-        body = _http_body(_GENERIC_ERROR_TYPE, code, _GENERIC_ERROR_MESSAGE)
-        return HTTPResponse(
-            status=GENERIC_HTTP_STATUS,
-            body=body,
-            headers=(("content-type", _JSON_MEDIA_TYPE),),
+        body = _http_body(
+            _GENERIC_ERROR_TYPE,
+            code,
+            _GENERIC_ERROR_MESSAGE,
+            param=param,
+            request_id=request_id,
         )
+        return HTTPResponse(status=GENERIC_HTTP_STATUS, body=body, headers=headers)
     status, error_type = entry
     # Reuse the single-sourced declared frame for the human-readable message so
     # the HTTP body and the SSE frame carry identical text for the same code.
     frame = error_frame_for(code)
-    body = _http_body(error_type, code, frame.message)
-    return HTTPResponse(
-        status=status,
-        body=body,
-        headers=(("content-type", _JSON_MEDIA_TYPE),),
-    )
+    body = _http_body(error_type, code, frame.message, param=param, request_id=request_id)
+    return HTTPResponse(status=status, body=body, headers=headers)
 
 
 def render_sse(code: str) -> bytes:
@@ -252,7 +318,13 @@ def render_not_implemented(surface: str) -> HTTPResponse:
     )
 
 
-def render(code: str, *, as_sse: bool) -> HTTPResponse | bytes:
+def render(
+    code: str,
+    *,
+    as_sse: bool,
+    param: str | None = None,
+    request_id: str | None = None,
+) -> HTTPResponse | bytes:
     """Map a value-code to a declared HTTP status + SSE ``Error_Frame`` (R3.2).
 
     ``as_sse=False`` returns an :class:`HTTPResponse` (the framework-free rendered
@@ -260,7 +332,13 @@ def render(code: str, *, as_sse: bool) -> HTTPResponse | bytes:
     bytes. An unmapped code renders a declared generic error either way, never raw
     internal detail (R3.4). This is the single ``Error_Envelope`` entry point
     (R3.1); every code reaching the wire passes through here.
+
+    ``param`` / ``request_id`` thread into the HTTP body (and the ``x-request-id``
+    header for ``request_id``); they are HTTP-body fields only — the SSE
+    ``Error_Frame`` keeps the frozen OpenAI streaming-error shape
+    (``message`` / ``type`` / ``code``) the v1 streaming-error contract pins, so
+    they are not injected into the SSE frame.
     """
     if as_sse:
         return render_sse(code)
-    return render_http(code)
+    return render_http(code, param=param, request_id=request_id)

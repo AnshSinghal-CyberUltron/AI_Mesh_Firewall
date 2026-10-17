@@ -173,6 +173,15 @@ ERROR_SHAPES: Mapping[str, tuple[str, str]] = MappingProxyType(
             "gateway_error",
             "The response was withheld by the output guard.",
         ),
+        # The INPUT content block (GW15/GW16, openai-conformance-gw01-local §10.2.2):
+        # the HTTP ``Error_Envelope`` renders this as 400 ``invalid_request_error`` (the
+        # frozen OpenAI content-block type) with the v2 posture ``code`` ``input_blocked``;
+        # the SSE frame carries the SAME ``type`` + ``code`` so a streaming block and a
+        # non-streaming block never disagree on the wire shape (R1.3 / R3.4 parity).
+        "input_blocked": (
+            "invalid_request_error",
+            "The request was blocked by an input content policy.",
+        ),
     }
 )
 

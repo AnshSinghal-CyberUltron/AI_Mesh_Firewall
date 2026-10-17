@@ -167,15 +167,19 @@ async def emit_response(send: ASGISend, response: errors.HTTPResponse) -> None:
     await send({"type": "http.response.body", "body": response.body})
 
 
-async def _emit_error_code(send: ASGISend, code: str) -> None:
+async def _emit_error_code(send: ASGISend, code: str, request_id: str | None = None) -> None:
     """Render a value-code through the single ``Error_Envelope`` and emit it as HTTP.
 
     Every value-code that reaches a non-streaming handler passes through
     :func:`errors.render_http`, so an unmapped code renders the declared generic error rather
     than leaking raw internal detail (R3.4). The streaming chat handler uses the SSE rendering
     instead (``errors.render_sse``), so the two sides never disagree on the error shape.
+
+    ``request_id`` is the gateway-minted per-request id when the render site has one (``None`` at
+    a pre-identity site); it threads into the HTTP body ``request_id`` field + the
+    ``x-request-id`` response header so the stock SDK reads a consistent id.
     """
-    await emit_response(send, errors.render_http(code))
+    await emit_response(send, errors.render_http(code, request_id=request_id))
 
 
 # --------------------------------------------------------------------------- #
@@ -305,7 +309,7 @@ class ChatRoute:
         body = await _read_body(receive)
         req, outcome = await ChatSurface(deps=self).run_lifecycle(scope, body)
         if outcome.refuse_code is not None:
-            await self._render_refusal(send, req, outcome.refuse_code)
+            await self._render_refusal(send, req, outcome.refuse_code, outcome.request_id)
             return
         # Proceed: the lifecycle guarantees all three provider inputs are set on a non-refusal.
         plan = outcome.plan
@@ -321,7 +325,11 @@ class ChatRoute:
         )
 
     async def _render_refusal(
-        self, send: ASGISend, req: CanonicalRequest | None, code: str
+        self,
+        send: ASGISend,
+        req: CanonicalRequest | None,
+        code: str,
+        request_id: str | None,
     ) -> None:
         """Render a §10.4 refusal through the single ``Error_Envelope`` (R12.1).
 
@@ -330,13 +338,19 @@ class ChatRoute:
         when the parsed request asked to stream (``req.streaming``) and otherwise as an HTTP body.
         Either way the one ``edge/errors`` envelope maps the value-code, so an unmapped code still
         renders a declared generic error rather than a raw framework 500.
+
+        ``request_id`` is the gateway-minted per-request id when the refusing phase ran after
+        identity resolution (``None`` for a pre-identity refusal); it is threaded into the HTTP
+        ``Error_Envelope`` body + the ``x-request-id`` response header so the render echoes the id
+        the admission / budget verdicts carry. The SSE ``Error_Frame`` keeps the frozen OpenAI
+        streaming-error shape (the id rides the stream's response header, not the frame).
         """
         if req is not None and req.streaming:
             await _start_sse(send)
             await _send_sse(send, errors.render_sse(code))
             await _end_sse(send)
             return
-        await _emit_error_code(send, code)
+        await _emit_error_code(send, code, request_id)
 
     async def _stream_response(
         self,
