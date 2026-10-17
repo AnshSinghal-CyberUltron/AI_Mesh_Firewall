@@ -5,6 +5,19 @@ HTTP envelopes are JSON (never HTML) and that unauthenticated calls do not
 leak stack traces. Against ASGI with lifespan off the native routers are
 unmounted (404) — that is the recorded v1-ASGI baseline. Live TCP (:8300)
 exercises the mounted routes.
+
+**Disposition — this is a v1-arm conformance file (consistent with the
+live-uvicorn disposition).** Its cells build the v1 FastAPI app
+(``ai_mesh_gateway.main.app``) through the ``sdk_app`` / ``sdk_client`` fixtures,
+which call ``T._make_sdk_app(...)`` (``T`` is ``test_openai_sdk_compat``). They
+carry no ``build_app`` v2 wiring, so they target the V1_App and have no v2
+equivalent to re-point at the shared ``wire_contract`` helper. Under a v2 run the
+collection gate (``conftest.py``) skips every ``sdk_app`` / ``sdk_client`` cell
+("v1-app cell; v2 wire contract proved by the v2 arm"); the v1 package
+``ai_mesh_gateway`` is a separate CI job's dependency and is absent from this
+venv, so these cells RUN only where the v1 package is installed (CI). The module
+collects cleanly under both apps because the v1 import is lazy inside
+``T._make_sdk_app`` (never at collection time).
 """
 
 from __future__ import annotations

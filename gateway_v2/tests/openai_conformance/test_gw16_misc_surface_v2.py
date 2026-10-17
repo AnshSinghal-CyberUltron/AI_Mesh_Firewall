@@ -1,5 +1,6 @@
 # Feature: chat-surface-gw16-misc
 # Validates: Requirements 6.4, 9.3, 9.4, 11.1, 11.2, 11.3
+# Validates (openai-conformance-gw01-local task 5.2): Requirements 4.2, 5.2, 6.2
 """GW16 in-process OpenAI-SDK conformance subset against the v2 misc surfaces (task 10.1).
 
 The GW16 sibling of ``test_gw15_chat_surface_v2.py``: the UNMODIFIED stock ``openai`` Python
@@ -85,6 +86,7 @@ from tests.edge._chat_lifecycle_fixtures import (  # noqa: E402
     ResolvingIdentity,
     warm_snapshot_source,
 )
+from tests.openai_conformance.wire_contract import assert_error_envelope  # noqa: E402
 
 pytestmark = pytest.mark.asyncio
 
@@ -362,11 +364,11 @@ async def test_embeddings_input_block_zero_dispatch() -> None:
     finally:
         await client.close()
 
-    err = excinfo.value
-    assert isinstance(err, openai.APIStatusError), f"expected an APIStatusError, got {err!r}"
-    body = json.loads(err.response.text)
-    assert isinstance(body.get("error"), dict), f"not an Error_Envelope body: {body!r}"
-    assert body["error"].get("code") == "input_blocked", f"unexpected error body: {body!r}"
+    # The generic error-envelope wire assertion (message/type/code/param/request_id + a 4xx
+    # status coherent with the code) is the shared Frozen_Contract body — assert it through the
+    # one helper both arms call. The misc-surface input BLOCK is NOT a §10.2.2 deliberate diff,
+    # so the exact wire code the v2 app returns (``input_blocked``) is passed as a literal.
+    assert_error_envelope(excinfo.value, expected_code="input_blocked")
     assert provider.open_calls == 0, "an input BLOCK must make ZERO provider dispatch"
 
 
@@ -427,10 +429,11 @@ async def test_models_retrieve_unknown_raises_not_found() -> None:
     finally:
         await client.close()
 
-    err = excinfo.value
-    assert err.status_code == 404, f"expected HTTP 404, got {err.status_code}"
-    body = json.loads(err.response.text)
-    assert body["error"].get("code") == "model_not_found", f"unexpected error body: {body!r}"
+    # The generic error-envelope wire assertion (full envelope fields + the HTTP 404 that
+    # coheres with ``model_not_found``) is the shared Frozen_Contract body — assert it through
+    # the one helper. ``pytest.raises(openai.NotFoundError)`` above already pins the SDK error
+    # class; a model-not-found is not a §10.2.2 diff, so the wire code is a literal.
+    assert_error_envelope(excinfo.value, expected_code="model_not_found")
     assert provider.open_calls == 0, "an unknown model retrieve must make ZERO provider dispatch"
 
 

@@ -1,5 +1,5 @@
 # Feature: chat-surface-gw15
-# Validates: Requirements 11.3, 12.3, 12.4, 15.1, 15.2, 15.3
+# Validates: Requirements 11.3, 12.3, 12.4, 15.1, 15.2, 15.3, 4.1, 4.3, 5.2
 """GW15 in-process OpenAI-SDK conformance subset against the v2 Chat_Surface (task 7.1).
 
 This is the **in-process conformance subset** the GW15 design calls for: the UNMODIFIED
@@ -55,7 +55,6 @@ a tree without the SDK installed skips cleanly rather than erroring the collecti
 
 from __future__ import annotations
 
-import json
 from collections.abc import AsyncIterator, Callable, Sequence
 
 import pytest
@@ -65,6 +64,9 @@ import pytest
 openai = pytest.importorskip("openai")
 httpx = pytest.importorskip("httpx")
 
+from gateway_v2.contracts.openai_conformance.expected_diffs import (  # noqa: E402
+    SDK_INSTALLED_FLOOR,
+)
 from gateway_v2.detect.holdback import scan as holdback_scan  # noqa: E402
 from gateway_v2.dispatch.provider import UpstreamEvent, UpstreamRequest  # noqa: E402
 from gateway_v2.domain import Category, Finding, FindingStatus, Span  # noqa: E402
@@ -77,6 +79,11 @@ from tests.edge._chat_lifecycle_fixtures import (  # noqa: E402
     AdmittingBudget,
     ResolvingIdentity,
     warm_snapshot_source,
+)
+from tests.openai_conformance.wire_contract import (  # noqa: E402
+    assert_chat_completion,
+    assert_error_envelope,
+    assert_stream_frames,
 )
 
 pytestmark = pytest.mark.asyncio
@@ -270,12 +277,25 @@ def _stock_client(app: object) -> openai.AsyncOpenAI:
     )
 
 
-async def _collect_stream_content(stream: object) -> str:
-    """Concatenate the ``choices[].delta.content`` of every chunk the SDK parsed."""
+async def _collect_stream(stream: object) -> tuple[list[object], str]:
+    """Collect every parsed chunk AND the concatenated ``choices[].delta.content``.
+
+    Returning the raw chunk list lets a cell hand them to the shared
+    :func:`assert_stream_frames` (the generic chunk-framing + terminal ``[DONE]`` wire
+    assertion) while keeping the reconstructed content for the scenario-specific checks.
+    """
+    chunks: list[object] = []
     content = ""
     async for chunk in stream:  # type: ignore[attr-defined]
+        chunks.append(chunk)
         if chunk.choices and chunk.choices[0].delta and chunk.choices[0].delta.content:
             content += chunk.choices[0].delta.content
+    return chunks, content
+
+
+async def _collect_stream_content(stream: object) -> str:
+    """Concatenate the ``choices[].delta.content`` of every chunk the SDK parsed."""
+    _chunks, content = await _collect_stream(stream)
     return content
 
 
@@ -296,9 +316,8 @@ async def test_s01_allow_baseline_non_streaming() -> None:
     finally:
         await client.close()
 
-    assert completion.object == "chat.completion"
+    assert_chat_completion(completion)
     assert completion.choices[0].message.content == "Hello from upstream."
-    assert completion.choices[0].message.role == "assistant"
     assert provider.open_calls == 1, "ALLOW baseline must make exactly one provider dispatch"
 
 
@@ -312,10 +331,11 @@ async def test_s01_allow_baseline_streaming() -> None:
             messages=[{"role": "user", "content": "Stream me a greeting."}],
             stream=True,
         )
-        content = await _collect_stream_content(stream)
+        chunks, content = await _collect_stream(stream)
     finally:
         await client.close()
 
+    assert_stream_frames(chunks)
     assert content == "Hello from upstream.", f"streamed content mismatch: {content!r}"
     assert provider.open_calls == 1, "ALLOW streaming baseline must make one provider dispatch"
 
@@ -346,12 +366,9 @@ async def test_s02_input_block_non_streaming() -> None:
         await client.close()
 
     # The SDK received a documented error (not a raw framework crash) — an APIStatusError
-    # carrying the declared {"error": {...}} envelope with the input_blocked code.
-    err = excinfo.value
-    assert isinstance(err, openai.APIStatusError), f"expected an APIStatusError, got {err!r}"
-    body = json.loads(err.response.text)
-    assert isinstance(body.get("error"), dict), f"not an Error_Envelope body: {body!r}"
-    assert body["error"].get("code") == "input_blocked", f"unexpected error body: {body!r}"
+    # carrying the declared {"error": {...}} envelope with the input_blocked code. The shared
+    # helper asserts the full envelope (message/type/code/param/request_id) + coherent status.
+    assert_error_envelope(excinfo.value, expected_code="input_blocked")
     assert provider.open_calls == 0, "an input BLOCK must make ZERO provider dispatch"
 
 
@@ -399,6 +416,7 @@ async def test_s03_output_redact_non_streaming() -> None:
     finally:
         await client.close()
 
+    assert_chat_completion(completion)
     content = completion.choices[0].message.content or ""
     assert _CANARY not in content, f"the raw canary reached the client: {content!r}"
     assert "[REDACTED]" in content, f"the REDACT placeholder is absent: {content!r}"
@@ -434,6 +452,7 @@ async def test_s04_monitor_completes_non_streaming() -> None:
     finally:
         await client.close()
 
+    assert_chat_completion(completion)
     assert completion.choices[0].message.content == "Hello from upstream."
     assert provider.open_calls == 1, "a MONITOR finding must not block the dispatch"
 
@@ -450,10 +469,11 @@ async def test_s04_monitor_completes_streaming() -> None:
             messages=[{"role": "user", "content": "a monitored prompt"}],
             stream=True,
         )
-        content = await _collect_stream_content(stream)
+        chunks, content = await _collect_stream(stream)
     finally:
         await client.close()
 
+    assert_stream_frames(chunks)
     assert content == "Hello from upstream."
     assert provider.open_calls == 1
 
@@ -487,6 +507,7 @@ async def test_s05_flag_completes_non_streaming() -> None:
     finally:
         await client.close()
 
+    assert_chat_completion(completion)
     assert completion.choices[0].message.content == "Hello from upstream."
     assert provider.open_calls == 1, "a FLAG finding must not block the traffic outcome"
 
@@ -509,6 +530,7 @@ async def test_s06_rule_off_completes_non_streaming() -> None:
     finally:
         await client.close()
 
+    assert_chat_completion(completion)
     assert completion.choices[0].message.content == "Hello from upstream."
     assert provider.open_calls == 1, "with the rule OFF the request completes like the baseline"
 
@@ -523,10 +545,11 @@ async def test_s06_rule_off_completes_streaming() -> None:
             messages=[{"role": "user", "content": "nothing to detect"}],
             stream=True,
         )
-        content = await _collect_stream_content(stream)
+        chunks, content = await _collect_stream(stream)
     finally:
         await client.close()
 
+    assert_stream_frames(chunks)
     assert content == "Hello from upstream."
     assert provider.open_calls == 1
 
@@ -561,11 +584,9 @@ async def test_s07_conflicting_rules_block_wins_non_streaming() -> None:
     finally:
         await client.close()
 
-    err = excinfo.value
-    assert isinstance(err, openai.APIStatusError), f"expected an APIStatusError, got {err!r}"
-    body = json.loads(err.response.text)
     # BLOCK won (the input_blocked code), not the REDACT — the most-restrictive disposition.
-    assert body["error"].get("code") == "input_blocked", f"BLOCK did not win: {body!r}"
+    # The shared helper asserts the full envelope; the code assertion is the S07 pass condition.
+    assert_error_envelope(excinfo.value, expected_code="input_blocked")
     assert provider.open_calls == 0, "a conflicting BLOCK must make ZERO provider dispatch"
 
 
@@ -612,5 +633,27 @@ async def test_lgw15_2_base_url_swap_only_non_streaming() -> None:
     finally:
         await client.close()
 
-    assert completion.object == "chat.completion"
+    assert_chat_completion(completion)
     assert completion.choices[0].message.content == "Hello from upstream."
+
+
+# =========================================================================== #
+# SDK version provenance — the installed stock SDK major is at or above the floor.
+# =========================================================================== #
+
+
+async def test_installed_sdk_major_at_or_above_floor() -> None:
+    """Requirement 4.4: the installed stock ``openai`` major is >= ``SDK_INSTALLED_FLOOR``.
+
+    The wire contract was frozen against ``2.38.0`` but the venv ships ``3.29.0`` — a major
+    jump. This cell records the proven floor in one product ledger
+    (:data:`SDK_INSTALLED_FLOOR`) and asserts the installed SDK's MAJOR is at or above it, so
+    the suite fails loudly if the environment regresses below the proven major rather than
+    silently drifting onto an unproven SDK.
+    """
+    installed_major = int(openai.__version__.split(".")[0])
+    floor_major = int(SDK_INSTALLED_FLOOR.split(".")[0])
+    assert installed_major >= floor_major, (
+        f"installed openai {openai.__version__!r} major {installed_major} is below the proven "
+        f"floor {SDK_INSTALLED_FLOOR!r} (major {floor_major})"
+    )

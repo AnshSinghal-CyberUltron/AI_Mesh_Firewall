@@ -388,7 +388,8 @@ def _p10_build_deps(flow: str, counter: _P10ReadCounter) -> MiscRoute:
 
 # Expected refuse-code per flow (``None`` ⇒ a 200 completed outcome). ``shed`` and ``budget``
 # are posture codes rendering HTTP 503; ``input_blocked`` is the GW15 input-block spelling,
-# which has no dedicated envelope entry so it renders the declared generic error (HTTP 500).
+# which carries a dedicated envelope entry rendering the frozen content-block disposition
+# (HTTP 400 ``invalid_request_error``) per the §10.2.2 reconciliation.
 _P10_EXPECTED_CODE: Mapping[str, str | None] = {
     _P10_IDENTITY: REFUSE_IDENTITY_UNRESOLVED,
     _P10_SHED: OVERLOAD_SHED,

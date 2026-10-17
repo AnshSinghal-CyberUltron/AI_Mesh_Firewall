@@ -24,12 +24,13 @@ the counted ``StubProviderClient`` subclass, and the ASGI receive/send harness m
 own ``tests/edge/test_gw16_embeddings_smoke.py``.
 
 A refusal renders through the single ``edge/errors`` ``Error_Envelope`` (``render_http``):
-``input_blocked`` has no dedicated envelope entry (GW15's shipped input-block spelling), so it
-renders as the declared generic error — HTTP 500 ``gateway_error`` with the code echoed in the
-structured ``code`` field (asserted via the error body, exactly as the smoke test does);
-``overload_shed`` and ``budget_unavailable`` are mapped posture codes rendering HTTP 503
-``service_unavailable``. All three assertions read the code off the parsed error body so they pin
-the *declared* value-code, not just a status.
+``input_blocked`` carries a dedicated envelope entry (the openai-conformance-gw01-local §10.2.2
+reconciliation) — a CONTENT block renders as the frozen OpenAI content-block disposition, HTTP
+400 ``invalid_request_error``, with the v2 posture ``code`` echoed in the structured ``code``
+field (asserted via the error body, exactly as the smoke test does); ``overload_shed`` and
+``budget_unavailable`` are mapped posture codes rendering HTTP 503 ``service_unavailable``. All
+three assertions read the code off the parsed error body so they pin the *declared* value-code,
+not just a status.
 """
 
 from __future__ import annotations
@@ -405,10 +406,11 @@ def test_property_5_block_embeddings_input_yields_zero_provider_calls() -> None:
                 open_calls=provider.open_calls,
             )
             # R4.3 — the refusal renders the declared block value-code through the single
-            # Error_Envelope. ``input_blocked`` has no dedicated envelope entry (GW15's shipped
-            # input-block spelling), so it is the declared generic error (HTTP 500 gateway_error)
-            # with the code echoed in the structured ``code`` field.
-            assert capture.status == 500, _ctx(
+            # Error_Envelope. ``input_blocked`` now carries a dedicated envelope entry (the
+            # openai-conformance-gw01-local §10.2.2 reconciliation): a CONTENT block renders as
+            # the frozen OpenAI content-block disposition, HTTP 400 ``invalid_request_error``,
+            # with the v2 posture ``code`` echoed in the structured ``code`` field.
+            assert capture.status == 400, _ctx(
                 _P5_SEED, i, note="unexpected status on BLOCK refusal",
                 position=position, status=capture.status,
             )
@@ -479,8 +481,9 @@ def test_property_6_block_is_most_restrictive_disposition_end_to_end() -> None:
         capture = _run(deps, body)
 
         # C22 — one BLOCK finding dominates every co-matching REDACT/FLAG: the Embeddings_Surface
-        # refuses with the declared input-block code, end-to-end through ``handle`` (R4.4).
-        assert capture.status == 500, _ctx(
+        # refuses with the declared input-block code, end-to-end through ``handle`` (R4.4). A
+        # CONTENT block renders HTTP 400 ``invalid_request_error`` (§10.2.2 reconciliation).
+        assert capture.status == 400, _ctx(
             _P6_SEED, i, note="unexpected status on C22 refusal",
             detectors=detectors, status=capture.status,
         )

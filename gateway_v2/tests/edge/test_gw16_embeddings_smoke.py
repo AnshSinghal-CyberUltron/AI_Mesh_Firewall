@@ -8,8 +8,8 @@ lifecycle correctly across three scenarios:
    renders ``shared_state_unavailable`` (HTTP 503) and makes ZERO provider calls.
 2. **BLOCK input finding** (clean identity + always-admit admission/budget + a
    resolved plan + a BLOCK-producing detector) ⇒ the surface renders
-   ``input_blocked`` (HTTP 403) and makes ZERO provider calls (the lifecycle ORDER
-   is load-bearing: the input scan is the last phase before ``provider.open``).
+   ``input_blocked`` (HTTP 400 ``invalid_request_error``) and makes ZERO provider calls
+   (the lifecycle ORDER is load-bearing: the input scan is the last phase before ``provider.open``).
 3. **Clean path** (clean identity + always-admit + resolved plan + no-finding
    detector + a scripted ``StubProviderClient`` whose ``text_deltas`` carry
    JSON-encoded vectors) ⇒ the surface renders the OpenAI embeddings body with one
@@ -242,7 +242,7 @@ def test_embeddings_fail_closed_identity_refuses_with_zero_provider_calls() -> N
 
 
 # --------------------------------------------------------------------------- #
-# Scenario 2 — BLOCK input finding ⇒ input_blocked (403), zero provider calls.
+# Scenario 2 — BLOCK input finding ⇒ input_blocked (HTTP 400), zero provider calls.
 # --------------------------------------------------------------------------- #
 
 
@@ -272,15 +272,17 @@ def test_embeddings_block_input_refuses_before_provider() -> None:
 
     # The input BLOCK short-circuits BEFORE provider.open ⇒ ZERO provider calls (R4.2), which
     # is the hard gate. The refusal renders through the single Error_Envelope: ``input_blocked``
-    # is GW15's shipped input-block spelling and (like ChatSurface) has no dedicated envelope
-    # entry, so it renders as the declared generic error (HTTP 500 ``gateway_error``) with NO raw
-    # internal detail leaked — never a raw framework error (R9.2). The envelope-rendered body is a
-    # well-formed OpenAI error object, confirming the refusal went through the single render path.
+    # is GW15's shipped input-block spelling and now carries a dedicated envelope entry (the
+    # openai-conformance-gw01-local §10.2.2 reconciliation) — a CONTENT block renders as the
+    # frozen OpenAI content-block disposition, HTTP 400 ``invalid_request_error``, while the body
+    # ``code`` keeps the v2 posture spelling ``input_blocked``. The body carries the full OpenAI
+    # error object (``param``/``request_id`` present) and leaks NO raw internal detail (R9.2).
     assert provider.open_calls == 0
-    assert capture.status == 500
+    assert capture.status == 400
     error = json.loads(capture.body)["error"]
-    assert error["type"] == "gateway_error"
+    assert error["type"] == "invalid_request_error"
     assert error["code"] == "input_blocked"  # declared code echoed; no raw framework detail.
+    assert "param" in error and "request_id" in error  # full OpenAI error-object shape.
     assert deps.exports.snapshot().fail_open_total == 0
 
 
