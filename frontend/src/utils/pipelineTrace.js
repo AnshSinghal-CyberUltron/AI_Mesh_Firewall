@@ -37,10 +37,31 @@ export function honestStageAction(stage) {
   let a = String((stage && stage.action) || "allow").toLowerCase();
   const lat = stage && stage.latency_ms;
   if (typeof lat === "number" && lat === 0 && (a === "allow" || a === "")) {
+    // L14b-2 (PIPELINE-0035): executed-vs-skipped is a PROPERTY OF THE RECORD, never
+    // recomputed in the browser. latency===0 is ambiguous (a genuine skip AND a
+    // sub-millisecond scan both round to 0), so this branch must NOT fabricate "skip"
+    // for a stage the backend says actually ran.
+    // 1. Respect the explicit backend signal first: ran===true must NEVER become skip;
+    //    ran===false may render skip.
+    const ran = stage && stage.ran;
+    if (ran === true) return a || "allow";
+    if (ran === false) return "skip";
+    // 2. Backward-compat for older records lacking `ran`: do not latency-infer skip
+    //    for stages that carry positive run-evidence — model routing always runs, and
+    //    a stage carrying a real scan_outcome / tier / redact_noop clearly executed.
     const name = String(stage?.name || stage?.stage || "").toLowerCase();
     if (name === "model_routing" || name === "route") {
       return a || "allow";
     }
+    const scanOutcome = String(stage?.scan_outcome || "").toLowerCase();
+    const tier = stage?.tier;
+    const ranEvidence = (
+      scanOutcome === "analyzed"
+      || scanOutcome === "clean"
+      || (tier !== undefined && tier !== null && tier !== "" && tier !== 0)
+      || stage?.redact_noop === true
+    );
+    if (ranEvidence) return a || "allow";
     return "skip";
   }
   const noop = stage && ((stage.metadata && stage.metadata.redact_noop) || stage.redact_noop);

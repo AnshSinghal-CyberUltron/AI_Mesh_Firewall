@@ -2,6 +2,62 @@
 
 All changes to the chat pipeline consolidation/fix/freeze effort.
 
+## PIPELINE-0035 (2026-10-21)
+
+**Input Scan "SKIP" display-honesty fix on the 503 scan-only + policy-redacted path.**
+
+Files:
+- `gateway/ai_mesh_gateway/pipeline_trace.py` (`build_pipeline_trace`,
+  `STAGE_TRANSPARENCY_KEYS`, `normalize_stage_transparency`)
+- `gateway/ai_mesh_gateway/main.py` (`_attach_pipeline_trace_to_llm_error`)
+- `frontend/src/utils/pipelineTrace.js` (`honestStageAction`)
+- tests: `gateway/ai_mesh_gateway/tests/test_pipeline_stage_ran_flag.py`,
+  `frontend/src/utils/pipelineTrace.test.js`
+
+WHAT: Added a truthful, explicit per-stage boolean `ran` to every pipeline_trace stage
+dict and made the Scan Detail UI respect it instead of inferring "skip" from
+`latency_ms === 0`.
+
+WHY (L14b-2 + C14): The UI's `honestStageAction` returned "skip" whenever a stage was
+`action in (allow,"")` AND `latency_ms === 0` (carve-out only for `model_routing`/`route`).
+`latency===0` is ambiguous — a genuine skip AND a sub-millisecond scan both round to 0 —
+so on the scan-only (no-model-call) + PII path, where POLICY redacted the input and the
+input scan then analyzed the already-masked text and allowed it (`_resolve_input_scan_action`
+→ `("allow","analyzed",True)`) with `input_scan_ms` reconciling to 0, the UI mislabeled a
+stage that actually ran as "SKIP". Runbook L14b-2 (§5/GW14b) requires Scan Detail stage
+status to render FROM THE RECORD; its FAIL condition is any field "recomputed in the
+browser". C14 (operator honesty): the trace must not claim a scan was skipped when it ran.
+
+NOW DOES:
+- `build_pipeline_trace` stamps `ran = (action != "skip")` on every stage after all action
+  resolution (so blocked-upstream skips, the skip-after-block invariant, and `skip_inference`
+  model-stage skips all set `ran=False`; input_scan carrying `allow`/`analyzed`/`clean` is
+  `ran=True`). Additive — no existing action/latency value changed. `ran` added to
+  `STAGE_TRANSPARENCY_KEYS`; `normalize_stage_transparency` defaults it from the action for
+  any stage missing it (e.g. the blocked-path builder).
+- `_attach_pipeline_trace_to_llm_error` (the 503/model-error trace builder) re-stamps `ran`
+  after it flips `model_output → error` (ran=True, the model was attempted) and
+  `output_guardrail → skip` (ran=False, model output failed → nothing to guard).
+- Frontend `honestStageAction`: in the `latency===0 && allow` branch, respect the record —
+  `ran === true` is NEVER recomputed to skip, `ran === false` may render skip. Backward-compat
+  (older records without `ran`): the branch no longer latency-infers skip for a stage with
+  positive run-evidence (`scan_outcome` in analyzed/clean, a truthy `tier`, or `redact_noop`),
+  generalizing the prior model_routing-only carve-out. The redact-noop→flag and injection-rec
+  logic is unchanged. A bare 0ms allow with no evidence and no flag still reads as skip.
+
+VERIFY:
+- Gateway: `test_pipeline_stage_ran_flag.py` 5 passed (input_scan analyzed@0ms → ran=True;
+  blocked-upstream + scan-only model stages → ran=False; the exact 503 model-error +
+  policy-redacted path via `_attach_pipeline_trace_to_llm_error` → input_scan ran=True,
+  model_output error+ran=True, output_guardrail skip+ran=False). Full suite:
+  193 failed / 4815 passed — the 193 are PRE-EXISTING missing-live-env/SDK failures
+  (identical count with the change stashed on clean HEAD: 193 failed / 4810 passed),
+  i.e. this change adds 0 regressions + 5 new passing tests.
+- Frontend: `npm run test:unit` 183 passed / 0 failed (incl. 2 new honestStageAction tests:
+  input_scan allow+0ms+scan_outcome=analyzed → NOT skip; genuinely-skipped stage → skip).
+  `npm run build` green (vite v7.3.3, built in 7.28s) — run in a disposable `node:22-alpine`
+  container (host `frontend/node_modules` is root-owned / no local vite).
+
 ## PIPELINE-0034 (2026-09-17)
 
 **T01 PII-off true bypass + AKIA-as-secret floor.**

@@ -90,6 +90,55 @@ test("honestStageAction keeps model_routing allow even at 0ms", () => {
   );
 });
 
+// PIPELINE-0035 / L14b-2: executed-vs-skipped renders from the record (stage.ran),
+// never recomputed in the browser from latency===0.
+test("honestStageAction respects the backend ran flag over latency inference", () => {
+  // The 503 scan-only + policy-redacted scenario: input_scan ran (analyzed the masked
+  // text, allowed it) but reconciled to 0ms. ran=true must NOT be recomputed to skip.
+  assert.equal(
+    honestStageAction({
+      name: "input_scan",
+      action: "allow",
+      latency_ms: 0,
+      ran: true,
+      scan_outcome: "analyzed",
+      redact_noop: true,
+    }),
+    "allow",
+  );
+  // A genuinely-skipped stage after an upstream block stays skip.
+  assert.equal(
+    honestStageAction({ name: "model_output", action: "allow", latency_ms: 0, ran: false }),
+    "skip",
+  );
+});
+
+test("honestStageAction does not latency-infer skip for a stage with run-evidence (no ran field)", () => {
+  // Backward-compat with older records lacking `ran`: scan_outcome=analyzed at 0ms ran.
+  assert.equal(
+    honestStageAction({
+      name: "input_scan",
+      action: "allow",
+      latency_ms: 0,
+      scan_outcome: "analyzed",
+      redact_noop: true,
+    }),
+    "allow",
+  );
+  // A real tier value is also positive run-evidence.
+  assert.equal(
+    honestStageAction({ name: "input_scan", action: "allow", latency_ms: 0, tier: "tier_1" }),
+    "allow",
+  );
+  // scan_outcome=clean at 0ms is still a stage that ran.
+  assert.equal(
+    honestStageAction({ name: "input_scan", action: "allow", latency_ms: 0, scan_outcome: "clean" }),
+    "allow",
+  );
+  // A bare 0ms allow with NO evidence and NO ran flag still reads as skip (unchanged).
+  assert.equal(honestStageAction({ name: "auth", action: "allow", latency_ms: 0 }), "skip");
+});
+
 test("honestStageAction flags unenforced injection BLOCK rec (scan 251434)", () => {
   assert.equal(
     honestStageAction({

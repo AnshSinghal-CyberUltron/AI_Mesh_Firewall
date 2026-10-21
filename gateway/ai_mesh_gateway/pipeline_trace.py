@@ -481,8 +481,10 @@ DECISION_SOURCE_LABELS: dict[str, str] = {
 }
 
 # PIPELINE-0020: every stage object carries these keys (empty when N/A).
+# PIPELINE-0035: `ran` (explicit executed-vs-skipped signal, L14b-2) is always present.
 STAGE_TRANSPARENCY_KEYS: tuple[str, ...] = (
     "action",
+    "ran",
     "latency_ms",
     "decision_source",
     "decision_source_label",
@@ -677,6 +679,11 @@ def normalize_stage_transparency(stage: dict[str, Any]) -> dict[str, Any]:
                 stage[key] = 0
             elif key == "latency_ms":
                 stage[key] = 0.0
+            elif key == "ran":
+                # PIPELINE-0035 (L14b-2): default from the stage's own action — a
+                # stage is "ran" unless its action says it was skipped. A stage dict
+                # present in the trace executed unless explicitly marked skip.
+                stage[key] = str(stage.get("action") or "").lower() != "skip"
             else:
                 stage[key] = ""
     if stage.get("decision_source") and not stage.get("decision_source_label"):
@@ -1635,6 +1642,23 @@ def build_pipeline_trace(
     for _s in stages:
         if _s.get("action") == "skip":
             _s["latency_ms"] = 0.0
+
+    # ── L14b-2: executed-vs-skipped is a PROPERTY OF THE RECORD (PIPELINE-0035) ──
+    # The UI must render the executed/skipped state from the record, never recompute
+    # it (e.g. from latency===0, which is ambiguous — a genuine skip AND a sub-ms scan
+    # both round to 0). Stamp an explicit boolean `ran` per stage, derived from the
+    # SAME signal the stage action already carries: a stage did NOT run iff its final
+    # resolved action is "skip" (this is set by _action() for blocked-upstream stages,
+    # by the skip-after-block invariant loop above, and by skip_inference for the model
+    # stages). Every other action (allow/block/redact/flag/error/reroute/monitor/
+    # needs_model) means the stage executed — so input_scan carrying
+    # action="allow" + scan_outcome in ("analyzed","clean") is ran=True even at 0ms.
+    # Additive: no existing action/latency value is changed. The error-path post-
+    # processing in main.py (_attach_pipeline_trace_to_llm_error) flips model_output
+    # → "error" and output_guardrail → "skip" AFTER this function returns; it re-stamps
+    # `ran` from the new action there so the field stays consistent on that path.
+    for _s in stages:
+        _s["ran"] = str(_s.get("action") or "").lower() != "skip"
 
     for _s in stages:
         normalize_stage_transparency(_s)
