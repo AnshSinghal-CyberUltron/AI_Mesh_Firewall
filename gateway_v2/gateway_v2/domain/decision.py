@@ -36,6 +36,9 @@ class Transformation:
 class FindingDisposition:
     detector: str
     disposition: Disposition
+    # Index into ``Decision.findings`` of the finding this disposition is for.
+    # ``None`` means the producer did not key it (detector-keyed fallback).
+    finding_index: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
