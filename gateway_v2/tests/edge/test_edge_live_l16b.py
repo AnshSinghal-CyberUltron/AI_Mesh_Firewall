@@ -319,7 +319,14 @@ def _poll_http_ready(
     while time.monotonic() < deadline:
         try:
             resp = httpx.get(url, timeout=2.0, headers=headers)
-        except (httpx.ConnectError, httpx.ReadError, httpx.ConnectTimeout, httpx.ReadTimeout):
+        # RemoteProtocolError: the published port can accept and close before nginx listens.
+        except (
+            httpx.ConnectError,
+            httpx.ReadError,
+            httpx.ConnectTimeout,
+            httpx.ReadTimeout,
+            httpx.RemoteProtocolError,
+        ):
             time.sleep(_READY_POLL_S)
             continue
         if require_200:

@@ -1,0 +1,858 @@
+{
+  "pbtResults": {
+    "2. Write the Group A chat exploration test": {
+      "status": "passed",
+      "failingExample": "All 8 cases (4 placements x json/stream) fail on the unfixed tree. user: 'My SSN is 123-45-6789 thanks' -> provider delta ('message_content','My SSN is 123-45-6789 thanks'). system: ('message_content','Customer SSN 123-45-6789 is on file') forwarded raw. later (3rd message): ('message_content','my SSN is 123-45-6789') forwarded raw. split parts: provider got (('content_part_text','My SSN is 123-45'),('content_part_text','-6789 thanks')) -- no single delta holds the SSN, the concatenation does, no [REDACTED] (input scan runs per part, finds nothing, ALLOW).",
+      "lastRunTimestamp": 1792663641833
+    },
+    "3. Write the Group A embeddings exploration test": {
+      "status": "passed",
+      "failingExample": "Bug confirmed on unfixed tree (masking clauses fail, shape clauses hold): (1) input ['release notes', 'My SSN is 123-45-6789'] -> provider delta ('embeddings_input', 'My SSN is 123-45-6789'); (2) input 'mail jane@example.com' -> provider delta ('embeddings_input', 'mail jane@example.com'); (3) input ['SSN 123-45-6789 on file', 'release notes', 'contact jane@example.com today'] -> provider delta ('embeddings_input', 'SSN 123-45-6789 on file') raw (and the email item raw). EmbeddingsSurface._input_scan returns None on REDACT; _input_as_deltas forwards raw items.",
+      "lastRunTimestamp": 1792663818054
+    },
+    "5. Write the Group B exploration test": {
+      "status": "passed",
+      "failingExample": "Bug confirmed on unfixed tree (valid-PAN cases fail; clause-2.5 negatives hold). Text 'please charge {pan} for the order' (canonical == original): '4111-1111-1111-1111' -> only primary hit pii_phone@14..33, phone precise fails, scan() == (), SecretDetector.detect() == (); '4111111111111111' -> pii_phone@14..30, scan() == (), detect() == (); '4111 1111 1111 1111' -> pii_phone@14..33, scan() == (), detect() == (). credential_card is never evaluated over the consumed region. Negatives already hold: '4111-1111-1111-1112' (Luhn-invalid, pii_phone@14..33), '411111111117' (12 digits, Luhn-valid, pii_phone@14..26), '41111111111111111115' (20 digits, Luhn-valid, pii_phone@14..34) all scan() == () and no CREDENTIAL finding.",
+      "lastRunTimestamp": 1792664547201
+    },
+    "7. Write the Group D exploration tests": {
+      "status": "passed",
+      "failingExample": "Bug confirmed on unfixed tree (29 strict xfails). (1) admit('a'), admit('b') -> request depth 2; complete('unknown') -> depth 1 (pops FIFO head 'a'). (2) admit a, admit b, complete a -> depth 1; repeated complete('a') -> depth 0 (pops 'b'). (3) 24 admit/complete pairs -> len(_in_flight) == 24 (flagged finished, never pruned). (4) All 25 admitted exit paths (chat json/stream + embeddings: success, [DONE], error frame, budget refusal, input BLOCK, scan failure, output BLOCK, raised ConnectionResetError, cancellation, kill-switch stream_killed, stream_idle_timeout) -> admission.complete calls [] (expected exactly one). (5) Real AdmissionController request_depth=4, 12 sequential requests -> depths 1,2,3,4 then requests 5-12 all 503 overload_shed (queue_full).",
+      "lastRunTimestamp": 1792665928615
+    },
+    "8. Write the Group E exploration test": {
+      "status": "passed",
+      "failingExample": "Plan {e-pii-redact-input: pii->redact scope=input; e-secret-block-output: secret->block scope=output}. (1) build_boot_dependencies raises DevProfileError(\"plan rule 'e-pii-redact-input' has scope='input'; ... the dev profile accepts only scope 'both' rules\"). (2) With the boot gate neutralised: provider reply 'here is AKIAIOSFODNN7EXAMPLE ok' is released raw with no output_blocked (json 200 + stream [DONE]); provider reply 'my SSN 123-45-6789 ok' reaches the client as 'my SSN [REDACTED] ok' (json + stream). The cause is that PlanResolver(plan, Phase.INPUT) serves both phases. Input 'key AKIAIOSFODNN7EXAMPLE please' is not blocked (holds today).",
+      "lastRunTimestamp": 1792666402244
+    },
+    "9. Write the Group F exploration test and the frozen v1 estimate oracle": {
+      "status": "passed",
+      "failingExample": "Bug confirmed on unfixed tree (6 counterexamples): (1) 2000-char prompt, request-count chunk 6, pool 1,000,000 -> HTTP 503 budget_unavailable, 0 provider calls; (2) max_tokens=4096 n=8 + 2000 chars -> charged 2000, v1 oracle 4596; (3) max_tokens=2000000 -> HTTP 200, admitted 1, charged 5, provider opened 1 (expected 400 invalid_max_tokens param=max_tokens); (4) chat input_blocked, 0 provider calls -> lease 100000 -> 99968, no refund; (5) embeddings same, 100000 -> 99968; (6) pool 10000 cap 3000, grants 3000/3000/3000/1000 -> w3 with 4 active granted 1000 > 1000//4 = 250.",
+      "lastRunTimestamp": 1792667399214
+    },
+    "11. Write the enforcement-and-lifecycle preservation test": {
+      "status": "passed",
+      "lastRunTimestamp": 1792669829696
+    }
+  },
+  "executionHistory": {
+    "1. Record the unfixed baseline": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662232165
+      },
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662251856
+      },
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792663217870
+      }
+    ],
+    "2. Write the Group A chat exploration test": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662232213
+      },
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792663227918
+      },
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792663663250
+      }
+    ],
+    "3. Write the Group A embeddings exploration test": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662232256
+      },
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792663670481
+      },
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792664040481
+      }
+    ],
+    "4. Write the Group A dispatch-verify exploration test": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662232333
+      },
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792664054806
+      },
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792664291651
+      }
+    ],
+    "5. Write the Group B exploration test": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662232377
+      },
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792664303019
+      },
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792664590114
+      }
+    ],
+    "6. Write the Group C exploration test": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662232419
+      },
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792664599569
+      },
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792664833343
+      }
+    ],
+    "7. Write the Group D exploration tests": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662232460
+      },
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792664842274
+      },
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792665961163
+      }
+    ],
+    "8. Write the Group E exploration test": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662232504
+      },
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792665970580
+      },
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792666434273
+      }
+    ],
+    "9. Write the Group F exploration test and the frozen v1 estimate oracle": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662232554
+      },
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792666447484
+      },
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792667435885
+      }
+    ],
+    "10. Write the detection-monotonicity preservation test": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662232598
+      },
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792667445254
+      },
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792668767419
+      }
+    ],
+    "11. Write the enforcement-and-lifecycle preservation test": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662232640
+      },
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792668781168
+      },
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792669865802
+      }
+    ],
+    "12. Confirm the admission, budget and lifecycle preservation baseline": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662232697
+      },
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792669879406
+      },
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792670748044
+      }
+    ],
+    "13. Checkpoint: exploration baseline": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662232768
+      },
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792670763487
+      }
+    ],
+    "14.1 Add `FindingDisposition.finding_index`": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662232812
+      }
+    ],
+    "14.2 Layer checkpoint and commit": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662232853
+      }
+    ],
+    "15.1 Declare the token estimate in `runtime/resources.py`": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662232935
+      }
+    ],
+    "15.2 Declare the four v1 output-budget constants": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662233016
+      }
+    ],
+    "15.3 Add `max_request_tokens()`": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662233062
+      }
+    ],
+    "15.4 Add `store_keys.budget_workers(org)`": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662233110
+      }
+    ],
+    "15.5 Runtime unit tests": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662233158
+      }
+    ],
+    "15.6 Layer checkpoint and commit": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662233200
+      }
+    ],
+    "16.1 Key verify obligations by finding index": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662233244
+      }
+    ],
+    "16.2 Fix `_resplit` boundaries": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662233293
+      }
+    ],
+    "16.3 Extract `verified_upstream`": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662233402
+      }
+    ],
+    "16.4 Dispatch unit tests and exploration flip": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662233449
+      }
+    ],
+    "16.5 Layer checkpoint and commit": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662233497
+      }
+    ],
+    "17.1 Set `finding_index` and coalesce REDACT spans": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662233544
+      }
+    ],
+    "17.2 Resolver tests": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662233598
+      }
+    ],
+    "17.3 Layer checkpoint and commit": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662233643
+      }
+    ],
+    "18.1 Add the versioned confusable set": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662233689
+      }
+    ],
+    "18.2 Fold through the one table": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662233740
+      }
+    ],
+    "18.3 Pattern changes in `detect/deterministic/patterns.py`": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662233857
+      }
+    ],
+    "18.4 Matcher validator and failed-region rescan": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662233903
+      }
+    ],
+    "18.5 Reconcile the shipped GW09 tests that encode the defect": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662233944
+      }
+    ],
+    "18.6 Layer checkpoint and commit": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662233987
+      }
+    ],
+    "19.1 Write the card-detection property test": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662234032
+      }
+    ],
+    "19.2 Write the order-independence property test": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662234072
+      }
+    ],
+    "19.3 Verify the Group B exploration test now passes": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662234129
+      }
+    ],
+    "19.4 Verify detection preservation still holds": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662234202
+      }
+    ],
+    "20. Checkpoint: Group B closed": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662234244
+      }
+    ],
+    "21.1 Write the phrase-and-confusable coverage property test": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662234291
+      }
+    ],
+    "21.2 Write the versioned-confusable property test": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662234334
+      }
+    ],
+    "21.3 Verify the Group C exploration test now passes": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662234375
+      }
+    ],
+    "21.4 Verify detection preservation still holds": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662234425
+      }
+    ],
+    "22. Checkpoint: Group C closed": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662234471
+      }
+    ],
+    "23.1 Add `BoundedQueue.remove`": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662234534
+      }
+    ],
+    "23.2 Make `complete` idempotent, slot-exact and pruning": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662234576
+      }
+    ],
+    "23.3 Lease fair share, overdraft and refund": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662234622
+      }
+    ],
+    "23.4 Add `derive_lease_cap_tokens` and `QuotaComponent.refund`": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662234665
+      }
+    ],
+    "23.5 Write the exact-`complete` property test": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662234719
+      }
+    ],
+    "23.6 Write the token-lease conservation property test (ledger half)": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662234763
+      }
+    ],
+    "23.7 Layer checkpoint and commit": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662234831
+      }
+    ],
+    "24.1 Changes in `edge/wire/openai.py`": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662234874
+      }
+    ],
+    "24.2 `MiscEmbeddingsRequest.input_is_string`": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662234918
+      }
+    ],
+    "24.3 Wire unit tests": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662234959
+      }
+    ],
+    "25.1 Extend the `chat_deps` protocols and reconcile the test fakes": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662235007
+      }
+    ],
+    "25.2 Add `edge/request_holds.py`": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662235059
+      }
+    ],
+    "25.3 Add `edge/phase_resolvers.py`": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662235101
+      }
+    ],
+    "25.4 Add `edge/input_enforcement.py`": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662235170
+      }
+    ],
+    "25.5 Add `edge/embeddings_input.py`": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662235215
+      }
+    ],
+    "25.6 Unit tests for the new edge modules": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662235271
+      }
+    ],
+    "26.1 Wire `edge/openai_chat.py`": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662235314
+      }
+    ],
+    "26.2 Wire `edge/routes.py`, `edge/openai_nonstream.py` and `edge/error_frame_scan.py`": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662235360
+      }
+    ],
+    "26.3 Wire `edge/openai_misc.py` (`EmbeddingsSurface`)": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662235417
+      }
+    ],
+    "26.4 Error mappings in `edge/errors.py`": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662235478
+      }
+    ],
+    "26.5 Lease wiring": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662235529
+      }
+    ],
+    "26.6 Flip the shipped xfail and the edge exploration markers": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662235573
+      }
+    ],
+    "26.7 Edge checkpoint": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662235616
+      }
+    ],
+    "27.1 Remove the slot workaround in `edge/dev_admit.py`": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662235657
+      }
+    ],
+    "27.2 Enable phase-scoped plans in `edge/dev_components.py`": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662235699
+      }
+    ],
+    "27.3 Charge real token costs in the dev profile": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662235742
+      }
+    ],
+    "27.4 Reconcile the shipped dev-profile tests that encode the defect": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662235787
+      }
+    ],
+    "27.5 Edge checkpoint and commit": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662235839
+      }
+    ],
+    "28.1 Write the per-channel REDACT property test": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662235950
+      }
+    ],
+    "28.2 Write the fail-closed property test": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662235996
+      }
+    ],
+    "28.3 Write the embeddings shape property test": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662236038
+      }
+    ],
+    "28.4 Add the Group A integration tests": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662236082
+      }
+    ],
+    "28.5 Verify the Group A exploration tests now pass": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662236125
+      }
+    ],
+    "28.6 Verify enforcement preservation still holds": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662236168
+      }
+    ],
+    "29. Checkpoint: Group A closed": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662236208
+      }
+    ],
+    "30.1 Write the exactly-once completion property test": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662236273
+      }
+    ],
+    "30.2 Verify the Group D exploration tests now pass": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662236336
+      }
+    ],
+    "30.3 Verify admission preservation still holds": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662236384
+      }
+    ],
+    "31. Checkpoint: Group D closed": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662236433
+      }
+    ],
+    "32.1 Write the phase-scoped resolution property test (edge half)": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662236478
+      }
+    ],
+    "32.2 Verify the Group E exploration test now passes": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662236523
+      }
+    ],
+    "32.3 Verify `scope: both` preservation still holds": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662236567
+      }
+    ],
+    "32.4 Confirm the reconciled dev-profile tests pass": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662236625
+      }
+    ],
+    "33. Checkpoint: Group E closed": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662236691
+      }
+    ],
+    "34.1 Write the token-cost property test (surface half)": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662236735
+      }
+    ],
+    "34.2 Write the output-budget clamp property test": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662236780
+      }
+    ],
+    "34.3 Verify the Group F exploration test now passes": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662236822
+      }
+    ],
+    "34.4 Verify lease preservation still holds": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662236867
+      }
+    ],
+    "35. Checkpoint: Group F closed": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662236911
+      }
+    ],
+    "36. Final gate: all tests pass": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662236982
+      }
+    ],
+    "37. Live dev-profile re-check of the original curl scenarios": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662237032
+      }
+    ],
+    "38. Record the card's local closure": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662237074
+      }
+    ],
+    "39. Log v1 changes, only if any were made": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662237117
+      }
+    ],
+    "40. Final records commit (no push)": [
+      {
+        "executionId": "e03c2671-5e92-4115-bd92-97344fb307fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792662237162
+      }
+    ]
+  }
+}
