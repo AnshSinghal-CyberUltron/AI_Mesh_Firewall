@@ -21,24 +21,33 @@ ENV SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH} \
 # the same reason: R2-05's "durable sink with an acknowledged-vs-durable high-water mark" is a
 # statement about a running process, and a package in pyproject but not in the image is how that
 # requirement silently has nothing to attach to. The image test asserts it is importable.
+# `gateway_v2/dev/` carries the DEV PROFILE example plan (`plan.example.json`), read only when a
+# container runs with AMF_DEV_PROFILE=1 (the compose `gateway-v2` profile); an inert data file
+# otherwise. GATEWAY_V2_EXTRAS selects optional pip extras: empty by default, so the default image
+# installs exactly what it did before; the compose dev service passes "[serve,conformance]" for
+# uvicorn (the B3 entrypoint) + httpx (the optional real upstream).
+ARG GATEWAY_V2_EXTRAS=""
 RUN --mount=type=bind,source=gateway_v2/pyproject.toml,target=/tmp/src/pyproject.toml,ro \
     --mount=type=bind,source=gateway_v2/gateway_v2,target=/tmp/src/pkg,ro \
     --mount=type=bind,source=gateway_v2/state_control,target=/tmp/src/control,ro \
     --mount=type=bind,source=gateway_v2/audit_control,target=/tmp/src/audit,ro \
+    --mount=type=bind,source=gateway_v2/dev,target=/tmp/src/dev,ro \
     --mount=type=bind,source=shared/ai_mesh_shared,target=/tmp/src/shared,ro \
     umask 022 \
     && mkdir -p /opt/gateway_v2/gateway_v2 /opt/gateway_v2/state_control \
-        /opt/gateway_v2/audit_control /opt/shared/ai_mesh_shared \
+        /opt/gateway_v2/audit_control /opt/gateway_v2/dev /opt/shared/ai_mesh_shared \
     && cp /tmp/src/pyproject.toml /opt/gateway_v2/pyproject.toml \
     && cp -R /tmp/src/pkg/. /opt/gateway_v2/gateway_v2/ \
     && cp -R /tmp/src/control/. /opt/gateway_v2/state_control/ \
     && cp -R /tmp/src/audit/. /opt/gateway_v2/audit_control/ \
+    && cp -R /tmp/src/dev/. /opt/gateway_v2/dev/ \
     && cp -R /tmp/src/shared/. /opt/shared/ai_mesh_shared/ \
     && find /opt -xdev -exec touch -h -d "@${SOURCE_DATE_EPOCH}" {} + \
     && pip install --no-cache-dir --no-compile \
         setuptools==75.8.2 \
         wheel==0.45.1 \
-    && pip install --no-cache-dir --no-compile --no-build-isolation /opt/gateway_v2 \
+    && pip install --no-cache-dir --no-compile --no-build-isolation \
+        "/opt/gateway_v2${GATEWAY_V2_EXTRAS}" \
     && chown -R 0:0 /usr/local /opt \
     && find /usr/local /opt -xdev -exec touch -h -d "@${SOURCE_DATE_EPOCH}" {} +
 

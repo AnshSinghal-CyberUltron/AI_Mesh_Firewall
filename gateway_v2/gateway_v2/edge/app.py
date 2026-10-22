@@ -239,6 +239,7 @@ def build_app(
     quota: BudgetDecider | None = None,
     exports: PerRequestExports | None = None,
     catalog: CatalogSource | None = None,
+    output_detector: ErrorFrameScanner | None = None,
 ) -> ASGIApplication:
     """Assemble the raw-ASGI serving skin (R2.1).
 
@@ -308,6 +309,7 @@ def build_app(
         admission=admission,
         quota=quota,
         exports=exports,
+        output_detector=output_detector,
     )
     misc = _build_misc_route(
         provider=provider,
@@ -354,6 +356,7 @@ def _build_chat_route(
     admission: AdmissionDecider | None,
     quota: BudgetDecider | None,
     exports: PerRequestExports | None,
+    output_detector: ErrorFrameScanner | None = None,
 ) -> ChatRoute:
     """Construct the single :class:`ChatRoute` with every §10.4 dep (task 6.1, R11 / R14).
 
@@ -412,6 +415,7 @@ def _build_chat_route(
         admission=admission if admission is not None else fail_closed_admission,
         quota=quota if quota is not None else fail_closed_budget,
         exports=request_exports,
+        output_detector=output_detector,
     )
 
 

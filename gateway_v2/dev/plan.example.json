@@ -1,0 +1,72 @@
+{
+  "org_id": "dev-org",
+  "streaming_mode": "incremental",
+  "rules": [
+    {
+      "rule_id": "dev-pii-redact",
+      "category": "pii",
+      "mode": "enforce",
+      "action": "redact",
+      "threshold": null,
+      "priority": 100,
+      "scope": "both",
+      "on_unavailable": "fail_closed",
+      "surfaces": ["chat", "embeddings"]
+    },
+    {
+      "rule_id": "dev-secret-block",
+      "category": "secret",
+      "mode": "enforce",
+      "action": "block",
+      "threshold": null,
+      "priority": 100,
+      "scope": "both",
+      "on_unavailable": "fail_closed",
+      "surfaces": ["chat", "embeddings"]
+    },
+    {
+      "rule_id": "dev-credential-block",
+      "category": "credential",
+      "mode": "enforce",
+      "action": "block",
+      "threshold": null,
+      "priority": 100,
+      "scope": "both",
+      "on_unavailable": "fail_closed",
+      "surfaces": ["chat", "embeddings"]
+    },
+    {
+      "rule_id": "dev-injection-flag",
+      "category": "prompt_injection",
+      "mode": "enforce",
+      "action": "flag",
+      "threshold": null,
+      "priority": 50,
+      "scope": "both",
+      "on_unavailable": "fail_open",
+      "surfaces": ["chat", "embeddings"]
+    },
+    {
+      "rule_id": "dev-jailbreak-flag",
+      "category": "jailbreak",
+      "mode": "enforce",
+      "action": "flag",
+      "threshold": null,
+      "priority": 50,
+      "scope": "both",
+      "on_unavailable": "fail_open",
+      "surfaces": ["chat", "embeddings"]
+    },
+    {
+      "rule_id": "dev-command-flag",
+      "category": "command",
+      "mode": "enforce",
+      "action": "flag",
+      "threshold": null,
+      "priority": 50,
+      "scope": "both",
+      "on_unavailable": "fail_open",
+      "surfaces": ["chat", "embeddings"]
+    }
+  ]
+}

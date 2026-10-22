@@ -472,6 +472,59 @@ services:
       control: { condition: service_healthy }
       demo: { condition: service_started }
 
+  # --- gateway_v2 DEV PROFILE (opt-in) ------------------------------------------------------
+  #   docker compose --profile gateway-v2 up -d --build gateway-v2   ->  http://127.0.0.1:8301/v1
+  # The v2 pipeline (identity -> plan -> admission -> budget -> GW09 input scan -> GW07 resolver
+  # -> provider -> output guard) wired for LOCAL DEVELOPMENT by AMF_DEV_PROFILE=1: one static API
+  # key, the example plan (PII redact / secret+credential block / injection flag), a DECLARED
+  # q_safe (not measured -- the real value comes from the GW20 fleet run), the real GW06 budget
+  # lease over the `redis` service, and an echo provider (set AMF_DEV_PROVIDER_URL for a real
+  # OpenAI-compatible upstream). Every dev-supplied dependency is named in the boot log with a
+  # DEV PROFILE marker. Profile-gated: the default stack is unaffected, and it is NOT part of
+  # docker-compose.prod.yml. Env reference: gateway_v2/gateway_v2/edge/dev_profile.py.
+  gateway-v2:
+    profiles: ["gateway-v2"]
+    build:
+      context: .
+      dockerfile: gateway_v2/Dockerfile
+      args:
+        GATEWAY_V2_EXTRAS: "[serve,conformance]"
+    command: ["python", "-m", "gateway_v2.edge.serve"]
+    restart: unless-stopped
+    ports: ["8301:8301"]
+    environment:
+      RV_HOST: 0.0.0.0
+      RV_PORT: "8301"
+      WEB_CONCURRENCY: ${GATEWAY_V2_WEB_CONCURRENCY:-2}
+      AMF_DEV_PROFILE: "1"
+      AMF_DEV_API_KEY: ${AMF_DEV_API_KEY:-dev-key-change-me}
+      # Must equal the plan file's org_id (the server refuses to start otherwise).
+      AMF_DEV_ORG_ID: ${AMF_DEV_ORG_ID:-dev-org}
+      AMF_DEV_PLAN_PATH: /opt/gateway_v2/dev/plan.example.json
+      AMF_DEV_MODELS: ${AMF_DEV_MODELS:-echo-1}
+      # DECLARED capacity inputs (config, not code): q_safe sizes the GW19 admission queues and
+      # the GW06 lease chunk; the audit pair sizes the (not yet fed) audit queue.
+      AMF_DEV_Q_SAFE: ${AMF_DEV_Q_SAFE:-500}
+      AMF_DEV_AUDIT_DRAIN_RATE_PER_S: ${AMF_DEV_AUDIT_DRAIN_RATE_PER_S:-1000}
+      AMF_DEV_AUDIT_BYTES_PER_RECORD: ${AMF_DEV_AUDIT_BYTES_PER_RECORD:-2765}
+      # `lease` = real GW06 QuotaComponent + BudgetLease over redis; `unlimited` = NOT enforced.
+      AMF_DEV_BUDGET: ${AMF_DEV_BUDGET:-lease}
+      AMF_DEV_REDIS_URL: redis://redis:6379/0
+      AMF_DEV_BUDGET_POOL_REQUESTS: ${AMF_DEV_BUDGET_POOL_REQUESTS:-100000}
+      AMF_DEV_RATE_PER_S: ${AMF_DEV_RATE_PER_S:-50}
+      AMF_DEV_BURST: ${AMF_DEV_BURST:-100}
+      AMF_DEV_LEASE_TTL_S: ${AMF_DEV_LEASE_TTL_S:-60}
+      AMF_DEV_PROVIDER_URL: ${AMF_DEV_PROVIDER_URL:-}
+      AMF_DEV_PROVIDER_API_KEY: ${AMF_DEV_PROVIDER_API_KEY:-}
+    depends_on:
+      redis: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://127.0.0.1:8301/readyz', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
   # --- GW05b / R2-04: control-plane state re-hydrators -------------------------------------
   # TWO of them, and that is the requirement, not a preference. The runbook's R2-04 row reads
   # "runs >= 2 re-hydrators in >= 2 zones (proven safe concurrently); and never lets an

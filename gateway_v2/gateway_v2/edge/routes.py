@@ -277,6 +277,11 @@ class ChatRoute:
     #: (``edge/app.py``, task 6.1) injects the process producer; the boot wiring
     #: replaces this default and threads the dimensions on each terminal outcome.
     exports: PerRequestExports = PerRequestExports()
+    #: The streaming completed-match source handed to the holdback pipeline (the egress
+    #: ``Detector`` seam, task 9.1). ``None`` keeps the shipped thin harness (no completed-match
+    #: findings on the streaming path); a boot that wires the GW07/GW08/GW09 detector passes it
+    #: here, above ``detect``, so ``egress`` still never names ``detect``.
+    output_detector: ErrorFrameScanner | None = None
 
     async def handle(self, scope: ASGIScope, receive: ASGIReceive, send: ASGISend) -> None:
         """Serve a chat/completions request end-to-end (R2.2, R7, R10, §10.4).
@@ -653,9 +658,9 @@ class ChatRoute:
         The INCREMENTAL ``Window`` + holdback cap derive from the injected
         contract/config and the STRICT buffer high-water from
         ``contract.stream_buffer_bytes(active_streams())`` — no capacity literal
-        here. The completed-match source is the injected detector, which today is
-        ``None`` (the thin harness, matching the shipped ``for_plan`` call); a boot
-        card wiring the GW07/GW08 detector threads it in without reshaping this seam.
+        here. The completed-match source is ``self.output_detector`` — ``None`` by default
+        (the thin harness, matching the shipped ``for_plan`` call); a boot that wires the
+        real detector (the DEV PROFILE does) threads it in without reshaping this seam.
         """
         return select_pipeline(
             plan,
@@ -665,7 +670,7 @@ class ChatRoute:
             metrics=HoldbackMetrics(),
             window=max_pattern_length(),
             resolver=self.resolver,
-            detector=None,
+            detector=self.output_detector,
             max_buffer_bytes=self.contract.stream_buffer_bytes(self.active_streams()),
             strict_metrics=StrictMetrics(),
         )

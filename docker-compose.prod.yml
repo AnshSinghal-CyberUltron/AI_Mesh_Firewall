@@ -23,7 +23,8 @@
 #              one is a single point of global non-enforcement, none fails the fleet closed)
 #   profile:   chromadb (chroma), mongo (telemetry-pilot), mcp-stub (mcp-stub),
 #              frontend (dev-frontend), transport stubs (transport-stubs),
-#              postgres-exporter (observability)
+#              postgres-exporter (observability),
+#              gateway-v2 (gateway-v2; AMF_DEV_PROFILE=1 local dev wiring -- never enable in prod)
 # Dev-only services stay profile-gated; prod defaults enable the full product path
 # (MCP sandboxes + Celery + guardrails/vector sidecars) without requiring --profile.
 

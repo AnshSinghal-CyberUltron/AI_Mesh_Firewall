@@ -53,10 +53,11 @@ from __future__ import annotations
 
 import functools
 import json
+import os
 import random
 import sys
 import time
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping
 from typing import TYPE_CHECKING, Any
 
 from gateway_v2.admit.admission import AdmissionController
@@ -69,6 +70,12 @@ from gateway_v2.edge.chat_deps import (
     fail_closed_budget,
     no_findings_detector,
     unresolved_snapshot_source,
+)
+from gateway_v2.edge.dev_admit import DevCompletingAdmission
+from gateway_v2.edge.dev_profile import (
+    build_dev_dependencies,
+    dev_profile_active,
+    wrap_dev_app,
 )
 from gateway_v2.edge.identity_resolver import fail_closed_resolver
 from gateway_v2.egress.output_guard import MinimalOutputResolver
@@ -168,6 +175,7 @@ def build_boot_dependencies(
     *,
     contract: ResourceContract,
     admission: AdmissionController | None = None,
+    env: Mapping[str, str] | None = None,
 ) -> tuple[dict[str, object], tuple[str, ...]]:
     """Build the ``build_app`` kwargs + one boot-log line per Fail_Closed_Fallback (R1.4/R1.7).
 
@@ -194,7 +202,19 @@ def build_boot_dependencies(
     ``error_scanner`` / ``exports`` are left unset so ``build_app`` composes its own shipped
     defaults (``_resolve_readiness`` / ``_one_stream`` / ``_NoControlSource`` /
     ``_no_error_findings`` / a fresh producer). It builds a half-ready app honestly, nothing faked.
+
+    **DEV PROFILE (opt-in only).** ``env`` (default ``os.environ``) is read for ``AMF_DEV_PROFILE``:
+    unset / ``0`` returns the table above byte-for-byte; ``1`` delegates to
+    :func:`gateway_v2.edge.dev_profile.build_dev_dependencies`, which wires the real pipeline
+    against declared local inputs and raises ``DevProfileError`` (→ refuse-to-start) on any missing
+    or invalid input. Read here — inside the per-worker factory path — so every uvicorn worker makes
+    the selection from its own environment, never from a parent closure.
     """
+    environment = os.environ if env is None else env
+    if dev_profile_active(environment):
+        return build_dev_dependencies(
+            contract=contract, env=environment, metrics_registry=_ExpositionRegistry()
+        )
     provider = _stub_provider()
     clock: Callable[[], float] = time.monotonic
     admission_decider: object = (
@@ -438,7 +458,9 @@ def _assemble_app(deps: dict[str, object]) -> ASGIApplication:
     ``app_factory``) go through it, and the honest-boot fallback contract is unchanged.
     """
     kwargs: dict[str, Any] = dict(deps)
-    return build_app(**kwargs)
+    # ``wrap_dev_app`` returns the app UNCHANGED unless the DEV PROFILE admission adapter is in
+    # ``deps`` (then it adds per-request admission-slot release + the lease lifespan hooks).
+    return wrap_dev_app(build_app(**kwargs), deps)
 
 
 def serving_app() -> ASGIApplication:
@@ -569,6 +591,8 @@ def _host_app(
     workers = contract.workers()
 
     admission = deps.get("admission")
+    if isinstance(admission, DevCompletingAdmission):
+        admission = admission.controller  # DEV PROFILE: the real GW19 controller underneath.
     if isinstance(admission, AdmissionController):
         # DEFERRED_SEAM (GW20, R7.2): the real per-worker GW19 drain must be bound into the
         # multiprocess manager (each worker runs its own ``Server``), which the top-level
@@ -657,7 +681,12 @@ def main(argv: list[str] | None = None) -> int:
     except Exception as exc:  # refuse-to-start, mirroring run_cli (load_contract can raise)
         return _refuse_start(exc)
 
-    deps, dep_logs = build_boot_dependencies(contract=contract)
+    try:
+        # Default path: never raises. DEV PROFILE: a missing/invalid dev input refuses to start.
+        deps, dep_logs = build_boot_dependencies(contract=contract)
+    except Exception as exc:
+        _write_boot_log((*cfg_logs, *contract_logs))
+        return _refuse_start(exc)
     _write_boot_log((*cfg_logs, *contract_logs, *dep_logs))
 
     try:
@@ -673,3 +702,9 @@ def main(argv: list[str] | None = None) -> int:
     install_sighup(runtime)
 
     return _host_app(deps, cfg=cfg, contract=contract)
+
+
+if __name__ == "__main__":
+    # ``python -m gateway_v2.edge.serve`` (and the ``gateway-v2-serve`` console script) actually
+    # serve: without this guard ``-m`` imported the module and exited 0 without hosting anything.
+    raise SystemExit(main())

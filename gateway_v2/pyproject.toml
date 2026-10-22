@@ -39,6 +39,12 @@ serve = [
     "uvicorn[standard]>=0.30",
 ]
 
+# ``gateway-v2-serve`` == ``python -m gateway_v2.edge.serve``: the B3 Serving_Entrypoint (needs the
+# ``serve`` extra at run time). Honest fail-closed boot by default; ``AMF_DEV_PROFILE=1`` selects
+# the opt-in local dev wiring (``gateway_v2/edge/dev_profile.py``, example plan ``dev/plan.example.json``).
+[project.scripts]
+gateway-v2-serve = "gateway_v2.edge.serve:main"
+
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["gateway_v2*", "state_control*", "audit_control*", "load_harness*", "lint*"]
