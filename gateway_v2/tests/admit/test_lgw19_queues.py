@@ -160,3 +160,132 @@ def test_max_depth_below_one_is_rejected() -> None:
 
     with pytest.raises(QueueFull):
         BoundedQueue(0)
+
+
+# --------------------------------------------------------------------------- #
+# Task 23.1 — BoundedQueue.remove: slot-exact release keeps the deques aligned
+# Feature: v2-enforcement-leaks (Group D), Property 10
+# Validates: Requirements 2.11
+# --------------------------------------------------------------------------- #
+
+
+def test_remove_present_returns_true_and_drops_depth() -> None:
+    """Removing a present item returns True, drops depth by one and keeps ages aligned."""
+    box = {"t": 100.0}
+    queue = BoundedQueue(4, clock=_clock(box))  # type: ignore[arg-type]
+    queue.offer("a", now=100.0)
+    queue.offer("b", now=101.0)
+    queue.offer("c", now=102.0)
+    assert queue.depth == 3
+    # Remove the MIDDLE item: the oldest ("a") must still drive oldest_age_s.
+    assert queue.remove("b") is True
+    assert queue.depth == 2
+    box["t"] = 110.0
+    # Oldest remaining is "a" (enqueued at 100); not "b"'s stale instant.
+    assert queue.oldest_age_s() == 10.0
+    # FIFO order of the rest is preserved: "a" then "c".
+    assert queue.pop() == "a"
+    assert queue.pop() == "c"
+    assert queue.depth == 0
+
+
+def test_remove_absent_returns_false_and_changes_nothing() -> None:
+    """Removing an absent item returns False and mutates neither deque."""
+    box = {"t": 100.0}
+    queue = BoundedQueue(4, clock=_clock(box))  # type: ignore[arg-type]
+    queue.offer("a", now=100.0)
+    queue.offer("b", now=101.0)
+    assert queue.remove("missing") is False
+    assert queue.depth == 2
+    box["t"] = 105.0
+    assert queue.oldest_age_s() == 5.0
+    assert queue.pop() == "a"
+    assert queue.pop() == "b"
+
+
+def test_remove_one_of_two_equal_items_leaves_one() -> None:
+    """With two equal items (the content-hash collision case), remove drops only one."""
+    box = {"t": 50.0}
+    queue = BoundedQueue(4, clock=_clock(box))  # type: ignore[arg-type]
+    queue.offer("dup", now=50.0)
+    queue.offer("other", now=51.0)
+    queue.offer("dup", now=52.0)
+    assert queue.depth == 3
+    # First remove drops the FIRST (oldest) "dup" at index 0.
+    assert queue.remove("dup") is True
+    assert queue.depth == 2
+    box["t"] = 60.0
+    # Oldest remaining is "other" (enqueued at 51), proving index-0 "dup" went, not the later one.
+    assert queue.oldest_age_s() == 9.0
+    # One "dup" still present; a second remove finds it, a third does not.
+    assert queue.remove("dup") is True
+    assert queue.depth == 1
+    assert queue.remove("dup") is False
+    assert queue.depth == 1
+    assert queue.pop() == "other"
+
+
+def test_remove_keeps_deques_aligned_under_random_interleaving() -> None:
+    """A seeded offer/pop/remove sequence keeps _items and _enqueued_at index-aligned.
+
+    After every step the two parallel deques have equal length, depth stays within the bound, and
+    oldest_age_s reflects the oldest SURVIVING item's enqueue instant (never a removed item's).
+    """
+    seed = 0x23_01
+    rng = random.Random(seed)
+    for i in range(_ITERATIONS):
+        max_depth = rng.randint(1, 16)
+        box = {"t": 0.0}
+        queue = BoundedQueue(max_depth, clock=_clock(box))  # type: ignore[arg-type]
+        # A plain-list shadow model carrying (id, enqueued_at), kept in lock-step with the queue.
+        shadow: list[tuple[int, float]] = []
+        for _ in range(rng.randint(1, 60)):
+            box["t"] += rng.uniform(0.1, 2.0)
+            roll = rng.random()
+            if roll < 0.5:
+                # Offer a value drawn from a small pool so equal ids collide sometimes.
+                value = rng.randint(0, 4)
+                accepted = queue.offer(value, now=box["t"])
+                if accepted:
+                    shadow.append((value, box["t"]))
+                else:
+                    assert len(shadow) == max_depth, (
+                        f"seed={seed:#x} iter={i} refused while shadow not full"
+                    )
+            elif roll < 0.75 and shadow:
+                popped = queue.pop()
+                expected = shadow.pop(0)
+                assert popped == expected[0], (
+                    f"seed={seed:#x} iter={i} pop {popped!r} != shadow {expected[0]!r}"
+                )
+            else:
+                target = rng.randint(0, 4)
+                removed = queue.remove(target)
+                index = next(
+                    (j for j, (v, _) in enumerate(shadow) if v == target), None
+                )
+                assert removed is (index is not None), (
+                    f"seed={seed:#x} iter={i} remove({target}) returned {removed}"
+                )
+                if index is not None:
+                    shadow.pop(index)
+            # The two deques must stay index-aligned at every step.
+            assert len(queue._items) == len(queue._enqueued_at), (
+                f"seed={seed:#x} iter={i} deques misaligned: "
+                f"{len(queue._items)} items vs {len(queue._enqueued_at)} ages"
+            )
+            assert queue.depth == len(shadow), (
+                f"seed={seed:#x} iter={i} depth {queue.depth} != shadow {len(shadow)}"
+            )
+            assert queue.depth <= max_depth, (
+                f"seed={seed:#x} iter={i} depth {queue.depth} > max {max_depth}"
+            )
+            # oldest_age_s reflects the oldest surviving item's enqueue instant.
+            if shadow:
+                assert queue.oldest_age_s(now=box["t"]) == box["t"] - shadow[0][1], (
+                    f"seed={seed:#x} iter={i} oldest age misaligned after remove"
+                )
+            else:
+                assert queue.oldest_age_s(now=box["t"]) == 0.0, (
+                    f"seed={seed:#x} iter={i} non-empty age on empty queue"
+                )

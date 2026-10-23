@@ -58,6 +58,7 @@ __all__ = (
     "AdmissionBounds",
     "QuotaComponent",
     "derive_bounds",
+    "derive_lease_cap_tokens",
     "derive_lease_chunk",
     "derive_low_watermark",
 )
@@ -197,6 +198,61 @@ def derive_lease_chunk(contract: ResourceContract, *, q_safe: float | None) -> i
     return chunk
 
 
+def derive_lease_cap_tokens(contract: ResourceContract, *, q_safe: float | None) -> int:
+    """Derive the Lease_Chunk expressed in **tokens** from ``contract`` + ``q_safe``. Pure (P12).
+
+    The Group F fix for leak F (Req 2.15; C29; Property 12). The shipped :func:`derive_lease_chunk`
+    sizes a chunk as "one refresh period of ``q_safe`` throughput, bounded by ``queue_depth``" — a
+    **request-count** sizing. But a request is charged in *tokens* (v1's ``estimate_prompt_tokens``
+    over the clamped request), so when the request-count chunk is numerically smaller than a single
+    request's token cost, a perfectly in-budget prompt (e.g. a 2,000-character prompt) is refused
+    ``budget_unavailable`` even though the org pool is nearly untouched — the chunk and the cost
+    were in **different units**. This function re-expresses the chunk in tokens so the lease chunk
+    and a request's token cost are the same unit:
+
+        tokens = derive_lease_chunk(contract, q_safe=q_safe) * contract.max_request_tokens()
+
+    i.e. the request-count chunk scaled by the **per-request token ceiling** (the contract's upper
+    bound on the token cost of any request that passes parsing). A worker's lease therefore holds
+    enough tokens to serve a chunk's worth of maximum-size requests, and the invariant that defeats
+    leak F holds: a single max-size request's ``estimate_prompt_tokens`` cost (``<=
+    max_request_tokens()``) never exceeds one token chunk (which is ``>= 1 * max_request_tokens()``,
+    since ``derive_lease_chunk >= 1``). So "a 2,000-char prompt refused because the request-count
+    chunk is smaller than its token cost" cannot recur.
+
+    Every number is a contract call or derives from :func:`derive_lease_chunk`; no capacity-position
+    literal appears here (the ``admit/`` capacity-literal gate stays green). The result is a pure
+    function of the contract plus ``q_safe`` (Property 9), so N workers over one contract derive the
+    identical token chunk.
+
+    Refuse-to-start, never guess — identical semantics to :func:`derive_lease_chunk`:
+
+    * ``q_safe`` unset or non-positive ⇒ :class:`CapacityUnset` (propagated from
+      :func:`derive_lease_chunk`; a missing measurement is explicitly not guessed).
+    * an uncomputable contract bound (``queue_depth`` or ``max_request_tokens``) ⇒ the contract's
+      :class:`CapacityUnavailable` propagates unchanged.
+    * a result ``< 1`` ⇒ :class:`CapacityUnavailable` (a sub-unit token chunk cannot admit even one
+      request). ``derive_lease_chunk >= 1`` and ``max_request_tokens() >= 1`` make this unreachable
+      by construction, but the guard is kept so the refuse-to-start contract is explicit and local.
+
+    :param contract: the signed capacity contract — the only holder of capacity literals.
+    :param q_safe: the measured guard service rate; ``None`` or ``<= 0`` ⇒ refuse to start.
+    :returns: the Lease_Chunk expressed in tokens (a positive integer).
+    :raises CapacityUnset: if ``q_safe`` is unset or non-positive.
+    :raises CapacityUnavailable: if the token chunk cannot be computed or is below one.
+    """
+    chunk = derive_lease_chunk(contract, q_safe=q_safe)
+    per_request_token_ceiling = contract.max_request_tokens()
+    tokens = chunk * per_request_token_ceiling
+    if tokens < 1:
+        raise CapacityUnavailable(
+            f"derived token Lease_Chunk={tokens} (chunk={chunk} "
+            f"max_request_tokens={per_request_token_ceiling}); "
+            "refuse to acquire a lease with a sub-unit token chunk",
+        )
+    return tokens
+
+
 def derive_low_watermark(chunk: int) -> int:
     """Derive the Low_Watermark from the Lease_Chunk only. Pure (Req 4.5, Property 9).
 
@@ -327,6 +383,53 @@ class QuotaComponent:
             return self._refuse(request_id)
         except Exception:  # noqa: BLE001 — fail-closed catch-all (Req 13.1), never admit on error.
             return self._refuse(request_id)
+
+    def refund(self, cost: int, *, request_id: str) -> None:
+        """Return a charged spend that resulted in **zero provider calls** (Req 1.17 / 2.17).
+
+        The façade half of the C29 refund (Property 1 (F)): when a request spent budget in
+        :meth:`evaluate` and was then refused *before* any upstream call — an input BLOCK, an input
+        scan failure, or an input REDACT verification failure — the edge layer calls this to return
+        the spend to the lease, so a request the provider never saw does not permanently consume the
+        org token budget. It delegates to :meth:`gateway_v2.admit.lease.BudgetLease.refund`, which
+        adds the cost straight back to the Remaining_Lease.
+
+        Purity and safety mirror the rest of the request path:
+
+        * **synchronous, no store I/O, no** ``await`` — the lease ``refund`` is a local in-memory
+          add (same purity contract as :meth:`~gateway_v2.admit.lease.BudgetLease.try_spend`;
+          Property 5), so a refund never blocks the edge response.
+        * ``cost <= 0`` is a no-op before the lease is touched (nothing was spent to return), so a
+          double or zero-cost refund costs nothing.
+        * **best-effort / fail-closed**, like :meth:`_refuse`: the lease call is wrapped so an
+          exception can never propagate into the edge request path and corrupt the response. A
+          failed refund is a *lost* refund (the budget is slightly over-spent, the conservative
+          direction), never a crash of a request that already decided its outcome.
+
+        **Generation threading (C29).** The current Budget_Generation is read from the injected
+        ``generation_source`` — the same source :meth:`evaluate` checks the held lease against — and
+        passed to :meth:`~gateway_v2.admit.lease.BudgetLease.refund`. The lease applies the refund
+        only when that generation still equals the one the held lease was acquired under; a
+        cross-generation refund (a revoke-on-change advanced the generation between the spend and
+        the refund) is **dropped at the lease**, the conservative direction (the stale generation's
+        spend is not returned, never mis-credited to the current generation). Reading the generation
+        here is a local injected call, not a store read, so the purity contract is preserved.
+
+        ``request_id`` is accepted for symmetry with :meth:`evaluate` and for any future
+        metrics/audit hook; it is unused today (there is no refund counter on the metrics surface,
+        and none is invented here).
+
+        :param cost: the budget cost (tokens) to return — the value charged in :meth:`evaluate`.
+        :param request_id: the request the refund belongs to (echo symmetry; unused today).
+        """
+        del request_id
+        if cost <= 0:
+            return
+        try:
+            current_gen = self._generation_source()
+            self._lease.refund(cost, current_gen)
+        except Exception:  # noqa: BLE001 — best-effort: a lost refund never crashes the edge path.
+            return
 
     def _refuse(self, request_id: str) -> BudgetVerdict:
         """Build the narrow ``budget_unavailable`` refusal and observe it (never fail-open).

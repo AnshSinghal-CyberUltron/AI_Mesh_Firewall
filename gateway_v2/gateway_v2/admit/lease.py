@@ -217,6 +217,7 @@ class BudgetLease:
         "_config",
         "_keys",
         "_metrics",
+        "_overdraft_tokens",
         "_spawn",
         "_state",
         "_worker_id",
@@ -232,9 +233,16 @@ class BudgetLease:
         spawn: Callable[[Awaitable[None]], None],
         metrics: QuotaMetricsLike,
         keys: StoreKeys = KEYS,
+        overdraft_tokens: int = 0,
     ) -> None:
         if not worker_id:
             msg = "worker_id must be a stable non-empty id (the lease key is per worker)"
+            raise ValueError(msg)
+        if overdraft_tokens < 0:
+            msg = (
+                "overdraft_tokens is the bounded negative floor on the Remaining_Lease; "
+                f"it must be >= 0 (0 disables overdraft), got {overdraft_tokens!r}"
+            )
             raise ValueError(msg)
         if config.chunk < 1:
             msg = f"chunk must be a positive contract-derived size, got {config.chunk!r}"
@@ -255,6 +263,7 @@ class BudgetLease:
         self._spawn = spawn
         self._metrics = metrics
         self._keys = keys
+        self._overdraft_tokens = overdraft_tokens
         # Starts empty and under the caller's generation: nothing is held until the first acquire.
         self._state = _LeaseState(remaining=0, generation=0, refill_in_flight=False)
 
@@ -280,6 +289,17 @@ class BudgetLease:
     def refill_in_flight(self) -> bool:
         """Whether an Async_Refill is currently in flight (the single-flight guard)."""
         return self._state.refill_in_flight
+
+    @property
+    def overdraft_tokens(self) -> int:
+        """The bounded overdraft floor: the Remaining_Lease may go negative by at most this many.
+
+        ``0`` (the default) disables overdraft, so ``try_spend`` keeps the strict ``remaining >=
+        cost`` contract. A positive value lets one in-flight request whose token cost was not yet
+        reflected in the held lease still be admitted, bounded so ``remaining`` never drops below
+        ``-overdraft_tokens`` (C29; see :meth:`try_spend`). O(1), no store read.
+        """
+        return self._overdraft_tokens
 
     # --- store-touching: idempotent read with retry-once boundary (R2-14) --------------------- #
 
@@ -352,30 +372,59 @@ class BudgetLease:
         """One atomic acquire attempt. Returns ``(grant, current_generation)``.
 
         ``grant`` is ``_STALE_GENERATION`` (``-1``) when ``want_gen`` is behind the store's
-        generation, ``0`` when the pool is empty (never over-grant), else ``min(pool, chunk)``. The
-        generation read, the ``min(pool, chunk)`` decrement, the per-worker lease ``SET`` and the
-        store-clock TTL are committed as one ``MULTI``/``EXEC`` guarded by ``WATCH`` on the pool and
-        generation keys — the WATCH/MULTI equivalent of the design's single ``EVAL``.
+        generation, ``0`` when the pool is empty (never over-grant), else the **fair share**
+        ``min(pool, chunk, max(1, pool // active_workers))`` (C29, Property 12). The generation
+        read, the per-member prune of expired workers, this worker's registration into the active
+        set, the pool decrement, the per-worker lease ``SET`` and the store-clock TTL are committed
+        as one ``MULTI``/``EXEC`` guarded by ``WATCH`` on the pool, generation and workers keys —
+        the WATCH/MULTI equivalent of the design's single ``EVAL``.
+
+        Fair share (C29). The active worker count comes from the ``budget_workers`` ZSET, whose
+        members are scored by lease expiry on the **store's** clock (``TIME`` + Lease_TTL), never a
+        worker's local clock, so a crashed worker drops out of the count by score at TTL exactly as
+        its ``budget_lease`` chunk is reclaimed. ``active_workers`` is read with the
+        side-effect-free ``ZCOUNT workers now +inf`` (non-expired members) plus this worker if it is
+        not already a live member — computed under ``WATCH`` so a concurrent registration aborts it
+        rather than racing the share. The destructive prune (``ZREMRANGEBYSCORE workers -inf now``)
+        and registration (``ZADD workers now+ttl worker``) are queued **inside** the ``MULTI`` so
+        they commit atomically with the decrement; doing either in the immediate (pre-``MULTI``)
+        phase would dirty this connection's own ``WATCH`` on the workers key and fail the ``EXEC``.
         """
         remaining_key = self._keys.budget_remaining(self._config.org)
         generation_key = self._keys.budget_generation(self._config.org)
         lease_key = self._keys.budget_lease(self._config.org, self._worker_id)
+        workers_key = self._keys.budget_workers(self._config.org)
         ttl_ms = max(1, round(self._config.ttl_s * 1000))
 
         for _ in range(_MAX_CAS_TRIES):
             async with self._client.pipeline() as pipe:
                 try:
-                    await pipe.watch(remaining_key, generation_key)
+                    await pipe.watch(remaining_key, generation_key, workers_key)
                     current_gen = _as_int(await pipe.get(generation_key))
                     if current_gen != want_gen:
                         await pipe.unwatch()
                         return _STALE_GENERATION, current_gen
                     pool = _as_int(await pipe.get(remaining_key))
-                    grant = min(pool, self._config.chunk)
+                    if pool <= 0:
+                        await pipe.unwatch()
+                        return 0, current_gen
+                    # Store-clock fair share. Read-only under WATCH: TIME, the count of non-expired
+                    # members, and whether this worker is already a live member. The prune + ADD
+                    # are deferred to the MULTI below so they do not trip this WATCH.
+                    store_now_s, _micros = await pipe.time()
+                    now = int(store_now_s)
+                    live_members = _as_int(await pipe.zcount(workers_key, now, "+inf"))
+                    self_score = await pipe.zscore(workers_key, self._worker_id)
+                    self_live = self_score is not None and float(self_score) > now
+                    active_workers = max(1, live_members + (0 if self_live else 1))
+                    fair_share = max(1, pool // active_workers)
+                    grant = min(pool, self._config.chunk, fair_share)
                     if grant <= 0:
                         await pipe.unwatch()
                         return 0, current_gen
                     pipe.multi()
+                    pipe.zremrangebyscore(workers_key, "-inf", now)
+                    pipe.zadd(workers_key, {self._worker_id: now + self._config.ttl_s})
                     pipe.decrby(remaining_key, grant)
                     pipe.set(lease_key, grant)
                     pipe.pexpire(lease_key, ttl_ms)
@@ -408,7 +457,14 @@ class BudgetLease:
           Low_Watermark, schedule an Async_Refill via the injected ``spawn`` under the single-flight
           guard (Req 4.1): if a refill is already in flight, schedule nothing new and keep serving
           (Req 4.3). The refill runs **off the request path** (Req 4.2; Property 5).
-        * ``remaining < cost`` → do **not** admit from this call. The façade decides between
+        * ``remaining < cost`` but **overdraft** is enabled → admit when the spend keeps the lease
+          above the bounded negative floor, i.e. ``remaining - cost >= -overdraft_tokens`` and the
+          lease still holds some budget (``remaining > 0``). This lets a single in-flight request
+          whose token cost was not yet reflected in the held lease through, with the invariant that
+          the Remaining_Lease never drops below ``-overdraft_tokens`` (C29, Property 12). The
+          Low_Watermark refill is scheduled as above. With ``overdraft_tokens == 0`` (the default)
+          this branch is unreachable, so the strict ``remaining >= cost`` behaviour is preserved.
+        * otherwise → do **not** admit from this call. The façade decides between
           ``budget_unavailable`` (pool + remaining both exhausted) and waiting on an in-flight
           refill; ``try_spend`` never acquires (Req 4.2).
         """
@@ -420,9 +476,10 @@ class BudgetLease:
                 needs_refill=False,
                 stale_generation=True,
             )
-        if state.remaining < cost:
-            # Not enough held budget. Nudge a refill if we are at/below the watermark so the next
-            # attempt can be served; the caller owns the refuse-vs-wait decision.
+        if not self._spendable(cost):
+            # Not enough held budget (even counting any bounded overdraft). Nudge a refill if we are
+            # at/below the watermark so the next attempt can be served; the caller owns the
+            # refuse-vs-wait decision.
             needs_refill = self._maybe_schedule_refill()
             return SpendResult(
                 admitted=False,
@@ -438,6 +495,54 @@ class BudgetLease:
             needs_refill=needs_refill,
             stale_generation=False,
         )
+
+    def _spendable(self, cost: int) -> bool:
+        """Whether ``cost`` may be drawn now, counting any bounded overdraft. Pure, O(1).
+
+        The strict rule is ``remaining >= cost``. With a positive ``overdraft_tokens`` a lease that
+        still holds budget (``remaining > 0``) may additionally go negative, provided the spend
+        keeps ``remaining`` at or above ``-overdraft_tokens``: the Remaining_Lease never drops below
+        the bounded floor, so the overshoot is at most one ``overdraft_tokens`` worth per worker.
+        """
+        state = self._state
+        if state.remaining >= cost:
+            return True
+        if self._overdraft_tokens <= 0 or state.remaining <= 0:
+            return False
+        return state.remaining - cost >= -self._overdraft_tokens
+
+    def refund(self, cost: int, generation: int) -> None:
+        """Return a previously spent ``cost`` to the Remaining_Lease. Synchronous: no store I/O.
+
+        The ledger half of the C29 refund (Req 1.17 / 2.17): a request that spent budget and was
+        then refused with **zero provider calls** (input BLOCK, input scan failure, input REDACT
+        verification failure) has its spend returned to the lease. This is local only — it adds the
+        cost straight back to ``remaining`` and schedules no refill; the ``QuotaComponent.refund``
+        façade (and the edge wiring above it) decides *when* a refund is owed and calls this. Like
+        :meth:`try_spend` it never ``await``\\s and never reads or writes the store (same purity
+        contract; Property 5).
+
+        **Generation guard (C29).** The refund is applied only when ``generation`` equals the held
+        lease's current Budget_Generation (``self._state.generation``) — the same generation the
+        spend was charged against. If the held lease has since moved to a different generation (a
+        revoke-on-change advanced the Budget_Generation between the spend and the refund, so the
+        lease was re-acquired under a new generation), the refund is **ignored (dropped)**: the
+        cost was charged against a generation the lease no longer holds, and returning it to the
+        current generation's Remaining_Lease would mis-credit a pool the spend never debited and
+        corrupt the new generation's ledger. Dropping it is the conservative direction — the stale
+        generation's spend is simply not returned (the budget is left slightly over-spent), never
+        mis-credited to the current generation.
+
+        A non-positive ``cost`` is ignored (nothing was spent to return), so a double call or a
+        zero-cost refund is a no-op. v1 simply returns the spend, so no upper clamp is applied here.
+        """
+        if cost <= 0:
+            return
+        if generation != self._state.generation:
+            # The held lease has moved to a different Budget_Generation since the spend: drop the
+            # refund rather than mis-credit it to the current generation (conservative direction).
+            return
+        self._state.remaining += cost
 
     def _maybe_schedule_refill(self) -> bool:
         """Schedule a single-flight Async_Refill iff at/below the watermark. Returns "needs refill".
@@ -475,24 +580,32 @@ class BudgetLease:
         """Return the unspent Remaining_Lease to the pool and delete the lease record. One step.
 
         Called on **clean** shutdown: a single atomic WATCH/MULTI (the ``EVAL`` equivalent) adds
-        the unspent remainder back to ``budget_remaining`` and ``DEL``\\s the per-worker lease
-        record, so the budget is immediately available to other workers. A **crashed** worker never
-        runs this; its ``budget_lease:<worker>`` key expires on the store's clock (the Lease_TTL set
-        at acquire) and the expired chunk is reclaimed, so budget is never permanently lost (Req
-        3.5; Property 2). Idempotent: a zero Remaining_Lease still deletes the record and adds none.
+        the unspent remainder back to ``budget_remaining``, ``DEL``\\s the per-worker lease record
+        and ``ZREM``\\s this worker from the ``budget_workers`` active-share set, so the budget is
+        immediately available to other workers and the fair-share divisor drops at once. A
+        **crashed** worker never runs this; its ``budget_lease:<worker>`` key expires on the store
+        clock (the Lease_TTL set at acquire) and its ``budget_workers`` membership drops out by the
+        same TTL score, so the expired chunk is reclaimed and budget is never permanently lost (Req
+        3.5; Property 2). Idempotent: a zero Remaining_Lease still deletes the record, removes the
+        worker and adds none.
         """
         state = self._state
         amount = state.remaining
         remaining_key = self._keys.budget_remaining(self._config.org)
         lease_key = self._keys.budget_lease(self._config.org, self._worker_id)
+        workers_key = self._keys.budget_workers(self._config.org)
         for _ in range(_MAX_CAS_TRIES):
             async with self._client.pipeline() as pipe:
                 try:
-                    await pipe.watch(remaining_key, lease_key)
+                    await pipe.watch(remaining_key, lease_key, workers_key)
                     pipe.multi()
                     if amount > 0:
                         pipe.incrby(remaining_key, amount)
                     pipe.delete(lease_key)
+                    # Drop this worker from the active-share set immediately, so a clean shutdown
+                    # does not keep inflating the fair-share divisor; a crashed worker drops out by
+                    # score at TTL instead (handled by the prune in ``_acquire_once``).
+                    pipe.zrem(workers_key, self._worker_id)
                     await pipe.execute()
                 except WatchError:
                     # Only contention retries. A store timeout on this mutating return propagates

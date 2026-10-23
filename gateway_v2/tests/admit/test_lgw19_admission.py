@@ -102,7 +102,9 @@ def test_property1_every_admitted_request_is_tracked_and_completes() -> None:
         )
         for rid in admitted_ids:
             ctl.complete(rid)
-            assert ctl._in_flight[rid].finished is True, (  # noqa: SLF001
+            # v2-enforcement-leaks D (task 23.2): complete now PRUNES the in-flight record
+            # (slot-exact, refcount-to-zero) rather than flagging it finished in place.
+            assert rid not in ctl._in_flight, (  # noqa: SLF001
                 f"seed={seed:#x} iter={i} admitted {rid} did not complete"
             )
 

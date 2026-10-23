@@ -100,6 +100,28 @@ class BoundedQueue:
         self._enqueued_at.popleft()
         return self._items.popleft()
 
+    def remove(self, item: object) -> bool:
+        """Remove ONE occurrence of ``item`` and its aligned age entry; return whether it was found.
+
+        This is what lets ``AdmissionController.complete`` release exactly the completing request's
+        slot rather than the FIFO head (Property 10 / Req 2.11). ``item`` is matched by ``==`` (the
+        queue stores request ids as ``object``). If two equal items occupy two slots — the content-
+        hash collision Property 10 accounts for — only the first (oldest) occurrence is removed, so
+        two admits of the same id need two removes. ``_items`` and ``_enqueued_at`` stay index-
+        aligned: the age entry at the matched index is removed with it.
+
+        O(depth), and depth is bounded by ``max_depth`` (an ``AdmissionBounds`` call), so the linear
+        scan is contract-bounded. Returns ``False`` without mutating anything when ``item`` is
+        absent.
+        """
+        try:
+            index = self._items.index(item)
+        except ValueError:
+            return False
+        del self._items[index]
+        del self._enqueued_at[index]
+        return True
+
     def oldest_age_s(self, *, now: float | None = None) -> float:
         """Age in seconds of the oldest item, read against the injected clock (Req 7.4).
 

@@ -128,6 +128,7 @@ class AdmissionController:
     """
 
     __slots__ = (
+        "_admitted_counts",
         "_backpressure",
         "_bounds",
         "_clock",
@@ -166,6 +167,14 @@ class AdmissionController:
         self._queues: dict[str, BoundedQueue] = self._build_queues(bounds, clock)
         self._backpressure: dict[str, BackpressureBuffer] = {}
         self._in_flight: dict[str, InFlightStream] = {}
+        # Admit refcount per request id, keyed by request_id, kept ALONGSIDE ``_in_flight`` rather
+        # than folded into ``InFlightStream``. The admit path and the B3 drain path share
+        # ``_in_flight`` (the drain keys it by stream_id via ``register_stream``), so an admit count
+        # carried on the record would blur the two: a register_stream-tracked stream has no admit,
+        # and a content-hashed request id can be admitted twice concurrently (two slots, one
+        # record). A separate map keeps the drain's ``finished`` flag / ``_declare_terminations``
+        # untouched and lets ``complete`` release exactly one slot per prior unmatched admit.
+        self._admitted_counts: dict[str, int] = {}
 
     @staticmethod
     def _build_queues(
@@ -249,6 +258,9 @@ class AdmissionController:
         self._publish_queue("request", now=now)
         self._metrics.observe_admit()
         self._in_flight[request_id] = InFlightStream(stream_id=request_id)
+        # One admit, one slot: a content-hashed id admitted twice concurrently occupies two slots,
+        # so ``complete`` must release at most one per prior unmatched admit (Property 10).
+        self._admitted_counts[request_id] = self._admitted_counts.get(request_id, 0) + 1
         return Admitted(owner_id=owner_id, request_id=request_id, admitted_at=now)
 
     def _shed(self, request_id: str, reason: ShedReason) -> ShedVerdict:
@@ -257,18 +269,34 @@ class AdmissionController:
         return shed_verdict(self._rng, request_id)
 
     def complete(self, request_id: str) -> None:
-        """Mark an admitted request's stream finished and release its request-queue slot.
+        """Release exactly this id's admission slot; idempotent, exact and pruning (Property 10).
 
-        Called when service for an admitted request completes. The request is dequeued (it was
-        admitted, so it is answered — never abandoned, Req 2.1) and its in-flight record is marked
-        finished so a later drain does not issue a declared termination for it.
+        Called when service for an admitted request completes. It is slot-exact and idempotent:
+
+        * An id with no outstanding admit — never admitted, or already completed as many times as
+          it was admitted — releases NO slot and changes NO queue depth. The method returns before
+          touching any queue (Req 2.11). This is what makes ``complete("unknown")`` and a repeated
+          ``complete`` of an already-completed id no-ops, instead of popping a foreign FIFO head.
+        * Otherwise it removes exactly THAT id's slot from the request queue via
+          :meth:`BoundedQueue.remove` (one occurrence, matched by ``==``), never the FIFO head, and
+          decrements the id's admit refcount. The in-flight record and the refcount entry are
+          pruned only when the count reaches 0, so two concurrent admits of a content-hashed id
+          each need their own ``complete``. The queue depth is published only after a real release.
+
+        Because the record is pruned, ``len(_in_flight)`` is bounded by the admitted, unfinished
+        ids (plus any register_stream-tracked drain streams, which this method does not touch).
         """
-        stream = self._in_flight.get(request_id)
-        if stream is not None:
-            stream.finished = True
-        queue = self._queues["request"]
-        if queue.depth > 0:
-            queue.pop()
+        count = self._admitted_counts.get(request_id, 0)
+        if count <= 0:
+            # No outstanding admit for this id: release nothing, touch no queue, publish nothing.
+            return
+        self._queues["request"].remove(request_id)
+        if count == 1:
+            # Last outstanding admit: prune both the refcount and the in-flight record.
+            del self._admitted_counts[request_id]
+            self._in_flight.pop(request_id, None)
+        else:
+            self._admitted_counts[request_id] = count - 1
         self._publish_queue("request")
 
     # --- queue reporting (task 8.1, Req 7.3 / 7.4) ---------------------------------------------

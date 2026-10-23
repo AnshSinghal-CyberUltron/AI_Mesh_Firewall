@@ -395,12 +395,6 @@ def test_large_chunk_admits_the_2000_char_prompt() -> None:
     assert (status, opened) == (200, 1), f"control: status {status} error {error!r}"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=_LEAK + "2000-char prompt, request-count chunk derive_lease_chunk(q_safe=1000)=6, pool "
-    "1,000,000: charged cost 2000 (characters) > 6 held -> HTTP 503 budget_unavailable, provider "
-    "opened 0 times, while the org pool still holds 999,994",
-)
 def test_prompt_above_the_request_count_chunk_is_admitted() -> None:
     """A cost above one chunk but within the org budget is not refused (2.16).
 
@@ -603,12 +597,6 @@ def test_single_worker_grant_is_bounded_by_pool_and_cap() -> None:
     assert grant == min(pool_before, _SHARE_CAP), f"control: pool {pool_before} grant {grant}"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=_LEAK + "pool 10000, cap 3000, workers w0..w3 acquire in turn: grants "
-    "3000/3000/3000/1000; w3 acquires with 4 active and pool 1000 but is granted 1000 > "
-    "1000 // 4 = 250 (grant = min(pool, chunk), no fair share)",
-)
 def test_grant_with_four_active_workers_is_at_most_a_quarter_of_the_pool() -> None:
     """With 4 active workers a grant is at most ``pool // 4`` (C29, Property 12).
 

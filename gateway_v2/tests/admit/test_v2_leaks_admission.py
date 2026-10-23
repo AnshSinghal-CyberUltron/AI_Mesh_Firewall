@@ -21,8 +21,6 @@ from __future__ import annotations
 import asyncio
 import random
 
-import pytest
-
 from gateway_v2.admit.admission import AdmissionController
 from gateway_v2.admit.codel import CoDelParams
 from gateway_v2.admit.grant import Admitted
@@ -77,11 +75,9 @@ def test_complete_unknown_on_an_empty_queue_changes_nothing() -> None:
     assert _depths(controller) == before
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=_LEAK + "admit('a'), admit('b') -> request depth 2; complete('unknown') pops the "
-    "FIFO head ('a') -> request depth 1, releasing a slot that belongs to an in-flight request",
-)
+# v2-enforcement-leaks D (task 23.2 fixed this): on the unfixed tree admit('a'), admit('b') ->
+# request depth 2; complete('unknown') popped the FIFO head ('a') -> request depth 1, releasing a
+# slot that belonged to an in-flight request. The slot-exact pruning ``complete`` now no-ops.
 def test_complete_unknown_id_leaves_every_queue_depth_unchanged() -> None:
     """``complete`` for an id that was never admitted releases no slot (Property 10).
 
@@ -97,11 +93,9 @@ def test_complete_unknown_id_leaves_every_queue_depth_unchanged() -> None:
     assert after == before, f"complete('unknown') changed queue depths: {before} -> {after}"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=_LEAK + "admit('a'), admit('b'), complete('a') -> depth 1; a repeated "
-    "complete('a') pops 'b' -> depth 0 (an already-completed id releases a foreign slot)",
-)
+# v2-enforcement-leaks D (task 23.2 fixed this): on the unfixed tree admit('a'), admit('b'),
+# complete('a') -> depth 1; a repeated complete('a') popped 'b' -> depth 0 (an already-completed id
+# released a foreign slot). The refcount reaches 0 after the first complete, so the second no-ops.
 def test_repeated_complete_releases_no_second_slot() -> None:
     """A second ``complete`` of an already-completed id is a no-op (Property 10).
 
@@ -118,11 +112,9 @@ def test_repeated_complete_releases_no_second_slot() -> None:
     assert after == before, f"repeated complete('a') changed queue depths: {before} -> {after}"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=_LEAK + "after 3 x request_depth (24) admit/complete pairs len(_in_flight) == 24: "
-    "complete flags InFlightStream.finished and never deletes the record (unbounded growth)",
-)
+# v2-enforcement-leaks D (task 23.2 fixed this): on the unfixed tree, after 3 x request_depth (24)
+# admit/complete pairs len(_in_flight) == 24 — complete flagged InFlightStream.finished and never
+# deleted the record (unbounded growth). The refcount-to-zero prune now empties _in_flight.
 def test_completed_records_are_pruned_from_in_flight() -> None:
     """After N admit/complete pairs the in-flight table is empty (Property 10).
 
