@@ -67,6 +67,7 @@ __all__ = (
     "AuditSink",
     "RewriteBackend",
     "assert_authorized",
+    "verified_upstream",
 )
 
 
@@ -88,6 +89,36 @@ def assert_authorized(auth: DispatchAuthorization) -> None:
     """
     if getattr(auth, "_witness", None) is not _WITNESS:
         raise ValueError("unauthorized dispatch: authorization provenance check failed")
+
+
+def verified_upstream(
+    auth: DispatchAuthorization,
+    *,
+    decision: Decision,
+    request: GatewayRequest,
+    transform: Transform,
+) -> UpstreamRequest:
+    """The request-side half of the entry: the only bytes that may reach a provider.
+
+    Runs, in order, the entry's pre-provider steps and nothing else (no pool, no audit,
+    no provider call), so the edge input path and :meth:`AuthorizedProviderEntry.dispatch`
+    share one code path:
+
+    1. :func:`assert_authorized` re-verifies provenance by witness identity (R2.5,
+       R10.6); a forged authorization raises ``ValueError`` before any byte is shaped.
+    2. :func:`~gateway_v2.dispatch.verify.apply_and_verify` applies ``decision``'s
+       transformations and verifies them against the finding spans. A
+       :class:`~gateway_v2.dispatch.verify.VerificationFailure` is terminal and
+       propagates (R3.1-R3.3); for REDACT only the sanitized bytes continue (R3.4).
+    3. ``transform.to_provider`` shapes the verified request, carrying
+       ``request.destination`` through unchanged (R2.4).
+
+    The authorization is only READ (witness identity), never minted or rebuilt, so the
+    provenance gate holds: minting stays in ``resolve/``.
+    """
+    assert_authorized(auth)
+    verified = apply_and_verify(decision, request)
+    return transform.to_provider(verified.request)
 
 
 @runtime_checkable
@@ -213,6 +244,10 @@ class AuthorizedProviderEntry:
            ZERO provider calls (R5, LGW11-4); every other non-terminal disposition drives
            the shipped ``ProviderClient.open`` under a bounded pool lease.
 
+        Steps 1, 2 and 4 are :func:`verified_upstream`, the one request-side code path.
+        The pure step 3 is evaluated just before it so the plan-derived destination rides
+        on the request; it reads no request byte and sends nothing.
+
         ``rewrite`` carries the resolver's winning-action signal that the ``Decision``
         vocabulary itself erases: the resolver maps ``Action.REWRITE`` to
         ``Disposition.REDACT`` (``resolve/decision.py::_action_to_disposition``), so a
@@ -226,28 +261,26 @@ class AuthorizedProviderEntry:
         The method is ``async`` and yields each :class:`UpstreamEvent` as it arrives, so
         the caller writes ``async for event in entry.dispatch(auth, ...)``.
         """
-        # (1) Runtime provenance assertion — before ANY provider byte (R2.5, R10.6).
-        assert_authorized(auth)
-
-        # (2) Apply + verify the request bytes; terminal on failure (R3.1-R3.3). A raised
-        # VerificationFailure propagates to the caller with no provider byte sent.
-        verified = apply_and_verify(decision, request)
-
         # (3) Deterministic, plan-derived routing — pure, no adjudicator, no shared
         # mutable state (R6). The catalogue snapshot is the resolved provider set the
-        # destination is drawn against; it is passed in already resolved (R7.1).
+        # destination is drawn against; it is passed in already resolved (R7.1). It runs
+        # first only because it is pure and touches no request byte: the destination is
+        # stamped on the request so steps (1), (2) and (4) run as ONE code path.
         destination = self._router.select(plan)
         _ = catalogue  # resolved snapshot carried on the path; routing stays plan-pure.
-
-        # (4) Shape the VERIFIED request to the upstream, carrying the plan-derived
-        # destination through unchanged (R2.4). The sanitized bytes are the only bytes
-        # that can reach the provider.
         routed = GatewayRequest(
             destination=destination,
-            model=verified.request.model,
-            text_deltas=verified.request.text_deltas,
+            model=request.model,
+            text_deltas=request.text_deltas,
         )
-        upstream = self._transform.to_provider(routed)
+
+        # (1) provenance assertion, (2) apply + verify (a VerificationFailure propagates
+        # with no provider byte sent, R3.1-R3.3), (4) shape the VERIFIED request to the
+        # upstream carrying the plan-derived destination (R2.4). The sanitized bytes are
+        # the only bytes that can reach the provider.
+        upstream = verified_upstream(
+            auth, decision=decision, request=routed, transform=self._transform,
+        )
 
         async for event in self._open_stream(
             upstream=upstream,

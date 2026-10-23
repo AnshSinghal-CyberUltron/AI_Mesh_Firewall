@@ -18,8 +18,10 @@ concatenated content with Python string (code-point) offsets, exactly as
 ``len()``. The whole request content is present (there is no streaming slice on
 the request side), so the base offset is ``0`` and a span is covered iff
 ``0 <= start <= end <= len(content)``. After redaction the sanitized content is
-re-split back onto the original channels at the original per-delta boundaries so
-the request → provider path keeps the same ``(channel, text)`` shape.
+re-split back onto the original channels, each original per-delta boundary
+shifted by the length change of the transformations before it, so the request →
+provider path keeps the same ``(channel, text)`` shape and every delta holds only
+its own sanitized bytes (:func:`_resplit`).
 
 **No new redactor (R12.1 / R3.5).** Redaction is performed solely by writing a
 ``Transformation``'s own ``replacement`` over its span — the same mechanism
@@ -46,6 +48,7 @@ from gateway_v2.domain import (
     Disposition,
     FindingDisposition,
     Span,
+    Transformation,
 )
 from gateway_v2.egress.output_guard import apply_decision
 
@@ -95,29 +98,76 @@ def _request_content(request: GatewayRequest) -> str:
     return "".join(text for _channel, text in request.text_deltas)
 
 
-def _resplit(content: str, request: GatewayRequest) -> tuple[tuple[str, str], ...]:
-    """Re-split sanitized ``content`` back onto the original delta channels.
+def _applied_edits(
+    transformations: tuple[Transformation, ...],
+    length: int,
+) -> tuple[tuple[int, int, int], ...]:
+    """``(start, end, replacement_len)`` of the edits ``apply_decision`` applied.
 
-    Redaction can change the content length, so the sanitized bytes are
-    distributed by walking the original per-delta boundaries: all but the last
-    delta keep their original character length and the final delta absorbs the
-    remainder. This keeps the ``(channel, text)`` shape and channel order the
-    provider transport expects while placing all redacted content back under the
-    channels it came from. A request with no deltas yields no deltas.
+    Mirrors ``apply_decision``'s slice filter with ``base_offset=0``: a span
+    wholly before (``end <= 0``) or wholly after (``start >= length``) the
+    content is skipped. Sorted by ``(start, end)``; ``apply_decision`` has
+    already rejected overlaps, so the ends are sorted too.
+    """
+    return tuple(
+        sorted(
+            (t.span.start, t.span.end, len(t.replacement))
+            for t in transformations
+            if not (t.span.end <= 0 or t.span.start >= length)
+        ),
+    )
+
+
+def _resplit(
+    sanitized: str,
+    request: GatewayRequest,
+    transformations: tuple[Transformation, ...],
+) -> tuple[tuple[str, str], ...]:
+    """Re-split ``sanitized`` back onto the original delta channels (Property 3).
+
+    Each original delta boundary ``B`` (in the concatenated original content) is
+    shifted by the summed length change ``len(replacement) - (end - start)`` of
+    the applied transformations that end at or before ``B``. A transformation
+    that straddles ``B`` (``start < B < end``: a value split across parts) puts
+    its whole replacement in the delta where it starts, so the boundary maps to
+    the end of that replacement and the later delta loses the covered prefix.
+
+    Every delta therefore holds exactly its own sanitized bytes: raw bytes never
+    move across a channel or an embeddings item, channel names and delta count
+    are kept, and with no transformations the deltas are returned unchanged
+    (clause 3.2). A request with no deltas yields no deltas. If the mapped final
+    boundary does not land on ``len(sanitized)`` the transformations are not the
+    ones that produced ``sanitized``, and the request fails closed.
     """
     deltas = request.text_deltas
     if not deltas:
         return ()
+    edits = _applied_edits(
+        transformations, sum(len(text) for _channel, text in deltas),
+    )
     out: list[tuple[str, str]] = []
-    cursor = 0
-    last = len(deltas) - 1
-    for index, (channel, original) in enumerate(deltas):
-        if index == last:
-            out.append((channel, content[cursor:]))
-        else:
-            end = cursor + len(original)
-            out.append((channel, content[cursor:end]))
-            cursor = end
+    boundary = 0  # original-content offset of the current delta's end
+    shift = 0  # summed length change of the edits ending at or before ``boundary``
+    pending = 0  # index of the first edit not yet ending at or before ``boundary``
+    cursor = 0  # sanitized offset of the current delta's start
+    for channel, text in deltas:
+        boundary += len(text)
+        while pending < len(edits) and edits[pending][1] <= boundary:
+            start, end, replacement_len = edits[pending]
+            shift += replacement_len - (end - start)
+            pending += 1
+        new_end = boundary + shift
+        if pending < len(edits) and edits[pending][0] < boundary:
+            # Straddles the boundary: the replacement stays in the start delta.
+            start, _end, replacement_len = edits[pending]
+            new_end = start + shift + replacement_len
+        out.append((channel, sanitized[cursor:new_end]))
+        cursor = new_end
+    if cursor != len(sanitized):
+        raise VerificationFailure(
+            "fail-closed: sanitized content does not re-split onto the request deltas "
+            f"(mapped_len={cursor}, sanitized_len={len(sanitized)})",
+        )
     return tuple(out)
 
 
@@ -130,15 +180,70 @@ def _redacting_detectors(decision: Decision) -> frozenset[str]:
     )
 
 
+def _is_finding_keyed(decision: Decision) -> bool:
+    """True iff every per-finding disposition names its finding by index.
+
+    Only a fully keyed decision takes the per-finding path. A decision where any
+    disposition lacks ``finding_index`` (e.g. ``MinimalOutputResolver``, or a
+    producer that appended an unkeyed disposition) keeps the shipped
+    detector-keyed rule, which obliges a superset and so can only fail closed.
+    """
+    return bool(decision.per_finding) and all(
+        item.finding_index is not None for item in decision.per_finding
+    )
+
+
+def _indexed_redacting_spans(decision: Decision) -> tuple[Span, ...]:
+    """Spans of exactly the findings whose keyed disposition is redacting.
+
+    Each index is validated before use. An index outside
+    ``[0, len(decision.findings))`` (a negative index would silently select a
+    different finding) or one that points at a finding from a different
+    detector means the decision is inconsistent, and an obligation might be
+    lost. Both fail closed with :class:`VerificationFailure`.
+    """
+    findings = decision.findings
+    obliged: set[int] = set()
+    for item in decision.per_finding:
+        index = item.finding_index
+        if index is None or not 0 <= index < len(findings):
+            raise VerificationFailure(
+                "fail-closed: per-finding disposition index is out of range "
+                f"(finding_index={index}, findings={len(findings)})",
+            )
+        if findings[index].detector != item.detector:
+            raise VerificationFailure(
+                "fail-closed: per-finding disposition index names a finding of "
+                f"another detector (finding_index={index}, "
+                f"disposition_detector={item.detector}, "
+                f"finding_detector={findings[index].detector})",
+            )
+        if item.disposition in _REDACTING_DISPOSITIONS:
+            obliged.add(index)
+    spans: list[Span] = []
+    for index in sorted(obliged):
+        spans.extend(findings[index].spans)
+    return tuple(spans)
+
+
 def _spans_to_verify(decision: Decision) -> tuple[Span, ...]:
     """Every finding span that a redacting disposition requires be redacted.
 
-    A finding is obliged to be redacted when its detector carries a redacting
-    per-finding disposition. The overall ``decision.disposition`` is the
-    most-restrictive of the per-finding dispositions, so a REDACT request can
-    still carry ALLOW/FLAG findings whose spans are *not* obliged — those are
-    skipped here (only the redacting findings' spans must be absent).
+    When every per-finding disposition carries ``finding_index``, exactly the
+    findings whose disposition is redacting are obliged (C22: each finding keeps
+    its own disposition), so ``SECRET -> flag`` plus ``CREDENTIAL -> redact`` from
+    one detector obliges only the CREDENTIAL span. Indexes are validated and an
+    inconsistent decision fails closed (:func:`_indexed_redacting_spans`).
+
+    Otherwise the shipped detector-keyed rule applies: a finding is obliged when
+    its detector carries any redacting per-finding disposition. The overall
+    ``decision.disposition`` is the most-restrictive of the per-finding
+    dispositions, so a REDACT request can still carry ALLOW/FLAG findings whose
+    spans are *not* obliged; those are skipped (only the redacting findings'
+    spans must be absent).
     """
+    if _is_finding_keyed(decision):
+        return _indexed_redacting_spans(decision)
     redacting = _redacting_detectors(decision)
     spans: list[Span] = []
     for finding in decision.findings:
@@ -274,7 +379,7 @@ def apply_and_verify(decision: Decision, request: GatewayRequest) -> VerifiedByt
     sanitized_request = GatewayRequest(
         destination=request.destination,
         model=request.model,
-        text_deltas=_resplit(sanitized, request),
+        text_deltas=_resplit(sanitized, request, decision.transformations),
     )
 
     redacting = _redacting_per_finding(decision)
