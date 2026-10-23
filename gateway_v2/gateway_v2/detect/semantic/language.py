@@ -12,20 +12,22 @@ local, self-contained pieces, all exercised BEFORE the guard tokenizer runs:
    silent clean ``EXECUTED`` pass (R5.1, R5.2, Property 6). The detector maps a
    non-clean posture to an ``UNAVAILABLE`` / explicit unsupported-language
    finding; this module only decides the posture, it decides no disposition.
-3. A self-contained confusable / homoglyph fold (:func:`fold_confusables`)
-   applied BEFORE the tokenizer (R5.3). The fold table is a module-level
-   :class:`~types.MappingProxyType` declared in THIS module -- it deliberately
-   does NOT import the GW09 ``detect/deterministic/canonicalize.py`` internals
-   (its homoglyph fold is one step of a nine-step byte-span decode pipeline; the
-   semantic pre-tokenizer fold is a standalone string transform). The table is a
-   small, self-contained copy of the common Cyrillic / Greek attack set in the
-   same spirit as the GW09 fold.
+3. A confusable / homoglyph fold (:func:`fold_confusables`) applied BEFORE the
+   tokenizer (R5.3). The fold table :data:`CONFUSABLE_FOLD` is a re-export of the
+   ONE versioned set ``detect/confusables.py::CONFUSABLES`` (v2-enforcement-leaks
+   Group C, clause 2.8), the same table the GW09 canonicaliser folds through, so
+   GW09 and GW10 cannot diverge. It still does NOT import the GW09
+   ``detect/deterministic/canonicalize.py`` internals: that fold is one step of a
+   nine-step byte-span decode pipeline, while this one is a standalone string
+   transform. The shared set is a strict superset of the 22-entry table this
+   module used to declare, with the same target for every one of those entries.
 
 :class:`MultilingualReport` is the separate per-language breakdown record the
 caller / audit reads so multilingual behaviour is reported separately from the
 aggregate English number (R5.5).
 
-Layering: this module imports only the Python standard library. It never imports
+Layering: this module imports only the Python standard library and the intra-layer
+``gateway_v2.detect.confusables`` table. It never imports
 ``edge``, ``admit``, or ``plan`` (Layer_Contract, R8.7). It follows the house
 idiom shared with ``detect/holdback.py`` and ``detect/deterministic/
 canonicalize.py``: ``from __future__ import annotations``, frozen
@@ -38,6 +40,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Final
+
+from gateway_v2.detect.confusables import CONFUSABLES
 
 __all__ = (
     "CONFUSABLE_FOLD",
@@ -73,43 +77,14 @@ SUPPORTED_LANGUAGES: Final[frozenset[str]] = frozenset(
 )
 
 # --------------------------------------------------------------------------- #
-# Confusable / homoglyph fold table. A self-contained copy (NOT an import of the
-# GW09 canonicalize internals) of the common Cyrillic / Greek look-alike attack
-# set, folded to the ASCII character they imitate. Applied BEFORE the tokenizer
-# (R5.3) so a homoglyph-obfuscated token reaches the guard as its ASCII form.
-# ``MappingProxyType`` keeps the table immutable at module scope (the
-# no-module-mutable gate rejects a bare dict/set literal; a MappingProxyType
-# call is accepted, matching the canonicalize.py house idiom).
+# Confusable / homoglyph fold table: a re-export of the one versioned set, so the
+# semantic pre-tokenizer fold and the GW09 canonicaliser share a table (C6
+# "confusable mapping"). Applied BEFORE the tokenizer (R5.3) so a
+# homoglyph-obfuscated token reaches the guard as its ASCII form. The set is an
+# immutable ``MappingProxyType`` of single character -> single ASCII letter, the
+# same shape this module's old table had, so :func:`fold_confusables` is unchanged.
 # --------------------------------------------------------------------------- #
-CONFUSABLE_FOLD: Final = MappingProxyType(
-    {
-        # Cyrillic small letters -> ASCII look-alike.
-        "\u0430": "a",  # CYRILLIC SMALL A
-        "\u0435": "e",  # CYRILLIC SMALL IE
-        "\u043e": "o",  # CYRILLIC SMALL O
-        "\u0440": "p",  # CYRILLIC SMALL ER
-        "\u0441": "c",  # CYRILLIC SMALL ES
-        "\u0445": "x",  # CYRILLIC SMALL HA
-        "\u0443": "y",  # CYRILLIC SMALL U
-        "\u0456": "i",  # CYRILLIC SMALL BYELORUSSIAN-UKRAINIAN I
-        "\u0458": "j",  # CYRILLIC SMALL JE
-        "\u04bb": "h",  # CYRILLIC SMALL SHHA
-        "\u0501": "d",  # CYRILLIC SMALL KOMI DE
-        # Cyrillic capital letters -> ASCII look-alike.
-        "\u0410": "A",  # CYRILLIC CAPITAL A
-        "\u0415": "E",  # CYRILLIC CAPITAL IE
-        "\u041e": "O",  # CYRILLIC CAPITAL O
-        "\u0420": "P",  # CYRILLIC CAPITAL ER
-        "\u0421": "C",  # CYRILLIC CAPITAL ES
-        "\u0425": "X",  # CYRILLIC CAPITAL HA
-        # Greek look-alikes -> ASCII.
-        "\u0391": "A",  # GREEK CAPITAL ALPHA
-        "\u0395": "E",  # GREEK CAPITAL EPSILON
-        "\u039f": "O",  # GREEK CAPITAL OMICRON
-        "\u03bf": "o",  # GREEK SMALL OMICRON
-        "\u03b1": "a",  # GREEK SMALL ALPHA
-    }
-)
+CONFUSABLE_FOLD: Final[MappingProxyType[str, str]] = CONFUSABLES
 
 
 @dataclass(frozen=True, slots=True)

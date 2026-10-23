@@ -13,7 +13,8 @@ truncation. ``BudgetExceeded`` is caught inside ``detect/deterministic`` and
 mapped to an ``UNAVAILABLE`` Finding; it is never an HTTP type and never
 escapes the detect layer.
 
-Layering: this module imports only ``gateway_v2.domain`` (+ stdlib). It mirrors
+Layering: this module imports only ``gateway_v2.domain``, the intra-layer
+``gateway_v2.detect.confusables`` table (+ stdlib). It mirrors
 the ``detect/holdback.py`` house idiom: ``from __future__ import annotations``,
 ``re``, frozen ``@dataclass(frozen=True, slots=True)``, ``MappingProxyType``
 immutable tables, a tuple ``__all__``. The ``[REDACTED]`` placeholder is
@@ -45,9 +46,9 @@ import html
 import re
 import unicodedata
 from dataclasses import dataclass
-from types import MappingProxyType
 from typing import Final
 
+from gateway_v2.detect.confusables import CONFUSABLES
 from gateway_v2.domain import Span
 
 __all__ = (
@@ -88,35 +89,13 @@ _B64_MAX: Final = 512
 _B64_RUN: Final = re.compile(rf"[A-Za-z0-9+/]{{{_B64_MIN},{_B64_MAX}}}={{0,2}}")
 
 # --------------------------------------------------------------------------- #
-# Decoder tables -- immutable MappingProxyType (R8.5, no module-level mutable).
+# Decoder tables -- immutable (R8.5, no module-level mutable).
 # --------------------------------------------------------------------------- #
 
-# Cyrillic / Greek confusable homoglyphs folded to their ASCII look-alike. A
-# small, self-contained copy (not an import) covering the common attack set.
-_HOMOGLYPHS: Final = MappingProxyType(
-    {
-        "\u0430": "a",  # CYRILLIC SMALL A
-        "\u0435": "e",  # CYRILLIC SMALL IE
-        "\u043e": "o",  # CYRILLIC SMALL O
-        "\u0440": "p",  # CYRILLIC SMALL ER
-        "\u0441": "c",  # CYRILLIC SMALL ES
-        "\u0445": "x",  # CYRILLIC SMALL HA
-        "\u0443": "y",  # CYRILLIC SMALL U
-        "\u0456": "i",  # CYRILLIC SMALL BYELORUSSIAN-UKRAINIAN I
-        "\u0458": "j",  # CYRILLIC SMALL JE
-        "\u04bb": "h",  # CYRILLIC SMALL SHHA
-        "\u0501": "d",  # CYRILLIC SMALL KOMI DE
-        "\u0391": "A",  # GREEK CAPITAL ALPHA
-        "\u039f": "O",  # GREEK CAPITAL OMICRON
-        "\u03bf": "o",  # GREEK SMALL OMICRON
-        "\u0410": "A",  # CYRILLIC CAPITAL A
-        "\u0415": "E",  # CYRILLIC CAPITAL IE
-        "\u041e": "O",  # CYRILLIC CAPITAL O
-        "\u0420": "P",  # CYRILLIC CAPITAL ER
-        "\u0421": "C",  # CYRILLIC CAPITAL ES
-        "\u0425": "X",  # CYRILLIC CAPITAL HA
-    }
-)
+# Cyrillic / Greek confusable homoglyphs are folded through the ONE versioned set,
+# ``detect/confusables.py::CONFUSABLES`` (v2-enforcement-leaks Group C, clause 2.8),
+# shared with the GW10 semantic pre-tokenizer fold. Every entry maps one character to
+# one ASCII letter, so the fold is 1:1 and span records are unchanged.
 
 # RTL / bidi control characters normalized away before matching.
 _BIDI_CONTROLS: Final = frozenset(
@@ -389,10 +368,14 @@ def _decode_unicode_escapes(buf: list[tuple[str, int, int]]) -> list[tuple[str, 
 
 
 def _fold_homoglyphs(buf: list[tuple[str, int, int]]) -> list[tuple[str, int, int]]:
-    """Fold Cyrillic / Greek confusables to their ASCII look-alike."""
+    """Fold Cyrillic / Greek confusables to their ASCII look-alike via ``CONFUSABLES``.
+
+    One output cell per input cell, each keeping its original span, so the fold never
+    moves an offset (Property 2) and confusable-free text is passed through unchanged.
+    """
     out: list[tuple[str, int, int]] = []
     for ch, lo, hi in buf:
-        out.append((_HOMOGLYPHS.get(ch, ch), lo, hi))
+        out.append((CONFUSABLES.get(ch, ch), lo, hi))
     return out
 
 

@@ -460,8 +460,17 @@ def test_property13_detection_is_monotone_against_the_frozen_original() -> None:
                 f"{msg}: original matcher findings on the folded text {shipped_canonical!r} "
                 f"not covered by the shipped scan: {missing}"
             )
-        elif lead or confusable:
-            # (3) Covering: a shipped span contains each original span.
+        elif failed or lead or confusable:
+            # (3) Covering: a shipped span contains each original span. A failed-confirm
+            # region admits this too, not just lead/confusable: bounding a prefilter
+            # (Group B, e.g. phone {9,14}) can move where the primary finditer resumes, so
+            # a neighbouring match's canonical start shifts by the bytes the shorter failed
+            # hit no longer consumes. `4111 1111 1111 1111user@example.com` is the live
+            # case: the unbounded phone hit ran to offset 19, the bounded one stops at 18,
+            # so the email the finditer then finds starts at 18 not 19 -- a one-byte WIDER
+            # span that still covers the original. Property 13 promises raw-offset equality
+            # only OFF the bug condition (branch 5); under a failed region it promises
+            # coverage of the original (category, span), which is exactly this check.
             missing = _uncovered(
                 ((cat, span) for _, cat, span in original_det.elements()), shipped_pairs
             )

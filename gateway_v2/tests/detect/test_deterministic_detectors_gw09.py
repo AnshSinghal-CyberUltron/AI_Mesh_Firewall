@@ -21,10 +21,12 @@ pass, the whole GW09 test surface:
 
 Everything is driven by the shipped production API -- nothing is tuned to make a
 case pass, and the scorer scores whatever the shipped ruleset actually does. A
-notable OUTCOME the scorer records: the shipped single-pass matcher's phone
-prefilter is a digit-run superset that fires first on a bare card number, so a
-standalone card is not emitted by ``scan`` -- the credential recall reflects that
-truthfully rather than hiding it.
+notable OUTCOME the scorer records: the phone prefilter is a digit-run superset
+that fires first on a bare card number, but its precise confirm fails over the
+PAN and the failed-region rescan recovers the ``credential_card`` match under a
+Luhn check, so a standalone (Luhn-valid) card IS emitted by ``scan`` as a
+CREDENTIAL finding -- the credential recall reflects that truthfully
+(v2-enforcement-leaks Group B).
 """
 
 from __future__ import annotations
@@ -112,34 +114,115 @@ def _transformations_for(finding: Finding) -> tuple[Transformation, ...]:
     )
 
 
-# A precompiled per-pattern precise table used ONLY by Property 6's reference
-# model -- a self-contained reimplementation of the single-pass contract that is
-# independent of ``matcher.scan`` (so the property is a real cross-check).
+# Precompiled per-pattern tables used ONLY by Property 6's reference model -- a
+# self-contained reimplementation of the matcher contract that is independent of
+# ``matcher.scan`` (so the property is a real cross-check). The reference models
+# the full v2-enforcement-leaks Group B contract: one combined-alternation
+# primary ``finditer``, a Luhn validator after the precise confirm, and the
+# failed-region rescan that recovers a match the leftmost-first primary pass hid.
 _REFERENCE_COMBINED = re.compile(
     "|".join(f"(?P<{name}>{spec.prefilter})" for name, spec in RULESET.items())
 )
 _REFERENCE_PRECISE = {name: re.compile(spec.precise) for name, spec in RULESET.items()}
+_REFERENCE_PREFILTER = {name: re.compile(spec.prefilter) for name, spec in RULESET.items()}
+_REFERENCE_ORDER = {name: i for i, name in enumerate(RULESET)}
+
+
+def _reference_luhn(text: str, start: int, end: int) -> bool:
+    """Independent Luhn checksum over the digits of ``text[start:end]`` (P6)."""
+    digits = [ord(ch) - 48 for ch in text[start:end] if ch.isdigit()]
+    if not digits:
+        return False
+    total = 0
+    for index, digit in enumerate(reversed(digits)):
+        if index % 2 == 1:
+            digit *= 2
+            if digit > 9:
+                digit -= 9
+        total += digit
+    return total % 10 == 0
+
+
+def _reference_confirm(text: str, name: str, pos: int) -> tuple[int, int] | None:
+    """Confirm ``name`` at ``pos`` in the FULL text, applying the named validator (P6)."""
+    confirmed = _REFERENCE_PRECISE[name].match(text, pos)
+    if confirmed is None:
+        return None
+    span = (confirmed.start(), confirmed.end())
+    if RULESET[name].validator == "luhn" and not _reference_luhn(text, span[0], span[1]):
+        return None
+    return span
+
+
+def _reference_rescan(
+    text: str,
+    region_start: int,
+    region_end: int,
+    excluded: frozenset[str],
+    emitted_end: dict[str, int],
+    out: list[tuple[str, int, int]],
+) -> None:
+    """Rescan a failed region leftmost-first for a match the primary pass hid (P6).
+
+    Candidates are every prefilter hit whose START is inside the region, gathered
+    PER START POSITION so overlapping candidates of different patterns at one
+    position are all surfaced (one pass suffices, no further recursion). The hit's
+    confirm runs on the FULL text, so a candidate whose value extends past the
+    region end still confirms. An excluded pattern is only re-tried AFTER the
+    region start (it already failed there). Per-pattern cursors forbid a duplicate.
+    """
+    if region_start >= region_end:
+        return
+    candidates: list[tuple[int, int, str]] = []
+    for pos in range(region_start, region_end):
+        for name in RULESET:
+            if name in excluded and pos <= region_start:
+                continue
+            if _REFERENCE_PREFILTER[name].match(text, pos) is None:
+                continue
+            candidates.append((pos, _REFERENCE_ORDER[name], name))
+    candidates.sort(key=lambda item: (item[0], item[1]))
+    for cand_start, _, name in candidates:
+        if cand_start < emitted_end.get(name, -1):
+            continue
+        span = _reference_confirm(text, name, cand_start)
+        if span is None or span[0] < emitted_end.get(name, -1):
+            continue
+        out.append((name, span[0], span[1]))
+        emitted_end[name] = span[1]
 
 
 def _reference_scan(canonical_text: str) -> list[tuple[str, int, int]]:
-    """Reproduce the shipped single-pass matcher contract independently (P6).
+    """Reproduce the shipped matcher contract independently (P6).
 
-    One combined-alternation ``finditer``; per hit, the firing pattern is the
-    ``lastgroup`` and the hit is confirmed by that pattern's precise regex
-    anchored at the prefilter match start. On a confirm the PRECISE span is
-    emitted; a prefilter-only near-miss emits nothing. This mirrors
-    ``matcher.scan`` by construction, so Property 6 asserts the production scan
-    equals this reference per-family-alternation union.
+    One combined-alternation primary ``finditer``; per hit, the firing pattern is
+    the ``lastgroup`` and the hit is confirmed by that pattern's precise regex
+    anchored at the prefilter match start in the full text, after which the named
+    validator (Luhn for ``credential_card``) is applied. On a confirm whose
+    validator passes the PRECISE span is emitted. On a failed confirm or failed
+    validator the hit's region is rescanned leftmost-first for a match of another
+    pattern the primary pass consumed (with the failed pattern excluded at its
+    start). Per-pattern cursors forbid a duplicate emission; the output is sorted by
+    ``(start, RULESET order)``. Built independently of ``matcher.scan``, so
+    Property 6 is a real cross-check.
     """
     out: list[tuple[str, int, int]] = []
+    emitted_end: dict[str, int] = {}
     for match in _REFERENCE_COMBINED.finditer(canonical_text):
         name = match.lastgroup
         if name is None:
             continue
-        confirmed = _REFERENCE_PRECISE[name].match(canonical_text, match.start())
-        if confirmed is None:
+        if match.start() < emitted_end.get(name, -1):
             continue
-        out.append((name, confirmed.start(), confirmed.end()))
+        span = _reference_confirm(canonical_text, name, match.start())
+        if span is None:
+            _reference_rescan(
+                canonical_text, match.start(), match.end(), frozenset({name}), emitted_end, out
+            )
+            continue
+        out.append((name, span[0], span[1]))
+        emitted_end[name] = span[1]
+    out.sort(key=lambda item: (item[1], _REFERENCE_ORDER[item[0]]))
     return out
 
 
@@ -486,21 +569,28 @@ def test_property6_single_pass_matcher_equals_reference_union() -> None:
 # --------------------------------------------------------------------------- #
 
 
-def _hash_model(serialized_patterns: Sequence[tuple[str, str, str, str, str]]) -> str:
+def _hash_model(serialized_patterns: Sequence[tuple[str, str, str, str, str, str]]) -> str:
     """Model the ruleset hash input WITHOUT mutating the frozen RULESET (P7).
 
     Mirrors ``patterns.ruleset_version``: sha256 over each pattern's
-    ``(name, category.value, kind.value, prefilter, precise)`` joined by the unit
-    separator, each record terminated by the record separator, patterns sorted by
-    name. We model it over a copyable list so a mutated-copy changes the version
-    while the real RULESET stays frozen.
+    ``(name, category.value, kind.value, prefilter, precise, validator or "")``
+    joined by the unit separator, each record terminated by the record separator,
+    patterns sorted by name, then the one ``("confusables", CONFUSABLE_SET_VERSION,
+    CONFUSABLES_DIGEST)`` record (v2-enforcement-leaks 18.3). We model it over a
+    copyable list so a mutated-copy changes the version while the real RULESET
+    stays frozen.
     """
     import hashlib
+
+    from gateway_v2.detect.confusables import CONFUSABLE_SET_VERSION, CONFUSABLES_DIGEST
 
     hasher = hashlib.sha256()
     for record in sorted(serialized_patterns, key=lambda r: r[0]):
         hasher.update("\x1f".join(record).encode("utf-8"))
         hasher.update(b"\x1e")
+    confusables = ("confusables", CONFUSABLE_SET_VERSION, CONFUSABLES_DIGEST)
+    hasher.update("\x1f".join(confusables).encode("utf-8"))
+    hasher.update(b"\x1e")
     return hasher.hexdigest()
 
 
@@ -514,6 +604,7 @@ def test_property7_detector_version_is_a_hash_of_the_ruleset() -> None:
             spec.kind.value,
             spec.prefilter,
             spec.precise,
+            spec.validator or "",
         )
         for spec in RULESET.values()
     ]
@@ -526,8 +617,8 @@ def test_property7_detector_version_is_a_hash_of_the_ruleset() -> None:
         # record's precise regex on a copy; the frozen RULESET is never touched.
         mutated = list(base_model)
         idx = rng.randrange(len(mutated))
-        name, cat, kind, pre, prec = mutated[idx]
-        mutated[idx] = (name, cat, kind, pre, prec + f"#{rng.randint(0, 9)}")
+        name, cat, kind, pre, prec, validator = mutated[idx]
+        mutated[idx] = (name, cat, kind, pre, prec + f"#{rng.randint(0, 9)}", validator)
         assert _hash_model(mutated) != ruleset_version(), (
             f"seed={seed}: a changed pattern did not change the version"
         )
@@ -768,13 +859,15 @@ def test_lgw09_6_c3_scoring_dev_traffic_fpr_zero_and_published() -> None:
     assert dev_fpr < 1.0
 
     # Per-family recall is published as an OUTCOME. PII and secret recall are
-    # strong; credential recall reflects the TRUE single-pass outcome (a bare card
-    # is shadowed by the phone prefilter, so the PEM header is the credential
-    # positive that fires) -- scored honestly, not tuned.
+    # strong; credential recall is now 1.0 as well -- both credential positives
+    # (the PEM header AND the bare Luhn-valid card) fire. The card is recovered by
+    # the failed-region rescan + Luhn validator after the phone prefilter's
+    # precise confirm fails over the PAN (v2-enforcement-leaks Group B, 18.4) --
+    # scored honestly, not tuned.
     assert scores[FAMILY_PII]["recall"] == 1.0, scores
     assert scores[FAMILY_SECRET]["recall"] == 1.0, scores
     assert FAMILY_CREDENTIAL in scores
-    assert 0.0 <= scores[FAMILY_CREDENTIAL]["recall"] <= 1.0
+    assert scores[FAMILY_CREDENTIAL]["recall"] == 1.0, scores
 
     # Publish the numbers to the test log (the C3 scoring run output).
     print("GW09 C3 per-family scores:")

@@ -141,10 +141,13 @@ POSITIVE_PII_SECRET: tuple[PositiveCase, ...] = (
         category=Category.CREDENTIAL,
         planted="-----BEGIN RSA PRIVATE KEY-----",
     ),
-    # Card number: carried as a labeled credential positive. The shipped
-    # single-pass matcher's phone prefilter is a superset that fires first on a
-    # bare digit run, so a standalone card is NOT emitted by ``scan`` -- a true
-    # OUTCOME of the single matcher pass, scored (not tuned) by the scorer.
+    # Card number: carried as a labeled credential positive. The phone prefilter
+    # is a digit-run superset that fires FIRST on a bare card, but its precise
+    # confirm fails over the PAN; the failed-region rescan then recovers the
+    # ``credential_card`` match and the Luhn validator confirms it (the PAN here
+    # is Luhn-valid). So a standalone card IS emitted by ``scan`` as a CREDENTIAL
+    # finding spanning the whole PAN -- a true OUTCOME of the matcher's rescan,
+    # scored (not tuned) by the scorer (v2-enforcement-leaks Group B, 18.4).
     PositiveCase(
         text="charge the card 4111 1111 1111 1111 today",
         family=FAMILY_SECRET,
