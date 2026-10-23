@@ -140,6 +140,51 @@ passes while a part-count flood is rejected before the fold walks every element.
 contract (via `workers()`) so the ceiling tracks deployment capacity and `edge` holds no literal.
 """
 
+# v2-enforcement-leaks Group F token budget. The budget is charged and leased in TOKENS, using the
+# same request estimate gateway v1 pre-charges, so the cost unit is a contract value here rather
+# than a literal in `edge` or `admit`. This is the only module `lint/check_capacity_literals.py`
+# exempts.
+_CHARS_PER_TOKEN_DIVISOR = 4
+"""Characters per input token in the request token estimate (`D`; v1 parity, R2.15).
+
+gateway v1's `LLMRouter.estimate_prompt_tokens` (`gateway/ai_mesh_gateway/llm_router.py`) counts
+input tokens as `max(1, prompt_chars // 4)`. v2 charges the org budget with the same estimate so a
+request costs the same tokens on both gateways; the divisor is declared once here and read through
+`ResourceContract.estimate_request_tokens`. It replaces the earlier design's 3.04 GW10 markdown
+ratio: parity with the v1 pre-charge is the contract, not a measured tokenizer ratio.
+"""
+_OUTPUT_TOKENS_HARD_CAP = 65536
+"""Hard cap on a request's clamped `max_tokens` (v1 parity, R2.15 / R2.16).
+
+gateway v1's pre-estimate clamp (`gateway/ai_mesh_gateway/main.py` ~L8460, `_mt_hard_cap = 65536`)
+lowers `max_tokens` to `min(max_tokens, org max_response_tokens, 65536)` before the cost estimate.
+It bounds even an org whose `max_response_tokens` is unset. Read through
+`ResourceContract.max_output_tokens`.
+"""
+_DEFAULT_RESPONSE_TOKEN_CEILING = 4096
+"""Org response-token ceiling used when the org declares none (v1 parity, R2.15 / R2.16).
+
+gateway v1 reads `org_config.get("max_response_tokens", 4096)` (`gateway/ai_mesh_gateway/main.py`
+~L8459). v2's compiled plan carries no org `max_response_tokens` until the control->v2
+FirewallConfig writer lands (Phase 3 / GW14b), so this default is the org ceiling for every request
+until then.
+Read through `ResourceContract.default_response_token_ceiling`.
+"""
+_MAX_OUTPUT_TOKENS_BOUNDARY = 1_000_000
+"""Parse-time boundary for `max_tokens` / `max_completion_tokens` (v1 parity, R2.16).
+
+gateway v1's `MAX_OUTPUT_TOKENS_CEILING` (`gateway/ai_mesh_gateway/main.py` ~L3399). A value above
+it is refused with HTTP 400 (`invalid_max_tokens` / `invalid_max_completion_tokens`); a value at
+or below it is clamped, never refused. Read through `ResourceContract.max_output_tokens_boundary`.
+"""
+_MAX_COMPLETIONS_PER_REQUEST = 1
+"""Completions (`n`) charged and forwarded per request (v1 parity, R2.15 / R2.16).
+
+gateway v1 forces `body["n"] = 1` at the boundary (`gateway/ai_mesh_gateway/main.py` ~L7593-7615)
+because its output guard inspects a single choice. v2 clamps `n` to the same value so it charges
+and forwards exactly one completion. Read through `ResourceContract.max_completions`.
+"""
+
 
 @dataclass(frozen=True, slots=True)
 class ResourceContract:
@@ -424,6 +469,105 @@ class ResourceContract:
         if n < 1:
             raise CapacityUnavailable("max request parts below minimum to serve")
         return n
+
+    @staticmethod
+    def estimate_request_tokens(chars: int, max_tokens: int, n: int) -> int:
+        """Group F: the request token estimate the budget phase charges (R2.15).
+
+        v1's `LLMRouter.estimate_prompt_tokens` (`gateway/ai_mesh_gateway/llm_router.py`), exactly:
+        input tokens are `max(1, chars // _CHARS_PER_TOKEN_DIVISOR)` when there are characters and
+        0 otherwise; the requested output budget `max_tokens x n` is added; the total is at least 1.
+        `chars` is the request's prompt characters and `max_tokens` / `n` are the CLAMPED output
+        budget, so the estimate is v1's pre-charge applied after v1's clamp.
+
+        A `@staticmethod` so a surface without a contract instance can call it. Raises
+        `ValueError` on `chars < 0`, `max_tokens < 0` or `n < 1`: callers pass parser-validated
+        values, so a raise is a programming error, never a request-path refusal.
+        """
+        if chars < 0:
+            raise ValueError(f"chars must be non-negative, got {chars}")
+        if max_tokens < 0:
+            raise ValueError(f"max_tokens must be non-negative, got {max_tokens}")
+        if n < 1:
+            raise ValueError(f"n must be at least 1, got {n}")
+        input_tokens = max(1, chars // _CHARS_PER_TOKEN_DIVISOR) if chars > 0 else 0
+        return max(input_tokens + max_tokens * n, 1)
+
+    @staticmethod
+    def max_output_tokens() -> int:
+        """Group F: v1's hard cap on a clamped `max_tokens` (`_OUTPUT_TOKENS_HARD_CAP`, R2.16)."""
+        return _OUTPUT_TOKENS_HARD_CAP
+
+    @staticmethod
+    def default_response_token_ceiling() -> int:
+        """Group F: v1's default org `max_response_tokens` (`_DEFAULT_RESPONSE_TOKEN_CEILING`).
+
+        The org ceiling the output-budget clamp uses until the plan carries the org value
+        (Phase 3 / GW14b), R2.15 / R2.16.
+        """
+        return _DEFAULT_RESPONSE_TOKEN_CEILING
+
+    @staticmethod
+    def max_output_tokens_boundary() -> int:
+        """Group F: v1's `MAX_OUTPUT_TOKENS_CEILING` parse boundary (`_MAX_OUTPUT_TOKENS_BOUNDARY`).
+
+        A `max_tokens` / `max_completion_tokens` above it is refused with HTTP 400 (R2.16).
+        """
+        return _MAX_OUTPUT_TOKENS_BOUNDARY
+
+    @staticmethod
+    def max_completions() -> int:
+        """Group F: v1's forced `n = 1` (`_MAX_COMPLETIONS_PER_REQUEST`, R2.15 / R2.16)."""
+        return _MAX_COMPLETIONS_PER_REQUEST
+
+    def max_request_tokens(self) -> int:
+        """Group F: upper bound on the token cost of any request that passes parsing (R2.15).
+
+        `estimate_request_tokens(max_request_bytes(), max_output_tokens(), max_completions())`,
+        i.e. `max(1, max_request_bytes() // _CHARS_PER_TOKEN_DIVISOR) + _OUTPUT_TOKENS_HARD_CAP x
+        _MAX_COMPLETIONS_PER_REQUEST`. A parsed request's characters are bounded by the C26 byte
+        pre-check, its clamped `max_tokens` by the hard cap and its `n` by the forced 1, so no
+        charged cost can exceed this. The lease overdraft bound (`overdraft_tokens`) and the lease
+        cap (`derive_lease_cap_tokens`) are derived from it.
+
+        It uses the hard cap, not the 4096 default org ceiling: the hard cap is the largest value
+        the clamp can produce for ANY org ceiling, so the bound stays valid once Phase 3 / GW14b
+        supplies an org `max_response_tokens` above 4096. Fails closed with `CapacityUnavailable`
+        if the result is below one token, matching every shipped contract method.
+        """
+        n = self.estimate_request_tokens(
+            self.max_request_bytes(), self.max_output_tokens(), self.max_completions()
+        )
+        if n < 1:
+            raise CapacityUnavailable("max request tokens below minimum to serve")
+        return n
+
+
+def _check_output_budget_ordering() -> None:
+    """Fail closed at import unless the v1 output-budget constants are ordered (Property 16).
+
+    Requires `1 <= default_response_token_ceiling() <= max_output_tokens() <=
+    max_output_tokens_boundary()` and `max_completions() >= 1`. A default ceiling above the hard
+    cap, or a hard cap above the parse boundary, would let the clamp produce a value the contract
+    says cannot exist, and `max_completions() < 1` would make every request uncostable. Raises
+    `CapacityUnavailable` so the gateway refuses to start, the stance every contract bound takes.
+    """
+    ceiling = ResourceContract.default_response_token_ceiling()
+    hard_cap = ResourceContract.max_output_tokens()
+    boundary = ResourceContract.max_output_tokens_boundary()
+    completions = ResourceContract.max_completions()
+    if not 1 <= ceiling <= hard_cap <= boundary:
+        raise CapacityUnavailable(
+            "output budget constants out of order: require 1 <= default ceiling "
+            f"({ceiling}) <= hard cap ({hard_cap}) <= boundary ({boundary}); refuse to start",
+        )
+    if completions < 1:
+        raise CapacityUnavailable(
+            f"max completions per request below one ({completions}); refuse to start",
+        )
+
+
+_check_output_budget_ordering()
 
 
 def _env_map(env: dict[str, str] | None) -> dict[str, str]:

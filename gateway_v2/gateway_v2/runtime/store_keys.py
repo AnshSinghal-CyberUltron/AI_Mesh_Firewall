@@ -126,6 +126,23 @@ class StoreKeys:
                              "reclaimed on crash or returned on shutdown")
         return f"{self.namespace}:budget:{org}:lease:{worker_id}"
 
+    def budget_workers(self, org: str) -> str:
+        """The Org's active lease workers — a ZSET, member = worker id, score = lease expiry.
+
+        The score is the lease expiry on the STORE's clock (`TIME` + Lease_TTL), never a worker's
+        local clock, so a crashed worker drops out of the active count at TTL exactly as its
+        `budget_lease` chunk is reclaimed (R2-09). The acquire prunes expired members by score and
+        reads the cardinality to size a fair share (`pool // active_workers`, C29) instead of
+        letting one worker drain the pool; both are per-member/range commands, not
+        whole-collection scans. Part of the live budget-lease counter family, distinct from the
+        published `StateKind.BUDGET` config record. Shares the namespace hash tag with the pool,
+        the generation and every lease so the WATCH/MULTI acquire stays single-slot.
+        """
+        if not org:
+            raise ValueError("a budget worker set needs an org: an unattributed budget cannot be "
+                             "leased, counted, or enforced per tenant")
+        return f"{self.namespace}:budget:{org}:workers"
+
     @property
     def audit_prefix(self) -> str:
         """The prefix an operator or an exporter scans for audit streams."""
