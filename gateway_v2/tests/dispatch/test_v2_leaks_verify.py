@@ -143,19 +143,13 @@ def test_resplit_keeps_each_delta_its_own_bytes_after_a_length_change() -> None:
 
 
 # --- Case 2: obligations keyed by detector id, not per finding -----------------------------
+# Fixed by tasks 16.1 (finding-keyed verify) + 17.1 (resolve sets finding_index). Unfixed
+# counterexample: SECRET->flag + CREDENTIAL->redact, both from deterministic.secret, with no
+# finding_index; the detector-keyed rule obliged the FLAG-ed SECRET span 4:24 too, which has
+# no transformation -> false VerificationFailure 'not fully covered (span=4:24,
+# covered_up_to=4)'.
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=VerificationFailure,
-    reason=(
-        "v2-enforcement-leaks A: SECRET->flag + CREDENTIAL->redact, both findings from "
-        "deterministic.secret; _redacting_detectors obliges the FLAG-ed SECRET span 4:24 too, "
-        "which has no transformation -> false VerificationFailure 'not fully covered "
-        "(span=4:24, covered_up_to=4)'. Verify is finding-keyed since 16.1, but the real "
-        "resolve sets no finding_index until 17.1, so the detector-keyed fallback still applies"
-    ),
-)
 def test_mixed_plan_obliges_only_the_redacting_finding() -> None:
     secret = "sk-test-abcdef123456"
     credential = "-----BEGIN RSA PRIVATE KEY-----"
@@ -174,11 +168,16 @@ def test_mixed_plan_obliges_only_the_redacting_finding() -> None:
         Phase.INPUT,
     )
     # The repro is faithful to the resolver: one FLAG and one REDACT disposition on the same
-    # detector id, and a transformation only over the CREDENTIAL span.
+    # detector id, each keyed to its own finding, and a transformation only over the
+    # CREDENTIAL span.
     assert decision.disposition is Disposition.REDACT
     assert decision.per_finding == (
-        FindingDisposition(detector=_SECRET_DETECTOR, disposition=Disposition.FLAG),
-        FindingDisposition(detector=_SECRET_DETECTOR, disposition=Disposition.REDACT),
+        FindingDisposition(
+            detector=_SECRET_DETECTOR, disposition=Disposition.FLAG, finding_index=0,
+        ),
+        FindingDisposition(
+            detector=_SECRET_DETECTOR, disposition=Disposition.REDACT, finding_index=1,
+        ),
     )
     assert tuple(t.span for t in decision.transformations) == (Span(cred_start, cred_end),)
 

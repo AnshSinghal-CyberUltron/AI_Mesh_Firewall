@@ -27,6 +27,7 @@ from gateway_v2.domain import (
     Mode,
     Phase,
     Rule,
+    Span,
     Transformation,
     most_restrictive,
 )
@@ -84,6 +85,64 @@ def _deciding_rule_id(rules: Sequence[Rule], action: Action) -> str:
     return ""
 
 
+def _mergeable(current: Transformation, nxt: Transformation) -> bool:
+    """True iff ``nxt`` (sorted at or after ``current``) folds into ``current``.
+
+    Both must share ``kind`` and ``replacement``, and their spans must overlap
+    (``nxt.start < current.end``) or be identical (which also catches two equal
+    zero-length spans). Spans that only touch (``current.end == nxt.start``) are
+    NOT mergeable: they are two adjacent values, possibly in two chat deltas or
+    two embeddings items, and fusing them would move a replacement across that
+    boundary.
+    """
+    if current.kind != nxt.kind or current.replacement != nxt.replacement:
+        return False
+    return nxt.span == current.span or nxt.span.start < current.span.end
+
+
+def _normalise_redactions(
+    transformations: Sequence[Transformation],
+) -> tuple[Transformation, ...]:
+    """Sort REDACT transformations by span and coalesce same-replacement overlaps.
+
+    Overlapping or identical spans with the same ``kind`` and ``replacement``
+    collapse into one transformation over their union, so two patterns (or a
+    single-part scan and a joined-parts scan) matching the same bytes yield one
+    clean edit. Touching spans are never merged (see :func:`_mergeable`).
+
+    Overlapping spans with DIFFERENT replacements are deliberately left as they
+    are: the design specifies a union only for a shared replacement, and picking
+    one replacement over another would be a second redaction policy. The
+    overlap then reaches dispatch, whose ``apply_and_verify`` rejects it and
+    the request fails closed (Property 4). The resolver only ever emits the
+    GW09 ``REDACTION_PLACEHOLDER``, so this arm is unreachable from ``resolve``.
+
+    Preservation (clauses 3.4/3.5): when no pair merges, the input order is
+    returned unchanged, so a decision with non-overlapping transformations is
+    identical to the pre-fix decision.
+    """
+    ordered = sorted(transformations, key=lambda t: (t.span.start, t.span.end))
+    out: list[Transformation] = []
+    merged = False
+    for item in ordered:
+        if out and _mergeable(out[-1], item):
+            current = out[-1]
+            out[-1] = Transformation(
+                kind=current.kind,
+                span=Span(
+                    start=current.span.start,
+                    end=max(current.span.end, item.span.end),
+                ),
+                replacement=current.replacement,
+            )
+            merged = True
+        else:
+            out.append(item)
+    if not merged:
+        return tuple(transformations)
+    return tuple(out)
+
+
 def resolve(
     findings: Sequence[Finding],
     plan: ExecutionPlan,
@@ -96,8 +155,11 @@ def resolve(
     only; UNAVAILABLE routes through ``on_unavailable``; EXECUTED takes its
     winning ENFORCE action); the request disposition is ``most_restrictive`` of
     the per-finding dispositions (empty -> ALLOW, BLOCK terminal);
-    transformations come from REDACT candidates; ``findings`` records every input
-    finding; ``plan_version`` is ``plan.version``.
+    transformations come from REDACT candidates, normalised by
+    :func:`_normalise_redactions` (same-replacement overlaps coalesced, touching
+    spans kept apart); ``findings`` records every input finding, in input order;
+    each ``FindingDisposition.finding_index`` is its finding's index into that
+    tuple; ``plan_version`` is ``plan.version``.
     """
     selected = _select_rules(plan, phase)
     per_finding: list[FindingDisposition] = []
@@ -105,7 +167,10 @@ def resolve(
     deciding_rules: list[str] = []
     unavailable_detectors: list[str] = []
 
-    for finding in findings:
+    # ``Decision.findings`` is ``tuple(findings)``: same order, nothing filtered,
+    # so the enumerate index is the index into the final tuple (Property 3).
+    recorded = tuple(findings)
+    for index, finding in enumerate(recorded):
         rules = _rules_for(finding, selected)
         candidate: Disposition | None = None
         rule_id: str | None = None
@@ -123,7 +188,11 @@ def resolve(
         if candidate is None:
             continue
         per_finding.append(
-            FindingDisposition(detector=finding.detector, disposition=candidate),
+            FindingDisposition(
+                detector=finding.detector,
+                disposition=candidate,
+                finding_index=index,
+            ),
         )
         if rule_id is not None:
             deciding_rules.append(rule_id)
@@ -134,8 +203,8 @@ def resolve(
     return Decision(
         disposition=disposition,
         per_finding=tuple(per_finding),
-        transformations=tuple(transformations),
-        findings=tuple(findings),
+        transformations=_normalise_redactions(transformations),
+        findings=recorded,
         plan_version=plan.version,
         deciding_rules=tuple(deciding_rules),
         unavailable_detectors=tuple(unavailable_detectors),
