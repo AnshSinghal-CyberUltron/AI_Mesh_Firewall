@@ -56,6 +56,7 @@ __all__ = (
     "canonicalize",
     "findings",
     "lead_context_starts",
+    "overconsume_gaps",
     "scan",
 )
 
@@ -575,6 +576,56 @@ def lead_context_starts(canonical_text: str) -> tuple[tuple[str, int], ...]:
         for m in _PRECISE[pattern.name].finditer(canonical_text):
             if prefilter.match(canonical_text, m.start()) is None:
                 out.append((pattern.name, m.start()))
+    return tuple(out)
+
+
+def overconsume_gaps(canonical_text: str, result: OracleScan) -> tuple[tuple[str, int, int], ...]:
+    """Every other-pattern match the original hid inside a CONFIRMED hit's over-consumption.
+
+    The design's "over-consumption gap" is wider than the failed-confirm region
+    (:attr:`OracleScan.failed_regions`): a prefilter is a SUPERSET, so even a SUCCESSFULLY
+    confirmed primary hit covers bytes past its own precise end. For a confirmed hit with
+    precise end ``confirm_end`` and prefilter hit end ``hit_end``, the primary leftmost-first
+    pass resumes at ``hit_end`` and never revisits ``[hit.hit_start, max(confirm_end,
+    hit_end))`` for any OTHER pattern. The Group B matcher fix mines exactly that region: it
+    re-offers every pattern over the confirmed winner's covered span and emits any match that
+    EXTENDS PAST the winner's precise end (``min_end = confirm_end``), whether it begins in the
+    trailing tail ``[confirm_end, hit_end)`` (a confirmed phone hiding an SSN) or begins INSIDE
+    the winner's own bytes and runs out of it (``api_key=...789user@example.com``: the email
+    starts at offset 8, inside the api-key value, and ends at 48, past the api-key precise end).
+
+    This read-out is a pure function of the ORIGINAL ruleset over the ORIGINAL canonical text,
+    so the preservation test can recognise "an over-consumption gap the fixed scan can mine"
+    without trusting the code under test. It subsumes the trailing-tail kind of
+    :attr:`failed_regions` for a confirmed hit (``confirm_end < hit_end``) and also the
+    begins-inside kind, which has no failed region at all.
+
+    Returns every ``(pattern, start, end)`` an original single-pattern confirm would find that
+    begins in a confirmed hit's covered region and ends past that hit's precise end, and that
+    the original multi-pattern ``scan`` did NOT already emit. A match wholly inside the winner
+    (ending at or before ``confirm_end``) is legitimately covered and is not reported, matching
+    the matcher's ``min_end`` containment arm.
+    """
+    emitted = frozenset((name, start, end) for name, start, end in result.matches)
+    out: list[tuple[str, int, int]] = []
+    for hit in result.hits:
+        if hit.confirm_end is None:
+            continue
+        region_end = max(hit.confirm_end, hit.hit_end)
+        for pattern in ORIGINAL_RULESET:
+            if pattern.name == hit.pattern_name:
+                continue
+            prefilter = _PREFILTER[pattern.name]
+            precise = _PRECISE[pattern.name]
+            for pos in range(hit.hit_start, region_end):
+                if prefilter.match(canonical_text, pos) is None:
+                    continue
+                confirmed = precise.match(canonical_text, pos)
+                if confirmed is None or confirmed.end() <= hit.confirm_end:
+                    continue
+                candidate = (pattern.name, confirmed.start(), confirmed.end())
+                if candidate not in emitted:
+                    out.append(candidate)
     return tuple(out)
 
 

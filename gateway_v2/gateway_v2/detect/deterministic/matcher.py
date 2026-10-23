@@ -47,6 +47,16 @@ per region:
   over the region ``R = [hit.start, hit.end)`` we RESCAN ``R``: every OTHER pattern
   leftmost-first inside ``R``, and the failed pattern at positions AFTER
   ``hit.start``. A nested failure recurses with the failed set excluded.
+* The prefilter is a SUPERSET, so even a SUCCESSFUL confirm can leave an
+  over-consumption gap: Q's prefilter hit can end past Q's precise match end
+  (``pii_phone`` prefilter ``(?:\\+?\\d[\\s().\\-]?){9,14}\\d`` matches
+  ``4155552671 123-45`` while the precise phone is only ``4155552671``), yet
+  ``finditer`` resumes at the whole PREFILTER hit end, so a confirmable match of
+  another pattern in the trailing gap ``[precise_end, hit.end)`` (the SSN
+  ``123-45-6789`` here) is never visited by the primary pass. So after a confirm
+  whose ``hit.end > precise_end`` we RESCAN that gap offering EVERY pattern
+  (including Q, which can legitimately match again later in the gap); the
+  per-pattern cursor already guards Q's emitted span, so no duplicate is produced.
 
 The rescan is bounded. Candidates are gathered per START position with the
 once-compiled all-lookahead regex :data:`_ALL_AT`, restricted to the region (at
@@ -208,6 +218,53 @@ def _confirm(text: str, name: str, pos: int) -> tuple[int, int] | None:
     return span
 
 
+def _emit_confirmed(
+    text: str,
+    name: str,
+    prefilter_end: int,
+    span: tuple[int, int],
+    out: dict[str, int],
+    matches: list[RawMatch],
+) -> None:
+    """Emit one confirmed ``name`` match and rescan its covered region.
+
+    ``span`` is the PRECISE ``(start, end)``; ``prefilter_end`` is the end of the
+    prefilter hit that produced it (the confirm is anchored at the prefilter hit
+    START, so ``span[0]`` IS that start). A prefilter is a SUPERSET, so the primary
+    ``finditer`` (and any outer rescan) resumes at the whole prefilter hit end and
+    NOTHING inside the covered region ``[span[0], max(span[1], prefilter_end))`` is
+    otherwise re-examined for a DIFFERENT pattern. A confirmable match of another
+    pattern can begin there and extend out of the region -- a card or SSN after
+    phone-shaped digits (the trailing gap ``[span[1], prefilter_end)``), or a
+    card-shaped digit run that begins INSIDE this value's own bytes and runs past
+    its end (a PAN seeded by the last digits of an api-key value). The leftmost-first
+    primary pass would silently drop either. So after recording this match and
+    advancing the per-pattern cursor we RESCAN the whole covered region offering
+    EVERY pattern with no exclusion. ``name`` itself is re-offered but its ``out``
+    cursor (now at ``span[1]``) forbids a duplicate or overlapping re-emission, and
+    any OTHER pattern whose confirmable match begins in the region is surfaced with
+    its true full extent (``_confirm`` runs on the full text). The region is at most
+    the bounded prefilter hit length, so this stays O(n·k·B); each emitted value
+    advances a cursor and occupies at least one byte, so the recursion terminates.
+    Pure apart from appending to ``matches`` and advancing ``out``.
+    """
+    matches.append(
+        RawMatch(pattern_name=name, canonical_start=span[0], canonical_end=span[1])
+    )
+    out[name] = span[1]
+    region_end = max(span[1], prefilter_end)
+    if region_end > span[0] + 1:
+        # Only surface another-pattern match that EXTENDS BEYOND this value's precise
+        # end (``min_end=span[1]``). A match that would lie wholly inside ``name``'s
+        # span is legitimately COVERED by it (Property 6's containment arm) and is
+        # left unemitted, so the output stays minimal and a benign value that happens
+        # to contain a shorter other-pattern shape is not over-reported. A match that
+        # runs out of the covered region (the trailing gap after phone-shaped digits,
+        # or a PAN/email seeded by this value's own bytes but running past its end) is
+        # NOT covered by ``name``, so it is emitted with its true full extent.
+        _rescan(text, span[0], region_end, frozenset(), out, matches, min_end=span[1])
+
+
 def _rescan(
     text: str,
     region_start: int,
@@ -215,6 +272,8 @@ def _rescan(
     excluded: frozenset[str],
     out: dict[str, int],
     matches: list[RawMatch],
+    *,
+    min_end: int = -1,
 ) -> None:
     """Rescan ``text[region_start:region_end]`` for matches the primary pass hid.
 
@@ -231,8 +290,17 @@ def _rescan(
     own region is needed: any match that candidate would have hidden is already a
     candidate here. Confirms run on the FULL text, so a candidate whose start is in
     the region but whose value extends past ``region_end`` still confirms to its
-    true extent. The per-pattern ``out`` cursor forbids a duplicate or overlapping
-    same-pattern emission across the primary pass and the rescan. Pure apart from
+    true extent. A confirmed candidate whose own prefilter over-consumed past its
+    precise end has its trailing gap rescanned by :func:`_emit_confirmed`, exactly
+    as the primary pass does: a confirmed phone recovered inside one rescan can
+    itself shadow a card or SSN in its prefilter's over-consumption gap. The
+    per-pattern ``out`` cursor forbids a duplicate or overlapping same-pattern
+    emission across the primary pass and the rescans. ``min_end`` is the covered
+    region's upper bound when this is the post-confirm rescan of a winner's own
+    span (:func:`_emit_confirmed`): a candidate whose end does not exceed ``min_end``
+    lies wholly inside the winner and is legitimately COVERED by it (Property 6's
+    containment arm), so it is NOT emitted. A failed-region rescan passes the
+    default ``min_end = -1``, emitting every confirmable match. Pure apart from
     appending to ``matches`` and advancing ``out``.
     """
     if region_start >= region_end:
@@ -245,10 +313,13 @@ def _rescan(
         span = _confirm(text, name, cand_start)
         if span is None or span[0] < out.get(name, -1):
             continue
-        matches.append(
-            RawMatch(pattern_name=name, canonical_start=span[0], canonical_end=span[1])
-        )
-        out[name] = span[1]
+        if span[1] <= min_end:
+            # The candidate lies wholly inside the covering winner's span: leave it
+            # covered (Property 6 containment arm), do not emit or advance a cursor.
+            continue
+        prefilter_hit = _PREFILTER[name].match(text, cand_start)
+        prefilter_end = prefilter_hit.end() if prefilter_hit is not None else span[1]
+        _emit_confirmed(text, name, prefilter_end, span, out, matches)
 
 
 def _candidates(
@@ -279,10 +350,16 @@ def _candidates(
     only = next(iter(excluded)) if len(excluded) == 1 else None
     if only is not None and _EXCL[only].search(text, region_start, region_end) is None:
         # Fast path: no OTHER pattern can start in the region. Only the excluded
-        # pattern, re-tried after the region start, can still be a candidate.
+        # pattern, re-tried at positions AFTER the region start, can still be a
+        # candidate. EVERY such start must be surfaced per position (a consuming
+        # ``finditer`` would hide a start that an earlier overlapping prefilter hit
+        # of the SAME pattern spans past -- e.g. a phone prefilter matching across a
+        # digit run hides the real phone start a few bytes on), so a per-position
+        # ``match`` is used, exactly like the general per-position walk below.
         found = [
-            (match.start(), _ORDER[only], only)
-            for match in _PREFILTER[only].finditer(text, region_start + 1, region_end)
+            (pos, _ORDER[only], only)
+            for pos in range(region_start + 1, region_end)
+            if _PREFILTER[only].match(text, pos) is not None
         ]
         found.sort(key=lambda item: (item[0], item[1]))
         return [(name, start) for start, _, name in found]
@@ -322,38 +399,65 @@ def scan(canonical_text: str) -> tuple[RawMatch, ...]:
     carrying the tight PRECISE span is emitted. On a failed confirm OR a failed
     validator the hit's ``[start, end)`` region is RESCANNED so a match of another
     pattern the leftmost-first primary pass consumed is not lost (Property 6), and
-    a card-shaped run that fails Luhn emits nothing (Property 5). Per-pattern
+    a card-shaped run that fails Luhn emits nothing (Property 5). On a SUCCESSFUL
+    confirm whose prefilter hit over-consumed (``match.end() > precise_end``) the
+    trailing gap ``[precise_end, match.end())`` is RESCANNED offering every pattern,
+    because ``finditer`` resumes past the whole prefilter hit and would otherwise
+    drop a confirmable match of another pattern there (Property 6). Per-pattern
     cursors forbid a duplicate emission across the primary pass and the rescans.
     Output is sorted by ``(start, RULESET order)``. Pure and deterministic.
     """
     matches: list[RawMatch] = []
     emitted_end: dict[str, int] = {}
+    # ``examined_to`` is the monotone frontier: positions ``[0, examined_to)`` have
+    # been fully examined for EVERY pattern (emitted, or determined to hold no
+    # confirmable match). It is NOT a per-pattern cursor -- a per-pattern cursor
+    # would let a primary hit whose START sits behind an earlier same-pattern
+    # emission be dropped whole, losing the OTHER-pattern matches its (superset)
+    # region still covers. Because combined-alternation prefilter hits do not align
+    # to value boundaries, a single hit can begin mid-value (confirm fails there)
+    # and still cover a fresh value further on; the tail past the frontier must be
+    # rescanned, never skipped.
+    examined_to = 0
     for match in _COMBINED.finditer(canonical_text):
         name = match.lastgroup
         if name is None:
             continue
-        if match.start() < emitted_end.get(name, -1):
+        hit_start, hit_end = match.start(), match.end()
+        if hit_end <= examined_to:
+            # The whole hit region is already examined by an earlier emission or
+            # rescan: nothing new can be here.
             continue
-        span = _confirm(canonical_text, name, match.start())
+        if hit_start < examined_to:
+            # The hit starts behind the frontier but reaches past it: rescan only the
+            # unexamined tail, offering every pattern (the frontier is not a position
+            # where any particular pattern failed, so nothing is excluded there).
+            _rescan(
+                canonical_text, examined_to, hit_end, frozenset(), emitted_end, matches
+            )
+            examined_to = hit_end
+            continue
+        span = _confirm(canonical_text, name, hit_start)
         if span is None:
             # Failed confirm or failed validator: rescan the region for a match of
             # another pattern (or of this one past its start) the primary pass hid.
             _rescan(
                 canonical_text,
-                match.start(),
-                match.end(),
+                hit_start,
+                hit_end,
                 frozenset({name}),
                 emitted_end,
                 matches,
             )
+            examined_to = hit_end
             continue
-        matches.append(
-            RawMatch(
-                pattern_name=name,
-                canonical_start=span[0],
-                canonical_end=span[1],
-            )
-        )
-        emitted_end[name] = span[1]
+        # Emit the confirmed match and, if the prefilter hit over-consumed past the
+        # precise end, rescan the trailing gap ``[span[1], hit_end)`` the primary
+        # ``finditer`` skips when it resumes at ``hit_end`` (Property 6). A precise
+        # match may also run PAST the prefilter hit (a non-greedy prefilter stopping
+        # short, e.g. the override prefilter at ``instruction`` while the precise
+        # needs ``instructions``), so the frontier advances to the larger of the two.
+        _emit_confirmed(canonical_text, name, hit_end, span, emitted_end, matches)
+        examined_to = max(hit_end, span[1])
     matches.sort(key=lambda m: (m.canonical_start, _ORDER[m.pattern_name]))
     return tuple(matches)

@@ -26,21 +26,31 @@ which, so the classification never trusts the code under test:
 * ``confusable``: ``t``, the NFKC form of one of its characters, or the original canonical text
   holds a non-ASCII Cyrillic or Greek letter outside the original ``_HOMOGLYPHS``. This is a
   newly declared confusable, which the Group C table can fold.
+* ``overconsume``: a confirmable match of another pattern begins inside a SUCCESSFULLY
+  confirmed original hit's covered region and extends past that hit's precise end, so the
+  original leftmost-first pass hid it (it resumed past the whole prefilter hit) while the
+  Group B matcher mines it. This is wider than ``failed``: a confirmed hit whose prefilter
+  stops exactly at its precise end leaves no failed region, yet still over-consumes earlier
+  bytes of a longer value. ``api_key=sk_live_abcdef0123456789user@example.com`` is the live
+  case -- the email begins at offset 8 inside the api-key value and runs to 48 past its end.
+  :func:`oracle.overconsume_gaps` derives this from the ORIGINAL ruleset, so the fixed scan's
+  monotone-superset addition routes to the covering branch, not strict equality.
 
 The assertions:
 
 1. The canonical text may differ from the original only on a ``confusable`` text, because
    the confusable table is the one canonicalisation change in scope (clause 3.8).
-2. Exact subset, used when the text is neither ``lead`` nor ``confusable``. The original
+2. Exact subset, used when the text is in none of the ``failed``/``lead``/``confusable``/
+   ``overconsume`` tiers. The original
    ``(pattern, canonical span)`` multiset is a subset of the shipped ``scan`` output, and the
    original ``(detector, category, original-byte span)`` multiset is a subset of the shipped
    detectors' output. The second is the literal clause 3.6 comparison.
-3. Covering subset, used on ``lead`` and ``confusable`` texts whose canonical text is
-   unchanged. Every original finding's original-byte span must be contained in some shipped
-   finding's span. Exact spans would be unsound here, because a start-superset phone
-   prefilter legitimately grows ``415) 555-2671`` to its true start ``(``. Covering is still
-   the safety-relevant direction: redacting the shipped span removes at least the bytes the
-   original removed.
+3. Covering subset, used on ``failed``, ``lead``, ``confusable`` and ``overconsume`` texts
+   whose canonical text is unchanged. Every original finding's original-byte span must be
+   contained in some shipped finding's span. Exact spans would be unsound here, because a
+   start-superset phone prefilter legitimately grows ``415) 555-2671`` to its true start
+   ``(``. Covering is still the safety-relevant direction: redacting the shipped span removes
+   at least the bytes the original removed.
 4. Folded text (the canonical text changed, which by 1 means a newly declared confusable was
    folded). Here the frozen ORIGINAL matcher is run over the SHIPPED canonical text, mapped
    back through the shipped span map, and each of its findings must be covered as in 3.
@@ -436,6 +446,16 @@ def test_property13_detection_is_monotone_against_the_frozen_original() -> None:
         failed = bool(original_scan.failed_regions)
         lead = bool(oracle.lead_context_starts(original_canonical))
         confusable = _has_newly_declared_confusable(text, original_canonical)
+        # An over-consumption gap the Group B matcher fix mines: a confirmable match of
+        # another pattern that the original leftmost-first pass hid inside a SUCCESSFULLY
+        # confirmed hit's covered region and that extends past that hit's precise end. This is
+        # wider than ``failed`` -- a confirmed hit whose prefilter stops exactly at its precise
+        # end (``api_key=...789user@example.com``: the email begins at offset 8, inside the
+        # api-key value, and runs to 48, past the api-key end) leaves no failed region, yet the
+        # fixed scan recovers the email. Derived from the ORIGINAL ruleset over the ORIGINAL
+        # canonical text, never from the code under test.
+        overconsume = bool(oracle.overconsume_gaps(original_canonical, original_scan))
+        bug_condition = failed or lead or confusable or overconsume
         seen_patterns.update(f.pattern_name for f in original)
 
         # (1) Only the confusable table may change the canonical text.
@@ -460,7 +480,7 @@ def test_property13_detection_is_monotone_against_the_frozen_original() -> None:
                 f"{msg}: original matcher findings on the folded text {shipped_canonical!r} "
                 f"not covered by the shipped scan: {missing}"
             )
-        elif failed or lead or confusable:
+        elif bug_condition:
             # (3) Covering: a shipped span contains each original span. A failed-confirm
             # region admits this too, not just lead/confusable: bounding a prefilter
             # (Group B, e.g. phone {9,14}) can move where the primary finditer resumes, so
@@ -468,9 +488,13 @@ def test_property13_detection_is_monotone_against_the_frozen_original() -> None:
             # hit no longer consumes. `4111 1111 1111 1111user@example.com` is the live
             # case: the unbounded phone hit ran to offset 19, the bounded one stops at 18,
             # so the email the finditer then finds starts at 18 not 19 -- a one-byte WIDER
-            # span that still covers the original. Property 13 promises raw-offset equality
-            # only OFF the bug condition (branch 5); under a failed region it promises
-            # coverage of the original (category, span), which is exactly this check.
+            # span that still covers the original. An over-consumption gap admits this
+            # branch for the same reason: the fixed scan ADDS a match the original hid inside
+            # a confirmed hit's covered region (a monotone-superset addition), so the shipped
+            # output is a strict superset and every original span is still covered. Property
+            # 13 promises raw-offset equality only OFF the bug condition (branch 5); under a
+            # failed/lead/confusable/over-consumption region it promises coverage of the
+            # original (category, span), which is exactly this check.
             missing = _uncovered(
                 ((cat, span) for _, cat, span in original_det.elements()), shipped_pairs
             )
@@ -486,7 +510,7 @@ def test_property13_detection_is_monotone_against_the_frozen_original() -> None:
                 f"{msg}: detectors lost an original finding: {original_det - shipped_det}"
             )
 
-        if not (failed or lead or confusable):
+        if not bug_condition:
             # (5) Equality off the bug condition.
             assert shipped_raw == original_raw, (
                 f"{msg}: scan differs from the original: {shipped_raw} != {original_raw}"
@@ -499,11 +523,24 @@ def test_property13_detection_is_monotone_against_the_frozen_original() -> None:
             tiers["failed"] += failed
             tiers["lead"] += lead
             tiers["confusable"] += confusable
+            tiers["overconsume"] += overconsume
 
     # The generator must actually reach every tier and every pattern the original emits
-    # (``credential_card`` never fires in the original: ``pii_phone`` shadows it).
-    for tier in ("equal", "failed", "lead", "confusable"):
-        assert tiers[tier] >= 200, f"seed={_SEED}: tier {tier!r} under-sampled: {dict(tiers)}"
+    # (``credential_card`` never fires in the original: ``pii_phone`` shadows it). The tiers
+    # overlap (a text can be both ``failed`` and ``overconsume``), so each counter is the
+    # count of texts in that tier, not a partition. ``overconsume`` is the rarest: it needs a
+    # confirmed value adjacent to or overlapping another confirmable value's start, so its
+    # legitimate sample count at this seed is ~73 (vs the thousands the other tiers reach); its
+    # floor is set below that, the others keep the 200 floor they held before this tier existed.
+    _TIER_FLOORS = {
+        "equal": 200,
+        "failed": 200,
+        "lead": 200,
+        "confusable": 200,
+        "overconsume": 50,
+    }
+    for tier, floor in _TIER_FLOORS.items():
+        assert tiers[tier] >= floor, f"seed={_SEED}: tier {tier!r} under-sampled: {dict(tiers)}"
     expected_patterns = {p.name for p in oracle.ORIGINAL_RULESET} - {"credential_card"}
     assert seen_patterns == expected_patterns, (
         f"seed={_SEED}: patterns never emitted by the original: "

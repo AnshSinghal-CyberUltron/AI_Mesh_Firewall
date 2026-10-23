@@ -154,6 +154,36 @@ def _reference_confirm(text: str, name: str, pos: int) -> tuple[int, int] | None
     return span
 
 
+def _reference_emit(
+    text: str,
+    name: str,
+    prefilter_end: int,
+    span: tuple[int, int],
+    emitted_end: dict[str, int],
+    out: list[tuple[str, int, int]],
+) -> None:
+    """Emit one confirmed ``name`` match and rescan its covered region (P6).
+
+    A prefilter is a SUPERSET, so the primary ``finditer`` resumes at the whole
+    prefilter hit end and nothing inside the covered region
+    ``[span[0], max(span[1], prefilter_end))`` is otherwise re-examined for a
+    DIFFERENT pattern. A confirmable match of another pattern can begin there and
+    run OUT of the region -- a card/SSN after phone-shaped digits (the trailing gap),
+    or a PAN/email seeded by this value's own bytes but running past its end. So the
+    whole covered region is rescanned offering every pattern, emitting ONLY a match
+    whose end EXCEEDS ``span[1]`` (``min_end``); a match wholly inside this value's
+    span is legitimately COVERED by it (Property 6 containment arm) and left
+    unemitted. ``name`` is re-offered but its cursor forbids a duplicate.
+    """
+    out.append((name, span[0], span[1]))
+    emitted_end[name] = span[1]
+    region_end = max(span[1], prefilter_end)
+    if region_end > span[0] + 1:
+        _reference_rescan(
+            text, span[0], region_end, frozenset(), emitted_end, out, min_end=span[1]
+        )
+
+
 def _reference_rescan(
     text: str,
     region_start: int,
@@ -161,15 +191,21 @@ def _reference_rescan(
     excluded: frozenset[str],
     emitted_end: dict[str, int],
     out: list[tuple[str, int, int]],
+    *,
+    min_end: int = -1,
 ) -> None:
-    """Rescan a failed region leftmost-first for a match the primary pass hid (P6).
+    """Rescan a region leftmost-first for a match the primary pass hid (P6).
 
     Candidates are every prefilter hit whose START is inside the region, gathered
     PER START POSITION so overlapping candidates of different patterns at one
     position are all surfaced (one pass suffices, no further recursion). The hit's
     confirm runs on the FULL text, so a candidate whose value extends past the
     region end still confirms. An excluded pattern is only re-tried AFTER the
-    region start (it already failed there). Per-pattern cursors forbid a duplicate.
+    region start (it already failed there). ``min_end`` is the covered winner's
+    precise end on the post-confirm rescan: a candidate whose end does not exceed it
+    lies wholly inside the winner and is left COVERED (containment arm). A confirmed
+    candidate whose own prefilter over-consumed has its covered region rescanned in
+    turn by :func:`_reference_emit`. Per-pattern cursors forbid a duplicate.
     """
     if region_start >= region_end:
         return
@@ -188,8 +224,11 @@ def _reference_rescan(
         span = _reference_confirm(text, name, cand_start)
         if span is None or span[0] < emitted_end.get(name, -1):
             continue
-        out.append((name, span[0], span[1]))
-        emitted_end[name] = span[1]
+        if span[1] <= min_end:
+            continue
+        prefilter_hit = _REFERENCE_PREFILTER[name].match(text, cand_start)
+        prefilter_end = prefilter_hit.end() if prefilter_hit is not None else span[1]
+        _reference_emit(text, name, prefilter_end, span, emitted_end, out)
 
 
 def _reference_scan(canonical_text: str) -> list[tuple[str, int, int]]:
@@ -198,30 +237,46 @@ def _reference_scan(canonical_text: str) -> list[tuple[str, int, int]]:
     One combined-alternation primary ``finditer``; per hit, the firing pattern is
     the ``lastgroup`` and the hit is confirmed by that pattern's precise regex
     anchored at the prefilter match start in the full text, after which the named
-    validator (Luhn for ``credential_card``) is applied. On a confirm whose
-    validator passes the PRECISE span is emitted. On a failed confirm or failed
-    validator the hit's region is rescanned leftmost-first for a match of another
-    pattern the primary pass consumed (with the failed pattern excluded at its
-    start). Per-pattern cursors forbid a duplicate emission; the output is sorted by
-    ``(start, RULESET order)``. Built independently of ``matcher.scan``, so
-    Property 6 is a real cross-check.
+    validator (Luhn for ``credential_card``) is applied. A monotone ``examined_to``
+    frontier (NOT a per-pattern cursor) marks how far the text has been examined for
+    EVERY pattern: because combined prefilter hits do not align to value boundaries,
+    a hit can begin mid-value (confirm fails there) yet still cover a fresh value
+    further on, so the unexamined TAIL of such a hit is rescanned, never skipped. On
+    a confirm whose validator passes the PRECISE span is emitted and the covered
+    region (the prefilter hit plus any precise overrun) is rescanned for a DIFFERENT
+    pattern that runs out of it (:func:`_reference_emit`). On a failed confirm or
+    validator the hit's region is rescanned leftmost-first for a match the primary
+    pass consumed (the failed pattern excluded at its start). Per-pattern cursors
+    forbid a duplicate; the output is sorted by ``(start, RULESET order)``. Built
+    independently of ``matcher.scan``, so Property 6 is a real cross-check.
     """
     out: list[tuple[str, int, int]] = []
     emitted_end: dict[str, int] = {}
+    examined_to = 0
     for match in _REFERENCE_COMBINED.finditer(canonical_text):
         name = match.lastgroup
         if name is None:
             continue
-        if match.start() < emitted_end.get(name, -1):
+        hit_start, hit_end = match.start(), match.end()
+        if hit_end <= examined_to:
             continue
-        span = _reference_confirm(canonical_text, name, match.start())
+        if hit_start < examined_to:
+            _reference_rescan(
+                canonical_text, examined_to, hit_end, frozenset(), emitted_end, out
+            )
+            examined_to = hit_end
+            continue
+        span = _reference_confirm(canonical_text, name, hit_start)
         if span is None:
             _reference_rescan(
-                canonical_text, match.start(), match.end(), frozenset({name}), emitted_end, out
+                canonical_text, hit_start, hit_end, frozenset({name}), emitted_end, out
             )
+            examined_to = hit_end
             continue
-        out.append((name, span[0], span[1]))
-        emitted_end[name] = span[1]
+        prefilter_hit = _REFERENCE_PREFILTER[name].match(canonical_text, hit_start)
+        prefilter_end = prefilter_hit.end() if prefilter_hit is not None else span[1]
+        _reference_emit(canonical_text, name, prefilter_end, span, emitted_end, out)
+        examined_to = max(hit_end, span[1])
     out.sort(key=lambda item: (item[1], _REFERENCE_ORDER[item[0]]))
     return out
 
