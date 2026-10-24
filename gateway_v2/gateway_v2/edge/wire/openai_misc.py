@@ -112,6 +112,12 @@ class MiscEmbeddingsRequest:
       yields one item per element, preserving index order (R3.2) so the rendered
       embeddings batch can round-trip each vector back to its input position
       (R6.2/R6.3).
+    * ``input_is_string`` -- ``True`` iff the decoded JSON ``input`` was a bare
+      string rather than a list (OpenAI allows ``input`` as a string OR a list of
+      strings). Defaulted ``False`` so every existing construction keeps
+      compiling; the parser sets it. The embeddings input-scan shape check
+      (``edge/embeddings_input.py::stage_embeddings``) reads it to assert that a
+      string ``input`` produced EXACTLY ONE delta (Property 15's shape clause).
 
     Frozen + slotted: an immutable value built once per request; ``input_items``
     is a tuple so the value type carries no mutable state. The parser landing in
@@ -121,6 +127,7 @@ class MiscEmbeddingsRequest:
 
     model: str
     input_items: tuple[str, ...]
+    input_is_string: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -271,8 +278,13 @@ class MiscRequestParser:
             raise MalformedRequest(MALFORMED_WRONG_SHAPE)
         if _BODY_INPUT_KEY not in obj:
             raise MalformedRequest(MALFORMED_WRONG_SHAPE)
+        input_is_string = isinstance(obj[_BODY_INPUT_KEY], str)
         input_items = _fold_input_items(obj)
-        return MiscEmbeddingsRequest(model=model, input_items=input_items)
+        return MiscEmbeddingsRequest(
+            model=model,
+            input_items=input_items,
+            input_is_string=input_is_string,
+        )
 
     def parse_moderations(self, body: bytes) -> MiscModerationsRequest:
         """Parse a ``POST /v1/moderations`` body into a typed value (R2.2).

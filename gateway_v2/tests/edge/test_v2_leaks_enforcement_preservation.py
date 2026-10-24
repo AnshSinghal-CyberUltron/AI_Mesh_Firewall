@@ -527,7 +527,9 @@ def _chat_case(seed: int) -> _ChatCase:
 async def _drive_chat(app: object, provider: _RecordingProvider, case: _ChatCase) -> None:
     where = f"seed={case.seed} chat stream={case.stream} expected={case.expected}"
     if case.deltas:
-        parsed = OpenAIRequestParser().parse(case.body, surface=Surface.CHAT)
+        parsed = OpenAIRequestParser().parse(
+            case.body, surface=Surface.CHAT, contract=_contract()
+        )
         assert parsed.text_deltas == case.deltas, f"{where}: generator deltas != parsed deltas"
         if case.expected in ("allow", "flag", "block"):
             today = _today_class([text for _channel, text in case.deltas])

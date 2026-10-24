@@ -80,7 +80,6 @@ from tests.edge._chat_lifecycle_fixtures import (
     warm_snapshot_source,
 )
 
-_LEAK = "v2-enforcement-leaks F: "
 _ORG = DEFAULT_ORG_ID
 _CHAT = "/v1/chat/completions"
 _EMBEDDINGS = "/v1/embeddings"
@@ -414,12 +413,6 @@ def test_prompt_above_the_request_count_chunk_is_admitted() -> None:
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=_LEAK + "max_tokens=4096 n=8 over a 2000-char prompt: the budget phase charged 2000 "
-    "(len of the folded input text); the v1 oracle over the clamped request (n 8->1, max_tokens "
-    "4096) charges 2000//4 + 4096*1 = 4596",
-)
 def test_budget_charges_the_v1_estimate_over_the_clamped_request() -> None:
     """The budget phase charges ``estimate_prompt_tokens`` after v1's clamp (Property 12).
 
@@ -465,12 +458,6 @@ def test_max_tokens_at_the_boundary_is_accepted() -> None:
     assert (status, len(admitted), opened) == (200, 1, 1), f"control: {status} {error!r}"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=_LEAK + "max_tokens=2000000: HTTP 200, admitted 1, budget charged 5 (characters), "
-    "provider opened 1; expected HTTP 400 invalid_max_tokens param=max_tokens, 0 admits, "
-    "0 provider calls",
-)
 def test_max_tokens_above_the_boundary_is_refused_before_admission() -> None:
     """v1's boundary refusal (Property 16): 400 ``invalid_max_tokens``, nothing admitted.
 
@@ -519,29 +506,7 @@ def test_input_block_is_reached_with_zero_provider_calls(path: str) -> None:
     assert (error.get("code"), opened) == (REFUSE_INPUT_BLOCKED, 0), f"{path}: {status} {error!r}"
 
 
-@pytest.mark.parametrize(
-    "path",
-    [
-        pytest.param(
-            _CHAT,
-            id="chat",
-            marks=pytest.mark.xfail(
-                strict=True,
-                reason=_LEAK + "chat input_blocked, 0 provider calls: lease held 100000 before, "
-                "99968 after (the 32-char cost was spent and never refunded)",
-            ),
-        ),
-        pytest.param(
-            _EMBEDDINGS,
-            id="embeddings",
-            marks=pytest.mark.xfail(
-                strict=True,
-                reason=_LEAK + "embeddings input_blocked, 0 provider calls: lease held 100000 "
-                "before, 99968 after (the 32-char cost was spent and never refunded)",
-            ),
-        ),
-    ],
-)
+@pytest.mark.parametrize("path", [_CHAT, _EMBEDDINGS], ids=["chat", "embeddings"])
 def test_input_block_refunds_the_spend(path: str) -> None:
     """A spend followed by a zero-provider-call refusal is refunded to the lease (2.17).
 

@@ -60,6 +60,27 @@ from gateway_v2.edge.openai_chat import REFUSE_INPUT_BLOCKED
 from gateway_v2.edge.openai_misc import EmbeddingsSurface, MiscRoute
 from gateway_v2.edge.wire.openai_misc import MiscResponseRenderer
 from gateway_v2.egress.output_guard import MinimalOutputResolver
+from gateway_v2.runtime.kinds import HardwareSignals
+from gateway_v2.runtime.resources import ResourceContract, from_signals
+
+
+def _contract() -> ResourceContract:
+    """A serviceable contract (the shared ``from_signals`` fixture shape)."""
+    signals = HardwareSignals(
+        cpu_quota=4.0,
+        memory_limit=400 * 1024 * 1024 * 8,
+        fd_limit=4096,
+        cpu_source="test",
+        mem_source="test",
+        fd_source="test",
+    )
+    return from_signals(
+        signals,
+        target_p99_ms=20.0,
+        utilization_cap=0.75,
+        per_worker_rss=400 * 1024 * 1024,
+    )
+
 
 # --------------------------------------------------------------------------- #
 # Detector names → disposition under the shipped MinimalOutputResolver.
@@ -161,6 +182,9 @@ class _AlwaysAdmit:
     async def admit(self, *, owner_id: str, request_id: str, enqueued_at: float) -> Admitted:
         return Admitted(owner_id=owner_id, request_id=request_id, admitted_at=enqueued_at)
 
+    def complete(self, request_id: str) -> None:
+        del request_id
+
 
 class _AlwaysBudget:
     """Budget that is always within budget (so the lifecycle reaches the input scan)."""
@@ -170,6 +194,9 @@ class _AlwaysBudget:
     async def evaluate(self, cost: int, *, request_id: str) -> Admitted:
         del cost
         return Admitted(owner_id="gw16", request_id=request_id, admitted_at=0.0)
+
+    def refund(self, cost: int, *, request_id: str) -> None:
+        del cost, request_id
 
 
 class _SheddingAdmission:
@@ -193,6 +220,9 @@ class _SheddingAdmission:
             request_id=request_id,
         )
 
+    def complete(self, request_id: str) -> None:
+        del request_id
+
 
 class _RefusingBudget:
     """Budget that always refuses — returns a ``BudgetVerdict`` carrying ``budget_unavailable``."""
@@ -210,6 +240,9 @@ class _RefusingBudget:
             should_retry=self._verdict.should_retry,
             request_id=request_id,
         )
+
+    def refund(self, cost: int, *, request_id: str) -> None:
+        del cost, request_id
 
 
 class _FindingsDetector:
@@ -342,6 +375,7 @@ def _deps_for(
     injected by the caller.
     """
     return MiscRoute(
+        contract=_contract(),
         provider=provider,
         clock=lambda: 0.0,
         renderer=MiscResponseRenderer(),

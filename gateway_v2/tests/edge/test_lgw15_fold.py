@@ -24,9 +24,36 @@ import random
 from gateway_v2.domain.channels import TEXT_CHANNELS
 from gateway_v2.domain.plan import Surface
 from gateway_v2.edge.wire.openai import OpenAIRequestParser
+from gateway_v2.runtime.kinds import HardwareSignals
+from gateway_v2.runtime.resources import ResourceContract, from_signals
 
 _SEED = 0x6C_6757_0002
 _ITERATIONS = 10_000
+
+
+def _contract() -> ResourceContract:
+    """A serviceable contract so ``parse`` can read its token-field parse boundary.
+
+    The fold-totality invariant this suite checks is independent of the contract,
+    so any serviceable ``from_signals`` contract suffices.
+    """
+    signals = HardwareSignals(
+        cpu_quota=4.0,
+        memory_limit=2 * 1024 * 1024 * 1024,
+        fd_limit=4096,
+        cpu_source="test",
+        mem_source="test",
+        fd_source="test",
+    )
+    return from_signals(
+        signals,
+        target_p99_ms=20.0,
+        utilization_cap=0.75,
+        per_worker_rss=400 * 1024 * 1024,
+    )
+
+
+_CONTRACT = _contract()
 
 #: The ``TextChannel.sdk_path`` prefix that marks an INPUT (request-side) channel;
 #: mirrors ``edge/wire/openai._INPUT_SDK_PATH_PREFIX`` so the test keys on the same
@@ -110,7 +137,7 @@ def test_property_2_input_channel_fold_is_total() -> None:
         for channel_name in input_channels:
             canary = _canary(rng)
             body = _request_with_canary(channel_name, canary)
-            parsed = parser.parse(_dumps(body), surface=Surface.CHAT)
+            parsed = parser.parse(_dumps(body), surface=Surface.CHAT, contract=_CONTRACT)
 
             # The canary appears in the folded input_channels under the matching
             # channel name — the fold enumerated it into scannable text (R1.2, C21).

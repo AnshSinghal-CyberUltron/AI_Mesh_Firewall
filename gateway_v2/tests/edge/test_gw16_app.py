@@ -224,6 +224,7 @@ def _scripted_misc(provider: ProviderClient, catalog: CatalogSource) -> MiscRout
     which neither admit nor budget nor scan).
     """
     return MiscRoute(
+        contract=_contract(),
         provider=provider,
         clock=lambda: 0.0,
         renderer=MiscResponseRenderer(),

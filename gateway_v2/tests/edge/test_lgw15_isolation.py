@@ -78,6 +78,10 @@ _P19_CHAT_PATH = "/v1/chat/completions"
 _P19_MAX_BYTES = 1 << 30
 _P19_MAX_EXPANSION_RATIO = 1_000.0
 _P19_MAX_PARTS = 1 << 30
+#: v1's ``max_tokens`` parse boundary mirrored onto the fake contract so ``parse``
+#: accepts the P19 bodies (which carry no token fields). A TEST bound, not a
+#: production capacity literal.
+_P19_MAX_OUTPUT_TOKENS_BOUNDARY = 1_000_000
 
 #: The shared canary token placed in BOTH tenants' requests. Tenant BLOCK's detector fires
 #: on it (⇒ BLOCK); tenant ALLOW's detector ignores it (⇒ ALLOW): the SAME bytes, opposite
@@ -191,6 +195,27 @@ class _P19FakeContract:
     def max_request_parts(self) -> int:
         return _P19_MAX_PARTS
 
+    def max_output_tokens_boundary(self) -> int:
+        """v1's ``max_tokens`` parse boundary; ``parse`` reads it to validate token fields."""
+        return _P19_MAX_OUTPUT_TOKENS_BOUNDARY
+
+    def default_response_token_ceiling(self) -> int:
+        """v1's default org output ceiling; ``run_lifecycle`` clamps ``max_tokens`` to it."""
+        return 4096
+
+    def max_output_tokens(self) -> int:
+        """v1's output-token hard cap (the clamp's upper bound)."""
+        return 65536
+
+    def max_completions(self) -> int:
+        """v1's completion cap; the clamp forces ``n`` to it."""
+        return 1
+
+    def estimate_request_tokens(self, chars: int, max_tokens: int, n: int) -> int:
+        """v1's request token estimate the budget phase charges over the clamped request."""
+        input_tokens = max(1, chars // 4) if chars > 0 else 0
+        return max(input_tokens + max_tokens * n, 1)
+
 
 class _P19FakeIdentity:
     """An :class:`IdentityResolver` resolving one canned tenant (never fails closed).
@@ -234,6 +259,9 @@ class _P19AdmitAdmission:
         await asyncio.sleep(0)
         return Admitted(owner_id=owner_id, request_id=request_id, admitted_at=0.0)
 
+    def complete(self, request_id: str) -> None:
+        del request_id
+
 
 class _P19AdmitBudget:
     """Budget that always admits (local lease, no store read) so both reach the input scan."""
@@ -244,6 +272,9 @@ class _P19AdmitBudget:
         del cost
         await asyncio.sleep(0)
         return Admitted(owner_id="p19", request_id=request_id, admitted_at=0.0)
+
+    def refund(self, cost: int, *, request_id: str) -> None:
+        del cost, request_id
 
 
 @dataclass(frozen=True, slots=True)
@@ -449,11 +480,18 @@ def test_property_19_two_tenant_isolation() -> None:
         # only ever saw the channels of ITS OWN request.) The parser is pure wire logic, so
         # re-folding each body reproduces exactly the channels that tenant's detector scanned.
         parser = OpenAIRequestParser()
+        _contract = _P19FakeContract()
         block_own_channels = {
-            text for _ch, text in parser.parse(block_body, surface=Surface.CHAT).input_channels
+            text
+            for _ch, text in parser.parse(
+                block_body, surface=Surface.CHAT, contract=_contract
+            ).input_channels
         }
         allow_own_channels = {
-            text for _ch, text in parser.parse(allow_body, surface=Surface.CHAT).input_channels
+            text
+            for _ch, text in parser.parse(
+                allow_body, surface=Surface.CHAT, contract=_contract
+            ).input_channels
         }
         assert set(block_sink.scanned_texts) == block_own_channels, _p19_ctx(
             i, note="BLOCK tenant scanned texts other than its own request's channels",

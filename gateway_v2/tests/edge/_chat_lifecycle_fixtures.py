@@ -117,6 +117,9 @@ class AdmittingAdmission:
         del enqueued_at
         return Admitted(owner_id=owner_id, request_id=request_id, admitted_at=0.0)
 
+    def complete(self, request_id: str) -> None:
+        del request_id
+
 
 class AdmittingBudget:
     """A budget decider that always admits — the lifecycle reaches the input scan + provider."""
@@ -126,6 +129,9 @@ class AdmittingBudget:
     async def evaluate(self, cost: int, *, request_id: str) -> BudgetVerdict | Admitted:
         del cost
         return Admitted(owner_id=DEFAULT_ORG_ID, request_id=request_id, admitted_at=0.0)
+
+    def refund(self, cost: int, *, request_id: str) -> None:
+        del cost, request_id
 
 
 def pass_through_plan(org_id: str = DEFAULT_ORG_ID) -> ExecutionPlan:

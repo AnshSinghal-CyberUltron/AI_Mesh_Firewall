@@ -127,6 +127,10 @@ class _AdmittingAdmission:
         del enqueued_at
         return Admitted(owner_id=owner_id, request_id=request_id, admitted_at=0.0)
 
+    def complete(self, request_id: str) -> None:
+        """No-op: the dry-run never releases slots (``AdmissionDecider`` protocol, task 25.1)."""
+        del request_id
+
 
 class _AdmittingBudget:
     """A budget decider that always admits — the lifecycle reaches the input scan + provider."""
@@ -137,6 +141,10 @@ class _AdmittingBudget:
         """Admit every request's budget evaluation (no fabricated refusal)."""
         del cost
         return Admitted(owner_id=_DRY_RUN_ORG_ID, request_id=request_id, admitted_at=0.0)
+
+    def refund(self, cost: int, *, request_id: str) -> None:
+        """No-op: the dry-run never refunds (``BudgetDecider`` protocol, task 25.1)."""
+        del cost, request_id
 
 
 def _pass_through_plan(org_id: str = _DRY_RUN_ORG_ID) -> ExecutionPlan:

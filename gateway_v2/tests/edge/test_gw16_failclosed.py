@@ -52,8 +52,28 @@ from gateway_v2.edge.wire.openai_misc import MiscResponseRenderer
 from gateway_v2.egress.output_guard import MinimalOutputResolver, OutputResolver
 from gateway_v2.plan.snapshot import ReplicaSnapshot
 from gateway_v2.plan.store import PlanStore
+from gateway_v2.runtime.kinds import HardwareSignals
+from gateway_v2.runtime.resources import ResourceContract, from_signals
 
 _ITERATIONS = 10_000
+
+
+def _contract() -> ResourceContract:
+    """A serviceable contract (the shared ``from_signals`` fixture shape)."""
+    signals = HardwareSignals(
+        cpu_quota=4.0,
+        memory_limit=400 * 1024 * 1024 * 8,
+        fd_limit=4096,
+        cpu_source="test",
+        mem_source="test",
+        fd_source="test",
+    )
+    return from_signals(
+        signals,
+        target_p99_ms=20.0,
+        utilization_cap=0.75,
+        per_worker_rss=400 * 1024 * 1024,
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -117,6 +137,9 @@ class _AlwaysAdmit:
     ) -> Admitted | ShedVerdict:
         return Admitted(owner_id=owner_id, request_id=request_id, admitted_at=enqueued_at)
 
+    def complete(self, request_id: str) -> None:
+        del request_id
+
 
 class _AlwaysBudget:
     """Budget that is always within budget, so the lifecycle reaches the input scan."""
@@ -126,6 +149,9 @@ class _AlwaysBudget:
     async def evaluate(self, cost: int, *, request_id: str) -> BudgetVerdict | Admitted:
         del cost
         return Admitted(owner_id="gw16", request_id=request_id, admitted_at=0.0)
+
+    def refund(self, cost: int, *, request_id: str) -> None:
+        del cost, request_id
 
 
 class _RaisingDetector:
@@ -240,6 +266,7 @@ def _embeddings_deps(
 ) -> MiscRoute:
     """Build a MiscRoute whose embeddings lifecycle reaches the input scan phase."""
     return MiscRoute(
+        contract=_contract(),
         provider=provider,
         clock=lambda: 0.0,
         renderer=MiscResponseRenderer(),
@@ -258,6 +285,7 @@ def _embeddings_deps(
 def _moderations_deps(provider: _CountingProvider, *, detector: InputDetector) -> MiscRoute:
     """Build a MiscRoute whose moderations lifecycle reaches the (scan-only) scan phase."""
     return MiscRoute(
+        contract=_contract(),
         provider=provider,
         clock=lambda: 0.0,
         renderer=MiscResponseRenderer(),

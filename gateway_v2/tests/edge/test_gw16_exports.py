@@ -85,6 +85,8 @@ from gateway_v2.egress.output_guard import MinimalOutputResolver
 from gateway_v2.plan.snapshot import ReplicaSnapshot
 from gateway_v2.plan.store import PlanStore
 from gateway_v2.runtime.holdback_metrics import Histogram
+from gateway_v2.runtime.kinds import HardwareSignals
+from gateway_v2.runtime.resources import ResourceContract, from_signals
 from gateway_v2.runtime.stream_metrics import PerRequestExports, PerRequestReading
 
 _SEED = 0x16_00_0016
@@ -183,6 +185,9 @@ class _P16AdmitAdmission:
         del enqueued_at
         return Admitted(owner_id=owner_id, request_id=request_id, admitted_at=0.0)
 
+    def complete(self, request_id: str) -> None:
+        del request_id
+
 
 class _P16ShedAdmission:
     """Admission that always sheds (the embeddings ``shed`` terminal outcome)."""
@@ -196,6 +201,9 @@ class _P16ShedAdmission:
         # Fresh, non-shared rng so the retry-after floor+jitter contract holds deterministically.
         return shed_verdict(random.Random(0), request_id)
 
+    def complete(self, request_id: str) -> None:
+        del request_id
+
 
 class _P16AdmitBudget:
     """Budget that always admits (local lease, no store read)."""
@@ -206,6 +214,9 @@ class _P16AdmitBudget:
         del cost
         return Admitted(owner_id="p16", request_id=request_id, admitted_at=0.0)
 
+    def refund(self, cost: int, *, request_id: str) -> None:
+        del cost, request_id
+
 
 class _P16RefuseBudget:
     """Budget that always refuses (the embeddings ``budget_refused`` terminal outcome)."""
@@ -215,6 +226,9 @@ class _P16RefuseBudget:
     async def evaluate(self, cost: int, *, request_id: str) -> BudgetVerdict | Admitted:
         del cost
         return budget_verdict(request_id)
+
+    def refund(self, cost: int, *, request_id: str) -> None:
+        del cost, request_id
 
 
 class _P16BlockDetector:
@@ -378,6 +392,24 @@ def _p16_vector_provider(canary: str) -> _P16CountingProvider:
     )
 
 
+def _contract() -> ResourceContract:
+    """A serviceable contract (the shared ``from_signals`` fixture shape)."""
+    signals = HardwareSignals(
+        cpu_quota=4.0,
+        memory_limit=400 * 1024 * 1024 * 8,
+        fd_limit=4096,
+        cpu_source="test",
+        mem_source="test",
+        fd_source="test",
+    )
+    return from_signals(
+        signals,
+        target_p99_ms=20.0,
+        utilization_cap=0.75,
+        per_worker_rss=400 * 1024 * 1024,
+    )
+
+
 def _p16_build_deps(outcome: str, org_id: str, canary: str) -> MiscRoute:
     """Assemble the per-outcome ``MiscRoute`` (one fresh ``PerRequestExports`` per request)."""
     plan = _p16_plan(org_id)
@@ -400,6 +432,7 @@ def _p16_build_deps(outcome: str, org_id: str, canary: str) -> MiscRoute:
         input_detector = _P16RaisingDetector()
 
     return MiscRoute(
+        contract=_contract(),
         provider=provider,
         clock=lambda: 0.0,
         renderer=MiscResponseRenderer(),

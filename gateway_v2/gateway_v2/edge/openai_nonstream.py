@@ -40,7 +40,10 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from gateway_v2.dispatch.provider import UpstreamRequest
+from gateway_v2.domain.plan import ExecutionPlan, Phase
 from gateway_v2.edge import errors
+from gateway_v2.edge.phase_resolvers import resolver_for
+from gateway_v2.edge.request_holds import RequestHolds
 from gateway_v2.egress.output_guard import OutputBlocked, apply_decision
 
 if TYPE_CHECKING:
@@ -106,6 +109,8 @@ async def collect_and_enforce(
     destination: str,
     body: Mapping[str, object],
     *,
+    plan: ExecutionPlan | None = None,
+    holds: RequestHolds | None = None,
     block_code: str,
     scan_failure_code: str,
 ) -> EnforcedOutput:
@@ -119,10 +124,21 @@ async def collect_and_enforce(
     passed in by the caller so this helper carries no value-code spelling of its own
     (one spelling source, in ``edge/openai_chat.py``). No branch increments
     ``fail_open_total``.
+
+    ``plan`` is the request's pinned :class:`ExecutionPlan`: the per-channel output
+    guard resolves through it at ``Phase.OUTPUT`` (Group E) so a phase-aware route
+    folds only its output-scoped rules; a ``None`` plan (or an unset ``phase_resolvers``)
+    resolves through ``deps.resolver`` byte-identically (Preservation 3.3). ``holds`` is
+    the per-request :class:`RequestHolds` ledger: :func:`_collect_output_channels`
+    records ``mark_dispatched`` immediately before the provider is opened (Group D) so
+    the budget spend STANDS once the provider saw the request; it defaults to a fresh
+    per-call ledger so a shipped caller that passes none stays callable.
     """
+    if holds is None:
+        holds = RequestHolds()
     try:
-        collected = await _collect_output_channels(deps, destination, body)
-        deltas = _enforce_channels(deps, collected)
+        collected = await _collect_output_channels(deps, destination, body, holds)
+        deltas = _enforce_channels(deps, plan, collected)
     except OutputBlocked:
         return EnforcedOutput(deltas=(), refuse_code=block_code)
     except Exception:  # noqa: BLE001 — fail closed: any uncomputable scan/decision withholds.
@@ -134,6 +150,7 @@ async def _collect_output_channels(
     deps: ChatRoute,
     destination: str,
     body: Mapping[str, object],
+    holds: RequestHolds,
 ) -> tuple[tuple[str, str], ...]:
     """Drain the provider to its final event, concatenating ``text_deltas`` per channel.
 
@@ -142,6 +159,10 @@ async def _collect_output_channels(
     preserved so the render is deterministic). A mid-stream ``error_frame`` is folded
     into the output-content channel so a provider error body is scanned as content,
     never forwarded unscanned.
+
+    ``holds.mark_dispatched()`` is recorded immediately before the provider is opened
+    (Group D): this is the non-streaming provider-open site, so once the request has
+    reached the provider the budget spend STANDS and is not refunded (C29).
     """
     order: list[str] = []
     texts: dict[str, list[str]] = {}
@@ -152,6 +173,8 @@ async def _collect_output_channels(
             order.append(channel)
         texts[channel].append(text)
 
+    # The provider is about to be opened: record the dispatch so the spend stands (C29).
+    holds.mark_dispatched()
     async for event in deps.provider.open(
         UpstreamRequest(destination=destination, body=body)
     ):
@@ -164,22 +187,30 @@ async def _collect_output_channels(
 
 def _enforce_channels(
     deps: ChatRoute,
+    plan: ExecutionPlan | None,
     collected: tuple[tuple[str, str], ...],
 ) -> tuple[tuple[str, str], ...]:
     """Scan + resolve + apply the output decision per channel (R8.1/R8.2).
 
     For each collected ``(channel, text)`` pair: run ``deps.error_scanner`` (the
-    injected whole-text findings producer) over that channel's text, resolve via
-    ``deps.resolver.decide`` (the C22 ``most_restrictive`` decision), and enforce with
-    ``apply_decision(text, decision, base_offset=0)``. Scanning per channel keeps a
-    finding's spans local to the channel the scanner saw, so a REDACT masks exactly
+    injected whole-text findings producer) over that channel's text, resolve via the
+    output resolver's ``decide`` (the C22 ``most_restrictive`` decision), and enforce
+    with ``apply_decision(text, decision, base_offset=0)``. Scanning per channel keeps
+    a finding's spans local to the channel the scanner saw, so a REDACT masks exactly
     that output field's bytes and the enforced text stays in its own channel for the
     renderer (channel fidelity, R8.2). A BLOCK raises ``OutputBlocked``; an
     uncomputable scan / decision or a partially-covered span propagates — both handled
     fail-closed by :func:`collect_and_enforce`.
+
+    Group E: when a ``plan`` is pinned the resolver is selected through
+    :func:`~gateway_v2.edge.phase_resolvers.resolver_for` bound to it at
+    ``Phase.OUTPUT``, so a phase-aware route folds only its output-scoped rules on the
+    response; a ``None`` plan (or an unset ``phase_resolvers``) uses ``deps.resolver``
+    byte-identically (Preservation 3.3 / 3.5).
     """
+    resolver = deps.resolver if plan is None else resolver_for(deps, plan, Phase.OUTPUT)
     enforced: list[tuple[str, str]] = []
     for channel, text in collected:
-        decision = deps.resolver.decide(list(deps.error_scanner(text)))
+        decision = resolver.decide(list(deps.error_scanner(text)))
         enforced.append((channel, apply_decision(text, decision, base_offset=0)))
     return tuple(enforced)

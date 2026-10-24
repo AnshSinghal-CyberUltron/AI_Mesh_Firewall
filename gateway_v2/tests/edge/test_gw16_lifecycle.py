@@ -60,6 +60,8 @@ from gateway_v2.edge.wire.openai_misc import MiscResponseRenderer
 from gateway_v2.egress.output_guard import MinimalOutputResolver
 from gateway_v2.plan.snapshot import ReplicaSnapshot
 from gateway_v2.plan.store import PlanStore
+from gateway_v2.runtime.kinds import HardwareSignals
+from gateway_v2.runtime.resources import ResourceContract, from_signals
 
 # =========================================================================== #
 # Shared harness — a counted provider/detector + the ASGI receive/send + plan/
@@ -67,6 +69,24 @@ from gateway_v2.plan.store import PlanStore
 # =========================================================================== #
 
 _ORG = "gw16-org"
+
+
+def _contract() -> ResourceContract:
+    """A serviceable contract (the shared ``from_signals`` fixture shape)."""
+    signals = HardwareSignals(
+        cpu_quota=4.0,
+        memory_limit=400 * 1024 * 1024 * 8,
+        fd_limit=4096,
+        cpu_source="test",
+        mem_source="test",
+        fd_source="test",
+    )
+    return from_signals(
+        signals,
+        target_p99_ms=20.0,
+        utilization_cap=0.75,
+        per_worker_rss=400 * 1024 * 1024,
+    )
 
 
 def _plan() -> ExecutionPlan:
@@ -302,6 +322,9 @@ class _P10LocalQuota:
             return budget_verdict(request_id)
         return Admitted(owner_id=_ORG, request_id=request_id, admitted_at=0.0)
 
+    def refund(self, cost: int, *, request_id: str) -> None:
+        del cost, request_id
+
 
 class _P10Admission:
     """Admits, or sheds once for the shed flow (a fail-closed shed carries its own code)."""
@@ -318,6 +341,9 @@ class _P10Admission:
         if self._shed:
             return shed_verdict(random.Random(0), request_id)
         return Admitted(owner_id=_ORG, request_id=request_id, admitted_at=0.0)
+
+    def complete(self, request_id: str) -> None:
+        del request_id
 
 
 class _P10BlockDetector:
@@ -369,6 +395,7 @@ def _p10_build_deps(flow: str, counter: _P10ReadCounter) -> MiscRoute:
         BudgetDecider, _P10LocalQuota(counter, refuse=flow == _P10_BUDGET)
     )
     return MiscRoute(
+        contract=_contract(),
         provider=provider,
         clock=lambda: 0.0,
         renderer=MiscResponseRenderer(),
@@ -515,6 +542,9 @@ class _U_SheddingAdmission:
         del owner_id, enqueued_at
         return shed_verdict(random.Random(0), request_id)
 
+    def complete(self, request_id: str) -> None:
+        del request_id
+
 
 class _U_RefusingBudget:
     """Budget that always refuses — returns a ``BudgetVerdict`` (``budget_unavailable``)."""
@@ -524,6 +554,9 @@ class _U_RefusingBudget:
     async def evaluate(self, cost: int, *, request_id: str) -> BudgetVerdict:
         del cost
         return budget_verdict(request_id)
+
+    def refund(self, cost: int, *, request_id: str) -> None:
+        del cost, request_id
 
 
 class _U_AlwaysAdmit:
@@ -536,6 +569,9 @@ class _U_AlwaysAdmit:
     ) -> Admitted:
         return Admitted(owner_id=owner_id, request_id=request_id, admitted_at=enqueued_at)
 
+    def complete(self, request_id: str) -> None:
+        del request_id
+
 
 class _U_AlwaysBudget:
     """Budget that is always within budget."""
@@ -545,6 +581,9 @@ class _U_AlwaysBudget:
     async def evaluate(self, cost: int, *, request_id: str) -> Admitted:
         del cost
         return Admitted(owner_id=_ORG, request_id=request_id, admitted_at=0.0)
+
+    def refund(self, cost: int, *, request_id: str) -> None:
+        del cost, request_id
 
 
 class _U_ScriptedCatalog:
@@ -577,6 +616,7 @@ def _u_embed_deps(
     """A ``MiscRoute`` whose plan resolves and whose varied seams the caller injects."""
     snapshot = _u_served_snapshot()
     return MiscRoute(
+        contract=_contract(),
         provider=provider,
         clock=lambda: 0.0,
         renderer=MiscResponseRenderer(),
@@ -695,6 +735,7 @@ def _u_models_deps(
 ) -> MiscRoute:
     """A ``MiscRoute`` with a counted provider + counted detector + scripted catalog."""
     return MiscRoute(
+        contract=_contract(),
         provider=provider,
         clock=lambda: 0.0,
         renderer=MiscResponseRenderer(),
@@ -771,6 +812,7 @@ def test_moderations_request_makes_zero_provider_calls() -> None:
     """8.5 — a moderations request opens NO provider (scan-only surface)."""
     provider = _CountingProvider()
     deps = MiscRoute(
+        contract=_contract(),
         provider=provider,
         clock=lambda: 0.0,
         renderer=MiscResponseRenderer(),

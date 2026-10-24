@@ -61,13 +61,15 @@ class AdmissionDecider(Protocol):
 
     The shipped :class:`~gateway_v2.admit.admission.AdmissionController` satisfies this structurally
     (its ``admit(owner_id, request_id, enqueued_at)`` already fails closed to a shed on any
-    undecidable path, R5.4). A ``Protocol`` so the lifecycle couples only to the surface and a test
-    can inject a counting fake.
+    undecidable path, R5.4; its synchronous ``complete(request_id)`` releases the admitted slot). A
+    ``Protocol`` so the lifecycle couples only to the surface and a test can inject a counting fake.
     """
 
     async def admit(
         self, owner_id: str, request_id: str, enqueued_at: float
     ) -> Admitted | ShedVerdict: ...
+
+    def complete(self, request_id: str) -> None: ...
 
 
 @runtime_checkable
@@ -76,10 +78,13 @@ class BudgetDecider(Protocol):
 
     The shipped :class:`~gateway_v2.admit.quota.QuotaComponent` satisfies this structurally; its
     ``evaluate(cost, *, request_id)`` spends the LOCAL lease with no request-path store read (R6.3)
-    and fails closed to a budget refusal (R13.1). A ``Protocol`` so a test can inject a fake.
+    and fails closed to a budget refusal (R13.1); its synchronous ``refund(cost, *, request_id)``
+    returns a spend that led to zero provider calls. A ``Protocol`` so a test can inject a fake.
     """
 
     async def evaluate(self, cost: int, *, request_id: str) -> BudgetVerdict | Admitted: ...
+
+    def refund(self, cost: int, *, request_id: str) -> None: ...
 
 
 class _AlwaysShedAdmission:
@@ -90,7 +95,8 @@ class _AlwaysShedAdmission:
     never a fail-OPEN hole. It mints a shed verdict from a per-call fresh, non-shared
     :class:`random.Random` so the ``retry_after_s`` floor + jitter contract holds; the seed is
     irrelevant because the default always sheds. ``__slots__`` so there is no instance state; a
-    single shared instance (:data:`fail_closed_admission`) is safe to reuse.
+    single shared instance (:data:`fail_closed_admission`) is safe to reuse. Its ``complete`` is a
+    no-op: the always-shed default admits nothing, so there is never a slot to release.
     """
 
     __slots__ = ()
@@ -102,6 +108,11 @@ class _AlwaysShedAdmission:
         del owner_id, enqueued_at
         return shed_verdict(random.Random(0), request_id)
 
+    def complete(self, request_id: str) -> None:
+        """No-op: nothing was admitted on the always-shed default, so no slot to release."""
+        del request_id
+        return
+
 
 class _AlwaysRefuseBudget:
     """The fail-closed default ``quota``: every request is budget-refused (GW15 2.4).
@@ -112,6 +123,8 @@ class _AlwaysRefuseBudget:
     no store I/O. In practice the admission default sheds FIRST, so this default is never reached on
     an unwired route; it is here so the budget phase is itself fail-closed. ``__slots__`` so there
     is no instance state; a single shared instance (:data:`fail_closed_budget`) is safe to reuse.
+    Its ``refund`` is a no-op: the always-refuse default spent nothing, so there is nothing to
+    return.
     """
 
     __slots__ = ()
@@ -120,6 +133,11 @@ class _AlwaysRefuseBudget:
         """Refuse every request's budget (fail closed); the cost is accepted but not consulted."""
         del cost
         return budget_verdict(request_id)
+
+    def refund(self, cost: int, *, request_id: str) -> None:
+        """No-op: nothing was spent on the always-refuse default, so there is nothing to return."""
+        del cost, request_id
+        return
 
 
 def no_findings_detector(text: str) -> Sequence[Finding]:

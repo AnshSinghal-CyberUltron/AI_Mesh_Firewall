@@ -2,11 +2,10 @@
 
 ``build_app`` assembles the serving skin as a MINIMAL raw-ASGI 3.0 application — a single
 ``async def app(scope, receive, send)`` callable — because the repo pulls in NO HTTP framework
-(``pyproject.toml`` dependencies are ``psycopg`` + ``redis`` only; adding starlette/fastapi here
-would take a framework dependency the whole package has deliberately avoided). Every HTTP reply
-is a framework-free :class:`gateway_v2.edge.errors.HTTPResponse` value emitted onto the ASGI
-``send`` channel via the ``emit_response`` helper (the task 7.1 pattern:
-``http.response.start`` + ``http.response.body``).
+(``pyproject.toml`` deps are ``psycopg`` + ``redis`` only; adding starlette/fastapi would take a
+dependency the package deliberately avoids). Every HTTP reply is a framework-free
+:class:`gateway_v2.edge.errors.HTTPResponse` value emitted onto the ASGI ``send`` channel via the
+``emit_response`` helper (``http.response.start`` + ``http.response.body``).
 
 What this assembles (R2.1):
 
@@ -20,14 +19,13 @@ What this assembles (R2.1):
   the ``runtime.state_stamp.state_ready(view)`` contract the LGW05b handoff pins (``/readyz`` must
   call ``state_ready(view)`` and return 503 with its reason when not ready); and
 * **``/metrics``** — the Prometheus text exposition computed OFF the serving loop (R2.6 / C38
-  R13.2): the handler offloads the (CPU-bound, O(samples)) snapshot via ``asyncio.to_thread`` so
-  a scrape never blocks the forwarding loop.
+  R13.2): the handler offloads the CPU-bound snapshot via ``asyncio.to_thread``.
 
 C38 serving-loop discipline (R13.1) is assembled here too: ``build_app`` constructs the one
 :class:`~gateway_v2.edge.executor.ScanExecutor` — a GIL-releasing thread pool sized by
 ``contract.pool_size(PoolKind.SCANNER)`` (no literal) — and injects it into the chat route so the
-CPU-bound error-frame scan runs on a worker thread, not inline on the forwarding loop; the pool is
-released on ``lifespan.shutdown``.
+CPU-bound error-frame scan runs off the forwarding loop; the pool is released on
+``lifespan.shutdown``.
 
 ``edge`` is the top layer, so this module may import every layer below. The scanner and the
 ``ProviderClient`` are injected into :func:`build_app` and handed to the chat route (above
@@ -73,6 +71,7 @@ from gateway_v2.edge.identity_resolver import (
     fail_closed_resolver,
 )
 from gateway_v2.edge.openai_misc import MiscRoute
+from gateway_v2.edge.phase_resolvers import PhaseResolverFactory
 from gateway_v2.edge.readiness import (
     METRICS_DIRECTORY_REASON,
     DirectoryGate,
@@ -240,57 +239,55 @@ def build_app(
     exports: PerRequestExports | None = None,
     catalog: CatalogSource | None = None,
     output_detector: ErrorFrameScanner | None = None,
+    phase_resolvers: PhaseResolverFactory | None = None,
 ) -> ASGIApplication:
     """Assemble the raw-ASGI serving skin (R2.1).
 
     Wires the streaming chat route to the injected ``provider`` / ``scanner`` / ``resolver`` +
     the bounded coalescer, registers the responses/misc/mcp/rag placeholders, and mounts
-    ``/readyz`` + ``/metrics``. The holdback cap is loaded once at boot from the environment
-    (``load_holdback_config``), matching the shipped ``load_contract`` idiom; the window and the
-    per-stream buffer high-water derive from ``contract`` (no literal). ``readiness`` defaults to
-    an always-ready probe for an unwired deployment (parity with ``state_ready(None)``);
-    ``active_streams`` defaults to a single-stream count when a live concurrency counter is not
-    yet wired (GW19 supplies the real one). ``control`` is the in-flight control source the chat
-    handler polls at each chunk boundary (R10); it defaults to a fresh/available/all-clear source
-    so a deployment that has not wired the kill-switch / revocation / plan feed (a GW05/GW06
-    integration) still runs under the max-stream-duration deadline, which is driven by ``clock``
-    vs the contract alone. ``error_scanner`` is the findings-producing detector a mid-stream
-    provider error frame is scanned through before any byte is forwarded (R11); it is injected
-    HERE (above ``detect``) and defaults to a no-findings scanner (forward unchanged) for a
-    deployment that has not yet wired GW07/GW08's detector — a withhold only ever follows a BLOCK
-    decision or a scan error, so the default is not a fail-open hole.
+    ``/readyz`` + ``/metrics``. The holdback cap is loaded once at boot (``load_holdback_config``,
+    the shipped ``load_contract`` idiom); the window and per-stream buffer high-water derive from
+    ``contract`` (no literal). ``readiness`` defaults to an always-ready probe (parity with
+    ``state_ready(None)``); ``active_streams`` to a single-stream count until GW19. ``control`` is
+    the in-flight control source polled at each chunk boundary (R10), defaulting to a
+    fresh/available/all-clear source so a deployment without the kill-switch / revocation / plan
+    feed still runs under the ``clock``-vs-contract max-stream-duration deadline.
+    ``error_scanner`` is the detector a mid-stream provider error frame is scanned through before
+    any byte is forwarded (R11); injected HERE (above ``detect``), it defaults to a no-findings
+    scanner — a withhold only follows a BLOCK decision or a scan error, so not a fail-open hole.
+
+    **Group E (task 27.2).** ``phase_resolvers`` is an OPTIONAL
+    :data:`~gateway_v2.edge.phase_resolvers.PhaseResolverFactory` threaded onto BOTH routes; when
+    set, each route selects its resolver via ``resolver_for`` bound to the pinned plan AND the phase
+    (a phase-scoped rule enforced only on its phase). ``None`` default = today's single-``resolver``
+    behaviour (Preservation 3.5 / 3.13).
 
     **GW14d metrics-directory readiness wiring (task 12.1, R1.8 / R10.3).** The ``metrics_registry``
     stays an INJECTED parameter; :func:`_resolve_readiness` COMPOSES the ``/readyz`` metrics gate
     without re-constructing anything (state gated FIRST, then the directory when the registry is a
     :class:`MetricsDirectorySource`; a plain registry falls back UNCHANGED). The ``/metrics``
-    ``asyncio.to_thread`` offload (R1.8) and the ``/readyz`` 503 render path (R10.3) are UNCHANGED.
+    offload (R1.8) and the ``/readyz`` 503 render path (R10.3) are UNCHANGED.
 
     **GW16 misc-surface wiring (task 7.1/8.1/10.1).** The single :class:`MiscRoute` is built via
     :func:`_build_misc_route`; ``build_routes(chat, misc)`` returns the exact table + the
     ``/v1/models/{id}`` prefix table, both held on the skin. ``catalog`` is the injected
-    :class:`CatalogSource` the Models surface lists/retrieves from (default
-    :data:`empty_catalog_source`, honest-empty — a test injects a scripted catalog, R7.4/R11.3).
+    :class:`CatalogSource` the Models surface uses (default :data:`empty_catalog_source`, R7.4).
 
-    **GW15 §10.4 chat-surface wiring (task 6.1, R11 / R14).** The single :class:`ChatRoute` is
-    built ONCE here via :func:`_build_chat_route`, with every §10.4 lifecycle dependency
-    constructed at boot and threaded onto the frozen route (nothing request-scoped is stored on it,
-    so two-tenant isolation holds, R13); each unwired dep (``input_detector`` / ``identity`` /
-    ``snapshot_source`` / ``admission`` / ``quota`` / ``exports``) falls back to its fail-closed
-    default — see :func:`_build_chat_route` for the per-dep contract. Every GW15 dep is INJECTED
-    (the shipped injection pattern) so production hands in the real GW07/GW08 detector, the served
-    snapshot source, the GW19/GW06 deciders, and the identity resolver, while a test injects fakes.
+    **GW15 §10.4 chat-surface wiring (task 6.1, R11 / R14).** The single :class:`ChatRoute` is built
+    ONCE here via :func:`_build_chat_route`, every §10.4 lifecycle dep constructed at boot and
+    threaded onto the frozen route (nothing request-scoped, so two-tenant isolation holds, R13);
+    each unwired dep falls back to its fail-closed default (see :func:`_build_chat_route`). Every
+    GW15 dep is INJECTED so production hands in the real detector / snapshot source / deciders /
+    identity resolver while a test injects fakes.
 
-    ``build_app`` stays pure assembly (no store read, no task spawned) and the serving bounds all
-    derive from the injected ``ResourceContract`` / ``HoldbackConfig`` with no capacity literal in
-    ``edge``. Returns the ``async def app(scope, receive, send)`` callable — the lifespan handler is
-    where a conforming server drives startup/shutdown.
+    ``build_app`` stays pure assembly (no store read, no task spawned); the serving bounds derive
+    from the injected ``ResourceContract`` / ``HoldbackConfig`` with no capacity literal in
+    ``edge``. Returns the ``async def app(scope, receive, send)`` callable.
     """
     cfg, _cfg_logs = load_holdback_config()
     # C38 serving-loop discipline (R13.1): the GIL-releasing executor the CPU-bound scan work is
-    # offloaded to, sized by `contract.pool_size(PoolKind.SCANNER)` — no thread-count literal here.
-    # Built once at assembly (off the request path) and shared across every stream; released on
-    # lifespan shutdown.
+    # offloaded to, sized by `contract.pool_size(PoolKind.SCANNER)` (no thread-count literal); built
+    # once at assembly, shared across every stream, released on lifespan shutdown.
     scan_executor = ScanExecutor(contract=contract)
     chat = _build_chat_route(
         contract=contract,
@@ -310,8 +307,10 @@ def build_app(
         quota=quota,
         exports=exports,
         output_detector=output_detector,
+        phase_resolvers=phase_resolvers,
     )
     misc = _build_misc_route(
+        contract=contract,
         provider=provider,
         resolver=resolver,
         clock=clock,
@@ -322,6 +321,7 @@ def build_app(
         quota=quota,
         exports=exports,
         catalog=catalog,
+        phase_resolvers=phase_resolvers,
     )
     exact, prefix = build_routes(chat, misc)
     probe = _resolve_readiness(
@@ -357,6 +357,7 @@ def _build_chat_route(
     quota: BudgetDecider | None,
     exports: PerRequestExports | None,
     output_detector: ErrorFrameScanner | None = None,
+    phase_resolvers: PhaseResolverFactory | None = None,
 ) -> ChatRoute:
     """Construct the single :class:`ChatRoute` with every §10.4 dep (task 6.1, R11 / R14).
 
@@ -388,8 +389,7 @@ def _build_chat_route(
       :class:`PerRequestExports` so an unwired deployment still carries a live producer.
     """
     # The GW14d per-request telemetry producer, built ONCE at boot and threaded onto the single
-    # route (R14). Every terminal outcome populates its dimensions through this one producer;
-    # ``fail_open_total`` is pinned at zero and no raw request/response content ever reaches it.
+    # route (R14); see the docstring for the one-producer / pinned-zero / no-raw-content contract.
     request_exports = exports if exports is not None else PerRequestExports()
     return ChatRoute(
         contract=contract,
@@ -416,11 +416,13 @@ def _build_chat_route(
         quota=quota if quota is not None else fail_closed_budget,
         exports=request_exports,
         output_detector=output_detector,
+        phase_resolvers=phase_resolvers,
     )
 
 
 def _build_misc_route(
     *,
+    contract: ResourceContract,
     provider: ProviderClient,
     resolver: OutputResolver,
     clock: Callable[[], float],
@@ -431,6 +433,7 @@ def _build_misc_route(
     quota: BudgetDecider | None,
     exports: PerRequestExports | None,
     catalog: CatalogSource | None,
+    phase_resolvers: PhaseResolverFactory | None = None,
 ) -> MiscRoute:
     """Construct the single :class:`MiscRoute` for the three GW16 misc surfaces (task 7.1/8.1).
 
@@ -443,14 +446,12 @@ def _build_misc_route(
     ``PlanUnknownTenant``); the injected ``catalog`` is threaded through (``None`` ⇒ the
     honest-empty :data:`empty_catalog_source`, every retrieve ``model_not_found``) and ``renderer``
     defaults to the stateless :class:`~gateway_v2.edge.wire.openai_misc.MiscResponseRenderer`.
-
-    The real ``_http`` prefix-match step that routes ``GET /v1/models/{id}`` onto the prefix table
-    is wired in task 8.1; this helper only constructs the route value so the ``build_routes(chat,
-    misc)`` call site compiles and the exact-match misc routes (embeddings / models-list /
-    moderations) go live.
+    The ``contract`` is the same injected :class:`ResourceContract` the chat route carries; the
+    embeddings budget phase charges its Group F token estimate through it.
     """
     request_exports = exports if exports is not None else PerRequestExports()
     return MiscRoute(
+        contract=contract,
         provider=provider,
         clock=clock,
         renderer=MiscResponseRenderer(),
@@ -464,6 +465,7 @@ def _build_misc_route(
         resolver=resolver,
         input_detector=input_detector if input_detector is not None else no_findings_detector,
         exports=request_exports,
+        phase_resolvers=phase_resolvers,
     )
 
 

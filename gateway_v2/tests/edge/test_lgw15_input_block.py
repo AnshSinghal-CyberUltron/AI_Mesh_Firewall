@@ -169,6 +169,32 @@ class _P9BoundContract:
     def max_request_parts() -> int:
         return 1_000_000
 
+    @staticmethod
+    def max_output_tokens_boundary() -> int:
+        """v1's ``max_tokens`` parse boundary; ``parse`` reads it to validate token fields."""
+        return 1_000_000
+
+    @staticmethod
+    def default_response_token_ceiling() -> int:
+        """v1's default org output ceiling; ``run_lifecycle`` clamps ``max_tokens`` to it."""
+        return 4096
+
+    @staticmethod
+    def max_output_tokens() -> int:
+        """v1's output-token hard cap (the clamp's upper bound)."""
+        return 65536
+
+    @staticmethod
+    def max_completions() -> int:
+        """v1's completion cap; the clamp forces ``n`` to it."""
+        return 1
+
+    @staticmethod
+    def estimate_request_tokens(chars: int, max_tokens: int, n: int) -> int:
+        """v1's request token estimate the budget phase charges over the clamped request."""
+        input_tokens = max(1, chars // 4) if chars > 0 else 0
+        return max(input_tokens + max_tokens * n, 1)
+
 
 class _P9Identity:
     """A fixed ``IdentityResolver`` (see ``edge/identity_resolver.py``) — resolves one tenant."""
@@ -204,6 +230,9 @@ class _P9Admission:
     async def admit(self, *, owner_id: str, request_id: str, enqueued_at: float) -> Admitted:
         return Admitted(owner_id=owner_id, request_id=request_id, admitted_at=enqueued_at)
 
+    def complete(self, request_id: str) -> None:
+        del request_id
+
 
 class _P9Quota:
     """Always within budget (so the lifecycle reaches the input scan, R6.1)."""
@@ -213,6 +242,9 @@ class _P9Quota:
     async def evaluate(self, cost: int, *, request_id: str) -> Admitted:
         del cost
         return Admitted(owner_id="p9", request_id=request_id, admitted_at=0.0)
+
+    def refund(self, cost: int, *, request_id: str) -> None:
+        del cost, request_id
 
 
 class _P9BlockDetector:

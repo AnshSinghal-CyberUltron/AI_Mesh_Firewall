@@ -174,18 +174,16 @@ _PLACEMENTS: dict[str, tuple[list[dict[str, object]], tuple[Delta, ...]]] = {
     ),
 }
 
-_LEAK = "v2-enforcement-leaks A: "
-_XFAIL_REASONS = {
-    "user_message": _LEAK + "'My SSN is 123-45-6789 thanks' -> provider delta "
-    "('message_content', 'My SSN is 123-45-6789 thanks') carries the raw SSN",
-    "system_message": _LEAK + "system 'Customer SSN 123-45-6789 is on file' -> provider delta 0 "
-    "carries the raw SSN unmasked",
-    "later_message": _LEAK + "third message 'my SSN is 123-45-6789' -> provider delta 2 "
-    "carries the raw SSN unmasked",
-    "split_across_parts": _LEAK + "parts 'My SSN is 123-45' + '-6789 thanks' are scanned only "
-    "one part at a time (no finding, ALLOW) -> provider gets both raw halves; no single delta "
-    "holds the SSN but their concatenation does, and no [REDACTED] is sent",
-}
+# Every placement -- the single-channel cases and ``split_across_parts`` -- is now masked
+# before the provider and passes plainly. ``split_across_parts`` closed when the join-run scan
+# separator was made EMPTY (``input_enforcement._JOIN_SEPARATOR``): ``scan_input`` derives the
+# message-part join run (``input_message_index == [0, 0]`` -> ``join_runs == ((0, 1),)``) and now
+# scans the SEPARATOR-FREE concatenation "My SSN is 123-45-6789 thanks", byte-identical to the
+# request-content coordinate space (``dispatch/verify._request_content`` / ``_base_offsets``), so
+# the straddling SSN is matched as the contiguous bytes it is on the wire, its span aligns with
+# ``apply_and_verify``'s masking, and the replacement lands in part0 where the SSN starts while
+# part1 loses the covered "-6789" prefix and keeps " thanks" (the ``_resplit`` behaviour). No
+# strict xfail remains.
 
 
 def _cases() -> list[object]:
@@ -193,8 +191,7 @@ def _cases() -> list[object]:
     for name in _PLACEMENTS:
         for stream in (False, True):
             mode = "stream" if stream else "json"
-            mark = pytest.mark.xfail(strict=True, reason=_XFAIL_REASONS[name])
-            cases.append(pytest.param(name, stream, id=f"{name}-{mode}", marks=mark))
+            cases.append(pytest.param(name, stream, id=f"{name}-{mode}"))
     return cases
 
 

@@ -53,7 +53,7 @@ from gateway_v2.detect.windowing import max_pattern_length
 from gateway_v2.dispatch.provider import ProviderClient, UpstreamRequest
 from gateway_v2.dispatch.routing import DispatchRouter
 from gateway_v2.dispatch.transform import Transform
-from gateway_v2.domain.plan import ExecutionPlan
+from gateway_v2.domain.plan import ExecutionPlan, Phase
 from gateway_v2.domain.posture import PLAN_UNAVAILABLE
 from gateway_v2.edge import errors
 from gateway_v2.edge.asgi_sse import (
@@ -87,6 +87,8 @@ from gateway_v2.edge.openai_misc import (
     ModerationsSurface,
 )
 from gateway_v2.edge.openai_misc_models import ModelsSurface
+from gateway_v2.edge.phase_resolvers import PhaseResolverFactory, resolver_for
+from gateway_v2.edge.request_holds import RequestHolds
 from gateway_v2.edge.stream_control import FirstByteLatch, StreamAttempt, run_with_no_splice
 from gateway_v2.edge.stream_timeouts import StreamTimeout, StreamTimeouts
 from gateway_v2.edge.wire.openai import (
@@ -167,7 +169,10 @@ async def emit_response(send: ASGISend, response: errors.HTTPResponse) -> None:
     await send({"type": "http.response.body", "body": response.body})
 
 
-async def _emit_error_code(send: ASGISend, code: str, request_id: str | None = None) -> None:
+async def _emit_error_code(
+    send: ASGISend, code: str, request_id: str | None = None,
+    param: str | None = None, boundary: int | None = None,
+) -> None:
     """Render a value-code through the single ``Error_Envelope`` and emit it as HTTP.
 
     Every value-code that reaches a non-streaming handler passes through
@@ -175,11 +180,16 @@ async def _emit_error_code(send: ASGISend, code: str, request_id: str | None = N
     than leaking raw internal detail (R3.4). The streaming chat handler uses the SSE rendering
     instead (``errors.render_sse``), so the two sides never disagree on the error shape.
 
-    ``request_id`` is the gateway-minted per-request id when the render site has one (``None`` at
-    a pre-identity site); it threads into the HTTP body ``request_id`` field + the
-    ``x-request-id`` response header so the stock SDK reads a consistent id.
+    ``request_id`` is the gateway-minted per-request id (``None`` at a pre-identity site); it
+    threads into the HTTP body + the ``x-request-id`` header. ``param`` names the offending field
+    for a boundary parse refusal (``None`` otherwise). ``boundary`` is the permitted-maximum VALUE
+    a contract-bearing caller supplies for the ``invalid_max_*`` codes (``None`` otherwise);
+    ``edge/errors`` formats it into the boundary-free declared message — the capacity number is
+    sourced from ``max_output_tokens_boundary()`` at the caller, never a literal here or there.
     """
-    await emit_response(send, errors.render_http(code, request_id=request_id))
+    await emit_response(
+        send, errors.render_http(code, param=param, request_id=request_id, boundary=boundary)
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -282,6 +292,14 @@ class ChatRoute:
     #: findings on the streaming path); a boot that wires the GW07/GW08/GW09 detector passes it
     #: here, above ``detect``, so ``egress`` still never names ``detect``.
     output_detector: ErrorFrameScanner | None = None
+    #: OPTIONAL phase-aware output-resolver factory (Group E, Property 11). When set (not
+    #: ``None``), the input scan and the output guard select their resolver through
+    #: :func:`~gateway_v2.edge.phase_resolvers.resolver_for` bound to the request's pinned plan
+    #: AND the phase (``Phase.INPUT`` / ``Phase.OUTPUT``), so a phase-specific rule is enforced
+    #: only on the phase it is scoped to. ``None`` (the default) keeps today's single-``resolver``
+    #: behaviour byte-identical — the default boot and every route built without a factory decide
+    #: exactly as before (Preservation 3.5 / 3.13).
+    phase_resolvers: PhaseResolverFactory | None = None
 
     async def handle(self, scope: ASGIScope, receive: ASGIReceive, send: ASGISend) -> None:
         """Serve a chat/completions request end-to-end (R2.2, R7, R10, §10.4).
@@ -311,23 +329,36 @@ class ChatRoute:
         """
         from gateway_v2.edge.openai_chat import ChatSurface
 
-        body = await _read_body(receive)
-        req, outcome = await ChatSurface(deps=self).run_lifecycle(scope, body)
-        if outcome.refuse_code is not None:
-            await self._render_refusal(send, req, outcome.refuse_code, outcome.request_id)
-            return
-        # Proceed: the lifecycle guarantees all three provider inputs are set on a non-refusal.
-        plan = outcome.plan
-        destination = outcome.destination
-        upstream_body = outcome.body
-        assert plan is not None and destination is not None and upstream_body is not None
-        assert req is not None  # parse succeeded on any proceed outcome
-        if req.streaming:
-            await self._stream_response(send, plan, destination, upstream_body)
-            return
-        await ChatSurface(deps=self).collect_and_render(
-            req, plan, destination, upstream_body, send
-        )
+        # ONE per-request hold ledger (Group D/F): the lifecycle RECORDS the admission slot +
+        # the budget spend on it, ``mark_dispatched`` is set immediately before ``provider.open``
+        # on each path, and ``release`` runs in the ``finally`` below so the slot is ``complete``-d
+        # (and an undispatched spend refunded) exactly once on EVERY exit — refusal, streaming,
+        # non-streaming, a raised exception, cancellation. Never shared across requests (R13).
+        holds = RequestHolds()
+        try:
+            body = await _read_body(receive)
+            req, outcome = await ChatSurface(deps=self).run_lifecycle(scope, body, holds)
+            if outcome.refuse_code is not None:
+                await self._render_refusal(
+                    send, req, outcome.refuse_code, outcome.request_id, outcome.refuse_param
+                )
+                return
+            # Proceed: the lifecycle guarantees all three provider inputs are set on a non-refusal.
+            plan = outcome.plan
+            destination = outcome.destination
+            upstream_body = outcome.body
+            assert plan is not None and destination is not None and upstream_body is not None
+            assert req is not None  # parse succeeded on any proceed outcome
+            if req.streaming:
+                await self._stream_response(send, plan, destination, upstream_body, holds)
+                return
+            await ChatSurface(deps=self).collect_and_render(
+                req, plan, destination, upstream_body, send, holds
+            )
+        finally:
+            # Synchronous, never raises, idempotent behind its own latch (task 25.2): a lost
+            # refund / complete can never mask the in-flight response or exception.
+            holds.release(self.admission, self.quota)
 
     async def _render_refusal(
         self,
@@ -335,6 +366,7 @@ class ChatRoute:
         req: CanonicalRequest | None,
         code: str,
         request_id: str | None,
+        param: str | None = None,
     ) -> None:
         """Render a §10.4 refusal through the single ``Error_Envelope`` (R12.1).
 
@@ -349,13 +381,22 @@ class ChatRoute:
         ``Error_Envelope`` body + the ``x-request-id`` response header so the render echoes the id
         the admission / budget verdicts carry. The SSE ``Error_Frame`` keeps the frozen OpenAI
         streaming-error shape (the id rides the stream's response header, not the frame).
+
+        ``param`` names the offending request field for a boundary parse refusal (``max_tokens`` /
+        ``max_completion_tokens``, ``None`` otherwise), echoed as ``error.param`` (Group F). The
+        permitted-maximum ``boundary`` VALUE from ``self.contract`` is passed on every HTTP refusal;
+        ``edge/errors`` uses it ONLY for the ``invalid_max_*`` codes (whose declared message is
+        boundary-free, the boundary being a capacity position), so the real boundary reaches the
+        HTTP body while the number lives only in ``runtime/resources.py``.
         """
         if req is not None and req.streaming:
             await _start_sse(send)
             await _send_sse(send, errors.render_sse(code))
             await _end_sse(send)
             return
-        await _emit_error_code(send, code, request_id)
+        await _emit_error_code(
+            send, code, request_id, param, self.contract.max_output_tokens_boundary()
+        )
 
     async def _stream_response(
         self,
@@ -363,6 +404,7 @@ class ChatRoute:
         plan: ExecutionPlan,
         destination: str,
         body: Mapping[str, object],
+        holds: RequestHolds | None = None,
     ) -> None:
         """Open the SSE response + drive the shipped egress orchestration (R2.2, R7, R10).
 
@@ -380,7 +422,13 @@ class ChatRoute:
         enforced before any provider hand-off: a signed safe retry/fallback runs only while the
         latch is unset, the first released content byte sets it, and after that the stream only
         terminates / errors — a second upstream response is never spliced in (R7.4).
+
+        ``holds`` is the per-request ledger threaded from :meth:`handle` so the streaming provider
+        open records ``mark_dispatched`` (Group D); it defaults to a fresh per-call ledger so a
+        shipped caller that drives this method directly stays callable.
         """
+        if holds is None:
+            holds = RequestHolds()
         coalescer = Coalescer(contract=self.contract, active_streams=self.active_streams)
         verdict = coalescer.admit()
         encoder = SSEEncoder()
@@ -389,7 +437,7 @@ class ChatRoute:
             await _send_sse(send, errors.render_sse(verdict.code))
             await _end_sse(send)
             return
-        await self._stream(send, encoder, coalescer, plan, destination, body)
+        await self._stream(send, encoder, coalescer, plan, destination, body, holds)
         await _end_sse(send)
 
     async def _stream(
@@ -400,6 +448,7 @@ class ChatRoute:
         plan: ExecutionPlan,
         destination: str,
         body: Mapping[str, object],
+        holds: RequestHolds,
     ) -> None:
         """Drive the egress pipeline under the no-splice gate + in-flight control (R7, R10).
 
@@ -467,6 +516,7 @@ class ChatRoute:
                 destination,
                 body,
                 produced,
+                holds,
             )
 
         await self._run_attempts(latch, _factory)
@@ -583,6 +633,7 @@ class ChatRoute:
         destination: str,
         body: Mapping[str, object],
         produced: _ProducedModeHolder,
+        holds: RequestHolds,
     ) -> StreamAttempt | None:
         """Yield the next eligible stream attempt, or ``None`` when none remains (R7.1).
 
@@ -619,6 +670,11 @@ class ChatRoute:
                 kill_latch.kill(PLAN_UNAVAILABLE)
                 return latch.is_set()
             request = UpstreamRequest(destination=destination, body=body)
+            # The provider is about to be opened — after the pre-open ``_build_pipeline`` build
+            # (which can fail CLOSED without opening) and the body assembly. Record the dispatch
+            # so the budget spend now STANDS (the provider saw the request, C29 "spend stands
+            # once dispatched"). On a no-splice RETRY this only re-sets a flag (idempotent).
+            holds.mark_dispatched()
             chunks = _as_chunks(
                 self.provider.open(request),
                 coalescer,
@@ -626,7 +682,11 @@ class ChatRoute:
                 timeouts,
                 error_scan=_ErrorFrameScan(
                     scanner=self.error_scanner,
-                    resolver=self.resolver,
+                    # Group E: the mid-stream error-frame scan is an OUTPUT-side guard, so it
+                    # resolves through the request's pinned plan at ``Phase.OUTPUT`` — a
+                    # phase-aware route enforces only its output-scoped rules on the frame; an
+                    # unset ``phase_resolvers`` returns ``self.resolver`` byte-identically (3.3).
+                    resolver=resolver_for(self, plan, Phase.OUTPUT),
                     kill_latch=kill_latch,
                     executor=self.executor,
                 ),
@@ -669,7 +729,10 @@ class ChatRoute:
             cfg=self.cfg,
             metrics=HoldbackMetrics(),
             window=max_pattern_length(),
-            resolver=self.resolver,
+            # Group E: the streaming output guard resolves through the pinned plan at
+            # ``Phase.OUTPUT`` so a phase-aware route folds only its output-scoped rules; an
+            # unset ``phase_resolvers`` returns ``self.resolver`` byte-identically (3.3 / 3.5).
+            resolver=resolver_for(self, plan, Phase.OUTPUT),
             detector=self.output_detector,
             max_buffer_bytes=self.contract.stream_buffer_bytes(self.active_streams()),
             strict_metrics=StrictMetrics(),

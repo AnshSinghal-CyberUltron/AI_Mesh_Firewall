@@ -198,6 +198,7 @@ def _scripted_misc(provider: ProviderClient, catalog: CatalogSource) -> MiscRout
     scan).
     """
     return MiscRoute(
+        contract=_contract(),
         provider=provider,
         clock=lambda: 0.0,
         renderer=MiscResponseRenderer(),

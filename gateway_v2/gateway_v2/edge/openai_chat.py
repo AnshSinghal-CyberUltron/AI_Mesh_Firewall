@@ -2,46 +2,33 @@
 
 ``edge/openai_chat.py`` is the orchestration one layer up from the pure wire codec
 (``edge/wire/openai.py``): it runs the ordered pre-provider pipeline for the
-OpenAI-compatible ``/v1/chat/completions`` and ``/v1/completions`` surfaces and
-then hands off to either the shipped streaming orchestration
-(``edge/routes.py::ChatRoute._stream``) or the new non-streaming collector. Every
-security decision lives HERE (the wire module makes none, R1.5); every pipeline
-mechanism it drives — GW05b/c identity + freshness, the plan round trip, GW19
-admission, GW06 budget lease, the GW07/GW08 input detector + the output guard —
-is already shipped and is WIRED, never rebuilt.
+OpenAI-compatible ``/v1/chat/completions`` and ``/v1/completions`` surfaces and then
+hands off to the shipped streaming orchestration or the non-streaming collector.
+Every security decision lives HERE (the wire module makes none, R1.5); every
+mechanism it drives (identity, the plan round trip, GW19 admission, GW06 budget
+lease, the GW07/GW08 detector + the output guard) is shipped and WIRED, not rebuilt.
 
-``edge`` is the top of the import-linter layer order, so this module may import
-every layer below plus its sibling ``edge`` modules. The injected detector /
-resolver / ``ProviderClient`` arrive through
-:class:`~gateway_v2.edge.routes.ChatRoute` (in ``edge``, above ``detect``) so
-``egress`` never names ``detect`` (R7.5 / R14.1).
+**The §10.4 pipeline.** :meth:`ChatSurface.run_lifecycle` runs the ordered phases —
+pre-checks → parse → identity → the ONE plan round trip → admit → budget → input
+scan — each FAILING CLOSED (it can only reduce the request to a ``refuse_code`` via
+an early return) and each running BEFORE the provider is opened, so a refusal makes
+zero provider calls.
 
-**The §10.4 pipeline (tasks 2.1–2.4).** :meth:`ChatSurface.run_lifecycle` runs the
-ordered pre-provider phases — pre-checks → parse → identity → the ONE shared-state
-plan round trip → admit → budget → input scan — each a clearly-named private step
-that FAILS CLOSED (it can only reduce the request to a ``refuse_code`` via an early
-return, never forward on uncertainty) and each running BEFORE the provider is
-opened, so a refusal makes zero provider calls. The proceed outcome carries the
-plan-derived ``destination`` (``DispatchRouter.select``) + the transformed ``body``
-(``Transform.to_provider``).
-
-**The non-streaming path (task 4.1).** :meth:`ChatSurface.collect_and_render` is the
-hand-off for a non-streaming request: it drains the provider, enforces every
-Output_Channel (via :func:`~gateway_v2.edge.openai_nonstream.collect_and_enforce`),
-and renders ONE OpenAI JSON — or withholds the body fail-closed on a BLOCK /
-uncomputable decision — through the single ``emit_response`` / ``edge/errors`` path.
-
-**No capacity literal, no module-level mutable.** The pre-check bounds all derive
-from the injected ``ResourceContract`` (task 2.2); ``edge`` embeds none. The
-refuse-code constants are plain module-level strings (codes, not capacity-position
-literals, mirroring ``domain/posture.py``); there is no module-level list / dict /
-set.
+**Group A/D/E/F rewiring (v2-enforcement-leaks, task 26.1).** The input scan
+delegates to :func:`~gateway_v2.edge.input_enforcement.scan_input`, resolving at
+:attr:`Phase.INPUT` via :func:`~gateway_v2.edge.phase_resolvers.resolver_for` (E).
+:meth:`_proceed` builds the upstream body ONLY from
+:func:`~gateway_v2.edge.input_enforcement.stage_upstream`, so a REDACT decision's
+transformations are APPLIED and verified before the provider and an unmaskable REDACT
+refuses ``input_unmaskable`` with zero calls (A). The output budget is clamped to
+v1's bounds before the cost is charged, and the cost is the v1 token estimate (F).
+A per-request :class:`~gateway_v2.edge.request_holds.RequestHolds` records the
+admitted slot + the budget spend so the handler releases them exactly once (D).
 
 **Import cycle.** ``ChatSurface``'s ``deps`` IS a
-:class:`~gateway_v2.edge.routes.ChatRoute`, so a runtime import of ``routes`` would
-be circular. Resolved the house way: ``from __future__ import annotations`` plus a
-:data:`typing.TYPE_CHECKING`-guarded ``ChatRoute`` reference used only in
-annotations — the name never exists at runtime, so no circular import is formed.
+:class:`~gateway_v2.edge.routes.ChatRoute`, so a runtime import of ``routes`` would be
+circular. Resolved the house way: a :data:`typing.TYPE_CHECKING`-guarded ``ChatRoute``
+reference used only in annotations, so no runtime circular import is formed.
 """
 
 from __future__ import annotations
@@ -53,16 +40,30 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING
 
 from gateway_v2.admit.grant import Admitted, ShedVerdict
+from gateway_v2.dispatch.provider import UpstreamRequest
 from gateway_v2.dispatch.transform import GatewayRequest
-from gateway_v2.domain import Disposition, Finding
-from gateway_v2.domain.plan import ExecutionPlan, PlanUnavailable, PlanUnknownTenant, Surface
+from gateway_v2.domain import Decision
+from gateway_v2.domain.plan import ExecutionPlan, Phase, PlanUnavailable, PlanUnknownTenant, Surface
 from gateway_v2.domain.posture import BUDGET_UNAVAILABLE
 from gateway_v2.edge import errors
 from gateway_v2.edge.error_frame_scan import SCAN_ERROR_CODE
 from gateway_v2.edge.identity_resolver import TenantIdentity
+from gateway_v2.edge.input_enforcement import (
+    REFUSE_INPUT_UNMASKABLE,
+    InputScan,
+    scan_input,
+    stage_upstream,
+)
 from gateway_v2.edge.openai_nonstream import collect_and_enforce, ok_response
+from gateway_v2.edge.phase_resolvers import resolver_for
+from gateway_v2.edge.request_holds import RequestHolds
 from gateway_v2.edge.routes import ASGIScope, ASGISend, emit_response
-from gateway_v2.edge.wire.openai import CanonicalRequest, MalformedRequest
+from gateway_v2.edge.wire.openai import (
+    CanonicalRequest,
+    MalformedRequest,
+    clamp_output_budget,
+    prompt_chars,
+)
 from gateway_v2.plan.lookup import lookup_plan
 
 #: The two cheap structural-part delimiters the Pre_Identity_Clock part-count proxy counts in the
@@ -115,13 +116,10 @@ _REQUEST_ID_HEX_WIDTH = 24
 _REQUEST_ID_SEP = "\x1f"
 
 if TYPE_CHECKING:
-    # ``ChatRoute`` lives in the sibling ``edge/routes.py`` which imports NOTHING
-    # from this module at runtime; here it is used purely as the type of the
-    # injected ``deps`` bundle. Guarded under ``TYPE_CHECKING`` (and reached only
-    # through the stringised annotation ``from __future__ import annotations``
-    # produces) so no runtime circular import is formed. Task 5 ADDS the GW15 deps
-    # (parser / renderer / input_detector / identity / snapshot_source / admission
-    # / quota / exports) to ``ChatRoute``; this task only type-references it.
+    # ``ChatRoute`` lives in the sibling ``edge/routes.py`` which imports NOTHING from
+    # this module at runtime; here it is only the type of the injected ``deps`` bundle,
+    # reached through the stringised annotations ``from __future__ import annotations``
+    # produces, so no runtime circular import is formed.
     from gateway_v2.edge.routes import ChatRoute
 
 __all__ = (
@@ -129,6 +127,7 @@ __all__ = (
     "REFUSE_IDENTITY_UNRESOLVED",
     "REFUSE_INPUT_BLOCKED",
     "REFUSE_INPUT_SCAN_FAILURE",
+    "REFUSE_INPUT_UNMASKABLE",
     "REFUSE_LIFECYCLE_INCOMPLETE",
     "REFUSE_OUTPUT_BLOCKED",
     "REFUSE_PLAN_UNAVAILABLE",
@@ -145,73 +144,48 @@ __all__ = (
 # --------------------------------------------------------------------------- #
 #
 # A phase that cannot forward sets ONE of these declared value-codes on the
-# :class:`LifecycleOutcome`; the handler renders it through the single
-# ``edge/errors`` ``Error_Envelope`` (an unmapped code already renders a declared
-# generic error there). They are codes (the shared value-code discipline, like
-# ``domain/posture.py``), NOT HTTP objects and NOT capacity-position literals.
-#
-# The per-phase refusals below (identity / plan / input) reuse the pre-existing
-# shared spellings where one exists (``domain/posture.py`` for identity + plan,
-# the shipped ``output_blocked`` for the input BLOCK gate) so the two sides of the
-# pipeline never disagree on a spelling (the C37 join failure); task 2.3 / 2.4
-# wire the phase bodies to those codes directly. ``REFUSE_LIFECYCLE_INCOMPLETE``
-# is the SKELETON-ONLY fail-closed default an unfilled phase stub returns, so the
-# lifecycle refuses (zero provider calls) rather than forwarding while a real check
-# is still unimplemented; the later sub-tasks replace each stub's body and this
-# default never reaches a filled phase.
+# :class:`LifecycleOutcome`; the handler renders it through the single ``edge/errors``
+# ``Error_Envelope`` (an unmapped code renders a declared generic error there). They
+# are codes (the shared value-code discipline, like ``domain/posture.py``), NOT HTTP
+# objects and NOT capacity-position literals. Each reuses the pre-existing shared
+# spelling where one exists so the two sides of the pipeline never disagree (C37).
 
-#: A Pre_Identity_Clock pre-check bound was exceeded (size / expansion / part
-#: count). The declared pre-check refusal; task 2.2 fills the comparison.
+#: A Pre_Identity_Clock pre-check bound was exceeded (size / expansion / part count).
 REFUSE_PRE_CHECK = "request_pre_check_exceeded"
 
-#: Tenant identity could not be resolved, or its freshness stamp is stale /
-#: unavailable (R4.2 / R4.3). Fail CLOSED — the shared ``shared_state_unavailable``
-#: spelling (a 503, never a 401: the key may be valid). Task 2.3 fills the body.
+#: Tenant identity unresolved, or its freshness stamp stale / unavailable (R4.2/R4.3).
+#: Fail CLOSED — ``shared_state_unavailable`` (a 503, never a 401: the key may be valid).
 REFUSE_IDENTITY_UNRESOLVED = "shared_state_unavailable"
 
-#: The plan could not be resolved on the served snapshot (R2.4). The shared
-#: ``plan_unavailable`` spelling. Task 2.3 fills the body.
+#: The plan could not be resolved on the served snapshot (R2.4).
 REFUSE_PLAN_UNAVAILABLE = "plan_unavailable"
 
-#: An input-channel finding resolved to a BLOCK disposition (C22). The request
-#: refuses BEFORE ``provider.open`` (R7.2 — zero provider calls). The shipped
-#: ``output_blocked``-family input spelling; task 2.4 fills the scan + resolve.
+#: An input-channel finding resolved to a BLOCK disposition (C22). ``stage_upstream``
+#: mints no authorization for a BLOCK, so the request refuses BEFORE ``provider.open``
+#: (R7.2 — zero provider calls). The shipped ``output_blocked``-family input spelling.
 REFUSE_INPUT_BLOCKED = "input_blocked"
 
-#: The budget lease is exhausted (R6.2). The shared ``posture.BUDGET_UNAVAILABLE`` spelling (a
-#: 503, narrower than ``shared_state_unavailable``: it refuses only quota, never the whole path);
-#: ``QuotaComponent.evaluate`` returns a ``BudgetVerdict`` carrying exactly this code. Task 2.4
-#: fills the body. Aliased to the one shared posture spelling so the two sides never disagree.
+#: The budget lease is exhausted (R6.2). The shared ``posture.BUDGET_UNAVAILABLE``
+#: spelling (a 503, narrower than ``shared_state_unavailable``: it refuses only quota).
 REFUSE_BUDGET_UNAVAILABLE = BUDGET_UNAVAILABLE
 
-#: An input-channel scan RAISED (R7, R8.4). Fail CLOSED — the request is withheld, never forwarded
-#: with unscanned content. Reuses the shipped ``scan_failure`` spelling (the one the egress pipeline
-#: and the error-frame scan already raise and the ``edge/errors`` envelope already renders as "the
-#: output guard could not complete"), so a scan-failure refusal has one spelling across the whole
-#: pipeline (C37). Task 2.4 fills the body. The non-streaming OUTPUT path (task 4.1) reuses this
-#: same spelling for an uncomputable output scan / decision (R8.4), so an input-side and an
-#: output-side scan failure render identically.
+#: An input-channel scan RAISED (R7, R8.4). Fail CLOSED — the request is withheld.
+#: Reuses the shipped ``scan_failure`` spelling so an input-side and an output-side
+#: scan failure render identically (C37); the non-streaming OUTPUT path reuses it too.
 REFUSE_INPUT_SCAN_FAILURE = SCAN_ERROR_CODE
 
-#: An OUTPUT-channel finding resolved to a BLOCK disposition on the non-streaming path (R8.3/R9.3).
-#: The whole response body is WITHHELD and this declared code renders through the ``edge/errors``
-#: envelope. Reuses the shipped ``output_blocked`` spelling — the SAME code the streaming output
-#: guard's terminal error frame carries and the ``edge/errors`` envelope already maps to a 403 —
-#: so the two output paths never disagree on the block spelling (C37).
+#: An OUTPUT-channel finding resolved to a BLOCK on the non-streaming path (R8.3/R9.3).
+#: The whole response body is WITHHELD. Reuses the shipped ``output_blocked`` spelling.
 REFUSE_OUTPUT_BLOCKED = "output_blocked"
 
 #: The request reached the chat lifecycle on a path that maps to no chat ``Surface``
-#: (R1.4, defensive). ``build_routes`` only dispatches ``/v1/chat/completions`` and
-#: ``/v1/completions`` here, so this is unreachable through the real router; the parse
-#: phase fails CLOSED with this declared code rather than guessing a surface for an
-#: off-contract path. The ``edge/errors`` envelope renders an unmapped code as the
-#: declared generic error, so no raw routing shape leaks.
+#: (R1.4, defensive) — unreachable through the real router; the parse phase fails CLOSED
+#: here rather than guessing a surface. Rendered as the declared generic error.
 REFUSE_UNSUPPORTED_SURFACE = "unsupported_surface"
 
-#: SKELETON-ONLY fail-closed default (task 2.1). An unfilled phase stub returns
-#: this so the lifecycle refuses rather than forwarding anything to a provider
-#: while the real check is unimplemented. Replaced by each later sub-task's body;
-#: never returned once a phase is filled.
+#: Fail-closed default a parse that produced neither a request nor a code returns, so
+#: the lifecycle refuses rather than forwarding an un-parsed request (never reached on
+#: a filled phase).
 REFUSE_LIFECYCLE_INCOMPLETE = "lifecycle_incomplete"
 
 
@@ -252,15 +226,25 @@ class LifecycleOutcome:
     #: budget verdicts carry. ``None`` for a pre-identity refusal (pre-checks / parse /
     #: identity / plan) — that render site has no id, so the envelope renders ``request_id: null``.
     request_id: str | None = None
+    #: The offending request field for a field-specific parse refusal (Group F): ``"max_tokens"``
+    #: for :data:`~gateway_v2.edge.wire.openai.INVALID_MAX_TOKENS` /
+    #: ``"max_completion_tokens"`` for the completion-token boundary, carried from
+    #: ``MalformedRequest.param``. The render site threads it into ``errors.render_http(param=...)``
+    #: so the OpenAI envelope echoes ``error.param``; ``None`` for every non-field-specific code.
+    refuse_param: str | None = None
 
 
-def _refused(code: str, *, request_id: str | None = None) -> LifecycleOutcome:
+def _refused(
+    code: str, *, request_id: str | None = None, param: str | None = None
+) -> LifecycleOutcome:
     """Build a fail-closed refusal outcome carrying ``code`` (zero provider calls).
 
     The one constructor for the refuse shape: ``refuse_code`` set, every provider
     input ``None``, so a refusing phase cannot accidentally leave a half-populated
     outcome that a later step might forward. ``request_id`` is threaded when the
-    refusing phase ran after identity resolution; ``None`` for a pre-identity refusal. Pure.
+    refusing phase ran after identity resolution (``None`` for a pre-identity
+    refusal); ``param`` names the offending field for a boundary parse refusal
+    (``None`` otherwise). Pure.
     """
     return LifecycleOutcome(
         plan=None,
@@ -268,6 +252,7 @@ def _refused(code: str, *, request_id: str | None = None) -> LifecycleOutcome:
         body=None,
         refuse_code=code,
         request_id=request_id,
+        refuse_param=param,
     )
 
 
@@ -279,33 +264,15 @@ def _refused(code: str, *, request_id: str | None = None) -> LifecycleOutcome:
 class ChatSurface:
     """Runs the §10.4 ordered pre-provider pipeline; fail-closed at every phase.
 
-    The ordered pipeline (the load-bearing phase ORDER this task pins):
-
-    1. **pre-checks** (:meth:`_pre_checks`, task 2.2) — the Pre_Identity_Clock
-       cheap size / expansion / part-count bounds, BEFORE canonicalization.
-    2. **parse** (:meth:`_parse`, task 2.3) — SDK JSON → :class:`CanonicalRequest`
-       via the injected parser; a malformed body → declared ``refuse_code``.
-    3. **identity** (:meth:`_identity`, task 2.3) — resolve :class:`TenantIdentity`
-       via ``admit.principal_of`` + the GW05b/c freshness stamp; unresolved / stale
-       / unavailable → auth ``refuse_code``, fail closed.
-    4. **plan** (:meth:`_plan`, task 2.3) — the ONE ``lookup_plan`` round trip on
-       the served snapshot; an unresolved plan → declared ``refuse_code``.
-    5. **admit** (:meth:`_admit`, task 2.4) — ``AdmissionController.admit``; a
-       ``ShedVerdict`` → its ``code``.
-    6. **budget** (:meth:`_budget`, task 2.4) — ``QuotaComponent.evaluate`` on the
-       local lease; a ``BudgetVerdict`` → ``BUDGET_UNAVAILABLE``.
-    7. **input scan** (:meth:`_input_scan`, task 2.4) — the injected detector over
-       every folded Input_Channel; a BLOCK disposition (C22) → ``input_blocked``.
-
-    Every phase runs BEFORE the provider is opened, and every phase can only return
-    early with a ``refuse_code`` on failure (there is no forward-on-uncertainty
-    path), so a refusal makes zero provider calls (R7.1 / R7.2). Only after all
-    seven phases pass does :meth:`run_lifecycle` build the proceed
-    :class:`LifecycleOutcome` with the plan-derived ``destination`` + the
-    transformed ``body``.
-
-    This task lands the method structure + ordering + the fail-closed control flow
-    + the private phase seams; the phase bodies are filled by tasks 2.2–2.4.
+    The ordered phases, each BEFORE the provider is opened and each able only to
+    return early with a ``refuse_code`` (no forward-on-uncertainty), so a refusal
+    makes zero provider calls (R7.1/R7.2): pre-checks (:meth:`_pre_checks`) → parse
+    (:meth:`_parse`) → identity (:meth:`_identity`) → the ONE plan round trip
+    (:meth:`_plan`) → admit (:meth:`_admit`) → budget (:meth:`_budget`) → input scan
+    (:meth:`_input_scan`). Only after every phase passes does :meth:`run_lifecycle`
+    stage the VERIFIED upstream (:meth:`_proceed`, via ``stage_upstream``), where a
+    BLOCK yields ``input_blocked`` and a REDACT's transformations are applied before
+    the provider (the Group A leak-fix).
     """
 
     __slots__ = ("_deps",)
@@ -313,12 +280,10 @@ class ChatSurface:
     def __init__(self, *, deps: ChatRoute) -> None:
         """Construct over the injected :class:`ChatRoute` dependency bundle.
 
-        ``deps`` carries every seam the lifecycle wires (the parser, the identity
-        resolver, the served ``snapshot_source``, the admission controller, the
-        quota component, the input detector + resolver, the ``DispatchRouter`` +
-        ``Transform``, and the per-request exports — task 5 ADDS the GW15 fields to
-        ``ChatRoute``). Held as a single frozen value so the surface itself carries
-        no mutable state and is safe to share across requests.
+        ``deps`` carries every seam the lifecycle wires (parser, identity resolver,
+        served ``snapshot_source``, admission, quota, input detector + resolver,
+        ``DispatchRouter`` + ``Transform``, phase resolvers and per-request exports).
+        Held as a single frozen value so the surface carries no mutable state.
         """
         self._deps = deps
 
@@ -326,11 +291,12 @@ class ChatSurface:
         self,
         scope: ASGIScope,
         body: bytes,
+        holds: RequestHolds | None = None,
     ) -> tuple[CanonicalRequest | None, LifecycleOutcome]:
         """Run the §10.4 ordered pipeline; return the parsed request + the outcome.
 
-        Drives the seven phases in order, returning EARLY the instant any phase
-        fails closed (a declared ``refuse_code``), so a refusal is produced before
+        Drives the ordered phases, returning EARLY the instant any phase fails
+        closed (a declared ``refuse_code``), so a refusal is produced before
         ``provider.open`` and makes zero provider calls. The returned tuple carries
         the :class:`CanonicalRequest` once parsing has succeeded (so the handler can
         dispatch to the streaming vs non-streaming path on ``req.streaming`` and the
@@ -339,7 +305,17 @@ class ChatSurface:
         second element is the proceed :class:`LifecycleOutcome` (plan + destination +
         body, ``refuse_code is None``).
 
+        ``holds`` is the per-request :class:`RequestHolds` ledger (Group D/F). The
+        lifecycle RECORDS what this request acquired — :meth:`RequestHolds.admitted`
+        after an ``Admitted`` verdict and :meth:`RequestHolds.spent` after the budget
+        phase — so the handler releases the slot + refunds the spend exactly once in a
+        ``finally`` (``ChatRoute.handle`` constructs + threads it; ``mark_dispatched``
+        is recorded immediately before ``provider.open``). Defaults to a FRESH per-call
+        ledger so a shipped caller that passes none stays callable, unshared.
         """
+        if holds is None:
+            holds = RequestHolds()
+
         # Phase 1 — pre-identity cheap pre-checks (task 2.2), BEFORE canonicalization.
         pre_check = self._pre_checks(scope, body)
         if pre_check is not None:
@@ -347,9 +323,11 @@ class ChatSurface:
 
         # Phase 2 — parse SDK JSON → CanonicalRequest (task 2.3). A malformed body
         # fails closed with a declared code; nothing after this runs on a bad body.
-        req, parse_refuse = self._parse(scope, body)
+        # A boundary-refusal (invalid_max_tokens / invalid_max_completion_tokens)
+        # carries the offending field name so the render echoes ``param`` (R2.15).
+        req, parse_refuse, parse_param = self._parse(scope, body)
         if parse_refuse is not None:
-            return None, _refused(parse_refuse)
+            return None, _refused(parse_refuse, param=parse_param)
         if req is None:
             # Fail closed: a parse that neither produced a request nor a code is
             # treated as a refusal (never forward an un-parsed request).
@@ -369,29 +347,51 @@ class ChatSurface:
         if plan is None:
             return req, _refused(REFUSE_PLAN_UNAVAILABLE)
 
+        # Plan pinned — clamp the output budget to v1's bounds BEFORE the cost is
+        # charged (Group F): ``n`` → ``max_completions()`` and ``max_tokens`` →
+        # ``min(org ceiling, hard cap)``. The clamped req flows to the budget phase
+        # and the proceed path, so a high-``n`` / high-``max_tokens`` request cannot
+        # under-charge and the provider receives v1's bounded budget.
+        req = clamp_output_budget(
+            req,
+            org_ceiling=self._deps.contract.default_response_token_ceiling(),
+            contract=self._deps.contract,
+        )
+
         # Identity resolved: a refusal below echoes the minted per-request id into the
         # Error_Envelope + the x-request-id header (the id the admit / budget verdicts carry).
         request_id = self._request_id(identity, req)
 
-        # Phase 5 — admission (task 2.4). A ShedVerdict fails closed with its code.
+        # Phase 5 — admission (task 2.4). A ShedVerdict fails closed with its code;
+        # an Admitted records the slot on ``holds`` so it is ``complete``-d on exit.
         admit_refuse = await self._admit(identity, req)
         if admit_refuse is not None:
             return req, _refused(admit_refuse, request_id=request_id)
+        holds.admitted(request_id)
 
-        # Phase 6 — budget lease spend (task 2.4). A BudgetVerdict fails closed.
-        budget_refuse = await self._budget(identity, req)
+        # Phase 6 — budget lease spend (task 2.4). A BudgetVerdict fails closed; a
+        # spend records the SAME cost on ``holds`` so it is refunded if nothing is
+        # dispatched. The cost is computed ONCE and spent + recorded identically.
+        cost = self._estimated_cost(req)
+        budget_refuse = await self._budget(identity, req, cost)
         if budget_refuse is not None:
             return req, _refused(budget_refuse, request_id=request_id)
+        holds.spent(cost, request_id)
 
-        # Phase 7 — INPUT scan + the BLOCK short-circuit (task 2.4), the LAST step
-        # before any provider contact: a BLOCK disposition refuses here, so a
-        # blocked request makes zero provider calls (R7.1 / R7.2).
-        input_refuse = self._input_scan(req)
-        if input_refuse is not None:
-            return req, _refused(input_refuse, request_id=request_id)
+        # Phase 7 — INPUT scan (task 2.4), the LAST step before any provider contact.
+        # A detector / resolver raise fails closed with ``scan_failure``; the resolved
+        # Decision is carried to ``_proceed``, where a BLOCK yields ``input_blocked``
+        # (``authorize`` mints nothing) and a REDACT's transformations are APPLIED and
+        # verified before the provider — so a blocked / unmaskable request makes zero
+        # provider calls (R7.1 / R7.2, the Group A leak-fix).
+        scan = self._input_scan(plan, req)
+        if scan.refuse_code is not None or scan.decision is None:
+            return req, _refused(
+                scan.refuse_code or REFUSE_INPUT_SCAN_FAILURE, request_id=request_id
+            )
 
-        # All seven phases passed: build the proceed outcome (destination + body).
-        return req, self._proceed(plan, req)
+        # All phases passed: stage the VERIFIED upstream bytes (destination + body).
+        return req, self._proceed(plan, req, scan.decision, request_id)
 
     # --- phase seams (bodies filled by tasks 2.2–2.4) --------------------------------------- #
 
@@ -475,7 +475,7 @@ class ChatSurface:
         self,
         scope: ASGIScope,
         body: bytes,
-    ) -> tuple[CanonicalRequest | None, str | None]:
+    ) -> tuple[CanonicalRequest | None, str | None, str | None]:
         """Parse the SDK body → :class:`CanonicalRequest` (task 2.3).
 
         Reads the request ``surface`` from the ASGI ``scope["path"]`` (mapping
@@ -483,24 +483,27 @@ class ChatSurface:
         via :data:`_PATH_TO_SURFACE`) and parses ``body`` through the injected
         ``deps.parser`` (:class:`~gateway_v2.edge.wire.openai.OpenAIRequestParser`).
         A :class:`~gateway_v2.edge.wire.openai.MalformedRequest` is caught and its
-        declared ``.code`` becomes the ``refuse_code`` (the second tuple element) —
-        a raw framework ``json``/``Key`` error never escapes (R1.4). A path that
-        maps to no chat surface fails closed with
-        :data:`REFUSE_UNSUPPORTED_SURFACE` BEFORE the parser runs (the router makes
-        this unreachable; the guard keeps the phase from guessing a surface).
+        declared ``.code`` becomes the ``refuse_code`` (the second tuple element)
+        plus its ``.param`` (the third — the offending field name for a boundary
+        refusal such as ``invalid_max_tokens``, ``None`` for a code-only refusal),
+        so a raw framework ``json``/``Key`` error never escapes (R1.4) and the field
+        name reaches the render site. A path that maps to no chat surface fails
+        closed with :data:`REFUSE_UNSUPPORTED_SURFACE` BEFORE the parser runs (the
+        router makes this unreachable; the guard keeps the phase from guessing a
+        surface).
 
-        On success the first element is the parsed request and the code is ``None``;
-        the parse makes no security decision (R1.5 — the parser is pure wire logic),
-        it only turns the bytes into the canonical shape the later phases consume.
+        On success the first element is the parsed request and the code + param are
+        ``None``; the parse makes no security decision (R1.5 — the parser is pure
+        wire logic), it only turns the bytes into the canonical shape later phases consume.
         """
         surface = self._surface_of(scope)
         if surface is None:
-            return None, REFUSE_UNSUPPORTED_SURFACE
+            return None, REFUSE_UNSUPPORTED_SURFACE, None
         try:
-            request = self._deps.parser.parse(body, surface=surface)
+            request = self._deps.parser.parse(body, surface=surface, contract=self._deps.contract)
         except MalformedRequest as exc:
-            return None, exc.code
-        return request, None
+            return None, exc.code, exc.param
+        return request, None, None
 
     @staticmethod
     def _surface_of(scope: ASGIScope) -> Surface | None:
@@ -607,6 +610,7 @@ class ChatSurface:
         self,
         identity: TenantIdentity,
         req: CanonicalRequest,
+        cost: int,
     ) -> str | None:
         """Budget lease spend (task 2.4); ``None`` ⇒ within budget.
 
@@ -615,20 +619,17 @@ class ChatSurface:
         (``posture.BUDGET_UNAVAILABLE`` — the one spelling the verdict carries), an
         ``Admitted`` returns ``None``.
 
-        ``cost`` is a cheap token-count PROXY: the total length of the folded input
-        channel text (:meth:`_estimated_cost`). The budget phase only needs a
-        non-negative integer cost to spend against the local lease, and the input
-        byte length is a monotone stand-in for the request's token cost that needs
-        no tokenizer on the request path (the exact token accounting is a provider /
-        GW16 concern); it is documented here as an estimate, not the final usage.
-        ``request_id`` is the SAME id minted for the admission phase
+        ``cost`` is the v1 token estimate (:meth:`_estimated_cost`), computed ONCE in
+        :meth:`run_lifecycle` and passed to BOTH this spend and ``holds.spent`` so the
+        amount refunded on a zero-provider-call refusal is exactly the amount spent
+        (Group F). ``request_id`` is the SAME id minted for the admission phase
         (:meth:`_request_id`, a pure function of the request identity) so a
-        ``BudgetVerdict`` and a ``ShedVerdict`` echo one id. The façade's
-        ``evaluate`` performs no store I/O, so this phase adds no shared-state round
-        trip and Property 6 holds.
+        ``BudgetVerdict`` and a ``ShedVerdict`` echo one id. The façade's ``evaluate``
+        performs no store I/O, so this phase adds no shared-state round trip and
+        Property 6 holds.
         """
         verdict = await self._deps.quota.evaluate(
-            self._estimated_cost(req),
+            cost,
             request_id=self._request_id(identity, req),
         )
         if isinstance(verdict, Admitted):
@@ -637,82 +638,85 @@ class ChatSurface:
         # façade already fails closed to this on any undecidable path (R6.2 / R13.1).
         return verdict.code
 
-    def _input_scan(self, req: CanonicalRequest) -> str | None:
-        """INPUT scan + the BLOCK short-circuit (task 2.4); ``None`` ⇒ no BLOCK.
+    def _input_scan(self, plan: ExecutionPlan, req: CanonicalRequest) -> InputScan:
+        """INPUT scan over every folded channel (task 2.4 / Group A); returns the scan.
 
-        Runs the injected ``deps.input_detector`` over every folded
-        ``req.input_channels`` pair and resolves the findings via
-        ``deps.resolver.decide``; a BLOCK disposition (C22 ``most_restrictive``)
-        returns :data:`REFUSE_INPUT_BLOCKED` and the lifecycle returns BEFORE
-        ``provider.open`` (zero provider calls, R7.2); a scan that raises fails
-        closed (``scan_failure`` withhold). The LAST phase before provider contact.
+        Thin adapter over :func:`~gateway_v2.edge.input_enforcement.scan_input`, the
+        ONE input scanner. It resolves the findings at :attr:`Phase.INPUT` via
+        :func:`~gateway_v2.edge.phase_resolvers.resolver_for` — ``deps.phase_resolvers``
+        when a route wires one (so an ``input``-scoped rule is enforced only on input,
+        Group E), else today's single ``deps.resolver``. ``scan_input`` runs
+        ``deps.input_detector`` once per delta AND once per message-part join run,
+        shifts every span into request-content coordinates, drops exact duplicates and
+        resolves ONCE (C21).
 
-        The injected ``deps.input_detector`` is a ``Callable[[str], Sequence[Finding]]``
-        (the SAME findings-producing shape as the error-frame scanner, R7.5 — injected
-        in ``edge``, above ``detect``, so ``egress`` names no detector). It runs over
-        EVERY folded ``req.input_channels`` pair, so a canary in ANY input channel is
-        scanned (C21): the per-channel findings are accumulated and resolved together
-        through ``deps.resolver.decide`` — the SAME ``OutputResolver`` the output path
-        uses, whose ``Decision.disposition`` is already the ``most_restrictive`` of the
-        per-finding dispositions (C22, R7.4), so one BLOCK finding yields a BLOCK
-        decision regardless of any co-matching REDACT/FLAG. A BLOCK disposition returns
-        :data:`REFUSE_INPUT_BLOCKED`; any other disposition (ALLOW / FLAG / REDACT)
-        lets the request proceed — the input phase refuses ONLY on BLOCK, and the input
-        REDACT path is out of this phase's scope (the output guard masks released
-        bytes).
+        The returned :class:`InputScan` carries BOTH the resolved
+        :class:`~gateway_v2.domain.Decision` and a ``refuse_code``:
 
-        **Fail closed (R7, R8.4).** The detector OR the resolver raising is caught and
-        mapped to :data:`REFUSE_INPUT_SCAN_FAILURE` (``scan_failure``): an uncomputable
-        input scan withholds the request rather than forwarding unscanned content to a
-        provider. The scan runs over the parsed, already-pre-checked channels, so no
-        unbounded work escapes the Pre_Identity_Clock bounds.
+        * ``refuse_code`` is :data:`REFUSE_INPUT_SCAN_FAILURE` (``decision is None``)
+          when the detector or resolver RAISED — fail closed, the request is withheld
+          rather than forwarded with unscanned content (R7 / R8.4).
+        * otherwise ``refuse_code is None`` and ``decision`` is carried to
+          :meth:`_proceed`, which stages the VERIFIED upstream bytes: a BLOCK yields
+          ``input_blocked`` (``authorize`` mints nothing) and a REDACT's
+          transformations are APPLIED before the provider (the Group A leak-fix). The
+          input phase no longer short-circuits a BLOCK here; the BLOCK / unmaskable
+          refusal is produced in ``stage_upstream`` before any provider call.
         """
-        try:
-            findings: list[Finding] = []
-            for _channel, text in req.input_channels:
-                findings.extend(self._deps.input_detector(text))
-            decision = self._deps.resolver.decide(findings)
-        except Exception:  # noqa: BLE001 — fail-closed: a raising scan/resolve withholds (R8.4).
-            return REFUSE_INPUT_SCAN_FAILURE
-        if decision.disposition is Disposition.BLOCK:
-            return REFUSE_INPUT_BLOCKED
-        return None
+        return scan_input(
+            req,
+            self._deps.input_detector,
+            resolver_for(self._deps, plan, Phase.INPUT),
+        )
 
     def _proceed(
         self,
         plan: ExecutionPlan,
         req: CanonicalRequest,
+        decision: Decision,
+        request_id: str,
     ) -> LifecycleOutcome:
-        """Build the proceed outcome once every phase passed (task 2.4).
+        """Stage the VERIFIED upstream once every phase passed (task 2.4 / Group A).
 
-        Derives the ``destination`` from ``deps.router.select(plan)`` and the
-        upstream ``body`` from ``deps.transform``-shaped ``Transform.to_provider``
-        over the parsed request, returning a :class:`LifecycleOutcome` with
-        ``refuse_code is None``. This is the ONLY path that leaves ``refuse_code``
-        unset — reached only after all seven fail-closed phases passed.
+        Derives the ``destination`` from ``deps.router.select(plan)`` (pure,
+        deterministic — a signed retry re-routes to the same place, R2.2) and builds
+        the upstream body ONLY from
+        :func:`~gateway_v2.edge.input_enforcement.stage_upstream` over the input
+        ``decision`` — the core leak-A fix: a REDACT decision's transformations are
+        APPLIED and the transformed bytes are VERIFIED (``verified_upstream``) before
+        any provider is opened, so the provider receives only the sanitized bytes.
 
-        The ``destination`` is ``deps.router.select(plan)`` — the pure, deterministic
-        plan-derived upstream (the same identical destination for the same plan
-        identity, so a signed retry re-routes to the same place, R2.2). The ``body``
-        is ``deps.transform.to_provider(GatewayRequest(...)).body`` — the parsed
-        request's ``model`` + ``text_deltas`` packed into the shipped
-        ``UpstreamRequest.body`` shape (R8.4), carrying the destination through
-        unchanged. The returned :class:`LifecycleOutcome` has ``refuse_code is None``;
-        this is the ONLY constructor of the proceed shape, reached only after all
-        seven fail-closed phases passed.
+        ``stage_upstream`` returns either a declared refuse CODE (a ``str``) or an
+        :class:`~gateway_v2.dispatch.provider.UpstreamRequest`:
+
+        * a ``str`` — ``input_blocked`` (a BLOCK decision mints no authorization,
+          defensive) or :data:`REFUSE_INPUT_UNMASKABLE` (a REDACT whose transformed
+          bytes still carry a detected value, or whose transformation cannot be
+          applied) — produces a REFUSED outcome carrying that code with the per-request
+          ``request_id`` and ZERO provider calls.
+        * an ``UpstreamRequest`` — the proceed outcome is built from its verified
+          ``body`` + ``destination`` (the ONLY bytes that reach the provider).
+
+        Streaming and non-streaming share this one staging path. The returned proceed
+        :class:`LifecycleOutcome` has ``refuse_code is None``.
         """
         destination = self._deps.router.select(plan)
-        body = self._deps.transform.to_provider(
+        staged = stage_upstream(
+            decision,
             GatewayRequest(
                 destination=destination,
                 model=req.model,
                 text_deltas=req.text_deltas,
-            )
-        ).body
+            ),
+            self._deps.transform,
+        )
+        if isinstance(staged, str):
+            return _refused(staged, request_id=request_id)
+        upstream: UpstreamRequest = staged
         return LifecycleOutcome(
             plan=plan,
-            destination=destination,
-            body=body,
+            destination=upstream.destination,
+            body=upstream.body,
             refuse_code=None,
         )
 
@@ -722,22 +726,13 @@ class ChatSurface:
     def _request_id(identity: TenantIdentity, req: CanonicalRequest) -> str:
         """Mint the ONE per-request id (task 2.4). Pure: a function of the request identity.
 
-        The admission + budget phases both echo the same id into their verdicts, so the
-        id must be STABLE across both calls within a request — a clock-minted id would
-        differ between phases (the clock advances). It is therefore derived as a pure
-        function of the request identity: the tenant ``org_id`` plus a fingerprint of the
-        request content (``model`` + every folded input channel ``(name, text)`` pair),
-        joined with an injective separator and hashed. This is NOT taken from any
-        client-supplied header (two concurrent client calls sharing an ``X-Request-ID``
-        would collide — the PIPELINE-0023 conflation lesson); the id is gateway-side and
-        tenant-scoped. The ``zs-`` prefix matches the shipped request-id convention.
-
-        Two genuinely distinct requests from the same tenant with byte-identical content
-        hash to the same id — acceptable here because the id only needs to let a verdict
-        echo the request it refused and to key the admission door; the request-content
-        fingerprint keeps distinct payloads distinct, and a true per-request nonce is a
-        boot-wiring concern (an injected rng) a later task can thread in without reshaping
-        this seam.
+        The admission + budget phases both echo the same id, so it must be STABLE across
+        both calls — a clock-minted id would differ (the clock advances). Derived as a
+        pure function of the request identity: the tenant ``org_id`` plus a fingerprint of
+        the request content (``model`` + every folded input channel pair), joined with an
+        injective separator and hashed. NOT taken from any client header (two concurrent
+        client calls sharing an ``X-Request-ID`` would collide — the PIPELINE-0023 lesson);
+        the id is gateway-side and tenant-scoped. The ``zs-`` prefix is the shipped convention.
         """
         parts = [identity.org_id, req.model]
         for channel, text in req.input_channels:
@@ -748,18 +743,21 @@ class ChatSurface:
         ).hexdigest()[:_REQUEST_ID_HEX_WIDTH]
         return f"{_REQUEST_ID_PREFIX}{identity.org_id}-{fingerprint}"
 
-    @staticmethod
-    def _estimated_cost(req: CanonicalRequest) -> int:
-        """A cheap token-cost PROXY for the budget spend (task 2.4). Pure.
+    def _estimated_cost(self, req: CanonicalRequest) -> int:
+        """The v1 request token estimate charged against the lease (Group F, R2.15). Pure.
 
-        The budget phase needs a non-negative integer cost to spend against the local
-        lease; the exact token count is a provider / GW16 concern, not something to run a
-        tokenizer for on the request path. The total character length of the folded input
-        channel text is a monotone, O(n) stand-in — a longer prompt costs more — which is
-        all the lease spend needs. Documented as an ESTIMATE, not the final usage. Pure:
-        no I/O, no clock.
+        Returns ``contract.estimate_request_tokens(prompt_chars(req), req.max_tokens,
+        req.n)`` over the CLAMPED ``req`` — v1's ``estimate_prompt_tokens``:
+        ``max(1, prompt_chars // 4)`` input tokens (0 when there are none) plus the
+        requested output budget ``max_tokens × n``, at least 1. The cost and the GW06
+        lease chunk are therefore in ONE unit, tokens, so a long prompt is not refused
+        merely because the request-count chunk is smaller than a character count, and a
+        high-``n`` / high-``max_tokens`` request cannot under-charge (bugfix.md F). The
+        bound lives in the injected ``contract``, so ``edge`` embeds no literal. Pure.
         """
-        return sum(len(text) for _channel, text in req.input_channels)
+        return self._deps.contract.estimate_request_tokens(
+            prompt_chars(req), req.max_tokens, req.n
+        )
 
     # --- non-streaming path (task 4.1) ----------------------------------------------------- #
 
@@ -770,25 +768,27 @@ class ChatSurface:
         destination: str,
         body: Mapping[str, object],
         send: ASGISend,
+        holds: RequestHolds | None = None,
     ) -> None:
         """Collect the whole upstream, enforce it, render ONE OpenAI JSON (R8/R9).
 
         Reached only after :meth:`run_lifecycle` produced a proceed outcome. Delegates
-        the drain + per-channel scan/resolve/enforce to
-        :func:`~gateway_v2.edge.openai_nonstream.collect_and_enforce` (fail closed),
-        then renders: a BLOCK ⇒ withhold + ``output_blocked`` (R8.3/R9.3); an
-        uncomputable scan/decision ⇒ withhold + ``scan_failure`` (R8.4), raw bytes
-        NEVER emitted and no ``fail_open_total`` increment on any branch; a clean
-        enforce ⇒ ONE ``chat.completion`` JSON via ``deps.renderer.non_stream_body``.
-        Every reply leaves through the single ``emit_response(send, HTTPResponse)``
-        path, so an unmapped value-code still renders the declared generic
-        ``Error_Envelope`` body (R9.2). ``plan`` output enforcement is applied by the
-        injected resolver; its mode is stamped as ``x-amf-produced-mode`` (GW13 C5/R5).
+        the drain + per-channel scan/resolve/enforce to ``collect_and_enforce`` (fail
+        closed), then renders: a BLOCK ⇒ withhold + ``output_blocked`` (R8.3/R9.3); an
+        uncomputable scan/decision ⇒ withhold + ``scan_failure`` (R8.4, raw bytes NEVER
+        emitted, no ``fail_open_total`` increment); a clean enforce ⇒ ONE OpenAI JSON.
+        Every reply leaves through ``emit_response`` so an unmapped value-code renders
+        the declared generic envelope (R9.2). ``plan`` drives the ``Phase.OUTPUT``
+        resolver + stamped mode; ``holds`` (fresh if ``None``) marks dispatch.
         """
+        if holds is None:
+            holds = RequestHolds()
         enforced = await collect_and_enforce(
             self._deps,
             destination,
             body,
+            plan=plan,
+            holds=holds,
             block_code=REFUSE_OUTPUT_BLOCKED,
             scan_failure_code=REFUSE_INPUT_SCAN_FAILURE,
         )

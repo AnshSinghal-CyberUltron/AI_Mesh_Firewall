@@ -160,6 +160,9 @@ def test_property_6_exactly_one_shared_state_round_trip() -> None:
                 return budget_verdict(request_id)
             return Admitted(owner_id=_ORG, request_id=request_id, admitted_at=0.0)
 
+        def refund(self, cost: int, *, request_id: str) -> None:
+            del cost, request_id
+
     # ----- the remaining lifecycle seams as minimal fakes ----- #
 
     class _P6_Admission:
@@ -177,6 +180,9 @@ def test_property_6_exactly_one_shared_state_round_trip() -> None:
             if self._shed:
                 return shed_verdict(random.Random(0), request_id)
             return Admitted(owner_id=_ORG, request_id=request_id, admitted_at=0.0)
+
+        def complete(self, request_id: str) -> None:
+            del request_id
 
     class _P6_Identity:
         """Resolves the canned identity, or ``None`` for the identity-refused flow."""
@@ -207,8 +213,10 @@ def test_property_6_exactly_one_shared_state_round_trip() -> None:
 
         __slots__ = ()
 
-        def parse(self, body: bytes, *, surface: Surface) -> CanonicalRequest:
-            del body
+        def parse(
+            self, body: bytes, *, surface: Surface, contract: object = None
+        ) -> CanonicalRequest:
+            del body, contract
             return CanonicalRequest(
                 model="gpt-test",
                 streaming=False,
@@ -291,6 +299,23 @@ def test_property_6_exactly_one_shared_state_round_trip() -> None:
 
         def max_request_parts(self) -> int:
             return 1_000_000
+
+        def default_response_token_ceiling(self) -> int:
+            """v1's default org output ceiling; ``run_lifecycle`` clamps ``max_tokens`` to it."""
+            return 4096
+
+        def max_output_tokens(self) -> int:
+            """v1's output-token hard cap (the clamp's upper bound)."""
+            return 65536
+
+        def max_completions(self) -> int:
+            """v1's completion cap; the clamp forces ``n`` to it."""
+            return 1
+
+        def estimate_request_tokens(self, chars: int, max_tokens: int, n: int) -> int:
+            """v1's request token estimate the budget phase charges over the clamped request."""
+            input_tokens = max(1, chars // 4) if chars > 0 else 0
+            return max(input_tokens + max_tokens * n, 1)
 
     @dataclass(frozen=True, slots=True)
     class _P6_Deps:
@@ -478,8 +503,10 @@ def test_property_5_pre_identity_pre_checks_reject_before_canonicalization() -> 
 
         calls: int = 0
 
-        def parse(self, body: bytes, *, surface: Surface) -> CanonicalRequest:
-            del body
+        def parse(
+            self, body: bytes, *, surface: Surface, contract: object = None
+        ) -> CanonicalRequest:
+            del body, contract
             self.calls += 1
             return CanonicalRequest(
                 model="spy",
@@ -1148,8 +1175,8 @@ class _P211Parser:
 
     __slots__ = ()
 
-    def parse(self, body: bytes, *, surface):  # type: ignore[no-untyped-def]
-        del body, surface
+    def parse(self, body: bytes, *, surface, contract=None):  # type: ignore[no-untyped-def]
+        del body, surface, contract
         return _p211_canonical_request()
 
 
@@ -1187,6 +1214,23 @@ class _P211Contract:
 
     def max_request_parts(self) -> int:
         return 1_000_000
+
+    def default_response_token_ceiling(self) -> int:
+        """v1's default org output ceiling; ``run_lifecycle`` clamps ``max_tokens`` to it."""
+        return 4096
+
+    def max_output_tokens(self) -> int:
+        """v1's output-token hard cap (the clamp's upper bound)."""
+        return 65536
+
+    def max_completions(self) -> int:
+        """v1's completion cap; the clamp forces ``n`` to it."""
+        return 1
+
+    def estimate_request_tokens(self, chars: int, max_tokens: int, n: int) -> int:
+        """v1's request token estimate the budget phase charges over the clamped request."""
+        input_tokens = max(1, chars // 4) if chars > 0 else 0
+        return max(input_tokens + max_tokens * n, 1)
 
 
 class _P211AllowResolver:
@@ -1387,12 +1431,18 @@ def test_wiring_admission_called_and_admitted_continues() -> None:
             self.owner_ids.append(owner_id)
             return Admitted(owner_id=owner_id, request_id=request_id, admitted_at=0.0)
 
+        def complete(self, request_id):  # type: ignore[no-untyped-def]
+            del request_id
+
     class _P211AdmitBudget:
         __slots__ = ()
 
         async def evaluate(self, cost, *, request_id):  # type: ignore[no-untyped-def]
             del cost
             return Admitted(owner_id=_ORG, request_id=request_id, admitted_at=0.0)
+
+        def refund(self, cost, *, request_id):  # type: ignore[no-untyped-def]
+            del cost, request_id
 
     admission = _P211RecordingAdmission()
     deps = _p211_build_deps(org=_ORG, admission=admission, quota=_P211AdmitBudget())
@@ -1462,12 +1512,18 @@ def test_wiring_undecidable_admission_fails_closed_to_shed() -> None:
                 self.sheds += 1
                 return shed_verdict(self._rng, request_id)
 
+        def complete(self, request_id):  # type: ignore[no-untyped-def]
+            del request_id
+
     class _P211AdmitBudget:
         __slots__ = ()
 
         async def evaluate(self, cost, *, request_id):  # type: ignore[no-untyped-def]
             del cost
             return Admitted(owner_id=_ORG, request_id=request_id, admitted_at=0.0)
+
+        def refund(self, cost, *, request_id):  # type: ignore[no-untyped-def]
+            del cost, request_id
 
     admission = _P211UndecidableAdmission()
     deps = _p211_build_deps(org=_ORG, admission=admission, quota=_P211AdmitBudget())
@@ -1513,6 +1569,9 @@ def test_wiring_quota_evaluate_is_called() -> None:
             del enqueued_at
             return Admitted(owner_id=owner_id, request_id=request_id, admitted_at=0.0)
 
+        def complete(self, request_id):  # type: ignore[no-untyped-def]
+            del request_id
+
     class _P211RecordingBudget:
         __slots__ = ("calls", "costs", "request_ids")
 
@@ -1526,6 +1585,9 @@ def test_wiring_quota_evaluate_is_called() -> None:
             self.costs.append(cost)
             self.request_ids.append(request_id)
             return Admitted(owner_id=_ORG, request_id=request_id, admitted_at=0.0)
+
+        def refund(self, cost, *, request_id):  # type: ignore[no-untyped-def]
+            del cost, request_id
 
     quota = _P211RecordingBudget()
     deps = _p211_build_deps(org=_ORG, admission=_P211AdmitAdmission(), quota=quota)

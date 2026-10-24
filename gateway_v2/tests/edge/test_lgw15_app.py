@@ -130,6 +130,7 @@ def _misc_route(provider: ProviderClient) -> MiscRoute:
     route wires refuse by default (never a fail-open hole).
     """
     return MiscRoute(
+        contract=_contract(),
         provider=provider,
         clock=_Clock(),
         renderer=MiscResponseRenderer(),

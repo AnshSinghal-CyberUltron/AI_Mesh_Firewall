@@ -39,12 +39,40 @@ from gateway_v2.edge.wire.openai import (
     OpenAIRequestParser,
     OpenAIResponseRenderer,
 )
+from gateway_v2.runtime.kinds import HardwareSignals
+from gateway_v2.runtime.resources import ResourceContract, from_signals
 
 _SEED = 0x16_15_0001
 _ITERATIONS = 10_000
 
 _PARSER = OpenAIRequestParser()
 _RENDERER = OpenAIResponseRenderer()
+
+
+def _contract() -> ResourceContract:
+    """A serviceable contract (the shared ``from_signals`` fixture shape the edge tests use).
+
+    ``parse`` reads ``max_output_tokens_boundary()`` off it to validate the token
+    fields; the value-code / stream / channel invariants this suite checks are
+    unaffected by the contract, so any serviceable contract suffices.
+    """
+    signals = HardwareSignals(
+        cpu_quota=4.0,
+        memory_limit=2 * 1024 * 1024 * 1024,
+        fd_limit=4096,
+        cpu_source="test",
+        mem_source="test",
+        fd_source="test",
+    )
+    return from_signals(
+        signals,
+        target_p99_ms=20.0,
+        utilization_cap=0.75,
+        per_worker_rss=400 * 1024 * 1024,
+    )
+
+
+_CONTRACT = _contract()
 
 # A corpus that stresses byte-for-byte preservation: empties, ASCII, unicode (so the
 # renderer's ``ensure_ascii`` escaping must round-trip), JSON-significant characters,
@@ -161,7 +189,7 @@ def test_property_1_parse_render_roundtrip_preserves_content_and_stream_flag() -
         body_obj, stream_flag = _gen_body(rng)
         raw = json.dumps(body_obj).encode("utf-8")
 
-        parsed = _PARSER.parse(raw, surface=Surface.CHAT)
+        parsed = _PARSER.parse(raw, surface=Surface.CHAT, contract=_CONTRACT)
 
         # --- Stream flag preserved exactly as the body ``stream`` flag (R1.3). -------
         assert parsed.streaming is stream_flag, _ctx(
@@ -276,7 +304,7 @@ def _mb_parse_raising(body: bytes) -> MalformedRequest:
     suite guards against.
     """
     with pytest.raises(MalformedRequest) as excinfo:
-        MB_PARSER.parse(body, surface=MB_SURFACE)
+        MB_PARSER.parse(body, surface=MB_SURFACE, contract=_CONTRACT)
     return excinfo.value
 
 
@@ -467,7 +495,7 @@ def test_mb_no_raw_framework_error_leaks(body: bytes) -> None:
     fails here rather than being swallowed as a ``MalformedRequest``.
     """
     try:
-        MB_PARSER.parse(body, surface=MB_SURFACE)
+        MB_PARSER.parse(body, surface=MB_SURFACE, contract=_CONTRACT)
     except MalformedRequest:
         return
     except (

@@ -189,6 +189,27 @@ class _P20FakeContract:
     def max_request_parts(self) -> int:
         return _P20_MAX_PARTS
 
+    def max_output_tokens_boundary(self) -> int:
+        """v1's ``max_tokens`` parse boundary; ``parse`` reads it to validate token fields."""
+        return 1_000_000
+
+    def default_response_token_ceiling(self) -> int:
+        """v1's default org output ceiling; ``run_lifecycle`` clamps ``max_tokens`` to it."""
+        return 4096
+
+    def max_output_tokens(self) -> int:
+        """v1's output-token hard cap (the clamp's upper bound)."""
+        return 65536
+
+    def max_completions(self) -> int:
+        """v1's completion cap; the clamp forces ``n`` to it."""
+        return 1
+
+    def estimate_request_tokens(self, chars: int, max_tokens: int, n: int) -> int:
+        """v1's request token estimate the budget phase charges over the clamped request."""
+        input_tokens = max(1, chars // 4) if chars > 0 else 0
+        return max(input_tokens + max_tokens * n, 1)
+
 
 class _P20Identity:
     """An :class:`IdentityResolver` resolving one canned tenant (never fails closed)."""
@@ -223,6 +244,9 @@ class _P20AdmitAdmission:
         del enqueued_at
         return Admitted(owner_id=owner_id, request_id=request_id, admitted_at=0.0)
 
+    def complete(self, request_id: str) -> None:
+        del request_id
+
 
 class _P20ShedAdmission:
     """Admission that always sheds (the ``shed`` terminal outcome)."""
@@ -236,6 +260,9 @@ class _P20ShedAdmission:
         # Fresh, non-shared rng so the retry-after floor+jitter contract holds deterministically.
         return shed_verdict(random.Random(0), request_id)
 
+    def complete(self, request_id: str) -> None:
+        del request_id
+
 
 class _P20AdmitBudget:
     """Budget that always admits (local lease, no store read)."""
@@ -246,6 +273,9 @@ class _P20AdmitBudget:
         del cost
         return Admitted(owner_id="p20", request_id=request_id, admitted_at=0.0)
 
+    def refund(self, cost: int, *, request_id: str) -> None:
+        del cost, request_id
+
 
 class _P20RefuseBudget:
     """Budget that always refuses (the ``budget_refused`` terminal outcome)."""
@@ -255,6 +285,9 @@ class _P20RefuseBudget:
     async def evaluate(self, cost: int, *, request_id: str) -> BudgetVerdict | Admitted:
         del cost
         return budget_verdict(request_id)
+
+    def refund(self, cost: int, *, request_id: str) -> None:
+        del cost, request_id
 
 
 class _P20InputDetector:

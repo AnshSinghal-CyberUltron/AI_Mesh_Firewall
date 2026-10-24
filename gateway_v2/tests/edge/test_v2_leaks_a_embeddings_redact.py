@@ -164,25 +164,6 @@ _CASES: dict[str, tuple[str | list[str], tuple[Delta, ...], tuple[str, ...]]] = 
     ),
 }
 
-_LEAK = "v2-enforcement-leaks A: "
-_MASK_XFAIL = {
-    "list_one_redacted": _LEAK + "input ['release notes', 'My SSN is 123-45-6789'] -> provider "
-    "delta 1 ('embeddings_input', 'My SSN is 123-45-6789') carries the raw SSN; "
-    "_input_scan returns None on REDACT and _input_as_deltas forwards the raw items",
-    "string_input": _LEAK + "input 'mail jane@example.com' -> provider delta "
-    "('embeddings_input', 'mail jane@example.com') carries the raw email",
-    "list_two_redacted": _LEAK + "input ['SSN 123-45-6789 on file', 'release notes', "
-    "'contact jane@example.com today'] -> provider deltas 0 and 2 carry the raw SSN and email",
-}
-
-
-def _mask_cases() -> list[object]:
-    return [
-        pytest.param(name, id=name, marks=pytest.mark.xfail(strict=True, reason=_MASK_XFAIL[name]))
-        for name in _CASES
-    ]
-
-
 @pytest.mark.parametrize("case", list(_CASES))
 def test_embeddings_redact_keeps_one_delta_per_item_in_order(case: str) -> None:
     """Property 15 (shape): one ``embeddings_input`` delta per item, order kept, clean items kept.
@@ -205,7 +186,7 @@ def test_embeddings_redact_keeps_one_delta_per_item_in_order(case: str) -> None:
             )
 
 
-@pytest.mark.parametrize("case", _mask_cases())
+@pytest.mark.parametrize("case", list(_CASES))
 def test_embeddings_redact_masks_each_item_before_the_provider(case: str) -> None:
     """Property 15 (masking): each finding becomes ``[REDACTED]``; no raw value in any delta.
 

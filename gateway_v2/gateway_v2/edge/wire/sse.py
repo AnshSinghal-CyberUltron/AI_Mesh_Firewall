@@ -182,6 +182,36 @@ ERROR_SHAPES: Mapping[str, tuple[str, str]] = MappingProxyType(
             "invalid_request_error",
             "The request was blocked by an input content policy.",
         ),
+        # The INPUT unmaskable REDACT refusal (v2-enforcement-leaks,
+        # edge/input_enforcement.py ``REFUSE_INPUT_UNMASKABLE``): a REDACT whose
+        # outbound bytes cannot be verified (a detected value survives, or the
+        # transformation cannot be applied). The HTTP ``Error_Envelope`` renders it
+        # 400 ``invalid_request_error`` with the v2 ``code`` ``input_unmaskable`` --
+        # the same content-refusal family as ``input_blocked`` -- so a streaming
+        # unmaskable refusal renders this DECLARED frame, not the generic one, and
+        # the two sides agree on ``type`` + ``code`` (R1.3 / R3.4 parity).
+        "input_unmaskable": (
+            "invalid_request_error",
+            "The request carried content that could not be masked and was withheld.",
+        ),
+        # The Group F output-budget parse refusals (v1 boundary validator): a
+        # ``max_tokens`` / ``max_completion_tokens`` above the parse boundary. The
+        # HTTP ``Error_Envelope`` renders each 400 ``invalid_request_error`` with the
+        # v2 ``code``; the human message stays BOUNDARY-FREE here because the boundary
+        # value is a capacity position (``runtime/resources.py`` only) and must not be
+        # a literal in this module. The concrete boundary is appended at the
+        # contract-bearing HTTP render site (``edge/errors.render_http`` ``detail``,
+        # supplied by ``ChatRoute._render_refusal`` from
+        # ``contract.max_output_tokens_boundary()``); a streaming boundary refusal
+        # keeps this frozen boundary-free frame shape.
+        "invalid_max_tokens": (
+            "invalid_request_error",
+            "The requested max_tokens exceeds the permitted maximum.",
+        ),
+        "invalid_max_completion_tokens": (
+            "invalid_request_error",
+            "The requested max_completion_tokens exceeds the permitted maximum.",
+        ),
     }
 )
 

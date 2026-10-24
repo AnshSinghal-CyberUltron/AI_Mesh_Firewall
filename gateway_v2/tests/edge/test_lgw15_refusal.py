@@ -161,6 +161,27 @@ class _P8FakeContract:
     def max_request_parts(self) -> int:
         return _P8_MAX_PARTS
 
+    def max_output_tokens_boundary(self) -> int:
+        """v1's ``max_tokens`` parse boundary; ``parse`` reads it to validate token fields."""
+        return 1_000_000
+
+    def default_response_token_ceiling(self) -> int:
+        """v1's default org output ceiling; ``run_lifecycle`` clamps ``max_tokens`` to it."""
+        return 4096
+
+    def max_output_tokens(self) -> int:
+        """v1's output-token hard cap (the clamp's upper bound)."""
+        return 65536
+
+    def max_completions(self) -> int:
+        """v1's completion cap; the clamp forces ``n`` to it."""
+        return 1
+
+    def estimate_request_tokens(self, chars: int, max_tokens: int, n: int) -> int:
+        """v1's request token estimate the budget phase charges over the clamped request."""
+        input_tokens = max(1, chars // 4) if chars > 0 else 0
+        return max(input_tokens + max_tokens * n, 1)
+
 
 class _P8FakeIdentity:
     """An :class:`IdentityResolver` that always resolves one canned tenant (never fails closed).
@@ -203,6 +224,9 @@ class _P8ShedAdmission:
         del owner_id, enqueued_at
         return shed_verdict(self._rng, request_id)
 
+    def complete(self, request_id: str) -> None:
+        del request_id
+
 
 class _P8AdmitAdmission:
     """An :class:`AdmissionDecider` that always admits — so the budget arm is reached (R6.2)."""
@@ -215,6 +239,9 @@ class _P8AdmitAdmission:
         del enqueued_at
         return Admitted(owner_id=owner_id, request_id=request_id, admitted_at=0.0)
 
+    def complete(self, request_id: str) -> None:
+        del request_id
+
 
 class _P8RefuseBudget:
     """A :class:`BudgetDecider` that always refuses — the budget-refusal arm (R6.2)."""
@@ -225,6 +252,9 @@ class _P8RefuseBudget:
         del cost
         return budget_verdict(request_id)
 
+    def refund(self, cost: int, *, request_id: str) -> None:
+        del cost, request_id
+
 
 class _P8AdmitBudget:
     """A :class:`BudgetDecider` that always admits (used only in the admission-shed arm)."""
@@ -234,6 +264,9 @@ class _P8AdmitBudget:
     async def evaluate(self, cost: int, *, request_id: str) -> BudgetVerdict | Admitted:
         del cost
         return Admitted(owner_id="p8", request_id=request_id, admitted_at=0.0)
+
+    def refund(self, cost: int, *, request_id: str) -> None:
+        del cost, request_id
 
 
 def _p8_no_findings(text: str) -> Sequence[Finding]:

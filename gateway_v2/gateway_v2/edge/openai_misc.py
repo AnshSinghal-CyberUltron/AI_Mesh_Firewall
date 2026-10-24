@@ -56,17 +56,18 @@ process-wide default provider instance. ``clock`` is REQUIRED, mirroring ``ChatR
 from __future__ import annotations
 
 import json
-from collections.abc import Callable, Mapping
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from gateway_v2.admit.grant import Admitted, ShedVerdict
 from gateway_v2.dispatch.provider import ProviderClient, UpstreamRequest
 from gateway_v2.dispatch.routing import DispatchRouter
-from gateway_v2.dispatch.transform import GatewayRequest, Transform
-from gateway_v2.domain import Disposition, Finding
+from gateway_v2.dispatch.transform import Transform
+from gateway_v2.domain import Finding
 from gateway_v2.domain.plan import (
     ExecutionPlan,
+    Phase,
     PlanUnavailable,
     PlanUnknownTenant,
     Surface,
@@ -86,11 +87,15 @@ from gateway_v2.edge.chat_deps import (
     no_findings_detector,
     unresolved_snapshot_source,
 )
+from gateway_v2.edge.embeddings_input import scan_embeddings, stage_embeddings
 from gateway_v2.edge.identity_resolver import (
     IdentityResolver,
     TenantIdentity,
     fail_closed_resolver,
 )
+from gateway_v2.edge.input_enforcement import REFUSE_INPUT_SCAN_FAILURE
+from gateway_v2.edge.phase_resolvers import PhaseResolverFactory, resolver_for
+from gateway_v2.edge.request_holds import RequestHolds
 from gateway_v2.edge.wire.openai_misc import (
     MiscEmbeddingsRequest,
     MiscModerationsRequest,
@@ -101,6 +106,7 @@ from gateway_v2.edge.wire.openai_misc import (
 from gateway_v2.egress.output_guard import MinimalOutputResolver, OutputResolver
 from gateway_v2.plan.lookup import lookup_plan
 from gateway_v2.plan.snapshot import ReplicaSnapshot
+from gateway_v2.runtime.resources import ResourceContract
 from gateway_v2.runtime.stream_metrics import PerRequestExports
 
 if TYPE_CHECKING:
@@ -144,15 +150,12 @@ class MiscRoute:
 
     Field groups:
 
-    * **Required (injected at boot).** ``provider`` — a real :class:`ProviderClient`
-      (``StubProviderClient`` locally) must be injected; there is no safe process-wide default
-      (parity with ``ChatRoute.provider``). ``clock`` — the injected monotonic clock
-      (parity with ``ChatRoute.clock``). ``renderer`` — :class:`MiscResponseRenderer` from
-      ``edge/wire/openai_misc.py`` (concurrent task 2.4); annotated under ``TYPE_CHECKING`` so
-      this module stays importable while 2.4 lands, injected at boot. ``catalog`` — the
-      :class:`CatalogSource` from ``edge/app.py``; a module-level default would cycle
-      (``app.py -> routes.py -> openai_misc.py -> app.py``), so it is injected at boot (the
-      boot wiring passes ``empty_catalog_source`` by default, a scripted catalog in tests).
+    * **Required (injected at boot).** ``provider`` (a real :class:`ProviderClient`, no safe
+      process-wide default) and ``clock`` parity ``ChatRoute``. ``renderer``
+      (:class:`MiscResponseRenderer`, ``edge/wire/openai_misc.py``, task 2.4) is annotated under
+      ``TYPE_CHECKING`` so the module stays importable until 2.4 lands. ``catalog``
+      (:class:`CatalogSource`, ``edge/app.py``) is injected to avoid the
+      ``app.py -> routes.py -> openai_misc.py -> app.py`` cycle (``empty_catalog_source`` default).
 
     * **Fail-closed security defaults.** ``identity`` (``None`` ⇒ refuse
       ``shared_state_unavailable``), ``admission`` (a ``ShedVerdict`` ⇒ refuse, embeddings
@@ -166,6 +169,10 @@ class MiscRoute:
     """
 
     # --- Required fields (no default): injected at boot (task 8.1). ---
+    #: The injected serving :class:`~gateway_v2.runtime.resources.ResourceContract` (parity with
+    #: ``ChatRoute.contract``). The embeddings budget phase charges the Group F token estimate
+    #: (``estimate_request_tokens``) through it, so ``edge`` embeds no capacity literal.
+    contract: ResourceContract
     #: The injected upstream :class:`ProviderClient` (``StubProviderClient`` locally); embeddings
     #: forwards through it for vectors (R6.1). No safe process-wide default — a real provider must
     #: be injected (parity with ``ChatRoute.provider``).
@@ -233,6 +240,9 @@ class MiscRoute:
     #: :class:`PerRequestExports` (the ``ChatRoute.exports`` field-default pattern) until the boot
     #: card injects the process producer.
     exports: PerRequestExports = PerRequestExports()
+    #: OPTIONAL phase-aware output-resolver factory (Group E, Property 11), parity with
+    #: ``ChatRoute.phase_resolvers``; ``None`` keeps today's single-``resolver`` behaviour (3.5).
+    phase_resolvers: PhaseResolverFactory | None = None
 
 
 # --------------------------------------------------------------------------- #
@@ -313,59 +323,38 @@ async def _emit_json(send: ASGISend, body: bytes) -> None:
 
 
 # --------------------------------------------------------------------------- #
-# EmbeddingsSurface (Components §2 / Per-surface lifecycle: embeddings) — task 5.2.
+# EmbeddingsSurface (Components §2 / Per-surface lifecycle: embeddings).
 # --------------------------------------------------------------------------- #
 #
-# ``POST /v1/embeddings`` is the one BILLABLE misc surface, so it runs the SAME
-# ordered §10.4 pre-provider lifecycle GW15's ``ChatSurface`` proved — parse →
-# identity → plan → admission → budget → input scan → provider — trimmed to the
-# embeddings shape (the embeddings body has no streaming disposition and no output
-# scan; the vectors come straight from the injected provider). The phase ORDER is
-# load-bearing: every refusal returns BEFORE ``provider.open``, so a blocked /
-# shed / budget-refused / unauthenticated / plan-less request makes ZERO provider
-# calls (R4.2 / R5.2 / R5.3 / R5.4 / R5.6). Every phase can only FAIL CLOSED (an
-# early return with a declared ``refuse_code``); there is no forward-on-uncertainty
-# path.
+# ``POST /v1/embeddings`` is the one BILLABLE misc surface: it runs the ordered §10.4
+# pre-provider lifecycle GW15's ``ChatSurface`` proved — parse → identity → plan →
+# admission → budget → input scan → stage → provider — trimmed to the embeddings shape
+# (no streaming disposition, no output scan; the vectors come from the injected provider).
+# The phase ORDER is load-bearing: every refusal returns BEFORE ``provider.open``, so a
+# blocked / unmaskable / shed / budget-refused / unauthenticated / plan-less request makes
+# ZERO provider calls, and every phase can only FAIL CLOSED.
 #
-# **Why a plan round trip (the task's §-5.2 decision).** The design's Data Models
-# section is explicit — "embeddings plan resolution + routing use ``Surface.EMBEDDINGS``
-# exactly as chat uses ``Surface.CHAT``" — and embeddings is billable + enforced, so
-# it mirrors ``ChatSurface`` and resolves the tenant's ``ExecutionPlan`` on the served
-# ``deps.snapshot_source()`` snapshot (the ONE request-path shared-state round trip)
-# to drive ``deps.router.select(plan)``. ``MiscRoute`` therefore carries a
-# ``snapshot_source`` field (added in this task, defaulting to the shipped fail-closed
-# ``unresolved_snapshot_source`` — parity with ``ChatRoute.snapshot_source``); an
-# unresolved plan refuses ``plan_unavailable`` before any provider contact.
+# Group A/D/E/F rewiring (v2-enforcement-leaks, task 26.3). The input scan delegates to
+# :func:`~gateway_v2.edge.embeddings_input.scan_embeddings`, resolving at ``Phase.INPUT``
+# via :func:`~gateway_v2.edge.phase_resolvers.resolver_for` (E). The proceed path stages
+# the VERIFIED bytes via :func:`~gateway_v2.edge.embeddings_input.stage_embeddings`, so a
+# REDACT is applied + verified before the provider and an unmaskable REDACT refuses
+# ``input_unmaskable`` with zero calls (A). A per-request
+# :class:`~gateway_v2.edge.request_holds.RequestHolds` records the admitted slot + the
+# budget spend so the handler releases them exactly once, refunding an undispatched spend
+# (D). The budget cost is the Group F token estimate (``estimate_request_tokens``, F). The
+# GW15 identity / plan refuse-code spellings are imported function-locally inside
+# :meth:`handle` (the deferred-import discipline ``ChatRoute.handle`` uses for the
+# ``routes -> openai_misc`` cycle); ``input_blocked`` / ``input_unmaskable`` /
+# ``scan_failure`` are the shared spellings ``edge/input_enforcement`` declares.
 #
-# **The refuse-code spellings are GW15's — reused, never re-spelled.** The identity /
-# admission / budget / input-blocked / scan-failure / plan-unavailable codes are
-# imported from ``edge/openai_chat.py`` (where GW15 declared them as the single shared
-# spellings, each aliased to the one ``domain/posture.py`` / egress spelling) so the
-# two surfaces never disagree on a code (the C37 join-failure lesson). They are
-# imported function-locally inside :meth:`EmbeddingsSurface.handle` alongside
-# ``emit_response`` because ``edge/openai_chat.py`` and ``edge/routes.py`` import
-# ``edge/routes`` / each other at module level and task 7.1 will wire
-# ``routes -> openai_misc``; a module-level import here would close that cycle, so the
-# lifecycle follows the SAME deferred-import discipline ``ChatRoute.handle`` uses for
-# ``ChatSurface`` (R1.5 — the cycle is avoided the house way, not by re-declaring codes).
-#
-# **How embedding vectors ride the provider stream (the task's provider-transport
-# decision).** The shipped ``dispatch/provider.py::UpstreamEvent`` carries ONLY
-# ``text_deltas`` / ``final`` / ``error_frame`` — it has NO embedding-vector field, and
-# the design forbids changing the shipped ``ProviderClient`` / ``UpstreamEvent`` protocol.
-# So the vectors ride the ONE transport the protocol offers: each ``UpstreamEvent``
-# ``text_deltas`` pair's TEXT is a JSON-encoded array of floats = one embedding vector,
-# and the arrival order of the deltas is the batch index order (``index`` = position in
-# the drained stream, matching the input item position, R6.3). The surface DRAINS the
-# stream exactly as ``edge/openai_nonstream.py`` does, decodes each delta text to a
-# ``tuple[float, ...]``, and renders through ``deps.renderer.embeddings_body`` — it never
-# COMPUTES a vector itself (R6.1); the provider is the sole source (``StubProviderClient``
-# locally, R6.4). A delta whose text is not a JSON float array fails CLOSED
-# (``scan_failure`` — the provider body could not be read as vectors; no partial/raw
-# result is emitted). See the orchestrator report for the gap note: the shipped protocol
-# has no first-class vector channel, so this JSON-over-``text_deltas`` convention is the
-# least-invasive honest local transport and the ``StubProviderClient`` scripts vectors the
-# same way in tests.
+# How embedding vectors ride the provider stream. The shipped ``UpstreamEvent`` has no
+# vector field, and the protocol is frozen, so each event ``text_deltas`` pair's TEXT is a
+# JSON-encoded float array = one embedding vector and the arrival order IS the batch index
+# order (``index`` = input item position, R6.3). The surface drains the stream, decodes
+# each delta, and renders through ``deps.renderer.embeddings_body`` — it never COMPUTES a
+# vector (R6.1); the provider is the sole source. A delta that is not a JSON float array
+# fails CLOSED (``scan_failure``; no partial/raw result).
 
 
 class EmbeddingsSurface:
@@ -395,76 +384,117 @@ class EmbeddingsSurface:
         :class:`~gateway_v2.edge.wire.openai_misc.MiscEmbeddingsRequest` (a
         :class:`~gateway_v2.edge.wire.openai.MalformedRequest` ⇒ its declared ``.code``
         via the envelope, R2.3), then runs the ordered pre-provider lifecycle. A refusal
-        at any phase renders the declared value-code through the single
-        ``emit_response(send, errors.render_http(code))`` path and makes ZERO provider
-        calls; a full pass opens the provider, reads the vectors, and renders the
-        embeddings body. The GW15 refuse-code spellings are imported here (not at module
-        level) because ``edge/routes`` imports back into this module once task 7.1 wires
-        ``build_routes`` — the deferred-import discipline ``ChatRoute.handle`` uses.
+        at any phase renders the declared value-code through the single ``edge/errors``
+        path and makes ZERO provider calls; a full pass stages the verified bytes, opens
+        the provider, reads the vectors, and renders the embeddings body. The GW15
+        identity / plan refuse-code spellings are imported here (not at module level) to
+        avoid the ``routes -> openai_misc`` cycle — the ``ChatRoute.handle`` discipline.
         """
         from gateway_v2.edge.openai_chat import (
             REFUSE_IDENTITY_UNRESOLVED,
-            REFUSE_INPUT_BLOCKED,
-            REFUSE_INPUT_SCAN_FAILURE,
             REFUSE_PLAN_UNAVAILABLE,
         )
         from gateway_v2.edge.wire.openai import MalformedRequest
 
-        body = await read_body(receive)
-
-        # Phase 1 — parse the SDK body (pure wire logic; a malformed body fails closed).
+        # ONE per-request hold ledger (Group D/F): the lifecycle records the admission slot
+        # (``holds.admitted``) + the budget spend (``holds.spent``), ``mark_dispatched`` is set
+        # just before ``provider.open``, and ``release`` runs in the ``finally`` below so the
+        # slot is ``complete``-d exactly once on every exit. A refusal at ``input_blocked`` /
+        # ``scan_failure`` / ``input_unmaskable`` has ``spent`` set but ``dispatched`` unset, so
+        # its spend is refunded automatically. Never shared across requests (R13 isolation).
+        holds = RequestHolds()
         try:
-            req = self._deps.parser.parse_embeddings(body)
-        except MalformedRequest as exc:
-            await _refuse(send, exc.code)
-            return
+            body = await read_body(receive)
 
-        # Phase 2 — resolve Tenant_Identity (GW05b/c). None / stale / unavailable ⇒ refuse,
-        # zero provider calls (R5.1 / R5.2).
-        identity = await self._deps.identity.resolve(scope)
-        if identity is None:
-            await _refuse(send, REFUSE_IDENTITY_UNRESOLVED)
-            return
+            # Phase 1 — parse the SDK body (pure wire logic; a malformed body fails closed).
+            try:
+                req = self._deps.parser.parse_embeddings(body)
+            except MalformedRequest as exc:
+                await _refuse(send, exc.code)
+                return
 
-        # Phase 3 — the ONE shared-state round trip: resolve the plan for Surface.EMBEDDINGS
-        # (parity with ChatSurface). An unresolved plan ⇒ refuse, zero provider calls (R5.6).
-        plan = self._resolve_plan(identity)
-        if plan is None:
-            await _refuse(send, REFUSE_PLAN_UNAVAILABLE)
-            return
+            # Phase 2 — resolve Tenant_Identity (GW05b/c). None / stale / unavailable ⇒ refuse,
+            # zero provider calls (R5.1 / R5.2).
+            identity = await self._deps.identity.resolve(scope)
+            if identity is None:
+                await _refuse(send, REFUSE_IDENTITY_UNRESOLVED)
+                return
 
-        # Phase 4 — admission (GW19). A ShedVerdict ⇒ refuse + retry, zero provider calls (R5.3).
-        admit_refuse = await self._admit(identity, req)
-        if admit_refuse is not None:
-            await _refuse(send, admit_refuse)
-            return
+            # Phase 3 — the ONE shared-state round trip: resolve the plan for Surface.EMBEDDINGS
+            # (parity with ChatSurface). An unresolved plan ⇒ refuse, zero provider calls (R5.6).
+            plan = self._resolve_plan(identity)
+            if plan is None:
+                await _refuse(send, REFUSE_PLAN_UNAVAILABLE)
+                return
 
-        # Phase 5 — budget lease spend (GW06), local lease / no request-path store read. A
-        # BudgetVerdict ⇒ refuse, zero provider calls (R5.4 / R5.5).
-        budget_refuse = await self._budget(identity, req)
-        if budget_refuse is not None:
-            await _refuse(send, budget_refuse)
-            return
+            request_id = self._request_id(identity, req)
 
-        # Phase 6 — INPUT scan + the BLOCK short-circuit, the LAST phase before provider
-        # contact. A BLOCK (C22) ⇒ input_blocked; a raising scan ⇒ scan_failure. Either way
-        # the request returns here, so a blocked request makes ZERO provider calls (R4).
-        input_refuse = self._input_scan(req, block_code=REFUSE_INPUT_BLOCKED)
-        if input_refuse is not None:
-            # A scan that RAISED is a withholding (fail-closed), recorded content-free (R10.3).
-            if input_refuse == REFUSE_INPUT_SCAN_FAILURE:
+            # Phase 4 — admission (GW19). A ShedVerdict ⇒ refuse + retry, zero provider calls
+            # (R5.3); an Admitted records the slot on ``holds`` so it is ``complete``-d on exit.
+            admit_refuse = await self._admit(identity, req, request_id)
+            if admit_refuse is not None:
+                await _refuse(send, admit_refuse)
+                return
+            holds.admitted(request_id)
+
+            # Phase 5 — budget lease spend (GW06), local lease / no request-path store read. A
+            # BudgetVerdict ⇒ refuse, zero provider calls (R5.4 / R5.5); a spend records the SAME
+            # cost on ``holds`` so it is refunded if nothing is dispatched. The cost is computed
+            # ONCE and spent + recorded identically.
+            cost = self._estimated_cost(req)
+            budget_refuse = await self._budget(req, cost, request_id)
+            if budget_refuse is not None:
+                await _refuse(send, budget_refuse)
+                return
+            holds.spent(cost, request_id)
+
+            # Phase 6 — INPUT scan + the BLOCK short-circuit, the LAST phase before provider
+            # contact. The scan resolves at Phase.INPUT via ``resolver_for`` (Group E); a BLOCK
+            # (C22) ⇒ input_blocked and a detector/resolver raise ⇒ scan_failure (Property 4).
+            # Either way the request returns here, so a blocked request makes ZERO provider
+            # calls (R4). The per-item ``observe_detector_invocation`` metric rides ``on_invoke``.
+            scan = scan_embeddings(
+                req,
+                detector=self._deps.input_detector,
+                resolver=resolver_for(self._deps, plan, Phase.INPUT),
+                on_invoke=lambda _text: self._deps.exports.observe_detector_invocation(),
+            )
+            if scan.refuse_code is not None or scan.decision is None:
+                # A scan that RAISED (scan_failure) is a withholding (fail-closed), recorded
+                # content-free (R10.3); a BLOCK renders its declared input_blocked code.
+                if scan.refuse_code == REFUSE_INPUT_SCAN_FAILURE:
+                    self._deps.exports.record_withheld()
+                await _refuse(send, scan.refuse_code or REFUSE_INPUT_SCAN_FAILURE)
+                return
+
+            # Stage the VERIFIED / REDACTED upstream bytes (Group A leak-fix): a BLOCK →
+            # input_blocked, an unmaskable REDACT → input_unmaskable, both BEFORE the provider.
+            staged = stage_embeddings(
+                scan.decision,
+                req,
+                destination=self._deps.router.select(plan),
+                transform=self._deps.transform,
+            )
+            if isinstance(staged, str):
+                # A staged-request refusal (input_blocked / input_unmaskable) is a withholding,
+                # recorded content-free before the refuse render — still zero provider calls.
                 self._deps.exports.record_withheld()
-            await _refuse(send, input_refuse)
-            return
+                await _refuse(send, staged)
+                return
 
-        # All phases passed: open the provider, read the vectors, render (R6). The provider is
-        # reached ONLY here — after every fail-closed phase.
-        await self._collect_and_render(
-            req,
-            plan,
-            send,
-            scan_failure_code=REFUSE_INPUT_SCAN_FAILURE,
-        )
+            # All phases passed: open the provider on the STAGED request, read the vectors,
+            # render (R6). The provider is reached ONLY here — after every fail-closed phase.
+            await self._collect_and_render(
+                req,
+                staged,
+                send,
+                holds,
+                scan_failure_code=REFUSE_INPUT_SCAN_FAILURE,
+            )
+        finally:
+            # Synchronous, never raises, idempotent behind its own latch: a lost refund /
+            # complete can never mask the in-flight response or exception (Group D/F).
+            holds.release(self._deps.admission, self._deps.quota)
 
     # --- lifecycle phases (mirror ChatSurface, trimmed to the embeddings shape) ----------- #
 
@@ -485,108 +515,79 @@ class EmbeddingsSurface:
             return None
         return state
 
-    async def _admit(self, identity: TenantIdentity, req: MiscEmbeddingsRequest) -> str | None:
+    async def _admit(
+        self, identity: TenantIdentity, req: MiscEmbeddingsRequest, request_id: str
+    ) -> str | None:
         """Admission control (GW19); ``None`` ⇒ admitted.
 
         Calls ``deps.admission.admit(owner_id=org_id, request_id, enqueued_at)``; a
         ``ShedVerdict`` returns its ``code`` (the shipped controller fails closed to a shed
         on any undecidable path, so a shed is the only non-admit outcome), an ``Admitted``
         returns ``None``. ``owner_id`` is the tenant's ``org_id`` (per-owner fairness);
-        ``enqueued_at`` is the injected clock at the admission boundary.
+        ``enqueued_at`` is the injected clock at the admission boundary. ``request_id`` is the
+        ONE id minted per request (threaded in so admission + budget echo the same id and the
+        per-request holds ledger ``complete``-s the right slot).
         """
+        del req
         verdict = await self._deps.admission.admit(
             owner_id=identity.org_id,
-            request_id=self._request_id(identity, req),
+            request_id=request_id,
             enqueued_at=self._deps.clock(),
         )
         if isinstance(verdict, ShedVerdict):
             return verdict.code
         return None
 
-    async def _budget(self, identity: TenantIdentity, req: MiscEmbeddingsRequest) -> str | None:
+    async def _budget(
+        self, req: MiscEmbeddingsRequest, cost: int, request_id: str
+    ) -> str | None:
         """Budget lease spend (GW06); ``None`` ⇒ within budget.
 
         Calls ``deps.quota.evaluate(cost, request_id=...)`` on the LOCAL lease (no
         request-path store read, R5.5); a ``BudgetVerdict`` returns its code
-        (``posture.BUDGET_UNAVAILABLE``), an ``Admitted`` returns ``None``. ``cost`` is a
-        cheap token-count PROXY: the total length of the folded input item text
-        (:meth:`_estimated_cost`), a monotone O(n) stand-in that needs no tokenizer on the
-        request path. ``request_id`` is the SAME id minted for admission so a budget and a
-        shed verdict echo one id.
+        (``posture.BUDGET_UNAVAILABLE``), an ``Admitted`` returns ``None``. ``cost`` is the
+        Group F token estimate (:meth:`_estimated_cost`), computed ONCE by the caller and both
+        spent here AND recorded on the holds ledger so a refund returns the same number.
+        ``request_id`` is the SAME id minted for admission so a budget and a shed verdict echo
+        one id.
         """
-        verdict = await self._deps.quota.evaluate(
-            self._estimated_cost(req),
-            request_id=self._request_id(identity, req),
-        )
+        del req
+        verdict = await self._deps.quota.evaluate(cost, request_id=request_id)
         if isinstance(verdict, Admitted):
             return None
         return verdict.code
-
-    def _input_scan(self, req: MiscEmbeddingsRequest, *, block_code: str) -> str | None:
-        """INPUT scan + the BLOCK short-circuit (R4); ``None`` ⇒ no BLOCK.
-
-        Folds every ``embeddings_input`` item into a ``(channel, text)`` Scannable_Text pair
-        (:func:`~gateway_v2.edge.wire.openai_misc.fold_misc_input`), runs the injected
-        ``deps.input_detector`` over EACH item's text (so a canary in ANY input item is
-        scanned, C21 / R4.1), accumulates the findings, and resolves them via
-        ``deps.resolver.decide`` — the SAME C22 ``most_restrictive`` resolver the chat output
-        path uses, so one BLOCK finding yields a BLOCK decision regardless of a co-matching
-        REDACT/FLAG (R4.4). A BLOCK disposition returns ``block_code`` (``input_blocked``) and
-        the lifecycle returns BEFORE ``provider.open`` (zero provider calls, R4.2). Each
-        detector run is recorded content-free on the exports producer (R10.2). The detector OR
-        the resolver RAISING is caught and mapped to the shipped ``scan_failure`` spelling: an
-        uncomputable input scan WITHHOLDS the request rather than forwarding unscanned content
-        (fail closed, R4.6).
-        """
-        from gateway_v2.edge.openai_chat import REFUSE_INPUT_SCAN_FAILURE
-        from gateway_v2.edge.wire.openai_misc import fold_misc_input
-
-        exports = self._deps.exports
-        try:
-            findings: list[Finding] = []
-            for _channel, text in fold_misc_input(req.input_items, "embeddings_input"):
-                exports.observe_detector_invocation()
-                findings.extend(self._deps.input_detector(text))
-            decision = self._deps.resolver.decide(findings)
-        except Exception:  # noqa: BLE001 — fail closed: a raising scan/resolve withholds (R4.6).
-            return REFUSE_INPUT_SCAN_FAILURE
-        if decision.disposition is Disposition.BLOCK:
-            return block_code
-        return None
 
     # --- provider drain + render (R6) ------------------------------------------------------ #
 
     async def _collect_and_render(
         self,
         req: MiscEmbeddingsRequest,
-        plan: ExecutionPlan,
+        upstream: UpstreamRequest,
         send: ASGISend,
+        holds: RequestHolds,
         *,
         scan_failure_code: str,
     ) -> None:
-        """Open the provider, drain the vectors, render the embeddings body (R6).
+        """Open the provider on the STAGED request, drain the vectors, render the body (R6).
 
-        Reached only after every pre-provider phase passed. Selects the destination from
-        ``deps.router.select(plan)``, packs the upstream body with
-        ``deps.transform.to_provider`` (the parsed request's ``model`` + input items as the
-        provider body), opens the injected provider, and drains the embedding vectors from the
-        ``UpstreamEvent`` stream (:meth:`_drain_vectors` — the provider is the sole source of
-        vectors, R6.1). The vectors render through ``deps.renderer.embeddings_body`` with batch
-        index order preserved (R6.2 / R6.3). A provider / decode failure fails CLOSED: the body
-        is WITHHELD with ``scan_failure_code`` and recorded content-free (R10.3), never a
-        partial or raw result. The refusal + the 200 body both leave through the shared
-        :func:`_refuse` / :func:`_emit_json` render helpers (the one ``edge/errors`` path).
+        Reached only after every pre-provider phase passed. ``upstream`` is the STAGED
+        :class:`~gateway_v2.dispatch.provider.UpstreamRequest` returned by
+        :func:`~gateway_v2.edge.embeddings_input.stage_embeddings` — the verified / redacted
+        bytes (the Group A leak-fix: a REDACT is applied before the provider is opened), so this
+        method never rebuilds the body from the raw input. It opens the injected provider on that
+        staged request, drains the embedding vectors from the ``UpstreamEvent`` stream
+        (:meth:`_drain_vectors` — the provider is the sole source of vectors, R6.1), and renders
+        through ``deps.renderer.embeddings_body`` with batch index order preserved (R6.2 / R6.3).
+
+        ``holds.mark_dispatched()`` is recorded inside :meth:`_drain_vectors`, immediately before
+        ``provider.open`` (Group D): once the request has reached the provider the budget spend
+        STANDS and is not refunded (C29). A provider / decode failure fails CLOSED: the body is
+        WITHHELD with ``scan_failure_code`` and recorded content-free (R10.3), never a partial or
+        raw result. The refusal + the 200 body both leave through the shared :func:`_refuse` /
+        :func:`_emit_json` render helpers (the one ``edge/errors`` path).
         """
-        destination = self._deps.router.select(plan)
-        upstream_body = self._deps.transform.to_provider(
-            GatewayRequest(
-                destination=destination,
-                model=req.model,
-                text_deltas=self._input_as_deltas(req),
-            )
-        ).body
         try:
-            vectors = await self._drain_vectors(destination, upstream_body)
+            vectors = await self._drain_vectors(upstream, holds)
         except Exception:  # noqa: BLE001 — fail closed: an unreadable provider body withholds.
             self._deps.exports.record_withheld()
             await _refuse(send, scan_failure_code)
@@ -595,24 +596,29 @@ class EmbeddingsSurface:
 
     async def _drain_vectors(
         self,
-        destination: str,
-        body: Mapping[str, object],
+        upstream: UpstreamRequest,
+        holds: RequestHolds,
     ) -> tuple[tuple[int, tuple[float, ...]], ...]:
         """Drain the provider stream into ordered ``(index, vector)`` pairs (R6.1 / R6.3).
 
         The shipped ``UpstreamEvent`` has no vector field, so each event ``text_deltas``
         pair's TEXT is a JSON-encoded array of floats = one embedding vector, and the arrival
-        order IS the batch index order. Iterates ``deps.provider.open(UpstreamRequest(...))``
-        to exhaustion, decoding every delta's text to a ``tuple[float, ...]`` and assigning the
-        next sequential ``index``; a mid-stream ``error_frame`` or a delta whose text is not a
-        JSON float array RAISES (the caller fails closed — the provider body could not be read
-        as vectors, so no partial/raw result is emitted). The gateway COMPUTES no vector (R6.1);
-        the provider is the sole source.
+        order IS the batch index order. Opens the injected provider on the STAGED ``upstream``
+        request (its verified ``destination`` + ``body``) and iterates it to exhaustion, decoding
+        every delta's text to a ``tuple[float, ...]`` and assigning the next sequential ``index``;
+        a mid-stream ``error_frame`` or a delta whose text is not a JSON float array RAISES (the
+        caller fails closed — the provider body could not be read as vectors, so no partial/raw
+        result is emitted). The gateway COMPUTES no vector (R6.1); the provider is the sole source.
+
+        ``holds.mark_dispatched()`` is recorded immediately before ``provider.open`` (Group D):
+        this is the embeddings provider-open site, so once the request has reached the provider
+        the budget spend STANDS and is not refunded (C29).
         """
-        request = UpstreamRequest(destination=destination, body=body)
         vectors: list[tuple[int, tuple[float, ...]]] = []
         index = 0
-        async for event in self._deps.provider.open(request):
+        # The provider is about to be opened: record the dispatch so the spend stands (C29).
+        holds.mark_dispatched()
+        async for event in self._deps.provider.open(upstream):
             if event.error_frame is not None:
                 raise _VectorTransportError("provider returned an error frame")
             for _channel, delta in event.text_deltas:
@@ -637,16 +643,6 @@ class EmbeddingsSurface:
             values.append(float(element))
         return tuple(values)
 
-    @staticmethod
-    def _input_as_deltas(req: MiscEmbeddingsRequest) -> tuple[tuple[str, str], ...]:
-        """Pack the embeddings input items into the ``Transform`` ``text_deltas`` shape.
-
-        The ``Transform`` consumes the ``(channel, text)`` delta shape; the embeddings input
-        items ride under the ``embeddings_input`` channel so the request → provider body
-        carries the exact input text the provider embeds, in request order.
-        """
-        return tuple(("embeddings_input", item) for item in req.input_items)
-
     # --- request-id + cost sourcing (mirror ChatSurface) ----------------------------------- #
 
     @staticmethod
@@ -666,15 +662,18 @@ class EmbeddingsSurface:
         fingerprint = hashlib.sha256(sep.join(parts).encode("utf-8")).hexdigest()[:24]
         return f"zs-{identity.org_id}-{fingerprint}"
 
-    @staticmethod
-    def _estimated_cost(req: MiscEmbeddingsRequest) -> int:
-        """A cheap token-cost PROXY for the budget spend. Pure.
+    def _estimated_cost(self, req: MiscEmbeddingsRequest) -> int:
+        """The Group F request token estimate the budget phase charges (R2.15). Pure.
 
-        The total character length of the folded input items — a monotone, O(n) stand-in for
-        the request's token cost that needs no tokenizer on the request path (the exact token
-        accounting is a provider concern). Documented as an ESTIMATE, not final usage.
+        Returns ``deps.contract.estimate_request_tokens(chars, 0, 1)`` over the total character
+        length of the input items — v1's request-token estimate (``max(1, chars // divisor)``),
+        with ``max_tokens=0`` and ``n=1`` because embeddings has no output budget (one completion,
+        no output tokens). The cost is sourced through the injected ``ResourceContract`` so
+        ``edge`` embeds no capacity literal; it is an ESTIMATE charged before the provider, not
+        final usage.
         """
-        return sum(len(item) for item in req.input_items)
+        chars = sum(len(item) for item in req.input_items)
+        return self._deps.contract.estimate_request_tokens(chars, 0, 1)
 
 
 # --------------------------------------------------------------------------- #

@@ -104,7 +104,6 @@ OUTPUT_CANARY = "OUTPUT-CANARY-7731"
 _IDLE_JUMP_S = 10.0
 #: Request-queue depth for the real-controller run (kept small; the run is 3x this).
 _REAL_DEPTH = 4
-_LEAK = "v2-enforcement-leaks D: "
 
 
 def _contract() -> ResourceContract:
@@ -171,6 +170,9 @@ class _Budget:
         if self._refuse:
             return budget_verdict(request_id)
         return Admitted(owner_id=DEFAULT_ORG_ID, request_id=request_id, admitted_at=0.0)
+
+    def refund(self, cost: int, *, request_id: str) -> None:
+        del cost, request_id
 
 
 class _NoIdentity:
@@ -515,23 +517,7 @@ def test_admitted_exit_path_is_reached(name: str) -> None:
     assert len(admission.admitted) == 1, f"{name}: admitted {admission.admitted!r}"
 
 
-def _completion_cases() -> list[object]:
-    return [
-        pytest.param(
-            name,
-            id=name,
-            marks=pytest.mark.xfail(
-                strict=True,
-                reason=_LEAK + f"{name}: admitted once, exits {_ADMITTED[name].expect!r}, "
-                "admission.complete called 0 times (no completion site in ChatRoute.handle / "
-                "ChatSurface.run_lifecycle / EmbeddingsSurface.handle)",
-            ),
-        )
-        for name in _ADMITTED
-    ]
-
-
-@pytest.mark.parametrize("name", _completion_cases())
+@pytest.mark.parametrize("name", list(_ADMITTED))
 def test_admitted_request_completes_exactly_once(name: str) -> None:
     """Every admitted request calls ``complete`` exactly once, for its own id (Property 9).
 
@@ -576,12 +562,6 @@ _STEADY_CYCLE = (
 )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=_LEAK + f"real AdmissionController, request_depth={_REAL_DEPTH}: after request 1 "
-    f"(chat json, 200) the request-queue depth is 1, not 0; depth grows 1,2,3,4 and requests "
-    f"{_REAL_DEPTH + 1}-{3 * _REAL_DEPTH} are all shed 503 overload_shed (queue_full)",
-)
 def test_real_controller_depth_returns_to_zero_under_steady_load() -> None:
     """Sequential chat (json + stream) and embeddings requests never accumulate slots.
 

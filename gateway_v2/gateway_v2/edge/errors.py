@@ -142,7 +142,14 @@ class HTTPResponse:
 #   * buffer/plan/snapshot/kill-switch/plan-unavailable/shared-state/overload/budget
 #     -> 503 Service Unavailable (a transient capacity / control-plane condition);
 #   * output_blocked / scan_failure -> 403 Forbidden (the guard withheld the
-#     response -- a policy decision, not an upstream fault);
+#     response -- a policy decision, not an upstream fault). These STAY 403.
+#   * input_blocked / input_unmaskable -> 400 invalid_request_error (the REQUEST
+#     carried content the gateway cannot forward safely -- an input content
+#     refusal in the frozen OpenAI BadRequest family, v1 GATEWAY_BLOCK_STATUS
+#     parity, default 400); NOT the 403 the output-side guard uses;
+#   * invalid_max_tokens / invalid_max_completion_tokens -> 400 invalid_request_error
+#     (v1's boundary validator refuses an output-budget field above the parse
+#     boundary with a 400, same client-error family as an input content refusal);
 #   * max-duration / stream_killed -> 503 (the gateway cut an in-flight stream).
 
 _ENVELOPE: Mapping[str, tuple[int, str]] = MappingProxyType(
@@ -175,7 +182,17 @@ _ENVELOPE: Mapping[str, tuple[int, str]] = MappingProxyType(
         # posture spelling ``input_blocked`` (what the v2 cells assert and what the
         # ledger's v2 side represents). ``output_blocked`` keeps its existing 403
         # mapping unchanged. The 400 is a response-status code, not a capacity literal.
+        #
+        # ``input_unmaskable`` (edge/input_enforcement.py ``REFUSE_INPUT_UNMASKABLE``)
+        # is the SAME HTTP family: a REDACT input whose outbound bytes cannot be
+        # verified (a detected value survives, or the transformation cannot be
+        # applied) is content the gateway cannot forward safely, exactly like an
+        # input block. GW01 §10.2.2 and v1's ``_build_safe_block_response`` ->
+        # ``GATEWAY_BLOCK_STATUS`` (default 400) make an unmaskable input REDACT the
+        # same client-error disposition as a block, so it renders 400
+        # ``invalid_request_error`` with the v2 posture ``code`` ``input_unmaskable``.
         "input_blocked": (400, "invalid_request_error"),
+        "input_unmaskable": (400, "invalid_request_error"),
         # -- GW16 misc-surface client-facing codes (Decision 1, R7.3/R9.1) ----
         # Value-codes declared in edge/wire/openai_misc.py (MISSING_REQUIRED_PARAMETER
         # / MODEL_NOT_FOUND); keyed here as literal strings (matching the existing
@@ -183,6 +200,22 @@ _ENVELOPE: Mapping[str, tuple[int, str]] = MappingProxyType(
         # The 400/404 are response-status codes, not capacity-position literals.
         "missing_required_parameter": (400, "invalid_request_error"),
         "model_not_found": (404, "not_found_error"),
+        # -- Group F output-budget parse refusals (v1 boundary validator) -----
+        # Value-codes declared in edge/wire/openai.py (INVALID_MAX_TOKENS /
+        # INVALID_MAX_COMPLETION_TOKENS); keyed here as literal strings (matching the
+        # existing literal-string keys above) so this render table takes no upward
+        # import. v1's boundary validator (``MAX_OUTPUT_TOKENS_CEILING``,
+        # gateway/ai_mesh_gateway/main.py ~L3399) refuses a ``max_tokens`` /
+        # ``max_completion_tokens`` ABOVE the parse boundary with HTTP 400
+        # ``invalid_request_error`` and ``param`` naming the field; v2 keeps that
+        # 400 ``invalid_request_error`` family with the v2 ``code`` spelling. The
+        # boundary number itself is NOT embedded here (it is a capacity position,
+        # ``runtime/resources.py`` only): it reaches the rendered message via the
+        # ``boundary`` argument the contract-bearing render site supplies (see
+        # :func:`render_http` + :data:`_BOUNDARY_CODES`). The 400 is a
+        # response-status code, not a capacity literal.
+        "invalid_max_tokens": (400, "invalid_request_error"),
+        "invalid_max_completion_tokens": (400, "invalid_request_error"),
         # -- Pre-existing posture codes (R2 cards) ----------------------------
         posture.PLAN_UNAVAILABLE: (503, "service_unavailable"),
         posture.KILL_SWITCH_UNAVAILABLE: (503, "service_unavailable"),
@@ -245,11 +278,21 @@ def _error_headers(request_id: str | None) -> tuple[tuple[str, str], ...]:
     return headers
 
 
+#: The two Group F output-budget parse-refusal codes whose declared message must name the
+#: permitted maximum. They are value-codes (plain strings, the same literal-string keying the
+#: ``_ENVELOPE`` entries use so this module takes no upward import of the
+#: ``edge/wire/openai`` constants), NOT capacity-position literals. The boundary NUMBER is never
+#: embedded here -- it arrives at runtime as the ``boundary`` argument sourced from
+#: ``ResourceContract.max_output_tokens_boundary()`` at the contract-bearing caller.
+_BOUNDARY_CODES = frozenset({"invalid_max_tokens", "invalid_max_completion_tokens"})
+
+
 def render_http(
     code: str,
     *,
     param: str | None = None,
     request_id: str | None = None,
+    boundary: int | None = None,
 ) -> HTTPResponse:
     """Render a value-code to a declared :class:`HTTPResponse` (R3.2).
 
@@ -266,6 +309,19 @@ def render_http(
     render site that has no id yet). When a ``request_id`` is supplied, the
     ``x-request-id`` response header is set alongside the body field so the stock SDK
     reads it from the header and the two never disagree.
+
+    ``boundary`` is the permitted-maximum VALUE a CONTRACT-BEARING caller supplies
+    (``None`` everywhere else). The boundary codes :data:`_BOUNDARY_CODES`
+    (``invalid_max_tokens`` / ``invalid_max_completion_tokens``) must name the
+    permitted maximum in their message, but that boundary is a capacity position
+    (``ResourceContract.max_output_tokens_boundary()``) that may NOT appear as a
+    literal in this render module (``check_capacity_literals`` forbids it outside
+    ``runtime/resources.py``). The declared :data:`ERROR_SHAPES` message therefore
+    stays boundary-free, and the caller that HAS a contract (``edge/routes.py``
+    ``ChatRoute._render_refusal``) passes the concrete ``boundary`` here; this
+    function appends the clause for a boundary code ONLY. So the real boundary
+    reaches the wire while the NUMBER lives only in the contract -- the gate stays
+    green because no capacity literal appears in this module.
     """
     headers = _error_headers(request_id)
     entry = _ENVELOPE.get(code)
@@ -279,10 +335,14 @@ def render_http(
         )
         return HTTPResponse(status=GENERIC_HTTP_STATUS, body=body, headers=headers)
     status, error_type = entry
-    # Reuse the single-sourced declared frame for the human-readable message so
-    # the HTTP body and the SSE frame carry identical text for the same code.
-    frame = error_frame_for(code)
-    body = _http_body(error_type, code, frame.message, param=param, request_id=request_id)
+    # Reuse the single-sourced declared frame for the human-readable message so the
+    # HTTP body and the SSE frame carry identical text. For a boundary code, append
+    # the contract-supplied boundary VALUE (never a literal here) so the message
+    # names the permitted maximum.
+    message = error_frame_for(code).message
+    if code in _BOUNDARY_CODES and boundary is not None:
+        message = f"{message} The permitted maximum is {boundary}."
+    body = _http_body(error_type, code, message, param=param, request_id=request_id)
     return HTTPResponse(status=status, body=body, headers=headers)
 
 
@@ -324,6 +384,7 @@ def render(
     as_sse: bool,
     param: str | None = None,
     request_id: str | None = None,
+    boundary: int | None = None,
 ) -> HTTPResponse | bytes:
     """Map a value-code to a declared HTTP status + SSE ``Error_Frame`` (R3.2).
 
@@ -333,12 +394,15 @@ def render(
     internal detail (R3.4). This is the single ``Error_Envelope`` entry point
     (R3.1); every code reaching the wire passes through here.
 
-    ``param`` / ``request_id`` thread into the HTTP body (and the ``x-request-id``
-    header for ``request_id``); they are HTTP-body fields only — the SSE
-    ``Error_Frame`` keeps the frozen OpenAI streaming-error shape
+    ``param`` / ``request_id`` / ``boundary`` thread into the HTTP body (and the
+    ``x-request-id`` header for ``request_id``); they are HTTP-body fields only —
+    the SSE ``Error_Frame`` keeps the frozen OpenAI streaming-error shape
     (``message`` / ``type`` / ``code``) the v1 streaming-error contract pins, so
-    they are not injected into the SSE frame.
+    they are not injected into the SSE frame. ``boundary`` is the contract-sourced
+    permitted maximum the boundary codes carry (see :func:`render_http`); the SSE
+    frame's boundary-free declared message is intentional (a streaming boundary
+    refusal keeps the frozen shape).
     """
     if as_sse:
         return render_sse(code)
-    return render_http(code, param=param, request_id=request_id)
+    return render_http(code, param=param, request_id=request_id, boundary=boundary)

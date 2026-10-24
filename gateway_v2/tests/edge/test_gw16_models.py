@@ -34,6 +34,8 @@ from gateway_v2.edge.openai_misc import MiscRoute
 from gateway_v2.edge.openai_misc_models import ModelsSurface
 from gateway_v2.edge.wire.openai_misc import MiscResponseRenderer
 from gateway_v2.egress.output_guard import MinimalOutputResolver
+from gateway_v2.runtime.kinds import HardwareSignals
+from gateway_v2.runtime.resources import ResourceContract, from_signals
 
 _ITERATIONS = 10_000
 _SEED = 0x6716  # a plain fixed seed → deterministic replay.
@@ -149,9 +151,28 @@ class _Capture:
                 self.body += bytes(chunk)
 
 
+def _contract() -> ResourceContract:
+    """A serviceable contract (the shared ``from_signals`` fixture shape)."""
+    signals = HardwareSignals(
+        cpu_quota=4.0,
+        memory_limit=400 * 1024 * 1024 * 8,
+        fd_limit=4096,
+        cpu_source="test",
+        mem_source="test",
+        fd_source="test",
+    )
+    return from_signals(
+        signals,
+        target_p99_ms=20.0,
+        utilization_cap=0.75,
+        per_worker_rss=400 * 1024 * 1024,
+    )
+
+
 def _deps(provider: _CountingProvider, catalog: CatalogSource) -> MiscRoute:
     """Build the ``MiscRoute`` with the counted provider + scripted catalog + fixed identity."""
     return MiscRoute(
+        contract=_contract(),
         provider=provider,
         clock=lambda: 0.0,
         renderer=MiscResponseRenderer(),
