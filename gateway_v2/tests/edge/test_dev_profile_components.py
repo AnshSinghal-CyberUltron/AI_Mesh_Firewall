@@ -29,7 +29,7 @@ from gateway_v2.edge.dev_components import (
     StaticCatalogSource,
     load_dev_plan,
     parse_model_ids,
-    plan_resolver,
+    phase_resolver_factory,
     warm_dev_snapshot_source,
 )
 from gateway_v2.edge.identity_resolver import TenantIdentity
@@ -112,7 +112,9 @@ def test_example_plan_compiles_through_the_real_compiler() -> None:
 def test_example_plan_resolves_pii_redact_and_secret_block() -> None:
     plan = load_dev_plan(str(EXAMPLE_PLAN), org_id="dev-org", compiled_at=0.0)
     detector = DeterministicFindings(phase=Phase.INPUT, budget_s=0.1)
-    resolver = plan_resolver(plan)
+    # The phase-aware factory at ``Phase.INPUT`` yields the same ``PlanResolver(plan, Phase.INPUT)``
+    # the single resolver used to be, so the decide assertions below are unchanged.
+    resolver = phase_resolver_factory()(plan, Phase.INPUT)
     assert resolver.decide(detector(f"ssn {SSN}")).disposition is Disposition.REDACT
     assert resolver.decide(detector(f"key {AWS_KEY}")).disposition is Disposition.BLOCK
     assert resolver.decide(detector("hello there")).disposition is Disposition.ALLOW
@@ -144,10 +146,6 @@ def test_snapshot_source_serves_the_compiled_plan() -> None:
             {"org_id": "dev-org", "streaming_mode": "incremental", "rules": [_rule(threshold=2)]},
             "threshold",
         ),
-        (
-            {"org_id": "dev-org", "streaming_mode": "incremental", "rules": [_rule(scope="input")]},
-            "scope='input'",
-        ),
         ({"org_id": "dev-org", "streaming_mode": "incremental", "rules": []}, "no active rules"),
         (
             {"org_id": "other", "streaming_mode": "incremental", "rules": [_rule()]},
@@ -169,6 +167,27 @@ def test_bad_plan_file_refuses_to_start(tmp_path: Path, body: object, fragment: 
 def test_missing_plan_file_refuses_to_start(tmp_path: Path) -> None:
     with pytest.raises(DevProfileError, match="cannot be read"):
         load_dev_plan(str(tmp_path / "absent.json"), org_id="dev-org", compiled_at=0.0)
+
+
+def test_phase_scoped_plan_is_accepted(tmp_path: Path) -> None:
+    """A phase-scoped (``scope: input`` / ``scope: output``) plan now boots (Group E).
+
+    The dev profile wires a phase-aware resolver factory, so an ``input``-scoped rule is enforced
+    on input and an ``output``-scoped rule on output; ``require_phase_agnostic`` no longer refuses
+    such a plan (it only refuses a plan with no active rule at all). The plan here carries one
+    input-scoped and one output-scoped rule and must compile to an :class:`ExecutionPlan`.
+    """
+    body = {
+        "org_id": "dev-org",
+        "streaming_mode": "incremental",
+        "rules": [
+            _rule(rule_id="pii-input", category="pii", action="redact", scope="input"),
+            _rule(rule_id="secret-output", category="secret", action="block", scope="output"),
+        ],
+    }
+    plan = load_dev_plan(_write_plan(tmp_path, body), org_id="dev-org", compiled_at=0.0)
+    assert isinstance(plan, ExecutionPlan)
+    assert {rule.scope.value for rule in plan.rules} == {"input", "output"}
 
 
 # --- detectors ------------------------------------------------------------------------------- #

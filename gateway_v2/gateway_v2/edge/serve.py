@@ -71,7 +71,6 @@ from gateway_v2.edge.chat_deps import (
     no_findings_detector,
     unresolved_snapshot_source,
 )
-from gateway_v2.edge.dev_admit import DevCompletingAdmission
 from gateway_v2.edge.dev_profile import (
     build_dev_dependencies,
     dev_profile_active,
@@ -590,9 +589,9 @@ def _host_app(
 
     workers = contract.workers()
 
+    # DEV PROFILE: ``deps["admission"]`` is the bare GW19 controller (no slot wrapper) — the GW15
+    # lifecycle completes each admitted slot on exit, so the controller is wired directly.
     admission = deps.get("admission")
-    if isinstance(admission, DevCompletingAdmission):
-        admission = admission.controller  # DEV PROFILE: the real GW19 controller underneath.
     if isinstance(admission, AdmissionController):
         # DEFERRED_SEAM (GW20, R7.2): the real per-worker GW19 drain must be bound into the
         # multiprocess manager (each worker runs its own ``Server``), which the top-level

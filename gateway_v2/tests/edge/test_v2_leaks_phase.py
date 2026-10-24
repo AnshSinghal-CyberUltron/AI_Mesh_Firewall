@@ -201,12 +201,6 @@ def _modes(reason: str | None) -> list[object]:
 # --- case 1: the dev boot accepts a phase-scoped plan ----------------------------------------- #
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=_LEAK + "build_boot_dependencies(plan with scope 'input'/'output' rules) raises "
-    "DevProfileError(\"plan rule 'e-pii-redact-input' has scope='input'; ... the dev profile "
-    "accepts only scope 'both' rules\")",
-)
 def test_dev_boot_accepts_a_plan_with_phase_scoped_rules(tmp_path: Path) -> None:
     """**Validates: Requirements 2.14**"""
     deps, logs = serve.build_boot_dependencies(
@@ -236,14 +230,7 @@ def test_output_only_block_does_not_block_input(tmp_path: Path, stream: bool) ->
 
 
 @pytest.mark.usefixtures("_phase_gate_open")
-@pytest.mark.parametrize(
-    "stream",
-    _modes(
-        f"provider reply 'here is {SECRET} ok' resolved by PlanResolver(plan, Phase.INPUT), "
-        "which does not select the output-only secret BLOCK rule -> reply released with the raw "
-        "key, no output_blocked"
-    ),
-)
+@pytest.mark.parametrize("stream", _modes(None))
 def test_output_only_block_blocks_output(tmp_path: Path, stream: bool) -> None:
     """A SECRET in the provider REPLY is blocked: ``e-secret-block-output`` selects on output.
 
@@ -257,13 +244,7 @@ def test_output_only_block_blocks_output(tmp_path: Path, stream: bool) -> None:
 
 
 @pytest.mark.usefixtures("_phase_gate_open")
-@pytest.mark.parametrize(
-    "stream",
-    _modes(
-        f"provider reply 'my SSN {SSN} ok' resolved by PlanResolver(plan, Phase.INPUT), which "
-        "selects the input-only pii REDACT rule on output -> client gets 'my SSN [REDACTED] ok'"
-    ),
-)
+@pytest.mark.parametrize("stream", _modes(None))
 def test_input_only_redact_does_not_touch_output(tmp_path: Path, stream: bool) -> None:
     """PII in the provider REPLY is released unchanged: ``e-pii-redact-input`` is input-only.
 

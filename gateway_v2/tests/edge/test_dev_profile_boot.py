@@ -11,7 +11,8 @@ from pathlib import Path
 
 import pytest
 
-from gateway_v2.admit.grant import Admitted, BudgetVerdict, ShedVerdict
+from gateway_v2.admit.admission import AdmissionController
+from gateway_v2.admit.grant import Admitted, BudgetVerdict
 from gateway_v2.dispatch.provider import StubProviderClient
 from gateway_v2.edge import serve
 from gateway_v2.edge.app import empty_catalog_source
@@ -22,12 +23,10 @@ from gateway_v2.edge.chat_deps import (
     unresolved_snapshot_source,
 )
 from gateway_v2.edge.dev_admit import (
-    DevCompletingAdmission,
     DevLeaseBudget,
     DevServedApp,
     DevUnlimitedBudget,
     LeaseSettings,
-    build_dev_admission,
 )
 from gateway_v2.edge.dev_components import DevProfileError, DevStaticIdentity, EchoProviderClient
 from gateway_v2.edge.dev_profile import dev_profile_active, load_dev_config, wrap_dev_app
@@ -151,7 +150,7 @@ def test_dev_boot_wires_real_components_and_logs_each_loudly() -> None:
     deps, logs = serve.build_boot_dependencies(contract=_contract(), env=_dev_env())
     assert isinstance(deps["identity"], DevStaticIdentity)
     assert isinstance(deps["resolver"], PlanResolver)
-    assert isinstance(deps["admission"], DevCompletingAdmission)
+    assert isinstance(deps["admission"], AdmissionController)
     assert isinstance(deps["quota"], DevUnlimitedBudget)
     assert isinstance(deps["provider"], EchoProviderClient)
     assert deps["output_detector"] is deps["error_scanner"]
@@ -171,12 +170,28 @@ def test_dev_boot_wires_real_components_and_logs_each_loudly() -> None:
         line = next(item for item in logs if item.startswith(f"boot: {dep} ->"))
         assert "DEV PROFILE" in line, line
     admission_line = next(item for item in logs if item.startswith("boot: admission ->"))
+    assert admission_line.startswith("boot: admission -> AdmissionController (GW19)")
     assert "q_safe=500.0 (DECLARED, not measured — real value comes from the GW20 fleet run)" in (
         admission_line
     )
+    # The slot wrapper is gone: the admission line names the ONE GW15 completion path, not the
+    # old "slots released when each ASGI request returns because the GW15 lifecycle never calls
+    # complete()" wording.
+    assert (
+        "the GW15 lifecycle completes each admitted slot on exit — one completion path on both "
+        "boot paths, no dev-profile slot wrapper" in admission_line
+    )
+    # The resolver line names the phase-aware factory, not a single "ONE resolver serves both
+    # phases" resolver.
+    resolver_line = next(item for item in logs if item.startswith("boot: resolver ->"))
+    assert "phase-aware PlanResolver factory" in resolver_line
+    assert "wired per phase" in resolver_line
     assert "boot: quota -> DevUnlimitedBudget (DEV PROFILE: budget NOT enforced)" in logs
     assert all("sk-dev" not in line for line in logs), "the API key must never be logged"
-    assert isinstance(serve._assemble_app(deps), DevServedApp)
+    # The slot wrapper is gone: the unlimited-budget dev boot assembles an UNWRAPPED app (there is
+    # no lease to drive on lifespan). Wrapping now happens ONLY for a ``DevLeaseBudget`` — covered
+    # by ``test_served_app_drives_lease_startup_on_lifespan``.
+    assert not isinstance(serve._assemble_app(deps), DevServedApp)
 
 
 @pytest.mark.parametrize(
@@ -209,6 +224,25 @@ def test_lease_mode_requires_its_store_inputs() -> None:
         load_dev_config(_dev_env(AMF_DEV_BUDGET="free"))
 
 
+def test_renamed_pool_requests_refuses_naming_the_token_replacement() -> None:
+    """The old ``AMF_DEV_BUDGET_POOL_REQUESTS`` refuses to start, naming its token replacement.
+
+    The dev lease pool is now sized in tokens (Group F): the request-count name is gone and its
+    presence is a hard refuse-to-start so an operator's old env never silently charges the wrong
+    unit.
+    """
+    env = _dev_env(
+        AMF_DEV_BUDGET="lease",
+        AMF_DEV_REDIS_URL="redis://x",
+        AMF_DEV_BUDGET_POOL_REQUESTS="3",
+        AMF_DEV_RATE_PER_S="1000",
+        AMF_DEV_BURST="100",
+        AMF_DEV_LEASE_TTL_S="30",
+    )
+    with pytest.raises(DevProfileError, match="AMF_DEV_BUDGET_POOL_TOKENS"):
+        load_dev_config(env)
+
+
 def test_main_refuses_to_start_on_missing_dev_input(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -228,54 +262,17 @@ def test_main_refuses_to_start_on_missing_dev_input(
 
 
 # --- admission release ----------------------------------------------------------------------- #
-
-
-def _admission() -> DevCompletingAdmission:
-    return build_dev_admission(
-        contract=_contract(),
-        q_safe=50.0,
-        audit_drain_rate_per_s=1000.0,
-        audit_bytes_per_record=2765,
-        drain_window_s=5.0,
-    )
-
-
-def test_bare_controller_wedges_without_complete_documenting_the_lifecycle_gap() -> None:
-    """The shipped GW15 lifecycle never calls ``complete``; a bare controller fills and sheds."""
-    adapter = _admission()
-    controller = adapter.controller
-    depth = adapter.bounds.request_depth
-
-    async def _run() -> list[object]:
-        now = controller._clock()  # noqa: SLF001 — the controller's own clock for sojourn 0.
-        return [await controller.admit("dev-org", f"r{i}", now) for i in range(depth + 3)]
-
-    verdicts = asyncio.run(_run())
-    assert any(isinstance(v, ShedVerdict) for v in verdicts[depth:])
-
-
-def test_served_app_releases_admission_slots_per_request() -> None:
-    adapter = _admission()
-    depth = adapter.bounds.request_depth
-
-    async def _inner(scope: object, receive: object, send: object) -> None:
-        verdict = await adapter.admit("dev-org", "rid", adapter.controller._clock())  # noqa: SLF001
-        assert isinstance(verdict, Admitted)
-
-    app = DevServedApp(_inner, admission=adapter, budget=None)
-
-    async def _receive() -> Mapping[str, object]:
-        return {"type": "http.request"}
-
-    async def _send(message: Mapping[str, object]) -> None:
-        del message
-
-    async def _run() -> None:
-        for _ in range(depth * 5):
-            await app({"type": "http"}, _receive, _send)
-
-    asyncio.run(_run())
-    assert adapter.controller.queue_report().per_queue["request"][0] == 0
+#
+# The shipped GW15 lifecycle now completes every admitted slot on exit (``finally``), so the dev
+# profile carries NO per-request slot wrapper: ``build_dev_admission`` returns the bare controller
+# and ``DevServedApp`` has no admission role. The lifecycle-level slot behaviour — ``3 ×
+# request_depth`` sequential requests, no shed, request depth back to 0, driven through the real
+# controller and the real ``ChatRoute.handle`` holds — is proved end-to-end by
+# ``test_v2_leaks_d_lifecycle.py::test_real_controller_depth_returns_to_zero_under_steady_load``.
+# The two tests that lived here (``test_served_app_releases_admission_slots_per_request`` and
+# ``test_bare_controller_wedges_without_complete_documenting_the_lifecycle_gap``) encoded the
+# removed slot wrapper and the pre-fix "lifecycle never completes" gap; they are deleted rather
+# than re-expressed against the defunct seam.
 
 
 # --- budget lease over a (fake) Redis -------------------------------------------------------- #
@@ -284,8 +281,13 @@ def test_served_app_releases_admission_slots_per_request() -> None:
 def test_lease_budget_admits_until_the_pool_is_spent_then_refuses() -> None:
     fakeredis = pytest.importorskip("fakeredis")
     client = fakeredis.FakeAsyncRedis()
+    # Token pool (not a request count): a 30_000-token pool fully drains into the worker's lease
+    # at startup (the token chunk is far larger), and ``evaluate`` now charges the REAL token cost
+    # straight through. At 10_000 tokens per call the pool admits exactly three spends and the
+    # fourth finds the lease exhausted (overdraft only extends a lease that still holds budget),
+    # so the admit/refuse pattern is the same [T, T, T, F, F] shape the request-pool test had.
     settings = LeaseSettings(
-        redis_url="redis://unused", pool_requests=3, rate_per_s=1000.0, burst=100, ttl_s=30.0
+        redis_url="redis://unused", pool_tokens=30_000, rate_per_s=1000.0, burst=100, ttl_s=30.0
     )
     budget = DevLeaseBudget(
         contract=_contract(), q_safe=500.0, settings=settings, org_id="dev-org", client=client
@@ -298,14 +300,18 @@ def test_lease_budget_admits_until_the_pool_is_spent_then_refuses() -> None:
 
     line, verdicts = asyncio.run(_run())
     assert "acquire=ok" in line
-    assert [isinstance(v, Admitted) for v in verdicts] == [True, True, True, False, False]
+    admits = [isinstance(v, Admitted) for v in verdicts]
+    assert admits == [True, True, True, False, False]
+    # Monotone (robust) view of the same outcome: admits come first, then only refusals, and the
+    # pool ends spent — no refusal is ever followed by an admit.
+    assert admits == sorted(admits, reverse=True), f"non-monotone admit pattern: {admits}"
     assert isinstance(verdicts[-1], BudgetVerdict)
 
 
 def test_served_app_drives_lease_startup_on_lifespan(capsys: pytest.CaptureFixture[str]) -> None:
     fakeredis = pytest.importorskip("fakeredis")
     settings = LeaseSettings(
-        redis_url="redis://unused", pool_requests=2, rate_per_s=1000.0, burst=10, ttl_s=30.0
+        redis_url="redis://unused", pool_tokens=2, rate_per_s=1000.0, burst=10, ttl_s=30.0
     )
     budget = DevLeaseBudget(
         contract=_contract(),
@@ -327,6 +333,7 @@ def test_served_app_drives_lease_startup_on_lifespan(capsys: pytest.CaptureFixtu
     async def _send(message: Mapping[str, object]) -> None:
         del message
 
-    app = DevServedApp(_inner, admission=None, budget=budget)
+    app = DevServedApp(_inner, budget=budget)
     asyncio.run(app({"type": "lifespan"}, _receive, _send))
+    # ``held`` is ``min(token_chunk, pool_tokens)`` = the 2-token pool (the chunk is far larger).
     assert "boot: DEV PROFILE budget lease acquire=ok held=2" in capsys.readouterr().out

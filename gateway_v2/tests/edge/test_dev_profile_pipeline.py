@@ -121,14 +121,6 @@ def test_client_never_sees_raw_ssn_and_aws_key_is_blocked(stream: bool) -> None:
     assert len(provider.received) == 1, "a BLOCKed input must make zero provider calls"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "FOUND, NOT FIXED (GW15 lifecycle): the input phase refuses only on BLOCK; an input "
-        "REDACT decision is not applied before Transform.to_provider, so redactable PII reaches "
-        "the provider and is masked only by the OUTPUT guard on the way back."
-    ),
-)
 def test_input_redact_masks_pii_before_the_provider() -> None:
     provider = _RecordingEcho()
     asyncio.run(_post(_app(provider), f"My SSN is {SSN} thanks", stream=False))

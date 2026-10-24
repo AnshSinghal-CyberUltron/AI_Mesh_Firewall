@@ -30,7 +30,7 @@ Environment:
 ``AMF_DEV_Q_SAFE``             DECLARED guard service rate, float > 0 (required)
 ``AMF_DEV_AUDIT_DRAIN_RATE_PER_S`` / ``AMF_DEV_AUDIT_BYTES_PER_RECORD``  DECLARED audit sizing
 ``AMF_DEV_BUDGET``             ``lease`` (real GW06 over Redis) or ``unlimited`` (required)
-``AMF_DEV_REDIS_URL`` / ``AMF_DEV_BUDGET_POOL_REQUESTS`` / ``AMF_DEV_RATE_PER_S`` /
+``AMF_DEV_REDIS_URL`` / ``AMF_DEV_BUDGET_POOL_TOKENS`` / ``AMF_DEV_RATE_PER_S`` /
 ``AMF_DEV_BURST`` / ``AMF_DEV_LEASE_TTL_S``  required when ``AMF_DEV_BUDGET=lease``
 ``AMF_DEV_PROVIDER_URL`` / ``AMF_DEV_PROVIDER_API_KEY``  optional real upstream (else echo)
 """
@@ -42,11 +42,12 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from urllib.parse import urlsplit, urlunsplit
 
+from gateway_v2.admit.admission import AdmissionController
+from gateway_v2.admit.quota import AdmissionBounds
 from gateway_v2.detect.holdback import scan as holdback_scan
 from gateway_v2.domain.plan import ExecutionPlan, Phase
 from gateway_v2.edge.app import ASGIApplication
 from gateway_v2.edge.dev_admit import (
-    DevCompletingAdmission,
     DevLeaseBudget,
     DevServedApp,
     DevUnlimitedBudget,
@@ -62,7 +63,7 @@ from gateway_v2.edge.dev_components import (
     env_text,
     load_dev_plan,
     parse_model_ids,
-    plan_resolver,
+    phase_resolver_factory,
     warm_dev_snapshot_source,
 )
 from gateway_v2.edge.dev_upstream import DevUpstreamProvider
@@ -152,9 +153,14 @@ def _int_at_least(env: Mapping[str, str], name: str, minimum: int) -> int:
 
 
 def _lease_settings(env: Mapping[str, str]) -> LeaseSettings:
+    if env_text(env, "AMF_DEV_BUDGET_POOL_REQUESTS") is not None:
+        raise DevProfileError(
+            "AMF_DEV_BUDGET_POOL_REQUESTS was renamed to AMF_DEV_BUDGET_POOL_TOKENS (the dev "
+            "lease pool is now sized in tokens); set AMF_DEV_BUDGET_POOL_TOKENS"
+        )
     return LeaseSettings(
         redis_url=_required(env, "AMF_DEV_REDIS_URL"),
-        pool_requests=_int_at_least(env, "AMF_DEV_BUDGET_POOL_REQUESTS", 1),
+        pool_tokens=_int_at_least(env, "AMF_DEV_BUDGET_POOL_TOKENS", 1),
         rate_per_s=_positive_float(env, "AMF_DEV_RATE_PER_S"),
         burst=_int_at_least(env, "AMF_DEV_BURST", 0),
         ttl_s=_positive_float(env, "AMF_DEV_LEASE_TTL_S"),
@@ -195,7 +201,10 @@ def _redact_url(url: str) -> str:
     return urlunsplit((parts.scheme, netloc, parts.path, "", ""))
 
 
-def _admission(cfg: DevProfileConfig, contract: ResourceContract) -> DevCompletingAdmission:
+def _admission(
+    cfg: DevProfileConfig, contract: ResourceContract
+) -> tuple[AdmissionController, AdmissionBounds]:
+    """Build the bare GW19 controller + its ``derive_bounds`` result (for the boot log)."""
     serving_cfg, _logs = load_serving_config()
     try:
         return build_dev_admission(
@@ -226,10 +235,9 @@ def _budget(
     lease = cfg.lease
     return budget, (
         f"boot: quota -> QuotaComponent(LocalGCRA + BudgetLease) GW06 over "
-        f"{_redact_url(lease.redis_url)} (DEV PROFILE: spends 1 unit PER REQUEST because GW06 "
-        "sizes its Lease_Chunk in requests while the GW15 lifecycle passes a character-count "
-        f"cost; chunk={budget.lease.config.chunk} low_watermark="
-        f"{budget.lease.config.low_watermark}; pool={lease.pool_requests} requests, "
+        f"{_redact_url(lease.redis_url)} (DEV PROFILE: charges the real v1 token cost against a "
+        f"token-sized Lease_Chunk (Group F); chunk={budget.lease.config.chunk} low_watermark="
+        f"{budget.lease.config.low_watermark}; pool={lease.pool_tokens} tokens, "
         f"rate={lease.rate_per_s}/s, burst={lease.burst}, lease_ttl={lease.ttl_s}s -- all "
         "DECLARED via env; generation read once at startup, no budget-config feed)"
     )
@@ -266,8 +274,11 @@ def _plan_log(cfg: DevProfileConfig, plan: ExecutionPlan) -> tuple[str, str]:
         f"boot: snapshot_source -> warmed ReplicaSnapshot over {cfg.plan_path} (DEV PROFILE: "
         f"compiled by plan.compiler, org={plan.org_id} version={plan.version} "
         f"streaming={plan.streaming_mode.value}; rules=[{rules}]; no control-plane feed)",
-        f"boot: resolver -> resolve.PlanResolver(plan {plan.version}) (DEV PROFILE: the REAL "
-        "GW07 resolver; ONE resolver serves both phases, so only scope=both rules are accepted)",
+        f"boot: resolver -> phase-aware PlanResolver factory (plan {plan.version}) (DEV PROFILE: "
+        "the REAL GW07 resolver, wired per phase via resolver_for -- PlanResolver(plan, phase) is "
+        "bound at Phase.INPUT for the input scan and Phase.OUTPUT for the output guard, so "
+        "phase-scoped rules (scope: input / scope: output) are enforced on exactly their phase "
+        "(Group E))",
     )
 
 
@@ -280,18 +291,26 @@ def build_dev_dependencies(
     """Build the DEV PROFILE ``build_app`` kwargs + boot-log lines (refuse on any bad input)."""
     cfg = load_dev_config(env)
     plan = load_dev_plan(cfg.plan_path, org_id=cfg.org_id, compiled_at=time.time())
-    admission = _admission(cfg, contract)
+    admission, bounds = _admission(cfg, contract)
     budget, budget_log = _budget(cfg, contract)
     budget_s = contract.guard_wait_budget_s()
     input_detector = DeterministicFindings(phase=Phase.INPUT, budget_s=budget_s)
     output_detector = DeterministicFindings(phase=Phase.OUTPUT, budget_s=budget_s)
     provider, provider_log = _provider(cfg, contract, input_detector)
     catalog = StaticCatalogSource(model_ids=cfg.models, org_id=cfg.org_id, created=int(time.time()))
+    # Group E: wire the PHASE-AWARE resolver factory so an ``input``-scoped rule is enforced only
+    # on input and an ``output``-scoped rule only on output (``resolver_for`` returns
+    # ``factory(plan, phase)`` per phase). ``build_app`` still requires a single ``resolver`` kwarg
+    # (the route's fallback when ``phase_resolvers`` is unset); once ``phase_resolvers`` is set it
+    # is NEVER consulted, so the single slot is a harmless valid ``OutputResolver`` bound at
+    # ``Phase.INPUT``.
+    phase_factory = phase_resolver_factory()
     deps: dict[str, object] = {
         "contract": contract,
         "provider": provider,
         "scanner": holdback_scan,
-        "resolver": plan_resolver(plan),
+        "resolver": phase_factory(plan, Phase.INPUT),
+        "phase_resolvers": phase_factory,
         "metrics_registry": metrics_registry,
         "clock": time.monotonic,
         "input_detector": input_detector,
@@ -304,7 +323,6 @@ def build_dev_dependencies(
         "catalog": catalog,
     }
     snapshot_log, resolver_log = _plan_log(cfg, plan)
-    bounds = admission.bounds
     logs: tuple[str, ...] = (
         "boot: DEV PROFILE ACTIVE (AMF_DEV_PROFILE=1) -- local development wiring, NOT FOR "
         "PRODUCTION; every dependency marked DEV PROFILE below is dev-supplied",
@@ -321,28 +339,29 @@ def build_dev_dependencies(
         f"boot: identity -> DevStaticIdentity (DEV PROFILE: one static bearer key "
         f"AMF_DEV_API_KEY -> org {cfg.org_id}; hmac.compare_digest; anything else refuses)",
         snapshot_log,
-        f"boot: admission -> AdmissionController (GW19) via DevCompletingAdmission (DEV PROFILE: "
-        f"q_safe={cfg.q_safe} (DECLARED, not measured — real value comes from the GW20 fleet "
-        f"run); audit_drain_rate={cfg.audit_drain_rate_per_s}/s audit_bytes_per_record="
+        f"boot: admission -> AdmissionController (GW19) (DEV PROFILE: the REAL controller, wired "
+        f"bare; q_safe={cfg.q_safe} (DECLARED, not measured — real value comes from the GW20 "
+        f"fleet run); audit_drain_rate={cfg.audit_drain_rate_per_s}/s audit_bytes_per_record="
         f"{cfg.audit_bytes_per_record} (DECLARED); derive_bounds request_depth="
-        f"{bounds.request_depth} audit_depth={bounds.audit_depth}; slots "
-        "released when each ASGI request returns because the GW15 lifecycle never calls "
-        "complete())",
+        f"{bounds.request_depth} audit_depth={bounds.audit_depth}; the GW15 lifecycle completes "
+        "each admitted slot on exit — one completion path on both boot paths, no dev-profile "
+        "slot wrapper)",
         budget_log,
         f"boot: catalog -> StaticCatalogSource {list(cfg.models)} (DEV PROFILE: AMF_DEV_MODELS)",
-        "boot: DEV PROFILE NOTE: input REDACT findings are NOT masked before the provider -- the "
-        "shipped GW15 input phase refuses only on BLOCK; redactable PII reaches the provider and "
-        "the OUTPUT guard masks it in the reply",
     )
     return deps, logs
 
 
 def wrap_dev_app(app: ASGIApplication, deps: Mapping[str, object]) -> ASGIApplication:
-    """Wrap the shipped app for the dev profile; return ``app`` UNCHANGED on the default path."""
-    admission = deps.get("admission")
-    if not isinstance(admission, DevCompletingAdmission):
-        return app
+    """Wrap the shipped app ONLY when a dev GW06 lease needs lifespan startup/shutdown.
+
+    :class:`DevServedApp`'s sole remaining job is to acquire the lease on ``lifespan.startup`` and
+    return the unspent remainder on ``lifespan.shutdown``. The admission slot wrapper is gone — the
+    GW15 lifecycle completes each admitted slot on exit. So there is no reason to wrap when the
+    budget is the unlimited stand-in (no lease to drive): return ``app`` UNCHANGED, as on the
+    default boot path.
+    """
     quota = deps.get("quota")
-    budget = quota if isinstance(quota, DevLeaseBudget) else None
-    served = DevServedApp(app, admission=admission, budget=budget)
-    return served
+    if not isinstance(quota, DevLeaseBudget):
+        return app
+    return DevServedApp(app, budget=quota)

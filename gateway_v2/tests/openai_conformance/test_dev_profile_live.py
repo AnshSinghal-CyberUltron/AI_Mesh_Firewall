@@ -222,11 +222,16 @@ def lease_live() -> Iterator[_Live]:
     thread = threading.Thread(target=store.serve_forever, daemon=True)
     thread.start()
     port = _free_port()
+    # The lease pool is now sized in TOKENS, and ``evaluate`` charges the real v1 token cost. Each
+    # of the three "request <i>" prompts costs 2 tokens (v1 estimate over the clamped request), so
+    # a 6-token pool admits exactly the three and leaves the lease empty; the fourth prompt then
+    # finds no budget and is refused ``budget_unavailable`` — the same "3 admit then refuse" shape
+    # the old 3-request pool produced.
     env = _env(
         port,
         AMF_DEV_BUDGET="lease",
         AMF_DEV_REDIS_URL=f"redis://127.0.0.1:{redis_port}/0",
-        AMF_DEV_BUDGET_POOL_REQUESTS="3",
+        AMF_DEV_BUDGET_POOL_TOKENS="6",
         AMF_DEV_RATE_PER_S="1000",
         AMF_DEV_BURST="100",
         AMF_DEV_LEASE_TTL_S="60",

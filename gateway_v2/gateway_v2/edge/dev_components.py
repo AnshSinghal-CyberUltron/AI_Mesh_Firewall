@@ -17,10 +17,13 @@ Each component is the thinnest honest adapter over a REAL shipped piece:
 * :class:`DeterministicFindings` — the GW09 deterministic detectors (PII / secret / injection
   signal) adapted to the ``(text) -> Sequence[Finding]`` shape the input scan, the non-streaming
   output scan, the error-frame scan and the streaming completed-match seam all take.
-* :func:`plan_resolver` — the REAL GW07 :class:`~gateway_v2.resolve.PlanResolver` bound to the
-  compiled plan. The shipped ``ChatRoute`` carries ONE resolver for BOTH phases, so a plan whose
-  rules are phase-specific cannot be honoured faithfully; :func:`require_phase_agnostic` refuses
-  such a plan at start-up rather than silently applying an input rule on output (or vice versa).
+* :func:`phase_resolver_factory` — a :data:`~gateway_v2.edge.phase_resolvers.PhaseResolverFactory`
+  that binds the REAL GW07 :class:`~gateway_v2.resolve.PlanResolver` to the request's pinned plan
+  AND a specific :class:`~gateway_v2.domain.plan.Phase`. Wired onto both routes (Group E), it lets
+  the input scan resolve at ``Phase.INPUT`` and the output guard at ``Phase.OUTPUT``, so an
+  ``input``-scoped rule is enforced only on input and an ``output``-scoped rule only on output.
+  :func:`require_phase_agnostic` therefore no longer refuses phase-specific rules; it only refuses
+  a plan with no enforcing rule at all.
 * :class:`EchoProviderClient` — a socket-free provider that streams back EXACTLY the text the
   gateway forwarded, so a user can see what reached the "model".
 * :class:`StaticCatalogSource` — a fixed model list for ``/v1/models``.
@@ -48,9 +51,11 @@ from gateway_v2.dispatch.provider import UpstreamEvent, UpstreamRequest
 from gateway_v2.dispatch.transform import BODY_DELTAS_KEY
 from gateway_v2.domain import Finding, FindingStatus
 from gateway_v2.domain.identity import Principal
-from gateway_v2.domain.plan import ExecutionPlan, Phase, RuleScope
+from gateway_v2.domain.plan import ExecutionPlan, Phase
 from gateway_v2.edge.app import CatalogModel
 from gateway_v2.edge.identity_resolver import ASGIScope, TenantIdentity, bearer_key
+from gateway_v2.edge.phase_resolvers import PhaseResolverFactory
+from gateway_v2.egress.output_guard import OutputResolver
 from gateway_v2.plan.compiler import CompileError, compile_plan
 from gateway_v2.plan.document import decode_plan_body
 from gateway_v2.plan.snapshot import ReplicaSnapshot
@@ -68,7 +73,7 @@ __all__ = (
     "env_text",
     "load_dev_plan",
     "parse_model_ids",
-    "plan_resolver",
+    "phase_resolver_factory",
     "require_phase_agnostic",
     "summarize_findings",
     "warm_dev_snapshot_source",
@@ -176,22 +181,16 @@ def load_dev_plan(path: str, *, org_id: str, compiled_at: float) -> ExecutionPla
 
 
 def require_phase_agnostic(plan: ExecutionPlan) -> None:
-    """Refuse a plan whose rules are phase-specific (scope ``input`` / ``output``).
+    """Refuse a plan with no enforcing rule (nothing would be enforced).
 
-    The shipped ``ChatRoute`` / ``MiscRoute`` carry ONE ``OutputResolver`` used for both the input
-    scan and the output guard, and the ``decide(matches)`` surface carries no phase. Binding the
-    real :class:`~gateway_v2.resolve.PlanResolver` to one phase would silently apply an
-    input-only rule to output (or drop it), so only ``scope: both`` rules are accepted in the dev
-    profile. A plan with no enforcing rule at all is also refused: it would let every finding
-    through and make the dev profile look like it enforces when it does not.
+    The name is historical. The dev profile now wires a phase-aware resolver factory
+    (:func:`phase_resolver_factory`) onto both routes, so a phase-specific rule
+    (``scope: input`` / ``scope: output``) IS enforced faithfully on exactly its phase (Group E):
+    the input scan resolves at ``Phase.INPUT`` and the output guard at ``Phase.OUTPUT``. Phase-
+    specific rules are therefore no longer refused. The one remaining refusal is a plan with no
+    active rules at all: it would let every finding through and make the dev profile look like it
+    enforces when it does not.
     """
-    for rule in plan.rules:
-        if rule.scope is not RuleScope.BOTH:
-            raise DevProfileError(
-                f"plan rule {rule.rule_id!r} has scope={rule.scope.value!r}; the shipped chat "
-                "route carries ONE resolver for both phases, so the dev profile accepts only "
-                "scope 'both' rules"
-            )
     if not plan.rules:
         raise DevProfileError("plan has no active rules; nothing would be enforced")
 
@@ -218,14 +217,27 @@ def warm_dev_snapshot_source(
     return _source
 
 
-def plan_resolver(plan: ExecutionPlan) -> PlanResolver:
-    """The REAL GW07 resolver bound to the compiled dev plan.
+def phase_resolver_factory() -> PhaseResolverFactory:
+    """A phase-aware factory over the REAL GW07 resolver (Group E, Property 11).
 
-    Bound at ``Phase.INPUT``: :func:`require_phase_agnostic` has already guaranteed every rule is
-    ``scope: both``, so the INPUT and OUTPUT rule selections are identical and the bound phase does
-    not change any decision.
+    Returns a :data:`~gateway_v2.edge.phase_resolvers.PhaseResolverFactory`: given the request's
+    pinned :class:`~gateway_v2.domain.plan.ExecutionPlan` and a
+    :class:`~gateway_v2.domain.plan.Phase`, it builds a
+    :class:`~gateway_v2.resolve.PlanResolver` bound to BOTH. Wired onto the chat and
+    misc routes via ``phase_resolvers``, it drives
+    :func:`~gateway_v2.edge.phase_resolvers.resolver_for` so the input scan resolves at
+    ``Phase.INPUT`` and the output guard at ``Phase.OUTPUT``. An ``input``-scoped rule is then
+    enforced only on input and an ``output``-scoped rule only on output (closing leak E).
+
+    ``PlanResolver`` satisfies the structural ``OutputResolver`` protocol (it exposes
+    ``decide(matches)``); the return annotation names that contract so the factory's product is
+    typed where it is consumed.
     """
-    return PlanResolver(plan=plan, phase=Phase.INPUT)
+
+    def _factory(plan: ExecutionPlan, phase: Phase) -> OutputResolver:
+        return PlanResolver(plan=plan, phase=phase)
+
+    return _factory
 
 
 # --------------------------------------------------------------------------- #
@@ -311,9 +323,10 @@ class EchoProviderClient:
     cut and each echo stream completes in-process.
 
     ``probe`` (optional) re-runs the deterministic detectors over what the provider RECEIVED and
-    writes one stderr line per request with category counts only (never content). It exists so
-    the operator can see that the shipped lifecycle does NOT mask input REDACT findings before the
-    provider (the output guard masks the reply on the way back).
+    writes one stderr line per request with category counts only (never content). It exists so the
+    operator can SEE the provider-side finding counts for visibility: the shipped lifecycle now
+    masks input REDACT findings before the provider (Group F), so a clean probe line is the
+    expected case; any residual finding count is a diagnostic signal, not a false claim.
     """
 
     __slots__ = ("_probe",)
