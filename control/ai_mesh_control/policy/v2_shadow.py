@@ -33,3 +33,23 @@ def exclude_shadow(qs: Any) -> Any:
 
 def only_shadow(qs: Any) -> Any:
     return qs.filter(metadata__source=SOURCE)
+
+
+def feed_category(meta: Mapping[str, Any] | None, policy_name: str | None) -> str:
+    """Category for a threat-feed row. A v2 row with none stays blank."""
+    meta = meta or {}
+    named = meta.get("threat_category") or policy_name or ""
+    if meta.get("source") == SOURCE:
+        return str(named)
+    return str(named or "Policy")
+
+
+def feed_severity(meta: Mapping[str, Any] | None) -> Any:
+    """Severity for a threat-feed row. A v2 row with none stays blank."""
+    meta = meta or {}
+    if meta.get("source") == SOURCE:
+        named = meta.get("security_risk_score")
+        if named in (None, ""):
+            named = meta.get("severity")
+        return "" if named in (None, "") else named
+    return meta.get("security_risk_score") or meta.get("severity") or "medium"

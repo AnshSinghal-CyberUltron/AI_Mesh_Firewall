@@ -688,6 +688,7 @@ class ThreatFeedView(APIView):
     def _serialize_threat_feed_page(self, request, page_qs: list) -> list:
         """Build threat-feed dicts for a page of EnforcementEvent rows."""
         from auth.models import Organization
+        from policy.v2_shadow import SOURCE, feed_category, feed_severity
 
         endpoint_ids = list(
             {ev.endpoint_id for ev in page_qs if ev.endpoint_id is not None}
@@ -737,7 +738,7 @@ class ThreatFeedView(APIView):
         items = []
         for ev in page_qs:
             meta = _enrich_scan_detail_metadata(ev.metadata or {})
-            category = meta.get("threat_category") or (ev.policy.name if ev.policy else None) or "Policy"
+            category = feed_category(meta, ev.policy.name if ev.policy else None)
             subcategory = (
                 meta.get("owasp_code") or meta.get("threat_subcategory") or (ev.rule.name if ev.rule else None) or ""
             )
@@ -764,7 +765,7 @@ class ThreatFeedView(APIView):
                     "id": str(ev.id),
                     "record_type": "enforcement_event",
                     "timestamp": ev.created_at.isoformat() if ev.created_at else None,
-                    "severity": meta.get("security_risk_score") or meta.get("severity") or "medium",
+                    "severity": feed_severity(meta),
                     "category": category,
                     "subcategory": subcategory,
                     "user_id": ev.user_id,
@@ -780,7 +781,11 @@ class ThreatFeedView(APIView):
                     "metadata": _sanitized_meta_for_client(meta),
                     "request_id": meta.get("request_id") or meta.get("pipeline_request_id") or "",
                     "incident_id": meta.get("incident_id") or meta.get("request_id") or str(ev.pk),
-                    "incident_title": get_incident_title(category, subcategory, source),
+                    "incident_title": (
+                        ""
+                        if source == SOURCE and not category
+                        else get_incident_title(category, subcategory, source)
+                    ),
                     "enforcement_action_text": _enforcement_action_text(ev.action, source, meta),
                     "prompt_lineage": meta.get("prompt_lineage") or [],
                     "tools_invoked": _tools_invoked_with_model(meta),
