@@ -40,18 +40,22 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from gateway_v2.dispatch.provider import UpstreamRequest
+from gateway_v2.domain.decision import Decision, most_restrictive
 from gateway_v2.domain.plan import ExecutionPlan, Phase
 from gateway_v2.edge import errors
+from gateway_v2.edge.console_projection import apply_projection, chat_console
 from gateway_v2.edge.phase_resolvers import resolver_for
 from gateway_v2.edge.request_holds import RequestHolds
+from gateway_v2.edge.wire.openai import CanonicalRequest
 from gateway_v2.egress.output_guard import OutputBlocked, apply_decision
 
 if TYPE_CHECKING:
-    from gateway_v2.edge.routes import ChatRoute
+    from gateway_v2.edge.routes import ASGISend, ChatRoute
 
 __all__ = (
     "EnforcedOutput",
     "collect_and_enforce",
+    "emit_enforced_chat",
     "ok_response",
 )
 
@@ -102,6 +106,7 @@ class EnforcedOutput:
 
     deltas: tuple[tuple[str, str], ...]
     refuse_code: str | None
+    output_decision: Decision | None = None
 
 
 async def collect_and_enforce(
@@ -138,12 +143,14 @@ async def collect_and_enforce(
         holds = RequestHolds()
     try:
         collected = await _collect_output_channels(deps, destination, body, holds)
-        deltas = _enforce_channels(deps, plan, collected)
-    except OutputBlocked:
-        return EnforcedOutput(deltas=(), refuse_code=block_code)
+        deltas, decision = _enforce_channels(deps, plan, collected)
+    except OutputBlocked as blocked:
+        return EnforcedOutput(
+            deltas=(), refuse_code=block_code, output_decision=blocked.decision,
+        )
     except Exception:  # noqa: BLE001 — fail closed: any uncomputable scan/decision withholds.
         return EnforcedOutput(deltas=(), refuse_code=scan_failure_code)
-    return EnforcedOutput(deltas=deltas, refuse_code=None)
+    return EnforcedOutput(deltas=deltas, refuse_code=None, output_decision=decision)
 
 
 async def _collect_output_channels(
@@ -189,7 +196,7 @@ def _enforce_channels(
     deps: ChatRoute,
     plan: ExecutionPlan | None,
     collected: tuple[tuple[str, str], ...],
-) -> tuple[tuple[str, str], ...]:
+) -> tuple[tuple[tuple[str, str], ...], Decision | None]:
     """Scan + resolve + apply the output decision per channel (R8.1/R8.2).
 
     For each collected ``(channel, text)`` pair: run ``deps.error_scanner`` (the
@@ -210,7 +217,64 @@ def _enforce_channels(
     """
     resolver = deps.resolver if plan is None else resolver_for(deps, plan, Phase.OUTPUT)
     enforced: list[tuple[str, str]] = []
+    chosen: Decision | None = None
     for channel, text in collected:
         decision = resolver.decide(list(deps.error_scanner(text)))
+        chosen = decision if chosen is None else _stricter_decision(chosen, decision)
         enforced.append((channel, apply_decision(text, decision, base_offset=0)))
-    return tuple(enforced)
+    return tuple(enforced), chosen
+
+
+def _stricter_decision(current: Decision, new: Decision) -> Decision:
+    if most_restrictive((current.disposition, new.disposition)) is new.disposition:
+        return new
+    return current
+
+
+async def emit_enforced_chat(
+    send: ASGISend,
+    deps: ChatRoute,
+    req: CanonicalRequest,
+    plan: ExecutionPlan,
+    enforced: EnforcedOutput,
+    holds: RequestHolds,
+) -> None:
+    """Render the non-streaming reply with the console projection beside the OpenAI JSON."""
+    from gateway_v2.edge.routes import emit_response
+
+    console = _console_for(enforced, holds)
+    if enforced.output_decision is not None:
+        holds.note_output(enforced.output_decision)
+    if enforced.refuse_code is not None:
+        response = apply_projection(errors.render_http(enforced.refuse_code), console)
+        await emit_response(send, response)
+        return
+    json_body = deps.renderer.non_stream_body(req, enforced.deltas)
+    response = apply_projection(ok_response(json_body, plan.streaming_mode.value), console)
+    await emit_response(send, response)
+
+
+def _console_for(
+    enforced: EnforcedOutput,
+    holds: RequestHolds,
+) -> dict[str, object] | None:
+    decision = holds.input_decision
+    if decision is None:
+        return None
+    output = enforced.output_decision
+    output_action = None if output is None else output.disposition.value
+    if output_action is None and enforced.refuse_code is not None and holds.dispatched:
+        output_action = "block"
+    output_rule = ""
+    if output is not None and output.deciding_rules and output_action not in (None, "allow"):
+        output_rule = output.deciding_rules[0]
+    input_rule = decision.deciding_rules[0] if decision.deciding_rules else ""
+    return chat_console(
+        request_id=holds.request_id,
+        plan_version=decision.plan_version,
+        input_action=decision.disposition.value,
+        output_action=output_action,
+        provider_called=holds.dispatched,
+        input_rule=input_rule,
+        output_rule=output_rule,
+    )

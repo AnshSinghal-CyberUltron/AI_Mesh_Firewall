@@ -56,6 +56,7 @@ every bit of state lives on the per-request ``__slots__`` instance.
 
 from __future__ import annotations
 
+from gateway_v2.domain.decision import Decision
 from gateway_v2.edge.chat_deps import AdmissionDecider, BudgetDecider
 
 __all__ = ("RequestHolds",)
@@ -77,6 +78,9 @@ class RequestHolds:
         "_admitted",
         "_cost",
         "_dispatched",
+        "_input_decision",
+        "_org_id",
+        "_output_decision",
         "_released",
         "_request_id",
         "_spent",
@@ -89,6 +93,9 @@ class RequestHolds:
         self._released: bool = False
         self._request_id: str = ""
         self._cost: int = 0
+        self._input_decision: Decision | None = None
+        self._output_decision: Decision | None = None
+        self._org_id: str = ""
 
     def admitted(self, request_id: str) -> None:
         """Record that admission granted a slot for ``request_id`` (``complete``-d on exit)."""
@@ -100,6 +107,42 @@ class RequestHolds:
         self._spent = True
         self._cost = cost
         self._request_id = request_id
+
+    def note_input(self, decision: Decision) -> None:
+        """Record the input decision that was enforced for this request."""
+        self._input_decision = decision
+
+    def note_output(self, decision: Decision) -> None:
+        """Record the output decision. Streaming may leave this unset."""
+        self._output_decision = decision
+
+    def note_tenant(self, org_id: str) -> None:
+        """Record the tenant the audit row must be attributed to."""
+        self._org_id = org_id
+
+    def note_request(self, request_id: str) -> None:
+        """Record the minted id before admission, so a shed still has a row key."""
+        self._request_id = request_id
+
+    @property
+    def input_decision(self) -> Decision | None:
+        return self._input_decision
+
+    @property
+    def output_decision(self) -> Decision | None:
+        return self._output_decision
+
+    @property
+    def org_id(self) -> str:
+        return self._org_id
+
+    @property
+    def request_id(self) -> str:
+        return self._request_id
+
+    @property
+    def dispatched(self) -> bool:
+        return self._dispatched
 
     def mark_dispatched(self) -> None:
         """Record that the provider was opened; after this the spend stands and is not refunded."""

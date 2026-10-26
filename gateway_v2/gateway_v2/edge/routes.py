@@ -13,23 +13,11 @@ input detector, and the ``ProviderClient`` are *injected* through :class:`ChatRo
 sits above ``detect`` while ``egress`` must not import it), so the wiring never reaches around
 the layer contract.
 
-**The real chat handler (GW15).** :meth:`ChatRoute.handle` runs the full §10.4 request lifecycle
-(cheap pre-checks → SDK parse → auth → the ONE plan round trip → admission → budget → the INPUT
-scan with a BLOCK short-circuit) through a per-request
-:class:`~gateway_v2.edge.openai_chat.ChatSurface` BEFORE any provider is opened — a refusal
-makes zero provider calls. On a proceed outcome it dispatches on the parsed ``streaming``
-disposition: a streaming request runs the shipped egress orchestration below with the
-plan-derived destination + the transformed body + plan-aware output enforcement; a
-non-streaming request collects the whole upstream, enforces it, and renders ONE OpenAI JSON via
-``ChatSurface.collect_and_render``. Every refusal — pre-parse, post-parse, or an in-stream cut —
-renders through the single :mod:`edge.errors` ``Error_Envelope`` (an HTTP body for a
-non-streaming request, a declared SSE ``Error_Frame`` for a streaming one), never a raw
-framework 500. The ``ChatSurface`` is built per call (``ChatSurface(deps=self)``) and every
-latch / in-flight / timeout value is per-request, so nothing request-scoped is shared on the
-frozen :class:`ChatRoute` (two-tenant isolation, R13).
-
-The GW15 §10.4 dependency surfaces + their fail-closed defaults live in the sibling
-:mod:`gateway_v2.edge.chat_deps`, imported here.
+**The real chat handler (GW15).** :meth:`ChatRoute.handle` runs the §10.4 lifecycle through a
+per-request :class:`~gateway_v2.edge.openai_chat.ChatSurface` before any provider is opened.
+A streaming proceed uses the egress orchestration; a non-streaming proceed renders one OpenAI
+JSON. Refusals render through :mod:`edge.errors`. The dependency surfaces live in
+:mod:`gateway_v2.edge.chat_deps`.
 
 **Placeholders (R2.3).** ``/v1/responses``, the misc OpenAI surface, the MCP surface and the
 RAG/vector surface are *registered* here so the route table is complete and a later card wires
@@ -48,6 +36,7 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
 
+from gateway_v2.audit.record import AuditRecord
 from gateway_v2.detect.holdback import TokenIndex
 from gateway_v2.detect.windowing import max_pattern_length
 from gateway_v2.dispatch.provider import ProviderClient, UpstreamRequest
@@ -68,6 +57,7 @@ from gateway_v2.edge.asgi_sse import end_sse as _end_sse
 from gateway_v2.edge.asgi_sse import read_body as _read_body
 from gateway_v2.edge.asgi_sse import send_sse as _send_sse
 from gateway_v2.edge.asgi_sse import start_sse as _start_sse
+from gateway_v2.edge.audit_emit import emit_chat_audit
 from gateway_v2.edge.cancel import InFlightControl, InFlightControlSource, KillLatch
 from gateway_v2.edge.chat_deps import (
     AdmissionDecider,
@@ -77,6 +67,12 @@ from gateway_v2.edge.chat_deps import (
     fail_closed_budget,
     no_findings_detector,
     unresolved_snapshot_source,
+)
+from gateway_v2.edge.console_projection import (
+    apply_projection,
+    console_from_holds,
+    refusal_trace_frame,
+    stream_trace_payload,
 )
 from gateway_v2.edge.error_frame_scan import ErrorFrameScanner
 from gateway_v2.edge.executor import ScanExecutor
@@ -172,6 +168,7 @@ async def emit_response(send: ASGISend, response: errors.HTTPResponse) -> None:
 async def _emit_error_code(
     send: ASGISend, code: str, request_id: str | None = None,
     param: str | None = None, boundary: int | None = None,
+    console: dict[str, object] | None = None,
 ) -> None:
     """Render a value-code through the single ``Error_Envelope`` and emit it as HTTP.
 
@@ -187,9 +184,8 @@ async def _emit_error_code(
     ``edge/errors`` formats it into the boundary-free declared message — the capacity number is
     sourced from ``max_output_tokens_boundary()`` at the caller, never a literal here or there.
     """
-    await emit_response(
-        send, errors.render_http(code, param=param, request_id=request_id, boundary=boundary)
-    )
+    response = errors.render_http(code, param=param, request_id=request_id, boundary=boundary)
+    await emit_response(send, apply_projection(response, console))
 
 
 # --------------------------------------------------------------------------- #
@@ -220,9 +216,10 @@ class _ProducedModeHolder:
     every attempt leaves it unset, in which case no trace frame is emitted).
     """
 
-    __slots__ = ("stats",)
+    __slots__ = ("holds", "stats")
 
-    def __init__(self) -> None:
+    def __init__(self, holds: RequestHolds | None = None) -> None:
+        self.holds = holds
         self.stats: StreamStats | StrictStats | None = None
 
 
@@ -300,6 +297,8 @@ class ChatRoute:
     #: behaviour byte-identical — the default boot and every route built without a factory decide
     #: exactly as before (Preservation 3.5 / 3.13).
     phase_resolvers: PhaseResolverFactory | None = None
+    #: Bounded audit enqueue. ``None`` leaves the response unchanged and writes no row.
+    audit: Callable[[AuditRecord], bool] | None = None
 
     async def handle(self, scope: ASGIScope, receive: ASGIReceive, send: ASGISend) -> None:
         """Serve a chat/completions request end-to-end (R2.2, R7, R10, §10.4).
@@ -322,25 +321,20 @@ class ChatRoute:
           (``StreamPipeline.for_plan``); a non-streaming request collects the whole upstream,
           enforces it, and renders ONE OpenAI JSON via ``ChatSurface.collect_and_render`` (R9).
 
-        The ``ChatSurface`` and every per-request latch / in-flight / timeout value are built here,
-        per call, so nothing request-scoped is shared on the frozen route (two-tenant isolation,
-        R13). ``ChatSurface`` is imported inside the method because ``edge/openai_chat.py`` imports
+        ``ChatSurface`` is imported inside the method because ``edge/openai_chat.py`` imports
         from THIS module at module level — a top-level import of it here would cycle.
         """
         from gateway_v2.edge.openai_chat import ChatSurface
 
-        # ONE per-request hold ledger (Group D/F): the lifecycle RECORDS the admission slot +
-        # the budget spend on it, ``mark_dispatched`` is set immediately before ``provider.open``
-        # on each path, and ``release`` runs in the ``finally`` below so the slot is ``complete``-d
-        # (and an undispatched spend refunded) exactly once on EVERY exit — refusal, streaming,
-        # non-streaming, a raised exception, cancellation. Never shared across requests (R13).
         holds = RequestHolds()
+        outcome = None
         try:
             body = await _read_body(receive)
             req, outcome = await ChatSurface(deps=self).run_lifecycle(scope, body, holds)
             if outcome.refuse_code is not None:
                 await self._render_refusal(
-                    send, req, outcome.refuse_code, outcome.request_id, outcome.refuse_param
+                    send, req, outcome.refuse_code, outcome.request_id,
+                    outcome.refuse_param, holds,
                 )
                 return
             # Proceed: the lifecycle guarantees all three provider inputs are set on a non-refusal.
@@ -356,8 +350,8 @@ class ChatRoute:
                 req, plan, destination, upstream_body, send, holds
             )
         finally:
-            # Synchronous, never raises, idempotent behind its own latch (task 25.2): a lost
-            # refund / complete can never mask the in-flight response or exception.
+            refused = None if outcome is None else outcome.refuse_code
+            emit_chat_audit(self.audit, holds, refused)
             holds.release(self.admission, self.quota)
 
     async def _render_refusal(
@@ -367,6 +361,7 @@ class ChatRoute:
         code: str,
         request_id: str | None,
         param: str | None = None,
+        holds: RequestHolds | None = None,
     ) -> None:
         """Render a §10.4 refusal through the single ``Error_Envelope`` (R12.1).
 
@@ -392,10 +387,16 @@ class ChatRoute:
         if req is not None and req.streaming:
             await _start_sse(send)
             await _send_sse(send, errors.render_sse(code))
+            trace = None if holds is None else refusal_trace_frame(holds)
+            if trace is not None:
+                await _send_sse(send, trace)
             await _end_sse(send)
             return
         await _emit_error_code(
-            send, code, request_id, param, self.contract.max_output_tokens_boundary()
+            send, code, request_id, param, self.contract.max_output_tokens_boundary(),
+            None if holds is None else console_from_holds(
+                holds, output_action=None, provider_called=False,
+            ),
         )
 
     async def _stream_response(
@@ -471,7 +472,7 @@ class ChatRoute:
         latch = FirstByteLatch()
         sent_terminal = _TerminalLatch()
         kill_latch = KillLatch()
-        produced = _ProducedModeHolder()
+        produced = _ProducedModeHolder(holds)
         control = InFlightControl(
             source=self.control,
             contract=self.contract,
@@ -609,16 +610,9 @@ class ChatRoute:
         stats = produced.stats
         if stats is None:
             return
-        degenerated = getattr(stats, "degenerated_to_strict", False)
-        await _send_sse(
-            send,
-            encoder.trace(
-                {
-                    "produced_mode": stats.produced_mode.value,
-                    "degenerated_to_strict": degenerated,
-                }
-            ),
-        )
+        await _send_sse(send, encoder.trace(stream_trace_payload(
+            produced, stats, bool(getattr(stats, "degenerated_to_strict", False)),
+        )))
 
     def _next_attempt(
         self,

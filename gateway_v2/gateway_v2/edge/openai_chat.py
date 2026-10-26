@@ -45,7 +45,6 @@ from gateway_v2.dispatch.transform import GatewayRequest
 from gateway_v2.domain import Decision
 from gateway_v2.domain.plan import ExecutionPlan, Phase, PlanUnavailable, PlanUnknownTenant, Surface
 from gateway_v2.domain.posture import BUDGET_UNAVAILABLE
-from gateway_v2.edge import errors
 from gateway_v2.edge.error_frame_scan import SCAN_ERROR_CODE
 from gateway_v2.edge.identity_resolver import TenantIdentity
 from gateway_v2.edge.input_enforcement import (
@@ -54,10 +53,10 @@ from gateway_v2.edge.input_enforcement import (
     scan_input,
     stage_upstream,
 )
-from gateway_v2.edge.openai_nonstream import collect_and_enforce, ok_response
+from gateway_v2.edge.openai_nonstream import collect_and_enforce, emit_enforced_chat
 from gateway_v2.edge.phase_resolvers import resolver_for
 from gateway_v2.edge.request_holds import RequestHolds
-from gateway_v2.edge.routes import ASGIScope, ASGISend, emit_response
+from gateway_v2.edge.routes import ASGIScope, ASGISend
 from gateway_v2.edge.wire.openai import (
     CanonicalRequest,
     MalformedRequest,
@@ -358,9 +357,9 @@ class ChatSurface:
             contract=self._deps.contract,
         )
 
-        # Identity resolved: a refusal below echoes the minted per-request id into the
-        # Error_Envelope + the x-request-id header (the id the admit / budget verdicts carry).
+        holds.note_tenant(identity.org_id)
         request_id = self._request_id(identity, req)
+        holds.note_request(request_id)
 
         # Phase 5 — admission (task 2.4). A ShedVerdict fails closed with its code;
         # an Admitted records the slot on ``holds`` so it is ``complete``-d on exit.
@@ -390,7 +389,7 @@ class ChatSurface:
                 scan.refuse_code or REFUSE_INPUT_SCAN_FAILURE, request_id=request_id
             )
 
-        # All phases passed: stage the VERIFIED upstream bytes (destination + body).
+        holds.note_input(scan.decision)
         return req, self._proceed(plan, req, scan.decision, request_id)
 
     # --- phase seams (bodies filled by tasks 2.2–2.4) --------------------------------------- #
@@ -792,9 +791,4 @@ class ChatSurface:
             block_code=REFUSE_OUTPUT_BLOCKED,
             scan_failure_code=REFUSE_INPUT_SCAN_FAILURE,
         )
-        if enforced.refuse_code is not None:
-            await emit_response(send, errors.render_http(enforced.refuse_code))
-            return
-        json_body = self._deps.renderer.non_stream_body(req, enforced.deltas)
-        # Stamp the Produced_Mode header from the plan's SELECTED mode (GW13 C5/R5).
-        await emit_response(send, ok_response(json_body, plan.streaming_mode.value))
+        await emit_enforced_chat(send, self._deps, req, plan, enforced, holds)
