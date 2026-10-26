@@ -458,6 +458,8 @@ def _assemble_app(deps: dict[str, object]) -> ASGIApplication:
     """
     kwargs: dict[str, Any] = dict(deps)
     kwargs.pop("audit_runtime", None)
+    kwargs.pop("plan_feed", None)
+    kwargs.pop("plan_watch", None)
     # ``wrap_dev_app`` returns the app UNCHANGED unless the DEV PROFILE admission adapter is in
     # ``deps`` (then it adds the lease lifespan hooks and, when present, the audit writer).
     return wrap_dev_app(build_app(**kwargs), deps)

@@ -65,8 +65,8 @@ from gateway_v2.edge.dev_components import (
     load_dev_plan,
     parse_model_ids,
     phase_resolver_factory,
-    warm_dev_snapshot_source,
 )
+from gateway_v2.edge.dev_plan_feed import DevPlanFeed, DevPlanWatch
 from gateway_v2.edge.dev_upstream import DevUpstreamProvider
 from gateway_v2.runtime.errors import CapacityUnavailable, CapacityUnset
 from gateway_v2.runtime.resources import ResourceContract
@@ -274,7 +274,8 @@ def _plan_log(cfg: DevProfileConfig, plan: ExecutionPlan) -> tuple[str, str]:
     return (
         f"boot: snapshot_source -> warmed ReplicaSnapshot over {cfg.plan_path} (DEV PROFILE: "
         f"compiled by plan.compiler, org={plan.org_id} version={plan.version} "
-        f"streaming={plan.streaming_mode.value}; rules=[{rules}]; no control-plane feed)",
+        f"streaming={plan.streaming_mode.value}; rules=[{rules}]; a published FirewallConfig "
+        "replaces this file when the dev redis key changes)",
         f"boot: resolver -> phase-aware PlanResolver factory (plan {plan.version}) (DEV PROFILE: "
         "the REAL GW07 resolver, wired per phase via resolver_for -- PlanResolver(plan, phase) is "
         "bound at Phase.INPUT for the input scan and Phase.OUTPUT for the output guard, so "
@@ -292,6 +293,7 @@ def build_dev_dependencies(
     """Build the DEV PROFILE ``build_app`` kwargs + boot-log lines (refuse on any bad input)."""
     cfg = load_dev_config(env)
     plan = load_dev_plan(cfg.plan_path, org_id=cfg.org_id, compiled_at=time.time())
+    feed = DevPlanFeed(plan, now=time.monotonic())
     admission, bounds = _admission(cfg, contract)
     budget, budget_log = _budget(cfg, contract)
     budget_s = contract.guard_wait_budget_s()
@@ -318,7 +320,8 @@ def build_dev_dependencies(
         "error_scanner": output_detector,
         "output_detector": output_detector,
         "identity": DevStaticIdentity(api_key=cfg.api_key, org_id=cfg.org_id),
-        "snapshot_source": warm_dev_snapshot_source(plan, now=time.monotonic()),
+        "snapshot_source": feed.source,
+        "plan_feed": feed,
         "admission": admission,
         "quota": budget,
         "catalog": catalog,
@@ -331,6 +334,7 @@ def build_dev_dependencies(
         env=env,
         contract=contract,
     )
+    plan_note = _attach_plan_watch(deps, cfg=cfg, feed=feed, contract=contract)
     snapshot_log, resolver_log = _plan_log(cfg, plan)
     logs: tuple[str, ...] = (
         "boot: DEV PROFILE ACTIVE (AMF_DEV_PROFILE=1) -- local development wiring, NOT FOR "
@@ -357,9 +361,31 @@ def build_dev_dependencies(
         "slot wrapper)",
         budget_log,
         audit_note,
+        plan_note,
         f"boot: catalog -> StaticCatalogSource {list(cfg.models)} (DEV PROFILE: AMF_DEV_MODELS)",
     )
     return deps, logs
+
+
+def _attach_plan_watch(
+    deps: dict[str, object],
+    *,
+    cfg: DevProfileConfig,
+    feed: DevPlanFeed,
+    contract: ResourceContract,
+) -> str:
+    """Poll the published plan only when the dev lease already has a redis."""
+    if cfg.lease is None:
+        return "boot: firewall plan -> file only (no redis lease; a console save is not loaded)"
+    deps["plan_watch"] = DevPlanWatch(
+        redis_url=cfg.lease.redis_url,
+        feed=feed,
+        timeout_s=contract.cancellation_bound_s(),
+    )
+    return (
+        "boot: firewall plan -> file until {rv2}:dev:firewall-plan changes "
+        "(polled off the request path)"
+    )
 
 
 def _attach_audit(
@@ -403,4 +429,6 @@ def wrap_dev_app(app: ASGIApplication, deps: Mapping[str, object]) -> ASGIApplic
         return app
     runtime = deps.get("audit_runtime")
     audit = runtime if isinstance(runtime, DevAudit) else None
-    return DevServedApp(app, budget=quota, audit=audit)
+    watch = deps.get("plan_watch")
+    plan_watch = watch if isinstance(watch, DevPlanWatch) else None
+    return DevServedApp(app, budget=quota, audit=audit, plan_watch=plan_watch)
