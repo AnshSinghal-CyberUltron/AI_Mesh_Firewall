@@ -55,11 +55,13 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
 from gateway_v2.domain import (
+    Disposition,
     Finding,
     InFlightKill,
     PlanUnavailable,
     PlanUnknownTenant,
     StreamingMode,
+    most_restrictive,
     posture,
 )
 from gateway_v2.egress.output_guard import (
@@ -132,6 +134,7 @@ class StrictStats:
     done: bool = False
     incomplete: bool = False
     error: str | None = None
+    output_action: str | None = None
 
 
 # --------------------------------------------------------------------------- #
@@ -260,6 +263,7 @@ class StrictWithholdPipeline:
             stats.incomplete = True
             self._metrics.observe_stream_incomplete(stats)
             raise
+        stats.output_action = "allow"
         stats.done = True
         self._metrics.observe_stream_complete(stats)
         return stats
@@ -346,14 +350,17 @@ class StrictWithholdPipeline:
         # later channel still yields zero content frames (LGW13-1). An
         # OutputBlocked anywhere short-circuits to the terminal block path.
         sanitized: list[tuple[str, str]] = []
+        chosen: str | None = None
         try:
             for channel, text in whole.items():
                 findings: Sequence[Finding] = (
                     self._detector(text) if self._detector is not None else ()
                 )
                 decision = self._resolver.decide(findings)
+                chosen = _stricter_action(chosen, decision.disposition.value)
                 sanitized.append((channel, apply_decision(text, decision, 0)))
-        except OutputBlocked:
+        except OutputBlocked as blocked:
+            stats.output_action = blocked.decision.disposition.value
             return await self._terminate(send, stats, error=_OUTPUT_BLOCKED_CODE)
 
         # ALLOW/REDACT: emit the sanitized whole response as a single content
@@ -361,6 +368,7 @@ class StrictWithholdPipeline:
         await send(DownstreamFrame(text_deltas=tuple(sanitized)))
         stats.frames_out += 1
         stats.completion_overhead_ns = max(0, self._clock() - t_final)
+        stats.output_action = chosen or "allow"
         stats.done = True
         self._metrics.observe_stream_complete(stats)
         return stats
@@ -426,3 +434,9 @@ class StrictWithholdPipeline:
         else:
             self._metrics.observe_stream_incomplete(stats)
         return stats
+
+
+def _stricter_action(current: str | None, action: str) -> str:
+    if current is None:
+        return action
+    return most_restrictive((Disposition(current), Disposition(action))).value

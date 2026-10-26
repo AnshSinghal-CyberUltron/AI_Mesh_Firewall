@@ -56,12 +56,14 @@ from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
 from dataclasses import dataclass, field
 
 from gateway_v2.domain import (
+    Disposition,
     ExecutionPlan,
     Finding,
     InFlightKill,
     PlanUnavailable,
     PlanUnknownTenant,
     StreamingMode,
+    most_restrictive,
 )
 from gateway_v2.egress.holdback_tradeoff import (
     TRADE_OFF_OUTCOMES,
@@ -320,6 +322,7 @@ class StreamStats:
     error: str | None = None
     produced_mode: StreamingMode = StreamingMode.INCREMENTAL
     degenerated_to_strict: bool = False
+    output_action: str | None = None
 
 
 # --------------------------------------------------------------------------- #
@@ -361,6 +364,7 @@ class StreamPipeline:
         self._window = window
         self._clock = clock
         self._detector = detector
+        self._output_action: str | None = None
 
     @classmethod
     def for_plan(
@@ -449,6 +453,7 @@ class StreamPipeline:
             stats.incomplete = True
             self._metrics.observe_stream_incomplete(stats)
             raise
+        stats.output_action = "allow"
         stats.done = True
         self._metrics.observe_stream_complete(stats)
         return stats
@@ -515,7 +520,7 @@ class StreamPipeline:
             # Scanner failed: retain all pending, emit nothing further (R3.6).
             return await self._terminate(send, stats, error="scan_failure")
         except OutputBlocked:
-            # Completed match blocked: withhold unreleased bytes (R3.4).
+            stats.output_action = self._output_action or "block"
             return await self._terminate(send, stats, error="output_blocked")
         except HoldbackOverflow:
             # Relaxed-class ceiling: release no held bytes of the match (R6.5).
@@ -538,7 +543,7 @@ class StreamPipeline:
         # genuinely empty response (no content frame at all) is NOT degenerate --
         # it is just empty -- so the ``> 0`` guard keeps it ``False``.
         stats.degenerated_to_strict = frames_out_before_final == 0 and stats.frames_out > 0
-
+        stats.output_action = self._output_action or "allow"
         stats.done = True
         self._metrics.observe_stream_complete(stats)
         return stats
@@ -653,8 +658,18 @@ class StreamPipeline:
         )
         matches = completed_in(text.hits, release_start, len(released))
         decision = self._resolver.decide(matches)
+        self._note_output(decision.disposition.value)
         decision = with_remainder_redactions(decision, remainder_edits)
         return apply_decision(released, decision, release_start)
+
+    def _note_output(self, action: str) -> None:
+        """Keep the most restrictive output disposition seen on this stream."""
+        current = self._output_action
+        if current is None:
+            self._output_action = action
+            return
+        winner = most_restrictive((Disposition(current), Disposition(action)))
+        self._output_action = winner.value
 
     # -- force-release trade-off helper (task 9.1) ------------------------- #
 
