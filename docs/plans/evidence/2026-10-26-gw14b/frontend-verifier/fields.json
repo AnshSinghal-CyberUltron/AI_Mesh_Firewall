@@ -1,0 +1,2233 @@
+{
+ "producer_key_counts": {
+  "C_ee": 66,
+  "G_gateway": 1621,
+  "G_telemetry": 23,
+  "G_trace": 155
+ },
+ "reads": [
+  {
+   "field": "action",
+   "files": [
+    "frontend/src/components/OutputGovernancePanel.jsx",
+    "frontend/src/components/OutputPipelineTimeline.jsx",
+    "frontend/src/components/firewall-module-utils.js",
+    "frontend/src/utils/outputGovernanceFeed.js",
+    "frontend/src/utils/pipelineTrace.js"
+   ],
+   "via": "enforcement_event"
+  },
+  {
+   "field": "action",
+   "files": [
+    "frontend/src/components/AttackSimulatorPanel.jsx",
+    "frontend/src/components/DatabaseConnectionPanel.jsx",
+    "frontend/src/components/RAGAttackTrustSimulator.jsx",
+    "frontend/src/components/rag/SemanticSearchPanel.jsx",
+    "frontend/src/components/simulator/StageTimeline.jsx",
+    "frontend/src/utils/inputScanExplain.js",
+    "frontend/src/utils/outputGovernanceFeed.js",
+    "frontend/src/utils/pipelineTrace.js"
+   ],
+   "via": "pipeline_trace"
+  },
+  {
+   "field": "action",
+   "files": [
+    "frontend/src/components/AttackSimulatorPanel.jsx",
+    "frontend/src/components/BedrockTestPanel.jsx",
+    "frontend/src/components/LogDetailPage.jsx",
+    "frontend/src/components/MCPConnectorPanel.jsx",
+    "frontend/src/components/MCPManagerPanel.jsx",
+    "frontend/src/components/ModelStatePanel.jsx",
+    "frontend/src/components/OutputGovernancePanel.jsx",
+    "frontend/src/components/OutputGuardrailEngineCard.jsx",
+    "frontend/src/components/RAGFeatureTestPanel.jsx",
+    "frontend/src/components/module-specific-log-charts.jsx",
+    "frontend/src/components/simulator/OutputGuardSimulator.jsx",
+    "frontend/src/hooks/useFirewallData.js",
+    "frontend/src/utils/liveGateway.js"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "action",
+   "files": [
+    "frontend/src/constants/zeroshieldBrand.js",
+    "frontend/src/utils/liveGateway.js"
+   ],
+   "via": "zeroshield"
+  },
+  {
+   "field": "actions",
+   "files": [
+    "frontend/src/components/LogDetailPage.jsx"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "auth_ms",
+   "files": [
+    "frontend/src/utils/liveGateway.js"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "auth_status",
+   "files": [
+    "frontend/src/components/LogDetailPage.jsx"
+   ],
+   "via": "enforcement_event"
+  },
+  {
+   "field": "by_stage",
+   "files": [
+    "frontend/src/components/LogDetailPage.jsx",
+    "frontend/src/utils/pipelineTrace.js"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "candidate_count",
+   "files": [
+    "frontend/src/components/RoutingAuditPanel.jsx"
+   ],
+   "via": "enforcement_event"
+  },
+  {
+   "field": "candidate_count",
+   "files": [
+    "frontend/src/components/simulator/StageTimeline.jsx"
+   ],
+   "via": "pipeline_trace"
+  },
+  {
+   "field": "candidate_count",
+   "files": [
+    "frontend/src/utils/liveGateway.js",
+    "frontend/src/utils/routingExplain.js"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "candidate_count",
+   "files": [
+    "frontend/src/utils/liveGateway.js"
+   ],
+   "via": "zeroshield"
+  },
+  {
+   "field": "candidate_scores",
+   "files": [
+    "frontend/src/utils/routingExplain.js"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "category",
+   "files": [
+    "frontend/src/components/firewall-module-utils.js"
+   ],
+   "via": "enforcement_event"
+  },
+  {
+   "field": "category",
+   "files": [
+    "frontend/src/components/AttackSimulatorPanel.jsx",
+    "frontend/src/components/RAGAttackTrustSimulator.jsx",
+    "frontend/src/hooks/useFirewallData.js",
+    "frontend/src/utils/liveGateway.js"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "compliance_tags",
+   "files": [
+    "frontend/src/components/LogDetailPage.jsx",
+    "frontend/src/components/OutputGovernancePanel.jsx",
+    "frontend/src/components/OutputPipelineTimeline.jsx",
+    "frontend/src/components/module-specific-log-charts.jsx"
+   ],
+   "via": "enforcement_event"
+  },
+  {
+   "field": "compliance_tags",
+   "files": [
+    "frontend/src/components/MCPConnectorPanel.jsx",
+    "frontend/src/components/MCPManagerPanel.jsx",
+    "frontend/src/components/ModelConnectionPanel.jsx",
+    "frontend/src/components/simulator/OutputGuardSimulator.jsx"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "compliance_tags",
+   "files": [
+    "frontend/src/utils/liveGateway.js"
+   ],
+   "via": "zeroshield"
+  },
+  {
+   "field": "confidence",
+   "files": [
+    "frontend/src/components/simulator/StageTimeline.jsx"
+   ],
+   "via": "pipeline_trace"
+  },
+  {
+   "field": "confidence",
+   "files": [
+    "frontend/src/components/BedrockTestPanel.jsx",
+    "frontend/src/components/simulator/OutputGuardSimulator.jsx",
+    "frontend/src/utils/liveGateway.js"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "confidence",
+   "files": [
+    "frontend/src/constants/zeroshieldBrand.js",
+    "frontend/src/utils/liveGateway.js"
+   ],
+   "via": "zeroshield"
+  },
+  {
+   "field": "content",
+   "files": [
+    "frontend/src/components/OutputPipelineTimeline.jsx",
+    "frontend/src/components/simulator/StageTimeline.jsx"
+   ],
+   "via": "pipeline_trace"
+  },
+  {
+   "field": "content",
+   "files": [
+    "frontend/src/components/AttackSimulatorPanel.jsx",
+    "frontend/src/components/LogDetailPage.jsx",
+    "frontend/src/components/MCPConnectorPanel.jsx",
+    "frontend/src/components/RAGAttackTrustSimulator.jsx",
+    "frontend/src/components/howToUseContent.js",
+    "frontend/src/components/rag/SemanticSearchPanel.jsx",
+    "frontend/src/components/simulator/IsolationOpsSimulator.jsx",
+    "frontend/src/components/simulator/RAGIngestionPanel.jsx",
+    "frontend/src/utils/liveGateway.js"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "content_safety",
+   "files": [
+    "frontend/src/components/LogDetailPage.jsx"
+   ],
+   "via": "enforcement_event"
+  },
+  {
+   "field": "data_sensitivity",
+   "files": [
+    "frontend/src/components/RoutingAuditPanel.jsx"
+   ],
+   "via": "enforcement_event"
+  },
+  {
+   "field": "data_sensitivity_source",
+   "files": [
+    "frontend/src/utils/routingExplain.js"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "decision_factors",
+   "files": [
+    "frontend/src/components/RoutingAuditPanel.jsx"
+   ],
+   "via": "enforcement_event"
+  },
+  {
+   "field": "decision_factors",
+   "files": [
+    "frontend/src/components/simulator/StageTimeline.jsx"
+   ],
+   "via": "pipeline_trace"
+  },
+  {
+   "field": "decision_factors",
+   "files": [
+    "frontend/src/components/howToUseContent.js",
+    "frontend/src/utils/liveGateway.js",
+    "frontend/src/utils/routingExplain.js"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "decision_factors",
+   "files": [
+    "frontend/src/utils/liveGateway.js"
+   ],
+   "via": "zeroshield"
+  },
+  {
+   "field": "decision_source",
+   "files": [
+    "frontend/src/components/RoutingAuditPanel.jsx"
+   ],
+   "via": "enforcement_event"
+  },
+  {
+   "field": "decision_source",
+   "files": [
+    "frontend/src/components/simulator/StageTimeline.jsx"
+   ],
+   "via": "pipeline_trace"
+  },
+  {
+   "field": "decision_source",
+   "files": [
+    "frontend/src/components/LogDetailPage.jsx",
+    "frontend/src/components/howToUseContent.js",
+    "frontend/src/utils/liveGateway.js",
+    "frontend/src/utils/routingExplain.js"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "decision_source",
+   "files": [
+    "frontend/src/utils/liveGateway.js"
+   ],
+   "via": "zeroshield"
+  },
+  {
+   "field": "decision_source_label",
+   "files": [
+    "frontend/src/components/simulator/StageTimeline.jsx"
+   ],
+   "via": "pipeline_trace"
+  },
+  {
+   "field": "decision_source_label",
+   "files": [
+    "frontend/src/components/LogDetailPage.jsx",
+    "frontend/src/utils/liveGateway.js"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "detail",
+   "files": [
+    "frontend/src/components/OutputGovernancePanel.jsx",
+    "frontend/src/components/OutputPipelineTimeline.jsx"
+   ],
+   "via": "enforcement_event"
+  },
+  {
+   "field": "detail",
+   "files": [
+    "frontend/src/components/simulator/StageTimeline.jsx",
+    "frontend/src/utils/inputScanExplain.js"
+   ],
+   "via": "pipeline_trace"
+  },
+  {
+   "field": "detail",
+   "files": [
+    "frontend/src/components/BedrockTestPanel.jsx",
+    "frontend/src/components/DatabaseConnectionPanel.jsx",
+    "frontend/src/components/GatewayKeyPanel.jsx",
+    "frontend/src/components/MCPConnectorPanel.jsx",
+    "frontend/src/components/MCPManagerPanel.jsx",
+    "frontend/src/components/MCPScanControlMatrix.jsx",
+    "frontend/src/components/ModelConnectionPanel.jsx",
+    "frontend/src/components/RAGAttackTrustSimulator.jsx",
+    "frontend/src/components/RAGFeatureTestPanel.jsx",
+    "frontend/src/components/firewall/Tier2ScanControl.jsx",
+    "frontend/src/components/rag/SemanticSearchPanel.jsx",
+    "frontend/src/components/simulator/CircuitBreakerSimulator.jsx",
+    "frontend/src/components/simulator/IsolationOpsSimulator.jsx",
+    "frontend/src/components/simulator/OutputGuardSimulator.jsx",
+    "frontend/src/context/AuthContext.jsx",
+    "frontend/src/pages/AIMeshFirewallOverview.jsx",
+    "frontend/src/utils/liveGateway.js",
+    "frontend/src/utils/pipelineTrace.js"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "detail",
+   "files": [
+    "frontend/src/constants/zeroshieldBrand.js",
+    "frontend/src/utils/liveGateway.js"
+   ],
+   "via": "zeroshield"
+  },
+  {
+   "field": "detection_tier",
+   "files": [
+    "frontend/src/utils/liveGateway.js",
+    "frontend/src/utils/pipelineTrace.js"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "detection_tier",
+   "files": [
+    "frontend/src/constants/zeroshieldBrand.js",
+    "frontend/src/utils/liveGateway.js"
+   ],
+   "via": "zeroshield"
+  },
+  {
+   "field": "dominant_latency_ms",
+   "files": [
+    "frontend/src/components/LogDetailPage.jsx",
+    "frontend/src/utils/pipelineTrace.js"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "dominant_share_pct",
+   "files": [
+    "frontend/src/components/LogDetailPage.jsx",
+    "frontend/src/utils/pipelineTrace.js"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "dominant_stage",
+   "files": [
+    "frontend/src/components/LogDetailPage.jsx",
+    "frontend/src/utils/pipelineTrace.js"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "endpoint",
+   "files": [
+    "frontend/src/components/LogDetailPage.jsx",
+    "frontend/src/components/module-specific-log-charts.jsx"
+   ],
+   "via": "enforcement_event"
+  },
+  {
+   "field": "endpoint",
+   "files": [
+    "frontend/src/components/LogDetailPage.jsx",
+    "frontend/src/components/module-specific-log-charts.jsx",
+    "frontend/src/hooks/useSimulatorEngine.js"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "endpoint_id",
+   "files": [
+    "frontend/src/components/LogDetailPage.jsx"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "enforcement_source",
+   "files": [
+    "frontend/src/utils/liveGateway.js"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "enforcement_source",
+   "files": [
+    "frontend/src/utils/liveGateway.js"
+   ],
+   "via": "zeroshield"
+  },
+  {
+   "field": "evaluator_model",
+   "files": [
+    "frontend/src/utils/liveGateway.js"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "evaluator_model",
+   "files": [
+    "frontend/src/utils/liveGateway.js"
+   ],
+   "via": "zeroshield"
+  },
+  {
+   "field": "event_type",
+   "files": [
+    "frontend/src/components/LogDetailPage.jsx",
+    "frontend/src/components/firewall-module-utils.js",
+    "frontend/src/components/module-specific-log-charts.jsx"
+   ],
+   "via": "enforcement_event"
+  },
+  {
+   "field": "event_type",
+   "files": [
+    "frontend/src/components/MCPManagerPanel.jsx",
+    "frontend/src/components/module-specific-log-charts.jsx"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "extra",
+   "files": [
+    "frontend/src/components/LogDetailPage.jsx",
+    "frontend/src/components/OutputGovernancePanel.jsx",
+    "frontend/src/components/OutputPipelineTimeline.jsx",
+    "frontend/src/components/firewall-module-utils.js",
+    "frontend/src/components/module-specific-log-charts.jsx",
+    "frontend/src/utils/outputGovernanceFeed.js",
+    "frontend/src/utils/pipelineTrace.js"
+   ],
+   "via": "enforcement_event"
+  },
+  {
+   "field": "extra",
+   "files": [
+    "frontend/src/components/module-specific-log-charts.jsx"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "fallback_chain",
+   "files": [
+    "frontend/src/components/RoutingAuditPanel.jsx"
+   ],
+   "via": "enforcement_event"
+  },
+  {
+   "field": "fallback_chain",
+   "files": [
+    "frontend/src/components/howToUseContent.js",
+    "frontend/src/components/simulator/ModelRoutingSimulator.jsx",
+    "frontend/src/utils/liveGateway.js",
+    "frontend/src/utils/routingExplain.js"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "fallback_chain",
+   "files": [
+    "frontend/src/utils/liveGateway.js"
+   ],
+   "via": "zeroshield"
+  },
+  {
+   "field": "final_action",
+   "files": [
+    "frontend/src/components/LogDetailPage.jsx",
+    "frontend/src/utils/pipelineTrace.js"
+   ],
+   "via": "pipeline_trace"
+  },
+  {
+   "field": "final_action",
+   "files": [
+    "frontend/src/components/AttackSimulatorPanel.jsx",
+    "frontend/src/components/RAGAttackTrustSimulator.jsx",
+    "frontend/src/components/RAGFeatureTestPanel.jsx",
+    "frontend/src/components/simulator/IsolationOpsSimulator.jsx",
+    "frontend/src/components/simulator/OutputGuardSimulator.jsx",
+    "frontend/src/utils/liveGateway.js"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "final_response",
+   "files": [
+    "frontend/src/utils/pipelineTrace.js"
+   ],
+   "via": "pipeline_trace"
+  },
+  {
+   "field": "findings",
+   "files": [
+    "frontend/src/components/MCPConnectorPanel.jsx"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "guard_action",
+   "files": [
+    "frontend/src/utils/liveGateway.js"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "guard_action",
+   "files": [
+    "frontend/src/utils/liveGateway.js"
+   ],
+   "via": "zeroshield"
+  },
+  {
+   "field": "guard_findings",
+   "files": [
+    "frontend/src/components/simulator/StageTimeline.jsx",
+    "frontend/src/utils/inputScanExplain.js"
+   ],
+   "via": "pipeline_trace"
+  },
+  {
+   "field": "guard_findings",
+   "files": [
+    "frontend/src/utils/liveGateway.js"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "guard_findings",
+   "files": [
+    "frontend/src/utils/liveGateway.js"
+   ],
+   "via": "zeroshield"
+  },
+  {
+   "field": "guard_model",
+   "files": [
+    "frontend/src/components/simulator/StageTimeline.jsx"
+   ],
+   "via": "pipeline_trace"
+  },
+  {
+   "field": "guard_model",
+   "files": [
+    "frontend/src/utils/liveGateway.js"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "guard_model",
+   "files": [
+    "frontend/src/utils/liveGateway.js"
+   ],
+   "via": "zeroshield"
+  },
+  {
+   "field": "guard_reason",
+   "files": [
+    "frontend/src/components/simulator/StageTimeline.jsx",
+    "frontend/src/utils/inputScanExplain.js",
+    "frontend/src/utils/pipelineTrace.js"
+   ],
+   "via": "pipeline_trace"
+  },
+  {
+   "field": "guard_reason",
+   "files": [
+    "frontend/src/utils/liveGateway.js",
+    "frontend/src/utils/routingExplain.js"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "guard_reason",
+   "files": [
+    "frontend/src/constants/zeroshieldBrand.js",
+    "frontend/src/utils/liveGateway.js"
+   ],
+   "via": "zeroshield"
+  },
+  {
+   "field": "guard_summary",
+   "files": [
+    "frontend/src/utils/liveGateway.js"
+   ],
+   "via": "pipeline_trace"
+  },
+  {
+   "field": "guard_summary",
+   "files": [
+    "frontend/src/components/AttackSimulatorPanel.jsx"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "hints",
+   "files": [
+    "frontend/src/components/LogDetailPage.jsx"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "incident_id",
+   "files": [
+    "frontend/src/components/LogDetailPage.jsx"
+   ],
+   "via": "enforcement_event"
+  },
+  {
+   "field": "incident_id",
+   "files": [
+    "frontend/src/components/LogDetailPage.jsx"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "input_action",
+   "files": [
+    "frontend/src/components/LogDetailPage.jsx"
+   ],
+   "via": "enforcement_event"
+  },
+  {
+   "field": "input_text",
+   "files": [
+    "frontend/src/utils/pipelineTrace.js"
+   ],
+   "via": "enforcement_event"
+  },
+  {
+   "field": "input_text",
+   "files": [
+    "frontend/src/utils/pipelineTrace.js"
+   ],
+   "via": "pipeline_trace"
+  },
+  {
+   "field": "input_text_after",
+   "files": [
+    "frontend/src/utils/pipelineTrace.js"
+   ],
+   "via": "pipeline_trace"
+  },
+  {
+   "field": "input_text_before",
+   "files": [
+    "frontend/src/utils/pipelineTrace.js"
+   ],
+   "via": "pipeline_trace"
+  },
+  {
+   "field": "input_tokens",
+   "files": [
+    "frontend/src/components/LogDetailPage.jsx"
+   ],
+   "via": "enforcement_event"
+  },
+  {
+   "field": "input_validation",
+   "files": [
+    "frontend/src/components/LogDetailPage.jsx"
+   ],
+   "via": "enforcement_event"
+  },
+  {
+   "field": "input_was_redacted",
+   "files": [
+    "frontend/src/utils/pipelineTrace.js"
+   ],
+   "via": "pipeline_trace"
+  },
+  {
+   "field": "intent",
+   "files": [
+    "frontend/src/components/LogDetailPage.jsx"
+   ],
+   "via": "enforcement_event"
+  },
+  {
+   "field": "is_isolation_event",
+   "files": [
+    "frontend/src/components/firewall-module-utils.js"
+   ],
+   "via": "enforcement_event"
+  },
+  {
+   "field": "jailbreak_detected",
+   "files": [
+    "frontend/src/utils/pipelineTrace.js"
+   ],
+   "via": "enforcement_event"
+  },
+  {
+   "field": "key_prefix",
+   "files": [
+    "frontend/src/components/LogDetailPage.jsx"
+   ],
+   "via": "enforcement_event"
+  },
+  {
+   "field": "kill_switch_ms",
+   "files": [
+    "frontend/src/utils/liveGateway.js"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "latency_breakdown",
+   "files": [
+    "frontend/src/utils/pipelineTrace.js"
+   ],
+   "via": "pipeline_trace"
+  },
+  {
+   "field": "latency_ms",
+   "files": [
+    "frontend/src/components/OutputGovernancePanel.jsx",
+    "frontend/src/components/OutputPipelineTimeline.jsx",
+    "frontend/src/components/RoutingAuditPanel.jsx",
+    "frontend/src/components/module-specific-log-charts.jsx",
+    "frontend/src/utils/pipelineTrace.js"
+   ],
+   "via": "enforcement_event"
+  },
+  {
+   "field": "latency_ms",
+   "files": [
+    "frontend/src/components/AttackSimulatorPanel.jsx",
+    "frontend/src/components/DatabaseConnectionPanel.jsx",
+    "frontend/src/components/RAGAttackTrustSimulator.jsx",
+    "frontend/src/components/simulator/StageTimeline.jsx",
+    "frontend/src/utils/pipelineTrace.js"
+   ],
+   "via": "pipeline_trace"
+  },
+  {
+   "field": "latency_ms",
+   "files": [
+    "frontend/src/components/BedrockTestPanel.jsx",
+    "frontend/src/components/LogDetailPage.jsx",
+    "frontend/src/components/MCPConnectorPanel.jsx",
+    "frontend/src/components/module-specific-log-charts.jsx",
+    "frontend/src/components/simulator/OutputGuardSimulator.jsx",
+    "frontend/src/utils/liveGateway.js",
+    "frontend/src/utils/pipelineTrace.js"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "llm",
+   "files": [
+    "frontend/src/components/OWASPStatsPanel.jsx"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "matched_patterns",
+   "files": [
+    "frontend/src/components/OutputGovernancePanel.jsx",
+    "frontend/src/components/OutputPipelineTimeline.jsx",
+    "frontend/src/components/module-specific-log-charts.jsx"
+   ],
+   "via": "enforcement_event"
+  },
+  {
+   "field": "matched_patterns",
+   "files": [
+    "frontend/src/components/simulator/StageTimeline.jsx",
+    "frontend/src/utils/inputScanExplain.js"
+   ],
+   "via": "pipeline_trace"
+  },
+  {
+   "field": "matched_patterns",
+   "files": [
+    "frontend/src/components/simulator/OutputGuardSimulator.jsx",
+    "frontend/src/utils/liveGateway.js"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "matched_patterns",
+   "files": [
+    "frontend/src/utils/liveGateway.js"
+   ],
+   "via": "zeroshield"
+  },
+  {
+   "field": "matched_policies",
+   "files": [
+    "frontend/src/components/simulator/StageTimeline.jsx"
+   ],
+   "via": "pipeline_trace"
+  },
+  {
+   "field": "matched_policies",
+   "files": [
+    "frontend/src/components/MCPConnectorPanel.jsx",
+    "frontend/src/utils/liveGateway.js",
+    "frontend/src/utils/pipelineTrace.js"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "matched_policies",
+   "files": [
+    "frontend/src/utils/liveGateway.js"
+   ],
+   "via": "zeroshield"
+  },
+  {
+   "field": "matched_policy_names",
+   "files": [
+    "frontend/src/utils/pipelineTrace.js"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "matched_rule_names",
+   "files": [
+    "frontend/src/utils/pipelineTrace.js"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "matched_rules",
+   "files": [
+    "frontend/src/components/simulator/StageTimeline.jsx"
+   ],
+   "via": "pipeline_trace"
+  },
+  {
+   "field": "matched_rules",
+   "files": [
+    "frontend/src/utils/liveGateway.js",
+    "frontend/src/utils/pipelineTrace.js"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "matched_rules",
+   "files": [
+    "frontend/src/utils/liveGateway.js"
+   ],
+   "via": "zeroshield"
+  },
+  {
+   "field": "mcp",
+   "files": [
+    "frontend/src/components/OWASPStatsPanel.jsx"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "message",
+   "files": [
+    "frontend/src/components/AttackSimulatorPanel.jsx",
+    "frontend/src/components/BedrockTestPanel.jsx",
+    "frontend/src/components/DatabaseConnectionPanel.jsx",
+    "frontend/src/components/GatewayKeyPanel.jsx",
+    "frontend/src/components/LogDetailPage.jsx",
+    "frontend/src/components/LogViewerPanel.jsx",
+    "frontend/src/components/MCPConnectorPanel.jsx",
+    "frontend/src/components/MCPManagerPanel.jsx",
+    "frontend/src/components/MCPScanControlMatrix.jsx",
+    "frontend/src/components/ModelConnectionPanel.jsx",
+    "frontend/src/components/RAGAttackTrustSimulator.jsx",
+    "frontend/src/components/RAGFeatureTestPanel.jsx",
+    "frontend/src/components/firewall/Tier2ScanControl.jsx",
+    "frontend/src/components/howToUseContent.js",
+    "frontend/src/components/layout/Header.jsx",
+    "frontend/src/components/simulator/IsolationOpsSimulator.jsx",
+    "frontend/src/components/simulator/OutputGuardSimulator.jsx",
+    "frontend/src/components/simulator/RAGIngestionPanel.jsx",
+    "frontend/src/context/AuthContext.jsx",
+    "frontend/src/hooks/useFirewallData.js",
+    "frontend/src/hooks/useSimulatorEngine.js",
+    "frontend/src/hooks/useSimulatorGatewayModels.js",
+    "frontend/src/utils/liveGateway.js"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "metadata",
+   "files": [
+    "frontend/src/components/OutputGovernancePanel.jsx",
+    "frontend/src/components/OutputPipelineTimeline.jsx",
+    "frontend/src/components/firewall-module-utils.js",
+    "frontend/src/utils/outputGovernanceFeed.js",
+    "frontend/src/utils/pipelineTrace.js"
+   ],
+   "via": "enforcement_event"
+  },
+  {
+   "field": "metadata",
+   "files": [
+    "frontend/src/utils/pipelineTrace.js"
+   ],
+   "via": "pipeline_trace"
+  },
+  {
+   "field": "metadata",
+   "files": [
+    "frontend/src/components/LogDetailPage.jsx",
+    "frontend/src/components/MCPConnectorPanel.jsx",
+    "frontend/src/components/OutputGuardrailEngineCard.jsx",
+    "frontend/src/components/RAGAttackTrustSimulator.jsx",
+    "frontend/src/components/module-specific-log-charts.jsx",
+    "frontend/src/components/rag/SemanticSearchPanel.jsx",
+    "frontend/src/hooks/useFirewallData.js"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "method",
+   "files": [
+    "frontend/src/components/LogDetailPage.jsx"
+   ],
+   "via": "enforcement_event"
+  },
+  {
+   "field": "method",
+   "files": [
+    "frontend/src/components/LogDetailPage.jsx",
+    "frontend/src/context/AuthContext.jsx",
+    "frontend/src/hooks/useSimulatorEngine.js"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "model",
+   "files": [
+    "frontend/src/components/LogDetailPage.jsx",
+    "frontend/src/components/OutputGovernancePanel.jsx",
+    "frontend/src/components/OutputPipelineTimeline.jsx"
+   ],
+   "via": "enforcement_event"
+  },
+  {
+   "field": "model",
+   "files": [
+    "frontend/src/components/LogDetailPage.jsx",
+    "frontend/src/components/simulator/CircuitBreakerSimulator.jsx",
+    "frontend/src/components/simulator/IsolationOpsSimulator.jsx",
+    "frontend/src/components/simulator/ModelRoutingSimulator.jsx",
+    "frontend/src/utils/liveGateway.js"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "model_input_ms",
+   "files": [
+    "frontend/src/utils/liveGateway.js"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "module",
+   "files": [
+    "frontend/src/components/firewall-module-utils.js"
+   ],
+   "via": "enforcement_event"
+  },
+  {
+   "field": "module",
+   "files": [
+    "frontend/src/components/module-specific-log-charts.jsx",
+    "frontend/src/pages/AIMeshFirewallOverview.jsx"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "module_id",
+   "files": [
+    "frontend/src/components/firewall-module-utils.js"
+   ],
+   "via": "enforcement_event"
+  },
+  {
+   "field": "module_id",
+   "files": [
+    "frontend/src/components/module-specific-log-charts.jsx"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "name",
+   "files": [
+    "frontend/src/components/AttackSimulatorPanel.jsx",
+    "frontend/src/components/DatabaseConnectionPanel.jsx",
+    "frontend/src/components/RAGAttackTrustSimulator.jsx",
+    "frontend/src/components/rag/SemanticSearchPanel.jsx",
+    "frontend/src/components/simulator/StageTimeline.jsx",
+    "frontend/src/utils/liveGateway.js",
+    "frontend/src/utils/pipelineTrace.js"
+   ],
+   "via": "pipeline_trace"
+  },
+  {
+   "field": "name",
+   "files": [
+    "frontend/src/components/AttackSimulatorPanel.jsx",
+    "frontend/src/components/DatabaseConnectionPanel.jsx",
+    "frontend/src/components/GatewayKeyPanel.jsx",
+    "frontend/src/components/LogDetailPage.jsx",
+    "frontend/src/components/MCPConnectorPanel.jsx",
+    "frontend/src/components/MCPManagerPanel.jsx",
+    "frontend/src/components/OWASPStatsPanel.jsx",
+    "frontend/src/components/OutputGuardrailCharts.jsx",
+    "frontend/src/components/RAGAttackTrustSimulator.jsx",
+    "frontend/src/components/RAGFeatureTestPanel.jsx",
+    "frontend/src/components/RAGPipelineTelemetry.jsx",
+    "frontend/src/components/RoutingGovernancePanel.jsx",
+    "frontend/src/components/module-specific-log-charts.jsx",
+    "frontend/src/components/rag/SemanticSearchPanel.jsx",
+    "frontend/src/components/simulator/RAGIngestionPanel.jsx",
+    "frontend/src/context/AuthContext.jsx",
+    "frontend/src/hooks/useSimulatorEngine.js",
+    "frontend/src/pages/AIMeshFirewallOverview.jsx",
+    "frontend/src/utils/liveGateway.js",
+    "frontend/src/utils/outputGovernanceFeed.js",
+    "frontend/src/utils/pipelineTrace.js"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "org_routing_enabled",
+   "files": [
+    "frontend/src/components/RoutingAuditPanel.jsx"
+   ],
+   "via": "enforcement_event"
+  },
+  {
+   "field": "org_routing_enabled",
+   "files": [
+    "frontend/src/utils/liveGateway.js",
+    "frontend/src/utils/routingExplain.js"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "org_routing_enabled",
+   "files": [
+    "frontend/src/utils/liveGateway.js"
+   ],
+   "via": "zeroshield"
+  },
+  {
+   "field": "organization_id",
+   "files": [
+    "frontend/src/components/LogDetailPage.jsx"
+   ],
+   "via": "enforcement_event"
+  },
+  {
+   "field": "original_model",
+   "files": [
+    "frontend/src/utils/liveGateway.js",
+    "frontend/src/utils/routingExplain.js"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "output_guardrail_ms",
+   "files": [
+    "frontend/src/utils/liveGateway.js"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "output_text",
+   "files": [
+    "frontend/src/utils/pipelineTrace.js"
+   ],
+   "via": "pipeline_trace"
+  },
+  {
+   "field": "output_tokens",
+   "files": [
+    "frontend/src/components/LogDetailPage.jsx"
+   ],
+   "via": "enforcement_event"
+  },
+  {
+   "field": "output_withheld",
+   "files": [
+    "frontend/src/utils/pipelineTrace.js"
+   ],
+   "via": "pipeline_trace"
+  },
+  {
+   "field": "output_withheld_reason",
+   "files": [
+    "frontend/src/utils/pipelineTrace.js"
+   ],
+   "via": "pipeline_trace"
+  },
+  {
+   "field": "overhead_ms",
+   "files": [
+    "frontend/src/utils/pipelineTrace.js"
+   ],
+   "via": "pipeline_trace"
+  },
+  {
+   "field": "overhead_ms",
+   "files": [
+    "frontend/src/components/LogDetailPage.jsx"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "owasp_code",
+   "files": [
+    "frontend/src/components/LogDetailPage.jsx",
+    "frontend/src/components/firewall-module-utils.js"
+   ],
+   "via": "enforcement_event"
+  },
+  {
+   "field": "pii_detected",
+   "files": [
+    "frontend/src/components/LogDetailPage.jsx",
+    "frontend/src/utils/pipelineTrace.js"
+   ],
+   "via": "enforcement_event"
+  },
+  {
+   "field": "pipeline_request_id",
+   "files": [
+    "frontend/src/components/LogDetailPage.jsx"
+   ],
+   "via": "enforcement_event"
+  },
+  {
+   "field": "pipeline_stage",
+   "files": [
+    "frontend/src/components/LogDetailPage.jsx",
+    "frontend/src/components/firewall-module-utils.js",
+    "frontend/src/components/module-specific-log-charts.jsx"
+   ],
+   "via": "enforcement_event"
+  },
+  {
+   "field": "pipeline_stage",
+   "files": [
+    "frontend/src/components/module-specific-log-charts.jsx",
+    "frontend/src/utils/liveGateway.js"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "pipeline_trace",
+   "files": [
+    "frontend/src/components/LogDetailPage.jsx",
+    "frontend/src/components/module-specific-log-charts.jsx",
+    "frontend/src/utils/pipelineTrace.js"
+   ],
+   "via": "enforcement_event"
+  },
+  {
+   "field": "pipeline_trace",
+   "files": [
+    "frontend/src/components/LogDetailPage.jsx",
+    "frontend/src/components/module-specific-log-charts.jsx",
+    "frontend/src/utils/liveGateway.js"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "pipeline_trace",
+   "files": [
+    "frontend/src/utils/pipelineTrace.js"
+   ],
+   "via": "zeroshield"
+  },
+  {
+   "field": "policy_ms",
+   "files": [
+    "frontend/src/utils/liveGateway.js"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "policy_summary",
+   "files": [
+    "frontend/src/components/RoutingAuditPanel.jsx"
+   ],
+   "via": "enforcement_event"
+  },
+  {
+   "field": "policy_summary",
+   "files": [
+    "frontend/src/components/simulator/StageTimeline.jsx"
+   ],
+   "via": "pipeline_trace"
+  },
+  {
+   "field": "policy_summary",
+   "files": [
+    "frontend/src/utils/liveGateway.js",
+    "frontend/src/utils/routingExplain.js"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "policy_summary",
+   "files": [
+    "frontend/src/utils/liveGateway.js"
+   ],
+   "via": "zeroshield"
+  },
+  {
+   "field": "policy_violations",
+   "files": [
+    "frontend/src/components/LogDetailPage.jsx"
+   ],
+   "via": "enforcement_event"
+  },
+  {
+   "field": "processing_time_ms",
+   "files": [
+    "frontend/src/utils/liveGateway.js"
+   ],
+   "via": "zeroshield"
+  },
+  {
+   "field": "project_id",
+   "files": [
+    "frontend/src/components/LogDetailPage.jsx"
+   ],
+   "via": "enforcement_event"
+  },
+  {
+   "field": "project_id",
+   "files": [
+    "frontend/src/components/GatewayKeyPanel.jsx"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "prompt",
+   "files": [
+    "frontend/src/components/LogDetailPage.jsx"
+   ],
+   "via": "enforcement_event"
+  },
+  {
+   "field": "prompt",
+   "files": [
+    "frontend/src/components/AttackSimulatorPanel.jsx",
+    "frontend/src/components/LogDetailPage.jsx",
+    "frontend/src/components/module-specific-log-charts.jsx",
+    "frontend/src/utils/liveGateway.js"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "prompt_hash",
+   "files": [
+    "frontend/src/components/LogDetailPage.jsx"
+   ],
+   "via": "enforcement_event"
+  },
+  {
+   "field": "prompt_in",
+   "files": [
+    "frontend/src/components/simulator/StageTimeline.jsx"
+   ],
+   "via": "pipeline_trace"
+  },
+  {
+   "field": "prompt_in_operator_masked",
+   "files": [
+    "frontend/src/components/simulator/StageTimeline.jsx"
+   ],
+   "via": "pipeline_trace"
+  },
+  {
+   "field": "prompt_injection_detected",
+   "files": [
+    "frontend/src/utils/pipelineTrace.js"
+   ],
+   "via": "enforcement_event"
+  },
+  {
+   "field": "prompt_lineage",
+   "files": [
+    "frontend/src/components/OutputGovernancePanel.jsx",
+    "frontend/src/components/OutputPipelineTimeline.jsx"
+   ],
+   "via": "enforcement_event"
+  },
+  {
+   "field": "prompt_out",
+   "files": [
+    "frontend/src/components/simulator/StageTimeline.jsx"
+   ],
+   "via": "pipeline_trace"
+  },
+  {
+   "field": "prompt_preview",
+   "files": [
+    "frontend/src/utils/pipelineTrace.js"
+   ],
+   "via": "pipeline_trace"
+  },
+  {
+   "field": "prompt_snippet",
+   "files": [
+    "frontend/src/components/LogDetailPage.jsx",
+    "frontend/src/components/OutputGovernancePanel.jsx",
+    "frontend/src/components/OutputPipelineTimeline.jsx",
+    "frontend/src/utils/pipelineTrace.js"
+   ],
+   "via": "enforcement_event"
+  },
+  {
+   "field": "prompt_submitted",
+   "files": [
+    "frontend/src/components/LogDetailPage.jsx",
+    "frontend/src/utils/pipelineTrace.js"
+   ],
+   "via": "enforcement_event"
+  },
+  {
+   "field": "prompt_submitted",
+   "files": [
+    "frontend/src/components/simulator/StageTimeline.jsx",
+    "frontend/src/utils/pipelineTrace.js"
+   ],
+   "via": "pipeline_trace"
+  },
+  {
+   "field": "prompt_submitted",
+   "files": [
+    "frontend/src/utils/liveGateway.js"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "ran",
+   "files": [
+    "frontend/src/utils/pipelineTrace.js"
+   ],
+   "via": "pipeline_trace"
+  },
+  {
+   "field": "rate_limit",
+   "files": [
+    "frontend/src/utils/liveGateway.js"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "rate_limit_ms",
+   "files": [
+    "frontend/src/utils/liveGateway.js"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "rate_limit_status",
+   "files": [
+    "frontend/src/components/LogDetailPage.jsx"
+   ],
+   "via": "enforcement_event"
+  },
+  {
+   "field": "reason",
+   "files": [
+    "frontend/src/components/LogDetailPage.jsx"
+   ],
+   "via": "enforcement_event"
+  },
+  {
+   "field": "reason",
+   "files": [
+    "frontend/src/components/MCPConnectorPanel.jsx",
+    "frontend/src/components/ModelStatePanel.jsx",
+    "frontend/src/utils/liveGateway.js",
+    "frontend/src/utils/pipelineTrace.js"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "reason",
+   "files": [
+    "frontend/src/constants/zeroshieldBrand.js",
+    "frontend/src/utils/liveGateway.js"
+   ],
+   "via": "zeroshield"
+  },
+  {
+   "field": "reason_code",
+   "files": [
+    "frontend/src/components/simulator/StageTimeline.jsx"
+   ],
+   "via": "pipeline_trace"
+  },
+  {
+   "field": "reason_code",
+   "files": [
+    "frontend/src/utils/liveGateway.js"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "reason_code",
+   "files": [
+    "frontend/src/utils/liveGateway.js"
+   ],
+   "via": "zeroshield"
+  },
+  {
+   "field": "recommended_action",
+   "files": [
+    "frontend/src/components/BedrockTestPanel.jsx"
+   ],
+   "via": "enforcement_event"
+  },
+  {
+   "field": "recommended_action",
+   "files": [
+    "frontend/src/components/simulator/StageTimeline.jsx",
+    "frontend/src/utils/inputScanExplain.js",
+    "frontend/src/utils/pipelineTrace.js"
+   ],
+   "via": "pipeline_trace"
+  },
+  {
+   "field": "recommended_action",
+   "files": [
+    "frontend/src/components/BedrockTestPanel.jsx",
+    "frontend/src/utils/liveGateway.js"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "recommended_action",
+   "files": [
+    "frontend/src/utils/liveGateway.js"
+   ],
+   "via": "zeroshield"
+  },
+  {
+   "field": "redact_noop",
+   "files": [
+    "frontend/src/utils/outputGovernanceFeed.js"
+   ],
+   "via": "enforcement_event"
+  },
+  {
+   "field": "redact_noop",
+   "files": [
+    "frontend/src/components/simulator/StageTimeline.jsx",
+    "frontend/src/utils/inputScanExplain.js",
+    "frontend/src/utils/pipelineTrace.js"
+   ],
+   "via": "pipeline_trace"
+  },
+  {
+   "field": "redacted_response",
+   "files": [
+    "frontend/src/utils/liveGateway.js"
+   ],
+   "via": "zeroshield"
+  },
+  {
+   "field": "redaction_display_note",
+   "files": [
+    "frontend/src/components/simulator/StageTimeline.jsx"
+   ],
+   "via": "pipeline_trace"
+  },
+  {
+   "field": "remapped_from",
+   "files": [
+    "frontend/src/components/LogDetailPage.jsx",
+    "frontend/src/utils/routingExplain.js"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "request_id",
+   "files": [
+    "frontend/src/components/LogDetailPage.jsx"
+   ],
+   "via": "enforcement_event"
+  },
+  {
+   "field": "request_id",
+   "files": [
+    "frontend/src/components/AttackSimulatorPanel.jsx",
+    "frontend/src/components/LogDetailPage.jsx",
+    "frontend/src/components/MCPConnectorPanel.jsx",
+    "frontend/src/utils/liveGateway.js"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "request_id",
+   "files": [
+    "frontend/src/utils/liveGateway.js"
+   ],
+   "via": "zeroshield"
+  },
+  {
+   "field": "requested_model",
+   "files": [
+    "frontend/src/components/simulator/StageTimeline.jsx"
+   ],
+   "via": "pipeline_trace"
+  },
+  {
+   "field": "requested_model",
+   "files": [
+    "frontend/src/components/LogDetailPage.jsx",
+    "frontend/src/utils/liveGateway.js",
+    "frontend/src/utils/routingExplain.js"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "rerouted",
+   "files": [
+    "frontend/src/components/RoutingAuditPanel.jsx"
+   ],
+   "via": "enforcement_event"
+  },
+  {
+   "field": "rerouted",
+   "files": [
+    "frontend/src/constants/zeroshieldBrand.js",
+    "frontend/src/utils/liveGateway.js"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "rewritten_response",
+   "files": [
+    "frontend/src/utils/liveGateway.js"
+   ],
+   "via": "zeroshield"
+  },
+  {
+   "field": "risk_score",
+   "files": [
+    "frontend/src/components/OutputGovernancePanel.jsx",
+    "frontend/src/components/OutputPipelineTimeline.jsx",
+    "frontend/src/components/module-specific-log-charts.jsx"
+   ],
+   "via": "enforcement_event"
+  },
+  {
+   "field": "risk_score",
+   "files": [
+    "frontend/src/components/simulator/StageTimeline.jsx"
+   ],
+   "via": "pipeline_trace"
+  },
+  {
+   "field": "risk_score",
+   "files": [
+    "frontend/src/components/BedrockTestPanel.jsx",
+    "frontend/src/components/GatewayKeyPanel.jsx",
+    "frontend/src/components/MCPManagerPanel.jsx",
+    "frontend/src/components/ModelConnectionPanel.jsx",
+    "frontend/src/components/ModelStatePanel.jsx",
+    "frontend/src/components/howToUseContent.js",
+    "frontend/src/components/simulator/CircuitBreakerSimulator.jsx",
+    "frontend/src/components/simulator/ModelRoutingSimulator.jsx",
+    "frontend/src/hooks/useIsolationPlayground.js",
+    "frontend/src/utils/liveGateway.js"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "risk_score",
+   "files": [
+    "frontend/src/constants/zeroshieldBrand.js",
+    "frontend/src/utils/liveGateway.js"
+   ],
+   "via": "zeroshield"
+  },
+  {
+   "field": "route_destination",
+   "files": [
+    "frontend/src/components/simulator/StageTimeline.jsx"
+   ],
+   "via": "pipeline_trace"
+  },
+  {
+   "field": "route_destination",
+   "files": [
+    "frontend/src/components/LogDetailPage.jsx",
+    "frontend/src/utils/liveGateway.js"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "route_destination_label",
+   "files": [
+    "frontend/src/components/simulator/StageTimeline.jsx"
+   ],
+   "via": "pipeline_trace"
+  },
+  {
+   "field": "route_destination_label",
+   "files": [
+    "frontend/src/components/LogDetailPage.jsx",
+    "frontend/src/utils/liveGateway.js"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "routed_model",
+   "files": [
+    "frontend/src/components/LogDetailPage.jsx",
+    "frontend/src/components/howToUseContent.js",
+    "frontend/src/utils/liveGateway.js",
+    "frontend/src/utils/routingExplain.js"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "routing",
+   "files": [
+    "frontend/src/utils/pipelineTrace.js"
+   ],
+   "via": "pipeline_trace"
+  },
+  {
+   "field": "routing",
+   "files": [
+    "frontend/src/components/howToUseContent.js"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "routing",
+   "files": [
+    "frontend/src/components/howToUseContent.js",
+    "frontend/src/utils/liveGateway.js"
+   ],
+   "via": "zeroshield"
+  },
+  {
+   "field": "routing_enabled",
+   "files": [
+    "frontend/src/components/AttackSimulatorPanel.jsx",
+    "frontend/src/components/RoutingGovernancePanel.jsx",
+    "frontend/src/components/simulator/IsolationOpsSimulator.jsx"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "routing_reason",
+   "files": [
+    "frontend/src/components/RoutingAuditPanel.jsx"
+   ],
+   "via": "enforcement_event"
+  },
+  {
+   "field": "routing_reason",
+   "files": [
+    "frontend/src/components/simulator/StageTimeline.jsx"
+   ],
+   "via": "pipeline_trace"
+  },
+  {
+   "field": "routing_reason",
+   "files": [
+    "frontend/src/components/howToUseContent.js",
+    "frontend/src/components/simulator/ModelRoutingSimulator.jsx",
+    "frontend/src/utils/liveGateway.js",
+    "frontend/src/utils/routingExplain.js"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "routing_reason",
+   "files": [
+    "frontend/src/utils/liveGateway.js"
+   ],
+   "via": "zeroshield"
+  },
+  {
+   "field": "routing_score",
+   "files": [
+    "frontend/src/components/RoutingAuditPanel.jsx"
+   ],
+   "via": "enforcement_event"
+  },
+  {
+   "field": "routing_score",
+   "files": [
+    "frontend/src/components/simulator/StageTimeline.jsx"
+   ],
+   "via": "pipeline_trace"
+  },
+  {
+   "field": "routing_score",
+   "files": [
+    "frontend/src/components/howToUseContent.js",
+    "frontend/src/utils/liveGateway.js",
+    "frontend/src/utils/routingExplain.js"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "routing_score",
+   "files": [
+    "frontend/src/utils/liveGateway.js"
+   ],
+   "via": "zeroshield"
+  },
+  {
+   "field": "scan_outcome",
+   "files": [
+    "frontend/src/components/simulator/StageTimeline.jsx",
+    "frontend/src/utils/inputScanExplain.js",
+    "frontend/src/utils/pipelineTrace.js"
+   ],
+   "via": "pipeline_trace"
+  },
+  {
+   "field": "scan_outcome",
+   "files": [
+    "frontend/src/utils/liveGateway.js"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "scan_outcome",
+   "files": [
+    "frontend/src/constants/zeroshieldBrand.js",
+    "frontend/src/utils/liveGateway.js"
+   ],
+   "via": "zeroshield"
+  },
+  {
+   "field": "security_risk_score",
+   "files": [
+    "frontend/src/components/LogDetailPage.jsx",
+    "frontend/src/components/OutputGovernancePanel.jsx",
+    "frontend/src/components/OutputPipelineTimeline.jsx",
+    "frontend/src/components/firewall-module-utils.js",
+    "frontend/src/components/module-specific-log-charts.jsx"
+   ],
+   "via": "enforcement_event"
+  },
+  {
+   "field": "selected_model",
+   "files": [
+    "frontend/src/components/simulator/StageTimeline.jsx"
+   ],
+   "via": "pipeline_trace"
+  },
+  {
+   "field": "selected_model",
+   "files": [
+    "frontend/src/utils/liveGateway.js",
+    "frontend/src/utils/routingExplain.js"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "selected_model",
+   "files": [
+    "frontend/src/utils/liveGateway.js"
+   ],
+   "via": "zeroshield"
+  },
+  {
+   "field": "severity",
+   "files": [
+    "frontend/src/components/firewall-module-utils.js"
+   ],
+   "via": "enforcement_event"
+  },
+  {
+   "field": "severity",
+   "files": [
+    "frontend/src/components/LogDetailPage.jsx",
+    "frontend/src/components/MCPManagerPanel.jsx",
+    "frontend/src/hooks/useFirewallData.js"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "share_pct",
+   "files": [
+    "frontend/src/components/LogDetailPage.jsx",
+    "frontend/src/utils/pipelineTrace.js"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "source",
+   "files": [
+    "frontend/src/components/LogDetailPage.jsx",
+    "frontend/src/components/firewall-module-utils.js"
+   ],
+   "via": "enforcement_event"
+  },
+  {
+   "field": "source",
+   "files": [
+    "frontend/src/components/LogDetailPage.jsx",
+    "frontend/src/components/LogViewerPanel.jsx",
+    "frontend/src/components/MCPConnectorPanel.jsx",
+    "frontend/src/components/ModelStatePanel.jsx",
+    "frontend/src/components/module-specific-log-charts.jsx",
+    "frontend/src/components/simulator/RAGIngestionPanel.jsx",
+    "frontend/src/hooks/useFirewallData.js"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "source_ip",
+   "files": [
+    "frontend/src/components/LogDetailPage.jsx"
+   ],
+   "via": "enforcement_event"
+  },
+  {
+   "field": "source_ip",
+   "files": [
+    "frontend/src/components/LogDetailPage.jsx"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "stage",
+   "files": [
+    "frontend/src/components/firewall-module-utils.js"
+   ],
+   "via": "enforcement_event"
+  },
+  {
+   "field": "stage",
+   "files": [
+    "frontend/src/utils/pipelineTrace.js"
+   ],
+   "via": "pipeline_trace"
+  },
+  {
+   "field": "stage",
+   "files": [
+    "frontend/src/components/LogDetailPage.jsx",
+    "frontend/src/components/RAGAttackTrustSimulator.jsx",
+    "frontend/src/components/RAGPipelineTelemetry.jsx",
+    "frontend/src/components/module-specific-log-charts.jsx",
+    "frontend/src/utils/outputGovernanceFeed.js",
+    "frontend/src/utils/pipelineTrace.js"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "stage_latency_sum_ms",
+   "files": [
+    "frontend/src/utils/pipelineTrace.js"
+   ],
+   "via": "pipeline_trace"
+  },
+  {
+   "field": "stage_latency_sum_ms",
+   "files": [
+    "frontend/src/components/LogDetailPage.jsx"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "stages",
+   "files": [
+    "frontend/src/components/LogDetailPage.jsx",
+    "frontend/src/components/module-specific-log-charts.jsx",
+    "frontend/src/components/simulator/StageTimeline.jsx",
+    "frontend/src/utils/liveGateway.js",
+    "frontend/src/utils/outputGovernanceFeed.js",
+    "frontend/src/utils/pipelineTrace.js"
+   ],
+   "via": "pipeline_trace"
+  },
+  {
+   "field": "stages",
+   "files": [
+    "frontend/src/components/AttackSimulatorPanel.jsx",
+    "frontend/src/components/RAGAttackTrustSimulator.jsx",
+    "frontend/src/components/RAGFeatureTestPanel.jsx",
+    "frontend/src/components/RAGPipelineTelemetry.jsx",
+    "frontend/src/components/module-specific-log-charts.jsx",
+    "frontend/src/utils/liveGateway.js"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "status_code",
+   "files": [
+    "frontend/src/components/LogDetailPage.jsx"
+   ],
+   "via": "enforcement_event"
+  },
+  {
+   "field": "threat_category",
+   "files": [
+    "frontend/src/components/OutputGovernancePanel.jsx",
+    "frontend/src/components/OutputPipelineTimeline.jsx",
+    "frontend/src/components/firewall-module-utils.js"
+   ],
+   "via": "enforcement_event"
+  },
+  {
+   "field": "threat_type",
+   "files": [
+    "frontend/src/components/OutputGovernancePanel.jsx",
+    "frontend/src/components/OutputPipelineTimeline.jsx",
+    "frontend/src/components/firewall-module-utils.js"
+   ],
+   "via": "enforcement_event"
+  },
+  {
+   "field": "threat_type",
+   "files": [
+    "frontend/src/components/RAGAttackTrustSimulator.jsx",
+    "frontend/src/components/simulator/StageTimeline.jsx",
+    "frontend/src/utils/inputScanExplain.js",
+    "frontend/src/utils/pipelineTrace.js"
+   ],
+   "via": "pipeline_trace"
+  },
+  {
+   "field": "threat_type",
+   "files": [
+    "frontend/src/components/BedrockTestPanel.jsx",
+    "frontend/src/components/RAGAttackTrustSimulator.jsx",
+    "frontend/src/components/simulator/OutputGuardSimulator.jsx",
+    "frontend/src/utils/liveGateway.js",
+    "frontend/src/utils/pipelineTrace.js"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "threat_type",
+   "files": [
+    "frontend/src/constants/zeroshieldBrand.js",
+    "frontend/src/utils/liveGateway.js"
+   ],
+   "via": "zeroshield"
+  },
+  {
+   "field": "tier",
+   "files": [
+    "frontend/src/components/simulator/StageTimeline.jsx",
+    "frontend/src/utils/inputScanExplain.js",
+    "frontend/src/utils/pipelineTrace.js"
+   ],
+   "via": "pipeline_trace"
+  },
+  {
+   "field": "tier",
+   "files": [
+    "frontend/src/components/MCPConnectorPanel.jsx",
+    "frontend/src/components/MCPScanControlMatrix.jsx",
+    "frontend/src/utils/liveGateway.js",
+    "frontend/src/utils/pipelineTrace.js"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "tier1_ms",
+   "files": [
+    "frontend/src/utils/liveGateway.js"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "tier2_ms",
+   "files": [
+    "frontend/src/utils/liveGateway.js"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "timestamp",
+   "files": [
+    "frontend/src/components/OutputGovernancePanel.jsx",
+    "frontend/src/components/firewall-module-utils.js"
+   ],
+   "via": "enforcement_event"
+  },
+  {
+   "field": "timestamp",
+   "files": [
+    "frontend/src/components/LogDetailPage.jsx",
+    "frontend/src/components/LogViewerPanel.jsx",
+    "frontend/src/components/MCPConnectorPanel.jsx",
+    "frontend/src/components/MCPManagerPanel.jsx",
+    "frontend/src/components/ModelStatePanel.jsx",
+    "frontend/src/components/RAGAttackTrustSimulator.jsx",
+    "frontend/src/components/RoutingAuditPanel.jsx",
+    "frontend/src/hooks/useFirewallData.js",
+    "frontend/src/utils/outputGovernanceFeed.js"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "tokens_used",
+   "files": [
+    "frontend/src/components/module-specific-log-charts.jsx"
+   ],
+   "via": "enforcement_event"
+  },
+  {
+   "field": "total_latency_ms",
+   "files": [
+    "frontend/src/utils/pipelineTrace.js"
+   ],
+   "via": "pipeline_trace"
+  },
+  {
+   "field": "total_latency_ms",
+   "files": [
+    "frontend/src/components/AttackSimulatorPanel.jsx",
+    "frontend/src/components/RAGAttackTrustSimulator.jsx",
+    "frontend/src/components/RAGFeatureTestPanel.jsx",
+    "frontend/src/components/simulator/IsolationOpsSimulator.jsx"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "total_ms",
+   "files": [
+    "frontend/src/components/AttackSimulatorPanel.jsx"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "total_tokens",
+   "files": [
+    "frontend/src/components/LogDetailPage.jsx"
+   ],
+   "via": "enforcement_event"
+  },
+  {
+   "field": "trigger_source",
+   "files": [
+    "frontend/src/utils/liveGateway.js"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "upstream_ms",
+   "files": [
+    "frontend/src/utils/liveGateway.js"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "user_agent",
+   "files": [
+    "frontend/src/components/LogDetailPage.jsx"
+   ],
+   "via": "enforcement_event"
+  },
+  {
+   "field": "user_agent",
+   "files": [
+    "frontend/src/components/LogDetailPage.jsx"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "user_id",
+   "files": [
+    "frontend/src/components/MCPConnectorPanel.jsx",
+    "frontend/src/components/RoutingAuditPanel.jsx"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "weights",
+   "files": [
+    "frontend/src/components/RoutingAuditPanel.jsx"
+   ],
+   "via": "enforcement_event"
+  },
+  {
+   "field": "weights",
+   "files": [
+    "frontend/src/components/simulator/StageTimeline.jsx"
+   ],
+   "via": "pipeline_trace"
+  },
+  {
+   "field": "weights",
+   "files": [
+    "frontend/src/components/RoutingGovernancePanel.jsx",
+    "frontend/src/utils/liveGateway.js",
+    "frontend/src/utils/routingExplain.js"
+   ],
+   "via": "unscoped"
+  },
+  {
+   "field": "weights",
+   "files": [
+    "frontend/src/utils/liveGateway.js"
+   ],
+   "via": "zeroshield"
+  },
+  {
+   "field": "x-zeroshield-original-model",
+   "files": [
+    "frontend/src/utils/liveGateway.js"
+   ],
+   "via": "header"
+  },
+  {
+   "field": "x-zeroshield-pipeline-request-id",
+   "files": [
+    "frontend/src/components/RAGAttackTrustSimulator.jsx"
+   ],
+   "via": "header"
+  },
+  {
+   "field": "x-zeroshield-rag-context-id",
+   "files": [
+    "frontend/src/components/RAGAttackTrustSimulator.jsx"
+   ],
+   "via": "header"
+  },
+  {
+   "field": "x-zeroshield-rerouted",
+   "files": [
+    "frontend/src/utils/liveGateway.js"
+   ],
+   "via": "header"
+  },
+  {
+   "field": "x-zeroshield-routed-model",
+   "files": [
+    "frontend/src/utils/liveGateway.js"
+   ],
+   "via": "header"
+  },
+  {
+   "field": "x-zeroshield-routing-policy-summary",
+   "files": [
+    "frontend/src/utils/liveGateway.js"
+   ],
+   "via": "header"
+  },
+  {
+   "field": "x-zeroshield-routing-reason",
+   "files": [
+    "frontend/src/utils/liveGateway.js"
+   ],
+   "via": "header"
+  },
+  {
+   "field": "x-zeroshield-routing-source",
+   "files": [
+    "frontend/src/utils/liveGateway.js"
+   ],
+   "via": "header"
+  },
+  {
+   "field": "x-zeroshield-signature",
+   "files": [
+    "frontend/src/components/howToUseContent.js"
+   ],
+   "via": "header"
+  },
+  {
+   "field": "x-zeroshield-stream-scan-mode",
+   "files": [
+    "frontend/src/utils/liveGateway.js"
+   ],
+   "via": "header"
+  }
+ ]
+}

@@ -40,6 +40,8 @@ jobs:
         run: .venv/bin/ruff check gateway_v2 state_control lint tests
       - name: mypy --strict
         run: .venv/bin/mypy --strict
+      - name: GW14b console inventory matches this tree
+        run: .venv/bin/python -m lint.check_console_inventory
       - name: v2 pytest (placeholder + negative fixtures)
         run: .venv/bin/python -m pytest -q
 

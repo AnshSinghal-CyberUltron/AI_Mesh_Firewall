@@ -1,0 +1,1156 @@
+{
+ "drain": {
+  "file": "control/ai_mesh_control/core/tasks.py",
+  "function": "_build_enforcement_metadata",
+  "silent_defaults": [
+   {
+    "default": "request",
+    "field": "event_type",
+    "line": 156
+   },
+   {
+    "default": 0,
+    "field": "risk_score",
+    "line": 158
+   },
+   {
+    "default": "1.1",
+    "field": "module_id",
+    "line": 177
+   }
+  ]
+ },
+ "event_endpoints": [
+  {
+   "file": "control/ai_mesh_control/policy/security_views.py",
+   "line": 314,
+   "metadata_keys": [
+    "category",
+    "description",
+    "framework",
+    "id",
+    "name",
+    "sample_agent_data",
+    "sample_mcp_data",
+    "sample_prompt"
+   ],
+   "path": "/api/security/attack-catalog/",
+   "view": "AttackCatalogView"
+  },
+  {
+   "file": "control/ai_mesh_control/policy/evaluation_views.py",
+   "line": 1085,
+   "metadata_keys": [
+    "agent_data",
+    "confidence",
+    "context",
+    "description",
+    "detail",
+    "error",
+    "mcp_data",
+    "overall_risk_score",
+    "pii_detected",
+    "prompt",
+    "recommended_action",
+    "response",
+    "risk_level",
+    "risk_score_breakdown",
+    "scan_duration_ms",
+    "threats_detected",
+    "tier1_risk_score",
+    "tier2_risk_score",
+    "timestamp",
+    "type"
+   ],
+   "path": "/api/security/scan/",
+   "view": "SecurityScanView"
+  },
+  {
+   "file": "control/ai_mesh_control/policy/security_views.py",
+   "line": 359,
+   "metadata_keys": [
+    "action",
+    "action_counts",
+    "agent_id",
+    "assignee",
+    "block",
+    "category",
+    "collapse",
+    "collapsed_by_request",
+    "count",
+    "data_accessed",
+    "endpoint_id",
+    "endpoint_identifier",
+    "endpoint_name",
+    "endpoint_username",
+    "enforcement_action_text",
+    "escalated_at",
+    "escalated_by_id",
+    "event_type",
+    "flag",
+    "hours",
+    "id",
+    "incident_id",
+    "incident_status",
+    "incident_title",
+    "input_blocked",
+    "kill_switch",
+    "limit",
+    "metadata",
+    "model",
+    "model_routed",
+    "module_id",
+    "monitor",
+    "offset",
+    "organization_id",
+    "organization_name",
+    "output_guard",
+    "owasp_code",
+    "pipeline_request_id",
+    "prompt_lineage",
+    "record_type",
+    "redact",
+    "request",
+    "request_id",
+    "resolved_at",
+    "resolved_by_id",
+    "results",
+    "rewrite",
+    "scan_hit",
+    "scan_truncated",
+    "security_risk_score",
+    "severity",
+    "source",
+    "source_display",
+    "stream_complete",
+    "streams",
+    "subcategory",
+    "threat_category",
+    "threat_subcategory",
+    "threat_type",
+    "timestamp",
+    "tools_invoked",
+    "user_display",
+    "user_id"
+   ],
+   "path": "/api/security/threat-feed/",
+   "view": "ThreatFeedView"
+  },
+  {
+   "file": "control/ai_mesh_control/policy/security_views.py",
+   "line": 1048,
+   "metadata_keys": [
+    "detail",
+    "extra",
+    "incident_id",
+    "metadata",
+    "pipeline_request_id",
+    "related_event_ids",
+    "request_id"
+   ],
+   "path": "/api/security/threat-feed/<int:pk>/",
+   "view": "ThreatFeedEventDetailView"
+  },
+  {
+   "file": "control/ai_mesh_control/policy/security_views.py",
+   "line": 1094,
+   "metadata_keys": [
+    "1h",
+    "24h",
+    "30d",
+    "6h",
+    "7d",
+    "_bidx",
+    "_owasp_code",
+    "_owasp_codes",
+    "_pii_detected",
+    "_source",
+    "_threat_category",
+    "dataLeakage",
+    "goalHijacking",
+    "jailbreak",
+    "metadata",
+    "n",
+    "owasp_code",
+    "owasp_codes",
+    "pii_detected",
+    "promptInjection",
+    "source",
+    "threat_category",
+    "time",
+    "toolOverreach"
+   ],
+   "path": "/api/security/attack-vector-trends/",
+   "view": "AttackVectorTrendsView"
+  },
+  {
+   "file": "control/ai_mesh_control/policy/security_views.py",
+   "line": 1567,
+   "metadata_keys": [
+    "AGENTIC01",
+    "AGENTIC02",
+    "AGENTIC03",
+    "AGENTIC04",
+    "AGENTIC05",
+    "AGENTIC06",
+    "AGENTIC07",
+    "AGENTIC08",
+    "AGENTIC09",
+    "AGENTIC10",
+    "LLM01",
+    "LLM02",
+    "LLM03",
+    "LLM04",
+    "LLM05",
+    "LLM06",
+    "LLM07",
+    "LLM08",
+    "LLM09",
+    "LLM10",
+    "MCP01",
+    "MCP02",
+    "MCP03",
+    "MCP04",
+    "MCP05",
+    "MCP06",
+    "MCP07",
+    "MCP08",
+    "MCP09",
+    "MCP10",
+    "_owasp_code",
+    "_owasp_codes",
+    "action",
+    "agentic",
+    "blocked",
+    "code",
+    "coverage",
+    "detected",
+    "hours",
+    "llm",
+    "mcp",
+    "n",
+    "unique_events_count",
+    "vector"
+   ],
+   "path": "/api/security/owasp-stats/",
+   "view": "OwaspStatsView"
+  },
+  {
+   "file": "control/ai_mesh_control/policy/security_views.py",
+   "line": 1688,
+   "metadata_keys": [
+    "_owasp_code",
+    "_owasp_codes",
+    "action",
+    "category",
+    "code",
+    "count",
+    "detail",
+    "endpoint_username",
+    "hours",
+    "id",
+    "limit",
+    "owasp_code",
+    "owasp_codes",
+    "prompt_snippet",
+    "prompt_snippet_truncated",
+    "results",
+    "risk_score",
+    "security_risk_score",
+    "source",
+    "source_display",
+    "subcategory",
+    "threat_category",
+    "threat_subcategory",
+    "timestamp"
+   ],
+   "path": "/api/security/owasp-events/",
+   "view": "OwaspEventsView"
+  },
+  {
+   "file": "control/ai_mesh_control/policy/security_views.py",
+   "line": 1973,
+   "metadata_keys": [
+    "_owasp_code",
+    "_owasp_codes",
+    "_threat_category",
+    "blockRate",
+    "blocked",
+    "endpoint_username",
+    "hours",
+    "label",
+    "lastSeen",
+    "last_seen",
+    "limit",
+    "max_risk",
+    "n",
+    "owasp_code",
+    "owasp_codes",
+    "primaryAttack",
+    "riskScore",
+    "sourceId",
+    "sourceIdRaw",
+    "sourceType",
+    "source_id",
+    "threat_category",
+    "total",
+    "totalAttempts"
+   ],
+   "path": "/api/security/threat-sources/",
+   "view": "ThreatSourcesView"
+  },
+  {
+   "file": "control/ai_mesh_control/policy/security_views.py",
+   "line": 2098,
+   "metadata_keys": [
+    "_data",
+    "_model",
+    "_risk",
+    "_tools",
+    "agent_id",
+    "data",
+    "edges",
+    "endpoint_id",
+    "from",
+    "hours",
+    "id",
+    "label",
+    "model",
+    "nodes",
+    "riskLevel",
+    "to",
+    "tool",
+    "type",
+    "user",
+    "user_id",
+    "x",
+    "y"
+   ],
+   "path": "/api/security/attack-graph/",
+   "view": "AttackGraphView"
+  },
+  {
+   "file": "control/ai_mesh_control/policy/security_views.py",
+   "line": 1301,
+   "metadata_keys": [
+    "1h",
+    "24h",
+    "30d",
+    "6h",
+    "7d",
+    "action_breakdown",
+    "avg_latency_ms",
+    "block_rate",
+    "blocked",
+    "count",
+    "critical_count",
+    "enforcement_rate",
+    "health_radar",
+    "latency_distribution",
+    "metric",
+    "mttr_minutes",
+    "period",
+    "range",
+    "redact_rate",
+    "redacted",
+    "requests_allowed",
+    "requests_blocked",
+    "requests_critical",
+    "requests_inspected",
+    "requests_redacted",
+    "total_threats",
+    "value"
+   ],
+   "path": "/api/security/soc-kpis/",
+   "view": "SocKpisView"
+  },
+  {
+   "file": "control/ai_mesh_control/policy/analytics_timeout_probe.py",
+   "line": 17,
+   "metadata_keys": [
+    "detail",
+    "slept"
+   ],
+   "path": "/api/security/analytics-timeout-probe/",
+   "view": "AnalyticsTimeoutProbeView"
+  },
+  {
+   "file": "control/ai_mesh_control/policy/security_views.py",
+   "line": 1381,
+   "metadata_keys": [
+    "1h",
+    "24h",
+    "30d",
+    "6h",
+    "7d",
+    "_is_critical",
+    "blocked",
+    "critical",
+    "flagged",
+    "modules",
+    "n",
+    "period",
+    "redacted",
+    "source",
+    "total"
+   ],
+   "path": "/api/security/module-kpis/",
+   "view": "ModuleKpisView"
+  },
+  {
+   "file": "control/ai_mesh_control/policy/security_views.py",
+   "line": 1457,
+   "metadata_keys": [
+    "1h",
+    "24h",
+    "30d",
+    "6h",
+    "7d",
+    "_bidx",
+    "_is_critical",
+    "blocked",
+    "critical",
+    "flagged",
+    "n",
+    "period",
+    "pressure",
+    "pressure_metric",
+    "redacted",
+    "source",
+    "time",
+    "total",
+    "value"
+   ],
+   "path": "/api/security/module-trends/",
+   "view": "ModuleTrendsView"
+  },
+  {
+   "file": "control/ai_mesh_control/policy/security_views.py",
+   "line": 1789,
+   "metadata_keys": [
+    "0-50ms",
+    "100-200ms",
+    "1h",
+    "200-500ms",
+    "24h",
+    "30d",
+    "50-100ms",
+    "500ms+",
+    "6h",
+    "7d",
+    "Allowed",
+    "Blocked",
+    "Redacted",
+    "_bidx",
+    "_model",
+    "_threat_category",
+    "_threat_type",
+    "action",
+    "alert",
+    "allow",
+    "allowed",
+    "block",
+    "blocked",
+    "charts",
+    "color",
+    "confirm",
+    "count",
+    "data",
+    "flag",
+    "key",
+    "model_downgrade",
+    "module_id",
+    "monitor",
+    "monitored",
+    "n",
+    "name",
+    "pass",
+    "period",
+    "range",
+    "redact",
+    "redacted",
+    "reroute",
+    "rewrite",
+    "time",
+    "title",
+    "type",
+    "value"
+   ],
+   "path": "/api/security/module-charts/<str:module_id>/",
+   "view": "ModuleChartsView"
+  },
+  {
+   "file": "control/ai_mesh_control/policy/security_views.py",
+   "line": 2262,
+   "metadata_keys": [
+    "detail",
+    "escalated_at",
+    "escalated_by_id",
+    "incident_id",
+    "incident_status",
+    "message",
+    "organization_id",
+    "threat_category",
+    "type"
+   ],
+   "path": "/api/security/incidents/<int:pk>/escalate/",
+   "view": "EscalateIncidentView"
+  },
+  {
+   "file": "control/ai_mesh_control/policy/security_views.py",
+   "line": 2353,
+   "metadata_keys": [
+    "detail",
+    "incident_id",
+    "incident_status",
+    "organization_id",
+    "resolved_at",
+    "resolved_by_id",
+    "type"
+   ],
+   "path": "/api/security/incidents/<int:pk>/resolve/",
+   "view": "ResolveIncidentView"
+  },
+  {
+   "file": "control/ai_mesh_control/policy/review_views.py",
+   "line": 35,
+   "metadata_keys": [
+    "count",
+    "results",
+    "status"
+   ],
+   "path": "/api/security/review-queue/",
+   "view": "ReviewQueueListView"
+  },
+  {
+   "file": "control/ai_mesh_control/policy/review_views.py",
+   "line": 50,
+   "metadata_keys": [
+    "detail",
+    "notes"
+   ],
+   "path": "/api/security/review-queue/<int:pk>/approve/",
+   "view": "ReviewApproveView"
+  },
+  {
+   "file": "control/ai_mesh_control/policy/review_views.py",
+   "line": 70,
+   "metadata_keys": [
+    "detail",
+    "notes"
+   ],
+   "path": "/api/security/review-queue/<int:pk>/reject/",
+   "view": "ReviewRejectView"
+  },
+  {
+   "file": "control/ai_mesh_control/policy/review_views.py",
+   "line": 107,
+   "metadata_keys": [
+    "count",
+    "results",
+    "status"
+   ],
+   "path": "/api/security/incidents/",
+   "view": "SecurityIncidentListView"
+  },
+  {
+   "file": "control/ai_mesh_control/policy/review_views.py",
+   "line": 122,
+   "metadata_keys": [
+    "detail",
+    "notes"
+   ],
+   "path": "/api/security/incidents/<int:pk>/escalate-incident/",
+   "view": "SecurityIncidentEscalateView"
+  },
+  {
+   "file": "control/ai_mesh_control/policy/review_views.py",
+   "line": 140,
+   "metadata_keys": [
+    "detail",
+    "notes"
+   ],
+   "path": "/api/security/incidents/<int:pk>/resolve-incident/",
+   "view": "SecurityIncidentResolveView"
+  },
+  {
+   "file": "control/ai_mesh_control/policy/security_views.py",
+   "line": 2459,
+   "metadata_keys": [
+    "agent_id",
+    "avg_block_rate",
+    "blocked_today",
+    "high_risk_users",
+    "max_risk",
+    "suspended",
+    "total_users",
+    "user_id",
+    "warnings"
+   ],
+   "path": "/api/security/user-blockage-kpis/",
+   "view": "UserBlockageKpisView"
+  },
+  {
+   "file": "control/ai_mesh_control/policy/security_views.py",
+   "line": 2543,
+   "metadata_keys": [
+    "action",
+    "allowed",
+    "blocked",
+    "date",
+    "day",
+    "days",
+    "n"
+   ],
+   "path": "/api/security/blockage-trend/",
+   "view": "BlockageTrendView"
+  },
+  {
+   "file": "control/ai_mesh_control/policy/security_views.py",
+   "line": 2577,
+   "metadata_keys": [
+    "action",
+    "blocked",
+    "hour",
+    "hours",
+    "n",
+    "totalAttempts"
+   ],
+   "path": "/api/security/usage-patterns/",
+   "view": "UsagePatternsView"
+  },
+  {
+   "file": "control/ai_mesh_control/policy/security_views.py",
+   "line": 2621,
+   "metadata_keys": [
+    "_owasp_code",
+    "_owasp_codes",
+    "_pii",
+    "_source",
+    "_threat_category",
+    "category",
+    "count",
+    "days",
+    "n",
+    "owasp_code",
+    "owasp_codes",
+    "percentage",
+    "pii_detected",
+    "source",
+    "threat_category",
+    "trend"
+   ],
+   "path": "/api/security/violation-categories/",
+   "view": "ViolationCategoriesView"
+  },
+  {
+   "file": "control/ai_mesh_control/policy/security_views.py",
+   "line": 2676,
+   "metadata_keys": [
+    "_risk",
+    "agentType",
+    "agent_id",
+    "avgRiskScore",
+    "blockRate",
+    "blocked",
+    "days",
+    "risk_scores",
+    "total"
+   ],
+   "path": "/api/security/agent-type-stats/",
+   "view": "AgentTypeStatsView"
+  },
+  {
+   "file": "control/ai_mesh_control/policy/security_views.py",
+   "line": 2729,
+   "metadata_keys": [
+    "action",
+    "automated",
+    "block",
+    "count",
+    "days",
+    "monitor",
+    "n",
+    "percentage",
+    "redact"
+   ],
+   "path": "/api/security/enforcement-action-stats/",
+   "view": "EnforcementActionStatsView"
+  },
+  {
+   "file": "control/ai_mesh_control/policy/security_views.py",
+   "line": 2774,
+   "metadata_keys": [
+    "_owasp_code",
+    "_owasp_codes",
+    "_pii",
+    "_threat_category",
+    "agentId",
+    "agentName",
+    "agentType",
+    "agent_id",
+    "blockRate",
+    "blocked",
+    "dataLeakage",
+    "data_leakage",
+    "days",
+    "lastViolation",
+    "last_at",
+    "limit",
+    "max_risk",
+    "n",
+    "other",
+    "riskScore",
+    "status",
+    "total",
+    "totalAttempts",
+    "userId",
+    "userName",
+    "user_id",
+    "violations",
+    "warnings"
+   ],
+   "path": "/api/security/user-blockage-stats/",
+   "view": "UserBlockageStatsView"
+  },
+  {
+   "file": "control/ai_mesh_control/policy/security_views.py",
+   "line": 2908,
+   "metadata_keys": [
+    "_esc",
+    "_lat_n",
+    "_lat_sum",
+    "_stage",
+    "action",
+    "allowed",
+    "avg_latency_ms",
+    "blocked",
+    "document_funnel",
+    "elevated",
+    "escalation_distribution",
+    "flagged",
+    "lat_avg",
+    "lat_n",
+    "n",
+    "normal",
+    "period",
+    "post_generator",
+    "post_ranker",
+    "retrieved",
+    "rewritten",
+    "stages",
+    "strict",
+    "total"
+   ],
+   "path": "/api/security/rag-pipeline-kpis/",
+   "view": "RAGPipelineStageKpisView"
+  },
+  {
+   "file": "control/ai_mesh_control/policy/security_views.py",
+   "line": 2995,
+   "metadata_keys": [
+    "_detail_extra",
+    "_detail_top",
+    "_esc",
+    "_lat",
+    "_risk",
+    "_stage",
+    "_threat",
+    "action",
+    "confidence",
+    "detail",
+    "escalation_level",
+    "latency_ms",
+    "request_id",
+    "stage",
+    "stages",
+    "threat_type",
+    "timestamp"
+   ],
+   "path": "/api/security/rag-pipeline-trace/<str:request_id>/",
+   "view": "RAGPipelineTraceView"
+  }
+ ],
+ "frontend_api_calls": [
+  {
+   "files": [
+    "frontend/src/components/BedrockTestPanel.jsx"
+   ],
+   "path": "/api/admin/gateway/bedrock-test/"
+  },
+  {
+   "files": [
+    "frontend/src/components/simulator/CircuitBreakerSimulator.jsx",
+    "frontend/src/components/simulator/IsolationOpsSimulator.jsx"
+   ],
+   "path": "/api/admin/gateway/circuit-breaker/reset/"
+  },
+  {
+   "files": [
+    "frontend/src/components/simulator/CircuitBreakerSimulator.jsx",
+    "frontend/src/components/simulator/IsolationOpsSimulator.jsx"
+   ],
+   "path": "/api/admin/gateway/circuit-breaker/state/"
+  },
+  {
+   "files": [
+    "frontend/src/components/simulator/CircuitBreakerSimulator.jsx",
+    "frontend/src/components/simulator/IsolationOpsSimulator.jsx"
+   ],
+   "path": "/api/admin/gateway/circuit-breaker/trigger/"
+  },
+  {
+   "files": [
+    "frontend/src/components/DatabaseConnectionPanel.jsx"
+   ],
+   "path": "/api/admin/gateway/db-test/"
+  },
+  {
+   "files": [
+    "frontend/src/components/rag/CollectionManagerPanel.jsx",
+    "frontend/src/hooks/useCollections.js"
+   ],
+   "path": "/api/admin/gateway/rag/collections/"
+  },
+  {
+   "files": [
+    "frontend/src/components/KillSwitchPanel.jsx"
+   ],
+   "path": "/api/admin/redis/kill-switches/validate/"
+  },
+  {
+   "files": [
+    "frontend/src/components/ChangePasswordForm.jsx"
+   ],
+   "path": "/api/auth/change-password/"
+  },
+  {
+   "files": [
+    "frontend/src/context/AuthContext.jsx"
+   ],
+   "path": "/api/auth/logout/"
+  },
+  {
+   "files": [
+    "frontend/src/context/AuthContext.jsx"
+   ],
+   "path": "/api/auth/me/"
+  },
+  {
+   "files": [
+    "frontend/src/pages/Profile.jsx"
+   ],
+   "path": "/api/auth/me/profile/"
+  },
+  {
+   "files": [
+    "frontend/src/context/AuthContext.jsx"
+   ],
+   "path": "/api/auth/token/"
+  },
+  {
+   "files": [
+    "frontend/src/context/AuthContext.jsx"
+   ],
+   "path": "/api/auth/token/refresh/"
+  },
+  {
+   "files": [
+    "frontend/src/components/MCPConnectorPanel.jsx",
+    "frontend/src/components/MCPScanControlMatrix.jsx",
+    "frontend/src/components/ModelGovernancePanel.jsx",
+    "frontend/src/components/OutputGuardrailControls.jsx",
+    "frontend/src/components/RoutingGovernancePanel.jsx",
+    "frontend/src/components/firewall/Tier2ScanControl.jsx",
+    "frontend/src/hooks/useFirewallConfig.jsx",
+    "frontend/src/hooks/useSimulatorGatewayModels.js",
+    "frontend/src/pages/AIMeshFirewallConfig.jsx",
+    "frontend/src/utils/firewallAllowlist.js"
+   ],
+   "path": "/api/firewall/config/"
+  },
+  {
+   "files": [
+    "frontend/src/components/KillSwitchPanel.jsx",
+    "frontend/src/components/ModelConnectionPanel.jsx",
+    "frontend/src/hooks/useSimulatorGatewayModels.js"
+   ],
+   "path": "/api/firewall/models/"
+  },
+  {
+   "files": [
+    "frontend/src/hooks/useIsolationPlayground.js"
+   ],
+   "path": "/api/gateways/isolation-playground/"
+  },
+  {
+   "files": [
+    "frontend/src/hooks/useIsolationPlayground.js"
+   ],
+   "path": "/api/gateways/isolation-playground/rotate/"
+  },
+  {
+   "files": [
+    "frontend/src/components/GatewayKeyPanel.jsx"
+   ],
+   "path": "/api/gateways/keys/"
+  },
+  {
+   "files": [
+    "frontend/src/components/GatewayKeyPanel.jsx"
+   ],
+   "path": "/api/gateways/keys/purge-revoked/"
+  },
+  {
+   "files": [
+    "frontend/src/hooks/useGatewayConfig.js"
+   ],
+   "path": "/api/gateways/public-url/"
+  },
+  {
+   "files": [
+    "frontend/src/hooks/useGatewayCredential.js",
+    "frontend/src/hooks/useSimulatorEngine.js"
+   ],
+   "path": "/api/gateways/simulator-default/"
+  },
+  {
+   "files": [
+    "frontend/src/hooks/useFirewallData.js"
+   ],
+   "path": "/api/gateways/stats/"
+  },
+  {
+   "files": [
+    "frontend/src/components/ServiceStatusPanel.jsx",
+    "frontend/src/hooks/useBackendHealth.js",
+    "frontend/src/hooks/useIsolationPlayground.js",
+    "frontend/src/hooks/useSimulatorEngine.js"
+   ],
+   "path": "/api/health/"
+  },
+  {
+   "files": [
+    "frontend/src/components/ServiceStatusPanel.jsx"
+   ],
+   "path": "/api/health/services/"
+  },
+  {
+   "files": [
+    "frontend/src/components/KillSwitchPanel.jsx"
+   ],
+   "path": "/api/kill-switches/"
+  },
+  {
+   "files": [
+    "frontend/src/components/MCPConnectorPanel.jsx"
+   ],
+   "path": "/api/mcp-connector/health/"
+  },
+  {
+   "files": [
+    "frontend/src/components/MCPConnectorPanel.jsx"
+   ],
+   "path": "/api/mcp-connector/org-gateway-key/"
+  },
+  {
+   "files": [
+    "frontend/src/components/MCPConnectorPanel.jsx",
+    "frontend/src/components/MCPScanControlMatrix.jsx",
+    "frontend/src/components/ServerTier2Manager.jsx"
+   ],
+   "path": "/api/mcp-connector/scan-controls/"
+  },
+  {
+   "files": [
+    "frontend/src/components/MCPConnectorPanel.jsx",
+    "frontend/src/components/simulator/MCPGuardrailSimulator.jsx"
+   ],
+   "path": "/api/mcp-connector/servers/"
+  },
+  {
+   "files": [
+    "frontend/src/components/MCPConnectorPanel.jsx"
+   ],
+   "path": "/api/mcp-connector/tools/"
+  },
+  {
+   "files": [
+    "frontend/src/components/MCPConnectorPanel.jsx",
+    "frontend/src/components/simulator/MCPGuardrailSimulator.jsx"
+   ],
+   "path": "/api/mcp-connector/tools/call/"
+  },
+  {
+   "files": [
+    "frontend/src/components/MCPManagerPanel.jsx"
+   ],
+   "path": "/api/mcp/enforcement-status/"
+  },
+  {
+   "files": [
+    "frontend/src/components/MCPScannerPanel.jsx"
+   ],
+   "path": "/api/mcp/graph"
+  },
+  {
+   "files": [
+    "frontend/src/components/MCPScannerPanel.jsx"
+   ],
+   "path": "/api/mcp/history"
+  },
+  {
+   "files": [
+    "frontend/src/components/MCPManagerPanel.jsx"
+   ],
+   "path": "/api/mcp/oauth/callback/"
+  },
+  {
+   "files": [
+    "frontend/src/components/MCPManagerPanel.jsx"
+   ],
+   "path": "/api/mcp/policies/"
+  },
+  {
+   "files": [
+    "frontend/src/components/MCPScannerPanel.jsx"
+   ],
+   "path": "/api/mcp/scan"
+  },
+  {
+   "files": [
+    "frontend/src/components/MCPScannerPanel.jsx"
+   ],
+   "path": "/api/mcp/servers"
+  },
+  {
+   "files": [
+    "frontend/src/components/MCPManagerPanel.jsx"
+   ],
+   "path": "/api/mcp/servers/"
+  },
+  {
+   "files": [
+    "frontend/src/components/MCPScannerPanel.jsx"
+   ],
+   "path": "/api/mcp/servers/register"
+  },
+  {
+   "files": [
+    "frontend/src/components/MCPScannerPanel.jsx"
+   ],
+   "path": "/api/mcp/status"
+  },
+  {
+   "files": [
+    "frontend/src/components/ModelStatePanel.jsx"
+   ],
+   "path": "/api/models/audit-log/"
+  },
+  {
+   "files": [
+    "frontend/src/components/ModelStatePanel.jsx",
+    "frontend/src/components/simulator/CircuitBreakerSimulator.jsx",
+    "frontend/src/components/simulator/IsolationOpsSimulator.jsx"
+   ],
+   "path": "/api/models/isolate/"
+  },
+  {
+   "files": [
+    "frontend/src/components/ModelStatePanel.jsx"
+   ],
+   "path": "/api/models/status/"
+  },
+  {
+   "files": [
+    "frontend/src/components/ModelStatePanel.jsx"
+   ],
+   "path": "/api/models/sync/"
+  },
+  {
+   "files": [
+    "frontend/src/components/layout/Header.jsx"
+   ],
+   "path": "/api/notifications/mark-all-read/"
+  },
+  {
+   "files": [
+    "frontend/src/components/PolicyManagementPanel.jsx"
+   ],
+   "path": "/api/policies/"
+  },
+  {
+   "files": [
+    "frontend/src/components/PolicyManagementPanel.jsx"
+   ],
+   "path": "/api/policies/compile/"
+  },
+  {
+   "files": [
+    "frontend/src/components/PolicyManagementPanel.jsx"
+   ],
+   "path": "/api/policies/compile/status/"
+  },
+  {
+   "files": [
+    "frontend/src/components/PolicyManagementPanel.jsx"
+   ],
+   "path": "/api/policies/mcp-presets/"
+  },
+  {
+   "files": [
+    "frontend/src/components/ServerTier1Manager.jsx"
+   ],
+   "path": "/api/policies/mcp-server-states/"
+  },
+  {
+   "files": [
+    "frontend/src/components/simulator/MCPGuardrailSimulator.jsx"
+   ],
+   "path": "/api/policies/test/"
+  },
+  {
+   "files": [
+    "frontend/src/components/MCPManagerPanel.jsx"
+   ],
+   "path": "/api/security/incidents/"
+  },
+  {
+   "files": [
+    "frontend/src/components/VectorPolicyPanel.jsx"
+   ],
+   "path": "/api/vector-policies/"
+  },
+  {
+   "files": [
+    "frontend/src/components/VectorPolicyPanel.jsx"
+   ],
+   "path": "/api/vector-policies/compile/"
+  },
+  {
+   "files": [
+    "frontend/src/components/rag/VectorProviderConfigPanel.jsx",
+    "frontend/src/hooks/useVectorProviders.js"
+   ],
+   "path": "/api/vector-providers/"
+  },
+  {
+   "files": [
+    "frontend/src/components/AttackSimulatorPanel.jsx",
+    "frontend/src/components/RoutingAuditPanel.jsx",
+    "frontend/src/components/howToUseContent.js",
+    "frontend/src/components/simulator/IsolationOpsSimulator.jsx",
+    "frontend/src/components/simulator/ModelRoutingSimulator.jsx",
+    "frontend/src/components/simulator/OutputGuardSimulator.jsx",
+    "frontend/src/hooks/useSimulatorEngine.js"
+   ],
+   "path": "/v1/chat/completions"
+  },
+  {
+   "files": [
+    "frontend/src/components/simulator/RAGIngestionPanel.jsx"
+   ],
+   "path": "/v1/rag/ingest"
+  }
+ ]
+}
