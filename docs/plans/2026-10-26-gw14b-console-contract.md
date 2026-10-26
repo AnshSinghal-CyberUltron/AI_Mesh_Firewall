@@ -1,6 +1,6 @@
 # GW14b — Console and control-plane contract v2
 
-**Status:** local half in progress. Inventory, schema, chat projection, audit emit, the dev Redis writer, the Scan Detail ingest, and the admin-route ledger are in the tree. Every ledger row is retire. The FirewallConfig map is not. Standing note: runbook §0-A.4, "Local status (2026-10-26)".
+**Status:** local half in progress. Inventory, schema, chat projection, audit emit, the dev Redis writer, the Scan Detail ingest, the admin-route ledger, and the FirewallConfig field map are in the tree. A console save does not yet publish a plan into the running gateway. The source marker is not. Standing note: runbook §0-A.4, "Local status (2026-10-26)".
 **Card:** GW14b (C3), runbook §0-A.4.
 **Source of truth:** `docs/AI_MESH_MASTER_RUNBOOK_v3_BACKEND_REWRITE.md` §0-A.4, §10.2.1, §10.2.3.
 **Depends on:** GW05, GW13, GW14 (local halves closed).
@@ -234,7 +234,13 @@ For each of the 65 serializer fields:
 
 The applied-version API returns the plan version each replica has loaded. UI07 reads it. L14b-6 publishes a plan at 70% load and requires every replica to report the new version inside the GW05 freshness bound. That load test is a live gate. The local half is the API plus a test with two in-process replicas and an injected clock.
 
-Console policies start driving `gateway_v2` only when this bullet lands. Bullet 5.4's timeline is honest about the **dev plan**. It is not honest about a policy the operator just saved. The plan says that so the two are not confused in review.
+Console policies start driving `gateway_v2` only when a save publishes a plan the replicas load. The map and the rejection are in. The publish into the running dev process is not: that process still compiles `dev/plan.example.json`.
+
+What landed:
+
+- `control/ai_mesh_control/core/firewall_v2_map.py` classifies all 65 serializer fields. Mapped fields become rules the compiler accepts (`pii`, `jailbreak`, `prompt_injection`, `toxicity`, and output `pii` / `credential` / `exfil`). `enforcement_mode=audit` and action `rewrite` are rejected by name.
+- An unsupported field is rejected only when the saved value changes, and turning the feature off is allowed. The settings form posts the whole row; rejecting an unchanged `rag_enabled: true` would block every other edit. The 400 body is `{field: "...field is unsupported..."}`.
+- `gateway_v2/plan/applied.py` `report_applied` is the applied-version read. Two in-process replicas on one store both report the published version. A replica whose clock is past the freshness bound, while the store is unreachable, reports no version.
 
 ### 5.7 Shadow stream (runbook bullet 7)
 
@@ -288,7 +294,7 @@ A local half of this card is L14b-2 fixtures, L14b-4, the §5.4 browser chats, a
 3. Edge emits one record per phase. Adapter writes `EnforcementEvent` without the three defaults. Secret-absent test.
 4. HTTP projection and headers. Split the OpenAI snapshot. Browser: allow, redact, block, flag.
 5. Admin-route ledger. No success stubs. Done: 26 rows, all `retire`, CI on caller drift.
-6. Field-by-field FirewallConfig map. Save-time rejection. Applied-version API with the in-process freshness test.
+6. Field-by-field FirewallConfig map and save-time rejection. Applied-version report with two in-process replicas. Publish from a console save into the running gateway is not done.
 7. Source marker so v2 rows cannot be summed with v1. Stop.
 
 No v1 file changes, so no `PIPELINE-xxxx` changelog entry. A control-plane adapter is not a `gateway_v2` layer violation if it reads JSON only.
