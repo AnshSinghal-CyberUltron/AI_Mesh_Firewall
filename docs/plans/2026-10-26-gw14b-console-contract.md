@@ -1,6 +1,6 @@
 # GW14b — Console and control-plane contract v2
 
-**Status:** local half in progress. Inventory, schema, chat projection, audit emit, and the dev Redis writer are in the tree. Scan Detail rows, the FirewallConfig map, and the admin ledger are not. Standing note: runbook §0-A.4, "Local status (2026-10-26)".
+**Status:** local half in progress. Inventory, schema, chat projection, audit emit, the dev Redis writer, and the Scan Detail ingest are in the tree. The control image must be rebuilt before a row appears. The FirewallConfig map and the admin ledger are not. Standing note: runbook §0-A.4, "Local status (2026-10-26)".
 **Card:** GW14b (C3), runbook §0-A.4.
 **Source of truth:** `docs/AI_MESH_MASTER_RUNBOOK_v3_BACKEND_REWRITE.md` §0-A.4, §10.2.1, §10.2.3.
 **Depends on:** GW05, GW13, GW14 (local halves closed).
@@ -162,6 +162,21 @@ Remove these silent fills for records that claim to be v2 (`v` present):
 v1 telemetry keeps its current defaults until cutover. The adapter is a separate function. Mixing the two is how a v2 redact becomes "request / 1.1 / risk 0" and the threat feed lies.
 
 The v1 drain is not deleted in this card. L14b-1 compares both.
+
+### 5.3b Store one row Scan Detail can open (this step)
+
+The producer and the translator are in the tree. Scan Detail still cannot see them. `ThreatFeedView` lists `EnforcementEvent` rows for the logged-in organization. The dev gateway writes `org_id=dev-org` onto `{rv2}:audit:dev-org`. The console org slug is `zeroshield`, not `dev-org`. A row stored under the wrong organization is invisible.
+
+What this step builds:
+
+- One row per `request_id`, not one row per phase. The feed collapses siblings and would otherwise keep the newer output `allow` and hide an input `redact`. The row's `action` is `zeroshield.action` on the record (the final action). Phase outcomes stay in `metadata.phases`.
+- The translator still does not write `event_type` or `risk_score`. `module_id` is `1.1` only when the record says `route=chat`, and that value is copied into `metadata.module_id` because the feed filters that key.
+- A missing phase or an `evidence` field is not stored. The stream cursor still moves past it so one bad record cannot stall the org.
+- Organization: slug match on `org_id`. `AMF_V2_AUDIT_ORG_MAP=dev-org=zeroshield` is the local bridge and is set on the control service. An unmapped org is counted and not written into another tenant.
+- The control process already drains v1 telemetry on a thread (`TELEMETRY_DRAIN_MODE=thread`). That loop calls the v2 ingest after the v1 drain. A Redis lock keeps the three gunicorn workers from inserting the same chat twice. The v1 drain function is not edited.
+- The raw prompt is not copied into the row. The console object already omits it.
+
+Not in this step: the admin-route ledger, the 65-field FirewallConfig map, and the GW21 shadow run. A streaming chat still has no output `Decision`, so its saved row matches the input decision only.
 
 ### 5.4 Console projection on the HTTP response (runbook bullet 4)
 

@@ -613,12 +613,13 @@ Landed in code, not yet visible on Scan Detail:
 
 - `gateway_v2/edge/audit_emit.py` builds one `AuditRecord` per phase (input, output, and admission for a budget refusal or an overload shed) and enqueues it through an injected callback after the response is sent. A full queue or a broken callback does not change the HTTP body. `Finding.evidence` is absent from the serialized bytes.
 - The dev profile, when it has a Redis lease, builds an `AuditSink` (`edge/dev_audit.py`), passes `emit` into the chat route, and starts the writer on lifespan. Records land on the dev Redis stream `{rv2}:audit:<org>`. A boot with no Redis lease still passes `audit=None`.
+- The control drain thread copies new records on that stream into one `EnforcementEvent` per request (`core/v2_audit_ingest.py`). The row action is the console final action. `AMF_V2_AUDIT_ORG_MAP=dev-org=zeroshield` attributes the dev tenant to the console org. An unmapped org is not written.
 - `control/ai_mesh_control/core/v2_audit_adapter.py` translates that JSON without importing `gateway_v2`. A missing phase is rejected and not stored. `module_id` is `1.1` only when the record says `route=chat`. It does not write `event_type` or `risk_score`. The v1 drain `_build_enforcement_metadata` in `core/tasks.py` is unchanged and still defaults those three fields for v1 events.
 - A stream keeps an output action string, not a `Decision`, so a streaming chat emits the input record only.
 
 Not done:
 
-- Nothing reads that Redis stream into an `EnforcementEvent` row. Scan Detail still reads the v1 store. The running container must be rebuilt before this writer is the one on port 8301.
+- Scan Detail shows a row only after the control process that contains this ingest is running. A stream still saves the input decision only.
 - Admin-route ledger. MCP, RAG, and `/v1/responses` stay HTTP 501. No success stubs.
 - The 65-field FirewallConfig map and the applied-version API. Saved console policies do not drive gateway-v2. The dev plan does.
 - A stored source marker and a separate v2 stream for the GW21 shadow. Not started.
