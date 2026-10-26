@@ -1,0 +1,42 @@
+=== IN-PROCESS: SSN masked in the bytes DISPATCHED TO THE PROVIDER (chat) ===
+client status      : 200
+PROVIDER received  : 'My SSN is [REDACTED] thanks'
+raw SSN in bytes   : False  (must be False)
+[REDACTED] in bytes: True  (must be True)
+RESULT: PASS -- provider received masked bytes; raw SSN absent
+
+=== IN-PROCESS: SSN item masked in the bytes DISPATCHED TO THE PROVIDER (embeddings) ===
+client status      : 200
+PROVIDER received  : (('embeddings_input', 'release notes'), ('embeddings_input', 'My SSN is [REDACTED]'))
+item count         : 2  (must be 2, in order)
+clean item kept    : 'release notes'  (must be 'release notes' byte-identical)
+raw SSN in any item: False  (must be False)
+[REDACTED] present : True  (must be True)
+RESULT: PASS -- each embeddings item masked at the provider, shape/order preserved
+
+=== IN-PROCESS: slots released -- request-queue depth returns to 0, no overload_shed ===
+request_depth=6; driving 18 sequential requests (real controller)
+  req  1 [chat      ] status=200 request_queue_depth=0
+  req  2 [chat      ] status=200 request_queue_depth=0
+  req  3 [embeddings] status=200 request_queue_depth=0
+  req  4 [chat      ] status=200 request_queue_depth=0
+  req  5 [chat      ] status=200 request_queue_depth=0
+  req  6 [embeddings] status=200 request_queue_depth=0
+  req  7 [chat      ] status=200 request_queue_depth=0
+  req  8 [chat      ] status=200 request_queue_depth=0
+  req  9 [embeddings] status=200 request_queue_depth=0
+  req 10 [chat      ] status=200 request_queue_depth=0
+  req 11 [chat      ] status=200 request_queue_depth=0
+  req 12 [embeddings] status=200 request_queue_depth=0
+  req 13 [chat      ] status=200 request_queue_depth=0
+  req 14 [chat      ] status=200 request_queue_depth=0
+  req 15 [embeddings] status=200 request_queue_depth=0
+  req 16 [chat      ] status=200 request_queue_depth=0
+  req 17 [chat      ] status=200 request_queue_depth=0
+  req 18 [embeddings] status=200 request_queue_depth=0
+max request-queue depth across run: 0  (must be 0)
+overload_shed (QUEUE_FULL) count  : 0  (must be 0)
+in-flight records remaining       : 0  (must be 0)
+RESULT: PASS -- every slot released; depth back to 0; no overload_shed
+
+ALL IN-PROCESS CHECKS PASSED

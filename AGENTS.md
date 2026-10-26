@@ -569,6 +569,125 @@
   per-layer commits. Plan: docs/plans/2026-10-11-r2-23-push-coalescing.md.
   Evidence: docs/plans/evidence/2026-10-11-r2-23-push-coalescing/.
 
+## v2-enforcement-leaks / GW15 input-REDACT + enforcement-leaks changelog
+- v2-enforcement-leaks (2026-10-26) — SIX GW15 ENFORCEMENT LEAKS CLOSED BEFORE THE PROVIDER, local
+  half CLOSED. Severity CRITICAL (A/B/C silently defeat a tenant-selected policy; D/E/F leak a
+  bounded resource or refuse valid work). The opt-in dev profile (AMF_DEV_PROFILE=1, dev/plan.example.json:
+  pii->redact, secret/credential->block, injection/jailbreak/command->flag, every rule scope:both)
+  exposed six defects in the clean-room gateway_v2. Fixed bottom-up by layer (domain->runtime->
+  dispatch->resolve->detect->admit->edge, then the dev cleanup), one commit per layer, fail-closed
+  everywhere, no capacity literal outside runtime/resources.py, egress never importing detect. Phase 0
+  wrote one exploratory bug-condition test per group + the preservation baselines on the UNFIXED tree
+  before any product change, each failing case under @pytest.mark.xfail(strict=True) so the suite
+  stayed green between commits and the marker had to go the moment its fix landed.
+  (A) INPUT REDACT MASKED + BYTE-VERIFIED BEFORE THE PROVIDER (chat + /v1/embeddings). Root: a REDACT
+  input decision forwarded raw bytes (only the output guard masked, only the echoed reply — C21, trace
+  said masked while the provider saw raw); EmbeddingsSurface acted on a decision only when BLOCK and
+  ignored REDACT; dispatch _resplit moved a byte of the next delta into the redacted one on a length
+  change; a detector-keyed verify obligation raised a false VerificationFailure on a mixed
+  SECRET->flag + CREDENTIAL->redact plan. Fix: FindingDisposition.finding_index (domain) keys each
+  obligation; resolver sets finding_index + coalesces overlapping/identical REDACT spans into their
+  union, never merging merely-touching spans; dispatch obliges exactly the indexed spans, fixes
+  _resplit (each boundary shifts by the summed length-delta of transformations ending at/before it; a
+  straddler stays in its start delta; raw bytes never cross a channel) and extracts the one
+  verified_upstream() path; edge/input_enforcement.py + edge/embeddings_input.py scan per delta + per
+  joined content-part run, shift by base offset, de-dupe then resolve once, and fail closed with
+  input_unmaskable (HTTP 400 invalid_request_error, same family as input_blocked, zero provider calls)
+  when the transformed bytes cannot be verified or an embeddings shape check fails.
+  (B) LUHN-VALID CARDS DETECTED REGARDLESS OF PATTERN ORDER. Root: the leftmost-first multi-pattern
+  pass let the pii_phone prefilter consume the PAN digit run, its precise matcher rejected it, and the
+  credential_card branch was never evaluated; no checksum. Fix (detect): PatternSpec.validator +
+  credential_card.validator="luhn"; bounded the unbounded prefilters (email local {1,64}/domain {1,253},
+  phone {9,14}, AWS key {10,16}, API-key value {12,512}); matcher keeps the one _COMBINED.finditer
+  primary pass, applies the validator after a confirm, and on a failed confirm/validator over region R
+  rescans every other pattern leftmost-first inside R (single-exclusion combined regexes precompiled at
+  import; deeper sets via the once-compiled _ALL_AT per-position lookahead restricted to R) — one
+  canonicalization + one primary match, no per-pattern loop. 4111-1111-1111-1111 / 4111111111111111 /
+  4111 1111 1111 1111 each emit one credential_card over the whole PAN; Luhn-invalid and 12/20-digit
+  runs emit none.
+  (C) JAILBREAK PHRASES + CONFUSABLES COVERED. Root: the \bDAN\b prefilter anchored the precise
+  "you are DAN" confirm at the DAN offset (same matcher defect as B); Greek Iota U+0399 was absent from
+  the fold table so "Ιgnore all previous instructions" never folded. Fix (detect): new
+  detect/confusables.py with a versioned CONFUSABLES table (CONFUSABLE_SET_VERSION="amf-confusables-1",
+  sha256 CONFUSABLES_DIGEST), a superset of both prior tables adding the Greek + Cyrillic upper/lower
+  letters whose UTS #39 prototype is one ASCII letter; canonicalize._fold_homoglyphs and
+  semantic/language.CONFUSABLE_FOLD both read it (1:1 per char, span records unchanged); ruleset_version()
+  appends the confusables record + validator field (a table change changes detector_version); lead-context
+  jailbreak alternatives (you\s+are\s+DAN\b, enable\s+developer\s+mode, answer\s+without\s+(?:any\s+)?restrictions)
+  added before the existing ones, audited for the start-superset invariant, matched from phrase start by
+  the Group B rescan with the span mapping back to the original confusable-bearing bytes.
+  (D) ADMISSION SLOTS RELEASED EXACTLY ONCE, complete() ISOLATED. Root: the GW15 lifecycle admitted but
+  never called complete (slots never released, in-flight never pruned); complete popped the FIFO head
+  for any id incl. an unknown/already-completed one, freeing a foreign slot. Fix: BoundedQueue.remove
+  (O(depth), depth contract-bounded); complete() returns untouched for an unknown id, else removes
+  exactly that id's slot, decrements the admit refcount, prunes at 0 and publishes (_decide increments
+  the refcount on admit — content-hashed ids can collide); edge/request_holds.py (per-request __slots__
+  RequestHolds: admitted/spent/mark_dispatched + a once-latched release that refunds if
+  spent-and-not-dispatched then completes if admitted, synchronous, never awaits/raises) wired in
+  edge/routes.py with try/finally and mark_dispatched() before each provider.open; the dev ASGI slot
+  wrapper removed so both boot paths release through the one lifecycle. Depth returns to 0 after
+  3 x request_depth sequential requests, no overload_shed.
+  (E) PHASE-AWARE RESOLUTION. Root: one resolver bound to one Phase served both phases, so scope:input/
+  output rules misfired or dropped and the dev profile refused to boot them. Fix: resolve(findings,
+  plan, phase) selects only rules scoped phase-or-both; edge/phase_resolvers.py resolver_for(route,
+  plan, phase) returns route.phase_resolvers(plan, phase) else route.resolver (unset branch reproduces
+  the default boot); chat input scans at Phase.INPUT, output guard / non-stream output / mid-stream
+  error-frame scan at Phase.OUTPUT with the pinned plan; dev profile drops require_phase_agnostic's
+  scope check and wires a phase_resolver_factory returning PlanResolver(plan, phase).
+  (F) ONE TOKEN UNIT FOR COST + LEASE, WITH REFUND AND A BOUNDED OUTPUT BUDGET. Root: GW06 sized the
+  chunk in requests, GW15 charged characters, so a long prompt was refused budget_unavailable with room
+  to spare; a refused request kept its charge; the output budget (max_tokens, n) was uncharged +
+  unbounded. Fix: runtime/resources.py estimate_request_tokens (v1's input=max(1, chars//4) if chars>0
+  else 0, plus max_tokens*n, min 1; _CHARS_PER_TOKEN_DIVISOR=4) + the four v1 output-budget constants
+  with an import-time ordering check (hard cap 65536, default ceiling 4096, boundary 1_000_000, max
+  completions 1) + max_request_tokens() + store_keys.budget_workers (a {rv2} ZSET scored by lease
+  expiry); admit/lease.py acquire grants min(pool, cap, max(1, pool//active)) from the store-clock-pruned
+  worker ZSET, BudgetLease(overdraft_tokens=...) + refund(cost, generation) local within the generation,
+  overshoot on amf_quota_lease_overshoot; admit/quota.py derive_lease_cap_tokens + QuotaComponent.refund;
+  edge/wire/openai.py parses max_tokens/n/max_completion_tokens via one _int_field (off-contract ->
+  MALFORMED_WRONG_SHAPE; above boundary -> invalid_max_tokens / invalid_max_completion_tokens with param)
+  + pure clamp_output_budget + prompt_chars; edge/openai_chat.py charges estimate_request_tokens(
+  prompt_chars, max_tokens, n) and clamps to the org ceiling; edge/errors.py maps input_unmaskable +
+  invalid_max_tokens + invalid_max_completion_tokens to (400, invalid_request_error), the boundary
+  rendered from max_output_tokens_boundary() not a literal. A 2000-char prompt is now admitted;
+  max_tokens=2000000 -> 400 invalid_max_tokens (param max_tokens) before admission; an input BLOCK after
+  a spend refunds on chat + embeddings; a 4-worker grant is <= pool//4.
+  NO V1 CHANGE: git diff --stat 103502b6..HEAD -- gateway/ai_mesh_gateway/ is empty, no uncommitted v1
+  change — all work is in gateway_v2/; no pipeline/CHANGELOG.md + PIPELINE-xxxx pointer needed.
+  COMMIT SEQUENCE (bottom-up, newest first): f56160c1 dev, d36caac6 edge, 2fc03f72 admit,
+  1104a90e+43dd5afd+143ca97d detect, 9835e557 resolve, 47d1c182 dispatch, 56a3ec7a runtime, 8328a399
+  domain, 103502b6 tests (Phase 0). The docs/records commit is the final commit.
+  OPEN (deferred, out of this card's scope): Phase 2 — real provider egress (HttpProviderClient seams)
+  + C29 true-up against provider-reported usage (this card pre-charges the v1 estimate only); Phase 3 —
+  decision visibility (audit, X-ZeroShield-* headers, the GW14b console contract); /v1/responses stays a
+  501 stub so GW15 remains ◐ PARTIAL on that one surface (MCP/RAG/vector = GW17/GW18, out of scope);
+  the full AuthorizedProviderEntry on chat (provider pooling/audit/rewrite) is Phase 2/3.
+  FOUND, NOT FIXED: (1) content-hash request-id collision — admitted ids can collide, so the lifecycle
+  is made collision-safe via an admit refcount, but the id scheme itself is unchanged (a GW05/identity
+  concern); (2) detection runs on the event loop — canonicalization + the deterministic match run inline
+  on the request path with no offload (fine at the current single-value sizes — scan("x"*262_144) is
+  ~0.11s on the fixed tree vs ~63.1s unfixed — but not moved off the loop; a GW12/executor concern);
+  (3) three canonicalisations per value — a value can be canonicalized up to three times across the
+  input scan, the join-run scan and verify (correct but redundant; a shared canonical form is a later
+  detect-path optimisation); (4) max_completion_tokens validated but uncharged — the field is parsed +
+  boundary-checked but the budget charges max_tokens*n only, so a request using max_completion_tokens is
+  under-charged on the output side (the charge-side fix waits on the Phase 2 usage true-up).
+  VERIFY: 2415 offline passed / 95 skipped / 1 xfailed / 0 failed (the sole xfail is the unrelated
+  pre-existing R2-04 store_ahead node; unfixed baseline was 1948/95/2, test_input_redact_masks_pii_before_the_provider
+  flipped xfail->PASS, no v2-enforcement-leaks marker remains active); mypy --strict 219 files; ruff;
+  import-linter 3/3 kept; 7 AST gates each exit 0; edge/openai_chat.py 800 (<=800) + edge/openai_misc.py
+  798 (<=799). Every Property 1-16 has a fix-checking/exploration test in the house idiom (seeded
+  random.Random, >=10,000 iterations, the seed in each assertion message, no hypothesis). LIVE: all 7
+  original dev-profile curl scenarios PASS over the REAL uvicorn HTTP server (uvicorn 0.54.0; real GW06
+  lease over a local Redis container; 9 workers) + a complementary in-process recording-provider byte-level
+  run — SSN masked at the provider (raw absent), card 4111-1111-1111-1111 -> 400 input_blocked zero
+  provider calls, "you are DAN" ASCII + Cyrillic DАN both 200 jailbreak=1, Greek Ιgnore 200
+  prompt_injection=1, 42/42 slots released with 0 overload_shed + depth 0, embeddings SSN item masked at
+  the provider, max_tokens=2000000 -> 400 invalid_max_tokens (param max_tokens).
+  Plan: docs/plans/2026-10-26-v2-enforcement-leaks.md.
+  Evidence: docs/plans/evidence/2026-10-22-v2-enforcement-leaks/ (baseline.txt, preservation-baseline.txt,
+  counterexamples.md, scan-262144-timing.txt, final-gate.txt, live-dev-profile/).
+
 ## MCP Hardening BACKSTOP changelog
 - Parallel Claude + Cursor sessions harden the multi-tenant MCP gateway. **Every hardening change is
   logged to four memories in the SAME commit:** Ruflo (`mcp__ruflo__memory_store`

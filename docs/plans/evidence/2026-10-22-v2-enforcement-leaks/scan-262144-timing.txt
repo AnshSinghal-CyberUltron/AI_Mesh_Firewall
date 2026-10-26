@@ -1,0 +1,51 @@
+v2-enforcement-leaks — scan("x" * 262_144) timing (Group B, task 19.2 evidence)
+===============================================================================
+Date:    2026-10-26 (date +%F)
+Python:  3.12.3 (gateway_v2/.venv)
+cwd:     gateway_v2
+Scope:   the C26 decode-budget / 256 KiB canonicalization + match cost on the FIXED tree.
+         A single-shot local wall-clock measurement (NOT an assertion; recorded in evidence
+         per task 19.2, which forbids putting the structural cost in an assertion). No product
+         code changed; no commit.
+
+Why 262_144
+-----------
+262_144 == gateway_v2.detect.deterministic.canonicalize._MAX_INPUT_BYTES, i.e. the largest
+input the cheap Decode_Budget pre-check (DecodeBudget.within) admits before the heavy decode.
+So "x" * 262_144 is the worst admissible single-value size — the exact C26 decode-budget edge.
+`"x"` is the adversarial single-character run the Group B order-independence property names
+(a long digit/x/a@ run that, on the UNFIXED tree, drove the phone/email prefilter to rescan the
+whole region leftmost-first). On the unfixed tree this call took ~63.1 s (recorded at task 19.2);
+the bounded-prefilter + failed-region-rescan fix (Phase 5, detect) removes that blow-up.
+
+Entry points measured
+----------------------
+  gateway_v2.detect.deterministic.canonicalize.canonicalize(text, DEFAULT_BUDGET)
+      -> the single canonicalization pass (one decode + SpanMap), C26 budget pre-checked first.
+  gateway_v2.detect.deterministic.matcher.scan(canonical_text)
+      -> the single combined-alternation primary pass + confirm/validator + failed-region rescan
+         (RULESET._COMBINED.finditer; no per-pattern loop over the whole text).
+
+Measured (two runs, same shell, warm interpreter)
+-------------------------------------------------
+  run 1:  canonicalize = 0.3246 s   scan = 0.1092 s   total = 0.4338 s   matches = 0
+  run 1:  scan("x"*262144) direct (no prior canonicalize) = 0.1080 s     matches = 0
+  run 2:  canonicalize = 0.3400 s   scan = 0.1153 s   total = 0.4553 s   matches = 0
+
+scan("x" * 262_144) wall-clock, FIXED tree:  ~0.11 s   (0 matches)
+canonicalize + scan over 262_144 chars:      ~0.44 s
+
+Comparison
+----------
+  unfixed tree (task 19.2 record):   scan("x" * 262_144)  ~= 63.1 s
+  fixed tree   (this measurement):   scan("x" * 262_144)  ~= 0.11 s
+  ~570x faster. The adversarial single-char run no longer triggers a whole-region
+  leftmost-first rescan cascade; the bounded prefilters + the once-compiled single-exclusion /
+  _ALL_AT per-position rescan keep regex invocations near-linear in len(text).
+
+Honesty note
+------------
+Single-shot local measurement on this developer host (not a benchmark harness, not a p99, not a
+fleet figure). The STRUCTURAL guarantee (regex invocations <= c*len(text) on the adversarial
+corpora) is asserted in tests/detect/test_v2_leaks_matcher_properties.py (P6); this file records
+only the wall-clock so the 63.1 s -> 0.11 s improvement is on record alongside it.
