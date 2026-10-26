@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useGatewayConfig } from "./useGatewayConfig";
+import { devGatewayKey } from "../utils/devGatewayKey";
 
 // Org-scoped storage prevents one org's simulator key leaking to another on a
 // shared browser. Mirrors the keys written by useSimulatorEngine so the two
@@ -89,8 +90,9 @@ export function useGatewayCredential() {
   const { gatewayUrl } = useGatewayConfig();
   const { fetchWithAuth, user, loading: authLoading } = useAuth();
   const orgId = user?.organization?.id;
+  const pinnedDevKey = devGatewayKey();
 
-  const [gatewayKey, setGatewayKey] = useState(() => readStoredGatewayKey(orgId));
+  const [gatewayKey, setGatewayKey] = useState(() => pinnedDevKey || readStoredGatewayKey(orgId));
   const [provisioning, setProvisioning] = useState(false);
   const [error, setError] = useState(null);
   const attemptedRef = useRef(null);
@@ -98,16 +100,16 @@ export function useGatewayCredential() {
   // Adopt an existing org-scoped key once the org becomes known (e.g. provisioned
   // earlier by useSimulatorEngine or another panel in this browser).
   useEffect(() => {
-    if (!orgId) return;
+    if (pinnedDevKey || !orgId) return;
     const cached = readStoredGatewayKey(orgId);
     if (cached) setGatewayKey(cached);
-  }, [orgId]);
+  }, [orgId, pinnedDevKey]);
 
   // Lazily provision the per-org simulator key. The backend returns plaintext
   // once on creation; we then cache it org-scoped. The endpoint is idempotent —
   // it returns the org's existing active key and never rotates.
   useEffect(() => {
-    if (authLoading || !orgId || gatewayKey) return;
+    if (pinnedDevKey || authLoading || !orgId || gatewayKey) return;
     const attemptKey = String(orgId);
     if (attemptedRef.current === attemptKey) return;
     attemptedRef.current = attemptKey;
@@ -121,7 +123,7 @@ export function useGatewayCredential() {
       })
       .catch(() => setError("Could not provision the simulator gateway key automatically."))
       .finally(() => setProvisioning(false));
-  }, [authLoading, fetchWithAuth, gatewayKey, orgId]);
+  }, [authLoading, fetchWithAuth, gatewayKey, orgId, pinnedDevKey]);
 
   // Re-FETCH the org's current key after the cached one looked disabled/invalid
   // (e.g. a stale value in this browser). The endpoint is idempotent and never
@@ -129,6 +131,7 @@ export function useGatewayCredential() {
   // NOT clear the cache or re-mint — that would churn keys and race other tabs.
   // Used by gatewayFetch's bounded self-heal (the caller retries at most once).
   const reprovision = useCallback(async () => {
+    if (pinnedDevKey) return pinnedDevKey;
     if (!orgId) return null;
     try {
       const key = await provisionOrgKey(orgId, fetchWithAuth);
@@ -140,7 +143,7 @@ export function useGatewayCredential() {
     } catch {
       return null;
     }
-  }, [orgId, fetchWithAuth]);
+  }, [orgId, fetchWithAuth, pinnedDevKey]);
 
   return {
     gatewayUrl,

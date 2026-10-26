@@ -464,26 +464,26 @@ services:
     ports: ["8180:5173"]
     environment:
       VITE_CONTROL_PROXY: http://control:8000
-      VITE_GATEWAY_PROXY: http://gateway:8300
+      # Browser /v1, /health and /gw-health go to gateway-v2. The v1 gateway stays on :8300
+      # for anything that still dials it directly.
+      VITE_GATEWAY_PROXY: http://gateway-v2:8301
       VITE_DEMO_PROXY: http://demo:8770
       VITE_GATEWAY_BASE_URL: ${VITE_GATEWAY_BASE_URL:-http://127.0.0.1:8180}
       VITE_BACKEND_BASE_URL: ${VITE_BACKEND_BASE_URL:-http://127.0.0.1:8180}
+      # Dev-profile bearer. The console sends this instead of a control-plane gateway key,
+      # because gateway-v2's dev profile accepts only AMF_DEV_API_KEY.
+      VITE_GATEWAY_DEV_KEY: ${AMF_DEV_API_KEY:-dev-key-change-me}
     depends_on:
       control: { condition: service_healthy }
-      demo: { condition: service_started }
+      gateway-v2: { condition: service_healthy }
 
-  # --- gateway_v2 DEV PROFILE (opt-in) ------------------------------------------------------
-  #   docker compose --profile gateway-v2 up -d --build gateway-v2   ->  http://127.0.0.1:8301/v1
-  # The v2 pipeline (identity -> plan -> admission -> budget -> GW09 input scan -> GW07 resolver
-  # -> provider -> output guard) wired for LOCAL DEVELOPMENT by AMF_DEV_PROFILE=1: one static API
-  # key, the example plan (PII redact / secret+credential block / injection flag), a DECLARED
-  # q_safe (not measured -- the real value comes from the GW20 fleet run), the real GW06 budget
-  # lease over the `redis` service, and an echo provider (set AMF_DEV_PROVIDER_URL for a real
-  # OpenAI-compatible upstream). Every dev-supplied dependency is named in the boot log with a
-  # DEV PROFILE marker. Profile-gated: the default stack is unaffected, and it is NOT part of
+  # --- gateway_v2 (local dev profile, the gateway the frontend proxies to) ----------------
+  #   http://127.0.0.1:8301/v1    and, through the UI, http://127.0.0.1:8180/v1
+  # AMF_DEV_PROFILE=1 wires one static API key, the example plan (PII redact / secret+credential
+  # block / injection flag), a DECLARED q_safe, the GW06 budget lease over `redis`, and an echo
+  # provider (set AMF_DEV_PROVIDER_URL for a real OpenAI-compatible upstream). Not in
   # docker-compose.prod.yml. Env reference: gateway_v2/gateway_v2/edge/dev_profile.py.
   gateway-v2:
-    profiles: ["gateway-v2"]
     build:
       context: .
       dockerfile: gateway_v2/Dockerfile
