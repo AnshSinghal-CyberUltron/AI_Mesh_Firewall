@@ -626,7 +626,11 @@ Not done:
 
 - The first settings save replaces the example-file plan. Secret and command rules from that file are not form fields, so they stop applying. Jailbreak in the form is a block, which is stricter than the file's flag.
 
-Live gates still open: L14b-1, L14b-2 on a saved Scan Detail row, L14b-3, L14b-5, L14b-6.
+Live checks run on 2026-10-26 against the local console:
+
+- L14b-5 passed. Turning RAG Enabled from off to on and saving showed `rag_enabled: rag_enabled is unsupported. The plan compiler has no rule, mode, or action for this field.` Last-saved time did not move. The form was reset so RAG stayed off.
+- L14b-2 did not pass. Scan Detail for the saved redact row (request `zs-dev-org-62342f843e56b5b8b1d34473`, scan 2) shows the six stored stages and leaves Duration as `--`. The same page invents Security Score 75 from the redact action (`deriveStageVerdict`), and `resolveLatencyBreakdown` draws a 0 ms / 0% table because the record has no `latency_breakdown`. Plan version and `deciding_rule` are on the record (`1.1.19663cec401a7665`, `dev-pii-redact`) and are not rendered. The feed fills category `Policy` and severity `medium` when metadata has neither. The 16 saved rows cover allow, redact, block, and flag. None is unavailable.
+- L14b-1, L14b-3, and L14b-6 were not run. This machine has no C2 corpus replay, no production bundle of MCP/RAG/breaker, and no fleet at 70% load.
 
 **Live acceptance tests — required to exit.**
 

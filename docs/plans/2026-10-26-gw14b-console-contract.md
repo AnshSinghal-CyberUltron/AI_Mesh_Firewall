@@ -266,7 +266,7 @@ What landed:
 | L14b-5 | One unsupported FirewallConfig field rejected with the field name in the body | The console shows that message, not a toast that says "HTTP 400" |
 | L14b-6 | Two in-process replicas, injected clock, freshness bound | Publish at 70% load against real replicas |
 
-A local half of this card is L14b-2 fixtures, L14b-4, the §5.4 browser chats, and the §5.5 ledger. Calling the card closed requires L14b-1, L14b-3, L14b-5's UI, and L14b-6.
+A local half of this card is L14b-2 fixtures, L14b-4, the §5.4 browser chats, and the §5.5 ledger. On 2026-10-26 the settings page passed L14b-5 (RAG on is rejected with the field name). Scan Detail did not pass L14b-2: the six stages render, but the page invents a security score and a 0 ms timing split, and it does not show plan version or `deciding_rule`. Calling the card closed still requires L14b-1, L14b-2 on the saved row, L14b-3, and L14b-6.
 
 ---
 
