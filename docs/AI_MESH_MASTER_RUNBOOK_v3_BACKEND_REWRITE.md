@@ -612,6 +612,7 @@ Done locally:
 - FirewallConfig field map for all 65 serializer fields (`core/firewall_v2_map.py`), wired into the config PUT. A changed value the plan compiler cannot represent is rejected with that field's name. Mapped fields are the chat rules the compiler accepts (PII, jailbreak, prompt injection, toxicity, and the output PII, credential, and exfil actions). An unchanged unsupported value still saves, and turning an unsupported feature off is allowed.
 - Applied-version report (`gateway_v2/plan/applied.py`). Two in-process replicas report the published plan version. A replica past the freshness bound, with the store unreachable, reports no version.
 - Stored source marker `gateway_v2`. SOC totals and module 1.1 charts exclude those rows and return `gateway_v2.total_threats` separately. The threat feed still lists them. The ingest does not write the v1 `telemetry:events` list.
+- A console save publishes the mapped rules to Redis key `{rv2}:dev:firewall-plan`. The dev workers poll that key off the chat path and replace the booted file plan. A rejected body leaves the previous plan in place. The save banner says whether the plan was published.
 
 Landed in code, and visible on Scan Detail after the control rebuild:
 
@@ -623,8 +624,8 @@ Landed in code, and visible on Scan Detail after the control rebuild:
 
 Not done:
 
-- A console save does not publish a plan into the running gateway-v2 process. That process still compiles `dev/plan.example.json`.
 - A stream still saves the input decision only.
+- The first settings save replaces the example-file plan. Secret and command rules from that file are not form fields, so they stop applying. Jailbreak in the form is a block, which is stricter than the file's flag.
 
 Live gates still open: L14b-1, L14b-2 on a saved Scan Detail row, L14b-3, L14b-5, L14b-6.
 
