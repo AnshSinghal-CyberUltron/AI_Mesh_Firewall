@@ -608,8 +608,9 @@ Done locally:
 - Version-1 audit schema in `gateway_v2/audit/console_schema.py`. A record that carries `evidence` fails validation. `enforcement_fields` does not write `event_type`, `module_id`, or `risk_score`.
 - Chat HTTP and SSE projection: `zeroshield`, `pipeline_trace`, and `X-ZeroShield-Action`. The trace has the six stages this gateway actually runs (`auth`, `rate_limit`, `input_scan`, `model_routing`, `model_output`, `output_guardrail`). `kill_switch`, `policy`, and `model_input` are not filled with empty allow boxes (L14b-2). Attack Simulator on the local console showed allow, redact, block, and flag matching the gateway.
 - Decision kept: the `zeroshield` object and the `X-ZeroShield-*` headers stay.
+- Admin-route ledger at `docs/plans/evidence/2026-10-26-gw14b/admin-ledger/routes.json`, checked by `python -m lint.check_console_inventory`. All 26 rows are `retire`: breaker, kill-switch validate, RAG, vector, db-test, bedrock-test, MCP discover/call/oauth, record-event, and the instance heartbeat. No success stubs. MCP, RAG, vector, and `/v1/responses` stay the existing HTTP 501 until GW15, GW17, or GW18. The control proxies still forward the breaker and the connectivity tests to the v1 gateway.
 
-Landed in code, not yet visible on Scan Detail:
+Landed in code, and visible on Scan Detail after the control rebuild:
 
 - `gateway_v2/edge/audit_emit.py` builds one `AuditRecord` per phase (input, output, and admission for a budget refusal or an overload shed) and enqueues it through an injected callback after the response is sent. A full queue or a broken callback does not change the HTTP body. `Finding.evidence` is absent from the serialized bytes.
 - The dev profile, when it has a Redis lease, builds an `AuditSink` (`edge/dev_audit.py`), passes `emit` into the chat route, and starts the writer on lifespan. Records land on the dev Redis stream `{rv2}:audit:<org>`. A boot with no Redis lease still passes `audit=None`.
@@ -619,8 +620,7 @@ Landed in code, not yet visible on Scan Detail:
 
 Not done:
 
-- Scan Detail shows a row only after the control process that contains this ingest is running. A stream still saves the input decision only.
-- Admin-route ledger. MCP, RAG, and `/v1/responses` stay HTTP 501. No success stubs.
+- A stream still saves the input decision only. Scan Detail shows a stored row when the control process that contains the ingest is the one running.
 - The 65-field FirewallConfig map and the applied-version API. Saved console policies do not drive gateway-v2. The dev plan does.
 - A stored source marker and a separate v2 stream for the GW21 shadow. Not started.
 

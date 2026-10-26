@@ -1,6 +1,6 @@
 # GW14b — Console and control-plane contract v2
 
-**Status:** local half in progress. Inventory, schema, chat projection, audit emit, the dev Redis writer, and the Scan Detail ingest are in the tree. The control image must be rebuilt before a row appears. The FirewallConfig map and the admin ledger are not. Standing note: runbook §0-A.4, "Local status (2026-10-26)".
+**Status:** local half in progress. Inventory, schema, chat projection, audit emit, the dev Redis writer, the Scan Detail ingest, and the admin-route ledger are in the tree. Every ledger row is retire. The FirewallConfig map is not. Standing note: runbook §0-A.4, "Local status (2026-10-26)".
 **Card:** GW14b (C3), runbook §0-A.4.
 **Source of truth:** `docs/AI_MESH_MASTER_RUNBOOK_v3_BACKEND_REWRITE.md` §0-A.4, §10.2.1, §10.2.3.
 **Depends on:** GW05, GW13, GW14 (local halves closed).
@@ -219,6 +219,8 @@ Known before that inventory, and not to be re-decided by guesswork during coding
 
 Do not add stub JSON that returns success. L14b-3's failure mode is silent breakage.
 
+The ledger is `docs/plans/evidence/2026-10-26-gw14b/admin-ledger/routes.json`. `python -m lint.check_console_inventory` fails when a console or v1 caller in this set is missing, when the caller list drifts, or when a 501 placeholder is signed `build`. All 26 rows are `retire`. The control proxies for the breaker, RAG collections, db-test, and bedrock-test still forward to the v1 gateway. gateway-v2 does not grow a success body for any of them. The existing 501 placeholders stay until GW15, GW17, or GW18 replace them.
+
 ### 5.6 FirewallConfig writer (runbook bullet 6)
 
 This is the writer side of GW05, owned jointly with this card. The dev-file plan is not a substitute.
@@ -285,7 +287,7 @@ A local half of this card is L14b-2 fixtures, L14b-4, the §5.4 browser chats, a
 2. JSON Schema for the audit record plus the console projection. L14b-4 tests.
 3. Edge emits one record per phase. Adapter writes `EnforcementEvent` without the three defaults. Secret-absent test.
 4. HTTP projection and headers. Split the OpenAI snapshot. Browser: allow, redact, block, flag.
-5. Admin-route ledger. No success stubs.
+5. Admin-route ledger. No success stubs. Done: 26 rows, all `retire`, CI on caller drift.
 6. Field-by-field FirewallConfig map. Save-time rejection. Applied-version API with the in-process freshness test.
 7. Source marker so v2 rows cannot be summed with v1. Stop.
 
