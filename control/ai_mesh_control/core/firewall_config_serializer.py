@@ -12,6 +12,7 @@ from core.firewall_model_governance import (
     stale_allowed_models,
     validate_governance_fields,
 )
+from core.firewall_v2_map import FIELDS, selection_errors
 from core.models import FirewallConfig
 
 
@@ -175,5 +176,16 @@ class FirewallConfigSerializer(serializers.ModelSerializer):
             )
             if gov_errors:
                 raise serializers.ValidationError(gov_errors)
+
+        stored = {}
+        if self.instance is not None:
+            stored = {
+                name: getattr(self.instance, name)
+                for name in FIELDS
+                if hasattr(self.instance, name)
+            }
+        unsupported = selection_errors(attrs, stored)
+        if unsupported:
+            raise serializers.ValidationError(unsupported)
 
         return attrs
