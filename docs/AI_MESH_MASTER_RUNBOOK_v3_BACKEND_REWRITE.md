@@ -600,6 +600,30 @@ The §0-A.5 table stays authoritative; these rows are added or replace the row f
 - Own the writer side of GW05: a field-by-field mapping of the 65 FirewallConfig fields to Rule/Mode/Action or an explicit "unsupported" rejected at save; an API exposing the applied plan version per replica (UI07 "applied gateway policy version").
 - During GW21 shadow, v2 records go to a separate stream (no double counting) that the console can display side by side.
 
+**Local status (2026-10-26).** Standing note for the local half. Not a live-gate result. Do not cut over.
+
+Done locally:
+
+- Field inventory (frontend reads, control-plane consumers, FirewallConfig keys) with a CI compare: `python -m lint.check_console_inventory`.
+- Version-1 audit schema in `gateway_v2/audit/console_schema.py`. A record that carries `evidence` fails validation. `enforcement_fields` does not write `event_type`, `module_id`, or `risk_score`.
+- Chat HTTP and SSE projection: `zeroshield`, `pipeline_trace`, and `X-ZeroShield-Action`. The trace has the six stages this gateway actually runs (`auth`, `rate_limit`, `input_scan`, `model_routing`, `model_output`, `output_guardrail`). `kill_switch`, `policy`, and `model_input` are not filled with empty allow boxes (L14b-2). Attack Simulator on the local console showed allow, redact, block, and flag matching the gateway.
+- Decision kept: the `zeroshield` object and the `X-ZeroShield-*` headers stay.
+
+Landed in code, not yet visible on Scan Detail:
+
+- `gateway_v2/edge/audit_emit.py` builds one `AuditRecord` per phase (input, output, and admission for a budget refusal or an overload shed) and enqueues it through an injected callback after the response is sent. A full queue or a broken callback does not change the HTTP body. `Finding.evidence` is absent from the serialized bytes. The dev boot still passes `audit=None`, so the running process writes nothing.
+- `control/ai_mesh_control/core/v2_audit_adapter.py` translates that JSON without importing `gateway_v2`. A missing phase is rejected and not stored. `module_id` is `1.1` only when the record says `route=chat`. It does not write `event_type` or `risk_score`. The v1 drain `_build_enforcement_metadata` in `core/tasks.py` is unchanged and still defaults those three fields for v1 events.
+- A stream keeps an output action string, not a `Decision`, so a streaming chat emits the input record only.
+
+Not done:
+
+- Nothing inserts an `EnforcementEvent` row, and nothing starts `AuditSink.run`. Scan Detail still reads the v1 store.
+- Admin-route ledger. MCP, RAG, and `/v1/responses` stay HTTP 501. No success stubs.
+- The 65-field FirewallConfig map and the applied-version API. Saved console policies do not drive gateway-v2. The dev plan does.
+- A stored source marker and a separate v2 stream for the GW21 shadow. Not started.
+
+Live gates still open: L14b-1, L14b-2 on a saved Scan Detail row, L14b-3, L14b-5, L14b-6.
+
 **Live acceptance tests — required to exit.**
 
 | Test | Live procedure | PASS | FAIL / stop |
