@@ -146,6 +146,8 @@ services:
       TELEMETRY_DRAIN_MODE: ${TELEMETRY_DRAIN_MODE:-thread}
       TELEMETRY_DRAIN_INTERVAL_SEC: ${TELEMETRY_DRAIN_INTERVAL_SEC:-1.0}
       TELEMETRY_DRAIN_BATCH_SIZE: ${TELEMETRY_DRAIN_BATCH_SIZE:-250}
+      # Local bridge: gateway-v2's dev tenant is not the console org slug.
+      AMF_V2_AUDIT_ORG_MAP: ${AMF_V2_AUDIT_ORG_MAP:-dev-org=zeroshield}
       # Phase 0a C-4b: pin ASGI thread pool (entrypoint default is also 2).
       ASGI_THREADS: ${ASGI_THREADS:-2}
       # Pin workers across recreate so the 16-core host cannot jump to 16 gunicorn
