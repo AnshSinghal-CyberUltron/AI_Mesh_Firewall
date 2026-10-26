@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 from typing import cast
 
+from lint.admin_ledger import compare as compare_admin_ledger
 from lint.console_inventory import (
     CONFIG_PATH,
     CONSUMERS_PATH,
@@ -88,6 +89,7 @@ def main(argv: list[str] | None = None) -> int:
         write(repo)
         return 0
     messages = compare(repo)
+    messages.extend(compare_admin_ledger(repo))
     for message in messages:
         print(message)
     return 1 if messages else 0
