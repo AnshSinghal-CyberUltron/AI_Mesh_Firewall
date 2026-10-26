@@ -228,9 +228,18 @@ class DevLeaseBudget:
         self._quota.refund(cost, request_id=request_id)
 
     async def startup(self) -> str:
-        """Seed the pool (NX), read the generation, acquire the first chunk. Returns a log line."""
+        """Seed the pool (NX), read the generation, acquire the first chunk. Returns a log line.
+
+        A previous dev process can leave the Redis pool at 0, or at a leftover
+        smaller than one worker's chunk. ``SET NX`` will not replace that key, so
+        the next boot acquires nothing and chats return ``budget_unavailable``.
+        Restore the declared pool whenever the stored balance is below it. This
+        module is the dev profile only.
+        """
         remaining_key = KEYS.budget_remaining(self._org_id)
         await self._client.set(remaining_key, self._settings.pool_tokens, nx=True)
+        if _below(await self._client.get(remaining_key), self._settings.pool_tokens):
+            await self._client.set(remaining_key, self._settings.pool_tokens)
         await self._client.set(KEYS.budget_generation(self._org_id), 0, nx=True)
         self._generation = await self._lease.read_generation()
         acquired = await self._lease.acquire(self._generation)
@@ -247,6 +256,16 @@ class DevLeaseBudget:
             await self._lease.return_unspent()
         finally:
             await self._client.aclose()
+
+
+def _below(value: object, pool_tokens: int) -> bool:
+    """True when a Redis balance is missing or lower than the declared dev pool."""
+    if value is None:
+        return True
+    try:
+        return int(_as_text(value)) < pool_tokens
+    except ValueError:
+        return True
 
 
 def _as_text(value: object) -> str:

@@ -538,8 +538,8 @@ class _ServingSkin:
         """
         method = _method(scope)
         path = _path(scope)
-        if path == "/readyz":
-            await self._readyz(send)
+        if path == "/readyz" or path == "/health":
+            await self._readyz(send, path)
             return
         if path == "/metrics":
             await self._metrics(send)
@@ -578,19 +578,11 @@ class _ServingSkin:
                 best_len = len(prefix)
         return best
 
-    async def _readyz(self, send: ASGISend) -> None:
-        """``/readyz``: ``200`` when ready, else ``503`` naming the unavailable dep (R2.4/R2.5).
-
-        Consults the injected :data:`ReadinessProbe` — wired by a deployment to
-        ``runtime.state_stamp.state_ready(view)`` so there is ONE definition of ready (the
-        LGW05b handoff pins this: ``/readyz`` must call ``state_ready(view)`` and return 503 with
-        its reason when state is unverified). A ``(True, None)`` renders ``200 ok``; a
-        ``(False, reason)`` renders ``503`` with the reason as the JSON body, so the 503 is
-        diagnosable.
-        """
+    async def _readyz(self, send: ASGISend, path: str = "/readyz") -> None:
+        """200 when ready. ``/readyz`` body is ``ok``; ``/health`` is ``{"status":"ok"}``."""
         ready, reason = self.readiness()
         if ready:
-            await emit_response(send, _ok_body())
+            await emit_response(send, _ok_body(path))
             return
         await emit_response(send, _not_ready_body(reason))
 
@@ -615,8 +607,14 @@ _READY_STATUS = 200
 _NOT_READY_STATUS = 503
 
 
-def _ok_body() -> errors.HTTPResponse:
-    """The ``/readyz`` success body: ``200`` with a plain ``ok`` marker."""
+def _ok_body(path: str = "/readyz") -> errors.HTTPResponse:
+    """200 readiness body. ``/health`` is the console JSON probe; ``/readyz`` stays ``ok``."""
+    if path == "/health":
+        return errors.HTTPResponse(
+            status=_READY_STATUS,
+            body=b'{"status":"ok"}',
+            headers=(("content-type", "application/json"),),
+        )
     return errors.HTTPResponse(
         status=_READY_STATUS,
         body=b"ok",
