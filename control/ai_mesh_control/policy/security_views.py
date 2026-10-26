@@ -1316,14 +1316,18 @@ class SocKpisView(AnalyticsConcurrencyMixin, APIView):
         since = timezone.now() - timedelta(hours=hours)
 
         org_id = _rollup_org_id(request, period, since)
+        scoped = _enforcement_events_for_request(
+            request, EnforcementEvent.objects.filter(created_at__gte=since)
+        )
+        from policy.v2_shadow import exclude_shadow, only_shadow
+
+        shadow = soc_kpis_from_events(only_shadow(scoped))
         if org_id is not None:
             from policy.analytics_rollup import soc_kpis_from_rollup
 
             k = soc_kpis_from_rollup(org_id, since)
         else:
-            base_events = EnforcementEvent.objects.filter(created_at__gte=since)
-            events = _enforcement_events_for_request(request, base_events)
-            k = soc_kpis_from_events(events)
+            k = soc_kpis_from_events(exclude_shadow(scoped))
 
         total = k["total"]
         blocked = k["blocked"]
@@ -1373,6 +1377,11 @@ class SocKpisView(AnalyticsConcurrencyMixin, APIView):
                 "latency_distribution": latency_distribution,
                 "health_radar": health_radar,
                 "avg_latency_ms": avg_latency_ms,
+                "gateway_v2": {
+                    "total_threats": int(shadow["total"] or 0),
+                    "blocked": int(shadow["blocked"] or 0),
+                    "redacted": int(shadow["redacted"] or 0),
+                },
             },
             "rollup" if org_id is not None else "raw",
         )
@@ -1821,7 +1830,9 @@ class ModuleChartsView(APIView):
 
     def _apply_module_filter(self, qs, module_id: str):
         if module_id == "1.1":
-            return qs
+            from policy.v2_shadow import exclude_shadow
+
+            return exclude_shadow(qs)
         return qs.filter(module_enforcement_q(module_id))
 
     def _build_event_timeline(self, qs, since, hours: int) -> dict:
