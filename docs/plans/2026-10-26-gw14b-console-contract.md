@@ -1,6 +1,6 @@
 # GW14b — Console and control-plane contract v2
 
-**Status:** local half in progress. Inventory, schema, chat projection, and the audit emit/adapter are in the tree. Scan Detail rows, the FirewallConfig map, and the admin ledger are not. Standing note: runbook §0-A.4, "Local status (2026-10-26)".
+**Status:** local half in progress. Inventory, schema, chat projection, audit emit, and the dev Redis writer are in the tree. Scan Detail rows, the FirewallConfig map, and the admin ledger are not. Standing note: runbook §0-A.4, "Local status (2026-10-26)".
 **Card:** GW14b (C3), runbook §0-A.4.
 **Source of truth:** `docs/AI_MESH_MASTER_RUNBOOK_v3_BACKEND_REWRITE.md` §0-A.4, §10.2.1, §10.2.3.
 **Depends on:** GW05, GW13, GW14 (local halves closed).
