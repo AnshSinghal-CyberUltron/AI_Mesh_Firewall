@@ -276,12 +276,14 @@ function buildMetrics(moduleId, socKpis, gatewayStats, threatFeedCount) {
   const allowed = Math.max(0, total - blocked - redacted);
 
   switch (moduleId) {
-    case "1.1":
+    case "1.1": {
+      const v2 = Number(socKpis.gateway_v2?.total_threats) || 0;
+      const v2Note = v2 > 0 ? ` · ${v2.toLocaleString()} gateway v2, not added` : "";
       return [
         {
           label: "Total Events",
           value: total.toLocaleString(),
-          change: `${blockRate}% block rate`,
+          change: `${blockRate}% block rate${v2Note}`,
           trend: "up",
         },
         {
@@ -303,6 +305,7 @@ function buildMetrics(moduleId, socKpis, gatewayStats, threatFeedCount) {
           trend: critical > 0 ? "up" : "down",
         },
       ];
+    }
     case "1.2":
       return [
         {
