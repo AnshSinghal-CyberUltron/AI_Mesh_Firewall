@@ -14,7 +14,7 @@ from gateway_v2.domain.category import Category
 from gateway_v2.domain.decision import Decision, Disposition, FindingDisposition
 from gateway_v2.domain.finding import Finding, FindingStatus, Span
 from gateway_v2.domain.posture import BUDGET_UNAVAILABLE, OVERLOAD_SHED
-from gateway_v2.edge.audit_emit import emit_chat_audit
+from gateway_v2.edge.audit_emit import emit_chat_audit, note_stream_output
 from gateway_v2.edge.request_holds import RequestHolds
 
 _SECRET = "123-45-6789"
@@ -58,6 +58,31 @@ def _holds() -> RequestHolds:
     holds.note_request("zs-dev-org-1")
     holds.note_input(_decision(Disposition.REDACT))
     return holds
+
+
+def test_a_stream_output_decision_is_audited() -> None:
+    holds = _holds()
+    output = _decision(Disposition.ALLOW)
+    stats = type("Stats", (), {"output_decision": output, "output_action": "allow"})()
+    note_stream_output(holds, stats, "ignored-when-a-decision-is-present")
+    seen: list[AuditRecord] = []
+    emit_chat_audit(_keep(seen), holds, None)
+    assert [record.phase for record in seen] == [AuditPhase.INPUT, AuditPhase.OUTPUT]
+    assert seen[1].outcome == "allow"
+
+
+def test_a_passthrough_stream_records_allow() -> None:
+    holds = _holds()
+    stats = type("Stats", (), {"output_action": "allow"})()
+    note_stream_output(holds, stats, "1.2.passthrough")
+    decision = holds.output_decision
+    assert decision is not None
+    assert decision.disposition is Disposition.ALLOW
+    assert decision.plan_version == "1.2.passthrough"
+    seen: list[AuditRecord] = []
+    emit_chat_audit(_keep(seen), holds, None)
+    assert seen[1].phase == AuditPhase.OUTPUT
+    assert seen[1].outcome == "allow"
 
 
 def test_input_record_omits_the_secret_and_names_the_chat_route() -> None:

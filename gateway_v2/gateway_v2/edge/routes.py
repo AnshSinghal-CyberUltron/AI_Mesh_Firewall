@@ -57,7 +57,7 @@ from gateway_v2.edge.asgi_sse import end_sse as _end_sse
 from gateway_v2.edge.asgi_sse import read_body as _read_body
 from gateway_v2.edge.asgi_sse import send_sse as _send_sse
 from gateway_v2.edge.asgi_sse import start_sse as _start_sse
-from gateway_v2.edge.audit_emit import emit_chat_audit
+from gateway_v2.edge.audit_emit import emit_chat_audit, note_stream_output
 from gateway_v2.edge.cancel import InFlightControl, InFlightControlSource, KillLatch
 from gateway_v2.edge.chat_deps import (
     AdmissionDecider,
@@ -690,6 +690,7 @@ class ChatRoute:
             # StreamPipeline.run and StrictWithholdPipeline.run return a stats value carrying
             # ``produced_mode``, so the holder reads it uniformly regardless of mode.
             produced.stats = await pipeline.run(chunks, sink, kill_latch)
+            note_stream_output(holds, produced.stats, plan.version)
             # The sink set the first-byte latch the instant a content byte went out; report that
             # as the "released a byte" signal so run_with_no_splice closes the gate (R7.2/R7.4).
             return latch.is_set()

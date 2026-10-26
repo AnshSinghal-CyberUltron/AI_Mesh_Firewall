@@ -4,8 +4,10 @@ The callback is :meth:`gateway_v2.audit.sink.AuditSink.emit`: it does not await 
 it does not raise when the queue is full. This module also swallows a broken
 callback. A lost record is a counted drop. It is not a failed chat.
 
-Streaming output does not yet keep a :class:`~gateway_v2.domain.decision.Decision`,
-only an action string, so a stream emits the input record and not an output record.
+Streaming output keeps the output ``Decision`` on the stream stats. The edge
+copies that decision onto the request before this function runs, so a stream
+emits an output record as well as the input record. A pass-through allow has
+no resolver decision; the edge records an allow decision for that case.
 """
 
 from __future__ import annotations
@@ -21,13 +23,34 @@ from gateway_v2.audit.record import (
     admission,
     from_decision,
 )
-from gateway_v2.domain.decision import Decision, DecisionRecord
+from gateway_v2.domain.decision import Decision, DecisionRecord, Disposition
 from gateway_v2.domain.posture import OVERLOAD_SHED
 from gateway_v2.edge import errors
 from gateway_v2.edge.console_projection import console_from_holds
 from gateway_v2.edge.request_holds import RequestHolds
 
 _CHAT_ROUTE = "chat"
+
+
+def note_stream_output(holds: RequestHolds, stats: object, plan_version: str) -> None:
+    """Record the stream's output decision. An allow with no decision is still output."""
+    decision = getattr(stats, "output_decision", None)
+    if isinstance(decision, Decision):
+        holds.note_output(decision)
+        return
+    if getattr(stats, "output_action", None) != "allow":
+        return
+    holds.note_output(
+        Decision(
+            disposition=Disposition.ALLOW,
+            per_finding=(),
+            transformations=(),
+            findings=(),
+            plan_version=plan_version,
+            deciding_rules=(),
+            unavailable_detectors=(),
+        ),
+    )
 
 
 def emit_chat_audit(

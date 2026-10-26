@@ -55,7 +55,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
 from gateway_v2.domain import (
-    Disposition,
+    Decision,
     Finding,
     InFlightKill,
     PlanUnavailable,
@@ -135,6 +135,7 @@ class StrictStats:
     incomplete: bool = False
     error: str | None = None
     output_action: str | None = None
+    output_decision: Decision | None = None
 
 
 # --------------------------------------------------------------------------- #
@@ -350,16 +351,17 @@ class StrictWithholdPipeline:
         # later channel still yields zero content frames (LGW13-1). An
         # OutputBlocked anywhere short-circuits to the terminal block path.
         sanitized: list[tuple[str, str]] = []
-        chosen: str | None = None
+        chosen: Decision | None = None
         try:
             for channel, text in whole.items():
                 findings: Sequence[Finding] = (
                     self._detector(text) if self._detector is not None else ()
                 )
                 decision = self._resolver.decide(findings)
-                chosen = _stricter_action(chosen, decision.disposition.value)
+                chosen = _stricter_decision(chosen, decision)
                 sanitized.append((channel, apply_decision(text, decision, 0)))
         except OutputBlocked as blocked:
+            stats.output_decision = blocked.decision
             stats.output_action = blocked.decision.disposition.value
             return await self._terminate(send, stats, error=_OUTPUT_BLOCKED_CODE)
 
@@ -368,7 +370,8 @@ class StrictWithholdPipeline:
         await send(DownstreamFrame(text_deltas=tuple(sanitized)))
         stats.frames_out += 1
         stats.completion_overhead_ns = max(0, self._clock() - t_final)
-        stats.output_action = chosen or "allow"
+        stats.output_decision = chosen
+        stats.output_action = chosen.disposition.value if chosen is not None else "allow"
         stats.done = True
         self._metrics.observe_stream_complete(stats)
         return stats
@@ -436,7 +439,11 @@ class StrictWithholdPipeline:
         return stats
 
 
-def _stricter_action(current: str | None, action: str) -> str:
+def _stricter_decision(current: Decision | None, new: Decision) -> Decision:
+    """The decision whose disposition is the more restrictive of the two."""
     if current is None:
-        return action
-    return most_restrictive((Disposition(current), Disposition(action))).value
+        return new
+    winner = most_restrictive((current.disposition, new.disposition))
+    if winner is new.disposition:
+        return new
+    return current

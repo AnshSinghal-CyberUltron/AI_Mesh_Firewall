@@ -56,7 +56,7 @@ from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
 from dataclasses import dataclass, field
 
 from gateway_v2.domain import (
-    Disposition,
+    Decision,
     ExecutionPlan,
     Finding,
     InFlightKill,
@@ -323,6 +323,7 @@ class StreamStats:
     produced_mode: StreamingMode = StreamingMode.INCREMENTAL
     degenerated_to_strict: bool = False
     output_action: str | None = None
+    output_decision: Decision | None = None
 
 
 # --------------------------------------------------------------------------- #
@@ -365,6 +366,7 @@ class StreamPipeline:
         self._clock = clock
         self._detector = detector
         self._output_action: str | None = None
+        self._output_decision: Decision | None = None
 
     @classmethod
     def for_plan(
@@ -519,8 +521,9 @@ class StreamPipeline:
         except ScanFailure:
             # Scanner failed: retain all pending, emit nothing further (R3.6).
             return await self._terminate(send, stats, error="scan_failure")
-        except OutputBlocked:
-            stats.output_action = self._output_action or "block"
+        except OutputBlocked as blocked:
+            self._note_output(blocked.decision)
+            self._publish(stats)
             return await self._terminate(send, stats, error="output_blocked")
         except HoldbackOverflow:
             # Relaxed-class ceiling: release no held bytes of the match (R6.5).
@@ -543,7 +546,7 @@ class StreamPipeline:
         # genuinely empty response (no content frame at all) is NOT degenerate --
         # it is just empty -- so the ``> 0`` guard keeps it ``False``.
         stats.degenerated_to_strict = frames_out_before_final == 0 and stats.frames_out > 0
-        stats.output_action = self._output_action or "allow"
+        self._publish(stats)
         stats.done = True
         self._metrics.observe_stream_complete(stats)
         return stats
@@ -658,18 +661,28 @@ class StreamPipeline:
         )
         matches = completed_in(text.hits, release_start, len(released))
         decision = self._resolver.decide(matches)
-        self._note_output(decision.disposition.value)
+        self._note_output(decision)
         decision = with_remainder_redactions(decision, remainder_edits)
         return apply_decision(released, decision, release_start)
 
-    def _note_output(self, action: str) -> None:
-        """Keep the most restrictive output disposition seen on this stream."""
-        current = self._output_action
-        if current is None:
-            self._output_action = action
+    def _note_output(self, decision: Decision) -> None:
+        """Keep the most restrictive output decision seen on this stream."""
+        current = self._output_decision
+        if current is not None:
+            winner = most_restrictive((current.disposition, decision.disposition))
+            if winner is not decision.disposition:
+                return
+        self._output_decision = decision
+        self._output_action = decision.disposition.value
+
+    def _publish(self, stats: StreamStats) -> None:
+        """Copy the kept decision onto the stats the edge audits."""
+        decision = self._output_decision
+        stats.output_decision = decision
+        if decision is not None:
+            stats.output_action = decision.disposition.value
             return
-        winner = most_restrictive((Disposition(current), Disposition(action)))
-        self._output_action = winner.value
+        stats.output_action = "allow"
 
     # -- force-release trade-off helper (task 9.1) ------------------------- #
 
