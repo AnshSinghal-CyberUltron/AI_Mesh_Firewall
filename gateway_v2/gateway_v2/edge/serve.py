@@ -457,8 +457,9 @@ def _assemble_app(deps: dict[str, object]) -> ASGIApplication:
     ``app_factory``) go through it, and the honest-boot fallback contract is unchanged.
     """
     kwargs: dict[str, Any] = dict(deps)
+    kwargs.pop("audit_runtime", None)
     # ``wrap_dev_app`` returns the app UNCHANGED unless the DEV PROFILE admission adapter is in
-    # ``deps`` (then it adds per-request admission-slot release + the lease lifespan hooks).
+    # ``deps`` (then it adds the lease lifespan hooks and, when present, the audit writer).
     return wrap_dev_app(build_app(**kwargs), deps)
 
 

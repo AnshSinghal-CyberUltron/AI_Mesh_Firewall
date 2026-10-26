@@ -54,6 +54,7 @@ from gateway_v2.edge.dev_admit import (
     LeaseSettings,
     build_dev_admission,
 )
+from gateway_v2.edge.dev_audit import DevAudit, build_dev_audit
 from gateway_v2.edge.dev_components import (
     DeterministicFindings,
     DevProfileError,
@@ -322,6 +323,14 @@ def build_dev_dependencies(
         "quota": budget,
         "catalog": catalog,
     }
+    audit_note = _attach_audit(
+        deps,
+        cfg=cfg,
+        budget=budget,
+        queue_depth=bounds.audit_depth,
+        env=env,
+        contract=contract,
+    )
     snapshot_log, resolver_log = _plan_log(cfg, plan)
     logs: tuple[str, ...] = (
         "boot: DEV PROFILE ACTIVE (AMF_DEV_PROFILE=1) -- local development wiring, NOT FOR "
@@ -347,9 +356,37 @@ def build_dev_dependencies(
         "each admitted slot on exit — one completion path on both boot paths, no dev-profile "
         "slot wrapper)",
         budget_log,
+        audit_note,
         f"boot: catalog -> StaticCatalogSource {list(cfg.models)} (DEV PROFILE: AMF_DEV_MODELS)",
     )
     return deps, logs
+
+
+def _attach_audit(
+    deps: dict[str, object],
+    *,
+    cfg: DevProfileConfig,
+    budget: DevLeaseBudget | DevUnlimitedBudget,
+    queue_depth: int,
+    env: Mapping[str, str],
+    contract: ResourceContract,
+) -> str:
+    """Put the sink callback on the boot deps when the dev lease has a redis."""
+    if not isinstance(budget, DevLeaseBudget) or cfg.lease is None:
+        return "boot: audit -> none (no redis lease; chat records are not enqueued)"
+    runtime = build_dev_audit(
+        redis_url=cfg.lease.redis_url,
+        timeout_s=contract.cancellation_bound_s(),
+        queue_depth=queue_depth,
+        env=env,
+    )
+    deps["audit"] = runtime.emit
+    deps["audit_runtime"] = runtime
+    return (
+        "boot: audit -> AuditSink over the dev redis "
+        f"(queue_depth={queue_depth}; writer starts on lifespan; "
+        "a full queue drops and counts, the chat response is unchanged)"
+    )
 
 
 def wrap_dev_app(app: ASGIApplication, deps: Mapping[str, object]) -> ASGIApplication:
@@ -364,4 +401,6 @@ def wrap_dev_app(app: ASGIApplication, deps: Mapping[str, object]) -> ASGIApplic
     quota = deps.get("quota")
     if not isinstance(quota, DevLeaseBudget):
         return app
-    return DevServedApp(app, budget=quota)
+    runtime = deps.get("audit_runtime")
+    audit = runtime if isinstance(runtime, DevAudit) else None
+    return DevServedApp(app, budget=quota, audit=audit)

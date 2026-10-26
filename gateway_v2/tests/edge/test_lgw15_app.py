@@ -138,7 +138,7 @@ def _misc_route(provider: ProviderClient) -> MiscRoute:
     )
 
 
-def _build_app(provider: ProviderClient) -> object:
+def _build_app(provider: ProviderClient, audit: object | None = None) -> object:
     """Assemble the REAL ASGI app with the injected ``provider`` (no socket)."""
     return build_app(
         contract=_contract(),
@@ -148,6 +148,7 @@ def _build_app(provider: ProviderClient) -> object:
         metrics_registry=_StubMetrics(),
         clock=_Clock(),
         error_scanner=_no_error_findings,
+        audit=audit,  # type: ignore[arg-type]
     )
 
 
@@ -225,7 +226,7 @@ def test_boot_injects_stub_provider_with_no_real_socket() -> None:
     )
 
 
-def _boot_chatroute(provider: ProviderClient) -> ChatRoute:
+def _boot_chatroute(provider: ProviderClient, audit: object | None = None) -> ChatRoute:
     """Recover the single :class:`ChatRoute` the boot path mounts, to introspect its wiring.
 
     ``build_app`` returns an opaque ASGI callable wrapping the frozen ``_ServingSkin`` + its route
@@ -233,12 +234,20 @@ def _boot_chatroute(provider: ProviderClient) -> ChatRoute:
     :class:`ChatRoute` by resolving the live chat handler back to its bound ``__self__`` — the
     EXACT route the boot path built, not a reconstruction.
     """
-    app = _build_app(provider)
+    app = _build_app(provider, audit)
     table = _mounted_table(app)
     handler = table[("POST", "/v1/chat/completions")]
     bound_self = getattr(handler, "__self__", None)
     assert isinstance(bound_self, ChatRoute), "could not recover the mounted ChatRoute from boot"
     return bound_self
+
+
+def test_boot_mounts_the_audit_callback_on_the_chat_route() -> None:
+    def _emit(_record: object) -> bool:
+        return True
+
+    route = _boot_chatroute(_stub_provider(), _emit)
+    assert route.audit is _emit
 
 
 def _mounted_table(app: object) -> Mapping[tuple[str, str], object]:

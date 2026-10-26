@@ -52,6 +52,7 @@ from gateway_v2.admit.quota import (
 )
 from gateway_v2.admit.supervisor import WorkerSupervisor
 from gateway_v2.edge.asgi_sse import ASGIReceive, ASGIScope, ASGISend
+from gateway_v2.edge.dev_audit import DevAudit
 from gateway_v2.runtime.resources import ResourceContract
 from gateway_v2.runtime.store_keys import KEYS
 
@@ -297,11 +298,18 @@ class DevServedApp:
     unspent remainder at shutdown.
     """
 
-    __slots__ = ("_budget", "_inner")
+    __slots__ = ("_audit", "_budget", "_inner")
 
-    def __init__(self, inner: _ASGIApp, *, budget: DevLeaseBudget) -> None:
+    def __init__(
+        self,
+        inner: _ASGIApp,
+        *,
+        budget: DevLeaseBudget,
+        audit: DevAudit | None = None,
+    ) -> None:
         self._inner = inner
         self._budget = budget
+        self._audit = audit
 
     async def __call__(self, scope: _Scope, receive: _Receive, send: _Send) -> None:
         if scope.get("type") == "lifespan":
@@ -311,17 +319,38 @@ class DevServedApp:
 
     def _lifespan_receive(self, receive: _Receive) -> _Receive:
         budget = self._budget
+        audit = self._audit
 
         async def _receive() -> Mapping[str, object]:
             message = await receive()
             kind = message.get("type")
             if kind == "lifespan.startup":
                 await _budget_startup(budget)
+                await _audit_startup(audit)
             elif kind == "lifespan.shutdown":
+                await _audit_shutdown(audit)
                 await _budget_shutdown(budget)
             return message
 
         return _receive
+
+
+async def _audit_startup(audit: DevAudit | None) -> None:
+    """Start the writer when the boot attached one. A missing sink is not an error."""
+    if audit is None:
+        return
+    await audit.startup()
+
+
+async def _audit_shutdown(audit: DevAudit | None) -> None:
+    """Stop the writer. Best-effort: a failed close must not block process exit."""
+    if audit is None:
+        return
+    try:
+        await audit.shutdown()
+    except Exception as exc:  # noqa: BLE001 — shutdown is best-effort.
+        sys.stdout.write(f"dev: audit writer shutdown failed ({type(exc).__name__})\n")
+        sys.stdout.flush()
 
 
 async def _budget_startup(budget: DevLeaseBudget) -> None:

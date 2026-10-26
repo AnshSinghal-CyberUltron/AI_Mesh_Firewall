@@ -48,6 +48,7 @@ from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
 
+from gateway_v2.audit.record import AuditRecord
 from gateway_v2.dispatch.provider import ProviderClient
 from gateway_v2.dispatch.routing import DispatchRouter
 from gateway_v2.dispatch.transform import Transform
@@ -240,6 +241,7 @@ def build_app(
     catalog: CatalogSource | None = None,
     output_detector: ErrorFrameScanner | None = None,
     phase_resolvers: PhaseResolverFactory | None = None,
+    audit: Callable[[AuditRecord], bool] | None = None,
 ) -> ASGIApplication:
     """Assemble the raw-ASGI serving skin (R2.1).
 
@@ -308,6 +310,7 @@ def build_app(
         exports=exports,
         output_detector=output_detector,
         phase_resolvers=phase_resolvers,
+        audit=audit,
     )
     misc = _build_misc_route(
         contract=contract,
@@ -358,35 +361,11 @@ def _build_chat_route(
     exports: PerRequestExports | None,
     output_detector: ErrorFrameScanner | None = None,
     phase_resolvers: PhaseResolverFactory | None = None,
+    audit: Callable[[AuditRecord], bool] | None = None,
 ) -> ChatRoute:
-    """Construct the single :class:`ChatRoute` with every §10.4 dep (task 6.1, R11 / R14).
+    """Construct the single chat route. Unwired deps use their fail-closed defaults.
 
-    Pulled out of :func:`build_app` so each stays well under the function-size gate; the wiring is
-    byte-for-byte the shipped construction. The frozen route holds nothing request-scoped, so
-    two-tenant isolation holds (R13). Each unwired dep falls back to its fail-closed default:
-
-    * ``input_detector`` — the real GW07/GW08 findings-producing detector
-      (``Callable[[str], Sequence[Finding]]``) injected HERE in ``edge`` (above ``detect``, so
-      ``egress`` never names ``detect``, R7.5/R14.1); the input scan runs it over every folded
-      Input_Channel (R11.1). Defaults to the fail-closed :func:`no_findings_detector` for an
-      unwired deployment — not a fail-open hole, because the lifecycle's fail-closed ``identity`` /
-      ``admission`` defaults refuse an unwired route in an earlier phase (zero provider calls).
-    * ``provider`` — the ``StubProviderClient`` in-process substitute locally (R11.2); the real
-      HTTP/SSE socket is a DEFERRED live gate and is NOT constructed here.
-    * ``identity`` — the GW05b/c :class:`IdentityResolver` (``principal_of`` + the freshness
-      stamp), defaulting to the fail-closed :data:`fail_closed_resolver` (every request refuses
-      with the declared auth code, zero provider calls, R4.2/R4.3).
-    * ``snapshot_source`` — the served :class:`ReplicaSnapshot` source for the ONE plan round trip
-      (R3.3), defaulting to :func:`unresolved_snapshot_source` (an unresolved plan refuses, R2.4).
-    * ``admission`` / ``quota`` — the GW19 admission + GW06 budget deciders, defaulting to the
-      fail-closed :data:`fail_closed_admission` (always sheds first) / :data:`fail_closed_budget`.
-    * ``exports`` — the GW14d :class:`PerRequestExports` per-request telemetry producer (R14),
-      built ONCE here (or the injected one threaded through). Every terminal outcome
-      (allowed / shed / budget-refused / input-blocked / output-redacted / output-blocked /
-      errored) populates its admission / budget / input- / output-enforcement dimensions through
-      this ONE producer; ``fail_open_total`` is pinned at zero and no raw request/response content
-      is ever placed in an export field (R14.1-R14.4). Defaults to a fresh
-      :class:`PerRequestExports` so an unwired deployment still carries a live producer.
+    ``audit`` defaults to ``None``: the response is unchanged and no record is enqueued.
     """
     # The GW14d per-request telemetry producer, built ONCE at boot and threaded onto the single
     # route (R14); see the docstring for the one-producer / pinned-zero / no-raw-content contract.
@@ -417,6 +396,7 @@ def _build_chat_route(
         exports=request_exports,
         output_detector=output_detector,
         phase_resolvers=phase_resolvers,
+        audit=audit,
     )
 
 
