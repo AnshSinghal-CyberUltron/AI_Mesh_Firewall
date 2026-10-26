@@ -620,11 +620,10 @@ Landed in code, and visible on Scan Detail after the control rebuild:
 - The dev profile, when it has a Redis lease, builds an `AuditSink` (`edge/dev_audit.py`), passes `emit` into the chat route, and starts the writer on lifespan. Records land on the dev Redis stream `{rv2}:audit:<org>`. A boot with no Redis lease still passes `audit=None`.
 - The control drain thread copies new records on that stream into one `EnforcementEvent` per request (`core/v2_audit_ingest.py`). The row action is the console final action. `AMF_V2_AUDIT_ORG_MAP=dev-org=zeroshield` attributes the dev tenant to the console org. An unmapped org is not written.
 - `control/ai_mesh_control/core/v2_audit_adapter.py` translates that JSON without importing `gateway_v2`. A missing phase is rejected and not stored. `module_id` is `1.1` only when the record says `route=chat`. It does not write `event_type` or `risk_score`. The v1 drain `_build_enforcement_metadata` in `core/tasks.py` is unchanged and still defaults those three fields for v1 events.
-- A stream keeps an output action string, not a `Decision`, so a streaming chat emits the input record only.
+- A stream keeps the output `Decision` on the pipeline stats. The chat handler records it before the audit emit, so a streamed chat stores an output phase as well as the input phase. A pass-through allow, which has no resolver decision, is stored as allow.
 
 Not done:
 
-- A stream still saves the input decision only.
 - The first settings save replaces the example-file plan. Secret and command rules from that file are not form fields, so they stop applying. Jailbreak in the form is a block, which is stricter than the file's flag.
 
 Live gates still open: L14b-1, L14b-2 on a saved Scan Detail row, L14b-3, L14b-5, L14b-6.

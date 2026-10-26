@@ -1,6 +1,6 @@
 # GW14b — Console and control-plane contract v2
 
-**Status:** local half in progress. Inventory, schema, chat projection, audit emit, the dev Redis writer, the Scan Detail ingest, the admin-route ledger, the FirewallConfig field map, the v2 source split, and a console save that publishes a plan are in the tree. A stream still saves the input decision only. Standing note: runbook §0-A.4, "Local status (2026-10-26)".
+**Status:** local half in progress. Inventory, schema, chat projection, audit emit, the dev Redis writer, the Scan Detail ingest, the admin-route ledger, the FirewallConfig field map, the v2 source split, a console save that publishes a plan, and a streamed output decision are in the tree. Standing note: runbook §0-A.4, "Local status (2026-10-26)".
 **Card:** GW14b (C3), runbook §0-A.4.
 **Source of truth:** `docs/AI_MESH_MASTER_RUNBOOK_v3_BACKEND_REWRITE.md` §0-A.4, §10.2.1, §10.2.3.
 **Depends on:** GW05, GW13, GW14 (local halves closed).
@@ -176,7 +176,7 @@ What this step builds:
 - The control process already drains v1 telemetry on a thread (`TELEMETRY_DRAIN_MODE=thread`). That loop calls the v2 ingest after the v1 drain. A Redis lock keeps the three gunicorn workers from inserting the same chat twice. The v1 drain function is not edited.
 - The raw prompt is not copied into the row. The console object already omits it.
 
-Not in this step: the admin-route ledger, the 65-field FirewallConfig map, and the GW21 shadow run. A streaming chat still has no output `Decision`, so its saved row matches the input decision only.
+Not in this step: the admin-route ledger, the 65-field FirewallConfig map, and the GW21 shadow run. A streamed chat now keeps the output `Decision` and stores an output phase.
 
 ### 5.4 Console projection on the HTTP response (runbook bullet 4)
 
