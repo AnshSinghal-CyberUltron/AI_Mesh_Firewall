@@ -19,6 +19,8 @@ import {
   resolvePipelineInputOutput,
   deriveStageVerdict,
   derivePipelineDetections,
+  stageDecidingRules,
+  recordedRiskScore,
 } from "./pipelineTrace.js";
 
 // Robustness: the trace card (StageTimeline) renders `stage.action` per element, so a
@@ -460,4 +462,46 @@ test("resolvePipelineInputOutput redact shows before/after (PIPELINE-0022)", () 
   assert.equal(io.inputAfter, "email u***@example.com");
   assert.equal(io.outputText, "ok");
   assert.equal(io.outputWithheld, false);
+});
+
+test("a gateway-v2 trace with no timings does not invent a 0ms breakdown", () => {
+  const bd = resolveLatencyBreakdown({
+    pipelineTrace: {
+      final_action: "redact",
+      plan_version: "1.1.19663cec401a7665",
+      stages: [
+        { name: "auth", action: "allow", ran: true },
+        { name: "input_scan", action: "redact", ran: true, deciding_rule: "dev-pii-redact" },
+      ],
+    },
+  });
+  assert.equal(bd, null);
+  assert.deepEqual(resolveLatencyHints({
+    pipelineTrace: {
+      stages: [{ name: "input_scan", action: "redact", ran: true }],
+    },
+  }), []);
+});
+
+test("stageDecidingRules reads deciding_rule and does not invent one", () => {
+  assert.deepEqual(stageDecidingRules({ deciding_rule: "dev-pii-redact" }), ["dev-pii-redact"]);
+  assert.deepEqual(stageDecidingRules({ matched_rules: ["a"], deciding_rule: "a" }), ["a"]);
+  assert.deepEqual(stageDecidingRules({ action: "allow", ran: true }), []);
+});
+
+test("recordedRiskScore keeps a stored number and rejects a severity word", () => {
+  assert.equal(recordedRiskScore(0), 0);
+  assert.equal(recordedRiskScore("85"), 85);
+  assert.equal(recordedRiskScore("medium"), null);
+  assert.equal(recordedRiskScore(undefined), null);
+});
+
+test("buildHonestTraceStages tags the stored deciding rule", () => {
+  const nodes = buildHonestTraceStages(
+    [{ name: "input_scan", action: "redact", ran: true, deciding_rule: "dev-pii-redact" }],
+    "redact",
+    {},
+  );
+  const scan = nodes.find((node) => node.id === "input_scan");
+  assert.ok(scan.tags.includes("rule: dev-pii-redact"));
 });

@@ -91,6 +91,23 @@ const _STAGE_SEVERITY = { block: 3, error: 3, redact: 2, rewrite: 2, flag: 1, re
 const _STAGE_SCORE = { block: 90, error: 90, redact: 75, rewrite: 75, flag: 60, reroute: 40 };
 
 /** Lift score/action from stage badges including unenforced injection BLOCK recs. */
+/** Rules the record names. Does not invent a rule the stage did not carry. */
+export function stageDecidingRules(stage) {
+  const named = [];
+  if (Array.isArray(stage?.matched_rules)) named.push(...stage.matched_rules);
+  if (Array.isArray(stage?.matched_rule_names)) named.push(...stage.matched_rule_names);
+  if (Array.isArray(stage?.deciding_rules)) named.push(...stage.deciding_rules);
+  if (stage?.deciding_rule) named.push(stage.deciding_rule);
+  return [...new Set(named.filter((rule) => rule))];
+}
+
+/** A risk score the record actually stored. Words such as "medium" are not a score. */
+export function recordedRiskScore(value) {
+  if (typeof value === "number" && Number.isFinite(value) && value >= 0) return value;
+  if (typeof value === "string" && /^\d+(\.\d+)?$/.test(value.trim())) return Number(value.trim());
+  return null;
+}
+
 export function deriveStageVerdict(stages) {
   let action = null, score = 0, severity = -1;
   for (const s of Array.isArray(stages) ? stages : []) {
@@ -142,7 +159,7 @@ export function buildHonestTraceStages(realStages, finalAction, ctx = {}) {
     if (s.detection_tier || s.tier) tags.push(`tier: ${s.detection_tier || s.tier}`);
     if (s.threat_type) tags.push(`category: ${String(s.threat_type).replace(/_/g, " ")}`);
     (s.matched_policy_names || s.matched_policies || []).forEach((p) => tags.push(`policy: ${p}`));
-    (s.matched_rules || s.matched_rule_names || []).forEach((r) => tags.push(`rule: ${r}`));
+    stageDecidingRules(s).forEach((r) => tags.push(`rule: ${r}`));
     const lat = typeof s.latency_ms === "number" ? s.latency_ms : null;
     out.push({
       id: name,
@@ -304,10 +321,9 @@ export function resolveLatencyBreakdown(sources = {}) {
   let overhead = finiteMs(trace.overhead_ms);
   const total = resolveTotalLatencyMs(sources);
 
-  if (stageSum == null && Array.isArray(trace.stages) && trace.stages.length) {
-    stageSum = Math.round(
-      trace.stages.reduce((acc, s) => acc + (finiteMs(s?.latency_ms) ?? 0), 0) * 10,
-    ) / 10;
+  const measured = measuredStageLatencies(trace?.stages);
+  if (stageSum == null && measured.length) {
+    stageSum = Math.round(measured.reduce((acc, row) => acc + row.latency_ms, 0) * 10) / 10;
   }
   if (overhead == null && total != null && stageSum != null) {
     overhead = Math.round(Math.max(0, total - stageSum) * 10) / 10;
@@ -317,7 +333,7 @@ export function resolveLatencyBreakdown(sources = {}) {
     ? trace.latency_breakdown
     : null;
 
-  if (stageSum == null && overhead == null && !backend && !(trace.stages?.length)) {
+  if (stageSum == null && overhead == null && !backend && measured.length === 0) {
     return null;
   }
 
@@ -335,17 +351,21 @@ export function resolveLatencyBreakdown(sources = {}) {
   };
 }
 
-function computeByStage(trace, totalMs) {
-  const stages = Array.isArray(trace?.stages) ? trace.stages : [];
-  const total = finiteMs(totalMs) ?? 0;
+function measuredStageLatencies(stages) {
+  if (!Array.isArray(stages)) return [];
   return stages
-    .filter((s) => s && (s.name || s.stage))
-    .map((s) => {
-      const stage = s.name || s.stage;
-      const latency_ms = finiteMs(s.latency_ms) ?? 0;
-      const share_pct = total > 0 ? Math.round((latency_ms / total) * 1000) / 10 : 0;
-      return { stage, latency_ms, share_pct };
-    })
+    .filter((s) => s && (s.name || s.stage) && finiteMs(s.latency_ms) != null)
+    .map((s) => ({ stage: s.name || s.stage, latency_ms: finiteMs(s.latency_ms) }));
+}
+
+function computeByStage(trace, totalMs) {
+  const total = finiteMs(totalMs) ?? 0;
+  return measuredStageLatencies(trace?.stages)
+    .map((row) => ({
+      stage: row.stage,
+      latency_ms: row.latency_ms,
+      share_pct: total > 0 ? Math.round((row.latency_ms / total) * 1000) / 10 : 0,
+    }))
     .sort((a, b) => b.latency_ms - a.latency_ms);
 }
 

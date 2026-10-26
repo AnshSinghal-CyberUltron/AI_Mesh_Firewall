@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { Clock, Shield, AlertTriangle, XCircle, CheckCircle, Pin, X, ArrowRightLeft } from "lucide-react";
-import { normalizeStages, formatRouteDestination, honestStageAction } from "../../utils/pipelineTrace";
+import { normalizeStages, formatRouteDestination, honestStageAction, stageDecidingRules } from "../../utils/pipelineTrace";
 import { summarizeRoutingDecision } from "../../utils/routingExplain";
 import { summarizeInputScanStage } from "../../utils/inputScanExplain";
 import { RoutingTechnicalDetails } from "../RoutingTechnicalDetails";
@@ -175,6 +175,7 @@ export function StageTimeline({ stages: rawStages = [], className = "" }) {
       <div className="-mx-1 flex items-stretch gap-2 overflow-x-auto pb-2 pt-1 sm:mx-0 sm:gap-3">
         {stages.map((stage, i) => {
           const displayAction = honestStageAction(stage);
+          const decidingRules = stageDecidingRules(stage);
           const theme = ACTION_THEME[displayAction] || ACTION_THEME.skip;
           const Icon = ACTION_ICONS[displayAction] || Clock;
           const isHovered = hoveredStage === i;
@@ -215,6 +216,11 @@ export function StageTimeline({ stages: rawStages = [], className = "" }) {
                 <div className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
                   {formatStageLatency(stage)}
                 </div>
+                {decidingRules.length > 0 && (
+                  <div className="mt-1 truncate text-[11px] font-medium text-sky-700 dark:text-sky-300" title={decidingRules.join(", ")}>
+                    {decidingRules.join(", ")}
+                  </div>
+                )}
 
                 <div className="mt-2 flex items-center gap-1.5">
                   <span className={`h-1.5 w-1.5 rounded-full ${theme.dot} ${isActive ? "animate-pulse" : ""}`} />
@@ -595,7 +601,7 @@ function StageDetailCard({ stage, onClose, isPinned }) {
             <span className="text-sky-600 dark:text-sky-300">{stage.matched_policies.join(", ")}</span>
           </div>
         )}
-        {stage.matched_rules?.length > 0 && (
+        {stageDecidingRules(stage).length > 0 && (
           <div className="col-span-2">
             {/* "Applied" only when the stage actually ENFORCED (block/redact/rewrite).
                 When the stage action is allow/monitor/flag the rules MATCHED their
@@ -604,7 +610,7 @@ function StageDetailCard({ stage, onClose, isPinned }) {
             <span className="text-slate-500 dark:text-slate-400">
               {["block", "redact", "rewrite"].includes(stage.action) ? "Rules applied:" : "Rules matched:"}
             </span>{" "}
-            <span className="text-sky-600 dark:text-sky-300">{stage.matched_rules.join(", ")}</span>
+            <span className="text-sky-600 dark:text-sky-300">{stageDecidingRules(stage).join(", ")}</span>
           </div>
         )}
         {stage.docs_in !== undefined && (
