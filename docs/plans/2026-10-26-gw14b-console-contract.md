@@ -1,6 +1,6 @@
 # GW14b — Console and control-plane contract v2
 
-**Status:** local half in progress. Inventory, schema, chat projection, audit emit, the dev Redis writer, the Scan Detail ingest, the admin-route ledger, and the FirewallConfig field map are in the tree. A console save does not yet publish a plan into the running gateway. The source marker is not. Standing note: runbook §0-A.4, "Local status (2026-10-26)".
+**Status:** local half in progress. Inventory, schema, chat projection, audit emit, the dev Redis writer, the Scan Detail ingest, the admin-route ledger, the FirewallConfig field map, and the v2 source split are in the tree. A console save does not yet publish a plan into the running gateway. Standing note: runbook §0-A.4, "Local status (2026-10-26)".
 **Card:** GW14b (C3), runbook §0-A.4.
 **Source of truth:** `docs/AI_MESH_MASTER_RUNBOOK_v3_BACKEND_REWRITE.md` §0-A.4, §10.2.1, §10.2.3.
 **Depends on:** GW05, GW13, GW14 (local halves closed).
@@ -244,7 +244,13 @@ What landed:
 
 ### 5.7 Shadow stream (runbook bullet 7)
 
-GW21 depends on GW14b. This card does not run the shadow. It reserves the seam: v2 records are already a different stream from v1 telemetry (`amf_audit_record` versus the v1 Redis telemetry stream). The adapter in §5.3 writes v2 events with an explicit source marker so a later side-by-side view does not have to guess, and so dashboards do not add the two stores together. No dual-write into the v1 stream.
+GW21 depends on GW14b. This card does not run the shadow. v2 records already use a different Redis stream (`{rv2}:audit:<org>`) from the v1 list `telemetry:events`, and the ingest does not write that list.
+
+What landed:
+
+- Every stored v2 row keeps `metadata.source = gateway_v2`.
+- SOC totals, module charts for 1.1, and the hourly fact builder exclude those rows. The SOC response adds `gateway_v2.total_threats` beside the v1 total. The firewall page shows that count as "gateway v2, not added". The threat feed still lists the rows, so Scan Detail can open them.
+- Adding the two totals is the double-count this split exists to prevent.
 
 ---
 
@@ -295,6 +301,6 @@ A local half of this card is L14b-2 fixtures, L14b-4, the §5.4 browser chats, a
 4. HTTP projection and headers. Split the OpenAI snapshot. Browser: allow, redact, block, flag.
 5. Admin-route ledger. No success stubs. Done: 26 rows, all `retire`, CI on caller drift.
 6. Field-by-field FirewallConfig map and save-time rejection. Applied-version report with two in-process replicas. Publish from a console save into the running gateway is not done.
-7. Source marker so v2 rows cannot be summed with v1. Stop.
+7. Source marker so v2 rows cannot be summed with v1. Done: SOC and 1.1 charts exclude `source=gateway_v2` and report that count separately. The feed still lists the rows.
 
 No v1 file changes, so no `PIPELINE-xxxx` changelog entry. A control-plane adapter is not a `gateway_v2` layer violation if it reads JSON only.

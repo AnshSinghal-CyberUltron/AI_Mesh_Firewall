@@ -611,6 +611,7 @@ Done locally:
 - Admin-route ledger at `docs/plans/evidence/2026-10-26-gw14b/admin-ledger/routes.json`, checked by `python -m lint.check_console_inventory`. All 26 rows are `retire`: breaker, kill-switch validate, RAG, vector, db-test, bedrock-test, MCP discover/call/oauth, record-event, and the instance heartbeat. No success stubs. MCP, RAG, vector, and `/v1/responses` stay the existing HTTP 501 until GW15, GW17, or GW18. The control proxies still forward the breaker and the connectivity tests to the v1 gateway.
 - FirewallConfig field map for all 65 serializer fields (`core/firewall_v2_map.py`), wired into the config PUT. A changed value the plan compiler cannot represent is rejected with that field's name. Mapped fields are the chat rules the compiler accepts (PII, jailbreak, prompt injection, toxicity, and the output PII, credential, and exfil actions). An unchanged unsupported value still saves, and turning an unsupported feature off is allowed.
 - Applied-version report (`gateway_v2/plan/applied.py`). Two in-process replicas report the published plan version. A replica past the freshness bound, with the store unreachable, reports no version.
+- Stored source marker `gateway_v2`. SOC totals and module 1.1 charts exclude those rows and return `gateway_v2.total_threats` separately. The threat feed still lists them. The ingest does not write the v1 `telemetry:events` list.
 
 Landed in code, and visible on Scan Detail after the control rebuild:
 
@@ -622,9 +623,8 @@ Landed in code, and visible on Scan Detail after the control rebuild:
 
 Not done:
 
-- A stream still saves the input decision only. Scan Detail shows a stored row when the control process that contains the ingest is the one running.
 - A console save does not publish a plan into the running gateway-v2 process. That process still compiles `dev/plan.example.json`.
-- A stored source marker and a separate v2 stream for the GW21 shadow. Not started.
+- A stream still saves the input decision only.
 
 Live gates still open: L14b-1, L14b-2 on a saved Scan Detail row, L14b-3, L14b-5, L14b-6.
 
