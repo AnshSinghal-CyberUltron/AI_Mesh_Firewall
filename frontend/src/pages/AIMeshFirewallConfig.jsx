@@ -24,6 +24,18 @@ import { AuditComplianceCard } from "../components/firewall/AuditComplianceCard"
 import { ImpactPanel } from "../components/firewall/ImpactPanel";
 import { VectorDbCard, ZeroShieldTestCard } from "../components/firewall/VectorDbCard";
 
+function planSaveMessage(note) {
+  if (!note || note.status === "published") {
+    const count = Number(note?.rules);
+    const rules = Number.isFinite(count) ? ` ${count} rules.` : "";
+    return `Configuration saved. Gateway v2 loads these rules on the next chat.${rules}`;
+  }
+  if (note.status === "skipped") {
+    return "Configuration saved. This org is not mapped to the dev gateway, so chat still uses the plan file.";
+  }
+  return "Configuration saved. The gateway plan was not written, so chat still uses its current plan.";
+}
+
 export function AIMeshFirewallConfig() {
   const { fetchWithAuth } = useAuth();
   const [config, dispatch] = useReducer(configReducer, DEFAULT_FIREWALL_CONFIG);
@@ -33,6 +45,7 @@ export function AIMeshFirewallConfig() {
   const [showContent, setShowContent] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [saveMessage, setSaveMessage] = useState("");
   const [error, setError] = useState(null);
 
   const isDirty = useMemo(() => !configsEqual(config, savedSnapshot), [config, savedSnapshot]);
@@ -109,6 +122,7 @@ export function AIMeshFirewallConfig() {
         dispatch({ type: "REPLACE", payload: mapped });
         setSavedSnapshot(mapped);
         setConnectedModels(Array.isArray(data.connected_models) ? data.connected_models : []);
+        setSaveMessage(planSaveMessage(data.gateway_v2_plan));
         setSaveSuccess(true);
         setTimeout(() => setSaveSuccess(false), 4000);
       } else if (res.status === 400) {
@@ -158,6 +172,7 @@ export function AIMeshFirewallConfig() {
         isDirty={isDirty}
         isSaving={isSaving}
         saveSuccess={saveSuccess}
+        saveMessage={saveMessage}
         error={error}
         updatedAt={config.updatedAt}
         onReset={handleReset}

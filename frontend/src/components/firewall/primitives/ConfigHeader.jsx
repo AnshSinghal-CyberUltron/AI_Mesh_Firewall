@@ -19,6 +19,7 @@ export function ConfigHeader({
   isDirty,
   isSaving,
   saveSuccess,
+  saveMessage,
   error,
   updatedAt,
   onReset,
@@ -72,7 +73,7 @@ export function ConfigHeader({
           >
             <div className="flex items-center gap-2 rounded-lg border border-success/30 bg-success/10 px-3 py-2 text-sm text-success">
               <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden />
-              Configuration saved successfully — active via Redis hot-reload
+              {saveMessage || "Configuration saved successfully — active via Redis hot-reload"}
             </div>
           </motion.div>
         )}
