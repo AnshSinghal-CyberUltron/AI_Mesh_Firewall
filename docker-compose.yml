@@ -510,7 +510,7 @@ services:
       # `lease` = real GW06 QuotaComponent + BudgetLease over redis; `unlimited` = NOT enforced.
       AMF_DEV_BUDGET: ${AMF_DEV_BUDGET:-lease}
       AMF_DEV_REDIS_URL: redis://redis:6379/0
-      AMF_DEV_BUDGET_POOL_REQUESTS: ${AMF_DEV_BUDGET_POOL_REQUESTS:-100000}
+      AMF_DEV_BUDGET_POOL_TOKENS: ${AMF_DEV_BUDGET_POOL_TOKENS:-100000000}
       AMF_DEV_RATE_PER_S: ${AMF_DEV_RATE_PER_S:-50}
       AMF_DEV_BURST: ${AMF_DEV_BURST:-100}
       AMF_DEV_LEASE_TTL_S: ${AMF_DEV_LEASE_TTL_S:-60}
