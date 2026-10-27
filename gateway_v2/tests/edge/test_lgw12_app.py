@@ -15,7 +15,7 @@ Asserts the serving-skin plumbing:
 * the chat route (``POST /v1/chat/completions``) is registered and routes to the streaming
   handler — a scripted :class:`StubProviderClient` drives a ``200`` ``text/event-stream``
   response ending in the terminal ``[DONE]`` marker (R2.1/R2.2).
-* a registered-for-later placeholder (``POST /v1/responses``) → the declared ``501``
+* a registered-for-later placeholder (``POST /v1/mcp``) → the declared ``501``
   ``not_implemented`` via the ``Error_Envelope``, NOT a raw ``404`` (R2.3/R3.4).
 * an unknown route → the declared ``501`` ``not_implemented``, not a raw framework error
   (R2.3/R3.4).
@@ -347,9 +347,9 @@ def _assert_not_implemented(transport: _Transport) -> None:
 
 
 def test_registered_placeholder_returns_501_not_404() -> None:
-    """``POST /v1/responses`` renders the declared ``501`` placeholder via the envelope (R2.3)."""
+    """``POST /v1/mcp`` renders the declared ``501`` placeholder via the envelope (R2.3)."""
     app = _build()
-    transport = _drive_http(app, "POST", "/v1/responses")
+    transport = _drive_http(app, "POST", "/v1/mcp")
     _assert_not_implemented(transport)
 
 

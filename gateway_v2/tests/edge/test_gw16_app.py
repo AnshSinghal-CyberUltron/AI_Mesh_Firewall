@@ -35,7 +35,7 @@ empty-suffix ``/v1/models/`` falling through to 501 ``not_implemented`` (NOT ret
 route → 501, an unmapped value-code → the generic 500 ``gateway_error`` body with NO raw leak
 (R9.2), and the ``build_app`` boot wiring (R11.3): one :class:`MiscRoute` built with every dep,
 accepting a :class:`StubProviderClient` + ``empty_catalog_source`` with no real socket/backend, the
-three misc routes resolving while responses/mcp/rag/vector stay ``not_implemented``.
+three misc routes and responses resolving while mcp/rag/vector stay ``not_implemented``.
 """
 
 from __future__ import annotations
@@ -90,11 +90,11 @@ _RESOLVED_ROUTES: tuple[tuple[str, str], ...] = (
     ("POST", "/v1/moderations"),
     ("POST", "/v1/chat/completions"),
     ("POST", "/v1/completions"),
+    ("POST", "/v1/responses"),
 )
 
 #: Surfaces that stay declared ``not_implemented`` placeholders (R1.3 / R11.3).
 _PLACEHOLDER_ROUTES: tuple[tuple[str, str], ...] = (
-    ("POST", "/v1/responses"),
     ("POST", "/v1/mcp"),
     ("POST", "/v1/rag/query"),
     ("POST", "/v1/vector/query"),
@@ -635,11 +635,11 @@ def test_build_app_wires_one_misc_route_with_every_dep_no_socket() -> None:
 # Feature: chat-surface-gw16-misc
 # Validates: Requirements 11.3
 def test_build_app_misc_routes_resolve_while_deferred_surfaces_stay_not_implemented() -> None:
-    """The misc routes resolve live while responses/mcp/rag/vector stay 501 (R11.3).
+    """The misc routes resolve live while mcp/rag/vector stay 501 (R11.3).
 
-    Over the REAL boot app (no scripted swap): the three misc surfaces + the two chat surfaces
-    resolve to a live handler (they never render the ``not_implemented`` placeholder), while the
-    deferred responses/mcp/rag/vector surfaces stay the declared 501 ``not_implemented``.
+    Over the REAL boot app (no scripted swap): the three misc surfaces, the two chat surfaces, and
+    ``/v1/responses`` resolve to a live handler (they never render the ``not_implemented``
+    placeholder), while the deferred mcp/rag/vector surfaces stay the declared 501.
     """
     app = _build_app(_CountingProvider())
     for method, path in _RESOLVED_ROUTES:

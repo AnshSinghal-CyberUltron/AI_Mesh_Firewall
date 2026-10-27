@@ -14,8 +14,9 @@ pipeline behaviour (that is covered by the lifecycle / stream / output property 
 * the two chat/completions routes — ``("POST", "/v1/chat/completions")`` and
   ``("POST", "/v1/completions")`` — RESOLVE to the live chat handler (they do NOT render the
   declared ``not_implemented`` placeholder).
-* the GW16/17/18 placeholders (``("POST", "/v1/responses")`` and siblings) stay registered as the
-  declared ``501 not_implemented`` via the single ``Error_Envelope`` (not a raw 404).
+* the GW17/18 placeholders (``("POST", "/v1/mcp")`` and siblings) stay registered as the declared
+  ``501 not_implemented`` via the single ``Error_Envelope`` (not a raw 404). ``/v1/responses`` is
+  live since the GW15 close-out and must not render that placeholder.
 
 The route table is assembled through the same :func:`gateway_v2.edge.routes.build_routes` the boot
 path calls, so introspecting the table it returns from the boot-built :class:`ChatRoute` observes
@@ -55,9 +56,8 @@ _CHAT_ROUTES: tuple[tuple[str, str], ...] = (
 
 #: GW17/18 surfaces still registered as declared not-implemented placeholders (R2.3). GW16
 #: replaced the three misc placeholders (embeddings / models / moderations) with real handlers,
-#: so they are no longer in this set.
+#: and the GW15 close-out replaced ``/v1/responses``, so they are no longer in this set.
 _PLACEHOLDER_ROUTES: tuple[tuple[str, str], ...] = (
-    ("POST", "/v1/responses"),
     ("POST", "/v1/mcp"),
     ("POST", "/v1/rag/query"),
     ("POST", "/v1/vector/query"),
@@ -379,10 +379,11 @@ def test_placeholder_routes_stay_not_implemented() -> None:
         )
 
 
-def test_responses_placeholder_is_not_implemented_not_404() -> None:
-    """``POST /v1/responses`` (the GW16/17/18 surface) stays ``501 not_implemented`` (R2.3)."""
+def test_responses_route_is_live_not_the_placeholder() -> None:
+    """``POST /v1/responses`` resolves to the live handler (GW15 close-out), not 501 or 404."""
     app = _build_app(_stub_provider())
     transport = _drive_http(app, "POST", "/v1/responses")
-    assert _is_not_implemented(transport), (
-        f"/v1/responses did not render the declared 501 not_implemented: {transport.status()}"
+    assert not _is_not_implemented(transport), (
+        f"/v1/responses still renders the not_implemented placeholder: {transport.status()}"
     )
+    assert transport.status() != 404, "/v1/responses rendered a raw routing miss"

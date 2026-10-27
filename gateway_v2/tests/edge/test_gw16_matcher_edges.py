@@ -27,7 +27,7 @@ THIS file pins the matcher's remaining edge cases with targeted examples:
 * **Boot wiring smoke.** ``build_app`` wires the misc route so ``POST /v1/embeddings``,
   ``POST /v1/moderations``, ``GET /v1/models``, and ``GET /v1/models/{id}`` are all reachable
   through the serving skin — each registered path dispatches to the intended surface, while the
-  deferred responses/mcp/rag/vector surfaces stay the declared 501 ``not_implemented``.
+  deferred mcp/rag/vector surfaces stay the declared 501 ``not_implemented``.
 
 The matcher cannot inject a scripted catalog through ``build_app`` (``_build_misc_route``
 hardcodes ``catalog=empty_catalog_source``), so to make the extracted id OBSERVABLE the boot app
@@ -594,14 +594,14 @@ def test_build_app_wires_all_misc_paths_reachable_through_the_skin() -> None:
 
 
 def test_build_app_deferred_surfaces_stay_not_implemented() -> None:
-    """responses/mcp/rag/vector stay the declared 501 ``not_implemented`` after boot (R1.3/R11.3).
+    """mcp/rag/vector stay the declared 501 ``not_implemented`` after boot (R1.3/R11.3).
 
     The matcher must not accidentally resolve a deferred surface through the prefix table or an
-    unknown-path fall-through to anything but the declared placeholder.
+    unknown-path fall-through to anything but the declared placeholder. ``/v1/responses`` is live
+    since the GW15 close-out, so it is not in this set.
     """
     app = _build_app(_CountingProvider())
     for method, path in (
-        ("POST", "/v1/responses"),
         ("POST", "/v1/mcp"),
         ("POST", "/v1/rag/query"),
         ("POST", "/v1/vector/query"),

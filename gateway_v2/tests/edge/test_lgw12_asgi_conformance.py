@@ -485,8 +485,13 @@ def test_error_frame_path_blocks_mid_stream() -> None:
     frames = transport.body_frames()
     assert frames, "no SSE frames recorded for the error-frame path"
 
-    # The last SSE frame is the declared Error_Frame — a parseable {"error": {...}} object.
-    terminal = frames[-1]
+    # The last non-trace SSE frame is the declared Error_Frame — a parseable {"error": {...}}
+    # object. GW14b §5.4: a NON-CONTENT ``amf.trace`` frame may follow it (it is trace, not
+    # content, so it does not break the no-content-after-error contract asserted below).
+    trace_prefix = b"event: amf.trace\n"
+    non_trace = [frame for frame in frames if not frame.startswith(trace_prefix)]
+    assert non_trace, f"only trace frames were recorded: {frames!r}"
+    terminal = non_trace[-1]
     assert terminal != DONE_MARKER, (
         f"a blocked stream must NOT end with [DONE]; frames={frames!r}"
     )
@@ -508,17 +513,20 @@ def test_error_frame_path_blocks_mid_stream() -> None:
     assert b"4111111111111111" not in joined, (
         "the blocked error frame's raw secret bytes leaked onto the wire"
     )
-    # No content frame follows the terminal Error_Frame (no splice after the cut).
+    # No content frame follows the terminal Error_Frame (no splice after the cut). Only the
+    # non-content trace frame may follow it, and it carries no ``choices`` content key.
     content_after: list[bytes] = []
     saw_error = False
     for frame in frames:
         if frame is terminal:
             saw_error = True
             continue
-        if saw_error and frame != DONE_MARKER:
+        if not saw_error:
+            continue
+        if frame == DONE_MARKER or not frame.startswith(trace_prefix) or b'"choices"' in frame:
             content_after.append(frame)
     assert not content_after, (
-        f"content frames emitted AFTER the terminal Error_Frame: {content_after!r}"
+        f"content or [DONE] frames emitted AFTER the terminal Error_Frame: {content_after!r}"
     )
 
 

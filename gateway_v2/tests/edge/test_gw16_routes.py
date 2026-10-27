@@ -15,9 +15,9 @@ These assert the *wiring* the task spells out:
   with no ``__self__`` — the precise, fast structural discriminator.
 * the ``prefix`` table binds exactly ``("GET", "/v1/models/")`` to
   :meth:`ModelsSurface.handle_retrieve` (R1.2) — same bound-method structural check.
-* the four remaining placeholders (``/v1/responses``, ``/v1/mcp``, ``/v1/rag/query``,
-  ``/v1/vector/query``) resolve to the declared ``501 not_implemented`` ``Error_Envelope`` when
-  driven over the in-process ASGI transport (R1.3).
+* the three remaining placeholders (``/v1/mcp``, ``/v1/rag/query``, ``/v1/vector/query``)
+  resolve to the declared ``501 not_implemented`` ``Error_Envelope`` when driven over the
+  in-process ASGI transport (R1.3).
 * both returned tables are function-local ``Mapping`` values (``build_routes`` returns a 2-tuple
   of Mappings — the no-module-mutable AST gate enforces the deeper property).
 
@@ -52,10 +52,9 @@ _MISC_EXACT: tuple[tuple[tuple[str, str], type], ...] = (
 #: The single prefix key GW16 binds to ``ModelsSurface.handle_retrieve`` (R1.2, Decision 2).
 _MODELS_PREFIX_KEY: tuple[str, str] = ("GET", "/v1/models/")
 
-#: The four surfaces that stay declared ``not_implemented`` placeholders (R1.3). The three misc
-#: keys are gone from this set — GW16 replaced them with the real handlers.
+#: The three surfaces that stay declared ``not_implemented`` placeholders (R1.3). The three misc
+#: keys are gone from this set (GW16), and so is ``/v1/responses`` (GW15 close-out).
 _PLACEHOLDER_ROUTES: tuple[tuple[str, str], ...] = (
-    ("POST", "/v1/responses"),
     ("POST", "/v1/mcp"),
     ("POST", "/v1/rag/query"),
     ("POST", "/v1/vector/query"),
@@ -143,11 +142,13 @@ def test_prefix_table_binds_models_retrieve() -> None:
     The retrieve path (``/v1/models/{id}``) cannot be a static exact key, so GW16 (Decision 2)
     puts it in a SECOND function-local table. The bound handler's ``__self__`` is a
     :class:`ModelsSurface` and its ``__func__`` is ``ModelsSurface.handle_retrieve`` (NOT
-    ``handle_list``), and the prefix table holds exactly this one key.
+    ``handle_list``). Besides this key the prefix table holds only the two GW15
+    ``/v1/responses/{id}`` id routes.
     """
     _exact, prefix = _routes()
-    assert set(prefix) == {_MODELS_PREFIX_KEY}, (
-        f"prefix table keys are {set(prefix)!r}, expected exactly {{{_MODELS_PREFIX_KEY!r}}}"
+    expected = {_MODELS_PREFIX_KEY, ("GET", "/v1/responses/"), ("DELETE", "/v1/responses/")}
+    assert set(prefix) == expected, (
+        f"prefix table keys are {set(prefix)!r}, expected exactly {expected!r}"
     )
     handler = prefix[_MODELS_PREFIX_KEY]
     bound_self = getattr(handler, "__self__", None)
@@ -161,14 +162,14 @@ def test_prefix_table_binds_models_retrieve() -> None:
 
 
 # --------------------------------------------------------------------------- #
-# R1.3 — the four remaining placeholders stay declared not_implemented.
+# R1.3 — the three remaining placeholders stay declared not_implemented.
 # --------------------------------------------------------------------------- #
 
 
 def test_remaining_placeholders_stay_not_implemented() -> None:
-    """responses / mcp / rag / vector still resolve to the declared ``501 not_implemented`` (R1.3).
+    """mcp / rag / vector still resolve to the declared ``501 not_implemented`` (R1.3).
 
-    These four surfaces are registered-for-later: driving each over the in-process ASGI transport
+    These three surfaces are registered-for-later: driving each over the in-process ASGI transport
     renders the ``not_implemented`` ``Error_Envelope`` (HTTP 501), never a raw 404-with-detail that
     would leak which surfaces exist.
     """
@@ -192,7 +193,7 @@ def test_misc_keys_absent_from_placeholder_set() -> None:
 
     The complement of R1.1/R1.3: none of the three misc exact handlers is a ``_placeholder``
     closure. A ``_placeholder`` handler has no ``__self__``; the real surface bound methods all do,
-    so the misc keys and the four remaining placeholders are disjoint by handler shape.
+    so the misc keys and the three remaining placeholders are disjoint by handler shape.
     """
     exact, _prefix = _routes()
     for key, _surface_cls in _MISC_EXACT:
