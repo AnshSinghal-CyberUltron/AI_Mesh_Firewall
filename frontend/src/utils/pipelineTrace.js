@@ -11,6 +11,7 @@ export const ACTION_BADGE = {
   monitor: "monitored",
   reroute: "rerouted",
   skip: "skipped",
+  unavailable: "unavailable",
   allow: "allowed",
 };
 

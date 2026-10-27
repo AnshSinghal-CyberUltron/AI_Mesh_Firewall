@@ -496,6 +496,41 @@ test("recordedRiskScore keeps a stored number and rejects a severity word", () =
   assert.equal(recordedRiskScore(undefined), null);
 });
 
+test("an unavailable stage stays unavailable and a missing stage is not filled in", () => {
+  const stages = [
+    { name: "auth", action: "allow", ran: true },
+    { name: "rate_limit", action: "allow", ran: true },
+    { name: "input_scan", action: "unavailable", ran: true, deciding_rule: "dev-guard-unavailable" },
+    { name: "model_routing", action: "skip", ran: false },
+    { name: "model_output", action: "skip", ran: false },
+  ];
+  assert.equal(
+    honestStageAction({ name: "input_scan", action: "unavailable", ran: true, latency_ms: 0 }),
+    "unavailable",
+  );
+  assert.equal(
+    honestStageAction({ name: "model_output", action: "skip", ran: false, latency_ms: 0 }),
+    "skip",
+  );
+  const nodes = buildHonestTraceStages(stages, "allow", {});
+  const ids = nodes.map((node) => node.id);
+  assert.deepEqual(
+    ids.filter((id) => id !== "final_output"),
+    ["auth", "rate_limit", "input_scan", "model_routing", "model_output"],
+  );
+  assert.equal(nodes.find((node) => node.id === "input_scan").badge, "unavailable");
+  assert.ok(nodes.find((node) => node.id === "input_scan").tags.includes("rule: dev-guard-unavailable"));
+  assert.equal(nodes.find((node) => node.id === "input_scan").metrics, undefined);
+  assert.equal(ids.includes("kill_switch"), false);
+  assert.equal(ids.includes("policy"), false);
+  assert.equal(ids.includes("model_input"), false);
+  assert.equal(ids.includes("output_guardrail"), false);
+  const verdict = deriveStageVerdict(stages);
+  assert.equal(verdict.score, 0);
+  assert.equal(resolveLatencyBreakdown({ pipelineTrace: { stages, plan_version: "1.1.unavailable" } }), null);
+  assert.equal(recordedRiskScore(undefined), null);
+});
+
 test("buildHonestTraceStages tags the stored deciding rule", () => {
   const nodes = buildHonestTraceStages(
     [{ name: "input_scan", action: "redact", ran: true, deciding_rule: "dev-pii-redact" }],

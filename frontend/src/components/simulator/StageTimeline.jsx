@@ -49,6 +49,13 @@ const ACTION_THEME = {
     icon: "text-zinc-500",
     highlight: "ring-zinc-400/40 shadow-zinc-500/20",
   },
+  unavailable: {
+    card: "border-orange-200 bg-orange-50/80 text-orange-950 dark:border-orange-500/30 dark:bg-orange-500/10 dark:text-orange-50",
+    badge: "bg-orange-500/15 text-orange-800 dark:text-orange-200",
+    dot: "bg-orange-500",
+    icon: "text-orange-500",
+    highlight: "ring-orange-400/40 shadow-orange-500/20",
+  },
   needs_model: {
     card: "border-violet-200 bg-violet-50/80 text-violet-900 dark:border-violet-500/30 dark:bg-violet-500/10 dark:text-violet-50",
     badge: "bg-violet-500/15 text-violet-700 dark:text-violet-300",
@@ -80,6 +87,7 @@ const ACTION_ICONS = {
   flag: AlertTriangle,
   redact: Shield,
   skip: Clock,
+  unavailable: AlertTriangle,
   needs_model: AlertTriangle,
   reroute: ArrowRightLeft,
   error: AlertTriangle,
