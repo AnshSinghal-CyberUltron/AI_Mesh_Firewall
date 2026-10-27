@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import math
 import os
 import warnings
@@ -191,6 +192,28 @@ gateway v1's `ResponseStore` default (`gateway/ai_mesh_gateway/responses_store.p
 `_DEFAULT_TTL_SECONDS`) is 30 days. The Responses adapter reads this through
 `ResourceContract.response_store_ttl_s`. The number lives only in this module.
 """
+
+
+@dataclass(frozen=True, slots=True)
+class McpBounds:
+    """GW17 MCP bounds, v1 parity (`gateway/ai_mesh_gateway/mcp_proxy.py:294-368`,
+    `mcp_sandbox_client.py:28-57`, `mcp_proxy.py:624-638`). Read through `mcp_bounds()`."""
+
+    body_bytes: int = 10 * 1024 * 1024
+    argument_bytes: int = 512 * 1024
+    json_depth: int = 200
+    argument_nodes: int = 50_000
+    result_bytes: int = 10 * 1024 * 1024
+    result_nodes: int = 1_000_000
+    result_blocks: int = 10_000
+    broker_init_timeout_s: float = 120.0
+    broker_method_timeout_s: float = 60.0
+    broker_retry_max: int = 5
+    broker_backoff_base_s: float = 0.5
+    broker_backoff_cap_s: float = 8.0
+    registry_ttl_s: float = 120.0
+    registry_timeout_s: float = 10.0
+    registry_poll_s: float = 2.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -534,6 +557,20 @@ class ResourceContract:
         this method and do not spell the duration themselves.
         """
         return _RESPONSE_STORE_TTL_S
+
+    def mcp_bounds(self) -> McpBounds:
+        """GW17: the MCP bounds. The body bound is never looser than chat's pre-check.
+
+        Fails closed with `CapacityUnavailable` if any bound is not positive.
+        """
+        defaults = McpBounds()
+        bounds = dataclasses.replace(
+            defaults, body_bytes=min(defaults.body_bytes, self.max_request_bytes())
+        )
+        for name in bounds.__slots__:
+            if getattr(bounds, name) <= 0:
+                raise CapacityUnavailable(f"mcp bound {name} below minimum to serve")
+        return bounds
 
     def max_request_tokens(self) -> int:
         """Group F: upper bound on the token cost of any request that passes parsing (R2.15).
