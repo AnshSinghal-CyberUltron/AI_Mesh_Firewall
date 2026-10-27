@@ -1,0 +1,108 @@
+{
+  "card": "GW17",
+  "surface": "POST /v1/mcp/{server_slug}",
+  "rule": "A v1 hardening behaviour may be dropped only through a pre-registered ledger entry.",
+  "replay_report": {
+    "status": "deferred",
+    "gate": "LGW17-7",
+    "reason": "The C2 replay against v1 MCP traffic needs the recorded corpus and the cloud lane; not claimed locally."
+  },
+  "entries": [
+    {
+      "id": "GW17-D01",
+      "topic": "detection default",
+      "v1": "MCP scanning is off unless scan controls or flags are set on the server",
+      "v2": "the org's firewall plan applies, the same rules as chat",
+      "direction": "stricter",
+      "proof": "tests/edge/test_mcp_properties.py::test_property_one_rule_enables_mcp_with_no_second_flag"
+    },
+    {
+      "id": "GW17-D02",
+      "topic": "Tier-2 enablement",
+      "v1": "two separate flags enable Tier-2 scanning",
+      "v2": "no flags; the plan decides",
+      "direction": "simpler",
+      "proof": "tests/edge/test_mcp_properties.py::test_property_one_rule_enables_mcp_with_no_second_flag"
+    },
+    {
+      "id": "GW17-D03",
+      "topic": "unmaskable redact",
+      "v1": "a redact that cannot mask never escalates to block",
+      "v2": "withholds: input_unmaskable on input, scan_failure on output",
+      "direction": "stricter",
+      "proof": "tests/edge/test_mcp_route.py"
+    },
+    {
+      "id": "GW17-D04",
+      "topic": "scanner failure",
+      "v1": "Tier-2 can fail open",
+      "v2": "fails closed",
+      "direction": "stricter",
+      "proof": "tests/edge/test_mcp_route.py"
+    },
+    {
+      "id": "GW17-D05",
+      "topic": "registry failure",
+      "v1": "the enabled-tools lookup fails open",
+      "v2": "mcp_registry_unavailable (HTTP 503); errors are never cached",
+      "direction": "stricter",
+      "proof": "tests/edge/test_mcp_route.py::test_registry_down_is_unavailable; tests/edge/test_mcp_registry.py"
+    },
+    {
+      "id": "GW17-D06",
+      "topic": "authenticated upstream",
+      "v1": "forwards a gateway OAuth token or a control-stored token",
+      "v2": "refused with mcp_upstream_auth_unsupported (HTTP 403); operator decision auth_servers=refuse",
+      "direction": "capability dropped",
+      "proof": "tests/edge/test_mcp_route.py::test_gates_refuse_with_zero_broker_calls[keyed]"
+    },
+    {
+      "id": "GW17-D07",
+      "topic": "gateway SSRF on the sandbox path",
+      "v1": "no gateway-side check on the sandbox path",
+      "v2": "dispatch/url_guard.check_remote before every remote call; stdio commands checked against an allow-list",
+      "direction": "stricter",
+      "proof": "ssrf-matrix.txt"
+    },
+    {
+      "id": "GW17-D08",
+      "topic": "allow-internal override",
+      "v1": "any non-empty agent flag disables the check; the gateway allowlist skips the metadata check",
+      "v2": "exact hosts only (AMF_DEV_MCP_ALLOW_INTERNAL_HOSTS); metadata, loopback and link-local are always refused",
+      "direction": "stricter",
+      "proof": "ssrf-matrix.txt"
+    },
+    {
+      "id": "GW17-D09",
+      "topic": "split secret across content blocks",
+      "v1": "block posture withholds; other postures mask every block",
+      "v2": "detected through join runs; redact applies per leaf; a span that straddles two leaves withholds",
+      "direction": "different, fail-closed on straddle",
+      "proof": "description-and-split-secret-cells.txt"
+    },
+    {
+      "id": "GW17-D10",
+      "topic": "org source",
+      "v1": "org from the URL, checked against the key",
+      "v2": "org from the key only; mapped to control's slug through AMF_DEV_MCP_ORG_MAP",
+      "direction": "stricter",
+      "proof": "tests/edge/test_mcp_properties.py::test_property_two_orgs_never_cross"
+    },
+    {
+      "id": "GW17-D11",
+      "topic": "routes",
+      "v1": "org route, REST tools routes, ext-proxy, internal tools call, OAuth flow",
+      "v2": "POST /v1/mcp/{server_slug} only; the other MCP rows stay retire in the GW14b admin ledger",
+      "direction": "surface reduced",
+      "proof": "docs/plans/evidence/2026-10-26-gw14b/admin-ledger/routes.json"
+    },
+    {
+      "id": "GW17-D12",
+      "topic": "per-key tool allow-list and per-key call cap",
+      "v1": "mcp_allowed_tools and mcp_max_tool_calls enforced per API key",
+      "v2": "not implemented; the per-server enabled-tools set and org admission/budget apply",
+      "direction": "capability dropped (gap, recorded for the runbook)",
+      "proof": "none; recorded gap"
+    }
+  ]
+}

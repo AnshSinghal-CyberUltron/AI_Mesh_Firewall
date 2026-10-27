@@ -1,0 +1,20 @@
+== initialize HTTP 200
+{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2025-06-18","capabilities":{"tools":{},"resources":{},"prompts":{},"completions":{}},"serverInfo":{"name":"zeroshield-gateway","version":"2"}}}
+== ping HTTP 200
+{"jsonrpc":"2.0","id":2,"result":{}}
+== notification HTTP 202
+
+== parse_error HTTP 400
+{"jsonrpc":"2.0","id":null,"error":{"code":-32700,"message":"The request body is not valid JSON.","data":{"code":"mcp_parse_error","request_id":null}}}
+== batch_refused HTTP 400
+{"jsonrpc":"2.0","id":null,"error":{"code":-32600,"message":"The request is not a single valid JSON-RPC 2.0 message.","data":{"code":"mcp_invalid_request","request_id":null}}}
+== unknown_method HTTP 200
+{"jsonrpc":"2.0","id":3,"error":{"code":-32601,"message":"That MCP method is not supported.","data":{"code":"mcp_method_not_found","request_id":null}}}
+== bare_path HTTP 404
+{"jsonrpc":"2.0","id":null,"error":{"code":-32000,"message":"No active MCP server with that name exists for this organization.","data":{"code":"mcp_server_not_found","request_id":null}}}
+== bad_key HTTP 503
+{"jsonrpc":"2.0","id":5,"error":{"code":-32000,"message":"The stream was terminated by the gateway.","data":{"code":"shared_state_unavailable","request_id":null}}}
+== unknown_server HTTP 404
+{"jsonrpc":"2.0","id":6,"error":{"code":-32000,"message":"No active MCP server with that name exists for this organization.","data":{"code":"mcp_server_not_found","request_id":"zs-dev-org-43bffed57878629bb03b8a13"}},"source":"gateway_v2","zeroshield":{"action":"allow","request_id":"zs-dev-org-43bffed57878629bb03b8a13"},"pipeline_trace":{"final_action":"allow","plan_version":"1.2.58a8e05fc1ae3d5b","stages":[{"name":"auth","action":"allow","ran":true},{"name":"rate_limit","action":"allow","ran":true},{"name":"input_scan","action":"skip","ran":false},{"name":"tool_call","action":"skip","ran":false},{"name":"output_guardrail","action":"skip","ran":false}]}}
+== bad_slug HTTP 404
+{"jsonrpc":"2.0","id":7,"error":{"code":-32000,"message":"No active MCP server with that name exists for this organization.","data":{"code":"mcp_server_not_found","request_id":null}}}
