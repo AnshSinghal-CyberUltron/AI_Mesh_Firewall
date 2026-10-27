@@ -116,6 +116,10 @@ class CardinalityDirectory:
             # Overflow_Counter and return; the dropped observation is counted, never silent.
             self._overflow_total += 1
 
+    def magnitude(self, tenant_key: str) -> int:
+        """The tenant's current magnitude, 0 when it holds no slot. Never allocates a slot."""
+        return self._slots.get(tenant_key, 0)
+
     def top_k_series(self) -> list[tuple[str, int]]:
         """The ``_k`` highest-magnitude tenants, deterministic tie-break ``(mag desc, key asc)``.
 

@@ -50,9 +50,9 @@ state).
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
+from typing import Protocol
 
 from gateway_v2.admit.metrics import AdmissionMetrics, QuotaMetrics
-from gateway_v2.audit import metrics as audit_metrics
 from gateway_v2.edge import render
 from gateway_v2.edge.cardinality import CardinalityDirectory
 from gateway_v2.edge.counters import PostureCounters, RejectionCounters
@@ -68,12 +68,11 @@ from gateway_v2.edge.series_count import series_count as _series_count
 from gateway_v2.edge.windowed import DEFAULT_BOUNDS, WindowedBusyGauge, WindowedHistogram
 from gateway_v2.runtime.holdback_metrics import HoldbackMetrics
 from gateway_v2.runtime.resources import ResourceContract
-from gateway_v2.runtime.state_metrics import StateMetrics
 from gateway_v2.runtime.stream_metrics import PerRequestExports
-from state_control.metrics import RehydrationMetrics
 
 __all__ = (
     "ADDON_HISTOGRAM_BASE",
+    "FlatProducer",
     "PRODUCER_READ_FAILURES_SERIES",
     "TENANT_OTHER_SERIES",
     "TENANT_PREFIX",
@@ -126,6 +125,15 @@ supplied — no GPU source fabricated, no synthesized reading. A non-``_total`` 
 types it ``gauge`` (R11.2).
 """
 
+class FlatProducer(Protocol):
+    """A flat producer: an audit, state or re-hydration reading, or a live adapter over one.
+
+    Read on every scrape, so a live adapter reports the current value, not the boot value.
+    """
+
+    def series(self) -> Mapping[str, float]: ...
+
+
 def _tenant_series_name(tenant_key: str) -> str:
     """``amf_tenant_magnitude{tenant="<key>"}`` — the ONE bounded per-tenant label (R3.1).
 
@@ -177,9 +185,9 @@ class Publisher:
         *,
         admission: AdmissionMetrics,
         quota: QuotaMetrics,
-        audit: audit_metrics.AuditMetrics,
-        rehydration: RehydrationMetrics,
-        state: StateMetrics,
+        audit: FlatProducer,
+        rehydration: FlatProducer,
+        state: FlatProducer,
         stream: PerRequestExports,
         holdback: HoldbackMetrics,
         directory: CardinalityDirectory,
@@ -223,9 +231,9 @@ class Publisher:
         *,
         admission: AdmissionMetrics,
         quota: QuotaMetrics,
-        audit: audit_metrics.AuditMetrics,
-        rehydration: RehydrationMetrics,
-        state: StateMetrics,
+        audit: FlatProducer,
+        rehydration: FlatProducer,
+        state: FlatProducer,
         stream: PerRequestExports,
         holdback: HoldbackMetrics,
         event_log: StructuredEventLog,
@@ -622,6 +630,13 @@ class Publisher:
         """
         try:
             self._directory.observe(tenant_key, magnitude)
+        except Exception:  # noqa: BLE001 — never turn a serving request into a 500 (R2.2).
+            return
+
+    def count_tenant(self, tenant_key: str) -> None:
+        """Count one more request for ``tenant_key`` in the directory. NEVER raises (R2-10)."""
+        try:
+            self._directory.observe(tenant_key, self._directory.magnitude(tenant_key) + 1)
         except Exception:  # noqa: BLE001 — never turn a serving request into a 500 (R2.2).
             return
 
