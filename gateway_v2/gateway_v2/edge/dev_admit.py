@@ -84,6 +84,7 @@ def build_dev_admission(
     audit_drain_rate_per_s: float,
     audit_bytes_per_record: int,
     drain_window_s: float,
+    metrics: AdmissionMetrics | None = None,
 ) -> tuple[AdmissionController, AdmissionBounds]:
     """Build the real GW19 controller from ``derive_bounds`` (q_safe DECLARED via env).
 
@@ -109,7 +110,7 @@ def build_dev_admission(
         params=CoDelParams(),
         rng=random.Random(),
         supervisor=WorkerSupervisor(),
-        metrics=AdmissionMetrics(),
+        metrics=metrics if metrics is not None else AdmissionMetrics(),
         drain_window_s=drain_window_s,
         clock=time.monotonic,
     )
@@ -165,7 +166,9 @@ class DevLeaseBudget:
     ``lifespan.shutdown``; refills run off the request path via the instance task set.
     """
 
-    __slots__ = ("_client", "_generation", "_lease", "_org_id", "_quota", "_settings", "_tasks")
+    __slots__ = (
+        "_client", "_generation", "_lease", "_metrics", "_org_id", "_quota", "_settings", "_tasks",
+    )
 
     def __init__(
         self,
@@ -185,6 +188,7 @@ class DevLeaseBudget:
         self._generation = 0
         self._tasks: set[asyncio.Future[None]] = set()
         metrics = QuotaMetrics()
+        self._metrics = metrics
         self._lease = BudgetLease(
             client,
             LeaseConfig(
@@ -208,6 +212,11 @@ class DevLeaseBudget:
     @property
     def lease(self) -> BudgetLease:
         return self._lease
+
+    @property
+    def metrics(self) -> QuotaMetrics:
+        """The quota producer the lease and the component both write to."""
+        return self._metrics
 
     def _current_generation(self) -> int:
         return self._generation

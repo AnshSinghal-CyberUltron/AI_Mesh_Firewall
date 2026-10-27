@@ -17,7 +17,7 @@ import redis.asyncio as redis_asyncio
 
 from gateway_v2.audit.budget import StreamBudget
 from gateway_v2.audit.record import AuditRecord
-from gateway_v2.audit.sink import AuditSink
+from gateway_v2.audit.sink import AuditSink, SinkCounters
 from gateway_v2.domain.audit_knobs import knobs_from_env
 from gateway_v2.runtime.store_audit import ValkeyAuditStore
 
@@ -36,6 +36,10 @@ class DevAudit:
     def emit(self, record: AuditRecord) -> bool:
         """Enqueue one record. A full queue returns False and the chat still succeeds."""
         return self._sink.emit(record)
+
+    def counters(self) -> SinkCounters:
+        """The sink's live counters, read on each ``/metrics`` scrape."""
+        return self._sink.counters()
 
     async def startup(self) -> None:
         """Start the writer. A second call does not start a second task."""

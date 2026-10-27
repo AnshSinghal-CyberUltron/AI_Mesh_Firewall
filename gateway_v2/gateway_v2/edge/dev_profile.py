@@ -43,6 +43,7 @@ from dataclasses import dataclass
 from urllib.parse import urlsplit, urlunsplit
 
 from gateway_v2.admit.admission import AdmissionController
+from gateway_v2.admit.metrics import AdmissionMetrics, QuotaMetrics
 from gateway_v2.admit.quota import AdmissionBounds
 from gateway_v2.detect.holdback import scan as holdback_scan
 from gateway_v2.domain.plan import ExecutionPlan, Phase
@@ -68,12 +69,15 @@ from gateway_v2.edge.dev_components import (
     phase_resolver_factory,
 )
 from gateway_v2.edge.dev_mcp import build_dev_mcp
+from gateway_v2.edge.dev_metrics import build_dev_publisher
 from gateway_v2.edge.dev_plan_feed import DevPlanFeed, DevPlanWatch
 from gateway_v2.edge.dev_upstream import DevUpstreamProvider
 from gateway_v2.edge.responses_store import ValkeyResponseStore
 from gateway_v2.runtime.errors import CapacityUnavailable, CapacityUnset
+from gateway_v2.runtime.holdback_metrics import HoldbackMetrics
 from gateway_v2.runtime.resources import ResourceContract
 from gateway_v2.runtime.serving_config import load_serving_config
+from gateway_v2.runtime.stream_metrics import PerRequestExports
 
 __all__ = (
     "DEV_PROFILE_ENV",
@@ -206,7 +210,7 @@ def _redact_url(url: str) -> str:
 
 
 def _admission(
-    cfg: DevProfileConfig, contract: ResourceContract
+    cfg: DevProfileConfig, contract: ResourceContract, metrics: AdmissionMetrics
 ) -> tuple[AdmissionController, AdmissionBounds]:
     """Build the bare GW19 controller + its ``derive_bounds`` result (for the boot log)."""
     serving_cfg, _logs = load_serving_config()
@@ -217,6 +221,7 @@ def _admission(
             audit_drain_rate_per_s=cfg.audit_drain_rate_per_s,
             audit_bytes_per_record=cfg.audit_bytes_per_record,
             drain_window_s=serving_cfg.drain_s,
+            metrics=metrics,
         )
     except (CapacityUnset, CapacityUnavailable) as exc:
         raise DevProfileError(f"admission bounds refused: {exc}") from exc
@@ -297,7 +302,8 @@ def build_dev_dependencies(
     cfg = load_dev_config(env)
     plan = load_dev_plan(cfg.plan_path, org_id=cfg.org_id, compiled_at=time.time())
     feed = DevPlanFeed(plan, now=time.monotonic())
-    admission, bounds = _admission(cfg, contract)
+    admission_metrics = AdmissionMetrics()
+    admission, bounds = _admission(cfg, contract, admission_metrics)
     budget, budget_log = _budget(cfg, contract)
     budget_s = contract.guard_wait_budget_s()
     input_detector = DeterministicFindings(phase=Phase.INPUT, budget_s=budget_s)
@@ -345,6 +351,19 @@ def build_dev_dependencies(
     mcp, mcp_note = build_dev_mcp(env, contract, redis_client=mcp_redis, clock=time.monotonic)
     if mcp is not None:
         deps["mcp"] = mcp
+    exports, holdback = PerRequestExports(), HoldbackMetrics()
+    runtime = deps.get("audit_runtime")
+    publisher, metrics_note = build_dev_publisher(
+        contract=contract,
+        admission=admission_metrics,
+        quota=budget.metrics if isinstance(budget, DevLeaseBudget) else QuotaMetrics(),
+        audit=runtime if isinstance(runtime, DevAudit) else None,
+        exports=exports,
+        holdback=holdback,
+    )
+    deps.update(
+        metrics_registry=publisher, observer=publisher, exports=exports, holdback_metrics=holdback
+    )
     snapshot_log, resolver_log = _plan_log(cfg, plan)
     logs: tuple[str, ...] = (
         "boot: DEV PROFILE ACTIVE (AMF_DEV_PROFILE=1) -- local development wiring, NOT FOR "
@@ -352,7 +371,7 @@ def build_dev_dependencies(
         provider_log,
         "boot: scanner -> detect.holdback.scan (shipped default scan protocol)",
         resolver_log,
-        "boot: metrics_registry -> minimal exposition registry (GW14d Publisher not wired)",
+        metrics_note,
         "boot: input_detector -> GW09 deterministic PII+secret+injection detectors "
         "(DEV PROFILE wiring of the real detectors)",
         "boot: error_scanner -> GW09 deterministic detectors (DEV PROFILE: non-streaming output "
