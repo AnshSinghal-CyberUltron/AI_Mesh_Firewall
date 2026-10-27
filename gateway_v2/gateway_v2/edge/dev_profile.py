@@ -67,6 +67,7 @@ from gateway_v2.edge.dev_components import (
     parse_model_ids,
     phase_resolver_factory,
 )
+from gateway_v2.edge.dev_mcp import build_dev_mcp
 from gateway_v2.edge.dev_plan_feed import DevPlanFeed, DevPlanWatch
 from gateway_v2.edge.dev_upstream import DevUpstreamProvider
 from gateway_v2.edge.responses_store import ValkeyResponseStore
@@ -338,6 +339,12 @@ def build_dev_dependencies(
     )
     plan_note = _attach_plan_watch(deps, cfg=cfg, feed=feed, contract=contract)
     store_note = _attach_response_store(deps, cfg=cfg, contract=contract)
+    mcp_redis = None
+    if cfg.lease is not None:
+        mcp_redis = _redis_client(cfg.lease.redis_url, timeout_s=contract.cancellation_bound_s())
+    mcp, mcp_note = build_dev_mcp(env, contract, redis_client=mcp_redis, clock=time.monotonic)
+    if mcp is not None:
+        deps["mcp"] = mcp
     snapshot_log, resolver_log = _plan_log(cfg, plan)
     logs: tuple[str, ...] = (
         "boot: DEV PROFILE ACTIVE (AMF_DEV_PROFILE=1) -- local development wiring, NOT FOR "
@@ -366,6 +373,7 @@ def build_dev_dependencies(
         audit_note,
         plan_note,
         store_note,
+        mcp_note,
         f"boot: catalog -> StaticCatalogSource {list(cfg.models)} (DEV PROFILE: AMF_DEV_MODELS)",
     )
     return deps, logs
