@@ -139,7 +139,7 @@ services:
       BACKEND_PUBLIC_URL: ${BACKEND_PUBLIC_URL:-http://127.0.0.1:8180}
       # Phase 1 Fx-2b: server-to-server admin proxy (control -> gateway)
       GATEWAY_URL: http://gateway:8300
-      GATEWAY_INTERNAL_API_KEY: ${GATEWAY_INTERNAL_API_KEY:-}
+      GATEWAY_INTERNAL_API_KEY: ${GATEWAY_INTERNAL_API_KEY:-dev-gateway-internal-key-change-me}
       TIER2_PROVIDER: ${TIER2_PROVIDER:-bedrock}
       GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
       VERTEX_TIER2_MODEL: ${VERTEX_TIER2_MODEL:-gemini-3.5-flash-lite}
@@ -518,6 +518,12 @@ services:
       AMF_DEV_LEASE_TTL_S: ${AMF_DEV_LEASE_TTL_S:-60}
       AMF_DEV_PROVIDER_URL: ${AMF_DEV_PROVIDER_URL:-}
       AMF_DEV_PROVIDER_API_KEY: ${AMF_DEV_PROVIDER_API_KEY:-}
+      # GW17 MCP: all five set wires POST /v1/mcp/{server}; none set keeps it the 501.
+      AMF_DEV_MCP_BROKER_URL: ${AMF_DEV_MCP_BROKER_URL:-http://mcp-broker:8311}
+      AMF_DEV_MCP_BROKER_KEY: ${MCP_BROKER_INTERNAL_KEY:-dev-mcp-broker-key-change-me}
+      AMF_DEV_CONTROL_URL: ${AMF_DEV_CONTROL_URL:-http://control:8000}
+      AMF_DEV_GATEWAY_INTERNAL_KEY: ${GATEWAY_INTERNAL_API_KEY:-dev-gateway-internal-key-change-me}
+      AMF_DEV_MCP_ORG_MAP: ${AMF_DEV_MCP_ORG_MAP:-dev-org=zeroshield}
     depends_on:
       redis: { condition: service_healthy }
     healthcheck:
