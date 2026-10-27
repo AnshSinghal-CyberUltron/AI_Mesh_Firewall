@@ -84,6 +84,7 @@ from gateway_v2.edge.openai_misc import (
     ModerationsSurface,
 )
 from gateway_v2.edge.openai_misc_models import ModelsSurface
+from gateway_v2.edge.outcome_metrics import OutcomeObserver
 from gateway_v2.edge.phase_resolvers import PhaseResolverFactory, resolver_for
 from gateway_v2.edge.request_holds import RequestHolds
 from gateway_v2.edge.responses_store import ResponseStore
@@ -291,16 +292,16 @@ class ChatRoute:
     #: findings on the streaming path); a boot that wires the GW07/GW08/GW09 detector passes it
     #: here, above ``detect``, so ``egress`` still never names ``detect``.
     output_detector: ErrorFrameScanner | None = None
-    #: OPTIONAL phase-aware output-resolver factory (Group E, Property 11). When set (not
-    #: ``None``), the input scan and the output guard select their resolver through
-    #: :func:`~gateway_v2.edge.phase_resolvers.resolver_for` bound to the request's pinned plan
-    #: AND the phase (``Phase.INPUT`` / ``Phase.OUTPUT``), so a phase-specific rule is enforced
-    #: only on the phase it is scoped to. ``None`` (the default) keeps today's single-``resolver``
-    #: behaviour byte-identical — the default boot and every route built without a factory decide
-    #: exactly as before (Preservation 3.5 / 3.13).
+    #: OPTIONAL phase-aware resolver factory (Group E, Property 11): when set, input and output
+    #: resolve through ``resolver_for`` bound to the pinned plan and the phase. ``None`` keeps the
+    #: single ``resolver`` byte-identical (Preservation 3.5 / 3.13).
     phase_resolvers: PhaseResolverFactory | None = None
     #: Bounded audit enqueue. ``None`` leaves the response unchanged and writes no row.
     audit: Callable[[AuditRecord], bool] | None = None
+    #: The ``/metrics`` request counters (tenant, rejection, posture). ``None`` counts nothing.
+    observer: OutcomeObserver | None = None
+    #: ONE holdback producer for every stream, so ``/metrics`` can read what the streams recorded.
+    holdback_metrics: HoldbackMetrics = HoldbackMetrics()
 
     async def handle(self, scope: ASGIScope, receive: ASGIReceive, send: ASGISend) -> None:
         """Serve a chat/completions request end-to-end (R2.2, R7, R10, §10.4).
@@ -353,7 +354,7 @@ class ChatRoute:
             )
         finally:
             refused = None if outcome is None else outcome.refuse_code
-            emit_chat_audit(self.audit, holds, refused)
+            emit_chat_audit(self.audit, holds, refused, observer=self.observer)
             holds.release(self.admission, self.quota)
 
     async def _render_refusal(
@@ -724,7 +725,7 @@ class ChatRoute:
             scanner=self.scanner,
             token_index=TokenIndex(),
             cfg=self.cfg,
-            metrics=HoldbackMetrics(),
+            metrics=self.holdback_metrics,
             window=max_pattern_length(),
             # Group E: the streaming output guard resolves through the pinned plan at
             # ``Phase.OUTPUT`` so a phase-aware route folds only its output-scoped rules; an

@@ -73,6 +73,7 @@ from gateway_v2.edge.identity_resolver import (
 )
 from gateway_v2.edge.mcp_deps import McpDeps
 from gateway_v2.edge.openai_misc import MiscRoute
+from gateway_v2.edge.outcome_metrics import OutcomeObserver
 from gateway_v2.edge.phase_resolvers import PhaseResolverFactory
 from gateway_v2.edge.readiness import (
     METRICS_DIRECTORY_REASON,
@@ -96,6 +97,7 @@ from gateway_v2.egress.output_guard import OutputResolver
 from gateway_v2.egress.stream import ScanProtocol
 from gateway_v2.plan.snapshot import ReplicaSnapshot
 from gateway_v2.runtime.holdback_config import HoldbackConfig, load_holdback_config
+from gateway_v2.runtime.holdback_metrics import HoldbackMetrics
 from gateway_v2.runtime.resources import ResourceContract
 from gateway_v2.runtime.state_stamp import StampView
 from gateway_v2.runtime.stream_metrics import PerRequestExports
@@ -246,6 +248,8 @@ def build_app(
     audit: Callable[[AuditRecord], bool] | None = None,
     response_store: ResponseStore | None = None,
     mcp: McpDeps | None = None,
+    observer: OutcomeObserver | None = None,
+    holdback_metrics: HoldbackMetrics | None = None,
 ) -> ASGIApplication:
     """Assemble the raw-ASGI serving skin (R2.1).
 
@@ -267,22 +271,16 @@ def build_app(
     (a phase-scoped rule enforced only on its phase). ``None`` default = today's single-``resolver``
     behaviour (Preservation 3.5 / 3.13).
 
-    **GW14d metrics-directory readiness wiring (task 12.1, R1.8 / R10.3).** The ``metrics_registry``
-    stays an INJECTED parameter; :func:`_resolve_readiness` COMPOSES the ``/readyz`` metrics gate
-    without re-constructing anything (state gated FIRST, then the directory when the registry is a
-    :class:`MetricsDirectorySource`; a plain registry falls back UNCHANGED). The ``/metrics``
-    offload (R1.8) and the ``/readyz`` 503 render path (R10.3) are UNCHANGED.
+    **GW14d (task 12.1).** ``/readyz`` gates state first, then the metrics directory when the
+    registry is a :class:`MetricsDirectorySource`. ``observer`` is the request-path counter sink.
 
     **GW16 misc-surface wiring (task 7.1/8.1/10.1).** The single :class:`MiscRoute` is built via
     :func:`_build_misc_route`; ``build_routes`` returns the exact + prefix tables held on the skin.
     ``catalog`` feeds the Models surface (default :data:`empty_catalog_source`, R7.4).
     ``response_store`` backs ``/v1/responses``; ``mcp`` wires ``/v1/mcp`` (``None``: 501).
 
-    **GW15 §10.4 chat-surface wiring (task 6.1, R11 / R14).** The single :class:`ChatRoute` is built
-    ONCE here via :func:`_build_chat_route`, every §10.4 lifecycle dep constructed at boot and
-    threaded onto the frozen route (nothing request-scoped, so two-tenant isolation holds, R13);
-    each unwired dep falls back to its fail-closed default (see :func:`_build_chat_route`). Every
-    GW15 dep is INJECTED so production passes in the real deps while a test injects fakes.
+    **GW15 §10.4 (task 6.1).** The single :class:`ChatRoute` is built ONCE via
+    :func:`_build_chat_route`; each unwired dep falls back to its fail-closed default.
 
     ``build_app`` stays pure assembly (no store read, no task spawned); the serving bounds derive
     from the injected ``ResourceContract`` / ``HoldbackConfig`` with no capacity literal in
@@ -313,6 +311,8 @@ def build_app(
         output_detector=output_detector,
         phase_resolvers=phase_resolvers,
         audit=audit,
+        observer=observer,
+        holdback_metrics=holdback_metrics,
     )
     misc = _build_misc_route(
         contract=contract,
@@ -327,6 +327,7 @@ def build_app(
         exports=exports,
         catalog=catalog,
         phase_resolvers=phase_resolvers,
+        observer=observer,
     )
     exact, prefix = build_routes(chat, misc, response_store, mcp)
     probe = _resolve_readiness(
@@ -364,6 +365,8 @@ def _build_chat_route(
     output_detector: ErrorFrameScanner | None = None,
     phase_resolvers: PhaseResolverFactory | None = None,
     audit: Callable[[AuditRecord], bool] | None = None,
+    observer: OutcomeObserver | None = None,
+    holdback_metrics: HoldbackMetrics | None = None,
 ) -> ChatRoute:
     """Construct the single chat route. Unwired deps use their fail-closed defaults.
 
@@ -399,6 +402,8 @@ def _build_chat_route(
         output_detector=output_detector,
         phase_resolvers=phase_resolvers,
         audit=audit,
+        observer=observer,
+        holdback_metrics=holdback_metrics if holdback_metrics is not None else HoldbackMetrics(),
     )
 
 
@@ -416,6 +421,7 @@ def _build_misc_route(
     exports: PerRequestExports | None,
     catalog: CatalogSource | None,
     phase_resolvers: PhaseResolverFactory | None = None,
+    observer: OutcomeObserver | None = None,
 ) -> MiscRoute:
     """Construct the single :class:`MiscRoute` for the three GW16 misc surfaces (task 7.1/8.1).
 
@@ -448,6 +454,7 @@ def _build_misc_route(
         input_detector=input_detector if input_detector is not None else no_findings_detector,
         exports=request_exports,
         phase_resolvers=phase_resolvers,
+        observer=observer,
     )
 
 

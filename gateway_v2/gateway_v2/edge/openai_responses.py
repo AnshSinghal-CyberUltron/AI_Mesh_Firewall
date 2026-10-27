@@ -141,7 +141,7 @@ class ResponsesRoute:
             await self._non_stream(send, prepared, req, outcome, holds)
         finally:
             refused = None if outcome is None else outcome.refuse_code
-            emit_chat_audit(self.chat.audit, holds, refused)
+            emit_chat_audit(self.chat.audit, holds, refused, observer=self.chat.observer)
             holds.release(self.chat.admission, self.chat.quota)
 
     async def handle_get(self, scope: ASGIScope, receive: ASGIReceive, send: ASGISend) -> None:

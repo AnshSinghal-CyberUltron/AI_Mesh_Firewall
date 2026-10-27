@@ -94,6 +94,7 @@ from gateway_v2.edge.identity_resolver import (
     fail_closed_resolver,
 )
 from gateway_v2.edge.input_enforcement import REFUSE_INPUT_SCAN_FAILURE
+from gateway_v2.edge.outcome_metrics import OutcomeObserver, observe_refusal, observe_tenant
 from gateway_v2.edge.phase_resolvers import PhaseResolverFactory, resolver_for
 from gateway_v2.edge.request_holds import RequestHolds
 from gateway_v2.edge.wire.openai_misc import (
@@ -190,28 +191,19 @@ class MiscRoute:
     catalog: CatalogSource
 
     # --- Fail-closed security defaults. ---
-    #: The GW05b/c identity resolver (R5.1): ``None`` / stale / unavailable ⇒ the lifecycle refuses
-    #: with the declared ``shared_state_unavailable`` code (zero provider calls). Defaults to the
-    #: shipped fail-closed :data:`fail_closed_resolver` (every request refuses) until boot wires the
-    #: real resolver.
+    #: The GW05b/c identity resolver (R5.1): ``None`` / stale / unavailable ⇒ refuse
+    #: ``shared_state_unavailable``. Defaults to the fail-closed :data:`fail_closed_resolver`.
     identity: IdentityResolver = fail_closed_resolver
     #: The GW19 admission decider (embeddings only, R5.3): a ``ShedVerdict`` ⇒ refuse with
     #: ``overload_shed`` + retry (zero provider calls). Defaults to the shipped fail-closed
     #: :data:`fail_closed_admission` (always sheds) until boot wires the real controller.
     admission: AdmissionDecider = fail_closed_admission
     #: The GW06 budget decider (embeddings only, R5.4): a ``BudgetVerdict`` ⇒ refuse with
-    #: ``budget_unavailable`` (zero provider calls, local lease, no request-path store read).
-    #: Defaults to the shipped fail-closed :data:`fail_closed_budget` until boot wires the real
-    #: quota component.
+    #: ``budget_unavailable``. Defaults to the fail-closed :data:`fail_closed_budget`.
     quota: BudgetDecider = fail_closed_budget
-    #: The served plan-snapshot source (embeddings only). Embeddings is a billable, enforced
-    #: upstream call, so — exactly as ``ChatRoute`` does for ``Surface.CHAT`` — it resolves the
-    #: tenant's :class:`~gateway_v2.domain.plan.ExecutionPlan` for ``Surface.EMBEDDINGS`` on this
-    #: served snapshot (the ONE request-path shared-state round trip) to drive ``router.select``
-    #: and output enforcement (design Data Models, "``Surface`` for embeddings"). Defaults to the
-    #: shipped fail-closed :func:`unresolved_snapshot_source` (every org reads ``PlanUnknownTenant``
-    #: ⇒ the embeddings lifecycle refuses ``plan_unavailable``) until boot wires the real served
-    #: snapshot. Moderations + Models do NOT read it (they resolve no plan surface).
+    #: The served plan-snapshot source (embeddings only): the ONE request-path round trip that
+    #: resolves the ``Surface.EMBEDDINGS`` plan, as ``ChatRoute`` does for chat. Defaults to the
+    #: fail-closed :func:`unresolved_snapshot_source` (refuses ``plan_unavailable``).
     snapshot_source: Callable[[], ReplicaSnapshot] = unresolved_snapshot_source
 
     # --- Stateless non-security defaults (the ChatRoute field-default pattern). ---
@@ -234,15 +226,14 @@ class MiscRoute:
     #: The byte-verified request shaper (``dispatch``): embeddings packs ``UpstreamRequest.body``
     #: from the parsed request. Shipped stateless default :class:`Transform`.
     transform: Transform = Transform()
-    #: The GW14d per-request telemetry producer (R10). Every terminal misc outcome populates its
-    #: dimensions through this ONE producer content-free; ``fail_open_total`` is pinned at zero and
-    #: no raw request/response content ever reaches an export field. Defaults to a fresh
-    #: :class:`PerRequestExports` (the ``ChatRoute.exports`` field-default pattern) until the boot
-    #: card injects the process producer.
+    #: The GW14d per-request telemetry producer (R10), content-free, ``fail_open_total`` pinned
+    #: at zero. Defaults to a fresh :class:`PerRequestExports` until boot injects the process one.
     exports: PerRequestExports = PerRequestExports()
     #: OPTIONAL phase-aware output-resolver factory (Group E, Property 11), parity with
     #: ``ChatRoute.phase_resolvers``; ``None`` keeps today's single-``resolver`` behaviour (3.5).
     phase_resolvers: PhaseResolverFactory | None = None
+    #: The ``/metrics`` request counters, parity with ``ChatRoute.observer``. ``None``: none.
+    observer: OutcomeObserver | None = None
 
 
 # --------------------------------------------------------------------------- #
@@ -286,17 +277,21 @@ class _VectorTransportError(Exception):
 # otherwise close — the discipline ``ChatRoute.handle`` uses.
 
 
-async def _refuse(send: ASGISend, code: str) -> None:
+async def _refuse(
+    send: ASGISend, code: str, observer: OutcomeObserver | None = None, *, decided: bool = False
+) -> None:
     """Render a declared refuse-code through the single ``Error_Envelope`` (R9).
 
     Every refusal leaves through ``emit_response(send, errors.render_http(code))`` — the
     one value-code → HTTP path — so an unmapped code still renders the declared generic
     error rather than a raw framework 500 (R9.2). Touches no exports counter;
     ``fail_open_total`` is never incremented (R10.3) and the withholding sites record a
-    content-free withholding on the exports producer BEFORE refusing.
+    content-free withholding on the exports producer BEFORE refusing. ``observer`` counts it.
     """
     from gateway_v2.edge import errors
     from gateway_v2.edge.routes import emit_response
+
+    observe_refusal(observer, code, decided=decided)
 
     await emit_response(send, errors.render_http(code))
 
@@ -410,21 +405,22 @@ class EmbeddingsSurface:
             try:
                 req = self._deps.parser.parse_embeddings(body)
             except MalformedRequest as exc:
-                await _refuse(send, exc.code)
+                await _refuse(send, exc.code, self._deps.observer)
                 return
 
             # Phase 2 — resolve Tenant_Identity (GW05b/c). None / stale / unavailable ⇒ refuse,
             # zero provider calls (R5.1 / R5.2).
             identity = await self._deps.identity.resolve(scope)
             if identity is None:
-                await _refuse(send, REFUSE_IDENTITY_UNRESOLVED)
+                await _refuse(send, REFUSE_IDENTITY_UNRESOLVED, self._deps.observer)
                 return
+            observe_tenant(self._deps.observer, identity.org_id)
 
             # Phase 3 — the ONE shared-state round trip: resolve the plan for Surface.EMBEDDINGS
             # (parity with ChatSurface). An unresolved plan ⇒ refuse, zero provider calls (R5.6).
             plan = self._resolve_plan(identity)
             if plan is None:
-                await _refuse(send, REFUSE_PLAN_UNAVAILABLE)
+                await _refuse(send, REFUSE_PLAN_UNAVAILABLE, self._deps.observer)
                 return
 
             request_id = self._request_id(identity, req)
@@ -433,7 +429,7 @@ class EmbeddingsSurface:
             # (R5.3); an Admitted records the slot on ``holds`` so it is ``complete``-d on exit.
             admit_refuse = await self._admit(identity, req, request_id)
             if admit_refuse is not None:
-                await _refuse(send, admit_refuse)
+                await _refuse(send, admit_refuse, self._deps.observer)
                 return
             holds.admitted(request_id)
 
@@ -444,15 +440,13 @@ class EmbeddingsSurface:
             cost = self._estimated_cost(req)
             budget_refuse = await self._budget(req, cost, request_id)
             if budget_refuse is not None:
-                await _refuse(send, budget_refuse)
+                await _refuse(send, budget_refuse, self._deps.observer)
                 return
             holds.spent(cost, request_id)
 
             # Phase 6 — INPUT scan + the BLOCK short-circuit, the LAST phase before provider
-            # contact. The scan resolves at Phase.INPUT via ``resolver_for`` (Group E); a BLOCK
-            # (C22) ⇒ input_blocked and a detector/resolver raise ⇒ scan_failure (Property 4).
-            # Either way the request returns here, so a blocked request makes ZERO provider
-            # calls (R4). The per-item ``observe_detector_invocation`` metric rides ``on_invoke``.
+            # contact, resolved at Phase.INPUT (Group E): BLOCK ⇒ input_blocked, a raise ⇒
+            # scan_failure; either way ZERO provider calls (R4). ``on_invoke`` counts each item.
             scan = scan_embeddings(
                 req,
                 detector=self._deps.input_detector,
@@ -464,7 +458,9 @@ class EmbeddingsSurface:
                 # content-free (R10.3); a BLOCK renders its declared input_blocked code.
                 if scan.refuse_code == REFUSE_INPUT_SCAN_FAILURE:
                     self._deps.exports.record_withheld()
-                await _refuse(send, scan.refuse_code or REFUSE_INPUT_SCAN_FAILURE)
+                code = scan.refuse_code or REFUSE_INPUT_SCAN_FAILURE
+                decided = scan.decision is not None
+                await _refuse(send, code, self._deps.observer, decided=decided)
                 return
 
             # Stage the VERIFIED / REDACTED upstream bytes (Group A leak-fix): a BLOCK →
@@ -479,7 +475,7 @@ class EmbeddingsSurface:
                 # A staged-request refusal (input_blocked / input_unmaskable) is a withholding,
                 # recorded content-free before the refuse render — still zero provider calls.
                 self._deps.exports.record_withheld()
-                await _refuse(send, staged)
+                await _refuse(send, staged, self._deps.observer, decided=True)
                 return
 
             # All phases passed: open the provider on the STAGED request, read the vectors,
@@ -590,7 +586,7 @@ class EmbeddingsSurface:
             vectors = await self._drain_vectors(upstream, holds)
         except Exception:  # noqa: BLE001 — fail closed: an unreadable provider body withholds.
             self._deps.exports.record_withheld()
-            await _refuse(send, scan_failure_code)
+            await _refuse(send, scan_failure_code, self._deps.observer, decided=True)
             return
         await _emit_json(send, self._deps.renderer.embeddings_body(req, vectors))
 
@@ -747,22 +743,23 @@ class ModerationsSurface:
         try:
             req = self._deps.parser.parse_moderations(body)
         except MalformedRequest as exc:
-            await _refuse(send, exc.code)
+            await _refuse(send, exc.code, self._deps.observer)
             return
 
         # Phase 2 — resolve Tenant_Identity. None / stale / unavailable ⇒ refuse (R8.1 / R5.1);
         # moderations opens no provider either way (R8.5).
         identity = await self._deps.identity.resolve(scope)
         if identity is None:
-            await _refuse(send, REFUSE_IDENTITY_UNRESOLVED)
+            await _refuse(send, REFUSE_IDENTITY_UNRESOLVED, self._deps.observer)
             return
+        observe_tenant(self._deps.observer, identity.org_id)
 
         # Phase 3 — scan-only. A RAISING scan is a withholding (fail closed): NO result body
         # is emitted (never a flagged:false unscanned result — R8.6).
         result = self._scan(req)
         if result is None:
             self._deps.exports.record_withheld()
-            await _refuse(send, REFUSE_INPUT_SCAN_FAILURE)
+            await _refuse(send, REFUSE_INPUT_SCAN_FAILURE, self._deps.observer)
             return
 
         # Render ONE 200 moderation body; ``model`` is optional on the request so echo it or

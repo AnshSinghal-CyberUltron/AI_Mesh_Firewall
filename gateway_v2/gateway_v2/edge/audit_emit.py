@@ -27,6 +27,7 @@ from gateway_v2.domain.decision import Decision, DecisionRecord, Disposition
 from gateway_v2.domain.posture import OVERLOAD_SHED
 from gateway_v2.edge import errors
 from gateway_v2.edge.console_projection import console_from_holds
+from gateway_v2.edge.outcome_metrics import OutcomeObserver, observe_outcome
 from gateway_v2.edge.request_holds import RequestHolds
 
 _CHAT_ROUTE = "chat"
@@ -61,12 +62,15 @@ def emit_chat_audit(
     route: str = _CHAT_ROUTE,
     console: Mapping[str, object] | None = None,
     detail: Mapping[str, str] | None = None,
+    observer: OutcomeObserver | None = None,
 ) -> None:
     """Enqueue the records this request can honestly name. Never raises.
 
     ``route`` names the surface. A non-chat surface passes its own ``console`` (chat's
     is built here) and may add plain-string ``detail`` such as the MCP server and tool.
+    ``observer`` counts the same outcome for ``/metrics``, whether or not audit is wired.
     """
+    observe_outcome(observer, holds, refuse_code)
     if emit is None or not holds.request_id or not holds.org_id:
         return
     try:

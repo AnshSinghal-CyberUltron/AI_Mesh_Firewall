@@ -146,6 +146,7 @@ class McpRoute:
                 route="mcp",
                 console=ctx.console(),
                 detail={"server_slug": ctx.server_slug, "tool": ctx.tool},
+                observer=self.chat.observer,
             )
             ctx.holds.release(self.chat.admission, self.chat.quota)
 

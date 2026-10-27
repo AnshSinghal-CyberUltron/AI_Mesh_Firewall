@@ -53,6 +53,7 @@ from __future__ import annotations
 
 from gateway_v2.edge.asgi_sse import ASGIReceive, ASGIScope, ASGISend
 from gateway_v2.edge.openai_misc import MiscRoute, _emit_json, _refuse
+from gateway_v2.edge.outcome_metrics import observe_tenant
 from gateway_v2.edge.wire.openai_misc import MODEL_NOT_FOUND
 
 __all__ = ("ModelsSurface",)
@@ -107,8 +108,9 @@ class ModelsSurface:
 
         identity = await self._deps.identity.resolve(scope)
         if identity is None:
-            await _refuse(send, REFUSE_IDENTITY_UNRESOLVED)
+            await _refuse(send, REFUSE_IDENTITY_UNRESOLVED, self._deps.observer)
             return
+        observe_tenant(self._deps.observer, identity.org_id)
 
         models = self._deps.catalog.catalog_for(identity)
         await _emit_json(send, self._deps.renderer.models_list_body(models))
@@ -133,22 +135,23 @@ class ModelsSurface:
 
         identity = await self._deps.identity.resolve(scope)
         if identity is None:
-            await _refuse(send, REFUSE_IDENTITY_UNRESOLVED)
+            await _refuse(send, REFUSE_IDENTITY_UNRESOLVED, self._deps.observer)
             return
+        observe_tenant(self._deps.observer, identity.org_id)
 
         model_id = self._extract_model_id(scope)
         if not model_id:
             # Defensive: the prefix matcher (task 8.1) only routes a non-empty trailing segment
             # here, but an empty id must never list the whole catalog by accident — fail closed to
             # a not-found rather than a surprise list.
-            await _refuse(send, MODEL_NOT_FOUND)
+            await _refuse(send, MODEL_NOT_FOUND, self._deps.observer)
             return
 
         for model in self._deps.catalog.catalog_for(identity):
             if model.id == model_id:
                 await _emit_json(send, self._deps.renderer.model_retrieve_body(model))
                 return
-        await _refuse(send, MODEL_NOT_FOUND)
+        await _refuse(send, MODEL_NOT_FOUND, self._deps.observer)
 
     @staticmethod
     def _extract_model_id(scope: ASGIScope) -> str:
