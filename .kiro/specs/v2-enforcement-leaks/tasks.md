@@ -959,7 +959,7 @@ Each edge sub-step must keep `check_sizes` green. `edge/openai_chat.py` must end
   - If none was made, record "no v1 change" in the plan doc.
   - _Requirements: 3.14_
 
-- [-] 40. Final records commit (no push)
+- [x] 40. Final records commit (no push)
   - Stage the plan doc, evidence, runbook and AGENTS.md by name. Commit: `docs(v2-leaks): record v2-enforcement-leaks local closure; GW15 input-REDACT residual closed`.
   - Run `git log --oneline` to confirm the bottom-up commit sequence: tests → domain → runtime → dispatch → resolve → detect → admit → edge → dev → docs.
   - **Never run `git push`.** Tell the user the branch is ready for them to push.
