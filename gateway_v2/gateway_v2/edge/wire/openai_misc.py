@@ -353,11 +353,11 @@ _FOLDED_MISC_CHANNELS = frozenset(
 )
 
 #: The ``TextChannel.sdk_path`` prefixes that mark a NON-misc channel: ``messages[]``
-#: is GW15's chat-input scope and ``choices[]`` is the output scope. A misc channel
-#: is one whose ``sdk_path`` begins with neither -- i.e. ``input`` / ``input[]``.
-#: A tuple (not a mutable), so the misc scope is read off the authoritative
+#: is GW15's chat-input scope, ``choices[]`` is the output scope, and ``mcp:`` is the
+#: GW17 MCP scope. A misc channel begins with none of them -- i.e. ``input`` /
+#: ``input[]``. A tuple (not a mutable), so the misc scope is read off the authoritative
 #: ``TEXT_CHANNELS`` tuple and never from a second hand-maintained list.
-_NON_MISC_SDK_PATH_PREFIXES = ("messages[]", "choices[]")
+_NON_MISC_SDK_PATH_PREFIXES = ("messages[]", "choices[]", "mcp:")
 
 
 def _misc_channel_names() -> frozenset[str]:

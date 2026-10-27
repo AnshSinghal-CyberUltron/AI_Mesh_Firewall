@@ -30,6 +30,12 @@ TEXT_CHANNELS: tuple[TextChannel, ...] = (
     TextChannel("output_tool_arguments", "choices[].message.tool_calls[].function.arguments", True),
     TextChannel("logprobs", "choices[].logprobs.content[].token", True),
     TextChannel("structured_output", "choices[].message.content json_object", True),
+    # GW17 MCP channels. The ``mcp:`` prefix keeps them out of the chat (``messages[]``),
+    # output (``choices[]``) and misc scopes; ``edge/wire/mcp.py`` owns their fold check.
+    TextChannel("mcp_arguments", "mcp:params.arguments", True),
+    TextChannel("mcp_completion", "mcp:params.argument.value", True),
+    TextChannel("mcp_result", "mcp:result", True),
+    TextChannel("mcp_error", "mcp:error", True),
 )
 
 

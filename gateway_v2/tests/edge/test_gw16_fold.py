@@ -40,9 +40,9 @@ _ITERATIONS = 10_000
 #: The ``TextChannel.sdk_path`` prefixes that mark a NON-misc channel; mirrors
 #: ``edge/wire/openai_misc._NON_MISC_SDK_PATH_PREFIXES`` so the test keys on the
 #: same scope boundary the misc fold's totality check does. ``messages[]`` is
-#: GW15's chat-input scope and ``choices[]`` is the output scope; a misc channel
-#: is one whose ``sdk_path`` begins with neither (``input`` / ``input[]``).
-_NON_MISC_SDK_PATH_PREFIXES = ("messages[]", "choices[]")
+#: GW15's chat-input scope, ``choices[]`` is the output scope and ``mcp:`` is the GW17
+#: MCP scope; a misc channel begins with none of them (``input`` / ``input[]``).
+_NON_MISC_SDK_PATH_PREFIXES = ("messages[]", "choices[]", "mcp:")
 
 #: Alphabet for canary synthesis — printable, SDK-safe, and distinctive so a
 #: canary that leaks across positions is unambiguous in a counterexample.
