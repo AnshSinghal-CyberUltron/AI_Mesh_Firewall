@@ -111,11 +111,18 @@ export async function consumeSSEStream(response) {
   let terminalTracePayload = null;
 
   // Parse a single SSE "event block" (already split on the \n\n boundary).
+  // A named frame is `event: amf.trace` plus a `data:` line (GW13). The console
+  // trace lives on that data line. Content deltas stay a bare `data:` line.
   // Returns nothing; mutates events/aggregatedContent/terminalError in place.
   const processPart = (part) => {
-    const line = part.trim();
-    if (!line.startsWith("data: ")) return;
-    const payload = line.slice(6).trim();
+    const dataLines = [];
+    for (const raw of part.split(/\r?\n/)) {
+      const line = raw.replace(/^\s+/, "");
+      if (!line.startsWith("data:")) continue;
+      dataLines.push(line.slice(5).replace(/^ /, ""));
+    }
+    if (!dataLines.length) return;
+    const payload = dataLines.join("\n").trim();
     if (payload === "[DONE]") {
       events.push({ type: "done" });
       return;

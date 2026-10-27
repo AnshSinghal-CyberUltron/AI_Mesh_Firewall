@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   consumeSSEStream,
+  normalizeStreamChatPipelineResult,
   extractRoutingFromHeaders,
   inferTerminalBlockedStage,
   normalizeChatPipelineResult,
@@ -77,6 +78,35 @@ test("non-data lines (comments / other fields) are ignored", async () => {
   );
   assert.equal(result.aggregatedContent, "ok");
   assert.equal(result.events.length, 1);
+});
+
+test("amf.trace data line is the console trace and is not assistant text", async () => {
+  const trace = {
+    zeroshield: { action: "allow", request_id: "zs-1" },
+    pipeline_trace: {
+      final_action: "allow",
+      plan_version: "1.1.abc",
+      stages: [
+        { name: "auth", action: "allow", ran: true },
+        { name: "rate_limit", action: "allow", ran: true },
+        { name: "input_scan", action: "allow", ran: true },
+        { name: "model_routing", action: "allow", ran: true },
+        { name: "model_output", action: "allow", ran: true },
+        { name: "output_guardrail", action: "allow", ran: true },
+      ],
+    },
+  };
+  const frame = `event: amf.trace\ndata: ${JSON.stringify(trace)}\n\n`;
+  const result = await consumeSSEStream(
+    sseResponse([`${deltaEvent("echo")}\n\n${frame}data: [DONE]\n\n`]),
+  );
+  assert.equal(result.aggregatedContent, "echo");
+  assert.equal(result.terminalTracePayload.pipeline_trace.stages.length, 6);
+  const normalized = normalizeStreamChatPipelineResult(result, 200, {});
+  assert.deepEqual(
+    normalized.stages.map((stage) => stage.name),
+    ["auth", "rate_limit", "input_scan", "model_routing", "model_output", "output_guardrail"],
+  );
 });
 
 // ---------------------------------------------------------------------------
