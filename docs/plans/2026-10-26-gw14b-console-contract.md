@@ -203,6 +203,8 @@ Local proof, before any claim that the timeline matches:
 
 Browser check on the Attack Simulator at `:8180`, stream mode on and off. Scan Detail for these new events is in scope only after §5.3 has written a row. Until then, the simulator is the surface under test, and the threat feed is still the v1 store.
 
+On 2026-10-27, with SSE stream mode on, the local Attack Simulator rendered the six stages from `event: amf.trace`. The reader takes that named frame's `data:` line. Content deltas stay bare `data:` lines, and the `stages.length >= 6` fallback was not lowered.
+
 ### 5.5 Admin endpoints (runbook bullet 5)
 
 Inventory every control-plane route the console calls that is not an event read. The card names the set: breaker, RAG collections, db/bedrock connectivity tests, MCP discover/call/oauth mirror, the record-event callback, and instance heartbeat.
@@ -266,7 +268,7 @@ What landed:
 | L14b-5 | One unsupported FirewallConfig field rejected with the field name in the body | The console shows that message, not a toast that says "HTTP 400" |
 | L14b-6 | Two in-process replicas, injected clock, freshness bound | Publish at 70% load against real replicas |
 
-A local half of this card is L14b-2 fixtures, L14b-4, the §5.4 browser chats, and the §5.5 ledger. On 2026-10-26 the settings page passed L14b-5. Scan Detail now renders the saved row: six stages, plan version, and deciding rule, with score and timing left blank when the record has neither. No saved row is unavailable. Calling the card closed still requires L14b-1, the unavailable fixture, L14b-3, and L14b-6.
+A local half of this card is L14b-2 fixtures, L14b-4, the §5.4 browser chats, and the §5.5 ledger. On 2026-10-26 the settings page passed L14b-5. Scan Detail now renders the saved row: six stages, plan version, and deciding rule, with score and timing left blank when the record has neither. No saved row is unavailable. On 2026-10-27 a streamed clean prompt in the Attack Simulator showed the same six stages as a non-stream run. Calling the card closed still requires L14b-1, the unavailable fixture, L14b-3, and L14b-6.
 
 ---
 
