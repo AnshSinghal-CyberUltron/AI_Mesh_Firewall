@@ -207,7 +207,7 @@ On 2026-10-27, with SSE stream mode on, the local Attack Simulator rendered the 
 
 A streamed output withhold now also ends with that trace frame, after the `output_blocked` error frame. Its `output_guardrail` stage is `block` with the deciding rule, and `model_output` ran. The simulator takes the stopped stage from the last `block` stage in a real trace, so the Sensitive Data Leakage preset reads "Stopped at output guardrail" instead of the nine-stage template's "Stopped at input scan". The prompt's prefix words can still appear before the withhold; that is the GW13 incremental holdback.
 
-Found, not fixed: a stream the holdback terminates with `forced_release_tradeoff` (a streamed Luhn-valid card) is projected as `allow`, with `output_guardrail` `skip`. No output `Decision` is recorded on that path, so the projection has nothing to read. The card digits were not released; the label is wrong. Fixing it means recording the terminating decision on the holds before `_finish_stream` emits the trace.
+Fixed on 2026-10-27: a stream the holdback terminates with `forced_release_tradeoff` (a streamed Luhn-valid card) was projected as `allow`, with the model and output guard `ran: false`. The pipeline now keeps the BLOCK decision that chose terminate, the other output-side cuts (`holdback_overflow`, `undefined_tradeoff`, `scan_failure`) publish `block` with no decision, and the trace takes "model ran" from the dispatch. A kill-switch cut publishes no output action, so the guard stays `skip` while the model shows as run.
 
 ### 5.5 Admin endpoints (runbook bullet 5)
 
