@@ -96,6 +96,29 @@ async def read_body(receive: ASGIReceive) -> bytes:
     return b"".join(chunks)
 
 
+async def read_body_bounded(receive: ASGIReceive, max_bytes: int) -> bytes | None:
+    """Read the body like :func:`read_body`, but stop past ``max_bytes`` and return ``None``.
+
+    The bound is checked as each chunk arrives, so an oversized body is never assembled.
+    ``max_bytes`` comes from the caller's ``ResourceContract``; no bound lives here.
+    """
+    chunks: list[bytes] = []
+    total = 0
+    while True:
+        event = await receive()
+        if event.get(_ASGI_EVENT_TYPE_KEY) != _ASGI_HTTP_REQUEST:
+            break
+        chunk = event.get(_ASGI_BODY_KEY)
+        if isinstance(chunk, (bytes, bytearray)):
+            total += len(chunk)
+            if total > max_bytes:
+                return None
+            chunks.append(bytes(chunk))
+        if not event.get(_ASGI_MORE_BODY_KEY, False):
+            break
+    return b"".join(chunks)
+
+
 async def start_sse(send: ASGISend) -> None:
     """Open a ``200`` SSE response on the ASGI channel (``more_body`` keeps it streaming)."""
     await send(

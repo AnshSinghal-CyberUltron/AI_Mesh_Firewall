@@ -57,12 +57,28 @@ def emit_chat_audit(
     emit: Callable[[AuditRecord], bool] | None,
     holds: RequestHolds,
     refuse_code: str | None,
+    *,
+    route: str = _CHAT_ROUTE,
+    console: Mapping[str, object] | None = None,
+    detail: Mapping[str, str] | None = None,
 ) -> None:
-    """Enqueue the records this request can honestly name. Never raises."""
+    """Enqueue the records this request can honestly name. Never raises.
+
+    ``route`` names the surface. A non-chat surface passes its own ``console`` (chat's
+    is built here) and may add plain-string ``detail`` such as the MCP server and tool.
+    """
     if emit is None or not holds.request_id or not holds.org_id:
         return
     try:
-        for record in _records(holds, refuse_code, time.time_ns()):
+        if console is None and route == _CHAT_ROUTE:
+            output = holds.output_decision
+            console = console_from_holds(
+                holds,
+                output_action=None if output is None else output.disposition.value,
+                provider_called=holds.dispatched,
+            )
+        extra = {"route": route, **(detail or {})}
+        for record in _records(holds, refuse_code, time.time_ns(), console, extra):
             emit(record)
     except Exception:
         return
@@ -72,25 +88,21 @@ def _records(
     holds: RequestHolds,
     refuse_code: str | None,
     recorded_at_ns: int,
+    console: Mapping[str, object] | None,
+    extra: Mapping[str, str],
 ) -> list[AuditRecord]:
     records: list[AuditRecord] = []
     output = holds.output_decision
-    output_action = None if output is None else output.disposition.value
-    console = console_from_holds(
-        holds,
-        output_action=output_action,
-        provider_called=holds.dispatched,
-    )
     if holds.input_decision is not None:
         records.append(
-            _phase(holds, holds.input_decision, AuditPhase.INPUT, recorded_at_ns, console),
+            _phase(holds, holds.input_decision, AuditPhase.INPUT, recorded_at_ns, console, extra),
         )
     if output is not None:
         records.append(
-            _phase(holds, output, AuditPhase.OUTPUT, recorded_at_ns, console),
+            _phase(holds, output, AuditPhase.OUTPUT, recorded_at_ns, console, extra),
         )
     if refuse_code and holds.input_decision is None and output is None:
-        admitted = _admission(holds, refuse_code, recorded_at_ns)
+        admitted = _admission(holds, refuse_code, recorded_at_ns, extra)
         if admitted is not None:
             records.append(admitted)
     return records
@@ -102,6 +114,7 @@ def _phase(
     phase: AuditPhase,
     recorded_at_ns: int,
     console: Mapping[str, object] | None,
+    extra: Mapping[str, str],
 ) -> AuditRecord:
     built = from_decision(
         DecisionRecord(
@@ -113,13 +126,14 @@ def _phase(
         phase=phase,
         recorded_at_ns=recorded_at_ns,
     )
-    return _annotate(built, console)
+    return _annotate(built, console, extra)
 
 
 def _admission(
     holds: RequestHolds,
     refuse_code: str,
     recorded_at_ns: int,
+    extra: Mapping[str, str],
 ) -> AuditRecord | None:
     try:
         status = errors.render_http(refuse_code, request_id=holds.request_id).status
@@ -136,12 +150,15 @@ def _admission(
             status=status,
         ),
         None,
+        extra,
     )
 
 
-def _annotate(record: AuditRecord, console: Mapping[str, object] | None) -> AuditRecord:
+def _annotate(
+    record: AuditRecord, console: Mapping[str, object] | None, extra: Mapping[str, str]
+) -> AuditRecord:
     detail = dict(record.detail)
-    detail["route"] = _CHAT_ROUTE
+    detail.update(extra)
     if console is not None:
         detail["console"] = dict(console)
     return AuditRecord(

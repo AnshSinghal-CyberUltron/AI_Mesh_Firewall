@@ -71,6 +71,7 @@ from gateway_v2.edge.identity_resolver import (
     TenantIdentity,
     fail_closed_resolver,
 )
+from gateway_v2.edge.mcp_deps import McpDeps
 from gateway_v2.edge.openai_misc import MiscRoute
 from gateway_v2.edge.phase_resolvers import PhaseResolverFactory
 from gateway_v2.edge.readiness import (
@@ -244,6 +245,7 @@ def build_app(
     phase_resolvers: PhaseResolverFactory | None = None,
     audit: Callable[[AuditRecord], bool] | None = None,
     response_store: ResponseStore | None = None,
+    mcp: McpDeps | None = None,
 ) -> ASGIApplication:
     """Assemble the raw-ASGI serving skin (R2.1).
 
@@ -272,10 +274,9 @@ def build_app(
     offload (R1.8) and the ``/readyz`` 503 render path (R10.3) are UNCHANGED.
 
     **GW16 misc-surface wiring (task 7.1/8.1/10.1).** The single :class:`MiscRoute` is built via
-    :func:`_build_misc_route`; ``build_routes(chat, misc, response_store)`` returns the exact table
-    + the id prefix table, both held on the skin. ``catalog`` is the injected
-    :class:`CatalogSource` the Models surface uses (default :data:`empty_catalog_source`, R7.4).
-    ``response_store`` backs ``/v1/responses`` storage; ``None`` uses a per-process memory store.
+    :func:`_build_misc_route`; ``build_routes`` returns the exact + prefix tables held on the skin.
+    ``catalog`` feeds the Models surface (default :data:`empty_catalog_source`, R7.4).
+    ``response_store`` backs ``/v1/responses``; ``mcp`` wires ``/v1/mcp`` (``None``: 501).
 
     **GW15 §10.4 chat-surface wiring (task 6.1, R11 / R14).** The single :class:`ChatRoute` is built
     ONCE here via :func:`_build_chat_route`, every §10.4 lifecycle dep constructed at boot and
@@ -327,7 +328,7 @@ def build_app(
         catalog=catalog,
         phase_resolvers=phase_resolvers,
     )
-    exact, prefix = build_routes(chat, misc, response_store)
+    exact, prefix = build_routes(chat, misc, response_store, mcp)
     probe = _resolve_readiness(
         readiness=readiness, metrics_registry=metrics_registry, state_view=state_view
     )

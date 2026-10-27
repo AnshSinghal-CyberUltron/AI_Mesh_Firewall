@@ -141,6 +141,7 @@ def _app(
     error_scanner: object = _none,
     org_id: str | None = None,
     store: MemoryResponseStore | None = None,
+    mcp: object | None = None,
 ) -> object:
     identity = ResolvingIdentity() if org_id is None else ResolvingIdentity(org_id)
     snapshot = warm_snapshot_source() if org_id is None else warm_snapshot_source(org_id=org_id)
@@ -158,6 +159,7 @@ def _app(
         admission=AdmittingAdmission(),
         quota=AdmittingBudget(),
         response_store=store,
+        mcp=mcp,  # type: ignore[arg-type]
     )
 
 

@@ -110,10 +110,10 @@
     "gateway/ai_mesh_gateway/mcp_proxy.py",
     "gateway_v2/gateway_v2/edge/routes.py"
    ],
-   "decision": "retire",
+   "decision": "build",
    "owner": "GW17",
    "path": "/v1/mcp",
-   "reason": "The owning card is not GW14b. The route stays the existing 501 placeholder, and this card does not add a success body."
+   "reason": "GW17 serves POST /v1/mcp/{server_slug} on the shared plan, detectors and resolver, forwarding only through the per-org broker. A gateway booted without the MCP configuration keeps the declared 501 placeholder."
   },
   {
    "callers": [

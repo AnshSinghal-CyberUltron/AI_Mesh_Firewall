@@ -77,6 +77,7 @@ from gateway_v2.edge.console_projection import (
 from gateway_v2.edge.error_frame_scan import ErrorFrameScanner
 from gateway_v2.edge.executor import ScanExecutor
 from gateway_v2.edge.identity_resolver import IdentityResolver, fail_closed_resolver
+from gateway_v2.edge.mcp_deps import McpDeps
 from gateway_v2.edge.openai_misc import (
     EmbeddingsSurface,
     MiscRoute,
@@ -761,13 +762,14 @@ def _placeholder(surface: str) -> RouteHandler:
 
 
 def build_routes(
-    chat: ChatRoute, misc: MiscRoute, response_store: ResponseStore | None = None
+    chat: ChatRoute, misc: MiscRoute, response_store: ResponseStore | None = None,
+    mcp: McpDeps | None = None,
 ) -> tuple[RouteTable, RouteTable]:
     """Assemble the two route tables: the exact ``(method, path)`` table + the prefix table.
 
-    GW16 wires the three misc surfaces live (R1.1): embeddings, models, and moderations, each
-    built per-request over the injected :class:`MiscRoute`. GW15 wires ``/v1/responses`` over
-    ``chat`` and ``response_store`` (memory when ``None``); MCP/RAG/vector stay ``501`` (R1.3).
+    GW16 wires embeddings, models, and moderations over :class:`MiscRoute`. GW15 wires
+    ``/v1/responses`` over ``chat`` (memory store when ``None``). GW17 wires ``/v1/mcp`` when
+    ``mcp`` is given, else it stays ``501``; RAG/vector stay ``501`` (R1.3).
 
     ``GET /v1/models/{id}`` (retrieve) cannot be a static exact key, so a SECOND function-local
     ``prefix`` table binds ``("GET", "/v1/models/")`` → :meth:`ModelsSurface.handle_retrieve`
@@ -777,9 +779,9 @@ def build_routes(
     Both tables are built as function locals (returned as read-only ``Mapping`` values) so there is
     no module-level mutable table (R1.4). Returns ``(exact, prefix)``.
     """
-    from gateway_v2.edge.openai_responses import responses_entries
+    from gateway_v2.edge.surface_entries import surface_entries
 
-    responses_exact, responses_prefix = responses_entries(chat, response_store)
+    responses_exact, responses_prefix = surface_entries(chat, response_store, mcp)
     exact: RouteTable = {
         ("POST", "/v1/chat/completions"): chat.handle,
         ("POST", "/v1/completions"): chat.handle,
@@ -787,7 +789,6 @@ def build_routes(
         ("POST", "/v1/embeddings"): EmbeddingsSurface(deps=misc).handle,
         ("GET", "/v1/models"): ModelsSurface(deps=misc).handle_list,
         ("POST", "/v1/moderations"): ModerationsSurface(deps=misc).handle,
-        ("POST", "/v1/mcp"): _placeholder("mcp"),
         ("POST", "/v1/rag/query"): _placeholder("rag"),
         ("POST", "/v1/vector/query"): _placeholder("vector"),
     }
