@@ -268,7 +268,7 @@ What landed:
 | L14b-5 | One unsupported FirewallConfig field rejected with the field name in the body | The console shows that message, not a toast that says "HTTP 400" |
 | L14b-6 | Two in-process replicas, injected clock, freshness bound | Publish at 70% load against real replicas |
 
-A local half of this card is L14b-2 fixtures, L14b-4, the §5.4 browser chats, and the §5.5 ledger. On 2026-10-26 the settings page passed L14b-5. Scan Detail now renders the saved row: six stages, plan version, and deciding rule, with score and timing left blank when the record has neither. No saved row is unavailable. On 2026-10-27 a streamed clean prompt in the Attack Simulator showed the same six stages as a non-stream run. Calling the card closed still requires L14b-1, the unavailable fixture, L14b-3, and L14b-6.
+A local half of this card is L14b-2 fixtures, L14b-4, the §5.4 browser chats, and the §5.5 ledger. On 2026-10-26 the settings page passed L14b-5. Scan Detail now renders the saved row: six stages, plan version, and deciding rule, with score and timing left blank when the record has neither. On 2026-10-27 the unavailable fixture rendered from a record: the input scan stays `unavailable`, a stage the record omits is not added, and score and timing stay blank. No saved row has that state, so the page was not opened for it. A streamed clean prompt in the Attack Simulator showed the same six stages as a non-stream run. Calling the card closed still requires L14b-1, the drained unavailable row, L14b-3, and L14b-6.
 
 ---
 
