@@ -52,6 +52,7 @@ from gateway_v2.edge.dev_admit import (
     DevServedApp,
     DevUnlimitedBudget,
     LeaseSettings,
+    _redis_client,
     build_dev_admission,
 )
 from gateway_v2.edge.dev_audit import DevAudit, build_dev_audit
@@ -68,6 +69,7 @@ from gateway_v2.edge.dev_components import (
 )
 from gateway_v2.edge.dev_plan_feed import DevPlanFeed, DevPlanWatch
 from gateway_v2.edge.dev_upstream import DevUpstreamProvider
+from gateway_v2.edge.responses_store import ValkeyResponseStore
 from gateway_v2.runtime.errors import CapacityUnavailable, CapacityUnset
 from gateway_v2.runtime.resources import ResourceContract
 from gateway_v2.runtime.serving_config import load_serving_config
@@ -335,6 +337,7 @@ def build_dev_dependencies(
         contract=contract,
     )
     plan_note = _attach_plan_watch(deps, cfg=cfg, feed=feed, contract=contract)
+    store_note = _attach_response_store(deps, cfg=cfg, contract=contract)
     snapshot_log, resolver_log = _plan_log(cfg, plan)
     logs: tuple[str, ...] = (
         "boot: DEV PROFILE ACTIVE (AMF_DEV_PROFILE=1) -- local development wiring, NOT FOR "
@@ -362,9 +365,21 @@ def build_dev_dependencies(
         budget_log,
         audit_note,
         plan_note,
+        store_note,
         f"boot: catalog -> StaticCatalogSource {list(cfg.models)} (DEV PROFILE: AMF_DEV_MODELS)",
     )
     return deps, logs
+
+
+def _attach_response_store(
+    deps: dict[str, object], *, cfg: DevProfileConfig, contract: ResourceContract
+) -> str:
+    """Share stored Responses objects across workers when the dev lease already has a redis."""
+    if cfg.lease is None:
+        return "boot: response store -> memory (no redis lease; a stored id stays on one worker)"
+    client = _redis_client(cfg.lease.redis_url, timeout_s=contract.cancellation_bound_s())
+    deps["response_store"] = ValkeyResponseStore(client, ttl_s=contract.response_store_ttl_s())
+    return "boot: response store -> {rv2}:responses:<org>:<id> over the dev redis"
 
 
 def _attach_plan_watch(

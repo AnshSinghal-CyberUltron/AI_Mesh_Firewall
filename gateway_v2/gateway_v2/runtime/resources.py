@@ -184,6 +184,13 @@ gateway v1 forces `body["n"] = 1` at the boundary (`gateway/ai_mesh_gateway/main
 because its output guard inspects a single choice. v2 clamps `n` to the same value so it charges
 and forwards exactly one completion. Read through `ResourceContract.max_completions`.
 """
+_RESPONSE_STORE_TTL_S = 30 * 24 * 3600
+"""How long a stored Responses object stays retrievable (v1 parity, GW15).
+
+gateway v1's `ResponseStore` default (`gateway/ai_mesh_gateway/responses_store.py`,
+`_DEFAULT_TTL_SECONDS`) is 30 days. The Responses adapter reads this through
+`ResourceContract.response_store_ttl_s`. The number lives only in this module.
+"""
 
 
 @dataclass(frozen=True, slots=True)
@@ -519,6 +526,14 @@ class ResourceContract:
     def max_completions() -> int:
         """Group F: v1's forced `n = 1` (`_MAX_COMPLETIONS_PER_REQUEST`, R2.15 / R2.16)."""
         return _MAX_COMPLETIONS_PER_REQUEST
+
+    def response_store_ttl_s(self) -> int:
+        """GW15: seconds a stored Responses object stays retrievable.
+
+        v1's `ResponseStore` default (`_RESPONSE_STORE_TTL_S`, 30 days). Callers in `edge` read
+        this method and do not spell the duration themselves.
+        """
+        return _RESPONSE_STORE_TTL_S
 
     def max_request_tokens(self) -> int:
         """Group F: upper bound on the token cost of any request that passes parsing (R2.15).

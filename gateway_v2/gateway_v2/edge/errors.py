@@ -216,6 +216,16 @@ _ENVELOPE: Mapping[str, tuple[int, str]] = MappingProxyType(
         # response-status code, not a capacity literal.
         "invalid_max_tokens": (400, "invalid_request_error"),
         "invalid_max_completion_tokens": (400, "invalid_request_error"),
+        # -- GW15 /v1/responses adapter codes --------------------------------
+        # Declared in edge/wire/responses.py and edge/openai_responses.py; keyed here as
+        # literal strings so this table takes no upward import. Chat never emits them, so
+        # the chat ``malformed_request_body`` 500 fallback is unchanged.
+        "responses_malformed_body": (400, "invalid_request_error"),
+        "responses_invalid_model": (400, "invalid_request_error"),
+        "responses_missing_input": (400, "invalid_request_error"),
+        "unsupported_content_part": (400, "invalid_request_error"),
+        "response_not_found": (404, "not_found_error"),
+        "response_store_unavailable": (503, "service_unavailable"),
         # -- Pre-existing posture codes (R2 cards) ----------------------------
         posture.PLAN_UNAVAILABLE: (503, "service_unavailable"),
         posture.KILL_SWITCH_UNAVAILABLE: (503, "service_unavailable"),

@@ -143,6 +143,19 @@ class StoreKeys:
                              "leased, counted, or enforced per tenant")
         return f"{self.namespace}:budget:{org}:workers"
 
+    def response(self, org: str, response_id: str) -> str:
+        """One stored Responses object (GW15 ``store: true``), keyed by org then id.
+
+        The org is part of the key, so a caller holding another org's id looks up a key that
+        does not exist. This family is never read on the chat path.
+        """
+        if not org:
+            raise ValueError("a stored response needs an org: an unattributed record cannot be "
+                             "scoped to one tenant")
+        if not response_id:
+            raise ValueError("a stored response needs an id")
+        return f"{self.namespace}:responses:{org}:{response_id}"
+
     @property
     def audit_prefix(self) -> str:
         """The prefix an operator or an exporter scans for audit streams."""

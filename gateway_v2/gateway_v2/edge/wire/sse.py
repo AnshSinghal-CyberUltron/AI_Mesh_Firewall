@@ -212,6 +212,32 @@ ERROR_SHAPES: Mapping[str, tuple[str, str]] = MappingProxyType(
             "invalid_request_error",
             "The requested max_completion_tokens exceeds the permitted maximum.",
         ),
+        # GW15 /v1/responses adapter codes (edge/wire/responses.py, edge/openai_responses.py).
+        # Chat does not emit them.
+        "responses_malformed_body": (
+            "invalid_request_error",
+            "The request body must be a JSON object.",
+        ),
+        "responses_invalid_model": (
+            "invalid_request_error",
+            "The model field is required and must be a string.",
+        ),
+        "responses_missing_input": (
+            "invalid_request_error",
+            "The request must include input or instructions.",
+        ),
+        "unsupported_content_part": (
+            "invalid_request_error",
+            "The request contains a content part this gateway cannot scan.",
+        ),
+        "response_not_found": (
+            "not_found_error",
+            "No stored response with that id exists for this organization.",
+        ),
+        "response_store_unavailable": (
+            "service_unavailable",
+            "The response could not be stored and was not returned as stored.",
+        ),
     }
 )
 

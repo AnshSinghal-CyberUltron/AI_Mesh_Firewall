@@ -78,6 +78,7 @@ from gateway_v2.edge.readiness import (
     DirectoryGate,
     make_metrics_readiness,
 )
+from gateway_v2.edge.responses_store import ResponseStore
 from gateway_v2.edge.routes import (
     ASGIReceive,
     ASGIScope,
@@ -242,11 +243,11 @@ def build_app(
     output_detector: ErrorFrameScanner | None = None,
     phase_resolvers: PhaseResolverFactory | None = None,
     audit: Callable[[AuditRecord], bool] | None = None,
+    response_store: ResponseStore | None = None,
 ) -> ASGIApplication:
     """Assemble the raw-ASGI serving skin (R2.1).
 
-    Wires the streaming chat route to the injected ``provider`` / ``scanner`` / ``resolver`` +
-    the bounded coalescer, registers the responses/misc/mcp/rag placeholders, and mounts
+    Wires the chat, responses, and misc routes plus the mcp/rag placeholders, and mounts
     ``/readyz`` + ``/metrics``. The holdback cap is loaded once at boot (``load_holdback_config``,
     the shipped ``load_contract`` idiom); the window and per-stream buffer high-water derive from
     ``contract`` (no literal). ``readiness`` defaults to an always-ready probe (parity with
@@ -271,16 +272,16 @@ def build_app(
     offload (R1.8) and the ``/readyz`` 503 render path (R10.3) are UNCHANGED.
 
     **GW16 misc-surface wiring (task 7.1/8.1/10.1).** The single :class:`MiscRoute` is built via
-    :func:`_build_misc_route`; ``build_routes(chat, misc)`` returns the exact table + the
-    ``/v1/models/{id}`` prefix table, both held on the skin. ``catalog`` is the injected
+    :func:`_build_misc_route`; ``build_routes(chat, misc, response_store)`` returns the exact table
+    + the id prefix table, both held on the skin. ``catalog`` is the injected
     :class:`CatalogSource` the Models surface uses (default :data:`empty_catalog_source`, R7.4).
+    ``response_store`` backs ``/v1/responses`` storage; ``None`` uses a per-process memory store.
 
     **GW15 §10.4 chat-surface wiring (task 6.1, R11 / R14).** The single :class:`ChatRoute` is built
     ONCE here via :func:`_build_chat_route`, every §10.4 lifecycle dep constructed at boot and
     threaded onto the frozen route (nothing request-scoped, so two-tenant isolation holds, R13);
     each unwired dep falls back to its fail-closed default (see :func:`_build_chat_route`). Every
-    GW15 dep is INJECTED so production hands in the real detector / snapshot source / deciders /
-    identity resolver while a test injects fakes.
+    GW15 dep is INJECTED so production passes in the real deps while a test injects fakes.
 
     ``build_app`` stays pure assembly (no store read, no task spawned); the serving bounds derive
     from the injected ``ResourceContract`` / ``HoldbackConfig`` with no capacity literal in
@@ -326,7 +327,7 @@ def build_app(
         catalog=catalog,
         phase_resolvers=phase_resolvers,
     )
-    exact, prefix = build_routes(chat, misc)
+    exact, prefix = build_routes(chat, misc, response_store)
     probe = _resolve_readiness(
         readiness=readiness, metrics_registry=metrics_registry, state_view=state_view
     )

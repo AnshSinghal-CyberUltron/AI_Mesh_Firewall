@@ -19,9 +19,9 @@ A streaming proceed uses the egress orchestration; a non-streaming proceed rende
 JSON. Refusals render through :mod:`edge.errors`. The dependency surfaces live in
 :mod:`gateway_v2.edge.chat_deps`.
 
-**Placeholders (R2.3).** ``/v1/responses``, the misc OpenAI surface, the MCP surface and the
-RAG/vector surface are *registered* here so the route table is complete and a later card wires
-each one in place; until then each returns a declared ``not_implemented`` value-code rendered by
+**Placeholders (R2.3).** The MCP surface and the RAG/vector surface are *registered* here so the
+route table is complete and a later card wires each one in place; until then each returns a
+declared ``not_implemented`` value-code rendered by
 the ``Error_Envelope`` — an HTTP ``501`` JSON body, NOT a raw ``404``-with-detail that would leak
 internal routing shape.
 
@@ -85,6 +85,7 @@ from gateway_v2.edge.openai_misc import (
 from gateway_v2.edge.openai_misc_models import ModelsSurface
 from gateway_v2.edge.phase_resolvers import PhaseResolverFactory, resolver_for
 from gateway_v2.edge.request_holds import RequestHolds
+from gateway_v2.edge.responses_store import ResponseStore
 from gateway_v2.edge.stream_control import FirstByteLatch, StreamAttempt, run_with_no_splice
 from gateway_v2.edge.stream_timeouts import StreamTimeout, StreamTimeouts
 from gateway_v2.edge.wire.openai import (
@@ -570,21 +571,21 @@ class ChatRoute:
         the resources have already been released by the unwinding loop, so it uses the plain
         ``_send_sse`` and never re-raises a timeout past the handler.
 
-        **Produced_Mode stamp (GW13 C5/R5).** On a CLEAN completion, a NON-CONTENT
-        ``amf.trace`` meta frame carrying ``produced_mode`` (and the INCREMENTAL
-        ``degenerated_to_strict`` fact) is emitted from the captured pipeline stats
-        just BEFORE the terminal ``[DONE]`` marker, so the two modes are visibly
-        distinct at the wire (R5.1-R5.3). It is trace, not content, and precedes the
-        terminal marker, so the "no content frame after a terminal frame" invariant
-        is untouched. When every attempt failed byte-less the holder carries no stats
-        and no trace frame is emitted (there was no produced response to stamp).
+        **Produced_Mode stamp (GW13 C5/R5, GW14b §5.4).** A NON-CONTENT ``amf.trace``
+        frame carries ``produced_mode`` and, when the input decision is known, the
+        six-stage console object. On a clean completion it precedes ``[DONE]``. When
+        the pipeline already emitted a terminal error, the same frame follows that
+        error: ``trace()`` is not content, so no content frame follows the error.
+        No stats means no frame.
         """
         if sent_terminal.is_set() or encoder.terminated:
+            await ChatRoute._emit_produced_mode(send, encoder, produced)
             return
         reason = kill_latch.reason()
         if reason is not None:
             await _send_sse(send, encoder.error(reason))
             sent_terminal.set()
+            await ChatRoute._emit_produced_mode(send, encoder, produced)
             return
         # Called on the class (not ``self``) so the terminal site stays usable with ``self``
         # unbound — the Produced_Mode stamp reads only the ``produced`` holder, never ``self``.
@@ -759,15 +760,14 @@ def _placeholder(surface: str) -> RouteHandler:
 # --------------------------------------------------------------------------- #
 
 
-def build_routes(chat: ChatRoute, misc: MiscRoute) -> tuple[RouteTable, RouteTable]:
+def build_routes(
+    chat: ChatRoute, misc: MiscRoute, response_store: ResponseStore | None = None
+) -> tuple[RouteTable, RouteTable]:
     """Assemble the two route tables: the exact ``(method, path)`` table + the prefix table.
 
-    GW16 wires the three misc surfaces live (R1.1): ``POST /v1/embeddings`` →
-    :meth:`EmbeddingsSurface.handle`, ``GET /v1/models`` → :meth:`ModelsSurface.handle_list`,
-    ``POST /v1/moderations`` → :meth:`ModerationsSurface.handle`, each built per-request over the
-    injected :class:`MiscRoute` (``Surface(deps=misc)``, parity with ``ChatSurface(deps=self)``).
-    The GW15 chat/completions routes are untouched and the responses/MCP/RAG/vector surfaces stay
-    declared ``not_implemented`` placeholders (R1.3).
+    GW16 wires the three misc surfaces live (R1.1): embeddings, models, and moderations, each
+    built per-request over the injected :class:`MiscRoute`. GW15 wires ``/v1/responses`` over
+    ``chat`` and ``response_store`` (memory when ``None``); MCP/RAG/vector stay ``501`` (R1.3).
 
     ``GET /v1/models/{id}`` (retrieve) cannot be a static exact key, so a SECOND function-local
     ``prefix`` table binds ``("GET", "/v1/models/")`` → :meth:`ModelsSurface.handle_retrieve`
@@ -777,10 +777,13 @@ def build_routes(chat: ChatRoute, misc: MiscRoute) -> tuple[RouteTable, RouteTab
     Both tables are built as function locals (returned as read-only ``Mapping`` values) so there is
     no module-level mutable table (R1.4). Returns ``(exact, prefix)``.
     """
+    from gateway_v2.edge.openai_responses import responses_entries
+
+    responses_exact, responses_prefix = responses_entries(chat, response_store)
     exact: RouteTable = {
         ("POST", "/v1/chat/completions"): chat.handle,
         ("POST", "/v1/completions"): chat.handle,
-        ("POST", "/v1/responses"): _placeholder("responses"),
+        **responses_exact,
         ("POST", "/v1/embeddings"): EmbeddingsSurface(deps=misc).handle,
         ("GET", "/v1/models"): ModelsSurface(deps=misc).handle_list,
         ("POST", "/v1/moderations"): ModerationsSurface(deps=misc).handle,
@@ -790,5 +793,6 @@ def build_routes(chat: ChatRoute, misc: MiscRoute) -> tuple[RouteTable, RouteTab
     }
     prefix: RouteTable = {
         ("GET", "/v1/models/"): ModelsSurface(deps=misc).handle_retrieve,
+        **responses_prefix,
     }
     return exact, prefix

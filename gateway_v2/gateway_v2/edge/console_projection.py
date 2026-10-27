@@ -82,6 +82,8 @@ def console_from_holds(
         return None
     decision = holds.input_decision
     rule = decision.deciding_rules[0] if decision.deciding_rules else ""
+    output = holds.output_decision
+    output_rule = output.deciding_rules[0] if output is not None and output.deciding_rules else ""
     return chat_console(
         request_id=holds.request_id,
         plan_version=decision.plan_version,
@@ -89,6 +91,7 @@ def console_from_holds(
         output_action=output_action,
         provider_called=provider_called,
         input_rule=rule,
+        output_rule=output_rule,
     )
 
 
