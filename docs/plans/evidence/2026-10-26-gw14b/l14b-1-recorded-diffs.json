@@ -1,0 +1,41 @@
+{
+  "recorded_from": "control core.tasks._build_enforcement_metadata on a bare event {action, request_id}, measured 2026-10-27 in the local control container. The row action is event.action. A missing event_type becomes request, that source security_scan maps to module 1.2, and a missing risk_score becomes 0 and security_risk_score 0.",
+  "comparison_fields": ["action", "event_type", "module_id", "risk_score", "security_risk_score"],
+  "cases": [
+    {
+      "decision": "allow",
+      "route": "chat",
+      "v1": {"action": "allow", "event_type": "request", "module_id": "1.2", "risk_score": 0, "security_risk_score": 0},
+      "v2": {"action": "allow", "event_type": null, "module_id": "1.1", "risk_score": null, "security_risk_score": null},
+      "registered_differences": ["event_type", "module_id", "risk_score", "security_risk_score"]
+    },
+    {
+      "decision": "flag",
+      "route": "chat",
+      "v1": {"action": "flag", "event_type": "request", "module_id": "1.2", "risk_score": 0, "security_risk_score": 0},
+      "v2": {"action": "flag", "event_type": null, "module_id": "1.1", "risk_score": null, "security_risk_score": null},
+      "registered_differences": ["event_type", "module_id", "risk_score", "security_risk_score"]
+    },
+    {
+      "decision": "redact",
+      "route": "chat",
+      "v1": {"action": "redact", "event_type": "request", "module_id": "1.2", "risk_score": 0, "security_risk_score": 0},
+      "v2": {"action": "redact", "event_type": null, "module_id": "1.1", "risk_score": null, "security_risk_score": null},
+      "registered_differences": ["event_type", "module_id", "risk_score", "security_risk_score"]
+    },
+    {
+      "decision": "block",
+      "route": "chat",
+      "v1": {"action": "block", "event_type": "request", "module_id": "1.2", "risk_score": 0, "security_risk_score": 0},
+      "v2": {"action": "block", "event_type": null, "module_id": "1.1", "risk_score": null, "security_risk_score": null},
+      "registered_differences": ["event_type", "module_id", "risk_score", "security_risk_score"]
+    },
+    {
+      "decision": "redact",
+      "route": null,
+      "v1": {"action": "redact", "event_type": "request", "module_id": "1.2", "risk_score": 0, "security_risk_score": 0},
+      "v2": {"action": "redact", "event_type": null, "module_id": null, "risk_score": null, "security_risk_score": null},
+      "registered_differences": ["event_type", "module_id", "risk_score", "security_risk_score"]
+    }
+  ]
+}
