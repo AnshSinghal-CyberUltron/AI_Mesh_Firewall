@@ -661,9 +661,35 @@ Live checks run on 2026-10-26 against the local console:
 
 **Tests.** L16b-1 upstream connections per request ≤ 0.01 at the qualified plateau · L16b-2 edge sustains ≥ 2× the fleet's qualified RPS adding < 1 ms p99 · L16b-3 fixed-interval SSE: every token arrives in its own read, max hold ≤ 1 ms, 30 ms injected hold detected · L16b-4 healthy stream > 350 s · L16b-5 drain one gateway during active streams per contract · L16b-6 unknown Host rejected, security headers present · L16b-7 regression gate: removing keepalive fails CI's edge test.
 
+### GW17b — Authenticated MCP upstreams (pre-cutover; opened 2026-10-27)
+
+| Field | Value |
+|---|---|
+| Phase | Surface |
+| Depends on | GW17 |
+| Required by | GW21, GW23 |
+| Objective | Serve MCP servers that need OAuth, a bearer token, basic auth or a custom header, which v2 refuses today. |
+
+**Why.** GW17 refuses every authenticated server with `mcp_upstream_auth_unsupported` (403), because control's server list never returns credentials, by design. v1 forwards a gateway OAuth token or a control-stored token, so a tenant with an authenticated server loses MCP at cutover. The fix is a credential path: how control hands a server's secret to the gateway, or to the broker directly, without putting it in a list response, a log line or an audit record. That includes OAuth refresh and the `needs_reauth` state. It changes control, the broker and the gateway, so it needs its own security design.
+
+**Tests.** L17b-1 a token server and an OAuth server each serve `tools/call` with the secret absent from every response, log and audit record · L17b-2 an expired OAuth token refreshes once, and a failed refresh refuses with a declared code, never forwarding unauthenticated · L17b-3 a revoked credential stops forwarding within the registry TTL · L17b-4 one org's credential is never sent to another org's server.
+
+### GW17c — Per-key MCP tool controls (pre-cutover; opened 2026-10-27)
+
+| Field | Value |
+|---|---|
+| Phase | Surface |
+| Depends on | GW17, GW05 |
+| Required by | GW21, GW23 |
+| Objective | Restore v1's per-key tool allow-list and per-key tool-call cap on the v2 MCP surface. |
+
+**Why.** v1 can limit an API key to named tools (`mcp_allowed_tools`, enforced on `tools/call` and filtered on `tools/list`) and cap its calls per minute (`mcp_max_tool_calls`). The v2 key record (`Principal`) has neither field. A v2 key can call every enabled tool on its org's servers, held back only by the per-server enabled-tools set and org admission. The fix adds the two fields to the published principal and enforces them before the broker call. The cap must be counted off the request path, under the GW06 lease idiom.
+
+**Tests.** L17c-1 a key restricted to one tool gets 403 on any other and sees only that tool in `tools/list` · L17c-2 a key at its cap gets a declared 429 with `Retry-After`, and other keys of the same org are unaffected · L17c-3 changing a key's allow-list takes effect within the identity freshness bound · L17c-4 an unrestricted key behaves exactly as GW17.
+
 ## 0-A.5 Corrected task index (replaces the §10.8 "Depends on" column)
 
-Verified acyclic; every exit artifact is produced by a card in the depending card's closure. T24 moves before GW23 (C9). New cards: GW14b, GW16b. (The control-plane and worker external-AI work stays with GW24, which T08/T25 already route there; C13 itemizes it.)
+Verified acyclic; every exit artifact is produced by a card in the depending card's closure. T24 moves before GW23 (C9). New cards: GW14b, GW16b, and (2026-10-27, from the GW17 gaps) GW17b, GW17c. (The control-plane and worker external-AI work stays with GW24, which T08/T25 already route there; C13 itemizes it.)
 
 | Card | Depends on |
 |---|---|
@@ -686,6 +712,8 @@ Verified acyclic; every exit artifact is produced by a card in the depending car
 | GW15 | GW01, GW02, GW06, GW09, GW10, GW11, GW13, GW14 |
 | GW16, GW17, GW18 | GW15 |
 | GW16b | GW12, GW19 |
+| GW17b | GW17 |
+| GW17c | GW17, GW05 |
 | GW19 | GW06, GW08, GW12, GW15 |
 | GW20 | GW14, GW15, GW16, GW16b, GW17, GW18, GW19 |
 | GW21 | GW02, GW14b, GW20 |
@@ -4557,6 +4585,8 @@ What makes one cutover survivable is that it is a **routing change, not a deploy
 | GW15 | Ship the chat surface on v2 and pass the full conformance suite | Surface | GW01, GW11, GW13, GW14 | ✅ DONE (local half) (B1; chat + legacy completions shipped; `/v1/responses` served 2026-10-27 as an adapter over the chat lifecycle, spec `.kiro/specs/gw15-responses-close/`, local proof reviewed; deferred live gates LGW15-1 real TCP + Node SDK and LGW15-6 C2 replay; input-REDACT residual CLOSED 2026-10-26 — REDACT now masked and byte-verified before the provider on chat + embeddings by the v2-enforcement-leaks card, see docs/plans/2026-10-26-v2-enforcement-leaks.md) |
 | GW16 | Ship embeddings, models, moderations and legacy completions | Surface | GW15 | ✅ DONE (B2; misc surfaces; +GW16b edge/delta = B5) |
 | GW17 | Ship the MCP surface on the same plan and resolver | Surface | GW15 | ✅ DONE (local half) (2026-10-27; `POST /v1/mcp/{server_slug}` JSON-RPC 2.0 over the chat lifecycle and the existing per-org broker sandbox, spec `.kiro/specs/mcp-surface-gw17/`, evidence `docs/plans/evidence/2026-10-27-gw17/`, local proof reviewed; LGW17-1/2/3/5/6 proven locally, LGW17-4 proven locally with two orgs at 10,000 concurrent calls; deferred LGW17-7 C2 replay and fleet-scale LGW17-4; recorded gaps: authenticated upstreams refused, no per-key tool allow-list or call cap, `Rule.surfaces` not applied (GW05 follow-up), inherited sandbox holes, SSE `notifications/progress` interleave untestable through the broker — see the GW17 card) |
+| GW17b | Serve authenticated MCP upstreams (OAuth, token, basic, header) | Surface | GW17 | ❌ NOT STARTED (opened 2026-10-27, pre-cutover; card in §0-A.4) |
+| GW17c | Restore per-key MCP tool allow-list and call cap | Surface | GW17, GW05 | ❌ NOT STARTED (opened 2026-10-27, pre-cutover; card in §0-A.4) |
 | GW18 | Ship RAG and vector surfaces on the same plan and resolver | Surface | GW15 | ❌ NOT DONE (`edge/rag.py` empty stub; `/v1/rag/query`, `/v1/vector/query` 501 — see §0.3.0 CORRECTION 2026-10-22) |
 | GW19 | Implement admission control, overload semantics and graceful drain | Hardening | GW06, GW12 | ✅ DONE (local half; admit/ admission control + drain) |
 | GW20 | Measure one v2 serving unit and prove horizontal scaling | Performance | GW15–GW19 | ☁️ DEFERRED (fleet capacity; local harness half = B6/R2-21, GW20b) |
@@ -5635,6 +5665,10 @@ Keep per-org sandbox isolation and prove it under concurrency.
 > **Recorded gaps (not fixed by GW17):** authenticated MCP servers are refused (`mcp_upstream_auth_unsupported`) because control's server list never returns credentials; v1's per-key tool allow-list and per-key call cap have no v2 equivalent (`Principal` has no such fields); `Rule.surfaces` is not applied, so MCP gets the chat rules (GW05 follow-up, all surfaces at once); the inherited sandbox holes — partial DNS-rebinding closure in the agent, `MCP_AGENT_ALLOW_INTERNAL_HOSTS` disabling the agent check for any value, outbound NAT on per-org networks, one shared broker key compared in non-constant time, runc fallback when gVisor is not required — are narrowed for remote transports by the gateway-side check, not closed; the SSE `notifications/progress` interleave is not observable through the broker's one-envelope reply and is untested.
 >
 > **Found, not fixed:** a bad API key returns 503 `shared_state_unavailable` instead of 401 on chat and MCP alike (v2 identity); the dev profile's `/metrics` is one line because the dev boot does not wire the GW14d publisher; the broker's per-request `sandbox rpc … request_id=` log line does not emit in the dev stack (`services/mcp-broker`, outside GW17). **Fixed during the live check:** a refusal before the input scan carried a console trace with `final_action: allow`; the console is now attached only once the input scan has recorded a decision, as chat does.
+>
+> **Gap review (2026-10-27, operator decisions).** Authenticated upstreams and per-key tool controls are opened as pre-cutover cards **GW17b** and **GW17c** (§0-A.4). `Rule.surfaces` stays ignored on every surface for now (operator decision); GW18 follows the same rule, and enforcing it is a GW05 follow-up that must ship together with a console way to set surfaces, since every rule in today's saved plan lists only `chat`. The inherited sandbox holes stay with the MCP hardening lane and the cloud infrastructure, and the SSE progress interleave is accepted as untestable. The bad-key 503 stays as the GW15 identity design decided.
+>
+> **Dev `/metrics` wired (2026-10-27).** The dev profile now serves the GW14d Publisher over the producers the request path writes to: the admission controller's, the budget lease's, the audit sink's live counters, one shared stream-exports producer and one shared holdback producer. State and re-hydration read `ABSENT` because the dev stack runs no writer. Add-on latency and windowed-busy have no source yet. FOUND + FIXED on the way: (1) `ChatRoute._build_pipeline` built a fresh `HoldbackMetrics()` for every stream, so the R2-06 held-tokens histogram and release-latency split were discarded per request on every boot path; the route now holds one producer. (2) The Publisher took audit, state and re-hydration as frozen values, so audit would have read its boot value forever; those three are now anything with `series()`, and dev passes a live audit adapter. (3) Nothing on the request path called the Publisher's tenant, rejection or posture counters; chat, responses and MCP now count through the shared audit hook, and embeddings, moderations and models through their refusal helper, by the audit admission rule (a refusal before any decision is a rejection, `shed` for `overload_shed`). Live, two workers: tenant 22 and admitted 22 for 22 served requests, 3 posture refusals and 3 rejections for 3 bad keys, 2 holdback streams, and audit produced = written = 44 = the audit stream's growth. **Still open:** each uvicorn worker has its own Publisher and a scrape reads one worker, so a fleet scraper needs per-worker targets or a shared-memory directory (GW14d's documented shared-memory model); production `serve.py` still wires the placeholder registry until GW14d's boot wiring lands.
 
 ### Failure scenarios that must be handled
 
