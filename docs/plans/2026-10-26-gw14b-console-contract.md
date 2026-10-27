@@ -205,6 +205,10 @@ Browser check on the Attack Simulator at `:8180`, stream mode on and off. Scan D
 
 On 2026-10-27, with SSE stream mode on, the local Attack Simulator rendered the six stages from `event: amf.trace`. The reader takes that named frame's `data:` line. Content deltas stay bare `data:` lines, and the `stages.length >= 6` fallback was not lowered.
 
+A streamed output withhold now also ends with that trace frame, after the `output_blocked` error frame. Its `output_guardrail` stage is `block` with the deciding rule, and `model_output` ran. The simulator takes the stopped stage from the last `block` stage in a real trace, so the Sensitive Data Leakage preset reads "Stopped at output guardrail" instead of the nine-stage template's "Stopped at input scan". The prompt's prefix words can still appear before the withhold; that is the GW13 incremental holdback.
+
+Found, not fixed: a stream the holdback terminates with `forced_release_tradeoff` (a streamed Luhn-valid card) is projected as `allow`, with `output_guardrail` `skip`. No output `Decision` is recorded on that path, so the projection has nothing to read. The card digits were not released; the label is wrong. Fixing it means recording the terminating decision on the holds before `_finish_stream` emits the trace.
+
 ### 5.5 Admin endpoints (runbook bullet 5)
 
 Inventory every control-plane route the console calls that is not an event read. The card names the set: breaker, RAG collections, db/bedrock connectivity tests, MCP discover/call/oauth mirror, the record-event callback, and instance heartbeat.
