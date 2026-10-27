@@ -529,7 +529,8 @@ class StreamPipeline:
             # Relaxed-class ceiling: release no held bytes of the match (R6.5).
             return await self._terminate(send, stats, error="holdback_overflow")
         except ForcedReleaseTerminate:
-            # Over-cap match declared terminate-the-stream (R6.4).
+            # Over-cap match declared terminate-the-stream (R6.4); its BLOCK decision is kept.
+            self._publish(stats)
             return await self._terminate(send, stats, error="forced_release_tradeoff")
         except TradeOffUndefined:
             # Over-cap pattern with no declared outcome: fail closed (R6.6).
@@ -710,8 +711,10 @@ class StreamPipeline:
                 if span.start >= text.forced_release_end:
                     continue  # prefix was not force-released; normal path handles it
                 # This match's prefix was released early -> trade-off applies.
-                outcome = derive_trade_off_outcome(self._resolver.decide((finding,)))
+                decision = self._resolver.decide((finding,))
+                outcome = derive_trade_off_outcome(decision)
                 if outcome == TRADE_OFF_TERMINATE:
+                    self._note_output(decision)
                     raise ForcedReleaseTerminate(finding.detector)
                 if outcome != TRADE_OFF_REDACT_REMAINDER:
                     # Over-cap pattern with no declared outcome -> fail closed.
@@ -762,6 +765,9 @@ class StreamPipeline:
         no content frame follows a terminal frame is structural: ``_run_enforcing``
         returns immediately after this call.
         """
+        if error != "killed" and stats.output_action is None:
+            # The output side withheld the stream with no decision to publish.
+            stats.output_decision, stats.output_action = None, "block"
         await send(DownstreamFrame(text_deltas=(), error_code=error))
         return self._finish_incomplete(stats, error=error)
 

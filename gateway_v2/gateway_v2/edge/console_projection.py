@@ -130,10 +130,13 @@ def stream_trace_payload(
     output_action = getattr(stats, "output_action", None)
     if not isinstance(output_action, str):
         output_action = None
+    holds = getattr(produced, "holds", None)
+    dispatched = getattr(holds, "dispatched", None)
+    provider_called = dispatched if isinstance(dispatched, bool) else output_action is not None
     console = console_from_holds(
-        getattr(produced, "holds", None),
+        holds,
         output_action=output_action,
-        provider_called=output_action is not None,
+        provider_called=provider_called,
     )
     if console is None:
         return payload
