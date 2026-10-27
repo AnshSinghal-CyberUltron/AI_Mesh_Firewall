@@ -238,6 +238,51 @@ ERROR_SHAPES: Mapping[str, tuple[str, str]] = MappingProxyType(
             "service_unavailable",
             "The response could not be stored and was not returned as stored.",
         ),
+        # GW17 MCP surface codes (edge/mcp.py, dispatch/mcp_broker.py).
+        "mcp_server_not_found": (
+            "not_found_error",
+            "No active MCP server with that name exists for this organization.",
+        ),
+        "mcp_tool_disabled": ("permission_error", "That tool is not enabled on this server."),
+        "mcp_upstream_auth_unsupported": (
+            "permission_error",
+            "This MCP server needs credentials the gateway does not forward.",
+        ),
+        "mcp_destination_refused": (
+            "permission_error",
+            "The MCP server's address or command is not allowed.",
+        ),
+        "mcp_org_unmapped": (
+            "permission_error",
+            "This organization is not configured for MCP on this gateway.",
+        ),
+        "mcp_registry_unavailable": (
+            "service_unavailable",
+            "The MCP server registry could not be reached.",
+        ),
+        "mcp_broker_unavailable": (
+            "service_unavailable",
+            "The MCP sandbox could not be reached.",
+        ),
+        "mcp_upstream_error": ("gateway_error", "The MCP server returned an unusable reply."),
+        "mcp_request_too_large": (
+            "invalid_request_error",
+            "The MCP request exceeds a size, depth, or node limit.",
+        ),
+        "mcp_result_too_large": (
+            "gateway_error",
+            "The MCP reply exceeds a size, depth, node, or block limit and was withheld.",
+        ),
+        "mcp_parse_error": ("invalid_request_error", "The request body is not valid JSON."),
+        "mcp_invalid_request": (
+            "invalid_request_error",
+            "The request is not a single valid JSON-RPC 2.0 message.",
+        ),
+        "mcp_method_not_found": ("not_found_error", "That MCP method is not supported."),
+        "mcp_invalid_params": (
+            "invalid_request_error",
+            "The method parameters have the wrong shape.",
+        ),
     }
 )
 
