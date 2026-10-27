@@ -109,6 +109,40 @@ test("amf.trace data line is the console trace and is not assistant text", async
   );
 });
 
+test("streamed output withhold uses the trace stages, not the nine-name list", async () => {
+  const trace = {
+    zeroshield: { action: "block", request_id: "zs-out" },
+    pipeline_trace: {
+      final_action: "block",
+      plan_version: "1.2.test",
+      stages: [
+        { name: "auth", action: "allow", ran: true },
+        { name: "rate_limit", action: "allow", ran: true },
+        { name: "input_scan", action: "allow", ran: true },
+        { name: "model_routing", action: "allow", ran: true },
+        { name: "model_output", action: "allow", ran: true },
+        { name: "output_guardrail", action: "block", ran: true, deciding_rule: "fw-pii-output" },
+      ],
+    },
+  };
+  const error = `data: ${JSON.stringify({
+    error: { message: "withheld", type: "gateway_error", code: "output_blocked" },
+  })}`;
+  const frame = `event: amf.trace\ndata: ${JSON.stringify(trace)}\n\n`;
+  const result = await consumeSSEStream(
+    sseResponse([`${deltaEvent("echo: ")}\n\n${error}\n\n${frame}`]),
+  );
+  const normalized = normalizeStreamChatPipelineResult(result, 200, {});
+  assert.equal(normalized.final_action, "block");
+  assert.equal(normalized.blocked_by, "output_guardrail");
+  assert.deepEqual(
+    normalized.stages.map((stage) => stage.name),
+    ["auth", "rate_limit", "input_scan", "model_routing", "model_output", "output_guardrail"],
+  );
+  assert.equal(normalized.stages.find((stage) => stage.name === "output_guardrail").action, "block");
+  assert.equal(normalized.stages.find((stage) => stage.name === "input_scan").action, "allow");
+});
+
 // ---------------------------------------------------------------------------
 // consumeSSEStream — final-buffer flush (M-30): the last SSE event without a
 // trailing \n\n must still be delivered.

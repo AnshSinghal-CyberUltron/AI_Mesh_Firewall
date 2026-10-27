@@ -384,6 +384,17 @@ export function inferTerminalBlockedStage(data, httpStatus, zs, finalAction = ""
   return inferBlockedStage(data, httpStatus, zs);
 }
 
+/** Last stage the record itself marked block. Empty when the record has none. */
+function blockingStageName(stages) {
+  let name = "";
+  for (const stage of stages || []) {
+    if (String(stage?.action || "").toLowerCase() === "block" && stage?.name) {
+      name = stage.name;
+    }
+  }
+  return name;
+}
+
 /** Last pipeline stage that ran input/output scanning (informational, not a block). */
 export function inferDetectionCheckpoint(data, zs) {
   const stages = data?.pipeline_trace?.stages || data?.stages || [];
@@ -1135,7 +1146,8 @@ export function normalizeChatPipelineResult(data, httpStatus, context = {}) {
   if (data?.pipeline_trace?.stages?.length >= 6) {
     const zs = mergeScanFieldsFromTrace(data.zeroshield || {}, data.pipeline_trace);
     const finalAction = inferFinalAction(data, httpStatus, zs);
-    const blockedStage = inferTerminalBlockedStage(data, httpStatus, zs, finalAction);
+    const blockedStage = blockingStageName(data.pipeline_trace.stages)
+      || inferTerminalBlockedStage(data, httpStatus, zs, finalAction);
     const stages = enrichStages(data.pipeline_trace.stages, data, zs, mergedContext);
     const totalLatency = resolveTotalLatencyMs({
       pipelineTrace: data.pipeline_trace,
