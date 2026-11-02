@@ -43,6 +43,7 @@ __all__ = (
     "VECTOR_CAPACITY_EXCEEDED",
     "VECTOR_CAPACITY_UNSET",
     "CREDENTIAL_LEAK_WITHHELD",
+    "COLLECTION_EXISTS",
     "gap_retry_after_s",
 )
 
@@ -175,6 +176,9 @@ VECTOR_CAPACITY_UNSET = "vector_capacity_unset"
 
 CREDENTIAL_LEAK_WITHHELD = "credential_leak_withheld"
 """R9.6: the pre-emission leak guard withheld the whole emission. Detail carries a ref id only."""
+
+COLLECTION_EXISTS = "collection_exists"
+"""R2.9: `create_collection` named an existing collection. Nothing was created or reset."""
 
 
 def gap_retry_after_s(*, rehydrate_period_ms: float, refresh_ms: float) -> float:

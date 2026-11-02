@@ -14,8 +14,9 @@ from __future__ import annotations
 
 from gateway_v2.domain import posture
 
-# The ten GW30 codes added in task 1.1. Introspected from the module below for the module-wide
-# single-spelling check, but named explicitly here so these exact codes are the ones asserted.
+# The GW30 codes (ten from task 1.1, plus COLLECTION_EXISTS for R2.9). Introspected from the
+# module below for the module-wide single-spelling check, but named explicitly here so these
+# exact codes are the ones asserted.
 _GW30_VECTOR_CODE_NAMES = (
     "VECTOR_OK",
     "UNSUPPORTED_OPERATION",
@@ -27,6 +28,7 @@ _GW30_VECTOR_CODE_NAMES = (
     "VECTOR_CAPACITY_EXCEEDED",
     "VECTOR_CAPACITY_UNSET",
     "CREDENTIAL_LEAK_WITHHELD",
+    "COLLECTION_EXISTS",
 )
 
 
@@ -45,7 +47,7 @@ def _module_str_constants() -> dict[str, str]:
 
 
 def test_every_gw30_vector_code_is_defined() -> None:
-    """Task 1.1 added exactly these ten GW30 codes to `domain.posture`."""
+    """These GW30 codes are defined to `domain.posture`."""
     for name in _GW30_VECTOR_CODE_NAMES:
         assert hasattr(posture, name), f"missing GW30 posture code: {name}"
 
@@ -59,13 +61,13 @@ def test_each_gw30_code_is_a_non_empty_string() -> None:
 
 
 def test_gw30_codes_have_no_duplicate_spelling() -> None:
-    """Each GW30 code is a unique spelling -- no two of the ten share a value."""
+    """Each GW30 code is a unique spelling -- no two share a value."""
     values = [getattr(posture, name) for name in _GW30_VECTOR_CODE_NAMES]
     assert len(set(values)) == len(values), f"duplicate GW30 code spelling: {values}"
 
 
 def test_gw30_code_set_is_pairwise_distinct() -> None:
-    """The full set of ten GW30 codes is pairwise distinct (every pair differs)."""
+    """The full set of GW30 codes is pairwise distinct (every pair differs)."""
     values = [getattr(posture, name) for name in _GW30_VECTOR_CODE_NAMES]
     for i, left in enumerate(values):
         for right in values[i + 1 :]:
