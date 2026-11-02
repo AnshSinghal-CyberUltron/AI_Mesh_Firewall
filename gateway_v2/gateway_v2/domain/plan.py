@@ -51,6 +51,26 @@ class Surface(StrEnum):
     EMBEDDINGS = "embeddings"
 
 
+class RuleKind(StrEnum):
+    KEYWORDS = "keywords"
+    REGEX = "regex"
+    PATTERN = "pattern"
+    DETECTOR = "detector"
+
+
+@dataclass(frozen=True, slots=True)
+class RuleCondition:
+    """Customer match, compiled once with the plan. ``None`` on a rule keeps the category join."""
+
+    kind: RuleKind
+    field: str
+    direction: RuleScope
+    keywords: tuple[str, ...]
+    pattern: str
+    detector_class: str
+    pipeline_stage: str
+
+
 @dataclass(frozen=True, slots=True)
 class Rule:
     rule_id: str
@@ -62,6 +82,7 @@ class Rule:
     scope: RuleScope
     on_unavailable: FailurePosture
     surfaces: frozenset[Surface]
+    condition: RuleCondition | None = None
 
 
 @dataclass(frozen=True, slots=True)

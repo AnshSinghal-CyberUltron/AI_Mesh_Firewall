@@ -32,6 +32,9 @@ remaining lease and then refuses only quota, because treating it as global would
 problem into an outage.
 """
 
+POLICY_REGEX_TIMEOUT = "policy_regex_timeout"
+"""A customer regex exceeded the guard-wait budget or was refused before it ran. Fail closed."""
+
 OVERLOAD_SHED = "overload_shed"
 """R2-07/R2-08: admission shed under overload. Code only -- `edge` owns the HTTP 503 mapping.
 
