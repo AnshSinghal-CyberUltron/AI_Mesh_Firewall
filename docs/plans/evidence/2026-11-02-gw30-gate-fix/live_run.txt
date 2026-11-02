@@ -1,0 +1,468 @@
+Failed to send telemetry event ClientStartEvent: capture() takes 1 positional argument but 3 were given
+Failed to send telemetry event ClientStartEvent: capture() takes 1 positional argument but 3 were given
+Failed to send telemetry event ClientStartEvent: capture() takes 1 positional argument but 3 were given
+Failed to send telemetry event ClientStartEvent: capture() takes 1 positional argument but 3 were given
+Failed to send telemetry event ClientStartEvent: capture() takes 1 positional argument but 3 were given
+Failed to send telemetry event ClientStartEvent: capture() takes 1 positional argument but 3 were given
+Failed to send telemetry event ClientStartEvent: capture() takes 1 positional argument but 3 were given
+Failed to send telemetry event ClientStartEvent: capture() takes 1 positional argument but 3 were given
+Failed to send telemetry event ClientStartEvent: capture() takes 1 positional argument but 3 were given
+Failed to send telemetry event ClientStartEvent: capture() takes 1 positional argument but 3 were given
+  [cleanup warn weaviate]: WeaviateGRPCUnavailableError: 
+Weaviate v1.27.0 makes use of a high-speed gRPC API as well as a REST API.
+Unfortunately, the gRPC health check against Weaviate could not be completed.
+
+This error could be due to one of several reasons:
+- The gRPC traffic at the specified port is blocked by a firewall.
+- gRPC is not enabled or incorrectly configured on the server or the client.
+    - Please check that the server address and port (127.0.0.1:50051) are correct.
+- your connection is unstable or has a high latency. In this case you can:
+    - increase init-timeout in `weaviate.connect_to_local(additional_config=wvc.init.AdditionalConfig(timeout=wvc.init.Timeout(init=X)))`
+    - disable startup checks by connecting using `skip_init_checks=True`
+
+The gRPC call failed with: UNAVAILABLE - failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (111)
+
+  [cleanup warn mongodb_atlas]: ServerSelectionTimeoutError: Could not reach any servers in [('45f2af43c25e', 27017)]. Replica set is configured with internal hostnames or IPs?, Timeout: 30s, Topology Description: <TopologyDescription id: 6ae89068022fce58a0ed9d43, topology_type: ReplicaSetNoPrimary, servers: [<ServerDescription ('45f2af43c25e', 27017) server_type: Unknown, rtt: None, error=AutoReconnect('45f2af43c25e:27017: [Errno -2] Name or service not known (configured timeouts: socketTimeoutMS: 20000.0ms, connectTimeoutMS: 20000.0ms)')>]>
+  [cleanup warn weaviate]: WeaviateGRPCUnavailableError: 
+Weaviate v1.27.0 makes use of a high-speed gRPC API as well as a REST API.
+Unfortunately, the gRPC health check against Weaviate could not be completed.
+
+This error could be due to one of several reasons:
+- The gRPC traffic at the specified port is blocked by a firewall.
+- gRPC is not enabled or incorrectly configured on the server or the client.
+    - Please check that the server address and port (127.0.0.1:50051) are correct.
+- your connection is unstable or has a high latency. In this case you can:
+    - increase init-timeout in `weaviate.connect_to_local(additional_config=wvc.init.AdditionalConfig(timeout=wvc.init.Timeout(init=X)))`
+    - disable startup checks by connecting using `skip_init_checks=True`
+
+The gRPC call failed with: UNAVAILABLE - failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (111)
+
+  [cleanup warn mongodb_atlas]: ServerSelectionTimeoutError: Could not reach any servers in [('45f2af43c25e', 27017)]. Replica set is configured with internal hostnames or IPs?, Timeout: 30s, Topology Description: <TopologyDescription id: 6ae8909c022fce58a0ed9d48, topology_type: ReplicaSetNoPrimary, servers: [<ServerDescription ('45f2af43c25e', 27017) server_type: Unknown, rtt: None, error=AutoReconnect('45f2af43c25e:27017: [Errno -2] Name or service not known (configured timeouts: socketTimeoutMS: 20000.0ms, connectTimeoutMS: 20000.0ms)')>]>
+{
+  "L30-1": "LIVE-PASS (7 live: chroma,qdrant,weaviate,pgvector,elasticsearch,redis,mongodb_atlas) + 6 INFRA-BLOCKED",
+  "L30-1b": "LIVE-PASS",
+  "L30-2": "LIVE-PASS",
+  "L30-3": "LIVE-PASS",
+  "generated": "2026-11-02T13:31:43.150540+00:00"
+}
+
+--- L30-1 per-store ---
+{
+  "live": {
+    "chroma": {
+      "create_collection": {
+        "code": "vector_ok",
+        "status": "created"
+      },
+      "upsert": {
+        "code": "vector_ok",
+        "count": 3
+      },
+      "query": {
+        "code": "vector_ok",
+        "count": 3,
+        "ids": [
+          "r1",
+          "r3",
+          "r2"
+        ],
+        "top_id": "r1"
+      },
+      "delete": {
+        "code": "vector_ok",
+        "count": 3
+      }
+    },
+    "qdrant": {
+      "create_collection": {
+        "code": "vector_ok",
+        "status": "created"
+      },
+      "upsert": {
+        "code": "vector_ok",
+        "count": 3
+      },
+      "query": {
+        "code": "vector_ok",
+        "count": 3,
+        "ids": [
+          "r1",
+          "r3",
+          "r2"
+        ],
+        "top_id": "r1"
+      },
+      "delete": {
+        "code": "vector_ok",
+        "count": 3
+      }
+    },
+    "weaviate": {
+      "create_collection": {
+        "code": "vector_ok",
+        "status": "created"
+      },
+      "upsert": {
+        "code": "vector_ok",
+        "count": 3
+      },
+      "query": {
+        "code": "vector_ok",
+        "count": 3,
+        "ids": [
+          "r1",
+          "r3",
+          "r2"
+        ],
+        "top_id": "r1"
+      },
+      "delete": {
+        "code": "vector_ok",
+        "count": 3
+      }
+    },
+    "pgvector": {
+      "create_collection": {
+        "code": "vector_ok",
+        "status": "created"
+      },
+      "upsert": {
+        "code": "vector_ok",
+        "count": 3
+      },
+      "query": {
+        "code": "vector_ok",
+        "count": 3,
+        "ids": [
+          "r1",
+          "r3",
+          "r2"
+        ],
+        "top_id": "r1"
+      },
+      "delete": {
+        "code": "vector_ok",
+        "count": 3
+      }
+    },
+    "elasticsearch": {
+      "create_collection": {
+        "code": "vector_ok",
+        "status": "created"
+      },
+      "upsert": {
+        "code": "vector_ok",
+        "count": 3
+      },
+      "query": {
+        "code": "vector_ok",
+        "count": 3,
+        "ids": [
+          "r1",
+          "r3",
+          "r2"
+        ],
+        "top_id": "r1"
+      },
+      "delete": {
+        "code": "vector_ok",
+        "count": 3
+      }
+    },
+    "redis": {
+      "create_collection": {
+        "code": "vector_ok",
+        "status": "created"
+      },
+      "upsert": {
+        "code": "vector_ok",
+        "count": 3
+      },
+      "query": {
+        "code": "vector_ok",
+        "count": 3,
+        "ids": [
+          "r1",
+          "r3",
+          "r2"
+        ],
+        "top_id": "r1"
+      },
+      "delete": {
+        "code": "vector_ok",
+        "count": 3
+      }
+    },
+    "mongodb_atlas": {
+      "create_collection": {
+        "code": "vector_ok",
+        "status": "created"
+      },
+      "upsert": {
+        "code": "vector_ok",
+        "count": 3
+      },
+      "query": {
+        "code": "vector_ok",
+        "count": 3,
+        "ids": [
+          "r1",
+          "r3",
+          "r2"
+        ],
+        "top_id": "r1"
+      },
+      "delete": {
+        "code": "vector_ok",
+        "count": 3
+      }
+    }
+  },
+  "infra_blocked": {
+    "pinecone": "cloud-only SaaS; no local image / no credentials",
+    "milvus": "needs etcd+minio sidecars; not brought up locally",
+    "aws_opensearch_serverless": "no local backend",
+    "aws_bedrock_kb": "cloud-only; no local image / no credentials",
+    "gcp_vertex_vector": "cloud-only; no local image / no credentials",
+    "azure_ai_search": "cloud-only; no local image / no credentials"
+  },
+  "parity": {
+    "stores_compared": [
+      "chroma",
+      "qdrant",
+      "weaviate",
+      "pgvector",
+      "elasticsearch",
+      "redis",
+      "mongodb_atlas"
+    ],
+    "create_collection_codes_identical": true,
+    "upsert_codes_identical": true,
+    "query_codes_identical": true,
+    "delete_codes_identical": true,
+    "query_ids": {
+      "chroma": [
+        "r1",
+        "r3",
+        "r2"
+      ],
+      "qdrant": [
+        "r1",
+        "r3",
+        "r2"
+      ],
+      "weaviate": [
+        "r1",
+        "r3",
+        "r2"
+      ],
+      "pgvector": [
+        "r1",
+        "r3",
+        "r2"
+      ],
+      "elasticsearch": [
+        "r1",
+        "r3",
+        "r2"
+      ],
+      "redis": [
+        "r1",
+        "r3",
+        "r2"
+      ],
+      "mongodb_atlas": [
+        "r1",
+        "r3",
+        "r2"
+      ]
+    },
+    "query_ids_identical": true,
+    "query_count_identical": true,
+    "upsert_count_identical": true
+  }
+}
+
+--- L30-1b create preserves data ---
+{
+  "pgvector": {
+    "first_create": "vector_ok",
+    "upsert": "vector_ok",
+    "second_create": "collection_exists",
+    "query_after_second_create": "vector_ok",
+    "ids_after_second_create": [
+      "r1",
+      "r3",
+      "r2"
+    ],
+    "pass": true
+  },
+  "redis": {
+    "first_create": "vector_ok",
+    "upsert": "vector_ok",
+    "second_create": "collection_exists",
+    "query_after_second_create": "vector_ok",
+    "ids_after_second_create": [
+      "r1",
+      "r3",
+      "r2"
+    ],
+    "pass": true
+  },
+  "qdrant": {
+    "first_create": "vector_ok",
+    "upsert": "vector_ok",
+    "second_create": "collection_exists",
+    "query_after_second_create": "vector_ok",
+    "ids_after_second_create": [
+      "r1",
+      "r3",
+      "r2"
+    ],
+    "pass": true
+  },
+  "weaviate": {
+    "first_create": "vector_ok",
+    "upsert": "vector_ok",
+    "second_create": "collection_exists",
+    "query_after_second_create": "vector_ok",
+    "ids_after_second_create": [
+      "r1",
+      "r3",
+      "r2"
+    ],
+    "pass": true
+  },
+  "elasticsearch": {
+    "first_create": "vector_ok",
+    "upsert": "vector_ok",
+    "second_create": "collection_exists",
+    "query_after_second_create": "vector_ok",
+    "ids_after_second_create": [
+      "r1",
+      "r3",
+      "r2"
+    ],
+    "pass": true
+  },
+  "chroma": {
+    "first_create": "vector_ok",
+    "upsert": "vector_ok",
+    "second_create": "collection_exists",
+    "query_after_second_create": "vector_ok",
+    "ids_after_second_create": [
+      "r1",
+      "r3",
+      "r2"
+    ],
+    "pass": true
+  },
+  "mongodb_atlas": {
+    "first_create": "vector_ok",
+    "upsert": "vector_ok",
+    "second_create": "collection_exists",
+    "query_after_second_create": "vector_ok",
+    "ids_after_second_create": [
+      "r1",
+      "r3",
+      "r2"
+    ],
+    "pass": true
+  }
+}
+
+--- L30-2 cases ---
+[
+  {
+    "store": "pgvector",
+    "request_id": "zs-249194053cd3",
+    "timestamp": "2026-11-02T13:31:38.091033+00:00",
+    "target": "127.0.0.1:50061 (nothing listening)",
+    "code": "provider_unreachable",
+    "records_is_none": true,
+    "elapsed_s": 0.0007,
+    "within_30s": true,
+    "is_provider_unreachable": true,
+    "is_empty_clean_search": false
+  },
+  {
+    "store": "qdrant",
+    "request_id": "zs-e27828df415d",
+    "timestamp": "2026-11-02T13:31:38.117856+00:00",
+    "target": "127.0.0.1:50061 (nothing listening)",
+    "code": "provider_unreachable",
+    "records_is_none": true,
+    "elapsed_s": 0.0268,
+    "within_30s": true,
+    "is_provider_unreachable": true,
+    "is_empty_clean_search": false
+  },
+  {
+    "store": "elasticsearch",
+    "request_id": "zs-1475f2f5d393",
+    "timestamp": "2026-11-02T13:31:38.120876+00:00",
+    "target": "127.0.0.1:50061 (nothing listening)",
+    "code": "provider_unreachable",
+    "records_is_none": true,
+    "elapsed_s": 0.003,
+    "within_30s": true,
+    "is_provider_unreachable": true,
+    "is_empty_clean_search": false
+  },
+  {
+    "store": "chroma",
+    "request_id": "zs-49abf2a50e46",
+    "timestamp": "2026-11-02T13:31:38.142443+00:00",
+    "target": "127.0.0.1:50061 (nothing listening)",
+    "code": "provider_unreachable",
+    "records_is_none": true,
+    "elapsed_s": 0.0215,
+    "within_30s": true,
+    "is_provider_unreachable": true,
+    "is_empty_clean_search": false
+  },
+  {
+    "store": "mongodb_atlas",
+    "request_id": "zs-fb4221fa5beb",
+    "timestamp": "2026-11-02T13:31:43.149124+00:00",
+    "target": "127.0.0.1:50061 (nothing listening)",
+    "code": "provider_unreachable",
+    "records_is_none": true,
+    "elapsed_s": 5.0066,
+    "within_30s": true,
+    "is_provider_unreachable": true,
+    "is_empty_clean_search": false
+  }
+]
+
+--- L30-3 cases ---
+[
+  {
+    "scenario": "cross_org_A_cred_for_B_request",
+    "request_id": "zs-489f5bdfc655",
+    "timestamp": "2026-11-02T13:31:43.149211+00:00",
+    "presented_credential_org": "orgA",
+    "target_request_org": "orgB",
+    "refused": true,
+    "refusal_code": "credential_scope_mismatch",
+    "backing_store_ops_for_request": 0,
+    "proceeded_to_store": false,
+    "org_b_payload_returned": null,
+    "secret_in_refusal_form": false,
+    "live_transport_used": "qdrant"
+  },
+  {
+    "scenario": "missing_org_identity",
+    "request_id": "zs-12b0e7d38008",
+    "timestamp": "2026-11-02T13:31:43.149236+00:00",
+    "presented_credential_org": "orgA",
+    "target_request_org": "(empty)",
+    "refused": true,
+    "refusal_code": "org_identity_invalid",
+    "backing_store_ops_for_request": 0,
+    "proceeded_to_store": false,
+    "org_b_payload_returned": null,
+    "secret_in_refusal_form": false,
+    "live_transport_used": "qdrant"
+  }
+]

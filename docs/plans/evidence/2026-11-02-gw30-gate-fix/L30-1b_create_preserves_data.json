@@ -1,0 +1,92 @@
+{
+  "gate": "L30-1b (R2.9 create is non-destructive)",
+  "timestamp": "2026-11-02T13:30:46.052522+00:00",
+  "run": "6ddbc50a",
+  "live": {
+    "pgvector": {
+      "first_create": "vector_ok",
+      "upsert": "vector_ok",
+      "second_create": "collection_exists",
+      "query_after_second_create": "vector_ok",
+      "ids_after_second_create": [
+        "r1",
+        "r3",
+        "r2"
+      ],
+      "pass": true
+    },
+    "redis": {
+      "first_create": "vector_ok",
+      "upsert": "vector_ok",
+      "second_create": "collection_exists",
+      "query_after_second_create": "vector_ok",
+      "ids_after_second_create": [
+        "r1",
+        "r3",
+        "r2"
+      ],
+      "pass": true
+    },
+    "qdrant": {
+      "first_create": "vector_ok",
+      "upsert": "vector_ok",
+      "second_create": "collection_exists",
+      "query_after_second_create": "vector_ok",
+      "ids_after_second_create": [
+        "r1",
+        "r3",
+        "r2"
+      ],
+      "pass": true
+    },
+    "weaviate": {
+      "first_create": "vector_ok",
+      "upsert": "vector_ok",
+      "second_create": "collection_exists",
+      "query_after_second_create": "vector_ok",
+      "ids_after_second_create": [
+        "r1",
+        "r3",
+        "r2"
+      ],
+      "pass": true
+    },
+    "elasticsearch": {
+      "first_create": "vector_ok",
+      "upsert": "vector_ok",
+      "second_create": "collection_exists",
+      "query_after_second_create": "vector_ok",
+      "ids_after_second_create": [
+        "r1",
+        "r3",
+        "r2"
+      ],
+      "pass": true
+    },
+    "chroma": {
+      "first_create": "vector_ok",
+      "upsert": "vector_ok",
+      "second_create": "collection_exists",
+      "query_after_second_create": "vector_ok",
+      "ids_after_second_create": [
+        "r1",
+        "r3",
+        "r2"
+      ],
+      "pass": true
+    },
+    "mongodb_atlas": {
+      "first_create": "vector_ok",
+      "upsert": "vector_ok",
+      "second_create": "collection_exists",
+      "query_after_second_create": "vector_ok",
+      "ids_after_second_create": [
+        "r1",
+        "r3",
+        "r2"
+      ],
+      "pass": true
+    }
+  },
+  "verdict": "LIVE-PASS"
+}

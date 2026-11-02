@@ -1,0 +1,67 @@
+{
+  "gate": "L30-2",
+  "timestamp": "2026-11-02T13:31:38.090011+00:00",
+  "cases": [
+    {
+      "store": "pgvector",
+      "request_id": "zs-249194053cd3",
+      "timestamp": "2026-11-02T13:31:38.091033+00:00",
+      "target": "127.0.0.1:50061 (nothing listening)",
+      "code": "provider_unreachable",
+      "records_is_none": true,
+      "elapsed_s": 0.0007,
+      "within_30s": true,
+      "is_provider_unreachable": true,
+      "is_empty_clean_search": false
+    },
+    {
+      "store": "qdrant",
+      "request_id": "zs-e27828df415d",
+      "timestamp": "2026-11-02T13:31:38.117856+00:00",
+      "target": "127.0.0.1:50061 (nothing listening)",
+      "code": "provider_unreachable",
+      "records_is_none": true,
+      "elapsed_s": 0.0268,
+      "within_30s": true,
+      "is_provider_unreachable": true,
+      "is_empty_clean_search": false
+    },
+    {
+      "store": "elasticsearch",
+      "request_id": "zs-1475f2f5d393",
+      "timestamp": "2026-11-02T13:31:38.120876+00:00",
+      "target": "127.0.0.1:50061 (nothing listening)",
+      "code": "provider_unreachable",
+      "records_is_none": true,
+      "elapsed_s": 0.003,
+      "within_30s": true,
+      "is_provider_unreachable": true,
+      "is_empty_clean_search": false
+    },
+    {
+      "store": "chroma",
+      "request_id": "zs-49abf2a50e46",
+      "timestamp": "2026-11-02T13:31:38.142443+00:00",
+      "target": "127.0.0.1:50061 (nothing listening)",
+      "code": "provider_unreachable",
+      "records_is_none": true,
+      "elapsed_s": 0.0215,
+      "within_30s": true,
+      "is_provider_unreachable": true,
+      "is_empty_clean_search": false
+    },
+    {
+      "store": "mongodb_atlas",
+      "request_id": "zs-fb4221fa5beb",
+      "timestamp": "2026-11-02T13:31:43.149124+00:00",
+      "target": "127.0.0.1:50061 (nothing listening)",
+      "code": "provider_unreachable",
+      "records_is_none": true,
+      "elapsed_s": 5.0066,
+      "within_30s": true,
+      "is_provider_unreachable": true,
+      "is_empty_clean_search": false
+    }
+  ],
+  "verdict": "LIVE-PASS"
+}
