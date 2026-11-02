@@ -1,0 +1,407 @@
+{
+  "pbtResults": {},
+  "executionHistory": {
+    "5.1 Implement `OrgCredential` and `CredentialResolution`": [
+      {
+        "executionId": "b5341d65-c052-4d32-84f0-ee656db2bf4a",
+        "chatSessionId": "sess_a67ac3ae-e66f-4a77-ba55-63d1ea3a6b2c",
+        "timestamp": 1793603692004
+      },
+      {
+        "executionId": "b5341d65-c052-4d32-84f0-ee656db2bf4a",
+        "chatSessionId": "sess_a67ac3ae-e66f-4a77-ba55-63d1ea3a6b2c",
+        "timestamp": 1793603999826
+      }
+    ],
+    "1.2 Write unit tests for code distinctness": [
+      {
+        "executionId": "b5341d65-c052-4d32-84f0-ee656db2bf4a",
+        "chatSessionId": "sess_a67ac3ae-e66f-4a77-ba55-63d1ea3a6b2c",
+        "timestamp": 1793603996522
+      }
+    ],
+    "1. Posture codes — `domain/posture.py` (bottom of the build order, codes only)": [
+      {
+        "executionId": "b5341d65-c052-4d32-84f0-ee656db2bf4a",
+        "chatSessionId": "sess_a67ac3ae-e66f-4a77-ba55-63d1ea3a6b2c",
+        "timestamp": 1793603996575
+      }
+    ],
+    "2.2 Write unit tests for the derivations and fail-closed paths": [
+      {
+        "executionId": "b5341d65-c052-4d32-84f0-ee656db2bf4a",
+        "chatSessionId": "sess_a67ac3ae-e66f-4a77-ba55-63d1ea3a6b2c",
+        "timestamp": 1793603997944
+      }
+    ],
+    "2. Capacity authority — `runtime/resources.py` derivations": [
+      {
+        "executionId": "b5341d65-c052-4d32-84f0-ee656db2bf4a",
+        "chatSessionId": "sess_a67ac3ae-e66f-4a77-ba55-63d1ea3a6b2c",
+        "timestamp": 1793603997989
+      }
+    ],
+    "4.1 Implement the frozen value types": [
+      {
+        "executionId": "b5341d65-c052-4d32-84f0-ee656db2bf4a",
+        "chatSessionId": "sess_a67ac3ae-e66f-4a77-ba55-63d1ea3a6b2c",
+        "timestamp": 1793603998962
+      }
+    ],
+    "6.1 Implement the `Vector_Adapter` `@runtime_checkable` protocol": [
+      {
+        "executionId": "b5341d65-c052-4d32-84f0-ee656db2bf4a",
+        "chatSessionId": "sess_a67ac3ae-e66f-4a77-ba55-63d1ea3a6b2c",
+        "timestamp": 1793604020479
+      },
+      {
+        "executionId": "720bffb6-8bee-4ae4-90d8-4ff5af4df957",
+        "chatSessionId": "sess_a67ac3ae-e66f-4a77-ba55-63d1ea3a6b2c",
+        "timestamp": 1793604954642
+      }
+    ],
+    "7.1 Implement `Stub_Vector_Connector`": [
+      {
+        "executionId": "b5341d65-c052-4d32-84f0-ee656db2bf4a",
+        "chatSessionId": "sess_a67ac3ae-e66f-4a77-ba55-63d1ea3a6b2c",
+        "timestamp": 1793604021906
+      },
+      {
+        "executionId": "720bffb6-8bee-4ae4-90d8-4ff5af4df957",
+        "chatSessionId": "sess_a67ac3ae-e66f-4a77-ba55-63d1ea3a6b2c",
+        "timestamp": 1793605003609
+      },
+      {
+        "executionId": "720bffb6-8bee-4ae4-90d8-4ff5af4df957",
+        "chatSessionId": "sess_a67ac3ae-e66f-4a77-ba55-63d1ea3a6b2c",
+        "timestamp": 1793605186275
+      }
+    ],
+    "4.2 Write unit tests for the absent-vs-empty invariant": [
+      {
+        "executionId": "b5341d65-c052-4d32-84f0-ee656db2bf4a",
+        "chatSessionId": "sess_a67ac3ae-e66f-4a77-ba55-63d1ea3a6b2c",
+        "timestamp": 1793604022830
+      },
+      {
+        "executionId": "720bffb6-8bee-4ae4-90d8-4ff5af4df957",
+        "chatSessionId": "sess_a67ac3ae-e66f-4a77-ba55-63d1ea3a6b2c",
+        "timestamp": 1793604993150
+      },
+      {
+        "executionId": "720bffb6-8bee-4ae4-90d8-4ff5af4df957",
+        "chatSessionId": "sess_a67ac3ae-e66f-4a77-ba55-63d1ea3a6b2c",
+        "timestamp": 1793605185266
+      }
+    ],
+    "5.2 Write unit tests for redaction and non-serialization": [
+      {
+        "executionId": "b5341d65-c052-4d32-84f0-ee656db2bf4a",
+        "chatSessionId": "sess_a67ac3ae-e66f-4a77-ba55-63d1ea3a6b2c",
+        "timestamp": 1793604023950
+      },
+      {
+        "executionId": "720bffb6-8bee-4ae4-90d8-4ff5af4df957",
+        "chatSessionId": "sess_a67ac3ae-e66f-4a77-ba55-63d1ea3a6b2c",
+        "timestamp": 1793604944038
+      }
+    ],
+    "5. Credential value types — `dispatch/vector_credentials.py` (data models)": [
+      {
+        "executionId": "720bffb6-8bee-4ae4-90d8-4ff5af4df957",
+        "chatSessionId": "sess_a67ac3ae-e66f-4a77-ba55-63d1ea3a6b2c",
+        "timestamp": 1793604944215
+      }
+    ],
+    "4. Adapter value types — `dispatch/vector_adapter.py` (data models)": [
+      {
+        "executionId": "720bffb6-8bee-4ae4-90d8-4ff5af4df957",
+        "chatSessionId": "sess_a67ac3ae-e66f-4a77-ba55-63d1ea3a6b2c",
+        "timestamp": 1793605185370
+      }
+    ],
+    "8.1 Implement `VectorRegistry`": [
+      {
+        "executionId": "720bffb6-8bee-4ae4-90d8-4ff5af4df957",
+        "chatSessionId": "sess_a67ac3ae-e66f-4a77-ba55-63d1ea3a6b2c",
+        "timestamp": 1793605206765
+      },
+      {
+        "executionId": "720bffb6-8bee-4ae4-90d8-4ff5af4df957",
+        "chatSessionId": "sess_a67ac3ae-e66f-4a77-ba55-63d1ea3a6b2c",
+        "timestamp": 1793605485484
+      }
+    ],
+    "10.1 Implement the `Credential_Source` seam and the scope guard": [
+      {
+        "executionId": "720bffb6-8bee-4ae4-90d8-4ff5af4df957",
+        "chatSessionId": "sess_a67ac3ae-e66f-4a77-ba55-63d1ea3a6b2c",
+        "timestamp": 1793605207784
+      },
+      {
+        "executionId": "720bffb6-8bee-4ae4-90d8-4ff5af4df957",
+        "chatSessionId": "sess_a67ac3ae-e66f-4a77-ba55-63d1ea3a6b2c",
+        "timestamp": 1793605486823
+      }
+    ],
+    "6.2 Write protocol-conformance unit tests": [
+      {
+        "executionId": "720bffb6-8bee-4ae4-90d8-4ff5af4df957",
+        "chatSessionId": "sess_a67ac3ae-e66f-4a77-ba55-63d1ea3a6b2c",
+        "timestamp": 1793605209614
+      },
+      {
+        "executionId": "720bffb6-8bee-4ae4-90d8-4ff5af4df957",
+        "chatSessionId": "sess_a67ac3ae-e66f-4a77-ba55-63d1ea3a6b2c",
+        "timestamp": 1793605483244
+      }
+    ],
+    "7.2 Write the stub-determinism property test": [
+      {
+        "executionId": "720bffb6-8bee-4ae4-90d8-4ff5af4df957",
+        "chatSessionId": "sess_a67ac3ae-e66f-4a77-ba55-63d1ea3a6b2c",
+        "timestamp": 1793605210435
+      },
+      {
+        "executionId": "720bffb6-8bee-4ae4-90d8-4ff5af4df957",
+        "chatSessionId": "sess_a67ac3ae-e66f-4a77-ba55-63d1ea3a6b2c",
+        "timestamp": 1793605484661
+      }
+    ],
+    "6. Adapter protocol — `dispatch/vector_adapter.py`": [
+      {
+        "executionId": "720bffb6-8bee-4ae4-90d8-4ff5af4df957",
+        "chatSessionId": "sess_a67ac3ae-e66f-4a77-ba55-63d1ea3a6b2c",
+        "timestamp": 1793605483303
+      }
+    ],
+    "7. Stub connector — `dispatch/vector_connectors.py` (build early; later tests inject it)": [
+      {
+        "executionId": "720bffb6-8bee-4ae4-90d8-4ff5af4df957",
+        "chatSessionId": "sess_a67ac3ae-e66f-4a77-ba55-63d1ea3a6b2c",
+        "timestamp": 1793605484734
+      }
+    ],
+    "9.1 Implement capability-flag enforcement on operations": [
+      {
+        "executionId": "720bffb6-8bee-4ae4-90d8-4ff5af4df957",
+        "chatSessionId": "sess_a67ac3ae-e66f-4a77-ba55-63d1ea3a6b2c",
+        "timestamp": 1793605495986
+      },
+      {
+        "executionId": "720bffb6-8bee-4ae4-90d8-4ff5af4df957",
+        "chatSessionId": "sess_a67ac3ae-e66f-4a77-ba55-63d1ea3a6b2c",
+        "timestamp": 1793606767524
+      }
+    ],
+    "11.1 Implement the credential leak guard": [
+      {
+        "executionId": "720bffb6-8bee-4ae4-90d8-4ff5af4df957",
+        "chatSessionId": "sess_a67ac3ae-e66f-4a77-ba55-63d1ea3a6b2c",
+        "timestamp": 1793605497385
+      },
+      {
+        "executionId": "720bffb6-8bee-4ae4-90d8-4ff5af4df957",
+        "chatSessionId": "sess_a67ac3ae-e66f-4a77-ba55-63d1ea3a6b2c",
+        "timestamp": 1793606768341
+      }
+    ],
+    "8.2 Write the no-silent-fallback property test": [
+      {
+        "executionId": "720bffb6-8bee-4ae4-90d8-4ff5af4df957",
+        "chatSessionId": "sess_a67ac3ae-e66f-4a77-ba55-63d1ea3a6b2c",
+        "timestamp": 1793605498705
+      },
+      {
+        "executionId": "720bffb6-8bee-4ae4-90d8-4ff5af4df957",
+        "chatSessionId": "sess_a67ac3ae-e66f-4a77-ba55-63d1ea3a6b2c",
+        "timestamp": 1793606765209
+      }
+    ],
+    "10.2 Write the org-credential-isolation property test": [
+      {
+        "executionId": "720bffb6-8bee-4ae4-90d8-4ff5af4df957",
+        "chatSessionId": "sess_a67ac3ae-e66f-4a77-ba55-63d1ea3a6b2c",
+        "timestamp": 1793605499836
+      },
+      {
+        "executionId": "720bffb6-8bee-4ae4-90d8-4ff5af4df957",
+        "chatSessionId": "sess_a67ac3ae-e66f-4a77-ba55-63d1ea3a6b2c",
+        "timestamp": 1793606766113
+      }
+    ],
+    "8. Registry — `dispatch/vector_adapter.py` (exact-match, no silent fallback)": [
+      {
+        "executionId": "720bffb6-8bee-4ae4-90d8-4ff5af4df957",
+        "chatSessionId": "sess_a67ac3ae-e66f-4a77-ba55-63d1ea3a6b2c",
+        "timestamp": 1793606765306
+      }
+    ],
+    "10. Credential source + scope guard — `dispatch/vector_credentials.py`": [
+      {
+        "executionId": "720bffb6-8bee-4ae4-90d8-4ff5af4df957",
+        "chatSessionId": "sess_a67ac3ae-e66f-4a77-ba55-63d1ea3a6b2c",
+        "timestamp": 1793606766197
+      }
+    ],
+    "12.1 Implement the bounded operation path": [
+      {
+        "executionId": "720bffb6-8bee-4ae4-90d8-4ff5af4df957",
+        "chatSessionId": "sess_a67ac3ae-e66f-4a77-ba55-63d1ea3a6b2c",
+        "timestamp": 1793606777579
+      },
+      {
+        "executionId": "720bffb6-8bee-4ae4-90d8-4ff5af4df957",
+        "chatSessionId": "sess_a67ac3ae-e66f-4a77-ba55-63d1ea3a6b2c",
+        "timestamp": 1793607168674
+      }
+    ],
+    "13.1 Implement the connector factory + capability table": [
+      {
+        "executionId": "720bffb6-8bee-4ae4-90d8-4ff5af4df957",
+        "chatSessionId": "sess_a67ac3ae-e66f-4a77-ba55-63d1ea3a6b2c",
+        "timestamp": 1793606778993
+      },
+      {
+        "executionId": "720bffb6-8bee-4ae4-90d8-4ff5af4df957",
+        "chatSessionId": "sess_a67ac3ae-e66f-4a77-ba55-63d1ea3a6b2c",
+        "timestamp": 1793607166058
+      }
+    ],
+    "9.2 Write the unsupported-operation-not-empty property test": [
+      {
+        "executionId": "720bffb6-8bee-4ae4-90d8-4ff5af4df957",
+        "chatSessionId": "sess_a67ac3ae-e66f-4a77-ba55-63d1ea3a6b2c",
+        "timestamp": 1793606780377
+      },
+      {
+        "executionId": "720bffb6-8bee-4ae4-90d8-4ff5af4df957",
+        "chatSessionId": "sess_a67ac3ae-e66f-4a77-ba55-63d1ea3a6b2c",
+        "timestamp": 1793607167486
+      }
+    ],
+    "11.2 Write the no-credential-leak property test": [
+      {
+        "executionId": "720bffb6-8bee-4ae4-90d8-4ff5af4df957",
+        "chatSessionId": "sess_a67ac3ae-e66f-4a77-ba55-63d1ea3a6b2c",
+        "timestamp": 1793606781235
+      },
+      {
+        "executionId": "720bffb6-8bee-4ae4-90d8-4ff5af4df957",
+        "chatSessionId": "sess_a67ac3ae-e66f-4a77-ba55-63d1ea3a6b2c",
+        "timestamp": 1793607169738
+      }
+    ],
+    "9. Capability enforcement — `dispatch/vector_adapter.py` / connector op path": [
+      {
+        "executionId": "720bffb6-8bee-4ae4-90d8-4ff5af4df957",
+        "chatSessionId": "sess_a67ac3ae-e66f-4a77-ba55-63d1ea3a6b2c",
+        "timestamp": 1793607167596
+      }
+    ],
+    "11. Pre-emission leak guard — `dispatch/vector_credentials.py` / emission boundary": [
+      {
+        "executionId": "720bffb6-8bee-4ae4-90d8-4ff5af4df957",
+        "chatSessionId": "sess_a67ac3ae-e66f-4a77-ba55-63d1ea3a6b2c",
+        "timestamp": 1793607169786
+      }
+    ],
+    "12.2 Write the provider-unreachable-not-empty property test": [
+      {
+        "executionId": "720bffb6-8bee-4ae4-90d8-4ff5af4df957",
+        "chatSessionId": "sess_a67ac3ae-e66f-4a77-ba55-63d1ea3a6b2c",
+        "timestamp": 1793607180216
+      },
+      {
+        "executionId": "720bffb6-8bee-4ae4-90d8-4ff5af4df957",
+        "chatSessionId": "sess_a67ac3ae-e66f-4a77-ba55-63d1ea3a6b2c",
+        "timestamp": 1793607509404
+      }
+    ],
+    "13.2 Write unit tests for the connector table": [
+      {
+        "executionId": "720bffb6-8bee-4ae4-90d8-4ff5af4df957",
+        "chatSessionId": "sess_a67ac3ae-e66f-4a77-ba55-63d1ea3a6b2c",
+        "timestamp": 1793607181217
+      },
+      {
+        "executionId": "720bffb6-8bee-4ae4-90d8-4ff5af4df957",
+        "chatSessionId": "sess_a67ac3ae-e66f-4a77-ba55-63d1ea3a6b2c",
+        "timestamp": 1793607510324
+      }
+    ],
+    "12. Connector operation execution over the injected transport — `dispatch/vector_connectors.py`": [
+      {
+        "executionId": "720bffb6-8bee-4ae4-90d8-4ff5af4df957",
+        "chatSessionId": "sess_a67ac3ae-e66f-4a77-ba55-63d1ea3a6b2c",
+        "timestamp": 1793607509498
+      }
+    ],
+    "13. The 13 named connectors — `dispatch/vector_connectors.py` (factory, no module mutable)": [
+      {
+        "executionId": "720bffb6-8bee-4ae4-90d8-4ff5af4df957",
+        "chatSessionId": "sess_a67ac3ae-e66f-4a77-ba55-63d1ea3a6b2c",
+        "timestamp": 1793607510388
+      }
+    ],
+    "15.1 Run the full offline gate and reconcile evidence": [
+      {
+        "executionId": "720bffb6-8bee-4ae4-90d8-4ff5af4df957",
+        "chatSessionId": "sess_a67ac3ae-e66f-4a77-ba55-63d1ea3a6b2c",
+        "timestamp": 1793607522194
+      },
+      {
+        "executionId": "720bffb6-8bee-4ae4-90d8-4ff5af4df957",
+        "chatSessionId": "sess_a67ac3ae-e66f-4a77-ba55-63d1ea3a6b2c",
+        "timestamp": 1793609323897
+      }
+    ],
+    "15. Final offline verification gate": [
+      {
+        "executionId": "720bffb6-8bee-4ae4-90d8-4ff5af4df957",
+        "chatSessionId": "sess_a67ac3ae-e66f-4a77-ba55-63d1ea3a6b2c",
+        "timestamp": 1793609323975
+      }
+    ],
+    "16.1 Wire the real per-store transports and capture live exit evidence": [
+      {
+        "executionId": "720bffb6-8bee-4ae4-90d8-4ff5af4df957",
+        "chatSessionId": "sess_a67ac3ae-e66f-4a77-ba55-63d1ea3a6b2c",
+        "timestamp": 1793609606473
+      },
+      {
+        "executionId": "720bffb6-8bee-4ae4-90d8-4ff5af4df957",
+        "chatSessionId": "sess_a67ac3ae-e66f-4a77-ba55-63d1ea3a6b2c",
+        "timestamp": 1793610563431
+      }
+    ],
+    "16. Live acceptance gates — L30-1 / L30-2 / L30-3 (real Docker/staging, real wire bytes)": [
+      {
+        "executionId": "720bffb6-8bee-4ae4-90d8-4ff5af4df957",
+        "chatSessionId": "sess_a67ac3ae-e66f-4a77-ba55-63d1ea3a6b2c",
+        "timestamp": 1793610563563
+      }
+    ],
+    "3. Checkpoint — lower layers (domain + runtime) green": [
+      {
+        "executionId": "720bffb6-8bee-4ae4-90d8-4ff5af4df957",
+        "chatSessionId": "sess_a67ac3ae-e66f-4a77-ba55-63d1ea3a6b2c",
+        "timestamp": 1793610588425
+      }
+    ],
+    "14. Checkpoint — adapter layer green": [
+      {
+        "executionId": "720bffb6-8bee-4ae4-90d8-4ff5af4df957",
+        "chatSessionId": "sess_a67ac3ae-e66f-4a77-ba55-63d1ea3a6b2c",
+        "timestamp": 1793610603475
+      }
+    ],
+    "17. Final checkpoint": [
+      {
+        "executionId": "720bffb6-8bee-4ae4-90d8-4ff5af4df957",
+        "chatSessionId": "sess_a67ac3ae-e66f-4a77-ba55-63d1ea3a6b2c",
+        "timestamp": 1793610613731
+      }
+    ]
+  }
+}
