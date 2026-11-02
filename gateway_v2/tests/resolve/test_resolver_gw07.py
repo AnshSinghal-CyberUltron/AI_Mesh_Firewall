@@ -447,6 +447,7 @@ def _rule_with_id(rule: Rule, rule_id: str) -> Rule:
         scope=rule.scope,
         on_unavailable=rule.on_unavailable,
         surfaces=rule.surfaces,
+        condition=rule.condition,
     )
 
 

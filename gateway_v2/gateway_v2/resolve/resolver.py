@@ -28,6 +28,7 @@ from gateway_v2.domain import (
     Phase,
     Rule,
     Span,
+    Surface,
     Transformation,
     most_restrictive,
 )
@@ -147,8 +148,15 @@ def resolve(
     findings: Sequence[Finding],
     plan: ExecutionPlan,
     phase: Phase,
+    surface: Surface | None = None,
+    stage: str | None = None,
 ) -> Decision:
     """Resolve ``findings`` under ``plan`` for ``phase`` into one ``Decision``.
+
+    ``surface`` limits selection to rules that name it (GW26). ``None`` selects
+    by phase only, which is what every caller did before surfaces were enforced.
+    ``stage`` limits a rule whose condition names a pipeline stage. ``None``
+    skips those rules, which is a chat request.
 
     Steps (§10.5.3) in strict order: select phase-admitted non-OFF rules; build
     at most one candidate ``FindingDisposition`` per finding (SKIPPED records
@@ -161,7 +169,7 @@ def resolve(
     each ``FindingDisposition.finding_index`` is its finding's index into that
     tuple; ``plan_version`` is ``plan.version``.
     """
-    selected = _select_rules(plan, phase)
+    selected = _select_rules(plan, phase, surface, stage)
     per_finding: list[FindingDisposition] = []
     transformations: list[Transformation] = []
     deciding_rules: list[str] = []

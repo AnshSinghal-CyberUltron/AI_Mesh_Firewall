@@ -24,6 +24,7 @@ from gateway_v2.domain import (
     ExecutionPlan,
     Finding,
     Phase,
+    Surface,
     Transformation,
 )
 
@@ -85,12 +86,16 @@ class PlanResolver:
 
     plan: ExecutionPlan
     phase: Phase
+    #: GW26. ``None`` selects by phase only. A set surface keeps rules that omit it.
+    surface: Surface | None = None
+    #: GW26. ``None`` skips rules that name a pipeline stage.
+    stage: str | None = None
 
     def decide(self, matches: Sequence[Finding]) -> Decision:
-        """Resolve ``matches`` against the bound plan+phase via ``resolve``."""
+        """Resolve ``matches`` against the bound plan, phase, surface, and stage."""
         from gateway_v2.resolve.resolver import resolve
 
-        return resolve(matches, self.plan, self.phase)
+        return resolve(matches, self.plan, self.phase, self.surface, self.stage)
 
 
 __all__ = (

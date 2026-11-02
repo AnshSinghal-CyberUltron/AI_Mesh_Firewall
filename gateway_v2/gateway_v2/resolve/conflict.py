@@ -22,7 +22,9 @@ from gateway_v2.domain import (
     Mode,
     Phase,
     Rule,
+    RuleKind,
     RuleScope,
+    Surface,
     most_restrictive,
 )
 from gateway_v2.resolve.decision import _action_to_disposition
@@ -39,28 +41,56 @@ def _phase_admits(scope: RuleScope, phase: Phase) -> bool:
     return scope is RuleScope.OUTPUT or scope is RuleScope.BOTH
 
 
-def _select_rules(plan: ExecutionPlan, phase: Phase) -> tuple[Rule, ...]:
-    """The phase-admitted, non-OFF rules of ``plan``.
+def _select_rules(
+    plan: ExecutionPlan,
+    phase: Phase,
+    surface: Surface | None = None,
+    stage: str | None = None,
+) -> tuple[Rule, ...]:
+    """The phase-admitted, non-OFF rules of ``plan`` for one surface.
 
     A rule is admitted when its ``scope`` admits ``phase`` (INPUT -> INPUT/BOTH,
     OUTPUT -> OUTPUT/BOTH). ``Mode.OFF`` rules never select -- OFF means no work
-    (§10.5.3 step 222). Order is preserved from ``plan.rules``.
+    (§10.5.3 step 222). When ``surface`` is set, the rule must also name that
+    surface (GW26). ``None`` keeps the phase-only selection. A condition with a
+    pipeline stage matches only that stage, so a chat request (no stage) skips it.
+    Order is preserved from ``plan.rules``.
     """
     return tuple(
         rule
         for rule in plan.rules
-        if _phase_admits(rule.scope, phase) and rule.mode is not Mode.OFF
+        if _phase_admits(rule.scope, phase)
+        and rule.mode is not Mode.OFF
+        and (surface is None or surface in rule.surfaces)
+        and _stage_admits(rule, stage)
     )
 
 
-def _rules_for(finding: Finding, selected: Sequence[Rule]) -> tuple[Rule, ...]:
-    """The category join: ``selected`` rules whose category matches ``finding``.
+def _stage_admits(rule: Rule, stage: str | None) -> bool:
+    condition = rule.condition
+    if condition is None or not condition.pipeline_stage:
+        return True
+    return stage == condition.pipeline_stage
 
-    ``category`` is the only shared, type-identical field between ``Finding`` and
-    ``Rule``, so it is the join key (§10.5.3 step 222 / Decision 1). Order is
-    preserved from ``selected``.
+
+def _rules_for(finding: Finding, selected: Sequence[Rule]) -> tuple[Rule, ...]:
+    """Join ``finding`` to the rule that produced it, else to category rules.
+
+    A customer condition sets ``finding.detector`` to the rule id, so that rule
+    is the only join. Built-in findings keep the category join, and a keyword
+    rule of the same category is not selected by that join.
     """
-    return tuple(rule for rule in selected if rule.category == finding.category)
+    by_id = tuple(rule for rule in selected if rule.rule_id == finding.detector)
+    if by_id:
+        return by_id
+    return tuple(
+        rule for rule in selected if rule.category == finding.category and _category_join(rule)
+    )
+
+
+def _category_join(rule: Rule) -> bool:
+    condition = rule.condition
+    return condition is None or condition.kind is RuleKind.DETECTOR
 
 
 def _winning_action(finding: Finding, rules: Sequence[Rule]) -> Action | None:
