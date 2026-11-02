@@ -86,7 +86,7 @@ def test_fstring_interpolation_never_leaks_the_secret() -> None:
 
     assert secret not in f"{cred}"
     assert secret not in f"{cred!r}"
-    assert secret not in "{}".format(cred)
+    assert secret not in "{}".format(cred)  # noqa: UP032 - exercises str.format, not an f-string
 
 
 def test_type_exposes_no_credential_serializer_in_its_own_dict() -> None:
@@ -142,7 +142,7 @@ def test_resolution_ok_false_on_every_failure_code() -> None:
 
 
 def test_resolution_ok_false_when_credential_omitted_even_on_ok_code() -> None:
-    """``ok`` keys off credential presence, not the code -- a code-only value is not ``ok`` (R10)."""
+    """``ok`` keys off credential presence, not the code: a code-only value is not ``ok`` (R10)."""
     resolution = CredentialResolution(code=posture.VECTOR_OK)
 
     assert resolution.ok is False
