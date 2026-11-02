@@ -18,6 +18,26 @@ from rest_framework.viewsets import ModelViewSet
 from auth.utils import get_request_organization
 from core.admin_views import IsAdminOrSuperuser
 
+
+def _stamp_plan(response, org):
+    """Publish the org plan and name any omitted actions on a successful save."""
+    if org is None or getattr(response, "status_code", 500) >= 400:
+        return response
+    from core.firewall_v2_publish import publish_for_org
+
+    status_body = publish_for_org(org)
+    if isinstance(getattr(response, "data", None), dict):
+        response.data["gateway_v2_plan"] = status_body
+    return response
+
+
+def _publish_org(org):
+    if org is None:
+        return None
+    from core.firewall_v2_publish import publish_for_org
+
+    return publish_for_org(org)
+
 from .constants import ACTION_BLOCK, ACTION_REDACT
 from .engine import VALID_POLICY_DOMAINS, validate_policy_domain
 from .models import EnforcementEvent, Policy, PolicyVersion, Rule
@@ -507,6 +527,10 @@ class PolicyViewSet(ModelViewSet):
             qs = qs.filter(policy_domain=policy_domain)
         return qs
 
+    def create(self, request, *args, **kwargs):
+        response = super().create(request, *args, **kwargs)
+        return _stamp_plan(response, get_request_organization(request))
+
     def perform_create(self, serializer):
         from rest_framework.exceptions import PermissionDenied
 
@@ -600,7 +624,7 @@ class PolicyViewSet(ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         try:
-            return super().update(request, *args, **kwargs)
+            response = super().update(request, *args, **kwargs)
         except ConflictError as e:
             return Response(
                 {
@@ -611,13 +635,16 @@ class PolicyViewSet(ModelViewSet):
                 },
                 status=status.HTTP_409_CONFLICT,
             )
+        return _stamp_plan(response, get_request_organization(request))
 
     def perform_destroy(self, instance):
         if instance.is_system:
             from rest_framework.exceptions import PermissionDenied
 
             raise PermissionDenied("System policies cannot be deleted.")
+        org = instance.organization
         instance.delete()
+        _publish_org(org)
 
     @extend_schema(
         tags=["Policies"],
@@ -675,7 +702,8 @@ class PolicyViewSet(ModelViewSet):
         serializer = RuleWriteSerializer(data={**request.data, "policy": policy.id})
         serializer.is_valid(raise_exception=True)
         serializer.save(policy=policy)
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
+        response = Response(serializer.data, status=status.HTTP_201_CREATED)
+        return _stamp_plan(response, policy.organization)
 
     @extend_schema(
         tags=["Policies"],
@@ -915,7 +943,13 @@ class RuleViewSet(ModelViewSet):
         serializer = RuleWriteSerializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
         serializer.save(policy=policy)
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
+        response = Response(serializer.data, status=status.HTTP_201_CREATED)
+        return _stamp_plan(response, policy.organization)
+
+    def update(self, request, *args, **kwargs):
+        response = super().update(request, *args, **kwargs)
+        rule = self.get_object()
+        return _stamp_plan(response, rule.policy.organization)
 
     def perform_update(self, serializer):
         from rest_framework.exceptions import PermissionDenied
@@ -930,7 +964,9 @@ class RuleViewSet(ModelViewSet):
 
         if instance.policy.is_system and not _user_is_policy_admin(self.request):
             raise PermissionDenied("Only platform admins can delete system policy rules.")
+        org = instance.policy.organization
         instance.delete()
+        _publish_org(org)
 
 
 from rest_framework.views import APIView as _APIView  # noqa: E402
