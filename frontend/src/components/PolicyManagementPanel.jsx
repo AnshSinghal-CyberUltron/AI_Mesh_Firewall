@@ -83,6 +83,34 @@ const POLICY_SCOPE_OPTIONS = [
 
 const POLICY_DOMAINS = POLICY_SCOPE_OPTIONS.map((option) => option.value);
 
+const SURFACE_OPTIONS = [
+  { value: "global", label: "Global" },
+  { value: "chat", label: "Chat" },
+  { value: "embeddings", label: "Embeddings" },
+  { value: "rag", label: "RAG" },
+  { value: "vector", label: "Vector" },
+  { value: "mcp", label: "MCP" },
+];
+
+function selectedSurfaces(condition) {
+  const raw = condition?.surfaces;
+  if (!Array.isArray(raw)) return [];
+  return raw.map((item) => String(item).trim().toLowerCase()).filter(Boolean);
+}
+
+function toggleSurface(condition, value) {
+  const selected = new Set(selectedSurfaces(condition));
+  if (value === "global") {
+    return selected.has("global") ? [] : ["global"];
+  }
+  selected.delete("global");
+  if (selected.has(value)) selected.delete(value);
+  else selected.add(value);
+  return SURFACE_OPTIONS.map((option) => option.value).filter(
+    (item) => item !== "global" && selected.has(item),
+  );
+}
+
 function normalizePolicyScope(policy) {
   // Prefer the backend policy_domain field (authoritative source)
   const domain = String(policy?.policy_domain || "").trim().toLowerCase();
@@ -892,6 +920,35 @@ function RuleModal({
               </div>
             </div>
           )}
+          <fieldset>
+            <legend className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+              Surfaces
+            </legend>
+            <div className="flex flex-wrap gap-2">
+              {SURFACE_OPTIONS.map((option) => {
+                const checked = selectedSurfaces(form.condition).includes(option.value);
+                return (
+                  <label
+                    key={option.value}
+                    className="inline-flex items-center gap-1.5 min-h-9 px-2 py-1 text-xs text-slate-700 dark:text-slate-300"
+                  >
+                    <input
+                      type="checkbox"
+                      data-testid={`surface-${option.value}`}
+                      checked={checked}
+                      onChange={() =>
+                        handleConditionChange("surfaces", toggleSurface(form.condition, option.value))
+                      }
+                    />
+                    {option.label}
+                  </label>
+                );
+              })}
+            </div>
+            <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+              None selected uses the policy domain default. Global covers chat, embeddings, RAG, vector, and MCP.
+            </p>
+          </fieldset>
           {form.action === "redact" && (
             <div>
               <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Redaction Replacement</label>
