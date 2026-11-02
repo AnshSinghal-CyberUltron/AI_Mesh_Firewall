@@ -22,6 +22,8 @@ from gateway_v2.domain.plan import (
     Action,
     FailurePosture,
     Mode,
+    RuleCondition,
+    RuleKind,
     RuleScope,
     StreamingMode,
     Surface,
@@ -43,20 +45,39 @@ def encode_plan_body(document: PlanDocument) -> dict[str, object]:
     return {
         "org_id": document.org_id,
         "streaming_mode": document.streaming_mode.value,
-        "rules": [
-            {
-                "rule_id": draft.rule_id,
-                "category": draft.category.value,
-                "mode": draft.mode.value,
-                "action": draft.action.value,
-                "threshold": draft.threshold,
-                "priority": draft.priority,
-                "scope": draft.scope.value,
-                "on_unavailable": draft.on_unavailable.value,
-                "surfaces": sorted(surface.value for surface in draft.surfaces),
-            }
-            for draft in document.drafts
-        ],
+        "rules": [_rule_body(draft) for draft in document.drafts],
+    }
+
+
+def _rule_body(draft: RuleDraft) -> dict[str, object]:
+    body: dict[str, object] = {
+        "rule_id": draft.rule_id,
+        "category": draft.category.value,
+        "mode": draft.mode.value,
+        "action": draft.action.value,
+        "threshold": draft.threshold,
+        "priority": draft.priority,
+        "scope": draft.scope.value,
+        "on_unavailable": draft.on_unavailable.value,
+        "surfaces": sorted(surface.value for surface in draft.surfaces),
+    }
+    encoded = _encode_condition(draft.condition)
+    if encoded is not None:
+        body["condition"] = encoded
+    return body
+
+
+def _encode_condition(condition: RuleCondition | None) -> dict[str, object] | None:
+    if condition is None:
+        return None
+    return {
+        "kind": condition.kind.value,
+        "field": condition.field,
+        "direction": condition.direction.value,
+        "keywords": list(condition.keywords),
+        "pattern": condition.pattern,
+        "detector_class": condition.detector_class,
+        "pipeline_stage": condition.pipeline_stage,
     }
 
 
@@ -138,10 +159,49 @@ def _draft(entry: object, position: int) -> RuleDraft:
         priority=_whole(rules, "priority"),
         scope=_member(RuleScope, _text(rules, "scope"), "scope"),
         on_unavailable=_member(
-            FailurePosture, _text(rules, "on_unavailable"), "on_unavailable",
+            FailurePosture,
+            _text(rules, "on_unavailable"),
+            "on_unavailable",
         ),
         surfaces=_surfaces(rules),
+        condition=_condition(rules),
     )
+
+
+def _condition(entry: Mapping[str, object]) -> RuleCondition | None:
+    if "condition" not in entry or entry.get("condition") is None:
+        return None
+    raw = entry["condition"]
+    if not isinstance(raw, dict):
+        raise CompileError("plan rule field 'condition' must be an object")
+    body: Mapping[str, object] = raw
+    return RuleCondition(
+        kind=_member(RuleKind, _text(body, "kind"), "condition.kind"),
+        field=_maybe_text(body, "field"),
+        direction=_member(RuleScope, _text(body, "direction"), "condition.direction"),
+        keywords=_keywords(body),
+        pattern=_maybe_text(body, "pattern"),
+        detector_class=_maybe_text(body, "detector_class"),
+        pipeline_stage=_maybe_text(body, "pipeline_stage"),
+    )
+
+
+def _maybe_text(body: Mapping[str, object], name: str) -> str:
+    value = body.get(name, "")
+    if value is None:
+        return ""
+    if not isinstance(value, str):
+        raise CompileError(f"plan rule field {name!r} must be a string")
+    return value
+
+
+def _keywords(body: Mapping[str, object]) -> tuple[str, ...]:
+    value = body.get("keywords", [])
+    if value is None:
+        return ()
+    if not isinstance(value, list) or any(not isinstance(item, str) or not item for item in value):
+        raise CompileError("plan rule field 'keywords' must be a list of non-empty strings")
+    return tuple(value)
 
 
 def plan_body_of(

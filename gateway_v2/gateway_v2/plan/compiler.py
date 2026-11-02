@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 from dataclasses import dataclass
 
 from gateway_v2.domain.category import Category
@@ -12,6 +13,8 @@ from gateway_v2.domain.plan import (
     FailurePosture,
     Mode,
     Rule,
+    RuleCondition,
+    RuleKind,
     RuleScope,
     StreamingMode,
     Surface,
@@ -21,6 +24,7 @@ SUPPORTED_STREAMING = frozenset({StreamingMode.INCREMENTAL, StreamingMode.STRICT
 SUPPORTED_ACTIONS = frozenset(
     {Action.ALLOW, Action.FLAG, Action.REDACT, Action.BLOCK},
 )
+_PIPELINE_STAGES = frozenset({"", "query", "retriever", "ranker", "generator"})
 
 
 class CompileError(ValueError):
@@ -38,6 +42,7 @@ class RuleDraft:
     scope: RuleScope
     on_unavailable: FailurePosture
     surfaces: frozenset[Surface]
+    condition: RuleCondition | None = None
 
 
 def detector_id(category: Category) -> str:
@@ -49,22 +54,37 @@ def _hash_rules(rules: tuple[Rule, ...]) -> str:
     for rule in sorted(rules, key=lambda item: item.rule_id):
         surfaces = ",".join(sorted(surface.value for surface in rule.surfaces))
         threshold = "" if rule.threshold is None else f"{rule.threshold:.4f}"
-        lines.append(
-            "|".join(
-                (
-                    rule.rule_id,
-                    rule.category.value,
-                    rule.mode.value,
-                    rule.action.value,
-                    threshold,
-                    str(rule.priority),
-                    rule.scope.value,
-                    rule.on_unavailable.value,
-                    surfaces,
-                ),
-            ),
+        parts: tuple[str, ...] = (
+            rule.rule_id,
+            rule.category.value,
+            rule.mode.value,
+            rule.action.value,
+            threshold,
+            str(rule.priority),
+            rule.scope.value,
+            rule.on_unavailable.value,
+            surfaces,
         )
+        token = _condition_token(rule.condition)
+        if token:
+            parts = (*parts, token)
+        lines.append("|".join(parts))
     return hashlib.sha256("\n".join(lines).encode()).hexdigest()
+
+
+def _condition_token(condition: RuleCondition | None) -> str:
+    if condition is None:
+        return ""
+    payload = {
+        "detector_class": condition.detector_class,
+        "direction": condition.direction.value,
+        "field": condition.field,
+        "keywords": list(condition.keywords),
+        "kind": condition.kind.value,
+        "pattern": condition.pattern,
+        "pipeline_stage": condition.pipeline_stage,
+    }
+    return json.dumps(payload, separators=(",", ":"))
 
 
 def _check_draft(draft: RuleDraft) -> None:
@@ -74,8 +94,7 @@ def _check_draft(draft: RuleDraft) -> None:
         raise CompileError("category must be a Category member")
     if draft.action not in SUPPORTED_ACTIONS:
         raise CompileError(
-            f"action {draft.action.value} is not supported; "
-            "use allow, flag, redact, or block",
+            f"action {draft.action.value} is not supported; use allow, flag, redact, or block",
         )
     if draft.threshold is not None and not 0.0 <= draft.threshold <= 1.0:
         raise CompileError("threshold must be between 0 and 1")
@@ -84,6 +103,23 @@ def _check_draft(draft: RuleDraft) -> None:
     unknown = [item for item in draft.surfaces if not isinstance(item, Surface)]
     if unknown:
         raise CompileError(f"unsupported surface {unknown[0]!r}")
+    _check_condition(draft)
+
+
+def _check_condition(draft: RuleDraft) -> None:
+    condition = draft.condition
+    if condition is None:
+        return
+    if condition.direction is not draft.scope:
+        raise CompileError("condition direction must match the rule scope")
+    if condition.pipeline_stage not in _PIPELINE_STAGES:
+        raise CompileError("unsupported pipeline_stage")
+    if condition.kind is RuleKind.KEYWORDS and not condition.keywords:
+        raise CompileError("keywords condition needs at least one keyword")
+    if condition.kind in (RuleKind.REGEX, RuleKind.PATTERN) and not condition.pattern.strip():
+        raise CompileError("regex condition needs a pattern")
+    if condition.kind is RuleKind.DETECTOR and not condition.detector_class.strip():
+        raise CompileError("detector condition needs a detector class")
 
 
 def compile_plan(
@@ -100,8 +136,7 @@ def compile_plan(
         raise CompileError("org_id is required")
     if streaming_mode not in SUPPORTED_STREAMING:
         raise CompileError(
-            f"streaming mode {streaming_mode.value} is not available yet; "
-            "use incremental",
+            f"streaming mode {streaming_mode.value} is not available yet; use incremental",
         )
     seen: set[str] = set()
     kept: list[Rule] = []
@@ -123,6 +158,7 @@ def compile_plan(
             scope=draft.scope,
             on_unavailable=draft.on_unavailable,
             surfaces=draft.surfaces,
+            condition=draft.condition,
         )
         kept.append(rule)
         detectors.add(detector_id(draft.category))
