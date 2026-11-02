@@ -16,6 +16,7 @@ from gateway_v2.edge.counters import (
     COVERAGE_GAP_SERIES,
     POSTURE_CODES,
     REASON_VOCAB,
+    STATUS_VOCAB,
     VOCAB_ERROR_SERIES,
     PostureCounters,
     RejectionCounters,
@@ -48,6 +49,19 @@ def test_out_of_vocab_posture_increments_coverage_gap_no_merge() -> None:
     for code in POSTURE_CODES:
         name = f"amf_posture_refusals_{code}_total"
         assert after[name] == before[name], f"{code} counter moved on an unknown code"
+
+
+def test_every_renderable_status_is_seeded_and_an_unknown_status_adds_no_series() -> None:
+    counters = RejectionCounters()
+    before = counters.series()
+    for status in STATUS_VOCAB:
+        for reason in REASON_VOCAB:
+            assert before[f'amf_rejected{{status="{status}",reason="{reason}"}}'] == 0
+    assert 418 not in STATUS_VOCAB
+    counters.observe(418, REASON_VOCAB[0])
+    after = counters.series()
+    assert set(after) == set(before)
+    assert after[VOCAB_ERROR_SERIES] == before[VOCAB_ERROR_SERIES] + 1
 
 
 def test_raise_on_unknown_surfaces_vocabulary_error() -> None:

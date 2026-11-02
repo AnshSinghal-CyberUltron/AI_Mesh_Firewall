@@ -368,6 +368,15 @@ def _is_not_implemented(transport: _Transport) -> bool:
     return isinstance(error, dict) and error.get("type") == "not_implemented"
 
 
+def _is_endpoint_not_found(transport: _Transport) -> bool:
+    """True iff the response is the declared ``404 endpoint_not_found`` rendering."""
+    if transport.status() != _NOT_FOUND_STATUS:
+        return False
+    obj = transport.json_body()
+    error = obj.get("error") if isinstance(obj, dict) else None
+    return isinstance(error, dict) and error.get("code") == "endpoint_not_found"
+
+
 # --------------------------------------------------------------------------- #
 # Random path generators (seeded random.Random; no hypothesis).
 # --------------------------------------------------------------------------- #
@@ -537,29 +546,29 @@ def test_http_prefix_step_routes_models_id_to_retrieve() -> None:
 
 # Feature: chat-surface-gw16-misc
 # Validates: Requirements 9.2, 11.3
-def test_models_empty_suffix_falls_through_to_not_implemented() -> None:
-    """``GET /v1/models/`` (empty trailing segment) → 501 ``not_implemented``, NOT retrieve.
+def test_models_empty_suffix_falls_through_to_endpoint_not_found() -> None:
+    """``GET /v1/models/`` (empty trailing segment) → 404 ``endpoint_not_found``, NOT retrieve.
 
     ``_match_prefix`` requires a NON-EMPTY trailing segment (``len(path) > len(prefix)``), so the
-    bare prefix with an empty suffix does not match and falls through to the declared
-    ``not_implemented`` placeholder — it must NOT render a model retrieve body or a 404.
+    bare prefix with an empty suffix does not match and falls through to the routing miss — it
+    must NOT render a model retrieve body (``model_not_found``).
     """
     app = _scripted_skin(_CountingProvider(), _ScriptedCatalog(()))
     transport = _drive(app, "GET", "/v1/models/")
-    assert _is_not_implemented(transport), (
-        f"/v1/models/ (empty suffix) did not fall through to 501 not_implemented: "
+    assert _is_endpoint_not_found(transport), (
+        f"/v1/models/ (empty suffix) did not fall through to 404 endpoint_not_found: "
         f"{transport.status()}"
     )
 
 
 # Feature: chat-surface-gw16-misc
 # Validates: Requirements 9.2, 11.3
-def test_unknown_route_renders_not_implemented() -> None:
-    """An entirely unmapped ``(method, path)`` renders the declared 501 ``not_implemented``."""
+def test_unknown_route_renders_endpoint_not_found() -> None:
+    """An entirely unmapped ``(method, path)`` renders 404 ``endpoint_not_found`` (v1 parity)."""
     app = _scripted_skin(_CountingProvider(), _ScriptedCatalog(()))
     transport = _drive(app, "GET", "/v1/nope/" + "x" * 4)
-    assert _is_not_implemented(transport), (
-        f"an unknown route did not render 501 not_implemented: {transport.status()}"
+    assert _is_endpoint_not_found(transport), (
+        f"an unknown route did not render 404 endpoint_not_found: {transport.status()}"
     )
 
 

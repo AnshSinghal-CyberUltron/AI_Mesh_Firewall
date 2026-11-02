@@ -353,11 +353,14 @@ def test_registered_placeholder_returns_501_not_404() -> None:
     _assert_not_implemented(transport)
 
 
-def test_unknown_route_returns_501_not_raw_framework_error() -> None:
-    """An unknown ``(method, path)`` renders the declared ``501``, not a raw framework error."""
+def test_unknown_route_returns_404_endpoint_not_found() -> None:
+    """An unknown ``(method, path)`` renders the declared 404 ``endpoint_not_found`` envelope."""
     app = _build()
     transport = _drive_http(app, "GET", "/this/route/does/not/exist")
-    _assert_not_implemented(transport)
+    assert transport.status() == 404, transport.status()
+    obj = json.loads(transport.body_bytes().decode("utf-8"))
+    assert obj["error"]["code"] == "endpoint_not_found"
+    assert obj["error"]["type"] == "not_found_error"
 
 
 # --------------------------------------------------------------------------- #

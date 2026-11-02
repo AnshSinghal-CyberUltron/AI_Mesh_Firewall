@@ -287,6 +287,11 @@ ERROR_SHAPES: Mapping[str, tuple[str, str]] = MappingProxyType(
             "invalid_request_error",
             "The method parameters have the wrong shape.",
         ),
+        "endpoint_not_found": ("not_found_error", "No endpoint is served at this path."),
+        "method_not_allowed": (
+            "invalid_request_error",
+            "This endpoint does not accept that HTTP method.",
+        ),
     }
 )
 

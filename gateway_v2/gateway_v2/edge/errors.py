@@ -56,6 +56,7 @@ from gateway_v2.edge.wire.sse import SSEEncoder, error_frame_for
 __all__ = (
     "GENERIC_HTTP_STATUS",
     "NOT_IMPLEMENTED_HTTP_STATUS",
+    "RENDERABLE_STATUSES",
     "HTTPResponse",
     "render",
     "render_http",
@@ -244,6 +245,11 @@ _ENVELOPE: Mapping[str, tuple[int, str]] = MappingProxyType(
         "mcp_invalid_request": (400, "invalid_request_error"),
         "mcp_method_not_found": (404, "not_found_error"),
         "mcp_invalid_params": (400, "invalid_request_error"),
+        # -- Routing misses (GW34 / V-15) --------------------------------------
+        # v1 answered an unknown path with 404 ``endpoint_not_found``; a 5xx would make the
+        # stock SDK retry. A known path with the wrong method is a 405, as v1 (FastAPI).
+        "endpoint_not_found": (404, "not_found_error"),
+        "method_not_allowed": (405, "invalid_request_error"),
         # -- Pre-existing posture codes (R2 cards) ----------------------------
         posture.PLAN_UNAVAILABLE: (503, "service_unavailable"),
         posture.KILL_SWITCH_UNAVAILABLE: (503, "service_unavailable"),
@@ -251,6 +257,13 @@ _ENVELOPE: Mapping[str, tuple[int, str]] = MappingProxyType(
         posture.BUDGET_UNAVAILABLE: (503, "service_unavailable"),
         posture.OVERLOAD_SHED: (503, "service_unavailable"),
     }
+)
+
+#: Every status :func:`render_http` can produce: each envelope status plus the generic fallback.
+#: The metrics ``rejected{status,reason}`` family is seeded over exactly this set, so a refusal
+#: can never add a series the Publisher's fixed series count does not include.
+RENDERABLE_STATUSES: tuple[int, ...] = tuple(
+    sorted({status for status, _ in _ENVELOPE.values()} | {GENERIC_HTTP_STATUS})
 )
 
 

@@ -339,6 +339,15 @@ def _is_not_implemented(transport: _Transport) -> bool:
     return isinstance(error, dict) and error.get("type") == "not_implemented"
 
 
+def _is_endpoint_not_found(transport: _Transport) -> bool:
+    """True iff the response is the declared ``404 endpoint_not_found`` rendering."""
+    if transport.status() != _NOT_FOUND_STATUS:
+        return False
+    obj = transport.json_body()
+    error = obj.get("error") if isinstance(obj, dict) else None
+    return isinstance(error, dict) and error.get("code") == "endpoint_not_found"
+
+
 def _one_known_catalog(known_id: str) -> _ScriptedCatalog:
     """A scripted catalog carrying exactly one model with ``known_id`` + two decoys."""
     return _ScriptedCatalog(
@@ -459,37 +468,36 @@ def test_exact_match_takes_precedence_over_prefix_table() -> None:
     )
 
 
-def test_empty_trailing_segment_falls_through_to_not_implemented() -> None:
-    """``GET /v1/models/`` (empty trailing segment) → 501 ``not_implemented``, NOT retrieve (R1.2).
+def test_empty_trailing_segment_falls_through_to_endpoint_not_found() -> None:
+    """``GET /v1/models/`` (empty trailing segment) → 404 ``endpoint_not_found``, NOT retrieve.
 
     ``_match_prefix`` requires a NON-EMPTY trailing segment (``len(path) > len(prefix)``), so the
     bare prefix with an empty suffix does not match the retrieve handler and falls through to the
-    declared ``not_implemented`` placeholder — it must NOT render a model retrieve body, a list, or
-    a 404.
+    routing miss — it must NOT render a model retrieve body (``model_not_found``) or a list.
     """
     app = _scripted_skin(_CountingProvider(), _one_known_catalog("m0"))
     transport = _drive(app, "GET", "/v1/models/")
 
-    assert _is_not_implemented(transport), (
-        f"/v1/models/ (empty suffix) did not fall through to 501 not_implemented: "
+    assert _is_endpoint_not_found(transport), (
+        f"/v1/models/ (empty suffix) did not fall through to 404 endpoint_not_found: "
         f"{transport.status()}"
     )
 
 
 def test_non_segment_boundary_prefix_does_not_spuriously_match() -> None:
-    """``/v1/modelsX`` (prefix of a route, not a segment boundary) → 501, not the models surface.
+    """``/v1/modelsX`` (prefix of a route, not a segment boundary) → 404, not the models surface.
 
     ``/v1/models`` is a proper prefix of ``/v1/modelsX`` only as a STRING, not at a path-segment
     boundary (there is no ``/`` after ``/v1/models``). The exact table has no ``("GET",
     "/v1/modelsX")`` key, and the prefix table's ``/v1/models/`` is NOT a prefix of ``/v1/modelsX``
     (``X`` != ``/``), so the matcher must not spuriously route it to the models list or retrieve —
-    it falls through to the declared ``not_implemented``.
+    it falls through to the routing miss.
     """
     app = _scripted_skin(_CountingProvider(), _one_known_catalog("m0"))
     transport = _drive(app, "GET", "/v1/modelsX")
 
-    assert _is_not_implemented(transport), (
-        f"/v1/modelsX spuriously matched the models surface instead of 501: {transport.status()}"
+    assert _is_endpoint_not_found(transport), (
+        f"/v1/modelsX spuriously matched the models surface instead of 404: {transport.status()}"
     )
     body = transport.json_body()
     assert isinstance(body, dict) and isinstance(body.get("error"), dict)
@@ -517,19 +525,42 @@ def test_models_double_slash_suffix_routes_retrieve_with_slashed_id() -> None:
     assert body["error"].get("code") == "model_not_found"
 
 
-def test_unknown_path_falls_through_to_declared_not_implemented() -> None:
-    """An entirely unmapped ``(method, path)`` → the declared 501 ``not_implemented`` (shipped).
+def test_unknown_path_falls_through_to_endpoint_not_found() -> None:
+    """An entirely unmapped ``(method, path)`` → 404 ``endpoint_not_found`` (v1 parity, V-15).
 
     Neither the exact table nor the prefix table carries the path, so the matcher renders the
-    declared ``not_implemented`` through the single ``Error_Envelope`` — the GW15/GW16 shipped
-    fall-through, not an invented mapping.
+    declared ``endpoint_not_found`` through the single ``Error_Envelope``. A 5xx here would make
+    the stock OpenAI SDK retry.
     """
     app = _scripted_skin(_CountingProvider(), _one_known_catalog("m0"))
     transport = _drive(app, "GET", "/v1/does-not-exist")
 
-    assert _is_not_implemented(transport), (
-        f"an unknown path did not render 501 not_implemented: {transport.status()}"
+    assert _is_endpoint_not_found(transport), (
+        f"an unknown path did not render 404 endpoint_not_found: {transport.status()}"
     )
+
+
+def test_known_path_with_another_method_is_405_with_allow() -> None:
+    """``GET /v1/chat/completions`` is served only as POST → 405 ``method_not_allowed``."""
+    app = _scripted_skin(_CountingProvider(), _one_known_catalog("m0"))
+    transport = _drive(app, "GET", "/v1/chat/completions")
+
+    assert transport.status() == 405, transport.status()
+    body = transport.json_body()
+    assert isinstance(body, dict) and isinstance(body.get("error"), dict)
+    assert body["error"].get("code") == "method_not_allowed"
+    start = next(e for e in transport.events if e.get("type") == "http.response.start")
+    headers = {bytes(k).decode(): bytes(v).decode() for k, v in start["headers"]}  # type: ignore[attr-defined]
+    assert headers.get("allow") == "POST", headers
+
+
+def test_routing_miss_body_never_echoes_the_path() -> None:
+    """The 404/405 body carries no part of the requested path."""
+    app = _scripted_skin(_CountingProvider(), _one_known_catalog("m0"))
+    marker = "secret-looking-segment-4111111111111111"
+    transport = _drive(app, "GET", f"/v1/{marker}")
+
+    assert marker not in transport.body_bytes().decode("utf-8")
 
 
 def test_models_matcher_paths_open_no_upstream() -> None:

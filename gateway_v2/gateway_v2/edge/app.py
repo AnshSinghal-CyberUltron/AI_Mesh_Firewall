@@ -45,7 +45,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Awaitable, Callable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Protocol, runtime_checkable
 
 from gateway_v2.audit.record import AuditRecord
@@ -521,9 +521,10 @@ class _ServingSkin:
         """Route one HTTP connection by ``(method, path)``.
 
         ``/readyz`` and ``/metrics`` are the two operational endpoints handled inline; every
-        other path is looked up in the route table. An unknown ``(method, path)`` renders the
-        declared ``not_implemented`` placeholder through the single ``Error_Envelope`` (never a
-        raw framework 404), so an unmapped route leaks no internal routing shape.
+        other path is looked up in the route table. A miss renders through the single
+        ``Error_Envelope``: 405 ``method_not_allowed`` (with ``allow``) when the path is served
+        under another method, else 404 ``endpoint_not_found`` — never a 5xx, which the OpenAI SDK
+        would retry. The body never echoes the path.
         """
         method = _method(scope)
         path = _path(scope)
@@ -540,9 +541,20 @@ class _ServingSkin:
                 # The prefixed handler reads ``scope["path"]`` to extract the ``{id}`` (Decision 2).
                 await prefixed(scope, receive, send)
                 return
-            await emit_response(send, errors.render_not_implemented(path))
+            await emit_response(send, self._routing_miss(path))
             return
         await handler(scope, receive, send)
+
+    def _routing_miss(self, path: str) -> errors.HTTPResponse:
+        """405 with ``allow`` when ``path`` is served under another method, else 404."""
+        allowed = sorted(
+            {m for m, p in self.routes if p == path}
+            | {m for m, prefix in self.prefix_routes if path.startswith(prefix) and path != prefix}
+        )
+        if not allowed:
+            return errors.render_http("endpoint_not_found")
+        response = errors.render_http("method_not_allowed")
+        return replace(response, headers=(*response.headers, ("allow", ", ".join(allowed))))
 
     def _match_prefix(self, method: str, path: str) -> RouteHandler | None:
         """Longest-prefix match over ``prefix_routes`` (Decision 2); ``None`` on no match.

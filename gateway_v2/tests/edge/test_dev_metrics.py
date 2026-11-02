@@ -98,6 +98,23 @@ def test_state_producers_read_absent_not_healthy() -> None:
     assert any("freshness" in name or "age" in name for name in absent), absent
 
 
+async def _refusals_then_scrape() -> tuple[int, dict[str, float]]:
+    deps, _logs = serve.build_boot_dependencies(contract=_contract(), env=_dev_env())
+    app = serve._assemble_app(deps)
+    oversized = {**_CHAT, "max_tokens": 2_000_000}
+    assert (await _call(app, "POST", "/v1/chat/completions", oversized))[0] == 400
+    assert (await _call(app, "POST", "/v1/chat/completions", _CHAT, key="wrong"))[0] == 503
+    status, text = await _call(app, "GET", "/metrics")
+    return status, _series(text)
+
+
+def test_a_refusal_at_a_status_other_than_503_keeps_metrics_serving() -> None:
+    status, series = asyncio.run(_refusals_then_scrape())
+    assert status == 200
+    assert series['amf_rejected{status="400",reason="rejected"}'] == 1
+    assert series['amf_rejected{status="503",reason="rejected"}'] == 1
+
+
 class _Sink:
     def __init__(self) -> None:
         self.counters_value = SinkCounters()

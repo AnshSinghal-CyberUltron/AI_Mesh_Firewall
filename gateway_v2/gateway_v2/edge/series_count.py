@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from gateway_v2.admit.metrics import AdmissionMetrics, QuotaMetrics
 from gateway_v2.audit import metrics as audit_metrics
-from gateway_v2.edge.counters import POSTURE_CODES, REASON_VOCAB
+from gateway_v2.edge.counters import POSTURE_CODES, REASON_VOCAB, STATUS_VOCAB
 from gateway_v2.runtime import holdback_metrics as holdback_module
 from gateway_v2.runtime import state_metrics as state_module
 from gateway_v2.runtime.resources import ResourceContract
@@ -65,7 +65,8 @@ def series_count(contract: ResourceContract) -> int:
     * ``contract.metrics_top_k()`` individual tenant series + 1 ``other`` + 1 Overflow_Counter:
       the bounded Top-K set (R3.8: ``≤ K + 1``) plus the overflow ``_total`` (R2.5). The Top-K
       family is padded to exactly ``K`` series so the count is invariant to the tenant count.
-    * ``len(REASON_VOCAB)`` ``rejected{status,reason}`` series + 1 vocab-error indicator (R6.4/6.5).
+    * ``len(STATUS_VOCAB) * len(REASON_VOCAB)`` ``rejected{status,reason}`` series + 1 vocab-error
+      indicator (R6.4/6.5).
     * ``len(POSTURE_CODES)`` posture-refusal counters + 1 coverage-gap indicator (R7.5/14.3).
     * 3 for the windowed C4 add-on histogram (R4) + 1 windowed-busy gauge (R11.3/11.4).
     * 1 for the Publisher's own ``producer_read_failures_total`` indicator (R1.3).
@@ -81,7 +82,7 @@ def series_count(contract: ResourceContract) -> int:
         + contract.metrics_top_k()
         + OTHER_SERIES
         + OVERFLOW_SERIES
-        + len(REASON_VOCAB)
+        + len(STATUS_VOCAB) * len(REASON_VOCAB)
         + REASON_VOCAB_ERROR_SERIES
         + len(POSTURE_CODES)
         + POSTURE_COVERAGE_GAP_SERIES

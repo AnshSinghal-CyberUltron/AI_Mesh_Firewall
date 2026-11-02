@@ -36,11 +36,13 @@ from __future__ import annotations
 
 from gateway_v2.audit import record
 from gateway_v2.domain import posture
+from gateway_v2.edge.errors import RENDERABLE_STATUSES
 
 __all__ = (
     "POSTURE_CODES",
     "POSTURE_PREFIX",
     "REASON_VOCAB",
+    "STATUS_VOCAB",
     "REJECTED_PREFIX",
     "VOCAB_ERROR_SERIES",
     "COVERAGE_GAP_SERIES",
@@ -59,6 +61,12 @@ REASON_VOCAB: tuple[str, ...] = (record.SHED, record.REJECTED)
 Reused verbatim so the ``rejected`` family's ``reason`` label can never carry a spelling the
 audit records do not. This is the ONLY source of ``reason`` values — nothing tenant/org/request
 derived ever reaches a label (R6.1, R6.3)."""
+
+STATUS_VOCAB: tuple[int, ...] = RENDERABLE_STATUSES
+"""The closed ``status`` label set: every status the error envelope can render.
+
+A refusal answered at any of these statuses lands in a pre-seeded series. A status outside the set
+is counted on :data:`VOCAB_ERROR_SERIES` and adds no series, so the exposition count stays fixed."""
 
 POSTURE_CODES: tuple[str, ...] = (
     posture.KILL_SWITCH_UNAVAILABLE,
@@ -124,24 +132,21 @@ def _reason_series_name(status: int, reason: str) -> str:
 class RejectionCounters:
     """One ``rejected{status,reason}`` counter per observed ``(status, reason)``, never merged.
 
-    ``reason`` is confined to :data:`REASON_VOCAB`. A fresh instance already carries a real zero for
-    every reason at the canonical 503 status (R6.4), so the first exposition distinguishes "no
-    rejections of this cause" from "cause not instrumented". Out-of-vocab reasons increment
-    :data:`VOCAB_ERROR_SERIES` and are NEVER folded into a merged ``rejected_503`` (R6.5).
+    ``reason`` is confined to :data:`REASON_VOCAB` and ``status`` to :data:`STATUS_VOCAB`. A fresh
+    instance already carries a real zero for every pair (R6.4), so the first exposition
+    distinguishes "no rejections of this cause" from "cause not instrumented". An out-of-vocab
+    reason or status increments :data:`VOCAB_ERROR_SERIES` and is NEVER folded into a merged
+    ``rejected_503`` (R6.5).
     """
 
     __slots__ = ("_counts", "_vocab_errors")
 
-    # The canonical status every reason is pre-seeded at, so a real zero exists from construction.
-    # 503 is the admission-shed/refusal status the Admission_Reason vocabulary describes (C40); it
-    # is a protocol constant, not a capacity literal.
-    _SEED_STATUS = 503
-
     def __init__(self) -> None:
-        # (status, reason) -> count. Seeded with a real zero for every vocabulary reason at the
-        # canonical status so the series is present-with-zero from the first exposition (R6.4).
+        # (status, reason) -> count. Seeded with a real zero for every pair in
+        # STATUS_VOCAB x REASON_VOCAB so the series is present-with-zero from the first exposition
+        # (R6.4) and the set of series never grows.
         self._counts: dict[tuple[int, str], int] = {
-            (self._SEED_STATUS, reason): 0 for reason in REASON_VOCAB
+            (status, reason): 0 for status in STATUS_VOCAB for reason in REASON_VOCAB
         }
         self._vocab_errors: int = 0
 
@@ -154,16 +159,16 @@ class RejectionCounters:
         counter untouched (no merged/default fallback, R6.5), and raises :class:`VocabularyError`
         only when ``raise_on_unknown`` is set.
         """
-        if reason not in REASON_VOCAB:
+        if reason not in REASON_VOCAB or status not in STATUS_VOCAB:
             self._vocab_errors += 1
             if raise_on_unknown:
                 raise VocabularyError(
-                    f"reason {reason!r} is not in the closed Admission_Reason vocabulary "
-                    f"{REASON_VOCAB!r}; refusing to merge into a default rejection series",
+                    f"rejection ({status!r}, {reason!r}) is outside the closed vocabularies "
+                    f"{STATUS_VOCAB!r} x {REASON_VOCAB!r}; refusing to add a series",
                 )
             return
         key = (status, reason)
-        self._counts[key] = self._counts.get(key, 0) + 1
+        self._counts[key] += 1
 
     def vocab_error_total(self) -> int:
         """The out-of-vocabulary rejection count (R6.5). Real zero from construction."""
