@@ -14,6 +14,38 @@ behaviour but disagreeing on spelling, so the join finds nothing.
 
 from __future__ import annotations
 
+__all__ = (
+    "KILL_SWITCH_UNAVAILABLE",
+    "SHARED_STATE_UNAVAILABLE",
+    "PLAN_UNAVAILABLE",
+    "BUDGET_UNAVAILABLE",
+    "POLICY_REGEX_TIMEOUT",
+    "OVERLOAD_SHED",
+    "MIN_RETRY_AFTER_S",
+    "STREAM_KILLED",
+    "STREAM_INTER_CHUNK_TIMEOUT",
+    "STREAM_IDLE_TIMEOUT",
+    "STREAM_WRITE_TIMEOUT",
+    "STREAM_MAX_DURATION",
+    "STREAM_KEY_REVOKED",
+    "STREAM_PLAN_CHANGED",
+    "STREAM_SNAPSHOT_STALE",
+    "STREAM_MALFORMED_UPSTREAM",
+    "STREAM_BUFFER_UNAVAILABLE",
+    "STREAM_STRICT_BUFFER_OVERFLOW",
+    "VECTOR_OK",
+    "UNSUPPORTED_OPERATION",
+    "PROVIDER_UNREACHABLE",
+    "CREDENTIAL_UNAVAILABLE",
+    "STORE_NOT_CONFIGURED",
+    "CREDENTIAL_SCOPE_MISMATCH",
+    "ORG_IDENTITY_INVALID",
+    "VECTOR_CAPACITY_EXCEEDED",
+    "VECTOR_CAPACITY_UNSET",
+    "CREDENTIAL_LEAK_WITHHELD",
+    "gap_retry_after_s",
+)
+
 KILL_SWITCH_UNAVAILABLE = "kill_switch_unavailable"
 """The kill-switch snapshot is stale or unverified. Chat refuses; fail CLOSED, never "off"."""
 
@@ -98,6 +130,51 @@ STREAM_STRICT_BUFFER_OVERFLOW = "strict_buffer_overflow"
 
 Fail closed, zero content; `edge` owns the HTTP/SSE rendering.
 """
+
+
+# -- GW30 Vector_Posture_Codes ---------------------------------------------------------------
+# Codes only for the vector-store adapter layer. `edge` owns any HTTP mapping (GW31) and the
+# rendering; `dispatch` returns these value-codes on a frozen `AdapterResult` /
+# `CredentialResolution`, never an unhandled exception and never an empty success. Each code has
+# exactly one spelling so the adapter, registry and credential seam cannot disagree about a fault
+# (the C37 join failure).
+
+VECTOR_OK = "vector_ok"
+"""R2/R5.6/R6.6: the single success code. A zero-record success is this code with `records==()`."""
+
+UNSUPPORTED_OPERATION = "unsupported_operation"
+"""R5.1: a capability the connector does not support. Distinct from `VECTOR_OK` and every error.
+
+A caller distinguishes an unsupported operation from a clean zero-record search by `code` alone,
+without inspecting the record count: `records is None` (absent), never an empty success.
+"""
+
+PROVIDER_UNREACHABLE = "provider_unreachable"
+"""R6.1: transport failure (refusal / connect-or-read timeout / transport error / upstream 5xx).
+
+Never an empty result labelled a clean search; `records is None`, distinguishable by `code`.
+"""
+
+CREDENTIAL_UNAVAILABLE = "credential_unavailable"
+"""R8: the org credential is unresolvable, unverified, or the control plane was unreachable."""
+
+STORE_NOT_CONFIGURED = "store_not_configured"
+"""R7.2: no connector is registered for the requested `store_id`. Routes to no connector."""
+
+CREDENTIAL_SCOPE_MISMATCH = "credential_scope_mismatch"
+"""R10.2: the resolved credential's `org_id` != the request's. Refused before any store call."""
+
+ORG_IDENTITY_INVALID = "org_identity_invalid"
+"""R10.3: the request carried a missing/empty/unresolvable `org_id`. Fail closed, no store call."""
+
+VECTOR_CAPACITY_EXCEEDED = "vector_capacity_exceeded"
+"""R11.3: a `ResourceContract` bound was exceeded mid-op. Abort, discard the partial result."""
+
+VECTOR_CAPACITY_UNSET = "vector_capacity_unset"
+"""R11.6: a required bound was unset at connector init. Refuse to start, no default literal."""
+
+CREDENTIAL_LEAK_WITHHELD = "credential_leak_withheld"
+"""R9.6: the pre-emission leak guard withheld the whole emission. Detail carries a ref id only."""
 
 
 def gap_retry_after_s(*, rehydrate_period_ms: float, refresh_ms: float) -> float:
