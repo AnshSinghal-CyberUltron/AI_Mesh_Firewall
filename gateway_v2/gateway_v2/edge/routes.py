@@ -42,7 +42,7 @@ from gateway_v2.detect.windowing import max_pattern_length
 from gateway_v2.dispatch.provider import ProviderClient, UpstreamRequest
 from gateway_v2.dispatch.routing import DispatchRouter
 from gateway_v2.dispatch.transform import Transform
-from gateway_v2.domain.plan import ExecutionPlan, Phase
+from gateway_v2.domain.plan import ExecutionPlan, Phase, Surface
 from gateway_v2.domain.posture import PLAN_UNAVAILABLE
 from gateway_v2.edge import errors
 from gateway_v2.edge.asgi_sse import (
@@ -302,6 +302,8 @@ class ChatRoute:
     observer: OutcomeObserver | None = None
     #: ONE holdback producer for every stream, so ``/metrics`` can read what the streams recorded.
     holdback_metrics: HoldbackMetrics = HoldbackMetrics()
+    #: GW26. A set phase factory enforces only rules that name this surface.
+    surface: Surface = Surface.CHAT
 
     async def handle(self, scope: ASGIScope, receive: ASGIReceive, send: ASGISend) -> None:
         """Serve a chat/completions request end-to-end (R2.2, R7, R10, §10.4).
@@ -679,10 +681,7 @@ class ChatRoute:
                 timeouts,
                 error_scan=_ErrorFrameScan(
                     scanner=self.error_scanner,
-                    # Group E: the mid-stream error-frame scan is an OUTPUT-side guard, so it
-                    # resolves through the request's pinned plan at ``Phase.OUTPUT`` — a
-                    # phase-aware route enforces only its output-scoped rules on the frame; an
-                    # unset ``phase_resolvers`` returns ``self.resolver`` byte-identically (3.3).
+                    # Group E: OUTPUT guard. Unset factory returns ``self.resolver`` (3.3).
                     resolver=resolver_for(self, plan, Phase.OUTPUT),
                     kill_latch=kill_latch,
                     executor=self.executor,
@@ -701,25 +700,9 @@ class ChatRoute:
         return _attempt
 
     def _build_pipeline(self, plan: ExecutionPlan) -> StreamPipeline | StrictWithholdPipeline:
-        """Construct the pipeline the resolved plan selected (GW13 C4; R1.3/R1.4/R2.3).
+        """Build the plan's stream pipeline and bind this route's surface on the detector."""
+        from gateway_v2.edge.dev_components import bind_surface
 
-        Delegates to the ONE ``select_pipeline`` factory keyed off
-        ``plan.streaming_mode``: an INCREMENTAL plan builds the shipped
-        ``StreamPipeline.for_plan`` release loop; a STRICT_WITHHOLD plan builds the
-        GW13 ``StrictWithholdPipeline.for_plan`` whole-response accumulator — both
-        resolving the enforcing-output set ONCE before the first chunk from
-        ``enforcing_output_rules(plan)`` and raising :class:`EnforcementUndetermined`
-        fail-closed on an unresolved plan. The one ``OutputResolver`` seam and the
-        injected ``detector`` are passed identically to both, so output enforcement
-        folds through the same resolver at ``Phase.OUTPUT`` regardless of mode.
-
-        The INCREMENTAL ``Window`` + holdback cap derive from the injected
-        contract/config and the STRICT buffer high-water from
-        ``contract.stream_buffer_bytes(active_streams())`` — no capacity literal
-        here. The completed-match source is ``self.output_detector`` — ``None`` by default
-        (the thin harness, matching the shipped ``for_plan`` call); a boot that wires the
-        real detector (the DEV PROFILE does) threads it in without reshaping this seam.
-        """
         return select_pipeline(
             plan,
             scanner=self.scanner,
@@ -728,10 +711,13 @@ class ChatRoute:
             metrics=self.holdback_metrics,
             window=max_pattern_length(),
             # Group E: the streaming output guard resolves through the pinned plan at
-            # ``Phase.OUTPUT`` so a phase-aware route folds only its output-scoped rules; an
-            # unset ``phase_resolvers`` returns ``self.resolver`` byte-identically (3.3 / 3.5).
+            # ``Phase.OUTPUT``. The detector gets this route's surface (GW26).
             resolver=resolver_for(self, plan, Phase.OUTPUT),
-            detector=self.output_detector,
+            detector=(
+                bind_surface(self.output_detector, self.surface)
+                if self.output_detector is not None
+                else None
+            ),
             max_buffer_bytes=self.contract.stream_buffer_bytes(self.active_streams()),
             strict_metrics=StrictMetrics(),
         )

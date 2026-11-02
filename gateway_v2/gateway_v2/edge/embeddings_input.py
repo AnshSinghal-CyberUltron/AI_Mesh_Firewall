@@ -61,6 +61,7 @@ from collections.abc import Callable, Sequence
 from gateway_v2.dispatch.provider import UpstreamRequest
 from gateway_v2.dispatch.transform import BODY_DELTAS_KEY, GatewayRequest, Transform
 from gateway_v2.domain import Decision, Finding
+from gateway_v2.domain.plan import Surface
 from gateway_v2.edge.input_enforcement import (
     REFUSE_INPUT_UNMASKABLE,
     InputScan,
@@ -119,10 +120,12 @@ def scan_embeddings(
     :data:`~gateway_v2.edge.input_enforcement.REFUSE_INPUT_SCAN_FAILURE` inside
     ``scan_deltas`` (Property 4).
     """
+    from gateway_v2.edge.dev_components import bind_surface
+
     return scan_deltas(
         embeddings_deltas(req),
         join_runs=(),
-        detector=detector,
+        detector=bind_surface(detector, Surface.EMBEDDINGS),
         resolver=resolver,
         on_invoke=on_invoke,
     )

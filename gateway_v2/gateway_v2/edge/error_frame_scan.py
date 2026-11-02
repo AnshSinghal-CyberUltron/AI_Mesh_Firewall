@@ -80,6 +80,7 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
+from gateway_v2.detect.conditions import PolicyRegexRefusal
 from gateway_v2.domain import Finding
 from gateway_v2.edge.executor import ScanExecutor
 from gateway_v2.egress.output_guard import OutputBlocked, OutputResolver, apply_decision
@@ -178,6 +179,8 @@ def scan_error_frame(
     """
     try:
         findings = scanner(frame)
+    except PolicyRegexRefusal as refused:
+        return ErrorFrameOutcome(forward_text=None, withheld_code=refused.code)
     except Exception:
         # Scan itself failed: withhold fail-closed, forward nothing (R11.4). The
         # frame's raw bytes never leave the gateway on a scan error.

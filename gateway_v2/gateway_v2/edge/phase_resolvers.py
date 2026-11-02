@@ -39,8 +39,9 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Protocol, runtime_checkable
 
-from gateway_v2.domain.plan import ExecutionPlan, Phase
+from gateway_v2.domain.plan import ExecutionPlan, Phase, Surface
 from gateway_v2.egress.output_guard import OutputResolver
+from gateway_v2.resolve.decision import PlanResolver
 
 __all__ = (
     "PhaseResolverFactory",
@@ -75,13 +76,17 @@ def resolver_for(
     route: _ResolverRoute,
     plan: ExecutionPlan,
     phase: Phase,
+    *,
+    surface: Surface | None = None,
 ) -> OutputResolver:
     """Select the :class:`OutputResolver` a route uses for ``phase`` under ``plan``.
 
     When the route carries a SET ``phase_resolvers`` factory (not ``None``), return
-    ``factory(plan, phase)`` -- a resolver bound to the pinned plan and the phase, so
-    an ``input``-scoped rule is enforced only on :attr:`Phase.INPUT` and an
-    ``output``-scoped rule only on :attr:`Phase.OUTPUT` (closing leak E).
+    ``factory(plan, phase)`` bound to ``surface`` when that product is a
+    :class:`PlanResolver`. ``surface`` overrides the route's ``surface`` attribute.
+    An ``input``-scoped rule is enforced only on :attr:`Phase.INPUT` and an
+    ``output``-scoped rule only on :attr:`Phase.OUTPUT` (closing leak E). A set
+    surface keeps a rule that does not name it (GW26).
 
     When the route carries no factory (the attribute is absent before task 26.2, or
     ``None`` after), return ``route.resolver`` -- byte-identical to today's single
@@ -93,6 +98,26 @@ def resolver_for(
     attribute and after.
     """
     factory: PhaseResolverFactory | None = getattr(route, "phase_resolvers", None)
-    if factory is not None:
-        return factory(plan, phase)
-    return route.resolver
+    if factory is None:
+        return route.resolver
+    return _bind_surface(factory(plan, phase), _asked_surface(route, surface))
+
+
+def _asked_surface(route: _ResolverRoute, override: Surface | None) -> Surface | None:
+    """The surface this resolution is for: the explicit argument, else the route's."""
+    if override is not None:
+        return override
+    found = getattr(route, "surface", None)
+    return found if isinstance(found, Surface) else None
+
+
+def _bind_surface(resolver: OutputResolver, surface: Surface | None) -> OutputResolver:
+    """Copy a :class:`PlanResolver` onto ``surface``. Any other resolver is unchanged."""
+    if surface is None or not isinstance(resolver, PlanResolver) or resolver.surface is surface:
+        return resolver
+    return PlanResolver(
+        plan=resolver.plan,
+        phase=resolver.phase,
+        surface=surface,
+        stage=resolver.stage,
+    )

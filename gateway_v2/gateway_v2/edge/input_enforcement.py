@@ -69,6 +69,7 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, replace
 
+from gateway_v2.detect.conditions import PolicyRegexRefusal
 from gateway_v2.dispatch.authorized import verified_upstream
 from gateway_v2.dispatch.provider import UpstreamRequest
 from gateway_v2.dispatch.transform import GatewayRequest, Transform
@@ -177,6 +178,8 @@ def scan_deltas(
             text_deltas, join_runs, detector, on_invoke,
         )
         decision = resolver.decide(findings)
+    except PolicyRegexRefusal as refused:
+        return InputScan(decision=None, refuse_code=refused.code)
     except Exception:  # noqa: BLE001 — fail-closed: a raising scan/resolve withholds.
         return InputScan(decision=None, refuse_code=REFUSE_INPUT_SCAN_FAILURE)
     return InputScan(decision=decision, refuse_code=None)

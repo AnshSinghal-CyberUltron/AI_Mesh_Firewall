@@ -27,6 +27,7 @@ from gateway_v2.domain.plan import ExecutionPlan, Phase, PlanUnavailable, PlanUn
 from gateway_v2.edge import errors
 from gateway_v2.edge.asgi_sse import ASGIReceive, ASGIScope, ASGISend, read_body_bounded
 from gateway_v2.edge.audit_emit import emit_chat_audit
+from gateway_v2.edge.dev_components import bind_surface
 from gateway_v2.edge.input_enforcement import scan_deltas, stage_upstream
 from gateway_v2.edge.mcp_console import mcp_console
 from gateway_v2.edge.mcp_registry import McpRegistry, OrgMap, ServerEntry, ToolSet
@@ -246,8 +247,10 @@ class McpRoute:
         outcome = enforce_reply(
             envelope,
             bounds=bounds,
-            detector=self.chat.output_detector or self.chat.error_scanner,
-            resolver=resolver_for(self.chat, plan, Phase.OUTPUT),
+            detector=bind_surface(
+                self.chat.output_detector or self.chat.error_scanner, Surface.MCP
+            ),
+            resolver=resolver_for(self.chat, plan, Phase.OUTPUT, surface=Surface.MCP),
         )
         if outcome.decision is not None:
             ctx.note_output(outcome.decision)
@@ -293,8 +296,8 @@ class McpRoute:
         scan = scan_deltas(
             fold.pairs(),
             join_runs=(),
-            detector=self.chat.input_detector,
-            resolver=resolver_for(self.chat, plan, Phase.INPUT),
+            detector=bind_surface(self.chat.input_detector, Surface.MCP),
+            resolver=resolver_for(self.chat, plan, Phase.INPUT, surface=Surface.MCP),
         )
         if scan.refuse_code is not None or scan.decision is None:
             raise _Refuse(scan.refuse_code or "scan_failure")

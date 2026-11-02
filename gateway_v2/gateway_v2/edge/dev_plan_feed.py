@@ -10,8 +10,11 @@ from __future__ import annotations
 import asyncio
 import sys
 import time
+from collections.abc import Mapping, Sequence
+from contextvars import ContextVar
 from typing import Any
 
+from gateway_v2.detect.conditions import ConditionProgram, compile_conditions
 from gateway_v2.domain.plan import ExecutionPlan
 from gateway_v2.plan.compiler import CompileError, compile_plan
 from gateway_v2.plan.document import decode_plan_body
@@ -22,38 +25,114 @@ PUBLISHED_PLAN_KEY = "{rv2}:dev:firewall-plan"
 _POLL_S = 1.0
 
 
+def plan_key(org_id: str) -> str:
+    """Per-org plan. The dev key is used only when this key is absent."""
+    return f"{{rv2}}:plan:{org_id}"
+
+
+def choose_published(org_blob: bytes | None, dev_blob: bytes | None) -> bytes | None:
+    """Prefer the org key. An empty org value falls through to the dev key."""
+    org_raw = _as_bytes(org_blob)
+    if org_raw:
+        return org_raw
+    return _as_bytes(dev_blob)
+
+
+def poll_bodies(
+    primary: str,
+    peers: Sequence[str],
+    fetched: Mapping[str, bytes | None],
+    dev: bytes | None,
+) -> tuple[tuple[str, bytes | None], ...]:
+    """One body per org. Peers never receive the dev-key fallback."""
+    chosen = [(primary, choose_published(fetched.get(plan_key(primary)), dev))]
+    for org in peers:
+        chosen.append((org, choose_published(fetched.get(plan_key(org)), None)))
+    return tuple(chosen)
+
+
+#: The org whose customer program the detector scans. Unset means the primary org.
+request_org: ContextVar[str | None] = ContextVar("gw26_request_org", default=None)
+
+
+def _as_bytes(blob: bytes | str | None) -> bytes | None:
+    if isinstance(blob, str):
+        blob = blob.encode("utf-8")
+    if isinstance(blob, bytes) and blob:
+        return blob
+    return None
+
+
 class DevPlanFeed:
     """The snapshot the chat path reads, plus one apply for a published body."""
 
-    def __init__(self, plan: ExecutionPlan, *, now: float) -> None:
+    def __init__(
+        self,
+        plan: ExecutionPlan,
+        *,
+        now: float,
+        peer_orgs: tuple[str, ...] = (),
+    ) -> None:
         self._org_id = plan.org_id
+        self._peers = tuple(org for org in peer_orgs if org != plan.org_id)
         self._store = PlanStore()
         self._store.put(plan)
         self._snapshot = ReplicaSnapshot(self._store)
         self._snapshot.absorb(plan.org_id, now=now)
-        self._raw: bytes | None = None
+        self._raw: dict[str, bytes] = {}
+        self._programs: dict[str, ConditionProgram] = {plan.org_id: compile_conditions(plan.rules)}
+        for org in self._peers:
+            self._programs[org] = ConditionProgram(())
+
+    def conditions(self) -> ConditionProgram:
+        """The customer matcher for the request org. Rebuilt only on apply.
+
+        An unset request org is the primary plan. A peer with no applied plan
+        returns an empty program, never the primary one.
+        """
+        org = request_org.get()
+        if org is None:
+            org = self._org_id
+        return self._programs.get(org, ConditionProgram(()))
 
     def source(self) -> ReplicaSnapshot:
         return self._snapshot
 
-    def apply(self, raw: bytes, *, compiled_at: float, now: float) -> str:
-        """``unchanged``, ``rejected``, or the version now served."""
-        if raw == self._raw:
+    @property
+    def org_id(self) -> str:
+        return self._org_id
+
+    @property
+    def peer_orgs(self) -> tuple[str, ...]:
+        return self._peers
+
+    def apply(
+        self,
+        raw: bytes,
+        *,
+        compiled_at: float,
+        now: float,
+        org_id: str | None = None,
+    ) -> str:
+        """``unchanged``, ``rejected``, or the version now served for ``org_id``."""
+        target = self._org_id if org_id is None else org_id
+        if raw == self._raw.get(target):
             return "unchanged"
         try:
-            plan = self._compile(raw, compiled_at)
+            plan = self._compile(raw, compiled_at, target)
         except CompileError:
             return "rejected"
         self._store.put(plan)
         self._snapshot.absorb(plan.org_id, now=now)
-        self._raw = raw
+        self._programs[target] = compile_conditions(plan.rules)
+        self._raw[target] = raw
         return plan.version
 
-    def _compile(self, raw: bytes, compiled_at: float) -> ExecutionPlan:
+    def _compile(self, raw: bytes, compiled_at: float, org_id: str) -> ExecutionPlan:
         document = decode_plan_body(raw)
-        if document.org_id != self._org_id:
+        if document.org_id != org_id:
             raise CompileError("published plan org does not match the dev org")
-        current = self._store.read(self._org_id)
+        current = self._store.read(org_id)
         previous = current if isinstance(current, ExecutionPlan) else None
         return compile_plan(
             document.org_id,
@@ -108,15 +187,28 @@ class DevPlanWatch:
             await client.aclose()
 
     async def _once(self, client: Any) -> None:
+        primary = self._feed.org_id
+        peers = self._feed.peer_orgs
         try:
-            raw = await client.get(PUBLISHED_PLAN_KEY)
+            fetched: dict[str, bytes | None] = {
+                plan_key(primary): await client.get(plan_key(primary))
+            }
+            dev_raw = await client.get(PUBLISHED_PLAN_KEY)
+            for org in peers:
+                fetched[plan_key(org)] = await client.get(plan_key(org))
         except Exception as exc:  # noqa: BLE001 — a poll failure keeps the served plan.
             self._note(f"dev: firewall plan poll failed ({type(exc).__name__})\n", b"")
             return
-        blob = raw.encode("utf-8") if isinstance(raw, str) else raw
-        if not isinstance(blob, bytes) or not blob:
+        dev_blob = dev_raw if isinstance(dev_raw, bytes) else None
+        for org, blob in poll_bodies(primary, peers, fetched, dev_blob):
+            self._apply_blob(org, blob)
+
+    def _apply_blob(self, org_id: str, blob: bytes | None) -> None:
+        if blob is None:
             return
-        outcome = self._feed.apply(blob, compiled_at=time.time(), now=time.monotonic())
+        outcome = self._feed.apply(
+            blob, compiled_at=time.time(), now=time.monotonic(), org_id=org_id
+        )
         if outcome == "unchanged":
             return
         if outcome == "rejected":

@@ -45,6 +45,7 @@ from gateway_v2.dispatch.transform import GatewayRequest
 from gateway_v2.domain import Decision
 from gateway_v2.domain.plan import ExecutionPlan, Phase, PlanUnavailable, PlanUnknownTenant, Surface
 from gateway_v2.domain.posture import BUDGET_UNAVAILABLE
+from gateway_v2.edge.dev_components import bind_surface
 from gateway_v2.edge.error_frame_scan import SCAN_ERROR_CODE
 from gateway_v2.edge.identity_resolver import TenantIdentity
 from gateway_v2.edge.input_enforcement import (
@@ -664,7 +665,7 @@ class ChatSurface:
         """
         return scan_input(
             req,
-            self._deps.input_detector,
+            bind_surface(self._deps.input_detector, req.surface),
             resolver_for(self._deps, plan, Phase.INPUT),
         )
 

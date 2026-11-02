@@ -193,6 +193,9 @@ _ENVELOPE: Mapping[str, tuple[int, str]] = MappingProxyType(
         # ``invalid_request_error`` with the v2 posture ``code`` ``input_unmaskable``.
         "input_blocked": (400, "invalid_request_error"),
         "input_unmaskable": (400, "invalid_request_error"),
+        # GW26: a customer regex that exceeded the guard-wait budget, or a pattern
+        # refused before it ran. Same client-error family as an input block.
+        "policy_regex_timeout": (400, "invalid_request_error"),
         # -- GW16 misc-surface client-facing codes (Decision 1, R7.3/R9.1) ----
         # Value-codes declared in edge/wire/openai_misc.py (MISSING_REQUIRED_PARAMETER
         # / MODEL_NOT_FOUND); keyed here as literal strings (matching the existing

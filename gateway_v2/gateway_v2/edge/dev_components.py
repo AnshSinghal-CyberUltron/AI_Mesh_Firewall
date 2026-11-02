@@ -41,6 +41,12 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from gateway_v2.detect.base import DetectorContext
+from gateway_v2.detect.conditions import (
+    ConditionProgram,
+    PolicyRegexRefusal,
+    raise_if_refused,
+    scan_conditions,
+)
 from gateway_v2.detect.deterministic.detectors import (
     InjectionSignalDetector,
     PiiDetector,
@@ -51,7 +57,7 @@ from gateway_v2.dispatch.provider import UpstreamEvent, UpstreamRequest
 from gateway_v2.dispatch.transform import BODY_DELTAS_KEY
 from gateway_v2.domain import Finding, FindingStatus
 from gateway_v2.domain.identity import Principal
-from gateway_v2.domain.plan import ExecutionPlan, Phase
+from gateway_v2.domain.plan import ExecutionPlan, Phase, Surface
 from gateway_v2.edge.app import CatalogModel
 from gateway_v2.edge.identity_resolver import ASGIScope, TenantIdentity, bearer_key
 from gateway_v2.edge.phase_resolvers import PhaseResolverFactory
@@ -64,6 +70,7 @@ from gateway_v2.resolve import PlanResolver
 
 __all__ = (
     "DEV_KEY_ID",
+    "DEV_PEER_KEY_ID",
     "ECHO_PREFIX",
     "DeterministicFindings",
     "DevProfileError",
@@ -73,6 +80,7 @@ __all__ = (
     "env_text",
     "load_dev_plan",
     "parse_model_ids",
+    "bind_surface",
     "phase_resolver_factory",
     "require_phase_agnostic",
     "summarize_findings",
@@ -82,6 +90,7 @@ __all__ = (
 #: The ``Principal.key_id`` the dev identity carries. A label, never the key itself — the raw
 #: bearer value is compared once with ``hmac.compare_digest`` and never stored on the principal.
 DEV_KEY_ID = "dev-profile-static-key"
+DEV_PEER_KEY_ID = "dev-profile-peer-key"
 
 #: Prefix the echo provider puts in front of the text it received (a wire-shape string).
 ECHO_PREFIX = "echo: "
@@ -106,24 +115,46 @@ class DevProfileError(RuntimeError):
 
 
 class DevStaticIdentity:
-    """An :class:`~gateway_v2.edge.identity_resolver.IdentityResolver` for ONE static key.
+    """An :class:`~gateway_v2.edge.identity_resolver.IdentityResolver` for the dev bearers.
 
-    The bearer token is named by the shipped :func:`bearer_key` and compared with
-    :func:`hmac.compare_digest` (constant-time in the length of the inputs). A missing, malformed,
-    or wrong key resolves to ``None``, so the lifecycle refuses with its declared identity code and
-    makes zero provider calls — the same fail-closed contract as the real resolver.
+    The primary bearer is required. An optional peer bearer resolves a second org.
+    Each token is compared with :func:`hmac.compare_digest`. A missing, malformed,
+    or unknown key resolves to ``None``. The matched org is stored on
+    :data:`~gateway_v2.edge.dev_plan_feed.request_org` so the customer matcher
+    scans that org's program.
     """
 
-    __slots__ = ("_expected", "_identity")
+    __slots__ = ("_entries",)
 
-    def __init__(self, *, api_key: str, org_id: str) -> None:
+    def __init__(
+        self,
+        *,
+        api_key: str,
+        org_id: str,
+        peer_api_key: str = "",
+        peer_org_id: str = "",
+    ) -> None:
         if not api_key:
             raise DevProfileError("AMF_DEV_API_KEY must be a non-empty string")
-        self._expected = api_key.encode("utf-8")
-        self._identity = TenantIdentity(
+        if bool(peer_api_key) != bool(peer_org_id):
+            raise DevProfileError(
+                "AMF_DEV_PEER_API_KEY and AMF_DEV_PEER_ORG_ID must both be set or both be empty"
+            )
+        entries: list[tuple[bytes, TenantIdentity]] = [
+            (api_key.encode("utf-8"), self._identity_for(org_id, DEV_KEY_ID))
+        ]
+        if peer_api_key:
+            entries.append(
+                (peer_api_key.encode("utf-8"), self._identity_for(peer_org_id, DEV_PEER_KEY_ID))
+            )
+        self._entries = tuple(entries)
+
+    @staticmethod
+    def _identity_for(org_id: str, key_id: str) -> TenantIdentity:
+        return TenantIdentity(
             org_id=org_id,
             principal=Principal(
-                key_id=DEV_KEY_ID,
+                key_id=key_id,
                 org_id=org_id,
                 # Not consulted on the request path (GW06 reads its GCRA params from the quota
                 # component, not the principal); carried as 0.0 rather than a fabricated rate.
@@ -134,13 +165,23 @@ class DevStaticIdentity:
         )
 
     async def resolve(self, scope: ASGIScope) -> TenantIdentity | None:
-        """Resolve the one dev tenant iff the bearer key matches; else ``None`` (fail closed)."""
+        """Resolve the matching dev tenant; anything else is ``None`` (fail closed)."""
+        from gateway_v2.edge.dev_plan_feed import request_org
+
         presented = bearer_key(scope)
+        request_org.set(None)
         if presented is None:
             return None
-        if not hmac.compare_digest(presented.encode("utf-8"), self._expected):
+        raw = presented.encode("utf-8")
+        matched: TenantIdentity | None = None
+        for expected, identity in self._entries:
+            if hmac.compare_digest(raw, expected):
+                matched = identity
+                break
+        if matched is None:
             return None
-        return self._identity
+        request_org.set(matched.org_id)
+        return matched
 
 
 # --------------------------------------------------------------------------- #
@@ -260,14 +301,44 @@ class DeterministicFindings:
 
     phase: Phase
     budget_s: float
+    conditions_of: Callable[[], ConditionProgram] | None = None
 
     def __call__(self, text: str) -> tuple[Finding, ...]:
+        """Scan with phase-only customer conditions. Routes pass :func:`bind_surface`."""
+        return self.scan(text, surface=None)
+
+    def scan(self, text: str, surface: Surface | None = None) -> tuple[Finding, ...]:
+        """The same detectors as :meth:`__call__`, limited to ``surface`` when set."""
         context = DetectorContext(phase=self.phase, rules=(), budget=Budget(self.budget_s))
         findings: list[Finding] = []
         findings.extend(PiiDetector().detect(text, context))
         findings.extend(SecretDetector().detect(text, context))
         findings.extend(InjectionSignalDetector().detect(text, context))
+        if self.conditions_of is not None:
+            scanned = scan_conditions(
+                self.conditions_of(),
+                text,
+                budget_s=self.budget_s,
+                phase=self.phase,
+                surface=surface,
+            )
+            raise_if_refused(scanned)
+            findings.extend(scanned.findings)
         return tuple(findings)
+
+
+def bind_surface(
+    detector: Callable[[str], Sequence[Finding]],
+    surface: Surface,
+) -> Callable[[str], Sequence[Finding]]:
+    """Run customer conditions on ``surface``. Any other detector is returned unchanged."""
+    if not isinstance(detector, DeterministicFindings):
+        return detector
+
+    def _bound(text: str) -> Sequence[Finding]:
+        return detector.scan(text, surface)
+
+    return _bound
 
 
 def summarize_findings(findings: Sequence[Finding]) -> str:
@@ -341,7 +412,10 @@ class EchoProviderClient:
     async def _stream(self, request: UpstreamRequest) -> AsyncIterator[UpstreamEvent]:
         received = "\n".join(_received_texts(request))
         if self._probe is not None:
-            summary = summarize_findings(self._probe(received))
+            try:
+                summary = summarize_findings(self._probe(received))
+            except PolicyRegexRefusal:
+                summary = "policy_regex_timeout"
             sys.stderr.write(
                 f"dev-echo: provider received {len(received)} chars; "
                 f"provider-side findings: {summary}\n"

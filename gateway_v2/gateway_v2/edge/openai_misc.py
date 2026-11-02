@@ -234,6 +234,8 @@ class MiscRoute:
     phase_resolvers: PhaseResolverFactory | None = None
     #: The ``/metrics`` request counters, parity with ``ChatRoute.observer``. ``None``: none.
     observer: OutcomeObserver | None = None
+    #: GW26. Embeddings is the misc surface that resolves a plan. Moderations does not.
+    surface: Surface = Surface.EMBEDDINGS
 
 
 # --------------------------------------------------------------------------- #

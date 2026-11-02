@@ -194,6 +194,10 @@ ERROR_SHAPES: Mapping[str, tuple[str, str]] = MappingProxyType(
             "invalid_request_error",
             "The request carried content that could not be masked and was withheld.",
         ),
+        "policy_regex_timeout": (
+            "invalid_request_error",
+            "A policy pattern could not be evaluated and the request was withheld.",
+        ),
         # The Group F output-budget parse refusals (v1 boundary validator): a
         # ``max_tokens`` / ``max_completion_tokens`` above the parse boundary. The
         # HTTP ``Error_Envelope`` renders each 400 ``invalid_request_error`` with the

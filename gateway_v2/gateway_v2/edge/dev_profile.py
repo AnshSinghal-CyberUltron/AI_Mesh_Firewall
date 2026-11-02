@@ -25,6 +25,8 @@ Environment:
 ``AMF_DEV_PROFILE``            ``1`` to activate (``0`` / unset = shipped default boot)
 ``AMF_DEV_API_KEY``            the one accepted bearer key (required)
 ``AMF_DEV_ORG_ID``             the dev org (default ``dev-org``; must equal the plan's org_id)
+``AMF_DEV_PEER_API_KEY``       optional second bearer; set only together with the peer org
+``AMF_DEV_PEER_ORG_ID``        optional second org; its plan key is polled, never the dev key
 ``AMF_DEV_PLAN_PATH``          JSON plan file in the signed ``plan.document`` shape (required)
 ``AMF_DEV_MODELS``             comma-separated model ids for ``/v1/models`` (required)
 ``AMF_DEV_Q_SAFE``             DECLARED guard service rate, float > 0 (required)
@@ -120,6 +122,8 @@ class DevProfileConfig:
 
     api_key: str
     org_id: str
+    peer_api_key: str
+    peer_org_id: str
     plan_path: str
     models: tuple[str, ...]
     q_safe: float
@@ -186,9 +190,17 @@ def load_dev_config(env: Mapping[str, str]) -> DevProfileConfig:
     provider_url = env_text(env, "AMF_DEV_PROVIDER_URL")
     if provider_url is not None and urlsplit(provider_url).scheme not in ("http", "https"):
         raise DevProfileError("AMF_DEV_PROVIDER_URL must be an http(s) URL")
+    peer_api_key = env_text(env, "AMF_DEV_PEER_API_KEY") or ""
+    peer_org_id = env_text(env, "AMF_DEV_PEER_ORG_ID") or ""
+    if bool(peer_api_key) != bool(peer_org_id):
+        raise DevProfileError(
+            "AMF_DEV_PEER_API_KEY and AMF_DEV_PEER_ORG_ID must both be set or both be empty"
+        )
     return DevProfileConfig(
         api_key=_required(env, "AMF_DEV_API_KEY"),
         org_id=env_text(env, "AMF_DEV_ORG_ID") or DEFAULT_DEV_ORG_ID,
+        peer_api_key=peer_api_key,
+        peer_org_id=peer_org_id,
         plan_path=_required(env, "AMF_DEV_PLAN_PATH"),
         models=parse_model_ids(env_text(env, "AMF_DEV_MODELS")),
         q_safe=_positive_float(env, "AMF_DEV_Q_SAFE"),
@@ -301,13 +313,21 @@ def build_dev_dependencies(
     """Build the DEV PROFILE ``build_app`` kwargs + boot-log lines (refuse on any bad input)."""
     cfg = load_dev_config(env)
     plan = load_dev_plan(cfg.plan_path, org_id=cfg.org_id, compiled_at=time.time())
-    feed = DevPlanFeed(plan, now=time.monotonic())
+    feed = DevPlanFeed(
+        plan,
+        now=time.monotonic(),
+        peer_orgs=(cfg.peer_org_id,) if cfg.peer_org_id else (),
+    )
     admission_metrics = AdmissionMetrics()
     admission, bounds = _admission(cfg, contract, admission_metrics)
     budget, budget_log = _budget(cfg, contract)
     budget_s = contract.guard_wait_budget_s()
-    input_detector = DeterministicFindings(phase=Phase.INPUT, budget_s=budget_s)
-    output_detector = DeterministicFindings(phase=Phase.OUTPUT, budget_s=budget_s)
+    input_detector = DeterministicFindings(
+        phase=Phase.INPUT, budget_s=budget_s, conditions_of=feed.conditions,
+    )
+    output_detector = DeterministicFindings(
+        phase=Phase.OUTPUT, budget_s=budget_s, conditions_of=feed.conditions,
+    )
     provider, provider_log = _provider(cfg, contract, input_detector)
     catalog = StaticCatalogSource(model_ids=cfg.models, org_id=cfg.org_id, created=int(time.time()))
     # Group E: wire the PHASE-AWARE resolver factory so an ``input``-scoped rule is enforced only
@@ -328,7 +348,12 @@ def build_dev_dependencies(
         "input_detector": input_detector,
         "error_scanner": output_detector,
         "output_detector": output_detector,
-        "identity": DevStaticIdentity(api_key=cfg.api_key, org_id=cfg.org_id),
+        "identity": DevStaticIdentity(
+            api_key=cfg.api_key,
+            org_id=cfg.org_id,
+            peer_api_key=cfg.peer_api_key,
+            peer_org_id=cfg.peer_org_id,
+        ),
         "snapshot_source": feed.source,
         "plan_feed": feed,
         "admission": admission,
@@ -378,8 +403,10 @@ def build_dev_dependencies(
         "guard + mid-stream error frames)",
         "boot: output_detector -> GW09 deterministic detectors (DEV PROFILE: streaming "
         "completed-match seam of the holdback pipeline)",
-        f"boot: identity -> DevStaticIdentity (DEV PROFILE: one static bearer key "
-        f"AMF_DEV_API_KEY -> org {cfg.org_id}; hmac.compare_digest; anything else refuses)",
+        f"boot: identity -> DevStaticIdentity (DEV PROFILE: bearer "
+        f"AMF_DEV_API_KEY -> org {cfg.org_id}"
+        + (f"; peer org {cfg.peer_org_id}" if cfg.peer_org_id else "")
+        + "; hmac.compare_digest; anything else refuses)",
         snapshot_log,
         f"boot: admission -> AdmissionController (GW19) (DEV PROFILE: the REAL controller, wired "
         f"bare; q_safe={cfg.q_safe} (DECLARED, not measured — real value comes from the GW20 "

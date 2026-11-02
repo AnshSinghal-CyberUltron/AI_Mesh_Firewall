@@ -59,7 +59,7 @@ def enforce_reply(
     scan = scan_deltas(fold.pairs(), join_runs=fold.join_runs, detector=detector, resolver=resolver)
     decision = scan.decision
     if scan.refuse_code is not None or decision is None:
-        return ReplyOutcome(code=_SCAN_FAILURE)
+        return ReplyOutcome(code=scan.refuse_code or _SCAN_FAILURE, decision=decision)
     if decision.disposition is Disposition.BLOCK or _has_server_request(messages):
         return ReplyOutcome(code=_OUTPUT_BLOCKED, decision=decision)
     masked = _apply(messages, fold, decision, detector, resolver)

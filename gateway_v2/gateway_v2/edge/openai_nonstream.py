@@ -39,11 +39,13 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from gateway_v2.detect.conditions import PolicyRegexRefusal
 from gateway_v2.dispatch.provider import UpstreamRequest
 from gateway_v2.domain.decision import Decision, most_restrictive
-from gateway_v2.domain.plan import ExecutionPlan, Phase
+from gateway_v2.domain.plan import ExecutionPlan, Phase, Surface
 from gateway_v2.edge import errors
 from gateway_v2.edge.console_projection import apply_projection, chat_console
+from gateway_v2.edge.dev_components import bind_surface
 from gateway_v2.edge.phase_resolvers import resolver_for
 from gateway_v2.edge.request_holds import RequestHolds
 from gateway_v2.edge.wire.openai import CanonicalRequest
@@ -144,6 +146,8 @@ async def collect_and_enforce(
     try:
         collected = await _collect_output_channels(deps, destination, body, holds)
         deltas, decision = _enforce_channels(deps, plan, collected)
+    except PolicyRegexRefusal as refused:
+        return EnforcedOutput(deltas=(), refuse_code=refused.code)
     except OutputBlocked as blocked:
         return EnforcedOutput(
             deltas=(), refuse_code=block_code, output_decision=blocked.decision,
@@ -219,7 +223,7 @@ def _enforce_channels(
     enforced: list[tuple[str, str]] = []
     chosen: Decision | None = None
     for channel, text in collected:
-        decision = resolver.decide(list(deps.error_scanner(text)))
+        decision = resolver.decide(list(bind_surface(deps.error_scanner, Surface.CHAT)(text)))
         chosen = decision if chosen is None else _stricter_decision(chosen, decision)
         enforced.append((channel, apply_decision(text, decision, base_offset=0)))
     return tuple(enforced), chosen
