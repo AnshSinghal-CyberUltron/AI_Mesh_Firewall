@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from gateway_v2.runtime.cgroup import DetectHooks, detect_with_hooks
 from gateway_v2.runtime.errors import CapacityUnavailable, CapacityUnset
 from gateway_v2.runtime.kinds import CapacityHint, HardwareSignals, PoolKind
+from gateway_v2.runtime.resources_vector import VectorBoundsMixin
 
 # Deployment-declared defaults. Logged as defaults when env is unset.
 _DEFAULT_TARGET_P99_MS = 20.0
@@ -193,6 +194,17 @@ gateway v1's `ResponseStore` default (`gateway/ai_mesh_gateway/responses_store.p
 `ResourceContract.response_store_ttl_s`. The number lives only in this module.
 """
 
+# GW30 vector-store-adapter capacity bounds (R6.4, R6.5, R11.1, R11.2, R11.4, R11.6). The injected
+# Vector_Connectors read their timeout and result-size ceilings through the contract, so no
+# connector holds a literal; the literals stay here (the only module check_capacity_literals.py
+# exempts) while the three accessors consuming them live in `VectorBoundsMixin`
+# (`runtime/resources_vector.py`), split out for the size gate — full rationale at the mixin.
+_VECTOR_OP_TIMEOUT_MULT = 250.0  # vector op budget = p99_s x mult (~5 s at the 20 ms default)
+_VECTOR_MAX_RESULT_COUNT = 10_000  # vector_max_result_count() clamp ceiling, R11.2 `[1, 10_000]`
+_VECTOR_MAX_RESULT_COUNT_MULT = 1  # count = connection_budget() x mult, clamped to [1, ceiling]
+_VECTOR_MAX_RESULT_BYTES = 10_485_760  # vector_max_result_bytes() ceiling, R11.2 10 MiB
+_VECTOR_MAX_RESULT_BYTES_SHARE = 0.025  # bytes = per_worker_rss x share, clamped to [1, ceiling]
+
 
 @dataclass(frozen=True, slots=True)
 class McpBounds:
@@ -217,7 +229,7 @@ class McpBounds:
 
 
 @dataclass(frozen=True, slots=True)
-class ResourceContract:
+class ResourceContract(VectorBoundsMixin):
     cpu_quota: float
     memory_limit: int
     fd_limit: int
