@@ -2,7 +2,7 @@
 
 Status date: 2 November 2026. Source of the card text: `docs/AI_MESH_MASTER_RUNBOOK_v3.1_CLEAN.docx`, Part 00. This file does not change that document.
 
-GW26 has new code on this tree and has been exercised on the local stack. It does not exit. The live lines below say exactly what was observed and what was not. GW17b, GW17c, GW27, GW28, GW29, GW30, GW31, GW32, GW33, GW34, GW35, and GW36 have no new card work from this pass. The runbook says each of those cards is required before GW21 and GW23, and that a card does not exit on unit tests alone.
+GW26 and GW30 have new code on this tree and have been exercised on the local stack. Neither exits. The live lines below say exactly what was observed and what was not. GW17b, GW17c, GW27, GW28, GW29, GW31, GW32, GW33, GW34, GW35, and GW36 have no new card work from this pass. The runbook says each of those cards is required before GW21 and GW23, and that a card does not exit on unit tests alone.
 
 ## GW26 — Customer policy rules and surface scoping
 
@@ -72,6 +72,60 @@ On 2 November the GW26 detect, plan, edge, and dev-profile files were run again:
 
 Control Django tests were not run here. The repo virtualenv and `gateway_v2/.venv` do not include Django. The control container is the process that published the live plan.
 
+## GW30 — Vector store adapter interface and connectors
+
+Depends on GW11. Required by GW21 and GW23.
+
+Objective in the runbook: one adapter interface for every vector store, with connectors for Pinecone, Chroma, Milvus/Zilliz, Qdrant, Weaviate, pgvector, Elasticsearch/OpenSearch, Redis, MongoDB Atlas, AWS (OpenSearch Serverless, Bedrock Knowledge Bases), GCP (Vertex AI Vector Search) and Azure (AI Search); interface query, upsert, delete, list and create collections, health, and capability flags (filters, namespaces, hybrid search); credentials per org from control, never in responses or logs; a connector that cannot do an operation answers a declared `unsupported_operation`, never an empty result; no silent fallback to another provider (the v1 `_resolve_vector_client` "any available" defect).
+
+This card was built from the `.kiro/specs/vector-store-adapter-gw30` spec, bottom-up on the import-linter layer order, following the shipped `dispatch/provider.py` idiom (injected `ProviderClient` / `StubProviderClient`). It does not add a route or any pipeline behaviour; the runbook puts `/v1/rag/*`, `/v1/vector/*` and the four-stage pipeline in GW31, and `edge/rag.py` is still the 501 stub. So GW30 ships the adapter layer GW31 will wire, and nothing in the browser exercises it yet.
+
+### Implementation work
+
+| Runbook item | State | What is true in the tree |
+|---|---|---|
+| One adapter interface: query, upsert, delete, list/create collections, health, capability flags | In `dispatch` | `dispatch/vector_adapter.py` defines the frozen `@runtime_checkable Vector_Adapter` protocol (the six async ops + `capabilities()`), the frozen slotted value types (`AdapterResult`, `VectorRecord`, the six request types, `Capabilities`), and the posture codes live in `domain/posture.py`. Outcome is distinguishable by `code` alone. |
+| A connector that cannot do an operation answers `unsupported_operation`, never an empty result | In `dispatch` | `dispatch/vector_operations.py` enforces the capability flags on the op path: a filter/namespace/hybrid request against a connector that declares that flag false returns `AdapterResult(code=unsupported_operation)` with `records is None` (absent), never an empty `()` success. |
+| No silent fallback to another provider | In `dispatch` | `dispatch/vector_registry.py` selects by exact `store_id` match only; an unregistered id returns `store_not_configured` on a frozen result, never "any available". |
+| Credentials per org from control, never in responses or logs | In `dispatch` | `dispatch/vector_credentials.py` holds `OrgCredential` (redacted repr, no serialization method), the injected `Credential_Source` seam, and the scope guard (resolved org must equal request org before any store call, else `credential_scope_mismatch`; missing org -> `org_identity_invalid`). `dispatch/vector_leak_guard.py` is the pre-emission leak guard: any reproduction of one or more consecutive characters of a genuine credential (plaintext or base64/base64url/hex/percent) withholds the whole emission and returns `credential_leak_withheld` carrying only a reference id. The literal "one or more consecutive characters" rule (R9, runbook GW09 byte-verified redaction, LGW17-6 split-secret floor) is honoured with no minimum-run threshold; false positives are handled by an entropy anchor on whether the secret is genuine credential material, not by relaxing the match. |
+| Per-operation bounds, fail closed | In `dispatch` + `runtime` | `dispatch/vector_bounded_op.py` runs each op under `ResourceContract.vector_operation_timeout_s()` and the result-size ceilings (`runtime/resources.py` + `resources_vector.py`); a timeout/transport failure -> `provider_unreachable`, a mid-op bound breach -> `vector_capacity_exceeded` (partial discarded), an unset bound -> `vector_capacity_unset`. No capacity literal outside `runtime/resources.py`. |
+| The 13 named connectors over an injected transport | Stub in the tree; real transports for the live gate | `dispatch/vector_connectors.py` has the `Vector_Transport` seam, `Stub_Vector_Connector` (socket-free, offline tests), the 13-connector capability table as a factory (no module-level mutable), and `Named_Vector_Connector`. The real per-store SDK/HTTP clients are the deferred live gate; `dispatch/vector_live_transports.py` (not on the production import path) implements real transports for the stores that have a local backend. |
+
+Offline gates on 2 November: the `lgw30` suite is 78 passed; `mypy --strict`, `ruff`, `lint-imports` (3 contracts kept, 0 broken), and the AST gates (`check_capacity_literals`, `check_no_module_mutable`, `check_frozen_dataclasses`, `check_http_outside_edge_resolve`) all clean. The full offline suite showed 0 new regressions (two pre-existing unrelated failures in `edge/dev_components.py` tenant-scale and the frontend console inventory, both outside GW30's change surface).
+
+### Live tests
+
+The runbook's exit evidence is "live Docker/staging, real wire bytes"; L30-1 is "same results and declared errors on every connector", with no cloud mandate and no explicit provider count. The three gates were run through the shipped adapter seam (`VectorRegistry` / `build_connector` / `run_bounded_operation` / `resolve_scoped_credential`) against real store containers in `docker-compose.gw30-stores.yml`, injecting the real transports. The 13 connector ids are the spec's expansion of the runbook's grouped provider list (Milvus/Zilliz and Elasticsearch/OpenSearch are grouped there; AWS lists two sub-items).
+
+| Test | Runbook pass line | State |
+|---|---|---|
+| L30-1 | Same query/upsert/delete suite against every connector; same results and declared errors on all | LIVE-PASS across 7 real stores on 2 November: pgvector (SQL + native `<=>`), Redis (brute-force hashes), Elasticsearch (dense_vector kNN), Qdrant, Weaviate (near_vector over gRPC), Chroma, and MongoDB Atlas Local. Byte-identical on byte-identical input: `create_collection`/`upsert`/`query`/`delete` all `vector_ok`, `query` ids `(r1, r3, r2)` (cosine order) and count 3 on all seven, upsert count 3 and delete count 3 on all seven. The six cloud/heavy stores are recorded infra-blocked, not fabricated (see below). |
+| L30-2 | Provider unreachable; declared error, never empty results as a clean search | LIVE-PASS. Each real transport pointed at a 127.0.0.1 port with nothing listening, driven through `run_bounded_operation`, returned `provider_unreachable` with `records is None` within 30 s (sub-100 ms for the refused connections; ~5 s for the Mongo connect timeout). None was a `vector_ok` empty result. Code, request id and timestamp persisted. |
+| L30-3 | Org A's credential with org B's request; refused | LIVE-PASS. Org A's verified credential presented for an Org B request returned `credential_scope_mismatch`; an empty request org returned `org_identity_invalid`. Both refused before any backing-store call, with zero backing-store operations proven by a call-counting wrapper around a real live transport, no Org B payload, and the credential secret absent from the refusal's emitted form. |
+
+Infra-blocked on this host, named so they are not read as a pass: `pinecone`, `aws_bedrock_kb`, `gcp_vertex_vector`, `azure_ai_search` are cloud-only SaaS with no local image and no credentials here. `aws_opensearch_serverless` was omitted because running both the Elasticsearch and OpenSearch JVMs alongside the main stack exceeds this 14 GiB host's free RAM (OpenSearch was SIGTERM/OOM'd); its transport is implemented and the Elasticsearch connector of the same engine family runs live. `milvus` needs etcd and minio sidecars and was not brought up. To complete the full set, run the four cloud connectors against staging credentials, OpenSearch on a larger host, and Milvus with its sidecars.
+
+Why GW30 does not exit: the real transports are injected by the live-gate harness, not by the production boot (`edge/serve.py`). Wiring the connectors into a served route is GW31 (routes + pipeline) and GW36 (production boot). Per the runbook a card is not done for cutover until it is wired and its live tests pass; GW30 has the live tests passing on 7 real stores but is not yet wired.
+
+### Unit and property tests that exist for this card
+
+On 2 November the `lgw30` suite was 78 passed (offline, stub-backed, no socket): posture-code distinctness, the `ResourceContract` vector derivations, the adapter value types and absent-vs-empty invariant, credential redaction/non-serialization, protocol conformance, and the six seeded `random.Random` >= 10,000-iteration property tests (one per design property: no silent fallback, no credential leak, unsupported-operation-not-empty, org-credential isolation, provider-unreachable-not-empty, stub determinism), plus the connector-table unit tests.
+
+- `gateway_v2/tests/domain/test_lgw30_posture.py`
+- `gateway_v2/tests/runtime/test_lgw30_resources.py`
+- `gateway_v2/tests/dispatch/test_lgw30_values.py`
+- `gateway_v2/tests/dispatch/test_lgw30_credential_value.py`
+- `gateway_v2/tests/dispatch/test_lgw30_protocol.py`
+- `gateway_v2/tests/dispatch/test_lgw30_stub_determinism.py`
+- `gateway_v2/tests/dispatch/test_lgw30_registry.py`
+- `gateway_v2/tests/dispatch/test_lgw30_capabilities.py`
+- `gateway_v2/tests/dispatch/test_lgw30_credential_isolation.py`
+- `gateway_v2/tests/dispatch/test_lgw30_leak_guard.py`
+- `gateway_v2/tests/dispatch/test_lgw30_bounded_op.py`
+- `gateway_v2/tests/dispatch/test_lgw30_connectors.py`
+
+Live-gate harness and evidence: `docs/plans/evidence/2026-11-02-gw30-live-gate/` (`run_live_gates.py` for the first 2-store run, `run_live_gates_9store.py` for the 7-store run, `SUMMARY_9STORE.md`, and the `L30-1/-2/-3` JSON). The store stack is `docker-compose.gw30-stores.yml`. This is a GW card, not an R2 item, so no four-memory Ruflo/Cursor mirror was written.
+
 ## Cards not started
 
 | Card | Runbook objective, short | State |
@@ -81,7 +135,7 @@ Control Django tests were not run here. The repo virtualenv and `gateway_v2/.ven
 | GW27 | The 45 unsupported FirewallConfig fields, built or retired by name | Not started. `firewall_v2_map.py` still rejects those fields on save. |
 | GW28 | Multi-model routing | Not started |
 | GW29 | Kill switch, isolation, reroute, auto-isolation | Not started. `kill_switch_engaged` is still hard-coded false. |
-| GW30 | Vector adapter and the connector list, `unsupported_operation` instead of an empty success | Not started. No vector client. |
+| GW30 | Vector adapter and the connector list, `unsupported_operation` instead of an empty success | Adapter layer built and live-tested on 2 November; see the GW30 section above. Not wired into the production boot (that is GW31/GW36), so it does not exit for cutover. |
 | GW31 | Four-stage RAG, the retired routes, async ingest, project on Principal, six RAG settings | Not started. `/v1/rag/query` is HTTP 501 `not_implemented:rag`. |
 | GW32 | v1 MCP URL or a signed redirect, gateway as OAuth 2.1 server, real HTTP+SSE and WebSocket | Not started |
 | GW33 | Output parity: IP leak, exfil channels, grounding, human review, REWRITE, canary | Not started. The GW26 publisher omits `rewrite` and `model_downgrade` and names them unsupported. It does not implement REWRITE. |
