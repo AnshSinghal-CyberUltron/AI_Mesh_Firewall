@@ -1,0 +1,114 @@
+{
+  "gate": "L30-1",
+  "timestamp": "2026-11-02T09:38:59.730474+00:00",
+  "live": {
+    "pgvector": {
+      "create_collection": {
+        "code": "vector_ok",
+        "status": "created"
+      },
+      "upsert": {
+        "code": "vector_ok",
+        "count": 3
+      },
+      "query": {
+        "code": "vector_ok",
+        "count": 3,
+        "ids": [
+          "r1",
+          "r3",
+          "r2"
+        ],
+        "top_id": "r1"
+      },
+      "delete": {
+        "code": "vector_ok",
+        "count": 3
+      }
+    },
+    "redis": {
+      "create_collection": {
+        "code": "vector_ok",
+        "status": "created"
+      },
+      "upsert": {
+        "code": "vector_ok",
+        "count": 3
+      },
+      "query": {
+        "code": "vector_ok",
+        "count": 3,
+        "ids": [
+          "r1",
+          "r3",
+          "r2"
+        ],
+        "top_id": "r1"
+      },
+      "delete": {
+        "code": "vector_ok",
+        "count": 3
+      }
+    }
+  },
+  "infra_blocked": {
+    "pinecone": "infra-blocked: no live backend / no credentials in this environment (deferred live gate per design.md Open Questions)",
+    "chroma": "infra-blocked: no live backend / no credentials in this environment (deferred live gate per design.md Open Questions)",
+    "milvus": "infra-blocked: no live backend / no credentials in this environment (deferred live gate per design.md Open Questions)",
+    "qdrant": "infra-blocked: no live backend / no credentials in this environment (deferred live gate per design.md Open Questions)",
+    "weaviate": "infra-blocked: no live backend / no credentials in this environment (deferred live gate per design.md Open Questions)",
+    "elasticsearch": "infra-blocked: no live backend / no credentials in this environment (deferred live gate per design.md Open Questions)",
+    "mongodb_atlas": "infra-blocked: no live backend / no credentials in this environment (deferred live gate per design.md Open Questions)",
+    "aws_opensearch_serverless": "infra-blocked: no live backend / no credentials in this environment (deferred live gate per design.md Open Questions)",
+    "aws_bedrock_kb": "infra-blocked: no live backend / no credentials in this environment (deferred live gate per design.md Open Questions)",
+    "gcp_vertex_vector": "infra-blocked: no live backend / no credentials in this environment (deferred live gate per design.md Open Questions)",
+    "azure_ai_search": "infra-blocked: no live backend / no credentials in this environment (deferred live gate per design.md Open Questions)"
+  },
+  "parity": {
+    "create_collection_codes": {
+      "pgvector": "vector_ok",
+      "redis": "vector_ok"
+    },
+    "create_collection_codes_identical": true,
+    "upsert_codes": {
+      "pgvector": "vector_ok",
+      "redis": "vector_ok"
+    },
+    "upsert_codes_identical": true,
+    "query_codes": {
+      "pgvector": "vector_ok",
+      "redis": "vector_ok"
+    },
+    "query_codes_identical": true,
+    "delete_codes": {
+      "pgvector": "vector_ok",
+      "redis": "vector_ok"
+    },
+    "delete_codes_identical": true,
+    "query_ids": {
+      "pgvector": [
+        "r1",
+        "r3",
+        "r2"
+      ],
+      "redis": [
+        "r1",
+        "r3",
+        "r2"
+      ]
+    },
+    "query_ids_identical": true,
+    "query_count_identical": true,
+    "upsert_count": {
+      "pgvector": 3,
+      "redis": 3
+    },
+    "upsert_count_identical": true,
+    "delete_count": {
+      "pgvector": 3,
+      "redis": 3
+    },
+    "delete_count_identical": true
+  },
+  "verdict": "LIVE-PASS (2 live backends: pgvector, redis) + 11 INFRA-BLOCKED"
+}

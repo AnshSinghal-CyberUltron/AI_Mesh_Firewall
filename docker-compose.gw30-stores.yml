@@ -1,0 +1,78 @@
+# GW30 local vector-store backends for the L30-1/L30-2/L30-3 live acceptance gates.
+# These are DEV-MODE, single-node, auth-disabled store servers used only to drive the
+# real per-store Vector_Transport implementations against live wire bytes. Not for prod.
+# Ports are chosen in a clean 69xx range to avoid the running ai_mesh_firewall stack.
+# NOTE: OpenSearch is intentionally omitted here -- running both the Elasticsearch and
+# OpenSearch JVMs alongside the main stack exceeds this host's RAM (it was SIGTERM/OOM'd).
+# OpenSearch shares the Elasticsearch engine family; its transport is implemented and unit-
+# wired, but its LIVE gate is recorded resource-blocked in this environment, not fabricated.
+name: gw30-stores
+
+services:
+  gw30-qdrant:
+    image: qdrant/qdrant:latest
+    ports:
+      - "6933:6333"   # REST
+      - "6934:6334"   # gRPC
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c ':> /dev/tcp/127.0.0.1/6333' || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  gw30-weaviate:
+    image: semitechnologies/weaviate:1.27.0
+    command: ["--host", "0.0.0.0", "--port", "8080", "--scheme", "http"]
+    environment:
+      AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: "true"
+      PERSISTENCE_DATA_PATH: "/var/lib/weaviate"
+      DEFAULT_VECTORIZER_MODULE: "none"
+      ENABLE_MODULES: ""
+      QUERY_DEFAULTS_LIMIT: "25"
+      CLUSTER_HOSTNAME: "node1"
+      GRPC_PORT: "50051"
+    ports:
+      - "6980:8080"
+      - "6951:50051"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/v1/.well-known/ready || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  gw30-elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.15.0
+    environment:
+      discovery.type: "single-node"
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+      bootstrap.memory_lock: "false"
+    ports:
+      - "6920:9200"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s http://127.0.0.1:9200/_cluster/health || exit 1"]
+      interval: 8s
+      timeout: 5s
+      retries: 40
+
+  gw30-chroma:
+    image: chromadb/chroma:0.5.20
+    ports:
+      - "6900:8000"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s http://127.0.0.1:8000/api/v1/heartbeat || curl -s http://127.0.0.1:8000/api/v2/heartbeat || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  gw30-mongo-atlas:
+    image: mongodb/mongodb-atlas-local:latest
+    ports:
+      - "6927:27017"
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --quiet --eval 'db.runCommand({ping:1}).ok' || exit 1"]
+      interval: 8s
+      timeout: 5s
+      retries: 40

@@ -1,0 +1,31 @@
+{
+  "gate": "L30-2",
+  "timestamp": "2026-11-02T09:38:59.963326+00:00",
+  "cases": [
+    {
+      "store": "pgvector",
+      "request_id": "zs-fb7193d2835e",
+      "timestamp": "2026-11-02T09:38:59.963969+00:00",
+      "target": "127.0.0.1:59901 (nothing listening)",
+      "code": "provider_unreachable",
+      "records_is_none": true,
+      "elapsed_s": 0.0005,
+      "within_30s": true,
+      "is_provider_unreachable": true,
+      "is_empty_clean_search": false
+    },
+    {
+      "store": "redis",
+      "request_id": "zs-261cd77228a2",
+      "timestamp": "2026-11-02T09:39:04.090287+00:00",
+      "target": "127.0.0.1:59901 (nothing listening)",
+      "code": "provider_unreachable",
+      "records_is_none": true,
+      "elapsed_s": 4.1263,
+      "within_30s": true,
+      "is_provider_unreachable": true,
+      "is_empty_clean_search": false
+    }
+  ],
+  "verdict": "LIVE-PASS"
+}

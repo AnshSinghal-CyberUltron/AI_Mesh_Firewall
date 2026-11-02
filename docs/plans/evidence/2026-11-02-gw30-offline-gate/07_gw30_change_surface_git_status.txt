@@ -1,0 +1,10 @@
+ M gateway_v2/gateway_v2/domain/posture.py
+ M gateway_v2/gateway_v2/runtime/resources.py
+?? gateway_v2/gateway_v2/dispatch/vector_adapter.py
+?? gateway_v2/gateway_v2/dispatch/vector_bounded_op.py
+?? gateway_v2/gateway_v2/dispatch/vector_connectors.py
+?? gateway_v2/gateway_v2/dispatch/vector_credentials.py
+?? gateway_v2/gateway_v2/dispatch/vector_leak_guard.py
+?? gateway_v2/gateway_v2/dispatch/vector_operations.py
+?? gateway_v2/gateway_v2/dispatch/vector_registry.py
+?? gateway_v2/gateway_v2/runtime/resources_vector.py
