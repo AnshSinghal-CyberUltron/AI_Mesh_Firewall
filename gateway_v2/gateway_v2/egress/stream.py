@@ -73,6 +73,7 @@ from gateway_v2.egress.holdback_tradeoff import (
     completed_in,
     derive_trade_off_outcome,
     longest_unbroken_run_bytes,
+    unsplittable_hold,
     with_remainder_redactions,
 )
 from gateway_v2.egress.output_guard import (
@@ -591,9 +592,6 @@ class StreamPipeline:
         except Exception as exc:  # scanner failure -> fail-closed (R3.6)
             raise ScanFailure(str(exc)) from exc
 
-        # Refresh the completed-match set against the WHOLE accumulated buffer so
-        # a match that straddles a release boundary -- or that completes only
-        # after the cap force-released its prefix -- is seen whole (task 9.1).
         if self._detector is not None:
             text.hits = list(self._detector(text.whole))
 
@@ -607,7 +605,12 @@ class StreamPipeline:
         if result.forced_release:
             self._metrics.observe_forced_release()
 
-        hold_index = len(text.pending) if final else result.hold_index
+        hold_index = unsplittable_hold(
+            text.hits,
+            text.base_offset,
+            len(text.pending) if final else result.hold_index,
+            final=final,
+        )
         released = text.pending[:hold_index]
         held_suffix = text.pending[hold_index:]
 

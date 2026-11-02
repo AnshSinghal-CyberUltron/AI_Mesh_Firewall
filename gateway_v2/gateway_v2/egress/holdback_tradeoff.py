@@ -36,6 +36,7 @@ __all__ = (
     "completed_in",
     "derive_trade_off_outcome",
     "longest_unbroken_run_bytes",
+    "unsplittable_hold",
     "with_remainder_redactions",
 )
 
@@ -99,9 +100,7 @@ def with_remainder_redactions(
     """
     if not remainder_edits or decision.disposition is Disposition.BLOCK:
         return decision
-    existing: set[tuple[int, int]] = {
-        (t.span.start, t.span.end) for t in decision.transformations
-    }
+    existing: set[tuple[int, int]] = {(t.span.start, t.span.end) for t in decision.transformations}
     extra: list[Transformation] = [
         Transformation(kind="redact", span=Span(start, end), replacement=_REMAINDER_PLACEHOLDER)
         for start, end in remainder_edits
@@ -159,7 +158,30 @@ def completed_in(
         return ()
     end = base_offset + length
     return tuple(
-        f
-        for f in hits
-        if f.spans and all(base_offset <= s.start and s.end <= end for s in f.spans)
+        f for f in hits if f.spans and all(base_offset <= s.start and s.end <= end for s in f.spans)
     )
+
+
+def unsplittable_hold(
+    hits: Sequence[Finding],
+    base_offset: int,
+    hold_index: int,
+    *,
+    final: bool,
+) -> int:
+    """Pull a release cut back so it does not divide a completed match.
+
+    The holdback scanner can release a prefix of a customer keyword whose tail
+    looks like a card or another held class. The cut moves to the start of any
+    span it would divide, and that span stays pending until a later release
+    contains it whole. The final chunk flushes the buffer unchanged.
+    """
+    if final or hold_index <= 0 or not hits:
+        return hold_index
+    cut = base_offset + hold_index
+    earliest = cut
+    for finding in hits:
+        for span in finding.spans:
+            if base_offset <= span.start < cut < span.end:
+                earliest = min(earliest, span.start)
+    return earliest - base_offset
