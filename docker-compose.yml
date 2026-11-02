@@ -502,6 +502,10 @@ services:
       AMF_DEV_API_KEY: ${AMF_DEV_API_KEY:-dev-key-change-me}
       # Must equal the plan file's org_id (the server refuses to start otherwise).
       AMF_DEV_ORG_ID: ${AMF_DEV_ORG_ID:-dev-org}
+      # Optional second org for the GW26 two-plan live line. Its key is polled;
+      # the dev firewall-plan key stays the primary fallback only.
+      AMF_DEV_PEER_API_KEY: ${AMF_DEV_PEER_API_KEY:-dev-peer-key}
+      AMF_DEV_PEER_ORG_ID: ${AMF_DEV_PEER_ORG_ID:-org-b}
       AMF_DEV_PLAN_PATH: /opt/gateway_v2/dev/plan.example.json
       AMF_DEV_MODELS: ${AMF_DEV_MODELS:-echo-1}
       # DECLARED capacity inputs (config, not code): q_safe sizes the GW19 admission queues and
