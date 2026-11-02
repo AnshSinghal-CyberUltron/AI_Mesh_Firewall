@@ -125,7 +125,6 @@
     "stream_complete",
     "streams",
     "subcategory",
-    "threat_category",
     "threat_subcategory",
     "threat_type",
     "timestamp",
@@ -138,7 +137,7 @@
   },
   {
    "file": "control/ai_mesh_control/policy/security_views.py",
-   "line": 1048,
+   "line": 1053,
    "metadata_keys": [
     "detail",
     "extra",
@@ -153,7 +152,7 @@
   },
   {
    "file": "control/ai_mesh_control/policy/security_views.py",
-   "line": 1094,
+   "line": 1099,
    "metadata_keys": [
     "1h",
     "24h",
@@ -185,7 +184,7 @@
   },
   {
    "file": "control/ai_mesh_control/policy/security_views.py",
-   "line": 1567,
+   "line": 1581,
    "metadata_keys": [
     "AGENTIC01",
     "AGENTIC02",
@@ -237,7 +236,7 @@
   },
   {
    "file": "control/ai_mesh_control/policy/security_views.py",
-   "line": 1688,
+   "line": 1702,
    "metadata_keys": [
     "_owasp_code",
     "_owasp_codes",
@@ -269,7 +268,7 @@
   },
   {
    "file": "control/ai_mesh_control/policy/security_views.py",
-   "line": 1973,
+   "line": 1989,
    "metadata_keys": [
     "_owasp_code",
     "_owasp_codes",
@@ -301,7 +300,7 @@
   },
   {
    "file": "control/ai_mesh_control/policy/security_views.py",
-   "line": 2098,
+   "line": 2114,
    "metadata_keys": [
     "_data",
     "_model",
@@ -331,7 +330,7 @@
   },
   {
    "file": "control/ai_mesh_control/policy/security_views.py",
-   "line": 1301,
+   "line": 1306,
    "metadata_keys": [
     "1h",
     "24h",
@@ -345,6 +344,7 @@
     "count",
     "critical_count",
     "enforcement_rate",
+    "gateway_v2",
     "health_radar",
     "latency_distribution",
     "metric",
@@ -376,7 +376,7 @@
   },
   {
    "file": "control/ai_mesh_control/policy/security_views.py",
-   "line": 1381,
+   "line": 1395,
    "metadata_keys": [
     "1h",
     "24h",
@@ -399,7 +399,7 @@
   },
   {
    "file": "control/ai_mesh_control/policy/security_views.py",
-   "line": 1457,
+   "line": 1471,
    "metadata_keys": [
     "1h",
     "24h",
@@ -426,7 +426,7 @@
   },
   {
    "file": "control/ai_mesh_control/policy/security_views.py",
-   "line": 1789,
+   "line": 1803,
    "metadata_keys": [
     "0-50ms",
     "100-200ms",
@@ -481,7 +481,7 @@
   },
   {
    "file": "control/ai_mesh_control/policy/security_views.py",
-   "line": 2262,
+   "line": 2278,
    "metadata_keys": [
     "detail",
     "escalated_at",
@@ -498,7 +498,7 @@
   },
   {
    "file": "control/ai_mesh_control/policy/security_views.py",
-   "line": 2353,
+   "line": 2369,
    "metadata_keys": [
     "detail",
     "incident_id",
@@ -575,7 +575,7 @@
   },
   {
    "file": "control/ai_mesh_control/policy/security_views.py",
-   "line": 2459,
+   "line": 2475,
    "metadata_keys": [
     "agent_id",
     "avg_block_rate",
@@ -592,7 +592,7 @@
   },
   {
    "file": "control/ai_mesh_control/policy/security_views.py",
-   "line": 2543,
+   "line": 2559,
    "metadata_keys": [
     "action",
     "allowed",
@@ -607,7 +607,7 @@
   },
   {
    "file": "control/ai_mesh_control/policy/security_views.py",
-   "line": 2577,
+   "line": 2593,
    "metadata_keys": [
     "action",
     "blocked",
@@ -621,7 +621,7 @@
   },
   {
    "file": "control/ai_mesh_control/policy/security_views.py",
-   "line": 2621,
+   "line": 2637,
    "metadata_keys": [
     "_owasp_code",
     "_owasp_codes",
@@ -645,7 +645,7 @@
   },
   {
    "file": "control/ai_mesh_control/policy/security_views.py",
-   "line": 2676,
+   "line": 2692,
    "metadata_keys": [
     "_risk",
     "agentType",
@@ -662,7 +662,7 @@
   },
   {
    "file": "control/ai_mesh_control/policy/security_views.py",
-   "line": 2729,
+   "line": 2745,
    "metadata_keys": [
     "action",
     "automated",
@@ -679,7 +679,7 @@
   },
   {
    "file": "control/ai_mesh_control/policy/security_views.py",
-   "line": 2774,
+   "line": 2790,
    "metadata_keys": [
     "_owasp_code",
     "_owasp_codes",
@@ -715,7 +715,7 @@
   },
   {
    "file": "control/ai_mesh_control/policy/security_views.py",
-   "line": 2908,
+   "line": 2924,
    "metadata_keys": [
     "_esc",
     "_lat_n",
@@ -747,7 +747,7 @@
   },
   {
    "file": "control/ai_mesh_control/policy/security_views.py",
-   "line": 2995,
+   "line": 3011,
    "metadata_keys": [
     "_detail_extra",
     "_detail_top",

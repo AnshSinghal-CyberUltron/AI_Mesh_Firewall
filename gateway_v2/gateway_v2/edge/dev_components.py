@@ -305,9 +305,9 @@ class DeterministicFindings:
 
     def __call__(self, text: str) -> tuple[Finding, ...]:
         """Scan with phase-only customer conditions. Routes pass :func:`bind_surface`."""
-        return self.scan(text, surface=None)
+        return self.findings_on(text, surface=None)
 
-    def scan(self, text: str, surface: Surface | None = None) -> tuple[Finding, ...]:
+    def findings_on(self, text: str, surface: Surface | None = None) -> tuple[Finding, ...]:
         """The same detectors as :meth:`__call__`, limited to ``surface`` when set."""
         context = DetectorContext(phase=self.phase, rules=(), budget=Budget(self.budget_s))
         findings: list[Finding] = []
@@ -336,7 +336,7 @@ def bind_surface(
         return detector
 
     def _bound(text: str) -> Sequence[Finding]:
-        return detector.scan(text, surface)
+        return detector.findings_on(text, surface)
 
     return _bound
 

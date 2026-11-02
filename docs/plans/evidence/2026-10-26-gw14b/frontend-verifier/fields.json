@@ -26,6 +26,7 @@
     "frontend/src/components/rag/SemanticSearchPanel.jsx",
     "frontend/src/components/simulator/StageTimeline.jsx",
     "frontend/src/utils/inputScanExplain.js",
+    "frontend/src/utils/liveGateway.js",
     "frontend/src/utils/outputGovernanceFeed.js",
     "frontend/src/utils/pipelineTrace.js"
    ],
@@ -870,20 +871,19 @@
    "files": [
     "frontend/src/utils/pipelineTrace.js"
    ],
-   "via": "unscoped"
+   "via": "pipeline_trace"
   },
   {
    "field": "matched_rules",
    "files": [
-    "frontend/src/components/simulator/StageTimeline.jsx"
+    "frontend/src/utils/pipelineTrace.js"
    ],
    "via": "pipeline_trace"
   },
   {
    "field": "matched_rules",
    "files": [
-    "frontend/src/utils/liveGateway.js",
-    "frontend/src/utils/pipelineTrace.js"
+    "frontend/src/utils/liveGateway.js"
    ],
    "via": "unscoped"
   },
