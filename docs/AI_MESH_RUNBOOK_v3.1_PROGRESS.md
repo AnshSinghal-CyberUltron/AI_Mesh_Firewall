@@ -2,7 +2,7 @@
 
 Status date: 2 November 2026. Source of the card text: `docs/AI_MESH_MASTER_RUNBOOK_v3.1_CLEAN.docx`, Part 00. This file does not change that document.
 
-GW26 and GW30 have new code on this tree and have been exercised on the local stack. Neither exits. The live lines below say exactly what was observed and what was not. GW17b, GW17c, GW27, GW28, GW29, GW31, GW32, GW33, GW34, GW35, and GW36 have no new card work from this pass. The runbook says each of those cards is required before GW21 and GW23, and that a card does not exit on unit tests alone.
+GW26 and GW30 have new code on this tree and have been exercised on the local stack. Neither exits. The live lines below say exactly what was observed and what was not. GW36 was started on 2 November (plan reviewed, slice S0 landed; it does not exit). GW17b, GW17c, GW27, GW28, GW29, GW31, GW32, GW33, GW34 and GW35 have no new card work from this pass. The runbook says each of those cards is required before GW21 and GW23, and that a card does not exit on unit tests alone.
 
 ## GW26 — Customer policy rules and surface scoping
 
@@ -126,6 +126,32 @@ On 2 November the `lgw30` suite was 78 passed (offline, stub-backed, no socket):
 
 Live-gate harness and evidence: `docs/plans/evidence/2026-11-02-gw30-live-gate/` (`run_live_gates.py` for the first 2-store run, `run_live_gates_9store.py` for the 7-store run, `SUMMARY_9STORE.md`, and the `L30-1/-2/-3` JSON). The store stack is `docker-compose.gw30-stores.yml`. This is a GW card, not an R2 item, so no four-memory Ruflo/Cursor mirror was written.
 
+## GW36 — Production boot wiring and local guard model
+
+Depends on GW05c, GW06, GW08, GW10 and GW11. Required by GW20, GW21 and GW23.
+
+Plan: `docs/plans/2026-11-02-gw36-production-boot.md`. It went through the `CLAUDE.md` order: exploration, a written plan, five contradictory reviews, and a devil's-advocate pass that re-checked each finding in code. The reviews added findings N1–N17 (plan §9.2) and raised the estimate from 7–11 to 14–18 agent-days. The main reason is that nothing writes signed state from control today: API keys go only to the v1 `auth:apikey:*` format, and control writes an unsigned plan document to `{rv2}:plan:{org}`, the key the signed PLAN feed owns. GW36 therefore needs a control-to-state projector (slice S2).
+
+### Slice S0 — done on 2 November
+
+| Item | What changed | Evidence |
+|---|---|---|
+| N1 `/metrics` crash | Found during the review and reproduced live. On the running dev gateway, one 400 refusal (`max_tokens=2000000`) made that worker's `/metrics` return 500 on every later scrape: `RejectionCounters` seeded status 503 only, a 400 added a series, and the Publisher's fixed `SERIES_COUNT` assertion failed (`rendered 3273 != 3272`). The `status` label is now a closed set (`errors.RENDERABLE_STATUSES`, every envelope status plus the generic 500), seeded with real zeros, and counted in `series_count`. An out-of-set status counts on `amf_publisher_vocab_error_total` and adds no series. | Live after rebuild: 20 of 20 scrapes 200 after a 400 and a 503 refusal; `amf_rejected{status="400",reason="rejected"} 1` |
+| N17 / V-15 routing miss | Unknown path → 404 `endpoint_not_found`; known path with another method → 405 `method_not_allowed` with `allow`; the body never echoes the path. `/v1/rag/query` and `/v1/vector/query` stay 501. | Live: `GET /v1/files` 404; `GET /v1/chat/completions` 405 `allow: POST`; `POST /v1/rag/query` 501. Stock `openai` 3.29 `files.list()` raises `NotFoundError` after one HTTP request (no retry). |
+| Pre-existing gate failures | `tests/lint/test_console_inventory.py`: ledgers regenerated with `--write`. The drift was committed frontend reads plus line shifts, and one `threat_category` read that commit `a3291e6f` removed. `check_tenant_scale` on `edge/dev_components.py`: the text-scan method was named `scan`, which the gate reads as Redis SCAN; renamed `findings_on`. | Both tests pass |
+
+Gates on 2 November: full offline suite 2778 passed, 100 skipped, 1 xfailed, 2 failed; `mypy --strict` 202 files; ruff; import-linter 3/3; capacity-literal, module-mutable, frozen-dataclass and http-outside-edge gates exit 0. The two failures are `tests/gates/test_check_tenant_scale.py` and `tests/gates/test_empty_tree_passes.py`, and both name only `gateway_v2/dispatch/vector_live_transports.py` (1309 lines; `scan_iter`, `smembers`, `keys`), which the GW30 commits landed on this branch during this session. That module talks to a customer vector store, not the shared state store, so the fix is to move it out of the data-plane package or add a justified allowlist entry. That is the GW30 lane's call; GW36 did not edit it.
+
+Evidence: `docs/plans/evidence/2026-11-02-gw36/` (`S0_live_before.txt`, `S0_live_after.txt`, `S0_full_offline_suite.txt`).
+
+### Not done
+
+S1–S7 in plan §9.4. L36-1 and L36-2 are not run. An unknown key on the dev gateway still answers 503 `shared_state_unavailable`, not 401 (S3).
+
+### Working defaults for the open owner decisions
+
+The owner asked on 2 November to proceed on defaults. They are working defaults for GW36, not signatures: in-flight kill switch cuts at the next chunk; `RV_STATE_FRESH_MS` 5000 and `RV_STATE_PG_GRACE_MS` 16000; the shipped holdback trade-off table; egress excluded from the envelope and reported separately; tail trim ≤ 0.1%; p99 excludes holdback with the held-tokens histogram published; surface scoping confirmed; keep `/gateway/{org}/mcp/{srv}`; six Scan Detail stages with real auth and rate_limit; guard model PG2-22M ONNX on CPU with semantic action FLAG. Plan §9.3 adds the GW36-specific ones (platform default plan for an org with no saved config, 401 for unknown/inactive/expired keys, `tools` refused with a declared 400 until GW34).
+
 ## Cards not started
 
 | Card | Runbook objective, short | State |
@@ -139,9 +165,9 @@ Live-gate harness and evidence: `docs/plans/evidence/2026-11-02-gw30-live-gate/`
 | GW31 | Four-stage RAG, the retired routes, async ingest, project on Principal, six RAG settings | Not started. `/v1/rag/query` is HTTP 501 `not_implemented:rag`. |
 | GW32 | v1 MCP URL or a signed redirect, gateway as OAuth 2.1 server, real HTTP+SSE and WebSocket | Not started |
 | GW33 | Output parity: IP leak, exfil channels, grounding, human review, REWRITE, canary | Not started. The GW26 publisher omits `rewrite` and `model_downgrade` and names them unsupported. It does not implement REWRITE. |
-| GW34 | SDK compatibility; unknown paths 404 `endpoint_not_found` | Not started. Unknown paths still return 501. |
+| GW34 | SDK compatibility; unknown paths 404 `endpoint_not_found` | Not started as a card. The unknown-path item landed with GW36 slice S0 on 2 November: an unknown path is 404 `endpoint_not_found`, a known path with another method is 405 with `allow`, and the registered placeholders stay 501. The client matrix (L34-1) is not run. |
 | GW35 | Console pages and Scan Detail truth | Not started. The Attack Simulator still shows Auth and Rate Limit as ALLOW on the competitor block above. Those two stages are hard-coded allow. |
-| GW36 | Production boot and a real local model | Not started. With `AMF_DEV_PROFILE` unset, the boot still does not serve real traffic. |
+| GW36 | Production boot and a real local model | Started 2 November; see the GW36 section above. With `AMF_DEV_PROFILE` unset, the boot still does not serve real traffic. |
 
 ## Owner decisions still written as open in v3.1
 

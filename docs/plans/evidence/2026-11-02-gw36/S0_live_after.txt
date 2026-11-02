@@ -1,0 +1,14 @@
+GW36 S0 — live probe AFTER the fix (rebuilt gateway-v2 image, dev profile, :8301), 2 Nov 2026
+unknown path GET /v1/files: {"error":{"message":"No endpoint is served at this path.","type":"not_found_error","code":"endpoint_not_found","param":null,"request_id":null}}  -> 404
+GET /v1/chat/completions: HTTP/1.1 405 Method Not Allowed
+GET /v1/chat/completions: allow: POST
+{"error":{"message":"This endpoint does not accept that HTTP method.","type":"invalid_request_error","code":"method_not_allowed","param":null,"request_id":null}}
+POST /v1/rag/query placeholder: 501
+POST chat max_tokens=2000000: 400
+POST chat bad key: 503
+GET /metrics x20: 200 200 200 200 200 200 200 200 200 200 200 200 200 200 200 200 200 200 200 200
+# TYPE amf_publisher_vocab_error_total counter
+amf_publisher_vocab_error_total 0
+amf_rejected{status="400",reason="rejected"} 1
+amf_rejected{status="503",reason="rejected"} 1
+openai 3.29.0: files.list -> NotFoundError status=404 code=endpoint_not_found; HTTP requests sent=1 (no retry)

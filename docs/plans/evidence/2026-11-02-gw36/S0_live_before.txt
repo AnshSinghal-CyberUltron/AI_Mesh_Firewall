@@ -1,0 +1,7 @@
+GW36 S0 — live probe BEFORE the fix (running gateway-v2 image, dev profile, :8301), 2 Nov 2026
+unknown path GET /v1/files:                 501
+GET /v1/chat/completions (wrong method):    501
+POST chat max_tokens=2000000 (400 refusal): 400
+GET /metrics scrape 1:                      200
+GET /metrics scrape 2:                      500   <- the worker that served the 400 fails its fixed SERIES_COUNT assertion
+GET /metrics scrape 3:                      200
