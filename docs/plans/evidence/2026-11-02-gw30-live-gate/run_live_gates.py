@@ -4,7 +4,7 @@
 Drives the three GW30 live acceptance gates through the ALREADY-SHIPPED adapter
 seam (``VectorRegistry`` + ``run_bounded_operation`` + ``resolve_scoped_credential``)
 against the REAL per-store transports in
-``gateway_v2.dispatch.vector_live_transports`` wired behind the ``Vector_Transport``
+``gateway_v2.dispatch.vector_transports`` wired behind the ``Vector_Transport``
 seam. Nothing in the offline layer is changed; this script only INJECTS real
 transports, exactly as a deployment would.
 
@@ -57,7 +57,7 @@ from gateway_v2.dispatch.vector_credentials import (  # noqa: E402
     StubCredentialSource,
     resolve_scoped_credential,
 )
-from gateway_v2.dispatch.vector_live_transports import (  # noqa: E402
+from gateway_v2.dispatch.vector_transports import (  # noqa: E402
     PgVectorConnectionParams,
     PgVectorTransport,
     RedisConnectionParams,
@@ -145,15 +145,15 @@ from gateway_v2.dispatch.vector_adapter import HealthRequest  # noqa: E402
 
 PG_PARAMS = PgVectorConnectionParams(
     host=os.environ.get("GW30_PG_HOST", "127.0.0.1"),
-    port=int(os.environ.get("GW30_PG_PORT", "5432")),
-    user=os.environ.get("GW30_PG_USER", "ai_mesh_firewall"),
-    password=os.environ.get("GW30_PG_PASSWORD", "ai_mesh_firewall"),
-    dbname=os.environ.get("GW30_PG_DB", "ai_mesh_firewall"),
+    port=int(os.environ.get("GW30_PG_PORT", "6932")),
+    user=os.environ.get("GW30_PG_USER", "gw30"),
+    password=os.environ.get("GW30_PG_PASSWORD", "gw30"),
+    dbname=os.environ.get("GW30_PG_DB", "gw30"),
     dimension=DIM,
 )
 REDIS_PARAMS = RedisConnectionParams(
     host=os.environ.get("GW30_REDIS_HOST", "127.0.0.1"),
-    port=int(os.environ.get("GW30_REDIS_PORT", "6379")),
+    port=int(os.environ.get("GW30_REDIS_PORT", "6979")),
     db=0,
 )
 

@@ -6,7 +6,11 @@ up by docker-compose.gw30-stores.yml: + qdrant, weaviate, elasticsearch,
 opensearch (as aws_opensearch_serverless), chroma, mongodb_atlas. Drives every gate
 through the ALREADY-SHIPPED adapter seam (VectorRegistry/build_connector +
 run_bounded_operation + resolve_scoped_credential) against the REAL transports in
-gateway_v2.dispatch.vector_live_transports. Nothing in the offline layer changes.
+gateway_v2.dispatch.vector_transports. Nothing in the offline layer changes.
+
+The Redis and pgvector transports run against the dedicated gw30-redis-stack (6979) and
+gw30-pgvector (6932) containers, never the main stack's Redis or Postgres. Collection names carry
+a per-run suffix. Set GW30_EVIDENCE_DIR to write the JSON somewhere other than this folder.
 
 Cloud-only stores (pinecone, aws_bedrock_kb, gcp_vertex_vector, azure_ai_search)
 and milvus (no local container here) are recorded INFRA-BLOCKED, never fabricated.
@@ -19,6 +23,7 @@ from __future__ import annotations
 import asyncio
 import datetime
 import json
+import os
 import socket
 import sys
 import uuid
@@ -39,12 +44,16 @@ from gateway_v2.dispatch.vector_connectors import STORE_IDS, build_connector  # 
 from gateway_v2.dispatch.vector_credentials import (  # noqa: E402
     CredentialResolution, OrgCredential, resolve_scoped_credential,
 )
-from gateway_v2.dispatch import vector_live_transports as vlt  # noqa: E402
+from gateway_v2.dispatch import vector_transports as vlt  # noqa: E402
 from gateway_v2.domain import posture  # noqa: E402
 from gateway_v2.runtime.kinds import HardwareSignals  # noqa: E402
 from gateway_v2.runtime.resources import from_signals  # noqa: E402
 
 DIM = 4
+RUN = uuid.uuid4().hex[:8]
+OUT = Path(os.environ.get("GW30_EVIDENCE_DIR", str(HERE)))
+PG = dict(host="127.0.0.1", port=6932, user="gw30", password="gw30", dbname="gw30")
+REDIS_PORT = 6979
 
 
 def now() -> str:
@@ -67,10 +76,9 @@ def live_contract():
 # store_id -> factory building a REAL transport pointed at the local container.
 LIVE_TRANSPORTS = {
     "pgvector": lambda: vlt.PgVectorTransport(vlt.PgVectorConnectionParams(
-        host="127.0.0.1", port=5432, user="ai_mesh_firewall",
-        password="ai_mesh_firewall", dbname="ai_mesh_firewall", dimension=DIM)),
+        **PG, dimension=DIM)),
     "redis": lambda: vlt.RedisVectorTransport(vlt.RedisConnectionParams(
-        host="127.0.0.1", port=6379, db=0)),
+        host="127.0.0.1", port=REDIS_PORT, db=0)),
     "qdrant": lambda: vlt.QdrantTransport(vlt.QdrantConnectionParams(
         host="127.0.0.1", port=6933, dimension=DIM)),
     "weaviate": lambda: vlt.WeaviateTransport(vlt.WeaviateConnectionParams(
@@ -125,7 +133,7 @@ async def run_suite(store_id: str, contract) -> dict:
     transport = LIVE_TRANSPORTS[store_id]()
     connector = build_connector(store_id, transport)
     org = "orgA"
-    coll = f"live_{store_id}"
+    coll = f"live_{store_id}_{RUN}"
     out: dict = {}
 
     cr = await run_bounded_operation(lambda: connector.create_collection(
@@ -161,21 +169,18 @@ async def _cleanup(store_id: str, coll: str) -> None:
         if store_id == "pgvector":
             import psycopg
             safe = "".join(c if (c.isalnum() or c == "_") else "_" for c in coll)
-            with psycopg.connect(host="127.0.0.1", port=5432, user="ai_mesh_firewall",
-                                 password="ai_mesh_firewall", dbname="ai_mesh_firewall",
-                                 autocommit=True) as cn, cn.cursor() as cur:
+            with psycopg.connect(**PG, autocommit=True) as cn, cn.cursor() as cur:
                 cur.execute(f"DROP TABLE IF EXISTS gw30_{safe}")
         elif store_id == "redis":
             import redis.asyncio as ra
-            c = ra.Redis(host="127.0.0.1", port=6379, decode_responses=True)
+            c = ra.Redis(host="127.0.0.1", port=REDIS_PORT, decode_responses=True)
             try:
-                async for k in c.scan_iter(match=f"gw30:*{coll}*"):
-                    await c.delete(k)
-                await c.delete(f"gw30:index:{coll}")
+                safe = "".join(ch if (ch.isalnum() or ch == "_") else "_" for ch in coll)
+                await c.execute_command("FT.DROPINDEX", f"gw30idx:{safe}", "DD")
             finally:
                 await c.aclose()
-        # for the HTTP stores, create_collection recreates fresh each run, so a
-        # residual empty collection is harmless; drop it best-effort via the SDKs
+        # create_collection never resets an existing collection, so every run drops its own
+        # per-run collection here (harness-only cleanup, not a transport operation)
         elif store_id == "qdrant":
             from qdrant_client import QdrantClient
             QdrantClient(host="127.0.0.1", port=6933).delete_collection(coll)
@@ -236,6 +241,48 @@ async def gate_l30_1(contract) -> dict:
         f"+ {len(res['infra_blocked'])} INFRA-BLOCKED"
         if ok_stores and all(identical) else "SEE DETAIL"
     )
+    return res
+
+
+async def run_preservation(store_id: str, contract) -> dict:
+    """Create, upsert, create again: the second create is collection_exists and data survives."""
+    connector = build_connector(store_id, LIVE_TRANSPORTS[store_id]())
+    org, coll = "orgA", f"keep_{store_id}_{RUN}"
+
+    def create():
+        return run_bounded_operation(lambda: connector.create_collection(CreateRequest(
+            org_id=org, store_id=store_id, collection=coll, dimension=DIM, metric="cosine")),
+            contract)
+
+    first = await create()
+    up = await run_bounded_operation(lambda: connector.upsert(
+        UpsertRequest(org_id=org, store_id=store_id, collection=coll, records=RECS)), contract)
+    await asyncio.sleep(1.5)
+    second = await create()
+    await asyncio.sleep(0.5)
+    q = await run_bounded_operation(lambda: connector.query(
+        QueryRequest(org_id=org, store_id=store_id, collection=coll, vector=QVEC, top_k=3)),
+        contract)
+    await _cleanup(store_id, coll)
+    ids = [r.id for r in q.records] if q.records is not None else None
+    return {
+        "first_create": first.code, "upsert": up.code, "second_create": second.code,
+        "query_after_second_create": q.code, "ids_after_second_create": ids,
+        "pass": (first.code == posture.VECTOR_OK and second.code == posture.COLLECTION_EXISTS
+                 and ids is not None and sorted(ids) == ["r1", "r2", "r3"]),
+    }
+
+
+async def gate_l30_1b(contract) -> dict:
+    res: dict = {"gate": "L30-1b (R2.9 create is non-destructive)", "timestamp": now(),
+                 "run": RUN, "live": {}}
+    for store_id in LIVE_TRANSPORTS:
+        try:
+            res["live"][store_id] = await run_preservation(store_id, contract)
+        except Exception as exc:  # noqa: BLE001
+            res["live"][store_id] = {"error": f"{type(exc).__name__}: {exc}", "pass": False}
+    res["verdict"] = ("LIVE-PASS" if all(v.get("pass") for v in res["live"].values())
+                      else "FAIL")
     return res
 
 
@@ -312,20 +359,32 @@ async def gate_l30_3(contract) -> dict:
     return res
 
 
+def _ensure_pgvector_extension() -> None:
+    import psycopg
+    with psycopg.connect(**PG, autocommit=True) as cn, cn.cursor() as cur:
+        cur.execute("CREATE EXTENSION IF NOT EXISTS vector")
+
+
 async def main() -> int:
     contract = live_contract()
+    _ensure_pgvector_extension()
+    OUT.mkdir(parents=True, exist_ok=True)
     g1 = await gate_l30_1(contract)
+    g1b = await gate_l30_1b(contract)
     g2 = await gate_l30_2(contract)
     g3 = await gate_l30_3(contract)
-    (HERE / "L30-1_9store_parity.json").write_text(json.dumps(g1, indent=2))
-    (HERE / "L30-2_9store_unreachable.json").write_text(json.dumps(g2, indent=2))
-    (HERE / "L30-3_9store_refusal.json").write_text(json.dumps(g3, indent=2))
-    summary = {"L30-1": g1["verdict"], "L30-2": g2["verdict"], "L30-3": g3["verdict"],
-               "generated": now()}
+    (OUT / "L30-1_9store_parity.json").write_text(json.dumps(g1, indent=2))
+    (OUT / "L30-1b_create_preserves_data.json").write_text(json.dumps(g1b, indent=2))
+    (OUT / "L30-2_9store_unreachable.json").write_text(json.dumps(g2, indent=2))
+    (OUT / "L30-3_9store_refusal.json").write_text(json.dumps(g3, indent=2))
+    summary = {"L30-1": g1["verdict"], "L30-1b": g1b["verdict"], "L30-2": g2["verdict"],
+               "L30-3": g3["verdict"], "generated": now()}
     print(json.dumps(summary, indent=2))
     print("\n--- L30-1 per-store ---")
     print(json.dumps({"live": g1["live"], "infra_blocked": g1["infra_blocked"],
                       "parity": g1["parity"]}, indent=2))
+    print("\n--- L30-1b create preserves data ---")
+    print(json.dumps(g1b["live"], indent=2))
     print("\n--- L30-2 cases ---")
     print(json.dumps(g2["cases"], indent=2))
     print("\n--- L30-3 cases ---")

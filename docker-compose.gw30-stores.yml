@@ -76,3 +76,30 @@ services:
       interval: 8s
       timeout: 5s
       retries: 40
+
+  # Redis with the search module: the Redis transport needs FT.CREATE / FT.SEARCH (server-side
+  # KNN). Its own port, so the live gate never writes to the main stack's state Redis on 6379.
+  gw30-redis-stack:
+    image: redis/redis-stack-server:7.4.0-v1
+    ports:
+      - "6979:6379"
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep -q PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # pgvector for the live gate, separate from the main stack's ai_mesh_firewall database.
+  gw30-pgvector:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: gw30
+      POSTGRES_PASSWORD: gw30
+      POSTGRES_DB: gw30
+    ports:
+      - "6932:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gw30 -d gw30"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
