@@ -60,7 +60,7 @@ async def _traffic() -> tuple[dict[str, object], dict[str, float]]:
     for _ in range(2):
         streamed = {**_CHAT, "stream": True}
         assert (await _call(app, "POST", "/v1/chat/completions", streamed))[0] == 200
-    assert (await _call(app, "POST", "/v1/chat/completions", _CHAT, key="wrong"))[0] == 503
+    assert (await _call(app, "POST", "/v1/chat/completions", _CHAT, key="wrong"))[0] == 401
     assert (await _call(app, "GET", "/v1/models"))[0] == 200
     status, text = await _call(app, "GET", "/metrics")
     assert status == 200
@@ -80,9 +80,10 @@ def test_metrics_follow_the_requests_the_app_served() -> None:
     # Four authenticated requests: one chat, two streams, one models list.
     assert series['amf_tenant_magnitude{tenant="dev-org"}'] == 4
     assert series["amf_admit_admitted_total"] == 3
-    # The bad key: one posture refusal and one pre-decision 503 rejection.
-    assert series["amf_posture_refusals_shared_state_unavailable_total"] == 1
-    assert series['amf_rejected{status="503",reason="rejected"}'] == 1
+    # The bad key (GW36 S3): a client fault, so a 401 rejection and NO gateway posture refusal.
+    assert series["amf_posture_refusals_shared_state_unavailable_total"] == 0
+    assert series['amf_rejected{status="401",reason="rejected"}'] == 1
+    assert series['amf_rejected{status="503",reason="rejected"}'] == 0
     assert series['amf_rejected{status="503",reason="shed"}'] == 0
 
 
@@ -103,7 +104,7 @@ async def _refusals_then_scrape() -> tuple[int, dict[str, float]]:
     app = serve._assemble_app(deps)
     oversized = {**_CHAT, "max_tokens": 2_000_000}
     assert (await _call(app, "POST", "/v1/chat/completions", oversized))[0] == 400
-    assert (await _call(app, "POST", "/v1/chat/completions", _CHAT, key="wrong"))[0] == 503
+    assert (await _call(app, "POST", "/v1/chat/completions", _CHAT, key="wrong"))[0] == 401
     status, text = await _call(app, "GET", "/metrics")
     return status, _series(text)
 
@@ -112,7 +113,7 @@ def test_a_refusal_at_a_status_other_than_503_keeps_metrics_serving() -> None:
     status, series = asyncio.run(_refusals_then_scrape())
     assert status == 200
     assert series['amf_rejected{status="400",reason="rejected"}'] == 1
-    assert series['amf_rejected{status="503",reason="rejected"}'] == 1
+    assert series['amf_rejected{status="401",reason="rejected"}'] == 1
 
 
 class _Sink:

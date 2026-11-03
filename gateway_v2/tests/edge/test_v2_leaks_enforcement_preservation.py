@@ -276,6 +276,11 @@ _JSON_ENVELOPE: dict[str, tuple[int, str, str]] = {
         "service_unavailable",
         "The stream was terminated by the gateway.",
     ),
+    "invalid_api_key": (
+        401,
+        "invalid_request_error",
+        "Incorrect API key provided. Pass a valid key as 'Authorization: Bearer <key>'.",
+    ),
     "malformed_request_body": (500, "gateway_error", "The gateway could not complete the request."),
     "request_pre_check_exceeded": (
         500,
@@ -294,6 +299,8 @@ _SSE_FRAME: dict[str, tuple[str, str]] = {
 }
 
 
+_IDENTITY_CODES = frozenset({"shared_state_unavailable", "invalid_api_key"})
+
 def _assert_json_refusal(
     response: _Response, code: str, *, post_identity: bool, where: str,
     expect_console: bool = False,
@@ -303,7 +310,8 @@ def _assert_json_refusal(
     payload = json.loads(response.body)
     error = payload["error"]
     request_id = error.get("request_id")
-    if post_identity:
+    # GW36 S3 (N11): an identity refusal is minted an id too, unrelated to the request content.
+    if post_identity or code in _IDENTITY_CODES:
         assert isinstance(request_id, str) and request_id.startswith("zs-"), (
             f"{where}: post-identity refusal must echo a zs- id, got {request_id!r}"
         )
@@ -674,7 +682,14 @@ async def _drive_chat(app: object, provider: _RecordingProvider, case: _ChatCase
     if case.expected == "malformed":
         _assert_json_refusal(response, "malformed_request_body", post_identity=False, where=where)
         return
-    code = "input_blocked" if case.expected == "block" else "shared_state_unavailable"
+    if case.expected == "identity":
+        # GW36 S3: a wrong dev key is a 401, and identity refusals are plain HTTP even when the
+        # request asked to stream (N11).
+        _assert_json_refusal(
+            response, "invalid_api_key", post_identity=False, where=where, expect_console=True,
+        )
+        return
+    code = "input_blocked"
     if case.stream:
         _assert_sse_refusal(response, code, where=where, expect_console=True)
     else:
@@ -762,7 +777,7 @@ async def _drive_embeddings(
     assert calls == 0, f"{where}: a refused request must make zero provider calls ({calls})"
     code = {
         "malformed": "malformed_request_body",
-        "identity": "shared_state_unavailable",
+        "identity": "invalid_api_key",
         "block": "input_blocked",
     }[case.expected]
     # Observed: every /v1/embeddings refusal renders request_id null (snapshotted, 3.12).
@@ -832,10 +847,9 @@ def test_default_boot_renders_declared_codes() -> None:
             else:
                 code = "shared_state_unavailable"
             seen.add(code)
-            if stream and code == "shared_state_unavailable":
-                _assert_sse_refusal(response, code, where=where)
-            else:
-                _assert_json_refusal(response, code, post_identity=False, where=where)
+            # The default boot's resolver cannot verify anything: 503, plain HTTP even for a
+            # stream (GW36 S3, N11), never 401.
+            _assert_json_refusal(response, code, post_identity=False, where=where)
         return seen
 
     seen = asyncio.run(_run())

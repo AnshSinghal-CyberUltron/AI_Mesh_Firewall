@@ -138,6 +138,10 @@ ERROR_SHAPES: Mapping[str, tuple[str, str]] = MappingProxyType(
             "authentication_error",
             "The API key was revoked and the stream was terminated.",
         ),
+        posture.INVALID_API_KEY: (
+            "invalid_request_error",
+            "Incorrect API key provided. Pass a valid key as 'Authorization: Bearer <key>'.",
+        ),
         posture.STREAM_PLAN_CHANGED: (
             "gateway_error",
             "The plan changed mid-stream and the stream was terminated.",

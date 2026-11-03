@@ -92,6 +92,8 @@ from gateway_v2.edge.identity_resolver import (
     IdentityResolver,
     TenantIdentity,
     fail_closed_resolver,
+    identity_of,
+    refusal_request_id,
 )
 from gateway_v2.edge.input_enforcement import REFUSE_INPUT_SCAN_FAILURE
 from gateway_v2.edge.outcome_metrics import OutcomeObserver, observe_refusal, observe_tenant
@@ -294,8 +296,7 @@ async def _refuse(
     from gateway_v2.edge.routes import emit_response
 
     observe_refusal(observer, code, decided=decided)
-
-    await emit_response(send, errors.render_http(code))
+    await emit_response(send, errors.render_http(code, request_id=refusal_request_id(code)))
 
 
 async def _emit_json(send: ASGISend, body: bytes) -> None:
@@ -387,10 +388,7 @@ class EmbeddingsSurface:
         identity / plan refuse-code spellings are imported here (not at module level) to
         avoid the ``routes -> openai_misc`` cycle — the ``ChatRoute.handle`` discipline.
         """
-        from gateway_v2.edge.openai_chat import (
-            REFUSE_IDENTITY_UNRESOLVED,
-            REFUSE_PLAN_UNAVAILABLE,
-        )
+        from gateway_v2.edge.openai_chat import REFUSE_PLAN_UNAVAILABLE
         from gateway_v2.edge.wire.openai import MalformedRequest
 
         # ONE per-request hold ledger (Group D/F): the lifecycle records the admission slot
@@ -412,9 +410,9 @@ class EmbeddingsSurface:
 
             # Phase 2 — resolve Tenant_Identity (GW05b/c). None / stale / unavailable ⇒ refuse,
             # zero provider calls (R5.1 / R5.2).
-            identity = await self._deps.identity.resolve(scope)
-            if identity is None:
-                await _refuse(send, REFUSE_IDENTITY_UNRESOLVED, self._deps.observer)
+            outcome = await identity_of(self._deps.identity, scope)
+            if (identity := outcome.identity) is None:
+                await _refuse(send, outcome.refusal, self._deps.observer)
                 return
             observe_tenant(self._deps.observer, identity.org_id)
 
@@ -732,10 +730,7 @@ class ModerationsSurface:
         (not at module level) to avoid the cycle ``edge/routes`` closes once task 7.1 wires
         ``build_routes`` — the deferred-import discipline ``ChatRoute.handle`` uses.
         """
-        from gateway_v2.edge.openai_chat import (
-            REFUSE_IDENTITY_UNRESOLVED,
-            REFUSE_INPUT_SCAN_FAILURE,
-        )
+        from gateway_v2.edge.openai_chat import REFUSE_INPUT_SCAN_FAILURE
         from gateway_v2.edge.wire.openai import MalformedRequest
 
         body = await read_body(receive)
@@ -750,9 +745,9 @@ class ModerationsSurface:
 
         # Phase 2 — resolve Tenant_Identity. None / stale / unavailable ⇒ refuse (R8.1 / R5.1);
         # moderations opens no provider either way (R8.5).
-        identity = await self._deps.identity.resolve(scope)
-        if identity is None:
-            await _refuse(send, REFUSE_IDENTITY_UNRESOLVED, self._deps.observer)
+        outcome = await identity_of(self._deps.identity, scope)
+        if (identity := outcome.identity) is None:
+            await _refuse(send, outcome.refusal, self._deps.observer)
             return
         observe_tenant(self._deps.observer, identity.org_id)
 

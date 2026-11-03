@@ -104,11 +104,11 @@ class ModelsSurface:
         drained — a ``GET`` carries no body the surface reads.
         """
         del receive  # GET /v1/models carries no body the surface reads.
-        from gateway_v2.edge.openai_chat import REFUSE_IDENTITY_UNRESOLVED
+        from gateway_v2.edge.identity_resolver import identity_of
 
-        identity = await self._deps.identity.resolve(scope)
-        if identity is None:
-            await _refuse(send, REFUSE_IDENTITY_UNRESOLVED, self._deps.observer)
+        outcome = await identity_of(self._deps.identity, scope)
+        if (identity := outcome.identity) is None:
+            await _refuse(send, outcome.refusal, self._deps.observer)
             return
         observe_tenant(self._deps.observer, identity.org_id)
 
@@ -131,11 +131,11 @@ class ModelsSurface:
         provider (R7.4/R7.5); the ``receive`` channel is not drained.
         """
         del receive  # GET /v1/models/{id} carries no body the surface reads.
-        from gateway_v2.edge.openai_chat import REFUSE_IDENTITY_UNRESOLVED
+        from gateway_v2.edge.identity_resolver import identity_of
 
-        identity = await self._deps.identity.resolve(scope)
-        if identity is None:
-            await _refuse(send, REFUSE_IDENTITY_UNRESOLVED, self._deps.observer)
+        outcome = await identity_of(self._deps.identity, scope)
+        if (identity := outcome.identity) is None:
+            await _refuse(send, outcome.refusal, self._deps.observer)
             return
         observe_tenant(self._deps.observer, identity.org_id)
 

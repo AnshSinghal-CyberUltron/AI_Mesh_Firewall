@@ -28,6 +28,7 @@ from gateway_v2.edge import errors
 from gateway_v2.edge.asgi_sse import ASGIReceive, ASGIScope, ASGISend, read_body_bounded
 from gateway_v2.edge.audit_emit import emit_chat_audit
 from gateway_v2.edge.dev_components import bind_surface
+from gateway_v2.edge.identity_resolver import identity_of
 from gateway_v2.edge.input_enforcement import scan_deltas, stage_upstream
 from gateway_v2.edge.mcp_console import mcp_console
 from gateway_v2.edge.mcp_registry import McpRegistry, OrgMap, ServerEntry, ToolSet
@@ -201,9 +202,9 @@ class McpRoute:
 
     async def _tenant(self, ctx: _Ctx) -> tuple[str, ExecutionPlan]:
         """Identity, then the plan. The org comes from the key only."""
-        identity = await self.chat.identity.resolve(ctx.scope)
+        identity = (outcome := await identity_of(self.chat.identity, ctx.scope)).identity
         if identity is None:
-            raise _Refuse("shared_state_unavailable")
+            raise _Refuse(outcome.refusal)
         ctx.holds.note_tenant(identity.org_id)
         state = lookup_plan(self.chat.snapshot_source(), identity.org_id, Surface.MCP)
         if isinstance(state, (PlanUnavailable, PlanUnknownTenant)):

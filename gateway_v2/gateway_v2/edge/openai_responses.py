@@ -35,6 +35,7 @@ from gateway_v2.edge.asgi_sse import (
 )
 from gateway_v2.edge.audit_emit import emit_chat_audit
 from gateway_v2.edge.console_projection import console_from_holds
+from gateway_v2.edge.identity_resolver import identity_of, refusal_request_id
 from gateway_v2.edge.openai_chat import REFUSE_IDENTITY_UNRESOLVED, ChatSurface, LifecycleOutcome
 from gateway_v2.edge.request_holds import RequestHolds
 from gateway_v2.edge.responses_store import MemoryResponseStore, ResponseStore, StoredResponse
@@ -123,7 +124,9 @@ class ResponsesRoute:
             body = await read_body(receive)
             prepared = await self._prepare(scope, body)
             if isinstance(prepared, str):
-                await emit_response(send, errors.render_http(prepared))
+                await emit_response(
+                    send, errors.render_http(prepared, request_id=refusal_request_id(prepared))
+                )
                 return
             if isinstance(prepared, TranslateRefusal):
                 await emit_response(send, errors.render_http(prepared.code, param=prepared.param))
@@ -148,9 +151,11 @@ class ResponsesRoute:
         """``GET /v1/responses/{id}`` and ``GET /v1/responses/{id}/input_items``."""
         del receive
         response_id, items = _path_id(scope)
-        org_id = await self._org(scope)
+        org_id, refusal = await self._org(scope)
         if org_id is None:
-            await emit_response(send, errors.render_http(REFUSE_IDENTITY_UNRESOLVED))
+            await emit_response(
+                send, errors.render_http(refusal, request_id=refusal_request_id(refusal))
+            )
             return
         record = None if response_id is None else await self.store.get(org_id, response_id)
         if record is None:
@@ -173,9 +178,11 @@ class ResponsesRoute:
         """``DELETE /v1/responses/{id}``."""
         del receive
         response_id, items = _path_id(scope)
-        org_id = await self._org(scope)
+        org_id, refusal = await self._org(scope)
         if org_id is None:
-            await emit_response(send, errors.render_http(REFUSE_IDENTITY_UNRESOLVED))
+            await emit_response(
+                send, errors.render_http(refusal, request_id=refusal_request_id(refusal))
+            )
             return
         deleted = (
             response_id is not None
@@ -207,9 +214,9 @@ class ResponsesRoute:
         replay: tuple[Mapping[str, object], ...] = ()
         chat_body: ChatBody | TranslateRefusal = first
         if previous is not None:
-            org_id = await self._org(scope)
+            org_id, refusal = await self._org(scope)
             if org_id is None:
-                return REFUSE_IDENTITY_UNRESOLVED
+                return refusal
             record = await self.store.get(org_id, previous)
             if record is None:
                 return RESPONSE_NOT_FOUND
@@ -219,9 +226,12 @@ class ResponsesRoute:
             return chat_body
         return _created(obj, chat_body, replay, previous, org_id)
 
-    async def _org(self, scope: ASGIScope) -> str | None:
-        identity = await self.chat.identity.resolve(scope)
-        return None if identity is None else identity.org_id
+    async def _org(self, scope: ASGIScope) -> tuple[str | None, str]:
+        """`(org, "")`, or `(None, refusal code)`: 401 for a bad key, 503 for doubt."""
+        outcome = await identity_of(self.chat.identity, scope)
+        if outcome.identity is None:
+            return None, outcome.refusal
+        return outcome.identity.org_id, ""
 
     async def _refuse(
         self, send: ASGISend, outcome: LifecycleOutcome, holds: RequestHolds

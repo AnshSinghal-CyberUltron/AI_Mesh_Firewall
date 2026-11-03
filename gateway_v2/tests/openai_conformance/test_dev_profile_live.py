@@ -173,16 +173,16 @@ def test_aws_key_is_blocked_with_input_blocked(live: _Live) -> None:
     assert AWS_KEY not in caught.value.response.text
 
 
-# (d) wrong key → declared identity refusal
+# (d) wrong key → the SDK's own AuthenticationError (GW36 S3: 401 invalid_api_key)
 @pytest.mark.parametrize("api_key", ["sk-wrong", API_KEY + "x"])
 def test_wrong_api_key_is_refused(live: _Live, api_key: str) -> None:
-    with pytest.raises(openai.APIStatusError) as caught:
+    with pytest.raises(openai.AuthenticationError) as caught:
         _client(live.base_url, api_key).chat.completions.create(
             model=MODEL, messages=[{"role": "user", "content": "hi"}]
         )
-    assert caught.value.status_code == 503
+    assert caught.value.status_code == 401
     assert isinstance(caught.value.body, dict)
-    assert caught.value.body.get("code") == "shared_state_unavailable"
+    assert caught.value.body.get("code") == "invalid_api_key"
 
 
 # (e) streaming variants of (a) and (b)

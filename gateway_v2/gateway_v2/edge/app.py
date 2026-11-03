@@ -528,7 +528,7 @@ class _ServingSkin:
         """
         method = _method(scope)
         path = _path(scope)
-        if path == "/readyz" or path == "/health":
+        if path in _PROBES:
             await self._readyz(send, path)
             return
         if path == "/metrics":
@@ -580,8 +580,8 @@ class _ServingSkin:
         return best
 
     async def _readyz(self, send: ASGISend, path: str = "/readyz") -> None:
-        """200 when ready. ``/readyz`` body is ``ok``; ``/health`` is ``{"status":"ok"}``."""
-        ready, reason = self.readiness()
+        """200 when ready (``/livez``: alive, never gated). ``/health`` is ``{"status":"ok"}``."""
+        ready, reason = (True, None) if path == "/livez" else self.readiness()
         if ready:
             await emit_response(send, _ok_body(path))
             return
@@ -605,6 +605,7 @@ class _ServingSkin:
 _TEXT_PLAIN = "text/plain; charset=utf-8"
 _PROM_MEDIA_TYPE = "text/plain; version=0.0.4; charset=utf-8"
 _READY_STATUS = 200
+_PROBES = frozenset({"/readyz", "/health", "/livez"})
 _NOT_READY_STATUS = 503
 
 

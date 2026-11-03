@@ -59,7 +59,12 @@ from gateway_v2.domain import Finding, FindingStatus
 from gateway_v2.domain.identity import Principal
 from gateway_v2.domain.plan import ExecutionPlan, Phase, Surface
 from gateway_v2.edge.app import CatalogModel
-from gateway_v2.edge.identity_resolver import ASGIScope, TenantIdentity, bearer_key
+from gateway_v2.edge.identity_resolver import (
+    ASGIScope,
+    IdentityOutcome,
+    TenantIdentity,
+    bearer_key,
+)
 from gateway_v2.edge.phase_resolvers import PhaseResolverFactory
 from gateway_v2.egress.output_guard import OutputResolver
 from gateway_v2.plan.compiler import CompileError, compile_plan
@@ -182,6 +187,11 @@ class DevStaticIdentity:
             return None
         request_org.set(matched.org_id)
         return matched
+
+    async def resolve_outcome(self, scope: ASGIScope) -> IdentityOutcome:
+        """The dev bearers are the whole verified state, so a miss is a 401, as in production."""
+        matched = await self.resolve(scope)
+        return IdentityOutcome.invalid() if matched is None else IdentityOutcome.resolved(matched)
 
 
 # --------------------------------------------------------------------------- #

@@ -162,6 +162,8 @@ _ENVELOPE: Mapping[str, tuple[int, str]] = MappingProxyType(
         # -- GW12 in-flight control / max duration (R10) ----------------------
         posture.STREAM_MAX_DURATION: (503, "timeout_error"),
         posture.STREAM_KEY_REVOKED: (401, "authentication_error"),
+        # GW36 S3: OpenAI's own 401 for a missing, unknown or revoked key (type and code).
+        posture.INVALID_API_KEY: (401, "invalid_request_error"),
         posture.STREAM_PLAN_CHANGED: (503, "service_unavailable"),
         posture.STREAM_SNAPSHOT_STALE: (503, "service_unavailable"),
         posture.STREAM_MALFORMED_UPSTREAM: (502, "gateway_error"),
@@ -339,6 +341,10 @@ def _error_headers(request_id: str | None) -> tuple[tuple[str, str], ...]:
 #: ``ResourceContract.max_output_tokens_boundary()`` at the contract-bearing caller.
 _BOUNDARY_CODES = frozenset({"invalid_max_tokens", "invalid_max_completion_tokens"})
 
+_UNAUTHORIZED = 401
+_AUTHENTICATE_HEADER = "www-authenticate"
+_BEARER_CHALLENGE = "Bearer"
+
 
 def render_http(
     code: str,
@@ -396,6 +402,9 @@ def render_http(
     if code in _BOUNDARY_CODES and boundary is not None:
         message = f"{message} The permitted maximum is {boundary}."
     body = _http_body(error_type, code, message, param=param, request_id=request_id)
+    if status == _UNAUTHORIZED:
+        # RFC 7235 section 3.1: a 401 names the scheme the client should retry with.
+        headers = (*headers, (_AUTHENTICATE_HEADER, _BEARER_CHALLENGE))
     return HTTPResponse(status=status, body=body, headers=headers)
 
 

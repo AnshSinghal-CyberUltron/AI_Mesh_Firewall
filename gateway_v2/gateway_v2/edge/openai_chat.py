@@ -47,7 +47,7 @@ from gateway_v2.domain.plan import ExecutionPlan, Phase, PlanUnavailable, PlanUn
 from gateway_v2.domain.posture import BUDGET_UNAVAILABLE
 from gateway_v2.edge.dev_components import bind_surface
 from gateway_v2.edge.error_frame_scan import SCAN_ERROR_CODE
-from gateway_v2.edge.identity_resolver import TenantIdentity
+from gateway_v2.edge.identity_resolver import TenantIdentity, identity_of
 from gateway_v2.edge.input_enforcement import (
     REFUSE_INPUT_UNMASKABLE,
     InputScan,
@@ -544,10 +544,10 @@ class ChatSurface:
         path shared-state read, so the one shared-state round trip stays the plan
         ``lookup_plan`` in :meth:`_plan` and Property 6 holds.
         """
-        identity = await self._deps.identity.resolve(scope)
-        if identity is None:
-            return None, REFUSE_IDENTITY_UNRESOLVED
-        return identity, None
+        outcome = await identity_of(self._deps.identity, scope)
+        if outcome.identity is None:
+            return None, outcome.refusal or REFUSE_IDENTITY_UNRESOLVED
+        return outcome.identity, None
 
     def _plan(
         self,

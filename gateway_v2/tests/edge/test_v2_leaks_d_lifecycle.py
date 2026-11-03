@@ -431,7 +431,9 @@ def _outcome(case: _Case, sent: Sequence[Mapping[str, object]]) -> str:
         if m["type"] == "http.response.body"
         and isinstance(chunk := m.get("body", b""), (bytes, bytearray))
     )
-    if case.stream and case.body == "ok":
+    # A refusal before any stream exists (identity, GW36 S3 / N11) is plain HTTP even when
+    # the request asked to stream; only a 200 is an SSE body.
+    if case.stream and case.body == "ok" and status == 200:
         if b"data: [DONE]" in body:
             return "done"
         for line in body.decode().splitlines():

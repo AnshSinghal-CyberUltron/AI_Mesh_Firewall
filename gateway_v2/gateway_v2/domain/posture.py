@@ -44,6 +44,7 @@ __all__ = (
     "VECTOR_CAPACITY_UNSET",
     "CREDENTIAL_LEAK_WITHHELD",
     "COLLECTION_EXISTS",
+    "INVALID_API_KEY",
     "gap_retry_after_s",
 )
 
@@ -179,6 +180,12 @@ CREDENTIAL_LEAK_WITHHELD = "credential_leak_withheld"
 
 COLLECTION_EXISTS = "collection_exists"
 """R2.9: `create_collection` named an existing collection. Nothing was created or reset."""
+
+INVALID_API_KEY = "invalid_api_key"
+"""GW36 S3: no credential, or VERIFIED state holds no live key for it. HTTP 401, OpenAI's code.
+
+The opposite of `SHARED_STATE_UNAVAILABLE`, which means "could not verify" (503, the key may be
+valid). A client fault, not a gateway posture, so it is not in the posture counters."""
 
 
 def gap_retry_after_s(*, rehydrate_period_ms: float, refresh_ms: float) -> float:

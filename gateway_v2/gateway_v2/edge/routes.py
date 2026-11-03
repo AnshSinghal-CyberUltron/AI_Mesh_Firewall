@@ -76,7 +76,11 @@ from gateway_v2.edge.console_projection import (
 )
 from gateway_v2.edge.error_frame_scan import ErrorFrameScanner
 from gateway_v2.edge.executor import ScanExecutor
-from gateway_v2.edge.identity_resolver import IdentityResolver, fail_closed_resolver
+from gateway_v2.edge.identity_resolver import (
+    IdentityResolver,
+    fail_closed_resolver,
+    refusal_request_id,
+)
 from gateway_v2.edge.mcp_deps import McpDeps
 from gateway_v2.edge.openai_misc import (
     EmbeddingsSurface,
@@ -389,6 +393,10 @@ class ChatRoute:
         boundary-free, the boundary being a capacity position), so the real boundary reaches the
         HTTP body while the number lives only in ``runtime/resources.py``.
         """
+        if request_id is None and (minted := refusal_request_id(code)) is not None:
+            # GW36 S3 (N11): identity's refusal (the only post-parse one with no id yet) is plain
+            # HTTP whatever `stream` asked, as OpenAI's 401 is, with a random id.
+            request_id, req = minted, None
         if req is not None and req.streaming:
             await _start_sse(send)
             await _send_sse(send, errors.render_sse(code))

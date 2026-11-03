@@ -20,19 +20,20 @@ imports nothing from ``openai_chat`` — so no circular import is formed and
 :class:`TenantIdentity` has one definition (re-exported from ``openai_chat`` for callers
 that reach it there, matching the design's Data-Models placement).
 
-**Fail closed (R4.2 / R4.3).** Three distinct conditions all reduce to the SAME
-fail-closed answer — ``resolve`` returns ``None`` and the lifecycle refuses with the
-declared ``shared_state_unavailable`` code (a 503, never a 401: the key may be valid, and
-the part that is uncertain may be precisely the revocation):
+**Fail closed (R4.2 / R4.3), with the reason kept (GW36 S3).** ``resolve_outcome`` returns
+an :class:`IdentityOutcome`, and every surface runs the phase through :func:`identity_of`:
 
-* **No credential** on the request (missing / malformed ``Authorization`` header) — nothing
-  to resolve.
-* **Stale / unavailable freshness stamp** — :meth:`IdentityCache.resolve` raises
-  :class:`~gateway_v2.domain.state.StoreDataUnavailable` while the GW05b/c stamp is not
-  fresh, so the identity held in RAM is refused rather than trusted (SP1/SP2). Caught here
-  and mapped to ``None``.
-* **Unresolved principal** — a revoked / never-issued key resolves to ``None`` from the
-  cache. Also ``None`` here.
+* **No usable credential** (missing, another scheme, not a console key's shape) and
+  **verified absence** (a revoked / never-issued key the cache resolved to ``None``) refuse
+  with ``invalid_api_key`` -- HTTP 401, the code OpenAI's SDK raises ``AuthenticationError``
+  on.
+* **Unverified state** -- :meth:`IdentityCache.resolve` raises
+  :class:`~gateway_v2.domain.state.StoreDataUnavailable` while freshness is not met or the
+  store does not answer -- refuses with ``shared_state_unavailable``: a 503, never a 401,
+  because the key may be valid and the uncertain part may be precisely the revocation.
+
+``resolve`` (``None`` on any failure) is kept for resolvers and callers that predate the
+outcome; :func:`identity_of` reads a bare ``None`` as the 503.
 
 **ONE round trip (R3.3).** The identity resolution does NOT perform a request-path shared-
 state read: :class:`IdentityCache` answers from its per-process RAM cache (or a single
@@ -52,19 +53,27 @@ boot-wiring concerns (tasks 5/6), not baked in here.
 
 from __future__ import annotations
 
+import hashlib
+import re
+import secrets
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
 
 from gateway_v2.admit.identity import Fetch, IdentityCache
+from gateway_v2.domain import posture
 from gateway_v2.domain.identity import Principal
 from gateway_v2.domain.state import StoreDataUnavailable
 
 __all__ = (
     "CachingIdentityResolver",
+    "IdentityOutcome",
     "IdentityResolver",
     "TenantIdentity",
     "fail_closed_resolver",
+    "hashed_bearer_key",
+    "identity_of",
+    "refusal_request_id",
 )
 
 #: An ASGI connection scope — the read-only ``{"type": ..., "method": ..., "headers": ...}``
@@ -95,6 +104,32 @@ class TenantIdentity:
     principal: Principal
 
 
+@dataclass(frozen=True, slots=True)
+class IdentityOutcome:
+    """What the identity phase concluded: an owner, or the code to refuse with (GW36 S3).
+
+    The distinction the bare ``None`` could not carry. ``invalid_api_key`` (401) means the
+    request carried no usable credential, or VERIFIED state holds no live key for it;
+    ``shared_state_unavailable`` (503) means the state could not be verified, so the key may
+    well be valid and a 401 would be a lie.
+    """
+
+    identity: TenantIdentity | None
+    refusal: str = ""
+
+    @staticmethod
+    def resolved(identity: TenantIdentity) -> IdentityOutcome:
+        return IdentityOutcome(identity)
+
+    @staticmethod
+    def invalid() -> IdentityOutcome:
+        return IdentityOutcome(None, posture.INVALID_API_KEY)
+
+    @staticmethod
+    def unverified() -> IdentityOutcome:
+        return IdentityOutcome(None, posture.SHARED_STATE_UNAVAILABLE)
+
+
 # --------------------------------------------------------------------------- #
 # The resolver surface (a Protocol so a test can inject a fake).
 # --------------------------------------------------------------------------- #
@@ -121,15 +156,48 @@ class IdentityResolver(Protocol):
         ...
 
 
+async def identity_of(resolver: IdentityResolver, scope: ASGIScope) -> IdentityOutcome:
+    """The ONE way a surface runs the identity phase (GW36 S3).
+
+    Prefers ``resolve_outcome`` (401 vs 503); a resolver that predates it is still served,
+    with its ``None`` read as "could not verify" -- the old meaning, so nothing that relied on
+    a 503 starts answering 401.
+    """
+    outcome = getattr(resolver, "resolve_outcome", None)
+    if outcome is not None:
+        result: IdentityOutcome = await outcome(scope)
+        return result
+    identity = await resolver.resolve(scope)
+    return IdentityOutcome.unverified() if identity is None else IdentityOutcome(identity)
+
+
+_IDENTITY_REFUSALS = frozenset({posture.INVALID_API_KEY, posture.SHARED_STATE_UNAVAILABLE})
+
+
+def refusal_request_id(code: str) -> str | None:
+    """A request id for an IDENTITY refusal, which precedes the content-derived one (N11).
+
+    Random, so a client can quote it and nothing about the request is derivable from it. Every
+    other code returns None: those refusals either carry the minted id or predate any.
+    """
+    return f"zs-{secrets.token_hex(12)}" if code in _IDENTITY_REFUSALS else None
+
+
 # --------------------------------------------------------------------------- #
 # Credential extraction (pure; no I/O, no security decision beyond naming the key).
 # --------------------------------------------------------------------------- #
 
 #: The ASGI header name (lower-cased bytes, per the ASGI convention) carrying the API
-#: credential, and the scheme prefix an OpenAI SDK sends. Plain byte/string constants, not
+#: credential, and the scheme an OpenAI SDK sends. Plain byte/string constants, not
 #: capacity-position literals.
 _AUTHORIZATION_HEADER = b"authorization"
-_BEARER_PREFIX = "Bearer "
+_BEARER_SCHEME = "bearer"
+
+_CONSOLE_KEY = re.compile(r"[A-Za-z0-9_-]{48}")
+"""The shape every console key has: ``secrets.token_urlsafe(48)[:48]``
+(``GatewayAPIKey.generate_key``, ``KEY_LENGTH = 48``). Anything else cannot match a stored key,
+so it is refused as absent without a store read: an unbounded stream of junk tokens must not
+become an unbounded stream of Valkey reads."""
 
 
 def bearer_key(scope: ASGIScope) -> str | None:
@@ -151,15 +219,26 @@ def bearer_key(scope: ASGIScope) -> str | None:
         name, value = header[0], header[1]
         if name != _AUTHORIZATION_HEADER or not isinstance(value, (bytes, bytearray)):
             continue
-        try:
-            decoded = bytes(value).decode("latin-1")
-        except UnicodeDecodeError:
+        # latin-1 decodes every byte, so this cannot raise. The scheme is case-insensitive
+        # (RFC 7235 section 2.1); the token is not.
+        scheme, _, token = bytes(value).decode("latin-1").partition(" ")
+        if scheme.lower() != _BEARER_SCHEME:
             return None
-        if decoded.startswith(_BEARER_PREFIX):
-            token = decoded[len(_BEARER_PREFIX) :].strip()
-            return token or None
-        return None
+        return token.strip() or None
     return None
+
+
+def hashed_bearer_key(scope: ASGIScope) -> str | None:
+    """The credential as control stores it: ``sha256(key).hexdigest()``, or ``None``.
+
+    The raw key never leaves this function: the cache, the store read and every log see only
+    the hash. A token that cannot be a console key (`_CONSOLE_KEY`) is ``None`` -- absent,
+    a 401 with no store read.
+    """
+    token = bearer_key(scope)
+    if token is None or not _CONSOLE_KEY.fullmatch(token):
+        return None
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
 # --------------------------------------------------------------------------- #
@@ -222,18 +301,25 @@ class CachingIdentityResolver:
         resolved principal so the plan round trip, admission, and budget are all scoped to
         the credential's own tenant (never another tenant's).
         """
+        return (await self.resolve_outcome(scope)).identity
+
+    async def resolve_outcome(self, scope: ASGIScope) -> IdentityOutcome:
+        """The same resolution, keeping WHY it failed: 401 for a bad key, 503 for doubt."""
         key_hash = self._key_namer(scope)
         if key_hash is None:
-            return None
+            return IdentityOutcome.invalid()
         try:
             principal = await self._cache.resolve(key_hash, self._fetch)
         except StoreDataUnavailable:
-            # Stale / unavailable freshness stamp: refuse rather than trust RAM (R4.3).
-            return None
+            # Stale / unavailable freshness, or the store did not answer: the key may be
+            # valid, so this is a 503, never a 401 (R4.3).
+            return IdentityOutcome.unverified()
         if principal is None:
-            # Revoked / never-issued key: unresolved identity (R4.2).
-            return None
-        return TenantIdentity(org_id=principal.org_id, principal=principal)
+            # Verified state holds no live key: revoked, expired or never issued (R4.2).
+            return IdentityOutcome.invalid()
+        return IdentityOutcome.resolved(
+            TenantIdentity(org_id=principal.org_id, principal=principal),
+        )
 
 
 # --------------------------------------------------------------------------- #
