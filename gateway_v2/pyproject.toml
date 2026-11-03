@@ -13,6 +13,16 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# GW30 live-gate vector-store SDK(s). Imported lazily INSIDE each transport's ``_client()``
+# (see ``dispatch/vector_transports/``), never on the base import path — so the base package
+# stays SDK-free and a tree that only runs the offline suite is unaffected, mirroring the
+# optional ``conformance`` / ``serve`` extras below. The Milvus transport raises
+# ``VectorTransportError`` (→ ``provider_unreachable``) if ``pymilvus`` is absent. Pinned to the
+# 2.5 line that matches the ``milvusdb/milvus:v2.5.*`` standalone image in
+# ``docker-compose.gw30-stores.yml``.
+vectors = [
+    "pymilvus==2.5.16",
+]
 dev = [
     "fakeredis>=2.26",
     "pytest>=8",
@@ -120,6 +130,14 @@ exclude = ["load_harness/bin/"]
 
 [[tool.mypy.overrides]]
 module = ["ai_mesh_gateway.*"]
+ignore_missing_imports = true
+
+# GW30: the optional Milvus SDK (``pymilvus``, the ``vectors`` extra) ships no ``py.typed``
+# marker, so --strict flags its lazy import inside ``dispatch/vector_transports/milvus_transport.py``
+# as import-untyped. The qdrant/weaviate SDKs ship stubs; pymilvus does not. Treat it as an
+# untyped optional dependency, exactly as the ``ai_mesh_gateway`` override above does for the v1 app.
+[[tool.mypy.overrides]]
+module = ["pymilvus.*"]
 ignore_missing_imports = true
 
 [tool.importlinter]

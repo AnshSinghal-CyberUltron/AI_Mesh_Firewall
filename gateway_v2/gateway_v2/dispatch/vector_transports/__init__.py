@@ -22,6 +22,10 @@ from gateway_v2.dispatch.vector_transports.elastic_transport import (
     OpenSearchConnectionParams,
     OpenSearchTransport,
 )
+from gateway_v2.dispatch.vector_transports.milvus_transport import (
+    MilvusConnectionParams,
+    MilvusTransport,
+)
 from gateway_v2.dispatch.vector_transports.mongo_transport import (
     MongoAtlasConnectionParams,
     MongoAtlasTransport,
@@ -48,6 +52,8 @@ __all__ = (
     "ChromaTransport",
     "ElasticsearchConnectionParams",
     "ElasticsearchTransport",
+    "MilvusConnectionParams",
+    "MilvusTransport",
     "MongoAtlasConnectionParams",
     "MongoAtlasTransport",
     "OpenSearchConnectionParams",

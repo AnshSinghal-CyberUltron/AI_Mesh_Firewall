@@ -117,3 +117,80 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+
+  # Milvus standalone + its two mandatory sidecars (etcd for metadata, MinIO for object
+  # storage). Previously infra-blocked because the 14 GiB host could not hold milvus + etcd +
+  # MinIO alongside the other eight stores; the VM now has ample RAM, so the store is brought up.
+  # Image tags are the versions Milvus's own standalone compose pins for the 2.5 line, matched to
+  # pymilvus==2.5.16 (gateway_v2 ``vectors`` extra). Host ports in the free 69xx range: milvus
+  # gRPC 19530->6930, milvus web/metrics 9091->6931, MinIO API 9000->6936, MinIO console
+  # 9001->6937, etcd client 2379->6938.
+  gw30-etcd:
+    image: quay.io/coreos/etcd:v3.5.16
+    environment:
+      ETCD_AUTO_COMPACTION_MODE: "revision"
+      ETCD_AUTO_COMPACTION_RETENTION: "1000"
+      ETCD_QUOTA_BACKEND_BYTES: "4294967296"
+      ETCD_SNAPSHOT_COUNT: "50000"
+    command: >
+      etcd -advertise-client-urls=http://127.0.0.1:2379
+      -listen-client-urls http://0.0.0.0:2379 --data-dir /etcd
+    ports:
+      - "127.0.0.1:6938:2379"
+    healthcheck:
+      test: ["CMD", "etcdctl", "endpoint", "health"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  # S3 object store for Milvus. MinIO's own images were delisted from Docker Hub and the quay.io
+  # replacement (``quay.io/minio/minio``) requires an authenticated pull that is not available in
+  # this environment (verified: Docker Hub ``minio/minio`` → "object not found"; quay anon token →
+  # UNAUTHORIZED). SeaweedFS exposes a minio-compatible S3 gateway and IS anonymously pullable, so
+  # it stands in as Milvus's S3 backend with the same ``minioadmin``/``minioadmin`` credentials
+  # (gw30-seaweedfs-s3.json). Transparent to the gate: Milvus still talks S3 on :9000 and the live
+  # wire bytes exercised by the gate are the Milvus gRPC path, not the object store. See the
+  # evidence SUMMARY FOUND-NOT-FIXED note.
+  gw30-minio:
+    image: chrislusf/seaweedfs:latest
+    command: >
+      server -dir=/data -s3 -s3.port=9000
+      -s3.config=/etc/seaweedfs/s3.json
+      -ip.bind=0.0.0.0
+    volumes:
+      - ./gw30-seaweedfs-s3.json:/etc/seaweedfs/s3.json:ro
+    ports:
+      - "127.0.0.1:6936:9000"
+    healthcheck:
+      # The SeaweedFS S3 endpoint returns an S3 "AccessDenied" XML (HTTP 403) for an
+      # unauthenticated GET of ``/`` — i.e. the gateway is up and speaking S3. ``curl -sf`` would
+      # fail on 403, so accept any HTTP response (connection established) as healthy.
+      test: ["CMD-SHELL", "curl -s -o /dev/null http://127.0.0.1:9000/ || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 40
+      start_period: 15s
+
+  gw30-milvus:
+    image: milvusdb/milvus:v2.5.4
+    command: ["milvus", "run", "standalone"]
+    environment:
+      ETCD_ENDPOINTS: "gw30-etcd:2379"
+      MINIO_ADDRESS: "gw30-minio:9000"
+      MINIO_ACCESS_KEY_ID: minioadmin
+      MINIO_SECRET_ACCESS_KEY: minioadmin
+    ports:
+      - "127.0.0.1:6930:19530"   # gRPC SDK
+      - "127.0.0.1:6931:9091"    # web / metrics / health
+    depends_on:
+      gw30-etcd:
+        condition: service_healthy
+      gw30-minio:
+        condition: service_healthy
+    mem_limit: 4g
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:9091/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 40
+      start_period: 90s
