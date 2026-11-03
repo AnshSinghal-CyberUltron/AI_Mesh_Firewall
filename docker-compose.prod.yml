@@ -20,7 +20,9 @@
 #              workers-beat, mcp-sandbox-image, mcp-broker, guardrails,
 #              vector-retrieval, nginx, demo,
 #              state-rehydrator-a + state-rehydrator-b (GW05b/R2-04: BOTH, always;
-#              one is a single point of global non-enforcement, none fails the fleet closed)
+#              one is a single point of global non-enforcement, none fails the fleet closed),
+#              state-projector-a + state-projector-b (GW36 S2: control-to-state projector;
+#              one writer under a lease, the other takes over; none fails the fleet closed)
 #   profile:   chromadb (chroma), mongo (telemetry-pilot), mcp-stub (mcp-stub),
 #              frontend (dev-frontend), transport stubs (transport-stubs),
 #              postgres-exporter (observability),
@@ -317,6 +319,21 @@ services:
 
   state-rehydrator-b:
     <<: *prod_rehydrator
+
+  # GW36 S2: the two projector replicas, on the same state-control image. Larger than a
+  # re-hydrator: a round holds one snapshot of control's key/org/plan rows and of the KEY/PLAN/KS
+  # records in memory (O(records), measured in the S2 live check).
+  state-projector-a: &prod_projector
+    <<: [*restart_unless_stopped, *ecr_state_control_image]
+    build: !reset null
+    profiles: !reset null
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  state-projector-b:
+    <<: *prod_projector
 
   mcp-sandbox-image:
     <<: [*restart_unless_stopped, *ecr_mcp_sandbox_image]

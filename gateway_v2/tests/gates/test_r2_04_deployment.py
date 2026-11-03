@@ -222,6 +222,50 @@ def test_prod_uses_a_dedicated_state_control_image_not_the_gateway_one(prod: str
     assert "ecr_gateway_image" not in block[: block.index("state-rehydrator-b")]
 
 
+PROJECTORS = ("state-projector-a", "state-projector-b")
+
+
+@pytest.mark.parametrize("name", PROJECTORS)
+def test_each_projector_runs_the_projector_and_is_exempt(compose: str, name: str) -> None:
+    """GW36 S2: a stale projector heartbeat withholds the fleet's stamp, so the projectors are
+    fleet-availability components on the same footing as the re-hydrators."""
+    block = _service_block(compose, name)
+    inherits = "<<: *state-projector" in block
+    assert inherits or "state_control.projector_service" in block
+    assert EXEMPTION in block
+    assert 'ai-mesh.role: "control-plane-projector"' in block
+
+
+def test_the_projectors_have_distinct_identities(compose: str) -> None:
+    """The lease holder IS the id; two replicas sharing one would both believe they lead."""
+    ids = re.findall(r"AMF_PROJECTOR_ID:\s*(\S+)", compose)
+    assert len(ids) >= 2 and len(set(ids)) == len(ids), f"projector ids: {ids}"
+
+
+def test_the_rehydrators_enforce_the_projector_heartbeat(compose: str) -> None:
+    block = _service_block(compose, "state-rehydrator-a")
+    assert "AMF_PROJECTOR_LAG_MS" in block
+
+
+@pytest.mark.parametrize("name", PROJECTORS)
+def test_each_projector_is_in_the_prod_overlay_on_the_state_image(prod: str, name: str) -> None:
+    assert f"\n  {name}:" in prod
+    header = prod[: prod.index("name: ai_mesh_firewall")]
+    assert name in header
+    block = _service_block(prod, name)
+    assert "*prod_projector" in block or "ecr_state_control_image" in block
+
+
+def test_the_projector_alerts_exist() -> None:
+    alerts = ALERTS.read_text(encoding="utf-8")
+    for name in (
+        "StateProjectorHeartbeatStale",
+        "StateProjectorNoWriter",
+        "StateProjectorSingleInstance",
+    ):
+        assert f"alert: {name}" in alerts, name
+
+
 def test_the_state_control_image_is_actually_built_and_pushed() -> None:
     """An image referenced by the overlay and built by nothing is a deploy-time failure.
 

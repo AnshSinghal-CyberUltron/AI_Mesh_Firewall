@@ -198,3 +198,70 @@ groups:
             rv-r2state-cp-1). Concurrency is safe: publishes are WATCH-guarded, budget repairs
             are compare-and-set, and a stamp is never replaced by an older one. Verify the idle
             watchdog's exclusion list still names both instances.
+
+      # GW36 S2: the control-to-state projector. Its safety heartbeat is part of the freshness
+      # proof, so a stale heartbeat withholds the stamp even when every kind verified.
+      - alert: StateProjectorHeartbeatStale
+        expr: max(amf_state_source_lag_seconds) > 16
+        for: 30s
+        labels:
+          severity: critical
+          service: control-plane
+        annotations:
+          summary: "The projector has not re-derived state from control within the lag bound"
+          description: >-
+            The re-hydrators are withholding the stamp (amf_state_stamp_withheld_source_lag_total
+            rises) because Postgres no longer provably matches control: a console revocation
+            would otherwise be served from state nobody re-derived. Check the projectors'
+            round failures and logs; the usual causes are a missing control migration
+            (core_v2_plan_document) or both projector replicas down.
+
+      - alert: StateProjectorNoWriter
+        expr: max(amf_projector_leader) < 1
+        for: 1m
+        labels:
+          severity: critical
+          service: control-plane
+        annotations:
+          summary: "No projector holds the writer lease"
+          description: >-
+            Both replicas are standing by or failing. StateProjectorHeartbeatStale follows once
+            the lag bound passes, and then the fleet fails closed.
+
+      - alert: StateProjectorSplitWriter
+        expr: sum(amf_projector_leader) > 1
+        for: 2m
+        labels:
+          severity: warning
+          service: control-plane
+        annotations:
+          summary: "Two projectors report holding the lease"
+          description: >-
+            Writes stay safe (every write is fenced on the lease inside its own transaction),
+            but two holders for longer than a lease TTL means one reports stale leadership.
+
+      - alert: StateProjectorSingleInstance
+        expr: count(up{job="amf-state-projector"} == 1) < 2
+        for: 5m
+        labels:
+          severity: warning
+          service: control-plane
+        annotations:
+          summary: "Fewer than two projectors are running"
+          description: >-
+            One projector is a single point of failure for the fleet's stamp. The standby
+            takes over within one lease TTL; without it a restart longer than the lag bound
+            fails the fleet closed.
+
+      - alert: StateProjectorOrgsWithoutPlan
+        expr: max(amf_projector_orgs_without_plan) > 0 or max(amf_projector_invalid_plans) > 0
+        for: 10m
+        labels:
+          severity: warning
+          service: control-plane
+        annotations:
+          summary: "Active organizations have no projectable plan document"
+          description: >-
+            Their gateways refuse requests (no PLAN record) or serve the previous plan. Run
+            `manage.py sync_v2_plan_documents` and read the projector's warning lines, which name
+            the org and the reason.

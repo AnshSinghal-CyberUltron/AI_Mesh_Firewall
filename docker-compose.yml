@@ -584,6 +584,9 @@ services:
       AMF_PG_TCP_USER_TIMEOUT_MS: ${AMF_PG_TCP_USER_TIMEOUT_MS:-2000}
       AMF_PG_CONNECT_TIMEOUT_S: ${AMF_PG_CONNECT_TIMEOUT_S:-2}
       AMF_REHYDRATOR_METRICS_PORT: "9108"
+      # GW36 S2: withhold the stamp when the projector's safety heartbeat is older than this
+      # (default = PG_GRACE_MS, the owner's 0.7-2 ride-through). 0 disables it (break-glass).
+      AMF_PROJECTOR_LAG_MS: ${AMF_PROJECTOR_LAG_MS:-16000}
       # Distinct per instance. It travels in the stamp's `by` field, so an operator can see
       # which re-hydrator last verified. The default (hostname:pid) is already distinct per
       # container; these are set explicitly so the names are stable across restarts.
@@ -618,6 +621,42 @@ services:
     labels:
       ai-mesh.idle-stop: "exempt"
       ai-mesh.role: "control-plane-rehydrator"
+      ai-mesh.criticality: "fleet-availability"
+
+  # GW36 S2: the control-to-state projector. Reads control's tables (same database, read-only
+  # snapshot) and signs KEY / PLAN / KILL SWITCH records. TWO replicas: a Postgres lease makes
+  # exactly one the writer and the other takes over within AMF_PROJECTOR_LEASE_MS. The
+  # re-hydrators withhold the fleet's stamp when the writer's heartbeat is older than
+  # AMF_PROJECTOR_LAG_MS, so both replicas are fleet-availability components and carry the
+  # same identity-based idle-stop exemption as the re-hydrators.
+  state-projector-a: &state-projector
+    <<: *state-rehydrator
+    command: ["python", "-m", "state_control.projector_service"]
+    environment: &state-projector-env
+      <<: *state-rehydrator-env
+      AMF_PROJECTOR_ID: projector-a
+      AMF_PROJECTOR_METRICS_PORT: "9109"
+      AMF_PROJECTOR_PERIOD_MS: ${AMF_PROJECTOR_PERIOD_MS:-1000}
+      AMF_PROJECTOR_LEASE_MS: ${AMF_PROJECTOR_LEASE_MS:-5000}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://127.0.0.1:9109/healthz', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    labels:
+      ai-mesh.idle-stop: "exempt"
+      ai-mesh.role: "control-plane-projector"
+      ai-mesh.criticality: "fleet-availability"
+
+  state-projector-b:
+    <<: *state-projector
+    environment:
+      <<: *state-projector-env
+      AMF_PROJECTOR_ID: projector-b
+    labels:
+      ai-mesh.idle-stop: "exempt"
+      ai-mesh.role: "control-plane-projector"
       ai-mesh.criticality: "fleet-availability"
 
 volumes:
