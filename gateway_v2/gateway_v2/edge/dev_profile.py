@@ -34,7 +34,9 @@ Environment:
 ``AMF_DEV_BUDGET``             ``lease`` (real GW06 over Redis) or ``unlimited`` (required)
 ``AMF_DEV_REDIS_URL`` / ``AMF_DEV_BUDGET_POOL_TOKENS`` / ``AMF_DEV_RATE_PER_S`` /
 ``AMF_DEV_BURST`` / ``AMF_DEV_LEASE_TTL_S``  required when ``AMF_DEV_BUDGET=lease``
-``AMF_DEV_PROVIDER_URL`` / ``AMF_DEV_PROVIDER_API_KEY``  optional real upstream (else echo)
+``AMF_DEV_PROVIDER_URL`` / ``AMF_DEV_PROVIDER_API_KEY``  optional OpenAI-compatible upstream base
+                               URL (``.../v1``; a full ``.../chat/completions`` URL is trimmed),
+                               else the echo provider
 """
 
 from __future__ import annotations
@@ -48,6 +50,11 @@ from gateway_v2.admit.admission import AdmissionController
 from gateway_v2.admit.metrics import AdmissionMetrics, QuotaMetrics
 from gateway_v2.admit.quota import AdmissionBounds
 from gateway_v2.detect.holdback import scan as holdback_scan
+from gateway_v2.dispatch.openai_upstream import (
+    CHAT_ENDPOINT,
+    OpenAIUpstreamProvider,
+    httpx_client_factory,
+)
 from gateway_v2.domain.plan import ExecutionPlan, Phase
 from gateway_v2.edge.app import ASGIApplication
 from gateway_v2.edge.dev_admit import (
@@ -73,10 +80,11 @@ from gateway_v2.edge.dev_components import (
 from gateway_v2.edge.dev_mcp import build_dev_mcp
 from gateway_v2.edge.dev_metrics import build_dev_publisher
 from gateway_v2.edge.dev_plan_feed import DevPlanFeed, DevPlanWatch
-from gateway_v2.edge.dev_upstream import DevUpstreamProvider
 from gateway_v2.edge.responses_store import ValkeyResponseStore
+from gateway_v2.edge.wire.sse import SSEDecoder
 from gateway_v2.runtime.errors import CapacityUnavailable, CapacityUnset
 from gateway_v2.runtime.holdback_metrics import HoldbackMetrics
+from gateway_v2.runtime.kinds import PoolKind
 from gateway_v2.runtime.resources import ResourceContract
 from gateway_v2.runtime.serving_config import load_serving_config
 from gateway_v2.runtime.stream_metrics import PerRequestExports
@@ -266,23 +274,29 @@ def _budget(
 
 def _provider(
     cfg: DevProfileConfig, contract: ResourceContract, probe: DeterministicFindings
-) -> tuple[EchoProviderClient | DevUpstreamProvider, str]:
+) -> tuple[EchoProviderClient | OpenAIUpstreamProvider, str]:
     if cfg.provider_url is None:
         return (
             EchoProviderClient(probe=probe),
             "boot: provider -> EchoProviderClient (DEV PROFILE: socket-free; replies "
             "'echo: <exact text the gateway forwarded>'; logs provider-side finding counts)",
         )
-    return (
-        DevUpstreamProvider(
-            url=cfg.provider_url,
+    base_url = cfg.provider_url.removesuffix("/").removesuffix(f"/{CHAT_ENDPOINT}")
+    connections = contract.pool_size(PoolKind.PROVIDER)
+    provider = OpenAIUpstreamProvider(
+        base_url=base_url,
+        decoder_factory=SSEDecoder,
+        client_factory=httpx_client_factory(
             api_key=cfg.provider_api_key,
             timeout_s=contract.max_stream_duration_s(),
+            connections=connections,
         ),
-        f"boot: provider -> HttpProviderClient (B4) to {_redact_url(cfg.provider_url)} "
-        "(DEV PROFILE adapter: destination label replaced by the URL; body sent as OpenAI "
-        "messages with EVERY input channel as role=user because Transform does not carry "
-        "roles; non-2xx fails closed; a fresh client per request)",
+    )
+    return provider, (
+        f"boot: provider -> OpenAIUpstreamProvider to {_redact_url(base_url)}/{CHAT_ENDPOINT} "
+        f"(GW36 S1: the verified request rebuilt with its roles; pooled client, "
+        f"{connections} connections; non-2xx / transport / malformed stream end as a declared "
+        "error)"
     )
 
 
@@ -500,4 +514,8 @@ def wrap_dev_app(app: ASGIApplication, deps: Mapping[str, object]) -> ASGIApplic
     audit = runtime if isinstance(runtime, DevAudit) else None
     watch = deps.get("plan_watch")
     plan_watch = watch if isinstance(watch, DevPlanWatch) else None
-    return DevServedApp(app, budget=quota, audit=audit, plan_watch=plan_watch)
+    provider = deps.get("provider")
+    closers = (provider.aclose,) if isinstance(provider, OpenAIUpstreamProvider) else ()
+    return DevServedApp(
+        app, budget=quota, audit=audit, plan_watch=plan_watch, closers=closers
+    )

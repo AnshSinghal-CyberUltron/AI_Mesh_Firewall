@@ -271,15 +271,73 @@ def test_model_list_parses_comma_separated_ids() -> None:
     assert parse_model_ids(" gpt-4o-mini, echo-1 ") == ("gpt-4o-mini", "echo-1")
 
 
-# --- optional real upstream adapter ---------------------------------------------------------- #
+# --- optional real upstream (GW36 S1: the production OpenAIUpstreamProvider) ----------------- #
 
 
-def test_upstream_adapter_posts_openai_messages_to_the_configured_url(
+def _dev_provider(monkeypatch: pytest.MonkeyPatch, handler: object, url: str) -> object:
+    """The provider the dev profile builds for ``url``, its httpx client on a MockTransport."""
+    httpx = pytest.importorskip("httpx")
+    from gateway_v2.edge import dev_profile
+
+    real_client = httpx.AsyncClient
+    monkeypatch.setattr(
+        httpx,
+        "AsyncClient",
+        lambda **kw: real_client(transport=httpx.MockTransport(handler), **kw),
+    )
+    cfg = dev_profile.load_dev_config(
+        {
+            "AMF_DEV_API_KEY": "k",
+            "AMF_DEV_PLAN_PATH": "unused",
+            "AMF_DEV_MODELS": "m",
+            "AMF_DEV_Q_SAFE": "500",
+            "AMF_DEV_AUDIT_DRAIN_RATE_PER_S": "1000",
+            "AMF_DEV_AUDIT_BYTES_PER_RECORD": "2765",
+            "AMF_DEV_BUDGET": "unlimited",
+            "AMF_DEV_PROVIDER_URL": url,
+            "AMF_DEV_PROVIDER_API_KEY": "sk-up",
+        }
+    )
+    from gateway_v2.runtime.kinds import HardwareSignals
+    from gateway_v2.runtime.resources import from_signals
+
+    contract = from_signals(
+        HardwareSignals(
+            cpu_quota=4.0,
+            memory_limit=4 * 1024**3,
+            fd_limit=4096,
+            cpu_source="test",
+            mem_source="test",
+            fd_source="test",
+        ),
+        target_p99_ms=20.0,
+        utilization_cap=0.75,
+        per_worker_rss=400 * 1024 * 1024,
+    )
+    probe = DeterministicFindings(phase=Phase.INPUT, budget_s=0.1)
+    provider, _log = dev_profile._provider(cfg, contract, probe)
+    return provider
+
+
+def _rendered_body() -> dict[str, object]:
+    from gateway_v2.dispatch.openai_upstream import BODY_ENDPOINT_KEY, BODY_OPENAI_KEY
+
+    return {
+        BODY_MODEL_KEY: "gpt-x",
+        BODY_DELTAS_KEY: (("message_content", "hello"),),
+        BODY_ENDPOINT_KEY: "chat/completions",
+        BODY_OPENAI_KEY: {
+            "model": "gpt-x",
+            "messages": [{"role": "system", "content": "hello"}],
+            "stream": True,
+        },
+    }
+
+
+def test_dev_upstream_posts_the_rendered_request_to_the_chat_endpoint(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     httpx = pytest.importorskip("httpx")
-    from gateway_v2.edge import dev_upstream
-
     seen: dict[str, object] = {}
 
     def _handler(request: object) -> object:
@@ -291,41 +349,27 @@ def test_upstream_adapter_posts_openai_messages_to_the_configured_url(
         sse = f"data: {json.dumps(chunk)}\n\ndata: [DONE]\n\n".encode()
         return httpx.Response(200, content=sse, headers={"content-type": "text/event-stream"})
 
-    real_client = httpx.AsyncClient
-
-    def _client(**kwargs: object) -> object:
-        return real_client(transport=httpx.MockTransport(_handler), **kwargs)
-
-    monkeypatch.setattr(httpx, "AsyncClient", _client)
-    provider = dev_upstream.DevUpstreamProvider(
-        url="http://upstream.test/v1/chat/completions", api_key="sk-up", timeout_s=5.0
-    )
-    body = {BODY_MODEL_KEY: "gpt-x", BODY_DELTAS_KEY: (("message_content", "hello"),)}
-    events = asyncio.run(_collect(provider, UpstreamRequest(destination="amf://label", body=body)))
+    provider = _dev_provider(monkeypatch, _handler, "http://upstream.test/v1/chat/completions")
+    request = UpstreamRequest(destination="amf://label", body=_rendered_body())
+    events = asyncio.run(_collect(provider, request))  # type: ignore[arg-type]
     assert seen["url"] == "http://upstream.test/v1/chat/completions"
     assert seen["auth"] == "Bearer sk-up"
     assert seen["body"] == {
         "model": "gpt-x",
-        "messages": [{"role": "user", "content": "hello"}],
+        "messages": [{"role": "system", "content": "hello"}],
         "stream": True,
     }
     assert [event.text_deltas for event in events] == [(("content", "hi!"),)]
 
 
-def test_upstream_adapter_fails_closed_on_non_2xx(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_dev_upstream_non_2xx_is_a_declared_failure(monkeypatch: pytest.MonkeyPatch) -> None:
     httpx = pytest.importorskip("httpx")
-    from gateway_v2.edge import dev_upstream
 
     def _handler(request: object) -> object:
         return httpx.Response(401, json={"error": {"message": "bad key"}})
 
-    real_client = httpx.AsyncClient
-    monkeypatch.setattr(
-        httpx,
-        "AsyncClient",
-        lambda **kw: real_client(transport=httpx.MockTransport(_handler), **kw),
-    )
-    provider = dev_upstream.DevUpstreamProvider(url="http://u.test/x", api_key="", timeout_s=5.0)
-    body = {BODY_MODEL_KEY: "m", BODY_DELTAS_KEY: (("message_content", "hi"),)}
-    events = asyncio.run(_collect(provider, UpstreamRequest(destination="amf://label", body=body)))
-    assert len(events) == 1 and events[0].final and events[0].error_frame is not None
+    provider = _dev_provider(monkeypatch, _handler, "http://u.test/v1")
+    request = UpstreamRequest(destination="amf://label", body=_rendered_body())
+    events = asyncio.run(_collect(provider, request))  # type: ignore[arg-type]
+    assert len(events) == 1 and events[0].final
+    assert events[0].gateway_error == "upstream_auth_error" and events[0].error_frame is None

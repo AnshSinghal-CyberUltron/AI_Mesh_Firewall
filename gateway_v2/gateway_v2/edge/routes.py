@@ -43,7 +43,7 @@ from gateway_v2.dispatch.provider import ProviderClient, UpstreamRequest
 from gateway_v2.dispatch.routing import DispatchRouter
 from gateway_v2.dispatch.transform import Transform
 from gateway_v2.domain.plan import ExecutionPlan, Phase, Surface
-from gateway_v2.domain.posture import PLAN_UNAVAILABLE
+from gateway_v2.domain.posture import PLAN_UNAVAILABLE, STREAM_KILLED
 from gateway_v2.edge import errors
 from gateway_v2.edge.asgi_sse import (
     ASGIReceive,
@@ -587,6 +587,11 @@ class ChatRoute:
             return
         reason = kill_latch.reason()
         if reason is not None:
+            # The pass-through loop ended normally after the cut and recorded "allow"; the trace
+            # must not report a cut stream as allowed (a kill-switch cut publishes no action).
+            stats = produced.stats
+            if reason != STREAM_KILLED and getattr(stats, "output_action", None) == "allow":
+                stats.output_action = "block"  # type: ignore[union-attr]
             await _send_sse(send, encoder.error(reason))
             sent_terminal.set()
             await ChatRoute._emit_produced_mode(send, encoder, produced)

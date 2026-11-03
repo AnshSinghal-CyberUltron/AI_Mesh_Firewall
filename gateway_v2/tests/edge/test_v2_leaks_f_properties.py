@@ -16,7 +16,7 @@ dev profile CHARGE the lease, and that a zero-dispatch refusal gives the charge 
 
 2. *v1 parity on a message-content-only chat request; a lower bound otherwise.* When a chat
    request's ONLY folded input text is message content (string ``content`` or ``content_part_text``
-   parts -- no ``tool_arguments`` / ``function_arguments``), the charge equals the FROZEN v1 oracle
+   parts -- no ``stop_sequence`` text), the charge equals the FROZEN v1 oracle
    (``tests/admit/_v1_token_estimate_oracle``: v1's ``estimate_prompt_tokens`` applied AFTER v1's
    clamp). This holds because ``prompt_chars`` reproduces v1's folded-input length exactly -- it
    joins a message's content parts with one separator, as v1 does -- and ``clamp_output_budget``
@@ -47,7 +47,7 @@ paths), and the dev-specific wiring is covered by ``tests/edge/test_dev_profile_
 **Drive-layer split.** Every iteration runs the UNIT tier (parse, clamp, recompute the charge, v1
 oracle comparison). Every ``_E2E_EVERY``-th iteration ALSO runs an END-TO-END tier: it drives the
 full §10.4 lifecycle through ``edge/app.build_app`` with a recording budget double and asserts the
-charged cost equals the recompute, over chat (message-only and tool-bearing) and embeddings. The
+charged cost equals the recompute, over chat (message-only and stop-bearing) and embeddings. The
 admission (clause 3) and refund (clause 4) clauses run as focused example checks over a real lease,
 because they need the real ``QuotaComponent`` / ``BudgetLease`` ledger, not a double.
 
@@ -114,7 +114,7 @@ _SEED = 0xF00D_B0DE_C105ED
 _ITERATIONS = 10_000
 #: Every ``_E2E_EVERY``-th iteration ALSO drives the full ASGI lifecycle with a recording budget
 #: and reads the cost actually charged. 10,000 // 200 = 50 end-to-end cases -- a non-trivial subset
-#: covering chat (message-only + tool-bearing) and embeddings while keeping the run fast.
+#: covering chat (message-only + stop-bearing) and embeddings while keeping the run fast.
 _E2E_EVERY = 200
 
 _ORG = DEFAULT_ORG_ID
@@ -186,43 +186,30 @@ def _parts_message(rng: random.Random) -> dict[str, object]:
     return {"role": rng.choice(("user", "system")), "content": parts}
 
 
-def _tool_message(rng: random.Random) -> dict[str, object]:
-    """A message carrying ``tool_calls`` -- its ``tool_arguments`` text is NOT counted by v1's
-    message-only oracle, so a request containing it charges STRICTLY MORE than the oracle."""
-    arguments = json.dumps({"q": _text(rng, rng.randint(1, 8))})
-    return {
-        "role": "assistant",
-        "content": _text(rng, rng.randint(0, 6)),
-        "tool_calls": [{"type": "function", "function": {"name": "f", "arguments": arguments}}],
-    }
+def _stop_sequences(rng: random.Random) -> list[str]:
+    """``stop`` strings -- scanned input text (GW36 S1) that v1's message-only oracle does NOT
+    count, so a request carrying them charges STRICTLY MORE than the oracle. (Tool calls played
+    this role before GW36 S1 refused them at parse.)"""
+    return [_text(rng, rng.randint(1, 8)) for _ in range(rng.randint(1, 4))]
 
 
 def _draw_request(rng: random.Random) -> tuple[dict[str, object], bool]:
     """Return ``(body, message_only)``: a chat body and whether its only input text is message
     content (string or content-part). ``message_only`` requests must charge the v1 oracle exactly;
-    the rest (tool-bearing) charge at least it."""
+    the rest (carrying ``stop`` text) charge at least it."""
     count = rng.randint(1, 5)
     message_only = rng.random() < 0.7
-    messages: list[dict[str, object]] = []
-    for _ in range(count):
-        if message_only:
-            messages.append(rng.choice((_string_message, _parts_message))(rng))
-        else:
-            messages.append(
-                rng.choice((_string_message, _parts_message, _tool_message))(rng)
-            )
-    # When not forced message-only, guarantee at least one tool message so the >= clause is real.
-    if not message_only and not any("tool_calls" in m for m in messages):
-        messages.append(_tool_message(rng))
+    messages = [rng.choice((_string_message, _parts_message))(rng) for _ in range(count)]
     body: dict[str, object] = {"model": _MODEL, "messages": messages}
+    if not message_only:
+        body["stop"] = _stop_sequences(rng)
     max_tokens = rng.choice(_MAX_TOKENS_CHOICES)
     if max_tokens or rng.random() < 0.5:
         body["max_tokens"] = max_tokens
     n = rng.choice(_N_CHOICES)
     if n != 1 or rng.random() < 0.5:
         body["n"] = n
-    actually_message_only = not any("tool_calls" in m for m in messages)
-    return body, actually_message_only
+    return body, "stop" not in body
 
 
 # --------------------------------------------------------------------------- #
@@ -510,11 +497,11 @@ def test_surface_charges_the_contract_estimate_over_the_clamped_budget() -> None
     upper = contract.max_request_tokens()
 
     message_only_seen = 0
-    tool_bearing_seen = 0
+    stop_bearing_seen = 0
     strictly_above_oracle_seen = 0
     e2e_cases = 0
     e2e_message_only = 0
-    e2e_tool_bearing = 0
+    e2e_stop_bearing = 0
 
     for index in range(_ITERATIONS):
         body, message_only = _draw_request(rng)
@@ -535,11 +522,11 @@ def test_surface_charges_the_contract_estimate_over_the_clamped_budget() -> None
                 f"{where}: message-only charge {charge} != v1 oracle {oracle}"
             )
         else:
-            tool_bearing_seen += 1
+            stop_bearing_seen += 1
             # Clause 2 (lower bound): tool/function argument text is counted by prompt_chars but
             # not by v1's message-only oracle, so the charge is >= the oracle.
             assert charge >= oracle, (
-                f"{where}: tool-bearing charge {charge} < v1 oracle {oracle}"
+                f"{where}: stop-bearing charge {charge} < v1 oracle {oracle}"
             )
             if charge > oracle:
                 strictly_above_oracle_seen += 1
@@ -562,7 +549,7 @@ def test_surface_charges_the_contract_estimate_over_the_clamped_budget() -> None
             if message_only:
                 e2e_message_only += 1
             else:
-                e2e_tool_bearing += 1
+                e2e_stop_bearing += 1
             assert status == 200, f"{where} (e2e): status {status} error {error!r}"
             assert budget.costs == [charge], (
                 f"{where} (e2e): surface charged {budget.costs!r}, recompute {charge}"
@@ -570,18 +557,18 @@ def test_surface_charges_the_contract_estimate_over_the_clamped_budget() -> None
 
     # Coverage (asserted non-trivial): both request shapes, a genuinely-above-oracle case, and an
     # end-to-end case on each shape, were exercised across the run.
-    assert message_only_seen > 0 and tool_bearing_seen > 0, (
+    assert message_only_seen > 0 and stop_bearing_seen > 0, (
         f"seed={_SEED:#x}: both shapes must occur, "
-        f"message-only={message_only_seen} tool-bearing={tool_bearing_seen}"
+        f"message-only={message_only_seen} stop-bearing={stop_bearing_seen}"
     )
     assert strictly_above_oracle_seen > 0, (
-        f"seed={_SEED:#x}: no tool-bearing request charged strictly above the oracle "
+        f"seed={_SEED:#x}: no stop-bearing request charged strictly above the oracle "
         f"(the >= clause was never non-trivially exercised)"
     )
     assert e2e_cases >= 2, f"seed={_SEED:#x}: expected >= 2 end-to-end cases, ran {e2e_cases}"
-    assert e2e_message_only > 0 and e2e_tool_bearing > 0, (
+    assert e2e_message_only > 0 and e2e_stop_bearing > 0, (
         f"seed={_SEED:#x}: end-to-end tier must cover both shapes, "
-        f"message-only={e2e_message_only} tool-bearing={e2e_tool_bearing}"
+        f"message-only={e2e_message_only} stop-bearing={e2e_stop_bearing}"
     )
 
 

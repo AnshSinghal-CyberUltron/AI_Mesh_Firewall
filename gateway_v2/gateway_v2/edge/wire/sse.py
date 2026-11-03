@@ -288,6 +288,29 @@ ERROR_SHAPES: Mapping[str, tuple[str, str]] = MappingProxyType(
             "The method parameters have the wrong shape.",
         ),
         "endpoint_not_found": ("not_found_error", "No endpoint is served at this path."),
+        "unsupported_parameter": (
+            "invalid_request_error",
+            "The request carries a parameter this gateway does not forward.",
+        ),
+        # GW36 S1: terminal failures the gateway detected on the upstream call. Never provider
+        # text: the provider's own message is not echoed.
+        "upstream_invalid_request": (
+            "invalid_request_error",
+            "The model provider rejected the request.",
+        ),
+        "upstream_rate_limited": ("rate_limit_error", "The model provider is rate limiting."),
+        "upstream_not_found": ("not_found_error", "The model provider does not serve that model."),
+        "upstream_timeout": ("timeout_error", "The model provider did not answer in time."),
+        "upstream_auth_error": (
+            "gateway_error",
+            "The gateway's credential for the model provider was refused.",
+        ),
+        "upstream_unavailable": ("gateway_error", "The model provider could not be reached."),
+        "upstream_error": ("gateway_error", "The model provider returned an error."),
+        "upstream_request_unbuildable": (
+            "gateway_error",
+            "The gateway could not build the request for the model provider.",
+        ),
         "method_not_allowed": (
             "invalid_request_error",
             "This endpoint does not accept that HTTP method.",
@@ -567,11 +590,20 @@ class SSEDecoder:
     (R1.5).
     """
 
-    __slots__ = ("_buffer", "_malformed")
+    __slots__ = ("_buffer", "_done", "_malformed")
 
     def __init__(self) -> None:
         self._buffer = bytearray()
+        self._done = False
         self._malformed = False
+
+    def finished(self) -> bool:
+        """``[DONE]`` was decoded and no bytes are left buffered.
+
+        A stream that ends without ``[DONE]``, or with a partial event still
+        buffered (a non-SSE body, a truncated read), is not a clean end.
+        """
+        return self._done and not self._buffer.strip()
 
     def feed(self, raw: bytes) -> tuple[DownstreamFrame, ...]:
         """Decode every COMPLETE event in the buffer; buffer any partial tail.
@@ -638,6 +670,7 @@ class SSEDecoder:
             self._malformed = True
             return None
         if payload == "[DONE]":
+            self._done = True
             return None
         return self._frame_from_json(payload)
 

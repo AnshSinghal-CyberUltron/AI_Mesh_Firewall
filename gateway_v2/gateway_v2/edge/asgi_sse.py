@@ -250,6 +250,12 @@ async def as_chunks(
         except StopAsyncIteration:
             return
 
+        # A failure the gateway detected on the upstream call (status, transport, malformed
+        # stream): terminal, rendered from the latch as the declared Error_Frame, never content.
+        if event.gateway_error is not None:
+            error_scan.kill_latch.kill(event.gateway_error)
+            return
+
         # Mid-stream provider error frame (R11): scan it BEFORE forwarding any byte. A REDACT/ALLOW
         # decision forwards the (possibly masked) frame as a FINAL content chunk and ends the
         # stream (R11.2); a BLOCK (R11.3) or a scan error (R11.4) withholds the frame entirely —

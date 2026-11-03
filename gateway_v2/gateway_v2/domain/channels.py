@@ -18,6 +18,10 @@ TEXT_CHANNELS: tuple[TextChannel, ...] = (
     TextChannel("content_part_text", "messages[].content[].text", True),
     TextChannel("tool_arguments", "messages[].tool_calls[].function.arguments", True),
     TextChannel("function_arguments", "messages[].function_call.arguments", True),
+    # GW36 S1: the legacy completions ``prompt`` and the chat ``stop`` strings are request text
+    # forwarded to the provider, so they are folded and scanned like ``messages[]``.
+    TextChannel("completion_prompt", "prompt", True),
+    TextChannel("stop_sequence", "stop", True),
     # GW16 misc INPUT channels (C21): embeddings/moderations ``input`` field. Their
     # ``sdk_path`` is a DISJOINT scope -- it starts with neither ``messages[]`` (the
     # chat-input scope GW15's ``_input_channel_names()`` filters on) nor ``choices[]``

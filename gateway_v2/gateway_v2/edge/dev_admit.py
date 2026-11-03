@@ -308,7 +308,7 @@ class DevServedApp:
     unspent remainder at shutdown.
     """
 
-    __slots__ = ("_audit", "_budget", "_inner", "_plan")
+    __slots__ = ("_audit", "_budget", "_closers", "_inner", "_plan")
 
     def __init__(
         self,
@@ -317,11 +317,13 @@ class DevServedApp:
         budget: DevLeaseBudget,
         audit: DevAudit | None = None,
         plan_watch: DevPlanWatch | None = None,
+        closers: tuple[Callable[[], Awaitable[None]], ...] = (),
     ) -> None:
         self._inner = inner
         self._budget = budget
         self._audit = audit
         self._plan = plan_watch
+        self._closers = closers
 
     async def __call__(self, scope: _Scope, receive: _Receive, send: _Send) -> None:
         if scope.get("type") == "lifespan":
@@ -333,6 +335,7 @@ class DevServedApp:
         budget = self._budget
         audit = self._audit
         plan_watch = self._plan
+        closers = self._closers
 
         async def _receive() -> Mapping[str, object]:
             message = await receive()
@@ -345,6 +348,8 @@ class DevServedApp:
                 await _plan_shutdown(plan_watch)
                 await _audit_shutdown(audit)
                 await _budget_shutdown(budget)
+                for close in closers:
+                    await close()
             return message
 
         return _receive

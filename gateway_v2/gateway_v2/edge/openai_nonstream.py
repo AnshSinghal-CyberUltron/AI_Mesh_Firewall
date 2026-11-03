@@ -67,6 +67,14 @@ __all__ = (
 #: not a capacity literal.
 _OUTPUT_CONTENT_CHANNEL = "output_content"
 
+
+class UpstreamFailed(Exception):
+    """The upstream call ended with a gateway-detected failure (``UpstreamEvent.gateway_error``)."""
+
+    def __init__(self, code: str) -> None:
+        super().__init__(code)
+        self.code = code
+
 # Non-streaming success-response shape (response-shape constants, NOT capacity literals).
 _OK_HTTP_STATUS = 200
 _JSON_MEDIA_TYPE = "application/json"
@@ -148,6 +156,8 @@ async def collect_and_enforce(
         deltas, decision = _enforce_channels(deps, plan, collected)
     except PolicyRegexRefusal as refused:
         return EnforcedOutput(deltas=(), refuse_code=refused.code)
+    except UpstreamFailed as failed:
+        return EnforcedOutput(deltas=(), refuse_code=failed.code)
     except OutputBlocked as blocked:
         return EnforcedOutput(
             deltas=(), refuse_code=block_code, output_decision=blocked.decision,
@@ -189,6 +199,8 @@ async def _collect_output_channels(
     async for event in deps.provider.open(
         UpstreamRequest(destination=destination, body=body)
     ):
+        if event.gateway_error is not None:
+            raise UpstreamFailed(event.gateway_error)
         for channel, delta in event.text_deltas:
             _append(channel, delta)
         if event.error_frame is not None:

@@ -75,11 +75,17 @@ class UpstreamEvent:
     for an ordinary content event; a non-``None`` value is a provider mid-stream
     error frame that must be scanned before any of its bytes are forwarded
     downstream (R11).
+
+    ``gateway_error`` is a declared gateway value-code (never provider text) for a
+    terminal failure the gateway itself detected: a non-2xx status, a transport
+    failure, or an undecodable or truncated stream. It ends the stream and is
+    rendered through the error envelope, never forwarded as content.
     """
 
     text_deltas: tuple[tuple[str, str], ...]
     final: bool
     error_frame: str | None = None
+    gateway_error: str | None = None
 
 
 # --------------------------------------------------------------------------- #

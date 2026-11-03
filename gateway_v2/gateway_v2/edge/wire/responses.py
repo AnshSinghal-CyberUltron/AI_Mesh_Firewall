@@ -16,6 +16,8 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from types import MappingProxyType
 
+from gateway_v2.edge.wire.openai_codes import UNSUPPORTED_CONTENT_PART
+
 __all__ = (
     "RESPONSES_INVALID_MODEL",
     "RESPONSES_MALFORMED_BODY",
@@ -35,9 +37,6 @@ RESPONSES_MALFORMED_BODY = "responses_malformed_body"
 RESPONSES_INVALID_MODEL = "responses_invalid_model"
 #: Neither ``input`` nor ``instructions`` carries text.
 RESPONSES_MISSING_INPUT = "responses_missing_input"
-#: A content part cannot be placed in a scanned chat text channel.
-UNSUPPORTED_CONTENT_PART = "unsupported_content_part"
-
 _PARAM_MODEL = "model"
 _PARAM_INPUT = "input"
 

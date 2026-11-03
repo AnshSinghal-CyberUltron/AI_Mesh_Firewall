@@ -250,6 +250,18 @@ _ENVELOPE: Mapping[str, tuple[int, str]] = MappingProxyType(
         # stock SDK retry. A known path with the wrong method is a 405, as v1 (FastAPI).
         "endpoint_not_found": (404, "not_found_error"),
         "method_not_allowed": (405, "invalid_request_error"),
+        "unsupported_parameter": (400, "invalid_request_error"),
+        # -- GW36 S1 upstream call failures (dispatch/openai_upstream.py) ----------
+        # The provider rejecting the gateway's own credential is a gateway fault (502), never
+        # a 401/403 the SDK would read as "your key is bad".
+        "upstream_invalid_request": (400, "invalid_request_error"),
+        "upstream_rate_limited": (429, "rate_limit_error"),
+        "upstream_not_found": (404, "not_found_error"),
+        "upstream_timeout": (504, "timeout_error"),
+        "upstream_auth_error": (502, "gateway_error"),
+        "upstream_unavailable": (502, "gateway_error"),
+        "upstream_error": (502, "gateway_error"),
+        "upstream_request_unbuildable": (500, "gateway_error"),
         # -- Pre-existing posture codes (R2 cards) ----------------------------
         posture.PLAN_UNAVAILABLE: (503, "service_unavailable"),
         posture.KILL_SWITCH_UNAVAILABLE: (503, "service_unavailable"),

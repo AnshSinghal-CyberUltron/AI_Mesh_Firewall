@@ -120,7 +120,9 @@ def _gen_body(rng: random.Random) -> tuple[dict[str, object], bool]:
     messages: list[dict[str, object]] = []
     for _ in range(rng.randint(0, 4)):
         message: dict[str, object] = {"role": rng.choice(("user", "assistant", "system"))}
-        shape = rng.randint(0, 3)
+        # GW36 S1: tool calls are refused at parse (not forwarded until GW34); their fold
+        # coverage lives in test_lgw15_fold.py, so the round trip draws the forwarded shapes.
+        shape = rng.randint(0, 1)
         if shape == 0:
             message["content"] = _text(rng)
         elif shape == 1:

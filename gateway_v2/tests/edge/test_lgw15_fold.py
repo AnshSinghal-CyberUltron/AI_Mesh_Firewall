@@ -21,9 +21,15 @@ from __future__ import annotations
 import json
 import random
 
+import pytest
+
 from gateway_v2.domain.channels import TEXT_CHANNELS
 from gateway_v2.domain.plan import Surface
-from gateway_v2.edge.wire.openai import OpenAIRequestParser
+from gateway_v2.edge.wire.openai import (
+    MalformedRequest,
+    OpenAIRequestParser,
+    fold_input_channels,
+)
 from gateway_v2.runtime.kinds import HardwareSignals
 from gateway_v2.runtime.resources import ResourceContract, from_signals
 
@@ -55,10 +61,14 @@ def _contract() -> ResourceContract:
 
 _CONTRACT = _contract()
 
-#: The ``TextChannel.sdk_path`` prefix that marks an INPUT (request-side) channel;
-#: mirrors ``edge/wire/openai._INPUT_SDK_PATH_PREFIX`` so the test keys on the same
-#: scope boundary the fold's totality check does.
-_INPUT_SDK_PATH_PREFIX = "messages[]"
+#: The ``TextChannel.sdk_path`` prefixes that mark an INPUT (request-side) channel;
+#: mirrors ``edge/wire/openai_fold.INPUT_SDK_PATH_PREFIXES`` so the test keys on the
+#: same scope boundary the fold's totality check does.
+_INPUT_SDK_PATH_PREFIXES = ("messages[]", "prompt", "stop")
+
+#: Channels the fold scans but the forwarding policy refuses at parse (GW36 S1: tool
+#: calls are not forwarded until GW34). Their fold coverage is checked on the fold itself.
+_REFUSED_AT_PARSE = frozenset({"tool_arguments", "function_arguments"})
 
 #: Alphabet for canary synthesis — printable, SDK-safe, and distinctive so a canary
 #: that leaks across channels is unambiguous in a counterexample.
@@ -81,7 +91,7 @@ def _input_channel_names() -> tuple[str, ...]:
     return tuple(
         channel.name
         for channel in TEXT_CHANNELS
-        if channel.sdk_path.startswith(_INPUT_SDK_PATH_PREFIX)
+        if channel.sdk_path.startswith(_INPUT_SDK_PATH_PREFIXES)
     )
 
 
@@ -115,6 +125,14 @@ def _request_with_canary(channel_name: str, canary: str) -> dict[str, object]:
             "role": "assistant",
             "function_call": {"name": "f", "arguments": canary},
         }
+    elif channel_name == "completion_prompt":
+        return {"model": "gpt-test", "prompt": canary}
+    elif channel_name == "stop_sequence":
+        return {
+            "model": "gpt-test",
+            "messages": [{"role": "user", "content": "hi"}],
+            "stop": [canary],
+        }
     else:  # pragma: no cover - guards against a new input channel with no case here
         raise AssertionError(f"no canary placement for input channel {channel_name!r}")
     return {"model": "gpt-test", "messages": [message]}
@@ -137,11 +155,16 @@ def test_property_2_input_channel_fold_is_total() -> None:
         for channel_name in input_channels:
             canary = _canary(rng)
             body = _request_with_canary(channel_name, canary)
-            parsed = parser.parse(_dumps(body), surface=Surface.CHAT, contract=_CONTRACT)
+            if channel_name in _REFUSED_AT_PARSE:
+                with pytest.raises(MalformedRequest):
+                    parser.parse(_dumps(body), surface=Surface.CHAT, contract=_CONTRACT)
+                folded = fold_input_channels(body).pairs
+            else:
+                parsed = parser.parse(_dumps(body), surface=Surface.CHAT, contract=_CONTRACT)
+                folded = parsed.input_channels
 
             # The canary appears in the folded input_channels under the matching
             # channel name — the fold enumerated it into scannable text (R1.2, C21).
-            folded = parsed.input_channels
             assert (channel_name, canary) in folded, _ctx(
                 _SEED,
                 i,

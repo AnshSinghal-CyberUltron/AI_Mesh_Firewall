@@ -58,6 +58,7 @@ from gateway_v2.edge.openai_nonstream import collect_and_enforce, emit_enforced_
 from gateway_v2.edge.phase_resolvers import resolver_for
 from gateway_v2.edge.request_holds import RequestHolds
 from gateway_v2.edge.routes import ASGIScope, ASGISend
+from gateway_v2.edge.upstream_body import with_openai_body
 from gateway_v2.edge.wire.openai import (
     CanonicalRequest,
     MalformedRequest,
@@ -713,11 +714,11 @@ class ChatSurface:
         if isinstance(staged, str):
             return _refused(staged, request_id=request_id)
         upstream: UpstreamRequest = staged
+        body = with_openai_body(upstream.body, req, self._deps.contract)
+        if body is None:
+            return _refused(REFUSE_LIFECYCLE_INCOMPLETE, request_id=request_id)
         return LifecycleOutcome(
-            plan=plan,
-            destination=upstream.destination,
-            body=upstream.body,
-            refuse_code=None,
+            plan=plan, destination=upstream.destination, body=body, refuse_code=None
         )
 
     # --- request-id + cost sourcing (task 2.4) --------------------------------------------- #

@@ -35,9 +35,28 @@ import dataclasses
 import json
 from collections.abc import Mapping
 from dataclasses import dataclass
+from types import MappingProxyType
 
-from gateway_v2.domain.channels import TEXT_CHANNELS
 from gateway_v2.domain.plan import Surface
+from gateway_v2.edge.wire.openai_codes import (
+    INVALID_MAX_COMPLETION_TOKENS,
+    INVALID_MAX_TOKENS,
+    MALFORMED_BODY,
+    MALFORMED_MISSING_MODEL,
+    MALFORMED_NOT_AN_OBJECT,
+    MALFORMED_WRONG_SHAPE,
+    UNSUPPORTED_CONTENT_PART,
+    UNSUPPORTED_PARAMETER,
+    MalformedRequest,
+)
+from gateway_v2.edge.wire.openai_fold import (
+    ChannelFoldError,
+    FoldResult,
+    UpstreamTemplate,
+    fold_input_channels,
+    fold_request,
+)
+from gateway_v2.edge.wire.openai_params import forwarded_fields
 from gateway_v2.runtime.resources import ResourceContract
 
 __all__ = (
@@ -47,77 +66,19 @@ __all__ = (
     "MALFORMED_MISSING_MODEL",
     "MALFORMED_NOT_AN_OBJECT",
     "MALFORMED_WRONG_SHAPE",
+    "UNSUPPORTED_CONTENT_PART",
+    "UNSUPPORTED_PARAMETER",
     "CanonicalRequest",
     "ChannelFoldError",
     "FoldResult",
     "MalformedRequest",
     "OpenAIRequestParser",
     "OpenAIResponseRenderer",
+    "UpstreamTemplate",
     "clamp_output_budget",
     "fold_input_channels",
     "prompt_chars",
 )
-
-
-# --------------------------------------------------------------------------- #
-# Declared malformed value-codes (R1.4) -- plain strings, not framework errors.
-# --------------------------------------------------------------------------- #
-#
-# A malformed / off-contract body raises :class:`MalformedRequest` carrying ONE
-# of these declared codes. They are codes (the shared value-code discipline, like
-# ``domain/posture.py``), NOT HTTP objects and NOT capacity-position literals: the
-# handler maps the code to an OpenAI-shaped error through the single
-# ``edge/errors`` ``Error_Envelope`` (an unmapped code already renders a declared
-# generic error there, so no raw ``json``/``Key`` error ever reaches the client).
-
-#: The request body is not valid JSON (the bytes could not be decoded/parsed).
-MALFORMED_BODY = "malformed_request_body"
-
-#: The decoded JSON top level is not an object (OpenAI requests are JSON objects).
-MALFORMED_NOT_AN_OBJECT = "malformed_request_not_an_object"
-
-#: A required OpenAI-contract field is absent -- e.g. ``model`` (R1.1 routing field).
-MALFORMED_MISSING_MODEL = "malformed_request_missing_model"
-
-#: A present field holds the wrong type for the OpenAI-compatible shape (e.g.
-#: ``model`` not a string, ``stream`` not a bool, ``messages`` not a list).
-MALFORMED_WRONG_SHAPE = "malformed_request_wrong_shape"
-
-#: ``max_tokens`` is a well-shaped non-negative int above the parse boundary
-#: (``max_output_tokens_boundary()``). v1 parity: refused HTTP 400 with ``param``
-#: ``max_tokens`` (``edge/errors`` -> ``(400, "invalid_request_error")``). A code.
-INVALID_MAX_TOKENS = "invalid_max_tokens"
-
-#: ``max_completion_tokens`` above the same boundary: the sibling HTTP 400 refusal
-#: with ``param`` ``max_completion_tokens``. A code, not a capacity literal.
-INVALID_MAX_COMPLETION_TOKENS = "invalid_max_completion_tokens"
-
-
-# --------------------------------------------------------------------------- #
-# Exceptions.
-# --------------------------------------------------------------------------- #
-
-
-class MalformedRequest(Exception):
-    """A request body is malformed or off the OpenAI-compatible contract (R1.4).
-
-    Carries a *declared value-code* (one of the ``MALFORMED_*`` constants above)
-    rather than a raw framework error, so the lifecycle handler renders it through
-    the single ``edge/errors`` ``Error_Envelope`` and the SDK sees an
-    OpenAI-shaped error -- never a leaked ``json.JSONDecodeError`` / ``KeyError``.
-    The originating ``code`` is kept on the instance so the trace keeps the one
-    spelling. An optional ``param`` names the offending request field (e.g.
-    ``"max_tokens"`` for :data:`INVALID_MAX_TOKENS`), matching v1's boundary
-    refusal; it defaults to ``None`` so every existing raise site (code only) is
-    unchanged, and the render site threads it to the envelope when present.
-    """
-
-    __slots__ = ("code", "param")
-
-    def __init__(self, code: str, *, param: str | None = None) -> None:
-        super().__init__(code)
-        self.code = code
-        self.param = param
 
 
 # --------------------------------------------------------------------------- #
@@ -153,6 +114,10 @@ class CanonicalRequest:
     but -- like v1 -- not charged/clamped), and ``request_clamps``
     (:func:`clamp_output_budget`'s ``"<field>=<pre>-><post>"`` records). Every new
     field carries a default, so each existing construction keeps compiling.
+
+    GW36 S1 adds ``upstream_template`` (the forwardable structure with each scanned
+    text occurrence as a slot, built by the same loop as ``input_channels``) and
+    ``forwarded`` (the validated top-level fields copied to the provider as given).
     """
 
     model: str
@@ -165,6 +130,8 @@ class CanonicalRequest:
     n: int = 1
     max_completion_tokens: int | None = None
     request_clamps: tuple[str, ...] = ()
+    upstream_template: UpstreamTemplate | None = None
+    forwarded: Mapping[str, object] = MappingProxyType({})
 
 
 # --------------------------------------------------------------------------- #
@@ -211,7 +178,8 @@ class OpenAIRequestParser:
         model = self._require_model(obj)
         streaming = self._stream_flag(obj)
         self._check_messages_shape(obj)
-        fold = fold_input_channels(obj)
+        forwarded = forwarded_fields(obj)
+        fold, template = fold_request(obj)
         boundary = contract.max_output_tokens_boundary()
         max_tokens = self._int_field(
             obj,
@@ -245,6 +213,8 @@ class OpenAIRequestParser:
             max_tokens=max_tokens,
             n=n,
             max_completion_tokens=max_completion_tokens,
+            upstream_template=template,
+            forwarded=forwarded,
         )
 
     @staticmethod
@@ -344,238 +314,6 @@ class OpenAIRequestParser:
             if not isinstance(message, dict):
                 raise MalformedRequest(MALFORMED_WRONG_SHAPE)
 
-# --------------------------------------------------------------------------- #
-# Input-channel folding (R1.2, C21) -- total over the input TEXT_CHANNELS.
-# --------------------------------------------------------------------------- #
-#
-# ``fold_input_channels`` walks a parsed OpenAI request against the INPUT-scoped
-# entries of ``domain/channels.py::TEXT_CHANNELS`` and yields one
-# ``(channel_name, text)`` pair per concrete text occurrence (R1.2). Each pair's
-# channel name is the ``TextChannel.name`` (``message_content`` /
-# ``content_part_text`` / ``tool_arguments`` / ``function_arguments``), the SAME
-# spelling the input scan and the canary test key on.
-#
-# INPUT vs OUTPUT scope. ``TEXT_CHANNELS`` enumerates request-side (``messages[]``)
-# and response-side (``choices[]``) channels; the ``choices[]`` entries are
-# OUTPUT-scoped (the output scan's job) and the input fold handles ONLY the four
-# ``messages[]`` entries. Scope is read off the authoritative ``sdk_path`` prefix
-# (``_INPUT_SDK_PATH_PREFIX``), not a second hand-maintained list.
-#
-# TOTALITY (C21). The set of channel names the fold can emit
-# (``_FOLDED_INPUT_CHANNELS``) must equal the set of input-scoped ``TEXT_CHANNELS``
-# names. Any divergence -- a new input ``TextChannel`` with no folding path, or a
-# folding path naming a dropped channel -- raises :class:`ChannelFoldError` at
-# import, so a new SDK field cannot silently escape scanning. The check runs once
-# at import over immutable constructs (``frozenset`` / ``tuple``).
-
-#: The ``TextChannel.sdk_path`` prefix that marks an INPUT (request-side) channel.
-#: Output channels carry the ``choices[]`` prefix and are the output scan's job.
-_INPUT_SDK_PATH_PREFIX = "messages[]"
-
-#: OpenAI message/content/tool keys the fold reads (one spelling of each field).
-_MESSAGE_CONTENT_KEY = "content"
-_CONTENT_PART_TEXT_KEY = "text"
-_MESSAGE_TOOL_CALLS_KEY = "tool_calls"
-_MESSAGE_FUNCTION_CALL_KEY = "function_call"
-_FUNCTION_KEY = "function"
-_FUNCTION_ARGUMENTS_KEY = "arguments"
-
-#: The channel names the fold emits, each tied to the ``TextChannel.name`` the
-#: enumeration pins. A frozenset (no module-level mutable); the totality check
-#: asserts this equals the set of input-scoped ``TEXT_CHANNELS`` names.
-_CHANNEL_MESSAGE_CONTENT = "message_content"
-_CHANNEL_CONTENT_PART_TEXT = "content_part_text"
-_CHANNEL_TOOL_ARGUMENTS = "tool_arguments"
-_CHANNEL_FUNCTION_ARGUMENTS = "function_arguments"
-
-_FOLDED_INPUT_CHANNELS = frozenset(
-    (
-        _CHANNEL_MESSAGE_CONTENT,
-        _CHANNEL_CONTENT_PART_TEXT,
-        _CHANNEL_TOOL_ARGUMENTS,
-        _CHANNEL_FUNCTION_ARGUMENTS,
-    )
-)
-
-
-@dataclass(frozen=True, slots=True)
-class FoldResult:
-    """The result of :func:`fold_input_channels` (R1.2, C21, Group A Property 3).
-
-    ``pairs`` is the tuple of ``(channel_name, text)`` occurrences in document
-    order; ``message_index`` is a PARALLEL tuple of the same length (one int per
-    pair) giving the 0-based ``messages[]`` index that pair was folded from, so a
-    caller can zip them without a guard. Frozen + slotted.
-    """
-
-    pairs: tuple[tuple[str, str], ...]
-    message_index: tuple[int, ...]
-
-
-class ChannelFoldError(RuntimeError):
-    """The fold is not total over the input ``TEXT_CHANNELS`` (C21).
-
-    Raised at import time by the module-level consistency check when the set of
-    channel names :func:`fold_input_channels` can emit diverges from the set of
-    input-scoped ``TEXT_CHANNELS`` names -- i.e. a new input ``TextChannel`` was
-    added with no folding path, or a folding path names a channel the enumeration
-    no longer carries. A build-time failure (not a silent gap) so a new SDK field
-    cannot escape scanning.
-    """
-
-
-def _input_channel_names() -> frozenset[str]:
-    """The set of input-scoped ``TEXT_CHANNELS`` names (C21 scope boundary).
-
-    An INPUT channel is one whose ``sdk_path`` begins with
-    :data:`_INPUT_SDK_PATH_PREFIX` (``messages[]``); the ``choices[]`` entries are
-    OUTPUT-scoped and excluded. Derived from the authoritative ``TEXT_CHANNELS``
-    tuple so there is one source of truth for the channel set.
-    """
-    return frozenset(
-        channel.name
-        for channel in TEXT_CHANNELS
-        if channel.sdk_path.startswith(_INPUT_SDK_PATH_PREFIX)
-    )
-
-
-def fold_input_channels(parsed: Mapping[str, object]) -> FoldResult:
-    """Enumerate every input ``TextChannel`` occurrence into pairs (R1.2, C21).
-
-    Walks ``parsed`` (an already-decoded OpenAI request object) against the four
-    input-scoped ``TEXT_CHANNELS`` entries and returns a :class:`FoldResult`: a
-    tuple of ``(channel_name, text)`` pairs (one per concrete text occurrence, in
-    document order) and a parallel tuple of each pair's 0-based ``messages[]``
-    index (Group A Property 3). The paths folded are ``messages[].content`` ->
-    ``message_content`` (string content), ``messages[].content[].text`` ->
-    ``content_part_text`` (array-of-parts), ``messages[].tool_calls[].function.
-    arguments`` -> ``tool_arguments``, and the legacy
-    ``messages[].function_call.arguments`` -> ``function_arguments``.
-
-    Only well-typed ``str`` occurrences are folded; a mistyped field is simply not
-    a text occurrence (the parser already rejected an off-contract ``messages``
-    shape). PURE: no I/O, no security decision. The fold is TOTAL over the input
-    channels (the module-level check guarantees every input ``TextChannel`` has a
-    path, C21), and every appended pair records its ``messages[]`` index so the two
-    returned tuples stay aligned.
-    """
-    messages = parsed.get(_BODY_MESSAGES_KEY)
-    if not isinstance(messages, list):
-        return FoldResult(pairs=(), message_index=())
-    pairs: list[tuple[str, str]] = []
-    message_index: list[int] = []
-    for index, message in enumerate(messages):
-        if not isinstance(message, dict):
-            continue
-        _fold_message_content(message, index, pairs, message_index)
-        _fold_tool_calls(message, index, pairs, message_index)
-        _fold_function_call(message, index, pairs, message_index)
-    return FoldResult(pairs=tuple(pairs), message_index=tuple(message_index))
-
-
-def _fold_message_content(
-    message: Mapping[str, object],
-    index: int,
-    pairs: list[tuple[str, str]],
-    message_index: list[int],
-) -> None:
-    """Fold ``messages[].content`` -- string form OR array-of-parts (R1.2).
-
-    A plain-string ``content`` folds as ``message_content``; the array-of-parts
-    shape folds each part's ``text`` as ``content_part_text`` in order. A content
-    that is neither contributes no text. Each pair records ``index``.
-    """
-    content = message.get(_MESSAGE_CONTENT_KEY)
-    if isinstance(content, str):
-        pairs.append((_CHANNEL_MESSAGE_CONTENT, content))
-        message_index.append(index)
-        return
-    if isinstance(content, list):
-        for part in content:
-            if not isinstance(part, dict):
-                continue
-            text = part.get(_CONTENT_PART_TEXT_KEY)
-            if isinstance(text, str):
-                pairs.append((_CHANNEL_CONTENT_PART_TEXT, text))
-                message_index.append(index)
-
-
-def _fold_tool_calls(
-    message: Mapping[str, object],
-    index: int,
-    pairs: list[tuple[str, str]],
-    message_index: list[int],
-) -> None:
-    """Fold ``messages[].tool_calls[].function.arguments`` (R1.2).
-
-    Each tool call's ``function.arguments`` string folds as ``tool_arguments`` in
-    order; a call with no well-typed ``arguments`` contributes none. Each pair
-    records ``index``.
-    """
-    tool_calls = message.get(_MESSAGE_TOOL_CALLS_KEY)
-    if not isinstance(tool_calls, list):
-        return
-    for call in tool_calls:
-        if not isinstance(call, dict):
-            continue
-        arguments = _function_arguments(call)
-        if arguments is not None:
-            pairs.append((_CHANNEL_TOOL_ARGUMENTS, arguments))
-            message_index.append(index)
-
-
-def _fold_function_call(
-    message: Mapping[str, object],
-    index: int,
-    pairs: list[tuple[str, str]],
-    message_index: list[int],
-) -> None:
-    """Fold the legacy ``messages[].function_call.arguments`` (R1.2).
-
-    The single legacy ``function_call`` object's ``arguments`` string folds as
-    ``function_arguments``; a missing/mistyped ``arguments`` contributes none. Each
-    pair records ``index``.
-    """
-    function_call = message.get(_MESSAGE_FUNCTION_CALL_KEY)
-    if not isinstance(function_call, dict):
-        return
-    arguments = function_call.get(_FUNCTION_ARGUMENTS_KEY)
-    if isinstance(arguments, str):
-        pairs.append((_CHANNEL_FUNCTION_ARGUMENTS, arguments))
-        message_index.append(index)
-
-
-def _function_arguments(call: Mapping[str, object]) -> str | None:
-    """Read ``<call>.function.arguments`` as a string, or ``None`` if absent/mistyped."""
-    function = call.get(_FUNCTION_KEY)
-    if not isinstance(function, dict):
-        return None
-    arguments = function.get(_FUNCTION_ARGUMENTS_KEY)
-    return arguments if isinstance(arguments, str) else None
-
-
-def _assert_fold_total() -> None:
-    """Fail the build if the fold is not total over the input channels (C21).
-
-    Compares the channel names :func:`fold_input_channels` can emit
-    (:data:`_FOLDED_INPUT_CHANNELS`) against the input-scoped ``TEXT_CHANNELS``
-    names (:func:`_input_channel_names`). Any divergence raises
-    :class:`ChannelFoldError` at import, so a new input ``TextChannel`` with no
-    folding path -- or a dangling folding path -- is a build-time failure rather
-    than a field that silently escapes scanning.
-    """
-    expected = _input_channel_names()
-    if _FOLDED_INPUT_CHANNELS != expected:
-        missing = tuple(sorted(expected - _FOLDED_INPUT_CHANNELS))
-        extra = tuple(sorted(_FOLDED_INPUT_CHANNELS - expected))
-        raise ChannelFoldError(
-            "input-channel fold is not total over TEXT_CHANNELS "
-            f"(unfolded input channels: {missing}; folding paths with no "
-            f"TEXT_CHANNELS entry: {extra})"
-        )
-
-
-_assert_fold_total()
 
 
 # --------------------------------------------------------------------------- #

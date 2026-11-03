@@ -44,7 +44,7 @@ from gateway_v2.domain.identity import Principal
 from gateway_v2.domain.plan import ExecutionPlan, StreamingMode
 from gateway_v2.edge.identity_resolver import TenantIdentity
 from gateway_v2.edge.openai_chat import REFUSE_INPUT_BLOCKED, ChatSurface
-from gateway_v2.edge.wire.openai import OpenAIRequestParser
+from gateway_v2.edge.wire.openai import UNSUPPORTED_PARAMETER, OpenAIRequestParser
 from gateway_v2.egress.output_guard import MinimalOutputResolver
 from gateway_v2.plan.snapshot import PlanState as _PlanState
 
@@ -54,10 +54,13 @@ if TYPE_CHECKING:
 _P9_SEED = 0x6C_6757_0009
 _P9_ITERATIONS = 10_000
 
-#: The ``TextChannel.sdk_path`` prefix that marks an INPUT (request-side) channel;
-#: mirrors ``edge/wire/openai._INPUT_SDK_PATH_PREFIX`` so the canary iterates over the
-#: SAME input-scoped channel set the fold's totality check pins.
-_P9_INPUT_SDK_PATH_PREFIX = "messages[]"
+#: The ``TextChannel.sdk_path`` prefixes that mark an INPUT (request-side) channel;
+#: mirrors ``edge/wire/openai_fold.INPUT_SDK_PATH_PREFIXES`` so the canary iterates over
+#: the SAME input-scoped channel set the fold's totality check pins.
+_P9_INPUT_SDK_PATH_PREFIXES = ("messages[]", "prompt", "stop")
+
+#: Scanned channels the forwarding policy refuses at parse (GW36 S1, until GW34).
+_P9_REFUSED_AT_PARSE = frozenset({"tool_arguments", "function_arguments"})
 
 #: A BLOCK-class detector name: ``MinimalOutputResolver`` maps ``card`` (and ``jwt``) to
 #: ``Disposition.BLOCK`` via its trade-off table, so a finding tagged with this detector
@@ -85,7 +88,7 @@ def _p9_input_channel_names() -> tuple[str, ...]:
     return tuple(
         channel.name
         for channel in TEXT_CHANNELS
-        if channel.sdk_path.startswith(_P9_INPUT_SDK_PATH_PREFIX)
+        if channel.sdk_path.startswith(_P9_INPUT_SDK_PATH_PREFIXES)
     )
 
 
@@ -116,6 +119,14 @@ def _p9_request_with_canary(channel_name: str, canary: str) -> dict[str, object]
         message = {
             "role": "assistant",
             "function_call": {"name": "f", "arguments": canary},
+        }
+    elif channel_name == "completion_prompt":
+        return {"model": "gpt-p9", "prompt": canary}
+    elif channel_name == "stop_sequence":
+        return {
+            "model": "gpt-p9",
+            "messages": [{"role": "user", "content": "hi"}],
+            "stop": [canary],
         }
     else:  # pragma: no cover - guards a new input channel with no case here (C21)
         raise AssertionError(f"no canary placement for input channel {channel_name!r}")
@@ -380,6 +391,15 @@ def test_property_9_block_input_channel_yields_zero_provider_calls() -> None:
             scope: Mapping[str, object] = {"path": "/v1/chat/completions"}
 
             req, outcome = asyncio.run(surface.run_lifecycle(scope, body))
+
+            if channel_name in _P9_REFUSED_AT_PARSE:
+                # GW36 S1: tool calls are refused at parse (not forwarded until GW34) -- the
+                # request is refused BEFORE the scan, still with zero provider calls.
+                assert req is None and outcome.refuse_code == UNSUPPORTED_PARAMETER, _p9_ctx(
+                    _P9_SEED, i, note="tool call not refused at parse", channel=channel_name
+                )
+                assert provider.open_calls == 0, _p9_ctx(_P9_SEED, i, channel=channel_name)
+                continue
 
             # The request parsed (so the refusal is the INPUT-scan BLOCK, not a parse error)
             # and the canary folded into THIS channel (C21 — the scan actually saw it).
