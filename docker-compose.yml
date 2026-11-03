@@ -531,7 +531,7 @@ services:
     depends_on:
       redis: { condition: service_healthy }
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://127.0.0.1:8301/readyz', timeout=3)"]
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://127.0.0.1:8301/livez', timeout=3)"]
       interval: 10s
       timeout: 5s
       retries: 3

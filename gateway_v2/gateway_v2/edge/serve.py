@@ -77,6 +77,8 @@ from gateway_v2.edge.dev_profile import (
     wrap_dev_app,
 )
 from gateway_v2.edge.identity_resolver import fail_closed_resolver
+from gateway_v2.edge.production_profile import apply_production, production_profile_active
+from gateway_v2.edge.state_runtime import StateRuntime, StateServedApp
 from gateway_v2.egress.output_guard import MinimalOutputResolver
 from gateway_v2.runtime.lifecycle import install_sighup
 from gateway_v2.runtime.pools import GatewayRuntime
@@ -210,6 +212,7 @@ def build_boot_dependencies(
     the selection from its own environment, never from a parent closure.
     """
     environment = os.environ if env is None else env
+    production = production_profile_active(environment)  # validates AMF_PROFILE first
     if dev_profile_active(environment):
         return build_dev_dependencies(
             contract=contract, env=environment, metrics_registry=_ExpositionRegistry()
@@ -254,6 +257,8 @@ def build_boot_dependencies(
         "boot: quota -> fail_closed_budget (fail-closed budget refusal; no GW06 decider wired)",
         "boot: catalog -> empty_catalog_source (every retrieve model_not_found; backend deferred)",
     )
+    if production:
+        return apply_production(deps, logs, contract=contract, env=environment)
     return deps, logs
 
 
@@ -460,9 +465,12 @@ def _assemble_app(deps: dict[str, object]) -> ASGIApplication:
     kwargs.pop("audit_runtime", None)
     kwargs.pop("plan_feed", None)
     kwargs.pop("plan_watch", None)
+    state = kwargs.pop("state_runtime", None)
     # ``wrap_dev_app`` returns the app UNCHANGED unless the DEV PROFILE admission adapter is in
     # ``deps`` (then it adds the lease lifespan hooks and, when present, the audit writer).
-    return wrap_dev_app(build_app(**kwargs), deps)
+    app = wrap_dev_app(build_app(**kwargs), deps)
+    # PRODUCTION PROFILE (GW36 S3): the signed-state runtime runs in the ASGI lifespan.
+    return StateServedApp(app, state) if isinstance(state, StateRuntime) else app
 
 
 def serving_app() -> ASGIApplication:
