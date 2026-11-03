@@ -96,6 +96,8 @@ class PlanDeltaApplier:
             org_id = record.key
             if record.deleted:
                 self._store.offboard(org_id)
+                if self._snapshot is not None:
+                    self._snapshot.forget(org_id)
                 offboarded.append(org_id)
                 continue
             try:

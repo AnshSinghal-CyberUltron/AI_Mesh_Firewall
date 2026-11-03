@@ -92,7 +92,14 @@ class StateSynchroniser:
         budget: DeltaBudget = DEFAULT_BUDGET,
         offload: Offload = _in_thread,
         stamp: StampView | None = None,
+        inline_kinds: frozenset[StateKind] = frozenset(),
     ) -> None:
+        """`inline_kinds`: appliers that must never leave the loop, whatever the round size.
+
+        The identity cache is unlocked loop-owned state (GW36 S3, N8); a thread-run applier
+        would mutate it concurrently with request-path reads. The plan and kill-switch
+        appliers lock, so they keep the offload.
+        """
         if budget.records <= 0:
             raise ValueError("delta budget must be positive")
         self._reader = reader
@@ -100,6 +107,7 @@ class StateSynchroniser:
         self._budget = budget
         self._offload = offload
         self._stamp = stamp
+        self._inline = inline_kinds
         self._cursors: dict[StateKind, Cursor] = {kind: START for kind in appliers}
         self._floors: dict[StateKind, Cursor] = {kind: START for kind in appliers}
 
@@ -118,7 +126,7 @@ class StateSynchroniser:
         must not start from zero on a lagging replica, so a signed stamp raises what it will
         ACCEPT. It must not also move the read cursor: a fresh process that jumped its cursor to
         the stamp's position would short-circuit its first round, apply nothing, and then serve
-        `PlanUnknownTenant` -- a 403 telling healthy tenants to complete onboarding -- for every
+        `PlanUnknownTenant` -- a 503 `plan_unavailable` for every healthy tenant -- for every
         org until the next write happened to touch it.
 
         Floors only rise, and a stamp whose version and position disagree about direction is
@@ -141,7 +149,7 @@ class StateSynchroniser:
             )
         except StoreDataUnavailable as exc:
             return RoundReport(kind, cursor, 0, truncated=False, offloaded=False, error=str(exc))
-        offloaded = len(round_.records) > self._budget.offload_above
+        offloaded = len(round_.records) > self._budget.offload_above and kind not in self._inline
         runner = self._offload if offloaded else _inline
         try:
             await runner(lambda: applier(round_))
@@ -215,10 +223,37 @@ class StateSynchroniser:
         `drain` are the per-kind primitives underneath it and assume the floor is already
         current, so product code schedules THIS.
         """
-        await self.observe_stamp()
+        try:
+            await self.observe_stamp()
+        except StoreDataUnavailable:
+            # The store did not answer the stamp read. The view keeps what it had and ages out
+            # on its own; the kinds are still drained, each reporting its own outcome.
+            pass
         return tuple(
             [await self.drain(kind, max_rounds=max_rounds) for kind in self._appliers],
         )
+
+    async def fast_forward(
+        self,
+        kind: StateKind,
+        mark: Callable[[int], object],
+    ) -> RoundReport:
+        """Cold start a kind whose RAM holds nothing to evict: jump the cursor to its head.
+
+        For the identity cache (GW36 S3): principals are fetched on demand, so replaying every
+        key record only to evict entries from an empty cache is O(keys) per worker per boot
+        for nothing. The head is read under the stamp floor, so a lagging store is refused
+        here exactly as a delta round would refuse it. `mark` receives the applied position.
+        """
+        cursor = self.cursor(kind)
+        try:
+            manifest = await self._reader.head(kind, cursor, self.floor(kind))
+        except StoreDataUnavailable as exc:
+            return RoundReport(kind, cursor, 0, truncated=False, offloaded=False, error=str(exc))
+        moved = Cursor(version=manifest.version, feed_seq=manifest.feed_seq)
+        mark(manifest.feed_seq)
+        self._cursors[kind] = moved
+        return RoundReport(kind=kind, cursor=moved, applied=0, truncated=False, offloaded=False)
 
     async def bootstrap_engaged(
         self,

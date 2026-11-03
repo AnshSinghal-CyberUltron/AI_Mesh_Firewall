@@ -9,7 +9,7 @@ from collections.abc import Callable
 from gateway_v2.domain.locks import FRESH_MS
 from gateway_v2.domain.plan import ExecutionPlan, PlanUnavailable, PlanUnknownTenant, is_newer
 from gateway_v2.plan.store import PlanStore
-from gateway_v2.runtime.state_stamp import StampView
+from gateway_v2.runtime.state_stamp import FreshnessGate
 
 PlanState = ExecutionPlan | PlanUnavailable | PlanUnknownTenant
 
@@ -22,7 +22,7 @@ class ReplicaSnapshot:
         fresh_ms: int = FRESH_MS,
         reconcile_period_s: float = 1.0,
         clock: Callable[[], float] = time.monotonic,
-        stamp: StampView | None = None,
+        stamp: FreshnessGate | None = None,
     ) -> None:
         if fresh_ms <= reconcile_period_s * 1000:
             raise ValueError("freshness bound must exceed the reconcile period")
@@ -46,6 +46,16 @@ class ReplicaSnapshot:
         moment = self._clock() if now is None else now
         with self._lock:
             self._absorb_locked(org_id, moment)
+
+    def forget(self, org_id: str) -> None:
+        """Drop the last-known-good for an offboarded tenant (GW36 S3, N19).
+
+        Without this, an org offboarded and then known again without a plan (a rejected
+        re-onboard) would be served its PRE-offboard plan for up to the freshness bound.
+        """
+        with self._lock:
+            self._served.pop(org_id, None)
+            self._served_at.pop(org_id, None)
 
     def _absorb_locked(self, org_id: str, moment: float) -> None:
         state = self._store.read(org_id)

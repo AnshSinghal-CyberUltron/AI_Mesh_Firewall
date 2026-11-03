@@ -58,7 +58,7 @@ from gateway_v2.admit.grant import Admitted, BudgetVerdict
 from gateway_v2.admit.lease import BudgetLease, LeaseConfig
 from gateway_v2.admit.quota import QuotaComponent
 from gateway_v2.domain.posture import BUDGET_UNAVAILABLE, SHARED_STATE_UNAVAILABLE
-from gateway_v2.domain.state import StateKind
+from gateway_v2.domain.state import StateKind, StoreDataUnavailable
 from gateway_v2.runtime.state_nudge import FAST_NONE_LIMIT, NudgeListener, PushKnobs
 from gateway_v2.runtime.store_keys import StoreKeys
 from gateway_v2.runtime.store_valkey import ValkeyStateStore
@@ -309,7 +309,9 @@ def test_d1_dead_pooled_socket_reconnects_not_500() -> None:
 
     The reader does not translate a dead socket into a 500-equivalent; it surfaces the transport
     fault (never a success-shaped stand-in) and the next read, over the reconnected pool, succeeds.
-    This CONFIRMS the existing behaviour — no guard was needed in ``store_valkey.py``.
+    Since GW36 S3 (N7) the fault surfaces as ``StoreDataUnavailable`` -- the fail-closed 503 every
+    state reader already handles -- with the transport error as its cause; before, the raw
+    redis error escaped ``drain_all`` and stopped the other kinds' rounds.
     """
 
     async def go() -> None:
@@ -327,8 +329,8 @@ def test_d1_dead_pooled_socket_reconnects_not_500() -> None:
         raised = False
         try:
             await store.stamp()
-        except RedisConnectionError:
-            raised = True
+        except StoreDataUnavailable as exc:
+            raised = isinstance(exc.__cause__, RedisConnectionError)
         assert raised, "a dead pooled socket must surface the fault, not a 500-equivalent answer"
 
         # The very next read reconnects (fresh pooled connection) and succeeds — not a stuck 500.

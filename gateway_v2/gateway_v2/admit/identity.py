@@ -36,7 +36,7 @@ from dataclasses import dataclass
 from gateway_v2.domain.identity import Principal
 from gateway_v2.domain.state import SignedRecord, StateKind, StoreDataUnavailable
 from gateway_v2.runtime.state_feed import FeedRound
-from gateway_v2.runtime.state_stamp import StampView
+from gateway_v2.runtime.state_stamp import FreshnessGate
 
 DEFAULT_CAPACITY = 50_000
 DEFAULT_NEGATIVE_TTL_S = 2.0
@@ -102,7 +102,7 @@ class IdentityCache:
         capacity: int = DEFAULT_CAPACITY,
         negative_ttl_s: float = DEFAULT_NEGATIVE_TTL_S,
         clock: Callable[[], float] = time.monotonic,
-        stamp: StampView | None = None,
+        stamp: FreshnessGate | None = None,
     ) -> None:
         if capacity <= 0:
             raise ValueError("identity cache capacity must be positive")
@@ -113,6 +113,8 @@ class IdentityCache:
         self._held: OrderedDict[str, Principal] = OrderedDict()
         self._negative: OrderedDict[str, float] = OrderedDict()
         self._inflight: dict[str, asyncio.Task[Principal | None]] = {}
+        self._touched: set[str] = set()
+        """Keys a delta changed while their fill was in flight (N18). Bounded by `_inflight`."""
         self._feed_seq = 0
         self._evicted = 0
         self._joins = 0
@@ -187,12 +189,27 @@ class IdentityCache:
         return await asyncio.shield(task)
 
     async def _fetch_once(self, key_hash: str, fetch: Fetch) -> Principal | None:
-        principal = await fetch(key_hash)
-        if principal is None:
-            self._deny(key_hash)
-            return None
-        self._admit(key_hash, principal)
-        return principal
+        """One store read, discarded and redone if a delta touched the key meanwhile (N18).
+
+        A read that saw the key BEFORE its revoke, completing AFTER the revoke delta was
+        applied, would otherwise be cached with nothing left to evict it: the epoch check only
+        refuses positions newer than applied, and this one is older. The same holds for a read
+        that saw "absent" before the key's add -- it would deny a valid key. A retry starts
+        after the delta was applied, so it sees at least that state; if it is touched again the
+        request fails closed rather than serve either answer.
+        """
+        for _attempt in range(2):
+            self._touched.discard(key_hash)
+            principal = await fetch(key_hash)
+            if key_hash in self._touched:
+                continue
+            if principal is None:
+                self._deny(key_hash)
+                return None
+            self._admit(key_hash, principal)
+            return principal
+        self._touched.discard(key_hash)
+        raise StoreDataUnavailable("the key changed twice while it was being read; retry")
 
     def _retire(self, task: asyncio.Task[Principal | None]) -> None:
         for key_hash, held in tuple(self._inflight.items()):
@@ -214,6 +231,8 @@ class IdentityCache:
         for record in records:
             if record.kind is not StateKind.KEY:
                 raise StoreDataUnavailable(f"{record.kind.value} record is not a key")
+            if record.key in self._inflight:
+                self._touched.add(record.key)
             dropped = self._held.pop(record.key, None)
             had_negative = self._negative.pop(record.key, None)
             if dropped is not None or had_negative is not None:

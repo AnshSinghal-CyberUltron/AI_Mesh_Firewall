@@ -221,6 +221,10 @@ class FeedReader:
             out.append(record)
         return manifest, tuple(out)
 
+    async def head(self, kind: StateKind, cursor: Cursor, floor: Cursor = START) -> Manifest:
+        """The verified head alone: one round trip, no index page and no records."""
+        return await self._read_head(kind, cursor, floor)
+
     async def _read_head(
         self,
         kind: StateKind,

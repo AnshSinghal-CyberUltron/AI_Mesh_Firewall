@@ -33,7 +33,7 @@ from enum import StrEnum
 from gateway_v2.domain.locks import FRESH_MS
 from gateway_v2.domain.state import SignedRecord, StateKind, StoreDataUnavailable
 from gateway_v2.runtime.state_feed import FeedRound
-from gateway_v2.runtime.state_stamp import StampView
+from gateway_v2.runtime.state_stamp import FreshnessGate
 
 GLOBAL_SCOPE = "global"
 ORG_PREFIX = "org:"
@@ -94,7 +94,7 @@ class KillSwitchSnapshot:
         *,
         stale_ms: int = FRESH_MS,
         clock: Callable[[], float] = time.monotonic,
-        stamp: StampView | None = None,
+        stamp: FreshnessGate | None = None,
     ) -> None:
         self._stale_s = stale_ms / 1000
         self._clock = clock

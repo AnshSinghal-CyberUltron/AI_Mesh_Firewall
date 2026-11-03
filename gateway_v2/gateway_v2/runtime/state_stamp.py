@@ -52,6 +52,7 @@ import logging
 import threading
 import time
 from collections.abc import Callable, Mapping
+from typing import Protocol
 
 from gateway_v2.domain.locks import FRESH_MS
 from gateway_v2.domain.state import (
@@ -80,6 +81,17 @@ pub/sub nudge for the stamp -- a nudge would buy at most one refresh period agai
 while adding a constant publish rate proportional to re-hydrators times workers (R2-23's cost
 class), and it would do nothing for the case that actually matters, which is start-up.
 """
+
+
+class FreshnessGate(Protocol):
+    """What a state reader asks before serving from RAM. `StampView` is one; GW36 S3's per-kind
+    gate (`runtime.state_gate.KindGate`) is the other, and adds "this kind is caught up"."""
+
+    def fresh(self, now: float | None = None) -> bool:
+        ...
+
+    def unverified(self) -> str:
+        ...
 
 
 class StampView:

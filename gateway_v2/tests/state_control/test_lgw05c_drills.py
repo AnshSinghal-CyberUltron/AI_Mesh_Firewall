@@ -406,8 +406,10 @@ def test_drill_store_partition_and_heal(drill: Drill) -> None:
         _docker("pause", VALKEY_CONTAINER)
         try:
             started = time.monotonic()
-            with pytest.raises((redis.RedisError, OSError, TimeoutError, asyncio.TimeoutError)):
-                await worker.round_once(StateKind.PLAN)
+            # GW36 S3 (N7): the transport fault is a failed ROUND, reported, not a raise that
+            # would stop every other kind's rounds in the same cycle.
+            paused = await worker.round_once(StateKind.PLAN)
+            assert not paused.ok and "unreachable" in (paused.error or ""), paused
             blocked_s = time.monotonic() - started
         finally:
             _docker("unpause", VALKEY_CONTAINER)

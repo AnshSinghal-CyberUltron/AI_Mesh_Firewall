@@ -14,16 +14,46 @@ asserting.
 `ZRANGEBYSCORE` takes `(after` so the lower bound is EXCLUSIVE: a reader must not re-apply the
 record it is already at. `upto` is the position the manifest attests, which is what keeps an
 in-flight bulk publish from being read as a fault.
+
+A store that does not answer -- refused, reset, timed out -- is `StoreDataUnavailable`, the
+reason every state reader already turns into a fail-closed 503 (GW36 S3, N7). Only TRANSPORT
+faults are converted: a `ResponseError` (WRONGTYPE, a missing module) or an authentication
+failure is a configuration defect, and it propagates loudly instead of hiding as a quiet 503.
 """
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+import contextlib
+from collections.abc import Iterator, Sequence
 from typing import Any
 
-from gateway_v2.domain.state import StateKind
+from gateway_v2.domain.state import StateKind, StoreDataUnavailable
 from gateway_v2.runtime.state_feed import Head, IndexPage
 from gateway_v2.runtime.store_keys import HASH_KINDS, KEYS, StoreKeys
+
+
+def _transport_faults() -> tuple[type[BaseException], ...]:
+    """Discovered lazily so the module imports without redis, as `state_control` does."""
+    faults: list[type[BaseException]] = [OSError, TimeoutError]
+    try:
+        from redis import exceptions
+    except ImportError:  # pragma: no cover - redis is a declared dependency
+        return tuple(faults)
+    faults.extend((exceptions.ConnectionError, exceptions.TimeoutError))
+    return tuple(faults)
+
+
+_TRANSPORT_FAULTS = _transport_faults()
+
+
+@contextlib.contextmanager
+def _reachable(operation: str) -> Iterator[None]:
+    try:
+        yield
+    except _TRANSPORT_FAULTS as exc:
+        raise StoreDataUnavailable(
+            f"state store unreachable during {operation}: {type(exc).__name__}",
+        ) from exc
 
 
 def _as_int(value: object) -> int:
@@ -106,11 +136,12 @@ class ValkeyStateStore:
     async def head(self, kind: StateKind) -> Head:
         """One MULTI: the manifest, the index size and the index head."""
         index = self._keys.index(kind)
-        async with self._client.pipeline(transaction=True) as pipe:
-            pipe.get(self._keys.manifest(kind))
-            pipe.zcard(index)
-            pipe.zrevrange(index, 0, 0, withscores=True)
-            manifest_raw, count, top = await pipe.execute()
+        with _reachable("head"):
+            async with self._client.pipeline(transaction=True) as pipe:
+                pipe.get(self._keys.manifest(kind))
+                pipe.zcard(index)
+                pipe.zrevrange(index, 0, 0, withscores=True)
+                manifest_raw, count, top = await pipe.execute()
         return Head(
             manifest_raw=_as_bytes(manifest_raw),
             index_count=_as_int(count),
@@ -127,17 +158,18 @@ class ValkeyStateStore:
     ) -> IndexPage:
         """One MULTI: the exact count at or below the attested position, and the page above."""
         index = self._keys.index(kind)
-        async with self._client.pipeline(transaction=True) as pipe:
-            pipe.zcount(index, "-inf", upto)
-            pipe.zrangebyscore(
-                index,
-                f"({after}",
-                upto,
-                start=0,
-                num=limit,
-                withscores=True,
-            )
-            total, page = await pipe.execute()
+        with _reachable("index_range"):
+            async with self._client.pipeline(transaction=True) as pipe:
+                pipe.zcount(index, "-inf", upto)
+                pipe.zrangebyscore(
+                    index,
+                    f"({after}",
+                    upto,
+                    start=0,
+                    num=limit,
+                    withscores=True,
+                )
+                total, page = await pipe.execute()
         return IndexPage(
             entries=tuple((_as_text(member), _as_int(score)) for member, score in page),
             total_at_or_below=_as_int(total),
@@ -147,17 +179,43 @@ class ValkeyStateStore:
         """One command. Hash-stored kinds use HMGET; plans have a key each, so MGET."""
         if not keys:
             return ()
-        if kind in HASH_KINDS:
-            raw = await self._client.hmget(self._keys.record_hash(kind), list(keys))
-        else:
-            raw = await self._client.mget([self._keys.record_key(kind, key) for key in keys])
+        with _reachable("records"):
+            if kind in HASH_KINDS:
+                raw = await self._client.hmget(self._keys.record_hash(kind), list(keys))
+            else:
+                raw = await self._client.mget(
+                    [self._keys.record_key(kind, key) for key in keys],
+                )
         return tuple(_as_bytes(value) for value in raw)
+
+    async def record_with_manifest(
+        self,
+        kind: StateKind,
+        key: str,
+    ) -> tuple[bytes | None, bytes | None]:
+        """One MULTI: `(manifest, record)` read together, for an on-demand identity fill.
+
+        Reading the record alone cannot tell a current store from one that regressed below what
+        this process already applied (a failover to a lagging replica); the manifest in the
+        same transaction can, and the caller checks it against its applied cursor.
+        """
+        with _reachable("record_with_manifest"):
+            async with self._client.pipeline(transaction=True) as pipe:
+                pipe.get(self._keys.manifest(kind))
+                if kind in HASH_KINDS:
+                    pipe.hmget(self._keys.record_hash(kind), [key])
+                else:
+                    pipe.mget([self._keys.record_key(kind, key)])
+                manifest_raw, (record_raw,) = await pipe.execute()
+        return _as_bytes(manifest_raw), _as_bytes(record_raw)
 
     async def engaged(self, kind: StateKind) -> tuple[str, ...]:
         """O(engaged). The cold-start read that replaces reading the whole kind."""
-        members = await self._client.smembers(self._keys.engaged(kind))
+        with _reachable("engaged"):
+            members = await self._client.smembers(self._keys.engaged(kind))
         return tuple(sorted(_as_text(member) for member in members))
 
     async def stamp(self) -> bytes | None:
         """One GET of one key. Constant per cycle, whatever the estate or the kind count."""
-        return _as_bytes(await self._client.get(self._keys.stamp))
+        with _reachable("stamp"):
+            return _as_bytes(await self._client.get(self._keys.stamp))
