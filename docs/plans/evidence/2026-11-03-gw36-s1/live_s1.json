@@ -1,0 +1,416 @@
+{
+  "results": [
+    {
+      "check": "roles_and_mask",
+      "pass": true,
+      "status": 200,
+      "roles": [
+        "system",
+        "user",
+        "assistant",
+        "user"
+      ],
+      "contains_ssn": false,
+      "prompt": "You are terse.\nmy ssn is [REDACTED]\nnoted\nand go",
+      "max_tokens": 4096,
+      "body_keys": [
+        "max_tokens",
+        "messages",
+        "model",
+        "stream"
+      ]
+    },
+    {
+      "check": "budget_rule",
+      "pass": true,
+      "max_tokens_100": 100,
+      "mct_only": [
+        null,
+        50
+      ]
+    },
+    {
+      "check": "completions_prompt_scanned",
+      "pass": true,
+      "status": 200,
+      "roles": [
+        "user"
+      ],
+      "prompt": "ssn [REDACTED]"
+    },
+    {
+      "check": "stop_scanned",
+      "pass": true,
+      "status": 200,
+      "stop": [
+        "x [REDACTED]",
+        "END"
+      ]
+    },
+    {
+      "check": "tools_refused",
+      "pass": true,
+      "status": 400,
+      "code": "unsupported_parameter",
+      "provider_calls": 0
+    },
+    {
+      "check": "image_part_refused",
+      "pass": true,
+      "status": 400,
+      "code": "unsupported_content_part",
+      "provider_calls": 0
+    },
+    {
+      "check": "injection_blocked",
+      "pass": true,
+      "status": 400,
+      "code": "input_blocked",
+      "provider_calls": 0
+    },
+    {
+      "check": "stream_ok",
+      "pass": true,
+      "status": 200,
+      "has_content": true
+    },
+    {
+      "check": "fault_http_error_429",
+      "pass": true,
+      "status": 429,
+      "code": "upstream_rate_limited"
+    },
+    {
+      "check": "fault_http_error_500",
+      "pass": true,
+      "status": 502,
+      "code": "upstream_error"
+    },
+    {
+      "check": "fault_http_error_401",
+      "pass": true,
+      "status": 502,
+      "code": "upstream_auth_error"
+    },
+    {
+      "check": "fault_malformed_",
+      "pass": true,
+      "status": 502,
+      "code": "stream_malformed_upstream"
+    },
+    {
+      "check": "fault_disconnect_",
+      "pass": true,
+      "status": 502,
+      "code": "upstream_unavailable"
+    },
+    {
+      "check": "fault_stream_429",
+      "pass": true,
+      "status": 200,
+      "tail": "scan\",\"action\":\"allow\",\"ran\":true},{\"name\":\"model_routing\",\"action\":\"allow\",\"ran\":true},{\"name\":\"model_output\",\"action\":\"allow\",\"ran\":true},{\"name\":\"output_guardrail\",\"action\":\"block\",\"ran\":true}]}}\n\n"
+    },
+    {
+      "check": "no_raw_ssn_at_provider",
+      "pass": true,
+      "recorded_calls": 12
+    }
+  ],
+  "recorder_calls": [
+    {
+      "seq": 15,
+      "ts": 1793682787.457466,
+      "path": "/v1/chat/completions",
+      "authorized": true,
+      "body_bytes": 231,
+      "stream": true,
+      "model": "echo-1",
+      "prompt": "You are terse.\nmy ssn is [REDACTED]\nnoted\nand go",
+      "contains_ssn": false,
+      "contains_akia": false,
+      "roles": [
+        "system",
+        "user",
+        "assistant",
+        "user"
+      ],
+      "body_keys": [
+        "max_tokens",
+        "messages",
+        "model",
+        "stream"
+      ],
+      "max_tokens": 4096,
+      "max_completion_tokens": null,
+      "stop": null
+    },
+    {
+      "seq": 16,
+      "ts": 1793682787.473557,
+      "path": "/v1/chat/completions",
+      "authorized": true,
+      "body_bytes": 93,
+      "stream": true,
+      "model": "echo-1",
+      "prompt": "hi",
+      "contains_ssn": false,
+      "contains_akia": false,
+      "roles": [
+        "user"
+      ],
+      "body_keys": [
+        "max_tokens",
+        "messages",
+        "model",
+        "stream"
+      ],
+      "max_tokens": 100,
+      "max_completion_tokens": null,
+      "stop": null
+    },
+    {
+      "seq": 17,
+      "ts": 1793682787.5255365,
+      "path": "/v1/chat/completions",
+      "authorized": true,
+      "body_bytes": 103,
+      "stream": true,
+      "model": "echo-1",
+      "prompt": "hi",
+      "contains_ssn": false,
+      "contains_akia": false,
+      "roles": [
+        "user"
+      ],
+      "body_keys": [
+        "max_completion_tokens",
+        "messages",
+        "model",
+        "stream"
+      ],
+      "max_tokens": null,
+      "max_completion_tokens": 50,
+      "stop": null
+    },
+    {
+      "seq": 18,
+      "ts": 1793682787.5767207,
+      "path": "/v1/chat/completions",
+      "authorized": true,
+      "body_bytes": 106,
+      "stream": true,
+      "model": "echo-1",
+      "prompt": "ssn [REDACTED]",
+      "contains_ssn": false,
+      "contains_akia": false,
+      "roles": [
+        "user"
+      ],
+      "body_keys": [
+        "max_tokens",
+        "messages",
+        "model",
+        "stream"
+      ],
+      "max_tokens": 4096,
+      "max_completion_tokens": null,
+      "stop": null
+    },
+    {
+      "seq": 19,
+      "ts": 1793682787.6312351,
+      "path": "/v1/chat/completions",
+      "authorized": true,
+      "body_bytes": 124,
+      "stream": true,
+      "model": "echo-1",
+      "prompt": "hi",
+      "contains_ssn": false,
+      "contains_akia": false,
+      "roles": [
+        "user"
+      ],
+      "body_keys": [
+        "max_tokens",
+        "messages",
+        "model",
+        "stop",
+        "stream"
+      ],
+      "max_tokens": 4096,
+      "max_completion_tokens": null,
+      "stop": [
+        "x [REDACTED]",
+        "END"
+      ]
+    },
+    {
+      "seq": 20,
+      "ts": 1793682787.6946206,
+      "path": "/v1/chat/completions",
+      "authorized": true,
+      "body_bytes": 94,
+      "stream": true,
+      "model": "echo-1",
+      "prompt": "hi",
+      "contains_ssn": false,
+      "contains_akia": false,
+      "roles": [
+        "user"
+      ],
+      "body_keys": [
+        "max_tokens",
+        "messages",
+        "model",
+        "stream"
+      ],
+      "max_tokens": 4096,
+      "max_completion_tokens": null,
+      "stop": null
+    },
+    {
+      "seq": 21,
+      "ts": 1793682787.746219,
+      "path": "/v1/chat/completions",
+      "authorized": true,
+      "body_bytes": 94,
+      "stream": true,
+      "model": "echo-1",
+      "prompt": "hi",
+      "contains_ssn": false,
+      "contains_akia": false,
+      "roles": [
+        "user"
+      ],
+      "body_keys": [
+        "max_tokens",
+        "messages",
+        "model",
+        "stream"
+      ],
+      "max_tokens": 4096,
+      "max_completion_tokens": null,
+      "stop": null
+    },
+    {
+      "seq": 22,
+      "ts": 1793682787.7529101,
+      "path": "/v1/chat/completions",
+      "authorized": true,
+      "body_bytes": 94,
+      "stream": true,
+      "model": "echo-1",
+      "prompt": "hi",
+      "contains_ssn": false,
+      "contains_akia": false,
+      "roles": [
+        "user"
+      ],
+      "body_keys": [
+        "max_tokens",
+        "messages",
+        "model",
+        "stream"
+      ],
+      "max_tokens": 4096,
+      "max_completion_tokens": null,
+      "stop": null
+    },
+    {
+      "seq": 23,
+      "ts": 1793682788.029164,
+      "path": "/v1/chat/completions",
+      "authorized": true,
+      "body_bytes": 94,
+      "stream": true,
+      "model": "echo-1",
+      "prompt": "hi",
+      "contains_ssn": false,
+      "contains_akia": false,
+      "roles": [
+        "user"
+      ],
+      "body_keys": [
+        "max_tokens",
+        "messages",
+        "model",
+        "stream"
+      ],
+      "max_tokens": 4096,
+      "max_completion_tokens": null,
+      "stop": null
+    },
+    {
+      "seq": 24,
+      "ts": 1793682788.0411432,
+      "path": "/v1/chat/completions",
+      "authorized": true,
+      "body_bytes": 94,
+      "stream": true,
+      "model": "echo-1",
+      "prompt": "hi",
+      "contains_ssn": false,
+      "contains_akia": false,
+      "roles": [
+        "user"
+      ],
+      "body_keys": [
+        "max_tokens",
+        "messages",
+        "model",
+        "stream"
+      ],
+      "max_tokens": 4096,
+      "max_completion_tokens": null,
+      "stop": null
+    },
+    {
+      "seq": 25,
+      "ts": 1793682788.0478272,
+      "path": "/v1/chat/completions",
+      "authorized": true,
+      "body_bytes": 94,
+      "stream": true,
+      "model": "echo-1",
+      "prompt": "hi",
+      "contains_ssn": false,
+      "contains_akia": false,
+      "roles": [
+        "user"
+      ],
+      "body_keys": [
+        "max_tokens",
+        "messages",
+        "model",
+        "stream"
+      ],
+      "max_tokens": 4096,
+      "max_completion_tokens": null,
+      "stop": null
+    },
+    {
+      "seq": 26,
+      "ts": 1793682788.0546262,
+      "path": "/v1/chat/completions",
+      "authorized": true,
+      "body_bytes": 94,
+      "stream": true,
+      "model": "echo-1",
+      "prompt": "hi",
+      "contains_ssn": false,
+      "contains_akia": false,
+      "roles": [
+        "user"
+      ],
+      "body_keys": [
+        "max_tokens",
+        "messages",
+        "model",
+        "stream"
+      ],
+      "max_tokens": 4096,
+      "max_completion_tokens": null,
+      "stop": null
+    }
+  ]
+}

@@ -155,9 +155,21 @@ Gates on 2 November: full offline suite 2778 passed, 100 skipped, 1 xfailed, 2 f
 
 Evidence: `docs/plans/evidence/2026-11-02-gw36/` (`S0_live_before.txt`, `S0_live_after.txt`, `S0_full_offline_suite.txt`).
 
+### Slice S1 — done on 3 November (production upstream provider)
+
+Plan with three contradictory reviews: `docs/plans/2026-11-03-gw36-s1-upstream-provider.md`. Evidence: `docs/plans/evidence/2026-11-03-gw36-s1/`.
+
+- The provider now receives the request rebuilt from the verified, masked deltas with its structure: roles in order, text parts joined exactly as scanned, the v1 output-budget rule (unset → 4096, set → clamped, `max_completion_tokens` alone → clamped with no `max_tokens`), and validated sampling fields. One loop builds both the scanned text pairs and the upstream template, so the template holds no request text.
+- Found and fixed: `/v1/completions` never scanned `prompt` (live, an SSN prompt got `input_scan` allow and the model received nothing). `prompt` and `stop` are now scanned input channels.
+- Not forwarded, refused with a declared 400 naming the field: tools and function calling, `response_format`, logprobs, tool-role messages, non-text content parts, unknown fields. A message `name` is accepted and not forwarded.
+- `OpenAIUpstreamProvider` replaces the dev adapter (deleted): one pooled client per worker, no cross-request abort. A non-2xx status, a non-SSE body, a stream without `[DONE]` or a transport failure ends with a typed `gateway_error`. Before, a provider error reached the client as a 200 whose content was the error code; now a provider 429 is a 429 `upstream_rate_limited`, and the provider's own 401/403 is a 502 `upstream_auth_error`.
+- Found while verifying and fixed: a stream cut by an upstream failure reported `final_action: allow` in its trace.
+- Live against the T02 recorder through a second dev gateway (:8302): 15/15 checks. Offline: 2845 passed in a container (the one container failure needs `git`; it passes on the host).
+- Recorded, not fixed: a stalled upstream holds a non-streaming request up to the 300 s read timeout (S5 / GW28); an upstream failure shows `output_guardrail: block` until the console schema has an `error` action (GW35); a streamed refusal before the first byte is still an SSE error frame after a 200 (S5 / GW34); the request id hashes raw input text (S3); embeddings to a real upstream (S1b).
+
 ### Not done
 
-S1–S7 in plan §9.4. L36-1 and L36-2 are not run. An unknown key on the dev gateway still answers 503 `shared_state_unavailable`, not 401 (S3).
+S2–S7 in plan §9.4. L36-1 and L36-2 are not run. An unknown key on the dev gateway still answers 503 `shared_state_unavailable`, not 401 (S3).
 
 ### Working defaults for the open owner decisions
 
