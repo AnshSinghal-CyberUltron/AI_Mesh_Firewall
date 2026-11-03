@@ -44,6 +44,11 @@ FIELDS: dict[str, dict[str, Any]] = {
     "requests_per_minute": {"kind": "unsupported"},
     "burst_limit": {"kind": "unsupported"},
     "org_tpm_limit": {"kind": "unsupported"},
+    # GW36 S4 (Req 8): the per-org token budget is NOT a firewall-plan field. The gateway
+    # reads it as a signed StateKind.BUDGET record written by the projector and spends it
+    # down through the per-org BudgetLease — the plan compiler has no rule, mode, or action
+    # for it, so it is ``unsupported`` here (a changed value is reported, like org_tpm_limit).
+    "org_token_budget": {"kind": "unsupported"},
     "blocked_keywords": {"kind": "unsupported"},
     "model_isolation_enabled": {"kind": "unsupported", "off": (False,)},
     "allowed_models": {"kind": "unsupported"},

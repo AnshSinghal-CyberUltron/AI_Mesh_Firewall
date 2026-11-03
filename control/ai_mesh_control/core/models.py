@@ -957,6 +957,19 @@ class FirewallConfig(models.Model):
         default=0,
         help_text="Org-wide tokens-per-minute ceiling across all keys (0 = disabled).",
     )
+    # GW36 S4 (Req 8): per-org token budget published to the gateway as a signed
+    # StateKind.BUDGET record (projector) and spent down by the per-org BudgetLease.
+    # A plain numeric token count only — NEVER a credential or secret. Range and
+    # default are control-plane policy values; they never live in gateway_v2.
+    org_token_budget = models.PositiveIntegerField(
+        default=100_000,
+        validators=[MinValueValidator(0), MaxValueValidator(1_000_000_000)],
+        help_text=(
+            "Per-org token budget (0–1,000,000,000 tokens). The gateway's per-org "
+            "lease spends this pool down; refills are generation-gated by the "
+            "projector. Default 100,000. A numeric token count only, never a credential."
+        ),
+    )
 
     # -- Content Filtering --
     content_filtering_enabled = models.BooleanField(
