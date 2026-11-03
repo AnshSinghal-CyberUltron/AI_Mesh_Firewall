@@ -2,7 +2,7 @@
 
 Status date: 2 November 2026. Source of the card text: `docs/AI_MESH_MASTER_RUNBOOK_v3.1_CLEAN.docx`, Part 00. This file does not change that document.
 
-GW26 and GW30 have new code on this tree and have been exercised on the local stack. Neither exits. The live lines below say exactly what was observed and what was not. GW36 was started on 2 November (plan reviewed, slice S0 landed; it does not exit). GW17b, GW17c, GW27, GW28, GW29, GW31, GW32, GW33, GW34 and GW35 have no new card work from this pass. The runbook says each of those cards is required before GW21 and GW23, and that a card does not exit on unit tests alone.
+GW26 and GW30 have new code on this tree and have been exercised on the local stack. Neither exits. The live lines below say exactly what was observed and what was not. GW36 was started on 2 November; slices S0–S3 are done (S3 on 3 November: the production profile reads real signed state, and a bad key is a 401), S4–S7 remain, so it does not exit. GW17b, GW17c, GW27, GW28, GW29, GW31, GW32, GW33, GW34 and GW35 have no new card work from this pass. The runbook says each of those cards is required before GW21 and GW23, and that a card does not exit on unit tests alone.
 
 ## GW26 — Customer policy rules and surface scoping
 
@@ -272,7 +272,7 @@ The owner asked on 2 November to proceed on defaults. They are working defaults 
 | GW33 | Output parity: IP leak, exfil channels, grounding, human review, REWRITE, canary | Not started. The GW26 publisher omits `rewrite` and `model_downgrade` and names them unsupported. It does not implement REWRITE. |
 | GW34 | SDK compatibility; unknown paths 404 `endpoint_not_found` | Not started as a card. The unknown-path item landed with GW36 slice S0 on 2 November: an unknown path is 404 `endpoint_not_found`, a known path with another method is 405 with `allow`, and the registered placeholders stay 501. The client matrix (L34-1) is not run. |
 | GW35 | Console pages and Scan Detail truth | Not started. The Attack Simulator still shows Auth and Rate Limit as ALLOW on the competitor block above. Those two stages are hard-coded allow. |
-| GW36 | Production boot and a real local model | Started 2 November; see the GW36 section above. With `AMF_DEV_PROFILE` unset, the boot still does not serve real traffic. |
+| GW36 | Production boot and a real local model | S0–S3 done (2–3 November); see the GW36 section above. `AMF_PROFILE=production` resolves real console keys and plans from signed state, but provider, admission, quota and detectors are still fail-closed (S4/S5), so it does not serve completions yet. |
 
 ## Owner decisions still written as open in v3.1
 
