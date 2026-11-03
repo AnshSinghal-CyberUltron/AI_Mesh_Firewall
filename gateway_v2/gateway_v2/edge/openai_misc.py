@@ -92,11 +92,17 @@ from gateway_v2.edge.identity_resolver import (
     IdentityResolver,
     TenantIdentity,
     fail_closed_resolver,
+    hashed_bearer_key,
     identity_of,
-    refusal_request_id,
 )
 from gateway_v2.edge.input_enforcement import REFUSE_INPUT_SCAN_FAILURE
-from gateway_v2.edge.outcome_metrics import OutcomeObserver, observe_refusal, observe_tenant
+from gateway_v2.edge.openai_misc_shared import (
+    _DEFAULT_MODERATION_MODEL,
+    _emit_json,
+    _refuse,
+    _VectorTransportError,
+)
+from gateway_v2.edge.outcome_metrics import OutcomeObserver, observe_tenant
 from gateway_v2.edge.phase_resolvers import PhaseResolverFactory, resolver_for
 from gateway_v2.edge.request_holds import RequestHolds
 from gateway_v2.edge.wire.openai_misc import (
@@ -241,86 +247,6 @@ class MiscRoute:
 
 
 # --------------------------------------------------------------------------- #
-# Response-shape constants + the fail-closed vector-transport signal.
-# --------------------------------------------------------------------------- #
-#: The OpenAI success response status / media type / header name for a non-streaming misc
-#: body. Response-shape values, NOT capacity-position literals (the serving bounds live in
-#: ``runtime/resources.py``); mirrors ``edge/openai_chat.py``'s non-stream constants.
-_OK_HTTP_STATUS = 200
-_JSON_MEDIA_TYPE = "application/json"
-_CONTENT_TYPE_HEADER = "content-type"
-
-#: The model echoed in a ``POST /v1/moderations`` body when the request omits ``model``
-#: (OpenAI's moderations ``model`` is optional). A plain response-shape string, NOT a
-#: capacity-position literal (serving bounds live in ``runtime/resources.py``): the renderer
-#: only echoes it and the SDK accepts whatever ``model`` the body carries, so a stable
-#: default keeps the render deterministic.
-_DEFAULT_MODERATION_MODEL = "text-moderation-latest"
-
-
-class _VectorTransportError(Exception):
-    """A provider delivery could not be read as an embedding vector (fail-closed signal).
-
-    Raised while draining the provider stream when an event carries an ``error_frame`` or a
-    delta text that is not a JSON float array. The surface catches it and WITHHOLDS the body
-    with the declared ``scan_failure`` code — no partial or raw provider body is ever emitted
-    (R6.1 / R10). A plain internal exception, never surfaced to the client as itself.
-    """
-
-
-# --------------------------------------------------------------------------- #
-# Shared emit helpers (the single ``edge/errors`` render path, R9).
-# --------------------------------------------------------------------------- #
-#
-# Both misc handlers render every refusal through the ONE value-code → HTTP
-# ``Error_Envelope`` and every 200 success through the ONE ``application/json``
-# ``HTTPResponse``. These two module-level functions ARE that single render path,
-# lifted here so neither handler re-spells it and the surfaces never disagree.
-# ``emit_response`` + ``edge/errors`` are deferred-imported INSIDE each helper to keep
-# this module free of the cycle task 7.1's ``routes -> openai_misc`` wiring would
-# otherwise close — the discipline ``ChatRoute.handle`` uses.
-
-
-async def _refuse(
-    send: ASGISend, code: str, observer: OutcomeObserver | None = None, *, decided: bool = False
-) -> None:
-    """Render a declared refuse-code through the single ``Error_Envelope`` (R9).
-
-    Every refusal leaves through ``emit_response(send, errors.render_http(code))`` — the
-    one value-code → HTTP path — so an unmapped code still renders the declared generic
-    error rather than a raw framework 500 (R9.2). Touches no exports counter;
-    ``fail_open_total`` is never incremented (R10.3) and the withholding sites record a
-    content-free withholding on the exports producer BEFORE refusing. ``observer`` counts it.
-    """
-    from gateway_v2.edge import errors
-    from gateway_v2.edge.routes import emit_response
-
-    observe_refusal(observer, code, decided=decided)
-    await emit_response(send, errors.render_http(code, request_id=refusal_request_id(code)))
-
-
-async def _emit_json(send: ASGISend, body: bytes) -> None:
-    """Emit a rendered JSON body as an HTTP 200 ``application/json`` response (R9).
-
-    The single success-emit path shared by both misc handlers: a byte-stable renderer
-    output goes out through the ONE ``emit_response`` + ``HTTPResponse`` boundary with the
-    OpenAI success status + media type. Deferred-imports for the same cycle reason as
-    :func:`_refuse`.
-    """
-    from gateway_v2.edge import errors
-    from gateway_v2.edge.routes import emit_response
-
-    await emit_response(
-        send,
-        errors.HTTPResponse(
-            status=_OK_HTTP_STATUS,
-            body=body,
-            headers=((_CONTENT_TYPE_HEADER, _JSON_MEDIA_TYPE),),
-        ),
-    )
-
-
-# --------------------------------------------------------------------------- #
 # EmbeddingsSurface (Components §2 / Per-surface lifecycle: embeddings).
 # --------------------------------------------------------------------------- #
 #
@@ -415,6 +341,10 @@ class EmbeddingsSurface:
                 await _refuse(send, outcome.refusal, self._deps.observer)
                 return
             observe_tenant(self._deps.observer, identity.org_id)
+            # Attribute any budget refund to this request's own tenant (GW36 S4): the composed
+            # QuotaGate.refund resolves the owner's lease from this org, returning the spend to
+            # it and no other (Req 6.3). Without it the refund owner would be "" and refund a no-op.
+            holds.note_tenant(identity.org_id)
 
             # Phase 3 — the ONE shared-state round trip: resolve the plan for Surface.EMBEDDINGS
             # (parity with ChatSurface). An unresolved plan ⇒ refuse, zero provider calls (R5.6).
@@ -438,59 +368,87 @@ class EmbeddingsSurface:
             # cost on ``holds`` so it is refunded if nothing is dispatched. The cost is computed
             # ONCE and spent + recorded identically.
             cost = self._estimated_cost(req)
-            budget_refuse = await self._budget(req, cost, request_id)
+            # The composed QuotaGate's per-key GCRA needs the SAME sha256 key hash identity
+            # resolved on (GW36 S4). ``hashed_bearer_key`` re-derives it from this scope's
+            # Authorization header — the production resolver's own key_namer — not from a raw
+            # token held elsewhere; a defensive None folds to "" (the budget phase still fails
+            # closed on the missing-owner path).
+            key_hash = hashed_bearer_key(scope) or ""
+            budget_refuse = await self._budget(identity, req, cost, request_id, key_hash)
             if budget_refuse is not None:
                 await _refuse(send, budget_refuse, self._deps.observer)
                 return
             holds.spent(cost, request_id)
 
-            # Phase 6 — INPUT scan + the BLOCK short-circuit, the LAST phase before provider
-            # contact, resolved at Phase.INPUT (Group E): BLOCK ⇒ input_blocked, a raise ⇒
-            # scan_failure; either way ZERO provider calls (R4). ``on_invoke`` counts each item.
-            scan = scan_embeddings(
-                req,
-                detector=self._deps.input_detector,
-                resolver=resolver_for(self._deps, plan, Phase.INPUT),
-                on_invoke=lambda _text: self._deps.exports.observe_detector_invocation(),
-            )
-            if scan.refuse_code is not None or scan.decision is None:
-                # A scan that RAISED (scan_failure) is a withholding (fail-closed), recorded
-                # content-free (R10.3); a BLOCK renders its declared input_blocked code.
-                if scan.refuse_code == REFUSE_INPUT_SCAN_FAILURE:
-                    self._deps.exports.record_withheld()
-                code = scan.refuse_code or REFUSE_INPUT_SCAN_FAILURE
-                decided = scan.decision is not None
-                await _refuse(send, code, self._deps.observer, decided=decided)
-                return
-
-            # Stage the VERIFIED / REDACTED upstream bytes (Group A leak-fix): a BLOCK →
-            # input_blocked, an unmaskable REDACT → input_unmaskable, both BEFORE the provider.
-            staged = stage_embeddings(
-                scan.decision,
-                req,
-                destination=self._deps.router.select(plan),
-                transform=self._deps.transform,
-            )
-            if isinstance(staged, str):
-                # A staged-request refusal (input_blocked / input_unmaskable) is a withholding,
-                # recorded content-free before the refuse render — still zero provider calls.
-                self._deps.exports.record_withheld()
-                await _refuse(send, staged, self._deps.observer, decided=True)
-                return
-
-            # All phases passed: open the provider on the STAGED request, read the vectors,
-            # render (R6). The provider is reached ONLY here — after every fail-closed phase.
-            await self._collect_and_render(
-                req,
-                staged,
-                send,
-                holds,
-                scan_failure_code=REFUSE_INPUT_SCAN_FAILURE,
-            )
+            # Phase 6 — INPUT scan → stage the VERIFIED upstream → provider, the LAST phase
+            # before provider contact. Factored into :meth:`_scan_stage_dispatch` so ``handle``
+            # stays under the function-size gate; behaviour is unchanged (same ordered steps,
+            # same fail-closed refusals, same zero-provider-call guarantees).
+            await self._scan_stage_dispatch(req, plan, send, holds)
         finally:
             # Synchronous, never raises, idempotent behind its own latch: a lost refund /
             # complete can never mask the in-flight response or exception (Group D/F).
             holds.release(self._deps.admission, self._deps.quota)
+
+    async def _scan_stage_dispatch(
+        self,
+        req: MiscEmbeddingsRequest,
+        plan: ExecutionPlan,
+        send: ASGISend,
+        holds: RequestHolds,
+    ) -> None:
+        """Phase 6: INPUT scan → stage the verified upstream → open the provider (R4 / R6).
+
+        The embeddings lifecycle's last phase, lifted out of :meth:`handle` so that method
+        stays under the function-size gate. Resolves findings at ``Phase.INPUT`` (Group E):
+        a BLOCK ⇒ ``input_blocked``, a raise ⇒ ``scan_failure``; either way ZERO provider
+        calls (R4). On a clean scan it stages the VERIFIED / REDACTED upstream bytes (Group A
+        leak-fix) — a BLOCK → ``input_blocked``, an unmaskable REDACT → ``input_unmaskable``,
+        both BEFORE the provider — and only then opens the provider on the STAGED request to
+        read the vectors and render (R6). Every refusal path records a content-free withholding
+        on the exports producer before the refuse render. Byte-identical to the inlined block.
+        """
+        # BLOCK ⇒ input_blocked, a raise ⇒ scan_failure. ``on_invoke`` counts each item.
+        scan = scan_embeddings(
+            req,
+            detector=self._deps.input_detector,
+            resolver=resolver_for(self._deps, plan, Phase.INPUT),
+            on_invoke=lambda _text: self._deps.exports.observe_detector_invocation(),
+        )
+        if scan.refuse_code is not None or scan.decision is None:
+            # A scan that RAISED (scan_failure) is a withholding (fail-closed), recorded
+            # content-free (R10.3); a BLOCK renders its declared input_blocked code.
+            if scan.refuse_code == REFUSE_INPUT_SCAN_FAILURE:
+                self._deps.exports.record_withheld()
+            code = scan.refuse_code or REFUSE_INPUT_SCAN_FAILURE
+            decided = scan.decision is not None
+            await _refuse(send, code, self._deps.observer, decided=decided)
+            return
+
+        # Stage the VERIFIED / REDACTED upstream bytes (Group A leak-fix): a BLOCK →
+        # input_blocked, an unmaskable REDACT → input_unmaskable, both BEFORE the provider.
+        staged = stage_embeddings(
+            scan.decision,
+            req,
+            destination=self._deps.router.select(plan),
+            transform=self._deps.transform,
+        )
+        if isinstance(staged, str):
+            # A staged-request refusal (input_blocked / input_unmaskable) is a withholding,
+            # recorded content-free before the refuse render — still zero provider calls.
+            self._deps.exports.record_withheld()
+            await _refuse(send, staged, self._deps.observer, decided=True)
+            return
+
+        # All phases passed: open the provider on the STAGED request, read the vectors,
+        # render (R6). The provider is reached ONLY here — after every fail-closed phase.
+        await self._collect_and_render(
+            req,
+            staged,
+            send,
+            holds,
+            scan_failure_code=REFUSE_INPUT_SCAN_FAILURE,
+        )
 
     # --- lifecycle phases (mirror ChatSurface, trimmed to the embeddings shape) ----------- #
 
@@ -535,20 +493,34 @@ class EmbeddingsSurface:
         return None
 
     async def _budget(
-        self, req: MiscEmbeddingsRequest, cost: int, request_id: str
+        self,
+        identity: TenantIdentity,
+        req: MiscEmbeddingsRequest,
+        cost: int,
+        request_id: str,
+        key_hash: str,
     ) -> str | None:
         """Budget lease spend (GW06); ``None`` ⇒ within budget.
 
-        Calls ``deps.quota.evaluate(cost, request_id=...)`` on the LOCAL lease (no
-        request-path store read, R5.5); a ``BudgetVerdict`` returns its code
-        (``posture.BUDGET_UNAVAILABLE``), an ``Admitted`` returns ``None``. ``cost`` is the
-        Group F token estimate (:meth:`_estimated_cost`), computed ONCE by the caller and both
-        spent here AND recorded on the holds ledger so a refund returns the same number.
-        ``request_id`` is the SAME id minted for admission so a budget and a shed verdict echo
-        one id.
+        Calls ``deps.quota.evaluate(cost, request_id, owner, principal, key_hash)`` on the
+        LOCAL lease (no request-path store read, R5.5); a non-``Admitted`` verdict returns its
+        code (``posture.BUDGET_UNAVAILABLE`` for a budget refusal, or ``posture.RATE_LIMITED``
+        for the composed ``QuotaGate``'s per-key GCRA reject — edge renders it 429), an
+        ``Admitted`` returns ``None``. ``cost`` is the Group F token estimate
+        (:meth:`_estimated_cost`), computed ONCE by the caller and both spent here AND recorded
+        on the holds ledger so a refund returns the same number. ``request_id`` is the SAME id
+        minted for admission so a budget and a shed verdict echo one id. ``owner`` /
+        ``principal`` / ``key_hash`` carry the resolved org + its signed key record + the sha256
+        key hash to the composed gate (GW36 S4); a shipped single-org decider ignores them.
         """
         del req
-        verdict = await self._deps.quota.evaluate(cost, request_id=request_id)
+        verdict = await self._deps.quota.evaluate(
+            cost,
+            request_id=request_id,
+            owner=identity.org_id,
+            principal=identity.principal,
+            key_hash=key_hash,
+        )
         if isinstance(verdict, Admitted):
             return None
         return verdict.code

@@ -52,7 +52,8 @@ module-level list / dict / set.
 from __future__ import annotations
 
 from gateway_v2.edge.asgi_sse import ASGIReceive, ASGIScope, ASGISend
-from gateway_v2.edge.openai_misc import MiscRoute, _emit_json, _refuse
+from gateway_v2.edge.openai_misc import MiscRoute
+from gateway_v2.edge.openai_misc_shared import _emit_json, _refuse
 from gateway_v2.edge.outcome_metrics import observe_tenant
 from gateway_v2.edge.wire.openai_misc import MODEL_NOT_FOUND
 

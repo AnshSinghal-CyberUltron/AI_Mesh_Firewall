@@ -51,6 +51,7 @@ from gateway_v2.admit.quota import (
     derive_low_watermark,
 )
 from gateway_v2.admit.supervisor import WorkerSupervisor
+from gateway_v2.domain.identity import Principal
 from gateway_v2.edge.asgi_sse import ASGIReceive, ASGIScope, ASGISend
 from gateway_v2.edge.dev_audit import DevAudit
 from gateway_v2.edge.dev_plan_feed import DevPlanWatch
@@ -133,13 +134,21 @@ class DevUnlimitedBudget:
     def __init__(self, *, org_id: str) -> None:
         self._org_id = org_id
 
-    async def evaluate(self, cost: int, *, request_id: str) -> BudgetVerdict | Admitted:
-        del cost
+    async def evaluate(
+        self,
+        cost: int,
+        *,
+        request_id: str,
+        owner: str = "",
+        principal: Principal | None = None,
+        key_hash: str = "",
+    ) -> BudgetVerdict | Admitted:
+        del cost, owner, principal, key_hash
         return Admitted(owner_id=self._org_id, request_id=request_id, admitted_at=0.0)
 
-    def refund(self, cost: int, *, request_id: str) -> None:
+    def refund(self, cost: int, *, request_id: str, owner: str = "") -> None:
         """No-op (``BudgetDecider`` protocol): the unlimited budget spent nothing to return."""
-        del cost, request_id
+        del cost, request_id, owner
 
 
 @dataclass(frozen=True, slots=True)
@@ -226,16 +235,31 @@ class DevLeaseBudget:
         self._tasks.add(task)
         task.add_done_callback(self._tasks.discard)
 
-    async def evaluate(self, cost: int, *, request_id: str) -> BudgetVerdict | Admitted:
+    async def evaluate(
+        self,
+        cost: int,
+        *,
+        request_id: str,
+        owner: str = "",
+        principal: Principal | None = None,
+        key_hash: str = "",
+    ) -> BudgetVerdict | Admitted:
+        # The dev adapter is a SINGLE-ORG lease over a fixed dev org; it has no per-principal GCRA
+        # cache or per-org registry, so the GW36 S4 owner/principal/key_hash kwargs are accepted to
+        # satisfy the widened BudgetDecider protocol and ignored (the dev lease already scopes to
+        # its one org). Production per-key GCRA + owner lookup is the composed QuotaGate's job.
+        del owner, principal, key_hash
         return await self._quota.evaluate(cost, request_id=request_id)
 
-    def refund(self, cost: int, *, request_id: str) -> None:
+    def refund(self, cost: int, *, request_id: str, owner: str = "") -> None:
         """Return a charged spend that reached zero provider calls (``BudgetDecider`` protocol).
 
         Delegates to the composed :meth:`QuotaComponent.refund`, which returns the spend to the
         Remaining_Lease iff it is the same Budget_Generation (a cross-generation refund is dropped
-        at the lease, the conservative direction).
+        at the lease, the conservative direction). ``owner`` is accepted for the widened protocol
+        and ignored — the dev lease is scoped to its one org.
         """
+        del owner
         self._quota.refund(cost, request_id=request_id)
 
     async def startup(self) -> str:

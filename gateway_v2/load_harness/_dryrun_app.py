@@ -137,14 +137,22 @@ class _AdmittingBudget:
 
     __slots__ = ()
 
-    async def evaluate(self, cost: int, *, request_id: str) -> BudgetVerdict | Admitted:
+    async def evaluate(
+        self,
+        cost: int,
+        *,
+        request_id: str,
+        owner: str,
+        principal: Principal,
+        key_hash: str,
+    ) -> BudgetVerdict | Admitted:
         """Admit every request's budget evaluation (no fabricated refusal)."""
-        del cost
+        del cost, owner, principal, key_hash
         return Admitted(owner_id=_DRY_RUN_ORG_ID, request_id=request_id, admitted_at=0.0)
 
-    def refund(self, cost: int, *, request_id: str) -> None:
+    def refund(self, cost: int, *, request_id: str, owner: str) -> None:
         """No-op: the dry-run never refunds (``BudgetDecider`` protocol, task 25.1)."""
-        del cost, request_id
+        del cost, request_id, owner
 
 
 def _pass_through_plan(org_id: str = _DRY_RUN_ORG_ID) -> ExecutionPlan:

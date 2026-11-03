@@ -161,7 +161,10 @@ class RequestHolds:
 
         if self._spent and not self._dispatched:
             try:
-                quota.refund(self._cost, request_id=self._request_id)
+                # Attribute the refund to this request's own tenant (recorded via note_tenant), so
+                # the composed QuotaGate returns the spend to the owner's lease and no other org's
+                # (GW36 S4, Conflict 2 / Req 6.3). refund needs no principal / key_hash.
+                quota.refund(self._cost, request_id=self._request_id, owner=self._org_id)
             except Exception:  # noqa: BLE001 - finally-path: a lost refund must never mask the response.
                 pass
 

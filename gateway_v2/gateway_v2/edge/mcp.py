@@ -28,7 +28,7 @@ from gateway_v2.edge import errors
 from gateway_v2.edge.asgi_sse import ASGIReceive, ASGIScope, ASGISend, read_body_bounded
 from gateway_v2.edge.audit_emit import emit_chat_audit
 from gateway_v2.edge.dev_components import bind_surface
-from gateway_v2.edge.identity_resolver import identity_of
+from gateway_v2.edge.identity_resolver import TenantIdentity, hashed_bearer_key, identity_of
 from gateway_v2.edge.input_enforcement import scan_deltas, stage_upstream
 from gateway_v2.edge.mcp_console import mcp_console
 from gateway_v2.edge.mcp_registry import McpRegistry, OrgMap, ServerEntry, ToolSet
@@ -192,7 +192,8 @@ class McpRoute:
 
     async def _refuse_reply_message(self, message: jsonrpc.JsonRpcMessage, ctx: _Ctx) -> None:
         """A client reply (no ``method``) is scanned as input for audit, then refused."""
-        org, plan = await self._tenant(ctx)
+        identity, plan = await self._tenant(ctx)
+        org = identity.org_id
         targets = (((), message.raw.get("result", message.raw.get("error")), "mcp_arguments"),)
         fold = fold_request(targets, self.chat.contract.mcp_bounds())
         if not isinstance(fold, str):
@@ -200,8 +201,12 @@ class McpRoute:
             self._scan_input(fold, plan, ctx)
         raise _Refuse("mcp_invalid_request")
 
-    async def _tenant(self, ctx: _Ctx) -> tuple[str, ExecutionPlan]:
-        """Identity, then the plan. The org comes from the key only."""
+    async def _tenant(self, ctx: _Ctx) -> tuple[TenantIdentity, ExecutionPlan]:
+        """Identity, then the plan. The org comes from the key only.
+
+        Returns the resolved :class:`TenantIdentity` (not just its ``org_id``) so the budget phase
+        can hand the signed ``principal`` to the composed ``QuotaGate``'s per-key GCRA (GW36 S4).
+        """
         identity = (outcome := await identity_of(self.chat.identity, ctx.scope)).identity
         if identity is None:
             raise _Refuse(outcome.refusal)
@@ -210,12 +215,13 @@ class McpRoute:
         if isinstance(state, (PlanUnavailable, PlanUnknownTenant)):
             raise _Refuse("plan_unavailable")
         ctx.plan_version = state.version
-        return identity.org_id, state
+        return identity, state
 
     async def _forward(self, send: ASGISend, message: jsonrpc.JsonRpcMessage, ctx: _Ctx) -> None:
         method = message.method or ""
         bounds = self.chat.contract.mcp_bounds()
-        org, plan = await self._tenant(ctx)
+        identity, plan = await self._tenant(ctx)
+        org = identity.org_id
         control_slug = self.org_map.control_slug(org)
         if control_slug is None:
             raise _Refuse("mcp_org_unmapped")
@@ -231,7 +237,7 @@ class McpRoute:
         params = message.params if isinstance(message.params, dict) else {}
         ctx.tool = str(params.get("name") or "") if method == "tools/call" else ""
         ctx.holds.note_request(_request_id(org, method, message.raw))
-        await self._admit_and_charge(org, fold, ctx)
+        await self._admit_and_charge(identity, fold, ctx)
         server, tools = await self._registry_gate(control_slug, method, ctx)
         forwarded = self._stage(method, params, fold, plan, ctx)
         await self._destination_gate(server)
@@ -259,7 +265,8 @@ class McpRoute:
             raise _Refuse(outcome.code)
         await self._send(send, _OK, jsonrpc.result(ctx.msg_id, outcome.result, ctx.console()), ctx)
 
-    async def _admit_and_charge(self, org: str, fold: Fold, ctx: _Ctx) -> None:
+    async def _admit_and_charge(self, identity: TenantIdentity, fold: Fold, ctx: _Ctx) -> None:
+        org = identity.org_id
         request_id = ctx.holds.request_id
         verdict = await self.chat.admission.admit(
             owner_id=org, request_id=request_id, enqueued_at=self.chat.clock()
@@ -269,7 +276,17 @@ class McpRoute:
         ctx.holds.admitted(request_id)
         chars = sum(len(leaf.text) for leaf in fold.leaves)
         cost = self.chat.contract.estimate_request_tokens(chars, 0, 1)
-        budget = await self.chat.quota.evaluate(cost, request_id=request_id)
+        # The composed QuotaGate's per-key GCRA needs the resolved principal + the sha256 key hash
+        # identity resolved on (GW36 S4). ``hashed_bearer_key`` re-derives the hash from this
+        # scope's Authorization header (the production resolver's own key_namer), not from a raw
+        # token held elsewhere; a defensive None folds to "" (the budget phase still fails closed).
+        budget = await self.chat.quota.evaluate(
+            cost,
+            request_id=request_id,
+            owner=org,
+            principal=identity.principal,
+            key_hash=hashed_bearer_key(ctx.scope) or "",
+        )
         if not isinstance(budget, Admitted):
             raise _Refuse(budget.code)
         ctx.holds.spent(cost, request_id)

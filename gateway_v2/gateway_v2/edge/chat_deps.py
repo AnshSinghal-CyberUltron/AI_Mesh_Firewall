@@ -34,6 +34,7 @@ from gateway_v2.admit.grant import (
     shed_verdict,
 )
 from gateway_v2.domain import Finding
+from gateway_v2.domain.identity import Principal
 from gateway_v2.plan.snapshot import ReplicaSnapshot
 from gateway_v2.plan.store import PlanStore
 
@@ -76,15 +77,32 @@ class AdmissionDecider(Protocol):
 class BudgetDecider(Protocol):
     """The budget surface the lifecycle reads (R6): ``evaluate`` → ``Admitted`` | ``BudgetVerdict``.
 
-    The shipped :class:`~gateway_v2.admit.quota.QuotaComponent` satisfies this structurally; its
-    ``evaluate(cost, *, request_id)`` spends the LOCAL lease with no request-path store read (R6.3)
-    and fails closed to a budget refusal (R13.1); its synchronous ``refund(cost, *, request_id)``
-    returns a spend that led to zero provider calls. A ``Protocol`` so a test can inject a fake.
+    The composed GW36 S4 :class:`~gateway_v2.edge.quota_gate.QuotaGate` satisfies this structurally;
+    it resolves the per-request principal's per-key GCRA (``key_hash`` → ``GcraCache``) and the
+    ``owner``'s per-org budget lease (``QuotaRegistry``), composing the rate check then the budget
+    spend. The shipped :class:`~gateway_v2.admit.quota.QuotaComponent` is the per-org delegate it
+    calls; both fail closed to a refusal on any undecidable path (R13.1) with no request-path store
+    read (R6.3), and the synchronous ``refund`` returns a spend that led to zero provider calls.
+
+    **Owner / principal / key_hash on the surface (GW36 S4, Conflict 2 / review finding N4).** S4
+    widens ``evaluate`` to carry the resolved ``owner`` (the org the spend is attributed to), the
+    request's signed ``principal`` and its ``key_hash`` (the sha256 the identity phase resolved on),
+    all keyword-only. ``refund`` carries only ``owner`` — there is no GCRA on a refund, so it needs
+    neither ``principal`` nor ``key_hash``. A spend and its refund are always attributed to the
+    resolved org, never guessed. A ``Protocol`` so a test can inject a fake.
     """
 
-    async def evaluate(self, cost: int, *, request_id: str) -> BudgetVerdict | Admitted: ...
+    async def evaluate(
+        self,
+        cost: int,
+        *,
+        request_id: str,
+        owner: str,
+        principal: Principal,
+        key_hash: str,
+    ) -> BudgetVerdict | Admitted: ...
 
-    def refund(self, cost: int, *, request_id: str) -> None: ...
+    def refund(self, cost: int, *, request_id: str, owner: str) -> None: ...
 
 
 class _AlwaysShedAdmission:
@@ -129,14 +147,22 @@ class _AlwaysRefuseBudget:
 
     __slots__ = ()
 
-    async def evaluate(self, cost: int, *, request_id: str) -> BudgetVerdict | Admitted:
-        """Refuse every request's budget (fail closed); the cost is accepted but not consulted."""
-        del cost
+    async def evaluate(
+        self,
+        cost: int,
+        *,
+        request_id: str,
+        owner: str,
+        principal: Principal,
+        key_hash: str,
+    ) -> BudgetVerdict | Admitted:
+        """Refuse every request's budget (fail closed); the inputs are accepted, not consulted."""
+        del cost, owner, principal, key_hash
         return budget_verdict(request_id)
 
-    def refund(self, cost: int, *, request_id: str) -> None:
+    def refund(self, cost: int, *, request_id: str, owner: str) -> None:
         """No-op: nothing was spent on the always-refuse default, so there is nothing to return."""
-        del cost, request_id
+        del cost, request_id, owner
         return
 
 

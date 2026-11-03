@@ -270,6 +270,13 @@ _ENVELOPE: Mapping[str, tuple[int, str]] = MappingProxyType(
         posture.SHARED_STATE_UNAVAILABLE: (503, "service_unavailable"),
         posture.BUDGET_UNAVAILABLE: (503, "service_unavailable"),
         posture.OVERLOAD_SHED: (503, "service_unavailable"),
+        # -- GW36 S4 per-key GCRA rate limit (QuotaGate) ----------------------
+        # The gateway's OWN per-key burst/sustained rate reject (distinct from
+        # ``upstream_rate_limited``, the provider's relayed 429). HTTP 429 +
+        # ``rate_limit_error`` is OpenAI's own rate-limit wire shape, so the stock SDK
+        # reads it as a rate limit and backs off. 429 is a response-status code, not a
+        # capacity-position literal.
+        posture.RATE_LIMITED: (429, "rate_limit_error"),
     }
 )
 
