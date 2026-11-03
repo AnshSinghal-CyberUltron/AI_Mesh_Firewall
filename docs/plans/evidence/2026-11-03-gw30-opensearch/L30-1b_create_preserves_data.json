@@ -1,0 +1,104 @@
+{
+  "gate": "L30-1b (R2.9 create is non-destructive)",
+  "timestamp": "2026-11-03T05:39:29.737774+00:00",
+  "run": "799a3db9",
+  "live": {
+    "pgvector": {
+      "first_create": "vector_ok",
+      "upsert": "vector_ok",
+      "second_create": "collection_exists",
+      "query_after_second_create": "vector_ok",
+      "ids_after_second_create": [
+        "r1",
+        "r3",
+        "r2"
+      ],
+      "pass": true
+    },
+    "redis": {
+      "first_create": "vector_ok",
+      "upsert": "vector_ok",
+      "second_create": "collection_exists",
+      "query_after_second_create": "vector_ok",
+      "ids_after_second_create": [
+        "r1",
+        "r3",
+        "r2"
+      ],
+      "pass": true
+    },
+    "qdrant": {
+      "first_create": "vector_ok",
+      "upsert": "vector_ok",
+      "second_create": "collection_exists",
+      "query_after_second_create": "vector_ok",
+      "ids_after_second_create": [
+        "r1",
+        "r3",
+        "r2"
+      ],
+      "pass": true
+    },
+    "weaviate": {
+      "first_create": "vector_ok",
+      "upsert": "vector_ok",
+      "second_create": "collection_exists",
+      "query_after_second_create": "vector_ok",
+      "ids_after_second_create": [
+        "r1",
+        "r3",
+        "r2"
+      ],
+      "pass": true
+    },
+    "elasticsearch": {
+      "first_create": "vector_ok",
+      "upsert": "vector_ok",
+      "second_create": "collection_exists",
+      "query_after_second_create": "vector_ok",
+      "ids_after_second_create": [
+        "r1",
+        "r3",
+        "r2"
+      ],
+      "pass": true
+    },
+    "chroma": {
+      "first_create": "vector_ok",
+      "upsert": "vector_ok",
+      "second_create": "collection_exists",
+      "query_after_second_create": "vector_ok",
+      "ids_after_second_create": [
+        "r1",
+        "r3",
+        "r2"
+      ],
+      "pass": true
+    },
+    "mongodb_atlas": {
+      "first_create": "vector_ok",
+      "upsert": "vector_ok",
+      "second_create": "collection_exists",
+      "query_after_second_create": "vector_ok",
+      "ids_after_second_create": [
+        "r1",
+        "r3",
+        "r2"
+      ],
+      "pass": true
+    },
+    "aws_opensearch_serverless": {
+      "first_create": "vector_ok",
+      "upsert": "vector_ok",
+      "second_create": "collection_exists",
+      "query_after_second_create": "vector_ok",
+      "ids_after_second_create": [
+        "r1",
+        "r3",
+        "r2"
+      ],
+      "pass": true
+    }
+  },
+  "verdict": "LIVE-PASS"
+}

@@ -1,0 +1,35 @@
+{
+  "gate": "L30-3",
+  "timestamp": "2026-11-03T05:40:29.048951+00:00",
+  "cases": [
+    {
+      "scenario": "cross_org_A_cred_for_B_request",
+      "request_id": "zs-a369910bf2dd",
+      "timestamp": "2026-11-03T05:40:29.048992+00:00",
+      "presented_credential_org": "orgA",
+      "target_request_org": "orgB",
+      "refused": true,
+      "refusal_code": "credential_scope_mismatch",
+      "backing_store_ops_for_request": 0,
+      "proceeded_to_store": false,
+      "org_b_payload_returned": null,
+      "secret_in_refusal_form": false,
+      "live_transport_used": "qdrant"
+    },
+    {
+      "scenario": "missing_org_identity",
+      "request_id": "zs-fed30420539e",
+      "timestamp": "2026-11-03T05:40:29.049010+00:00",
+      "presented_credential_org": "orgA",
+      "target_request_org": "(empty)",
+      "refused": true,
+      "refusal_code": "org_identity_invalid",
+      "backing_store_ops_for_request": 0,
+      "proceeded_to_store": false,
+      "org_b_payload_returned": null,
+      "secret_in_refusal_form": false,
+      "live_transport_used": "qdrant"
+    }
+  ],
+  "verdict": "LIVE-PASS"
+}

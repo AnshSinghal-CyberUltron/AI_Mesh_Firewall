@@ -89,6 +89,10 @@ LIVE_TRANSPORTS = {
         host="127.0.0.1", port=6900, dimension=DIM)),
     "mongodb_atlas": lambda: vlt.MongoAtlasTransport(vlt.MongoAtlasConnectionParams(
         host="127.0.0.1", port=6927, dimension=DIM, dbname="gw30")),
+    # OpenSearch 2.17 (container gw30-opensearch on 127.0.0.1:6921), standing in for the
+    # aws_opensearch_serverless connector: same engine, same knn_vector wire shape.
+    "aws_opensearch_serverless": lambda: vlt.OpenSearchTransport(vlt.OpenSearchConnectionParams(
+        host="127.0.0.1", port=6921, dimension=DIM)),
 }
 INFRA_BLOCKED = {
     "pinecone": "cloud-only SaaS; no local image / no credentials",
@@ -299,6 +303,8 @@ async def gate_l30_2(contract) -> dict:
         "chroma": vlt.ChromaTransport(vlt.ChromaConnectionParams(host="127.0.0.1", port=bad, dimension=DIM)),
         "mongodb_atlas": vlt.MongoAtlasTransport(vlt.MongoAtlasConnectionParams(
             host="127.0.0.1", port=bad, dimension=DIM, dbname="gw30")),
+        "aws_opensearch_serverless": vlt.OpenSearchTransport(vlt.OpenSearchConnectionParams(
+            host="127.0.0.1", port=bad, dimension=DIM)),
     }
     for store_id, transport in dead.items():
         conn = build_connector(store_id, transport)
