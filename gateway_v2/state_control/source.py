@@ -55,6 +55,15 @@ class SourceSwitch:
 
 
 @dataclass(frozen=True, slots=True)
+class SourceBudget:
+    """One organisation's per-org token budget, as control stores it."""
+
+    org_slug: str
+    pool_tokens: int
+    """The org's configured token pool size (a non-negative count, never a credential)."""
+
+
+@dataclass(frozen=True, slots=True)
 class SourceView:
     as_of: float
     """Epoch seconds of the read's snapshot (the database's `transaction_timestamp()`)."""
@@ -63,6 +72,7 @@ class SourceView:
     keys: tuple[SourceKey, ...]
     plans: tuple[SourcePlan, ...]
     switches: tuple[SourceSwitch, ...]
+    budgets: tuple[SourceBudget, ...]
 
 
 class ControlSource(Protocol):
@@ -85,6 +95,7 @@ class _Rows:
     keys: dict[str, _Key] = field(default_factory=dict)
     plans: dict[str, tuple[str, int]] = field(default_factory=dict)
     switches: dict[tuple[str | None, str, str], str] = field(default_factory=dict)
+    budgets: dict[str, int] = field(default_factory=dict)
 
 
 class MemorySource:
@@ -125,6 +136,10 @@ class MemorySource:
                         rows.switches.items(), key=lambda item: repr(item[0]),
                     )
                 ),
+                budgets=tuple(
+                    SourceBudget(slug, pool_tokens)
+                    for slug, pool_tokens in sorted(rows.budgets.items())
+                ),
             )
 
     # --- console-shaped mutations ----------------------------------------------------------
@@ -139,6 +154,7 @@ class MemorySource:
             rows = self._rows
             rows.orgs.pop(slug, None)
             rows.plans.pop(slug, None)
+            rows.budgets.pop(slug, None)
             for key_hash in [h for h, row in rows.keys.items() if row.org_slug == slug]:
                 del rows.keys[key_hash]
             for scope in [s for s in rows.switches if s[0] == slug]:
@@ -169,6 +185,14 @@ class MemorySource:
         with self._lock:
             self._rows.plans.pop(slug, None)
 
+    def budget(self, slug: str, pool_tokens: int) -> None:
+        with self._lock:
+            self._rows.budgets[slug] = pool_tokens
+
+    def drop_budget(self, slug: str) -> None:
+        with self._lock:
+            self._rows.budgets.pop(slug, None)
+
     def switch(
         self,
         org_slug: str | None,
@@ -192,6 +216,8 @@ class MemorySource:
             rows.orgs[new] = rows.orgs.pop(old)
             if old in rows.plans:
                 rows.plans[new] = rows.plans.pop(old)
+            if old in rows.budgets:
+                rows.budgets[new] = rows.budgets.pop(old)
             for row in rows.keys.values():
                 if row.org_slug == old:
                     row.org_slug = new

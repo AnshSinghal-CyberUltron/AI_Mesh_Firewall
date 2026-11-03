@@ -16,6 +16,7 @@ The tables (Django app labels in brackets):
     core_v2_plan_document   [core]      organization_id, body, revision        (GW36 S2)
     core_killswitch         [core]      organization_id, model_name, api_key_prefix, is_active,
                                         action
+    core_firewallconfig     [core]      organization_id, org_token_budget      (GW36 S4)
 """
 
 from __future__ import annotations
@@ -23,7 +24,14 @@ from __future__ import annotations
 from typing import Any
 
 from state_control.pg import PostgresControlDB
-from state_control.source import SourceKey, SourceOrg, SourcePlan, SourceSwitch, SourceView
+from state_control.source import (
+    SourceBudget,
+    SourceKey,
+    SourceOrg,
+    SourcePlan,
+    SourceSwitch,
+    SourceView,
+)
 
 _AS_OF = "SELECT EXTRACT(EPOCH FROM transaction_timestamp())"
 
@@ -46,6 +54,15 @@ _SWITCHES = (
     "SELECT o.slug, s.model_name, s.api_key_prefix, s.action FROM core_killswitch s "
     "LEFT JOIN auth_api_organization o ON o.id = s.organization_id "
     "WHERE s.is_active ORDER BY o.slug, s.model_name, s.api_key_prefix"
+)
+
+# The per-org token budget lives on FirewallConfig (one row per org, the FK is unique).
+# An org-less FirewallConfig row (organization_id IS NULL) has no slug to key on, so the
+# inner join drops it: a budget needs an org.
+_BUDGETS = (
+    "SELECT o.slug, c.org_token_budget FROM core_firewallconfig c "
+    "JOIN auth_api_organization o ON o.id = c.organization_id "
+    "ORDER BY o.slug"
 )
 
 
@@ -85,7 +102,19 @@ class PostgresControlSource:
                 )
                 for slug, model, prefix, action in cursor.fetchall()
             )
-        return SourceView(as_of=as_of, orgs=orgs, keys=keys, plans=plans, switches=switches)
+            cursor.execute(_BUDGETS)
+            budgets = tuple(
+                SourceBudget(org_slug=str(slug), pool_tokens=int(pool_tokens))
+                for slug, pool_tokens in cursor.fetchall()
+            )
+        return SourceView(
+            as_of=as_of,
+            orgs=orgs,
+            keys=keys,
+            plans=plans,
+            switches=switches,
+            budgets=budgets,
+        )
 
 
 def _one(cursor: Any, sql: str) -> tuple[Any, ...]:

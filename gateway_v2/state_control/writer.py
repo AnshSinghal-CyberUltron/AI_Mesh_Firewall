@@ -189,6 +189,20 @@ class StateWriter:
             op=StateOp.OFFBOARD,
         )
 
+    def budget_set(self, org_id: str, pool_tokens: int) -> WriteOutcome:
+        """Write (or leave unchanged) the signed per-org token budget.
+
+        `if_changed` skips the write when the stored body already carries this pool, so an
+        unchanged budget bumps nothing (the generation, which IS the record's `feed_seq`, only
+        advances on a changed body). The body is a numeric token count only, never a credential.
+        """
+        return self.put(
+            StateKind.BUDGET,
+            org_id,
+            {"org_id": org_id, "pool_tokens": pool_tokens},
+            if_changed=True,
+        )
+
     def key_add(
         self,
         key_hash: str,

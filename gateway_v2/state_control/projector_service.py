@@ -27,7 +27,7 @@ from gateway_v2.domain.state_knobs import ProjectorKnobs, StateKnobs
 from gateway_v2.runtime.store_keys import DEFAULT_NAMESPACE, StoreKeys
 from gateway_v2.runtime.store_valkey import require_bounded_client
 from state_control.pg import PostgresControlDB
-from state_control.projector import ProjectionSummary, Projector
+from state_control.projector import ProjectionSummary, Projector, ValkeyPoolSeeder
 from state_control.service import (
     DEFAULT_CONNECT_TIMEOUT_S,
     DEFAULT_IDLE_TX_TIMEOUT_MS,
@@ -247,14 +247,21 @@ class ProjectorService:
         ceiling_s = StateKnobs().store_timeout_ceiling_s
         client = redis.Redis.from_url(config.valkey_url, socket_timeout=ceiling_s / 2)
         require_bounded_client(client, below_s=ceiling_s)
-        publisher = ValkeyPublisher(client, config.secret, StoreKeys(config.namespace))
+        keys = StoreKeys(config.namespace)
+        publisher = ValkeyPublisher(client, config.secret, keys)
         writer = StateWriter(db, publisher, config.secret, actor=f"amf.projector:{config.holder}")
+        # The live pool counter is a direct store op on the budget-lease key family, NOT a signed
+        # record, so it reuses the same bounded store client (Req 10). The writer publishes signed
+        # BUDGET records; the seeder sets `{rv2}:budget:{org}:remaining` / `:generation` under a
+        # generation CAS.
+        seeder = ValkeyPoolSeeder(client, keys=keys)
         projector = Projector(
             db,
             PostgresControlSource(db),
             writer,
             holder=config.holder,
             knobs=config.knobs,
+            seeder=seeder,
         )
         return cls(config, projector)
 
