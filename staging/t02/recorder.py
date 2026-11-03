@@ -18,6 +18,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import socket
 import threading
 import time
 import uuid
@@ -79,6 +80,13 @@ def _record(path: str, body: Any, raw: bytes, authorized: bool) -> int:
             "prompt": prompt[:4000],
             "contains_ssn": bool(SSN_RE.search(prompt) or SSN_RE.search(raw.decode("utf-8", "replace"))),
             "contains_akia": bool(AKIA_RE.search(prompt) or AKIA_RE.search(raw.decode("utf-8", "replace"))),
+            # Structure the gateway forwarded (GW36 S1): roles in order, top-level keys, budget.
+            "roles": [m.get("role") for m in (body.get("messages") or []) if isinstance(m, dict)]
+            if isinstance(body, dict) else [],
+            "body_keys": sorted(body) if isinstance(body, dict) else [],
+            "max_tokens": body.get("max_tokens") if isinstance(body, dict) else None,
+            "max_completion_tokens": body.get("max_completion_tokens") if isinstance(body, dict) else None,
+            "stop": body.get("stop") if isinstance(body, dict) else None,
         }
         _calls.append(row)
         if len(_calls) > MAX_CALLS:
@@ -235,8 +243,11 @@ class _Base(BaseHTTPRequestHandler):
             time.sleep(delay_ms / 1000.0)
         mode = str(fault.get("mode") or "none")
         if mode == "disconnect":
+            # shutdown() really ends the TCP stream; close() alone leaves the socket open through
+            # the handler's rfile/wfile, which the client sees as a stall, not a disconnect.
+            self.close_connection = True
             try:
-                self.connection.close()
+                self.connection.shutdown(socket.SHUT_RDWR)
             except Exception:
                 pass
             return
