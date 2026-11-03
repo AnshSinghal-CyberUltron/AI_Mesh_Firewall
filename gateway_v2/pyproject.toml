@@ -22,6 +22,12 @@ dependencies = [
 # ``docker-compose.gw30-stores.yml``.
 vectors = [
     "pymilvus==2.5.16",
+    # GW30 Pinecone live gate: the MODERN SDK is named ``pinecone`` (the old ``pinecone-client``
+    # name is deprecated). Pinned exactly, like ``pymilvus`` above. Imported lazily inside
+    # ``dispatch/vector_transports/pinecone_transport.py``'s ``_client()``. Unlike pymilvus it
+    # SHIPS a ``py.typed`` marker, so --strict type-checks its import cleanly and NO
+    # ``ignore_missing_imports`` override is added below.
+    "pinecone==10.3.0",
 ]
 dev = [
     "fakeredis>=2.26",

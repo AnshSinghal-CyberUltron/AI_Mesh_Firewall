@@ -34,6 +34,10 @@ from gateway_v2.dispatch.vector_transports.pgvector_transport import (
     PgVectorConnectionParams,
     PgVectorTransport,
 )
+from gateway_v2.dispatch.vector_transports.pinecone_transport import (
+    PineconeConnectionParams,
+    PineconeTransport,
+)
 from gateway_v2.dispatch.vector_transports.qdrant_transport import (
     QdrantConnectionParams,
     QdrantTransport,
@@ -60,6 +64,8 @@ __all__ = (
     "OpenSearchTransport",
     "PgVectorConnectionParams",
     "PgVectorTransport",
+    "PineconeConnectionParams",
+    "PineconeTransport",
     "QdrantConnectionParams",
     "QdrantTransport",
     "RedisConnectionParams",

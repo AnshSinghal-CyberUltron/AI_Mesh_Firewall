@@ -1,0 +1,44 @@
+{
+  "gate": "L30-3",
+  "store": "pinecone",
+  "timestamp": "2026-11-03T14:40:12.316397+00:00",
+  "cases": [
+    {
+      "scenario": "cross_org_A_cred_for_B_request",
+      "request_id": "zs-99f364b5d4ed",
+      "timestamp": "2026-11-03T14:40:12.316447+00:00",
+      "presented_credential_org": "orgA",
+      "target_request_org": "orgB",
+      "refused": true,
+      "refusal_code": "credential_scope_mismatch",
+      "backing_store_ops_for_request": 0,
+      "proceeded_to_store": false,
+      "org_b_payload_returned": null,
+      "secret_in_refusal_form": false,
+      "live_transport_used": "pinecone"
+    },
+    {
+      "scenario": "missing_org_identity",
+      "request_id": "zs-24f4f3e8fd81",
+      "timestamp": "2026-11-03T14:40:12.316460+00:00",
+      "presented_credential_org": "orgA",
+      "target_request_org": "(empty)",
+      "refused": true,
+      "refusal_code": "org_identity_invalid",
+      "backing_store_ops_for_request": 0,
+      "proceeded_to_store": false,
+      "org_b_payload_returned": null,
+      "secret_in_refusal_form": false,
+      "live_transport_used": "pinecone"
+    }
+  ],
+  "verdict": "LIVE-PASS",
+  "cleanup": {
+    "ran": true,
+    "index_deleted": "gw30-live-gate",
+    "already_absent": false
+  },
+  "discovered_cloud": "aws",
+  "discovered_region": "us-east-1",
+  "credential_ref": "cred-pinecone-gw30"
+}

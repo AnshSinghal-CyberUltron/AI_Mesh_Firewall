@@ -1,0 +1,55 @@
+{
+  "gate": "L30-1",
+  "store": "pinecone",
+  "timestamp": "2026-11-03T14:39:31.677498+00:00",
+  "live": {
+    "pinecone": {
+      "create_collection": {
+        "code": "vector_ok",
+        "status": "created"
+      },
+      "upsert": {
+        "code": "vector_ok",
+        "count": 3
+      },
+      "poll": {
+        "poll_attempts": 2,
+        "queryable_count": 3
+      },
+      "query": {
+        "code": "vector_ok",
+        "count": 3,
+        "ids": [
+          "r1",
+          "r3",
+          "r2"
+        ],
+        "top_id": "r1"
+      },
+      "delete": {
+        "code": "vector_ok",
+        "count": 3
+      }
+    }
+  },
+  "infra_blocked": {
+    "milvus": "needs etcd+minio sidecars; not brought up in this run",
+    "aws_bedrock_kb": "cloud-only; no local image / no credentials",
+    "gcp_vertex_vector": "cloud-only; no local image / no credentials",
+    "azure_ai_search": "cloud-only; no local image / no credentials"
+  },
+  "ordering_from_store_cosine": [
+    "r1",
+    "r3",
+    "r2"
+  ],
+  "verdict": "LIVE-PASS (1 live: pinecone) + 4 INFRA-BLOCKED",
+  "cleanup": {
+    "ran": true,
+    "index_deleted": "gw30-live-gate",
+    "already_absent": false
+  },
+  "discovered_cloud": "aws",
+  "discovered_region": "us-east-1",
+  "credential_ref": "cred-pinecone-gw30"
+}

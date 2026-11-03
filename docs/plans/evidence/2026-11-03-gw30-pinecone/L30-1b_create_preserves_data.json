@@ -1,0 +1,33 @@
+{
+  "gate": "L30-1b (R2.9 create is non-destructive)",
+  "store": "pinecone",
+  "timestamp": "2026-11-03T14:39:49.189647+00:00",
+  "run": "9b459a6c",
+  "live": {
+    "pinecone": {
+      "first_create": "vector_ok",
+      "upsert": "vector_ok",
+      "poll": {
+        "poll_attempts": 1,
+        "queryable_count": 3
+      },
+      "second_create": "collection_exists",
+      "query_after_second_create": "vector_ok",
+      "ids_after_second_create": [
+        "r1",
+        "r3",
+        "r2"
+      ],
+      "pass": true
+    }
+  },
+  "verdict": "LIVE-PASS",
+  "cleanup": {
+    "ran": true,
+    "index_deleted": "gw30-live-gate",
+    "already_absent": false
+  },
+  "discovered_cloud": "aws",
+  "discovered_region": "us-east-1",
+  "credential_ref": "cred-pinecone-gw30"
+}
