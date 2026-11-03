@@ -1,0 +1,18 @@
+[PASS] E1 new console key resolves: GET /v1/models 200 after 976 ms (console 201 at +11 ms)
+[PASS] E1 chat passes identity and plan: HTTP 503 overload_shed x-request-id=zs-zeroshield-dab864b1c123a536af2a1683 (the next stage, admission, is the fail-closed default until S4)
+[PASS] E2 unknown key stream=False: AuthenticationError 401 code=invalid_api_key request_id=zs-516a127769045056c01eb0eb
+[PASS] E2 unknown key stream=True: AuthenticationError 401 code=invalid_api_key request_id=zs-b8739f2fa7dd02cfd4bf623d
+[PASS] E2 junk token stream=False: AuthenticationError 401 code=invalid_api_key request_id=zs-b7605e5d4e334f465cf1f971
+[PASS] E2 junk token stream=True: AuthenticationError 401 code=invalid_api_key request_id=zs-0130530e0173d6346dddc312
+[PASS] E2 no key stream=False: AuthenticationError 401 code=invalid_api_key request_id=zs-78501d8914a4b4a2b771b93c
+[PASS] E2 no key stream=True: AuthenticationError 401 code=invalid_api_key request_id=zs-1f3b624dc18e7fcaefe4b6cc
+[PASS] E2 /v1/models unknown key: HTTP 401 invalid_api_key www-authenticate=Bearer
+[PASS] E3 deactivated key is 401 on every worker: 401 after 916 ms from the console PATCH
+[PASS] E4 store down: unseen key is 503 not 401: HTTP 503 shared_state_unavailable
+[PASS] E4 store down: a CACHED valid key is 503 on every worker past FRESH_MS: after 0.1 s: HTTP 503 shared_state_unavailable
+[PASS] E4 /readyz 503 and /livez 200: /readyz 503 'state was last verified against Postgres 5.2 s ago by rehydrator-b, over the 5 s bound: re'; /livez 200
+[PASS] E5 store back: recovers by itself: valid key 200 again 0.7 s after redis start
+[PASS] E6 stamp ages out: 503 not 401: 503 4.7 s after the re-hydrators stopped (shared_state_unavailable)
+[PASS] E6 stamp back: recovers: 200 again 0.7 s after the re-hydrators started
+[PASS] E7 /metrics 200 and counts 401s: amf_rejected{status="401",reason="rejected"} 47
+{"passed": 17, "total": 17}

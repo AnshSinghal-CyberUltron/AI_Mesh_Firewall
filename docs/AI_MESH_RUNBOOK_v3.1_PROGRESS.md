@@ -206,9 +206,52 @@ Plan with five contradictory reviews: `docs/plans/2026-11-03-gw36-s2-control-pro
   - The diff is O(records) (measured above).
   - Pre-existing `makemigrations` drift on `FirewallConfig.routing_enabled`.
 
+### Slice S3 — done on 3 November (gateway state runtime, hashed identity, 401/503)
+
+Plan with five contradictory reviews: `docs/plans/2026-11-03-gw36-s3-state-runtime-identity.md`. Evidence: `docs/plans/evidence/2026-11-03-gw36-s3/`. Developed on the shared dev VM.
+
+- `AMF_PROFILE=production` builds a signed-state runtime per worker (`edge/state_runtime.py`). It runs in the ASGI lifespan; one task owns every drain, and nudges only wake it.
+  - **Cold start:** the kill switch adopts its engaged set and the KEY cursor jumps to the head, so start-up does not grow with the number of keys or records.
+  - **Lifespan:** each worker waits, bounded by the 5 s freshness window, to catch up before uvicorn routes to it.
+  - **Everything else:** provider, admission, quota, detectors and catalog stay on their fail-closed defaults, named in the boot log (S4/S5).
+- **Identity is the sha256 of the bearer over signed KEY records.**
+  - A missing, unknown or revoked key is 401 `invalid_api_key`, OpenAI's shape, on every surface. It is plain HTTP even for `stream=true`, so the SDK raises `AuthenticationError`, and it carries `WWW-Authenticate` and a random request id.
+  - Unverified state is 503 `shared_state_unavailable`, never 401.
+  - Only the console key shape is looked up, so junk tokens cost no store read.
+- **Found and fixed:**
+  - A fill in flight during a revoke delta was cached forever (N18); the fix covers revokes and adds alike.
+  - A fill from a regressed store could resurrect a revoked key; the fetch now checks the KEY manifest against the applied cursor.
+  - The KEY applier could run in a thread over an unlocked cache (N8).
+  - Raw Redis errors escaped the synchroniser and stopped every kind (N7); only transport faults convert, and server errors stay loud.
+  - There was no per-kind freshness (N9).
+  - The plan snapshot kept an offboarded org's plan (N19).
+  - The production `/readyz` would have silently ignored the stamp.
+- `/livez` was added (static 200), and the compose healthcheck uses it.
+- Live on the VM stack, 17/17 checks, with a production-profile gateway (2 workers) reading the stack's own signed state:
+
+  | Check | Result |
+  |---|---|
+  | E1 console key resolves | about 1 s; chat refused only at admission (S4) |
+  | E2 unknown / junk / missing key | SDK `AuthenticationError` 401, streaming or not |
+  | E3 deactivation | 401 on every worker in 0.9 s |
+  | E4 Valkey down | 503, `/readyz` 503 past the 5 s bound, `/livez` 200 |
+  | E5 Valkey back | recovers in 0.7 s |
+  | E6 re-hydrators stopped | 503 at 4.7 s |
+  | E7 `/metrics` | counts the 401s |
+
+- Gates: offline suite 2956 passed, 0 failed (VM, `-n 24`, 58 s); `mypy --strict` 272 files; ruff; import-linter 3/3; every AST gate clean. The negative controls for N18 and N19 fail without the fixes.
+- Changed on purpose: a wrong dev-profile key is now 401, where it was 503.
+- Recorded, not fixed:
+  - MCP `initialize`/`ping` answer before identity (GW32).
+  - A malformed unauthenticated body is 400 before 401.
+  - Plan pins grow per request (S4).
+  - Streams admitted before a revoke keep running (GW29).
+  - Failed-credential audit records (GW35).
+  - The duplicate re-hydrator metric family on the gateway (N14, S5).
+
 ### Not done
 
-S3–S7 in plan §9.4. L36-1 and L36-2 are not run. An unknown key on the dev gateway still answers 503 `shared_state_unavailable`, not 401 (S3).
+S4–S7 in plan §9.4. L36-1 and L36-2 are not run.
 
 ### Working defaults for the open owner decisions
 

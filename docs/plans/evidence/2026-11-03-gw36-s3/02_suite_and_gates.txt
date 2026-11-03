@@ -1,0 +1,16 @@
+# offline suite (-n 24, AMF_EDGE_DOCKER=0)
+2956 passed, 100 skipped, 6 warnings in 57.61s
+# mypy --strict
+Success: no issues found in 272 source files
+# ruff
+All checks passed!
+# import-linter
+Contracts: 3 kept, 0 broken.
+check_capacity_literals gateway_v2 exit=0
+check_no_module_mutable gateway_v2 exit=0
+check_frozen_dataclasses gateway_v2 exit=0
+check_http_outside_edge_resolve gateway_v2 exit=0
+check_sizes gateway_v2 exit=0
+check_tenant_scale gateway_v2 exit=0
+check_dispatch_provenance gateway_v2 exit=0
+check_secret_headers exit=0
