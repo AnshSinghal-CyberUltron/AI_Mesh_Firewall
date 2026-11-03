@@ -51,6 +51,7 @@ from dataclasses import dataclass
 from gateway_v2.admit.gcra import LocalGCRA
 from gateway_v2.admit.grant import Admitted, BudgetVerdict, budget_verdict
 from gateway_v2.admit.lease import BudgetLease
+from gateway_v2.domain.identity import Principal
 from gateway_v2.runtime.errors import CapacityUnavailable, CapacityUnset
 from gateway_v2.runtime.resources import ResourceContract
 
@@ -326,8 +327,25 @@ class QuotaComponent:
         self._generation_source = generation_source
         self._metrics = metrics
 
-    async def evaluate(self, cost: int, *, request_id: str) -> BudgetVerdict | Admitted:
+    async def evaluate(
+        self,
+        cost: int,
+        *,
+        request_id: str,
+        owner: str = "",
+        principal: Principal | None = None,
+        key_hash: str = "",
+    ) -> BudgetVerdict | Admitted:
         """Decide one request: GCRA burst+rate, then the Budget_Lease. Fail-closed (Req 13.1).
+
+        **GW36 S4 owner surface (Conflict 2).** ``owner`` / ``principal`` / ``key_hash`` are
+        accepted (keyword-only, defaulted) so this shipped façade stays a valid
+        :class:`~gateway_v2.edge.chat_deps.BudgetDecider` under the widened protocol and a bare
+        ``QuotaComponent`` injected directly as ``ChatRoute.quota`` is unaffected. The component is
+        ALREADY scoped to ONE org (its own ``BudgetLease``) and carries its own internal GCRA, so
+        it ignores them — the per-principal GCRA cache + per-org owner lookup are the composed
+        :class:`~gateway_v2.edge.quota_gate.QuotaGate`'s job, and the gate calls this with the
+        narrow ``evaluate(cost, request_id=...)`` form.
 
         The decision order and the fail-closed catch-all:
 
@@ -354,6 +372,7 @@ class QuotaComponent:
         :param request_id: echoed into any :class:`BudgetVerdict` for ``edge`` to render.
         :returns: :class:`Admitted` on admission, else a :class:`BudgetVerdict`.
         """
+        del owner, principal, key_hash  # org-scoped façade; the composed gate owns the lookup.
         try:
             if not self._gcra.admit():
                 # Over the local burst/rate allowance: refuse with the quota-refusal verdict.
@@ -384,8 +403,14 @@ class QuotaComponent:
         except Exception:  # noqa: BLE001 — fail-closed catch-all (Req 13.1), never admit on error.
             return self._refuse(request_id)
 
-    def refund(self, cost: int, *, request_id: str) -> None:
+    def refund(self, cost: int, *, request_id: str, owner: str = "") -> None:
         """Return a charged spend that resulted in **zero provider calls** (Req 1.17 / 2.17).
+
+        **GW36 S4 owner surface (Conflict 2).** ``owner`` is accepted (keyword-only, defaulted) so
+        this façade stays a valid :class:`~gateway_v2.edge.chat_deps.BudgetDecider` under the
+        widened ``refund`` surface; the component is already org-scoped to its own lease, so it is
+        ignored (the composed :class:`~gateway_v2.edge.quota_gate.QuotaGate` is what resolves the
+        owner's component and then calls this with the narrow ``refund(cost, request_id=...)``).
 
         The façade half of the C29 refund (Property 1 (F)): when a request spent budget in
         :meth:`evaluate` and was then refused *before* any upstream call — an input BLOCK, an input
@@ -422,7 +447,7 @@ class QuotaComponent:
         :param cost: the budget cost (tokens) to return — the value charged in :meth:`evaluate`.
         :param request_id: the request the refund belongs to (echo symmetry; unused today).
         """
-        del request_id
+        del request_id, owner
         if cost <= 0:
             return
         try:
