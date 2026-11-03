@@ -78,4 +78,18 @@ CREATE TABLE IF NOT EXISTS amf_state_log (
   actor        text    NOT NULL,
   at           timestamptz NOT NULL DEFAULT now()
 );
+
+-- GW36 S2: the projector's writer lease and its safety heartbeat. One row, ever.
+-- `last_ok_at` is the transaction start of the source read whose revocations are all durable,
+-- so `clock_timestamp() - last_ok_at` is how far state may lag control.
+CREATE TABLE IF NOT EXISTS amf_state_projector (
+  id           smallint PRIMARY KEY CHECK (id = 1),
+  holder       text        NOT NULL,
+  lease_until  timestamptz NOT NULL,
+  last_ok_at   timestamptz
+);
 """
+
+TABLES = ("amf_state_counter", "amf_state_record", "amf_state_log", "amf_state_projector")
+"""What `init_schema` checks for before it runs any DDL, so a start-up with the tables present
+takes no lock at all (`CREATE INDEX IF NOT EXISTS` locks the table even when the index exists)."""

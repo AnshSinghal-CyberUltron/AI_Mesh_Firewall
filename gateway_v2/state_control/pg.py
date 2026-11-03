@@ -57,9 +57,16 @@ from typing import Any
 
 from gateway_v2.domain.state import SignedRecord, StateKind, StateOp, Version
 from state_control.db import ZERO_COUNTERS, CommitUnknown, KindCounters, LoggedWrite
-from state_control.schema import SCHEMA
+from state_control.schema import SCHEMA, TABLES
 
 LOG = logging.getLogger("amf.state.pg")
+
+_SCHEMA_LOCK_KEY = 0x616D6673
+"""`pg_advisory_xact_lock` key serialising concurrent `init_schema` calls ("amfs")."""
+
+_SCHEMA_LOCK_TIMEOUT_MS = 5_000
+"""Only for the one-off DDL transaction: a second process starting together waits this long for
+the first one's DDL instead of failing on the 250 ms request-path lock bound."""
 
 _COLUMNS = (
     "kind, key, epoch, seq, feed_seq, content_hash, deleted, op, signature, body"
@@ -238,6 +245,21 @@ class PostgresTx:
             return None
         return float(row[0].timestamp())
 
+    def renew_lease(self, holder: str, ttl_ms: int) -> bool:
+        """The fence: renew this holder's live lease, holding its row lock until commit.
+
+        A takeover UPDATE waits on that lock, so it cannot commit between this write's fence and
+        its commit, and every write by the old holder after a takeover fails here. The database
+        clock (`clock_timestamp()`, not the transaction-start `now()`) decides expiry.
+        """
+        self._cur.execute(
+            "UPDATE amf_state_projector SET lease_until = clock_timestamp() "
+            "+ make_interval(secs => %s) WHERE id = 1 AND holder = %s "
+            "AND lease_until > clock_timestamp() RETURNING 1",
+            (ttl_ms / 1000, holder),
+        )
+        return self._cur.fetchone() is not None
+
     def settings(self, names: Sequence[str]) -> dict[str, str]:
         """What the server says the named GUCs are, as it sees them. The bound read-back."""
         self._cur.execute(
@@ -377,12 +399,97 @@ class PostgresControlDB:
         return applied
 
     def init_schema(self) -> None:
+        """Create the tables when any is missing. Idempotent, and lock-free when they exist.
+
+        Called by every state-control process at start-up (GW36 G13). Two processes starting
+        together serialise on a transaction-scoped advisory lock, which works through PgBouncer
+        transaction pooling; the session-level kind would not.
+        """
         with self._connect() as connection, connection.cursor() as cursor:
             self._apply_bounds(cursor)
+            cursor.execute(
+                "SELECT " + ", ".join(["to_regclass(%s) IS NOT NULL"] * len(TABLES)),
+                TABLES,
+            )
+            if all(cursor.fetchone()):
+                return
+            cursor.execute(f"SET LOCAL lock_timeout = {_SCHEMA_LOCK_TIMEOUT_MS}")
+            cursor.execute("SELECT pg_advisory_xact_lock(%s)", (_SCHEMA_LOCK_KEY,))
             cursor.execute(SCHEMA)
+            LOG.info("control-plane state schema created")
+
+    def claim_lease(self, holder: str, ttl_ms: int) -> bool:
+        """Become or stay the projector's writer. False means another holder's lease is live.
+
+        A standby only reads the row; it UPDATEs only once the lease has expired, so polling never
+        queues behind the leader's fenced writes.
+        """
+        with self.tx() as tx:
+            cursor = tx._cur  # noqa: SLF001 - same module
+            cursor.execute(
+                "INSERT INTO amf_state_projector (id, holder, lease_until) VALUES "
+                "(1, %s, clock_timestamp() + make_interval(secs => %s)) "
+                "ON CONFLICT (id) DO NOTHING RETURNING 1",
+                (holder, ttl_ms / 1000),
+            )
+            if cursor.fetchone() is not None:
+                return True
+            cursor.execute(
+                "SELECT holder, lease_until > clock_timestamp() FROM amf_state_projector "
+                "WHERE id = 1",
+            )
+            current, live = cursor.fetchone()
+            if live and current == holder:
+                return tx.renew_lease(holder, ttl_ms)
+            if live:
+                return False
+            cursor.execute(
+                "UPDATE amf_state_projector SET holder = %s, lease_until = clock_timestamp() "
+                "+ make_interval(secs => %s) WHERE id = 1 AND lease_until <= clock_timestamp() "
+                "RETURNING 1",
+                (holder, ttl_ms / 1000),
+            )
+            return cursor.fetchone() is not None
+
+    def release_lease(self, holder: str) -> None:
+        """A clean stop hands over now instead of after the TTL. A crash still waits the TTL."""
+        with self.tx() as tx:
+            tx._cur.execute(  # noqa: SLF001 - same module
+                "UPDATE amf_state_projector SET lease_until = clock_timestamp() "
+                "WHERE id = 1 AND holder = %s",
+                (holder,),
+            )
+
+    def mark_projected(self, holder: str, as_of: float) -> bool:
+        """Record the safety heartbeat: every revocation read at `as_of` is durable."""
+        with self.tx() as tx:
+            cursor = tx._cur  # noqa: SLF001 - same module
+            cursor.execute(
+                "UPDATE amf_state_projector SET last_ok_at = GREATEST("
+                "COALESCE(last_ok_at, to_timestamp(%s)), to_timestamp(%s)) "
+                "WHERE id = 1 AND holder = %s AND lease_until > clock_timestamp() RETURNING 1",
+                (as_of, as_of, holder),
+            )
+            return cursor.fetchone() is not None
+
+    def source_lag_s(self) -> float | None:
+        """Seconds since the last safety heartbeat, by the database clock. None = never."""
+        connection = self._connect(read_only=True)
+        try:
+            with connection.cursor() as cursor:
+                self._apply_bounds(cursor)
+                cursor.execute(
+                    "SELECT EXTRACT(EPOCH FROM clock_timestamp() - last_ok_at) "
+                    "FROM amf_state_projector WHERE id = 1",
+                )
+                row = cursor.fetchone()
+                return None if row is None or row[0] is None else max(float(row[0]), 0.0)
+        finally:
+            connection.rollback()
+            connection.close()
 
     @contextlib.contextmanager
-    def cursor_tx(self) -> Iterator[Any]:
+    def cursor_tx(self, *, read_only: bool = False) -> Iterator[Any]:
         """The same bounded transaction, yielding the RAW cursor. GW14c's seam.
 
         The audit sink (`audit_control/`) needs the four session bounds and the commit semantics
@@ -393,8 +500,11 @@ class PostgresControlDB:
 
         Callers get no state-specific helpers and no schema knowledge, so nothing about the
         control plane's tables leaks through this seam.
+
+        `read_only=True` is one REPEATABLE READ snapshot: every statement in the block sees the
+        same committed state. The GW36 projector reads control's tables this way.
         """
-        connection = self._connect()
+        connection = self._connect(read_only=read_only)
         try:
             with connection.cursor() as cursor:
                 self._apply_bounds(cursor)

@@ -86,6 +86,8 @@ class RehydrationMetrics:
     last_success_at: float = ABSENT
     active: int = 0
     publish_pending_oldest_s: float = ABSENT
+    stamps_withheld_source_lag: int = 0
+    source_lag_s: float = ABSENT
     by_kind: Mapping[StateKind, KindRehydrationMetrics] = field(default_factory=dict)
     by_fault: Mapping[str, int] = field(default_factory=dict)
     by_reason: Mapping[str, int] = field(default_factory=dict)
@@ -109,6 +111,8 @@ class RehydrationMetrics:
             "amf_state_stamp_degraded_total": self.stamps_degraded,
             "amf_state_stamp_races_lost_total": self.stamp_races_lost,
             "amf_state_publish_pending_oldest_seconds": self.publish_pending_oldest_s,
+            "amf_state_stamp_withheld_source_lag_total": self.stamps_withheld_source_lag,
+            "amf_state_source_lag_seconds": self.source_lag_s,
         }
         for kind in StateKind:
             metrics = self.by_kind.get(kind, KindRehydrationMetrics())
@@ -128,10 +132,12 @@ class RehydrationMetrics:
         return out
 
 
-SERIES_COUNT = 13 + 4 * len(StateKind) + len(FAULT_CATEGORIES) + len(ALL_REASONS)
+SERIES_COUNT = 15 + 4 * len(StateKind) + len(FAULT_CATEGORIES) + len(ALL_REASONS)
 """How many series this surface can ever produce. A constant, by construction.
 
-13 process-level, four per kind, one per fault category, one per repair reason. R2-10 is why this
+15 process-level (two of them GW36's projector-lag pair: a withheld stamp whose cause is the
+projector, not a kind, must be told apart from a broken kind), four per kind, one per fault
+category, one per repair reason. R2-10 is why this
 is an expression rather than `len(series())`: the test asserts the two agree, so a label whose
 domain is not closed fails the gate instead of shipping.
 """
@@ -176,6 +182,12 @@ class RehydrationMetricsRecorder:
             stamp_races_lost=self._metrics.stamp_races_lost
             + (1 if summary.stamp_race_lost else 0),
             last_success_at=now if summary.ok else self._metrics.last_success_at,
+            stamps_withheld_source_lag=self._metrics.stamps_withheld_source_lag
+            + (1 if stamped is None and summary.source_lagging else 0),
+            source_lag_s=(
+                self._metrics.source_lag_s if summary.source_lag_s is None
+                else summary.source_lag_s
+            ),
         )
 
     def observe_publish_pending(self, oldest_s: float | None) -> None:

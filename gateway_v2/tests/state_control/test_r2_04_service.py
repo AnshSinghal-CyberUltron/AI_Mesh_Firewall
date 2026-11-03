@@ -524,22 +524,14 @@ def test_the_store_ahead_repair_may_still_regress_because_it_has_to() -> None:
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "PRE-EXISTING GW05c/R2-02 defect, NOT R2-04. `repair_epoch` advances the counter's "
-        "feed_seq to N+1 but the records keep their original feed_seq <= N, so `_compare` sees "
-        "head.index_top < manifest.feed_seq and returns INDEX on every subsequent round -- a "
-        "permanent O(records) whole-kind republish once per period. Measured: 8 consecutive "
-        "rounds, 8 whole-kind publishes, diagnose never returns to None. Violates GW05c's "
-        "'per-record publish, never a whole-kind rewrite'. Fixing it means either re-signing the "
-        "records at new positions during an epoch repair or comparing index_top against the "
-        "records' own max feed_seq -- a GW05c design decision, not R2-04's to guess at. Remove "
-        "this marker when it is fixed."
-    ),
-)
 def test_a_store_ahead_repair_settles_instead_of_looping() -> None:
-    """What SHOULD happen after a `store_ahead` repair: the kind reads clean and stays clean."""
+    """After a `store_ahead` repair the kind reads clean and stays clean.
+
+    Was a strict xfail (GW05c/R2-02): the epoch bump alone left the manifest one position above
+    every record, so the re-hydrator looped on INDEX and every gateway reader refused the kind.
+    GW36 S2 re-signs the records at new positions above the store's, so the manifest sits on the
+    highest record.
+    """
     lab = _service()
     lab.service.round_once()
     counters, records, engaged = lab.db.snapshot(StateKind.PLAN)

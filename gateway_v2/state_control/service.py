@@ -43,8 +43,12 @@ from typing import Any
 from gateway_v2.domain.locks import FRESH_MS, PG_GRACE_MS
 from gateway_v2.domain.state_knobs import (
     DEFAULT_DEEP_EVERY,
+    DEFAULT_PROJECTOR_ADD_CHUNKS_PER_ROUND,
+    DEFAULT_PROJECTOR_LEASE_MS,
+    DEFAULT_PROJECTOR_PERIOD_MS,
     DEFAULT_REFRESH_PERIOD_MS,
     DEFAULT_REHYDRATE_PERIOD_MS,
+    ProjectorKnobs,
     StateKnobs,
 )
 from gateway_v2.runtime.store_keys import DEFAULT_NAMESPACE, StoreKeys
@@ -106,10 +110,26 @@ class ServiceConfig:
     idle_tx_timeout_ms: int
     tcp_user_timeout_ms: int
     connect_timeout_s: int
+    projector: ProjectorKnobs = ProjectorKnobs(lag_ms=0)
+    """GW36. `from_env` enforces the projector heartbeat by default; a directly built config
+    (tests, benches) does not, so nothing that predates the projector changes behaviour."""
 
     @property
     def period_s(self) -> float:
         return self.knobs.rehydrate_period_ms / 1000
+
+
+def projector_knobs_from_env(source: Mapping[str, str]) -> ProjectorKnobs:
+    """One reading of the projector's knobs, shared by the projector and the re-hydrators so a
+    lag bound is always validated against the lease and period the projector actually runs."""
+    return ProjectorKnobs(
+        period_ms=_int(source, "AMF_PROJECTOR_PERIOD_MS", DEFAULT_PROJECTOR_PERIOD_MS),
+        lease_ms=_int(source, "AMF_PROJECTOR_LEASE_MS", DEFAULT_PROJECTOR_LEASE_MS),
+        lag_ms=_int(source, "AMF_PROJECTOR_LAG_MS", PG_GRACE_MS),
+        add_chunks_per_round=_int(
+            source, "AMF_PROJECTOR_ADD_CHUNKS_PER_ROUND", DEFAULT_PROJECTOR_ADD_CHUNKS_PER_ROUND,
+        ),
+    )
 
 
 def from_env(env: Mapping[str, str] | None = None) -> ServiceConfig:
@@ -163,6 +183,7 @@ def from_env(env: Mapping[str, str] | None = None) -> ServiceConfig:
             source, "AMF_PG_TCP_USER_TIMEOUT_MS", DEFAULT_TCP_USER_TIMEOUT_MS,
         ),
         connect_timeout_s=_int(source, "AMF_PG_CONNECT_TIMEOUT_S", DEFAULT_CONNECT_TIMEOUT_S),
+        projector=projector_knobs_from_env(source),
     )
 
 
@@ -228,6 +249,8 @@ class RehydratorService:
         )
         # R2-04 clause 1, verified rather than asserted. Raises ControlPlaneBoundsNotApplied.
         db.verify_bounds()
+        # GW36 G13: nothing else creates `amf_state_*` in a deployment. Lock-free when present.
+        db.init_schema()
         client = redis.Redis.from_url(
             config.valkey_url, socket_timeout=config.knobs.store_timeout_ceiling_s / 2,
         )
@@ -243,7 +266,9 @@ class RehydratorService:
             CoalesceConfig.from_knobs(config.knobs),
             clock=time.monotonic,
         )
-        writer = StateWriter(db, coalescing, config.secret)
+        writer = StateWriter(
+            db, coalescing, config.secret, actor=f"amf.rehydrator:{config.rehydrator_id}",
+        )
         # The re-hydrator keeps the BARE publisher: its wholesale `publish_kind` restore must NOT
         # be coalesced (R2-04 HA — a re-hydrator's restore is the change and emits its own nudge).
         rehydrator = Rehydrator(
@@ -254,6 +279,8 @@ class RehydratorService:
             name=config.rehydrator_id,
             fresh_ms=config.knobs.fresh_ms,
             pg_grace_ms=config.knobs.pg_grace_ms,
+            source_lag=db.source_lag_s,
+            source_lag_ms=config.projector.lag_ms,
         )
         return cls(config, rehydrator, coalescer=coalescing)
 
@@ -280,7 +307,7 @@ class RehydratorService:
     def run(self) -> int:
         """Loop until stopped. Returns a process exit code."""
         config = self._config
-        for warning in config.knobs.warnings:
+        for warning in (*config.knobs.warnings, *config.projector.warnings):
             LOG.warning("%s", warning)
         LOG.info(
             "re-hydrator %s starting in zone=%s: period=%dms deep_every=%d fresh=%dms "

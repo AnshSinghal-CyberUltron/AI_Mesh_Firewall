@@ -79,6 +79,10 @@ class ControlTx(Protocol):
     def logged(self, log_id: int) -> LoggedWrite | None:
         ...
 
+    def renew_lease(self, holder: str, ttl_ms: int) -> bool:
+        """The projector's fence. False when `holder` no longer holds a live lease."""
+        ...
+
 
 class ControlDB(Protocol):
     def tx(self) -> contextlib.AbstractContextManager[ControlTx]:
@@ -111,6 +115,8 @@ class _State:
     engaged: dict[tuple[StateKind, str], bool]
     log: list[LoggedWrite]
     written_at: dict[tuple[StateKind, str], float]
+    lease: tuple[str, float] | None = None
+    last_ok_at: float | None = None
 
     def copy(self) -> _State:
         return _State(
@@ -119,6 +125,8 @@ class _State:
             engaged=dict(self.engaged),
             log=list(self.log),
             written_at=dict(self.written_at),
+            lease=self.lease,
+            last_ok_at=self.last_ok_at,
         )
 
 
@@ -169,6 +177,14 @@ class _MemoryTx:
             if entry.log_id == log_id:
                 return entry
         return None
+
+    def renew_lease(self, holder: str, ttl_ms: int) -> bool:
+        now = self._clock()
+        lease = self._state.lease
+        if lease is None or lease[0] != holder or lease[1] <= now:
+            return False
+        self._state.lease = (holder, now + ttl_ms / 1000)
+        return True
 
 
 class MemoryControlDB:
@@ -228,6 +244,41 @@ class MemoryControlDB:
     def log(self) -> Sequence[LoggedWrite]:
         with self._lock:
             return tuple(self._state.log)
+
+    def claim_lease(self, holder: str, ttl_ms: int) -> bool:
+        with self.tx() as tx:
+            now = self._clock()
+            lease = tx._state.lease  # noqa: SLF001 - same module
+            if lease is not None and lease[1] > now and lease[0] != holder:
+                return False
+            tx._state.lease = (holder, now + ttl_ms / 1000)  # noqa: SLF001
+            return True
+
+    def release_lease(self, holder: str) -> None:
+        with self.tx() as tx:
+            lease = tx._state.lease  # noqa: SLF001 - same module
+            if lease is not None and lease[0] == holder:
+                tx._state.lease = (holder, self._clock())  # noqa: SLF001
+
+    def mark_projected(self, holder: str, as_of: float) -> bool:
+        with self.tx() as tx:
+            state = tx._state  # noqa: SLF001 - same module
+            lease = state.lease
+            if lease is None or lease[0] != holder or lease[1] <= self._clock():
+                return False
+            state.last_ok_at = as_of if state.last_ok_at is None else max(state.last_ok_at, as_of)
+            return True
+
+    def source_lag_s(self) -> float | None:
+        with self._lock:
+            last = self._state.last_ok_at
+        return None if last is None else max(self._clock() - last, 0.0)
+
+    def lease_holder(self) -> str | None:
+        """Test inspection: who holds a live lease now."""
+        with self._lock:
+            lease = self._state.lease
+        return lease[0] if lease is not None and lease[1] > self._clock() else None
 
 
 def advance(

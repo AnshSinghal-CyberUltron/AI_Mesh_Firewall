@@ -31,16 +31,33 @@ from gateway_v2.domain.state import (
     StateOp,
     Version,
 )
-from gateway_v2.runtime.state_sig import make_manifest, make_record
-from state_control.db import CommitUnknown, ControlDB, KindCounters, advance
+from gateway_v2.runtime.state_sig import body_hash, canonical_body, make_manifest, make_record
+from state_control.db import CommitUnknown, ControlDB, ControlTx, KindCounters, advance
 from state_control.publisher import StatePublisher
 
 LOG = logging.getLogger("amf.state.writer")
 
 OK = "ok"
 OK_PUBLISH_PENDING = "ok_publish_pending"
+UNCHANGED = "unchanged"
 UNKNOWN = "unknown"
 ERROR = "error"
+
+
+class LeaseLost(Exception):
+    """A fenced write found its holder's lease gone. Nothing was committed."""
+
+
+class RecordExists(Exception):
+    """`put_many(require_new=True)` met a key that already has a record. Nothing was committed."""
+
+
+@dataclass(frozen=True, slots=True)
+class Fence:
+    """Commit only while `holder` holds the projector lease; each fenced write renews it."""
+
+    holder: str
+    ttl_ms: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -55,7 +72,7 @@ class WriteOutcome:
 
     @property
     def durable(self) -> bool:
-        return self.status in (OK, OK_PUBLISH_PENDING)
+        return self.status in (OK, OK_PUBLISH_PENDING, UNCHANGED)
 
     @property
     def published(self) -> bool:
@@ -94,11 +111,29 @@ class StateWriter:
         op: StateOp = StateOp.PUT,
         engaged: bool | None = None,
         epoch_bump: bool = False,
+        if_changed: bool = False,
+        fence: Fence | None = None,
     ) -> WriteOutcome:
-        """Commit one record, then publish exactly that record."""
+        """Commit one record, then publish exactly that record.
+
+        `if_changed` skips the write, inside the counter lock, when the stored record already has
+        this body, this `deleted` flag and (for a kill switch) this engaged flag: the outcome is
+        `unchanged` and nothing is bumped or published. `fence` makes the commit conditional on
+        the projector lease (raises `LeaseLost`).
+        """
         record, counters = self._commit(
-            kind, key, body, deleted=deleted, op=op, engaged=engaged, epoch_bump=epoch_bump,
+            kind,
+            key,
+            body,
+            deleted=deleted,
+            op=op,
+            engaged=engaged,
+            epoch_bump=epoch_bump,
+            if_changed=if_changed,
+            fence=fence,
         )
+        if record is None:
+            return WriteOutcome(UNCHANGED, kind, counters.version, counters.feed_seq, 0)
         manifest = self._manifest(kind, counters)
         return self._publish_one(record, manifest, counters, engaged)
 
@@ -108,12 +143,22 @@ class StateWriter:
         entries: Sequence[tuple[str, Mapping[str, object]]],
         *,
         engaged: Mapping[str, bool] | None = None,
+        require_new: bool = False,
+        fence: Fence | None = None,
     ) -> WriteOutcome:
-        """Bulk onboarding. ONE transaction, ONE version bump, ONE manifest, ONE nudge."""
+        """Bulk onboarding. ONE transaction, ONE version bump, ONE manifest, ONE nudge.
+
+        `require_new` refuses (raises `RecordExists`, nothing committed) when any key already has
+        a record: a batch publish writes records before the manifest outside one MULTI, which is
+        harmless for new keys (their index scores sit above the attested manifest) and breaks a
+        mid-round reader's count for an existing one.
+        """
         if not entries:
             counters = self._db.counters(kind)
             return WriteOutcome(OK, kind, counters.version, counters.feed_seq, 0)
-        records, counters = self._commit_many(kind, entries, engaged)
+        records, counters = self._commit_many(
+            kind, entries, engaged, require_new=require_new, fence=fence,
+        )
         manifest = self._manifest(kind, counters)
         try:
             published = self._publisher.publish_batch(
@@ -181,21 +226,68 @@ class StateWriter:
         """`off` is an explicit record too, and it is what keeps `on_count` honest."""
         return self.put(StateKind.KS, scope, {"on": on}, engaged=on)
 
-    def repair_epoch(self, kind: StateKind) -> KindCounters:
-        """Move Postgres to a new epoch when the STORE holds a version it never issued.
+    def repair_epoch(
+        self,
+        kind: StateKind,
+        *,
+        store_version: Version | None = None,
+        store_feed_seq: int = 0,
+    ) -> KindCounters:
+        """Move the kind above whatever the STORE holds that Postgres never issued.
 
         A divergence (a restore from a stray backup, a rogue publisher) can leave the store
-        ahead. Republishing the current content at the current version would be a REGRESS from
-        the point of view of a gateway that already applied the higher one, and C36 refuses a
-        regress by design, so the fleet would reject the repair. Bumping the epoch first makes
-        the republished state unambiguously newer than anything any process has applied.
+        ahead. A gateway that applied the store's position refuses any manifest older in VERSION
+        or lower in FEED_SEQ (`decode_manifest`), whatever its epoch. So every record is re-signed,
+        byte-for-byte and with its `deleted`, `op` and engaged flag kept, at a new epoch above both
+        sides and at fresh positions above both sides. The manifest then sits exactly on the
+        highest record, so the next round finds nothing to repair (the old loop: an epoch bump
+        alone left the manifest one position above every record, forever).
+
+        An EMPTY kind cannot be lifted above a reader's position, because a reader refuses count
+        0 at any position but 0. It gets the epoch bump at position 0, which a cold reader accepts;
+        a warm reader that applied the higher position stays fail-closed until it restarts.
         """
         with self._db.tx() as tx:
             counters = tx.counters(kind, lock=True)
-            moved = advance(counters, epoch_bump=True, is_new=False, engaged_delta=0)
+            epoch = max(counters.version.epoch, store_version.epoch if store_version else 0) + 1
+            records = sorted(tx.records(kind), key=lambda record: record.feed_seq)
+            if not records:
+                moved = KindCounters(
+                    version=Version(epoch, 0),
+                    feed_seq=counters.feed_seq,
+                    count=counters.count,
+                    on_count=counters.on_count,
+                )
+            else:
+                base = max(counters.feed_seq, store_feed_seq)
+                for index, record in enumerate(records, start=1):
+                    tx.upsert(
+                        make_record(
+                            self._secret,
+                            kind,
+                            record.key,
+                            _body_of(record),
+                            Version(epoch, index),
+                            base + index,
+                            deleted=record.deleted,
+                            op=record.op,
+                        ),
+                        engaged=tx.engaged(kind, record.key),
+                        actor=self._actor,
+                    )
+                moved = KindCounters(
+                    version=Version(epoch, len(records)),
+                    feed_seq=base + len(records),
+                    count=counters.count,
+                    on_count=counters.on_count,
+                )
             tx.set_counters(kind, moved)
         LOG.warning(
-            "state epoch repaired kind=%s version=%s", kind.value, moved.version,
+            "state epoch repaired kind=%s version=%s feed_seq=%d records=%d",
+            kind.value,
+            moved.version,
+            moved.feed_seq,
+            len(records),
         )
         return moved
 
@@ -232,13 +324,24 @@ class StateWriter:
         op: StateOp,
         engaged: bool | None,
         epoch_bump: bool,
-    ) -> tuple[SignedRecord, KindCounters]:
+        if_changed: bool,
+        fence: Fence | None,
+    ) -> tuple[SignedRecord | None, KindCounters]:
         engage = False if deleted else bool(engaged)
         try:
             with self._db.tx() as tx:
                 counters = tx.counters(kind, lock=True)
+                _check_fence(tx, fence)
                 previous = tx.record(kind, key)
                 was_engaged = tx.engaged(kind, key)
+                if (
+                    if_changed
+                    and previous is not None
+                    and previous.deleted == deleted
+                    and previous.content_hash == body_hash(canonical_body(body))
+                    and (engaged is None or was_engaged == engage)
+                ):
+                    return None, counters
                 moved = advance(
                     counters,
                     epoch_bump=epoch_bump,
@@ -269,14 +372,20 @@ class StateWriter:
         kind: StateKind,
         entries: Sequence[tuple[str, Mapping[str, object]]],
         engaged: Mapping[str, bool] | None,
+        *,
+        require_new: bool,
+        fence: Fence | None,
     ) -> tuple[tuple[SignedRecord, ...], KindCounters]:
         records: list[SignedRecord] = []
         with self._db.tx() as tx:
             counters = tx.counters(kind, lock=True)
+            _check_fence(tx, fence)
             moved = counters
             for key, body in entries:
                 engage = False if engaged is None else bool(engaged.get(key, False))
                 previous = tx.record(kind, key)
+                if require_new and previous is not None:
+                    raise RecordExists(f"{kind.value} record {key!r} already exists")
                 was_engaged = tx.engaged(kind, key)
                 moved = advance(
                     moved,
@@ -328,6 +437,11 @@ class StateWriter:
             )
         status = OK if published else OK_PUBLISH_PENDING
         return WriteOutcome(status, record.kind, counters.version, counters.feed_seq, 1)
+
+
+def _check_fence(tx: ControlTx, fence: Fence | None) -> None:
+    if fence is not None and not tx.renew_lease(fence.holder, fence.ttl_ms):
+        raise LeaseLost(f"projector lease is not held by {fence.holder!r}")
 
 
 def _body_of(record: SignedRecord) -> Mapping[str, object]:

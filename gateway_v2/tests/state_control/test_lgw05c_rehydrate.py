@@ -288,8 +288,11 @@ def test_a_store_ahead_repair_bumps_the_epoch_first() -> None:
     assert [event.reason for event in summary.repairs] == [STORE_AHEAD]
     after = db.counters(StateKind.PLAN).version
     assert after.epoch == before.epoch + 1
-    assert after.seq == 0
-    assert db.counters(StateKind.PLAN).feed_seq > 1, "the cursor still moved forward"
+    # GW36 S2 (F11): every record is re-signed at the new epoch, so seq counts them, and the
+    # position lands above the rogue store's 5 -- a reader that applied 5 refuses anything lower.
+    assert after.seq == 1
+    assert db.counters(StateKind.PLAN).feed_seq > 5, "the cursor moved above the store's"
+    assert rehydrator.round_once().repairs == (), "a repaired kind must read clean next round"
 
 
 def test_the_stale_grace_rechecks_before_repairing() -> None:

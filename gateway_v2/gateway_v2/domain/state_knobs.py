@@ -168,3 +168,58 @@ class StateKnobs:
 
 
 DEFAULT_KNOBS = StateKnobs()
+
+
+DEFAULT_PROJECTOR_PERIOD_MS = 1_000
+"""How often the projector reads control's tables. The new-key lag is about one period."""
+
+DEFAULT_PROJECTOR_LEASE_MS = 5_000
+"""How long one projector holds the writer lease without renewing it. Every fenced write renews,
+so a long round never fences itself out; the TTL only decides how fast a standby takes over."""
+
+DEFAULT_PROJECTOR_ADD_CHUNKS_PER_ROUND = 4
+"""New-key chunks one round may write after the safety heartbeat. Bulk onboarding then spreads
+over rounds instead of stretching one, so the next round's revocations are not queued behind it."""
+
+
+@dataclass(frozen=True, slots=True)
+class ProjectorKnobs:
+    """The control-to-state projector's periods. Validated on construction."""
+
+    period_ms: int = DEFAULT_PROJECTOR_PERIOD_MS
+    lease_ms: int = DEFAULT_PROJECTOR_LEASE_MS
+
+    lag_ms: int = PG_GRACE_MS
+    """The re-hydrator withholds the stamp when the projector's last safety heartbeat is older
+    than this. 0 = not enforced (break-glass). The default is the owner's ride-through bound
+    (0.7-2): state may lag its source by at most as long as a Postgres outage may be ridden out."""
+
+    add_chunks_per_round: int = DEFAULT_PROJECTOR_ADD_CHUNKS_PER_ROUND
+
+    def __post_init__(self) -> None:
+        if self.period_ms <= 0:
+            raise ValueError("projector period_ms must be positive")
+        if self.add_chunks_per_round < 1:
+            raise ValueError("projector add_chunks_per_round must be >= 1")
+        if self.lease_ms < 2 * self.period_ms:
+            raise ValueError(
+                f"projector lease_ms={self.lease_ms} must be at least 2 x period_ms="
+                f"{self.period_ms}: a leader that misses one renewal must not lose the lease",
+            )
+        if self.lag_ms < 0:
+            raise ValueError("projector lag_ms must not be negative")
+        if self.lag_ms and self.lag_ms < self.lease_ms + self.period_ms:
+            raise ValueError(
+                f"projector lag_ms={self.lag_ms} must be 0 (off) or at least lease_ms + "
+                f"period_ms={self.lease_ms + self.period_ms}: a standby takeover must not "
+                "withhold the fleet's stamp",
+            )
+
+    @property
+    def warnings(self) -> tuple[str, ...]:
+        if self.lag_ms == 0:
+            return (
+                "projector lag is NOT enforced (lag_ms=0): a stopped projector leaves revoked "
+                "keys and killed orgs served from state that no longer matches control",
+            )
+        return ()

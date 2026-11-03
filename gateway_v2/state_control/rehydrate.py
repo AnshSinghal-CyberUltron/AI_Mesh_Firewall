@@ -201,6 +201,12 @@ class RoundSummary:
     depending on the wording of an exception.
     """
 
+    source_lag_s: float | None = None
+    """The projector's heartbeat age this round. None when not enforced, unread or never set."""
+
+    source_lagging: bool = False
+    """The stamp was withheld (or would have been) because the projector heartbeat is stale."""
+
     @property
     def ok(self) -> bool:
         return not self.errors
@@ -223,7 +229,23 @@ class Rehydrator:
         name: str | None = None,
         fresh_ms: int = FRESH_MS,
         pg_grace_ms: int = PG_GRACE_MS,
+        source_lag: Callable[[], float | None] | None = None,
+        source_lag_ms: int = 0,
     ) -> None:
+        """`source_lag` / `source_lag_ms`: GW36's projector heartbeat in the freshness proof.
+
+        When enforced (`source_lag_ms > 0`), a round that verified every kind still withholds the
+        stamp if the projector's last safety heartbeat is missing or older than the bound: the
+        store then matches Postgres, but Postgres no longer matches control, so a revocation made
+        in the console would be served from state nothing re-derived. A Postgres outage keeps the
+        existing ride-through, which bounds that case on its own.
+        """
+        if source_lag_ms < 0:
+            raise ValueError("source_lag_ms must not be negative")
+        if source_lag_ms and source_lag is None:
+            raise ValueError("source_lag_ms is enforced but no source_lag reader was given")
+        self._source_lag = source_lag
+        self._source_lag_ms = source_lag_ms
         if pg_grace_ms != 0 and pg_grace_ms < fresh_ms:
             # A grace shorter than the gateways' freshness bound cannot ride anything through:
             # the fleet would fail closed before the window it is meant to cover had ended.
@@ -360,7 +382,12 @@ class Rehydrator:
         """Republish the whole kind from Postgres. The ONLY legitimate whole-kind publish."""
         detected_at = self._clock()
         if reason == STORE_AHEAD:
-            self._writer.repair_epoch(kind)
+            held = self._store_manifest(kind)
+            self._writer.repair_epoch(
+                kind,
+                store_version=None if held is None else held.version,
+                store_feed_seq=0 if held is None else held.feed_seq,
+            )
         counters, records, engaged = self._snapshot(kind)
         manifest = self._writer.manifest_for(kind, counters)
         # ONLY the store_ahead repair may move the manifest backwards; every other reason
@@ -431,7 +458,10 @@ class Rehydrator:
                 LOG.warning("rehydrate round failed for kind=%s: %s", kind.value, exc)
                 errors.append((kind, f"{type(exc).__name__}: {exc}"))
                 faults.append((kind, FAULT_ERROR))
-        minted, won = self._stamp(started_at, verified, deep=deep, db_down=db_down)
+        lag_s, lagging = self._source_check(db_down=db_down)
+        minted, won = self._stamp(
+            started_at, verified, deep=deep, db_down=db_down, source_lagging=lagging,
+        )
         return RoundSummary(
             repairs=tuple(repairs),
             healthy=tuple(healthy),
@@ -440,7 +470,36 @@ class Rehydrator:
             stamp_race_lost=minted is not None and not won,
             faults=tuple(faults),
             publish_pending_s=pending_s,
+            source_lag_s=lag_s,
+            source_lagging=lagging,
         )
+
+    def _source_check(self, *, db_down: bool) -> tuple[float | None, bool]:
+        """`(projector lag in seconds or None, whether the stamp must be withheld for it)`.
+
+        Not read while Postgres is down: the ride-through already bounds that window, and the
+        heartbeat cannot advance during it anyway. Any read failure counts as lagging.
+        """
+        if not self._source_lag_ms or self._source_lag is None or db_down:
+            return None, False
+        try:
+            lag_s = self._source_lag()
+        except Exception as exc:  # noqa: BLE001 - an unreadable heartbeat is not a fresh one
+            LOG.warning("projector heartbeat could not be read: %s", exc)
+            return None, True
+        if lag_s is None:
+            return None, True
+        return lag_s, lag_s * 1000 > self._source_lag_ms
+
+    def _store_manifest(self, kind: StateKind) -> Manifest | None:
+        """The manifest the store holds now, verified but with no floor. Repair path only."""
+        head = self._publisher.stored_head(kind)
+        if head.manifest_raw is None:
+            return None
+        try:
+            return decode_manifest(self._secret, kind, head.manifest_raw, not_before=ZERO)
+        except StoreDataUnavailable:
+            return None
 
     def _reason(
         self, kind: StateKind, *, deep: bool,
@@ -500,11 +559,14 @@ class Rehydrator:
         *,
         deep: bool,
         db_down: bool,
+        source_lagging: bool = False,
     ) -> tuple[Stamp | None, bool]:
         """`(the stamp this round minted, whether it won the race)`."""
         if not self._can_stamp:
             return None, False
-        claim = self._claimable(verified_at, verified, db_down=db_down)
+        claim = self._claimable(
+            verified_at, verified, db_down=db_down, source_lagging=source_lagging,
+        )
         if claim is None:
             return None, False
         cursors, degraded = claim
@@ -545,6 +607,7 @@ class Rehydrator:
         verified: Mapping[StateKind, Cursor],
         *,
         db_down: bool,
+        source_lagging: bool = False,
     ) -> tuple[Mapping[StateKind, Cursor], bool] | None:
         """`(cursors, degraded)` this round may attest, or None to withhold.
 
@@ -553,8 +616,17 @@ class Rehydrator:
         fresh-looking stamp forever. Withholding makes freshness LAPSE instead, and the fleet
         fails closed once the last stamp ages past the bound. Honest silence beats a confident
         half-truth, because the missing half is the broken half.
+
+        The same holds one hop upstream (GW36): a store that matches Postgres proves nothing
+        once the projector has stopped deriving Postgres from control.
         """
         missing = sorted(kind.value for kind in StateKind if kind not in verified)
+        if not missing and source_lagging:
+            self._withhold(
+                [kind.value for kind in StateKind],
+                f"projector heartbeat missing or older than {self._source_lag_ms} ms",
+            )
+            return None
         if not missing:
             return dict(verified), False
         if verified or not db_down:
