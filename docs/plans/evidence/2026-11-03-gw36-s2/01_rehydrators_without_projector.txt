@@ -1,0 +1,9 @@
+# step 1: control migrated (core.0041) + S2 re-hydrators started, NO projector yet
+# amf_state tables now present:
+amf_state_counter,amf_state_record,amf_state_log,amf_state_projector
+# stamp exists: 0
+# rehydrator metrics:
+amf_state_source_lag_seconds -1.0
+amf_state_stamp_withheld_source_lag_total 74
+amf_state_stamp_withheld_total 74
+amf_state_stamp_written_total 0

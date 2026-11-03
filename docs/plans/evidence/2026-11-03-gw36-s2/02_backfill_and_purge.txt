@@ -1,0 +1,12 @@
+# step 2: manage.py sync_v2_plan_documents --purge-legacy-plan-keys
+default: published revision=1 rules=7 dev_copy=not_mapped
+zeroshield: published revision=1 rules=168 dev_copy=written
+purged 2 legacy plan documents
+# {rv2}:plan:* / devplan keys after purge:
+{rv2}:dev:firewall-plan
+{rv2}:devplan:dev-org
+{rv2}:idx:plan
+{rv2}:meta:plan
+{rv2}:plan:default
+{rv2}:plan:zeroshield
+(control's unrelated startup/AWS-client log lines removed)

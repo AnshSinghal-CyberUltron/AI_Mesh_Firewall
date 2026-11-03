@@ -1,0 +1,20 @@
+Success: no issues found in 269 source files
+[1;32mAll checks passed![0m
+
+Contracts: 3 kept, 0 broken.
+check_capacity_literals gateway_v2 exit=0 
+check_capacity_literals state_control exit=0 
+check_no_module_mutable gateway_v2 exit=0 
+check_no_module_mutable state_control exit=0 
+check_frozen_dataclasses gateway_v2 exit=0 
+check_frozen_dataclasses state_control exit=0 
+check_http_outside_edge_resolve gateway_v2 exit=0 
+check_http_outside_edge_resolve state_control exit=0 
+check_sizes gateway_v2 exit=0 
+check_sizes state_control exit=0 
+check_tenant_scale gateway_v2 exit=0 
+check_tenant_scale state_control exit=1 1 tenant-scale violation(s). See §2.1 rule 1 and R2-02: no work proportional to tenants, keys or records on a serving p
+check_dispatch_provenance gateway_v2 exit=0 
+check_dispatch_provenance state_control exit=0 
+check_secret_headers (repo-wide, takes no tree) exit=0
+NOTE: check_tenant_scale state_control exit=1 is the pre-existing documented R2-05 finding state_control/valkey.py:100 (zrange on the re-hydrator's deep-verify path); the gate deliberately excludes state_control and S2 adds no violation.

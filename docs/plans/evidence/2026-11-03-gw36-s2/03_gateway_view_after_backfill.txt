@@ -1,0 +1,45 @@
+# step 3: gateway-side read of the real store (FeedReader + appliers + StampView)
+{
+ "at": 1793690797.4916196,
+ "budget_manifest": true,
+ "key": {
+  "cursor": "Cursor(version=Version(epoch=1, seq=2), feed_seq=2)",
+  "error": null,
+  "ok": true
+ },
+ "keys_in_index": 2,
+ "killed": {
+  "default": false,
+  "zeroshield": false
+ },
+ "ks": {
+  "cursor": "Cursor(version=Version(epoch=0, seq=0), feed_seq=0)",
+  "error": null,
+  "ok": true
+ },
+ "plan": {
+  "cursor": "Cursor(version=Version(epoch=1, seq=2), feed_seq=2)",
+  "error": null,
+  "ok": true
+ },
+ "plans": {
+  "default": "plan v1.1 rules=7",
+  "zeroshield": "plan v1.2 rules=168"
+ },
+ "principals": {
+  "3f8550d995c8": {
+   "key_id": "09697629-0ae0-4655-95fd-c4034c913b9d",
+   "org_id": "zeroshield"
+  },
+  "43ff3cbb3810": "absent",
+  "8e2ec5faba8a": {
+   "key_id": "96f33466-7adf-4717-b857-5a7da93613f6",
+   "org_id": "zeroshield"
+  }
+ },
+ "stamp": {
+  "accepted": true,
+  "age_s": 0.707,
+  "fresh": true
+ }
+}

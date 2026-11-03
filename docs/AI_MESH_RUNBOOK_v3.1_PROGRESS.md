@@ -169,9 +169,46 @@ Plan with three contradictory reviews: `docs/plans/2026-11-03-gw36-s1-upstream-p
 - Live against the T02 recorder through a second dev gateway (:8302): 15/15 checks. Offline: 2845 passed in a container (the one container failure needs `git`; it passes on the host).
 - Recorded, not fixed: a stalled upstream holds a non-streaming request up to the 300 s read timeout (S5 / GW28); an upstream failure shows `output_guardrail: block` until the console schema has an `error` action (GW35); a streamed refusal before the first byte is still an SSE error frame after a 200 (S5 / GW34); the request id hashes raw input text (S3); embeddings to a real upstream (S1b).
 
+### Slice S2 — done on 3 November (control-to-state projector)
+
+Plan with five contradictory reviews: `docs/plans/2026-11-03-gw36-s2-control-projector.md`. Evidence: `docs/plans/evidence/2026-11-03-gw36-s2/`.
+
+- Found live before any change: the deployed re-hydrators failed every round with `relation "amf_state_counter" does not exist` (G13). No stamp had ever been written, and two unsigned documents sat at `{rv2}:plan:dev-org` and `{rv2}:plan:org-b`.
+- Control now stores each org's plan document in `core_v2_plan_document` (migration `core/0041`), keyed by the org slug and rebuilt under a row lock on the org. Two racing saves previously could store the older one. The dev copy moved to `{rv2}:devplan:{alias}`, so control never writes `{rv2}:plan:*`. An org with no saved config now publishes the model defaults (v1 parity), instead of "firewall off".
+- Found and fixed while reading control: a failed policy load published a plan without the org's policies, and a failed config import published "firewall off". Both now refuse to store.
+- New `state-projector-a/-b` (`python -m state_control.projector_service`) reads control's tables in one read-only snapshot and writes signed KEY, PLAN and KILL SWITCH records.
+  - One writer at a time, under a Postgres lease; every write is fenced and renews it.
+  - Each round runs in a fixed order: switches on, revokes, plans, a safety heartbeat, switches off, then new keys (capped per round).
+  - The re-hydrators withhold the stamp when the heartbeat is older than 16 s.
+  - `init_schema` now runs in both services.
+- `store_ahead` repair: after an epoch bump, gateways refused the kind for good, not only the re-hydrator, because the manifest sat above every record and below a reader's applied position. The repair now re-signs every record above the store's epoch and position, keeping revoke, op and engaged state. The R2-04 strict xfail passes and its marker is removed.
+- Live on the stack, every result read back through the gateway's own `FeedReader`, appliers and `StampView`:
+
+  | Check | Result |
+  |---|---|
+  | Console key create | signed KEY in 655–806 ms |
+  | Config save | PLAN 1.3 → 1.4; an identical save makes no new version |
+  | Deactivate | REVOKE in 866–979 ms |
+  | Hard delete | REVOKE in 993 ms |
+  | Org-wide kill switch | on and off in about 1.6 s |
+  | Clean stop of the writer | takeover in 0.8 s, 0 withheld stamps |
+  | Crash of the writer | takeover in 5.3 s (lease TTL) |
+  | Both projectors down | first withheld stamp at 16.9 s |
+  | Restart | stamp resumes in 1.8–2.3 s |
+
+- Round cost at 10,000 keys and 200 orgs on real Postgres: 249 ms steady state, 286 ms for one revoke, onboarding 2,000 keys per round.
+- Gates: full offline suite 2916 passed, 100 skipped, 0 failed. `state_control` with a live Postgres 16: 296 passed. `mypy --strict` 269 files, ruff, import-linter 3/3 and the AST gates are clean, apart from the documented R2-05 `valkey.py:100`.
+- Recorded, not fixed:
+  - The console refuses org-wide kill switches and creates only per-model ones. v2 has no org-plus-model scope, so those are counted and logged as not enforced until GW29.
+  - BUDGET records and pool seeding move to S4, because control has no budget field.
+  - Identity-cache fill race and `_served` not cleared on offboard (S3).
+  - Rate 0 is not a GCRA (S4).
+  - The diff is O(records) (measured above).
+  - Pre-existing `makemigrations` drift on `FirewallConfig.routing_enabled`.
+
 ### Not done
 
-S2–S7 in plan §9.4. L36-1 and L36-2 are not run. An unknown key on the dev gateway still answers 503 `shared_state_unavailable`, not 401 (S3).
+S3–S7 in plan §9.4. L36-1 and L36-2 are not run. An unknown key on the dev gateway still answers 503 `shared_state_unavailable`, not 401 (S3).
 
 ### Working defaults for the open owner decisions
 

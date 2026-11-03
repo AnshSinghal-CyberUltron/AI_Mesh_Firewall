@@ -1,0 +1,4 @@
+# step 13: dev profile reads {rv2}:devplan:{alias} (no longer the signed {rv2}:plan:* key)
+dev: firewall plan applied version=1.2.bbd4d0284d179df5
+{rv2}:devplan:dev-org org_id= dev-org rules= 168
+# pre-existing control drift seen by makemigrations --check (not S2): core.FirewallConfig.routing_enabled
