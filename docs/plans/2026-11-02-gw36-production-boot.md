@@ -264,6 +264,22 @@ was accepted (devil's-advocate pass); none of the gaps G1–G14 was a pure false
 | Mid-stream key revocation / kill switch | `_NoControlSource` stays until GW29 (named in the boot log) |
 | Model allow-list per key | GW28 |
 
+### 9.3a Answers taken from the runbook (3 Nov 2026)
+
+| Question | Runbook answer | Source |
+|---|---|---|
+| Which upstream for the S1/S5 live tests? | The **synthetic OpenAI-compatible provider recorder**, not a real provider. It records the bytes the provider received (the zero-calls-on-BLOCK proofs use it). It exists: `staging/t02/recorder.py` (stdlib; `POST /v1/chat/completions`, admin `/calls`, `/reset`, `/fault`). | §3 L1 staging ("synthetic OpenAI provider recorder"), T02, LGW11-2, L06-1 |
+| When does a real provider come in? | Only at the T24 canary ("authorized real provider", official SDK through authorized BYOK). Customer BYOK is excluded from firewall cost/latency accounting. | T24, S37, cover "Customer model" |
+| Which guard model? | Llama Prompt Guard 2 **22M**. 86M cannot meet the 20 ms budget for the ≤ 1,024-token band. | §0-A.2 (PG2-86M 5.94/12.37/19.00 ms) |
+| Which runtime for GW36? | `local_onnx` on CPU is **development/CI only** (best 74 ms per window). Production is one owner process per L4 with an exact-shape 1×512 fp16 TensorRT engine (GW25). | GW08 C7/C35 correction, §10.5.4 |
+| Which export? | fp32 ONNX exported from the pristine weights with parity checked against reference logits. **Not an int8/quantised export:** int8 flips 2–6% of decisions against fp32. Pinned bytes from the prototype: safetensors `5120e30b…`, ONNX `2bf20e0f…` (opset 17, onnxruntime 1.30, max logit diff 4.3e-6), tokenizer `6eb98335…`. Exporter: `rvproto/tools/export_onnx.py`. | GW08 correction, T09 step 47, `lanes/proto-builder/onnx-parity-22M-nopad.json` |
+| Model identity | Hash the model and tokenizer bytes actually loaded and compare with a signed manifest; mismatch = UNAVAILABLE. | C35 |
+| Tokenizer | Disable the shipped tokenizer.json truncation and padding at 512. | C6, GW10 correction |
+| Semantic action | FLAG until a signed per-request FPR and recall floor exists; thresholds calibrated per window count. T01 floors are not signed, so L36-2 publishes measured numbers and does not claim a pass. | C6, C16 |
+| Card order | Start with GW36 ("nothing else can be measured until production serves traffic"). | v3.1 review, §00.6 |
+
+Not in the runbook: where to obtain the 22M weights. They are not in the repo or on this machine (the prototype's `models/` lived on the controller VM). Meta's Hugging Face repo is licence-gated. Whatever source is used, the bytes must match the pinned safetensors hash above, so the source is verifiable.
+
 ### 9.4 Revised slices
 
 | Slice | Scope | Exit evidence | Agent-days |
