@@ -128,8 +128,9 @@ class CredentialResolution:
 class Credential_Source(Protocol):
     """The injected per-org credential seam (R8.6), mirroring ``ProviderClient``.
 
-    ``resolve(org_id)`` reads the per-org plan key ``{rv2}:plan:{org}`` from the
-    control plane within the 5000 ms resolution bound and returns exactly one
+    ``resolve(org_id)`` reads the org's credential from the control plane (the
+    signed per-org state, never an unsigned key) within the 5000 ms resolution
+    bound and returns exactly one
     :class:`CredentialResolution`: a success carrying one :class:`OrgCredential`
     scoped to the requested ``org_id``, or a failure carrying a posture code and
     no credential. It fails closed -- a missing/empty ``org_id``, a control plane

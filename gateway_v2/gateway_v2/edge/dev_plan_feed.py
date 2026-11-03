@@ -26,8 +26,12 @@ _POLL_S = 1.0
 
 
 def plan_key(org_id: str) -> str:
-    """Per-org plan. The dev key is used only when this key is absent."""
-    return f"{{rv2}}:plan:{org_id}"
+    """Per-org dev plan. The dev key is used only when this key is absent.
+
+    Not ``{rv2}:plan:{org}``: that is the signed PLAN record the production feed reads (GW36 S2),
+    and one key must never hold two formats.
+    """
+    return f"{{rv2}}:devplan:{org_id}"
 
 
 def choose_published(org_blob: bytes | None, dev_blob: bytes | None) -> bytes | None:

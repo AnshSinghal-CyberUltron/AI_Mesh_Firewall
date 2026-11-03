@@ -28,12 +28,14 @@ function planSaveMessage(note) {
   if (!note || note.status === "published") {
     const count = Number(note?.rules);
     const rules = Number.isFinite(count) ? ` ${count} rules.` : "";
-    return `Configuration saved. Gateway v2 loads these rules on the next chat.${rules}`;
+    const revision = Number(note?.revision);
+    const version = Number.isFinite(revision) ? ` Plan revision ${revision}.` : "";
+    return `Configuration saved. Gateway v2 applies these rules within a few seconds.${rules}${version}`;
   }
   if (note.status === "skipped") {
-    return "Configuration saved. This org is not mapped to the dev gateway, so chat still uses the plan file.";
+    return "Configuration saved. This configuration has no organization, so no gateway plan was published.";
   }
-  return "Configuration saved. The gateway plan was not written, so chat still uses its current plan.";
+  return "Configuration saved. The gateway plan was not stored, so the gateway keeps its current plan.";
 }
 
 export function AIMeshFirewallConfig() {

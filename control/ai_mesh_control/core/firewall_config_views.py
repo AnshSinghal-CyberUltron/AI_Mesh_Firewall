@@ -73,10 +73,9 @@ class FirewallConfigView(APIView):
         compliance_warnings = validate_compliance_requirements(config)
 
         response_data = FirewallConfigSerializer(config, context={"organization": org}).data
-        from core.firewall_v2_publish import publish_saved_plan
+        from core.firewall_v2_publish import publish_for_org
 
-        slug = getattr(org, "slug", None)
-        response_data["gateway_v2_plan"] = publish_saved_plan(slug, response_data)
+        response_data["gateway_v2_plan"] = publish_for_org(org)
         if compliance_warnings:
             response_data["compliance_warnings"] = compliance_warnings
             logger.warning(
