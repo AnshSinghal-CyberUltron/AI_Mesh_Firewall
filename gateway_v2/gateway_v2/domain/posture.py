@@ -19,6 +19,7 @@ __all__ = (
     "SHARED_STATE_UNAVAILABLE",
     "PLAN_UNAVAILABLE",
     "BUDGET_UNAVAILABLE",
+    "RATE_LIMITED",
     "POLICY_REGEX_TIMEOUT",
     "OVERLOAD_SHED",
     "MIN_RETRY_AFTER_S",
@@ -65,6 +66,19 @@ budget posture is deliberately NARROWER than the others: a budget-kind failure s
 remaining lease and then refuses only quota, because treating it as global would turn a counter
 problem into an outage.
 """
+
+RATE_LIMITED = "rate_limited"
+"""GW36 S4: the per-key GCRA reject -- the per-worker burst/sustained rate was exceeded.
+
+Named here so the composed ``QuotaGate`` (``edge/quota_gate.py``) does not invent a second spelling
+when it surfaces a ``LocalGCRA`` refusal. Like the other codes it carries no status, message or
+``ErrorSpec``: ``admit`` returns a value carrying this code and ``edge`` owns the HTTP 429 +
+``rate_limit_error`` mapping. The TAT is left untouched on reject, so the allowance is unchanged and
+the next legitimately-timed arrival is still served; the refusal makes zero provider calls.
+
+This is the GATEWAY-side per-key rate limit and is deliberately DISTINCT from
+``upstream_rate_limited`` (the provider's own 429 relayed by ``dispatch``): the first is the gateway
+refusing before any upstream call, the second is the upstream refusing the gateway's call."""
 
 POLICY_REGEX_TIMEOUT = "policy_regex_timeout"
 """A customer regex exceeded the guard-wait budget or was refused before it ran. Fail closed."""

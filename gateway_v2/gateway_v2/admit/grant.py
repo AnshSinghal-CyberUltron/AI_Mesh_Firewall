@@ -31,6 +31,7 @@ from gateway_v2.domain.posture import (
     BUDGET_UNAVAILABLE,
     MIN_RETRY_AFTER_S,
     OVERLOAD_SHED,
+    RATE_LIMITED,
     gap_retry_after_s,
 )
 
@@ -40,6 +41,7 @@ __all__ = (
     "ResourceGrant",
     "ShedVerdict",
     "budget_verdict",
+    "rate_limited_verdict",
     "shed_retry_after_s",
     "shed_verdict",
 )
@@ -165,6 +167,42 @@ def budget_verdict(
     """
     return BudgetVerdict(
         code=BUDGET_UNAVAILABLE,
+        retry_after_s=gap_retry_after_s(
+            rehydrate_period_ms=rehydrate_period_ms,
+            refresh_ms=refresh_ms,
+        ),
+        should_retry=False,
+        request_id=request_id,
+    )
+
+
+def rate_limited_verdict(
+    request_id: str,
+    *,
+    rehydrate_period_ms: float = 0.0,
+    refresh_ms: float = 0.0,
+) -> BudgetVerdict:
+    """Build the per-key GCRA rate-limit refusal for a request (GW36 S4, Req 3.6, 5.3, 11.1).
+
+    The composed ``QuotaGate`` (``edge/quota_gate.py``) returns this when the request's per-key
+    :class:`~gateway_v2.admit.gcra.LocalGCRA` refuses — the per-worker burst / sustained rate was
+    exceeded. ``edge`` renders it as HTTP **429** ``rate_limit_error`` (see ``edge/errors.py``),
+    distinct from the 503 a budget refusal renders.
+
+    **Verdict-type choice (GW36 S4 Conflict 1).** This REUSES the :class:`BudgetVerdict` value type
+    and only varies ``code`` to ``posture.RATE_LIMITED`` rather than introducing a second frozen
+    dataclass. That keeps the ``BudgetDecider.evaluate`` return union (``BudgetVerdict | Admitted``)
+    and the lifecycle's ``_budget`` handler (which returns ``verdict.code`` on a non-``Admitted``
+    outcome) unchanged: ``edge`` maps the carried code → ``(429, rate_limit_error)`` exactly as it
+    maps ``budget_unavailable`` → ``(503, service_unavailable)``. The field shape is identical to
+    ``budget_verdict`` — ``should_retry`` is **always ``False``** and ``retry_after_s`` is
+    ``gap_retry_after_s(...)`` floored at ``MIN_RETRY_AFTER_S`` so a retrying SDK client cannot
+    amplify load (R2-08). The TAT was left untouched by the GCRA on reject, so the allowance is
+    unchanged and the next legitimately-timed arrival is still served (Req 3.6); no HTTP object is
+    constructed here — ``edge`` renders the 429 from this value.
+    """
+    return BudgetVerdict(
+        code=RATE_LIMITED,
         retry_after_s=gap_retry_after_s(
             rehydrate_period_ms=rehydrate_period_ms,
             refresh_ms=refresh_ms,
