@@ -902,11 +902,19 @@ def test_property_13_uncomputable_scan_or_decision_fails_closed_fail_open_zero()
     class _P13Quota:
         __slots__ = ()
 
-        async def evaluate(self, cost: int, *, request_id: str) -> Admitted:
+        async def evaluate(
+        self,
+        cost: int,
+        *,
+        request_id: str,
+        owner: str = "",
+        principal: object = None,
+        key_hash: str = "",
+    ) -> Admitted:
             del cost
             return Admitted(owner_id="p13", request_id=request_id, admitted_at=0.0)
 
-        def refund(self, cost: int, *, request_id: str) -> None:
+        def refund(self, cost: int, *, request_id: str, owner: str = "") -> None:
             del cost, request_id
 
     class _P13BoundContract:

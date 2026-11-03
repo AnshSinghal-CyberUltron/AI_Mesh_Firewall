@@ -104,7 +104,7 @@ class _CountingBudget:
         del cost, request_id
         raise AssertionError("evaluate must not be reached by RequestHolds.release")
 
-    def refund(self, cost: int, *, request_id: str) -> None:
+    def refund(self, cost: int, *, request_id: str, owner: str = "") -> None:
         self.calls.append((cost, request_id))
         if self._raise:
             raise RuntimeError("boom: refund raised")

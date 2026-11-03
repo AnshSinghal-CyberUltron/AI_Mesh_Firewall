@@ -268,12 +268,20 @@ class _P19AdmitBudget:
 
     __slots__ = ()
 
-    async def evaluate(self, cost: int, *, request_id: str) -> BudgetVerdict | Admitted:
+    async def evaluate(
+        self,
+        cost: int,
+        *,
+        request_id: str,
+        owner: str = "",
+        principal: object = None,
+        key_hash: str = "",
+    ) -> BudgetVerdict | Admitted:
         del cost
         await asyncio.sleep(0)
         return Admitted(owner_id="p19", request_id=request_id, admitted_at=0.0)
 
-    def refund(self, cost: int, *, request_id: str) -> None:
+    def refund(self, cost: int, *, request_id: str, owner: str = "") -> None:
         del cost, request_id
 
 

@@ -314,7 +314,15 @@ class _P10LocalQuota:
         self._counter = counter
         self._refuse = refuse
 
-    async def evaluate(self, cost: int, *, request_id: str) -> BudgetVerdict | Admitted:
+    async def evaluate(
+        self,
+        cost: int,
+        *,
+        request_id: str,
+        owner: str = "",
+        principal: object = None,
+        key_hash: str = "",
+    ) -> BudgetVerdict | Admitted:
         # A LOCAL lease spend: no shared-state read is attributable to the budget phase. The
         # counter is deliberately NOT touched here (that is the property under test).
         del cost
@@ -322,7 +330,7 @@ class _P10LocalQuota:
             return budget_verdict(request_id)
         return Admitted(owner_id=_ORG, request_id=request_id, admitted_at=0.0)
 
-    def refund(self, cost: int, *, request_id: str) -> None:
+    def refund(self, cost: int, *, request_id: str, owner: str = "") -> None:
         del cost, request_id
 
 
@@ -551,11 +559,19 @@ class _U_RefusingBudget:
 
     __slots__ = ()
 
-    async def evaluate(self, cost: int, *, request_id: str) -> BudgetVerdict:
+    async def evaluate(
+        self,
+        cost: int,
+        *,
+        request_id: str,
+        owner: str = "",
+        principal: object = None,
+        key_hash: str = "",
+    ) -> BudgetVerdict:
         del cost
         return budget_verdict(request_id)
 
-    def refund(self, cost: int, *, request_id: str) -> None:
+    def refund(self, cost: int, *, request_id: str, owner: str = "") -> None:
         del cost, request_id
 
 
@@ -578,11 +594,19 @@ class _U_AlwaysBudget:
 
     __slots__ = ()
 
-    async def evaluate(self, cost: int, *, request_id: str) -> Admitted:
+    async def evaluate(
+        self,
+        cost: int,
+        *,
+        request_id: str,
+        owner: str = "",
+        principal: object = None,
+        key_hash: str = "",
+    ) -> Admitted:
         del cost
         return Admitted(owner_id=_ORG, request_id=request_id, admitted_at=0.0)
 
-    def refund(self, cost: int, *, request_id: str) -> None:
+    def refund(self, cost: int, *, request_id: str, owner: str = "") -> None:
         del cost, request_id
 
 

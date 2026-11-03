@@ -1,4 +1,4 @@
-"""The 65 FirewallConfig fields are mapped or rejected by name, and a supported set compiles."""
+"""The 66 FirewallConfig fields are mapped or rejected by name, and a supported set compiles."""
 
 from __future__ import annotations
 
@@ -33,7 +33,7 @@ _INVENTORY = (
 def test_the_map_covers_every_exposed_field() -> None:
     exposed = json.loads(_INVENTORY.read_text(encoding="utf-8"))["exposed_fields"]
     assert set(_load().FIELDS) == set(exposed)
-    assert len(exposed) == 65
+    assert len(exposed) == 66
 
 
 def test_turning_rag_on_names_the_field() -> None:

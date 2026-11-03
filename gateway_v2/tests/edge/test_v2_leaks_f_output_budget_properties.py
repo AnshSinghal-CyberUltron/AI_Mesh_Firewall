@@ -641,11 +641,19 @@ class _RecordingDevBudget:
         self._inner = inner
         self.costs: list[int] = []
 
-    async def evaluate(self, cost: int, *, request_id: str) -> BudgetVerdict | Admitted:
+    async def evaluate(
+        self,
+        cost: int,
+        *,
+        request_id: str,
+        owner: str = "",
+        principal: object = None,
+        key_hash: str = "",
+    ) -> BudgetVerdict | Admitted:
         self.costs.append(cost)
         return await self._inner.evaluate(cost, request_id=request_id)
 
-    def refund(self, cost: int, *, request_id: str) -> None:
+    def refund(self, cost: int, *, request_id: str, owner: str = "") -> None:
         self._inner.refund(cost, request_id=request_id)
 
 

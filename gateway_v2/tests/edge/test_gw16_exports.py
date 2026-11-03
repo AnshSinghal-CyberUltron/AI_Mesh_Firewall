@@ -210,11 +210,19 @@ class _P16AdmitBudget:
 
     __slots__ = ()
 
-    async def evaluate(self, cost: int, *, request_id: str) -> BudgetVerdict | Admitted:
+    async def evaluate(
+        self,
+        cost: int,
+        *,
+        request_id: str,
+        owner: str = "",
+        principal: object = None,
+        key_hash: str = "",
+    ) -> BudgetVerdict | Admitted:
         del cost
         return Admitted(owner_id="p16", request_id=request_id, admitted_at=0.0)
 
-    def refund(self, cost: int, *, request_id: str) -> None:
+    def refund(self, cost: int, *, request_id: str, owner: str = "") -> None:
         del cost, request_id
 
 
@@ -223,11 +231,19 @@ class _P16RefuseBudget:
 
     __slots__ = ()
 
-    async def evaluate(self, cost: int, *, request_id: str) -> BudgetVerdict | Admitted:
+    async def evaluate(
+        self,
+        cost: int,
+        *,
+        request_id: str,
+        owner: str = "",
+        principal: object = None,
+        key_hash: str = "",
+    ) -> BudgetVerdict | Admitted:
         del cost
         return budget_verdict(request_id)
 
-    def refund(self, cost: int, *, request_id: str) -> None:
+    def refund(self, cost: int, *, request_id: str, owner: str = "") -> None:
         del cost, request_id
 
 

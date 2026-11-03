@@ -152,7 +152,15 @@ def test_property_6_exactly_one_shared_state_round_trip() -> None:
             self._counter = counter
             self._refuse = refuse
 
-        async def evaluate(self, cost: int, *, request_id: str) -> BudgetVerdict | Admitted:
+        async def evaluate(
+        self,
+        cost: int,
+        *,
+        request_id: str,
+        owner: str = "",
+        principal: object = None,
+        key_hash: str = "",
+    ) -> BudgetVerdict | Admitted:
             # A LOCAL lease spend: no shared-state read is attributable to the budget
             # phase. The counter is deliberately NOT touched here.
             del cost
@@ -160,7 +168,7 @@ def test_property_6_exactly_one_shared_state_round_trip() -> None:
                 return budget_verdict(request_id)
             return Admitted(owner_id=_ORG, request_id=request_id, admitted_at=0.0)
 
-        def refund(self, cost: int, *, request_id: str) -> None:
+        def refund(self, cost: int, *, request_id: str, owner: str = "") -> None:
             del cost, request_id
 
     # ----- the remaining lifecycle seams as minimal fakes ----- #
@@ -1437,11 +1445,11 @@ def test_wiring_admission_called_and_admitted_continues() -> None:
     class _P211AdmitBudget:
         __slots__ = ()
 
-        async def evaluate(self, cost, *, request_id):  # type: ignore[no-untyped-def]
+        async def evaluate(self, cost, *, request_id, owner="", principal=None, key_hash=""):  # type: ignore[no-untyped-def]
             del cost
             return Admitted(owner_id=_ORG, request_id=request_id, admitted_at=0.0)
 
-        def refund(self, cost, *, request_id):  # type: ignore[no-untyped-def]
+        def refund(self, cost, *, request_id, owner=""):  # type: ignore[no-untyped-def]
             del cost, request_id
 
     admission = _P211RecordingAdmission()
@@ -1518,11 +1526,11 @@ def test_wiring_undecidable_admission_fails_closed_to_shed() -> None:
     class _P211AdmitBudget:
         __slots__ = ()
 
-        async def evaluate(self, cost, *, request_id):  # type: ignore[no-untyped-def]
+        async def evaluate(self, cost, *, request_id, owner="", principal=None, key_hash=""):  # type: ignore[no-untyped-def]
             del cost
             return Admitted(owner_id=_ORG, request_id=request_id, admitted_at=0.0)
 
-        def refund(self, cost, *, request_id):  # type: ignore[no-untyped-def]
+        def refund(self, cost, *, request_id, owner=""):  # type: ignore[no-untyped-def]
             del cost, request_id
 
     admission = _P211UndecidableAdmission()
@@ -1580,13 +1588,13 @@ def test_wiring_quota_evaluate_is_called() -> None:
             self.costs: list[int] = []
             self.request_ids: list[str] = []
 
-        async def evaluate(self, cost, *, request_id):  # type: ignore[no-untyped-def]
+        async def evaluate(self, cost, *, request_id, owner="", principal=None, key_hash=""):  # type: ignore[no-untyped-def]
             self.calls += 1
             self.costs.append(cost)
             self.request_ids.append(request_id)
             return Admitted(owner_id=_ORG, request_id=request_id, admitted_at=0.0)
 
-        def refund(self, cost, *, request_id):  # type: ignore[no-untyped-def]
+        def refund(self, cost, *, request_id, owner=""):  # type: ignore[no-untyped-def]
             del cost, request_id
 
     quota = _P211RecordingBudget()

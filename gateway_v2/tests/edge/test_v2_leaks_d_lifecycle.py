@@ -165,13 +165,21 @@ class _Budget:
     def __init__(self, *, refuse: bool) -> None:
         self._refuse = refuse
 
-    async def evaluate(self, cost: int, *, request_id: str) -> BudgetVerdict | Admitted:
+    async def evaluate(
+        self,
+        cost: int,
+        *,
+        request_id: str,
+        owner: str = "",
+        principal: object = None,
+        key_hash: str = "",
+    ) -> BudgetVerdict | Admitted:
         del cost
         if self._refuse:
             return budget_verdict(request_id)
         return Admitted(owner_id=DEFAULT_ORG_ID, request_id=request_id, admitted_at=0.0)
 
-    def refund(self, cost: int, *, request_id: str) -> None:
+    def refund(self, cost: int, *, request_id: str, owner: str = "") -> None:
         del cost, request_id
 
 

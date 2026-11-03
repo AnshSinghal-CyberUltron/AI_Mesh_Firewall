@@ -191,11 +191,19 @@ class _AlwaysBudget:
 
     __slots__ = ()
 
-    async def evaluate(self, cost: int, *, request_id: str) -> Admitted:
+    async def evaluate(
+        self,
+        cost: int,
+        *,
+        request_id: str,
+        owner: str = "",
+        principal: object = None,
+        key_hash: str = "",
+    ) -> Admitted:
         del cost
         return Admitted(owner_id="gw16", request_id=request_id, admitted_at=0.0)
 
-    def refund(self, cost: int, *, request_id: str) -> None:
+    def refund(self, cost: int, *, request_id: str, owner: str = "") -> None:
         del cost, request_id
 
 
@@ -232,7 +240,15 @@ class _RefusingBudget:
     def __init__(self, verdict: BudgetVerdict) -> None:
         self._verdict = verdict
 
-    async def evaluate(self, cost: int, *, request_id: str) -> BudgetVerdict:
+    async def evaluate(
+        self,
+        cost: int,
+        *,
+        request_id: str,
+        owner: str = "",
+        principal: object = None,
+        key_hash: str = "",
+    ) -> BudgetVerdict:
         del cost
         return BudgetVerdict(
             code=self._verdict.code,
@@ -241,7 +257,7 @@ class _RefusingBudget:
             request_id=request_id,
         )
 
-    def refund(self, cost: int, *, request_id: str) -> None:
+    def refund(self, cost: int, *, request_id: str, owner: str = "") -> None:
         del cost, request_id
 
 

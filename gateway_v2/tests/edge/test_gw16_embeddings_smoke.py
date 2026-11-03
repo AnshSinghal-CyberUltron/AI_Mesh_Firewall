@@ -128,11 +128,19 @@ class _AlwaysBudget:
 
     __slots__ = ()
 
-    async def evaluate(self, cost: int, *, request_id: str) -> Admitted:
+    async def evaluate(
+        self,
+        cost: int,
+        *,
+        request_id: str,
+        owner: str = "",
+        principal: object = None,
+        key_hash: str = "",
+    ) -> Admitted:
         del cost
         return Admitted(owner_id="gw16", request_id=request_id, admitted_at=0.0)
 
-    def refund(self, cost: int, *, request_id: str) -> None:
+    def refund(self, cost: int, *, request_id: str, owner: str = "") -> None:
         del cost, request_id
 
 

@@ -498,7 +498,7 @@ class _RefundRecordingBudget(_Budget):
         super().__init__(refuse=False)
         self._refunds = refunds
 
-    def refund(self, cost: int, *, request_id: str) -> None:
+    def refund(self, cost: int, *, request_id: str, owner: str = "") -> None:
         del request_id
         self._refunds.append(cost)
 
