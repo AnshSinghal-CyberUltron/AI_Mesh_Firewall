@@ -8,12 +8,15 @@ set -euo pipefail
 cd "$(dirname "$0")/../../../.."
 E=docs/plans/evidence/2026-11-03-gw36-s2
 B=${CONTROL_URL:-http://127.0.0.1:8100}
-TOKEN=$(cat /tmp/gw36_s2_token)
+TOKEN=$(cat "${TOKEN_FILE:-/tmp/gw36_s2_token}")
 
 api() { curl -s -H "Authorization: Bearer $TOKEN" -H 'content-type: application/json' "$@"; }
 sql() { docker exec ai_mesh_firewall-postgres-1 psql -U ai_mesh_firewall -d ai_mesh_firewall -tAc "$1"; }
 verify() { docker compose exec -T state-projector-a python - "$@" < "$E/verify_state.py"; }
 now_ms() { date +%s%3N; }
+# The lease holder is whichever replica won; read it rather than assume projector-a.
+leader() { echo "ai_mesh_firewall-state-$(sql "select holder from amf_state_projector")-1"; }
+shell() { docker compose exec -T control python manage.py shell -c "$1" </dev/null; }
 
 # Wait until amf_state_record holds (kind, key) with the given `deleted` value. Prints the ms.
 wait_record() {
@@ -83,31 +86,31 @@ ks=$(api -X POST "$B/api/kill-switches/" -d '{"model_name":"gpt-4o","action":"di
 ks_id=$(echo "$ks" | python3 -c "import sys,json;print(json.load(sys.stdin)['id'])")
 echo "per-model activate -> HTTP $(api -o /dev/null -w '%{http_code}' -X POST "$B/api/kill-switches/$ks_id/activate/" -d '{"reason":"gw36 s2 live check"}')"
 sleep 2
-docker exec ai_mesh_firewall-state-projector-a-1 python -c "import urllib.request as u; print(u.urlopen('http://127.0.0.1:9109/metrics').read().decode())" | grep unsupported_switches
-docker logs --since 5s ai_mesh_firewall-state-projector-a-1 2>&1 | grep -m1 "has no v2 scope" | cut -c1-220
+docker exec "$(leader)" python -c "import urllib.request as u; print(u.urlopen('http://127.0.0.1:9109/metrics').read().decode())" | grep unsupported_switches
+docker logs --since 30s "$(leader)" 2>&1 | grep -m1 "has no v2 scope" | cut -c1-220 || true
 echo "KS records (none may exist for a per-model switch): $(sql "select count(*) from amf_state_record where kind='ks'")"
 api -o /dev/null -X POST "$B/api/kill-switches/$ks_id/deactivate/" -d '{}'
 api -o /dev/null -X DELETE "$B/api/kill-switches/$ks_id/"
 
 echo
 echo "# step 7b: an org-wide switch saved through the model (admin / ORM path; the API refuses it)"
-ks_pk=$(docker compose exec -T control python manage.py shell -c "
+ks_pk=$(shell "
 from auth.models import Organization; from core.models import KillSwitch
 ks = KillSwitch.objects.create(organization=Organization.objects.get(slug='zeroshield'), model_name='__global__', action='disable', is_active=False, reason='gw36 s2')
 print('PK', ks.pk)" 2>/dev/null | grep '^PK' | cut -d' ' -f2)
 t0=$(now_ms)
-docker compose exec -T control python manage.py shell -c "
+shell "
 from core.models import KillSwitch; ks = KillSwitch.objects.get(pk=$ks_pk); ks.is_active = True; ks.save()" >/dev/null 2>&1
 echo "kill-switch-on lag (save -> engaged KS durable): $(wait_engaged org:zeroshield t "$t0") ms"
 sleep 1.2
 verify org=zeroshield | python3 -c "import sys,json;d=json.load(sys.stdin);print('gateway reader killed:', d['killed'], d['ks'])"
 t0=$(now_ms)
-docker compose exec -T control python manage.py shell -c "
+shell "
 from core.models import KillSwitch; ks = KillSwitch.objects.get(pk=$ks_pk); ks.is_active = False; ks.save()" >/dev/null 2>&1
 echo "kill-switch-off lag: $(wait_engaged org:zeroshield f "$t0") ms"
 sleep 1.2
 verify org=zeroshield | python3 -c "import sys,json;d=json.load(sys.stdin);print('gateway reader killed:', d['killed'])"
-docker compose exec -T control python manage.py shell -c "
+shell "
 from core.models import KillSwitch; KillSwitch.objects.filter(pk=$ks_pk).delete()" >/dev/null 2>&1
 
 echo

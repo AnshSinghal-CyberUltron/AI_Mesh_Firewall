@@ -14,25 +14,26 @@ holder() { docker exec ai_mesh_firewall-postgres-1 psql -U ai_mesh_firewall -d a
   "select holder||' live='||(lease_until > clock_timestamp())||' lag_s='||round(extract(epoch from clock_timestamp()-last_ok_at)::numeric,2) from amf_state_projector"; }
 
 {
-echo "# step 9: writer failover (stop projector-a; projector-b must take over within the lease)"
+echo "# step 9: writer failover (stop the lease holder; the other replica must take over)"
 echo "lease before: $(holder)"
+lead=$(holder | cut -d' ' -f1); other=$([ "$lead" = projector-a ] && echo projector-b || echo projector-a)
 base=$(withheld)
 t0=$(now_ms)
-docker stop ai_mesh_firewall-state-projector-a-1 >/dev/null
+docker stop "ai_mesh_firewall-state-$lead-1" >/dev/null
 for _ in $(seq 1 200); do
-  case "$(holder)" in projector-b*) break;; esac
+  case "$(holder)" in "$other"*) break;; esac
   sleep 0.1
 done
 echo "takeover after $(( $(now_ms) - t0 )) ms: $(holder)"
 sleep 3
 echo "stamps withheld for source lag during failover: $(( $(withheld | cut -d. -f1) - ${base%.*} ))"
-echo "projector-b leader metric: $(metric ai_mesh_firewall-state-projector-b-1 9109 amf_projector_leader)"
+echo "$other leader metric: $(metric "ai_mesh_firewall-state-$other-1" 9109 amf_projector_leader)"
 
 echo
 echo "# step 10: both projectors down -> stamp withheld once the heartbeat is older than 16 s"
 base=$(withheld)
 t0=$(now_ms)
-docker stop ai_mesh_firewall-state-projector-b-1 >/dev/null
+docker stop "ai_mesh_firewall-state-$other-1" >/dev/null
 for _ in $(seq 1 300); do
   [ "$(( $(withheld | cut -d. -f1) - ${base%.*} ))" -gt 0 ] && break
   sleep 0.2
@@ -40,7 +41,7 @@ done
 echo "first withheld stamp $(( $(now_ms) - t0 )) ms after the last projector stopped: $(holder)"
 docker logs --since 5s ai_mesh_firewall-state-rehydrator-a-1 2>&1 | grep -m1 "withheld" | cut -c1-200
 sleep 6
-docker compose exec -T state-rehydrator-a python - < "$E/verify_state.py" \
+docker compose exec -T state-rehydrator-a python - < "$E/verify_state.py" 2>/dev/null \
   | python3 -c "import sys,json;print('gateway reader stamp after 6 s more:', json.load(sys.stdin)['stamp'])"
 
 echo
@@ -53,6 +54,6 @@ for _ in $(seq 1 300); do
 done
 echo "stamp resumed $(( $(now_ms) - t0 )) ms after the projectors were started: $(holder)"
 sleep 2
-docker compose exec -T state-rehydrator-a python - < "$E/verify_state.py" \
+docker compose exec -T state-rehydrator-a python - < "$E/verify_state.py" 2>/dev/null \
   | python3 -c "import sys,json;d=json.load(sys.stdin);print('gateway reader:', d['stamp'], 'plan', d['plan']['ok'], 'key', d['key']['ok'], 'ks', d['ks']['ok'])"
 } 2>&1 | tee "$E/05_failover_and_outage.txt"

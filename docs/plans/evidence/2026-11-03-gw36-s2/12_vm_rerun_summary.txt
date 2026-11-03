@@ -1,0 +1,11 @@
+# GW36 S2 re-run on the shared dev VM (EC2 x8aedz.12xlarge, 48 vCPU, user suraj, rootless Docker)
+# 3 Nov 2026. Stack on 127.0.0.1 ports +20000 (docker-compose.vm.yml, VM-local, not committed).
+
+## offline suite
+serial  : 2914 passed, 97 skipped, 7 warnings, 5 errors in 609.56s (0:10:09)
+          (the 5 errors are tests/edge/test_edge_live_l16b.py: rootless Docker containers cannot reach
+          a host process at 172.17.0.1:8300; run with AMF_EDGE_DOCKER=0 on the VM, keep it on the laptop)
+parallel: 2914 passed, 102 skipped, 8 warnings in 46.96s  [-n 24, AMF_EDGE_DOCKER=0]
+
+## live Postgres 16 (tests/state_control + tests/audit_control), serial: 351 passed, 23 skipped
+   (-n 8 errors only in audit_control/test_lgw14c_pg.py: its tests share tables, so run live-PG suites serially)
