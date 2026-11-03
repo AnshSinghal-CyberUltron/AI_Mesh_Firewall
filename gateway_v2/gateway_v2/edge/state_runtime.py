@@ -27,10 +27,11 @@ import asyncio
 import contextlib
 import logging
 import os
-from collections.abc import Awaitable, Callable, Mapping
+from collections.abc import Awaitable, Callable, Iterable, Mapping
 from dataclasses import dataclass
 from typing import Any
 
+from gateway_v2.admit.budget_state import BudgetSnapshot, budget_applier
 from gateway_v2.admit.identity import IdentityCache, identity_applier, principal_of
 from gateway_v2.admit.killswitch import (
     KillSwitchSnapshot,
@@ -50,7 +51,7 @@ from gateway_v2.edge.identity_resolver import CachingIdentityResolver, hashed_be
 from gateway_v2.plan.delta import plan_applier
 from gateway_v2.plan.snapshot import ReplicaSnapshot
 from gateway_v2.plan.store import PlanStore
-from gateway_v2.runtime.state_feed import FeedReader
+from gateway_v2.runtime.state_feed import FeedReader, FeedRound
 from gateway_v2.runtime.state_gate import KindGates
 from gateway_v2.runtime.state_metrics import StateMetricsRecorder
 from gateway_v2.runtime.state_nudge import NudgeListener
@@ -71,9 +72,38 @@ _ASGIApp = Callable[
     Awaitable[None],
 ]
 
-#: The kinds a worker must have caught up before it is ready. BUDGET has no gateway reader yet
-#: (S4), so it is not one of them.
-READY_KINDS = (StateKind.PLAN, StateKind.KS, StateKind.KEY)
+#: The kinds a worker must have caught up before it is ready. BUDGET now HAS a gateway reader -- the
+#: `QuotaRegistry` builds each org's lease from the served `BudgetSnapshot` the `budget_applier`
+#: maintains -- so a worker serving budget decisions before it has read BUDGET to its head would
+#: admit against a stale (or empty) pool, exactly the regression gating KEY/PLAN/KS prevents. BUDGET
+#: drains to its (possibly empty) head on the normal cycle like PLAN, NOT via a cold-start adoption:
+#: an empty-but-caught-up BUDGET head reports `ok and not truncated`, which `KindGates.observe`
+#: records as fresh, so a worker with no BUDGET records still becomes ready once it has drained the
+#: kind -- adding it to `READY_KINDS` does not wedge startup.
+READY_KINDS = (StateKind.PLAN, StateKind.KS, StateKind.KEY, StateKind.BUDGET)
+
+
+def _noop_reacquire(org: str) -> None:
+    """The default BUDGET re-acquire hook before `apply_production` wires the registry's.
+
+    A generation change seen before the `QuotaRegistry` is wired marks nothing; the registry reads
+    the current served record on its first `component_for` for the org anyway, so the mark is only
+    an optimisation and losing it before boot finishes is fail-safe.
+    """
+    del org
+
+
+def _noop_invalidate(key_hashes: Iterable[str]) -> None:
+    """The default GCRA-invalidate hook before `apply_production` wires the cache's.
+
+    A KEY delta seen before the `GcraCache` is wired invalidates nothing; a stale per-worker GCRA
+    is rebuilt on the next request whose principal's `(rate_per_s, burst)` differ, so losing an
+    invalidation before boot finishes is fail-safe (the allowance is at worst momentarily the old
+    one, never missing).
+    """
+    # Drain the iterable so a generator-backed caller is not left half-consumed.
+    for _ in key_hashes:
+        pass
 
 
 class StateConfigError(ValueError):
@@ -153,6 +183,19 @@ class StateRuntime:
         self.switches = KillSwitchSnapshot(
             stale_ms=knobs.fresh_ms, stamp=self.gates.gate(StateKind.KS),
         )
+        self.budget_snapshot = BudgetSnapshot(gate=self.gates.gate(StateKind.BUDGET))
+        # Two request-path collaborators are built LATER, in `apply_production` (edge), because they
+        # need the contract, `q_safe`, the store client, and a worker id this runtime does not hold:
+        # the per-org `QuotaRegistry` (whose `on_generation_change` the BUDGET applier must call)
+        # and the per-principal `GcraCache` (whose entry a KEY delta must invalidate alongside the
+        # identity cache). Both are reached through a mutable indirection set after construction, so
+        # the appliers map below is COMPLETE at construction (Req 7.1 — all four kinds present) and
+        # the registry/cache can still wire their hooks once built (`set_budget_reacquire_hook` /
+        # `set_gcra_invalidate`). Until wired both default to a no-op: a round that fires them
+        # before the boot finished simply does nothing, which is fail-safe (an un-invalidated GCRA
+        # is rebuilt on the next principal change; an un-marked generation is re-read on first use).
+        self._budget_reacquire_hook: Callable[[str], None] = _noop_reacquire
+        self._gcra_invalidate: Callable[[Iterable[str]], None] = _noop_invalidate
         # PLAN first: a key whose org was just onboarded resolves straight from the store, and
         # its plan must already be served by then (the projector writes plans before keys).
         self.sync = StateSynchroniser(
@@ -160,7 +203,10 @@ class StateRuntime:
             {
                 StateKind.PLAN: plan_applier(self.plans, self.snapshot),
                 StateKind.KS: killswitch_applier(self.switches),
-                StateKind.KEY: identity_applier(self.identity_cache),
+                StateKind.KEY: self._key_applier(),
+                StateKind.BUDGET: budget_applier(
+                    self.budget_snapshot, lambda org: self._budget_reacquire_hook(org),
+                ),
             },
             stamp=self.stamp,
             inline_kinds=frozenset({StateKind.KEY}),
@@ -173,6 +219,51 @@ class StateRuntime:
         self._cold: set[StateKind] = {StateKind.KS, StateKind.KEY}
         self.cycles = 0
         self.cycle_failures = 0
+
+    # --- applier composition ------------------------------------------------------------------
+
+    def _key_applier(self) -> Callable[[FeedRound], None]:
+        """The KEY applier: evict the identity cache AND invalidate the GCRA cache on a delta.
+
+        `identity_applier` already evicts exactly the key hashes a KEY delta names from the identity
+        cache (and advances the applied position on an empty round via `mark_applied`). The GCRA
+        cache must drop the SAME hashes so a key whose resolved `Principal` changed rebuilds its
+        per-worker `LocalGCRA` from the updated `rate_per_s`/`burst` (Req 3.3). `on_delta` returns
+        the evicted hashes, so this composes the shipped applier's eviction with a
+        `_gcra_invalidate` call over the same hashes — one KEY delta, both caches invalidated
+        together. A round with no records only advances the position and invalidates nothing
+        (there is nothing to rebuild).
+        """
+        identity = identity_applier(self.identity_cache)
+
+        def apply(round_: FeedRound) -> None:
+            if round_.records:
+                evicted = self.identity_cache.on_delta(round_.records, round_.manifest.feed_seq)
+                if evicted:
+                    self._gcra_invalidate(evicted)
+            else:
+                identity(round_)
+
+        return apply
+
+    def set_budget_reacquire_hook(self, hook: Callable[[str], None]) -> None:
+        """Wire the BUDGET applier's generation-change hook (the registry's `on_generation_change`).
+
+        Called once by `apply_production` after the `QuotaRegistry` is built. The applier was
+        registered at construction with a thunk that forwards to this hook, so wiring it here lets
+        a generation change mark that org's lease for re-acquisition (Req 7.3) without the appliers
+        map ever being incomplete.
+        """
+        self._budget_reacquire_hook = hook
+
+    def set_gcra_invalidate(self, invalidate: Callable[[Iterable[str]], None]) -> None:
+        """Wire the per-principal `GcraCache.invalidate` the KEY applier calls on a delta (Req 3.3).
+
+        Called once by `apply_production` after the `GcraCache` is built. The KEY applier calls this
+        with the hashes a KEY delta evicted from the identity cache, so the two caches are
+        invalidated together on the same delta.
+        """
+        self._gcra_invalidate = invalidate
 
     # --- request path -------------------------------------------------------------------------
 
@@ -222,6 +313,22 @@ class StateRuntime:
     @property
     def namespace(self) -> str:
         return self._config.namespace
+
+    @property
+    def store_client(self) -> Any:
+        """The one bounded `redis.asyncio` client this worker's readers share.
+
+        Exposed so `apply_production` can build the per-org `BudgetLease` the `QuotaRegistry`
+        factory mints over the SAME bounded client (one connection budget per worker), rather than
+        opening a second store connection. Read-only; the runtime owns its lifetime (`shutdown`
+        closes it).
+        """
+        return self._client
+
+    @property
+    def store_keys(self) -> StoreKeys:
+        """The `StoreKeys` layout (namespace + hash tag) the budget lease keys are built from."""
+        return self._keys
 
     @property
     def fresh_ms(self) -> int:

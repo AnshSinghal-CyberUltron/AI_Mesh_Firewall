@@ -14,6 +14,13 @@ from tests.edge.test_dev_profile_boot import _contract, _dev_env
 STATE = {
     "AMF_STATE_VALKEY_URL": "redis://127.0.0.1:1/0",
     "AMF_STATE_HMAC_KEY": "secret",
+    # S4 (task 10.1) made the DECLARED guard rate a required production-boot input:
+    # `apply_production` refuses before the state checks when `AMF_Q_SAFE` is absent, so a valid
+    # production env now includes it. The audit sizing (`AMF_AUDIT_*`) stays optional (shipped
+    # DECLARED defaults), so `AMF_Q_SAFE` is the only new required input. The `without_its_state`
+    # cases drop ONE state key but keep `AMF_Q_SAFE`, so they still reach and assert the
+    # StateConfigError for the missing state key.
+    "AMF_Q_SAFE": "200",
 }
 
 
@@ -40,11 +47,23 @@ def test_production_wires_signed_state_without_any_io() -> None:
     joined = "\n".join(logs)
     assert "PRODUCTION PROFILE" in joined and "NOT enforced" in joined
     assert "boot: identity -> fail_closed_resolver" not in joined
-    assert "boot: quota -> fail_closed_budget" in joined, "unwired stages stay named"
+    # S4 (task 10.4) wired admission + quota, so the S3 fail-closed lines are DROPPED and replaced
+    # by one real line per wired admission, rate, and budget dependency.
+    assert "boot: admission -> fail_closed_admission" not in joined
+    assert "boot: quota -> fail_closed_budget" not in joined
+    assert "boot: admission -> AdmissionController" in joined
+    assert "boot: rate -> per-principal LocalGCRA" in joined
+    assert "boot: budget -> per-org BudgetLease registry" in joined
+    assert "never shared_state_unavailable" in joined
     assert STATE["AMF_STATE_HMAC_KEY"] not in joined, "the secret never reaches a log line"
 
 
-@pytest.mark.parametrize("missing", sorted(STATE))
+#: The state inputs whose absence is a `StateConfigError` (distinct from `AMF_Q_SAFE`, whose absence
+#: is a `ProfileError` raised earlier by `apply_production` — covered by the S4 boot tests).
+_STATE_KEYS = ("AMF_STATE_VALKEY_URL", "AMF_STATE_HMAC_KEY")
+
+
+@pytest.mark.parametrize("missing", sorted(_STATE_KEYS))
 def test_production_refuses_to_start_without_its_state(missing: str) -> None:
     env = {"AMF_PROFILE": "production", **{k: v for k, v in STATE.items() if k != missing}}
     with pytest.raises(StateConfigError, match=missing):
