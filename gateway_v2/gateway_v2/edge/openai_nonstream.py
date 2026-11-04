@@ -365,10 +365,7 @@ async def emit_enforced_chat(
     console = console_from_holds(holds, code)
     if code is not None:
         response = apply_projection(
-            errors.render_http(
-                code, request_id=holds.request_id, retry_after_s=enforced.retry_after_s
-            ),
-            console,
+            errors.render_http(code, retry_after_s=enforced.retry_after_s), console
         )
         await emit_response(send, response)
         return

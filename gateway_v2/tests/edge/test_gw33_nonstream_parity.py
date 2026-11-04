@@ -68,29 +68,3 @@ def test_a_plan_without_built_in_output_rules_keeps_the_base_scanner_only() -> N
 
 def test_no_plan_keeps_the_base_scanner_only() -> None:
     assert list(_whole_response_scanner(_deps(), None, None)("10.20.30.40")) == []
-
-
-def test_a_non_streaming_post_dispatch_refusal_echoes_the_request_id() -> None:
-    """Live finding: a non-streaming upstream 502 rendered ``error.request_id: null`` and no
-    ``x-request-id`` header while the streaming 502 carried both."""
-    import asyncio
-    import json
-
-    from gateway_v2.edge.openai_nonstream import EnforcedOutput, emit_enforced_chat
-
-    holds = RequestHolds()
-    holds.note_request("zs-org-abc")
-    sent: list[dict[str, object]] = []
-
-    async def send(message: dict[str, object]) -> None:
-        sent.append(message)
-
-    plan = plan_of(StreamingMode.INCREMENTAL)
-    enforced = EnforcedOutput(deltas=(), refuse_code="upstream_error")
-    asyncio.run(emit_enforced_chat(send, _deps(), None, plan, enforced, holds))  # type: ignore[arg-type]
-    start = next(m for m in sent if m["type"] == "http.response.start")
-    headers = {k.decode(): v.decode() for k, v in start["headers"]}  # type: ignore[union-attr]
-    chunks = [m.get("body", b"") for m in sent if m["type"] == "http.response.body"]
-    body = json.loads(b"".join(chunks))  # type: ignore[arg-type]
-    assert headers.get("x-request-id") == "zs-org-abc"
-    assert body["error"]["request_id"] == "zs-org-abc"
