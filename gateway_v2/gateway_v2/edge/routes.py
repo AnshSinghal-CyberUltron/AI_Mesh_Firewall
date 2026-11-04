@@ -42,6 +42,12 @@ from gateway_v2.detect.windowing import max_pattern_length
 from gateway_v2.dispatch.provider import ProviderClient, UpstreamRequest
 from gateway_v2.dispatch.routing import DispatchRouter
 from gateway_v2.dispatch.transform import Transform
+from gateway_v2.domain.incident import (
+    IncidentDecider,
+    StreamBinding,
+    fail_closed_gate,
+    fail_closed_recheck,
+)
 from gateway_v2.domain.plan import ExecutionPlan, Phase, Surface
 from gateway_v2.domain.posture import PLAN_UNAVAILABLE, STREAM_KILLED
 from gateway_v2.edge import errors
@@ -68,8 +74,8 @@ from gateway_v2.edge.chat_deps import (
     no_findings_detector,
     unresolved_snapshot_source,
 )
+from gateway_v2.edge.chat_lifecycle import LifecycleOutcome
 from gateway_v2.edge.console_projection import (
-    apply_projection,
     console_from_holds,
     refusal_trace_frame,
     stream_trace_payload,
@@ -81,6 +87,14 @@ from gateway_v2.edge.identity_resolver import (
     fail_closed_resolver,
     refusal_request_id,
 )
+from gateway_v2.edge.incident_recheck import (
+    Recheck,
+    attempt_recheck_cut,
+    first_attempt_refusal,
+    note_stream_cut,
+)
+from gateway_v2.edge.incident_render import render_incident_refusal
+from gateway_v2.edge.inflight_source import InFlightControlFactory, RefusingControlSource
 from gateway_v2.edge.mcp_deps import McpDeps
 from gateway_v2.edge.openai_misc import (
     EmbeddingsSurface,
@@ -92,6 +106,7 @@ from gateway_v2.edge.outcome_metrics import OutcomeObserver
 from gateway_v2.edge.phase_resolvers import PhaseResolverFactory, resolver_for
 from gateway_v2.edge.request_holds import RequestHolds
 from gateway_v2.edge.responses_store import ResponseStore
+from gateway_v2.edge.route_emit import ProducedModeHolder, emit_error_code, emit_response
 from gateway_v2.edge.stream_control import FirstByteLatch, StreamAttempt, run_with_no_splice
 from gateway_v2.edge.stream_timeouts import StreamTimeout, StreamTimeouts
 from gateway_v2.edge.wire.openai import (
@@ -109,9 +124,8 @@ from gateway_v2.egress.stream import (
     ScanProtocol,
     Send,
     StreamPipeline,
-    StreamStats,
 )
-from gateway_v2.egress.strict import StrictStats, StrictWithholdPipeline
+from gateway_v2.egress.strict import StrictWithholdPipeline
 from gateway_v2.plan.snapshot import ReplicaSnapshot
 from gateway_v2.runtime.holdback_config import HoldbackConfig
 from gateway_v2.runtime.holdback_metrics import HoldbackMetrics
@@ -150,51 +164,6 @@ RouteTable = Mapping[tuple[str, str], RouteHandler]
 # --------------------------------------------------------------------------- #
 
 
-async def emit_response(send: ASGISend, response: errors.HTTPResponse) -> None:
-    """Write a framework-free :class:`errors.HTTPResponse` onto the ASGI ``send`` channel.
-
-    The single place a rendered HTTP value becomes ASGI events: a ``http.response.start`` with
-    the status + the response's ``(name, value)`` header tuple (encoded to the ASGI
-    ``list[tuple[bytes, bytes]]`` header shape), then one ``http.response.body`` carrying the
-    body bytes. Keeping this in one helper means every HTTP reply — the two operational
-    endpoints and every ``Error_Envelope`` rendering — emits identically.
-    """
-    headers = [
-        (name.encode("latin-1"), value.encode("latin-1")) for name, value in response.headers
-    ]
-    await send(
-        {
-            "type": "http.response.start",
-            "status": response.status,
-            "headers": headers,
-        }
-    )
-    await send({"type": "http.response.body", "body": response.body})
-
-
-async def _emit_error_code(
-    send: ASGISend, code: str, request_id: str | None = None,
-    param: str | None = None, boundary: int | None = None,
-    console: dict[str, object] | None = None,
-) -> None:
-    """Render a value-code through the single ``Error_Envelope`` and emit it as HTTP.
-
-    Every value-code that reaches a non-streaming handler passes through
-    :func:`errors.render_http`, so an unmapped code renders the declared generic error rather
-    than leaking raw internal detail (R3.4). The streaming chat handler uses the SSE rendering
-    instead (``errors.render_sse``), so the two sides never disagree on the error shape.
-
-    ``request_id`` is the gateway-minted per-request id (``None`` at a pre-identity site); it
-    threads into the HTTP body + the ``x-request-id`` header. ``param`` names the offending field
-    for a boundary parse refusal (``None`` otherwise). ``boundary`` is the permitted-maximum VALUE
-    a contract-bearing caller supplies for the ``invalid_max_*`` codes (``None`` otherwise);
-    ``edge/errors`` formats it into the boundary-free declared message — the capacity number is
-    sourced from ``max_output_tokens_boundary()`` at the caller, never a literal here or there.
-    """
-    response = errors.render_http(code, param=param, request_id=request_id, boundary=boundary)
-    await emit_response(send, apply_projection(response, console))
-
-
 # --------------------------------------------------------------------------- #
 # The chat route (R2.2) — the real GW15 handler over the shipped egress pipeline.
 # --------------------------------------------------------------------------- #
@@ -207,27 +176,6 @@ async def _emit_error_code(
 # fail-closed default so every existing construction keeps compiling until a boot card injects the
 # real GW19 / GW06 / GW07-08 components; an unwired route sheds at admission (zero provider calls)
 # before the budget or input phases ever matter.
-
-
-class _ProducedModeHolder:
-    """A per-request mutable sink for the pipeline's returned stats (GW13 C5).
-
-    Both ``StreamPipeline.run`` and ``StrictWithholdPipeline.run`` return a stats
-    value carrying ``produced_mode`` (and, on the INCREMENTAL side,
-    ``degenerated_to_strict``). The ``_attempt`` coroutine captures that return and
-    stashes it here so :meth:`ChatRoute._finish_stream` can emit the Produced_Mode
-    trace frame on the wire just before the terminal ``[DONE]`` marker. It is a
-    per-request LOCAL instance built in :meth:`ChatRoute._stream` (never a
-    module-level mutable, gated), so nothing request-scoped is shared on the frozen
-    route. ``stats`` is ``None`` until an attempt completed (a byte-less failure of
-    every attempt leaves it unset, in which case no trace frame is emitted).
-    """
-
-    __slots__ = ("holds", "stats")
-
-    def __init__(self, holds: RequestHolds | None = None) -> None:
-        self.holds = holds
-        self.stats: StreamStats | StrictStats | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -308,6 +256,11 @@ class ChatRoute:
     holdback_metrics: HoldbackMetrics = HoldbackMetrics()
     #: GW26. A set phase factory enforces only rules that name this surface.
     surface: Surface = Surface.CHAT
+    #: GW29: the per-stream control source factory (``None`` = use ``control``), the phase 4b
+    #: gate and the attempt recheck. Every default FAILS CLOSED (unwired refuses, ``unwired``).
+    control_factory: InFlightControlFactory | None = None
+    incident_gate: IncidentDecider = fail_closed_gate
+    incident_recheck: Recheck = fail_closed_recheck
 
     async def handle(self, scope: ASGIScope, receive: ASGIReceive, send: ASGISend) -> None:
         """Serve a chat/completions request end-to-end (R2.2, R7, R10, §10.4).
@@ -337,13 +290,15 @@ class ChatRoute:
 
         holds = RequestHolds()
         outcome = None
+        refused_code: str | None = None
         try:
             body = await _read_body(receive)
             req, outcome = await ChatSurface(deps=self).run_lifecycle(scope, body, holds)
             if outcome.refuse_code is not None:
+                refused_code = outcome.refuse_code
                 await self._render_refusal(
                     send, req, outcome.refuse_code, outcome.request_id,
-                    outcome.refuse_param, holds,
+                    outcome.refuse_param, holds, retry_after_s=outcome.retry_after_s,
                 )
                 return
             # Proceed: the lifecycle guarantees all three provider inputs are set on a non-refusal.
@@ -353,14 +308,17 @@ class ChatRoute:
             assert plan is not None and destination is not None and upstream_body is not None
             assert req is not None  # parse succeeded on any proceed outcome
             if req.streaming:
-                await self._stream_response(send, plan, destination, upstream_body, holds)
+                refused_code = await self.first_attempt_refusal(send, outcome, holds)
+                if refused_code is None:
+                    await self._stream_response(
+                        send, plan, destination, upstream_body, holds, outcome=outcome
+                    )
                 return
             await ChatSurface(deps=self).collect_and_render(
-                req, plan, destination, upstream_body, send, holds
+                req, plan, destination, upstream_body, send, holds, outcome=outcome
             )
         finally:
-            refused = None if outcome is None else outcome.refuse_code
-            emit_chat_audit(self.audit, holds, refused, observer=self.observer)
+            emit_chat_audit(self.audit, holds, refused_code, observer=self.observer)
             holds.release(self.admission, self.quota)
 
     async def _render_refusal(
@@ -371,6 +329,8 @@ class ChatRoute:
         request_id: str | None,
         param: str | None = None,
         holds: RequestHolds | None = None,
+        *,
+        retry_after_s: float | None = None,
     ) -> None:
         """Render a §10.4 refusal through the single ``Error_Envelope`` (R12.1).
 
@@ -397,6 +357,10 @@ class ChatRoute:
             # GW36 S3 (N11): identity's refusal (the only post-parse one with no id yet) is plain
             # HTTP whatever `stream` asked, as OpenAI's 401 is, with a random id.
             request_id, req = minted, None
+        if code in errors.INCIDENT_HTTP_CODES:
+            # GW29 (6.4a): HTTP 503 + Retry-After even for a streaming request; no SSE head yet.
+            await render_incident_refusal(send, code, request_id, holds, retry_after_s)
+            return
         if req is not None and req.streaming:
             await _start_sse(send)
             await _send_sse(send, errors.render_sse(code))
@@ -405,12 +369,18 @@ class ChatRoute:
                 await _send_sse(send, trace)
             await _end_sse(send)
             return
-        await _emit_error_code(
+        await emit_error_code(
             send, code, request_id, param, self.contract.max_output_tokens_boundary(),
             None if holds is None else console_from_holds(
                 holds, output_action=None, provider_called=False,
             ),
         )
+
+    async def first_attempt_refusal(
+        self, send: ASGISend, outcome: LifecycleOutcome, holds: RequestHolds
+    ) -> str | None:
+        """Recheck the routed model BEFORE any SSE head (6.3a); a refusal is the 503 JSON."""
+        return await first_attempt_refusal(self.incident_recheck, send, outcome, holds)
 
     async def _stream_response(
         self,
@@ -419,6 +389,8 @@ class ChatRoute:
         destination: str,
         body: Mapping[str, object],
         holds: RequestHolds | None = None,
+        *,
+        outcome: LifecycleOutcome,
     ) -> None:
         """Open the SSE response + drive the shipped egress orchestration (R2.2, R7, R10).
 
@@ -451,7 +423,7 @@ class ChatRoute:
             await _send_sse(send, errors.render_sse(verdict.code))
             await _end_sse(send)
             return
-        await self._stream(send, encoder, coalescer, plan, destination, body, holds)
+        await self._stream(send, encoder, coalescer, plan, destination, body, holds, outcome)
         await _end_sse(send)
 
     async def _stream(
@@ -463,6 +435,7 @@ class ChatRoute:
         destination: str,
         body: Mapping[str, object],
         holds: RequestHolds,
+        outcome: LifecycleOutcome,
     ) -> None:
         """Drive the egress pipeline under the no-splice gate + in-flight control (R7, R10).
 
@@ -485,9 +458,17 @@ class ChatRoute:
         latch = FirstByteLatch()
         sent_terminal = _TerminalLatch()
         kill_latch = KillLatch()
-        produced = _ProducedModeHolder(holds)
+        produced = ProducedModeHolder(holds)
+        binding: StreamBinding | None = outcome.binding
+        source = (
+            self.control_factory.for_stream(binding)
+            if self.control_factory is not None
+            else self.control
+            if binding is not None
+            else RefusingControlSource()
+        )
         control = InFlightControl(
-            source=self.control,
+            source=source,
             contract=self.contract,
             clock=self.clock,
             kill_latch=kill_latch,
@@ -531,6 +512,8 @@ class ChatRoute:
                 body,
                 produced,
                 holds,
+                org_id="" if binding is None else binding.org_id,
+                routed_model=outcome.routed_model or "",
             )
 
         await self._run_attempts(latch, _factory)
@@ -564,7 +547,7 @@ class ChatRoute:
         encoder: SSEEncoder,
         kill_latch: KillLatch,
         sent_terminal: _TerminalLatch,
-        produced: _ProducedModeHolder,
+        produced: ProducedModeHolder,
     ) -> None:
         """Close the stream: render an in-flight cut's ``Error_Frame`` or the ``[DONE]`` marker.
 
@@ -595,6 +578,7 @@ class ChatRoute:
             return
         reason = kill_latch.reason()
         if reason is not None:
+            note_stream_cut(produced.holds, reason)
             # The pass-through loop ended normally after the cut and recorded "allow"; the trace
             # must not report a cut stream as allowed (a kill-switch cut publishes no action).
             stats = produced.stats
@@ -613,7 +597,7 @@ class ChatRoute:
     async def _emit_produced_mode(
         send: ASGISend,
         encoder: SSEEncoder,
-        produced: _ProducedModeHolder,
+        produced: ProducedModeHolder,
     ) -> None:
         """Emit the Produced_Mode trace frame from the captured stats (GW13 C5/R5).
 
@@ -644,8 +628,11 @@ class ChatRoute:
         plan: ExecutionPlan,
         destination: str,
         body: Mapping[str, object],
-        produced: _ProducedModeHolder,
+        produced: ProducedModeHolder,
         holds: RequestHolds,
+        *,
+        org_id: str,
+        routed_model: str,
     ) -> StreamAttempt | None:
         """Yield the next eligible stream attempt, or ``None`` when none remains (R7.1).
 
@@ -682,6 +669,12 @@ class ChatRoute:
                 kill_latch.kill(PLAN_UNAVAILABLE)
                 return latch.is_set()
             request = UpstreamRequest(destination=destination, body=body)
+            # GW29 (6.4): re-check the routed model ABOVE ``mark_dispatched`` so a refusal refunds.
+            if attempt_recheck_cut(
+                self.incident_recheck, org_id=org_id, model=routed_model,
+                kill_latch=kill_latch, holds=holds,
+            ):
+                return latch.is_set()
             # The provider is about to be opened — after the pre-open ``_build_pipeline`` build
             # (which can fail CLOSED without opening) and the body assembly. Record the dispatch
             # so the budget spend now STANDS (the provider saw the request, C29 "spend stands

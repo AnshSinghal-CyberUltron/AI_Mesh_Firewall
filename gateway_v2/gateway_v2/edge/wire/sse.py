@@ -158,6 +158,26 @@ ERROR_SHAPES: Mapping[str, tuple[str, str]] = MappingProxyType(
             "gateway_error",
             "No buffer capacity was available and the stream was rejected.",
         ),
+        posture.KILL_SWITCH_ENGAGED: (
+            "service_unavailable",
+            "An incident kill switch is engaged; the request was refused.",
+        ),
+        posture.MODEL_KILLED: (
+            "service_unavailable",
+            "The requested model is disabled by an incident kill switch.",
+        ),
+        posture.MODEL_ISOLATED_NO_FALLBACK: (
+            "service_unavailable",
+            "The requested model is isolated and no eligible fallback exists.",
+        ),
+        posture.REROUTE_REFUSED: (
+            "service_unavailable",
+            "The requested model is isolated and this surface cannot be rerouted.",
+        ),
+        posture.STREAM_MODEL_ISOLATED: (
+            "service_unavailable",
+            "The model was isolated and the stream was terminated.",
+        ),
         posture.STREAM_STRICT_BUFFER_OVERFLOW: (
             "gateway_error",
             "The strict-withhold buffer limit was exceeded and the response was withheld.",

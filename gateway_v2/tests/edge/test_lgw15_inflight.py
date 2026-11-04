@@ -154,7 +154,8 @@ def _finish_terminal_code(latch: KillLatch) -> bytes:
     arguments and never touches ``self``, so no route need be constructed to exercise the single
     terminal site in isolation.
     """
-    from gateway_v2.edge.routes import ChatRoute, _ProducedModeHolder
+    from gateway_v2.edge.route_emit import ProducedModeHolder as _ProducedModeHolder
+    from gateway_v2.edge.routes import ChatRoute
 
     encoder = SSEEncoder()
     sent_terminal = _TerminalLatch()

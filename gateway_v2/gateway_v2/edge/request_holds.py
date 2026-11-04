@@ -57,6 +57,7 @@ every bit of state lives on the per-request ``__slots__`` instance.
 from __future__ import annotations
 
 from gateway_v2.domain.decision import Decision
+from gateway_v2.domain.incident import RerouteNote
 from gateway_v2.edge.chat_deps import AdmissionDecider, BudgetDecider
 
 __all__ = ("RequestHolds",)
@@ -78,11 +79,15 @@ class RequestHolds:
         "_admitted",
         "_cost",
         "_dispatched",
+        "_incident_cause",
+        "_incident_retry_after_s",
+        "_incident_underlying",
         "_input_decision",
         "_org_id",
         "_output_decision",
         "_released",
         "_request_id",
+        "_reroute",
         "_spent",
     )
 
@@ -96,6 +101,10 @@ class RequestHolds:
         self._input_decision: Decision | None = None
         self._output_decision: Decision | None = None
         self._org_id: str = ""
+        self._incident_cause: str | None = None
+        self._incident_underlying: str | None = None
+        self._incident_retry_after_s: float | None = None
+        self._reroute: RerouteNote | None = None
 
     def admitted(self, request_id: str) -> None:
         """Record that admission granted a slot for ``request_id`` (``complete``-d on exit)."""
@@ -123,6 +132,34 @@ class RequestHolds:
     def note_request(self, request_id: str) -> None:
         """Record the minted id before admission, so a shed still has a row key."""
         self._request_id = request_id
+
+    def note_incident_cause(
+        self, cause: str, underlying: str | None = None, retry_after_s: float | None = None
+    ) -> None:
+        """Record the GW29 incident cause, the underlying refuse/stream code and the retry hint."""
+        self._incident_cause = cause
+        self._incident_underlying = underlying
+        self._incident_retry_after_s = retry_after_s
+
+    def note_reroute(self, rec: RerouteNote) -> None:
+        """Record the reroute provenance of this request (canonical names, no content)."""
+        self._reroute = rec
+
+    @property
+    def incident_cause(self) -> str | None:
+        return self._incident_cause
+
+    @property
+    def incident_underlying(self) -> str | None:
+        return self._incident_underlying
+
+    @property
+    def incident_retry_after_s(self) -> float | None:
+        return self._incident_retry_after_s
+
+    @property
+    def reroute(self) -> RerouteNote | None:
+        return self._reroute
 
     @property
     def input_decision(self) -> Decision | None:

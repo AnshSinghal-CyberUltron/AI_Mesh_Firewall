@@ -27,6 +27,14 @@ from gateway_v2.domain.decision import Decision, DecisionRecord, Disposition
 from gateway_v2.domain.posture import OVERLOAD_SHED
 from gateway_v2.edge import errors
 from gateway_v2.edge.console_projection import console_from_holds
+from gateway_v2.edge.incident_audit import (
+    effective_refuse_code,
+    incident_is_cut,
+    incident_is_refusal,
+    incident_records,
+    reroute_record,
+    with_routing,
+)
 from gateway_v2.edge.outcome_metrics import OutcomeObserver, observe_outcome
 from gateway_v2.edge.request_holds import RequestHolds
 
@@ -70,6 +78,7 @@ def emit_chat_audit(
     is built here) and may add plain-string ``detail`` such as the MCP server and tool.
     ``observer`` counts the same outcome for ``/metrics``, whether or not audit is wired.
     """
+    refuse_code = effective_refuse_code(holds, refuse_code)
     observe_outcome(observer, holds, refuse_code)
     if emit is None or not holds.request_id or not holds.org_id:
         return
@@ -96,7 +105,10 @@ def _records(
     extra: Mapping[str, str],
 ) -> list[AuditRecord]:
     records: list[AuditRecord] = []
-    output = holds.output_decision
+    if incident_is_refusal(holds):
+        # GW29: an incident refusal is ONE record, whatever was decided before it (6.4a).
+        return incident_records(holds, refuse_code, recorded_at_ns)
+    output = None if incident_is_cut(holds) else holds.output_decision
     if holds.input_decision is not None:
         records.append(
             _phase(holds, holds.input_decision, AuditPhase.INPUT, recorded_at_ns, console, extra),
@@ -109,6 +121,11 @@ def _records(
         admitted = _admission(holds, refuse_code, recorded_at_ns, extra)
         if admitted is not None:
             records.append(admitted)
+    records = [with_routing(holds, record) for record in records]
+    records.extend(incident_records(holds, refuse_code, recorded_at_ns))
+    rerouted = reroute_record(holds, recorded_at_ns)
+    if rerouted is not None:
+        records.append(rerouted)
     return records
 
 

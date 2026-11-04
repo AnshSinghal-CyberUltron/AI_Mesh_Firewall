@@ -61,6 +61,7 @@ __all__ = (
     "SweepResult",
     "canonical_model",
     "fail_closed_incident",
+    "fail_closed_gate",
     "fail_closed_org",
     "fail_closed_recheck",
     "isolation_scope",
@@ -114,6 +115,7 @@ INCIDENT_CAUSES: Final[tuple[str, ...]] = (
     "cut_killed",
     "cut_key_revoked",
     "cut_snapshot_stale",
+    "cut_model_isolated",
     # reroute and isolation-change audit records
     "reroute",
     "isolate",
@@ -377,6 +379,27 @@ def fail_closed_recheck(*, org_id: str, model: str) -> GateVerdict:
 
 def fail_closed_org(*, org_id: str, request_id: str) -> GateVerdict:
     return GateVerdict.refuse(KILL_SWITCH_UNAVAILABLE, "unwired", MIN_RETRY_AFTER_S)
+
+
+class _FailClosedGate:
+    """The `IncidentDecider` an unwired route carries: every method refuses with cause `unwired`."""
+
+    __slots__ = ()
+
+    def decide(self, *, org_id: str, requested_model: str, request_id: str) -> GateVerdict:
+        return fail_closed_incident(
+            org_id=org_id, requested_model=requested_model, request_id=request_id
+        )
+
+    def recheck(self, *, org_id: str, model: str) -> GateVerdict:
+        return fail_closed_recheck(org_id=org_id, model=model)
+
+    def decide_org(self, *, org_id: str, request_id: str) -> GateVerdict:
+        return fail_closed_org(org_id=org_id, request_id=request_id)
+
+
+#: Stateless shared instance (like `fail_closed_admission`); the default of every `incident_gate`.
+fail_closed_gate: IncidentDecider = _FailClosedGate()
 
 
 # -- canonical model identity (design 4.6) ---------------------------------------------------

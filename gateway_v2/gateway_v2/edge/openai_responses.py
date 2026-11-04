@@ -39,7 +39,8 @@ from gateway_v2.edge.identity_resolver import identity_of, refusal_request_id
 from gateway_v2.edge.openai_chat import REFUSE_IDENTITY_UNRESOLVED, ChatSurface, LifecycleOutcome
 from gateway_v2.edge.request_holds import RequestHolds
 from gateway_v2.edge.responses_store import MemoryResponseStore, ResponseStore, StoredResponse
-from gateway_v2.edge.routes import ChatRoute, RouteHandler, _emit_error_code, emit_response
+from gateway_v2.edge.route_emit import emit_error_code
+from gateway_v2.edge.routes import ChatRoute, RouteHandler, emit_response
 from gateway_v2.edge.wire.openai import CanonicalRequest
 from gateway_v2.edge.wire.responses import (
     RESPONSES_MALFORMED_BODY,
@@ -120,6 +121,7 @@ class ResponsesRoute:
         """``POST /v1/responses``."""
         holds = RequestHolds()
         outcome: LifecycleOutcome | None = None
+        refused_code: str | None = None
         try:
             body = await read_body(receive)
             prepared = await self._prepare(scope, body)
@@ -136,15 +138,15 @@ class ResponsesRoute:
                 chat_scope, prepared.chat_bytes, holds
             )
             if outcome.refuse_code is not None or req is None:
+                refused_code = outcome.refuse_code
                 await self._refuse(send, outcome, holds)
                 return
             if req.streaming:
-                await self._stream(send, prepared, req, outcome, holds)
+                refused_code = await self._stream(send, prepared, req, outcome, holds)
                 return
             await self._non_stream(send, prepared, req, outcome, holds)
         finally:
-            refused = None if outcome is None else outcome.refuse_code
-            emit_chat_audit(self.chat.audit, holds, refused, observer=self.chat.observer)
+            emit_chat_audit(self.chat.audit, holds, refused_code, observer=self.chat.observer)
             holds.release(self.chat.admission, self.chat.quota)
 
     async def handle_get(self, scope: ASGIScope, receive: ASGIReceive, send: ASGISend) -> None:
@@ -237,13 +239,14 @@ class ResponsesRoute:
         self, send: ASGISend, outcome: LifecycleOutcome, holds: RequestHolds
     ) -> None:
         """The lifecycle refusal as JSON, with the console object when a decision exists."""
-        await _emit_error_code(
+        await emit_error_code(
             send,
             outcome.refuse_code or REFUSE_IDENTITY_UNRESOLVED,
             outcome.request_id,
             outcome.refuse_param,
             self.chat.contract.max_output_tokens_boundary(),
             console_from_holds(holds, output_action=None, provider_called=False),
+            outcome.retry_after_s,
         )
 
     async def _non_stream(
@@ -259,7 +262,7 @@ class ResponsesRoute:
         assert plan is not None and destination is not None and upstream is not None
         capture = _Capture()
         await ChatSurface(deps=self.chat).collect_and_render(
-            req, plan, destination, upstream, capture.send, holds
+            req, plan, destination, upstream, capture.send, holds, outcome=outcome
         )
         if capture.status != _OK:
             await emit_response(
@@ -298,10 +301,17 @@ class ResponsesRoute:
         req: CanonicalRequest,
         outcome: LifecycleOutcome,
         holds: RequestHolds,
-    ) -> None:
-        """Chat's stream, translated to typed events as it arrives."""
+    ) -> str | None:
+        """Chat's stream, translated to typed events as it arrives.
+
+        Returns the refuse code of a first-attempt incident recheck (503 JSON, written BEFORE
+        ``start_sse``), else ``None``.
+        """
         plan, destination, upstream = outcome.plan, outcome.destination, outcome.body
         assert plan is not None and destination is not None and upstream is not None
+        refused = await self.chat.first_attempt_refusal(send, outcome, holds)
+        if refused is not None:
+            return refused
         translator = ResponsesEventTranslator(
             response_id=new_id("resp"),
             item_id=new_id("msg"),
@@ -320,10 +330,13 @@ class ResponsesRoute:
                 if out:
                     await send_sse(send, out)
 
-        await self.chat._stream_response(forward, plan, destination, upstream, holds)
+        await self.chat._stream_response(
+            forward, plan, destination, upstream, holds, outcome=outcome
+        )
         failure = await self._stream_failure(translator, prepared, holds, req, upstream)
         await send_sse(send, translator.finish(failure_code=failure))
         await end_sse(send)
+        return None
 
     async def _stream_failure(
         self,

@@ -25,7 +25,12 @@ import json  # noqa: F401
 import random  # noqa: F401
 from collections.abc import AsyncIterator, Mapping, Sequence  # noqa: F401
 from dataclasses import dataclass, field  # noqa: F401
+from dataclasses import field as _lgw29_field
 from typing import TYPE_CHECKING, cast  # noqa: F401
+
+from tests.edge._lgw29_support import dev_gate as _lgw29_dev_gate
+from tests.edge._lgw29_support import dev_recheck as _lgw29_dev_recheck
+from tests.edge._lgw29_support import proceed_outcome as _lgw29_proceed_outcome
 
 if TYPE_CHECKING:  # pragma: no cover - annotation-only import, no runtime cycle
     from gateway_v2.edge.routes import ChatRoute  # noqa: F401
@@ -169,6 +174,8 @@ def test_property_12_block_output_finding_withholds_the_whole_response() -> None
         error_scanner: object
         resolver: MinimalOutputResolver
         renderer: OpenAIResponseRenderer
+        incident_gate: object = _lgw29_field(default_factory=_lgw29_dev_gate)
+        incident_recheck: object = _lgw29_field(default_factory=_lgw29_dev_recheck)
 
     def _p12_block_scanner(canary: str) -> object:
         """An output scanner: a BLOCK-class finding over every ``canary`` occurrence.
@@ -266,6 +273,7 @@ def test_property_12_block_output_finding_withholds_the_whole_response() -> None
                 destination="p12-upstream",
                 body={},
                 send=send,
+                outcome=_lgw29_proceed_outcome(),
             )
         )
 
@@ -805,6 +813,8 @@ def test_property_13_uncomputable_scan_or_decision_fails_closed_fail_open_zero()
         error_scanner: object
         resolver: object
         renderer: OpenAIResponseRenderer
+        incident_gate: object = _lgw29_field(default_factory=_lgw29_dev_gate)
+        incident_recheck: object = _lgw29_field(default_factory=_lgw29_dev_recheck)
 
     def _p13_plan() -> ExecutionPlan:
         return ExecutionPlan(
@@ -976,6 +986,8 @@ def test_property_13_uncomputable_scan_or_decision_fails_closed_fail_open_zero()
         router: object
         transform: object
         provider: _P13CanaryProvider
+        incident_gate: object = _lgw29_field(default_factory=_lgw29_dev_gate)
+        incident_recheck: object = _lgw29_field(default_factory=_lgw29_dev_recheck)
 
     def _p13_input_deps(canary: str, *, rng: random.Random) -> _P13InputDeps:
         plan = _p13_plan()
@@ -1026,6 +1038,7 @@ def test_property_13_uncomputable_scan_or_decision_fails_closed_fail_open_zero()
                     destination="p13-dest",
                     body={"model": "gpt-p13"},
                     send=send,
+                    outcome=_lgw29_proceed_outcome(),
                 )
             )
 
@@ -1283,6 +1296,8 @@ class _P11NonStreamDeps:
     provider: _P11OneChannelProvider
     error_scanner: _P11OutputScanner
     resolver: _P11MinimalOutputResolver
+    incident_gate: object = _lgw29_field(default_factory=_lgw29_dev_gate)
+    incident_recheck: object = _lgw29_field(default_factory=_lgw29_dev_recheck)
 
 
 def _p11_canonical_request() -> _P11CanonicalRequest:
@@ -1317,6 +1332,8 @@ def _p11_client_bytes_nonstream(
             _p11_cast("_P11ChatRoute", deps),
             "p11-destination",
             {},
+            org_id="org-test",
+            routed_model="gpt-test",
             block_code="output_blocked",
             scan_failure_code="scan_failure",
         )

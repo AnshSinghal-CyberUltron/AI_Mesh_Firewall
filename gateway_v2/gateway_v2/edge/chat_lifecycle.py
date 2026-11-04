@@ -21,6 +21,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 
+from gateway_v2.domain.incident import RouteDecision, StreamBinding
 from gateway_v2.domain.plan import ExecutionPlan
 from gateway_v2.domain.posture import BUDGET_UNAVAILABLE
 from gateway_v2.edge.error_frame_scan import SCAN_ERROR_CODE
@@ -133,10 +134,24 @@ class LifecycleOutcome:
     #: ``MalformedRequest.param``. The render site threads it into ``errors.render_http(param=...)``
     #: so the OpenAI envelope echoes ``error.param``; ``None`` for every non-field-specific code.
     refuse_param: str | None = None
+    #: GW29 (additive, defaulted so every existing construction compiles). ``routed_model`` is the
+    #: canonical model phase 4b checked and the body carries; ``reroute`` the decision when it
+    #: differs from the request; ``binding`` what an in-flight stream is bound to; ``retry_after_s``
+    #: and ``cause`` are set on every incident refusal for the renderer and the single audit record.
+    routed_model: str | None = None
+    reroute: RouteDecision | None = None
+    binding: StreamBinding | None = None
+    retry_after_s: float | None = None
+    cause: str | None = None
 
 
 def _refused(
-    code: str, *, request_id: str | None = None, param: str | None = None
+    code: str,
+    *,
+    request_id: str | None = None,
+    param: str | None = None,
+    retry_after_s: float | None = None,
+    cause: str | None = None,
 ) -> LifecycleOutcome:
     """Build a fail-closed refusal outcome carrying ``code`` (zero provider calls).
 
@@ -154,4 +169,6 @@ def _refused(
         refuse_code=code,
         request_id=request_id,
         refuse_param=param,
+        retry_after_s=retry_after_s,
+        cause=cause,
     )

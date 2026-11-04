@@ -130,7 +130,7 @@ def test_property_template_slots_align_with_the_fold_and_carry_no_text() -> None
         leaked = [s for s in _template_strings(template) if s in texts and s not in roles]
         assert not leaked, (_SEED, i, body, leaked)
         rendered = with_openai_body(
-            MappingProxyType({BODY_DELTAS_KEY: req.text_deltas}), req, _contract()
+            MappingProxyType({BODY_DELTAS_KEY: req.text_deltas}), req, _contract(), model=req.model
         )
         assert rendered is not None, (_SEED, i, body)
         sent = rendered[BODY_OPENAI_KEY]
@@ -156,9 +156,9 @@ def test_property_template_slots_align_with_the_fold_and_carry_no_text() -> None
 def test_a_slot_whose_delta_moved_channel_is_refused() -> None:
     req = _parse({"model": "m", "messages": [{"role": "user", "content": "hi"}]})
     moved = MappingProxyType({BODY_DELTAS_KEY: (("content_part_text", "hi"),)})
-    assert with_openai_body(moved, req, _contract()) is None
+    assert with_openai_body(moved, req, _contract(), model=req.model) is None
     short = MappingProxyType({BODY_DELTAS_KEY: ()})
-    assert with_openai_body(short, req, _contract()) is None
+    assert with_openai_body(short, req, _contract(), model=req.model) is None
 
 
 @pytest.mark.parametrize(
@@ -229,7 +229,7 @@ def test_prompt_shapes_that_cannot_be_one_scanned_turn_are_refused(
 def test_a_message_name_is_accepted_but_not_forwarded() -> None:
     req = _parse({"model": "m", "messages": [{"role": "user", "content": "hi", "name": "AKIA"}]})
     rendered = with_openai_body(
-        MappingProxyType({BODY_DELTAS_KEY: req.text_deltas}), req, _contract()
+        MappingProxyType({BODY_DELTAS_KEY: req.text_deltas}), req, _contract(), model=req.model
     )
     assert rendered is not None
     assert "AKIA" not in json.dumps(_plain(rendered[BODY_OPENAI_KEY]))
@@ -255,7 +255,8 @@ def test_output_budget_follows_v1(budget: dict[str, int], expected: dict[str, in
         org_ceiling=contract.default_response_token_ceiling(),
         contract=contract,
     )
-    rendered = with_openai_body(MappingProxyType({BODY_DELTAS_KEY: req.text_deltas}), req, contract)
+    deltas = MappingProxyType({BODY_DELTAS_KEY: req.text_deltas})
+    rendered = with_openai_body(deltas, req, contract, model=req.model)
     assert rendered is not None
     sent = rendered[BODY_OPENAI_KEY]
     got = {k: sent[k] for k in ("max_tokens", "max_completion_tokens") if k in sent}  # type: ignore[operator, index]

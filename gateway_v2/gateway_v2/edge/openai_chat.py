@@ -42,6 +42,7 @@ from gateway_v2.admit.grant import Admitted, ShedVerdict
 from gateway_v2.dispatch.provider import UpstreamRequest
 from gateway_v2.dispatch.transform import GatewayRequest
 from gateway_v2.domain import Decision
+from gateway_v2.domain.incident import GateVerdict, StreamBinding
 from gateway_v2.domain.plan import ExecutionPlan, Phase, PlanUnavailable, PlanUnknownTenant, Surface
 from gateway_v2.edge.chat_lifecycle import (
     REFUSE_BUDGET_UNAVAILABLE,
@@ -58,6 +59,7 @@ from gateway_v2.edge.chat_lifecycle import (
 )
 from gateway_v2.edge.dev_components import bind_surface
 from gateway_v2.edge.identity_resolver import TenantIdentity, hashed_bearer_key, identity_of
+from gateway_v2.edge.incident_phase import incident_phase, proceed_binding
 from gateway_v2.edge.input_enforcement import (
     REFUSE_INPUT_UNMASKABLE,
     InputScan,
@@ -256,6 +258,14 @@ class ChatSurface:
         request_id = self._request_id(identity, req)
         holds.note_request(request_id)
 
+        # Phase 4b (GW29): the incident gate, BEFORE admission and budget (refusal = no charge).
+        verdict, incident_refused = incident_phase(
+            self._deps.incident_gate, org_id=identity.org_id, model=req.model,
+            request_id=request_id, holds=holds,
+        )
+        if incident_refused is not None:
+            return req, incident_refused
+
         # Phase 5 — admission (task 2.4). A ShedVerdict fails closed with its code;
         # an Admitted records the slot on ``holds`` so it is ``complete``-d on exit.
         admit_refuse = await self._admit(identity, req)
@@ -267,26 +277,16 @@ class ChatSurface:
         # spend records the SAME cost on ``holds`` so it is refunded if nothing is
         # dispatched. The cost is computed ONCE and spent + recorded identically.
         cost = self._estimated_cost(req)
-        # The per-key GCRA (inside the composed QuotaGate) needs the SAME sha256 key hash the
-        # identity phase resolved the principal on (GW36 S4, Conflict 2). ``hashed_bearer_key``
-        # reads the ``Authorization`` header off this very ``scope`` and is the exact function the
-        # production ``CachingIdentityResolver`` wires as its ``key_namer`` — so this re-derives the
-        # resolved hash from the request, it does NOT recompute from a raw token held elsewhere.
-        # Identity already resolved by this phase, so the hash is present; a defensive ``None``
-        # (e.g. a test resolver that bypassed the header) folds to "" and the budget phase still
-        # fails closed on the missing-owner path.
+        # The per-key GCRA needs the SAME key hash identity resolved on (GW36 S4, Conflict 2);
+        # re-derived from this scope's Authorization header, a defensive None folds to "".
         key_hash = hashed_bearer_key(scope) or ""
         budget_refuse = await self._budget(identity, req, cost, key_hash)
         if budget_refuse is not None:
             return req, _refused(budget_refuse, request_id=request_id)
         holds.spent(cost, request_id)
 
-        # Phase 7 — INPUT scan (task 2.4), the LAST step before any provider contact.
-        # A detector / resolver raise fails closed with ``scan_failure``; the resolved
-        # Decision is carried to ``_proceed``, where a BLOCK yields ``input_blocked``
-        # (``authorize`` mints nothing) and a REDACT's transformations are APPLIED and
-        # verified before the provider — so a blocked / unmaskable request makes zero
-        # provider calls (R7.1 / R7.2, the Group A leak-fix).
+        # Phase 7 — INPUT scan, the LAST step before provider contact; a raise fails closed
+        # (scan_failure) and the Decision goes to ``_proceed`` (BLOCK/REDACT enforced there).
         scan = self._input_scan(plan, req)
         if scan.refuse_code is not None or scan.decision is None:
             return req, _refused(
@@ -294,7 +294,13 @@ class ChatSurface:
             )
 
         holds.note_input(scan.decision)
-        return req, self._proceed(plan, req, scan.decision, request_id)
+        binding = proceed_binding(
+            holds, verdict, requested=req.model, org_id=identity.org_id, key_hash=key_hash,
+            feed_seq=identity.principal.feed_seq,
+        )
+        return req, self._proceed(
+            plan, req, scan.decision, request_id, binding=binding, verdict=verdict
+        )
 
     # --- phase seams (bodies filled by tasks 2.2–2.4) --------------------------------------- #
 
@@ -592,6 +598,9 @@ class ChatSurface:
         req: CanonicalRequest,
         decision: Decision,
         request_id: str,
+        *,
+        binding: StreamBinding,
+        verdict: GateVerdict,
     ) -> LifecycleOutcome:
         """Stage the VERIFIED upstream once every phase passed (task 2.4 / Group A).
 
@@ -618,11 +627,12 @@ class ChatSurface:
         :class:`LifecycleOutcome` has ``refuse_code is None``.
         """
         destination = self._deps.router.select(plan)
+        routed_model = verdict.routed_model or ""
         staged = stage_upstream(
             decision,
             GatewayRequest(
                 destination=destination,
-                model=req.model,
+                model=routed_model,
                 text_deltas=req.text_deltas,
             ),
             self._deps.transform,
@@ -630,11 +640,12 @@ class ChatSurface:
         if isinstance(staged, str):
             return _refused(staged, request_id=request_id)
         upstream: UpstreamRequest = staged
-        body = with_openai_body(upstream.body, req, self._deps.contract)
+        body = with_openai_body(upstream.body, req, self._deps.contract, model=routed_model)
         if body is None:
             return _refused(REFUSE_LIFECYCLE_INCOMPLETE, request_id=request_id)
         return LifecycleOutcome(
-            plan=plan, destination=upstream.destination, body=body, refuse_code=None
+            plan=plan, destination=upstream.destination, body=body, refuse_code=None,
+            routed_model=routed_model, reroute=verdict.reroute, binding=binding,
         )
 
     # --- request-id + cost sourcing (task 2.4) --------------------------------------------- #
@@ -686,6 +697,8 @@ class ChatSurface:
         body: Mapping[str, object],
         send: ASGISend,
         holds: RequestHolds | None = None,
+        *,
+        outcome: LifecycleOutcome,
     ) -> None:
         """Collect the whole upstream, enforce it, render ONE OpenAI JSON (R8/R9).
 
@@ -706,6 +719,8 @@ class ChatSurface:
             body,
             plan=plan,
             holds=holds,
+            org_id="" if outcome.binding is None else outcome.binding.org_id,
+            routed_model=outcome.routed_model or "",
             block_code=REFUSE_OUTPUT_BLOCKED,
             scan_failure_code=REFUSE_INPUT_SCAN_FAILURE,
         )

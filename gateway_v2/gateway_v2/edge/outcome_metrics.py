@@ -63,4 +63,7 @@ def observe_outcome(
     """Count one finished chat, responses or MCP request from its hold ledger."""
     observe_tenant(observer, holds.org_id)
     decided = holds.input_decision is not None or holds.output_decision is not None
+    cause = holds.incident_cause
+    if cause is not None and not cause.startswith("cut_"):
+        decided = False  # an incident refusal is an admission rejection whatever was decided before
     observe_refusal(observer, refuse_code, decided=decided)
