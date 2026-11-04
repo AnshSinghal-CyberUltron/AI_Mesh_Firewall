@@ -22,6 +22,11 @@ __all__ = (
     "RATE_LIMITED",
     "POLICY_REGEX_TIMEOUT",
     "OVERLOAD_SHED",
+    "KILL_SWITCH_ENGAGED",
+    "MODEL_KILLED",
+    "MODEL_ISOLATED_NO_FALLBACK",
+    "REROUTE_REFUSED",
+    "STREAM_MODEL_ISOLATED",
     "MIN_RETRY_AFTER_S",
     "STREAM_KILLED",
     "STREAM_INTER_CHUNK_TIMEOUT",
@@ -91,6 +96,21 @@ codes above, this carries no status, message or `ErrorSpec`: `admit` returns a `
 bearing this code and `edge` renders the 503 + `Retry-After` + `x-should-retry: false`. Living in
 the one shared vocabulary stops `admit` from inventing a second spelling (the C37 join failure).
 """
+
+KILL_SWITCH_ENGAGED = "kill_switch_engaged"
+"""GW29: a global, org or org-model kill switch is engaged for this request. Code only."""
+
+MODEL_KILLED = "model_killed"
+"""GW29: the routed model is killed, or its name is unresolvable/unknown (cause in audit detail)."""
+
+MODEL_ISOLATED_NO_FALLBACK = "model_isolated_no_fallback"
+"""GW29: the model is isolated and no fallback is named, or the isolation record is malformed."""
+
+REROUTE_REFUSED = "reroute_refused"
+"""GW29: an isolated model's fallback is ineligible (killed, isolated, disallowed, weaker)."""
+
+STREAM_MODEL_ISOLATED = "stream_model_isolated"
+"""GW29: a retry attempt of a stream found its model isolated (the mid-stream terminal code)."""
 
 MIN_RETRY_AFTER_S = 1.0
 """R2-08: sheds carrying 6-11 ms of retry-after made the OpenAI SDK retry almost immediately."""

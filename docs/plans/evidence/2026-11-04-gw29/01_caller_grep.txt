@@ -1,0 +1,336 @@
+# 01_caller_grep.txt  (task 1; grep over *.py, __pycache__ excluded)
+# Classification key: [model=] needs routed model kwarg (task 11/12); [outcome=] needs LifecycleOutcome kwarg (task 14);
+# [control=] must pass control explicitly after the RefusingControlSource default flip (task 14); [none] no signature impact.
+  [control=]  gateway_v2/dispatch/http_provider.py:10:this client explicitly through the shipped ``build_app(provider=...)`` seam.
+  [control=]  gateway_v2/dispatch/http_provider.py:148:    holds and a deployment injects it through ``build_app(provider=...)`` with no
+  [none]  gateway_v2/runtime/holdback_metrics.py:40:    "SERIES_COUNT",
+  [none]  gateway_v2/runtime/holdback_metrics.py:216:SERIES_COUNT = 4 + 3 * 3
+  [none]  gateway_v2/runtime/holdback_metrics.py:223:series (``_bucket`` + ``_sum`` + ``_count``), matching the SERIES_COUNT composition in the
+  [none]  gateway_v2/runtime/holdback_metrics.py:224:observability-contract design (§SERIES_COUNT composition) and the audit/state producer convention.
+  [none]  gateway_v2/runtime/__init__.py:19:    SERIES_COUNT,
+  [none]  gateway_v2/runtime/__init__.py:100:    "SERIES_COUNT",
+  [none]  gateway_v2/runtime/state_metrics.py:259:SERIES_COUNT = 9 * len(StateKind) + 6 + 3 + 6 + 8
+  [none]  gateway_v2/runtime/strict_metrics.py:50:    "SERIES_COUNT",
+  [none]  gateway_v2/runtime/strict_metrics.py:205:SERIES_COUNT = 4 + 1 * 3
+  [none]  gateway_v2/runtime/strict_metrics.py:212:SERIES_COUNT composition in the observability-contract design and the audit/state/holdback
+  [none]  gateway_v2/runtime/stream_metrics.py:129:    SERIES_COUNT = 5 + 2 * 3
+  [none]  gateway_v2/runtime/stream_metrics.py:143:    (design §SERIES_COUNT) and sums this term into its own ``SERIES_COUNT`` composition — the
+  [aliases= default ok]  gateway_v2/edge/state_runtime.py:183:        self.switches = KillSwitchSnapshot(
+  [none]  gateway_v2/edge/openai_responses.py:4::meth:`~gateway_v2.edge.openai_chat.ChatSurface.run_lifecycle`, the same
+  [none]  gateway_v2/edge/openai_responses.py:135:            req, outcome = await ChatSurface(deps=self.chat).run_lifecycle(
+  [outcome=]  gateway_v2/edge/openai_responses.py:261:        await ChatSurface(deps=self.chat).collect_and_render(
+  [outcome=]  gateway_v2/edge/openai_responses.py:323:        await self.chat._stream_response(forward, plan, destination, upstream, holds)
+  [model=]  gateway_v2/edge/upstream_body.py:3::func:`with_openai_body` runs after ``stage_upstream`` has applied and byte-verified the input
+  [model=]  gateway_v2/edge/upstream_body.py:29:__all__ = ("with_openai_body",)
+  [model=]  gateway_v2/edge/upstream_body.py:35:def with_openai_body(
+  [none]  gateway_v2/edge/dev_metrics.py:71:        f"boot: metrics_registry -> GW14d Publisher ({publisher.SERIES_COUNT} series: admission, "
+  [none]  gateway_v2/edge/series_count.py:1:"""The Publisher's fixed SERIES_COUNT arithmetic (GW14d — split from ``edge/publisher.py``).
+  [none]  gateway_v2/edge/series_count.py:4:against on every scrape (R15.1/R15.2): a pure function of the six producers' ``SERIES_COUNT`` plus
+  [none]  gateway_v2/edge/series_count.py:10:Everything here is pure ``edge``-layer arithmetic over the producers' published ``SERIES_COUNT``
+  [none]  gateway_v2/edge/series_count.py:28:# SERIES_COUNT fixed-term components (series, not families: a histogram = 3).
+  [none]  gateway_v2/edge/series_count.py:32:# matching every producer's SERIES_COUNT convention.
+  [none]  gateway_v2/edge/series_count.py:40:WINDOWED_BUSY_SERIES_COUNT = 1
+  [none]  gateway_v2/edge/series_count.py:47:    A function of the six producers' ``SERIES_COUNT`` plus the contract-derived ``K`` plus the
+  [none]  gateway_v2/edge/series_count.py:49:    family counts as its three native series, matching every producer's own ``SERIES_COUNT``):
+  [none]  gateway_v2/edge/series_count.py:51:    * ``AdmissionMetrics.SERIES_COUNT`` (= ``2·5 + 3 + 1 + 5 + 1`` = 20): per-queue depth/age
+  [none]  gateway_v2/edge/series_count.py:54:    * ``QuotaMetrics.SERIES_COUNT`` (= 3): the three label-free quota scalars.
+  [none]  gateway_v2/edge/series_count.py:55:    * ``audit_metrics.SERIES_COUNT`` (= ``8 + 6 + 8 + 7`` = 29): all scalar audit/store series.
+  [none]  gateway_v2/edge/series_count.py:56:    * ``state_control.metrics.SERIES_COUNT`` (= ``13 + 4·len(StateKind) + len(FAULT_CATEGORIES)
+  [none]  gateway_v2/edge/series_count.py:59:    * ``runtime.state_metrics.SERIES_COUNT`` (= ``9·len(StateKind) + 6 + 3 + 6 + 8``): per-kind +
+  [none]  gateway_v2/edge/series_count.py:61:    * ``PerRequestExports.SERIES_COUNT`` (= ``5 + 2·3`` = 11): five stream scalars + two
+  [none]  gateway_v2/edge/series_count.py:63:    * ``runtime.holdback_metrics.SERIES_COUNT`` (= ``4 + 3·3`` = 13): four holdback scalars + three
+  [none]  gateway_v2/edge/series_count.py:75:        AdmissionMetrics.SERIES_COUNT
+  [none]  gateway_v2/edge/series_count.py:76:        + QuotaMetrics.SERIES_COUNT
+  [none]  gateway_v2/edge/series_count.py:77:        + audit_metrics.SERIES_COUNT
+  [none]  gateway_v2/edge/series_count.py:78:        + rehydration_metrics.SERIES_COUNT
+  [none]  gateway_v2/edge/series_count.py:79:        + state_module.SERIES_COUNT
+  [none]  gateway_v2/edge/series_count.py:80:        + PerRequestExports.SERIES_COUNT
+  [none]  gateway_v2/edge/series_count.py:81:        + holdback_module.SERIES_COUNT
+  [none]  gateway_v2/edge/series_count.py:90:        + WINDOWED_BUSY_SERIES_COUNT
+  [outcome=]  gateway_v2/edge/wire/openai.py:387:# ``collect_and_render``) into ONE OpenAI-compatible non-streaming JSON body (the
+  [outcome=]  gateway_v2/edge/openai_misc.py:445:        await self._collect_and_render(
+  [outcome=]  gateway_v2/edge/openai_misc.py:530:    async def _collect_and_render(
+  [control=]  gateway_v2/edge/serve.py:149:    factory is added here: ``build_app(provider=...)`` already accepts the real client directly, so
+  [control=]  gateway_v2/edge/serve.py:204:    defaults (``_resolve_readiness`` / ``_one_stream`` / ``_NoControlSource`` /
+  [control=]  gateway_v2/edge/serve.py:275:    worker its own ``build_app(...)`` instance (its own ``ScanExecutor``, its own frozen routes) —
+  [control=]  gateway_v2/edge/serve.py:393:    it forks ``N`` worker processes, runs each on its own event loop with its own ``build_app(...)``
+  [control=]  gateway_v2/edge/serve.py:471:    app = wrap_dev_app(build_app(**kwargs), deps)
+  [control=]  gateway_v2/edge/serve.py:670:    3. Call ``build_app(**deps)`` wrapped in ``try/except`` — on ANY exception write
+  [none]  gateway_v2/edge/production_profile.py:482:        f"boot: metrics_registry -> GW14d Publisher ({publisher.SERIES_COUNT} series; state and "
+  [outcome=]  gateway_v2/edge/routes.py:331:          enforces it, and renders ONE OpenAI JSON via ``ChatSurface.collect_and_render`` (R9).
+  [none]  gateway_v2/edge/routes.py:342:            req, outcome = await ChatSurface(deps=self).run_lifecycle(scope, body, holds)
+  [outcome=]  gateway_v2/edge/routes.py:356:                await self._stream_response(send, plan, destination, upstream_body, holds)
+  [outcome=]  gateway_v2/edge/routes.py:358:            await ChatSurface(deps=self).collect_and_render(
+  [outcome=]  gateway_v2/edge/routes.py:415:    async def _stream_response(
+  [control=]  gateway_v2/edge/app.py:226:def build_app(
+  [control=]  gateway_v2/edge/app.py:386:        control=control if control is not None else _NoControlSource(),
+  [control=]  gateway_v2/edge/app.py:769:class _NoControlSource:
+  [control=]  gateway_v2/edge/app.py:799:#: still imports; a real server boots the app with ``build_app(...)``.
+  [none]  gateway_v2/edge/openai_chat.py:11:**The §10.4 pipeline.** :meth:`ChatSurface.run_lifecycle` runs the ordered phases —
+  [outcome=]  gateway_v2/edge/openai_chat.py:67:from gateway_v2.edge.openai_nonstream import collect_and_enforce, emit_enforced_chat
+  [model=]  gateway_v2/edge/openai_chat.py:71:from gateway_v2.edge.upstream_body import with_openai_body
+  [none]  gateway_v2/edge/openai_chat.py:166:    (:meth:`_input_scan`). Only after every phase passes does :meth:`run_lifecycle`
+  [none]  gateway_v2/edge/openai_chat.py:184:    async def run_lifecycle(
+  [model=][binding=][verdict=]  gateway_v2/edge/openai_chat.py:297:        return req, self._proceed(plan, req, scan.decision, request_id)
+  [none]  gateway_v2/edge/openai_chat.py:530:        phase resolved on, threaded from :meth:`run_lifecycle` (GW36 S4, Conflict 2). A
+  [none]  gateway_v2/edge/openai_chat.py:535:        :meth:`run_lifecycle` and passed to BOTH this spend and ``holds.spent`` so the
+  [model=][binding=][verdict=]  gateway_v2/edge/openai_chat.py:589:    def _proceed(
+  [model=]  gateway_v2/edge/openai_chat.py:633:        body = with_openai_body(upstream.body, req, self._deps.contract)
+  [outcome=]  gateway_v2/edge/openai_chat.py:681:    async def collect_and_render(
+  [none]  gateway_v2/edge/openai_chat.py:692:        Reached only after :meth:`run_lifecycle` produced a proceed outcome. Delegates
+  [outcome=]  gateway_v2/edge/openai_chat.py:693:        the drain + per-channel scan/resolve/enforce to ``collect_and_enforce`` (fail
+  [outcome=]  gateway_v2/edge/openai_chat.py:703:        enforced = await collect_and_enforce(
+  [none]  gateway_v2/edge/publisher.py:33:The exposed series count is a FIXED EXPRESSION (:data:`Publisher.SERIES_COUNT`), the sum of the six
+  [none]  gateway_v2/edge/publisher.py:34:producers' ``SERIES_COUNT`` values plus the bounded tenant set (``K + 1`` + the Overflow_Counter)
+  [none]  gateway_v2/edge/publisher.py:38:per-term reconciliation are documented on :data:`Publisher.SERIES_COUNT`.
+  [none]  gateway_v2/edge/publisher.py:66:from gateway_v2.edge.series_count import WINDOWED_BUSY_SERIES_COUNT as _WINDOWED_BUSY_SERIES_COUNT
+  [none]  gateway_v2/edge/publisher.py:179:        "SERIES_COUNT",
+  [none]  gateway_v2/edge/publisher.py:224:        self.SERIES_COUNT: int = _series_count(contract)
+  [none]  gateway_v2/edge/publisher.py:301:        # producer's SERIES_COUNT).
+  [none]  gateway_v2/edge/publisher.py:351:            assert rendered == self.SERIES_COUNT, (
+  [none]  gateway_v2/edge/publisher.py:352:                f"rendered series {rendered} != fixed SERIES_COUNT {self.SERIES_COUNT}"
+  [none]  gateway_v2/edge/publisher.py:380:        """The audit/store producer — all scalar families (R1.2). SERIES_COUNT = 29."""
+  [none]  gateway_v2/edge/publisher.py:385:        boundary (the one deployment-wiring crossing, §Architecture). SERIES_COUNT as the module."""
+  [none]  gateway_v2/edge/publisher.py:401:        pairs — matching the producer's ``SERIES_COUNT``,
+  [none]  gateway_v2/edge/publisher.py:421:        SERIES_COUNT = ``2·len(QUEUE_NAMES) + 3 + 1 + len(ShedReason) + 1`` = 20: the histogram term
+  [none]  gateway_v2/edge/publisher.py:451:        """The budget-lease quota producer — three label-free scalars (R1.2). SERIES_COUNT = 3.
+  [none]  gateway_v2/edge/publisher.py:469:        SERIES_COUNT = ``5 + 2·3`` = 11.
+  [none]  gateway_v2/edge/publisher.py:497:        SERIES_COUNT = ``4 + 3·3`` = 13. The held-tokens histogram is exposed with native
+  [none]  gateway_v2/edge/publisher.py:615:        count += _WINDOWED_BUSY_SERIES_COUNT
+  [outcome=]  gateway_v2/edge/openai_nonstream.py:8:JSON body or a fail-closed value-code. ``ChatSurface.collect_and_render`` (in
+  [outcome=]  gateway_v2/edge/openai_nonstream.py:9:``edge/openai_chat.py``) is the thin public entry that calls :func:`collect_and_enforce`
+  [outcome=]  gateway_v2/edge/openai_nonstream.py:59:    "collect_and_enforce",
+  [outcome=]  gateway_v2/edge/openai_nonstream.py:122:async def collect_and_enforce(
+  [outcome=]  gateway_v2/edge/openai_nonstream.py:147:    the per-request :class:`RequestHolds` ledger: :func:`_collect_output_channels`
+  [outcome=]  gateway_v2/edge/openai_nonstream.py:155:        collected = await _collect_output_channels(deps, destination, body, holds)
+  [outcome=]  gateway_v2/edge/openai_nonstream.py:170:async def _collect_output_channels(
+  [outcome=]  gateway_v2/edge/openai_nonstream.py:226:    fail-closed by :func:`collect_and_enforce`.
+  [none]  gateway_v2/admit/metrics.py:140:    SERIES_COUNT = 2 * len(QUEUE_NAMES) + 3 + 1 + len(ShedReason) + 1
+  [none]  gateway_v2/admit/metrics.py:262:    SERIES_COUNT = 1 + 1 + 1
+  [none]  gateway_v2/audit/metrics.py:11:* **`SERIES_COUNT` is a fixed expression**, not `len(series())`, and the test asserts the two
+  [none]  gateway_v2/audit/metrics.py:123:SERIES_COUNT = 8 + 6 + 8 + 7
+  [control=]  tests/dispatch/test_b4_http_integration.py:351:    so it is a drop-in through ``build_app(provider=...)``.
+  [none]  tests/runtime/test_lgw05b_cadence_metrics.py:35:    SERIES_COUNT,
+  [none]  tests/runtime/test_lgw05b_cadence_metrics.py:234:    assert len(recorder.snapshot().series()) == SERIES_COUNT
+  [none]  tests/runtime/test_lgw05b_cadence_metrics.py:235:    assert SERIES_COUNT == 9 * len(StateKind) + 15 + 8
+  [none]  tests/runtime/test_lgw05b_cadence_metrics.py:356:    assert len(series) == SERIES_COUNT
+  [none]  tests/runtime/test_stream_metrics_series_count.py:3:"""Stream producer ``SERIES_COUNT`` equals the series the Publisher renders for it (task 2.4).
+  [none]  tests/runtime/test_stream_metrics_series_count.py:5:Asserts ``PerRequestExports.SERIES_COUNT`` equals the series count the Publisher's stream adapter
+  [none]  tests/runtime/test_stream_metrics_series_count.py:19:    assert count == PerRequestExports.SERIES_COUNT, (
+  [none]  tests/runtime/test_stream_metrics_series_count.py:20:        f"stream adapter rendered {count} series, SERIES_COUNT is {PerRequestExports.SERIES_COUNT}"
+  [none]  tests/runtime/test_holdback_metrics_series_count.py:3:"""Holdback producer ``SERIES_COUNT`` equals the series the Publisher renders for it (task 2.6).
+  [none]  tests/runtime/test_holdback_metrics_series_count.py:5:Asserts ``runtime.holdback_metrics.SERIES_COUNT`` equals the series count the Publisher's holdback
+  [none]  tests/runtime/test_holdback_metrics_series_count.py:19:    assert count == holdback_metrics.SERIES_COUNT, (
+  [none]  tests/runtime/test_holdback_metrics_series_count.py:20:        f"holdback adapter rendered {count} series, SERIES_COUNT is {holdback_metrics.SERIES_COUNT}"
+  [aliases= default ok]  tests/runtime/test_lgw05c_sync.py:103:    switches = KillSwitchSnapshot(stale_ms=5_000, clock=lambda: 100.0)
+  [none]  tests/runtime/test_lgw05c_metrics.py:28:    SERIES_COUNT,
+  [aliases= default ok]  tests/runtime/test_lgw05c_metrics.py:59:    switches = KillSwitchSnapshot(stale_ms=5_000, clock=lambda: 100.0)
+  [none]  tests/runtime/test_lgw05c_metrics.py:96:    assert len(recorder.snapshot().series()) == SERIES_COUNT
+  [none]  tests/runtime/test_lgw05c_metrics.py:98:    assert SERIES_COUNT == 9 * len(StateKind) + 15 + 8
+  [aliases= default ok]  tests/runtime/test_lgw05c_metrics.py:122:    switches = KillSwitchSnapshot(stale_ms=5_000, clock=lambda: 100.0)
+  [aliases= default ok]  tests/runtime/test_lgw05c_metrics.py:245:    switches = KillSwitchSnapshot(stale_ms=5_000, clock=lambda: 100.0)
+  [none]  tests/runtime/test_lgw05c_metrics.py:274:    assert len(series) == SERIES_COUNT
+  [none]  tests/runtime/test_lgw05c_metrics.py:290:    assert len(recorder.snapshot().series()) == SERIES_COUNT
+  [control=]  tests/edge/test_v2_leaks_d_lifecycle.py:416:    return build_app(
+  [control=]  tests/edge/test_gw16_matcher_edges.py:217:def _build_app(provider: ProviderClient) -> object:
+  [control=]  tests/edge/test_gw16_matcher_edges.py:219:    return build_app(
+  [control=]  tests/edge/test_gw16_matcher_edges.py:257:    app = _build_app(provider)
+  [control=]  tests/edge/test_gw16_matcher_edges.py:608:    app = _build_app(_CountingProvider())
+  [control=]  tests/edge/test_gw16_matcher_edges.py:634:    app = _build_app(_CountingProvider())
+  [control=]  tests/edge/test_v2_leaks_f_properties.py:406:    return build_app(
+  [none]  tests/edge/test_gw36_s4_gate_order_property.py:20:(:class:`~gateway_v2.edge.openai_chat.ChatSurface.run_lifecycle`) runs ``admission.admit`` (phase 5)
+  [none]  tests/edge/test_gw36_s4_gate_order_property.py:184:    This is the SAME control flow as ``ChatSurface.run_lifecycle`` — ``admission.admit`` runs first,
+  [control=]  tests/edge/test_tenant_scale_harness.py:106:    app = build_app(
+  [none]  tests/edge/test_publisher_exposition_count_property.py:3:"""Property 2 — ``exposition()`` renders exactly ``SERIES_COUNT`` series, one ``# TYPE`` per family.
+  [none]  tests/edge/test_publisher_exposition_count_property.py:7:For any observed tenant set, the rendered SERIES count equals ``Publisher.SERIES_COUNT`` (the fixed
+  [none]  tests/edge/test_publisher_exposition_count_property.py:38:    """Count series the way the Publisher's ``SERIES_COUNT`` convention does.
+  [none]  tests/edge/test_publisher_exposition_count_property.py:43:    §SERIES_COUNT convention that the Publisher asserts against internally.
+  [none]  tests/edge/test_publisher_exposition_count_property.py:90:        # exposition() internally asserts rendered-series == SERIES_COUNT (R15.2) under the design's
+  [none]  tests/edge/test_publisher_exposition_count_property.py:98:        # Convention series count == the fixed SERIES_COUNT (R15.2) — the same count exposition()
+  [none]  tests/edge/test_publisher_exposition_count_property.py:100:        assert convention_series == pub.SERIES_COUNT, _ctx(
+  [none]  tests/edge/test_publisher_exposition_count_property.py:103:            note="convention series != SERIES_COUNT",
+  [none]  tests/edge/test_publisher_exposition_count_property.py:105:            want=pub.SERIES_COUNT,
+  [outcome=]  tests/edge/test_lgw15_stream.py:9:orchestration (:meth:`~gateway_v2.edge.routes.ChatRoute._stream_response` →
+  [outcome=]  tests/edge/test_lgw15_stream.py:252:    """Drive the shipped streaming orchestration for one clean stream via ``_stream_response``."""
+  [outcome=]  tests/edge/test_lgw15_stream.py:255:    await route._stream_response(capture.send, plan, destination, body={})
+  [control=]  tests/edge/test_readiness_probe.py:137:    app = build_app(
+  [control=]  tests/edge/test_readiness_probe.py:158:    app = build_app(
+  [none]  tests/edge/test_lgw15_isolation.py:8:``run_lifecycle`` coroutines on one event loop) so a shared-mutable-state leak between the
+  [none]  tests/edge/test_lgw15_isolation.py:203:        """v1's default org output ceiling; ``run_lifecycle`` clamps ``max_tokens`` to it."""
+  [none]  tests/edge/test_lgw15_isolation.py:402:        block_surface.run_lifecycle(scope, block_body),
+  [none]  tests/edge/test_lgw15_isolation.py:403:        allow_surface.run_lifecycle(scope, allow_body),
+  [control=]  tests/edge/test_v2_leaks_f_output_budget_properties.py:514:    return build_app(
+  [control=]  tests/edge/test_b4_wiring.py:158:    (or whatever the caller injects) through the SAME ``build_app(provider=...)`` seam,
+  [control=]  tests/edge/test_b4_wiring.py:161:    return build_app(
+  [control=]  tests/edge/test_b4_wiring.py:176:# R7.1 — drop-in: build_app(provider=HttpProviderClient(...)) assembles a callable
+  [control=]  tests/edge/test_b4_wiring.py:182:    """``build_app(provider=HttpProviderClient(...))`` assembles a callable ASGI 3 app (R7.1).
+  [outcome=]  tests/edge/test_lgw15_output.py:44:#   * NON-STREAMING (R9.3): ``ChatSurface.collect_and_render`` drains the whole upstream, runs
+  [outcome=]  tests/edge/test_lgw15_output.py:145:    # NON-STREAMING half (R9.3) — collect_and_render withholds the JSON body.
+  [outcome=]  tests/edge/test_lgw15_output.py:159:        """The ``ChatRoute``-shaped bundle ``collect_and_render`` reads from.
+  [outcome=]  tests/edge/test_lgw15_output.py:263:            surface.collect_and_render(
+  [outcome=]  tests/edge/test_lgw15_output.py:605:# routed through ``ChatSurface.collect_and_render`` → ``collect_and_enforce`` — are
+  [none]  tests/edge/test_lgw15_output.py:615:# ``run_lifecycle`` — is driven too, so "input OR output scan/decision" is covered.
+  [outcome=]  tests/edge/test_lgw15_output.py:658:    #: The output content channel ``collect_and_enforce`` folds a provider delta into and
+  [outcome=]  tests/edge/test_lgw15_output.py:687:        ``collect_and_render`` writes via ``emit_response`` an ``http.response.start``
+  [outcome=]  tests/edge/test_lgw15_output.py:761:        bytes in hand; ``collect_and_enforce`` must catch it and withhold (R8.4). (A span
+  [outcome=]  tests/edge/test_lgw15_output.py:796:        """The duck-typed bundle ``collect_and_render`` → ``collect_and_enforce`` reads.
+  [none]  tests/edge/test_lgw15_output.py:858:    # INPUT-side fault — the injected detector raising inside run_lifecycle.
+  [none]  tests/edge/test_lgw15_output.py:944:            """v1's default org output ceiling; ``run_lifecycle`` clamps ``max_tokens`` to it."""
+  [none]  tests/edge/test_lgw15_output.py:965:        """The bundle ``run_lifecycle`` reads up to the (raising) input scan."""
+  [outcome=]  tests/edge/test_lgw15_output.py:1012:        # --- OUTPUT path: every uncomputable output fault, via collect_and_render. ---
+  [outcome=]  tests/edge/test_lgw15_output.py:1023:                surface.collect_and_render(
+  [none]  tests/edge/test_lgw15_output.py:1061:        # --- INPUT path: the injected detector raising inside run_lifecycle. ---
+  [none]  tests/edge/test_lgw15_output.py:1070:        parsed, outcome = asyncio.run(in_surface.run_lifecycle(in_scope, in_body))
+  [outcome=]  tests/edge/test_lgw15_output.py:1105:#   * NON-STREAMING: the shipped ``collect_and_enforce`` drain + per-channel
+  [outcome=]  tests/edge/test_lgw15_output.py:1148:    collect_and_enforce as _p11_collect_and_enforce,
+  [outcome=]  tests/edge/test_lgw15_output.py:1275:    """The minimal duck-typed deps ``collect_and_enforce`` reads (provider/scanner/resolver).
+  [outcome=]  tests/edge/test_lgw15_output.py:1277:    ``collect_and_enforce`` only reads ``deps.provider`` (drained to the final event),
+  [outcome=]  tests/edge/test_lgw15_output.py:1304:    Drives the shipped ``collect_and_enforce`` (drain + per-channel scan/resolve/
+  [outcome=]  tests/edge/test_lgw15_output.py:1316:        _p11_collect_and_enforce(
+  [none]  tests/edge/test_lgw15_refusal.py:11:(:meth:`~gateway_v2.edge.openai_chat.ChatSurface.run_lifecycle`) returns a refusal
+  [none]  tests/edge/test_lgw15_refusal.py:169:        """v1's default org output ceiling; ``run_lifecycle`` clamps ``max_tokens`` to it."""
+  [none]  tests/edge/test_lgw15_refusal.py:295:# A fake deps bundle carrying exactly the attributes run_lifecycle reads.
+  [none]  tests/edge/test_lgw15_refusal.py:305:    :meth:`ChatSurface.run_lifecycle` touches is accepted. This bundle carries exactly those —
+  [none]  tests/edge/test_lgw15_refusal.py:376:    """Drive one ``run_lifecycle`` to completion via ``asyncio.run``; return the outcome tuple."""
+  [none]  tests/edge/test_lgw15_refusal.py:380:        req, outcome = await surface.run_lifecycle(scope, body)
+  [none]  tests/edge/test_lgw15_exports.py:197:        """v1's default org output ceiling; ``run_lifecycle`` clamps ``max_tokens`` to it."""
+  [outcome=]  tests/edge/test_lgw15_exports.py:339:    nothing (ALLOW). The ``errored`` outcome's scanner RAISES so ``collect_and_enforce`` fails
+  [none]  tests/edge/test_lgw15_exports.py:575:    _req, outcome = await ChatSurface(deps=_p20_as_route(deps)).run_lifecycle(scope, body)
+  [none]  tests/edge/test_lgw15_exports.py:588:    req, outcome = await surface.run_lifecycle(scope, body)
+  [outcome=]  tests/edge/test_lgw15_exports.py:594:    await surface.collect_and_render(
+  [control=]  tests/edge/test_v2_leaks_a_failclosed_properties.py:395:    return build_app(
+  [none]  tests/edge/test_lgw15_lifecycle.py:312:            """v1's default org output ceiling; ``run_lifecycle`` clamps ``max_tokens`` to it."""
+  [none]  tests/edge/test_lgw15_lifecycle.py:332:        Carries exactly the seams ``ChatSurface.run_lifecycle`` consults; a duck-typed
+  [none]  tests/edge/test_lgw15_lifecycle.py:401:            _req, outcome = asyncio.run(surface.run_lifecycle(scope, b"{}"))
+  [none]  tests/edge/test_lgw15_lifecycle.py:466:# (``max_request_parts``) — ``run_lifecycle`` returns the declared ``REFUSE_PRE_CHECK``
+  [none]  tests/edge/test_lgw15_lifecycle.py:625:        return await surface.run_lifecycle(_P5_SCOPE, body)
+  [none]  tests/edge/test_lgw15_lifecycle.py:667:# (R4.3), ``run_lifecycle`` renders the declared authentication value-code
+  [none]  tests/edge/test_lgw15_lifecycle.py:913:            return await ChatSurface(deps=route).run_lifecycle(scope, body)
+  [none]  tests/edge/test_lgw15_lifecycle.py:1078:        return await ChatSurface(deps=route).run_lifecycle(scope, body)
+  [none]  tests/edge/test_lgw15_lifecycle.py:1133:# ``ChatSurface.run_lifecycle`` consults (mirroring the P6 section's ``_P6_Deps`` approach) so
+  [none]  tests/edge/test_lgw15_lifecycle.py:1227:        """v1's default org output ceiling; ``run_lifecycle`` clamps ``max_tokens`` to it."""
+  [none]  tests/edge/test_lgw15_lifecycle.py:1292:    Carries exactly the seams ``ChatSurface.run_lifecycle`` reads: the generous contract, the
+  [none]  tests/edge/test_lgw15_lifecycle.py:1404:    _req, outcome = asyncio.run(ChatSurface(deps=deps).run_lifecycle(scope, b"{}"))  # type: ignore[arg-type]
+  [none]  tests/edge/test_lgw15_lifecycle.py:1457:    _req, outcome = asyncio.run(ChatSurface(deps=deps).run_lifecycle(_P211_SCOPE, b"{}"))  # type: ignore[arg-type]
+  [none]  tests/edge/test_lgw15_lifecycle.py:1538:    _req, outcome = asyncio.run(ChatSurface(deps=deps).run_lifecycle(_P211_SCOPE, b"{}"))  # type: ignore[arg-type]
+  [none]  tests/edge/test_lgw15_lifecycle.py:1602:    _req, outcome = asyncio.run(ChatSurface(deps=deps).run_lifecycle(_P211_SCOPE, b"{}"))  # type: ignore[arg-type]
+  [model=]  tests/edge/test_gw36_s1_upstream_body.py:31:from gateway_v2.edge.upstream_body import with_openai_body
+  [model=]  tests/edge/test_gw36_s1_upstream_body.py:132:        rendered = with_openai_body(
+  [model=]  tests/edge/test_gw36_s1_upstream_body.py:159:    assert with_openai_body(moved, req, _contract()) is None
+  [model=]  tests/edge/test_gw36_s1_upstream_body.py:161:    assert with_openai_body(short, req, _contract()) is None
+  [model=]  tests/edge/test_gw36_s1_upstream_body.py:231:    rendered = with_openai_body(
+  [model=]  tests/edge/test_gw36_s1_upstream_body.py:258:    rendered = with_openai_body(MappingProxyType({BODY_DELTAS_KEY: req.text_deltas}), req, contract)
+  [control=]  tests/edge/test_lgw12_asgi_conformance.py:224:    return build_app(
+  [control=]  tests/edge/test_v2_leaks_a_integration.py:471:def _build_app(*, quota: BudgetDecider, provider: _CountingProvider) -> ASGIApplication:
+  [control=]  tests/edge/test_v2_leaks_a_integration.py:472:    return build_app(
+  [control=]  tests/edge/test_v2_leaks_a_integration.py:542:        app = _build_app(quota=quota, provider=provider)
+  [control=]  tests/edge/test_gw16_app.py:244:def _build_app(provider: ProviderClient) -> object:
+  [control=]  tests/edge/test_gw16_app.py:246:    return build_app(
+  [control=]  tests/edge/test_gw16_app.py:286:    app = _build_app(provider)
+  [control=]  tests/edge/test_gw16_app.py:615:    app = _build_app(provider)
+  [control=]  tests/edge/test_gw16_app.py:653:    app = _build_app(_CountingProvider())
+  [control=]  tests/edge/test_gw16_routes.py:124:        return _build_app(provider)
+  [control=]  tests/edge/test_gw16_routes.py:179:        transport = _drive_http(_build_app(_stub_provider()), method, path)
+  [control=]  tests/edge/test_lgw12_app.py:134:    return build_app(
+  [control=]  tests/edge/test_b3_serve.py:14:  returned deps splat cleanly into ``build_app(**deps)`` to produce a callable ASGI app.
+  [control=]  tests/edge/test_b3_serve.py:303:    """The returned deps splat cleanly into ``build_app(**deps)`` → a callable ASGI app (R1.4)."""
+  [control=]  tests/edge/test_b3_serve.py:306:    assert callable(app), "build_app(**deps) did not produce a callable ASGI app"
+  [control=]  tests/edge/test_lgw15_app.py:141:def _build_app(provider: ProviderClient, audit: object | None = None) -> object:
+  [control=]  tests/edge/test_lgw15_app.py:143:    return build_app(
+  [control=]  tests/edge/test_lgw15_app.py:237:    app = _build_app(provider, audit)
+  [control=]  tests/edge/test_lgw15_app.py:358:        app = _build_app(_stub_provider())
+  [control=]  tests/edge/test_lgw15_app.py:368:    app = _build_app(_stub_provider())
+  [control=]  tests/edge/test_lgw15_app.py:384:    app = _build_app(_stub_provider())
+  [control=]  tests/edge/test_responses_route.py:148:    return build_app(
+  [outcome=]  tests/edge/test_lgw15_nonstream.py:24:# ``ChatSurface.collect_and_render`` drains the whole upstream response, applies the OUTPUT
+  [outcome=]  tests/edge/test_lgw15_nonstream.py:46:# doubles. ``ChatSurface.collect_and_render`` reads only ``deps.provider`` / ``deps.error_scanner``
+  [outcome=]  tests/edge/test_lgw15_nonstream.py:92:        ``collect_and_render`` emits a reply through the single ``emit_response`` path, which
+  [outcome=]  tests/edge/test_lgw15_nonstream.py:105:        """The ``ChatRoute``-shaped bundle ``collect_and_render`` reads from.
+  [outcome=]  tests/edge/test_lgw15_nonstream.py:241:        # ``collect_and_render`` reads ``plan.streaming_mode`` only to stamp the Produced_Mode
+  [outcome=]  tests/edge/test_lgw15_nonstream.py:255:            surface.collect_and_render(
+  [outcome=]  tests/edge/test_lgw15_nonstream.py:324:# (``ChatSurface.collect_and_render``) emits EVERY reply — success and refusal alike —
+  [outcome=]  tests/edge/test_lgw15_nonstream.py:335:#   (2) the END-TO-END non-stream path: a BLOCK output drives ``collect_and_render`` to
+  [outcome=]  tests/edge/test_lgw15_nonstream.py:404:    Drives ``ChatSurface.collect_and_render`` end to end with a provider that streams a
+  [outcome=]  tests/edge/test_lgw15_nonstream.py:406:    ``OutputBlocked``; ``collect_and_enforce`` maps it to the declared block value-code and
+  [outcome=]  tests/edge/test_lgw15_nonstream.py:407:    ``collect_and_render`` renders it through the SINGLE ``emit_response(send,
+  [outcome=]  tests/edge/test_lgw15_nonstream.py:481:        ``collect_and_render`` → ``collect_and_enforce`` consults exactly ``provider``
+  [outcome=]  tests/edge/test_lgw15_nonstream.py:523:    # A resolvable plan: ``collect_and_render`` refuses on the BLOCK before the Produced_Mode
+  [outcome=]  tests/edge/test_lgw15_nonstream.py:538:        surface.collect_and_render(
+  [outcome=]  tests/edge/test_lgw15_nonstream.py:580:    Drives ``ChatSurface.collect_and_render`` with a resolver that RAISES — an uncomputable
+  [outcome=]  tests/edge/test_lgw15_nonstream.py:581:    output decision. ``collect_and_enforce`` fails CLOSED, mapping the raise to the declared
+  [outcome=]  tests/edge/test_lgw15_nonstream.py:582:    scan-failure value-code, and ``collect_and_render`` renders it through the single
+  [outcome=]  tests/edge/test_lgw15_nonstream.py:647:    # A resolvable plan: ``collect_and_render`` refuses on the scan-failure before the
+  [outcome=]  tests/edge/test_lgw15_nonstream.py:661:        surface.collect_and_render(
+  [control=]  tests/edge/test_metrics_offload.py:77:    return build_app(
+  [none]  tests/edge/test_lgw15_input_block.py:6:``ChatSurface.run_lifecycle`` coroutine is driven via ``asyncio.run``.
+  [none]  tests/edge/test_lgw15_input_block.py:190:        """v1's default org output ceiling; ``run_lifecycle`` clamps ``max_tokens`` to it."""
+  [none]  tests/edge/test_lgw15_input_block.py:401:            req, outcome = asyncio.run(surface.run_lifecycle(scope, body))
+  [control=]  tests/edge/test_v2_leaks_d_properties.py:522:    return build_app(
+  [none]  tests/state_control/test_r2_04_service.py:32:    SERIES_COUNT,
+  [none]  tests/state_control/test_r2_04_service.py:258:    assert len(recorder.snapshot().series()) == SERIES_COUNT
+  [none]  tests/state_control/test_r2_04_service.py:343:    assert len(lines) == SERIES_COUNT
+  [aliases= default ok]  tests/state_control/test_lgw05c_writer.py:72:        self.switches = KillSwitchSnapshot(stale_ms=5_000, clock=lambda: 100.0)
+  [aliases= default ok]  tests/state_control/test_lgw05c_live_stack.py:106:        self.switches = KillSwitchSnapshot(stale_ms=5_000, clock=lambda: 100.0)
+  [aliases= default ok]  tests/state_control/test_lgw05c_valkey.py:74:        self.switches = KillSwitchSnapshot(stale_ms=5_000, clock=lambda: 100.0)
+  [aliases= default ok]  tests/state_control/test_lgw05c_valkey.py:338:    switches = KillSwitchSnapshot(stale_ms=5_000, clock=lambda: 100.0)
+  [aliases= default ok]  tests/state_control/test_lgw05c_drills.py:112:        self.switches = KillSwitchSnapshot(stale_ms=5_000, clock=time.monotonic)
+  [aliases= default ok]  tests/state_control/test_lgw05c_drills.py:543:        switches = KillSwitchSnapshot(stale_ms=5_000, clock=time.monotonic)
+  [none]  tests/state_control/test_gw36_s2_service.py:10:from state_control.metrics import SERIES_COUNT as REHYDRATION_SERIES
+  [none]  tests/state_control/test_gw36_s2_service.py:66:    assert len(metrics.series()) == projector_service.SERIES_COUNT
+  [none]  tests/state_control/test_gw36_s2_service.py:69:    assert len(folded.series()) == projector_service.SERIES_COUNT
+  [none]  tests/egress/test_output_streaming_modes_gw13.py:97:from gateway_v2.runtime.strict_metrics import SERIES_COUNT as STRICT_SERIES_COUNT
+  [none]  tests/egress/test_output_streaming_modes_gw13.py:1025:    # Distinct SERIES_COUNT from HoldbackMetrics; INCREMENTAL still records into HoldbackMetrics.
+  [none]  tests/egress/test_output_streaming_modes_gw13.py:1029:    assert STRICT_SERIES_COUNT != hb_mod.SERIES_COUNT
+  [aliases= default ok]  tests/admit/test_lgw05c_killswitch.py:49:    return KillSwitchSnapshot(stale_ms=5_000, clock=lambda: 100.0, **kwargs)  # type: ignore[arg-type]
+  [none]  tests/admit/test_metrics_series_count.py:3:"""Admit producer ``SERIES_COUNT`` equals the series the Publisher renders for it (task 2.2).
+  [none]  tests/admit/test_metrics_series_count.py:5:A fixed, by-construction ``SERIES_COUNT`` is only honest if it matches what actually gets rendered.
+  [none]  tests/admit/test_metrics_series_count.py:6:These example tests assert ``AdmissionMetrics.SERIES_COUNT`` and ``QuotaMetrics.SERIES_COUNT`` each
+  [none]  tests/admit/test_metrics_series_count.py:23:    """``AdmissionMetrics.SERIES_COUNT`` == the Publisher's admit-adapter series count (R15.2)."""
+  [none]  tests/admit/test_metrics_series_count.py:26:    assert count == AdmissionMetrics.SERIES_COUNT, (
+  [none]  tests/admit/test_metrics_series_count.py:27:        f"admit adapter rendered {count} series, SERIES_COUNT is {AdmissionMetrics.SERIES_COUNT}"
+  [none]  tests/admit/test_metrics_series_count.py:32:    """``QuotaMetrics.SERIES_COUNT`` == the Publisher's quota-adapter series count (R15.2)."""
+  [none]  tests/admit/test_metrics_series_count.py:35:    assert count == QuotaMetrics.SERIES_COUNT, (
+  [none]  tests/admit/test_metrics_series_count.py:36:        f"quota adapter rendered {count} series, SERIES_COUNT is {QuotaMetrics.SERIES_COUNT}"
+  [control=]  tests/admit/test_v2_leaks_budget.py:283:    return build_app(
+  [aliases= default ok]  tests/admit/test_lgw05b_failclosed.py:95:    snapshot = KillSwitchSnapshot(clock=lambda: clock.mono, stamp=view)
+  [aliases= default ok]  tests/admit/test_lgw05b_failclosed.py:128:    snapshot = KillSwitchSnapshot(clock=lambda: clock.mono, stamp=_fresh_view(clock))
+  [aliases= default ok]  tests/admit/test_lgw05b_failclosed.py:155:    wedged = KillSwitchSnapshot(clock=lambda: clock.mono, stamp=_fresh_view(clock))
+  [aliases= default ok]  tests/admit/test_lgw05b_failclosed.py:161:    refreshed = KillSwitchSnapshot(clock=lambda: clock2.mono, stamp=unverified)
+  [aliases= default ok]  tests/admit/test_lgw05b_failclosed.py:460:    switch = KillSwitchSnapshot(clock=lambda: clock.mono, stamp=view)
+  [control=]  tests/load_harness/test_dryrun.py:13:``build_app(provider=scripted_stub, ...)`` (CI-cheap, deterministic, no socket), driven under
+  [control=]  tests/openai_conformance/test_gw15_chat_surface_v2.py:231:def _build_app(
+  [control=]  tests/openai_conformance/test_gw15_chat_surface_v2.py:244:    return build_app(
+  [control=]  tests/openai_conformance/test_gw15_chat_surface_v2.py:310:    client = _stock_client(_build_app(provider=provider))
+  [control=]  tests/openai_conformance/test_gw15_chat_surface_v2.py:327:    client = _stock_client(_build_app(provider=provider))
+  [control=]  tests/openai_conformance/test_gw15_chat_surface_v2.py:357:        _build_app(provider=provider, input_detector=_block_input_detector)
+  [control=]  tests/openai_conformance/test_gw15_chat_surface_v2.py:379:        _build_app(provider=provider, input_detector=_block_input_detector)
+  [control=]  tests/openai_conformance/test_gw15_chat_surface_v2.py:409:        _build_app(provider=provider, error_scanner=_redact_output_scanner)
+  [control=]  tests/openai_conformance/test_gw15_chat_surface_v2.py:445:        _build_app(provider=provider, input_detector=_monitor_input_detector)
+  [control=]  tests/openai_conformance/test_gw15_chat_surface_v2.py:464:        _build_app(provider=provider, input_detector=_monitor_input_detector)
+  [control=]  tests/openai_conformance/test_gw15_chat_surface_v2.py:500:        _build_app(provider=provider, input_detector=_flag_input_detector)
+  [control=]  tests/openai_conformance/test_gw15_chat_surface_v2.py:524:    client = _stock_client(_build_app(provider=provider, input_detector=_no_findings))
+  [control=]  tests/openai_conformance/test_gw15_chat_surface_v2.py:541:    client = _stock_client(_build_app(provider=provider, input_detector=_no_findings))
+  [control=]  tests/openai_conformance/test_gw15_chat_surface_v2.py:576:        _build_app(provider=provider, input_detector=_conflicting_input_detector)
+  [control=]  tests/openai_conformance/test_gw15_chat_surface_v2.py:597:        _build_app(provider=provider, input_detector=_conflicting_input_detector)
+  [control=]  tests/openai_conformance/test_gw15_chat_surface_v2.py:627:    client = _stock_client(_build_app(provider=provider))
+  [control=]  tests/openai_conformance/test_gw16_misc_surface_v2.py:12:scripted :class:`_ScriptedCatalog` behind the new ``build_app(catalog=...)`` seam.
+  [control=]  tests/openai_conformance/test_gw16_misc_surface_v2.py:41:  scripted :class:`_ScriptedCatalog` via the ``build_app(catalog=...)`` seam).
+  [control=]  tests/openai_conformance/test_gw16_misc_surface_v2.py:207:    named seam, R11.3), injected through the new ``build_app(catalog=...)`` seam. It returns the
+  [control=]  tests/openai_conformance/test_gw16_misc_surface_v2.py:252:def _build_app(
+  [control=]  tests/openai_conformance/test_gw16_misc_surface_v2.py:262:    per-scenario ``input_detector`` (input scan) and ``catalog`` (the new ``build_app(catalog=...)``
+  [control=]  tests/openai_conformance/test_gw16_misc_surface_v2.py:266:    return build_app(
+  [control=]  tests/openai_conformance/test_gw16_misc_surface_v2.py:310:    client = _stock_client(_build_app(provider=provider))
+  [control=]  tests/openai_conformance/test_gw16_misc_surface_v2.py:334:    client = _stock_client(_build_app(provider=provider))
+  [control=]  tests/openai_conformance/test_gw16_misc_surface_v2.py:360:    client = _stock_client(_build_app(provider=provider, input_detector=_block_input_detector))
+  [control=]  tests/openai_conformance/test_gw16_misc_surface_v2.py:384:    client = _stock_client(_build_app(provider=provider, catalog=catalog))
+  [control=]  tests/openai_conformance/test_gw16_misc_surface_v2.py:405:    client = _stock_client(_build_app(provider=provider, catalog=catalog))
+  [control=]  tests/openai_conformance/test_gw16_misc_surface_v2.py:425:    client = _stock_client(_build_app(provider=provider, catalog=catalog))
+  [control=]  tests/openai_conformance/test_gw16_misc_surface_v2.py:448:    client = _stock_client(_build_app(provider=provider))
+  [control=]  tests/openai_conformance/test_gw16_misc_surface_v2.py:472:        _build_app(provider=provider, input_detector=_flag_moderation_detector)
+  [control=]  tests/openai_conformance/test_gw16_misc_surface_v2.py:501:    app = _build_app(provider=provider)
+  [control=]  tests/openai_conformance/test_gw16_misc_surface_v2.py:533:    client = _stock_client(_build_app(provider=provider))
+  [none]  tests/audit/test_lgw14c_metrics.py:4:  making 40% of new tenants' first requests return HTTP 500. `SERIES_COUNT` is a fixed
+  [none]  tests/audit/test_lgw14c_metrics.py:21:    SERIES_COUNT,
+  [none]  tests/audit/test_lgw14c_metrics.py:39:    assert len(AuditMetrics().series()) == SERIES_COUNT
+  [none]  tests/audit/test_lgw14c_metrics.py:50:    assert len(large.snapshot().series()) == SERIES_COUNT
+  [none]  tests/audit/test_lgw14c_metrics.py:88:    assert len(names) == SERIES_COUNT
