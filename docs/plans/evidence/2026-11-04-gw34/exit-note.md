@@ -32,8 +32,8 @@ Report: `sdk-matrix-report.json` (written by `sdk_matrix/conftest.py`).
 
 | client | ran | passed | skipped | known failure |
 |---|---|---|---|---|
-| python-sync (openai 3.42.1) | 11 | 11 | 0 | none |
-| python-async (openai 3.42.1) | 11 | 11 | 0 | none |
+| python-sync (openai 3.42.1) | 13 | 13 | 0 | none |
+| python-async (openai 3.42.1) | 13 | 13 | 0 | none |
 | node (openai 4.104.0) | 10 | 9 | 0 | cell `c` xfail (see below) |
 
 Plus the wire-mode cells (real `OpenAIUpstreamProvider` over a loopback fake upstream with seeded random
