@@ -147,3 +147,17 @@ def test_a_customer_row_cannot_downgrade_a_builtin_finding_end_to_end() -> None:
 def test_the_ip_detector_instance_is_built_from_the_contract_bounds() -> None:
     # The composer must use the contract-derived OutputBounds (D-30), never a private literal.
     assert IpLeakDetector(bounds=_C.output_bounds()).bounds == _C.output_bounds()
+
+
+def test_strict_sync_detectors_run_through_the_injected_executor_runner() -> None:
+    """D-22/L-3: `_finalize` never scans inline on the loop when an executor is wired."""
+    calls: list[int] = []
+
+    async def spy(fn):  # type: ignore[no-untyped-def]
+        calls.append(1)
+        return fn()
+
+    plan = plan_of(_STRICT, rule("out_ip_leak", Category.IP_LEAK, Action.REDACT, "output.ip_leak"))
+    composed = _build(plan, base=_base, runner=spy)
+    result = run(plan, [("output_content", "host 10.0.0.1 up")], composed=composed)
+    assert calls and "10.0.0.1" not in result.released
