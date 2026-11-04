@@ -9,12 +9,13 @@ downstream calls.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 
 from gateway_v2.dispatch.mcp_broker import BROKER_SLUG
 from gateway_v2.domain.mcp_path import ORG_SEGMENT
 
-__all__ = ("GatewayPath", "McpPath", "classify_gateway_path", "parse_mcp_path")
+__all__ = ("GatewayPath", "McpPath", "classify_gateway_path", "parse_mcp_path", "raw_path")
 
 _V1_PREFIX = "/v1/mcp/"
 _GATEWAY_PREFIX = "/gateway/"
@@ -82,3 +83,13 @@ def classify_gateway_path(raw: str) -> GatewayPath:
     if tail == ["oauth", "status"]:
         return GatewayPath("oauth_status", org, slug)
     return miss
+
+
+def raw_path(scope: Mapping[str, object]) -> str:
+    """The undecoded path when the server provides it (so a percent-encoded separator stays
+    visible to the parser), else ``scope["path"]``. The query string is never part of it."""
+    raw = scope.get("raw_path")
+    if isinstance(raw, (bytes, bytearray)):
+        return bytes(raw).split(b"?", 1)[0].decode("latin-1")
+    path = scope.get("path")
+    return path if isinstance(path, str) else ""

@@ -47,7 +47,7 @@ from gateway_v2.edge.mcp_identity import (
     challenge,
     resolve_caller,
 )
-from gateway_v2.edge.mcp_paths import McpPath, classify_gateway_path, parse_mcp_path
+from gateway_v2.edge.mcp_paths import McpPath, classify_gateway_path, parse_mcp_path, raw_path
 from gateway_v2.edge.mcp_policy_gate import apply_tool_policy, filter_tools_list, spend_cap
 from gateway_v2.edge.mcp_registry import McpRegistry, OrgMap, ServerEntry, ToolSet
 from gateway_v2.edge.mcp_reply import enforce_reply
@@ -185,18 +185,24 @@ class McpRoute:
 
     async def handle(self, scope: ASGIScope, receive: ASGIReceive, send: ASGISend) -> None:
         """``/v1/mcp/{server_slug}`` (POST, GET, DELETE)."""
-        await self._handle_path(scope, receive, send, parse_mcp_path(_raw_path(scope)))
+        await self._handle_path(scope, receive, send, parse_mcp_path(raw_path(scope)))
 
     async def handle_gateway(
         self, scope: ASGIScope, receive: ASGIReceive, send: ASGISend
     ) -> None:
         """The v1 path ``/gateway/{org}/mcp/{srv}``. Any other ``/gateway/...`` shape is the
         same routing miss the router gives an unregistered path."""
-        parsed = classify_gateway_path(_raw_path(scope))
+        parsed = classify_gateway_path(raw_path(scope))
         if parsed.kind == "mcp":
             await self._handle_path(scope, receive, send, McpPath(parsed.server_slug, parsed.org))
             return
         await emit_response(send, errors.render_http("endpoint_not_found"))
+
+    async def run_message(
+        self, scope: ASGIScope, path: McpPath, receive: ASGIReceive, send: ASGISend
+    ) -> None:
+        """One message through the same pipeline an HTTP POST runs (the WebSocket transport)."""
+        await self._handle_path(scope, receive, send, path)
 
     async def _handle_path(
         self, scope: ASGIScope, receive: ASGIReceive, send: ASGISend, parsed: McpPath | None
@@ -551,16 +557,6 @@ class McpRoute:
             body = mcp_sse.encode_message(body)
             headers = (*mcp_sse.SSE_HEADERS, *headers[1:])
         await emit_response(send, errors.HTTPResponse(status=status, body=body, headers=headers))
-
-
-def _raw_path(scope: ASGIScope) -> str:
-    """The undecoded path when the server provides it (so a percent-encoded separator stays
-    visible to the parser), else ``scope["path"]``."""
-    raw = scope.get("raw_path")
-    if isinstance(raw, (bytes, bytearray)):
-        return bytes(raw).split(b"?", 1)[0].decode("latin-1")
-    path = scope.get("path")
-    return path if isinstance(path, str) else ""
 
 
 def _server_slug(scope: ASGIScope) -> str:
