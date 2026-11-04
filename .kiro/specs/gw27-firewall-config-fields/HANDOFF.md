@@ -106,5 +106,9 @@ User-visible behaviour: retired fields refuse a changed value with a field-named
 ## Remaining for the human
 1. Live Docker/staging gates NOT run and NOT claimed: L27-1, L27-2, live Postgres EXPLAIN arm, live entry-size model. Control-tree Django tests beyond `test_firewall_v2_gw27` (12 passed at the earlier run) were not re-run at HEAD.
 2. Merge decision: branch is ready to merge into `suraj-revamp` (no conflicts, no rebase needed). The one failing test (`test_check_tenant_scale`, Pinecone line 140) and the 9 mypy missing-SDK errors are pre-existing at baseline.
-3. Confirm D-12 retention floors: 365 days for PCI-DSS and HIPAA (`RETENTION_FLOOR_DAYS` in `core/firewall_v2_controls.py`). 365 is capped by the existing serializer ceiling; HIPAA's real documentation period is longer. D-12 must be signed before setting `AMF_AUDIT_RETENTION_SWEEP=on`.
-4. Also pending owner sign-off: D-8 (default-on blast radius before moving `V2_PLAN_NEW_RULES_MODE` from `monitor` to `enforce`).
+3. Still remaining even after D-8/D-12 sign-off: run `check_fleet_plan_schema.py`, review the monitor-mode audit sample, and flip `V2_PLAN_CONTROLS_ENABLED` / `V2_PLAN_NEW_RULES_MODE` to `enforce`. No live gate for these has run.
+4. Still remaining even after D-12 sign-off: at least one reviewed `dry_run` cycle before setting `AMF_AUDIT_RETENTION_SWEEP=on`.
+
+## Signed
+- D-12 (retention floors: PCI-DSS 365, HIPAA 365, other frameworks no floor) — owner accepted as proposed, 4 November 2026. See design.md. The `dry_run` cycle review (item 4 above) is still outstanding before `on`.
+- D-8 (default-on blast radius: `rate_limit_enabled=True, requests_per_minute=1000, burst_limit=150, blocked_keywords="password, secret, api_key, token", threat_intel_enabled=True, auto_block_threats=True, threat_score_threshold=75`) — owner accepted as proposed, 4 November 2026. See design.md. The monitor-to-enforce flip (item 3 above) is still outstanding.
