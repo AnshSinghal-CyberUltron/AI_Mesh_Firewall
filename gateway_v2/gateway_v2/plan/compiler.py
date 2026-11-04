@@ -8,10 +8,12 @@ from dataclasses import dataclass
 
 from gateway_v2.domain.category import Category
 from gateway_v2.domain.plan import (
+    UNSET_CONTROLS,
     Action,
     ExecutionPlan,
     FailurePosture,
     Mode,
+    OrgControls,
     Rule,
     RuleCondition,
     RuleKind,
@@ -19,6 +21,7 @@ from gateway_v2.domain.plan import (
     StreamingMode,
     Surface,
 )
+from gateway_v2.plan.controls_codec import controls_token
 
 SUPPORTED_STREAMING = frozenset({StreamingMode.INCREMENTAL, StreamingMode.STRICT_WITHHOLD})
 SUPPORTED_ACTIONS = frozenset(
@@ -49,7 +52,7 @@ def detector_id(category: Category) -> str:
     return f"det.{category.value}"
 
 
-def _hash_rules(rules: tuple[Rule, ...]) -> str:
+def _hash_rules(rules: tuple[Rule, ...], controls: OrgControls = UNSET_CONTROLS) -> str:
     lines: list[str] = []
     for rule in sorted(rules, key=lambda item: item.rule_id):
         surfaces = ",".join(sorted(surface.value for surface in rule.surfaces))
@@ -69,6 +72,9 @@ def _hash_rules(rules: tuple[Rule, ...]) -> str:
         if token:
             parts = (*parts, token)
         lines.append("|".join(parts))
+    token = controls_token(controls)
+    if token:
+        lines.append(token)
     return hashlib.sha256("\n".join(lines).encode()).hexdigest()
 
 
@@ -130,6 +136,7 @@ def compile_plan(
     previous: ExecutionPlan | None = None,
     compiled_at: float,
     epoch: int = 1,
+    controls: OrgControls = UNSET_CONTROLS,
 ) -> ExecutionPlan:
     """Drop OFF rules. Reject unsupported streaming and regressing versions."""
     if not org_id.strip():
@@ -174,12 +181,13 @@ def compile_plan(
         org_id=org_id,
         epoch=plan_epoch,
         sequence=sequence,
-        content_hash=_hash_rules(ordered),
+        content_hash=_hash_rules(ordered, controls),
         compiled_at=compiled_at,
         rules=ordered,
         required_detectors=frozenset(detectors),
         streaming_mode=streaming_mode,
         integrity_locked=True,
+        controls=controls,
     )
     if previous is not None and not _acceptable(plan, previous):
         raise CompileError("plan version regressed")

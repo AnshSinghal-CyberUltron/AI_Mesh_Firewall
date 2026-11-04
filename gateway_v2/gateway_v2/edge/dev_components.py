@@ -220,6 +220,7 @@ def load_dev_plan(path: str, *, org_id: str, compiled_at: float) -> ExecutionPla
             document.drafts,
             streaming_mode=document.streaming_mode,
             compiled_at=compiled_at,
+            controls=document.controls,
         )
     except CompileError as exc:
         raise DevProfileError(f"AMF_DEV_PLAN_PATH={path!r} rejected by compiler: {exc}") from exc
