@@ -507,6 +507,19 @@ CELERY_BEAT_SCHEDULE = {
 
 # Redis
 REDIS_URL = _redis_url
+# GW27 publish gates (design D-8, D-10). Controls (org rate/burst/TPM, response cap, audit,
+# retention, compliance) are written into the signed plan only once every gateway replica is at
+# plan schema 1 (scripts/check_fleet_plan_schema.py) and the org is listed ("*" = every org).
+V2_PLAN_CONTROLS_ENABLED = os.environ.get("V2_PLAN_CONTROLS_ENABLED", "").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
+V2_PLAN_CONTROLS_ORGS = os.environ.get("V2_PLAN_CONTROLS_ORGS", "").strip()
+# off | monitor | enforce for the blocked-keyword and threat-intel rows. Default monitor: visible
+# in audit and trace, never blocking, until an owner moves it to enforce.
+V2_PLAN_NEW_RULES_MODE = os.environ.get("V2_PLAN_NEW_RULES_MODE", "monitor").strip().lower()
 
 # REST Framework configuration
 REST_FRAMEWORK = {

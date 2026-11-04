@@ -17,9 +17,18 @@ import json
 import logging
 import os
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from typing import Any
 
-from core.firewall_v2_map import drafts_for
+from core.firewall_v2_controls import (
+    REQUIRES_CONTROLS,
+    controls_eligible,
+    controls_for,
+    keywords_of,
+    new_rules_mode,
+    threat_drafts,
+)
+from core.firewall_v2_map import drafts_for, retired_unchanged
 from core.v2_audit_adapter import parse_org_map
 
 logger = logging.getLogger(__name__)
@@ -77,18 +86,75 @@ def document_bytes(
     org_id: str,
     payload: Mapping[str, Any],
     policy_rows: Sequence[Mapping[str, Any]] = (),
+    *,
+    controls_enabled: bool = False,
+    rules_mode: str = "monitor",
 ) -> bytes:
-    """Firewall drafts plus policy rules. An empty firewall list means the firewall is off."""
+    """Firewall drafts, threat rules, policy rules and (when enabled) the org ``controls``.
+
+    An empty firewall list means the firewall is off. ``controls_enabled`` is the D-10 gate: the
+    ``controls`` object and its ``requires`` marker are written only when the fleet gate is open
+    for this org. ``rules_mode`` is the D-8 gate for the threat rows (``off|monitor|enforce``).
+    """
     rules = [{**row, "priority": _PRIORITY} for row in drafts_for(payload)]
+    rules.extend({**row, "priority": _PRIORITY} for row in threat_drafts(payload, mode=rules_mode))
     rules.extend(policy_rows)
-    body = {"org_id": org_id, "rules": rules, "streaming_mode": "incremental"}
+    body: dict[str, Any] = {"org_id": org_id, "rules": rules, "streaming_mode": "incremental"}
+    if controls_enabled:
+        controls = controls_for(payload)
+        if controls:
+            body["controls"] = controls
+            body["requires"] = [REQUIRES_CONTROLS]
     return json.dumps(body, separators=(",", ":"), sort_keys=True).encode("utf-8")
+def keyword_row(payload: Mapping[str, Any], mode: str = "enforce") -> dict[str, Any] | None:
+    """``blocked_keywords`` as one policy-shaped row for the existing ``_policy_rule`` path.
+
+    Matching is the shipped matcher's: case-insensitive substring (``token`` also matches
+    ``tokenizer``). Empty text, or only separators, yields no row. ``mode`` is the D-8 gate.
+    """
+    words = keywords_of(payload.get("blocked_keywords"))
+    if not words or mode == "off":
+        return None
+    if not (payload.get("firewall_enabled", True) and payload.get("content_filtering_enabled", True)):
+        return None
+    monitor = mode == "monitor" or payload.get("enforcement_mode") == "monitor"
+    action = "monitor" if monitor else "block"
+    return {
+        "code": "fw-blocked-keywords",
+        "policy_domain": "pipeline",
+        "enabled": True,
+        "category": "exfil",
+        "priority": _PRIORITY,
+        "rules": [
+            {
+                "id": "keywords",
+                "name": "blocked_keywords",
+                "enabled": True,
+                "rule_type": "keywords",
+                "action": action,
+                "priority": _PRIORITY,
+                "pipeline_stage": "",
+                "condition": {"keywords": words, "field": "input"},
+            },
+        ],
+    }
 
 
 def policy_drafts(
     policies: Sequence[Mapping[str, Any]],
+    *,
+    output_enabled: bool = True,
+    output_fallback: str = "flag",
+    monitor: bool = False,
 ) -> tuple[list[dict[str, Any]], list[str]]:
-    """Enabled pipeline, rag, and mcp rules, plus the names of actions the plan omits."""
+    """Enabled pipeline, rag, and mcp rules, plus the names of actions the plan omits.
+
+    ``output_enabled`` and ``output_fallback`` are ``output_policy_enabled`` and
+    ``output_policy_action`` (GW27, design section 10). Disabled: output-scope rules are dropped
+    and both-scope rules keep their input half. Enabled: an output or both-scope rule whose own
+    action is ``monitor`` or empty takes the fallback; an explicit own action wins. ``monitor`` is
+    the global monitor posture; it forces ``mode=monitor`` on the rules the fallback decided.
+    """
     drafts: list[dict[str, Any]] = []
     unsupported: list[str] = []
     for policy in policies:
@@ -100,7 +166,9 @@ def policy_drafts(
         for rule in policy.get("rules") or []:
             if not isinstance(rule, Mapping) or not rule.get("enabled", True):
                 continue
-            draft = _policy_rule(policy, rule, domain, unsupported)
+            draft = _policy_rule(
+                policy, rule, domain, unsupported, _OutputPolicy(output_enabled, output_fallback, monitor)
+            )
             if draft is not None:
                 drafts.append(draft)
     return drafts, unsupported
@@ -116,30 +184,76 @@ def publish_for_org(org: Any) -> dict[str, object]:
     """
     if org is None or not getattr(org, "pk", None):
         return {"status": "skipped", "reason": "no_org"}
-    from django.db import transaction
-
     from auth.models import Organization
+    from django.db import transaction
 
     try:
         with transaction.atomic():
             locked = Organization.objects.select_for_update().get(pk=org.pk)
             payload = _firewall_payload(locked)
-            rows, unsupported = policy_drafts(_policy_rows(locked.slug))
-            raw = document_bytes(locked.slug, payload, rows)
+            eligible = controls_eligible(locked.slug)
+            rules_mode = new_rules_mode()
+            rows, unsupported = _drafts_for_org(locked.slug, payload, rules_mode)
+            raw = document_bytes(
+                locked.slug, payload, rows, controls_enabled=eligible, rules_mode=rules_mode
+            )
             revision = _store(locked, raw)
     except Exception:
         logger.exception("gateway-v2 plan document was not stored for org %s", org.pk)
         return {"status": "unavailable", "org_id": getattr(org, "slug", None)}
-    return {
+    note: dict[str, object] = {
         "status": "published",
         "org_id": locked.slug,
         "revision": revision,
         "rules": raw.count(b'"rule_id"'),
         "unsupported": unsupported,
-        "dev_copy": _dev_copy(locked.slug, payload, rows),
+        "dev_copy": _dev_copy(locked.slug, payload, rows, eligible, rules_mode),
     }
+    note.update(_notes(locked, payload, eligible, rules_mode))
+    return note
 
 
+def _drafts_for_org(
+    slug: str, payload: Mapping[str, Any], rules_mode: str
+) -> tuple[list[dict[str, Any]], list[str]]:
+    """Policy rows plus the keyword row, with the output-policy fields applied (GW27)."""
+    policies = _policy_rows(slug)
+    keyword = keyword_row(payload, rules_mode)
+    if keyword is not None:
+        policies.append(keyword)
+    fallback = str(payload.get("output_policy_action") or "flag").strip().lower()
+    return policy_drafts(
+        policies,
+        output_enabled=bool(payload.get("output_policy_enabled", True)),
+        output_fallback=fallback,
+        monitor=payload.get("enforcement_mode") == "monitor",
+    )
+def _notes(
+    org: Any, payload: Mapping[str, Any], eligible: bool, rules_mode: str
+) -> dict[str, object]:
+    """The honest parts of the console status note: scope, semantics, withheld and retired."""
+    notes: dict[str, object] = {
+        "controls": "published" if eligible else "controls_withheld",
+        "new_rules_mode": rules_mode,
+        "org_limits_scope": "per gateway replica",
+        "tpm_basis": "estimated tokens at admission; no response true-up",
+        "keywords": "case-insensitive substring match",
+        "retention": "stamped at write time; not retroactive; records without a stamp are kept",
+        "threat_intel": "content-score floor; no actor reputation feed in v2",
+        "retired_unchanged": retired_unchanged(payload),
+    }
+    try:
+        from core.compliance import validate_compliance_requirements
+        from core.models import FirewallConfig
+
+        row = FirewallConfig.objects.filter(organization=org).first()
+        notes["compliance_violations"] = (
+            validate_compliance_requirements(row) if row is not None else []
+        )
+    except Exception:
+        logger.exception("compliance violations were not computed for org %s", org.pk)
+        notes["compliance_violations"] = "unavailable"
+    return notes
 def _store(org: Any, raw: bytes) -> int:
     """Upsert the document; the revision rises only when the body changed."""
     from core.models import V2PlanDocument
@@ -159,41 +273,81 @@ def _dev_copy(
     slug: str,
     payload: Mapping[str, Any],
     rows: Sequence[Mapping[str, Any]],
+    controls_enabled: bool = False,
+    rules_mode: str = "monitor",
 ) -> str:
     alias = gateway_org_for(slug, os.environ.get("AMF_V2_AUDIT_ORG_MAP", ""))
     if alias is None:
         return "not_mapped"
     try:
-        _write(alias, document_bytes(alias, payload, rows))
+        _write(
+            alias,
+            document_bytes(
+                alias, payload, rows, controls_enabled=controls_enabled, rules_mode=rules_mode
+            ),
+        )
     except Exception:
         logger.exception("gateway-v2 dev plan copy was not written for %s", alias)
         return "unavailable"
     return "written"
 
 
+@dataclass(frozen=True)
+class _OutputPolicy:
+    """The ``output_policy_*`` fields and the global monitor posture, for one publish."""
+
+    enabled: bool = True
+    fallback: str = "flag"
+    monitor: bool = False
+_ACTIONS = {"allow", "flag", "redact", "block"}
+_DEFAULT_OUTPUT = _OutputPolicy()
+def _output_action(own: str, fallback: str, monitor: bool) -> tuple[str, str] | None:
+    """(action, mode) for an output or both-scope rule per the section 10 table, or None."""
+    chosen = fallback if fallback in _ACTIONS else "flag"
+    if own in _ACTIONS:
+        action, mode = own, "enforce"
+    elif own == "monitor":
+        action, mode = (chosen, "enforce") if chosen != "allow" else ("flag", "monitor")
+    elif own == "":
+        action, mode = chosen, "enforce"
+    else:
+        return None
+    return action, "monitor" if monitor else mode
 def _policy_rule(
     policy: Mapping[str, Any],
     rule: Mapping[str, Any],
     domain: str,
     unsupported: list[str],
+    output: _OutputPolicy = _DEFAULT_OUTPUT,
 ) -> dict[str, Any] | None:
     action = str(rule.get("action") or "").strip().lower()
     label = f"{policy.get('code')}/{rule.get('name') or rule.get('id')}"
     if action in _UNSUPPORTED_ACTIONS:
         unsupported.append(f"{label} ({action})")
         return None
-    mode = "enforce"
-    if action == "monitor":
-        mode = "monitor"
-        action = "flag"
-    elif action not in {"allow", "flag", "redact", "block"}:
-        unsupported.append(f"{label} ({action or 'unknown'})")
-        return None
     condition = rule.get("condition") if isinstance(rule.get("condition"), Mapping) else {}
     surfaces = _surfaces(domain, condition)
     if not surfaces:
         return None
     scope = _scope(condition)
+    mode = "enforce"
+    if scope in {"output", "both"} and not output.enabled:
+        if scope == "output":
+            return None
+        scope = "input"
+    elif scope in {"output", "both"}:
+        decided = _output_action(action, output.fallback, output.monitor)
+        if decided is None:
+            unsupported.append(f"{label} ({action})")
+            return None
+        action, mode = decided
+    if scope == "input" or action not in _ACTIONS:
+        if action == "monitor":
+            mode = "monitor"
+            action = "flag"
+        elif action not in _ACTIONS:
+            unsupported.append(f"{label} ({action or 'unknown'})")
+            return None
     built = _condition(rule, condition, scope)
     if built is None:
         return None

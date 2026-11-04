@@ -12,7 +12,8 @@ from core.firewall_model_governance import (
     stale_allowed_models,
     validate_governance_fields,
 )
-from core.firewall_v2_map import FIELDS, selection_errors
+from core.firewall_v2_controls import built_value_errors, controls_eligible
+from core.firewall_v2_map import FIELDS, changed_fields, selection_errors
 from core.models import FirewallConfig
 
 
@@ -185,6 +186,15 @@ class FirewallConfigSerializer(serializers.ModelSerializer):
                 if hasattr(self.instance, name)
             }
         unsupported = selection_errors(attrs, stored)
+        # GW27: BUILT values the gateway cannot represent, and controls-backed changes while the
+        # fleet plan-schema gate is closed. An unchanged stored value is always accepted.
+        slug = getattr(org, "slug", "") or ""
+        built = built_value_errors(
+            {**stored, **attrs},
+            changed_fields(attrs, stored),
+            controls_ok=controls_eligible(slug),
+        )
+        unsupported = {**built, **unsupported}
         if unsupported:
             raise serializers.ValidationError(unsupported)
 
