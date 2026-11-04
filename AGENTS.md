@@ -569,6 +569,9 @@
   per-layer commits. Plan: docs/plans/2026-10-11-r2-23-push-coalescing.md.
   Evidence: docs/plans/evidence/2026-10-11-r2-23-push-coalescing/.
 
+## GW33 / output parity changelog
+- GW33 (2026-11-05) — OUTPUT GUARDRAIL PARITY (IP leak, exfil channels, canary, lexical grounding, real REWRITE, review flag): local half closed; live L33-1..L33-3 deferred. Byte-altering IP/exfil/grounding actions are STRICT_WITHHOLD-only; grounding model mode UNAVAILABLE until a backend advertises hallucination (GW33-F1). Plan: docs/plans/2026-gw33-output-parity.md; canonical entry: docs/pipeline/CHANGELOG.md.
+
 ## v2-enforcement-leaks / GW15 input-REDACT + enforcement-leaks changelog
 - v2-enforcement-leaks (2026-10-26) — SIX GW15 ENFORCEMENT LEAKS CLOSED BEFORE THE PROVIDER, local
   half CLOSED. Severity CRITICAL (A/B/C silently defeat a tenant-selected policy; D/E/F leak a

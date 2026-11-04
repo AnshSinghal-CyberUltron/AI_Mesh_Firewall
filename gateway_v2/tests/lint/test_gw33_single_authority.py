@@ -68,3 +68,42 @@ def test_an_allow_listed_site_is_permitted(tmp_path: Path) -> None:
     allow = (("x/m.py", "R.decide", "test"),)
     assert scan_tree(tmp_path, allow_list=allow, check_stale=False) == []
     assert scan_tree(tmp_path, allow_list=(("x/m.py", "R.gone", "t"),)) != []
+
+
+_ITERATIONS = 120
+
+
+def test_property_5_random_planted_violations_are_always_caught_and_clean_code_never() -> None:
+    """Feature: gw33-output-parity, Property 5: Single authority. Validates 5.3."""
+    # Feature: gw33-output-parity, Property 5: Single authority
+    import random
+    import tempfile
+
+    rng = random.Random(33_005)
+    members = ("REDACT", "BLOCK", "FLAG", "REWRITE", "ALLOW")
+    with tempfile.TemporaryDirectory() as raw:
+        root = Path(raw)
+        for index in range(_ITERATIONS):
+            name = f"fn_{rng.randrange(10**6)}"
+            a, b = rng.choice(members), rng.choice(members)
+            kind = rng.choice(["if", "dict", "match", "edit_kw", "edit_pos"])
+            source = "from gateway_v2.domain import Action, Disposition, Span, Transformation\n"
+            if kind == "if":
+                source += f"def {name}(x):\n    if x is Action.{a}:\n        return Disposition.{b}\n    return 0\n"
+            elif kind == "dict":
+                source += f"def {name}():\n    return {{Action.{a}: Disposition.{b}}}\n"
+            elif kind == "match":
+                source += (f"def {name}(x):\n    match x:\n        case Action.{a}:\n"
+                           f"            return Disposition.{b}\n")
+            elif kind == "edit_kw":
+                source += (f"def {name}():\n    return Transformation(kind='{rng.choice(['rewrite', 'redact'])}',"
+                           " span=Span(0, 1), replacement='x')\n")
+            else:
+                source += (f"def {name}():\n    return Transformation('{rng.choice(['rewrite', 'redact'])}',"
+                           " Span(0, 1), 'x')\n")
+            (root / f"bad_{index}.py").write_text(source, "utf-8")
+            clean = f"from gateway_v2.domain import Action\ndef {name}(x):\n    return x is Action.{a}\n"
+            (root / f"ok_{index}.py").write_text(clean, "utf-8")
+        hits = {Path(h.path).name for h in scan_tree(root, check_stale=False)}
+        assert {f"bad_{i}.py" for i in range(_ITERATIONS)} <= hits
+        assert not any(name.startswith("ok_") for name in hits)

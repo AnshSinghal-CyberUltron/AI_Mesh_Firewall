@@ -2,6 +2,16 @@
 
 All changes to the chat pipeline consolidation/fix/freeze effort.
 
+## GW33 (2026-11-05) — OUTPUT GUARDRAIL PARITY, local half closed; live L33-1..L33-3 deferred
+**v2 output guardrails restored; REWRITE is real.** IP/infrastructure leak, exfiltration channels
+(markdown/HTML/CSS sinks, DNS labels), per-request canary tokens and lexical grounding, each a
+built-in detector rule selected by detector identity (never the category label); a real
+`Disposition.REWRITE` with a declared, hashed template, byte-verified on the output and request
+sides; the review flag computed once by the resolver; five GW27-retired control fields mapped. The
+byte-altering IP/exfil/grounding actions are STRICT_WITHHOLD-only (the publisher promotes the org and
+reports it). Open items against the card text: grounding on a local model ships lexical (model mode
+UNAVAILABLE until a backend advertises hallucination; follow-up GW33-F1); INCREMENTAL IP-redaction
+parity gap. Plan note: `docs/plans/2026-gw33-output-parity.md`. No live gate was run.
 ## PIPELINE-0035 (2026-10-21)
 
 **Input Scan "SKIP" display-honesty fix on the 503 scan-only + policy-redacted path.**
