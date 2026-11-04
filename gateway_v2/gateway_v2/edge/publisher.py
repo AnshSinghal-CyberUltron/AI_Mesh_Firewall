@@ -57,6 +57,7 @@ from gateway_v2.edge import render
 from gateway_v2.edge.cardinality import CardinalityDirectory
 from gateway_v2.edge.counters import PostureCounters, RejectionCounters
 from gateway_v2.edge.event_log import StructuredEventLog
+from gateway_v2.edge.incident_publish import IncidentPublication, incident_series_count
 from gateway_v2.edge.rates import ResetSafeRate
 from gateway_v2.edge.render import Family
 from gateway_v2.edge.series_count import HISTOGRAM_SERIES as _HISTOGRAM_SERIES
@@ -178,6 +179,7 @@ class Publisher:
         "_clock",
         "SERIES_COUNT",
         "_read_failures",
+        "_incident",
     )
 
     def __init__(
@@ -199,7 +201,9 @@ class Publisher:
         event_log: StructuredEventLog,
         contract: ResourceContract,
         clock: Callable[[], float],
+        incident: IncidentPublication | None = None,
     ) -> None:
+        self._incident = incident
         self._admission = admission
         self._quota = quota
         self._audit = audit
@@ -221,7 +225,9 @@ class Publisher:
         #: never recomputes it and the scrape-path assertion reads a constant. Invariant to the
         #: observed tenant count because the tenant term is the fixed ``K + 1`` (R15.3, Property 2).
         #: The term-by-term reconciliation is documented on :func:`_series_count`.
-        self.SERIES_COUNT: int = _series_count(contract)
+        self.SERIES_COUNT: int = _series_count(contract) + (
+            0 if incident is None else incident_series_count(contract)
+        )  # GW29 terms
         # The Publisher's own read-failure indicator (R1.3), a real zero from construction.
         self._read_failures: int = 0
 
@@ -239,6 +245,7 @@ class Publisher:
         event_log: StructuredEventLog,
         contract: ResourceContract,
         clock: Callable[[], float],
+        incident: IncidentPublication | None = None,
     ) -> Publisher:
         """Build a Publisher whose three mechanisms derive from ``contract`` + ``clock`` (the
         production path).
@@ -269,6 +276,7 @@ class Publisher:
             event_log=event_log,
             contract=contract,
             clock=clock,
+            incident=incident,
         )
 
     # ----------------------------------------------------------------------- #
@@ -316,6 +324,10 @@ class Publisher:
             families.extend(fams)
             rendered += count
 
+        if self._incident is not None:  # GW29 incident series (fixed scalars + padded top-K)
+            fams, count = self._guarded_flat(self._incident.families)
+            families.extend(fams)
+            rendered += count
         # (3) reset-safe rates: the book-keeper is wired for the Publisher to derive counter rates
         # from; no rate series is currently published (the producers expose cumulative counters that
         # Prometheus rates downstream), so this step contributes zero families. Keeping the step

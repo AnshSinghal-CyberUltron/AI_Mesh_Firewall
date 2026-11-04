@@ -44,7 +44,12 @@ from gateway_v2.plan.document import decode_plan_body
 from gateway_v2.runtime.state_sig import body_hash, canonical_body
 from gateway_v2.runtime.store_keys import KEYS, StoreKeys
 from state_control.db import KindCounters
-from state_control.source import ControlSource, SourceView
+from state_control.incident_scopes import (
+    IncidentScopePolicy,
+    is_isolation_scope,
+    org_model_projection,
+)
+from state_control.source import ControlSource, SourceSwitch, SourceView
 from state_control.writer import UNCHANGED, Fence, LeaseLost, StateWriter, WriteOutcome
 
 LOG = logging.getLogger("amf.state.projector")
@@ -172,6 +177,7 @@ class Projector:
         knobs: ProjectorKnobs,
         chunk: int = 500,
         seeder: PoolSeeder | None = None,
+        incident_scopes: IncidentScopePolicy | None = None,
     ) -> None:
         if not holder or "\n" in holder:
             raise ValueError("projector holder id must be non-empty and single-line")
@@ -186,6 +192,10 @@ class Projector:
         untouched: `projector_service` always wires one; a test that only exercises the signed
         writes may leave it out."""
         self._fence = Fence(holder, knobs.lease_ms)
+        self._incident_scopes = incident_scopes or IncidentScopePolicy()
+        """GW29 rollout guard: org-model scopes are projected only when this is `enabled`."""
+        if self._incident_scopes.refusal is not None:
+            LOG.error("%s", self._incident_scopes.refusal)
         self._noted: frozenset[str] = frozenset()
         """Warnings already logged, so a standing condition is one line, not one per second."""
 
@@ -194,7 +204,7 @@ class Projector:
         if not self._db.claim_lease(self._holder, self._knobs.lease_ms):
             return ProjectionSummary(leader=False)
         view = self._source.read()
-        desired = desired_state(view)
+        desired = desired_state(view, self._incident_scopes)
         for note in desired.notes:
             if note not in self._noted:
                 LOG.warning("%s", note)
@@ -265,6 +275,8 @@ class Projector:
 
     def _switches_off(self, desired: _Desired, ks: _Snapshot, tally: _Tally) -> None:
         for scope in sorted(set(ks[2]) - desired.switches_on):
+            if is_isolation_scope(scope):
+                continue  # GW29: iso: is written by StateWriter.isolation, never derived here
             tally.count(self._put(StateKind.KS, scope, {"on": False}, engaged=False))
 
     def _budgets(self, desired: _Desired, budgets: _Snapshot, tally: _Tally) -> None:
@@ -408,8 +420,14 @@ _KINDS = (StateKind.KEY, StateKind.PLAN, StateKind.KS, StateKind.BUDGET)
 _Snapshot = tuple[KindCounters, tuple[SignedRecord, ...], tuple[str, ...]]
 
 
-def desired_state(view: SourceView) -> _Desired:
-    """The records control's snapshot implies. Pure: the property tests drive it directly."""
+def desired_state(
+    view: SourceView, incident_scopes: IncidentScopePolicy | None = None,
+) -> _Desired:
+    """The records control's snapshot implies. Pure: the property tests drive it directly.
+
+    `incident_scopes` is the GW29 rollout guard; None (the default) keeps org-model switches
+    unsupported, so a fleet that has not rolled never receives a scope it cannot read."""
+    policy = incident_scopes or IncidentScopePolicy()
     notes: list[str] = []
     invalid_names = 0
     active: set[str] = set()
@@ -466,15 +484,27 @@ def desired_state(view: SourceView) -> _Desired:
         ):
             switches_on.add(f"org:{switch.org_slug}")
             continue
-        # v2 scopes are `global`, `org:<id>` and `model:<name>`, and `model:` is GLOBAL: mapping an
-        # org's model switch onto it would stop that model for every tenant. Request-path
-        # enforcement and an org-scoped model scope are GW29; until then this is said out loud.
+        if (
+            policy.enabled
+            and switch.org_slug is not None
+            and switch.model_name != _ORG_WIDE
+            and not switch.api_key_prefix
+            and switch.action == _DISABLE
+        ):
+            scope = org_model_projection(switch.org_slug, switch.model_name)
+            if scope is not None:
+                switches_on.add(scope)
+                continue
+            invalid_names += 1
+            notes.append(
+                f"kill switch org={switch.org_slug!r} model name is not a valid model name; "
+                "not projected",
+            )
+            continue
+        # `model:<name>` is GLOBAL: mapping an org's model switch onto it would stop that model
+        # for every tenant, so a switch with no safe scope is counted and said out loud.
         unsupported += 1
-        notes.append(
-            f"engaged kill switch org={switch.org_slug!r} model={switch.model_name!r} "
-            f"credential_prefix={bool(switch.api_key_prefix)} action={switch.action!r} has no v2 "
-            "scope and is NOT enforced by gateway v2 (GW29)",
-        )
+        notes.append(_unsupported_note(switch, policy))
     return _Desired(
         keys=keys,
         plans=plans,
@@ -489,6 +519,22 @@ def desired_state(view: SourceView) -> _Desired:
         invalid_names=invalid_names,
         notes=tuple(notes),
     )
+
+
+def _unsupported_note(switch: SourceSwitch, policy: IncidentScopePolicy) -> str:
+    detail = (
+        f"engaged kill switch org={switch.org_slug!r} model={switch.model_name!r} "
+        f"credential_prefix={bool(switch.api_key_prefix)} action={switch.action!r}"
+    )
+    if switch.api_key_prefix:
+        return f"{detail} has no v2 scope and is NOT enforced by gateway v2"
+    if switch.org_slug is not None and switch.action == _DISABLE and not policy.enabled:
+        return (
+            f"{detail} maps to an org-model scope, which is not projected until "
+            "AMF_STATE_PROJECT_INCIDENT_SCOPES is on and AMF_GATEWAY_MIN_SCOPE_GENERATION is "
+            "declared; it is NOT enforced by gateway v2 until then"
+        )
+    return f"{detail} has no v2 scope and is NOT enforced by gateway v2"
 
 
 def validate_plan(slug: str, raw: str) -> tuple[Mapping[str, object] | None, int, str]:

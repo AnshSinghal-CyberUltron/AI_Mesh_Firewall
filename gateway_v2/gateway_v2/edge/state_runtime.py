@@ -27,9 +27,10 @@ import asyncio
 import contextlib
 import logging
 import os
-from collections.abc import Awaitable, Callable, Iterable, Mapping
+from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any
+from types import MappingProxyType
+from typing import Any, Protocol
 
 from gateway_v2.admit.budget_state import BudgetSnapshot, budget_applier
 from gateway_v2.admit.identity import IdentityCache, identity_applier, principal_of
@@ -41,7 +42,7 @@ from gateway_v2.admit.killswitch import (
 )
 from gateway_v2.domain.identity import Principal
 from gateway_v2.domain.locks import FRESH_MS, PG_GRACE_MS
-from gateway_v2.domain.state import StateKind, StoreDataUnavailable
+from gateway_v2.domain.state import SignedRecord, StateKind, StoreDataUnavailable
 from gateway_v2.domain.state_knobs import (
     DEFAULT_REFRESH_PERIOD_MS,
     DEFAULT_REHYDRATE_PERIOD_MS,
@@ -91,6 +92,11 @@ def _noop_reacquire(org: str) -> None:
     an optimisation and losing it before boot finishes is fail-safe.
     """
     del org
+
+
+def _noop_revocations(records: Sequence[SignedRecord]) -> None:
+    """Default revocation observer until the GW29 ledger is wired: nothing to record."""
+    del records
 
 
 def _noop_invalidate(key_hashes: Iterable[str]) -> None:
@@ -158,8 +164,16 @@ def _int(env: Mapping[str, str], name: str, default: int) -> int:
 class StateRuntime:
     """One worker's signed-state readers, their gates, and the task that keeps them current."""
 
-    def __init__(self, config: StateRuntimeConfig, *, client: Any = None) -> None:
-        """`client` is injectable for tests; production builds a bounded `redis.asyncio` one."""
+    def __init__(
+        self,
+        config: StateRuntimeConfig,
+        *,
+        client: Any = None,
+        aliases: Mapping[str, str] | None = None,
+    ) -> None:
+        """`client` is injectable for tests; production builds a bounded `redis.asyncio` one.
+
+        `aliases` is the GW29 model alias table, passed once to the kill-switch parser."""
         self._config = config
         knobs = config.knobs
         if client is None:
@@ -182,6 +196,10 @@ class StateRuntime:
         )
         self.switches = KillSwitchSnapshot(
             stale_ms=knobs.fresh_ms, stamp=self.gates.gate(StateKind.KS),
+            aliases=(
+                aliases if isinstance(aliases, MappingProxyType)
+                else MappingProxyType(dict(aliases or {}))
+            ),
         )
         self.budget_snapshot = BudgetSnapshot(gate=self.gates.gate(StateKind.BUDGET))
         # Two request-path collaborators are built LATER, in `apply_production` (edge), because they
@@ -196,6 +214,7 @@ class StateRuntime:
         # is rebuilt on the next principal change; an un-marked generation is re-read on first use).
         self._budget_reacquire_hook: Callable[[str], None] = _noop_reacquire
         self._gcra_invalidate: Callable[[Iterable[str]], None] = _noop_invalidate
+        self._revocation_observe: Callable[[Sequence[SignedRecord]], None] = _noop_revocations
         # PLAN first: a key whose org was just onboarded resolves straight from the store, and
         # its plan must already be served by then (the projector writes plans before keys).
         self.sync = StateSynchroniser(
@@ -241,6 +260,7 @@ class StateRuntime:
                 evicted = self.identity_cache.on_delta(round_.records, round_.manifest.feed_seq)
                 if evicted:
                     self._gcra_invalidate(evicted)
+                self._revocation_observe(round_.records)
             else:
                 identity(round_)
 
@@ -264,6 +284,10 @@ class StateRuntime:
         invalidated together on the same delta.
         """
         self._gcra_invalidate = invalidate
+
+    def set_revocation_observer(self, observe: Callable[[Sequence[SignedRecord]], None]) -> None:
+        """Wire the GW29 revocation ledger: every KEY delta's records reach it (design 5.7)."""
+        self._revocation_observe = observe
 
     # --- request path -------------------------------------------------------------------------
 
@@ -425,6 +449,14 @@ class StateRuntime:
         await self._listener.run(nudged)
 
 
+class LifespanHook(Protocol):
+    """Something that runs inside the ASGI lifespan (the GW29 pump and ticker)."""
+
+    async def startup(self) -> None: ...
+
+    async def shutdown(self) -> None: ...
+
+
 class StateServedApp:
     """Runs the state runtime inside the ASGI lifespan, like `DevServedApp` runs the dev pieces.
 
@@ -433,9 +465,20 @@ class StateServedApp:
     not starting. Everything that is not `lifespan` passes straight through.
     """
 
-    def __init__(self, app: _ASGIApp, runtime: StateRuntime) -> None:
+    def __init__(
+        self, app: _ASGIApp, runtime: StateRuntime, hooks: Sequence[LifespanHook] = (),
+    ) -> None:
         self._app = app
         self._runtime = runtime
+        self._hooks = tuple(hooks)
+
+    async def _run_hooks(self, *, start: bool) -> None:
+        """Start or stop each hook; one that fails is logged and never blocks the others."""
+        for hook in self._hooks:
+            try:
+                await (hook.startup() if start else hook.shutdown())
+            except Exception as exc:  # noqa: BLE001 - a hook failure must not stop the worker
+                LOG.error("lifespan hook failed: %s", type(exc).__name__)
 
     async def __call__(
         self,
@@ -455,7 +498,9 @@ class StateServedApp:
                     await self._runtime.startup()
                 except Exception as exc:  # noqa: BLE001 - fail closed, but start
                     LOG.error("state runtime did not start: %s: %s", type(exc).__name__, exc)
+                await self._run_hooks(start=True)
             elif kind == "lifespan.shutdown":
+                await self._run_hooks(start=False)
                 await self._runtime.shutdown()
             return message
 

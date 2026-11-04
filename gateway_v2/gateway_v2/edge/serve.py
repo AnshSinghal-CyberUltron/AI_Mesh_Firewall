@@ -466,11 +466,12 @@ def _assemble_app(deps: dict[str, object]) -> ASGIApplication:
     kwargs.pop("plan_feed", None)
     kwargs.pop("plan_watch", None)
     state = kwargs.pop("state_runtime", None)
+    hooks = tuple(kwargs.pop("lifespan_hooks", ()))
     # ``wrap_dev_app`` returns the app UNCHANGED unless the DEV PROFILE admission adapter is in
     # ``deps`` (then it adds the lease lifespan hooks and, when present, the audit writer).
     app = wrap_dev_app(build_app(**kwargs), deps)
     # PRODUCTION PROFILE (GW36 S3): the signed-state runtime runs in the ASGI lifespan.
-    return StateServedApp(app, state) if isinstance(state, StateRuntime) else app
+    return StateServedApp(app, state, hooks) if isinstance(state, StateRuntime) else app
 
 
 def serving_app() -> ASGIApplication:

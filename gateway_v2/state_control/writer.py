@@ -19,11 +19,14 @@ side absorbs it over several bounded rounds.
 
 from __future__ import annotations
 
+import json
 import logging
+import time
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
+from gateway_v2.domain.incident import IsolationOrigin, isolation_scope
 from gateway_v2.domain.state import (
     Manifest,
     SignedRecord,
@@ -33,6 +36,7 @@ from gateway_v2.domain.state import (
 )
 from gateway_v2.runtime.state_sig import body_hash, canonical_body, make_manifest, make_record
 from state_control.db import CommitUnknown, ControlDB, ControlTx, KindCounters, advance
+from state_control.incident_scopes import isolation_body
 from state_control.publisher import StatePublisher
 
 LOG = logging.getLogger("amf.state.writer")
@@ -239,6 +243,56 @@ class StateWriter:
     def killswitch(self, scope: str, *, on: bool) -> WriteOutcome:
         """`off` is an explicit record too, and it is what keeps `on_count` honest."""
         return self.put(StateKind.KS, scope, {"on": on}, engaged=on)
+
+    def isolation(
+        self,
+        model: str,
+        *,
+        on: bool,
+        fallback: str | None = None,
+        origin: IsolationOrigin = IsolationOrigin.OPERATOR,
+        reason: str = "",
+        expires_at: float | None = None,
+        created_at: float | None = None,
+        no_expiry: bool = False,
+        now: float | None = None,
+    ) -> WriteOutcome:
+        """Write (or clear) the signed `iso:<model>` record through the same `put` as a kill switch.
+
+        `off` is an explicit record, as for `killswitch`. A model that does not canonicalise, or a
+        body the gateway would read as malformed, raises `ValueError` and writes NOTHING (GW29
+        design 4.6, 7). IDEMPOTENT for `origin=auto`: while an auto isolation of this model is
+        already active, a second `on` returns `unchanged` and writes and publishes nothing, so N
+        gateways that all detected the same incident produce exactly one record (AC27).
+        """
+        scope = isolation_scope(model)
+        body = isolation_body(
+            on=on, fallback=fallback, origin=origin, reason=reason, expires_at=expires_at,
+            created_at=created_at, no_expiry=no_expiry,
+        )
+        if on and origin is IsolationOrigin.AUTO and self._auto_isolation_active(
+            scope, time.time() if now is None else now,
+        ):
+            counters = self._db.counters(StateKind.KS)
+            return WriteOutcome(UNCHANGED, StateKind.KS, counters.version, counters.feed_seq, 0)
+        return self.put(StateKind.KS, scope, body, engaged=on)
+
+    def _auto_isolation_active(self, scope: str, now: float) -> bool:
+        with self._db.tx() as tx:
+            record = tx.record(StateKind.KS, scope)
+            engaged = tx.engaged(StateKind.KS, scope)
+        if record is None or record.deleted or not engaged:
+            return False
+        try:
+            body = json.loads(record.body)
+        except (ValueError, UnicodeDecodeError):
+            return False
+        if not isinstance(body, dict) or body.get("origin") != IsolationOrigin.AUTO.value:
+            return False
+        expires = body.get("expires_at")
+        if isinstance(expires, bool) or not isinstance(expires, int | float):
+            return False  # no usable deadline: write a fresh, bounded record (tightening only)
+        return float(expires) > now
 
     def repair_epoch(
         self,

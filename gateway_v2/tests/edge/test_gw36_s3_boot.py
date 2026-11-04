@@ -45,7 +45,10 @@ def test_production_wires_signed_state_without_any_io() -> None:
     assert runtime.ready()[0] is False, "nothing is ready before the lifespan ran"
     assert isinstance(serve._assemble_app(deps), StateServedApp)
     joined = "\n".join(logs)
-    assert "PRODUCTION PROFILE" in joined and "NOT enforced" in joined
+    assert "PRODUCTION PROFILE" in joined
+    # GW29: the kill switch is enforced now; the old "NOT enforced" line is gone.
+    assert "boot: kill switch -> enforced at admission and per chunk" in joined
+    assert "NOT enforced on the request path" not in joined
     assert "boot: identity -> fail_closed_resolver" not in joined
     # S4 (task 10.4) wired admission + quota, so the S3 fail-closed lines are DROPPED and replaced
     # by one real line per wired admission, rate, and budget dependency.
