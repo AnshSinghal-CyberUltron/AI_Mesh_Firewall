@@ -69,21 +69,7 @@ def node_results() -> dict[str, dict[str, object]]:
         server.wait(timeout=15)
 
 
-#: OPEN FINDING (owner decision, see the exit note): the Node SDK's ``chat.completions.stream()``
-#: helper breaks on the gateway's named ``amf.trace`` SSE event ("chunk.choices is not iterable")
-#: because the Node ``Stream`` yields EVERY named event as ``{event, data}`` and the helper treats
-#: it as a chunk. Fixing it means changing the trace framing (an SSE comment, or an in-band
-#: ``choices: []`` chunk as OpenAI's own usage chunk), which changes what console consumers
-#: receive, so it is NOT made here. ``strict=True`` flips this to a failure the day it is fixed.
-_NODE_TRACE_FRAMING = pytest.mark.xfail(
-    strict=True, reason="Node stream() helper cannot parse the named amf.trace event"
-)
-
-
-@pytest.mark.parametrize(
-    "cell",
-    [pytest.param(c, marks=_NODE_TRACE_FRAMING) if c == "c" else c for c in _CELLS],
-)
+@pytest.mark.parametrize("cell", _CELLS)
 @pytest.mark.matrix(client="node", cell="x")
 def test_node_cell(cell: str, node_results: dict[str, dict[str, object]]) -> None:
     row = node_results.get(cell)

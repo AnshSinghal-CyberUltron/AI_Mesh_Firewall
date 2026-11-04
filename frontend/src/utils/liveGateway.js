@@ -111,13 +111,28 @@ export async function consumeSSEStream(response) {
   let terminalTracePayload = null;
 
   // Parse a single SSE "event block" (already split on the \n\n boundary).
-  // A named frame is `event: amf.trace` plus a `data:` line (GW13). The console
-  // trace lives on that data line. Content deltas stay a bare `data:` line.
+  // The gateway's console trace is an SSE COMMENT line, `: amf.trace {json}` (GW34 V13: a comment is
+  // skipped by every SDK parser, so it never reaches an SDK iterator). It is read here explicitly.
+  // Content deltas stay a bare `data:` line. Older gateways sent the trace as a named
+  // `event: amf.trace` frame with a `data:` line; that still parses through the data path below.
   // Returns nothing; mutates events/aggregatedContent/terminalError in place.
   const processPart = (part) => {
     const dataLines = [];
     for (const raw of part.split(/\r?\n/)) {
       const line = raw.replace(/^\s+/, "");
+      const traceMatch = /^:\s?amf\.trace (.*)$/.exec(line);
+      if (traceMatch) {
+        try {
+          const traceObj = JSON.parse(traceMatch[1]);
+          if (traceObj && typeof traceObj === "object") {
+            events.push({ type: "data", payload: traceObj });
+            terminalTracePayload = traceObj;
+          }
+        } catch {
+          events.push({ type: "raw", payload: traceMatch[1] });
+        }
+        continue;
+      }
       if (!line.startsWith("data:")) continue;
       dataLines.push(line.slice(5).replace(/^ /, ""));
     }

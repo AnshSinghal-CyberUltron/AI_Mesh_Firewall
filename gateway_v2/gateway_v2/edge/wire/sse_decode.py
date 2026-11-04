@@ -11,7 +11,7 @@ from collections.abc import Mapping
 from gateway_v2.domain import posture
 from gateway_v2.egress.stream import DownstreamFrame
 
-__all__ = ("FINISH_REASONS", "SSEDecoder")
+__all__ = ("FINISH_REASONS", "SSEDecoder", "trace_comment_payload")
 
 #: The closed set of ``finish_reason`` values a stream may carry. The deprecated
 #: ``function_call`` reason is rejected on purpose (D1b).
@@ -22,6 +22,20 @@ _TOOL_NAME = "output_tool_name"
 _TOOL_ARGUMENTS = "output_tool_arguments"
 _TOOL_CHANNEL_PREFIX = "output_tool_"
 _KEY_MARK = "#"
+_TRACE_COMMENT = ": amf.trace "
+
+
+def trace_comment_payload(event_text: str) -> str | None:
+    """The JSON text of an ``: amf.trace {json}`` comment line in one SSE event, else ``None``.
+
+    The gateway's trace frame is an SSE comment (GW34 V13), so no SDK iterator sees it. A line
+    not starting with exactly ``: amf.trace `` is an ordinary comment or field: ``None``.
+    """
+    for line in event_text.split("\n"):
+        line = line.rstrip("\r")
+        if line.startswith(_TRACE_COMMENT):
+            return line[len(_TRACE_COMMENT):]
+    return None
 
 
 # --------------------------------------------------------------------------- #
@@ -50,7 +64,15 @@ class SSEDecoder:
     (R1.5).
     """
 
-    __slots__ = ("_buffer", "_done", "_first_id", "_first_name", "_malformed", "_max_tool_calls")
+    __slots__ = (
+        "_buffer",
+        "_done",
+        "_first_id",
+        "_first_name",
+        "_malformed",
+        "_max_tool_calls",
+        "_trace",
+    )
 
     def __init__(self, max_tool_calls: int = 0) -> None:
         """``max_tool_calls`` bounds the ``delta.tool_calls[].index`` range; ``0`` is a
@@ -61,6 +83,16 @@ class SSEDecoder:
         self._max_tool_calls = max_tool_calls
         self._first_id: dict[int, str] = {}
         self._first_name: dict[int, str] = {}
+        self._trace: dict[str, object] | None = None
+
+    @property
+    def trace(self) -> dict[str, object] | None:
+        """The last ``: amf.trace {json}`` comment decoded (GW34 V13), else ``None``.
+
+        The comment yields no frame, so the SDK-facing content path never sees it; a trace
+        consumer reads it here.
+        """
+        return self._trace
 
     def finished(self) -> bool:
         """``[DONE]`` was decoded and no bytes are left buffered.
@@ -130,6 +162,10 @@ class SSEDecoder:
         except UnicodeDecodeError:
             self._malformed = True
             return None
+        trace = trace_comment_payload(text)
+        if trace is not None:
+            self._take_trace(trace)
+            return None
         payload = self._data_payload(text)
         if payload is None:
             self._malformed = True
@@ -138,6 +174,17 @@ class SSEDecoder:
             self._done = True
             return None
         return self._frame_from_json(payload)
+
+    def _take_trace(self, payload: str) -> None:
+        """Keep a trace comment's JSON object; an undecodable one is malformed (R1.5)."""
+        try:
+            obj = json.loads(payload)
+        except ValueError:
+            obj = None
+        if isinstance(obj, dict):
+            self._trace = obj
+        else:
+            self._malformed = True
 
     def _data_payload(self, event_text: str) -> str | None:
         """Join the ``data:`` field value(s) of an SSE event, or ``None``.

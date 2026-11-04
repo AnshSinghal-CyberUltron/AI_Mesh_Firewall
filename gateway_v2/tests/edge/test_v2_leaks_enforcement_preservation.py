@@ -247,7 +247,7 @@ def _chat_stream_ok(content: str) -> bytes:
         }
     )
     trace = _compact({"produced_mode": "incremental", "degenerated_to_strict": True})
-    return b"data: " + chunk + b"\n\nevent: amf.trace\ndata: " + trace + b"\n\ndata: [DONE]\n\n"
+    return b"data: " + chunk + b"\n\n: amf.trace " + trace + b"\n\ndata: [DONE]\n\n"
 
 
 def _embeddings_ok(count: int) -> bytes:
@@ -384,7 +384,7 @@ def _assert_chat_ok(
 
 
 def _trace_payload(rest: bytes, where: str) -> dict[str, object]:
-    marker = b"event: amf.trace\ndata: "
+    marker = b": amf.trace "
     assert rest.startswith(marker), f"{where}: missing trace frame {rest!r}"
     raw = rest[len(marker):]
     raw = raw.split(b"\n\n", 1)[0]

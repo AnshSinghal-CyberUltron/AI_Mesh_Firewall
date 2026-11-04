@@ -92,14 +92,14 @@ Failure analysis (verbatim): the only failure is check_tenant_scale at `gateway_
 - V10: All Python SDK cells use the loopback uvicorn server (sync `httpx.Client` cannot use `ASGITransport`).
 - V11: `x-request-id` is now sent on the 200 SSE start.
 - V12: `SSEEncoder.content(frame)` emits one merged `choices[0].delta` per frame. Three shipped codec property tests were updated to merge same-channel text.
-- V13: R1.6 "`amf.trace` never surfaces as a chunk" is not satisfiable with stock SDKs without changing the trace framing. Python yields it as a bare `ChatCompletionChunk`; Node yields `{event, data}` and `chat.completions.stream()` throws. The matrix filters the trailing trace chunk (Python) and records Node cell `c` as `xfail(strict=True)`. Needs an owner decision.
+- V13: R1.6 "`amf.trace` never surfaces as a chunk" is not satisfiable with stock SDKs without changing the trace framing. Python yields it as a bare `ChatCompletionChunk`; Node yields `{event, data}` and `chat.completions.stream()` throws. The matrix filters the trailing trace chunk (Python) and records Node cell `c` as `xfail(strict=True)`. RESOLVED 4 Nov 2026 (owner): the trace is now an SSE comment line `: amf.trace {json}`; Node cell `c` passes and both matrices assert R1.6. See `.agents/tasks/gw34/trace-comment-gate.md`.
 
 Pre-existing, left alone: the `check_tenant_scale` finding above; `request_pre_check_exceeded` renders HTTP 500 `gateway_error` (unmapped code).
 
 ## What remains for the human
 
 1. Live Docker/staging gate NOT run and not claimed: L34-1 against a real v2 boot and L34-2 live.
-2. Decide V13 (`amf.trace` framing). Until then Node matrix cell `c` is a strict xfail (node `c:0/1`).
+2. ~~Decide V13 (`amf.trace` framing).~~ Done 4 Nov 2026: SSE comment framing; Node matrix is 10/10.
 3. `check_tenant_scale` finding in `dispatch/vector_transports/pinecone_transport.py:140` (GW30). Full pytest has 1 red test until the GW30 lane fixes it.
 4. V9 follow-up: publish `tool_calls_released` / `tool_calls_withheld` as Publisher series, with matching `SERIES_COUNT` and exposition test updates.
 5. Merge: `suraj-revamp` has not been fast-forwarded. Untracked `.agents/tasks/gw34/review.md` and `review.json` are not committed here.

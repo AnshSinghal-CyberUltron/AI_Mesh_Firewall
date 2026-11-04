@@ -80,7 +80,7 @@ test("non-data lines (comments / other fields) are ignored", async () => {
   assert.equal(result.events.length, 1);
 });
 
-test("amf.trace data line is the console trace and is not assistant text", async () => {
+test("amf.trace comment line is the console trace and is not assistant text", async () => {
   const trace = {
     zeroshield: { action: "allow", request_id: "zs-1" },
     pipeline_trace: {
@@ -96,7 +96,7 @@ test("amf.trace data line is the console trace and is not assistant text", async
       ],
     },
   };
-  const frame = `event: amf.trace\ndata: ${JSON.stringify(trace)}\n\n`;
+  const frame = `: amf.trace ${JSON.stringify(trace)}\n\n`;
   const result = await consumeSSEStream(
     sseResponse([`${deltaEvent("echo")}\n\n${frame}data: [DONE]\n\n`]),
   );
@@ -128,7 +128,7 @@ test("streamed output withhold uses the trace stages, not the nine-name list", a
   const error = `data: ${JSON.stringify({
     error: { message: "withheld", type: "gateway_error", code: "output_blocked" },
   })}`;
-  const frame = `event: amf.trace\ndata: ${JSON.stringify(trace)}\n\n`;
+  const frame = `: amf.trace ${JSON.stringify(trace)}\n\n`;
   const result = await consumeSSEStream(
     sseResponse([`${deltaEvent("echo: ")}\n\n${error}\n\n${frame}`]),
   );

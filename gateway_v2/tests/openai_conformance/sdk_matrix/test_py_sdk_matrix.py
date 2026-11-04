@@ -39,18 +39,18 @@ _WEATHER_TOOL = {
 
 
 def _content_chunks(chunks: list[object]) -> list[object]:
-    """Drop the trailing ``amf.trace`` trace frame the stock SDK yields as a bare chunk.
+    """Assert every yielded chunk is a real content chunk (R1.6, GW34 V13).
 
-    FINDING (deviation from R1.6, recorded in design.md): the stock SDK's ``Stream`` yields EVERY
-    SSE event, whatever its ``event:`` name, so the gateway's named ``amf.trace`` frame arrives as
-    a ``ChatCompletionChunk`` with no ``choices`` and no id (it carries no content or tool-call
-    delta, and the ``.stream()`` accumulator ignores it). It is always last, before ``[DONE]``.
-    Hiding it from the iterator would mean changing the trace framing (e.g. to an SSE comment),
-    which changes what console consumers see: an owner decision, not made here.
+    The gateway's ``amf.trace`` frame is an SSE COMMENT line (``: amf.trace {json}``) since the
+    owner decision of 4 Nov 2026; a compliant SSE parser -- the stock SDK's ``Stream`` included --
+    skips a comment line outright, so it never reaches the iterator as a bare
+    ``ChatCompletionChunk``. This helper is kept as the R1.6 assertion point: every chunk the SDK
+    actually yields must carry ``choices``.
     """
-    traces = [c for c in chunks if not c.choices]  # type: ignore[attr-defined]
-    assert len(traces) <= 1 and (not traces or chunks[-1] is traces[0])
-    return [c for c in chunks if c.choices]  # type: ignore[attr-defined]
+    for chunk in chunks:
+        choices = chunk.choices  # type: ignore[attr-defined]
+        assert choices, f"a non-content frame (amf.trace?) reached the SDK iterator: {chunk!r}"
+    return list(chunks)
 
 
 @pytest.fixture(scope="module")
@@ -257,7 +257,11 @@ def test_json_mode_and_done_last_once(client: str, gateway) -> None:  # type: ig
             assert response.headers["x-request-id"].startswith("zs-")
             text = response.read().decode()
     assert text.count("data: [DONE]") == 1 and text.rstrip().endswith("data: [DONE]")
-    assert "event: amf.trace" in text and text.index("amf.trace") < text.index("[DONE]")
+    # GW34 V13: the trace is a single-line SSE comment, before [DONE], never a named event.
+    assert "event: amf.trace" not in text
+    [trace_line] = [ln for ln in text.splitlines() if ln.startswith(": amf.trace ")]
+    assert isinstance(json.loads(trace_line[len(": amf.trace "):]), dict)
+    assert text.index(": amf.trace ") < text.index("[DONE]")
     frames = [json.loads(line[6:]) for line in text.splitlines()
               if line.startswith("data: ") and line != "data: [DONE]" and "choices" in line]
     assert len({f["id"] for f in frames}) == 1 and len({f["model"] for f in frames}) == 1

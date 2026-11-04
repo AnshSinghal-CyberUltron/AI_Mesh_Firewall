@@ -58,7 +58,7 @@ from gateway_v2.edge.wire.sse_chunks import (
     StreamIdentity,
     ToolFragment,
 )
-from gateway_v2.edge.wire.sse_decode import SSEDecoder
+from gateway_v2.edge.wire.sse_decode import SSEDecoder, trace_comment_payload
 from gateway_v2.egress.stream import DownstreamFrame
 
 __all__ = (
@@ -75,7 +75,9 @@ __all__ = (
     "SSEEncoderTerminated",
     "SSEErrorFrame",
     "StreamIdentity",
+    "TRACE_COMMENT_PREFIX",
     "TRACE_EVENT",
+    "trace_comment_payload",
 )
 
 
@@ -87,13 +89,15 @@ __all__ = (
 #: the SDK stops iterating cleanly when it reads this sentinel (R1.2).
 DONE_MARKER = b"data: [DONE]\n\n"
 
-#: The SSE ``event:`` name that marks a NON-CONTENT trace frame (GW13, C5). A
-#: content chunk carries no ``event:`` field (the stock OpenAI SDK reads the
-#: default ``message`` event as a ``chat.completion.chunk``); a frame tagged with
-#: this named event is the gateway's own Produced_Mode trace, NOT an assistant
-#: content delta, so a client that only decodes ``chat.completion.chunk`` content
-#: ignores it. A frame-shape marker string, not a capacity-position literal.
+#: The token that marks the gateway's NON-CONTENT trace frame (GW13, C5). Since GW34 V13 (owner
+#: decision, 4 Nov 2026) the trace is an SSE COMMENT line, ``: amf.trace {json}``: every compliant
+#: SSE parser (the Python and Node ``openai`` SDKs included) skips a comment, so the trace never
+#: reaches an SDK iterator. Trace consumers (the console, the Responses translator, the decoder)
+#: read the comment explicitly. A frame-shape marker string, not a capacity-position literal.
 TRACE_EVENT = "amf.trace"
+
+#: The exact bytes a trace comment line starts with (``:`` then the marker, then one space).
+TRACE_COMMENT_PREFIX = b": " + TRACE_EVENT.encode("ascii") + b" "
 
 #: Defaults used to populate the SDK-required ``id`` / ``model`` / ``created``
 #: fields when the caller does not override them. ``DownstreamFrame`` carries
@@ -525,26 +529,19 @@ class SSEEncoder:
         return DONE_MARKER
 
     def trace(self, fields: Mapping[str, object]) -> bytes:
-        """Emit a NON-CONTENT ``amf.trace`` meta frame carrying ``fields`` (GW13, C5).
+        """Emit a NON-CONTENT ``amf.trace`` meta frame carrying ``fields`` (GW13, C5; GW34 V13).
 
-        Serialises ``fields`` (the Produced_Mode stamp
-        ``{"produced_mode": ..., "degenerated_to_strict": ...}``) as a named-event
-        SSE frame (``event: amf.trace\\n`` + ``data: {json}\\n\\n``). It is NOT a
-        ``chat.completion.chunk`` content frame — the named ``event:`` marks it as
-        the gateway's own trace, so an SDK that decodes only the default-event
-        content stream never mistakes it for an assistant delta.
+        Serialises ``fields`` (the Produced_Mode stamp plus the console object) as ONE SSE
+        COMMENT line, ``: amf.trace {json}\\n\\n``. The JSON is compact, ASCII-only and so never
+        contains a newline. A comment is skipped by every compliant SSE parser, so no SDK iterator
+        ever sees the trace (R1.6); the gateway's own consumers read the comment explicitly.
 
-        This is TRACE, not content, so it does NOT flip the encoder terminal and is
-        NOT blocked by the ``terminated`` state (the Produced_Mode stamp is emitted
-        just before the terminal ``[DONE]`` marker). Keeping it off the terminal
-        state machine means the "no content frame after a terminal frame" contract
-        (R1.3) is untouched — a trace frame is never a content frame, and ``done()``
-        / ``error()`` still refuse any subsequent :meth:`content`.
+        This is TRACE, not content, so it does NOT flip the encoder terminal and is NOT blocked by
+        the ``terminated`` state (it is emitted just before ``[DONE]`` and, after an error frame,
+        following it). ``done()`` / ``error()`` still refuse any subsequent :meth:`content`.
         """
         body = json.dumps(dict(fields), ensure_ascii=True, separators=(",", ":"))
-        return b"event: " + TRACE_EVENT.encode("ascii") + b"\ndata: " + body.encode(
-            "ascii"
-        ) + b"\n\n"
+        return TRACE_COMMENT_PREFIX + body.encode("ascii") + b"\n\n"
 
     def error(self, error_code: str) -> bytes:
         """Emit a declared ``Error_Frame`` for a posture code and go terminal (R1.3).

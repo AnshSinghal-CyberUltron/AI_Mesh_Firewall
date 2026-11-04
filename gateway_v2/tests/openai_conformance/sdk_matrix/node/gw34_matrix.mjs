@@ -33,7 +33,14 @@ async function cell(name, fn) {
 function assert(cond, msg) {
   if (!cond) throw new Error(msg);
 }
-const contentChunks = (chunks) => chunks.filter((c) => c && Array.isArray(c.choices) && c.choices.length);
+// R1.6 (GW34 V13): the `amf.trace` SSE comment is skipped by the SDK's own event source, so
+// every yielded chunk must carry real content; a non-content chunk reaching here is a regression.
+const contentChunks = (chunks) => {
+  for (const c of chunks) {
+    assert(c && Array.isArray(c.choices) && c.choices.length, `amf.trace (or another non-content frame) reached the SDK iterator: ${JSON.stringify(c)}`);
+  }
+  return chunks;
+};
 
 await cell("a", async () => {
   const r = await client.chat.completions.create({ model: MODEL, messages: marker("plain") });
@@ -56,6 +63,9 @@ await cell("b", async () => {
 });
 
 await cell("c", async () => {
+  // GW34 V13 (owner decision, 4 Nov 2026): `amf.trace` is an SSE comment line, so the
+  // `.stream()` helper's own event source skips it instead of throwing "chunk.choices is
+  // not iterable" on the named `event: amf.trace` frame it used to receive.
   const stream = client.beta.chat.completions.stream({ model: MODEL, messages: marker("tool"), tools: [TOOL] });
   const final = await stream.finalChatCompletion();
   const call = final.choices[0].message.tool_calls[0];

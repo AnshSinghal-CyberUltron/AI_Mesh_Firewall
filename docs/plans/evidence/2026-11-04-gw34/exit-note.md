@@ -34,7 +34,7 @@ Report: `sdk-matrix-report.json` (written by `sdk_matrix/conftest.py`).
 |---|---|---|---|---|
 | python-sync (openai 3.42.1) | 13 | 13 | 0 | none |
 | python-async (openai 3.42.1) | 13 | 13 | 0 | none |
-| node (openai 4.104.0) | 10 | 9 | 0 | cell `c` xfail (see below) |
+| node (openai 4.104.0) | 10 | 10 | 0 | none (cell `c` was a strict xfail until V13 was resolved on 4 Nov 2026) |
 
 Plus the wire-mode cells (real `OpenAIUpstreamProvider` over a loopback fake upstream with seeded random
 byte splits, 12 variants), the D8 `ASGITransport` buffering probe, `/v1/files` 404 (exactly one request),
@@ -43,11 +43,22 @@ and 14 wire profiles. Closing rule satisfied: Python SDK and Node loopback cells
 
 ## Open findings (owner decisions; nothing below was changed)
 
-1. **`amf.trace` vs the stock SDKs (requirement R1.6 cannot be met as written).** Python yields the trace
-   as a bare trailing `ChatCompletionChunk` (no `choices`, no id; the `.stream()` helper ignores it). Node
-   yields `{event, data}` and its `chat.completions.stream()` helper throws "chunk.choices is not iterable".
-   Fixing it changes the trace framing consumers see (SSE comment, or an in-band `choices: []` chunk like
-   OpenAI's usage chunk). Node cell `c` is `xfail(strict=True)`. Options and effect were sent to the owner.
+1. **RESOLVED 4 Nov 2026 (owner decision).** `amf.trace` vs the stock SDKs (R1.6) is fixed: the frame is
+   now an SSE COMMENT line, `: amf.trace {compact json}\n\n` (`SSEEncoder.trace`), same payload and
+   position (after the finish chunk, before `[DONE]`). A comment is skipped by every compliant SSE
+   parser, so neither SDK iterator ever sees it. Consumers updated: `edge/wire/sse.py`
+   (`SSEEncoder.trace`), `edge/wire/sse_decode.py` (`SSEDecoder.trace` / `trace_comment_payload`, new),
+   `edge/wire/responses_events.py` (`_trace_comment` / `_trace_frame`), `frontend/src/utils/liveGateway.js`
+   (`consumeSSEStream`), and every test asserting `event: amf.trace` (`test_stream_output_trace.py`,
+   `test_v2_leaks_enforcement_preservation.py`, `test_lgw12_asgi_conformance.py`,
+   `test_py_sdk_matrix.py`, `test_node_sdk_matrix.py` / `node/gw34_matrix.mjs`,
+   `tests/openai_conformance/wire_contract.py` comment). New `test_gw34_trace_comment.py` asserts the
+   comment is one line, round-trips, and the decoder/translator fail closed on a malformed comment.
+   Node matrix cell `c` is a normal passing test (`strict=True` xfail removed); both SDK matrices assert
+   R1.6 directly. `control/` and `gateway/` (v1) were searched: no consumer of the v2 named event exists
+   there (the v1 `gateway/ai_mesh_gateway` trace frame is an unrelated, pre-existing in-band
+   `choices: []` chunk shape, untouched). Full command outputs:
+   `.agents/tasks/gw34/trace-comment-gate.md`.
 2. **Tool-call counters** `tool_calls_released/withheld` are on `RequestHolds` and in the audit `detail`
    (digits) but are NOT exported as new Publisher series (pinned `SERIES_COUNT`, R15). Follow-up.
 3. **Pre-existing:** `tests/gates/test_check_tenant_scale.py` fails on the untouched tree
