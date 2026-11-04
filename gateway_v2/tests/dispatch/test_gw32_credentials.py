@@ -73,8 +73,8 @@ def test_property_5_negative_control_a_leaking_repr_is_caught() -> None:
     assert any(secret[:8] in sink for sink in leaking_sinks)  # the property's check flags it
 
 
-# Feature: gw32-mcp-transport, Property 6: render validity
-def test_property_6_render_rules() -> None:
+# Feature: gw32-mcp-transport, Property 7: header validation
+def test_property_7_render_rules() -> None:
     rng = random.Random(6)
     for _ in range(ITERATIONS):
         secret = _secret(rng)
@@ -339,3 +339,43 @@ def test_control_404_and_5xx_and_short_secret() -> None:
         ControlCredentialClient(
             base_url="http://control.example.com", internal_key="k", call=Control({}), bounds=BOUNDS
         )
+
+
+class PerOrgControl:
+    """Control fake whose answer depends on the `X-Org-Slug` it is asked with."""
+
+    def __init__(self, by_org: dict[str, str]) -> None:
+        self.by_org = by_org
+
+    async def __call__(
+        self,
+        method: str,
+        url: str,
+        headers: Mapping[str, str],
+        query: Mapping[str, str],
+        body: Mapping[str, object] | None,
+        timeout_s: float,
+        max_bytes: int,
+    ) -> tuple[int, bytes]:
+        token = self.by_org.get(headers["X-Org-Slug"])
+        if token is None:
+            return 404, b"{}"
+        return 200, json.dumps({"auth_type": "bearer", "token": token, "version": 1}).encode()
+
+
+# Feature: gw32-mcp-transport, Property 6: org isolation
+def test_property_6_two_orgs_same_slug_never_share_a_credential() -> None:
+    rng = random.Random(6)
+    for _ in range(ITERATIONS // 4):
+        tokens = {"org-a": _secret(rng, 20), "org-b": _secret(rng, 20)}
+        control = PerOrgControl(tokens)
+        service, cache = _service(control, _endpoint())  # type: ignore[arg-type]
+        order = [("org-a", "s"), ("org-b", "s"), ("org-c", "s"), ("org-a", "s"), ("org-b", "s")]
+        rng.shuffle(order)
+        for org, slug in order:
+            out = asyncio.run(service.acquire(org, slug, "bearer"))
+            if org in tokens:
+                assert isinstance(out, UpstreamCredential) and out.token == tokens[org]
+            else:
+                assert isinstance(out, CredentialRefusal)  # an org with no credential gets none
+        assert {k[0] for k in cache.keys()} <= set(tokens)

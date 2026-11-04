@@ -136,7 +136,7 @@ def test_property_3_admitted_never_exceeds_cap_plus_declared_overshoot() -> None
     assert total <= 10
 
 
-# Feature: gw32-mcp-transport, Property 4: Retry-After is bounded by the window
+# Feature: gw32-mcp-transport, Property 4b: Retry-After is bounded by the window (R17.2)
 def test_property_4_retry_after_bounds() -> None:
     rng = random.Random(4)
     for it in range(ITERATIONS):
@@ -155,7 +155,7 @@ def test_property_4_retry_after_bounds() -> None:
     fleet.drop_refills()
 
 
-# Feature: gw32-mcp-transport, Property 3b: a store outage never admits beyond held + bootstrap
+# Feature: gw32-mcp-transport, Property 4: cap fail-closed (outage admits <= held + bootstrap)
 def test_cap_outage_property() -> None:
     rng = random.Random(33)
     for it in range(ITERATIONS // 4):
