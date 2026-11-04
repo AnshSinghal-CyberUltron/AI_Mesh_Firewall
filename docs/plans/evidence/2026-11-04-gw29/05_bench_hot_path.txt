@@ -1,0 +1,6 @@
+loops=20000 (injected clocks, in-process, single thread)
+N1 gate.decide clean (no incident)                3.04 us/call
+N1 gate.decide rerouted (isolation)               7.63 us/call
+N1 gate.decide refused (global kill)              2.72 us/call
+N2 per-chunk switches.evaluate (clean)            0.88 us/call
+N2 per-chunk switches.evaluate (engaged)          0.90 us/call
