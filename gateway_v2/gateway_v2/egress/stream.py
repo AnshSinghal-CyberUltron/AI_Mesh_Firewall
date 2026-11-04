@@ -64,6 +64,7 @@ from gateway_v2.domain import (
     StreamingMode,
     most_restrictive,
 )
+from gateway_v2.domain.channels import META_CHANNELS
 from gateway_v2.egress.holdback_tradeoff import (
     TRADE_OFF_OUTCOMES,
     TRADE_OFF_REDACT_REMAINDER,
@@ -414,6 +415,12 @@ class StreamPipeline:
 
                 seen: set[str] = set()
                 for channel, delta in chunk.text_deltas:
+                    if channel in META_CHANNELS:
+                        # GW34: a meta channel (``finish_reason``) is not text: pass it through
+                        # unscanned and unheld (the decoder already checked it against a closed
+                        # set). Not a content frame, so ``frames_out`` does not count it.
+                        await send(DownstreamFrame(text_deltas=((channel, delta),)))
+                        continue
                     seen.add(channel)
                     text = texts.get(channel)
                     if text is None:
