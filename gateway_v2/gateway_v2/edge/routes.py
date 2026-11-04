@@ -433,6 +433,7 @@ class ChatRoute:
         encoder = SSEEncoder()
         await _start_sse(send)
         if verdict.code is not None:
+            holds.note_failure(verdict.code)  # GW35: no provider opened; audit reads the cause
             await _send_sse(send, errors.render_sse(verdict.code))
             await _end_sse(send)
             return

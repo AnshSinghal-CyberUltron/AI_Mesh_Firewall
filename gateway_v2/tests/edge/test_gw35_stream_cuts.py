@@ -173,3 +173,14 @@ def test_a_pipeline_output_block_with_a_decision_keeps_its_rule() -> None:
     assert payload is not None
     guard = next(s for s in payload["pipeline_trace"]["stages"] if s["name"] == "output_guardrail")  # type: ignore[index]
     assert guard["action"] == "block" and guard["deciding_rule"] == "fw-pii-output"
+
+
+def test_a_stream_refused_before_the_provider_opens_is_a_routing_error_in_the_audit() -> None:
+    holds = _holds(dispatched=False)
+    holds.note_failure(posture.STREAM_BUFFER_UNAVAILABLE)
+    records: list[AuditRecord] = []
+    emit_chat_audit(lambda r: records.append(r) or True, holds, None)
+    console = records[0].detail["console"]
+    stages = {s["name"]: (s["action"], s["ran"]) for s in console["pipeline_trace"]["stages"]}  # type: ignore[index]
+    assert stages["model_routing"] == ("error", True)
+    assert console["zeroshield"]["action"] == "error"  # type: ignore[index]

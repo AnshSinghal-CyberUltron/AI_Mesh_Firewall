@@ -277,3 +277,6 @@ The owner asked on 2 November to proceed on defaults. They are working defaults 
 ## Owner decisions still written as open in v3.1
 
 §00.7 items 7 through 12 are unchanged: egress against the $5,000 envelope, the latency-tail trim share, whether holdback counts in the 20 ms SLO, confirming the surface-scoping reversal, the MCP client URL, and whether six-stage Scan Detail is signed. Item 10 is the one this slice touches. Findings that reach the resolver are filtered by surface, and a refused regex is skipped when the route surface is not in the rule's list. The streaming chat detector receives the route surface. The document still asks for confirmation, and this file does not pretend that sentence was signed.
+
+## GW35 (4 November 2026): local half built, not exited
+Auth and Rate Limit now show the real outcome, an upstream failure shows `error` and no longer `output_guardrail: block`, and a rejected key leaves an audit row under `_unauthenticated`. The live stack run, the Playwright sweep, the browser walk and the owner signatures were not done, so the card does not exit. See `docs/plans/evidence/2026-11-04-gw35/SUMMARY.md`.
