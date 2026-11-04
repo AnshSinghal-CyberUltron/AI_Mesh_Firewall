@@ -68,7 +68,8 @@ def write_plan(
         "org_id": ORG,
         "streaming_mode": "incremental",
         "rules": rules
-        or [rule("inert", ("zz-never-matches-zz",), action="block", scope="input", surfaces=["chat"])],
+        or [rule("inert", ("zz-never-matches-zz",), action="block", scope="input",
+                 surfaces=["chat"])],
     }
     if rag_settings is not None:
         body["rag_settings"] = dict(rag_settings)

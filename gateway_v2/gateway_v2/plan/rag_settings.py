@@ -7,6 +7,7 @@ read path: ``rag_max_documents`` above the ceiling is clamped DOWN, never widene
 """
 from __future__ import annotations
 
+import dataclasses
 import json
 import math
 from collections.abc import Mapping
@@ -101,6 +102,10 @@ class EffectiveRag:
     rag_tier2_enabled: bool
     top_k: int
     settings_clamped: bool
+
+    def capped(self, top_k: int) -> EffectiveRag:
+        """The same settings with a smaller per-request ``top_k``. Never widens."""
+        return dataclasses.replace(self, top_k=min(top_k, self.top_k))
 
 
 def effective_settings(plan: ExecutionPlan, contract: ResourceContract) -> EffectiveRag:

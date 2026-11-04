@@ -163,33 +163,36 @@
   {
    "callers": [
     "frontend/src/components/howToUseContent.js",
-    "gateway/ai_mesh_gateway/main.py"
+    "gateway/ai_mesh_gateway/main.py",
+    "gateway_v2/gateway_v2/edge/rag_entries.py"
    ],
-   "decision": "retire",
-   "owner": "GW18",
+   "decision": "build",
+   "owner": "GW31",
    "path": "/v1/rag/collections",
-   "reason": "RAG and vector belong to GW18. gateway-v2 does not add a success body for them."
+   "reason": "GW31 serves this route over the shipped GW30 adapter (edge/rag_entries.py). It is no longer a 501 placeholder."
   },
   {
    "callers": [
-    "gateway/ai_mesh_gateway/main.py"
+    "gateway/ai_mesh_gateway/main.py",
+    "gateway_v2/gateway_v2/edge/rag_entries.py"
    ],
-   "decision": "retire",
-   "owner": "GW18",
+   "decision": "build",
+   "owner": "GW31",
    "path": "/v1/rag/documents",
-   "reason": "RAG and vector belong to GW18. gateway-v2 does not add a success body for them."
+   "reason": "GW31 serves this route over the shipped GW30 adapter (edge/rag_entries.py). It is no longer a 501 placeholder."
   },
   {
    "callers": [
     "frontend/src/components/howToUseContent.js",
     "frontend/src/components/simulator/RAGIngestionPanel.jsx",
     "gateway/ai_mesh_gateway/main.py",
-    "gateway/ai_mesh_gateway/vector_routes.py"
+    "gateway/ai_mesh_gateway/vector_routes.py",
+    "gateway_v2/gateway_v2/edge/rag_entries.py"
    ],
-   "decision": "retire",
-   "owner": "GW18",
+   "decision": "build",
+   "owner": "GW31",
    "path": "/v1/rag/ingest",
-   "reason": "RAG and vector belong to GW18. gateway-v2 does not add a success body for them."
+   "reason": "GW31 serves this route over the shipped GW30 adapter (edge/rag_entries.py). It is no longer a 501 placeholder."
   },
   {
    "callers": [
@@ -201,12 +204,12 @@
     "frontend/src/lib/gatewayFetch.js",
     "gateway/ai_mesh_gateway/main.py",
     "gateway/ai_mesh_gateway/vector_routes.py",
-    "gateway_v2/gateway_v2/edge/routes.py"
+    "gateway_v2/gateway_v2/edge/rag_entries.py"
    ],
-   "decision": "retire",
-   "owner": "GW18",
+   "decision": "build",
+   "owner": "GW31",
    "path": "/v1/rag/query",
-   "reason": "The owning card is not GW14b. The route stays the existing 501 placeholder, and this card does not add a success body."
+   "reason": "GW31 serves this route over the shipped GW30 adapter (edge/rag_entries.py). It is no longer a 501 placeholder."
   },
   {
    "callers": [
@@ -222,41 +225,44 @@
   },
   {
    "callers": [
-    "gateway/ai_mesh_gateway/vector_routes.py"
+    "gateway/ai_mesh_gateway/vector_routes.py",
+    "gateway_v2/gateway_v2/edge/rag_entries.py"
    ],
-   "decision": "retire",
-   "owner": "GW18",
+   "decision": "build",
+   "owner": "GW31",
    "path": "/v1/vector/config",
-   "reason": "RAG and vector belong to GW18. gateway-v2 does not add a success body for them."
-  },
-  {
-   "callers": [
-    "gateway/ai_mesh_gateway/vector_routes.py"
-   ],
-   "decision": "retire",
-   "owner": "GW18",
-   "path": "/v1/vector/delete",
-   "reason": "RAG and vector belong to GW18. gateway-v2 does not add a success body for them."
+   "reason": "GW31 serves this route over the shipped GW30 adapter (edge/rag_entries.py). It is no longer a 501 placeholder."
   },
   {
    "callers": [
     "gateway/ai_mesh_gateway/vector_routes.py",
-    "gateway_v2/gateway_v2/edge/routes.py"
+    "gateway_v2/gateway_v2/edge/rag_entries.py"
    ],
-   "decision": "retire",
-   "owner": "GW18",
+   "decision": "build",
+   "owner": "GW31",
+   "path": "/v1/vector/delete",
+   "reason": "GW31 serves this route over the shipped GW30 adapter (edge/rag_entries.py). It is no longer a 501 placeholder."
+  },
+  {
+   "callers": [
+    "gateway/ai_mesh_gateway/vector_routes.py",
+    "gateway_v2/gateway_v2/edge/rag_entries.py"
+   ],
+   "decision": "build",
+   "owner": "GW31",
    "path": "/v1/vector/query",
-   "reason": "The owning card is not GW14b. The route stays the existing 501 placeholder, and this card does not add a success body."
+   "reason": "GW31 serves this route over the shipped GW30 adapter (edge/rag_entries.py). It is no longer a 501 placeholder."
   },
   {
    "callers": [
     "gateway/ai_mesh_gateway/main.py",
-    "gateway/ai_mesh_gateway/vector_routes.py"
+    "gateway/ai_mesh_gateway/vector_routes.py",
+    "gateway_v2/gateway_v2/edge/rag_entries.py"
    ],
-   "decision": "retire",
-   "owner": "GW18",
+   "decision": "build",
+   "owner": "GW31",
    "path": "/v1/vector/upsert",
-   "reason": "RAG and vector belong to GW18. gateway-v2 does not add a success body for them."
+   "reason": "GW31 serves this route over the shipped GW30 adapter (edge/rag_entries.py). It is no longer a 501 placeholder."
   }
  ]
 }

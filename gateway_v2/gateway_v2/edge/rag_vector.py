@@ -9,7 +9,6 @@ structural.
 """
 from __future__ import annotations
 
-import dataclasses
 import math
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -88,7 +87,7 @@ class RagVectorRoute:
             top_k = body["top_k"]
             if isinstance(top_k, bool) or not isinstance(top_k, int) or top_k < 1:
                 raise RagRefused(posture.RAG_INVALID_REQUEST)
-            eff = dataclasses.replace(eff, top_k=min(top_k, eff.top_k))
+            eff = eff.capped(top_k)
         timeout_s = chat.contract.vector_operation_timeout_s()
         got = await run_retriever(
             chat, deps, s.plan, eff, surface=Surface.VECTOR, org_id=s.org_id, project=ns.project,

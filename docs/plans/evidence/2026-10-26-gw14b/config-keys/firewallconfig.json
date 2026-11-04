@@ -470,7 +470,7 @@
    "kind": "BooleanField",
    "line": 1240,
    "name": "rag_enabled",
-   "quoted_in_gateway_v2": false,
+   "quoted_in_gateway_v2": true,
    "quoted_in_v1_gateway": true,
    "read_only": false
   },
@@ -479,7 +479,7 @@
    "kind": "BooleanField",
    "line": 1244,
    "name": "vector_db_isolation",
-   "quoted_in_gateway_v2": false,
+   "quoted_in_gateway_v2": true,
    "quoted_in_v1_gateway": true,
    "read_only": false
   },
@@ -488,7 +488,7 @@
    "kind": "PositiveIntegerField",
    "line": 1248,
    "name": "rag_max_documents",
-   "quoted_in_gateway_v2": false,
+   "quoted_in_gateway_v2": true,
    "quoted_in_v1_gateway": false,
    "read_only": false
   },
@@ -497,7 +497,7 @@
    "kind": "FloatField",
    "line": 1253,
    "name": "rag_relevance_threshold",
-   "quoted_in_gateway_v2": false,
+   "quoted_in_gateway_v2": true,
    "quoted_in_v1_gateway": true,
    "read_only": false
   },
@@ -506,7 +506,7 @@
    "kind": "BooleanField",
    "line": 1258,
    "name": "rag_redaction_enabled",
-   "quoted_in_gateway_v2": false,
+   "quoted_in_gateway_v2": true,
    "quoted_in_v1_gateway": true,
    "read_only": false
   },
@@ -515,7 +515,7 @@
    "kind": "BooleanField",
    "line": 1266,
    "name": "rag_tier2_enabled",
-   "quoted_in_gateway_v2": false,
+   "quoted_in_gateway_v2": true,
    "quoted_in_v1_gateway": true,
    "read_only": false
   },
