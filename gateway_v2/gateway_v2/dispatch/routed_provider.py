@@ -198,6 +198,10 @@ class RoutedProvider:
     ) -> AsyncIterator[UpstreamEvent]:
         return self._run(request, ctx)
 
+    def serves_alias(self, name: str) -> bool:
+        """True iff a NON-passthrough candidate lists ``name`` (passthrough does not count)."""
+        return any(name in c.served_models for c in self._table.all_candidates())
+
     async def abort(self) -> None:
         """No-op: the consumer cuts a request by closing its iterator (D-6)."""
         return None

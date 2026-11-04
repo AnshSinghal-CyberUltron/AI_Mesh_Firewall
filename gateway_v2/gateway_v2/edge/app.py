@@ -50,6 +50,7 @@ from typing import Protocol, runtime_checkable
 
 from gateway_v2.audit.record import AuditRecord
 from gateway_v2.dispatch.provider import ProviderClient
+from gateway_v2.dispatch.routed_provider import RoutedProvider
 from gateway_v2.dispatch.routing import DispatchRouter
 from gateway_v2.dispatch.transform import Transform
 from gateway_v2.edge import errors
@@ -250,6 +251,7 @@ def build_app(
     mcp: McpDeps | None = None,
     observer: OutcomeObserver | None = None,
     holdback_metrics: HoldbackMetrics | None = None,
+    routing: RoutedProvider | None = None,
 ) -> ASGIApplication:
     """Assemble the raw-ASGI serving skin (R2.1).
 
@@ -287,9 +289,8 @@ def build_app(
     ``edge``. Returns the ``async def app(scope, receive, send)`` callable.
     """
     cfg, _cfg_logs = load_holdback_config()
-    # C38 serving-loop discipline (R13.1): the GIL-releasing executor the CPU-bound scan work is
-    # offloaded to, sized by `contract.pool_size(PoolKind.SCANNER)` (no thread-count literal); built
-    # once at assembly, shared across every stream, released on lifespan shutdown.
+    # C38 (R13.1): the GIL-releasing scan executor, sized by `pool_size(PoolKind.SCANNER)` (no
+    # thread-count literal); built once, shared across every stream, released on lifespan shutdown.
     scan_executor = ScanExecutor(contract=contract)
     chat = _build_chat_route(
         contract=contract,
@@ -313,6 +314,7 @@ def build_app(
         audit=audit,
         observer=observer,
         holdback_metrics=holdback_metrics,
+        routing=routing,
     )
     misc = _build_misc_route(
         contract=contract,
@@ -367,6 +369,7 @@ def _build_chat_route(
     audit: Callable[[AuditRecord], bool] | None = None,
     observer: OutcomeObserver | None = None,
     holdback_metrics: HoldbackMetrics | None = None,
+    routing: RoutedProvider | None = None,
 ) -> ChatRoute:
     """Construct the single chat route. Unwired deps use their fail-closed defaults.
 
@@ -404,6 +407,7 @@ def _build_chat_route(
         audit=audit,
         observer=observer,
         holdback_metrics=holdback_metrics if holdback_metrics is not None else HoldbackMetrics(),
+        routing=routing,
     )
 
 

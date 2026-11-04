@@ -43,6 +43,7 @@ from gateway_v2.dispatch.provider import UpstreamRequest
 from gateway_v2.dispatch.transform import GatewayRequest
 from gateway_v2.domain import Decision
 from gateway_v2.domain.plan import ExecutionPlan, Phase, PlanUnavailable, PlanUnknownTenant, Surface
+from gateway_v2.domain.posture import ROUTING_UNKNOWN_MODEL
 from gateway_v2.edge.chat_lifecycle import (
     REFUSE_BUDGET_UNAVAILABLE,
     REFUSE_IDENTITY_UNRESOLVED,
@@ -56,6 +57,7 @@ from gateway_v2.edge.chat_lifecycle import (
     LifecycleOutcome,
     _refused,
 )
+from gateway_v2.edge.chat_upstream import routing_context
 from gateway_v2.edge.dev_components import bind_surface
 from gateway_v2.edge.identity_resolver import TenantIdentity, hashed_bearer_key, identity_of
 from gateway_v2.edge.input_enforcement import (
@@ -633,6 +635,14 @@ class ChatSurface:
         body = with_openai_body(upstream.body, req, self._deps.contract)
         if body is None:
             return _refused(REFUSE_LIFECYCLE_INCOMPLETE, request_id=request_id)
+        routing = getattr(self._deps, "routing", None)  # duck-typed test deps may lack it
+        if routing is not None:  # GW28: config refusals only, zero provider calls, no snapshot read
+            max_len = self._deps.contract.routing_max_identifier_len()
+            ctx = routing_context(plan, body, request_id, _drop_decision, max_ident_len=max_len)
+            code = routing.preflight(ctx)
+            if code is not None:
+                refusal = "model_not_found" if code == ROUTING_UNKNOWN_MODEL else code
+                return _refused(refusal, request_id=request_id)
         return LifecycleOutcome(
             plan=plan, destination=upstream.destination, body=body, refuse_code=None
         )
@@ -710,3 +720,7 @@ class ChatSurface:
             scan_failure_code=REFUSE_INPUT_SCAN_FAILURE,
         )
         await emit_enforced_chat(send, self._deps, req, plan, enforced, holds)
+
+
+def _drop_decision(_decision: object) -> None:
+    """Preflight sink: a configuration refusal records nothing (no provider was contacted)."""

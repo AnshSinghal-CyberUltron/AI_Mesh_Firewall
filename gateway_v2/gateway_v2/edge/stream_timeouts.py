@@ -118,7 +118,14 @@ class StreamTimeouts:
     from stream start. No module-level mutable; the per-request instance carries it.
     """
 
-    __slots__ = ("_clock", "_contract", "_kill_latch", "_last_write_s")
+    __slots__ = (
+        "_clock",
+        "_contract",
+        "_first_event_s",
+        "_first_pending",
+        "_kill_latch",
+        "_last_write_s",
+    )
 
     def __init__(
         self,
@@ -126,8 +133,13 @@ class StreamTimeouts:
         contract: ResourceContract,
         kill_latch: KillLatch,
         clock: Callable[[], float],
+        first_event_s: float | None = None,
     ) -> None:
         self._contract = contract
+        # GW28 D-13/D-18: when routing is on, the FIRST next-event await uses this wider bound and
+        # the idle clock is re-seeded once it returns. ``None`` leaves behaviour byte-identical.
+        self._first_event_s = first_event_s
+        self._first_pending = first_event_s is not None
         self._kill_latch = kill_latch
         self._clock = clock
         # The last completed-write clock reading seeds from stream start so the first write's
@@ -144,10 +156,20 @@ class StreamTimeouts:
         and the handler renders the declared ``Error_Frame``), and :class:`StreamTimeout` is
         raised so the serving loop unwinds and releases resources (R9.2, fail closed).
         """
+        first = self._first_pending
+        self._first_pending = False
+        limit = self._contract.inter_chunk_timeout_s()
+        if first and self._first_event_s is not None:
+            limit = self._first_event_s
         try:
-            return await asyncio.wait_for(awaitable, timeout=self._contract.inter_chunk_timeout_s())
+            result = await asyncio.wait_for(awaitable, timeout=limit)
         except TimeoutError as exc:
             raise self._cut(posture.STREAM_INTER_CHUNK_TIMEOUT) from exc
+        if first:
+            # D-18: idle measures client back-pressure, not upstream latency, so the clock
+            # restarts when the first upstream event of ANY kind has arrived.
+            self._last_write_s = self._clock()
+        return result
 
     async def send(self, do_send: Callable[[], Awaitable[None]]) -> None:
         """Perform one downstream write under the Write_Timeout + Idle_Timeout (R9.3/R9.4).

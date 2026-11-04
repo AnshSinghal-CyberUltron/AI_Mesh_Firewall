@@ -40,6 +40,7 @@ from gateway_v2.audit.record import AuditRecord
 from gateway_v2.detect.holdback import TokenIndex
 from gateway_v2.detect.windowing import max_pattern_length
 from gateway_v2.dispatch.provider import ProviderClient, UpstreamRequest
+from gateway_v2.dispatch.routed_provider import RoutedProvider
 from gateway_v2.dispatch.routing import DispatchRouter
 from gateway_v2.dispatch.transform import Transform
 from gateway_v2.domain.plan import ExecutionPlan, Phase, Surface
@@ -68,6 +69,7 @@ from gateway_v2.edge.chat_deps import (
     no_findings_detector,
     unresolved_snapshot_source,
 )
+from gateway_v2.edge.chat_upstream import open_chat_upstream
 from gateway_v2.edge.console_projection import (
     apply_projection,
     console_from_holds,
@@ -288,6 +290,8 @@ class ChatRoute:
     holdback_metrics: HoldbackMetrics = HoldbackMetrics()
     #: GW26. A set phase factory enforces only rules that name this surface.
     surface: Surface = Surface.CHAT
+    #: GW28. ``None`` keeps today's single plain provider; set, the two chat open sites route.
+    routing: RoutedProvider | None = None
 
     async def handle(self, scope: ASGIScope, receive: ASGIReceive, send: ASGISend) -> None:
         """Serve a chat/completions request end-to-end (R2.2, R7, R10, §10.4).
@@ -476,6 +480,13 @@ class ChatRoute:
             contract=self.contract,
             kill_latch=kill_latch,
             clock=self.clock,
+            first_event_s=(
+                None
+                if self.routing is None
+                else self.contract.routing_pre_content_budget_s(
+                    self.contract.routing_max_attempts()
+                )
+            ),
         )
 
         async def _sink(frame: DownstreamFrame) -> None:
@@ -668,7 +679,7 @@ class ChatRoute:
             # once dispatched"). On a no-splice RETRY this only re-sets a flag (idempotent).
             holds.mark_dispatched()
             chunks = _as_chunks(
-                self.provider.open(request),
+                open_chat_upstream(self, plan, request, holds),
                 coalescer,
                 control,
                 timeouts,

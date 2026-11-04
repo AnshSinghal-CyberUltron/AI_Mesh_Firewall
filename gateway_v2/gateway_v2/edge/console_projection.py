@@ -9,15 +9,17 @@ not run is ``ran: false`` and ``action: skip``. The body action and
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING
 
 from gateway_v2.audit.console_schema import SOURCE, validate_console
 from gateway_v2.domain.decision import Disposition, most_restrictive
 from gateway_v2.edge import errors
+from gateway_v2.edge.routing_trace import deciding_rule
 from gateway_v2.edge.wire.sse import SSEEncoder
 
 if TYPE_CHECKING:
+    from gateway_v2.dispatch.routing_types import RoutingDecision
     from gateway_v2.edge.request_holds import RequestHolds
 
 _ACTION_HEADER = "x-zeroshield-action"
@@ -40,16 +42,32 @@ def chat_console(
     provider_called: bool,
     input_rule: str = "",
     output_rule: str = "",
+    routing: Sequence[RoutingDecision] = (),
+    routing_alias: str = "-",
 ) -> dict[str, object]:
-    """The console object for one chat. ``output_action`` is None when output did not run."""
+    """The console object for one chat. ``output_action`` is None when output did not run.
+
+    ``routing`` (GW28) is the request's own decision list; its last entry maps onto the
+    ``model_routing`` stage: a refusal is ``skip``/not-ran, anything else keeps today's action,
+    and ``deciding_rule`` packs ``reason|selected|attempt|remapped_from|alias``. Default ``()``
+    leaves every existing caller byte-identical.
+    """
     final = input_action if output_action is None else _stricter(input_action, output_action)
     model_ran = provider_called
+    route_action = "allow" if model_ran else "skip"
+    route_ran = model_ran
+    route_rule = ""
+    if routing:
+        last = routing[-1]
+        route_rule = deciding_rule(last, routing_alias)
+        if last.refusal_code is not None:
+            route_action, route_ran = "skip", False
     output_shown = "skip" if output_action is None else output_action
     stages: list[dict[str, object]] = [
         _stage("auth", "allow", True, ""),
         _stage("rate_limit", "allow", True, ""),
         _stage("input_scan", input_action, True, input_rule if input_action != "allow" else ""),
-        _stage("model_routing", "allow" if model_ran else "skip", model_ran, ""),
+        _stage("model_routing", route_action, route_ran, route_rule),
         _stage("model_output", "allow" if model_ran else "skip", model_ran, ""),
         _stage(
             "output_guardrail",
@@ -84,6 +102,7 @@ def console_from_holds(
     rule = decision.deciding_rules[0] if decision.deciding_rules else ""
     output = holds.output_decision
     output_rule = output.deciding_rules[0] if output is not None and output.deciding_rules else ""
+    trace = holds.routing_trace
     return chat_console(
         request_id=holds.request_id,
         plan_version=decision.plan_version,
@@ -92,6 +111,8 @@ def console_from_holds(
         provider_called=provider_called,
         input_rule=rule,
         output_rule=output_rule,
+        routing=() if trace is None else trace.decisions(),
+        routing_alias="-" if trace is None else trace.alias,
     )
 
 
