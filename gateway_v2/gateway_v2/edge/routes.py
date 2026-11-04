@@ -106,6 +106,8 @@ from gateway_v2.edge.openai_misc import (
 )
 from gateway_v2.edge.openai_misc_models import ModelsSurface
 from gateway_v2.edge.outcome_metrics import OutcomeObserver
+from gateway_v2.edge.output_detectors import build_output_detectors
+from gateway_v2.edge.output_length import bounded_upstream
 from gateway_v2.edge.phase_resolvers import PhaseResolverFactory, resolver_for
 from gateway_v2.edge.rag_deps import RagDeps
 from gateway_v2.edge.request_holds import RequestHolds
@@ -649,23 +651,14 @@ class ChatRoute:
     ) -> StreamAttempt | None:
         """Yield the next eligible stream attempt, or ``None`` when none remains (R7.1).
 
-        There is exactly ONE signed upstream to try (a signed fallback chain is a later card), so
-        the first call returns an attempt and every later call returns ``None`` — the ``offered``
-        one-way latch records that the sole provider response has been handed out, so a byte-less
-        failure is NOT retried against the same provider forever and there is nothing further to
-        splice. :func:`run_with_no_splice` only invokes this factory while the first-byte latch
-        still permits a retry, so a fresh attempt is impossible once a byte is on the wire.
-
-        The attempt builds the pipeline via ``select_pipeline(plan, ...)`` (GW13 C4) — the
-        resolved ``ExecutionPlan.streaming_mode`` selects the INCREMENTAL ``StreamPipeline`` or
-        the STRICT_WITHHOLD ``StrictWithholdPipeline`` and drives the enforcing-output set (R2.3),
-        replacing the old pass-through flag — opens the injected ``ProviderClient`` to the
-        plan-derived
-        ``destination`` with the transformed ``body`` (replacing the old ``_DEFAULT_DESTINATION`` /
-        ``_EMPTY_BODY`` stand-ins, R2.2 / R8.4), hands the per-request :class:`KillLatch` to
-        ``pipeline.run`` as the ``killed()`` seam, and threads the :class:`InFlightControl` +
-        :class:`StreamTimeouts` into :func:`_as_chunks` (every R10 trigger at each chunk boundary,
-        R10.2-R10.7; the Inter_Chunk_Timeout on the next-event await, R9.2).
+        There is exactly ONE signed upstream to try, so the first call returns an attempt and every
+        later call returns ``None`` (the ``offered`` latch); :func:`run_with_no_splice` only invokes
+        this while the first-byte latch still permits a retry. The attempt builds the pipeline via
+        ``select_pipeline(plan, ...)`` (GW13 C4: ``streaming_mode`` selects INCREMENTAL or
+        STRICT_WITHHOLD), opens the provider to the plan-derived ``destination`` with the verified
+        ``body``, hands the :class:`KillLatch` to ``pipeline.run`` as the ``killed()`` seam, and
+        threads :class:`InFlightControl` + :class:`StreamTimeouts` into :func:`_as_chunks`
+        (R9.2, R10.2-R10.7). GW33 bounds the upstream with ``bounded_upstream`` (D-13).
         """
         if offered.is_set():
             return None
@@ -673,7 +666,7 @@ class ChatRoute:
 
         async def _attempt() -> bool:
             try:
-                pipeline = self._build_pipeline(plan)
+                pipeline = self._build_pipeline(plan, holds)
             except EnforcementUndetermined:
                 # Defensive: the proceed outcome carries a resolved plan, so `for_plan` resolves
                 # the enforcing-output set without raising. Were the enforcement state ever
@@ -693,18 +686,21 @@ class ChatRoute:
             # so the budget spend now STANDS (the provider saw the request, C29 "spend stands
             # once dispatched"). On a no-splice RETRY this only re-sets a flag (idempotent).
             holds.mark_dispatched(routed_model)
-            chunks = _as_chunks(
-                open_chat_upstream(self, plan, request, holds),
-                coalescer,
-                control,
-                timeouts,
-                error_scan=_ErrorFrameScan(
-                    scanner=self.error_scanner,
-                    # Group E: OUTPUT guard. Unset factory returns ``self.resolver`` (3.3).
-                    resolver=resolver_for(self, plan, Phase.OUTPUT),
-                    kill_latch=kill_latch,
-                    executor=self.executor,
+            chunks = bounded_upstream(
+                _as_chunks(
+                    open_chat_upstream(self, plan, request, holds),
+                    coalescer,
+                    control,
+                    timeouts,
+                    error_scan=_ErrorFrameScan(
+                        scanner=self.error_scanner,
+                        # Group E: OUTPUT guard. Unset factory returns ``self.resolver`` (3.3).
+                        resolver=resolver_for(self, plan, Phase.OUTPUT),
+                        kill_latch=kill_latch,
+                        executor=self.executor,
+                    ),
                 ),
+                self.contract.output_ceiling_chars(),
             )
             # Capture the returned stats so the Produced_Mode trace frame can be stamped on the
             # wire from the SELECTED mode + the INCREMENTAL degenerate fact (GW13 C5/R5). Both
@@ -718,10 +714,17 @@ class ChatRoute:
 
         return _attempt
 
-    def _build_pipeline(self, plan: ExecutionPlan) -> StreamPipeline | StrictWithholdPipeline:
+    def _build_pipeline(
+        self, plan: ExecutionPlan, holds: RequestHolds,
+    ) -> StreamPipeline | StrictWithholdPipeline:
         """Build the plan's stream pipeline and bind this route's surface on the detector."""
         from gateway_v2.edge.dev_components import bind_surface
 
+        bound = bind_surface(self.output_detector, self.surface) if self.output_detector else None
+        out = build_output_detectors(  # GW33: new detectors only for the plan's built-in rules
+            plan, base=bound, ticket=holds.canary_ticket, context_chunks=(), backend=None,
+            contract=self.contract, runner=self.executor.run,
+        )
         return select_pipeline(
             plan,
             scanner=self.scanner,
@@ -732,13 +735,12 @@ class ChatRoute:
             # Group E: the streaming output guard resolves through the pinned plan at
             # ``Phase.OUTPUT``. The detector gets this route's surface (GW26).
             resolver=resolver_for(self, plan, Phase.OUTPUT),
-            detector=(
-                bind_surface(self.output_detector, self.surface)
-                if self.output_detector is not None
-                else None
-            ),
+            detector=out.detector_for(plan.streaming_mode),
             max_buffer_bytes=self.contract.stream_buffer_bytes(self.active_streams()),
             strict_metrics=StrictMetrics(),
+            delta_detector=out.canary_delta,
+            final_detector=out.final,
+            sync_runner=out.runner,
         )
 
 

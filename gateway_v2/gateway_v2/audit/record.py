@@ -32,7 +32,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from enum import StrEnum
 
-from gateway_v2.domain.decision import DecisionRecord
+from gateway_v2.domain.decision import DecisionRecord, Transformation
 from gateway_v2.domain.incident import INCIDENT_CAUSES
 
 SCHEMA_VERSION = 1
@@ -119,6 +119,21 @@ def finding_detail(record: DecisionRecord) -> list[Mapping[str, object]]:
     ]
 
 
+def _transformation_detail(change: Transformation) -> dict[str, object]:
+    """Kind and offsets; the REPLACEMENT only for a redact (a constant placeholder).
+
+    A rewrite's replacement is the rendered declared template: GW33 requirement 4.4 keeps the
+    rewritten text out of the stored record, so a rewrite carries kind and span only.
+    """
+    detail: dict[str, object] = {
+        "kind": change.kind,
+        "span": [change.span.start, change.span.end],
+    }
+    if change.kind != "rewrite":
+        detail["replacement"] = change.replacement
+    return detail
+
+
 def from_decision(
     record: DecisionRecord,
     *,
@@ -143,12 +158,7 @@ def from_decision(
                 for item in decision.per_finding
             ],
             "transformations": [
-                {
-                    "kind": change.kind,
-                    "span": [change.span.start, change.span.end],
-                    "replacement": change.replacement,
-                }
-                for change in decision.transformations
+                _transformation_detail(change) for change in decision.transformations
             ],
             "findings": finding_detail(record),
         },

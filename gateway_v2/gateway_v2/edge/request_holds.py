@@ -56,7 +56,8 @@ every bit of state lives on the per-request ``__slots__`` instance.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
+from typing import Protocol
 
 from gateway_v2.domain.decision import Decision
 from gateway_v2.domain.incident import RerouteNote
@@ -64,7 +65,13 @@ from gateway_v2.domain.plan import UNSET_CONTROLS, OrgControls
 from gateway_v2.edge.chat_deps import AdmissionDecider, BudgetDecider
 from gateway_v2.edge.routing_trace import RoutingTrace
 
-__all__ = ("RequestHolds",)
+__all__ = ("CanaryTicketLike", "RequestHolds")
+
+
+class CanaryTicketLike(Protocol):
+    """What the hold ledger needs of a canary ticket (`edge/canary_inject.CanaryTicket`)."""
+
+    def reveal(self) -> str: ...
 
 
 class RequestHolds:
@@ -83,6 +90,7 @@ class RequestHolds:
         "_admitted",
         "_attempt_code",
         "_attempt_model",
+        "_canary_ticket",
         "_cost",
         "_dispatched",
         "_controls",
@@ -95,6 +103,7 @@ class RequestHolds:
         "_org_refund",
         "_org_tokens",
         "_output_decision",
+        "_output_extras",
         "_released",
         "_request_id",
         "_routing",
@@ -123,6 +132,8 @@ class RequestHolds:
         self._incident_underlying: str | None = None
         self._incident_retry_after_s: float | None = None
         self._reroute: RerouteNote | None = None
+        self._canary_ticket: CanaryTicketLike | None = None
+        self._output_extras: Mapping[str, object] = {}
 
     def admitted(self, request_id: str) -> None:
         """Record that admission granted a slot for ``request_id`` (``complete``-d on exit)."""
@@ -142,6 +153,22 @@ class RequestHolds:
     def note_output(self, decision: Decision) -> None:
         """Record the output decision. Streaming may leave this unset."""
         self._output_decision = decision
+
+    def note_output_extras(self, extras: Mapping[str, object]) -> None:
+        """GW33 audit fields for the OUTPUT record (review flag, canary booleans, bytes action)."""
+        self._output_extras = extras
+
+    @property
+    def output_extras(self) -> Mapping[str, object]:
+        return self._output_extras
+
+    def note_canary(self, ticket: CanaryTicketLike | None) -> None:
+        """Record the canary ticket (None: not injected, so `canary_checked` stays False)."""
+        self._canary_ticket = ticket
+
+    @property
+    def canary_ticket(self) -> CanaryTicketLike | None:
+        return self._canary_ticket
 
     def note_tenant(self, org_id: str) -> None:
         """Record the tenant the audit row must be attributed to."""

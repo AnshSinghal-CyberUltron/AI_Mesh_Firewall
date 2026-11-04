@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import threading
+from dataclasses import replace
 
 import pytest
 
@@ -192,9 +193,12 @@ def test_lgw05_7_unsupported_action_rejected_strict_withhold_accepted() -> None:
         "org-a", (), streaming_mode=StreamingMode.STRICT_WITHHOLD, compiled_at=1.0,
     )
     assert plan.streaming_mode is StreamingMode.STRICT_WITHHOLD
-    # Still a valid guard: an unsupported rule ACTION (not a streaming mode) is rejected.
-    with pytest.raises(CompileError, match="not supported"):
+    # GW33: REWRITE is a supported action (it was refused before this card), but only with a
+    # declared template: a REWRITE rule without one is still rejected at compile time.
+    with pytest.raises(CompileError, match="rewrite_template"):
         _compile("org-a", (_draft(action=Action.REWRITE),))
+    ok = _compile("org-a", (replace(_draft(action=Action.REWRITE), rewrite_template="[{category}]"),))
+    assert ok.rules[0].rewrite_template == "[{category}]"
 
 
 def test_version_cannot_regress() -> None:

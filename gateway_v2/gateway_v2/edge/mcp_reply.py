@@ -29,7 +29,8 @@ __all__ = ("ReplyOutcome", "enforce_reply")
 _OUTPUT_BLOCKED = "output_blocked"
 _SCAN_FAILURE = "scan_failure"
 _UPSTREAM_ERROR = "mcp_upstream_error"
-_WITHHOLD_ON_RESCAN = frozenset({Disposition.REDACT, Disposition.BLOCK})
+_WITHHOLD_ON_RESCAN = frozenset({Disposition.REDACT, Disposition.REWRITE, Disposition.BLOCK})
+_RESCANNED = frozenset({Disposition.REDACT, Disposition.REWRITE})  # GW33: REWRITE re-scans too
 
 
 @dataclass(frozen=True, slots=True)
@@ -93,7 +94,7 @@ def _apply(
         for leaf in fold.leaves:
             texts.append(apply_decision(leaf.text, decision, base))
             base += len(leaf.text)
-        if decision.disposition is Disposition.REDACT:
+        if decision.disposition in _RESCANNED:
             leaves = zip(fold.leaves, texts, strict=True)
             pairs = tuple((leaf.channel, text) for leaf, text in leaves)
             again = scan_deltas(

@@ -65,3 +65,21 @@ def test_gw32_new_mcp_modules_have_no_capacity_literals() -> None:
         for p in _PKG.glob(pattern)
     ]
     assert not [h for h in scan_tree(_PKG) if Path(h.path) in new]
+
+
+def test_gw33_allowlist_contains_resources_output() -> None:
+    from lint.check_capacity_literals import ALLOWED_RELS
+
+    assert {"runtime/resources.py", "runtime/resources_output.py"} <= ALLOWED_RELS
+
+
+def test_gw33_resources_output_is_allowed(tmp_path: Path) -> None:
+    _write(tmp_path, "runtime/resources_output.py", "pool(max_connections=64)\n")
+    assert scan_tree(tmp_path) == []
+
+
+def test_gw33_other_runtime_module_still_fails(tmp_path: Path) -> None:
+    _write(tmp_path, "runtime/resources_other.py", "pool(max_connections=64)\n")
+    _write(tmp_path, "detect/output/ruleset.py", "pool(max_connections=64)\n")
+    hits = scan_tree(tmp_path)
+    assert len(hits) == 2

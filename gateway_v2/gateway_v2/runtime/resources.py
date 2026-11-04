@@ -13,6 +13,7 @@ from gateway_v2.runtime.resources_env import _env_map, _parse_override, _parse_o
 from gateway_v2.runtime.resources_incident import IncidentBoundsMixin, check_incident_ordering
 from gateway_v2.runtime.resources_rag import RagBoundsMixin
 from gateway_v2.runtime.resources_routing import RoutingBoundsMixin
+from gateway_v2.runtime.resources_output import OutputBoundsMixin
 from gateway_v2.runtime.resources_vector import VectorBoundsMixin
 
 # Deployment-declared defaults. Logged as defaults when env is unset.
@@ -256,7 +257,9 @@ class McpBounds:
 
 
 @dataclass(frozen=True, slots=True)
-class ResourceContract(VectorBoundsMixin, RagBoundsMixin, RoutingBoundsMixin, IncidentBoundsMixin):
+class ResourceContract(
+    VectorBoundsMixin, RagBoundsMixin, RoutingBoundsMixin, IncidentBoundsMixin, OutputBoundsMixin,
+):
     cpu_quota: float
     memory_limit: int
     fd_limit: int

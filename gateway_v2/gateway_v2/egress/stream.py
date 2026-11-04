@@ -22,31 +22,21 @@ sibling ``gateway_v2.egress.output_guard`` -- never ``detect``. The test files,
 which are not under the layer contract, import the concrete ``detect`` scanner
 and inject it.
 
-**Scope of this file (tasks 7.1-7.3, 9.1).** It defines the transport value
-types, the exception vocabulary, the per-text-stream state (``_Text``), the
-per-stream reading (``StreamStats``), the enforcing-output gating, the release
-loop, the latency / held-token metrics (tasks 7.1-7.3), the force-release
-trade-off state machine with its fail-closed terminal error frames (task 9.1),
-and the in-flight-kill handling (task 10): ``run`` checks ``killed()`` at each
-chunk boundary and, on a kill, cuts per ``InFlightKill.CUT_NEXT_CHUNK`` -- it
-ceases emission at that boundary, discards still-held bytes, and emits a
-``killed`` Terminal_Error_Frame (R7).
+**Scope.** Transport value types, the exception vocabulary, per-text-stream state (``_Text``),
+the per-stream reading (``StreamStats``), enforcing-output gating, the release loop, the latency /
+held-token metrics, the force-release trade-off state machine with its fail-closed terminal frames,
+and in-flight-kill handling (``killed()`` is checked at each chunk boundary; on a kill the stream is
+cut per ``InFlightKill.CUT_NEXT_CHUNK``: emission ceases, held bytes are discarded, a ``killed``
+Terminal_Error_Frame is emitted, R7). Output-decision bookkeeping lives in ``stream_publish``.
 
-**Trade-off outcome mirror (task 9.1).** The per-pattern Trade_Off_Outcome lives
-authoritatively in ``detect.holdback.TRADE_OFF``, which ``egress`` cannot import.
-The sibling ``egress.holdback_tradeoff`` module is the egress-side mirror: it
-derives each outcome from the resolver's ``Decision`` and folds a force-released
-match's still-held remainder into the output ``Decision`` as a redaction. A test
-pins that the derived outcome agrees with ``detect.holdback.TRADE_OFF``.
+**Trade-off outcome mirror.** The per-pattern outcome lives authoritatively in
+``detect.holdback.TRADE_OFF``, which ``egress`` cannot import; ``egress.holdback_tradeoff`` derives
+each outcome from the resolver's ``Decision`` and a drift test pins the two together.
 
-**Match source seam (task 9.1, GW07/GW08 drop-in).** The thin harness has no real
-detector feeding ``_Text.hits``, so a completed-match source is INJECTED as the
-optional ``detector`` callable: given the full accumulated text of a channel it
-returns completed ``Finding``s with absolute spans. ``None`` keeps the thin
-harness unchanged (tasks 7.* still pass). It is re-run on the WHOLE accumulated
-text each delta so a match that straddles a release boundary or completes only
-after force-release is seen whole (Properties 5 and 6). GW07/GW08's detector
-drops in here.
+**Match source seam.** A completed-match source is INJECTED as the optional ``detector`` callable:
+given the full accumulated text of a channel it returns completed ``Finding``s with absolute spans.
+``None`` keeps the thin harness unchanged. It is re-run on the WHOLE accumulated text each delta so
+a match that straddles a release boundary or completes only after force-release is seen whole.
 """
 
 from __future__ import annotations
@@ -63,7 +53,7 @@ from gateway_v2.domain import (
     PlanUnavailable,
     PlanUnknownTenant,
     StreamingMode,
-    most_restrictive,
+    posture,
 )
 from gateway_v2.egress.holdback_tradeoff import (
     TRADE_OFF_OUTCOMES,
@@ -71,16 +61,29 @@ from gateway_v2.egress.holdback_tradeoff import (
     TRADE_OFF_TERMINATE,
     ForcedReleaseTerminate,
     completed_in,
-    derive_trade_off_outcome,
     longest_unbroken_run_bytes,
     unsplittable_hold,
     with_remainder_redactions,
 )
+from gateway_v2.egress.output_errors import (
+    FinalCheckUnapplied,
+    OutputLengthExceeded,
+    RewriteVerificationFailure,
+)
 from gateway_v2.egress.output_guard import (
+    FinalDetector,
     OutputBlocked,
     OutputResolver,
     apply_decision,
     enforcing_output_rules,
+)
+from gateway_v2.egress.stream_publish import (
+    OutputAggregate,
+    TradeOffUndefined,
+    WholeText,
+    apply_final_check,
+    forced_release_remainder_edits,
+    publish_output,
 )
 from gateway_v2.egress.transport import (
     ScanProtocol,
@@ -92,6 +95,7 @@ from gateway_v2.runtime.holdback_metrics import HoldbackMetrics
 
 __all__ = (
     "ChunkSource",
+    "DeltaDetector",
     "Detector",
     "DownstreamFrame",
     "EnforcementUndetermined",
@@ -174,14 +178,13 @@ KillSignal = Callable[[], bool]
 #: detector): no findings, ALLOW decision, identity redaction. The real GW07/GW08
 #: detector satisfies this signature and drops in behind it unchanged.
 Detector = Callable[[str], Sequence[Finding]]
+#: GW33 D-23: stateless per-delta detector ``(whole, previous_len) -> findings`` with ABSOLUTE
+#: offsets (the canary overlap scan); per-channel state lives on ``_Text``, never in the detector.
+DeltaDetector = Callable[[str, int], Sequence[Finding]]
 
 
-# The structural protocols for the INJECTED scanner / token counter --
-# ``ScanResultLike``, ``ScanProtocol``, ``TokenCounterProtocol`` -- were extracted
-# to the sibling ``egress.transport`` module (to keep this file under the
-# ``check_sizes`` module-length gate) and imported above. They are kept in this
-# module's ``__all__`` so every existing ``from gateway_v2.egress.stream import
-# ScanProtocol/ScanResultLike/TokenCounterProtocol`` re-export keeps resolving.
+# ``ScanProtocol`` / ``ScanResultLike`` / ``TokenCounterProtocol`` live in ``egress.transport`` and
+# are re-exported through ``__all__`` so existing imports keep resolving.
 
 
 # --------------------------------------------------------------------------- #
@@ -195,10 +198,6 @@ class HoldbackOverflow(Exception):
     Filled in by task 9; defined here so the vocabulary is complete and the
     scanner's ``overflow`` signal has a home.
     """
-
-
-class TradeOffUndefined(Exception):
-    """An over-cap pattern has no declared trade-off outcome (R6.6). Task 9."""
 
 
 class ScanFailure(Exception):
@@ -284,6 +283,8 @@ class _Text:
     max_held_tokens: int = 0
     max_unbroken_run_bytes: int = 0
     hits: list[Finding] = field(default_factory=list)
+    # GW33 D-23: per-CHANNEL findings of the stateless ``delta_detector`` (canary), span-deduped.
+    delta_hits: list[Finding] = field(default_factory=list)
 
 
 # --------------------------------------------------------------------------- #
@@ -325,6 +326,11 @@ class StreamStats:
     degenerated_to_strict: bool = False
     output_action: str | None = None
     output_decision: Decision | None = None
+    # GW33: ``decision.review_required or final_check_unavailable`` (D-22); audit reads THIS value.
+    review_required: bool = False
+    canary_leaked: bool = False
+    bytes_action: str = "allow"
+    final_check_unavailable: int = 0
 
 
 # --------------------------------------------------------------------------- #
@@ -356,6 +362,8 @@ class StreamPipeline:
         window: int,
         clock: Callable[[], int] = time.perf_counter_ns,
         detector: Detector | None = None,
+        delta_detector: DeltaDetector | None = None,
+        final_detector: FinalDetector | None = None,
     ) -> None:
         self._scanner = scanner
         self._resolver = resolver
@@ -366,8 +374,9 @@ class StreamPipeline:
         self._window = window
         self._clock = clock
         self._detector = detector
-        self._output_action: str | None = None
-        self._output_decision: Decision | None = None
+        self._delta_detector = delta_detector
+        self._final_detector = final_detector
+        self._agg = OutputAggregate()
 
     @classmethod
     def for_plan(
@@ -382,6 +391,8 @@ class StreamPipeline:
         window: int,
         clock: Callable[[], int] = time.perf_counter_ns,
         detector: Detector | None = None,
+        delta_detector: DeltaDetector | None = None,
+        final_detector: FinalDetector | None = None,
     ) -> StreamPipeline:
         """Build a pipeline, resolving ``enforcing_output`` from the plan (R2.3).
 
@@ -411,6 +422,8 @@ class StreamPipeline:
             window=window,
             clock=clock,
             detector=detector,
+            delta_detector=delta_detector,
+            final_detector=final_detector,
         )
 
     async def run(
@@ -444,19 +457,24 @@ class StreamPipeline:
         send: Send,
         stats: StreamStats,
     ) -> StreamStats:
-        """Release every chunk unheld; hold nothing (R2.2)."""
+        """Release every chunk unheld; hold nothing (R2.2). A wired final check still runs."""
+        wholes = WholeText(self._final_detector is not None)
         try:
             async for chunk in chunks:
                 stats.upstream_chunks += 1
                 await send(DownstreamFrame(text_deltas=chunk.text_deltas))
+                wholes.add(chunk.text_deltas)
                 stats.frames_out += 1
                 if chunk.final:
                     break
+            await apply_final_check(wholes.parts, self._final_detector, self._resolver, self._agg)
+        except OutputLengthExceeded:
+            return await self._terminate(send, stats, error=posture.OUTPUT_LENGTH_EXCEEDED)
         except Exception:
             stats.incomplete = True
             self._metrics.observe_stream_incomplete(stats)
             raise
-        stats.output_action = "allow"
+        publish_output(stats, self._agg)
         stats.done = True
         self._metrics.observe_stream_complete(stats)
         return stats
@@ -519,19 +537,31 @@ class StreamPipeline:
                         out = self._process_delta(text, channel, "", final=True, stats=stats)
                         await self._emit(out, send, stats)
                     break
+            # D-22: the whole-channel final check, after the last chunk and before publish.
+            await apply_final_check(
+                {channel: text.whole for channel, text in texts.items()},
+                self._final_detector, self._resolver, self._agg,
+            )
         except ScanFailure:
             # Scanner failed: retain all pending, emit nothing further (R3.6).
             return await self._terminate(send, stats, error="scan_failure")
         except OutputBlocked as blocked:
             self._note_output(blocked.decision)
-            self._publish(stats)
+            publish_output(stats, self._agg)
             return await self._terminate(send, stats, error="output_blocked")
+        except RewriteVerificationFailure:
+            return await self._terminate(send, stats, error=posture.REWRITE_UNVERIFIED)
+        except OutputLengthExceeded:
+            return await self._terminate(send, stats, error=posture.OUTPUT_LENGTH_EXCEEDED)
+        except FinalCheckUnapplied:
+            publish_output(stats, self._agg)
+            return await self._terminate(send, stats, error=posture.FINAL_CHECK_UNAPPLIED)
         except HoldbackOverflow:
             # Relaxed-class ceiling: release no held bytes of the match (R6.5).
             return await self._terminate(send, stats, error="holdback_overflow")
         except ForcedReleaseTerminate:
             # Over-cap match declared terminate-the-stream (R6.4); its BLOCK decision is kept.
-            self._publish(stats)
+            publish_output(stats, self._agg)
             return await self._terminate(send, stats, error="forced_release_tradeoff")
         except TradeOffUndefined:
             # Over-cap pattern with no declared outcome: fail closed (R6.6).
@@ -548,7 +578,7 @@ class StreamPipeline:
         # genuinely empty response (no content frame at all) is NOT degenerate --
         # it is just empty -- so the ``> 0`` guard keeps it ``False``.
         stats.degenerated_to_strict = frames_out_before_final == 0 and stats.frames_out > 0
-        self._publish(stats)
+        publish_output(stats, self._agg)
         stats.done = True
         self._metrics.observe_stream_complete(stats)
         return stats
@@ -594,6 +624,9 @@ class StreamPipeline:
 
         if self._detector is not None:
             text.hits = list(self._detector(text.whole))
+        if self._delta_detector is not None:
+            self._extend_delta_hits(text, len(text.whole) - len(delta))
+            text.hits = [*(text.hits if self._detector is not None else ()), *text.delta_hits]
 
         # Relaxed-class overflow (R6.5): fail closed, release NO in-progress bytes
         # (the raise unwinds before any release below).
@@ -638,6 +671,16 @@ class StreamPipeline:
         stats.holdback_wait_ns += max(0, t_ready - oldest_arrival)
         return DownstreamFrame(text_deltas=((channel, emitted),)), t_ready
 
+    def _extend_delta_hits(self, text: _Text, previous_len: int) -> None:
+        """Run the stateless delta detector; dedupe by ``(start, end)`` (D-23, L-4)."""
+        assert self._delta_detector is not None
+        seen = {tuple((s.start, s.end) for s in f.spans) for f in text.delta_hits}
+        for finding in self._delta_detector(text.whole, previous_len):
+            key = tuple((s.start, s.end) for s in finding.spans)
+            if key not in seen:
+                seen.add(key)
+                text.delta_hits.append(finding)
+
     def _record_maxima(self, text: _Text, held_suffix: str, stats: StreamStats) -> None:
         """Fold the per-stream held-token / unbroken-run maxima (R5.1/R5.5)."""
         held_tokens = self._token_index.tokens_in(held_suffix)
@@ -670,25 +713,8 @@ class StreamPipeline:
         return apply_decision(released, decision, release_start)
 
     def _note_output(self, decision: Decision) -> None:
-        """Keep the most restrictive output decision seen on this stream."""
-        current = self._output_decision
-        if current is not None:
-            winner = most_restrictive((current.disposition, decision.disposition))
-            if winner is not decision.disposition:
-                return
-        self._output_decision = decision
-        self._output_action = decision.disposition.value
-
-    def _publish(self, stats: StreamStats) -> None:
-        """Copy the kept decision onto the stats the edge audits."""
-        decision = self._output_decision
-        stats.output_decision = decision
-        if decision is not None:
-            stats.output_action = decision.disposition.value
-            return
-        stats.output_action = "allow"
-
-    # -- force-release trade-off helper (task 9.1) ------------------------- #
+        """Fold ``decision`` into the audit aggregate (``combine_decisions``; never for bytes)."""
+        self._agg.note(decision)
 
     def _forced_release_remainder_edits(
         self,
@@ -696,42 +722,11 @@ class StreamPipeline:
         release_start: int,
         release_end: int,
     ) -> tuple[tuple[int, int], ...]:
-        """Absolute remainder spans to redact for force-release trade-offs.
-
-        A completed match whose span starts before ``text.forced_release_end`` had
-        its prefix released early by the cap (R6.2). Its declared outcome applies:
-        ``terminate`` raises ``ForcedReleaseTerminate`` (R6.4); ``redact_remainder``
-        yields the still-held remainder span inside THIS slice to redact before any
-        of it is written (R6.3; the prefix was already redacted at its own release
-        point, so Released_Bytes never carries an unredacted match, Property 1);
-        no derivable outcome raises ``TradeOffUndefined`` (R6.6, fail closed).
-        """
-        if text.forced_release_end <= 0 or not text.hits:
-            return ()
-        edits: list[tuple[int, int]] = []
-        for finding in text.hits:
-            for span in finding.spans:
-                if span.start >= text.forced_release_end:
-                    continue  # prefix was not force-released; normal path handles it
-                # This match's prefix was released early -> trade-off applies.
-                decision = self._resolver.decide((finding,))
-                outcome = derive_trade_off_outcome(decision)
-                if outcome == TRADE_OFF_TERMINATE:
-                    self._note_output(decision)
-                    raise ForcedReleaseTerminate(finding.detector)
-                if outcome != TRADE_OFF_REDACT_REMAINDER:
-                    # Over-cap pattern with no declared outcome -> fail closed.
-                    raise TradeOffUndefined(
-                        f"over-cap pattern has no declared trade-off outcome "
-                        f"(class={finding.detector})",
-                    )
-                # Redact the still-held remainder of the match that lies within
-                # this release slice: [max(span.start, release_start), span.end).
-                rem_start = max(span.start, release_start)
-                rem_end = min(span.end, release_end)
-                if rem_start < rem_end:
-                    edits.append((rem_start, rem_end))
-        return tuple(edits)
+        """Force-release trade-off remainder spans (task 9.1; see ``stream_publish``)."""
+        return forced_release_remainder_edits(
+            text.hits, text.forced_release_end, release_start, release_end,
+            self._resolver, self._note_output,
+        )
 
     async def _emit(
         self,

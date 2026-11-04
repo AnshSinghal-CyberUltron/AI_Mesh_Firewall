@@ -9,6 +9,7 @@ from gateway_v2.domain.decision import (
     Disposition,
     FindingDisposition,
     Transformation,
+    combine_decisions,
     most_restrictive,
 )
 from gateway_v2.domain.dispatch_authorization import DispatchAuthorization
@@ -16,9 +17,11 @@ from gateway_v2.domain.finding import Finding, FindingStatus, Span
 from gateway_v2.domain.identity import Principal
 from gateway_v2.domain.locks import FRESH_MS, PG_GRACE_MS, RELAXED_HOLDBACK_CLASSES, InFlightKill
 from gateway_v2.domain.plan import (
+    LEGACY_IP_RULE_PREFIX,
     Action,
     ExecutionPlan,
     FailurePosture,
+    GroundingMode,
     Mode,
     Phase,
     PlanUnavailable,
@@ -29,6 +32,7 @@ from gateway_v2.domain.plan import (
     RuleScope,
     StreamingMode,
     Surface,
+    builtin_output_detector,
     is_newer,
 )
 from gateway_v2.domain.posture import (
@@ -61,6 +65,7 @@ __all__ = (
     "ZERO",
     "BUDGET_UNAVAILABLE",
     "DEFAULT_KNOBS",
+    "LEGACY_IP_RULE_PREFIX",
     "KILL_SWITCH_UNAVAILABLE",
     "MIN_RETRY_AFTER_S",
     "OVERLOAD_SHED",
@@ -80,6 +85,7 @@ __all__ = (
     "Finding",
     "FindingDisposition",
     "FindingStatus",
+    "GroundingMode",
     "InFlightKill",
     "Manifest",
     "Mode",
@@ -108,6 +114,8 @@ __all__ = (
     "Transformation",
     "Version",
     "apply_stage",
+    "builtin_output_detector",
+    "combine_decisions",
     "gap_retry_after_s",
     "is_newer",
     "most_restrictive",

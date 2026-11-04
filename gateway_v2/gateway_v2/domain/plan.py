@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from enum import StrEnum
 
@@ -59,6 +60,19 @@ class RuleKind(StrEnum):
     DETECTOR = "detector"
 
 
+class GroundingMode(StrEnum):
+    """Closed set of grounding modes (GW33 C8). The compiler refuses any other value."""
+    LEXICAL = "lexical"
+    MODEL = "model"
+LEGACY_IP_RULE_PREFIX = "fw-exfil-"
+"""D-2: the GW26 publisher's pre-GW33 rule id prefix for IP leakage (published under ``exfil``).
+
+Deviation recorded: the design text names ``output_ip_leakage_*``, but the shipped
+``firewall_v2_map._draft`` ids every firewall row ``fw-{category}-{scope}``, so the real legacy IP
+rule is ``fw-exfil-output`` (category ``exfil``, no condition). Only the IP-leakage output row is
+published under category ``exfil`` with a ``fw-`` id (customer rows are ``pol-...``), so the prefix
+selects exactly that rule. The behaviour D-2 specifies is unchanged.
+"""
 @dataclass(frozen=True, slots=True)
 class RuleCondition:
     """Customer match, compiled once with the plan. ``None`` on a rule keeps the category join."""
@@ -70,6 +84,8 @@ class RuleCondition:
     pattern: str
     detector_class: str
     pipeline_stage: str
+    # D-29: allowed host suffixes for ``output.exfil``; encoded and hashed only when non-empty.
+    allow_hosts: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -84,6 +100,25 @@ class Rule:
     on_unavailable: FailurePosture
     surfaces: frozenset[Surface]
     condition: RuleCondition | None = None
+    # D-4: the declared REWRITE template. Hashed/encoded only when non-empty.
+    rewrite_template: str = ""
+
+
+_BUILTIN_OUTPUT = re.compile(r"^output\.(exfil|ip_leak|grounding|canary)(\.[a-z0-9_:-]+)?$")
+
+
+def builtin_output_detector(rule: Rule) -> str | None:
+    """D-28: the built-in output detector family a rule selects, else ``None``.
+
+    Pure function of the signed rule, keyed on detector identity (``RuleKind.DETECTOR`` plus the
+    reserved ``output.`` namespace), never on the category label: the publisher's ``exfil`` fallback
+    category is a legacy catch-all that customer rows can land in.
+    """
+    condition = rule.condition
+    if condition is None or condition.kind is not RuleKind.DETECTOR:
+        return None
+    match = _BUILTIN_OUTPUT.match(condition.detector_class)
+    return None if match is None else match.group(1)
 
 
 @dataclass(frozen=True, slots=True)

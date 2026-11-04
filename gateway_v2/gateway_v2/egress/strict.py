@@ -51,25 +51,28 @@ vocabulary ``posture.STREAM_STRICT_BUFFER_OVERFLOW`` == ``"strict_buffer_overflo
 from __future__ import annotations
 
 import time
-from collections.abc import Callable, Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 
 from gateway_v2.domain import (
     Decision,
     Finding,
+    FindingStatus,
     InFlightKill,
     PlanUnavailable,
     PlanUnknownTenant,
     StreamingMode,
-    most_restrictive,
     posture,
 )
+from gateway_v2.egress.output_errors import OutputLengthExceeded, RewriteVerificationFailure
 from gateway_v2.egress.output_guard import (
+    FinalDetector,
     OutputBlocked,
     OutputResolver,
     apply_decision,
     enforcing_output_rules,
 )
+from gateway_v2.egress.rewrite_model import RewriteProposer, refine_rewrites
 from gateway_v2.egress.stream import (
     ChunkSource,
     Detector,
@@ -80,12 +83,23 @@ from gateway_v2.egress.stream import (
     Undetermined,
     UpstreamPlan,
 )
+from gateway_v2.egress.stream_publish import (
+    OutputAggregate,
+    WholeText,
+    apply_final_check,
+    publish_output,
+)
 from gateway_v2.runtime.strict_metrics import StrictMetrics
 
 __all__ = (
     "StrictStats",
     "StrictWithholdPipeline",
+    "SyncRunner",
 )
+
+#: D-22: the edge-injected off-loop runner for the SYNC whole-channel detector (``ScanExecutor.run``
+#: takes a thunk). ``None`` runs it inline: the dev profile and existing tests stay unchanged.
+SyncRunner = Callable[[Callable[[], Sequence[Finding]]], Awaitable[Sequence[Finding]]]
 
 #: The raw ``error_code`` the shipped pipeline puts on the terminal frame for an
 #: in-flight kill (``StreamPipeline._cut_on_kill`` -> ``error="killed"``). STRICT
@@ -136,6 +150,11 @@ class StrictStats:
     error: str | None = None
     output_action: str | None = None
     output_decision: Decision | None = None
+    # GW33: same audit fields as ``StreamStats`` so both modes agree for the same input (R4.5).
+    review_required: bool = False
+    canary_leaked: bool = False
+    bytes_action: str = "allow"
+    final_check_unavailable: int = 0
 
 
 # --------------------------------------------------------------------------- #
@@ -168,7 +187,17 @@ class StrictWithholdPipeline:
         metrics: StrictMetrics,
         clock: Callable[[], int] = time.perf_counter_ns,
         detector: Detector | None = None,
+        final_detector: FinalDetector | None = None,
+        sync_runner: SyncRunner | None = None,
+        rewrite_proposer: RewriteProposer | None = None,
+        reinspect: Detector | None = None,
+        proposal_max_chars: int = 0,
     ) -> None:
+        self._final_detector = final_detector
+        self._sync_runner = sync_runner
+        self._proposer = rewrite_proposer
+        self._reinspect = reinspect
+        self._proposal_max_chars = proposal_max_chars
         self._resolver = resolver
         self._enforcing_output = enforcing_output
         self._max_buffer_bytes = max_buffer_bytes
@@ -186,6 +215,11 @@ class StrictWithholdPipeline:
         metrics: StrictMetrics,
         clock: Callable[[], int] = time.perf_counter_ns,
         detector: Detector | None = None,
+        final_detector: FinalDetector | None = None,
+        sync_runner: SyncRunner | None = None,
+        rewrite_proposer: RewriteProposer | None = None,
+        reinspect: Detector | None = None,
+        proposal_max_chars: int = 0,
     ) -> StrictWithholdPipeline:
         """Build a pipeline, resolving ``enforcing_output`` from the plan (R2.3).
 
@@ -214,6 +248,11 @@ class StrictWithholdPipeline:
             metrics=metrics,
             clock=clock,
             detector=detector,
+            final_detector=final_detector,
+            sync_runner=sync_runner,
+            rewrite_proposer=rewrite_proposer,
+            reinspect=reinspect,
+            proposal_max_chars=proposal_max_chars,
         )
 
     async def run(
@@ -253,18 +292,24 @@ class StrictWithholdPipeline:
         straight through as content frames -- while still reporting
         ``produced_mode = strict_withhold`` on the returned stats.
         """
+        wholes = WholeText(self._final_detector is not None)
+        agg = OutputAggregate()
         try:
             async for chunk in chunks:
                 stats.upstream_chunks += 1
                 await send(DownstreamFrame(text_deltas=chunk.text_deltas))
+                wholes.add(chunk.text_deltas)
                 stats.frames_out += 1
                 if chunk.final:
                     break
+            await apply_final_check(wholes.parts, self._final_detector, self._resolver, agg)
+        except OutputLengthExceeded:
+            return await self._terminate(send, stats, error=posture.OUTPUT_LENGTH_EXCEEDED)
         except Exception:
             stats.incomplete = True
             self._metrics.observe_stream_incomplete(stats)
             raise
-        stats.output_action = "allow"
+        publish_output(stats, agg)
         stats.done = True
         self._metrics.observe_stream_complete(stats)
         return stats
@@ -312,6 +357,10 @@ class StrictWithholdPipeline:
 
                 if chunk.final:
                     return await self._finalize(whole, send, stats)
+        except RewriteVerificationFailure:
+            return await self._terminate(send, stats, error=posture.REWRITE_UNVERIFIED)
+        except OutputLengthExceeded:
+            return await self._terminate(send, stats, error=posture.OUTPUT_LENGTH_EXCEEDED)
         except Exception:
             stats.incomplete = True
             self._metrics.observe_stream_incomplete(stats)
@@ -351,30 +400,48 @@ class StrictWithholdPipeline:
         # later channel still yields zero content frames (LGW13-1). An
         # OutputBlocked anywhere short-circuits to the terminal block path.
         sanitized: list[tuple[str, str]] = []
-        chosen: Decision | None = None
+        agg = OutputAggregate()
         try:
             for channel, text in whole.items():
-                findings: Sequence[Finding] = (
-                    self._detector(text) if self._detector is not None else ()
-                )
+                findings = await self._channel_findings(channel, text)
+                if any(f.status is FindingStatus.UNAVAILABLE for f in findings):
+                    agg.final_check_unavailable += 1  # forces the audit review flag (D-22)
                 decision = self._resolver.decide(findings)
-                chosen = _stricter_decision(chosen, decision)
+                decision = await self._refine(text, decision)
+                agg.note(decision)
                 sanitized.append((channel, apply_decision(text, decision, 0)))
         except OutputBlocked as blocked:
-            stats.output_decision = blocked.decision
-            stats.output_action = blocked.decision.disposition.value
+            agg.note(blocked.decision)
+            publish_output(stats, agg)
             return await self._terminate(send, stats, error=_OUTPUT_BLOCKED_CODE)
-
         # ALLOW/REDACT: emit the sanitized whole response as a single content
         # frame carrying every channel's bytes, then complete cleanly.
         await send(DownstreamFrame(text_deltas=tuple(sanitized)))
         stats.frames_out += 1
         stats.completion_overhead_ns = max(0, self._clock() - t_final)
-        stats.output_decision = chosen
-        stats.output_action = chosen.disposition.value if chosen is not None else "allow"
+        publish_output(stats, agg)
         stats.done = True
         self._metrics.observe_stream_complete(stats)
         return stats
+
+    async def _channel_findings(self, channel: str, text: str) -> Sequence[Finding]:
+        """Sync detector (off-loop through the injected runner) then the async final detector."""
+        detector = self._detector
+        sync: Sequence[Finding] = ()
+        if detector is not None:
+            runner = self._sync_runner
+            sync = detector(text) if runner is None else await runner(lambda: detector(text))
+        final = () if self._final_detector is None else await self._final_detector(channel, text)
+        return (*sync, *final)
+
+    async def _refine(self, text: str, decision: Decision) -> Decision:
+        """D-5: optional local-model rewrite proposals, STRICT path only; template is the floor."""
+        if self._proposer is None or self._reinspect is None:
+            return decision
+        return await refine_rewrites(
+            text, decision, self._proposer, self._reinspect, self._resolver,
+            self._proposal_max_chars,
+        )
 
     # -- terminal paths (mirror StreamPipeline._terminate / _cut_on_kill) --- #
 
@@ -437,13 +504,3 @@ class StrictWithholdPipeline:
         else:
             self._metrics.observe_stream_incomplete(stats)
         return stats
-
-
-def _stricter_decision(current: Decision | None, new: Decision) -> Decision:
-    """The decision whose disposition is the more restrictive of the two."""
-    if current is None:
-        return new
-    winner = most_restrictive((current.disposition, new.disposition))
-    if winner is new.disposition:
-        return new
-    return current

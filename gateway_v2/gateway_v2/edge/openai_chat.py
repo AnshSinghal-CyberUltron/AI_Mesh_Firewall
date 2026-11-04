@@ -45,6 +45,7 @@ from gateway_v2.domain import Decision
 from gateway_v2.domain.incident import GateVerdict, StreamBinding
 from gateway_v2.domain.plan import ExecutionPlan, Phase, PlanUnavailable, PlanUnknownTenant, Surface
 from gateway_v2.domain.posture import ROUTING_UNKNOWN_MODEL
+from gateway_v2.edge.canary_inject import inject_canary_for_plan
 from gateway_v2.edge.chat_lifecycle import (
     REFUSE_BUDGET_UNAVAILABLE,
     REFUSE_IDENTITY_UNRESOLVED,
@@ -253,6 +254,12 @@ class ChatSurface:
         )
 
         holds.note_controls(plan.controls)
+        # GW33 D-11/D-19: plan-driven canary slot, or a pre-dispatch refusal (FAIL_CLOSED rule).
+        injected = inject_canary_for_plan(plan, req, holds, self._deps.contract)
+        if isinstance(injected, str):
+            return req, _refused(injected)
+        req = injected
+
         holds.note_tenant(identity.org_id)
         request_id = self._request_id(identity, req)
         holds.note_request(request_id)

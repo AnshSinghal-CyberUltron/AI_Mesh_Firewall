@@ -24,9 +24,11 @@ from gateway_v2.domain import (
     ExecutionPlan,
     Finding,
     Phase,
+    Rule,
     Surface,
     Transformation,
 )
+from gateway_v2.resolve.rewrite import render_template
 
 #: The placeholder a redaction ``Transformation`` writes in place of a span.
 #: Re-declared locally (resolve imports only domain); MUST equal the shipped
@@ -36,11 +38,10 @@ REDACTION_PLACEHOLDER: str = "[REDACTED]"
 def _action_to_disposition(action: Action) -> Disposition:
     """Map an ``Action`` to its ``Disposition`` (total over the enum, Decision 2).
 
-    ALLOW->ALLOW, FLAG->FLAG, REDACT->REDACT, BLOCK->BLOCK, REWRITE->REDACT.
-    REWRITE is a payload-mutating action with no ``Disposition`` member of its
-    own, so it maps to REDACT: the conservative, transformation-producing choice
-    that never silently allows and never downgrades a BLOCK. Exhaustive over the
-    enum; the final return is the REWRITE arm, keeping it total.
+    ALLOW->ALLOW, FLAG->FLAG, REDACT->REDACT, REWRITE->REWRITE, BLOCK->BLOCK
+    (GW33: REWRITE is a first-class disposition, ranked between REDACT and BLOCK, so it never
+    downgrades a BLOCK and never silently allows). Exhaustive over the enum; the final return is
+    the REWRITE arm, keeping it total.
     """
     if action is Action.ALLOW:
         return Disposition.ALLOW
@@ -50,21 +51,27 @@ def _action_to_disposition(action: Action) -> Disposition:
         return Disposition.REDACT
     if action is Action.BLOCK:
         return Disposition.BLOCK
-    return Disposition.REDACT
+    return Disposition.REWRITE
 
 
 def _transformations_for(
     finding: Finding,
     disposition: Disposition,
+    rule: Rule | None = None,
 ) -> tuple[Transformation, ...]:
-    """Redaction transformations for ``finding`` under its candidate ``disposition``.
+    """Edits for ``finding`` under its candidate ``disposition``.
 
-    When ``disposition is Disposition.REDACT`` (including REWRITE->REDACT), emit
-    one ``Transformation(kind="redact", span, replacement)`` per span in
-    ``finding.spans`` using the local ``REDACTION_PLACEHOLDER`` -- mirroring the
-    shipped ``MinimalOutputResolver.decide``. Any other disposition contributes
-    no transformation.
+    REDACT emits one ``Transformation(kind="redact", span, replacement)`` per span using the
+    local ``REDACTION_PLACEHOLDER`` -- mirroring the shipped ``MinimalOutputResolver.decide``.
+    REWRITE (GW33) emits ``kind="rewrite"`` with the deciding ``rule``'s declared template rendered
+    by ``render_template``. Any other disposition contributes no transformation.
     """
+    if disposition is Disposition.REWRITE and rule is not None:
+        replacement = render_template(rule.rewrite_template, finding.category, rule.rule_id)
+        return tuple(
+            Transformation(kind="rewrite", span=span, replacement=replacement)
+            for span in finding.spans
+        )
     if disposition is not Disposition.REDACT:
         return ()
     return tuple(

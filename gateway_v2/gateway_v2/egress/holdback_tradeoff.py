@@ -26,6 +26,7 @@ from gateway_v2.domain import (
     FindingDisposition,
     Span,
     Transformation,
+    most_restrictive,
 )
 
 __all__ = (
@@ -77,7 +78,9 @@ def derive_trade_off_outcome(decision: Decision) -> str | None:
     other disposition (ALLOW/FLAG) has no declared outcome, so this returns
     ``None`` and the caller fails closed (``undefined_tradeoff``, R6.6).
     """
-    if decision.disposition is Disposition.BLOCK:
+    # GW33 D-8: a REWRITE cannot be applied to bytes already released, so it terminates (stricter
+    # than a class table's default; the minimal resolver never yields REWRITE, so no drift).
+    if decision.disposition in (Disposition.BLOCK, Disposition.REWRITE):
         return TRADE_OFF_TERMINATE
     if decision.disposition is Disposition.REDACT:
         return TRADE_OFF_REDACT_REMAINDER
@@ -113,7 +116,8 @@ def with_remainder_redactions(
     # most-restrictive invariant holds.
     per_finding = decision.per_finding
     has_restriction = any(
-        fd.disposition in (Disposition.REDACT, Disposition.BLOCK) for fd in per_finding
+        fd.disposition in (Disposition.REDACT, Disposition.REWRITE, Disposition.BLOCK)
+        for fd in per_finding
     )
     if not has_restriction:
         per_finding = (
@@ -121,13 +125,15 @@ def with_remainder_redactions(
             FindingDisposition(detector="forced_release_remainder", disposition=Disposition.REDACT),
         )
     return Decision(
-        disposition=Disposition.REDACT,
+        disposition=most_restrictive((decision.disposition, Disposition.REDACT)),
         per_finding=per_finding,
         transformations=(*decision.transformations, *extra),
         findings=decision.findings,
         plan_version=decision.plan_version,
         deciding_rules=decision.deciding_rules,
         unavailable_detectors=decision.unavailable_detectors,
+        review_required=decision.review_required,
+        codes=decision.codes,
     )
 
 

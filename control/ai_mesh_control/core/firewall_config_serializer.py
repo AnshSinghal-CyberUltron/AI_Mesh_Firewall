@@ -99,8 +99,13 @@ class FirewallConfigSerializer(serializers.ModelSerializer):
         return value
 
     def validate(self, attrs):
-        # T01 L01-2: REWRITE is unsupported. Reject writes; never silent-allow.
+        # T01 L01-2 / GW33: REWRITE is a real template-driven action, but only on the v2 gateway
+        # and only for orgs the deployment enables (``V2_REWRITE_ORGS``, default none). Every other
+        # org still has the write rejected; it is never silently allowed.
         _unsupported = frozenset({"rewrite"})
+        organization = getattr(self.instance, "organization", None)
+        if rewrite_served_by_v2(getattr(organization, "slug", None)):
+            _unsupported = frozenset()
         for field in (
             "output_pii_action",
             "output_credential_action",
@@ -112,7 +117,8 @@ class FirewallConfigSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError(
                     {
                         field: (
-                            "REWRITE is unsupported. Control rejects this action; "
+                            "REWRITE is only enforced on the v2 gateway for orgs it is "
+                            "enabled for. Control rejects this action; "
                             "use redact, block, flag, or allow."
                         )
                     }
@@ -185,7 +191,7 @@ class FirewallConfigSerializer(serializers.ModelSerializer):
                 for name in FIELDS
                 if hasattr(self.instance, name)
             }
-        unsupported = selection_errors(attrs, stored)
+        unsupported = selection_errors(attrs, stored, getattr(org, "slug", None))
         # GW27: BUILT values the gateway cannot represent, and controls-backed changes while the
         # fleet plan-schema gate is closed. An unchanged stored value is always accepted.
         slug = getattr(org, "slug", "") or ""

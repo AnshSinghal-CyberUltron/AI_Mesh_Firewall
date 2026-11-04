@@ -57,7 +57,7 @@ import asyncio
 import json
 import random
 from collections.abc import AsyncIterator, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 from gateway_v2.dispatch.provider import UpstreamEvent, UpstreamRequest
@@ -864,7 +864,10 @@ def test_default_boot_renders_declared_codes() -> None:
 # Decision level: scope-both input and output decisions equal today's (3.4, 3.5).
 # --------------------------------------------------------------------------- #
 
-_CATEGORIES = tuple(Category)
+# GW33 D-32: EXFIL/IP_LEAK/HALLUCINATION/CANARY join rules by identity only (the built-in output
+# detectors stamp their rule id), so this category-join oracle draws from the other categories.
+_BUILTIN_ONLY = (Category.EXFIL, Category.IP_LEAK, Category.HALLUCINATION, Category.CANARY)
+_CATEGORIES = tuple(c for c in Category if c not in _BUILTIN_ONLY)
 _ACTIONS = ("allow", "flag", "redact", "block")
 _ACTION_DISPOSITION = {
     "allow": Disposition.ALLOW,
@@ -999,7 +1002,12 @@ def test_scope_both_decisions_equal_todays_for_the_same_findings() -> None:
         expected = _oracle(findings, plan)
         decisions = {phase: resolve(findings, plan, phase) for phase in (Phase.INPUT, Phase.OUTPUT)}
         where = f"seed={seed} plan={plan.version} text={text!r}"
-        assert decisions[Phase.INPUT] == decisions[Phase.OUTPUT], (
+        # GW33 adds the OUTPUT-only ``review_required`` flag (INPUT is always False), so the two
+        # phases are compared on everything the oracle can predict, plus the declared flag.
+        output = decisions[Phase.OUTPUT]
+        assert decisions[Phase.INPUT].review_required is False, where
+        assert output.review_required is (output.disposition is not Disposition.ALLOW), where
+        assert replace(output, review_required=False) == decisions[Phase.INPUT], (
             f"{where}: scope-both INPUT and OUTPUT decisions differ"
         )
         for phase, decision in decisions.items():

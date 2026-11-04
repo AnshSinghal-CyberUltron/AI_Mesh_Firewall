@@ -70,6 +70,13 @@ __all__ = (
     "RAG_INGEST_OVERLOAD",
     "RAG_JOB_NOT_FOUND",
     "RAG_INTERNAL_ERROR",
+    "EDIT_OVERLAP_REDACTED",
+    "REWRITE_TEMPLATE_MISSING",
+    "REWRITE_UNVERIFIED",
+    "FINAL_CHECK_UNAPPLIED",
+    "OUTPUT_LENGTH_EXCEEDED",
+    "CANARY_UNAVAILABLE",
+    "DECISION_CODES",
     "gap_retry_after_s",
     "ROUTING_NO_CANDIDATES",
     "ROUTING_UNKNOWN_MODEL",
@@ -315,6 +322,24 @@ RAG_INTERNAL_ERROR = "rag_internal_error"
 """GW31: an unexpected failure inside a RAG route. Class name only is logged."""
 
 
+# -- GW33 output-parity codes ----------------------------------------------------------------
+# Codes only (single spelling, the C37 join). The first two ride on ``Decision.codes`` (resolver
+# facts about how the bytes were produced); the last four are terminal/request codes that `egress`
+# and `edge` return and `edge/errors.py` renders. None carries content.
+EDIT_OVERLAP_REDACTED = "edit_overlap_redacted"
+"""D-7: an overlap component with differing kind/replacement became one redact over the union."""
+REWRITE_TEMPLATE_MISSING = "rewrite_template_missing"
+"""A hand-built REWRITE rule had no template; the resolver fell closed to BLOCK."""
+REWRITE_UNVERIFIED = "rewrite_unverified"
+"""Terminal: a rewrite could not be byte-verified (replacement misplaced, survivor, overlap)."""
+FINAL_CHECK_UNAPPLIED = "final_check_unapplied"
+"""Terminal: an INCREMENTAL final check produced a byte-altering disposition it cannot apply."""
+OUTPUT_LENGTH_EXCEEDED = "output_length_exceeded"
+"""Terminal: the provider ignored the max_tokens clamp and exceeded the output ceiling."""
+CANARY_UNAVAILABLE = "canary_unavailable"
+"""Request: a FAIL_CLOSED canary rule could not inject its token; refused before dispatch."""
+DECISION_CODES = frozenset({EDIT_OVERLAP_REDACTED, REWRITE_TEMPLATE_MISSING})
+"""The closed set ``Decision.codes`` may carry (GW33 C1)."""
 def gap_retry_after_s(*, rehydrate_period_ms: float, refresh_ms: float) -> float:
     """How long a client should wait out a shared-state gap (C36).
 

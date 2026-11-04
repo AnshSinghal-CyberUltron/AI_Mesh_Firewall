@@ -58,6 +58,7 @@ __all__ = (
     "DecodeBudget",
     "SpanMap",
     "canonicalize",
+    "canonicalize_structure",
 )
 
 #: Re-declared locally (detect may not import ``egress``); a test pins this
@@ -413,7 +414,12 @@ def _deobfuscate_email(buf: list[tuple[str, int, int]]) -> list[tuple[str, int, 
 # --------------------------------------------------------------------------- #
 
 
-def canonicalize(text: str, budget: DecodeBudget) -> tuple[str, SpanMap]:
+def canonicalize(
+    text: str,
+    budget: DecodeBudget,
+    *,
+    decode_base64: bool = True,
+) -> tuple[str, SpanMap]:
     """Canonicalize ``text`` in one pass, returning ``(canonical, SpanMap)``.
 
     Order (R2.5/R2.6, the C26 fix):
@@ -424,6 +430,11 @@ def canonicalize(text: str, budget: DecodeBudget) -> tuple[str, SpanMap]:
           so a canonical match collapses back to the original byte Span.
 
     Pure: ``text`` is never mutated (R1.4); a new string is returned.
+
+    GW33: ``decode_base64=False`` skips the base64 decoder only. The output detectors that must
+    keep URL and token boundaries intact (exfil structure, canary) use it, because a decoded
+    base64 run can introduce spaces or delimiters that end a URL early. Every existing caller keeps
+    the default (``True``), so existing behaviour is unchanged.
     """
     if not budget.within(text):
         raise BudgetExceeded("decode budget exceeded before heavy canonicalization")
@@ -431,7 +442,8 @@ def canonicalize(text: str, budget: DecodeBudget) -> tuple[str, SpanMap]:
     buf = _seed(text)
     buf = _decode_percent(buf)
     buf = _decode_entities(buf)
-    buf = _decode_base64(buf)
+    if decode_base64:
+        buf = _decode_base64(buf)
     buf = _decode_fullwidth(buf)
     buf = _strip_ignorable(buf)
     buf = _decode_unicode_escapes(buf)
@@ -439,6 +451,27 @@ def canonicalize(text: str, budget: DecodeBudget) -> tuple[str, SpanMap]:
     buf = _normalize_bidi(buf)
     buf = _deobfuscate_email(buf)
 
+    canonical = _buf_text(buf)
+    records = tuple((i, cell[1], cell[2]) for i, cell in enumerate(buf))
+    return canonical, SpanMap(records=records)
+
+
+def canonicalize_structure(text: str, budget: DecodeBudget) -> tuple[str, SpanMap]:
+    """Structure-preserving canonicalisation for URL/markup boundaries (GW33).
+
+    Only the character-level folds run (fullwidth, zero-width/ignorable, homoglyph, bidi): no
+    percent, entity, base64 or escape decoding. A decoded ``%29``, ``&#32;`` or base64 run can
+    introduce a delimiter that ends a URL early, so the exfil detector scans BOTH this view and
+    ``canonicalize(..., decode_base64=False)`` and takes the union of their findings. The same
+    cheap Decode_Budget pre-check applies (explicit reject, never a silent truncation).
+    """
+    if not budget.within(text):
+        raise BudgetExceeded("decode budget exceeded before heavy canonicalization")
+    buf = _seed(text)
+    buf = _decode_fullwidth(buf)
+    buf = _strip_ignorable(buf)
+    buf = _fold_homoglyphs(buf)
+    buf = _normalize_bidi(buf)
     canonical = _buf_text(buf)
     records = tuple((i, cell[1], cell[2]) for i, cell in enumerate(buf))
     return canonical, SpanMap(records=records)

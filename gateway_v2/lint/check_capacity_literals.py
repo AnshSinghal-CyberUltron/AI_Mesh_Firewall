@@ -44,6 +44,7 @@ ALLOWED_RELS: frozenset[str] = frozenset(
         "runtime/resources.py",
         "runtime/resources_org.py",
         "runtime/resources_mcp.py",
+        "runtime/resources_output.py",
     },
 )
 
