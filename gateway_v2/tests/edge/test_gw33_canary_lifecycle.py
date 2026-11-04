@@ -49,6 +49,23 @@ def test_a_chat_request_gets_one_verified_system_slot_carrying_the_token() -> No
     assert str(messages[1]["content"]).startswith("Internal reference cnry_")  # type: ignore[index]
 
 
+def test_the_canary_slot_keeps_the_gw34_tool_fields_of_the_template() -> None:
+    """Integration (GW33 x GW34): growing the template must keep tools and the joined pairs."""
+    tool = {"type": "function", "function": {
+        "name": "get_weather", "description": "Weather for a city",
+        "parameters": {"type": "object", "properties": {"city": {"type": "string"}}},
+    }}
+    canary = rule("out_canary", Category.CANARY, Action.BLOCK, "output.canary")
+    _provider, req, outcome = _run({**_CHAT, "tools": [tool]}, canary)
+    assert outcome.refuse_code is None and req is not None
+    assert len(req.input_forwarded) == len(req.text_deltas)
+    body = outcome.body[BODY_OPENAI_KEY]  # type: ignore[index]
+    assert [m["role"] for m in body["messages"]] == ["user", "system"]  # type: ignore[index]
+    [sent] = body["tools"]  # type: ignore[index]
+    assert sent["function"]["name"] == "get_weather"
+    assert sent["function"]["description"] == "Weather for a city"
+
+
 def test_a_legacy_completions_prompt_is_chat_shaped_upstream_so_it_is_injected_too() -> None:
     canary = rule("out_canary", Category.CANARY, Action.BLOCK, "output.canary")
     _provider, req, outcome = _run(_COMPLETION, canary)

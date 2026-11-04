@@ -114,11 +114,7 @@ def with_canary(
         return NotInjected("slot_mismatch")
     index = template.slot_count
     slot = TextSlot(index=index, channel=_CHANNEL)
-    grown = UpstreamTemplate(
-        messages=(*template.messages, TemplateMessage(role="system", content=slot)),
-        stop=template.stop,
-        slot_count=index + 1,
-    )
+    grown = _with_system_slot(template, slot)
     next_message = (max(req.input_message_index) + 1) if req.input_message_index else 0
     return Injected(
         replace(
@@ -128,8 +124,24 @@ def with_canary(
             input_message_index=(*req.input_message_index, next_message)
             if req.input_message_index
             else req.input_message_index,
+            input_forwarded=(*req.input_forwarded, True) if req.input_forwarded else (),
             upstream_template=grown,
         ),
+    )
+
+
+def _with_system_slot(template: UpstreamTemplate, slot: TextSlot) -> UpstreamTemplate:
+    """``template`` plus one trailing system message holding ``slot``.
+
+    GW34: the slot is one more PLAIN, forwarded pair; the per-pair tuples (when present) grow
+    with it, and the tools / joined-pair facts carry over unchanged.
+    """
+    return replace(
+        template,
+        messages=(*template.messages, TemplateMessage(role="system", content=slot)),
+        slot_count=slot.index + 1,
+        forwarded=(*template.forwarded, True) if template.forwarded else (),
+        pair_parts=(*template.pair_parts, 0) if template.pair_parts else (),
     )
 
 
