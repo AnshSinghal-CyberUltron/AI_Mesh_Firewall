@@ -1,4 +1,5 @@
-"""GW27 D-13: the capacity gate allows exactly two modules; the allowlist cannot widen silently."""
+"""GW27 D-13: the capacity gate allows exactly the declared modules; the allowlist cannot widen
+silently (GW32 added runtime/resources_mcp.py alongside GW27's runtime/resources_org.py)."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -17,8 +18,10 @@ def _write(root: Path, rel: str) -> None:
     path.write_text(_LITERAL, encoding="utf-8")
 
 
-def test_allowlist_is_exactly_the_two_modules() -> None:
-    assert ALLOWED_RELS == frozenset({"runtime/resources.py", "runtime/resources_org.py"})
+def test_allowlist_is_exactly_the_declared_modules() -> None:
+    assert ALLOWED_RELS == frozenset(
+        {"runtime/resources.py", "runtime/resources_org.py", "runtime/resources_mcp.py"},
+    )
 
 
 def test_literal_in_resources_org_passes(tmp_path: Path) -> None:

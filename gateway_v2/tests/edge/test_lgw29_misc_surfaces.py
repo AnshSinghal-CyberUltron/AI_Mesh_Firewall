@@ -237,6 +237,7 @@ def test_every_post_route_is_classified() -> None:
     covered_by_lifecycle = {"/v1/chat/completions", "/v1/completions", "/v1/responses"}
     covered_by_misc_gate = {"/v1/embeddings", "/v1/moderations"}
     placeholders = {"/v1/rag/query", "/v1/vector/query"}
+    covered_by_oauth = {"/oauth/register", "/oauth/authorize", "/oauth/token"}
     for (method, path), handler in {**exact, **prefix}.items():
         if method == "GET" and path.startswith("/v1/models"):
             continue
@@ -246,7 +247,9 @@ def test_every_post_route_is_classified() -> None:
             path in covered_by_lifecycle
             or path in covered_by_misc_gate
             or path in placeholders
+            or path in covered_by_oauth
             or path.startswith("/v1/mcp")
+            or path.startswith("/gateway/")  # GW32 MCP surface; gated in McpRoute._tenant
         )
         assert classified, f"unclassified POST route {path}"
         del handler
