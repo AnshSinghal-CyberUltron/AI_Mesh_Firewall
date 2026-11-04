@@ -259,6 +259,8 @@ _ENVELOPE: Mapping[str, tuple[int, str]] = MappingProxyType(
         "mcp_upstream_credential_invalid": (502, "gateway_error"),
         "mcp_upstream_insecure_transport": (403, "permission_error"),
         "mcp_transport_unsupported": (400, "invalid_request_error"),
+        "mcp_upstream_oauth_failed": (502, "gateway_error"),
+        "mcp_upstream_oauth_unavailable": (503, "service_unavailable"),
         # -- Routing misses (GW34 / V-15) --------------------------------------
         # v1 answered an unknown path with 404 ``endpoint_not_found``; a 5xx would make the
         # stock SDK retry. A known path with the wrong method is a 405, as v1 (FastAPI).

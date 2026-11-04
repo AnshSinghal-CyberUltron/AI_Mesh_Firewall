@@ -76,6 +76,14 @@ class OAuthFlowEndpointTests(TestCase):
         self.server.refresh_from_db()
         self.assertEqual((self.server.oauth_state, self.server.oauth_code_verifier), ("", ""))
 
+    def test_reused_client_keeps_its_stored_secret(self):
+        self._post("oauth-flow/", self._flow())
+        body = self._flow(state="t" * 43)
+        del body["client_secret"]
+        self.assertEqual(self._post("oauth-flow/", body).status_code, 200)
+        flow = self._post("oauth-flow/consume/", {"state": "t" * 43}).json()
+        self.assertEqual(flow["client_secret"], SECRET)
+
     def test_unknown_or_malformed_state_is_404(self):
         for state in ("x" * 43, "short", 7, None):
             self.assertEqual(self._post("oauth-flow/consume/", {"state": state}).status_code, 404)

@@ -16,6 +16,7 @@ from gateway_v2.edge.mcp_registry import McpRegistry, OrgMap
 from gateway_v2.runtime.resources_mcp import McpCredentialBounds, McpTransportBounds
 
 if TYPE_CHECKING:  # routes.py imports this module; the OAuth routes import routes.py
+    from gateway_v2.edge.mcp_upstream_routes import UpstreamOAuthRoutes
     from gateway_v2.edge.oauth_routes import OAuthRoutes, OAuthUnavailable
 
 __all__ = ("McpDeps",)
@@ -49,4 +50,6 @@ class McpDeps:
     """GW32: exact-match `Origin` allow-list (`AMF_MCP_ALLOWED_ORIGINS`), beyond same-authority."""
     transport_bounds: McpTransportBounds | None = None
     public_base: str = ""
+    upstream_oauth: UpstreamOAuthRoutes | None = None
+    """GW32 R9: upstream OAuth setup routes. `None` = those paths stay the routing miss."""
     """GW32: validated `AMF_GATEWAY_PUBLIC_URL`; empty = no `resource_metadata` is advertised."""

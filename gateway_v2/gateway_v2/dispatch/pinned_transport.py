@@ -8,8 +8,9 @@ time, and a 3xx is returned to the caller as a failure (never followed).
 """
 from __future__ import annotations
 
-from collections.abc import Mapping
-from typing import TYPE_CHECKING
+from collections.abc import Awaitable, Mapping
+from typing import TYPE_CHECKING, Protocol
+from urllib.parse import urlencode
 
 from gateway_v2.dispatch.mcp_credentials import TokenEndpoint
 from gateway_v2.dispatch.url_guard import Refusal, Resolver, resolve_checked
@@ -17,7 +18,9 @@ from gateway_v2.dispatch.url_guard import Refusal, Resolver, resolve_checked
 if TYPE_CHECKING:
     import httpx
 
-__all__ = ("PinnedRefused", "PinnedTransport", "pinned_token_endpoint")
+__all__ = (
+    "PinnedRefused", "PinnedTransport", "UpstreamHttp", "pinned_http", "pinned_token_endpoint",
+)
 
 
 class PinnedRefused(Exception):
@@ -69,16 +72,35 @@ def PinnedTransport(  # noqa: N802 - constructor-shaped factory for a lazily bui
     return transport
 
 
-def pinned_token_endpoint(
+class UpstreamHttp(Protocol):
+    """``(method, url, headers, body, timeout_s, max_bytes) -> (status, body)``. Raises on any
+    transport failure or refused destination; a 3xx is returned, never followed."""
+
+    def __call__(
+        self,
+        method: str,
+        url: str,
+        headers: Mapping[str, str],
+        body: bytes | None,
+        timeout_s: float,
+        max_bytes: int,
+    ) -> Awaitable[tuple[int, bytes]]: ...
+
+
+def pinned_http(
     resolver: Resolver,
     allow_hosts: frozenset[str] = frozenset(),
     inner: httpx.AsyncBaseTransport | None = None,
-) -> TokenEndpoint:
-    """The production `TokenEndpoint`: POST a form through the pinned transport, no redirects,
-    bounded read. Any failure raises; `CredentialService` classifies that as transient."""
+) -> UpstreamHttp:
+    """One bounded request through the pinned transport (no redirects, bounded read)."""
 
     async def call(
-        url: str, form: Mapping[str, str], timeout_s: float, max_bytes: int
+        method: str,
+        url: str,
+        headers: Mapping[str, str],
+        body: bytes | None,
+        timeout_s: float,
+        max_bytes: int,
     ) -> tuple[int, bytes]:
         import httpx
 
@@ -86,14 +108,33 @@ def pinned_token_endpoint(
         async with httpx.AsyncClient(
             transport=transport, timeout=timeout_s, follow_redirects=False
         ) as client:
-            async with client.stream("POST", url, data=dict(form)) as response:
+            async with client.stream(method, url, headers=dict(headers), content=body) as resp:
                 chunks: list[bytes] = []
                 total = 0
-                async for chunk in response.aiter_bytes():
+                async for chunk in resp.aiter_bytes():
                     total += len(chunk)
                     if total > max_bytes:
-                        raise ValueError("token endpoint reply over the bound")
+                        raise ValueError("upstream reply over the bound")
                     chunks.append(chunk)
-                return response.status_code, b"".join(chunks)
+                return resp.status_code, b"".join(chunks)
+
+    return call
+
+
+def pinned_token_endpoint(
+    resolver: Resolver,
+    allow_hosts: frozenset[str] = frozenset(),
+    inner: httpx.AsyncBaseTransport | None = None,
+) -> TokenEndpoint:
+    """The production `TokenEndpoint`: POST a form through the pinned transport, no redirects,
+    bounded read. Any failure raises; `CredentialService` classifies that as transient."""
+    http = pinned_http(resolver, allow_hosts, inner)
+
+    async def call(
+        url: str, form: Mapping[str, str], timeout_s: float, max_bytes: int
+    ) -> tuple[int, bytes]:
+        body = urlencode(dict(form)).encode()
+        headers = {"Content-Type": "application/x-www-form-urlencoded"}
+        return await http("POST", url, headers, body, timeout_s, max_bytes)
 
     return call

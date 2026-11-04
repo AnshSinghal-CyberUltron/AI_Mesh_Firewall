@@ -45,6 +45,7 @@ def surface_entries(
         credential_bounds=mcp.credential_bounds,
         plaintext_credential_hosts=mcp.plaintext_credential_hosts,
         public_base=mcp.public_base,
+        upstream_oauth=mcp.upstream_oauth,
     )
     exact[("POST", MCP_PATH)] = route.handle_bare
     _oauth_entries(exact, prefix, mcp.oauth if mcp.oauth is not None else OAuthUnavailable())

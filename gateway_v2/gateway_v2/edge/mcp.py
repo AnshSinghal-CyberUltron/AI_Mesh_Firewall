@@ -57,6 +57,7 @@ from gateway_v2.edge.mcp_session_gate import (
     header,
     session_header,
 )
+from gateway_v2.edge.mcp_upstream_routes import UpstreamOAuthRoutes, serve_upstream
 from gateway_v2.edge.phase_resolvers import resolver_for
 from gateway_v2.edge.request_holds import RequestHolds
 from gateway_v2.edge.routes import ChatRoute, emit_response
@@ -174,6 +175,8 @@ class McpRoute:
     sessions: SessionStore | None = None
     allowed_origins: frozenset[str] = frozenset()
     transport_bounds: McpTransportBounds | None = None
+    upstream_oauth: UpstreamOAuthRoutes | None = None
+    """GW32 R9: the upstream OAuth setup routes. `None` = those paths stay the routing miss."""
 
     def _transport(self) -> McpTransportBounds:
         return self.transport_bounds or derive_transport_bounds(self.chat.contract)
@@ -195,6 +198,9 @@ class McpRoute:
         parsed = classify_gateway_path(raw_path(scope))
         if parsed.kind == "mcp":
             await self._handle_path(scope, receive, send, McpPath(parsed.server_slug, parsed.org))
+            return
+        if parsed.kind != "miss" and self.upstream_oauth is not None:
+            await serve_upstream(self, parsed, scope, receive, send)
             return
         await emit_response(send, errors.render_http("endpoint_not_found"))
 

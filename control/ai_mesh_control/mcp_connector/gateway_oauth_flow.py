@@ -89,7 +89,8 @@ class MCPGatewayOAuthFlowView(_Internal):
         state, verifier = data.get("state"), data.get("code_verifier")
         key_id, ttl = data.get("key_id"), data.get("ttl_s")
         texts = {name: _text(data, name) for name in _TEXT_FIELDS}
-        secret = _text(data, "client_secret", 2048)
+        keep_secret = "client_secret" not in data  # a reused client keeps its stored secret
+        secret = "" if keep_secret else _text(data, "client_secret", 2048)
         valid = (
             isinstance(state, str) and _STATE_MIN <= len(state) <= _STATE_MAX
             and isinstance(verifier, str) and 43 <= len(verifier) <= 128
@@ -105,7 +106,8 @@ class MCPGatewayOAuthFlowView(_Internal):
         server.oauth_token_endpoint = texts["token_endpoint"]
         server.oauth_registration_endpoint = texts["registration_endpoint"]
         server.oauth_client_id = texts["client_id"]
-        server.oauth_client_secret = secret
+        if not keep_secret:
+            server.oauth_client_secret = secret
         server.oauth_resource = texts["resource"]
         server.oauth_scope = texts["scope"]
         server.oauth_code_verifier = verifier

@@ -37,6 +37,8 @@ NEEDS_REAUTH_AFTER_FAILURES = 3  # consecutive transient refresh failures before
 # upstream OAuth setup redirect hops, each re-resolved and pinned
 CREDENTIAL_CACHE_SLOTS = 1024  # per-worker credential cache entries
 OAUTH_REDIRECT_HOPS = 3
+UPSTREAM_FLOW_TTL_S = 600  # gateway-run upstream OAuth state lifetime (DD-4), whole seconds
+UPSTREAM_METADATA_BYTES = 64 * 1024  # discovery / registration reply cap
 # --- GW17c: cap lease -----------------------------------------------------------------------------
 CAP_WINDOW_S = 60.0  # a key's cap window, v1 parity: 60 s (D-6), store TTL driven
 CAP_CHUNK_MAX = 64  # largest lease chunk a worker takes from the store
@@ -193,6 +195,8 @@ class McpCredentialBounds:
     credential_cache_slots: int
     credential_cache_ttl_s: float
     oauth_redirect_hops: int
+    upstream_flow_ttl_s: int
+    upstream_metadata_bytes: int
 
 
 def derive_credential_bounds(contract: ResourceContract) -> McpCredentialBounds:
@@ -214,6 +218,8 @@ def derive_credential_bounds(contract: ResourceContract) -> McpCredentialBounds:
         credential_cache_slots=CREDENTIAL_CACHE_SLOTS,
         credential_cache_ttl_s=ttl,
         oauth_redirect_hops=OAUTH_REDIRECT_HOPS,
+        upstream_flow_ttl_s=UPSTREAM_FLOW_TTL_S,
+        upstream_metadata_bytes=UPSTREAM_METADATA_BYTES,
     )
 
 

@@ -18,6 +18,7 @@ import dataclasses
 import random
 from collections.abc import Callable, Mapping
 from typing import Any
+from urllib.parse import urlsplit
 
 from gateway_v2.admit.mcp_cap import CallCapTable
 from gateway_v2.admit.mcp_metrics import McpPolicyMetrics
@@ -30,10 +31,12 @@ from gateway_v2.dispatch.mcp_credentials import (
     CredentialService,
 )
 from gateway_v2.dispatch.mcp_refresh_lock import LocalRefreshLock, ValkeyRefreshLock
-from gateway_v2.dispatch.pinned_transport import pinned_token_endpoint
+from gateway_v2.dispatch.mcp_upstream_oauth import ControlOAuthFlowClient
+from gateway_v2.dispatch.pinned_transport import pinned_http, pinned_token_endpoint
 from gateway_v2.dispatch.url_guard import parse_allow_hosts
 from gateway_v2.edge.dev_components import DevProfileError, env_text
 from gateway_v2.edge.mcp_deps import McpDeps
+from gateway_v2.edge.mcp_upstream_routes import UpstreamOAuthRoutes
 from gateway_v2.edge.oauth_routes import OAuthRoutes
 from gateway_v2.runtime.resources import ResourceContract
 from gateway_v2.runtime.resources_mcp import (
@@ -44,6 +47,8 @@ from gateway_v2.runtime.resources_mcp import (
 from gateway_v2.runtime.store_keys_mcp import McpStoreKeys
 
 __all__ = ("extend_mcp_deps",)
+
+_LOOPBACK = frozenset({"127.0.0.1", "::1", "localhost"})
 
 
 def _control_call() -> Any:
@@ -109,6 +114,7 @@ def extend_mcp_deps(
     )
     plaintext = parse_allow_hosts(env_text(env, "AMF_MCP_ALLOW_PLAINTEXT_CREDENTIAL_HOSTS") or "")
     credentials: CredentialService | None
+    upstream: UpstreamOAuthRoutes | None = None
     try:
         client = ControlCredentialClient(
             base_url=control_url,
@@ -133,6 +139,16 @@ def extend_mcp_deps(
             clock=clock,
         )
         base.registry.subscribe_drop(_dropper(cache), cache.keys)
+        upstream = UpstreamOAuthRoutes(
+            flow=ControlOAuthFlowClient(
+                base_url=control_url, internal_key=internal_key, call=_control_call(),
+                bounds=cred_bounds,
+            ),
+            http=pinned_http(base.dns, base.allow_hosts),
+            bounds=cred_bounds,
+            body_bytes=transport.oauth_body_bytes,
+            public_base=_public_base(env),
+        )
         lock_scope = "shared store" if redis_client is not None else "PER-WORKER, no store"
         notes.append(
             "boot: mcp credentials -> GW17b CredentialService (cache dropped on registry version "
@@ -176,8 +192,29 @@ def extend_mcp_deps(
         allowed_origins=parse_allow_hosts(env_text(env, "AMF_MCP_ALLOWED_ORIGINS") or ""),
         transport_bounds=transport,
         public_base=public_base,
+        upstream_oauth=upstream,
+    )
+    notes.append(
+        "boot: mcp upstream oauth setup -> "
+        + ("UNSET (no safe control link)" if upstream is None else (
+            "oauth/start|callback|status over control flow state, pinned dial"
+            + ("" if upstream.public_base else "; start answers 503 (AMF_GATEWAY_PUBLIC_URL unset)")
+        ))
     )
     return deps, tuple(notes)
+
+
+def _public_base(env: Mapping[str, str]) -> str:
+    """The validated public URL (https or loopback http), else empty (never a guessed URL)."""
+    url = env_text(env, "AMF_GATEWAY_PUBLIC_URL")
+    if url is None:
+        return ""
+    parts = urlsplit(url)
+    host = parts.hostname or ""
+    ok = parts.scheme == "https" or (parts.scheme == "http" and host in _LOOPBACK)
+    if not host or not ok or parts.query or parts.fragment:
+        raise DevProfileError("AMF_GATEWAY_PUBLIC_URL must be an https URL (or loopback http)")
+    return url.rstrip("/")
 
 
 def _dropper(cache: CredentialCache) -> Callable[[str, str], None]:

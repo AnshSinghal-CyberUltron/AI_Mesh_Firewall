@@ -80,6 +80,7 @@ from gateway_v2.edge.dev_components import (
 from gateway_v2.edge.dev_mcp import build_dev_mcp
 from gateway_v2.edge.dev_metrics import build_dev_publisher
 from gateway_v2.edge.dev_plan_feed import DevPlanFeed, DevPlanWatch
+from gateway_v2.edge.mcp_deps import McpDeps
 from gateway_v2.edge.responses_store import ValkeyResponseStore
 from gateway_v2.edge.wire.sse import SSEDecoder
 from gateway_v2.runtime.errors import CapacityUnavailable, CapacityUnset
@@ -384,14 +385,7 @@ def build_dev_dependencies(
     )
     plan_note = _attach_plan_watch(deps, cfg=cfg, feed=feed, contract=contract)
     store_note = _attach_response_store(deps, cfg=cfg, contract=contract)
-    mcp_redis = None
-    if cfg.lease is not None:
-        mcp_redis = _redis_client(cfg.lease.redis_url, timeout_s=contract.cancellation_bound_s())
-    mcp, mcp_note = build_dev_mcp(
-        env, contract, redis_client=mcp_redis, clock=time.monotonic, identity=deps["identity"]
-    )
-    if mcp is not None:
-        deps["mcp"] = mcp
+    mcp, mcp_note = _attach_mcp(deps, cfg=cfg, env=env, contract=contract)
     exports, holdback = PerRequestExports(), HoldbackMetrics()
     runtime = deps.get("audit_runtime")
     publisher, metrics_note = build_dev_publisher(
@@ -403,7 +397,7 @@ def build_dev_dependencies(
         holdback=holdback,
     )
     if mcp is not None and mcp.policy_metrics is not None:
-        publisher.attach_mcp_policy(mcp.policy_metrics)
+        publisher.attach_mcp_policy(mcp.policy_metrics)  # GW17c series + enforcement version
     deps.update(
         metrics_registry=publisher, observer=publisher, exports=exports, holdback_metrics=holdback
     )
@@ -441,6 +435,25 @@ def build_dev_dependencies(
         f"boot: catalog -> StaticCatalogSource {list(cfg.models)} (DEV PROFILE: AMF_DEV_MODELS)",
     )
     return deps, logs
+
+
+def _attach_mcp(
+    deps: dict[str, object],
+    *,
+    cfg: DevProfileConfig,
+    env: Mapping[str, str],
+    contract: ResourceContract,
+) -> tuple[McpDeps | None, str]:
+    """Build the MCP deps (GW17 + GW32/GW17b/GW17c services) over the dev redis, if any."""
+    mcp_redis = None
+    if cfg.lease is not None:
+        mcp_redis = _redis_client(cfg.lease.redis_url, timeout_s=contract.cancellation_bound_s())
+    mcp, note = build_dev_mcp(
+        env, contract, redis_client=mcp_redis, clock=time.monotonic, identity=deps["identity"]
+    )
+    if mcp is not None:
+        deps["mcp"] = mcp
+    return mcp, note
 
 
 def _attach_response_store(
