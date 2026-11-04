@@ -125,6 +125,7 @@ AUTO_REASONS: Final[tuple[str, ...]] = (
     "probation_failed",
     "no_fallback",
     "fallback_ineligible",
+    "expired",
 )
 """Closed reasons for auto-origin events; never request content."""
 

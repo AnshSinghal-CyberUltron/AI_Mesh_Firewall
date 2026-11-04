@@ -82,3 +82,97 @@ def local_auto(model: str, wall_now: float, *, dur: float = 300.0, fallback: str
         model, fallback, IsolationOrigin.AUTO, "error_rate", wall_now, wall_now + dur,
         False, 0, False,
     )
+
+
+# -- risk / auto-isolation builders ----------------------------------------------------------
+
+
+def contract():  # type: ignore[no-untyped-def]
+    from gateway_v2.runtime.kinds import HardwareSignals
+    from gateway_v2.runtime.resources import from_signals
+
+    rss = 100 * 1024 * 1024
+    return from_signals(
+        HardwareSignals(cpu_quota=4.0, memory_limit=rss * 64, fd_limit=4096,
+                        cpu_source="t", mem_source="t", fd_source="t"),
+        target_p99_ms=20.0, utilization_cap=0.75, per_worker_rss=rss,
+    )
+
+
+def risk_tracker(clock: Clock, *, max_models: int = 16, known=None):  # type: ignore[no-untyped-def]
+    from gateway_v2.admit.model_risk import ModelRiskTracker, RiskParams
+
+    return ModelRiskTracker(
+        clock=clock, params=RiskParams.from_contract(contract()), max_models=max_models,
+        known=known,
+    )
+
+
+def observe_many(tracker, model: str, outcome, orgs: list[str], count: int) -> None:  # type: ignore[no-untyped-def]
+    for i in range(count):
+        tracker.observe(model, outcome, orgs[i % len(orgs)])
+
+
+class Catalog:
+    def __init__(self, profiles: dict[str, object]) -> None:
+        self._profiles = profiles
+
+    def profile(self, model: str):  # type: ignore[no-untyped-def]
+        return self._profiles.get(model)
+
+
+class Fallbacks:
+    def __init__(self, mapping: dict[str, str]) -> None:
+        self._mapping = mapping
+
+    def fallback_for(self, model: str) -> str | None:
+        return self._mapping.get(model)
+
+
+class Constraints:
+    def __init__(self, constraints: object) -> None:
+        self._constraints = constraints
+
+    def for_request(self, plan: object, org_id: str, requested_model: str):  # type: ignore[no-untyped-def]
+        return self._constraints
+
+
+class Rig:
+    """One worker: snapshot + state + tracker + isolator + the events it emitted."""
+
+    def __init__(self, *, fallbacks: dict[str, str] | None = None, profiles=None,  # type: ignore[no-untyped-def]
+                 constraints=None, slots: int = 4) -> None:
+        from gateway_v2.admit.auto_isolation import AutoIsolator, IsolatorParams
+        from gateway_v2.admit.incident_metrics import IncidentMetrics
+        from gateway_v2.domain.incident import ModelProfile, RequestConstraints
+
+        c = contract()
+        self.mono, self.wall = Clock(100.0), Clock(1_000.0)
+        self.snap = snapshot(self.mono)
+        load(self.snap, [], on_count=0)
+        self.tracker = risk_tracker(self.mono)
+        self.state = make_state(self.snap, self.wall, self.mono, slots=slots,
+                                auto_s=c.auto_isolation_duration_s(),
+                                hold_s=c.max_isolation_hold_s(),
+                                hook=self.tracker.reset_for_recovery)
+        tags = frozenset({"t"})
+        self.profiles = profiles if profiles is not None else {
+            "a": ModelProfile("a", "p", tags, 2), "b": ModelProfile("b", "p", tags, 2)}
+        self.metrics = IncidentMetrics()
+        self.events: list = []
+        self.isolator = AutoIsolator(
+            state=self.state, risk=self.tracker, switches=self.snap,
+            fallbacks=Fallbacks({"a": "b"} if fallbacks is None else fallbacks),
+            catalog=Catalog(self.profiles),
+            constraints=Constraints(constraints if constraints is not None
+                                    else RequestConstraints(True, None, frozenset(), 0)),
+            params=IsolatorParams(c.risk_threshold(), c.risk_min_distinct_orgs(),
+                                  c.auto_isolation_duration_s()),
+            wall=self.wall, emit=self.events.append, metrics=self.metrics,
+        )
+
+    def trip(self, model: str = "a", orgs: tuple[str, ...] = ("o1", "o2", "o3")) -> None:
+        from gateway_v2.domain.incident import ModelOutcome
+
+        observe_many(self.tracker, model, ModelOutcome.SERVER_ERROR, list(orgs),
+                     contract().risk_min_samples())
