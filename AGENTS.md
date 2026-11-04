@@ -1925,12 +1925,14 @@
   `incident_scopes.py` + `StateWriter.isolation`, flag `AMF_STATE_PROJECT_INCIDENT_SCOPES` default OFF, refused
   while `AMF_GATEWAY_MIN_SCOPE_GENERATION` < 2.
   OPEN (DEFERRED, no live stack): L29-1..L29-4 live, real notification delivery, fleet convergence timing of a
-  signed auto-isolation, console agreement (GW35). NOT WIRED: nothing in the production request path calls
-  `IncidentWiring.record_attempt` yet, so the risk tracker is fed only by tests (routes.py is at its size cap);
-  a follow-up must add it. `plan_changed` is a named constant `False` (not wired).
+  signed auto-isolation, console agreement (GW35). WIRED (convergence fix): `emit_chat_audit` feeds
+  `IncidentAuditTap.record_attempt` (bound to `IncidentWiring.record_attempt` in `build_incident`) via
+  `edge/incident_attempt.py`, from the holds ledger (`mark_dispatched(model)`, provider/guard code); end-to-end test
+  `test_lgw29_l29_3_live_feed.py` (5xx/timeout through the real route isolates + reroutes, stream and non-stream).
+  `plan_changed` is a named constant `False` (not wired).
   FOUND, NOT FIXED: `check_tenant_scale` exit 1 on `dispatch/vector_transports/pinecone_transport.py:140` (GW30,
   on the base commit) and `state_control/valkey.py:100` (R2-05); both are the only failing test in the suite.
-  VERIFY: 3600 passed / 107 skipped / 1 failed (that declared tenant-scale test; baseline 3037 / 112 / 2) / 556
+  VERIFY: 3605 passed / 107 skipped / 1 failed (that declared tenant-scale test; baseline 3037 / 112 / 2) / 556
   lgw29-subset passed; `mypy --strict` 303 files with only the 9 baseline import-not-found for absent optional
   vector SDKs, ruff clean, import-linter `Contracts: 3 kept, 0 broken`, capacity/mutable/frozen/http/sizes/
   provenance/secret_headers gates exit 0. Negative controls (phase 4b removed, DevNoControlSource default,

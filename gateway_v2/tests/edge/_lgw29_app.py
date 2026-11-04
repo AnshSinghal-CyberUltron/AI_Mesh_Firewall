@@ -169,6 +169,7 @@ class Harness:
         mcp: object | None = None,
         between: Callable[[Harness, int], None] | None = None,
         audit: bool = True,
+        audit_sink: Callable[[AuditRecord], bool] | None = None,
     ) -> None:
         self.rig = GateRig(aliases=aliases, **(rig or {}))
         self.ledger = RevocationLedger(clock=self.rig.mono, slots=64, retention_s=600.0)
@@ -195,7 +196,7 @@ class Harness:
             incident_gate=self.rig.gate,
             incident_recheck=lambda **kw: self.recheck(**kw),
             control_factory=KillSwitchControlFactory(self.rig.snap, self.ledger),
-            audit=self.records.append if audit else None,
+            audit=audit_sink or (self.records.append if audit else None),
             mcp=mcp,  # type: ignore[arg-type]
         )
 

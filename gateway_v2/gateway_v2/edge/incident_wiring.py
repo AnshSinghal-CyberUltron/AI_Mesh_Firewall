@@ -29,6 +29,7 @@ from gateway_v2.admit.model_risk import ModelRiskTracker, RiskParams
 from gateway_v2.admit.revocation import RevocationLedger
 from gateway_v2.audit.record import AuditRecord
 from gateway_v2.domain.incident import KS_SCOPE_GENERATION, ModelOutcome, Notifier
+from gateway_v2.edge.incident_attempt import outcome_for
 from gateway_v2.edge.incident_catalog import CatalogConfig, load_catalog_config
 from gateway_v2.edge.inflight_source import KillSwitchControlFactory
 from gateway_v2.edge.notifier_pump import (
@@ -43,42 +44,7 @@ from gateway_v2.runtime.resources import ResourceContract
 __all__ = ("IncidentAuditTap", "IncidentWiring", "build_incident", "outcome_for")
 
 LOG = logging.getLogger("amf.gateway.incident")
-
-#: Provider status classes (protocol facts, not capacity): 429 and the 5xx range.
-_RATE_LIMITED = 429
-_SERVER_ERRORS = range(500, 600)
 _MS_PER_S = 1000.0
-
-
-def outcome_for(
-    *,
-    status: int | None = None,
-    timed_out: bool = False,
-    malformed: bool = False,
-    guard_hit: bool = False,
-    completed: bool = False,
-) -> ModelOutcome | None:
-    """The closed mapping of design 5.5. ``None`` means: this attempt counts for nothing.
-
-    Precedence is fixed: timeout, malformed upstream, output-guard hit, provider status, then a
-    completed stream. Provider 400/401/403/404/413/422 and every unmapped status are
-    client- or credential-attributable and never counted. Gateway-side refusals, client
-    disconnects and drain are not provider attempts and are never passed here.
-    """
-    if timed_out:
-        return ModelOutcome.TIMEOUT
-    if malformed:
-        return ModelOutcome.MALFORMED
-    if guard_hit:
-        return ModelOutcome.GUARD_HIT
-    if status is not None:
-        if status == _RATE_LIMITED:
-            return ModelOutcome.RATE_LIMITED
-        if status in _SERVER_ERRORS:
-            return ModelOutcome.SERVER_ERROR
-        return None
-    return ModelOutcome.OK if completed else None
-
 
 class IncidentAuditTap:
     """Wraps the audit sink: counts incident cuts, then forwards. Never raises, never blocks.
@@ -87,7 +53,7 @@ class IncidentAuditTap:
     the return value), so wiring the tap cannot create a sink that was not configured.
     """
 
-    __slots__ = ("_downstream", "_metrics")
+    __slots__ = ("_downstream", "_feed", "_metrics")
 
     def __init__(
         self,
@@ -96,6 +62,17 @@ class IncidentAuditTap:
     ) -> None:
         self._downstream = downstream
         self._metrics = metrics
+        self._feed: Callable[..., None] | None = None
+
+    def bind_attempts(self, feed: Callable[..., None]) -> None:
+        """Late-bind the risk feed (the tap exists before the tracker it feeds)."""
+        self._feed = feed
+
+    def record_attempt(self, *, org_id: str, model: str, outcome: ModelOutcome | None) -> None:
+        """One provider attempt for the risk tracker. Never raises; no feed bound counts nothing."""
+        feed = self._feed
+        if feed is not None:
+            feed(org_id=org_id, model=model, outcome=outcome)
 
     def __call__(self, record: AuditRecord) -> bool:
         try:
@@ -235,7 +212,7 @@ def build_incident(
         retention_s=contract.max_stream_duration_s() + runtime.fresh_ms / _MS_PER_S,
         on_floor_cut=metrics.observe_revocation_floor_cut,
     )
-    return IncidentWiring(
+    wiring = IncidentWiring(
         gate=gate, control_factory=KillSwitchControlFactory(runtime.switches, ledger),
         state=state, pump=pump,
         ticker=IncidentTicker(
@@ -244,6 +221,8 @@ def build_incident(
         risk=risk, isolator=isolator, ledger=ledger, metrics=metrics, audit=tap,
         config=cfg, runtime=runtime,
     )
+    tap.bind_attempts(wiring.record_attempt)
+    return wiring
 
 
 def _risk_tracker(

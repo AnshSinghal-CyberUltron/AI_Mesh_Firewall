@@ -134,8 +134,15 @@ async def first_attempt_refusal(
 
 
 def note_stream_cut(holds: RequestHolds | None, stream_code: str) -> None:
-    """Stamp the cut cause for an incident stream code, unless a cause is already recorded."""
-    if holds is None or holds.incident_cause is not None:
+    """Stamp the cut cause for an incident stream code, unless a cause is already recorded.
+
+    The code is also kept as the provider attempt's end (risk accounting maps provider codes only).
+    """
+    if holds is None:
+        return
+    if holds.attempt_code is None:
+        holds.note_attempt_code(stream_code)
+    if holds.incident_cause is not None:
         return
     cause = _CUT_CAUSE.get(stream_code)
     if cause is not None:

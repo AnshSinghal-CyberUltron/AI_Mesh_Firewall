@@ -77,6 +77,8 @@ class RequestHolds:
 
     __slots__ = (
         "_admitted",
+        "_attempt_code",
+        "_attempt_model",
         "_cost",
         "_dispatched",
         "_incident_cause",
@@ -95,6 +97,8 @@ class RequestHolds:
         self._admitted: bool = False
         self._spent: bool = False
         self._dispatched: bool = False
+        self._attempt_model: str | None = None
+        self._attempt_code: str | None = None
         self._released: bool = False
         self._request_id: str = ""
         self._cost: int = 0
@@ -181,9 +185,28 @@ class RequestHolds:
     def dispatched(self) -> bool:
         return self._dispatched
 
-    def mark_dispatched(self) -> None:
-        """Record that the provider was opened; after this the spend stands and is not refunded."""
+    @property
+    def attempt_code(self) -> str | None:
+        """The provider-side failure code the attempt ended with (``None``: it completed)."""
+        return self._attempt_code
+
+    def note_attempt_code(self, code: str) -> None:
+        """Record how the provider attempt ended when the refusal is rendered elsewhere."""
+        self._attempt_code = code
+
+    @property
+    def attempt_model(self) -> str | None:
+        """The canonical model the provider attempt was sent to (``None``: no tracked attempt)."""
+        return self._attempt_model
+
+    def mark_dispatched(self, model: str | None = None) -> None:
+        """Record that the provider was opened; after this the spend stands and is not refunded.
+
+        ``model`` (GW29) names the routed model so the outcome can feed the risk tracker.
+        """
         self._dispatched = True
+        if model:
+            self._attempt_model = model
 
     def release(self, admission: AdmissionDecider, quota: BudgetDecider) -> None:
         """Release the held resources once: refund (iff spent and not dispatched) then complete.

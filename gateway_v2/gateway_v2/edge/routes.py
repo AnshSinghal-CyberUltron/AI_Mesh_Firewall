@@ -679,7 +679,7 @@ class ChatRoute:
             # (which can fail CLOSED without opening) and the body assembly. Record the dispatch
             # so the budget spend now STANDS (the provider saw the request, C29 "spend stands
             # once dispatched"). On a no-splice RETRY this only re-sets a flag (idempotent).
-            holds.mark_dispatched()
+            holds.mark_dispatched(routed_model)
             chunks = _as_chunks(
                 self.provider.open(request),
                 coalescer,

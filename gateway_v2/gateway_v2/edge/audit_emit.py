@@ -27,6 +27,7 @@ from gateway_v2.domain.decision import Decision, DecisionRecord, Disposition
 from gateway_v2.domain.posture import OVERLOAD_SHED
 from gateway_v2.edge import errors
 from gateway_v2.edge.console_projection import console_from_holds
+from gateway_v2.edge.incident_attempt import feed_attempt
 from gateway_v2.edge.incident_audit import (
     effective_refuse_code,
     incident_is_cut,
@@ -80,6 +81,7 @@ def emit_chat_audit(
     """
     refuse_code = effective_refuse_code(holds, refuse_code)
     observe_outcome(observer, holds, refuse_code)
+    feed_attempt(emit, holds, refuse_code)  # GW29: the risk tracker sees this attempt (tap only)
     if emit is None or not holds.request_id or not holds.org_id:
         return
     try:

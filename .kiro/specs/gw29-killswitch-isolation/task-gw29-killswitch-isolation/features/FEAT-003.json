@@ -1,0 +1,24 @@
+{
+  "id": "FEAT-003",
+  "type": "feat",
+  "description": "Ops wiring and writer side: notifier pump + ticker + catalog loader + interim constraint source + incident_wiring, production profile wiring (state_runtime aliases/ledger, publisher/series_count via edge/incident_publish.py, readiness), and state_control projector/writer (om: scope, flag gate, StateWriter.isolation). Depends on FEAT-001/002 (state_control part only on domain). Implements tasks 16-18 of tasks.md in /work/suraj/AI_Mesh_Firewall/.worktrees/gw29/.kiro/specs/gw29-killswitch-isolation/",
+  "status": "completed",
+  "steps": [
+    "Task 16 new edge modules.",
+    "Task 17 production wiring; publisher.py is 748 lines, add only registration lines.",
+    "Task 18 state_control incident_scopes.py + writer.isolation + rollout guard."
+  ],
+  "acceptance_criteria": [
+    "Production profile has a real gate/control factory, never DevNoControlSource, never the fail-closed default",
+    "Publisher rendered series count equals declared (P10)",
+    "Notifier failure cannot change request outcome",
+    "state_control writes om:/iso: records only behind the flag and imports only gateway_v2.domain"
+  ],
+  "verification": [
+    "pytest -n 24 -q 0 failed",
+    "pytest -q tests/state_control",
+    "mypy --strict; ruff check .; lint-imports; python -m lint.check_http_outside_edge_resolve state_control"
+  ],
+  "blocked_reason": null,
+  "findings": "FEAT-003 done (tasks 16-18). Full suite 3584 passed / 107 skipped / 1 failed (declared tenant_scale: pinecone_transport.py:140 + state_control/valkey.py:100, both pre-existing); lgw29 subset 314 passed; tests/state_control 540 passed; mypy clean except the 9 pre-existing import-not-found; ruff, lint-imports (3 kept), capacity/mutable/frozen/http/sizes/provenance/secret_headers gates exit 0.\nNEW edge modules: incident_catalog.py (AMF_MODEL_CATALOG JSON {models:[{name,provider,tags,sensitivity,aliases}]}, AMF_MODEL_FALLBACKS inline 'a=b,c=d', AMF_MODEL_AUTO_TARGET; CatalogError; CatalogConfig; InterimConstraintSource known=False without catalog), notifier_pump.py (NotifierPump, RerouteLimiter, IncidentTicker, LoggingNotifier), incident_wiring.py (build_incident, IncidentWiring, outcome_for, IncidentAuditTap), incident_publish.py (IncidentPublication + incident_series_count; fixed 27 scalars + top-K risk family padded to K+other+overflow via CardinalityDirectory). Edits: publisher.py (+optional incident= kwarg, 759 lines), series_count untouched (term lives in incident_publish), state_runtime.py (aliases kwarg, set_revocation_observer, LifespanHook + StateServedApp(app, runtime, hooks)), serve.py (_assemble_app pops lifespan_hooks), production_profile.py (_wire_incident, _signed_state_readiness; deps gain incident_gate, incident_recheck, control_factory, audit=IncidentAuditTap, lifespan_hooks=(wiring,); boot line now 'kill switch -> enforced ...'; CatalogError/CapacityUnset/Unavailable -> ProfileError). state_control: incident_scopes.py (IncidentScopePolicy, policy_from_env, org_model_projection, isolation_body, is_isolation_scope), projector.py (desired_state(view, policy) and Projector(incident_scopes=); om: projected only when flag AND AMF_GATEWAY_MIN_SCOPE_GENERATION>=2; _switches_off now SKIPS iso: scopes so the projector never clears an isolation), projector_service.py (ProjectorConfig.incident_scopes from env), writer.py (StateWriter.isolation, idempotent for an active origin=auto record).\nFOR FEAT-004 / OPEN: (1) NOTHING in the request path calls IncidentWiring.record_attempt(org_id=, model=, outcome=outcome_for(...)) yet, so the risk tracker is never fed in production and auto-isolation cannot fire there (routes.py is at 799 lines). L29-3 local test can drive wiring.record_attempt / risk.observe directly. (2) IncidentWiring.refresh_gauges runs on every scrape via IncidentPublication; observe_cut is counted by IncidentAuditTap on cut_* audit records (needs audit to flow through deps['audit'], which the production profile now always sets; with no downstream sink the tap returns False and drops the record). The gate counts its own refusals and reroutes. (3) Pump/ticker start in the StateServedApp lifespan only when production_profile builds the app; NotifierPump default sink is LoggingNotifier (no real delivery: declared OPEN). (4) Existing test_gw36_s3_boot asserted 'NOT enforced'; updated to the new boot line. (5) tests added: edge test_lgw29_{notifier,ticker,catalog,outcome_mapping,series_count_property,production_wiring}.py, state_control test_lgw29_{projector,writer_isolation}.py (Postgres-16 case skips without AMF_PG_DSN)."
+}

@@ -176,8 +176,10 @@ async def collect_and_enforce(
     except PolicyRegexRefusal as refused:
         return EnforcedOutput(deltas=(), refuse_code=refused.code)
     except UpstreamFailed as failed:
+        holds.note_attempt_code(failed.code)
         return EnforcedOutput(deltas=(), refuse_code=failed.code)
     except OutputBlocked as blocked:
+        holds.note_attempt_code(block_code)
         return EnforcedOutput(
             deltas=(), refuse_code=block_code, output_decision=blocked.decision,
         )
@@ -218,7 +220,7 @@ async def _collect_output_channels(
     # GW29: re-check the ALREADY-ROUTED model ABOVE mark_dispatched, so a refusal is refunded (6.4).
     recheck_or_raise(deps.incident_recheck, org_id=org_id, model=routed_model)
     # The provider is about to be opened: record the dispatch so the spend stands (C29).
-    holds.mark_dispatched()
+    holds.mark_dispatched(routed_model)
     async for event in deps.provider.open(
         UpstreamRequest(destination=destination, body=body)
     ):

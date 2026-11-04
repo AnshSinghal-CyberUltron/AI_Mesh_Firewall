@@ -1,0 +1,25 @@
+{
+  "id": "FEAT-001",
+  "type": "feat",
+  "description": "Lower layers bottom-up: baseline+evidence, domain/incident.py + posture codes, resources split + incident accessors (resources.py is AT the 800-line cap), audit constructors, dispatch/incident_routing.decide_route, KillSwitchSnapshot extension, IncidentState, IncidentGate, ModelRiskTracker/AutoIsolator/RevocationLedger/IncidentMetrics, checkpoint A. Implements tasks.md in /work/suraj/AI_Mesh_Firewall/.worktrees/gw29/.kiro/specs/gw29-killswitch-isolation/ tasks 1-10.",
+  "status": "completed",
+  "steps": [
+    "Read tasks.md conventions, SIZE HAZARDS and Gate commands, then design.md sections 3-5, 8.",
+    "Task 1: baseline run + evidence dir + caller grep.",
+    "Tasks 2-9 in order, each with its tests (P1-P7, P11-P15 tagged in source) and verify command.",
+    "Task 10: full G1-G4 checkpoint; commit per layer."
+  ],
+  "acceptance_criteria": [
+    "Full offline suite has 0 failed and the baseline pass count plus new tests",
+    "mypy --strict, ruff, lint-imports clean",
+    "runtime/resources.py <= 800 lines and check_sizes/check_capacity_literals exit 0",
+    "All lgw29 admit/domain/dispatch/runtime/audit tests pass"
+  ],
+  "verification": [
+    "pytest -q -k lgw29 (container)",
+    "mypy --strict; ruff check .; lint-imports",
+    "python -m lint.check_sizes gateway_v2; python -m lint.check_capacity_literals gateway_v2; python -m lint.check_no_module_mutable gateway_v2; python -m lint.check_frozen_dataclasses gateway_v2"
+  ],
+  "blocked_reason": null,
+  "findings": "Tasks 1-10 done, commits f71eb5c5..3be86b54 on gw29-killswitch-isolation. GATES: run via docs/plans/evidence/2026-11-04-gw29/gates.sh {g1|g1b|g2|g3|g4|'<cmd>'}; image gw29-dev (python:3.12-slim + dev/conformance/serve deps + pytest-xdist + git; Dockerfile /tmp/gw29img), mounts the parent .git ro so secret-headers runs. Checkpoint A: 3316 passed/106 skipped/1 failed (baseline 3037/112/2); lgw29 subset 272 passed. PRE-EXISTING, not GW29: test_check_tenant_scale::test_the_shipped_data_plane_is_clean fails on base commit (dispatch/vector_transports/pinecone_transport.py:140 .keys()) + declared state_control/valkey.py:100; mypy --strict always shows 9 import-not-found for optional vector SDKs (vectors extra not installed) - treat '9 errors' as clean. NEVER use git stash: the stash stack is shared by all worktrees (I popped and then restored the user's a90483a). API FOR LATER STEPS: domain/incident.py has GateVerdict.proceed/refuse, IncidentDecider, fail_closed_incident/recheck/org (cause 'unwired', retry=MIN_RETRY_AFTER_S), canonical_model, KillEvaluation(state str,'stale'|'ok'|'engaged'; .stale/.engaged), StreamBinding, RerouteNote, IncidentEvent, NO_ROUTED_MODEL='-' (routed_model of decide_org proceed verdicts). Posture codes added to domain/posture.py. admit: KillSwitchSnapshot(aliases=MappingProxyType) + evaluate(org, canonical_model) + isolation_record/isolation_models/isolation_records + view().org_models/isolations/quarantined; on_count drift counts engaged RECORD KEYS (two keys aliasing one model = 2). IncidentState(switches, wall, clock, local_slots, auto_duration_s, max_hold_s, probation_hook) with active_isolation/status_of/snapshot_models/expired_signed_count/add_local/sweep + local_evicted_total/local_suppressed_total. IncidentGate(switches, state, catalog|None, aliases, fallbacks, constraints, retry_jitter_s, metrics, emit, rng, wall, auto_target=None, rehydrate_period_ms, refresh_ms); decide/recheck/decide_org never raise; refusal counters bump inside the gate (edge must NOT double-count refusals). Reroute emits IncidentEvent REROUTE via emit (exceptions swallowed). ModelRiskTracker(clock, params=RiskParams.from_contract(c), max_models, known=callable) observe/score/readings/reset_for_recovery/untracked_total; AutoIsolator(state, risk, switches, fallbacks, catalog, constraints, params=IsolatorParams(threshold,min_orgs,auto_duration_s), wall, emit, metrics).evaluate(model)/sweep(); RevocationLedger(clock, slots, retention_s, on_floor_cut).observe(records)/revoked_since(key_hash, feed_seq); IncidentMetrics SERIES_COUNT=27 (prefix amf_incident_), risk_family_series_count(K,other,overflow) for edge/series_count.py. audit/record.py: incident_refusal/incident_cut/incident_reroute/incident_change (+TERMINATED/REROUTED/ISOLATION_CHANGE, INCIDENT_REQUEST_ID for system events). runtime: ResourceContract(VectorBoundsMixin, IncidentBoundsMixin) - all D8 accessors + risk_buckets(); resources.py is 781 lines; env helpers in runtime/resources_env.py. Test helpers: tests/admit/_lgw29_support.py (Clock, ks, iso_body, snapshot, load, make_state, local_auto, contract, risk_tracker, Rig, GateRig, Catalog, Fallbacks, Constraints), tests/dispatch/_lgw29_support.py. Small test-only edit: tests/admit/test_lgw05c_killswitch.py signature pin now includes 'aliases'."
+}
