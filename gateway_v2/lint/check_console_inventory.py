@@ -13,9 +13,11 @@ from lint.console_inventory import (
     CONSUMERS_PATH,
     FIELDS_PATH,
     build,
+    contract_diff,
     diff_reads,
     dump,
     repo_root,
+    vocabulary_messages,
 )
 
 
@@ -88,7 +90,12 @@ def main(argv: list[str] | None = None) -> int:
     if "--write" in args:
         write(repo)
         return 0
+    if "--contract-diff" in args:
+        for line in contract_diff(repo):
+            print(line)
+        return 0
     messages = compare(repo)
+    messages.extend(vocabulary_messages(repo))
     messages.extend(compare_admin_ledger(repo))
     for message in messages:
         print(message)

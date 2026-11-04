@@ -161,6 +161,24 @@
    "reason": "MCP discover, call, oauth, and the record-event callback belong to GW17. gateway-v2 does not register them."
   },
   {
+   "callers": [],
+   "decision": "retire",
+   "decision_ref": "GW35 D-11 (requirements 7.4)",
+   "owner": "gw35",
+   "path": "/v1/observability",
+   "reason": "Used by scripts and the demo, not by the console (runbook V-06). gateway-v2 does not serve it; metrics are at /metrics.",
+   "signed": null
+  },
+  {
+   "callers": [],
+   "decision": "retire",
+   "decision_ref": "GW35 D-11 (requirements 7.4)",
+   "owner": "gw35",
+   "path": "/v1/policy/check",
+   "reason": "Used by scripts and the demo, not by the console (runbook V-06). gateway-v2 enforces policy in the chat path and has no standalone check route.",
+   "signed": null
+  },
+  {
    "callers": [
     "frontend/src/components/howToUseContent.js",
     "gateway/ai_mesh_gateway/main.py"
@@ -219,6 +237,15 @@
    "owner": "GW15",
    "path": "/v1/responses",
    "reason": "GW15 still owns this route. It stays the existing 501 placeholder. This card does not add a success body."
+  },
+  {
+   "callers": [],
+   "decision": "retire",
+   "decision_ref": "GW35 D-11 (requirements 7.4)",
+   "owner": "gw35",
+   "path": "/v1/usage",
+   "reason": "Used by scripts and the demo, not by the console (runbook V-06). gateway-v2 does not serve it, so it is recorded as retired, not stubbed.",
+   "signed": null
   },
   {
    "callers": [

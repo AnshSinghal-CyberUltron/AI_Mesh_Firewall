@@ -39,6 +39,6 @@ export function retiredFromMessage(text) {
   return {
     title: "Retired on gateway v2",
     message: text.slice(RETIRED_CODE.length + 1).trim(),
-    path: "/v1/mcp/internal/discover-tools",
+    path: "",
   };
 }

@@ -290,6 +290,31 @@ def _silent_defaults(repo: Path) -> list[dict[str, object]]:
     return unique
 
 
+def _literal_assign(path: Path, name: str) -> object:
+    """The literal value assigned to module-level ``name`` (``ast.literal_eval``)."""
+    for node in _module(path).body:
+        if isinstance(node, ast.Assign):
+            for target in node.targets:
+                if isinstance(target, ast.Name) and target.id == name:
+                    return ast.literal_eval(node.value)
+    raise LookupError(name)
+
+
+def v2_adapter_consumers(repo: Path) -> dict[str, object]:
+    """GW35: the console vocabulary the control adapter ranks, and the reserved audit org."""
+    adapter = repo / "control" / "ai_mesh_control" / "core" / "v2_audit_adapter.py"
+    record = repo / "gateway_v2" / "gateway_v2" / "audit" / "record.py"
+    rank = _literal_assign(adapter, "_RANK")
+    if not isinstance(rank, dict):
+        raise TypeError("_RANK is not a dict literal")
+    return {
+        "file": "control/ai_mesh_control/core/v2_audit_adapter.py",
+        "console_rank": dict(sorted(rank.items(), key=lambda item: item[1])),
+        "no_console_outcomes": ["rejected", "shed"],
+        "reserved_orgs": [str(_literal_assign(record, "UNAUTHENTICATED_ORG"))],
+    }
+
+
 def control_plane_consumers(repo: Path) -> dict[str, object]:
     calls: dict[str, set[str]] = {}
     for path in _frontend_sources(repo):
@@ -302,6 +327,7 @@ def control_plane_consumers(repo: Path) -> dict[str, object]:
             {"path": path, "files": sorted(files)} for path, files in sorted(calls.items())
         ],
         "event_endpoints": _route_rows(repo),
+        "v2_audit": v2_adapter_consumers(repo),
         "drain": {
             "function": "_build_enforcement_metadata",
             "file": "control/ai_mesh_control/core/tasks.py",
@@ -457,3 +483,78 @@ def diff_reads(committed: list[dict[str, object]], fresh: list[dict[str, object]
         where = files[0] if files else "?"
         messages.append(f"inventory lists {field} via {via} but {where} no longer reads it")
     return messages
+
+
+# --------------------------------------------------------------------------- #
+# GW35: the v2 contract, the vocabulary mirror, and the page audit.
+# --------------------------------------------------------------------------- #
+
+CONSOLE_SCHEMA_PATH = Path("gateway_v2/gateway_v2/audit/console_schema.py")
+PIPELINE_TRACE_JS = Path("frontend/src/utils/pipelineTrace.js")
+_VOCAB_JS_RE = re.compile(r"export const STAGE_ACTION_VOCAB = \[([^\]]*)\]")
+_V2_GUARDS = ("isGatewayV2Trace", "gateway_v2")
+
+
+def v2_contract_reads() -> frozenset[str]:
+    """The fields gateway v2 produces on the console contract (GW14b, GW35)."""
+    return frozenset(
+        {
+            "action", "request_id",  # zeroshield.*
+            "final_action", "plan_version", "stages",  # pipeline_trace.*
+            "name", "ran", "deciding_rule",  # pipeline_trace.stages[].*
+            "source",
+            "x-zeroshield-action", "x-request-id", "x-amf-produced-mode",
+        },
+    )
+
+
+def python_vocab(repo: Path) -> tuple[str, ...]:
+    value = _literal_assign(repo / CONSOLE_SCHEMA_PATH, "STAGE_ACTION_VOCAB")
+    if not isinstance(value, tuple):
+        raise TypeError("STAGE_ACTION_VOCAB is not a tuple literal")
+    return tuple(str(item) for item in value)
+
+
+def frontend_vocab(repo: Path) -> tuple[str, ...]:
+    text = (repo / PIPELINE_TRACE_JS).read_text(encoding="utf-8")
+    match = _VOCAB_JS_RE.search(text)
+    if match is None:
+        raise LookupError("STAGE_ACTION_VOCAB array literal not found in pipelineTrace.js")
+    return tuple(re.findall(r"""["']([a-z_]+)["']""", match.group(1)))
+
+
+def vocabulary_messages(repo: Path) -> list[str]:
+    """Fail when the frontend stage-action vocabulary differs from the schema's."""
+    py, js = set(python_vocab(repo)), set(frontend_vocab(repo))
+    if py == js:
+        return []
+    return [
+        "stage-action vocabulary differs: schema-only "
+        f"{sorted(py - js)}, frontend-only {sorted(js - py)}",
+    ]
+
+
+def contract_diff(repo: Path) -> list[str]:
+    """Frontend reads outside the v2 contract in files that never check for a v2 source.
+
+    A read is acceptable when the file guards on ``isGatewayV2Trace`` / ``gateway_v2`` (it
+    branches on the source) or when it is a v1-only page recorded in the ledger. The rest
+    is the page audit: each line needs a source branch, a "not reported" substitute, or a
+    v1-only note.
+    """
+    contract = v2_contract_reads()
+    fresh = frontend_reads(repo, producer_keys(repo))
+    lines: list[str] = []
+    for row in fresh:
+        field = str(row["field"])
+        if field in contract or str(row["via"]) == "header":
+            continue
+        files = row["files"]
+        if not isinstance(files, list):
+            continue
+        for rel in files:
+            text = (repo / str(rel)).read_text(encoding="utf-8", errors="replace")
+            if any(guard in text for guard in _V2_GUARDS):
+                continue
+            lines.append(f"{rel}: reads {field} via {row['via']} with no gateway-v2 guard")
+    return sorted(set(lines))
