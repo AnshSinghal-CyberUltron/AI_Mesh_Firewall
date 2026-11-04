@@ -33,15 +33,21 @@ _CLOSED = "closed"
 class StreamResponse:
     """Per-request, mutable (like ``FirstByteLatch``); the module holds no mutable state."""
 
-    __slots__ = ("_emit_error", "_send", "_state")
+    __slots__ = ("_emit_error", "_request_id", "_send", "_state")
 
     def __init__(
-        self, send: ASGISend, *, emit_error: Callable[[str], Awaitable[None]]
+        self,
+        send: ASGISend,
+        *,
+        emit_error: Callable[[str], Awaitable[None]],
+        request_id: str | None = None,
     ) -> None:
         """``emit_error(code)`` writes the plain HTTP error for ``code`` (the same bytes a
-        non-stream request gets, with the console projection headers)."""
+        non-stream request gets, with the console projection headers); ``request_id`` is echoed
+        as ``x-request-id`` on the 200 start."""
         self._send = send
         self._emit_error = emit_error
+        self._request_id = request_id
         self._state = _PENDING
 
     @property
@@ -61,7 +67,7 @@ class StreamResponse:
     async def start(self) -> None:
         """Send ``http.response.start`` (200 ``text/event-stream``); idempotent."""
         if self._state == _PENDING:
-            await start_sse(self._send)
+            await start_sse(self._send, self._request_id)
             self._state = _STARTED
 
     async def write(self, frame: bytes) -> None:

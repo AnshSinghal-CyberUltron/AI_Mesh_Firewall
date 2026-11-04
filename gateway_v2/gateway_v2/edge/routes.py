@@ -426,7 +426,9 @@ class ChatRoute:
                 ),
             )
 
-        response = StreamResponse(send, emit_error=emit_error)
+        response = StreamResponse(
+            send, emit_error=emit_error, request_id=holds.request_id or None
+        )
         coalescer = Coalescer(contract=self.contract, active_streams=self.active_streams)
         verdict = coalescer.admit()
         identity = StreamIdentity(

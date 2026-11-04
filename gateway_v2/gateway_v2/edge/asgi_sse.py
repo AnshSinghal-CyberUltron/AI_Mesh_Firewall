@@ -119,15 +119,16 @@ async def read_body_bounded(receive: ASGIReceive, max_bytes: int) -> bytes | Non
     return b"".join(chunks)
 
 
-async def start_sse(send: ASGISend) -> None:
-    """Open a ``200`` SSE response on the ASGI channel (``more_body`` keeps it streaming)."""
-    await send(
-        {
-            "type": "http.response.start",
-            "status": 200,
-            "headers": list(_SSE_HEADERS),
-        }
-    )
+async def start_sse(send: ASGISend, request_id: str | None = None) -> None:
+    """Open a ``200`` SSE response on the ASGI channel (``more_body`` keeps it streaming).
+
+    ``request_id`` (GW34) is echoed as ``x-request-id`` so the SDK's ``response.request_id`` works
+    on a stream as it does on every other reply.
+    """
+    headers = list(_SSE_HEADERS)
+    if request_id:
+        headers.append((b"x-request-id", request_id.encode("latin-1")))
+    await send({"type": "http.response.start", "status": 200, "headers": headers})
 
 
 async def send_sse(send: ASGISend, frame: bytes) -> None:
