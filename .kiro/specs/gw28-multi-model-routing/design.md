@@ -30,8 +30,8 @@ Five structural choices, each argued below:
    follow it (Req 4).
 5. **The stall bound is app-level and phase-specific**: a cumulative pre-content deadline
    (30 s), a mid-stream gap bound (0.8 s) and a total ceiling, enforced by `bounded_events` around
-   each attempt; the httpx transport timeout drops from 300 s to the pre-content bound as a
-   backstop; and the edge's own streaming timer is widened so it can never pre-empt the router
+   each attempt; the httpx transport timeout is unchanged (`max_stream_duration_s()`) and is only a
+   backstop, since the 30 s bound is application-level; and the edge's own streaming timer is widened so it can never pre-empt the router
    (D-13). All numbers are derived in `runtime/resources.py` (Req 5).
 
 **Technology stack (locked on approval):** Python ≥ 3.12, `asyncio` (`asyncio.wait_for`), stdlib
@@ -240,16 +240,23 @@ from `runtime` to `dispatch` **by injection** (floats/ints passed by `edge`), th
   one pool.
   **Production multi-client lifecycle and budget.** `build_routed_provider` may receive several
   distinct clients (one per provider). It (1) returns a frozen `RoutedBundle(routed, closers)` where
-  `closers` is the `aclose` of every distinct client (de-duplicated by `id()`), **minus** clients the
-  caller declares as already owned via `owned_elsewhere: Collection[object]` (so the dev profile's
-  shared `deps["provider"]` is never closed twice); the caller must extend `closers` with
+  `closers` is the `aclose` of every **factory-built** client only (one per distinct provider key, so no
+  `id()` de-duplication is needed). Clients the caller already owns are passed as
+  `owned_elsewhere: Mapping[ProviderKey, ProviderClient]` and are never closed here (so the dev
+  profile's shared `deps["provider"]` is never closed twice). **Mapping rule:** `ProviderKey = str`
+  (C1). For each candidate, `clients[candidate_id] = owned_elsewhere.get(c.provider_key)` if present,
+  else the factory-built client for `c.provider_key` (built once per distinct key, shared by every
+  candidate with that key). `n` = number of distinct provider keys **not** in `owned_elsewhere`;
+  `RoutedProvider.clients` is this candidate_id-keyed mapping. `RoutedBundle` is
+  `@dataclass(frozen=True, slots=True)` with `routed: RoutedProvider` and
+  `closers: tuple[Callable[[], Awaitable[None]], ...]`; the caller must extend `closers` with
   `bundle.closers`; (2) sizes the pools itself. `pool_size(PROVIDER)` equals `workers()`, so the budget is small.
   `provider_pool_share(n)` is `pool_size(PROVIDER) // n` with **no floor**; it raises
   `CapacityUnavailable` when the result is `< 1` or `n < 1`. A table with more distinct clients than
   `pool_size(PROVIDER)` therefore **refuses to boot** (fail closed, `RoutingConfigError` wrapping the
   cause). The budget is made checkable by construction: `build_routed_provider` takes a
-  `client_factory: Callable[[ProviderKey, int], OpenAIUpstreamProvider]` (key -> built client) and
-  calls it with `connections=share` for each distinct provider key; it never receives pre-built
+  `client_factory: Callable[[ProviderKey, int], OpenAIUpstreamProvider]` (key, share -> built client) and
+  calls it with `connections=share` for each distinct non-owned provider key; it never receives pre-built
   clients for sizing. Callers that already own a client pass it via `owned_elsewhere` (not sized,
   not closed). As a second check, `OpenAIUpstreamProvider` gains a read-only `connections: int`
   property (additive, same spirit as `per_request_safe`) and the factory asserts
@@ -336,6 +343,8 @@ class Candidate:
     upstream_model: str          # model name sent upstream; non-empty unless passthrough
     served_models: frozenset[str]  # client aliases; non-empty unless passthrough
     weight: int                  # >= 1 (vnode count)
+    provider_key: str            # ProviderKey = str; selects the client; charset-checked in build;
+                                 # part of P1 equal-input comparison, NOT part of the HRW key
     passthrough: bool = False    # D-3: fallback_set only
 
 @dataclass(frozen=True, slots=True)
@@ -594,7 +603,7 @@ scripts (P4).
   `routing = None`. The kwargs dict (`"provider": provider, ...` near L356) gains `"routing": routing`.
   `closers` (near L518) is unchanged and sufficient. The boot log states the four bounds (Req 5.6).
 - **`edge/production_profile.py`.** Leaves the fail-closed provider default. GW28 exposes
-  `build_routed_provider(contract, table, client_factory, snapshot_source, *, owned_elsewhere=(), log)` in
+  `build_routed_provider(contract, table, client_factory, snapshot_source, *, owned_elsewhere: Mapping[ProviderKey, ProviderClient] = {}, log)` in
   `edge/` (a thin factory reading every bound from `ResourceContract`) returning
   `RoutedBundle(routed, closers)` (D-11). **It logs the four bounds itself** at construction through
   the same `log` callable the dev boot uses, one line
@@ -694,6 +703,7 @@ are formatting, as in `routing.py`.
 | Type | Layer / file | Frozen/slotted | Notes |
 |---|---|---|---|
 | `Candidate`, `CandidateSet`, `RoutingTable` | `dispatch/routing_types.py` | yes | boot-time config, by value |
+| `RoutedBundle` | `edge/production_profile.py` | yes (`frozen=True, slots=True`) | `routed` + `closers` tuple |
 | `RoutingContext`, `RoutingSnapshot` | `dispatch/routing_types.py` | yes | `Selection_Inputs`, out of band |
 | `RoutingDecision`, `RoutingRefusal` | `dispatch/routing_types.py` | yes | trace/audit values, no content |
 | `StallBounds` | `dispatch/stall_guard.py` | yes | validated ordering |
@@ -842,15 +852,15 @@ Unit/integration (non-property):
   for longer than the chat first-event bound but shorter than `max_stream_duration_s` still succeeds
   (the client and its timeout are unchanged); the same silence on routed chat yields `upstream_timeout`
   at `first_event_s`. Also asserts the profile builds exactly one `OpenAIUpstreamProvider`.
-- **T-life-1 (D-11, round-4 F1).** `build_routed_provider` with three distinct fake clients plus one
-  `owned_elsewhere`: `bundle.closers` has exactly three entries; running them closes each client once
+- **T-life-1 (D-11, round-4 F1).** `build_routed_provider` with three distinct provider keys plus one key supplied via
+  `owned_elsewhere`: `bundle.closers` has exactly three entries (factory-built only); running them closes each client once
   and the shared one zero times; for a contract with pool_size(PROVIDER)=P, `sum` of `n * provider_pool_share(n)` is `<= P` for every n in 1..P; negative case: n = P+1 raises `CapacityUnavailable` and `build_routed_provider` refuses to boot; clients are created by the factory with `connections == share` (checked via the `connections` property).
 - **T-log-1 (Req 5.6, round-4 F4).** Both the dev boot and `build_routed_provider` emit the bounds line
   with four values equal to the contract accessors.
 - **T-edge-4 (D-16).** Audit `record_started` destination equals `DispatchRouter.select(plan)`
   and is unchanged by routing; the trace destination equals the candidate destination `rebind` set.
-- `dev_profile` no longer passes `max_stream_duration_s()` as the httpx timeout (assert on the built
-  factory/timeout).
+- `dev_profile` builds exactly one `OpenAIUpstreamProvider` whose timeout equals
+  `contract.max_stream_duration_s()` (unchanged).
 - `edge/errors.py` maps every `ROUTING_*` code to a non-generic body (iterate the posture codes);
   `sse.py` likewise.
 - End-to-end through `openai_nonstream` with a never-yielding fake upstream returns 504 within the
@@ -1003,3 +1013,16 @@ functions.
   `pipeline_trace`. Upstream model names are not included.
 - **Honoured constraints.** No capacity literal added outside `runtime/resources.py`; GW27 D-13
   two-file allowlist unchanged. No live gate is run or claimed.
+## Review responses (round 6)
+- **Finding 1 (MEDIUM) — resolved (C1 `Candidate.provider_key`, D-11, C6, Data Models, T-life-1).**
+  `ProviderKey = str` added to `Candidate` (charset-checked in `CandidateSet.build`, in P1 equality, not
+  in the HRW key). `owned_elsewhere` is a `Mapping[ProviderKey, ProviderClient]`; the
+  candidate_id -> client mapping rule, `n`, closers (factory-built only, `id()` dedupe dropped) and
+  `RoutedBundle` (frozen, slotted) are defined.
+- **Finding 2 (MEDIUM) — resolved (Overview item 5, Testing Strategy).** Stale text rewritten: the
+  httpx timeout is unchanged; test asserts one client with timeout `max_stream_duration_s()`.
+- **Finding 3 (LOW) — addressed.** The PR description must state Req 5 is closed for routed chat and
+  the dev profile only; with `routing=None` the 300 s stall persists until GW36 S5.
+- **Finding 4 (NIT) — kept as Open Item** (closed console schema; owner decision).
+- **Honoured constraints.** No capacity literal added; GW27 D-13 two-file allowlist unchanged. No live
+  gate is run or claimed.
