@@ -1,3 +1,4 @@
+# ruff: noqa: E501  (GW33 test file: long assertion/docstring lines kept readable)
 """GW33 task 3.6 / D-23, Properties 10 and 16: the stateless per-delta canary overlap scan."""
 from __future__ import annotations
 
@@ -14,7 +15,7 @@ from gateway_v2.egress.stream import DownstreamFrame, StreamPipeline, UpstreamCh
 from gateway_v2.resolve import PlanResolver
 from gateway_v2.runtime.holdback_config import load_holdback_config
 from gateway_v2.runtime.holdback_metrics import HoldbackMetrics
-from tests.e2e.gw33_support import TOKEN, contract, plan_of, rule, run, split
+from tests.e2e.gw33_support import TOKEN, contract, plan_of, rule, run
 
 _ITERATIONS = 120
 _OVERLAP = contract().canary_scan_overlap_chars()

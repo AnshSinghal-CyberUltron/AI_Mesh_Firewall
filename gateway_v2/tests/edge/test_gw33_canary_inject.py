@@ -1,3 +1,4 @@
+# ruff: noqa: E501  (GW33 test file: long assertion/docstring lines kept readable)
 """GW33 task 9.1/9.5: canary injection (format, shapes, secrecy, D-19 failure semantics)."""
 from __future__ import annotations
 
@@ -88,7 +89,10 @@ def test_with_canary_adds_one_verified_system_slot_and_survives_rendering() -> N
     # The rendered provider body carries the token as a system message built from a verified delta.
     from gateway_v2.dispatch.transform import BODY_DELTAS_KEY
 
-    body = with_openai_body({BODY_DELTAS_KEY: grown.text_deltas}, grown, _CONTRACT)
+    body = with_openai_body(
+        {BODY_DELTAS_KEY: grown.text_deltas}, grown, _CONTRACT,
+        model=grown.model, org_ceiling=_CONTRACT.default_response_token_ceiling(),
+    )
     assert body is not None
     rendered = json.dumps(body, default=lambda o: dict(o), sort_keys=True)
     assert ticket.reveal() in rendered and '"system"' in rendered

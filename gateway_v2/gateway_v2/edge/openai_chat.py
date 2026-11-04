@@ -187,6 +187,25 @@ class ChatSurface:
         """
         self._deps = deps
 
+    def _pin_request(
+        self, plan: ExecutionPlan, req: CanonicalRequest, holds: RequestHolds,
+    ) -> tuple[CanonicalRequest, str | None]:
+        """Clamp the output budget to v1's bounds BEFORE the cost is charged (Group F).
+
+        ``n`` -> ``max_completions()``, ``max_tokens`` -> ``min(org ceiling, hard cap)``. Then the
+        plan controls are noted and GW33 D-11/D-19 injects the plan-driven canary slot, or returns
+        a pre-dispatch refusal code (FAIL_CLOSED rule).
+        """
+        req = clamp_output_budget(
+            req,
+            org_ceiling=org_response_ceiling(plan, self._deps.contract),
+            contract=self._deps.contract,
+        )
+        holds.note_controls(plan.controls)
+        injected = inject_canary_for_plan(plan, req, holds, self._deps.contract)
+        if isinstance(injected, str):
+            return req, injected
+        return injected, None
     async def run_lifecycle(
         self,
         scope: ASGIScope,
@@ -245,21 +264,10 @@ class ChatSurface:
         if plan is None:
             return req, _refused(REFUSE_PLAN_UNAVAILABLE)
 
-        # Plan pinned — clamp the output budget to v1's bounds BEFORE the cost is charged
-        # (Group F): ``n`` → ``max_completions()``, ``max_tokens`` → ``min(org ceiling, hard cap)``.
-        req = clamp_output_budget(
-            req,
-            org_ceiling=org_response_ceiling(plan, self._deps.contract),
-            contract=self._deps.contract,
-        )
-
-        holds.note_controls(plan.controls)
-        # GW33 D-11/D-19: plan-driven canary slot, or a pre-dispatch refusal (FAIL_CLOSED rule).
-        injected = inject_canary_for_plan(plan, req, holds, self._deps.contract)
-        if isinstance(injected, str):
-            return req, _refused(injected)
-        req = injected
-
+        # Plan pinned: clamp the output budget, record controls, inject the canary (or refuse).
+        req, pin_refuse = self._pin_request(plan, req, holds)
+        if pin_refuse is not None:
+            return req, _refused(pin_refuse)
         holds.note_tenant(identity.org_id)
         request_id = self._request_id(identity, req)
         holds.note_request(request_id)

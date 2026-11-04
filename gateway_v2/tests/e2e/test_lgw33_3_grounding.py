@@ -1,3 +1,4 @@
+# ruff: noqa: E501  (GW33 test file: long assertion/docstring lines kept readable)
 """LGW33-3 (offline equivalent, not the live gate): an ungrounded answer on a RAG request is flagged
 per the org's hallucination action, and the path makes zero firewall-attributable provider calls."""
 from __future__ import annotations

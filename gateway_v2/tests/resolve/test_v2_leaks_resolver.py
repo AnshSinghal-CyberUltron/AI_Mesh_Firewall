@@ -72,7 +72,8 @@ _PLACEHOLDER = "[REDACTED]"
 # categories most generated cases would resolve to ALLOW and prove nothing.
 _POOL = (Category.PII, Category.SECRET, Category.CREDENTIAL)
 # GW33: REWRITE is now its own disposition; the frozen pre-fix reference below models plans WITHOUT
-# REWRITE rules (Property 4 preservation). REWRITE is covered by tests/resolve/test_gw33_resolver.py.
+# REWRITE rules (Property 4 preservation). REWRITE is covered by
+# tests/resolve/test_gw33_resolver.py.
 _REDACTING = (Action.REDACT,)
 
 
@@ -241,7 +242,8 @@ def _frozen_winning_action(rules: Sequence[Rule]) -> Action | None:
 def _strip_index(decision: Decision) -> Decision:
     """``decision`` with every ``finding_index`` reset to the pre-fix default ``None``."""
     # GW33 adds ``review_required`` (and ``codes``): additive fields the frozen pre-fix reference
-    # does not model, so they are normalised here and asserted in tests/resolve/test_gw33_resolver.py.
+    # does not model, so they are normalised here and asserted in
+    # tests/resolve/test_gw33_resolver.py.
     return replace(
         decision,
         per_finding=tuple(replace(fd, finding_index=None) for fd in decision.per_finding),

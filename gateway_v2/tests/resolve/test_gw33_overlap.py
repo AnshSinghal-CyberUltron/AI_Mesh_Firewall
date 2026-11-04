@@ -3,8 +3,16 @@ from __future__ import annotations
 
 import random
 
-from gateway_v2.domain import Category, Decision, Disposition, Finding, FindingDisposition
-from gateway_v2.domain import FindingStatus, Span, Transformation
+from gateway_v2.domain import (
+    Category,
+    Decision,
+    Disposition,
+    Finding,
+    FindingDisposition,
+    FindingStatus,
+    Span,
+    Transformation,
+)
 from gateway_v2.egress.output_guard import apply_decision
 from gateway_v2.resolve.rewrite import normalise_edits, render_template
 

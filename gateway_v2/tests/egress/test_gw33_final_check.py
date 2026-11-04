@@ -1,3 +1,4 @@
+# ruff: noqa: E501  (GW33 test file: long assertion/docstring lines kept readable)
 """GW33 tasks 3.5/3.6: the whole-channel final check and the typed terminal arms (both modes)."""
 from __future__ import annotations
 

@@ -1,3 +1,4 @@
+# ruff: noqa: E501  (GW33 test file: long assertion/docstring lines kept readable)
 """GW33 task 8.4a/8.4b/M-6: every `compile_plan` call site installs GW26-shaped and REWRITE plans."""
 from __future__ import annotations
 

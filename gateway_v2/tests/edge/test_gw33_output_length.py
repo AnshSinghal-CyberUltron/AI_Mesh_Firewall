@@ -1,3 +1,4 @@
+# ruff: noqa: E501  (GW33 test file: long assertion/docstring lines kept readable)
 """GW33 task 9.2a / D-13: a provider that ignores the clamp is cut with the declared code."""
 from __future__ import annotations
 

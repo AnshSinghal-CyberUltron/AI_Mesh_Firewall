@@ -1,3 +1,4 @@
+# ruff: noqa: E501  (GW33 test file: long assertion/docstring lines kept readable)
 """GW33 task 10.1: STRICT_WITHHOLD and INCREMENTAL equivalents for every new class and action
 (offline equivalent, not the live gate). Property 1 (restated) and Property 14 (hold bound)."""
 from __future__ import annotations

@@ -1,3 +1,4 @@
+# ruff: noqa: E501  (GW33 test file: long assertion/docstring lines kept readable)
 """GW33 task 7.7: the output corpus (L33-1/2/3 shapes plus negatives) against the detectors."""
 from __future__ import annotations
 

@@ -1,3 +1,4 @@
+# ruff: noqa: E501  (GW33 test file: long assertion/docstring lines kept readable)
 """GW33 task 7.2 / Property 6: IP and infrastructure leak classification."""
 from __future__ import annotations
 

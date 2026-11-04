@@ -1,3 +1,4 @@
+# ruff: noqa: E501  (GW33 test file: long assertion/docstring lines kept readable)
 """GW33 task 5: REWRITE in the resolver, the review flag, identity joins (Properties 3, 4, 8)."""
 from __future__ import annotations
 

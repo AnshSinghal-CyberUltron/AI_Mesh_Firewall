@@ -1,3 +1,4 @@
+# ruff: noqa: E501  (GW33 test file: long assertion/docstring lines kept readable)
 """GW33 task 3.4: the untrusted local rewrite proposer (accept only re-inspected ALLOW text)."""
 from __future__ import annotations
 
@@ -75,7 +76,7 @@ def test_accepted_proposal_swaps_replacement_only() -> None:
 
 
 def test_every_miss_keeps_the_template() -> None:
-    for bad in (None, "", "x" * 41, RuntimeError("boom"), asyncio.TimeoutError()):
+    for bad in (None, "", "x" * 41, RuntimeError("boom"), TimeoutError()):
         decision, stats = _run(_Proposer([bad, bad]), _clean)
         assert [t.replacement for t in decision.transformations] == ["[ip]", "[ip]"]
         assert stats == [RefineStats(applied=0, fallback_template=2)]

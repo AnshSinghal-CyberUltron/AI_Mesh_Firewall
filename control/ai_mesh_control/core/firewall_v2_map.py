@@ -304,7 +304,8 @@ def selection_errors(
         message = _refusal(field, spec, incoming[field])
         if message is not None:
             errors[field] = message
-    errors.update(_gw33_errors(incoming, previous, org_slug))
+    for field, message in _gw33_errors(incoming, previous, org_slug).items():
+        errors.setdefault(field, message)  # a spec-level refusal (owner message) wins
     return errors
 DELEGATED = ("org_token_budget",)
 """Former ``unsupported`` entries outside the 45 GW27 dispositions: owned by another card (GW36)."""

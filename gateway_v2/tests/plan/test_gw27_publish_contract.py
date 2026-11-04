@@ -215,7 +215,8 @@ def test_output_fallback_leaves_input_rules_and_unknown_actions_alone() -> None:
     drafts, unsupported = load().publish.policy_drafts([_policy("bogus", "output")])
     assert drafts == [] and unsupported
     drafts, unsupported = load().publish.policy_drafts([_policy("rewrite", "output")])
-    assert drafts == [] and unsupported == ["p/r (rewrite)"]
+    # GW33: rewrite is built but per-org gated, so the omission names its reason.
+    assert drafts == [] and unsupported == ["p/r (rewrite: not enabled for this org)"]
 
 
 def test_output_policy_disabled_drops_output_and_keeps_the_input_half_of_both() -> None:

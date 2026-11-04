@@ -1,5 +1,6 @@
 """GW27 D-13: the capacity gate allows exactly the declared modules; the allowlist cannot widen
-silently (GW32 added runtime/resources_mcp.py alongside GW27's runtime/resources_org.py)."""
+silently (GW32 added runtime/resources_mcp.py alongside GW27's runtime/resources_org.py; GW33 added
+runtime/resources_output.py)."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -20,7 +21,12 @@ def _write(root: Path, rel: str) -> None:
 
 def test_allowlist_is_exactly_the_declared_modules() -> None:
     assert ALLOWED_RELS == frozenset(
-        {"runtime/resources.py", "runtime/resources_org.py", "runtime/resources_mcp.py"},
+        {
+            "runtime/resources.py",
+            "runtime/resources_org.py",
+            "runtime/resources_mcp.py",
+            "runtime/resources_output.py",
+        },
     )
 
 

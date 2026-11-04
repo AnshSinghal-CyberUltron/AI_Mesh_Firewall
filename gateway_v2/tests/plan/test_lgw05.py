@@ -197,7 +197,8 @@ def test_lgw05_7_unsupported_action_rejected_strict_withhold_accepted() -> None:
     # declared template: a REWRITE rule without one is still rejected at compile time.
     with pytest.raises(CompileError, match="rewrite_template"):
         _compile("org-a", (_draft(action=Action.REWRITE),))
-    ok = _compile("org-a", (replace(_draft(action=Action.REWRITE), rewrite_template="[{category}]"),))
+    rewrite = replace(_draft(action=Action.REWRITE), rewrite_template="[{category}]")
+    ok = _compile("org-a", (rewrite,))
     assert ok.rules[0].rewrite_template == "[{category}]"
 
 

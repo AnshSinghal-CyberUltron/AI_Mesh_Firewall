@@ -11,9 +11,9 @@ from gateway_v2.runtime.errors import CapacityUnavailable, CapacityUnset
 from gateway_v2.runtime.kinds import CapacityHint, HardwareSignals, PoolKind
 from gateway_v2.runtime.resources_env import _env_map, _parse_override, _parse_owner_queue_ms
 from gateway_v2.runtime.resources_incident import IncidentBoundsMixin, check_incident_ordering
+from gateway_v2.runtime.resources_output import OutputBoundsMixin
 from gateway_v2.runtime.resources_rag import RagBoundsMixin
 from gateway_v2.runtime.resources_routing import RoutingBoundsMixin
-from gateway_v2.runtime.resources_output import OutputBoundsMixin
 from gateway_v2.runtime.resources_vector import VectorBoundsMixin
 
 # Deployment-declared defaults. Logged as defaults when env is unset.

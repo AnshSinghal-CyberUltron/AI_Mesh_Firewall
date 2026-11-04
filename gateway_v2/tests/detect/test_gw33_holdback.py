@@ -1,3 +1,4 @@
+# ruff: noqa: E501  (GW33 test file: long assertion/docstring lines kept readable)
 """GW33 task 6 / Property 14: the holdback is unchanged except the `canary` class label."""
 from __future__ import annotations
 

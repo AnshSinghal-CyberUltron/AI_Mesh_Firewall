@@ -1,3 +1,4 @@
+# ruff: noqa: E501  (GW33 test file: long assertion/docstring lines kept readable)
 """GW33 task 10.3: pathological inputs and the per-delta canary overlap rescan against the hot path."""
 from __future__ import annotations
 

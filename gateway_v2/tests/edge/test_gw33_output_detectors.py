@@ -1,3 +1,4 @@
+# ruff: noqa: E501  (GW33 test file: long assertion/docstring lines kept readable)
 """GW33 task 9.2/9.5: the per-request output detector composer (D-2, D-22, D-23, D-28, D-32)."""
 from __future__ import annotations
 

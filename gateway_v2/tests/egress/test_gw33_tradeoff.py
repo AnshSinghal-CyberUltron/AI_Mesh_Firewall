@@ -1,3 +1,4 @@
+# ruff: noqa: E501  (GW33 test file: long assertion/docstring lines kept readable)
 """GW33 task 3.3: REWRITE terminates on force-release; remainder folding with REWRITE."""
 from __future__ import annotations
 

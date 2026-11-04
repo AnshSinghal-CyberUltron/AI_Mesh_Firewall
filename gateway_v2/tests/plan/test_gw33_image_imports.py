@@ -1,3 +1,4 @@
+# ruff: noqa: E501  (GW33 test file: long assertion/docstring lines kept readable)
 """GW33 task 8.6 (L-5): the plan compiler's new import graph is deployable in the state-control image.
 
 `plan/compiler.py` now imports `detect.output.*` and `runtime.resources_output`, and

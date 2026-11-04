@@ -79,26 +79,6 @@
    "reason": "per-org default model selection"
   },
   {
-   "field": "factuality_check_enabled",
-   "owner": "GW33",
-   "reason": "grounding/hallucination output parity"
-  },
-  {
-   "field": "hallucination_grounding_mode",
-   "owner": "GW33",
-   "reason": "grounding/hallucination output parity"
-  },
-  {
-   "field": "hallucination_grounding_model",
-   "owner": "GW33",
-   "reason": "grounding/hallucination output parity"
-  },
-  {
-   "field": "hallucination_grounding_threshold",
-   "owner": "GW33",
-   "reason": "grounding/hallucination output parity"
-  },
-  {
    "field": "log_level",
    "owner": "GW27",
    "reason": "v2 observability is the typed GW14d exposition with bounded cardinality; there is no per-org log-detail knob to build"
@@ -122,11 +102,6 @@
    "field": "model_isolation_enabled",
    "owner": "GW29",
    "reason": "isolation is plan state built by GW29"
-  },
-  {
-   "field": "output_hallucination_action",
-   "owner": "GW33",
-   "reason": "grounding/hallucination output action; rewrite is also refused"
   },
   {
    "field": "rag_enabled",

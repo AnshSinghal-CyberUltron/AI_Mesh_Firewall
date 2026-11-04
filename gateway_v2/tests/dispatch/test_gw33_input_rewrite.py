@@ -1,3 +1,4 @@
+# ruff: noqa: E501  (GW33 test file: long assertion/docstring lines kept readable)
 """GW33 task 4: request-side REWRITE is verified like a redaction; the `rewrite` bit is untouched."""
 from __future__ import annotations
 

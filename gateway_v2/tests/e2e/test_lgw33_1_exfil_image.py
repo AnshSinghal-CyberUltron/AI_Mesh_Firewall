@@ -1,3 +1,4 @@
+# ruff: noqa: E501  (GW33 test file: long assertion/docstring lines kept readable)
 """LGW33-1 (offline equivalent, not the live gate): a markdown image whose URL carries encoded data
 is defanged or blocked and never delivered. Every action; both modes where the mode can hold."""
 from __future__ import annotations

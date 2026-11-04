@@ -17,8 +17,8 @@ from gateway_v2.edge.openai_chat import ChatSurface
 from gateway_v2.edge.routes import ChatRoute
 from tests.e2e.gw33_support import contract, plan_of, rule
 from tests.edge.test_lgw15_input_block import (
-    _P9CountingProvider,
     _p9_build_deps,
+    _P9CountingProvider,
     _P9Snapshot,
 )
 

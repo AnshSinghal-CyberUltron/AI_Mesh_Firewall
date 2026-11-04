@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import hashlib
 import json
-from collections.abc import Mapping
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass
 
 from gateway_v2.domain.category import Category
 from gateway_v2.domain.plan import (
-    UNSET_CONTROLS,
     LEGACY_IP_RULE_PREFIX,
+    UNSET_CONTROLS,
     Action,
     ExecutionPlan,
     FailurePosture,
