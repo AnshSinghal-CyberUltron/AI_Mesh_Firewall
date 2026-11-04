@@ -12,7 +12,7 @@ from core.firewall_model_governance import (
     stale_allowed_models,
     validate_governance_fields,
 )
-from core.firewall_v2_map import FIELDS, selection_errors
+from core.firewall_v2_map import FIELDS, rewrite_served_by_v2, selection_errors
 from core.models import FirewallConfig
 
 
@@ -98,8 +98,13 @@ class FirewallConfigSerializer(serializers.ModelSerializer):
         return value
 
     def validate(self, attrs):
-        # T01 L01-2: REWRITE is unsupported. Reject writes; never silent-allow.
+        # T01 L01-2 / GW33: REWRITE is a real template-driven action, but only on the v2 gateway
+        # and only for orgs the deployment enables (``V2_REWRITE_ORGS``, default none). Every other
+        # org still has the write rejected; it is never silently allowed.
         _unsupported = frozenset({"rewrite"})
+        organization = getattr(self.instance, "organization", None)
+        if rewrite_served_by_v2(getattr(organization, "slug", None)):
+            _unsupported = frozenset()
         for field in (
             "output_pii_action",
             "output_credential_action",
@@ -111,7 +116,8 @@ class FirewallConfigSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError(
                     {
                         field: (
-                            "REWRITE is unsupported. Control rejects this action; "
+                            "REWRITE is only enforced on the v2 gateway for orgs it is "
+                            "enabled for. Control rejects this action; "
                             "use redact, block, flag, or allow."
                         )
                     }
@@ -184,7 +190,7 @@ class FirewallConfigSerializer(serializers.ModelSerializer):
                 for name in FIELDS
                 if hasattr(self.instance, name)
             }
-        unsupported = selection_errors(attrs, stored)
+        unsupported = selection_errors(attrs, stored, getattr(organization, "slug", None))
         if unsupported:
             raise serializers.ValidationError(unsupported)
 
