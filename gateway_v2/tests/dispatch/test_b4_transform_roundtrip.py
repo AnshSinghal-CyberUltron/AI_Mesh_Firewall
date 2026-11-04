@@ -132,8 +132,16 @@ def _random_request(rng: random.Random) -> GatewayRequest:
     return GatewayRequest(
         destination=f"amf://upstream/org-{rng.getrandbits(32):08x}",
         model=rng.choice(("gpt-5.2", "north-mini", "nemotron", "claude-4")),
-        text_deltas=_random_deltas(rng),
+        text_deltas=_one_per_channel(_random_deltas(rng)),
     )
+
+
+def _one_per_channel(deltas: tuple[tuple[str, str], ...]) -> tuple[tuple[str, str], ...]:
+    """GW34: a frame is ONE merged ``choices[0].delta`` -- same-channel text concatenates."""
+    merged: dict[str, str] = {}
+    for channel, text in deltas:
+        merged[channel] = merged.get(channel, "") + text
+    return tuple(merged.items())
 
 
 def _encode(deltas: tuple[tuple[str, str], ...]) -> tuple[tuple[bytes, bytes], ...]:

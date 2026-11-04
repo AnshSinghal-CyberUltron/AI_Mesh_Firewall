@@ -49,7 +49,15 @@ from dataclasses import dataclass
 from types import MappingProxyType
 
 from gateway_v2.domain import posture
-from gateway_v2.edge.wire.sse_chunks import CHUNK_OBJECT, DEFAULT_CREATED, SSEChoice, SSEChunk
+from gateway_v2.edge.wire.sse_chunks import (
+    CHUNK_OBJECT,
+    DEFAULT_CREATED,
+    ChunkEvent,
+    SSEChoice,
+    SSEChunk,
+    StreamIdentity,
+    ToolFragment,
+)
 from gateway_v2.edge.wire.sse_decode import SSEDecoder
 from gateway_v2.egress.stream import DownstreamFrame
 
@@ -66,6 +74,7 @@ __all__ = (
     "SSEEncoder",
     "SSEEncoderTerminated",
     "SSEErrorFrame",
+    "StreamIdentity",
     "TRACE_EVENT",
 )
 
@@ -366,6 +375,22 @@ def error_frame_for(error_code: str) -> SSEErrorFrame:
     return SSEErrorFrame(error_type=error_type, code=error_code, message=message)
 
 
+def _tool_fragment_json(fragment: ToolFragment) -> dict[str, object]:
+    """One ``delta.tool_calls[]`` entry; the first fragment carries ``id`` / ``type`` / ``name``."""
+    entry: dict[str, object] = {"index": fragment.index}
+    if fragment.id is not None:
+        entry["id"] = fragment.id
+        entry["type"] = "function"
+    function: dict[str, object] = {}
+    if fragment.name is not None:
+        function["name"] = fragment.name
+    if fragment.arguments is not None:
+        function["arguments"] = fragment.arguments
+    if function:
+        entry["function"] = function
+    return entry
+
+
 # --------------------------------------------------------------------------- #
 # Encoder (R1.1 / R1.2 / R1.3).
 # --------------------------------------------------------------------------- #
@@ -393,7 +418,7 @@ class SSEEncoder:
     to emit (R1.3).
     """
 
-    __slots__ = ("_created", "_index", "_model", "_stream_id", "_terminated")
+    __slots__ = ("_created", "_index", "_model", "_role_sent", "_stream_id", "_terminated")
 
     def __init__(
         self,
@@ -401,12 +426,18 @@ class SSEEncoder:
         stream_id: str = DEFAULT_STREAM_ID,
         model: str = DEFAULT_MODEL,
         created: int = DEFAULT_CREATED,
+        identity: StreamIdentity | None = None,
     ) -> None:
+        """``identity`` (GW34) fixes ``id`` / ``model`` / ``created`` for every chunk of the
+        stream; without it the legacy keyword defaults apply."""
+        if identity is not None:
+            stream_id, model, created = identity.stream_id, identity.model, identity.created
         self._stream_id = stream_id
         self._model = model
         self._created = created
         self._index = 0
         self._terminated = False
+        self._role_sent = False
 
     @property
     def terminated(self) -> bool:
@@ -441,6 +472,46 @@ class SSEEncoder:
             model=self._model,
             created=self._created,
             choices=tuple(self._choices_for(frame)),
+        )
+        return self._data_frame(chunk.as_json_obj())
+
+    def chunk(self, event: ChunkEvent) -> bytes:
+        """Serialise one merged :class:`ChunkEvent` as ONE ``choices[0]`` chunk (GW34, R5).
+
+        All of the event's deltas share one ``delta`` object; ``delta.role`` is added to the FIRST
+        chunk only; ``finish_reason`` is ``null`` unless the event carries one; the stream
+        ``id`` / ``model`` / ``created`` are the encoder's fixed identity; no ``usage`` (D10).
+        Refused after a terminal frame (R1.3).
+        """
+        if self._terminated:
+            raise SSEEncoderTerminated("chunk requested after a terminal frame was emitted")
+        delta: dict[str, object] = {}
+        if not self._role_sent:
+            delta["role"] = "assistant"
+            self._role_sent = True
+        if event.content:
+            delta["content"] = event.content
+        if event.reasoning:
+            delta["reasoning_content"] = event.reasoning
+        if event.refusal:
+            delta["refusal"] = event.refusal
+        for channel, text in event.extra:
+            delta[channel] = delta.get(channel, "") + text  # type: ignore[operator]
+        if event.tool_calls:
+            delta["tool_calls"] = [_tool_fragment_json(f) for f in event.tool_calls]
+        choice = SSEChoice(index=0, delta=delta, finish_reason=event.finish_reason)
+        chunk = SSEChunk(
+            id=self._stream_id, model=self._model, created=self._created, choices=(choice,)
+        )
+        return self._data_frame(chunk.as_json_obj())
+
+    def finish(self, reason: str) -> bytes:
+        """The final chunk: an empty ``delta`` and the stream's ``finish_reason`` (GW34, R5)."""
+        if self._terminated:
+            raise SSEEncoderTerminated("finish requested after a terminal frame was emitted")
+        choice = SSEChoice(index=0, delta={}, finish_reason=reason)
+        chunk = SSEChunk(
+            id=self._stream_id, model=self._model, created=self._created, choices=(choice,)
         )
         return self._data_frame(chunk.as_json_obj())
 
@@ -488,18 +559,18 @@ class SSEEncoder:
         return self._data_frame(err.as_json_obj())
 
     def _choices_for(self, frame: DownstreamFrame) -> list[SSEChoice]:
-        """Map a frame's ``text_deltas`` to SDK ``choices[]`` entries.
+        """Map a frame's ``text_deltas`` to ONE SDK ``choices[0]`` entry (GW34, R5).
 
-        The default ``content`` channel maps to the ``content`` delta key; any
-        other channel name is used as the delta key verbatim so a non-default
-        text stream (e.g. ``reasoning_content``) round-trips through the SDK
-        delta object. One choice per delta, enumerated by its position.
+        All deltas of a frame share one ``delta`` object (n is forced to 1, D17), each channel
+        under its own delta key with same-channel text concatenated in order, so a stock SDK reads
+        one choice per chunk. A frame with no delta yields an empty ``choices`` list.
         """
-        choices: list[SSEChoice] = []
-        for position, (channel, text) in enumerate(frame.text_deltas):
-            key = "content" if channel == "content" else channel
-            choices.append(SSEChoice(index=position, delta={key: text}))
-        return choices
+        delta: dict[str, object] = {}
+        for channel, text in frame.text_deltas:
+            delta[channel] = str(delta.get(channel, "")) + text
+        if not delta:
+            return []
+        return [SSEChoice(index=0, delta=delta)]
 
     def _data_frame(self, obj: Mapping[str, object]) -> bytes:
         """Serialise a JSON object as a single ``data: {json}\\n\\n`` SSE frame.

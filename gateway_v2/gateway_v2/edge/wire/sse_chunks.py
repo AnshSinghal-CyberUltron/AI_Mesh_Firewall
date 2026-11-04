@@ -8,7 +8,15 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 
-__all__ = ("CHUNK_OBJECT", "DEFAULT_CREATED", "SSEChoice", "SSEChunk")
+__all__ = (
+    "CHUNK_OBJECT",
+    "DEFAULT_CREATED",
+    "ChunkEvent",
+    "SSEChoice",
+    "SSEChunk",
+    "StreamIdentity",
+    "ToolFragment",
+)
 
 #: The ``object`` discriminator every streamed content frame carries. The stock
 #: OpenAI SDK parses a streamed frame as a ``ChatCompletionChunk`` only when this
@@ -67,3 +75,38 @@ class SSEChunk:
             "model": self.model,
             "choices": [choice.as_json_obj() for choice in self.choices],
         }
+
+
+@dataclass(frozen=True, slots=True)
+class ToolFragment:
+    """One streamed ``delta.tool_calls[]`` entry (``None`` fields are omitted on the wire)."""
+
+    index: int
+    id: str | None = None
+    name: str | None = None
+    arguments: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ChunkEvent:
+    """One merged downstream chunk: every delta of one frame, as typed fields.
+
+    ``extra`` carries any other string-valued channel under its own name (the legacy
+    channel-to-delta-key behaviour). ``finish_reason`` is set only on a final chunk.
+    """
+
+    content: str = ""
+    reasoning: str = ""
+    refusal: str = ""
+    tool_calls: tuple[ToolFragment, ...] = ()
+    extra: tuple[tuple[str, str], ...] = ()
+    finish_reason: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class StreamIdentity:
+    """The stable ``id`` / ``model`` / ``created`` every chunk of one stream carries."""
+
+    stream_id: str
+    model: str
+    created: int

@@ -213,6 +213,9 @@ def test_property_1_parse_render_roundtrip_preserves_content_and_stream_flag() -
 
         # content: concatenation of every input-channel text, byte-identical.
         want_content = _expected_concat(deltas, _OUTPUT_CONTENT_CHANNEL)
+        if _expected_concat(deltas, _OUTPUT_TOOL_ARGUMENTS_CHANNEL) and not want_content:
+            # GW34: a tool-call message with no text renders ``content: null`` (as OpenAI does).
+            want_content = None  # type: ignore[assignment]
         assert message["content"] == want_content, _ctx(
             _SEED, i, note="content not preserved", got=message.get("content"), want=want_content
         )

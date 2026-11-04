@@ -57,6 +57,13 @@ from gateway_v2.edge.wire.openai_fold import (
     fold_request,
 )
 from gateway_v2.edge.wire.openai_params import forwarded_fields
+from gateway_v2.edge.wire.tool_stream import (
+    FINISH_CHANNEL,
+    TOOL_ARGUMENTS,
+    TOOL_ID,
+    TOOL_NAME,
+    parse_tool_key,
+)
 from gateway_v2.runtime.resources import ResourceContract
 from gateway_v2.runtime.resources_tools import ToolBounds
 
@@ -458,8 +465,6 @@ _FINISH_TOOL_CALLS = "tool_calls"
 #: list/dict literal) so there is no module-level mutable.
 _OUTPUT_CONTENT_CHANNELS = frozenset(("output_content", "content"))
 
-#: The transport channel name carrying tool-call ``function.arguments`` text.
-_OUTPUT_TOOL_ARGUMENTS_CHANNEL = "output_tool_arguments"
 
 #: The transport channel name carrying the assistant ``reasoning_content`` text.
 _OUTPUT_REASONING_CHANNEL = "output_reasoning"
@@ -499,8 +504,7 @@ class OpenAIResponseRenderer:
         always render the same bytes and a ``json.loads`` round-trip recovers the
         content byte-for-byte. PURE: no I/O, no security decision (R1.5).
         """
-        message = self._message_for(deltas)
-        has_tool_calls = "tool_calls" in message
+        message, finish_reason = self._message_and_finish(deltas)
         obj: dict[str, object] = {
             "id": DEFAULT_COMPLETION_ID,
             "object": COMPLETION_OBJECT,
@@ -510,9 +514,7 @@ class OpenAIResponseRenderer:
                 {
                     "index": 0,
                     "message": message,
-                    "finish_reason": (
-                        _FINISH_TOOL_CALLS if has_tool_calls else _FINISH_STOP
-                    ),
+                    "finish_reason": finish_reason,
                 }
             ],
             "usage": {
@@ -526,19 +528,29 @@ class OpenAIResponseRenderer:
 
     @staticmethod
     def _message_for(deltas: tuple[tuple[str, str], ...]) -> dict[str, object]:
-        """Assemble the single ``choices[0].message`` object from enforced deltas.
+        """The single ``choices[0].message`` object (see :meth:`_message_and_finish`)."""
+        return OpenAIResponseRenderer._message_and_finish(deltas)[0]
 
-        Concatenates each channel's enforced text in document order so the
-        placement is a byte identity on the content. ``content`` is always
-        present (``""`` when no output-content delta was released, matching the
-        SDK's non-null content shape for a plain completion); ``reasoning_content``
-        / ``refusal`` / ``tool_calls`` appear only when their channel carried
-        text, so a plain completion renders the minimal SDK shape.
+    @staticmethod
+    def _message_and_finish(
+        deltas: tuple[tuple[str, str], ...],
+    ) -> tuple[dict[str, object], str]:
+        """Assemble the single ``choices[0].message`` and ``finish_reason`` from enforced deltas.
+
+        Concatenates each channel's enforced text in document order so the placement is a byte
+        identity on the content. ``content`` is present (``""`` for a plain completion; ``null``
+        when the message carries tool calls and no text, as OpenAI renders it);
+        ``reasoning_content`` / ``refusal`` appear only when their channel carried text.
+        Tool calls are complete ``{id, type, function: {name, arguments}}`` objects in index
+        order, built from the per-call keys ``output_tool_{id,name,arguments}#n`` (the bare
+        legacy ``output_tool_arguments`` is index 0). ``finish_reason`` is the meta delta when
+        present, else ``tool_calls`` when calls exist, else ``stop``.
         """
         content = ""
         reasoning = ""
         refusal = ""
-        tool_arguments = ""
+        finish: str | None = None
+        calls: dict[int, dict[str, str]] = {}
         for channel, text in deltas:
             if channel in _OUTPUT_CONTENT_CHANNELS:
                 content += text
@@ -546,19 +558,31 @@ class OpenAIResponseRenderer:
                 reasoning += text
             elif channel == _OUTPUT_REFUSAL_CHANNEL:
                 refusal += text
-            elif channel == _OUTPUT_TOOL_ARGUMENTS_CHANNEL:
-                tool_arguments += text
-        message: dict[str, object] = {"role": _RESPONSE_ROLE, "content": content}
+            elif channel == FINISH_CHANNEL:
+                finish = text
+            elif text and (key := parse_tool_key(channel)) is not None:
+                parts = calls.setdefault(key[1], {})
+                parts[key[0]] = parts.get(key[0], "") + text
+        message: dict[str, object] = {
+            "role": _RESPONSE_ROLE,
+            "content": None if calls and not content else content,
+        }
         if reasoning:
             message["reasoning_content"] = reasoning
         if refusal:
             message["refusal"] = refusal
-        if tool_arguments:
+        if calls:
             message["tool_calls"] = [
                 {
-                    "index": 0,
+                    "id": calls[index].get(TOOL_ID, ""),
                     "type": "function",
-                    "function": {"arguments": tool_arguments},
+                    "function": {
+                        "name": calls[index].get(TOOL_NAME, ""),
+                        "arguments": calls[index].get(TOOL_ARGUMENTS, ""),
+                    },
                 }
+                for index in sorted(calls)
             ]
-        return message
+        if finish is None:
+            finish = _FINISH_TOOL_CALLS if calls else _FINISH_STOP
+        return message, finish

@@ -588,6 +588,7 @@ def test_property_16_tool_call_fragment_reassembly_round_trip() -> None:
     from gateway_v2.dispatch.provider import UpstreamEvent
     from gateway_v2.dispatch.transform import Transform
     from gateway_v2.edge.wire.sse import SSEDecoder, SSEEncoder
+    from gateway_v2.edge.wire.sse_chunks import ChunkEvent, ToolFragment
     from gateway_v2.egress.stream import DownstreamFrame
 
     _P16_SEED = 0x16_15_0505
@@ -596,7 +597,13 @@ def test_property_16_tool_call_fragment_reassembly_round_trip() -> None:
     # The channel a tool call's ``function.arguments`` ride on. It is NOT the default ``content``
     # channel, so the encoder uses the channel name verbatim as the SDK delta key and the decoder
     # maps it back to the same channel name — the exact non-default round-trip under test.
-    _P16_ARGS_CHANNEL = "output_tool_arguments"
+    #
+    # GW34: streamed tool calls ride ``delta.tool_calls`` fragments; the decoder mints the per-call
+    # channel ``output_tool_arguments#0`` (plus ``output_tool_id#0`` / ``output_tool_name#0``).
+    _P16_ARGS_CHANNEL = "output_tool_arguments#0"
+    _P16_CALL_CHANNELS = frozenset(
+        {_P16_ARGS_CHANNEL, "output_tool_id#0", "output_tool_name#0"}
+    )
 
     # A corpus of ``arguments``-string fragments that stress byte-for-byte reassembly: empties,
     # realistic JSON tool-call argument bodies, JSON-significant characters (quotes, backslashes,
@@ -674,12 +681,25 @@ def test_property_16_tool_call_fragment_reassembly_round_trip() -> None:
             # The transform forwards the deltas unchanged (content pass-through, no error frame).
             assert frame.error_code is None, ctx
             assert frame.text_deltas == ((_P16_ARGS_CHANNEL, fragment),), ctx
-            wire.extend(encoder.content(frame))
+            wire.extend(
+                encoder.chunk(
+                    ChunkEvent(
+                        tool_calls=(
+                            ToolFragment(
+                                index=0,
+                                id="call_1" if position == 0 else None,
+                                name="f" if position == 0 else None,
+                                arguments=fragment,
+                            ),
+                        )
+                    )
+                )
+            )
         wire.extend(encoder.done())
 
         # Decode the concatenated wire back, feeding it in arbitrary chunk boundaries so the
         # split-surrogate / split-multibyte buffering path is exercised; the decoder is confluent.
-        decoder = SSEDecoder()
+        decoder = SSEDecoder(max_tool_calls=4)
         decoded_frames = _p16_feed_in_chunks(decoder, bytes(wire), rng)
         assert not decoder.malformed(), ctx
 
@@ -694,7 +714,7 @@ def test_property_16_tool_call_fragment_reassembly_round_trip() -> None:
         assert reassembled == arguments, ctx
         # No stray content on any other channel leaked into the reassembly.
         assert all(
-            channel == _P16_ARGS_CHANNEL
+            channel in _P16_CALL_CHANNELS or channel == "role"
             for frame in decoded_frames
             for channel, _ in frame.text_deltas
         ), ctx

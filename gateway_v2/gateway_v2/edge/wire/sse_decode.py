@@ -11,7 +11,17 @@ from collections.abc import Mapping
 from gateway_v2.domain import posture
 from gateway_v2.egress.stream import DownstreamFrame
 
-__all__ = ("SSEDecoder",)
+__all__ = ("FINISH_REASONS", "SSEDecoder")
+
+#: The closed set of ``finish_reason`` values a stream may carry. The deprecated
+#: ``function_call`` reason is rejected on purpose (D1b).
+FINISH_REASONS = frozenset({"stop", "length", "tool_calls", "content_filter"})
+_FINISH_CHANNEL = "finish_reason"
+_TOOL_ID = "output_tool_id"
+_TOOL_NAME = "output_tool_name"
+_TOOL_ARGUMENTS = "output_tool_arguments"
+_TOOL_CHANNEL_PREFIX = "output_tool_"
+_KEY_MARK = "#"
 
 
 # --------------------------------------------------------------------------- #
@@ -40,12 +50,17 @@ class SSEDecoder:
     (R1.5).
     """
 
-    __slots__ = ("_buffer", "_done", "_malformed")
+    __slots__ = ("_buffer", "_done", "_first_id", "_first_name", "_malformed", "_max_tool_calls")
 
-    def __init__(self) -> None:
+    def __init__(self, max_tool_calls: int = 0) -> None:
+        """``max_tool_calls`` bounds the ``delta.tool_calls[].index`` range; ``0`` is a
+        tools-disabled route, where any ``tool_calls`` delta is malformed."""
         self._buffer = bytearray()
         self._done = False
         self._malformed = False
+        self._max_tool_calls = max_tool_calls
+        self._first_id: dict[int, str] = {}
+        self._first_name: dict[int, str] = {}
 
     def finished(self) -> bool:
         """``[DONE]`` was decoded and no bytes are left buffered.
@@ -191,13 +206,15 @@ class SSEDecoder:
     ) -> tuple[tuple[str, str], ...] | None:
         """Extract ``(channel, text)`` deltas from a chunk object's ``choices``.
 
-        Reads each ``choices[].delta`` object: a ``content`` string maps to the
-        ``content`` channel, and any other string-valued delta key maps to a
-        channel of that name, so the encoder's channel->delta-key mapping
-        round-trips (R1.6). A missing/empty ``choices`` list yields an empty
-        tuple (a valid content frame carrying no delta). Returns ``None`` when
-        ``choices`` is present but not a list of delta objects (unrecognised
-        shape -> malformed).
+        Only choice ``index`` 0 is read (the gateway forces ``n = 1``, D17/D26); a choice whose
+        ``index`` is not a non-bool int is malformed. Each string-valued delta key maps to a
+        channel of that name (so the encoder's channel->delta-key mapping round-trips), except the
+        reserved keys, which are malformed: ``finish_reason`` (a meta channel only the decoder may
+        mint), any key containing ``#`` or starting ``output_tool_`` (only the decoder mints the
+        per-call tool channels). ``delta.tool_calls`` becomes ``output_tool_{id,name,arguments}#n``
+        deltas; ``delta.function_call`` is malformed (D1b); a choice ``finish_reason`` in the closed
+        set becomes a ``("finish_reason", value)`` delta. A missing/empty ``choices`` list yields an
+        empty tuple. Returns ``None`` (malformed) on any unrecognised shape.
         """
         choices = obj.get("choices")
         if choices is None:
@@ -208,11 +225,77 @@ class SSEDecoder:
         for choice in choices:
             if not isinstance(choice, dict):
                 return None
+            position = choice.get("index", 0)
+            if isinstance(position, bool) or not isinstance(position, int):
+                return None
+            if position >= 1:
+                continue
             delta = choice.get("delta")
             if not isinstance(delta, dict):
                 return None
-            for key, value in delta.items():
-                if isinstance(value, str):
-                    channel = "content" if key == "content" else key
-                    deltas.append((channel, value))
+            if not self._delta_channels(delta, deltas):
+                return None
+            finish = choice.get("finish_reason")
+            if finish is not None:
+                if not isinstance(finish, str) or finish not in FINISH_REASONS:
+                    return None
+                deltas.append((_FINISH_CHANNEL, finish))
         return tuple(deltas)
+
+    def _delta_channels(self, delta: Mapping[str, object], out: list[tuple[str, str]]) -> bool:
+        """Append one delta object's channels to ``out``; ``False`` means malformed."""
+        if delta.get("function_call") is not None:
+            return False
+        for key, value in delta.items():
+            if key == "tool_calls":
+                if value is not None and not self._tool_calls(value, out):
+                    return False
+            elif key == "function_call":
+                continue
+            elif key == _FINISH_CHANNEL or _KEY_MARK in key or key.startswith(_TOOL_CHANNEL_PREFIX):
+                return False
+            elif isinstance(value, str):
+                out.append((key, value))
+        return True
+
+    def _tool_calls(self, value: object, out: list[tuple[str, str]]) -> bool:
+        if not isinstance(value, list) or self._max_tool_calls <= 0:
+            return False
+        for fragment in value:
+            if not isinstance(fragment, dict):
+                return False
+            index = fragment.get("index")
+            if isinstance(index, bool) or not isinstance(index, int):
+                return False
+            if not 0 <= index < self._max_tool_calls:
+                return False
+            if fragment.get("type") not in (None, "function"):
+                return False
+            function = fragment.get("function")
+            if function is not None and not isinstance(function, dict):
+                return False
+            names = (fragment.get("id"), (function or {}).get("name"))
+            arguments = (function or {}).get("arguments")
+            if any(item is not None and not isinstance(item, str) for item in (*names, arguments)):
+                return False
+            if not self._first_value(self._first_id, index, names[0], _TOOL_ID, out):
+                return False
+            if not self._first_value(self._first_name, index, names[1], _TOOL_NAME, out):
+                return False
+            if arguments:
+                out.append((f"{_TOOL_ARGUMENTS}{_KEY_MARK}{index}", str(arguments)))
+        return True
+
+    @staticmethod
+    def _first_value(
+        seen: dict[int, str], index: int, value: object, channel: str, out: list[tuple[str, str]]
+    ) -> bool:
+        """Keep the FIRST id / name per index; drop an equal repeat, reject a differing one."""
+        if not isinstance(value, str) or not value:
+            return True
+        first = seen.get(index)
+        if first is None:
+            seen[index] = value
+            out.append((f"{channel}{_KEY_MARK}{index}", value))
+            return True
+        return first == value
