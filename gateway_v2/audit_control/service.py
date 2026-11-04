@@ -44,9 +44,11 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 
 from audit_control.export import DEFAULT_PAGE, MAX_PAGES_PER_ROUND, AuditExporter, RoundSummary
+from audit_control.retention import RetentionSweeper, parse_mode
 from audit_control.sink_pg import PostgresAuditSink
 from gateway_v2.audit.metrics import AuditMetricsRecorder, DurableReading, render
 from gateway_v2.domain.audit_knobs import knobs_from_env
+from gateway_v2.runtime.resources_org import derive_retention_bounds
 from gateway_v2.runtime.store_audit import ValkeyAuditStore
 from gateway_v2.runtime.store_keys import DEFAULT_NAMESPACE, StoreKeys
 from gateway_v2.runtime.store_valkey import require_bounded_client
@@ -101,6 +103,7 @@ class ExporterConfig:
     max_pages: int
     metrics_port: int
     store_timeout_s: float
+    retention_mode: str = "off"
 
     @property
     def period_s(self) -> float:
@@ -129,6 +132,7 @@ def from_env(env: Mapping[str, str] | None = None) -> ExporterConfig:
         max_pages=_int(source, "AMF_AUDIT_EXPORT_MAX_PAGES", MAX_PAGES_PER_ROUND),
         metrics_port=_int(source, "AMF_AUDIT_METRICS_PORT", DEFAULT_METRICS_PORT),
         store_timeout_s=_float(source, "AMF_AUDIT_STORE_TIMEOUT_S", DEFAULT_STORE_TIMEOUT_S),
+        retention_mode=parse_mode(source.get("AMF_AUDIT_RETENTION_SWEEP")),
     )
     if config.period_ms <= 0:
         raise ValueError("AMF_AUDIT_EXPORT_PERIOD_MS must be positive")
@@ -152,7 +156,7 @@ class _Handler(BaseHTTPRequestHandler):
         if self.path.startswith("/healthz"):
             self._text(200, "ok\n")
         elif self.path.startswith("/metrics"):
-            self._text(200, render(self.service.metrics()))
+            self._text(200, render(self.service.metrics()) + self.service.retention_metrics())
         else:
             self._text(404, "not found\n")
 
@@ -176,7 +180,11 @@ class ExporterService:
         config: ExporterConfig,
         exporter: AuditExporter,
         sink: PostgresAuditSink,
+        sweeper: RetentionSweeper | None = None,
     ) -> None:
+        self._sweeper = sweeper
+        self._last_sweep_attempt: float | None = None
+        self._last_sweep_ok: float | None = None
         self._config = config
         self._exporter = exporter
         self._sink = sink
@@ -207,7 +215,12 @@ class ExporterService:
         exporter = AuditExporter(
             store, sink, page=config.page, max_pages=config.max_pages,
         )
-        return cls(config, exporter, sink)
+        sweeper = None
+        if config.retention_mode != "off":  # bounds are derived only when the sweep can run
+            sweeper = RetentionSweeper(
+                database, derive_retention_bounds(), mode=config.retention_mode
+            )
+        return cls(config, exporter, sink, sweeper)
 
     # --- the loop ------------------------------------------------------------------------------
 
@@ -273,6 +286,7 @@ class ExporterService:
                         "audit_export_round_failed error=%s",
                         f"{type(exc).__name__}: {exc}"[:300],
                     )
+                self._maybe_sweep()
                 # Sleep the REMAINDER of the period, so a slow round does not push the cadence
                 # out: the export has to keep pace with the trim, not with its own latency.
                 elapsed = time.monotonic() - started
@@ -286,6 +300,28 @@ class ExporterService:
 
     def stop(self) -> None:
         self._stop.set()
+
+    def _maybe_sweep(self) -> None:
+        """Run the retention sweep when due. It shares the loop but can never stop it."""
+        if self._sweeper is None or self._config.retention_mode == "off":
+            return
+        now = time.monotonic()
+        attempt = self._last_sweep_attempt
+        if attempt is not None and now - attempt < self._sweeper.period_s:
+            return
+        self._last_sweep_attempt = now
+        if not self._sweeper.sweep_once().failed:
+            self._last_sweep_ok = now
+
+    def retention_metrics(self) -> str:
+        """`audit_retention_last_sweep_age_s`: absent while the sweep is off, -1 before the first
+        success, else seconds since the last successful sweep (it grows and alarms on failure)."""
+        if self._config.retention_mode == "off":
+            return ""
+        ok = self._last_sweep_ok
+        age = -1.0 if ok is None else time.monotonic() - ok
+        name = "amf_audit_retention_last_sweep_age_seconds"
+        return f"# TYPE {name} gauge\n{name} {age}\n"
 
     def metrics(self) -> Any:
         return self._recorder.snapshot()

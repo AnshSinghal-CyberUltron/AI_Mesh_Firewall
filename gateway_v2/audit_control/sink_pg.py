@@ -25,8 +25,25 @@ from typing import Any, Protocol
 
 from audit_control.cursor import ZERO_ID, OrgCursor, StreamId, parse_id
 from audit_control.schema import SCHEMA
+from gateway_v2.runtime.resources_org import derive_retention_bounds
 
 LOG = logging.getLogger("amf.audit.sink_pg")
+_STAMP_MAX_DAYS = derive_retention_bounds().stamp_max_days
+"""A stamped `retention_days` outside 1.._STAMP_MAX_DAYS (or not an int) is stored as NULL."""
+
+
+def retention_stamp(fields: dict[str, Any]) -> int | None:
+    """The record's stamped retention days, or None. Only a real int (not bool) in range counts.
+
+    A stringified or out-of-range stamp must never become a deletable row, so it is NULL.
+    """
+    detail = fields.get("detail")
+    if not isinstance(detail, dict):
+        return None
+    value = detail.get("retention_days")
+    if isinstance(value, bool) or not isinstance(value, int):
+        return None
+    return value if 1 <= value <= _STAMP_MAX_DAYS else None
 
 
 class BoundedDatabase(Protocol):
@@ -67,14 +84,15 @@ class DurableRecord:
             int(fields.get("v", 0) or 0),
             int(fields.get("at_ns", 0) or 0),
             self.payload.decode("utf-8", "replace"),
+            retention_stamp(fields),
         )
 
 
 _INSERT = """
 INSERT INTO amf_audit_record
   (org_id, stream_id, id_ms, id_seq, request_id, phase, outcome, schema_version,
-   recorded_at_ns, body)
-VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+   recorded_at_ns, body, retention_days)
+VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
 ON CONFLICT (org_id, stream_id) DO NOTHING
 """
 
