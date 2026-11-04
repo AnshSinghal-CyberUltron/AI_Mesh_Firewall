@@ -15,6 +15,10 @@ class Category(StrEnum):
     TOXICITY = "toxicity"
     EXFIL = "exfil"
     DOS = "dos"
+    # GW33 output parity: one spelling each (D-1). ``EXFIL`` is reused for exfiltration channels.
+    IP_LEAK = "ip_leak"
+    HALLUCINATION = "hallucination"
+    CANARY = "canary"
 
 
 def parse_category(value: object) -> Category:

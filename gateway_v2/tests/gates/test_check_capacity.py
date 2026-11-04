@@ -38,3 +38,21 @@ def test_resources_module_is_allowed() -> None:
 
 def test_shipped_tree_has_no_capacity_literals() -> None:
     assert scan_tree(_PKG) == []
+
+
+def test_gw33_allowlist_is_exactly_the_two_resources_modules() -> None:
+    from lint.check_capacity_literals import ALLOWED_RELS
+
+    assert ALLOWED_RELS == ("runtime/resources.py", "runtime/resources_output.py")
+
+
+def test_gw33_resources_output_is_allowed(tmp_path: Path) -> None:
+    _write(tmp_path, "runtime/resources_output.py", "pool(max_connections=64)\n")
+    assert scan_tree(tmp_path) == []
+
+
+def test_gw33_other_runtime_module_still_fails(tmp_path: Path) -> None:
+    _write(tmp_path, "runtime/resources_other.py", "pool(max_connections=64)\n")
+    _write(tmp_path, "detect/output/ruleset.py", "pool(max_connections=64)\n")
+    hits = scan_tree(tmp_path)
+    assert len(hits) == 2
