@@ -86,6 +86,42 @@ class Rule:
 
 
 @dataclass(frozen=True, slots=True)
+class RateControl:
+    """Org request-rate control (GW27). ``enabled`` gates request rate and burst only."""
+
+    enabled: bool
+    requests_per_minute: int
+    burst: int
+
+
+@dataclass(frozen=True, slots=True)
+class AuditControl:
+    """Org audit control (GW27). Hard blocks, SHED and REJECTED are recorded regardless."""
+
+    enabled: bool
+    incident_logging: bool
+    retention_days: int
+
+
+@dataclass(frozen=True, slots=True)
+class OrgControls:
+    """Operational org controls carried beside the rules (GW27).
+
+    Absent means "no org-specific control": no org rate limit, the contract-default
+    response ceiling, audit on. ``0`` / ``None`` / ``()`` are the unset values.
+    """
+
+    rate: RateControl | None = None
+    org_tpm_limit: int = 0
+    max_response_tokens: int = 0
+    audit: AuditControl | None = None
+    compliance_frameworks: tuple[str, ...] = ()
+
+
+UNSET_CONTROLS = OrgControls()
+
+
+@dataclass(frozen=True, slots=True)
 class ExecutionPlan:
     org_id: str
     epoch: int
@@ -101,6 +137,7 @@ class ExecutionPlan:
 
     Provenance only. Ordering stays (epoch, sequence) — see is_newer.
     """
+    controls: OrgControls = UNSET_CONTROLS
 
     @property
     def version(self) -> str:
