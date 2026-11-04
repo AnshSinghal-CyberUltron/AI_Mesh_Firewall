@@ -267,15 +267,15 @@ Built and exercised offline:
 - GW17c: per-key allow-list (`tools/call` 403, `tools/list` filtered) and a per-key call cap (lease table, 60 s store-driven window, cold-start bootstrap of 1 declared). Enforced in `_forward`, so every transport reaches it.
 - GW32: `/gateway/{org}/mcp/{srv}` and `/v1/mcp/{slug}`; Origin and `MCP-Protocol-Version` gates; shared session store; POST, GET (SSE stream) and DELETE; SSE reply by `Accept`; WebSocket with the same pipeline per frame; OAuth 2.1 server (discovery, registration, authorize with PKCE, token, refresh rotation, family revocation on reuse).
 
-Not built (do not read this card as done):
-- Upstream OAuth setup (`oauth/start`, `callback`, `status`, discovery and dynamic registration against an upstream) and the pinned-dial transport. Consequence: the `CredentialService` refresh takes an injected token-endpoint callable, and NO production implementation exists, so OAuth-upstream refresh cannot run in a deployment and the DNS-rebinding control (design iteration 3, finding 1) is not implemented. The admin ledger row for `oauth/start` stays `retire`.
-- Credential-cache invalidation on the registry's version poll (`poll_once(extra_keys)` / `subscribe_drop`). The control side bumps `mcp:scan_ver` on every credential write; the gateway cache is bounded by its TTL only.
-- `McpRoute.from_deps` / `build_mcp_deps` and any boot wiring (dev or production). Nothing constructs the new dependencies outside tests.
-- Publishing `McpPolicyMetrics` through the edge `Publisher` (`SERIES_COUNT`) and the `amf_mcp_policy_enforcement_version` metric.
-- Offline real-socket upstream fixtures (HTTP+SSE and WebSocket servers) and the pre-change route-table goldens.
-- WebSocket: a revocation while a frame is in flight is seen at the next frame or the idle re-check, not by cancelling the in-flight call.
+Iteration 2 (review fixes), also offline:
+- Wiring: `edge/mcp_boot.py` builds every new service from the dev-profile boot; `serve._assemble_app` wraps the WebSocket scope; an end-to-end test goes through `build_dev_mcp` and `build_app`. The production profile builds no MCP at all (pre-existing; GW36).
+- Upstream OAuth setup routes `oauth/start|callback|status` (R9), control flow-state endpoints (DD-4), and the pinned dial (`resolve_checked` + `PinnedTransport`) for every gateway OAuth call including refresh. Admin-ledger row `oauth/start` is now `build`, owner GW32.
+- Credential cache dropped on the registry version poll; policy metrics + `amf_mcp_policy_enforcement_version` published; WebSocket in-flight revocation cancels the call (1008) and idle-weight slot accounting (D-8).
+- Control credential and flow endpoint tests run on a throwaway Postgres; one real defect fixed (write-back for a missing/foreign server returned 409, now the uniform 404).
 
-Found, not fixed: `check_tenant_scale` reports `dispatch/vector_transports/pinecone_transport.py:140` (pre-existing, unrelated); the control test suite does not create its test database on SQLite (a pre-existing Postgres-only migration), so the new control DB tests in `mcp_connector/tests/test_gateway_credential_endpoints.py` were written but NOT run.
+Still not built: offline real-socket upstream fixtures (HTTP+SSE and WebSocket servers) and the pre-change route-table goldens.
+
+Found, not fixed: `check_tenant_scale` reports `dispatch/vector_transports/pinecone_transport.py:140` (pre-existing, unrelated); `mcp_connector.tests.test_oauth_transport_guard.test_websocket_ws_scheme_url_is_allowed` needs DNS for `ws-everything.stub` (pre-existing, file untouched).
 
 Deploy order for GW17c (review M9): deploy gateways first with `AMF_PROJECT_MCP_KEY_POLICY` unset; set it to `1` on the projector only after every gateway replica runs this code. Until then GW17c enforces nothing in production.
 
@@ -283,14 +283,14 @@ Deploy order for GW17c (review M9): deploy gateways first with `AMF_PROJECT_MCP_
 
 | Card | Runbook objective, short | State |
 |---|---|---|
-| GW17b | Authenticated MCP upstreams | Code on this tree, offline gates green, live gate not run. See the GW32 / GW17b / GW17c section. Bearer, basic and custom-header upstreams attach a credential; OAuth upstream refresh has the service and the control write-back but NOT the production token-endpoint transport or the setup routes (not done). `query_param` stays refused. |
+| GW17b | Authenticated MCP upstreams | Code on this tree, offline gates green, live gate not run. See the GW32 / GW17b / GW17c section. Bearer, basic, custom-header and OAuth upstreams attach a credential; OAuth refresh and setup go through the pinned dial. `query_param` stays refused. |
 | GW17c | Per-key `mcp_allowed_tools` and `mcp_max_tool_calls` | Code present, projection off by default (`AMF_PROJECT_MCP_KEY_POLICY`). It enforces nothing in production until that flag is set after every gateway replica runs this code. Offline gates green, live gate not run. |
 | GW27 | The 45 unsupported FirewallConfig fields, built or retired by name | Not started. `firewall_v2_map.py` still rejects those fields on save. |
 | GW28 | Multi-model routing | Not started |
 | GW29 | Kill switch, isolation, reroute, auto-isolation | Not started. `kill_switch_engaged` is still hard-coded false. |
 | GW30 | Vector adapter and the connector list, `unsupported_operation` instead of an empty success | Adapter layer built and live-tested on 2 November; see the GW30 section above. Not wired into the production boot (that is GW31/GW36), so it does not exit for cutover. |
 | GW31 | Four-stage RAG, the retired routes, async ingest, project on Principal, six RAG settings | Not started. `/v1/rag/query` is HTTP 501 `not_implemented:rag`. |
-| GW32 | v1 MCP URL or a signed redirect, gateway as OAuth 2.1 server, real HTTP+SSE and WebSocket | Partly built, code on this tree, offline gates green, live gate not run. Built: v1 path served, sessions, POST/GET/DELETE, SSE reply, WebSocket, OAuth 2.1 server, identity before any method. NOT built: upstream OAuth setup routes (`oauth/start|callback|status`), real-server fixtures, `build_mcp_deps`, publisher series wiring. See the GW32 section. |
+| GW32 | v1 MCP URL or a signed redirect, gateway as OAuth 2.1 server, real HTTP+SSE and WebSocket | Code on this tree, offline gates green, live gate not run. Built: v1 path, sessions, POST/GET/DELETE, SSE reply, WebSocket, OAuth 2.1 server, upstream OAuth setup routes, identity before any method, dev-profile wiring. NOT built: offline real-server fixtures, route-table goldens, production-profile MCP wiring. See the GW32 section. |
 | GW33 | Output parity: IP leak, exfil channels, grounding, human review, REWRITE, canary | Not started. The GW26 publisher omits `rewrite` and `model_downgrade` and names them unsupported. It does not implement REWRITE. |
 | GW34 | SDK compatibility; unknown paths 404 `endpoint_not_found` | Not started as a card. The unknown-path item landed with GW36 slice S0 on 2 November: an unknown path is 404 `endpoint_not_found`, a known path with another method is 405 with `allow`, and the registered placeholders stay 501. The client matrix (L34-1) is not run. |
 | GW35 | Console pages and Scan Detail truth | Not started. The Attack Simulator still shows Auth and Rate Limit as ALLOW on the competitor block above. Those two stages are hard-coded allow. |

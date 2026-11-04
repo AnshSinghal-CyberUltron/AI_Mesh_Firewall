@@ -138,7 +138,7 @@ def extend_mcp_deps(
             bounds=cred_bounds,
             clock=clock,
         )
-        base.registry.subscribe_drop(_dropper(cache), cache.keys)
+        base.registry.subscribe_drop(cache.drop_scope, cache.scopes)
         upstream = UpstreamOAuthRoutes(
             flow=ControlOAuthFlowClient(
                 base_url=control_url, internal_key=internal_key, call=_control_call(),
@@ -215,15 +215,6 @@ def _public_base(env: Mapping[str, str]) -> str:
     if not host or not ok or parts.query or parts.fragment:
         raise DevProfileError("AMF_GATEWAY_PUBLIC_URL must be an https URL (or loopback http)")
     return url.rstrip("/")
-
-
-def _dropper(cache: CredentialCache) -> Callable[[str, str], None]:
-    def drop(org: str, server: str) -> None:
-        for cached_org, cached_server in cache.keys():
-            if cached_org == org and server in ("", cached_server):
-                cache.drop(cached_org, cached_server)
-
-    return drop
 
 
 def _oauth(

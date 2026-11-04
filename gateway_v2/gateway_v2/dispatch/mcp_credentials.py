@@ -289,7 +289,14 @@ class CredentialCache:
     def drop(self, org: str, slug: str) -> None:
         self._entries.pop((org, slug), None)
 
-    def keys(self) -> frozenset[tuple[str, str]]:
+    def drop_scope(self, org: str, server: str) -> None:
+        """Drop every entry of ``org`` (``server == ""``) or the one ``(org, server)`` entry. The
+        walk is over this worker's bounded RAM table (``slots`` entries), never the store."""
+        for cached in [key for key in self._entries if key[0] == org and server in ("", key[1])]:
+            self._entries.pop(cached, None)
+
+    def scopes(self) -> frozenset[tuple[str, str]]:
+        """The ``(org, server)`` pairs held (at most ``slots``), for the registry version poll."""
         return frozenset(self._entries)
 
 

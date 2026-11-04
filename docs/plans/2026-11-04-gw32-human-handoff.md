@@ -11,27 +11,30 @@ Run from the repo root on the Docker stack, with the branch deployed.
 | DL-1 | Point VS Code or the MCP SDK client at `https://<gateway>/gateway/<org>/mcp/<srv>` with only the key changed. Run initialize, tools/list, tools/call. Expect all three to succeed. |
 | DL-2 | With a real MCP client, run discovery, dynamic registration, authorize with PKCE and the token exchange against the running gateway (`AMF_GATEWAY_PUBLIC_URL` and `AMF_OAUTH_HASH_KEY` must be set, and the OAuth routes wired: see "Wiring" below), then call a tool. |
 | DL-3 | Reach a real HTTP+SSE MCP server and a real WebSocket MCP server through the real broker and sandbox. Check `tools/list`, `tools/call`, the sandbox host allowlist and the SSRF check. The offline tests do NOT cover this. |
-| DL-4 | Real token server and real OAuth server (with real refresh) through control, broker and sandbox. Grep every response, container log and audit record for the secret. Check revocation within the registry TTL, and two real orgs on one stack. OAuth refresh needs the production token-endpoint transport, which does not exist yet. |
+| DL-4 | Real token server and real OAuth server (with real refresh) through control, broker and sandbox. Grep every response, container log and audit record for the secret. Check revocation within the registry TTL, and two real orgs on one stack. OAuth refresh uses the pinned token-endpoint transport (`dispatch/pinned_transport.py`); check it against a real IdP. |
 | DL-5 | Edit a key's allow-list and cap in the console. Check it reaches the gateway within the identity freshness bound (5 s), and that the cap holds across real workers on a real Valkey. |
 | DL-6 | The GW26 MCP live claims that this card unblocks. |
 | DL-7 | The C2 MCP replay (LGW17-7) and the fleet-scale LGW17-4, deferred as in GW17. |
 
-Control tests: `control/ai_mesh_control/mcp_connector/tests/test_gateway_credential_endpoints.py` needs
-Postgres (the SQLite test database cannot be created because of an existing migration). Run it with
-`python manage.py test mcp_connector.tests.test_gateway_credential_endpoints` against a Postgres test
-database. `test_gateway_credential_body.py` ran green offline.
-
-## Wiring that is not done (do this before any live run)
-- Nothing builds `McpDeps.sessions`, `oauth`, `token_store`, `credentials`, `cap_table`, `policy_metrics`
-  or the `WsLimiter` outside tests. There is no `build_mcp_deps` and neither the dev nor the production
-  profile serves the new surfaces. `wrap_mcp_app(app, ws_limiter)` exists for the WebSocket scope.
-- No production token-endpoint transport (pinned dial) exists for OAuth upstream refresh.
-- No upstream OAuth setup routes.
-- `McpPolicyMetrics` is not published and `amf_mcp_policy_enforcement_version` does not exist.
-
+Control tests: run on a throwaway Postgres (pgvector/pgvector:pg16) + Redis with
+`DEBUG=true REDIS_URL=... DATABASE_URL=postgresql://... python manage.py test mcp_connector`
+(SQLite cannot create the test database because of an existing Postgres-only migration). Iteration 2
+ran them green except one pre-existing DNS-dependent test (see verification.md).
+## Wiring (iteration 2)
+- `edge/mcp_boot.extend_mcp_deps` is the one construction site. `build_dev_mcp` calls it, so the DEV
+  PROFILE builds the session store, call-cap table, credential service, OAuth 2.1 server, token
+  resolver, policy metrics and the upstream OAuth setup routes. `serve._assemble_app` wraps the
+  WebSocket scope with one shared `WsLimiter` (idle-weight budget = `connection_budget()`).
+- Without a store (no `AMF_DEV_REDIS_URL`): no session ids, capped keys refused, OAuth 503, refresh
+  lock per-worker. A control URL that is neither https nor loopback leaves credentials and the setup
+  routes unset (an upstream secret never crosses plaintext).
+- The PRODUCTION PROFILE builds no MCP dependencies at all (pre-existing: GW17 is dev-profile only).
+  Wiring MCP into the production boot belongs with GW36's production profile.
+- `McpPolicyMetrics` is published through `Publisher.attach_mcp_policy` (7 series incl.
+  `amf_mcp_policy_enforcement_version`).
 ## Deploy order for per-key policy (D-10)
 1. Deploy the gateway with this code, with `AMF_PROJECT_MCP_KEY_POLICY` unset.
-2. Check every replica runs it (there is no metric for this yet; check the image tag).
+2. Check every replica reports `amf_mcp_policy_enforcement_version 1` on `/metrics`.
 3. Set `AMF_PROJECT_MCP_KEY_POLICY=1` on the projector. Until then GW17c enforces nothing.
 If it is set early, keys with an allow-list or cap are unrestricted on old replicas (declared residual).
 
@@ -42,12 +45,16 @@ keeps custody. D-5 capacity allowlist shape (shared with GW27: append `runtime/r
 `ALLOWED_RELS` when that lands). D-6 cap window 60 s. D-7 offline real-server proof split from live.
 DD-3 gateway-side refresh. DD-8 cold-start bootstrap 1 (set 0 for exactness at the price of a 429 on a
 cold worker's first call). DD-13 Origin default (same authority or `AMF_MCP_ALLOWED_ORIGINS`).
-DD-16 `query_param` auth unsupported. D-8 WebSocket idle weight plus per-message slot (the literal
-R5.7 is not what is built; `ws_idle_weight` is in the bounds but the limiter counts connections only).
-D-9 credential replacement rules (not built). D-10 deploy order above.
+DD-16 `query_param` auth unsupported. D-8 WebSocket idle weight plus per-message slot: each message runs the HTTP pipeline (full
+admission slot and budget charge); open sockets hold `ceil(n x ws_idle_weight)` slots against
+`connection_budget()` (refused 1013 beyond it). D-9 credential replacement: `oauth/start` refuses a
+`zsmcp_` token and a restricted key, needs `force=true` when already authorised; any unrestricted raw
+key of the org can still replace it (residual, owner decision). D-10 deploy order above.
 
 Settings read by this code: `AMF_GATEWAY_PUBLIC_URL`, `AMF_OAUTH_HASH_KEY`,
 `AMF_OAUTH_HASH_KEY_PREVIOUS`, `AMF_TRUSTED_PROXY_HOPS`, `AMF_MCP_ALLOWED_ORIGINS`,
-`AMF_MCP_ALLOW_PLAINTEXT_CREDENTIAL_HOSTS`, `AMF_PROJECT_MCP_KEY_POLICY`. Only
-`AMF_PROJECT_MCP_KEY_POLICY` is read by shipped boot code (the projector). The rest are the names the
-wiring should use; nothing reads them yet.
+`AMF_MCP_ALLOW_PLAINTEXT_CREDENTIAL_HOSTS`, `AMF_PROJECT_MCP_KEY_POLICY`. All but
+`AMF_TRUSTED_PROXY_HOPS` are read by the dev-profile boot (`edge/mcp_boot.py`) or the projector.
+Upstream OAuth setup: deploy note, disable query-string access logging for `/gateway/oauth/callback`
+(design residual). Upstream metadata redirects are refused outright (stricter than the design's
+re-pinned hop budget).

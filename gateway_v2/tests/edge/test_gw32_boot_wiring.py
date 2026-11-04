@@ -197,17 +197,52 @@ def test_publisher_exports_policy_series_and_enforcement_version() -> None:
 
 def test_credential_cache_is_dropped_when_the_registry_version_changes() -> None:
     from gateway_v2.dispatch.mcp_credentials import CredentialCache
-    from gateway_v2.edge.mcp_boot import _dropper
-
     cache = CredentialCache(slots=4, ttl_s=100.0, clock=lambda: 0.0)
-    assert cache.keys() == frozenset()
+    assert cache.scopes() == frozenset()
     from gateway_v2.domain.mcp_credential import UpstreamCredential
 
     sample = UpstreamCredential(kind="bearer", token="s" * 12, version=1)
     cache.put("acme", "s", "bearer", sample)
     cache.put("acme", "t", "bearer", sample)
     cache.put("other", "s", "bearer", sample)
-    _dropper(cache)("acme", "s")
-    assert cache.keys() == frozenset({("acme", "t"), ("other", "s")})
-    _dropper(cache)("acme", "")  # an org-wide bump
-    assert cache.keys() == frozenset({("other", "s")})
+    cache.drop_scope("acme", "s")
+    assert cache.scopes() == frozenset({("acme", "t"), ("other", "s")})
+    cache.drop_scope("acme", "")  # an org-wide bump
+    assert cache.scopes() == frozenset({("other", "s")})
+
+
+def test_serving_assembler_wraps_the_websocket_scope() -> None:
+    """`serve._assemble_app` is the boot path's one `build_app` call; it must add the MCP
+    WebSocket wrapper with a shared limiter whenever MCP deps are present."""
+    from gateway_v2.edge import serve
+
+    deps, _, _ = _boot({}, Principal("kid", ORG, 0.0, 0.0, 1))
+    kwargs: dict[str, object] = {
+        "contract": _contract(), "provider": None, "scanner": holdback_scan,
+        "resolver": MinimalOutputResolver(), "metrics_registry": _Metrics(), "clock": _Clock(),
+        "input_detector": _none, "error_scanner": _none,
+        "identity": Identity(Principal("kid", ORG, 0.0, 0.0, 1)),
+        "snapshot_source": warm_snapshot_source(), "admission": AdmittingAdmission(),
+        "quota": AdmittingBudget(), "mcp": deps,
+    }
+    app = serve._assemble_app(kwargs)  # noqa: SLF001
+    sent: list[dict[str, object]] = []
+
+    async def go() -> None:
+        events = [{"type": "websocket.connect"}, {"type": "websocket.disconnect"}]
+
+        async def receive() -> dict[str, object]:
+            return events.pop(0)
+
+        async def send(event: dict[str, object]) -> None:
+            sent.append(event)
+
+        scope = {
+            "type": "websocket", "path": "/v1/mcp/s", "raw_path": b"/v1/mcp/s",
+            "headers": [(b"authorization", f"Bearer {KEY}".encode()), (b"host", b"gw.test")],
+            "client": ("1.2.3.4", 1),
+        }
+        await app(scope, receive, send)  # type: ignore[arg-type]
+
+    asyncio.run(go())
+    assert sent and sent[0]["type"] == "websocket.accept"

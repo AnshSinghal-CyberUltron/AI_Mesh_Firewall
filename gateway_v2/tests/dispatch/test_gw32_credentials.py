@@ -301,7 +301,7 @@ def test_cache_hit_avoids_fetch_and_type_change_bypasses() -> None:
     again = asyncio.run(service.acquire("o", "s", "bearer"))
     assert isinstance(first, UpstreamCredential) and again is first and control.fetches == 1
     assert cache.get("o", "s", "basic") is None  # a changed auth_type never reuses the entry
-    assert cache.keys() == frozenset()  # and drops it
+    assert cache.scopes() == frozenset()  # and drops it
 
 
 def test_permanent_failure_marks_needs_reauth_with_zero_credential() -> None:
@@ -309,7 +309,7 @@ def test_permanent_failure_marks_needs_reauth_with_zero_credential() -> None:
     service, cache = _service(control, _endpoint({"error": "invalid_grant"}, 400))
     out = asyncio.run(service.acquire("o", "s", "oauth"))
     assert isinstance(out, CredentialRefusal) and out.code == "mcp_upstream_needs_reauth"
-    assert control.reauth == 1 and cache.keys() == frozenset()
+    assert control.reauth == 1 and cache.scopes() == frozenset()
 
 
 def test_transient_failures_mark_needs_reauth_only_after_n() -> None:
@@ -378,4 +378,4 @@ def test_property_6_two_orgs_same_slug_never_share_a_credential() -> None:
                 assert isinstance(out, UpstreamCredential) and out.token == tokens[org]
             else:
                 assert isinstance(out, CredentialRefusal)  # an org with no credential gets none
-        assert {k[0] for k in cache.keys()} <= set(tokens)
+        assert {k[0] for k in cache.scopes()} <= set(tokens)
