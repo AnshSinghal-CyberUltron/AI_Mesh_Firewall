@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from gateway_v2.runtime.cgroup import DetectHooks, detect_with_hooks
 from gateway_v2.runtime.errors import CapacityUnavailable, CapacityUnset
 from gateway_v2.runtime.kinds import CapacityHint, HardwareSignals, PoolKind
+from gateway_v2.runtime.resources_routing import RoutingBoundsMixin
 from gateway_v2.runtime.resources_vector import VectorBoundsMixin
 
 # Deployment-declared defaults. Logged as defaults when env is unset.
@@ -52,6 +53,12 @@ _MAX_STREAM_DURATION_MULT = 15000.0  # wall-clock stream lifetime
 _MAX_CUT_LATENCY_MULT = 2.0  # a cut must complete within p99 x mult
 _MAX_SNAPSHOT_AGE_MULT = 1.0  # control-plane snapshot freshness vs p99
 _CANCEL_BOUND_MULT = 3.0  # disconnect -> full-kill budget
+_UPSTREAM_FIRST_EVENT_MULT = 1500.0  # GW28 pre-content upstream budget = p99_s x mult (30 s)
+_UPSTREAM_GAP_FRACTION = 0.8  # GW28 mid-stream gap = fraction x inter-chunk bound
+_ROUTING_MAX_ATTEMPTS = 2  # GW28 candidate attempts per request
+_ROUTING_MAX_CANDIDATES = 8  # GW28 candidates per set
+_ROUTING_MAX_WEIGHT = 16  # GW28 vnodes per candidate
+_ROUTING_MAX_IDENT_LEN = 64  # GW28 identifier length cap
 
 _AUDIT_QUEUE_MEMORY_SHARE = 0.02
 """Share of a worker's usable memory the audit queue may occupy (GW14c).
@@ -229,7 +236,7 @@ class McpBounds:
 
 
 @dataclass(frozen=True, slots=True)
-class ResourceContract(VectorBoundsMixin):
+class ResourceContract(VectorBoundsMixin, RoutingBoundsMixin):
     cpu_quota: float
     memory_limit: int
     fd_limit: int
@@ -761,40 +768,3 @@ def _startup_logs(
             f"detected={contract.detected_workers()} (deviation)",
         )
     return tuple(lines)
-
-
-def snapshot(contract: ResourceContract, logs: tuple[str, ...]) -> dict[str, object]:
-    pools: dict[str, int | None] = {}
-    for kind in PoolKind:
-        if kind is PoolKind.GUARD:
-            try:
-                pools[kind.value] = contract.pool_size(kind)
-            except CapacityUnset:
-                pools[kind.value] = None
-            continue
-        pools[kind.value] = contract.pool_size(kind)
-    rate = contract.offered_service_rate()
-    return {
-        "cpu_quota": contract.cpu_quota,
-        "cpu_source": contract.cpu_source,
-        "memory_limit": contract.memory_limit,
-        "mem_source": contract.mem_source,
-        "fd_limit": contract.fd_limit,
-        "fd_source": contract.fd_source,
-        "workers": contract.workers(),
-        "detected_workers": contract.detected_workers(),
-        "worker_override": contract.worker_override,
-        "binding": contract.binding_signal(),
-        "queue_depth": contract.queue_depth(rate),
-        "connection_budget": contract.connection_budget(),
-        "stream_buffer_bytes": contract.stream_buffer_bytes(1),
-        "inter_chunk_timeout_s": contract.inter_chunk_timeout_s(),
-        "idle_timeout_s": contract.idle_timeout_s(),
-        "write_timeout_s": contract.write_timeout_s(),
-        "max_stream_duration_s": contract.max_stream_duration_s(),
-        "max_cut_latency_s": contract.max_cut_latency_s(),
-        "max_snapshot_age_s": contract.max_snapshot_age_s(),
-        "cancellation_bound_s": contract.cancellation_bound_s(),
-        "pools": pools,
-        "logs": list(logs),
-    }

@@ -8,7 +8,8 @@ import threading
 from gateway_v2.runtime.cgroup import DetectHooks
 from gateway_v2.runtime.errors import CapacityUnset
 from gateway_v2.runtime.kinds import PoolKind
-from gateway_v2.runtime.resources import ResourceContract, load_contract, snapshot
+from gateway_v2.runtime.resources import ResourceContract, load_contract
+from gateway_v2.runtime.resources_snapshot import snapshot
 
 
 class DummyPool:
