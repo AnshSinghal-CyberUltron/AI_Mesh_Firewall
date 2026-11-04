@@ -353,9 +353,8 @@ def build_dev_dependencies(
     # Group E: wire the PHASE-AWARE resolver factory so an ``input``-scoped rule is enforced only
     # on input and an ``output``-scoped rule only on output (``resolver_for`` returns
     # ``factory(plan, phase)`` per phase). ``build_app`` still requires a single ``resolver`` kwarg
-    # (the route's fallback when ``phase_resolvers`` is unset); once ``phase_resolvers`` is set it
-    # is NEVER consulted, so the single slot is a harmless valid ``OutputResolver`` bound at
-    # ``Phase.INPUT``.
+    # (the route's fallback when ``phase_resolvers`` is unset); once set it is NEVER consulted, so
+    # the single slot is a harmless valid ``OutputResolver`` bound at ``Phase.INPUT``.
     phase_factory = phase_resolver_factory()
     deps: dict[str, object] = {
         "contract": contract,
@@ -398,8 +397,7 @@ def build_dev_dependencies(
     mcp, mcp_note = build_dev_mcp(env, contract, redis_client=mcp_redis, clock=time.monotonic)
     if mcp is not None:
         deps["mcp"] = mcp
-    exports, holdback = PerRequestExports(), HoldbackMetrics()
-    runtime = deps.get("audit_runtime")
+    exports, holdback, runtime = PerRequestExports(), HoldbackMetrics(), deps.get("audit_runtime")
     publisher, metrics_note = build_dev_publisher(
         contract=contract,
         admission=admission_metrics,
@@ -408,9 +406,8 @@ def build_dev_dependencies(
         exports=exports,
         holdback=holdback,
     )
-    deps.update(
-        metrics_registry=publisher, observer=publisher, exports=exports, holdback_metrics=holdback
-    )
+    deps |= {"metrics_registry": publisher, "observer": publisher, "exports": exports}
+    deps["holdback_metrics"] = holdback
     snapshot_log, resolver_log = _plan_log(cfg, plan)
     logs: tuple[str, ...] = (
         "boot: DEV PROFILE ACTIVE (AMF_DEV_PROFILE=1) -- local development wiring, NOT FOR "

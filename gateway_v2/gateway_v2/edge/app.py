@@ -275,8 +275,7 @@ def build_app(
     surface; ``response_store`` backs ``/v1/responses``; ``mcp`` wires ``/v1/mcp`` (``None``: 501).
     **GW15.** The single :class:`ChatRoute` is built ONCE via :func:`_build_chat_route`; each
     unwired dep falls back to its fail-closed default. **GW27.** ``org_limits`` is the org rate /
-    burst / TPM decider shared by both routes; ``None`` builds a real ``OrgLimits(contract)``.
-
+    burst / TPM decider shared by both routes; ``None`` builds ``OrgLimits(contract)``.
     ``build_app`` stays pure assembly (no store read, no task spawned); the serving bounds derive
     from the injected ``ResourceContract`` / ``HoldbackConfig`` with no capacity literal in
     ``edge``. Returns the ``async def app(scope, receive, send)`` callable.
