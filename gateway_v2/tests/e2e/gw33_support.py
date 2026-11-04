@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import random
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
 from dataclasses import dataclass, field
 
 from gateway_v2.detect.holdback import TokenIndex
@@ -129,7 +129,7 @@ def run(
     backend: object | None = None,
     killed: Callable[[], bool] = lambda: False,
     composed: OutputDetectors | None = None,
-    source: Callable[[list[UpstreamChunk]], object] | None = None,
+    wrap: Callable[[AsyncIterator[UpstreamChunk]], AsyncIterator[UpstreamChunk]] | None = None,
 ) -> Result:
     c = contract()
     out = composed or build_output_detectors(
@@ -154,7 +154,8 @@ def run(
             yield chunk
 
     async def drive() -> object:
-        return await pipeline.run(gen(), send, killed)
+        source = gen()
+        return await pipeline.run(wrap(source) if wrap is not None else source, send, killed)
 
     result.stats = asyncio.run(drive())
     return result
