@@ -16,8 +16,9 @@ _ROOT = repo_root()
 
 def test_the_frontend_vocabulary_matches_the_schema() -> None:
     assert inventory.vocabulary_messages(_ROOT) == []
+    # GW33's ``rewrite`` disposition is a console stage action too (merged with GW35).
     assert set(inventory.python_vocab(_ROOT)) == {
-        "allow", "flag", "redact", "block", "error", "skip",
+        "allow", "flag", "redact", "rewrite", "block", "error", "skip",
     }
 
 
