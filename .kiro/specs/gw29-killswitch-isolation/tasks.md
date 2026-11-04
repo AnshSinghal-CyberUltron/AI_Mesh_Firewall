@@ -95,7 +95,7 @@ If the Postgres DSN `AMF_PG_DSN` is unset, the Postgres-16 projector tests skip 
 
 ## Tasks (bottom-up; each leaves the tree buildable)
 
-- [ ] 1. Baseline, evidence skeleton and verify-first grep (no product code).
+- [x] 1. Baseline, evidence skeleton and verify-first grep (no product code).
   Create `docs/plans/evidence/2026-11-04-gw29/` with `gates.sh` (commands above, image confirmed by actually running
   G1 once), `00_baseline.txt` (pass/skipped/xfailed counts, mypy file count, import-linter result, each gate exit) and
   `01_caller_grep.txt` = output of `grep -rn "_NoControlSource\|build_app(\|_stream_response\|collect_and_render\|
@@ -106,7 +106,7 @@ If the Postgres DSN `AMF_PG_DSN` is unset, the Postgres-16 projector tests skip 
   Verify: G1 completes; record the baseline numbers (all later runs must have 0 failed and no new skips except the
   declared Postgres-only tests).
 
-- [ ] 2. Domain value types, scope grammar, canonical model, posture codes (`domain/` only; D§3, D§4.3, D§4.6, D§5.1).
+- [x] 2. Domain value types, scope grammar, canonical model, posture codes (`domain/` only; D§3, D§4.3, D§4.6, D§5.1).
   Create `gateway_v2/domain/incident.py`: `Final` protocol constants (`MODEL_NAME_MAX=128`, `SLUG_MAX=64`,
   `REASON_MAX=200`, `ROUTING_SENTINEL="auto"`, `KS_SCOPE_GENERATION=2`), compiled `MODEL_NAME`/`MODEL_NAME_CANON`/slug
   patterns, `INCIDENT_CAUSES` and `AUTO_REASONS` tuples (include `recheck`, `gate_error`, `unwired`, `unresolvable_model`,
@@ -129,7 +129,7 @@ If the Postgres DSN `AMF_PG_DSN` is unset, the Postgres-16 projector tests skip 
   Verify: G1b, `mypy --strict`, `ruff check .`, `lint-imports`, `check_frozen_dataclasses gateway_v2`,
   `check_capacity_literals gateway_v2`, `check_no_module_mutable gateway_v2` all clean.
 
-- [ ] 3. Resource contract: headroom split, then incident accessors (D§8). Depends on 2 only for names.
+- [x] 3. Resource contract: headroom split, then incident accessors (D§8). Depends on 2 only for names.
   (a) Extract `_env_map/_parse_override/_parse_owner_queue_ms` to `runtime/resources_env.py` and import them back; run
   the full suite subset `pytest -q tests/runtime` to prove no behaviour change; `wc -l resources.py` drops by ~35.
   (b) Add the named constants to `runtime/resources.py` (`_RISK_WINDOW_S`, `_RISK_BUCKETS`, `_RISK_MIN_SAMPLES`,
@@ -145,7 +145,7 @@ If the Postgres DSN `AMF_PG_DSN` is unset, the Postgres-16 projector tests skip 
   Verify: `check_sizes gateway_v2` exit 0 (resources.py <= 800), `check_capacity_literals gateway_v2` exit 0, G1b,
   `pytest -q tests/runtime`, mypy, ruff.
 
-- [ ] 4. Audit constructors (D§5.11). `audit/record.py` is 229 lines; additive only.
+- [x] 4. Audit constructors (D§5.11). `audit/record.py` is 229 lines; additive only.
   Add the closed reason values `TERMINATED`, `REROUTED`, `ISOLATION_CHANGE` to the audit reason tuple (not to
   `edge/counters.py` `REASON_VOCAB`), and constructors `incident_refusal(...)`, `incident_cut(...)`,
   `incident_reroute(...)`, `incident_change(...)` built on `admission(...)` (phase `ADMISSION`, `detail.cause`,
@@ -154,7 +154,7 @@ If the Postgres DSN `AMF_PG_DSN` is unset, the Postgres-16 projector tests skip 
   Files: `gateway_v2/audit/record.py`, test.
   Verify: `pytest -q tests/audit`, G1b, mypy, ruff.
 
-- [ ] 5. Pure routing decision (`dispatch/`, D§4.5). Depends on 2.
+- [x] 5. Pure routing decision (`dispatch/`, D§4.5). Depends on 2.
   Create `gateway_v2/dispatch/incident_routing.py` `decide_route(...)` implementing eligibility rules 1-7 (named, distinct,
   not killed, not isolated, allowed_models, constraints known + profiles present, compliance superset, sensitivity
   ceiling) -> `RouteDecision`; no clock, no random, no module state, no I/O. `DispatchRouter` untouched.
@@ -164,7 +164,7 @@ If the Postgres DSN `AMF_PG_DSN` is unset, the Postgres-16 projector tests skip 
   Files: `gateway_v2/dispatch/incident_routing.py`, 2 tests.
   Verify: `pytest -q tests/dispatch -k lgw29`, `lint-imports`, mypy, ruff.
 
-- [ ] 6. KillSwitchSnapshot: org-model set, isolation map, `evaluate`, drift latch, quarantine (`admit/killswitch.py`, D§4.3, 4.6).
+- [x] 6. KillSwitchSnapshot: org-model set, isolation map, `evaluate`, drift latch, quarantine (`admit/killswitch.py`, D§4.3, 4.6).
   `killswitch.py` is 289 lines. Add `aliases: Mapping[str,str] = MappingProxyType({})` constructor arg (the only
   construction site is `edge/state_runtime.py`, left for task 18), `_org_models`, `_isolations`, `_quarantined`, replace
   `_set_scope` by `_apply_record_locked` using `parse_scope`, `on_count` accounting including isolations and quarantined
@@ -180,7 +180,7 @@ If the Postgres DSN `AMF_PG_DSN` is unset, the Postgres-16 projector tests skip 
   Files: `gateway_v2/admit/killswitch.py`, 2 tests.
   Verify: `pytest -q tests/admit`, G1b, `check_sizes`, mypy, ruff, `check_no_module_mutable gateway_v2`.
 
-- [ ] 7. IncidentState: the one read model and the one expiry decision (`admit/incident_state.py`, D§4.4, 5.3).
+- [x] 7. IncidentState: the one read model and the one expiry decision (`admit/incident_state.py`, D§4.4, 5.3).
   Create `IncidentState` (`status_of`, `active_isolation`, `sweep`, `add_local`, `snapshot_models`, `expired_signed_count`)
   with injected `wall`/`clock`, `__slots__`, its own lock never nested with the snapshot lock (reads `switches.*` accessors
   first, then takes its lock), explicit `expires_at` rule, auto-origin duration + `max_isolation_hold_s()` monotonic cap,
@@ -195,7 +195,7 @@ If the Postgres DSN `AMF_PG_DSN` is unset, the Postgres-16 projector tests skip 
   Files: `gateway_v2/admit/incident_state.py`, 3 tests.
   Verify: `pytest -q tests/admit -k lgw29`, mypy, ruff, `check_frozen_dataclasses`, `check_no_module_mutable`.
 
-- [ ] 8. IncidentGate (`admit/incident_gate.py`, D§4.1, 5.4). Depends on 2, 3, 5, 6, 7.
+- [x] 8. IncidentGate (`admit/incident_gate.py`, D§4.1, 5.4). Depends on 2, 3, 5, 6, 7.
   `IncidentGate.decide` (step 0 `canonical_model`/`auto` handling per D§4.6; stale -> kill order global/org/org-model/model;
   isolation via `IncidentState` + `decide_route`; every route target re-evaluated), `recheck`, `decide_org`; one broad
   catch at the boundary returning `refuse(KILL_SWITCH_UNAVAILABLE, cause="gate_error")` with ERROR log of the class
@@ -210,7 +210,7 @@ If the Postgres DSN `AMF_PG_DSN` is unset, the Postgres-16 projector tests skip 
   Files: `gateway_v2/admit/incident_gate.py`, `admit/__init__.py`, 4 tests.
   Verify: `pytest -q tests/admit -k lgw29`, `lint-imports`, mypy, ruff, G3 `check_http_outside_edge_resolve` (no HTTP object in admit).
 
-- [ ] 9. Risk tracker, auto-isolator, revocation ledger, incident metrics (`admit/`, D§5.5-5.7, 5.10).
+- [x] 9. Risk tracker, auto-isolator, revocation ledger, incident metrics (`admit/`, D§5.5-5.7, 5.10).
   Create `admit/model_risk.py` (`ModelRiskTracker`: bucket ring, weights from contract, distinct-org sets `orgs_seen` /
   error orgs, only catalogued models, `max_models`, probation, never raises), `admit/auto_isolation.py` (`AutoIsolator`:
   trigger rule with `min(risk_min_distinct_orgs(), distinct_orgs_seen)`, fallback pre-check via `decide_route`, skipped
@@ -224,10 +224,10 @@ If the Postgres DSN `AMF_PG_DSN` is unset, the Postgres-16 projector tests skip 
   Files: the four new `admit/` modules, `admit/__init__.py`, 6 tests.
   Verify: `pytest -q tests/admit -k lgw29`, mypy, ruff, all admit-side AST gates.
 
-- [ ] 10. Checkpoint A: lower layers complete. Run G1 (full), G2, G3, G4; compare with baseline (0 failed). Fix only
+- [x] 10. Checkpoint A: lower layers complete. Run G1 (full), G2, G3, G4; compare with baseline (0 failed). Fix only
   regressions caused by tasks 2-9. Commit per layer so far (domain, runtime, audit, dispatch, admit).
 
-- [ ] 11. Edge value plumbing: errors, counters, holds, deps (small files, no behaviour yet; D§6.1, 6.2, 6.4a, 5.10).
+- [x] 11. Edge value plumbing: errors, counters, holds, deps (small files, no behaviour yet; D§6.1, 6.2, 6.4a, 5.10).
   `edge/errors.py`: envelopes for the 5 new codes (HTTP 503 / stream frame), `INCIDENT_HTTP_CODES` frozen tuple,
   `render_http(..., retry_after_s=None)` adds integer `retry-after = max(1, ceil(...))` and `x-should-retry: false` only
   when given. `edge/counters.py`: `POSTURE_CODES` += the five codes (do NOT extend `REASON_VOCAB`/`STATUS_VOCAB`).
@@ -242,7 +242,7 @@ If the Postgres DSN `AMF_PG_DSN` is unset, the Postgres-16 projector tests skip 
   Files: `edge/errors.py`, `counters.py`, `request_holds.py`, `chat_lifecycle.py`, `chat_deps.py`, `upstream_body.py`, tests.
   Verify: `pytest -q tests/edge`, `check_sizes gateway_v2`, mypy, ruff.
 
-- [ ] 12. Phase 4b in the chat lifecycle (D§6.1, 6.2). Depends on 8, 11. SIZE: extract first.
+- [x] 12. Phase 4b in the chat lifecycle (D§6.1, 6.2). Depends on 8, 11. SIZE: extract first.
   Create `edge/incident_phase.py` holding the phase 4b helper (call `deps.incident_gate.decide`, on refuse
   `holds.note_incident_cause` and return `_refused(...)` with `retry_after_s`/`cause`; on proceed build `StreamBinding`
   from `identity.org_id`, `verdict.routed_model`, the already-derived `hashed_bearer_key`, `identity.principal.feed_seq`;
@@ -258,7 +258,7 @@ If the Postgres DSN `AMF_PG_DSN` is unset, the Postgres-16 projector tests skip 
   Files: `edge/incident_phase.py`, `edge/openai_chat.py`, `edge/chat_lifecycle.py` (if needed), 3 tests.
   Verify: `pytest -q tests/edge`, `check_sizes gateway_v2` (openai_chat.py and run_lifecycle under cap), mypy, ruff.
 
-- [ ] 13. Refusal rendering, single audit record, stream-vs-HTTP (D§6.4a). Depends on 4, 11, 12. SIZE: routes.py at 799.
+- [x] 13. Refusal rendering, single audit record, stream-vs-HTTP (D§6.4a). Depends on 4, 11, 12. SIZE: routes.py at 799.
   Create `edge/incident_render.py` (incident-aware `_render_refusal` branch: codes in `INCIDENT_HTTP_CODES` render as
   HTTP 503 even when `req.streaming`, passing `outcome.retry_after_s`/`cause`; `_emit_error_code(..., retry_after_s=)`).
   Move any needed lines out of `routes.py` into this module so `routes.py` ends <= 799 (net zero or smaller).
@@ -272,7 +272,7 @@ If the Postgres DSN `AMF_PG_DSN` is unset, the Postgres-16 projector tests skip 
   Files: `edge/incident_render.py`, `edge/routes.py`, `edge/audit_emit.py`, 2 tests.
   Verify: `pytest -q tests/edge`, `check_sizes gateway_v2`, mypy, ruff.
 
-- [ ] 14. Mid-stream source, recheck, signature changes and callers (D§4.2, 5.8, 6.3, 6.3a, 6.4). Depends on 9, 12, 13. SIZE: routes.py/app.py.
+- [x] 14. Mid-stream source, recheck, signature changes and callers (D§4.2, 5.8, 6.3, 6.3a, 6.4). Depends on 9, 12, 13. SIZE: routes.py/app.py.
   Create `edge/inflight_source.py` (`KillSwitchControlSource` using `evaluate`, `age_s=0.0` when fresh and
   `available=False` when STALE, `revoked` via the ledger, `plan_changed=False` as a named constant with docstring;
   `KillSwitchControlFactory`, `RefusingControlSource`, `DevNoControlSource`; a raising source returns
@@ -302,7 +302,7 @@ If the Postgres DSN `AMF_PG_DSN` is unset, the Postgres-16 projector tests skip 
   Verify: full `pytest -n 24 -q` equals baseline pass count (any newly cut stream = missed migration), `check_sizes gateway_v2`,
   mypy, ruff, `lint-imports`.
 
-- [ ] 15. Other authenticated surfaces: embeddings, moderations, MCP (D§6.4b). Depends on 8, 11, 14. SIZE: openai_misc.py 764.
+- [x] 15. Other authenticated surfaces: embeddings, moderations, MCP (D§6.4b). Depends on 8, 11, 14. SIZE: openai_misc.py 764.
   Add `MiscRoute.incident_gate = fail_closed_incident`, `incident_org_gate = fail_closed_org`. Put the preamble (decide
   before `_admit`, reroute -> `REROUTE_REFUSED`/`reroute_unsupported`, canonical name into `stage_embeddings`, recheck above
   `holds.mark_dispatched()` in `_drain_vectors`) in a new `edge/incident_misc.py`; `openai_misc.py` adds only call lines
@@ -315,7 +315,7 @@ If the Postgres DSN `AMF_PG_DSN` is unset, the Postgres-16 projector tests skip 
   Files: `edge/openai_misc.py`, `edge/incident_misc.py`, `edge/mcp.py`, test.
   Verify: `pytest -q tests/edge`, `check_sizes gateway_v2`, mypy, ruff.
 
-- [ ] 16. Notifier pump, ticker, catalog loader, constraint source, wiring (`edge/`, D§5.9, 6.5, 4.5, 4.6). Depends on 9, 14.
+- [x] 16. Notifier pump, ticker, catalog loader, constraint source, wiring (`edge/`, D§5.9, 6.5, 4.5, 4.6). Depends on 9, 14.
   Create `edge/notifier_pump.py` (bounded `deque` under lock, drop-oldest + counter, `RerouteLimiter`, drain task with
   `asyncio.wait_for(notify, notifier_timeout_s())`, `LoggingNotifier`, `IncidentTicker` with injected `sleep`),
   `edge/incident_catalog.py` (`AMF_MODEL_CATALOG` JSON, `AMF_MODEL_FALLBACKS`, `AMF_MODEL_AUTO_TARGET`; `ModelCatalog`
@@ -329,7 +329,7 @@ If the Postgres DSN `AMF_PG_DSN` is unset, the Postgres-16 projector tests skip 
   Files: the four new `edge/` modules, tests.
   Verify: `pytest -q tests/edge -k lgw29`, `check_sizes`, `check_no_module_mutable gateway_v2`, mypy, ruff.
 
-- [ ] 17. Production wiring (`edge/production_profile.py`, `state_runtime.py`, `publisher.py`, `series_count.py`, readiness; D§6.5, 5.10). Depends on 16. SIZE: publisher.py 748.
+- [x] 17. Production wiring (`edge/production_profile.py`, `state_runtime.py`, `publisher.py`, `series_count.py`, readiness; D§6.5, 5.10). Depends on 16. SIZE: publisher.py 748.
   `edge/state_runtime.py`: build `KillSwitchSnapshot(aliases=...)` from the catalog (single construction site; re-grep),
   `_key_applier` calls `ledger.observe(round_.records)` through a setter like `set_gcra_invalidate`.
   `edge/production_profile.py`: `build_incident` BEFORE `StateRuntime`, bind `gate`, `control_factory`,
@@ -346,7 +346,7 @@ If the Postgres DSN `AMF_PG_DSN` is unset, the Postgres-16 projector tests skip 
   `edge/incident_publish.py`, `edge/serve.py` (docstring only), tests.
   Verify: `pytest -q tests/edge`, full `pytest -n 24 -q` equals baseline, `check_sizes gateway_v2`, mypy, ruff, `lint-imports`.
 
-- [ ] 18. State-control writer side and rollout guard (`state_control/`, D§7, 9). Independent of 8-17; needs only 2.
+- [x] 18. State-control writer side and rollout guard (`state_control/`, D§7, 9). Independent of 8-17; needs only 2.
   Create `state_control/incident_scopes.py` (org-model projection `om:<slug>:<model>`, writer-side `canonical_model(raw,
   None)` validation -> `invalid_names`, flag `AMF_STATE_PROJECT_INCIDENT_SCOPES` default OFF, ERROR log + refusal to write
   new scopes when ON and `AMF_GATEWAY_MIN_SCOPE_GENERATION` < `KS_SCOPE_GENERATION`); `projector.py` gets only the call
@@ -361,7 +361,7 @@ If the Postgres DSN `AMF_PG_DSN` is unset, the Postgres-16 projector tests skip 
   Verify: `pytest -q tests/state_control`, `check_http_outside_edge_resolve state_control`, `check_capacity_literals
   state_control`, mypy, ruff, `lint-imports`.
 
-- [ ] 19. Local equivalents of the live scenarios (D§13), injected clock + fake provider.
+- [x] 19. Local equivalents of the live scenarios (D§13), injected clock + fake provider.
   `tests/edge/test_lgw29_l29_1_kill_under_load.py` (includes G-17: 2 000-token stream, engage at +2 s, cut asserted),
   `test_lgw29_l29_2_isolate_reroute.py` (zero calls to M), `test_lgw29_l29_3_auto_isolation.py` (50% 5xx/timeouts across
   `min(floor, active orgs)` orgs trips inside `risk_window_s()`, one-org run trips, two-org run with errors from one does
@@ -370,19 +370,19 @@ If the Postgres DSN `AMF_PG_DSN` is unset, the Postgres-16 projector tests skip 
   in evidence).
   Verify: `pytest -q -k "lgw29 and l29"`.
 
-- [ ] 20. Negative controls (AC32), each reverted afterwards (D§13).
+- [x] 20. Negative controls (AC32), each reverted afterwards (D§13).
   With a throwaway edit (verify `git diff` is empty after each): remove the phase 4b call; restore `DevNoControlSource` as
   the production default; make the gate treat STALE as OK; make expiry compare against creation only. Each must make the named
   acceptance test fail; record the failing test names in `docs/plans/evidence/2026-11-04-gw29/04_negative_controls.txt`.
   Verify: `git status --short gateway_v2` shows no leftover change.
 
-- [ ] 21. Docs and evidence: `docs/plans/2026-11-04-gw29-killswitch-isolation.md` (plan pointer to this tasks.md),
+- [x] 21. Docs and evidence: `docs/plans/2026-11-04-gw29-killswitch-isolation.md` (plan pointer to this tasks.md),
   `AGENTS.md` GW29 changelog entry (match the R2-xx/GW12 entries: what was wrong, FIX list, OPEN, FOUND NOT FIXED, VERIFY
   with real counts), progress-doc card-table update in `docs/AI_MESH_RUNBOOK_v3.1_PROGRESS.md` stating closed-local vs open
   (live L29-1..L29-4, real notifier delivery, fleet convergence timing, console agreement GW35). Save benchmark output.
   Verify: markdown links resolve (`ls` the referenced evidence files).
 
-- [ ] 22. Final offline gate (container-run, full): run G1, G2, G3, G4 from `gates.sh`; write outputs to
+- [x] 22. Final offline gate (container-run, full): run G1, G2, G3, G4 from `gates.sh`; write outputs to
   `docs/plans/evidence/2026-11-04-gw29/02_suite_and_gates.txt` and `03_gate_exits.txt`. Required: 0 failed, no new skips
   beyond the declared Postgres-only tests, `mypy --strict` clean, `ruff` clean, `Contracts: 3 kept, 0 broken`, every
   AST gate exit 0 on both trees (documented `state_control/valkey.py:100` tenant-scale finding excepted), `check_sizes` 0.
