@@ -172,6 +172,7 @@ def test_trade_off_table_matches_design_exactly() -> None:
         "api_token": TradeOffOutcome.REDACT_REMAINDER,
         "email": TradeOffOutcome.REDACT_REMAINDER,
         "jwt": TradeOffOutcome.TERMINATE,
+        "canary": TradeOffOutcome.TERMINATE,  # GW33 D-16: the only class this card adds
         "card": TradeOffOutcome.TERMINATE,
         "uuid": TradeOffOutcome.REDACT_REMAINDER,
         "sha256": TradeOffOutcome.REDACT_REMAINDER,

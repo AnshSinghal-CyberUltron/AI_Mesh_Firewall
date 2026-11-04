@@ -588,6 +588,19 @@ def test_egress_trade_off_outcomes_cover_exactly_the_legal_set() -> None:
     assert TRADE_OFF_TERMINATE == TradeOffOutcome.TERMINATE.value
 
 
+def test_gw33_ip_leak_and_exfil_sink_are_intentionally_absent_from_both_tables() -> None:
+    # GW33 D-9: neither an IP address nor an exfil sink head is a holdable suffix (`:`, `(` and
+    # spaces break word runs), so an `ip_leak`/`exfil_sink` class would be unreachable. Their
+    # INCREMENTAL behaviour is flag-only at `final`; enforcement is STRICT_WITHHOLD. Pinned so
+    # nobody adds an unreachable class later. Only `canary` is added by GW33.
+    from gateway_v2.egress.output_guard import _CLASS_DISPOSITION
+
+    for table in (set(TRADE_OFF), set(_CLASS_DISPOSITION)):
+        assert "ip_leak" not in table and "exfil_sink" not in table
+        assert "canary" in table
+    assert set(TRADE_OFF) == set(_CLASS_DISPOSITION)
+
+
 def test_egress_derived_outcome_agrees_with_detect_table_for_every_class() -> None:
     # For every class in the authoritative detect trade-off table, the outcome
     # the egress pipeline DERIVES from the resolver (BLOCK -> terminate,
@@ -857,6 +870,7 @@ _CLASS_VALUE: tuple[tuple[str, str, Category], ...] = (
     ("api_token", "ghp_abcdefghijklmnopqrstuvwxyz0123456789", Category.SECRET),
     ("email", "person@example.org", Category.PII),
     ("jwt", "eyJhbGci.eyJzdWIi.sig", Category.SECRET),
+    ("canary", "cnry_abcdefghijklmnopqrstuvwxyz", Category.CANARY),  # GW33
     ("card", "4111111111111111", Category.PII),
     ("uuid", "550e8400-e29b-41d4-a716-446655440000", Category.PII),
     ("sha256", "b" * 64, Category.SECRET),

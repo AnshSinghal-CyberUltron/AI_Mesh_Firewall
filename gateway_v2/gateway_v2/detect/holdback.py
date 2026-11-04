@@ -107,6 +107,9 @@ TRADE_OFF: Final[Mapping[str, TradeOffOutcome]] = MappingProxyType(
         "api_token": TradeOffOutcome.REDACT_REMAINDER,
         "email": TradeOffOutcome.REDACT_REMAINDER,
         "jwt": TradeOffOutcome.TERMINATE,
+        # GW33 D-16/C6: the per-request canary token (one word run, so it can never exceed the cap).
+        # ``ip_leak`` / ``exfil_sink`` are intentionally ABSENT (D-9): neither is holdable.
+        "canary": TradeOffOutcome.TERMINATE,
         # Numeric-class, cap-bounded.
         "card": TradeOffOutcome.TERMINATE,
         # Relaxed, may exceed cap to the ceiling.
@@ -241,12 +244,16 @@ _EMAIL_RE: Final = re.compile(r"@")
 _AWS_RE: Final = re.compile(r"\A(?:AKIA|ASIA)")
 _JWT_RE: Final = re.compile(r"\Aey")
 _PEM_LEAD_RE: Final = re.compile(r"\A-+BEGIN")
+#: GW33 D-16: the fixed public lead of a canary token; the 26-character body is the secret.
+_CANARY_LEAD: Final = "cnry_"
 
 
 def _classify_word_suffix(suffix: str) -> str | None:
     """Best-effort class name for a word-class held suffix, or ``None``."""
     if not suffix:
         return None
+    if suffix.startswith(_CANARY_LEAD):
+        return "canary"
     if _AWS_RE.match(suffix):
         return "aws"
     # A JWT begins with the base64 of '{"', i.e. "eyJ"; a 1-2 char lead "ey"/"eyJ"
