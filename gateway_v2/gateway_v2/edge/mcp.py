@@ -14,11 +14,14 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 from collections.abc import Mapping
 from dataclasses import dataclass
 from types import MappingProxyType
 
 from gateway_v2.admit.grant import Admitted, ShedVerdict
+from gateway_v2.admit.mcp_cap import CallCapTable
+from gateway_v2.admit.mcp_metrics import McpPolicyMetrics
 from gateway_v2.dispatch.mcp_broker import BrokerClient, McpServer
 from gateway_v2.dispatch.mcp_credentials import CredentialService
 from gateway_v2.dispatch.transform import BODY_DELTAS_KEY, GatewayRequest
@@ -40,6 +43,7 @@ from gateway_v2.edge.mcp_identity import (
     challenge,
     resolve_caller,
 )
+from gateway_v2.edge.mcp_policy_gate import apply_tool_policy, filter_tools_list, spend_cap
 from gateway_v2.edge.mcp_registry import McpRegistry, OrgMap, ServerEntry, ToolSet
 from gateway_v2.edge.mcp_reply import enforce_reply
 from gateway_v2.edge.phase_resolvers import resolver_for
@@ -75,12 +79,14 @@ class _Ctx:
 
     __slots__ = (
         "caller", "holds", "input_action", "input_rule", "msg_id", "output_action", "output_rule",
+        "retry_after_s",
         "plan_version", "scope", "server_slug", "tool", "tool_called",
     )
 
     def __init__(self, server_slug: str, scope: ASGIScope) -> None:
         self.scope = scope
         self.caller: McpCaller | None = None
+        self.retry_after_s = 0.0
         self.holds = RequestHolds()
         self.msg_id: jsonrpc.JsonRpcId = None
         self.server_slug = server_slug
@@ -118,11 +124,12 @@ class _Ctx:
 
 
 class _Refuse(Exception):
-    """Stop the request with a declared value-code."""
+    """Stop the request with a declared value-code (and, for a 429, a retry hint)."""
 
-    def __init__(self, code: str) -> None:
+    def __init__(self, code: str, retry_after_s: float = 0.0) -> None:
         super().__init__(code)
         self.code = code
+        self.retry_after_s = retry_after_s
 
 
 @dataclass(frozen=True, slots=True)
@@ -141,6 +148,8 @@ class McpRoute:
     credentials: CredentialService | None = None
     credential_bounds: McpCredentialBounds | None = None
     plaintext_credential_hosts: frozenset[str] = frozenset()
+    cap_table: CallCapTable | None = None
+    policy_metrics: McpPolicyMetrics | None = None
 
     async def handle_bare(self, scope: ASGIScope, receive: ASGIReceive, send: ASGISend) -> None:
         """``POST /v1/mcp`` with no server slug."""
@@ -155,6 +164,7 @@ class McpRoute:
             await self._serve(receive, send, ctx)
         except _Refuse as stop:
             refused = stop.code
+            ctx.retry_after_s = stop.retry_after_s
             await self._send_error(send, ctx, stop.code)
         finally:
             emit_chat_audit(
@@ -178,6 +188,8 @@ class McpRoute:
             raise _Refuse(caller.code)
         ctx.caller = caller
         ctx.holds.note_tenant(caller.identity.org_id)
+        if self.cap_table is not None:
+            self.cap_table.touch(caller.identity.principal)  # pre-warm the cap lease off-path
         bounds = self.chat.contract.mcp_bounds()
         body = await read_body_bounded(receive, bounds.body_bytes)
         if body is None:
@@ -261,6 +273,11 @@ class McpRoute:
         ctx.tool = str(params.get("name") or "") if method == "tools/call" else ""
         ctx.holds.note_request(_request_id(org, method, message.raw))
         await self._admit_and_charge(identity, fold, ctx)
+        # GW17c DD-6: after admission + budget (a denied call is rate-limited like any other),
+        # before the registry gate. The refusal releases holds, which refunds the budget charge.
+        denied = apply_tool_policy(identity.principal, method, params, self.policy_metrics)
+        if denied is not None:
+            raise _Refuse(denied)
         server, tools = await self._registry_gate(control_slug, method, ctx)
         forwarded = self._stage(method, params, fold, plan, ctx)
         await self._destination_gate(server)
@@ -270,6 +287,9 @@ class McpRoute:
         )
         if isinstance(attached, str):
             raise _Refuse(attached)
+        capped = spend_cap(self.cap_table, identity.principal, method, ctx.holds.request_id)
+        if capped is not None:  # DD-7: last refusal point before the dispatch mark
+            raise _Refuse(capped.code, capped.retry_after_s)
         ctx.holds.mark_dispatched()
         ctx.tool_called = True
         reply = await self.broker.call(
@@ -284,7 +304,7 @@ class McpRoute:
             raise _Refuse("output_blocked")  # DD-14: withhold, never partly mask
         envelope = reply.envelope
         if method == "tools/list":
-            envelope = _filter_tools(envelope, tools)
+            envelope = filter_tools_list(identity.principal, _filter_tools(envelope, tools))
         outcome = enforce_reply(
             envelope,
             bounds=bounds,
@@ -404,6 +424,12 @@ class McpRoute:
         headers: tuple[tuple[str, str], ...] = (("content-type", "application/json"),)
         if code == "invalid_api_key":
             headers = (*headers, ("www-authenticate", challenge(self.public_base)))
+        if ctx is not None and ctx.retry_after_s > 0:
+            headers = (
+                *headers,
+                ("retry-after", str(max(1, math.ceil(ctx.retry_after_s)))),
+                ("x-should-retry", "false"),
+            )
         if ctx is not None and ctx.holds.request_id:
             headers = (*headers, ("x-request-id", ctx.holds.request_id))
         await emit_response(send, errors.HTTPResponse(status=status, body=body, headers=headers))

@@ -35,6 +35,8 @@ def surface_entries(
         allow_hosts=mcp.allow_hosts,
         stdio_allowed=mcp.stdio_allowed,
         token_store=mcp.token_store,
+        cap_table=mcp.cap_table,
+        policy_metrics=mcp.policy_metrics,
         credentials=mcp.credentials,
         credential_bounds=mcp.credential_bounds,
         plaintext_credential_hosts=mcp.plaintext_credential_hosts,

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from gateway_v2.admit.mcp_cap import CallCapTable
+from gateway_v2.admit.mcp_metrics import McpPolicyMetrics
 from gateway_v2.dispatch.mcp_broker import BrokerClient
 from gateway_v2.dispatch.mcp_credentials import CredentialService
 from gateway_v2.dispatch.url_guard import Resolver
@@ -31,5 +33,8 @@ class McpDeps:
     credential_bounds: McpCredentialBounds | None = None
     plaintext_credential_hosts: frozenset[str] = frozenset()
     """GW17b: hosts allowed a credential over plaintext (the plaintext-hosts env allow-list)."""
+    cap_table: CallCapTable | None = None
+    """GW17c: per-key call-cap leases. `None` + a capped key = refused (fail closed)."""
+    policy_metrics: McpPolicyMetrics | None = None
     public_base: str = ""
     """GW32: validated `AMF_GATEWAY_PUBLIC_URL`; empty = no `resource_metadata` is advertised."""
