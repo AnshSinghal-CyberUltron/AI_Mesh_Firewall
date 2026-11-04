@@ -19,6 +19,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
 
+from gateway_v2.domain.category import Category
 from gateway_v2.runtime.kinds import CapacityHint  # lower layer — legal import
 
 
@@ -123,7 +124,20 @@ class GuardBackend(Protocol):
     def capacity_hint(self) -> CapacityHint: ...
 
 
+@runtime_checkable
+class HallucinationCapable(Protocol):
+    """Optional capability (GW33 D-27): the backend advertises the categories it can answer.
+
+    ``GuardBackend`` gains no required member. The grounding detector's model mode requires
+    ``isinstance(backend, HallucinationCapable)`` and ``Category.HALLUCINATION`` in
+    ``supported_categories``; otherwise it returns ``UNAVAILABLE`` without calling ``classify``.
+    """
+
+    supported_categories: frozenset[Category]
+
+
 __all__: tuple[str, ...] = (
+    "HallucinationCapable",
     "Budget",
     "GuardResult",
     "Readiness",
