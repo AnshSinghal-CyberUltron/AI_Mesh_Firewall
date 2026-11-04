@@ -13,6 +13,7 @@ from gateway_v2.runtime.errors import CapacityUnavailable, CapacityUnset
 from gateway_v2.runtime.kinds import CapacityHint, HardwareSignals, PoolKind
 from gateway_v2.runtime.resources_budget import BudgetBoundsMixin
 from gateway_v2.runtime.resources_stream import StreamBoundsMixin
+from gateway_v2.runtime.resources_tools import ToolBoundsMixin
 from gateway_v2.runtime.resources_vector import VectorBoundsMixin
 
 # Deployment-declared defaults. Logged as defaults when env is unset.
@@ -208,6 +209,15 @@ _VECTOR_MAX_RESULT_BYTES = 10_485_760  # vector_max_result_bytes() ceiling, R11.
 _VECTOR_MAX_RESULT_BYTES_SHARE = 0.025  # bytes = per_worker_rss x share, clamped to [1, ceiling]
 
 
+# GW34 tool-calling bounds, read through `ToolBoundsMixin.tool_bounds()` (`resources_tools.py`).
+_MAX_TOOLS = 128  # tools per request: the OpenAI per-request function limit
+_MAX_TOOL_CALLS = 128  # tool calls per message / response: the same limit
+_SCHEMA_DEPTH = 32  # JSON-schema nesting: deeper than generated schemas, cheap to walk
+_SCHEMA_NODE_BYTES = 64  # nodes <= max_request_bytes // this (a node is >= 4 B of JSON)
+_TOOL_ARGUMENTS_DIVISOR = 4  # one call's arguments may use at most 1/4 of the request bytes
+_SCAN_BUDGET_FRACTION = 0.5  # share of target_p99_ms that detector invocations may consume
+_SCAN_SLOT_COST_US = 200  # per detector call: measured p99 ~152 us (evidence gw34), +margin
+_PARTS_PER_SCHEMA_NODE = 2  # a schema node adds at most one `{` and one `,` to the C26 count
 @dataclass(frozen=True, slots=True)
 class McpBounds:
     """GW17 MCP bounds, v1 parity (`gateway/ai_mesh_gateway/mcp_proxy.py:294-368`,
@@ -231,7 +241,9 @@ class McpBounds:
 
 
 @dataclass(frozen=True, slots=True)
-class ResourceContract(VectorBoundsMixin, BudgetBoundsMixin, StreamBoundsMixin):
+class ResourceContract(
+    VectorBoundsMixin, BudgetBoundsMixin, StreamBoundsMixin, ToolBoundsMixin
+):
     cpu_quota: float
     memory_limit: int
     fd_limit: int

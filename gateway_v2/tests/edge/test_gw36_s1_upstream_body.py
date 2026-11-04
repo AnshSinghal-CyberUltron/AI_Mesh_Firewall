@@ -164,9 +164,11 @@ def test_a_slot_whose_delta_moved_channel_is_refused() -> None:
 @pytest.mark.parametrize(
     ("body", "code", "param"),
     [
-        ({"tools": []}, UNSUPPORTED_PARAMETER, "tools"),
-        ({"tool_choice": "auto"}, UNSUPPORTED_PARAMETER, "tool_choice"),
-        ({"response_format": {"type": "json_object"}}, UNSUPPORTED_PARAMETER, "response_format"),
+        ({"audio": {"voice": "x"}}, UNSUPPORTED_PARAMETER, "audio"),
+        ({"modalities": ["audio"]}, UNSUPPORTED_PARAMETER, "modalities"),
+        ({"prediction": {"type": "content"}}, UNSUPPORTED_PARAMETER, "prediction"),
+        ({"web_search_options": {}}, UNSUPPORTED_PARAMETER, "web_search_options"),
+        ({"top_logprobs": 3}, UNSUPPORTED_PARAMETER, "top_logprobs"),
         ({"logprobs": True}, UNSUPPORTED_PARAMETER, "logprobs"),
         ({"functions": []}, UNSUPPORTED_PARAMETER, "functions"),
         ({"not a field!": 1}, UNSUPPORTED_PARAMETER, None),
@@ -191,11 +193,12 @@ def test_fields_the_gateway_does_not_scan_or_type_are_refused(
 @pytest.mark.parametrize(
     ("messages", "code"),
     [
-        ([{"role": "tool", "content": "x", "tool_call_id": "c1"}], UNSUPPORTED_PARAMETER),
+        # GW34: tool turns are accepted, but an orphan tool message has no declaring call.
+        ([{"role": "tool", "content": "x", "tool_call_id": "c1"}], MALFORMED_WRONG_SHAPE),
         ([{"role": "function", "content": "x", "name": "f"}], UNSUPPORTED_PARAMETER),
         (
             [{"role": "assistant", "content": None, "tool_calls": [{"id": "c1"}]}],
-            UNSUPPORTED_PARAMETER,
+            MALFORMED_WRONG_SHAPE,
         ),
         ([{"role": "user", "content": [{"type": "image_url", "image_url": {}}]}],
          UNSUPPORTED_CONTENT_PART),
@@ -388,8 +391,8 @@ def test_stop_strings_are_scanned_before_they_are_forwarded() -> None:
 @pytest.mark.parametrize(
     "extra",
     [
-        {"tools": [{"type": "function", "function": {"name": "f"}}]},
-        {"response_format": {"type": "json_object"}},
+        {"audio": {"voice": "x"}},
+        {"functions": []},
         {"messages": [{"role": "user", "content": [{"type": "image_url", "image_url": {}}]}]},
     ],
 )

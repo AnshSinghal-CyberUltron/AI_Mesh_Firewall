@@ -58,6 +58,7 @@ from gateway_v2.edge.wire.openai_fold import (
 )
 from gateway_v2.edge.wire.openai_params import forwarded_fields
 from gateway_v2.runtime.resources import ResourceContract
+from gateway_v2.runtime.resources_tools import ToolBounds
 
 __all__ = (
     "INVALID_MAX_COMPLETION_TOKENS",
@@ -132,6 +133,8 @@ class CanonicalRequest:
     request_clamps: tuple[str, ...] = ()
     upstream_template: UpstreamTemplate | None = None
     forwarded: Mapping[str, object] = MappingProxyType({})
+    #: Per-pair forwarded flag (False for scan-only pairs); empty means every pair is forwarded.
+    input_forwarded: tuple[bool, ...] = ()
 
 
 # --------------------------------------------------------------------------- #
@@ -148,6 +151,13 @@ _BODY_N_KEY = "n"
 _BODY_MAX_COMPLETION_TOKENS_KEY = "max_completion_tokens"
 
 
+def _contract_tool_bounds(contract: object) -> ToolBounds | None:
+    """The contract's tool bounds, or ``None`` for a contract that has none (tools disabled)."""
+    resolver = getattr(contract, "tool_bounds", None)
+    bounds = resolver() if callable(resolver) else None
+    return bounds if isinstance(bounds, ToolBounds) else None
+
+
 class OpenAIRequestParser:
     """SDK JSON body -> :class:`CanonicalRequest`. Pure; no I/O, no security decision.
 
@@ -161,7 +171,12 @@ class OpenAIRequestParser:
     __slots__ = ()
 
     def parse(
-        self, body: bytes, *, surface: Surface, contract: ResourceContract
+        self,
+        body: bytes,
+        *,
+        surface: Surface,
+        contract: ResourceContract,
+        tool_bounds: ToolBounds | None = None,
     ) -> CanonicalRequest:
         """Parse a request body into a :class:`CanonicalRequest` (R1.1-R1.3, R2.16).
 
@@ -178,8 +193,9 @@ class OpenAIRequestParser:
         model = self._require_model(obj)
         streaming = self._stream_flag(obj)
         self._check_messages_shape(obj)
-        forwarded = forwarded_fields(obj)
-        fold, template = fold_request(obj)
+        bounds = tool_bounds if tool_bounds is not None else _contract_tool_bounds(contract)
+        forwarded = forwarded_fields(obj, bounds)
+        fold, template = fold_request(obj, bounds)
         boundary = contract.max_output_tokens_boundary()
         max_tokens = self._int_field(
             obj,
@@ -210,6 +226,7 @@ class OpenAIRequestParser:
             text_deltas=fold.pairs,
             surface=surface,
             input_message_index=fold.message_index,
+            input_forwarded=fold.forwarded,
             max_tokens=max_tokens,
             n=n,
             max_completion_tokens=max_completion_tokens,
@@ -371,9 +388,19 @@ def prompt_chars(req: CanonicalRequest) -> int:
     content parts with a single ``" "``. A single-part run adds no separator; an
     empty ``input_message_index`` yields the bare char sum. PURE wire logic.
     """
-    total = sum(len(text) for _channel, text in req.input_channels)
+    flags = req.input_forwarded
+    keep = [
+        position
+        for position in range(len(req.input_channels))
+        if not flags or flags[position]
+    ]
+    total = sum(len(req.input_channels[position][1]) for position in keep)
     index = req.input_message_index
-    separators = sum(1 for p in range(1, len(index)) if index[p] == index[p - 1])
+    separators = sum(
+        1
+        for left, right in zip(keep, keep[1:], strict=False)
+        if right == left + 1 and index and index[right] == index[left]
+    )
     return total + separators
 
 
