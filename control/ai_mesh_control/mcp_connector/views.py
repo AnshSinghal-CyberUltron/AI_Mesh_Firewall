@@ -29,6 +29,8 @@ from rest_framework.permissions import AllowAny, BasePermission, IsAdminUser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from core.retired_routes import is_retired
+
 from . import mcp_firewall_client
 from .models import MCPEvent, MCPServerRegistration, MCPScanControl, MCPToolRegistration
 from .scan_controls import resolve_effective_controls, serialize_control
@@ -371,6 +373,8 @@ def _mirror_oauth_token_to_gateway(server, tok: dict) -> None:
     must find the token after control ``_store_oauth_tokens`` or refresh.
     Failures are logged and swallowed — the control DB row remains authoritative.
     """
+    if is_retired("/v1/mcp/internal/oauth-token-mirror"):
+        return
     org = getattr(server, "organization", None)
     org_slug = getattr(org, "slug", "") if org else ""
     server_url = (getattr(server, "url", "") or "").strip()
@@ -748,6 +752,8 @@ def _discover_tools_via_gateway(server, org) -> tuple[list[dict], str | None]:
     misleading ``synced: 0`` with no cause -- the single biggest reason
     the MCP sync feature appeared silently broken.
     """
+    if is_retired("/v1/mcp/internal/discover-tools"):
+        return [], "retired_on_gateway_v2: tool discovery is not served by gateway-v2."
     gateway_url = (
         (getattr(settings, "GATEWAY_URL", "") or "").strip().rstrip("/")
         or os.environ.get("GATEWAY_URL", "").strip().rstrip("/")
@@ -980,6 +986,10 @@ def _call_tool_via_gateway(
     (parity with org_mcp_jsonrpc). Control already evaluated policies
     with the same actor; the gateway re-uses it for field projection.
     """
+    if is_retired("/v1/mcp/internal/tools-call"):
+        raise _MCPToolCallError(
+            "retired_on_gateway_v2: tool execution is not served by gateway-v2.", http_status=410
+        )
     gateway_url = (
         (getattr(settings, "GATEWAY_URL", "") or "").strip().rstrip("/")
         or os.environ.get("GATEWAY_URL", "").strip().rstrip("/")
