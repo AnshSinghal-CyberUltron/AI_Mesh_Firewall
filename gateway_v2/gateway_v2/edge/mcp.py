@@ -22,12 +22,15 @@ from types import MappingProxyType
 from gateway_v2.admit.grant import Admitted, ShedVerdict
 from gateway_v2.admit.mcp_cap import CallCapTable
 from gateway_v2.admit.mcp_metrics import McpPolicyMetrics
+from gateway_v2.admit.mcp_sessions import SessionBinding, SessionRefusal, SessionStore
 from gateway_v2.dispatch.mcp_broker import BrokerClient, McpServer
 from gateway_v2.dispatch.mcp_credentials import CredentialService
 from gateway_v2.dispatch.transform import BODY_DELTAS_KEY, GatewayRequest
 from gateway_v2.dispatch.url_guard import Resolver, check_remote, check_stdio
+from gateway_v2.domain import posture
 from gateway_v2.domain.decision import Decision, Disposition
 from gateway_v2.domain.plan import ExecutionPlan, Phase, PlanUnavailable, PlanUnknownTenant, Surface
+from gateway_v2.domain.state import StoreDataUnavailable
 from gateway_v2.edge import errors
 from gateway_v2.edge.asgi_sse import ASGIReceive, ASGIScope, ASGISend, read_body_bounded
 from gateway_v2.edge.audit_emit import emit_chat_audit
@@ -36,6 +39,7 @@ from gateway_v2.edge.identity_resolver import TenantIdentity
 from gateway_v2.edge.input_enforcement import scan_deltas, stage_upstream
 from gateway_v2.edge.mcp_console import mcp_console
 from gateway_v2.edge.mcp_cred_gate import leaks, prepare
+from gateway_v2.edge.mcp_http import serve_stream
 from gateway_v2.edge.mcp_identity import (
     CallerRefused,
     McpCaller,
@@ -43,35 +47,49 @@ from gateway_v2.edge.mcp_identity import (
     challenge,
     resolve_caller,
 )
+from gateway_v2.edge.mcp_paths import McpPath, classify_gateway_path, parse_mcp_path
 from gateway_v2.edge.mcp_policy_gate import apply_tool_policy, filter_tools_list, spend_cap
 from gateway_v2.edge.mcp_registry import McpRegistry, OrgMap, ServerEntry, ToolSet
 from gateway_v2.edge.mcp_reply import enforce_reply
+from gateway_v2.edge.mcp_session_gate import (
+    check_origin,
+    check_protocol_version,
+    header,
+    session_header,
+)
 from gateway_v2.edge.phase_resolvers import resolver_for
 from gateway_v2.edge.request_holds import RequestHolds
 from gateway_v2.edge.routes import ChatRoute, emit_response
-from gateway_v2.edge.wire import jsonrpc
+from gateway_v2.edge.wire import jsonrpc, mcp_sse
 from gateway_v2.edge.wire.mcp import (
     LOCAL_METHODS,
     METHODS,
     Fold,
     check_request_size,
     fold_request,
+    prefers_sse,
     rebuild,
     request_targets,
 )
 from gateway_v2.plan import lookup_plan
-from gateway_v2.runtime.resources_mcp import McpCredentialBounds
+from gateway_v2.runtime.resources_mcp import (
+    McpCredentialBounds,
+    McpTransportBounds,
+    derive_transport_bounds,
+)
 
-__all__ = ("MCP_PATH", "MCP_PREFIX", "McpRoute")
+__all__ = ("GATEWAY_PREFIX", "MCP_PATH", "MCP_PREFIX", "McpRoute")
 
 MCP_PATH = "/v1/mcp"
 MCP_PREFIX = "/v1/mcp/"
+GATEWAY_PREFIX = "/gateway/"
 _STDIO = "stdio"
 _PROTOCOL_VERSION = "2025-06-18"
 _SERVER_INFO: Mapping[str, str] = MappingProxyType({"name": "zeroshield-gateway", "version": "2"})
 _CAPABILITIES = ("tools", "resources", "prompts", "completions")
 _ACCEPTED = 202
 _OK = 200
+_NO_CONTENT = 204
 
 
 class _Ctx:
@@ -79,7 +97,7 @@ class _Ctx:
 
     __slots__ = (
         "caller", "holds", "input_action", "input_rule", "msg_id", "output_action", "output_rule",
-        "retry_after_s",
+        "retry_after_s", "path_org", "session_out", "sse",
         "plan_version", "scope", "server_slug", "tool", "tool_called",
     )
 
@@ -87,6 +105,9 @@ class _Ctx:
         self.scope = scope
         self.caller: McpCaller | None = None
         self.retry_after_s = 0.0
+        self.path_org: str | None = None
+        self.session_out = ""
+        self.sse = False
         self.holds = RequestHolds()
         self.msg_id: jsonrpc.JsonRpcId = None
         self.server_slug = server_slug
@@ -150,6 +171,12 @@ class McpRoute:
     plaintext_credential_hosts: frozenset[str] = frozenset()
     cap_table: CallCapTable | None = None
     policy_metrics: McpPolicyMetrics | None = None
+    sessions: SessionStore | None = None
+    allowed_origins: frozenset[str] = frozenset()
+    transport_bounds: McpTransportBounds | None = None
+
+    def _transport(self) -> McpTransportBounds:
+        return self.transport_bounds or derive_transport_bounds(self.chat.contract)
 
     async def handle_bare(self, scope: ASGIScope, receive: ASGIReceive, send: ASGISend) -> None:
         """``POST /v1/mcp`` with no server slug."""
@@ -157,8 +184,25 @@ class McpRoute:
         await self._send_error(send, _Ctx("", scope), "mcp_server_not_found")
 
     async def handle(self, scope: ASGIScope, receive: ASGIReceive, send: ASGISend) -> None:
-        """``POST /v1/mcp/{server_slug}``."""
-        ctx = _Ctx(_server_slug(scope), scope)
+        """``/v1/mcp/{server_slug}`` (POST, GET, DELETE)."""
+        await self._handle_path(scope, receive, send, parse_mcp_path(_raw_path(scope)))
+
+    async def handle_gateway(
+        self, scope: ASGIScope, receive: ASGIReceive, send: ASGISend
+    ) -> None:
+        """The v1 path ``/gateway/{org}/mcp/{srv}``. Any other ``/gateway/...`` shape is the
+        same routing miss the router gives an unregistered path."""
+        parsed = classify_gateway_path(_raw_path(scope))
+        if parsed.kind == "mcp":
+            await self._handle_path(scope, receive, send, McpPath(parsed.server_slug, parsed.org))
+            return
+        await emit_response(send, errors.render_http("endpoint_not_found"))
+
+    async def _handle_path(
+        self, scope: ASGIScope, receive: ASGIReceive, send: ASGISend, parsed: McpPath | None
+    ) -> None:
+        ctx = _Ctx(parsed.server_slug if parsed else "", scope)
+        ctx.path_org = parsed.path_org if parsed else None
         refused: str | None = None
         try:
             await self._serve(receive, send, ctx)
@@ -179,17 +223,71 @@ class McpRoute:
             ctx.holds.release(self.chat.admission, self.chat.quota)
 
     async def _serve(self, receive: ASGIReceive, send: ASGISend, ctx: _Ctx) -> None:
-        # Order (GW32 DD-1): path, identity (headers only), then the bounded body read and the
-        # JSON-RPC parse. No method, local or forwarded, is answered before identity.
+        # Order (GW32 DD-1): path, Origin, identity (headers only), org match, protocol version,
+        # session, then the bounded body read and the JSON-RPC parse. No method, local or
+        # forwarded, is answered before identity.
         if not ctx.server_slug:
             raise _Refuse("mcp_server_not_found")
+        if not check_origin(ctx.scope, self.allowed_origins):
+            raise _Refuse("mcp_origin_refused")
         caller = await resolve_caller(self.chat.identity, self.token_store, ctx.scope)
         if isinstance(caller, CallerRefused):
             raise _Refuse(caller.code)
         ctx.caller = caller
         ctx.holds.note_tenant(caller.identity.org_id)
+        if ctx.path_org is not None and self.org_map.control_slug(
+            caller.identity.org_id
+        ) != ctx.path_org:
+            raise _Refuse("mcp_org_mismatch")  # same answer for "wrong org" and "no such org"
+        if check_protocol_version(ctx.scope) is None:
+            raise _Refuse("mcp_transport_unsupported")
+        session_id = await self._check_session(ctx, caller)
         if self.cap_table is not None:
             self.cap_table.touch(caller.identity.principal)  # pre-warm the cap lease off-path
+        method = str(ctx.scope.get("method", "POST")).upper()
+        if method == "GET":
+            await serve_stream(self, receive, send, ctx, session_id)
+            return
+        if method == "DELETE":
+            await self._end_session(send, ctx, session_id)
+            return
+        if method != "POST":
+            raise _Refuse("method_not_allowed")
+        ctx.sse = prefers_sse(header(ctx.scope, "accept"))
+        await self._serve_post(receive, send, ctx)
+
+    def _binding(self, ctx: _Ctx) -> SessionBinding:
+        assert ctx.caller is not None
+        principal = ctx.caller.identity.principal
+        return SessionBinding(principal.key_id, ctx.caller.identity.org_id, ctx.server_slug)
+
+    async def _check_session(self, ctx: _Ctx, caller: McpCaller) -> str | None:
+        """``None`` when the request carries no session header; else the id once it is proven."""
+        presented = session_header(ctx.scope)
+        if presented is None:
+            return None
+        if presented == "" or self.sessions is None:
+            raise _Refuse("mcp_session_invalid")
+        try:
+            live = await self.sessions.check(presented, self._binding(ctx))
+        except StoreDataUnavailable as exc:
+            raise _Refuse("shared_state_unavailable") from exc
+        if not live:
+            raise _Refuse("mcp_session_invalid")
+        return presented
+
+    async def _end_session(self, send: ASGISend, ctx: _Ctx, session_id: str | None) -> None:
+        if session_id is None or self.sessions is None:
+            raise _Refuse("mcp_session_invalid")
+        try:
+            closed = await self.sessions.close(session_id, self._binding(ctx))
+        except StoreDataUnavailable as exc:
+            raise _Refuse("shared_state_unavailable") from exc
+        if not closed:
+            raise _Refuse("mcp_session_invalid")
+        await emit_response(send, errors.HTTPResponse(status=_NO_CONTENT, body=b""))
+
+    async def _serve_post(self, receive: ASGIReceive, send: ASGISend, ctx: _Ctx) -> None:
         bounds = self.chat.contract.mcp_bounds()
         body = await read_body_bounded(receive, bounds.body_bytes)
         if body is None:
@@ -200,7 +298,9 @@ class McpRoute:
             raise _Refuse(message.code)
         ctx.msg_id = message.id
         if message.method in LOCAL_METHODS:
-            await self._local(send, message)
+            if message.method == "initialize":
+                await self._open_session(ctx)
+            await self._local(send, message, ctx)
             return
         if message.method is None:
             await self._refuse_reply_message(message, ctx)
@@ -208,7 +308,20 @@ class McpRoute:
             raise _Refuse("mcp_method_not_found")
         await self._forward(send, message, ctx)
 
-    async def _local(self, send: ASGISend, message: jsonrpc.JsonRpcMessage) -> None:
+    async def _open_session(self, ctx: _Ctx) -> None:
+        if self.sessions is None:
+            return  # no session store wired: no id is issued (stateless server, spec-permitted)
+        try:
+            opened = await self.sessions.open(self._binding(ctx))
+        except StoreDataUnavailable as exc:
+            raise _Refuse("shared_state_unavailable") from exc
+        if isinstance(opened, SessionRefusal):
+            raise _Refuse(opened.code, posture.MIN_RETRY_AFTER_S)
+        ctx.session_out = opened
+
+    async def _local(
+        self, send: ASGISend, message: jsonrpc.JsonRpcMessage, ctx: _Ctx | None = None
+    ) -> None:
         """``initialize``, ``ping`` and ``notifications/initialized``, answered here."""
         if message.is_notification:
             await emit_response(send, errors.HTTPResponse(status=_ACCEPTED, body=b""))
@@ -223,7 +336,7 @@ class McpRoute:
             }
         else:
             value = {}
-        await self._send(send, _OK, jsonrpc.result(message.id, value), None)
+        await self._send(send, _OK, jsonrpc.result(message.id, value), ctx)
 
     async def _refuse_reply_message(self, message: jsonrpc.JsonRpcMessage, ctx: _Ctx) -> None:
         """A client reply (no ``method``) is scanned as input for audit, then refused."""
@@ -432,7 +545,22 @@ class McpRoute:
             )
         if ctx is not None and ctx.holds.request_id:
             headers = (*headers, ("x-request-id", ctx.holds.request_id))
+        if ctx is not None and ctx.session_out:
+            headers = (*headers, ("mcp-session-id", ctx.session_out))
+        if ctx is not None and ctx.sse and body:
+            body = mcp_sse.encode_message(body)
+            headers = (*mcp_sse.SSE_HEADERS, *headers[1:])
         await emit_response(send, errors.HTTPResponse(status=status, body=body, headers=headers))
+
+
+def _raw_path(scope: ASGIScope) -> str:
+    """The undecoded path when the server provides it (so a percent-encoded separator stays
+    visible to the parser), else ``scope["path"]``."""
+    raw = scope.get("raw_path")
+    if isinstance(raw, (bytes, bytearray)):
+        return bytes(raw).split(b"?", 1)[0].decode("latin-1")
+    path = scope.get("path")
+    return path if isinstance(path, str) else ""
 
 
 def _server_slug(scope: ASGIScope) -> str:

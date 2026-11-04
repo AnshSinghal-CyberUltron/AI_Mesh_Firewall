@@ -6,12 +6,13 @@ from dataclasses import dataclass
 
 from gateway_v2.admit.mcp_cap import CallCapTable
 from gateway_v2.admit.mcp_metrics import McpPolicyMetrics
+from gateway_v2.admit.mcp_sessions import SessionStore
 from gateway_v2.dispatch.mcp_broker import BrokerClient
 from gateway_v2.dispatch.mcp_credentials import CredentialService
 from gateway_v2.dispatch.url_guard import Resolver
 from gateway_v2.edge.mcp_identity import TokenResolver
 from gateway_v2.edge.mcp_registry import McpRegistry, OrgMap
-from gateway_v2.runtime.resources_mcp import McpCredentialBounds
+from gateway_v2.runtime.resources_mcp import McpCredentialBounds, McpTransportBounds
 
 __all__ = ("McpDeps",)
 
@@ -36,5 +37,10 @@ class McpDeps:
     cap_table: CallCapTable | None = None
     """GW17c: per-key call-cap leases. `None` + a capped key = refused (fail closed)."""
     policy_metrics: McpPolicyMetrics | None = None
+    sessions: SessionStore | None = None
+    """GW32: shared session store. `None` = no session id is issued; a presented one is invalid."""
+    allowed_origins: frozenset[str] = frozenset()
+    """GW32: exact-match `Origin` allow-list (`AMF_MCP_ALLOWED_ORIGINS`), beyond same-authority."""
+    transport_bounds: McpTransportBounds | None = None
     public_base: str = ""
     """GW32: validated `AMF_GATEWAY_PUBLIC_URL`; empty = no `resource_metadata` is advertised."""

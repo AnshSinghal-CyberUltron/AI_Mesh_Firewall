@@ -308,3 +308,32 @@ def _assert_fold_total() -> None:
 
 
 _assert_fold_total()
+
+
+# -- GW32 transport negotiation (DD-12) -----------------------------------------------------------
+DEFAULT_PROTOCOL_VERSION = "2025-03-26"
+"""The MCP spec default when `MCP-Protocol-Version` is absent."""
+SUPPORTED_PROTOCOL_VERSIONS = frozenset({"2025-06-18", "2025-03-26", "2024-11-05"})
+
+
+def prefers_sse(accept: str | None) -> bool:
+    """True only when ``text/event-stream`` is listed and ``application/json`` is not preferred
+    (higher q) over it. Absent, ``*/*`` or JSON-first is JSON."""
+    if not accept:
+        return False
+    weights: dict[str, float] = {}
+    for part in accept.split(","):
+        media, _, params = part.strip().partition(";")
+        quality = 1.0
+        for param in params.split(";"):
+            key, _, value = param.strip().partition("=")
+            if key.strip() == "q":
+                try:
+                    quality = float(value)
+                except ValueError:
+                    quality = 0.0
+        weights[media.strip().lower()] = quality
+    sse = weights.get("text/event-stream")
+    if sse is None or sse <= 0:
+        return False
+    return weights.get("application/json", 0.0) <= sse

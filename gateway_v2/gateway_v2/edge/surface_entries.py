@@ -7,7 +7,7 @@ booted without MCP configuration answers honestly.
 
 from __future__ import annotations
 
-from gateway_v2.edge.mcp import MCP_PATH, MCP_PREFIX, McpRoute
+from gateway_v2.edge.mcp import GATEWAY_PREFIX, MCP_PATH, MCP_PREFIX, McpRoute
 from gateway_v2.edge.mcp_deps import McpDeps
 from gateway_v2.edge.openai_responses import responses_entries
 from gateway_v2.edge.responses_store import ResponseStore
@@ -36,6 +36,9 @@ def surface_entries(
         stdio_allowed=mcp.stdio_allowed,
         token_store=mcp.token_store,
         cap_table=mcp.cap_table,
+        sessions=mcp.sessions,
+        allowed_origins=mcp.allowed_origins,
+        transport_bounds=mcp.transport_bounds,
         policy_metrics=mcp.policy_metrics,
         credentials=mcp.credentials,
         credential_bounds=mcp.credential_bounds,
@@ -43,5 +46,7 @@ def surface_entries(
         public_base=mcp.public_base,
     )
     exact[("POST", MCP_PATH)] = route.handle_bare
-    prefix[("POST", MCP_PREFIX)] = route.handle
+    for method in ("POST", "GET", "DELETE"):
+        prefix[(method, MCP_PREFIX)] = route.handle
+        prefix[(method, GATEWAY_PREFIX)] = route.handle_gateway
     return exact, prefix
