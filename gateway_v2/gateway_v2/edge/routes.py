@@ -369,7 +369,7 @@ class ChatRoute:
         del req  # GW34: every post-parse refusal is a plain HTTP error, stream or not (R7)
         await emit_error_code(
             send, code, request_id, param, self.contract.max_output_tokens_boundary(),
-            refusal_console(holds, code),
+            refusal_console(holds, code), retry_after_s=retry_after_s,
         )
 
     async def first_attempt_refusal(

@@ -302,7 +302,9 @@ class ChatSurface:
             self._deps.org_limits, plan, identity.org_id, cost, holds, request_id
         )
         if org_refuse is not None:
-            return req, _refused(org_refuse.code, request_id=request_id)
+            return req, _refused(
+                org_refuse.code, request_id=request_id, retry_after_s=org_refuse.retry_after_s
+            )
         # The per-key GCRA needs the SAME key hash identity resolved on (GW36 S4, Conflict 2);
         # re-derived from this scope's Authorization header, a defensive None folds to "".
         key_hash = hashed_bearer_key(scope) or ""
