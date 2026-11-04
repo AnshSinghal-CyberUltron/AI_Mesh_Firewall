@@ -327,6 +327,9 @@ _ENVELOPE: Mapping[str, tuple[int, str]] = MappingProxyType(
         posture.KILL_SWITCH_UNAVAILABLE: (503, "service_unavailable"),
         posture.SHARED_STATE_UNAVAILABLE: (503, "service_unavailable"),
         posture.BUDGET_UNAVAILABLE: (503, "service_unavailable"),
+        # Per-request id mint failed (decision D8): 503, generic message, and the render site
+        # passes ``request_id=None`` so there is no ``x-request-id`` header and a null body id.
+        posture.REQUEST_ID_UNAVAILABLE: (503, "service_unavailable"),
         posture.OVERLOAD_SHED: (503, "service_unavailable"),
         # -- GW29 incident response (kill switch / model kill / isolation / reroute) ------
         posture.KILL_SWITCH_ENGAGED: (503, "service_unavailable"),

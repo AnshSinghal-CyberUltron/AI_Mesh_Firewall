@@ -8,7 +8,6 @@ exception message can carry chunk text.
 """
 from __future__ import annotations
 
-import hashlib
 import json
 import logging
 from collections.abc import Awaitable, Callable, Mapping
@@ -26,6 +25,7 @@ from gateway_v2.edge.audit_emit import emit_chat_audit
 from gateway_v2.edge.identity_resolver import TenantIdentity, hashed_bearer_key, identity_of
 from gateway_v2.edge.rag_stages import RagRefused
 from gateway_v2.edge.request_holds import RequestHolds
+from gateway_v2.edge.request_ids import RequestIdUnavailable
 from gateway_v2.edge.routes import ChatRoute, emit_response
 from gateway_v2.plan import lookup_plan
 from gateway_v2.plan.rag_settings import EffectiveRag, effective_settings
@@ -159,11 +159,6 @@ async def _admit_and_charge(chat: ChatRoute, ctx: RagCtx, session: Session, char
     ctx.holds.spent(cost, request_id)
 
 
-def _request_id(org: str, path: str, raw: bytes) -> str:
-    digest = hashlib.sha256(f"{org}\x1f{path}\x1f".encode() + raw).hexdigest()[:24]
-    return f"zs-{org}-{digest}"
-
-
 async def serve(
     chat: ChatRoute,
     scope: ASGIScope,
@@ -187,7 +182,13 @@ async def serve(
             raw = body
         parsed = json_object(raw) if needs_body else {}
         ctx.session = session = await _session(chat, ctx, surface)
-        ctx.holds.note_request(_request_id(session.org_id, str(scope.get("path")), raw))
+        try:
+            ctx.holds.begin_request(session.org_id)
+        except RequestIdUnavailable as exc:
+            # Fail closed (req 2.8): no id exists, so none is rendered; nothing is admitted,
+            # spent or dispatched.
+            ctx.holds.note_failure(posture.REQUEST_ID_UNAVAILABLE)
+            raise RagRefused(posture.REQUEST_ID_UNAVAILABLE) from exc
         await _admit_and_charge(chat, ctx, session, len(raw))
         reply = await work(ctx, session, parsed)
     except RagRefused as stop:

@@ -33,7 +33,6 @@ reference used only in annotations, so no runtime circular import is formed.
 
 from __future__ import annotations
 
-import hashlib
 from collections.abc import Mapping
 from types import MappingProxyType
 from typing import TYPE_CHECKING
@@ -44,7 +43,7 @@ from gateway_v2.dispatch.transform import GatewayRequest
 from gateway_v2.domain import Decision
 from gateway_v2.domain.incident import GateVerdict, StreamBinding
 from gateway_v2.domain.plan import ExecutionPlan, Phase, PlanUnavailable, PlanUnknownTenant, Surface
-from gateway_v2.domain.posture import ROUTING_UNKNOWN_MODEL
+from gateway_v2.domain.posture import REQUEST_ID_UNAVAILABLE, ROUTING_UNKNOWN_MODEL
 from gateway_v2.edge.canary_inject import inject_canary_for_plan
 from gateway_v2.edge.chat_lifecycle import (
     REFUSE_BUDGET_UNAVAILABLE,
@@ -78,6 +77,7 @@ from gateway_v2.edge.openai_nonstream import collect_and_enforce, emit_enforced_
 from gateway_v2.edge.org_gate import enforce_org_limits, org_response_ceiling
 from gateway_v2.edge.phase_resolvers import resolver_for
 from gateway_v2.edge.request_holds import RequestHolds
+from gateway_v2.edge.request_ids import RequestIdUnavailable
 from gateway_v2.edge.routes import ASGIScope, ASGISend
 from gateway_v2.edge.upstream_body import FillRefused, with_openai_body
 from gateway_v2.edge.wire.openai import (
@@ -117,24 +117,6 @@ _PATH_TO_SURFACE: Mapping[str, Surface] = MappingProxyType(
         "/v1/completions": Surface.CHAT,
     }
 )
-
-#: The prefix of the gateway-minted per-request id (``zs-`` — the shipped request-id convention,
-#: PIPELINE-0023). The §10.4 lifecycle mints ONE request_id per request and threads it into BOTH
-#: ``AdmissionController.admit`` and ``QuotaComponent.evaluate`` so a shed / budget verdict echoes
-#: the SAME id (and the two phases never disagree). The id is NOT taken from any client-supplied
-#: header (the PIPELINE-0023 conflation lesson — a client ``X-Request-ID`` would let two concurrent
-#: requests collide); it is derived gateway-side. A plain string prefix, not a capacity-position
-#: literal.
-_REQUEST_ID_PREFIX = "zs-"
-
-#: Hex width of the request-id fingerprint folded from the request identity. Wide enough that two
-#: distinct (org, request-content) pairs do not collide in practice, short enough to keep the id
-#: legible in a trace. A formatting width, not a capacity bound.
-_REQUEST_ID_HEX_WIDTH = 24
-#: Field separator for the canonical request-identity string hashed into the id. A control
-#: character that cannot occur in an org id, a model name, or a channel name, so the join is
-#: injective. A formatting constant, not a capacity bound.
-_REQUEST_ID_SEP = "\x1f"
 
 if TYPE_CHECKING:
     # ``ChatRoute`` lives in the sibling ``edge/routes.py`` which imports NOTHING from
@@ -276,8 +258,9 @@ class ChatSurface:
         if pin_refuse is not None:
             return req, _refused(pin_refuse)
         holds.note_tenant(identity.org_id)
-        request_id = self._request_id(identity, req)
-        holds.note_request(request_id)
+        request_id = self._begin_request(holds, identity.org_id)
+        if request_id is None:
+            return req, _refused(REQUEST_ID_UNAVAILABLE)  # fail closed (2.8): no id rendered
 
         # Phase 4b (GW29): the incident gate, BEFORE admission and budget (refusal = no charge).
         verdict, incident_refused = incident_phase(
@@ -289,7 +272,7 @@ class ChatSurface:
 
         # Phase 5 — admission (task 2.4). A ShedVerdict fails closed with its code;
         # an Admitted records the slot on ``holds`` so it is ``complete``-d on exit.
-        admit_refuse = await self._admit(identity, req)
+        admit_refuse = await self._admit(identity, req, request_id)
         if admit_refuse is not None:
             return req, _refused(admit_refuse, request_id=request_id)
         holds.admitted(request_id)
@@ -307,7 +290,7 @@ class ChatSurface:
         # The per-key GCRA needs the SAME key hash identity resolved on (GW36 S4, Conflict 2);
         # re-derived from this scope's Authorization header, a defensive None folds to "".
         key_hash = hashed_bearer_key(scope) or ""
-        budget_refuse = await self._budget(identity, req, cost, key_hash)
+        budget_refuse = await self._budget(identity, req, cost, key_hash, request_id)
         if budget_refuse is not None:
             return req, _refused(budget_refuse, request_id=request_id)
         holds.spent(cost, request_id)
@@ -328,6 +311,18 @@ class ChatSurface:
         return req, self._proceed(
             plan, req, scan.decision, request_id, binding=binding, verdict=verdict
         )
+
+    @staticmethod
+    def _begin_request(holds: RequestHolds, org_id: str) -> str | None:
+        """Mint the ONE request id; ``None`` on mint failure (fail closed, req 2.8).
+
+        On failure no id exists, so none is rendered; nothing is admitted, spent or dispatched.
+        """
+        try:
+            return holds.begin_request(org_id)
+        except RequestIdUnavailable:
+            holds.note_failure(REQUEST_ID_UNAVAILABLE)
+            return None
 
     # --- phase seams (bodies filled by tasks 2.2–2.4) --------------------------------------- #
 
@@ -540,6 +535,7 @@ class ChatSurface:
         self,
         identity: TenantIdentity,
         req: CanonicalRequest,
+        request_id: str,
     ) -> str | None:
         """Admission control (task 2.4); ``None`` ⇒ admitted.
 
@@ -551,14 +547,15 @@ class ChatSurface:
         The ``owner_id`` is ``identity.org_id`` — the admission door is keyed to the
         request's own tenant, so one tenant's saturation sheds only its own requests
         (the GW19 per-owner fairness invariant). ``request_id`` is the one minted for
-        this request (:meth:`_request_id`) so the ``ShedVerdict`` echoes the id the
-        trace carries; ``enqueued_at`` is read from the injected clock
-        (``deps.clock``) at the admission boundary, matching the shipped controller's
-        injected-clock sojourn accounting (deterministic under a test's fake clock).
+        this request (``holds.begin_request``) and passed in, never recomputed, so the
+        ``ShedVerdict`` echoes the id the trace carries;
+        ``enqueued_at`` is read from the injected clock (``deps.clock``) at the admission
+        boundary, matching the shipped controller's injected-clock sojourn accounting
+        (deterministic under a test's fake clock).
         """
         verdict = await self._deps.admission.admit(
             owner_id=identity.org_id,
-            request_id=self._request_id(identity, req),
+            request_id=request_id,
             enqueued_at=self._deps.clock(),
         )
         if isinstance(verdict, ShedVerdict):
@@ -573,6 +570,7 @@ class ChatSurface:
         req: CanonicalRequest,
         cost: int,
         key_hash: str,
+        request_id: str,
     ) -> str | None:
         """Budget lease spend (task 2.4); ``None`` ⇒ within budget.
 
@@ -592,15 +590,15 @@ class ChatSurface:
         ``cost`` is the v1 token estimate (:meth:`_estimated_cost`), computed ONCE in
         :meth:`run_lifecycle` and passed to BOTH this spend and ``holds.spent`` so the
         amount refunded on a zero-provider-call refusal is exactly the amount spent
-        (Group F). ``request_id`` is the SAME id minted for the admission phase
-        (:meth:`_request_id`, a pure function of the request identity) so a
+        (Group F). ``request_id`` is the SAME id minted once for this request and passed to the
+        admission phase (``holds.begin_request``), never recomputed, so a
         ``BudgetVerdict`` and a ``ShedVerdict`` echo one id. The façade's ``evaluate``
         performs no store I/O, so this phase adds no shared-state round trip and
         Property 6 holds.
         """
         verdict = await self._deps.quota.evaluate(
             cost,
-            request_id=self._request_id(identity, req),
+            request_id=request_id,
             owner=identity.org_id,
             principal=identity.principal,
             key_hash=key_hash,
@@ -716,29 +714,7 @@ class ChatSurface:
             routed_model=routed_model, reroute=verdict.reroute, binding=binding,
         )
 
-    # --- request-id + cost sourcing (task 2.4) --------------------------------------------- #
-
-    @staticmethod
-    def _request_id(identity: TenantIdentity, req: CanonicalRequest) -> str:
-        """Mint the ONE per-request id (task 2.4). Pure: a function of the request identity.
-
-        The admission + budget phases both echo the same id, so it must be STABLE across
-        both calls — a clock-minted id would differ (the clock advances). Derived as a
-        pure function of the request identity: the tenant ``org_id`` plus a fingerprint of
-        the request content (``model`` + every folded input channel pair), joined with an
-        injective separator and hashed. NOT taken from any client header (two concurrent
-        client calls sharing an ``X-Request-ID`` would collide — the PIPELINE-0023 lesson);
-        the id is gateway-side and tenant-scoped. The ``zs-`` prefix is the shipped convention.
-        """
-        parts = [identity.org_id, req.model]
-        for channel, text in req.input_channels:
-            parts.append(channel)
-            parts.append(text)
-        fingerprint = hashlib.sha256(
-            _REQUEST_ID_SEP.join(parts).encode("utf-8")
-        ).hexdigest()[:_REQUEST_ID_HEX_WIDTH]
-        return f"{_REQUEST_ID_PREFIX}{identity.org_id}-{fingerprint}"
-
+    # --- cost sourcing (task 2.4) ---------------------------------------------------------- #
     def _estimated_cost(self, req: CanonicalRequest) -> int:
         """The v1 request token estimate charged against the lease (Group F, R2.15). Pure.
 

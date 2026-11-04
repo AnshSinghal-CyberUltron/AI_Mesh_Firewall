@@ -12,6 +12,75 @@ byte-altering IP/exfil/grounding actions are STRICT_WITHHOLD-only (the publisher
 reports it). Open items against the card text: grounding on a local model ships lexical (model mode
 UNAVAILABLE until a backend advertises hallucination; follow-up GW33-F1); INCREMENTAL IP-redaction
 parity gap. Plan note: `docs/plans/2026-gw33-output-parity.md`. No live gate was run.
+
+## PIPELINE-0036 (2026-11-05)
+
+**Request-id uniqueness: content-hash id replaced by a per-request minted id (finding F2).**
+
+Files (all in `gateway_v2/gateway_v2/`):
+- `edge/request_ids.py` (new — `mint_tenant_request_id`, `RequestIdUnavailable`)
+- `edge/request_holds.py` (`RequestHolds.begin_request`)
+- `domain/posture.py` (`REQUEST_ID_UNAVAILABLE` code)
+- `edge/errors.py` (Error_Envelope mapping → HTTP 503, no id, no `x-request-id`)
+- `edge/openai_chat.py`, `edge/openai_misc.py`, `edge/incident_misc.py`,
+  `edge/rag_common.py`, `edge/mcp.py`, `edge/wire/sse.py`
+- tests: `tests/edge/test_request_ids.py`, `test_request_holds_begin_request.py`,
+  `test_request_id_unavailable_errors.py`, `test_request_id_unavailable_mcp.py`,
+  `test_request_id_unavailable_rag.py`, `test_request_id_uniqueness_explore.py`,
+  `test_request_id_uniqueness_property.py`, `test_request_id_preservation.py`,
+  `test_embeddings_mint_failure.py`, and updated `test_gw28_edge_routing.py`,
+  `test_gw32_l17c.py`, `test_lgw15_isolation.py`
+
+WHAT: The v2 gateway minted each request's `request_id` as a pure content hash
+(`sha256(tenant + content)[:24]`) in four independent edge surfaces — chat
+(`openai_chat.py`, recomputed in three phases: lifecycle note, `_admit`, `_budget`),
+embeddings (`openai_misc.py`), RAG/vector (`rag_common.py`) and MCP (`mcp.py`, whose
+incident gate fell back to the per-org constant `hash(org, "incident", {})`). So
+byte-identical requests collided on one id.
+
+WHY (finding F2, 4 Nov 2026): five identical chat calls all returned
+`zs-dev-org-fb2340bd19bc5b758a6b2018`; stream and non-stream repeats collided; MCP
+`tools/list` reused one id; embeddings and RAG showed the same. The collision conflated
+audit and Scan Detail rows (control `_upsert` merged repeated prompts into ONE
+`EnforcementEvent`) and keyed admission slots, admit refcounts and budget refunds on a
+shared id, so one request could release/refund/attribute another's resources. This is the
+same conflation CLASS as PIPELINE-0023 but a DIFFERENT CAUSE: it is the `gateway_v2` edge
+(deterministic content hashing), NOT the control-plane `proxy_chat` path, which PIPELINE-0023
+fixed and which this change leaves completely untouched.
+
+NOW DOES: one random id `zs-{org}-<24 hex>` is minted ONCE per request by
+`edge/request_ids.py::mint_tenant_request_id(org_id)` (entropy from `secrets.token_hex`,
+injected default param, no module-level mutable state) and carried on
+`RequestHolds.begin_request` (idempotent — returns an already-set id, otherwise mints and
+notes). All four content-hash copies and the MCP per-org-constant incident-gate fallback
+are removed; every phase reads the id from `holds`. Minting fails closed: any exception or a
+result that is not exactly 24 lowercase hex chars raises `RequestIdUnavailable`, and each
+surface refuses with the new domain posture code `request_id_unavailable` → HTTP 503 with no
+id and no `x-request-id` header, before admission, budget and dispatch (zero provider calls).
+Decision D8: a dedicated `request_id_unavailable` code, not a reuse of
+`shared_state_unavailable` (which would misreport the cause). Decision D9: no set-once guard
+on `RequestHolds.note_request` (pre-id refusal paths legitimately note a pre-id; single-id-
+per-request is enforced by `begin_request` idempotence and property test B). `mint_request_id`
+pre-identity refusals, moderations' own id and the client `X-Request-ID`-is-ignored rule are
+all unchanged.
+
+VERIFY:
+- Offline gate (from `gateway_v2/`): full `pytest` 4954 passed / 1 known pre-existing
+  Pinecone tenant-scale failure (`pinecone_transport.py:140`); `mypy --strict` clean
+  (406 files); `ruff` clean; import-linter 3/3 kept (no contract change — all edits in `edge`
+  plus one domain code); the five AST gates (`capacity_literals`, `no_module_mutable`,
+  `frozen_dataclasses`, `http_outside_edge_resolve`, `tenant_scale`) each exit 0.
+- Live gate (amff2 stack, real stack not stubs): five identical calls each on chat non-stream,
+  chat stream, MCP `tools/list` and RAG → five DISTINCT ids matching `zs-{org}-<24 hex>`;
+  control created five distinct `EnforcementEvent` rows (no conflation); a zero-provider-call
+  refusal refunded net 0 and admission slots returned to baseline; a 50-way identical burst gave
+  50 distinct ids; the control-plane `proxy_chat` path untouched (`git diff gateway/` empty).
+  Embeddings uniqueness and the forced mint-failure path were NOT RUN live (covered offline).
+- Ruflo memory (`memory store --namespace pipeline/changes`) NOT written: the `memory` CLI is
+  not on PATH in this environment; a human must replay it. The other three memories
+  (this file, `AGENTS.md`, `.cursor/rules/pipeline-changelog.mdc`) are updated in this commit.
+- Evidence: `docs/plans/evidence/2026-11-05-request-id-uniqueness/`.
+
 ## PIPELINE-0035 (2026-10-21)
 
 **Input Scan "SKIP" display-honesty fix on the 503 scan-only + policy-redacted path.**

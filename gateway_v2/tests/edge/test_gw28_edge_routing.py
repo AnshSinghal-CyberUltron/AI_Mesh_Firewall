@@ -43,7 +43,6 @@ def _canary_scanner(t: str) -> Sequence[Finding]:
 
 @pytest.mark.parametrize("stream", [False, True])
 def test_t_edge_1_one_open_routed_per_request_fallback_inside(stream: bool) -> None:
-    opens_total = 0
     for failing in ("a", "b"):
         tl = Timeline()
         clients = {n: (_fail(n, tl) if n == failing else _ok(n, tl)) for n in ("a", "b")}
@@ -52,8 +51,9 @@ def test_t_edge_1_one_open_routed_per_request_fallback_inside(stream: bool) -> N
         assert status == 200, body
         assert "hello" in body
         assert rp.calls == 1  # fallback happened INSIDE the single open_routed call
-        opens_total += len(tl.opens())
-    assert opens_total == 3  # exactly one of the two orderings needed a fallback
+        # The routing order is keyed on the (now random, per-request) id, so whether the failing
+        # client is tried first is not fixed; either way one fallback at most, inside the one call.
+        assert 1 <= len(tl.opens()) <= 2
 
 
 def test_t_edge_1_routing_none_opens_plain_provider_once() -> None:

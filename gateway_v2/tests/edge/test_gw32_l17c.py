@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import random
+import re
 from dataclasses import replace
 
 import pytest
@@ -177,13 +178,18 @@ def test_capped_key_without_a_cap_table_fails_closed() -> None:
     assert resp.status_code == 429 and broker.requests == []
 
 
+def _norm_id(raw: bytes) -> bytes:
+    return re.sub(rb"zs-[^\"]*?-[0-9a-f]{24}", b"zs-ID", raw)
+
+
 def test_unrestricted_key_is_byte_identical_to_a_policy_free_run() -> None:
     plain, _, _, _ = _app(_p(), cap=False)
     with_table, _, _, _ = _app(_p(), cap=True)
     a = asyncio.run(_post(plain, _CALL_A))
     b = asyncio.run(_post(with_table, _CALL_A))
     assert a.status_code == b.status_code == 200
-    assert a.content == b.content  # byte-identical: the policy code added nothing
+    # Byte-identical once the per-request id (random since request-id-uniqueness) is normalised.
+    assert _norm_id(a.content) == _norm_id(b.content)  # the policy code added nothing
 
 
 def test_negative_control_dropping_the_allow_list_call_is_red(

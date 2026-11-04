@@ -61,6 +61,7 @@ from gateway_v2.domain.identity import Principal
 from gateway_v2.domain.plan import ExecutionPlan, StreamingMode, Surface
 from gateway_v2.edge.identity_resolver import IdentityResolver, TenantIdentity
 from gateway_v2.edge.openai_chat import REFUSE_INPUT_BLOCKED, ChatSurface, LifecycleOutcome
+from gateway_v2.edge.request_ids import mint_tenant_request_id
 from gateway_v2.edge.routes import ChatRoute
 from gateway_v2.edge.wire.openai import OpenAIRequestParser, OpenAIResponseRenderer
 from gateway_v2.egress.output_guard import MinimalOutputResolver
@@ -518,30 +519,14 @@ def test_property_19_two_tenant_isolation() -> None:
         )
 
         # ---- R13.3: request IDs are tenant-scoped and never shared ---- #
-        # The gateway-minted request id is tenant-scoped (``zs-{org_id}-…``). Reconstruct each
-        # tenant's id from its own parsed request + identity and assert it carries its own
+        # The gateway-minted request id is tenant-scoped (``zs-{org_id}-…``) and per-request
+        # random. Mint each tenant's id from its own org and assert it carries its own
         # org_id and never the other tenant's.
         assert block_req is not None and allow_req is not None, _p19_ctx(
             i, note="a tenant's request failed to parse",
         )
-        block_rid = ChatSurface._request_id(
-            TenantIdentity(
-                org_id=block_org,
-                principal=Principal(
-                    key_id="x", org_id=block_org, rate_per_s=1.0, burst=1.0, feed_seq=0
-                ),
-            ),
-            block_req,  # type: ignore[arg-type]
-        )
-        allow_rid = ChatSurface._request_id(
-            TenantIdentity(
-                org_id=allow_org,
-                principal=Principal(
-                    key_id="x", org_id=allow_org, rate_per_s=1.0, burst=1.0, feed_seq=0
-                ),
-            ),
-            allow_req,  # type: ignore[arg-type]
-        )
+        block_rid = mint_tenant_request_id(block_org)
+        allow_rid = mint_tenant_request_id(allow_org)
         assert block_org in block_rid and allow_org not in block_rid, _p19_ctx(
             i, note="BLOCK tenant request id is not confined to its own org", rid=block_rid,
         )

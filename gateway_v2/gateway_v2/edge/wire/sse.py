@@ -165,6 +165,10 @@ ERROR_SHAPES: Mapping[str, tuple[str, str]] = MappingProxyType(
             "gateway_error",
             "No buffer capacity was available and the stream was rejected.",
         ),
+        posture.REQUEST_ID_UNAVAILABLE: (
+            "service_unavailable",
+            "The request could not be started.",
+        ),
         posture.KILL_SWITCH_ENGAGED: (
             "service_unavailable",
             "An incident kill switch is engaged; the request was refused.",

@@ -108,7 +108,6 @@ async def embeddings_gate(
     request_id: str,
 ) -> str | None:
     """Phase 4b for embeddings: the canonical routed model, or ``None`` after the 503 was sent."""
-    holds.note_request(request_id)
     verdict = unsupported_reroute(
         deps.incident_gate.decide(org_id=org_id, requested_model=model, request_id=request_id)
     )

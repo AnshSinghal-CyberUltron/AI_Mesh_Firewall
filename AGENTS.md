@@ -173,6 +173,22 @@
  patterns, {1,2} emphasis cap, G53 skip, B1 noop exemption, redact eligibility + pipeline_trace
  input_scan=redact on intentional noop. LIVE input_scan REDACT + masked prompt forwarded. 7 new
  tests. Gate: 2009 full suite. Evidence: mcp-parallel/findings/pipeline-p12-live-proof.json.
+ - PIPELINE-0036 (2026-11-05) — REQUEST-ID UNIQUENESS (gateway_v2 edge, finding F2): content-hash
+ request_id (sha256(tenant+content)[:24]) in four surfaces (chat openai_chat.py ×3 phases,
+ embeddings openai_misc.py, RAG/vector rag_common.py, MCP mcp.py whose incident gate fell back to
+ the per-org constant hash(org,"incident",{})) collided for byte-identical requests → audit/Scan
+ Detail conflation (control _upsert merged repeats into ONE EnforcementEvent) + admission/refund
+ keyed on a shared id. Same CLASS as PIPELINE-0023, DIFFERENT CAUSE (edge, not proxy_chat — which
+ is untouched). FIX: one random zs-{org}-<24 hex> minted ONCE by edge/request_ids.py
+ (mint_tenant_request_id, fail-closed → RequestIdUnavailable) + carried on RequestHolds.begin_request
+ (idempotent); four hash copies + MCP per-org constant removed; new domain code request_id_unavailable
+ → HTTP 503 no id; decisions D8 (new 503 code, not shared_state_unavailable) + D9 (no set-once guard
+ on note_request). VERIFY: offline full pytest 4954 passed / 1 known pre-existing Pinecone tenant-
+ scale fail, mypy --strict clean (406 files), ruff clean, import-linter 3/3, 5 AST gates exit 0;
+ live amff2 — 5 identical chat/stream/MCP/RAG → 5 distinct ids, 5 distinct EnforcementEvent rows,
+ refund net 0 + admission baseline, 50-way burst 50 distinct, git diff gateway/ empty; embeddings +
+ forced mint-failure NOT RUN live (covered offline). Ruflo memory NOT written (memory CLI absent;
+ human to replay). Evidence: docs/plans/evidence/2026-11-05-request-id-uniqueness/.
 
 ## R2-04 / GW05 state re-hydration changelog
 - R2-04 (2026-10-08) — REHYDRATOR LOCK STALL + CONTROL-PLANE PG HARDENING, local half CLOSED.

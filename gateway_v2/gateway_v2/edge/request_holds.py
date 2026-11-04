@@ -63,6 +63,7 @@ from gateway_v2.domain.decision import Decision
 from gateway_v2.domain.incident import RerouteNote
 from gateway_v2.domain.plan import UNSET_CONTROLS, OrgControls
 from gateway_v2.edge.chat_deps import AdmissionDecider, BudgetDecider
+from gateway_v2.edge.request_ids import mint_tenant_request_id
 from gateway_v2.edge.routing_trace import RoutingTrace
 
 __all__ = ("CanaryTicketLike", "RequestHolds")
@@ -218,6 +219,18 @@ class RequestHolds:
         """Record the minted id before admission, so a shed still has a row key."""
         self._request_id = request_id
 
+    def begin_request(
+        self, org_id: str, mint: Callable[[str], str] = mint_tenant_request_id
+    ) -> str:
+        """Return this request's id, minting and noting it on first use (idempotent).
+        A failing mint raises ``RequestIdUnavailable`` and notes nothing. ``note_request`` stays an
+        unguarded primitive for refusal paths that note a pre-id.
+        """
+        if self._request_id:
+            return self._request_id
+        request_id = mint(org_id)
+        self.note_request(request_id)
+        return request_id
     def note_routing(self, trace: RoutingTrace) -> None:
         """Attach this request's own routing trace (GW28); never shared across requests."""
         self._routing = trace

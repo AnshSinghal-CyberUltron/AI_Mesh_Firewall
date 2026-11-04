@@ -1,0 +1,58 @@
+# amff2 live-test override for the request-id-uniqueness fix (task 5).
+# Project name: amff2. Host ports 127.0.0.1.
+# NOTE ON PORTS: the task asked for base +60000 (control 68100, gateway-v2 68301, ...). Those
+# exceed the maximum TCP port 65535 and Docker refuses them ("invalid hostPort: 66432/65770").
+# This stack uses base +55000 instead so every mapped port stays <= 65535. All ports are
+# distinct from amfint (+30000) and the main stack (+20000) and bound to 127.0.0.1.
+# Full map in stack-ports.txt.
+# Flags enabled for the TEST ORG ONLY (zeroshield / dev-org). Never "*".
+# AMF_AUDIT_RETENTION_SWEEP is deliberately NOT set (default off).
+services:
+  postgres:   { ports: !override ["127.0.0.1:60432:5432"] }
+  pgbouncer:  { ports: !override ["127.0.0.1:61432:6432"] }
+  redis:      { ports: !override ["127.0.0.1:61379:6379"] }
+  chromadb:   { ports: !override ["127.0.0.1:63001:8000"] }
+  rabbitmq:   { ports: !override ["127.0.0.1:60672:5672", "127.0.0.1:60673:15672"] }
+  control:
+    ports: !override ["127.0.0.1:63100:8000"]
+    environment:
+      VECTOR_PROVIDER_ALLOW_PRIVATE: "1"
+      MCP_ALLOW_INTERNAL_HOSTS: "fake-mcp:9500,127.0.0.1:9500"
+      AMF_V2_AUDIT_ORG_MAP: "dev-org=zeroshield,_unauthenticated=zeroshield"
+      V2_PLAN_CONTROLS_ENABLED: "true"
+      V2_PLAN_CONTROLS_ORGS: "zeroshield,dev-org"
+      V2_PLAN_NEW_RULES_MODE: "enforce"
+      V2_REWRITE_ORGS: "zeroshield,dev-org"
+      ASGI_ALLOWED_ORIGINS: "http://127.0.0.1:63180,http://localhost:63180"
+      FRONTEND_ORIGIN: "http://127.0.0.1:63180"
+      GATEWAY_PUBLIC_URL: "http://127.0.0.1:63180"
+      BACKEND_PUBLIC_URL: "http://127.0.0.1:63180"
+  gateway:    { ports: !override ["127.0.0.1:63300:8300"] }
+  gateway-v2:
+    ports: !override ["127.0.0.1:63301:8301"]
+    environment:
+      AMF_DEV_MCP_ALLOW_INTERNAL_HOSTS: fake-mcp,127.0.0.1:9500,127.0.0.1
+      AMF_DEV_CONTROL_URL: http://127.0.0.1:8000
+      AMF_MCP_ALLOW_PLAINTEXT_CREDENTIAL_HOSTS: fake-mcp
+      AMF_DEV_PROVIDER_URL: ${INT_PROVIDER_URL-}
+      AMF_DEV_PROVIDER_API_KEY: ${INT_PROVIDER_KEY-}
+    volumes:
+      - ./docs/plans/evidence/2026-11-05-request-id-uniqueness/loopback_fwd.py:/opt/loopback_fwd.py:ro
+    command: ["sh", "-c", "python /opt/loopback_fwd.py & exec python -m gateway_v2.edge.serve"]
+  guardrails: { ports: !override ["127.0.0.1:63310:8310"] }
+  mcp-broker:
+    container_name: amff2_mcp_broker
+    environment:
+      MCP_BROKER_CONTAINER_NAME: amff2_mcp_broker
+      MCP_AGENT_ALLOW_INTERNAL_HOSTS: fake-mcp
+    ports: !override ["127.0.0.1:63311:8311"]
+    volumes:
+      - ${XDG_RUNTIME_DIR}/docker.sock:/var/run/docker.sock
+  mcp-stub:   { ports: !override ["127.0.0.1:64999:9999"] }
+  vector-retrieval: { ports: !override ["127.0.0.1:63312:8312"] }
+  demo:       { ports: !override ["127.0.0.1:63770:8770"] }
+  frontend:
+    ports: !override ["127.0.0.1:63180:5173"]
+    environment:
+      VITE_GATEWAY_BASE_URL: http://127.0.0.1:63180
+      VITE_BACKEND_BASE_URL: http://127.0.0.1:63180

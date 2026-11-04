@@ -1,0 +1,216 @@
+{
+  "pbtResults": {},
+  "executionHistory": {
+    "1. Write bug condition exploration test": [
+      {
+        "executionId": "b8988b14-8eb9-492c-b6da-9e367e8dd16d",
+        "chatSessionId": "sess_a18a6c0a-54f6-441a-ba4f-5d5c61c5fe54",
+        "timestamp": 1793807859316
+      },
+      {
+        "executionId": "b8988b14-8eb9-492c-b6da-9e367e8dd16d",
+        "chatSessionId": "sess_a18a6c0a-54f6-441a-ba4f-5d5c61c5fe54",
+        "timestamp": 1793808384496
+      }
+    ],
+    "2. Write preservation property tests (BEFORE implementing fix)": [
+      {
+        "executionId": "b8988b14-8eb9-492c-b6da-9e367e8dd16d",
+        "chatSessionId": "sess_a18a6c0a-54f6-441a-ba4f-5d5c61c5fe54",
+        "timestamp": 1793808426076
+      },
+      {
+        "executionId": "b8988b14-8eb9-492c-b6da-9e367e8dd16d",
+        "chatSessionId": "sess_a18a6c0a-54f6-441a-ba4f-5d5c61c5fe54",
+        "timestamp": 1793808909385
+      }
+    ],
+    "3.1 Add the `request_id_unavailable` posture code (domain layer)": [
+      {
+        "executionId": "b8988b14-8eb9-492c-b6da-9e367e8dd16d",
+        "chatSessionId": "sess_a18a6c0a-54f6-441a-ba4f-5d5c61c5fe54",
+        "timestamp": 1793808924983
+      },
+      {
+        "executionId": "b8988b14-8eb9-492c-b6da-9e367e8dd16d",
+        "chatSessionId": "sess_a18a6c0a-54f6-441a-ba4f-5d5c61c5fe54",
+        "timestamp": 1793808997534
+      }
+    ],
+    "3.2 Add the mint helper `edge/request_ids.py`": [
+      {
+        "executionId": "b8988b14-8eb9-492c-b6da-9e367e8dd16d",
+        "chatSessionId": "sess_a18a6c0a-54f6-441a-ba4f-5d5c61c5fe54",
+        "timestamp": 1793809011256
+      },
+      {
+        "executionId": "b8988b14-8eb9-492c-b6da-9e367e8dd16d",
+        "chatSessionId": "sess_a18a6c0a-54f6-441a-ba4f-5d5c61c5fe54",
+        "timestamp": 1793809120101
+      }
+    ],
+    "3.3 Add `RequestHolds.begin_request` in `edge/request_holds.py`": [
+      {
+        "executionId": "b8988b14-8eb9-492c-b6da-9e367e8dd16d",
+        "chatSessionId": "sess_a18a6c0a-54f6-441a-ba4f-5d5c61c5fe54",
+        "timestamp": 1793809129448
+      },
+      {
+        "executionId": "b8988b14-8eb9-492c-b6da-9e367e8dd16d",
+        "chatSessionId": "sess_a18a6c0a-54f6-441a-ba4f-5d5c61c5fe54",
+        "timestamp": 1793809199601
+      }
+    ],
+    "3.4 Map `REQUEST_ID_UNAVAILABLE` in `edge/errors.py`": [
+      {
+        "executionId": "b8988b14-8eb9-492c-b6da-9e367e8dd16d",
+        "chatSessionId": "sess_a18a6c0a-54f6-441a-ba4f-5d5c61c5fe54",
+        "timestamp": 1793809214573
+      },
+      {
+        "executionId": "b8988b14-8eb9-492c-b6da-9e367e8dd16d",
+        "chatSessionId": "sess_a18a6c0a-54f6-441a-ba4f-5d5c61c5fe54",
+        "timestamp": 1793809609686
+      }
+    ],
+    "3.5 Chat: mint once and stop recomputing (stream and non-stream)": [
+      {
+        "executionId": "b8988b14-8eb9-492c-b6da-9e367e8dd16d",
+        "chatSessionId": "sess_a18a6c0a-54f6-441a-ba4f-5d5c61c5fe54",
+        "timestamp": 1793809626149
+      },
+      {
+        "executionId": "b8988b14-8eb9-492c-b6da-9e367e8dd16d",
+        "chatSessionId": "sess_a18a6c0a-54f6-441a-ba4f-5d5c61c5fe54",
+        "timestamp": 1793809900126
+      }
+    ],
+    "3.6 Embeddings: mint once": [
+      {
+        "executionId": "b8988b14-8eb9-492c-b6da-9e367e8dd16d",
+        "chatSessionId": "sess_a18a6c0a-54f6-441a-ba4f-5d5c61c5fe54",
+        "timestamp": 1793809919483
+      },
+      {
+        "executionId": "b8988b14-8eb9-492c-b6da-9e367e8dd16d",
+        "chatSessionId": "sess_a18a6c0a-54f6-441a-ba4f-5d5c61c5fe54",
+        "timestamp": 1793810208446
+      }
+    ],
+    "3.7 RAG and vector: mint once": [
+      {
+        "executionId": "b8988b14-8eb9-492c-b6da-9e367e8dd16d",
+        "chatSessionId": "sess_a18a6c0a-54f6-441a-ba4f-5d5c61c5fe54",
+        "timestamp": 1793810225664
+      },
+      {
+        "executionId": "b8988b14-8eb9-492c-b6da-9e367e8dd16d",
+        "chatSessionId": "sess_a18a6c0a-54f6-441a-ba4f-5d5c61c5fe54",
+        "timestamp": 1793810425364
+      }
+    ],
+    "3.8 MCP including the incident-gate fallback": [
+      {
+        "executionId": "b8988b14-8eb9-492c-b6da-9e367e8dd16d",
+        "chatSessionId": "sess_a18a6c0a-54f6-441a-ba4f-5d5c61c5fe54",
+        "timestamp": 1793810449285
+      },
+      {
+        "executionId": "b8988b14-8eb9-492c-b6da-9e367e8dd16d",
+        "chatSessionId": "sess_a18a6c0a-54f6-441a-ba4f-5d5c61c5fe54",
+        "timestamp": 1793811028479
+      }
+    ],
+    "3.9 Update `tests/edge/test_lgw15_isolation.py`": [
+      {
+        "executionId": "b8988b14-8eb9-492c-b6da-9e367e8dd16d",
+        "chatSessionId": "sess_a18a6c0a-54f6-441a-ba4f-5d5c61c5fe54",
+        "timestamp": 1793811042643
+      },
+      {
+        "executionId": "b8988b14-8eb9-492c-b6da-9e367e8dd16d",
+        "chatSessionId": "sess_a18a6c0a-54f6-441a-ba4f-5d5c61c5fe54",
+        "timestamp": 1793811148986
+      }
+    ],
+    "3.10 Write property tests (tagged in-source, at least 100 iterations)": [
+      {
+        "executionId": "b8988b14-8eb9-492c-b6da-9e367e8dd16d",
+        "chatSessionId": "sess_a18a6c0a-54f6-441a-ba4f-5d5c61c5fe54",
+        "timestamp": 1793811164876
+      },
+      {
+        "executionId": "b8988b14-8eb9-492c-b6da-9e367e8dd16d",
+        "chatSessionId": "sess_a18a6c0a-54f6-441a-ba4f-5d5c61c5fe54",
+        "timestamp": 1793811589629
+      }
+    ],
+    "3.11 Verify bug condition exploration test now passes": [
+      {
+        "executionId": "b8988b14-8eb9-492c-b6da-9e367e8dd16d",
+        "chatSessionId": "sess_a18a6c0a-54f6-441a-ba4f-5d5c61c5fe54",
+        "timestamp": 1793811604565
+      },
+      {
+        "executionId": "b8988b14-8eb9-492c-b6da-9e367e8dd16d",
+        "chatSessionId": "sess_a18a6c0a-54f6-441a-ba4f-5d5c61c5fe54",
+        "timestamp": 1793811708096
+      }
+    ],
+    "3.12 Verify preservation tests still pass": [
+      {
+        "executionId": "b8988b14-8eb9-492c-b6da-9e367e8dd16d",
+        "chatSessionId": "sess_a18a6c0a-54f6-441a-ba4f-5d5c61c5fe54",
+        "timestamp": 1793811722015
+      },
+      {
+        "executionId": "b8988b14-8eb9-492c-b6da-9e367e8dd16d",
+        "chatSessionId": "sess_a18a6c0a-54f6-441a-ba4f-5d5c61c5fe54",
+        "timestamp": 1793811820886
+      }
+    ],
+    "3. Fix for request_id collision on byte-identical requests": [
+      {
+        "executionId": "b8988b14-8eb9-492c-b6da-9e367e8dd16d",
+        "chatSessionId": "sess_a18a6c0a-54f6-441a-ba4f-5d5c61c5fe54",
+        "timestamp": 1793811832516
+      }
+    ],
+    "4. Offline gate": [
+      {
+        "executionId": "b8988b14-8eb9-492c-b6da-9e367e8dd16d",
+        "chatSessionId": "sess_a18a6c0a-54f6-441a-ba4f-5d5c61c5fe54",
+        "timestamp": 1793811847889
+      },
+      {
+        "executionId": "44b106bc-db46-4736-8b58-0977d99b2e5b",
+        "chatSessionId": "sess_a18a6c0a-54f6-441a-ba4f-5d5c61c5fe54",
+        "timestamp": 1793812341380
+      },
+      {
+        "executionId": "44b106bc-db46-4736-8b58-0977d99b2e5b",
+        "chatSessionId": "sess_a18a6c0a-54f6-441a-ba4f-5d5c61c5fe54",
+        "timestamp": 1793812560172
+      }
+    ],
+    "5. Live check against the real stack": [
+      {
+        "executionId": "44b106bc-db46-4736-8b58-0977d99b2e5b",
+        "chatSessionId": "sess_a18a6c0a-54f6-441a-ba4f-5d5c61c5fe54",
+        "timestamp": 1793812581470
+      },
+      {
+        "executionId": "44b106bc-db46-4736-8b58-0977d99b2e5b",
+        "chatSessionId": "sess_a18a6c0a-54f6-441a-ba4f-5d5c61c5fe54",
+        "timestamp": 1793813752730
+      }
+    ],
+    "6. Changelog pointers (same commit as the fix)": [
+      {
+        "executionId": "44b106bc-db46-4736-8b58-0977d99b2e5b",
+        "chatSessionId": "sess_a18a6c0a-54f6-441a-ba4f-5d5c61c5fe54",
+        "timestamp": 1793813766950
+      }
+    ]
+  }
+}
