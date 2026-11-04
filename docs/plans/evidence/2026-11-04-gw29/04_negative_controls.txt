@@ -1,0 +1,61 @@
+# Task 20 negative controls (AC32). Each edit was applied, lgw29 subset run (pytest -n 8 -k lgw29), then reverted with git checkout.
+Failing test names are de-duplicated from parametrisation (count = failing cases).
+
+== NC1 remove phase 4b (refusal ignored) ==
+result: 39 failed, 517 passed, 1 skipped in 4.01s
+  FAILS 18 x  tests/edge/test_lgw29_endpoint_matrix.py::test_phase_4b_refusal_charges_nothing
+  FAILS 1 x  tests/edge/test_lgw29_phase_order.py::test_a_refused_request_takes_no_slot_spends_nothing_and_calls_no_provider
+  FAILS 1 x  tests/edge/test_lgw29_refusal_charges_nothing_property.py::test_property_9_refusal_holds_no_slot_spends_nothing_and_calls_no_provider
+  FAILS 18 x  tests/edge/test_lgw29_single_audit.py::test_a_phase_4b_refusal_writes_exactly_one_record
+  FAILS 1 x  tests/edge/test_lgw29_single_audit.py::test_a_stale_snapshot_refusal_is_one_record_with_cause_stale
+after revert: git diff gateway_v2/gateway_v2 = EMPTY
+
+== NC2 DevNoControlSource as the app default ==
+result: 1 failed, 555 passed, 1 skipped in 4.02s
+  FAILS 1 x  tests/edge/test_lgw29_inflight_source.py::test_build_app_defaults_to_the_refusing_source_not_the_dev_one
+after revert: git diff gateway_v2/gateway_v2 = EMPTY
+
+== NC3 gate treats STALE as OK ==
+result: 7 failed, 549 passed, 1 skipped in 4.03s
+  FAILS 1 x  tests/admit/test_lgw29_gate.py::test_recheck_passes_unchanged_and_refuses_with_the_underlying_code
+  FAILS 1 x  tests/admit/test_lgw29_gate.py::test_decide_org_checks_freshness_global_and_org_only
+  FAILS 1 x  tests/edge/test_lgw29_misc_surfaces.py::test_a_stale_feed_refuses_moderations
+  FAILS 1 x  tests/edge/test_lgw29_single_audit.py::test_a_stale_snapshot_refusal_is_one_record_with_cause_stale
+  FAILS 1 x  tests/admit/test_lgw29_gate.py::test_never_loaded_snapshot_refuses_stale_first
+  FAILS 1 x  tests/admit/test_lgw29_gate.py::test_precedence_is_stale_then_global_org_org_model_then_model
+  FAILS 1 x  tests/admit/test_lgw29_gate.py::test_retry_after_is_floored_jittered_and_deterministic_under_a_seed
+after revert: git diff gateway_v2/gateway_v2 = EMPTY
+
+== NC4 expiry compares against creation only ==
+result: 32 failed, 524 passed, 1 skipped in 3.98s
+  FAILS 1 x  tests/admit/test_lgw29_gate.py::test_a_failing_emitter_never_changes_the_outcome
+  FAILS 1 x  tests/admit/test_lgw29_incident_state.py::test_an_operator_record_is_not_subject_to_the_hold_cap
+  FAILS 1 x  tests/admit/test_lgw29_autoisolate_dedup.py::test_signed_isolations_emit_nothing_from_the_gateway_but_reset_probation
+  FAILS 1 x  tests/admit/test_lgw29_incident_state.py::test_snapshot_models_lists_only_active_isolations_sorted_with_source
+  FAILS 1 x  tests/admit/test_lgw29_gate.py::test_recheck_refuses_a_model_isolated_since_routing_and_never_reroutes
+  FAILS 1 x  tests/admit/test_lgw29_autoisolate_property.py::test_property_12_tightening_only_and_an_eligible_destination
+  FAILS 1 x  tests/admit/test_lgw29_gate.py::test_an_eligible_fallback_reroutes_and_emits_one_event
+  FAILS 1 x  tests/admit/test_lgw29_incident_state.py::test_signed_is_preferred_and_local_is_used_when_signed_is_inactive
+  FAILS 1 x  tests/admit/test_lgw29_gate.py::test_isolated_without_a_fallback_or_malformed_is_refused
+  FAILS 1 x  tests/admit/test_lgw29_incident_state.py::test_status_of_reports_kill_at_any_scope_and_the_active_isolation
+  FAILS 1 x  tests/admit/test_lgw29_expiry_property.py::test_property_6_gate_and_read_model_agree_and_expired_is_never_active
+  FAILS 1 x  tests/admit/test_lgw29_gate.py::test_unknown_constraints_refuse_the_reroute
+  FAILS 1 x  tests/admit/test_lgw29_incident_state.py::test_add_local_refuses_over_an_active_operator_isolation_and_counts
+  FAILS 1 x  tests/admit/test_lgw29_incident_state.py::test_expired_local_entries_are_purged_on_write_before_evicting
+  FAILS 1 x  tests/admit/test_lgw29_gate.py::test_a_fallback_that_is_killed_for_this_org_or_isolated_is_never_used
+  FAILS 1 x  tests/admit/test_lgw29_gate.py::test_an_expired_isolation_is_not_applied
+  FAILS 1 x  tests/admit/test_lgw29_incident_state.py::test_a_signed_off_clears_the_local_entry_and_calls_the_probation_hook
+  FAILS 1 x  tests/admit/test_lgw29_incident_state.py::test_sweep_reports_a_local_expiry_exactly_once
+  FAILS 1 x  tests/admit/test_lgw29_incident_state.py::test_sweep_reports_a_signed_expiry_separately_and_once
+  FAILS 1 x  tests/admit/test_lgw29_incident_state.py::test_sweep_reports_a_signed_off_as_a_signed_end
+  FAILS 2 x  tests/edge/test_lgw29_l29_2_isolate_reroute.py::test_zero_calls_reach_the_isolated_model_and_traffic_moves
+  FAILS 1 x  tests/edge/test_lgw29_l29_2_isolate_reroute.py::test_every_endpoint_reroutes_and_none_calls_the_isolated_model
+  FAILS 1 x  tests/edge/test_lgw29_l29_2_isolate_reroute.py::test_an_isolation_without_a_usable_fallback_refuses_instead_of_calling_the_model
+  FAILS 1 x  tests/edge/test_lgw29_l29_2_isolate_reroute.py::test_lifting_the_isolation_returns_traffic_to_the_model
+  FAILS 1 x  tests/edge/test_lgw29_l29_4_expiry.py::test_the_gate_and_the_read_model_agree_at_every_step_around_expiry
+  FAILS 1 x  tests/edge/test_lgw29_misc_surfaces.py::test_embeddings_never_reroute_an_isolated_model
+  FAILS 2 x  tests/edge/test_lgw29_upstream_model.py::test_a_rerouted_request_carries_the_fallback_and_is_recorded
+  FAILS 1 x  tests/admit/test_lgw29_model_identity_property.py::test_property_13_an_isolated_family_is_rerouted_or_refused_never_sent_through
+  FAILS 1 x  tests/admit/test_lgw29_incident_state.py::test_operator_isolation_with_a_deadline_expires_at_read_time_without_grace
+  FAILS 1 x  tests/admit/test_lgw29_incident_state.py::test_auto_record_with_a_deadline_follows_the_deadline
+after revert: git diff gateway_v2/gateway_v2 = EMPTY

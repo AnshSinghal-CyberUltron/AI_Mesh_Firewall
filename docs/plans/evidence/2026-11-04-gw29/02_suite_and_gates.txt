@@ -1,0 +1,56 @@
+# G1 full offline suite (pytest -n 24)
+  /usr/local/lib/python3.12/site-packages/fakeredis/_clients/_setup.py:172: RuntimeWarning: coroutine 'BudgetLease._refill' was never awaited
+    if any(arg in kwargs for arg in ("driver_info", "lib_name", "lib_version")):
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/admit/test_lgw06_lease_no_multiplication.py::test_property1_no_replica_multiplication
+  /usr/local/lib/python3.12/site-packages/fakeredis/commands_mixins/sortedset_mixin.py:34: RuntimeWarning: coroutine 'BudgetLease._refill' was never awaited
+    def __init__(self, value: float, exclusive: bool = False, bytes_val: bytes | None = None):
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/gates/test_check_tenant_scale.py::test_the_shipped_data_plane_is_clean
+1 failed, 3600 passed, 107 skipped, 4 warnings in 50.78s
+
+# G1b lgw29 subset
+The event loop scope for asynchronous fixtures will default to the "fixture" caching scope. Future versions of pytest-asyncio will default the loop scope for asynchronous fixtures to "function" scope. Set the default fixture loop scope explicitly in order to avoid unexpected behavior in the future. Valid fixture loop scopes are: "function", "class", "module", "package", "session"
+
+  warnings.warn(PytestDeprecationWarning(_DEFAULT_FIXTURE_LOOP_SCOPE_UNSET))
+bringing up nodes...
+bringing up nodes...
+
+........................................................................ [ 12%]
+........................................................................ [ 25%]
+........................................................................ [ 38%]
+........................................................................ [ 51%]
+........................................................................ [ 64%]
+........................................................................ [ 77%]
+.........................................................s.............. [ 90%]
+.....................................................                    [100%]
+556 passed, 1 skipped in 3.92s
+
+# G2 mypy --strict (the 9 import-not-found for absent optional vector SDKs are baseline), ruff, lint-imports
+gateway_v2/dispatch/vector_transports/elastic_transport.py:137: error: Cannot find implementation or library stub for module named "elasticsearch"  [import-not-found]
+gateway_v2/dispatch/vector_transports/elastic_transport.py:203: error: Cannot find implementation or library stub for module named "opensearchpy"  [import-not-found]
+gateway_v2/dispatch/vector_transports/chroma_transport.py:45: error: Cannot find implementation or library stub for module named "chromadb"  [import-not-found]
+gateway_v2/dispatch/vector_transports/chroma_transport.py:45: note: See https://mypy.readthedocs.io/en/stable/running_mypy.html#missing-imports
+Found 9 errors in 6 files (checked 303 source files)
+All checks passed!
+Analyzed 298 files, 1814 dependencies.
+--------------------------------------
+
+Gateway v2 layers KEPT
+Resolve imports only domain KEPT
+No HTTP framework outside edge KEPT
+
+Contracts: 3 kept, 0 broken.
+
+# G4 gate self-tests
+
+tests/gates/test_check_tenant_scale.py:190: AssertionError
+=========================== short test summary info ============================
+FAILED tests/gates/test_check_tenant_scale.py::test_the_shipped_data_plane_is_clean
+1 failed, 125 passed in 7.41s

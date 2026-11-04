@@ -1,0 +1,24 @@
+check_capacity_literals gateway_v2 exit=0
+check_capacity_literals state_control exit=0
+check_no_module_mutable gateway_v2 exit=0
+check_no_module_mutable state_control exit=0
+check_frozen_dataclasses gateway_v2 exit=0
+check_frozen_dataclasses state_control exit=0
+check_http_outside_edge_resolve gateway_v2 exit=0
+check_http_outside_edge_resolve state_control exit=0
+check_sizes gateway_v2 exit=0
+check_sizes state_control exit=0
+check_tenant_scale gateway_v2 exit=1
+check_tenant_scale state_control exit=1
+check_dispatch_provenance gateway_v2 exit=0
+check_dispatch_provenance state_control exit=0
+check_secret_headers exit=0
+gateway_v2/dispatch/vector_transports/pinecone_transport.py:140: keys: whole-collection store read: cannot be O(changes)
+1 tenant-scale violation(s). See §2.1 rule 1 and R2-02: no work proportional to tenants, keys or records on a serving path.
+state_control/valkey.py:100: zrange: whole-collection store read: cannot be O(changes)
+1 tenant-scale violation(s). See §2.1 rule 1 and R2-02: no work proportional to tenants, keys or records on a serving path.
+
+NOTE: check_tenant_scale exit=1 on both trees is the two declared PRE-EXISTING findings, neither in a GW29 file:
+  gateway_v2/dispatch/vector_transports/pinecone_transport.py:140 (GW30, present on the base commit)
+  state_control/valkey.py:100 (R2-05, declared)
+The same two make tests/gates/test_check_tenant_scale.py::test_the_shipped_data_plane_is_clean the only failure in G1 and G4.
