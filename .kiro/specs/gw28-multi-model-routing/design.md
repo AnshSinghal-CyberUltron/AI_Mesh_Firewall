@@ -212,10 +212,11 @@ from `runtime` to `dispatch` **by injection** (floats/ints passed by `edge`), th
 - **D-9 — Mid-stream gap bound is strictly *inside* the edge's.** `upstream_gap_timeout_s()` is
   0.8 × `inter_chunk_timeout_s()` (0.8 s at default) so the router's timer fires before the edge's
   1 s one and the terminal code is deterministically `upstream_timeout` from the router (D-13). It is
-  *new* strictness for the non-streaming path. Risk recorded: a BYOK model pausing >0.8 s between
+  *new* strictness for the non-streaming path, and it also tightens **routed streaming**, where the
+  shipped mid-stream bound was 1 s (now 0.8 s). Risk recorded: a BYOK model pausing >0.8 s between
   tokens mid-response is now cut on non-streaming requests. Mitigation: one constant
   (`_UPSTREAM_GAP_FRACTION`); the pre-content bound covers "thinking" pauses *before* content.
-  **Owner notice (review F5):** the PR description MUST state this behaviour change explicitly.
+  **Owner notice (review F5):** the PR description MUST state this behaviour change explicitly, for both non-streaming and routed streaming.
 - **D-10 — Empty provider iterators fail closed.** A candidate iterator ending with zero events is a
   protocol violation → terminal `stream_malformed_upstream`, non-retryable. An iterator ending after
   content without a `final` event → terminal `stream_malformed_upstream`, never silent truncation.
@@ -242,12 +243,19 @@ from `runtime` to `dispatch` **by injection** (floats/ints passed by `edge`), th
   `closers` is the `aclose` of every distinct client (de-duplicated by `id()`), **minus** clients the
   caller declares as already owned via `owned_elsewhere: Collection[object]` (so the dev profile's
   shared `deps["provider"]` is never closed twice); the caller must extend `closers` with
-  `bundle.closers`; (2) requires each distinct client to have been built with
-  `connections = contract.provider_pool_share(n_clients)`, a new accessor
-  `max(1, pool_size(PROVIDER) // n)` (no literal beyond `1`, which is arithmetic identity), and
-  asserts `sum(shares) <= pool_size(PROVIDER)` at construction (`RoutingConfigError`, fatal at boot).
-  The shared-pool dev case has `n = 1`, i.e. the full signed budget. Tests: T-edge-7 (below) and
-  T-life-1 (both/all pools closed on lifespan shutdown, no double close of a shared instance).
+  `bundle.closers`; (2) sizes the pools itself. `pool_size(PROVIDER)` equals `workers()`, so the budget is small.
+  `provider_pool_share(n)` is `pool_size(PROVIDER) // n` with **no floor**; it raises
+  `CapacityUnavailable` when the result is `< 1` or `n < 1`. A table with more distinct clients than
+  `pool_size(PROVIDER)` therefore **refuses to boot** (fail closed, `RoutingConfigError` wrapping the
+  cause). The budget is made checkable by construction: `build_routed_provider` takes a
+  `client_factory: Callable[[ProviderKey, int], OpenAIUpstreamProvider]` (key -> built client) and
+  calls it with `connections=share` for each distinct provider key; it never receives pre-built
+  clients for sizing. Callers that already own a client pass it via `owned_elsewhere` (not sized,
+  not closed). As a second check, `OpenAIUpstreamProvider` gains a read-only `connections: int`
+  property (additive, same spirit as `per_request_safe`) and the factory asserts
+  `sum(c.connections) <= pool_size(PROVIDER)` over created clients (`RoutingConfigError`, fatal at
+  boot). The shared-pool dev case has `n = 1`, i.e. the full signed budget. Tests: T-edge-7 (below)
+  and T-life-1 (all pools closed on lifespan shutdown, no double close of a shared instance).
 - **D-12 — Exactly one provider open per chat request (invariant, tested).** With `routing` set,
   `open_chat_upstream` is called at most once per request: `_next_attempt`'s `offered` latch already
   returns `None` after the first attempt, and non-streaming has a single call site. All fallback
@@ -586,7 +594,7 @@ scripts (P4).
   `routing = None`. The kwargs dict (`"provider": provider, ...` near L356) gains `"routing": routing`.
   `closers` (near L518) is unchanged and sufficient. The boot log states the four bounds (Req 5.6).
 - **`edge/production_profile.py`.** Leaves the fail-closed provider default. GW28 exposes
-  `build_routed_provider(contract, table, clients, snapshot_source, *, owned_elsewhere=(), log)` in
+  `build_routed_provider(contract, table, client_factory, snapshot_source, *, owned_elsewhere=(), log)` in
   `edge/` (a thin factory reading every bound from `ResourceContract`) returning
   `RoutedBundle(routed, closers)` (D-11). **It logs the four bounds itself** at construction through
   the same `log` callable the dev boot uses, one line
@@ -661,9 +669,9 @@ the constants, no literal in the mixin):
 |---|---|---|
 | `upstream_first_event_timeout_s()` | 30 s | `_stream_timeout_s(_UPSTREAM_FIRST_EVENT_MULT)` |
 | `upstream_gap_timeout_s()` | 0.8 s | `max(_UPSTREAM_GAP_FRACTION × inter_chunk_timeout_s(), p99_s)` |
-| `upstream_total_timeout_s()` | 299.94 s | `max_stream_duration_s() - cancellation_bound_s()` (strictly below the edge max-duration kill, so the router's `upstream_timeout` wins the race deterministically; review round 4 F5) |
+| `upstream_total_timeout_s()` | 299.94 s | `max_stream_duration_s() - cancellation_bound_s()` (per attempt, measured from that attempt's start; strictly below the edge max-duration kill for a single attempt. After a fallback the edge deadline, measured from stream start, may fire first and the terminal is then the edge's declared `stream_killed`; still exactly one terminal, fail closed; round 5 F2) |
 | `routing_pre_content_budget_s(n)` | 60.18 s for n=2 | `n × (first_event + cancellation_bound) + cancellation_bound` (edge first-chunk bound, D-13) |
-| `provider_pool_share(n)` | `pool_size(PROVIDER)` for n=1 | `max(1, pool_size(PROVIDER) // n)`; `CapacityUnavailable` if n < 1 (D-11) |
+| `provider_pool_share(n)` | `pool_size(PROVIDER)` for n=1 | `pool_size(PROVIDER) // n`, no floor; `CapacityUnavailable` if n < 1 or result < 1 (D-11) |
 | `routing_max_attempts()` | 2 | `_ROUTING_MAX_ATTEMPTS`, fail closed if < 1 |
 | `routing_max_candidates()` | 8 | `_ROUTING_MAX_CANDIDATES` |
 | `routing_max_weight()` | 16 | `_ROUTING_MAX_WEIGHT` |
@@ -803,7 +811,7 @@ bound fires near its value.
 | P4 | No double generation: over random fault scripts (fail-before-content, fail-after-content, stall, role-only-then-stall, clean) the timeline never has two live opens, a second open occurs only after the first's `aclose` completed with zero content yielded, opens ≤ `max_attempts`, and after any content no further open occurs | `test_gw28_no_double_generation.py` | property (async) |
 | P5 | Stream integrity: ≤ 1 terminal event, nothing after it, no content after an error; concatenated text byte-identical to the one committing attempt's text; sentinel text from abandoned attempts never appears; round-trips through `Transform` and `SSEEncoder`/`SSEDecoder` | `test_gw28_stream_integrity.py` | property (async) |
 | P6 | No policy bypass: (a) `rebind` changes only `model` (random nested bodies, deep equality elsewhere); (b) every attempt's body equals the verified body modulo `model`; (c) `ctx=None` or wrong type → 0 client opens; (d) `ModelRouter.rank` has no enforcement/decision parameter and `routed_provider`/`model_routing`/`stall_guard` import none of `edge/admit/detect/plan/resolve` (AST); (e) exactly one candidate `.open(` call site in `routed_provider.py` (AST) | `test_gw28_no_policy_bypass.py` | property + static |
-| P7 | Stall bound: a fake upstream that never yields terminates with exactly one `upstream_timeout` at `first_event_s`, iterator observed closed, no `final` success; **a role-only empty-delta event then silence is also cut at the cumulative `first_event_s`, not at `gap_s`**; mid-stream stall ends at `gap_s`; slow trickle ends at `total_s`; derivation: for random `target_p99_ms ∈ [1, 100]`, `0 < gap < first_event < total < max_stream_duration_s()` (new P11 clause: slow trickle terminates with `upstream_timeout` from the router, never `stream_killed`/max-duration, over random p99), at the default `first_event < 300 s`, accessors raise `CapacityUnavailable` on non-positive | `test_gw28_stall_bound.py` | property + integration |
+| P7 | Stall bound: a fake upstream that never yields terminates with exactly one `upstream_timeout` at `first_event_s`, iterator observed closed, no `final` success; **a role-only empty-delta event then silence is also cut at the cumulative `first_event_s`, not at `gap_s`**; mid-stream stall ends at `gap_s`; slow trickle ends at `total_s`; derivation: for random `target_p99_ms ∈ [1, 100]`, `0 < gap < first_event < total < max_stream_duration_s()` (new P11 clause, single-attempt case only: slow trickle terminates with `upstream_timeout` from the router, never `stream_killed`/max-duration, over random p99; after a fallback the edge max-duration code is an accepted single declared terminal), at the default `first_event < 300 s`, accessors raise `CapacityUnavailable` on non-positive | `test_gw28_stall_bound.py` | property + integration |
 | P8 | Attempt bound and exhaustion: attempts ≤ `routing_max_attempts()`; ≥ 2 retryable failures → `routing_attempts_exhausted`; single possible attempt surfaces its own code; teardown failure → no further open | `test_gw28_attempt_bound.py` | property (async) |
 | P9 | Trace is content-free: with a planted secret in the prompt, no `RoutingDecision`/refusal field contains it; fields hold only closed-vocabulary strings and candidate ids | `test_gw28_trace_redaction.py` | property |
 | P10 | Fault injection: an injected `Exception` at each point (`rank`, `sink` pre-content, `snapshot_source`, `rebind`, mid-iteration, `aclose`) yields exactly one terminal event, code `routing_internal_error` (or `routing_snapshot_unavailable`/`routing_teardown_unconfirmed` where defined), zero further opens, and the live iterator closed; `CancelledError` and `GeneratorExit` injected mid-attempt propagate (not converted to an event) and the live iterator is closed; a post-commit sink raise does not alter the forwarded stream | `test_gw28_fault_injection.py` | property (async) |
@@ -836,7 +844,7 @@ Unit/integration (non-property):
   at `first_event_s`. Also asserts the profile builds exactly one `OpenAIUpstreamProvider`.
 - **T-life-1 (D-11, round-4 F1).** `build_routed_provider` with three distinct fake clients plus one
   `owned_elsewhere`: `bundle.closers` has exactly three entries; running them closes each client once
-  and the shared one zero times; `sum(provider_pool_share(n)) <= pool_size(PROVIDER)` for n in 1..8.
+  and the shared one zero times; for a contract with pool_size(PROVIDER)=P, `sum` of `n * provider_pool_share(n)` is `<= P` for every n in 1..P; negative case: n = P+1 raises `CapacityUnavailable` and `build_routed_provider` refuses to boot; clients are created by the factory with `connections == share` (checked via the `connections` property).
 - **T-log-1 (Req 5.6, round-4 F4).** Both the dev boot and `build_routed_provider` emit the bounds line
   with four values equal to the contract accessors.
 - **T-edge-4 (D-16).** Audit `record_started` destination equals `DispatchRouter.select(plan)`
@@ -973,3 +981,25 @@ functions.
 - **Honoured constraints.** Capacity literals stay only in `runtime/resources.py` (D-15; the new
   `provider_pool_share` and total-timeout derivations add no literal); no gate allowlist extension is
   needed, so there is no conflict with GW27 D-13's two-file allowlist. No live gate is run or claimed.
+
+## Review responses (round 5)
+- **Finding 1 (MEDIUM) — resolved (D-11, C8 `provider_pool_share`, C6 `build_routed_provider`, T-life-1).**
+  The `max(1, ...)` floor is removed; the share is `pool_size(PROVIDER) // n` and raises
+  `CapacityUnavailable` when `< 1`, so an oversized table refuses to boot. T-life-1 is bounded to
+  `n <= pool_size(PROVIDER)` with a negative case at `P+1`. The budget is checkable: clients are built
+  by a `client_factory` called with `connections=share`, backed by a read-only `connections` property
+  on `OpenAIUpstreamProvider` and a sum assertion.
+- **Finding 2 (LOW) — resolved by scoping (C8, P7/P11).** `total_s` stays per attempt; the router-wins
+  claim is limited to a single attempt. After a fallback the edge's `stream_killed` is an accepted,
+  single, declared terminal.
+- **Finding 3 (LOW) — resolved by stating behaviour (C6 `_stage`).** Zero-provider-call refusals
+  produced inside `open_routed` (`routing_all_unavailable`, `routing_snapshot_unavailable`,
+  `routing_context_missing`, `routing_internal_error`) occur after `mark_dispatched`, so the budget
+  spend is NOT refunded, unlike preflight refusals. This is conservative (over-charges, never
+  under-charges). Releasing the mark via a "no candidate opened" signal is recorded as a follow-up.
+- **Finding 4 (LOW) — resolved (D-9).** D-9 and the PR notice now cover routed streaming (1 s to 0.8 s).
+- **Finding 5 (NIT) — resolved.** Candidate ids in `deciding_rule` are operator-defined, org-owned
+  identifiers validated by `CandidateSet.build`; they are safe to expose in the client-visible
+  `pipeline_trace`. Upstream model names are not included.
+- **Honoured constraints.** No capacity literal added outside `runtime/resources.py`; GW27 D-13
+  two-file allowlist unchanged. No live gate is run or claimed.

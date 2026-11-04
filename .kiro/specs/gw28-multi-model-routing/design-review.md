@@ -1,47 +1,81 @@
-# GW28 Design Review (pass 3, fresh read)
+# Design Review — GW28 Multi-model routing (round 5)
 
-Verdict: CHANGES_REQUESTED (0 HIGH, 2 MEDIUM, 5 LOW)
-
-## Verified assumptions (read from source)
-- `DispatchRouter` is pure, `__slots__ = ()`, identity = org/epoch/sequence/content_hash; left unchanged.
-- `OpenAIUpstreamProvider`: `abort()` no-op, `_drain` holds one frame back, role channel stripped in `_content`, `httpx.TimeoutException -> upstream_timeout`, 5xx other than 504 -> `upstream_error`, 429 -> `upstream_rate_limited`. D-5 code set matches.
-- `routes.py::_next_attempt` has the `offered` one-shot latch; `openai_nonstream.py` has a single `deps.provider.open` site (L199). D-12 is true.
-- `StreamTimeouts.next_event` wraps every await in `inter_chunk_timeout_s()`; `_last_write_s` is seeded at construction and `send()` cuts on idle. D-13/D-18 diagnosis is accurate.
-- `resources.py` is exactly 800 lines; `snapshot()` (L766-800) is literal-free; importers are `pools.py` and `tests/runtime/test_lgw12_resources.py`. D-15 is feasible. `_stream_timeout_s` multiplies p99 and floors at one p99. Defaults 1500x = 30 s, 15000x = 300 s check out.
-- `dev_profile._provider` builds the timeout from `max_stream_duration_s()` (the 300 s root cause).
-- `upstream_timeout` is already mapped in `edge/errors.py` (504) and `edge/wire/sse.py`.
-- No `ROUTING_*` codes exist yet in `domain/posture.py` (additive, as designed).
-- Layering: new dispatch modules import only domain and dispatch siblings; bounds are injected. No violation found. No module-level mutable state or capacity literal outside `resources.py` is introduced by the design.
-
-## Unverified / wrong assumptions
-- The per-request trace record that `console_projection` reads was never read (design admits this, Open Items). See Finding 2.
-- "Chat provider closes with the app": not true for a second client. See Finding 1.
-- Equating `holds.request_id` with a per-request identity: it is a content hash, not unique. See Finding 2.
+Reviewed: `design.md` against `requirements.md` and the code in `.worktrees/gw28/gateway_v2/gateway_v2`.
+Prior-round MEDIUMs (second pooled client, worker-level trace sink) are resolved. One new MEDIUM remains.
 
 ## Findings
 
-### 1. MEDIUM - Second pooled client has no shutdown path and no connection budget (D-11, C6 dev_profile)
-Design adds `chat_provider`, a second `OpenAIUpstreamProvider` with its own httpx pool. In the real code, shutdown closers are built in `dev_profile.py` (~L517) as `(provider.aclose,)` for `deps["provider"]` only. `RoutedProvider` has no `aclose`, and `build_routed_provider` (production) has no owner for client lifecycle. The chat pool would leak sockets at lifespan shutdown. Also `connections = contract.pool_size(PoolKind.PROVIDER)` is the signed provider socket budget; a second client with the same value doubles the fleet's upstream sockets/fds, and the design says nothing about how the budget is split.
-Fix: (a) state that `chat_provider` is added to `closers` (and `build_routed_provider` returns or registers the clients to be closed on shutdown), with a test that both pools are closed on lifespan shutdown; (b) either share one pool and apply the 30 s bound only at the app-level `bounded_events` (transport timeout stays as is for both), or split `pool_size(PROVIDER)` explicitly between the two clients and assert the sum does not exceed it. The shared-pool option is simpler and removes the T-edge-7 need for separate clients, since the router bound already enforces 30 s on chat.
+### 1. MEDIUM — D-11 provider pool-share rule contradicts its own boot assertion and cannot be enforced as written
+Where: D-11 "Production multi-client lifecycle and budget", C8 `provider_pool_share(n)`, test T-life-1.
 
-### 2. MEDIUM - Trace sink is worker-level and keyed by a non-unique id; Req 6 target unspecified (C4, C6 Trace, Open Items)
-`RoutedProvider` takes one `sink: Callable[[RoutingDecision], None]` for the whole worker, and `RoutingDecision` identifies a request only by `request_key = holds.request_id`. `ChatSurface._request_id` is a pure function of (org, model, input channels), so two concurrent identical requests share the id. A sink that appends to a per-request record by that key will conflate traces, the same defect class as PIPELINE-0023 (client request id collision merging prompts). Separately, the destination record type is "not yet read", so Req 6.1/6.3 and acceptance criterion 7 are not implementable without guessing.
-Fix: make the sink per request. Add a `RoutingContext.sink` (or a third `open_routed(request, ctx, sink)` argument) that `edge/chat_upstream.py` binds to the request's own trace record via `holds`; remove the worker-level sink from `RoutedProvider.__init__`. Keep `request_key` for ranking only. Read `console_projection` now and name the concrete record type and the field mapping table (RoutingDecision field -> model_routing stage key) in the design. Add a test: two concurrent identical requests produce disjoint decision lists.
+Verified in source: `ResourceContract.pool_size(PoolKind.PROVIDER)` is `workers()` (`runtime/resources.py`
+L295-296, `n = w`). So the budget is small: 1 on a 1-worker contract, a handful on small pods.
 
-### 3. LOW - A2 / Glossary "Candidate_Set derived from the pinned plan" is not met
-D-1 says so honestly (boot-time, unsigned, org-keyed table; a plan epoch change does not touch it). Req 1.2 is met via the HRW key only. Fix: amend requirements A2 to record the deviation (and owner sign-off) so the requirement and design do not conflict.
+- `provider_pool_share(n) = max(1, pool_size(PROVIDER) // n)` floors every share at 1. Whenever
+  `n > pool_size(PROVIDER)` (for example 3 providers on a 2-worker pod), the sum is `n`, which exceeds the budget.
+  The design's own boot assertion `sum(shares) <= pool_size(PROVIDER)` then raises `RoutingConfigError`. The `max(1, …)`
+  floor is therefore dead or contradictory, and the design never says which one wins.
+- T-life-1 asserts `sum(provider_pool_share(n)) <= pool_size(PROVIDER)` "for n in 1..8". That is false for any test
+  contract with fewer than 8 workers, so the test as specified fails.
+- `build_routed_provider` receives already-built clients. `OpenAIUpstreamProvider` keeps `connections` inside the
+  `httpx_client_factory` closure and exposes no attribute for it. "Requires each distinct client to have been built
+  with `connections = share`" has no way to check what the client was actually built with. The assertion only
+  compares computed numbers and enforces nothing about real pools.
 
-### 4. LOW - Req 5.6 start-up logging is only wired for the dev profile
-The "logged at start-up" bound set is added to the `snapshot()` dict and the dev boot log. Production goes through `build_routed_provider`. Fix: have that factory log the four bounds, and add a test asserting the line.
+Fix (pick and state one):
+- Remove the `max(1, …)` floor. `provider_pool_share(n)` returns `pool_size(PROVIDER) // n` and raises
+  `CapacityUnavailable` when the result is `< 1`. Document that a table with more distinct clients than
+  `pool_size(PROVIDER)` refuses to boot, fail closed. Limit T-life-1's loop to `n <= pool_size(PROVIDER)` and add a
+  negative case (`n > pool_size` raises).
+- Make the budget checkable. Either have `build_routed_provider` construct the clients from a factory callable it
+  calls with `connections=share`, or add a read-only `connections: int` property to `OpenAIUpstreamProvider`
+  (additive, same one-line spirit as `per_request_safe`) and assert `sum(c.connections) <= pool_size(PROVIDER)`.
 
-### 5. LOW - `total_s` equals the edge `max_stream_duration_s` (both 300 s)
-On a slow trickle the router's `upstream_timeout` and the edge max-duration kill race, so the terminal code is nondeterministic. P11 does not cover total. Fix: set `total_s` slightly below, e.g. `max_stream_duration_s() - cancellation_bound_s()`, and extend P11 to assert `total < max_stream_duration`.
+### 2. LOW — `total_s` is per attempt, so the "router wins the race" claim fails after a fallback
+Where: C8 `upstream_total_timeout_s`, P7/P11, review round-4 F5 response.
 
-### 6. LOW - Residual provider-side generation after a timeout fallback is not recorded
-Closing the socket after `upstream_timeout` does not guarantee the provider stopped generating; a fallback attempt can overlap billing. This satisfies Req 2.3 (released and aborted) but should be recorded as a residual in the design.
+`InFlightControl._deadline = clock() + max_stream_duration_s()` (`edge/cancel.py` L427) is measured from stream
+start. The router's `total_s` is measured from each attempt's start. A second attempt starts up to about 30 s in, so
+a slow trickle on attempt 2 reaches the edge's 300 s kill first and ends as `stream_killed`, not the router's
+`upstream_timeout`. The terminal is still single and declared (fail closed), but the property text is wrong.
+Fix: make the router's total deadline absolute from `open_routed` entry (one `start` shared across attempts), or
+scope the P11 clause to the single-attempt case and state the fallback case ends in the edge max-duration code.
 
-### 7. LOW - HRW cost on the request path
-Up to 8 candidates x weight 16 = 128 sha256 calls per rank. Likely well under the 20 ms SLO, but unmeasured. Fix: add a micro-benchmark assertion for worst-case `rank` in P2, or compute one digest per candidate and derive vnodes cheaply.
+### 3. LOW — Zero-provider-call refusals inside `open_routed` do not refund the budget spend
+Where: C6 `_stage` preflight vs `routes.py::_attempt` / `openai_nonstream._collect_output_channels`.
 
-## Requirement coverage
-Deterministic routing (P1-P3), no double generation (P4, P8, D-12), no policy bypass (P6, T-edge-5, D-8 structural), stream integrity (P5), stall bound (P7, P11, D-13/D-14/D-18) are all concretely designed and have property tests. Req 6 is the only requirement not implementable as written (Finding 2).
+Both chat sites call `holds.mark_dispatched()` before the open. `routing_all_unavailable`,
+`routing_snapshot_unavailable`, `routing_context_missing` and `routing_internal_error` pre-open are produced inside
+`open_routed` with zero provider calls, so the spend stands. Preflight refusals are refunded, so the two groups are
+inconsistent, and the unrefunded group is the one that fires during a provider outage. Fix: state the behaviour
+explicitly, or have `open_routed` expose "no candidate opened" so the edge can release the dispatch mark.
+
+### 4. LOW — Mid-stream gap tightening also applies to streaming
+Where: D-9.
+
+D-9 frames 0.8 s as new strictness for non-streaming only. On streaming the shipped bound was 1 s, so routed
+streaming also drops 1 s to 0.8 s. Fix: say so in D-9 and the PR-description notice.
+
+### 5. NIT — Candidate ids surface in the client-visible response body
+Where: C6 Trace.
+
+`apply_projection` merges `pipeline_trace` (including `deciding_rule` with `sel`/`from`) into the JSON body returned to
+the client. State that candidate ids are org-owned and safe to expose, or hash them.
+
+## Verified Assumptions
+- `resources.py` is exactly 800 lines; `snapshot()` is literal-free and has exactly two importers (`runtime/pools.py`, `tests/runtime/test_lgw12_resources.py`); `check_sizes` caps modules at 800.
+- Derived values check out: `cancellation_bound_s` is 3×p99 (60 ms), `inter_chunk` 1 s, `max_stream_duration` 300 s, so total 299.94 s and pre-content budget 60.18 s for n=2.
+- `_next_attempt` is a one-shot via the `offered` latch; chat open sites are exactly `routes.py:691` and `openai_nonstream.py:199`; misc/embeddings opens separately.
+- `StreamTimeouts.next_event` wraps every `__anext__`, and `_last_write_s` is seeded at construction, so the idle-timer hazard (D-18) is real and the fix is coherent.
+- `console_schema._STAGE_KEYS` is closed to `name, action, ran, deciding_rule`; `chat_console` has the six fixed stages.
+- All retryable and non-retryable `upstream_*` codes exist in `openai_upstream.py` and the `edge/errors.py` and `wire/sse.py` maps.
+- `OpenAIUpstreamProvider.abort()` is a no-op and `open()` returns the async iterator synchronously.
+
+## Unverified / Wrong Assumptions
+- Wrong: `sum(provider_pool_share(n)) <= pool_size(PROVIDER)` for n in 1..8 (Finding 1).
+- Wrong: router `upstream_timeout` always wins over the edge max-duration cut (Finding 2, fallback case).
+- Unverified: that `asyncio.wait_for` cancellation of an `httpx` stream read never returns a half-open socket to the pool. Design correctly defers live confirmation; the in-process transport test is only a proxy.
+- Unverified: where `RoutingTrace` is handed to `console_from_holds` on the streaming trace frame. The design names the call chain but I did not trace the trace-frame emission path.
+
+## Verdict
+1 MEDIUM, 3 LOW, 1 NIT → **CHANGES_REQUESTED**.
