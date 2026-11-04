@@ -248,15 +248,13 @@ class AuthorizedProviderEntry:
         The pure step 3 is evaluated just before it so the plan-derived destination rides
         on the request; it reads no request byte and sends nothing.
 
-        ``rewrite`` carries the resolver's winning-action signal that the ``Decision``
-        vocabulary itself erases: the resolver maps ``Action.REWRITE`` to
-        ``Disposition.REDACT`` (``resolve/decision.py::_action_to_disposition``), so a
-        REWRITE is byte-identical to a REDACT at the disposition level. The one bit of
-        provenance — "the winning action was REWRITE and REWRITE is supported" — is passed
-        explicitly so the entry can route a REWRITE to the LOCAL guard seam instead of a
-        provider generation (R5.2) without re-deriving the action. It defaults to
-        ``False`` (ALLOW/FLAG/REDACT drive the provider), so an ordinary dispatch is
-        unaffected.
+        ``rewrite`` is the LOCAL-guard-seam bit (R5.2, LGW11-4), NOT the GW33 disposition. Since
+        GW33 the resolver maps ``Action.REWRITE`` to its own ``Disposition.REWRITE`` (template
+        substitution, verified like a redaction by ``dispatch/verify.py``) and that decision drives
+        the provider with the rewritten bytes. This bit keeps its separate meaning — "run the local
+        ``RewriteBackend`` seam and send nothing to the provider" — is retained unchanged, and is
+        never set by GW33 (reserved for a future local-model request rewrite). It defaults to
+        ``False``, so an ordinary dispatch is unaffected.
 
         The method is ``async`` and yields each :class:`UpstreamEvent` as it arrives, so
         the caller writes ``async for event in entry.dispatch(auth, ...)``.

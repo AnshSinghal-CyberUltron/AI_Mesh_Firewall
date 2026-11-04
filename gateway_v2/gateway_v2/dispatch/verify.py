@@ -83,10 +83,13 @@ class VerificationFailure(Exception):
 
 
 #: Dispositions that oblige a finding's spans to be redacted out of the request
-#: content. REDACT (incl. REWRITE→REDACT in the resolver) is the only request-
-#: side redacting disposition; BLOCK never reaches here (no authorization is
+#: content. REDACT and REWRITE (GW33: a first-class disposition whose spans are replaced by the
+#: declared template, verified exactly like a redaction) are the request-side
+#: redacting dispositions; BLOCK never reaches here (no authorization is
 #: minted for a BLOCK decision), and ALLOW/FLAG observe without redacting.
-_REDACTING_DISPOSITIONS: frozenset[Disposition] = frozenset({Disposition.REDACT})
+_REDACTING_DISPOSITIONS: frozenset[Disposition] = frozenset(
+    {Disposition.REDACT, Disposition.REWRITE},
+)
 
 
 def _request_content(request: GatewayRequest) -> str:

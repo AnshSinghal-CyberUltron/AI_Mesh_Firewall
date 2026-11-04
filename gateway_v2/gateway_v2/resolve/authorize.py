@@ -3,8 +3,8 @@
 ``authorize(decision)`` is the ONE call that mints a ``DispatchAuthorization``.
 A BLOCK ``Decision`` is terminal: no authorization is minted, so no object
 exists for any caller to pass to the provider entry (LGW11-2). ALLOW / FLAG /
-REDACT (including REWRITE, which the resolver maps to ``Disposition.REDACT``)
-mint one stamped with the decision identity.
+REDACT / REWRITE (GW33: ``Disposition.REWRITE``, stamped ``"rewrite"``) mint one stamped with
+the decision identity.
 
 Imports ONLY ``gateway_v2.domain`` (the "Resolve imports only domain"
 import-linter contract). The full-module-path import of the module-private
@@ -25,7 +25,7 @@ def authorize(decision: Decision) -> DispatchAuthorization | None:
 
     Returns ``None`` iff ``decision.disposition is Disposition.BLOCK`` (terminal,
     so no authorization object exists). Otherwise mints one for ALLOW / FLAG /
-    REDACT, carrying the decision identity (``plan_version``, ``disposition``).
+    REDACT / REWRITE, carrying the decision identity (``plan_version``, ``disposition``).
     """
     if decision.disposition is Disposition.BLOCK:
         return None
