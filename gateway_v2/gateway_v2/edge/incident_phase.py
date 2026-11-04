@@ -68,11 +68,12 @@ def note_reroute(holds: RequestHolds, verdict: GateVerdict, requested: str) -> N
     decision = verdict.reroute
     if decision is None or verdict.routed_model is None:
         return
+    canonical = decision.isolated_model or requested
     holds.note_reroute(
         RerouteNote(
-            requested=requested,
+            requested=canonical,
             routed=verdict.routed_model,
-            isolated_model=decision.isolated_model or requested,
+            isolated_model=canonical,
             decision_source=decision.decision_source,
             reason=decision.reason,
         )
