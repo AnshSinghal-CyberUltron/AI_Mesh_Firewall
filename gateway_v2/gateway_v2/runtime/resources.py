@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from gateway_v2.runtime.cgroup import DetectHooks, detect_with_hooks
 from gateway_v2.runtime.errors import CapacityUnavailable, CapacityUnset
 from gateway_v2.runtime.kinds import CapacityHint, HardwareSignals, PoolKind
+from gateway_v2.runtime.resources_output import OutputBoundsMixin
 from gateway_v2.runtime.resources_vector import VectorBoundsMixin
 
 # Deployment-declared defaults. Logged as defaults when env is unset.
@@ -205,7 +206,6 @@ _VECTOR_MAX_RESULT_COUNT_MULT = 1  # count = connection_budget() x mult, clamped
 _VECTOR_MAX_RESULT_BYTES = 10_485_760  # vector_max_result_bytes() ceiling, R11.2 10 MiB
 _VECTOR_MAX_RESULT_BYTES_SHARE = 0.025  # bytes = per_worker_rss x share, clamped to [1, ceiling]
 
-
 @dataclass(frozen=True, slots=True)
 class McpBounds:
     """GW17 MCP bounds, v1 parity (`gateway/ai_mesh_gateway/mcp_proxy.py:294-368`,
@@ -229,7 +229,7 @@ class McpBounds:
 
 
 @dataclass(frozen=True, slots=True)
-class ResourceContract(VectorBoundsMixin):
+class ResourceContract(VectorBoundsMixin, OutputBoundsMixin):
     cpu_quota: float
     memory_limit: int
     fd_limit: int
