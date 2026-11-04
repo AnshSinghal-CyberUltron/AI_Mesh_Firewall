@@ -31,7 +31,7 @@ from __future__ import annotations
 
 import json
 import re
-from collections.abc import Awaitable, Callable, Mapping
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
 
 from gateway_v2.domain import posture
@@ -51,6 +51,7 @@ __all__ = (
     "base_channel",
     "check_calls",
     "decoded_text",
+    "validate_tool_output",
     "parse_tool_key",
     "tool_key",
 )
@@ -368,3 +369,66 @@ class ToolCallAssembler:
             self._release(len((call.id + call.name + call.arguments).encode()))
             call.started = True
         return tuple(events)
+
+
+def validate_tool_output(
+    enforced: Sequence[tuple[str, str]],
+    *,
+    declared: frozenset[str],
+    tools_declared: bool,
+    bounds: ToolBounds | None,
+    json_mode: bool,
+    decoded_clean_sync: Callable[[str], bool],
+) -> Terminate | None:
+    """The non-stream twin of the assembler's checks, over the already-enforced deltas.
+
+    Same rules as :class:`ToolCallAssembler` (id shape, declared name, both id and name present,
+    no call when ``tools`` were not declared, JSON validity, decoded-form residual scan), applied
+    once after enforcement; ``tool_choice: "none"`` is irrelevant (output is never trusted to
+    follow the request). A route with no tool bounds treats ANY tool call as blocked. In JSON mode
+    the enforced ``content`` must ``json.loads`` (D9). ``None`` means valid.
+    """
+    calls: dict[int, _Call] = {}
+    finish: str | None = None
+    content: list[str] = []
+    for channel, text in enforced:
+        key = parse_tool_key(channel)
+        if channel == FINISH_CHANNEL:
+            finish = text
+        elif key is not None:
+            if bounds is None:
+                return Terminate(OUTPUT_BLOCKED)
+            call = calls.setdefault(key[1], _Call())
+            if key[1] >= bounds.max_tool_calls:
+                return Terminate(posture.STREAM_MALFORMED_UPSTREAM)
+            if key[0] == TOOL_ID:
+                call.id += text
+            elif key[0] == TOOL_NAME:
+                call.name += text
+            else:
+                call.arguments += text
+                if len(call.arguments) > bounds.arguments_bytes:
+                    return Terminate(posture.STREAM_MALFORMED_UPSTREAM)
+        elif channel in (_CONTENT, _OUTPUT_CONTENT):
+            content.append(text)
+    failure = check_calls(
+        calls, declared=declared, tools_declared=tools_declared, finish_reason=finish
+    )
+    if failure is not None:
+        return failure
+    for call in calls.values():
+        decoded = decoded_text(call.arguments)
+        if decoded is None:
+            return Terminate(OUTPUT_BLOCKED)
+        try:
+            clean = decoded_clean_sync(decoded)
+        except Exception:
+            return Terminate(SCAN_FAILURE)
+        if not clean:
+            return Terminate(OUTPUT_BLOCKED)
+    if json_mode and not calls:
+        try:
+            json.loads("".join(content))
+        except (ValueError, RecursionError):
+            return Terminate(OUTPUT_BLOCKED)
+    return None

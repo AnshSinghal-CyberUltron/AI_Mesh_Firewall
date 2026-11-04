@@ -737,5 +737,6 @@ class ChatSurface:
             holds=holds,
             block_code=REFUSE_OUTPUT_BLOCKED,
             scan_failure_code=REFUSE_INPUT_SCAN_FAILURE,
+            req=req,
         )
         await emit_enforced_chat(send, self._deps, req, plan, enforced, holds)

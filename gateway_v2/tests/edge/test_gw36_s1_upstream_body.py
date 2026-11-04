@@ -281,9 +281,10 @@ def _plain(value: object) -> object:
 class _Recorder:
     """Records the rendered request; replies with one content event, or a scripted failure."""
 
-    def __init__(self, failure: str | None = None) -> None:
+    def __init__(self, failure: str | None = None, reply: str = "ok") -> None:
         self.sent: list[Mapping[str, object]] = []
         self.failure = failure
+        self.reply = reply
 
     def open(self, request: UpstreamRequest) -> AsyncIterator[UpstreamEvent]:
         return self._stream(request)
@@ -296,7 +297,7 @@ class _Recorder:
         if self.failure is not None:
             yield UpstreamEvent(text_deltas=(), final=True, gateway_error=self.failure)
             return
-        yield UpstreamEvent(text_deltas=(("content", "ok"),), final=True)
+        yield UpstreamEvent(text_deltas=(("content", self.reply),), final=True)
 
     async def abort(self) -> None:
         return None

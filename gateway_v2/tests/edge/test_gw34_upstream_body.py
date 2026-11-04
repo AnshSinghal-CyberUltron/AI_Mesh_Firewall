@@ -50,7 +50,8 @@ def _pydantic_tool(name: str = "get_weather") -> dict[str, Any]:
 
 
 def _ok(extra: dict[str, Any], messages: list[dict[str, Any]] | None = None) -> dict[str, Any]:
-    provider = _Recorder()
+    # a JSON-mode request needs JSON content back (D9); anything else gets plain text
+    provider = _Recorder(reply="{}" if "response_format" in extra else "ok")
     status, body = _chat(provider, {"messages": messages or [_USER], **extra})
     assert status == 200, body
     [sent] = provider.sent
