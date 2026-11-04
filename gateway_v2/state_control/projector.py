@@ -517,6 +517,7 @@ def validate_plan(slug: str, raw: str) -> tuple[Mapping[str, object] | None, int
             document.drafts,
             streaming_mode=document.streaming_mode,
             compiled_at=0.0,
+            rag_settings=document.rag_settings,
         )
     except CompileError as exc:
         return None, 0, f"CompileError: {exc}"[:200]

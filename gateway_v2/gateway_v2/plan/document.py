@@ -38,15 +38,19 @@ class PlanDocument:
     org_id: str
     streaming_mode: StreamingMode
     drafts: tuple[RuleDraft, ...]
+    rag_settings: Mapping[str, object] | None = None
 
 
 def encode_plan_body(document: PlanDocument) -> dict[str, object]:
     """The body the control plane signs. Canonicalisation is the signer's job."""
-    return {
+    body: dict[str, object] = {
         "org_id": document.org_id,
         "streaming_mode": document.streaming_mode.value,
         "rules": [_rule_body(draft) for draft in document.drafts],
     }
+    if document.rag_settings is not None:
+        body["rag_settings"] = dict(document.rag_settings)
+    return body
 
 
 def _rule_body(draft: RuleDraft) -> dict[str, object]:
@@ -91,7 +95,17 @@ def decode_plan_body(raw: bytes) -> PlanDocument:
         org_id=_text(body, "org_id"),
         streaming_mode=_member(StreamingMode, _text(body, "streaming_mode"), "streaming_mode"),
         drafts=tuple(_draft(entry, position) for position, entry in enumerate(rules)),
+        rag_settings=_rag_settings(body),
     )
+
+
+def _rag_settings(body: Mapping[str, object]) -> Mapping[str, object] | None:
+    raw = body.get("rag_settings")
+    if raw is None:
+        return None
+    if not isinstance(raw, dict):
+        raise CompileError("plan body field 'rag_settings' must be an object")
+    return raw
 
 
 def _object(raw: bytes) -> Mapping[str, object]:
