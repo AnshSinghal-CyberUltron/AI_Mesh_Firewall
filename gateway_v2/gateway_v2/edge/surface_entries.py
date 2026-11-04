@@ -11,7 +11,8 @@ from gateway_v2.edge.mcp import MCP_PATH, MCP_PREFIX, McpRoute
 from gateway_v2.edge.mcp_deps import McpDeps
 from gateway_v2.edge.openai_responses import responses_entries
 from gateway_v2.edge.responses_store import ResponseStore
-from gateway_v2.edge.routes import ChatRoute, RouteHandler, _placeholder
+from gateway_v2.edge.route_support import placeholder as _placeholder
+from gateway_v2.edge.routes import ChatRoute, RouteHandler
 
 __all__ = ("surface_entries",)
 

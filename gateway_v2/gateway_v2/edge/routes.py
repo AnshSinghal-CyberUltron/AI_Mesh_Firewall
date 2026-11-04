@@ -92,6 +92,8 @@ from gateway_v2.edge.outcome_metrics import OutcomeObserver
 from gateway_v2.edge.phase_resolvers import PhaseResolverFactory, resolver_for
 from gateway_v2.edge.request_holds import RequestHolds
 from gateway_v2.edge.responses_store import ResponseStore
+from gateway_v2.edge.route_support import ProducedModeHolder as _ProducedModeHolder
+from gateway_v2.edge.route_support import placeholder as _placeholder
 from gateway_v2.edge.stream_control import FirstByteLatch, StreamAttempt, run_with_no_splice
 from gateway_v2.edge.stream_timeouts import StreamTimeout, StreamTimeouts
 from gateway_v2.edge.wire.openai import (
@@ -109,9 +111,8 @@ from gateway_v2.egress.stream import (
     ScanProtocol,
     Send,
     StreamPipeline,
-    StreamStats,
 )
-from gateway_v2.egress.strict import StrictStats, StrictWithholdPipeline
+from gateway_v2.egress.strict import StrictWithholdPipeline
 from gateway_v2.plan.snapshot import ReplicaSnapshot
 from gateway_v2.runtime.holdback_config import HoldbackConfig
 from gateway_v2.runtime.holdback_metrics import HoldbackMetrics
@@ -207,27 +208,6 @@ async def _emit_error_code(
 # fail-closed default so every existing construction keeps compiling until a boot card injects the
 # real GW19 / GW06 / GW07-08 components; an unwired route sheds at admission (zero provider calls)
 # before the budget or input phases ever matter.
-
-
-class _ProducedModeHolder:
-    """A per-request mutable sink for the pipeline's returned stats (GW13 C5).
-
-    Both ``StreamPipeline.run`` and ``StrictWithholdPipeline.run`` return a stats
-    value carrying ``produced_mode`` (and, on the INCREMENTAL side,
-    ``degenerated_to_strict``). The ``_attempt`` coroutine captures that return and
-    stashes it here so :meth:`ChatRoute._finish_stream` can emit the Produced_Mode
-    trace frame on the wire just before the terminal ``[DONE]`` marker. It is a
-    per-request LOCAL instance built in :meth:`ChatRoute._stream` (never a
-    module-level mutable, gated), so nothing request-scoped is shared on the frozen
-    route. ``stats`` is ``None`` until an attempt completed (a byte-less failure of
-    every attempt leaves it unset, in which case no trace frame is emitted).
-    """
-
-    __slots__ = ("holds", "stats")
-
-    def __init__(self, holds: RequestHolds | None = None) -> None:
-        self.holds = holds
-        self.stats: StreamStats | StrictStats | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -739,21 +719,6 @@ class ChatRoute:
 # --------------------------------------------------------------------------- #
 # Placeholder routes (R2.3) — registered-for-later, declared not-implemented.
 # --------------------------------------------------------------------------- #
-
-
-def _placeholder(surface: str) -> RouteHandler:
-    """Build a registered-for-later handler that renders a declared ``not_implemented`` code.
-
-    The surface is *registered* so the route table is complete and a later card (GW15/16/17/18)
-    wires the real handler in place. Until then it renders the ``not_implemented`` value-code
-    through the single ``Error_Envelope`` (an HTTP ``501`` JSON body via the unmapped-code
-    generic path), NOT a raw ``404``-with-detail that would leak which surfaces exist.
-    """
-
-    async def _handle(scope: ASGIScope, receive: ASGIReceive, send: ASGISend) -> None:
-        await emit_response(send, errors.render_not_implemented(surface))
-
-    return _handle
 
 
 # --------------------------------------------------------------------------- #
