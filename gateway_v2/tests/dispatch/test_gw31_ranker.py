@@ -45,7 +45,7 @@ def test_property_deterministic_bounded_threshold() -> None:
         assert all(c.relevance >= thr for c in a.chunks)
 
 
-# Feature: gw31-rag-pipeline, Property 5: a lower-trust chunk never outranks an equal higher-trust one
+# Feature: gw31-rag-pipeline, Property 5: lower trust never outranks equal higher trust
 def test_property_trust_primary() -> None:
     rng = random.Random(5)
     for _ in range(10_000):
