@@ -145,6 +145,7 @@ class DevPlanFeed:
             previous=previous,
             compiled_at=compiled_at,
             controls=document.controls,
+            rag_settings=document.rag_settings,
         )
 
 

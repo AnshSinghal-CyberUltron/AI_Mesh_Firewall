@@ -29,3 +29,4 @@ class Principal:
     """GW17c: tool names this key may call. Empty = unrestricted; `DENY_ALL_TOOLS` = none."""
     mcp_max_tool_calls: int = 0
     """GW17c: tool calls per cap window. 0 means unlimited."""
+    project: str = "default"

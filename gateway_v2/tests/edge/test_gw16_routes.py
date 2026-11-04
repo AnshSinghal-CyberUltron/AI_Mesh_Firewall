@@ -56,6 +56,9 @@ _MODELS_PREFIX_KEY: tuple[str, str] = ("GET", "/v1/models/")
 #: keys are gone from this set (GW16), and so is ``/v1/responses`` (GW15 close-out).
 _PLACEHOLDER_ROUTES: tuple[tuple[str, str], ...] = (
     ("POST", "/v1/mcp"),
+)
+#: GW31: with no RAG dependencies injected these answer a declared 503 ``rag_unavailable``.
+_RAG_UNAVAILABLE_ROUTES: tuple[tuple[str, str], ...] = (
     ("POST", "/v1/rag/query"),
     ("POST", "/v1/vector/query"),
 )
@@ -146,7 +149,12 @@ def test_prefix_table_binds_models_retrieve() -> None:
     ``/v1/responses/{id}`` id routes.
     """
     _exact, prefix = _routes()
-    expected = {_MODELS_PREFIX_KEY, ("GET", "/v1/responses/"), ("DELETE", "/v1/responses/")}
+    expected = {
+        _MODELS_PREFIX_KEY,
+        ("GET", "/v1/responses/"),
+        ("DELETE", "/v1/responses/"),
+        ("GET", "/v1/rag/ingest/"),  # GW31
+    }
     assert set(prefix) == expected, (
         f"prefix table keys are {set(prefix)!r}, expected exactly {expected!r}"
     )
@@ -186,6 +194,10 @@ def test_remaining_placeholders_stay_not_implemented() -> None:
         assert _is_not_implemented(transport), (
             f"placeholder {(method, path)!r} is not the not_implemented Error_Envelope"
         )
+    for method, path in _RAG_UNAVAILABLE_ROUTES:
+        transport = _drive_http(_build_app(_stub_provider()), method, path)
+        assert transport.status() == 503, (method, path, transport.status())
+        assert b"rag_unavailable" in transport.body_bytes()
 
 
 def test_misc_keys_absent_from_placeholder_set() -> None:

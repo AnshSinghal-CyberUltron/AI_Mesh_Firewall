@@ -37,6 +37,7 @@ def scan(repo: Path) -> dict[str, list[str]]:
         repo / "frontend" / "src",
         repo / "gateway" / "ai_mesh_gateway",
         repo / "gateway_v2" / "gateway_v2" / "edge" / "routes.py",
+        repo / "gateway_v2" / "gateway_v2" / "edge" / "rag_entries.py",
     )
     for root in roots:
         for path in _files(root):

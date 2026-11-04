@@ -46,6 +46,7 @@ class PlanDocument:
     streaming_mode: StreamingMode
     drafts: tuple[RuleDraft, ...]
     controls: OrgControls = UNSET_CONTROLS
+    rag_settings: Mapping[str, object] | None = None
 
 
 def encode_plan_body(document: PlanDocument) -> dict[str, object]:
@@ -58,6 +59,8 @@ def encode_plan_body(document: PlanDocument) -> dict[str, object]:
     if document.controls != UNSET_CONTROLS:
         body["controls"] = controls_body(document.controls)
         body["requires"] = [REQUIRES_CONTROLS]
+    if document.rag_settings is not None:
+        body["rag_settings"] = dict(document.rag_settings)
     return body
 
 
@@ -105,6 +108,7 @@ def decode_plan_body(raw: bytes) -> PlanDocument:
         streaming_mode=_member(StreamingMode, _text(body, "streaming_mode"), "streaming_mode"),
         drafts=tuple(_draft(entry, position) for position, entry in enumerate(rules)),
         controls=_controls(body),
+        rag_settings=_rag_settings(body),
     )
 
 
@@ -199,6 +203,15 @@ def _frameworks(section: Mapping[str, object]) -> tuple[str, ...]:
     if len(set(value)) != len(value):
         raise CompileError("plan controls.compliance 'frameworks' has duplicates")
     return tuple(value)
+
+
+def _rag_settings(body: Mapping[str, object]) -> Mapping[str, object] | None:
+    raw = body.get("rag_settings")
+    if raw is None:
+        return None
+    if not isinstance(raw, dict):
+        raise CompileError("plan body field 'rag_settings' must be an object")
+    return raw
 
 
 def _object(raw: bytes) -> Mapping[str, object]:

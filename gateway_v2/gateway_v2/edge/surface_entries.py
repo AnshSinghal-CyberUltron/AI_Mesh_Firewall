@@ -11,6 +11,8 @@ from gateway_v2.edge.mcp import GATEWAY_PREFIX, MCP_PATH, MCP_PREFIX, McpRoute
 from gateway_v2.edge.mcp_deps import McpDeps
 from gateway_v2.edge.oauth_routes import OAuthRoutes, OAuthUnavailable
 from gateway_v2.edge.openai_responses import responses_entries
+from gateway_v2.edge.rag_deps import RagDeps
+from gateway_v2.edge.rag_entries import rag_entries
 from gateway_v2.edge.responses_store import ResponseStore
 from gateway_v2.edge.route_support import placeholder as _placeholder
 from gateway_v2.edge.routes import ChatRoute, RouteHandler
@@ -21,10 +23,16 @@ _Entries = dict[tuple[str, str], RouteHandler]
 
 
 def surface_entries(
-    chat: ChatRoute, response_store: ResponseStore | None, mcp: McpDeps | None
+    chat: ChatRoute,
+    response_store: ResponseStore | None,
+    mcp: McpDeps | None,
+    rag: RagDeps | None = None,
 ) -> tuple[_Entries, _Entries]:
-    """``(exact, prefix)`` entries for ``/v1/responses`` and ``/v1/mcp``."""
+    """``(exact, prefix)`` entries for ``/v1/responses``, ``/v1/mcp`` and RAG/vector."""
     exact, prefix = responses_entries(chat, response_store)
+    rag_exact, rag_prefix = rag_entries(chat, rag)
+    exact.update(rag_exact)
+    prefix.update(rag_prefix)
     if mcp is None:
         exact[("POST", MCP_PATH)] = _placeholder("mcp")
         return exact, prefix

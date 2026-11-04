@@ -51,6 +51,25 @@ __all__ = (
     "CREDENTIAL_LEAK_WITHHELD",
     "COLLECTION_EXISTS",
     "INVALID_API_KEY",
+    "RAG_DISABLED",
+    "RAG_UNAVAILABLE",
+    "RAG_INVALID_REQUEST",
+    "RAG_REQUEST_TOO_LARGE",
+    "RAG_QUERY_INVALID",
+    "RAG_QUERY_BLOCKED",
+    "RAG_OUTPUT_WITHHELD",
+    "RAG_NAMESPACE_REFUSED",
+    "PROJECT_INVALID",
+    "RAG_EMBEDDER_UNAVAILABLE",
+    "RAG_GROUNDING_UNAVAILABLE",
+    "RAG_ANSWER_UNAVAILABLE",
+    "RAG_RETRIEVAL_INVALID",
+    "RAG_CHUNK_STORE_UNAVAILABLE",
+    "RAG_INGEST_BLOCKED",
+    "RAG_INGEST_TOO_LARGE",
+    "RAG_INGEST_OVERLOAD",
+    "RAG_JOB_NOT_FOUND",
+    "RAG_INTERNAL_ERROR",
     "gap_retry_after_s",
     "ROUTING_NO_CANDIDATES",
     "ROUTING_UNKNOWN_MODEL",
@@ -256,6 +275,44 @@ MCP_UPSTREAM_OAUTH_UNAVAILABLE = "mcp_upstream_oauth_unavailable"
 """GW32: upstream OAuth setup is not configured (no public URL or no control link). HTTP 503."""
 MCP_TRANSPORT_UNSUPPORTED = "mcp_transport_unsupported"
 """GW32: unknown server transport or unsupported `MCP-Protocol-Version`. HTTP 400."""
+RAG_DISABLED = "rag_disabled"
+"""GW31: the org plan switched RAG off. Zero adapter calls."""
+RAG_UNAVAILABLE = "rag_unavailable"
+"""GW31: no RAG dependencies were injected, or the ingest job store refused the job."""
+RAG_INVALID_REQUEST = "rag_invalid_request"
+"""GW31: a RAG body field is missing, mistyped, reserved or out of bounds."""
+RAG_REQUEST_TOO_LARGE = "rag_request_too_large"
+"""GW31: the RAG request body is over the contract bound."""
+RAG_QUERY_INVALID = "rag_query_invalid"
+"""GW31: the query is not a non-empty string within its byte bound."""
+RAG_QUERY_BLOCKED = "rag_query_blocked"
+"""GW31: the query-stage scan blocked the query."""
+RAG_OUTPUT_WITHHELD = "rag_output_withheld"
+"""GW31: the generator stage withheld the response (fail closed)."""
+RAG_NAMESPACE_REFUSED = "rag_namespace_refused"
+"""GW31: a namespace segment is outside the charset or the wire name is too long."""
+PROJECT_INVALID = "project_invalid"
+"""GW31: the signed key record carries a malformed project."""
+RAG_EMBEDDER_UNAVAILABLE = "rag_embedder_unavailable"
+"""GW31: no embedder, an embedder failure, or a wrong dimension."""
+RAG_GROUNDING_UNAVAILABLE = "rag_grounding_unavailable"
+"""GW31: Tier-2 grounding was required and not available."""
+RAG_ANSWER_UNAVAILABLE = "rag_answer_unavailable"
+"""GW31: the injected answerer failed."""
+RAG_RETRIEVAL_INVALID = "rag_retrieval_invalid"
+"""GW31: the adapter broke its own absent-vs-empty invariant."""
+RAG_CHUNK_STORE_UNAVAILABLE = "rag_chunk_store_unavailable"
+"""GW31: the ChunkStore is lost or unreachable. Never an empty success."""
+RAG_INGEST_BLOCKED = "rag_ingest_blocked"
+"""GW31: an ingest document was blocked by the content scan."""
+RAG_INGEST_TOO_LARGE = "rag_ingest_too_large"
+"""GW31: an ingest request or document is over its bound."""
+RAG_INGEST_OVERLOAD = "rag_ingest_overload"
+"""GW31: the ingest queue is full. Carries Retry-After."""
+RAG_JOB_NOT_FOUND = "rag_job_not_found"
+"""GW31: no ingest job with that id for this tenant and project."""
+RAG_INTERNAL_ERROR = "rag_internal_error"
+"""GW31: an unexpected failure inside a RAG route. Class name only is logged."""
 
 
 def gap_retry_after_s(*, rehydrate_period_ms: float, refresh_ms: float) -> float:

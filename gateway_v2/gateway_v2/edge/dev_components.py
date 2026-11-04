@@ -241,6 +241,7 @@ def load_dev_plan(path: str, *, org_id: str, compiled_at: float) -> ExecutionPla
             streaming_mode=document.streaming_mode,
             compiled_at=compiled_at,
             controls=document.controls,
+            rag_settings=document.rag_settings,
         )
     except CompileError as exc:
         raise DevProfileError(f"AMF_DEV_PLAN_PATH={path!r} rejected by compiler: {exc}") from exc
@@ -338,8 +339,13 @@ class DeterministicFindings:
         """Scan with phase-only customer conditions. Routes pass :func:`bind_surface`."""
         return self.findings_on(text, surface=None)
 
-    def findings_on(self, text: str, surface: Surface | None = None) -> tuple[Finding, ...]:
-        """The same detectors as :meth:`__call__`, limited to ``surface`` when set."""
+    def findings_on(
+        self, text: str, surface: Surface | None = None, stage: str | None = None
+    ) -> tuple[Finding, ...]:
+        """The same detectors as :meth:`__call__`, limited to ``surface`` and ``stage`` when set.
+
+        A rule that names a ``pipeline_stage`` is matched only when ``stage`` equals it (GW31).
+        """
         context = DetectorContext(phase=self.phase, rules=(), budget=Budget(self.budget_s))
         findings: list[Finding] = []
         findings.extend(PiiDetector().detect(text, context))
@@ -351,6 +357,7 @@ class DeterministicFindings:
                 text,
                 budget_s=self.budget_s,
                 phase=self.phase,
+                stage=stage,
                 surface=surface,
             )
             raise_if_refused(scanned)
@@ -361,13 +368,14 @@ class DeterministicFindings:
 def bind_surface(
     detector: Callable[[str], Sequence[Finding]],
     surface: Surface,
+    stage: str | None = None,
 ) -> Callable[[str], Sequence[Finding]]:
-    """Run customer conditions on ``surface``. Any other detector is returned unchanged."""
+    """Run customer conditions on ``surface`` (and ``stage``). Any other detector is unchanged."""
     if not isinstance(detector, DeterministicFindings):
         return detector
 
     def _bound(text: str) -> Sequence[Finding]:
-        return detector.findings_on(text, surface)
+        return detector.findings_on(text, surface, stage)
 
     return _bound
 

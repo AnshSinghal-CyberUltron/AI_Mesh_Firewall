@@ -11,7 +11,7 @@ What this assembles (R2.1):
 
 * a **router** — the ``(method, path) -> handler`` table built by
   :func:`gateway_v2.edge.routes.build_routes`, with the streaming chat route wired live and the
-  responses/misc/mcp/rag surfaces registered as declared not-implemented placeholders (R2.2/R2.3);
+  responses/misc/mcp/rag surfaces (an unwired one is a declared placeholder, R2.2/R2.3);
 * a **lifespan** handler — drains the ASGI ``lifespan`` protocol (``startup`` / ``shutdown``) so
   a conforming server can boot and stop the app cleanly;
 * **``/readyz``** — returns ``200`` when every required state dependency is available and a
@@ -79,6 +79,7 @@ from gateway_v2.edge.mcp_deps import McpDeps
 from gateway_v2.edge.openai_misc import MiscRoute
 from gateway_v2.edge.outcome_metrics import OutcomeObserver
 from gateway_v2.edge.phase_resolvers import PhaseResolverFactory
+from gateway_v2.edge.rag_deps import RagDeps
 from gateway_v2.edge.readiness import (
     METRICS_DIRECTORY_REASON,
     DirectoryGate,
@@ -252,6 +253,7 @@ def build_app(
     audit: Callable[[AuditRecord], bool] | None = None,
     response_store: ResponseStore | None = None,
     mcp: McpDeps | None = None,
+    rag: RagDeps | None = None,
     observer: OutcomeObserver | None = None,
     holdback_metrics: HoldbackMetrics | None = None,
     org_limits: OrgLimitDecider | None = None,
@@ -263,24 +265,22 @@ def build_app(
     """Assemble the raw-ASGI serving skin (R2.1).
 
     Wires the chat, responses, and misc routes plus the mcp/rag placeholders, and mounts
-    ``/readyz`` + ``/metrics``. The holdback cap is loaded once at boot (``load_holdback_config``,
-    the shipped ``load_contract`` idiom); the window and per-stream buffer high-water derive from
-    ``contract`` (no literal). ``readiness`` defaults to an always-ready probe (parity with
-    ``state_ready(None)``); ``active_streams`` to a single-stream count until GW19. ``control`` is
-    the in-flight control source polled at each chunk boundary (R10); GW29 defaults it to
+    ``/readyz`` + ``/metrics``. The holdback cap is loaded once at boot (``load_holdback_config``);
+    the window and per-stream buffer high-water derive from ``contract`` (no literal).
+    ``readiness`` defaults to an always-ready probe; ``active_streams`` to a single-stream count
+    until GW19. ``control`` is the in-flight source polled per chunk (R10); GW29 defaults it to
     :class:`RefusingControlSource` (fail closed: an unwired stream is cut, never left uncontrolled),
     and ``control_factory`` / ``incident_gate`` / ``incident_recheck`` (all unwired = refuse) take
     the per-stream kill-switch source and the phase 4b / attempt gates (dev: pass-through).
     ``error_scanner`` is the mid-stream error-frame detector (R11, default: no findings).
     **Group E.** ``phase_resolvers`` (optional) binds each route's resolver to the plan and phase.
     **GW14d.** ``/readyz`` gates state first, then the metrics directory; ``observer`` counts.
-    **GW16.** The single :class:`MiscRoute` is built via :func:`_build_misc_route`; ``catalog``
-    feeds Models; ``response_store`` backs ``/v1/responses``; ``mcp`` wires ``/v1/mcp``.
-    **GW15 §10.4.** The single :class:`ChatRoute` is built ONCE via :func:`_build_chat_route`.
-    **GW27.** ``org_limits`` is the org rate / burst / TPM decider shared by both routes.
-    ``build_app`` stays pure assembly (no store read, no task spawned); the serving bounds derive
-    from the injected ``ResourceContract`` / ``HoldbackConfig`` with no capacity literal in
-    ``edge``. Returns the ``async def app(scope, receive, send)`` callable.
+    **GW16.** One :class:`MiscRoute` via :func:`_build_misc_route`; ``catalog`` feeds Models;
+    ``response_store`` backs ``/v1/responses``; ``mcp`` wires ``/v1/mcp``; **GW31** ``rag`` wires
+    RAG + vector. **GW15 §10.4.** One :class:`ChatRoute` via :func:`_build_chat_route`. **GW27.**
+    ``org_limits`` is the org rate / burst / TPM decider. ``build_app`` stays pure assembly (no
+    store read, no task spawned); bounds derive from the injected ``ResourceContract`` /
+    ``HoldbackConfig`` with no capacity literal. Returns the ``app(scope, receive, send)`` callable.
     """
     cfg, _cfg_logs = load_holdback_config()
     # C38 (R13.1): the GIL-releasing scan executor, sized by `pool_size(PoolKind.SCANNER)` (no
@@ -334,7 +334,7 @@ def build_app(
         incident_gate=incident_gate,
         incident_recheck=incident_recheck,
     )
-    exact, prefix = build_routes(chat, misc, response_store, mcp)
+    exact, prefix = build_routes(chat, misc, response_store, mcp, rag)
     probe = _resolve_readiness(
         readiness=readiness, metrics_registry=metrics_registry, state_view=state_view
     )

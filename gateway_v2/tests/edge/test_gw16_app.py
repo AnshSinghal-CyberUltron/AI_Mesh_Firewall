@@ -97,6 +97,9 @@ _RESOLVED_ROUTES: tuple[tuple[str, str], ...] = (
 #: Surfaces that stay declared ``not_implemented`` placeholders (R1.3 / R11.3).
 _PLACEHOLDER_ROUTES: tuple[tuple[str, str], ...] = (
     ("POST", "/v1/mcp"),
+)
+#: GW31: with no RAG dependencies injected these answer a declared 503 ``rag_unavailable``.
+_RAG_UNAVAILABLE_ROUTES: tuple[tuple[str, str], ...] = (
     ("POST", "/v1/rag/query"),
     ("POST", "/v1/vector/query"),
 )
@@ -666,3 +669,8 @@ def test_build_app_misc_routes_resolve_while_deferred_surfaces_stay_not_implemen
         assert _is_not_implemented(transport), (
             f"placeholder {(method, path)!r} is not the not_implemented Error_Envelope"
         )
+    for method, path in _RAG_UNAVAILABLE_ROUTES:
+        transport = _drive(app, method, path)
+        assert transport.status() == 503, (method, path, transport.status())
+        body = transport.json_body()
+        assert isinstance(body, dict) and body["error"]["code"] == "rag_unavailable"

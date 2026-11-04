@@ -204,11 +204,15 @@ def test_route_table_has_one_responses_post_and_keeps_the_501s() -> None:
     app = _app(provider)
 
     async def run() -> None:
-        for path in ("/v1/mcp", "/v1/rag/query", "/v1/vector/query"):
+        for path in ("/v1/mcp",):
             status, _, raw = await _call(app, "POST", path, {})
             assert status == 501, (path, status)
             body = json.loads(raw)
             assert body["error"]["type"] == "not_implemented"
+        for path in ("/v1/rag/query", "/v1/vector/query"):
+            status, _, raw = await _call(app, "POST", path, {})
+            assert status == 503, (path, status)
+            assert json.loads(raw)["error"]["code"] == "rag_unavailable"
         status, _, _ = await _call(app, "POST", "/v1/responses", {"model": "m", "input": "hi"})
         assert status == 200
 

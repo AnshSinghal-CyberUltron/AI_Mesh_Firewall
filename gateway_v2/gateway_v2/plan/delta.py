@@ -65,6 +65,7 @@ def plan_from_record(record: SignedRecord, *, compiled_at: float) -> ExecutionPl
         streaming_mode=document.streaming_mode,
         compiled_at=compiled_at,
         controls=document.controls,
+        rag_settings=document.rag_settings,
     )
     return replace(
         compiled,

@@ -82,6 +82,7 @@ from gateway_v2.edge.dev_components import (
 from gateway_v2.edge.dev_mcp import build_dev_mcp
 from gateway_v2.edge.dev_metrics import build_dev_publisher
 from gateway_v2.edge.dev_plan_feed import DevPlanFeed, DevPlanWatch
+from gateway_v2.edge.dev_rag import attach_dev_surfaces
 from gateway_v2.edge.incident_passthrough import PassThroughIncidentGate
 from gateway_v2.edge.inflight_source import DevNoControlSource
 from gateway_v2.edge.mcp_deps import McpDeps
@@ -396,6 +397,7 @@ def build_dev_dependencies(
     plan_note = _attach_plan_watch(deps, cfg=cfg, feed=feed, contract=contract)
     store_note = _attach_response_store(deps, cfg=cfg, contract=contract)
     mcp, mcp_note = _attach_mcp(deps, cfg=cfg, env=env, contract=contract)
+    attach_dev_surfaces(deps, mcp, env, contract)
     exports, holdback = PerRequestExports(), HoldbackMetrics()
     runtime = deps.get("audit_runtime")
     publisher, metrics_note = build_dev_publisher(

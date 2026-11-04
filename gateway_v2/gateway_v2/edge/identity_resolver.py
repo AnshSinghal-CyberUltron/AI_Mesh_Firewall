@@ -60,7 +60,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
 
-from gateway_v2.admit.identity import Fetch, IdentityCache
+from gateway_v2.admit.identity import Fetch, IdentityCache, ProjectInvalid
 from gateway_v2.domain import posture
 from gateway_v2.domain.identity import Principal
 from gateway_v2.domain.state import StoreDataUnavailable
@@ -171,7 +171,9 @@ async def identity_of(resolver: IdentityResolver, scope: ASGIScope) -> IdentityO
     return IdentityOutcome.unverified() if identity is None else IdentityOutcome(identity)
 
 
-_IDENTITY_REFUSALS = frozenset({posture.INVALID_API_KEY, posture.SHARED_STATE_UNAVAILABLE})
+_IDENTITY_REFUSALS = frozenset(
+    {posture.INVALID_API_KEY, posture.SHARED_STATE_UNAVAILABLE, posture.PROJECT_INVALID}
+)
 
 
 def refusal_request_id(code: str) -> str | None:
@@ -316,6 +318,9 @@ class CachingIdentityResolver:
         so revocation and plan edits bind both the same way."""
         try:
             principal = await self._cache.resolve(key_hash, self._fetch)
+        except ProjectInvalid:
+            # GW31: the key record is signed but malformed; nothing about it is trusted.
+            return IdentityOutcome(None, posture.PROJECT_INVALID)
         except StoreDataUnavailable:
             # Stale / unavailable freshness, or the store did not answer: the key may be
             # valid, so this is a 503, never a 401 (R4.3).

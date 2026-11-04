@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Mapping
 from dataclasses import dataclass
 
 from gateway_v2.domain.category import Category
@@ -21,6 +22,7 @@ from gateway_v2.domain.plan import (
     StreamingMode,
     Surface,
 )
+from gateway_v2.domain.rag import RagSettings
 from gateway_v2.plan.controls_codec import controls_token
 
 SUPPORTED_STREAMING = frozenset({StreamingMode.INCREMENTAL, StreamingMode.STRICT_WITHHOLD})
@@ -137,6 +139,7 @@ def compile_plan(
     compiled_at: float,
     epoch: int = 1,
     controls: OrgControls = UNSET_CONTROLS,
+    rag_settings: Mapping[str, object] | None = None,
 ) -> ExecutionPlan:
     """Drop OFF rules. Reject unsupported streaming and regressing versions."""
     if not org_id.strip():
@@ -177,17 +180,27 @@ def compile_plan(
         plan_epoch = epoch
         sequence = 1
     ordered = tuple(sorted(kept, key=lambda rule: (rule.priority, rule.rule_id)))
+    from gateway_v2.plan.rag_settings import canonical_settings_json, parse_rag_settings
+
+    rag = parse_rag_settings(rag_settings)
+    content_hash = _hash_rules(ordered, controls)
+    if rag != RagSettings():
+        # Mixed in only when non-default, so every existing plan keeps its hash and version.
+        content_hash = hashlib.sha256(
+            f"{content_hash}\x1f{canonical_settings_json(rag)}".encode()
+        ).hexdigest()
     plan = ExecutionPlan(
         org_id=org_id,
         epoch=plan_epoch,
         sequence=sequence,
-        content_hash=_hash_rules(ordered, controls),
+        content_hash=content_hash,
         compiled_at=compiled_at,
         rules=ordered,
         required_detectors=frozenset(detectors),
         streaming_mode=streaming_mode,
         integrity_locked=True,
         controls=controls,
+        rag=rag,
     )
     if previous is not None and not _acceptable(plan, previous):
         raise CompileError("plan version regressed")

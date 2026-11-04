@@ -1,5 +1,4 @@
 """ResourceContract — the only module allowed to hold capacity-position literals."""
-
 from __future__ import annotations
 
 import dataclasses
@@ -12,6 +11,7 @@ from gateway_v2.runtime.errors import CapacityUnavailable, CapacityUnset
 from gateway_v2.runtime.kinds import CapacityHint, HardwareSignals, PoolKind
 from gateway_v2.runtime.resources_env import _env_map, _parse_override, _parse_owner_queue_ms
 from gateway_v2.runtime.resources_incident import IncidentBoundsMixin, check_incident_ordering
+from gateway_v2.runtime.resources_rag import RagBoundsMixin
 from gateway_v2.runtime.resources_routing import RoutingBoundsMixin
 from gateway_v2.runtime.resources_vector import VectorBoundsMixin
 
@@ -256,7 +256,7 @@ class McpBounds:
 
 
 @dataclass(frozen=True, slots=True)
-class ResourceContract(VectorBoundsMixin, RoutingBoundsMixin, IncidentBoundsMixin):
+class ResourceContract(VectorBoundsMixin, RagBoundsMixin, RoutingBoundsMixin, IncidentBoundsMixin):
     cpu_quota: float
     memory_limit: int
     fd_limit: int
