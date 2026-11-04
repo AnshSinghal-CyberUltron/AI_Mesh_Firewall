@@ -105,7 +105,7 @@ Stages that are real on the chat path, and only these:
 5. `model_output` — provider called, or `ran: false` / `action: skip` when the input decision blocked before dispatch.
 6. `output_guardrail` — the output `Decision`, or skipped when the provider was not called.
 
-`kill_switch`, `policy`, and `circuit_breaker` are not separate stages. v2 applies policy inside the resolver, and a synthetic `policy: allow` is the default-fill L14b-2 rejects. Six real stages is also the count at which the current UI stops synthesizing (`stages.length >= 6`). That match is convenient. It is not a reason to add a seventh empty stage.
+`kill_switch`, `policy`, and `model_input` are not separate stages (wording corrected by GW35 to the v3.1 runbook list; proposed, awaiting owner signature). v2 applies policy inside the resolver, and a synthetic `policy: allow` is the default-fill L14b-2 rejects. Six real stages is also the count at which the current UI stops synthesizing (`stages.length >= 6`). That match is convenient. It is not a reason to add a seventh empty stage.
 
 `flag` is a disposition the dev plan already produces for injection and jailbreak. The UI's `inferFinalAction` will surface it once `zeroshield.action` is `flag`. Do not collapse flag into allow.
 

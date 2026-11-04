@@ -28,7 +28,7 @@ from gateway_v2.domain.incident import GateVerdict, fail_closed_recheck
 from gateway_v2.edge.asgi_sse import ASGISend
 from gateway_v2.edge.cancel import KillLatch
 from gateway_v2.edge.chat_lifecycle import LifecycleOutcome
-from gateway_v2.edge.console_projection import console_from_holds
+from gateway_v2.edge.console_projection import refusal_console
 from gateway_v2.edge.request_holds import RequestHolds
 from gateway_v2.edge.route_emit import emit_error_code
 
@@ -127,7 +127,7 @@ async def first_attempt_refusal(
         send,
         code,
         holds.request_id or None,
-        console=console_from_holds(holds, output_action=None, provider_called=False),
+        console=refusal_console(holds, code),
         retry_after_s=verdict.retry_after_s,
     )
     return code

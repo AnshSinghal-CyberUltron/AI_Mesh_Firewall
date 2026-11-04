@@ -540,3 +540,54 @@ test("buildHonestTraceStages tags the stored deciding rule", () => {
   const scan = nodes.find((node) => node.id === "input_scan");
   assert.ok(scan.tags.includes("rule: dev-pii-redact"));
 });
+
+// ---- GW35: gateway-v2 vocabulary, source discriminator, not-reported ---------------------------
+import {
+  ACTION_BADGE as GW35_BADGE,
+  NOT_REPORTED,
+  STAGE_ACTION_VOCAB,
+  isGatewayV2Trace,
+  notReported,
+} from "./pipelineTrace.js";
+
+test("GW35: the stage-action vocabulary is the six words the gateway schema speaks", () => {
+  assert.deepEqual([...STAGE_ACTION_VOCAB].sort(), ["allow", "block", "error", "flag", "redact", "skip"]);
+  assert.equal(GW35_BADGE.error, "error");
+});
+
+test("GW35: error ranks below block and above redact in the verdict", () => {
+  const v = (...actions) => deriveStageVerdict(actions.map((action) => ({ name: "s", action, ran: true })));
+  assert.equal(v("allow", "error", "redact").action, "error");
+  assert.equal(v("error", "block").action, "block");
+  assert.equal(v("block", "error").action, "block");
+});
+
+test("GW35: ran:false with action error is shown as error, and ran:true never becomes skip", () => {
+  assert.equal(honestStageAction({ name: "input_scan", action: "error", ran: false }), "error");
+  assert.equal(honestStageAction({ name: "auth", action: "allow", ran: true, latency_ms: 0 }), "allow");
+});
+
+test("GW35: isGatewayV2Trace reads the source field, never the stage count", () => {
+  assert.equal(isGatewayV2Trace({ source: "gateway_v2" }), true);
+  assert.equal(isGatewayV2Trace({ metadata: { source: "gateway_v2" } }), true);
+  assert.equal(isGatewayV2Trace({ pipeline_trace: { stages: new Array(6).fill({}) } }), false);
+  assert.equal(isGatewayV2Trace(null), false);
+  assert.equal(notReported({ source: "gateway_v2" }), NOT_REPORTED);
+  assert.equal(notReported({}), "");
+});
+
+test("GW35: a v2 trace without total_latency_ms has no latency, never 0 or a client guess", () => {
+  const meta = { source: "gateway_v2", latency_ms: 12 };
+  const trace = { stages: [{ name: "auth", action: "allow", ran: true, latency_ms: 3 }] };
+  assert.equal(resolveTotalLatencyMs({ pipelineTrace: trace, meta, clientMs: 99 }), null);
+  assert.equal(resolveTotalLatencyMs({ pipelineTrace: { ...trace, total_latency_ms: 7 }, meta }), 7);
+  // v1 behaviour is unchanged
+  assert.equal(resolveTotalLatencyMs({ pipelineTrace: trace, meta: { latency_ms: 12 } }) > 0, true);
+});
+
+test("GW35: the final response reads as an upstream error, not a delivery", () => {
+  const out = buildHonestTraceStages([{ name: "model_output", action: "error", ran: true }], "error");
+  const last = out[out.length - 1];
+  assert.match(last.content, /Upstream error/);
+  assert.equal(last.badge, "error");
+});

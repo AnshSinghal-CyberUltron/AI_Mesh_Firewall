@@ -19,7 +19,7 @@ from gateway_v2.dispatch.provider import UpstreamRequest
 from gateway_v2.domain.decision import Disposition
 from gateway_v2.domain.incident import StreamBinding
 from gateway_v2.domain.plan import ExecutionPlan, Phase, Surface
-from gateway_v2.domain.posture import PLAN_UNAVAILABLE, STREAM_KILLED
+from gateway_v2.domain.posture import PLAN_UNAVAILABLE
 from gateway_v2.edge.asgi_sse import ASGISend
 from gateway_v2.edge.asgi_sse import ErrorFrameScan as _ErrorFrameScan
 from gateway_v2.edge.asgi_sse import TerminalLatch as _TerminalLatch
@@ -35,8 +35,8 @@ from gateway_v2.edge.inflight_source import RefusingControlSource
 from gateway_v2.edge.output_detectors import build_output_detectors
 from gateway_v2.edge.output_length import bounded_upstream
 from gateway_v2.edge.phase_resolvers import resolver_for
+from gateway_v2.edge.produced_holder import ProducedModeHolder, record_cut
 from gateway_v2.edge.request_holds import RequestHolds
-from gateway_v2.edge.route_emit import ProducedModeHolder
 from gateway_v2.edge.stream_control import FirstByteLatch, StreamAttempt, run_with_no_splice
 from gateway_v2.edge.stream_response import StreamResponse
 from gateway_v2.edge.stream_timeouts import StreamTimeout, StreamTimeouts
@@ -500,9 +500,7 @@ async def finish_stream(
     if reason is not None:
         # The pass-through loop ended normally after the cut and recorded "allow"; the trace
         # must not report a cut stream as allowed (a kill-switch cut publishes no action).
-        stats = produced.stats
-        if reason != STREAM_KILLED and getattr(stats, "output_action", None) == "allow":
-            stats.output_action = "block"  # type: ignore[union-attr]
+        record_cut(produced, reason)
         await put(encoder.error(reason))
         sent_terminal.set()
         await emit_produced_mode(send, encoder, produced, put)
@@ -530,7 +528,7 @@ async def emit_produced_mode(
     with no stats (every attempt failed byte-less) emits nothing.
     """
     stats = produced.stats
-    if stats is None:
+    if not produced.has_trace():
         return
     frame = encoder.trace(
         stream_trace_payload(produced, stats, bool(getattr(stats, "degenerated_to_strict", False)))

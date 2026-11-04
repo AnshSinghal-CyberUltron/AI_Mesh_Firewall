@@ -73,6 +73,8 @@ class CanaryTicketLike(Protocol):
 
     def reveal(self) -> str: ...
 
+_DISPOSITIONS = frozenset({"allow", "flag", "redact", "rewrite", "block"})
+
 
 class RequestHolds:
     """The per-request ledger of acquired holds, released exactly once in a ``finally``.
@@ -97,13 +99,19 @@ class RequestHolds:
         "_incident_cause",
         "_incident_retry_after_s",
         "_incident_underlying",
+        "_failure_code",
+        "_identity_resolved",
         "_input_decision",
+        "_key_fingerprint",
         "_org_id",
         "_org_id_charged",
         "_org_refund",
         "_org_tokens",
         "_output_decision",
         "_output_extras",
+        "_output_action",
+        "_output_rule",
+        "_plan_version",
         "_released",
         "_request_id",
         "_routing",
@@ -138,6 +146,12 @@ class RequestHolds:
         self._output_extras: Mapping[str, object] = {}
         self._tool_calls_released: int = 0
         self._tool_calls_withheld: int = 0
+        self._identity_resolved: bool = False
+        self._plan_version: str = ""
+        self._failure_code: str = ""
+        self._output_action: str = ""
+        self._output_rule: str = ""
+        self._key_fingerprint: str = ""
 
     def admitted(self, request_id: str) -> None:
         """Record that admission granted a slot for ``request_id`` (``complete``-d on exit)."""
@@ -242,6 +256,64 @@ class RequestHolds:
     @property
     def reroute(self) -> RerouteNote | None:
         return self._reroute
+    def note_identity_resolved(self) -> None:
+        """Record that the credential resolved to a tenant (the auth stage ran and allowed)."""
+        self._identity_resolved = True
+
+    def note_plan(self, version: str) -> None:
+        """Record the pinned plan version. Never fabricated: unset stays empty."""
+        self._plan_version = version
+
+    def note_failure(self, code: str) -> None:
+        """Record the first failure or refusal code. Later calls do not overwrite the cause."""
+        if code and not self._failure_code:
+            self._failure_code = code
+
+    def note_output_action(self, action: str | None, rule: str = "") -> None:
+        """Record the output guard action. Only the four dispositions are accepted, never ``error``.
+
+        Last write wins, so a policy ``block`` overrides an earlier synthetic allow. An empty,
+        ``None`` or non-disposition value is ignored and cannot blank a recorded action.
+        """
+        if action in _DISPOSITIONS:
+            self._output_action = action
+            self._output_rule = rule
+
+    def note_key_fingerprint(self, fingerprint: str) -> None:
+        """Record the 12-hex credential fingerprint (never the credential or its full hash)."""
+        self._key_fingerprint = fingerprint
+
+    @property
+    def identity_resolved(self) -> bool:
+        return self._identity_resolved
+
+    @property
+    def plan_version(self) -> str:
+        return self._plan_version
+
+    @property
+    def failure_code(self) -> str:
+        return self._failure_code
+
+    @property
+    def output_action(self) -> str:
+        return self._output_action
+
+    @property
+    def output_rule(self) -> str:
+        return self._output_rule
+
+    @property
+    def key_fingerprint(self) -> str:
+        return self._key_fingerprint
+
+    @property
+    def is_admitted(self) -> bool:
+        return self._admitted
+
+    @property
+    def is_spent(self) -> bool:
+        return self._spent
 
     @property
     def input_decision(self) -> Decision | None:

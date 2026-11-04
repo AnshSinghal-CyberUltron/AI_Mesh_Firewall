@@ -97,6 +97,7 @@ from gateway_v2.edge.routes import (
     build_routes,
     emit_response,
 )
+from gateway_v2.edge.unauth_audit import UnauthAuditGate
 from gateway_v2.edge.wire.openai import OpenAIRequestParser, OpenAIResponseRenderer
 from gateway_v2.edge.wire.openai_misc import MiscResponseRenderer
 from gateway_v2.egress.output_guard import OutputResolver
@@ -262,6 +263,7 @@ def build_app(
     control_factory: InFlightControlFactory | None = None,
     incident_gate: IncidentDecider | None = None,
     incident_recheck: Recheck | None = None,
+    unauth_audit: UnauthAuditGate | None = None,
 ) -> ASGIApplication:
     """Assemble the raw-ASGI serving skin (R2.1).
 
@@ -274,8 +276,8 @@ def build_app(
     and ``control_factory`` / ``incident_gate`` / ``incident_recheck`` (all unwired = refuse) take
     the per-stream kill-switch source and the phase 4b / attempt gates (dev: pass-through).
     ``error_scanner`` is the mid-stream error-frame detector (R11, default: no findings).
-    **Group E.** ``phase_resolvers`` (optional) binds each route's resolver to the plan and phase.
-    **GW14d.** ``/readyz`` gates state first, then the metrics directory; ``observer`` counts.
+    **Group E.** ``phase_resolvers`` binds each route's resolver to the plan and phase. **GW14d.**
+    ``/readyz`` gates state, then the metrics directory; ``observer`` counts.
     **GW16.** One :class:`MiscRoute` via :func:`_build_misc_route`; ``catalog`` feeds Models;
     ``response_store`` backs ``/v1/responses``; ``mcp`` wires ``/v1/mcp``; **GW31** ``rag`` wires
     RAG + vector. **GW15 §10.4.** One :class:`ChatRoute` via :func:`_build_chat_route`. **GW27.**
@@ -284,8 +286,7 @@ def build_app(
     ``HoldbackConfig`` with no capacity literal. Returns the ``app(scope, receive, send)`` callable.
     """
     cfg, _cfg_logs = load_holdback_config()
-    # C38 (R13.1): the GIL-releasing scan executor, sized by `pool_size(PoolKind.SCANNER)` (no
-    # thread-count literal); built once, shared across every stream, released on lifespan shutdown.
+    # C38 (R13.1): the scan executor, sized by `pool_size(PoolKind.SCANNER)`; shared by all streams.
     scan_executor = ScanExecutor(contract=contract)
     limits = org_limits if org_limits is not None else OrgLimits(contract)
     chat = _build_chat_route(
@@ -315,6 +316,7 @@ def build_app(
         control_factory=control_factory,
         incident_gate=incident_gate,
         incident_recheck=incident_recheck,
+        unauth_audit=unauth_audit,
     )
     misc = _build_misc_route(
         org_limits=limits,
@@ -378,6 +380,7 @@ def _build_chat_route(
     control_factory: InFlightControlFactory | None = None,
     incident_gate: IncidentDecider | None = None,
     incident_recheck: Recheck | None = None,
+    unauth_audit: UnauthAuditGate | None = None,
 ) -> ChatRoute:
     """Construct the single chat route. Unwired deps use their fail-closed defaults.
 
@@ -421,6 +424,7 @@ def _build_chat_route(
             incident_recheck if incident_recheck is not None else fail_closed_recheck
         ),
         tool_bounds=resolve_tool_bounds(contract),
+        unauth_audit=unauth_audit,
     )
 
 

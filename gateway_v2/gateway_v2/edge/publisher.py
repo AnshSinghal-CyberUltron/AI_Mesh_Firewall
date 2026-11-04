@@ -60,6 +60,7 @@ from gateway_v2.edge.cardinality import CardinalityDirectory
 from gateway_v2.edge.counters import PostureCounters, RejectionCounters
 from gateway_v2.edge.event_log import StructuredEventLog
 from gateway_v2.edge.incident_publish import IncidentPublication, incident_series_count
+from gateway_v2.edge.publisher_admit import admit_families
 from gateway_v2.edge.rates import ResetSafeRate
 from gateway_v2.edge.render import Family
 from gateway_v2.edge.series_count import HISTOGRAM_SERIES as _HISTOGRAM_SERIES
@@ -68,6 +69,7 @@ from gateway_v2.edge.series_count import OVERFLOW_SERIES as _OVERFLOW_SERIES
 from gateway_v2.edge.series_count import READ_FAILURES_SERIES as _READ_FAILURES_SERIES
 from gateway_v2.edge.series_count import WINDOWED_BUSY_SERIES_COUNT as _WINDOWED_BUSY_SERIES_COUNT
 from gateway_v2.edge.series_count import series_count as _series_count
+from gateway_v2.edge.unauth_audit import UnauthAuditCounters
 from gateway_v2.edge.windowed import DEFAULT_BOUNDS, WindowedBusyGauge, WindowedHistogram
 from gateway_v2.runtime.holdback_metrics import HoldbackMetrics
 from gateway_v2.runtime.resources import ResourceContract
@@ -184,6 +186,7 @@ class Publisher:
         "_audit_suppressed",
         "_incident",
         "_mcp_policy",
+        "_unauth",
     )
 
     def __init__(
@@ -206,8 +209,10 @@ class Publisher:
         contract: ResourceContract,
         clock: Callable[[], float],
         incident: IncidentPublication | None = None,
+        unauth: UnauthAuditCounters | None = None,
     ) -> None:
         self._incident = incident
+        self._unauth = unauth
         self._admission = admission
         self._quota = quota
         self._audit = audit
@@ -229,7 +234,9 @@ class Publisher:
         #: never recomputes it and the scrape-path assertion reads a constant. Invariant to the
         #: observed tenant count because the tenant term is the fixed ``K + 1`` (R15.3, Property 2).
         #: The term-by-term reconciliation is documented on :func:`_series_count`.
-        self.SERIES_COUNT: int = _series_count(contract) + (
+        self.SERIES_COUNT: int = _series_count(
+            contract, 0 if unauth is None else UnauthAuditCounters.SERIES_COUNT,
+        ) + (
             0 if incident is None else incident_series_count(contract)
         )  # GW29 terms
         # The Publisher's own read-failure indicator (R1.3), a real zero from construction.
@@ -275,6 +282,7 @@ class Publisher:
         contract: ResourceContract,
         clock: Callable[[], float],
         incident: IncidentPublication | None = None,
+        unauth: UnauthAuditCounters | None = None,
     ) -> Publisher:
         """Build a Publisher whose three mechanisms derive from ``contract`` + ``clock`` (the
         production path).
@@ -306,6 +314,7 @@ class Publisher:
             contract=contract,
             clock=clock,
             incident=incident,
+            unauth=unauth,
         )
 
     # ----------------------------------------------------------------------- #
@@ -336,7 +345,12 @@ class Publisher:
         # (1) flat producers — series() -> dict[str, float]. Each adapter returns its families and
         # the number of SERIES it rendered (labelled series within one family each count toward the
         # producer's SERIES_COUNT).
-        for adapter in (self._audit_families, self._rehydration_families, self._state_families):
+        for adapter in (
+            self._audit_families,
+            self._rehydration_families,
+            self._state_families,
+            self._unauth_families,
+        ):
             fams, count = self._guarded_flat(adapter)
             families.extend(fams)
             rendered += count
@@ -434,6 +448,12 @@ class Publisher:
         sentinel gauges which pass through unchanged (they are not rates — R5.5)."""
         return self._flat_scalar_families(self._state.series())
 
+    def _unauth_families(self) -> tuple[list[Family], int]:
+        """GW35 unauthenticated-audit counters; absent (0 series) when no gate is wired."""
+        if self._unauth is None:
+            return [], 0
+        return self._flat_scalar_families(self._unauth.series())
+
     def _flat_scalar_families(self, series: Mapping[str, float]) -> tuple[list[Family], int]:
         """Group a flat ``series()`` dict into typed scalar families, de-dup-safe (R1.4/1.5/1.7).
 
@@ -460,40 +480,8 @@ class Publisher:
     # ----------------------------------------------------------------------- #
 
     def _admit_families(self) -> tuple[list[Family], int]:
-        """The admission producer — per-queue scalars + the one oldest-age histogram (R1.6).
-
-        SERIES_COUNT = ``2·len(QUEUE_NAMES) + 3 + 1 + len(ShedReason) + 1 + 2`` = 22: the
-        histogram term is the ``+ 3``, every other term a scalar family.
-        """
-        reading = self._admission.snapshot()
-        families: list[Family] = []
-        scalars: dict[str, float] = {}
-        from gateway_v2.admit.metrics import PREFIX as ADMIT_PREFIX
-        from gateway_v2.admit.metrics import QUEUE_NAMES
-
-        for name in QUEUE_NAMES:
-            scalars[f'{ADMIT_PREFIX}_queue_depth{{queue="{name}"}}'] = float(
-                reading.queues.depth(name)
-            )
-            scalars[f'{ADMIT_PREFIX}_queue_oldest_age_seconds{{queue="{name}"}}'] = (
-                reading.queues.oldest_age_s(name)
-            )
-        scalars[f"{ADMIT_PREFIX}_admitted_total"] = float(reading.admitted_total)
-        for reason, count in reading.shed_total.items():
-            scalars[f'{ADMIT_PREFIX}_shed_total{{reason="{reason}"}}'] = float(count)
-        scalars[f"{ADMIT_PREFIX}_fail_open_total"] = float(reading.fail_open_total)
-        scalars[f"{ADMIT_PREFIX}_org_limits_table_full_total"] = float(
-            reading.org_limits_table_full_total
-        )
-        scalars[f"{ADMIT_PREFIX}_org_limits_slots_used"] = float(reading.org_limits_slots_used)
-        scalar_families, scalar_count = self._flat_scalar_families(scalars)
-        families.extend(scalar_families)
-        families.append(
-            render.render_histogram(
-                f"{ADMIT_PREFIX}_oldest_age_ms", reading.oldest_age_s_hist, DEFAULT_BOUNDS
-            )
-        )
-        return families, scalar_count + _HISTOGRAM_SERIES
+        """The admission producer: per-queue scalars + the oldest-age histogram (R1.6)."""
+        return admit_families(self._admission.snapshot(), self._flat_scalar_families)
 
     def _quota_families(self) -> tuple[list[Family], int]:
         """The budget-lease quota producer — three label-free scalars (R1.2). SERIES_COUNT = 3.

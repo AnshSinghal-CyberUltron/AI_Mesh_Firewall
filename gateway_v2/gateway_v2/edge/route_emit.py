@@ -13,9 +13,7 @@ from __future__ import annotations
 from gateway_v2.edge import errors
 from gateway_v2.edge.asgi_sse import ASGISend
 from gateway_v2.edge.console_projection import apply_projection
-from gateway_v2.edge.request_holds import RequestHolds
-from gateway_v2.egress.stream import StreamStats
-from gateway_v2.egress.strict import StrictStats
+from gateway_v2.edge.produced_holder import ProducedModeHolder
 
 __all__ = ("ProducedModeHolder", "emit_error_code", "emit_response")
 
@@ -67,23 +65,3 @@ async def emit_error_code(
     )
     await emit_response(send, apply_projection(response, console))
 
-
-class ProducedModeHolder:
-    """A per-request mutable sink for the pipeline's returned stats (GW13 C5).
-
-    Both ``StreamPipeline.run`` and ``StrictWithholdPipeline.run`` return a stats
-    value carrying ``produced_mode`` (and, on the INCREMENTAL side,
-    ``degenerated_to_strict``). The ``_attempt`` coroutine captures that return and
-    stashes it here so :meth:`ChatRoute._finish_stream` can emit the Produced_Mode
-    trace frame on the wire just before the terminal ``[DONE]`` marker. It is a
-    per-request LOCAL instance built in :meth:`ChatRoute._stream` (never a
-    module-level mutable, gated), so nothing request-scoped is shared on the frozen
-    route. ``stats`` is ``None`` until an attempt completed (a byte-less failure of
-    every attempt leaves it unset, in which case no trace frame is emitted).
-    """
-
-    __slots__ = ("holds", "stats")
-
-    def __init__(self, holds: RequestHolds | None = None) -> None:
-        self.holds = holds
-        self.stats: StreamStats | StrictStats | None = None

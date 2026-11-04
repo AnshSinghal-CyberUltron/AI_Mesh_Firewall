@@ -4,6 +4,7 @@
 // Per-stage action -> small status-badge label (honest per-stage; never a single
 // global action smeared across every stage).
 export const ACTION_BADGE = {
+  error: "error",
   block: "blocked",
   redact: "redacted",
   rewrite: "rewritten",
@@ -15,6 +16,21 @@ export const ACTION_BADGE = {
   allow: "allowed",
 };
 
+// GW35: the stage-action vocabulary the gateway-v2 console schema speaks. A literal array so
+// `lint/check_console_inventory` can compare it with `audit/console_schema.STAGE_ACTION_VOCAB`.
+export const STAGE_ACTION_VOCAB = ["allow", "flag", "redact", "rewrite", "block", "error", "skip"];
+export const NOT_REPORTED = "Not reported by gateway v2";
+export const ERROR_LABEL = "Upstream error";
+// A gateway-v2 body or event says so itself: `source: "gateway_v2"` on a live response or an
+// `amf.trace` frame, `metadata.source` on a threat-feed event. The stage count never decides it.
+export function isGatewayV2Trace(body) {
+  if (!body || typeof body !== "object") return false;
+  return body.source === "gateway_v2" || body.metadata?.source === "gateway_v2";
+}
+// The text to show for a field gateway v2 does not produce (never 0, never a default).
+export function notReported(body) {
+  return isGatewayV2Trace(body) ? NOT_REPORTED : "";
+}
 export const STAGE_LABELS = {
   auth: "Auth",
   rate_limit: "Rate Limit",
@@ -88,7 +104,7 @@ export function honestStageAction(stage) {
   return a;
 }
 
-const _STAGE_SEVERITY = { block: 3, error: 3, redact: 2, rewrite: 2, flag: 1, reroute: 1, monitor: 0, skip: 0, allow: 0, pass: 0 };
+const _STAGE_SEVERITY = { block: 4, error: 3, redact: 2, rewrite: 2, flag: 1, reroute: 1, monitor: 0, skip: 0, allow: 0, pass: 0 };
 const _STAGE_SCORE = { block: 90, error: 90, redact: 75, rewrite: 75, flag: 60, reroute: 40 };
 
 /** Lift score/action from stage badges including unenforced injection BLOCK recs. */
@@ -180,7 +196,9 @@ export function buildHonestTraceStages(realStages, finalAction, ctx = {}) {
     content:
       fa === "block"
         ? "[Response blocked — not delivered to client]"
-        : fa === "redact"
+        : fa === "error"
+          ? "[Upstream error — no response delivered]"
+          : fa === "redact"
           ? ctx.sanitizedOutput || "(sensitive spans redacted)"
           : ctx.rawOutput || "(delivered)",
     badge: ACTION_BADGE[fa] || fa,
@@ -245,6 +263,10 @@ export function resolveTotalLatencyMs(sources = {}) {
   const meta = sources.meta || {};
   const extra = meta.extra || {};
   const trace = resolvePipelineTrace({ ...sources, meta, extra });
+  if (isGatewayV2Trace(sources) || isGatewayV2Trace(meta) || isGatewayV2Trace(sources.logData)) {
+    // gateway v2 reports no latency unless the trace carries one: no default, no client guess.
+    return finiteMs(trace?.total_latency_ms);
+  }
 
   const fromTrace = finiteMs(trace?.total_latency_ms);
   if (fromTrace != null && fromTrace > 0) return fromTrace;

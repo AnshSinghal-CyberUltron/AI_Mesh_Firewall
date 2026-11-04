@@ -68,7 +68,7 @@ from gateway_v2.edge.chat_deps import (
 from gateway_v2.edge.chat_lifecycle import LifecycleOutcome
 from gateway_v2.edge.chat_stream import ChatStream, finish_stream
 from gateway_v2.edge.console_projection import (
-    console_from_holds,
+    refusal_console,
 )
 from gateway_v2.edge.disconnect import StreamingDone, run_until_disconnect
 from gateway_v2.edge.error_frame_scan import ErrorFrameScanner
@@ -98,6 +98,7 @@ from gateway_v2.edge.request_holds import RequestHolds
 from gateway_v2.edge.responses_store import ResponseStore
 from gateway_v2.edge.route_emit import ProducedModeHolder, emit_error_code, emit_response
 from gateway_v2.edge.stream_response import StreamResponse
+from gateway_v2.edge.unauth_audit import UnauthAuditGate
 from gateway_v2.edge.wire.openai import (
     CanonicalRequest,
     OpenAIRequestParser,
@@ -250,6 +251,8 @@ class ChatRoute:
     tool_bounds: ToolBounds | None = None
     #: GW34. The epoch clock stamped into a stream's ``created`` (``clock`` is monotonic).
     wall_clock_s: Callable[[], float] = time.time
+    #: GW35. Bounds audit records for a failed credential (no tenant). ``None`` drops them.
+    unauth_audit: UnauthAuditGate | None = None
 
     async def handle(self, scope: ASGIScope, receive: ASGIReceive, send: ASGISend) -> None:
         """Serve a chat/completions request end-to-end (R2.2, R7, R10, §10.4).
@@ -317,7 +320,7 @@ class ChatRoute:
             if killed:
                 refused_code = STREAM_KILLED
             emit_chat_audit(
-                self.audit, holds, refused_code, observer=self.observer,
+                self.audit, holds, refused_code, observer=self.observer, gate=self.unauth_audit,
                 detail=_tool_call_detail(holds),
             )
             holds.release(self.admission, self.quota)
@@ -357,6 +360,8 @@ class ChatRoute:
             # GW36 S3 (N11): identity's refusal (the only post-parse one with no id yet) is plain
             # HTTP whatever `stream` asked, as OpenAI's 401 is, with a random id.
             request_id, req = minted, None
+            if holds is not None:
+                holds.note_request(minted)
         if code in errors.INCIDENT_HTTP_CODES:
             # GW29 (6.4a): HTTP 503 + Retry-After even for a streaming request; no SSE head yet.
             await render_incident_refusal(send, code, request_id, holds, retry_after_s)
@@ -364,9 +369,7 @@ class ChatRoute:
         del req  # GW34: every post-parse refusal is a plain HTTP error, stream or not (R7)
         await emit_error_code(
             send, code, request_id, param, self.contract.max_output_tokens_boundary(),
-            None if holds is None else console_from_holds(
-                holds, output_action=None, provider_called=False,
-            ),
+            refusal_console(holds, code),
         )
 
     async def first_attempt_refusal(
@@ -409,14 +412,10 @@ class ChatRoute:
             holds = RequestHolds()
 
         async def emit_error(code: str) -> None:
-            dispatched = holds.dispatched
             await emit_error_code(
                 send, code, holds.request_id or None, None,
                 self.contract.max_output_tokens_boundary(),
-                console_from_holds(
-                    holds, output_action="block" if dispatched else None,
-                    provider_called=dispatched,
-                ),
+                refusal_console(holds, code),
                 # GW29 6.4a under GW34 deferred start: a pre-byte incident cut is the 503 with
                 # the retry hints, as the first-attempt refusal is (None: no incident, no hint).
                 retry_after_s=holds.incident_retry_after_s,
@@ -434,6 +433,7 @@ class ChatRoute:
         )
         encoder = SSEEncoder(identity=identity)
         if verdict.code is not None:
+            holds.note_failure(verdict.code)  # GW35: no provider opened; audit reads the cause
             if plain_pre_byte:
                 await response.fail_pre_byte(verdict.code)
                 return

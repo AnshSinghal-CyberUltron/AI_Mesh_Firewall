@@ -323,6 +323,13 @@ AGENT_API_KEY = os.environ.get("AGENT_API_KEY", "").strip()
 # Falls back to AGENT_API_KEY when unset.
 GATEWAY_INTERNAL_API_KEY = os.environ.get("GATEWAY_INTERNAL_API_KEY", "").strip()
 
+# GW35: which gateway the control plane fronts. ``v1`` (default) forwards every proxied admin and
+# MCP call as before. ``v2`` answers the calls gateway-v2 does not implement with 410
+# ``retired_on_gateway_v2`` and never contacts the gateway. Anything else refuses to start: a typo
+# must not silently keep forwarding retired routes.
+AMF_GATEWAY_BACKEND = os.environ.get("AMF_GATEWAY_BACKEND", "v1")
+if AMF_GATEWAY_BACKEND not in ("v1", "v2"):
+    raise ImproperlyConfigured(f"AMF_GATEWAY_BACKEND must be 'v1' or 'v2', got {AMF_GATEWAY_BACKEND!r}")
 # Policy audit: when True, store prompt/response snippets and hashes in EnforcementEvent metadata (Phase 3).
 POLICY_AUDIT_STORE_PROMPT_RESPONSE = os.environ.get("POLICY_AUDIT_STORE_PROMPT_RESPONSE", "true").lower() in (
     "true",

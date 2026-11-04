@@ -35,6 +35,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from core.admin_views import IsAdminOrSuperuser
+from core.retired_routes import is_retired, retired_response
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +63,8 @@ def _envelope_error(message: str, code: str, status: int) -> Response:
 
 
 def _proxy(method: str, gw_path: str, payload: dict | None = None) -> Response:
+    if is_retired(gw_path):
+        return retired_response(gw_path)
     secret = _gateway_internal_secret()
     if not secret:
         logger.error("Gateway admin proxy: GATEWAY_INTERNAL_API_KEY not configured")

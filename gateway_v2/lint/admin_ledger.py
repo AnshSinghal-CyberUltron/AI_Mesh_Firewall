@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import re
+import sys
 from pathlib import Path
 
 LEDGER_PATH = Path("docs/plans/evidence/2026-10-26-gw14b/admin-ledger/routes.json")
@@ -81,6 +82,38 @@ def compare(repo: Path) -> list[str]:
     return messages
 
 
+def pending_signature(repo: Path) -> list[str]:
+    """Paths whose row asks for an owner signature and has none (``signed`` present, null)."""
+    document = json.loads((repo / LEDGER_PATH).read_text(encoding="utf-8"))
+    rows = document.get("routes", []) if isinstance(document, dict) else []
+    return sorted(
+        str(row["path"])
+        for row in rows
+        if isinstance(row, dict) and "signed" in row and row["signed"] is None
+    )
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Print ledger errors and unsigned rows. ``--require-signed`` also fails on unsigned rows.
+
+    This card does not forge a signature: an unsigned row is "pending signature" and exits 0
+    locally. The human cutover gate (GW21/GW23) runs with ``--require-signed``.
+    """
+    from lint.console_inventory import repo_root
+
+    args = sys.argv[1:] if argv is None else argv
+    repo = repo_root()
+    messages = compare(repo)
+    pending = pending_signature(repo)
+    for message in messages:
+        print(message)
+    for path in pending:
+        print(f"{path}: pending signature")
+    if messages:
+        return 1
+    return 1 if pending and "--require-signed" in args else 0
+
+
 def _row_errors(
     path: str,
     row: dict[str, object],
@@ -95,7 +128,9 @@ def _row_errors(
     if not isinstance(reason, str) or not reason.strip():
         messages.append(f"{path} has no reason")
     callers = scanned.get(path)
-    if callers is None:
+    if callers is None and decision == "retire" and row.get("callers") == []:
+        pass  # a retired route no caller reaches (GW35 D-11): recorded, not served
+    elif callers is None:
         messages.append(f"{path} is in the ledger but nothing calls it")
     elif row.get("callers") != callers:
         messages.append(f"{path} callers do not match the tree")
@@ -137,3 +172,7 @@ def _files(root: Path) -> list[Path]:
         and not path.name.endswith(".test.js")
         and not path.name.endswith(".test.jsx")
     )
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

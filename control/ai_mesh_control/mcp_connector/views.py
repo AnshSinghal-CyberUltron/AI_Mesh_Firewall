@@ -30,6 +30,8 @@ from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
+from core.retired_routes import is_retired
+
 from . import mcp_firewall_client
 from .models import MCPEvent, MCPServerRegistration, MCPScanControl, MCPToolRegistration
 from .scan_controls import resolve_effective_controls, serialize_control
@@ -372,6 +374,8 @@ def _mirror_oauth_token_to_gateway(server, tok: dict) -> None:
     must find the token after control ``_store_oauth_tokens`` or refresh.
     Failures are logged and swallowed — the control DB row remains authoritative.
     """
+    if is_retired("/v1/mcp/internal/oauth-token-mirror"):
+        return
     org = getattr(server, "organization", None)
     org_slug = getattr(org, "slug", "") if org else ""
     server_url = (getattr(server, "url", "") or "").strip()
@@ -749,6 +753,8 @@ def _discover_tools_via_gateway(server, org) -> tuple[list[dict], str | None]:
     misleading ``synced: 0`` with no cause -- the single biggest reason
     the MCP sync feature appeared silently broken.
     """
+    if is_retired("/v1/mcp/internal/discover-tools"):
+        return [], "retired_on_gateway_v2: tool discovery is not served by gateway-v2."
     gateway_url = (
         (getattr(settings, "GATEWAY_URL", "") or "").strip().rstrip("/")
         or os.environ.get("GATEWAY_URL", "").strip().rstrip("/")
@@ -981,6 +987,10 @@ def _call_tool_via_gateway(
     (parity with org_mcp_jsonrpc). Control already evaluated policies
     with the same actor; the gateway re-uses it for field projection.
     """
+    if is_retired("/v1/mcp/internal/tools-call"):
+        raise _MCPToolCallError(
+            "retired_on_gateway_v2: tool execution is not served by gateway-v2.", http_status=410
+        )
     gateway_url = (
         (getattr(settings, "GATEWAY_URL", "") or "").strip().rstrip("/")
         or os.environ.get("GATEWAY_URL", "").strip().rstrip("/")
@@ -1777,6 +1787,19 @@ class MCPToolCallView(APIView):
             # M6: honor a typed http_status (404 unknown-tool / 400 bad-request);
             # default 502 only for genuine outages (plain RequestException).
             _http_status = getattr(exc, "http_status", status.HTTP_502_BAD_GATEWAY)
+            if _http_status == 410:
+                # GW35: AMF_GATEWAY_BACKEND=v2 retired this route; answer in the proxy envelope.
+                return Response(
+                    {
+                        "status": "error",
+                        "data": {
+                            "code": "retired_on_gateway_v2",
+                            "message": "Tool execution is not served by gateway-v2.",
+                            "path": "/v1/mcp/internal/tools-call",
+                        },
+                    },
+                    status=410,
+                )
             _err_label = (
                 "Tool not found" if _http_status == 404
                 else "Invalid tool request" if _http_status == 400

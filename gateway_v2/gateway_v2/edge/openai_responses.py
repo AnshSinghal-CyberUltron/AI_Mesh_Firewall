@@ -34,7 +34,7 @@ from gateway_v2.edge.asgi_sse import (
     start_sse,
 )
 from gateway_v2.edge.audit_emit import emit_chat_audit
-from gateway_v2.edge.console_projection import console_from_holds
+from gateway_v2.edge.console_projection import refusal_console
 from gateway_v2.edge.identity_resolver import identity_of, refusal_request_id
 from gateway_v2.edge.openai_chat import REFUSE_IDENTITY_UNRESOLVED, ChatSurface, LifecycleOutcome
 from gateway_v2.edge.request_holds import RequestHolds
@@ -146,7 +146,10 @@ class ResponsesRoute:
                 return
             await self._non_stream(send, prepared, req, outcome, holds)
         finally:
-            emit_chat_audit(self.chat.audit, holds, refused_code, observer=self.chat.observer)
+            emit_chat_audit(
+                self.chat.audit, holds, refused_code, observer=self.chat.observer,
+                gate=self.chat.unauth_audit,
+            )
             holds.release(self.chat.admission, self.chat.quota)
 
     async def handle_get(self, scope: ASGIScope, receive: ASGIReceive, send: ASGISend) -> None:
@@ -239,13 +242,16 @@ class ResponsesRoute:
         self, send: ASGISend, outcome: LifecycleOutcome, holds: RequestHolds
     ) -> None:
         """The lifecycle refusal as JSON, with the console object when a decision exists."""
+        code = outcome.refuse_code or REFUSE_IDENTITY_UNRESOLVED
+        if outcome.request_id is None and (minted := refusal_request_id(code)) is not None:
+            holds.note_request(minted)  # keys the audit row; the response id is unchanged
         await emit_error_code(
             send,
-            outcome.refuse_code or REFUSE_IDENTITY_UNRESOLVED,
+            code,
             outcome.request_id,
             outcome.refuse_param,
             self.chat.contract.max_output_tokens_boundary(),
-            console_from_holds(holds, output_action=None, provider_called=False),
+            refusal_console(holds, code),
             outcome.retry_after_s,
         )
 

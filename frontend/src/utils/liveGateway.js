@@ -9,7 +9,12 @@ import {
   formatRoutingReason,
   isRoutingReroute,
 } from "../constants/zeroshieldBrand.js";
-import { resolveTotalLatencyMs, resolveTtftMs, formatRouteDestination } from "./pipelineTrace.js";
+import {
+  formatRouteDestination,
+  isGatewayV2Trace,
+  resolveTotalLatencyMs,
+  resolveTtftMs,
+} from "./pipelineTrace.js";
 
 export function chatCompletionBody({
   prompt,
@@ -227,14 +232,17 @@ export function normalizeStreamChatPipelineResult(
 
   const terminal = sseResult?.terminalTracePayload;
   const terminalZs = terminal?.zeroshield || {};
+  const v2Final = isGatewayV2Trace(terminal) ? terminal.pipeline_trace?.final_action : "";
   const synthetic = {
+    source: isGatewayV2Trace(terminal) ? "gateway_v2" : undefined,
     choices: sseResult?.aggregatedContent
       ? [{ message: { content: sseResult.aggregatedContent } }]
       : [],
     pipeline_trace: terminal?.pipeline_trace,
     zeroshield: {
       ...terminalZs,
-      action: blockedInStream ? "block" : terminalErr ? "error" : (terminalZs.action || "allow"),
+      action: v2Final
+        || (blockedInStream ? "block" : terminalErr ? "error" : (terminalZs.action || "allow")),
       threat_type: blockedInStream ? (terminalErr?.type || "output_blocked") : (terminalZs.threat_type || ""),
       stream: true,
       stream_scan_mode: scanMode,
@@ -255,11 +263,11 @@ export function normalizeStreamChatPipelineResult(
     stream_scan_mode: scanMode,
     aggregated_content: sseResult?.aggregatedContent || "",
     ttft_ms: ttftMs ?? normalized.ttft_ms,
-    final_action: blockedInStream
+    final_action: v2Final || (blockedInStream
       ? "block"
       : terminalErr
         ? "error"
-        : normalized.final_action,
+        : normalized.final_action),
   };
 }
 
@@ -371,6 +379,10 @@ function isContentPolicyBlock(data, httpStatus) {
 
 function inferFinalAction(data, httpStatus, zs) {
   if (data?.final_action) return data.final_action;
+  // gateway v2 states its verdict in the trace; never re-derive it from the HTTP status.
+  if (isGatewayV2Trace(data) && data.pipeline_trace?.final_action) {
+    return data.pipeline_trace.final_action;
+  }
   const code = String(data?.code || "").toLowerCase();
   if (httpStatus === 422 && INFERENCE_SETUP_CODES.has(code)) return "needs_model";
   if (isUpstreamProviderError(data, httpStatus)) return "error";
@@ -410,6 +422,13 @@ function blockingStageName(stages) {
   return name;
 }
 
+/** First stage the record marked error (an upstream or internal fault). Empty when none did. */
+export function erroringStageName(stages) {
+  for (const stage of stages || []) {
+    if (String(stage?.action || "").toLowerCase() === "error" && stage?.name) return stage.name;
+  }
+  return "";
+}
 /** Last pipeline stage that ran input/output scanning (informational, not a block). */
 export function inferDetectionCheckpoint(data, zs) {
   const stages = data?.pipeline_trace?.stages || data?.stages || [];
@@ -1122,6 +1141,31 @@ function hasOutputGuardSignal(zs, data) {
   );
 }
 
+/**
+ * A gateway-v2 body: show exactly the stages it returned. No template stage is added
+ * (`kill_switch`, `policy`, `model_input`), no latency or routing detail is invented, and the
+ * verdict is the trace's own `final_action`. Fields v2 does not produce stay absent.
+ */
+function normalizeGatewayV2Result(data, context) {
+  const trace = data.pipeline_trace;
+  const stages = trace.stages.map((stage) => ({ ...stage }));
+  const zs = data.zeroshield || {};
+  const finalAction = trace.final_action || zs.action || "allow";
+  const { pipeline_trace: _omitTrace, ...rest } = data;
+  return {
+    ...rest,
+    final_action: finalAction,
+    blocked_by: blockingStageName(stages),
+    errored_stage: erroringStageName(stages),
+    zeroshield: zs,
+    request_id: zs.request_id || data.request_id,
+    stages,
+    plan_version: trace.plan_version,
+    total_latency_ms: resolveTotalLatencyMs({ pipelineTrace: trace, source: "gateway_v2" }),
+    estimated_tokens: context.estimatedTokens ?? estimateRequestTokens(context.prompt, context.maxTokens),
+    pipeline_live: true,
+  };
+}
 /** Map /v1/chat/completions response into Attack Simulator shape (full stages + final_action). */
 export function normalizeChatPipelineResult(data, httpStatus, context = {}) {
   const routingHeaders = extractRoutingFromHeaders(context.responseHeaders);
@@ -1158,6 +1202,9 @@ export function normalizeChatPipelineResult(data, httpStatus, context = {}) {
     };
   };
 
+  if (isGatewayV2Trace(data) && Array.isArray(data.pipeline_trace?.stages)) {
+    return normalizeGatewayV2Result(data, context);
+  }
   if (data?.pipeline_trace?.stages?.length >= 6) {
     const zs = mergeScanFieldsFromTrace(data.zeroshield || {}, data.pipeline_trace);
     const finalAction = inferFinalAction(data, httpStatus, zs);

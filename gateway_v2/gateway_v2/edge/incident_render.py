@@ -9,7 +9,7 @@ deliberately differs from other post-parse refusals. HTTP objects exist only her
 from __future__ import annotations
 
 from gateway_v2.edge.asgi_sse import ASGISend
-from gateway_v2.edge.console_projection import console_from_holds
+from gateway_v2.edge.console_projection import refusal_console
 from gateway_v2.edge.request_holds import RequestHolds
 from gateway_v2.edge.route_emit import emit_error_code
 
@@ -24,11 +24,7 @@ async def render_incident_refusal(
     retry_after_s: float | None,
 ) -> None:
     """Emit the 503 JSON envelope for an incident ``code`` (never an SSE head)."""
-    console = (
-        None
-        if holds is None
-        else console_from_holds(holds, output_action=None, provider_called=False)
-    )
+    console = refusal_console(holds, code)
     await emit_error_code(
         send, code, request_id, None, None, console, retry_after_s
     )

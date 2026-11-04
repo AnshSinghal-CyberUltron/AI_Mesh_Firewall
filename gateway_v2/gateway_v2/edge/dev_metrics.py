@@ -21,6 +21,7 @@ from gateway_v2.audit.metrics import AuditMetrics
 from gateway_v2.edge.dev_audit import DevAudit
 from gateway_v2.edge.event_log import StructuredEventLog
 from gateway_v2.edge.publisher import Publisher
+from gateway_v2.edge.unauth_audit import UnauthAuditCounters
 from gateway_v2.runtime.holdback_metrics import HoldbackMetrics
 from gateway_v2.runtime.resources import ResourceContract
 from gateway_v2.runtime.state_metrics import StateMetricsRecorder
@@ -52,6 +53,7 @@ def build_dev_publisher(
     audit: DevAudit | None,
     exports: PerRequestExports,
     holdback: HoldbackMetrics,
+    unauth: UnauthAuditCounters | None = None,
 ) -> tuple[Publisher, str]:
     """``(publisher, boot log line)``."""
     clock = time.monotonic
@@ -66,6 +68,7 @@ def build_dev_publisher(
         event_log=StructuredEventLog.from_contract(contract, clock=clock),
         contract=contract,
         clock=clock,
+        unauth=unauth,
     )
     log = (
         f"boot: metrics_registry -> GW14d Publisher ({publisher.SERIES_COUNT} series: admission, "

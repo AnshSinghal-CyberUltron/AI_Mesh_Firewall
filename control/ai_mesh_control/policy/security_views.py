@@ -1324,9 +1324,9 @@ class SocKpisView(AnalyticsConcurrencyMixin, APIView):
         scoped = _enforcement_events_for_request(
             request, EnforcementEvent.objects.filter(created_at__gte=since)
         )
-        from policy.v2_shadow import exclude_shadow, only_shadow
+        from policy.v2_shadow import exclude_shadow, only_shadow, v2_totals
 
-        shadow = soc_kpis_from_events(only_shadow(scoped))
+        shadow = v2_totals(only_shadow(scoped))
         if org_id is not None:
             from policy.analytics_rollup import soc_kpis_from_rollup
 
@@ -1382,11 +1382,7 @@ class SocKpisView(AnalyticsConcurrencyMixin, APIView):
                 "latency_distribution": latency_distribution,
                 "health_radar": health_radar,
                 "avg_latency_ms": avg_latency_ms,
-                "gateway_v2": {
-                    "total_threats": int(shadow["total"] or 0),
-                    "blocked": int(shadow["blocked"] or 0),
-                    "redacted": int(shadow["redacted"] or 0),
-                },
+                "gateway_v2": shadow,
             },
             "rollup" if org_id is not None else "raw",
         )

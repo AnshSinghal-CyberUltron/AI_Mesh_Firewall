@@ -517,6 +517,7 @@
    "field": "final_action",
    "files": [
     "frontend/src/components/LogDetailPage.jsx",
+    "frontend/src/utils/liveGateway.js",
     "frontend/src/utils/pipelineTrace.js"
    ],
    "via": "pipeline_trace"
@@ -957,7 +958,8 @@
     "frontend/src/components/RAGAttackTrustSimulator.jsx",
     "frontend/src/components/module-specific-log-charts.jsx",
     "frontend/src/components/rag/SemanticSearchPanel.jsx",
-    "frontend/src/hooks/useFirewallData.js"
+    "frontend/src/hooks/useFirewallData.js",
+    "frontend/src/utils/pipelineTrace.js"
    ],
    "via": "unscoped"
   },
@@ -1850,7 +1852,8 @@
    "field": "source",
    "files": [
     "frontend/src/components/LogDetailPage.jsx",
-    "frontend/src/components/firewall-module-utils.js"
+    "frontend/src/components/firewall-module-utils.js",
+    "frontend/src/utils/pipelineTrace.js"
    ],
    "via": "enforcement_event"
   },
@@ -1863,7 +1866,8 @@
     "frontend/src/components/ModelStatePanel.jsx",
     "frontend/src/components/module-specific-log-charts.jsx",
     "frontend/src/components/simulator/RAGIngestionPanel.jsx",
-    "frontend/src/hooks/useFirewallData.js"
+    "frontend/src/hooks/useFirewallData.js",
+    "frontend/src/utils/pipelineTrace.js"
    ],
    "via": "unscoped"
   },

@@ -36,6 +36,10 @@ from gateway_v2.domain.decision import DecisionRecord, Transformation
 from gateway_v2.domain.incident import INCIDENT_CAUSES
 
 SCHEMA_VERSION = 1
+UNAUTHENTICATED_ORG = "_unauthenticated"
+"""Reserved org for a record whose credential did not resolve to a tenant (GW35). The gateway never
+guesses a tenant; the control plane maps this stream to an org explicitly
+(`AMF_V2_AUDIT_ORG_MAP`)."""
 """Bump when a field changes meaning or disappears. Additions do not need it; GW14b reads by
 name and a reader that finds an unexpected version must say so rather than interpret it."""
 
@@ -206,6 +210,32 @@ def admission(
         outcome=outcome,
         recorded_at_ns=recorded_at_ns,
         detail={"reason": reason, "status": status},
+    )
+
+
+def output_failure(
+    *,
+    request_id: str,
+    org_id: str,
+    reason: str,
+    failure_class: str,
+    recorded_at_ns: int,
+    status: int,
+) -> AuditRecord:
+    """An OUTPUT-phase record for a dispatched request that ended without an output decision.
+
+    ``failure_class`` is ``operational`` (an upstream or stream fault, shown as ``error``) or
+    ``policy`` (a cut that fails closed as ``block``). No schema bump: ``detail`` carries it.
+    """
+    if not reason:
+        raise ValueError("an output failure record needs a reason")
+    return AuditRecord(
+        request_id=request_id,
+        org_id=org_id,
+        phase=AuditPhase.OUTPUT,
+        outcome=REJECTED,
+        recorded_at_ns=recorded_at_ns,
+        detail={"reason": reason, "failure_class": failure_class, "status": status},
     )
 
 

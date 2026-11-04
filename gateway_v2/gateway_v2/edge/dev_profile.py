@@ -90,6 +90,7 @@ from gateway_v2.edge.inflight_source import DevNoControlSource
 from gateway_v2.edge.mcp_deps import McpDeps
 from gateway_v2.edge.responses_store import ValkeyResponseStore
 from gateway_v2.edge.routing_boot import bounds_line, build_dev_routing
+from gateway_v2.edge.unauth_audit import UnauthAuditCounters, build_unauth_gate
 from gateway_v2.edge.wire.sse import SSEDecoder
 from gateway_v2.runtime.errors import CapacityUnavailable, CapacityUnset
 from gateway_v2.runtime.holdback_metrics import HoldbackMetrics
@@ -395,12 +396,7 @@ def build_dev_dependencies(
         "incident_recheck": PassThroughIncidentGate().recheck,
     }
     audit_note = _attach_audit(
-        deps,
-        cfg=cfg,
-        budget=budget,
-        queue_depth=bounds.audit_depth,
-        env=env,
-        contract=contract,
+        deps, cfg=cfg, budget=budget, queue_depth=bounds.audit_depth, env=env, contract=contract,
     )
     plan_note = _attach_plan_watch(deps, cfg=cfg, feed=feed, contract=contract)
     store_note = _attach_response_store(deps, cfg=cfg, contract=contract)
@@ -408,6 +404,7 @@ def build_dev_dependencies(
     attach_dev_surfaces(deps, mcp, env, contract)
     exports, holdback = PerRequestExports(), HoldbackMetrics()
     runtime = deps.get("audit_runtime")
+    gate = deps["unauth_audit"] = build_unauth_gate(contract, time.monotonic)
     publisher, metrics_note = build_dev_publisher(
         contract=contract,
         admission=admission_metrics,
@@ -415,6 +412,7 @@ def build_dev_dependencies(
         audit=runtime if isinstance(runtime, DevAudit) else None,
         exports=exports,
         holdback=holdback,
+        unauth=UnauthAuditCounters(gate),
     )
     if mcp is not None and mcp.policy_metrics is not None:
         publisher.attach_mcp_policy(mcp.policy_metrics)  # GW17c series + enforcement version

@@ -43,10 +43,11 @@ from gateway_v2.detect.conditions import PolicyRegexRefusal
 from gateway_v2.dispatch.provider import UpstreamRequest
 from gateway_v2.domain.channels import META_CHANNELS
 from gateway_v2.domain.decision import Decision, Disposition, most_restrictive
+from gateway_v2.domain.failure_class import is_operational_failure
 from gateway_v2.domain.plan import ExecutionPlan, Phase, Surface
 from gateway_v2.edge import errors
 from gateway_v2.edge.chat_upstream import open_chat_upstream
-from gateway_v2.edge.console_projection import apply_projection, chat_console
+from gateway_v2.edge.console_projection import apply_projection, console_from_holds
 from gateway_v2.edge.dev_components import bind_surface
 from gateway_v2.edge.incident_recheck import IncidentRecheckRefused, recheck_or_raise
 from gateway_v2.edge.phase_resolvers import resolver_for
@@ -323,16 +324,26 @@ async def emit_enforced_chat(
     enforced: EnforcedOutput,
     holds: RequestHolds,
 ) -> None:
-    """Render the non-streaming reply with the console projection beside the OpenAI JSON."""
+    """Render the non-streaming reply with the console projection beside the OpenAI JSON.
+
+    The cause and the output action are recorded on ``holds`` first, so the response and the audit
+    record read the same facts. A fault (``UpstreamFailed``) is a ``failure_code`` only; a policy
+    refusal after dispatch with no decision (``output_blocked`` without one, ``scan_failure``)
+    also records a ``block`` output action.
+    """
     from gateway_v2.edge.routes import emit_response
 
-    console = _console_for(enforced, holds)
+    code = enforced.refuse_code
+    if code is not None:
+        holds.note_failure(code)
     if enforced.output_decision is not None:
         holds.note_output(enforced.output_decision)
-    if enforced.refuse_code is not None:
+    elif code is not None and holds.dispatched and not is_operational_failure(code):
+        holds.note_output_action("block", code)
+    console = console_from_holds(holds, code)
+    if code is not None:
         response = apply_projection(
-            errors.render_http(enforced.refuse_code, retry_after_s=enforced.retry_after_s),
-            console,
+            errors.render_http(code, retry_after_s=enforced.retry_after_s), console
         )
         await emit_response(send, response)
         return
@@ -347,32 +358,3 @@ async def emit_enforced_chat(
             headers=(*response.headers, (_ROUTING_REASON_HEADER, reason)),
         )
     await emit_response(send, response)
-
-
-def _console_for(
-    enforced: EnforcedOutput,
-    holds: RequestHolds,
-) -> dict[str, object] | None:
-    decision = holds.input_decision
-    if decision is None:
-        return None
-    output = enforced.output_decision
-    output_action = None if output is None else output.disposition.value
-    if output_action is None and enforced.refuse_code is not None and holds.dispatched:
-        output_action = "block"
-    output_rule = ""
-    if output is not None and output.deciding_rules and output_action not in (None, "allow"):
-        output_rule = output.deciding_rules[0]
-    input_rule = decision.deciding_rules[0] if decision.deciding_rules else ""
-    trace = holds.routing_trace
-    return chat_console(
-        request_id=holds.request_id,
-        plan_version=decision.plan_version,
-        input_action=decision.disposition.value,
-        output_action=output_action,
-        provider_called=holds.dispatched,
-        input_rule=input_rule,
-        output_rule=output_rule,
-        routing=() if trace is None else trace.decisions(),
-        routing_alias="-" if trace is None else trace.alias,
-    )

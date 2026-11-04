@@ -61,7 +61,12 @@ from gateway_v2.edge.chat_lifecycle import (
 )
 from gateway_v2.edge.chat_upstream import routing_context
 from gateway_v2.edge.dev_components import bind_surface
-from gateway_v2.edge.identity_resolver import TenantIdentity, hashed_bearer_key, identity_of
+from gateway_v2.edge.identity_resolver import (
+    TenantIdentity,
+    hashed_bearer_key,
+    identity_of,
+    mint_request_id,
+)
 from gateway_v2.edge.incident_phase import incident_phase, proceed_binding
 from gateway_v2.edge.input_enforcement import (
     REFUSE_INPUT_UNMASKABLE,
@@ -89,16 +94,13 @@ from gateway_v2.plan.lookup import lookup_plan
 #: their elements with ``,``. Counting these two byte occurrences is a strict over-estimate of the
 #: real part count (string literals and nested objects also contribute), so the pre-check is
 #: conservative: it can only ADD a refusal to a request whose structural fan-out is large, and it
-#: stays O(n) over the raw bytes — never a ``json.loads`` of a potentially huge body (the heavy
-#: work this phase exists to run in FRONT of). These are byte values the proxy scans for, not
-#: capacity-position literals.
+#: stays O(n) over the raw bytes, never a ``json.loads`` of a potentially huge body. These are
+#: byte values the proxy scans for, not capacity-position literals.
 _PART_OPEN_BYTE = 0x7B  # ``{``
 _PART_SEP_BYTE = 0x2C  # ``,``
 
-#: The ASCII ceiling (code points <= this are plain ASCII and do not expand under NFKC). A byte /
-#: code point above it is "expansion-prone": NFKC-folding compatibility, fullwidth, and ligature
-#: code points is exactly what blew a 1 MiB body up 18x in the C26 register. A byte-range marker
-#: for the cheap O(n) expansion proxy, not a capacity-position literal.
+#: The ASCII ceiling: code points above it are "expansion-prone" under NFKC (fullwidth, ligatures
+#: blew a 1 MiB body up 18x in the C26 register). A byte-range marker, not a capacity literal.
 _ASCII_MAX_BYTE = 0x7F
 #: Byte markers that make a body a tool-bearing candidate for the C26 part allowance (D20).
 _TOOL_MARKS = (b"tools", b"tool_calls", b"response_format")
@@ -254,17 +256,20 @@ class ChatSurface:
 
         # Phase 3 — resolve Tenant_Identity (task 2.3); stale / unavailable fails closed.
         identity, identity_refuse = await self._identity(scope)
-        if identity_refuse is not None:
-            return req, _refused(identity_refuse)
-        if identity is None:
-            return req, _refused(REFUSE_IDENTITY_UNRESOLVED)
+        if identity_refuse is not None or identity is None:
+            holds.note_key_fingerprint((hashed_bearer_key(scope) or "")[:12])  # GW35: 12 hex only
+            return req, _refused(identity_refuse or REFUSE_IDENTITY_UNRESOLVED)
+        holds.note_identity_resolved()
 
         # Phase 4 — the ONE shared-state round trip: resolve the plan (task 2.3).
         plan, plan_refuse = self._plan(identity, req)
-        if plan_refuse is not None:
-            return req, _refused(plan_refuse)
-        if plan is None:
-            return req, _refused(REFUSE_PLAN_UNAVAILABLE)
+        if plan_refuse is not None or plan is None:
+            refusal = plan_refuse or REFUSE_PLAN_UNAVAILABLE
+            holds.note_tenant(identity.org_id)  # GW35 D-30: attributable; id only in console/audit
+            holds.note_request(mint_request_id())
+            holds.note_failure(refusal)
+            return req, _refused(refusal)
+        holds.note_plan(plan.version)
 
         # Plan pinned: clamp the output budget, record controls, inject the canary (or refuse).
         req, pin_refuse = self._pin_request(plan, req, holds)

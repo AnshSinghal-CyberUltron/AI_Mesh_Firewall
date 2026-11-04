@@ -9,7 +9,7 @@ from collections.abc import Mapping, Sequence
 
 import pytest
 
-from gateway_v2.audit.console_schema import validate_console
+from gateway_v2.audit.console_schema import MCP_STAGE_NAMES, validate_console
 from gateway_v2.domain.decision import Decision, Disposition
 from gateway_v2.edge.audit_emit import emit_chat_audit
 from gateway_v2.edge.mcp_console import MCP_STAGES, mcp_console
@@ -163,7 +163,7 @@ def test_org_map() -> None:
 
 
 def _check(console: dict[str, object]) -> dict[str, dict[str, object]]:
-    validate_console(console)
+    validate_console(console, stage_names=MCP_STAGE_NAMES)
     trace = console["pipeline_trace"]
     assert isinstance(trace, dict)
     stages = {stage["name"]: stage for stage in trace["stages"]}

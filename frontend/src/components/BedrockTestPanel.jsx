@@ -6,6 +6,8 @@ import {
 import { copyToClipboard } from "../lib/clipboard";
 import { useGatewayConfig } from "../hooks/useGatewayConfig";
 import { useAuth } from "../context/AuthContext";
+import { RetiredOnGatewayV2 } from "./RetiredOnGatewayV2";
+import { isRetiredResponse, retiredPanelModel } from "../utils/retiredRoute.js";
 import {
   ZEROSHIELD_GUARD_MODEL_LABEL,
   ZEROSHIELD_TIER1_LABEL,
@@ -33,6 +35,7 @@ export function ZeroShieldGuardModelTestPanel({ embedded = false }) {
   const [scanError, setScanError] = useState(null);
   const [showRawJson, setShowRawJson] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [retired, setRetired] = useState(null);
 
   const handleHealthCheck = async () => {
     setHealthLoading(true);
@@ -51,6 +54,10 @@ export function ZeroShieldGuardModelTestPanel({ embedded = false }) {
       const elapsed = Math.round(performance.now() - startTime);
       let envelope = {};
       try { envelope = await res.json(); } catch { envelope = {}; }
+      if (isRetiredResponse(res.status, envelope)) {
+        setRetired(retiredPanelModel(envelope));
+        return;
+      }
       const body = envelope?.data || envelope || {};
 
       if (res.status === 401 || res.status === 403) {
@@ -104,6 +111,10 @@ export function ZeroShieldGuardModelTestPanel({ embedded = false }) {
       const elapsed = Math.round(performance.now() - startTime);
       let envelope = {};
       try { envelope = await res.json(); } catch { envelope = {}; }
+      if (isRetiredResponse(res.status, envelope)) {
+        setRetired(retiredPanelModel(envelope));
+        return;
+      }
       const body = envelope?.data || envelope || {};
 
       if (res.status === 401 || res.status === 403) {
@@ -163,6 +174,7 @@ export function ZeroShieldGuardModelTestPanel({ embedded = false }) {
         </div>
       </div>
 
+      {retired ? <div className="mb-6"><RetiredOnGatewayV2 model={retired} /></div> : null}
       <div className="mb-6 flex items-center gap-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 px-3 py-2.5">
         <Shield className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
         <div className="min-w-0">

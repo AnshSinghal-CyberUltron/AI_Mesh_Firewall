@@ -278,7 +278,14 @@ function buildMetrics(moduleId, socKpis, gatewayStats, threatFeedCount) {
   switch (moduleId) {
     case "1.1": {
       const v2 = Number(socKpis.gateway_v2?.total_threats) || 0;
-      const v2Note = v2 > 0 ? ` · ${v2.toLocaleString()} gateway v2, not added` : "";
+      const v2Refused = Number(socKpis.gateway_v2?.refused_total) || 0;
+      const v2Errors = Number(socKpis.gateway_v2?.error_total) || 0;
+      const v2Extra = [
+        v2Refused > 0 ? `${v2Refused.toLocaleString()} refused` : "",
+        v2Errors > 0 ? `${v2Errors.toLocaleString()} errors` : "",
+      ].filter(Boolean).join(", ");
+      const v2Note = (v2 > 0 ? ` · ${v2.toLocaleString()} gateway v2, not added` : "")
+        + (v2Extra ? ` · gateway v2: ${v2Extra}` : "");
       return [
         {
           label: "Total Events",

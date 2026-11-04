@@ -184,7 +184,7 @@
   },
   {
    "file": "control/ai_mesh_control/policy/security_views.py",
-   "line": 1581,
+   "line": 1577,
    "metadata_keys": [
     "AGENTIC01",
     "AGENTIC02",
@@ -236,7 +236,7 @@
   },
   {
    "file": "control/ai_mesh_control/policy/security_views.py",
-   "line": 1702,
+   "line": 1698,
    "metadata_keys": [
     "_owasp_code",
     "_owasp_codes",
@@ -268,7 +268,7 @@
   },
   {
    "file": "control/ai_mesh_control/policy/security_views.py",
-   "line": 1989,
+   "line": 1985,
    "metadata_keys": [
     "_owasp_code",
     "_owasp_codes",
@@ -300,7 +300,7 @@
   },
   {
    "file": "control/ai_mesh_control/policy/security_views.py",
-   "line": 2114,
+   "line": 2110,
    "metadata_keys": [
     "_data",
     "_model",
@@ -376,7 +376,7 @@
   },
   {
    "file": "control/ai_mesh_control/policy/security_views.py",
-   "line": 1395,
+   "line": 1391,
    "metadata_keys": [
     "1h",
     "24h",
@@ -399,7 +399,7 @@
   },
   {
    "file": "control/ai_mesh_control/policy/security_views.py",
-   "line": 1471,
+   "line": 1467,
    "metadata_keys": [
     "1h",
     "24h",
@@ -426,7 +426,7 @@
   },
   {
    "file": "control/ai_mesh_control/policy/security_views.py",
-   "line": 1803,
+   "line": 1799,
    "metadata_keys": [
     "0-50ms",
     "100-200ms",
@@ -481,7 +481,7 @@
   },
   {
    "file": "control/ai_mesh_control/policy/security_views.py",
-   "line": 2278,
+   "line": 2274,
    "metadata_keys": [
     "detail",
     "escalated_at",
@@ -498,7 +498,7 @@
   },
   {
    "file": "control/ai_mesh_control/policy/security_views.py",
-   "line": 2369,
+   "line": 2365,
    "metadata_keys": [
     "detail",
     "incident_id",
@@ -575,7 +575,7 @@
   },
   {
    "file": "control/ai_mesh_control/policy/security_views.py",
-   "line": 2475,
+   "line": 2471,
    "metadata_keys": [
     "agent_id",
     "avg_block_rate",
@@ -592,7 +592,7 @@
   },
   {
    "file": "control/ai_mesh_control/policy/security_views.py",
-   "line": 2559,
+   "line": 2555,
    "metadata_keys": [
     "action",
     "allowed",
@@ -607,7 +607,7 @@
   },
   {
    "file": "control/ai_mesh_control/policy/security_views.py",
-   "line": 2593,
+   "line": 2589,
    "metadata_keys": [
     "action",
     "blocked",
@@ -621,7 +621,7 @@
   },
   {
    "file": "control/ai_mesh_control/policy/security_views.py",
-   "line": 2637,
+   "line": 2633,
    "metadata_keys": [
     "_owasp_code",
     "_owasp_codes",
@@ -645,7 +645,7 @@
   },
   {
    "file": "control/ai_mesh_control/policy/security_views.py",
-   "line": 2692,
+   "line": 2688,
    "metadata_keys": [
     "_risk",
     "agentType",
@@ -662,7 +662,7 @@
   },
   {
    "file": "control/ai_mesh_control/policy/security_views.py",
-   "line": 2745,
+   "line": 2741,
    "metadata_keys": [
     "action",
     "automated",
@@ -679,7 +679,7 @@
   },
   {
    "file": "control/ai_mesh_control/policy/security_views.py",
-   "line": 2790,
+   "line": 2786,
    "metadata_keys": [
     "_owasp_code",
     "_owasp_codes",
@@ -715,7 +715,7 @@
   },
   {
    "file": "control/ai_mesh_control/policy/security_views.py",
-   "line": 2924,
+   "line": 2920,
    "metadata_keys": [
     "_esc",
     "_lat_n",
@@ -747,7 +747,7 @@
   },
   {
    "file": "control/ai_mesh_control/policy/security_views.py",
-   "line": 3011,
+   "line": 3007,
    "metadata_keys": [
     "_detail_extra",
     "_detail_top",
@@ -1152,5 +1152,22 @@
    ],
    "path": "/v1/rag/ingest"
   }
- ]
+ ],
+ "v2_audit": {
+  "console_rank": {
+   "allow": 0,
+   "block": 4,
+   "error": 3,
+   "flag": 1,
+   "redact": 2
+  },
+  "file": "control/ai_mesh_control/core/v2_audit_adapter.py",
+  "no_console_outcomes": [
+   "rejected",
+   "shed"
+  ],
+  "reserved_orgs": [
+   "_unauthenticated"
+  ]
+ }
 }
