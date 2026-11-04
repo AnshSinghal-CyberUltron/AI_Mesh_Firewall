@@ -35,7 +35,7 @@ list / dict / set.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -44,12 +44,14 @@ from gateway_v2.dispatch.provider import UpstreamRequest
 from gateway_v2.domain.channels import META_CHANNELS
 from gateway_v2.domain.decision import Decision, Disposition, most_restrictive
 from gateway_v2.domain.failure_class import is_operational_failure
+from gateway_v2.domain.finding import Finding
 from gateway_v2.domain.plan import ExecutionPlan, Phase, Surface
 from gateway_v2.edge import errors
 from gateway_v2.edge.chat_upstream import open_chat_upstream
 from gateway_v2.edge.console_projection import apply_projection, console_from_holds
 from gateway_v2.edge.dev_components import bind_surface
 from gateway_v2.edge.incident_recheck import IncidentRecheckRefused, recheck_or_raise
+from gateway_v2.edge.output_detectors import build_output_detectors, needs_output_detectors
 from gateway_v2.edge.phase_resolvers import resolver_for
 from gateway_v2.edge.request_holds import RequestHolds
 from gateway_v2.edge.wire.openai import CanonicalRequest
@@ -171,7 +173,7 @@ async def collect_and_enforce(
         collected = await _collect_output_channels(
             deps, destination, body, holds, org_id, routed_model, plan
         )
-        deltas, decision = _enforce_channels(deps, plan, collected)
+        deltas, decision = _enforce_channels(deps, plan, collected, holds)
         failure = _validate_output(deps, plan, req, deltas)
         if failure is not None:
             return EnforcedOutput(deltas=(), refuse_code=failure, output_decision=decision)
@@ -250,6 +252,7 @@ def _enforce_channels(
     deps: ChatRoute,
     plan: ExecutionPlan | None,
     collected: tuple[tuple[str, str], ...],
+    holds: RequestHolds | None = None,
 ) -> tuple[tuple[tuple[str, str], ...], Decision | None]:
     """Scan + resolve + apply the output decision per channel (R8.1/R8.2).
 
@@ -270,16 +273,35 @@ def _enforce_channels(
     byte-identically (Preservation 3.3 / 3.5).
     """
     resolver = deps.resolver if plan is None else resolver_for(deps, plan, Phase.OUTPUT)
+    scan = _whole_response_scanner(deps, plan, holds)
     enforced: list[tuple[str, str]] = []
     chosen: Decision | None = None
     for channel, text in collected:
         if channel in META_CHANNELS:  # not text: closed-set value, passed through unscanned
             enforced.append((channel, text))
             continue
-        decision = resolver.decide(list(bind_surface(deps.error_scanner, Surface.CHAT)(text)))
+        decision = resolver.decide(list(scan(text)))
         chosen = decision if chosen is None else _stricter_decision(chosen, decision)
         enforced.append((channel, apply_decision(text, decision, base_offset=0)))
     return tuple(enforced), chosen
+
+
+def _whole_response_scanner(
+    deps: ChatRoute, plan: ExecutionPlan | None, holds: RequestHolds | None
+) -> Callable[[str], Sequence[Finding]]:
+    """The GW09 scanner plus the plan's GW33 built-in detectors (IP leak, exfil, canary).
+
+    The streaming path builds the same set in ``ChatStream._build_pipeline``; without it a
+    non-streaming reply skipped them. Grounding stays streaming-only (async, needs context).
+    """
+    base = bind_surface(deps.error_scanner, Surface.CHAT)
+    if plan is None or not needs_output_detectors(plan):
+        return base
+    out = build_output_detectors(
+        plan, base=base, ticket=None if holds is None else holds.canary_ticket,
+        context_chunks=(), backend=None, contract=deps.contract, runner=None,
+    )
+    return out.whole_response or base
 
 
 def _validate_output(

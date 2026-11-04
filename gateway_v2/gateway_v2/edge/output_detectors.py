@@ -49,7 +49,12 @@ from gateway_v2.egress.output_guard import FinalDetector, enforcing_output_rules
 from gateway_v2.egress.strict import SyncRunner
 from gateway_v2.runtime.resources import ResourceContract
 
-__all__ = ("OutputDetectors", "build_output_detectors", "legacy_ip_rules")
+__all__ = (
+    "OutputDetectors",
+    "build_output_detectors",
+    "legacy_ip_rules",
+    "needs_output_detectors",
+)
 
 Detect = Callable[[str], Sequence[Finding]]
 DeltaDetect = Callable[[str, int], Sequence[Finding]]
@@ -66,6 +71,9 @@ class OutputDetectors:
     final: FinalDetector | None = None
     runner: SyncRunner | None = None
     legacy_rule_ids: tuple[str, ...] = ()
+    #: Non-streaming parity: the sync detectors over the whole collected channel. Nothing is
+    #: released before the decision there, so it scans what STRICT scans (grounding excluded).
+    whole_response: Detect | None = None
 
     def detector_for(self, mode: StreamingMode) -> Detect | None:
         """The `detector=` seam of the pipeline that `mode` selects."""
@@ -127,6 +135,12 @@ def _grounding_mode(rule: Rule) -> GroundingMode:
     return GroundingMode.MODEL if head == GroundingMode.MODEL.value else GroundingMode.LEXICAL
 
 
+def needs_output_detectors(plan: ExecutionPlan) -> bool:
+    """True when the plan selects a built-in output detector or carries a legacy IP rule."""
+    has_family = any(builtin_output_detector(r) is not None for r in _output_rules(plan))
+    return has_family or bool(legacy_ip_rules(plan))
+
+
 def build_output_detectors(
     plan: ExecutionPlan,
     *,
@@ -146,7 +160,7 @@ def build_output_detectors(
             by_family[family] = rule
     legacy = legacy_ip_rules(plan)
     if not by_family and not legacy:
-        return OutputDetectors(per_delta=base, sync_whole=base)
+        return OutputDetectors(per_delta=base, sync_whole=base, whole_response=base)
     bounds = contract.output_bounds()
     ip = exfil = canary = None
     if "ip_leak" in by_family:
@@ -177,8 +191,10 @@ def build_output_detectors(
             _relabel(IpLeakDetector(bounds=bounds, rule_id=r.rule_id).detect, r.rule_id)
             for r in legacy
         )
+        whole = _chain(base, ip, exfil, canary, *legacy_dets)
         return OutputDetectors(
-            sync_whole=_chain(base, ip, exfil, canary, *legacy_dets),
+            sync_whole=whole,
+            whole_response=whole,
             final=_final(None, grounding, contract),
             runner=runner,
             legacy_rule_ids=tuple(r.rule_id for r in legacy),
@@ -194,6 +210,7 @@ def build_output_detectors(
         final=_final(_chain(ip, exfil, canary), grounding, contract, runner),
         runner=runner,
         legacy_rule_ids=tuple(r.rule_id for r in legacy),
+        whole_response=_chain(base, ip, exfil, canary),
     )
 
 

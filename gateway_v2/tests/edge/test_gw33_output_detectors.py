@@ -45,7 +45,7 @@ def test_no_new_family_is_the_identity_and_holds_no_extra_hook() -> None:
     for mode in (_INCR, _STRICT):
         plan = plan_of(mode, rule("r", Category.PII, Action.REDACT))
         out = _build(plan, base=_base)
-        assert out == OutputDetectors(per_delta=_base, sync_whole=_base)
+        assert out == OutputDetectors(per_delta=_base, sync_whole=_base, whole_response=_base)
         assert out.detector_for(mode) is _base
         assert out.canary_delta is None and out.final is None
     empty = _build(plan_of(_INCR), base=None)
@@ -63,8 +63,8 @@ def test_customer_rows_in_the_exfil_fallback_category_select_no_detector() -> No
     for condition in customers:
         r = Rule("pol-1", Category.EXFIL, Mode.ENFORCE, Action.BLOCK, None, 100, RuleScope.OUTPUT,
                  FailurePosture.FAIL_CLOSED, frozenset({Surface.CHAT}), condition)
-        assert _build(plan_of(_INCR, r), base=_base) == OutputDetectors(per_delta=_base,
-                                                                         sync_whole=_base)
+        assert _build(plan_of(_INCR, r), base=_base) == OutputDetectors(
+            per_delta=_base, sync_whole=_base, whole_response=_base)
 
 
 def test_mode_to_detector_assignment() -> None:
