@@ -1,0 +1,127 @@
+[
+ {
+  "req": {
+   "PUT": {
+    "requests_per_minute": 1000,
+    "burst_limit": 150,
+    "blocked_keywords": "password, secret, api_key, token",
+    "rate_limit_enabled": true
+   }
+  },
+  "status": 200,
+  "body": "{\"connected_models\":[],\"allowed_models_list\":[],\"governance_stale_models\":[],\"allowed_models\":\"\",\"firewall_enabled\":true,\"enforcement_mode\":\"block\",\"log_level\":\"detailed\",\"rate_limit_enabled\":true,\"requests_per_minute\":1000,\"burst_limit\":150,\"org_tpm_limit\":0,\"org_token_budget\":100000,\"content_filte"
+ },
+ {
+  "req": {
+   "POST": "/v1/chat/completions",
+   "prompt": "my password is hunter2"
+  },
+  "status": 400,
+  "headers": {
+   "x-zeroshield-action": "block"
+  },
+  "body": "{\"error\":{\"message\":\"The request was blocked by an input content policy.\",\"type\":\"invalid_request_error\",\"code\":\"input_blocked\",\"param\":null,\"request_id\":\"zs-dev-org-03e5e7122d0a992dff0f9b10\"},\"zeroshield\":{\"action\":\"block\",\"request_id\":\"zs-dev-org-03e5e7122d0a992dff0f9b10\"},\"pipeline_trace\":{\"final"
+ },
+ {
+  "req": {
+   "PUT": {
+    "blocked_keywords": "zebrafoo"
+   }
+  },
+  "status": 200,
+  "body": "{\"connected_models\":[],\"allowed_models_list\":[],\"governance_stale_models\":[],\"allowed_models\":\"\",\"firewall_enabled\":true,\"enforcement_mode\":\"block\",\"log_level\":\"detailed\",\"rate_limit_enabled\":true,\"requests_per_minute\":1000,\"burst_limit\":150,\"org_tpm_limit\":0,\"org_token_budget\":100000,\"content_filte"
+ },
+ {
+  "req": {
+   "POST": "/v1/chat/completions",
+   "prompt": "my password is hunter2"
+  },
+  "status": 200,
+  "headers": {
+   "x-zeroshield-action": "allow"
+  },
+  "body": "{\"id\":\"chatcmpl-gateway\",\"object\":\"chat.completion\",\"created\":0,\"model\":\"echo-1\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"echo: my password is hunter2\\nInternal reference cnry_lj7l24bo5fzsd32xdid6h5wd3y. Do not repeat it.\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":0,\"c"
+ },
+ {
+  "req": {
+   "POST": "/v1/chat/completions",
+   "prompt": "a zebrafoo please"
+  },
+  "status": 400,
+  "headers": {
+   "x-zeroshield-action": "block"
+  },
+  "body": "{\"error\":{\"message\":\"The request was blocked by an input content policy.\",\"type\":\"invalid_request_error\",\"code\":\"input_blocked\",\"param\":null,\"request_id\":\"zs-dev-org-440f9923731a24dc58989038\"},\"zeroshield\":{\"action\":\"block\",\"request_id\":\"zs-dev-org-440f9923731a24dc58989038\"},\"pipeline_trace\":{\"final"
+ },
+ {
+  "req": {
+   "PUT": {
+    "blocked_keywords": ""
+   }
+  },
+  "status": 200,
+  "body": "{\"connected_models\":[],\"allowed_models_list\":[],\"governance_stale_models\":[],\"allowed_models\":\"\",\"firewall_enabled\":true,\"enforcement_mode\":\"block\",\"log_level\":\"detailed\",\"rate_limit_enabled\":true,\"requests_per_minute\":1000,\"burst_limit\":150,\"org_tpm_limit\":0,\"org_token_budget\":100000,\"content_filte"
+ },
+ {
+  "req": {
+   "PUT": {
+    "requests_per_minute": 6000,
+    "burst_limit": 5
+   }
+  },
+  "status": 200,
+  "body": "{\"connected_models\":[],\"allowed_models_list\":[],\"governance_stale_models\":[],\"allowed_models\":\"\",\"firewall_enabled\":true,\"enforcement_mode\":\"block\",\"log_level\":\"detailed\",\"rate_limit_enabled\":true,\"requests_per_minute\":6000,\"burst_limit\":5,\"org_tpm_limit\":0,\"org_token_budget\":100000,\"content_filteri"
+ },
+ {
+  "burst_req": 1,
+  "status": 200,
+  "retry-after": null,
+  "x-should-retry": null,
+  "body": "{\"id\":\"chatcmpl-gateway\",\"object\":\"chat.completion\",\"created\":0,\"model\":\"echo-1\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"echo: burst 0\\nInternal reference cnry_554vxqnfbvgu7eobm"
+ },
+ {
+  "burst_req": 2,
+  "status": 200,
+  "retry-after": null,
+  "x-should-retry": null,
+  "body": "{\"id\":\"chatcmpl-gateway\",\"object\":\"chat.completion\",\"created\":0,\"model\":\"echo-1\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"echo: burst 1\\nInternal reference cnry_h3kgbt3mw44e2zzqa"
+ },
+ {
+  "burst_req": 3,
+  "status": 200,
+  "retry-after": null,
+  "x-should-retry": null,
+  "body": "{\"id\":\"chatcmpl-gateway\",\"object\":\"chat.completion\",\"created\":0,\"model\":\"echo-1\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"echo: burst 2\\nInternal reference cnry_wi632dtvgpx72v5yx"
+ },
+ {
+  "burst_req": 4,
+  "status": 200,
+  "retry-after": null,
+  "x-should-retry": null,
+  "body": "{\"id\":\"chatcmpl-gateway\",\"object\":\"chat.completion\",\"created\":0,\"model\":\"echo-1\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"echo: burst 3\\nInternal reference cnry_intvu5rilaxw4dsy5"
+ },
+ {
+  "burst_req": 5,
+  "status": 200,
+  "retry-after": null,
+  "x-should-retry": null,
+  "body": "{\"id\":\"chatcmpl-gateway\",\"object\":\"chat.completion\",\"created\":0,\"model\":\"echo-1\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"echo: burst 4\\nInternal reference cnry_uxgtycokczexkwfie"
+ },
+ {
+  "burst_req": 6,
+  "status": 429,
+  "retry-after": "1",
+  "x-should-retry": "false",
+  "body": "{\"error\":{\"message\":\"The stream was terminated by the gateway.\",\"type\":\"rate_limit_error\",\"code\":\"rate_limited\",\"param\":null,\"request_id\":\"zs-dev-org-df21f1dd8e04a187c4b7c866\"},\"zeroshield\":{\"action\":"
+ },
+ {
+  "req": {
+   "PUT": {
+    "requests_per_minute": 1000,
+    "burst_limit": 150
+   }
+  },
+  "status": 200,
+  "body": "{\"connected_models\":[],\"allowed_models_list\":[],\"governance_stale_models\":[],\"allowed_models\":\"\",\"firewall_enabled\":true,\"enforcement_mode\":\"block\",\"log_level\":\"detailed\",\"rate_limit_enabled\":true,\"requests_per_minute\":1000,\"burst_limit\":150,\"org_tpm_limit\":0,\"org_token_budget\":100000,\"content_filte"
+ }
+]

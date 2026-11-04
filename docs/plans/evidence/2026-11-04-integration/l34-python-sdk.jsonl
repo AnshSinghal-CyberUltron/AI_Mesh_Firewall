@@ -1,0 +1,8 @@
+{"cell": "plain_nonstream", "ok": true, "detail": {"content": "Hello from the fake upstream.", "finish": "stop", "id": "chatcmpl-gateway"}}
+{"cell": "plain_stream", "ok": true, "detail": {"chunks": 5, "text": "Hello from the fake upstream.", "last_finish": "stop"}}
+{"cell": "tool_stream", "ok": true, "detail": {"name": "get_weather", "arguments": "{\"city\": \"Paris\"}", "finish": "tool_calls"}}
+{"cell": "tool_nonstream", "ok": true, "detail": {"name": "get_weather", "arguments": "{\"city\": \"Paris\"}", "finish": "tool_calls"}}
+{"cell": "stream_helper", "ok": true, "detail": {"events": ["chunk", "content.delta", "content.done"], "final": "Hello from the fake upstream."}}
+{"cell": "done_on_wire", "ok": true, "detail": {"done_line": true, "amf_trace_comment_lines": 1, "order_tail": ["data: {\"id\":\"chatcmpl-zs-dev-org-0b7ebe9", ": amf.trace {\"produced_mode\":\"incrementa", "data: [DONE]"], "named_event_frames": 0}}
+{"cell": "cancellation", "ok": true, "detail": {"chunks_before_cancel": 3, "elapsed_s": 0.6}}
+{"cell": "refused_stream_raises", "ok": true, "detail": {"status": 400, "code": "input_blocked"}}

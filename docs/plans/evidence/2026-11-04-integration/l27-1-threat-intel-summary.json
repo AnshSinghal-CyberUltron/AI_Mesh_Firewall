@@ -1,0 +1,41 @@
+{
+ "threat on, jailbreak off": {
+  "put": 200,
+  "status": 400,
+  "input_scan": [
+   [
+    "input_scan",
+    "block",
+    "input_blocked"
+   ]
+  ],
+  "fw_rules": [
+   "fw-credential-output",
+   "fw-pii-input",
+   "fw-pii-output",
+   "fw-prompt_injection-input",
+   "fw-threat-command-input",
+   "fw-threat-jailbreak-input",
+   "fw-threat-prompt_injection-input",
+   "fw-toxicity-input"
+  ]
+ },
+ "threat off, jailbreak off": {
+  "put": 200,
+  "status": 400,
+  "input_scan": [
+   [
+    "input_scan",
+    "block",
+    "input_blocked"
+   ]
+  ],
+  "fw_rules": [
+   "fw-credential-output",
+   "fw-pii-input",
+   "fw-pii-output",
+   "fw-prompt_injection-input",
+   "fw-toxicity-input"
+  ]
+ }
+}

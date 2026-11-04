@@ -1,0 +1,183 @@
+[
+    {
+        "label": "failed credential (invalid_api_key)",
+        "event_id": 198,
+        "org_id": 2,
+        "action": "block",
+        "request_id": "zs-8dac00037eec772bc026bd1d",
+        "refused_at": "auth",
+        "pipeline_trace": {
+            "stages": [
+                {
+                    "ran": true,
+                    "name": "auth",
+                    "action": "block",
+                    "deciding_rule": "invalid_api_key"
+                },
+                {
+                    "ran": false,
+                    "name": "rate_limit",
+                    "action": "skip"
+                },
+                {
+                    "ran": false,
+                    "name": "input_scan",
+                    "action": "skip"
+                },
+                {
+                    "ran": false,
+                    "name": "model_routing",
+                    "action": "skip"
+                },
+                {
+                    "ran": false,
+                    "name": "model_output",
+                    "action": "skip"
+                },
+                {
+                    "ran": false,
+                    "name": "output_guardrail",
+                    "action": "skip"
+                }
+            ],
+            "final_action": "block"
+        }
+    },
+    {
+        "label": "upstream 500 (stream)",
+        "event_id": 197,
+        "org_id": 2,
+        "action": "error",
+        "request_id": "zs-dev-org-f96b79dc3454cf583fd8f235",
+        "refused_at": "model_output",
+        "pipeline_trace": {
+            "stages": [
+                {
+                    "ran": true,
+                    "name": "auth",
+                    "action": "allow"
+                },
+                {
+                    "ran": true,
+                    "name": "rate_limit",
+                    "action": "allow"
+                },
+                {
+                    "ran": true,
+                    "name": "input_scan",
+                    "action": "allow"
+                },
+                {
+                    "ran": false,
+                    "name": "model_routing",
+                    "action": "skip",
+                    "deciding_rule": "refused_internal_error|-|0|-|-"
+                },
+                {
+                    "ran": true,
+                    "name": "model_output",
+                    "action": "error",
+                    "deciding_rule": "upstream_error"
+                },
+                {
+                    "ran": true,
+                    "name": "output_guardrail",
+                    "action": "allow"
+                }
+            ],
+            "final_action": "error",
+            "plan_version": "1.6.87c58e88a77d297b"
+        }
+    },
+    {
+        "label": "upstream 500 (non-stream)",
+        "event_id": 196,
+        "org_id": 2,
+        "action": "error",
+        "request_id": "zs-dev-org-419c463adaafeda335a37188",
+        "refused_at": "model_output",
+        "pipeline_trace": {
+            "stages": [
+                {
+                    "ran": true,
+                    "name": "auth",
+                    "action": "allow"
+                },
+                {
+                    "ran": true,
+                    "name": "rate_limit",
+                    "action": "allow"
+                },
+                {
+                    "ran": true,
+                    "name": "input_scan",
+                    "action": "allow"
+                },
+                {
+                    "ran": false,
+                    "name": "model_routing",
+                    "action": "skip",
+                    "deciding_rule": "refused_internal_error|-|0|-|-"
+                },
+                {
+                    "ran": true,
+                    "name": "model_output",
+                    "action": "error",
+                    "deciding_rule": "upstream_error"
+                },
+                {
+                    "ran": false,
+                    "name": "output_guardrail",
+                    "action": "skip"
+                }
+            ],
+            "final_action": "error",
+            "plan_version": "1.6.87c58e88a77d297b"
+        }
+    },
+    {
+        "label": "org burst 429",
+        "event_id": 190,
+        "org_id": 2,
+        "action": "block",
+        "request_id": "zs-dev-org-741b2b7ba81cb790589a0817",
+        "refused_at": "rate_limit",
+        "pipeline_trace": {
+            "stages": [
+                {
+                    "ran": true,
+                    "name": "auth",
+                    "action": "allow"
+                },
+                {
+                    "ran": true,
+                    "name": "rate_limit",
+                    "action": "block",
+                    "deciding_rule": "rate_limited"
+                },
+                {
+                    "ran": false,
+                    "name": "input_scan",
+                    "action": "skip"
+                },
+                {
+                    "ran": false,
+                    "name": "model_routing",
+                    "action": "skip"
+                },
+                {
+                    "ran": false,
+                    "name": "model_output",
+                    "action": "skip"
+                },
+                {
+                    "ran": false,
+                    "name": "output_guardrail",
+                    "action": "skip"
+                }
+            ],
+            "final_action": "block",
+            "plan_version": "1.5.5005eefb8144cf50"
+        }
+    }
+]
