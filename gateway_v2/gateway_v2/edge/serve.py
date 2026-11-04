@@ -77,6 +77,9 @@ from gateway_v2.edge.dev_profile import (
     wrap_dev_app,
 )
 from gateway_v2.edge.identity_resolver import fail_closed_resolver
+from gateway_v2.edge.mcp_deps import McpDeps
+from gateway_v2.edge.mcp_wiring import wrap_mcp_app
+from gateway_v2.edge.mcp_ws import WsLimiter
 from gateway_v2.edge.production_profile import apply_production, production_profile_active
 from gateway_v2.edge.state_runtime import StateRuntime, StateServedApp
 from gateway_v2.egress.output_guard import MinimalOutputResolver
@@ -468,7 +471,13 @@ def _assemble_app(deps: dict[str, object]) -> ASGIApplication:
     state = kwargs.pop("state_runtime", None)
     # ``wrap_dev_app`` returns the app UNCHANGED unless the DEV PROFILE admission adapter is in
     # ``deps`` (then it adds the lease lifespan hooks and, when present, the audit writer).
-    app = wrap_dev_app(build_app(**kwargs), deps)
+    built = build_app(**kwargs)
+    mcp = kwargs.get("mcp")
+    if isinstance(mcp, McpDeps) and mcp.transport_bounds is not None:
+        # GW32: the WebSocket scope, one shared per-worker limiter. `route_of` reads the booted
+        # route from `build_app`'s table, so this wraps BEFORE `wrap_dev_app` hides it.
+        built = wrap_mcp_app(built, WsLimiter(mcp.transport_bounds))
+    app = wrap_dev_app(built, deps)
     # PRODUCTION PROFILE (GW36 S3): the signed-state runtime runs in the ASGI lifespan.
     return StateServedApp(app, state) if isinstance(state, StateRuntime) else app
 

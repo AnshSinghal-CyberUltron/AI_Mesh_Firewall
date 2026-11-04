@@ -201,7 +201,13 @@ async def _run_message(
         sent = True
         return {"type": "http.request", "body": text.encode(), "more_body": False}
 
-    post_scope = {**scope, "type": "http", "method": "POST"}
+    # A frame reply is always one JSON document: drop `Accept` so the pipeline never SSE-frames it.
+    headers = [
+        (name, value)
+        for name, value in scope.get("headers", ())  # type: ignore[attr-defined]
+        if bytes(name).lower() != b"accept"
+    ]
+    post_scope = {**scope, "type": "http", "method": "POST", "headers": headers}
     task = asyncio.ensure_future(route.run_message(post_scope, path, one_body, collect))
     watcher = asyncio.ensure_future(receive())
     try:

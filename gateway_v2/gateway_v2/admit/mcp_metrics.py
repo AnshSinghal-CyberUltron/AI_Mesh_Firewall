@@ -2,12 +2,19 @@
 
 No method takes a key, org or tenant argument, so the series count cannot move with the estate.
 `fail_open_total` is pinned to zero: nothing in the policy or cap path fails open. Publication
-through the edge `Publisher` is a wiring step that is NOT done in this card (see the handoff).
+through the edge `Publisher` is `Publisher.attach_mcp_policy` (boot-time), which adds `SERIES_COUNT`
+series plus the enforcement-version gauge.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+
+PREFIX = "amf_mcp"
+ENFORCEMENT_VERSION = 1
+"""The GW17c enforcement version this gateway runs. Exported as `amf_mcp_policy_enforcement_version`
+so an operator can confirm every replica enforces before flipping `AMF_PROJECT_MCP_KEY_POLICY`
+(design M9). Bump when the signed per-key field set or its meaning changes."""
 
 
 @dataclass(frozen=True, slots=True)

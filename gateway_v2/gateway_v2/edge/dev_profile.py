@@ -387,7 +387,9 @@ def build_dev_dependencies(
     mcp_redis = None
     if cfg.lease is not None:
         mcp_redis = _redis_client(cfg.lease.redis_url, timeout_s=contract.cancellation_bound_s())
-    mcp, mcp_note = build_dev_mcp(env, contract, redis_client=mcp_redis, clock=time.monotonic)
+    mcp, mcp_note = build_dev_mcp(
+        env, contract, redis_client=mcp_redis, clock=time.monotonic, identity=deps["identity"]
+    )
     if mcp is not None:
         deps["mcp"] = mcp
     exports, holdback = PerRequestExports(), HoldbackMetrics()
@@ -400,6 +402,8 @@ def build_dev_dependencies(
         exports=exports,
         holdback=holdback,
     )
+    if mcp is not None and mcp.policy_metrics is not None:
+        publisher.attach_mcp_policy(mcp.policy_metrics)
     deps.update(
         metrics_registry=publisher, observer=publisher, exports=exports, holdback_metrics=holdback
     )
@@ -433,7 +437,7 @@ def build_dev_dependencies(
         audit_note,
         plan_note,
         store_note,
-        mcp_note,
+        *mcp_note.splitlines(),
         f"boot: catalog -> StaticCatalogSource {list(cfg.models)} (DEV PROFILE: AMF_DEV_MODELS)",
     )
     return deps, logs

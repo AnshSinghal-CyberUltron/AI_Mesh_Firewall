@@ -20,6 +20,7 @@ from urllib.parse import urlsplit, urlunsplit
 from gateway_v2.dispatch.mcp_broker import BrokerClient, httpx_transport
 from gateway_v2.dispatch.url_guard import default_resolver, parse_allow_hosts
 from gateway_v2.edge.dev_components import DevProfileError, env_text
+from gateway_v2.edge.mcp_boot import extend_mcp_deps
 from gateway_v2.edge.mcp_deps import McpDeps
 from gateway_v2.edge.mcp_registry import ControlTransport, McpRegistry, Mget, OrgMap
 from gateway_v2.runtime.resources import ResourceContract
@@ -42,6 +43,7 @@ def build_dev_mcp(
     *,
     redis_client: Any | None,
     clock: Any,
+    identity: object | None = None,
 ) -> tuple[McpDeps | None, str]:
     """``(deps, boot log line)``. ``deps`` is ``None`` when MCP is not configured."""
     values = {name: env_text(env, name) for name in _REQUIRED}
@@ -85,6 +87,11 @@ def build_dev_mcp(
             env_text(env, "AMF_DEV_MCP_STDIO_ALLOWED_COMMANDS") or _DEFAULT_STDIO
         ),
     )
+    deps, notes = extend_mcp_deps(
+        deps, env, contract, redis_client=redis_client, identity=identity, clock=clock,
+        control_url=values["AMF_DEV_CONTROL_URL"] or "",
+        internal_key=values["AMF_DEV_GATEWAY_INTERNAL_KEY"] or "",
+    )
     poll = "polled off the request path" if redis_client is not None else "TTL only, no redis"
     log = (
         f"boot: mcp -> POST /v1/mcp/{{server}} via broker "
@@ -92,7 +99,7 @@ def build_dev_mcp(
         f"{_redact(values['AMF_DEV_CONTROL_URL'] or '')} (scan_ver {poll}), "
         f"{len(present)} inputs set; keys redacted"
     )
-    return deps, log
+    return deps, "\n".join((log, *notes))
 
 
 async def _sleep(seconds: float) -> None:

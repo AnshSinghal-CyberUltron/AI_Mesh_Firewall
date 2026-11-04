@@ -107,7 +107,7 @@ class McpRegistry:
     """Per-(org, server) RAM cache over control. One instance per worker."""
 
     __slots__ = ("_base", "_key", "_servers", "_timeout", "_tools", "_transport", "_ttl",
-                 "_clock", "_versions", "_mget", "_poll_s", "_poll")
+                 "_clock", "_versions", "_mget", "_poll_s", "_poll", "_extra", "_on_drop")
 
     def __init__(
         self,
@@ -135,6 +135,21 @@ class McpRegistry:
         self._mget = mget
         self._poll_s = poll_s
         self._poll: asyncio.Task[None] | None = None
+        self._extra: Callable[[], frozenset[tuple[str, str]]] | None = None
+        self._on_drop: list[Callable[[str, str], None]] = []
+
+    def subscribe_drop(
+        self,
+        on_drop: Callable[[str, str], None],
+        extra_keys: Callable[[], frozenset[tuple[str, str]]] | None = None,
+    ) -> None:
+        """GW17b: also poll the version of every ``(org, server)`` ``extra_keys`` reports, and call
+        ``on_drop(org, server)`` when one changes (``server`` is ``""`` for an org-wide change).
+        Boot-time only. A rotated or revoked upstream credential then leaves the cache at the
+        poll cadence instead of at the TTL."""
+        self._on_drop.append(on_drop)
+        if extra_keys is not None:
+            self._extra = extra_keys
 
     def _ensure_poll(self) -> None:
         """Start the version poll on first use, inside the running loop, off the request path."""
@@ -230,10 +245,13 @@ class McpRegistry:
             await asyncio.sleep(interval_s)
 
     def _cached(self) -> set[tuple[str, str]]:
-        return set(self._servers) | set(self._tools)
+        extra = self._extra() if self._extra is not None else frozenset()
+        return set(self._servers) | set(self._tools) | set(extra)
 
     def _drop(self, scope: str) -> None:
         org, _, server = scope.partition(":")
+        for notify in self._on_drop:
+            notify(org, server)
         for table in (self._servers, self._tools):
             for cached in [key for key in table if key[0] == org and server in ("", key[1])]:
                 table.pop(cached, None)
