@@ -271,7 +271,7 @@ The owner asked on 2 November to proceed on defaults. They are working defaults 
 | GW32 | v1 MCP URL or a signed redirect, gateway as OAuth 2.1 server, real HTTP+SSE and WebSocket | Not started |
 | GW33 | Output parity: IP leak, exfil channels, grounding, human review, REWRITE, canary | Not started. The GW26 publisher omits `rewrite` and `model_downgrade` and names them unsupported. It does not implement REWRITE. |
 | GW34 | SDK compatibility; unknown paths 404 `endpoint_not_found` | Not started as a card. The unknown-path item landed with GW36 slice S0 on 2 November: an unknown path is 404 `endpoint_not_found`, a known path with another method is 405 with `allow`, and the registered placeholders stay 501. The client matrix (L34-1) is not run. |
-| GW35 | Console pages and Scan Detail truth | Not started. The Attack Simulator still shows Auth and Rate Limit as ALLOW on the competitor block above. Those two stages are hard-coded allow. |
+| GW35 | Console pages and Scan Detail truth | Local half built on 4 November: Auth and Rate Limit show the real outcome, `error` is a console action, failed credentials are audited. Live stack run, browser walk and owner signatures not done, so it does not exit. See `docs/plans/evidence/2026-11-04-gw35/SUMMARY.md`. |
 | GW36 | Production boot and a real local model | S0–S3 done (2–3 November); see the GW36 section above. `AMF_PROFILE=production` resolves real console keys and plans from signed state, but provider, admission, quota and detectors are still fail-closed (S4/S5), so it does not serve completions yet. |
 
 ## Owner decisions still written as open in v3.1
