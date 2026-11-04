@@ -111,7 +111,7 @@ def test_deny_all_and_name_validity() -> None:
 # Feature: gw32-mcp-transport, Property 3: cap conservation
 def test_property_3_admitted_never_exceeds_cap_plus_declared_overshoot() -> None:
     rng = random.Random(3)
-    for it in range(ITERATIONS // 4):
+    for it in range(ITERATIONS):
         workers = rng.randint(1, 4)
         cap = rng.randint(1, 40)
         fleet = Fleet(workers, bootstrap=1, seed=it)
@@ -158,7 +158,7 @@ def test_property_4_retry_after_bounds() -> None:
 # Feature: gw32-mcp-transport, Property 4: cap fail-closed (outage admits <= held + bootstrap)
 def test_cap_outage_property() -> None:
     rng = random.Random(33)
-    for it in range(ITERATIONS // 4):
+    for it in range(ITERATIONS):
         fleet = Fleet(1, bootstrap=1, seed=it)
         table = fleet.tables[0]
 

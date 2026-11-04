@@ -74,7 +74,7 @@ def test_open_check_close_and_foreign_bindings() -> None:
 # Feature: gw32-mcp-transport, Property 10: bounded session counts under random schedules
 def test_property_10_counts_never_exceed_bounds_and_live_sessions_stay_counted() -> None:
     rng = random.Random(10)
-    for it in range(ITERATIONS // 10):
+    for it in range(ITERATIONS):
         clock = Clock()
         bounds = _bounds(per_key=rng.randint(1, 3), per_org=rng.randint(2, 5), total=6)
         for store in _stores(clock, bounds):

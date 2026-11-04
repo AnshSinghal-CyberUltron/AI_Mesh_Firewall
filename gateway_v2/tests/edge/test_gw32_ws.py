@@ -224,3 +224,70 @@ def test_other_websocket_paths_are_delegated_to_the_app() -> None:
     sent = drive(wrap_mcp_app(app, WsLimiter(bounds)), [], path="/v1/not-mcp")
     assert all(e["type"] != "websocket.accept" for e in sent)
     assert route_of(app) is not None and route_of(object()) is None
+
+
+def test_accept_event_stream_on_the_upgrade_still_gets_json_frames() -> None:
+    app, broker, bounds = _build(Identity())
+    wrapped = wrap_mcp_app(app, WsLimiter(bounds))
+    sent = drive(
+        wrapped, [text(call("tools/list", msg_id=7))],
+        headers={"accept": "application/json, text/event-stream"},
+    )
+    (reply,) = texts(sent)  # parsed as one JSON document, not an SSE-framed body
+    assert reply["id"] == 7 and closes(sent) == []
+    assert len(broker.requests) == 1
+
+
+def test_revocation_while_a_message_is_in_flight_cancels_it_and_closes_1008() -> None:
+    identity = Identity()
+    app, broker, bounds = _build(identity, tb_over={"stream_recheck_s": 0.01})
+    started = asyncio.Event()
+    finished: list[bool] = []
+    real = broker.__call__
+
+    async def slow(*args: object) -> tuple[int, bytes]:
+        started.set()
+        await asyncio.sleep(2)  # held until the watchdog cancels it
+        finished.append(True)
+        return await real(*args)  # type: ignore[arg-type]
+
+    route = route_of(app)
+    assert route is not None
+    route.broker._transport = slow  # type: ignore[assignment]  # noqa: SLF001
+    sent: list[dict[str, object]] = []
+
+    async def go() -> None:
+        queue: asyncio.Queue[dict[str, object]] = asyncio.Queue()
+        await queue.put({"type": "websocket.connect"})
+        scope = {
+            "type": "websocket", "path": "/v1/mcp/s", "raw_path": b"/v1/mcp/s",
+            "headers": [(b"authorization", b"Bearer test"), (b"host", b"gw.test")],
+            "client": ("1.2.3.4", 1),
+        }
+
+        async def send(event: dict[str, object]) -> None:
+            sent.append(event)
+
+        task = asyncio.ensure_future(
+            wrap_mcp_app(app, WsLimiter(bounds))(scope, queue.get, send)
+        )
+        await queue.put(text(call("tools/list")))
+        await asyncio.wait_for(started.wait(), 2)
+        identity.revoked = True
+        await asyncio.wait_for(task, 2)
+
+    asyncio.run(go())
+    assert closes(sent) == [1008]
+    assert finished == []  # the in-flight call was cancelled, never completed
+    assert texts(sent) == []
+
+
+def test_idle_weight_bounds_open_sockets_against_the_slot_budget() -> None:
+    _, _, bounds = _build(Identity())
+    weighted = replace(bounds, ws_idle_weight=0.5, ws_global=100, ws_per_key=100, ws_per_org=100)
+    limiter = WsLimiter(weighted, slot_budget=1)
+    assert limiter.acquire("k1", ORG) and limiter.acquire("k2", ORG)  # 2 x 0.5 = 1 slot
+    assert limiter.idle_slots() == 1
+    assert not limiter.acquire("k3", ORG)  # ceil(1.5) = 2 > 1: refused, never under-counted
+    limiter.release("k1", ORG)
+    assert limiter.acquire("k3", ORG)

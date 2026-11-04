@@ -476,7 +476,10 @@ def _assemble_app(deps: dict[str, object]) -> ASGIApplication:
     if isinstance(mcp, McpDeps) and mcp.transport_bounds is not None:
         # GW32: the WebSocket scope, one shared per-worker limiter. `route_of` reads the booted
         # route from `build_app`'s table, so this wraps BEFORE `wrap_dev_app` hides it.
-        built = wrap_mcp_app(built, WsLimiter(mcp.transport_bounds))
+        built = wrap_mcp_app(
+            built,
+            WsLimiter(mcp.transport_bounds, slot_budget=kwargs["contract"].connection_budget()),
+        )
     app = wrap_dev_app(built, deps)
     # PRODUCTION PROFILE (GW36 S3): the signed-state runtime runs in the ASGI lifespan.
     return StateServedApp(app, state) if isinstance(state, StateRuntime) else app

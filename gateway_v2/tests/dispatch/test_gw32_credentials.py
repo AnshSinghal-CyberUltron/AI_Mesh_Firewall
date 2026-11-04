@@ -276,7 +276,7 @@ def _endpoint(reply: dict[str, object] | None = None, status: int = 200):  # typ
 # Feature: gw32-mcp-transport, Property 8: N concurrent requests, one refresh
 def test_property_8_single_flight_refresh() -> None:
     rng = random.Random(8)
-    for _ in range(ITERATIONS // 4):
+    for _ in range(ITERATIONS):
         n = rng.randint(2, 12)
         control, endpoint = Control(_oauth()), _endpoint()
         service, _ = _service(control, endpoint)
@@ -366,7 +366,7 @@ class PerOrgControl:
 # Feature: gw32-mcp-transport, Property 6: org isolation
 def test_property_6_two_orgs_same_slug_never_share_a_credential() -> None:
     rng = random.Random(6)
-    for _ in range(ITERATIONS // 4):
+    for _ in range(ITERATIONS):
         tokens = {"org-a": _secret(rng, 20), "org-b": _secret(rng, 20)}
         control = PerOrgControl(tokens)
         service, cache = _service(control, _endpoint())  # type: ignore[arg-type]

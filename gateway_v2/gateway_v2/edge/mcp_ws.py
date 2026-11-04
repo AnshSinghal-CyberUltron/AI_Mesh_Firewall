@@ -10,14 +10,18 @@ Refusals before ``accept`` are a ``websocket.close`` with no accept, which ASGI 
 an HTTP 403 handshake. Over a connection bound the close code is 1013. A binary frame closes 1003,
 an oversize frame 1009, a revoked or unauthenticated caller 1008.
 
-Known gap, recorded in the handoff: a revocation that happens WHILE a message is in flight is seen
-at the next frame (and on the idle re-check), not by cancelling the in-flight broker call.
+While a message is in flight a watchdog re-checks identity every `stream_recheck_s`; on a
+revocation it cancels the in-flight call (so no broker call starts after the revocation is seen)
+and closes 1008 (R5.5). Each message takes a full admission slot and budget charge through the
+shared pipeline; the open socket itself holds `ws_idle_weight` of a slot, and the limiter refuses a
+new socket (1013) when ``ceil(open sockets x ws_idle_weight)`` would exceed `slot_budget` (D-8).
 """
 
 from __future__ import annotations
 
 import asyncio
 import json
+import math
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 
@@ -54,6 +58,9 @@ class WsLimiter:
     """Per-worker connection counters (instance-owned; one asyncio thread, so no lock)."""
 
     bounds: McpTransportBounds
+    slot_budget: int | None = None
+    """Whole admission slots idle sockets may hold (`connection_budget()`); `None` = no idle-weight
+    bound beyond the connection counts."""
     _key: dict[str, int] = field(default_factory=dict)
     _org: dict[str, int] = field(default_factory=dict)
     _total: int = 0
@@ -63,12 +70,22 @@ class WsLimiter:
             self._total >= self.bounds.ws_global
             or self._key.get(key_id, 0) >= self.bounds.ws_per_key
             or self._org.get(org, 0) >= self.bounds.ws_per_org
+            or not self._weight_fits(self._total + 1)
         ):
             return False
         self._total += 1
         self._key[key_id] = self._key.get(key_id, 0) + 1
         self._org[org] = self._org.get(org, 0) + 1
         return True
+
+    def _weight_fits(self, sockets: int) -> bool:
+        if self.slot_budget is None:
+            return True
+        return math.ceil(sockets * self.bounds.ws_idle_weight) <= self.slot_budget
+
+    def idle_slots(self) -> int:
+        """Whole slots the open sockets hold: ``ceil(sum of idle weights)``, never under-counted."""
+        return math.ceil(self._total * self.bounds.ws_idle_weight)
 
     def release(self, key_id: str, org: str) -> None:
         self._total = max(0, self._total - 1)
@@ -210,8 +227,20 @@ async def _run_message(
     post_scope = {**scope, "type": "http", "method": "POST", "headers": headers}
     task = asyncio.ensure_future(route.run_message(post_scope, path, one_body, collect))
     watcher = asyncio.ensure_future(receive())
+    recheck_s = route._transport().stream_recheck_s  # noqa: SLF001
     try:
-        await asyncio.wait({task, watcher}, return_when=asyncio.FIRST_COMPLETED)
+        while True:
+            done, _ = await asyncio.wait(
+                {task, watcher}, timeout=recheck_s, return_when=asyncio.FIRST_COMPLETED
+            )
+            if done:
+                break
+            again = await resolve_caller(route.chat.identity, route.token_store, scope)
+            if isinstance(again, CallerRefused):  # revoked mid-call: no broker call after this
+                task.cancel()
+                await asyncio.gather(task, return_exceptions=True)
+                await _close(send, WS_CLOSE_POLICY)
+                return {"type": "websocket.disconnect"}
         if not task.done():
             task.cancel()  # the client went away (or pipelined): do not leave the call running
             await asyncio.gather(task, return_exceptions=True)
