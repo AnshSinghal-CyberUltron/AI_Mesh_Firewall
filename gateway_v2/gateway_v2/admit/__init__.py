@@ -13,6 +13,7 @@ from gateway_v2.admit.admission import (
     DrainState,
     InFlightStream,
 )
+from gateway_v2.admit.auto_isolation import AutoIsolator, IsolatorParams
 from gateway_v2.admit.codel import (
     CoDelController,
     CoDelDecision,
@@ -32,6 +33,9 @@ from gateway_v2.admit.identity import (
     identity_applier,
     principal_of,
 )
+from gateway_v2.admit.incident_gate import IncidentGate
+from gateway_v2.admit.incident_metrics import IncidentMetrics, IncidentReading
+from gateway_v2.admit.incident_state import IncidentState, IsolationView
 from gateway_v2.admit.killswitch import (
     KillSwitchSnapshot,
     KillSwitchState,
@@ -47,10 +51,12 @@ from gateway_v2.admit.metrics import (
     QueueReport,
     ShedReason,
 )
+from gateway_v2.admit.model_risk import ModelRiskTracker, RiskParams, RiskReading
 from gateway_v2.admit.quota import (
     AdmissionBounds,
     derive_bounds,
 )
+from gateway_v2.admit.revocation import RevocationLedger
 from gateway_v2.admit.supervisor import (
     ExitOutcome,
     Worker,
@@ -63,6 +69,7 @@ __all__ = (
     "AdmissionMetrics",
     "AdmissionReading",
     "Admitted",
+    "AutoIsolator",
     "CacheStats",
     "CoDelController",
     "CoDelDecision",
@@ -73,11 +80,21 @@ __all__ = (
     "DrainState",
     "ExitOutcome",
     "IdentityCache",
+    "IncidentGate",
+    "IncidentMetrics",
+    "IncidentReading",
+    "IncidentState",
+    "IsolationView",
+    "IsolatorParams",
     "InFlightStream",
     "KillSwitchSnapshot",
     "KillSwitchState",
     "KillSwitchView",
+    "ModelRiskTracker",
     "QueueReport",
+    "RevocationLedger",
+    "RiskParams",
+    "RiskReading",
     "ResourceGrant",
     "ShedReason",
     "ShedVerdict",

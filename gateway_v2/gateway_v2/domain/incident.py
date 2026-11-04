@@ -33,6 +33,7 @@ __all__ = (
     "INCIDENT_CAUSES",
     "KS_SCOPE_GENERATION",
     "MODEL_NAME_MAX",
+    "NO_ROUTED_MODEL",
     "REASON_MAX",
     "ROUTING_SENTINEL",
     "SLUG_MAX",
@@ -76,6 +77,8 @@ SLUG_MAX: Final = 64
 REASON_MAX: Final = 200
 ROUTING_SENTINEL: Final = "auto"
 """The product's routing mode, not a model name. The gate resolves or refuses it (no router)."""
+NO_ROUTED_MODEL: Final = "-"
+"""`routed_model` of an org-level verdict (`decide_org`): a surface that names no routable model."""
 KS_SCOPE_GENERATION: Final = 2
 """Scope-grammar generation: 1 = global/org/model, 2 adds `om:` and `iso:` (rollout, design 9)."""
 

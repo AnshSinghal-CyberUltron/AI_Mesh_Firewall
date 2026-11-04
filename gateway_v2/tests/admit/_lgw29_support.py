@@ -176,3 +176,42 @@ class Rig:
 
         observe_many(self.tracker, model, ModelOutcome.SERVER_ERROR, list(orgs),
                      contract().risk_min_samples())
+
+
+class GateRig:
+    """A gate over a real snapshot + state, with a recording emitter and a seeded rng."""
+
+    def __init__(self, *, aliases=None, profiles=None, fallbacks=None, catalog: bool = False,  # type: ignore[no-untyped-def]
+                 auto_target: str | None = None, constraints=None, load_empty: bool = True) -> None:
+        import random
+        from types import MappingProxyType
+
+        from gateway_v2.admit.incident_gate import IncidentGate
+        from gateway_v2.admit.incident_metrics import IncidentMetrics
+        from gateway_v2.domain.incident import RequestConstraints
+
+        c = contract()
+        self.mono, self.wall = Clock(100.0), Clock(1_000.0)
+        self.aliases = MappingProxyType(dict(aliases or {}))
+        self.snap = snapshot(self.mono, aliases=self.aliases)
+        if load_empty:
+            load(self.snap, [], on_count=0)
+        self.state = make_state(self.snap, self.wall, self.mono, auto_s=300.0, hold_s=600.0)
+        self.metrics = IncidentMetrics()
+        self.events: list = []
+        self.profiles = profiles or {}
+        self.gate = IncidentGate(
+            switches=self.snap, state=self.state,
+            catalog=Catalog(self.profiles) if catalog else None, aliases=self.aliases,
+            fallbacks=Fallbacks(fallbacks or {}),
+            constraints=Constraints(constraints if constraints is not None
+                                    else RequestConstraints(False, None, frozenset(), 0)),
+            retry_jitter_s=c.incident_retry_jitter_s(), metrics=self.metrics,
+            emit=self.events.append, rng=random.Random(7), wall=self.wall, auto_target=auto_target,
+        )
+
+    def engage(self, *records) -> None:  # type: ignore[no-untyped-def]
+        load(self.snap, list(records))
+
+    def decide(self, model: str, org: str = "a"):  # type: ignore[no-untyped-def]
+        return self.gate.decide(org_id=org, requested_model=model, request_id="r1")
