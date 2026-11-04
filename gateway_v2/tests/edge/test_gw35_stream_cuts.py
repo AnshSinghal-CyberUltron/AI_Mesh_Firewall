@@ -184,3 +184,11 @@ def test_a_stream_refused_before_the_provider_opens_is_a_routing_error_in_the_au
     stages = {s["name"]: (s["action"], s["ran"]) for s in console["pipeline_trace"]["stages"]}  # type: ignore[index]
     assert stages["model_routing"] == ("error", True)
     assert console["zeroshield"]["action"] == "error"  # type: ignore[index]
+
+
+@pytest.mark.parametrize("code", ["killed", posture.STREAM_KILLED])
+def test_a_strict_kill_records_nothing(code: str) -> None:
+    holds = _holds()
+    payload, _ = _finish(holds, StrictStats(incomplete=True, error=code), None, terminal=True)
+    assert payload is not None and holds.failure_code == "" and holds.output_action == ""
+    assert payload["zeroshield"]["action"] == "allow"  # type: ignore[index]

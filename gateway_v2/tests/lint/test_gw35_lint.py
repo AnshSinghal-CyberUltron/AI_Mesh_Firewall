@@ -90,6 +90,7 @@ def test_no_doc_names_circuit_breaker_as_a_dropped_stage() -> None:
     for doc in docs:
         text = Path(doc).read_text(encoding="utf-8", errors="replace")
         assert not stale.search(text), doc
-    contract = (_ROOT / "docs/plans/2026-10-26-gw14b-console-contract.md").read_text(encoding="utf-8")
+    plan = _ROOT / "docs/plans/2026-10-26-gw14b-console-contract.md"
+    contract = plan.read_text(encoding="utf-8")
     assert all(name in contract for name in names)
     assert "awaiting owner signature" in contract

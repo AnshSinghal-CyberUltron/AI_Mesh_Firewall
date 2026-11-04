@@ -191,3 +191,19 @@ def test_a_streamed_identity_refusal_is_plain_http_with_the_console() -> None:
 def test_a_malformed_body_keeps_no_trace() -> None:
     res = _call(None, body=b"{not json")
     assert "pipeline_trace" not in res.body.decode()
+
+
+def test_the_body_gains_exactly_zeroshield_pipeline_trace_and_source() -> None:
+    res = _call(None)
+    body = res.json()
+    assert {"zeroshield", "pipeline_trace", "source"} <= set(body)
+    assert body["source"] == "gateway_v2"
+    assert set(body) - {"zeroshield", "pipeline_trace", "source"} == {
+        "id", "object", "created", "model", "choices", "usage",
+    }
+
+
+def test_the_stream_trace_frame_carries_source() -> None:
+    res = _call(None, stream=True)
+    frame = res.trace_frame()
+    assert frame is not None and frame["source"] == "gateway_v2"
