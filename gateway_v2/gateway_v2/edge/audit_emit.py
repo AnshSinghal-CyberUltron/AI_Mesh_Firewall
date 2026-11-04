@@ -33,9 +33,55 @@ from gateway_v2.edge.request_holds import RequestHolds
 _CHAT_ROUTE = "chat"
 
 
-def note_stream_output(holds: RequestHolds, stats: object, plan_version: str) -> None:
+#: Decides whether a review-queue item is emitted for a REDACT/REWRITE disposition (requirement
+#: 4.3; GW27 wires `output_incident_logging_enabled` into it). FLAG and BLOCK always queue.
+ReviewQueuePolicy = Callable[[], bool]
+
+
+def _always() -> bool:
+    return True
+
+
+def review_item_wanted(decision: Decision, policy: ReviewQueuePolicy = _always) -> bool:
+    """Whether the review queue gets an item. The in-record flag is set regardless."""
+    if not decision.review_required:
+        return False
+    if decision.disposition in (Disposition.REDACT, Disposition.REWRITE):
+        return policy()
+    return True
+
+
+def output_extras(
+    holds: RequestHolds,
+    stats: object,
+    decision: Decision | None,
+    policy: ReviewQueuePolicy = _always,
+) -> dict[str, object]:
+    """The GW33 audit fields. Booleans, rule/code names and the bytes action: never content."""
+    review = bool(getattr(stats, "review_required", False))
+    forced = decision is None or not decision.review_required  # the stats-only flag (D-22)
+    queued = forced or (decision is not None and review_item_wanted(decision, policy))
+    return {
+        "review_required": review,
+        "review_queued": review and queued,
+        "canary_checked": holds.canary_ticket is not None,
+        "canary_leaked": bool(getattr(stats, "canary_leaked", False)),
+        "bytes_action": str(getattr(stats, "bytes_action", "allow")),
+        "codes": list(decision.codes) if decision is not None else [],
+    }
+
+
+def note_stream_output(
+    holds: RequestHolds,
+    stats: object,
+    plan_version: str,
+    policy: ReviewQueuePolicy = _always,
+) -> None:
     """Record the stream's output decision. An allow with no decision is still output."""
     decision = getattr(stats, "output_decision", None)
+    holds.note_output_extras(
+        output_extras(holds, stats, decision if isinstance(decision, Decision) else None, policy),
+    )
     if isinstance(decision, Decision):
         holds.note_output(decision)
         return
@@ -93,7 +139,7 @@ def _records(
     refuse_code: str | None,
     recorded_at_ns: int,
     console: Mapping[str, object] | None,
-    extra: Mapping[str, str],
+    extra: Mapping[str, object],
 ) -> list[AuditRecord]:
     records: list[AuditRecord] = []
     output = holds.output_decision
@@ -118,8 +164,10 @@ def _phase(
     phase: AuditPhase,
     recorded_at_ns: int,
     console: Mapping[str, object] | None,
-    extra: Mapping[str, str],
+    extra: Mapping[str, object],
 ) -> AuditRecord:
+    if phase is AuditPhase.OUTPUT and holds.output_extras:
+        extra = {**extra, **holds.output_extras}
     built = from_decision(
         DecisionRecord(
             request_id=holds.request_id,
@@ -137,7 +185,7 @@ def _admission(
     holds: RequestHolds,
     refuse_code: str,
     recorded_at_ns: int,
-    extra: Mapping[str, str],
+    extra: Mapping[str, object],
 ) -> AuditRecord | None:
     try:
         status = errors.render_http(refuse_code, request_id=holds.request_id).status
@@ -159,7 +207,7 @@ def _admission(
 
 
 def _annotate(
-    record: AuditRecord, console: Mapping[str, object] | None, extra: Mapping[str, str]
+    record: AuditRecord, console: Mapping[str, object] | None, extra: Mapping[str, object]
 ) -> AuditRecord:
     detail = dict(record.detail)
     detail.update(extra)

@@ -31,6 +31,7 @@ from gateway_v2.egress.output_guard import FinalDetector, OutputBlocked, OutputR
 
 __all__ = (
     "OutputAggregate",
+    "WholeText",
     "PublishStats",
     "TradeOffUndefined",
     "apply_final_check",
@@ -55,6 +56,25 @@ class PublishStats(Protocol):
     canary_leaked: bool
     bytes_action: str
     final_check_unavailable: int
+
+
+class WholeText:
+    """Per-channel accumulation for the PASS-THROUGH final check; inert unless a detector is wired.
+
+    A flag-only IP/exfil/grounding rule holds nothing, but its check still needs the whole channel
+    after the last chunk (D-9, D-22), so a pass-through run collects text only when asked to.
+    """
+
+    __slots__ = ("enabled", "parts")
+
+    def __init__(self, enabled: bool) -> None:
+        self.enabled = enabled
+        self.parts: dict[str, str] = {}
+
+    def add(self, deltas: Sequence[tuple[str, str]]) -> None:
+        if self.enabled:
+            for channel, delta in deltas:
+                self.parts[channel] = self.parts.get(channel, "") + delta
 
 
 def bytes_action(decision: Decision) -> str:

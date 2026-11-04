@@ -170,6 +170,11 @@ _ENVELOPE: Mapping[str, tuple[int, str]] = MappingProxyType(
         posture.STREAM_BUFFER_UNAVAILABLE: (503, "service_unavailable"),
         # -- GW13 STRICT_WITHHOLD buffer overflow (R9.5) ----------------------
         posture.STREAM_STRICT_BUFFER_OVERFLOW: (503, "service_unavailable"),
+        # -- GW33 output-parity terminal and request codes (generic body, never retried) ----
+        posture.REWRITE_UNVERIFIED: (503, "service_unavailable"),
+        posture.FINAL_CHECK_UNAPPLIED: (503, "service_unavailable"),
+        posture.OUTPUT_LENGTH_EXCEEDED: (503, "service_unavailable"),
+        posture.CANARY_UNAVAILABLE: (503, "service_unavailable"),
         # -- Pre-existing egress terminal codes (reused unchanged) ------------
         "stream_killed": (503, "service_unavailable"),
         "scan_failure": (403, "gateway_error"),

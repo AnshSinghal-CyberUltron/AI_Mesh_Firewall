@@ -80,6 +80,7 @@ from gateway_v2.egress.output_guard import (
 from gateway_v2.egress.stream_publish import (
     OutputAggregate,
     TradeOffUndefined,
+    WholeText,
     apply_final_check,
     forced_release_remainder_edits,
     publish_output,
@@ -456,21 +457,24 @@ class StreamPipeline:
         send: Send,
         stats: StreamStats,
     ) -> StreamStats:
-        """Release every chunk unheld; hold nothing (R2.2)."""
+        """Release every chunk unheld; hold nothing (R2.2). A wired final check still runs."""
+        wholes = WholeText(self._final_detector is not None)
         try:
             async for chunk in chunks:
                 stats.upstream_chunks += 1
                 await send(DownstreamFrame(text_deltas=chunk.text_deltas))
+                wholes.add(chunk.text_deltas)
                 stats.frames_out += 1
                 if chunk.final:
                     break
+            await apply_final_check(wholes.parts, self._final_detector, self._resolver, self._agg)
         except OutputLengthExceeded:
             return await self._terminate(send, stats, error=posture.OUTPUT_LENGTH_EXCEEDED)
         except Exception:
             stats.incomplete = True
             self._metrics.observe_stream_incomplete(stats)
             raise
-        stats.output_action = "allow"
+        publish_output(stats, self._agg)
         stats.done = True
         self._metrics.observe_stream_complete(stats)
         return stats

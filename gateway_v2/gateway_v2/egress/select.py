@@ -33,9 +33,9 @@ import time
 from collections.abc import Callable
 
 from gateway_v2.domain import ExecutionPlan, StreamingMode
-from gateway_v2.egress.output_guard import OutputResolver
-from gateway_v2.egress.stream import Detector, StreamPipeline
-from gateway_v2.egress.strict import StrictWithholdPipeline
+from gateway_v2.egress.output_guard import FinalDetector, OutputResolver
+from gateway_v2.egress.stream import DeltaDetector, Detector, StreamPipeline
+from gateway_v2.egress.strict import StrictWithholdPipeline, SyncRunner
 from gateway_v2.egress.transport import ScanProtocol, TokenCounterProtocol
 from gateway_v2.runtime.holdback_config import HoldbackConfig
 from gateway_v2.runtime.holdback_metrics import HoldbackMetrics
@@ -60,6 +60,10 @@ def select_pipeline(
     max_buffer_bytes: int,
     strict_metrics: StrictMetrics,
     clock: Callable[[], int] = time.perf_counter_ns,
+    # GW33 (D-22/D-23): optional hooks; None keeps both pipelines exactly as before.
+    delta_detector: DeltaDetector | None = None,
+    final_detector: FinalDetector | None = None,
+    sync_runner: SyncRunner | None = None,
 ) -> StreamPipeline | StrictWithholdPipeline:
     """Return the pipeline the resolved plan selected, with the seam identical for both.
 
@@ -82,6 +86,8 @@ def select_pipeline(
             metrics=strict_metrics,
             clock=clock,
             detector=detector,
+            final_detector=final_detector,
+            sync_runner=sync_runner,
         )
     return StreamPipeline.for_plan(
         plan,
@@ -93,4 +99,6 @@ def select_pipeline(
         window=window,
         clock=clock,
         detector=detector,
+        delta_detector=delta_detector,
+        final_detector=final_detector,
     )

@@ -83,7 +83,12 @@ from gateway_v2.egress.stream import (
     Undetermined,
     UpstreamPlan,
 )
-from gateway_v2.egress.stream_publish import OutputAggregate, publish_output
+from gateway_v2.egress.stream_publish import (
+    OutputAggregate,
+    WholeText,
+    apply_final_check,
+    publish_output,
+)
 from gateway_v2.runtime.strict_metrics import StrictMetrics
 
 __all__ = (
@@ -287,20 +292,24 @@ class StrictWithholdPipeline:
         straight through as content frames -- while still reporting
         ``produced_mode = strict_withhold`` on the returned stats.
         """
+        wholes = WholeText(self._final_detector is not None)
+        agg = OutputAggregate()
         try:
             async for chunk in chunks:
                 stats.upstream_chunks += 1
                 await send(DownstreamFrame(text_deltas=chunk.text_deltas))
+                wholes.add(chunk.text_deltas)
                 stats.frames_out += 1
                 if chunk.final:
                     break
+            await apply_final_check(wholes.parts, self._final_detector, self._resolver, agg)
         except OutputLengthExceeded:
             return await self._terminate(send, stats, error=posture.OUTPUT_LENGTH_EXCEEDED)
         except Exception:
             stats.incomplete = True
             self._metrics.observe_stream_incomplete(stats)
             raise
-        stats.output_action = "allow"
+        publish_output(stats, agg)
         stats.done = True
         self._metrics.observe_stream_complete(stats)
         return stats
