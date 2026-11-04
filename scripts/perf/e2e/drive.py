@@ -92,6 +92,15 @@ def post_stream(url: str, key: str, body: dict, timeout: float):
             buf += raw
             while b"\n\n" in buf:
                 frame, buf = buf.split(b"\n\n", 1)
+                # gateway_v2 (GW34 V13) sends the trace as an SSE comment, `: amf.trace {json}`.
+                if frame.startswith(b": amf.trace "):
+                    try:
+                        d = json.loads(frame[len(b": amf.trace "):].split(b"\n", 1)[0])
+                    except json.JSONDecodeError:
+                        continue
+                    if isinstance(d, dict) and d.get("pipeline_trace"):
+                        trace = d["pipeline_trace"]
+                    continue
                 if not frame.startswith(b"data: "):
                     continue
                 p = frame[6:].decode(errors="replace").strip()

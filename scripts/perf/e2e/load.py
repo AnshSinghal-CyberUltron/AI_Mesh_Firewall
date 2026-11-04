@@ -131,9 +131,15 @@ def one_request(url, key, model, prompt_chars, max_tokens, timeout, stream):
             pass
     else:
         for frame in raw.split(b"\n\n"):
+            # v1: a `data:` frame; gateway_v2 (GW34 V13): an SSE comment `: amf.trace {json}`.
+            body = None
             if frame.startswith(b"data: ") and b"pipeline_trace" in frame:
+                body = frame[6:].strip()
+            elif frame.startswith(b": amf.trace ") and b"pipeline_trace" in frame:
+                body = frame[len(b": amf.trace "):].split(b"\n", 1)[0]
+            if body is not None:
                 try:
-                    trace = json.loads(frame[6:].strip()).get("pipeline_trace")
+                    trace = json.loads(body).get("pipeline_trace")
                 except json.JSONDecodeError:
                     pass
     addon = None
