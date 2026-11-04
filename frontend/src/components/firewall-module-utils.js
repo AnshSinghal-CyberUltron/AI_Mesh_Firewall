@@ -628,10 +628,14 @@ function summarizeEvents(events) {
   const redacted = (actions.redact || 0) + (actions.rewrite || 0);
   const flagged = actions.flag || 0;
   const monitor = actions.monitor || 0;
-  const allowed = Math.max(0, total - blocked - redacted - flagged - monitor);
+  // GW35: an upstream/internal fault is neither a block nor an allow. Counting it as allowed
+  // would draw "No threat detected" for a request that never got a verdict.
+  const errored = actions.error || 0;
+  const allowed = Math.max(0, total - blocked - redacted - flagged - monitor - errored);
 
   return {
     total,
+    errored,
     blocked,
     redacted,
     flagged,

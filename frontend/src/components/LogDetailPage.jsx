@@ -9,7 +9,9 @@ import { copyToClipboard } from "../lib/clipboard";
 import { getModuleLogCharts } from "./module-specific-log-charts";
 import { useAuth } from "../context/AuthContext";
 import {
+  NOT_REPORTED,
   formatPipelineDurationMs,
+  isGatewayV2Trace,
   formatDominantStageLabel,
   formatRouteDestination,
   resolveLatencyBreakdown,
@@ -105,7 +107,10 @@ function normalizeLogDetail(logData) {
   const latencyBreakdown = resolveLatencyBreakdown({ pipelineTrace, meta, extra, logData });
   const ttftMs = resolveTtftMs({ pipelineTrace, meta, extra, zeroshield: meta.zeroshield || extra.zeroshield });
 
-  let durationLabel = formatPipelineDurationMs(totalLatencyMs);
+  // gateway v2 reports no latency unless its trace carries one: say so, never "0ms" or "--".
+  let durationLabel = totalLatencyMs == null && isGatewayV2Trace(meta)
+    ? NOT_REPORTED
+    : formatPipelineDurationMs(totalLatencyMs);
   if (
     latencyBreakdown
     && latencyBreakdown.stage_latency_sum_ms != null
@@ -142,7 +147,7 @@ function normalizeLogDetail(logData) {
 // most-severe pipeline stage so the Scan Detail is honest regardless of which
 // telemetry path (stream vs non-stream) produced the event.
 const ACTION_TONE = { allow: "emerald", monitor: "emerald", pass: "emerald", redact: "blue", rewrite: "blue", flag: "amber", reroute: "amber", block: "red", error: "red" };
-const _STAGE_SEVERITY = { block: 3, error: 3, redact: 2, rewrite: 2, flag: 1, reroute: 1, monitor: 0, skip: 0, allow: 0, pass: 0 };
+const _STAGE_SEVERITY = { block: 4, error: 3, redact: 2, rewrite: 2, flag: 1, reroute: 1, monitor: 0, skip: 0, allow: 0, pass: 0 };
 
 // Honest timestamp: a log missing its timestamp must show "—", never the
 // current wall-clock time (which reads as if the event just happened now).
@@ -751,11 +756,13 @@ function StatusBadge({ status, action }) {
   const block = { bg: "bg-red-100 dark:bg-red-800/30", text: "text-red-700 dark:text-red-300", dot: "bg-red-500" };
   const flag = { bg: "bg-amber-100 dark:bg-amber-800/30", text: "text-amber-700 dark:text-amber-300", dot: "bg-amber-500" };
   const redact = { bg: "bg-blue-100 dark:bg-blue-800/30", text: "text-blue-700 dark:text-blue-300", dot: "bg-blue-500" };
+  // GW35: a fault is not a block. Orange, and worded "Upstream error", never BLOCK.
+  const fault = { bg: "bg-orange-100 dark:bg-orange-800/30", text: "text-orange-700 dark:text-orange-300", dot: "bg-orange-500" };
   // Accept both present- and past-tense verdicts (event action is present-tense:
   // allow/redact/block/flag/reroute; legacy rows used allowed/redacted/…).
   const statusConfig = {
     allow, allowed: allow, monitor: allow, pass: allow,
-    block, blocked: block, error: block,
+    block, blocked: block, error: fault,
     flag, flagged: flag, reroute: flag,
     redact, redacted: redact, rewrite: redact,
   };
@@ -763,7 +770,7 @@ function StatusBadge({ status, action }) {
   return (
     <span className={`inline-flex items-center gap-1.5 px-3 py-1 ${config.bg} ${config.text} rounded-full text-xs font-semibold`}>
       <div className={`w-1.5 h-1.5 rounded-full ${config.dot}`}></div>
-      {action || status?.toUpperCase()}
+      {String(status || "").toLowerCase() === "error" ? "Upstream error" : action || status?.toUpperCase()}
     </span>
   );
 }

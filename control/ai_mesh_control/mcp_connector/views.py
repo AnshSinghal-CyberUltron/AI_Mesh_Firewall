@@ -1786,6 +1786,19 @@ class MCPToolCallView(APIView):
             # M6: honor a typed http_status (404 unknown-tool / 400 bad-request);
             # default 502 only for genuine outages (plain RequestException).
             _http_status = getattr(exc, "http_status", status.HTTP_502_BAD_GATEWAY)
+            if _http_status == 410:
+                # GW35: AMF_GATEWAY_BACKEND=v2 retired this route; answer in the proxy envelope.
+                return Response(
+                    {
+                        "status": "error",
+                        "data": {
+                            "code": "retired_on_gateway_v2",
+                            "message": "Tool execution is not served by gateway-v2.",
+                            "path": "/v1/mcp/internal/tools-call",
+                        },
+                    },
+                    status=410,
+                )
             _err_label = (
                 "Tool not found" if _http_status == 404
                 else "Invalid tool request" if _http_status == 400

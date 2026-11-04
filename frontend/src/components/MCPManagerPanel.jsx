@@ -11,6 +11,8 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { RetiredOnGatewayV2 } from "./RetiredOnGatewayV2";
+import { isRetiredResponse, retiredPanelModel } from "../utils/retiredRoute.js";
 import {
   Server,
   Shield,
@@ -172,6 +174,7 @@ export function MCPManagerPanel() {
   const [auditLogs, setAuditLogs] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [retired, setRetired] = useState(null);
   const [enforcementStatus, setEnforcementStatus] = useState(null);
 
   /* ── server for which tools/policies are shown ── */
@@ -483,6 +486,11 @@ export function MCPManagerPanel() {
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
+        if (isRetiredResponse(res.status, body)) {
+          if (preopenedPopup && !preopenedPopup.closed) preopenedPopup.close();
+          setRetired(retiredPanelModel(body));
+          return;
+        }
         if (body.error === "oauth_required" && body.authorization_url) {
           // Auto-open OAuth popup — no manual config needed
           handleOAuthPopup(body.authorization_url, serverId, preopenedPopup);
@@ -770,6 +778,7 @@ export function MCPManagerPanel() {
           ))}
         </div>
 
+        {retired ? <RetiredOnGatewayV2 model={retired} /> : null}
         {error && (
           <div className="mt-3 flex items-center gap-2 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 text-sm">
             <AlertTriangle className="w-4 h-4 shrink-0" />

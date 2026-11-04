@@ -184,7 +184,7 @@ function getStatusConfig(httpStatus, action) {
     || (httpStatus >= 400 && httpStatus !== 403 && httpStatus !== 429 && httpStatus !== 422
         && !["block", "redact", "flag"].includes(action))
   ) {
-    return { color: "amber", label: "ERROR", icon: AlertTriangle, bg: "bg-amber-50 dark:bg-amber-900/20", border: "border-amber-200 dark:border-amber-800", text: "text-amber-700 dark:text-amber-300" };
+    return { color: "amber", label: action === "error" ? "UPSTREAM ERROR" : "ERROR", icon: AlertTriangle, bg: "bg-amber-50 dark:bg-amber-900/20", border: "border-amber-200 dark:border-amber-800", text: "text-amber-700 dark:text-amber-300" };
   }
   if (httpStatus === 403 || action === "block") {
     return { color: "red", label: "BLOCKED", icon: AlertTriangle, bg: "bg-red-50 dark:bg-red-900/20", border: "border-red-200 dark:border-red-800", text: "text-red-700 dark:text-red-300" };
@@ -1061,7 +1061,7 @@ export function AttackSimulatorPanel() {
               const actionLabel = blocked
                 ? (result.final_action?.toUpperCase() || "BLOCK")
                 : errored
-                  ? "ERROR"
+                  ? (result.final_action === "error" ? "UPSTREAM ERROR" : "ERROR")
                   : (scan.action || result.final_action?.toUpperCase() || "ALLOW");
               const isClean = blocked || errored ? false : scan.clean;
               const threatLabel =

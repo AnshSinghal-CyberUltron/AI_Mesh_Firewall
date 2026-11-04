@@ -6,6 +6,8 @@ import { InfoTooltip } from "./InfoTooltip";
 import { useGatewayCredential } from "../hooks/useGatewayCredential";
 import { useAuth } from "../context/AuthContext";
 import { gatewayFetch } from "../lib/gatewayFetch";
+import { RetiredOnGatewayV2 } from "./RetiredOnGatewayV2";
+import { isRetiredResponse, retiredPanelModel } from "../utils/retiredRoute.js";
 
 const DB_PROVIDERS = [
   {
@@ -69,6 +71,7 @@ export function DatabaseConnectionPanel({ embedded = false }) {
   const [testing, setTesting] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
+  const [retired, setRetired] = useState(null);
   const [showSimulation, setShowSimulation] = useState(false);
   const [simulating, setSimulating] = useState(false);
   const [simResult, setSimResult] = useState(null);
@@ -115,7 +118,9 @@ export function DatabaseConnectionPanel({ embedded = false }) {
       try { envelope = await res.json(); } catch { envelope = {}; }
       const body = envelope?.data || envelope || {};
 
-      if (res.status === 401 || res.status === 403) {
+      if (isRetiredResponse(res.status, envelope)) {
+        setRetired(retiredPanelModel(envelope));
+      } else if (res.status === 401 || res.status === 403) {
         setError("Admin access is required to test database connections.");
       } else if (res.ok && body.status !== "error") {
         setResult({
@@ -311,6 +316,7 @@ export function DatabaseConnectionPanel({ embedded = false }) {
         {result && <ConnectionStatusBadge status={result.success ? "connected" : "error"} />}
       </div>
 
+      {retired ? <RetiredOnGatewayV2 model={retired} /> : null}
       {/* Error */}
       {error && (
         <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-xs text-red-700 dark:text-red-300 flex items-start gap-2">

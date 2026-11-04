@@ -165,3 +165,17 @@ test("module 1.5 headline uses the uncapped routing count, not the limit=500 pag
   const fallback = Object.fromEntries(noCount.summaryCards.map((card) => [card.label, card.value]));
   assert.equal(fallback["Routing decisions"], "3");
 });
+
+// ---- GW35: an upstream error is neither a block nor an allow ----------------------------------
+test("GW35: an error row is counted as an error and never as allowed", () => {
+  const events = [
+    { id: "a", action: "allow", metadata: { source: "gateway_v2" } },
+    { id: "b", action: "error", metadata: { source: "gateway_v2", refused_at: "model_output" } },
+    { id: "c", action: "block", metadata: { source: "gateway_v2", refused_at: "auth" } },
+  ];
+  const data = buildModulePageData("1.1", events, {});
+  const summary = data.summary || data;
+  assert.equal(summary.errored, 1);
+  assert.equal(summary.allowed, 1);
+  assert.equal(summary.blocked, 1);
+});
