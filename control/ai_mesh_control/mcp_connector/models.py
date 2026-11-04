@@ -174,6 +174,11 @@ class MCPServerRegistration(models.Model):
     # Transient per-flow values (cleared on callback completion):
     oauth_code_verifier = EncryptedCharField(max_length=512, blank=True, default="")
     oauth_state = models.CharField(max_length=128, blank=True, default="", db_index=True)
+    # GW32 (DD-4): the gateway-run setup flow binds its single-use state to the starting key and
+    # expires it; both are cleared with the state. ``oauth_token_obtained_at`` feeds oauth/status.
+    oauth_flow_key_id = models.CharField(max_length=128, blank=True, default="")
+    oauth_flow_expires_at = models.DateTimeField(null=True, blank=True)
+    oauth_token_obtained_at = models.DateTimeField(null=True, blank=True)
 
     # ── Sync diagnostics (Phase A surfaced these; columns added Phase B) ──
     last_sync_error = models.TextField(blank=True, default="")
