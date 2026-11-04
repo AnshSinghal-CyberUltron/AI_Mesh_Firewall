@@ -53,6 +53,7 @@ from gateway_v2.domain import (
     PlanUnavailable,
     PlanUnknownTenant,
     StreamingMode,
+    posture,
 )
 from gateway_v2.egress.holdback_tradeoff import (
     TRADE_OFF_OUTCOMES,
@@ -64,16 +65,23 @@ from gateway_v2.egress.holdback_tradeoff import (
     unsplittable_hold,
     with_remainder_redactions,
 )
+from gateway_v2.egress.output_errors import (
+    FinalCheckUnapplied,
+    OutputLengthExceeded,
+    RewriteVerificationFailure,
+)
 from gateway_v2.egress.output_guard import (
+    FinalDetector,
     OutputBlocked,
     OutputResolver,
     apply_decision,
     enforcing_output_rules,
 )
 from gateway_v2.egress.stream_publish import (
+    OutputAggregate,
     TradeOffUndefined,
+    apply_final_check,
     forced_release_remainder_edits,
-    kept_output_decision,
     publish_output,
 )
 from gateway_v2.egress.transport import (
@@ -86,6 +94,7 @@ from gateway_v2.runtime.holdback_metrics import HoldbackMetrics
 
 __all__ = (
     "ChunkSource",
+    "DeltaDetector",
     "Detector",
     "DownstreamFrame",
     "EnforcementUndetermined",
@@ -168,6 +177,9 @@ KillSignal = Callable[[], bool]
 #: detector): no findings, ALLOW decision, identity redaction. The real GW07/GW08
 #: detector satisfies this signature and drops in behind it unchanged.
 Detector = Callable[[str], Sequence[Finding]]
+#: GW33 D-23: stateless per-delta detector ``(whole, previous_len) -> findings`` with ABSOLUTE
+#: offsets (the canary overlap scan); per-channel state lives on ``_Text``, never in the detector.
+DeltaDetector = Callable[[str, int], Sequence[Finding]]
 
 
 # ``ScanProtocol`` / ``ScanResultLike`` / ``TokenCounterProtocol`` live in ``egress.transport`` and
@@ -270,6 +282,8 @@ class _Text:
     max_held_tokens: int = 0
     max_unbroken_run_bytes: int = 0
     hits: list[Finding] = field(default_factory=list)
+    # GW33 D-23: per-CHANNEL findings of the stateless ``delta_detector`` (canary), span-deduped.
+    delta_hits: list[Finding] = field(default_factory=list)
 
 
 # --------------------------------------------------------------------------- #
@@ -311,6 +325,11 @@ class StreamStats:
     degenerated_to_strict: bool = False
     output_action: str | None = None
     output_decision: Decision | None = None
+    # GW33: ``decision.review_required or final_check_unavailable`` (D-22); audit reads THIS value.
+    review_required: bool = False
+    canary_leaked: bool = False
+    bytes_action: str = "allow"
+    final_check_unavailable: int = 0
 
 
 # --------------------------------------------------------------------------- #
@@ -342,6 +361,8 @@ class StreamPipeline:
         window: int,
         clock: Callable[[], int] = time.perf_counter_ns,
         detector: Detector | None = None,
+        delta_detector: DeltaDetector | None = None,
+        final_detector: FinalDetector | None = None,
     ) -> None:
         self._scanner = scanner
         self._resolver = resolver
@@ -352,8 +373,9 @@ class StreamPipeline:
         self._window = window
         self._clock = clock
         self._detector = detector
-        self._output_action: str | None = None
-        self._output_decision: Decision | None = None
+        self._delta_detector = delta_detector
+        self._final_detector = final_detector
+        self._agg = OutputAggregate()
 
     @classmethod
     def for_plan(
@@ -368,6 +390,8 @@ class StreamPipeline:
         window: int,
         clock: Callable[[], int] = time.perf_counter_ns,
         detector: Detector | None = None,
+        delta_detector: DeltaDetector | None = None,
+        final_detector: FinalDetector | None = None,
     ) -> StreamPipeline:
         """Build a pipeline, resolving ``enforcing_output`` from the plan (R2.3).
 
@@ -397,6 +421,8 @@ class StreamPipeline:
             window=window,
             clock=clock,
             detector=detector,
+            delta_detector=delta_detector,
+            final_detector=final_detector,
         )
 
     async def run(
@@ -438,6 +464,8 @@ class StreamPipeline:
                 stats.frames_out += 1
                 if chunk.final:
                     break
+        except OutputLengthExceeded:
+            return await self._terminate(send, stats, error=posture.OUTPUT_LENGTH_EXCEEDED)
         except Exception:
             stats.incomplete = True
             self._metrics.observe_stream_incomplete(stats)
@@ -505,19 +533,31 @@ class StreamPipeline:
                         out = self._process_delta(text, channel, "", final=True, stats=stats)
                         await self._emit(out, send, stats)
                     break
+            # D-22: the whole-channel final check, after the last chunk and before publish.
+            await apply_final_check(
+                {channel: text.whole for channel, text in texts.items()},
+                self._final_detector, self._resolver, self._agg,
+            )
         except ScanFailure:
             # Scanner failed: retain all pending, emit nothing further (R3.6).
             return await self._terminate(send, stats, error="scan_failure")
         except OutputBlocked as blocked:
             self._note_output(blocked.decision)
-            publish_output(stats, self._output_decision)
+            publish_output(stats, self._agg)
             return await self._terminate(send, stats, error="output_blocked")
+        except RewriteVerificationFailure:
+            return await self._terminate(send, stats, error=posture.REWRITE_UNVERIFIED)
+        except OutputLengthExceeded:
+            return await self._terminate(send, stats, error=posture.OUTPUT_LENGTH_EXCEEDED)
+        except FinalCheckUnapplied:
+            publish_output(stats, self._agg)
+            return await self._terminate(send, stats, error=posture.FINAL_CHECK_UNAPPLIED)
         except HoldbackOverflow:
             # Relaxed-class ceiling: release no held bytes of the match (R6.5).
             return await self._terminate(send, stats, error="holdback_overflow")
         except ForcedReleaseTerminate:
             # Over-cap match declared terminate-the-stream (R6.4); its BLOCK decision is kept.
-            publish_output(stats, self._output_decision)
+            publish_output(stats, self._agg)
             return await self._terminate(send, stats, error="forced_release_tradeoff")
         except TradeOffUndefined:
             # Over-cap pattern with no declared outcome: fail closed (R6.6).
@@ -534,7 +574,7 @@ class StreamPipeline:
         # genuinely empty response (no content frame at all) is NOT degenerate --
         # it is just empty -- so the ``> 0`` guard keeps it ``False``.
         stats.degenerated_to_strict = frames_out_before_final == 0 and stats.frames_out > 0
-        publish_output(stats, self._output_decision)
+        publish_output(stats, self._agg)
         stats.done = True
         self._metrics.observe_stream_complete(stats)
         return stats
@@ -580,6 +620,9 @@ class StreamPipeline:
 
         if self._detector is not None:
             text.hits = list(self._detector(text.whole))
+        if self._delta_detector is not None:
+            self._extend_delta_hits(text, len(text.whole) - len(delta))
+            text.hits = [*(text.hits if self._detector is not None else ()), *text.delta_hits]
 
         # Relaxed-class overflow (R6.5): fail closed, release NO in-progress bytes
         # (the raise unwinds before any release below).
@@ -624,6 +667,16 @@ class StreamPipeline:
         stats.holdback_wait_ns += max(0, t_ready - oldest_arrival)
         return DownstreamFrame(text_deltas=((channel, emitted),)), t_ready
 
+    def _extend_delta_hits(self, text: _Text, previous_len: int) -> None:
+        """Run the stateless delta detector; dedupe by ``(start, end)`` (D-23, L-4)."""
+        assert self._delta_detector is not None
+        seen = {tuple((s.start, s.end) for s in f.spans) for f in text.delta_hits}
+        for finding in self._delta_detector(text.whole, previous_len):
+            key = tuple((s.start, s.end) for s in finding.spans)
+            if key not in seen:
+                seen.add(key)
+                text.delta_hits.append(finding)
+
     def _record_maxima(self, text: _Text, held_suffix: str, stats: StreamStats) -> None:
         """Fold the per-stream held-token / unbroken-run maxima (R5.1/R5.5)."""
         held_tokens = self._token_index.tokens_in(held_suffix)
@@ -656,10 +709,8 @@ class StreamPipeline:
         return apply_decision(released, decision, release_start)
 
     def _note_output(self, decision: Decision) -> None:
-        """Keep the most restrictive output decision seen on this stream."""
-        kept = kept_output_decision(self._output_decision, decision)
-        self._output_decision = kept
-        self._output_action = kept.disposition.value
+        """Fold ``decision`` into the audit aggregate (``combine_decisions``; never for bytes)."""
+        self._agg.note(decision)
 
     def _forced_release_remainder_edits(
         self,

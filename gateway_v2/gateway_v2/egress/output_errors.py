@@ -7,7 +7,7 @@ above, `egress` raises `RewriteVerificationFailure` from `rewrite_verify`.
 """
 from __future__ import annotations
 
-__all__ = ("OutputLengthExceeded", "RewriteVerificationFailure")
+__all__ = ("FinalCheckUnapplied", "OutputLengthExceeded", "RewriteVerificationFailure")
 
 
 class RewriteVerificationFailure(ValueError):
@@ -16,3 +16,7 @@ class RewriteVerificationFailure(ValueError):
 
 class OutputLengthExceeded(ValueError):
     """The provider exceeded `output_ceiling_chars()`: terminal code `output_length_exceeded`."""
+
+
+class FinalCheckUnapplied(ValueError):
+    """INCREMENTAL final check yielded REDACT/REWRITE it cannot apply: `final_check_unapplied`."""
