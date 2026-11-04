@@ -1,98 +1,87 @@
 """Project a chat decision into the console object GW14b kept.
 
 The simulator reads ``zeroshield.action`` and ``pipeline_trace``. Those names
-stay. The six stages are the work this gateway actually did. A stage that did
-not run is ``ran: false`` and ``action: skip``. The body action and
-``X-ZeroShield-Action`` are written by :func:`apply_projection`.
+stay. The six stages are the work this gateway actually did, built by
+:mod:`gateway_v2.edge.console_stages` from facts on the request's ledger. A stage
+that did not run is ``ran: false`` and ``action: skip``. The body action,
+``source`` and ``X-ZeroShield-Action`` are written by :func:`apply_projection`.
 """
 
 from __future__ import annotations
 
 import json
+import logging
 from collections.abc import Mapping
 from typing import TYPE_CHECKING
 
-from gateway_v2.audit.console_schema import SOURCE, validate_console
-from gateway_v2.domain.decision import Disposition, most_restrictive
 from gateway_v2.edge import errors
+from gateway_v2.edge.console_stages import ChatFacts, stages_to_console
 from gateway_v2.edge.wire.sse import SSEEncoder
 
 if TYPE_CHECKING:
     from gateway_v2.edge.request_holds import RequestHolds
 
 _ACTION_HEADER = "x-zeroshield-action"
-_STAGES = (
-    "auth",
-    "rate_limit",
-    "input_scan",
-    "model_routing",
-    "model_output",
-    "output_guardrail",
-)
+_LOG = logging.getLogger("amf.edge.console")
 
 
-def chat_console(
-    *,
-    request_id: str,
-    plan_version: str,
-    input_action: str,
-    output_action: str | None,
-    provider_called: bool,
-    input_rule: str = "",
-    output_rule: str = "",
-) -> dict[str, object]:
-    """The console object for one chat. ``output_action`` is None when output did not run."""
-    final = input_action if output_action is None else _stricter(input_action, output_action)
-    model_ran = provider_called
-    output_shown = "skip" if output_action is None else output_action
-    stages: list[dict[str, object]] = [
-        _stage("auth", "allow", True, ""),
-        _stage("rate_limit", "allow", True, ""),
-        _stage("input_scan", input_action, True, input_rule if input_action != "allow" else ""),
-        _stage("model_routing", "allow" if model_ran else "skip", model_ran, ""),
-        _stage("model_output", "allow" if model_ran else "skip", model_ran, ""),
-        _stage(
-            "output_guardrail",
-            output_shown,
-            output_action is not None,
-            output_rule if output_action not in (None, "allow") else "",
-        ),
-    ]
-    console: dict[str, object] = {
-        "source": SOURCE,
-        "zeroshield": {"action": final, "request_id": request_id},
-        "pipeline_trace": {
-            "final_action": final,
-            "plan_version": plan_version,
-            "stages": stages,
-        },
-    }
-    validate_console(console)
-    return console
+def chat_console(*, request_id: str, facts: ChatFacts) -> dict[str, object] | None:
+    """The validated console for ``facts``, or ``None`` when no honest trace exists."""
+    return stages_to_console(request_id, facts)
+
+
+def facts_from_holds(holds: RequestHolds, refuse_code: str | None = None) -> ChatFacts:
+    """Copy the request's ledger into :class:`ChatFacts`. Reads ``holds`` only, never stats.
+
+    One code, three readers: the code is ``refuse_code`` or the first failure recorded on
+    ``holds``. After dispatch it is a ``failure_code``; before, it is a ``refuse_code``.
+    """
+    code = refuse_code or holds.failure_code
+    decision = holds.input_decision
+    passed = decision is not None
+    output = holds.output_decision
+    out_action = holds.output_action or ("" if output is None else output.disposition.value)
+    out_rule = holds.output_rule or (
+        output.deciding_rules[0] if output is not None and output.deciding_rules else ""
+    )
+    return ChatFacts(
+        refuse_code="" if holds.dispatched else code,
+        identity_resolved=holds.identity_resolved or passed,
+        plan_version=holds.plan_version or ("" if decision is None else decision.plan_version),
+        admitted=holds.is_admitted or passed,
+        spent=holds.is_spent or passed,
+        input_action="" if decision is None else decision.disposition.value,
+        input_rule=decision.deciding_rules[0] if decision and decision.deciding_rules else "",
+        dispatched=holds.dispatched,
+        failure_code=code if holds.dispatched else "",
+        output_action=out_action,
+        output_rule=out_rule,
+    )
 
 
 def console_from_holds(
-    holds: RequestHolds | None,
-    *,
-    output_action: str | None,
-    provider_called: bool,
+    holds: RequestHolds | None, refuse_code: str | None = None
 ) -> dict[str, object] | None:
-    """Build the console object from the input decision recorded on ``holds``."""
-    if holds is None or holds.input_decision is None:
+    """The one console entry. A failure returns ``None`` and logs once; the response stands."""
+    if holds is None:
         return None
-    decision = holds.input_decision
-    rule = decision.deciding_rules[0] if decision.deciding_rules else ""
-    output = holds.output_decision
-    output_rule = output.deciding_rules[0] if output is not None and output.deciding_rules else ""
-    return chat_console(
-        request_id=holds.request_id,
-        plan_version=decision.plan_version,
-        input_action=decision.disposition.value,
-        output_action=output_action,
-        provider_called=provider_called,
-        input_rule=rule,
-        output_rule=output_rule,
-    )
+    try:
+        return chat_console(
+            request_id=holds.request_id, facts=facts_from_holds(holds, refuse_code)
+        )
+    except Exception as exc:  # noqa: BLE001 - a console failure must never change the response.
+        _LOG.warning(
+            "console build failed request_id=%s error=%s", holds.request_id, type(exc).__name__,
+        )
+        return None
+
+
+def refusal_console(holds: RequestHolds | None, code: str) -> dict[str, object] | None:
+    """The console for a refusal rendered by ``code``; records the code on ``holds`` first."""
+    if holds is None:
+        return None
+    holds.note_failure(code)
+    return console_from_holds(holds, code)
 
 
 def apply_projection(
@@ -107,6 +96,7 @@ def apply_projection(
         raise ValueError("console projection requires a JSON object body")
     parsed["zeroshield"] = console["zeroshield"]
     parsed["pipeline_trace"] = console["pipeline_trace"]
+    parsed["source"] = console["source"]
     action = _action_of(console)
     body = json.dumps(parsed, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
     return errors.HTTPResponse(
@@ -127,46 +117,22 @@ def stream_trace_payload(
         "produced_mode": getattr(mode, "value", mode),
         "degenerated_to_strict": degenerated,
     }
-    output_action = getattr(stats, "output_action", None)
-    if not isinstance(output_action, str):
-        output_action = None
-    holds = getattr(produced, "holds", None)
-    dispatched = getattr(holds, "dispatched", None)
-    provider_called = dispatched if isinstance(dispatched, bool) else output_action is not None
-    console = console_from_holds(
-        holds,
-        output_action=output_action,
-        provider_called=provider_called,
-    )
+    console = console_from_holds(getattr(produced, "holds", None))
     if console is None:
         return payload
-    payload["zeroshield"] = console["zeroshield"]
-    payload["pipeline_trace"] = console["pipeline_trace"]
+    for key in ("zeroshield", "pipeline_trace", "source"):
+        payload[key] = console[key]
     return payload
 
 
-def refusal_trace_frame(holds: RequestHolds | None) -> bytes | None:
-    """An ``amf.trace`` frame for an input refusal, or None when no decision was recorded."""
-    console = console_from_holds(holds, output_action=None, provider_called=False)
+def refusal_trace_frame(holds: RequestHolds | None, code: str) -> bytes | None:
+    """An ``amf.trace`` frame for a refusal, or None when no honest trace exists."""
+    console = refusal_console(holds, code)
     if console is None:
         return None
     return SSEEncoder().trace(
-        {"zeroshield": console["zeroshield"], "pipeline_trace": console["pipeline_trace"]},
+        {key: console[key] for key in ("zeroshield", "pipeline_trace", "source")},
     )
-
-
-def _stage(name: str, action: str, ran: bool, deciding_rule: str) -> dict[str, object]:
-    if name not in _STAGES:
-        raise ValueError(name)
-    stage: dict[str, object] = {"name": name, "action": action, "ran": ran}
-    if deciding_rule:
-        stage["deciding_rule"] = deciding_rule
-    return stage
-
-
-def _stricter(left: str, right: str) -> str:
-    winner = most_restrictive((Disposition(left), Disposition(right)))
-    return winner.value
 
 
 def _action_of(console: Mapping[str, object]) -> str:

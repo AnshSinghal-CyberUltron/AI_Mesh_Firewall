@@ -73,6 +73,7 @@ __all__ = (
     "fail_closed_resolver",
     "hashed_bearer_key",
     "identity_of",
+    "mint_request_id",
     "refusal_request_id",
 )
 
@@ -174,13 +175,18 @@ async def identity_of(resolver: IdentityResolver, scope: ASGIScope) -> IdentityO
 _IDENTITY_REFUSALS = frozenset({posture.INVALID_API_KEY, posture.SHARED_STATE_UNAVAILABLE})
 
 
+def mint_request_id() -> str:
+    """A random, content-free gateway request id (``zs-`` + 24 hex)."""
+    return f"zs-{secrets.token_hex(12)}"
+
+
 def refusal_request_id(code: str) -> str | None:
     """A request id for an IDENTITY refusal, which precedes the content-derived one (N11).
 
     Random, so a client can quote it and nothing about the request is derivable from it. Every
     other code returns None: those refusals either carry the minted id or predate any.
     """
-    return f"zs-{secrets.token_hex(12)}" if code in _IDENTITY_REFUSALS else None
+    return mint_request_id() if code in _IDENTITY_REFUSALS else None
 
 
 # --------------------------------------------------------------------------- #

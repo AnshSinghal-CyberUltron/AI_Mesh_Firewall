@@ -8,12 +8,12 @@ filled in. Validated against the GW14b console schema before it is returned.
 
 from __future__ import annotations
 
-from gateway_v2.audit.console_schema import SOURCE, validate_console
+from gateway_v2.audit.console_schema import MCP_STAGE_NAMES, SOURCE, validate_console
 from gateway_v2.domain.decision import Disposition, most_restrictive
 
 __all__ = ("MCP_STAGES", "mcp_console")
 
-MCP_STAGES = ("auth", "rate_limit", "input_scan", "tool_call", "output_guardrail")
+MCP_STAGES = MCP_STAGE_NAMES
 _SKIP = "skip"
 _ALLOW = "allow"
 
@@ -52,7 +52,7 @@ def mcp_console(
             "stages": stages,
         },
     }
-    validate_console(console)
+    validate_console(console, stage_names=MCP_STAGE_NAMES)
     return console
 
 

@@ -389,6 +389,7 @@ def _assert_chat_ok(
         parsed = json.loads(response.body)
         parsed.pop("zeroshield")
         parsed.pop("pipeline_trace")
+        assert parsed.pop("source") == "gateway_v2"  # GW35 D-27: the one additive key
         assert parsed == json.loads(_chat_json_ok(content)), f"{where}: SDK JSON changed"
         assert response.headers.get("x-zeroshield-action") == final, where
         payload = json.loads(response.body)

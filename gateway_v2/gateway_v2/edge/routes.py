@@ -43,7 +43,7 @@ from gateway_v2.dispatch.provider import ProviderClient, UpstreamRequest
 from gateway_v2.dispatch.routing import DispatchRouter
 from gateway_v2.dispatch.transform import Transform
 from gateway_v2.domain.plan import ExecutionPlan, Phase, Surface
-from gateway_v2.domain.posture import PLAN_UNAVAILABLE, STREAM_KILLED
+from gateway_v2.domain.posture import PLAN_UNAVAILABLE
 from gateway_v2.edge import errors
 from gateway_v2.edge.asgi_sse import (
     ASGIReceive,
@@ -70,7 +70,7 @@ from gateway_v2.edge.chat_deps import (
 )
 from gateway_v2.edge.console_projection import (
     apply_projection,
-    console_from_holds,
+    refusal_console,
     refusal_trace_frame,
     stream_trace_payload,
 )
@@ -90,10 +90,13 @@ from gateway_v2.edge.openai_misc import (
 from gateway_v2.edge.openai_misc_models import ModelsSurface
 from gateway_v2.edge.outcome_metrics import OutcomeObserver
 from gateway_v2.edge.phase_resolvers import PhaseResolverFactory, resolver_for
+from gateway_v2.edge.produced_holder import ProducedModeHolder as _ProducedModeHolder
+from gateway_v2.edge.produced_holder import record_cut
 from gateway_v2.edge.request_holds import RequestHolds
 from gateway_v2.edge.responses_store import ResponseStore
 from gateway_v2.edge.stream_control import FirstByteLatch, StreamAttempt, run_with_no_splice
 from gateway_v2.edge.stream_timeouts import StreamTimeout, StreamTimeouts
+from gateway_v2.edge.unauth_audit import UnauthAuditGate
 from gateway_v2.edge.wire.openai import (
     CanonicalRequest,
     OpenAIRequestParser,
@@ -109,9 +112,8 @@ from gateway_v2.egress.stream import (
     ScanProtocol,
     Send,
     StreamPipeline,
-    StreamStats,
 )
-from gateway_v2.egress.strict import StrictStats, StrictWithholdPipeline
+from gateway_v2.egress.strict import StrictWithholdPipeline
 from gateway_v2.plan.snapshot import ReplicaSnapshot
 from gateway_v2.runtime.holdback_config import HoldbackConfig
 from gateway_v2.runtime.holdback_metrics import HoldbackMetrics
@@ -209,27 +211,6 @@ async def _emit_error_code(
 # before the budget or input phases ever matter.
 
 
-class _ProducedModeHolder:
-    """A per-request mutable sink for the pipeline's returned stats (GW13 C5).
-
-    Both ``StreamPipeline.run`` and ``StrictWithholdPipeline.run`` return a stats
-    value carrying ``produced_mode`` (and, on the INCREMENTAL side,
-    ``degenerated_to_strict``). The ``_attempt`` coroutine captures that return and
-    stashes it here so :meth:`ChatRoute._finish_stream` can emit the Produced_Mode
-    trace frame on the wire just before the terminal ``[DONE]`` marker. It is a
-    per-request LOCAL instance built in :meth:`ChatRoute._stream` (never a
-    module-level mutable, gated), so nothing request-scoped is shared on the frozen
-    route. ``stats`` is ``None`` until an attempt completed (a byte-less failure of
-    every attempt leaves it unset, in which case no trace frame is emitted).
-    """
-
-    __slots__ = ("holds", "stats")
-
-    def __init__(self, holds: RequestHolds | None = None) -> None:
-        self.holds = holds
-        self.stats: StreamStats | StrictStats | None = None
-
-
 @dataclass(frozen=True, slots=True)
 class ChatRoute:
     """The injected dependencies the ``/v1/chat/completions`` handler wires together.
@@ -308,6 +289,8 @@ class ChatRoute:
     holdback_metrics: HoldbackMetrics = HoldbackMetrics()
     #: GW26. A set phase factory enforces only rules that name this surface.
     surface: Surface = Surface.CHAT
+    #: GW35. Bounds audit records for a failed credential (no tenant). ``None`` drops them.
+    unauth_audit: UnauthAuditGate | None = None
 
     async def handle(self, scope: ASGIScope, receive: ASGIReceive, send: ASGISend) -> None:
         """Serve a chat/completions request end-to-end (R2.2, R7, R10, §10.4).
@@ -360,7 +343,9 @@ class ChatRoute:
             )
         finally:
             refused = None if outcome is None else outcome.refuse_code
-            emit_chat_audit(self.audit, holds, refused, observer=self.observer)
+            emit_chat_audit(
+                self.audit, holds, refused, observer=self.observer, gate=self.unauth_audit,
+            )
             holds.release(self.admission, self.quota)
 
     async def _render_refusal(
@@ -397,19 +382,19 @@ class ChatRoute:
             # GW36 S3 (N11): identity's refusal (the only post-parse one with no id yet) is plain
             # HTTP whatever `stream` asked, as OpenAI's 401 is, with a random id.
             request_id, req = minted, None
+            if holds is not None:
+                holds.note_request(minted)
         if req is not None and req.streaming:
             await _start_sse(send)
             await _send_sse(send, errors.render_sse(code))
-            trace = None if holds is None else refusal_trace_frame(holds)
+            trace = refusal_trace_frame(holds, code)
             if trace is not None:
                 await _send_sse(send, trace)
             await _end_sse(send)
             return
         await _emit_error_code(
             send, code, request_id, param, self.contract.max_output_tokens_boundary(),
-            None if holds is None else console_from_holds(
-                holds, output_action=None, provider_called=False,
-            ),
+            refusal_console(holds, code),
         )
 
     async def _stream_response(
@@ -597,9 +582,7 @@ class ChatRoute:
         if reason is not None:
             # The pass-through loop ended normally after the cut and recorded "allow"; the trace
             # must not report a cut stream as allowed (a kill-switch cut publishes no action).
-            stats = produced.stats
-            if reason != STREAM_KILLED and getattr(stats, "output_action", None) == "allow":
-                stats.output_action = "block"  # type: ignore[union-attr]
+            record_cut(produced, reason)
             await _send_sse(send, encoder.error(reason))
             sent_terminal.set()
             await ChatRoute._emit_produced_mode(send, encoder, produced)
@@ -626,7 +609,7 @@ class ChatRoute:
         with no stats (every attempt failed byte-less) emits nothing.
         """
         stats = produced.stats
-        if stats is None:
+        if not produced.has_trace():
             return
         await _send_sse(send, encoder.trace(stream_trace_payload(
             produced, stats, bool(getattr(stats, "degenerated_to_strict", False)),

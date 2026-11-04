@@ -13,7 +13,8 @@ from __future__ import annotations
 from gateway_v2.runtime.errors import CapacityUnavailable
 from gateway_v2.runtime.resources import ResourceContract
 
-_UNAUTH_AUDIT_RATE_MULT = 2  # records per metrics window = workers x mult (unmeasured; owner decision)
+# records per metrics window = workers x mult (unmeasured; owner decision)
+_UNAUTH_AUDIT_RATE_MULT = 2
 
 
 def unauth_audit_rate(contract: ResourceContract) -> int:

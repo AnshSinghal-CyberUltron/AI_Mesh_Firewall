@@ -65,6 +65,7 @@ from gateway_v2.domain import (
     StreamingMode,
     most_restrictive,
 )
+from gateway_v2.domain.failure_class import is_no_action, terminal_output_action
 from gateway_v2.egress.holdback_tradeoff import (
     TRADE_OFF_OUTCOMES,
     TRADE_OFF_REDACT_REMAINDER,
@@ -768,9 +769,8 @@ class StreamPipeline:
         no content frame follows a terminal frame is structural: ``_run_enforcing``
         returns immediately after this call.
         """
-        if error != "killed" and stats.output_action is None:
-            # The output side withheld the stream with no decision to publish.
-            stats.output_decision, stats.output_action = None, "block"
+        if not is_no_action(error) and stats.output_action is None:
+            stats.output_decision, stats.output_action = None, terminal_output_action(error)
         await send(DownstreamFrame(text_deltas=(), error_code=error))
         return self._finish_incomplete(stats, error=error)
 

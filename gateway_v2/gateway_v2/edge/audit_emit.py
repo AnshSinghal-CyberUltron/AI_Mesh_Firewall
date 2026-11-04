@@ -18,24 +18,40 @@ from collections.abc import Callable, Mapping
 from gateway_v2.audit.record import (
     REJECTED,
     SHED,
+    UNAUTHENTICATED_ORG,
     AuditPhase,
     AuditRecord,
     admission,
     from_decision,
+    output_failure,
 )
 from gateway_v2.domain.decision import Decision, DecisionRecord, Disposition
-from gateway_v2.domain.posture import OVERLOAD_SHED
+from gateway_v2.domain.failure_class import is_no_action, is_operational_failure
+from gateway_v2.domain.posture import INVALID_API_KEY, OVERLOAD_SHED, SHARED_STATE_UNAVAILABLE
 from gateway_v2.edge import errors
 from gateway_v2.edge.console_projection import console_from_holds
 from gateway_v2.edge.outcome_metrics import OutcomeObserver, observe_outcome
 from gateway_v2.edge.request_holds import RequestHolds
+from gateway_v2.edge.unauth_audit import UnauthAuditGate
 
 _CHAT_ROUTE = "chat"
+_IDENTITY_CODES = frozenset({INVALID_API_KEY, SHARED_STATE_UNAVAILABLE})
 
 
 def note_stream_output(holds: RequestHolds, stats: object, plan_version: str) -> None:
-    """Record the stream's output decision. An allow with no decision is still output."""
+    """Record the stream's output decision and cause. An allow with no decision is still output.
+
+    A cut with an error code records ``failure_code`` (the first cause wins). A policy cut with no
+    decision also records a ``block`` output action; a fault never touches the output action, so
+    ``error`` cannot paint the guardrail stage. A kill-switch cut records nothing.
+    """
+    error = getattr(stats, "error", None)
     decision = getattr(stats, "output_decision", None)
+    if isinstance(error, str) and error and not is_no_action(error):
+        holds.note_failure(error)
+        policy_cut = getattr(stats, "output_action", None) == "block"
+        if not is_operational_failure(error) and policy_cut and not isinstance(decision, Decision):
+            holds.note_output_action("block", error)
     if isinstance(decision, Decision):
         holds.note_output(decision)
         return
@@ -63,33 +79,50 @@ def emit_chat_audit(
     console: Mapping[str, object] | None = None,
     detail: Mapping[str, str] | None = None,
     observer: OutcomeObserver | None = None,
+    gate: UnauthAuditGate | None = None,
 ) -> None:
     """Enqueue the records this request can honestly name. Never raises.
 
     ``route`` names the surface. A non-chat surface passes its own ``console`` (chat's
     is built here) and may add plain-string ``detail`` such as the MCP server and tool.
     ``observer`` counts the same outcome for ``/metrics``, whether or not audit is wired.
+    ``gate`` bounds the records written for a failed credential, which name no tenant.
     """
     observe_outcome(observer, holds, refuse_code)
-    if emit is None or not holds.request_id or not holds.org_id:
+    org = _audit_org(holds, refuse_code, route)
+    if emit is None or not holds.request_id or not org:
         return
     try:
-        if console is None and route == _CHAT_ROUTE:
-            output = holds.output_decision
-            console = console_from_holds(
-                holds,
-                output_action=None if output is None else output.disposition.value,
-                provider_called=holds.dispatched,
-            )
         extra = {"route": route, **(detail or {})}
-        for record in _records(holds, refuse_code, time.time_ns(), console, extra):
+        if org == UNAUTHENTICATED_ORG:
+            if gate is None or not gate.admit():
+                return
+            if holds.key_fingerprint:
+                extra["key_fingerprint"] = holds.key_fingerprint
+        if console is None and route == _CHAT_ROUTE:
+            console = console_from_holds(holds, refuse_code)
+        for record in _records(holds, org, refuse_code, time.time_ns(), console, extra):
             emit(record)
     except Exception:
         return
 
 
+def _audit_org(holds: RequestHolds, refuse_code: str | None, route: str) -> str:
+    """The tenant for the row: the resolved one, or the reserved sentinel for a failed credential.
+
+    Never a guess. The sentinel applies to chat-shaped routes only; an unauthenticated MCP call
+    stays unaudited (a recorded gap).
+    """
+    if holds.org_id:
+        return holds.org_id
+    if route == _CHAT_ROUTE and refuse_code in _IDENTITY_CODES:
+        return UNAUTHENTICATED_ORG
+    return ""
+
+
 def _records(
     holds: RequestHolds,
+    org: str,
     refuse_code: str | None,
     recorded_at_ns: int,
     console: Mapping[str, object] | None,
@@ -99,21 +132,52 @@ def _records(
     output = holds.output_decision
     if holds.input_decision is not None:
         records.append(
-            _phase(holds, holds.input_decision, AuditPhase.INPUT, recorded_at_ns, console, extra),
+            _phase(
+                holds, org, holds.input_decision, AuditPhase.INPUT, recorded_at_ns, console, extra,
+            ),
         )
     if output is not None:
         records.append(
-            _phase(holds, output, AuditPhase.OUTPUT, recorded_at_ns, console, extra),
+            _phase(holds, org, output, AuditPhase.OUTPUT, recorded_at_ns, console, extra),
         )
+    elif holds.dispatched and holds.failure_code:
+        failed = _output_failure(holds, org, recorded_at_ns, console, extra)
+        if failed is not None:
+            records.append(failed)
     if refuse_code and holds.input_decision is None and output is None:
-        admitted = _admission(holds, refuse_code, recorded_at_ns, extra)
+        admitted = _admission(holds, org, refuse_code, recorded_at_ns, console, extra)
         if admitted is not None:
             records.append(admitted)
     return records
 
 
+def _output_failure(
+    holds: RequestHolds,
+    org: str,
+    recorded_at_ns: int,
+    console: Mapping[str, object] | None,
+    extra: Mapping[str, str],
+) -> AuditRecord | None:
+    code = holds.failure_code
+    try:
+        status = errors.render_http(code, request_id=holds.request_id).status
+    except Exception:
+        return None
+    kind = "operational" if is_operational_failure(code) else "policy"
+    built = output_failure(
+        request_id=holds.request_id,
+        org_id=org,
+        reason=code,
+        failure_class=kind,
+        recorded_at_ns=recorded_at_ns,
+        status=status,
+    )
+    return _annotate(built, console, extra)
+
+
 def _phase(
     holds: RequestHolds,
+    org: str,
     decision: Decision,
     phase: AuditPhase,
     recorded_at_ns: int,
@@ -126,7 +190,7 @@ def _phase(
             plan_version=decision.plan_version,
             decision=decision,
         ),
-        org_id=holds.org_id,
+        org_id=org,
         phase=phase,
         recorded_at_ns=recorded_at_ns,
     )
@@ -135,8 +199,10 @@ def _phase(
 
 def _admission(
     holds: RequestHolds,
+    org: str,
     refuse_code: str,
     recorded_at_ns: int,
+    console: Mapping[str, object] | None,
     extra: Mapping[str, str],
 ) -> AuditRecord | None:
     try:
@@ -147,13 +213,13 @@ def _admission(
     return _annotate(
         admission(
             request_id=holds.request_id,
-            org_id=holds.org_id,
+            org_id=org,
             outcome=outcome,
             reason=refuse_code,
             recorded_at_ns=recorded_at_ns,
             status=status,
         ),
-        None,
+        console if extra.get("route") == _CHAT_ROUTE else None,
         extra,
     )
 

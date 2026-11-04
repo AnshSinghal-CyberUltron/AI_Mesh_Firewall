@@ -57,7 +57,12 @@ from gateway_v2.edge.chat_lifecycle import (
     _refused,
 )
 from gateway_v2.edge.dev_components import bind_surface
-from gateway_v2.edge.identity_resolver import TenantIdentity, hashed_bearer_key, identity_of
+from gateway_v2.edge.identity_resolver import (
+    TenantIdentity,
+    hashed_bearer_key,
+    identity_of,
+    mint_request_id,
+)
 from gateway_v2.edge.input_enforcement import (
     REFUSE_INPUT_UNMASKABLE,
     InputScan,
@@ -229,17 +234,22 @@ class ChatSurface:
 
         # Phase 3 — resolve Tenant_Identity (task 2.3); stale / unavailable fails closed.
         identity, identity_refuse = await self._identity(scope)
-        if identity_refuse is not None:
-            return req, _refused(identity_refuse)
-        if identity is None:
-            return req, _refused(REFUSE_IDENTITY_UNRESOLVED)
+        if identity_refuse is not None or identity is None:
+            # GW35: only a 12-hex fingerprint of a console-shaped key is kept, never the key.
+            holds.note_key_fingerprint((hashed_bearer_key(scope) or "")[:12])
+            return req, _refused(identity_refuse or REFUSE_IDENTITY_UNRESOLVED)
+        holds.note_identity_resolved()
 
         # Phase 4 — the ONE shared-state round trip: resolve the plan (task 2.3).
         plan, plan_refuse = self._plan(identity, req)
-        if plan_refuse is not None:
-            return req, _refused(plan_refuse)
-        if plan is None:
-            return req, _refused(REFUSE_PLAN_UNAVAILABLE)
+        if plan_refuse is not None or plan is None:
+            # GW35 D-30: the identity is known, so the refusal is attributable. The minted id is
+            # only on the console and the audit record; the error envelope is untouched.
+            holds.note_tenant(identity.org_id)
+            holds.note_request(mint_request_id())
+            holds.note_failure(plan_refuse or REFUSE_PLAN_UNAVAILABLE)
+            return req, _refused(plan_refuse or REFUSE_PLAN_UNAVAILABLE)
+        holds.note_plan(plan.version)
 
         # Plan pinned — clamp the output budget to v1's bounds BEFORE the cost is
         # charged (Group F): ``n`` → ``max_completions()`` and ``max_tokens`` →
