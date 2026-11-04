@@ -102,9 +102,10 @@ def test_terminal_output_action() -> None:
 
 
 def test_every_code_routes_kills_is_classified() -> None:
-    """Every posture constant `edge/routes.py` passes to ``kill_latch.kill`` is in a table."""
-    source = pathlib.Path(__file__).parents[2] / "gateway_v2" / "edge" / "routes.py"
-    tree = ast.parse(source.read_text(encoding="utf-8"))
+    """Every posture constant `edge/chat_stream.py` passes to ``kill_latch.kill`` is in a table."""
+    edge = pathlib.Path(__file__).parents[2] / "gateway_v2" / "edge"
+    # GW34 moved the stream attempt from routes.py into chat_stream.py.
+    tree = ast.parse((edge / "chat_stream.py").read_text(encoding="utf-8"))
     names = {
         node.args[0].id
         for node in ast.walk(tree)
