@@ -49,6 +49,8 @@ from dataclasses import dataclass
 from types import MappingProxyType
 
 from gateway_v2.domain import posture
+from gateway_v2.edge.wire.sse_chunks import CHUNK_OBJECT, DEFAULT_CREATED, SSEChoice, SSEChunk
+from gateway_v2.edge.wire.sse_decode import SSEDecoder
 from gateway_v2.egress.stream import DownstreamFrame
 
 __all__ = (
@@ -72,12 +74,6 @@ __all__ = (
 # SDK wire-shape constants (plain strings -- not capacity literals).
 # --------------------------------------------------------------------------- #
 
-#: The ``object`` discriminator every streamed content frame carries. The stock
-#: OpenAI SDK parses a streamed frame as a ``ChatCompletionChunk`` only when this
-#: field reads exactly ``chat.completion.chunk`` (matches the recorded
-#: conformance frame in ``tests/openai_conformance/test_openai_sdk_compat.py``).
-CHUNK_OBJECT = "chat.completion.chunk"
-
 #: The terminal marker that ends an OpenAI streaming response. Bytes are fixed;
 #: the SDK stops iterating cleanly when it reads this sentinel (R1.2).
 DONE_MARKER = b"data: [DONE]\n\n"
@@ -97,7 +93,6 @@ TRACE_EVENT = "amf.trace"
 #: once at construction rather than per frame.
 DEFAULT_STREAM_ID = "chatcmpl-stream"
 DEFAULT_MODEL = "gateway"
-DEFAULT_CREATED = 0
 
 
 # --------------------------------------------------------------------------- #
@@ -324,57 +319,8 @@ ERROR_SHAPES: Mapping[str, tuple[str, str]] = MappingProxyType(
 
 
 # --------------------------------------------------------------------------- #
-# Value types (Data Models).
+# Value types (Data Models). ``SSEChoice`` / ``SSEChunk`` live in ``sse_chunks``.
 # --------------------------------------------------------------------------- #
-
-
-@dataclass(frozen=True, slots=True)
-class SSEChoice:
-    """One SDK ``choices[]`` entry: an index, a ``delta`` object, a finish reason.
-
-    ``delta`` is a read-only ``Mapping`` (e.g. ``{"content": "Hello"}`` or
-    ``{"role": "assistant", "content": "Hello"}``) carried straight into the
-    serialised JSON. ``finish_reason`` is ``None`` on every content chunk and set
-    (``"stop"``) only on the terminal content chunk, matching the SDK schema.
-    """
-
-    index: int
-    delta: Mapping[str, object]
-    finish_reason: str | None = None
-
-    def as_json_obj(self) -> dict[str, object]:
-        """The plain JSON object for this choice (SDK ``choices[]`` entry)."""
-        return {
-            "index": self.index,
-            "delta": dict(self.delta),
-            "finish_reason": self.finish_reason,
-        }
-
-
-@dataclass(frozen=True, slots=True)
-class SSEChunk:
-    """The SDK-shaped content frame body serialised to ``data: {json}\\n\\n``.
-
-    Carries the OpenAI ``chat.completion.chunk`` fields the stock SDK requires to
-    parse a streamed frame: ``id`` / ``object`` / ``created`` / ``model`` and the
-    ``choices`` list. Frozen + slotted; ``choices`` is a tuple so the value type
-    is immutable.
-    """
-
-    id: str
-    model: str
-    choices: tuple[SSEChoice, ...]
-    created: int = DEFAULT_CREATED
-
-    def as_json_obj(self) -> dict[str, object]:
-        """The plain JSON object the encoder serialises for a content frame."""
-        return {
-            "id": self.id,
-            "object": CHUNK_OBJECT,
-            "created": self.created,
-            "model": self.model,
-            "choices": [choice.as_json_obj() for choice in self.choices],
-        }
 
 
 @dataclass(frozen=True, slots=True)
@@ -566,207 +512,3 @@ class SSEEncoder:
         """
         body = json.dumps(obj, ensure_ascii=True, separators=(",", ":"))
         return b"data: " + body.encode("ascii") + b"\n\n"
-
-
-# --------------------------------------------------------------------------- #
-# Decoder (R1.4 / R1.5 / R1.6, Property 9).
-# --------------------------------------------------------------------------- #
-
-
-class SSEDecoder:
-    """Decode an upstream SSE byte stream into ``DownstreamFrame``s.
-
-    :meth:`feed` accumulates raw bytes and only decodes a COMPLETE event -- one
-    terminated by the blank-line ``\\n\\n`` separator. Any trailing partial event
-    (and therefore any split multi-byte UTF-8 sequence or split JSON
-    ``\\uXXXX`` surrogate escape, including a high/low surrogate PAIR split across
-    two chunks) stays in the internal buffer until its remaining bytes arrive
-    (R1.4). Decoding only complete events makes the decode CONFLUENT: the same
-    concatenated byte stream yields the same frames regardless of where the fed
-    boundaries fall (Property 9).
-
-    The terminal ``[DONE]`` marker yields no frame (it signals clean termination,
-    not content). A ``{"error": {...}}`` event yields a terminal
-    ``DownstreamFrame`` whose ``error_code`` is the event's ``code``. A complete
-    event that cannot be decoded (bad UTF-8, non-JSON data, or an unrecognised
-    shape) sets the :meth:`malformed` latch and yields no frame, so the caller
-    fails closed with ``STREAM_MALFORMED_UPSTREAM`` and never reports success
-    (R1.5).
-    """
-
-    __slots__ = ("_buffer", "_done", "_malformed")
-
-    def __init__(self) -> None:
-        self._buffer = bytearray()
-        self._done = False
-        self._malformed = False
-
-    def finished(self) -> bool:
-        """``[DONE]`` was decoded and no bytes are left buffered.
-
-        A stream that ends without ``[DONE]``, or with a partial event still
-        buffered (a non-SSE body, a truncated read), is not a clean end.
-        """
-        return self._done and not self._buffer.strip()
-
-    def feed(self, raw: bytes) -> tuple[DownstreamFrame, ...]:
-        """Decode every COMPLETE event in the buffer; buffer any partial tail.
-
-        Appends ``raw`` to the internal buffer, splits off each event terminated
-        by ``\\n\\n``, and decodes each in order. A partial trailing event stays
-        buffered for the next :meth:`feed`, so a chunk boundary never splits a
-        decoded code point (R1.4). Returns the frames decoded this call (possibly
-        empty); ``[DONE]`` and malformed events contribute no frame.
-        """
-        self._buffer.extend(raw)
-        frames: list[DownstreamFrame] = []
-        for event_bytes in self._drain_complete_events():
-            frame = self._decode_event(event_bytes)
-            if frame is not None:
-                frames.append(frame)
-        return tuple(frames)
-
-    def malformed(self) -> bool:
-        """Whether an undecodable complete event has been seen (R1.5).
-
-        One-way latch: once set it stays set, so the caller terminates the stream
-        with ``STREAM_MALFORMED_UPSTREAM`` and never reports the stream
-        successful. A split event that is merely still buffered does NOT set this
-        -- only a COMPLETE event that fails to decode does.
-        """
-        return self._malformed
-
-    def _drain_complete_events(self) -> list[bytes]:
-        """Pop each ``\\n\\n``-terminated event off the buffer, in order.
-
-        Leaves a trailing partial event (no terminator yet) in the buffer. The
-        event bytes returned exclude the ``\\n\\n`` separator.
-        """
-        events: list[bytes] = []
-        sep = b"\n\n"
-        while True:
-            idx = self._buffer.find(sep)
-            if idx == -1:
-                break
-            event = bytes(self._buffer[:idx])
-            del self._buffer[: idx + len(sep)]
-            if event:
-                events.append(event)
-        return events
-
-    def _decode_event(self, event_bytes: bytes) -> DownstreamFrame | None:
-        """Decode one complete event's bytes into a frame (or ``None``).
-
-        Decodes the WHOLE event's bytes as UTF-8 in one step -- never a partial
-        multi-byte prefix, because only complete events reach here -- so a split
-        code point is reassembled before decoding (R1.4). Extracts the ``data:``
-        payload, treats ``[DONE]`` as clean termination (no frame), JSON-parses
-        the rest, and maps the recognised shapes to a ``DownstreamFrame``. Any
-        decode or shape failure sets :meth:`malformed` and yields ``None`` (R1.5).
-        """
-        try:
-            text = event_bytes.decode("utf-8")
-        except UnicodeDecodeError:
-            self._malformed = True
-            return None
-        payload = self._data_payload(text)
-        if payload is None:
-            self._malformed = True
-            return None
-        if payload == "[DONE]":
-            self._done = True
-            return None
-        return self._frame_from_json(payload)
-
-    def _data_payload(self, event_text: str) -> str | None:
-        """Join the ``data:`` field value(s) of an SSE event, or ``None``.
-
-        An SSE event is CR/LF-delimited fields; the decoder reads the ``data:``
-        field(s) and ignores comments (``:`` prefix) and other field names. Per
-        the SSE spec a single leading space after the colon is stripped, and
-        multiple ``data:`` lines join with a newline. Returns ``None`` when the
-        event carries no ``data:`` field at all (an undecodable upstream shape).
-        """
-        data_lines: list[str] = []
-        has_data = False
-        for line in event_text.split("\n"):
-            line = line.rstrip("\r")
-            if not line or line.startswith(":"):
-                continue
-            field, _, value = line.partition(":")
-            if field != "data":
-                continue
-            has_data = True
-            data_lines.append(value[1:] if value.startswith(" ") else value)
-        if not has_data:
-            return None
-        return "\n".join(data_lines)
-
-    def _frame_from_json(self, payload: str) -> DownstreamFrame | None:
-        """Parse a JSON ``data:`` payload into a ``DownstreamFrame`` (or ``None``).
-
-        A ``{"error": {...}}`` object becomes a terminal frame carrying the
-        error ``code`` (R1.3 decode side). A ``chat.completion.chunk`` object's
-        ``choices[].delta`` content becomes the frame's ``text_deltas`` (R1.6
-        round-trip). A payload that is not valid JSON, or that matches neither
-        shape, sets :meth:`malformed` and yields ``None`` (R1.5).
-        """
-        try:
-            obj = json.loads(payload)
-        except (ValueError, UnicodeDecodeError):
-            self._malformed = True
-            return None
-        if not isinstance(obj, dict):
-            self._malformed = True
-            return None
-        error = obj.get("error")
-        if isinstance(error, dict):
-            return self._error_frame(error)
-        deltas = self._deltas_from_choices(obj)
-        if deltas is None:
-            self._malformed = True
-            return None
-        return DownstreamFrame(text_deltas=deltas)
-
-    def _error_frame(self, error: Mapping[str, object]) -> DownstreamFrame:
-        """A terminal ``DownstreamFrame`` from an upstream ``{"error": {...}}``.
-
-        ``error_code`` is the error object's ``code`` when it is a string, else
-        ``STREAM_MALFORMED_UPSTREAM`` (an error frame without a usable code is
-        still terminal and still fails closed). No content deltas accompany a
-        terminal error frame.
-        """
-        code = error.get("code")
-        error_code = code if isinstance(code, str) and code else posture.STREAM_MALFORMED_UPSTREAM
-        return DownstreamFrame(text_deltas=(), error_code=error_code)
-
-    def _deltas_from_choices(
-        self, obj: Mapping[str, object]
-    ) -> tuple[tuple[str, str], ...] | None:
-        """Extract ``(channel, text)`` deltas from a chunk object's ``choices``.
-
-        Reads each ``choices[].delta`` object: a ``content`` string maps to the
-        ``content`` channel, and any other string-valued delta key maps to a
-        channel of that name, so the encoder's channel->delta-key mapping
-        round-trips (R1.6). A missing/empty ``choices`` list yields an empty
-        tuple (a valid content frame carrying no delta). Returns ``None`` when
-        ``choices`` is present but not a list of delta objects (unrecognised
-        shape -> malformed).
-        """
-        choices = obj.get("choices")
-        if choices is None:
-            return ()
-        if not isinstance(choices, list):
-            return None
-        deltas: list[tuple[str, str]] = []
-        for choice in choices:
-            if not isinstance(choice, dict):
-                return None
-            delta = choice.get("delta")
-            if not isinstance(delta, dict):
-                return None
-            for key, value in delta.items():
-                if isinstance(value, str):
-                    channel = "content" if key == "content" else key
-                    deltas.append((channel, value))
-        return tuple(deltas)
