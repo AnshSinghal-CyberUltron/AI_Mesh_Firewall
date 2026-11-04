@@ -78,9 +78,19 @@ _BYTE_ALTERING = {"redact", "rewrite", "block"}
 _EXFIL_ACTIONS = {"flag", "redact", "rewrite", "block"}
 
 
+#: The gateway's reserved audit stream for failed credentials (GW35 Req 4.3/4.4). Mapping it to a
+#: slug routes those records to that org's console; it is never a gateway org, so it must not make
+#: the slug's dev-plan alias ambiguous.
+_UNAUTHENTICATED_STREAM = "_unauthenticated"
+
+
 def gateway_org_for(slug: str, raw_map: str) -> str | None:
     """The one gateway org mapped to this console slug. Ambiguous maps return none."""
-    matches = [source for source, target in parse_org_map(raw_map).items() if target == slug]
+    matches = [
+        source
+        for source, target in parse_org_map(raw_map).items()
+        if target == slug and source != _UNAUTHENTICATED_STREAM
+    ]
     if len(matches) != 1:
         return None
     return matches[0]
