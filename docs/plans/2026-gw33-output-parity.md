@@ -13,6 +13,11 @@ Card text (verbatim, `AI_MESH_MASTER_RUNBOOK_v3.1_CLEAN.docx`): *"GW33 — Outpu
 - **Plan**: `SUPPORTED_ACTIONS` += REWRITE, template validation (`plan/rewrite_template.py`), D-9 STRICT-only refusal keyed on detector identity, `allow_hosts`/grounding-mode/reserved-namespace validation, hash and document encoding only when non-empty (every existing plan keeps its `content_hash`), `requires: ["rewrite/1"]`.
 - **Control plane**: `rewrite` leaves `_UNSUPPORTED_ACTIONS` (only `model_downgrade`, owner GW28, remains); per-org gate `rewrite_served_by_v2` (`V2_REWRITE_ORGS`, default none); five GW27-retired fields now mapped; platform `REWRITE_TEMPLATES`; built-in detector rows (`out_ip_leak`, `out_hallucination`, `out_exfil`, `out_canary`) at priority 200; `streaming_mode_for` promotion (D-20) reported as `streaming_mode_promoted`.
 
+## Card-level dispositions recorded here (task 11.4, D-12, D-13)
+- `max_response_tokens` response-side bound: **BUILT here** (`edge/output_length.py`, terminal code `output_length_exceeded`), not retired to another card.
+- `model_downgrade`: retired by name to **GW28** (the publisher message reads `... (model_downgrade): owner GW28`); `rewrite` is no longer unsupported.
+- No GW27 ledger exists on this tree; the tests that asserted "rewrite refused" now assert the per-org gate (`test_firewall_v2_map.py::test_audit_mode_and_rewrite_are_named` still holds because the default org is not served; `test_gw33_publish.py` covers the served case).
+
 ## Owner-visible deviations and open items
 1. **Grounding on a local model: lexical shipped; model mode UNAVAILABLE until a backend advertises hallucination.** This is an open item against the card text with no owning card. It is NOT a GW10 deferral (GW33 depends on GW10). Follow-up card **GW33-F1** (model-backed grounding) is requested; owner acknowledgement requested.
 2. **INCREMENTAL IP-redaction parity gap**: IP leak with redact/rewrite/block is STRICT_WITHHOLD-only (IPv6 and `host:port` are not holdable). Orgs choosing an enforcing IP action lose TTFT. Recorded follow-up: an IPv4/dotted-hostname-only INCREMENTAL hold class using the same stateless overlap scan.

@@ -161,3 +161,38 @@ def test_strict_sync_detectors_run_through_the_injected_executor_runner() -> Non
     composed = _build(plan, base=_base, runner=spy)
     result = run(plan, [("output_content", "host 10.0.0.1 up")], composed=composed)
     assert calls and "10.0.0.1" not in result.released
+
+
+class _SlowBackend:
+    """Advertises hallucination but never answers inside the wait budget."""
+
+    supported_categories = frozenset({Category.HALLUCINATION})
+
+    async def classify(self, windows, budget):  # type: ignore[no-untyped-def]
+        import asyncio
+
+        await asyncio.sleep(2.0)
+        return []
+
+    async def readiness(self):  # type: ignore[no-untyped-def]  # pragma: no cover
+        raise NotImplementedError
+
+    def capacity_hint(self):  # type: ignore[no-untyped-def]  # pragma: no cover
+        raise NotImplementedError
+
+
+def test_a_grounding_timeout_is_one_unavailable_finding_routed_by_mode() -> None:
+    """D-22: `asyncio.wait_for(grounding_wait_budget_s())`; a timeout is UNAVAILABLE, never clean."""
+    fast = contract(0.5)  # wait budget = 0.05 s
+    klass = "output.grounding.model:slow"
+    for mode, action, blocked in ((_INCR, Action.FLAG, False), (_STRICT, Action.BLOCK, True)):
+        plan = plan_of(mode, rule("g", Category.HALLUCINATION, action, klass))
+        composed = _build(plan, contract=fast, backend=_SlowBackend(),
+                          context_chunks=("some context words",))
+        result = run(plan, [("output_content", "an answer")], composed=composed)
+        if blocked:  # STRICT + FAIL_CLOSED: nothing was released, so the posture is honoured
+            assert result.released == "" and result.codes == ["output_blocked"]
+        else:  # INCREMENTAL: reported, never enforced
+            assert result.released == "an answer" and result.codes == []
+            assert result.stats.review_required is True  # type: ignore[attr-defined]
+            assert result.stats.final_check_unavailable == 1  # type: ignore[attr-defined]
