@@ -59,6 +59,9 @@ _CHAT_ROUTES: tuple[tuple[str, str], ...] = (
 #: and the GW15 close-out replaced ``/v1/responses``, so they are no longer in this set.
 _PLACEHOLDER_ROUTES: tuple[tuple[str, str], ...] = (
     ("POST", "/v1/mcp"),
+)
+#: GW31: with no RAG dependencies injected these answer a declared 503 ``rag_unavailable``.
+_RAG_UNAVAILABLE_ROUTES: tuple[tuple[str, str], ...] = (
     ("POST", "/v1/rag/query"),
     ("POST", "/v1/vector/query"),
 )
@@ -377,6 +380,10 @@ def test_placeholder_routes_stay_not_implemented() -> None:
         assert _is_not_implemented(transport), (
             f"placeholder {(method, path)!r} is not the not_implemented Error_Envelope"
         )
+    for method, path in _RAG_UNAVAILABLE_ROUTES:
+        transport = _drive_http(app, method, path)
+        assert transport.status() == 503, (method, path, transport.status())
+        assert b"rag_unavailable" in transport.body_bytes()
 
 
 def test_responses_route_is_live_not_the_placeholder() -> None:

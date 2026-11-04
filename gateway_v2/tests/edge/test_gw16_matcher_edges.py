@@ -632,11 +632,7 @@ def test_build_app_deferred_surfaces_stay_not_implemented() -> None:
     since the GW15 close-out, so it is not in this set.
     """
     app = _build_app(_CountingProvider())
-    for method, path in (
-        ("POST", "/v1/mcp"),
-        ("POST", "/v1/rag/query"),
-        ("POST", "/v1/vector/query"),
-    ):
+    for method, path in (("POST", "/v1/mcp"),):
         transport = _drive(app, method, path)
         assert transport.status() == _NOT_IMPLEMENTED_STATUS, (
             f"deferred {(method, path)!r} did not render 501: {transport.status()}"
@@ -644,3 +640,9 @@ def test_build_app_deferred_surfaces_stay_not_implemented() -> None:
         assert _is_not_implemented(transport), (
             f"deferred {(method, path)!r} is not the not_implemented Error_Envelope"
         )
+    # GW31: RAG/vector are served; with no dependencies they answer a declared 503, never 501.
+    for method, path in (("POST", "/v1/rag/query"), ("POST", "/v1/vector/query")):
+        transport = _drive(app, method, path)
+        assert transport.status() == 503, (method, path, transport.status())
+        body = transport.json_body()
+        assert isinstance(body, dict) and body["error"]["code"] == "rag_unavailable"
