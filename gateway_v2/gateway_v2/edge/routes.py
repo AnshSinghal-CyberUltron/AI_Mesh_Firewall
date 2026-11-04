@@ -42,6 +42,7 @@ from gateway_v2.dispatch.provider import ProviderClient
 from gateway_v2.dispatch.routing import DispatchRouter
 from gateway_v2.dispatch.transform import Transform
 from gateway_v2.domain.plan import ExecutionPlan, Surface
+from gateway_v2.domain.posture import STREAM_KILLED
 from gateway_v2.edge import errors
 from gateway_v2.edge.asgi_sse import (
     ASGIReceive,
@@ -66,6 +67,7 @@ from gateway_v2.edge.console_projection import (
     apply_projection,
     console_from_holds,
 )
+from gateway_v2.edge.disconnect import StreamingDone, run_until_disconnect
 from gateway_v2.edge.error_frame_scan import ErrorFrameScanner
 from gateway_v2.edge.executor import ScanExecutor
 from gateway_v2.edge.identity_resolver import (
@@ -304,6 +306,7 @@ class ChatRoute:
 
         holds = RequestHolds()
         outcome = None
+        killed = False  # the client left before a streaming response finished (GW34 R6)
         try:
             body = await _read_body(receive)
             req, outcome = await ChatSurface(deps=self).run_lifecycle(scope, body, holds)
@@ -320,13 +323,20 @@ class ChatRoute:
             assert plan is not None and destination is not None and upstream_body is not None
             assert req is not None  # parse succeeded on any proceed outcome
             if req.streaming:
-                await self._stream_response(send, plan, destination, upstream_body, holds, req)
+                async def _serve(done: StreamingDone) -> None:
+                    await self._stream_response(
+                        send, plan, destination, upstream_body, holds, req, done=done
+                    )
+
+                killed = await run_until_disconnect(receive, _serve)
                 return
             await ChatSurface(deps=self).collect_and_render(
                 req, plan, destination, upstream_body, send, holds
             )
         finally:
             refused = None if outcome is None else outcome.refuse_code
+            if killed:
+                refused = STREAM_KILLED
             emit_chat_audit(
                 self.audit, holds, refused, observer=self.observer, detail=_tool_call_detail(holds)
             )
@@ -383,6 +393,7 @@ class ChatRoute:
         req: CanonicalRequest | None = None,
         *,
         plain_pre_byte: bool = True,
+        done: StreamingDone | None = None,
     ) -> None:
         """Serve a streaming proceed outcome through the egress orchestration (R2.2, R7, R10).
 
@@ -435,7 +446,7 @@ class ChatRoute:
         if not plain_pre_byte:
             await response.start()
         await ChatStream(self).stream(
-            response, encoder, coalescer, plan, destination, body, holds, req
+            response, encoder, coalescer, plan, destination, body, holds, req, done
         )
 
     async def _finish_stream(

@@ -27,6 +27,7 @@ from gateway_v2.edge.asgi_sse import send_sse as _send_sse
 from gateway_v2.edge.audit_emit import note_stream_output
 from gateway_v2.edge.cancel import InFlightControl, KillLatch
 from gateway_v2.edge.console_projection import stream_trace_payload
+from gateway_v2.edge.disconnect import StreamingDone
 from gateway_v2.edge.phase_resolvers import resolver_for
 from gateway_v2.edge.request_holds import RequestHolds
 from gateway_v2.edge.stream_control import FirstByteLatch, StreamAttempt, run_with_no_splice
@@ -116,6 +117,7 @@ class ChatStream:
         body: Mapping[str, object],
         holds: RequestHolds,
         req: CanonicalRequest | None = None,
+        done: StreamingDone | None = None,
     ) -> None:
         """Drive the egress pipeline under the no-splice gate + in-flight control (R7, R10).
 
@@ -212,6 +214,8 @@ class ChatStream:
 
         await self._run_attempts(latch, _factory)
         holds.note_tool_calls(assembler.calls_released, assembler.calls_withheld)
+        if done is not None:
+            done.set()  # the terminal write begins: a later disconnect must not cancel it
         await finish_stream(
             response.send,
             encoder,

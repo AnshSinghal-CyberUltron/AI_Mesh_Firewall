@@ -94,6 +94,7 @@ from tests.edge._chat_lifecycle_fixtures import (
     chat_body,
     warm_snapshot_source,
 )
+from tests.edge.asgi_receive import mark_sent, receive_until_sent
 
 #: An input value the input detector flags with a ``card`` finding (BLOCK).
 CARD = "4111111111111111"
@@ -474,15 +475,16 @@ async def _serve(
         "headers": [(b"content-type", b"application/json")],
     }
 
-    async def _receive() -> Mapping[str, object]:
-        if incoming:
-            return incoming.pop(0)
-        return {"type": "http.disconnect"}
+    # GW34: the disconnect is reported only once the response is complete (as uvicorn does); a
+    # stub that disconnects right after the body is a client that left before the first frame.
+    done = asyncio.Event()
+    _receive = receive_until_sent(incoming, done)
 
     async def _send(message: Mapping[str, object]) -> None:
         if case.send_raises and message["type"] == "http.response.start":
             raise ConnectionResetError("v2-leaks-d: client went away")
         sent.append(dict(message))
+        mark_sent(done, message)
 
     task = asyncio.ensure_future(app(scope, _receive, _send))
     if case.cancel:

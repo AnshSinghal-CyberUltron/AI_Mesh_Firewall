@@ -87,6 +87,7 @@ from tests.edge._chat_lifecycle_fixtures import (
     chat_body,
     warm_snapshot_source,
 )
+from tests.edge.asgi_receive import mark_sent
 
 #: The GW13 Produced_Mode trace frame prefix: a NON-CONTENT ``amf.trace`` meta frame the
 #: streaming chat path emits just before the terminal ``[DONE]`` marker. It is NOT a
@@ -250,7 +251,7 @@ class _Transport:
     ``send``. The recorded ``events`` list is the "wire" the conformance assertions read.
     """
 
-    __slots__ = ("events", "_incoming")
+    __slots__ = ("events", "_incoming", "_sent")
 
     def __init__(self, *, body: bytes) -> None:
         self.events: list[Mapping[str, object]] = []
@@ -259,8 +260,8 @@ class _Transport:
         # the client disconnect once the response has drained.
         self._incoming: list[Mapping[str, object]] = [
             {"type": "http.request", "body": body, "more_body": False},
-            {"type": "http.disconnect"},
         ]
+        self._sent = asyncio.Event()
 
     @staticmethod
     def scope(path: str = _CHAT_PATH) -> dict[str, object]:
@@ -276,11 +277,13 @@ class _Transport:
         """Pull the next scripted incoming event; after the script, hold at disconnect."""
         if self._incoming:
             return self._incoming.pop(0)
+        await self._sent.wait()  # GW34: disconnect only once the response is complete
         return {"type": "http.disconnect"}
 
     async def send(self, event: Mapping[str, object]) -> None:
         """Record one emitted ASGI event (the recording side of the in-process transport)."""
         self.events.append(dict(event))
+        mark_sent(self._sent, event)
 
     # -- recorded-wire accessors --------------------------------------------- #
 
