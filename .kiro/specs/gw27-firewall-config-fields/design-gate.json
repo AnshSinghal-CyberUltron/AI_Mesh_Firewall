@@ -1,0 +1,26 @@
+{
+  "verdict": "CHANGES_REQUESTED",
+  "findings": [
+    {
+      "id": "1",
+      "severity": "MEDIUM",
+      "summary": "Boot enumeration calls PlanStore.known(), forbidden by lint/check_tenant_scale.py (ESTATE_ENUMERATORS); card cannot pass its own AST gate. Replace with runtime slot gauge + table-full refusal."
+    },
+    {
+      "id": "2",
+      "severity": "MEDIUM",
+      "summary": "MCP audit gating excluded in section 5 surface table but required in section 7 and tests; mcp.py resolves a plan and emits audit. Put MCP audit in scope (note_controls in _tenant) and keep only rate/burst/TPM excluded."
+    },
+    {
+      "id": "3",
+      "severity": "NIT",
+      "summary": "Org refund condition must be _org_refund is not None and not _dispatched, not tied to _spent (org charge precedes budget phase)."
+    },
+    {
+      "id": "4",
+      "severity": "NIT",
+      "summary": "Add scope both->input rewrite to the ledger via text for output_policy_enabled."
+    }
+  ],
+  "reviewDoc": "/work/suraj/AI_Mesh_Firewall/.worktrees/gw27/.kiro/specs/gw27-firewall-config-fields/design-review.md"
+}

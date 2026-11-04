@@ -397,7 +397,7 @@ standalone documented reason, so that "retire" is a decision and not an omission
   GW32**.
 - Any change to the console/frontend forms beyond consuming the existing field-level save-error
   messages — frontend parity is tracked under **GW35**.
-- Serving wiring for the org controls (rate/burst/TPM, response clamp, audit gating) on chat, responses and embeddings IS in scope. Out of scope: MCP and moderations org rate limiting (GW17/GW32), and the per-org token budget lease (GW36).
+- Serving wiring for the org controls (rate/burst/TPM, response clamp, audit gating) on chat, responses and embeddings IS in scope. MCP audit gating and compliance stamp ARE in scope (MCP resolves a plan and emits audit). Out of scope: MCP and moderations org rate/burst/TPM limiting (GW17/GW32), and the per-org token budget lease (GW36).
 
 
 ## Assumptions

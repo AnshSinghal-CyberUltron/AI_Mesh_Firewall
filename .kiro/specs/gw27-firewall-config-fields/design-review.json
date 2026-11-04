@@ -1,14 +1,26 @@
 {
   "verdict": "CHANGES_REQUESTED",
   "findings": [
-    {"id": 1, "severity": "MEDIUM", "title": "Fast path (rate is None) vs slot rule (rate enabled) disagree; disabled-rate org can take a slot and be 429'd on a full table", "fix": "Single _controlled(c) predicate: (rate and rate.enabled) or org_tpm_limit>0, used in fast path, slot allocation and boot count; add test"},
-    {"id": 2, "severity": "MEDIUM", "title": "Unspecified whether rate_limit_enabled=false also disables org_tpm_limit", "fix": "State TPM is enforced independently of the switch; add test row"},
-    {"id": 3, "severity": "MEDIUM", "title": "Retention sweeper (audit_control exporter) has no ResourceContract; derive_org_bounds needs workers()", "fix": "Split derive_retention_bounds with no workers() dependency; specify how service.py builds inputs; test exporter starts without gateway worker config"},
-    {"id": 4, "severity": "MEDIUM", "title": "retention_days sink plumbing mis-described: sink parses payload JSON (body.detail), needs RECORD_COLUMNS/_INSERT/columns() changes and schema-before-insert ordering", "fix": "List the column plumbing and old-row NULL test in implementation step 7"},
-    {"id": 5, "severity": "MEDIUM", "title": "Partial index (recorded_at_ns) does not serve org-scoped sweep or enumeration; per-row expression prevents range use", "fix": "Index (org_id, recorded_at_ns) WHERE retention_days IS NOT NULL plus a coarse hard-floor bound; EXPLAIN evidence"},
-    {"id": 6, "severity": "MEDIUM", "title": "Request/burst bucket has unbounded false 429s under uneven worker spread (no tolerance slack like the TPM bucket)", "fix": "Add derived burst spread slack in resources_org.py or state and property-test an accepted false-refusal envelope; record in D-4"},
-    {"id": 7, "severity": "NIT", "title": "Declared HIPAA/PCI with audit_logging_enabled=false only reported", "fix": "State accepted by design in D-2 or refuse in built_value_errors; add a test"},
-    {"id": 8, "severity": "NIT", "title": "Stamped compliance_frameworks adds up to ~512 B per audit record vs R2-05 entry-size model", "fix": "Re-run entry-size model gate with stamps or stamp a short hash"}
+    {
+      "id": "1",
+      "severity": "MEDIUM",
+      "summary": "Boot enumeration calls PlanStore.known(), forbidden by lint/check_tenant_scale.py (ESTATE_ENUMERATORS); card cannot pass its own AST gate. Replace with runtime slot gauge + table-full refusal."
+    },
+    {
+      "id": "2",
+      "severity": "MEDIUM",
+      "summary": "MCP audit gating excluded in section 5 surface table but required in section 7 and tests; mcp.py resolves a plan and emits audit. Put MCP audit in scope (note_controls in _tenant) and keep only rate/burst/TPM excluded."
+    },
+    {
+      "id": "3",
+      "severity": "NIT",
+      "summary": "Org refund condition must be _org_refund is not None and not _dispatched, not tied to _spent (org charge precedes budget phase)."
+    },
+    {
+      "id": "4",
+      "severity": "NIT",
+      "summary": "Add scope both->input rewrite to the ledger via text for output_policy_enabled."
+    }
   ],
-  "reviewDoc": "/work/suraj/AI_Mesh_Firewall/.kiro/specs/gw27-firewall-config-fields/design-review.md"
+  "reviewDoc": "/work/suraj/AI_Mesh_Firewall/.worktrees/gw27/.kiro/specs/gw27-firewall-config-fields/design-review.md"
 }

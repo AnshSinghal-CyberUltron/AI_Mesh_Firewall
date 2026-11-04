@@ -1,98 +1,54 @@
-# GW27 Design Review (revision pass 3)
+# GW27 Design Review (revision pass 5)
 
-Reviewed: `design.md` against `requirements.md`, with codebase reads for assumption checks. No build or test suites were run.
+Reviewed: `design.md` and `requirements.md` against the code in `.worktrees/gw27/gateway_v2`. No build or test suites were run.
 
-Verdict: **CHANGES_REQUESTED** (0 HIGH, 6 MEDIUM, 2 NIT).
+Verdict: **CHANGES_REQUESTED** (0 HIGH, 2 MEDIUM, 2 NIT).
 
-The two HIGH findings from pass 2 (per-worker TPM false-429 and the cross-replica claim) are resolved. Tolerance floor, per-replica semantics and bucket parameters are now explicit. The remaining findings are narrower gaps in the new text.
+## Pass-4 findings: verification
 
-## Coverage check (all 45 fields)
-
-- `firewall_v2_map.py` has 46 `{"kind": "unsupported"}` entries (counted). The design names all of them.
-- BUILT, 15: the section 2 table lists 15 rows, each with Published-as, Enforced-in and Mapped-in. The count check (4+1+1+2+1+3+3) holds. `blocked_keywords` maps through `firewall_v2_publish.keyword_row`, not the map module, and the `FIELDS` entry carries `via: rules.keywords`. That is acceptable and stated.
-- RETIRED, 30: the section 13 table sums to 30 (1+1+1+2+2+1+2+3+1+4+6+6). Each row has an owner and reason. `org_token_budget` is the 46th, delegated to GW36.
-- No silent drop. The drift test, committed ledger, field-named error and `retired_unchanged` note make retirement explicit.
+All six are resolved in the text.
+- F1 (refund): bound at charge time via `org_charged(org_id, cost, refund)`, `release` signature unchanged. The four real callers (`routes.py:364`, `openai_responses.py:148`, `openai_misc.py:391`, `mcp.py:153`) are named and confirmed in code. `openai_chat.py` has no `release`.
+- F2 (audit controls delivery): `RequestHolds.note_controls` plus a separate `stamp` mapping. Confirmed `emit_chat_audit(emit, holds, refuse_code, *, route, console, detail, observer)` takes only `holds`, and `_records` types `extra` as `Mapping[str, str]`. The design keeps `extra` and adds `stamp`, which is consistent. Plan resolution (phase 4) precedes admission, so `note_controls` can run before any later refusal.
+- F3 (retention enumeration): keyset pagination with `org_id > after_org ORDER BY org_id LIMIT` and a per-org batch cap now terminates in `dry_run` and under persistent locks.
+- F4, F5, F6: resolved (`DurableRecord`, wall-clock `time.time_ns` default, snapshot committed first in step 8).
 
 ## Findings
 
-### 1. MEDIUM. Fast path and slot rule disagree on a disabled rate (section 5)
+### 1. MEDIUM. Boot enumeration calls `PlanStore.known()`, which the tenant-scale AST gate forbids (section 5, "Fast path and boot enumeration")
 
-Section 5 says only orgs whose controls "enable rate or TPM" occupy a slot. The fast path is `if controls.rate is None and controls.org_tpm_limit == 0: return None`. `RateControl` carries `enabled`, and `controls_for` publishes the object when the operator turns rate limiting off. `rate is not None` with `enabled=False` then bypasses the fast path, enters the fail-closed `try`, and can consume a slot. With a full table it would be refused with 429 although the operator disabled the control. `require_capacity` counting has the same ambiguity.
+The design has the boot wiring call `PlanStore.known()` to count controlled orgs for `OrgLimits.require_capacity`. It records only that `known()` exists (`plan/store.py:63`). It does not say that `known()` is documented "diagnostics and tests only. Never call this from a serving path or a periodic refresh". `lint/check_tenant_scale.py` rule 2 enforces this: `ESTATE_ENUMERATORS = {"known"}`, and any call to `known()` outside the file that defines it is a violation. That gate is one of the five AST gates the design requires to exit 0 over `gateway_v2`. As written, the card cannot pass its own offline gate. It also reintroduces the R2-02 estate-enumeration pattern. The boot-time `CapacityUnavailable` row in the Error Handling table depends on it.
 
-Fix: define one predicate and use it in all three places (fast path, slot allocation, boot count):
+Fix: remove the boot enumeration. Count incrementally instead.
+- `OrgLimits` already knows the slot usage at runtime. Add a label-free gauge `org_limits_slots_used` and the existing `org_limits_table_full_total`, and alarm on slots_used near `slots`.
+- Keep the runtime fail-closed refusal when the table is full.
+- Delete `require_capacity(controlled_org_count)`, the "Controlled-org count exceeds slots at boot" row, and the `PlanStore.known()` reference.
+- Optionally pre-count in `plan/delta.py` as each plan compiles (already per-tenant, O(changes)) and pass the count to a gauge. Do not add an allowlist entry for `known()`.
 
-```python
-def _controlled(c: OrgControls) -> bool:
-    return (c.rate is not None and c.rate.enabled) or c.org_tpm_limit > 0
-# check(): if not _controlled(controls): return None   # before the try
-```
+### 2. MEDIUM. MCP audit gating is excluded in the surface table but required in section 7 and the tests (sections 5 and 7)
 
-Add a test: `rate=RateControl(False, 1000, 150)`, `org_tpm_limit=0` with a full table is admitted and takes no slot.
+The section 5 surface table lists MCP routes as "audit: owner GW17/GW32". Section 7 says `mcp.py:144` is a caller whose gating and stamp are verified. The Testing section requires "one case per caller (routes, responses, mcp)". Code confirms `mcp.py` builds its own `RequestHolds` in `_Ctx`, resolves a plan (`lookup_plan(..., Surface.MCP)` at `mcp.py:214`), spends the org budget, and calls `emit_chat_audit` in `finally` at line 144. So MCP can be gated, but the two sections disagree on whether it is in scope. If MCP is excluded, an operator who sets `audit_logging_enabled=false` still gets MCP audit records. That is a partly stored-and-ignored BUILT field, which the card forbids. The answer also decides whether `_Ctx` must call `holds.note_controls(plan.controls)` after `_tenant`.
 
-### 2. MEDIUM. Whether `rate_limit_enabled=false` also disables org TPM is unspecified (sections 2, 3, 5; Req 3.2/3.3)
+Fix: choose one. Recommended: MCP audit gating and stamp are IN scope. Edit the table row to "wired (MCP resolves the plan at `mcp.py:214`; `_tenant` calls `ctx.holds.note_controls(plan.controls)`)". Keep org rate/burst/TPM as the named MCP exclusion (owner GW17/GW32) and say in the ledger `via` text that those three fields do not cover MCP. Add the MCP file to the implementation step 6 file list.
 
-`rate_limit_enabled` is called the master switch for the "rate group", yet `org_tpm_limit` is published as `controls.org_tpm_limit` outside `controls.rate`. Req 3.3 says TPM is enabled by a positive value alone. Req 3.2 says disabled means no rate rule. An implementer can reasonably gate TPM on the switch or not, and the two readings differ in production.
+### 3. NIT. Org refund condition wording (section 5, "RequestHolds changes")
 
-Fix: write one sentence in section 5 and the ledger `via` text. Recommended wording: "`org_tpm_limit > 0` is enforced independently of `rate_limit_enabled`; the switch gates only the request-rate and burst bucket." Add a test row for `(rate off, tpm 1000)` that expects the TPM bucket to apply.
+The text says the org refund runs "under the identical condition as the lease refund (`charged and not dispatched`)". The lease refund is `_spent and not _dispatched`. `_spent` is set only after the budget phase succeeds. The org charge happens before the budget phase, so a budget refusal leaves `_spent` False. The condition must be `_org_refund is not None and not _dispatched`, independent of `_spent`. The lifecycle test already expects a refund when the budget refuses. Write the condition out as an explicit expression.
 
-### 3. MEDIUM. The retention sweeper has no `ResourceContract` (section 8, Data Models)
+### 4. NIT. `output_policy_enabled=false` and `scope == "both"` rewriting needs a ledger `via` note
 
-`retention_hard_floor_days`, `retention_sweep_batch` and `retention_sweep_period_s` come from `derive_org_bounds(contract)`. `derive_org_bounds` reads `workers()`, `metrics_directory_slots()` and `max_request_bytes()`, and raises `CapacityUnavailable` if `workers()` is unavailable. The host is `python -m audit_control` (`audit_control/service.py`), which today constructs no `ResourceContract` (grep shows none). The design does not say how the exporter obtains a contract, and a gateway-sized contract is irrelevant to an exporter process. If it is built the gateway way, the exporter can refuse to start for an unrelated reason.
-
-Fix: split the derivation. Add `derive_retention_bounds(contract_or_none) -> RetentionBounds` in `runtime/resources_org.py` that needs no `workers()`. State how `service.py` builds its inputs: either a minimal contract constructor the exporter already can call, or named constants inside `resources_org.py`. Add a test that the exporter starts with `AMF_AUDIT_RETENTION_SWEEP=off` without any gateway worker configuration.
-
-### 4. MEDIUM. Plumbing of `retention_days` into the sink is mis-described (section 8)
-
-The design says `sink_pg.py` "writes `retention_days` from `record.detail.get("retention_days")`". The sink never sees an `AuditRecord`. `PendingRecord.columns()` parses the stored JSON payload, and the record's `detail` sits inside it as `body["detail"]`. A new column also requires changes to `RECORD_COLUMNS`, `_INSERT`, `columns()` and the positional tuple, and the schema must be applied before the new INSERT runs on an already-deployed table. None of that is listed.
-
-Fix: add these items to step 7 of the implementation order:
-- `RECORD_COLUMNS` and `_INSERT` gain `retention_days`.
-- `columns()` reads `fields.get("detail", {}).get("retention_days")`, accepts an `int` (not `bool`) in `1..365`, else `None`.
-- `schema.py` ALTER runs in the same `apply_schema` call before any INSERT, and a test replays an old-shape row (no `detail`) and expects NULL.
-- Tests that pin `RECORD_COLUMNS` are updated.
-
-### 5. MEDIUM. The partial index does not serve the sweep and enumeration queries (section 8)
-
-The index is `(recorded_at_ns) WHERE retention_days IS NOT NULL`. The sweep predicate is `org_id = %(org)s AND recorded_at_ns < now_ns - retention_days * 86400e9`. The comparison uses a per-row expression, so the index range cannot bound it, and `org_id` is not in the index. Each org's batch walks every stamped row of every org. The enumeration query's claim that it is "served by the partial index" does not hold either (it scans the same set). On a large table the sweep becomes a repeated full index scan while holding row locks.
-
-Fix: change the index to `(org_id, recorded_at_ns) WHERE retention_days IS NOT NULL`, and add a coarse bound that the index can use, using the maximum retention allowed by the control plane:
-
-```sql
-AND recorded_at_ns < %(now_ns)s - %(min_days)s::bigint * 86400000000000
-```
-
-where `min_days` is `retention_hard_floor_days`. Then the per-row expression only refines a bounded range. State the expected plan in the evidence (EXPLAIN on the live Postgres arm).
-
-### 6. MEDIUM. False 429s under uneven worker spread are unbounded (section 5, request bucket)
-
-The design splits rate and burst by `workers()` and accepts that "under uneven spread one connection sees `burst_worker`". Kernel accept distribution across workers is not uniform. At `W = 36`, `burst = 150` gives `burst_worker = 5`, but a burst of 150 spread randomly puts well over 5 requests on many workers (mean 4.2 per worker). So an org sending 150 requests, exactly at its limit, would see a substantial fraction refused. The TPM bucket received a tolerance floor for this reason (pass-2 finding 1); the request bucket did not.
-
-Fix: either (a) add a slack to `burst_worker` derived in `resources_org.py` (a named multiplier over the mean, for example `ceil(burst / W * _BURST_SPREAD_MULT)`) and update the stated aggregate bound, or (b) state the accepted false-refusal envelope explicitly and add a property test that, for an org at `0.5 * burst` spread uniformly at random over W workers, the refusal probability is below a stated bound. Pick one and record it in D-4 and the ledger text. Without it, AC-4 can pass on `W = 1` and still reject compliant tenants in production.
-
-### 7. NIT. Declared compliance framework with audit disabled is only reported (section 12, D-2)
-
-`audit_logging_enabled = false` with HIPAA or PCI-DSS declared is accepted and surfaced in the publish note only. This is consistent with D-2 (declarative), and `_is_mandatory` still records blocks. Fix: state explicitly in D-2 that this is accepted by design, or add the pair to `built_value_errors` with a field-keyed refusal on `audit_logging_enabled`. Whichever is chosen, add one test.
-
-### 8. NIT. Stamped `compliance_frameworks` adds per-record bytes (section 7)
-
-Up to 16 labels of 32 characters (512 bytes) are stamped into `detail` on every record. R2-05's `ENTRY_FACTOR` and per-org byte model were calibrated on a 2.7 KB record. Fix: note the worst-case increase in the ledger and re-run the existing entry-size model gate with the stamped fields present, or stamp a short hash plus a lookup in the ledger.
+Rewriting a `both` row to `input` is correct and tested. Add it to the ledger `via` text for field 7 so the console note shows an operator that output halves were removed.
 
 ## Verified Assumptions
 
-- `ALLOWED_REL = "runtime/resources.py"` at `lint/check_capacity_literals.py:42` and the match at line 129 (`rel == ALLOWED_REL or rel.endswith("/" + ALLOWED_REL)`) are as the design states. `runtime/resources.py` is exactly 800 lines.
-- `ResourceContract` has `workers`, `metrics_directory_slots`, `metrics_window_s`, `max_request_bytes`, `estimate_request_tokens`, `max_output_tokens`, `max_completions` and `default_response_token_ceiling`. `PlanStore.known()` exists (`plan/store.py:63`).
-- `compile_plan(` call sites are `plan/delta.py:62`, `edge/dev_components.py:218`, `edge/dev_plan_feed.py:141`, plus the definition at `plan/compiler.py:125`. This matches the design's three.
-- `posture.RATE_LIMITED` maps to 429 `rate_limit_error` in `edge/errors.py:279`. `rate_limited_verdict` is imported in `edge/quota_gate.py`.
-- `AuditRecord.detail` is a `Mapping` ("the seam those fields arrive through"). `Category.EXFIL = "exfil"` and `_keyword_spans` exist. `Action` is a `StrEnum` including `flag`.
-- `amf_audit_record` has `recorded_at_ns bigint NOT NULL` and primary key `(org_id, stream_id)`.
-- `import-linter` `root_packages = ["gateway_v2"]`; `audit_control` and `state_control` sit outside it.
-- No other file outside `firewall_v2_map.py` branches on `kind == "unsupported"`, so removing that kind is local to the map and its tests.
+- Lifecycle order in `openai_chat.py`: parse, identity, plan (phase 4), clamp, `holds.note_tenant`, admission (5), `_estimated_cost`, budget (6), input scan (7). Phase 5b fits after `holds.admitted`. `clamp_output_budget` currently uses `contract.default_response_token_ceiling()` and can take `plan.controls.max_response_tokens`.
+- `RequestHolds` has slots, a `_released` latch and `release(admission, quota)`. The proposed additions fit.
+- `AuditRecord.detail` is `Mapping[str, object]` and `outcome` carries the disposition or SHED/REJECTED, so `_is_mandatory` can read only the record.
+- `amf_audit_record` has `recorded_at_ns bigint`, PK `(org_id, stream_id)`, and `RECORD_COLUMNS` lives in `audit_control/schema.py`.
+- `posture.RATE_LIMITED` is mapped to 429 in `edge/errors.py:279`; `rate_limited_verdict` exists in `admit/grant.py`.
 
 ## Unverified / Wrong Assumptions
 
-- Wrong or unspecified: the exporter can call `derive_org_bounds` (finding 3).
-- Wrong: `sink_pg` can read `record.detail` (finding 4).
-- Wrong: the partial index serves the sweep and enumeration queries (finding 5).
-- Unverified: that per-worker `ceil(burst / W)` yields acceptable false-refusal rates under kernel accept distribution (finding 6).
-- Unverified: `edge/openai_chat.py` is 712 lines (read from the design, not re-counted). Not blocking.
-- Not checked: the truncated tail of `requirements.md` (AC-5 onward). The findings above do not depend on it.
+- Wrong: `PlanStore.known()` is usable from boot wiring (finding 1).
+- Inconsistent: MCP audit scope (finding 2).
+- Not verified: Postgres chooses the partial index for the batch query. This is the live-arm assertion.
+- Not verified: `scripts/check_fleet_plan_schema.py` and the `V2_PLAN_*` settings are new work and do not exist yet.
