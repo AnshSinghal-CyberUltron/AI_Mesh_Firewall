@@ -102,3 +102,5 @@ EXIT 1
 
 ## Failure analysis
 The only failure is check_tenant_scale at gateway_v2/dispatch/vector_transports/pinecone_transport.py:140. `git log main..HEAD` on that file shows only 564e2ecf (GW30 Pinecone live-acceptance); GW34 commits do not touch it. tasks.md only documents a known state_control finding for this gate, so this one is new relative to that note but belongs to GW30. Fixing means changing GW30 dispatch code or the gate, which is out of GW34 scope; left unfixed, no baseline added.
+
+**Decision (recorded):** accepted as pre-existing for GW34. No GW30 code or gate edit made in this lane. This finding belongs to the GW30 lane to fix.
