@@ -1,4 +1,4 @@
-"""AST gate: capacity literals only in runtime/resources.py."""
+"""AST gate: capacity literals only in runtime/resources.py (and the allowlisted split modules)."""
 
 from __future__ import annotations
 
@@ -39,7 +39,12 @@ CAPACITY_CALLS = frozenset(
         "Queue",
     },
 )
-ALLOWED_REL = "runtime/resources.py"
+ALLOWED_RELS: frozenset[str] = frozenset(
+    {
+        "runtime/resources.py",
+        "runtime/resources_mcp.py",
+    },
+)
 
 
 @dataclass(frozen=True)
@@ -126,7 +131,7 @@ def scan_tree(root: Path) -> list[CapacityViolation]:
     hits: list[CapacityViolation] = []
     for path in _py_files(root):
         rel = _rel(path, root)
-        if rel == ALLOWED_REL or rel.endswith("/" + ALLOWED_REL):
+        if any(rel == allowed or rel.endswith("/" + allowed) for allowed in ALLOWED_RELS):
             continue
         try:
             tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
@@ -142,7 +147,8 @@ def main(argv: list[str] | None = None) -> int:
     root = Path(args[0] if args else "gateway_v2")
     hits = scan_tree(root)
     for hit in hits:
-        print(f"{hit.path}:{hit.line}: capacity literal {hit.symbol} outside runtime/resources.py")
+        allowed = ", ".join(sorted(ALLOWED_RELS))
+        print(f"{hit.path}:{hit.line}: capacity literal {hit.symbol} outside {allowed}")
     return 1 if hits else 0
 
 
