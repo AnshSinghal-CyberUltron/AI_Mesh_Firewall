@@ -8,7 +8,7 @@ from collections.abc import Mapping
 
 import pytest
 
-from gateway_v2.audit.record import AuditRecord
+from gateway_v2.audit.record import AuditPhase, AuditRecord
 from gateway_v2.domain import posture
 from gateway_v2.domain.decision import Decision, Disposition
 from gateway_v2.edge.audit_emit import emit_chat_audit, note_stream_output
@@ -62,8 +62,8 @@ def _finish(holds: RequestHolds, stats: object, reason: str | None, *, terminal:
     asyncio.run(ChatRoute._finish_stream(None, send, encoder, latch, sent, produced))  # type: ignore[arg-type]
     payload = None
     for frame in frames:
-        if frame.startswith(b"event: amf.trace\n"):
-            payload = json.loads(frame.split(b"data: ", 1)[1].split(b"\n", 1)[0])
+        if frame.startswith(b": amf.trace "):  # GW34 V13 comment-line framing
+            payload = json.loads(frame[len(b": amf.trace "):].split(b"\n", 1)[0])
     records: list[AuditRecord] = []
     emit_chat_audit(lambda r: records.append(r) or True, holds, None)
     return payload, records
@@ -104,7 +104,12 @@ def test_a_policy_cut_is_an_output_block(code: str) -> None:
     stages = _stages(payload)
     assert stages["output_guardrail"] == ("block", True)
     assert payload["zeroshield"]["action"] == "block"  # type: ignore[index]
-    assert all(r.detail["console"]["zeroshield"] == payload["zeroshield"] for r in records)  # type: ignore[index]
+    # GW29 incident rows (`incident_cut` / `incident_refusal`) carry no console by design; every
+    # row that does carry one must agree with the frame.
+    consoled = [r for r in records if r.phase is not AuditPhase.ADMISSION or "console" in r.detail]
+    assert consoled and all(
+        r.detail["console"]["zeroshield"] == payload["zeroshield"] for r in consoled  # type: ignore[index]
+    )
 
 
 @pytest.mark.parametrize("code", [posture.STREAM_KILLED, "killed"])
@@ -158,7 +163,12 @@ def test_strict_pipeline_failures_rely_on_the_failure_code(
     assert payload is not None
     assert _stages(payload)["output_guardrail"] == guard
     assert payload["zeroshield"]["action"] == final  # type: ignore[index]
-    assert all(r.detail["console"]["zeroshield"] == payload["zeroshield"] for r in records)  # type: ignore[index]
+    # GW29 incident rows (`incident_cut` / `incident_refusal`) carry no console by design; every
+    # row that does carry one must agree with the frame.
+    consoled = [r for r in records if r.phase is not AuditPhase.ADMISSION or "console" in r.detail]
+    assert consoled and all(
+        r.detail["console"]["zeroshield"] == payload["zeroshield"] for r in consoled  # type: ignore[index]
+    )
 
 
 def test_a_pipeline_output_block_with_a_decision_keeps_its_rule() -> None:

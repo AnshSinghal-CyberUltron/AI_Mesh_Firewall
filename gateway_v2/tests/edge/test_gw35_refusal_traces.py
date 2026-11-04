@@ -152,7 +152,8 @@ def test_upstream_failure_after_input_redact_is_still_error() -> None:
 def test_streamed_upstream_failure_frame_matches_the_audit_console() -> None:
     app, records, _ = h.build_app(h.ScriptedProvider(h.failed_events("upstream_error")))
     res = asyncio.run(h.post(app, records, stream=True))
-    frame = res.trace_frame()
+    # GW34 R7: a failure before the first content byte is plain HTTP with the console in the body.
+    frame = res.trace_frame() or res.json()
     assert frame is not None and frame["zeroshield"]["action"] == "error"  # type: ignore[index]
     assert _shape(frame)["model_output"] == ("error", True)
     assert all(console == {k: frame[k] for k in console} for console in _audit_consoles(res))
@@ -168,7 +169,8 @@ def test_audit_console_equals_the_response_console() -> None:
         (None, {"content": "key AKIAIOSFODNN7EXAMPLE", "stream": True}),
     ):
         res = _call(mutate, **kw)
-        console = res.trace_frame() if kw.get("stream") else res.json()
+        # GW34 R7: a streamed refusal before the first byte is plain HTTP (console in the body).
+        console = (res.trace_frame() if kw.get("stream") else None) or res.json()
         assert console is not None
         for audited in _audit_consoles(res):
             assert audited["pipeline_trace"] == console["pipeline_trace"], kw

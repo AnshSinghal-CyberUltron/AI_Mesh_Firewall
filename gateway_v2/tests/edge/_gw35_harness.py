@@ -79,7 +79,7 @@ class Result:
 
     def trace_frame(self) -> dict[str, object] | None:
         """The ``amf.trace`` SSE payload, when the response carried one."""
-        marker = b"event: amf.trace\ndata: "
+        marker = b": amf.trace "  # GW34 V13: the trace is an SSE comment line, not a named event
         if marker not in self.body:
             return None
         raw = self.body.split(marker, 1)[1].split(b"\n", 1)[0]
