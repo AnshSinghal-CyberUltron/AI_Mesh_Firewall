@@ -236,7 +236,15 @@ def test_every_post_route_is_classified() -> None:
     exact, prefix = build_routes(chat, misc, None, mcp_deps(Broker(), Control([server_row("s")])))
     covered_by_lifecycle = {"/v1/chat/completions", "/v1/completions", "/v1/responses"}
     covered_by_misc_gate = {"/v1/embeddings", "/v1/moderations"}
-    placeholders = {"/v1/rag/query", "/v1/vector/query"}
+    placeholders = {
+        "/v1/rag/query",
+        "/v1/rag/ingest",
+        "/v1/rag/collections",
+        "/v1/admin/rag/collections",
+        "/v1/vector/query",
+        "/v1/vector/upsert",
+        "/v1/vector/delete",
+    }
     covered_by_oauth = {"/oauth/register", "/oauth/authorize", "/oauth/token"}
     for (method, path), handler in {**exact, **prefix}.items():
         if method == "GET" and path.startswith("/v1/models"):

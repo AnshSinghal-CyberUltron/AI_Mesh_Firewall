@@ -65,7 +65,7 @@ def test_clamp_down_at_request_time() -> None:
 def test_plan_from_record_honours_disabled() -> None:
     from gateway_v2.plan.delta import plan_from_record
 
-    doc = PlanDocument("org", StreamingMode.INCREMENTAL, (), {"rag_enabled": False})
+    doc = PlanDocument("org", StreamingMode.INCREMENTAL, (), rag_settings={"rag_enabled": False})
     raw = json.dumps(encode_plan_body(doc)).encode()
     assert decode_plan_body(raw).rag_settings == {"rag_enabled": False}
     from tests.plan.test_lgw05c_delta import _plan_record
@@ -94,6 +94,6 @@ def test_property_round_trip() -> None:
         parsed = parse_rag_settings(raw)
         encoded = encode_rag_settings(parsed)
         assert parse_rag_settings(encoded) == parsed
-        doc = PlanDocument("o", StreamingMode.INCREMENTAL, (), encoded)
+        doc = PlanDocument("o", StreamingMode.INCREMENTAL, (), rag_settings=encoded)
         back = decode_plan_body(json.dumps(encode_plan_body(doc)).encode())
         assert parse_rag_settings(back.rag_settings) == parsed

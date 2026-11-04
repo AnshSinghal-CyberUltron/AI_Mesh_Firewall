@@ -115,7 +115,7 @@ class _Fixed:
         self.project = project
 
     async def resolve(self, scope: object) -> TenantIdentity:
-        principal = Principal("k", ORG, 0.0, 0.0, 0, self.project)
+        principal = Principal("k", ORG, 0.0, 0.0, 0, project=self.project)
         return TenantIdentity(ORG, principal)
 
 

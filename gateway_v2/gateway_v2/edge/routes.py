@@ -111,7 +111,6 @@ from gateway_v2.edge.rag_deps import RagDeps
 from gateway_v2.edge.request_holds import RequestHolds
 from gateway_v2.edge.responses_store import ResponseStore
 from gateway_v2.edge.route_emit import ProducedModeHolder, emit_error_code, emit_response
-from gateway_v2.edge.route_support import placeholder as _placeholder
 from gateway_v2.edge.stream_control import FirstByteLatch, StreamAttempt, run_with_no_splice
 from gateway_v2.edge.stream_timeouts import StreamTimeout, StreamTimeouts
 from gateway_v2.edge.wire.openai import (
