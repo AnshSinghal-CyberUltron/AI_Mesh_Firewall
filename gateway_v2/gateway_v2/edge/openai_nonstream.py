@@ -44,6 +44,7 @@ from gateway_v2.dispatch.provider import UpstreamRequest
 from gateway_v2.domain.decision import Decision, most_restrictive
 from gateway_v2.domain.plan import ExecutionPlan, Phase, Surface
 from gateway_v2.edge import errors
+from gateway_v2.edge.chat_upstream import open_chat_upstream
 from gateway_v2.edge.console_projection import apply_projection, chat_console
 from gateway_v2.edge.dev_components import bind_surface
 from gateway_v2.edge.phase_resolvers import resolver_for
@@ -152,7 +153,7 @@ async def collect_and_enforce(
     if holds is None:
         holds = RequestHolds()
     try:
-        collected = await _collect_output_channels(deps, destination, body, holds)
+        collected = await _collect_output_channels(deps, destination, body, holds, plan)
         deltas, decision = _enforce_channels(deps, plan, collected)
     except PolicyRegexRefusal as refused:
         return EnforcedOutput(deltas=(), refuse_code=refused.code)
@@ -172,6 +173,7 @@ async def _collect_output_channels(
     destination: str,
     body: Mapping[str, object],
     holds: RequestHolds,
+    plan: ExecutionPlan | None = None,
 ) -> tuple[tuple[str, str], ...]:
     """Drain the provider to its final event, concatenating ``text_deltas`` per channel.
 
@@ -196,8 +198,8 @@ async def _collect_output_channels(
 
     # The provider is about to be opened: record the dispatch so the spend stands (C29).
     holds.mark_dispatched()
-    async for event in deps.provider.open(
-        UpstreamRequest(destination=destination, body=body)
+    async for event in open_chat_upstream(
+        deps, plan, UpstreamRequest(destination=destination, body=body), holds
     ):
         if event.gateway_error is not None:
             raise UpstreamFailed(event.gateway_error)
@@ -285,6 +287,7 @@ def _console_for(
     if output is not None and output.deciding_rules and output_action not in (None, "allow"):
         output_rule = output.deciding_rules[0]
     input_rule = decision.deciding_rules[0] if decision.deciding_rules else ""
+    trace = holds.routing_trace
     return chat_console(
         request_id=holds.request_id,
         plan_version=decision.plan_version,
@@ -293,4 +296,6 @@ def _console_for(
         provider_called=holds.dispatched,
         input_rule=input_rule,
         output_rule=output_rule,
+        routing=() if trace is None else trace.decisions(),
+        routing_alias="-" if trace is None else trace.alias,
     )

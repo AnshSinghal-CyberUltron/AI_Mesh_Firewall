@@ -47,6 +47,14 @@ __all__ = (
     "COLLECTION_EXISTS",
     "INVALID_API_KEY",
     "gap_retry_after_s",
+    "ROUTING_NO_CANDIDATES",
+    "ROUTING_UNKNOWN_MODEL",
+    "ROUTING_ALL_UNAVAILABLE",
+    "ROUTING_ATTEMPTS_EXHAUSTED",
+    "ROUTING_TEARDOWN_UNCONFIRMED",
+    "ROUTING_CONTEXT_MISSING",
+    "ROUTING_SNAPSHOT_UNAVAILABLE",
+    "ROUTING_INTERNAL_ERROR",
 )
 
 KILL_SWITCH_UNAVAILABLE = "kill_switch_unavailable"
@@ -211,3 +219,13 @@ def gap_retry_after_s(*, rehydrate_period_ms: float, refresh_ms: float) -> float
     retries become the load (R2-08).
     """
     return max(MIN_RETRY_AFTER_S, (rehydrate_period_ms + refresh_ms) / 1000)
+
+# GW28 multi-model routing terminal codes. Codes only; `edge` owns the HTTP mapping.
+ROUTING_NO_CANDIDATES = "routing_no_candidates"
+ROUTING_UNKNOWN_MODEL = "routing_unknown_model"
+ROUTING_ALL_UNAVAILABLE = "routing_all_unavailable"
+ROUTING_ATTEMPTS_EXHAUSTED = "routing_attempts_exhausted"
+ROUTING_TEARDOWN_UNCONFIRMED = "routing_teardown_unconfirmed"
+ROUTING_CONTEXT_MISSING = "routing_context_missing"
+ROUTING_SNAPSHOT_UNAVAILABLE = "routing_snapshot_unavailable"
+ROUTING_INTERNAL_ERROR = "routing_internal_error"

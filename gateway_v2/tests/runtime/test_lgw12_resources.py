@@ -24,7 +24,8 @@ import random
 import gateway_v2.runtime.resources as resources
 from gateway_v2.runtime.errors import CapacityUnavailable
 from gateway_v2.runtime.kinds import HardwareSignals
-from gateway_v2.runtime.resources import ResourceContract, from_signals, snapshot
+from gateway_v2.runtime.resources import ResourceContract, from_signals
+from gateway_v2.runtime.resources_snapshot import snapshot
 
 _MS_PER_S = resources._MS_PER_S
 

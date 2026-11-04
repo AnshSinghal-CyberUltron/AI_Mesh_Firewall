@@ -264,6 +264,15 @@ _ENVELOPE: Mapping[str, tuple[int, str]] = MappingProxyType(
         "upstream_unavailable": (502, "gateway_error"),
         "upstream_error": (502, "gateway_error"),
         "upstream_request_unbuildable": (500, "gateway_error"),
+        # -- GW28 multi-model routing refusals (dispatch/routed_provider.py) ---------------
+        posture.ROUTING_UNKNOWN_MODEL: (404, "not_found_error"),
+        posture.ROUTING_NO_CANDIDATES: (503, "service_unavailable"),
+        posture.ROUTING_ALL_UNAVAILABLE: (503, "service_unavailable"),
+        posture.ROUTING_ATTEMPTS_EXHAUSTED: (503, "service_unavailable"),
+        posture.ROUTING_TEARDOWN_UNCONFIRMED: (503, "service_unavailable"),
+        posture.ROUTING_CONTEXT_MISSING: (503, "service_unavailable"),
+        posture.ROUTING_SNAPSHOT_UNAVAILABLE: (503, "service_unavailable"),
+        posture.ROUTING_INTERNAL_ERROR: (503, "service_unavailable"),
         # -- Pre-existing posture codes (R2 cards) ----------------------------
         posture.PLAN_UNAVAILABLE: (503, "service_unavailable"),
         posture.KILL_SWITCH_UNAVAILABLE: (503, "service_unavailable"),

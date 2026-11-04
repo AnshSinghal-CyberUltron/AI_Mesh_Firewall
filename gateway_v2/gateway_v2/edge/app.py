@@ -37,18 +37,19 @@ mutable:** the route table is a function local and the serving bounds derive fro
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, replace
 from typing import Protocol, runtime_checkable
 
 from gateway_v2.admit.org_limits import OrgLimits
 from gateway_v2.audit.record import AuditRecord
 from gateway_v2.dispatch.provider import ProviderClient
+from gateway_v2.dispatch.routed_provider import RoutedProvider
 from gateway_v2.dispatch.routing import DispatchRouter
 from gateway_v2.dispatch.transform import Transform
-from gateway_v2.domain import Finding
 from gateway_v2.edge import errors
-from gateway_v2.edge.cancel import InFlightControlSource, InFlightSnapshot
+from gateway_v2.edge.app_defaults import NoControlSource, no_error_findings, one_stream
+from gateway_v2.edge.cancel import InFlightControlSource
 from gateway_v2.edge.chat_deps import (
     AdmissionDecider,
     BudgetDecider,
@@ -246,6 +247,7 @@ def build_app(
     observer: OutcomeObserver | None = None,
     holdback_metrics: HoldbackMetrics | None = None,
     org_limits: OrgLimitDecider | None = None,
+    routing: RoutedProvider | None = None,
 ) -> ASGIApplication:
     """Assemble the raw-ASGI serving skin (R2.1).
 
@@ -280,9 +282,8 @@ def build_app(
     ``edge``. Returns the ``async def app(scope, receive, send)`` callable.
     """
     cfg, _cfg_logs = load_holdback_config()
-    # C38 serving-loop discipline (R13.1): the GIL-releasing executor the CPU-bound scan work is
-    # offloaded to, sized by `contract.pool_size(PoolKind.SCANNER)` (no thread-count literal); built
-    # once at assembly, shared across every stream, released on lifespan shutdown.
+    # C38 (R13.1): the GIL-releasing scan executor, sized by `pool_size(PoolKind.SCANNER)` (no
+    # thread-count literal); built once, shared across every stream, released on lifespan shutdown.
     scan_executor = ScanExecutor(contract=contract)
     limits = org_limits if org_limits is not None else OrgLimits(contract)
     chat = _build_chat_route(
@@ -308,6 +309,7 @@ def build_app(
         audit=audit,
         observer=observer,
         holdback_metrics=holdback_metrics,
+        routing=routing,
     )
     misc = _build_misc_route(
         org_limits=limits,
@@ -364,6 +366,7 @@ def _build_chat_route(
     audit: Callable[[AuditRecord], bool] | None = None,
     observer: OutcomeObserver | None = None,
     holdback_metrics: HoldbackMetrics | None = None,
+    routing: RoutedProvider | None = None,
 ) -> ChatRoute:
     """Construct the single chat route. Unwired deps use their fail-closed defaults.
 
@@ -379,10 +382,10 @@ def _build_chat_route(
         resolver=resolver,
         cfg=cfg,
         router=DispatchRouter(),
-        active_streams=active_streams if active_streams is not None else _one_stream,
-        control=control if control is not None else _NoControlSource(),
+        active_streams=active_streams if active_streams is not None else one_stream,
+        control=control if control is not None else NoControlSource(),
         clock=clock,
-        error_scanner=error_scanner if error_scanner is not None else _no_error_findings,
+        error_scanner=error_scanner if error_scanner is not None else no_error_findings,
         executor=scan_executor,
         org_limits=org_limits,
         # --- GW15 §10.4 lifecycle deps, constructed once at boot (task 6.1) ---
@@ -402,6 +405,7 @@ def _build_chat_route(
         audit=audit,
         observer=observer,
         holdback_metrics=holdback_metrics if holdback_metrics is not None else HoldbackMetrics(),
+        routing=routing,
     )
 
 
@@ -740,54 +744,6 @@ def _compose_directory_after(
         return True, None
 
     return probe
-
-
-def _no_error_findings(_frame: str) -> Sequence[Finding]:
-    """The default error-frame findings scanner when GW07/GW08's detector is not yet wired.
-
-    Returns NO findings, so a mid-stream error frame resolves to ALLOW and is forwarded unchanged
-    (R11.2) — the same thin-handler posture as the content path, which runs the shipped pipeline
-    with ``detector=None`` (no findings) until GW15 wires the real detector. This is NOT a
-    fail-open hole: a withhold only happens on a BLOCK decision or a scan error (R11.3/R11.4), and
-    the default scanner never raises; a deployment that must guard error frames injects the real
-    findings detector through :func:`build_app`'s ``error_scanner`` (above ``detect``), at which
-    point a secret in an error frame is redacted/blocked exactly as in released content.
-    """
-    return ()
-
-
-def _one_stream() -> int:
-    """The default live-concurrency count when GW19's counter is not yet wired.
-
-    One active stream — so the coalescer's derived per-stream high-water is computed for a single
-    stream. Not a capacity literal: it is a count of in-flight streams, the quantity the live
-    counter reports, not a configured bound.
-    """
-    return 1
-
-
-class _NoControlSource:
-    """The default in-flight control source when the control-plane feed is not yet wired.
-
-    Reports a FRESH, AVAILABLE snapshot with every signal clear, so a stream runs under the
-    max-duration deadline alone until GW05/GW06 inject the real kill-switch / revocation / plan
-    feed. ``age_s=0.0`` keeps it inside any derived ``max_snapshot_age_s()`` (so it is not treated
-    as stale), and ``available=True`` means it does not trip the fail-closed path for a deployment
-    that simply has not wired the control plane yet. A real source replaces this with the signed
-    snapshot read; the max-stream-duration trigger is active regardless, since that bound is purely
-    the injected clock vs the contract.
-    """
-
-    __slots__ = ()
-
-    def snapshot(self) -> InFlightSnapshot:
-        return InFlightSnapshot(
-            available=True,
-            age_s=0.0,
-            kill_switch_engaged=False,
-            key_revoked=False,
-            plan_changed=False,
-        )
 
 
 # --------------------------------------------------------------------------- #

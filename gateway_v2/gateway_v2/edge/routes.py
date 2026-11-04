@@ -40,6 +40,7 @@ from gateway_v2.audit.record import AuditRecord
 from gateway_v2.detect.holdback import TokenIndex
 from gateway_v2.detect.windowing import max_pattern_length
 from gateway_v2.dispatch.provider import ProviderClient, UpstreamRequest
+from gateway_v2.dispatch.routed_provider import RoutedProvider
 from gateway_v2.dispatch.routing import DispatchRouter
 from gateway_v2.dispatch.transform import Transform
 from gateway_v2.domain.plan import ExecutionPlan, Phase, Surface
@@ -69,6 +70,7 @@ from gateway_v2.edge.chat_deps import (
     no_findings_detector,
     unresolved_snapshot_source,
 )
+from gateway_v2.edge.chat_upstream import open_chat_upstream
 from gateway_v2.edge.console_projection import (
     apply_projection,
     console_from_holds,
@@ -93,6 +95,8 @@ from gateway_v2.edge.outcome_metrics import OutcomeObserver
 from gateway_v2.edge.phase_resolvers import PhaseResolverFactory, resolver_for
 from gateway_v2.edge.request_holds import RequestHolds
 from gateway_v2.edge.responses_store import ResponseStore
+from gateway_v2.edge.route_support import ProducedModeHolder as _ProducedModeHolder
+from gateway_v2.edge.route_support import placeholder as _placeholder
 from gateway_v2.edge.stream_control import FirstByteLatch, StreamAttempt, run_with_no_splice
 from gateway_v2.edge.stream_timeouts import StreamTimeout, StreamTimeouts
 from gateway_v2.edge.wire.openai import (
@@ -110,9 +114,8 @@ from gateway_v2.egress.stream import (
     ScanProtocol,
     Send,
     StreamPipeline,
-    StreamStats,
 )
-from gateway_v2.egress.strict import StrictStats, StrictWithholdPipeline
+from gateway_v2.egress.strict import StrictWithholdPipeline
 from gateway_v2.plan.snapshot import ReplicaSnapshot
 from gateway_v2.runtime.holdback_config import HoldbackConfig
 from gateway_v2.runtime.holdback_metrics import HoldbackMetrics
@@ -210,27 +213,6 @@ async def _emit_error_code(
 # before the budget or input phases ever matter.
 
 
-class _ProducedModeHolder:
-    """A per-request mutable sink for the pipeline's returned stats (GW13 C5).
-
-    Both ``StreamPipeline.run`` and ``StrictWithholdPipeline.run`` return a stats
-    value carrying ``produced_mode`` (and, on the INCREMENTAL side,
-    ``degenerated_to_strict``). The ``_attempt`` coroutine captures that return and
-    stashes it here so :meth:`ChatRoute._finish_stream` can emit the Produced_Mode
-    trace frame on the wire just before the terminal ``[DONE]`` marker. It is a
-    per-request LOCAL instance built in :meth:`ChatRoute._stream` (never a
-    module-level mutable, gated), so nothing request-scoped is shared on the frozen
-    route. ``stats`` is ``None`` until an attempt completed (a byte-less failure of
-    every attempt leaves it unset, in which case no trace frame is emitted).
-    """
-
-    __slots__ = ("holds", "stats")
-
-    def __init__(self, holds: RequestHolds | None = None) -> None:
-        self.holds = holds
-        self.stats: StreamStats | StrictStats | None = None
-
-
 @dataclass(frozen=True, slots=True)
 class ChatRoute:
     """The injected dependencies the ``/v1/chat/completions`` handler wires together.
@@ -309,6 +291,8 @@ class ChatRoute:
     holdback_metrics: HoldbackMetrics = HoldbackMetrics()
     #: GW26. A set phase factory enforces only rules that name this surface.
     surface: Surface = Surface.CHAT
+    #: GW28. ``None`` keeps today's single plain provider; set, the two chat open sites route.
+    routing: RoutedProvider | None = None
 
     async def handle(self, scope: ASGIScope, receive: ASGIReceive, send: ASGISend) -> None:
         """Serve a chat/completions request end-to-end (R2.2, R7, R10, §10.4).
@@ -497,6 +481,13 @@ class ChatRoute:
             contract=self.contract,
             kill_latch=kill_latch,
             clock=self.clock,
+            first_event_s=(
+                None
+                if self.routing is None
+                else self.contract.routing_pre_content_budget_s(
+                    self.contract.routing_max_attempts()
+                )
+            ),
         )
 
         async def _sink(frame: DownstreamFrame) -> None:
@@ -689,7 +680,7 @@ class ChatRoute:
             # once dispatched"). On a no-splice RETRY this only re-sets a flag (idempotent).
             holds.mark_dispatched()
             chunks = _as_chunks(
-                self.provider.open(request),
+                open_chat_upstream(self, plan, request, holds),
                 coalescer,
                 control,
                 timeouts,
@@ -740,21 +731,6 @@ class ChatRoute:
 # --------------------------------------------------------------------------- #
 # Placeholder routes (R2.3) — registered-for-later, declared not-implemented.
 # --------------------------------------------------------------------------- #
-
-
-def _placeholder(surface: str) -> RouteHandler:
-    """Build a registered-for-later handler that renders a declared ``not_implemented`` code.
-
-    The surface is *registered* so the route table is complete and a later card (GW15/16/17/18)
-    wires the real handler in place. Until then it renders the ``not_implemented`` value-code
-    through the single ``Error_Envelope`` (an HTTP ``501`` JSON body via the unmapped-code
-    generic path), NOT a raw ``404``-with-detail that would leak which surfaces exist.
-    """
-
-    async def _handle(scope: ASGIScope, receive: ASGIReceive, send: ASGISend) -> None:
-        await emit_response(send, errors.render_not_implemented(surface))
-
-    return _handle
 
 
 # --------------------------------------------------------------------------- #

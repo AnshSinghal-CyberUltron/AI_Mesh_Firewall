@@ -32,7 +32,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import AsyncIterator, Callable, Mapping
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import TYPE_CHECKING, Any, ClassVar, Protocol
 
 from gateway_v2.dispatch.provider import UpstreamEvent, UpstreamRequest
 from gateway_v2.domain.posture import STREAM_MALFORMED_UPSTREAM
@@ -131,10 +131,14 @@ def _plain(value: object) -> object:
 class OpenAIUpstreamProvider:
     """A pooled, per-request-safe :class:`ProviderClient` for an OpenAI-compatible endpoint."""
 
+    #: GW28 D-6: opening a stream keeps no instance-level latch, so one instance may serve
+    #: concurrent requests and be a routing candidate's client. Checked on ``type(client)``.
+    per_request_safe: ClassVar[bool] = True
     __slots__ = (
         "_base_url",
         "_client",
         "_client_factory",
+        "_connections",
         "_decoder_factory",
         "_loop",
     )
@@ -145,7 +149,9 @@ class OpenAIUpstreamProvider:
         base_url: str,
         decoder_factory: Callable[[], SSEDecoderLike],
         client_factory: ClientFactory,
+        connections: int = 0,
     ) -> None:
+        self._connections = connections
         self._base_url = base_url.rstrip("/")
         self._decoder_factory = decoder_factory
         self._client_factory = client_factory
@@ -155,6 +161,11 @@ class OpenAIUpstreamProvider:
     @property
     def base_url(self) -> str:
         return self._base_url
+
+    @property
+    def connections(self) -> int:
+        """Pooled sockets declared by the builder (0 = not declared); read for the boot budget."""
+        return self._connections
 
     def open(self, request: UpstreamRequest) -> AsyncIterator[UpstreamEvent]:
         """Stream the rendered request to the provider as ``UpstreamEvent``s."""

@@ -61,6 +61,7 @@ from collections.abc import Callable
 from gateway_v2.domain.decision import Decision
 from gateway_v2.domain.plan import UNSET_CONTROLS, OrgControls
 from gateway_v2.edge.chat_deps import AdmissionDecider, BudgetDecider
+from gateway_v2.edge.routing_trace import RoutingTrace
 
 __all__ = ("RequestHolds",)
 
@@ -90,6 +91,7 @@ class RequestHolds:
         "_output_decision",
         "_released",
         "_request_id",
+        "_routing",
         "_spent",
     )
 
@@ -107,6 +109,7 @@ class RequestHolds:
         self._org_id_charged: str = ""
         self._org_tokens: int = 0
         self._org_refund: Callable[[str, int], None] | None = None
+        self._routing: RoutingTrace | None = None
 
     def admitted(self, request_id: str) -> None:
         """Record that admission granted a slot for ``request_id`` (``complete``-d on exit)."""
@@ -144,6 +147,14 @@ class RequestHolds:
     def note_request(self, request_id: str) -> None:
         """Record the minted id before admission, so a shed still has a row key."""
         self._request_id = request_id
+
+    def note_routing(self, trace: RoutingTrace) -> None:
+        """Attach this request's own routing trace (GW28); never shared across requests."""
+        self._routing = trace
+
+    @property
+    def routing_trace(self) -> RoutingTrace | None:
+        return self._routing
 
     @property
     def controls(self) -> OrgControls:

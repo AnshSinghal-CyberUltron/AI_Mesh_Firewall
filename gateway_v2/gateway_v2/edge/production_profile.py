@@ -44,6 +44,8 @@ from gateway_v2.edge.dev_profile import dev_profile_active
 from gateway_v2.edge.event_log import StructuredEventLog
 from gateway_v2.edge.publisher import Publisher
 from gateway_v2.edge.quota_gate import QuotaGate
+from gateway_v2.edge.routing_boot import RoutedBundle as RoutedBundle
+from gateway_v2.edge.routing_boot import build_routed_provider as build_routed_provider
 from gateway_v2.edge.state_runtime import StateRuntime, StateRuntimeConfig
 from gateway_v2.runtime.holdback_metrics import HoldbackMetrics
 from gateway_v2.runtime.resources import ResourceContract

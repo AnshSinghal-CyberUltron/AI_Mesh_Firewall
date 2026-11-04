@@ -319,6 +319,15 @@ ERROR_SHAPES: Mapping[str, tuple[str, str]] = MappingProxyType(
             "invalid_request_error",
             "This endpoint does not accept that HTTP method.",
         ),
+        # GW28 multi-model routing: terminal refusals the gateway decided before/while routing.
+        "routing_unknown_model": ("not_found_error", "The requested model is not served."),
+        "routing_no_candidates": ("service_unavailable", "No model provider is configured."),
+        "routing_all_unavailable": ("service_unavailable", "Every model provider is unavailable."),
+        "routing_attempts_exhausted": ("service_unavailable", "Every provider attempt failed."),
+        "routing_teardown_unconfirmed": ("service_unavailable", "The request was stopped."),
+        "routing_context_missing": ("service_unavailable", "The request could not be routed."),
+        "routing_snapshot_unavailable": ("service_unavailable", "Provider health is unknown."),
+        "routing_internal_error": ("service_unavailable", "The request could not be routed."),
     }
 )
 
