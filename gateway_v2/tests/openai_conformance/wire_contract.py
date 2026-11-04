@@ -121,6 +121,10 @@ def assert_stream_frames(chunks: Sequence[object]) -> None:
     ``object`` away would contradict that contract, so this helper only requires it carry no
     content delta. A chunk WITH non-empty ``choices`` is always held to the full content-chunk
     framing.
+
+    GW34 V13 (4 Nov 2026): the v2 gateway now writes the trace as an SSE COMMENT line
+    (``: amf.trace {json}``), which the SDK skips, so a v2 stream no longer yields a trace chunk;
+    the tolerance stays for other wires (the v1 gateway's in-band ``choices: []`` trace chunk).
     """
 
     assert chunks, "stream produced no chunks"

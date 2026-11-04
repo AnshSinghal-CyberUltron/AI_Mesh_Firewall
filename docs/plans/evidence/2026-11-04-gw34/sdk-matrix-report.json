@@ -12,10 +12,9 @@
     "skipped": null
    },
    "c": {
-    "passed": 0,
+    "passed": 1,
     "ran": 1,
-    "skipped": null,
-    "xfail": "Node stream() helper cannot parse the named amf.trace event"
+    "skipped": null
    },
    "d": {
     "passed": 1,
