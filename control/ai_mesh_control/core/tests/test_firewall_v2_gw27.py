@@ -36,7 +36,9 @@ def _validate(data, **stored):
 class DispositionTests(SimpleTestCase):
     def test_no_unsupported_kind_remains(self):
         self.assertNotIn("unsupported", {spec["kind"] for spec in FIELDS.values()})
-        self.assertEqual(len(retire_ledger()), 30)
+        # 30 on the GW27 branch; GW33 Requirement 9 maps the five factuality / grounding /
+        # output_hallucination_action fields, so the merged tree retires 25.
+        self.assertEqual(len(retire_ledger()), 25)
 
     def test_turning_rag_on_names_the_field_and_owner(self):
         errors = selection_errors({"rag_enabled": True}, {"rag_enabled": False})
