@@ -24,10 +24,15 @@ from gateway_v2.audit.record import (
     from_decision,
 )
 from gateway_v2.domain.decision import Decision, DecisionRecord, Disposition
+from gateway_v2.domain.plan import UNSET_CONTROLS, AuditControl, OrgControls
 from gateway_v2.domain.posture import OVERLOAD_SHED
 from gateway_v2.edge import errors
 from gateway_v2.edge.console_projection import console_from_holds
-from gateway_v2.edge.outcome_metrics import OutcomeObserver, observe_outcome
+from gateway_v2.edge.outcome_metrics import (
+    OutcomeObserver,
+    observe_audit_suppressed,
+    observe_outcome,
+)
 from gateway_v2.edge.request_holds import RequestHolds
 
 _CHAT_ROUTE = "chat"
@@ -82,10 +87,52 @@ def emit_chat_audit(
                 provider_called=holds.dispatched,
             )
         extra = {"route": route, **(detail or {})}
-        for record in _records(holds, refuse_code, time.time_ns(), console, extra):
+        controls = holds.controls
+        stamp = _stamp(controls)
+        for record in _records(holds, refuse_code, time.time_ns(), console, extra, stamp):
+            if _suppressed(record, controls.audit):
+                observe_audit_suppressed(observer)
+                continue
             emit(record)
     except Exception:
         return
+
+
+_MANDATORY_OUTCOMES = frozenset({Disposition.BLOCK.value, SHED, REJECTED})
+_INCIDENT_OUTCOMES = frozenset({Disposition.REDACT.value, Disposition.FLAG.value})
+
+
+def _is_mandatory(record: AuditRecord) -> bool:
+    """A hard block, a shed or an admission rejection. Reads only the record, never a control."""
+    return record.outcome in _MANDATORY_OUTCOMES
+
+
+def _suppressed(record: AuditRecord, audit: AuditControl | None) -> bool:
+    """Org audit gating (GW27). Classify first, then gate; no control means audit stays on."""
+    if audit is None or _is_mandatory(record):
+        return False
+    if not audit.enabled:
+        return True
+    return (
+        not audit.incident_logging
+        and record.phase is AuditPhase.OUTPUT
+        and record.outcome in _INCIDENT_OUTCOMES
+    )
+
+
+def _stamp(controls: OrgControls) -> Mapping[str, object]:
+    """Retention and compliance values in force, stamped as int and list[str] (never strings).
+
+    Nothing is stamped when the plan carried no controls, so a pre-plan refusal has no stamp.
+    """
+    if controls == UNSET_CONTROLS:
+        return {}
+    stamp: dict[str, object] = {}
+    if controls.audit is not None:
+        stamp["retention_days"] = controls.audit.retention_days
+    if controls.compliance_frameworks:
+        stamp["compliance_frameworks"] = list(controls.compliance_frameworks)
+    return stamp
 
 
 def _records(
@@ -94,19 +141,22 @@ def _records(
     recorded_at_ns: int,
     console: Mapping[str, object] | None,
     extra: Mapping[str, str],
+    stamp: Mapping[str, object],
 ) -> list[AuditRecord]:
     records: list[AuditRecord] = []
     output = holds.output_decision
     if holds.input_decision is not None:
         records.append(
-            _phase(holds, holds.input_decision, AuditPhase.INPUT, recorded_at_ns, console, extra),
+            _phase(
+                holds, holds.input_decision, AuditPhase.INPUT, recorded_at_ns, console, extra, stamp
+            ),
         )
     if output is not None:
         records.append(
-            _phase(holds, output, AuditPhase.OUTPUT, recorded_at_ns, console, extra),
+            _phase(holds, output, AuditPhase.OUTPUT, recorded_at_ns, console, extra, stamp),
         )
     if refuse_code and holds.input_decision is None and output is None:
-        admitted = _admission(holds, refuse_code, recorded_at_ns, extra)
+        admitted = _admission(holds, refuse_code, recorded_at_ns, extra, stamp)
         if admitted is not None:
             records.append(admitted)
     return records
@@ -119,6 +169,7 @@ def _phase(
     recorded_at_ns: int,
     console: Mapping[str, object] | None,
     extra: Mapping[str, str],
+    stamp: Mapping[str, object],
 ) -> AuditRecord:
     built = from_decision(
         DecisionRecord(
@@ -130,7 +181,7 @@ def _phase(
         phase=phase,
         recorded_at_ns=recorded_at_ns,
     )
-    return _annotate(built, console, extra)
+    return _annotate(built, console, extra, stamp)
 
 
 def _admission(
@@ -138,6 +189,7 @@ def _admission(
     refuse_code: str,
     recorded_at_ns: int,
     extra: Mapping[str, str],
+    stamp: Mapping[str, object],
 ) -> AuditRecord | None:
     try:
         status = errors.render_http(refuse_code, request_id=holds.request_id).status
@@ -155,14 +207,19 @@ def _admission(
         ),
         None,
         extra,
+        stamp,
     )
 
 
 def _annotate(
-    record: AuditRecord, console: Mapping[str, object] | None, extra: Mapping[str, str]
+    record: AuditRecord,
+    console: Mapping[str, object] | None,
+    extra: Mapping[str, str],
+    stamp: Mapping[str, object],
 ) -> AuditRecord:
     detail = dict(record.detail)
     detail.update(extra)
+    detail.update(stamp)
     if console is not None:
         detail["console"] = dict(console)
     return AuditRecord(

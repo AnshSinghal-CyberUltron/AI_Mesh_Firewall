@@ -64,6 +64,7 @@ def write_plan(path: Path, controls: Mapping[str, object] | None) -> None:
     if controls is not None:
         body["controls"] = {"version": 1, **controls}
         body["requires"] = ["controls/1"]
+    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(body), encoding="utf-8")
 
 
