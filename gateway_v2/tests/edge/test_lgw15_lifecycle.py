@@ -13,6 +13,10 @@ property-based test.
 
 from __future__ import annotations
 
+from dataclasses import field as _lgw29_field
+
+from tests.edge._lgw29_support import dev_gate as _lgw29_dev_gate
+from tests.edge._lgw29_support import dev_recheck as _lgw29_dev_recheck
 from tests.edge._org_limits import NoopOrgLimits, org_limits_for
 
 # ===========================================================================
@@ -348,6 +352,8 @@ def test_property_6_exactly_one_shared_state_round_trip() -> None:
         router: DispatchRouter
         transform: Transform
         clock: object = field(default_factory=lambda: (lambda: 0.0))
+        incident_gate: object = _lgw29_field(default_factory=_lgw29_dev_gate)
+        incident_recheck: object = _lgw29_field(default_factory=_lgw29_dev_recheck)
 
     def _p6_build_deps(flow: str, counter: _P6_ReadCounter) -> _P6_Deps:
         """Assemble the dependency bundle configured for one lifecycle ``flow``."""
@@ -563,6 +569,8 @@ def test_property_5_pre_identity_pre_checks_reject_before_canonicalization() -> 
 
         contract: _P5StubContract
         parser: _P5SpyParser = field(default_factory=_P5SpyParser)
+        incident_gate: object = _lgw29_field(default_factory=_lgw29_dev_gate)
+        incident_recheck: object = _lgw29_field(default_factory=_lgw29_dev_recheck)
 
     def _p5_expansion_ratio(body: bytes) -> float:
         """Mirror of ``ChatSurface._expansion_ratio`` so the generator can target it."""
@@ -1318,6 +1326,8 @@ def _p211_build_deps(
         router: object
         transform: object
         clock: object = field(default_factory=lambda: (lambda: 0.0))
+        incident_gate: object = _lgw29_field(default_factory=_lgw29_dev_gate)
+        incident_recheck: object = _lgw29_field(default_factory=_lgw29_dev_recheck)
 
     return _P211Deps(
         contract=_P211Contract(),

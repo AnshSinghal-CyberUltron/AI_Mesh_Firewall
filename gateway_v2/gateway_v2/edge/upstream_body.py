@@ -37,9 +37,13 @@ def with_openai_body(
     req: CanonicalRequest,
     contract: ResourceContract,
     *,
+    model: str,
     org_ceiling: int,
 ) -> Mapping[str, object] | None:
     """``upstream_body`` plus the rendered OpenAI request, or ``None`` on a slot mismatch.
+
+    ``model`` is REQUIRED (GW29, 6.2): the canonical routed model phase 4b checked, so what the gate
+    decided on is exactly what the provider receives.
 
     A request with no template (built by hand rather than parsed) is returned unchanged: the
     OpenAI provider then refuses it (``upstream_request_unbuildable``) without posting.
@@ -71,7 +75,7 @@ def with_openai_body(
             content = _PART_JOIN.join(part for part in parts if part is not None)
         messages.append(MappingProxyType({"role": message.role, "content": content}))
 
-    body: dict[str, object] = {"model": req.model, "messages": tuple(messages), **req.forwarded}
+    body: dict[str, object] = {"model": model, "messages": tuple(messages), **req.forwarded}
     if template.stop is not None:
         stop_slots = (template.stop,) if isinstance(template.stop, TextSlot) else template.stop
         stops = [fill(slot) for slot in stop_slots]

@@ -47,8 +47,14 @@ from gateway_v2.dispatch.provider import ProviderClient
 from gateway_v2.dispatch.routed_provider import RoutedProvider
 from gateway_v2.dispatch.routing import DispatchRouter
 from gateway_v2.dispatch.transform import Transform
+from gateway_v2.domain.incident import (
+    IncidentDecider,
+    fail_closed_gate,
+    fail_closed_org,
+    fail_closed_recheck,
+)
 from gateway_v2.edge import errors
-from gateway_v2.edge.app_defaults import NoControlSource, no_error_findings, one_stream
+from gateway_v2.edge.app_defaults import no_error_findings, one_stream
 from gateway_v2.edge.cancel import InFlightControlSource
 from gateway_v2.edge.chat_deps import (
     AdmissionDecider,
@@ -67,6 +73,8 @@ from gateway_v2.edge.identity_resolver import (
     TenantIdentity,
     fail_closed_resolver,
 )
+from gateway_v2.edge.incident_recheck import Recheck
+from gateway_v2.edge.inflight_source import InFlightControlFactory, RefusingControlSource
 from gateway_v2.edge.mcp_deps import McpDeps
 from gateway_v2.edge.openai_misc import MiscRoute
 from gateway_v2.edge.outcome_metrics import OutcomeObserver
@@ -248,6 +256,9 @@ def build_app(
     holdback_metrics: HoldbackMetrics | None = None,
     org_limits: OrgLimitDecider | None = None,
     routing: RoutedProvider | None = None,
+    control_factory: InFlightControlFactory | None = None,
+    incident_gate: IncidentDecider | None = None,
+    incident_recheck: Recheck | None = None,
 ) -> ASGIApplication:
     """Assemble the raw-ASGI serving skin (R2.1).
 
@@ -256,26 +267,17 @@ def build_app(
     the shipped ``load_contract`` idiom); the window and per-stream buffer high-water derive from
     ``contract`` (no literal). ``readiness`` defaults to an always-ready probe (parity with
     ``state_ready(None)``); ``active_streams`` to a single-stream count until GW19. ``control`` is
-    the in-flight control source polled at each chunk boundary (R10), defaulting to a
-    fresh/available/all-clear source so a deployment without the kill-switch / revocation / plan
-    feed still runs under the ``clock``-vs-contract max-stream-duration deadline.
-    ``error_scanner`` is the detector a mid-stream provider error frame is scanned through before
-    any byte is forwarded (R11); injected HERE (above ``detect``), it defaults to a no-findings
-    scanner — a withhold only follows a BLOCK decision or a scan error, so not a fail-open hole.
-
-    **Group E (task 27.2).** ``phase_resolvers`` is an OPTIONAL
-    :data:`~gateway_v2.edge.phase_resolvers.PhaseResolverFactory` threaded onto BOTH routes; when
-    set, each route selects its resolver via ``resolver_for`` bound to the pinned plan AND the phase
-    (a phase-scoped rule enforced only on its phase). ``None`` default = today's single-``resolver``
-    behaviour (Preservation 3.5 / 3.13).
-
-    **GW14d.** ``/readyz`` gates state first, then the metrics directory when the registry is a
-    :class:`MetricsDirectorySource`. ``observer`` is the request-path counter sink. **GW16.** The
-    single :class:`MiscRoute` is built via :func:`_build_misc_route`; ``catalog`` feeds the Models
-    surface; ``response_store`` backs ``/v1/responses``; ``mcp`` wires ``/v1/mcp`` (``None``: 501).
-    **GW15.** The single :class:`ChatRoute` is built ONCE via :func:`_build_chat_route`; each
-    unwired dep falls back to its fail-closed default. **GW27.** ``org_limits`` is the org rate /
-    burst / TPM decider shared by both routes; ``None`` builds ``OrgLimits(contract)``.
+    the in-flight control source polled at each chunk boundary (R10); GW29 defaults it to
+    :class:`RefusingControlSource` (fail closed: an unwired stream is cut, never left uncontrolled),
+    and ``control_factory`` / ``incident_gate`` / ``incident_recheck`` (all unwired = refuse) take
+    the per-stream kill-switch source and the phase 4b / attempt gates (dev: pass-through).
+    ``error_scanner`` is the mid-stream error-frame detector (R11, default: no findings).
+    **Group E.** ``phase_resolvers`` (optional) binds each route's resolver to the plan and phase.
+    **GW14d.** ``/readyz`` gates state first, then the metrics directory; ``observer`` counts.
+    **GW16.** The single :class:`MiscRoute` is built via :func:`_build_misc_route`; ``catalog``
+    feeds Models; ``response_store`` backs ``/v1/responses``; ``mcp`` wires ``/v1/mcp``.
+    **GW15 §10.4.** The single :class:`ChatRoute` is built ONCE via :func:`_build_chat_route`.
+    **GW27.** ``org_limits`` is the org rate / burst / TPM decider shared by both routes.
     ``build_app`` stays pure assembly (no store read, no task spawned); the serving bounds derive
     from the injected ``ResourceContract`` / ``HoldbackConfig`` with no capacity literal in
     ``edge``. Returns the ``async def app(scope, receive, send)`` callable.
@@ -309,6 +311,9 @@ def build_app(
         observer=observer,
         holdback_metrics=holdback_metrics,
         routing=routing,
+        control_factory=control_factory,
+        incident_gate=incident_gate,
+        incident_recheck=incident_recheck,
     )
     misc = _build_misc_route(
         org_limits=limits,
@@ -325,6 +330,9 @@ def build_app(
         catalog=catalog,
         phase_resolvers=phase_resolvers,
         observer=observer,
+        audit=audit,
+        incident_gate=incident_gate,
+        incident_recheck=incident_recheck,
     )
     exact, prefix = build_routes(chat, misc, response_store, mcp)
     probe = _resolve_readiness(
@@ -366,6 +374,9 @@ def _build_chat_route(
     observer: OutcomeObserver | None = None,
     holdback_metrics: HoldbackMetrics | None = None,
     routing: RoutedProvider | None = None,
+    control_factory: InFlightControlFactory | None = None,
+    incident_gate: IncidentDecider | None = None,
+    incident_recheck: Recheck | None = None,
 ) -> ChatRoute:
     """Construct the single chat route. Unwired deps use their fail-closed defaults.
 
@@ -382,7 +393,7 @@ def _build_chat_route(
         cfg=cfg,
         router=DispatchRouter(),
         active_streams=active_streams if active_streams is not None else one_stream,
-        control=control if control is not None else NoControlSource(),
+        control=control if control is not None else RefusingControlSource(),
         clock=clock,
         error_scanner=error_scanner if error_scanner is not None else no_error_findings,
         executor=scan_executor,
@@ -405,6 +416,11 @@ def _build_chat_route(
         observer=observer,
         holdback_metrics=holdback_metrics if holdback_metrics is not None else HoldbackMetrics(),
         routing=routing,
+        control_factory=control_factory,
+        incident_gate=incident_gate if incident_gate is not None else fail_closed_gate,
+        incident_recheck=(
+            incident_recheck if incident_recheck is not None else fail_closed_recheck
+        ),
     )
 
 
@@ -424,6 +440,9 @@ def _build_misc_route(
     catalog: CatalogSource | None,
     phase_resolvers: PhaseResolverFactory | None = None,
     observer: OutcomeObserver | None = None,
+    audit: Callable[[AuditRecord], bool] | None = None,
+    incident_gate: IncidentDecider | None = None,
+    incident_recheck: Recheck | None = None,
 ) -> MiscRoute:
     """Construct the single :class:`MiscRoute` for the three GW16 misc surfaces (task 7.1/8.1).
 
@@ -458,6 +477,12 @@ def _build_misc_route(
         exports=request_exports,
         phase_resolvers=phase_resolvers,
         observer=observer,
+        audit=audit,
+        incident_gate=incident_gate if incident_gate is not None else fail_closed_gate,
+        incident_org_gate=(
+            incident_gate.decide_org if incident_gate is not None else fail_closed_org
+        ),
+        incident_recheck=incident_recheck if incident_recheck is not None else fail_closed_recheck,
     )
 
 

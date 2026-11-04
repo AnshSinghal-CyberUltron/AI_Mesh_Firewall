@@ -26,6 +26,7 @@ from typing import Any
 from gateway_v2.domain.state_knobs import ProjectorKnobs, StateKnobs
 from gateway_v2.runtime.store_keys import DEFAULT_NAMESPACE, StoreKeys
 from gateway_v2.runtime.store_valkey import require_bounded_client
+from state_control.incident_scopes import IncidentScopePolicy, policy_from_env
 from state_control.pg import PostgresControlDB
 from state_control.projector import ProjectionSummary, Projector, ValkeyPoolSeeder
 from state_control.service import (
@@ -63,6 +64,8 @@ class ProjectorConfig:
     idle_tx_timeout_ms: int
     tcp_user_timeout_ms: int
     connect_timeout_s: int
+    incident_scopes: IncidentScopePolicy = IncidentScopePolicy()
+    """GW29 rollout guard (default OFF): whether org-model scopes may be projected."""
 
     @property
     def period_s(self) -> float:
@@ -95,6 +98,7 @@ def from_env(env: Mapping[str, str] | None = None) -> ProjectorConfig:
             source, "AMF_PG_TCP_USER_TIMEOUT_MS", DEFAULT_TCP_USER_TIMEOUT_MS,
         ),
         connect_timeout_s=_int(source, "AMF_PG_CONNECT_TIMEOUT_S", DEFAULT_CONNECT_TIMEOUT_S),
+        incident_scopes=policy_from_env(source),
     )
 
 
@@ -262,6 +266,7 @@ class ProjectorService:
             holder=config.holder,
             knobs=config.knobs,
             seeder=seeder,
+            incident_scopes=config.incident_scopes,
         )
         return cls(config, projector)
 

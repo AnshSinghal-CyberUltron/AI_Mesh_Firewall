@@ -42,6 +42,7 @@ import json
 import random
 from collections.abc import AsyncIterator, Callable, Mapping, Sequence
 from dataclasses import dataclass, field
+from dataclasses import field as _lgw29_field
 from typing import cast
 
 from gateway_v2.admit.grant import (
@@ -65,6 +66,8 @@ from gateway_v2.edge.wire.openai import OpenAIRequestParser, OpenAIResponseRende
 from gateway_v2.egress.output_guard import MinimalOutputResolver
 from gateway_v2.plan.snapshot import ReplicaSnapshot
 from gateway_v2.plan.store import PlanStore
+from tests.edge._lgw29_support import dev_gate as _lgw29_dev_gate
+from tests.edge._lgw29_support import dev_recheck as _lgw29_dev_recheck
 from tests.edge._org_limits import NoopOrgLimits
 
 _SEED = 0x16_15_0008
@@ -326,6 +329,8 @@ class _P8Deps:
     renderer: OpenAIResponseRenderer = field(default_factory=OpenAIResponseRenderer)
     router: DispatchRouter = field(default_factory=DispatchRouter)
     transform: Transform = field(default_factory=Transform)
+    incident_gate: object = _lgw29_field(default_factory=_lgw29_dev_gate)
+    incident_recheck: object = _lgw29_field(default_factory=_lgw29_dev_recheck)
 
 
 def _p8_plan(org_id: str) -> ExecutionPlan:

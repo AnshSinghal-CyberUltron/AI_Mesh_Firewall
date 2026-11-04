@@ -1,0 +1,58 @@
+# 02_checkpoint_a.txt (task 10, after tasks 2-9)
+## G1 full offline
+FAILED tests/gates/test_check_tenant_scale.py::test_the_shipped_data_plane_is_clean
+1 failed, 3316 passed, 106 skipped in 49.20s
+## G1b lgw29
+272 passed in 3.64s
+## G2
+Found 9 errors in 6 files (checked 290 source files)
+All checks passed!
+Analyzed 286 files, 1680 dependencies.
+--------------------------------------
+
+Gateway v2 layers KEPT
+Resolve imports only domain KEPT
+No HTTP framework outside edge KEPT
+
+Contracts: 3 kept, 0 broken.
+## G3
+check_capacity_literals gateway_v2 exit=0
+check_capacity_literals state_control exit=0
+check_no_module_mutable gateway_v2 exit=0
+check_no_module_mutable state_control exit=0
+check_frozen_dataclasses gateway_v2 exit=0
+check_frozen_dataclasses state_control exit=0
+check_http_outside_edge_resolve gateway_v2 exit=0
+check_http_outside_edge_resolve state_control exit=0
+check_sizes gateway_v2 exit=0
+check_sizes state_control exit=0
+check_tenant_scale gateway_v2 exit=1
+check_tenant_scale state_control exit=1
+check_dispatch_provenance gateway_v2 exit=0
+check_dispatch_provenance state_control exit=0
+check_secret_headers exit=0
+## G4
+FAILED tests/gates/test_check_tenant_scale.py::test_the_shipped_data_plane_is_clean
+1 failed, 125 passed in 7.25s
+
+## Classification (vs 00_baseline.txt: 3037 passed / 112 skipped / 2 failed)
+- 0 new failures. +279 passed = 272 new lgw29 tests + 6 tests previously skipped for want of git
+  in the container (gates.sh image now has git + the parent .git mounted ro) + secret-headers.
+- The only failure, tests/gates/test_check_tenant_scale.py::test_the_shipped_data_plane_is_clean,
+  is PRE-EXISTING in the base commit 6c082476: gateway_v2/dispatch/vector_transports/
+  pinecone_transport.py:140 `.keys()` (GW30). state_control/valkey.py:100 is the declared R2-05
+  finding. GW29 adds no tenant-scale hit (two `.keys()` uses in admit/incident_state.py rewritten).
+- mypy --strict: the 9 errors are all import-not-found for the optional vector SDKs (weaviate,
+  qdrant_client, pinecone, pymongo, elasticsearch, opensearchpy, chromadb); identical before any
+  GW29 edit (the `vectors` extra is not installed). 0 errors in GW29 files; no new type: ignore in
+  product code.
+- runtime/resources.py 800 -> 781 lines (env helpers moved to resources_env.py; incident
+  accessors in resources_incident.py IncidentBoundsMixin).
+
+## Incident during this run (recorded for honesty)
+A `git stash` / `git stash pop` pair used for a baseline comparison ran on a clean tree, so the
+pop applied and dropped the SHARED stash a90483a ("On suraj-revamp: GW18 not to include right
+now", untracked files only). Repaired at once: `git stash store` put a90483a back at stash@{0}
+(original order, stash@{1} GW-18 untouched) and the 47 restored untracked files, each byte-checked
+against its untracked tree dd64b6ba, were removed from this worktree. No tracked file changed. No
+later step uses git stash.

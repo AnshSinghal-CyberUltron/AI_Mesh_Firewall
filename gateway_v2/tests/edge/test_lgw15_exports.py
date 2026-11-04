@@ -63,6 +63,7 @@ import json
 import random
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
+from dataclasses import field as _lgw29_field
 
 from gateway_v2.admit.grant import (
     Admitted,
@@ -94,6 +95,8 @@ from gateway_v2.plan.snapshot import ReplicaSnapshot
 from gateway_v2.plan.store import PlanStore
 from gateway_v2.runtime.holdback_metrics import Histogram
 from gateway_v2.runtime.stream_metrics import PerRequestExports, PerRequestReading
+from tests.edge._lgw29_support import dev_gate as _lgw29_dev_gate
+from tests.edge._lgw29_support import dev_recheck as _lgw29_dev_recheck
 from tests.edge._org_limits import NoopOrgLimits
 
 _SEED = 0x20_15_0020
@@ -405,6 +408,8 @@ class _P20Deps:
     renderer: OpenAIResponseRenderer = field(default_factory=OpenAIResponseRenderer)
     router: DispatchRouter = field(default_factory=DispatchRouter)
     transform: Transform = field(default_factory=Transform)
+    incident_gate: object = _lgw29_field(default_factory=_lgw29_dev_gate)
+    incident_recheck: object = _lgw29_field(default_factory=_lgw29_dev_recheck)
 
 
 def _p20_plan(org_id: str) -> ExecutionPlan:
@@ -594,7 +599,7 @@ async def _p20_run_output(
     assert req is not None and outcome.plan is not None
     assert outcome.destination is not None and outcome.body is not None
     await surface.collect_and_render(
-        req, outcome.plan, outcome.destination, outcome.body, send
+        req, outcome.plan, outcome.destination, outcome.body, send, outcome=outcome
     )
     return outcome
 

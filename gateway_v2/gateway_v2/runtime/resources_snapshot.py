@@ -51,6 +51,7 @@ def snapshot(contract: ResourceContract, logs: tuple[str, ...]) -> dict[str, obj
         "routing_pre_content_budget_s": contract.routing_pre_content_budget_s(
             contract.routing_max_attempts()
         ),
+        **contract.incident_snapshot(),
         "pools": pools,
         "logs": list(logs),
     }

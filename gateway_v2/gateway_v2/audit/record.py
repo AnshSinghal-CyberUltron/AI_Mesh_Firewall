@@ -33,6 +33,7 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 
 from gateway_v2.domain.decision import DecisionRecord
+from gateway_v2.domain.incident import INCIDENT_CAUSES
 
 SCHEMA_VERSION = 1
 """Bump when a field changes meaning or disappears. Additions do not need it; GW14b reads by
@@ -226,4 +227,137 @@ def shed(
         outcome=record.outcome,
         recorded_at_ns=record.recorded_at_ns,
         detail={**record.detail, "retry_after_ms": retry_after_ms},
+    )
+
+
+# --- GW29: incident-response records (design 5.11) -----------------------------------------------
+# Built on `admission(...)`: same phase (`ADMISSION`, no new `AuditPhase`), same shape, `cause` in
+# `detail` drawn from the closed `INCIDENT_CAUSES`. None of these carries content, a key or a
+# credential: the model names are operator-known, the org id is already the record's own.
+
+TERMINATED = "terminated"
+"""An in-flight stream cut by a kill, a key revocation or a stale snapshot."""
+
+REROUTED = "rerouted"
+"""A request served by a fallback because its model was isolated."""
+
+ISOLATION_CHANGE = "isolation_change"
+"""A system event: a model was isolated, recovered, or an auto-isolation was skipped."""
+
+INCIDENT_REASONS: tuple[str, ...] = (REJECTED, TERMINATED, REROUTED, ISOLATION_CHANGE)
+"""The closed outcome set of the incident records. Deliberately NOT `edge.counters.REASON_VOCAB`."""
+
+INCIDENT_REQUEST_ID = "incident"
+"""`request_id` of a system event that belongs to no request (an `AuditRecord` needs one)."""
+
+
+def _incident(
+    *,
+    request_id: str,
+    org_id: str,
+    outcome: str,
+    reason: str,
+    cause: str,
+    recorded_at_ns: int,
+    status: int,
+    extra: Mapping[str, object],
+) -> AuditRecord:
+    if cause not in INCIDENT_CAUSES:
+        raise ValueError(f"incident cause {cause!r} is not in the closed INCIDENT_CAUSES")
+    if outcome not in INCIDENT_REASONS:
+        raise ValueError(f"incident outcome {outcome!r} is not in the closed INCIDENT_REASONS")
+    base = admission(
+        request_id=request_id,
+        org_id=org_id,
+        outcome=outcome,
+        reason=reason,
+        recorded_at_ns=recorded_at_ns,
+        status=status,
+    )
+    return AuditRecord(
+        request_id=base.request_id,
+        org_id=base.org_id,
+        phase=base.phase,
+        outcome=base.outcome,
+        recorded_at_ns=base.recorded_at_ns,
+        detail={**base.detail, "cause": cause, **extra},
+    )
+
+
+def incident_refusal(
+    *,
+    request_id: str,
+    org_id: str,
+    code: str,
+    cause: str,
+    recorded_at_ns: int,
+    retry_after_ms: int,
+    status: int = 503,
+    underlying: str | None = None,
+) -> AuditRecord:
+    """The single record of a phase 4b or recheck refusal. `underlying` is set for `recheck`."""
+    extra: dict[str, object] = {"retry_after_ms": retry_after_ms}
+    if underlying is not None:
+        extra["underlying"] = underlying
+    return _incident(
+        request_id=request_id, org_id=org_id, outcome=REJECTED, reason=code, cause=cause,
+        recorded_at_ns=recorded_at_ns, status=status, extra=extra,
+    )
+
+
+def incident_cut(
+    *,
+    request_id: str,
+    org_id: str,
+    code: str,
+    cause: str,
+    recorded_at_ns: int,
+    status: int = 200,
+) -> AuditRecord:
+    """The terminal record of a stream cut. The stream had begun, so `status` is its head's."""
+    return _incident(
+        request_id=request_id, org_id=org_id, outcome=TERMINATED, reason=code, cause=cause,
+        recorded_at_ns=recorded_at_ns, status=status, extra={},
+    )
+
+
+def incident_reroute(
+    *,
+    request_id: str,
+    org_id: str,
+    requested: str,
+    routed: str,
+    recorded_at_ns: int,
+    decision_source: str = "isolation",
+    status: int = 200,
+) -> AuditRecord:
+    """One record per rerouted request: which model was asked for and which one served it."""
+    return _incident(
+        request_id=request_id, org_id=org_id, outcome=REROUTED, reason=REROUTED, cause="reroute",
+        recorded_at_ns=recorded_at_ns, status=status,
+        extra={"from": requested, "to": routed, "decision_source": decision_source},
+    )
+
+
+def incident_change(
+    *,
+    org_id: str,
+    cause: str,
+    model: str,
+    recorded_at_ns: int,
+    fallback: str | None = None,
+    reason: str = "",
+    request_id: str = INCIDENT_REQUEST_ID,
+) -> AuditRecord:
+    """An isolate / recover / auto-skipped system event. `org_id` is `global` for fleet scope."""
+    if cause not in ("isolate", "recover", "auto_skipped"):
+        raise ValueError(f"isolation-change cause {cause!r} is not isolate/recover/auto_skipped")
+    extra: dict[str, object] = {"model": model}
+    if fallback is not None:
+        extra["fallback"] = fallback
+    if reason:
+        extra["why"] = reason
+    return _incident(
+        request_id=request_id, org_id=org_id, outcome=ISOLATION_CHANGE, reason=cause, cause=cause,
+        recorded_at_ns=recorded_at_ns, status=200, extra=extra,
     )

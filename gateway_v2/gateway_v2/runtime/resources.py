@@ -5,12 +5,13 @@ from __future__ import annotations
 import dataclasses
 import math
 import os
-import warnings
 from dataclasses import dataclass
 
 from gateway_v2.runtime.cgroup import DetectHooks, detect_with_hooks
 from gateway_v2.runtime.errors import CapacityUnavailable, CapacityUnset
 from gateway_v2.runtime.kinds import CapacityHint, HardwareSignals, PoolKind
+from gateway_v2.runtime.resources_env import _env_map, _parse_override, _parse_owner_queue_ms
+from gateway_v2.runtime.resources_incident import IncidentBoundsMixin, check_incident_ordering
 from gateway_v2.runtime.resources_routing import RoutingBoundsMixin
 from gateway_v2.runtime.resources_vector import VectorBoundsMixin
 
@@ -212,6 +213,25 @@ _VECTOR_MAX_RESULT_COUNT_MULT = 1  # count = connection_budget() x mult, clamped
 _VECTOR_MAX_RESULT_BYTES = 10_485_760  # vector_max_result_bytes() ceiling, R11.2 10 MiB
 _VECTOR_MAX_RESULT_BYTES_SHARE = 0.025  # bytes = per_worker_rss x share, clamped to [1, ceiling]
 
+# GW29 incident-response bounds (design 8). OWNER-TO-SIGN working defaults; the accessors live in
+# `IncidentBoundsMixin` (`runtime/resources_incident.py`), split out for the size gate.
+_RISK_WINDOW_S = 60.0  # sliding risk window; also the declared auto-isolation detection window
+_RISK_BUCKETS = 12  # bucket width = window / buckets (5 s = the console gauge cadence)
+_RISK_MIN_SAMPLES = 20  # no score below this many samples
+_RISK_PROBATION_MIN = 5  # post-recovery hysteresis sample floor (<= min samples)
+_RISK_THRESHOLD = 0.35  # 50% hard failures trips; 50% 429 scores 0.25 and does not
+_RISK_WEIGHT_HARD = 1.0  # timeout / 5xx / malformed
+_RISK_WEIGHT_SOFT = 0.5  # 429 and output-guard hits
+_RISK_WEIGHT_NONE = 0.0  # a clean attempt
+_RISK_MODELS_DIV = 8  # tracked models = metrics_directory_slots() // div
+_AUTO_ISOLATE_WINDOWS = 5  # auto isolation lasts this many risk windows (300 s)
+_HOLD_CAP_MULT = 2  # local monotonic hold cap = duration x mult
+_RISK_MIN_ORGS = 3  # distinct erroring orgs before auto-isolation
+_REVOKE_SLOTS_MULT = 4  # revocation ledger = connection_budget() x mult
+_EVENT_QUEUE_SLOTS_MULT = 64  # event queue = event_log_rate() x mult
+_NOTIFIER_TIMEOUT_MULT = 100.0  # notifier call bound = p99_s x mult
+_RETRY_JITTER_FRACTION = 0.5  # Retry-After jitter = MIN_RETRY_AFTER_S x fraction
+
 
 @dataclass(frozen=True, slots=True)
 class McpBounds:
@@ -236,7 +256,7 @@ class McpBounds:
 
 
 @dataclass(frozen=True, slots=True)
-class ResourceContract(VectorBoundsMixin, RoutingBoundsMixin):
+class ResourceContract(VectorBoundsMixin, RoutingBoundsMixin, IncidentBoundsMixin):
     cpu_quota: float
     memory_limit: int
     fd_limit: int
@@ -639,47 +659,7 @@ def _check_output_budget_ordering() -> None:
 
 
 _check_output_budget_ordering()
-
-
-def _env_map(env: dict[str, str] | None) -> dict[str, str]:
-    if env is not None:
-        return env
-    return dict(os.environ)
-
-
-def _parse_override(raw: str | None) -> int | None:
-    if raw is None or not raw.strip():
-        return None
-    return int(raw.strip())
-
-
-def _parse_owner_queue_ms(raw: str | None) -> float:
-    """Parse `RV_OWNER_QUEUE_MS` in milliseconds, warn-and-default on a rejected value.
-
-    An unset / blank key returns the measured default silently. A non-numeric or non-positive
-    value falls back to the default and emits a `warnings.warn` naming the rejected value, the same
-    stance `load_contract` / `holdback_config` take for an invalid env knob.
-    """
-    if raw is None or not raw.strip():
-        return _DEFAULT_OWNER_QUEUE_MS
-    stripped = raw.strip()
-    try:
-        value = float(stripped)
-    except ValueError:
-        warnings.warn(
-            f"{_OWNER_QUEUE_ENV_KEY}={stripped!r} is not a number; "
-            f"using default owner-queue bound {_DEFAULT_OWNER_QUEUE_MS} ms",
-            stacklevel=2,
-        )
-        return _DEFAULT_OWNER_QUEUE_MS
-    if value <= 0 or math.isnan(value) or math.isinf(value):
-        warnings.warn(
-            f"{_OWNER_QUEUE_ENV_KEY}={value} is not positive-finite; "
-            f"using default owner-queue bound {_DEFAULT_OWNER_QUEUE_MS} ms",
-            stacklevel=2,
-        )
-        return _DEFAULT_OWNER_QUEUE_MS
-    return value
+check_incident_ordering()
 
 
 def from_signals(

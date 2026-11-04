@@ -40,6 +40,8 @@ from gateway_v2.domain.identity import Principal
 from gateway_v2.domain.plan import ExecutionPlan, StreamingMode
 from gateway_v2.edge.app import build_app
 from gateway_v2.edge.identity_resolver import TenantIdentity
+from gateway_v2.edge.incident_passthrough import PassThroughIncidentGate
+from gateway_v2.edge.inflight_source import DevNoControlSource
 from gateway_v2.egress.output_guard import MinimalOutputResolver
 from gateway_v2.plan.snapshot import ReplicaSnapshot
 from gateway_v2.plan.store import PlanStore
@@ -314,6 +316,11 @@ def build_dry_run_app(contract: ResourceContract, provider: object) -> object:
         snapshot_source=_warm_snapshot_source,
         admission=_AdmittingAdmission(),
         quota=_AdmittingBudget(),
+        # GW29: the dry run measures the serving path, not the incident response: explicit dev
+        # pass-through gate and a never-cutting control source (the real defaults fail closed).
+        control=DevNoControlSource(),
+        incident_gate=PassThroughIncidentGate(),
+        incident_recheck=PassThroughIncidentGate().recheck,
     )
 
 

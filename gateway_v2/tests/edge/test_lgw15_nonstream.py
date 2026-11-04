@@ -14,6 +14,12 @@ property-based test.
 
 from __future__ import annotations
 
+from dataclasses import field as _lgw29_field
+
+from tests.edge._lgw29_support import dev_gate as _lgw29_dev_gate
+from tests.edge._lgw29_support import dev_recheck as _lgw29_dev_recheck
+from tests.edge._lgw29_support import proceed_outcome as _lgw29_proceed_outcome
+
 # ===========================================================================
 # Property 14 — Non-streaming returns one enforced OpenAI-compatible JSON (task 4.5).
 # ===========================================================================
@@ -115,6 +121,8 @@ def test_property_14_non_streaming_returns_one_enforced_openai_json() -> None:
         error_scanner: object
         resolver: MinimalOutputResolver
         renderer: OpenAIResponseRenderer
+        incident_gate: object = _lgw29_field(default_factory=_lgw29_dev_gate)
+        incident_recheck: object = _lgw29_field(default_factory=_lgw29_dev_recheck)
 
     def _p14_make_scanner(canary: str) -> object:
         """Build the output scanner: a REDACT finding over every ``canary`` occurrence.
@@ -258,6 +266,7 @@ def test_property_14_non_streaming_returns_one_enforced_openai_json() -> None:
                 destination="p14-upstream",
                 body={},
                 send=send,
+                outcome=_lgw29_proceed_outcome(),
             )
         )
 
@@ -489,6 +498,8 @@ def test_p46_nonstream_block_emits_declared_error_envelope_not_raw_error() -> No
         error_scanner: object
         resolver: _P46BlockResolver
         renderer: OpenAIResponseRenderer
+        incident_gate: object = _lgw29_field(default_factory=_lgw29_dev_gate)
+        incident_recheck: object = _lgw29_field(default_factory=_lgw29_dev_recheck)
 
     # A collected ASGI ``send`` sink: records the response-start + body events so the test
     # can inspect the emitted HTTP response (a raw framework error would not take this shape).
@@ -541,6 +552,7 @@ def test_p46_nonstream_block_emits_declared_error_envelope_not_raw_error() -> No
             destination="dest",
             body={"model": "gpt-test"},
             send=_p46_send,
+            outcome=_lgw29_proceed_outcome(),
         )
     )
 
@@ -621,6 +633,8 @@ def test_p46_nonstream_scan_failure_renders_declared_envelope_not_raw_error() ->
         error_scanner: object
         resolver: _P46RaisingResolver
         renderer: OpenAIResponseRenderer
+        incident_gate: object = _lgw29_field(default_factory=_lgw29_dev_gate)
+        incident_recheck: object = _lgw29_field(default_factory=_lgw29_dev_recheck)
 
     _p46_events2: list[Mapping[str, object]] = []
 
@@ -664,6 +678,7 @@ def test_p46_nonstream_scan_failure_renders_declared_envelope_not_raw_error() ->
             destination="dest",
             body={"model": "gpt-test"},
             send=_p46_send2,
+            outcome=_lgw29_proceed_outcome(),
         )
     )
 

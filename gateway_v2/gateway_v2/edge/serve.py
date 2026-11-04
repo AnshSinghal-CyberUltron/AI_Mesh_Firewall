@@ -201,7 +201,7 @@ def build_boot_dependencies(
     :func:`~gateway_v2.edge.chat_deps.no_findings_detector`; ``metrics_registry`` → a minimal
     exposition registry. ``readiness`` / ``state_view`` / ``active_streams`` / ``control`` /
     ``error_scanner`` / ``exports`` are left unset so ``build_app`` composes its own shipped
-    defaults (``_resolve_readiness`` / ``_one_stream`` / ``_NoControlSource`` /
+    defaults (``_resolve_readiness`` / ``_one_stream`` / ``RefusingControlSource`` /
     ``_no_error_findings`` / a fresh producer). It builds a half-ready app honestly, nothing faked.
 
     **DEV PROFILE (opt-in only).** ``env`` (default ``os.environ``) is read for ``AMF_DEV_PROFILE``:
@@ -466,11 +466,12 @@ def _assemble_app(deps: dict[str, object]) -> ASGIApplication:
     kwargs.pop("plan_feed", None)
     kwargs.pop("plan_watch", None)
     state = kwargs.pop("state_runtime", None)
+    hooks = tuple(kwargs.pop("lifespan_hooks", ()))
     # ``wrap_dev_app`` returns the app UNCHANGED unless the DEV PROFILE admission adapter is in
     # ``deps`` (then it adds the lease lifespan hooks and, when present, the audit writer).
     app = wrap_dev_app(build_app(**kwargs), deps)
     # PRODUCTION PROFILE (GW36 S3): the signed-state runtime runs in the ASGI lifespan.
-    return StateServedApp(app, state) if isinstance(state, StateRuntime) else app
+    return StateServedApp(app, state, hooks) if isinstance(state, StateRuntime) else app
 
 
 def serving_app() -> ASGIApplication:

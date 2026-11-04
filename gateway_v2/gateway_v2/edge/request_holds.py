@@ -59,6 +59,7 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from gateway_v2.domain.decision import Decision
+from gateway_v2.domain.incident import RerouteNote
 from gateway_v2.domain.plan import UNSET_CONTROLS, OrgControls
 from gateway_v2.edge.chat_deps import AdmissionDecider, BudgetDecider
 from gateway_v2.edge.routing_trace import RoutingTrace
@@ -80,9 +81,14 @@ class RequestHolds:
 
     __slots__ = (
         "_admitted",
+        "_attempt_code",
+        "_attempt_model",
         "_cost",
         "_dispatched",
         "_controls",
+        "_incident_cause",
+        "_incident_retry_after_s",
+        "_incident_underlying",
         "_input_decision",
         "_org_id",
         "_org_id_charged",
@@ -92,6 +98,7 @@ class RequestHolds:
         "_released",
         "_request_id",
         "_routing",
+        "_reroute",
         "_spent",
     )
 
@@ -99,6 +106,8 @@ class RequestHolds:
         self._admitted: bool = False
         self._spent: bool = False
         self._dispatched: bool = False
+        self._attempt_model: str | None = None
+        self._attempt_code: str | None = None
         self._released: bool = False
         self._request_id: str = ""
         self._cost: int = 0
@@ -110,6 +119,10 @@ class RequestHolds:
         self._org_tokens: int = 0
         self._org_refund: Callable[[str, int], None] | None = None
         self._routing: RoutingTrace | None = None
+        self._incident_cause: str | None = None
+        self._incident_underlying: str | None = None
+        self._incident_retry_after_s: float | None = None
+        self._reroute: RerouteNote | None = None
 
     def admitted(self, request_id: str) -> None:
         """Record that admission granted a slot for ``request_id`` (``complete``-d on exit)."""
@@ -159,6 +172,33 @@ class RequestHolds:
     @property
     def controls(self) -> OrgControls:
         return self._controls
+    def note_incident_cause(
+        self, cause: str, underlying: str | None = None, retry_after_s: float | None = None
+    ) -> None:
+        """Record the GW29 incident cause, the underlying refuse/stream code and the retry hint."""
+        self._incident_cause = cause
+        self._incident_underlying = underlying
+        self._incident_retry_after_s = retry_after_s
+
+    def note_reroute(self, rec: RerouteNote) -> None:
+        """Record the reroute provenance of this request (canonical names, no content)."""
+        self._reroute = rec
+
+    @property
+    def incident_cause(self) -> str | None:
+        return self._incident_cause
+
+    @property
+    def incident_underlying(self) -> str | None:
+        return self._incident_underlying
+
+    @property
+    def incident_retry_after_s(self) -> float | None:
+        return self._incident_retry_after_s
+
+    @property
+    def reroute(self) -> RerouteNote | None:
+        return self._reroute
 
     @property
     def input_decision(self) -> Decision | None:
@@ -180,9 +220,28 @@ class RequestHolds:
     def dispatched(self) -> bool:
         return self._dispatched
 
-    def mark_dispatched(self) -> None:
-        """Record that the provider was opened; after this the spend stands and is not refunded."""
+    @property
+    def attempt_code(self) -> str | None:
+        """The provider-side failure code the attempt ended with (``None``: it completed)."""
+        return self._attempt_code
+
+    def note_attempt_code(self, code: str) -> None:
+        """Record how the provider attempt ended when the refusal is rendered elsewhere."""
+        self._attempt_code = code
+
+    @property
+    def attempt_model(self) -> str | None:
+        """The canonical model the provider attempt was sent to (``None``: no tracked attempt)."""
+        return self._attempt_model
+
+    def mark_dispatched(self, model: str | None = None) -> None:
+        """Record that the provider was opened; after this the spend stands and is not refunded.
+
+        ``model`` (GW29) names the routed model so the outcome can feed the risk tracker.
+        """
         self._dispatched = True
+        if model:
+            self._attempt_model = model
 
     def release(self, admission: AdmissionDecider, quota: BudgetDecider) -> None:
         """Release the held resources once: refund (iff spent and not dispatched) then complete.

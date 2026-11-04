@@ -46,6 +46,7 @@ capacity-position literals (the serving skin's bounds live in
 from __future__ import annotations
 
 import json
+import math
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from types import MappingProxyType
@@ -55,6 +56,7 @@ from gateway_v2.edge.wire.sse import SSEEncoder, error_frame_for
 
 __all__ = (
     "GENERIC_HTTP_STATUS",
+    "INCIDENT_HTTP_CODES",
     "NOT_IMPLEMENTED_HTTP_STATUS",
     "RENDERABLE_STATUSES",
     "HTTPResponse",
@@ -62,6 +64,7 @@ __all__ = (
     "render_http",
     "render_not_implemented",
     "render_sse",
+    "retry_headers",
 )
 
 
@@ -279,6 +282,12 @@ _ENVELOPE: Mapping[str, tuple[int, str]] = MappingProxyType(
         posture.SHARED_STATE_UNAVAILABLE: (503, "service_unavailable"),
         posture.BUDGET_UNAVAILABLE: (503, "service_unavailable"),
         posture.OVERLOAD_SHED: (503, "service_unavailable"),
+        # -- GW29 incident response (kill switch / model kill / isolation / reroute) ------
+        posture.KILL_SWITCH_ENGAGED: (503, "service_unavailable"),
+        posture.MODEL_KILLED: (503, "service_unavailable"),
+        posture.MODEL_ISOLATED_NO_FALLBACK: (503, "service_unavailable"),
+        posture.REROUTE_REFUSED: (503, "service_unavailable"),
+        posture.STREAM_MODEL_ISOLATED: (503, "service_unavailable"),
         # -- GW36 S4 per-key GCRA rate limit (QuotaGate) ----------------------
         # The gateway's OWN per-key burst/sustained rate reject (distinct from
         # ``upstream_rate_limited``, the provider's relayed 429). HTTP 429 +
@@ -357,6 +366,36 @@ def _error_headers(request_id: str | None) -> tuple[tuple[str, str], ...]:
 #: ``ResourceContract.max_output_tokens_boundary()`` at the contract-bearing caller.
 _BOUNDARY_CODES = frozenset({"invalid_max_tokens", "invalid_max_completion_tokens"})
 
+#: GW29: the refusal codes a phase-4b / recheck gate can return. They render as HTTP 503 with
+#: ``Retry-After`` + ``x-should-retry: false`` even for a streaming request, because no SSE head has
+#: been sent when the gate refuses (a frozen tuple, not module-level mutable).
+INCIDENT_HTTP_CODES: tuple[str, ...] = (
+    posture.KILL_SWITCH_ENGAGED,
+    posture.MODEL_KILLED,
+    posture.MODEL_ISOLATED_NO_FALLBACK,
+    posture.REROUTE_REFUSED,
+    posture.KILL_SWITCH_UNAVAILABLE,
+)
+
+_RETRY_AFTER_HEADER = "retry-after"
+_SHOULD_RETRY_HEADER = "x-should-retry"
+_SHOULD_RETRY_VALUE = "false"
+_RETRY_AFTER_FLOOR_S = 1
+
+def retry_headers(retry_after_s: float | None) -> tuple[tuple[str, str], ...]:
+    """``retry-after`` (integer seconds, never below the floor) + ``x-should-retry: false``.
+
+    Empty for ``None`` so every non-incident response stays byte-identical (GW29, 6.4a).
+    """
+    if retry_after_s is None:
+        return ()
+    seconds = max(_RETRY_AFTER_FLOOR_S, math.ceil(retry_after_s))
+    return (
+        (_RETRY_AFTER_HEADER, str(seconds)),
+        (_SHOULD_RETRY_HEADER, _SHOULD_RETRY_VALUE),
+    )
+
+
 _UNAUTHORIZED = 401
 _AUTHENTICATE_HEADER = "www-authenticate"
 _BEARER_CHALLENGE = "Bearer"
@@ -368,8 +407,13 @@ def render_http(
     param: str | None = None,
     request_id: str | None = None,
     boundary: int | None = None,
+    retry_after_s: float | None = None,
 ) -> HTTPResponse:
     """Render a value-code to a declared :class:`HTTPResponse` (R3.2).
+
+    ``retry_after_s`` (GW29, 6.4a) is given only by an incident refusal: it adds an integer
+    ``retry-after`` (``max(1, ceil(...))``) and ``x-should-retry: false``. ``None`` leaves every
+    existing caller byte-identical.
 
     A code with a declared :data:`_ENVELOPE` entry renders that status; the JSON
     body's ``message`` is taken from the single-sourced :func:`error_frame_for`
@@ -398,7 +442,7 @@ def render_http(
     reaches the wire while the NUMBER lives only in the contract -- the gate stays
     green because no capacity literal appears in this module.
     """
-    headers = _error_headers(request_id)
+    headers = (*_error_headers(request_id), *retry_headers(retry_after_s))
     entry = _ENVELOPE.get(code)
     if entry is None:
         body = _http_body(

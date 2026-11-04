@@ -5,7 +5,9 @@ builds: the state runtime (one per worker, run in the ASGI lifespan), identity r
 signed KEY records by the key's sha256, per-org plans from signed PLAN records, readiness gated
 on the stamp and on every kind being caught up, and a GW14d Publisher whose state series are
 live. Everything else stays on its shipped fail-closed default and the boot log says so, by name:
-provider, admission and quota (S4), detectors and catalog (S5), kill-switch enforcement (GW29).
+provider, admission and quota (S4), detectors and catalog (S5). The kill switch is enforced
+(GW29): the real incident gate, per-stream control source, revocation ledger and notifier pump
+are built here, and the boot refuses to start if an incident knob or catalog input is invalid.
 
 Selection is explicit. Unset or empty keeps today's table; any other value refuses to start,
 as does `production` together with `AMF_DEV_PROFILE=1`. Read inside the per-worker factory path,
@@ -15,6 +17,7 @@ so the parent's refuse-to-start probe raises before any worker is spawned.
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import random
 import socket
@@ -40,13 +43,19 @@ from gateway_v2.admit.quota import (
 from gateway_v2.admit.quota_registry import QuotaRegistry
 from gateway_v2.admit.supervisor import WorkerSupervisor
 from gateway_v2.audit.metrics import AuditMetrics
+from gateway_v2.domain.incident import KS_SCOPE_GENERATION
 from gateway_v2.edge.dev_profile import dev_profile_active
 from gateway_v2.edge.event_log import StructuredEventLog
+from gateway_v2.edge.incident_catalog import CatalogConfig, CatalogError, load_catalog_config
+from gateway_v2.edge.incident_publish import IncidentPublication
+from gateway_v2.edge.incident_wiring import IncidentWiring, build_incident
+from gateway_v2.edge.inflight_source import KillSwitchControlFactory
 from gateway_v2.edge.publisher import Publisher
 from gateway_v2.edge.quota_gate import QuotaGate
 from gateway_v2.edge.routing_boot import RoutedBundle as RoutedBundle
 from gateway_v2.edge.routing_boot import build_routed_provider as build_routed_provider
 from gateway_v2.edge.state_runtime import StateRuntime, StateRuntimeConfig
+from gateway_v2.runtime.errors import CapacityUnavailable, CapacityUnset
 from gateway_v2.runtime.holdback_metrics import HoldbackMetrics
 from gateway_v2.runtime.resources import ResourceContract
 from gateway_v2.runtime.serving_config import load_serving_config
@@ -54,6 +63,7 @@ from gateway_v2.runtime.store_keys import StoreKeys
 from gateway_v2.runtime.stream_metrics import PerRequestExports
 from state_control.metrics import RehydrationMetrics
 
+LOG = logging.getLogger("amf.gateway.production")
 PROFILE_ENV = "AMF_PROFILE"
 PRODUCTION = "production"
 
@@ -423,6 +433,49 @@ def _wire_quota_gate(
     return quota_gate, quota_metrics, worker_count, lease_chunk, lease_watermark
 
 
+def _wire_incident(
+    contract: ResourceContract, env: Mapping[str, str], clock: Callable[[], float],
+) -> tuple[CatalogConfig, Callable[[StateRuntime], IncidentWiring]]:
+    """Load the catalog inputs, then return the builder that wires the incident components.
+
+    The catalog (so the alias table) must exist BEFORE the `StateRuntime`: the kill-switch parser
+    takes the aliases at construction. Any invalid catalog input or underivable incident knob is a
+    `ProfileError` (refuse to start), never a silent fail-closed default.
+    """
+    try:
+        config = load_catalog_config(env)
+    except CatalogError as exc:
+        raise ProfileError(str(exc)) from exc
+    def build(runtime: StateRuntime) -> IncidentWiring:
+        try:
+            wiring = build_incident(
+                runtime, contract, env=env, clock=clock, wall=time.time,
+                rng=random.Random(), config=config,
+            )
+        except (CapacityUnset, CapacityUnavailable) as exc:
+            raise ProfileError(f"incident knob cannot be derived: {exc}") from exc
+        # AC12: production never runs on a dev/fail-closed control source.
+        if not isinstance(wiring.control_factory, KillSwitchControlFactory):
+            raise ProfileError("production needs the real kill-switch control factory")
+        runtime.set_revocation_observer(wiring.ledger.observe)
+        LOG.info(
+            "incident wiring: scope generation %d, catalog digest %s",
+            KS_SCOPE_GENERATION, config.digest or "none",
+        )
+        return wiring
+    return config, build
+
+
+def _signed_state_readiness(
+    runtime: StateRuntime, wiring: IncidentWiring,
+) -> Callable[[], tuple[bool, str | None]]:
+    """`/readyz`: signed state first, then the incident wiring (built, catalog digest present)."""
+    def probe() -> tuple[bool, str | None]:
+        ready, reason = runtime.ready()
+        return (ready, reason) if not ready else wiring.ready()
+    return probe
+
+
 def apply_production(
     deps: dict[str, object],
     logs: tuple[str, ...],
@@ -434,8 +487,10 @@ def apply_production(
     # Refuse to start before any component is built when the DECLARED guard rate is absent or
     # non-positive (Req 1). The resolved rate is passed straight to `derive_bounds` below.
     q_safe = _resolve_q_safe(env)
-    runtime = StateRuntime(StateRuntimeConfig.from_env(env))
     clock = time.monotonic
+    catalog_config, build_wiring = _wire_incident(contract, env, clock)
+    runtime = StateRuntime(StateRuntimeConfig.from_env(env), aliases=catalog_config.aliases)
+    wiring = build_wiring(runtime)
     admission, admission_metrics, bounds = _build_admission(
         contract, env, clock, q_safe=q_safe
     )
@@ -455,11 +510,15 @@ def apply_production(
         event_log=StructuredEventLog.from_contract(contract, clock=clock),
         contract=contract,
         clock=clock,
+        incident=IncidentPublication(
+            metrics=wiring.metrics, risk=wiring.risk, contract=contract,
+            refresh=wiring.refresh_gauges,
+        ),
     )
     deps.update(
         identity=runtime.identity_resolver(),
         snapshot_source=runtime.snapshot_source,
-        readiness=runtime.ready,
+        readiness=_signed_state_readiness(runtime, wiring),
         metrics_registry=publisher,
         observer=publisher,
         exports=exports,
@@ -471,6 +530,13 @@ def apply_production(
         admission=admission,
         quota=quota_gate,
         org_limits=OrgLimits(contract, metrics=admission_metrics),
+        # GW29: the real incident gate and per-stream control source replace the fail-closed
+        # defaults (which refuse every request); the pump and ticker run in the lifespan.
+        incident_gate=wiring.gate,
+        incident_recheck=wiring.gate.recheck,
+        control_factory=wiring.control_factory,
+        audit=wiring.audit,
+        lifespan_hooks=(wiring,),
     )
     kept = tuple(
         line for line in logs if not any(line.startswith(f"boot: {name} ->") for name in _REPLACED)
@@ -495,6 +561,6 @@ def apply_production(
         f"boot: budget -> per-org BudgetLease registry over signed BUDGET records "
         f"(chunk={lease_chunk} tokens, watermark={lease_watermark}); budget_unavailable on empty "
         "pool, never shared_state_unavailable",
-        "boot: kill switch -> snapshot kept current, NOT enforced on the request path (GW29)",
+        wiring.status_line(),
         *kept,
     )

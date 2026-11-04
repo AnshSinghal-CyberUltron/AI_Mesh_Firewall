@@ -1,0 +1,20 @@
+# 00_baseline.txt (task 1)
+image: gw29-dev = python:3.12-slim + dev/conformance/serve extras + pytest-xdist (gates.sh)
+G1 full offline (pytest -n 24): 3037 passed, 112 skipped, 2 failed, 0 xfailed-reported, 7 warnings (53 s)
+pre-existing failures (NOT GW29):
+  tests/gates/test_check_tenant_scale.py::test_the_shipped_data_plane_is_clean  -> state_control/valkey.py:100 (R2-05, declared)
+  tests/gates/test_secret_headers.py::test_current_tracked_tree_yields_zero_hits -> container has no git / worktree gitdir not mounted (env). gates.sh now mounts the parent .git read-only + git in image.
+wc -l before any GW29 edit (SIZE HAZARDS):
+  runtime/resources.py 800
+  gateway_v2/edge/app.py 800
+  gateway_v2/edge/routes.py 799
+  gateway_v2/edge/openai_misc.py 764
+  gateway_v2/edge/publisher.py 748
+  gateway_v2/edge/serve.py 720
+  gateway_v2/edge/openai_chat.py 712
+  state_control/projector.py 626
+  gateway_v2/edge/openai_responses.py 511
+  gateway_v2/edge/production_profile.py 494
+  gateway_v2/edge/errors.py 477
+  state_control/writer.py 471
+  gateway_v2/edge/state_runtime.py 462

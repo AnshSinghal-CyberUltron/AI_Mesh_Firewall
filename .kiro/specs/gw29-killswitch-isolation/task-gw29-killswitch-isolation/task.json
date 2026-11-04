@@ -1,0 +1,12 @@
+{
+  "task_id": "task-gw29-killswitch-isolation",
+  "task_description": "GW29 backend card: kill switch enforcement at admission and per chunk, org-model scope, isolation + reroute, auto-isolation, notification, metrics, audit. Offline gates only.",
+  "status": "pending",
+  "feature_order": [
+    "FEAT-001",
+    "FEAT-002",
+    "FEAT-003",
+    "FEAT-004"
+  ],
+  "blocked_reason": null
+}

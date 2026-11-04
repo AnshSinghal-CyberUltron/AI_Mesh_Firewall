@@ -47,6 +47,7 @@ from gateway_v2.edge import errors
 from gateway_v2.edge.chat_upstream import open_chat_upstream
 from gateway_v2.edge.console_projection import apply_projection, chat_console
 from gateway_v2.edge.dev_components import bind_surface
+from gateway_v2.edge.incident_recheck import IncidentRecheckRefused, recheck_or_raise
 from gateway_v2.edge.phase_resolvers import resolver_for
 from gateway_v2.edge.request_holds import RequestHolds
 from gateway_v2.edge.wire.openai import CanonicalRequest
@@ -82,6 +83,8 @@ _JSON_MEDIA_TYPE = "application/json"
 _CONTENT_TYPE_HEADER = "content-type"
 #: Produced_Mode response header on the non-streaming chat path (GW13 C5/R5). A header name.
 _PRODUCED_MODE_HEADER = "x-amf-produced-mode"
+#: GW29: names a reroute on the non-streaming response (``isolation:<isolated>-><fallback>``).
+_ROUTING_REASON_HEADER = "x-amf-routing-reason"
 
 
 def ok_response(json_body: bytes, produced_mode: str) -> errors.HTTPResponse:
@@ -118,6 +121,8 @@ class EnforcedOutput:
     deltas: tuple[tuple[str, str], ...]
     refuse_code: str | None
     output_decision: Decision | None = None
+    #: GW29: set on an incident recheck refusal so the shared emitter renders ``Retry-After``.
+    retry_after_s: float | None = None
 
 
 async def collect_and_enforce(
@@ -125,6 +130,8 @@ async def collect_and_enforce(
     destination: str,
     body: Mapping[str, object],
     *,
+    org_id: str,
+    routed_model: str,
     plan: ExecutionPlan | None = None,
     holds: RequestHolds | None = None,
     block_code: str,
@@ -153,13 +160,27 @@ async def collect_and_enforce(
     if holds is None:
         holds = RequestHolds()
     try:
-        collected = await _collect_output_channels(deps, destination, body, holds, plan)
+        collected = await _collect_output_channels(
+            deps, destination, body, holds, org_id, routed_model, plan
+        )
         deltas, decision = _enforce_channels(deps, plan, collected)
+    except IncidentRecheckRefused as refused:
+        # GW29 (6.4): refused between phase 4b and the provider open; the holds are undispatched,
+        # so the spend is refunded by ``release``. One incident audit record, cause ``recheck``.
+        code = refused.verdict.refuse_code or ""
+        holds.note_incident_cause(
+            "recheck", underlying=code, retry_after_s=refused.verdict.retry_after_s
+        )
+        return EnforcedOutput(
+            deltas=(), refuse_code=code, retry_after_s=refused.verdict.retry_after_s
+        )
     except PolicyRegexRefusal as refused:
         return EnforcedOutput(deltas=(), refuse_code=refused.code)
     except UpstreamFailed as failed:
+        holds.note_attempt_code(failed.code)
         return EnforcedOutput(deltas=(), refuse_code=failed.code)
     except OutputBlocked as blocked:
+        holds.note_attempt_code(block_code)
         return EnforcedOutput(
             deltas=(), refuse_code=block_code, output_decision=blocked.decision,
         )
@@ -173,6 +194,8 @@ async def _collect_output_channels(
     destination: str,
     body: Mapping[str, object],
     holds: RequestHolds,
+    org_id: str,
+    routed_model: str,
     plan: ExecutionPlan | None = None,
 ) -> tuple[tuple[str, str], ...]:
     """Drain the provider to its final event, concatenating ``text_deltas`` per channel.
@@ -196,8 +219,10 @@ async def _collect_output_channels(
             order.append(channel)
         texts[channel].append(text)
 
+    # GW29: re-check the ALREADY-ROUTED model ABOVE mark_dispatched, so a refusal is refunded (6.4).
+    recheck_or_raise(deps.incident_recheck, org_id=org_id, model=routed_model)
     # The provider is about to be opened: record the dispatch so the spend stands (C29).
-    holds.mark_dispatched()
+    holds.mark_dispatched(routed_model)
     async for event in open_chat_upstream(
         deps, plan, UpstreamRequest(destination=destination, body=body), holds
     ):
@@ -264,11 +289,22 @@ async def emit_enforced_chat(
     if enforced.output_decision is not None:
         holds.note_output(enforced.output_decision)
     if enforced.refuse_code is not None:
-        response = apply_projection(errors.render_http(enforced.refuse_code), console)
+        response = apply_projection(
+            errors.render_http(enforced.refuse_code, retry_after_s=enforced.retry_after_s),
+            console,
+        )
         await emit_response(send, response)
         return
     json_body = deps.renderer.non_stream_body(req, enforced.deltas)
     response = apply_projection(ok_response(json_body, plan.streaming_mode.value), console)
+    note = holds.reroute
+    if note is not None:
+        reason = f"isolation:{note.isolated_model}->{note.routed}"
+        response = errors.HTTPResponse(
+            status=response.status,
+            body=response.body,
+            headers=(*response.headers, (_ROUTING_REASON_HEADER, reason)),
+        )
     await emit_response(send, response)
 
 

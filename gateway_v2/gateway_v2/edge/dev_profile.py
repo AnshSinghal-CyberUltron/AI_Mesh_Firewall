@@ -82,6 +82,8 @@ from gateway_v2.edge.dev_components import (
 from gateway_v2.edge.dev_mcp import build_dev_mcp
 from gateway_v2.edge.dev_metrics import build_dev_publisher
 from gateway_v2.edge.dev_plan_feed import DevPlanFeed, DevPlanWatch
+from gateway_v2.edge.incident_passthrough import PassThroughIncidentGate
+from gateway_v2.edge.inflight_source import DevNoControlSource
 from gateway_v2.edge.responses_store import ValkeyResponseStore
 from gateway_v2.edge.routing_boot import bounds_line, build_dev_routing
 from gateway_v2.edge.wire.sse import SSEDecoder
@@ -350,11 +352,8 @@ def build_dev_dependencies(
     )
     provider, routing, provider_log = _provider(cfg, contract, input_detector)
     catalog = StaticCatalogSource(model_ids=cfg.models, org_id=cfg.org_id, created=int(time.time()))
-    # Group E: wire the PHASE-AWARE resolver factory so an ``input``-scoped rule is enforced only
-    # on input and an ``output``-scoped rule only on output (``resolver_for`` returns
-    # ``factory(plan, phase)`` per phase). ``build_app`` still requires a single ``resolver`` kwarg
-    # (the route's fallback when ``phase_resolvers`` is unset); once set it is NEVER consulted, so
-    # the single slot is a harmless valid ``OutputResolver`` bound at ``Phase.INPUT``.
+    # Group E: the PHASE-AWARE resolver factory (input rules on input, output rules on output);
+    # the single ``resolver`` slot is a harmless fallback that is never consulted once it is set.
     phase_factory = phase_resolver_factory()
     deps: dict[str, object] = {
         "contract": contract,
@@ -380,6 +379,10 @@ def build_dev_dependencies(
         "quota": budget,
         "org_limits": OrgLimits(contract, metrics=admission_metrics),
         "catalog": catalog,
+        # GW29: the dev profile never cuts or refuses on an incident (named pass-through).
+        "control": DevNoControlSource(),
+        "incident_gate": PassThroughIncidentGate(),
+        "incident_recheck": PassThroughIncidentGate().recheck,
     }
     audit_note = _attach_audit(
         deps,

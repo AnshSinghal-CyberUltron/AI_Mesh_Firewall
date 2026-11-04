@@ -61,10 +61,18 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from gateway_v2.admit.grant import Admitted, ShedVerdict
+from gateway_v2.audit.record import AuditRecord
 from gateway_v2.dispatch.provider import ProviderClient, UpstreamRequest
 from gateway_v2.dispatch.routing import DispatchRouter
 from gateway_v2.dispatch.transform import Transform
 from gateway_v2.domain import Finding
+from gateway_v2.domain.incident import (
+    GateVerdict,
+    IncidentDecider,
+    fail_closed_gate,
+    fail_closed_org,
+    fail_closed_recheck,
+)
 from gateway_v2.domain.plan import (
     ExecutionPlan,
     Phase,
@@ -96,6 +104,8 @@ from gateway_v2.edge.identity_resolver import (
     hashed_bearer_key,
     identity_of,
 )
+from gateway_v2.edge.incident_misc import embeddings_gate, moderations_gate, refuse_recheck
+from gateway_v2.edge.incident_recheck import IncidentRecheckRefused, Recheck, recheck_or_raise
 from gateway_v2.edge.input_enforcement import REFUSE_INPUT_SCAN_FAILURE
 from gateway_v2.edge.openai_misc_shared import (
     _DEFAULT_MODERATION_MODEL,
@@ -249,6 +259,11 @@ class MiscRoute:
     observer: OutcomeObserver | None = None
     #: GW26. Embeddings is the misc surface that resolves a plan. Moderations does not.
     surface: Surface = Surface.EMBEDDINGS
+    #: GW29 (6.4b): phase 4b / org-wide / attempt gates plus the audit sink; every default refuses.
+    incident_gate: IncidentDecider = fail_closed_gate
+    incident_org_gate: Callable[..., GateVerdict] = fail_closed_org
+    incident_recheck: Recheck = fail_closed_recheck
+    audit: Callable[[AuditRecord], bool] | None = None
 
 
 # --------------------------------------------------------------------------- #
@@ -322,12 +337,10 @@ class EmbeddingsSurface:
         from gateway_v2.edge.openai_chat import REFUSE_PLAN_UNAVAILABLE
         from gateway_v2.edge.wire.openai import MalformedRequest
 
-        # ONE per-request hold ledger (Group D/F): the lifecycle records the admission slot
-        # (``holds.admitted``) + the budget spend (``holds.spent``), ``mark_dispatched`` is set
-        # just before ``provider.open``, and ``release`` runs in the ``finally`` below so the
-        # slot is ``complete``-d exactly once on every exit. A refusal at ``input_blocked`` /
-        # ``scan_failure`` / ``input_unmaskable`` has ``spent`` set but ``dispatched`` unset, so
-        # its spend is refunded automatically. Never shared across requests (R13 isolation).
+        # ONE per-request hold ledger (Group D/F): admitted/spent are recorded as acquired,
+        # ``mark_dispatched`` just before ``provider.open``, and ``release`` runs in the ``finally``
+        # so the slot is ``complete``-d once on every exit; an undispatched spend is refunded.
+        # Never shared across requests (R13 isolation).
         holds = RequestHolds()
         try:
             body = await read_body(receive)
@@ -339,20 +352,17 @@ class EmbeddingsSurface:
                 await _refuse(send, exc.code, self._deps.observer)
                 return
 
-            # Phase 2 — resolve Tenant_Identity (GW05b/c). None / stale / unavailable ⇒ refuse,
-            # zero provider calls (R5.1 / R5.2).
+            # Phase 2 — resolve Tenant_Identity (GW05b/c); None/stale/unavailable ⇒ refuse (R5.1).
             outcome = await identity_of(self._deps.identity, scope)
             if (identity := outcome.identity) is None:
                 await _refuse(send, outcome.refusal, self._deps.observer)
                 return
             observe_tenant(self._deps.observer, identity.org_id)
-            # Attribute any budget refund to this request's own tenant (GW36 S4): the composed
-            # QuotaGate.refund resolves the owner's lease from this org, returning the spend to
-            # it and no other (Req 6.3). Without it the refund owner would be "" and refund a no-op.
+            # Attribute any budget refund to this request's own tenant (GW36 S4, Req 6.3).
             holds.note_tenant(identity.org_id)
 
             # Phase 3 — the ONE shared-state round trip: resolve the plan for Surface.EMBEDDINGS
-            # (parity with ChatSurface). An unresolved plan ⇒ refuse, zero provider calls (R5.6).
+            # (parity with ChatSurface); unresolved ⇒ refuse, zero provider calls (R5.6).
             plan = self._resolve_plan(identity)
             if plan is None:
                 await _refuse(send, REFUSE_PLAN_UNAVAILABLE, self._deps.observer)
@@ -360,18 +370,26 @@ class EmbeddingsSurface:
 
             request_id = self._request_id(identity, req)
 
-            # Phase 4 — admission (GW19). A ShedVerdict ⇒ refuse + retry, zero provider calls
-            # (R5.3); an Admitted records the slot on ``holds`` so it is ``complete``-d on exit.
+            # Phase 4a (GW29): incident gate BEFORE admission, so a refusal charges nothing.
+            routed = await embeddings_gate(
+                self._deps, send, holds, org_id=identity.org_id, model=req.model,
+                request_id=request_id,
+            )
+            if routed is None:
+                return
+            req = MiscEmbeddingsRequest(
+                model=routed, input_items=req.input_items, input_is_string=req.input_is_string
+            )
+
+            # Phase 4 — admission (GW19): a ShedVerdict refuses (R5.3); Admitted records the slot.
             admit_refuse = await self._admit(identity, req, request_id)
             if admit_refuse is not None:
                 await _refuse(send, admit_refuse, self._deps.observer)
                 return
             holds.admitted(request_id)
 
-            # Phase 5 — budget lease spend (GW06), local lease / no request-path store read. A
-            # BudgetVerdict ⇒ refuse, zero provider calls (R5.4 / R5.5); a spend records the SAME
-            # cost on ``holds`` so it is refunded if nothing is dispatched. The cost is computed
-            # ONCE and spent + recorded identically.
+            # Phase 5 — budget lease spend (GW06), local lease. A BudgetVerdict ⇒ refuse, zero
+            # provider calls (R5.4 / R5.5); the SAME cost is spent and recorded on ``holds``.
             cost = self._estimated_cost(req)
             holds.note_controls(plan.controls)
             org_refuse = enforce_org_limits(
@@ -380,11 +398,8 @@ class EmbeddingsSurface:
             if org_refuse is not None:
                 await _refuse(send, org_refuse.code, self._deps.observer)
                 return
-            # The composed QuotaGate's per-key GCRA needs the SAME sha256 key hash identity
-            # resolved on (GW36 S4). ``hashed_bearer_key`` re-derives it from this scope's
-            # Authorization header — the production resolver's own key_namer — not from a raw
-            # token held elsewhere; a defensive None folds to "" (the budget phase still fails
-            # closed on the missing-owner path).
+            # The per-key GCRA needs the SAME key hash identity resolved on (GW36 S4); re-derived
+            # from the Authorization header, a defensive None folds to "" (budget fails closed).
             key_hash = hashed_bearer_key(scope) or ""
             budget_refuse = await self._budget(identity, req, cost, request_id, key_hash)
             if budget_refuse is not None:
@@ -392,14 +407,11 @@ class EmbeddingsSurface:
                 return
             holds.spent(cost, request_id)
 
-            # Phase 6 — INPUT scan → stage the VERIFIED upstream → provider, the LAST phase
-            # before provider contact. Factored into :meth:`_scan_stage_dispatch` so ``handle``
-            # stays under the function-size gate; behaviour is unchanged (same ordered steps,
-            # same fail-closed refusals, same zero-provider-call guarantees).
+            # Phase 6 — INPUT scan → stage the VERIFIED upstream → provider (the LAST phase before
+            # provider contact), factored into :meth:`_scan_stage_dispatch` for the size gate.
             await self._scan_stage_dispatch(req, plan, send, holds)
         finally:
-            # Synchronous, never raises, idempotent behind its own latch: a lost refund /
-            # complete can never mask the in-flight response or exception (Group D/F).
+            # Synchronous, never raises, idempotent: a lost refund can never mask the response.
             holds.release(self._deps.admission, self._deps.quota)
 
     async def _scan_stage_dispatch(
@@ -567,7 +579,13 @@ class EmbeddingsSurface:
         :func:`_emit_json` render helpers (the one ``edge/errors`` path).
         """
         try:
-            vectors = await self._drain_vectors(upstream, holds)
+            vectors = await self._drain_vectors(upstream, holds, req.model)
+        except IncidentRecheckRefused as refused:
+            await refuse_recheck(
+                send, holds, refused, route="embeddings",
+                audit=self._deps.audit, observer=self._deps.observer,
+            )
+            return
         except Exception:  # noqa: BLE001 — fail closed: an unreadable provider body withholds.
             self._deps.exports.record_withheld()
             await _refuse(send, scan_failure_code, self._deps.observer, decided=True)
@@ -578,6 +596,7 @@ class EmbeddingsSurface:
         self,
         upstream: UpstreamRequest,
         holds: RequestHolds,
+        routed_model: str,
     ) -> tuple[tuple[int, tuple[float, ...]], ...]:
         """Drain the provider stream into ordered ``(index, vector)`` pairs (R6.1 / R6.3).
 
@@ -596,6 +615,8 @@ class EmbeddingsSurface:
         """
         vectors: list[tuple[int, tuple[float, ...]]] = []
         index = 0
+        # GW29: recheck ABOVE mark_dispatched so a refusal leaves the holds undispatched (refund).
+        recheck_or_raise(self._deps.incident_recheck, org_id=holds.org_id, model=routed_model)
         # The provider is about to be opened: record the dispatch so the spend stands (C29).
         holds.mark_dispatched()
         async for event in self._deps.provider.open(upstream):
@@ -734,6 +755,8 @@ class ModerationsSurface:
             await _refuse(send, outcome.refusal, self._deps.observer)
             return
         observe_tenant(self._deps.observer, identity.org_id)
+        if not await moderations_gate(self._deps, send, org_id=identity.org_id):
+            return
 
         # Phase 3 — scan-only. A RAISING scan is a withholding (fail closed): NO result body
         # is emitted (never a flagged:false unscanned result — R8.6).

@@ -31,6 +31,7 @@ import json
 import random
 from collections.abc import AsyncIterator, Mapping, Sequence
 from dataclasses import dataclass, field
+from dataclasses import field as _lgw29_field
 from typing import TYPE_CHECKING, cast
 
 from gateway_v2.admit.grant import Admitted
@@ -47,6 +48,8 @@ from gateway_v2.edge.openai_chat import REFUSE_INPUT_BLOCKED, ChatSurface
 from gateway_v2.edge.wire.openai import UNSUPPORTED_PARAMETER, OpenAIRequestParser
 from gateway_v2.egress.output_guard import MinimalOutputResolver
 from gateway_v2.plan.snapshot import PlanState as _PlanState
+from tests.edge._lgw29_support import dev_gate as _lgw29_dev_gate
+from tests.edge._lgw29_support import dev_recheck as _lgw29_dev_recheck
 from tests.edge._org_limits import NoopOrgLimits
 
 if TYPE_CHECKING:
@@ -325,6 +328,8 @@ class _P9Deps:
     #: The counted provider is REACHABLE on the deps (as production wires it) but the
     #: pre-provider lifecycle never opens it — the test asserts its call count stayed zero.
     provider: _P9CountingProvider
+    incident_gate: object = _lgw29_field(default_factory=_lgw29_dev_gate)
+    incident_recheck: object = _lgw29_field(default_factory=_lgw29_dev_recheck)
 
 
 def _p9_plan() -> ExecutionPlan:

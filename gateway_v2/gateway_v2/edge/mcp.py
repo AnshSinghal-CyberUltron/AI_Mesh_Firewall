@@ -29,6 +29,7 @@ from gateway_v2.edge.asgi_sse import ASGIReceive, ASGIScope, ASGISend, read_body
 from gateway_v2.edge.audit_emit import emit_chat_audit
 from gateway_v2.edge.dev_components import bind_surface
 from gateway_v2.edge.identity_resolver import TenantIdentity, hashed_bearer_key, identity_of
+from gateway_v2.edge.incident_audit import incident_is_refusal
 from gateway_v2.edge.input_enforcement import scan_deltas, stage_upstream
 from gateway_v2.edge.mcp_console import mcp_console
 from gateway_v2.edge.mcp_registry import McpRegistry, OrgMap, ServerEntry, ToolSet
@@ -211,12 +212,26 @@ class McpRoute:
         if identity is None:
             raise _Refuse(outcome.refusal)
         ctx.holds.note_tenant(identity.org_id)
+        self._incident_org_gate(ctx, identity.org_id)
         state = lookup_plan(self.chat.snapshot_source(), identity.org_id, Surface.MCP)
         if isinstance(state, (PlanUnavailable, PlanUnknownTenant)):
             raise _Refuse("plan_unavailable")
         ctx.plan_version = state.version
         ctx.holds.note_controls(state.controls)
         return identity, state
+
+    def _incident_org_gate(self, ctx: _Ctx, org_id: str) -> None:
+        """GW29 (6.4b): a global or org kill (or a stale feed) stops MCP; org from the key."""
+        holds = ctx.holds
+        request_id = holds.request_id or _request_id(org_id, "incident", {})
+        verdict = self.chat.incident_gate.decide_org(org_id=org_id, request_id=request_id)
+        if verdict.refuse_code is None:
+            return
+        holds.note_request(request_id)
+        holds.note_incident_cause(
+            verdict.cause or "gate_error", retry_after_s=verdict.retry_after_s
+        )
+        raise _Refuse(verdict.refuse_code)
 
     async def _forward(self, send: ASGISend, message: jsonrpc.JsonRpcMessage, ctx: _Ctx) -> None:
         method = message.method or ""
@@ -366,6 +381,8 @@ class McpRoute:
         headers: tuple[tuple[str, str], ...] = (("content-type", "application/json"),)
         if ctx is not None and ctx.holds.request_id:
             headers = (*headers, ("x-request-id", ctx.holds.request_id))
+        if ctx is not None and incident_is_refusal(ctx.holds):
+            headers = (*headers, *errors.retry_headers(ctx.holds.incident_retry_after_s))
         await emit_response(send, errors.HTTPResponse(status=status, body=body, headers=headers))
 
 

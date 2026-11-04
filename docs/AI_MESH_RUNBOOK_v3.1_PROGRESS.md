@@ -2,7 +2,7 @@
 
 Status date: 2 November 2026. Source of the card text: `docs/AI_MESH_MASTER_RUNBOOK_v3.1_CLEAN.docx`, Part 00. This file does not change that document.
 
-GW26 and GW30 have new code on this tree and have been exercised on the local stack. Neither exits. The live lines below say exactly what was observed and what was not. GW36 was started on 2 November; slices S0–S3 are done (S3 on 3 November: the production profile reads real signed state, and a bad key is a 401), S4–S7 remain, so it does not exit. GW17b, GW17c, GW27, GW28, GW29, GW31, GW32, GW33, GW34 and GW35 have no new card work from this pass. The runbook says each of those cards is required before GW21 and GW23, and that a card does not exit on unit tests alone.
+GW26 and GW30 have new code on this tree and have been exercised on the local stack. Neither exits. The live lines below say exactly what was observed and what was not. GW36 was started on 2 November; slices S0–S3 are done (S3 on 3 November: the production profile reads real signed state, and a bad key is a 401), S4–S7 remain, so it does not exit. GW17b, GW17c, GW27, GW28, GW31, GW32, GW33, GW34 and GW35 have no new card work from this pass. The runbook says each of those cards is required before GW21 and GW23, and that a card does not exit on unit tests alone.
 
 ## GW26 — Customer policy rules and surface scoping
 
@@ -245,7 +245,7 @@ Plan with five contradictory reviews: `docs/plans/2026-11-03-gw36-s3-state-runti
   - MCP `initialize`/`ping` answer before identity (GW32).
   - A malformed unauthenticated body is 400 before 401.
   - Plan pins grow per request (S4).
-  - Streams admitted before a revoke keep running (GW29).
+  - Streams admitted before a revoke keep running (closed locally by GW29: per-chunk revoke check).
   - Failed-credential audit records (GW35).
   - The duplicate re-hydrator metric family on the gateway (N14, S5).
 
@@ -265,7 +265,7 @@ The owner asked on 2 November to proceed on defaults. They are working defaults 
 | GW17c | Per-key `mcp_allowed_tools` and `mcp_max_tool_calls` | Not started |
 | GW27 | The 45 unsupported FirewallConfig fields, built or retired by name | Local half closed on 4 November: 15 built, 30 retired by name, `org_token_budget` delegated to GW36; offline gate green. Live half OPEN: L27-1, L27-2, the live Postgres EXPLAIN arm, the live audit entry-size re-run, and the D-8 and D-12 owner sign-offs. Does not exit. Evidence: `docs/plans/evidence/2026-10-27-gw27/`. |
 | GW28 | Multi-model routing | Not started |
-| GW29 | Kill switch, isolation, reroute, auto-isolation | Not started. `kill_switch_engaged` is still hard-coded false. |
+| GW29 | Kill switch, isolation, reroute, auto-isolation | Closed locally on 4 November (branch `gw29-killswitch-isolation`, plan `docs/plans/2026-11-04-gw29-killswitch-isolation.md`): the phase 4b gate, org-model scope, isolation with reroute, mid-stream cut, revoke ledger, auto-isolation and the writer side are built and tested offline (full suite 3605 passed, 1 declared tenant-scale failure; negative controls recorded). The risk tracker is now fed from the production request path: `emit_chat_audit` calls `IncidentAuditTap.record_attempt` (bound in `build_incident`) for every finished attempt, deriving the `ModelOutcome` from the holds ledger's dispatched model + the provider/guard code the request actually ended with (`edge/incident_attempt.py`); an end-to-end test (`tests/edge/test_lgw29_l29_3_live_feed.py`) drives provider 5xx/timeout through the real route and asserts auto-isolation + reroute. AC21-23 and the auto half of AC27 are now met by the real path, not only the local-injection test. Still open: live L29-1 to L29-4, real notification delivery, fleet convergence timing, console agreement (GW35). It does not exit for cutover. |
 | GW30 | Vector adapter and the connector list, `unsupported_operation` instead of an empty success | Adapter layer built and live-tested on 2 November; see the GW30 section above. Not wired into the production boot (that is GW31/GW36), so it does not exit for cutover. |
 | GW31 | Four-stage RAG, the retired routes, async ingest, project on Principal, six RAG settings | Not started. `/v1/rag/query` is HTTP 501 `not_implemented:rag`. |
 | GW32 | v1 MCP URL or a signed redirect, gateway as OAuth 2.1 server, real HTTP+SSE and WebSocket | Not started |

@@ -59,6 +59,7 @@ from gateway_v2.egress.stream import ScanProtocol
 from gateway_v2.runtime.holdback_config import HoldbackConfig
 from gateway_v2.runtime.kinds import HardwareSignals
 from gateway_v2.runtime.resources import ResourceContract, from_signals
+from tests.edge._lgw29_support import proceed_outcome as _lgw29_proceed_outcome
 from tests.edge._org_limits import org_limits_for
 
 _SEED = 0x15_15_0015
@@ -254,7 +255,9 @@ async def _p15_drive(route: ChatRoute, capture: _P15Capture) -> None:
     """Drive the shipped streaming orchestration for one clean stream via ``_stream_response``."""
     plan = _p15_plan()
     destination = route.router.select(plan)
-    await route._stream_response(capture.send, plan, destination, body={})
+    await route._stream_response(
+        capture.send, plan, destination, body={}, outcome=_lgw29_proceed_outcome()
+    )
 
 
 def _p15_run_once(rng: random.Random) -> list[bytes]:

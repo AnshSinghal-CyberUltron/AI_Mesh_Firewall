@@ -1,5 +1,5 @@
-"""Small route helpers split out of ``edge/routes.py`` (size gate): the per-request produced-mode
-holder and the registered-for-later placeholder handler.
+"""Small route helper split out of ``edge/routes.py`` (size gate): the registered-for-later
+placeholder handler.
 """
 
 from __future__ import annotations
@@ -10,33 +10,9 @@ from gateway_v2.edge import errors
 from gateway_v2.edge.asgi_sse import ASGIReceive, ASGIScope, ASGISend
 
 if TYPE_CHECKING:
-    from gateway_v2.edge.request_holds import RequestHolds
     from gateway_v2.edge.routes import RouteHandler
-    from gateway_v2.egress.stream import StreamStats
-    from gateway_v2.egress.strict import StrictStats
 
-__all__ = ("ProducedModeHolder", "placeholder")
-
-
-class ProducedModeHolder:
-    """A per-request mutable sink for the pipeline's returned stats (GW13 C5).
-
-    Both ``StreamPipeline.run`` and ``StrictWithholdPipeline.run`` return a stats
-    value carrying ``produced_mode`` (and, on the INCREMENTAL side,
-    ``degenerated_to_strict``). The ``_attempt`` coroutine captures that return and
-    stashes it here so :meth:`ChatRoute._finish_stream` can emit the Produced_Mode
-    trace frame on the wire just before the terminal ``[DONE]`` marker. It is a
-    per-request LOCAL instance built in :meth:`ChatRoute._stream` (never a
-    module-level mutable, gated), so nothing request-scoped is shared on the frozen
-    route. ``stats`` is ``None`` until an attempt completed (a byte-less failure of
-    every attempt leaves it unset, in which case no trace frame is emitted).
-    """
-
-    __slots__ = ("holds", "stats")
-
-    def __init__(self, holds: RequestHolds | None = None) -> None:
-        self.holds = holds
-        self.stats: StreamStats | StrictStats | None = None
+__all__ = ("placeholder",)
 
 
 def placeholder(surface: str) -> RouteHandler:
@@ -49,7 +25,7 @@ def placeholder(surface: str) -> RouteHandler:
     """
 
     async def _handle(scope: ASGIScope, receive: ASGIReceive, send: ASGISend) -> None:
-        from gateway_v2.edge.routes import emit_response
+        from gateway_v2.edge.route_emit import emit_response
 
         await emit_response(send, errors.render_not_implemented(surface))
 

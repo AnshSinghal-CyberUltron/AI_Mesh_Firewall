@@ -14,9 +14,9 @@ from collections.abc import Mapping
 from gateway_v2.domain.decision import Decision, Disposition
 from gateway_v2.edge.cancel import KillLatch
 from gateway_v2.edge.request_holds import RequestHolds
+from gateway_v2.edge.route_emit import ProducedModeHolder as _ProducedModeHolder
 from gateway_v2.edge.routes import (  # type: ignore[attr-defined]
     ChatRoute,
-    _ProducedModeHolder,
     _TerminalLatch,
 )
 from gateway_v2.edge.wire.sse import SSEEncoder

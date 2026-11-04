@@ -1920,6 +1920,40 @@
   VERIFY: 3208 passed (1 pre-existing tenant_scale failure), mypy/ruff/import-linter/AST gates as baseline.
   Plan: .kiro/specs/gw27-firewall-config-fields/. Evidence: docs/plans/evidence/2026-10-27-gw27/.
 
+## GW29 / incident response changelog
+- GW29 (2026-11-04) — KILL SWITCH + ISOLATION + REROUTE + AUTO-ISOLATION, local half CLOSED. Branch
+  gw29-killswitch-isolation. `kill_switch_engaged` was hard-coded false and streams admitted before a kill, revoke or
+  isolation kept running; the console's org-wide and org-plus-model kills were counted "not enforced".
+  FIX (bottom-up on the layer contract, fail closed, no capacity literal outside runtime/resources.py):
+  (1) `domain/incident.py` value types, scope grammar, `canonical_model` (NFKC/casefold/alias, applied BEFORE any
+  match and sent upstream), `GateVerdict` exactly-one invariant, five new posture codes.
+  (2) `runtime/resources_incident.py` mixin (resources.py stays <= 800 via `resources_env.py`).
+  (3) `admit/killswitch.py` org-model set, isolation map, quarantine, drift latch, single-lock `evaluate`.
+  (4) `admit/incident_state.py` ONE expiry decision shared by gate and read model; `incident_gate.py` phase 4b
+  (stale, global, org, org-model, model, isolation) + `dispatch/incident_routing.py` pure `decide_route`.
+  (5) `model_risk.py` / `auto_isolation.py` (tighten only, needs an eligible fallback) / `revocation.py` /
+  `incident_metrics.py` (27 series). (6) Edge: phase 4b before `_admit`, per-attempt recheck above
+  `mark_dispatched`, `KillSwitchControlSource` (refusing default, `DevNoControlSource` dev only), single audit
+  record per refusal, 503 + `Retry-After` + `x-should-retry:false` even for streaming requests, embeddings /
+  moderations / MCP gated, notifier pump + ticker + catalog + production wiring. (7) `state_control`
+  `incident_scopes.py` + `StateWriter.isolation`, flag `AMF_STATE_PROJECT_INCIDENT_SCOPES` default OFF, refused
+  while `AMF_GATEWAY_MIN_SCOPE_GENERATION` < 2.
+  OPEN (DEFERRED, no live stack): L29-1..L29-4 live, real notification delivery, fleet convergence timing of a
+  signed auto-isolation, console agreement (GW35). WIRED (convergence fix): `emit_chat_audit` feeds
+  `IncidentAuditTap.record_attempt` (bound to `IncidentWiring.record_attempt` in `build_incident`) via
+  `edge/incident_attempt.py`, from the holds ledger (`mark_dispatched(model)`, provider/guard code); end-to-end test
+  `test_lgw29_l29_3_live_feed.py` (5xx/timeout through the real route isolates + reroutes, stream and non-stream).
+  `plan_changed` is a named constant `False` (not wired).
+  FOUND, NOT FIXED: `check_tenant_scale` exit 1 on `dispatch/vector_transports/pinecone_transport.py:140` (GW30,
+  on the base commit) and `state_control/valkey.py:100` (R2-05); both are the only failing test in the suite.
+  VERIFY: 3605 passed / 107 skipped / 1 failed (that declared tenant-scale test; baseline 3037 / 112 / 2) / 556
+  lgw29-subset passed; `mypy --strict` 303 files with only the 9 baseline import-not-found for absent optional
+  vector SDKs, ruff clean, import-linter `Contracts: 3 kept, 0 broken`, capacity/mutable/frozen/http/sizes/
+  provenance/secret_headers gates exit 0. Negative controls (phase 4b removed, DevNoControlSource default,
+  STALE as OK, creation-only expiry) each fail named tests and are reverted. Hot path: gate.decide 3.0 us clean /
+  7.6 us rerouted, 0.9 us per-chunk evaluate.
+  Plan: docs/plans/2026-11-04-gw29-killswitch-isolation.md. Evidence: docs/plans/evidence/2026-11-04-gw29/.
+
 ## Ralph autonomous loop — gateway hardening
 - Backlog + status live in scripts/ralph/prd.json; learnings in scripts/ralph/progress.txt.
 - ONE story per iteration; never break a passing gate; never mark passes:true without a green gate.

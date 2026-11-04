@@ -131,7 +131,7 @@ def test_property_template_slots_align_with_the_fold_and_carry_no_text() -> None
         assert not leaked, (_SEED, i, body, leaked)
         rendered = with_openai_body(
             MappingProxyType({BODY_DELTAS_KEY: req.text_deltas}), req, _contract(),
-            org_ceiling=_contract().default_response_token_ceiling(),
+            model=req.model, org_ceiling=_contract().default_response_token_ceiling(),
         )
         assert rendered is not None, (_SEED, i, body)
         sent = rendered[BODY_OPENAI_KEY]
@@ -158,9 +158,10 @@ def test_a_slot_whose_delta_moved_channel_is_refused() -> None:
     req = _parse({"model": "m", "messages": [{"role": "user", "content": "hi"}]})
     moved = MappingProxyType({BODY_DELTAS_KEY: (("content_part_text", "hi"),)})
     ceiling = _contract().default_response_token_ceiling()
-    assert with_openai_body(moved, req, _contract(), org_ceiling=ceiling) is None
+    kw = {"model": req.model, "org_ceiling": ceiling}
+    assert with_openai_body(moved, req, _contract(), **kw) is None
     short = MappingProxyType({BODY_DELTAS_KEY: ()})
-    assert with_openai_body(short, req, _contract(), org_ceiling=ceiling) is None
+    assert with_openai_body(short, req, _contract(), **kw) is None
 
 
 @pytest.mark.parametrize(
@@ -232,7 +233,7 @@ def test_a_message_name_is_accepted_but_not_forwarded() -> None:
     req = _parse({"model": "m", "messages": [{"role": "user", "content": "hi", "name": "AKIA"}]})
     rendered = with_openai_body(
         MappingProxyType({BODY_DELTAS_KEY: req.text_deltas}), req, _contract(),
-        org_ceiling=_contract().default_response_token_ceiling(),
+        model=req.model, org_ceiling=_contract().default_response_token_ceiling(),
     )
     assert rendered is not None
     assert "AKIA" not in json.dumps(_plain(rendered[BODY_OPENAI_KEY]))
@@ -262,6 +263,7 @@ def test_output_budget_follows_v1(budget: dict[str, int], expected: dict[str, in
         MappingProxyType({BODY_DELTAS_KEY: req.text_deltas}),
         req,
         contract,
+        model=req.model,
         org_ceiling=contract.default_response_token_ceiling(),
     )
     assert rendered is not None

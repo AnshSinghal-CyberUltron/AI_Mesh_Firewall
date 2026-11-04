@@ -27,8 +27,7 @@ Three components:
   boundaries fall (Property 9). An undecodable complete event sets the
   :meth:`SSEDecoder.malformed` latch so the caller fails closed with
   ``STREAM_MALFORMED_UPSTREAM`` and never reports the stream successful (R1.5).
-* The value types :class:`SSEChunk`, :class:`SSEChoice`, :class:`SSEErrorFrame`
-  -- the SDK-shaped content body and the declared error body (Data Models).
+* The value types :class:`SSEChunk`, :class:`SSEChoice`, :class:`SSEErrorFrame` (Data Models).
 
 Round-trip (R1.6, Property 8 codec half): :meth:`SSEDecoder.feed` of a
 well-formed content frame yields a ``DownstreamFrame`` whose ``text_deltas`` are
@@ -157,6 +156,26 @@ ERROR_SHAPES: Mapping[str, tuple[str, str]] = MappingProxyType(
         posture.STREAM_BUFFER_UNAVAILABLE: (
             "gateway_error",
             "No buffer capacity was available and the stream was rejected.",
+        ),
+        posture.KILL_SWITCH_ENGAGED: (
+            "service_unavailable",
+            "An incident kill switch is engaged; the request was refused.",
+        ),
+        posture.MODEL_KILLED: (
+            "service_unavailable",
+            "The requested model is disabled by an incident kill switch.",
+        ),
+        posture.MODEL_ISOLATED_NO_FALLBACK: (
+            "service_unavailable",
+            "The requested model is isolated and no eligible fallback exists.",
+        ),
+        posture.REROUTE_REFUSED: (
+            "service_unavailable",
+            "The requested model is isolated and this surface cannot be rerouted.",
+        ),
+        posture.STREAM_MODEL_ISOLATED: (
+            "service_unavailable",
+            "The model was isolated and the stream was terminated.",
         ),
         posture.STREAM_STRICT_BUFFER_OVERFLOW: (
             "gateway_error",

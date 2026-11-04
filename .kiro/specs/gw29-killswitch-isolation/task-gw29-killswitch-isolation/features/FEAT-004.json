@@ -1,0 +1,23 @@
+{
+  "id": "FEAT-004",
+  "type": "test",
+  "description": "Local L29-1..4 equivalents, hot-path benchmark, negative controls (reverted), docs/evidence/AGENTS.md changelog/progress doc, final full offline gate. Depends on FEAT-001..003. Implements tasks 19-22 of tasks.md in /work/suraj/AI_Mesh_Firewall/.worktrees/gw29/.kiro/specs/gw29-killswitch-isolation/",
+  "status": "completed",
+  "steps": [
+    "Task 19 local scenario tests + bench file.",
+    "Task 20 negative controls, revert each, record failing test names.",
+    "Task 21 docs and changelog.",
+    "Task 22 final gates written to evidence files; commit locally."
+  ],
+  "acceptance_criteria": [
+    "Each negative control makes its named test fail and is fully reverted",
+    "Evidence files contain real counts and gate exits",
+    "Final suite 0 failed, mypy/ruff/lint-imports clean, all AST gates exit 0 (documented valkey.py:100 excepted)"
+  ],
+  "verification": [
+    "Full G1-G4 from docs/plans/evidence/2026-11-04-gw29/gates.sh",
+    "git -C worktree status shows clean tree after commit"
+  ],
+  "blocked_reason": null,
+  "findings": "FEAT-004 done (tasks 19-22), commits f0d2652f (L29-1..4 tests + bench) and the docs/evidence commit. Final G1: 3600 passed / 107 skipped / 1 failed (declared tenant_scale: pinecone_transport.py:140 + state_control/valkey.py:100); lgw29 subset 556 passed; mypy only the 9 baseline import-not-found; ruff clean; lint-imports 3 kept; all AST gates exit 0 except check_tenant_scale (declared). Negative controls NC1-4 each fail named tests and were reverted (evidence 04_negative_controls.txt). OPEN: live L29-1..4, notifier delivery, fleet convergence, GW35; IncidentWiring.record_attempt is not called from the production request path (risk tracker unfed in prod; routes.py at size cap). Task JSON/tasks.md/design-review.md left untracked."
+}

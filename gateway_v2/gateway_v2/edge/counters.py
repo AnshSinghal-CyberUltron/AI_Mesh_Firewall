@@ -84,6 +84,11 @@ POSTURE_CODES: tuple[str, ...] = (
     posture.STREAM_SNAPSHOT_STALE,
     posture.STREAM_MALFORMED_UPSTREAM,
     posture.STREAM_BUFFER_UNAVAILABLE,
+    posture.KILL_SWITCH_ENGAGED,
+    posture.MODEL_KILLED,
+    posture.MODEL_ISOLATED_NO_FALLBACK,
+    posture.REROUTE_REFUSED,
+    posture.STREAM_MODEL_ISOLATED,
 )
 """The five base ``domain.posture`` codes + the ten GW12 ``STREAM_*`` codes, in the one spelling
 each. Imported — not hardcoded — so a code's spelling has exactly one home (the C37 join-failure
