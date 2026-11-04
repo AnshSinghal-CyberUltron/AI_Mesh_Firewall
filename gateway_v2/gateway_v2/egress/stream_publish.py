@@ -107,8 +107,12 @@ class OutputAggregate:
     canary_leaked: bool = False
     bytes_action: str = "allow"
     final_check_unavailable: int = 0
+    _last: Decision | None = None
 
     def note(self, decision: Decision) -> None:
+        if decision is self._last:  # a BLOCK is noted at release and again by the arm: count once
+            return
+        self._last = decision
         self.decision = (
             decision if self.decision is None else combine_decisions(self.decision, decision)
         )
