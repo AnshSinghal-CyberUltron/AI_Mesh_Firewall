@@ -33,8 +33,9 @@ from collections import OrderedDict
 from collections.abc import Awaitable, Callable, Iterable, Sequence
 from dataclasses import dataclass
 
-from gateway_v2.domain.identity import Principal
+from gateway_v2.domain.identity import DENY_ALL_TOOLS, Principal
 from gateway_v2.domain.state import SignedRecord, StateKind, StoreDataUnavailable
+from gateway_v2.runtime.resources_mcp import mcp_policy_bounds
 from gateway_v2.runtime.state_feed import FeedRound
 from gateway_v2.runtime.state_stamp import FreshnessGate
 
@@ -74,7 +75,43 @@ def principal_of(record: SignedRecord) -> Principal | None:
         rate_per_s=_number(body, "rate_per_s"),
         burst=_number(body, "burst"),
         feed_seq=record.feed_seq,
+        mcp_allowed_tools=_allowed_tools(body),
+        mcp_max_tool_calls=_max_tool_calls(body),
     )
+
+
+def _allowed_tools(body: dict[str, object]) -> frozenset[str]:
+    """GW17c strict parse. Absent = unrestricted; present but malformed raises, so the key does
+    not resolve at all (never unrestricted)."""
+    if "mcp_allowed_tools" not in body:
+        return frozenset()
+    raw = body["mcp_allowed_tools"]
+    bounds = mcp_policy_bounds()
+    if not isinstance(raw, list) or not 1 <= len(raw) <= bounds.tools_max:
+        raise StoreDataUnavailable("key record field 'mcp_allowed_tools' must be a bounded list")
+    names: set[str] = set()
+    for name in raw:
+        if not isinstance(name, str) or name in names:
+            raise StoreDataUnavailable("key record 'mcp_allowed_tools' entries must be unique text")
+        if name != DENY_ALL_TOOLS and not _valid_tool_name(name, bounds.tool_name_max):
+            raise StoreDataUnavailable("key record 'mcp_allowed_tools' holds an invalid name")
+        names.add(name)
+    return frozenset(names)
+
+
+def _valid_tool_name(name: str, limit: int) -> bool:
+    return 1 <= len(name) <= limit and name.isprintable()
+
+
+def _max_tool_calls(body: dict[str, object]) -> int:
+    if "mcp_max_tool_calls" not in body:
+        return 0
+    value = body["mcp_max_tool_calls"]
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise StoreDataUnavailable("key record field 'mcp_max_tool_calls' must be an integer")
+    if not 0 <= value <= mcp_policy_bounds().cap_max:
+        raise StoreDataUnavailable("key record field 'mcp_max_tool_calls' is out of bounds")
+    return value
 
 
 def _text(body: dict[str, object], name: str) -> str:

@@ -129,6 +129,7 @@ def projector_knobs_from_env(source: Mapping[str, str]) -> ProjectorKnobs:
         add_chunks_per_round=_int(
             source, "AMF_PROJECTOR_ADD_CHUNKS_PER_ROUND", DEFAULT_PROJECTOR_ADD_CHUNKS_PER_ROUND,
         ),
+        project_mcp_key_policy=source.get("AMF_PROJECT_MCP_KEY_POLICY", "") == "1",
     )
 
 

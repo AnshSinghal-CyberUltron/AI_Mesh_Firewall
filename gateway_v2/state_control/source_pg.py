@@ -21,6 +21,7 @@ The tables (Django app labels in brackets):
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from state_control.pg import PostgresControlDB
@@ -35,11 +36,30 @@ from state_control.source import (
 
 _AS_OF = "SELECT EXTRACT(EPOCH FROM transaction_timestamp())"
 
+def _allowed_tools(raw: object) -> tuple[str, ...] | None:
+    """A JSON list (or the driver's list) of names. Anything else is malformed -> `None`
+    (deny-all in the projector); a corrupt control value is never unrestricted."""
+    try:
+        value = json.loads(raw) if isinstance(raw, (str, bytes)) else raw
+    except ValueError:
+        return None
+    if value is None:
+        return ()
+    if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+        return None
+    return tuple(value)
+
+
+def _max_calls(raw: object) -> int:
+    return raw if isinstance(raw, int) and not isinstance(raw, bool) and raw >= 0 else -1
+
+
 _ORGS = "SELECT slug, is_active FROM auth_api_organization ORDER BY slug"
 
 _KEYS = (
     "SELECT k.key_hash, k.id::text, o.slug, "
-    "(k.is_active AND (k.expires_at IS NULL OR k.expires_at > transaction_timestamp())) "
+    "(k.is_active AND (k.expires_at IS NULL OR k.expires_at > transaction_timestamp())), "
+    "k.mcp_allowed_tools, k.mcp_max_tool_calls "
     "FROM core_gatewayapikey k "
     "LEFT JOIN auth_api_organization o ON o.id = k.organization_id "
     "ORDER BY k.key_hash"
@@ -84,8 +104,10 @@ class PostgresControlSource:
                     key_id=str(key_id),
                     org_slug=None if slug is None else str(slug),
                     active=bool(active),
+                    mcp_allowed_tools=_allowed_tools(allowed),
+                    mcp_max_tool_calls=_max_calls(cap),
                 )
-                for key_hash, key_id, slug, active in cursor.fetchall()
+                for key_hash, key_id, slug, active, allowed, cap in cursor.fetchall()
             )
             cursor.execute(_PLANS)
             plans = tuple(
