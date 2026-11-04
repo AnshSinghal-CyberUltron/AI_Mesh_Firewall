@@ -2906,9 +2906,12 @@ class MCPGatewayCredentialRefreshResultView(APIView):
         }
         if rotated:
             values["oauth_refresh_token"] = rotated
-        changed = MCPServerRegistration.objects.filter(
-            organization=org, server_slug=slug, auth_type="oauth", credential_version=version
-        ).update(**values)
+        rows = MCPServerRegistration.objects.filter(
+            organization=org, server_slug=slug, auth_type="oauth"
+        )
+        changed = rows.filter(credential_version=version).update(**values)
+        if not changed and not rows.exists():
+            return _credential_not_found()  # missing and foreign look the same (R11.5)
         if not changed:
             conflict = Response({"error": "version conflict"}, status=status.HTTP_409_CONFLICT)
             conflict["Cache-Control"] = "no-store"

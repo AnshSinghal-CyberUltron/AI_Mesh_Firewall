@@ -75,10 +75,12 @@ class CredentialEndpointTests(TestCase):
 
     def test_requires_internal_key_and_is_not_open_to_console_users(self):
         self._server()
-        self.assertEqual(self.client.get(URL, {"server_slug": "s"}).status_code, 403)
+        # No credentials at all: DRF answers 401 (unauthenticated); either way it is refused.
+        self.assertIn(self.client.get(URL, {"server_slug": "s"}).status_code, (401, 403))
         bad = dict(INTERNAL, HTTP_X_GATEWAY_INTERNAL_KEY="wrong")
         resp = self.client.get(URL, {"server_slug": "s"}, HTTP_X_ORG_SLUG="org-a", **bad)
-        self.assertEqual(resp.status_code, 403)
+        self.assertIn(resp.status_code, (401, 403))
+        self.assertNotIn(SECRET, resp.content.decode())
 
     def test_404_is_uniform_for_missing_and_foreign_servers(self):
         self._server()
@@ -145,7 +147,8 @@ class CredentialEndpointTests(TestCase):
         rendered = ""
         for name in names:
             cls = getattr(serializers, name)
-            fields = getattr(getattr(cls, "Meta", None), "fields", None)
-            if isinstance(fields, (list, tuple)) and "server_slug" in fields:
+            meta = getattr(cls, "Meta", None)
+            if getattr(meta, "model", None) is MCPServerRegistration:
                 rendered += repr(cls(MCPServerRegistration.objects.first()).data)
+        self.assertIn("server_slug", rendered)  # the check really rendered the console shapes
         self.assertNotIn(SECRET, rendered)
