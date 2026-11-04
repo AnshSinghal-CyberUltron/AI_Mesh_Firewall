@@ -37,18 +37,19 @@ def test_put_get_take_is_single_use() -> None:
         asyncio.run(run())
 
 
-def test_counter_peek_and_sets() -> None:
+def test_counter_peek_and_scored_live_count() -> None:
     for kv in _kvs(Clock()):
 
         async def run() -> None:
             assert await kv.peek("c") == 0
             assert [await kv.incr("c", 10) for _ in range(3)] == [1, 2, 3]
             assert await kv.peek("c") == 3
-            await kv.sadd("s", "a", 10)
-            await kv.sadd("s", "b", 10)
-            await kv.srem("s", "a")
-            assert await kv.smembers("s") == {"b"}
-            await kv.delete("s")
+            await kv.zadd("z", "a", 150.0, 60)
+            await kv.zadd("z", "b", 300.0, 60)
+            assert await kv.zlive("z", 100.0) == 2
+            assert await kv.zlive("z", 200.0) == 1  # `a` expired and was pruned
+            await kv.zadd("z", "b", 120.0, 60)  # re-adding moves the score
+            assert await kv.zlive("z", 200.0) == 0
 
         asyncio.run(run())
 

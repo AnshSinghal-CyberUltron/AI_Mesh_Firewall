@@ -24,8 +24,13 @@ from gateway_v2.domain.state import StoreDataUnavailable
 from gateway_v2.runtime.resources_mcp import McpTransportBounds
 from gateway_v2.runtime.store_keys_mcp import McpStoreKeys
 
-__all__ = ("MemorySessionStore", "SessionBinding", "SessionRefusal", "SessionStore",
-           "ValkeySessionStore")
+__all__ = (
+    "MemorySessionStore",
+    "SessionBinding",
+    "SessionRefusal",
+    "SessionStore",
+    "ValkeySessionStore",
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -79,7 +84,8 @@ class MemorySessionStore:
             len(rows),
         )
         limits = (
-            self._bounds.sessions_per_key, self._bounds.sessions_per_org,
+            self._bounds.sessions_per_key,
+            self._bounds.sessions_per_org,
             self._bounds.sessions_global,
         )
         if any(count >= limit for count, limit in zip(counts, limits, strict=True)):
@@ -94,8 +100,9 @@ class MemorySessionStore:
         if row is None or row[0] != binding:
             return False
         now = self._clock()
-        expiry = min(now + self._bounds.session_idle_ttl_s,
-                     row[1] + self._bounds.session_max_lifetime_s)
+        expiry = min(
+            now + self._bounds.session_idle_ttl_s, row[1] + self._bounds.session_max_lifetime_s
+        )
         self._rows[_digest(session_id)] = (row[0], row[1], expiry)
         return True
 
@@ -115,7 +122,7 @@ class _Pipe(Protocol):
     def multi(self) -> None: ...
     def zremrangebyscore(self, key: str, lo: object, hi: object) -> object: ...
     async def zcount(self, key: str, lo: object, hi: object) -> int: ...
-    async def hgetall(self, key: str) -> dict[Any, Any]: ...
+    async def hmget(self, key: str, fields: list[str]) -> list[Any]: ...
     def zadd(self, key: str, mapping: dict[str, float], **kw: Any) -> object: ...
     def zrem(self, key: str, *members: str) -> object: ...
     def hset(self, key: str, *, mapping: dict[str, str]) -> object: ...
@@ -136,8 +143,12 @@ class ValkeySessionStore:
     """The shared store over a redis-py style async client (WATCH/MULTI, ``{rv2}``-tagged)."""
 
     def __init__(
-        self, client: _Client, keys: McpStoreKeys, bounds: McpTransportBounds,
-        clock: Callable[[], float], max_tries: int,
+        self,
+        client: _Client,
+        keys: McpStoreKeys,
+        bounds: McpTransportBounds,
+        clock: Callable[[], float],
+        max_tries: int,
     ) -> None:
         self._client, self._keys, self._bounds, self._clock = client, keys, bounds, clock
         self._tries = max_tries
@@ -149,12 +160,22 @@ class ValkeySessionStore:
             self._keys.sessions_global(),
         )
 
+    @staticmethod
+    async def _row(pipe: _Pipe, key: str) -> tuple[str, str, str, str] | None:
+        """The four bound fields of one session hash (HMGET: O(1), not a whole-hash read)."""
+        values = await pipe.hmget(key, ["key_id", "org_id", "server_slug", "created_ms"])
+        if any(value is None for value in values):
+            return None
+        a, b, c, d = (_text(value) for value in values)
+        return a, b, c, d
+
     async def open(self, binding: SessionBinding) -> str | SessionRefusal:
         session_id = secrets.token_urlsafe(32)
         digest = _digest(session_id)
         zsets = self._sets(binding)
         limits = (
-            self._bounds.sessions_per_key, self._bounds.sessions_per_org,
+            self._bounds.sessions_per_key,
+            self._bounds.sessions_per_org,
             self._bounds.sessions_global,
         )
         ttl = self._bounds.session_idle_ttl_s
@@ -172,10 +193,15 @@ class ValkeySessionStore:
                     for zset in zsets:
                         pipe.zremrangebyscore(zset, "-inf", now)
                         pipe.zadd(zset, {digest: now + ttl})
-                    pipe.hset(self._keys.session(digest), mapping={
-                        "key_id": binding.key_id, "org_id": binding.org_id,
-                        "server_slug": binding.server_slug, "created_ms": str(int(now * 1000)),
-                    })
+                    pipe.hset(
+                        self._keys.session(digest),
+                        mapping={
+                            "key_id": binding.key_id,
+                            "org_id": binding.org_id,
+                            "server_slug": binding.server_slug,
+                            "created_ms": str(int(now * 1000)),
+                        },
+                    )
                     pipe.pexpire(self._keys.session(digest), round(ttl * 1000))
                     await pipe.execute()
                     return session_id
@@ -193,16 +219,16 @@ class ValkeySessionStore:
             async with self._client.pipeline() as pipe:
                 try:
                     await pipe.watch(key)
-                    row = {_text(k): _text(v) for k, v in (await pipe.hgetall(key)).items()}
-                    if not row or row != {
-                        "key_id": binding.key_id, "org_id": binding.org_id,
-                        "server_slug": binding.server_slug,
-                        "created_ms": row.get("created_ms", ""),
-                    }:
+                    row = await self._row(pipe, key)
+                    if row is None or (row[0], row[1], row[2]) != (
+                        binding.key_id,
+                        binding.org_id,
+                        binding.server_slug,
+                    ):
                         await pipe.unwatch()
                         return False
                     now = self._clock()
-                    ceiling = int(row["created_ms"]) / 1000 + self._bounds.session_max_lifetime_s
+                    ceiling = int(row[3]) / 1000 + self._bounds.session_max_lifetime_s
                     expiry = min(now + self._bounds.session_idle_ttl_s, ceiling)
                     if expiry <= now:
                         await pipe.unwatch()
@@ -226,10 +252,12 @@ class ValkeySessionStore:
             async with self._client.pipeline() as pipe:
                 try:
                     await pipe.watch(key)
-                    row = {_text(k): _text(v) for k, v in (await pipe.hgetall(key)).items()}
-                    if (
-                        row.get("key_id"), row.get("org_id"), row.get("server_slug")
-                    ) != (binding.key_id, binding.org_id, binding.server_slug):
+                    row = await self._row(pipe, key)
+                    if row is None or (row[0], row[1], row[2]) != (
+                        binding.key_id,
+                        binding.org_id,
+                        binding.server_slug,
+                    ):
                         await pipe.unwatch()
                         return False
                     pipe.multi()

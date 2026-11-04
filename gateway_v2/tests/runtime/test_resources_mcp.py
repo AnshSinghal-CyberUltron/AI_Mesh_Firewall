@@ -86,3 +86,7 @@ def test_store_keys_share_hash_tag_and_reject_empty() -> None:
         keys.cap_used("")
     with pytest.raises(ValueError):
         keys.refresh_lock("o", "")
+
+
+def test_cap_window_is_the_v1_sixty_seconds() -> None:
+    assert rm.derive_cap_bounds(_contract()).cap_window_s == 60.0  # D-6, v1 parity

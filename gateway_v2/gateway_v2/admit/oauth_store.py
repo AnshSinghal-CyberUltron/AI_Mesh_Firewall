@@ -37,11 +37,9 @@ class KV(Protocol):
 
     async def peek(self, key: str) -> int: ...
 
-    async def sadd(self, key: str, member: str, ttl_s: float) -> None: ...
+    async def zadd(self, key: str, member: str, expires_at: float, ttl_s: float) -> None: ...
 
-    async def srem(self, key: str, member: str) -> None: ...
-
-    async def smembers(self, key: str) -> set[str]: ...
+    async def zlive(self, key: str, now: float) -> int: ...
 
 
 class MemoryKV:
@@ -51,7 +49,7 @@ class MemoryKV:
         self._clock = clock
         self._rows: dict[str, tuple[float, Record]] = {}
         self._counters: dict[str, tuple[float, int]] = {}
-        self._sets: dict[str, tuple[float, set[str]]] = {}
+        self._zsets: dict[str, dict[str, float]] = {}
         self.fail = False
 
     def _check(self) -> None:
@@ -94,23 +92,17 @@ class MemoryKV:
         expires, count = self._counters.get(key, (0.0, 0))
         return count if expires > self._clock() else 0
 
-    async def sadd(self, key: str, member: str, ttl_s: float) -> None:
+    async def zadd(self, key: str, member: str, expires_at: float, ttl_s: float) -> None:
         self._check()
-        expires, members = self._sets.get(key, (0.0, set()))
-        if expires <= self._clock():
-            members = set()
-        members.add(member)
-        self._sets[key] = (self._clock() + ttl_s, members)
+        self._zsets.setdefault(key, {})[member] = expires_at
 
-    async def srem(self, key: str, member: str) -> None:
+    async def zlive(self, key: str, now: float) -> int:
+        """Drop expired members, then count the rest (the live-client count)."""
         self._check()
-        if key in self._sets:
-            self._sets[key][1].discard(member)
-
-    async def smembers(self, key: str) -> set[str]:
-        self._check()
-        expires, members = self._sets.get(key, (0.0, set()))
-        return set(members) if expires > self._clock() else set()
+        members = self._zsets.get(key, {})
+        for member in [m for m, expires in members.items() if expires <= now]:
+            del members[member]
+        return len(members)
 
 
 class ValkeyKV:
@@ -174,24 +166,22 @@ class ValkeyKV:
             raise StoreDataUnavailable("oauth store unavailable") from exc
         return 0 if raw is None else int(raw)
 
-    async def sadd(self, key: str, member: str, ttl_s: float) -> None:
+    async def zadd(self, key: str, member: str, expires_at: float, ttl_s: float) -> None:
         try:
             async with self._client.pipeline() as pipe:
-                pipe.sadd(key, member)
+                pipe.zadd(key, {member: expires_at})
                 pipe.pexpire(key, max(1, round(ttl_s * 1000)))
                 await pipe.execute()
         except Exception as exc:  # noqa: BLE001
             raise StoreDataUnavailable("oauth store unavailable") from exc
 
-    async def srem(self, key: str, member: str) -> None:
+    async def zlive(self, key: str, now: float) -> int:
         try:
-            await self._client.srem(key, member)
-        except Exception as exc:  # noqa: BLE001
-            raise StoreDataUnavailable("oauth store unavailable") from exc
-
-    async def smembers(self, key: str) -> set[str]:
-        try:
-            return {str(item) for item in await self._client.smembers(key)}
+            async with self._client.pipeline() as pipe:
+                pipe.zremrangebyscore(key, "-inf", now)
+                pipe.zcard(key)
+                results = await pipe.execute()
+            return int(results[-1])
         except Exception as exc:  # noqa: BLE001
             raise StoreDataUnavailable("oauth store unavailable") from exc
 

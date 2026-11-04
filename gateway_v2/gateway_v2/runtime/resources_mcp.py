@@ -38,7 +38,7 @@ NEEDS_REAUTH_AFTER_FAILURES = 3  # consecutive transient refresh failures before
 CREDENTIAL_CACHE_SLOTS = 1024  # per-worker credential cache entries
 OAUTH_REDIRECT_HOPS = 3
 # --- GW17c: cap lease -----------------------------------------------------------------------------
-CAP_WINDOW_S = 3600.0  # a key's cap window (store TTL driven)
+CAP_WINDOW_S = 60.0  # a key's cap window, v1 parity: 60 s (D-6), store TTL driven
 CAP_CHUNK_MAX = 64  # largest lease chunk a worker takes from the store
 # no acquire retry sooner than this after a failure
 CAP_BOOTSTRAP = 1  # cold-worker allowance before the first acquire lands (DD-8)

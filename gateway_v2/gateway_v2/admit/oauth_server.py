@@ -199,8 +199,10 @@ class OAuthServer:
             record["secret_hash"] = self._mac(secret)
         ttl = bounds.oauth_client_unused_ttl_s
         await self._kv.put(self._keys.oauth_client(client_id), record, ttl)
-        await self._kv.sadd(per_source, client_id, bounds.oauth_client_ttl_s)
-        await self._kv.sadd(self._keys.oauth_clients_index(), client_id, bounds.oauth_client_ttl_s)
+        expires = self._clock() + ttl
+        await self._kv.zadd(per_source, client_id, expires, bounds.oauth_client_ttl_s)
+        index = self._keys.oauth_clients_index()
+        await self._kv.zadd(index, client_id, expires, bounds.oauth_client_ttl_s)
         self._emit("oauth_register", client_id=client_id)
         reply: dict[str, object] = {
             "client_id": client_id,
@@ -214,14 +216,8 @@ class OAuthServer:
         return reply
 
     async def _live_count(self, set_key: str) -> int:
-        """Count LIVE clients: members whose record expired are removed before counting."""
-        live = 0
-        for client_id in await self._kv.smembers(set_key):
-            if await self._kv.get(self._keys.oauth_client(client_id)) is None:
-                await self._kv.srem(set_key, client_id)
-            else:
-                live += 1
-        return live
+        """Count LIVE clients: expired members are pruned (by score) before counting."""
+        return await self._kv.zlive(set_key, self._clock())
 
     # -- authorize (R6.5, R6.6) -------------------------------------------------------------------
     async def validate_authorize(self, params: Mapping[str, str]) -> AuthorizeRequest | OAuthError:
@@ -346,9 +342,15 @@ class OAuthServer:
     async def _touch_client(self, client: Mapping[str, object]) -> None:
         record = {k: v for k, v in client.items() if k != "id"}
         record["used"] = True
-        await self._kv.put(
-            self._keys.oauth_client(str(client["id"])), record, self._cfg.bounds.oauth_client_ttl_s
-        )
+        bounds = self._cfg.bounds
+        client_id = str(client["id"])
+        await self._kv.put(self._keys.oauth_client(client_id), record, bounds.oauth_client_ttl_s)
+        expires = self._clock() + bounds.oauth_client_ttl_s
+        for index in (
+            self._keys.oauth_clients_by_source(str(record["source"])),
+            self._keys.oauth_clients_index(),
+        ):
+            await self._kv.zadd(index, client_id, expires, bounds.oauth_client_ttl_s)
 
     async def _exchange_code(
         self, params: Mapping[str, str], client: dict[str, object]
@@ -387,7 +389,7 @@ class OAuthServer:
                 await self._revoke_family(str(earlier["f"]))
             return OAuthError("invalid_grant")
         await self._kv.put(used_key, {"f": record["f"]}, self._cfg.bounds.oauth_refresh_ttl_s)
-        if record["c"] != client["id"]:
+        if record["c"] != client["id"] or await self._family_revoked(record):
             return OAuthError("invalid_grant")
         await self._touch_client(client)
         return await self._mint(record["k"], record["i"], str(client["id"]), str(record["f"]))
@@ -403,16 +405,17 @@ class OAuthServer:
         rt_key = self._keys.oauth_refresh(self._mac(refresh))
         await self._kv.put(at_key, base, bounds.oauth_access_ttl_s)
         await self._kv.put(rt_key, base, bounds.oauth_refresh_ttl_s)
-        fam = self._keys.oauth_family(family)
-        await self._kv.sadd(fam, at_key, bounds.oauth_refresh_ttl_s)
-        await self._kv.sadd(fam, rt_key, bounds.oauth_refresh_ttl_s)
         return TokenGrant(access, refresh, round(bounds.oauth_access_ttl_s))
 
     async def _revoke_family(self, family: str) -> None:
-        fam = self._keys.oauth_family(family)
-        for member in await self._kv.smembers(fam):
-            await self._kv.delete(member)
-        await self._kv.delete(fam)
+        """Revocation is a marker, not an enumeration: every token record names its family and is
+        refused while the marker lives (O(1); it outlives the longest token, so nothing revives)."""
+        await self._kv.put(
+            self._keys.oauth_family(family), {"revoked": True}, self._cfg.bounds.oauth_refresh_ttl_s
+        )
+
+    async def _family_revoked(self, record: Mapping[str, object]) -> bool:
+        return await self._kv.get(self._keys.oauth_family(str(record.get("f", "")))) is not None
 
     # -- resolution on MCP routes (R7) ------------------------------------------------------------
     async def lookup_access(self, token: str) -> str | None:
@@ -422,7 +425,7 @@ class OAuthServer:
         for mac in self._candidates(token):
             record = await self._kv.get(self._keys.oauth_access(mac))
             if record is not None and isinstance(record.get("k"), str):
-                return str(record["k"])
+                return None if await self._family_revoked(record) else str(record["k"])
         return None
 
 
