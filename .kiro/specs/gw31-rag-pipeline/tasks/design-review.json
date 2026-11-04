@@ -1,0 +1,14 @@
+{
+  "verdict": "CHANGES_REQUESTED",
+  "findings": [
+    {"id": "F-1", "severity": "MEDIUM", "title": "Req 8.1 'durably queued' contradicted by in-memory job store (D-9); no requirements clarification", "fix": "Add requirements C-7 defining durably queued as recorded in the injected IngestJobStore; test put-failure yields no 202"},
+    {"id": "F-2", "severity": "MEDIUM", "title": "Generator output scan unspecified: detector, scan function, and REDACT behaviour when rag_redaction_enabled=false conflict between steps 2 and 6", "fix": "Name scan_deltas with Phase.OUTPUT/stage generator, state detector (add output_detector to RagDeps if needed), gate step 6 on rag_redaction_enabled, add tests"},
+    {"id": "F-3", "severity": "MEDIUM", "title": "rag_connector_unsupported undefined (no code, no owner, wiring is GW36); id round-trip test covers only 4 transports", "fix": "Either drop the check and make the round-trip test cover all transports with coverage assertion, or define code, function and call site"},
+    {"id": "F-4", "severity": "MEDIUM", "title": "All returned ids missing from ChunkStore yields 200 empty context (empty success on store loss)", "fix": "Return rag_chunk_store_unavailable 503 when adapter returned ids and all miss; document single-process limit"},
+    {"id": "F-5", "severity": "LOW", "title": "rag_context_blocked in error table is never produced", "fix": "Remove or name the emitting condition"},
+    {"id": "F-6", "severity": "LOW", "title": "Relevance (cos+1)/2 makes orthogonal chunks score 0.5; default threshold derivation unstated", "fix": "Document mapping and threshold constant source in docstring"},
+    {"id": "F-7", "severity": "LOW", "title": "compile_plan signature gains rag_settings/contract keywords; existing callers not enumerated", "fix": "List callers and keep existing compile tests unchanged"},
+    {"id": "F-8", "severity": "LOW", "title": "Lowercase-only org id refusal may trip dev profile", "fix": "Test dev Principal org id is lowercase"}
+  ],
+  "reviewDoc": "/work/suraj/AI_Mesh_Firewall/.worktrees/gw31/.kiro/specs/gw31-rag-pipeline/tasks/design-review.md"
+}

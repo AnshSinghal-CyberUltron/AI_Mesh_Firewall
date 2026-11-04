@@ -220,7 +220,7 @@ def test_property_reserved_keys_refused() -> None:
     assert docs[0].trust.name == "LOW"
 
 
-# Feature: gw31-rag-pipeline, Property 16: created names list back through listed_name and parse_wire
+# Feature: gw31-rag-pipeline, Property 16: created names list back via listed_name + parse_wire
 def test_property_create_list_round_trip() -> None:
     rng = random.Random(16)
     chars = "abcdefghij0123456789_-"

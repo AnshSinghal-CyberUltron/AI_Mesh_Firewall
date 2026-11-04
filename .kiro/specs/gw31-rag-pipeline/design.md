@@ -497,3 +497,21 @@ A whole-collection drop (`DELETE /v1/rag/collections` with no `ids`) returns `un
 | F-8 Req 9.3 charset | LOW | Addressed. C-9(b). |
 | F-9 line budget table | LOW | Addressed. Table and task-1 exit check added. |
 | F-10 history length | NIT | Addressed. History moved to `tasks/design-history.md`. |
+
+
+## Implementation deviations (recorded in tasks/deviations.md)
+
+Corrections the implementation forced. These supersede the text above where they conflict.
+
+- **D-2 amended.** Stage scoping must reach the detector as well as the resolver:
+  `DeterministicFindings.findings_on(text, surface, stage)` and `bind_surface(detector, surface,
+  stage)` carry the stage; `detect/conditions.py` filters rules on it.
+- **Generator step 6 amended.** The output scan uses the OUTPUT detector (`chat.output_detector or
+  chat.error_scanner`), because a detector's `phase` selects the customer conditions it evaluates.
+  `RagDeps.detector_tier1_output` is the Tier-2-off counterpart.
+- **D-5 amended.** `load_dev_plan` and `DevPlanFeed._compile` also pass `rag_settings`.
+- **Dev profile.** The store is `InMemoryVectorAdapter`, not `Stub_Vector_Connector`; the dev
+  grounder reports `ok`; `build_dev_rag` takes the dev deps mapping.
+- **D-4 amended.** The boot key-fetch closure has no contract, so the over-long project check is
+  enforced on RAG routes by the edge only.
+- **Redaction check** is position-exact (output == text with spans swapped for replacements).

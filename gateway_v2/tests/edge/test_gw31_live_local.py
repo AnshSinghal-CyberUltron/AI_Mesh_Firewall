@@ -99,7 +99,8 @@ def test_l31_2_duplicate_flood_is_capped(tmp_path: Path) -> None:
             app,
             "POST",
             "/v1/rag/query",
-            {"collection": "docs", "query": "buy cheap pills now best price guaranteed tomatoes pasta"},
+            {"collection": "docs",
+             "query": "buy cheap pills now best price guaranteed tomatoes pasta"},
         )
         ids = [c["id"] for c in body["context"]]  # type: ignore[index]
         share = sum(1 for i in ids if i.startswith("f")) / len(ids)
