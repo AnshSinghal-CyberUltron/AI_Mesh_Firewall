@@ -18,6 +18,7 @@ where a property demands a cross-check.
 from __future__ import annotations
 
 import random
+from dataclasses import replace
 
 from gateway_v2.domain.category import Category
 from gateway_v2.domain.decision import Decision, Disposition, most_restrictive
@@ -43,7 +44,10 @@ ITERATIONS = 10_000
 # occur frequently across generated findings.
 _DETECTORS = ("d0", "d1", "d2", "d3")
 
-_CATEGORIES = tuple(Category)
+# GW33 D-32: the four built-in-output categories join rules by identity only (see
+# tests/resolve/test_gw33_resolver.py), so this category-join mirror draws from the rest.
+_BUILTIN_ONLY = (Category.EXFIL, Category.IP_LEAK, Category.HALLUCINATION, Category.CANARY)
+_CATEGORIES = tuple(c for c in Category if c not in _BUILTIN_ONLY)
 _STATUSES = (
     FindingStatus.EXECUTED,
     FindingStatus.SKIPPED,
@@ -63,7 +67,7 @@ _ACTION_TO_DISPOSITION = {
     Action.FLAG: Disposition.FLAG,
     Action.REDACT: Disposition.REDACT,
     Action.BLOCK: Disposition.BLOCK,
-    Action.REWRITE: Disposition.REDACT,
+    Action.REWRITE: Disposition.REWRITE,  # GW33: first-class disposition (was REDACT)
 }
 
 
@@ -120,6 +124,7 @@ def _rng_rule(rng: random.Random, index: int) -> Rule:
         scope=rng.choice(_SCOPES),
         on_unavailable=rng.choice(_POSTURES),
         surfaces=frozenset(),
+        rewrite_template="[rw]",  # a declared template: REWRITE rules are resolvable
     )
 
 
@@ -448,6 +453,7 @@ def _rule_with_id(rule: Rule, rule_id: str) -> Rule:
         on_unavailable=rule.on_unavailable,
         surfaces=rule.surfaces,
         condition=rule.condition,
+        rewrite_template=rule.rewrite_template,
     )
 
 
@@ -623,17 +629,20 @@ def test_empty_findings_resolve_to_allow() -> None:
         assert decision.findings == ()
 
 
-def test_rewrite_action_maps_to_redact_with_transformation_per_span() -> None:
-    # REWRITE -> REDACT: an ENFORCE REWRITE rule on an EXECUTED finding with spans
-    # yields disposition REDACT and one redact Transformation per span.
-    # Validates: Requirements 1.3, 10.6
+def test_rewrite_action_maps_to_rewrite_with_transformation_per_span() -> None:
+    # GW33 (was "REWRITE -> REDACT"): an ENFORCE REWRITE rule on an EXECUTED finding with spans
+    # yields disposition REWRITE and one rewrite Transformation per span carrying the rendered
+    # template. The interim REDACT mapping is gone.
+    # Validates: Requirements 1.3, 10.6; GW33 5.1
     spans = (Span(start=0, end=4), Span(start=6, end=9))
     finding = _executed(Category.PII, "pii-det", spans=spans)
-    plan = _example_plan((_rule(Category.PII, Action.REWRITE),))
+    rule = replace(_rule(Category.PII, Action.REWRITE), rewrite_template="[{category}]")
+    plan = _example_plan((rule,))
     decision = resolve((finding,), plan, Phase.OUTPUT)
-    assert decision.disposition is Disposition.REDACT
+    assert decision.disposition is Disposition.REWRITE
     assert len(decision.transformations) == len(spans)
-    assert all(t.kind == "redact" for t in decision.transformations)
+    assert all(t.kind == "rewrite" for t in decision.transformations)
+    assert all(t.replacement == "[pii]" for t in decision.transformations)
     assert tuple(t.span for t in decision.transformations) == spans
 
 

@@ -17,6 +17,7 @@ from collections.abc import Sequence
 
 from gateway_v2.domain import (
     Action,
+    Category,
     ExecutionPlan,
     Finding,
     Mode,
@@ -25,6 +26,7 @@ from gateway_v2.domain import (
     RuleKind,
     RuleScope,
     Surface,
+    builtin_output_detector,
     most_restrictive,
 )
 from gateway_v2.resolve.decision import _action_to_disposition
@@ -88,13 +90,24 @@ def _rules_for(finding: Finding, selected: Sequence[Rule]) -> tuple[Rule, ...]:
     )
 
 
+#: Categories only the platform built-in output detectors produce (GW33). Nothing produced them
+#: before this card, so excluding non-built-in rules from the category join changes no pre-card
+#: behaviour; it stops a customer rule that fell into the publisher's ``exfil`` catch-all from
+#: governing a built-in finding (D-32). Built-in findings join by identity (``Finding.detector``).
+_BUILTIN_ONLY = frozenset(
+    {Category.EXFIL, Category.IP_LEAK, Category.HALLUCINATION, Category.CANARY},
+)
+
+
 def _category_join(rule: Rule) -> bool:
+    if rule.category in _BUILTIN_ONLY and builtin_output_detector(rule) is None:
+        return False
     condition = rule.condition
     return condition is None or condition.kind is RuleKind.DETECTOR
 
 
-def _winning_action(finding: Finding, rules: Sequence[Rule]) -> Action | None:
-    """The winning ENFORCE action for ``finding`` among its selecting ``rules``.
+def _winning_rule(finding: Finding, rules: Sequence[Rule]) -> Rule | None:
+    """The winning ENFORCE rule for ``finding`` among its selecting ``rules``.
 
     Among the ENFORCE rules (``rule.mode is Mode.ENFORCE``) order by ``priority``
     DESCENDING -- highest priority wins, so signed organisation intent (given the
@@ -115,12 +128,19 @@ def _winning_action(finding: Finding, rules: Sequence[Rule]) -> Action | None:
     )
     for rule in tied:
         if _action_to_disposition(rule.action) is winner_disposition:
-            return rule.action
-    return tied[0].action
+            return rule
+    return tied[0]
+
+
+def _winning_action(finding: Finding, rules: Sequence[Rule]) -> Action | None:
+    """The winning ENFORCE action (see :func:`_winning_rule`); ``None`` when none selects."""
+    rule = _winning_rule(finding, rules)
+    return None if rule is None else rule.action
 
 
 __all__ = (
     "_rules_for",
     "_select_rules",
     "_winning_action",
+    "_winning_rule",
 )

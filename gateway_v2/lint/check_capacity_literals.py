@@ -1,4 +1,4 @@
-"""AST gate: capacity literals only in runtime/resources.py and runtime/resources_output.py (GW33 D-25)."""
+"""AST gate: capacity literals only in the two resources modules (GW33 D-25)."""
 
 from __future__ import annotations
 

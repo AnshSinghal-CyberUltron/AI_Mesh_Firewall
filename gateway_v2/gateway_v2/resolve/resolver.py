@@ -17,6 +17,7 @@ from collections.abc import Sequence
 
 from gateway_v2.domain import (
     Action,
+    Category,
     Decision,
     Disposition,
     ExecutionPlan,
@@ -31,9 +32,21 @@ from gateway_v2.domain import (
     Surface,
     Transformation,
     most_restrictive,
+    posture,
 )
-from gateway_v2.resolve.conflict import _rules_for, _select_rules, _winning_action
-from gateway_v2.resolve.decision import _action_to_disposition, _transformations_for
+from gateway_v2.resolve.conflict import (
+    _rules_for,
+    _select_rules,
+    _winning_action,
+    _winning_rule,
+)
+from gateway_v2.resolve.decision import (
+    REDACTION_PLACEHOLDER,
+    _action_to_disposition,
+    _transformations_for,
+)
+from gateway_v2.resolve.review import review_required
+from gateway_v2.resolve.rewrite import normalise_edits
 
 
 def _unavailable_candidate(rules: Sequence[Rule]) -> Disposition | None:
@@ -56,8 +69,8 @@ def _unavailable_candidate(rules: Sequence[Rule]) -> Disposition | None:
 def _executed_candidate(
     finding: Finding,
     rules: Sequence[Rule],
-) -> tuple[Disposition, str] | None:
-    """Candidate disposition + deciding ``rule_id`` for an EXECUTED finding.
+) -> tuple[Disposition, str, Rule | None, str | None] | None:
+    """Candidate disposition, deciding ``rule_id``, deciding rule and code for an EXECUTED finding.
 
     The winning ENFORCE action (priority desc, name-free tie-break) maps to a
     disposition. A non-selecting finding (``action is None``) or an ALLOW
@@ -71,7 +84,22 @@ def _executed_candidate(
     disposition = _action_to_disposition(action)
     if disposition is Disposition.ALLOW:
         return None
-    return disposition, _deciding_rule_id(rules, action)
+    if (
+        disposition in (Disposition.REDACT, Disposition.REWRITE)
+        and finding.category is Category.HALLUCINATION
+        and not finding.spans
+    ):
+        # Requirement 3.7: an unlocalised hallucination cannot be redacted; act on the whole
+        # response. Scoped to HALLUCINATION: other categories keep today's behaviour byte-for-byte.
+        return Disposition.BLOCK, _deciding_rule_id(rules, action), None, None
+    if disposition is Disposition.REWRITE:
+        winner = _winning_rule(finding, rules)
+        if winner is None or not winner.rewrite_template:
+            # A hand-built rule only (the compiler refuses it): never rewrite to nothing.
+            rule_id = "" if winner is None else winner.rule_id
+            return Disposition.BLOCK, rule_id, None, posture.REWRITE_TEMPLATE_MISSING
+        return disposition, winner.rule_id, winner, None
+    return disposition, _deciding_rule_id(rules, action), None, None
 
 
 def _deciding_rule_id(rules: Sequence[Rule], action: Action) -> str:
@@ -174,6 +202,7 @@ def resolve(
     transformations: list[Transformation] = []
     deciding_rules: list[str] = []
     unavailable_detectors: list[str] = []
+    codes: list[str] = []
 
     # ``Decision.findings`` is ``tuple(findings)``: same order, nothing filtered,
     # so the enumerate index is the index into the final tuple (Property 3).
@@ -182,6 +211,7 @@ def resolve(
         rules = _rules_for(finding, selected)
         candidate: Disposition | None = None
         rule_id: str | None = None
+        decider: Rule | None = None
         if finding.status is FindingStatus.SKIPPED:
             candidate = None
         elif finding.status is FindingStatus.UNAVAILABLE:
@@ -191,7 +221,9 @@ def resolve(
         else:
             executed = _executed_candidate(finding, rules)
             if executed is not None:
-                candidate, rule_id = executed
+                candidate, rule_id, decider, code = executed
+                if code is not None and code not in codes:
+                    codes.append(code)
 
         if candidate is None:
             continue
@@ -206,16 +238,25 @@ def resolve(
             deciding_rules.append(rule_id)
         if candidate is Disposition.REDACT:
             transformations.extend(_transformations_for(finding, candidate))
+        elif candidate is Disposition.REWRITE:
+            transformations.extend(_transformations_for(finding, candidate, decider))
 
     disposition = most_restrictive(tuple(fd.disposition for fd in per_finding))
+    if all(item.kind == "redact" for item in transformations):
+        edits = _normalise_redactions(transformations)  # pre-GW33 path, unchanged
+    else:
+        edits, overlap_codes = normalise_edits(transformations, REDACTION_PLACEHOLDER)
+        codes.extend(code for code in overlap_codes if code not in codes)
     return Decision(
         disposition=disposition,
         per_finding=tuple(per_finding),
-        transformations=_normalise_redactions(transformations),
+        transformations=edits,
         findings=recorded,
         plan_version=plan.version,
         deciding_rules=tuple(deciding_rules),
         unavailable_detectors=tuple(unavailable_detectors),
+        review_required=review_required(per_finding, phase),
+        codes=tuple(codes),
     )
 
 
