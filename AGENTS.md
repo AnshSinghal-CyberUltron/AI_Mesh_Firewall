@@ -1906,6 +1906,20 @@
     (aidefence): has_pii true raw / false masked. Parity with CHG-0098; extends CHG-0039/0064. Evidence mcp-parallel/
     findings/backstop-p-finite-sse-notification-scan/.
 
+## GW27 / FirewallConfig fields changelog
+- GW27 (2026-11-04) — 45 UNSUPPORTED FIREWALLCONFIG FIELDS: 15 BUILT, 30 RETIRED-BY-NAME (org_token_budget
+  delegated to GW36), local half CLOSED, live half OPEN. `firewall_v2_map.py` has no `unsupported` kind;
+  retired saves are refused naming the field and owner, `rewrite` is refused for the five action fields,
+  unchanged retired values are tolerated. BUILT: org request rate/burst/TPM (`admit/org_limits.py`,
+  per gateway replica, estimate-based TPM), response-token cap, audit enable/incident logging/retention
+  stamp/compliance stamp (`edge/audit_emit.py`, `audit_control/retention.py`, sweep off by default),
+  blocked keywords, output policy enable/fallback, threat intel (content-score floor). Signed plan body
+  gains `controls` + `requires: ["controls/1"]` behind `V2_PLAN_CONTROLS_ENABLED` and
+  `scripts/check_fleet_plan_schema.py`; keyword/threat rows ship in `V2_PLAN_NEW_RULES_MODE=monitor`.
+  OPEN: L27-1, L27-2, live Postgres EXPLAIN, live entry-size re-run, D-8/D-12 owner sign-offs.
+  VERIFY: 3208 passed (1 pre-existing tenant_scale failure), mypy/ruff/import-linter/AST gates as baseline.
+  Plan: .kiro/specs/gw27-firewall-config-fields/. Evidence: docs/plans/evidence/2026-10-27-gw27/.
+
 ## Ralph autonomous loop — gateway hardening
 - Backlog + status live in scripts/ralph/prd.json; learnings in scripts/ralph/progress.txt.
 - ONE story per iteration; never break a passing gate; never mark passes:true without a green gate.
