@@ -150,16 +150,31 @@ async def scan_text(
 
 
 def redact_text(text: str, decision: Decision) -> str | None:
-    """Apply ``decision`` and verify by bytes that no raw finding span survives."""
+    """Apply ``decision`` and verify by bytes that every finding span was replaced.
+
+    The output must equal the text with each transformation span swapped for its replacement and
+    nothing else changed. Checking position by position avoids a false alarm when a raw value
+    also occurs elsewhere in the text legitimately, and cannot miss a span that was left in place.
+    """
     try:
         out = apply_decision(text, decision, 0)
     except (ValueError, OutputBlocked):
         return None
-    for item in decision.transformations:
-        raw = text[item.span.start : item.span.end]
-        if raw and raw in out and raw != item.replacement:
+    edits = sorted(
+        (t.span.start, t.span.end, t.replacement)
+        for t in decision.transformations
+        if t.span.end > 0 and t.span.start < len(text)
+    )
+    expected: list[str] = []
+    cursor = 0
+    for start, end, replacement in edits:
+        if start < cursor or end > len(text):
             return None
-    return out
+        expected.append(text[cursor:start])
+        expected.append(replacement)
+        cursor = end
+    expected.append(text[cursor:])
+    return out if out == "".join(expected) else None
 
 
 def _rules(decision: Decision | None) -> tuple[str, ...]:
