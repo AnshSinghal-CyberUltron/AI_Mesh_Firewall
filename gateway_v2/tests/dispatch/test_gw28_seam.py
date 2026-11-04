@@ -46,12 +46,14 @@ def _real() -> OpenAIUpstreamProvider:
     )
 
 
+# Feature: gw28-multi-model-routing, Property 12: RoutedProvider is not a ProviderClient
 def test_routed_provider_is_not_a_provider_client() -> None:
     rp = build_rp({"a": FakeClient("a", [], Timeline())})
     assert not isinstance(rp, ProviderClient)
     assert not hasattr(rp, "open")
 
 
+# Feature: gw28-multi-model-routing, Property 12: only per_request_safe clients are accepted
 def test_per_request_safe_clients_accepted_and_instance_latch_clients_rejected() -> None:
     _build(_real())
     stub = StubProviderClient(script=[], rng=random.Random(0))
@@ -73,6 +75,7 @@ def test_construction_validation() -> None:
         StallBounds(first_event_s=1.0, gap_s=2.0, total_s=3.0, teardown_s=0.1)
 
 
+# Feature: gw28-multi-model-routing, Property 12: open_routed has one caller
 def test_open_routed_is_only_called_from_the_chat_upstream_module() -> None:
     callers: set[str] = set()
     for path in _ROOT.rglob("*.py"):

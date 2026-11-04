@@ -51,7 +51,7 @@ def test_bounds_ordering_validated() -> None:
 
 # Feature: gw28-multi-model-routing, Property 7: a never-yielding upstream is cut at first_event_s
 def test_p7_never_yielding_cut_at_first_event() -> None:
-    for _ in range(20):
+    for _ in range(100):
         tl = Timeline()
         events, elapsed = asyncio.run(_collect(FakeClient("a", [], tl, hang_after=True)))
         assert len(events) == 1 and _timeout_only(events)
@@ -61,7 +61,7 @@ def test_p7_never_yielding_cut_at_first_event() -> None:
 
 # Feature: gw28-multi-model-routing, Property 7: role-only then silence is cut at first_event_s
 def test_p7_role_only_then_silence_is_cumulative() -> None:
-    for _ in range(20):
+    for _ in range(100):
         tl = Timeline()
         # role frame at ~0.03 s, then silence: cut at ~0.05 s (cumulative), not 0.03 + gap
         c = FakeClient("a", [0.03, role()], tl, hang_after=True)
@@ -80,7 +80,7 @@ def test_p7_many_role_only_events_do_not_extend_deadline() -> None:
 
 # Feature: gw28-multi-model-routing, Property 7: mid-stream stall ends at gap_s
 def test_p7_mid_stream_stall_ends_at_gap() -> None:
-    for _ in range(20):
+    for _ in range(100):
         tl = Timeline()
         c = FakeClient("a", [text("hi")], tl, hang_after=True)
         events, elapsed = asyncio.run(_collect(c))
