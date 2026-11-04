@@ -183,6 +183,9 @@ class MCPServerRegistration(models.Model):
     # stays graceful (no 500); the UI surfaces an actionable per-org
     # "re-authenticate <server>" badge from this flag + last_sync_error.
     needs_reauth = models.BooleanField(default=False)
+    # GW17b: bumped by every credential write. The gateway's refresh write-back is a
+    # compare-and-set on this value, so a stale refresher can never overwrite a newer token.
+    credential_version = models.PositiveIntegerField(default=1)
 
     @property
     def oauth_authorized(self) -> bool:

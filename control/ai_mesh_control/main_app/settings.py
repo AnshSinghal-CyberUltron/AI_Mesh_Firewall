@@ -529,6 +529,7 @@ REST_FRAMEWORK = {
         "login_ip": os.environ.get("LOGIN_THROTTLE_IP_RATE", "10/min"),
         "login_user": os.environ.get("LOGIN_THROTTLE_USER_RATE", "5/min"),
         "policy_write": os.environ.get("POLICY_WRITE_THROTTLE_RATE", "30/min"),
+        "mcp-internal-credential": os.environ.get("MCP_INTERNAL_CREDENTIAL_THROTTLE_RATE", "600/min"),
     },
     # Number of TRUSTED reverse proxies in front of the app. DRF's get_ident
     # uses this to pick the real client IP from X-Forwarded-For; with it set,

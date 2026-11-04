@@ -24,6 +24,12 @@ urlpatterns = [
     # Gateway-internal: enable/disable enforcement helpers
     path("internal/enabled-tools/", views.MCPGatewayEnabledToolsView.as_view(), name="mcp-internal-enabled-tools"),
     path("internal/record-event/", views.MCPGatewayRecordEventView.as_view(), name="mcp-internal-record-event"),
+    path("internal/credential/", views.MCPGatewayCredentialView.as_view(), name="mcp-internal-credential"),
+    path(
+        "internal/credential/refresh-result/",
+        views.MCPGatewayCredentialRefreshResultView.as_view(),
+        name="mcp-internal-credential-refresh-result",
+    ),
     path("internal/needs-reauth/", views.MCPGatewayNeedsReauthView.as_view(), name="mcp-internal-needs-reauth"),
     # Developer diagnostic channel (staff-only) — real cause behind a sanitized
     # client error, looked up by the correlation ref. Never exposed to clients.
