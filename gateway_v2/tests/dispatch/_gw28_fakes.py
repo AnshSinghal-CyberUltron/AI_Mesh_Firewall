@@ -7,14 +7,19 @@ from collections.abc import AsyncIterator, Callable, Sequence
 from dataclasses import dataclass, field
 from typing import ClassVar
 
+from gateway_v2.dispatch.model_routing import ModelRouter
 from gateway_v2.dispatch.openai_upstream import BODY_ENDPOINT_KEY, BODY_OPENAI_KEY
 from gateway_v2.dispatch.provider import UpstreamEvent, UpstreamRequest
+from gateway_v2.dispatch.routed_provider import RoutedProvider
 from gateway_v2.dispatch.routing_types import (
     Candidate,
     CandidateSet,
     RoutingContext,
     RoutingDecision,
+    RoutingSnapshot,
+    RoutingTable,
 )
+from gateway_v2.dispatch.stall_guard import StallBounds
 from gateway_v2.domain.plan import ExecutionPlan, StreamingMode
 
 MAX_LEN = 64
@@ -170,3 +175,47 @@ class FakeClient:
 
     async def abort(self) -> None:
         return None
+
+
+SMALL = StallBounds(first_event_s=0.03, gap_s=0.015, total_s=1.0, teardown_s=0.05)
+
+
+def build_rp(
+    clients: dict[str, FakeClient],
+    *,
+    bounds: StallBounds = SMALL,
+    max_attempts: int = 2,
+    snapshot: Callable[[], RoutingSnapshot] | None = None,
+    weights: dict[str, int] | None = None,
+) -> RoutedProvider:
+    """A RoutedProvider whose org ``org`` serves model ``m`` from every given client."""
+    cands = [cand(n, weight=(weights or {}).get(n, 1)) for n in sorted(clients)]
+    table = RoutingTable.build({"org": cset(*cands)})
+    return RoutedProvider(
+        router=ModelRouter(),
+        table=table,
+        clients=dict(clients),
+        bounds=bounds,
+        max_attempts=max_attempts,
+        max_ident_len=MAX_LEN,
+        snapshot_source=snapshot or (lambda: RoutingSnapshot()),
+    )
+
+
+async def drain(
+    rp: RoutedProvider,
+    ctx_: RoutingContext | None,
+    req: UpstreamRequest | None = None,
+    tl: Timeline | None = None,
+) -> list[UpstreamEvent]:
+    """Consume ``open_routed`` fully, logging content yields into ``tl`` for ordering checks."""
+    out: list[UpstreamEvent] = []
+    async for e in rp.open_routed(req or request(), ctx_):
+        if tl is not None and e.text_deltas:
+            tl.log.append(("yield", "content"))
+        out.append(e)
+    return out
+
+
+def terminals(events: Sequence[UpstreamEvent]) -> list[UpstreamEvent]:
+    return [e for e in events if e.final or e.error_frame is not None or e.gateway_error]
