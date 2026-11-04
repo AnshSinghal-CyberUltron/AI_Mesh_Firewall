@@ -13,7 +13,7 @@ from core.firewall_model_governance import (
     validate_governance_fields,
 )
 from core.firewall_v2_controls import built_value_errors, controls_eligible
-from core.firewall_v2_map import FIELDS, changed_fields, selection_errors
+from core.firewall_v2_map import FIELDS, changed_fields, rewrite_served_by_v2, selection_errors
 from core.models import FirewallConfig
 
 
