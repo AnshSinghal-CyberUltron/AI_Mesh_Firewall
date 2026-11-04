@@ -340,7 +340,8 @@ Mapping-valued fields are stored as sorted `tuple`s of pairs (never a `dict`).
 class Candidate:
     candidate_id: str            # unique within the set; non-empty; no "\x1f"
     destination: str             # label stamped into UpstreamRequest.destination
-    upstream_model: str          # model name sent upstream; non-empty unless passthrough
+    upstream_model: str          # model name sent upstream; non-empty unless passthrough;
+                                 # `_UPSTREAM_MODEL` fullmatch (round 8 F2), NOT `_IDENT`
     served_models: frozenset[str]  # client aliases; non-empty unless passthrough
     weight: int                  # >= 1 (vnode count)
     provider_key: str            # ProviderKey = str; selects the client; `_IDENT` fullmatch in build;
@@ -368,6 +369,15 @@ class RoutingContext:                 # passed as an ARGUMENT, never placed in t
     @classmethod
     def from_plan(cls, plan: ExecutionPlan, *, request_key: str, requested_model: str,
                   sink: Callable[[RoutingDecision], None]) -> RoutingContext: ...
+    # Round 8 F1: `from_plan` is the SINGLE canonicalisation point for the client-supplied name.
+    # `requested_model` is accepted iff `isinstance(str)` and `_IDENT.fullmatch(name)` (the same
+    # `_IDENT = [A-Za-z0-9._:-]{1,N}`, `N = routing_max_identifier_len()`, compiled with re.ASCII,
+    # defined once in `routing_types.py`). No case folding, trimming or Unicode normalisation is
+    # applied: the charset is ASCII-only, so there is nothing to normalise and no two distinct raw
+    # strings map to one accepted value. A rejected name is stored as the EMPTY string "" in the
+    # context, so no unvalidated client text can reach the HRW key, a RoutingDecision, the console
+    # or the event line. A pure helper `is_valid_model_name(name: str, max_len: int) -> bool` is
+    # exported for `rank` (defence in depth) and for tests.
 
 @dataclass(frozen=True, slots=True)
 class RoutingSnapshot:
@@ -415,8 +425,15 @@ class ModelRouter:
 `RoutingRefusal` is **returned**, not raised, so the fail-closed branch is a normal value flow that
 mypy forces callers to handle. Algorithm (pure and total):
 
+0. **Client-name guard (round 8 F1).** If `not is_valid_model_name(ctx.requested_model,
+   routing_max_identifier_len())` (empty, over-length, or any character outside `_IDENT`, including
+   `|`, `\x1f`, `/`, whitespace, newline and every control character) → return
+   `RoutingRefusal(ROUTING_UNKNOWN_MODEL)` **before** matching, so a passthrough candidate can never
+   accept an unvalidated name. This re-checks what `from_plan` already enforced (the context is a
+   public value type, so `rank` does not trust its constructor). Fail closed: refusal, 0 provider
+   opens, HTTP 404 `model_not_found` (existing mapping), never a fallback to another model.
 1. `matching = [c for c in cset.candidates if c.passthrough or ctx.requested_model in c.served_models]`.
-   Empty (or empty `requested_model`) → `RoutingRefusal(ROUTING_UNKNOWN_MODEL)`.
+   Empty → `RoutingRefusal(ROUTING_UNKNOWN_MODEL)`.
 2. `eligible = [c for c in matching if c.candidate_id not in snapshot.unavailable]`.
    Empty → `RoutingRefusal(ROUTING_ALL_UNAVAILABLE)`.
 3. Key = `"\x1f".join((org_id, str(epoch), str(sequence), content_hash, request_key, requested_model))`.
@@ -642,8 +659,12 @@ scripts (P4).
   | `selected_candidate is not None` and provider called | `action="allow"`, `ran=True` (as today) |
   | refusal (`refusal_code` set) | `action="skip"`, `ran=False` |
   | `routing_reason`, `selected_candidate`, `attempt_index`, `remapped_from`, `requested_model` | `deciding_rule` = `"{reason}|{sel}|{attempt}|{from}|{alias}"`, `-` for None |
-  `alias` is `requested_model` only if some candidate in the table serves it (known alias), else `-`,
-  so no client-supplied free text reaches the record (Req 6.4); `sel`/`from` are operator-defined
+  `alias` is `requested_model` only if it appears in the `served_models` of some **non-passthrough**
+  candidate (operator-configured, `_IDENT`-validated at boot), else `-`. A passthrough match does not
+  make a name "known" (round 8 F1), so in the dev profile `alias` is always `-`. Independently, the
+  name was already `_IDENT`-validated in `RoutingContext.from_plan` and `rank`, so even the
+  `RoutingDecision.requested_model` field only ever holds an accepted or empty value. No
+  client-supplied free text reaches the record (Req 6.4); `sel`/`from` are operator-defined
   `candidate_id`s validated in `CandidateSet.build` (`_IDENT` fullmatch, see Input validation; excludes `|`). `selected_model`
   (upstream name), `decision_source`, `destination` and `candidate_count` do **not** fit the closed
   schema; they are emitted on the existing `edge/event_log` path as one rate-limited structured line
@@ -735,12 +756,12 @@ serialise routing state. This removes the forged-body and serialisation concerns
 
 | Input | Required | Type / limits | On failure |
 |---|---|---|---|
-| `CandidateSet.build(candidates)` | yes | 1..`routing_max_candidates()` items; unique non-empty ids; **every** `candidate_id`, `provider_key`, `served_models` alias and (non-passthrough) `upstream_model` must `fullmatch` `_IDENT = [A-Za-z0-9._:-]{1,N}` with `N = routing_max_identifier_len()` (excludes `|`, `\x1f`, whitespace and control chars by construction); `1 <= weight <= routing_max_weight()`; non-empty `served_models` and `upstream_model` unless `passthrough`; `passthrough` only with `allow_passthrough=True` | `RoutingConfigError`, fatal at boot, ERROR |
+| `CandidateSet.build(candidates)` | yes | 1..`routing_max_candidates()` items; unique non-empty ids; **every** `candidate_id`, `provider_key`, `served_models` alias must `fullmatch` `_IDENT = [A-Za-z0-9._:-]{1,N}`; a (non-passthrough) `upstream_model` must `fullmatch` the looser `_UPSTREAM_MODEL = [A-Za-z0-9._:/@+-]{1,N}` (round 8 F2: real upstream names such as `meta-llama/Llama-3` or `accounts/x/models/y`; it never reaches the console, only the upstream body and the event line, which carries no free text beyond this validated name; still excludes `|`, `\x1f`, whitespace and control chars; `N` is the same accessor) with `N = routing_max_identifier_len()` (excludes `|`, `\x1f`, whitespace and control chars by construction); `1 <= weight <= routing_max_weight()`; non-empty `served_models` and `upstream_model` unless `passthrough`; `passthrough` only with `allow_passthrough=True` | `RoutingConfigError`, fatal at boot, ERROR |
 | `RoutingTable` | yes | org ids unique, non-empty; `fallback_set` optional | `RoutingConfigError`, fatal at boot |
 | `RoutedProvider(clients=...)` | yes | covers every candidate id; each class `per_request_safe is True` | `RoutingConfigError`, fatal at boot |
 | `StallBounds` | yes | `0 < gap < first_event < total`, `teardown > 0` | `RoutingConfigError`, fatal at boot |
 | `ctx` argument | yes per request | `RoutingContext` | `routing_context_missing`, 0 opens, WARN |
-| `ctx.requested_model` | yes | non-empty `str` | empty → `routing_unknown_model` |
+| `ctx.requested_model` (client-supplied, reaches us via the request body `model`) | yes | `str`; `_IDENT.fullmatch`, length `1..routing_max_identifier_len()` (default 64), ASCII only; checked in `RoutingContext.from_plan` (invalid → stored as `""`) and again in `ModelRouter.rank` step 0 and `preflight` | invalid/empty/over-length → `RoutingRefusal(routing_unknown_model)`, HTTP 404 `model_not_found`, 0 opens, INFO event line (class `routing_decision`, no model text); not a boot error. Note: names with `/` or `@` are refused as client aliases (fail closed, documented; operators expose such upstreams through an `_IDENT` alias in `served_models`) |
 | `snapshot_source()` | yes | returns `RoutingSnapshot` | raises or wrong type → `routing_snapshot_unavailable`, ERROR |
 
 ## Error Handling
@@ -825,7 +846,7 @@ bound fires near its value.
 | P6 | No policy bypass: (a) `rebind` changes only `model` (random nested bodies, deep equality elsewhere); (b) every attempt's body equals the verified body modulo `model`; (c) `ctx=None` or wrong type → 0 client opens; (d) `ModelRouter.rank` has no enforcement/decision parameter and `routed_provider`/`model_routing`/`stall_guard` import none of `edge/admit/detect/plan/resolve` (AST); (e) exactly one candidate `.open(` call site in `routed_provider.py` (AST) | `test_gw28_no_policy_bypass.py` | property + static |
 | P7 | Stall bound: a fake upstream that never yields terminates with exactly one `upstream_timeout` at `first_event_s`, iterator observed closed, no `final` success; **a role-only empty-delta event then silence is also cut at the cumulative `first_event_s`, not at `gap_s`**; mid-stream stall ends at `gap_s`; slow trickle ends at `total_s`; derivation: for random `target_p99_ms ∈ [1, 100]`, `0 < gap < first_event < total < max_stream_duration_s()` (new P11 clause, single-attempt case only: slow trickle terminates with `upstream_timeout` from the router, never `stream_killed`/max-duration, over random p99; after a fallback the edge max-duration code is an accepted single declared terminal), at the default `first_event < 300 s`, accessors raise `CapacityUnavailable` on non-positive | `test_gw28_stall_bound.py` | property + integration |
 | P8 | Attempt bound and exhaustion: attempts ≤ `routing_max_attempts()`; ≥ 2 retryable failures → `routing_attempts_exhausted`; single possible attempt surfaces its own code; teardown failure → no further open | `test_gw28_attempt_bound.py` | property (async) |
-| P9 | Trace is content-free: with a planted secret in the prompt, no `RoutingDecision`/refusal field contains it; fields hold only closed-vocabulary strings and `_IDENT`-validated candidate ids; planted `|`/newline ids are rejected at boot | `test_gw28_trace_redaction.py` | property |
+| P9 | Trace is content-free: with a planted secret in the prompt, no `RoutingDecision`/refusal field contains it; fields hold only closed-vocabulary strings and `_IDENT`-validated candidate ids; planted `|`/newline ids are rejected at boot; **round 8:** a seeded generator (≥10,000 iterations) draws client model names from the full printable and control range plus the planted separators and lengths 0..2N, and asserts for every draw that (a) accept ⇔ `_IDENT.fullmatch` and `len <= N`, (b) on accept the console `deciding_rule` splits into exactly 5 fields and contains no character outside `_IDENT ∪ {"|"}`, (c) on reject there are 0 opens and the code is `routing_unknown_model`, (d) no rejected raw string appears in any `RoutingDecision`/console/event field, (e) accepted names rank identically across repeated calls | `test_gw28_trace_redaction.py` | property |
 | P10 | Fault injection: an injected `Exception` at each point (`rank`, `sink` pre-content, `snapshot_source`, `rebind`, mid-iteration, `aclose`) yields exactly one terminal event, code `routing_internal_error` (or `routing_snapshot_unavailable`/`routing_teardown_unconfirmed` where defined), zero further opens, and the live iterator closed; `CancelledError` and `GeneratorExit` injected mid-attempt propagate (not converted to an event) and the live iterator is closed; a post-commit sink raise does not alter the forwarded stream | `test_gw28_fault_injection.py` | property (async) |
 | P11 | Timer precedence: for random `target_p99_ms ∈ [1, 100]` and `n ∈ [1, max_attempts]`, `gap < inter_chunk`, and `routing_pre_content_budget_s(n) > n × (first_event + cancellation_bound)`; integration: with routing on, a stalled streaming upstream ends with the router's `upstream_timeout` (never the edge `STREAM_INTER_CHUNK_TIMEOUT`), and fallback after a pre-content stall is reachable on streaming; **(D-18)** with small injected contract values (idle bound I), a fake upstream sending first content after 2×I delivers that content (no `stream_idle_timeout`), and a never-yielding upstream ends with the router's `upstream_timeout` frame, not `stream_idle_timeout`; with `first_event_s=None` the idle behaviour is unchanged (regression) | `test_gw28_timer_precedence.py` | property + integration |
 | P12 | Seam: `RoutedProvider` is not a `ProviderClient`; `open_routed` is called only from `edge/chat_upstream.py` (AST over `gateway_v2/`); a client class without `per_request_safe is True` (`HttpProviderClient`, `StubProviderClient`) is rejected at construction, `OpenAIUpstreamProvider` accepted | `test_gw28_seam.py` | static + unit |
@@ -845,7 +866,16 @@ Unit/integration (non-property):
   attempt 1 identically to attempt 0, so the secret is redacted or blocked (streaming and
   non-streaming). Same test with a planted secret in a mid-stream `error_frame` of attempt 1.
 - **T-edge-6 (D-8a).** `CandidateSet.build` rejects empty, over-cap, control-char/`\x1f` and duplicate
-  destinations, and any `candidate_id`/`provider_key`/alias/`upstream_model` failing `_IDENT` (planted `|`, newline, space, over-length) with `RoutingConfigError`; asserts the label never changes the HTTP target.
+  destinations, and any `candidate_id`/`provider_key`/alias failing `_IDENT`, or `upstream_model` failing `_UPSTREAM_MODEL` (accepted: `meta-llama/Llama-3`, `accounts/x/models/y`; planted `|`, newline, space, over-length) with `RoutingConfigError`; asserts the label never changes the HTTP target.
+- **T-edge-9 (round 8 F1, client `requested_model`).** With a dev-profile `fallback_set` holding a
+  passthrough candidate: `RoutingContext.from_plan` and `ModelRouter.rank` given `llama-3`,
+  `gpt-4o:2024-08` (accepted), and planted `a|b`, `a\nb`, `a\x1fb`, `a b`, `meta/llama-3`, `\x00`,
+  `ünï`, a trailing-newline `abc\n` (fullmatch, not match), an empty string, and a 65-char name
+  (rejected, `ROUTING_UNKNOWN_MODEL`, zero `open` calls, 404 `model_not_found` via the real
+  `_stage` preflight). Asserts the console `deciding_rule` has exactly 5 `|`-separated fields and its
+  `alias` field is `-` for every passthrough-only match, and that the planted text appears nowhere
+  in the console, the event line, or the `RoutingDecision`. A name exactly `routing_max_identifier_len()`
+  long is accepted; one longer is rejected.
 - **T-edge-8 (round-4 F2).** Two concurrent identical requests (same `request_key`) with different
   injected per-attempt outcomes: each request's `RoutingTrace` holds only its own decisions; the
   stage `deciding_rule` of each console reflects its own final decision; schema validation passes
@@ -1044,3 +1074,28 @@ functions.
 - **Finding 4 (NIT) — kept as Open Item.**
 - **Honoured constraints.** GW27 D-13 two-file capacity-literal allowlist unchanged (new literal sits in
   `resources.py`). No live gate is run or claimed.
+
+## Review responses (round 8)
+- **Finding 1 (MEDIUM) — resolved (C1 `from_plan`, C2 step 0, C6 `alias`, Input validation, T-edge-9, P9).**
+  The client `requested_model` is validated with the same `_IDENT` charset and the same
+  `routing_max_identifier_len()` cap as operator identifiers, at the single canonicalisation point
+  `RoutingContext.from_plan` (invalid stored as `""`) and again in `ModelRouter.rank` step 0 and
+  `preflight`, before it can reach the HRW key, a `RoutingDecision`, the console or the event line.
+  Rejection = `RoutingRefusal(ROUTING_UNKNOWN_MODEL)` → 404 `model_not_found`, 0 opens, no fallback
+  to another model. No new code, accessor or capacity literal: `ROUTING_UNKNOWN_MODEL` and
+  `routing_max_identifier_len()` already exist. The trace `alias` is now informative only for
+  non-passthrough served aliases (reviewer's fix point 1). Trade-off stated: client names containing
+  `/` or `@` are refused (fail closed); an operator maps them via a `served_models` alias.
+  No allowlist change (GW27 D-13), no module-level mutable state (`_IDENT` is a compiled immutable
+  pattern built from the accessor value at construction, held on the frozen `CandidateSet`/router
+  config, not a mutable global), frozen/slotted types unchanged, no HTTP object outside `edge`.
+- **Finding 2 (LOW) — addressed (C1, Input validation).** Separate documented `_UPSTREAM_MODEL`
+  pattern for `upstream_model` allowing `/`, `@`, `+`; `_IDENT` unchanged for ids and aliases.
+  T-edge-6 gains accepted cases `meta-llama/Llama-3` and `accounts/x/models/y` and a rejected `a|b`.
+- **Finding 3 (LOW) — carried (accepted).** PR description states the 30 s pre-content bound and
+  names `_UPSTREAM_FIRST_EVENT_MULT`.
+- **Finding 4 (LOW) — carried (accepted).** PR description states Req 5 closed for routed chat and the
+  dev profile only until GW36 S5 (default `routing=None` path unchanged).
+- **Finding 5 (NIT) — unchanged**, recorded owner decision (closed `console_schema._STAGE_KEYS`).
+- **Unverified assumptions** (httpx pool on `wait_for` cancel; non-streaming request deadline) remain
+  deferred to the Live_Gate; nothing run or claimed.
