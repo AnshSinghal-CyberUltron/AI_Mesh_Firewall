@@ -1,31 +1,22 @@
-# GW32 offline gate outputs (branch gw32-mcp-transport)
+# GW32 offline gate outputs (branch gw32-mcp-transport, final tree)
 
-python -m lint.check_capacity_literals gateway_v2 -> exit 0
-python -m lint.check_no_module_mutable gateway_v2 -> exit 0
-python -m lint.check_frozen_dataclasses gateway_v2 -> exit 0
-python -m lint.check_http_outside_edge_resolve gateway_v2 -> exit 0
-python -m lint.check_credential_flow gateway_v2 -> exit 0
-python -m lint.check_sizes gateway_v2 -> exit 0
-python -m lint.check_tenant_scale gateway_v2 state_control -> exit 1 (gateway_v2/admit/mcp_sessions.py:196: hgetall: whole-collection store read: cannot be O(changes))
+python -m lint.check_capacity_literals -> exit 0
+python -m lint.check_no_module_mutable -> exit 0
+python -m lint.check_frozen_dataclasses -> exit 0
+python -m lint.check_http_outside_edge_resolve -> exit 0
+python -m lint.check_credential_flow -> exit 0
+python -m lint.check_sizes -> exit 0
 python -m lint.check_console_inventory -> exit 0
 python -m lint.check_dispatch_provenance -> exit 0
-Gateway v2 layers KEPT
+python -m lint.check_tenant_scale gateway_v2 state_control -> exit 1 (gateway_v2/dispatch/vector_transports/pinecone_transport.py:140: keys: whole-collection store read: cannot be O(changes)) [pre-existing, file untouched by this branch]
 Resolve imports only domain KEPT
 No HTTP framework outside edge KEPT
 
 Contracts: 3 kept, 0 broken.
 
-ruff:
+ruff check gateway_v2 state_control audit_control lint tests:
 All checks passed!
 
-mypy --strict gateway_v2 state_control audit_control:
-      1 Found 9 errors in 6 files (checked 270 source files)
-      1 gateway_v2/dispatch/vector_transports/chroma_transport.py: error: Cannot find implementation or library stub for module named "chromadb"  [import-not-found]
-      1 gateway_v2/dispatch/vector_transports/elastic_transport.py: error: Cannot find implementation or library stub for module named "elasticsearch"  [import-not-found]
-      1 gateway_v2/dispatch/vector_transports/elastic_transport.py: error: Cannot find implementation or library stub for module named "opensearchpy"  [import-not-found]
-      1 gateway_v2/dispatch/vector_transports/mongo_transport.py: error: Cannot find implementation or library stub for module named "pymongo"  [import-not-found]
-      1 gateway_v2/dispatch/vector_transports/pinecone_transport.py: error: Cannot find implementation or library stub for module named "pinecone"  [import-not-found]
-      1 gateway_v2/dispatch/vector_transports/qdrant_transport.py: error: Cannot find implementation or library stub for module named "qdrant_client.http.exceptions"  [import-not-found]
-      1 gateway_v2/dispatch/vector_transports/qdrant_transport.py: error: Cannot find implementation or library stub for module named "qdrant_client"  [import-not-found]
-      1 gateway_v2/dispatch/vector_transports/weaviate_transport.py: error: Cannot find implementation or library stub for module named "weaviate.classes.config"  [import-not-found]
-      1 gateway_v2/dispatch/vector_transports/weaviate_transport.py: error: Cannot find implementation or library stub for module named "weaviate"  [import-not-found]
+mypy --strict gateway_v2 state_control audit_control (only optional vector-client stubs missing: pre-existing):
+Found 9 errors in 6 files (checked 270 source files)
+1

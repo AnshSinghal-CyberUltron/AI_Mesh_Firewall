@@ -184,3 +184,16 @@ def test_unrestricted_key_is_byte_identical_to_a_policy_free_run() -> None:
     b = asyncio.run(_post(with_table, _CALL_A))
     assert a.status_code == b.status_code == 200
     assert a.content == b.content  # byte-identical: the policy code added nothing
+
+
+def test_negative_control_dropping_the_allow_list_call_is_red(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """R22.5: with the allow-list call removed, the denied-tool assertion must fail."""
+    import gateway_v2.edge.mcp as mcp_module
+
+    monkeypatch.setattr(mcp_module, "apply_tool_policy", lambda *a, **k: None)
+    app, broker, _, _ = _app(_p(frozenset({"a"})))
+    resp = asyncio.run(_post(app, _CALL_B))
+    with pytest.raises(AssertionError):
+        assert resp.status_code == 403 and broker.requests == []
