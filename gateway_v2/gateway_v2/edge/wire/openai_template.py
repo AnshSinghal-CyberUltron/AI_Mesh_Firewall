@@ -35,9 +35,13 @@ __all__ = (
     "UpstreamTemplate",
 )
 
-#: ASCII record separator: joins the strings of one joined channel. A request string that
-#: contains it is refused (``openai_tools``), so a split can never be ambiguous.
-JOIN_SEPARATOR = "\x1e"
+#: Joins the strings of one joined channel. A Unicode PRIVATE-USE code point on purpose: the ASCII
+#: separators (``\x1c``-``\x1f``) match ``\s`` in a regex, so adjacent items would form false
+#: cross-item matches (two UUIDs became a phone number in the dev detector); a private-use point is
+#: neither whitespace nor a word character and survives canonicalisation (it is not default-
+#: ignorable). A request string that contains it is refused (``openai_tools``), so a split can
+#: never be ambiguous.
+JOIN_SEPARATOR = "\ue000"
 #: ``TextSlot.index`` of a slot that is a PART of a joined pair (resolved via the template).
 JOINED = -1
 

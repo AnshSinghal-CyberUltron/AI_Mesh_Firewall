@@ -62,6 +62,7 @@ from gateway_v2.edge.chat_deps import (
     fail_closed_admission,
     fail_closed_budget,
     no_findings_detector,
+    resolve_tool_bounds,
     unresolved_snapshot_source,
 )
 from gateway_v2.edge.error_frame_scan import ErrorFrameScanner
@@ -372,8 +373,6 @@ def _build_chat_route(
 
     ``audit`` defaults to ``None``: the response is unchanged and no record is enqueued.
     """
-    # The GW14d per-request telemetry producer, built ONCE at boot and threaded onto the single
-    # route (R14); see the docstring for the one-producer / pinned-zero / no-raw-content contract.
     request_exports = exports if exports is not None else PerRequestExports()
     return ChatRoute(
         contract=contract,
@@ -404,6 +403,7 @@ def _build_chat_route(
         audit=audit,
         observer=observer,
         holdback_metrics=holdback_metrics if holdback_metrics is not None else HoldbackMetrics(),
+        tool_bounds=resolve_tool_bounds(contract),
     )
 
 

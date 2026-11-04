@@ -33,6 +33,7 @@ injected ``ResourceContract`` / ``HoldbackConfig`` and never from a literal here
 
 from __future__ import annotations
 
+import time
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
 
@@ -102,6 +103,7 @@ from gateway_v2.plan.snapshot import ReplicaSnapshot
 from gateway_v2.runtime.holdback_config import HoldbackConfig
 from gateway_v2.runtime.holdback_metrics import HoldbackMetrics
 from gateway_v2.runtime.resources import ResourceContract
+from gateway_v2.runtime.resources_tools import ToolBounds
 from gateway_v2.runtime.stream_metrics import PerRequestExports
 
 __all__ = (
@@ -272,6 +274,10 @@ class ChatRoute:
     holdback_metrics: HoldbackMetrics = HoldbackMetrics()
     #: GW26. A set phase factory enforces only rules that name this surface.
     surface: Surface = Surface.CHAT
+    #: GW34. The tool bounds, resolved once at boot; ``None`` is a tools-disabled route.
+    tool_bounds: ToolBounds | None = None
+    #: GW34. The epoch clock stamped into a stream's ``created`` (``clock`` is monotonic).
+    wall_clock_s: Callable[[], float] = time.time
 
     async def handle(self, scope: ASGIScope, receive: ASGIReceive, send: ASGISend) -> None:
         """Serve a chat/completions request end-to-end (R2.2, R7, R10, §10.4).

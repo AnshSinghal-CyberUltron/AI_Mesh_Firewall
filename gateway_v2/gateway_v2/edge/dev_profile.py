@@ -44,6 +44,7 @@ from __future__ import annotations
 import time
 from collections.abc import Mapping
 from dataclasses import dataclass
+from functools import partial
 from urllib.parse import urlsplit, urlunsplit
 
 from gateway_v2.admit.admission import AdmissionController
@@ -57,6 +58,7 @@ from gateway_v2.dispatch.openai_upstream import (
 )
 from gateway_v2.domain.plan import ExecutionPlan, Phase
 from gateway_v2.edge.app import ASGIApplication
+from gateway_v2.edge.chat_deps import resolve_tool_bounds
 from gateway_v2.edge.dev_admit import (
     DevLeaseBudget,
     DevServedApp,
@@ -108,6 +110,12 @@ BUDGET_LEASE = "lease"
 BUDGET_UNLIMITED = "unlimited"
 _INACTIVE_VALUES = frozenset(("", "0"))
 _ACTIVE_VALUE = "1"
+
+
+def _decoder_tool_calls(contract: ResourceContract) -> int:
+    """The SSE decoder's tool-call index bound: the contract's, or 0 (tools disabled)."""
+    bounds = resolve_tool_bounds(contract)
+    return 0 if bounds is None else bounds.max_tool_calls
 
 
 def dev_profile_active(env: Mapping[str, str]) -> bool:
@@ -285,7 +293,7 @@ def _provider(
     connections = contract.pool_size(PoolKind.PROVIDER)
     provider = OpenAIUpstreamProvider(
         base_url=base_url,
-        decoder_factory=SSEDecoder,
+        decoder_factory=partial(SSEDecoder, max_tool_calls=_decoder_tool_calls(contract)),
         client_factory=httpx_client_factory(
             api_key=cfg.provider_api_key,
             timeout_s=contract.max_stream_duration_s(),

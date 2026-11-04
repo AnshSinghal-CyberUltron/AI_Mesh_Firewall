@@ -75,7 +75,7 @@ def test_a_realistic_tools_request_is_accepted() -> None:
         ({"tools": [_tool(parameters={"$ref": "#/$defs/missing"})]}, "tools"),
         ({"tools": [_tool(parameters={"type": "weird"})]}, "tools"),
         ({"tools": [_tool(parameters={"minimum": True})]}, "tools"),
-        ({"tools": [_tool(description="a\x1eb")]}, "tools"),
+        ({"tools": [_tool(description="a\ue000b")]}, "tools"),
         ({"tools": [_tool(description="\ud800")]}, "tools"),
         ({"tools": [_tool()], "tool_choice": {"type": "function", "function": {"name": "nope"}}},
          "tool_choice"),
@@ -120,7 +120,7 @@ def test_tool_round_trip_is_accepted_and_arguments_are_canonical() -> None:
     assert pairs["tool_arguments_raw"] == '{"a": 1}'
     raw_at = [c for c, _ in req.input_channels].index("tool_arguments_raw")
     assert req.input_forwarded[raw_at] is False
-    assert pairs["tool_call_id"].split("\x1e") == ["call_1", "call_1"]
+    assert pairs["tool_call_id"].split("\ue000") == ["call_1", "call_1"]
 
 
 @pytest.mark.parametrize(

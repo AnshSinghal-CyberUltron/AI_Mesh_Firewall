@@ -37,6 +37,7 @@ from gateway_v2.domain import Finding
 from gateway_v2.domain.identity import Principal
 from gateway_v2.plan.snapshot import ReplicaSnapshot
 from gateway_v2.plan.store import PlanStore
+from gateway_v2.runtime.resources_tools import ToolBounds
 
 __all__ = (
     "AdmissionDecider",
@@ -45,6 +46,7 @@ __all__ = (
     "fail_closed_admission",
     "fail_closed_budget",
     "no_findings_detector",
+    "resolve_tool_bounds",
     "unresolved_snapshot_source",
 )
 
@@ -201,3 +203,17 @@ def unresolved_snapshot_source() -> ReplicaSnapshot:
     default cannot leak across requests.
     """
     return ReplicaSnapshot(PlanStore())
+
+
+def resolve_tool_bounds(contract: object) -> ToolBounds | None:
+    """The tool bounds a route serves with, resolved ONCE at boot (GW34, design "Decoder").
+
+    A contract that has no ``tool_bounds`` (the standalone ``test_lgw15_*`` fakes) yields
+    ``None``: a tools-DISABLED route, where a request carrying ``tools`` / ``tool_calls`` / a
+    ``tool`` role / ``response_format`` is refused ``unsupported_parameter`` and the SSE decoder
+    treats any upstream ``tool_calls`` delta as malformed (fail closed). The real
+    ``ResourceContract`` always provides it.
+    """
+    resolver = getattr(contract, "tool_bounds", None)
+    bounds = resolver() if callable(resolver) else None
+    return bounds if isinstance(bounds, ToolBounds) else None
