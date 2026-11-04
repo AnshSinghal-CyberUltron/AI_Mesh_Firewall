@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from gateway_v2.admit.incident_state import IncidentState
 from gateway_v2.admit.killswitch import KillSwitchSnapshot
+from gateway_v2.domain.incident import IsolationOrigin, IsolationRecord
 from gateway_v2.domain.state import SignedRecord, StateKind, StateOp, Version
 from gateway_v2.runtime.state_sig import make_record
 
@@ -56,3 +58,27 @@ def load(
     """One clean complete round: attested position = the highest feed_seq, count = engaged keys."""
     top = max((r.feed_seq for r in records), default=0)
     snap.apply(records, attested_feed_seq=top, attested_engaged=on_count)
+
+
+def make_state(
+    snap: KillSwitchSnapshot,
+    wall: Clock,
+    mono: Clock,
+    *,
+    slots: int = 4,
+    auto_s: float = 300.0,
+    hold_s: float = 600.0,
+    hook: object = None,
+) -> IncidentState:
+    return IncidentState(
+        switches=snap, wall=wall, clock=mono, local_slots=slots, auto_duration_s=auto_s,
+        max_hold_s=hold_s, probation_hook=hook,  # type: ignore[arg-type]
+    )
+
+
+def local_auto(model: str, wall_now: float, *, dur: float = 300.0, fallback: str | None = "fb",
+               ) -> IsolationRecord:
+    return IsolationRecord(
+        model, fallback, IsolationOrigin.AUTO, "error_rate", wall_now, wall_now + dur,
+        False, 0, False,
+    )
