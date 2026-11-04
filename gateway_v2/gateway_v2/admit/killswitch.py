@@ -26,10 +26,19 @@ from __future__ import annotations
 import json
 import threading
 import time
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
+from types import MappingProxyType
 
+from gateway_v2.domain.incident import (
+    IsolationRecord,
+    KillEvaluation,
+    ParsedScope,
+    ScopeKind,
+    parse_isolation_body,
+    parse_scope,
+)
 from gateway_v2.domain.locks import FRESH_MS
 from gateway_v2.domain.state import SignedRecord, StateKind, StoreDataUnavailable
 from gateway_v2.runtime.state_feed import FeedRound
@@ -56,10 +65,21 @@ class KillSwitchView:
     orgs: frozenset[str]
     models: frozenset[str]
     feed_seq: int
+    org_models: int = 0
+    """GW29: engaged `om:<org>:<model>` scopes. A count: names stay out of metrics."""
+
+    isolations: int = 0
+    """GW29: `iso:<model>` records with `on: true`, expired or not (expiry is applied at READ)."""
+
+    quarantined: int = 0
+    """GW29: ON records of a known shape whose model could not be canonicalised (C19)."""
 
     @property
     def count(self) -> int:
-        return len(self.orgs) + len(self.models) + (1 if self.engaged else 0)
+        return (
+            len(self.orgs) + len(self.models) + (1 if self.engaged else 0)
+            + self.org_models + self.isolations + self.quarantined
+        )
 
 
 def scope_is_on(record: SignedRecord) -> bool:
@@ -95,14 +115,24 @@ class KillSwitchSnapshot:
         stale_ms: int = FRESH_MS,
         clock: Callable[[], float] = time.monotonic,
         stamp: FreshnessGate | None = None,
+        aliases: Mapping[str, str] = MappingProxyType({}),
     ) -> None:
         self._stale_s = stale_ms / 1000
         self._clock = clock
         self._stamp = stamp
+        self._aliases = aliases
         self._lock = threading.Lock()
         self._engaged = False
         self._orgs: set[str] = set()
         self._models: set[str] = set()
+        self._org_models: set[tuple[str, str]] = set()
+        self._isolations: dict[str, IsolationRecord] = {}
+        self._quarantined: set[str] = set()
+        # Raw record key -> the engaged entry it holds, and how many keys hold each entry. Two keys
+        # can canonicalise to ONE entry (`model:GPT-4o`, `model:gpt-4o`); the manifest's `on_count`
+        # counts RECORDS, so the drift check counts keys, not entries.
+        self._on_keys: dict[str, tuple[ScopeKind, str | None, str | None]] = {}
+        self._refs: dict[tuple[ScopeKind, str | None, str | None], int] = {}
         self._feed_seq = 0
         # NOT `_verified_at`. This is a MONOTONIC reading of when this process last read the
         # store successfully -- nothing was verified against anything. The stamp's `verified_at`
@@ -150,6 +180,47 @@ class KillSwitchSnapshot:
         with self._lock:
             return model in self._models
 
+    def evaluate(self, org_id: str, model: str, now: float | None = None) -> KillEvaluation:
+        """Every fact the gate needs under ONE lock acquisition (design 4.3).
+
+        `model` must already be canonical (`domain.incident.canonical_model`): matching is exact
+        set membership, so the gate canonicalises once, before any kill matching. The freshness
+        stamp is checked outside the lock, exactly as `state()` does.
+        """
+        moment = self._clock() if now is None else now
+        with self._lock:
+            refreshed = self._refreshed_at
+            is_global = self._engaged
+            org_engaged = org_id in self._orgs
+            org_model = (org_id, model) in self._org_models
+            model_engaged = model in self._models
+        stale = refreshed is None or moment - refreshed > self._stale_s
+        if not stale and self._stamp is not None and not self._stamp.fresh():
+            stale = True
+        if stale:
+            state = KillSwitchState.STALE
+        else:
+            state = KillSwitchState.ENGAGED if is_global else KillSwitchState.OK
+        age = None if refreshed is None else moment - refreshed
+        return KillEvaluation(
+            state.value, is_global, org_engaged, org_model, model_engaged, age,
+        )
+
+    def isolation_record(self, model: str) -> IsolationRecord | None:
+        """The raw, UN-expired isolation record for a canonical model name, or None."""
+        with self._lock:
+            return self._isolations.get(model)
+
+    def isolation_models(self) -> tuple[str, ...]:
+        """Canonical names with an `on: true` isolation record. A sorted copy."""
+        with self._lock:
+            return tuple(sorted(self._isolations))
+
+    def isolation_records(self) -> tuple[IsolationRecord, ...]:
+        """Every `on: true` isolation record, un-expired, as a copy taken under the lock."""
+        with self._lock:
+            return tuple(self._isolations[m] for m in sorted(self._isolations))
+
     def view(self) -> KillSwitchView:
         with self._lock:
             return KillSwitchView(
@@ -157,6 +228,9 @@ class KillSwitchSnapshot:
                 orgs=frozenset(self._orgs),
                 models=frozenset(self._models),
                 feed_seq=self._feed_seq,
+                org_models=len(self._org_models),
+                isolations=len(self._isolations),
+                quarantined=len(self._quarantined),
             )
 
     def refresh_age_seconds(self, now: float | None = None) -> float | None:
@@ -181,6 +255,11 @@ class KillSwitchSnapshot:
             self._engaged = False
             self._orgs = set()
             self._models = set()
+            self._org_models = set()
+            self._isolations = {}
+            self._quarantined = set()
+            self._on_keys = {}
+            self._refs = {}
             self._feed_seq = 0
             self._absorb_locked(records, attested_feed_seq, attested_engaged, moment)
 
@@ -210,43 +289,99 @@ class KillSwitchSnapshot:
         attested_engaged: int | None,
         moment: float,
     ) -> None:
+        try:
+            self._absorb_checked(records, attested_feed_seq, attested_engaged)
+        except StoreDataUnavailable:
+            # Drift latch (C3): whatever was half-applied must not be served as fresh. Clearing the
+            # stamp makes the snapshot STALE immediately, not after `stale_ms`; a later clean round
+            # sets it again.
+            self._refreshed_at = None
+            raise
+        self._feed_seq = max(self._feed_seq, attested_feed_seq)
+        self._refreshed_at = moment
+
+    def _absorb_checked(
+        self,
+        records: Sequence[SignedRecord],
+        attested_feed_seq: int,
+        attested_engaged: int | None,
+    ) -> None:
         for record in records:
             if record.feed_seq > attested_feed_seq:
                 continue  # above the attested generation: a publish in flight
-            self._set_scope(record.key, scope_is_on(record))
+            self._apply_record_locked(record)
         if attested_engaged is not None:
-            held = len(self._orgs) + len(self._models) + (1 if self._engaged else 0)
+            held = len(self._on_keys)
             if held != attested_engaged:
                 raise StoreDataUnavailable(
                     f"kill-switch snapshot holds {held} engaged scopes, the manifest attests "
                     f"{attested_engaged}",
                 )
-        self._feed_seq = max(self._feed_seq, attested_feed_seq)
-        self._refreshed_at = moment
 
-    def _set_scope(self, scope: str, on: bool) -> None:
-        if scope == GLOBAL_SCOPE:
+    def _apply_record_locked(self, record: SignedRecord) -> None:
+        """Apply one record: parse the scope, read `on`, move the engaged entry it names."""
+        on = scope_is_on(record)
+        parsed = parse_scope(record.key, self._aliases)
+        entry = _entry(record.key, parsed)
+        previous = self._on_keys.get(record.key)
+        if not on:
+            if previous is not None:
+                del self._on_keys[record.key]
+                self._release(previous)
+            return
+        if previous is not None and previous != entry:
+            self._release(previous)
+        self._on_keys[record.key] = entry
+        if previous != entry:
+            self._acquire(entry)
+        if parsed.kind is ScopeKind.ISOLATION and parsed.model is not None:
+            self._isolations[parsed.model] = parse_isolation_body(
+                record, parsed.model, self._aliases,
+            )
+
+    def _acquire(self, entry: tuple[ScopeKind, str | None, str | None]) -> None:
+        count = self._refs.get(entry, 0)
+        self._refs[entry] = count + 1
+        if count == 0:
+            self._toggle_entry(entry, True)
+
+    def _release(self, entry: tuple[ScopeKind, str | None, str | None]) -> None:
+        count = self._refs.get(entry, 0) - 1
+        if count > 0:
+            self._refs[entry] = count
+            return
+        self._refs.pop(entry, None)
+        self._toggle_entry(entry, False)
+
+    def _toggle_entry(self, entry: tuple[ScopeKind, str | None, str | None], on: bool) -> None:
+        kind, org, model = entry
+        if kind is ScopeKind.GLOBAL:
             self._engaged = on
-            return
-        if scope.startswith(ORG_PREFIX):
-            self._toggle(self._orgs, scope[len(ORG_PREFIX):], on, scope)
-            return
-        if scope.startswith(MODEL_PREFIX):
-            self._toggle(self._models, scope[len(MODEL_PREFIX):], on, scope)
-            return
-        raise StoreDataUnavailable(
-            f"kill-switch scope {scope!r} is not recognised; an unknown scope could be an "
-            "engaged switch this process would ignore",
-        )
+        elif kind is ScopeKind.ORG and org is not None:
+            _flip(self._orgs, org, on)
+        elif kind is ScopeKind.MODEL and model is not None:
+            _flip(self._models, model, on)
+        elif kind is ScopeKind.ORG_MODEL and org is not None and model is not None:
+            _flip(self._org_models, (org, model), on)
+        elif kind is ScopeKind.ISOLATION and model is not None:
+            if not on:
+                self._isolations.pop(model, None)
+        elif org is not None:  # a quarantined key: org slot carries the raw key
+            _flip(self._quarantined, org, on)
 
-    @staticmethod
-    def _toggle(target: set[str], name: str, on: bool, scope: str) -> None:
-        if not name:
-            raise StoreDataUnavailable(f"kill-switch scope {scope!r} names nothing")
-        if on:
-            target.add(name)
-        else:
-            target.discard(name)
+
+def _entry(key: str, parsed: ParsedScope) -> tuple[ScopeKind, str | None, str | None]:
+    """The engaged entry a record names. A quarantined record is keyed by its raw key."""
+    if parsed.quarantined:
+        return (parsed.kind, key, None)
+    return (parsed.kind, parsed.org, parsed.model)
+
+
+def _flip[T](target: set[T], item: T, on: bool) -> None:
+    if on:
+        target.add(item)
+    else:
+        target.discard(item)
 
 
 def engaged_scopes(records: Iterable[SignedRecord], attested_feed_seq: int) -> tuple[str, ...]:

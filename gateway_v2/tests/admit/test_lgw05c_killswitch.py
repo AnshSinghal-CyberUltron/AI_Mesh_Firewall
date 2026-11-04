@@ -63,7 +63,8 @@ def test_the_snapshot_structurally_cannot_read_the_store() -> None:
 
     # `stamp` is GW05b's freshness VIEW: it is handed raw bytes by the synchroniser and holds no
     # client, so it cannot become an I/O backdoor. The assertion below pins that.
-    assert parameters == {"stale_ms", "clock", "stamp"}
+    # GW29 adds `aliases`: an immutable name->name map (data, not a client): no I/O backdoor.
+    assert parameters == {"stale_ms", "clock", "stamp", "aliases"}
     for method in (
         "apply", "adopt", "state", "org_killed", "model_killed", "view", "unavailable_reason",
     ):
