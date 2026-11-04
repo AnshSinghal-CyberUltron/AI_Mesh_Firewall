@@ -144,6 +144,7 @@ class DevPlanFeed:
             streaming_mode=document.streaming_mode,
             previous=previous,
             compiled_at=compiled_at,
+            rag_settings=document.rag_settings,
         )
 
 

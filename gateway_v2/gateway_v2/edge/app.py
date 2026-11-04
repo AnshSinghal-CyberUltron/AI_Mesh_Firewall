@@ -11,7 +11,7 @@ What this assembles (R2.1):
 
 * a **router** — the ``(method, path) -> handler`` table built by
   :func:`gateway_v2.edge.routes.build_routes`, with the streaming chat route wired live and the
-  responses/misc/mcp/rag surfaces registered as declared not-implemented placeholders (R2.2/R2.3);
+  responses/misc/mcp/rag surfaces (an unwired one is a declared placeholder, R2.2/R2.3);
 * a **lifespan** handler — drains the ASGI ``lifespan`` protocol (``startup`` / ``shutdown``) so
   a conforming server can boot and stop the app cleanly;
 * **``/readyz``** — returns ``200`` when every required state dependency is available and a
@@ -75,6 +75,7 @@ from gateway_v2.edge.mcp_deps import McpDeps
 from gateway_v2.edge.openai_misc import MiscRoute
 from gateway_v2.edge.outcome_metrics import OutcomeObserver
 from gateway_v2.edge.phase_resolvers import PhaseResolverFactory
+from gateway_v2.edge.rag_deps import RagDeps
 from gateway_v2.edge.readiness import (
     METRICS_DIRECTORY_REASON,
     DirectoryGate,
@@ -248,6 +249,7 @@ def build_app(
     audit: Callable[[AuditRecord], bool] | None = None,
     response_store: ResponseStore | None = None,
     mcp: McpDeps | None = None,
+    rag: RagDeps | None = None,
     observer: OutcomeObserver | None = None,
     holdback_metrics: HoldbackMetrics | None = None,
 ) -> ASGIApplication:
@@ -277,11 +279,9 @@ def build_app(
     **GW16 misc-surface wiring (task 7.1/8.1/10.1).** The single :class:`MiscRoute` is built via
     :func:`_build_misc_route`; ``build_routes`` returns the exact + prefix tables held on the skin.
     ``catalog`` feeds the Models surface (default :data:`empty_catalog_source`, R7.4).
-    ``response_store`` backs ``/v1/responses``; ``mcp`` wires ``/v1/mcp`` (``None``: 501).
-
+    ``response_store``: /v1/responses; ``mcp``: /v1/mcp (``None``: 501); ``rag``: RAG and vector.
     **GW15 §10.4 (task 6.1).** The single :class:`ChatRoute` is built ONCE via
     :func:`_build_chat_route`; each unwired dep falls back to its fail-closed default.
-
     ``build_app`` stays pure assembly (no store read, no task spawned); the serving bounds derive
     from the injected ``ResourceContract`` / ``HoldbackConfig`` with no capacity literal in
     ``edge``. Returns the ``async def app(scope, receive, send)`` callable.
@@ -329,7 +329,7 @@ def build_app(
         phase_resolvers=phase_resolvers,
         observer=observer,
     )
-    exact, prefix = build_routes(chat, misc, response_store, mcp)
+    exact, prefix = build_routes(chat, misc, response_store, mcp, rag)
     probe = _resolve_readiness(
         readiness=readiness, metrics_registry=metrics_registry, state_view=state_view
     )

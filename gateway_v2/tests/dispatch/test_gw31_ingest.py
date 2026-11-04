@@ -7,10 +7,10 @@ import asyncio
 from gateway_v2.dispatch.rag_chunks import InMemoryChunkStore
 from gateway_v2.dispatch.rag_embedding import DeterministicHashEmbedder
 from gateway_v2.dispatch.rag_ingest import (
-    InMemoryJobStore,
     IngestDoc,
     IngestJob,
     IngestQueue,
+    InMemoryJobStore,
     write_batch,
 )
 from gateway_v2.dispatch.rag_retrieval import retrieve

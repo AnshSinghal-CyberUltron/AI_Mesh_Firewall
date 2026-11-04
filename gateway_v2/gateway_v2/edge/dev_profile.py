@@ -80,6 +80,7 @@ from gateway_v2.edge.dev_components import (
 from gateway_v2.edge.dev_mcp import build_dev_mcp
 from gateway_v2.edge.dev_metrics import build_dev_publisher
 from gateway_v2.edge.dev_plan_feed import DevPlanFeed, DevPlanWatch
+from gateway_v2.edge.dev_rag import attach_dev_surfaces
 from gateway_v2.edge.responses_store import ValkeyResponseStore
 from gateway_v2.edge.wire.sse import SSEDecoder
 from gateway_v2.runtime.errors import CapacityUnavailable, CapacityUnset
@@ -388,8 +389,7 @@ def build_dev_dependencies(
     if cfg.lease is not None:
         mcp_redis = _redis_client(cfg.lease.redis_url, timeout_s=contract.cancellation_bound_s())
     mcp, mcp_note = build_dev_mcp(env, contract, redis_client=mcp_redis, clock=time.monotonic)
-    if mcp is not None:
-        deps["mcp"] = mcp
+    attach_dev_surfaces(deps, mcp, env, contract)
     exports, holdback = PerRequestExports(), HoldbackMetrics()
     runtime = deps.get("audit_runtime")
     publisher, metrics_note = build_dev_publisher(

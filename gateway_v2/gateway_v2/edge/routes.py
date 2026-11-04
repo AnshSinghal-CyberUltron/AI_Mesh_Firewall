@@ -90,6 +90,7 @@ from gateway_v2.edge.openai_misc import (
 from gateway_v2.edge.openai_misc_models import ModelsSurface
 from gateway_v2.edge.outcome_metrics import OutcomeObserver
 from gateway_v2.edge.phase_resolvers import PhaseResolverFactory, resolver_for
+from gateway_v2.edge.rag_deps import RagDeps
 from gateway_v2.edge.request_holds import RequestHolds
 from gateway_v2.edge.responses_store import ResponseStore
 from gateway_v2.edge.stream_control import FirstByteLatch, StreamAttempt, run_with_no_splice
@@ -763,13 +764,13 @@ def _placeholder(surface: str) -> RouteHandler:
 
 def build_routes(
     chat: ChatRoute, misc: MiscRoute, response_store: ResponseStore | None = None,
-    mcp: McpDeps | None = None,
+    mcp: McpDeps | None = None, rag: RagDeps | None = None,
 ) -> tuple[RouteTable, RouteTable]:
     """Assemble the two route tables: the exact ``(method, path)`` table + the prefix table.
 
     GW16 wires embeddings, models, and moderations over :class:`MiscRoute`. GW15 wires
     ``/v1/responses`` over ``chat`` (memory store when ``None``). GW17 wires ``/v1/mcp`` when
-    ``mcp`` is given, else it stays ``501``; RAG/vector stay ``501`` (R1.3).
+    ``mcp`` is given, else it stays ``501``; GW31 wires RAG/vector (``rag=None``: 503).
 
     ``GET /v1/models/{id}`` (retrieve) cannot be a static exact key, so a SECOND function-local
     ``prefix`` table binds ``("GET", "/v1/models/")`` → :meth:`ModelsSurface.handle_retrieve`
@@ -781,7 +782,7 @@ def build_routes(
     """
     from gateway_v2.edge.surface_entries import surface_entries
 
-    responses_exact, responses_prefix = surface_entries(chat, response_store, mcp)
+    responses_exact, responses_prefix = surface_entries(chat, response_store, mcp, rag)
     exact: RouteTable = {
         ("POST", "/v1/chat/completions"): chat.handle,
         ("POST", "/v1/completions"): chat.handle,
@@ -789,8 +790,6 @@ def build_routes(
         ("POST", "/v1/embeddings"): EmbeddingsSurface(deps=misc).handle,
         ("GET", "/v1/models"): ModelsSurface(deps=misc).handle_list,
         ("POST", "/v1/moderations"): ModerationsSurface(deps=misc).handle,
-        ("POST", "/v1/rag/query"): _placeholder("rag"),
-        ("POST", "/v1/vector/query"): _placeholder("vector"),
     }
     prefix: RouteTable = {
         ("GET", "/v1/models/"): ModelsSurface(deps=misc).handle_retrieve,
