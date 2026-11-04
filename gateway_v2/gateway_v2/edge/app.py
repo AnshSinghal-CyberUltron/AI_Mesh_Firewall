@@ -44,7 +44,7 @@ bounds all derive from the injected ``ResourceContract``.
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, replace
 from typing import Protocol, runtime_checkable
 
@@ -52,9 +52,11 @@ from gateway_v2.audit.record import AuditRecord
 from gateway_v2.dispatch.provider import ProviderClient
 from gateway_v2.dispatch.routing import DispatchRouter
 from gateway_v2.dispatch.transform import Transform
-from gateway_v2.domain import Finding
 from gateway_v2.edge import errors
-from gateway_v2.edge.cancel import InFlightControlSource, InFlightSnapshot
+from gateway_v2.edge.app_defaults import NoControlSource as _NoControlSource
+from gateway_v2.edge.app_defaults import no_error_findings as _no_error_findings
+from gateway_v2.edge.app_defaults import one_stream as _one_stream
+from gateway_v2.edge.cancel import InFlightControlSource
 from gateway_v2.edge.chat_deps import (
     AdmissionDecider,
     BudgetDecider,
@@ -91,6 +93,7 @@ from gateway_v2.edge.routes import (
     build_routes,
     emit_response,
 )
+from gateway_v2.edge.unauth_audit import UnauthAuditGate
 from gateway_v2.edge.wire.openai import OpenAIRequestParser, OpenAIResponseRenderer
 from gateway_v2.edge.wire.openai_misc import MiscResponseRenderer
 from gateway_v2.egress.output_guard import OutputResolver
@@ -250,6 +253,7 @@ def build_app(
     mcp: McpDeps | None = None,
     observer: OutcomeObserver | None = None,
     holdback_metrics: HoldbackMetrics | None = None,
+    unauth_audit: UnauthAuditGate | None = None,
 ) -> ASGIApplication:
     """Assemble the raw-ASGI serving skin (R2.1).
 
@@ -287,9 +291,8 @@ def build_app(
     ``edge``. Returns the ``async def app(scope, receive, send)`` callable.
     """
     cfg, _cfg_logs = load_holdback_config()
-    # C38 serving-loop discipline (R13.1): the GIL-releasing executor the CPU-bound scan work is
-    # offloaded to, sized by `contract.pool_size(PoolKind.SCANNER)` (no thread-count literal); built
-    # once at assembly, shared across every stream, released on lifespan shutdown.
+    # C38 serving-loop discipline (R13.1): the GIL-releasing scan executor, sized by
+    # `contract.pool_size(PoolKind.SCANNER)`; built once, shared by every stream.
     scan_executor = ScanExecutor(contract=contract)
     chat = _build_chat_route(
         contract=contract,
@@ -313,6 +316,7 @@ def build_app(
         audit=audit,
         observer=observer,
         holdback_metrics=holdback_metrics,
+        unauth_audit=unauth_audit,
     )
     misc = _build_misc_route(
         contract=contract,
@@ -367,6 +371,7 @@ def _build_chat_route(
     audit: Callable[[AuditRecord], bool] | None = None,
     observer: OutcomeObserver | None = None,
     holdback_metrics: HoldbackMetrics | None = None,
+    unauth_audit: UnauthAuditGate | None = None,
 ) -> ChatRoute:
     """Construct the single chat route. Unwired deps use their fail-closed defaults.
 
@@ -404,6 +409,7 @@ def _build_chat_route(
         audit=audit,
         observer=observer,
         holdback_metrics=holdback_metrics if holdback_metrics is not None else HoldbackMetrics(),
+        unauth_audit=unauth_audit,
     )
 
 
@@ -740,54 +746,6 @@ def _compose_directory_after(
         return True, None
 
     return probe
-
-
-def _no_error_findings(_frame: str) -> Sequence[Finding]:
-    """The default error-frame findings scanner when GW07/GW08's detector is not yet wired.
-
-    Returns NO findings, so a mid-stream error frame resolves to ALLOW and is forwarded unchanged
-    (R11.2) — the same thin-handler posture as the content path, which runs the shipped pipeline
-    with ``detector=None`` (no findings) until GW15 wires the real detector. This is NOT a
-    fail-open hole: a withhold only happens on a BLOCK decision or a scan error (R11.3/R11.4), and
-    the default scanner never raises; a deployment that must guard error frames injects the real
-    findings detector through :func:`build_app`'s ``error_scanner`` (above ``detect``), at which
-    point a secret in an error frame is redacted/blocked exactly as in released content.
-    """
-    return ()
-
-
-def _one_stream() -> int:
-    """The default live-concurrency count when GW19's counter is not yet wired.
-
-    One active stream — so the coalescer's derived per-stream high-water is computed for a single
-    stream. Not a capacity literal: it is a count of in-flight streams, the quantity the live
-    counter reports, not a configured bound.
-    """
-    return 1
-
-
-class _NoControlSource:
-    """The default in-flight control source when the control-plane feed is not yet wired.
-
-    Reports a FRESH, AVAILABLE snapshot with every signal clear, so a stream runs under the
-    max-duration deadline alone until GW05/GW06 inject the real kill-switch / revocation / plan
-    feed. ``age_s=0.0`` keeps it inside any derived ``max_snapshot_age_s()`` (so it is not treated
-    as stale), and ``available=True`` means it does not trip the fail-closed path for a deployment
-    that simply has not wired the control plane yet. A real source replaces this with the signed
-    snapshot read; the max-stream-duration trigger is active regardless, since that bound is purely
-    the injected clock vs the contract.
-    """
-
-    __slots__ = ()
-
-    def snapshot(self) -> InFlightSnapshot:
-        return InFlightSnapshot(
-            available=True,
-            age_s=0.0,
-            kill_switch_engaged=False,
-            key_revoked=False,
-            plan_changed=False,
-        )
 
 
 # --------------------------------------------------------------------------- #

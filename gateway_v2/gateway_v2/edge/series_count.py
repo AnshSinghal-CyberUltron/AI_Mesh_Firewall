@@ -41,7 +41,7 @@ WINDOWED_BUSY_SERIES_COUNT = 1
 READ_FAILURES_SERIES = 1
 
 
-def series_count(contract: ResourceContract) -> int:
+def series_count(contract: ResourceContract, extra_series: int = 0) -> int:
     """The fixed by-construction series count for a Publisher built on ``contract`` (R15.1).
 
     A function of the six producers' ``SERIES_COUNT`` plus the contract-derived ``K`` plus the
@@ -70,6 +70,7 @@ def series_count(contract: ResourceContract) -> int:
     * ``len(POSTURE_CODES)`` posture-refusal counters + 1 coverage-gap indicator (R7.5/14.3).
     * 3 for the windowed C4 add-on histogram (R4) + 1 windowed-busy gauge (R11.3/11.4).
     * 1 for the Publisher's own ``producer_read_failures_total`` indicator (R1.3).
+    * ``extra_series``: the optional GW35 unauthenticated-audit counters (2), or 0 when unwired.
     """
     return (
         AdmissionMetrics.SERIES_COUNT
@@ -89,4 +90,5 @@ def series_count(contract: ResourceContract) -> int:
         + HISTOGRAM_SERIES
         + WINDOWED_BUSY_SERIES_COUNT
         + READ_FAILURES_SERIES
+        + extra_series
     )

@@ -65,6 +65,7 @@ from gateway_v2.edge.series_count import OVERFLOW_SERIES as _OVERFLOW_SERIES
 from gateway_v2.edge.series_count import READ_FAILURES_SERIES as _READ_FAILURES_SERIES
 from gateway_v2.edge.series_count import WINDOWED_BUSY_SERIES_COUNT as _WINDOWED_BUSY_SERIES_COUNT
 from gateway_v2.edge.series_count import series_count as _series_count
+from gateway_v2.edge.unauth_audit import UnauthAuditCounters
 from gateway_v2.edge.windowed import DEFAULT_BOUNDS, WindowedBusyGauge, WindowedHistogram
 from gateway_v2.runtime.holdback_metrics import HoldbackMetrics
 from gateway_v2.runtime.resources import ResourceContract
@@ -178,6 +179,7 @@ class Publisher:
         "_clock",
         "SERIES_COUNT",
         "_read_failures",
+        "_unauth",
     )
 
     def __init__(
@@ -199,7 +201,9 @@ class Publisher:
         event_log: StructuredEventLog,
         contract: ResourceContract,
         clock: Callable[[], float],
+        unauth: UnauthAuditCounters | None = None,
     ) -> None:
+        self._unauth = unauth
         self._admission = admission
         self._quota = quota
         self._audit = audit
@@ -221,7 +225,9 @@ class Publisher:
         #: never recomputes it and the scrape-path assertion reads a constant. Invariant to the
         #: observed tenant count because the tenant term is the fixed ``K + 1`` (R15.3, Property 2).
         #: The term-by-term reconciliation is documented on :func:`_series_count`.
-        self.SERIES_COUNT: int = _series_count(contract)
+        self.SERIES_COUNT: int = _series_count(
+            contract, 0 if unauth is None else UnauthAuditCounters.SERIES_COUNT,
+        )
         # The Publisher's own read-failure indicator (R1.3), a real zero from construction.
         self._read_failures: int = 0
 
@@ -239,6 +245,7 @@ class Publisher:
         event_log: StructuredEventLog,
         contract: ResourceContract,
         clock: Callable[[], float],
+        unauth: UnauthAuditCounters | None = None,
     ) -> Publisher:
         """Build a Publisher whose three mechanisms derive from ``contract`` + ``clock`` (the
         production path).
@@ -269,6 +276,7 @@ class Publisher:
             event_log=event_log,
             contract=contract,
             clock=clock,
+            unauth=unauth,
         )
 
     # ----------------------------------------------------------------------- #
@@ -299,7 +307,12 @@ class Publisher:
         # (1) flat producers — series() -> dict[str, float]. Each adapter returns its families and
         # the number of SERIES it rendered (labelled series within one family each count toward the
         # producer's SERIES_COUNT).
-        for adapter in (self._audit_families, self._rehydration_families, self._state_families):
+        for adapter in (
+            self._audit_families,
+            self._rehydration_families,
+            self._state_families,
+            self._unauth_families,
+        ):
             fams, count = self._guarded_flat(adapter)
             families.extend(fams)
             rendered += count
@@ -389,6 +402,12 @@ class Publisher:
         """The state-propagation producer — all scalar families, incl. the ``ABSENT = -1.0``
         sentinel gauges which pass through unchanged (they are not rates — R5.5)."""
         return self._flat_scalar_families(self._state.series())
+
+    def _unauth_families(self) -> tuple[list[Family], int]:
+        """GW35 unauthenticated-audit counters; absent (0 series) when no gate is wired."""
+        if self._unauth is None:
+            return [], 0
+        return self._flat_scalar_families(self._unauth.series())
 
     def _flat_scalar_families(self, series: Mapping[str, float]) -> tuple[list[Family], int]:
         """Group a flat ``series()`` dict into typed scalar families, de-dup-safe (R1.4/1.5/1.7).

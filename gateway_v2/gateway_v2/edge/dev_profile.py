@@ -81,6 +81,7 @@ from gateway_v2.edge.dev_mcp import build_dev_mcp
 from gateway_v2.edge.dev_metrics import build_dev_publisher
 from gateway_v2.edge.dev_plan_feed import DevPlanFeed, DevPlanWatch
 from gateway_v2.edge.responses_store import ValkeyResponseStore
+from gateway_v2.edge.unauth_audit import UnauthAuditCounters, build_unauth_gate
 from gateway_v2.edge.wire.sse import SSEDecoder
 from gateway_v2.runtime.errors import CapacityUnavailable, CapacityUnset
 from gateway_v2.runtime.holdback_metrics import HoldbackMetrics
@@ -375,12 +376,7 @@ def build_dev_dependencies(
         "catalog": catalog,
     }
     audit_note = _attach_audit(
-        deps,
-        cfg=cfg,
-        budget=budget,
-        queue_depth=bounds.audit_depth,
-        env=env,
-        contract=contract,
+        deps, cfg=cfg, budget=budget, queue_depth=bounds.audit_depth, env=env, contract=contract,
     )
     plan_note = _attach_plan_watch(deps, cfg=cfg, feed=feed, contract=contract)
     store_note = _attach_response_store(deps, cfg=cfg, contract=contract)
@@ -392,6 +388,7 @@ def build_dev_dependencies(
         deps["mcp"] = mcp
     exports, holdback = PerRequestExports(), HoldbackMetrics()
     runtime = deps.get("audit_runtime")
+    gate = deps["unauth_audit"] = build_unauth_gate(contract, time.monotonic)
     publisher, metrics_note = build_dev_publisher(
         contract=contract,
         admission=admission_metrics,
@@ -399,6 +396,7 @@ def build_dev_dependencies(
         audit=runtime if isinstance(runtime, DevAudit) else None,
         exports=exports,
         holdback=holdback,
+        unauth=UnauthAuditCounters(gate),
     )
     deps.update(
         metrics_registry=publisher, observer=publisher, exports=exports, holdback_metrics=holdback

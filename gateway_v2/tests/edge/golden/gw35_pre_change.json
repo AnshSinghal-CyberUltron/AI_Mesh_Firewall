@@ -1,0 +1,93 @@
+{
+  "budget_unavailable": {
+    "body": "{\"error\":{\"message\":\"The stream was terminated by the gateway.\",\"type\":\"service_unavailable\",\"code\":\"budget_unavailable\",\"param\":null,\"request_id\":\"zs-ID\"}}",
+    "headers": {
+      "content-type": "application/json",
+      "x-request-id": "zs-ID"
+    },
+    "status": 503
+  },
+  "input_blocked": {
+    "body": "{\"error\":{\"message\":\"The request was blocked by an input content policy.\",\"type\":\"invalid_request_error\",\"code\":\"input_blocked\",\"param\":null,\"request_id\":\"zs-ID\"},\"zeroshield\":{\"action\":\"block\",\"request_id\":\"zs-ID\"},\"pipeline_trace\":{\"final_action\":\"block\",\"plan_version\":\"1.1.19663cec401a7665\",\"stages\":[{\"name\":\"auth\",\"action\":\"allow\",\"ran\":true},{\"name\":\"rate_limit\",\"action\":\"allow\",\"ran\":true},{\"name\":\"input_scan\",\"action\":\"block\",\"ran\":true,\"deciding_rule\":\"dev-secret-block\"},{\"name\":\"model_routing\",\"action\":\"skip\",\"ran\":false},{\"name\":\"model_output\",\"action\":\"skip\",\"ran\":false},{\"name\":\"output_guardrail\",\"action\":\"skip\",\"ran\":false}]}}",
+    "headers": {
+      "content-type": "application/json",
+      "x-request-id": "zs-ID",
+      "x-zeroshield-action": "block"
+    },
+    "status": 400
+  },
+  "invalid_key": {
+    "body": "{\"error\":{\"message\":\"Incorrect API key provided. Pass a valid key as 'Authorization: Bearer <key>'.\",\"type\":\"invalid_request_error\",\"code\":\"invalid_api_key\",\"param\":null,\"request_id\":\"zs-ID\"}}",
+    "headers": {
+      "content-type": "application/json",
+      "www-authenticate": "Bearer",
+      "x-request-id": "zs-ID"
+    },
+    "status": 401
+  },
+  "missing_key": {
+    "body": "{\"error\":{\"message\":\"Incorrect API key provided. Pass a valid key as 'Authorization: Bearer <key>'.\",\"type\":\"invalid_request_error\",\"code\":\"invalid_api_key\",\"param\":null,\"request_id\":\"zs-ID\"}}",
+    "headers": {
+      "content-type": "application/json",
+      "www-authenticate": "Bearer",
+      "x-request-id": "zs-ID"
+    },
+    "status": 401
+  },
+  "overload_shed": {
+    "body": "{\"error\":{\"message\":\"The stream was terminated by the gateway.\",\"type\":\"service_unavailable\",\"code\":\"overload_shed\",\"param\":null,\"request_id\":\"zs-ID\"}}",
+    "headers": {
+      "content-type": "application/json",
+      "x-request-id": "zs-ID"
+    },
+    "status": 503
+  },
+  "plan_unavailable": {
+    "body": "{\"error\":{\"message\":\"The stream was terminated by the gateway.\",\"type\":\"service_unavailable\",\"code\":\"plan_unavailable\",\"param\":null,\"request_id\":null}}",
+    "headers": {
+      "content-type": "application/json"
+    },
+    "status": 503
+  },
+  "rate_limited": {
+    "body": "{\"error\":{\"message\":\"The stream was terminated by the gateway.\",\"type\":\"rate_limit_error\",\"code\":\"rate_limited\",\"param\":null,\"request_id\":\"zs-ID\"}}",
+    "headers": {
+      "content-type": "application/json",
+      "x-request-id": "zs-ID"
+    },
+    "status": 429
+  },
+  "shared_state_unavailable": {
+    "body": "{\"error\":{\"message\":\"The stream was terminated by the gateway.\",\"type\":\"service_unavailable\",\"code\":\"shared_state_unavailable\",\"param\":null,\"request_id\":\"zs-ID\"}}",
+    "headers": {
+      "content-type": "application/json",
+      "x-request-id": "zs-ID"
+    },
+    "status": 503
+  },
+  "stream_identity_refusal": {
+    "body": "{\"error\":{\"message\":\"Incorrect API key provided. Pass a valid key as 'Authorization: Bearer <key>'.\",\"type\":\"invalid_request_error\",\"code\":\"invalid_api_key\",\"param\":null,\"request_id\":\"zs-ID\"}}",
+    "headers": {
+      "content-type": "application/json",
+      "www-authenticate": "Bearer",
+      "x-request-id": "zs-ID"
+    },
+    "status": 401
+  },
+  "upstream_error": {
+    "body": "{\"error\":{\"message\":\"The model provider returned an error.\",\"type\":\"gateway_error\",\"code\":\"upstream_error\",\"param\":null,\"request_id\":null},\"zeroshield\":{\"action\":\"block\",\"request_id\":\"zs-ID\"},\"pipeline_trace\":{\"final_action\":\"block\",\"plan_version\":\"1.1.19663cec401a7665\",\"stages\":[{\"name\":\"auth\",\"action\":\"allow\",\"ran\":true},{\"name\":\"rate_limit\",\"action\":\"allow\",\"ran\":true},{\"name\":\"input_scan\",\"action\":\"allow\",\"ran\":true},{\"name\":\"model_routing\",\"action\":\"allow\",\"ran\":true},{\"name\":\"model_output\",\"action\":\"allow\",\"ran\":true},{\"name\":\"output_guardrail\",\"action\":\"block\",\"ran\":true}]}}",
+    "headers": {
+      "content-type": "application/json",
+      "x-zeroshield-action": "block"
+    },
+    "status": 502
+  },
+  "upstream_rate_limited": {
+    "body": "{\"error\":{\"message\":\"The model provider is rate limiting.\",\"type\":\"rate_limit_error\",\"code\":\"upstream_rate_limited\",\"param\":null,\"request_id\":null},\"zeroshield\":{\"action\":\"block\",\"request_id\":\"zs-ID\"},\"pipeline_trace\":{\"final_action\":\"block\",\"plan_version\":\"1.1.19663cec401a7665\",\"stages\":[{\"name\":\"auth\",\"action\":\"allow\",\"ran\":true},{\"name\":\"rate_limit\",\"action\":\"allow\",\"ran\":true},{\"name\":\"input_scan\",\"action\":\"allow\",\"ran\":true},{\"name\":\"model_routing\",\"action\":\"allow\",\"ran\":true},{\"name\":\"model_output\",\"action\":\"allow\",\"ran\":true},{\"name\":\"output_guardrail\",\"action\":\"block\",\"ran\":true}]}}",
+    "headers": {
+      "content-type": "application/json",
+      "x-zeroshield-action": "block"
+    },
+    "status": 429
+  }
+}
