@@ -550,8 +550,12 @@ import {
   notReported,
 } from "./pipelineTrace.js";
 
-test("GW35: the stage-action vocabulary is the six words the gateway schema speaks", () => {
-  assert.deepEqual([...STAGE_ACTION_VOCAB].sort(), ["allow", "block", "error", "flag", "redact", "skip"]);
+test("GW35: the stage-action vocabulary is the words the gateway schema speaks (GW33 adds rewrite)", () => {
+  assert.deepEqual(
+    [...STAGE_ACTION_VOCAB].sort(),
+    ["allow", "block", "error", "flag", "redact", "rewrite", "skip"],
+  );
+  assert.equal(GW35_BADGE.rewrite, "rewritten");
   assert.equal(GW35_BADGE.error, "error");
 });
 
