@@ -29,7 +29,7 @@ a terminate-the-stream class maps to ``BLOCK``.
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from types import MappingProxyType
 from typing import Protocol, runtime_checkable
 
@@ -48,8 +48,10 @@ from gateway_v2.domain import (
     Transformation,
     most_restrictive,
 )
+from gateway_v2.egress.rewrite_verify import has_rewrite_edit, verify_rewrites
 
 __all__ = (
+    "FinalDetector",
     "DEFAULT_PLAN_VERSION",
     "REDACTION_PLACEHOLDER",
     "MinimalOutputResolver",
@@ -59,6 +61,9 @@ __all__ = (
     "enforcing_output_rules",
 )
 
+#: D-22: the async whole-channel check run once after the last chunk. Arguments: channel name and
+#: the whole channel text. `edge` composes it; egress only knows the type.
+FinalDetector = Callable[[str, str], Awaitable[Sequence[Finding]]]
 #: The placeholder a redaction ``Transformation`` writes in place of a span. A
 #: fixed sentinel is enough for the harness; GW08's resolver may vary it.
 REDACTION_PLACEHOLDER: str = "[REDACTED]"
@@ -142,6 +147,9 @@ _CLASS_DISPOSITION: Mapping[str, Disposition] = MappingProxyType(
         # terminate-the-stream classes -> BLOCK.
         "jwt": Disposition.BLOCK,
         "card": Disposition.BLOCK,
+        # GW33 D-26: a canary is a leak tripwire; its default is BLOCK. `ip_leak` and `exfil_sink`
+        # are intentionally ABSENT (D-9): neither is holdable in INCREMENTAL.
+        "canary": Disposition.BLOCK,
     },
 )
 
@@ -282,4 +290,7 @@ def apply_decision(released: str, decision: Decision, base_offset: int) -> str:
         out.append(replacement)
         cursor = end
     out.append(released[cursor:])
-    return "".join(out)
+    result = "".join(out)
+    if has_rewrite_edit(decision, base_offset, length):
+        verify_rewrites(released, result, decision, base_offset)
+    return result

@@ -54,7 +54,7 @@ class Decision:
     plan_version: str
     deciding_rules: tuple[str, ...]
     unavailable_detectors: tuple[str, ...]
-    # GW33 C1: computed once by the resolver (``resolve/review.py``); egress/edge/audit only copy it.
+    # GW33 C1: computed once by the resolver (``resolve/review.py``); later layers only copy it.
     review_required: bool = False
     # Declared codes only (``posture.DECISION_CODES``), never content.
     codes: tuple[str, ...] = ()
@@ -82,8 +82,9 @@ def _union(first: tuple[str, ...], second: tuple[str, ...]) -> tuple[str, ...]:
     return tuple(dict.fromkeys((*first, *second)))
 def combine_decisions(a: Decision, b: Decision) -> Decision:
     """Merge two decisions (D-22): most restrictive disposition, ``review_required`` OR, ordered
-    union of rules/codes/unavailable detectors, per-finding concatenation, and the transformations of
-    the KEPT (more restrictive; ``a`` on a tie) decision only. Pure; re-validated by ``Decision``.
+    union of rules/codes/unavailable detectors, per-finding concatenation, and the
+    transformations of the KEPT (more restrictive; ``a`` on a tie) decision only. Pure;
+    re-validated by ``Decision``.
 
     The result is an audit aggregate. Bytes are never taken from it: each channel applies its own.
     """

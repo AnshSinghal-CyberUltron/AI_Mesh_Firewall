@@ -214,7 +214,7 @@ valid). A client fault, not a gateway posture, so it is not in the posture count
 # facts about how the bytes were produced); the last four are terminal/request codes that `egress`
 # and `edge` return and `edge/errors.py` renders. None carries content.
 EDIT_OVERLAP_REDACTED = "edit_overlap_redacted"
-"""D-7: an overlap component with differing kind/replacement collapsed to one redact over the union."""
+"""D-7: an overlap component with differing kind/replacement became one redact over the union."""
 REWRITE_TEMPLATE_MISSING = "rewrite_template_missing"
 """A hand-built REWRITE rule had no template; the resolver fell closed to BLOCK."""
 REWRITE_UNVERIFIED = "rewrite_unverified"

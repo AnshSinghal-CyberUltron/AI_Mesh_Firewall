@@ -11,9 +11,10 @@ Each accessor is a documented multiplier or fraction of an existing contract fie
 is unset, `CapacityUnavailable` on a non-positive result.
 
 D-30: `DEFAULT_OUTPUT_BOUNDS` holds the MOST SENSITIVE values the contract can derive (smallest
-minimums, largest scan allowance). `OutputBoundsMixin.output_bounds()` is clamped so a contract-derived
-detector never flags LESS than a detector built from the default. The compile-time template check
-builds its detectors from the default, so a template it accepts cannot be flagged at run time.
+minimums, largest scan allowance). `OutputBoundsMixin.output_bounds()` is clamped so a
+contract-derived detector never flags LESS than a detector built from the default. The
+compile-time template check builds its detectors from the default, so a template it accepts
+cannot be flagged at run time.
 """
 from __future__ import annotations
 
@@ -26,6 +27,9 @@ from gateway_v2.runtime.errors import CapacityUnavailable, CapacityUnset
 # D-24: the one immutable template limit. `plan/rewrite_template.py` imports it directly because
 # `compile_plan` has four call sites that hold no `ResourceContract`.
 REWRITE_TEMPLATE_MAX_CHARS: Final[int] = 128
+
+# Survivor-check floor used when no contract is in hand (`ceil(20 ms x 0.6)`, the default contract).
+DEFAULT_REWRITE_SURVIVOR_MIN_CHARS: Final[int] = 12
 
 _MS_PER_S: Final[float] = 1000.0
 # Sensitive floors (the DEFAULT bounds).
@@ -48,7 +52,7 @@ _PROPOSAL_PER_TEMPLATE: Final[int] = 8
 _CANARY_ENTROPY_BYTES: Final[int] = 17  # 136 bits -> 26 base32 characters
 _CANARY_TEXT_CHARS: Final[int] = 128
 _GROUNDING_CHARS_PER_TOKEN: Final[int] = 4
-_OUTPUT_CHARS_PER_TOKEN: Final[int] = 8  # deliberately generous: never fires on a compliant provider
+_OUTPUT_CHARS_PER_TOKEN: Final[int] = 8  # deliberately generous: never fires when compliant
 
 
 @dataclass(frozen=True, slots=True)

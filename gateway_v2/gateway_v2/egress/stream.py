@@ -22,31 +22,21 @@ sibling ``gateway_v2.egress.output_guard`` -- never ``detect``. The test files,
 which are not under the layer contract, import the concrete ``detect`` scanner
 and inject it.
 
-**Scope of this file (tasks 7.1-7.3, 9.1).** It defines the transport value
-types, the exception vocabulary, the per-text-stream state (``_Text``), the
-per-stream reading (``StreamStats``), the enforcing-output gating, the release
-loop, the latency / held-token metrics (tasks 7.1-7.3), the force-release
-trade-off state machine with its fail-closed terminal error frames (task 9.1),
-and the in-flight-kill handling (task 10): ``run`` checks ``killed()`` at each
-chunk boundary and, on a kill, cuts per ``InFlightKill.CUT_NEXT_CHUNK`` -- it
-ceases emission at that boundary, discards still-held bytes, and emits a
-``killed`` Terminal_Error_Frame (R7).
+**Scope.** Transport value types, the exception vocabulary, per-text-stream state (``_Text``),
+the per-stream reading (``StreamStats``), enforcing-output gating, the release loop, the latency /
+held-token metrics, the force-release trade-off state machine with its fail-closed terminal frames,
+and in-flight-kill handling (``killed()`` is checked at each chunk boundary; on a kill the stream is
+cut per ``InFlightKill.CUT_NEXT_CHUNK``: emission ceases, held bytes are discarded, a ``killed``
+Terminal_Error_Frame is emitted, R7). Output-decision bookkeeping lives in ``stream_publish``.
 
-**Trade-off outcome mirror (task 9.1).** The per-pattern Trade_Off_Outcome lives
-authoritatively in ``detect.holdback.TRADE_OFF``, which ``egress`` cannot import.
-The sibling ``egress.holdback_tradeoff`` module is the egress-side mirror: it
-derives each outcome from the resolver's ``Decision`` and folds a force-released
-match's still-held remainder into the output ``Decision`` as a redaction. A test
-pins that the derived outcome agrees with ``detect.holdback.TRADE_OFF``.
+**Trade-off outcome mirror.** The per-pattern outcome lives authoritatively in
+``detect.holdback.TRADE_OFF``, which ``egress`` cannot import; ``egress.holdback_tradeoff`` derives
+each outcome from the resolver's ``Decision`` and a drift test pins the two together.
 
-**Match source seam (task 9.1, GW07/GW08 drop-in).** The thin harness has no real
-detector feeding ``_Text.hits``, so a completed-match source is INJECTED as the
-optional ``detector`` callable: given the full accumulated text of a channel it
-returns completed ``Finding``s with absolute spans. ``None`` keeps the thin
-harness unchanged (tasks 7.* still pass). It is re-run on the WHOLE accumulated
-text each delta so a match that straddles a release boundary or completes only
-after force-release is seen whole (Properties 5 and 6). GW07/GW08's detector
-drops in here.
+**Match source seam.** A completed-match source is INJECTED as the optional ``detector`` callable:
+given the full accumulated text of a channel it returns completed ``Finding``s with absolute spans.
+``None`` keeps the thin harness unchanged. It is re-run on the WHOLE accumulated text each delta so
+a match that straddles a release boundary or completes only after force-release is seen whole.
 """
 
 from __future__ import annotations
@@ -63,7 +53,6 @@ from gateway_v2.domain import (
     PlanUnavailable,
     PlanUnknownTenant,
     StreamingMode,
-    most_restrictive,
 )
 from gateway_v2.egress.holdback_tradeoff import (
     TRADE_OFF_OUTCOMES,
@@ -71,7 +60,6 @@ from gateway_v2.egress.holdback_tradeoff import (
     TRADE_OFF_TERMINATE,
     ForcedReleaseTerminate,
     completed_in,
-    derive_trade_off_outcome,
     longest_unbroken_run_bytes,
     unsplittable_hold,
     with_remainder_redactions,
@@ -81,6 +69,12 @@ from gateway_v2.egress.output_guard import (
     OutputResolver,
     apply_decision,
     enforcing_output_rules,
+)
+from gateway_v2.egress.stream_publish import (
+    TradeOffUndefined,
+    forced_release_remainder_edits,
+    kept_output_decision,
+    publish_output,
 )
 from gateway_v2.egress.transport import (
     ScanProtocol,
@@ -176,12 +170,8 @@ KillSignal = Callable[[], bool]
 Detector = Callable[[str], Sequence[Finding]]
 
 
-# The structural protocols for the INJECTED scanner / token counter --
-# ``ScanResultLike``, ``ScanProtocol``, ``TokenCounterProtocol`` -- were extracted
-# to the sibling ``egress.transport`` module (to keep this file under the
-# ``check_sizes`` module-length gate) and imported above. They are kept in this
-# module's ``__all__`` so every existing ``from gateway_v2.egress.stream import
-# ScanProtocol/ScanResultLike/TokenCounterProtocol`` re-export keeps resolving.
+# ``ScanProtocol`` / ``ScanResultLike`` / ``TokenCounterProtocol`` live in ``egress.transport`` and
+# are re-exported through ``__all__`` so existing imports keep resolving.
 
 
 # --------------------------------------------------------------------------- #
@@ -195,10 +185,6 @@ class HoldbackOverflow(Exception):
     Filled in by task 9; defined here so the vocabulary is complete and the
     scanner's ``overflow`` signal has a home.
     """
-
-
-class TradeOffUndefined(Exception):
-    """An over-cap pattern has no declared trade-off outcome (R6.6). Task 9."""
 
 
 class ScanFailure(Exception):
@@ -524,14 +510,14 @@ class StreamPipeline:
             return await self._terminate(send, stats, error="scan_failure")
         except OutputBlocked as blocked:
             self._note_output(blocked.decision)
-            self._publish(stats)
+            publish_output(stats, self._output_decision)
             return await self._terminate(send, stats, error="output_blocked")
         except HoldbackOverflow:
             # Relaxed-class ceiling: release no held bytes of the match (R6.5).
             return await self._terminate(send, stats, error="holdback_overflow")
         except ForcedReleaseTerminate:
             # Over-cap match declared terminate-the-stream (R6.4); its BLOCK decision is kept.
-            self._publish(stats)
+            publish_output(stats, self._output_decision)
             return await self._terminate(send, stats, error="forced_release_tradeoff")
         except TradeOffUndefined:
             # Over-cap pattern with no declared outcome: fail closed (R6.6).
@@ -548,7 +534,7 @@ class StreamPipeline:
         # genuinely empty response (no content frame at all) is NOT degenerate --
         # it is just empty -- so the ``> 0`` guard keeps it ``False``.
         stats.degenerated_to_strict = frames_out_before_final == 0 and stats.frames_out > 0
-        self._publish(stats)
+        publish_output(stats, self._output_decision)
         stats.done = True
         self._metrics.observe_stream_complete(stats)
         return stats
@@ -671,24 +657,9 @@ class StreamPipeline:
 
     def _note_output(self, decision: Decision) -> None:
         """Keep the most restrictive output decision seen on this stream."""
-        current = self._output_decision
-        if current is not None:
-            winner = most_restrictive((current.disposition, decision.disposition))
-            if winner is not decision.disposition:
-                return
-        self._output_decision = decision
-        self._output_action = decision.disposition.value
-
-    def _publish(self, stats: StreamStats) -> None:
-        """Copy the kept decision onto the stats the edge audits."""
-        decision = self._output_decision
-        stats.output_decision = decision
-        if decision is not None:
-            stats.output_action = decision.disposition.value
-            return
-        stats.output_action = "allow"
-
-    # -- force-release trade-off helper (task 9.1) ------------------------- #
+        kept = kept_output_decision(self._output_decision, decision)
+        self._output_decision = kept
+        self._output_action = kept.disposition.value
 
     def _forced_release_remainder_edits(
         self,
@@ -696,42 +667,11 @@ class StreamPipeline:
         release_start: int,
         release_end: int,
     ) -> tuple[tuple[int, int], ...]:
-        """Absolute remainder spans to redact for force-release trade-offs.
-
-        A completed match whose span starts before ``text.forced_release_end`` had
-        its prefix released early by the cap (R6.2). Its declared outcome applies:
-        ``terminate`` raises ``ForcedReleaseTerminate`` (R6.4); ``redact_remainder``
-        yields the still-held remainder span inside THIS slice to redact before any
-        of it is written (R6.3; the prefix was already redacted at its own release
-        point, so Released_Bytes never carries an unredacted match, Property 1);
-        no derivable outcome raises ``TradeOffUndefined`` (R6.6, fail closed).
-        """
-        if text.forced_release_end <= 0 or not text.hits:
-            return ()
-        edits: list[tuple[int, int]] = []
-        for finding in text.hits:
-            for span in finding.spans:
-                if span.start >= text.forced_release_end:
-                    continue  # prefix was not force-released; normal path handles it
-                # This match's prefix was released early -> trade-off applies.
-                decision = self._resolver.decide((finding,))
-                outcome = derive_trade_off_outcome(decision)
-                if outcome == TRADE_OFF_TERMINATE:
-                    self._note_output(decision)
-                    raise ForcedReleaseTerminate(finding.detector)
-                if outcome != TRADE_OFF_REDACT_REMAINDER:
-                    # Over-cap pattern with no declared outcome -> fail closed.
-                    raise TradeOffUndefined(
-                        f"over-cap pattern has no declared trade-off outcome "
-                        f"(class={finding.detector})",
-                    )
-                # Redact the still-held remainder of the match that lies within
-                # this release slice: [max(span.start, release_start), span.end).
-                rem_start = max(span.start, release_start)
-                rem_end = min(span.end, release_end)
-                if rem_start < rem_end:
-                    edits.append((rem_start, rem_end))
-        return tuple(edits)
+        """Force-release trade-off remainder spans (task 9.1; see ``stream_publish``)."""
+        return forced_release_remainder_edits(
+            text.hits, text.forced_release_end, release_start, release_end,
+            self._resolver, self._note_output,
+        )
 
     async def _emit(
         self,

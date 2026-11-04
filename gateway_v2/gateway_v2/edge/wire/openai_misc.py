@@ -456,6 +456,10 @@ MODERATION_CATEGORY_MAP: Mapping[Category, str] = MappingProxyType(
         Category.TOXICITY: Category.TOXICITY.value,
         Category.EXFIL: Category.EXFIL.value,
         Category.DOS: Category.DOS.value,
+        # GW33: output-parity categories ride as extras like every other firewall category.
+        Category.IP_LEAK: Category.IP_LEAK.value,
+        Category.HALLUCINATION: Category.HALLUCINATION.value,
+        Category.CANARY: Category.CANARY.value,
     }
 )
 
