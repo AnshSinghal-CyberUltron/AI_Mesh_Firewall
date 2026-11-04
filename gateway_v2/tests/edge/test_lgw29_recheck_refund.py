@@ -12,7 +12,7 @@ import pytest
 
 from gateway_v2.domain.incident import GateVerdict
 from gateway_v2.domain.posture import KILL_SWITCH_ENGAGED
-from gateway_v2.edge import incident_recheck, openai_misc, openai_nonstream, routes
+from gateway_v2.edge import chat_stream, incident_recheck, openai_misc, openai_nonstream, routes
 from tests.edge._lgw29_app import Harness, chat
 
 
@@ -29,7 +29,10 @@ def _order(source: str, first: str, second: str) -> bool:
 
 def test_the_recheck_precedes_mark_dispatched_at_every_provider_open_site() -> None:
     assert _order(
-        inspect.getsource(routes.ChatRoute._next_attempt), "attempt_recheck_cut", "mark_dispatched"
+        # GW34 moved the streaming attempt into ``ChatStream`` (``edge/chat_stream.py``).
+        inspect.getsource(chat_stream.ChatStream._next_attempt),
+        "attempt_recheck_cut",
+        "mark_dispatched",
     )
     assert _order(
         inspect.getsource(openai_nonstream._collect_output_channels),
@@ -84,7 +87,12 @@ def test_a_refusal_at_the_streaming_attempt_cuts_the_stream_without_opening_the_
 
     h.recheck = recheck
     result = asyncio.run(h.call("/v1/chat/completions", chat(stream=True)))
-    assert result.status == 200 and "stream_killed" in result.text and "[DONE]" not in result.text
+    # GW34 deferred start: no byte was written, so the cut is the plain HTTP 503 (with the GW29
+    # retry hints), not a 200 SSE head followed by an error frame.
+    assert result.status == 503 and result.code() == "stream_killed"
+    assert result.headers["content-type"].startswith("application/json")
+    assert int(result.headers["retry-after"]) >= 1 and result.headers["x-should-retry"] == "false"
+    assert "[DONE]" not in result.text and not result.body.startswith(b"data:")
     assert h.provider.open_calls == 0 and len(calls) == 2
     assert h.budget.net == 0 and len(h.budget.refund_calls) == 1
     assert [r.detail["cause"] for r in h.records] == ["recheck"]

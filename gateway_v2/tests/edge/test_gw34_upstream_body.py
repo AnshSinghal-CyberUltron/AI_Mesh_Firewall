@@ -326,7 +326,8 @@ def test_p3_every_string_leaf_of_the_rendered_body_is_accounted_for() -> None:
         req = OpenAIRequestParser().parse(json.dumps(body).encode(), surface=Surface.CHAT,
                                           contract=contract)
         rendered = with_openai_body(MappingProxyType({BODY_DELTAS_KEY: req.text_deltas}),
-                                    req, contract)
+                                    req, contract, model=req.model,
+                                    org_ceiling=contract.max_output_tokens())
         assert rendered is not None and not hasattr(rendered, "code")
         sent = rendered[BODY_OPENAI_KEY]
         verified = {part for _c, text in req.text_deltas for part in text.split(JOIN_SEPARATOR)}

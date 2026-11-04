@@ -94,7 +94,7 @@ def test_an_assembler_termination_releases_nothing_in_every_pipeline(
     kind: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     factory, enforcing = _pipelines()[kind]
-    monkeypatch.setattr(ChatStream, "_build_pipeline", lambda self, plan: factory())
+    monkeypatch.setattr(ChatStream, "_build_pipeline", lambda self, plan, holds: factory())
     monkeypatch.setattr(chat_stream, "enforcing_output_rules", lambda plan: enforcing)
     reply = _stream(_tool_events(name="rm_rf"))  # undeclared name
     assert reply.status == 403 and not reply.is_sse, (kind, reply.status)
@@ -130,7 +130,9 @@ def test_an_egress_terminate_with_a_withheld_call_drops_it_and_never_finishes(
         return await real_finish(self)
 
     monkeypatch.setattr(ToolCallAssembler, "finish", spy)
-    monkeypatch.setattr(ChatStream, "_build_pipeline", lambda self, plan: _TerminalPipeline(code))
+    monkeypatch.setattr(
+        ChatStream, "_build_pipeline", lambda self, plan, holds: _TerminalPipeline(code)
+    )
     monkeypatch.setattr(chat_stream, "enforcing_output_rules", lambda plan: True)
     reply = _stream(_tool_events())
     assert reply.status != 200 and not reply.is_sse, (code, reply.status)
@@ -142,7 +144,7 @@ def test_a_terminate_after_the_first_byte_is_an_error_frame_with_no_tool_bytes(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(ChatStream, "_build_pipeline",
-                        lambda self, plan: _TerminalPipeline("output_blocked"))
+                        lambda self, plan, holds: _TerminalPipeline("output_blocked"))
     monkeypatch.setattr(chat_stream, "enforcing_output_rules", lambda plan: True)
     reply = _stream([content("some text ", final=False), *_tool_events()])
     assert reply.status == 200 and reply.is_sse

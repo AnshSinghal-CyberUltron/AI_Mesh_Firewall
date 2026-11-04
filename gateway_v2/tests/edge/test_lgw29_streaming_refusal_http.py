@@ -22,9 +22,10 @@ def test_streaming_requests_get_http_503_with_the_retry_headers(path, build) -> 
     assert result.code() == "kill_switch_engaged"
 
 
-def test_the_non_incident_streaming_refusals_keep_their_sse_shape() -> None:
+def test_the_non_incident_streaming_refusals_are_plain_http_without_retry_hints() -> None:
     h = Harness()
-    # a refusal that is NOT an incident code still renders as a 200 SSE error frame
+    # GW34 R7 (merged after GW29): every post-parse refusal is a plain HTTP error, stream or not.
+    # A refusal that is NOT an incident code gets its own status and no GW29 retry hints.
     h.budget.evaluate = _budget_refuses  # type: ignore[method-assign]
     result = asyncio.run(
         h.call(
@@ -32,8 +33,9 @@ def test_the_non_incident_streaming_refusals_keep_their_sse_shape() -> None:
             {"model": "m", "stream": True, "messages": [{"role": "user", "content": "x"}]},
         )
     )
-    assert result.status == 200 and "event-stream" in result.headers["content-type"]
-    assert "retry-after" not in result.headers
+    assert result.status == 503 and result.code() == "budget_unavailable"
+    assert result.headers["content-type"].startswith("application/json")
+    assert "retry-after" not in result.headers and "x-should-retry" not in result.headers
 
 
 async def _budget_refuses(cost, *, request_id, owner="", principal=None, key_hash=""):  # type: ignore[no-untyped-def]
