@@ -1,6 +1,6 @@
 # Feature: gw29-killswitch-isolation, Property 12/14: the live path feeds the risk tracker
 # Validates: Requirements 5.1, 5.3, AC21..AC23, AC26 (real-route provider errors isolate+reroute)
-"""L29-3 end to end: provider errors through the REAL route auto-isolate model A and reroute to B."""
+"""L29-3 end to end: provider errors through the REAL route isolate model A and reroute to B."""
 from __future__ import annotations
 
 import asyncio

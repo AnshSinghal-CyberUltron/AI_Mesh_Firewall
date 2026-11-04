@@ -54,3 +54,5 @@ tests/gates/test_check_tenant_scale.py:190: AssertionError
 =========================== short test summary info ============================
 FAILED tests/gates/test_check_tenant_scale.py::test_the_shipped_data_plane_is_clean
 1 failed, 125 passed in 7.41s
+
+# Convergence pass 2: fixed E501 in tests/edge/test_lgw29_l29_3_live_feed.py; re-ran G1 (3605 passed/107 skipped/1 declared tenant_scale fail), G2 (ruff clean, lint-imports 3 kept, mypy 9 baseline import-not-found), G3 (all 0 except declared tenant_scale: pinecone_transport.py:140, state_control/valkey.py:100), G4 (125 passed + same declared fail).
