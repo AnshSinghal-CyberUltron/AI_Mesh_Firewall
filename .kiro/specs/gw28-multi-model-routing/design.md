@@ -343,7 +343,7 @@ class Candidate:
     upstream_model: str          # model name sent upstream; non-empty unless passthrough
     served_models: frozenset[str]  # client aliases; non-empty unless passthrough
     weight: int                  # >= 1 (vnode count)
-    provider_key: str            # ProviderKey = str; selects the client; charset-checked in build;
+    provider_key: str            # ProviderKey = str; selects the client; `_IDENT` fullmatch in build;
                                  # part of P1 equal-input comparison, NOT part of the HRW key
     passthrough: bool = False    # D-3: fallback_set only
 
@@ -644,7 +644,7 @@ scripts (P4).
   | `routing_reason`, `selected_candidate`, `attempt_index`, `remapped_from`, `requested_model` | `deciding_rule` = `"{reason}|{sel}|{attempt}|{from}|{alias}"`, `-` for None |
   `alias` is `requested_model` only if some candidate in the table serves it (known alias), else `-`,
   so no client-supplied free text reaches the record (Req 6.4); `sel`/`from` are operator-defined
-  `candidate_id`s validated in `CandidateSet.build` (charset-checked, no `|`). `selected_model`
+  `candidate_id`s validated in `CandidateSet.build` (`_IDENT` fullmatch, see Input validation; excludes `|`). `selected_model`
   (upstream name), `decision_source`, `destination` and `candidate_count` do **not** fit the closed
   schema; they are emitted on the existing `edge/event_log` path as one rate-limited structured line
   per decision (class `routing_decision`, no content parameter by construction) and are **not**
@@ -669,6 +669,7 @@ _UPSTREAM_GAP_FRACTION = 0.8          # mid-stream gap = fraction x inter-chunk 
 _ROUTING_MAX_ATTEMPTS = 2
 _ROUTING_MAX_CANDIDATES = 8
 _ROUTING_MAX_WEIGHT = 16
+_ROUTING_MAX_IDENT_LEN = 64           # identifier length cap (Finding 1, round 7)
 ```
 
 Accessors in `RoutingBoundsMixin` (new file, `VectorBoundsMixin` pattern: function-local import of
@@ -684,6 +685,7 @@ the constants, no literal in the mixin):
 | `routing_max_attempts()` | 2 | `_ROUTING_MAX_ATTEMPTS`, fail closed if < 1 |
 | `routing_max_candidates()` | 8 | `_ROUTING_MAX_CANDIDATES` |
 | `routing_max_weight()` | 16 | `_ROUTING_MAX_WEIGHT` |
+| `routing_max_identifier_len()` | 64 | `_ROUTING_MAX_IDENT_LEN`, fail closed if < 1 |
 
 `teardown_s` is the existing `cancellation_bound_s()` (60 ms). Every accessor raises
 `CapacityUnavailable` on a non-positive result. The moved `snapshot()` (D-15, now in
@@ -733,7 +735,7 @@ serialise routing state. This removes the forged-body and serialisation concerns
 
 | Input | Required | Type / limits | On failure |
 |---|---|---|---|
-| `CandidateSet.build(candidates)` | yes | 1..`routing_max_candidates()` items; unique non-empty ids without `\x1f`; `1 <= weight <= routing_max_weight()`; non-empty `served_models` and `upstream_model` unless `passthrough`; `passthrough` only with `allow_passthrough=True` | `RoutingConfigError`, fatal at boot, ERROR |
+| `CandidateSet.build(candidates)` | yes | 1..`routing_max_candidates()` items; unique non-empty ids; **every** `candidate_id`, `provider_key`, `served_models` alias and (non-passthrough) `upstream_model` must `fullmatch` `_IDENT = [A-Za-z0-9._:-]{1,N}` with `N = routing_max_identifier_len()` (excludes `|`, `\x1f`, whitespace and control chars by construction); `1 <= weight <= routing_max_weight()`; non-empty `served_models` and `upstream_model` unless `passthrough`; `passthrough` only with `allow_passthrough=True` | `RoutingConfigError`, fatal at boot, ERROR |
 | `RoutingTable` | yes | org ids unique, non-empty; `fallback_set` optional | `RoutingConfigError`, fatal at boot |
 | `RoutedProvider(clients=...)` | yes | covers every candidate id; each class `per_request_safe is True` | `RoutingConfigError`, fatal at boot |
 | `StallBounds` | yes | `0 < gap < first_event < total`, `teardown > 0` | `RoutingConfigError`, fatal at boot |
@@ -823,7 +825,7 @@ bound fires near its value.
 | P6 | No policy bypass: (a) `rebind` changes only `model` (random nested bodies, deep equality elsewhere); (b) every attempt's body equals the verified body modulo `model`; (c) `ctx=None` or wrong type → 0 client opens; (d) `ModelRouter.rank` has no enforcement/decision parameter and `routed_provider`/`model_routing`/`stall_guard` import none of `edge/admit/detect/plan/resolve` (AST); (e) exactly one candidate `.open(` call site in `routed_provider.py` (AST) | `test_gw28_no_policy_bypass.py` | property + static |
 | P7 | Stall bound: a fake upstream that never yields terminates with exactly one `upstream_timeout` at `first_event_s`, iterator observed closed, no `final` success; **a role-only empty-delta event then silence is also cut at the cumulative `first_event_s`, not at `gap_s`**; mid-stream stall ends at `gap_s`; slow trickle ends at `total_s`; derivation: for random `target_p99_ms ∈ [1, 100]`, `0 < gap < first_event < total < max_stream_duration_s()` (new P11 clause, single-attempt case only: slow trickle terminates with `upstream_timeout` from the router, never `stream_killed`/max-duration, over random p99; after a fallback the edge max-duration code is an accepted single declared terminal), at the default `first_event < 300 s`, accessors raise `CapacityUnavailable` on non-positive | `test_gw28_stall_bound.py` | property + integration |
 | P8 | Attempt bound and exhaustion: attempts ≤ `routing_max_attempts()`; ≥ 2 retryable failures → `routing_attempts_exhausted`; single possible attempt surfaces its own code; teardown failure → no further open | `test_gw28_attempt_bound.py` | property (async) |
-| P9 | Trace is content-free: with a planted secret in the prompt, no `RoutingDecision`/refusal field contains it; fields hold only closed-vocabulary strings and candidate ids | `test_gw28_trace_redaction.py` | property |
+| P9 | Trace is content-free: with a planted secret in the prompt, no `RoutingDecision`/refusal field contains it; fields hold only closed-vocabulary strings and `_IDENT`-validated candidate ids; planted `|`/newline ids are rejected at boot | `test_gw28_trace_redaction.py` | property |
 | P10 | Fault injection: an injected `Exception` at each point (`rank`, `sink` pre-content, `snapshot_source`, `rebind`, mid-iteration, `aclose`) yields exactly one terminal event, code `routing_internal_error` (or `routing_snapshot_unavailable`/`routing_teardown_unconfirmed` where defined), zero further opens, and the live iterator closed; `CancelledError` and `GeneratorExit` injected mid-attempt propagate (not converted to an event) and the live iterator is closed; a post-commit sink raise does not alter the forwarded stream | `test_gw28_fault_injection.py` | property (async) |
 | P11 | Timer precedence: for random `target_p99_ms ∈ [1, 100]` and `n ∈ [1, max_attempts]`, `gap < inter_chunk`, and `routing_pre_content_budget_s(n) > n × (first_event + cancellation_bound)`; integration: with routing on, a stalled streaming upstream ends with the router's `upstream_timeout` (never the edge `STREAM_INTER_CHUNK_TIMEOUT`), and fallback after a pre-content stall is reachable on streaming; **(D-18)** with small injected contract values (idle bound I), a fake upstream sending first content after 2×I delivers that content (no `stream_idle_timeout`), and a never-yielding upstream ends with the router's `upstream_timeout` frame, not `stream_idle_timeout`; with `first_event_s=None` the idle behaviour is unchanged (regression) | `test_gw28_timer_precedence.py` | property + integration |
 | P12 | Seam: `RoutedProvider` is not a `ProviderClient`; `open_routed` is called only from `edge/chat_upstream.py` (AST over `gateway_v2/`); a client class without `per_request_safe is True` (`HttpProviderClient`, `StubProviderClient`) is rejected at construction, `OpenAIUpstreamProvider` accepted | `test_gw28_seam.py` | static + unit |
@@ -843,7 +845,7 @@ Unit/integration (non-property):
   attempt 1 identically to attempt 0, so the secret is redacted or blocked (streaming and
   non-streaming). Same test with a planted secret in a mid-stream `error_frame` of attempt 1.
 - **T-edge-6 (D-8a).** `CandidateSet.build` rejects empty, over-cap, control-char/`\x1f` and duplicate
-  destinations with `RoutingConfigError`; asserts the label never changes the HTTP target.
+  destinations, and any `candidate_id`/`provider_key`/alias/`upstream_model` failing `_IDENT` (planted `|`, newline, space, over-length) with `RoutingConfigError`; asserts the label never changes the HTTP target.
 - **T-edge-8 (round-4 F2).** Two concurrent identical requests (same `request_key`) with different
   injected per-attempt outcomes: each request's `RoutingTrace` holds only its own decisions; the
   stage `deciding_rule` of each console reflects its own final decision; schema validation passes
@@ -1026,3 +1028,19 @@ functions.
 - **Finding 4 (NIT) — kept as Open Item** (closed console schema; owner decision).
 - **Honoured constraints.** No capacity literal added; GW27 D-13 two-file allowlist unchanged. No live
   gate is run or claimed.
+
+## Review responses (round 7)
+- **Finding 1 (MEDIUM) — resolved (C1, C6, C8, Input validation, T-edge-6, P9).** One shared rule
+  `_IDENT = re.compile(r"[A-Za-z0-9._:-]{1,N}")` applied with `fullmatch` in `CandidateSet.build` to
+  `candidate_id`, `provider_key`, every `served_models` alias and non-passthrough `upstream_model`;
+  violation is `RoutingConfigError` at boot. `N` comes from the new accessor
+  `routing_max_identifier_len()` backed by `_ROUTING_MAX_IDENT_LEN` (one line in `resources.py`, the
+  existing allowlisted file); the pattern is a format, not a capacity, so no literal lands in
+  `dispatch`. T-edge-6 and P9 add planted `|`, newline, space and over-length cases.
+- **Finding 2 (LOW) — addressed.** The PR description must state that non-streaming pre-content
+  waits are now bounded at 30 s (previously up to 300 s) and name `_UPSTREAM_FIRST_EVENT_MULT` as the knob.
+- **Finding 3 (LOW) — addressed.** PR description: Req 5 closed for routed chat and dev profile only
+  until GW36 S5.
+- **Finding 4 (NIT) — kept as Open Item.**
+- **Honoured constraints.** GW27 D-13 two-file capacity-literal allowlist unchanged (new literal sits in
+  `resources.py`). No live gate is run or claimed.
