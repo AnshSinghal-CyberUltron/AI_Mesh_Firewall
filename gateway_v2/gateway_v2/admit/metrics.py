@@ -117,6 +117,8 @@ class AdmissionReading:
     admitted_total: int
     shed_total: Mapping[str, int]
     fail_open_total: int
+    org_limits_table_full_total: int = 0
+    org_limits_slots_used: int = 0
 
     def shed_for(self, reason: ShedReason) -> int:
         """Shed count for a fixed ``reason`` bucket (``0`` from the first snapshot). O(1)."""
@@ -137,7 +139,7 @@ class AdmissionMetrics:
     asserts against (Req 13.2).
     """
 
-    SERIES_COUNT = 2 * len(QUEUE_NAMES) + 3 + 1 + len(ShedReason) + 1
+    SERIES_COUNT = 2 * len(QUEUE_NAMES) + 3 + 1 + len(ShedReason) + 1 + 2
     """How many series this producer can ever emit. A constant, by construction.
 
     ``2 * len(QUEUE_NAMES)`` is the per-queue depth + oldest-age pair for each fixed queue
@@ -146,7 +148,8 @@ class AdmissionMetrics:
     ``_count`` (a histogram family counts as its three native-exposition series under the
     renderer's chosen bucket set — R1.4: the ``_bucket`` set shares one base name); ``+ 1`` is
     ``admitted_total``; ``len(ShedReason)`` is the one real-zero ``shed_total`` bucket per fixed
-    shed reason; the trailing ``+ 1`` is ``fail_open_total``.
+    shed reason; the ``+ 1`` is ``fail_open_total``; the trailing ``+ 2`` is GW27's
+    ``org_limits_table_full_total`` counter and ``org_limits_slots_used`` gauge.
 
     R2-10 is why this is a fixed expression rather than ``len(series())``: a full metric directory
     made 40% of new tenants' first requests fail with HTTP 500, so a series whose existence depends
@@ -160,6 +163,8 @@ class AdmissionMetrics:
         self._admitted_total = 0
         self._shed_total: dict[str, int] = {reason.value: 0 for reason in ShedReason}
         self._fail_open_total = 0
+        self._org_table_full_total = 0
+        self._org_slots_used = 0
         # Each fixed queue starts at (depth=0, oldest_age_s=0.0): a real zero, never an absent key.
         self._queue_depth: dict[str, int] = {name: 0 for name in QUEUE_NAMES}
         self._queue_oldest_age_s: dict[str, float] = {name: 0.0 for name in QUEUE_NAMES}
@@ -171,6 +176,14 @@ class AdmissionMetrics:
     def observe_shed(self, reason: ShedReason) -> None:
         """Record one shed under a fixed ``reason`` bucket. O(1)."""
         self._shed_total[reason.value] += 1
+
+    def observe_org_limits_table_full(self) -> None:
+        """A controlled org was refused because the org-limit table was full (GW27). O(1)."""
+        self._org_table_full_total += 1
+
+    def set_org_slots_used(self, used: int) -> None:
+        """Overwrite the org-limit table occupancy gauge (GW27). O(1)."""
+        self._org_slots_used = used
 
     def set_queue(self, queue: str, *, depth: int, oldest_age_s: float) -> None:
         """Overwrite the current depth + oldest-item age for a fixed queue. O(1).
@@ -205,6 +218,8 @@ class AdmissionMetrics:
             admitted_total=self._admitted_total,
             shed_total=MappingProxyType(dict(self._shed_total)),
             fail_open_total=self._fail_open_total,
+            org_limits_table_full_total=self._org_table_full_total,
+            org_limits_slots_used=self._org_slots_used,
         )
 
 
