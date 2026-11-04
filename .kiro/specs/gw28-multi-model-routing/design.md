@@ -1099,3 +1099,38 @@ functions.
 - **Finding 5 (NIT) — unchanged**, recorded owner decision (closed `console_schema._STAGE_KEYS`).
 - **Unverified assumptions** (httpx pool on `wait_for` cancel; non-streaming request deadline) remain
   deferred to the Live_Gate; nothing run or claimed.
+
+## Implementation deviations (iteration 1; mirrored in `.agents/tasks/deviations.md`)
+Implementation showed the design is wrong or silent on these points; the code follows this section.
+- **Injected identifier length.** `dispatch` cannot import `runtime`, so `routing_max_identifier_len()`
+  reaches it by injection: `CandidateSet.build(..., max_ident_len=)`, `RoutingContext.from_plan(...,
+  max_ident_len=)`, `ModelRouter.rank(..., *, max_ident_len)` and `RoutedProvider(..., max_ident_len=)`.
+  `RoutingTable.build(by_org, *, fallback_set)` and `RoutedProvider.serves_alias(name)` are added.
+  The destination-label cap is the same value (no separate accessor).
+- **Trace location (C6 "Trace").** The per-request `RoutingTrace` is attached to the request's own
+  `RequestHolds` (`note_routing` / `routing_trace`), created in `open_chat_upstream`, not threaded as a
+  local through `routes.py`/`openai_nonstream.py`. `RequestHolds` is already per request, never shared,
+  and already reaches both open sites, `console_from_holds` and the audit emitter, so every console
+  builder sees the same trace without a signature change. `chat_console` gains `routing` and
+  `routing_alias` (the alias is decided at trace creation by `RoutedProvider.serves_alias`).
+- **Event line.** `edge/event_log.StructuredEventLog` has a closed vocabulary and is not reachable from
+  `ChatRoute`, so the `routing_decision` line is a plain INFO record from `RoutingTrace.append`
+  (bounded: at most `routing_max_attempts()+1` lines per request). It is not rate-limited.
+- **Responses surface (D-11, T-edge-2).** `/v1/responses` is built from the same `ChatRoute`, so it is
+  routed too (a stall bound there is desirable). Only embeddings, moderations, models, MCP and vector
+  stay unrouted.
+- **Factory location.** `build_routed_provider` / `RoutedBundle` live in `edge/routing_boot.py` (the
+  dev wiring lives there too) and are re-exported by `edge/production_profile.py`.
+- **Duck-typed dependency bundles.** Several shipped tests drive the chat open path with bundles that
+  have no `routing` field, so `open_chat_upstream` and `_stage` read it with `getattr(..., None)`.
+- **Preflight code.** `_stage` maps `routing_unknown_model` to the existing `model_not_found` code
+  (HTTP 404). `edge/errors.py` also declares `routing_unknown_model` as 404 `not_found_error` for the
+  `open_routed`-time path.
+- **`OpenAIUpstreamProvider.connections`** is a constructor argument (default 0 = not declared), read by
+  the factory's budget check.
+- **Size headroom.** `edge/app_defaults.py` (default boot seams) and `edge/route_support.py`
+  (`ProducedModeHolder`, `placeholder`) were extracted from `app.py` / `routes.py`, behaviour-free.
+- **Dev-profile behaviour change.** Because the dev `fallback_set` is a passthrough candidate, client
+  model names must match `_IDENT` (so `meta/llama-3` is refused with 404 `model_not_found`), as the
+  round-8 trade-off already states.
+
