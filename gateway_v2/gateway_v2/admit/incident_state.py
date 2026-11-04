@@ -261,7 +261,7 @@ class IncidentState:
         with self._lock:
             for model in signed:
                 self._note_signed_locked(model, signed[model])
-            for model in sorted(self._signed_seen - signed.keys()):
+            for model in sorted(self._signed_seen.difference(signed)):
                 if self._note_signed_locked(model, None):
                     cleared.append(model)
             active: dict[str, str] = {}
@@ -284,7 +284,7 @@ class IncidentState:
                 elif was == _SIGNED:
                     signed_expired.append(model)
             self._was_active = active
-            keep = signed.keys() | self._local.keys()
+            keep = {*signed, *self._local}
             for model in [m for m in self._first_seen if m not in keep]:
                 del self._first_seen[model]
         if self._hook is not None:
