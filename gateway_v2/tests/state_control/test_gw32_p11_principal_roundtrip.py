@@ -1,4 +1,5 @@
 """GW17c Property 11 and the field-name contract across control, projector and `principal_of`."""
+
 from __future__ import annotations
 
 import json
@@ -22,8 +23,15 @@ _BOUNDS = mcp_policy_bounds()
 def _record(body: dict[str, Any]) -> SignedRecord:
     raw = canonical_body(body)
     return SignedRecord(
-        kind=StateKind.KEY, key="k" * 64, version=Version(1, 1), feed_seq=7,
-        content_hash=body_hash(raw), deleted=False, op=StateOp.PUT, signature="s", body=raw,
+        kind=StateKind.KEY,
+        key="k" * 64,
+        version=Version(1, 1),
+        feed_seq=7,
+        content_hash=body_hash(raw),
+        deleted=False,
+        op=StateOp.PUT,
+        signature="s",
+        body=raw,
     )
 
 
@@ -35,14 +43,22 @@ def _names(rng: random.Random) -> tuple[str, ...]:
 def test_field_names_are_pinned() -> None:
     body = _key_body("kid", "acme", ("a",), 3)
     assert set(body) == {
-        "key_id", "org_id", "rate_per_s", "burst", "mcp_allowed_tools", "mcp_max_tool_calls",
+        "key_id",
+        "org_id",
+        "rate_per_s",
+        "burst",
+        "mcp_allowed_tools",
+        "mcp_max_tool_calls",
     }
     assert set(Principal.__dataclass_fields__) >= {"mcp_allowed_tools", "mcp_max_tool_calls"}
 
 
 def test_default_key_body_bytes_do_not_churn() -> None:
     assert _key_body("kid", "acme") == {
-        "key_id": "kid", "org_id": "acme", "rate_per_s": 0.0, "burst": 0.0,
+        "key_id": "kid",
+        "org_id": "acme",
+        "rate_per_s": 0.0,
+        "burst": 0.0,
     }
 
 
@@ -66,13 +82,20 @@ def test_absent_fields_are_unrestricted() -> None:
 @pytest.mark.parametrize(
     "field,value",
     [
-        ("mcp_allowed_tools", "tool"), ("mcp_allowed_tools", None), ("mcp_allowed_tools", []),
-        ("mcp_allowed_tools", [1]), ("mcp_allowed_tools", ["a", "a"]),
-        ("mcp_allowed_tools", ["bad\x01name"]), ("mcp_allowed_tools", [""]),
+        ("mcp_allowed_tools", "tool"),
+        ("mcp_allowed_tools", None),
+        ("mcp_allowed_tools", []),
+        ("mcp_allowed_tools", [1]),
+        ("mcp_allowed_tools", ["a", "a"]),
+        ("mcp_allowed_tools", ["bad\x01name"]),
+        ("mcp_allowed_tools", [""]),
         ("mcp_allowed_tools", ["x" * (_BOUNDS.tool_name_max + 1)]),
         ("mcp_allowed_tools", [f"t{i}" for i in range(_BOUNDS.tools_max + 1)]),
-        ("mcp_max_tool_calls", True), ("mcp_max_tool_calls", "5"), ("mcp_max_tool_calls", None),
-        ("mcp_max_tool_calls", 1.5), ("mcp_max_tool_calls", -1),
+        ("mcp_max_tool_calls", True),
+        ("mcp_max_tool_calls", "5"),
+        ("mcp_max_tool_calls", None),
+        ("mcp_max_tool_calls", 1.5),
+        ("mcp_max_tool_calls", -1),
         ("mcp_max_tool_calls", _BOUNDS.cap_max + 1),
     ],
 )
@@ -129,7 +152,10 @@ def test_old_reader_ignores_new_fields() -> None:
     """Rolling deploy: a pre-change `principal_of` read only the four names."""
     body = dict(_key_body("kid", "acme", ("x",), 3))
     legacy = Principal(
-        key_id=str(body["key_id"]), org_id=str(body["org_id"]), rate_per_s=0.0, burst=0.0,
+        key_id=str(body["key_id"]),
+        org_id=str(body["org_id"]),
+        rate_per_s=0.0,
+        burst=0.0,
         feed_seq=1,
     )
     assert legacy.mcp_allowed_tools == frozenset() and legacy.mcp_max_tool_calls == 0

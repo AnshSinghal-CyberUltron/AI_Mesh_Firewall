@@ -5,8 +5,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from gateway_v2.dispatch.mcp_broker import BrokerClient
+from gateway_v2.dispatch.mcp_credentials import CredentialService
 from gateway_v2.dispatch.url_guard import Resolver
+from gateway_v2.edge.mcp_identity import TokenResolver
 from gateway_v2.edge.mcp_registry import McpRegistry, OrgMap
+from gateway_v2.runtime.resources_mcp import McpCredentialBounds
 
 __all__ = ("McpDeps",)
 
@@ -21,3 +24,12 @@ class McpDeps:
     dns: Resolver
     allow_hosts: frozenset[str]
     stdio_allowed: frozenset[str]
+    token_store: TokenResolver | None = None
+    """GW32: resolves a `zsmcp_` token to its key hash. `None` = no OAuth server (fail closed)."""
+    credentials: CredentialService | None = None
+    """GW17b: upstream credential service. `None` + an authenticated server = refused."""
+    credential_bounds: McpCredentialBounds | None = None
+    plaintext_credential_hosts: frozenset[str] = frozenset()
+    """GW17b: hosts allowed a credential over plaintext (the plaintext-hosts env allow-list)."""
+    public_base: str = ""
+    """GW32: validated `AMF_GATEWAY_PUBLIC_URL`; empty = no `resource_metadata` is advertised."""

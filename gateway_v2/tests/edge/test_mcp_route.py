@@ -15,6 +15,9 @@ _SERVERS = [
     server_row("search"),
     server_row("off", is_active=False),
     server_row("keyed", auth_type="bearer"),
+    server_row("qp", auth_type="query_param"),
+    server_row("reauth", auth_type="oauth", needs_reauth=True),
+    server_row("ws9", transport="carrier-pigeon"),
     server_row("meta", url="http://meta.example.com/mcp"),
     server_row("loop", url="http://loop.example.com/mcp"),
     server_row("files", transport="stdio", url="", command="npx", args=["-y", "pkg@1"]),
@@ -108,7 +111,12 @@ def test_bare_route_and_bad_slug() -> None:
     (
         ("/v1/mcp/missing", call("tools/list"), 404, "mcp_server_not_found"),
         ("/v1/mcp/off", call("tools/list"), 404, "mcp_server_not_found"),
-        ("/v1/mcp/keyed", call("tools/list"), 403, "mcp_upstream_auth_unsupported"),
+        # GW17b: a bearer server is no longer "unsupported"; with no credential service wired it
+        # fails closed as credential-unavailable. query_param stays unsupported (DD-16).
+        ("/v1/mcp/keyed", call("tools/list"), 503, "mcp_upstream_credential_unavailable"),
+        ("/v1/mcp/qp", call("tools/list"), 403, "mcp_upstream_auth_unsupported"),
+        ("/v1/mcp/reauth", call("tools/list"), 403, "mcp_upstream_needs_reauth"),
+        ("/v1/mcp/ws9", call("tools/list"), 400, "mcp_transport_unsupported"),
         ("/v1/mcp/search", call("tools/call", {"name": "drop", "arguments": {}}), 403,
          "mcp_tool_disabled"),
         ("/v1/mcp/search", call("tools/call", {"name": "ghost", "arguments": {}}), 403,
@@ -125,7 +133,7 @@ def test_gates_refuse_with_zero_broker_calls(
     got_status, got = _run(app, path, body)
     assert (got_status, _error_code(got)) == (status, code)
     assert broker.requests == []
-    if code == "mcp_destination_refused":
+    if code in ("mcp_destination_refused", "mcp_upstream_credential_unavailable"):
         assert _stage(got, "input_scan")["ran"] is True
         assert _stage(got, "tool_call")["ran"] is False
     else:

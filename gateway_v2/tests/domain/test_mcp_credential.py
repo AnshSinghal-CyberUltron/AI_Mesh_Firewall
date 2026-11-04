@@ -1,4 +1,5 @@
 """GW17b credential value types do not reveal, copy or serialise their secret."""
+
 from __future__ import annotations
 
 import copy

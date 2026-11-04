@@ -23,6 +23,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 from urllib.parse import urlparse
 
+from gateway_v2.domain.mcp_credential import RenderedHeaders
 from gateway_v2.runtime.resources import McpBounds
 
 if TYPE_CHECKING:
@@ -122,12 +123,24 @@ class BrokerClient:
         self._sleep = sleep
 
     async def call(
-        self, slug: str, server: McpServer, method: str, params: object, request_id: str
+        self,
+        slug: str,
+        server: McpServer,
+        method: str,
+        params: object,
+        request_id: str,
+        upstream_headers: RenderedHeaders | None = None,
     ) -> BrokerReply:
-        """Forward one method through the org's sandbox. Never raises."""
+        """Forward one method through the org's sandbox. Never raises.
+
+        ``upstream_headers`` (GW17b) is the rendered upstream credential, placed in
+        ``upstream.headers`` of the sandbox body only. ``None`` keeps the ``auth none`` body
+        byte-identical.
+        """
         if not BROKER_SLUG.match(slug):
             return BrokerReply(code=_BROKER_UNAVAILABLE)
-        body = json.dumps(self._payload(server, method, params, request_id)).encode("utf-8")
+        payload = self._payload(server, method, params, request_id, upstream_headers)
+        body = json.dumps(payload).encode("utf-8")
         headers = {
             "Content-Type": "application/json",
             "X-MCP-Broker-Key": self._key,
@@ -137,7 +150,12 @@ class BrokerClient:
         return await self._send(url, headers, body, method)
 
     def _payload(
-        self, server: McpServer, method: str, params: object, request_id: str
+        self,
+        server: McpServer,
+        method: str,
+        params: object,
+        request_id: str,
+        headers: RenderedHeaders | None = None,
     ) -> dict[str, object]:
         payload: dict[str, object] = {
             "server_slug": server.slug,
@@ -160,7 +178,7 @@ class BrokerClient:
             payload["upstream"] = {
                 "url": server.url,
                 "allowed_hosts": _hosts(server.url),
-                "headers": {},
+                "headers": dict(headers.pairs) if headers is not None else {},
                 "oauth_client_role": _OAUTH_ROLE,
             }
         return payload
@@ -204,6 +222,11 @@ class BrokerClient:
             self._bounds.broker_backoff_base_s * (2**attempt),
         )
         await self._sleep(base + self._rng.uniform(0.0, base / 4))
+
+
+def registered_hosts(url: str) -> list[str]:
+    """The ``upstream.allowed_hosts`` the broker body carries for ``url``."""
+    return _hosts(url)
 
 
 def _hosts(url: str) -> list[str]:

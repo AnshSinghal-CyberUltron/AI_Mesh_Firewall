@@ -77,7 +77,7 @@ def test_server_lookup_sends_the_internal_headers() -> None:
     control = _Control()
     entry = asyncio.run(_registry(control).server("zeroshield", "search"))
     assert not isinstance(entry, str)
-    assert entry.usable and not entry.needs_auth
+    assert entry.usable and entry.auth_type == "none"
     assert entry.url == "https://mcp.example.com/mcp"
     url, headers, _ = control.calls[0]
     assert url == "http://control:8100/api/mcp-connector/servers/"
@@ -94,8 +94,8 @@ def test_inactive_keyed_and_legacy_servers_fail_closed() -> None:
     keyed = asyncio.run(registry.server("zeroshield", "keyed"))
     legacy = asyncio.run(registry.server("zeroshield", "legacy"))
     assert not isinstance(off, str) and not off.usable
-    assert not isinstance(keyed, str) and keyed.needs_auth
-    assert not isinstance(legacy, str) and legacy.needs_auth
+    assert not isinstance(keyed, str) and keyed.auth_type == "bearer"
+    assert not isinstance(legacy, str) and legacy.auth_type == "unsupported"
     assert asyncio.run(registry.server("zeroshield", "missing")) == "mcp_server_not_found"
 
 

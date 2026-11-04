@@ -1,4 +1,5 @@
 """GW32 MCP capacity values: derivations, fail-closed bounds, key layout."""
+
 from __future__ import annotations
 
 import dataclasses
@@ -64,11 +65,21 @@ def test_cap_bounds_are_frozen_and_derived() -> None:
 def test_store_keys_share_hash_tag_and_reject_empty() -> None:
     keys = McpStoreKeys()
     for built in (
-        keys.session("a"), keys.sessions_by_key("k"), keys.sessions_by_org("o"),
-        keys.sessions_global(), keys.cap_used("k"), keys.refresh_lock("o", "s"),
-        keys.oauth_client("c"), keys.oauth_code("h"), keys.oauth_access("h"),
-        keys.oauth_refresh("h"), keys.oauth_family("f"), keys.oauth_form("h"),
-        keys.oauth_failures("h"), keys.oauth_clients_index(), keys.oauth_clients_by_source("h"),
+        keys.session("a"),
+        keys.sessions_by_key("k"),
+        keys.sessions_by_org("o"),
+        keys.sessions_global(),
+        keys.cap_used("k"),
+        keys.refresh_lock("o", "s"),
+        keys.oauth_client("c"),
+        keys.oauth_code("h"),
+        keys.oauth_access("h"),
+        keys.oauth_refresh("h"),
+        keys.oauth_family("f"),
+        keys.oauth_form("h"),
+        keys.oauth_failures("h"),
+        keys.oauth_clients_index(),
+        keys.oauth_clients_by_source("h"),
     ):
         assert built.startswith("{rv2}:")
     with pytest.raises(ValueError):

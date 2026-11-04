@@ -34,6 +34,11 @@ def surface_entries(
         dns=mcp.dns,
         allow_hosts=mcp.allow_hosts,
         stdio_allowed=mcp.stdio_allowed,
+        token_store=mcp.token_store,
+        credentials=mcp.credentials,
+        credential_bounds=mcp.credential_bounds,
+        plaintext_credential_hosts=mcp.plaintext_credential_hosts,
+        public_base=mcp.public_base,
     )
     exact[("POST", MCP_PATH)] = route.handle_bare
     prefix[("POST", MCP_PREFIX)] = route.handle

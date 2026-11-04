@@ -19,8 +19,10 @@ import asyncio
 import json
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
+from types import MappingProxyType
 
 from gateway_v2.dispatch.mcp_broker import BROKER_SLUG
+from gateway_v2.dispatch.mcp_transports import normalise_transport
 
 __all__ = (
     "ControlTransport",
@@ -53,7 +55,11 @@ class ServerEntry:
     args: tuple[str, ...]
     env: Mapping[str, str]
     usable: bool
-    needs_auth: bool
+    auth_type: str
+    """One of none, bearer, basic, header, oauth, or ``unsupported`` (query_param, missing,
+    unknown). ``unsupported`` is refused at the registry gate with the legacy code (GW17b R11.9)."""
+    needs_reauth: bool = False
+    transport_supported: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -236,17 +242,41 @@ class McpRegistry:
 def _server_entry(slug: str, row: Mapping[str, object]) -> ServerEntry:
     args = row.get("args")
     env = row.get("env_vars")
-    auth_type = row.get("auth_type")
+    transport = normalise_transport(row.get("transport"))
     return ServerEntry(
         slug=slug,
-        transport=str(row.get("transport") or "streamable-http").strip().lower(),
+        transport=transport or str(row.get("transport")).strip().lower(),
         url=str(row.get("url") or ""),
         command=str(row.get("command") or ""),
         args=tuple(str(item) for item in args) if isinstance(args, list) else (),
         env={str(k): str(v) for k, v in env.items()} if isinstance(env, dict) else {},
         usable=row.get("is_active") is True and row.get("is_exposed_to_agents") is True,
-        needs_auth=auth_type != _NO_AUTH or row.get("oauth_authorized") is True,
+        auth_type=_auth_type(row),
+        needs_reauth=row.get("needs_reauth") is True,
+        transport_supported=transport is not None,
     )
+
+
+_AUTH_TYPES: Mapping[str, str] = MappingProxyType(
+    {
+        "none": _NO_AUTH,
+        "bearer": "bearer",
+        "basic": "basic",
+        "authheaders": "header",  # control's wire name for a custom header
+        "oauth": "oauth",
+    }
+)
+
+
+def _auth_type(row: Mapping[str, object]) -> str:
+    """Classify control's ``auth_type``. A missing or unknown value is never ``none``."""
+    raw = row.get("auth_type")
+    known = _AUTH_TYPES.get(raw) if isinstance(raw, str) else None
+    if known is None:
+        return "unsupported"
+    if known == _NO_AUTH and row.get("oauth_authorized") is True:
+        return "unsupported"  # GW17 rule kept: an authorised OAuth row is not "no auth"
+    return known
 
 
 def _names(value: object) -> frozenset[str]:

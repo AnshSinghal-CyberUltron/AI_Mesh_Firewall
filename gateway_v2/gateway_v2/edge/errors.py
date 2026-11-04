@@ -247,6 +247,18 @@ _ENVELOPE: Mapping[str, tuple[int, str]] = MappingProxyType(
         "mcp_invalid_request": (400, "invalid_request_error"),
         "mcp_method_not_found": (404, "not_found_error"),
         "mcp_invalid_params": (400, "invalid_request_error"),
+        # -- GW32 / GW17b / GW17c codes (see domain/posture.py) -------------------
+        "mcp_tool_not_permitted": (403, "permission_error"),
+        "mcp_tool_call_cap_exceeded": (429, "rate_limit_error"),
+        "mcp_session_invalid": (404, "not_found_error"),
+        "mcp_session_limit": (429, "rate_limit_error"),
+        "mcp_origin_refused": (403, "permission_error"),
+        "mcp_org_mismatch": (403, "permission_error"),
+        "mcp_upstream_needs_reauth": (403, "permission_error"),
+        "mcp_upstream_credential_unavailable": (503, "service_unavailable"),
+        "mcp_upstream_credential_invalid": (502, "gateway_error"),
+        "mcp_upstream_insecure_transport": (403, "permission_error"),
+        "mcp_transport_unsupported": (400, "invalid_request_error"),
         # -- Routing misses (GW34 / V-15) --------------------------------------
         # v1 answered an unknown path with 404 ``endpoint_not_found``; a 5xx would make the
         # stock SDK retry. A known path with the wrong method is a 405, as v1 (FastAPI).

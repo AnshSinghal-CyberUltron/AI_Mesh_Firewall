@@ -20,6 +20,7 @@ from types import MappingProxyType
 
 from gateway_v2.admit.grant import Admitted, ShedVerdict
 from gateway_v2.dispatch.mcp_broker import BrokerClient, McpServer
+from gateway_v2.dispatch.mcp_credentials import CredentialService
 from gateway_v2.dispatch.transform import BODY_DELTAS_KEY, GatewayRequest
 from gateway_v2.dispatch.url_guard import Resolver, check_remote, check_stdio
 from gateway_v2.domain.decision import Decision, Disposition
@@ -28,9 +29,17 @@ from gateway_v2.edge import errors
 from gateway_v2.edge.asgi_sse import ASGIReceive, ASGIScope, ASGISend, read_body_bounded
 from gateway_v2.edge.audit_emit import emit_chat_audit
 from gateway_v2.edge.dev_components import bind_surface
-from gateway_v2.edge.identity_resolver import TenantIdentity, hashed_bearer_key, identity_of
+from gateway_v2.edge.identity_resolver import TenantIdentity
 from gateway_v2.edge.input_enforcement import scan_deltas, stage_upstream
 from gateway_v2.edge.mcp_console import mcp_console
+from gateway_v2.edge.mcp_cred_gate import leaks, prepare
+from gateway_v2.edge.mcp_identity import (
+    CallerRefused,
+    McpCaller,
+    TokenResolver,
+    challenge,
+    resolve_caller,
+)
 from gateway_v2.edge.mcp_registry import McpRegistry, OrgMap, ServerEntry, ToolSet
 from gateway_v2.edge.mcp_reply import enforce_reply
 from gateway_v2.edge.phase_resolvers import resolver_for
@@ -47,6 +56,7 @@ from gateway_v2.edge.wire.mcp import (
     request_targets,
 )
 from gateway_v2.plan import lookup_plan
+from gateway_v2.runtime.resources_mcp import McpCredentialBounds
 
 __all__ = ("MCP_PATH", "MCP_PREFIX", "McpRoute")
 
@@ -64,12 +74,13 @@ class _Ctx:
     """What one request learned, for the console and audit. Built per request."""
 
     __slots__ = (
-        "holds", "input_action", "input_rule", "msg_id", "output_action", "output_rule",
+        "caller", "holds", "input_action", "input_rule", "msg_id", "output_action", "output_rule",
         "plan_version", "scope", "server_slug", "tool", "tool_called",
     )
 
     def __init__(self, server_slug: str, scope: ASGIScope) -> None:
         self.scope = scope
+        self.caller: McpCaller | None = None
         self.holds = RequestHolds()
         self.msg_id: jsonrpc.JsonRpcId = None
         self.server_slug = server_slug
@@ -125,6 +136,11 @@ class McpRoute:
     dns: Resolver
     allow_hosts: frozenset[str]
     stdio_allowed: frozenset[str]
+    token_store: TokenResolver | None = None
+    public_base: str = ""
+    credentials: CredentialService | None = None
+    credential_bounds: McpCredentialBounds | None = None
+    plaintext_credential_hosts: frozenset[str] = frozenset()
 
     async def handle_bare(self, scope: ASGIScope, receive: ASGIReceive, send: ASGISend) -> None:
         """``POST /v1/mcp`` with no server slug."""
@@ -153,6 +169,15 @@ class McpRoute:
             ctx.holds.release(self.chat.admission, self.chat.quota)
 
     async def _serve(self, receive: ASGIReceive, send: ASGISend, ctx: _Ctx) -> None:
+        # Order (GW32 DD-1): path, identity (headers only), then the bounded body read and the
+        # JSON-RPC parse. No method, local or forwarded, is answered before identity.
+        if not ctx.server_slug:
+            raise _Refuse("mcp_server_not_found")
+        caller = await resolve_caller(self.chat.identity, self.token_store, ctx.scope)
+        if isinstance(caller, CallerRefused):
+            raise _Refuse(caller.code)
+        ctx.caller = caller
+        ctx.holds.note_tenant(caller.identity.org_id)
         bounds = self.chat.contract.mcp_bounds()
         body = await read_body_bounded(receive, bounds.body_bytes)
         if body is None:
@@ -162,8 +187,6 @@ class McpRoute:
             ctx.msg_id = message.id
             raise _Refuse(message.code)
         ctx.msg_id = message.id
-        if not ctx.server_slug:
-            raise _Refuse("mcp_server_not_found")
         if message.method in LOCAL_METHODS:
             await self._local(send, message)
             return
@@ -202,15 +225,15 @@ class McpRoute:
         raise _Refuse("mcp_invalid_request")
 
     async def _tenant(self, ctx: _Ctx) -> tuple[TenantIdentity, ExecutionPlan]:
-        """Identity, then the plan. The org comes from the key only.
+        """The plan for the already-resolved caller. The org comes from the key only.
 
-        Returns the resolved :class:`TenantIdentity` (not just its ``org_id``) so the budget phase
-        can hand the signed ``principal`` to the composed ``QuotaGate``'s per-key GCRA (GW36 S4).
+        Identity was resolved once in ``_serve`` (before any method); this returns that
+        :class:`TenantIdentity` so the budget phase can hand the signed ``principal`` to the
+        composed ``QuotaGate``'s per-key GCRA (GW36 S4).
         """
-        identity = (outcome := await identity_of(self.chat.identity, ctx.scope)).identity
-        if identity is None:
-            raise _Refuse(outcome.refusal)
-        ctx.holds.note_tenant(identity.org_id)
+        if ctx.caller is None:
+            raise _Refuse("invalid_api_key")  # unreachable by construction; fail closed
+        identity = ctx.caller.identity
         state = lookup_plan(self.chat.snapshot_source(), identity.org_id, Surface.MCP)
         if isinstance(state, (PlanUnavailable, PlanUnknownTenant)):
             raise _Refuse("plan_unavailable")
@@ -241,13 +264,24 @@ class McpRoute:
         server, tools = await self._registry_gate(control_slug, method, ctx)
         forwarded = self._stage(method, params, fold, plan, ctx)
         await self._destination_gate(server)
+        attached = await prepare(
+            self.credentials, self.credential_bounds, self.plaintext_credential_hosts,
+            control_slug, server,
+        )
+        if isinstance(attached, str):
+            raise _Refuse(attached)
         ctx.holds.mark_dispatched()
         ctx.tool_called = True
         reply = await self.broker.call(
-            control_slug, _broker_server(server), method, forwarded, ctx.holds.request_id
+            control_slug, _broker_server(server), method, forwarded, ctx.holds.request_id,
+            attached.headers if attached is not None else None,
         )
         if reply.code is not None:
             raise _Refuse(reply.code)
+        if attached is not None and self.credential_bounds is not None and leaks(
+            attached.credential, reply.envelope, min_len=self.credential_bounds.credential_min_len
+        ):
+            raise _Refuse("output_blocked")  # DD-14: withhold, never partly mask
         envelope = reply.envelope
         if method == "tools/list":
             envelope = _filter_tools(envelope, tools)
@@ -277,15 +311,14 @@ class McpRoute:
         chars = sum(len(leaf.text) for leaf in fold.leaves)
         cost = self.chat.contract.estimate_request_tokens(chars, 0, 1)
         # The composed QuotaGate's per-key GCRA needs the resolved principal + the sha256 key hash
-        # identity resolved on (GW36 S4). ``hashed_bearer_key`` re-derives the hash from this
-        # scope's Authorization header (the production resolver's own key_namer), not from a raw
-        # token held elsewhere; a defensive None folds to "" (the budget phase still fails closed).
+        # identity resolved on (GW36 S4). The hash comes from the McpCaller, never re-derived from
+        # the header: a request authenticated by an MCP access token has no API key in it.
         budget = await self.chat.quota.evaluate(
             cost,
             request_id=request_id,
             owner=org,
             principal=identity.principal,
-            key_hash=hashed_bearer_key(ctx.scope) or "",
+            key_hash=ctx.caller.key_hash if ctx.caller is not None else "",
         )
         if not isinstance(budget, Admitted):
             raise _Refuse(budget.code)
@@ -299,8 +332,12 @@ class McpRoute:
             raise _Refuse(server)
         if not server.usable:
             raise _Refuse("mcp_server_not_found")
-        if server.needs_auth:
+        if not server.transport_supported:
+            raise _Refuse("mcp_transport_unsupported")
+        if server.auth_type == "unsupported":
             raise _Refuse("mcp_upstream_auth_unsupported")
+        if server.needs_reauth:
+            raise _Refuse("mcp_upstream_needs_reauth")
         if method not in ("tools/call", "tools/list"):
             return server, None
         tools = await self.registry.tools(control_slug, ctx.server_slug)
@@ -359,10 +396,14 @@ class McpRoute:
             request_id=ctx.holds.request_id or None,
             extra=ctx.console(),
         )
-        await self._send(send, status, body, ctx)
+        await self._send(send, status, body, ctx, code)
 
-    async def _send(self, send: ASGISend, status: int, body: bytes, ctx: _Ctx | None) -> None:
+    async def _send(
+        self, send: ASGISend, status: int, body: bytes, ctx: _Ctx | None, code: str = ""
+    ) -> None:
         headers: tuple[tuple[str, str], ...] = (("content-type", "application/json"),)
+        if code == "invalid_api_key":
+            headers = (*headers, ("www-authenticate", challenge(self.public_base)))
         if ctx is not None and ctx.holds.request_id:
             headers = (*headers, ("x-request-id", ctx.holds.request_id))
         await emit_response(send, errors.HTTPResponse(status=status, body=body, headers=headers))
