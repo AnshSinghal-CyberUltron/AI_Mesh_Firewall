@@ -8,7 +8,6 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 
 from gateway_v2.domain.category import Category
-from gateway_v2.domain.rag import RagSettings
 from gateway_v2.domain.plan import (
     Action,
     ExecutionPlan,
@@ -21,6 +20,7 @@ from gateway_v2.domain.plan import (
     StreamingMode,
     Surface,
 )
+from gateway_v2.domain.rag import RagSettings
 
 SUPPORTED_STREAMING = frozenset({StreamingMode.INCREMENTAL, StreamingMode.STRICT_WITHHOLD})
 SUPPORTED_ACTIONS = frozenset(

@@ -6,11 +6,11 @@ import random
 
 import pytest
 
+from gateway_v2.domain.plan import StreamingMode
 from gateway_v2.domain.rag import RagSettings
 from gateway_v2.plan.compiler import CompileError, compile_plan
 from gateway_v2.plan.document import PlanDocument, decode_plan_body, encode_plan_body
 from gateway_v2.plan.rag_settings import effective_settings, encode_rag_settings, parse_rag_settings
-from gateway_v2.domain.plan import StreamingMode
 from tests.runtime.test_gw17_mcp_bounds import _contract
 
 

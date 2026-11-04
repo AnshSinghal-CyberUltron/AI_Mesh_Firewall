@@ -56,7 +56,29 @@ class CacheStats:
     feed_seq: int
 
 
-def principal_of(record: SignedRecord) -> Principal | None:
+class ProjectInvalid(StoreDataUnavailable):
+    """The key record carries a malformed ``project`` (GW31).
+
+    A subclass of :class:`StoreDataUnavailable` so any catch site that predates it still fails
+    closed as a 503 and never rewrites the project. ``edge/identity_resolver`` catches it first
+    and renders ``project_invalid``.
+    """
+
+
+_PROJECT_CHARS = frozenset("abcdefghijklmnopqrstuvwxyz0123456789_-")
+DEFAULT_PROJECT = "default"
+
+
+def valid_project(value: object, max_len: int | None = None) -> bool:
+    """Lowercase ``[a-z0-9_-]``, non-empty after strip, within ``max_len`` when given."""
+    if not isinstance(value, str) or not value.strip() or value != value.strip():
+        return False
+    if max_len is not None and len(value) > max_len:
+        return False
+    return all(ch in _PROJECT_CHARS for ch in value)
+
+
+def principal_of(record: SignedRecord, *, max_project_len: int | None = None) -> Principal | None:
     """Resolve a signed key record. None means the key is revoked."""
     if record.kind is not StateKind.KEY:
         raise StoreDataUnavailable(f"{record.kind.value} record is not a key")
@@ -68,12 +90,18 @@ def principal_of(record: SignedRecord) -> Principal | None:
         raise StoreDataUnavailable(f"key record body is not valid JSON: {exc}") from exc
     if not isinstance(body, dict):
         raise StoreDataUnavailable("key record body is not an object")
+    project = body.get("project")
+    if project is None:
+        project = DEFAULT_PROJECT
+    elif not valid_project(project, max_project_len):
+        raise ProjectInvalid("key record field 'project' is malformed")
     return Principal(
         key_id=_text(body, "key_id"),
         org_id=_text(body, "org_id"),
         rate_per_s=_number(body, "rate_per_s"),
         burst=_number(body, "burst"),
         feed_seq=record.feed_seq,
+        project=str(project),
     )
 
 
