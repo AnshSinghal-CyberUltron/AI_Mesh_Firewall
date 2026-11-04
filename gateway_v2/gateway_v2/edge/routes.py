@@ -33,39 +33,28 @@ injected ``ResourceContract`` / ``HoldbackConfig`` and never from a literal here
 
 from __future__ import annotations
 
+import time
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
 
 from gateway_v2.audit.record import AuditRecord
-from gateway_v2.detect.holdback import TokenIndex
-from gateway_v2.detect.windowing import max_pattern_length
-from gateway_v2.dispatch.provider import ProviderClient, UpstreamRequest
+from gateway_v2.dispatch.provider import ProviderClient
 from gateway_v2.dispatch.routed_provider import RoutedProvider
 from gateway_v2.dispatch.routing import DispatchRouter
 from gateway_v2.dispatch.transform import Transform
-from gateway_v2.domain.incident import (
-    IncidentDecider,
-    StreamBinding,
-    fail_closed_gate,
-    fail_closed_recheck,
-)
-from gateway_v2.domain.plan import ExecutionPlan, Phase, Surface
-from gateway_v2.domain.posture import PLAN_UNAVAILABLE, STREAM_KILLED
+from gateway_v2.domain.incident import IncidentDecider, fail_closed_gate, fail_closed_recheck
+from gateway_v2.domain.plan import ExecutionPlan, Surface
+from gateway_v2.domain.posture import STREAM_KILLED
 from gateway_v2.edge import errors
 from gateway_v2.edge.asgi_sse import (
     ASGIReceive,
     ASGIScope,
     ASGISend,
 )
-from gateway_v2.edge.asgi_sse import ErrorFrameScan as _ErrorFrameScan
 from gateway_v2.edge.asgi_sse import TerminalLatch as _TerminalLatch
-from gateway_v2.edge.asgi_sse import as_chunks as _as_chunks
-from gateway_v2.edge.asgi_sse import end_sse as _end_sse
 from gateway_v2.edge.asgi_sse import read_body as _read_body
-from gateway_v2.edge.asgi_sse import send_sse as _send_sse
-from gateway_v2.edge.asgi_sse import start_sse as _start_sse
-from gateway_v2.edge.audit_emit import emit_chat_audit, note_stream_output
-from gateway_v2.edge.cancel import InFlightControl, InFlightControlSource, KillLatch
+from gateway_v2.edge.audit_emit import emit_chat_audit
+from gateway_v2.edge.cancel import InFlightControlSource, KillLatch
 from gateway_v2.edge.chat_deps import (
     AdmissionDecider,
     BudgetDecider,
@@ -77,12 +66,11 @@ from gateway_v2.edge.chat_deps import (
     unresolved_snapshot_source,
 )
 from gateway_v2.edge.chat_lifecycle import LifecycleOutcome
-from gateway_v2.edge.chat_upstream import open_chat_upstream
+from gateway_v2.edge.chat_stream import ChatStream, finish_stream
 from gateway_v2.edge.console_projection import (
     console_from_holds,
-    refusal_trace_frame,
-    stream_trace_payload,
 )
+from gateway_v2.edge.disconnect import StreamingDone, run_until_disconnect
 from gateway_v2.edge.error_frame_scan import ErrorFrameScanner
 from gateway_v2.edge.executor import ScanExecutor
 from gateway_v2.edge.identity_resolver import (
@@ -92,12 +80,10 @@ from gateway_v2.edge.identity_resolver import (
 )
 from gateway_v2.edge.incident_recheck import (
     Recheck,
-    attempt_recheck_cut,
     first_attempt_refusal,
-    note_stream_cut,
 )
 from gateway_v2.edge.incident_render import render_incident_refusal
-from gateway_v2.edge.inflight_source import InFlightControlFactory, RefusingControlSource
+from gateway_v2.edge.inflight_source import InFlightControlFactory
 from gateway_v2.edge.mcp_deps import McpDeps
 from gateway_v2.edge.openai_misc import (
     EmbeddingsSurface,
@@ -106,38 +92,29 @@ from gateway_v2.edge.openai_misc import (
 )
 from gateway_v2.edge.openai_misc_models import ModelsSurface
 from gateway_v2.edge.outcome_metrics import OutcomeObserver
-from gateway_v2.edge.output_detectors import build_output_detectors
-from gateway_v2.edge.output_length import bounded_upstream
-from gateway_v2.edge.phase_resolvers import PhaseResolverFactory, resolver_for
+from gateway_v2.edge.phase_resolvers import PhaseResolverFactory
 from gateway_v2.edge.rag_deps import RagDeps
 from gateway_v2.edge.request_holds import RequestHolds
 from gateway_v2.edge.responses_store import ResponseStore
 from gateway_v2.edge.route_emit import ProducedModeHolder, emit_error_code, emit_response
-from gateway_v2.edge.stream_control import FirstByteLatch, StreamAttempt, run_with_no_splice
-from gateway_v2.edge.stream_timeouts import StreamTimeout, StreamTimeouts
+from gateway_v2.edge.stream_response import StreamResponse
 from gateway_v2.edge.wire.openai import (
     CanonicalRequest,
     OpenAIRequestParser,
     OpenAIResponseRenderer,
 )
-from gateway_v2.edge.wire.sse import SSEEncoder
+from gateway_v2.edge.wire.sse import DEFAULT_MODEL, DEFAULT_STREAM_ID, SSEEncoder, StreamIdentity
 from gateway_v2.egress.backpressure import Coalescer
 from gateway_v2.egress.output_guard import OutputResolver
-from gateway_v2.egress.select import select_pipeline
 from gateway_v2.egress.stream import (
-    DownstreamFrame,
-    EnforcementUndetermined,
     ScanProtocol,
-    Send,
-    StreamPipeline,
 )
-from gateway_v2.egress.strict import StrictWithholdPipeline
 from gateway_v2.plan.snapshot import ReplicaSnapshot
 from gateway_v2.runtime.holdback_config import HoldbackConfig
 from gateway_v2.runtime.holdback_metrics import HoldbackMetrics
 from gateway_v2.runtime.resources import ResourceContract
+from gateway_v2.runtime.resources_tools import ToolBounds
 from gateway_v2.runtime.stream_metrics import PerRequestExports
-from gateway_v2.runtime.strict_metrics import StrictMetrics
 
 __all__ = (
     "ASGIReceive",
@@ -269,6 +246,10 @@ class ChatRoute:
     control_factory: InFlightControlFactory | None = None
     incident_gate: IncidentDecider = fail_closed_gate
     incident_recheck: Recheck = fail_closed_recheck
+    #: GW34. The tool bounds, resolved once at boot; ``None`` is a tools-disabled route.
+    tool_bounds: ToolBounds | None = None
+    #: GW34. The epoch clock stamped into a stream's ``created`` (``clock`` is monotonic).
+    wall_clock_s: Callable[[], float] = time.time
 
     async def handle(self, scope: ASGIScope, receive: ASGIReceive, send: ASGISend) -> None:
         """Serve a chat/completions request end-to-end (R2.2, R7, R10, §10.4).
@@ -299,6 +280,7 @@ class ChatRoute:
         holds = RequestHolds()
         outcome = None
         refused_code: str | None = None
+        killed = False  # the client left before a streaming response finished (GW34 R6)
         try:
             body = await _read_body(receive)
             req, outcome = await ChatSurface(deps=self).run_lifecycle(scope, body, holds)
@@ -318,15 +300,26 @@ class ChatRoute:
             if req.streaming:
                 refused_code = await self.first_attempt_refusal(send, outcome, holds)
                 if refused_code is None:
-                    await self._stream_response(
-                        send, plan, destination, upstream_body, holds, outcome=outcome
-                    )
+                    proceed = outcome
+
+                    async def _serve(done: StreamingDone) -> None:
+                        await self._stream_response(
+                            send, plan, destination, upstream_body, holds, req,
+                            outcome=proceed, done=done,
+                        )
+
+                    killed = await run_until_disconnect(receive, _serve)
                 return
             await ChatSurface(deps=self).collect_and_render(
                 req, plan, destination, upstream_body, send, holds, outcome=outcome
             )
         finally:
-            emit_chat_audit(self.audit, holds, refused_code, observer=self.observer)
+            if killed:
+                refused_code = STREAM_KILLED
+            emit_chat_audit(
+                self.audit, holds, refused_code, observer=self.observer,
+                detail=_tool_call_detail(holds),
+            )
             holds.release(self.admission, self.quota)
 
     async def _render_refusal(
@@ -342,17 +335,16 @@ class ChatRoute:
     ) -> None:
         """Render a §10.4 refusal through the single ``Error_Envelope`` (R12.1).
 
-        A pre-parse refusal (``req is None`` — a malformed / oversized body never became a stream)
-        renders as an HTTP body; a post-parse refusal renders as a declared SSE ``Error_Frame``
-        when the parsed request asked to stream (``req.streaming``) and otherwise as an HTTP body.
-        Either way the one ``edge/errors`` envelope maps the value-code, so an unmapped code still
-        renders a declared generic error rather than a raw framework 500.
+        EVERY refusal renders as an HTTP body, whether or not the request asked to stream (GW34
+        R7): a refused stream is a plain HTTP error with the same bytes as the non-stream refusal,
+        so the SDK raises its status-based error class and applies its retry policy. The one
+        ``edge/errors`` envelope maps the value-code, so an unmapped code still renders a declared
+        generic error rather than a raw framework 500.
 
         ``request_id`` is the gateway-minted per-request id when the refusing phase ran after
         identity resolution (``None`` for a pre-identity refusal); it is threaded into the HTTP
         ``Error_Envelope`` body + the ``x-request-id`` response header so the render echoes the id
-        the admission / budget verdicts carry. The SSE ``Error_Frame`` keeps the frozen OpenAI
-        streaming-error shape (the id rides the stream's response header, not the frame).
+        the admission / budget verdicts carry.
 
         ``param`` names the offending request field for a boundary parse refusal (``max_tokens`` /
         ``max_completion_tokens``, ``None`` otherwise), echoed as ``error.param`` (Group F). The
@@ -369,14 +361,7 @@ class ChatRoute:
             # GW29 (6.4a): HTTP 503 + Retry-After even for a streaming request; no SSE head yet.
             await render_incident_refusal(send, code, request_id, holds, retry_after_s)
             return
-        if req is not None and req.streaming:
-            await _start_sse(send)
-            await _send_sse(send, errors.render_sse(code))
-            trace = None if holds is None else refusal_trace_frame(holds)
-            if trace is not None:
-                await _send_sse(send, trace)
-            await _end_sse(send)
-            return
+        del req  # GW34: every post-parse refusal is a plain HTTP error, stream or not (R7)
         await emit_error_code(
             send, code, request_id, param, self.contract.max_output_tokens_boundary(),
             None if holds is None else console_from_holds(
@@ -397,25 +382,24 @@ class ChatRoute:
         destination: str,
         body: Mapping[str, object],
         holds: RequestHolds | None = None,
+        req: CanonicalRequest | None = None,
         *,
-        outcome: LifecycleOutcome,
+        outcome: LifecycleOutcome | None = None,
+        plain_pre_byte: bool = True,
+        done: StreamingDone | None = None,
     ) -> None:
-        """Open the SSE response + drive the shipped egress orchestration (R2.2, R7, R10).
+        """Serve a streaming proceed outcome through the egress orchestration (R2.2, R7, R10).
 
         Reached only on a proceed outcome for a streaming request. The coalescer admit fails
         CLOSED when the derived per-stream high-water is below one byte
-        (``STREAM_BUFFER_UNAVAILABLE``); on admit, a per-request ``SSEEncoder`` is the pipeline's
-        downstream ``send`` sink and the injected ``ProviderClient``'s events — opened to the
-        plan-derived ``destination`` with the transformed ``body`` — feed the ``StreamPipeline``
-        release loop built via ``for_plan(plan, ...)`` so output enforcement reflects the resolved
-        plan. A terminal ``[DONE]`` closes the stream; any value-code the pipeline emits renders as
-        a declared SSE ``Error_Frame`` through the single envelope.
+        (``STREAM_BUFFER_UNAVAILABLE``). A per-request ``SSEEncoder`` (one stable ``id`` / ``model``
+        / ``created`` from ``req``) is the sink for the released frames, which flow through the
+        shipped pipeline built via ``select_pipeline(plan, ...)`` and the tool-call assembler.
 
-        The :class:`~gateway_v2.edge.stream_control.FirstByteLatch` is created HERE, above the
-        egress loop, and threaded into the stream orchestration so the no-splice gate (R7) is
-        enforced before any provider hand-off: a signed safe retry/fallback runs only while the
-        latch is unset, the first released content byte sets it, and after that the stream only
-        terminates / errors — a second upstream response is never spliced in (R7.4).
+        **Deferred start (GW34 R7).** The SSE response starts at the first content-bearing frame,
+        so a coalescer refusal or any failure before it is a plain HTTP error with the exact
+        non-stream bytes. ``plain_pre_byte=False`` (the Responses adapter, which translates our
+        SSE bytes itself) keeps today's eager start and SSE ``Error_Frame`` behaviour.
 
         ``holds`` is the per-request ledger threaded from :meth:`handle` so the streaming provider
         open records ``mark_dispatched`` (Group D); it defaults to a fresh per-call ledger so a
@@ -423,138 +407,46 @@ class ChatRoute:
         """
         if holds is None:
             holds = RequestHolds()
-        coalescer = Coalescer(contract=self.contract, active_streams=self.active_streams)
-        verdict = coalescer.admit()
-        encoder = SSEEncoder()
-        await _start_sse(send)
-        if verdict.code is not None:
-            await _send_sse(send, errors.render_sse(verdict.code))
-            await _end_sse(send)
-            return
-        await self._stream(send, encoder, coalescer, plan, destination, body, holds, outcome)
-        await _end_sse(send)
 
-    async def _stream(
-        self,
-        send: ASGISend,
-        encoder: SSEEncoder,
-        coalescer: Coalescer,
-        plan: ExecutionPlan,
-        destination: str,
-        body: Mapping[str, object],
-        holds: RequestHolds,
-        outcome: LifecycleOutcome,
-    ) -> None:
-        """Drive the egress pipeline under the no-splice gate + in-flight control (R7, R10).
-
-        A per-request :class:`FirstByteLatch` gates retry/fallback: ``_sink`` sets it the instant
-        the FIRST content byte is released (R7.2), and :func:`run_with_no_splice` requests a fresh
-        attempt only while it is unset (R7.1/R7.3). Each attempt opens the injected
-        ``ProviderClient`` for the routed destination and runs the shipped ``StreamPipeline``
-        release loop; released frames are encoded by the one ``SSEEncoder``.
-
-        **In-flight control (R10).** A per-request :class:`KillLatch` is the ``killed()`` seam; an
-        :class:`InFlightControl` evaluated at each chunk boundary (:func:`_as_chunks`) flips it on a
-        fired trigger and stops the source (R10.7). **Bounded timeouts (C27/R9).** A per-request
-        :class:`StreamTimeouts` bounds the next-event await (R9.2) and the downstream write + idle
-        (R9.3/R9.4), flipping the SAME latch on a breach. Either way :meth:`_finish_stream` renders
-        the latch's posture code as the declared terminal ``Error_Frame`` at the ONE terminal site.
-
-        On a clean finish the terminal ``[DONE]`` marker is emitted; a byte-less failure of every
-        eligible attempt closes the stream without a splice (R7.4).
-        """
-        latch = FirstByteLatch()
-        sent_terminal = _TerminalLatch()
-        kill_latch = KillLatch()
-        produced = ProducedModeHolder(holds)
-        binding: StreamBinding | None = outcome.binding
-        source = (
-            self.control_factory.for_stream(binding)
-            if self.control_factory is not None
-            else self.control
-            if binding is not None
-            else RefusingControlSource()
-        )
-        control = InFlightControl(
-            source=source,
-            contract=self.contract,
-            clock=self.clock,
-            kill_latch=kill_latch,
-        )
-        timeouts = StreamTimeouts(
-            contract=self.contract,
-            kill_latch=kill_latch,
-            clock=self.clock,
-            first_event_s=(
-                None
-                if self.routing is None
-                else self.contract.routing_pre_content_budget_s(
-                    self.contract.routing_max_attempts()
-                )
-            ),
-        )
-
-        async def _sink(frame: DownstreamFrame) -> None:
-            if sent_terminal.is_set():
-                return
-            error_code = frame.error_code
-            if error_code is not None:
-                # The terminal error write is bounded by the write/idle timeout too (R9.3/R9.4)
-                # so a client that stops reading cannot wedge the stream on the terminal frame.
-                await timeouts.send(lambda: _send_sse(send, encoder.error(error_code)))
-                sent_terminal.set()
-                return
-            # The first released content byte closes the no-splice gate (R7.2): once a byte is on
-            # the wire the orchestration will never attempt a second upstream response (R7.4).
-            latch.set_on_release()
-            # Each downstream content write is bounded by the Write_Timeout, and the inter-write
-            # gap by the Idle_Timeout (R9.3/R9.4); a breach flips the kill latch + raises.
-            await timeouts.send(lambda: _send_sse(send, encoder.content(frame)))
-
-        offered = _TerminalLatch()
-
-        def _factory() -> StreamAttempt | None:
-            return self._next_attempt(
-                offered,
-                latch,
-                _sink,
-                coalescer,
-                kill_latch,
-                control,
-                timeouts,
-                plan,
-                destination,
-                body,
-                produced,
-                holds,
-                org_id="" if binding is None else binding.org_id,
-                routed_model=outcome.routed_model or "",
+        async def emit_error(code: str) -> None:
+            dispatched = holds.dispatched
+            await emit_error_code(
+                send, code, holds.request_id or None, None,
+                self.contract.max_output_tokens_boundary(),
+                console_from_holds(
+                    holds, output_action="block" if dispatched else None,
+                    provider_called=dispatched,
+                ),
+                # GW29 6.4a under GW34 deferred start: a pre-byte incident cut is the 503 with
+                # the retry hints, as the first-attempt refusal is (None: no incident, no hint).
+                retry_after_s=holds.incident_retry_after_s,
             )
 
-        await self._run_attempts(latch, _factory)
-        await self._finish_stream(send, encoder, kill_latch, sent_terminal, produced)
-
-    async def _run_attempts(
-        self,
-        latch: FirstByteLatch,
-        factory: Callable[[], StreamAttempt | None],
-    ) -> None:
-        """Drive the no-splice attempt loop, swallowing a timeout cut as a terminal failure (R9).
-
-        :func:`run_with_no_splice` re-raises a post-first-byte failure (R7.3). A C27 timeout is a
-        legitimate terminal cut, not a splice candidate: it has already flipped the per-request
-        :class:`KillLatch` with its posture code, so the stream must terminate and render that
-        code — never retry. Catching :class:`StreamTimeout` here lets the loop fall through to
-        :meth:`_finish_stream`, which reads the latch reason and emits the declared timeout
-        ``Error_Frame`` at the single terminal site (R9.2–R9.4, fail closed: the resources are
-        released as the loop unwinds).
-        """
-        try:
-            await run_with_no_splice(latch, factory)
-        except StreamTimeout:
-            # The latch already carries the timeout reason; _finish_stream renders it. The raise
-            # exists only to unwind the stalled await — resources release as the loop exits.
+        response = StreamResponse(
+            send, emit_error=emit_error, request_id=holds.request_id or None
+        )
+        coalescer = Coalescer(contract=self.contract, active_streams=self.active_streams)
+        verdict = coalescer.admit()
+        identity = StreamIdentity(
+            stream_id=f"chatcmpl-{holds.request_id}" if holds.request_id else DEFAULT_STREAM_ID,
+            model=DEFAULT_MODEL if req is None else req.model,
+            created=int(self.wall_clock_s()),
+        )
+        encoder = SSEEncoder(identity=identity)
+        if verdict.code is not None:
+            if plain_pre_byte:
+                await response.fail_pre_byte(verdict.code)
+                return
+            await response.start()
+            await response.write_started(errors.render_sse(verdict.code))
+            await response.close()
             return
+        if not plain_pre_byte:
+            await response.start()
+        await ChatStream(self).stream(
+            response, encoder, coalescer, plan, destination, body, holds, req, done,
+            outcome=outcome,
+        )
 
     async def _finish_stream(
         self,
@@ -564,189 +456,17 @@ class ChatRoute:
         sent_terminal: _TerminalLatch,
         produced: ProducedModeHolder,
     ) -> None:
-        """Close the stream: render an in-flight cut's ``Error_Frame`` or the ``[DONE]`` marker.
-
-        If an in-flight trigger cut the stream (R10) OR a C27 timeout tripped (R9.2-R9.4), the
-        per-request :class:`KillLatch` carries the reason posture code the FIRST cut set; the
-        handler renders it as the declared terminal ``Error_Frame`` here (the pass-through
-        pipeline does not emit one of its own), so a max-duration cut shows ``STREAM_MAX_DURATION``,
-        a key revocation shows ``STREAM_KEY_REVOKED`` (R10.2-R10.6), and a stall shows
-        ``STREAM_INTER_CHUNK_TIMEOUT`` / ``STREAM_IDLE_TIMEOUT`` / ``STREAM_WRITE_TIMEOUT``
-        (R9.2-R9.4) — one terminal site for every cut reason. No content frame follows the terminal
-        frame (``sent_terminal`` guards against a double terminal). Only when nothing was cut and no
-        terminal has been emitted does the clean ``[DONE]`` marker close the stream.
-
-        The in-loop content/error writes in ``_sink`` are the ones bounded by the Write_Timeout +
-        Idle_Timeout (R9.3/R9.4); this terminal close is a best-effort final marker emitted after
-        the resources have already been released by the unwinding loop, so it uses the plain
-        ``_send_sse`` and never re-raises a timeout past the handler.
-
-        **Produced_Mode stamp (GW13 C5/R5, GW14b §5.4).** A NON-CONTENT ``amf.trace``
-        frame carries ``produced_mode`` and, when the input decision is known, the
-        six-stage console object. On a clean completion it precedes ``[DONE]``. When
-        the pipeline already emitted a terminal error, the same frame follows that
-        error: ``trace()`` is not content, so no content frame follows the error.
-        No stats means no frame.
-        """
-        if sent_terminal.is_set() or encoder.terminated:
-            await ChatRoute._emit_produced_mode(send, encoder, produced)
-            return
-        reason = kill_latch.reason()
-        if reason is not None:
-            note_stream_cut(produced.holds, reason)
-            # The pass-through loop ended normally after the cut and recorded "allow"; the trace
-            # must not report a cut stream as allowed (a kill-switch cut publishes no action).
-            stats = produced.stats
-            if reason != STREAM_KILLED and getattr(stats, "output_action", None) == "allow":
-                stats.output_action = "block"  # type: ignore[union-attr]
-            await _send_sse(send, encoder.error(reason))
-            sent_terminal.set()
-            await ChatRoute._emit_produced_mode(send, encoder, produced)
-            return
-        # Called on the class (not ``self``) so the terminal site stays usable with ``self``
-        # unbound — the Produced_Mode stamp reads only the ``produced`` holder, never ``self``.
-        await ChatRoute._emit_produced_mode(send, encoder, produced)
-        await _send_sse(send, encoder.done())
-
-    @staticmethod
-    async def _emit_produced_mode(
-        send: ASGISend,
-        encoder: SSEEncoder,
-        produced: ProducedModeHolder,
-    ) -> None:
-        """Emit the Produced_Mode trace frame from the captured stats (GW13 C5/R5).
-
-        Reads the stats the completing attempt stashed on ``produced``: the
-        ``produced_mode`` is the SELECTED streaming mode the pipeline ran
-        (``incremental`` / ``strict_withhold``, R5.2/R5.3) and
-        ``degenerated_to_strict`` is the INCREMENTAL per-response trace fact (R6.2) —
-        ``StrictStats`` carries no such flag, so a STRICT run stamps ``False`` by
-        construction. Emitted as the one non-content ``amf.trace`` frame; a holder
-        with no stats (every attempt failed byte-less) emits nothing.
-        """
-        stats = produced.stats
-        if stats is None:
-            return
-        await _send_sse(send, encoder.trace(stream_trace_payload(
-            produced, stats, bool(getattr(stats, "degenerated_to_strict", False)),
-        )))
-
-    def _next_attempt(
-        self,
-        offered: _TerminalLatch,
-        latch: FirstByteLatch,
-        sink: Send,
-        coalescer: Coalescer,
-        kill_latch: KillLatch,
-        control: InFlightControl,
-        timeouts: StreamTimeouts,
-        plan: ExecutionPlan,
-        destination: str,
-        body: Mapping[str, object],
-        produced: ProducedModeHolder,
-        holds: RequestHolds,
-        *,
-        org_id: str,
-        routed_model: str,
-    ) -> StreamAttempt | None:
-        """Yield the next eligible stream attempt, or ``None`` when none remains (R7.1).
-
-        There is exactly ONE signed upstream to try, so the first call returns an attempt and every
-        later call returns ``None`` (the ``offered`` latch); :func:`run_with_no_splice` only invokes
-        this while the first-byte latch still permits a retry. The attempt builds the pipeline via
-        ``select_pipeline(plan, ...)`` (GW13 C4: ``streaming_mode`` selects INCREMENTAL or
-        STRICT_WITHHOLD), opens the provider to the plan-derived ``destination`` with the verified
-        ``body``, hands the :class:`KillLatch` to ``pipeline.run`` as the ``killed()`` seam, and
-        threads :class:`InFlightControl` + :class:`StreamTimeouts` into :func:`_as_chunks`
-        (R9.2, R10.2-R10.7). GW33 bounds the upstream with ``bounded_upstream`` (D-13).
-        """
-        if offered.is_set():
-            return None
-        offered.set()
-
-        async def _attempt() -> bool:
-            try:
-                pipeline = self._build_pipeline(plan, holds)
-            except EnforcementUndetermined:
-                # Defensive: the proceed outcome carries a resolved plan, so `for_plan` resolves
-                # the enforcing-output set without raising. Were the enforcement state ever
-                # undetermined, fail CLOSED — flip the kill latch with the declared
-                # ``plan_unavailable`` code and release no byte; `_finish_stream` renders it (R2.4).
-                kill_latch.kill(PLAN_UNAVAILABLE)
-                return latch.is_set()
-            request = UpstreamRequest(destination=destination, body=body)
-            # GW29 (6.4): re-check the routed model ABOVE ``mark_dispatched`` so a refusal refunds.
-            if attempt_recheck_cut(
-                self.incident_recheck, org_id=org_id, model=routed_model,
-                kill_latch=kill_latch, holds=holds,
-            ):
-                return latch.is_set()
-            # The provider is about to be opened — after the pre-open ``_build_pipeline`` build
-            # (which can fail CLOSED without opening) and the body assembly. Record the dispatch
-            # so the budget spend now STANDS (the provider saw the request, C29 "spend stands
-            # once dispatched"). On a no-splice RETRY this only re-sets a flag (idempotent).
-            holds.mark_dispatched(routed_model)
-            chunks = bounded_upstream(
-                _as_chunks(
-                    open_chat_upstream(self, plan, request, holds),
-                    coalescer,
-                    control,
-                    timeouts,
-                    error_scan=_ErrorFrameScan(
-                        scanner=self.error_scanner,
-                        # Group E: OUTPUT guard. Unset factory returns ``self.resolver`` (3.3).
-                        resolver=resolver_for(self, plan, Phase.OUTPUT),
-                        kill_latch=kill_latch,
-                        executor=self.executor,
-                    ),
-                ),
-                self.contract.output_ceiling_chars(),
-            )
-            # Capture the returned stats so the Produced_Mode trace frame can be stamped on the
-            # wire from the SELECTED mode + the INCREMENTAL degenerate fact (GW13 C5/R5). Both
-            # StreamPipeline.run and StrictWithholdPipeline.run return a stats value carrying
-            # ``produced_mode``, so the holder reads it uniformly regardless of mode.
-            produced.stats = await pipeline.run(chunks, sink, kill_latch)
-            note_stream_output(holds, produced.stats, plan.version)
-            # The sink set the first-byte latch the instant a content byte went out; report that
-            # as the "released a byte" signal so run_with_no_splice closes the gate (R7.2/R7.4).
-            return latch.is_set()
-
-        return _attempt
-
-    def _build_pipeline(
-        self, plan: ExecutionPlan, holds: RequestHolds,
-    ) -> StreamPipeline | StrictWithholdPipeline:
-        """Build the plan's stream pipeline and bind this route's surface on the detector."""
-        from gateway_v2.edge.dev_components import bind_surface
-
-        bound = bind_surface(self.output_detector, self.surface) if self.output_detector else None
-        out = build_output_detectors(  # GW33: new detectors only for the plan's built-in rules
-            plan, base=bound, ticket=holds.canary_ticket, context_chunks=(), backend=None,
-            contract=self.contract, runner=self.executor.run,
-        )
-        return select_pipeline(
-            plan,
-            scanner=self.scanner,
-            token_index=TokenIndex(),
-            cfg=self.cfg,
-            metrics=self.holdback_metrics,
-            window=max_pattern_length(),
-            # Group E: the streaming output guard resolves through the pinned plan at
-            # ``Phase.OUTPUT``. The detector gets this route's surface (GW26).
-            resolver=resolver_for(self, plan, Phase.OUTPUT),
-            detector=out.detector_for(plan.streaming_mode),
-            max_buffer_bytes=self.contract.stream_buffer_bytes(self.active_streams()),
-            strict_metrics=StrictMetrics(),
-            delta_detector=out.canary_delta,
-            final_detector=out.final,
-            sync_runner=out.runner,
-        )
+        """Delegate to :func:`finish_stream`, the ONE terminal site (does not read ``self``)."""
+        await finish_stream(send, encoder, kill_latch, sent_terminal, produced)
 
 
-# --------------------------------------------------------------------------- #
-# Placeholder routes (R2.3) — registered-for-later, declared not-implemented.
-# --------------------------------------------------------------------------- #
+def _tool_call_detail(holds: RequestHolds) -> Mapping[str, str] | None:
+    """Audit detail for a request that carried tool calls: COUNTS as digit strings, nothing else
+    (no tool name, id, argument or schema text reaches an audit field, R11)."""
+    released, withheld = holds.tool_calls_released, holds.tool_calls_withheld
+    if not (released or withheld):
+        return None
+    return {"tool_calls_released": str(released), "tool_calls_withheld": str(withheld)}
 
 
 # --------------------------------------------------------------------------- #

@@ -167,9 +167,11 @@ def test_a_slot_whose_delta_moved_channel_is_refused() -> None:
 @pytest.mark.parametrize(
     ("body", "code", "param"),
     [
-        ({"tools": []}, UNSUPPORTED_PARAMETER, "tools"),
-        ({"tool_choice": "auto"}, UNSUPPORTED_PARAMETER, "tool_choice"),
-        ({"response_format": {"type": "json_object"}}, UNSUPPORTED_PARAMETER, "response_format"),
+        ({"audio": {"voice": "x"}}, UNSUPPORTED_PARAMETER, "audio"),
+        ({"modalities": ["audio"]}, UNSUPPORTED_PARAMETER, "modalities"),
+        ({"prediction": {"type": "content"}}, UNSUPPORTED_PARAMETER, "prediction"),
+        ({"web_search_options": {}}, UNSUPPORTED_PARAMETER, "web_search_options"),
+        ({"top_logprobs": 3}, UNSUPPORTED_PARAMETER, "top_logprobs"),
         ({"logprobs": True}, UNSUPPORTED_PARAMETER, "logprobs"),
         ({"functions": []}, UNSUPPORTED_PARAMETER, "functions"),
         ({"not a field!": 1}, UNSUPPORTED_PARAMETER, None),
@@ -194,11 +196,12 @@ def test_fields_the_gateway_does_not_scan_or_type_are_refused(
 @pytest.mark.parametrize(
     ("messages", "code"),
     [
-        ([{"role": "tool", "content": "x", "tool_call_id": "c1"}], UNSUPPORTED_PARAMETER),
+        # GW34: tool turns are accepted, but an orphan tool message has no declaring call.
+        ([{"role": "tool", "content": "x", "tool_call_id": "c1"}], MALFORMED_WRONG_SHAPE),
         ([{"role": "function", "content": "x", "name": "f"}], UNSUPPORTED_PARAMETER),
         (
             [{"role": "assistant", "content": None, "tool_calls": [{"id": "c1"}]}],
-            UNSUPPORTED_PARAMETER,
+            MALFORMED_WRONG_SHAPE,
         ),
         ([{"role": "user", "content": [{"type": "image_url", "image_url": {}}]}],
          UNSUPPORTED_CONTENT_PART),
@@ -288,9 +291,10 @@ def _plain(value: object) -> object:
 class _Recorder:
     """Records the rendered request; replies with one content event, or a scripted failure."""
 
-    def __init__(self, failure: str | None = None) -> None:
+    def __init__(self, failure: str | None = None, reply: str = "ok") -> None:
         self.sent: list[Mapping[str, object]] = []
         self.failure = failure
+        self.reply = reply
 
     def open(self, request: UpstreamRequest) -> AsyncIterator[UpstreamEvent]:
         return self._stream(request)
@@ -303,7 +307,7 @@ class _Recorder:
         if self.failure is not None:
             yield UpstreamEvent(text_deltas=(), final=True, gateway_error=self.failure)
             return
-        yield UpstreamEvent(text_deltas=(("content", "ok"),), final=True)
+        yield UpstreamEvent(text_deltas=(("content", self.reply),), final=True)
 
     async def abort(self) -> None:
         return None
@@ -398,8 +402,8 @@ def test_stop_strings_are_scanned_before_they_are_forwarded() -> None:
 @pytest.mark.parametrize(
     "extra",
     [
-        {"tools": [{"type": "function", "function": {"name": "f"}}]},
-        {"response_format": {"type": "json_object"}},
+        {"audio": {"voice": "x"}},
+        {"functions": []},
         {"messages": [{"role": "user", "content": [{"type": "image_url", "image_url": {}}]}]},
     ],
 )
@@ -433,18 +437,13 @@ def test_a_gateway_detected_upstream_failure_is_an_error_never_a_200(
     assert json.loads(body)["error"]["code"] == code
 
 
-def test_a_streamed_upstream_failure_ends_with_the_declared_error_frame() -> None:
+def test_a_streamed_upstream_failure_before_any_byte_is_a_plain_http_error() -> None:
+    # GW34 R7: nothing was produced, so the status is the real one (429), not 200 + an SSE frame.
     provider = _Recorder(failure="upstream_rate_limited")
     status, body = _chat(
         provider, {"messages": [{"role": "user", "content": "hi"}], "stream": True}
     )
-    text = body.decode()
-    assert status == 200  # the SSE start precedes provider.open (recorded S5 / GW34 follow-up)
-    assert "upstream_rate_limited" in text
-    assert '"content":"' not in text.replace('"content":""', "")
-    trace = next(
-        json.loads(line[len("data: ") :])
-        for line in text.splitlines()
-        if line.startswith("data: ") and "pipeline_trace" in line
-    )
-    assert trace["pipeline_trace"]["final_action"] != "allow", trace
+    assert status == 429, body
+    payload = json.loads(body)
+    assert payload["error"]["code"] == "upstream_rate_limited"
+    assert payload["pipeline_trace"]["final_action"] != "allow", payload

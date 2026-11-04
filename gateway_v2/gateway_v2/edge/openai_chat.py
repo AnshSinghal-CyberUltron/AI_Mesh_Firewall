@@ -74,7 +74,7 @@ from gateway_v2.edge.org_gate import enforce_org_limits, org_response_ceiling
 from gateway_v2.edge.phase_resolvers import resolver_for
 from gateway_v2.edge.request_holds import RequestHolds
 from gateway_v2.edge.routes import ASGIScope, ASGISend
-from gateway_v2.edge.upstream_body import with_openai_body
+from gateway_v2.edge.upstream_body import FillRefused, with_openai_body
 from gateway_v2.edge.wire.openai import (
     CanonicalRequest,
     MalformedRequest,
@@ -100,6 +100,8 @@ _PART_SEP_BYTE = 0x2C  # ``,``
 #: code points is exactly what blew a 1 MiB body up 18x in the C26 register. A byte-range marker
 #: for the cheap O(n) expansion proxy, not a capacity-position literal.
 _ASCII_MAX_BYTE = 0x7F
+#: Byte markers that make a body a tool-bearing candidate for the C26 part allowance (D20).
+_TOOL_MARKS = (b"tools", b"tool_calls", b"response_format")
 
 #: The ASGI ``scope`` key carrying the request path, and the two chat-surface paths this handler
 #: serves. Both the chat-completions and the legacy completions paths map to ``Surface.CHAT`` (the
@@ -358,9 +360,25 @@ class ChatSurface:
             return REFUSE_PRE_CHECK
         if self._expansion_ratio(body) > contract.max_expansion_ratio():
             return REFUSE_PRE_CHECK
-        if self._part_count(body) > contract.max_request_parts():
+        if self._part_count(body) > self._parts_ceiling(body):
             return REFUSE_PRE_CHECK
         return None
+
+    def _parts_ceiling(self, body: bytes) -> int:
+        """The C26 part ceiling: ``max_request_parts()``, plus the tool allowance only when due.
+
+        ``_part_count`` counts every ``{`` and ``,`` byte, so a realistic ``tools`` request (20
+        pydantic schemas) exceeds the plain ceiling before any new code runs (D20). The allowance
+        (derived from the schema-node bound the fold enforces later) is added only when the route
+        has tool bounds AND the body mentions ``tools`` / ``tool_calls`` / ``response_format``; a
+        tool-free body keeps the full strength of the flood guard, and a route without tool bounds
+        (a tools-disabled fake contract) never reads the allowance.
+        """
+        ceiling = self._deps.contract.max_request_parts()
+        bounds = getattr(self._deps, "tool_bounds", None)
+        if bounds is not None and any(body.find(mark) >= 0 for mark in _TOOL_MARKS):
+            ceiling += bounds.parts_allowance
+        return ceiling
 
     @staticmethod
     def _expansion_ratio(body: bytes) -> float:
@@ -428,7 +446,16 @@ class ChatSurface:
         if surface is None:
             return None, REFUSE_UNSUPPORTED_SURFACE, None
         try:
-            request = self._deps.parser.parse(body, surface=surface, contract=self._deps.contract)
+            bounds = getattr(self._deps, "tool_bounds", None)
+            # The route's bounds are passed only when it has them, so a parser that predates
+            # GW34 (the standalone test fakes) keeps its two-keyword ``parse`` signature.
+            request = (
+                self._deps.parser.parse(body, surface=surface, contract=self._deps.contract)
+                if bounds is None
+                else self._deps.parser.parse(
+                    body, surface=surface, contract=self._deps.contract, tool_bounds=bounds
+                )
+            )
         except MalformedRequest as exc:
             return None, exc.code, exc.param
         return request, None, None
@@ -666,6 +693,8 @@ class ChatSurface:
             model=routed_model,
             org_ceiling=org_response_ceiling(plan, self._deps.contract),
         )
+        if isinstance(body, FillRefused):
+            return _refused(body.code, request_id=request_id)
         if body is None:
             return _refused(REFUSE_LIFECYCLE_INCOMPLETE, request_id=request_id)
         routing = getattr(self._deps, "routing", None)  # duck-typed test deps may lack it
@@ -756,6 +785,7 @@ class ChatSurface:
             routed_model=outcome.routed_model or "",
             block_code=REFUSE_OUTPUT_BLOCKED,
             scan_failure_code=REFUSE_INPUT_SCAN_FAILURE,
+            req=req,
         )
         await emit_enforced_chat(send, self._deps, req, plan, enforced, holds)
 

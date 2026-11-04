@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import json
 import random
+from types import MappingProxyType
 
 import pytest
 
@@ -64,11 +65,11 @@ _CONTRACT = _contract()
 #: The ``TextChannel.sdk_path`` prefixes that mark an INPUT (request-side) channel;
 #: mirrors ``edge/wire/openai_fold.INPUT_SDK_PATH_PREFIXES`` so the test keys on the
 #: same scope boundary the fold's totality check does.
-_INPUT_SDK_PATH_PREFIXES = ("messages[]", "prompt", "stop")
+_INPUT_SDK_PATH_PREFIXES = ("messages[]", "prompt", "stop", "tools[]", "response_format")
 
 #: Channels the fold scans but the forwarding policy refuses at parse (GW36 S1: tool
 #: calls are not forwarded until GW34). Their fold coverage is checked on the fold itself.
-_REFUSED_AT_PARSE = frozenset({"tool_arguments", "function_arguments"})
+_REFUSED_AT_PARSE = frozenset({"function_arguments"})
 
 #: Alphabet for canary synthesis — printable, SDK-safe, and distinctive so a canary
 #: that leaks across channels is unambiguous in a counterexample.
@@ -78,6 +79,31 @@ _CANARY_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_"
 def _ctx(seed: int, i: int, **extra: object) -> str:
     body = " ".join(f"{k}={v!r}" for k, v in extra.items())
     return f"seed={seed:#x} iter={i} {body}"
+
+
+def _fn(**function: object) -> dict[str, object]:
+    return {"tools": [{"type": "function", "function": {"name": "f", **function}}]}
+
+
+#: Canary placement for the GW34 request-side tool channels (builders, not module mutables).
+_TOOL_CASES = MappingProxyType(
+    {
+        "tool_name": lambda c: {"tools": [{"type": "function", "function": {"name": c}}]},
+        "tool_schema_struct": lambda c: _fn(
+            parameters={"type": "object", "properties": {c: {"type": "string"}}}
+        ),
+        "tool_description": lambda c: _fn(description=c),
+        "tool_schema_text": lambda c: _fn(
+            parameters={"type": "object", "description": c}
+        ),
+        "response_format_schema": lambda c: {
+            "response_format": {
+                "type": "json_schema",
+                "json_schema": {"name": "r", "description": c},
+            }
+        },
+    }
+)
 
 
 def _canary(rng: random.Random) -> str:
@@ -116,10 +142,35 @@ def _request_with_canary(channel_name: str, canary: str) -> dict[str, object]:
                 {
                     "id": "call_0",
                     "type": "function",
-                    "function": {"name": "f", "arguments": canary},
+                    "function": {"name": "f", "arguments": json.dumps({"k": canary})},
                 }
             ],
         }
+    elif channel_name == "tool_arguments_raw":
+        message = {
+            "role": "assistant",
+            "tool_calls": [
+                {
+                    "id": "call_0",
+                    "type": "function",
+                    "function": {"name": "f", "arguments": json.dumps({"k": canary})},
+                }
+            ],
+        }
+    elif channel_name == "tool_call_id":
+        message = {
+            "role": "assistant",
+            "tool_calls": [
+                {
+                    "id": canary,
+                    "type": "function",
+                    "function": {"name": "f", "arguments": "{}"},
+                }
+            ],
+        }
+    elif channel_name in _TOOL_CASES:
+        return {"model": "gpt-test", "messages": [{"role": "user", "content": "hi"}],
+                **_TOOL_CASES[channel_name](canary)}
     elif channel_name == "function_arguments":
         message = {
             "role": "assistant",
@@ -165,7 +216,7 @@ def test_property_2_input_channel_fold_is_total() -> None:
 
             # The canary appears in the folded input_channels under the matching
             # channel name — the fold enumerated it into scannable text (R1.2, C21).
-            assert (channel_name, canary) in folded, _ctx(
+            assert any(n == channel_name and canary in t for n, t in folded), _ctx(
                 _SEED,
                 i,
                 note="canary missing from folded input_channels",
@@ -179,7 +230,7 @@ def test_property_2_input_channel_fold_is_total() -> None:
             texts_for_channel = tuple(
                 text for name, text in folded if name == channel_name
             )
-            assert canary in texts_for_channel, _ctx(
+            assert any(canary in t for t in texts_for_channel), _ctx(
                 _SEED,
                 i,
                 note="canary not folded under its own channel name",

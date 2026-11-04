@@ -64,6 +64,7 @@ from gateway_v2.domain import (
     StreamingMode,
     posture,
 )
+from gateway_v2.domain.channels import META_CHANNELS
 from gateway_v2.egress.output_errors import OutputLengthExceeded, RewriteVerificationFailure
 from gateway_v2.egress.output_guard import (
     FinalDetector,
@@ -329,6 +330,7 @@ class StrictWithholdPipeline:
         are emitted deterministically in the order channels first appeared.
         """
         whole: dict[str, str] = {}
+        meta: list[tuple[str, str]] = []
         try:
             async for chunk in chunks:
                 stats.upstream_chunks += 1
@@ -345,8 +347,12 @@ class StrictWithholdPipeline:
                 if killed():
                     return await self._cut_on_kill(send, stats)
 
-                # Accumulate; release NOTHING (R3.2).
+                # Accumulate; release NOTHING (R3.2). A GW34 meta channel (``finish_reason``) is
+                # not text: it is kept in its own ordered list and emitted LAST, unscanned.
                 for channel, delta in chunk.text_deltas:
+                    if channel in META_CHANNELS:
+                        meta.append((channel, delta))
+                        continue
                     whole[channel] = whole.get(channel, "") + delta
                 stats.buffered_bytes = sum(len(text) for text in whole.values())
 
@@ -356,7 +362,7 @@ class StrictWithholdPipeline:
                     return await self._overflow(send, stats)
 
                 if chunk.final:
-                    return await self._finalize(whole, send, stats)
+                    return await self._finalize(whole, send, stats, meta)
         except RewriteVerificationFailure:
             return await self._terminate(send, stats, error=posture.REWRITE_UNVERIFIED)
         except OutputLengthExceeded:
@@ -378,6 +384,7 @@ class StrictWithholdPipeline:
         whole: dict[str, str],
         send: Send,
         stats: StrictStats,
+        meta: Sequence[tuple[str, str]] = (),
     ) -> StrictStats:
         """Inspect the whole buffer once, resolve once, emit or BLOCK.
 
@@ -416,7 +423,7 @@ class StrictWithholdPipeline:
             return await self._terminate(send, stats, error=_OUTPUT_BLOCKED_CODE)
         # ALLOW/REDACT: emit the sanitized whole response as a single content
         # frame carrying every channel's bytes, then complete cleanly.
-        await send(DownstreamFrame(text_deltas=tuple(sanitized)))
+        await send(DownstreamFrame(text_deltas=(*sanitized, *meta)))
         stats.frames_out += 1
         stats.completion_overhead_ns = max(0, self._clock() - t_final)
         publish_output(stats, agg)

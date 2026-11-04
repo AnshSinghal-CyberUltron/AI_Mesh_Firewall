@@ -1340,6 +1340,11 @@ def _p11_client_bytes_nonstream(
             scan_failure_code="scan_failure",
         )
     )
+    if channel_name.startswith("output_tool"):
+        # GW34: these fake deps carry no ``tool_bounds`` (a tools-disabled route), so a tool call
+        # is withheld whole (fail closed): the canary still reaches the client zero times.
+        assert enforced.refuse_code == "output_blocked" and enforced.deltas == ()
+        return b""
     assert enforced.refuse_code is None, (
         f"REDACT canary refused on the non-stream path (channel={channel_name!r}, "
         f"refuse_code={enforced.refuse_code!r})"

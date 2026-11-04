@@ -32,6 +32,7 @@ import random
 from collections.abc import AsyncIterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from dataclasses import field as _lgw29_field
+from types import MappingProxyType
 from typing import TYPE_CHECKING, cast
 
 from gateway_v2.admit.grant import Admitted
@@ -61,10 +62,17 @@ _P9_ITERATIONS = 10_000
 #: The ``TextChannel.sdk_path`` prefixes that mark an INPUT (request-side) channel;
 #: mirrors ``edge/wire/openai_fold.INPUT_SDK_PATH_PREFIXES`` so the canary iterates over
 #: the SAME input-scoped channel set the fold's totality check pins.
-_P9_INPUT_SDK_PATH_PREFIXES = ("messages[]", "prompt", "stop")
+_P9_INPUT_SDK_PATH_PREFIXES = ("messages[]", "prompt", "stop", "tools[]", "response_format")
 
 #: Scanned channels the forwarding policy refuses at parse (GW36 S1, until GW34).
-_P9_REFUSED_AT_PARSE = frozenset({"tool_arguments", "function_arguments"})
+#: The fake contract here has no ``tool_bounds`` (a tools-disabled route, GW34), so every tool
+#: channel is refused at parse -- before the scan, with zero provider calls.
+_P9_REFUSED_AT_PARSE = frozenset(
+    {
+        "function_arguments", "tool_arguments", "tool_arguments_raw", "tool_call_id", "tool_name",
+        "tool_schema_struct", "tool_description", "tool_schema_text", "response_format_schema",
+    }
+)
 
 #: A BLOCK-class detector name: ``MinimalOutputResolver`` maps ``card`` (and ``jwt``) to
 #: ``Disposition.BLOCK`` via its trade-off table, so a finding tagged with this detector
@@ -79,6 +87,31 @@ _P9_CANARY_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_"
 def _p9_ctx(seed: int, i: int, **extra: object) -> str:
     body = " ".join(f"{k}={v!r}" for k, v in extra.items())
     return f"seed={seed:#x} iter={i} {body}"
+
+
+def _fn(**function: object) -> dict[str, object]:
+    return {"tools": [{"type": "function", "function": {"name": "f", **function}}]}
+
+
+#: Canary placement for the GW34 request-side tool channels (builders, not module mutables).
+_TOOL_CASES = MappingProxyType(
+    {
+        "tool_name": lambda c: {"tools": [{"type": "function", "function": {"name": c}}]},
+        "tool_schema_struct": lambda c: _fn(
+            parameters={"type": "object", "properties": {c: {"type": "string"}}}
+        ),
+        "tool_description": lambda c: _fn(description=c),
+        "tool_schema_text": lambda c: _fn(
+            parameters={"type": "object", "description": c}
+        ),
+        "response_format_schema": lambda c: {
+            "response_format": {
+                "type": "json_schema",
+                "json_schema": {"name": "r", "description": c},
+            }
+        },
+    }
+)
 
 
 def _p9_canary(rng: random.Random) -> str:
@@ -115,10 +148,35 @@ def _p9_request_with_canary(channel_name: str, canary: str) -> dict[str, object]
                 {
                     "id": "call_0",
                     "type": "function",
-                    "function": {"name": "f", "arguments": canary},
+                    "function": {"name": "f", "arguments": json.dumps({"k": canary})},
                 }
             ],
         }
+    elif channel_name == "tool_arguments_raw":
+        message = {
+            "role": "assistant",
+            "tool_calls": [
+                {
+                    "id": "call_0",
+                    "type": "function",
+                    "function": {"name": "f", "arguments": json.dumps({"k": canary})},
+                }
+            ],
+        }
+    elif channel_name == "tool_call_id":
+        message = {
+            "role": "assistant",
+            "tool_calls": [
+                {
+                    "id": canary,
+                    "type": "function",
+                    "function": {"name": "f", "arguments": "{}"},
+                }
+            ],
+        }
+    elif channel_name in _TOOL_CASES:
+        return {"model": "gpt-p9", "messages": [{"role": "user", "content": "hi"}],
+                **_TOOL_CASES[channel_name](canary)}
     elif channel_name == "function_arguments":
         message = {
             "role": "assistant",
@@ -421,7 +479,9 @@ def test_property_9_block_input_channel_yields_zero_provider_calls() -> None:
             assert req is not None, _p9_ctx(
                 _P9_SEED, i, note="request did not parse", channel=channel_name
             )
-            assert (channel_name, canary) in req.input_channels, _p9_ctx(
+            assert any(
+                n == channel_name and canary in t for n, t in req.input_channels
+            ), _p9_ctx(
                 _P9_SEED,
                 i,
                 note="canary not folded into its channel (scan could not see it)",

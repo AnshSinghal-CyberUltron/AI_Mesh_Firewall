@@ -91,7 +91,19 @@ def _rt_random_text(rng: random.Random) -> str:
     return "".join(out)
 
 
+def _one_per_channel(deltas: tuple[tuple[str, str], ...]) -> tuple[tuple[str, str], ...]:
+    """GW34: a frame is ONE merged ``choices[0].delta`` -- same-channel text concatenates."""
+    merged: dict[str, str] = {}
+    for channel, text in deltas:
+        merged[channel] = merged.get(channel, "") + text
+    return tuple(merged.items())
+
+
 def _rt_random_deltas(rng: random.Random) -> tuple[tuple[str, str], ...]:
+    return _one_per_channel(_rt_raw_deltas(rng))
+
+
+def _rt_raw_deltas(rng: random.Random) -> tuple[tuple[str, str], ...]:
     """A tuple of ``(channel, text)`` deltas — the content frame's payload.
 
     Each delta picks a channel from :data:`_RT_CHANNELS` so the default-vs-named
@@ -162,15 +174,20 @@ def test_property8_sse_codec_round_trip() -> None:
             f"{round_tripped.error_code!r}"
         )
         # Byte-for-byte identity on the carried text payload.
-        assert round_tripped.text_deltas == original.text_deltas, (
+        # GW34: one merged ``choices[0].delta`` per frame -- same-channel text concatenates.
+        merged: dict[str, str] = {}
+        for channel, text in original.text_deltas:
+            merged[channel] = merged.get(channel, "") + text
+        expected = tuple(merged.items())
+        assert round_tripped.text_deltas == expected, (
             f"i={i} seed={_RT_SEED:#x} round-trip lost deltas: "
-            f"{round_tripped.text_deltas!r} != {original.text_deltas!r}"
+            f"{round_tripped.text_deltas!r} != {expected!r}"
         )
         # The identity holds at the UTF-8 byte level too, defending the
         # byte-for-byte claim against any silent normalisation across the
         # ensure_ascii-escape / surrogate-decode boundary.
         assert _rt_encode_bytes(round_tripped.text_deltas) == _rt_encode_bytes(
-            original.text_deltas
+            expected
         ), f"i={i} seed={_RT_SEED:#x} round-trip altered UTF-8 bytes"
 
         # -- done() marker: decoder yields NO frame, not malformed (R1.2) ----- #
@@ -261,6 +278,10 @@ def _sc_random_text(rng: random.Random) -> str:
 
 
 def _sc_random_deltas(rng: random.Random) -> tuple[tuple[str, str], ...]:
+    return _one_per_channel(_sc_raw_deltas(rng))
+
+
+def _sc_raw_deltas(rng: random.Random) -> tuple[tuple[str, str], ...]:
     """A tuple of ``(channel, text)`` deltas — the content frame's payload."""
     count = rng.randint(1, 6)
     return tuple(

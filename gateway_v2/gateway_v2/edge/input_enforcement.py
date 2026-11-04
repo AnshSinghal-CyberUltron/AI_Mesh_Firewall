@@ -75,6 +75,8 @@ from gateway_v2.dispatch.provider import UpstreamRequest
 from gateway_v2.dispatch.transform import GatewayRequest, Transform
 from gateway_v2.dispatch.verify import VerificationFailure
 from gateway_v2.domain import Decision, Finding, Span
+from gateway_v2.domain.channels import BLOCK_ONLY_CHANNELS
+from gateway_v2.domain.decision import Disposition, FindingDisposition
 from gateway_v2.edge.error_frame_scan import SCAN_ERROR_CODE
 from gateway_v2.edge.wire.openai import CanonicalRequest
 from gateway_v2.egress.output_guard import OutputResolver
@@ -177,12 +179,60 @@ def scan_deltas(
         findings = _collect_findings(
             text_deltas, join_runs, detector, on_invoke,
         )
-        decision = resolver.decide(findings)
+        decision = _block_only_escalation(
+            resolver.decide(findings), findings, text_deltas, resolver
+        )
     except PolicyRegexRefusal as refused:
         return InputScan(decision=None, refuse_code=refused.code)
     except Exception:  # noqa: BLE001 — fail-closed: a raising scan/resolve withholds.
         return InputScan(decision=None, refuse_code=REFUSE_INPUT_SCAN_FAILURE)
     return InputScan(decision=decision, refuse_code=None)
+
+
+def _block_only_escalation(
+    decision: Decision,
+    findings: Sequence[Finding],
+    text_deltas: Sequence[tuple[str, str]],
+    resolver: OutputResolver,
+) -> Decision:
+    """BLOCK-only attribution (GW34 D23): a REDACT / BLOCK on a name, id or structural run blocks.
+
+    ``scan_deltas`` pools findings in request coordinates and a ``Finding`` carries no channel, so
+    the channel is recovered from the span: any finding overlapping a delta of a
+    :data:`~gateway_v2.domain.channels.BLOCK_ONLY_CHANNELS` channel is decided ALONE. A
+    redaction of a tool name / call id / schema key would break the declared-set and id ties (and
+    the pooled REDACT would be applied to bytes that are rendered from the template, so the
+    original would be forwarded), so a REDACT-class result is escalated to a BLOCK decision. A
+    finding that straddles a BLOCK-only range and a forwarded range counts as a hit. FLAG (monitor)
+    stays FLAG. The pooled decision is returned unchanged when nothing overlaps.
+    """
+    ranges = [
+        (start, start + len(text))
+        for (channel, text), start in zip(text_deltas, _base_offsets(text_deltas), strict=True)
+        if channel in BLOCK_ONLY_CHANNELS
+    ]
+    unchanged = (Disposition.ALLOW, Disposition.FLAG, Disposition.BLOCK)
+    if not ranges or decision.disposition in unchanged:
+        return decision
+    for finding in findings:
+        hit = any(
+            span.start < end and start < span.end
+            for span in finding.spans
+            for start, end in ranges
+        )
+        if not hit:
+            continue
+        alone = resolver.decide([finding])
+        if alone.disposition in (Disposition.REDACT, Disposition.BLOCK):
+            return replace(
+                decision,
+                disposition=Disposition.BLOCK,
+                per_finding=(
+                    *decision.per_finding,
+                    FindingDisposition(detector=finding.detector, disposition=Disposition.BLOCK),
+                ),
+            )
+    return decision
 
 
 def scan_input(

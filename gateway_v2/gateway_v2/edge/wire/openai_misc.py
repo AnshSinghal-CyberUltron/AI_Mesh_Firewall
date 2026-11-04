@@ -357,7 +357,9 @@ _FOLDED_MISC_CHANNELS = frozenset(
 #: GW17 MCP scope. A misc channel begins with none of them -- i.e. ``input`` /
 #: ``input[]``. A tuple (not a mutable), so the misc scope is read off the authoritative
 #: ``TEXT_CHANNELS`` tuple and never from a second hand-maintained list.
-_NON_MISC_SDK_PATH_PREFIXES = ("messages[]", "prompt", "stop", "choices[]", "mcp:")
+_NON_MISC_SDK_PATH_PREFIXES = (
+    "messages[]", "prompt", "stop", "tools[]", "response_format", "choices[]", "mcp:",
+)
 
 
 def _misc_channel_names() -> frozenset[str]:

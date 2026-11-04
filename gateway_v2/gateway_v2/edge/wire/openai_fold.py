@@ -15,8 +15,10 @@ emit must equal the set of ``TEXT_CHANNELS`` whose ``sdk_path`` starts with one 
 :data:`INPUT_SDK_PATH_PREFIXES`; any divergence raises :class:`ChannelFoldError` at import.
 
 Paths folded: ``messages[].content`` (string), ``messages[].content[].text`` (parts),
-``messages[].tool_calls[].function.arguments``, ``messages[].function_call.arguments``, the legacy
-completions ``prompt`` (string or list of strings) and ``stop`` (string or list of strings).
+``messages[].tool_calls[]`` (id, name, raw + canonical arguments), ``messages[].tool_call_id``,
+``tools[]`` / ``tool_choice`` / ``response_format`` (GW34, joined runs: see ``openai_template``),
+``messages[].function_call.arguments``, the legacy completions ``prompt`` (string or list of
+strings) and ``stop`` (string or list of strings).
 PURE: no I/O, no security decision; the forwarding policy lives in
 :mod:`gateway_v2.edge.wire.openai_params`.
 """
@@ -24,23 +26,37 @@ PURE: no I/O, no security decision; the forwarding policy lives in
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
 
 from gateway_v2.domain.channels import TEXT_CHANNELS
+from gateway_v2.edge.wire.openai_codes import MALFORMED_WRONG_SHAPE, MalformedRequest
+from gateway_v2.edge.wire.openai_template import (
+    Builder,
+    ContentTemplate,
+    FoldResult,
+    TemplateMessage,
+    TemplateToolCall,
+    TextSlot,
+    ToolsTemplate,
+    UpstreamTemplate,
+)
+from gateway_v2.edge.wire.openai_tools import fold_tool_calls, fold_tools, validate_tool_messages
+from gateway_v2.runtime.resources_tools import ToolBounds
 
 __all__ = (
     "INPUT_SDK_PATH_PREFIXES",
     "ChannelFoldError",
     "FoldResult",
     "TemplateMessage",
+    "TemplateToolCall",
     "TextSlot",
+    "ToolsTemplate",
     "UpstreamTemplate",
     "fold_input_channels",
     "fold_request",
 )
 
 #: The ``TextChannel.sdk_path`` prefixes that mark a chat-input (request-side) channel.
-INPUT_SDK_PATH_PREFIXES = ("messages[]", "prompt", "stop")
+INPUT_SDK_PATH_PREFIXES = ("messages[]", "prompt", "stop", "tools[]", "response_format")
 
 _MESSAGES_KEY = "messages"
 _PROMPT_KEY = "prompt"
@@ -61,6 +77,7 @@ _CHANNEL_TOOL_ARGUMENTS = "tool_arguments"
 _CHANNEL_FUNCTION_ARGUMENTS = "function_arguments"
 _CHANNEL_COMPLETION_PROMPT = "completion_prompt"
 _CHANNEL_STOP_SEQUENCE = "stop_sequence"
+_TOOL_CALL_ID_KEY = "tool_call_id"
 
 _FOLDED_INPUT_CHANNELS = frozenset(
     (
@@ -70,6 +87,13 @@ _FOLDED_INPUT_CHANNELS = frozenset(
         _CHANNEL_FUNCTION_ARGUMENTS,
         _CHANNEL_COMPLETION_PROMPT,
         _CHANNEL_STOP_SEQUENCE,
+        "tool_arguments_raw",
+        "tool_name",
+        "tool_call_id",
+        "tool_schema_struct",
+        "tool_description",
+        "tool_schema_text",
+        "response_format_schema",
     )
 )
 
@@ -78,90 +102,47 @@ class ChannelFoldError(RuntimeError):
     """The fold is not total over the input ``TEXT_CHANNELS`` (C21), raised at import."""
 
 
-@dataclass(frozen=True, slots=True)
-class FoldResult:
-    """Folded ``(channel_name, text)`` pairs in document order + a PARALLEL ``messages[]`` index.
+def fold_request(
+    parsed: Mapping[str, object], bounds: ToolBounds | None = None
+) -> tuple[FoldResult, UpstreamTemplate]:
+    """Fold every input text occurrence and build the upstream template in ONE pass.
 
-    A ``prompt`` / ``stop`` occurrence gets an index past the last message (each ``stop`` string
-    its own), so the two tuples always have the same length and no join run spans them.
+    ``bounds`` enables the GW34 tool fold (``tools``, ``tool_choice``, ``response_format``, tool
+    history). Without it (a route with no ``tool_bounds``) tool-bearing requests are refused
+    earlier by ``forwarded_fields``; a hand-built body that still carries ``tool_calls`` folds the
+    legacy scan-only ``tool_arguments`` pair so the fold stays total.
     """
-
-    pairs: tuple[tuple[str, str], ...]
-    message_index: tuple[int, ...]
-
-
-@dataclass(frozen=True, slots=True)
-class TextSlot:
-    """Placeholder for fold pair ``index`` (whose channel is ``channel``) in the template.
-
-    Not a JSON value, so nothing parsed from a request body can be mistaken for one.
-    """
-
-    index: int
-    channel: str
-
-
-#: A message ``content`` in the template: one slot (string content), a tuple of slots (text parts,
-#: rendered joined with no separator -- the scanned byte sequence), or ``None`` (absent / null).
-ContentTemplate = TextSlot | tuple[TextSlot, ...] | None
-
-
-@dataclass(frozen=True, slots=True)
-class TemplateMessage:
-    """One forwarded message: its role and its content template. Nothing else is copied."""
-
-    role: str
-    content: ContentTemplate
-
-
-@dataclass(frozen=True, slots=True)
-class UpstreamTemplate:
-    """The forwardable request structure with every scanned text occurrence as a :class:`TextSlot`.
-
-    ``slot_count`` equals the number of fold pairs, so a renderer can check it was handed exactly
-    the deltas this template was built against.
-    """
-
-    messages: tuple[TemplateMessage, ...]
-    stop: TextSlot | tuple[TextSlot, ...] | None
-    slot_count: int
-
-
-class _Builder:
-    """Accumulates fold pairs and hands out the matching slots (one loop, one order)."""
-
-    __slots__ = ("index", "pairs")
-
-    def __init__(self) -> None:
-        self.pairs: list[tuple[str, str]] = []
-        self.index: list[int] = []
-
-    def slot(self, channel: str, text: str, message_index: int) -> TextSlot:
-        slot = TextSlot(index=len(self.pairs), channel=channel)
-        self.pairs.append((channel, text))
-        self.index.append(message_index)
-        return slot
-
-    def result(self) -> FoldResult:
-        return FoldResult(pairs=tuple(self.pairs), message_index=tuple(self.index))
-
-
-def fold_request(parsed: Mapping[str, object]) -> tuple[FoldResult, UpstreamTemplate]:
-    """Fold every input text occurrence and build the upstream template in ONE pass."""
-    builder = _Builder()
+    builder = Builder()
+    tools = ToolsTemplate()
     messages: list[TemplateMessage] = []
     raw_messages = parsed.get(_MESSAGES_KEY)
     next_index = 0
+    if bounds is not None:
+        tools, declared = fold_tools(builder, parsed, bounds)
+        validate_tool_messages(raw_messages, declared, bounds)
     if isinstance(raw_messages, list):
         for index, message in enumerate(raw_messages):
             if not isinstance(message, dict):
                 continue
             content = _fold_content(builder, message, index)
-            _fold_tool_calls(builder, message, index)
+            calls: tuple[TemplateToolCall, ...] = ()
+            call_id: str | None = None
+            if bounds is not None:
+                calls = fold_tool_calls(builder, message, bounds)
+                raw_id = message.get(_TOOL_CALL_ID_KEY)
+                if isinstance(raw_id, str):
+                    builder.scan_only("tool_call_id", raw_id)
+                    call_id = raw_id
+            else:
+                _fold_tool_calls(builder, message, index)
             _fold_function_call(builder, message, index)
             role = message.get(_ROLE_KEY)
             role_text = role if isinstance(role, str) else ""
-            messages.append(TemplateMessage(role=role_text, content=content))
+            messages.append(
+                TemplateMessage(
+                    role=role_text, content=content, tool_calls=calls, tool_call_id=call_id
+                )
+            )
         next_index = len(raw_messages)
     prompt = _fold_strings(builder, parsed.get(_PROMPT_KEY), _CHANNEL_COMPLETION_PROMPT, next_index)
     if prompt is not None:
@@ -170,19 +151,30 @@ def fold_request(parsed: Mapping[str, object]) -> tuple[FoldResult, UpstreamTemp
     stop = _fold_strings(
         builder, parsed.get(_STOP_KEY), _CHANNEL_STOP_SEQUENCE, next_index, separate=True
     )
-    fold = builder.result()
+    next_index += len(stop) if isinstance(stop, tuple) else (1 if stop is not None else 0)
+    fold, forwarded, pair_parts, joined = builder.finish(next_index)
+    if bounds is not None and len(joined) > bounds.max_scanned_slots:
+        raise MalformedRequest(MALFORMED_WRONG_SHAPE, param="tools")
     template = UpstreamTemplate(
-        messages=tuple(messages), stop=stop, slot_count=len(fold.pairs)
+        messages=tuple(messages),
+        stop=stop,
+        slot_count=len(fold.pairs),
+        tools=tools,
+        forwarded=forwarded,
+        pair_parts=pair_parts,
+        joined=joined,
     )
     return fold, template
 
 
-def fold_input_channels(parsed: Mapping[str, object]) -> FoldResult:
+def fold_input_channels(
+    parsed: Mapping[str, object], bounds: ToolBounds | None = None
+) -> FoldResult:
     """The fold half of :func:`fold_request` (the scanned pairs + their ``messages[]`` index)."""
-    return fold_request(parsed)[0]
+    return fold_request(parsed, bounds)[0]
 
 
-def _fold_content(builder: _Builder, message: Mapping[str, object], index: int) -> ContentTemplate:
+def _fold_content(builder: Builder, message: Mapping[str, object], index: int) -> ContentTemplate:
     """``messages[].content``: a string is one slot; a list folds each part's string ``text``."""
     content = message.get(_CONTENT_KEY)
     if isinstance(content, str):
@@ -199,7 +191,7 @@ def _fold_content(builder: _Builder, message: Mapping[str, object], index: int) 
     return None
 
 
-def _fold_tool_calls(builder: _Builder, message: Mapping[str, object], index: int) -> None:
+def _fold_tool_calls(builder: Builder, message: Mapping[str, object], index: int) -> None:
     """``messages[].tool_calls[].function.arguments`` (scanned; never forwarded)."""
     tool_calls = message.get(_TOOL_CALLS_KEY)
     if not isinstance(tool_calls, list):
@@ -210,21 +202,21 @@ def _fold_tool_calls(builder: _Builder, message: Mapping[str, object], index: in
         function = call.get(_FUNCTION_KEY)
         arguments = function.get(_ARGUMENTS_KEY) if isinstance(function, dict) else None
         if isinstance(arguments, str):
-            builder.slot(_CHANNEL_TOOL_ARGUMENTS, arguments, index)
+            builder.slot(_CHANNEL_TOOL_ARGUMENTS, arguments, index, forwarded=False)
 
 
-def _fold_function_call(builder: _Builder, message: Mapping[str, object], index: int) -> None:
+def _fold_function_call(builder: Builder, message: Mapping[str, object], index: int) -> None:
     """The legacy ``messages[].function_call.arguments`` (scanned; never forwarded)."""
     function_call = message.get(_FUNCTION_CALL_KEY)
     if not isinstance(function_call, dict):
         return
     arguments = function_call.get(_ARGUMENTS_KEY)
     if isinstance(arguments, str):
-        builder.slot(_CHANNEL_FUNCTION_ARGUMENTS, arguments, index)
+        builder.slot(_CHANNEL_FUNCTION_ARGUMENTS, arguments, index, forwarded=False)
 
 
 def _fold_strings(
-    builder: _Builder,
+    builder: Builder,
     value: object,
     channel: str,
     first_index: int,

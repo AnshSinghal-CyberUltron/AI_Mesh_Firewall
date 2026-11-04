@@ -1,0 +1,6 @@
+{"detector":"gateway_v2.edge.dev_components.DeterministicFindings (PII+Secret+InjectionSignal), Phase.INPUT",
+ "short_slots_1000x3":{"p50_us":80.4,"p99_us":152.1},
+ "worst_case_slots_3000":{"p50_us":136.4,"p99_us":491.6,"max_us":527.1},
+ "realistic_tool_8_slots_per_call":{"p50_us":218.6,"p99_us":224.3},
+ "realistic_tool_25_slots_per_call":{"p50_us":481.4,"p99_us":496.1},
+ "_SCAN_SLOT_COST_US":500,"rationale":"worst-case slot p99 491.6us rounded up"}

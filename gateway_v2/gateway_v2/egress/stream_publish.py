@@ -28,6 +28,7 @@ from gateway_v2.egress.holdback_tradeoff import (
 )
 from gateway_v2.egress.output_errors import FinalCheckUnapplied
 from gateway_v2.egress.output_guard import FinalDetector, OutputBlocked, OutputResolver
+from gateway_v2.egress.stream_meta import TradeOffUndefined  # the one class (GW34 split)
 
 __all__ = (
     "OutputAggregate",
@@ -43,8 +44,6 @@ __all__ = (
 _BYTES_RANK = ("allow", "flag", "redact", "rewrite", "block")
 
 
-class TradeOffUndefined(Exception):
-    """An over-cap pattern has no declared trade-off outcome (R6.6)."""
 
 
 class PublishStats(Protocol):

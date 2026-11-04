@@ -9,11 +9,14 @@ from dataclasses import dataclass
 from gateway_v2.runtime.cgroup import DetectHooks, detect_with_hooks
 from gateway_v2.runtime.errors import CapacityUnavailable, CapacityUnset
 from gateway_v2.runtime.kinds import CapacityHint, HardwareSignals, PoolKind
+from gateway_v2.runtime.resources_budget import BudgetBoundsMixin
 from gateway_v2.runtime.resources_env import _env_map, _parse_override, _parse_owner_queue_ms
 from gateway_v2.runtime.resources_incident import IncidentBoundsMixin, check_incident_ordering
 from gateway_v2.runtime.resources_output import OutputBoundsMixin
 from gateway_v2.runtime.resources_rag import RagBoundsMixin
 from gateway_v2.runtime.resources_routing import RoutingBoundsMixin
+from gateway_v2.runtime.resources_stream import StreamBoundsMixin
+from gateway_v2.runtime.resources_tools import ToolBoundsMixin
 from gateway_v2.runtime.resources_vector import VectorBoundsMixin
 
 # Deployment-declared defaults. Logged as defaults when env is unset.
@@ -234,6 +237,15 @@ _NOTIFIER_TIMEOUT_MULT = 100.0  # notifier call bound = p99_s x mult
 _RETRY_JITTER_FRACTION = 0.5  # Retry-After jitter = MIN_RETRY_AFTER_S x fraction
 
 
+# GW34 tool-calling bounds, read through `ToolBoundsMixin.tool_bounds()` (`resources_tools.py`).
+_MAX_TOOLS = 128  # tools per request: the OpenAI per-request function limit
+_MAX_TOOL_CALLS = 128  # tool calls per message / response: the same limit
+_SCHEMA_DEPTH = 32  # JSON-schema nesting: deeper than generated schemas, cheap to walk
+_SCHEMA_NODE_BYTES = 64  # nodes <= max_request_bytes // this (a node is >= 4 B of JSON)
+_TOOL_ARGUMENTS_DIVISOR = 4  # one call's arguments may use at most 1/4 of the request bytes
+_SCAN_BUDGET_FRACTION = 0.5  # share of target_p99_ms that detector invocations may consume
+_SCAN_SLOT_COST_US = 200  # per detector call: measured p99 ~152 us (evidence gw34), +margin
+_PARTS_PER_SCHEMA_NODE = 2  # a schema node adds at most one `{` and one `,` to the C26 count
 @dataclass(frozen=True, slots=True)
 class McpBounds:
     """GW17 MCP bounds, v1 parity (`gateway/ai_mesh_gateway/mcp_proxy.py:294-368`,
@@ -258,7 +270,11 @@ class McpBounds:
 
 @dataclass(frozen=True, slots=True)
 class ResourceContract(
+    # The GW34 PROVIDING mixins come first: the later mixins re-declare some of their methods as
+    # host-supplied stubs (`max_output_tokens`, the stream timeouts) and the MRO takes the first.
+    BudgetBoundsMixin, StreamBoundsMixin,
     VectorBoundsMixin, RagBoundsMixin, RoutingBoundsMixin, IncidentBoundsMixin, OutputBoundsMixin,
+    ToolBoundsMixin,
 ):
     cpu_quota: float
     memory_limit: int
@@ -350,43 +366,6 @@ class ResourceContract(
         if n < 1:
             raise CapacityUnavailable("stream buffer below minimum to serve")
         return n
-
-    def _stream_timeout_s(self, mult: float) -> float:
-        """GW12: a stream timeout/duration/bound derived from the request-path SLO.
-
-        value = p99_s x mult, clamped up to a derived floor of one p99 period (no stream bound
-        may be shorter than a single SLO unit of work), and fails closed with
-        `CapacityUnavailable` on a non-positive result -- matching the shipped
-        `stream_buffer_bytes` contract. `target_p99_ms` is positive by construction
-        (`from_signals` refuses to start otherwise), so the floor is positive; the guard is the
-        same defensive fail-closed stance the rest of the contract takes.
-        """
-        p99_s = self.target_p99_ms / _MS_PER_S
-        value = max(p99_s * mult, p99_s)
-        if value <= 0:
-            raise CapacityUnavailable("stream timeout below minimum to serve")
-        return value
-
-    def inter_chunk_timeout_s(self) -> float:
-        return self._stream_timeout_s(_INTER_CHUNK_TIMEOUT_MULT)
-
-    def idle_timeout_s(self) -> float:
-        return self._stream_timeout_s(_IDLE_TIMEOUT_MULT)
-
-    def write_timeout_s(self) -> float:
-        return self._stream_timeout_s(_WRITE_TIMEOUT_MULT)
-
-    def max_stream_duration_s(self) -> float:
-        return self._stream_timeout_s(_MAX_STREAM_DURATION_MULT)
-
-    def max_cut_latency_s(self) -> float:
-        return self._stream_timeout_s(_MAX_CUT_LATENCY_MULT)
-
-    def max_snapshot_age_s(self) -> float:
-        return self._stream_timeout_s(_MAX_SNAPSHOT_AGE_MULT)
-
-    def cancellation_bound_s(self) -> float:
-        return self._stream_timeout_s(_CANCEL_BOUND_MULT)
 
     def owner_queue_bound_s(self) -> float:
         """B4 (C43): the `RV_OWNER_QUEUE_MS` owner-queue bound, in seconds.
@@ -564,33 +543,6 @@ class ResourceContract(
             raise ValueError(f"n must be at least 1, got {n}")
         input_tokens = max(1, chars // _CHARS_PER_TOKEN_DIVISOR) if chars > 0 else 0
         return max(input_tokens + max_tokens * n, 1)
-
-    @staticmethod
-    def max_output_tokens() -> int:
-        """Group F: v1's hard cap on a clamped `max_tokens` (`_OUTPUT_TOKENS_HARD_CAP`, R2.16)."""
-        return _OUTPUT_TOKENS_HARD_CAP
-
-    @staticmethod
-    def default_response_token_ceiling() -> int:
-        """Group F: v1's default org `max_response_tokens` (`_DEFAULT_RESPONSE_TOKEN_CEILING`).
-
-        The org ceiling the output-budget clamp uses until the plan carries the org value
-        (Phase 3 / GW14b), R2.15 / R2.16.
-        """
-        return _DEFAULT_RESPONSE_TOKEN_CEILING
-
-    @staticmethod
-    def max_output_tokens_boundary() -> int:
-        """Group F: v1's `MAX_OUTPUT_TOKENS_CEILING` parse boundary (`_MAX_OUTPUT_TOKENS_BOUNDARY`).
-
-        A `max_tokens` / `max_completion_tokens` above it is refused with HTTP 400 (R2.16).
-        """
-        return _MAX_OUTPUT_TOKENS_BOUNDARY
-
-    @staticmethod
-    def max_completions() -> int:
-        """Group F: v1's forced `n = 1` (`_MAX_COMPLETIONS_PER_REQUEST`, R2.15 / R2.16)."""
-        return _MAX_COMPLETIONS_PER_REQUEST
 
     def response_store_ttl_s(self) -> int:
         """GW15: seconds a stored Responses object stays retrievable.

@@ -41,7 +41,8 @@ from typing import TYPE_CHECKING
 
 from gateway_v2.detect.conditions import PolicyRegexRefusal
 from gateway_v2.dispatch.provider import UpstreamRequest
-from gateway_v2.domain.decision import Decision, most_restrictive
+from gateway_v2.domain.channels import META_CHANNELS
+from gateway_v2.domain.decision import Decision, Disposition, most_restrictive
 from gateway_v2.domain.plan import ExecutionPlan, Phase, Surface
 from gateway_v2.edge import errors
 from gateway_v2.edge.chat_upstream import open_chat_upstream
@@ -51,6 +52,7 @@ from gateway_v2.edge.incident_recheck import IncidentRecheckRefused, recheck_or_
 from gateway_v2.edge.phase_resolvers import resolver_for
 from gateway_v2.edge.request_holds import RequestHolds
 from gateway_v2.edge.wire.openai import CanonicalRequest
+from gateway_v2.edge.wire.tool_stream import validate_tool_output
 from gateway_v2.egress.output_guard import OutputBlocked, apply_decision
 
 if TYPE_CHECKING:
@@ -136,6 +138,7 @@ async def collect_and_enforce(
     holds: RequestHolds | None = None,
     block_code: str,
     scan_failure_code: str,
+    req: CanonicalRequest | None = None,
 ) -> EnforcedOutput:
     """Drain the provider, enforce every Output_Channel; fail closed (task 4.1).
 
@@ -156,6 +159,10 @@ async def collect_and_enforce(
     records ``mark_dispatched`` immediately before the provider is opened (Group D) so
     the budget spend STANDS once the provider saw the request; it defaults to a fresh
     per-call ledger so a shipped caller that passes none stays callable.
+
+    ``req`` (GW34) supplies the request's declared tool names and response format so the tool-call
+    output is validated (:func:`validate_tool_output`); a caller with no ``req`` (the Responses
+    adapter) declares no tools, so any tool call in the output is blocked.
     """
     if holds is None:
         holds = RequestHolds()
@@ -164,6 +171,9 @@ async def collect_and_enforce(
             deps, destination, body, holds, org_id, routed_model, plan
         )
         deltas, decision = _enforce_channels(deps, plan, collected)
+        failure = _validate_output(deps, plan, req, deltas)
+        if failure is not None:
+            return EnforcedOutput(deltas=(), refuse_code=failure, output_decision=decision)
     except IncidentRecheckRefused as refused:
         # GW29 (6.4): refused between phase 4b and the provider open; the holds are undispatched,
         # so the spend is refunded by ``release``. One incident audit record, cause ``recheck``.
@@ -262,10 +272,41 @@ def _enforce_channels(
     enforced: list[tuple[str, str]] = []
     chosen: Decision | None = None
     for channel, text in collected:
+        if channel in META_CHANNELS:  # not text: closed-set value, passed through unscanned
+            enforced.append((channel, text))
+            continue
         decision = resolver.decide(list(bind_surface(deps.error_scanner, Surface.CHAT)(text)))
         chosen = decision if chosen is None else _stricter_decision(chosen, decision)
         enforced.append((channel, apply_decision(text, decision, base_offset=0)))
     return tuple(enforced), chosen
+
+
+def _validate_output(
+    deps: ChatRoute,
+    plan: ExecutionPlan | None,
+    req: CanonicalRequest | None,
+    enforced: tuple[tuple[str, str], ...],
+) -> str | None:
+    """Validate tool calls and JSON-mode content in the enforced output (GW34, D6/D9/D18)."""
+    template = None if req is None else req.upstream_template
+    declared = frozenset(tool.name for tool in (template.tools.tools if template else ()))
+    fmt = None if template is None else template.tools.response_format
+    resolver = deps.resolver if plan is None else resolver_for(deps, plan, Phase.OUTPUT)
+    scanner = bind_surface(deps.error_scanner, Surface.CHAT)
+
+    def decoded_clean_sync(text: str) -> bool:
+        decision = resolver.decide(list(scanner(text)))
+        return decision.disposition in (Disposition.ALLOW, Disposition.FLAG)
+
+    failure = validate_tool_output(
+        enforced,
+        declared=declared,
+        tools_declared=bool(declared),
+        bounds=getattr(deps, "tool_bounds", None),
+        json_mode=fmt is not None and fmt.type != "text",
+        decoded_clean_sync=decoded_clean_sync,
+    )
+    return None if failure is None else failure.code
 
 
 def _stricter_decision(current: Decision, new: Decision) -> Decision:

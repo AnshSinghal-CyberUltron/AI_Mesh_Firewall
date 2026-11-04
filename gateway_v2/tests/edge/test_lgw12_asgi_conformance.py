@@ -87,12 +87,13 @@ from tests.edge._chat_lifecycle_fixtures import (
     chat_body,
     warm_snapshot_source,
 )
+from tests.edge.asgi_receive import mark_sent
 
 #: The GW13 Produced_Mode trace frame prefix: a NON-CONTENT ``amf.trace`` meta frame the
 #: streaming chat path emits just before the terminal ``[DONE]`` marker. It is NOT a
 #: ``chat.completion.chunk`` content frame, so the content-frame conformance checks exclude it
 #: (they still require every genuine content frame to parse as a chunk carrying the exact deltas).
-_TRACE_FRAME_PREFIX = b"event: " + TRACE_EVENT.encode("ascii")
+_TRACE_FRAME_PREFIX = b": " + TRACE_EVENT.encode("ascii") + b" "
 
 
 def _is_content_frame(frame: bytes) -> bool:
@@ -250,7 +251,7 @@ class _Transport:
     ``send``. The recorded ``events`` list is the "wire" the conformance assertions read.
     """
 
-    __slots__ = ("events", "_incoming")
+    __slots__ = ("events", "_incoming", "_sent")
 
     def __init__(self, *, body: bytes) -> None:
         self.events: list[Mapping[str, object]] = []
@@ -259,8 +260,8 @@ class _Transport:
         # the client disconnect once the response has drained.
         self._incoming: list[Mapping[str, object]] = [
             {"type": "http.request", "body": body, "more_body": False},
-            {"type": "http.disconnect"},
         ]
+        self._sent = asyncio.Event()
 
     @staticmethod
     def scope(path: str = _CHAT_PATH) -> dict[str, object]:
@@ -276,11 +277,13 @@ class _Transport:
         """Pull the next scripted incoming event; after the script, hold at disconnect."""
         if self._incoming:
             return self._incoming.pop(0)
+        await self._sent.wait()  # GW34: disconnect only once the response is complete
         return {"type": "http.disconnect"}
 
     async def send(self, event: Mapping[str, object]) -> None:
         """Record one emitted ASGI event (the recording side of the in-process transport)."""
         self.events.append(dict(event))
+        mark_sent(self._sent, event)
 
     # -- recorded-wire accessors --------------------------------------------- #
 
@@ -488,7 +491,7 @@ def test_error_frame_path_blocks_mid_stream() -> None:
     # The last non-trace SSE frame is the declared Error_Frame — a parseable {"error": {...}}
     # object. GW14b §5.4: a NON-CONTENT ``amf.trace`` frame may follow it (it is trace, not
     # content, so it does not break the no-content-after-error contract asserted below).
-    trace_prefix = b"event: amf.trace\n"
+    trace_prefix = _TRACE_FRAME_PREFIX
     non_trace = [frame for frame in frames if not frame.startswith(trace_prefix)]
     assert non_trace, f"only trace frames were recorded: {frames!r}"
     terminal = non_trace[-1]

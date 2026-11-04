@@ -80,9 +80,9 @@ def test_output_withhold_still_emits_the_six_stage_trace() -> None:
 
     assert len(capture.frames) == 1
     frame = capture.frames[0]
-    assert frame.startswith(b"event: amf.trace\n")
+    assert frame.startswith(b": amf.trace ")
     assert b'"content"' not in frame
-    payload = json.loads(frame.split(b"data: ", 1)[1].split(b"\n", 1)[0])
+    payload = json.loads(frame[len(b": amf.trace "):].split(b"\n", 1)[0])
     assert payload["zeroshield"]["action"] == "block"
     stages = {stage["name"]: stage for stage in payload["pipeline_trace"]["stages"]}
     assert list(stages) == [
@@ -123,7 +123,7 @@ def _trace_after_error(
 
     asyncio.run(_drive())
     assert len(capture.frames) == 1
-    payload = json.loads(capture.frames[0].split(b"data: ", 1)[1].split(b"\n", 1)[0])
+    payload = json.loads(capture.frames[0][len(b": amf.trace "):].split(b"\n", 1)[0])
     stages = {stage["name"]: stage for stage in payload["pipeline_trace"]["stages"]}
     stages["_final"] = {"action": payload["zeroshield"]["action"]}
     return stages

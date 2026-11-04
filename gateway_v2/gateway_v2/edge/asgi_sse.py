@@ -119,15 +119,16 @@ async def read_body_bounded(receive: ASGIReceive, max_bytes: int) -> bytes | Non
     return b"".join(chunks)
 
 
-async def start_sse(send: ASGISend) -> None:
-    """Open a ``200`` SSE response on the ASGI channel (``more_body`` keeps it streaming)."""
-    await send(
-        {
-            "type": "http.response.start",
-            "status": 200,
-            "headers": list(_SSE_HEADERS),
-        }
-    )
+async def start_sse(send: ASGISend, request_id: str | None = None) -> None:
+    """Open a ``200`` SSE response on the ASGI channel (``more_body`` keeps it streaming).
+
+    ``request_id`` (GW34) is echoed as ``x-request-id`` so the SDK's ``response.request_id`` works
+    on a stream as it does on every other reply.
+    """
+    headers = list(_SSE_HEADERS)
+    if request_id:
+        headers.append((b"x-request-id", request_id.encode("latin-1")))
+    await send({"type": "http.response.start", "status": 200, "headers": headers})
 
 
 async def send_sse(send: ASGISend, frame: bytes) -> None:
@@ -241,44 +242,53 @@ async def as_chunks(
     if control.evaluate() is not None:
         return
     iterator = events.__aiter__()
-    while True:
-        # Bound the wait for the NEXT upstream event by the Inter_Chunk_Timeout (R9.2). Driving
-        # __anext__ explicitly (rather than `async for`) is what lets the per-event await be
-        # wrapped; a breach raises StreamTimeout (latch already flipped) and unwinds the stream.
-        try:
-            event = await timeouts.next_event(iterator.__anext__())
-        except StopAsyncIteration:
-            return
-
-        # A failure the gateway detected on the upstream call (status, transport, malformed
-        # stream): terminal, rendered from the latch as the declared Error_Frame, never content.
-        if event.gateway_error is not None:
-            error_scan.kill_latch.kill(event.gateway_error)
-            return
-
-        # Mid-stream provider error frame (R11): scan it BEFORE forwarding any byte. A REDACT/ALLOW
-        # decision forwards the (possibly masked) frame as a FINAL content chunk and ends the
-        # stream (R11.2); a BLOCK (R11.3) or a scan error (R11.4) withholds the frame entirely —
-        # the kill latch is flipped with the terminal code and the source stops, so no byte of the
-        # frame is forwarded and the handler renders the declared Error_Frame from the latch.
-        if event.error_frame is not None:
-            forwarded = await forward_error_frame(event.error_frame, error_scan)
-            if forwarded is None:
-                return  # withheld: latch carries the terminal code (R11.3 / R11.4)
-            nbytes = len(forwarded.encode("utf-8"))
+    try:
+        while True:
+            # Bound the wait for the NEXT upstream event by the Inter_Chunk_Timeout (R9.2). Driving
+            # __anext__ explicitly (rather than `async for`) is what lets the per-event await be
+            # wrapped; a breach raises StreamTimeout (latch already flipped) and unwinds the stream.
+            try:
+                event = await timeouts.next_event(iterator.__anext__())
+            except StopAsyncIteration:
+                return
+            # A failure the gateway detected on the upstream call (status, transport, malformed
+            # stream): terminal, rendered from the latch as the declared Error_Frame, never content.
+            if event.gateway_error is not None:
+                error_scan.kill_latch.kill(event.gateway_error)
+                return
+            # Mid-stream provider error frame (R11): scan it BEFORE forwarding any byte. A
+            # REDACT/ALLOW decision forwards the (possibly masked) frame as a FINAL content chunk
+            # and ends the stream (R11.2); a BLOCK (R11.3) or a scan error (R11.4) withholds the
+            # frame entirely -- the kill latch is flipped with the terminal code and the source
+            # stops, so no byte of the frame is forwarded.
+            if event.error_frame is not None:
+                forwarded = await forward_error_frame(event.error_frame, error_scan)
+                if forwarded is None:
+                    return  # withheld: latch carries the terminal code (R11.3 / R11.4)
+                nbytes = len(forwarded.encode("utf-8"))
+                coalescer.offer(nbytes)
+                try:
+                    yield UpstreamChunk(text_deltas=(("content", forwarded),), final=True)
+                finally:
+                    coalescer.release(nbytes)
+                return
+            text = "".join(delta for _, delta in event.text_deltas)
+            nbytes = len(text.encode("utf-8"))
             coalescer.offer(nbytes)
-            yield UpstreamChunk(text_deltas=(("content", forwarded),), final=True)
-            coalescer.release(nbytes)
-            return
-
-        text = "".join(delta for _, delta in event.text_deltas)
-        nbytes = len(text.encode("utf-8"))
-        coalescer.offer(nbytes)
-        yield UpstreamChunk(text_deltas=event.text_deltas, final=event.final)
-        coalescer.release(nbytes)
-        if event.final:
-            return
-        # Chunk boundary: poll every R10 trigger. A fired trigger stops the source so no further
-        # upstream bytes reach the caller after the cut (R10.7).
-        if control.evaluate() is not None:
-            return
+            try:
+                yield UpstreamChunk(text_deltas=event.text_deltas, final=event.final)
+            finally:
+                coalescer.release(nbytes)
+            if event.final:
+                return
+            # Chunk boundary: poll every R10 trigger. A fired trigger stops the source so no
+            # further upstream bytes reach the caller after the cut (R10.7).
+            if control.evaluate() is not None:
+                return
+    finally:
+        # GW34 R6: whether the stream ended, failed or was CANCELLED (client disconnect), close the
+        # provider iterator (the httpx stream context exits and the socket closes) and release any
+        # coalescer bytes (the per-yield ``finally`` above).
+        aclose = getattr(iterator, "aclose", None)
+        if aclose is not None:
+            await aclose()

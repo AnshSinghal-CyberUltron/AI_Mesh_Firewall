@@ -3,8 +3,8 @@
 Pure over the chat stream bytes the shipped chat route already writes. The
 translator does not scan or decide. A content delta the chat pipeline released
 becomes a ``response.output_text.delta``. A chat error frame ends the stream on
-``response.failed``. The chat ``amf.trace`` frame is folded into the terminal
-response object and is not sent as its own event.
+``response.failed``. The chat ``: amf.trace {json}`` comment frame (GW34 V13) is folded into the
+terminal response object and is not sent as its own event.
 
 The translator is fed incrementally and finished once. ``finish`` is separate so
 the caller can persist :meth:`ResponsesEventTranslator.final_response` before
@@ -19,6 +19,7 @@ import json
 from collections.abc import Mapping
 
 from gateway_v2.domain import posture
+from gateway_v2.edge.wire.sse_decode import trace_comment_payload
 
 __all__ = (
     "COMPLETED",
@@ -37,7 +38,6 @@ ITEM_DONE = "response.output_item.done"
 COMPLETED = "response.completed"
 FAILED = "response.failed"
 
-_TRACE_EVENT = "amf.trace"
 _DONE_PAYLOAD = "[DONE]"
 _CONSOLE_KEYS = ("zeroshield", "pipeline_trace")
 _FRAME_SEPARATOR = b"\n\n"
@@ -155,7 +155,10 @@ class ResponsesEventTranslator:
 
     def _frame(self, frame: bytes) -> bytes:
         """Route one complete chat frame."""
-        event, data = _fields(frame)
+        trace = _trace_comment(frame)
+        if trace is not None:
+            return self._trace_frame(trace)
+        data = _fields(frame)
         if data is None:
             self._error_once(posture.STREAM_MALFORMED_UPSTREAM)
             return b""
@@ -170,10 +173,19 @@ class ResponsesEventTranslator:
         if not isinstance(obj, dict):
             self._error_once(posture.STREAM_MALFORMED_UPSTREAM)
             return b""
-        if event == _TRACE_EVENT:
-            self._take_console(obj)
-            return b""
         return self._chat_object(obj)
+
+    def _trace_frame(self, payload: str) -> bytes:
+        """Fold a ``: amf.trace`` comment's JSON object into the console; malformed otherwise."""
+        try:
+            obj = json.loads(payload)
+        except ValueError:
+            obj = None
+        if isinstance(obj, dict):
+            self._take_console(obj)
+        else:
+            self._error_once(posture.STREAM_MALFORMED_UPSTREAM)
+        return b""
 
     def _chat_object(self, obj: Mapping[str, object]) -> bytes:
         """A chat error frame or a content chunk."""
@@ -279,13 +291,20 @@ def _text_part(text: str) -> dict[str, object]:
     return {"type": "output_text", "text": text, "annotations": []}
 
 
-def _fields(frame: bytes) -> tuple[str | None, str | None]:
-    """The ``event`` name and the joined ``data`` value of one SSE frame."""
+def _trace_comment(frame: bytes) -> str | None:
+    """The JSON text of the frame's ``: amf.trace`` comment line, else ``None``."""
+    try:
+        return trace_comment_payload(frame.decode("utf-8"))
+    except UnicodeDecodeError:
+        return None
+
+
+def _fields(frame: bytes) -> str | None:
+    """The joined ``data`` value of one SSE frame (comments and other fields are skipped)."""
     try:
         text = frame.decode("utf-8")
     except UnicodeDecodeError:
-        return None, None
-    event: str | None = None
+        return None
     data: list[str] = []
     for line in text.split("\n"):
         line = line.rstrip("\r")
@@ -293,13 +312,11 @@ def _fields(frame: bytes) -> tuple[str | None, str | None]:
             continue
         name, _, value = line.partition(":")
         value = value[1:] if value.startswith(" ") else value
-        if name == "event":
-            event = value
-        elif name == "data":
+        if name == "data":
             data.append(value)
     if not data:
-        return event, None
-    return event, "\n".join(data)
+        return None
+    return "\n".join(data)
 
 
 def _content_texts(obj: Mapping[str, object]) -> list[str]:
