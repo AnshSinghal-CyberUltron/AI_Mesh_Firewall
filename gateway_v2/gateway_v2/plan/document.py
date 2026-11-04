@@ -30,6 +30,11 @@ from gateway_v2.domain.plan import (
 )
 from gateway_v2.plan.compiler import CompileError, RuleDraft
 
+#: Capabilities a body may require. GW33 adds ``rewrite/1``; GW27 extends the set with
+#: ``controls/1`` when it merges (extend, never replace). An unknown entry is refused so an older
+#: gateway can never apply a body whose meaning it does not understand (fail closed).
+SUPPORTED_REQUIRES = frozenset({"rewrite/1"})
+
 
 @dataclass(frozen=True, slots=True)
 class PlanDocument:
@@ -42,11 +47,14 @@ class PlanDocument:
 
 def encode_plan_body(document: PlanDocument) -> dict[str, object]:
     """The body the control plane signs. Canonicalisation is the signer's job."""
-    return {
+    body: dict[str, object] = {
         "org_id": document.org_id,
         "streaming_mode": document.streaming_mode.value,
         "rules": [_rule_body(draft) for draft in document.drafts],
     }
+    if any(draft.action is Action.REWRITE for draft in document.drafts):
+        body["requires"] = ["rewrite/1"]  # only when a rewrite rule exists: other bodies unchanged
+    return body
 
 
 def _rule_body(draft: RuleDraft) -> dict[str, object]:
@@ -64,13 +72,15 @@ def _rule_body(draft: RuleDraft) -> dict[str, object]:
     encoded = _encode_condition(draft.condition)
     if encoded is not None:
         body["condition"] = encoded
+    if draft.rewrite_template:
+        body["rewrite_template"] = draft.rewrite_template
     return body
 
 
 def _encode_condition(condition: RuleCondition | None) -> dict[str, object] | None:
     if condition is None:
         return None
-    return {
+    encoded: dict[str, object] = {
         "kind": condition.kind.value,
         "field": condition.field,
         "direction": condition.direction.value,
@@ -79,11 +89,15 @@ def _encode_condition(condition: RuleCondition | None) -> dict[str, object] | No
         "detector_class": condition.detector_class,
         "pipeline_stage": condition.pipeline_stage,
     }
+    if condition.allow_hosts:
+        encoded["allow_hosts"] = list(condition.allow_hosts)
+    return encoded
 
 
 def decode_plan_body(raw: bytes) -> PlanDocument:
     """Parse a signed plan body. Raises CompileError on anything the compiler cannot accept."""
     body = _object(raw)
+    _check_requires(body)
     rules = body.get("rules")
     if not isinstance(rules, list):
         raise CompileError("plan body field 'rules' must be a list")
@@ -92,6 +106,17 @@ def decode_plan_body(raw: bytes) -> PlanDocument:
         streaming_mode=_member(StreamingMode, _text(body, "streaming_mode"), "streaming_mode"),
         drafts=tuple(_draft(entry, position) for position, entry in enumerate(rules)),
     )
+
+
+def _check_requires(body: Mapping[str, object]) -> None:
+    requires = body.get("requires")
+    if requires is None:
+        return
+    if not isinstance(requires, list) or any(not isinstance(item, str) for item in requires):
+        raise CompileError("plan body field 'requires' must be a list of strings")
+    unknown = sorted(item for item in requires if item not in SUPPORTED_REQUIRES)
+    if unknown:
+        raise CompileError(f"plan body requires unsupported capability {unknown[0]!r}")
 
 
 def _object(raw: bytes) -> Mapping[str, object]:
@@ -165,6 +190,7 @@ def _draft(entry: object, position: int) -> RuleDraft:
         ),
         surfaces=_surfaces(rules),
         condition=_condition(rules),
+        rewrite_template=_maybe_text(rules, "rewrite_template"),
     )
 
 
@@ -183,6 +209,7 @@ def _condition(entry: Mapping[str, object]) -> RuleCondition | None:
         pattern=_maybe_text(body, "pattern"),
         detector_class=_maybe_text(body, "detector_class"),
         pipeline_stage=_maybe_text(body, "pipeline_stage"),
+        allow_hosts=_allow_hosts(body),
     )
 
 
@@ -193,6 +220,15 @@ def _maybe_text(body: Mapping[str, object], name: str) -> str:
     if not isinstance(value, str):
         raise CompileError(f"plan rule field {name!r} must be a string")
     return value
+
+
+def _allow_hosts(body: Mapping[str, object]) -> tuple[str, ...]:
+    value = body.get("allow_hosts", [])
+    if value is None:
+        return ()
+    if not isinstance(value, list) or any(not isinstance(item, str) or not item for item in value):
+        raise CompileError("plan rule field 'allow_hosts' must be a list of non-empty strings")
+    return tuple(value)
 
 
 def _keywords(body: Mapping[str, object]) -> tuple[str, ...]:

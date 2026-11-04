@@ -63,8 +63,15 @@ class GroundingMode(StrEnum):
     """Closed set of grounding modes (GW33 C8). The compiler refuses any other value."""
     LEXICAL = "lexical"
     MODEL = "model"
-LEGACY_IP_RULE_PREFIX = "output_ip_leakage"
-"""D-2: the GW26 publisher's pre-GW33 rule id prefix for IP leakage (published under ``exfil``)."""
+LEGACY_IP_RULE_PREFIX = "fw-exfil-"
+"""D-2: the GW26 publisher's pre-GW33 rule id prefix for IP leakage (published under ``exfil``).
+
+Deviation recorded: the design text names ``output_ip_leakage_*``, but the shipped
+``firewall_v2_map._draft`` ids every firewall row ``fw-{category}-{scope}``, so the real legacy IP
+rule is ``fw-exfil-output`` (category ``exfil``, no condition). Only the IP-leakage output row is
+published under category ``exfil`` with a ``fw-`` id (customer rows are ``pol-...``), so the prefix
+selects exactly that rule. The behaviour D-2 specifies is unchanged.
+"""
 @dataclass(frozen=True, slots=True)
 class RuleCondition:
     """Customer match, compiled once with the plan. ``None`` on a rule keeps the category join."""
