@@ -598,3 +598,20 @@ Findings from `design-review.md` (6 findings: 4 MEDIUM, 2 LOW). Rounds 1 to 4 ar
 | 4 | MEDIUM | Addressed. No `max_request_parts_with_tools()`. `ToolBounds.parts_allowance` carries the node allowance and `_pre_checks` picks the ceiling from the route-level `self.tool_bounds`; `None` always uses `contract.max_request_parts()`. D20 reworded. The fake-contract test now sends a body containing `tools` and asserts the declared `unsupported_parameter` refusal, not a 500. | D20, "C26 part-count allowance", "ToolBounds values" |
 | 5 | LOW | Addressed. The harness uses a new `ScriptedProvider` (test code, not the shipped `StubProviderClient`): `open(request)` selects the script from `request.body["messages"]`, fresh per-call state, per-call `closed` and `aborted` counters for R6.1 and R6.2. | "L34-1 matrix", `harness.py` |
 | 6 | LOW | Addressed. `_HELD_FRAME_SLOTS = 2` removed; the held list is two named slots `_ROLE_SLOT` and `_FINISH_SLOT`, so no integer bound exists. | "Deferred start" |
+
+## Deviations
+
+Recorded during implementation (full table with rationale: `.agents/tasks/gw34/deviations.md`).
+
+- V1 Joined runs: each tool channel is ONE fold pair per request (separator-joined, split back after the decision) instead of one pair per string, because the measured detector cost is ~7x the assumed 20 us. This is the "widening subtree joining" mitigation. Supersedes the slot arithmetic tables above; the 20-tool request now uses 8 of 50 slots.
+- V2 `JOIN_SEPARATOR` is U+E000 (ASCII `\x1c`-`\x1f` match `\s` and created cross-item false positives).
+- V3 `_SCAN_SLOT_COST_US = 200` (measured p99 152.1 us), `max_scanned_slots = 50` at 20 ms.
+- V4 `ToolBounds.max_withheld_bytes = stream_buffer_bytes(connection_budget())` (the contract has no `active_streams()`).
+- V5 The assembler re-numbers output call indexes dense and ascending in first-emission order: the stock SDK's `accumulate_delta` merges by list position.
+- V6 `delta.role` is not a reserved/malformed key (providers send it); `finish_reason`, `#`-keys and the `output_tool_` prefix are.
+- V7 BLOCK-only escalation covers REDACT and BLOCK; FLAG (monitor) stays FLAG.
+- V8 `StreamResponse` holds no frames: the encoder adds `role` to the first written chunk and meta/empty frames never become chunks.
+- V9 Tool-call counts are in the audit `detail` (digits) and on `RequestHolds`; no new Publisher series (pinned `SERIES_COUNT`).
+- V10 All Python SDK cells use the loopback server (sync `httpx.Client` cannot use `ASGITransport`).
+- V11 `x-request-id` is echoed on the 200 SSE start. V12 `SSEEncoder.content(frame)` emits one merged choice.
+- V13 `amf.trace` cannot be hidden from the stock SDK iterators without changing the trace framing: Python yields it as a bare chunk (no choices), Node's `chat.completions.stream()` helper throws on it. Open owner decision; matrix records Node cell `c` as `xfail(strict=True)`.
