@@ -185,7 +185,7 @@ class ToolCallAssembler:
         tools_declared: bool,
         enforcing: bool,
         json_mode: bool,
-        bounds: ToolBounds,
+        bounds: ToolBounds | None,
         decoded_clean: Callable[[str], Awaitable[bool]],
         charge: Callable[[int], bool],
         refund: Callable[[int], None],
@@ -220,7 +220,10 @@ class ToolCallAssembler:
         return 0 if self._released_calls else len(self._calls)
 
     def _hold(self, nbytes: int) -> bool:
-        if self._held + nbytes > self._bounds.max_withheld_bytes or not self._charge(nbytes):
+        bounds = self._bounds
+        if bounds is None or self._held + nbytes > bounds.max_withheld_bytes:
+            return False
+        if not self._charge(nbytes):
             return False
         self._held += nbytes
         return True
@@ -277,11 +280,14 @@ class ToolCallAssembler:
         )
 
     def _absorb(self, base: str, index: int, text: str) -> Terminate | None:
-        if index >= self._bounds.max_tool_calls:
+        bounds = self._bounds
+        if bounds is None:  # a tools-disabled route: any tool call is withheld whole
+            return Terminate(OUTPUT_BLOCKED)
+        if index >= bounds.max_tool_calls:
             return Terminate(posture.STREAM_MALFORMED_UPSTREAM)
         call = self._calls.setdefault(index, _Call())
         if base == TOOL_ARGUMENTS and not call.started:
-            if len(call.arguments) + len(text) > self._bounds.arguments_bytes:
+            if len(call.arguments) + len(text) > bounds.arguments_bytes:
                 return Terminate(posture.STREAM_MALFORMED_UPSTREAM)
         if not call.started or self._enforcing:
             if not self._hold(len(text.encode())):

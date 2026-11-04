@@ -427,18 +427,13 @@ def test_a_gateway_detected_upstream_failure_is_an_error_never_a_200(
     assert json.loads(body)["error"]["code"] == code
 
 
-def test_a_streamed_upstream_failure_ends_with_the_declared_error_frame() -> None:
+def test_a_streamed_upstream_failure_before_any_byte_is_a_plain_http_error() -> None:
+    # GW34 R7: nothing was produced, so the status is the real one (429), not 200 + an SSE frame.
     provider = _Recorder(failure="upstream_rate_limited")
     status, body = _chat(
         provider, {"messages": [{"role": "user", "content": "hi"}], "stream": True}
     )
-    text = body.decode()
-    assert status == 200  # the SSE start precedes provider.open (recorded S5 / GW34 follow-up)
-    assert "upstream_rate_limited" in text
-    assert '"content":"' not in text.replace('"content":""', "")
-    trace = next(
-        json.loads(line[len("data: ") :])
-        for line in text.splitlines()
-        if line.startswith("data: ") and "pipeline_trace" in line
-    )
-    assert trace["pipeline_trace"]["final_action"] != "allow", trace
+    assert status == 429, body
+    payload = json.loads(body)
+    assert payload["error"]["code"] == "upstream_rate_limited"
+    assert payload["pipeline_trace"]["final_action"] != "allow", payload

@@ -8,14 +8,16 @@ re-exports :class:`_ProducedModeHolder` so existing imports keep resolving.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
+from functools import partial
 from typing import TYPE_CHECKING
 
 from gateway_v2.detect.holdback import TokenIndex
 from gateway_v2.detect.windowing import max_pattern_length
 from gateway_v2.dispatch.provider import UpstreamRequest
-from gateway_v2.domain.plan import ExecutionPlan, Phase
+from gateway_v2.domain.decision import Disposition
+from gateway_v2.domain.plan import ExecutionPlan, Phase, Surface
 from gateway_v2.domain.posture import PLAN_UNAVAILABLE, STREAM_KILLED
 from gateway_v2.edge.asgi_sse import ASGISend
 from gateway_v2.edge.asgi_sse import ErrorFrameScan as _ErrorFrameScan
@@ -28,9 +30,13 @@ from gateway_v2.edge.console_projection import stream_trace_payload
 from gateway_v2.edge.phase_resolvers import resolver_for
 from gateway_v2.edge.request_holds import RequestHolds
 from gateway_v2.edge.stream_control import FirstByteLatch, StreamAttempt, run_with_no_splice
+from gateway_v2.edge.stream_response import StreamResponse
 from gateway_v2.edge.stream_timeouts import StreamTimeout, StreamTimeouts
 from gateway_v2.edge.wire.sse import SSEEncoder
+from gateway_v2.edge.wire.sse_chunks import ChunkEvent
+from gateway_v2.edge.wire.tool_stream import Terminate, ToolCallAssembler
 from gateway_v2.egress.backpressure import Coalescer
+from gateway_v2.egress.output_guard import enforcing_output_rules
 from gateway_v2.egress.select import select_pipeline
 from gateway_v2.egress.stream import (
     DownstreamFrame,
@@ -44,8 +50,32 @@ from gateway_v2.runtime.strict_metrics import StrictMetrics
 
 if TYPE_CHECKING:
     from gateway_v2.edge.routes import ChatRoute
+    from gateway_v2.edge.wire.openai import CanonicalRequest
 
-__all__ = ("ChatStream", "_ProducedModeHolder", "emit_produced_mode", "finish_stream")
+__all__ = (
+    "ChatStream",
+    "PendingError",
+    "_ProducedModeHolder",
+    "emit_produced_mode",
+    "finish_stream",
+)
+
+
+class _AssemblerTerminated(Exception):
+    """The tool-call assembler terminated the stream; the code is on :class:`PendingError`.
+
+    Raised from the sink so ``StreamPipeline._run_passthrough`` (which never checks ``killed()``)
+    unwinds too; caught in the attempt and not counted as an incomplete stream.
+    """
+
+
+class PendingError:
+    """The terminal code recorded while the response is still pending (per request, mutable)."""
+
+    __slots__ = ("code",)
+
+    def __init__(self) -> None:
+        self.code: str | None = None
 
 
 class _ProducedModeHolder:
@@ -78,35 +108,36 @@ class ChatStream:
 
     async def stream(
         self,
-        send: ASGISend,
+        response: StreamResponse,
         encoder: SSEEncoder,
         coalescer: Coalescer,
         plan: ExecutionPlan,
         destination: str,
         body: Mapping[str, object],
         holds: RequestHolds,
+        req: CanonicalRequest | None = None,
     ) -> None:
         """Drive the egress pipeline under the no-splice gate + in-flight control (R7, R10).
 
-        A per-request :class:`FirstByteLatch` gates retry/fallback: ``_sink`` sets it the instant
+        A per-request :class:`FirstByteLatch` gates retry/fallback: the sink sets it the instant
         the FIRST content byte is released (R7.2), and :func:`run_with_no_splice` requests a fresh
         attempt only while it is unset (R7.1/R7.3). Each attempt opens the injected
-        ``ProviderClient`` for the routed destination and runs the shipped ``StreamPipeline``
-        release loop; released frames are encoded by the one ``SSEEncoder``.
+        ``ProviderClient`` for the routed destination and runs the shipped pipeline; the released
+        frames pass through the per-request :class:`ToolCallAssembler` (GW34) and are encoded by
+        the one ``SSEEncoder``.
 
-        **In-flight control (R10).** A per-request :class:`KillLatch` is the ``killed()`` seam; an
-        :class:`InFlightControl` evaluated at each chunk boundary (:func:`_as_chunks`) flips it on a
-        fired trigger and stops the source (R10.7). **Bounded timeouts (C27/R9).** A per-request
-        :class:`StreamTimeouts` bounds the next-event await (R9.2) and the downstream write + idle
-        (R9.3/R9.4), flipping the SAME latch on a breach. Either way :meth:`_finish_stream` renders
-        the latch's posture code as the declared terminal ``Error_Frame`` at the ONE terminal site.
-
-        On a clean finish the terminal ``[DONE]`` marker is emitted; a byte-less failure of every
-        eligible attempt closes the stream without a splice (R7.4).
+        **Deferred start (GW34 R7).** Nothing is written until the first content-bearing event, so
+        a refusal or failure before it is a plain HTTP error (:class:`StreamResponse`), not an SSE
+        error frame after a 200. **In-flight control (R10).** A per-request :class:`KillLatch` is
+        the ``killed()`` seam; an :class:`InFlightControl` evaluated at each chunk boundary
+        (:func:`_as_chunks`) flips it on a fired trigger. **Bounded timeouts (C27/R9).** A
+        per-request :class:`StreamTimeouts` bounds the next-event await and the downstream write.
+        Either way :func:`finish_stream` renders the latch's posture code at the ONE terminal site.
         """
         latch = FirstByteLatch()
         sent_terminal = _TerminalLatch()
         kill_latch = KillLatch()
+        pending_error = PendingError()
         produced = _ProducedModeHolder(holds)
         control = InFlightControl(
             source=self.route.control,
@@ -119,23 +150,44 @@ class ChatStream:
             kill_latch=kill_latch,
             clock=self.route.clock,
         )
+        assembler = self._assembler(plan, coalescer, req)
+
+        async def _write_events(events: Sequence[ChunkEvent]) -> None:
+            for event in events:
+                # The first released content byte closes the no-splice gate (R7.2): once a byte is
+                # on the wire the orchestration never attempts a second upstream response (R7.4).
+                latch.set_on_release()
+                # Each downstream write is bounded by the Write_Timeout, the inter-write gap by the
+                # Idle_Timeout (R9.3/R9.4); a breach flips the kill latch + raises.
+                await timeouts.send(partial(response.write, encoder.chunk(event)))
+
+        def _terminate(outcome: Terminate) -> _AssemblerTerminated:
+            kill_latch.kill(outcome.code)
+            pending_error.code = outcome.code
+            return _AssemblerTerminated(outcome.code)
 
         async def _sink(frame: DownstreamFrame) -> None:
             if sent_terminal.is_set():
                 return
             error_code = frame.error_code
             if error_code is not None:
-                # The terminal error write is bounded by the write/idle timeout too (R9.3/R9.4)
-                # so a client that stops reading cannot wedge the stream on the terminal frame.
-                await timeouts.send(lambda: _send_sse(send, encoder.error(error_code)))
+                if response.pending:
+                    pending_error.code = error_code  # nothing written: a plain HTTP error
+                else:
+                    await timeouts.send(lambda: response.write_started(encoder.error(error_code)))
                 sent_terminal.set()
                 return
-            # The first released content byte closes the no-splice gate (R7.2): once a byte is on
-            # the wire the orchestration will never attempt a second upstream response (R7.4).
-            latch.set_on_release()
-            # Each downstream content write is bounded by the Write_Timeout, and the inter-write
-            # gap by the Idle_Timeout (R9.3/R9.4); a breach flips the kill latch + raises.
-            await timeouts.send(lambda: _send_sse(send, encoder.content(frame)))
+            outcome = assembler.feed(frame)
+            if isinstance(outcome, Terminate):
+                raise _terminate(outcome)
+            await _write_events(outcome)
+
+        async def _finish_calls() -> None:
+            outcome = await assembler.finish()
+            if isinstance(outcome, Terminate):
+                _terminate(outcome)
+                return
+            await _write_events(outcome)
 
         offered = _TerminalLatch()
 
@@ -153,11 +205,55 @@ class ChatStream:
                 body,
                 produced,
                 holds,
+                finish_calls=_finish_calls,
+                pending_error=pending_error,
+                sent_terminal=sent_terminal,
             )
 
         await self._run_attempts(latch, _factory)
-        await finish_stream(send, encoder, kill_latch, sent_terminal, produced)
+        holds.note_tool_calls(assembler.calls_released, assembler.calls_withheld)
+        await finish_stream(
+            response.send,
+            encoder,
+            kill_latch,
+            sent_terminal,
+            produced,
+            response=response,
+            finish_reason=assembler.finish_reason,
+            pending_error=pending_error,
+        )
+        await response.close()
 
+    def _assembler(
+        self, plan: ExecutionPlan, coalescer: Coalescer, req: CanonicalRequest | None
+    ) -> ToolCallAssembler:
+        """Build the per-request assembler from what the request declared (D6, D9, D18)."""
+        from gateway_v2.edge.dev_components import bind_surface  # local: it imports ``edge.app``
+
+        template = None if req is None else req.upstream_template
+        declared = frozenset(tool.name for tool in (template.tools.tools if template else ()))
+        fmt = None if template is None else template.tools.response_format
+        resolver = resolver_for(self.route, plan, Phase.OUTPUT)
+        scanner = bind_surface(self.route.error_scanner, Surface.CHAT)
+        executor = self.route.executor
+
+        async def decoded_clean(text: str) -> bool:
+            def work() -> bool:
+                decision = resolver.decide(list(scanner(text)))
+                return decision.disposition in (Disposition.ALLOW, Disposition.FLAG)
+
+            return await executor.run(work)
+
+        return ToolCallAssembler(
+            declared=declared,
+            tools_declared=bool(declared),
+            enforcing=bool(enforcing_output_rules(plan)),
+            json_mode=fmt is not None and fmt.type != "text",
+            bounds=self.route.tool_bounds,
+            decoded_clean=decoded_clean,
+            charge=coalescer.offer,
+            refund=coalescer.release,
+        )
 
     async def _run_attempts(
         self,
@@ -196,6 +292,10 @@ class ChatStream:
         body: Mapping[str, object],
         produced: _ProducedModeHolder,
         holds: RequestHolds,
+        *,
+        finish_calls: Callable[[], Awaitable[None]],
+        pending_error: PendingError,
+        sent_terminal: _TerminalLatch,
     ) -> StreamAttempt | None:
         """Yield the next eligible stream attempt, or ``None`` when none remains (R7.1).
 
@@ -254,7 +354,23 @@ class ChatStream:
             # wire from the SELECTED mode + the INCREMENTAL degenerate fact (GW13 C5/R5). Both
             # StreamPipeline.run and StrictWithholdPipeline.run return a stats value carrying
             # ``produced_mode``, so the holder reads it uniformly regardless of mode.
-            produced.stats = await pipeline.run(chunks, sink, kill_latch)
+            try:
+                stats = await pipeline.run(chunks, sink, kill_latch)
+            except _AssemblerTerminated:
+                # The assembler terminated the stream (its code is on the latch and the pending
+                # holder): not an ``incomplete`` stream, and nothing more is released.
+                return latch.is_set()
+            produced.stats = stats
+            # GW34 guarded finish: ``run`` RETURNS on an egress terminate (``incomplete``), so a
+            # clean return alone is not success. Release the withheld calls only when nothing
+            # terminated the stream; otherwise they are dropped with the request.
+            if (
+                not stats.incomplete
+                and kill_latch.reason() is None
+                and pending_error.code is None
+                and not sent_terminal.is_set()
+            ):
+                await finish_calls()
             note_stream_output(holds, produced.stats, plan.version)
             # The sink set the first-byte latch the instant a content byte went out; report that
             # as the "released a byte" signal so run_with_no_splice closes the gate (R7.2/R7.4).
@@ -294,56 +410,70 @@ async def finish_stream(
     kill_latch: KillLatch,
     sent_terminal: _TerminalLatch,
     produced: _ProducedModeHolder,
+    *,
+    response: StreamResponse | None = None,
+    finish_reason: str | None = None,
+    pending_error: PendingError | None = None,
 ) -> None:
-    """Close the stream: render an in-flight cut's ``Error_Frame`` or the ``[DONE]`` marker.
+    """Close the stream: a plain HTTP error, an ``Error_Frame``, or the finish chunk + ``[DONE]``.
 
-    If an in-flight trigger cut the stream (R10) OR a C27 timeout tripped (R9.2-R9.4), the
-    per-request :class:`KillLatch` carries the reason posture code the FIRST cut set; the
-    handler renders it as the declared terminal ``Error_Frame`` here (the pass-through
-    pipeline does not emit one of its own), so a max-duration cut shows ``STREAM_MAX_DURATION``,
-    a key revocation shows ``STREAM_KEY_REVOKED`` (R10.2-R10.6), and a stall shows
-    ``STREAM_INTER_CHUNK_TIMEOUT`` / ``STREAM_IDLE_TIMEOUT`` / ``STREAM_WRITE_TIMEOUT``
-    (R9.2-R9.4) — one terminal site for every cut reason. No content frame follows the terminal
-    frame (``sent_terminal`` guards against a double terminal). Only when nothing was cut and no
-    terminal has been emitted does the clean ``[DONE]`` marker close the stream.
+    If an in-flight trigger cut the stream (R10), a C27 timeout tripped (R9.2-R9.4) or the
+    tool-call assembler terminated it, the per-request :class:`KillLatch` carries the reason code
+    the FIRST cut set (``pending_error`` the code recorded while no byte had been written); this
+    is the ONE terminal site for every cut reason, so a max-duration cut shows
+    ``STREAM_MAX_DURATION``, a key revocation ``STREAM_KEY_REVOKED``, a stall a timeout code.
 
-    The in-loop content/error writes in ``_sink`` are the ones bounded by the Write_Timeout +
-    Idle_Timeout (R9.3/R9.4); this terminal close is a best-effort final marker emitted after
-    the resources have already been released by the unwinding loop, so it uses the plain
-    ``_send_sse`` and never re-raises a timeout past the handler.
+    **Pre-byte (GW34 R7).** With a ``response`` still pending, a failure code answers as a plain
+    HTTP error (the same bytes a non-stream request gets; no ``amf.trace``), and a clean stream
+    that produced no content starts the SSE response, sends the finish chunk, the trace and
+    ``[DONE]`` (HTTP 200). **After the first byte** the terminal handling is unchanged: the
+    declared ``Error_Frame``, or (clean) the finish chunk, the Produced_Mode trace and ``[DONE]``.
+    No content frame follows a terminal frame (``sent_terminal`` guards a double terminal). With no
+    ``response`` (the legacy callers) the behaviour is the pre-GW34 one.
 
-    **Produced_Mode stamp (GW13 C5/R5, GW14b §5.4).** A NON-CONTENT ``amf.trace``
-    frame carries ``produced_mode`` and, when the input decision is known, the
-    six-stage console object. On a clean completion it precedes ``[DONE]``. When
-    the pipeline already emitted a terminal error, the same frame follows that
-    error: ``trace()`` is not content, so no content frame follows the error.
-    No stats means no frame.
+    **Produced_Mode stamp (GW13 C5/R5, GW14b §5.4).** A NON-CONTENT ``amf.trace`` frame carries
+    ``produced_mode`` and, when the input decision is known, the six-stage console object. No
+    stats means no frame.
     """
-    if sent_terminal.is_set() or encoder.terminated:
-        await emit_produced_mode(send, encoder, produced)
-        return
+    pending = response is not None and response.pending
+    code = None if pending_error is None else pending_error.code
     reason = kill_latch.reason()
+    if pending and response is not None:
+        if code is None:
+            code = reason
+        if code is not None:
+            await response.fail_pre_byte(code)
+            return
+        await response.start()  # a clean stream that produced no content: 200 + [DONE]
+    if response is None:
+        async def put(frame: bytes) -> None:
+            await _send_sse(send, frame)
+    else:
+        put = response.write_started
+    if sent_terminal.is_set() or encoder.terminated:
+        await emit_produced_mode(send, encoder, produced, put)
+        return
     if reason is not None:
         # The pass-through loop ended normally after the cut and recorded "allow"; the trace
         # must not report a cut stream as allowed (a kill-switch cut publishes no action).
         stats = produced.stats
         if reason != STREAM_KILLED and getattr(stats, "output_action", None) == "allow":
             stats.output_action = "block"  # type: ignore[union-attr]
-        await _send_sse(send, encoder.error(reason))
+        await put(encoder.error(reason))
         sent_terminal.set()
-        await emit_produced_mode(send, encoder, produced)
+        await emit_produced_mode(send, encoder, produced, put)
         return
-    # Called on the class (not ``self``) so the terminal site stays usable with ``self``
-    # unbound — the Produced_Mode stamp reads only the ``produced`` holder, never ``self``.
-    await emit_produced_mode(send, encoder, produced)
-    await _send_sse(send, encoder.done())
-
+    if finish_reason is not None:
+        await put(encoder.finish(finish_reason))
+    await emit_produced_mode(send, encoder, produced, put)
+    await put(encoder.done())
 
 
 async def emit_produced_mode(
     send: ASGISend,
     encoder: SSEEncoder,
     produced: _ProducedModeHolder,
+    put: Callable[[bytes], Awaitable[None]] | None = None,
 ) -> None:
     """Emit the Produced_Mode trace frame from the captured stats (GW13 C5/R5).
 
@@ -358,6 +488,10 @@ async def emit_produced_mode(
     stats = produced.stats
     if stats is None:
         return
-    await _send_sse(send, encoder.trace(stream_trace_payload(
-        produced, stats, bool(getattr(stats, "degenerated_to_strict", False)),
-    )))
+    frame = encoder.trace(
+        stream_trace_payload(produced, stats, bool(getattr(stats, "degenerated_to_strict", False)))
+    )
+    if put is None:
+        await _send_sse(send, frame)
+    else:
+        await put(frame)

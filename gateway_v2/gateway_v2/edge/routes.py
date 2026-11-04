@@ -49,10 +49,7 @@ from gateway_v2.edge.asgi_sse import (
     ASGISend,
 )
 from gateway_v2.edge.asgi_sse import TerminalLatch as _TerminalLatch
-from gateway_v2.edge.asgi_sse import end_sse as _end_sse
 from gateway_v2.edge.asgi_sse import read_body as _read_body
-from gateway_v2.edge.asgi_sse import send_sse as _send_sse
-from gateway_v2.edge.asgi_sse import start_sse as _start_sse
 from gateway_v2.edge.audit_emit import emit_chat_audit
 from gateway_v2.edge.cancel import InFlightControlSource, KillLatch
 from gateway_v2.edge.chat_deps import (
@@ -68,7 +65,6 @@ from gateway_v2.edge.chat_stream import ChatStream, _ProducedModeHolder, finish_
 from gateway_v2.edge.console_projection import (
     apply_projection,
     console_from_holds,
-    refusal_trace_frame,
 )
 from gateway_v2.edge.error_frame_scan import ErrorFrameScanner
 from gateway_v2.edge.executor import ScanExecutor
@@ -88,12 +84,13 @@ from gateway_v2.edge.outcome_metrics import OutcomeObserver
 from gateway_v2.edge.phase_resolvers import PhaseResolverFactory
 from gateway_v2.edge.request_holds import RequestHolds
 from gateway_v2.edge.responses_store import ResponseStore
+from gateway_v2.edge.stream_response import StreamResponse
 from gateway_v2.edge.wire.openai import (
     CanonicalRequest,
     OpenAIRequestParser,
     OpenAIResponseRenderer,
 )
-from gateway_v2.edge.wire.sse import SSEEncoder
+from gateway_v2.edge.wire.sse import DEFAULT_MODEL, DEFAULT_STREAM_ID, SSEEncoder, StreamIdentity
 from gateway_v2.egress.backpressure import Coalescer
 from gateway_v2.egress.output_guard import OutputResolver
 from gateway_v2.egress.stream import (
@@ -323,14 +320,16 @@ class ChatRoute:
             assert plan is not None and destination is not None and upstream_body is not None
             assert req is not None  # parse succeeded on any proceed outcome
             if req.streaming:
-                await self._stream_response(send, plan, destination, upstream_body, holds)
+                await self._stream_response(send, plan, destination, upstream_body, holds, req)
                 return
             await ChatSurface(deps=self).collect_and_render(
                 req, plan, destination, upstream_body, send, holds
             )
         finally:
             refused = None if outcome is None else outcome.refuse_code
-            emit_chat_audit(self.audit, holds, refused, observer=self.observer)
+            emit_chat_audit(
+                self.audit, holds, refused, observer=self.observer, detail=_tool_call_detail(holds)
+            )
             holds.release(self.admission, self.quota)
 
     async def _render_refusal(
@@ -344,17 +343,16 @@ class ChatRoute:
     ) -> None:
         """Render a §10.4 refusal through the single ``Error_Envelope`` (R12.1).
 
-        A pre-parse refusal (``req is None`` — a malformed / oversized body never became a stream)
-        renders as an HTTP body; a post-parse refusal renders as a declared SSE ``Error_Frame``
-        when the parsed request asked to stream (``req.streaming``) and otherwise as an HTTP body.
-        Either way the one ``edge/errors`` envelope maps the value-code, so an unmapped code still
-        renders a declared generic error rather than a raw framework 500.
+        EVERY refusal renders as an HTTP body, whether or not the request asked to stream (GW34
+        R7): a refused stream is a plain HTTP error with the same bytes as the non-stream refusal,
+        so the SDK raises its status-based error class and applies its retry policy. The one
+        ``edge/errors`` envelope maps the value-code, so an unmapped code still renders a declared
+        generic error rather than a raw framework 500.
 
         ``request_id`` is the gateway-minted per-request id when the refusing phase ran after
         identity resolution (``None`` for a pre-identity refusal); it is threaded into the HTTP
         ``Error_Envelope`` body + the ``x-request-id`` response header so the render echoes the id
-        the admission / budget verdicts carry. The SSE ``Error_Frame`` keeps the frozen OpenAI
-        streaming-error shape (the id rides the stream's response header, not the frame).
+        the admission / budget verdicts carry.
 
         ``param`` names the offending request field for a boundary parse refusal (``max_tokens`` /
         ``max_completion_tokens``, ``None`` otherwise), echoed as ``error.param`` (Group F). The
@@ -367,14 +365,7 @@ class ChatRoute:
             # GW36 S3 (N11): identity's refusal (the only post-parse one with no id yet) is plain
             # HTTP whatever `stream` asked, as OpenAI's 401 is, with a random id.
             request_id, req = minted, None
-        if req is not None and req.streaming:
-            await _start_sse(send)
-            await _send_sse(send, errors.render_sse(code))
-            trace = None if holds is None else refusal_trace_frame(holds)
-            if trace is not None:
-                await _send_sse(send, trace)
-            await _end_sse(send)
-            return
+        del req  # GW34: every post-parse refusal is a plain HTTP error, stream or not (R7)
         await _emit_error_code(
             send, code, request_id, param, self.contract.max_output_tokens_boundary(),
             None if holds is None else console_from_holds(
@@ -389,23 +380,22 @@ class ChatRoute:
         destination: str,
         body: Mapping[str, object],
         holds: RequestHolds | None = None,
+        req: CanonicalRequest | None = None,
+        *,
+        plain_pre_byte: bool = True,
     ) -> None:
-        """Open the SSE response + drive the shipped egress orchestration (R2.2, R7, R10).
+        """Serve a streaming proceed outcome through the egress orchestration (R2.2, R7, R10).
 
         Reached only on a proceed outcome for a streaming request. The coalescer admit fails
         CLOSED when the derived per-stream high-water is below one byte
-        (``STREAM_BUFFER_UNAVAILABLE``); on admit, a per-request ``SSEEncoder`` is the pipeline's
-        downstream ``send`` sink and the injected ``ProviderClient``'s events — opened to the
-        plan-derived ``destination`` with the transformed ``body`` — feed the ``StreamPipeline``
-        release loop built via ``for_plan(plan, ...)`` so output enforcement reflects the resolved
-        plan. A terminal ``[DONE]`` closes the stream; any value-code the pipeline emits renders as
-        a declared SSE ``Error_Frame`` through the single envelope.
+        (``STREAM_BUFFER_UNAVAILABLE``). A per-request ``SSEEncoder`` (one stable ``id`` / ``model``
+        / ``created`` from ``req``) is the sink for the released frames, which flow through the
+        shipped pipeline built via ``select_pipeline(plan, ...)`` and the tool-call assembler.
 
-        The :class:`~gateway_v2.edge.stream_control.FirstByteLatch` is created HERE, above the
-        egress loop, and threaded into the stream orchestration so the no-splice gate (R7) is
-        enforced before any provider hand-off: a signed safe retry/fallback runs only while the
-        latch is unset, the first released content byte sets it, and after that the stream only
-        terminates / errors — a second upstream response is never spliced in (R7.4).
+        **Deferred start (GW34 R7).** The SSE response starts at the first content-bearing frame,
+        so a coalescer refusal or any failure before it is a plain HTTP error with the exact
+        non-stream bytes. ``plain_pre_byte=False`` (the Responses adapter, which translates our
+        SSE bytes itself) keeps today's eager start and SSE ``Error_Frame`` behaviour.
 
         ``holds`` is the per-request ledger threaded from :meth:`handle` so the streaming provider
         open records ``mark_dispatched`` (Group D); it defaults to a fresh per-call ledger so a
@@ -413,29 +403,40 @@ class ChatRoute:
         """
         if holds is None:
             holds = RequestHolds()
+
+        async def emit_error(code: str) -> None:
+            dispatched = holds.dispatched
+            await _emit_error_code(
+                send, code, holds.request_id or None, None,
+                self.contract.max_output_tokens_boundary(),
+                console_from_holds(
+                    holds, output_action="block" if dispatched else None,
+                    provider_called=dispatched,
+                ),
+            )
+
+        response = StreamResponse(send, emit_error=emit_error)
         coalescer = Coalescer(contract=self.contract, active_streams=self.active_streams)
         verdict = coalescer.admit()
-        encoder = SSEEncoder()
-        await _start_sse(send)
+        identity = StreamIdentity(
+            stream_id=f"chatcmpl-{holds.request_id}" if holds.request_id else DEFAULT_STREAM_ID,
+            model=DEFAULT_MODEL if req is None else req.model,
+            created=int(self.wall_clock_s()),
+        )
+        encoder = SSEEncoder(identity=identity)
         if verdict.code is not None:
-            await _send_sse(send, errors.render_sse(verdict.code))
-            await _end_sse(send)
+            if plain_pre_byte:
+                await response.fail_pre_byte(verdict.code)
+                return
+            await response.start()
+            await response.write_started(errors.render_sse(verdict.code))
+            await response.close()
             return
-        await self._stream(send, encoder, coalescer, plan, destination, body, holds)
-        await _end_sse(send)
-
-    async def _stream(
-        self,
-        send: ASGISend,
-        encoder: SSEEncoder,
-        coalescer: Coalescer,
-        plan: ExecutionPlan,
-        destination: str,
-        body: Mapping[str, object],
-        holds: RequestHolds,
-    ) -> None:
-        """Delegate to :meth:`ChatStream.stream` (see ``edge/chat_stream.py``)."""
-        await ChatStream(self).stream(send, encoder, coalescer, plan, destination, body, holds)
+        if not plain_pre_byte:
+            await response.start()
+        await ChatStream(self).stream(
+            response, encoder, coalescer, plan, destination, body, holds, req
+        )
 
     async def _finish_stream(
         self,
@@ -447,6 +448,15 @@ class ChatRoute:
     ) -> None:
         """Delegate to :func:`finish_stream`, the ONE terminal site (does not read ``self``)."""
         await finish_stream(send, encoder, kill_latch, sent_terminal, produced)
+
+
+def _tool_call_detail(holds: RequestHolds) -> Mapping[str, str] | None:
+    """Audit detail for a request that carried tool calls: COUNTS as digit strings, nothing else
+    (no tool name, id, argument or schema text reaches an audit field, R11)."""
+    released, withheld = holds.tool_calls_released, holds.tool_calls_withheld
+    if not (released or withheld):
+        return None
+    return {"tool_calls_released": str(released), "tool_calls_withheld": str(withheld)}
 
 
 # --------------------------------------------------------------------------- #

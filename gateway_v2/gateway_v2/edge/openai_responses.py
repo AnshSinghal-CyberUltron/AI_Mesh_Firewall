@@ -320,7 +320,9 @@ class ResponsesRoute:
                 if out:
                     await send_sse(send, out)
 
-        await self.chat._stream_response(forward, plan, destination, upstream, holds)
+        await self.chat._stream_response(
+            forward, plan, destination, upstream, holds, plain_pre_byte=False
+        )
         failure = await self._stream_failure(translator, prepared, holds, req, upstream)
         await send_sse(send, translator.finish(failure_code=failure))
         await end_sse(send)

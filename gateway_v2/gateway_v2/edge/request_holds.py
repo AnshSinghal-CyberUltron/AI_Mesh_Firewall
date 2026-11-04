@@ -84,6 +84,8 @@ class RequestHolds:
         "_released",
         "_request_id",
         "_spent",
+        "_tool_calls_released",
+        "_tool_calls_withheld",
     )
 
     def __init__(self) -> None:
@@ -96,6 +98,8 @@ class RequestHolds:
         self._input_decision: Decision | None = None
         self._output_decision: Decision | None = None
         self._org_id: str = ""
+        self._tool_calls_released: int = 0
+        self._tool_calls_withheld: int = 0
 
     def admitted(self, request_id: str) -> None:
         """Record that admission granted a slot for ``request_id`` (``complete``-d on exit)."""
@@ -115,6 +119,19 @@ class RequestHolds:
     def note_output(self, decision: Decision) -> None:
         """Record the output decision. Streaming may leave this unset."""
         self._output_decision = decision
+
+    def note_tool_calls(self, released: int, withheld: int) -> None:
+        """Record how many tool calls the stream released / withheld (counts only, GW34)."""
+        self._tool_calls_released = released
+        self._tool_calls_withheld = withheld
+
+    @property
+    def tool_calls_released(self) -> int:
+        return self._tool_calls_released
+
+    @property
+    def tool_calls_withheld(self) -> int:
+        return self._tool_calls_withheld
 
     def note_tenant(self, org_id: str) -> None:
         """Record the tenant the audit row must be attributed to."""
