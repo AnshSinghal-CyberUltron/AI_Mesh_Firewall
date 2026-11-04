@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from gateway_v2.admit.grant import Admitted, BudgetVerdict, ShedVerdict
+from gateway_v2.admit.grant import BudgetVerdict, ShedVerdict
 from gateway_v2.domain import posture
 from gateway_v2.edge.chat_deps import unresolved_snapshot_source
 from gateway_v2.edge.identity_resolver import IdentityOutcome

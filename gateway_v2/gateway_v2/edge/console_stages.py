@@ -175,12 +175,14 @@ def _provider_stages(
 
 
 def _guardrail(facts: ChatFacts, failure: str) -> StageOutcome:
-    if facts.output_action in _DISPOSITIONS:
-        rule = facts.output_rule or failure
-        shown = rule if facts.output_action != _ALLOW else ""
-        return StageOutcome("output_guardrail", facts.output_action, True, shown)
-    if facts.dispatched and failure and not is_operational_failure(failure):
+    policy_cut = facts.dispatched and bool(failure) and not is_operational_failure(failure)
+    action = facts.output_action
+    if policy_cut and action in ("", _ALLOW):
+        # A policy cut with no stricter decision recorded fails closed as an output block.
         return StageOutcome("output_guardrail", _BLOCK, True, failure)
+    if action in _DISPOSITIONS:
+        shown = (facts.output_rule or failure) if action != _ALLOW else ""
+        return StageOutcome("output_guardrail", action, True, shown)
     return StageOutcome("output_guardrail", _SKIP, False)
 
 
