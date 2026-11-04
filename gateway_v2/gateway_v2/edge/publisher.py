@@ -422,8 +422,8 @@ class Publisher:
     def _admit_families(self) -> tuple[list[Family], int]:
         """The admission producer — per-queue scalars + the one oldest-age histogram (R1.6).
 
-        SERIES_COUNT = ``2·len(QUEUE_NAMES) + 3 + 1 + len(ShedReason) + 1 + 2`` = 22: the histogram term
-        is the ``+ 3``, every other term a scalar family.
+        SERIES_COUNT = ``2·len(QUEUE_NAMES) + 3 + 1 + len(ShedReason) + 1 + 2`` = 22: the
+        histogram term is the ``+ 3``, every other term a scalar family.
         """
         reading = self._admission.snapshot()
         families: list[Family] = []

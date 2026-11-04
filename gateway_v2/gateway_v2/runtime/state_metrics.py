@@ -263,10 +263,10 @@ SERIES_COUNT = 9 * len(StateKind) + 6 + 3 + 6 + 8 + 1
 """How many series this surface can ever produce. A constant, by construction.
 
 `9 *` is the eight per-kind round metrics plus GW05b's per-kind floor; the trailing `+ 8` is
-freshness and the final `+ 1` is GW27's `plan_schema_version` gauge. R2-10 is the reason this is a fixed expression rather than a count of whatever
-happens to be emitted: a full metric directory made 40% of new tenants' first requests fail
-with HTTP 500, so a series whose existence depends on tenant count must not be addable by
-accident.
+freshness and the final `+ 1` is GW27's `plan_schema_version` gauge. R2-10 is the reason this
+is a fixed expression rather than a count of whatever happens to be emitted: a full metric
+directory made 40% of new tenants' first requests fail with HTTP 500, so a series whose
+existence depends on tenant count must not be addable by accident.
 """
 
 

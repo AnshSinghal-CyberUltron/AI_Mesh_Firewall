@@ -126,9 +126,9 @@ class AuditMetrics:
 SERIES_COUNT = 9 + 6 + 8 + 7
 """How many series this surface can ever produce. A constant, by construction.
 
-Nine producer (GW27 adds the org-suppressed counter), six bound, eight durability, seven store. R2-10 is why this is an expression
-rather than a count of whatever happens to be emitted: a label whose domain is tenant-derived
-then fails the gate instead of shipping.
+Nine producer (GW27 adds the org-suppressed counter), six bound, eight durability, seven
+store. R2-10 is why this is an expression rather than a count of whatever happens to be
+emitted: a label whose domain is tenant-derived then fails the gate instead of shipping.
 """
 
 def metric_type(name: str) -> str:
