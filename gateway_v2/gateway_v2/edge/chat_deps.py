@@ -35,6 +35,7 @@ from gateway_v2.admit.grant import (
 )
 from gateway_v2.domain import Finding
 from gateway_v2.domain.identity import Principal
+from gateway_v2.domain.plan import OrgControls
 from gateway_v2.plan.snapshot import ReplicaSnapshot
 from gateway_v2.plan.store import PlanStore
 
@@ -42,6 +43,7 @@ __all__ = (
     "AdmissionDecider",
     "BudgetDecider",
     "InputDetector",
+    "OrgLimitDecider",
     "fail_closed_admission",
     "fail_closed_budget",
     "no_findings_detector",
@@ -103,6 +105,22 @@ class BudgetDecider(Protocol):
     ) -> BudgetVerdict | Admitted: ...
 
     def refund(self, cost: int, *, request_id: str, owner: str) -> None: ...
+
+
+@runtime_checkable
+class OrgLimitDecider(Protocol):
+    """The GW27 org rate / burst / TPM surface; :class:`~gateway_v2.admit.org_limits.OrgLimits`.
+
+    ``check`` returns ``None`` to admit or a refusal verdict (429, fail-closed). ``refund_tokens``
+    returns an estimate charged for a request that never reached the provider. Required on every
+    route that charges an org: it has no default, so an unwired route cannot be built.
+    """
+
+    def check(
+        self, org: str, controls: OrgControls, cost: int, *, request_id: str
+    ) -> BudgetVerdict | None: ...
+
+    def refund_tokens(self, org: str, cost: int) -> None: ...
 
 
 class _AlwaysShedAdmission:

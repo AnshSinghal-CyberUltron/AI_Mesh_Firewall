@@ -21,24 +21,17 @@ What this assembles (R2.1):
 * **``/metrics``** — the Prometheus text exposition computed OFF the serving loop (R2.6 / C38
   R13.2): the handler offloads the CPU-bound snapshot via ``asyncio.to_thread``.
 
-C38 serving-loop discipline (R13.1) is assembled here too: ``build_app`` constructs the one
+C38 serving-loop discipline (R13.1): ``build_app`` constructs the one
 :class:`~gateway_v2.edge.executor.ScanExecutor` — a GIL-releasing thread pool sized by
-``contract.pool_size(PoolKind.SCANNER)`` (no literal) — and injects it into the chat route so the
-CPU-bound error-frame scan runs off the forwarding loop; the pool is released on
-``lifespan.shutdown``.
+``contract.pool_size(PoolKind.SCANNER)`` — and injects it into the chat route so the CPU-bound
+error-frame scan runs off the forwarding loop; the pool is released on ``lifespan.shutdown``.
 
-``edge`` is the top layer, so this module may import every layer below. The scanner and the
-``ProviderClient`` are injected into :func:`build_app` and handed to the chat route (above
-``detect`` — the correct injection site; ``egress`` must never import ``detect``, R14.1/R14.2).
+``edge`` is the top layer. The scanner and the ``ProviderClient`` are injected into
+:func:`build_app` above ``detect`` (``egress`` must never import ``detect``, R14.1/R14.2).
 
-**Split (noted in task 7.2).** The route table and the per-route handlers live in the sibling
-:mod:`gateway_v2.edge.routes`; this module owns the ASGI protocol loop + the two operational
-endpoints. The split keeps each module well under the 800-line gate and separates "how ASGI
-events flow" from "what each route does".
-
-**No capacity literal, no module-level mutable.** The route table is a function local; the HTTP
-status integers here are response-status codes, not capacity-position literals; the serving
-bounds all derive from the injected ``ResourceContract``.
+**Split.** The route table and handlers live in :mod:`gateway_v2.edge.routes`; this module owns
+the ASGI protocol loop + the two operational endpoints. **No capacity literal, no module-level
+mutable:** the route table is a function local and the serving bounds derive from the contract.
 """
 
 from __future__ import annotations
@@ -48,6 +41,7 @@ from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, replace
 from typing import Protocol, runtime_checkable
 
+from gateway_v2.admit.org_limits import OrgLimits
 from gateway_v2.audit.record import AuditRecord
 from gateway_v2.dispatch.provider import ProviderClient
 from gateway_v2.dispatch.routing import DispatchRouter
@@ -59,6 +53,7 @@ from gateway_v2.edge.chat_deps import (
     AdmissionDecider,
     BudgetDecider,
     InputDetector,
+    OrgLimitDecider,
     fail_closed_admission,
     fail_closed_budget,
     no_findings_detector,
@@ -250,6 +245,7 @@ def build_app(
     mcp: McpDeps | None = None,
     observer: OutcomeObserver | None = None,
     holdback_metrics: HoldbackMetrics | None = None,
+    org_limits: OrgLimitDecider | None = None,
 ) -> ASGIApplication:
     """Assemble the raw-ASGI serving skin (R2.1).
 
@@ -271,16 +267,13 @@ def build_app(
     (a phase-scoped rule enforced only on its phase). ``None`` default = today's single-``resolver``
     behaviour (Preservation 3.5 / 3.13).
 
-    **GW14d (task 12.1).** ``/readyz`` gates state first, then the metrics directory when the
-    registry is a :class:`MetricsDirectorySource`. ``observer`` is the request-path counter sink.
-
-    **GW16 misc-surface wiring (task 7.1/8.1/10.1).** The single :class:`MiscRoute` is built via
-    :func:`_build_misc_route`; ``build_routes`` returns the exact + prefix tables held on the skin.
-    ``catalog`` feeds the Models surface (default :data:`empty_catalog_source`, R7.4).
-    ``response_store`` backs ``/v1/responses``; ``mcp`` wires ``/v1/mcp`` (``None``: 501).
-
-    **GW15 §10.4 (task 6.1).** The single :class:`ChatRoute` is built ONCE via
-    :func:`_build_chat_route`; each unwired dep falls back to its fail-closed default.
+    **GW14d.** ``/readyz`` gates state first, then the metrics directory when the registry is a
+    :class:`MetricsDirectorySource`. ``observer`` is the request-path counter sink. **GW16.** The
+    single :class:`MiscRoute` is built via :func:`_build_misc_route`; ``catalog`` feeds the Models
+    surface; ``response_store`` backs ``/v1/responses``; ``mcp`` wires ``/v1/mcp`` (``None``: 501).
+    **GW15.** The single :class:`ChatRoute` is built ONCE via :func:`_build_chat_route`; each
+    unwired dep falls back to its fail-closed default. **GW27.** ``org_limits`` is the org rate /
+    burst / TPM decider shared by both routes; ``None`` builds a real ``OrgLimits(contract)``.
 
     ``build_app`` stays pure assembly (no store read, no task spawned); the serving bounds derive
     from the injected ``ResourceContract`` / ``HoldbackConfig`` with no capacity literal in
@@ -291,7 +284,9 @@ def build_app(
     # offloaded to, sized by `contract.pool_size(PoolKind.SCANNER)` (no thread-count literal); built
     # once at assembly, shared across every stream, released on lifespan shutdown.
     scan_executor = ScanExecutor(contract=contract)
+    limits = org_limits if org_limits is not None else OrgLimits(contract)
     chat = _build_chat_route(
+        org_limits=limits,
         contract=contract,
         provider=provider,
         scanner=scanner,
@@ -315,6 +310,7 @@ def build_app(
         holdback_metrics=holdback_metrics,
     )
     misc = _build_misc_route(
+        org_limits=limits,
         contract=contract,
         provider=provider,
         resolver=resolver,
@@ -346,6 +342,7 @@ def build_app(
 
 def _build_chat_route(
     *,
+    org_limits: OrgLimitDecider,
     contract: ResourceContract,
     provider: ProviderClient,
     scanner: ScanProtocol,
@@ -387,6 +384,7 @@ def _build_chat_route(
         clock=clock,
         error_scanner=error_scanner if error_scanner is not None else _no_error_findings,
         executor=scan_executor,
+        org_limits=org_limits,
         # --- GW15 §10.4 lifecycle deps, constructed once at boot (task 6.1) ---
         parser=OpenAIRequestParser(),
         renderer=OpenAIResponseRenderer(),
@@ -409,6 +407,7 @@ def _build_chat_route(
 
 def _build_misc_route(
     *,
+    org_limits: OrgLimitDecider,
     contract: ResourceContract,
     provider: ProviderClient,
     resolver: OutputResolver,
@@ -439,6 +438,7 @@ def _build_misc_route(
     """
     request_exports = exports if exports is not None else PerRequestExports()
     return MiscRoute(
+        org_limits=org_limits,
         contract=contract,
         provider=provider,
         clock=clock,

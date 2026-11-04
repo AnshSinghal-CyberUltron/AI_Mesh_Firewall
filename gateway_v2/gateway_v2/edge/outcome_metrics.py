@@ -19,7 +19,13 @@ from gateway_v2.edge import errors
 from gateway_v2.edge.counters import POSTURE_CODES
 from gateway_v2.edge.request_holds import RequestHolds
 
-__all__ = ("OutcomeObserver", "observe_outcome", "observe_refusal", "observe_tenant")
+__all__ = (
+    "OutcomeObserver",
+    "observe_audit_suppressed",
+    "observe_outcome",
+    "observe_refusal",
+    "observe_tenant",
+)
 
 
 class OutcomeObserver(Protocol):
@@ -38,6 +44,17 @@ def observe_tenant(observer: OutcomeObserver | None, org_id: str) -> None:
         return
     try:
         observer.count_tenant(org_id)
+    except Exception:  # noqa: BLE001 — never raise into the serving request.
+        return
+
+
+def observe_audit_suppressed(observer: OutcomeObserver | None) -> None:
+    """Count one audit record an org's own toggle suppressed (GW27). Optional on the observer."""
+    hook = getattr(observer, "observe_audit_suppressed", None)
+    if hook is None:
+        return
+    try:
+        hook()
     except Exception:  # noqa: BLE001 — never raise into the serving request.
         return
 

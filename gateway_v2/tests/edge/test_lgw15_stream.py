@@ -59,6 +59,7 @@ from gateway_v2.egress.stream import ScanProtocol
 from gateway_v2.runtime.holdback_config import HoldbackConfig
 from gateway_v2.runtime.kinds import HardwareSignals
 from gateway_v2.runtime.resources import ResourceContract, from_signals
+from tests.edge._org_limits import org_limits_for
 
 _SEED = 0x15_15_0015
 _ITERATIONS = 10_000
@@ -186,6 +187,7 @@ def _p15_route(provider: StubProviderClient) -> ChatRoute:
     """
     contract = _p15_contract()
     return ChatRoute(
+        org_limits=org_limits_for(contract),
         contract=contract,
         provider=provider,
         scanner=cast(ScanProtocol, scan),

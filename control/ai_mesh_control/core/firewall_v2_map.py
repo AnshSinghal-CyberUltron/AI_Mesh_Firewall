@@ -14,10 +14,14 @@ import math
 from collections.abc import Mapping
 from typing import Any
 
-_MESSAGE = "{field} is unsupported. The plan compiler has no rule, mode, or action for this field."
+_RETIRED = (
+    "{field} is retired and not enforced (owner {owner}): {reason}. "
+    "Change refused so the value is never stored and ignored."
+)
+_REWRITE = "{field}: 'rewrite' is not enforced (owner GW33)."
 
-# off: values that turn the feature off. A change to one of these is allowed.
-# reject: mapped values the compiler refuses.
+# off: values that turn a retired feature off. A change to one of these is allowed.
+# reject: built/mapped values the compiler refuses.
 FIELDS: dict[str, dict[str, Any]] = {
     "organization": {"kind": "identity"},
     "updated_at": {"kind": "identity"},
@@ -39,56 +43,194 @@ FIELDS: dict[str, dict[str, Any]] = {
     "output_credential_action": {"kind": "mapped", "reject": ("rewrite",)},
     "output_ip_leakage_enabled": {"kind": "mapped"},
     "output_ip_leakage_action": {"kind": "mapped", "reject": ("rewrite",)},
-    "log_level": {"kind": "unsupported"},
-    "rate_limit_enabled": {"kind": "unsupported", "off": (False,)},
-    "requests_per_minute": {"kind": "unsupported"},
-    "burst_limit": {"kind": "unsupported"},
-    "org_tpm_limit": {"kind": "unsupported"},
+    "log_level": {
+        "kind": "retired",
+        "owner": "GW27",
+        "reason": "v2 observability is the typed GW14d exposition with bounded cardinality; there is no per-org log-detail knob to build",
+    },
+    "rate_limit_enabled": {"kind": "built", "via": "controls.rate"},
+    "requests_per_minute": {"kind": "built", "via": "controls.rate"},
+    "burst_limit": {"kind": "built", "via": "controls.rate"},
+    "org_tpm_limit": {"kind": "built", "via": "controls.org_tpm_limit"},
     # GW36 S4 (Req 8): the per-org token budget is NOT a firewall-plan field. The gateway
     # reads it as a signed StateKind.BUDGET record written by the projector and spends it
-    # down through the per-org BudgetLease — the plan compiler has no rule, mode, or action
-    # for it, so it is ``unsupported`` here (a changed value is reported, like org_tpm_limit).
-    "org_token_budget": {"kind": "unsupported"},
-    "blocked_keywords": {"kind": "unsupported"},
-    "model_isolation_enabled": {"kind": "unsupported", "off": (False,)},
-    "allowed_models": {"kind": "unsupported"},
-    "default_model": {"kind": "unsupported"},
-    "semantic_analysis_enabled": {"kind": "unsupported", "off": (False,)},
-    "tier2_execution_mode": {"kind": "unsupported"},
-    "tier2_stream_hold_enabled": {"kind": "unsupported", "off": (False,)},
-    "tier2_stream_hold_timeout_ms": {"kind": "unsupported"},
-    "tier2_enabled": {"kind": "unsupported", "off": (None, False)},
-    "mcp_tier2_enabled": {"kind": "unsupported", "off": (None, False)},
-    "mcp_ext_scan_action": {"kind": "unsupported", "off": ("tag",)},
-    "tier2_strict": {"kind": "unsupported"},
-    "mcp_policy_only_enforcement": {"kind": "unsupported", "off": (False,)},
-    "factuality_check_enabled": {"kind": "unsupported", "off": (False,)},
-    "hallucination_grounding_mode": {"kind": "unsupported"},
-    "hallucination_grounding_threshold": {"kind": "unsupported"},
-    "hallucination_grounding_model": {"kind": "unsupported"},
-    "output_policy_enabled": {"kind": "unsupported", "off": (False,)},
-    "output_policy_action": {"kind": "unsupported", "reject": ("rewrite",)},
-    "output_hallucination_action": {"kind": "unsupported", "reject": ("rewrite",)},
-    "output_incident_logging_enabled": {"kind": "unsupported", "off": (False,)},
-    "max_response_tokens": {"kind": "unsupported"},
-    "rag_enabled": {"kind": "unsupported", "off": (False,)},
-    "vector_db_isolation": {"kind": "unsupported", "off": (False,)},
-    "rag_max_documents": {"kind": "unsupported"},
-    "rag_relevance_threshold": {"kind": "unsupported"},
-    "rag_redaction_enabled": {"kind": "unsupported", "off": (False,)},
-    "rag_tier2_enabled": {"kind": "unsupported", "off": (False,)},
-    "threat_intel_enabled": {"kind": "unsupported", "off": (False,)},
-    "auto_block_threats": {"kind": "unsupported", "off": (False,)},
-    "threat_score_threshold": {"kind": "unsupported"},
-    "audit_logging_enabled": {"kind": "unsupported", "off": (False,)},
-    "retention_days": {"kind": "unsupported"},
-    "compliance_frameworks": {"kind": "unsupported"},
-    "routing_risk_weight": {"kind": "unsupported"},
-    "routing_cost_weight": {"kind": "unsupported"},
-    "routing_latency_weight": {"kind": "unsupported"},
-    "routing_priority_weight": {"kind": "unsupported"},
-    "default_data_sensitivity": {"kind": "unsupported"},
-    "routing_enabled": {"kind": "unsupported", "off": (False,)},
+    # down through the per-org BudgetLease. It is the 46th former ``unsupported`` entry,
+    # delegated to GW36 and outside the 45 that GW27 dispositions.
+    "org_token_budget": {
+        "kind": "retired",
+        "owner": "GW36",
+        "reason": "the per-org token budget is a signed StateKind.BUDGET record spent by the per-org BudgetLease",
+    },
+    "blocked_keywords": {"kind": "built", "via": "rules.keywords"},
+    "model_isolation_enabled": {
+        "kind": "retired",
+        "owner": "GW29",
+        "reason": "isolation is plan state built by GW29",
+        "off": (False,),
+    },
+    "allowed_models": {
+        "kind": "retired",
+        "owner": "GW28",
+        "reason": "per-org model catalogue",
+    },
+    "default_model": {
+        "kind": "retired",
+        "owner": "GW28",
+        "reason": "per-org default model selection",
+    },
+    "semantic_analysis_enabled": {
+        "kind": "retired",
+        "owner": "GW10",
+        "reason": "semantic detection is governed by the GW10 detector and policy set",
+        "off": (False,),
+    },
+    "tier2_execution_mode": {
+        "kind": "retired",
+        "owner": "GW27",
+        "reason": "there is no v2 plan primitive for sync or async Tier-2; v2 detection runs in the resolver",
+    },
+    "tier2_stream_hold_enabled": {
+        "kind": "retired",
+        "owner": "GW13",
+        "reason": "stream hold is the output streaming-mode surface",
+        "off": (False,),
+    },
+    "tier2_stream_hold_timeout_ms": {
+        "kind": "retired",
+        "owner": "GW13",
+        "reason": "stream hold is the output streaming-mode surface",
+    },
+    "tier2_enabled": {
+        "kind": "retired",
+        "owner": "GW10",
+        "reason": "semantic detection is governed by the GW10 detector and policy set",
+        "off": (None, False),
+    },
+    "mcp_tier2_enabled": {
+        "kind": "retired",
+        "owner": "GW17",
+        "reason": "MCP surface posture",
+        "off": (None, False),
+    },
+    "mcp_ext_scan_action": {
+        "kind": "retired",
+        "owner": "GW17",
+        "reason": "external MCP proxy posture (GW32 consumes it)",
+        "off": ("tag",),
+    },
+    "tier2_strict": {
+        "kind": "retired",
+        "owner": "GW27",
+        "reason": "subsumed by per-rule on_unavailable, which drafts_for already emits from tier2_fail_closed_enabled",
+    },
+    "mcp_policy_only_enforcement": {
+        "kind": "retired",
+        "owner": "GW17",
+        "reason": "MCP surface posture",
+        "off": (False,),
+    },
+    "factuality_check_enabled": {
+        "kind": "retired",
+        "owner": "GW33",
+        "reason": "grounding/hallucination output parity",
+        "off": (False,),
+    },
+    "hallucination_grounding_mode": {
+        "kind": "retired",
+        "owner": "GW33",
+        "reason": "grounding/hallucination output parity",
+    },
+    "hallucination_grounding_threshold": {
+        "kind": "retired",
+        "owner": "GW33",
+        "reason": "grounding/hallucination output parity",
+    },
+    "hallucination_grounding_model": {
+        "kind": "retired",
+        "owner": "GW33",
+        "reason": "grounding/hallucination output parity",
+    },
+    "output_policy_enabled": {"kind": "built", "via": "rules.output_policy"},
+    "output_policy_action": {"kind": "built", "via": "rules.output_policy", "reject": ("rewrite",)},
+    "output_hallucination_action": {
+        "kind": "retired",
+        "owner": "GW33",
+        "reason": "grounding/hallucination output action; rewrite is also refused",
+        "reject": ("rewrite",),
+    },
+    "output_incident_logging_enabled": {"kind": "built", "via": "controls.audit"},
+    "max_response_tokens": {"kind": "built", "via": "controls.max_response_tokens"},
+    "rag_enabled": {
+        "kind": "retired",
+        "owner": "GW31",
+        "reason": "RAG settings are built by GW31",
+        "off": (False,),
+    },
+    "vector_db_isolation": {
+        "kind": "retired",
+        "owner": "GW31",
+        "reason": "RAG settings are built by GW31",
+        "off": (False,),
+    },
+    "rag_max_documents": {
+        "kind": "retired",
+        "owner": "GW31",
+        "reason": "RAG settings are built by GW31",
+    },
+    "rag_relevance_threshold": {
+        "kind": "retired",
+        "owner": "GW31",
+        "reason": "RAG settings are built by GW31",
+    },
+    "rag_redaction_enabled": {
+        "kind": "retired",
+        "owner": "GW31",
+        "reason": "RAG settings are built by GW31",
+        "off": (False,),
+    },
+    "rag_tier2_enabled": {
+        "kind": "retired",
+        "owner": "GW31",
+        "reason": "RAG settings are built by GW31",
+        "off": (False,),
+    },
+    "threat_intel_enabled": {"kind": "built", "via": "rules.threat"},
+    "auto_block_threats": {"kind": "built", "via": "rules.threat"},
+    "threat_score_threshold": {"kind": "built", "via": "rules.threat"},
+    "audit_logging_enabled": {"kind": "built", "via": "controls.audit"},
+    "retention_days": {"kind": "built", "via": "controls.audit"},
+    "compliance_frameworks": {"kind": "built", "via": "controls.compliance"},
+    "routing_risk_weight": {
+        "kind": "retired",
+        "owner": "GW28",
+        "reason": "weighted deterministic routing",
+    },
+    "routing_cost_weight": {
+        "kind": "retired",
+        "owner": "GW28",
+        "reason": "weighted deterministic routing",
+    },
+    "routing_latency_weight": {
+        "kind": "retired",
+        "owner": "GW28",
+        "reason": "weighted deterministic routing",
+    },
+    "routing_priority_weight": {
+        "kind": "retired",
+        "owner": "GW28",
+        "reason": "weighted deterministic routing",
+    },
+    "default_data_sensitivity": {
+        "kind": "retired",
+        "owner": "GW28",
+        "reason": "weighted deterministic routing",
+    },
+    "routing_enabled": {
+        "kind": "retired",
+        "owner": "GW28",
+        "reason": "weighted deterministic routing",
+        "off": (False,),
+    },
 }
 
 _INPUTS = (
@@ -106,17 +248,45 @@ def selection_errors(
     incoming: Mapping[str, Any],
     stored: Mapping[str, Any] | None,
 ) -> dict[str, str]:
-    """Field-keyed errors for a new value the compiler cannot represent."""
+    """Field-keyed errors for a new value the gateway does not enforce."""
     previous = stored or {}
     errors: dict[str, str] = {}
     for field, spec in FIELDS.items():
         if field not in incoming or _same(incoming[field], previous.get(field)):
             continue
-        if _rejected(spec, incoming[field]):
-            errors[field] = _MESSAGE.format(field=field)
+        message = _refusal(field, spec, incoming[field])
+        if message is not None:
+            errors[field] = message
     return errors
-
-
+DELEGATED = ("org_token_budget",)
+"""Former ``unsupported`` entries outside the 45 GW27 dispositions: owned by another card (GW36)."""
+def changed_fields(incoming: Mapping[str, Any], stored: Mapping[str, Any] | None) -> set[str]:
+    """Fields whose incoming value differs from the stored one (the console posts the whole row)."""
+    previous = stored or {}
+    return {f for f, v in incoming.items() if f not in previous or not _same(v, previous[f])}
+def retire_ledger() -> list[dict[str, str]]:
+    """The 30 retired entries, sorted by field: what the committed ledger must equal."""
+    return [
+        {"field": f, "owner": spec["owner"], "reason": spec["reason"]}
+        for f, spec in sorted(FIELDS.items())
+        if spec["kind"] == "retired" and f not in DELEGATED
+    ]
+def delegated_ledger() -> list[str]:
+    return sorted(DELEGATED)
+def built_ledger() -> list[dict[str, str]]:
+    """The built entries, sorted by field, with where each is published."""
+    return [
+        {"field": f, "via": spec["via"]}
+        for f, spec in sorted(FIELDS.items())
+        if spec["kind"] == "built"
+    ]
+def retired_unchanged(stored: Mapping[str, Any]) -> list[str]:
+    """Retired fields whose stored value is on, i.e. values the operator holds that v2 ignores."""
+    return sorted(
+        f
+        for f, spec in FIELDS.items()
+        if spec["kind"] == "retired" and f in stored and stored[f] not in spec.get("off", ())
+    )
 def drafts_for(payload: Mapping[str, Any]) -> list[dict[str, Any]]:
     """Rules a supported payload compiles to. Unsupported fields are absent here."""
     if payload.get("firewall_enabled") is False:
@@ -192,15 +362,16 @@ def _draft(
     }
 
 
-def _rejected(spec: Mapping[str, Any], value: Any) -> bool:
+def _refusal(field: str, spec: Mapping[str, Any], value: Any) -> str | None:
+    """The refusal message for a NEW value of ``field``, or None when it is acceptable."""
     if "reject" in spec and value in spec["reject"]:
-        return True
-    if spec["kind"] != "unsupported":
-        return False
+        return _REWRITE.format(field=field)
+    if spec["kind"] != "retired":
+        return None
     off = spec.get("off")
-    return off is None or value not in off
-
-
+    if off is not None and value in off:
+        return None
+    return _RETIRED.format(field=field, owner=spec["owner"], reason=spec["reason"])
 def _same(left: Any, right: Any) -> bool:
     if isinstance(left, float) or isinstance(right, float):
         if left is None or right is None:

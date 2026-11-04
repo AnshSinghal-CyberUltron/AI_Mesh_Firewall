@@ -37,6 +37,7 @@ RECORD_COLUMNS = (
     "schema_version",
     "recorded_at_ns",
     "body",
+    "retention_days",
 )
 
 SCHEMA = """
@@ -75,4 +76,12 @@ CREATE TABLE IF NOT EXISTS amf_audit_cursor (
   records_lost        bigint NOT NULL DEFAULT 0,
   updated_at          timestamptz NOT NULL DEFAULT now()
 );
+-- GW27: the retention window stamped on the record when it was written (non-retroactive). NULL =
+-- written before this card or by a gateway that did not stamp; a NULL row is never deleted. Run
+-- before any INSERT (init_schema), so a new exporter against an existing table never inserts into
+-- a missing column.
+ALTER TABLE amf_audit_record ADD COLUMN IF NOT EXISTS retention_days smallint;
+-- org_id leads so the per-org sweep predicate and ORDER BY recorded_at_ns are one index range.
+CREATE INDEX IF NOT EXISTS amf_audit_record_retention
+  ON amf_audit_record (org_id, recorded_at_ns) WHERE retention_days IS NOT NULL;
 """

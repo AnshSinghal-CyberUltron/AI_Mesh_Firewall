@@ -178,6 +178,7 @@ class Publisher:
         "_clock",
         "SERIES_COUNT",
         "_read_failures",
+        "_audit_suppressed",
     )
 
     def __init__(
@@ -224,6 +225,7 @@ class Publisher:
         self.SERIES_COUNT: int = _series_count(contract)
         # The Publisher's own read-failure indicator (R1.3), a real zero from construction.
         self._read_failures: int = 0
+        self._audit_suppressed: int = 0
 
     @classmethod
     def from_contract(
@@ -377,8 +379,10 @@ class Publisher:
     # ----------------------------------------------------------------------- #
 
     def _audit_families(self) -> tuple[list[Family], int]:
-        """The audit/store producer — all scalar families (R1.2). SERIES_COUNT = 29."""
-        return self._flat_scalar_families(self._audit.series())
+        """The audit/store producer — all scalar families (R1.2). SERIES_COUNT = 30."""
+        series = dict(self._audit.series())
+        series["amf_audit_suppressed_by_org_total"] = float(self._audit_suppressed)
+        return self._flat_scalar_families(series)
 
     def _rehydration_families(self) -> tuple[list[Family], int]:
         """The re-hydrator producer — all scalar families, read across the ``root_packages``
@@ -418,8 +422,8 @@ class Publisher:
     def _admit_families(self) -> tuple[list[Family], int]:
         """The admission producer — per-queue scalars + the one oldest-age histogram (R1.6).
 
-        SERIES_COUNT = ``2·len(QUEUE_NAMES) + 3 + 1 + len(ShedReason) + 1`` = 20: the histogram term
-        is the ``+ 3``, every other term a scalar family.
+        SERIES_COUNT = ``2·len(QUEUE_NAMES) + 3 + 1 + len(ShedReason) + 1 + 2`` = 22: the
+        histogram term is the ``+ 3``, every other term a scalar family.
         """
         reading = self._admission.snapshot()
         families: list[Family] = []
@@ -438,6 +442,10 @@ class Publisher:
         for reason, count in reading.shed_total.items():
             scalars[f'{ADMIT_PREFIX}_shed_total{{reason="{reason}"}}'] = float(count)
         scalars[f"{ADMIT_PREFIX}_fail_open_total"] = float(reading.fail_open_total)
+        scalars[f"{ADMIT_PREFIX}_org_limits_table_full_total"] = float(
+            reading.org_limits_table_full_total
+        )
+        scalars[f"{ADMIT_PREFIX}_org_limits_slots_used"] = float(reading.org_limits_slots_used)
         scalar_families, scalar_count = self._flat_scalar_families(scalars)
         families.extend(scalar_families)
         families.append(
@@ -661,6 +669,10 @@ class Publisher:
             self._event_log.record(reason, reason)
         except Exception:  # noqa: BLE001 — request-path never-raise contract (R2-10).
             return
+
+    def observe_audit_suppressed(self) -> None:
+        """Count one audit record an org's own toggle suppressed (GW27). NEVER raises."""
+        self._audit_suppressed += 1
 
     def observe_posture(self, code: str) -> None:
         """Record one fail-closed posture refusal under its own counter (R7). NEVER raises.

@@ -48,6 +48,7 @@ from urllib.parse import urlsplit, urlunsplit
 
 from gateway_v2.admit.admission import AdmissionController
 from gateway_v2.admit.metrics import AdmissionMetrics, QuotaMetrics
+from gateway_v2.admit.org_limits import OrgLimits
 from gateway_v2.admit.quota import AdmissionBounds
 from gateway_v2.detect.holdback import scan as holdback_scan
 from gateway_v2.dispatch.openai_upstream import (
@@ -372,6 +373,7 @@ def build_dev_dependencies(
         "plan_feed": feed,
         "admission": admission,
         "quota": budget,
+        "org_limits": OrgLimits(contract, metrics=admission_metrics),
         "catalog": catalog,
     }
     audit_note = _attach_audit(

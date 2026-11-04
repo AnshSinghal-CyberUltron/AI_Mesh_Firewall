@@ -62,6 +62,7 @@ from gateway_v2.plan.snapshot import ReplicaSnapshot
 from gateway_v2.plan.store import PlanStore
 from gateway_v2.runtime.kinds import HardwareSignals
 from gateway_v2.runtime.resources import ResourceContract, from_signals
+from tests.edge._org_limits import org_limits_for
 
 # =========================================================================== #
 # Shared harness — a counted provider/detector + the ASGI receive/send + plan/
@@ -403,6 +404,7 @@ def _p10_build_deps(flow: str, counter: _P10ReadCounter) -> MiscRoute:
         BudgetDecider, _P10LocalQuota(counter, refuse=flow == _P10_BUDGET)
     )
     return MiscRoute(
+        org_limits=org_limits_for(_contract()),
         contract=_contract(),
         provider=provider,
         clock=lambda: 0.0,
@@ -640,6 +642,7 @@ def _u_embed_deps(
     """A ``MiscRoute`` whose plan resolves and whose varied seams the caller injects."""
     snapshot = _u_served_snapshot()
     return MiscRoute(
+        org_limits=org_limits_for(_contract()),
         contract=_contract(),
         provider=provider,
         clock=lambda: 0.0,
@@ -759,6 +762,7 @@ def _u_models_deps(
 ) -> MiscRoute:
     """A ``MiscRoute`` with a counted provider + counted detector + scripted catalog."""
     return MiscRoute(
+        org_limits=org_limits_for(_contract()),
         contract=_contract(),
         provider=provider,
         clock=lambda: 0.0,
@@ -836,6 +840,7 @@ def test_moderations_request_makes_zero_provider_calls() -> None:
     """8.5 — a moderations request opens NO provider (scan-only surface)."""
     provider = _CountingProvider()
     deps = MiscRoute(
+        org_limits=org_limits_for(_contract()),
         contract=_contract(),
         provider=provider,
         clock=lambda: 0.0,

@@ -80,6 +80,8 @@ class AuditMetrics:
     store_policy_unsafe: int = 0
     store_sample_errors: int = 0
     store_reachable: int = 0
+    suppressed_by_org: int = 0
+    """Records an org's own audit toggle suppressed (GW27). An operator choice, not loss."""
 
     def series(self) -> dict[str, float]:
         """The flat, label-free series a registry would publish."""
@@ -93,6 +95,7 @@ class AuditMetrics:
             f"{PREFIX}_queue_capacity": self.sink.capacity,
             f"{PREFIX}_queued_records": self.sink.queued,
             f"{PREFIX}_acknowledged_ratio": self.sink.acknowledged_ratio,
+            f"{PREFIX}_suppressed_by_org_total": self.suppressed_by_org,
             # --- the bound ----------------------------------------------------------------
             f"{PREFIX}_trimmed_records_total": self.sink.trimmed,
             f"{PREFIX}_budget_bytes": self.budget.budget_bytes,
@@ -120,12 +123,12 @@ class AuditMetrics:
         }
 
 
-SERIES_COUNT = 8 + 6 + 8 + 7
+SERIES_COUNT = 9 + 6 + 8 + 7
 """How many series this surface can ever produce. A constant, by construction.
 
-Eight producer, six bound, eight durability, seven store. R2-10 is why this is an expression
-rather than a count of whatever happens to be emitted: a label whose domain is tenant-derived
-then fails the gate instead of shipping.
+Nine producer (GW27 adds the org-suppressed counter), six bound, eight durability, seven
+store. R2-10 is why this is an expression rather than a count of whatever happens to be
+emitted: a label whose domain is tenant-derived then fails the gate instead of shipping.
 """
 
 def metric_type(name: str) -> str:
@@ -146,6 +149,9 @@ class AuditMetricsRecorder:
 
     def observe_sink(self, counters: SinkCounters) -> None:
         self._metrics = replace(self._metrics, sink=counters)
+
+    def observe_suppressed_by_org(self, total: int) -> None:
+        self._metrics = replace(self._metrics, suppressed_by_org=total)
 
     def observe_budget(self, reading: BudgetReading) -> None:
         self._metrics = replace(self._metrics, budget=reading)

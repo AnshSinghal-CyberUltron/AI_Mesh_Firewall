@@ -19,9 +19,13 @@ from dataclasses import dataclass
 
 from gateway_v2.domain.category import Category
 from gateway_v2.domain.plan import (
+    UNSET_CONTROLS,
     Action,
+    AuditControl,
     FailurePosture,
     Mode,
+    OrgControls,
+    RateControl,
     RuleCondition,
     RuleKind,
     RuleScope,
@@ -29,6 +33,9 @@ from gateway_v2.domain.plan import (
     Surface,
 )
 from gateway_v2.plan.compiler import CompileError, RuleDraft
+from gateway_v2.plan.controls_codec import CONTROLS_VERSION, REQUIRES_CONTROLS, controls_body
+
+_SUPPORTED_REQUIRES = frozenset({REQUIRES_CONTROLS})
 
 
 @dataclass(frozen=True, slots=True)
@@ -38,15 +45,20 @@ class PlanDocument:
     org_id: str
     streaming_mode: StreamingMode
     drafts: tuple[RuleDraft, ...]
+    controls: OrgControls = UNSET_CONTROLS
 
 
 def encode_plan_body(document: PlanDocument) -> dict[str, object]:
     """The body the control plane signs. Canonicalisation is the signer's job."""
-    return {
+    body: dict[str, object] = {
         "org_id": document.org_id,
         "streaming_mode": document.streaming_mode.value,
         "rules": [_rule_body(draft) for draft in document.drafts],
     }
+    if document.controls != UNSET_CONTROLS:
+        body["controls"] = controls_body(document.controls)
+        body["requires"] = [REQUIRES_CONTROLS]
+    return body
 
 
 def _rule_body(draft: RuleDraft) -> dict[str, object]:
@@ -87,11 +99,106 @@ def decode_plan_body(raw: bytes) -> PlanDocument:
     rules = body.get("rules")
     if not isinstance(rules, list):
         raise CompileError("plan body field 'rules' must be a list")
+    _check_requires(body)
     return PlanDocument(
         org_id=_text(body, "org_id"),
         streaming_mode=_member(StreamingMode, _text(body, "streaming_mode"), "streaming_mode"),
         drafts=tuple(_draft(entry, position) for position, entry in enumerate(rules)),
+        controls=_controls(body),
     )
+
+
+def _check_requires(body: Mapping[str, object]) -> None:
+    """A body from a newer control plane is refused, never half-applied."""
+    if "requires" not in body:
+        return
+    value = body["requires"]
+    if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
+        raise CompileError("plan body field 'requires' must be a list of strings")
+    unknown = sorted(str(item) for item in value if item not in _SUPPORTED_REQUIRES)
+    if unknown:
+        raise CompileError(f"plan body requires unsupported features {unknown}")
+
+
+def _controls(body: Mapping[str, object]) -> OrgControls:
+    if "controls" not in body:
+        return UNSET_CONTROLS
+    raw = body["controls"]
+    section = _section(raw, "controls", {"version", "rate", "org_tpm_limit", "max_response_tokens",
+                                        "audit", "compliance"})
+    version = section.get("version")
+    if isinstance(version, bool) or not isinstance(version, int) or version != CONTROLS_VERSION:
+        raise CompileError("plan controls 'version' is unsupported")
+    return OrgControls(
+        rate=_rate(section),
+        org_tpm_limit=_count(section, "org_tpm_limit", "controls"),
+        max_response_tokens=_count(section, "max_response_tokens", "controls"),
+        audit=_audit(section),
+        compliance_frameworks=_frameworks(section),
+    )
+
+
+def _section(raw: object, name: str, allowed: set[str]) -> Mapping[str, object]:
+    if not isinstance(raw, dict):
+        raise CompileError(f"plan {name} must be an object")
+    unknown = sorted(str(key) for key in raw if key not in allowed)
+    if unknown:
+        raise CompileError(f"plan {name} has unknown keys {unknown}")
+    return raw
+
+
+def _count(body: Mapping[str, object], name: str, where: str, *, required: bool = False) -> int:
+    if required and name not in body:
+        raise CompileError(f"plan {where} field {name!r} is required")
+    value = body.get(name, 0)
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise CompileError(f"plan {where} field {name!r} must be a non-negative integer")
+    return value
+
+
+def _flag(body: Mapping[str, object], name: str, where: str) -> bool:
+    value = body.get(name)
+    if not isinstance(value, bool):
+        raise CompileError(f"plan {where} field {name!r} must be a boolean")
+    return value
+
+
+def _rate(section: Mapping[str, object]) -> RateControl | None:
+    if "rate" not in section:
+        return None
+    rate = _section(section["rate"], "controls.rate", {"enabled", "requests_per_minute", "burst"})
+    return RateControl(
+        enabled=_flag(rate, "enabled", "controls.rate"),
+        requests_per_minute=_count(rate, "requests_per_minute", "controls.rate", required=True),
+        burst=_count(rate, "burst", "controls.rate", required=True),
+    )
+
+
+def _audit(section: Mapping[str, object]) -> AuditControl | None:
+    if "audit" not in section:
+        return None
+    audit = _section(
+        section["audit"], "controls.audit", {"enabled", "incident_logging", "retention_days"},
+    )
+    return AuditControl(
+        enabled=_flag(audit, "enabled", "controls.audit"),
+        incident_logging=_flag(audit, "incident_logging", "controls.audit"),
+        retention_days=_count(audit, "retention_days", "controls.audit", required=True),
+    )
+
+
+def _frameworks(section: Mapping[str, object]) -> tuple[str, ...]:
+    if "compliance" not in section:
+        return ()
+    compliance = _section(section["compliance"], "controls.compliance", {"frameworks"})
+    value = compliance.get("frameworks")
+    if not isinstance(value, list) or not value:
+        raise CompileError("plan controls.compliance 'frameworks' must be a non-empty list")
+    if any(not isinstance(item, str) or not item.strip() for item in value):
+        raise CompileError("plan controls.compliance 'frameworks' must hold non-empty strings")
+    if len(set(value)) != len(value):
+        raise CompileError("plan controls.compliance 'frameworks' has duplicates")
+    return tuple(value)
 
 
 def _object(raw: bytes) -> Mapping[str, object]:
@@ -208,6 +315,7 @@ def plan_body_of(
     org_id: str,
     drafts: Sequence[RuleDraft],
     streaming_mode: StreamingMode = StreamingMode.INCREMENTAL,
+    controls: OrgControls = UNSET_CONTROLS,
 ) -> dict[str, object]:
     """Convenience for the writer and for tests."""
-    return encode_plan_body(PlanDocument(org_id, streaming_mode, tuple(drafts)))
+    return encode_plan_body(PlanDocument(org_id, streaming_mode, tuple(drafts), controls))

@@ -63,6 +63,7 @@ from gateway_v2.edge.chat_deps import (
     AdmissionDecider,
     BudgetDecider,
     InputDetector,
+    OrgLimitDecider,
     fail_closed_admission,
     fail_closed_budget,
     no_findings_detector,
@@ -251,7 +252,7 @@ class ChatRoute:
     ``ResourceContract``): the CPU-bound error-frame scan is handed to the GIL-releasing executor
     so one stream's scan cannot starve another's latency (R13.1/R13.3) and serving-loop lag is
     recorded as the R13.4 SLO input. (The shipped per-delta holdback scan stays synchronous in the
-    pure release loop — offloading it is a GW13 follow-up.)
+    pure release loop — offloading it is a GW13 follow-up.) ``org_limits`` is GW27's org gate.
     """
 
     contract: ResourceContract
@@ -265,8 +266,8 @@ class ChatRoute:
     clock: Callable[[], float]
     error_scanner: ErrorFrameScanner
     executor: ScanExecutor
+    org_limits: OrgLimitDecider
     # --- GW15 §10.4 lifecycle deps ---
-    #
     # The seams the ``ChatSurface`` lifecycle reads, each a fail-closed default defined in
     # ``edge/chat_deps.py`` (an unwired route refuses — admission sheds first, zero provider
     # calls). ``admission`` / ``quota`` are the narrow ``AdmissionDecider`` / ``BudgetDecider``

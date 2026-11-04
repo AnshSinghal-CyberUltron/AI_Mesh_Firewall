@@ -82,6 +82,7 @@ from gateway_v2.edge.chat_deps import (
     AdmissionDecider,
     BudgetDecider,
     InputDetector,
+    OrgLimitDecider,
     fail_closed_admission,
     fail_closed_budget,
     no_findings_detector,
@@ -102,6 +103,7 @@ from gateway_v2.edge.openai_misc_shared import (
     _refuse,
     _VectorTransportError,
 )
+from gateway_v2.edge.org_gate import enforce_org_limits
 from gateway_v2.edge.outcome_metrics import OutcomeObserver, observe_tenant
 from gateway_v2.edge.phase_resolvers import PhaseResolverFactory, resolver_for
 from gateway_v2.edge.request_holds import RequestHolds
@@ -197,6 +199,9 @@ class MiscRoute:
     #: the Models surface (R7.4). A module-level default would cycle; the boot wiring injects it
     #: (``empty_catalog_source`` by default, a scripted catalog in tests).
     catalog: CatalogSource
+    #: GW27: the org rate / burst / TPM decider. REQUIRED, no default, so an unwired embeddings
+    #: surface cannot be constructed (parity with ``ChatRoute.org_limits``).
+    org_limits: OrgLimitDecider
 
     # --- Fail-closed security defaults. ---
     #: The GW05b/c identity resolver (R5.1): ``None`` / stale / unavailable ⇒ refuse
@@ -368,6 +373,13 @@ class EmbeddingsSurface:
             # cost on ``holds`` so it is refunded if nothing is dispatched. The cost is computed
             # ONCE and spent + recorded identically.
             cost = self._estimated_cost(req)
+            holds.note_controls(plan.controls)
+            org_refuse = enforce_org_limits(
+                self._deps.org_limits, plan, identity.org_id, cost, holds, request_id
+            )
+            if org_refuse is not None:
+                await _refuse(send, org_refuse.code, self._deps.observer)
+                return
             # The composed QuotaGate's per-key GCRA needs the SAME sha256 key hash identity
             # resolved on (GW36 S4). ``hashed_bearer_key`` re-derives it from this scope's
             # Authorization header — the production resolver's own key_namer — not from a raw

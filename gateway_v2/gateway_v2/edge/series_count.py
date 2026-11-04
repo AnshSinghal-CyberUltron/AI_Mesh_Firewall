@@ -48,16 +48,16 @@ def series_count(contract: ResourceContract) -> int:
     fixed indicator terms — never the observed tenant count (R15.3). Term by term (a histogram
     family counts as its three native series, matching every producer's own ``SERIES_COUNT``):
 
-    * ``AdmissionMetrics.SERIES_COUNT`` (= ``2·5 + 3 + 1 + 5 + 1`` = 20): per-queue depth/age
+    * ``AdmissionMetrics.SERIES_COUNT`` (= ``2·5 + 3 + 1 + 5 + 1 + 2`` = 22): per-queue depth/age
       scalars, the one ``oldest_age_s_hist`` histogram (as 3), ``admitted_total``, the five
       ``shed_total`` buckets, ``fail_open_total``.
     * ``QuotaMetrics.SERIES_COUNT`` (= 3): the three label-free quota scalars.
-    * ``audit_metrics.SERIES_COUNT`` (= ``8 + 6 + 8 + 7`` = 29): all scalar audit/store series.
+    * ``audit_metrics.SERIES_COUNT`` (= ``9 + 6 + 8 + 7`` = 30): all scalar audit/store series.
     * ``state_control.metrics.SERIES_COUNT`` (= ``13 + 4·len(StateKind) + len(FAULT_CATEGORIES)
       + len(ALL_REASONS)``): the re-hydrator's process/per-kind/fault/reason scalars (read across
       the ``root_packages`` boundary, exactly as ``edge/app.py`` already assembles).
-    * ``runtime.state_metrics.SERIES_COUNT`` (= ``9·len(StateKind) + 6 + 3 + 6 + 8``): per-kind +
-      identity + killswitch + nudge + freshness scalars (``ABSENT`` sentinel gauges included).
+    * ``runtime.state_metrics.SERIES_COUNT`` (= ``9·len(StateKind) + 6 + 3 + 6 + 8 + 1``): per-kind
+      + identity + killswitch + nudge + freshness scalars (``ABSENT`` sentinel gauges included).
     * ``PerRequestExports.SERIES_COUNT`` (= ``5 + 2·3`` = 11): five stream scalars + two
       histograms (as 3 each).
     * ``runtime.holdback_metrics.SERIES_COUNT`` (= ``4 + 3·3`` = 13): four holdback scalars + three

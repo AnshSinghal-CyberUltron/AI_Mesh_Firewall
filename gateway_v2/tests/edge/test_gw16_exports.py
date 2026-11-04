@@ -88,6 +88,7 @@ from gateway_v2.runtime.holdback_metrics import Histogram
 from gateway_v2.runtime.kinds import HardwareSignals
 from gateway_v2.runtime.resources import ResourceContract, from_signals
 from gateway_v2.runtime.stream_metrics import PerRequestExports, PerRequestReading
+from tests.edge._org_limits import org_limits_for
 
 _SEED = 0x16_00_0016
 _ITERATIONS = 10_000
@@ -448,6 +449,7 @@ def _p16_build_deps(outcome: str, org_id: str, canary: str) -> MiscRoute:
         input_detector = _P16RaisingDetector()
 
     return MiscRoute(
+        org_limits=org_limits_for(_contract()),
         contract=_contract(),
         provider=provider,
         clock=lambda: 0.0,

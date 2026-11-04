@@ -29,6 +29,7 @@ from gateway_v2.admit.gcra import GcraParams, LocalGCRA
 from gateway_v2.admit.gcra_cache import GcraCache
 from gateway_v2.admit.lease import BudgetLease, LeaseConfig
 from gateway_v2.admit.metrics import AdmissionMetrics, QuotaMetrics
+from gateway_v2.admit.org_limits import OrgLimits
 from gateway_v2.admit.quota import (
     AdmissionBounds,
     QuotaComponent,
@@ -467,6 +468,7 @@ def apply_production(
         # 5.1, 5.6). Neither fail-closed default remains in `deps` after this.
         admission=admission,
         quota=quota_gate,
+        org_limits=OrgLimits(contract, metrics=admission_metrics),
     )
     kept = tuple(
         line for line in logs if not any(line.startswith(f"boot: {name} ->") for name in _REPLACED)
@@ -485,7 +487,9 @@ def apply_production(
         f"measured value; request_depth={bounds.request_depth} concurrency={bounds.concurrency} "
         f"audit_depth={bounds.audit_depth})",
         f"boot: rate -> per-principal LocalGCRA, per-worker rate = rate_per_s / {worker_count} "
-        "(rate_per_s 0 = no per-key request limit, DECLARED; per-key request-count is GW27)",
+        "(rate_per_s 0 = no per-key request limit, DECLARED)",
+        "boot: org_limits -> per-org rate / burst / TPM from the signed plan controls "
+        "(per gateway replica, GW27; no store I/O on the request path)",
         f"boot: budget -> per-org BudgetLease registry over signed BUDGET records "
         f"(chunk={lease_chunk} tokens, watermark={lease_watermark}); budget_unavailable on empty "
         "pool, never shared_state_unavailable",

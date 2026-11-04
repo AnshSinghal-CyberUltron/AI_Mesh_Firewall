@@ -30,7 +30,7 @@ import asyncio
 import json
 import random
 from collections.abc import AsyncIterator, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, cast
 
 from gateway_v2.admit.grant import Admitted
@@ -47,6 +47,7 @@ from gateway_v2.edge.openai_chat import REFUSE_INPUT_BLOCKED, ChatSurface
 from gateway_v2.edge.wire.openai import UNSUPPORTED_PARAMETER, OpenAIRequestParser
 from gateway_v2.egress.output_guard import MinimalOutputResolver
 from gateway_v2.plan.snapshot import PlanState as _PlanState
+from tests.edge._org_limits import NoopOrgLimits
 
 if TYPE_CHECKING:
     from gateway_v2.edge.routes import ChatRoute
@@ -308,6 +309,7 @@ class _P9Deps:
     outcome. Every seam is fail-closed-or-permissive by construction, isolating the one
     behaviour under test: the INPUT-scan BLOCK short-circuit.
     """
+    org_limits: object = field(default_factory=NoopOrgLimits, kw_only=True)
 
     contract: _P9BoundContract
     parser: OpenAIRequestParser

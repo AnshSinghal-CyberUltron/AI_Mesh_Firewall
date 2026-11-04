@@ -263,7 +263,7 @@ The owner asked on 2 November to proceed on defaults. They are working defaults 
 |---|---|---|
 | GW17b | Authenticated MCP upstreams | Not started. Upstream auth still refuses with `mcp_upstream_auth_unsupported`. |
 | GW17c | Per-key `mcp_allowed_tools` and `mcp_max_tool_calls` | Not started |
-| GW27 | The 45 unsupported FirewallConfig fields, built or retired by name | Not started. `firewall_v2_map.py` still rejects those fields on save. |
+| GW27 | The 45 unsupported FirewallConfig fields, built or retired by name | Local half closed on 4 November: 15 built, 30 retired by name, `org_token_budget` delegated to GW36; offline gate green. Live half OPEN: L27-1, L27-2, the live Postgres EXPLAIN arm, the live audit entry-size re-run, and the D-8 and D-12 owner sign-offs. Does not exit. Evidence: `docs/plans/evidence/2026-10-27-gw27/`. |
 | GW28 | Multi-model routing | Not started |
 | GW29 | Kill switch, isolation, reroute, auto-isolation | Not started. `kill_switch_engaged` is still hard-coded false. |
 | GW30 | Vector adapter and the connector list, `unsupported_operation` instead of an empty success | Adapter layer built and live-tested on 2 November; see the GW30 section above. Not wired into the production boot (that is GW31/GW36), so it does not exit for cutover. |

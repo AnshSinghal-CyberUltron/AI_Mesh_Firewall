@@ -13,6 +13,8 @@ property-based test.
 
 from __future__ import annotations
 
+from tests.edge._org_limits import NoopOrgLimits, org_limits_for
+
 # ===========================================================================
 # Property 6 — Exactly one shared-state round trip per request (task 2.6).
 # ===========================================================================
@@ -333,6 +335,7 @@ def test_property_6_exactly_one_shared_state_round_trip() -> None:
         stand-in for the real frozen ``ChatRoute`` so the property exercises the lifecycle
         wiring without the full boot graph.
         """
+        org_limits: object = field(default_factory=NoopOrgLimits, kw_only=True)
 
         contract: _P6_Contract
         parser: _P6_Parser
@@ -848,6 +851,7 @@ def test_property_7_unresolvable_or_stale_identity_fails_closed() -> None:
         from gateway_v2.detect.holdback import scan as holdback_scan
 
         return ChatRoute(
+            org_limits=org_limits_for(_p7_contract()),
             contract=_p7_contract(),
             provider=cast(ProviderClient, provider),
             scanner=cast(ScanProtocol, holdback_scan),
@@ -1051,6 +1055,7 @@ def test_property_7_resolved_identity_is_not_refused_at_identity() -> None:
     cfg, _logs = load_holdback_config()
     provider = _CountingProvider(rng=random.Random(_SEED))
     route = ChatRoute(
+        org_limits=org_limits_for(_contract()),
         contract=_contract(),
         provider=cast(ProviderClient, provider),
         scanner=cast(ScanProtocol, holdback_scan),
@@ -1301,6 +1306,7 @@ def _p211_build_deps(
 
     @dataclass(frozen=True, slots=True)
     class _P211Deps:
+        org_limits: object = field(default_factory=NoopOrgLimits, kw_only=True)
         contract: object
         parser: object
         identity: object

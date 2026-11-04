@@ -95,7 +95,7 @@ def test_the_series_count_is_a_constant() -> None:
 
     assert len(recorder.snapshot().series()) == SERIES_COUNT
     # 9 per kind (8 round metrics + GW05b's floor), 15 scalars, 8 freshness.
-    assert SERIES_COUNT == 9 * len(StateKind) + 15 + 8
+    assert SERIES_COUNT == 9 * len(StateKind) + 15 + 8 + 1  # GW27 plan_schema_version
 
 
 def test_no_series_name_carries_a_tenant_identifier() -> None:

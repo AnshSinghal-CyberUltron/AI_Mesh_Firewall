@@ -45,6 +45,7 @@ from gateway_v2.egress.output_guard import MinimalOutputResolver
 from gateway_v2.runtime.kinds import HardwareSignals
 from gateway_v2.runtime.resources import ResourceContract, from_signals
 from gateway_v2.runtime.stream_metrics import PerRequestExports
+from tests.edge._org_limits import org_limits_for
 
 _SEED = 0x6A12
 
@@ -130,6 +131,7 @@ def _misc_route(provider: ProviderClient) -> MiscRoute:
     route wires refuse by default (never a fail-open hole).
     """
     return MiscRoute(
+        org_limits=org_limits_for(_contract()),
         contract=_contract(),
         provider=provider,
         clock=_Clock(),

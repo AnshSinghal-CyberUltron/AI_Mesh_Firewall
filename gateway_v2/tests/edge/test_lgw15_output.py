@@ -27,6 +27,8 @@ from collections.abc import AsyncIterator, Mapping, Sequence  # noqa: F401
 from dataclasses import dataclass, field  # noqa: F401
 from typing import TYPE_CHECKING, cast  # noqa: F401
 
+from tests.edge._org_limits import NoopOrgLimits
+
 if TYPE_CHECKING:  # pragma: no cover - annotation-only import, no runtime cycle
     from gateway_v2.edge.routes import ChatRoute  # noqa: F401
 
@@ -963,6 +965,7 @@ def test_property_13_uncomputable_scan_or_decision_fails_closed_fail_open_zero()
     @dataclass(slots=True)
     class _P13InputDeps:
         """The bundle ``run_lifecycle`` reads up to the (raising) input scan."""
+        org_limits: object = field(default_factory=NoopOrgLimits, kw_only=True)
 
         contract: _P13BoundContract
         parser: OpenAIRequestParser
