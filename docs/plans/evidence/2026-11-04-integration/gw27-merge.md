@@ -1,5 +1,5 @@
 # GW27 merge into integration-gw27-35
-- Merge commit:  (git merge --no-ff gw27-firewall-config-fields onto suraj-revamp 1634da0c)
+- Merge commit: 70f65990 (git merge --no-ff gw27-firewall-config-fields onto suraj-revamp 1634da0c)
 - Conflicts: none (clean merge; GW27 branch sat on suraj-revamp tip). No fix commits.
 - Env: fresh venv /tmp/intv, editable from integration worktree, extras dev,serve,conformance,vectors + pytest-xdist. Run from gateway_v2/.
 ## Gates
