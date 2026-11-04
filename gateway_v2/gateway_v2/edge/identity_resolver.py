@@ -308,6 +308,12 @@ class CachingIdentityResolver:
         key_hash = self._key_namer(scope)
         if key_hash is None:
             return IdentityOutcome.invalid()
+        return await self.resolve_hash(key_hash)
+
+    async def resolve_hash(self, key_hash: str) -> IdentityOutcome:
+        """Resolve an already-named credential hash (GW32). The one cache path: chat reaches it
+        through `resolve_outcome`, MCP also reaches it for an `MCP_Access_Token`'s stored hash,
+        so revocation and plan edits bind both the same way."""
         try:
             principal = await self._cache.resolve(key_hash, self._fetch)
         except StoreDataUnavailable:

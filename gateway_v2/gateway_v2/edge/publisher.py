@@ -52,6 +52,8 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 from typing import Protocol
 
+from gateway_v2.admit.mcp_metrics import ENFORCEMENT_VERSION, McpPolicyMetrics
+from gateway_v2.admit.mcp_metrics import PREFIX as MCP_PREFIX
 from gateway_v2.admit.metrics import AdmissionMetrics, QuotaMetrics
 from gateway_v2.edge import render
 from gateway_v2.edge.cardinality import CardinalityDirectory
@@ -181,6 +183,7 @@ class Publisher:
         "_read_failures",
         "_audit_suppressed",
         "_incident",
+        "_mcp_policy",
     )
 
     def __init__(
@@ -232,6 +235,30 @@ class Publisher:
         # The Publisher's own read-failure indicator (R1.3), a real zero from construction.
         self._read_failures: int = 0
         self._audit_suppressed: int = 0
+        self._mcp_policy: McpPolicyMetrics | None = None
+
+    def attach_mcp_policy(self, metrics: McpPolicyMetrics) -> None:
+        """Boot-time: publish the GW17c policy series (tool denials, cap refusals, refills,
+        overshoot, evictions, fail-open pinned 0) and `amf_mcp_policy_enforcement_version`.
+        Adds exactly ``McpPolicyMetrics.SERIES_COUNT + 1`` to :attr:`SERIES_COUNT`."""
+        if self._mcp_policy is None:
+            self.SERIES_COUNT += McpPolicyMetrics.SERIES_COUNT + 1
+        self._mcp_policy = metrics
+
+    def _mcp_policy_families(self) -> tuple[list[Family], int]:
+        if self._mcp_policy is None:
+            return [], 0
+        reading = self._mcp_policy.snapshot()
+        scalars: dict[str, float] = {
+            f"{MCP_PREFIX}_tool_denied_total": float(reading.tool_denied_total),
+            f"{MCP_PREFIX}_cap_refused_total": float(reading.cap_refused_total),
+            f"{MCP_PREFIX}_cap_async_refill_total": float(reading.cap_async_refill_total),
+            f"{MCP_PREFIX}_cap_overshoot": float(reading.cap_overshoot),
+            f"{MCP_PREFIX}_cap_evicted_total": float(reading.cap_evicted_total),
+            f"{MCP_PREFIX}_fail_open_total": float(reading.fail_open_total),
+            f"{MCP_PREFIX}_policy_enforcement_version": float(ENFORCEMENT_VERSION),
+        }
+        return self._flat_scalar_families(scalars)
 
     @classmethod
     def from_contract(
@@ -321,6 +348,7 @@ class Publisher:
             self._quota_families,
             self._stream_families,
             self._holdback_families,
+            self._mcp_policy_families,
         ):
             fams, count = self._guarded_flat(adapter)
             families.extend(fams)

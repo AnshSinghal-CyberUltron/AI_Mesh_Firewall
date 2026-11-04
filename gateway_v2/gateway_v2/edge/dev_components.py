@@ -193,6 +193,26 @@ class DevStaticIdentity:
         matched = await self.resolve(scope)
         return IdentityOutcome.invalid() if matched is None else IdentityOutcome.resolved(matched)
 
+    async def resolve_hash(self, key_hash: str) -> IdentityOutcome:
+        """The same dev bearers by sha256 hash, for the OAuth server and `zsmcp_` tokens (GW32).
+
+        A hash never matches a bearer by accident: every candidate is hashed and compared in
+        constant time, and a miss is the same 401 outcome as a wrong key."""
+        import hashlib
+
+        probe = key_hash.encode("ascii", "ignore")
+        matched: TenantIdentity | None = None
+        for expected, identity in self._entries:
+            digest = hashlib.sha256(expected).hexdigest().encode("ascii")
+            if hmac.compare_digest(probe, digest):
+                matched = identity
+        if matched is None:
+            return IdentityOutcome.invalid()
+        from gateway_v2.edge.dev_plan_feed import request_org
+
+        request_org.set(matched.org_id)  # the customer matcher scans this org's program
+        return IdentityOutcome.resolved(matched)
+
 
 # --------------------------------------------------------------------------- #
 # Plan — decoded + compiled by the REAL plan layer.

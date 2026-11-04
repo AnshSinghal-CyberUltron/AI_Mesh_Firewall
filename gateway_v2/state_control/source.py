@@ -33,6 +33,10 @@ class SourceKey:
     org_slug: str | None
     active: bool
     """The key's own state at `as_of`: `is_active` and not past `expires_at`."""
+    mcp_allowed_tools: tuple[str, ...] | None = ()
+    """GW17c. Empty = unrestricted. `None` = the control value was malformed (deny-all)."""
+    mcp_max_tool_calls: int = 0
+    """GW17c. 0 = unlimited."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -87,6 +91,8 @@ class _Key:
     org_slug: str | None
     is_active: bool
     expires_at: float | None
+    mcp_allowed_tools: tuple[str, ...] | None = ()
+    mcp_max_tool_calls: int = 0
 
 
 @dataclass
@@ -123,6 +129,8 @@ class MemorySource:
                         key_id=row.key_id,
                         org_slug=row.org_slug,
                         active=row.is_active and (row.expires_at is None or row.expires_at > now),
+                        mcp_allowed_tools=row.mcp_allowed_tools,
+                        mcp_max_tool_calls=row.mcp_max_tool_calls,
                     )
                     for key_hash, row in sorted(rows.keys.items())
                 ),
@@ -168,9 +176,13 @@ class MemorySource:
         org_slug: str | None,
         active: bool = True,
         expires_at: float | None = None,
+        mcp_allowed_tools: tuple[str, ...] | None = (),
+        mcp_max_tool_calls: int = 0,
     ) -> None:
         with self._lock:
-            self._rows.keys[key_hash] = _Key(key_id, org_slug, active, expires_at)
+            self._rows.keys[key_hash] = _Key(
+                key_id, org_slug, active, expires_at, mcp_allowed_tools, mcp_max_tool_calls
+            )
 
     def drop_key(self, key_hash: str) -> None:
         with self._lock:

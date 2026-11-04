@@ -21,12 +21,13 @@ import requests
 from django.conf import settings
 from django.core.cache import cache
 from django.db import IntegrityError
-from django.db.models import Count, Q
+from django.db.models import Count, F, Q
 from django.http import HttpResponse
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.permissions import AllowAny, BasePermission, IsAdminUser
 from rest_framework.response import Response
+from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
 from . import mcp_firewall_client
@@ -2792,6 +2793,135 @@ class MCPGatewayNeedsReauthView(APIView):
         )
         _mark_needs_reauth(server, reason)
         return Response({"needs_reauth": True}, status=status.HTTP_200_OK)
+
+
+# ── GW17b: gateway-internal upstream credential endpoints ─────────────
+_GATEWAY_AUTH_KINDS = {
+    "bearer": "bearer",
+    "basic": "basic",
+    "authheaders": "header",  # control's wire name for a custom header
+    "oauth": "oauth",
+}
+
+
+def _credential_not_found() -> Response:
+    """One body for 'no such server' and 'not yours' (R11.5): nothing to tell them apart."""
+    response = Response({"error": "server not found"}, status=status.HTTP_404_NOT_FOUND)
+    response["Cache-Control"] = "no-store"
+    return response
+
+
+def _credential_body(server, *, need_refresh: bool) -> dict | None:
+    """The credential in the gateway's wire shape, or ``None`` for a type with no credential.
+
+    Secrets appear ONLY here (internal-key permission, ``no-store``). The refresh token and the
+    token endpoint are returned only when the gateway asks (``need_refresh=1``).
+    """
+    kind = _GATEWAY_AUTH_KINDS.get(server.auth_type)
+    if kind is None:
+        return None
+    body: dict = {"auth_type": kind, "version": server.credential_version}
+    if kind == "bearer":
+        body["token"] = server.auth_token
+    elif kind == "basic":
+        body["username"] = server.auth_username
+        body["token"] = server.auth_password
+    elif kind == "header":
+        body["header_name"] = server.auth_header_key
+        body["token"] = server.auth_header_value
+    else:
+        body["token"] = server.auth_token
+        expires = server.oauth_token_expires_at
+        body["expires_at"] = expires.timestamp() if expires else None
+        body["refreshable"] = bool(server.oauth_refresh_token and server.oauth_token_endpoint)
+        if need_refresh and body["refreshable"]:
+            body["refresh_token"] = server.oauth_refresh_token
+            body["token_endpoint"] = server.oauth_token_endpoint
+            body["client_id"] = server.oauth_client_id
+            body["client_secret"] = server.oauth_client_secret
+    return body
+
+
+class MCPGatewayCredentialView(APIView):
+    """Gateway-internal: ONE server's upstream credential, for one use.
+
+    GET /api/mcp-connector/internal/credential/?server_slug=<slug>[&need_refresh=1]
+    The org comes from ``X-Org-Slug`` (the gateway derived it from the key's org map). Never
+    callable with a console JWT.
+    """
+
+    permission_classes = [IsGatewayInternalOnly]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "mcp-internal-credential"
+
+    def get(self, request):
+        org = _gateway_request_org(request)
+        slug = (request.query_params.get("server_slug") or "").strip().lower()
+        if org is None or not slug:
+            return _credential_not_found()
+        server = MCPServerRegistration.objects.filter(organization=org, server_slug=slug).first()
+        if server is None:
+            return _credential_not_found()
+        body = _credential_body(server, need_refresh=request.query_params.get("need_refresh") == "1")
+        if body is None:
+            return _credential_not_found()
+        response = Response(body, status=status.HTTP_200_OK)
+        response["Cache-Control"] = "no-store"
+        return response
+
+
+class MCPGatewayCredentialRefreshResultView(APIView):
+    """Gateway-internal: store a refreshed OAuth access token (compare-and-set on version).
+
+    POST /api/mcp-connector/internal/credential/refresh-result/
+        Body: {"server_slug", "version", "access_token", "expires_in", "refresh_token"?}
+    A version that is not the stored one is a 409: another replica already refreshed.
+    """
+
+    permission_classes = [IsGatewayInternalOnly]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "mcp-internal-credential"
+
+    def post(self, request):
+        org = _gateway_request_org(request)
+        data = request.data or {}
+        slug = str(data.get("server_slug") or "").strip().lower()
+        access = data.get("access_token")
+        version, expires_in = data.get("version"), data.get("expires_in")
+        rotated = data.get("refresh_token")
+        valid = (
+            org is not None and slug and isinstance(access, str) and access
+            and isinstance(version, int) and not isinstance(version, bool)
+            and isinstance(expires_in, int) and not isinstance(expires_in, bool) and expires_in > 0
+            and (rotated is None or isinstance(rotated, str))
+        )
+        if not valid:
+            return _credential_not_found()
+        values = {
+            "auth_token": access,
+            "oauth_token_expires_at": timezone.now() + timedelta(seconds=expires_in),
+            "needs_reauth": False,
+            "last_sync_error": "",
+            "credential_version": F("credential_version") + 1,
+        }
+        if rotated:
+            values["oauth_refresh_token"] = rotated
+        rows = MCPServerRegistration.objects.filter(
+            organization=org, server_slug=slug, auth_type="oauth"
+        )
+        changed = rows.filter(credential_version=version).update(**values)
+        if not changed and not rows.exists():
+            return _credential_not_found()  # missing and foreign look the same (R11.5)
+        if not changed:
+            conflict = Response({"error": "version conflict"}, status=status.HTTP_409_CONFLICT)
+            conflict["Cache-Control"] = "no-store"
+            return conflict
+        from .signals import bump_scan_version
+
+        bump_scan_version(org.slug, slug)  # QuerySet.update() fires no post_save
+        response = Response({"stored": True}, status=status.HTTP_200_OK)
+        response["Cache-Control"] = "no-store"
+        return response
 
 
 # ── Org Gateway Key Provisioning ─────────────────────────────────────

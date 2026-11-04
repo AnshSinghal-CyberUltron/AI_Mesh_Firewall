@@ -230,6 +230,34 @@ The opposite of `SHARED_STATE_UNAVAILABLE`, which means "could not verify" (503,
 valid). A client fault, not a gateway posture, so it is not in the posture counters."""
 
 
+MCP_TOOL_NOT_PERMITTED = "mcp_tool_not_permitted"
+"""GW17c: the key's allow-list does not name this tool. HTTP 403."""
+MCP_TOOL_CALL_CAP_EXCEEDED = "mcp_tool_call_cap_exceeded"
+"""GW17c: the key's tool-call cap is spent (or could not be proven unspent). HTTP 429."""
+MCP_SESSION_INVALID = "mcp_session_invalid"
+"""GW32: unknown, expired or foreign `Mcp-Session-Id`. HTTP 404."""
+MCP_SESSION_LIMIT = "mcp_session_limit"
+"""GW32: a session bound (per key, org or global) is full. HTTP 429."""
+MCP_ORIGIN_REFUSED = "mcp_origin_refused"
+"""GW32: `Origin` is neither the request authority nor allow-listed. HTTP 403."""
+MCP_ORG_MISMATCH = "mcp_org_mismatch"
+"""GW32: the path org is not the key's org. HTTP 403, identical for 'wrong' and 'no such' org."""
+MCP_UPSTREAM_NEEDS_REAUTH = "mcp_upstream_needs_reauth"
+"""GW17b: the upstream credential needs a human to re-authorise. HTTP 403 (never 401)."""
+MCP_UPSTREAM_CREDENTIAL_UNAVAILABLE = "mcp_upstream_credential_unavailable"
+"""GW17b: the credential could not be fetched or refreshed in time. HTTP 503."""
+MCP_UPSTREAM_CREDENTIAL_INVALID = "mcp_upstream_credential_invalid"
+"""GW17b: the stored credential cannot be rendered safely. HTTP 502."""
+MCP_UPSTREAM_INSECURE_TRANSPORT = "mcp_upstream_insecure_transport"
+"""GW17b: a credential would travel over plaintext to a non-loopback host. HTTP 403."""
+MCP_UPSTREAM_OAUTH_FAILED = "mcp_upstream_oauth_failed"
+"""GW32: the upstream OAuth setup flow (discovery, registration, exchange) failed. HTTP 502."""
+MCP_UPSTREAM_OAUTH_UNAVAILABLE = "mcp_upstream_oauth_unavailable"
+"""GW32: upstream OAuth setup is not configured (no public URL or no control link). HTTP 503."""
+MCP_TRANSPORT_UNSUPPORTED = "mcp_transport_unsupported"
+"""GW32: unknown server transport or unsupported `MCP-Protocol-Version`. HTTP 400."""
+
+
 def gap_retry_after_s(*, rehydrate_period_ms: float, refresh_ms: float) -> float:
     """How long a client should wait out a shared-state gap (C36).
 

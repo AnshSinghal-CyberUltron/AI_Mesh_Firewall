@@ -37,10 +37,12 @@ from dataclasses import dataclass, field
 from typing import Any, Protocol
 
 from gateway_v2.detect.conditions import compile_conditions
+from gateway_v2.domain.identity import DENY_ALL_TOOLS
 from gateway_v2.domain.state import SignedRecord, StateKind, StateOp
 from gateway_v2.domain.state_knobs import ProjectorKnobs
 from gateway_v2.plan.compiler import CompileError, compile_plan
 from gateway_v2.plan.document import decode_plan_body
+from gateway_v2.runtime.resources_mcp import mcp_policy_bounds
 from gateway_v2.runtime.state_sig import body_hash, canonical_body
 from gateway_v2.runtime.store_keys import KEYS, StoreKeys
 from state_control.db import KindCounters
@@ -49,7 +51,7 @@ from state_control.incident_scopes import (
     is_isolation_scope,
     org_model_projection,
 )
-from state_control.source import ControlSource, SourceSwitch, SourceView
+from state_control.source import ControlSource, SourceKey, SourceSwitch, SourceView
 from state_control.writer import UNCHANGED, Fence, LeaseLost, StateWriter, WriteOutcome
 
 LOG = logging.getLogger("amf.state.projector")
@@ -204,7 +206,11 @@ class Projector:
         if not self._db.claim_lease(self._holder, self._knobs.lease_ms):
             return ProjectionSummary(leader=False)
         view = self._source.read()
-        desired = desired_state(view, self._incident_scopes)
+        desired = desired_state(
+            view,
+            self._incident_scopes,
+            mcp_key_policy=self._knobs.project_mcp_key_policy,
+        )
         for note in desired.notes:
             if note not in self._noted:
                 LOG.warning("%s", note)
@@ -421,12 +427,15 @@ _Snapshot = tuple[KindCounters, tuple[SignedRecord, ...], tuple[str, ...]]
 
 
 def desired_state(
-    view: SourceView, incident_scopes: IncidentScopePolicy | None = None,
+    view: SourceView,
+    incident_scopes: IncidentScopePolicy | None = None,
+    *,
+    mcp_key_policy: bool = False,
 ) -> _Desired:
     """The records control's snapshot implies. Pure: the property tests drive it directly.
-
     `incident_scopes` is the GW29 rollout guard; None (the default) keeps org-model switches
-    unsupported, so a fleet that has not rolled never receives a scope it cannot read."""
+    unsupported, so a fleet that has not rolled never receives a scope it cannot read.
+    `mcp_key_policy` (GW17c) projects per-key MCP allow-list/cap only when on."""
     policy = incident_scopes or IncidentScopePolicy()
     notes: list[str] = []
     invalid_names = 0
@@ -449,7 +458,8 @@ def desired_state(
             invalid_names += 1
             continue
         if key.org_slug in active:
-            keys[key.key_hash] = _key_body(key.key_id, key.org_slug)
+            allowed, cap = _mcp_policy(key, mcp_key_policy, notes)
+            keys[key.key_hash] = _key_body(key.key_id, key.org_slug, allowed, cap)
     plans: dict[str, Mapping[str, object]] = {}
     invalid_plans = refused = 0
     documented = {plan.org_slug for plan in view.plans}
@@ -570,9 +580,43 @@ def validate_plan(slug: str, raw: str) -> tuple[Mapping[str, object] | None, int
     return parsed, refused, ""
 
 
-def _key_body(key_id: str, org_slug: str) -> Mapping[str, object]:
-    """Rate 0 = no per-key request limit (GW36 §9.3: control configures TPM only). Declared."""
-    return {"key_id": key_id, "org_id": org_slug, "rate_per_s": 0.0, "burst": 0.0}
+def _key_body(
+    key_id: str, org_slug: str, allowed: tuple[str, ...] = (), cap: int = 0
+) -> Mapping[str, object]:
+    """Rate 0 = no per-key request limit (GW36 §9.3: control configures TPM only). Declared.
+
+    GW17c: the MCP fields are written ONLY when they differ from the defaults, so a key without
+    a policy produces the same bytes (and content hash) as before this card.
+    """
+    body: dict[str, object] = {
+        "key_id": key_id, "org_id": org_slug, "rate_per_s": 0.0, "burst": 0.0,
+    }
+    if allowed:
+        body["mcp_allowed_tools"] = sorted(set(allowed))
+    if cap:
+        body["mcp_max_tool_calls"] = cap
+    return body
+
+
+def _mcp_policy(
+    key: SourceKey, enabled: bool, notes: list[str]
+) -> tuple[tuple[str, ...], int]:
+    """The (allow-list, cap) to project for one key (DD-11). Never projects looser than asked:
+    an over-bound or malformed allow-list is deny-all, an over-bound cap is the bound itself."""
+    if not enabled:
+        return (), 0
+    bounds = mcp_policy_bounds()
+    allowed = key.mcp_allowed_tools
+    if allowed is None or len(allowed) > bounds.tools_max or any(
+        not name or len(name) > bounds.tool_name_max for name in allowed
+    ):
+        notes.append(f"key {key.key_id!r} MCP allow-list is over-bound or malformed; deny-all")
+        allowed = (DENY_ALL_TOOLS,)
+    cap = key.mcp_max_tool_calls
+    if cap < 0 or cap > bounds.cap_max:
+        notes.append(f"key {key.key_id!r} MCP call cap is over-bound; projected as the bound")
+        cap = bounds.cap_max
+    return allowed, cap
 
 
 def _body_of(record: SignedRecord) -> Mapping[str, object]:

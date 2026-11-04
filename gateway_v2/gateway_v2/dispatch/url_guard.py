@@ -24,15 +24,18 @@ import asyncio
 import ipaddress
 import socket
 from collections.abc import Awaitable, Callable, Sequence
+from dataclasses import dataclass
 from urllib.parse import urlparse
 
 __all__ = (
     "REMOTE_SCHEMES",
+    "Refusal",
     "Resolver",
     "check_remote",
     "check_stdio",
     "default_resolver",
     "parse_allow_hosts",
+    "resolve_checked",
 )
 
 #: Schemes a remote MCP transport may use (streamable-http / sse / websocket).
@@ -92,25 +95,37 @@ def _allowlisted(host: str, port: int | None, allow_hosts: frozenset[str]) -> bo
     return name in allow_hosts or (port is not None and f"{name}:{port}" in allow_hosts)
 
 
-async def check_remote(
+@dataclass(frozen=True, slots=True)
+class Refusal:
+    """A destination the gateway will not dial. ``reason`` is for logs and tests only."""
+
+    reason: str
+
+
+async def resolve_checked(
     url: str,
     *,
     resolver: Resolver,
     allow_hosts: frozenset[str] = frozenset(),
-) -> str | None:
-    """``None`` when ``url`` is safe to forward, else the refusal reason. Never raises."""
+) -> tuple[str, ...] | Refusal:
+    """The approved addresses for ``url``, or a ``Refusal``. Never raises.
+
+    Every resolved address passes the same checks ``check_remote`` applies. The caller dials one of
+    the RETURNED addresses and never resolves the name again, which is what closes DNS rebinding
+    between check and connect.
+    """
     try:
         parsed = urlparse(url.strip())
         port = parsed.port
     except (ValueError, AttributeError):
-        return "unparseable URL"
+        return Refusal("unparseable URL")
     if (parsed.scheme or "").lower() not in REMOTE_SCHEMES:
-        return "scheme not allowed"
+        return Refusal("scheme not allowed")
     if parsed.username is not None or parsed.password is not None or "@" in parsed.netloc:
-        return "userinfo not allowed"
+        return Refusal("userinfo not allowed")
     host = parsed.hostname
     if not host:
-        return "no host"
+        return Refusal("no host")
     block_private = not _allowlisted(host, port, allow_hosts)
     literal = host.strip("[]")
     try:
@@ -118,18 +133,30 @@ async def check_remote(
     except ValueError:
         pass
     else:
-        return _blocked(literal, block_private=block_private)
+        reason = _blocked(literal, block_private=block_private)
+        return Refusal(reason) if reason is not None else (literal,)
     try:
-        addresses = await resolver(host, port)
+        addresses = tuple(await resolver(host, port))
     except Exception:  # noqa: BLE001 - fail closed on any resolver error
-        return "DNS resolution failed"
+        return Refusal("DNS resolution failed")
     if not addresses:
-        return "no addresses resolved"
+        return Refusal("no addresses resolved")
     for address in addresses:
         reason = _blocked(address, block_private=block_private)
         if reason is not None:
-            return reason
-    return None
+            return Refusal(reason)
+    return addresses
+
+
+async def check_remote(
+    url: str,
+    *,
+    resolver: Resolver,
+    allow_hosts: frozenset[str] = frozenset(),
+) -> str | None:
+    """``None`` when ``url`` is safe to forward, else the refusal reason. Never raises."""
+    checked = await resolve_checked(url, resolver=resolver, allow_hosts=allow_hosts)
+    return checked.reason if isinstance(checked, Refusal) else None
 
 
 def check_stdio(command: str, allowed: frozenset[str]) -> str | None:

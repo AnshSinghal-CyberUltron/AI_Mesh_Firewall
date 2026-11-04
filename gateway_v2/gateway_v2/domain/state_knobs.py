@@ -196,6 +196,11 @@ class ProjectorKnobs:
 
     add_chunks_per_round: int = DEFAULT_PROJECTOR_ADD_CHUNKS_PER_ROUND
 
+    project_mcp_key_policy: bool = False
+    """GW17c: write `mcp_allowed_tools` / `mcp_max_tool_calls` into KEY records. Off by default so
+    an old gateway replica (which ignores the fields) is never handed a policy it would not
+    enforce; flip only after every gateway replica enforces it (deploy ordering, review M9)."""
+
     def __post_init__(self) -> None:
         if self.period_ms <= 0:
             raise ValueError("projector period_ms must be positive")

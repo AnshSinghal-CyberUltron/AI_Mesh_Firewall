@@ -99,10 +99,10 @@
     "frontend/src/components/MCPConnectorPanel.jsx",
     "gateway/ai_mesh_gateway/mcp_oauth_proxy.py"
    ],
-   "decision": "retire",
-   "owner": "GW17",
+   "decision": "build",
+   "owner": "GW32",
    "path": "/gateway/{org}/mcp/{server}/oauth/start",
-   "reason": "MCP discover, call, oauth, and the record-event callback belong to GW17. gateway-v2 does not register them."
+   "reason": "GW32 Requirement 9 builds it in gateway-v2: edge/mcp_upstream_routes.py serves oauth/start, /gateway/oauth/callback and oauth/status, with the DD-4 flow state in control."
   },
   {
    "callers": [

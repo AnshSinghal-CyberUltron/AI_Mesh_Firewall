@@ -49,6 +49,16 @@ _SERVER_RELEVANT_FIELDS = frozenset({
     "is_exposed_to_agents",
     "name",
     "server_slug",
+    # GW17b: a credential or re-auth state change must reach the gateway's credential cache
+    # and registry entry within the scan-version poll, not only at the TTL.
+    "auth_type",
+    "auth_token",
+    "auth_username",
+    "auth_password",
+    "auth_header_key",
+    "auth_header_value",
+    "needs_reauth",
+    "credential_version",
 })
 
 _redis_pool: redis.ConnectionPool | None = None

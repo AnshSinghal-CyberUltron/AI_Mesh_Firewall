@@ -38,3 +38,30 @@ def test_resources_module_is_allowed() -> None:
 
 def test_shipped_tree_has_no_capacity_literals() -> None:
     assert scan_tree(_PKG) == []
+
+
+# --- GW32: allowlist of runtime/resources_mcp.py (negative controls included) -------------------
+_LITERAL = "def f() -> None:\n    pool(max_connections=64)\n"
+
+
+def test_gw32_literal_allowed_in_resources_mcp(tmp_path: Path) -> None:
+    _write(tmp_path, "runtime/resources_mcp.py", _LITERAL)
+    assert scan_tree(tmp_path) == []
+
+
+def test_gw32_literal_still_fails_elsewhere(tmp_path: Path) -> None:
+    for rel in ("runtime/other.py", "admit/mcp_cap.py", "runtime/resources_x.py"):
+        _write(tmp_path, rel, _LITERAL)
+    hits = scan_tree(tmp_path)
+    assert {Path(h.path).name for h in hits} == {"other.py", "mcp_cap.py", "resources_x.py"}
+
+
+def test_gw32_new_mcp_modules_have_no_capacity_literals() -> None:
+    new = [
+        p
+        for pattern in (
+            "admit/mcp_*.py", "edge/mcp_*.py", "edge/oauth_routes.py", "dispatch/mcp_*.py",
+        )
+        for p in _PKG.glob(pattern)
+    ]
+    assert not [h for h in scan_tree(_PKG) if Path(h.path) in new]

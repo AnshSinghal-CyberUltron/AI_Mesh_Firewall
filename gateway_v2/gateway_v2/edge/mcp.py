@@ -14,63 +14,102 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 from collections.abc import Mapping
 from dataclasses import dataclass
 from types import MappingProxyType
 
 from gateway_v2.admit.grant import Admitted, ShedVerdict
+from gateway_v2.admit.mcp_cap import CallCapTable
+from gateway_v2.admit.mcp_metrics import McpPolicyMetrics
+from gateway_v2.admit.mcp_sessions import SessionBinding, SessionRefusal, SessionStore
 from gateway_v2.dispatch.mcp_broker import BrokerClient, McpServer
+from gateway_v2.dispatch.mcp_credentials import CredentialService
 from gateway_v2.dispatch.transform import BODY_DELTAS_KEY, GatewayRequest
 from gateway_v2.dispatch.url_guard import Resolver, check_remote, check_stdio
+from gateway_v2.domain import posture
 from gateway_v2.domain.decision import Decision, Disposition
 from gateway_v2.domain.plan import ExecutionPlan, Phase, PlanUnavailable, PlanUnknownTenant, Surface
+from gateway_v2.domain.state import StoreDataUnavailable
 from gateway_v2.edge import errors
 from gateway_v2.edge.asgi_sse import ASGIReceive, ASGIScope, ASGISend, read_body_bounded
 from gateway_v2.edge.audit_emit import emit_chat_audit
 from gateway_v2.edge.dev_components import bind_surface
-from gateway_v2.edge.identity_resolver import TenantIdentity, hashed_bearer_key, identity_of
+from gateway_v2.edge.identity_resolver import TenantIdentity
 from gateway_v2.edge.incident_audit import incident_is_refusal
 from gateway_v2.edge.input_enforcement import scan_deltas, stage_upstream
 from gateway_v2.edge.mcp_console import mcp_console
+from gateway_v2.edge.mcp_cred_gate import leaks, prepare
+from gateway_v2.edge.mcp_http import serve_stream
+from gateway_v2.edge.mcp_identity import (
+    CallerRefused,
+    McpCaller,
+    TokenResolver,
+    challenge,
+    resolve_caller,
+)
+from gateway_v2.edge.mcp_paths import McpPath, classify_gateway_path, parse_mcp_path, raw_path
+from gateway_v2.edge.mcp_policy_gate import apply_tool_policy, filter_tools_list, spend_cap
 from gateway_v2.edge.mcp_registry import McpRegistry, OrgMap, ServerEntry, ToolSet
 from gateway_v2.edge.mcp_reply import enforce_reply
+from gateway_v2.edge.mcp_session_gate import (
+    check_origin,
+    check_protocol_version,
+    header,
+    session_header,
+)
+from gateway_v2.edge.mcp_upstream_routes import UpstreamOAuthRoutes, serve_upstream
 from gateway_v2.edge.phase_resolvers import resolver_for
 from gateway_v2.edge.request_holds import RequestHolds
 from gateway_v2.edge.routes import ChatRoute, emit_response
-from gateway_v2.edge.wire import jsonrpc
+from gateway_v2.edge.wire import jsonrpc, mcp_sse
 from gateway_v2.edge.wire.mcp import (
     LOCAL_METHODS,
     METHODS,
     Fold,
     check_request_size,
     fold_request,
+    prefers_sse,
     rebuild,
     request_targets,
 )
 from gateway_v2.plan import lookup_plan
+from gateway_v2.runtime.resources_mcp import (
+    McpCredentialBounds,
+    McpTransportBounds,
+    derive_transport_bounds,
+)
 
-__all__ = ("MCP_PATH", "MCP_PREFIX", "McpRoute")
+__all__ = ("GATEWAY_PREFIX", "MCP_PATH", "MCP_PREFIX", "McpRoute")
 
 MCP_PATH = "/v1/mcp"
 MCP_PREFIX = "/v1/mcp/"
+GATEWAY_PREFIX = "/gateway/"
 _STDIO = "stdio"
 _PROTOCOL_VERSION = "2025-06-18"
 _SERVER_INFO: Mapping[str, str] = MappingProxyType({"name": "zeroshield-gateway", "version": "2"})
 _CAPABILITIES = ("tools", "resources", "prompts", "completions")
 _ACCEPTED = 202
 _OK = 200
+_NO_CONTENT = 204
 
 
 class _Ctx:
     """What one request learned, for the console and audit. Built per request."""
 
     __slots__ = (
-        "holds", "input_action", "input_rule", "msg_id", "output_action", "output_rule",
+        "caller", "holds", "input_action", "input_rule", "msg_id", "output_action", "output_rule",
+        "retry_after_s", "path_org", "session_out", "sse",
         "plan_version", "scope", "server_slug", "tool", "tool_called",
     )
 
     def __init__(self, server_slug: str, scope: ASGIScope) -> None:
         self.scope = scope
+        self.caller: McpCaller | None = None
+        self.retry_after_s = 0.0
+        self.path_org: str | None = None
+        self.session_out = ""
+        self.sse = False
         self.holds = RequestHolds()
         self.msg_id: jsonrpc.JsonRpcId = None
         self.server_slug = server_slug
@@ -108,11 +147,12 @@ class _Ctx:
 
 
 class _Refuse(Exception):
-    """Stop the request with a declared value-code."""
+    """Stop the request with a declared value-code (and, for a 429, a retry hint)."""
 
-    def __init__(self, code: str) -> None:
+    def __init__(self, code: str, retry_after_s: float = 0.0) -> None:
         super().__init__(code)
         self.code = code
+        self.retry_after_s = retry_after_s
 
 
 @dataclass(frozen=True, slots=True)
@@ -126,6 +166,21 @@ class McpRoute:
     dns: Resolver
     allow_hosts: frozenset[str]
     stdio_allowed: frozenset[str]
+    token_store: TokenResolver | None = None
+    public_base: str = ""
+    credentials: CredentialService | None = None
+    credential_bounds: McpCredentialBounds | None = None
+    plaintext_credential_hosts: frozenset[str] = frozenset()
+    cap_table: CallCapTable | None = None
+    policy_metrics: McpPolicyMetrics | None = None
+    sessions: SessionStore | None = None
+    allowed_origins: frozenset[str] = frozenset()
+    transport_bounds: McpTransportBounds | None = None
+    upstream_oauth: UpstreamOAuthRoutes | None = None
+    """GW32 R9: the upstream OAuth setup routes. `None` = those paths stay the routing miss."""
+
+    def _transport(self) -> McpTransportBounds:
+        return self.transport_bounds or derive_transport_bounds(self.chat.contract)
 
     async def handle_bare(self, scope: ASGIScope, receive: ASGIReceive, send: ASGISend) -> None:
         """``POST /v1/mcp`` with no server slug."""
@@ -133,13 +188,40 @@ class McpRoute:
         await self._send_error(send, _Ctx("", scope), "mcp_server_not_found")
 
     async def handle(self, scope: ASGIScope, receive: ASGIReceive, send: ASGISend) -> None:
-        """``POST /v1/mcp/{server_slug}``."""
-        ctx = _Ctx(_server_slug(scope), scope)
+        """``/v1/mcp/{server_slug}`` (POST, GET, DELETE)."""
+        await self._handle_path(scope, receive, send, parse_mcp_path(raw_path(scope)))
+
+    async def handle_gateway(
+        self, scope: ASGIScope, receive: ASGIReceive, send: ASGISend
+    ) -> None:
+        """The v1 path ``/gateway/{org}/mcp/{srv}``. Any other ``/gateway/...`` shape is the
+        same routing miss the router gives an unregistered path."""
+        parsed = classify_gateway_path(raw_path(scope))
+        if parsed.kind == "mcp":
+            await self._handle_path(scope, receive, send, McpPath(parsed.server_slug, parsed.org))
+            return
+        if parsed.kind != "miss" and self.upstream_oauth is not None:
+            await serve_upstream(self, parsed, scope, receive, send)
+            return
+        await emit_response(send, errors.render_http("endpoint_not_found"))
+
+    async def run_message(
+        self, scope: ASGIScope, path: McpPath, receive: ASGIReceive, send: ASGISend
+    ) -> None:
+        """One message through the same pipeline an HTTP POST runs (the WebSocket transport)."""
+        await self._handle_path(scope, receive, send, path)
+
+    async def _handle_path(
+        self, scope: ASGIScope, receive: ASGIReceive, send: ASGISend, parsed: McpPath | None
+    ) -> None:
+        ctx = _Ctx(parsed.server_slug if parsed else "", scope)
+        ctx.path_org = parsed.path_org if parsed else None
         refused: str | None = None
         try:
             await self._serve(receive, send, ctx)
         except _Refuse as stop:
             refused = stop.code
+            ctx.retry_after_s = stop.retry_after_s
             await self._send_error(send, ctx, stop.code)
         finally:
             emit_chat_audit(
@@ -154,6 +236,71 @@ class McpRoute:
             ctx.holds.release(self.chat.admission, self.chat.quota)
 
     async def _serve(self, receive: ASGIReceive, send: ASGISend, ctx: _Ctx) -> None:
+        # Order (GW32 DD-1): path, Origin, identity (headers only), org match, protocol version,
+        # session, then the bounded body read and the JSON-RPC parse. No method, local or
+        # forwarded, is answered before identity.
+        if not ctx.server_slug:
+            raise _Refuse("mcp_server_not_found")
+        if not check_origin(ctx.scope, self.allowed_origins):
+            raise _Refuse("mcp_origin_refused")
+        caller = await resolve_caller(self.chat.identity, self.token_store, ctx.scope)
+        if isinstance(caller, CallerRefused):
+            raise _Refuse(caller.code)
+        ctx.caller = caller
+        ctx.holds.note_tenant(caller.identity.org_id)
+        if ctx.path_org is not None and self.org_map.control_slug(
+            caller.identity.org_id
+        ) != ctx.path_org:
+            raise _Refuse("mcp_org_mismatch")  # same answer for "wrong org" and "no such org"
+        if check_protocol_version(ctx.scope) is None:
+            raise _Refuse("mcp_transport_unsupported")
+        session_id = await self._check_session(ctx, caller)
+        if self.cap_table is not None:
+            self.cap_table.touch(caller.identity.principal)  # pre-warm the cap lease off-path
+        method = str(ctx.scope.get("method", "POST")).upper()
+        if method == "GET":
+            await serve_stream(self, receive, send, ctx, session_id)
+            return
+        if method == "DELETE":
+            await self._end_session(send, ctx, session_id)
+            return
+        if method != "POST":
+            raise _Refuse("method_not_allowed")
+        ctx.sse = prefers_sse(header(ctx.scope, "accept"))
+        await self._serve_post(receive, send, ctx)
+
+    def _binding(self, ctx: _Ctx) -> SessionBinding:
+        assert ctx.caller is not None
+        principal = ctx.caller.identity.principal
+        return SessionBinding(principal.key_id, ctx.caller.identity.org_id, ctx.server_slug)
+
+    async def _check_session(self, ctx: _Ctx, caller: McpCaller) -> str | None:
+        """``None`` when the request carries no session header; else the id once it is proven."""
+        presented = session_header(ctx.scope)
+        if presented is None:
+            return None
+        if presented == "" or self.sessions is None:
+            raise _Refuse("mcp_session_invalid")
+        try:
+            live = await self.sessions.check(presented, self._binding(ctx))
+        except StoreDataUnavailable as exc:
+            raise _Refuse("shared_state_unavailable") from exc
+        if not live:
+            raise _Refuse("mcp_session_invalid")
+        return presented
+
+    async def _end_session(self, send: ASGISend, ctx: _Ctx, session_id: str | None) -> None:
+        if session_id is None or self.sessions is None:
+            raise _Refuse("mcp_session_invalid")
+        try:
+            closed = await self.sessions.close(session_id, self._binding(ctx))
+        except StoreDataUnavailable as exc:
+            raise _Refuse("shared_state_unavailable") from exc
+        if not closed:
+            raise _Refuse("mcp_session_invalid")
+        await emit_response(send, errors.HTTPResponse(status=_NO_CONTENT, body=b""))
+
+    async def _serve_post(self, receive: ASGIReceive, send: ASGISend, ctx: _Ctx) -> None:
         bounds = self.chat.contract.mcp_bounds()
         body = await read_body_bounded(receive, bounds.body_bytes)
         if body is None:
@@ -163,10 +310,10 @@ class McpRoute:
             ctx.msg_id = message.id
             raise _Refuse(message.code)
         ctx.msg_id = message.id
-        if not ctx.server_slug:
-            raise _Refuse("mcp_server_not_found")
         if message.method in LOCAL_METHODS:
-            await self._local(send, message)
+            if message.method == "initialize":
+                await self._open_session(ctx)
+            await self._local(send, message, ctx)
             return
         if message.method is None:
             await self._refuse_reply_message(message, ctx)
@@ -174,7 +321,20 @@ class McpRoute:
             raise _Refuse("mcp_method_not_found")
         await self._forward(send, message, ctx)
 
-    async def _local(self, send: ASGISend, message: jsonrpc.JsonRpcMessage) -> None:
+    async def _open_session(self, ctx: _Ctx) -> None:
+        if self.sessions is None:
+            return  # no session store wired: no id is issued (stateless server, spec-permitted)
+        try:
+            opened = await self.sessions.open(self._binding(ctx))
+        except StoreDataUnavailable as exc:
+            raise _Refuse("shared_state_unavailable") from exc
+        if isinstance(opened, SessionRefusal):
+            raise _Refuse(opened.code, posture.MIN_RETRY_AFTER_S)
+        ctx.session_out = opened
+
+    async def _local(
+        self, send: ASGISend, message: jsonrpc.JsonRpcMessage, ctx: _Ctx | None = None
+    ) -> None:
         """``initialize``, ``ping`` and ``notifications/initialized``, answered here."""
         if message.is_notification:
             await emit_response(send, errors.HTTPResponse(status=_ACCEPTED, body=b""))
@@ -189,7 +349,7 @@ class McpRoute:
             }
         else:
             value = {}
-        await self._send(send, _OK, jsonrpc.result(message.id, value), None)
+        await self._send(send, _OK, jsonrpc.result(message.id, value), ctx)
 
     async def _refuse_reply_message(self, message: jsonrpc.JsonRpcMessage, ctx: _Ctx) -> None:
         """A client reply (no ``method``) is scanned as input for audit, then refused."""
@@ -203,15 +363,15 @@ class McpRoute:
         raise _Refuse("mcp_invalid_request")
 
     async def _tenant(self, ctx: _Ctx) -> tuple[TenantIdentity, ExecutionPlan]:
-        """Identity, then the plan. The org comes from the key only.
+        """The plan for the already-resolved caller. The org comes from the key only.
 
-        Returns the resolved :class:`TenantIdentity` (not just its ``org_id``) so the budget phase
-        can hand the signed ``principal`` to the composed ``QuotaGate``'s per-key GCRA (GW36 S4).
+        Identity was resolved once in ``_serve`` (before any method); this returns that
+        :class:`TenantIdentity` so the budget phase can hand the signed ``principal`` to the
+        composed ``QuotaGate``'s per-key GCRA (GW36 S4).
         """
-        identity = (outcome := await identity_of(self.chat.identity, ctx.scope)).identity
-        if identity is None:
-            raise _Refuse(outcome.refusal)
-        ctx.holds.note_tenant(identity.org_id)
+        if ctx.caller is None:
+            raise _Refuse("invalid_api_key")  # unreachable by construction; fail closed
+        identity = ctx.caller.identity
         self._incident_org_gate(ctx, identity.org_id)
         state = lookup_plan(self.chat.snapshot_source(), identity.org_id, Surface.MCP)
         if isinstance(state, (PlanUnavailable, PlanUnknownTenant)):
@@ -254,19 +414,38 @@ class McpRoute:
         ctx.tool = str(params.get("name") or "") if method == "tools/call" else ""
         ctx.holds.note_request(_request_id(org, method, message.raw))
         await self._admit_and_charge(identity, fold, ctx)
+        # GW17c DD-6: after admission + budget (a denied call is rate-limited like any other),
+        # before the registry gate. The refusal releases holds, which refunds the budget charge.
+        denied = apply_tool_policy(identity.principal, method, params, self.policy_metrics)
+        if denied is not None:
+            raise _Refuse(denied)
         server, tools = await self._registry_gate(control_slug, method, ctx)
         forwarded = self._stage(method, params, fold, plan, ctx)
         await self._destination_gate(server)
+        attached = await prepare(
+            self.credentials, self.credential_bounds, self.plaintext_credential_hosts,
+            control_slug, server,
+        )
+        if isinstance(attached, str):
+            raise _Refuse(attached)
+        capped = spend_cap(self.cap_table, identity.principal, method, ctx.holds.request_id)
+        if capped is not None:  # DD-7: last refusal point before the dispatch mark
+            raise _Refuse(capped.code, capped.retry_after_s)
         ctx.holds.mark_dispatched()
         ctx.tool_called = True
         reply = await self.broker.call(
-            control_slug, _broker_server(server), method, forwarded, ctx.holds.request_id
+            control_slug, _broker_server(server), method, forwarded, ctx.holds.request_id,
+            attached.headers if attached is not None else None,
         )
         if reply.code is not None:
             raise _Refuse(reply.code)
+        if attached is not None and self.credential_bounds is not None and leaks(
+            attached.credential, reply.envelope, min_len=self.credential_bounds.credential_min_len
+        ):
+            raise _Refuse("output_blocked")  # DD-14: withhold, never partly mask
         envelope = reply.envelope
         if method == "tools/list":
-            envelope = _filter_tools(envelope, tools)
+            envelope = filter_tools_list(identity.principal, _filter_tools(envelope, tools))
         outcome = enforce_reply(
             envelope,
             bounds=bounds,
@@ -293,15 +472,14 @@ class McpRoute:
         chars = sum(len(leaf.text) for leaf in fold.leaves)
         cost = self.chat.contract.estimate_request_tokens(chars, 0, 1)
         # The composed QuotaGate's per-key GCRA needs the resolved principal + the sha256 key hash
-        # identity resolved on (GW36 S4). ``hashed_bearer_key`` re-derives the hash from this
-        # scope's Authorization header (the production resolver's own key_namer), not from a raw
-        # token held elsewhere; a defensive None folds to "" (the budget phase still fails closed).
+        # identity resolved on (GW36 S4). The hash comes from the McpCaller, never re-derived from
+        # the header: a request authenticated by an MCP access token has no API key in it.
         budget = await self.chat.quota.evaluate(
             cost,
             request_id=request_id,
             owner=org,
             principal=identity.principal,
-            key_hash=hashed_bearer_key(ctx.scope) or "",
+            key_hash=ctx.caller.key_hash if ctx.caller is not None else "",
         )
         if not isinstance(budget, Admitted):
             raise _Refuse(budget.code)
@@ -315,8 +493,12 @@ class McpRoute:
             raise _Refuse(server)
         if not server.usable:
             raise _Refuse("mcp_server_not_found")
-        if server.needs_auth:
+        if not server.transport_supported:
+            raise _Refuse("mcp_transport_unsupported")
+        if server.auth_type == "unsupported":
             raise _Refuse("mcp_upstream_auth_unsupported")
+        if server.needs_reauth:
+            raise _Refuse("mcp_upstream_needs_reauth")
         if method not in ("tools/call", "tools/list"):
             return server, None
         tools = await self.registry.tools(control_slug, ctx.server_slug)
@@ -375,14 +557,29 @@ class McpRoute:
             request_id=ctx.holds.request_id or None,
             extra=ctx.console(),
         )
-        await self._send(send, status, body, ctx)
+        await self._send(send, status, body, ctx, code)
 
-    async def _send(self, send: ASGISend, status: int, body: bytes, ctx: _Ctx | None) -> None:
+    async def _send(
+        self, send: ASGISend, status: int, body: bytes, ctx: _Ctx | None, code: str = ""
+    ) -> None:
         headers: tuple[tuple[str, str], ...] = (("content-type", "application/json"),)
+        if code == "invalid_api_key":
+            headers = (*headers, ("www-authenticate", challenge(self.public_base)))
+        if ctx is not None and ctx.retry_after_s > 0:
+            headers = (
+                *headers,
+                ("retry-after", str(max(1, math.ceil(ctx.retry_after_s)))),
+                ("x-should-retry", "false"),
+            )
         if ctx is not None and ctx.holds.request_id:
             headers = (*headers, ("x-request-id", ctx.holds.request_id))
         if ctx is not None and incident_is_refusal(ctx.holds):
             headers = (*headers, *errors.retry_headers(ctx.holds.incident_retry_after_s))
+        if ctx is not None and ctx.session_out:
+            headers = (*headers, ("mcp-session-id", ctx.session_out))
+        if ctx is not None and ctx.sse and body:
+            body = mcp_sse.encode_message(body)
+            headers = (*mcp_sse.SSE_HEADERS, *headers[1:])
         await emit_response(send, errors.HTTPResponse(status=status, body=body, headers=headers))
 
 

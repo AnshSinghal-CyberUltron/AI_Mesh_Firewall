@@ -84,6 +84,7 @@ from gateway_v2.edge.dev_metrics import build_dev_publisher
 from gateway_v2.edge.dev_plan_feed import DevPlanFeed, DevPlanWatch
 from gateway_v2.edge.incident_passthrough import PassThroughIncidentGate
 from gateway_v2.edge.inflight_source import DevNoControlSource
+from gateway_v2.edge.mcp_deps import McpDeps
 from gateway_v2.edge.responses_store import ValkeyResponseStore
 from gateway_v2.edge.routing_boot import bounds_line, build_dev_routing
 from gateway_v2.edge.wire.sse import SSEDecoder
@@ -394,13 +395,9 @@ def build_dev_dependencies(
     )
     plan_note = _attach_plan_watch(deps, cfg=cfg, feed=feed, contract=contract)
     store_note = _attach_response_store(deps, cfg=cfg, contract=contract)
-    mcp_redis = None
-    if cfg.lease is not None:
-        mcp_redis = _redis_client(cfg.lease.redis_url, timeout_s=contract.cancellation_bound_s())
-    mcp, mcp_note = build_dev_mcp(env, contract, redis_client=mcp_redis, clock=time.monotonic)
-    if mcp is not None:
-        deps["mcp"] = mcp
-    exports, holdback, runtime = PerRequestExports(), HoldbackMetrics(), deps.get("audit_runtime")
+    mcp, mcp_note = _attach_mcp(deps, cfg=cfg, env=env, contract=contract)
+    exports, holdback = PerRequestExports(), HoldbackMetrics()
+    runtime = deps.get("audit_runtime")
     publisher, metrics_note = build_dev_publisher(
         contract=contract,
         admission=admission_metrics,
@@ -409,8 +406,11 @@ def build_dev_dependencies(
         exports=exports,
         holdback=holdback,
     )
-    deps |= {"metrics_registry": publisher, "observer": publisher, "exports": exports}
-    deps["holdback_metrics"] = holdback
+    if mcp is not None and mcp.policy_metrics is not None:
+        publisher.attach_mcp_policy(mcp.policy_metrics)  # GW17c series + enforcement version
+    deps.update(
+        metrics_registry=publisher, observer=publisher, exports=exports, holdback_metrics=holdback
+    )
     snapshot_log, resolver_log = _plan_log(cfg, plan)
     logs: tuple[str, ...] = (
         "boot: DEV PROFILE ACTIVE (AMF_DEV_PROFILE=1) -- local development wiring, NOT FOR "
@@ -441,10 +441,29 @@ def build_dev_dependencies(
         audit_note,
         plan_note,
         store_note,
-        mcp_note,
+        *mcp_note.splitlines(),
         f"boot: catalog -> StaticCatalogSource {list(cfg.models)} (DEV PROFILE: AMF_DEV_MODELS)",
     )
     return deps, logs
+
+
+def _attach_mcp(
+    deps: dict[str, object],
+    *,
+    cfg: DevProfileConfig,
+    env: Mapping[str, str],
+    contract: ResourceContract,
+) -> tuple[McpDeps | None, str]:
+    """Build the MCP deps (GW17 + GW32/GW17b/GW17c services) over the dev redis, if any."""
+    mcp_redis = None
+    if cfg.lease is not None:
+        mcp_redis = _redis_client(cfg.lease.redis_url, timeout_s=contract.cancellation_bound_s())
+    mcp, note = build_dev_mcp(
+        env, contract, redis_client=mcp_redis, clock=time.monotonic, identity=deps["identity"]
+    )
+    if mcp is not None:
+        deps["mcp"] = mcp
+    return mcp, note
 
 
 def _attach_response_store(
