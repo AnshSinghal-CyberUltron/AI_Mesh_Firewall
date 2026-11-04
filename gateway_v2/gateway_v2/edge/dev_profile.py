@@ -55,6 +55,7 @@ from gateway_v2.dispatch.openai_upstream import (
     OpenAIUpstreamProvider,
     httpx_client_factory,
 )
+from gateway_v2.dispatch.routed_provider import RoutedProvider
 from gateway_v2.domain.plan import ExecutionPlan, Phase
 from gateway_v2.edge.app import ASGIApplication
 from gateway_v2.edge.dev_admit import (
@@ -81,6 +82,7 @@ from gateway_v2.edge.dev_mcp import build_dev_mcp
 from gateway_v2.edge.dev_metrics import build_dev_publisher
 from gateway_v2.edge.dev_plan_feed import DevPlanFeed, DevPlanWatch
 from gateway_v2.edge.responses_store import ValkeyResponseStore
+from gateway_v2.edge.routing_boot import bounds_line, build_dev_routing
 from gateway_v2.edge.wire.sse import SSEDecoder
 from gateway_v2.runtime.errors import CapacityUnavailable, CapacityUnset
 from gateway_v2.runtime.holdback_metrics import HoldbackMetrics
@@ -274,10 +276,11 @@ def _budget(
 
 def _provider(
     cfg: DevProfileConfig, contract: ResourceContract, probe: DeterministicFindings
-) -> tuple[EchoProviderClient | OpenAIUpstreamProvider, str]:
+) -> tuple[EchoProviderClient | OpenAIUpstreamProvider, RoutedProvider | None, str]:
     if cfg.provider_url is None:
         return (
             EchoProviderClient(probe=probe),
+            None,
             "boot: provider -> EchoProviderClient (DEV PROFILE: socket-free; replies "
             "'echo: <exact text the gateway forwarded>'; logs provider-side finding counts)",
         )
@@ -291,12 +294,14 @@ def _provider(
             timeout_s=contract.max_stream_duration_s(),
             connections=connections,
         ),
+        connections=connections,
     )
-    return provider, (
+    routing = build_dev_routing(contract, provider)
+    return provider, routing, (
         f"boot: provider -> OpenAIUpstreamProvider to {_redact_url(base_url)}/{CHAT_ENDPOINT} "
         f"(GW36 S1: the verified request rebuilt with its roles; pooled client, "
         f"{connections} connections; non-2xx / transport / malformed stream end as a declared "
-        "error)"
+        f"error; GW28 chat routed through one passthrough candidate; {bounds_line(contract)})"
     )
 
 
@@ -342,7 +347,7 @@ def build_dev_dependencies(
     output_detector = DeterministicFindings(
         phase=Phase.OUTPUT, budget_s=budget_s, conditions_of=feed.conditions,
     )
-    provider, provider_log = _provider(cfg, contract, input_detector)
+    provider, routing, provider_log = _provider(cfg, contract, input_detector)
     catalog = StaticCatalogSource(model_ids=cfg.models, org_id=cfg.org_id, created=int(time.time()))
     # Group E: wire the PHASE-AWARE resolver factory so an ``input``-scoped rule is enforced only
     # on input and an ``output``-scoped rule only on output (``resolver_for`` returns
@@ -354,6 +359,7 @@ def build_dev_dependencies(
     deps: dict[str, object] = {
         "contract": contract,
         "provider": provider,
+        "routing": routing,
         "scanner": holdback_scan,
         "resolver": phase_factory(plan, Phase.INPUT),
         "phase_resolvers": phase_factory,

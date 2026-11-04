@@ -315,7 +315,7 @@ def _dev_provider(monkeypatch: pytest.MonkeyPatch, handler: object, url: str) ->
         per_worker_rss=400 * 1024 * 1024,
     )
     probe = DeterministicFindings(phase=Phase.INPUT, budget_s=0.1)
-    provider, _log = dev_profile._provider(cfg, contract, probe)
+    provider, _routing, _log = dev_profile._provider(cfg, contract, probe)
     return provider
 
 
