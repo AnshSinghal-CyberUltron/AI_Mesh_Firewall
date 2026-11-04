@@ -40,6 +40,7 @@ from gateway_v2.edge.wire.openai_misc import MiscResponseRenderer
 from gateway_v2.egress.output_guard import MinimalOutputResolver
 from gateway_v2.runtime.kinds import HardwareSignals
 from gateway_v2.runtime.resources import ResourceContract, from_signals
+from tests.edge._org_limits import org_limits_for
 
 
 def _contract() -> ResourceContract:
@@ -253,6 +254,7 @@ def _run(deps: MiscRoute, body: bytes) -> _Capture:
 def test_embeddings_fail_closed_identity_refuses_with_zero_provider_calls() -> None:
     provider = _CountingProvider(script=())
     deps = MiscRoute(
+        org_limits=org_limits_for(_contract()),
         contract=_contract(),
         provider=provider,
         clock=lambda: 0.0,
@@ -288,6 +290,7 @@ def test_embeddings_block_input_refuses_before_provider() -> None:
         script=(UpstreamEvent(text_deltas=(("x", "[0.0]"),), final=True),)
     )
     deps = MiscRoute(
+        org_limits=org_limits_for(_contract()),
         contract=_contract(),
         provider=provider,
         clock=lambda: 0.0,
@@ -338,6 +341,7 @@ def test_embeddings_clean_path_renders_vectors_in_index_order() -> None:
     )
     provider = _CountingProvider(script=events)
     deps = MiscRoute(
+        org_limits=org_limits_for(_contract()),
         contract=_contract(),
         provider=provider,
         clock=lambda: 0.0,

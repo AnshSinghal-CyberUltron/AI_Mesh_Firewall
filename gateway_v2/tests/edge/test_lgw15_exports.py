@@ -94,6 +94,7 @@ from gateway_v2.plan.snapshot import ReplicaSnapshot
 from gateway_v2.plan.store import PlanStore
 from gateway_v2.runtime.holdback_metrics import Histogram
 from gateway_v2.runtime.stream_metrics import PerRequestExports, PerRequestReading
+from tests.edge._org_limits import NoopOrgLimits
 
 _SEED = 0x20_15_0020
 _ITERATIONS = 10_000
@@ -387,6 +388,7 @@ class _P20Deps:
     constructing the full heavyweight route (the scanner / holdback / executor / in-flight
     seams are never reached on these terminal paths).
     """
+    org_limits: object = field(default_factory=NoopOrgLimits, kw_only=True)
 
     contract: _P20FakeContract
     identity: IdentityResolver

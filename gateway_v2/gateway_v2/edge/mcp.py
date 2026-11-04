@@ -215,6 +215,7 @@ class McpRoute:
         if isinstance(state, (PlanUnavailable, PlanUnknownTenant)):
             raise _Refuse("plan_unavailable")
         ctx.plan_version = state.version
+        ctx.holds.note_controls(state.controls)
         return identity, state
 
     async def _forward(self, send: ASGISend, message: jsonrpc.JsonRpcMessage, ctx: _Ctx) -> None:

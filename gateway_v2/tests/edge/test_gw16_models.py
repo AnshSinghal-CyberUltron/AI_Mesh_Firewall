@@ -36,6 +36,7 @@ from gateway_v2.edge.wire.openai_misc import MiscResponseRenderer
 from gateway_v2.egress.output_guard import MinimalOutputResolver
 from gateway_v2.runtime.kinds import HardwareSignals
 from gateway_v2.runtime.resources import ResourceContract, from_signals
+from tests.edge._org_limits import org_limits_for
 
 _ITERATIONS = 10_000
 _SEED = 0x6716  # a plain fixed seed → deterministic replay.
@@ -172,6 +173,7 @@ def _contract() -> ResourceContract:
 def _deps(provider: _CountingProvider, catalog: CatalogSource) -> MiscRoute:
     """Build the ``MiscRoute`` with the counted provider + scripted catalog + fixed identity."""
     return MiscRoute(
+        org_limits=org_limits_for(_contract()),
         contract=_contract(),
         provider=provider,
         clock=lambda: 0.0,

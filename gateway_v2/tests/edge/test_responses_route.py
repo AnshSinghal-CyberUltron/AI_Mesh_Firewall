@@ -14,6 +14,8 @@ from collections.abc import AsyncIterator, Sequence
 
 import pytest
 
+from tests.edge._org_limits import org_limits_for
+
 httpx = pytest.importorskip("httpx")
 
 from gateway_v2.detect.holdback import scan as holdback_scan  # noqa: E402
@@ -233,6 +235,7 @@ def test_exact_table_has_exactly_one_responses_post() -> None:
         "quota": None,
         "exports": None,
         "phase_resolvers": None,
+        "org_limits": org_limits_for(contract),
     }
     chat = _build_chat_route(
         scanner=holdback_scan,

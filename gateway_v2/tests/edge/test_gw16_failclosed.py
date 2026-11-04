@@ -54,6 +54,7 @@ from gateway_v2.plan.snapshot import ReplicaSnapshot
 from gateway_v2.plan.store import PlanStore
 from gateway_v2.runtime.kinds import HardwareSignals
 from gateway_v2.runtime.resources import ResourceContract, from_signals
+from tests.edge._org_limits import org_limits_for
 
 _ITERATIONS = 10_000
 
@@ -274,6 +275,7 @@ def _embeddings_deps(
 ) -> MiscRoute:
     """Build a MiscRoute whose embeddings lifecycle reaches the input scan phase."""
     return MiscRoute(
+        org_limits=org_limits_for(_contract()),
         contract=_contract(),
         provider=provider,
         clock=lambda: 0.0,
@@ -293,6 +295,7 @@ def _embeddings_deps(
 def _moderations_deps(provider: _CountingProvider, *, detector: InputDetector) -> MiscRoute:
     """Build a MiscRoute whose moderations lifecycle reaches the (scan-only) scan phase."""
     return MiscRoute(
+        org_limits=org_limits_for(_contract()),
         contract=_contract(),
         provider=provider,
         clock=lambda: 0.0,

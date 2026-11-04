@@ -65,6 +65,7 @@ from gateway_v2.edge.input_enforcement import (
     stage_upstream,
 )
 from gateway_v2.edge.openai_nonstream import collect_and_enforce, emit_enforced_chat
+from gateway_v2.edge.org_gate import enforce_org_limits, org_response_ceiling
 from gateway_v2.edge.phase_resolvers import resolver_for
 from gateway_v2.edge.request_holds import RequestHolds
 from gateway_v2.edge.routes import ASGIScope, ASGISend
@@ -248,10 +249,11 @@ class ChatSurface:
         # under-charge and the provider receives v1's bounded budget.
         req = clamp_output_budget(
             req,
-            org_ceiling=self._deps.contract.default_response_token_ceiling(),
+            org_ceiling=org_response_ceiling(plan, self._deps.contract),
             contract=self._deps.contract,
         )
 
+        holds.note_controls(plan.controls)
         holds.note_tenant(identity.org_id)
         request_id = self._request_id(identity, req)
         holds.note_request(request_id)
@@ -267,14 +269,19 @@ class ChatSurface:
         # spend records the SAME cost on ``holds`` so it is refunded if nothing is
         # dispatched. The cost is computed ONCE and spent + recorded identically.
         cost = self._estimated_cost(req)
+        # Phase 5b (GW27) — org rate / burst / TPM, before the per-key GCRA and the budget lease.
+        org_refuse = enforce_org_limits(
+            self._deps.org_limits, plan, identity.org_id, cost, holds, request_id
+        )
+        if org_refuse is not None:
+            return req, _refused(org_refuse.code, request_id=request_id)
         # The per-key GCRA (inside the composed QuotaGate) needs the SAME sha256 key hash the
         # identity phase resolved the principal on (GW36 S4, Conflict 2). ``hashed_bearer_key``
         # reads the ``Authorization`` header off this very ``scope`` and is the exact function the
         # production ``CachingIdentityResolver`` wires as its ``key_namer`` — so this re-derives the
         # resolved hash from the request, it does NOT recompute from a raw token held elsewhere.
-        # Identity already resolved by this phase, so the hash is present; a defensive ``None``
-        # (e.g. a test resolver that bypassed the header) folds to "" and the budget phase still
-        # fails closed on the missing-owner path.
+        # A defensive ``None`` (a test resolver that bypassed the header) folds to "" and the
+        # budget phase still fails closed on the missing-owner path.
         key_hash = hashed_bearer_key(scope) or ""
         budget_refuse = await self._budget(identity, req, cost, key_hash)
         if budget_refuse is not None:
@@ -630,7 +637,12 @@ class ChatSurface:
         if isinstance(staged, str):
             return _refused(staged, request_id=request_id)
         upstream: UpstreamRequest = staged
-        body = with_openai_body(upstream.body, req, self._deps.contract)
+        body = with_openai_body(
+            upstream.body,
+            req,
+            self._deps.contract,
+            org_ceiling=org_response_ceiling(plan, self._deps.contract),
+        )
         if body is None:
             return _refused(REFUSE_LIFECYCLE_INCOMPLETE, request_id=request_id)
         return LifecycleOutcome(

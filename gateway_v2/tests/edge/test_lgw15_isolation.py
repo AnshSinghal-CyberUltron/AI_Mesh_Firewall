@@ -65,6 +65,7 @@ from gateway_v2.edge.wire.openai import OpenAIRequestParser, OpenAIResponseRende
 from gateway_v2.egress.output_guard import MinimalOutputResolver
 from gateway_v2.plan.snapshot import ReplicaSnapshot
 from gateway_v2.plan.store import PlanStore
+from tests.edge._org_limits import NoopOrgLimits
 
 _SEED = 0x16_15_0019
 _ITERATIONS = 10_000
@@ -296,6 +297,7 @@ class _P19Deps:
     ``mypy --strict`` is satisfied without constructing the full heavyweight route (the
     scanner / holdback / executor / in-flight seams are never reached pre-provider).
     """
+    org_limits: object = field(default_factory=NoopOrgLimits, kw_only=True)
 
     contract: _P19FakeContract
     identity: IdentityResolver

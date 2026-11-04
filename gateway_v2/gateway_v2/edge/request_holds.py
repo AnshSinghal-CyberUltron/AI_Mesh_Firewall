@@ -56,7 +56,10 @@ every bit of state lives on the per-request ``__slots__`` instance.
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from gateway_v2.domain.decision import Decision
+from gateway_v2.domain.plan import UNSET_CONTROLS, OrgControls
 from gateway_v2.edge.chat_deps import AdmissionDecider, BudgetDecider
 
 __all__ = ("RequestHolds",)
@@ -78,8 +81,12 @@ class RequestHolds:
         "_admitted",
         "_cost",
         "_dispatched",
+        "_controls",
         "_input_decision",
         "_org_id",
+        "_org_id_charged",
+        "_org_refund",
+        "_org_tokens",
         "_output_decision",
         "_released",
         "_request_id",
@@ -96,6 +103,10 @@ class RequestHolds:
         self._input_decision: Decision | None = None
         self._output_decision: Decision | None = None
         self._org_id: str = ""
+        self._controls: OrgControls = UNSET_CONTROLS
+        self._org_id_charged: str = ""
+        self._org_tokens: int = 0
+        self._org_refund: Callable[[str, int], None] | None = None
 
     def admitted(self, request_id: str) -> None:
         """Record that admission granted a slot for ``request_id`` (``complete``-d on exit)."""
@@ -120,9 +131,23 @@ class RequestHolds:
         """Record the tenant the audit row must be attributed to."""
         self._org_id = org_id
 
+    def note_controls(self, controls: OrgControls) -> None:
+        """Record the org controls of the plan this request resolved (audit gating and stamp)."""
+        self._controls = controls
+
+    def org_charged(self, org_id: str, cost: int, refund: Callable[[str, int], None]) -> None:
+        """Record an org TPM charge and how to return it. ``refund`` is required by design."""
+        self._org_id_charged = org_id
+        self._org_tokens = cost
+        self._org_refund = refund
+
     def note_request(self, request_id: str) -> None:
         """Record the minted id before admission, so a shed still has a row key."""
         self._request_id = request_id
+
+    @property
+    def controls(self) -> OrgControls:
+        return self._controls
 
     @property
     def input_decision(self) -> Decision | None:
@@ -168,6 +193,11 @@ class RequestHolds:
             except Exception:  # noqa: BLE001 - finally-path: a lost refund must never mask the response.
                 pass
 
+        if self._org_refund is not None and not self._dispatched:
+            try:
+                self._org_refund(self._org_id_charged, self._org_tokens)
+            except Exception:  # noqa: BLE001 - finally-path: a lost org refund must not mask.
+                pass
         if self._admitted:
             try:
                 admission.complete(self._request_id)

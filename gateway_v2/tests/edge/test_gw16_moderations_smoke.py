@@ -43,6 +43,7 @@ from gateway_v2.edge.wire.openai_misc import MiscResponseRenderer
 from gateway_v2.egress.output_guard import MinimalOutputResolver
 from gateway_v2.runtime.kinds import HardwareSignals
 from gateway_v2.runtime.resources import ResourceContract, from_signals
+from tests.edge._org_limits import org_limits_for
 
 # --------------------------------------------------------------------------- #
 # Test doubles (real StubProviderClient; minimal fail-closed-or-permissive deps).
@@ -213,6 +214,7 @@ def _deps(
     detector: InputDetector,
 ) -> MiscRoute:
     return MiscRoute(
+        org_limits=org_limits_for(_contract()),
         contract=_contract(),
         provider=provider,
         clock=lambda: 0.0,

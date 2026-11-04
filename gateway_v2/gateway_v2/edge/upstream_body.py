@@ -36,6 +36,8 @@ def with_openai_body(
     upstream_body: Mapping[str, object],
     req: CanonicalRequest,
     contract: ResourceContract,
+    *,
+    org_ceiling: int,
 ) -> Mapping[str, object] | None:
     """``upstream_body`` plus the rendered OpenAI request, or ``None`` on a slot mismatch.
 
@@ -76,7 +78,7 @@ def with_openai_body(
         if any(stop is None for stop in stops):
             return None
         body["stop"] = stops[0] if isinstance(template.stop, TextSlot) else tuple(stops)
-    _apply_budget(body, req, contract)
+    _apply_budget(body, req, contract, org_ceiling)
     body["stream"] = True
     return MappingProxyType(
         {
@@ -102,9 +104,9 @@ def _verified_texts(raw: object) -> Sequence[tuple[str, str]] | None:
 
 
 def _apply_budget(
-    body: dict[str, object], req: CanonicalRequest, contract: ResourceContract
+    body: dict[str, object], req: CanonicalRequest, contract: ResourceContract, org_ceiling: int
 ) -> None:
-    ceiling = min(contract.default_response_token_ceiling(), contract.max_output_tokens())
+    ceiling = min(org_ceiling, contract.max_output_tokens())
     if req.max_tokens > 0:
         body["max_tokens"] = req.max_tokens
     elif req.max_completion_tokens is not None:
