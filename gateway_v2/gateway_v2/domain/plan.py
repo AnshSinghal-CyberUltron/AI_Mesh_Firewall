@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 
 from gateway_v2.domain.category import Category
+from gateway_v2.domain.rag import RagSettings
 
 
 class Mode(StrEnum):
@@ -101,6 +102,8 @@ class ExecutionPlan:
 
     Provenance only. Ordering stays (epoch, sequence) — see is_newer.
     """
+    rag: RagSettings = RagSettings()
+    """GW31: the six RAG settings. Defaults when the plan document carries none."""
 
     @property
     def version(self) -> str:

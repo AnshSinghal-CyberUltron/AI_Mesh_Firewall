@@ -20,3 +20,4 @@ class Principal:
     rate_per_s: float
     burst: float
     feed_seq: int
+    project: str = "default"
