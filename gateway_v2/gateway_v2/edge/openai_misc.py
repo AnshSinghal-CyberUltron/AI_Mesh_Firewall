@@ -80,6 +80,7 @@ from gateway_v2.domain.plan import (
     PlanUnknownTenant,
     Surface,
 )
+from gateway_v2.domain.posture import REQUEST_ID_UNAVAILABLE
 from gateway_v2.edge.asgi_sse import (
     ASGIReceive,
     ASGIScope,
@@ -117,6 +118,7 @@ from gateway_v2.edge.org_gate import enforce_org_limits
 from gateway_v2.edge.outcome_metrics import OutcomeObserver, observe_tenant
 from gateway_v2.edge.phase_resolvers import PhaseResolverFactory, resolver_for
 from gateway_v2.edge.request_holds import RequestHolds
+from gateway_v2.edge.request_ids import RequestIdUnavailable
 from gateway_v2.edge.wire.openai_misc import (
     MiscEmbeddingsRequest,
     MiscModerationsRequest,
@@ -368,7 +370,14 @@ class EmbeddingsSurface:
                 await _refuse(send, REFUSE_PLAN_UNAVAILABLE, self._deps.observer)
                 return
 
-            request_id = self._request_id(identity, req)
+            try:
+                request_id = holds.begin_request(identity.org_id)
+            except RequestIdUnavailable:
+                # Fail closed (req 2.8): no id exists, so none is rendered; nothing is
+                # admitted, spent or dispatched.
+                holds.note_failure(REQUEST_ID_UNAVAILABLE)
+                await _refuse(send, REQUEST_ID_UNAVAILABLE, self._deps.observer)
+                return
 
             # Phase 4a (GW29): incident gate BEFORE admission, so a refusal charges nothing.
             routed = await embeddings_gate(
@@ -644,25 +653,7 @@ class EmbeddingsSurface:
             values.append(float(element))
         return tuple(values)
 
-    # --- request-id + cost sourcing (mirror ChatSurface) ----------------------------------- #
-
-    @staticmethod
-    def _request_id(identity: TenantIdentity, req: MiscEmbeddingsRequest) -> str:
-        """Mint the ONE per-request id. Pure: a function of the request identity.
-
-        Mirrors ``ChatSurface._request_id`` — a STABLE id across the admission + budget
-        phases (a clock-minted id would differ between phases). Derived from the tenant
-        ``org_id`` + a fingerprint of the request content (``model`` + every input item),
-        joined with an injective separator and hashed. NOT taken from a client header (the
-        PIPELINE-0023 conflation lesson); the ``zs-`` prefix matches the request-id convention.
-        """
-        import hashlib
-
-        sep = "\x1f"
-        parts = [identity.org_id, req.model, *req.input_items]
-        fingerprint = hashlib.sha256(sep.join(parts).encode("utf-8")).hexdigest()[:24]
-        return f"zs-{identity.org_id}-{fingerprint}"
-
+    # --- cost sourcing (the request id is minted once by ``holds.begin_request``) ---------- #
     def _estimated_cost(self, req: MiscEmbeddingsRequest) -> int:
         """The Group F request token estimate the budget phase charges (R2.15). Pure.
 

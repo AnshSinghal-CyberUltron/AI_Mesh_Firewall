@@ -12,8 +12,6 @@ zero broker calls. The org comes from the API key only, through the org map.
 
 from __future__ import annotations
 
-import hashlib
-import json
 import math
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -61,6 +59,7 @@ from gateway_v2.edge.mcp_session_gate import (
 from gateway_v2.edge.mcp_upstream_routes import UpstreamOAuthRoutes, serve_upstream
 from gateway_v2.edge.phase_resolvers import resolver_for
 from gateway_v2.edge.request_holds import RequestHolds
+from gateway_v2.edge.request_ids import RequestIdUnavailable
 from gateway_v2.edge.routes import ChatRoute, emit_response
 from gateway_v2.edge.wire import jsonrpc, mcp_sse
 from gateway_v2.edge.wire.mcp import (
@@ -353,12 +352,10 @@ class McpRoute:
 
     async def _refuse_reply_message(self, message: jsonrpc.JsonRpcMessage, ctx: _Ctx) -> None:
         """A client reply (no ``method``) is scanned as input for audit, then refused."""
-        identity, plan = await self._tenant(ctx)
-        org = identity.org_id
+        _identity, plan = await self._tenant(ctx)
         targets = (((), message.raw.get("result", message.raw.get("error")), "mcp_arguments"),)
         fold = fold_request(targets, self.chat.contract.mcp_bounds())
         if not isinstance(fold, str):
-            ctx.holds.note_request(_request_id(org, "reply", message.raw))
             self._scan_input(fold, plan, ctx)
         raise _Refuse("mcp_invalid_request")
 
@@ -372,6 +369,13 @@ class McpRoute:
         if ctx.caller is None:
             raise _Refuse("invalid_api_key")  # unreachable by construction; fail closed
         identity = ctx.caller.identity
+        try:
+            ctx.holds.begin_request(identity.org_id)
+        except RequestIdUnavailable:
+            # Fail closed (req 2.8): no id exists, so none is rendered. Refused before the
+            # incident gate, admission, budget and any broker call.
+            ctx.holds.note_failure(posture.REQUEST_ID_UNAVAILABLE)
+            raise _Refuse(posture.REQUEST_ID_UNAVAILABLE) from None
         self._incident_org_gate(ctx, identity.org_id)
         state = lookup_plan(self.chat.snapshot_source(), identity.org_id, Surface.MCP)
         if isinstance(state, (PlanUnavailable, PlanUnknownTenant)):
@@ -383,11 +387,9 @@ class McpRoute:
     def _incident_org_gate(self, ctx: _Ctx, org_id: str) -> None:
         """GW29 (6.4b): a global or org kill (or a stale feed) stops MCP; org from the key."""
         holds = ctx.holds
-        request_id = holds.request_id or _request_id(org_id, "incident", {})
-        verdict = self.chat.incident_gate.decide_org(org_id=org_id, request_id=request_id)
+        verdict = self.chat.incident_gate.decide_org(org_id=org_id, request_id=holds.request_id)
         if verdict.refuse_code is None:
             return
-        holds.note_request(request_id)
         holds.note_incident_cause(
             verdict.cause or "gate_error", retry_after_s=verdict.retry_after_s
         )
@@ -412,7 +414,6 @@ class McpRoute:
             raise _Refuse(fold)
         params = message.params if isinstance(message.params, dict) else {}
         ctx.tool = str(params.get("name") or "") if method == "tools/call" else ""
-        ctx.holds.note_request(_request_id(org, method, message.raw))
         await self._admit_and_charge(identity, fold, ctx)
         # GW17c DD-6: after admission + budget (a denied call is rate-limited like any other),
         # before the registry gate. The refusal releases holds, which refunds the budget charge.
@@ -591,10 +592,6 @@ def _server_slug(scope: ASGIScope) -> str:
     return "" if not slug or "/" in slug else slug
 
 
-def _request_id(org: str, method: str, raw: Mapping[str, object]) -> str:
-    content = json.dumps(raw, sort_keys=True, separators=(",", ":"), default=str)
-    fingerprint = hashlib.sha256(f"{org}\x1f{method}\x1f{content}".encode()).hexdigest()[:24]
-    return f"zs-{org}-{fingerprint}"
 
 
 def _verified_texts(raw: object, count: int) -> tuple[str, ...]:

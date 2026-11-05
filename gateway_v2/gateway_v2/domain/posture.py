@@ -19,6 +19,7 @@ __all__ = (
     "SHARED_STATE_UNAVAILABLE",
     "PLAN_UNAVAILABLE",
     "BUDGET_UNAVAILABLE",
+    "REQUEST_ID_UNAVAILABLE",
     "RATE_LIMITED",
     "POLICY_REGEX_TIMEOUT",
     "OVERLOAD_SHED",
@@ -106,6 +107,10 @@ remaining lease and then refuses only quota, because treating it as global would
 problem into an outage.
 """
 
+REQUEST_ID_UNAVAILABLE = "request_id_unavailable"
+"""A per-request id could not be minted (entropy failure or malformed result). Fail CLOSED: refuse
+before admission, budget and dispatch, so there are zero provider calls and no id exists to echo.
+Deliberately NOT `SHARED_STATE_UNAVAILABLE`, which would misreport the cause (decision D8)."""
 RATE_LIMITED = "rate_limited"
 """GW36 S4: the per-key GCRA reject -- the per-worker burst/sustained rate was exceeded.
 

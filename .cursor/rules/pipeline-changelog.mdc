@@ -18,6 +18,32 @@ rebase from `main` often. Pipeline changes MUST NOT break the gateway test gate
 
 ## Changelog entries (newest last)
 
+- PIPELINE-0035 (2026-10-21) — INPUT_SCAN "SKIP" DISPLAY-HONESTY (L14b-2 + C14):
+  gateway/ai_mesh_gateway/pipeline_trace.py (build_pipeline_trace + STAGE_TRANSPARENCY_KEYS +
+  normalize_stage_transparency) + main.py (_attach_pipeline_trace_to_llm_error) +
+  frontend/src/utils/pipelineTrace.js (honestStageAction). WHAT: added an explicit per-stage
+  boolean `ran` to every pipeline_trace stage and made the Scan Detail UI render executed-vs-
+  skipped FROM THE RECORD instead of inferring "skip" from latency_ms===0. WHY: on the 503
+  scan-only + policy-redacted PII path, POLICY redacted the input, input_scan then analyzed the
+  masked text and allowed it (_resolve_input_scan_action → ("allow","analyzed",True)) with
+  input_scan_ms reconciled to 0, so honestStageAction (latency===0 && allow ⇒ skip, carve-out
+  only model_routing/route) mislabeled a stage that ran as SKIP — exactly what runbook L14b-2
+  (§5/GW14b) forbids ("recomputed in the browser") and a C14 operator-honesty violation.
+  NOW DOES: build_pipeline_trace stamps `ran = action != "skip"` after all action resolution
+  (blocked-upstream skip, skip-after-block invariant, skip_inference model stages → ran=False;
+  input_scan allow/analyzed/clean → ran=True); `ran` added to STAGE_TRANSPARENCY_KEYS +
+  normalize defaults it from the action; _attach_pipeline_trace_to_llm_error re-stamps `ran`
+  after model_output→error (ran=True, model attempted) + output_guardrail→skip (ran=False);
+  honestStageAction respects `ran` (true never recomputed to skip, false may skip) + extends the
+  latency-0 carve-out to any stage with positive run-evidence (scan_outcome analyzed/clean,
+  truthy tier, redact_noop) for backward-compat with records lacking the flag. Additive — no
+  existing action/latency changed; redact-noop/injection-rec logic unchanged. VERIFY: GW
+  test_pipeline_stage_ran_flag.py 5 passed (input_scan analyzed@0ms ran=True; blocked-upstream +
+  scan-only model stages ran=False; the exact 503 model-error + policy-redacted path →
+  input_scan ran=True, model_output error+ran=True, output_guardrail skip+ran=False); full suite
+  193 pre-existing env-fails (identical with change stashed on clean HEAD) + 5 new, 0 regressions.
+  FE npm run test:unit 183 passed (2 new honestStageAction tests) + npm run build green (vite
+  7.3.3, node:22-alpine container; host frontend/node_modules root-owned / no local vite).
 - PIPELINE-0036 (2026-11-05) — FALSE `stream_idle_timeout` ON WITHHELD STRICT STREAMS (bugfix F1):
   `gateway_v2/gateway_v2/edge/stream_timeouts.py` (StreamTimeouts.__init__ + next_event +
   new private _note_upstream_activity + module docstring) + `edge/chat_stream.py`
@@ -52,3 +78,43 @@ rebase from `main` often. Pipeline changes MUST NOT break the gateway test gate
   reconciles the two ids at merge. Ruflo memory NOT stored: the `memory` CLI is not on PATH in this
   environment (step 1 above could not be performed; recorded in the commit message). Evidence:
   docs/plans/evidence/2026-11-05-strict-idle/.
+- PIPELINE-0037 (2026-11-05) — REQUEST-ID UNIQUENESS (gateway_v2 edge, finding F2):
+  gateway_v2/gateway_v2/edge/request_ids.py (new: mint_tenant_request_id + RequestIdUnavailable) +
+  edge/request_holds.py (begin_request) + domain/posture.py (REQUEST_ID_UNAVAILABLE) +
+  edge/errors.py (Error_Envelope → HTTP 503, no id, no x-request-id) + edge/openai_chat.py +
+  edge/openai_misc.py + edge/incident_misc.py + edge/rag_common.py + edge/mcp.py + edge/wire/sse.py.
+  WHAT: request_id was minted as a pure content hash (sha256(tenant+content)[:24]) in four
+  independent edge surfaces — chat (openai_chat.py, recomputed in three phases: lifecycle note,
+  _admit, _budget), embeddings (openai_misc.py), RAG/vector (rag_common.py) and MCP (mcp.py, whose
+  incident gate fell back to the per-org constant hash(org,"incident",{})) — so byte-identical
+  requests collided on one id. WHY (finding F2, 4 Nov 2026): five identical chat calls all returned
+  zs-dev-org-fb2340bd19bc5b758a6b2018; stream/non-stream repeats, MCP tools/list, embeddings and
+  RAG all collided. The collision conflated audit and Scan Detail rows (control _upsert merged
+  repeated prompts into ONE EnforcementEvent) and keyed admission slots, admit refcounts and budget
+  refunds on a shared id → one request could release/refund/attribute another's resources. Same
+  conflation CLASS as PIPELINE-0023 but a DIFFERENT CAUSE: the gateway_v2 edge (deterministic
+  content hashing), NOT the control-plane proxy_chat path (PIPELINE-0023), which is left untouched.
+  NOW DOES: one random id zs-{org}-<24 hex> minted ONCE per request by
+  edge/request_ids.py::mint_tenant_request_id(org_id) (entropy via secrets.token_hex as an injected
+  default param, no module-level mutable state) and carried on RequestHolds.begin_request
+  (idempotent — returns an already-set id, else mints and notes). All four content-hash copies and
+  the MCP per-org-constant incident-gate fallback removed; every phase reads the id from holds.
+  Fail-closed: any exception or a non-24-lowercase-hex result raises RequestIdUnavailable and each
+  surface refuses with the new domain code request_id_unavailable → HTTP 503, no id, no
+  x-request-id, before admission/budget/dispatch (zero provider calls). Decision D8: a dedicated
+  request_id_unavailable code (not shared_state_unavailable, which would misreport the cause);
+  decision D9: no set-once guard on RequestHolds.note_request (pre-id refusal paths legitimately
+  note a pre-id; single-id-per-request enforced by begin_request idempotence + property test B).
+  mint_request_id pre-identity refusals, moderations' own id, and the X-Request-ID-is-ignored rule
+  are unchanged. VERIFY: offline (from gateway_v2/) full pytest 4954 passed / 1 known pre-existing
+  Pinecone tenant-scale fail (pinecone_transport.py:140), mypy --strict clean (406 files), ruff
+  clean, import-linter 3/3 kept (no contract change — edits in edge + one domain code), five AST
+  gates (capacity_literals, no_module_mutable, frozen_dataclasses, http_outside_edge_resolve,
+  tenant_scale) each exit 0; live amff2 stack — 5 identical calls each on chat non-stream, chat
+  stream, MCP tools/list and RAG → 5 distinct ids matching zs-{org}-<24 hex>, control created 5
+  distinct EnforcementEvent rows (no conflation), zero-provider refusal refunded net 0 + admission
+  slots to baseline, 50-way identical burst → 50 distinct ids, proxy_chat untouched (git diff
+  gateway/ empty); embeddings uniqueness + forced mint-failure NOT RUN live (covered offline).
+  Ruflo memory (memory store --namespace pipeline/changes) NOT written: the memory CLI is not on
+  PATH in this environment; a human must replay it. Evidence:
+  docs/plans/evidence/2026-11-05-request-id-uniqueness/.
