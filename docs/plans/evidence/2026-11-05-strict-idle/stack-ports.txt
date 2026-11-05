@@ -1,0 +1,16 @@
+# amff1 host port map (127.0.0.1). Base +25000.
+# All mapped ports <= 65535 (max TCP port). Distinct from amfint (+30000) and ai_mesh_firewall
+# (+20000); ss -ltn checked before boot, no collisions.
+control        33100 -> 8000
+gateway-v2     33301 -> 8301   (the surface under test)
+gateway (v1)   33300 -> 8300
+mcp-broker     33311 -> 8311
+mcp-stub       34999 -> 9999
+guardrails     33310 -> 8310
+vector-retr    33312 -> 8312
+demo           33770 -> 8770
+frontend       33180 -> 5173  (not started)
+postgres       30432 -> 5432
+pgbouncer      31432 -> 6432
+redis          31379 -> 6379
+rabbitmq       30672 -> 5672 , 30673 -> 15672

@@ -1,0 +1,22 @@
+ai_mesh_firewall-demo-1	Up 18 hours (healthy)
+ai_mesh_firewall-gateway-1	Up 18 hours (unhealthy)
+ai_mesh_firewall-gateway-v2-1	Up 18 hours (healthy)
+ai_mesh_firewall-state-projector-a-1	Restarting (1) 20 seconds ago
+ai_mesh_firewall-state-projector-b-1	Restarting (1) 20 seconds ago
+ai_mesh_firewall-state-rehydrator-a-1	Restarting (1) 38 seconds ago
+ai_mesh_firewall-state-rehydrator-b-1	Restarting (1) 38 seconds ago
+ai_mesh_mcp_broker	Up 18 hours (healthy)
+amfint-control-1	Up 16 hours (healthy)
+amfint-fake-mcp	Up 17 hours
+amfint-fake-openai	Up 16 hours
+amfint-frontend-1	Up 16 hours
+amfint-gateway-1	Up 17 hours (healthy)
+amfint-gateway-v2-1	Up 17 hours (healthy)
+amfint_mcp_broker	Up 17 hours (healthy)
+amfint-mcp-stub-1	Up 17 hours (healthy)
+amfint-pgbouncer-1	Up 17 hours (healthy)
+amfint-postgres-1	Up 17 hours (healthy)
+amfint-rabbitmq-1	Up 17 hours (healthy)
+amfint-redis-1	Up 17 hours (healthy)
+amfint-state-projector-a-1	Up 17 hours (healthy)
+amfint-state-rehydrator-a-1	Up 17 hours (healthy)

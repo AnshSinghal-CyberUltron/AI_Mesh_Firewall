@@ -1,0 +1,5 @@
+boot: DEV PROFILE ACTIVE (AMF_DEV_PROFILE=1) -- local development wiring, NOT FOR PRODUCTION; every dependency marked DEV PROFILE below is dev-supplied
+boot: firewall plan -> file until {rv2}:dev:firewall-plan changes (polled off the request path)
+boot: identity -> DevStaticIdentity (DEV PROFILE: bearer AMF_DEV_API_KEY -> org dev-org; peer org org-b; hmac.compare_digest; anything else refuses)
+boot: snapshot_source -> warmed ReplicaSnapshot over /opt/gateway_v2/dev/plan.strict.json (DEV PROFILE: compiled by plan.compiler, org=dev-org version=1.1.6e661faec9225b06 streaming=strict_withhold; rules=[dev-injection-flag:prompt_injection->flag/enforce, fw-ip-leak-output:ip_leak->block/enforce, dev-pii-redact:pii->redact/enforce, dev-secret-block:secret->block/enforce]; a published FirewallConfig replaces this file when the dev redis key changes)
+dev: firewall plan applied version=1.1.67a1618323458584

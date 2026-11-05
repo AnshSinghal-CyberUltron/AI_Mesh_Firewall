@@ -2,6 +2,63 @@
 
 All changes to the chat pipeline consolidation/fix/freeze effort.
 
+## PIPELINE-0036 (2026-11-05) — FALSE `stream_idle_timeout` ON WITHHELD STRICT STREAMS (bugfix F1)
+
+> ID NOTE: a sibling, currently-unmerged branch (`bugfix-f2-request-id`) also claims a
+> `PIPELINE-00NN` id. This entry took the next free id on THIS branch
+> (`bugfix-f1-strict-idle`) at authoring time; if both branches land, a human reconciles
+> the two ids at merge.
+
+Files:
+- `gateway_v2/gateway_v2/edge/stream_timeouts.py` (`StreamTimeouts.__init__`,
+  `next_event`, new private `_note_upstream_activity`, module docstring)
+- `gateway_v2/gateway_v2/edge/chat_stream.py` (`ChatStream._controls`)
+- `gateway_v2/gateway_v2/egress/output_guard.py` (new `withholds_until_decision`)
+- tests: `gateway_v2/tests/edge/test_strict_withhold_idle_timeout_bug.py`,
+  `..._preservation.py`, `..._properties.py`, `..._wiring.py`,
+  `gateway_v2/tests/egress/test_withholds_until_decision.py`,
+  `gateway_v2/tests/runtime/test_stream_timeouts_liveness.py`
+
+ROOT CAUSE: A STRICT_WITHHOLD stream with an enforcing output rule withholds every
+downstream byte until the whole response has been inspected and decided. `StreamTimeouts`
+modelled downstream idle as time-since-the-last-completed-write, with `_last_write_s`
+seeded at stream start. So a *healthy* withheld stream that outlasted `idle_timeout_s`
+(3 s at the default 20 ms SLO) was cut at its first write with `stream_idle_timeout`
+(HTTP 408, "The downstream client went idle") **before any byte** — the client was blamed
+for a gap the gateway created on purpose, and the fully-received, otherwise-deliverable
+answer was discarded. GW33 D-20 promotes exfil / ip-leak / grounding orgs to strict, so
+their long real-model answers failed before the first byte.
+
+FIX: (1) `egress/output_guard.withholds_until_decision(plan)` — pure predicate,
+`plan.streaming_mode is STRICT_WITHHOLD and bool(enforcing_output_rules(plan))`, reusing the
+existing `enforcing_output_rules` (no new import edge). (2) A keyword-only
+`upstream_liveness: bool = False` flag on `edge/stream_timeouts.StreamTimeouts`; when set,
+`next_event` re-seeds the idle clock on every upstream event it returns (the same
+`_last_write_s = _clock()` assignment the GW28 D-18 first-event branch already performs).
+`send` is unchanged, and a timeout cut in `next_event` never re-seeds — fail closed. (3)
+Wired once in `edge/chat_stream.ChatStream._controls` as
+`upstream_liveness=withholds_until_decision(plan)`. Default `False` leaves INCREMENTAL and
+pass-through strict byte-for-byte unchanged; no new capacity literal (all bounds still from
+`ResourceContract`); upstream stall still bounded by `inter_chunk_timeout_s` (1 s) and total
+time by `max_stream_duration_s` (300 s).
+
+VERIFY:
+- Offline — full `pytest` 4917 passed (only the known `check_tenant_scale` Pinecone
+  tenant-scale failure); `mypy --strict` clean (405 files); `ruff` clean; `import-linter`
+  3/3 contracts kept (no new edge); AST gates (capacity literals, no module-level mutable,
+  frozen dataclasses) each exit 0.
+- Live `amff1` — strict SLOWSTREAM (40 chunks, 150 ms apart) returns 200 with full content
+  at 6.15 s and zero 408 (the F1 artifact returned 408 before any byte); a block-tripping
+  payload is still terminal `output_blocked` with zero content before it; a mid-stream stall
+  is still cut by the upstream guard (`stream_inter_chunk_timeout`); INCREMENTAL unchanged.
+
+A separate owner finding on `max_stream_duration_s` (a 300 s wall-clock ceiling that cuts a
+20,000-token strict answer before any byte) is recorded in
+`docs/plans/evidence/2026-11-05-strict-idle/FINDING-max-stream-duration.md`; no bound was
+changed.
+
+Evidence: `docs/plans/evidence/2026-11-05-strict-idle/`.
+
 ## GW33 (2026-11-05) — OUTPUT GUARDRAIL PARITY, local half closed; live L33-1..L33-3 deferred
 **v2 output guardrails restored; REWRITE is real.** IP/infrastructure leak, exfiltration channels
 (markdown/HTML/CSS sinks, DNS labels), per-request canary tokens and lexical grounding, each a

@@ -46,7 +46,23 @@ idle as *the time since the last byte the client accepted*:
 * The ``idle`` bound (R9.3) caps the AGGREGATE gap since the last ``send`` that COMPLETED — how
   long the client has gone without accepting a byte. Before each ``send`` we read the injected
   clock; if ``now - last_completed_write > idle_timeout_s()`` the client has been idle too long
-  and we cut with ``STREAM_IDLE_TIMEOUT`` before issuing the write. A ``send`` that itself
+  and we cut with ``STREAM_IDLE_TIMEOUT`` before issuing the write.
+
+  **Liveness mode (strict-withhold-idle-timeout, F1).** For a ``STRICT_WITHHOLD`` stream with an
+  enforcing output rule the gateway deliberately writes NOTHING downstream until it has inspected
+  and decided the whole response. The idle clock, seeded at stream start and advanced only by a
+  completed write, would therefore measure how long the GATEWAY withheld, not how long the CLIENT
+  stopped reading, and the first and only content write would trip ``STREAM_IDLE_TIMEOUT`` for any
+  answer that took longer than ``idle_timeout_s()`` — blaming the client for silence the gateway
+  created by design. When ``upstream_liveness=True`` (set once in ``ChatStream._controls`` for
+  exactly that mode), idle is instead measured as *the time since the last upstream event or
+  completed write*: every event :meth:`next_event` returns re-seeds the idle clock (the same
+  assignment the D-18 first-event branch performs). The upstream stall is still bounded by
+  ``inter_chunk_timeout_s()`` (1 s < idle's 3 s at defaults, so a silent upstream is always caught
+  by :meth:`next_event` first) and total time by ``max_stream_duration_s()``; the idle check in
+  :meth:`send` is unchanged, so once writing begins, client back-pressure is detected exactly as
+  before. In the default (``upstream_liveness=False``) mode — INCREMENTAL and pass-through strict —
+  none of this runs and the write-based model is byte-for-byte unchanged. A ``send`` that itself
   blocks past the idle bound is likewise an idle client, so :meth:`StreamTimeouts.send` bounds
   the single write by ``min(write_timeout_s, idle_timeout_s)`` is NOT used — instead the single
   write is bounded by its own ``write_timeout_s`` and the *inter-write gap* is bounded by
@@ -125,6 +141,7 @@ class StreamTimeouts:
         "_first_pending",
         "_kill_latch",
         "_last_write_s",
+        "_upstream_liveness",
     )
 
     def __init__(
@@ -134,6 +151,7 @@ class StreamTimeouts:
         kill_latch: KillLatch,
         clock: Callable[[], float],
         first_event_s: float | None = None,
+        upstream_liveness: bool = False,
     ) -> None:
         self._contract = contract
         # GW28 D-13/D-18: when routing is on, the FIRST next-event await uses this wider bound and
@@ -142,6 +160,14 @@ class StreamTimeouts:
         self._first_pending = first_event_s is not None
         self._kill_latch = kill_latch
         self._clock = clock
+        # strict-withhold-idle-timeout (F1): when a withholding strict stream writes nothing
+        # downstream until the whole response is decided, the write-based idle gap would blame the
+        # client for a silence the gateway created on purpose. In liveness mode EVERY upstream
+        # event re-seeds the idle clock (see ``_note_upstream_activity``), turning "time since the
+        # last completed write" into "time since the last upstream event or completed write". The
+        # default is False so every existing construction (INCREMENTAL, pass-through strict, tests,
+        # routing boot) is byte-for-byte unchanged.
+        self._upstream_liveness = upstream_liveness
         # The last completed-write clock reading seeds from stream start so the first write's
         # idle gap is measured from when the stream opened (R9.3). Mutable one-cell state.
         self._last_write_s = clock()
@@ -169,7 +195,27 @@ class StreamTimeouts:
             # D-18: idle measures client back-pressure, not upstream latency, so the clock
             # restarts when the first upstream event of ANY kind has arrived.
             self._last_write_s = self._clock()
+        if self._upstream_liveness:
+            # strict-withhold-idle-timeout (F1): a withholding strict stream makes no write while
+            # it accumulates, so the idle clock would otherwise measure the gateway's own withhold.
+            # Re-seed it on EVERY upstream event (the same assignment the D-18 branch performs; for
+            # a routed liveness stream both lines run and the second assignment is idempotent). The
+            # cut path (``_cut`` on a timeout) never reaches here, so a timeout never re-seeds
+            # (fail closed): the refresh happens only on the successful return path.
+            self._note_upstream_activity()
         return result
+
+    def _note_upstream_activity(self) -> None:
+        """Re-seed the idle clock on an upstream event (strict-withhold liveness mode).
+
+        Assigns ``self._last_write_s = self._clock()`` — exactly the assignment the GW28 D-18
+        first-event branch performs — so that, in ``upstream_liveness`` mode, the idle gap that
+        :meth:`send` checks is measured from the last upstream event rather than from a downstream
+        write that a withholding strict stream never issued until the decision. One mutable cell,
+        no new state; only ever called from the successful :meth:`next_event` return path, so a
+        timeout cut can never re-seed (fail closed).
+        """
+        self._last_write_s = self._clock()
 
     async def send(self, do_send: Callable[[], Awaitable[None]]) -> None:
         """Perform one downstream write under the Write_Timeout + Idle_Timeout (R9.3/R9.4).
