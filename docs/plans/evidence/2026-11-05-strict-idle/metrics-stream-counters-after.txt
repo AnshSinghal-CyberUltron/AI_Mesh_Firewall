@@ -1,0 +1,4 @@
+amf_posture_refusals_stream_idle_timeout_total 0
+amf_posture_refusals_stream_inter_chunk_timeout_total 0
+amf_posture_refusals_stream_killed_total 0
+amf_posture_refusals_stream_write_timeout_total 0

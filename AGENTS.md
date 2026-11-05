@@ -173,6 +173,25 @@
  patterns, {1,2} emphasis cap, G53 skip, B1 noop exemption, redact eligibility + pipeline_trace
  input_scan=redact on intentional noop. LIVE input_scan REDACT + masked prompt forwarded. 7 new
  tests. Gate: 2009 full suite. Evidence: mcp-parallel/findings/pipeline-p12-live-proof.json.
+ - PIPELINE-0036 (2026-11-05) — FALSE stream_idle_timeout ON WITHHELD STRICT STREAMS (bugfix F1):
+ edge/stream_timeouts.py + edge/chat_stream.py + egress/output_guard.py. STRICT_WITHHOLD streams
+ with an enforcing output rule withhold every byte until the whole response is decided, but
+ StreamTimeouts modelled downstream idle as time-since-last-write seeded at stream start, so a
+ healthy withheld stream longer than idle_timeout_s (3 s @ default SLO) was falsely cut with
+ stream_idle_timeout / HTTP 408 before any byte (GW33 D-20 promotes exfil/ip-leak/grounding orgs
+ to strict). FIX: egress.output_guard.withholds_until_decision(plan); a keyword-only
+ upstream_liveness flag on StreamTimeouts that re-seeds the idle clock on every upstream event
+ next_event returns (same assignment as the GW28 D-18 first-event branch; send unchanged; a
+ timeout cut never re-seeds, fail closed); wired once in ChatStream._controls as
+ upstream_liveness=withholds_until_decision(plan). Default False leaves INCREMENTAL + pass-through
+ strict byte-for-byte unchanged; no new capacity literal. VERIFY: offline full pytest 4917 passed
+ (only known Pinecone check_tenant_scale failure), mypy --strict clean (405 files), ruff clean,
+ import-linter 3/3 kept, AST gates exit 0; live amff1 strict SLOWSTREAM 200 + full content @ 6.15 s
+ zero 408 (was 408 before any byte on the F1 artifact), block still terminal zero-content, stall
+ still cut by the upstream guard, incremental unchanged. Separate owner finding on
+ max_stream_duration_s in FINDING-max-stream-duration.md. ID NOTE: sibling unmerged branch
+ bugfix-f2-request-id also claims a PIPELINE id — human reconciles at merge. Evidence:
+ docs/plans/evidence/2026-11-05-strict-idle/.
 
 ## R2-04 / GW05 state re-hydration changelog
 - R2-04 (2026-10-08) — REHYDRATOR LOCK STALL + CONTROL-PLANE PG HARDENING, local half CLOSED.

@@ -45,6 +45,7 @@ from gateway_v2.domain import (
     Rule,
     RuleScope,
     Span,
+    StreamingMode,
     Transformation,
     most_restrictive,
 )
@@ -59,6 +60,7 @@ __all__ = (
     "OutputResolver",
     "apply_decision",
     "enforcing_output_rules",
+    "withholds_until_decision",
 )
 
 #: D-22: the async whole-channel check run once after the last chunk. Arguments: channel name and
@@ -125,6 +127,33 @@ def enforcing_output_rules(plan: ExecutionPlan) -> tuple[Rule, ...]:
         if rule.scope in _OUTPUT_SCOPES
         and rule.mode is Mode.ENFORCE
         and rule.action in _ENFORCING_ACTIONS
+    )
+
+
+def withholds_until_decision(plan: ExecutionPlan) -> bool:
+    """Whether a stream on ``plan`` withholds every byte until the output decision.
+
+    True exactly when the plan is ``StreamingMode.STRICT_WITHHOLD`` *and* it has a
+    non-empty :func:`enforcing_output_rules` -- the same predicate
+    ``StrictWithholdPipeline`` uses to pick its accumulate-and-inspect path
+    (``_run_enforcing``) over the pass-through one, and that
+    ``egress.select.select_pipeline`` resolves into the ``enforcing_output``
+    argument of the strict pipeline it builds. A STRICT plan with no enforcing
+    output rule is pass-through (it holds nothing), and every INCREMENTAL plan
+    writes each chunk as it arrives, so both return False.
+
+    The edge layer uses this to decide whether a stream's idle clock must be
+    driven by upstream liveness instead of the last downstream write: only a
+    withholding strict stream writes nothing while it accumulates, so only it
+    needs the liveness signal. Reusing this one predicate keeps that decision in
+    lock-step with the pipeline selection (a drift test pins the two together);
+    it derives no bound and adds no capacity literal. ``egress`` already owns
+    ``enforcing_output_rules``, so this stays an egress-local predicate with no
+    new import edge to ``edge`` or ``detect``.
+    """
+    return (
+        plan.streaming_mode is StreamingMode.STRICT_WITHHOLD
+        and bool(enforcing_output_rules(plan))
     )
 
 

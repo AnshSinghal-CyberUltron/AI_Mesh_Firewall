@@ -1,0 +1,54 @@
+# Pipeline Consolidate + Fix + FREEZE — changelog protocol (Cursor mirror)
+
+The pipeline lane consolidates, fixes, and freezes the chat pipeline code paths in
+`gateway/ai_mesh_gateway/main.py`. Every pipeline change MUST be logged to **all four
+memories in the same commit**:
+
+1. Ruflo — `memory store --namespace pipeline/changes --key "<PIPELINE-id>" --value "…"`.
+2. Claude — one-line pointer in repo-root `AGENTS.md` (*Pipeline changelog* section).
+3. Cursor — an entry appended to THIS file (`.cursor/rules/pipeline-changelog.mdc`).
+4. Canonical — the full entry in `docs/pipeline/CHANGELOG.md` (source of truth).
+
+Minimum fields per entry: change-id · date · files · WHAT · WHY · NOW DOES · VERIFY.
+
+Hard rules: one `PIPELINE-NNNN` per logical change (never reuse an id); commit small;
+stage narrowly (the worktree/index is SHARED across sessions — never `git add -A`);
+rebase from `main` often. Pipeline changes MUST NOT break the gateway test gate
+(`cd gateway && ./.venv/bin/python -m pytest ai_mesh_gateway/tests -q`).
+
+## Changelog entries (newest last)
+
+- PIPELINE-0036 (2026-11-05) — FALSE `stream_idle_timeout` ON WITHHELD STRICT STREAMS (bugfix F1):
+  `gateway_v2/gateway_v2/edge/stream_timeouts.py` (StreamTimeouts.__init__ + next_event +
+  new private _note_upstream_activity + module docstring) + `edge/chat_stream.py`
+  (ChatStream._controls) + `egress/output_guard.py` (new withholds_until_decision). WHAT: gave the
+  idle clock a per-stream upstream-liveness signal so a healthy withheld STRICT_WITHHOLD stream is
+  no longer cut as a client idle fault. WHY: a STRICT_WITHHOLD stream with an enforcing output rule
+  withholds every downstream byte until the whole response is decided, but StreamTimeouts modelled
+  downstream idle as time-since-the-last-completed-write with `_last_write_s` seeded at stream
+  start, so a healthy withheld stream longer than idle_timeout_s (3 s @ the default 20 ms SLO) was
+  cut at its first write with stream_idle_timeout / HTTP 408 ("the downstream client went idle")
+  BEFORE any byte — the client was blamed for gateway-created silence and the decided answer was
+  discarded. GW33 D-20 promotes exfil / ip-leak / grounding orgs to strict, so their long real-model
+  answers failed before the first byte. NOW DOES: egress.output_guard.withholds_until_decision(plan)
+  = (plan.streaming_mode is STRICT_WITHHOLD and bool(enforcing_output_rules(plan))), reusing the
+  existing enforcing_output_rules (no new import edge); a keyword-only upstream_liveness: bool =
+  False on StreamTimeouts whose next_event re-seeds `_last_write_s = _clock()` on every upstream
+  event it returns (the same assignment the GW28 D-18 first-event branch performs); send unchanged
+  and a timeout cut in next_event never re-seeds (fail closed); wired once in ChatStream._controls
+  as upstream_liveness=withholds_until_decision(plan). Default False ⇒ INCREMENTAL and pass-through
+  strict byte-for-byte unchanged; no new capacity literal (all bounds still from ResourceContract);
+  upstream stall still bounded by inter_chunk_timeout_s (1 s) and total time by
+  max_stream_duration_s (300 s). VERIFY: offline — full pytest 4917 passed (only the known Pinecone
+  check_tenant_scale failure), mypy --strict clean (405 files), ruff clean, import-linter 3/3 kept
+  (no new edge), AST gates (capacity literals / no module-level mutable / frozen dataclasses) each
+  exit 0; live amff1 — strict SLOWSTREAM (40 chunks, 150 ms apart) 200 + full content @ 6.15 s with
+  zero 408 (was 408 before any byte on the F1 artifact), a block payload still terminal
+  output_blocked with zero content before it, a mid-stream stall still cut by the upstream guard
+  (stream_inter_chunk_timeout), INCREMENTAL unchanged. Separate owner finding on
+  max_stream_duration_s (300 s ceiling discards a 20,000-token strict answer before any byte) in
+  docs/plans/evidence/2026-11-05-strict-idle/FINDING-max-stream-duration.md; no bound changed. ID
+  NOTE: a sibling unmerged branch (bugfix-f2-request-id) also claims a PIPELINE id — a human
+  reconciles the two ids at merge. Ruflo memory NOT stored: the `memory` CLI is not on PATH in this
+  environment (step 1 above could not be performed; recorded in the commit message). Evidence:
+  docs/plans/evidence/2026-11-05-strict-idle/.

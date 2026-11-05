@@ -1,0 +1,55 @@
+# amff1 live-test override for the strict-withhold-idle-timeout fix (task 5).
+# Project name: amff1. Host ports 127.0.0.1, base +25000 (gateway-v2 -> 33301, control -> 33100,
+# v1 gateway -> 33300, redis -> 31379, postgres -> 30432, pgbouncer -> 31432, rabbitmq ->
+# 30672/30673, mcp-broker -> 33311, mcp-stub -> 34999). All <= 65535 and distinct from amfint
+# (+30000) and ai_mesh_firewall (+20000); ss -ltn checked, no collisions. Full map: stack-ports.txt.
+#
+# The dev gateway-v2 is promoted to STRICT_WITHHOLD the GW33 D-20 way: the dev plan file
+# (AMF_DEV_PLAN_PATH -> plan.strict.json) sets streaming_mode=strict_withhold AND carries an
+# enforcing OUTPUT rule (fw-ip-leak-output: category ip_leak, scope output, mode enforce, action
+# block, condition detector_class=output.ip_leak). withholds_until_decision(plan) is then True, so
+# the stream withholds every byte until the output decision -- the exact bug condition.
+# A PEER org (org-b) is wired as the INCREMENTAL control (its plan is published to
+# {rv2}:devplan:org-b at run time, see up.sh / plan.incremental.json).
+#
+# AMF_AUDIT_RETENTION_SWEEP is deliberately NOT set (default off).
+services:
+  postgres:   { ports: !override ["127.0.0.1:30432:5432"] }
+  pgbouncer:  { ports: !override ["127.0.0.1:31432:6432"] }
+  redis:      { ports: !override ["127.0.0.1:31379:6379"] }
+  rabbitmq:   { ports: !override ["127.0.0.1:30672:5672", "127.0.0.1:30673:15672"] }
+  control:
+    ports: !override ["127.0.0.1:33100:8000"]
+    environment:
+      AMF_V2_AUDIT_ORG_MAP: "dev-org=zeroshield,_unauthenticated=zeroshield"
+      ASGI_ALLOWED_ORIGINS: "http://127.0.0.1:33180,http://localhost:33180"
+      FRONTEND_ORIGIN: "http://127.0.0.1:33180"
+      GATEWAY_PUBLIC_URL: "http://127.0.0.1:33180"
+      BACKEND_PUBLIC_URL: "http://127.0.0.1:33180"
+  gateway:    { ports: !override ["127.0.0.1:33300:8300"] }
+  gateway-v2:
+    ports: !override ["127.0.0.1:33301:8301"]
+    environment:
+      # D-20 promotion: strict plan with an enforcing output.ip_leak BLOCK rule.
+      AMF_DEV_PLAN_PATH: /opt/gateway_v2/dev/plan.strict.json
+      # Peer org is the INCREMENTAL control (its plan is published to redis in up.sh).
+      AMF_DEV_PEER_API_KEY: ${AMF_DEV_PEER_API_KEY:-dev-peer-key}
+      AMF_DEV_PEER_ORG_ID: ${AMF_DEV_PEER_ORG_ID:-org-b}
+      # The fake OpenAI upstream (SLOWSTREAM / SLOWLEAK / SLOWSTALL).
+      AMF_DEV_PROVIDER_URL: ${INT_PROVIDER_URL-http://fake-openai:9600/v1}
+      AMF_DEV_PROVIDER_API_KEY: ${INT_PROVIDER_KEY-sk-fake-upstream}
+    volumes:
+      - ./docs/plans/evidence/2026-11-05-strict-idle/plan.strict.json:/opt/gateway_v2/dev/plan.strict.json:ro
+  guardrails: { ports: !override ["127.0.0.1:33310:8310"] }
+  mcp-broker:
+    container_name: amff1_mcp_broker
+    environment:
+      MCP_BROKER_CONTAINER_NAME: amff1_mcp_broker
+    ports: !override ["127.0.0.1:33311:8311"]
+    volumes:
+      - ${XDG_RUNTIME_DIR}/docker.sock:/var/run/docker.sock
+  mcp-stub:   { ports: !override ["127.0.0.1:34999:9999"] }
+  vector-retrieval: { ports: !override ["127.0.0.1:33312:8312"] }
+  demo:       { ports: !override ["127.0.0.1:33770:8770"] }
+  frontend:
+    ports: !override ["127.0.0.1:33180:5173"]

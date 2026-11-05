@@ -44,7 +44,7 @@ from gateway_v2.edge.wire.sse import SSEEncoder
 from gateway_v2.edge.wire.sse_chunks import ChunkEvent
 from gateway_v2.edge.wire.tool_stream import Terminate, ToolCallAssembler
 from gateway_v2.egress.backpressure import Coalescer
-from gateway_v2.egress.output_guard import enforcing_output_rules
+from gateway_v2.egress.output_guard import enforcing_output_rules, withholds_until_decision
 from gateway_v2.egress.select import select_pipeline
 from gateway_v2.egress.stream import (
     DownstreamFrame,
@@ -134,7 +134,7 @@ class ChatStream:
         pending_error = PendingError()
         produced = ProducedModeHolder(holds)
         binding: StreamBinding | None = None if outcome is None else outcome.binding
-        control, timeouts = self._controls(binding, kill_latch)
+        control, timeouts = self._controls(binding, kill_latch, plan)
         assembler = self._assembler(plan, coalescer, req)
 
         async def _write_events(events: Sequence[ChunkEvent]) -> None:
@@ -214,10 +214,21 @@ class ChatStream:
         await response.close()
 
     def _controls(
-        self, binding: StreamBinding | None, kill_latch: KillLatch
+        self, binding: StreamBinding | None, kill_latch: KillLatch, plan: ExecutionPlan
     ) -> tuple[InFlightControl, StreamTimeouts]:
-        """The per-stream in-flight control (GW29 source) and C27 timeouts (GW28 first event)."""
+        """The per-stream in-flight control (GW29 source) and C27 timeouts (GW28 first event).
+
+        strict-withhold-idle-timeout (F1): a withholding strict stream writes nothing downstream
+        until it has decided the whole response, so the write-based idle clock would blame the
+        client for the gateway's own withhold. :func:`withholds_until_decision` decides, once from
+        the plan, whether the C27 idle clock must be driven by upstream liveness instead; the flag
+        is passed straight to :class:`StreamTimeouts`. The predicate is pure and does not raise on
+        a valid plan, but it is evaluated here, before any attempt opens the upstream, so if it
+        ever did raise the stream fails before it starts (a plain error, never a silently disabled
+        guard).
+        """
         route = self.route
+        upstream_liveness = withholds_until_decision(plan)
         # GW29: the per-stream control source; an unbound stream refuses (fail closed).
         source = (
             route.control_factory.for_stream(binding)
@@ -243,6 +254,7 @@ class ChatStream:
                     route.contract.routing_max_attempts()
                 )
             ),
+            upstream_liveness=upstream_liveness,
         )
         return control, timeouts
 
