@@ -68,7 +68,7 @@ Caveat: dev profile has one fixed route, so real rerouting was not tested.
 1. Open `?tab=firewall-1-5`. Expected: "Multi-Model Governance" with the routing governance panel and a Model Routing Simulator. Fail: error boundary.
 2. In the Model Routing Simulator send a normal prompt with routing enabled. Expected: the result appears with stages.
 3. Open the resulting event in Scan Detail (click the row or "view detail"). Expected: an indigo card with `data-testid="routing-decision-card"` titled as a routing decision, showing requested model, selected/routed model, reason, and candidate count. Fail: card absent for an allowed request, or fields all blank/NaN.
-4. Try to save a routing weight on this page or in section 2. Expected: refused naming GW28 (consistent with section 2 step 4).
+4. Try to save a routing weight on this page or in section 2 (needs control with `AMF_GATEWAY_BACKEND=v2`, as in section 2 step 4). Expected: refused naming GW28 (consistent with section 2 step 4).
 5. A blocked event should NOT show a routing card (the model was skipped). Expected for a blocked event: `model_routing` stage reads skip.
 
 ## 5. Kill switch / isolation controls (GW29)

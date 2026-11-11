@@ -185,12 +185,6 @@ class FirewallConfigSerializer(serializers.ModelSerializer):
             if gov_errors:
                 raise serializers.ValidationError(gov_errors)
 
-        # GW27 refusals describe what gateway-v2 can serve. While v1 is the serving gateway
-        # (AMF_GATEWAY_BACKEND=v1, the default) v1 still enforces every field, so these checks
-        # must not block a v1 save.
-        if gateway_backend() != "v2":
-            return attrs
-
         stored = {}
         if self.instance is not None:
             stored = {
@@ -198,6 +192,17 @@ class FirewallConfigSerializer(serializers.ModelSerializer):
                 for name in FIELDS
                 if hasattr(self.instance, name)
             }
+        # GW27 refusals describe what gateway-v2 can serve. While v1 is the serving gateway
+        # (AMF_GATEWAY_BACKEND=v1, the default) v1 still enforces every field, so only the sanity
+        # checks that hold for any gateway apply (e.g. retention_days >= 1).
+        if gateway_backend() != "v2":
+            sanity = built_value_errors(
+                {**stored, **attrs}, changed_fields(attrs, stored), v2_limits=False
+            )
+            if sanity:
+                raise serializers.ValidationError(sanity)
+            return attrs
+
         unsupported = selection_errors(attrs, stored, getattr(org, "slug", None))
         # GW27: BUILT values the gateway cannot represent, and controls-backed changes while the
         # fleet plan-schema gate is closed. An unchanged stored value is always accepted.
