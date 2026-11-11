@@ -24,7 +24,12 @@ required_checks=(
 
 contexts_json=$(printf '%s\n' "${required_checks[@]}" | python3 -c 'import json,sys; print(json.dumps([l.strip() for l in sys.stdin if l.strip()]))')
 
+echo "This REPLACES any existing protection on develop, staging and main with the settings below."
 for branch in develop staging main; do
+  if ! gh api "repos/$repo/branches/$branch" --silent 2>/dev/null; then
+    echo "WARNING: branch '$branch' does not exist; skipped. Create it, then re-run this script." >&2
+    continue
+  fi
   echo "Protecting $branch"
   gh api -X PUT "repos/$repo/branches/$branch/protection" --input - <<JSON
 {

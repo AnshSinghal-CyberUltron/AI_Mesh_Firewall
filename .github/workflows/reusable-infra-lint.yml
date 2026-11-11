@@ -19,7 +19,7 @@ on:
   workflow_call:
     inputs:
       paths-exclude:
-        description: Extended regex of paths skipped by hadolint, shellcheck and Trivy.
+        description: Extended regex of paths skipped by hadolint and shellcheck (Trivy uses `trivy-skip-dirs`).
         type: string
         default: "^(docs|\\.kiro|\\.swarm|\\.skill-workspace|mcp-parallel|semantic-review|runs)/|node_modules"
       compose-files:
@@ -56,6 +56,10 @@ on:
       shellcheck-image:
         type: string
         default: koalaman/shellcheck:v0.11.0
+      trivy-skip-dirs:
+        description: Comma-separated directories (globs allowed) that `trivy config` skips.
+        type: string
+        default: "docs,.kiro,.swarm,.skill-workspace,mcp-parallel,semantic-review,runs,node_modules"
       trivy-image:
         type: string
         default: aquasec/trivy:0.76.2
@@ -155,11 +159,13 @@ jobs:
         continue-on-error: ${{ !inputs.trivy-blocking }}
         env:
           IMAGE: ${{ inputs.trivy-image }}
+          SKIP_DIRS: ${{ inputs.trivy-skip-dirs }}
         run: |
+          args=(config --quiet --severity "HIGH,CRITICAL" --format sarif
+                --output /src/trivy-config.sarif --exit-code 1)
+          if [ -n "$SKIP_DIRS" ]; then args+=(--skip-dirs "$SKIP_DIRS"); fi
           docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$PWD:/src" -w /src "$IMAGE" \
-            config --quiet --severity HIGH,CRITICAL \
-            --skip-dirs docs,.kiro,.swarm,.skill-workspace,mcp-parallel,semantic-review,runs,node_modules \
-            --format sarif --output /src/trivy-config.sarif --exit-code 1 .
+            "${args[@]}" .
       - name: Upload SARIF
         if: always() && hashFiles('trivy-config.sarif') != ''
         continue-on-error: true

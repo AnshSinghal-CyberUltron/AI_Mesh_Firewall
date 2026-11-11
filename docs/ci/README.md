@@ -19,15 +19,15 @@ feature/* fix/* ci/* docs/* chore/* refactor/* test/* perf/* dependabot/*
 
 | Pipeline | Job | Tool | On a PR it… |
 |---|---|---|---|
-| `CI` (`ci.yml`) | control | Django tests, Postgres 16 + Redis 7.4 service containers | **blocks** on any failure not listed in `.github/ci/control-known-failures.txt` |
+| `CI` (`ci.yml`) | control | Django tests, Postgres 16 + Redis 7.4 service containers | **blocks** on any failure not listed in `.github/ci/control-known-failures.txt`, and on a run that did not complete (no test summary, fewer than 500 tests, or a non-zero exit with no parsed failure) |
 | | frontend | `npm ci`, `node --test` unit tests, `vite build` | **blocks** |
 | | CI helper scripts | self-tests for `scripts/ci/known_failures.py` | **blocks** |
 | `gateway-v2` (`gateway-v2.yml`) | structural-gates | size, HTTP, mutability, capacity, tenant-scale AST gates; import-linter; ruff; mypy --strict; console inventory; ~5,000 pytest | **blocks** |
 | | secret-headers, image-digest, openai-conformance, parity-harness | repo-specific gates | **block** |
-| `Security` (`security.yml`) | secrets | gitleaks + TruffleHog (verified only), PR commits only | **blocks** |
-| | SAST | Semgrep OSS (diff-aware: new ERROR findings only) | **blocks** |
+| `Security` (`security.yml`) | secrets | gitleaks + TruffleHog (verified only) on the PR's commits, or the pushed range | **blocks** |
+| | SAST | Semgrep OSS, diff-aware: new ERROR findings against the merge base (PR) or the previous head (push) | **blocks** |
 | | | Bandit (high severity, high confidence) | report → code scanning |
-| | dependencies | dependency-review: new deps with high+ CVEs or AGPL/SSPL licences | **blocks** |
+| | dependencies | dependency-review: new deps with high+ CVEs or AGPL/SSPL licences | **blocks** once the Dependency graph is enabled. Until then it passes with a warning, and only that case is tolerated |
 | | | OSV-Scanner on every lockfile, npm audit | report → code scanning |
 | | infra lint | actionlint, hadolint (error), shellcheck (error), `docker compose config`, `nginx -t` | **blocks** |
 | | | Trivy config (HIGH, CRITICAL) | report → code scanning |
@@ -36,13 +36,17 @@ feature/* fix/* ci/* docs/* chore/* refactor/* test/* perf/* dependabot/*
 | `chat-pipeline-golden` | golden-freeze | v1 gateway golden tests | **red since 6 Aug 2026 on every branch**; waived per `MERGE_POLICY.md` until fixed |
 | Dependabot (`dependabot.yml`) | | weekly grouped update PRs into `develop` for Actions, pip, npm and Docker | |
 
-The weekly `schedule` run of `Security` scans the **full git history** for secrets and every lockfile, so it catches anything the diff-aware PR checks cannot see.
+The weekly `schedule` run of `Security` scans the **full git history** for secrets and every lockfile, so it catches anything the diff-aware PR checks cannot see. Full sweeps are **report-only**:
+- Semgrep without a baseline, and TruffleHog over the whole history, upload SARIF and artifacts and annotate the run.
+- They do not fail it, because a finding in old commits cannot be fixed by the run that finds it.
+
+**Schedules and Dependabot run only from the default branch (`main`).** GitHub reads `schedule:` triggers and `.github/dependabot.yml` from the default branch. So the weekly sweep and the update PRs start once these files reach `main` through the promotion path.
 
 ### Why some scanners are report-only
 
 The repo already carries findings: 319 OSV advisories, root containers flagged by Trivy, and legacy Bandit hits. A scanner that blocks on legacy findings keeps every PR red until people stop reading it. So:
 
-- **Diff-aware scanners block.** Secrets on the PR's commits, Semgrep `--baseline-commit`, and dependency-review only see what the PR adds.
+- **Diff-aware scanners block.** Secrets on the PR's commits or pushed range, Semgrep `--baseline-commit`, and dependency-review only see what the change adds.
 - **Whole-repo scanners report** to the Security tab.
 
 Flip `osv-blocking`, `bandit-blocking`, `npm-audit-blocking` or `trivy-blocking` to `true` in `security.yml` once a scanner is at zero.
@@ -78,28 +82,42 @@ jobs:
 
 | Workflow | Inputs that matter |
 |---|---|
-| `reusable-python-ci.yml` | `working-directory`, `install-command`, `lint-command`, `typecheck-command`, `test-command`, `known-failures-file`, `report-name` |
-| `reusable-django-ci.yml` | `working-directory`, `install-command`, `test-labels`, `check-migrations`, `known-failures-file`, `extra-env` |
+| `reusable-python-ci.yml` | `working-directory`, `install-command`, `lint-command`, `typecheck-command`, `test-command`, `known-failures-file`, `min-tests`, `report-name` |
+| `reusable-django-ci.yml` | `working-directory`, `install-command`, `test-labels`, `check-migrations`, `known-failures-file`, `min-tests`, `extra-env` |
 | `reusable-node-ci.yml` | `working-directory`, `lint-command`, `test-command`, `build-command`, `node-version` |
 | `reusable-secret-scan.yml` | `full-history`, image pins |
 | `reusable-sast.yml` | `semgrep-configs`, `semgrep-severity`, `paths-exclude`, `bandit-targets`, `bandit-blocking` |
-| `reusable-dependency-scan.yml` | `fail-on-severity`, `deny-licenses`, `osv-blocking`, `osv-exclude`, `npm-directories`, `npm-audit-blocking` |
-| `reusable-infra-lint.yml` | `compose-files`, `compose-env`, `nginx-configs`, `paths-exclude`, `trivy-blocking` |
+| `reusable-dependency-scan.yml` | `fail-on-severity`, `deny-licenses`, `dependency-review-required`, `osv-blocking`, `osv-exclude`, `npm-directories`, `npm-audit-blocking` |
+| `reusable-infra-lint.yml` | `compose-files`, `compose-env`, `nginx-configs`, `paths-exclude` (hadolint and shellcheck), `trivy-skip-dirs`, `trivy-blocking` |
 | `reusable-codeql.yml` | `languages`, `queries`, `paths-ignore` |
+
+**Permissions the caller must grant.** A called workflow can never have more than the calling job grants, so give the calling job at least:
+
+| Workflow | Calling-job `permissions:` |
+|---|---|
+| `reusable-python-ci`, `reusable-django-ci`, `reusable-node-ci`, `reusable-secret-scan` | `contents: read` |
+| `reusable-sast`, `reusable-codeql`, `reusable-infra-lint` | `contents: read`, `security-events: write` (SARIF upload) |
+| `reusable-dependency-scan` | `contents: read`, `pull-requests: write` (review comment), `security-events: write` (OSV SARIF) |
 
 Notes for callers:
 
-- The `known-failures-file` ratchet runs `scripts/ci/known_failures.py`, so copy that file into the calling repo.
+- The `known-failures-file` ratchet runs `scripts/ci/known_failures.py`, so copy that file into the calling repo. The ratchet fails a run that did not complete; set `min-tests` near your suite's size so a partly collected suite fails too.
 - Pin to a tag or commit (`@<sha>`), not `@main`, for reproducible builds.
 - Every third-party action here is pinned to a full commit SHA, with its version in a comment. Dependabot keeps them current.
 
 ## One-time owner setup
 
 1. **Branch protection.** The CI token cannot change protection, so the owner runs `./scripts/ci/setup_branch_protection.sh AnshSinghal-CyberUltron/AI_Mesh_Firewall` once.
+   - It **replaces** any existing protection on `develop`, `staging` and `main`.
+   - It skips a branch that does not exist, with a warning.
 2. **Repository settings:**
    - Enable the *Dependency graph*. Until it is on, `dependency-review` reports "not supported" without blocking. Then set `dependency-review-required: true` in `security.yml`.
    - Enable *Dependabot alerts* and *Dependabot security updates*.
    - Enable *Code scanning*, which receives the SARIF uploads and CodeQL alerts.
+   - **If the repository goes private:** code scanning (CodeQL and every SARIF upload) needs GitHub Advanced Security, which is paid for private repositories.
+     - Without it, the upload steps fail softly (`continue-on-error`).
+     - The scanners still run, still block where marked, and still publish their reports as run artifacts.
+     - Only the Security-tab view is lost.
    - Enable *Private vulnerability reporting*.
 3. **Optional paid or account tools.** GitGuardian, CodeRabbit, Snyk and SonarCloud are deliberately not wired. The owner chose free tools only. Each would add a job or app without changing the structure above.
 

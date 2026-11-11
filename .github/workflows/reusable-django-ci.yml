@@ -37,6 +37,10 @@ on:
       known-failures-file:
         type: string
         default: ""
+      min-tests:
+        description: With a ratchet, fewer tests than this means the run crashed (fails the job).
+        type: number
+        default: 1
       postgres-image:
         type: string
         default: pgvector/pgvector:pg16
@@ -100,17 +104,28 @@ jobs:
         run: python manage.py makemigrations --check --dry-run
       - name: Test
         id: test
-        continue-on-error: ${{ inputs.known-failures-file != '' }}
-        env: { LABELS: "${{ inputs.test-labels }}" }
+        env:
+          LABELS: ${{ inputs.test-labels }}
+          BASELINE: ${{ inputs.known-failures-file }}
         run: |
-          set -o pipefail
+          set +e -o pipefail
           read -ra labels <<< "$LABELS"
           python manage.py test "${labels[@]}" --noinput 2>&1 | tee "$RUNNER_TEMP/django-test.log"
+          rc=$?
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+          # With a baseline the ratchet decides (it also fails a crashed run); without one,
+          # the suite's own exit status does.
+          if [ -z "$BASELINE" ]; then exit "$rc"; fi
       - name: Known-failure ratchet
         if: inputs.known-failures-file != ''
         working-directory: .
-        env: { BASELINE: "${{ inputs.known-failures-file }}" }
-        run: python scripts/ci/known_failures.py --log "$RUNNER_TEMP/django-test.log" --baseline "$BASELINE"
+        env:
+          BASELINE: ${{ inputs.known-failures-file }}
+          RC: ${{ steps.test.outputs.rc }}
+          MIN_TESTS: ${{ inputs.min-tests }}
+        run: |
+          python scripts/ci/known_failures.py --log "$RUNNER_TEMP/django-test.log" \
+            --baseline "$BASELINE" --exit-code "$RC" --min-tests "$MIN_TESTS"
       - name: Upload test log
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

@@ -62,8 +62,32 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: Is dependency review available here?
+        id: available
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+          REQUIRED: ${{ inputs.dependency-review-required }}
+        run: |
+          # The review needs the repository's Dependency graph. When it is off, the compare API
+          # answers 403/404; that (and only that) is tolerated unless the caller requires it.
+          if gh api "repos/$REPO/dependency-graph/compare/$BASE...$HEAD" > /dev/null 2> err.txt; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          cat err.txt
+          if grep -qiE 'not supported|dependency graph|HTTP 40[34]' err.txt; then
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+            msg="Dependency review is unavailable: enable the Dependency graph (Settings > Code security)."
+            if [ "$REQUIRED" = "true" ]; then echo "::error::$msg"; exit 1; fi
+            echo "::warning::$msg This check passes without reviewing until then."
+            exit 0
+          fi
+          exit 1
       - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
-        continue-on-error: ${{ !inputs.dependency-review-required }}
+        if: steps.available.outputs.ok == 'true'
         with:
           fail-on-severity: ${{ inputs.fail-on-severity }}
           deny-licenses: ${{ inputs.deny-licenses }}

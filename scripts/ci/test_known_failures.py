@@ -15,7 +15,15 @@ FAIL: test_a (core.tests.mod.ATests.test_a)
 ----------------------------------------------------------------------
 ERROR: test_b (policy.tests.mod.BTests.test_b)
 FAIL: test_c (core.tests.mod.ATests.test_c)
-Ran 3 tests
+----------------------------------------------------------------------
+Ran 3 tests in 0.004s
+
+FAILED (failures=2, errors=1)
+"""
+
+_CRASH = """\
+Creating test database for alias 'default'...
+django.db.utils.OperationalError: connection to server at "127.0.0.1", port 5432 failed
 """
 
 _JUNIT = """<?xml version="1.0"?>
@@ -75,6 +83,34 @@ class KnownFailuresTests(unittest.TestCase):
         )
         log = self._write("log.txt", _LOG)
         self.assertEqual(known_failures.main(["--log", str(log), "--baseline", str(baseline)]), 0)
+
+    def test_a_crashed_run_never_passes(self) -> None:
+        """Review of #102: no database, 0 tests run, exit 1 must not read as "no new failures"."""
+        baseline = self._write("b.txt", "")
+        log = self._write("log.txt", _CRASH)
+        self.assertEqual(known_failures.main(["--log", str(log), "--baseline", str(baseline)]), 2)
+        empty = self._write("empty.txt", "")
+        self.assertEqual(known_failures.main(["--log", str(empty), "--baseline", str(baseline)]), 2)
+
+    def test_a_non_zero_exit_without_a_parsed_failure_is_a_crash(self) -> None:
+        baseline = self._write("b.txt", "")
+        ok_log = self._write("ok.txt", "Ran 4 tests in 0.1s\n\nOK\n")
+        args = ["--log", str(ok_log), "--baseline", str(baseline)]
+        self.assertEqual(known_failures.main([*args, "--exit-code", "0"]), 0)
+        self.assertEqual(known_failures.main([*args, "--exit-code", "1"]), 2)
+
+    def test_an_empty_junit_report_is_a_crash(self) -> None:
+        baseline = self._write("b.txt", "")
+        junit = self._write("e.xml", "<testsuites><testsuite/></testsuites>")
+        self.assertEqual(known_failures.main(["--junit", str(junit), "--baseline", str(baseline)]), 2)
+
+    def test_too_few_tests_is_a_crash(self) -> None:
+        baseline = self._write("b.txt", "core.tests.mod.ATests.test_a\npolicy.tests.mod.BTests.test_b\n"
+                               "core.tests.mod.ATests.test_c\n")
+        log = self._write("log.txt", _LOG)
+        args = ["--log", str(log), "--baseline", str(baseline)]
+        self.assertEqual(known_failures.main([*args, "--min-tests", "3"]), 0)
+        self.assertEqual(known_failures.main([*args, "--min-tests", "500"]), 2)
 
     def test_unreadable_input_is_an_error(self) -> None:
         baseline = self._write("b.txt", "")
