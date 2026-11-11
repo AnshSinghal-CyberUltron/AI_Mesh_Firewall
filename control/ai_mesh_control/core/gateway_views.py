@@ -139,7 +139,8 @@ class GatewayStatsListView(APIView):
         gateways = Agent.objects.filter(agent_type="gateway").order_by("-updated_at")
         if org is not None:
             gateways = gateways.filter(endpoint__organization=org)
-        elif not getattr(request.user, "is_superuser", False):
+        else:
+            # #120 / R11: a superuser without an org gets nothing, not every tenant's gateways.
             gateways = gateways.none()
         agent_ids = list(gateways.values_list("id", flat=True))
 

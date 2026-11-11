@@ -372,9 +372,8 @@ class PolicyWriteSerializer(serializers.ModelSerializer):
             mcp_model = Policy.mcp_server.field.related_model
             if org is not None:
                 self.fields["mcp_server"].queryset = mcp_model.objects.filter(organization=org)
-            elif getattr(request.user, "is_superuser", False):
-                self.fields["mcp_server"].queryset = mcp_model.objects.all()
             else:
+                # #120 / R11: a superuser without an org gets nothing, not every tenant's servers.
                 self.fields["mcp_server"].queryset = mcp_model.objects.none()
 
     def validate_code(self, value):

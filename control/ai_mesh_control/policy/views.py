@@ -498,7 +498,8 @@ class PolicyViewSet(ModelViewSet):
         org = get_request_organization(self.request)
         if org is not None:
             qs = qs.filter(organization=org)
-        elif not (getattr(self.request, "user", None) and self.request.user.is_superuser):
+        else:
+            # #120 / R11: a superuser without an org gets nothing, not every tenant's policies.
             qs = qs.none()
         enabled = self.request.query_params.get("enabled")
         if enabled is not None:
@@ -908,8 +909,7 @@ class RuleViewSet(ModelViewSet):
         org = get_request_organization(self.request)
         if org is not None:
             return qs.filter(policy__organization=org)
-        if getattr(self.request.user, "is_superuser", False):
-            return qs
+        # #120 / R11: a superuser without an org gets nothing, not every tenant's rules.
         return qs.none()
 
     def get_serializer_class(self):
@@ -930,7 +930,8 @@ class RuleViewSet(ModelViewSet):
         policy_qs = Policy.objects.filter(pk=policy_id)
         if org is not None:
             policy_qs = policy_qs.filter(organization=org)
-        elif not request.user.is_superuser:
+        else:
+            # #120 / R11: a superuser without an org gets nothing, not every tenant's policies to add rules to.
             policy_qs = policy_qs.none()
 
         policy = policy_qs.first()

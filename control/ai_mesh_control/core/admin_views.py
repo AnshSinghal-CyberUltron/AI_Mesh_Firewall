@@ -67,7 +67,8 @@ class AdminAgentVersionStatsView(APIView):
         endpoints_qs = Endpoint.objects.values("metadata")
         if org is not None:
             endpoints_qs = endpoints_qs.filter(organization=org)
-        elif not (getattr(request, "user", None) and request.user.is_superuser):
+        else:
+            # #120 / R11: a superuser without an org gets nothing, not every tenant's endpoints.
             endpoints_qs = endpoints_qs.none()
         by_version = defaultdict(int)
         for ep in endpoints_qs:
@@ -110,7 +111,8 @@ class AdminEndpointHealthView(APIView):
         endpoints_qs = Endpoint.objects.all()
         if org is not None:
             endpoints_qs = endpoints_qs.filter(organization=org)
-        elif not (getattr(request, "user", None) and request.user.is_superuser):
+        else:
+            # #120 / R11: a superuser without an org gets nothing, not every tenant's endpoints.
             endpoints_qs = endpoints_qs.none()
         total = endpoints_qs.count()
         online = endpoints_qs.filter(status="online").count()

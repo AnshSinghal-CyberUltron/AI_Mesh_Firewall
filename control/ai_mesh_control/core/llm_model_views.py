@@ -91,9 +91,8 @@ class LLMModelConfigListView(APIView):
         org = self._get_org(request)
         if org is not None:
             qs = LLMModelConfig.objects.filter(organization=org)
-        elif getattr(request.user, "is_superuser", False):
-            qs = LLMModelConfig.objects.all()
         else:
+            # #120 / R11: a superuser without an org gets nothing, not every tenant's model configs.
             qs = LLMModelConfig.objects.none()
         qs = LLMModelConfig.queryset_user_managed(qs)
         serializer = LLMModelConfigSerializer(qs, many=True)
@@ -159,9 +158,8 @@ class LLMModelConfigDetailView(APIView):
             obj = LLMModelConfig.objects.get(pk=pk)
         except LLMModelConfig.DoesNotExist:
             return None
-        if org is not None and obj.organization_id != org.id:
-            return None
-        if org is None and not getattr(request.user, "is_superuser", False):
+        # #120 / R11: a superuser without an org gets nothing, not every tenant's model configs.
+        if org is None or obj.organization_id != org.id:
             return None
         if obj.is_platform_managed:
             return None

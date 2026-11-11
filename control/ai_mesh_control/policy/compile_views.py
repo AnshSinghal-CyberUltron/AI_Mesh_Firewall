@@ -160,7 +160,10 @@ class PolicyCompileStatusView(APIView):
     )
     def get(self, request: Request) -> Response:
         org = get_request_organization(request)
-        if org is None and not request.user.is_superuser:
+        # #120 / R11: a superuser without an org is refused too. Without an org this view
+        # read the "default" key, which load_policies / compile_policies fill with
+        # compile_all() over EVERY org's policies.
+        if org is None:
             return Response(
                 {"detail": "Organization scope required."},
                 status=status.HTTP_403_FORBIDDEN,
