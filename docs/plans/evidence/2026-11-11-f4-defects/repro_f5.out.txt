@@ -1,0 +1,4 @@
+# origin/develop 25c33c86, run from control/
+code: MCP_AUTH_FAILED
+summary: The MCP server rejected authentication. Check the credentials or re-authorize the connection, then retry.
+needs_reauth heuristic (views.py:922) fires on: ['re-authorize']
