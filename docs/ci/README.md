@@ -33,7 +33,7 @@ feature/* fix/* ci/* docs/* chore/* refactor/* test/* perf/* dependabot/*
 | | | workflow guard (`scripts/ci/workflow_guard.py`): SHA-pinned `uses:`, top-level least-privilege `permissions:`, digest-pinned job images; see [below](#workflow-guard-pinned-actions-and-least-privilege-tokens) | **blocks** |
 | | | Trivy config (HIGH, CRITICAL) | report → code scanning |
 | | CodeQL | Python, JavaScript/TypeScript, GitHub Actions; `security-extended` | alerts → code scanning |
-| `PR policy` (`pr-policy.yml`) | policy | Conventional Commit title, description with a testing section, size report, promotion path, release notes into `main` | **blocks** |
+| `PR policy` (`pr-policy.yml`) | policy | Conventional Commit title, description with a testing section, size report, promotion path, release notes into `main`. A PR whose author is exactly `dependabot[bot]` skips only the description-length and testing-section rules ([why](#dependabot-prs-and-the-pr-policy)) | **blocks** |
 | `chat-pipeline-golden` | golden-freeze | v1 gateway golden tests; runs only when the v1 pipeline files, `docs/pipeline/`, the golden cases or this workflow change | **red since 6 Aug 2026 on every branch**; waived per `MERGE_POLICY.md` until fixed |
 | Dependabot (`dependabot.yml`) | | weekly grouped update PRs into `develop` for Actions (SHA pins and their version comments, titled `ci(deps): …`), pip, npm and Docker | |
 
@@ -59,6 +59,17 @@ Flip `osv-blocking`, `bandit-blocking`, `npm-audit-blocking` or `trivy-blocking`
 | `.github/ci/control-known-failures.txt` | 23 control tests failing when the gate was introduced | delete a line when its test passes (the ratchet prints a notice); never add one |
 | `.gitleaksignore` | fingerprints of findings in **old commits** (no secret values) | never add a fingerprint for a new commit; remove the secret instead |
 | `.gitleaks.toml` | every rule off only in the detector test corpora, specs and evidence; other `tests/`/`fixtures/` skip `generic-api-key` only | never widen it to hide a real finding |
+
+### Dependabot PRs and the PR policy
+
+Dependabot writes its own PR body (release notes and a commit list), which can never carry a testing section, so without an exemption no update PR, and so no action-pin bump, could pass `policy`.
+
+- **What is skipped.** When `github.event.pull_request.user.login` is exactly `dependabot[bot]`, `pr-policy.yml` skips the description-length and testing-section rules, and says so in the job summary.
+  - The login belongs to GitHub's Dependabot app; no person or other app can register it.
+  - The check reads the event's author, never the title, body or branch name, so PR text cannot claim the exemption.
+- **What still applies.** The Conventional Commits title (`dependabot.yml` gives the Actions updates a `ci(deps):` prefix), the promotion path, release notes into `main`, and every other check. A Dependabot PR still needs two reviews under `MERGE_POLICY.md`; its tests are the CI checks.
+- **Ecosystems without a prefix.** pip, npm and Docker updates have no title prefix yet. Their default titles (`Bump …`) still fail the title rule until a reviewer retitles them.
+- **Self-tests.** `scripts/ci/test_pr_policy.py` extracts the policy script from the workflow and runs it for these cases (`CI helper scripts` runs them).
 
 ## Reusing these workflows in another repo
 

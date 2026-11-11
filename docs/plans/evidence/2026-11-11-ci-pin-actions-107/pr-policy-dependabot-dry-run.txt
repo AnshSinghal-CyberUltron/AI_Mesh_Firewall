@@ -1,0 +1,35 @@
+# The policy script is extracted from .github/workflows/pr-policy.yml (scripts/ci/test_pr_policy.py::policy_script) and run as the step runs it.
+
+## dependabot[bot], ci(deps) title, generated body -> develop
+exit=0
+### PR policy
+- Size XS: 12 changed lines in 1 files.
+- Author is dependabot[bot]: description-length and testing-section rules skipped; CI checks are its tests.
+
+## dependabot[bot], default Dependabot title -> develop
+exit=1
+### PR policy
+- Size XS: 12 changed lines in 1 files.
+- Author is dependabot[bot]: description-length and testing-section rules skipped; CI checks are its tests.
+- ❌ Title must follow Conventional Commits, e.g. 'fix(control): ...'. Allowed types: feat, fix, docs, chore, ci, test, refactor, perf, build, revert, security, release.
+
+## dependabot[bot], ci(deps) title -> main (promotion path)
+exit=1
+### PR policy
+- Size XS: 12 changed lines in 1 files.
+- Author is dependabot[bot]: description-length and testing-section rules skipped; CI checks are its tests.
+- ❌ 'dependabot/github_actions/actions-abc' cannot be merged into 'main'. Promotion path: develop -> staging -> main (hotfix/* may target staging or main).
+- ❌ PRs into main need a 'Release notes' section.
+
+## human author, same generated body -> develop
+exit=1
+### PR policy
+- Size XS: 12 changed lines in 1 files.
+- ❌ Description needs a testing section (a heading containing Test, Evidence, Verification or Validation).
+
+## human author, body text claims dependabot[bot]
+exit=1
+### PR policy
+- Size XS: 12 changed lines in 1 files.
+- ❌ Description is too short: say why, what changed, and how it was tested.
+- ❌ Description needs a testing section (a heading containing Test, Evidence, Verification or Validation).
