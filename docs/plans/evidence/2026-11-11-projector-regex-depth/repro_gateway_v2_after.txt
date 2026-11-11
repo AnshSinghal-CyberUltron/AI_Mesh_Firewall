@@ -1,0 +1,11 @@
+len(deep) = 999 redos_shape = False
+validate_plan(499-deep regex): returned (1, '')
+validate_plan('a{4294967296}'): returned (1, '')
+validate_plan(deep JSON body): returned (0, 'RecursionError: maximum recursion depth exceeded while decoding a JSON array from a unicode string')
+validate_plan(400-deep) at shallow stack: returned (1, '')
+validate_plan(400-deep) after 600 frames: returned (1, '')
+_regex_spans(finditer raises RuntimeError after 1 match): returned None
+Projector.round_once() with one poisoned org: returned ProjectionSummary(leader=True, heartbeat=True, complete=True, as_of=10017.0, writes=2, unchanged=0, revokes=0, adds=0, adds_deferred=0, invalid_plans=0, refused_conditions=1, orgs_witho
+new-healthy plan signed: True
+rehydrator stamped: Stamp(verified_at=10017.0, cursors={<StateKind.PLAN: 'plan'>: Cursor(version=Version(epoch=1, seq=4), feed_seq=4), <StateKind.KEY: 'key'>: Cursor(version=Version(epoch=1, seq=2), feed_seq=2), <StateKind.KS: 'ks'>: Cursor(version=Version(epoch=1, seq=0), feed_seq=0), <StateKind.BUDGET: 'budget'>: Cursor(version=Version(epoch=1, seq=0), feed_seq=0)}, by='vm:18328', deep=False, degraded=False, signature=<elided>) source_lagging: False
+check_template(rewrite rule, 499-deep regex): RAISED TemplateError: rule rw: the rule's own condition pattern is refused (ReDoS shape, nested too de

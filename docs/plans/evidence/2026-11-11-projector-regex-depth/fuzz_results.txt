@@ -1,0 +1,21 @@
+# group_depth vs re's own parse tree (re._parser), Python 3.13.18; run from gateway_v2/
+$ python fuzz_token_soup.py 7 200000
+checked=6824 under_counts=0
+$ python fuzz_token_soup.py 11 200000
+checked=6931 under_counts=0
+$ python fuzz_structured.py 5 20000
+checked=12010 under_counts=0
+$ python fuzz_structured.py 6 20000
+checked=12072 under_counts=0
+$ python fuzz_structured.py 8 20000
+checked=11794 under_counts=0
+$ python fuzz_structured.py 9 20000
+checked=11917 under_counts=0
+$ python fuzz_structured.py 10 20000
+checked=11900 under_counts=0
+$ python fuzz_structured.py 12 20000
+checked=11932 under_counts=0
+$ python fuzz_structured.py 13 20000
+checked=12004 under_counts=0
+$ python fuzz_structured.py 14 20000
+checked=11998 under_counts=0

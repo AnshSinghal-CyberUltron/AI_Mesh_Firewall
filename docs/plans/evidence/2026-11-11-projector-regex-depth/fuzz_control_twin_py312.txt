@@ -1,0 +1,4 @@
+python 3.12.3 control twin structured seed=6: checked=23916 under_counts=0
+python 3.12.3 control twin token-soup seed=6: checked=1403 under_counts=0
+python 3.12.3 control twin structured seed=21: checked=23750 under_counts=0
+python 3.12.3 control twin token-soup seed=21: checked=1340 under_counts=0

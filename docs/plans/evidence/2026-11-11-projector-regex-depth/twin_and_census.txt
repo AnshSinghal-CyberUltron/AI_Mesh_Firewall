@@ -1,0 +1,6 @@
+vectors identical in both suites (ignoring whitespace): True
+twin comparison: 100000 random strings, 0 disagreements
+census: 3618 files, 254755 string literals, 13301 containing '('
+census: deepest literal has group depth 5 (gateway/ai_mesh_gateway/tests/test_rag_query_stage_hardening.py: '(((((a+)+)+)+)+)$')
+census: literals deeper than 32: 0
+cpu: 6.911 user s

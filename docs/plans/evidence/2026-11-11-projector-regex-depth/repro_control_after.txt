@@ -1,0 +1,12 @@
+validate_condition({'regex': 499-deep}): RAISED ValidationError: [ErrorDetail(string='condition regex nests groups deeper than 32 levels.', code=
+validate_redaction_config({'regex': 499-deep}): RAISED ValidationError: [ErrorDetail(string='redaction_config regex nests groups deeper than 32 levels.'
+validate_condition({'regex': 'a{4294967296}'}): RAISED ValidationError: [ErrorDetail(string='condition regex does not compile: the repetition number is 
+validate_condition({'regex': 'a(b'}) [re.error baseline]: RAISED ValidationError: [ErrorDetail(string='condition regex does not compile: missing ), unterminated s
+redaction._smart_substitute(text, 499-deep): returned 'aaa'
+redaction._smart_substitute(text, 'a(b') [re.error baseline]: returned 'secret a(b'
+firewall_v2_publish._matches_own_pattern(499-deep): returned True
+WARNING engine Rule id=7 has an invalid regex and will never match: RecursionError: maximum recursion depth exceeded
+engine._evaluate_rule(block rule, 499-deep): returned False
+WARNING engine Rule id=8 has an invalid regex and will never match: error: missing ), unterminated subpattern at position 1
+INFO 2026-11-11 11:33:43,307 apps 18355 139872111163072 SecurityEnginesConfig: warming up IntegratedSecurityScanner in background thread...
+engine._evaluate_rule(block rule, 'a(b') [re.error baseline]: returned False

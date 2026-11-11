@@ -1,0 +1,12 @@
+len(deep) = 999 redos_shape = False
+validate_plan(499-deep regex): RAISED RecursionError: maximum recursion depth exceeded
+validate_plan('a{4294967296}'): RAISED OverflowError: the repetition number is too large
+validate_plan(deep JSON body): RAISED RecursionError: maximum recursion depth exceeded while decoding a JSON array from a unicode stri
+validate_plan(400-deep) at shallow stack: returned (0, '')
+validate_plan(400-deep) after 600 frames: RAISED RecursionError: maximum recursion depth exceeded
+_regex_spans(finditer raises RuntimeError after 1 match): returned (Span(start=0, end=1),)
+Projector.round_once() with one poisoned org: RAISED RecursionError: maximum recursion depth exceeded
+new-healthy plan signed: False
+freshness stamp withheld (projector heartbeat missing or older than 16000 ms): plan, key, ks, budget; gateways fail closed once the last stamp ages past the freshness bound
+rehydrator stamped: None source_lagging: True
+check_template(rewrite rule, 499-deep regex): RAISED RecursionError: maximum recursion depth exceeded

@@ -1,0 +1,3 @@
+customer condition/policy JSON depth in: 505
+published plan body JSON depth out: 5 | rules: 9
+customer rows published: ['pol-P-1', 'pol-P-2']

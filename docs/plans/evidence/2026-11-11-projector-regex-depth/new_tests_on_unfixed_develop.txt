@@ -1,0 +1,18 @@
+FAILED tests/state_control/test_projector_poisoned_tenant.py::test_a_regex_re_cannot_compile_is_a_counted_refusal_not_an_exception[pattern0]
+FAILED tests/state_control/test_projector_poisoned_tenant.py::test_a_regex_re_cannot_compile_is_a_counted_refusal_not_an_exception[(((((((((((((((((((((((((((((((((a)))))))))))))))))))))))))))))))))]
+FAILED tests/state_control/test_projector_poisoned_tenant.py::test_a_regex_re_cannot_compile_is_a_counted_refusal_not_an_exception[a{4294967296}]
+FAILED tests/state_control/test_projector_poisoned_tenant.py::test_the_verdict_does_not_depend_on_the_projectors_stack[0]
+FAILED tests/state_control/test_projector_poisoned_tenant.py::test_the_verdict_does_not_depend_on_the_projectors_stack[300]
+FAILED tests/state_control/test_projector_poisoned_tenant.py::test_the_verdict_does_not_depend_on_the_projectors_stack[600]
+FAILED tests/state_control/test_projector_poisoned_tenant.py::test_deeply_nested_json_is_not_projectable_and_does_not_raise[raw0]
+FAILED tests/state_control/test_projector_poisoned_tenant.py::test_deeply_nested_json_is_not_projectable_and_does_not_raise[raw1]
+FAILED tests/state_control/test_projector_poisoned_tenant.py::test_a_rewrite_rule_with_a_deep_condition_is_a_compile_error_not_an_exception
+FAILED tests/state_control/test_projector_poisoned_tenant.py::test_any_unanticipated_exception_is_not_projectable
+FAILED tests/state_control/test_projector_poisoned_tenant.py::test_a_poisoned_tenant_does_not_stop_the_round_or_the_fleet_stamp
+FAILED tests/plan/test_rewrite_template_refused_condition.py::test_a_refused_condition_is_a_template_error[pattern0]
+FAILED tests/plan/test_rewrite_template_refused_condition.py::test_a_refused_condition_is_a_template_error[(((((((((((((((((((((((((((((((((a)))))))))))))))))))))))))))))))))]
+FAILED tests/plan/test_rewrite_template_refused_condition.py::test_a_refused_condition_is_a_template_error[a{4294967296}]
+FAILED tests/plan/test_rewrite_template_refused_condition.py::test_a_refused_condition_is_a_template_error[(a+)+]
+15 failed, 2 passed in 1.68s
+--- control (base shimmed with MAX_GROUP_DEPTH=32/group_depth=None so the module imports) ---
+RuleApiTests on develop 25c33c86: AssertionError: 500 != 400 : b'{"detail":"Internal server error."}' (both condition and redaction_config); Ran 9 tests: FAILED (failures=10, errors=12) incl. RecursionError/OverflowError escaping validators, engine, redaction and publisher

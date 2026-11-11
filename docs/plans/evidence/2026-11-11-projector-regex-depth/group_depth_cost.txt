@@ -1,0 +1,5 @@
+1000-char worst (499 nested)   group_depth    331.8 us/call (thread CPU)   re.compile once    2453.5 us
+1000-char literals             group_depth    179.8 us/call (thread CPU)   re.compile once    1260.5 us
+1000-char classes              group_depth    116.5 us/call (thread CPU)   re.compile once     648.6 us
+typical email regex            group_depth      4.8 us/call (thread CPU)   re.compile once     126.7 us
+measured with nice -n 10 on the shared 2-CPU host while other agents' suites ran; thread CPU time, not wall
