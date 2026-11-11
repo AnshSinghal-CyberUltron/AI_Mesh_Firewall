@@ -1,0 +1,88 @@
+{
+  "command": "flock /home/claude/work/.heavy.lock nice -n 10 .f2-scratch/venv/bin/python -I docs/plans/evidence/2026-11-11-f2-guard-model/scripts/export_onnx.py",
+  "exporter": "torch.onnx.export(dynamo=False, do_constant_folding=True)",
+  "opset": 17,
+  "onnx_ir_version": 8,
+  "opset_import": [
+    {
+      "domain": "",
+      "version": 17
+    }
+  ],
+  "inputs": [
+    "input_ids",
+    "attention_mask"
+  ],
+  "outputs": [
+    "logits"
+  ],
+  "node_count": 4599,
+  "op_histogram": {
+    "Constant": 1816,
+    "Unsqueeze": 381,
+    "Shape": 374,
+    "Concat": 192,
+    "Reshape": 192,
+    "Squeeze": 184,
+    "Slice": 183,
+    "Add": 183,
+    "Gather": 158,
+    "MatMul": 144,
+    "Cast": 128,
+    "Transpose": 120,
+    "Mul": 90,
+    "Div": 63,
+    "ConstantOfShape": 48,
+    "Expand": 48,
+    "Where": 38,
+    "Sqrt": 36,
+    "Equal": 36,
+    "LayerNormalization": 26,
+    "Identity": 24,
+    "Tile": 24,
+    "GatherElements": 24,
+    "Clip": 13,
+    "Not": 13,
+    "Erf": 13,
+    "If": 12,
+    "Neg": 12,
+    "Softmax": 12,
+    "Gemm": 2,
+    "Range": 1,
+    "Sub": 1,
+    "Sign": 1,
+    "Less": 1,
+    "Greater": 1,
+    "And": 1,
+    "Abs": 1,
+    "Log": 1,
+    "Ceil": 1,
+    "LessOrEqual": 1
+  },
+  "onnx_bytes": 284233017,
+  "onnx_sha256": "fe637bbc12fad24abf9dbbb0bf0dbb9f3bfa7ec568d5d7c34934b0141984d76a",
+  "checker": "onnx.checker.check_model(full_check=True) passed",
+  "export_seconds": 5.95,
+  "export_warnings": [
+    "DeprecationWarning: The feature will be removed. Please remove usage of this function",
+    "DeprecationWarning: You are using the legacy TorchScript-based ONNX export. Starting in PyTorch 2.9, the new torch.export-based ONNX exporter has become the default. Learn more abo"
+  ],
+  "source": {
+    "safetensors_sha256": "5120e30bcd536ce285345d9ec104bea6bd6e8f94365b99a340c764f417ea5fa1",
+    "tokenizer_sha256": "6eb983352e73f1697b883a8c3f6b66bdfa336ab3d29dd3687f8316d0ff2789c1",
+    "config_sha256": "1dc4742d04507072cafffb7235dc5dba5af9ba126f7a9830b95ed7ec00fd9104",
+    "num_parameters": 70830722,
+    "id2label": {
+      "0": "LABEL_0",
+      "1": "LABEL_1"
+    }
+  },
+  "versions": {
+    "python": "3.13.18",
+    "torch": "2.15.0+cpu",
+    "transformers": "5.22.2",
+    "onnx": "1.23.2",
+    "onnxruntime": "1.31.1",
+    "numpy": "2.5.4"
+  }
+}

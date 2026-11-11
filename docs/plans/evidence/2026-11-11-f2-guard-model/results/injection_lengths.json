@@ -1,0 +1,32 @@
+{
+  "explicit_injection (gandalf+deepset label1+inrepo PI/goal_hijacking)": {
+    "n": 1349,
+    "p50": 14,
+    "p90": 41,
+    "p95": 61,
+    "p99": 153,
+    "max": 1012,
+    "share_le_64": 0.9548,
+    "share_le_128": 0.9852
+  },
+  "yanis multilingual": {
+    "n": 1034,
+    "p50": 18,
+    "p90": 26,
+    "p95": 28,
+    "p99": 43,
+    "max": 64,
+    "share_le_64": 1.0,
+    "share_le_128": 1.0
+  },
+  "jailbreaks sampled (jackhhao+inthewild)": {
+    "n": 300,
+    "p50": 372,
+    "p90": 1046,
+    "p95": 1261,
+    "p99": 3158,
+    "max": 9212,
+    "share_le_64": 0.0367,
+    "share_le_128": 0.1867
+  }
+}

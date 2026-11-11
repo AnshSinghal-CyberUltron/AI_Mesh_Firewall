@@ -1,0 +1,12 @@
+{
+  "full_windows": 60,
+  "max_abs_logit_diff": 4.76837158203125e-06,
+  "max_abs_p_malicious_diff": 9.091134745009555e-07,
+  "decision_agreement": {
+    "0.5": "60/60",
+    "0.9": "60/60",
+    "0.95": "60/60"
+  },
+  "ort_batch8_vs_single_max_abs_p_diff": 0.0,
+  "windows_with_p_ge_0.5": 54
+}

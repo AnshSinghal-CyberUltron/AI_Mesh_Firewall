@@ -1,0 +1,245 @@
+{
+  "host": {
+    "cpus": 2,
+    "loadavg_at_start": [
+      7.578125,
+      7.00537109375,
+      5.70068359375
+    ],
+    "onnxruntime": "1.31.1",
+    "note": "shared 2-vCPU host; other agents' test suites were running",
+    "loadavg_at_end": [
+      4.8525390625,
+      5.58154296875,
+      5.7783203125
+    ]
+  },
+  "cold_start": {
+    "read_and_sha256_s": 0.425,
+    "session_create_s": 1.394,
+    "first_512_run_s": 0.531,
+    "cpu_s_total": 4.811,
+    "rss_mb_before": 49.2,
+    "rss_mb_after_read": 320.3,
+    "rss_mb_after_session": 767.9,
+    "rss_mb_after_dropping_bytes": 767.9,
+    "rss_mb_after_warm_512": 844.7,
+    "rss_mb_session_resident_after_warm": 795.5,
+    "sha256_prefix": "fe637bbc12fa"
+  },
+  "per_window": [
+    {
+      "runs": 200,
+      "batch": 1,
+      "seq": 16,
+      "wall_ms_p50": 25.09,
+      "wall_ms_p99": 76.95,
+      "cpu_ms_mean": 22.43,
+      "cpu_ms_p50": 23.1,
+      "cpu_ms_p99": 25.33,
+      "cpu_ms_per_window_mean": 22.43,
+      "intra_op_threads": 1
+    },
+    {
+      "runs": 200,
+      "batch": 1,
+      "seq": 64,
+      "wall_ms_p50": 52.66,
+      "wall_ms_p99": 152.85,
+      "cpu_ms_mean": 45.96,
+      "cpu_ms_p50": 47.85,
+      "cpu_ms_p99": 60.83,
+      "cpu_ms_per_window_mean": 45.96,
+      "intra_op_threads": 1
+    },
+    {
+      "runs": 150,
+      "batch": 1,
+      "seq": 128,
+      "wall_ms_p50": 263.21,
+      "wall_ms_p99": 546.31,
+      "cpu_ms_mean": 85.98,
+      "cpu_ms_p50": 82.72,
+      "cpu_ms_p99": 128.27,
+      "cpu_ms_per_window_mean": 85.98,
+      "intra_op_threads": 1
+    },
+    {
+      "runs": 100,
+      "batch": 1,
+      "seq": 256,
+      "wall_ms_p50": 379.54,
+      "wall_ms_p99": 873.66,
+      "cpu_ms_mean": 183.15,
+      "cpu_ms_p50": 181.45,
+      "cpu_ms_p99": 255.98,
+      "cpu_ms_per_window_mean": 183.15,
+      "intra_op_threads": 1
+    },
+    {
+      "runs": 80,
+      "batch": 1,
+      "seq": 512,
+      "wall_ms_p50": 1103.71,
+      "wall_ms_p99": 2698.97,
+      "cpu_ms_mean": 478.07,
+      "cpu_ms_p50": 470.95,
+      "cpu_ms_p99": 614.88,
+      "cpu_ms_per_window_mean": 478.07,
+      "intra_op_threads": 1
+    },
+    {
+      "runs": 30,
+      "batch": 2,
+      "seq": 512,
+      "wall_ms_p50": 2122.12,
+      "wall_ms_p99": 3717.42,
+      "cpu_ms_mean": 1025.85,
+      "cpu_ms_p50": 990.49,
+      "cpu_ms_p99": 1235.16,
+      "cpu_ms_per_window_mean": 512.92,
+      "intra_op_threads": 1
+    },
+    {
+      "runs": 30,
+      "batch": 4,
+      "seq": 512,
+      "wall_ms_p50": 3532.83,
+      "wall_ms_p99": 6523.94,
+      "cpu_ms_mean": 2243.08,
+      "cpu_ms_p50": 2245.47,
+      "cpu_ms_p99": 2600.23,
+      "cpu_ms_per_window_mean": 560.77,
+      "intra_op_threads": 1
+    },
+    {
+      "runs": 200,
+      "batch": 1,
+      "seq": 16,
+      "wall_ms_p50": 60.74,
+      "wall_ms_p99": 136.33,
+      "cpu_ms_mean": 25.51,
+      "cpu_ms_p50": 25.52,
+      "cpu_ms_p99": 37.36,
+      "cpu_ms_per_window_mean": 25.51,
+      "intra_op_threads": 2
+    },
+    {
+      "runs": 200,
+      "batch": 1,
+      "seq": 64,
+      "wall_ms_p50": 54.14,
+      "wall_ms_p99": 173.42,
+      "cpu_ms_mean": 54.24,
+      "cpu_ms_p50": 54.9,
+      "cpu_ms_p99": 67.3,
+      "cpu_ms_per_window_mean": 54.24,
+      "intra_op_threads": 2
+    },
+    {
+      "runs": 150,
+      "batch": 1,
+      "seq": 128,
+      "wall_ms_p50": 208.77,
+      "wall_ms_p99": 371.38,
+      "cpu_ms_mean": 92.09,
+      "cpu_ms_p50": 87.92,
+      "cpu_ms_p99": 161.8,
+      "cpu_ms_per_window_mean": 92.09,
+      "intra_op_threads": 2
+    },
+    {
+      "runs": 100,
+      "batch": 1,
+      "seq": 256,
+      "wall_ms_p50": 448.87,
+      "wall_ms_p99": 784.03,
+      "cpu_ms_mean": 193.09,
+      "cpu_ms_p50": 188.31,
+      "cpu_ms_p99": 241.11,
+      "cpu_ms_per_window_mean": 193.09,
+      "intra_op_threads": 2
+    },
+    {
+      "runs": 80,
+      "batch": 1,
+      "seq": 512,
+      "wall_ms_p50": 726.8,
+      "wall_ms_p99": 1370.98,
+      "cpu_ms_mean": 495.12,
+      "cpu_ms_p50": 480.5,
+      "cpu_ms_p99": 643.2,
+      "cpu_ms_per_window_mean": 495.12,
+      "intra_op_threads": 2
+    },
+    {
+      "runs": 30,
+      "batch": 2,
+      "seq": 512,
+      "wall_ms_p50": 2032.04,
+      "wall_ms_p99": 3728.25,
+      "cpu_ms_mean": 1046.15,
+      "cpu_ms_p50": 1041.86,
+      "cpu_ms_p99": 1195.25,
+      "cpu_ms_per_window_mean": 523.08,
+      "intra_op_threads": 2
+    },
+    {
+      "runs": 30,
+      "batch": 4,
+      "seq": 512,
+      "wall_ms_p50": 1864.33,
+      "wall_ms_p99": 4691.04,
+      "cpu_ms_mean": 2152.16,
+      "cpu_ms_p50": 2119.53,
+      "cpu_ms_p99": 2623.2,
+      "cpu_ms_per_window_mean": 538.04,
+      "intra_op_threads": 2
+    }
+  ],
+  "concurrency_shared_session_intra1": [
+    {
+      "python_threads": 1,
+      "windows": 12,
+      "windows_per_s_wall": 1.48,
+      "cpu_ms_per_window": 419.26,
+      "cpu_utilisation": 0.62
+    },
+    {
+      "python_threads": 2,
+      "windows": 9,
+      "windows_per_s_wall": 0.95,
+      "cpu_ms_per_window": 487.71,
+      "cpu_utilisation": 0.46
+    }
+  ],
+  "tokenizer": {
+    "english_prose": {
+      "chars": 65536,
+      "bytes": 65536,
+      "tokens": 13761,
+      "chars_per_token": 4.762,
+      "thread_cpu_ms_p50": 36.7,
+      "thread_cpu_us_per_kib": 573.5,
+      "tokens_in_1557_chars": 426
+    },
+    "python_code": {
+      "chars": 65526,
+      "bytes": 65718,
+      "tokens": 20310,
+      "chars_per_token": 3.226,
+      "thread_cpu_ms_p50": 35.16,
+      "thread_cpu_us_per_kib": 547.9,
+      "tokens_in_1557_chars": 452
+    },
+    "cjk": {
+      "chars": 22880,
+      "bytes": 68640,
+      "tokens": 20281,
+      "chars_per_token": 1.128,
+      "thread_cpu_ms_p50": 14.15,
+      "thread_cpu_us_per_kib": 211.2,
+      "tokens_in_1557_chars": 1381
+    }
+  }
+}

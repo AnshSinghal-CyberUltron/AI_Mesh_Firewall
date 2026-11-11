@@ -1,0 +1,7 @@
+# Never commit model bytes or downloaded datasets here (see README.md).
+*.onnx
+*.safetensors
+*.parquet
+datasets/
+bundle*/
+__pycache__/

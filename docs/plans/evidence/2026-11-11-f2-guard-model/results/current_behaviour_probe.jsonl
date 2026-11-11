@@ -1,0 +1,5 @@
+{"probe": "manifest_self_certifies", "model_hash": "23914a83c3c7080988b4aab957e8c1abf4a281df9cc77c7e1d43d3e81f39e94e", "ready_before_any_classify": false}
+{"probe": "detector_first_call", "findings": [{"category": "prompt_injection", "status": "unavailable", "evidence": "reason=stale_or_manifest_mismatch;on_unavailable=fail_open"}, {"category": "jailbreak", "status": "unavailable", "evidence": "reason=stale_or_manifest_mismatch;on_unavailable=fail_open"}]}
+{"probe": "detector_rules_empty", "n_findings": 0}
+{"probe": "backend_idle_6s_then_classify", "result": "stale_or_manifest_mismatch", "score_is_sha256_of_text": 0.17557225985815103}
+{"probe": "char_windowing", "chars": 4000, "windows": 3, "chars_per_window": 1557}
