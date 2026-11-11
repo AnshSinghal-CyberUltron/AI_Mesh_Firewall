@@ -99,7 +99,8 @@ class ScanSizing:
             line += (
                 f"; CLAMPED from {self.calibrated_slots}: this host cannot scan a realistic "
                 "tool request inside the scan budget, so such scans may overrun it. Remedy: "
-                f"AMF_TARGET_P99_MS >= {math.ceil(needed_ms)}, or more CPU or fewer workers"
+                f"AMF_TARGET_P99_MS >= {math.ceil(needed_ms)}, or more CPU per worker (the cost is "
+                "measured before workers start, so fewer workers eases serving latency only)"
             )
         return line
 
@@ -202,7 +203,7 @@ def scan_sizing(contract: object, env: Mapping[str, str] | None = None) -> ScanS
         # old fail-closed signal instead of clamping (Reviewer B on #104).
         raise CapacityUnavailable(
             f"no scan slot fits {target_ms} ms x {_SCAN_BUDGET_FRACTION} at {cost:.0f} us/slot "
-            f"({source}): raise AMF_TARGET_P99_MS, or give the host more CPU or fewer workers"
+            f"({source}): raise AMF_TARGET_P99_MS, or give the host more CPU"
         )
     served = resolver(slot_cost_us=cost, scanned_slots_floor=floor).max_scanned_slots
     sizing = ScanSizing(cost, source, floor, calibrated, served)
