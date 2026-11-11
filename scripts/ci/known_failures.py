@@ -20,7 +20,6 @@ import argparse
 import os
 import re
 import sys
-import xml.etree.ElementTree as ET
 from pathlib import Path
 
 _DJANGO = re.compile(r"^(FAIL|ERROR): (\S+) \(([^)]+)\)")
@@ -37,9 +36,12 @@ def from_django_log(text: str) -> set[str]:
 
 
 def from_junit(path: Path) -> set[str]:
+    # defusedxml refuses entity expansion and external entities; never parse XML with the
+    # stdlib parser here, even though the file comes from the same job's test run.
+    from defusedxml.ElementTree import parse
+
     found: set[str] = set()
-    # The junit file is written by the test run in the same job, not fetched from anywhere.
-    for case in ET.parse(path).getroot().iter("testcase"):  # nosemgrep: use-defused-xml-parse
+    for case in parse(path).getroot().iter("testcase"):
         if any(child.tag.split("}")[-1] in {"failure", "error"} for child in case):
             found.add(f"{case.attrib.get('classname', '')}::{case.attrib.get('name', '')}")
     return found
@@ -81,7 +83,10 @@ def main(argv: list[str] | None = None) -> int:
             failing = from_django_log(args.log.read_text(encoding="utf-8", errors="replace"))
         else:
             failing = from_junit(args.junit)
-    except (OSError, ET.ParseError) as exc:
+    except ImportError:
+        print("known_failures: --junit needs defusedxml (pip install defusedxml)", file=sys.stderr)
+        return 2
+    except (OSError, ValueError, SyntaxError) as exc:
         print(f"known_failures: cannot read test output: {exc}", file=sys.stderr)
         return 2
 

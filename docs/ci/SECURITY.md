@@ -9,6 +9,16 @@
 | `40bacebf` | `infra/terraform/envs/prod/prod.tfvars` | `db_password`, `django_secret_key`, `policy_signing_key`, `field_encryption_key`, `gateway_internal_api_key` |
 | `6bf509d1` | `docker-compose.cosign-e2e.yml` | `GATEWAY_INTERNAL_API_KEY` |
 
+## Owner decision (11 Nov 2026)
+
+The owner reviewed this finding and decided:
+
+- The values are development credentials with limited budget and access.
+- They will be rotated after the current build phase.
+- The repository will be made private at that point.
+
+Until then, development continues with these values. The `.gitleaksignore` baseline stays in place, so CI blocks only **new** findings. The rotation table below stays open until the rotation is done.
+
 ## Required actions (owner)
 
 1. **Rotate every value above.** Treat each as compromised whether or not it is still in use:

@@ -12,9 +12,10 @@ services:
   control:
     ports: !override ["127.0.0.1:38100:8000"]
     environment:
-      # The console's /v1 goes to gateway-v2 here, so control must apply the v2-only GW27
-      # refusals (they are skipped while AMF_GATEWAY_BACKEND is v1, the default).
-      AMF_GATEWAY_BACKEND: "v2"
+      # AMF_GATEWAY_BACKEND stays v1 here: =v2 also retires the v1 MCP discovery/tool-call
+      # proxies (core/retired_routes.py), which this mixed v1+v2 stack still uses (checklist 7.3).
+      # To exercise the GW27 v2-only refusals (checklist 2.4, 2.6, 4.4), run control with
+      # AMF_GATEWAY_BACKEND=v2 for that section only.
       VECTOR_PROVIDER_ALLOW_PRIVATE: "1"
       MCP_ALLOW_INTERNAL_HOSTS: "fake-mcp:9500,127.0.0.1:9500"
       AMF_V2_AUDIT_ORG_MAP: "dev-org=zeroshield,_unauthenticated=zeroshield"
