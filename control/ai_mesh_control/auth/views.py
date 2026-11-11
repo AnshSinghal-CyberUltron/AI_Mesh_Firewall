@@ -542,7 +542,11 @@ class SessionTerminateView(APIView):
 
         req_org = get_request_organization(request)
         target_org_id = getattr(getattr(user, "profile", None), "organization_id", None)
-        if req_org is not None and target_org_id != req_org.id and not request.user.is_superuser:
+        # #120 / R11: the target must be in the caller's org, for superusers too, and a
+        # caller without an org reaches nobody (was: a superuser, or any staff user
+        # without an org, could act on any tenant's users). A platform operator names
+        # the org with ?organization_id (get_request_organization).
+        if req_org is None or target_org_id != req_org.id:
             return Response({"detail": "User not found."}, status=status.HTTP_404_NOT_FOUND)
 
         reason = request.data.get("reason", "")
@@ -616,7 +620,11 @@ class SessionReinstateView(APIView):
 
         req_org = get_request_organization(request)
         target_org_id = getattr(getattr(user, "profile", None), "organization_id", None)
-        if req_org is not None and target_org_id != req_org.id and not request.user.is_superuser:
+        # #120 / R11: the target must be in the caller's org, for superusers too, and a
+        # caller without an org reaches nobody (was: a superuser, or any staff user
+        # without an org, could act on any tenant's users). A platform operator names
+        # the org with ?organization_id (get_request_organization).
+        if req_org is None or target_org_id != req_org.id:
             return Response({"detail": "User not found."}, status=status.HTTP_404_NOT_FOUND)
 
         cleared = TerminatedSession.objects.filter(user=user, cleared_at__isnull=True).update(
@@ -691,7 +699,8 @@ class UserManagementListCreateView(APIView):
         )
         if org is not None:
             users = users.filter(profile__organization_id=org.id)
-        elif not request.user.is_superuser:
+        else:
+            # #120 / R11: no org, no users (was: a superuser without an org saw every tenant's).
             users = users.none()
 
         serializer = UserManagementSerializer(users, many=True)
@@ -755,7 +764,8 @@ class UserManagementDetailView(APIView):
         if not user:
             return Response({"detail": "User not found."}, status=status.HTTP_404_NOT_FOUND)
         org = get_request_organization(request)
-        if org is not None and getattr(user.profile, "organization_id", None) != org.id:
+        # #120 / R11: fail closed without an org (was: an admin with no org reached any user).
+        if org is None or getattr(user.profile, "organization_id", None) != org.id:
             return Response({"detail": "User not found."}, status=status.HTTP_404_NOT_FOUND)
         return Response(UserManagementSerializer(user).data)
 
@@ -774,7 +784,8 @@ class UserManagementDetailView(APIView):
         if not user:
             return Response({"detail": "User not found."}, status=status.HTTP_404_NOT_FOUND)
         org = get_request_organization(request)
-        if org is not None and getattr(user.profile, "organization_id", None) != org.id:
+        # #120 / R11: fail closed without an org (was: an admin with no org reached any user).
+        if org is None or getattr(user.profile, "organization_id", None) != org.id:
             return Response({"detail": "User not found."}, status=status.HTTP_404_NOT_FOUND)
         serializer = UserUpdateSerializer(user, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
@@ -793,7 +804,8 @@ class UserManagementDetailView(APIView):
         if not user:
             return Response({"detail": "User not found."}, status=status.HTTP_404_NOT_FOUND)
         org = get_request_organization(request)
-        if org is not None and getattr(user.profile, "organization_id", None) != org.id:
+        # #120 / R11: fail closed without an org (was: an admin with no org reached any user).
+        if org is None or getattr(user.profile, "organization_id", None) != org.id:
             return Response({"detail": "User not found."}, status=status.HTTP_404_NOT_FOUND)
         if user == request.user:
             return Response({"detail": "You cannot delete your own account."}, status=status.HTTP_400_BAD_REQUEST)
