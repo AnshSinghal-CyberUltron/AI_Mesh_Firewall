@@ -125,18 +125,21 @@ class NotificationConsumer(AsyncWebsocketConsumer):
             except Exception:
                 return None
 
-        org_id = None
-        if user.is_superuser:
-            # M-08 FIX: a superuser must explicitly select a tenant (?organization_id=...)
-            # or have a profile org. Do NOT silently default to org 1 — that would
-            # implicitly associate the session with a real, unintended tenant and leak
-            # its notifications. When neither is present, org_id stays None and the
-            # shared `if org_id is None:` guard below rejects the connection (4403).
-            org_id = _get_org_id_from_scope(self.scope)
-            if org_id is None:
-                org_id = await sync_to_async(_get_org_from_profile, thread_sensitive=True)(user)
-        else:
-            org_id = await sync_to_async(_get_org_from_profile, thread_sensitive=True)(user)
+        def _resolve_org_id(u, requested_org_id):
+            # #120 / R11 (auth/models.py UserProfile.is_platform_operator): only a
+            # platform operator may pick another tenant's stream with ?organization_id.
+            # Before, ANY superuser could, so an org B superuser could subscribe to org
+            # A's notifications. Everyone else gets their own profile org.
+            from auth.models import is_platform_operator
+
+            if requested_org_id is not None and is_platform_operator(u):
+                return requested_org_id
+            return _get_org_from_profile(u)
+
+        # M-08: never default to a tenant. With no org, the guard below rejects (4403).
+        org_id = await sync_to_async(_resolve_org_id, thread_sensitive=True)(
+            user, _get_org_id_from_scope(self.scope)
+        )
 
         if org_id is None:
             LOG.warning("WebSocket rejected: no org_id for user_id=%s", user.id)
