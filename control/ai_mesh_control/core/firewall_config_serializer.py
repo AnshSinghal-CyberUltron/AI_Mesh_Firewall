@@ -15,6 +15,7 @@ from core.firewall_model_governance import (
 from core.firewall_v2_controls import built_value_errors, controls_eligible
 from core.firewall_v2_map import FIELDS, changed_fields, rewrite_served_by_v2, selection_errors
 from core.models import FirewallConfig
+from core.retired_routes import gateway_backend
 
 
 class FiniteFloatField(serializers.FloatField):
@@ -183,6 +184,12 @@ class FirewallConfigSerializer(serializers.ModelSerializer):
             )
             if gov_errors:
                 raise serializers.ValidationError(gov_errors)
+
+        # GW27 refusals describe what gateway-v2 can serve. While v1 is the serving gateway
+        # (AMF_GATEWAY_BACKEND=v1, the default) v1 still enforces every field, so these checks
+        # must not block a v1 save.
+        if gateway_backend() != "v2":
+            return attrs
 
         stored = {}
         if self.instance is not None:

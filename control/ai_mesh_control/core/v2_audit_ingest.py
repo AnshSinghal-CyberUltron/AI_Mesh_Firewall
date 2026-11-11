@@ -41,20 +41,35 @@ def _ingest(client: Any) -> int:
     prefix = os.environ.get("AMF_V2_AUDIT_STREAM_PREFIX", _DEFAULT_STREAM_PREFIX)
     mapping = parse_org_map(os.environ.get("AMF_V2_AUDIT_ORG_MAP", ""))
     written = 0
-    for stream in _streams(client, prefix):
+    for stream in _streams(client, prefix, mapping):
         written += _ingest_stream(client, stream, mapping)
     return written
 
 
-def _streams(client: Any, prefix: str) -> list[str]:
-    found: list[str] = []
-    cursor = 0
-    while True:
-        cursor, keys = client.scan(cursor, match=f"{prefix}*", count=50)
-        found.extend(key for key in keys if isinstance(key, str))
-        if cursor == 0:
-            break
-    return sorted(set(found))
+#: Gateway-v2 writes failed-credential records under this org id (GW35).
+_UNAUTHENTICATED = "_unauthenticated"
+
+
+def _streams(client: Any, prefix: str, mapping: dict[str, str]) -> list[str]:
+    """The audit streams that exist, found in O(organizations), never by scanning the keyspace.
+
+    Gateway-v2 writes ``{prefix}{org_id}`` where ``org_id`` is the control slug, a mapped alias
+    (``AMF_V2_AUDIT_ORG_MAP``) or ``_unauthenticated``. A stream under any other id could not be
+    attributed anyway (``_apply_entry`` drops it), so it is not worth a keyspace SCAN that shares
+    the v1 Redis and runs every drain interval.
+    """
+    from auth.models import Organization
+
+    org_ids = set(Organization.objects.filter(is_active=True).values_list("slug", flat=True))
+    org_ids.update(mapping)
+    org_ids.add(_UNAUTHENTICATED)
+    candidates = sorted(f"{prefix}{org_id}" for org_id in org_ids if org_id)
+    if not candidates:
+        return []
+    pipe = client.pipeline(transaction=False)
+    for stream in candidates:
+        pipe.exists(stream)
+    return [stream for stream, hit in zip(candidates, pipe.execute()) if hit]
 
 
 def _ingest_stream(client: Any, stream: str, mapping: dict[str, str]) -> int:

@@ -374,6 +374,11 @@ services:
     # Production UI is baked into nginx (ai-mesh-nginx). Vite only for debugging.
     profiles: ["dev-frontend"]
 
+  gateway-v2:
+    # Dev-profile gateway (AMF_DEV_PROFILE=1, static repo-published bearer). The base file runs
+    # it for local stacks; here it is gated so a plain prod `up` never starts it.
+    profiles: ["gateway-v2"]
+
   http-everything:
     profiles: ["transport-stubs"]
 

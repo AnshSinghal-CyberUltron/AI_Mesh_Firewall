@@ -16,6 +16,7 @@ COPY deploy/edge-error.json /etc/nginx/edge_errors/__edge_error.json
 COPY deploy/security-headers.inc /etc/nginx/security-headers.inc
 COPY deploy/require-edge-https.inc /etc/nginx/require-edge-https.inc
 COPY deploy/deny-public-openapi.inc /etc/nginx/deny-public-openapi.inc
+COPY deploy/deny-internal-api.inc /etc/nginx/deny-internal-api.inc
 
 # Superuser gate for the /demo/ reference app (HTTP Basic Auth). Credentials are
 # baked from build args sourced from .env at build time; the htpasswd stores only
