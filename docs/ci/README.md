@@ -27,7 +27,7 @@ feature/* fix/* ci/* docs/* chore/* refactor/* test/* perf/* dependabot/*
 | `Security` (`security.yml`) | secrets | gitleaks (merge commits included, `--remerge-diff`) + TruffleHog (verified only) on the PR's commits, or the pushed range | **blocks**, also on a TruffleHog scan error; the weekly full-history gitleaks sweep blocks too |
 | | SAST | Semgrep OSS, diff-aware: new ERROR findings against the merge base (PR) or the previous head (push) | **blocks** |
 | | | Bandit (high severity, high confidence) | report → code scanning |
-| | dependencies | dependency-review: new deps with high+ CVEs or AGPL/SSPL licences | **blocks** once the Dependency graph is enabled. Until then it passes with a warning, and only that case is tolerated |
+| | dependencies | dependency-review: new deps with high+ CVEs or AGPL/SSPL licences | **blocks** once the Dependency graph is enabled. Until then the probe tolerates a 403/404 that is not a rate limit (GitHub answers a bare `Forbidden` while the graph is off) and passes with a warning; any other error fails |
 | | | OSV-Scanner on every lockfile, npm audit | report → code scanning |
 | | infra lint | actionlint, hadolint (error), shellcheck (error), `docker compose config`, `nginx -t` | **blocks** |
 | | | Trivy config (HIGH, CRITICAL) | report → code scanning |
@@ -114,12 +114,14 @@ Notes for callers:
    - It skips a branch that does not exist, with a warning.
    - It turns on `enforce_admins`. Every agent acts as the owner's admin account, so without it the required checks would be advisory. `ENFORCE_ADMINS=false` restores the advisory behaviour; the script header shows how to lift it for one emergency merge.
    - Each required check is bound to the GitHub Actions app (id 15368), so a commit status of the same name posted by anyone else cannot satisfy it.
+   - It leaves `required_conversation_resolution` off: agents cannot resolve review threads (GraphQL is blocked for them), so bot threads are answered in the PR conversation under MERGE_POLICY rule 3 instead.
 2. **Repository settings:**
    - Enable the *Dependency graph*. Until it is on, `dependency-review` reports "not supported" without blocking. Then set `dependency-review-required: true` in `security.yml`.
    - Enable *Dependabot alerts* and *Dependabot security updates*.
    - Enable *Code scanning*, which receives the SARIF uploads and CodeQL alerts.
    - **If the repository goes private:** code scanning (CodeQL and every SARIF upload) needs GitHub Advanced Security, which is paid for private repositories.
-     - Without it, the upload steps fail softly (`continue-on-error`).
+     - Without it, the SARIF upload steps of the other scanners fail softly (`continue-on-error`).
+     - **CodeQL does not:** its `analyze` step uploads as part of the analysis and fails. CodeQL is not a required check, but MERGE_POLICY rule 2 would see a red check on every PR. Either buy Advanced Security or remove the `codeql` job from `security.yml`.
      - The scanners still run, still block where marked, and still publish their reports as run artifacts.
      - Only the Security-tab view is lost.
    - Enable *Private vulnerability reporting*.

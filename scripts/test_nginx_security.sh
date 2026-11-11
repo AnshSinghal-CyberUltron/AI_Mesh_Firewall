@@ -242,15 +242,29 @@ docker run --rm "${NGINX_MOUNTS[@]}" nginx:1.30-alpine \
 # Header proof: start nginx, curl named Host /login vs unknown Host /login.
 # Host ports: free ones by default (concurrent runs must not clash); override with
 # NGINX_TEST_HTTP_PORT / NGINX_TEST_HTTPS_PORT.
-free_port() { python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])'; }
-HTTP_PORT="${NGINX_TEST_HTTP_PORT:-$(free_port)}"
-HTTPS_PORT="${NGINX_TEST_HTTPS_PORT:-$(free_port)}"
-cid="$(docker run -d --rm \
-  "${NGINX_MOUNTS[@]}" \
-  -p "127.0.0.1:${HTTP_PORT}:80" \
-  -p "127.0.0.1:${HTTPS_PORT}:443" \
-  nginx:1.30-alpine \
-  sh -c 'rm -f /etc/nginx/conf.d/default.conf && nginx -g "daemon off;"')"
+# Two distinct free ports from one call (both sockets are bound at once, so they differ). Another
+# process can still take one before docker binds it, so the start is retried with new ports.
+free_ports() { python3 -c 'import socket
+a, b = socket.socket(), socket.socket()
+a.bind(("127.0.0.1", 0)); b.bind(("127.0.0.1", 0))
+print(a.getsockname()[1], b.getsockname()[1])'; }
+cid=""
+for _attempt in 1 2 3; do
+  read -r free_http free_https <<<"$(free_ports)"
+  HTTP_PORT="${NGINX_TEST_HTTP_PORT:-$free_http}"
+  HTTPS_PORT="${NGINX_TEST_HTTPS_PORT:-$free_https}"
+  if cid="$(docker run -d --rm \
+    "${NGINX_MOUNTS[@]}" \
+    -p "127.0.0.1:${HTTP_PORT}:80" \
+    -p "127.0.0.1:${HTTPS_PORT}:443" \
+    nginx:1.30-alpine \
+    sh -c 'rm -f /etc/nginx/conf.d/default.conf && nginx -g "daemon off;"')"; then
+    break
+  fi
+  cid=""
+  [ -z "${NGINX_TEST_HTTP_PORT:-}${NGINX_TEST_HTTPS_PORT:-}" ] || break  # pinned ports: no retry
+done
+[ -n "$cid" ] || die "could not start nginx on free ports"
 cleanup_cid() { docker rm -f "${cid}" >/dev/null 2>&1 || true; }
 trap 'cleanup_cid; rm -rf "${TMP}"' EXIT
 
