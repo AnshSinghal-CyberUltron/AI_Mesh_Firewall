@@ -9,6 +9,7 @@ from rest_framework.test import APIClient
 from policy.telemetry_resolution import metadata_policy_codes
 from policy.constants import ACTION_BLOCK
 from policy.models import EnforcementEvent, Policy
+from policy.tests.analytics_api_testcase import AnalyticsAPITestCase
 
 User = get_user_model()
 
@@ -28,7 +29,9 @@ class MetadataPolicyCodesTests(TestCase):
         self.assertEqual(metadata_policy_codes(meta), ["MCP_TOOL_INJECT"])
 
 
-class TopViolatorsMetadataFallbackTests(TestCase):
+class TopViolatorsMetadataFallbackTests(AnalyticsAPITestCase):
+    # Hits views that query the 'analytics' alias (Phase 0a C-7, 8b7c221b); a plain
+    # TestCase forbids that alias, so the views returned 500 (#106).
     def setUp(self):
         from auth.models import Organization, UserProfile
 

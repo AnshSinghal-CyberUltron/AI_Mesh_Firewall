@@ -5,18 +5,20 @@ from __future__ import annotations
 from datetime import timedelta
 
 from django.contrib.auth import get_user_model
-from django.test import TestCase
 from django.utils import timezone
 from rest_framework.test import APIClient
 
 from policy.analytics_views import _build_category_performance
 from policy.constants import ACTION_BLOCK, ACTION_REDACT
 from policy.models import EnforcementEvent, Policy
+from policy.tests.analytics_api_testcase import AnalyticsAPITestCase
 
 User = get_user_model()
 
 
-class PolicyAnalyticsCategoryTests(TestCase):
+class PolicyAnalyticsCategoryTests(AnalyticsAPITestCase):
+    # Hits views that query the 'analytics' alias (Phase 0a C-7, 8b7c221b); a plain
+    # TestCase forbids that alias, so the views returned 500 (#106).
     def setUp(self):
         from auth.models import Organization, UserProfile
 

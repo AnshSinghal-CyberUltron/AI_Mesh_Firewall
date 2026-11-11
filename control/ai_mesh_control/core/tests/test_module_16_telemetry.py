@@ -15,6 +15,7 @@ from policy.module_16 import (
     is_module_16_enforcement,
     merge_module_16_feed_items,
 )
+from policy.tests.analytics_api_testcase import AnalyticsAPITestCase
 
 User = get_user_model()
 
@@ -101,7 +102,12 @@ class Module16ClassificationTests(TestCase):
         self.assertEqual(merged[0]["id"], "ev-1")
 
 
-class Module16ApiTests(TestCase):
+class Module16ApiTests(AnalyticsAPITestCase):
+    # /api/security/ requests run inside AnalyticsTimeoutMiddleware's transaction on
+    # the 'analytics' alias (Phase 0a C-7, 8b7c221b). A plain TestCase does not
+    # allow that alias, so every request here raised DatabaseOperationForbidden
+    # (#106). AnalyticsAPITestCase (c26eb491) allows it and commits fixtures so
+    # both connections see them.
     def setUp(self):
         from auth.models import Organization, UserProfile
 
@@ -182,11 +188,34 @@ class Module16ApiTests(TestCase):
             action="block",
             reason="org a only",
         )
+        # An org A enforcement event in the same module, so both feed streams
+        # (enforcement + audit) are exercised.
+        self._create_event(
+            self.org_a,
+            event_type="kill_switch",
+            source="policy",
+            module_id="1.6",
+            security_risk_score=60,
+            model="secret-model",
+        )
+        url = "/api/security/threat-feed/?module_id=1.6&hours=48&limit=50"
 
-        client = APIClient()
-        client.force_authenticate(user=self.user_b)
-        resp = client.get("/api/security/threat-feed/?module_id=1.6&hours=48&limit=50")
-        self.assertEqual(resp.status_code, 200)
-        for row in resp.json().get("results", []):
+        def _models(user):
+            client = APIClient()
+            client.force_authenticate(user=user)
+            resp = client.get(url)
+            self.assertEqual(resp.status_code, 200)
+            rows = resp.json().get("results", [])
+            return rows, {(row.get("metadata") or {}).get("model") for row in rows}
+
+        # Control: org A does see its own rows, so the check below is not vacuous.
+        rows_a, models_a = _models(self.user_a)
+        self.assertIn("secret-model", models_a)
+        self.assertGreaterEqual(len(rows_a), 2)
+
+        rows_b, models_b = _models(self.user_b)
+        self.assertNotIn("secret-model", models_b)
+        for row in rows_b:
             meta = row.get("metadata") or {}
-            self.assertNotEqual(meta.get("model"), "secret-model")
+            self.assertNotEqual(meta.get("organization_id"), self.org_a.id)
+        self.assertEqual(rows_b, [])
