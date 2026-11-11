@@ -75,6 +75,95 @@ def _has_redos_shape(pattern):
     )
 
 
+# Hotfix (projector round): ``re`` parses and compiles a pattern recursively, about two Python
+# frames per nesting level, so a 999-char pattern of 499 nested groups raises RecursionError
+# (not re.error), and a ~400-deep one compiles or raises depending on how deep the caller's
+# stack already is. The depth is checked BEFORE ``re`` sees the pattern, so the answer is the
+# same on every stack: 32 levels need about 72 frames (measured on 3.12 and 3.13).
+#
+# TWIN: ``gateway_v2/gateway_v2/detect/conditions.py`` (``MAX_GROUP_DEPTH`` / ``group_depth``)
+# holds the same limit and scan; the packages share no code, and both suites pin the same test
+# vectors, so change them together.
+MAX_GROUP_DEPTH = 32
+
+# ``(?flags)`` (global: opens no group) or ``(?flags-flags:`` (scoped). Deliberately permissive:
+# anything ``re`` would reject as flags aborts its parse there, so it cannot nest deeper after it.
+_INLINE_FLAGS_RE = re.compile(r"\(\?([aiLmstux]*)(?:-([aiLmstux]*))?([:)])")
+
+
+def group_depth(pattern):
+    """The deepest group nesting in ``pattern``, by one non-recursive left-to-right scan.
+
+    It follows ``re``'s own tokenisation, so it never under-counts what ``re`` nests; where it
+    differs it over-counts, which only rejects more:
+
+    * ``\\`` escapes the next character, so ``\\(`` is a literal;
+    * a character class ``[...]`` is skipped: a ``]`` right after ``[`` or ``[^`` is a literal,
+      ``[`` inside a class is a literal, and the class ends at the first other unescaped ``]``;
+    * a comment group ``(?#...)`` is skipped up to its first unescaped ``)``, as ``re`` does;
+    * VERBOSE is tracked per scope exactly as ``re`` does (global ``(?x)`` for the top level,
+      ``(?x:...)`` / ``(?-x:...)`` for one group, inherited by every other group), and in a
+      VERBOSE scope ``#`` to the end of the line is a comment and skipped;
+    * the over-counts: ``(?P=name)`` (a back-reference, not a group) and the condition of
+      ``(?(1)...)`` each count one level for the moment they are open;
+    * an unbalanced ``)`` never takes the depth below zero; ``re`` rejects the pattern anyway.
+    """
+    scopes = [False]  # VERBOSE of every open scope; scopes[-1] is the current one
+    deepest = 0
+    index, end = 0, len(pattern)
+    while index < end:
+        char = pattern[index]
+        if char == "\\":
+            index += 2
+        elif char == "[":
+            index = _class_end(pattern, index + 1)
+        elif char == "#" and scopes[-1]:
+            index = _skip_past(pattern, index + 1, "\n")
+        elif char == "(" and pattern.startswith("?#", index + 1):
+            index = _skip_past(pattern, index + 3, ")")
+        elif char == "(":
+            verbose = scopes[-1]
+            flags = _INLINE_FLAGS_RE.match(pattern, index)
+            if flags is not None and flags.group(3) == ")":
+                scopes[-1] = verbose or "x" in flags.group(1)
+                index = flags.end()
+                continue
+            if flags is not None:
+                verbose = (verbose or "x" in flags.group(1)) and "x" not in (flags.group(2) or "")
+            scopes.append(verbose)
+            deepest = max(deepest, len(scopes) - 1)
+            index = index + 1 if flags is None else flags.end()
+        else:
+            if char == ")" and len(scopes) > 1:
+                scopes.pop()
+            index += 1
+    return deepest
+
+
+def _class_end(pattern, index):
+    """The index after the ``]`` closing the class whose body starts at ``index``."""
+    end = len(pattern)
+    if index < end and pattern[index] == "^":
+        index += 1
+    if index < end and pattern[index] == "]":
+        index += 1
+    return _skip_past(pattern, index, "]")
+
+
+def _skip_past(pattern, index, stop):
+    """The index after the first unescaped ``stop`` at or after ``index`` (or the end)."""
+    end = len(pattern)
+    while index < end:
+        char = pattern[index]
+        if char == "\\":
+            index += 2
+            continue
+        if char == stop:
+            return index + 1
+        index += 1
+    return end
+
+
 def reject_unsupported_rule_action(value):
     """T01 L01-2: operator REWRITE is unsupported. model_downgrade stays valid."""
     if str(value or "").strip().lower() == "rewrite":
@@ -92,10 +181,11 @@ def validate_condition(value):
     runs at write time so operators get immediate feedback:
 
       * condition must be a JSON object (dict);
-      * any ``regex``/``pattern`` string must compile (re.error -> 400), be
-        within ``_MAX_REGEX_LEN`` (cheap ReDoS guard), and NOT contain a
-        nested unbounded-quantifier shape (FINDING-3 catastrophic-backtracking
-        ReDoS guard).
+      * any ``regex``/``pattern`` string must compile (any exception ``re``
+        raises -> 400, not only re.error), be within ``_MAX_REGEX_LEN`` (cheap
+        ReDoS guard), nest groups no deeper than ``MAX_GROUP_DEPTH``, and NOT
+        contain a nested unbounded-quantifier shape (FINDING-3
+        catastrophic-backtracking ReDoS guard).
 
     Empty / missing condition is allowed (keyword rules, presets). Returns the
     value unchanged on success; raises ValidationError otherwise.
@@ -120,9 +210,13 @@ def validate_condition(value):
                 "group like (.*a){n}, or quantified alternation like (X|XY)+) "
                 "— rejected as ReDoS."
             )
+        if group_depth(pattern) > MAX_GROUP_DEPTH:
+            raise serializers.ValidationError(
+                f"condition regex nests groups deeper than {MAX_GROUP_DEPTH} levels."
+            )
         try:
             re.compile(pattern)
-        except re.error as exc:
+        except Exception as exc:  # noqa: BLE001 - re also raises RecursionError/OverflowError
             raise serializers.ValidationError(f"condition regex does not compile: {exc}")
     return value
 
@@ -152,9 +246,13 @@ def validate_redaction_config(value):
                 "(nested unbounded quantifier, quantified wildcard group, or "
                 "quantified alternation) — rejected as ReDoS."
             )
+        if group_depth(pattern) > MAX_GROUP_DEPTH:
+            raise serializers.ValidationError(
+                f"redaction_config regex nests groups deeper than {MAX_GROUP_DEPTH} levels."
+            )
         try:
             re.compile(pattern)
-        except re.error as exc:
+        except Exception as exc:  # noqa: BLE001 - re also raises RecursionError/OverflowError
             raise serializers.ValidationError(f"redaction_config regex does not compile: {exc}")
     return value
 
