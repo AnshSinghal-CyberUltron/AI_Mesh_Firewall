@@ -38,7 +38,6 @@ def _pin_scan_cost(monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv(name, value)
 
 
-
 def _sse(text: str) -> bytes:
     chunk = {"choices": [{"index": 0, "delta": {"role": "assistant", "content": text}}]}
     return f"data: {json.dumps(chunk)}\n\ndata: [DONE]\n\n".encode()

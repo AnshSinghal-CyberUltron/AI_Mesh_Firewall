@@ -178,6 +178,10 @@ class FakeClient:
 
 
 SMALL = StallBounds(first_event_s=0.03, gap_s=0.015, total_s=1.0, teardown_s=0.05)
+#: Bounds no scheduling hiccup on a loaded runner reaches. Every test that is NOT about stall
+#: timing uses these: under SMALL, a first event later than 30 ms trips the stall guard and the
+#: router falls back, turning an exception or integrity test into a stall test (#109 CI, #110).
+RELAXED = StallBounds(first_event_s=5.0, gap_s=2.0, total_s=30.0, teardown_s=1.0)
 
 
 def build_rp(

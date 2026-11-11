@@ -19,8 +19,8 @@ from tests.edge import _gw28_app as H
 _C = H.contract(p99_ms=1.0)
 
 # A 1 ms p99 leaves a 500 us scan budget, and GW34 refuses to start when no scan slot fits it
-# (#104). These tests check timers, not calibration, so the scan cost is pinned far below that:
-# both in os.environ (`resolve_tool_bounds` reads it) and in every explicit boot env below.
+# (#104). These tests check timers, not calibration, so the scan cost is pinned far below that,
+# in os.environ: these tests reach scan sizing only through `resolve_tool_bounds`, which reads it.
 _SCAN_COST_PIN = {"AMF_SCAN_SLOT_COST_US": "40"}
 
 
@@ -28,7 +28,6 @@ _SCAN_COST_PIN = {"AMF_SCAN_SLOT_COST_US": "40"}
 def _pin_scan_cost(monkeypatch: pytest.MonkeyPatch) -> None:
     for name, value in _SCAN_COST_PIN.items():
         monkeypatch.setenv(name, value)
-
 
 
 def _frames(body: str) -> list[str]:

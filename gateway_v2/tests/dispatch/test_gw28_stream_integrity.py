@@ -9,6 +9,7 @@ from gateway_v2.dispatch.provider import UpstreamEvent
 from gateway_v2.edge.wire.sse import SSEDecoder, SSEEncoder
 from gateway_v2.egress.stream import DownstreamFrame
 from tests.dispatch._gw28_fakes import (
+    RELAXED,
     FakeClient,
     Timeline,
     build_rp,
@@ -74,7 +75,7 @@ def test_p5_round_trips_through_sse_codec() -> None:
     async def main() -> None:
         tl = Timeline()
         c = FakeClient("a", [role(), text("he"), text("llo", final=True)], tl)
-        events = await drain(build_rp({"a": c}), ctx())
+        events = await drain(build_rp({"a": c}, bounds=RELAXED), ctx())
         enc = SSEEncoder()
         wire = b"".join(
             enc.content(DownstreamFrame(text_deltas=e.text_deltas)) for e in events if e.text_deltas
@@ -90,9 +91,11 @@ def test_p5_round_trips_through_sse_codec() -> None:
 
 def test_empty_iterator_and_no_final_are_malformed() -> None:
     async def main() -> None:
-        ev = await drain(build_rp({"a": FakeClient("a", [], Timeline())}), ctx())
+        ev = await drain(build_rp({"a": FakeClient("a", [], Timeline())}, bounds=RELAXED), ctx())
         assert [e.gateway_error for e in ev] == ["stream_malformed_upstream"]
-        ev = await drain(build_rp({"a": FakeClient("a", [text("x")], Timeline())}), ctx())
+        ev = await drain(
+            build_rp({"a": FakeClient("a", [text("x")], Timeline())}, bounds=RELAXED), ctx()
+        )
         assert ev[0].text_deltas and ev[-1].gateway_error == "stream_malformed_upstream"
         assert len(terminals(ev)) == 1
 
@@ -104,7 +107,7 @@ def test_provider_error_frame_is_forwarded_not_retried() -> None:
         tl = Timeline()
         frame = UpstreamEvent(text_deltas=(), final=True, error_frame="provider-said-no")
         clients = {"a": FakeClient("a", [frame], tl), "b": FakeClient("b", [frame], tl)}
-        ev = await drain(build_rp(clients), ctx())
+        ev = await drain(build_rp(clients, bounds=RELAXED), ctx())
         assert ev == [frame] and len(tl.opens()) == 1
 
     asyncio.run(main())
