@@ -1,9 +1,10 @@
 # F1: production gateway serves real completions (GW36 S5 + per-org providers)
 
-Status: 11 Nov 2026, **revision 4**.
+Status: 11 Nov 2026, **revision 5**.
 - Revision 1 (`8484c571`) was challenged by five reviewers.
 - Revisions 2 (`4d23ed07`) and 3 (`91785d9b`) were challenged by Plan Reviewer A (completeness) and Plan Reviewer B (security, scale and operability). Both requested changes each time.
-- Revision 4 replaces the customer-regex design (§5.2) with one backed by a working prototype and measurements, and fixes the other revision-3 findings (§10).
+- Revision 4 replaced the customer-regex design (§5.2) with one backed by a working prototype and measurements, and fixed the other revision-3 findings (§10).
+- Revision 5 answers the revision-4 reviews (§10). §5.2 gains exact one-sided word boundaries, an incremental streaming scan, a tenant-fair scan scheduler, a parse-only projector check and new cost limits. Every change comes with exhaustive or fuzz evidence and measured costs. Building it found a new `regex` bug, which is worked around (§5.2.1).
 
 Revision 3 changes how the plan is organised:
 - **§5 is the implementable design of F1a-1 only.** Both revision-2 reviewers judged F1a-1 releasable once its own blockers were fixed, and §5 fixes them.
@@ -80,7 +81,7 @@ Production profile today (`edge/production_profile.py`, `edge/serve.py`):
 
 | Slice | Scope | Design status |
 |---|---|---|
-| **F1a-1 Pipeline safety** | Detector factory (N5), customer-regex engine with a per-request scan deadline, production resolvers and base detectors, bounded audit sink, N14, GW35, response store, per-worker process hardening, honest boot log. Provider stays a stub | **§5, ready for implementation** |
+| **F1a-1 Pipeline safety** | Detector factory (N5), customer-regex engine (exact translator, incremental streaming scan, tenant-fair scan scheduler), production resolvers and base detectors, bounded audit sink, N14, GW35, response store, per-worker process hardening, honest boot log. Provider stays a stub | **§5, ready for implementation** |
 | **F1a-2 MODEL state** | Forward-compatible stamp (its own release first), MODEL kind, projector, per-org applier, catalogue, GW29 semantics, alias grammar, filters | **§6 requirements**; own design and review before code |
 | **F1a-3 OpenAI-compatible dispatch** | Credentials, SSRF, pools, parameter shaping, error mapping, observability, compose `gateway-v2-prod` | **§7 requirements**; own design and review before code |
 | F1b | Azure OpenAI and Anthropic native adapters | after F1a-3 |
@@ -107,11 +108,11 @@ No new error codes are introduced in F1a-1.
 
 - **New production module `edge/detectors.py`** holds:
   - `DeterministicFindings`, `bind_surface` and `phase_resolver_factory`, moved out of `dev_components.py`. `dev_components` re-exports the **same objects**, because `bind_surface` checks the class with `isinstance`;
-  - the shared `BASE_DETECTORS` tuple (already introduced by the GW34 calibration work), so calibration and serving time the same detectors.
+  - the shared `BASE_DETECTORS` tuple, which is on `develop` since #104; F1a-1 branches from `develop` after #105. Calibration and serving therefore time the same detectors.
 
   The module does not import `edge.app`, which avoids the import cycle that forces today's lazy imports.
 - **Shape:** `DetectorFactory.for_request(plan, phase) -> RequestDetector`.
-  - The result is a callable bound to the request's **pinned** `ExecutionPlan`, its compiled `ConditionProgram`, and a per-request `ScanDeadline` (§5.2).
+  - The result is a callable bound to the request's **pinned** `ExecutionPlan`, its compiled `ConditionProgram`, and the request's scan context: its org for the inline bucket and the scan scheduler, and the per-pass and per-delta budgets (§5.2.4, §5.2.5).
   - `bind_surface(detector, surface, stage)` keeps its signature and binds onto that object.
   - No ContextVar is used anywhere. `request_org` and `DevPlanFeed.conditions()` are deleted, and dev uses the same factory.
 - **Program lifecycle (Reviewer 3 m1).**
@@ -129,14 +130,15 @@ No new error codes are introduced in F1a-1.
   - `bind_surface` refuses a detector that carries no program;
   - a parametrised test drives an org-B rule through all 9 `bind_surface` sites, moderations and both RAG tier-1 detectors, and asserts org B's program fires at each.
 
-### 5.2 Customer regex: exact `re` meaning, pre-emptible matching, bounded loop time
+### 5.2 Customer regex: exact `re` meaning, pre-emptible matching, bounded cost
 
 **Requirements.**
 1. **Exact semantics:** a customer pattern matches exactly what Python `re` matches today, with no bypass through Unicode digits, separators, combining marks or case folding.
 2. **Pre-emption:** a catastrophic pattern is stopped within a bound.
-3. **Event-loop bound:** no tenant holds the event loop longer than a bounded slice.
-4. **No false refusals:** long streams, slow upstreams and many ordinary rules are not refused.
-5. **Bounded compile cost.**
+3. **Event-loop bound:** no tenant takes more than a stated share of a worker's event loop.
+4. **No false refusals:** a streamed response is refused for regex cost only where the same text, scanned once as a non-streaming response, would be refused. Long streams, slow upstreams and many ordinary rules are not refused.
+5. **Bounded translation and compile cost,** kept off the projector's safety path.
+6. **Tenant isolation:** one tenant's rules cannot starve another tenant's scans, on the loop or off it.
 
 **Why the obvious engines fail (measured by the reviewers and re-measured here).**
 - **RE2** has ASCII-only `\d`, `\w`, `\s` and `\b`.
@@ -148,80 +150,177 @@ No new error codes are introduced in F1a-1.
   - it reads fuzzy `{e<=1}` and POSIX `[[:alpha:]]` syntax where `re` reads literals.
 - **`re`** cannot be pre-empted.
 
-**Design: a translator from `re` to `regex`, then `regex` with a timeout.** A working prototype and its evidence are in `docs/plans/evidence/2026-11-11-f1a1-regex/`.
+The revision-5 prototype and its evidence are in `docs/plans/evidence/2026-11-11-f1a1-regex/`; `RESULTS.md` indexes them and `perf5.md` holds every cost number below. All times are thread CPU time on this host (2 shared CPUs), Python 3.12.3, `regex` 2023.8.8.
+
+#### 5.2.1 The translator
 
 - **Parsing.** The pattern is parsed by `re`'s own parser (`re._parser`). Escapes, sets, verbose mode, scoped flags and quantifier syntax therefore mean what `re` says.
   - The tree is re-emitted for `regex`, and no global flag reaches `regex`.
   - `.`, `^` and `$` get explicit scoped flags.
   - Braces and brackets are emitted only as `re` parsed them, so fuzzy and POSIX syntax cannot appear.
-- **Categories.**
-  - `\w` becomes `[\p{L}\p{N}_]`, `\d` becomes `\p{Nd}`, and `\s` becomes an explicit 10-range set taken from `re`. Negations follow the same pattern.
-  - They are never case-folded, because `re` matches a category by the character itself.
-  - Inside sets, the categories are split out of the set.
-- **Word boundaries.** `\b` and `\B` become lookarounds over that `\w`. `\B` is false on the empty string, as in `re`.
-- **Case-insensitive literals and sets.** These use `regex`'s native case folding. The translator then asks `re` for its own verdict on every one of the 2,927 cased code points, and adds or removes the code points where the two engines disagree. That keeps `re`'s special folds exact.
-- **The Unicode database must match.**
-  - `regex` is pinned to the release whose Unicode database equals the interpreter's: **regex 2023.8.8 with Python 3.12, both Unicode 15.0**. On those, `[\p{L}\p{N}_]` equals `re`'s `\w` on all 1,114,112 code points, and `\p{Nd}` equals `\d`.
-    - Newer releases (Unicode 15.1/16) mark up to 5,004 code points as letters that Python leaves unassigned. An attacker could use those to defeat `\b`. Excluding them with lookaheads cost about 10× in matching speed.
-  - **Boot check:** the gateway refuses to start when `regex.__version__` and `unicodedata.unidata_version` are not the pinned pair.
-  - **CI check:** an exhaustive test compares every code point. Upgrading Python then forces a matching `regex` pin.
-- **A `regex` prefilter bug, worked around.**
-  - `regex` (2023.8.8 and 2026.9.29 alike) builds a first-character prefilter that folds a case-sensitive set when the pattern starts with an optional case-insensitive item. Measured: `(?i:a)?[^\p{L}]` misses U+0345.
-  - Patterns containing a case-insensitive part get a leading `(?=[\s\S]|\Z)`, which disables that prefilter. Other patterns keep it.
-- **Refused at translation:** the ASCII and LOCALE flags, and a backreference under IGNORECASE. `regex` compares backreferences with its own case folding.
-- **Evidence for the prototype:**
+  - **The emitted vocabulary is fixed:** literals, escapes, sets, `\p{…}` classes, groups, alternation, counted, lazy and possessive repeats, atomic groups, lookarounds, `\A`, `\Z`, scoped flags, backreferences and conditionals. Fuzzy matching, recursion, `(?r)` reverse search and `(*SKIP)`/`(*FAIL)` verbs are never emitted, so the `regex` bugs confined to them (#525, #607, #608) are out of reach.
+- **Categories.** `\w` becomes `[\p{L}\p{N}_]`, `\d` becomes `\p{Nd}`, and `\s` becomes an explicit 10-range set taken from `re`. Negations follow the same pattern. They are never case-folded, because `re` matches a category by the character itself. Inside sets, the categories are split out of the set.
+- **Word boundaries (Reviewers A-B2, B-B1).** `\b` and `\B` are lookarounds over that `\w`, and `\B` is false on the empty string, as in `re`.
+  - When the neighbouring item can only start (or end) with a word character, or only with a non-word character, one side of the boundary is already known, and the translator emits **one** lookaround for the other side: `\b[A-Z]` becomes `(?<![\p{L}\p{N}_])[A-Z]`.
+  - This is exact. If the next item must consume a word character at position p, then `\b` at p holds exactly when the character before p is not a word character. The neighbour's class comes from `re`'s own verdict, case variants included, through groups, alternations and repeats with a minimum of at least 1. Anything else keeps the two-sided form: a nullable neighbour, `.`, a negated set, or a mixed class such as `(?i)ι`, whose variant U+0345 is not a word character.
+  - It removes the slowdown the reviewers measured. The IBAN-shaped `\b[A-Z]{2}\d{2}[A-Z0-9]{11,30}\b` now takes 0.03 ms on 32 KiB of prose and 0.23 ms on code, against 0.48 and 0.58 ms for `re` (two-sided: 7.2–20.7 ms).
+- **Atomic repeats, where exact.** A greedy repeat of one character class X is emitted atomically when the next item must start with a character of the other word class: giving back an X character leaves an X character next, where that item cannot start. Before `\b` this also needs at least one X to remain, because `\b` compares both sides (the fuzz found `1{,2}\b` while this rule was being built).
+- **Possessive repeats (Reviewer A-S1).** `re` backtracks neither into a possessive repeat nor into any one of its iterations; `regex`'s `X{m,n}+` backtracks inside an iteration. Possessive repeats are emitted as `(?>(?>X){m,n})`.
+- **Case-insensitive literals and sets.** These use `regex`'s native case folding. The translator then takes `re`'s verdict on every one of the 2,927 cased code points, and adds or removes the code points where the two engines disagree. That keeps `re`'s special folds exact.
+  - **Cost (Reviewers A-B1, B-B3).** The verdict is **one** `findall` over a string of all cased code points, by `re` and by `regex`, instead of 2,927 calls each. Translation of the worst legal pattern (64 distinct case-insensitive two-character sets) takes 9.3 ms.
+  - The cased-code-point table is generated at build time (`gen_cased.py`, with a CI `--check`), not at import. Import now takes 0.02 s, against 1.16 s before (Reviewer B, NIT 8).
+- **Two `regex` bugs, worked around** (both present in 2023.8.8 and 2026.9.29):
+  - **The first-character prefilter.** When a pattern starts with an optional case-insensitive item, `regex` builds a prefilter that folds the following case-sensitive set; measured, `(?i:a)?[^\p{L}]` misses U+0345. Patterns containing a case-insensitive part get a leading `(?=[\s\S]|\Z)`, which disables that prefilter.
+  - **Lone negated characters in an alternation (new in revision 5).** `regex` merges alternatives that are single negated characters into one negated set, so `(?:[^9]|[^c])` matches only characters that are neither 9 nor c, instead of every character. It under-matches, which would be a bypass. The translator emits a negated single character with its member repeated (`[^\x39\x39]`), which `regex` keeps as a set. Without the workaround, the extended fuzz finds 10 mismatches in 2,000 patterns. With it, the exhaustive single-character-alternation test below finds none.
+- **Refused at translation:** the ASCII and LOCALE flags, a backreference under IGNORECASE (`regex` compares backreferences with its own case folding), and anything over the limits in §5.2.3. Every refusal is decided on the parse tree, so the parse-only check refuses exactly what translation refuses.
+- **A fail-open at HEAD, removed (Reviewer A, NIT 3).** On 3.12.3, `re` raises `SystemError` for some possessive patterns with a capture group. `conditions.py:_work` catches only `re.error`, so the rule silently matches nothing. The gateway no longer compiles customer patterns with `re`. Control's validation treats any exception from `re` as a refusal, and a regression test pins both behaviours.
+- **Evidence (exactness):**
 
   | Check | Result |
   |---|---|
-  | Exhaustive per-code-point comparison of `\d \D \w \W \s \S`, in and out of sets, with and without `(?i)` | 0 mismatches |
-  | `\b`, `\B` and their neighbours for every code point | 0 mismatches |
-  | Differential fuzz against `re` on a corpus of control separators, NBSP, U+2000, Arabic-Indic and fullwidth digits, combining marks, ß/ẞ, ı/İ/K, superscripts and σ/Σ (32,000 random patterns, about 244,000 pattern-text pairs) | 0 mismatches |
-  | Match time against `re` (`perf.md`) | from 3× faster to 3.5× slower. Worst: `\w+@\w+\.\w+`, 4.1 ms against 1.2 ms on 21 KB |
-  | Translation | 0.1–18 ms per pattern |
-  | Compile | at most 9 ms per pattern (most under 1 ms) |
+  | `\d \D \w \W \s \S`: in and out of sets, negated, with and without `(?i)`, on every code point | 0 mismatches |
+  | `\b \B \bx x\b \Bx x\B` (two-sided) next to every code point | 0 mismatches |
+  | One-sided boundaries: 30 patterns × 2 flag sets, with each neighbour class interleaved with every code point, plus the text edges | 0 mismatches |
+  | Every case-insensitive single literal (2,927) against every code point (Reviewer A's test) | 0 mismatches |
+  | Every pair and triple from a 19-item vocabulary of single-character items, in an alternation: plain, repeated, in a negative lookahead and after a literal, under no flag, `(?i)` and `(?s)` | 0 mismatches in 86,640 patterns |
+  | Differential fuzz against `re`. The grammar adds possessive repeats, atomic groups, lookbehinds and single-character alternations. Patterns run in worker processes, so a pattern that hangs inside `re` itself is skipped and counted | 0 mismatches: 9 seeds × 6,000 patterns, 401,408 pattern-text pairs. 60 patterns hung inside `re` and were skipped; 21 hit `regex`'s 1 s timeout where `re` also took 0.7–1.7 s |
 
-- **Placement.**
-  - Translation and compile run in gateway_v2 only: in the gateway and in the projector's plan validation.
-  - Control validates with `re` plus the translator's refusal rules and the limits below. It never compiles with `regex`, so control's own `regex` pin (used by a dependency) does not matter.
-- **Matching.** `compiled.finditer(text, timeout=t, concurrent=True)`, which releases the GIL (measured: 90–93 ticks against 1–2). The thread created per match is removed.
-  - When the computed `t` is ≤ 0, the scan refuses without calling `regex`. A negative timeout means *no* timeout in `regex`.
-- **Time budget.** There is no per-request aggregate and no wall-clock deadline (the revision-3 design was wrong on both counts).
-  - **Off-loop calls:** each scan pass gets today's per-pass budget, `guard_wait_budget_s()` (100 ms), shared by all of its rules.
-  - **The inline streaming per-delta call** (`egress/stream.py:548`): each delta gets one inline budget, shared by all its rules, of **half a scan window** (5 ms at the default p99). That leaves room for timeout overshoot (measured: a 2 ms timeout fired at 5.4 ms, a 10 ms one at 14.6 ms), so one delta holds the loop for at most one scan window.
-  - The budget is counted as consumed regex time, never as a deadline from admission. A slow upstream therefore costs nothing.
-  - A timeout refuses the request with `policy_regex_timeout`, as today.
-- **Every non-streaming customer scan moves off the event loop.** Their callers are all `async` (checked by AST), so each sync scan is wrapped in `await executor.run(...)`. The sites:
-  - chat input (`openai_chat.py:300`, in `run_lifecycle`);
-  - the non-streaming whole-response scan (`openai_nonstream.py:176-177`, in `collect_and_enforce`);
-  - MCP input and replies (`mcp.py` `_forward`);
-  - embeddings (`openai_misc.py:445`, in `_scan_stage_dispatch`);
-  - moderations.
+  Match speed against `re` (32 KiB of prose and of code, 15 patterns including the `\b`+class family): the worst ratio is **3.7×** (`\b\w+\s+(?:token|secret)\b`, 4.3 against 1.2 ms), and 11 of the 15 patterns are faster than `re`.
 
-  RAG and the error frame are already off the loop. Only the streaming per-delta path stays inline. Its offload is the documented GW13 follow-up (`executor.py:37-40`), and it is bounded as above.
-- **Why this bounds cross-tenant loop time.**
-  - A pathological rule hits the inline cap on its first delta, and the stream is refused. Each such request therefore costs the loop at most one scan window.
-  - Tenant A's concurrent requests are bounded by admission and the GW27 org rate and concurrency limits. So the loop time A can take is at most (A's admitted request rate × one scan window), not unbounded.
-  - Ordinary rules cost microseconds per delta. Revision 3's measured refusal of a 4k-token stream came from the per-request aggregate, which is gone.
-  - The two-tenant tests below assert this with R rules each tuned just under the cap, and with C concurrent streams from tenant A.
-- **Publish-time limits.**
-  - **Where enforced:** control's serializer, the projector's `validate_plan` and the gateway compile all enforce them; Django admin and `load_policies` go through the projector check.
-  - **The limits:**
-    - pattern length ≤ 1000 (today's limit);
-    - each counted repetition ≤ 1000, and the product of nested counted repetitions ≤ 1000;
-    - at most **64 regex rules per plan** (`_MAX_REGEX_RULES_PER_PLAN`, a new capacity constant in `runtime/resources.py`);
-    - translation refusals.
-  - **Breaking a limit:**
-    - control refuses at save;
-    - an existing stored rule over a limit becomes a refused rule, which fails closed with `policy_regex_timeout` on an applicable request, as today. It is counted in the projector's `refused_conditions`.
-- **Compile cost.**
-  - Translation and compile are lazy: on the first request that needs the org's program, in the executor, off the loop.
-  - The result is cached in a per-worker LRU keyed by `(org, plan version)`, with a contract-derived capacity and an eviction metric.
-  - On the measured patterns, compile took at most 9 ms (most under 1 ms) and translation 0.1–18 ms (the slow end for a case-insensitive pattern).
-  - The projector memoises validation by plan body hash.
+#### 5.2.2 The `regex` pin and its supply chain
+
+- **The Unicode database must match.** `regex` is pinned to **2023.8.8**, whose Unicode database (15.0) equals Python 3.12's. On that pair, `[\p{L}\p{N}_]` equals `re`'s `\w` on all 1,114,112 code points, and `\p{Nd}` equals `\d`.
+  - Later releases differ (measured on Python 3.12):
+
+    | `regex` | `\w` differs on | `\d` differs on |
+    |---|---|---|
+    | 2023.10.3 to 2024.5.15 | 622 | 0 |
+    | 2024.11.6 | 5,004 | 80 |
+    | 2026.9.29 | 22,484 | 90 |
+
+  - `RESULTS.md`'s revision-4 claim that all releases from 2024.11.6 to 2026.9.29 differ on 5,004 code points was wrong; it is corrected (Reviewer B).
+- **The build (Reviewers A-S2, B-4).** PyPI has no cp312 wheel for 2023.8.8, and the runtime image (`python:3.12-slim`) has no compiler.
+  - A builder stage compiles the wheel from the sdist, fetched under `--require-hashes`, for linux/amd64 and linux/arm64. CI caches the two wheels and records their sha256.
+  - The runtime stage installs them with `--no-index --require-hashes`. No compiler reaches the runtime image.
+  - 2023.8.8 predates Python 3.12, so the exhaustive and fuzz CI jobs (§5.8) are the only check of this combination. They run on every PR that touches the translator, the pin or the image.
+- **Where the pin lives (Reviewer A, NIT 1).** `regex==2023.8.8` is a base dependency in `gateway_v2/pyproject.toml`, and `types-regex` is a dev dependency for `mypy --strict`. `requires-python` becomes `==3.12.*`, matching the boot check.
+- **Boot check.** The gateway refuses to start unless all of these hold:
+  - `importlib.metadata.version("regex") == "2023.8.8"` (`regex.__version__` reports `2.5.132` on this release, so it cannot be used);
+  - `unicodedata.unidata_version == "15.0.0"`;
+  - a full functional comparison: `[\p{L}\p{N}_]`, `\p{Nd}` and the `\s` set against `re`'s `\w`, `\d` and `\s`, by `findall` over every code point. That costs 0.27 s of CPU per process at boot.
+- **Upstream fixes after 2023.8.8.** Later releases fixed memory-safety bugs in compile and scan code that translated patterns can reach:
+  - #611 (a heap out-of-bounds write at compile time) and #612 (a size underflow), both in 2026.8.30;
+  - a segfault fix in 2026.3.32;
+  - allocation and error-propagation fixes in PRs 615–618.
+
+  Whether #611 and #612 exist in 2023.8.8 is not confirmed. Therefore:
+  - **Crash fuzz in CI.** Translator output from the fuzz grammar, plus the limit-edge shapes, is compiled and matched in child processes. A child that dies by a signal fails the job, and the pattern is recorded.
+  - **ASAN corpus.** An ASAN build of the wheel runs the same corpus weekly.
+  - Only patterns that pass the publish limits reach `regex`, which keeps the reachable surface to the shapes the fuzz covers.
+- **The pin is frozen, not just old.** It cannot follow upstream without losing exact `\w`.
+  - **Exit plan:** explicit code-point sets built from `re` (749 ranges for `\w`, 64 for `\d`). They are exact on any `regex` release (0 mismatches on 2026.11.9 and on 2023.8.8, measured by Reviewer B), but match 6–14× slower.
+  - If a security fix must come from a later release, the translator switches to explicit sets. The per-pass budget absorbs the slowdown, and the boot check and CI switch with it. §9 records this.
+
+#### 5.2.3 Publish-time limits and where they are checked
+
+- **The limits.** Revision 5 adds the last three rows:
+
+  | Limit | Value | Why |
+  |---|---|---|
+  | Pattern length | ≤ 1000 | today's limit |
+  | Each counted repetition, and the product of nested counted repetitions | ≤ 1000 | revision 4 |
+  | Regex rules per plan | ≤ 64 (`_MAX_REGEX_RULES_PER_PLAN`) | revision 4 |
+  | **Total expanded repetition:** the sum, over counted repeats, of the count × the product of the enclosing counts | ≤ 1000 per pattern | Reviewer B: `"x{1000}"*140` passed every revision-4 limit, then compiled in 92 ms and added 36 MiB |
+  | **Distinct case-insensitive items** (each costs one verdict) | ≤ 64 per pattern | Reviewers A and B: 990 distinct items took 1.67–2.2 s to translate |
+  | **Distinct case-insensitive items per plan** | ≤ 512 | 64 rules × 64 items took 1.39 s of CPU to translate and compile |
+
+- **One parse-only check, in three places.** `check_limits` parses with `re._parser` and walks the tree for the refusal rules and the limits. It never translates and never imports `regex`. It is used by:
+  - control's serializer, which refuses at save (as a byte-identical copy in `ai_mesh_shared/regex_limits.py`; Django admin and `load_policies` are covered by the projector check);
+  - the projector's `validate_plan`;
+  - the gateway, before translating.
+
+  A CI test asserts that the two copies are identical and that the three callers agree on the fuzz corpus.
+- **Measured cost at the limits (thread CPU):**
+
+  | What | Cost |
+  |---|---|
+  | Parse-only check, worst single pattern (a 990-character alternation) | 1.2 ms |
+  | Parse-only check, hostile 64-rule plan | 16.5 ms |
+  | Translation, worst pattern (64 distinct case-insensitive sets) | 9.3 ms (compile 4.7 ms) |
+  | Compile, worst shape at expanded repetition 1000 (`(?:\b\w{3}\b ){250}`) | 0.8 ms; 1.3 MiB traced at peak |
+  | Compile, a 990-character literal alternation | 4.0 ms |
+  | Translation + compile, a plan at every per-plan limit (512 distinct case-insensitive items, plus 56 compile-heavy rules) | 236 ms |
+
+- **The projector's safety path (Reviewers A-B1, B-B3).** Today `desired_state` runs `validate_plan` before `mark_projected` writes the safety heartbeat (`projector.py:209,224`). Revision 5 changes three things:
+  - The projector runs only the parse-only check, never translation or `regex`: 16.5 ms for a hostile 64-rule plan, against the 16 s lag bound.
+  - Validation is memoised by body hash, and it moves out of `desired_state` into `_plans`, with a per-round time budget of a quarter of `lag_ms`. A plan not validated within the budget keeps its previous record and is validated in the next round, with a note. A burst of new plan bodies therefore delays only those plans, never the heartbeat.
+  - Test: a hostile 64-rule plan, re-published with a new body every round, keeps the heartbeat inside `lag_ms`.
+- **Breaking a limit:** control refuses at save. An existing stored rule over a limit becomes a refused rule, which fails closed with `policy_regex_timeout` on an applicable request, as today. It is counted in the projector's `refused_conditions`.
+- **Gateway compile.**
+  - Translation and compile are lazy: they run on the first request that needs the org's program, on the scan scheduler (§5.2.5), off the loop, and charged to that org.
+  - They are **single-flight** per `(org, plan version)`, so concurrent first requests wait on one compile.
+  - Each rule is its own step, with a GIL yield between rules. Measured while a worker compiled the per-plan-limit plan: without the yield, back-to-back `regex.compile` calls starved the event loop for 90 ms; with it, the worst loop stall was 7.3 ms, the same as any busy pure-Python thread (7.6 ms).
+  - The per-worker program cache is bounded by **bytes**: each entry is charged its compile footprint (≤ 1.3 MiB per pattern at the limits), against a contract-derived budget, with an eviction metric.
 - **Other `re` call sites.**
-  - `rewrite_template.py:91-98` (compile-time scan): goes through the same engine, with its literal `_CHECK_BUDGET_S = 0.25` replaced by `guard_wait_budget_s()`.
-  - Control's `_matches_own_pattern` (`firewall_v2_publish.py:586-593`): runs the pattern with `re` today, so a hostile pattern can hang a control worker. It is gated by the publish-time limits and `_has_redos_shape` first, and runs off the request thread with a bound.
+  - `rewrite_template.py:91-98` (compile-time scan): goes through the same engine. Its literal `_CHECK_BUDGET_S = 0.25` is replaced by `guard_wait_budget_s()`.
+  - Control's `_matches_own_pattern` (`firewall_v2_publish.py:586-593`): gated by the parse-only check and `_has_redos_shape` first, and run off the request thread with a bound.
 - **What does not change.** `_redos_shape` keeps refusing the shapes it refuses today, and the timeout posture is unchanged.
+
+#### 5.2.4 Matching, budgets and the streaming scan
+
+- **The budget unit is thread CPU time.** `regex`'s timeout counts the matching thread's CPU time across a whole `finditer`, not wall time.
+  - Measured: a 100 ms timeout fired at 100 ms of thread CPU, idle, and at 540–704 ms of wall time with three busy loops sharing the 2 CPUs.
+  - Revision 4's "overshoot" was this host contention, not the engine. Every budget, bucket and bound below is therefore in thread CPU time, measured with `time.thread_time()` around each call. Wall time under host oversubscription is a capacity matter (GW34), not a tenant-isolation one.
+- **Calls.** `compiled.finditer(text, pos=q, timeout=t, concurrent=True)`, which releases the GIL. The thread created per match is removed. When the computed `t` is ≤ 0, the scan refuses without calling `regex` (a negative timeout means *no* timeout in `regex`).
+- **The per-pass budget scales with the text.** An off-loop pass gets `guard_wait_budget_s() × max(1, len(text) / 128 KiB)`, shared by all of its rules: 100 ms up to 128 KiB, and 400 ms at the 512 KiB output ceiling.
+  - A fixed budget refused long texts that `re` scans today. A linear scan costs time in proportion to the text, so the budget does too, and catastrophic patterns still hit it.
+  - Non-streaming scans use the same formula. A timeout refuses the request with `policy_regex_timeout`, as today.
+- **The streaming scan is incremental (Reviewers A-B2, B-B1).** Today every delta rescans the whole output (`egress/stream.py:548`), so a delta costs O(output) and a stream O(n²). Revision 5 keeps each rule's hit list **identical** to that rescan while scanning far less.
+  - **The idea.** An attempt at position t whose outcome can no longer change is *final*. After each scan, the scanner keeps a resume point q before which every match and every failed attempt is final, and the next scan resumes at q with `finditer(text, pos=q)`.
+    - `pos` keeps the earlier text visible to lookbehinds, and `^`/`\A` do not match at q, exactly as in a whole-text scan.
+  - **Two exact finality rules,** from the parse tree:
+    - **Reach.** `analyze` returns the rule's read reach R: how far right of its start an attempt can read, with lookaheads, `$` and boundaries included. It is finite unless the pattern has `*`, `+`, `{n,}`, a backreference, or a lookbehind that reads to its right. An attempt at t is final once t + R ≤ len(text).
+    - **Stoppers.** The translator also builds the class of characters that no consuming item of the pattern can match. An attempt cannot consume a stopper, and every assertion it evaluates sits at or before the first stopper at or after its start. So the attempt at t is final once any stopper follows t. This makes unbounded rules incremental too: `\b\w+\s+(?:token|secret)\b` stops at any punctuation. Patterns with `\Z` or a non-multiline `$`, which read the end of the text, have no stoppers.
+  - **Fallback.** A rule that can match empty, or that has neither a finite reach nor a stopper (`(?s)a.*b`), keeps the whole-text rescan.
+  - **State.** Final hits that end before the released offset are dropped, so the state per stream stays O(R + held text).
+  - **Evidence.** `incremental_fuzz.py` compares the incremental hit list with a whole-text `finditer` after every delta of random chunkings, for fuzz-grammar patterns and for real DLP shapes: 0 mismatches over 39,998 incremental streams (83% of 48,000 fuzz patterns) and 655,969 deltas. With reach alone, 55% of the revision-4 fuzz grammar's patterns were incremental; with stoppers, 83% of the revision-5 grammar's are. Building it, the fuzz also found two reach-analysis bugs (a `0 × ∞` in an optional unbounded group, and a lookbehind containing a lookahead), both fixed before these runs.
+- **The streaming budget.** Each delta's inline customer scan gets one budget of **half a scan window** of thread CPU (5 ms at the default p99), shared by all its rules.
+  - **No refusal inline.** When a rule's inline call times out, or the inline budget is spent, the rest of that delta's customer scan **moves off the loop** as one pass, under the per-pass budget. The stream awaits that pass before releasing those bytes. A whole-text-rescan rule that moved off the loop stays off the loop for the rest of that stream.
+  - **Coalescing.** A stream has at most one off-loop pass in flight; deltas that arrive meanwhile are scanned together by the next pass. The released bytes do not depend on how deltas are grouped (chunk-split invariance, Property 4), and the existing property test runs over the coalescing layer.
+  - So a stream is refused for regex cost only when one pass over its text exceeds the per-pass budget: the same rule as a non-streaming response of the same text (requirement 4).
+- **Measured per-delta cost** (10 rules, thread CPU, per 4-character delta at the given output length). Rule set B is Reviewer B's (IBAN shape included); rule set A is Reviewer A's (`\b\w+\s+(?:token|secret)\b` included). "Unpunctuated" is words and spaces only: no stopper ever appears, which is the worst case for stopper-mode rules.
+
+  | Rules | Text | 32 KiB: rev. 4 → rev. 5 | 128 KiB | 512 KiB |
+  |---|---|---|---|---|
+  | B | prose | 0.71 → 0.04 ms | 2.50 → 0.04 ms | 11.1 → 0.04 ms |
+  | B | code | 1.29 → 0.04 ms | 5.04 → 0.04 ms | 20.2 → 0.04 ms |
+  | B | unpunctuated | 0.73 → 0.07 ms | 2.79 → 0.18 ms | 11.3 → 0.57 ms |
+  | A | prose | 4.83 → 0.11 ms | 37.5 → 0.06 ms | 88.3 → 0.04 ms |
+  | A | code | 5.35 → 0.04 ms | 19.5 → 0.04 ms | 80.5 → 0.04 ms |
+  | A | unpunctuated | 6.40 → 4.30 ms | 21.0 → 18.7 ms | 85.3 → 78.7 ms |
+
+  - **The worst case is visible.** Set A on unpunctuated text: the token/secret rule finds no stopper and rescans. It crosses the 5 ms inline budget at about 32 KiB, moves off the loop and coalesces. A pass at the 512 KiB ceiling takes about 79 ms, against a 400 ms per-pass budget, so it is not refused. Its cost lands on its own org's scheduler share, which slows that stream instead of the loop.
+
+#### 5.2.5 Tenant isolation: the inline bucket and the scan scheduler
+
+- **Inline share (Reviewers A-S4, B-B2).** Each org has a per-worker **inline loop bucket** of thread CPU, with rate ρ = 25% of one core and a burst of one scan window, both contract-derived.
+  - Every inline customer call is debited its measured thread CPU.
+  - When an org's bucket is empty, that org's scans go off the loop. They are not refused.
+  - So on one worker, an org's inline customer-regex time is at most ρ of the loop plus one burst, however many streams it runs. Revision 4's "admitted request rate × one scan window" bound was wrong: a rule just under the cap costs up to one window per delta, not per request.
+- **Off-loop passes run on a scan scheduler,** not directly on the shared executor. Reviewer B measured tenant A's pathological requests pushing tenant B's off-loop scans to p99 1.4–2.1 s on the shared executor.
+  - The scheduler has T scan threads, contract-derived from the core count.
+  - Each org has its own FIFO, served by deficit round robin weighted by each pass's measured thread CPU, so under contention every active org gets an equal CPU share.
+  - An org uses at most max(1, T − 1) threads at a time, so one org can never hold every thread.
+  - The queue depth is bounded by admission: each admitted request has at most one pass queued or running (streams coalesce). So the scheduler adds no new shed path, and admission's existing concurrency cap bounds it.
+  - **Bound.** A tenant-B pass waits for at most one running pass per thread (each within its per-pass budget of CPU), then is served within one DRR round. With fewer than T orgs active, B always finds a free thread.
+- **Every other customer scan goes through the scheduler too:**
+  - chat input (`openai_chat.py:300`);
+  - the non-streaming whole-response scan (`openai_nonstream.py:176-177`);
+  - MCP input and replies (`mcp.py` `_forward`);
+  - embeddings (`openai_misc.py:445`);
+  - moderations, RAG and the error frame;
+  - **STRICT_WITHHOLD (Reviewer A-S3).** `build_output_detectors` returns `runner=None` when a plan has no built-in output families (`output_detectors.py:162-163`), so `strict.py:439-440` scans the whole withheld output on the loop. The scheduler is now always passed as the runner;
+  - gateway compile (§5.2.3), charged to the org.
 
 ### 5.3 Resolvers and base detectors
 
@@ -248,6 +347,7 @@ No new error codes are introduced in F1a-1.
    - **Decision:** the holder runs `MemorySampler` and publishes the decision. Every worker adopts it, unless it is older than two sampler periods; then the previous decision stays in force and a staleness gauge is raised.
    - Losing the lease stops sampling; any worker can take it over.
    - Every worker still runs `startup_check`, as today.
+   - **Reserved slugs (Reviewer B, revision 3 NIT 11).** The audit ids `_calibration` and `_unauthenticated` are also valid org slugs today, the same class of collision as the lease key. Control refuses org slugs that start with `_`. A data check in the migration lists any existing one, and blocks the migration until it is renamed.
 5. **Lifecycle.**
    - An `AuditLifespan` hook starts the writer and the sampler task.
    - **At shutdown,** the writer is asked to stop after its current batch, not cancelled mid-write. Cancelling mid-write lost the in-flight batch, which was counted as produced but not written (measured: 300 produced, 0 written). `drain(timeout)` then writes what remains, before the runtime closes the client. `StateServedApp` already closes the client after the hooks.
@@ -275,6 +375,7 @@ No new error codes are introduced in F1a-1.
 
 - `RLIMIT_CORE=0` and `prctl(PR_SET_DUMPABLE, 0)` are applied **in each worker's app factory** (`serve.serving_app`). A setting made in the parent does not survive uvicorn's spawn, which was measured.
 - The test checks `PR_GET_DUMPABLE == 0` from inside a spawned worker.
+- **The parent too (Reviewer B, revision 3 NIT 9).** `main()` builds the production dependencies in the parent before spawning workers (`serve.py:700-720`), so the same hardening runs at the top of `main()`. The runbook notes that `dumpable=0` also blocks same-uid `py-spy` and `gdb`.
 - The projector hardening and `_FILE` secrets belong to F1a-3, where the projector starts holding provider keys.
 
 ### 5.7 Boot log
@@ -292,23 +393,35 @@ No new error codes are introduced in F1a-1.
 - **Unit and property tests:**
   - **N5:** an org-B rule fires with org B's program at every scan site, not only the four off-loop ones. The sites are all 9 `bind_surface` calls, moderations and both RAG tier-1 detectors. The off-loop ones fail on HEAD. `bind_surface` refuses a detector with no program.
   - **Pinning:** a mid-request plan update does not change the program a request uses.
-  - **Semantics against `re`:**
-    - the exhaustive per-code-point class and boundary test;
-    - the differential fuzz, from the prototype, in CI;
-    - the reviewers' bypass cases: U+001F separators in a card pattern, U+001C in `password\s*=`, a combining mark after `\bpassword\b`, and `(?i)\bssn\b` against `ssǹ`;
-    - the pinned-pair boot check.
+  - **Semantics against `re`** (all in CI, on the pinned pair):
+    - the exhaustive per-code-point class and boundary tests, including the one-sided boundaries (`exhaustive_boundary.py`), every case-insensitive single literal, and every pair and triple of single-character items in an alternation (`alt_exhaustive.py`, which pins the lone-negated-character workaround);
+    - the differential fuzz, whose grammar includes possessive repeats, atomic groups, lookbehinds and single-character alternations. It runs in worker processes with a per-pattern timeout, so a pattern that hangs inside `re` is skipped and counted; a `regex` timeout where `re` finished is counted apart;
+    - the incremental streaming fuzz: after every delta, the incremental hit list equals a whole-text `finditer`, for both finality rules (reach and stoppers);
+    - the reviewers' bypass cases: U+001F separators in a card pattern, U+001C in `password\s*=`, a combining mark after `\bpassword\b`, `(?i)\bssn\b` against `ssǹ`, `(?:a+x?){2,}+` on `aaa`, and `(?:[^9]|[^c])`;
+    - the `SystemError` regression: `x(?:(a)a{1,2}|aba(?i:A)|x?x?){2,}+` is refused at publish and fails closed at the gateway. It never silently matches nothing;
+    - the boot check, including the full functional comparison.
+  - **Performance gate.** On a fixed corpus (prose and code-like text, 32 KiB, including the `\b`+class family), each translated rule's thread CPU stays within 6× `re`'s, with each side floored at 0.05 ms. Revision 5's worst measured ratio is 3.7×; the gate is set above it so that runner noise does not flake, and it still catches a regression like revision 4's 11–30× `\b`.
+  - **Crash fuzz.** Translator output is compiled and matched in child processes. Any death by a signal fails the job.
   - **Regex DoS:**
-    - patterns that pass `_redos_shape` and the limits yet time out under `regex`, for example `(\w+\s?){1,30}$`. The reviewers' earlier patterns never time out, so they cannot be the test.
-    - **Two-tenant tests:**
-      - (a) tenant A has R rules, each tuned just under the inline cap, on the non-strict streaming path. Tenant B's per-delta loop delay stays within one scan window.
-      - (b) tenant A has C concurrent pathological streams. Each costs at most one scan window, and each is refused.
-      - (c) the same as (b) on the chat input path, which is now off the loop.
-    - Negative and zero remaining time never reaches `regex`.
+    - patterns that pass `_redos_shape` and the limits, yet time out under `regex`. Example: `(\w+\s?){1,30}$`;
+    - **two-tenant tests,** each asserting tenant B's per-delta loop delay and off-loop wait against the §5.2.5 bounds, in thread CPU:
+      - (a) tenant A has R rules, each tuned just under the inline budget, on the non-strict streaming path, with **C concurrent streams that are never refused**. A's inline share stays within ρ plus one burst;
+      - (b) tenant A has C concurrent pathological streams. Each moves off the loop, then is refused after one per-pass budget;
+      - (c) the same as (b), on the chat input path and on STRICT_WITHHOLD;
+      - (d) tenant A floods the scan scheduler with pathological non-streaming requests at the admission limit. Tenant B's off-loop pass waits at most one running pass per thread;
+    - negative and zero remaining time never reaches `regex`.
   - **No false refusals:**
-    - a benign 6k-token stream with 10 ordinary rules completes;
+    - a 32k-token stream of prose and a 16 KiB code-like stream complete, each with 10 ordinary rules including the IBAN shape and `\b\w+\s+(?:token|secret)\b`;
+    - a stream at the 512 KiB output ceiling with Reviewer A's 10 rules completes, on unpunctuated text too (its token/secret rule moves off the loop);
+    - a stream whose whole-text-rescan rule outgrows the inline budget moves off the loop and completes, releasing the same bytes as a non-coalesced run;
+    - the per-pass budget scales with the text: a pass over 512 KiB gets four base budgets;
     - a request whose first token arrives after 2 s still runs its output rules.
   - **Limits:**
-    - counted-repetition and per-plan cap refusals in control, the projector and the gateway;
+    - refusals for total expanded repetition, distinct case-insensitive items per pattern and per plan, in control, the projector and the gateway, with one shared verdict;
+    - a hostile 64-rule plan, re-published with a new body every round, keeps the projector heartbeat inside `lag_ms`;
+    - event-loop lag while a worker compiles a plan at every per-plan limit stays within the measured bound (one rule per step, GIL yield between rules);
+    - single-flight compile: 50 concurrent first requests trigger one compile;
+    - the compiled-program cache stays within its byte budget;
     - `_matches_own_pattern` cannot hang a control worker.
   - **Audit:**
     - sink lifecycle: start, then stop-after-batch and drain at shutdown, with no batch lost;
@@ -367,7 +480,8 @@ No new error codes are introduced in F1a-1.
    - An omitted row is carried as `{alias, omitted: reason}`, so the gateway can answer with a declared code instead of `model_not_found`.
 6. **Projector cost and safety.**
    - Changes are detected by a projector-private memo per `row_id`: a digest of the Fernet token, the AAD tuple and the published `{kid, nonce, ct}`. A row is decrypted only when it changes.
-   - Plan validation is memoised by body hash.
+   - Plan validation is memoised by body hash (and is parse-only and time-boxed, §5.2.3).
+   - The omission notes, logged one per note (`projector.py:214-216`), never carry `base_url` (Reviewer B, revision 3 NIT 10).
    - Removals and real per-row key changes go before the heartbeat. Kid re-wraps are a bounded backlog after it.
    - **Breaker:** when the omission ratio for one reason crosses a threshold, the previous records are kept and an alarm is raised. This prevents one wrong control key from emptying every catalogue.
    - A mixed console edit (one model removed, one added) is written as two versions.
@@ -470,11 +584,14 @@ No new error codes are introduced in F1a-1.
 
 | Risk | Mitigation |
 |---|---|
-| Engine swap changes what customer rules match | Translator from `re`'s own parse tree; a pinned `regex` whose Unicode database matches the interpreter's, checked at boot; exhaustive and fuzz tests against `re` |
-| The `regex` pin is old (2023.8.8) | It is required for an exact Unicode match on Python 3.12. The pair moves together on a Python upgrade, and the exhaustive CI test fails until it does |
-| Inline streaming scans hold the loop | Per-delta inline budget of half a scan window across all rules; a pathological rule fails on its first delta; every other scan site moves off the loop |
+| Engine swap changes what customer rules match | Translator from `re`'s own parse tree; a pinned `regex` whose Unicode database matches the interpreter's, checked at boot by a full functional comparison; exhaustive, fuzz and incremental-scan tests against `re` in CI. Two `regex` bugs are worked around and pinned by tests |
+| The `regex` pin is frozen at 2023.8.8 (no cp312 wheel; upstream memory-safety fixes after it) | Built from the hashed sdist in a builder stage; never emits the constructs the known bugs need; crash fuzz in CI and an ASAN corpus weekly. **Exit plan:** explicit code-point sets built from `re`, which are exact on any `regex` release and 6–14× slower; the per-pass budget absorbs that |
+| Inline streaming scans hold the loop | Incremental scanning (about 0.04 ms per delta for 10 rules, at any length, on punctuated prose and code); half a scan window of thread CPU per delta; an inline timeout moves the work off the loop instead of refusing; a per-org inline bucket caps each org's loop share at ρ |
+| Off-loop scans of one org starve another | Scan scheduler: a FIFO per org, deficit round robin by thread CPU, at most T − 1 threads per org; depth bounded by admission |
+| Hostile plans slow the projector or the gateway | Parse-only check in the projector (16.5 ms for a hostile 64-rule plan), memoised and time-boxed per round; expanded-repetition and case-insensitive-item limits per pattern and per plan; single-flight, per-rule, GIL-yielding lazy compile on the scheduler; byte-bounded program cache |
+| A whole-text-rescan rule makes a very long stream expensive | Its rescans move off the loop and coalesce, so the stream slows (backpressure) instead of holding the loop. The org's scheduler share bounds what it takes from others. The worst case measured, Reviewer A's rules on 512 KiB of unpunctuated text, is about 79 ms per pass against a 400 ms budget |
 | Detector factory touches every scan seam | Off-loop N5 test per path; the same objects re-exported for dev; full suite |
-| A heavy but legitimate plan hits the inline per-delta budget | It refuses only that tenant's request, with a declared code and a counter; ordinary rules take microseconds per delta; there are 64 rules per plan at most |
+| A heavy but legitimate plan hits the inline per-delta budget | Nothing is refused inline: the work moves off the loop. A pass is refused only over its length-scaled per-pass budget, the same rule as non-streaming |
 | Audit lease flaps between workers | Contract-derived TTL; the takeover test; adopting a decision is idempotent |
 
 ## 10. Disposition of the revision-2 reviews
@@ -537,6 +654,28 @@ Revision-1 dispositions (reviewers 1–5) are unchanged except where the table a
 | A-N9: typo | §3 |
 | B: projector notes logged `base_url` | §6.6 |
 | B: hash-tag deferral conditions | §8 and §5.8 live step 7 (Valkey ops baseline); lease keys moved (§5.4) |
+
+### Revision-4 findings (Plan Reviewers A and B at `9df2980c`)
+
+| Finding | Where handled |
+|---|---|
+| A-B1 / B-B3: translation cost unbounded and on the projector's pre-heartbeat path; compile cost of sequential repetition; LRU sized by entries; executor translation stalls the loop | §5.2.1: one-`findall` case-insensitive verdicts and a build-time cased table. §5.2.3: expanded-repetition and case-insensitive-item limits (per pattern and per plan); a parse-only projector check, memoised, time-boxed and out of `desired_state`; single-flight, per-rule, GIL-yielding compile on the scheduler; byte-bounded cache. All with measured costs |
+| A-B2 / B-B1: the per-delta scan rescans the whole output; translated `\b` next to a class is slow | §5.2.1: exact one-sided boundaries. §5.2.4: incremental scanning with two exact finality rules (reach and stoppers); inline timeouts move work off the loop instead of refusing; length-scaled per-pass budget. §5.8: performance gate |
+| B-B2: overshoot; unbounded concurrent streams; shared executor | §5.2.4: the "overshoot" is thread-CPU accounting under host contention, so every budget is in thread CPU. §5.2.5: per-org inline bucket and scan scheduler (DRR, T − 1 cap). §5.8 tests (a)–(d) |
+| A-S1: possessive repeats over groups | §5.2.1: `(?>(?>X){m,n})`; possessive repeats in the CI fuzz |
+| A-S2 / B-4: no cp312 wheel; `regex.__version__`; `requires-python` | §5.2.2: builder stage with a hashed sdist; `importlib.metadata`; full functional boot check; `==3.12.*` |
+| B-4: missed upstream fixes; frozen pin; the wrong "5,004" | §5.2.2: unreachable constructs named; crash fuzz and ASAN corpus; exit plan; corrected counts. §9 |
+| A-S3: STRICT_WITHHOLD scans on the loop when `runner` is `None` | §5.2.5: the scheduler is always the runner. §5.8 test (c) covers strict mode |
+| A-S4: the aggregate loop-time bound was per request, not per delta | §5.2.5: per-org inline bucket. §5.8 test (a) with C concurrent streams |
+| A NIT 1: stale per-request deadline text; dependency bullet | §4 and §5.1 updated; §5.2.2 says where the pin and `types-regex` live |
+| A NIT 2: the fuzz hangs inside `re`; `SystemError` | §5.8: worker processes with a per-pattern timeout; `SystemError` treated as a refusal |
+| A NIT 3: HEAD fail-open on `SystemError` | §5.2.1 and the §5.8 regression test |
+| A NIT 4: `BASE_DETECTORS` | §5.1: on `develop` since #104 |
+| B NIT 5: §6.6 `base_url` | §6.6 |
+| B NIT 6: revision-3 NITs 9 and 11 | §5.6 (parent hardening, runbook); §5.4 (reserved `_` slugs) |
+| B NIT 7: `perf.md` input text; the `\b`+class family | `perf5.md` states its inputs and includes the family |
+| B NIT 8: `_CASED` computed at import | `gen_cased.py` builds the table, with a CI `--check` |
+| (found in revision 5) `regex` merges lone negated characters in an alternation | §5.2.1: the duplicated-member workaround; `alt_exhaustive.py` and the extended fuzz |
 
 ---
 _Generated by [Claude Code](https://claude.ai/code/session_01SDCVQVj8LRKW3CZ99zfdW1)_

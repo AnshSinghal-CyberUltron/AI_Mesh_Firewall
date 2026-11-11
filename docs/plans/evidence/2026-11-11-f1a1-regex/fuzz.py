@@ -1,66 +1,75 @@
-import random, re, sys, time, warnings, regex
-sys.path.insert(0, ".")
-from translate_prototype import translate, Refused
-warnings.simplefilter("ignore")
-R = random.Random(int(sys.argv[1]) if len(sys.argv) > 1 else 1)
-ALPHA = list("abcxyzABCXYZ019_ -.,:\n") + ["\x1c", "\x1f", "\xa0", " ", "١", "１", "́", "ͅ", "\xdf", "\xb2", "σ", "Σ", "ı", "İ", "K", "k", "K", "ẞ", "é", "٠"]
-ESC = [r"\d", r"\D", r"\w", r"\W", r"\s", r"\S"]
-LIT = list("abcxyzAXZ019_ ") + ["é", "σ", "\xdf", "k", "ı"]
+"""Differential fuzz: translated `regex` vs `re` on random patterns (revision 5).
 
-def atom(d):
-    r = R.random()
-    if r < 0.30: return re.escape(R.choice(LIT))
-    if r < 0.45: return R.choice(ESC)
-    if r < 0.52: return "."
-    if r < 0.70:
-        items = [R.choice(ESC + [re.escape(c) for c in LIT] + ["a-z", "0-9", "-"]) for _ in range(R.randint(1, 3))]
-        return "[" + ("^" if R.random() < 0.3 else "") + "".join(items) + "]"
-    if r < 0.85 and d < 3:
-        kind = R.choice(["(", "(?:", "(?=", "(?!"])
-        return kind + seq(d + 1) + ")"
-    if r < 0.90: return R.choice([r"\b", r"\B", "^", "$", r"\A", r"\Z"])
-    if r < 0.95: return R.choice(["{", "}", "a{e<=1}", "{,}", "x{2,}", "[[:alpha:]]"])
-    return re.escape(R.choice(LIT))
+Adds possessive quantifiers, atomic groups and lookbehinds to the grammar (Reviewer A, rev 4),
+and runs patterns in worker processes so a pattern that hangs inside `re` itself (which cannot
+be interrupted) is skipped and counted instead of hanging the run.
 
-def quant(a):
-    r = R.random()
-    if r < 0.6 or a in ("^", "$", r"\A", r"\Z", r"\b", r"\B"): return a
-    q = R.choice(["*", "+", "?", "{2}", "{1,3}", "{,2}", "{2,}"])
-    return a + q + ("?" if R.random() < 0.2 else "")
+    python fuzz.py <seed> <patterns>
+"""
+import multiprocessing as mp, random, re, sys, time, warnings
 
-def seq(d=0):
-    parts = [quant(atom(d)) for _ in range(R.randint(1, 4))]
-    s = "".join(parts)
-    if R.random() < 0.15 and d < 2: s += "|" + seq(d + 1)
-    return s
-
-def text():
-    return "".join(R.choice(ALPHA) for _ in range(R.randint(0, 24)))
-
-n = int(sys.argv[2]) if len(sys.argv) > 2 else 20000
-checked = mism = skipped = refused = 0
-t0 = time.perf_counter()
-for _ in range(n):
-    p = R.choice(["", "", "(?i)", "(?m)", "(?s)", "(?im)"]) + seq()
+def check_one(args):
+    seed, i = args
+    import regex, fuzz_gen as G
+    from translate_prototype import translate, Refused
+    warnings.simplefilter("ignore")
+    R = random.Random(seed * 1_000_003 + i); G.R = R
+    p = R.choice(["", "", "(?i)", "(?m)", "(?s)", "(?im)"]) + G.seq()
     try:
         a = re.compile(p)
     except Exception:
-        skipped += 1; continue
+        return ("skipped", p, None)
     try:
         b = regex.compile(translate(p))
     except Refused:
-        refused += 1; continue
+        return ("refused", p, None)
     except Exception as e:
-        mism += 1; print("COMPILE-FAIL", repr(p), type(e).__name__, e); continue
+        return ("compile-fail", p, f"{type(e).__name__}: {e}")
+    bad = None; n = 0
     for _ in range(8):
-        s = text()
+        s = "".join(R.choice(G.ALPHA) for _ in range(R.randint(0, 24)))
+        t0 = time.thread_time()
+        sa = [m.span() for m in a.finditer(s)]
+        t_re = time.thread_time() - t0
         try:
-            sa = [m.span() for m in a.finditer(s)]
             sb = [m.span() for m in b.finditer(s, timeout=1.0)]
-        except Exception as e:
-            print("ERR", repr(p), repr(s), e); continue
-        checked += 1
-        if sa != sb:
-            mism += 1
-            if mism <= 15: print("MISMATCH", repr(p), repr(s), sa, sb)
-print(f"patterns={n} checked={checked} mismatches={mism} re-invalid-skipped={skipped} refused={refused} in {time.perf_counter()-t0:.1f}s")
+        except TimeoutError:
+            # `regex` used > 1 s of CPU where `re` finished: a speed difference, recorded apart
+            return ("rx-timeout", p, f"re {t_re*1e3:.1f} ms on {s!r}")
+        n += 1
+        if sa != sb and bad is None:
+            bad = (s, sa, sb)
+    return ("mismatch" if bad else "ok", p, bad or n)
+
+def run(seed, n):
+    sys.path.insert(0, ".")
+    counts = {"ok": 0, "mismatch": 0, "rx-timeout": 0, "skipped": 0, "refused": 0, "compile-fail": 0, "re-hang": 0}
+    checks = 0
+    t0 = time.perf_counter()
+    ctx = mp.get_context("fork")
+    todo = list(range(n))
+    while todo:
+        with ctx.Pool(2) as pool:
+            pending = [(j, pool.apply_async(check_one, ((seed, j),))) for j in todo[:1000]]
+            rest = todo[1000:]
+            done = []
+            for idx, (j, res) in enumerate(pending):
+                try:
+                    kind, p, info = res.get(timeout=20)
+                except mp.TimeoutError:
+                    counts["re-hang"] += 1
+                    # restart the pool; resubmit everything after the hung pattern
+                    todo = [k for k, _ in pending[idx + 1:]] + rest
+                    pool.terminate()
+                    break
+                counts[kind] += 1
+                if kind == "ok": checks += info
+                elif kind in ("mismatch", "compile-fail", "rx-timeout") and counts[kind] <= 10:
+                    print(kind.upper(), repr(p), info, flush=True)
+            else:
+                todo = rest
+    print(f"seed={seed} patterns={n} checks={checks} " + " ".join(f"{k}={v}" for k, v in counts.items())
+          + f" in {time.perf_counter()-t0:.1f}s")
+
+if __name__ == "__main__":
+    run(int(sys.argv[1]) if len(sys.argv) > 1 else 1, int(sys.argv[2]) if len(sys.argv) > 2 else 4000)
