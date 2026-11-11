@@ -285,6 +285,25 @@ _OUTPUTS = (
 BUILTIN_PRIORITY = 200
 _ACTIONS = ("allow", "flag", "redact", "rewrite", "block")
 _BYTE_ALTERING = ("redact", "rewrite", "block")
+#: F4/F3: the surfaces beyond chat where each built-in category row's scan runs, keyed by
+#: ``(category, scope)``. INPUT runs on MCP tool arguments, the RAG query and the retrieved and
+#: ranked chunks (RAG and vector), and embeddings input; OUTPUT runs on MCP tool results and the
+#: RAG generator. Embeddings take data protection only, as v1's embeddings floor did. A row not
+#: listed (the ``out_*`` detector rows: those detectors are built only on the chat paths) keeps
+#: chat only.
+_SURFACE_EXTENSION: Mapping[tuple[str, str], tuple[str, ...]] = MappingProxyType(
+    {
+        ("pii", "input"): ("embeddings", "mcp", "rag", "vector"),
+        ("prompt_injection", "input"): ("mcp", "rag", "vector"),
+        ("jailbreak", "input"): ("mcp", "rag", "vector"),
+        ("command", "input"): ("mcp", "rag", "vector"),
+        ("toxicity", "input"): ("mcp", "rag", "vector"),
+        ("pii", "output"): ("mcp", "rag"),
+        ("credential", "output"): ("mcp", "rag"),
+    }
+)
+#: Suffix of an extension row's id; the chat row keeps its id, so its bytes do not change.
+EXTENSION_SUFFIX = "-ext"
 
 
 def selection_errors(
@@ -458,6 +477,34 @@ def _builtin_output_drafts(payload: Mapping[str, Any], mode: str) -> list[dict[s
             ),
         )
     return rows
+
+
+def surface_drafts(rows: list[dict[str, Any]], mode: str = "enforce") -> list[dict[str, Any]]:
+    """F4/F3: one extension row per built-in row, for the non-chat surfaces it protects.
+
+    The built-in rows are published for chat only, so on MCP, RAG, vector and embeddings no
+    built-in rule selected and an injection in a retrieved chunk or PII in a tool result was
+    allowed. The chat row is left as it is, and a separate ``<rule_id>-ext`` row carries the
+    other surfaces. These are new rule drafts, so ``mode`` is the D-8 gate: ``off`` omits them,
+    ``monitor`` publishes them as ``flag``/``monitor``, ``enforce`` keeps the chat row's action.
+    A ``rewrite`` extends as ``redact``: the RAG generator applies only BLOCK and REDACT, so a
+    REWRITE there would release the text unchanged.
+    """
+    if mode == "off":
+        return []
+    out: list[dict[str, Any]] = []
+    for row in rows:
+        surfaces = _SURFACE_EXTENSION.get((str(row.get("category")), str(row.get("scope"))))
+        if not surfaces or not str(row.get("rule_id", "")).startswith("fw-"):
+            continue
+        ext = {**row, "rule_id": f"{row['rule_id']}{EXTENSION_SUFFIX}", "surfaces": list(surfaces)}
+        ext.pop("rewrite_template", None)
+        if ext.get("action") == "rewrite":
+            ext["action"] = "redact"
+        if mode == "monitor":
+            ext["action"], ext["mode"] = "flag", "monitor"
+        out.append(ext)
+    return out
 
 
 def _action(value: Any, default: str) -> str:

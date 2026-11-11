@@ -36,6 +36,7 @@ from core.firewall_v2_map import (
     org_listed,
     retired_unchanged,
     rewrite_served_by_v2,
+    surface_drafts,
 )
 from core.firewall_v2_map import _setting as _deployment_setting
 from core.v2_audit_adapter import parse_org_map
@@ -187,8 +188,14 @@ def document_body(
     slug = org_slug if org_slug is not None else org_id
     # Customer/firewall rows get the default priority only when they carry none of their own, so
     # the built-in detector rows keep the explicit priority their emitter gave them (D-32).
-    rules = [{"priority": _PRIORITY, **row} for row in drafts_for(payload)]
-    rules.extend({**row, "priority": _PRIORITY} for row in threat_drafts(payload, mode=rules_mode))
+    builtin = drafts_for(payload)
+    threats = threat_drafts(payload, mode=rules_mode)
+    rules = [{"priority": _PRIORITY, **row} for row in builtin]
+    rules.extend({**row, "priority": _PRIORITY} for row in threats)
+    # F4/F3: the same built-ins on the non-chat surfaces, behind the D-8 gate (chat rows unchanged).
+    rules.extend(
+        {"priority": _PRIORITY, **row} for row in surface_drafts([*builtin, *threats], rules_mode)
+    )
     rules.extend(policy_rows)
     if payload.get("firewall_enabled") is not False:
         rules.extend(platform_rows(slug))
