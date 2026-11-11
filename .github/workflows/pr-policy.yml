@@ -11,9 +11,10 @@ on:
   pull_request:
     types: [opened, edited, synchronize, reopened, ready_for_review]
 
+# The job reads only the event payload (title, body, refs, line counts) and calls no API, so it
+# needs no pull-requests scope; contents: read is the repository-wide baseline.
 permissions:
   contents: read
-  pull-requests: read
 
 jobs:
   policy:

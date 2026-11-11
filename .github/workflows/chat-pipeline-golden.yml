@@ -11,12 +11,19 @@ on:
       - 'gateway/ai_mesh_gateway/main.py'
       - 'gateway/tests/golden/**'
       - 'docs/pipeline/**'
+      # A change to this workflow runs it, so the change is tested by the run it changes.
+      - '.github/workflows/chat-pipeline-golden.yml'
   push:
     branches:
       - cursor/chat-pipeline-freeze
     paths:
       - 'gateway/**'
       - 'docs/pipeline/**'
+      - '.github/workflows/chat-pipeline-golden.yml'
+
+# Least privilege: the job only checks out and reads the repository.
+permissions:
+  contents: read
 
 jobs:
   golden-freeze:
@@ -25,8 +32,10 @@ jobs:
       run:
         working-directory: gateway
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: '3.12'
       - name: Install test deps
