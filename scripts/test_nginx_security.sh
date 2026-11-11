@@ -331,11 +331,16 @@ echo "${gw_docs}" | grep -qE '^HTTP/1\.[01] 401' \
 
 # The internal control API (decrypted upstream credentials) must 404 on BOTH public vhosts,
 # which also proves each include sits in the right server block, not just that two exist.
+# Both files: nginx.conf serves :80 (18091) and nginx-ssl.conf serves :443 (18453).
 for host in aimeshfirewall.zeroshield.ai aimeshbackend.zeroshield.ai; do
   internal="$(curl -sD - -o /dev/null -H "Host: ${host}" -H "X-Forwarded-Proto: https" \
     "http://127.0.0.1:18091/api/mcp-connector/internal/credential/")"
   echo "${internal}" | grep -qE '^HTTP/1\.[01] 404' \
-    || die "${host} /api/mcp-connector/internal/ expected 404, got:"$'\n'"${internal}"
+    || die "${host} :80 /api/mcp-connector/internal/ expected 404, got:"$'\n'"${internal}"
+  internal_tls="$(curl -skD - -o /dev/null -H "Host: ${host}" \
+    "https://127.0.0.1:18453/api/mcp-connector/internal/credential/")"
+  echo "${internal_tls}" | grep -qE '^HTTP/[0-9.]+ 404' \
+    || die "${host} :443 /api/mcp-connector/internal/ expected 404, got:"$'\n'"${internal_tls}"
 done
 
 pass "docker nginx -t + /login headers + unknown-Host 403 + gateway OpenAPI 401 + internal API 404"
