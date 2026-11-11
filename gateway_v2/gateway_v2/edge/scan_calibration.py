@@ -201,8 +201,8 @@ def scan_sizing(contract: object, env: Mapping[str, str] | None = None) -> ScanS
         # Not a busy host but a mis-set SLO: not even one slot fits the scan budget. Keep the
         # old fail-closed signal instead of clamping (Reviewer B on #104).
         raise CapacityUnavailable(
-            f"no scan slot fits {target_ms} ms x {_SCAN_BUDGET_FRACTION} at {cost:.0f} us/slot: "
-            "raise AMF_TARGET_P99_MS"
+            f"no scan slot fits {target_ms} ms x {_SCAN_BUDGET_FRACTION} at {cost:.0f} us/slot "
+            f"({source}): raise AMF_TARGET_P99_MS, or give the host more CPU or fewer workers"
         )
     served = resolver(slot_cost_us=cost, scanned_slots_floor=floor).max_scanned_slots
     sizing = ScanSizing(cost, source, floor, calibrated, served)
