@@ -25,8 +25,8 @@ vectors = [
     # GW30 Pinecone live gate: the MODERN SDK is named ``pinecone`` (the old ``pinecone-client``
     # name is deprecated). Pinned exactly, like ``pymilvus`` above. Imported lazily inside
     # ``dispatch/vector_transports/pinecone_transport.py``'s ``_client()``. Unlike pymilvus it
-    # SHIPS a ``py.typed`` marker, so --strict type-checks its import cleanly and NO
-    # ``ignore_missing_imports`` override is added below.
+    # SHIPS a ``py.typed`` marker, so when it is installed --strict type-checks its import fully;
+    # the optional-SDK override below only stops an ABSENT pinecone from failing the gate.
     "pinecone==10.3.0",
 ]
 dev = [
