@@ -17,7 +17,11 @@ from gateway_v2.domain.channels import (
 )
 from gateway_v2.edge.chat_deps import resolve_tool_bounds
 from gateway_v2.edge.dev_components import DeterministicFindings
-from gateway_v2.edge.scan_calibration import CALIBRATION_SLOTS, measure_scan_slot_cost_us
+from gateway_v2.edge.scan_calibration import (
+    CALIBRATION_SLOTS,
+    measure_scan_slot_cost_us,
+    scanned_slots_floor,
+)
 from gateway_v2.runtime import resources, resources_tools
 from gateway_v2.runtime.errors import CapacityUnavailable
 from gateway_v2.runtime.resources import load_contract
@@ -84,8 +88,10 @@ def test_calibration_max_scanned_slots_cost_less_than_the_scan_budget() -> None:
     test calibrated under says nothing about the load now.
     """
     c = _contract()
-    cost_us = measure_scan_slot_cost_us.__wrapped__(c.guard_wait_budget_s(), c.scan_window_s())
-    slots = c.tool_bounds(slot_cost_us=cost_us).max_scanned_slots
+    cost_us = measure_scan_slot_cost_us.__wrapped__(
+        c.guard_wait_budget_s(), c.scan_window_s(), scanned_slots_floor()
+    )
+    slots = c.tool_bounds(slot_cost_us=cost_us).max_scanned_slots  # calibrated, before any clamp
     detector = DeterministicFindings(phase=Phase.INPUT, budget_s=1.0)
     texts = list(CALIBRATION_SLOTS) * (slots // len(CALIBRATION_SLOTS) + 1)
     texts = texts[:slots]
@@ -118,7 +124,7 @@ def test_calibration_passes_last_one_scan_window(monkeypatch: pytest.MonkeyPatch
     fake_time = types.SimpleNamespace(perf_counter=lambda: next(clock))
     monkeypatch.setattr(scan_calibration, "time", fake_time)
     rounds_per_pass = 10  # the fake clock advances one tick per round
-    cost = measure_scan_slot_cost_us.__wrapped__(0.05, rounds_per_pass * tick)
+    cost = measure_scan_slot_cost_us.__wrapped__(0.05, rounds_per_pass * tick, 1)
     passes = resources._SCAN_CALIBRATION_PASSES
     slots_per_pass = rounds_per_pass * len(CALIBRATION_SLOTS)
     assert len(calls) == 1 + passes * slots_per_pass  # one warm-up slot, then full windows
@@ -141,13 +147,39 @@ def test_a_measured_slot_cost_replaces_the_declared_one() -> None:
     assert dear < declared < cheap
 
 
-def test_a_non_positive_slot_cost_fails_closed() -> None:
+@pytest.mark.parametrize("cost", [0.0, -1.0, float("nan"), float("inf")])
+def test_a_non_finite_or_non_positive_slot_cost_fails_closed(cost: float) -> None:
     with pytest.raises(CapacityUnavailable):
-        _contract().tool_bounds(slot_cost_us=0.0)
+        _contract().tool_bounds(slot_cost_us=cost)
 
 
-def test_build_app_bounds_are_the_calibrated_ones() -> None:
+def test_the_floor_raises_a_low_bound_and_never_lowers_a_high_one() -> None:
     c = _contract()
-    cost_us = measure_scan_slot_cost_us(c.guard_wait_budget_s(), c.scan_window_s())
-    expected = c.tool_bounds(slot_cost_us=cost_us)
+    dear = c.tool_bounds(slot_cost_us=resources._SCAN_SLOT_COST_US * 10).max_scanned_slots
+    assert c.tool_bounds(
+        slot_cost_us=resources._SCAN_SLOT_COST_US * 10, scanned_slots_floor=dear + 5
+    ).max_scanned_slots == dear + 5
+    declared = c.tool_bounds().max_scanned_slots
+    assert c.tool_bounds(scanned_slots_floor=1).max_scanned_slots == declared
+
+
+def test_build_app_bounds_are_the_served_ones(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("AMF_SCAN_SLOT_COST_US", raising=False)
+    c = _contract()
+    floor = scanned_slots_floor()
+    cost_us = measure_scan_slot_cost_us(c.guard_wait_budget_s(), c.scan_window_s(), floor)
+    expected = c.tool_bounds(slot_cost_us=cost_us, scanned_slots_floor=floor)
     assert resolve_tool_bounds(c) == expected
+    assert expected.max_scanned_slots >= floor
+
+
+@pytest.mark.parametrize("p99", [float("inf"), float("nan"), 0.0, -5.0])
+def test_a_non_finite_or_non_positive_p99_target_refuses_the_contract(p99: float) -> None:
+    signals = resources.HardwareSignals(
+        cpu_quota=2.0, memory_limit=8 << 30, fd_limit=20_000,
+        cpu_source="affinity", mem_source="meminfo", fd_source="rlimit",
+    )
+    with pytest.raises(CapacityUnavailable):
+        resources.from_signals(
+            signals, target_p99_ms=p99, utilization_cap=0.75, per_worker_rss=400 << 20
+        )

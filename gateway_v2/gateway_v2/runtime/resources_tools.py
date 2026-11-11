@@ -54,12 +54,16 @@ class ToolBoundsMixin:
 
         return self.target_p99_ms / _MS_PER_S * _SCAN_BUDGET_FRACTION
 
-    def tool_bounds(self, slot_cost_us: float | None = None) -> ToolBounds:
+    def tool_bounds(
+        self, slot_cost_us: float | None = None, scanned_slots_floor: int = 0
+    ) -> ToolBounds:
         """Derive the tool bounds; fail closed (`CapacityUnavailable`) on any value below one.
 
         `slot_cost_us` is this host's measured per-slot scan cost (boot calibration,
         `edge/scan_calibration.py`); without it the DECLARED `_SCAN_SLOT_COST_US` is used, so a
         faster host admits more scanned slots and a slower one fewer, inside the same budget.
+        `scanned_slots_floor` raises a calibrated bound that came out below what a realistic
+        request needs (`edge/scan_calibration.py` decides it and logs the clamp).
 
         `max_withheld_bytes` is the per-stream buffer ceiling at the connection budget (the
         largest stream count the worker admits), so the assembler's total withheld bytes can never
@@ -81,10 +85,11 @@ class ToolBoundsMixin:
         request_bytes = self.max_request_bytes()
         nodes = request_bytes // _SCHEMA_NODE_BYTES
         cost_us = _SCAN_SLOT_COST_US if slot_cost_us is None else slot_cost_us
-        if cost_us <= 0:
-            raise CapacityUnavailable("scan slot cost must be positive")
+        if not cost_us > 0 or not math.isfinite(cost_us):  # `not >` also refuses NaN
+            raise CapacityUnavailable("scan slot cost must be finite and positive")
         # Same window as scan_window_s(), kept in microseconds to avoid float round-trips.
         slots = math.floor(self.target_p99_ms * _MS_PER_S * _SCAN_BUDGET_FRACTION / cost_us)
+        slots = max(slots, scanned_slots_floor)
         bounds = ToolBounds(
             max_tools=_MAX_TOOLS,
             schema_depth=_SCHEMA_DEPTH,

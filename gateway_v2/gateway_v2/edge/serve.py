@@ -81,6 +81,7 @@ from gateway_v2.edge.mcp_deps import McpDeps
 from gateway_v2.edge.mcp_wiring import wrap_mcp_app
 from gateway_v2.edge.mcp_ws import WsLimiter
 from gateway_v2.edge.production_profile import apply_production, production_profile_active
+from gateway_v2.edge.scan_calibration import export_for_workers, scan_sizing
 from gateway_v2.edge.state_runtime import StateRuntime, StateServedApp
 from gateway_v2.egress.output_guard import MinimalOutputResolver
 from gateway_v2.runtime.lifecycle import install_sighup
@@ -175,6 +176,14 @@ def _stub_provider() -> StubProviderClient:
     return StubProviderClient(script=empty_script, rng=random.Random(0))
 
 
+def _with_tool_bounds_line(
+    logs: tuple[str, ...], contract: ResourceContract, env: Mapping[str, str]
+) -> tuple[str, ...]:
+    """Append the GW34 scan sizing (cost, source, floor, served bound) to the boot log."""
+    sizing = scan_sizing(contract, env)
+    return logs if sizing is None else (*logs, sizing.boot_line())
+
+
 def build_boot_dependencies(
     *,
     contract: ResourceContract,
@@ -217,9 +226,10 @@ def build_boot_dependencies(
     environment = os.environ if env is None else env
     production = production_profile_active(environment)  # validates AMF_PROFILE first
     if dev_profile_active(environment):
-        return build_dev_dependencies(
+        dev_deps, dev_logs = build_dev_dependencies(
             contract=contract, env=environment, metrics_registry=_ExpositionRegistry()
         )
+        return dev_deps, _with_tool_bounds_line(dev_logs, contract, environment)
     provider = _stub_provider()
     clock: Callable[[], float] = time.monotonic
     admission_decider: object = (
@@ -260,6 +270,7 @@ def build_boot_dependencies(
         "boot: quota -> fail_closed_budget (fail-closed budget refusal; no GW06 decider wired)",
         "boot: catalog -> empty_catalog_source (every retrieve model_not_found; backend deferred)",
     )
+    logs = _with_tool_bounds_line(logs, contract, environment)
     if production:
         return apply_production(deps, logs, contract=contract, env=environment)
     return deps, logs
@@ -716,6 +727,9 @@ def main(argv: list[str] | None = None) -> int:
         # Prove ``build_app`` assembles cleanly ONCE in the parent before any uvicorn worker spawns
         # (R1.8). The returned app is discarded; each worker rebuilds its own via ``app_factory``.
         _assemble_app(deps)
+        # One GW34 scan calibration per host, taken here before any worker competes for the CPU;
+        # every worker inherits it through the environment and serves the same bound.
+        export_for_workers(contract)
     except Exception as exc:
         return _refuse_start(exc)
 
