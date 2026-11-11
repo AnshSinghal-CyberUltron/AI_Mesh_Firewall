@@ -21,6 +21,7 @@ captured output are in this directory (`repro_*.py`, `repro_*.out.txt`). Each sc
 | SDK-matrix evidence overwrite | `gateway_v2/tests/openai_conformance/sdk_matrix/conftest.py` |
 | `request_pre_check_exceeded` 500 | `HANDOFF.md` line 97 |
 | V9 Publisher series | `HANDOFF.md` V9 and item 4 |
+| v1 golden suite (added by the coordinator) | CI `chat-pipeline-golden` / `golden-freeze`, run 42977201040; waiver in `docs/ci/MERGE_POLICY.md:33` ("defect-fix feature") |
 
 `docs/plans/2026-11-04-gw32-mcp-transport.md` and `2026-11-04-gw17b-security-design.md` list no open defect. They record residual risks only (sandbox holes, access logs). Those are not reproducible defects, so they are not registered here.
 
@@ -45,8 +46,20 @@ Severity classes: **security**, **correctness**, **hygiene**. Status: CONFIRMED 
 | R13 | V9: `tool_calls_released`/`withheld` are not Publisher series | CONFIRMED (missing) | hygiene (observability) | Counters reach only the audit detail (`edge/request_holds.py:191-202`) | **overlaps F1a-1 N14**: Publisher signature and `series_count` (§5.5) | deferred until F1a-1 lands |
 | R14 | v1 I-07 (`blocked_keywords` not on embeddings) | NOT REPRODUCIBLE on v2 | — | The keyword row is a `pipeline` policy row, so it publishes `chat` + `embeddings` (`firewall_v2_publish.py:48-53, 227-257`) | — | none |
 | R15 | RAG generator releases text unchanged on a REWRITE disposition (new, found while designing R1) | LATENT | security | `edge/rag_stages.py:393-404` handles BLOCK and REDACT only, so a REWRITE falls through to `return text`. Reachable today only through a customer rewrite policy on the `rag` domain for an org in `V2_REWRITE_ORGS` | R1 extends `rewrite` as `redact` so that R1 does not create a new path to it | separate PR on request |
+| **R16a** | **v1 gateway (LIVE in production): obfuscated, encoded and split PII/secrets on INPUT reach the model** (21 of the 153 `golden-freeze` failures) | CONFIRMED | **security, top** | `gateway/ai_mesh_gateway/scanner.py:1197-1330`. Task 3.1 (policy-driven detection) reduced `_scan_prompt_sync` to a plain-value floor (`docs/pipeline/CHANGELOG.md:267`), and PIPELINE-0032 restored only the plain values. The G33/G53/G69/G71/G87/G91 decoders no longer drive the verdict. An HTML-entity or markdown-split SSN gets verdict `allow`, and `redact_all` leaves its bytes unchanged (`probe_v1golden.out.txt`) | v1 code; no F1a or hotfix file | **first after this PR** |
+| **R16b** | v1: no deterministic injection or jailbreak floor at Tier-1 (125 of the 153) | CONFIRMED; **stale expectation against a deliberate design**, residual risk open | security (owner decision) | `scanner.py:1210-1212`: "Injection / jailbreak / RAG-poisoning stay policy-only (task 3.1) … A zero-policy org will not get a built-in injection block." Prod relies on org policies plus the Tier-2 model floor (PIPELINE-0033; `ENABLE_TIER2=true`, `GATEWAY_TIER2_SAMPLE_RATE` in `docker-compose.prod.yml`). With Tier-2 off, sampled out or degraded and no org injection policy, `ignore all previous instructions` is `allow` | owner decision: restore a Tier-1 floor, or re-baseline the golden | decision |
+| R16c | v1 output-side golden cases (G35, G88, G10; 5 of the 153) | **UNVERIFIED** at the OutputGuard level | security, if real | The golden calls `InputScanner(config={})._scan_output_sync`, which returns `flag` for PII (`scanner.py:1698-1705`). `sanitize_output_for_verdict` does not mask a `flag`. The production OutputGuard (`output_guard.py:1254`) applies the org's `output_pii_action`, which these tests do not exercise | — | verify with an OutputGuard-level test before any fix |
+| R16d | v1 stale fixtures (2 of the 153) | stale expectation | hygiene | `plain_email`: the oracle flags the smart-mask `j***@e***.com` itself (`email_smart_masked`, PIPELINE-0012); the raw address is gone. `g101` card: the fixture `4111-1111-1111-1119` fails Luhn, and the Luhn gate (be797529) rejects it by design | — | fix the fixtures with R16a |
 
-Order of work by severity: R1, R2 (decision), R3, R4, R5 (decision), R6, R7, R12. R13 waits for F1a-1. R8–R11 and R14 need no change now.
+**R16 deployment status: v1 is the live production data plane.**
+- `docker-compose.prod.yml:183-235`: service `gateway`, image `ai-mesh-gateway`, which `infra/scripts/build-push-images.sh:135-136` builds from `gateway/Dockerfile`. It serves `GATEWAY_PUBLIC_URL=https://aimeshgateway.zeroshield.ai`.
+- `deploy/nginx.conf:124-125` and `deploy/nginx-ssl.conf:47-63,184-185`: `/v1` is proxied to `gateway:8300`.
+- `infra/terraform/envs/prod/main.tf:211`: `container_port = 8300`.
+- `gateway-v2` is profile-gated in prod, so a plain `up` never starts it (`docker-compose.prod.yml:377-381`).
+- Control defaults to `AMF_GATEWAY_BACKEND=v1` (`main_app/settings.py:330`).
+- gateway_v2 does not serve production completions until F1 lands.
+
+Order of work by severity: **R16a** (v1, live), R1 (this PR), R16b and R2 (decisions), R3, R4, R5 (decision), R6, R7, R12. R16c needs verification first. R13 waits for F1a-1. R8–R11 and R14 need no change now.
 
 ## Detail
 
@@ -78,3 +91,14 @@ Order of work by severity: R1, R2 (decision), R3, R4, R5 (decision), R6, R7, R12
 
 ### R12: SDK-matrix evidence overwrite
 - **Repro:** run `pytest tests/openai_conformance/sdk_matrix` on a host without `node_modules/openai`. The run passes (45 passed, 10 skipped) and leaves `docs/plans/evidence/2026-11-04-gw34/sdk-matrix-report.json` modified: 32 insertions and 33 deletions, every node cell `ran 0, skipped "node_modules/openai is absent"` (`sdk_matrix_mutation.txt`).
+
+### R16: v1 gateway golden suite (`golden-freeze`, 153 failures)
+- **Repro:** `cd gateway && GATEWAY_LIVE=0 /home/claude/work/venv-v1/bin/python -m pytest tests/golden -q -p no:cacheprovider` gives `153 failed, 515 passed, 7 skipped`. That is the same id set as CI run 42977201040 (job 130378920740, head bd88e563) and as the `docs/ci/MERGE_POLICY.md` waiver. List: `v1_golden_failures.txt`.
+- **Classification:** 21 real input misses (R16a), 125 injection cases that encode the pre-task-3.1 Tier-1 contract (R16b), 5 output cases unverified (R16c), 2 stale fixtures (R16d). Sample probe: `probe_v1golden.py` → `probe_v1golden.out.txt`:
+  - plain SSN and AKIA still `redact` (the floor works for plain values);
+  - HTML-entity SSN → `allow`, bytes unchanged after `redact_all`;
+  - markdown-split `1**2**3-45-6789` → `allow`, bytes unchanged;
+  - SSN split across two user turns → `allow`;
+  - percent-encoded AKIA → verdict `allow`, although `redact_all` would mask it;
+  - plain injection → `allow`.
+- **Expected for R16a:** the platform PII/secret floor that PIPELINE-0032 restored for plain values also holds for the obfuscations G33/G53/G69/G71/G87/G91 once fixed, when the value is recoverable by canonicalisation or decoding: redact, or block where masking is impossible.
