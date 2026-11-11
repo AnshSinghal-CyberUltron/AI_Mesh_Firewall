@@ -376,8 +376,9 @@ services:
 
   gateway-v2:
     # Dev-profile gateway (AMF_DEV_PROFILE=1, static repo-published bearer). The base file runs
-    # it for local stacks; here it is gated so a plain prod `up` never starts it.
-    profiles: ["gateway-v2"]
+    # it for local stacks; here it is gated so a plain prod `up` never starts it. The debugging
+    # `dev-frontend` profile also enables it, because that frontend proxies /v1 to it.
+    profiles: ["gateway-v2", "dev-frontend"]
 
   http-everything:
     profiles: ["transport-stubs"]

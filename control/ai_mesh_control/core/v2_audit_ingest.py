@@ -64,8 +64,6 @@ def _streams(client: Any, prefix: str, mapping: dict[str, str]) -> list[str]:
     org_ids.update(mapping)
     org_ids.add(_UNAUTHENTICATED)
     candidates = sorted(f"{prefix}{org_id}" for org_id in org_ids if org_id)
-    if not candidates:
-        return []
     pipe = client.pipeline(transaction=False)
     for stream in candidates:
         pipe.exists(stream)
