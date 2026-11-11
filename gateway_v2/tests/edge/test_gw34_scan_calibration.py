@@ -126,6 +126,55 @@ def test_a_slow_host_serves_the_floor_and_says_so(caplog: pytest.LogCaptureFixtu
     assert any("CLAMPED" in record.getMessage() for record in caplog.records)
 
 
+def test_the_served_bound_is_floored_on_a_slow_host(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Review of #104: pin the cost, so the served-path floor is tested on every host."""
+    monkeypatch.setenv(SCAN_COST_ENV, "100000")  # 100 ms per slot: the calibrated bound is 0
+    served = resolve_tool_bounds(_contract())
+    assert served is not None
+    assert served.max_scanned_slots == scanned_slots_floor()
+
+
+def test_a_measured_cost_that_is_not_finite_and_positive_refuses(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    for bad in (0.0, float("nan"), float("inf"), -1.0):
+        monkeypatch.setattr(scan_calibration, "_measure_once", lambda _b, _p, v=bad: v)
+        with pytest.raises(CapacityUnavailable):
+            measure_scan_slot_cost_us.__wrapped__(0.05, 0.01, 1)
+
+
+def test_the_cheapest_re_measurement_is_kept(monkeypatch: pytest.MonkeyPatch) -> None:
+    costs = iter([5_000.0, 900.0, 2_000.0])
+    monkeypatch.setattr(scan_calibration, "_measure_once", lambda _b, _p: next(costs))
+    assert measure_scan_slot_cost_us.__wrapped__(0.05, 0.01, 1_000) == 900.0
+
+
+def test_a_fractional_p99_does_not_report_a_false_clamp() -> None:
+    import dataclasses
+
+    c = dataclasses.replace(_contract(), target_p99_ms=500.5)
+    sizing = scan_sizing(c, {SCAN_COST_ENV: "1"})
+    assert sizing is not None and not sizing.clamped
+
+
+def test_the_clamp_warning_is_logged_once(caplog: pytest.LogCaptureFixture) -> None:
+    scan_calibration._warn_clamped.cache_clear()
+    c = _contract()
+    for _ in range(3):
+        scan_sizing(c, {SCAN_COST_ENV: "123456"})
+    assert sum("CLAMPED" in r.getMessage() for r in caplog.records) == 1
+
+
+def test_main_exports_the_calibration_for_its_workers() -> None:
+    import inspect
+
+    from gateway_v2.edge import serve
+
+    source = inspect.getsource(serve.main)
+    assert "export_for_workers(contract)" in source
+    assert source.index("_assemble_app(deps)") < source.index("export_for_workers(contract)")
+
+
 def test_a_fast_host_is_not_clamped() -> None:
     sizing = scan_sizing(_contract(), {SCAN_COST_ENV: "1"})
     assert sizing is not None and not sizing.clamped

@@ -41,6 +41,7 @@ from gateway_v2.edge.wire.openai_template import JOINED_CHANNEL_ORDER
 from gateway_v2.runtime.errors import CapacityUnavailable
 from gateway_v2.runtime.resources import (
     _MS_PER_S,
+    _SCAN_BUDGET_FRACTION,
     _SCAN_CALIBRATION_MAX_PASS_S,
     _SCAN_CALIBRATION_PASSES,
     _SCAN_CALIBRATION_RETRIES,
@@ -136,11 +137,15 @@ def measure_scan_slot_cost_us(budget_s: float, window_s: float, floor: int) -> f
         raise CapacityUnavailable("scan window must be finite and positive to calibrate")
     pass_s = min(window_s, _SCAN_CALIBRATION_MAX_PASS_S)
     window_us = window_s * _US_PER_S
-    cost = _measure_once(budget_s, pass_s)
+    cost = _checked(_measure_once(budget_s, pass_s))
     for _ in range(_SCAN_CALIBRATION_RETRIES):
         if math.floor(window_us / cost) >= floor:
             break
-        cost = min(cost, _measure_once(budget_s, pass_s))
+        cost = min(cost, _checked(_measure_once(budget_s, pass_s)))
+    return cost
+
+
+def _checked(cost: float) -> float:
     if not (math.isfinite(cost) and cost > 0):
         raise CapacityUnavailable("measured scan slot cost is not finite and positive")
     return cost
@@ -178,12 +183,20 @@ def scan_sizing(contract: object, env: Mapping[str, str] | None = None) -> ScanS
         source = "measured at boot"
     else:
         cost, source = declared, SCAN_COST_ENV
-    calibrated = math.floor(float(window()) * _US_PER_S / cost)  # may be 0 on a slow host
+    # The same expression `tool_bounds` uses, so a fractional p99 cannot fake a clamp.
+    target_ms = float(getattr(contract, "target_p99_ms", 0.0))
+    calibrated = math.floor(target_ms * _MS_PER_S * _SCAN_BUDGET_FRACTION / cost)  # may be 0
     served = resolver(slot_cost_us=cost, scanned_slots_floor=floor).max_scanned_slots
     sizing = ScanSizing(cost, source, floor, calibrated, served)
     if sizing.clamped:
-        logger.warning("%s", sizing.boot_line())
+        _warn_clamped(sizing.boot_line())
     return sizing
+
+
+@functools.cache
+def _warn_clamped(line: str) -> None:
+    """Warn once per process and distinct sizing, not on every `resolve_tool_bounds` call."""
+    logger.warning("%s", line)
 
 
 def export_for_workers(contract: object, env: MutableMapping[str, str] | None = None) -> None:
