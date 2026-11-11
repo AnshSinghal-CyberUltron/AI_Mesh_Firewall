@@ -1,0 +1,2 @@
+# The vector_credentials precedent (dispatch/vector_credentials.py:98-101) on Python 3.12: does pickling still carry the secret?
+python 3.12.3 | pickle.dumps succeeded | planted secret present in the pickle bytes: True
