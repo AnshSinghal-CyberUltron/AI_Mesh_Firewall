@@ -1,0 +1,2 @@
+FAILED tests/gates/test_check_tenant_scale.py::test_the_shipped_data_plane_is_clean
+1 failed, 4885 passed, 108 skipped, 39 warnings in 61.71s (0:01:01)

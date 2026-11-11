@@ -19,6 +19,8 @@ import {
   resolvePipelineInputOutput,
   deriveStageVerdict,
   derivePipelineDetections,
+  stageDecidingRules,
+  recordedRiskScore,
 } from "./pipelineTrace.js";
 
 // Robustness: the trace card (StageTimeline) renders `stage.action` per element, so a
@@ -88,6 +90,55 @@ test("honestStageAction keeps model_routing allow even at 0ms", () => {
     honestStageAction({ name: "route", action: "allow", latency_ms: 0 }),
     "allow",
   );
+});
+
+// PIPELINE-0035 / L14b-2: executed-vs-skipped renders from the record (stage.ran),
+// never recomputed in the browser from latency===0.
+test("honestStageAction respects the backend ran flag over latency inference", () => {
+  // The 503 scan-only + policy-redacted scenario: input_scan ran (analyzed the masked
+  // text, allowed it) but reconciled to 0ms. ran=true must NOT be recomputed to skip.
+  assert.equal(
+    honestStageAction({
+      name: "input_scan",
+      action: "allow",
+      latency_ms: 0,
+      ran: true,
+      scan_outcome: "analyzed",
+      redact_noop: true,
+    }),
+    "allow",
+  );
+  // A genuinely-skipped stage after an upstream block stays skip.
+  assert.equal(
+    honestStageAction({ name: "model_output", action: "allow", latency_ms: 0, ran: false }),
+    "skip",
+  );
+});
+
+test("honestStageAction does not latency-infer skip for a stage with run-evidence (no ran field)", () => {
+  // Backward-compat with older records lacking `ran`: scan_outcome=analyzed at 0ms ran.
+  assert.equal(
+    honestStageAction({
+      name: "input_scan",
+      action: "allow",
+      latency_ms: 0,
+      scan_outcome: "analyzed",
+      redact_noop: true,
+    }),
+    "allow",
+  );
+  // A real tier value is also positive run-evidence.
+  assert.equal(
+    honestStageAction({ name: "input_scan", action: "allow", latency_ms: 0, tier: "tier_1" }),
+    "allow",
+  );
+  // scan_outcome=clean at 0ms is still a stage that ran.
+  assert.equal(
+    honestStageAction({ name: "input_scan", action: "allow", latency_ms: 0, scan_outcome: "clean" }),
+    "allow",
+  );
+  // A bare 0ms allow with NO evidence and NO ran flag still reads as skip (unchanged).
+  assert.equal(honestStageAction({ name: "auth", action: "allow", latency_ms: 0 }), "skip");
 });
 
 test("honestStageAction flags unenforced injection BLOCK rec (scan 251434)", () => {
@@ -411,4 +462,136 @@ test("resolvePipelineInputOutput redact shows before/after (PIPELINE-0022)", () 
   assert.equal(io.inputAfter, "email u***@example.com");
   assert.equal(io.outputText, "ok");
   assert.equal(io.outputWithheld, false);
+});
+
+test("a gateway-v2 trace with no timings does not invent a 0ms breakdown", () => {
+  const bd = resolveLatencyBreakdown({
+    pipelineTrace: {
+      final_action: "redact",
+      plan_version: "1.1.19663cec401a7665",
+      stages: [
+        { name: "auth", action: "allow", ran: true },
+        { name: "input_scan", action: "redact", ran: true, deciding_rule: "dev-pii-redact" },
+      ],
+    },
+  });
+  assert.equal(bd, null);
+  assert.deepEqual(resolveLatencyHints({
+    pipelineTrace: {
+      stages: [{ name: "input_scan", action: "redact", ran: true }],
+    },
+  }), []);
+});
+
+test("stageDecidingRules reads deciding_rule and does not invent one", () => {
+  assert.deepEqual(stageDecidingRules({ deciding_rule: "dev-pii-redact" }), ["dev-pii-redact"]);
+  assert.deepEqual(stageDecidingRules({ matched_rules: ["a"], deciding_rule: "a" }), ["a"]);
+  assert.deepEqual(stageDecidingRules({ action: "allow", ran: true }), []);
+});
+
+test("recordedRiskScore keeps a stored number and rejects a severity word", () => {
+  assert.equal(recordedRiskScore(0), 0);
+  assert.equal(recordedRiskScore("85"), 85);
+  assert.equal(recordedRiskScore("medium"), null);
+  assert.equal(recordedRiskScore(undefined), null);
+});
+
+test("an unavailable stage stays unavailable and a missing stage is not filled in", () => {
+  const stages = [
+    { name: "auth", action: "allow", ran: true },
+    { name: "rate_limit", action: "allow", ran: true },
+    { name: "input_scan", action: "unavailable", ran: true, deciding_rule: "dev-guard-unavailable" },
+    { name: "model_routing", action: "skip", ran: false },
+    { name: "model_output", action: "skip", ran: false },
+  ];
+  assert.equal(
+    honestStageAction({ name: "input_scan", action: "unavailable", ran: true, latency_ms: 0 }),
+    "unavailable",
+  );
+  assert.equal(
+    honestStageAction({ name: "model_output", action: "skip", ran: false, latency_ms: 0 }),
+    "skip",
+  );
+  const nodes = buildHonestTraceStages(stages, "allow", {});
+  const ids = nodes.map((node) => node.id);
+  assert.deepEqual(
+    ids.filter((id) => id !== "final_output"),
+    ["auth", "rate_limit", "input_scan", "model_routing", "model_output"],
+  );
+  assert.equal(nodes.find((node) => node.id === "input_scan").badge, "unavailable");
+  assert.ok(nodes.find((node) => node.id === "input_scan").tags.includes("rule: dev-guard-unavailable"));
+  assert.equal(nodes.find((node) => node.id === "input_scan").metrics, undefined);
+  assert.equal(ids.includes("kill_switch"), false);
+  assert.equal(ids.includes("policy"), false);
+  assert.equal(ids.includes("model_input"), false);
+  assert.equal(ids.includes("output_guardrail"), false);
+  const verdict = deriveStageVerdict(stages);
+  assert.equal(verdict.score, 0);
+  assert.equal(resolveLatencyBreakdown({ pipelineTrace: { stages, plan_version: "1.1.unavailable" } }), null);
+  assert.equal(recordedRiskScore(undefined), null);
+});
+
+test("buildHonestTraceStages tags the stored deciding rule", () => {
+  const nodes = buildHonestTraceStages(
+    [{ name: "input_scan", action: "redact", ran: true, deciding_rule: "dev-pii-redact" }],
+    "redact",
+    {},
+  );
+  const scan = nodes.find((node) => node.id === "input_scan");
+  assert.ok(scan.tags.includes("rule: dev-pii-redact"));
+});
+
+// ---- GW35: gateway-v2 vocabulary, source discriminator, not-reported ---------------------------
+import {
+  ACTION_BADGE as GW35_BADGE,
+  NOT_REPORTED,
+  STAGE_ACTION_VOCAB,
+  isGatewayV2Trace,
+  notReported,
+} from "./pipelineTrace.js";
+
+test("GW35: the stage-action vocabulary is the words the gateway schema speaks (GW33 adds rewrite)", () => {
+  assert.deepEqual(
+    [...STAGE_ACTION_VOCAB].sort(),
+    ["allow", "block", "error", "flag", "redact", "rewrite", "skip"],
+  );
+  assert.equal(GW35_BADGE.rewrite, "rewritten");
+  assert.equal(GW35_BADGE.error, "error");
+});
+
+test("GW35: error ranks below block and above redact in the verdict", () => {
+  const v = (...actions) => deriveStageVerdict(actions.map((action) => ({ name: "s", action, ran: true })));
+  assert.equal(v("allow", "error", "redact").action, "error");
+  assert.equal(v("error", "block").action, "block");
+  assert.equal(v("block", "error").action, "block");
+});
+
+test("GW35: ran:false with action error is shown as error, and ran:true never becomes skip", () => {
+  assert.equal(honestStageAction({ name: "input_scan", action: "error", ran: false }), "error");
+  assert.equal(honestStageAction({ name: "auth", action: "allow", ran: true, latency_ms: 0 }), "allow");
+});
+
+test("GW35: isGatewayV2Trace reads the source field, never the stage count", () => {
+  assert.equal(isGatewayV2Trace({ source: "gateway_v2" }), true);
+  assert.equal(isGatewayV2Trace({ metadata: { source: "gateway_v2" } }), true);
+  assert.equal(isGatewayV2Trace({ pipeline_trace: { stages: new Array(6).fill({}) } }), false);
+  assert.equal(isGatewayV2Trace(null), false);
+  assert.equal(notReported({ source: "gateway_v2" }), NOT_REPORTED);
+  assert.equal(notReported({}), "");
+});
+
+test("GW35: a v2 trace without total_latency_ms has no latency, never 0 or a client guess", () => {
+  const meta = { source: "gateway_v2", latency_ms: 12 };
+  const trace = { stages: [{ name: "auth", action: "allow", ran: true, latency_ms: 3 }] };
+  assert.equal(resolveTotalLatencyMs({ pipelineTrace: trace, meta, clientMs: 99 }), null);
+  assert.equal(resolveTotalLatencyMs({ pipelineTrace: { ...trace, total_latency_ms: 7 }, meta }), 7);
+  // v1 behaviour is unchanged
+  assert.equal(resolveTotalLatencyMs({ pipelineTrace: trace, meta: { latency_ms: 12 } }) > 0, true);
+});
+
+test("GW35: the final response reads as an upstream error, not a delivery", () => {
+  const out = buildHonestTraceStages([{ name: "model_output", action: "error", ran: true }], "error");
+  const last = out[out.length - 1];
+  assert.match(last.content, /Upstream error/);
+  assert.equal(last.badge, "error");
 });

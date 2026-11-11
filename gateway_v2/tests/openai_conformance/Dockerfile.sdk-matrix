@@ -1,0 +1,20 @@
+# GW34 L34-1 SDK matrix tooling image (test tooling, NOT a runtime image).
+#
+# Build (needs the network: pip + npm ci), context = gateway_v2/:
+#   cd gateway_v2 && docker build -f $PWD/tests/openai_conformance/Dockerfile.sdk-matrix \
+#       --build-arg OPENAI_VERSION=3.42.1 -t amf-sdk-matrix .
+# Run (no outbound access needed; --network host so the loopback uvicorn server and the
+# SDK clients share 127.0.0.1):
+#   docker run --rm --network host amf-sdk-matrix
+FROM python:3.12-slim
+ARG OPENAI_VERSION=3.42.1
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1 PYTHONDONTWRITEBYTECODE=1
+RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates gnupg \
+    && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+    && apt-get install -y --no-install-recommends nodejs \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /work/gateway_v2
+COPY . /work/gateway_v2
+RUN pip install -e ".[dev,serve,conformance]" "openai==${OPENAI_VERSION}"
+RUN cd tests/openai_conformance/node && npm ci
+CMD ["python", "-m", "pytest", "tests/openai_conformance/sdk_matrix", "-rs", "-q", "-p", "no:cacheprovider"]

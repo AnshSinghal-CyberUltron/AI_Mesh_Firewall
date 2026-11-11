@@ -1,0 +1,99 @@
+{
+  "pbtResults": {
+    "1. Write bug condition exploration test": {
+      "status": "passed",
+      "failingExample": "Bug reproduced on UNFIXED code (3 of 4 cases fail as expected; the 2.9s control passes).\n\nCase 1 (6s healthy strict stream): StreamTimeout('stream_idle_timeout') raised at the first content send; first-send idle gap = 6.0000000000000036 s vs idle_timeout_s = 3.0 s; content_frames = 0; codes = [] (no inter-chunk cut — the cut is purely the write-based idle seed).\n\nCase 2 (ASGI 408): pre_byte_code = 'stream_idle_timeout', wrote_body = False, first-send idle gap = 6.0 s — i.e. HTTP 408 with no body, matching l34-python-sdk-strict-withhold.jsonl.\n\nCase 4 (routed first_event_s=60.18, 4s first event then 6s of chunks): StreamTimeout('stream_idle_timeout'); first-send idle gap = 6.000000000000014 s vs 3.0 s — the GW28 D-18 first-event re-seed does NOT cover the withheld accumulation period.\n\nCounterexample confirms design root cause 1: at the first send, now - _last_write_s equals the total elapsed withheld time, far over the 3s idle bound. Root cause is the write-based idle seed, not the inter-chunk bound.",
+      "lastRunTimestamp": 1793850280112
+    },
+    "3.6 Verify bug condition exploration test now passes": {
+      "status": "passed",
+      "lastRunTimestamp": 1793853627765
+    }
+  },
+  "executionHistory": {
+    "1. Write bug condition exploration test": [
+      {
+        "executionId": "14fbc842-25a8-4975-86a8-b36a5ed395fa",
+        "chatSessionId": "sess_a18a6c0a-54f6-441a-ba4f-5d5c61c5fe54",
+        "timestamp": 1793849996464
+      }
+    ],
+    "2. Write preservation property tests (BEFORE implementing fix)": [
+      {
+        "executionId": "14fbc842-25a8-4975-86a8-b36a5ed395fa",
+        "chatSessionId": "sess_a18a6c0a-54f6-441a-ba4f-5d5c61c5fe54",
+        "timestamp": 1793850459615
+      }
+    ],
+    "3.1 Add `withholds_until_decision(plan)` in `egress/output_guard.py`": [
+      {
+        "executionId": "14fbc842-25a8-4975-86a8-b36a5ed395fa",
+        "chatSessionId": "sess_a18a6c0a-54f6-441a-ba4f-5d5c61c5fe54",
+        "timestamp": 1793851057387
+      }
+    ],
+    "3.2 Add `upstream_liveness` to `StreamTimeouts` in `edge/stream_timeouts.py`": [
+      {
+        "executionId": "14fbc842-25a8-4975-86a8-b36a5ed395fa",
+        "chatSessionId": "sess_a18a6c0a-54f6-441a-ba4f-5d5c61c5fe54",
+        "timestamp": 1793851307392
+      }
+    ],
+    "3.3 Wire `ChatStream._controls(binding, kill_latch, plan)` in `edge/chat_stream.py`": [
+      {
+        "executionId": "14fbc842-25a8-4975-86a8-b36a5ed395fa",
+        "chatSessionId": "sess_a18a6c0a-54f6-441a-ba4f-5d5c61c5fe54",
+        "timestamp": 1793851615429
+      }
+    ],
+    "3.4 Write the four property tests (>= 100 iterations each)": [
+      {
+        "executionId": "14fbc842-25a8-4975-86a8-b36a5ed395fa",
+        "chatSessionId": "sess_a18a6c0a-54f6-441a-ba4f-5d5c61c5fe54",
+        "timestamp": 1793852933921
+      }
+    ],
+    "3.5 Update the `edge/stream_timeouts.py` module docstring": [
+      {
+        "executionId": "14fbc842-25a8-4975-86a8-b36a5ed395fa",
+        "chatSessionId": "sess_a18a6c0a-54f6-441a-ba4f-5d5c61c5fe54",
+        "timestamp": 1793853526000
+      }
+    ],
+    "3.6 Verify bug condition exploration test now passes": [
+      {
+        "executionId": "14fbc842-25a8-4975-86a8-b36a5ed395fa",
+        "chatSessionId": "sess_a18a6c0a-54f6-441a-ba4f-5d5c61c5fe54",
+        "timestamp": 1793853539510
+      }
+    ],
+    "3.7 Verify preservation tests still pass": [
+      {
+        "executionId": "14fbc842-25a8-4975-86a8-b36a5ed395fa",
+        "chatSessionId": "sess_a18a6c0a-54f6-441a-ba4f-5d5c61c5fe54",
+        "timestamp": 1793853665055
+      }
+    ],
+    "4. Run the offline gate": [
+      {
+        "executionId": "14fbc842-25a8-4975-86a8-b36a5ed395fa",
+        "chatSessionId": "sess_a18a6c0a-54f6-441a-ba4f-5d5c61c5fe54",
+        "timestamp": 1793853745968
+      }
+    ],
+    "5. Live check against the real stack": [
+      {
+        "executionId": "14fbc842-25a8-4975-86a8-b36a5ed395fa",
+        "chatSessionId": "sess_a18a6c0a-54f6-441a-ba4f-5d5c61c5fe54",
+        "timestamp": 1793854316950
+      }
+    ],
+    "6. Add the repo-required changelog pointer lines": [
+      {
+        "executionId": "14fbc842-25a8-4975-86a8-b36a5ed395fa",
+        "chatSessionId": "sess_a18a6c0a-54f6-441a-ba4f-5d5c61c5fe54",
+        "timestamp": 1793855430865
+      }
+    ]
+  }
+}

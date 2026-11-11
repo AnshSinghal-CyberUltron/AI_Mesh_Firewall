@@ -1,0 +1,403 @@
+"""Apply-and-verify the request bytes before any provider byte is sent (GW11 C4).
+
+This module is the request-side mirror of
+``egress/output_guard.py::apply_decision`` (R3.5): it applies a ``Decision``'s
+redaction ``Transformation``s to a request's text content and then *verifies*,
+byte-for-byte, that every ``finding.spans`` entry under a redacting disposition
+was in fact covered by a transformation and carries no surviving raw bytes. It
+is fail-closed: any uncovered or partial span, or any span whose raw bytes
+survive in the output, raises :class:`VerificationFailure` and the caller sends
+nothing (R3.3).
+
+**Byte/offset model.** A :class:`~gateway_v2.dispatch.transform.GatewayRequest`
+carries its payload as ``text_deltas`` — an ordered tuple of
+``(channel, text)`` pairs. "Request bytes" is the concatenation of those delta
+texts in order; a ``Span(start, end)`` and a ``Transformation`` index into that
+concatenated content with Python string (code-point) offsets, exactly as
+``apply_decision`` indexes into its released slice with ``str`` offsets and
+``len()``. The whole request content is present (there is no streaming slice on
+the request side), so the base offset is ``0`` and a span is covered iff
+``0 <= start <= end <= len(content)``. After redaction the sanitized content is
+re-split back onto the original channels, each original per-delta boundary
+shifted by the length change of the transformations before it, so the request →
+provider path keeps the same ``(channel, text)`` shape and every delta holds only
+its own sanitized bytes (:func:`_resplit`).
+
+**No new redactor (R12.1 / R3.5).** Redaction is performed solely by writing a
+``Transformation``'s own ``replacement`` over its span — the same mechanism
+``apply_decision`` uses. This module invents no redaction algorithm (that is
+GW15); it only applies the shipped transformations and verifies the result.
+
+**Layering.** ``dispatch`` sits above ``egress`` in the import-linter layer
+order, so importing ``apply_decision``/``OutputBlocked`` from
+``gateway_v2.egress.output_guard`` is contract-legal and lets the request side
+reuse the exact byte-boundary discipline rather than re-deriving it. The
+``Decision``/``Disposition``/``Transformation``/``Finding``/``Span`` values come
+from ``gateway_v2.domain`` (the lowest layer); ``GatewayRequest`` from the
+dispatch sibling ``dispatch.transform``. No ``detect``/``plan``/``admit``/
+``edge`` import (those sit above ``dispatch``).
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+from gateway_v2.dispatch.transform import GatewayRequest
+from gateway_v2.domain import (
+    Decision,
+    Disposition,
+    FindingDisposition,
+    Span,
+    Transformation,
+)
+from gateway_v2.egress.output_guard import apply_decision
+
+__all__ = (
+    "VerificationFailure",
+    "VerifiedBytes",
+    "apply_and_verify",
+)
+
+
+@dataclass(frozen=True, slots=True)
+class VerifiedBytes:
+    """The only bytes the entry may send (R3.1, R3.4).
+
+    ``request`` is the sanitized :class:`GatewayRequest` — its ``text_deltas``
+    carry the content after every redaction ``Transformation`` has been applied
+    and verified against the finding spans. ``log`` is the LGW11-3 verification
+    log entry describing what was redacted (or that nothing was).
+    """
+
+    request: GatewayRequest
+    log: str
+
+
+class VerificationFailure(Exception):
+    """Terminal verification failure (R3.3): no bytes are sent to the provider.
+
+    Raised when a redacting disposition's finding span is not fully covered by
+    an applied transformation, or when the span's raw content survives in the
+    sanitized output.
+    """
+
+
+#: Dispositions that oblige a finding's spans to be redacted out of the request
+#: content. REDACT and REWRITE (GW33: a first-class disposition whose spans are replaced by the
+#: declared template, verified exactly like a redaction) are the request-side
+#: redacting dispositions; BLOCK never reaches here (no authorization is
+#: minted for a BLOCK decision), and ALLOW/FLAG observe without redacting.
+_REDACTING_DISPOSITIONS: frozenset[Disposition] = frozenset(
+    {Disposition.REDACT, Disposition.REWRITE},
+)
+
+
+def _request_content(request: GatewayRequest) -> str:
+    """Concatenate the request's delta texts into the verifiable content string.
+
+    The concatenation order is the ``text_deltas`` order; this is the single
+    coordinate space every ``Span``/``Transformation`` offset indexes into.
+    """
+    return "".join(text for _channel, text in request.text_deltas)
+
+
+def _applied_edits(
+    transformations: tuple[Transformation, ...],
+    length: int,
+) -> tuple[tuple[int, int, int], ...]:
+    """``(start, end, replacement_len)`` of the edits ``apply_decision`` applied.
+
+    Mirrors ``apply_decision``'s slice filter with ``base_offset=0``: a span
+    wholly before (``end <= 0``) or wholly after (``start >= length``) the
+    content is skipped. Sorted by ``(start, end)``; ``apply_decision`` has
+    already rejected overlaps, so the ends are sorted too.
+    """
+    return tuple(
+        sorted(
+            (t.span.start, t.span.end, len(t.replacement))
+            for t in transformations
+            if not (t.span.end <= 0 or t.span.start >= length)
+        ),
+    )
+
+
+def _resplit(
+    sanitized: str,
+    request: GatewayRequest,
+    transformations: tuple[Transformation, ...],
+) -> tuple[tuple[str, str], ...]:
+    """Re-split ``sanitized`` back onto the original delta channels (Property 3).
+
+    Each original delta boundary ``B`` (in the concatenated original content) is
+    shifted by the summed length change ``len(replacement) - (end - start)`` of
+    the applied transformations that end at or before ``B``. A transformation
+    that straddles ``B`` (``start < B < end``: a value split across parts) puts
+    its whole replacement in the delta where it starts, so the boundary maps to
+    the end of that replacement and the later delta loses the covered prefix.
+
+    Every delta therefore holds exactly its own sanitized bytes: raw bytes never
+    move across a channel or an embeddings item, channel names and delta count
+    are kept, and with no transformations the deltas are returned unchanged
+    (clause 3.2). A request with no deltas yields no deltas. If the mapped final
+    boundary does not land on ``len(sanitized)`` the transformations are not the
+    ones that produced ``sanitized``, and the request fails closed.
+    """
+    deltas = request.text_deltas
+    if not deltas:
+        return ()
+    edits = _applied_edits(
+        transformations, sum(len(text) for _channel, text in deltas),
+    )
+    out: list[tuple[str, str]] = []
+    boundary = 0  # original-content offset of the current delta's end
+    shift = 0  # summed length change of the edits ending at or before ``boundary``
+    pending = 0  # index of the first edit not yet ending at or before ``boundary``
+    cursor = 0  # sanitized offset of the current delta's start
+    for channel, text in deltas:
+        boundary += len(text)
+        while pending < len(edits) and edits[pending][1] <= boundary:
+            start, end, replacement_len = edits[pending]
+            shift += replacement_len - (end - start)
+            pending += 1
+        new_end = boundary + shift
+        if pending < len(edits) and edits[pending][0] < boundary:
+            # Straddles the boundary: the replacement stays in the start delta.
+            start, _end, replacement_len = edits[pending]
+            new_end = start + shift + replacement_len
+        out.append((channel, sanitized[cursor:new_end]))
+        cursor = new_end
+    if cursor != len(sanitized):
+        raise VerificationFailure(
+            "fail-closed: sanitized content does not re-split onto the request deltas "
+            f"(mapped_len={cursor}, sanitized_len={len(sanitized)})",
+        )
+    return tuple(out)
+
+
+def _redacting_detectors(decision: Decision) -> frozenset[str]:
+    """Detectors whose per-finding disposition obliges redaction (R3.2)."""
+    return frozenset(
+        item.detector
+        for item in decision.per_finding
+        if item.disposition in _REDACTING_DISPOSITIONS
+    )
+
+
+def _is_finding_keyed(decision: Decision) -> bool:
+    """True iff every per-finding disposition names its finding by index.
+
+    Only a fully keyed decision takes the per-finding path. A decision where any
+    disposition lacks ``finding_index`` (e.g. ``MinimalOutputResolver``, or a
+    producer that appended an unkeyed disposition) keeps the shipped
+    detector-keyed rule, which obliges a superset and so can only fail closed.
+    """
+    return bool(decision.per_finding) and all(
+        item.finding_index is not None for item in decision.per_finding
+    )
+
+
+def _indexed_redacting_spans(decision: Decision) -> tuple[Span, ...]:
+    """Spans of exactly the findings whose keyed disposition is redacting.
+
+    Each index is validated before use. An index outside
+    ``[0, len(decision.findings))`` (a negative index would silently select a
+    different finding) or one that points at a finding from a different
+    detector means the decision is inconsistent, and an obligation might be
+    lost. Both fail closed with :class:`VerificationFailure`.
+    """
+    findings = decision.findings
+    obliged: set[int] = set()
+    for item in decision.per_finding:
+        index = item.finding_index
+        if index is None or not 0 <= index < len(findings):
+            raise VerificationFailure(
+                "fail-closed: per-finding disposition index is out of range "
+                f"(finding_index={index}, findings={len(findings)})",
+            )
+        if findings[index].detector != item.detector:
+            raise VerificationFailure(
+                "fail-closed: per-finding disposition index names a finding of "
+                f"another detector (finding_index={index}, "
+                f"disposition_detector={item.detector}, "
+                f"finding_detector={findings[index].detector})",
+            )
+        if item.disposition in _REDACTING_DISPOSITIONS:
+            obliged.add(index)
+    spans: list[Span] = []
+    for index in sorted(obliged):
+        spans.extend(findings[index].spans)
+    return tuple(spans)
+
+
+def _spans_to_verify(decision: Decision) -> tuple[Span, ...]:
+    """Every finding span that a redacting disposition requires be redacted.
+
+    When every per-finding disposition carries ``finding_index``, exactly the
+    findings whose disposition is redacting are obliged (C22: each finding keeps
+    its own disposition), so ``SECRET -> flag`` plus ``CREDENTIAL -> redact`` from
+    one detector obliges only the CREDENTIAL span. Indexes are validated and an
+    inconsistent decision fails closed (:func:`_indexed_redacting_spans`).
+
+    Otherwise the shipped detector-keyed rule applies: a finding is obliged when
+    its detector carries any redacting per-finding disposition. The overall
+    ``decision.disposition`` is the most-restrictive of the per-finding
+    dispositions, so a REDACT request can still carry ALLOW/FLAG findings whose
+    spans are *not* obliged; those are skipped (only the redacting findings'
+    spans must be absent).
+    """
+    if _is_finding_keyed(decision):
+        return _indexed_redacting_spans(decision)
+    redacting = _redacting_detectors(decision)
+    spans: list[Span] = []
+    for finding in decision.findings:
+        if finding.detector in redacting:
+            spans.extend(finding.spans)
+    return tuple(spans)
+
+
+def _assert_covered(span: Span, length: int) -> None:
+    """Fail closed unless ``span`` lies wholly inside ``[0, length]`` (R3.3).
+
+    Mirrors ``apply_decision``'s ``_covers`` discipline with ``base_offset=0``:
+    the whole request content is present, so an obliged span that is out of
+    range or inverted is a partial/uncovered span and must raise rather than let
+    a partially-redacted match reach the provider.
+    """
+    if not (0 <= span.start <= span.end <= length):
+        raise VerificationFailure(
+            "fail-closed: redacting finding span is not covered by the request content "
+            f"(span={span.start}:{span.end}, content_len={length})",
+        )
+
+
+def _verify_no_raw_survives(
+    original: str,
+    sanitized: str,
+    spans: tuple[Span, ...],
+) -> None:
+    """Verify no obliged span's raw bytes survive in ``sanitized`` (R3.2).
+
+    For each obliged span the original raw content ``original[start:end]`` must
+    not appear verbatim anywhere in the sanitized output. A non-empty raw span
+    that is still a substring of ``sanitized`` means the transformation did not
+    actually remove it (uncovered, partial, or a no-op replacement that echoes
+    the raw bytes) — a fail-closed condition.
+    """
+    for span in spans:
+        raw = original[span.start : span.end]
+        if raw and raw in sanitized:
+            raise VerificationFailure(
+                "fail-closed: raw bytes of a redacting finding span survive the "
+                f"transformation (span={span.start}:{span.end})",
+            )
+
+
+def _redacting_per_finding(decision: Decision) -> tuple[FindingDisposition, ...]:
+    return tuple(
+        item
+        for item in decision.per_finding
+        if item.disposition in _REDACTING_DISPOSITIONS
+    )
+
+
+def _assert_fully_covered_by_transformations(
+    spans: tuple[Span, ...],
+    decision: Decision,
+) -> None:
+    """Fail closed unless every obliged ``span`` is wholly covered by transforms.
+
+    Mirrors ``apply_decision``'s "a redaction whose span is not fully covered …
+    raises rather than letting a partially-redacted match through": every byte
+    of an obliged finding span must fall inside the union of the decision's
+    transformation spans. A span that is only partially covered (one transform
+    touching part of it, the remainder left raw) is a partial redaction and must
+    raise — the surviving-raw check alone would miss it when the untouched
+    remainder is not a verbatim copy of the whole raw span.
+    """
+    intervals = sorted(
+        (t.span.start, t.span.end) for t in decision.transformations
+    )
+    for span in spans:
+        cursor = span.start
+        for start, end in intervals:
+            if start > cursor:
+                break
+            if end > cursor:
+                cursor = end
+            if cursor >= span.end:
+                break
+        if cursor < span.end:
+            raise VerificationFailure(
+                "fail-closed: redacting finding span is not fully covered by a "
+                f"transformation (span={span.start}:{span.end}, "
+                f"covered_up_to={cursor})",
+            )
+
+
+def apply_and_verify(decision: Decision, request: GatewayRequest) -> VerifiedBytes:
+    """Apply ``decision``'s transformations to ``request`` and verify the result.
+
+    Applies every ``Transformation`` in ``decision.transformations`` to the
+    concatenated request content (via the shipped ``apply_decision`` with
+    ``base_offset=0``, so the whole request is the covered slice), then verifies
+    that every ``finding.spans`` entry obliged by a redacting per-finding
+    disposition was covered and no longer carries its raw bytes. Returns the
+    sanitized :class:`VerifiedBytes` with the LGW11-3 verification log.
+
+    Fail-closed (R3.3): raises :class:`VerificationFailure` on any uncovered or
+    partial obliged span, or any obliged span whose raw bytes survive the
+    transformation. A BLOCK decision never reaches here (no authorization is
+    minted for it); an ALLOW/FLAG decision with no redacting findings returns
+    the request content unchanged with a log noting no redaction occurred.
+    """
+    content = _request_content(request)
+    length = len(content)
+
+    obliged_spans = _spans_to_verify(decision)
+    # Fail closed first on any obliged span that cannot be covered by the content
+    # at all — a partial/out-of-range span must not reach the apply step.
+    for span in obliged_spans:
+        _assert_covered(span, length)
+
+    # Fail closed on any obliged span not WHOLLY covered by a transformation — a
+    # partial transformation (which would leave a raw remainder the surviving-raw
+    # check alone can miss) is a fail-closed condition, mirroring apply_decision.
+    _assert_fully_covered_by_transformations(obliged_spans, decision)
+
+    # Apply the shipped transformations with the whole content as the slice. This
+    # reuses apply_decision's byte-boundary discipline: an in-range transformation
+    # span not fully covered raises ValueError (fail-closed), overlaps raise, and
+    # out-of-slice spans are skipped (none here, since base_offset=0 and the whole
+    # content is present).
+    try:
+        sanitized = apply_decision(content, decision, base_offset=0)
+    except ValueError as exc:
+        raise VerificationFailure(
+            f"fail-closed: transformation could not be applied cleanly ({exc})",
+        ) from exc
+
+    # Byte-level verification: no obliged span's raw content survives.
+    _verify_no_raw_survives(content, sanitized, obliged_spans)
+
+    sanitized_request = GatewayRequest(
+        destination=request.destination,
+        model=request.model,
+        text_deltas=_resplit(sanitized, request, decision.transformations),
+    )
+
+    redacting = _redacting_per_finding(decision)
+    if redacting:
+        detectors = ", ".join(sorted(item.detector for item in redacting))
+        log = (
+            f"verified REDACT dispatch: {len(obliged_spans)} span(s) across "
+            f"detector(s) [{detectors}] redacted and verified absent "
+            f"(plan_version={decision.plan_version})"
+        )
+    else:
+        log = (
+            "verified dispatch: no redacting disposition, request content "
+            f"unchanged (disposition={decision.disposition}, "
+            f"plan_version={decision.plan_version})"
+        )
+
+    return VerifiedBytes(request=sanitized_request, log=log)

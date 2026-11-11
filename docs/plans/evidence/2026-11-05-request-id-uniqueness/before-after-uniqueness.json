@@ -1,0 +1,146 @@
+{
+  "amfint": {
+    "chat_nonstream:seq": {
+      "n": 5,
+      "distinct": 1,
+      "null": 0,
+      "all_distinct": false,
+      "all_same": true
+    },
+    "chat_nonstream:concurrent": {
+      "n": 5,
+      "distinct": 1,
+      "null": 0,
+      "all_distinct": false,
+      "all_same": true
+    },
+    "chat_stream:seq": {
+      "n": 5,
+      "distinct": 1,
+      "null": 0,
+      "all_distinct": false,
+      "all_same": true
+    },
+    "chat_stream:concurrent": {
+      "n": 5,
+      "distinct": 1,
+      "null": 0,
+      "all_distinct": false,
+      "all_same": true
+    },
+    "mcp_tools_list:seq": {
+      "n": 5,
+      "distinct": 1,
+      "null": 0,
+      "all_distinct": false,
+      "all_same": true
+    },
+    "mcp_tools_list:concurrent": {
+      "n": 5,
+      "distinct": 1,
+      "null": 0,
+      "all_distinct": false,
+      "all_same": true
+    },
+    "embeddings:seq": {
+      "n": 5,
+      "distinct": 0,
+      "null": 5,
+      "all_distinct": false,
+      "all_same": false
+    },
+    "embeddings:concurrent": {
+      "n": 5,
+      "distinct": 0,
+      "null": 5,
+      "all_distinct": false,
+      "all_same": false
+    },
+    "rag_query:seq": {
+      "n": 5,
+      "distinct": 1,
+      "null": 0,
+      "all_distinct": false,
+      "all_same": true
+    },
+    "rag_query:concurrent": {
+      "n": 5,
+      "distinct": 1,
+      "null": 0,
+      "all_distinct": false,
+      "all_same": true
+    }
+  },
+  "amff2": {
+    "chat_nonstream:seq": {
+      "n": 5,
+      "distinct": 5,
+      "null": 0,
+      "all_distinct": true,
+      "all_same": false
+    },
+    "chat_nonstream:concurrent": {
+      "n": 5,
+      "distinct": 5,
+      "null": 0,
+      "all_distinct": true,
+      "all_same": false
+    },
+    "chat_stream:seq": {
+      "n": 5,
+      "distinct": 5,
+      "null": 0,
+      "all_distinct": true,
+      "all_same": false
+    },
+    "chat_stream:concurrent": {
+      "n": 5,
+      "distinct": 5,
+      "null": 0,
+      "all_distinct": true,
+      "all_same": false
+    },
+    "mcp_tools_list:seq": {
+      "n": 5,
+      "distinct": 5,
+      "null": 0,
+      "all_distinct": true,
+      "all_same": false
+    },
+    "mcp_tools_list:concurrent": {
+      "n": 5,
+      "distinct": 5,
+      "null": 0,
+      "all_distinct": true,
+      "all_same": false
+    },
+    "embeddings:seq": {
+      "n": 5,
+      "distinct": 0,
+      "null": 5,
+      "all_distinct": false,
+      "all_same": false
+    },
+    "embeddings:concurrent": {
+      "n": 5,
+      "distinct": 0,
+      "null": 5,
+      "all_distinct": false,
+      "all_same": false
+    },
+    "rag_query:seq": {
+      "n": 5,
+      "distinct": 5,
+      "null": 0,
+      "all_distinct": true,
+      "all_same": false
+    },
+    "rag_query:concurrent": {
+      "n": 5,
+      "distinct": 5,
+      "null": 0,
+      "all_distinct": true,
+      "all_same": false
+    }
+  }
+}

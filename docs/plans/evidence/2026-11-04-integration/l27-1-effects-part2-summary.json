@@ -1,0 +1,41 @@
+{
+ "pii_detection_enabled": [
+  "redact",
+  "allow"
+ ],
+ "enforcement_mode": [
+  400,
+  200
+ ],
+ "firewall_enabled": [
+  400,
+  200
+ ],
+ "max_response_tokens": [
+  200,
+  200,
+  "{\"id\":\"chatcmpl-gateway\",\"object\":\"chat.completion\",\"created\":0,\"model\":\"echo-1\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"Hello from the f"
+ ],
+ "rate_limit_enabled": [
+  [
+   429,
+   200,
+   429,
+   429
+  ],
+  [
+   200,
+   200,
+   200,
+   200
+  ]
+ ],
+ "audit_logging_enabled": {
+  "records_added_when_on": 2,
+  "records_added_when_off": 0
+ },
+ "threat_intel_enabled": [
+  200,
+  200
+ ]
+}

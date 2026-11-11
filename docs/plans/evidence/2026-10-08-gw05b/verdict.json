@@ -1,0 +1,61 @@
+{
+  "card": "GW05b",
+  "phase": "7 (live stack + local fault drills)",
+  "closes": [
+    "R2-03 (SP1, SP2)",
+    "R2-04 gateway half"
+  ],
+  "postgres": "16.15",
+  "valkey": "8.1.10",
+  "gates": "5 AST x 2 trees + tenant-scale + import-linter + ruff + mypy --strict: clean",
+  "pytest_offline": {
+    "passed": 538,
+    "skipped": 57
+  },
+  "pytest_live": {
+    "passed": 591,
+    "skipped": 4
+  },
+  "drills": {
+    "passed": 19
+  },
+  "freshness_suites": {
+    "passed": 208
+  },
+  "drilled": [
+    "SP1: a FRESH worker refuses a rolled-back store, across both real adapters",
+    "SP1 control: the same worker WITHOUT a stamp serves the rollback",
+    "SP2: an unpublished commit fails the gateway closed within the bound",
+    "SP2 control: the original GW05c behaviour, pinned",
+    "two re-hydrators, 50 interleaved rounds: verified_at monotonic (R2-04)",
+    "a forged stamp in a real store never wedges freshness",
+    "a rotated signing secret fails the reader closed",
+    "store flush takes the stamp too; fail closed, then restore AND re-stamp",
+    "store partition (docker pause): freshness ages out, then recovers",
+    "paused postgres: fresh through the grace, closed past it, recovers on unpause",
+    "both re-hydrators gone: fail closed at the bound, recover after one returns",
+    "flush under a held FOR UPDATE: restored and stamped while the lock is held"
+  ],
+  "measured_locally": {
+    "fail_closed_after_verification_stops_s": "5.0-5.3 (one freshness bound)",
+    "recovery_after_one_rehydrator_returns_s": "<= 0.2",
+    "freshness_recovery_after_a_store_partition_s": "< 5.0",
+    "rehydration_under_a_held_row_lock_s": "< 5.0 (RC2: 38 s)",
+    "paused_postgres_operation_cost_s": "5.0 at shipped bounds, 2.0 at 1 s bounds"
+  },
+  "not_drilled_needs_lane_or_gw06": {
+    "L05b-1": "a lagging REPLICA and a promotion; drills substitute a partial restore",
+    "L05b-2": "mechanism drilled; 'every request 503' needs edge/ (GW06)",
+    "L05b-3": "drilled locally; the reference figure (0.54-0.79 s) is Cloud SQL's",
+    "L05b-4": "Cloud SQL failover at 60% load; shape drilled with docker pause",
+    "L05b-5": "Memorystore maintenance cannot be triggered; no manual failover (R2-13)",
+    "L05b-6": "drilled per process; 'global' needs a fleet"
+  },
+  "uncalled_pending_gw06": [
+    "state_ready (/readyz must call it)",
+    "require_bounded_client (start-up must call it)",
+    "StateKnobs (no env loader; GW06 owns the start-up path)",
+    "next_delay_s / is_deep_round (no loop driver exists)"
+  ],
+  "clock_note": "every measured bound uses an injected clock. the FAULT is real (stopped database, paused store, held row lock); the waiting is not. no latency is claimed."
+}

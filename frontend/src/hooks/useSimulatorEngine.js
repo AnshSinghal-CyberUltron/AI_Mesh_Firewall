@@ -5,6 +5,7 @@ import { isDocumentHidden } from "../utils/requestLifecycle.js";
 import { startVisibleInterval } from "../utils/visiblePoll.js";
 import { resolveGatewayHealthUrl } from "../utils/environmentUrls";
 import { fetchGatewayPath } from "../utils/gatewayChatFetch";
+import { devGatewayKey } from "../utils/devGatewayKey";
 
 const HEALTH_POLL_INTERVAL = 15000;
 const GATEWAY_KEY_STORAGE_LEGACY = "zeroshield_gateway_key";
@@ -32,8 +33,9 @@ export function useSimulatorEngine() {
   const { gatewayUrl } = useGatewayConfig();
   const { fetchWithAuth, user, loading: authLoading } = useAuth();
   const orgId = user?.organization?.id;
+  const pinnedDevKey = devGatewayKey();
 
-  const [gatewayKey, setGatewayKey] = useState(() => readStoredGatewayKey(orgId));
+  const [gatewayKey, setGatewayKey] = useState(() => pinnedDevKey || readStoredGatewayKey(orgId));
   const [connectionStatus, setConnectionStatus] = useState("disconnected"); // connected | degraded | disconnected
   const [backendHealth, setBackendHealth] = useState(null);
   const [gatewayHealth, setGatewayHealth] = useState(null);
@@ -156,16 +158,16 @@ export function useSimulatorEngine() {
 
   // Reload cached key when org context becomes available or changes.
   useEffect(() => {
-    if (!orgId) return;
+    if (pinnedDevKey || !orgId) return;
     const cached = readStoredGatewayKey(orgId);
     if (cached) {
       setGatewayKey(cached);
     }
-  }, [orgId]);
+  }, [orgId, pinnedDevKey]);
 
   // Lazy-provision per-org simulator key (POST returns plaintext once at creation).
   useEffect(() => {
-    if (authLoading || !orgId) return;
+    if (pinnedDevKey || authLoading || !orgId) return;
     if (gatewayKey) return;
     const attemptKey = String(orgId);
     if (bootstrapAttemptedRef.current === attemptKey) return;
@@ -185,7 +187,7 @@ export function useSimulatorEngine() {
         // Simulator bootstrap is best-effort; manual entry still works.
       }
     })();
-  }, [authLoading, fetchWithAuth, gatewayKey, orgId, updateGatewayKey]);
+  }, [authLoading, fetchWithAuth, gatewayKey, orgId, pinnedDevKey, updateGatewayKey]);
 
   // Execute a scenario against the gateway
   const executeScenario = useCallback(async (config) => {

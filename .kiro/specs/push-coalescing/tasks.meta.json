@@ -1,0 +1,476 @@
+{
+  "pbtResults": {},
+  "executionHistory": {
+    "1.1 Add the two named-constant defaults and the two `StateKnobs` fields": [
+      {
+        "executionId": "7b27c3ee-4afd-43ac-98c9-0581c6cba807",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791876007912
+      },
+      {
+        "executionId": "7b27c3ee-4afd-43ac-98c9-0581c6cba807",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791876032071
+      },
+      {
+        "executionId": "7b27c3ee-4afd-43ac-98c9-0581c6cba807",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791876188788
+      }
+    ],
+    "2.1 Add `emit_nudge` and the `nudge=` keyword to the protocol and implementations": [
+      {
+        "executionId": "7b27c3ee-4afd-43ac-98c9-0581c6cba807",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791876007936
+      },
+      {
+        "executionId": "7b27c3ee-4afd-43ac-98c9-0581c6cba807",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791876215578
+      },
+      {
+        "executionId": "7b27c3ee-4afd-43ac-98c9-0581c6cba807",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791876375309
+      }
+    ],
+    "3.1 Move the trailing `PUBLISH` out of the durable MULTI behind `nudge=`": [
+      {
+        "executionId": "7b27c3ee-4afd-43ac-98c9-0581c6cba807",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791876007961
+      },
+      {
+        "executionId": "7b27c3ee-4afd-43ac-98c9-0581c6cba807",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791876406110
+      },
+      {
+        "executionId": "7b27c3ee-4afd-43ac-98c9-0581c6cba807",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791876611808
+      }
+    ],
+    "4.1 Add the frozen label-free counter type": [
+      {
+        "executionId": "7b27c3ee-4afd-43ac-98c9-0581c6cba807",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791876007984
+      },
+      {
+        "executionId": "7b27c3ee-4afd-43ac-98c9-0581c6cba807",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791876407139
+      },
+      {
+        "executionId": "7b27c3ee-4afd-43ac-98c9-0581c6cba807",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791876612639
+      }
+    ],
+    "5.1 Add `CoalesceConfig` with `from_knobs` and `__post_init__` re-validation": [
+      {
+        "executionId": "7b27c3ee-4afd-43ac-98c9-0581c6cba807",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791876008007
+      },
+      {
+        "executionId": "7b27c3ee-4afd-43ac-98c9-0581c6cba807",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791876626410
+      },
+      {
+        "executionId": "7b27c3ee-4afd-43ac-98c9-0581c6cba807",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791876779059
+      }
+    ],
+    "5.2 Add the `_PendingNudge` accumulator and the `CoalescingPublisher` skeleton": [
+      {
+        "executionId": "7b27c3ee-4afd-43ac-98c9-0581c6cba807",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791876008065
+      },
+      {
+        "executionId": "7b27c3ee-4afd-43ac-98c9-0581c6cba807",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791876796881
+      },
+      {
+        "executionId": "7b27c3ee-4afd-43ac-98c9-0581c6cba807",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791877048498
+      }
+    ],
+    "5.3 Implement durability-first `publish_record` / `publish_batch` + the coalesce algorithm": [
+      {
+        "executionId": "7b27c3ee-4afd-43ac-98c9-0581c6cba807",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791876008096
+      },
+      {
+        "executionId": "7b27c3ee-4afd-43ac-98c9-0581c6cba807",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791877076551
+      },
+      {
+        "executionId": "7b27c3ee-4afd-43ac-98c9-0581c6cba807",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791877487545
+      }
+    ],
+    "5.4 Implement `flush_due(now)` and `flush_all()`": [
+      {
+        "executionId": "7b27c3ee-4afd-43ac-98c9-0581c6cba807",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791876008124
+      },
+      {
+        "executionId": "7b27c3ee-4afd-43ac-98c9-0581c6cba807",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791877505160
+      },
+      {
+        "executionId": "7b27c3ee-4afd-43ac-98c9-0581c6cba807",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791877759963
+      }
+    ],
+    "6.1 Wrap the writer's publisher and add the flush hooks": [
+      {
+        "executionId": "7b27c3ee-4afd-43ac-98c9-0581c6cba807",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791876008152
+      },
+      {
+        "executionId": "7b27c3ee-4afd-43ac-98c9-0581c6cba807",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791877778600
+      },
+      {
+        "executionId": "7b27c3ee-4afd-43ac-98c9-0581c6cba807",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791878010655
+      }
+    ],
+    "7. Checkpoint — component + wiring tests pass": [
+      {
+        "executionId": "7b27c3ee-4afd-43ac-98c9-0581c6cba807",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791876008179
+      },
+      {
+        "executionId": "7b27c3ee-4afd-43ac-98c9-0581c6cba807",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791878034208
+      },
+      {
+        "executionId": "7b27c3ee-4afd-43ac-98c9-0581c6cba807",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791878075173
+      }
+    ],
+    "8.1 Property 1 — per-owner push bound; last push carries max `feed_seq`": [
+      {
+        "executionId": "7b27c3ee-4afd-43ac-98c9-0581c6cba807",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791876008206
+      },
+      {
+        "executionId": "7b27c3ee-4afd-43ac-98c9-0581c6cba807",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791878114699
+      },
+      {
+        "executionId": "7b27c3ee-4afd-43ac-98c9-0581c6cba807",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791878934999
+      }
+    ],
+    "8.2 Property 2 — durable writes equal N; durable state byte-identical to the bare path": [
+      {
+        "executionId": "7b27c3ee-4afd-43ac-98c9-0581c6cba807",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791876008235
+      },
+      {
+        "executionId": "7b27c3ee-4afd-43ac-98c9-0581c6cba807",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791878128821
+      },
+      {
+        "executionId": "7b27c3ee-4afd-43ac-98c9-0581c6cba807",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791878936365
+      }
+    ],
+    "8.3 Property 3 — reader (nudges + one backstop round) ends at or above latest `feed_seq`": [
+      {
+        "executionId": "7b27c3ee-4afd-43ac-98c9-0581c6cba807",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791876008258
+      },
+      {
+        "executionId": "7b27c3ee-4afd-43ac-98c9-0581c6cba807",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791878130262
+      },
+      {
+        "executionId": "7b27c3ee-4afd-43ac-98c9-0581c6cba807",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791878937735
+      }
+    ],
+    "8.4 Property 4 — monotonic announced position; no regressive push on the wire": [
+      {
+        "executionId": "7b27c3ee-4afd-43ac-98c9-0581c6cba807",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791876008286
+      },
+      {
+        "executionId": "7b27c3ee-4afd-43ac-98c9-0581c6cba807",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791878131537
+      },
+      {
+        "executionId": "7b27c3ee-4afd-43ac-98c9-0581c6cba807",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791878938620
+      }
+    ],
+    "8.5 Property 5 — per-owner isolation across interleaved multi-owner workloads": [
+      {
+        "executionId": "7b27c3ee-4afd-43ac-98c9-0581c6cba807",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791876008313
+      },
+      {
+        "executionId": "7b27c3ee-4afd-43ac-98c9-0581c6cba807",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791878132713
+      },
+      {
+        "executionId": "7b27c3ee-4afd-43ac-98c9-0581c6cba807",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791878940258
+      }
+    ],
+    "8.6 Property 6 — idempotent flush on a quiesced owner": [
+      {
+        "executionId": "7b27c3ee-4afd-43ac-98c9-0581c6cba807",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791876008342
+      },
+      {
+        "executionId": "7b27c3ee-4afd-43ac-98c9-0581c6cba807",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791878133946
+      },
+      {
+        "executionId": "7b27c3ee-4afd-43ac-98c9-0581c6cba807",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791878941489
+      }
+    ],
+    "8.7 Property 7 — fail-safe: injected push failure / shutdown never costs durability or freshness": [
+      {
+        "executionId": "7b27c3ee-4afd-43ac-98c9-0581c6cba807",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791876008371
+      },
+      {
+        "executionId": "7b27c3ee-4afd-43ac-98c9-0581c6cba807",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791878150375
+      },
+      {
+        "executionId": "7b27c3ee-4afd-43ac-98c9-0581c6cba807",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791878942918
+      }
+    ],
+    "8.8 Property 8 — bound derives from the authority; over-long window refused at construction": [
+      {
+        "executionId": "7b27c3ee-4afd-43ac-98c9-0581c6cba807",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791876008401
+      },
+      {
+        "executionId": "7b27c3ee-4afd-43ac-98c9-0581c6cba807",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791878151962
+      },
+      {
+        "executionId": "7b27c3ee-4afd-43ac-98c9-0581c6cba807",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791878943949
+      }
+    ],
+    "8.9 Property 9 — confluence of write ordering (equal durable state + final announced position)": [
+      {
+        "executionId": "7b27c3ee-4afd-43ac-98c9-0581c6cba807",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791876008437
+      },
+      {
+        "executionId": "7b27c3ee-4afd-43ac-98c9-0581c6cba807",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791878152992
+      },
+      {
+        "executionId": "7b27c3ee-4afd-43ac-98c9-0581c6cba807",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791878945792
+      }
+    ],
+    "8.10 Property 10 — push count independent of simulated worker / request count": [
+      {
+        "executionId": "7b27c3ee-4afd-43ac-98c9-0581c6cba807",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791876008474
+      },
+      {
+        "executionId": "7b27c3ee-4afd-43ac-98c9-0581c6cba807",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791878154425
+      },
+      {
+        "executionId": "7b27c3ee-4afd-43ac-98c9-0581c6cba807",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791878946808
+      }
+    ],
+    "9.1 Assert one PUBLISH per write / batch, zero on the serving path, count invariant to N and R": [
+      {
+        "executionId": "7b27c3ee-4afd-43ac-98c9-0581c6cba807",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791876008503
+      },
+      {
+        "executionId": "7b27c3ee-4afd-43ac-98c9-0581c6cba807",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791878115512
+      },
+      {
+        "executionId": "7b27c3ee-4afd-43ac-98c9-0581c6cba807",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791878948039
+      }
+    ],
+    "10.1 Build the deterministic in-process un-coalesced-vs-coalesced harness": [
+      {
+        "executionId": "7b27c3ee-4afd-43ac-98c9-0581c6cba807",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791876008532
+      },
+      {
+        "executionId": "7b27c3ee-4afd-43ac-98c9-0581c6cba807",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791878116950
+      },
+      {
+        "executionId": "7b27c3ee-4afd-43ac-98c9-0581c6cba807",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791878949075
+      }
+    ],
+    "11. Full gate sweep": [
+      {
+        "executionId": "7b27c3ee-4afd-43ac-98c9-0581c6cba807",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791876008559
+      },
+      {
+        "executionId": "7b27c3ee-4afd-43ac-98c9-0581c6cba807",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791878960984
+      },
+      {
+        "executionId": "7b27c3ee-4afd-43ac-98c9-0581c6cba807",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791879207950
+      }
+    ],
+    "12. Final checkpoint — ensure all tests pass": [
+      {
+        "executionId": "7b27c3ee-4afd-43ac-98c9-0581c6cba807",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791876008585
+      },
+      {
+        "executionId": "7b27c3ee-4afd-43ac-98c9-0581c6cba807",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791879208972
+      },
+      {
+        "executionId": "7b27c3ee-4afd-43ac-98c9-0581c6cba807",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791879224898
+      }
+    ],
+    "1. Add the push-coalescing authority to `StateKnobs` (MODIFIED: `gateway_v2/domain/state_knobs.py`)": [
+      {
+        "executionId": "7b27c3ee-4afd-43ac-98c9-0581c6cba807",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791876188831
+      }
+    ],
+    "2. Extend the `StatePublisher` protocol and in-memory / broken twins (MODIFIED: `state_control/publisher.py`)": [
+      {
+        "executionId": "7b27c3ee-4afd-43ac-98c9-0581c6cba807",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791876375339
+      }
+    ],
+    "3. Make the inline `PUBLISH` conditional in `ValkeyPublisher` (MODIFIED: `state_control/valkey.py`)": [
+      {
+        "executionId": "7b27c3ee-4afd-43ac-98c9-0581c6cba807",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791876611837
+      }
+    ],
+    "4. Implement `CoalescerCounters` (NEW: `state_control/coalescer.py`)": [
+      {
+        "executionId": "7b27c3ee-4afd-43ac-98c9-0581c6cba807",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791876612683
+      }
+    ],
+    "5. Implement `CoalesceConfig` and `CoalescingPublisher` (NEW: `state_control/coalescer.py`)": [
+      {
+        "executionId": "7b27c3ee-4afd-43ac-98c9-0581c6cba807",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791877760000
+      }
+    ],
+    "6. Wire the coalescer into the service (MODIFIED: `state_control/service.py`)": [
+      {
+        "executionId": "7b27c3ee-4afd-43ac-98c9-0581c6cba807",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791878010681
+      }
+    ],
+    "8. Write the ten property-based tests (NEW: `tests/state_control/test_coalescer_properties.py`)": [
+      {
+        "executionId": "7b27c3ee-4afd-43ac-98c9-0581c6cba807",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791878946834
+      }
+    ],
+    "9. Write the standing verification obligation tests (NEW: `tests/state_control/test_push_verification.py`)": [
+      {
+        "executionId": "7b27c3ee-4afd-43ac-98c9-0581c6cba807",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791878948074
+      }
+    ],
+    "10. Write the microbenchmark (NEW: `tests/state_control/test_lgw23_microbench.py`)": [
+      {
+        "executionId": "7b27c3ee-4afd-43ac-98c9-0581c6cba807",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791878949100
+      }
+    ]
+  }
+}

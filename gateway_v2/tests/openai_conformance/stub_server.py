@@ -17,12 +17,18 @@ sys.path.insert(0, str(_ROOT.parent / "shared"))
 
 import uvicorn
 
-import ai_mesh_gateway.main as gm
 from tests.openai_conformance.test_openai_sdk_compat_live_uvicorn import _apply_stubs, _free_port
 
 
 def main() -> None:
     _apply_stubs()
+    # Single application module object: resolve the v1 app through the ONE
+    # accessor (``from ai_mesh_gateway import main``) at call time — the same
+    # identity ``_apply_stubs`` patched via ``_resolved_main()`` — never a
+    # module-top ``import ai_mesh_gateway.main as gm`` that binds a SECOND module
+    # object (and would ERROR at import under a tree without the v1 package).
+    from ai_mesh_gateway import main as gm
+
     port = int(os.environ.get("AMF_STUB_PORT", "0") or 0) or _free_port()
     url = f"http://127.0.0.1:{port}"
     url_file = os.environ.get("AMF_STUB_URL_FILE", "").strip()

@@ -1,0 +1,163 @@
+"""A streamed output withhold still carries the six-stage console frame.
+
+The pipeline emits ``output_blocked`` itself and sets the terminal latch. GW14b
+§5.4 still requires the ``amf.trace`` object on that stream. The frame follows
+the error and is not a content chunk.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import json
+from collections.abc import Mapping
+
+from gateway_v2.domain.decision import Decision, Disposition
+from gateway_v2.edge.cancel import KillLatch
+from gateway_v2.edge.request_holds import RequestHolds
+from gateway_v2.edge.route_emit import ProducedModeHolder as _ProducedModeHolder
+from gateway_v2.edge.routes import (  # type: ignore[attr-defined]
+    ChatRoute,
+    _TerminalLatch,
+)
+from gateway_v2.edge.wire.sse import SSEEncoder
+from gateway_v2.egress.stream import StreamStats
+
+
+class _Capture:
+    __slots__ = ("frames",)
+
+    def __init__(self) -> None:
+        self.frames: list[bytes] = []
+
+    async def send(self, event: Mapping[str, object]) -> None:
+        if event.get("type") != "http.response.body":
+            return
+        body = event.get("body")
+        if isinstance(body, (bytes, bytearray)) and body:
+            self.frames.append(bytes(body))
+
+
+def _decision(action: Disposition, rule: str) -> Decision:
+    return Decision(
+        disposition=action,
+        per_finding=(),
+        transformations=(),
+        findings=(),
+        plan_version="1.2.test",
+        deciding_rules=(rule,) if rule else (),
+        unavailable_detectors=(),
+    )
+
+
+def test_output_withhold_still_emits_the_six_stage_trace() -> None:
+    holds = RequestHolds()
+    holds.note_request("zs-output-block")
+    holds.note_input(_decision(Disposition.ALLOW, ""))
+    holds.mark_dispatched()
+    holds.note_output(_decision(Disposition.BLOCK, "fw-pii-output"))
+    produced = _ProducedModeHolder(holds)
+    produced.stats = StreamStats(
+        output_action="block",
+        output_decision=holds.output_decision,
+    )
+    encoder = SSEEncoder()
+    encoder.error("output_blocked")
+    sent = _TerminalLatch()
+    sent.set()
+    capture = _Capture()
+
+    async def _drive() -> None:
+        await ChatRoute._finish_stream(
+            None,  # type: ignore[arg-type]
+            capture.send,
+            encoder,
+            KillLatch(),
+            sent,
+            produced,
+        )
+
+    asyncio.run(_drive())
+
+    assert len(capture.frames) == 1
+    frame = capture.frames[0]
+    assert frame.startswith(b": amf.trace ")
+    assert b'"content"' not in frame
+    payload = json.loads(frame[len(b": amf.trace "):].split(b"\n", 1)[0])
+    assert payload["zeroshield"]["action"] == "block"
+    stages = {stage["name"]: stage for stage in payload["pipeline_trace"]["stages"]}
+    assert list(stages) == [
+        "auth",
+        "rate_limit",
+        "input_scan",
+        "model_routing",
+        "model_output",
+        "output_guardrail",
+    ]
+    assert stages["input_scan"]["action"] == "allow"
+    assert stages["model_output"]["ran"] is True
+    assert stages["output_guardrail"]["action"] == "block"
+    assert stages["output_guardrail"]["deciding_rule"] == "fw-pii-output"
+    assert "kill_switch" not in stages
+
+
+def _trace_after_error(
+    holds: RequestHolds, stats: StreamStats, code: str
+) -> dict[str, dict[str, object]]:
+    produced = _ProducedModeHolder(holds)
+    produced.stats = stats
+    encoder = SSEEncoder()
+    encoder.error(code)
+    sent = _TerminalLatch()
+    sent.set()
+    capture = _Capture()
+
+    async def _drive() -> None:
+        await ChatRoute._finish_stream(
+            None,  # type: ignore[arg-type]
+            capture.send,
+            encoder,
+            KillLatch(),
+            sent,
+            produced,
+        )
+
+    asyncio.run(_drive())
+    assert len(capture.frames) == 1
+    payload = json.loads(capture.frames[0][len(b": amf.trace "):].split(b"\n", 1)[0])
+    stages = {stage["name"]: stage for stage in payload["pipeline_trace"]["stages"]}
+    stages["_final"] = {"action": payload["zeroshield"]["action"]}
+    return stages
+
+
+def test_holdback_cut_trace_is_block_and_the_model_ran() -> None:
+    """A streamed card cut by the holdback reads block, not allow with the model skipped."""
+    holds = RequestHolds()
+    holds.note_request("zs-holdback-cut")
+    holds.note_input(_decision(Disposition.ALLOW, ""))
+    holds.mark_dispatched()
+    cut = _decision(Disposition.BLOCK, "fw-credential-output")
+    holds.note_output(cut)
+    stages = _trace_after_error(
+        holds,
+        StreamStats(output_action="block", output_decision=cut),
+        "forced_release_tradeoff",
+    )
+    assert stages["_final"]["action"] == "block"
+    assert stages["model_routing"]["ran"] is True
+    assert stages["model_output"]["ran"] is True
+    assert stages["output_guardrail"]["action"] == "block"
+    assert stages["output_guardrail"]["ran"] is True
+    assert stages["output_guardrail"]["deciding_rule"] == "fw-credential-output"
+
+
+def test_kill_cut_trace_says_the_model_ran_and_the_guard_did_not_decide() -> None:
+    """A kill-switch cut after dispatch: the model ran; the output guard made no decision."""
+    holds = RequestHolds()
+    holds.note_request("zs-kill-cut")
+    holds.note_input(_decision(Disposition.ALLOW, ""))
+    holds.mark_dispatched()
+    stages = _trace_after_error(holds, StreamStats(output_action=None), "killed")
+    assert stages["model_routing"]["ran"] is True
+    assert stages["model_output"]["ran"] is True
+    assert stages["output_guardrail"]["action"] == "skip"
+    assert stages["output_guardrail"]["ran"] is False

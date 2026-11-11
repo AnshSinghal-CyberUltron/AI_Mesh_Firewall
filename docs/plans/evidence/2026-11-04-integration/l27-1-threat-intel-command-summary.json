@@ -1,0 +1,32 @@
+{
+ "threat on": [
+  400,
+  [
+   [
+    "input_scan",
+    "block",
+    "input_blocked"
+   ]
+  ]
+ ],
+ "threat off": [
+  200,
+  [
+   [
+    "input_scan",
+    "allow",
+    null
+   ]
+  ]
+ ],
+ "threat on again": [
+  400,
+  [
+   [
+    "input_scan",
+    "block",
+    "input_blocked"
+   ]
+  ]
+ ]
+}

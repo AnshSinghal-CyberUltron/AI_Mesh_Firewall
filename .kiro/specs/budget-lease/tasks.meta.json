@@ -1,0 +1,418 @@
+{
+  "pbtResults": {},
+  "executionHistory": {
+    "1.1 Write unit tests for the new store keys": [
+      {
+        "executionId": "e8647584-8aa4-4e89-b7e2-46bbd22437de",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791539463654
+      },
+      {
+        "executionId": "e8647584-8aa4-4e89-b7e2-46bbd22437de",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791539753221
+      }
+    ],
+    "2.1 Write property test for GCRA burst and rate bound": [
+      {
+        "executionId": "e8647584-8aa4-4e89-b7e2-46bbd22437de",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791539463704
+      },
+      {
+        "executionId": "e8647584-8aa4-4e89-b7e2-46bbd22437de",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791539754287
+      }
+    ],
+    "3. Checkpoint — foundation layer": [
+      {
+        "executionId": "e8647584-8aa4-4e89-b7e2-46bbd22437de",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791539463758
+      },
+      {
+        "executionId": "e8647584-8aa4-4e89-b7e2-46bbd22437de",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791539769654
+      }
+    ],
+    "4.1 Implement the lease config, state carrier, and atomic acquire": [
+      {
+        "executionId": "e8647584-8aa4-4e89-b7e2-46bbd22437de",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791539463811
+      },
+      {
+        "executionId": "e8647584-8aa4-4e89-b7e2-46bbd22437de",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791539796046
+      },
+      {
+        "executionId": "e8647584-8aa4-4e89-b7e2-46bbd22437de",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791540990669
+      }
+    ],
+    "4.2 Implement local `try_spend` with single-flight off-path refill scheduling": [
+      {
+        "executionId": "e8647584-8aa4-4e89-b7e2-46bbd22437de",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791539463882
+      },
+      {
+        "executionId": "e8647584-8aa4-4e89-b7e2-46bbd22437de",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791540989638
+      }
+    ],
+    "4.3 Implement `return_unspent` and TTL-reclaim semantics": [
+      {
+        "executionId": "e8647584-8aa4-4e89-b7e2-46bbd22437de",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791539463965
+      },
+      {
+        "executionId": "e8647584-8aa4-4e89-b7e2-46bbd22437de",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791540988405
+      }
+    ],
+    "4.4 Write property test for no replica multiplication": [
+      {
+        "executionId": "e8647584-8aa4-4e89-b7e2-46bbd22437de",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791539464022
+      },
+      {
+        "executionId": "e8647584-8aa4-4e89-b7e2-46bbd22437de",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791540983733
+      }
+    ],
+    "4.5 Write property test for budget conservation": [
+      {
+        "executionId": "e8647584-8aa4-4e89-b7e2-46bbd22437de",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791539464074
+      },
+      {
+        "executionId": "e8647584-8aa4-4e89-b7e2-46bbd22437de",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791540984764
+      }
+    ],
+    "4.6 Write property test for stale generation never spent": [
+      {
+        "executionId": "e8647584-8aa4-4e89-b7e2-46bbd22437de",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791539464122
+      },
+      {
+        "executionId": "e8647584-8aa4-4e89-b7e2-46bbd22437de",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791540985961
+      }
+    ],
+    "4.7 Write property test for refill never on the request path": [
+      {
+        "executionId": "e8647584-8aa4-4e89-b7e2-46bbd22437de",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791539464169
+      },
+      {
+        "executionId": "e8647584-8aa4-4e89-b7e2-46bbd22437de",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791540986974
+      }
+    ],
+    "5. Checkpoint — lease state machine": [
+      {
+        "executionId": "e8647584-8aa4-4e89-b7e2-46bbd22437de",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791539464219
+      },
+      {
+        "executionId": "e8647584-8aa4-4e89-b7e2-46bbd22437de",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791540991689
+      }
+    ],
+    "6.1 Implement the `BudgetVerdict` value in `admit/grant.py`": [
+      {
+        "executionId": "e8647584-8aa4-4e89-b7e2-46bbd22437de",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791539464268
+      },
+      {
+        "executionId": "e8647584-8aa4-4e89-b7e2-46bbd22437de",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791541043278
+      },
+      {
+        "executionId": "e8647584-8aa4-4e89-b7e2-46bbd22437de",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791542470531
+      }
+    ],
+    "6.2 Implement pure chunk and watermark derivation in `admit/quota.py`": [
+      {
+        "executionId": "e8647584-8aa4-4e89-b7e2-46bbd22437de",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791539464320
+      },
+      {
+        "executionId": "e8647584-8aa4-4e89-b7e2-46bbd22437de",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791541073402
+      },
+      {
+        "executionId": "e8647584-8aa4-4e89-b7e2-46bbd22437de",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791542473550
+      }
+    ],
+    "6.3 Write property test for contract-derived chunk": [
+      {
+        "executionId": "e8647584-8aa4-4e89-b7e2-46bbd22437de",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791539464375
+      },
+      {
+        "executionId": "e8647584-8aa4-4e89-b7e2-46bbd22437de",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791542472529
+      }
+    ],
+    "6.4 Write example tests for `BudgetVerdict` and watermark": [
+      {
+        "executionId": "e8647584-8aa4-4e89-b7e2-46bbd22437de",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791539464432
+      },
+      {
+        "executionId": "e8647584-8aa4-4e89-b7e2-46bbd22437de",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791542469662
+      }
+    ],
+    "7.1 Write property test for the narrow budget outage posture": [
+      {
+        "executionId": "e8647584-8aa4-4e89-b7e2-46bbd22437de",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791539464480
+      },
+      {
+        "executionId": "e8647584-8aa4-4e89-b7e2-46bbd22437de",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791542474367
+      }
+    ],
+    "7.2 Write property test for fail-closed under error": [
+      {
+        "executionId": "e8647584-8aa4-4e89-b7e2-46bbd22437de",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791539464533
+      },
+      {
+        "executionId": "e8647584-8aa4-4e89-b7e2-46bbd22437de",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791542475796
+      }
+    ],
+    "8. Checkpoint — façade wired to GCRA + lease": [
+      {
+        "executionId": "e8647584-8aa4-4e89-b7e2-46bbd22437de",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791539464585
+      },
+      {
+        "executionId": "e8647584-8aa4-4e89-b7e2-46bbd22437de",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791542478260
+      }
+    ],
+    "9.1 Write property test for idempotent read retry-once": [
+      {
+        "executionId": "e8647584-8aa4-4e89-b7e2-46bbd22437de",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791539464650
+      },
+      {
+        "executionId": "e8647584-8aa4-4e89-b7e2-46bbd22437de",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791543122980
+      }
+    ],
+    "10.1 Write unit tests for the quota metrics series": [
+      {
+        "executionId": "e8647584-8aa4-4e89-b7e2-46bbd22437de",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791539464702
+      },
+      {
+        "executionId": "e8647584-8aa4-4e89-b7e2-46bbd22437de",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791543732291
+      }
+    ],
+    "11. Add the 45 s partition regression and confirm the store-connection boundary (R2-19 / R2-09)": [
+      {
+        "executionId": "e8647584-8aa4-4e89-b7e2-46bbd22437de",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791539464751
+      },
+      {
+        "executionId": "e8647584-8aa4-4e89-b7e2-46bbd22437de",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791542526592
+      },
+      {
+        "executionId": "e8647584-8aa4-4e89-b7e2-46bbd22437de",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791543125249
+      }
+    ],
+    "12. Checkpoint — boundary and metrics complete": [
+      {
+        "executionId": "e8647584-8aa4-4e89-b7e2-46bbd22437de",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791539464840
+      },
+      {
+        "executionId": "e8647584-8aa4-4e89-b7e2-46bbd22437de",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791543734739
+      }
+    ],
+    "13.1 Implement the LGW06-3 multi-replica harness": [
+      {
+        "executionId": "e8647584-8aa4-4e89-b7e2-46bbd22437de",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791539464904
+      },
+      {
+        "executionId": "e8647584-8aa4-4e89-b7e2-46bbd22437de",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791543773336
+      }
+    ],
+    "13.2 Implement the LGW06-5 injected-latency equivalent": [
+      {
+        "executionId": "e8647584-8aa4-4e89-b7e2-46bbd22437de",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791539464951
+      },
+      {
+        "executionId": "e8647584-8aa4-4e89-b7e2-46bbd22437de",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791544650381
+      }
+    ],
+    "13.3 Implement the R2-09 partition-behaviour harness assertion": [
+      {
+        "executionId": "e8647584-8aa4-4e89-b7e2-46bbd22437de",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791539465007
+      },
+      {
+        "executionId": "e8647584-8aa4-4e89-b7e2-46bbd22437de",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791544651417
+      }
+    ],
+    "14. Document the feature and append the R2-09/R2-14/R2-19 changelog": [
+      {
+        "executionId": "e8647584-8aa4-4e89-b7e2-46bbd22437de",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791539465064
+      },
+      {
+        "executionId": "e8647584-8aa4-4e89-b7e2-46bbd22437de",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791544729661
+      },
+      {
+        "executionId": "e8647584-8aa4-4e89-b7e2-46bbd22437de",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791545554036
+      }
+    ],
+    "15. Final local verification gate": [
+      {
+        "executionId": "e8647584-8aa4-4e89-b7e2-46bbd22437de",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791539465112
+      }
+    ],
+    "1. Add the budget-lease store key family to `runtime/store_keys.py`": [
+      {
+        "executionId": "e8647584-8aa4-4e89-b7e2-46bbd22437de",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791539495263
+      },
+      {
+        "executionId": "e8647584-8aa4-4e89-b7e2-46bbd22437de",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791539753278
+      }
+    ],
+    "2. Implement the pure `admit/gcra.py` LocalGCRA": [
+      {
+        "executionId": "e8647584-8aa4-4e89-b7e2-46bbd22437de",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791539496454
+      },
+      {
+        "executionId": "e8647584-8aa4-4e89-b7e2-46bbd22437de",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791539754343
+      }
+    ],
+    "4. Implement the store-backed `admit/lease.py` BudgetLease state machine": [
+      {
+        "executionId": "e8647584-8aa4-4e89-b7e2-46bbd22437de",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791540990728
+      }
+    ],
+    "6. Implement chunk/watermark derivation and the `BudgetVerdict` value": [
+      {
+        "executionId": "e8647584-8aa4-4e89-b7e2-46bbd22437de",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791542473611
+      }
+    ],
+    "7. Implement the `QuotaComponent` façade in `admit/quota.py`": [
+      {
+        "executionId": "e8647584-8aa4-4e89-b7e2-46bbd22437de",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791542475847
+      }
+    ],
+    "9. Implement the retry-once-on-idempotent-read boundary (R2-14)": [
+      {
+        "executionId": "e8647584-8aa4-4e89-b7e2-46bbd22437de",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791542524339
+      },
+      {
+        "executionId": "e8647584-8aa4-4e89-b7e2-46bbd22437de",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791543123049
+      }
+    ],
+    "10. Implement the producer-only quota metrics in `admit/metrics.py`": [
+      {
+        "executionId": "e8647584-8aa4-4e89-b7e2-46bbd22437de",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791542525576
+      },
+      {
+        "executionId": "e8647584-8aa4-4e89-b7e2-46bbd22437de",
+        "chatSessionId": "sess_683fed32-cd2a-4017-9a78-53c7696d3367",
+        "timestamp": 1791543732414
+      }
+    ]
+  }
+}

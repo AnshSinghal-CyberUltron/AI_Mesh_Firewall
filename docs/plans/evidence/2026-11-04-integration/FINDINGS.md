@@ -1,0 +1,34 @@
+# Integration live-test findings (4 Nov 2026)
+
+Stack: integration worktree at `integration-gw27-35` (all 8 branches merged), compose project `amfint`,
+dev profile (`AMF_DEV_PROFILE=1`), gateway-v2 single worker. Every finding below was observed on real
+HTTP traffic; the evidence file is named on each line.
+
+## Fixed in this pass (one commit each)
+
+| Commit | Defect | Evidence |
+|---|---|---|
+| 239a5449 | `firewall_config_serializer.py` called `rewrite_served_by_v2` without importing it (lost in the GW27×GW33 merge). **Every** `PUT /api/firewall/config/` returned HTTP 500, so no console setting could be saved. | first run of `l27-1-field-changes.jsonl` (all 500), control traceback `NameError` |
+| f071279c | Org rate/burst 429 had no `Retry-After` / `x-should-retry`: `edge/openai_chat.py` dropped `BudgetVerdict.retry_after_s` and `ChatRoute._render_refusal` did not pass it to `emit_error_code`. L27-2 requires the header. | `l27-effects.json` (before: `retry-after` None; after: `1`, `x-should-retry: false`) |
+| 9d64c375 | Follow-up: the f071279c edit put `edge/openai_chat.py` at 801 lines (size gate 800). | `lint.check_sizes` exit 0 after |
+| e73e1fa5 | **Non-streaming chat skipped the GW33 built-in output detectors.** With `stream=false` an RFC1918 address, a data-bearing markdown image and the echoed canary all came back HTTP 200 `allow`. With `stream=true` they were withheld by `out_ip_leak` / `out_exfil` / `out_canary`. `_enforce_channels` used the GW09 scanner only; it now chains the same sync detectors STRICT uses (`OutputDetectors.whole_response`). The GW33 branch itself never wired this, so the merge didn't introduce it. | `gw33-output-nocanary-exfil.jsonl` (before), `gw33-output-after-fix-exfil.jsonl`, `gw33-output-after-fix-canary.jsonl` (after) |
+| 3302e4bb | Test drift: the GW27 control test hard-coded 30 retired fields; after GW33 Req 9 maps 5 of them the merged tree retires 25. | `control-tests-after-fixes.txt` |
+| d42d3b69 | Mapping GW35's `_unauthenticated` audit stream (`AMF_V2_AUDIT_ORG_MAP=dev-org=zeroshield,_unauthenticated=zeroshield`, as GW35 Req 4.4 says to do) made `gateway_org_for` ambiguous, so publishing silently reported `dev_copy: not_mapped` and **no console save reached the dev gateway**. | first part-2 run (every PUT `dev_copy: not_mapped`, no setting took effect); `l27-1-effects-part2-summary.json` after |
+
+Reverted (owner decision, left open as F4): 4d75e401 made non-stream post-dispatch refusals echo the
+request id. `tests/edge/test_gw35_golden_capture.py` freezes those bytes as identical to the pre-change
+build, so changing them is a wire-contract decision. Reverted by 7caa3a2e.
+
+## Open (not fixed: larger than a small in-scope fix, or a product/owner decision)
+
+- **F1 HIGH: STRICT_WITHHOLD streams longer than `idle_timeout_s` die with 408 `stream_idle_timeout`, blamed on the client.** `StreamTimeouts.send` measures the gap since the last *client write*. In STRICT_WITHHOLD the gateway writes nothing until the decision, so a healthy 6 s upstream stream (a chunk every 150 ms, client connected) gets `HTTP 408 "The downstream client went idle"` before any byte. GW33 D-20 promotes every org with an enforcing IP-leak or exfil rule to strict, so long real-model answers will hit this. Evidence: `l34-python-sdk-strict-withhold.jsonl` (cancellation cell), curl transcript in the chat log. The fix needs a decision on GW12/GW13 R9.3 idle semantics, so I didn't patch it.
+- **F2 HIGH (pre-existing, GW15/GW16/GW17): request ids are a pure content hash.** Identical requests get identical ids: chat, stream and non-stream (`zs-dev-org-fb2340bd19bc5b758a6b2018` ×5), MCP (`id:3 tools/list` reused across runs), embeddings, RAG. Audit / Scan Detail rows for repeated prompts collide (the PIPELINE-0023 conflation class), and refunds are keyed on `request_id`. The designs chose this on purpose ("a clock-minted id would differ between phases"), so changing it is a design decision.
+- **F3 MED: built-in platform rules are published `surfaces: ["chat"]` only.** By default no injection, secret or credential rule covers RAG chunks or MCP results. L31-1 fails as shipped: a poisoned chunk is served on `/v1/rag/query` and `/v1/vector/query` with `blocked=0`. An AKIA key in an MCP tool result passed raw. With an operator rule on `rag` + `vector` (retriever stage) the chunk is dropped on both paths (`blocked=1`, `pol-L26RAG-13`), so the mechanism works; the default rule set is the gap. Evidence: `gw31-l31.jsonl`, `gw31-l31-vector.jsonl`, `gw31-l31-followup.jsonl`, `gw31-l31-vector-ruled.jsonl`, `gw32-mcp.jsonl`.
+- **F4 MED: non-stream upstream error envelopes (`upstream_error` 502, `upstream_rate_limited` 429) carry `error.request_id: null` and no `x-request-id`.** The stream path carries both, and `zeroshield.request_id` is set in the same body. These bytes are frozen by the GW35 golden test (owner decision). Evidence: `gw35-wire.jsonl`.
+- **F5 MED (cross v1/v2): registering an MCP server in the console marks it `needs_reauth` at once.** Control's tool sync calls the v1 gateway `discover-tools` without a key (`HTTP 401 Missing or malformed Authorization header`), so the v2 gateway then refuses every call with `403 mcp_upstream_needs_reauth`. For the live test I cleared the flag by hand in the Django shell (test setup, declared). Evidence: `gw32-mcp.jsonl` first run, control log line `MCP sync error [code=MCP_AUTH_FAILED]`.
+- **F6 LOW: after a real upstream 500 the trace shows `model_routing: skip` with `deciding_rule: refused_internal_error|-|0|-|-`**, although the request was routed and dispatched. `model_output: error` and `final_action: error` are correct. Evidence: `gw35-console-rows.json`.
+- **F7 LOW: a RAG query for a collection the org does not have returns `502 provider_unreachable`**, not a not-found code. Isolation itself holds: org-b lists `[]` and reads nothing. Evidence: `gw31-l31.jsonl`.
+- **F8 LOW: GW33 grounding stays streaming-only.** e73e1fa5 adds the sync detectors to the non-stream path, not the async grounding check (needs RAG context).
+- F9 INFO: with `V2_CANARY_ORGS` set, the dev **echo** provider repeats the injected system slot, so every reply is blocked by `out_canary` on both paths. That's correct behaviour for a canary-leaking model, but leave canary off for manual testing on the echo provider.
+- F10 INFO: Node `openai@4.104.0` (the repo pin) exposes the helper only as `client.beta.chat.completions.stream`; `client.chat.completions.stream` is `undefined` in that version.
+- F11 INFO: the broad control `core.tests` run inside the container has ~19 failures (routing round-trips, ingestion auth, model governance, …). I ran no baseline before my changes, so I can't attribute them. The targeted GW27/GW33/new suites pass (19/19). Known gateway gate failure `test_check_tenant_scale` (`pinecone_transport.py:140`) is unchanged.

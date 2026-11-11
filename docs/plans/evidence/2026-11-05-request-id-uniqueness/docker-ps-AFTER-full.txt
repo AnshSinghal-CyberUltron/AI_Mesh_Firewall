@@ -1,0 +1,49 @@
+ai_mesh_firewall-control-1	Exited (0) 7 hours ago
+ai_mesh_firewall-demo-1	Up 7 hours (healthy)
+ai_mesh_firewall-frontend-1	Exited (1) 7 hours ago
+ai_mesh_firewall-gateway-1	Up 7 hours (unhealthy)
+ai_mesh_firewall-gateway-v2-1	Up 7 hours (healthy)
+ai_mesh_firewall-mcp-sandbox-image-1	Exited (0) 33 hours ago
+ai_mesh_firewall-mcp-stub-1	Exited (143) 7 hours ago
+ai_mesh_firewall-pgbouncer-1	Exited (0) 7 hours ago
+ai_mesh_firewall-postgres-1	Exited (0) 7 hours ago
+ai_mesh_firewall-rabbitmq-1	Exited (0) 7 hours ago
+ai_mesh_firewall-redis-1	Exited (0) 7 hours ago
+ai_mesh_firewall-state-projector-a-1	Restarting (1) 10 seconds ago
+ai_mesh_firewall-state-projector-b-1	Restarting (1) 10 seconds ago
+ai_mesh_firewall-state-rehydrator-a-1	Restarting (1) 16 seconds ago
+ai_mesh_firewall-state-rehydrator-b-1	Restarting (1) 16 seconds ago
+ai_mesh_mcp_broker	Up 7 hours (healthy)
+amff2-control-1	Up 11 minutes (healthy)
+amff2-fake-mcp	Up 11 minutes
+amff2-fake-openai	Up 11 minutes
+amff2-gateway-1	Up 11 minutes (healthy)
+amff2-gateway-v2-1	Up 11 minutes (healthy)
+amff2_mcp_broker	Up 12 minutes (healthy)
+amff2-mcp-sandbox-image-1	Exited (0) 12 minutes ago
+amff2-mcp-stub-1	Up 12 minutes (healthy)
+amff2-pgbouncer-1	Up 11 minutes (healthy)
+amff2-postgres-1	Up 12 minutes (healthy)
+amff2-rabbitmq-1	Up 12 minutes (healthy)
+amff2-redis-1	Up 12 minutes (healthy)
+amff2-state-projector-a-1	Up 11 minutes (healthy)
+amff2-state-rehydrator-a-1	Up 11 minutes (healthy)
+amfint-control-1	Up 5 hours (healthy)
+amfint-fake-mcp	Up 6 hours
+amfint-fake-openai	Up 5 hours
+amfint-frontend-1	Up 5 hours
+amfint-gateway-1	Up 6 hours (healthy)
+amfint-gateway-v2-1	Up 5 hours (healthy)
+amfint_mcp_broker	Up 6 hours (healthy)
+amfint-mcp-sandbox-image-1	Exited (0) 6 hours ago
+amfint-mcp-stub-1	Up 6 hours (healthy)
+amfint-pgbouncer-1	Up 6 hours (healthy)
+amfint-postgres-1	Up 6 hours (healthy)
+amfint-rabbitmq-1	Up 6 hours (healthy)
+amfint-redis-1	Up 6 hours (healthy)
+amfint-state-projector-a-1	Up 6 hours (healthy)
+amfint-state-rehydrator-a-1	Up 6 hours (healthy)
+gw30-stores-gw30-etcd-1	Exited (0) 7 hours ago
+gw30-stores-gw30-milvus-1	Exited (143) 7 hours ago
+gw30-stores-gw30-minio-1	Exited (255) 7 hours ago
+zeroshield-mcp-sandbox	Exited (143) 5 hours ago

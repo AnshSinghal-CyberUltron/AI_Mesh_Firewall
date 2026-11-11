@@ -1,0 +1,342 @@
+{
+  "pbtResults": {},
+  "executionHistory": {
+    "1.1 Implement the frozen value types + `exclude_lost_segment_tails`": [
+      {
+        "executionId": "fdc34a00-ce2c-4a81-879b-a639580531fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791980544889
+      },
+      {
+        "executionId": "fdc34a00-ce2c-4a81-879b-a639580531fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791980557791
+      },
+      {
+        "executionId": "fdc34a00-ce2c-4a81-879b-a639580531fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791980766606
+      }
+    ],
+    "1.2 Implement `firewall_added_delta` + `DirectBaselineMissing` + `assert_within_slo`": [
+      {
+        "executionId": "fdc34a00-ce2c-4a81-879b-a639580531fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791980544915
+      },
+      {
+        "executionId": "fdc34a00-ce2c-4a81-879b-a639580531fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791981181077
+      },
+      {
+        "executionId": "fdc34a00-ce2c-4a81-879b-a639580531fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791981305319
+      }
+    ],
+    "2.1 Write the security-headers include — `security-headers.inc`": [
+      {
+        "executionId": "fdc34a00-ce2c-4a81-879b-a639580531fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791980544939
+      },
+      {
+        "executionId": "fdc34a00-ce2c-4a81-879b-a639580531fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791980559012
+      },
+      {
+        "executionId": "fdc34a00-ce2c-4a81-879b-a639580531fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791980862773
+      }
+    ],
+    "2.2 Write the upstream keepalive block + proxy location — `gateway-edge.conf`": [
+      {
+        "executionId": "fdc34a00-ce2c-4a81-879b-a639580531fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791980544963
+      },
+      {
+        "executionId": "fdc34a00-ce2c-4a81-879b-a639580531fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791980568263
+      },
+      {
+        "executionId": "fdc34a00-ce2c-4a81-879b-a639580531fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791980953517
+      }
+    ],
+    "2.3 Add the default_server unknown-Host 403 catch-all — `gateway-edge.conf` (append)": [
+      {
+        "executionId": "fdc34a00-ce2c-4a81-879b-a639580531fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791980544986
+      },
+      {
+        "executionId": "fdc34a00-ce2c-4a81-879b-a639580531fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791980959771
+      },
+      {
+        "executionId": "fdc34a00-ce2c-4a81-879b-a639580531fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791981020895
+      }
+    ],
+    "2.4 Write the edge container image + harness compose — `Dockerfile.edge` + `docker-compose.edge.yml`": [
+      {
+        "executionId": "fdc34a00-ce2c-4a81-879b-a639580531fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791980545012
+      },
+      {
+        "executionId": "fdc34a00-ce2c-4a81-879b-a639580531fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791981571411
+      },
+      {
+        "executionId": "fdc34a00-ce2c-4a81-879b-a639580531fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791981727203
+      }
+    ],
+    "3.1 Write the static keepalive grep gate — `check_edge_keepalive.sh`": [
+      {
+        "executionId": "fdc34a00-ce2c-4a81-879b-a639580531fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791980545041
+      },
+      {
+        "executionId": "fdc34a00-ce2c-4a81-879b-a639580531fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791980569204
+      },
+      {
+        "executionId": "fdc34a00-ce2c-4a81-879b-a639580531fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791981173753
+      }
+    ],
+    "4.1 Build the harness driver + Docker-availability gate": [
+      {
+        "executionId": "fdc34a00-ce2c-4a81-879b-a639580531fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791980545087
+      },
+      {
+        "executionId": "fdc34a00-ce2c-4a81-879b-a639580531fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791981863364
+      },
+      {
+        "executionId": "fdc34a00-ce2c-4a81-879b-a639580531fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791982481869
+      }
+    ],
+    "5. Checkpoint — delta module + edge config + static gate + harness green": [
+      {
+        "executionId": "fdc34a00-ce2c-4a81-879b-a639580531fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791980545128
+      },
+      {
+        "executionId": "fdc34a00-ce2c-4a81-879b-a639580531fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791982494382
+      },
+      {
+        "executionId": "fdc34a00-ce2c-4a81-879b-a639580531fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791982517239
+      }
+    ],
+    "6.1 Document the Edge_Drain_Contract + name every Deferred_Seam next to the config": [
+      {
+        "executionId": "fdc34a00-ce2c-4a81-879b-a639580531fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791980545152
+      },
+      {
+        "executionId": "fdc34a00-ce2c-4a81-879b-a639580531fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791982518443
+      },
+      {
+        "executionId": "fdc34a00-ce2c-4a81-879b-a639580531fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791982662030
+      }
+    ],
+    "7.1 Run the full gate and map evidence to the §10.9 card format": [
+      {
+        "executionId": "fdc34a00-ce2c-4a81-879b-a639580531fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791980545176
+      },
+      {
+        "executionId": "fdc34a00-ce2c-4a81-879b-a639580531fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791982663025
+      },
+      {
+        "executionId": "fdc34a00-ce2c-4a81-879b-a639580531fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791983245500
+      }
+    ],
+    "8. Final checkpoint": [
+      {
+        "executionId": "fdc34a00-ce2c-4a81-879b-a639580531fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791980545202
+      },
+      {
+        "executionId": "fdc34a00-ce2c-4a81-879b-a639580531fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791983244658
+      }
+    ],
+    "3. CI edge regression gate (L16b-7) — `check_edge_keepalive.sh` + the pytest wrapper (static, no Docker)": [
+      {
+        "executionId": "fdc34a00-ce2c-4a81-879b-a639580531fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791981173791
+      }
+    ],
+    "1. Firewall-added-delta SLO module — `runtime/latency_slo.py` (NEW, the pure Python half, built first)": [
+      {
+        "executionId": "fdc34a00-ce2c-4a81-879b-a639580531fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791981305341
+      }
+    ],
+    "1.3 Write the Property 1–3 tail-exclusion property tests (PBT)": [
+      {
+        "executionId": "fdc34a00-ce2c-4a81-879b-a639580531fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791981312745
+      },
+      {
+        "executionId": "fdc34a00-ce2c-4a81-879b-a639580531fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791981559015
+      }
+    ],
+    "1.4 Write the Property 4–6 delta/baseline/SLO property tests (PBT)": [
+      {
+        "executionId": "fdc34a00-ce2c-4a81-879b-a639580531fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791981318605
+      },
+      {
+        "executionId": "fdc34a00-ce2c-4a81-879b-a639580531fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791981560013
+      }
+    ],
+    "1.5 Write delta-module example/unit tests": [
+      {
+        "executionId": "fdc34a00-ce2c-4a81-879b-a639580531fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791981319652
+      },
+      {
+        "executionId": "fdc34a00-ce2c-4a81-879b-a639580531fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791981560911
+      }
+    ],
+    "2. V2 edge nginx config — `gateway_v2/deploy/edge/` (NEW infra; v1 `deploy/nginx.conf` NOT edited)": [
+      {
+        "executionId": "fdc34a00-ce2c-4a81-879b-a639580531fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791981727229
+      }
+    ],
+    "3.2 Surface the gate via a pytest wrapper — `tests/edge/test_edge_config_gate.py`": [
+      {
+        "executionId": "fdc34a00-ce2c-4a81-879b-a639580531fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791981734100
+      },
+      {
+        "executionId": "fdc34a00-ce2c-4a81-879b-a639580531fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791981853675
+      }
+    ],
+    "4.2 L16b-1 — conns/request ≤ 0.01 (integration)": [
+      {
+        "executionId": "fdc34a00-ce2c-4a81-879b-a639580531fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791981872177
+      },
+      {
+        "executionId": "fdc34a00-ce2c-4a81-879b-a639580531fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791982483158
+      }
+    ],
+    "4.3 L16b-3 — fixed-interval SSE per-token read + hold ≤ 1 ms + 30 ms injected hold detected (integration)": [
+      {
+        "executionId": "fdc34a00-ce2c-4a81-879b-a639580531fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791981873836
+      },
+      {
+        "executionId": "fdc34a00-ce2c-4a81-879b-a639580531fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791982484625
+      }
+    ],
+    "4.4 L16b-6 — unknown Host 403 + security headers over the live edge (integration)": [
+      {
+        "executionId": "fdc34a00-ce2c-4a81-879b-a639580531fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791981875240
+      },
+      {
+        "executionId": "fdc34a00-ce2c-4a81-879b-a639580531fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791982486018
+      }
+    ],
+    "4.5 L16b-4 — short proxy-passthrough proof (integration)": [
+      {
+        "executionId": "fdc34a00-ce2c-4a81-879b-a639580531fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791981876199
+      },
+      {
+        "executionId": "fdc34a00-ce2c-4a81-879b-a639580531fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791982486992
+      }
+    ],
+    "4. Local_Edge_Harness + docker-gated live L16b subset — `tests/edge/test_edge_live_l16b.py` (gated behind Docker)": [
+      {
+        "executionId": "fdc34a00-ce2c-4a81-879b-a639580531fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791982481901
+      }
+    ],
+    "6. Edge drain contract + deferred seams recorded as named references (doc/verification task)": [
+      {
+        "executionId": "fdc34a00-ce2c-4a81-879b-a639580531fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791982662062
+      }
+    ],
+    "7. Final verification gate": [
+      {
+        "executionId": "fdc34a00-ce2c-4a81-879b-a639580531fc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1791983245529
+      }
+    ]
+  }
+}

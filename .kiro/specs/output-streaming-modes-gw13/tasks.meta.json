@@ -1,0 +1,182 @@
+{
+  "pbtResults": {},
+  "executionHistory": {
+    "1. Add the STRICT buffer-overflow terminal code (C9)": [
+      {
+        "executionId": "a0aaa031-549a-432f-af0d-7c6cdd8707dc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792156715520
+      },
+      {
+        "executionId": "a0aaa031-549a-432f-af0d-7c6cdd8707dc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792156738502
+      },
+      {
+        "executionId": "a0aaa031-549a-432f-af0d-7c6cdd8707dc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792156922812
+      }
+    ],
+    "2. Accept STRICT_WITHHOLD in the compiler (C3)": [
+      {
+        "executionId": "a0aaa031-549a-432f-af0d-7c6cdd8707dc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792156715558
+      },
+      {
+        "executionId": "a0aaa031-549a-432f-af0d-7c6cdd8707dc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792156739902
+      },
+      {
+        "executionId": "a0aaa031-549a-432f-af0d-7c6cdd8707dc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792156921755
+      }
+    ],
+    "3. Add the StrictMetrics completion-overhead producer (C7)": [
+      {
+        "executionId": "a0aaa031-549a-432f-af0d-7c6cdd8707dc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792156715595
+      },
+      {
+        "executionId": "a0aaa031-549a-432f-af0d-7c6cdd8707dc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792156740852
+      },
+      {
+        "executionId": "a0aaa031-549a-432f-af0d-7c6cdd8707dc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792156920357
+      }
+    ],
+    "4. Add produced-mode and degenerate observables to StreamStats (C5/C6)": [
+      {
+        "executionId": "a0aaa031-549a-432f-af0d-7c6cdd8707dc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792156715628
+      },
+      {
+        "executionId": "a0aaa031-549a-432f-af0d-7c6cdd8707dc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792156933772
+      },
+      {
+        "executionId": "a0aaa031-549a-432f-af0d-7c6cdd8707dc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792157201470
+      }
+    ],
+    "5. Implement the StrictWithholdPipeline and StrictStats (C1)": [
+      {
+        "executionId": "a0aaa031-549a-432f-af0d-7c6cdd8707dc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792156715660
+      },
+      {
+        "executionId": "a0aaa031-549a-432f-af0d-7c6cdd8707dc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792157202407
+      },
+      {
+        "executionId": "a0aaa031-549a-432f-af0d-7c6cdd8707dc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792157638028
+      }
+    ],
+    "6. Add the select_pipeline factory (C2)": [
+      {
+        "executionId": "a0aaa031-549a-432f-af0d-7c6cdd8707dc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792156715694
+      },
+      {
+        "executionId": "a0aaa031-549a-432f-af0d-7c6cdd8707dc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792157672666
+      },
+      {
+        "executionId": "a0aaa031-549a-432f-af0d-7c6cdd8707dc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792158084039
+      }
+    ],
+    "7. Wire the streaming chat path through select_pipeline and stamp Produced_Mode (C4/C5)": [
+      {
+        "executionId": "a0aaa031-549a-432f-af0d-7c6cdd8707dc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792156715727
+      },
+      {
+        "executionId": "a0aaa031-549a-432f-af0d-7c6cdd8707dc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792158194763
+      },
+      {
+        "executionId": "a0aaa031-549a-432f-af0d-7c6cdd8707dc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792159979930
+      }
+    ],
+    "8. Checkpoint — Ensure all tests pass": [
+      {
+        "executionId": "a0aaa031-549a-432f-af0d-7c6cdd8707dc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792156715759
+      },
+      {
+        "executionId": "a0aaa031-549a-432f-af0d-7c6cdd8707dc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792159978803
+      }
+    ],
+    "10. Exit gate — full suite and every repository gate": [
+      {
+        "executionId": "a0aaa031-549a-432f-af0d-7c6cdd8707dc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792156715808
+      },
+      {
+        "executionId": "8c2b93b4-6ba2-4d0d-ac81-9760c5847dcd",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792161343152
+      },
+      {
+        "executionId": "8c2b93b4-6ba2-4d0d-ac81-9760c5847dcd",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792163231412
+      }
+    ],
+    "11. Final checkpoint — Ensure all tests pass": [
+      {
+        "executionId": "a0aaa031-549a-432f-af0d-7c6cdd8707dc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792156715833
+      },
+      {
+        "executionId": "8c2b93b4-6ba2-4d0d-ac81-9760c5847dcd",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792163230671
+      }
+    ],
+    "9. Write the single GW13 property + mechanism test file (one file, one pass)": [
+      {
+        "executionId": "a0aaa031-549a-432f-af0d-7c6cdd8707dc",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792160060245
+      },
+      {
+        "executionId": "8c2b93b4-6ba2-4d0d-ac81-9760c5847dcd",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792161076190
+      },
+      {
+        "executionId": "8c2b93b4-6ba2-4d0d-ac81-9760c5847dcd",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792161342015
+      }
+    ]
+  }
+}

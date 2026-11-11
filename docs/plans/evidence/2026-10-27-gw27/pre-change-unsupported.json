@@ -1,0 +1,276 @@
+[
+ {
+  "field": "log_level",
+  "off": null,
+  "reject": []
+ },
+ {
+  "field": "rate_limit_enabled",
+  "off": [
+   false
+  ],
+  "reject": []
+ },
+ {
+  "field": "requests_per_minute",
+  "off": null,
+  "reject": []
+ },
+ {
+  "field": "burst_limit",
+  "off": null,
+  "reject": []
+ },
+ {
+  "field": "org_tpm_limit",
+  "off": null,
+  "reject": []
+ },
+ {
+  "field": "org_token_budget",
+  "off": null,
+  "reject": []
+ },
+ {
+  "field": "blocked_keywords",
+  "off": null,
+  "reject": []
+ },
+ {
+  "field": "model_isolation_enabled",
+  "off": [
+   false
+  ],
+  "reject": []
+ },
+ {
+  "field": "allowed_models",
+  "off": null,
+  "reject": []
+ },
+ {
+  "field": "default_model",
+  "off": null,
+  "reject": []
+ },
+ {
+  "field": "semantic_analysis_enabled",
+  "off": [
+   false
+  ],
+  "reject": []
+ },
+ {
+  "field": "tier2_execution_mode",
+  "off": null,
+  "reject": []
+ },
+ {
+  "field": "tier2_stream_hold_enabled",
+  "off": [
+   false
+  ],
+  "reject": []
+ },
+ {
+  "field": "tier2_stream_hold_timeout_ms",
+  "off": null,
+  "reject": []
+ },
+ {
+  "field": "tier2_enabled",
+  "off": [
+   null,
+   false
+  ],
+  "reject": []
+ },
+ {
+  "field": "mcp_tier2_enabled",
+  "off": [
+   null,
+   false
+  ],
+  "reject": []
+ },
+ {
+  "field": "mcp_ext_scan_action",
+  "off": [
+   "tag"
+  ],
+  "reject": []
+ },
+ {
+  "field": "tier2_strict",
+  "off": null,
+  "reject": []
+ },
+ {
+  "field": "mcp_policy_only_enforcement",
+  "off": [
+   false
+  ],
+  "reject": []
+ },
+ {
+  "field": "factuality_check_enabled",
+  "off": [
+   false
+  ],
+  "reject": []
+ },
+ {
+  "field": "hallucination_grounding_mode",
+  "off": null,
+  "reject": []
+ },
+ {
+  "field": "hallucination_grounding_threshold",
+  "off": null,
+  "reject": []
+ },
+ {
+  "field": "hallucination_grounding_model",
+  "off": null,
+  "reject": []
+ },
+ {
+  "field": "output_policy_enabled",
+  "off": [
+   false
+  ],
+  "reject": []
+ },
+ {
+  "field": "output_policy_action",
+  "off": null,
+  "reject": [
+   "rewrite"
+  ]
+ },
+ {
+  "field": "output_hallucination_action",
+  "off": null,
+  "reject": [
+   "rewrite"
+  ]
+ },
+ {
+  "field": "output_incident_logging_enabled",
+  "off": [
+   false
+  ],
+  "reject": []
+ },
+ {
+  "field": "max_response_tokens",
+  "off": null,
+  "reject": []
+ },
+ {
+  "field": "rag_enabled",
+  "off": [
+   false
+  ],
+  "reject": []
+ },
+ {
+  "field": "vector_db_isolation",
+  "off": [
+   false
+  ],
+  "reject": []
+ },
+ {
+  "field": "rag_max_documents",
+  "off": null,
+  "reject": []
+ },
+ {
+  "field": "rag_relevance_threshold",
+  "off": null,
+  "reject": []
+ },
+ {
+  "field": "rag_redaction_enabled",
+  "off": [
+   false
+  ],
+  "reject": []
+ },
+ {
+  "field": "rag_tier2_enabled",
+  "off": [
+   false
+  ],
+  "reject": []
+ },
+ {
+  "field": "threat_intel_enabled",
+  "off": [
+   false
+  ],
+  "reject": []
+ },
+ {
+  "field": "auto_block_threats",
+  "off": [
+   false
+  ],
+  "reject": []
+ },
+ {
+  "field": "threat_score_threshold",
+  "off": null,
+  "reject": []
+ },
+ {
+  "field": "audit_logging_enabled",
+  "off": [
+   false
+  ],
+  "reject": []
+ },
+ {
+  "field": "retention_days",
+  "off": null,
+  "reject": []
+ },
+ {
+  "field": "compliance_frameworks",
+  "off": null,
+  "reject": []
+ },
+ {
+  "field": "routing_risk_weight",
+  "off": null,
+  "reject": []
+ },
+ {
+  "field": "routing_cost_weight",
+  "off": null,
+  "reject": []
+ },
+ {
+  "field": "routing_latency_weight",
+  "off": null,
+  "reject": []
+ },
+ {
+  "field": "routing_priority_weight",
+  "off": null,
+  "reject": []
+ },
+ {
+  "field": "default_data_sensitivity",
+  "off": null,
+  "reject": []
+ },
+ {
+  "field": "routing_enabled",
+  "off": [
+   false
+  ],
+  "reject": []
+ }
+]

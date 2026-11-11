@@ -71,15 +71,25 @@ done < <(git diff --cached --name-only --diff-filter=ACM || true)
 # Report filenames only. Never print matching lines (key material).
 # Needle is assembled at runtime so this file does not contain a literal header.
 _OS_HDR="BEGIN OPEN""SSH PRIVATE KEY"
-_PEM_RE="BEGIN [A-Z0-9][A-Z0-9 ]* PRIVATE KEY"
+# Optional-label form: the label group plus its trailing space is optional, so
+# bare PKCS#8 "BEGIN PRIVATE KEY" matches via the empty branch while
+# "BEGIN RSA/EC/ENCRYPTED PRIVATE KEY" match via the label branch (D1).
+_PEM_RE="BEGIN ([A-Z0-9][A-Z0-9 ]* )?PRIVATE KEY"
+# Fixture allowlist mirroring the CI Content_Allowlist intent (D4): staged
+# source/doc/spec mentions of a header are not findings. Extends part (2)'s
+# fixture_re with the source/doc/spec categories.
+pem_fixture_re='(tests?/|/leakhunt/|patterns\.py$|corpus\.py$|precommit-secret-scan\.sh$|ATTACK_LANDSCAPE\.md$|SOLUTIONS\.md$|\.py$|\.md$|\.sh$|docs/|\.kiro/specs/)'
 while IFS= read -r f; do
   [ -n "$f" ] || continue
-  # LGW00-2: extensionless / typical key suffixes. Mentions in .py/.md/.sh are not keys.
+  # Mirror the CI Content_Allowlist: skip staged source/doc/spec mentions.
+  if printf '%s' "$f" | grep -Eq "$pem_fixture_re"; then
+    continue
+  fi
+  # Content-first: inspect suffixed files and dotfiles too; only .pem/.key/.secret
+  # are always-inspected and the named build files are skipped.
   case "$f" in
     *.pem|*.key|*.secret) ;;
-    *.*) continue ;;
     Dockerfile*|Makefile*|LICENSE|CHANGELOG) continue ;;
-    .*) continue ;;
   esac
   fadd="$(git diff --cached --no-color -U0 -- "$f" | grep -E '^\+' | grep -vE '^\+\+\+' || true)"
   if printf '%s' "$fadd" | grep -Eq "${_OS_HDR}|${_PEM_RE}"; then

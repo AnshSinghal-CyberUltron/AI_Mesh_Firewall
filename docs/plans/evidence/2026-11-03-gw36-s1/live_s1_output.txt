@@ -1,0 +1,16 @@
+PASS roles_and_mask {"status": 200, "roles": ["system", "user", "assistant", "user"], "contains_ssn": false, "prompt": "You are terse.\nmy ssn is [REDACTED]\nnoted\nand go", "max_tokens": 4096, "body_keys": ["max_tokens", "messages", "model", "stream"]}
+PASS budget_rule {"max_tokens_100": 100, "mct_only": [null, 50]}
+PASS completions_prompt_scanned {"status": 200, "roles": ["user"], "prompt": "ssn [REDACTED]"}
+PASS stop_scanned {"status": 200, "stop": ["x [REDACTED]", "END"]}
+PASS tools_refused {"status": 400, "code": "unsupported_parameter", "provider_calls": 0}
+PASS image_part_refused {"status": 400, "code": "unsupported_content_part", "provider_calls": 0}
+PASS injection_blocked {"status": 400, "code": "input_blocked", "provider_calls": 0}
+PASS stream_ok {"status": 200, "has_content": true}
+PASS fault_http_error_429 {"status": 429, "code": "upstream_rate_limited"}
+PASS fault_http_error_500 {"status": 502, "code": "upstream_error"}
+PASS fault_http_error_401 {"status": 502, "code": "upstream_auth_error"}
+PASS fault_malformed_ {"status": 502, "code": "stream_malformed_upstream"}
+PASS fault_disconnect_ {"status": 502, "code": "upstream_unavailable"}
+PASS fault_stream_429 {"status": 200, "tail": "scan\",\"action\":\"allow\",\"ran\":true},{\"name\":\"model_routing\",\"action\":\"allow\",\"ran\":true},{\"name\":\"model_output\",\"action\":\"allow\",\"ran\":true},{\"name\":\"output_guardrail\",\"action\":\"block\",\"ran\":true}]}}\n\n"}
+PASS no_raw_ssn_at_provider {"recorded_calls": 12}
+15/15 passed

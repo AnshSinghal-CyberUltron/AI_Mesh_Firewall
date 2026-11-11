@@ -957,6 +957,19 @@ class FirewallConfig(models.Model):
         default=0,
         help_text="Org-wide tokens-per-minute ceiling across all keys (0 = disabled).",
     )
+    # GW36 S4 (Req 8): per-org token budget published to the gateway as a signed
+    # StateKind.BUDGET record (projector) and spent down by the per-org BudgetLease.
+    # A plain numeric token count only — NEVER a credential or secret. Range and
+    # default are control-plane policy values; they never live in gateway_v2.
+    org_token_budget = models.PositiveIntegerField(
+        default=100_000,
+        validators=[MinValueValidator(0), MaxValueValidator(1_000_000_000)],
+        help_text=(
+            "Per-org token budget (0–1,000,000,000 tokens). The gateway's per-org "
+            "lease spends this pool down; refills are generation-gated by the "
+            "projector. Default 100,000. A numeric token count only, never a credential."
+        ),
+    )
 
     # -- Content Filtering --
     content_filtering_enabled = models.BooleanField(
@@ -1961,3 +1974,29 @@ class PocSubmission(models.Model):
 
     def __str__(self) -> str:
         return f"{self.company} — {self.contact} ({self.submitted_at:%Y-%m-%d %H:%M})"
+
+
+class V2PlanDocument(models.Model):
+    """One organization's gateway-v2 plan document, as control compiled it (GW36 S2).
+
+    The state projector (``gateway_v2/state_control/projector.py``) reads this table and signs
+    the body into the PLAN record gateways load. ``body`` is TEXT, not JSON: it holds the exact
+    bytes the mapper produced, and the projector validates and canonicalises them itself.
+    ``revision`` rises only when the body changes, so the console can show which save is live.
+    """
+
+    id = models.BigAutoField(primary_key=True)
+    organization = models.OneToOneField(
+        "auth_api.Organization",
+        on_delete=models.CASCADE,
+        related_name="v2_plan_document",
+    )
+    body = models.TextField()
+    revision = models.BigIntegerField(default=1)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "core_v2_plan_document"
+
+    def __str__(self) -> str:
+        return f"V2PlanDocument(org={self.organization_id}, revision={self.revision})"

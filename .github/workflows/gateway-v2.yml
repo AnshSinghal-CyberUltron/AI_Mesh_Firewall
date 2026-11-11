@@ -20,20 +20,31 @@ jobs:
       - name: Install v2 dev deps
         run: |
           python -m venv .venv
-          .venv/bin/pip install -q -e ".[dev]"
-      - name: Size + HTTP AST + mutable-state + capacity-literal gates
+          # `serve` brings httpx + uvicorn (the provider, MCP broker and serve entrypoint import
+          # them, so `mypy --strict` needs them); `conformance` brings pytest-asyncio + openai, which
+          # the httpx-backed tests need once httpx is installed (they importorskip httpx only).
+          .venv/bin/pip install -q -e ".[dev,serve,conformance]"
+      - name: Size + HTTP AST + mutable-state + capacity + tenant-scale gates
         run: |
-          .venv/bin/python -m lint.check_sizes gateway_v2
-          .venv/bin/python -m lint.check_http_outside_edge_resolve gateway_v2
-          .venv/bin/python -m lint.check_no_module_mutable gateway_v2
-          .venv/bin/python -m lint.check_capacity_literals gateway_v2
-          .venv/bin/python -m lint.check_frozen_dataclasses gateway_v2
+          for tree in gateway_v2 state_control; do
+            .venv/bin/python -m lint.check_sizes "$tree"
+            .venv/bin/python -m lint.check_http_outside_edge_resolve "$tree"
+            .venv/bin/python -m lint.check_no_module_mutable "$tree"
+            .venv/bin/python -m lint.check_capacity_literals "$tree"
+            .venv/bin/python -m lint.check_frozen_dataclasses "$tree"
+            .venv/bin/python -m lint.check_dispatch_provenance "$tree"
+          done
+          # R2-02 / 2.1-1: the data plane only. The control plane's repair path is
+          # O(records) by design and runs off the serving loop.
+          .venv/bin/python -m lint.check_tenant_scale gateway_v2
       - name: import-linter
         run: .venv/bin/lint-imports
       - name: ruff
-        run: .venv/bin/ruff check gateway_v2 lint tests
+        run: .venv/bin/ruff check gateway_v2 state_control lint tests
       - name: mypy --strict
         run: .venv/bin/mypy --strict
+      - name: GW14b console inventory matches this tree
+        run: .venv/bin/python -m lint.check_console_inventory
       - name: v2 pytest (placeholder + negative fixtures)
         run: .venv/bin/python -m pytest -q
 
@@ -65,6 +76,30 @@ jobs:
           if not hits:
               raise SystemExit("LGW00-2 FAIL: scanner accepted an OpenSSH header")
           print("lgw00_2_rejected", blob.name)
+          PY
+      - name: GW00 Req 1.1 throwaway bare PKCS#8 header (not committed)
+        working-directory: gateway_v2
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import sys
+          sys.path.insert(0, ".")
+          from lint.check_secret_headers import scan_paths
+          # Assemble the bare PKCS#8 header from fragments so this workflow file
+          # never contains the literal header string (mirrors how the scanner
+          # assembles its needle and how the OpenSSH check assembles above).
+          begin = "BEGIN " + "PRIVATE KEY"
+          header = "-----" + begin + "-----\n"
+          footer = "-----END " + "PRIVATE KEY-----\n"
+          blob = Path("/tmp/lgw00-pkcs8")
+          blob.write_text(
+              header + "GW00-REQ-1-1-CI-FIXTURE-NOT-A-REAL-KEY\n" + footer,
+              encoding="utf-8",
+          )
+          hits = scan_paths([blob], allowlist=set())
+          if not hits:
+              raise SystemExit("GW00 FAIL: scanner accepted a bare PKCS#8 header")
+          print("gw00_pkcs8_rejected", blob.name)
           PY
 
   image-digest:

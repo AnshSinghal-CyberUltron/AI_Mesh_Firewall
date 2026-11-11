@@ -116,9 +116,9 @@ export function Login() {
 
           <div className="grid grid-cols-3 gap-2">
             {[
-              { icon: Activity, label: 'Uptime', value: '99.99%' },
-              { icon: FileCheck, label: 'Compliance', value: 'SOC2 / ISO' },
-              { icon: Shield, label: 'Protected', value: '10M+ calls' },
+              { icon: Activity, label: 'Gateway', value: 'OpenAI-compatible' },
+              { icon: FileCheck, label: 'Policy', value: 'Org-owned control' },
+              { icon: Shield, label: 'Guardrails', value: 'Local-first' },
             ].map(({ icon: Icon, label, value }) => (
               <div key={label} className="rounded-xl border border-slate-200/70 bg-white/70 p-2.5 dark:border-slate-800 dark:bg-slate-900/40">
                 <div className="flex items-center gap-2">
@@ -284,9 +284,9 @@ export function Login() {
 
             <div className="lg:hidden grid grid-cols-3 gap-3">
               {[
-                { icon: Activity, label: 'Uptime', value: '99.99%' },
-                { icon: FileCheck, label: 'Compliance', value: 'SOC2' },
-                { icon: Shield, label: 'Protected', value: '10M+' },
+                { icon: Activity, label: 'Gateway', value: 'OpenAI-compatible' },
+                { icon: FileCheck, label: 'Policy', value: 'Org-owned' },
+                { icon: Shield, label: 'Guardrails', value: 'Local-first' },
               ].map(({ icon: Icon, label, value }) => (
                 <div key={label} className="rounded-xl border border-slate-200/70 bg-white/85 p-3 dark:border-slate-800 dark:bg-slate-900/60">
                   <div className="flex items-center gap-1.5">

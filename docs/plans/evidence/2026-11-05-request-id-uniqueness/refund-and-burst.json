@@ -1,0 +1,97 @@
+{
+  "refund_check": {
+    "blocked_requests": [
+      {
+        "status": 400,
+        "request_id": "zs-dev-org-d299ff5af865c2cf4991ea1a",
+        "code": "input_blocked"
+      },
+      {
+        "status": 400,
+        "request_id": "zs-dev-org-5a5df4063dd2c4456a3a6191",
+        "code": "input_blocked"
+      },
+      {
+        "status": 400,
+        "request_id": "zs-dev-org-0a05d1bd7d385b4ac73a8b1f",
+        "code": "input_blocked"
+      },
+      {
+        "status": 400,
+        "request_id": "zs-dev-org-cac1c86c18f595f8046c5a0a",
+        "code": "input_blocked"
+      },
+      {
+        "status": 400,
+        "request_id": "zs-dev-org-4d8ec8491771fe4ca40837e7",
+        "code": "input_blocked"
+      },
+      {
+        "status": 400,
+        "request_id": "zs-dev-org-ebc0408d33c84ce65f66c824",
+        "code": "input_blocked"
+      },
+      {
+        "status": 400,
+        "request_id": "zs-dev-org-dd566a93ec987270e11b1999",
+        "code": "input_blocked"
+      },
+      {
+        "status": 400,
+        "request_id": "zs-dev-org-f767a57adce30ef333c4a207",
+        "code": "input_blocked"
+      },
+      {
+        "status": 400,
+        "request_id": "zs-dev-org-72850332337b5c9b098729a0",
+        "code": "input_blocked"
+      },
+      {
+        "status": 400,
+        "request_id": "zs-dev-org-4038eccb7992f3400671b1b6",
+        "code": "input_blocked"
+      }
+    ],
+    "all_blocked": true,
+    "all_distinct_ids": true,
+    "metrics_before": {
+      "admitted_total": 133.0,
+      "slots_used": 1.0,
+      "queue_depth_request": 0.0,
+      "fail_open_total": 0.0,
+      "quota_overshoot": 0.0
+    },
+    "metrics_after": {
+      "admitted_total": 143.0,
+      "slots_used": 1.0,
+      "queue_depth_request": 0.0,
+      "fail_open_total": 0.0,
+      "quota_overshoot": 0.0
+    },
+    "slots_returned_to_baseline": true,
+    "admitted_delta": 10.0,
+    "budget_remaining_before": 96723200,
+    "budget_remaining_after": 96723200,
+    "budget_net_delta": 0,
+    "quota_overshoot_after": 0.0,
+    "fail_open_after": 0.0
+  },
+  "concurrency_burst": {
+    "requests": 50,
+    "distinct_ids": 50,
+    "null_ids": 0,
+    "all_match_format": true,
+    "slots_before": 1.0,
+    "slots_after": 1.0,
+    "queue_depth_after": 0.0,
+    "no_leaked_slots": true,
+    "fail_open_after": 0.0,
+    "sample_ids": [
+      "zs-dev-org-6ea294e4316e3432244f5966",
+      "zs-dev-org-c4a355a986e5576c0766d1a7",
+      "zs-dev-org-a3ebfb9e1e7af845fd57c159",
+      "zs-dev-org-ec20cbbd7936341ae16fb4a9",
+      "zs-dev-org-2c9d195f98b71b6327a5b504"
+    ]
+  }
+}

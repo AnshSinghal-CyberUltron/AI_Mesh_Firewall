@@ -1,0 +1,382 @@
+"""Non-streaming collect + output-enforce helpers (GW15, task 4.1).
+
+Split out of ``edge/openai_chat.py`` so the chat-surface module stays under the
+800-line module gate: this sibling owns the OUTPUT-side mechanics of the
+non-streaming path — draining the injected ``ProviderClient`` to the final event,
+scanning + resolving + enforcing every Output_Channel, and reducing the result to
+either the enforced ``(channel, text)`` deltas the renderer places into ONE OpenAI
+JSON body or a fail-closed value-code. ``ChatSurface.collect_and_render`` (in
+``edge/openai_chat.py``) is the thin public entry that calls :func:`collect_and_enforce`
+and then renders / withholds through the single ``edge/errors`` envelope.
+
+``edge`` is the top of the import-linter layer order, so this module may import
+``egress`` (the pure ``apply_decision`` + ``OutputBlocked``), ``dispatch`` (the
+``UpstreamRequest`` value + the injected ``ProviderClient`` surface), and its
+sibling ``edge`` modules. ``egress`` never names ``detect`` — the findings producer
+(``ChatRoute.error_scanner``) and the resolver (``ChatRoute.resolver``) arrive
+injected on the :class:`~gateway_v2.edge.routes.ChatRoute` bundle, in ``edge``,
+above ``detect`` (R7.5 / R14.1).
+
+**Fail closed everywhere.** A BLOCK disposition in any output channel withholds the
+whole body; an uncomputable scan / decision (an ``apply_decision`` ``ValueError`` on
+a partially-covered redaction span, or any scanner / resolver / provider raise) also
+withholds — the raw collected bytes are NEVER emitted when the decision could not be
+computed or blocks, and no branch increments ``fail_open_total`` (R8.3 / R8.4).
+
+**Import cycle.** ``ChatRoute`` lives in ``edge/routes.py`` which imports nothing
+from here at runtime; it is referenced only in annotations under
+:data:`typing.TYPE_CHECKING` (``from __future__ import annotations`` stringises
+every annotation), so no runtime circular import is formed.
+
+**No capacity literal, no module-level mutable.** The output-content channel name
+is a channel spelling, not a capacity-position literal; there is no module-level
+list / dict / set.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass
+from typing import TYPE_CHECKING
+
+from gateway_v2.detect.conditions import PolicyRegexRefusal
+from gateway_v2.dispatch.provider import UpstreamRequest
+from gateway_v2.domain.channels import META_CHANNELS
+from gateway_v2.domain.decision import Decision, Disposition, most_restrictive
+from gateway_v2.domain.failure_class import is_operational_failure
+from gateway_v2.domain.finding import Finding
+from gateway_v2.domain.plan import ExecutionPlan, Phase, Surface
+from gateway_v2.edge import errors
+from gateway_v2.edge.chat_upstream import open_chat_upstream
+from gateway_v2.edge.console_projection import apply_projection, console_from_holds
+from gateway_v2.edge.dev_components import bind_surface
+from gateway_v2.edge.incident_recheck import IncidentRecheckRefused, recheck_or_raise
+from gateway_v2.edge.output_detectors import build_output_detectors, needs_output_detectors
+from gateway_v2.edge.phase_resolvers import resolver_for
+from gateway_v2.edge.request_holds import RequestHolds
+from gateway_v2.edge.wire.openai import CanonicalRequest
+from gateway_v2.edge.wire.tool_stream import validate_tool_output
+from gateway_v2.egress.output_guard import OutputBlocked, apply_decision
+
+if TYPE_CHECKING:
+    from gateway_v2.edge.routes import ASGISend, ChatRoute
+
+__all__ = (
+    "EnforcedOutput",
+    "collect_and_enforce",
+    "emit_enforced_chat",
+    "ok_response",
+)
+
+#: The output-content channel a mid-stream provider ``error_frame`` folds into, so a
+#: provider error body is scanned as output content, never forwarded unscanned. The
+#: spelling the ``OpenAIResponseRenderer`` maps to ``message.content``. A channel name,
+#: not a capacity literal.
+_OUTPUT_CONTENT_CHANNEL = "output_content"
+
+
+class UpstreamFailed(Exception):
+    """The upstream call ended with a gateway-detected failure (``UpstreamEvent.gateway_error``)."""
+
+    def __init__(self, code: str) -> None:
+        super().__init__(code)
+        self.code = code
+
+# Non-streaming success-response shape (response-shape constants, NOT capacity literals).
+_OK_HTTP_STATUS = 200
+_JSON_MEDIA_TYPE = "application/json"
+_CONTENT_TYPE_HEADER = "content-type"
+#: Produced_Mode response header on the non-streaming chat path (GW13 C5/R5). A header name.
+_PRODUCED_MODE_HEADER = "x-amf-produced-mode"
+#: GW29: names a reroute on the non-streaming response (``isolation:<isolated>-><fallback>``).
+_ROUTING_REASON_HEADER = "x-amf-routing-reason"
+
+
+def ok_response(json_body: bytes, produced_mode: str) -> errors.HTTPResponse:
+    """Build the ``200`` non-streaming JSON response, stamping Produced_Mode (GW13 C5/R5).
+
+    The non-streaming path is strict-shaped by nature (the whole response is inspected
+    before any byte is emitted), so ``produced_mode`` is the plan's SELECTED
+    ``streaming_mode`` value (``incremental`` / ``strict_withhold``), carried as the
+    ``x-amf-produced-mode`` response header alongside the JSON content type so a caller
+    of the backend response path reads which mode produced the response (R5.1/R5.4).
+    """
+    return errors.HTTPResponse(
+        status=_OK_HTTP_STATUS,
+        body=json_body,
+        headers=(
+            (_CONTENT_TYPE_HEADER, _JSON_MEDIA_TYPE),
+            (_PRODUCED_MODE_HEADER, produced_mode),
+        ),
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class EnforcedOutput:
+    """The result of collecting + enforcing the non-streaming upstream (task 4.1).
+
+    Mirrors ``LifecycleOutcome``'s proceed/refuse discipline on the OUTPUT side:
+    ``refuse_code is None`` with the enforced ``(channel, text)`` ``deltas`` for the
+    renderer, OR a declared value-code (``REFUSE_OUTPUT_BLOCKED`` on a BLOCK,
+    ``REFUSE_INPUT_SCAN_FAILURE`` on an uncomputable scan/decision) with empty
+    ``deltas`` — the raw bytes are never emitted (fail closed, R8.3 / R8.4), and no
+    branch increments ``fail_open_total``. Frozen + slotted.
+    """
+
+    deltas: tuple[tuple[str, str], ...]
+    refuse_code: str | None
+    output_decision: Decision | None = None
+    #: GW29: set on an incident recheck refusal so the shared emitter renders ``Retry-After``.
+    retry_after_s: float | None = None
+
+
+async def collect_and_enforce(
+    deps: ChatRoute,
+    destination: str,
+    body: Mapping[str, object],
+    *,
+    org_id: str,
+    routed_model: str,
+    plan: ExecutionPlan | None = None,
+    holds: RequestHolds | None = None,
+    block_code: str,
+    scan_failure_code: str,
+    req: CanonicalRequest | None = None,
+) -> EnforcedOutput:
+    """Drain the provider, enforce every Output_Channel; fail closed (task 4.1).
+
+    Returns the enforced ``(channel, text)`` deltas on success, or a fail-closed
+    ``refuse_code`` — the raw collected bytes are never emitted when the decision
+    could not be computed or blocks. A BLOCK ⇒ ``block_code`` (R8.3); any other raise
+    (an ``apply_decision`` ``ValueError`` on a partially-covered span, a scanner /
+    resolver / provider raise) ⇒ ``scan_failure_code`` (R8.4). The two codes are
+    passed in by the caller so this helper carries no value-code spelling of its own
+    (one spelling source, in ``edge/openai_chat.py``). No branch increments
+    ``fail_open_total``.
+
+    ``plan`` is the request's pinned :class:`ExecutionPlan`: the per-channel output
+    guard resolves through it at ``Phase.OUTPUT`` (Group E) so a phase-aware route
+    folds only its output-scoped rules; a ``None`` plan (or an unset ``phase_resolvers``)
+    resolves through ``deps.resolver`` byte-identically (Preservation 3.3). ``holds`` is
+    the per-request :class:`RequestHolds` ledger: :func:`_collect_output_channels`
+    records ``mark_dispatched`` immediately before the provider is opened (Group D) so
+    the budget spend STANDS once the provider saw the request; it defaults to a fresh
+    per-call ledger so a shipped caller that passes none stays callable.
+
+    ``req`` (GW34) supplies the request's declared tool names and response format so the tool-call
+    output is validated (:func:`validate_tool_output`); a caller with no ``req`` (the Responses
+    adapter) declares no tools, so any tool call in the output is blocked.
+    """
+    if holds is None:
+        holds = RequestHolds()
+    try:
+        collected = await _collect_output_channels(
+            deps, destination, body, holds, org_id, routed_model, plan
+        )
+        deltas, decision = _enforce_channels(deps, plan, collected, holds)
+        failure = _validate_output(deps, plan, req, deltas)
+        if failure is not None:
+            return EnforcedOutput(deltas=(), refuse_code=failure, output_decision=decision)
+    except IncidentRecheckRefused as refused:
+        # GW29 (6.4): refused between phase 4b and the provider open; the holds are undispatched,
+        # so the spend is refunded by ``release``. One incident audit record, cause ``recheck``.
+        code = refused.verdict.refuse_code or ""
+        holds.note_incident_cause(
+            "recheck", underlying=code, retry_after_s=refused.verdict.retry_after_s
+        )
+        return EnforcedOutput(
+            deltas=(), refuse_code=code, retry_after_s=refused.verdict.retry_after_s
+        )
+    except PolicyRegexRefusal as refused:
+        return EnforcedOutput(deltas=(), refuse_code=refused.code)
+    except UpstreamFailed as failed:
+        holds.note_attempt_code(failed.code)
+        return EnforcedOutput(deltas=(), refuse_code=failed.code)
+    except OutputBlocked as blocked:
+        holds.note_attempt_code(block_code)
+        return EnforcedOutput(
+            deltas=(), refuse_code=block_code, output_decision=blocked.decision,
+        )
+    except Exception:  # noqa: BLE001 — fail closed: any uncomputable scan/decision withholds.
+        return EnforcedOutput(deltas=(), refuse_code=scan_failure_code)
+    return EnforcedOutput(deltas=deltas, refuse_code=None, output_decision=decision)
+
+
+async def _collect_output_channels(
+    deps: ChatRoute,
+    destination: str,
+    body: Mapping[str, object],
+    holds: RequestHolds,
+    org_id: str,
+    routed_model: str,
+    plan: ExecutionPlan | None = None,
+) -> tuple[tuple[str, str], ...]:
+    """Drain the provider to its final event, concatenating ``text_deltas`` per channel.
+
+    Reads the async event stream to exhaustion, concatenating each channel's fragments
+    in arrival order into one ``(channel, text)`` pair (first-seen channel order
+    preserved so the render is deterministic). A mid-stream ``error_frame`` is folded
+    into the output-content channel so a provider error body is scanned as content,
+    never forwarded unscanned.
+
+    ``holds.mark_dispatched()`` is recorded immediately before the provider is opened
+    (Group D): this is the non-streaming provider-open site, so once the request has
+    reached the provider the budget spend STANDS and is not refunded (C29).
+    """
+    order: list[str] = []
+    texts: dict[str, list[str]] = {}
+
+    def _append(channel: str, text: str) -> None:
+        if channel not in texts:
+            texts[channel] = []
+            order.append(channel)
+        texts[channel].append(text)
+
+    # GW29: re-check the ALREADY-ROUTED model ABOVE mark_dispatched, so a refusal is refunded (6.4).
+    recheck_or_raise(deps.incident_recheck, org_id=org_id, model=routed_model)
+    # The provider is about to be opened: record the dispatch so the spend stands (C29).
+    holds.mark_dispatched(routed_model)
+    async for event in open_chat_upstream(
+        deps, plan, UpstreamRequest(destination=destination, body=body), holds
+    ):
+        if event.gateway_error is not None:
+            raise UpstreamFailed(event.gateway_error)
+        for channel, delta in event.text_deltas:
+            _append(channel, delta)
+        if event.error_frame is not None:
+            _append(_OUTPUT_CONTENT_CHANNEL, event.error_frame)
+    return tuple((channel, "".join(texts[channel])) for channel in order)
+
+
+def _enforce_channels(
+    deps: ChatRoute,
+    plan: ExecutionPlan | None,
+    collected: tuple[tuple[str, str], ...],
+    holds: RequestHolds | None = None,
+) -> tuple[tuple[tuple[str, str], ...], Decision | None]:
+    """Scan + resolve + apply the output decision per channel (R8.1/R8.2).
+
+    For each collected ``(channel, text)`` pair: run ``deps.error_scanner`` (the
+    injected whole-text findings producer) over that channel's text, resolve via the
+    output resolver's ``decide`` (the C22 ``most_restrictive`` decision), and enforce
+    with ``apply_decision(text, decision, base_offset=0)``. Scanning per channel keeps
+    a finding's spans local to the channel the scanner saw, so a REDACT masks exactly
+    that output field's bytes and the enforced text stays in its own channel for the
+    renderer (channel fidelity, R8.2). A BLOCK raises ``OutputBlocked``; an
+    uncomputable scan / decision or a partially-covered span propagates — both handled
+    fail-closed by :func:`collect_and_enforce`.
+
+    Group E: when a ``plan`` is pinned the resolver is selected through
+    :func:`~gateway_v2.edge.phase_resolvers.resolver_for` bound to it at
+    ``Phase.OUTPUT``, so a phase-aware route folds only its output-scoped rules on the
+    response; a ``None`` plan (or an unset ``phase_resolvers``) uses ``deps.resolver``
+    byte-identically (Preservation 3.3 / 3.5).
+    """
+    resolver = deps.resolver if plan is None else resolver_for(deps, plan, Phase.OUTPUT)
+    scan = _whole_response_scanner(deps, plan, holds)
+    enforced: list[tuple[str, str]] = []
+    chosen: Decision | None = None
+    for channel, text in collected:
+        if channel in META_CHANNELS:  # not text: closed-set value, passed through unscanned
+            enforced.append((channel, text))
+            continue
+        decision = resolver.decide(list(scan(text)))
+        chosen = decision if chosen is None else _stricter_decision(chosen, decision)
+        enforced.append((channel, apply_decision(text, decision, base_offset=0)))
+    return tuple(enforced), chosen
+
+
+def _whole_response_scanner(
+    deps: ChatRoute, plan: ExecutionPlan | None, holds: RequestHolds | None
+) -> Callable[[str], Sequence[Finding]]:
+    """The GW09 scanner plus the plan's GW33 built-in detectors (IP leak, exfil, canary).
+
+    The streaming path builds the same set in ``ChatStream._build_pipeline``; without it a
+    non-streaming reply skipped them. Grounding stays streaming-only (async, needs context).
+    """
+    base = bind_surface(deps.error_scanner, Surface.CHAT)
+    if plan is None or not needs_output_detectors(plan):
+        return base
+    out = build_output_detectors(
+        plan, base=base, ticket=None if holds is None else holds.canary_ticket,
+        context_chunks=(), backend=None, contract=deps.contract, runner=None,
+    )
+    return out.whole_response or base
+
+
+def _validate_output(
+    deps: ChatRoute,
+    plan: ExecutionPlan | None,
+    req: CanonicalRequest | None,
+    enforced: tuple[tuple[str, str], ...],
+) -> str | None:
+    """Validate tool calls and JSON-mode content in the enforced output (GW34, D6/D9/D18)."""
+    template = None if req is None else req.upstream_template
+    declared = frozenset(tool.name for tool in (template.tools.tools if template else ()))
+    fmt = None if template is None else template.tools.response_format
+    resolver = deps.resolver if plan is None else resolver_for(deps, plan, Phase.OUTPUT)
+    scanner = bind_surface(deps.error_scanner, Surface.CHAT)
+
+    def decoded_clean_sync(text: str) -> bool:
+        decision = resolver.decide(list(scanner(text)))
+        return decision.disposition in (Disposition.ALLOW, Disposition.FLAG)
+
+    failure = validate_tool_output(
+        enforced,
+        declared=declared,
+        tools_declared=bool(declared),
+        bounds=getattr(deps, "tool_bounds", None),
+        json_mode=fmt is not None and fmt.type != "text",
+        decoded_clean_sync=decoded_clean_sync,
+    )
+    return None if failure is None else failure.code
+
+
+def _stricter_decision(current: Decision, new: Decision) -> Decision:
+    if most_restrictive((current.disposition, new.disposition)) is new.disposition:
+        return new
+    return current
+
+
+async def emit_enforced_chat(
+    send: ASGISend,
+    deps: ChatRoute,
+    req: CanonicalRequest,
+    plan: ExecutionPlan,
+    enforced: EnforcedOutput,
+    holds: RequestHolds,
+) -> None:
+    """Render the non-streaming reply with the console projection beside the OpenAI JSON.
+
+    The cause and the output action are recorded on ``holds`` first, so the response and the audit
+    record read the same facts. A fault (``UpstreamFailed``) is a ``failure_code`` only; a policy
+    refusal after dispatch with no decision (``output_blocked`` without one, ``scan_failure``)
+    also records a ``block`` output action.
+    """
+    from gateway_v2.edge.routes import emit_response
+
+    code = enforced.refuse_code
+    if code is not None:
+        holds.note_failure(code)
+    if enforced.output_decision is not None:
+        holds.note_output(enforced.output_decision)
+    elif code is not None and holds.dispatched and not is_operational_failure(code):
+        holds.note_output_action("block", code)
+    console = console_from_holds(holds, code)
+    if code is not None:
+        response = apply_projection(
+            errors.render_http(code, retry_after_s=enforced.retry_after_s), console
+        )
+        await emit_response(send, response)
+        return
+    json_body = deps.renderer.non_stream_body(req, enforced.deltas)
+    response = apply_projection(ok_response(json_body, plan.streaming_mode.value), console)
+    note = holds.reroute
+    if note is not None:
+        reason = f"isolation:{note.isolated_model}->{note.routed}"
+        response = errors.HTTPResponse(
+            status=response.status,
+            body=response.body,
+            headers=(*response.headers, (_ROUTING_REASON_HEADER, reason)),
+        )
+    await emit_response(send, response)

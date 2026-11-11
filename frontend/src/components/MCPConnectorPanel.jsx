@@ -33,6 +33,8 @@ import {
   X,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
+import { RetiredOnGatewayV2 } from "./RetiredOnGatewayV2";
+import { isRetiredResponse, retiredFromMessage, retiredPanelModel } from "../utils/retiredRoute.js";
 import { startVisibleInterval } from "../utils/visiblePoll.js";
 import { toAbsoluteGatewayUrl, resolveMcpGatewayBaseUrl } from "../utils/environmentUrls";
 import { ServerTier2Manager } from "./ServerTier2Manager";
@@ -383,6 +385,7 @@ function MCPConnectorPanelInner() {
   const [obsHours, setObsHours] = useState(24); // 0 = all-time, 1/24/168/720
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [retired, setRetired] = useState(null);
 
   /* ── servers ── */
   const [servers, setServers] = useState([]);
@@ -687,6 +690,8 @@ function MCPConnectorPanelInner() {
       const syncErr =
         syncData.error || syncData.last_sync_error || (!syncRes.ok ? `HTTP ${syncRes.status}` : null);
 
+      const syncRetired = retiredFromMessage(syncErr);
+      if (syncRetired) setRetired(syncRetired);
       if (syncErr || toolCount === 0) {
         // Failure (CP08) — clear inline error, modal stays open, user fixes + retries.
         setAddConnectError(
@@ -824,6 +829,8 @@ function MCPConnectorPanelInner() {
       }
       if (body.error || body.connection_status === "failed") {
         const errMsg = body.error || "upstream discovery error";
+        const gone = retiredFromMessage(errMsg);
+        if (gone) setRetired(gone);
         setError(`Sync failed for server: ${errMsg}`);
         toast(`Sync failed: ${errMsg}`, { tone: "error" });
         await loadServerTools(serverId);
@@ -1291,6 +1298,7 @@ function MCPConnectorPanelInner() {
         }),
       });
       const body = await res.json().catch(() => ({}));
+      if (isRetiredResponse(res.status, body)) setRetired(retiredPanelModel(body));
       if (!res.ok) {
         setExecuteResult({ ...body, error: true, status: res.status });
         throw new Error(formatExecutionError(body, res.status));
@@ -2667,6 +2675,7 @@ function MCPConnectorPanelInner() {
         />
       </div>
 
+      {retired ? <RetiredOnGatewayV2 model={retired} /> : null}
       {/* Error banner */}
       {error && (
         <div className="flex items-center gap-2 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 text-sm">

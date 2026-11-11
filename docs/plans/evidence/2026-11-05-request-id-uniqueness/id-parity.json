@@ -1,0 +1,19 @@
+{
+  "chat_stream": {
+    "x_request_id_header": "zs-dev-org-26dda473b39ca377dbe29861",
+    "sse_chunk_id": "chatcmpl-zs-dev-org-26dda473b39ca377dbe29861",
+    "header_equals_sse_start_id": true,
+    "note": "SSE chunk id is chatcmpl-{request_id}; the start header x-request-id carries the same request_id."
+  },
+  "chat_nonstream_allow": {
+    "x_request_id_header": null,
+    "body_zeroshield_request_id": "zs-dev-org-dc826348d30d6ec1a785fba0",
+    "note": "The 200 allow envelope sets NO x-request-id header (frozen GW35 golden shape); the id is in the body zeroshield.request_id and error.request_id. x-request-id IS set on block/error envelopes and on the SSE start."
+  },
+  "chat_block_envelope": {
+    "x_request_id_header": "zs-dev-org-e9606cf7494e67cdc4b39697",
+    "body_error_request_id": "zs-dev-org-e9606cf7494e67cdc4b39697",
+    "body_zeroshield_request_id": "zs-dev-org-e9606cf7494e67cdc4b39697",
+    "header_equals_body": true
+  }
+}

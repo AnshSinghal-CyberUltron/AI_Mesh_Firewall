@@ -1,0 +1,39 @@
+v2-enforcement-leaks — UNFIXED-TREE BASELINE (task 1)
+=====================================================
+Date:      2026-10-22 (date +%F)
+Tree:      HEAD 2f681545, no product-code changes (only untracked .kiro/specs/* in git status)
+Python:    3.12.3 (gateway_v2/.venv)
+cwd:       gateway_v2
+
+Gate G results
+--------------
+.venv/bin/python -m pytest -q -p no:cacheprovider
+    1948 passed, 95 skipped, 2 xfailed, 8 warnings in 878.47s (0:14:38)   exit 0
+    Matches the expected baseline 1948 / 95 / 2 exactly.
+    The 2 xfails (both strict=True):
+      - tests/edge/test_dev_profile_pipeline.py::test_input_redact_masks_pii_before_the_provider
+        (Group A; flips to PASS when the input REDACT fix lands)
+      - tests/state_control/test_r2_04_service.py::test_a_store_ahead_repair_settles_instead_of_looping
+        (R2-04 store_ahead; stays xfailed, out of scope)
+    Warnings: the known-benign R2-09 "coroutine 'BudgetLease._refill' was never awaited".
+
+.venv/bin/mypy --strict                                     Success: no issues found in 214 source files   exit 0
+.venv/bin/ruff check gateway_v2 state_control lint tests    All checks passed!                             exit 0
+.venv/bin/lint-imports                                      Contracts: 3 kept, 0 broken                    exit 0
+    (Gateway v2 layers / Resolve imports only domain / No HTTP framework outside edge)
+.venv/bin/python -m lint.check_capacity_literals gateway_v2         exit 0
+.venv/bin/python -m lint.check_no_module_mutable gateway_v2         exit 0
+.venv/bin/python -m lint.check_frozen_dataclasses gateway_v2        exit 0
+.venv/bin/python -m lint.check_http_outside_edge_resolve gateway_v2 exit 0
+.venv/bin/python -m lint.check_sizes gateway_v2                     exit 0
+.venv/bin/python -m lint.check_tenant_scale gateway_v2              exit 0
+.venv/bin/python -m lint.check_dispatch_provenance gateway_v2       exit 0
+
+Edge file-size ceilings (wc -l; edge steps must end at or below these)
+--------------------------------------------------------------------
+gateway_v2/gateway_v2/edge/openai_chat.py   800
+gateway_v2/gateway_v2/edge/openai_misc.py   799
+
+Final target (from tasks.md): every baseline test still passes + the flipped
+test_input_redact_masks_pii_before_the_provider + all new tests; 95 skipped; 1 xfailed
+(R2-04 store_ahead, unchanged); 0 failed.

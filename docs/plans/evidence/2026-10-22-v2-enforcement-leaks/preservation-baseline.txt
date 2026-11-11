@@ -1,0 +1,273 @@
+v2-enforcement-leaks — ADMISSION / BUDGET / LIFECYCLE PRESERVATION BASELINE (task 12)
+====================================================================================
+Property 2 (Preservation) / design Property 14. Clauses 3.10, 3.11, 3.12.
+Date:   2026-10-22
+Tree:   HEAD 2f681545 (suraj-revamp), UNFIXED. `git diff HEAD -- gateway_v2` is empty: no product
+        code or shipped test is modified. Only untracked phase-0 files exist (tasks 2-11 tests,
+        oracles, specs, evidence).
+cwd:    gateway_v2
+Runner: .venv/bin/python -m pytest -q -p no:cacheprovider <files>
+Rule:   the shipped suites are the preservation oracle and are run UNCHANGED.
+
+RESULT: PASS. 410 passed, 0 failed, 0 skipped, 0 xfailed across the five suites.
+
+1. Suites run (exact files, from globs under gateway_v2/tests/)
+---------------------------------------------------------------
+(a) test_lgw19_*  (tests/**/test_lgw19_*.py, 13 files)        99 passed   (103.6 s)
+    tests/admit/test_lgw19_admission.py      tests/admit/test_lgw19_backpressure.py
+    tests/admit/test_lgw19_codel.py          tests/admit/test_lgw19_drain.py
+    tests/admit/test_lgw19_edge_seam.py      tests/admit/test_lgw19_fairness.py
+    tests/admit/test_lgw19_grant.py          tests/admit/test_lgw19_harness.py
+    tests/admit/test_lgw19_metrics.py        tests/admit/test_lgw19_queues.py
+    tests/admit/test_lgw19_quota.py          tests/admit/test_lgw19_supervisor.py
+    tests/gates/test_lgw19_admit_capacity_literals.py
+
+(b) test_lgw06_*  (tests/**/test_lgw06_*.py, 14 files)        74 passed, 9 warnings (101.6 s)
+    tests/admit/test_lgw06_chunk_derivation.py      tests/admit/test_lgw06_failclosed.py
+    tests/admit/test_lgw06_gcra.py                  tests/admit/test_lgw06_generation.py
+    tests/admit/test_lgw06_grant.py                 tests/admit/test_lgw06_harness.py
+    tests/admit/test_lgw06_lease_conservation.py    tests/admit/test_lgw06_lease_no_multiplication.py
+    tests/admit/test_lgw06_metrics.py               tests/admit/test_lgw06_outage_posture.py
+    tests/admit/test_lgw06_refill_offpath.py        tests/admit/test_lgw06_retry_once.py
+    tests/runtime/test_lgw06_partition_regression.py tests/runtime/test_lgw06_store_keys.py
+    The 9 warnings are all the known-benign R2-09 "coroutine 'BudgetLease._refill' was never
+    awaited" RuntimeWarning (undrained single-flight refill coroutines), plus the pytest
+    resource-warning footer. Not failures.
+
+(c) test_lgw15_*  (tests/**/test_lgw15_*.py, 14 files)        121 passed  (71.7 s)
+    tests/edge/test_lgw15_app.py        tests/edge/test_lgw15_dispatch.py
+    tests/edge/test_lgw15_errors.py     tests/edge/test_lgw15_exports.py
+    tests/edge/test_lgw15_fold.py       tests/edge/test_lgw15_inflight.py
+    tests/edge/test_lgw15_input_block.py tests/edge/test_lgw15_isolation.py
+    tests/edge/test_lgw15_lifecycle.py  tests/edge/test_lgw15_nonstream.py
+    tests/edge/test_lgw15_openai_codec.py tests/edge/test_lgw15_output.py
+    tests/edge/test_lgw15_refusal.py    tests/edge/test_lgw15_stream.py
+
+(d) GW13  (tests/**/*gw13*.py, 1 file)                        26 passed   (0.6 s)
+    tests/egress/test_output_streaming_modes_gw13.py
+    (The only GW13-owned suite. Other files mention "GW13" only in comments: lgw12 ASGI
+    conformance, lgw15 inflight/nonstream, lgw19 backpressure, plan lgw05/lgw05c, and the
+    openai_conformance wire_contract helper. Those run under their own suites.)
+
+(e) GW16  (tests/**/test_gw16_*.py + tests/**/test_lgw16_*.py, 22 files)   90 passed (39.9 s)
+    tests/domain/test_gw16_channels.py
+    tests/edge/test_gw16_app.py              tests/edge/test_gw16_batch_index.py
+    tests/edge/test_gw16_category_fidelity.py tests/edge/test_gw16_codec.py
+    tests/edge/test_gw16_embeddings_block.py tests/edge/test_gw16_embeddings_smoke.py
+    tests/edge/test_gw16_errors.py           tests/edge/test_gw16_exports.py
+    tests/edge/test_gw16_failclosed.py       tests/edge/test_gw16_fold.py
+    tests/edge/test_gw16_identity.py         tests/edge/test_gw16_lifecycle.py
+    tests/edge/test_gw16_malformed.py        tests/edge/test_gw16_matcher_edges.py
+    tests/edge/test_gw16_misc_units.py       tests/edge/test_gw16_models.py
+    tests/edge/test_gw16_models_list.py      tests/edge/test_gw16_moderations_smoke.py
+    tests/edge/test_gw16_routes.py           tests/edge/test_lgw16_misc_envelope.py
+    tests/openai_conformance/test_gw16_misc_surface_v2.py
+    test_gw16_embeddings_block.py run on its own as well: 3 passed (9.7 s).
+
+Totals: 99 + 74 + 121 + 26 + 90 = 410 passed.
+
+Supplementary, current status of the dev-profile tests (named in section 3, run unchanged):
+    tests/edge/test_dev_profile_boot.py, tests/edge/test_dev_profile_components.py,
+    tests/edge/test_dev_profile_pipeline.py, tests/openai_conformance/test_dev_profile_live.py
+    -> 69 passed, 1 xfailed (2.2 s). The xfail is the strict
+    test_dev_profile_pipeline.py::test_input_redact_masks_pii_before_the_provider (Group A).
+
+2. Behaviour -> pinning tests (observed PASS on the unfixed tree)
+------------------------------------------------------------------
+3.10a  Shed verdict: ShedVerdict value, code OVERLOAD_SHED, jittered Retry-After >= 1 s,
+       x-should-retry: false
+  - tests/admit/test_lgw19_edge_seam.py::test_edge_renders_503_from_shed_verdict
+      seeded property: HTTP 503, Retry-After == ceil(retry_after_s) and >= 1,
+      headers["x-should-retry"] == "false", verdict.should_retry is False, request_id echoed
+      in the body, body code == OVERLOAD_SHED.
+  - tests/admit/test_lgw19_edge_seam.py::test_retry_after_ceiling_is_at_least_the_floor
+  - tests/admit/test_lgw19_edge_seam.py::test_shed_verdict_is_the_only_overload_surface
+  - tests/admit/test_lgw19_edge_seam.py::test_admit_grant_imports_no_http_framework
+  - tests/admit/test_lgw19_edge_seam.py::test_admit_admission_imports_no_http_framework
+  - tests/admit/test_lgw19_grant.py::test_property5_retry_after_floor_and_should_retry
+  - tests/admit/test_lgw19_grant.py::test_property5_retry_after_floor_across_many_seeds
+  - tests/admit/test_lgw19_grant.py::test_jitter_varies_across_seeds_within_bounds
+  - tests/admit/test_lgw19_grant.py::test_jitter_frac_bounds_are_respected
+  - tests/admit/test_lgw19_grant.py::test_min_retry_after_imported_not_redefined
+  - tests/admit/test_lgw19_admission.py::test_shed_verdict_carries_a_floored_jittered_retry_after
+      controller-level: retry_after_s >= MIN_RETRY_AFTER_S and never in the 6-11 ms band.
+  - tests/admit/test_lgw19_admission.py::test_property1_shedding_only_at_admission
+  - tests/admit/test_lgw19_admission.py::test_property10_full_queue_sheds_at_the_door_and_never_fails_open
+  - tests/admit/test_lgw19_admission.py::test_property10_undecidable_path_sheds_fail_closed
+      (code OVERLOAD_SHED, should_retry False, fail_open_total 0)
+  - tests/admit/test_lgw19_admission.py::test_fail_open_total_stays_zero_across_an_overload_burst
+  - tests/admit/test_lgw19_harness.py::test_g06_local_amplification_below_bound_vs_6_to_11ms_baseline
+  - tests/admit/test_lgw19_harness.py::test_property8_retry_amplification_bound
+  - Lifecycle side (edge refuses with the verdict's own code, provider not opened):
+      tests/edge/test_lgw15_lifecycle.py::test_wiring_undecidable_admission_fails_closed_to_shed
+      tests/edge/test_lgw15_refusal.py::test_property_8_pre_provider_refusal_short_circuits_the_provider
+      tests/edge/test_lgw15_exports.py::test_property_20_terminal_outcomes_populate_content_free_exports_fail_open_zero
+      tests/edge/test_gw16_embeddings_block.py::test_property_9_pre_provider_refusal_short_circuits_the_provider
+
+3.10b  SIGTERM drain state machine (ACCEPTING -> DRAINING -> ... -> EXITED), declared
+       terminations never truncated, exactly the unfinished streams terminated
+  - tests/admit/test_lgw19_drain.py::test_property7_every_unfinished_stream_gets_a_declared_termination
+      seeded property: terminated == registered - finished, every termination is a
+      DeclaredTermination with truncated is False, no finished stream terminated.
+  - tests/admit/test_lgw19_drain.py::test_starts_in_accepting_and_sigterm_moves_to_draining_then_exits
+  - tests/admit/test_lgw19_drain.py::test_drain_publishes_duration_measured_on_the_injected_clock
+  - tests/admit/test_lgw19_drain.py::test_audit_queue_is_flushed_before_exit
+  - tests/admit/test_lgw19_drain.py::test_declared_terminations_are_ordered_by_stream_id
+  Note: the drain tests drive register_stream / finish_stream, which task 23.2 leaves unchanged.
+
+3.10c  Queue bound, CoDel and per-owner fairness (shed semantics that 23.1/23.2 touch)
+  - tests/admit/test_lgw19_queues.py::test_property4_depth_never_exceeds_declared_max
+  - tests/admit/test_lgw19_queues.py::test_property4_overfull_enqueue_sheds_at_the_door
+  - tests/admit/test_lgw19_queues.py::test_depth_tracks_offer_and_pop
+  - tests/admit/test_lgw19_fairness.py::test_property3_saturating_owner_does_not_change_a_peers_shed_decisions
+  - tests/admit/test_lgw19_fairness.py::test_property3_per_owner_state_is_isolated
+  - tests/admit/test_lgw19_codel.py (all 15 tests, incl. test_no_twelve_ms_instantaneous_bound,
+    test_prompt_size_independence_signature, test_hard_cap_sheds_regardless_of_backoff_state)
+  - tests/admit/test_lgw19_supervisor.py::test_isolate_removes_only_the_crashed_workers_slots
+  - tests/admit/test_lgw19_harness.py::test_lgw19_1_three_times_q_safe_sheds_bounds_p99_and_memory
+  - tests/admit/test_lgw19_harness.py::test_lgw19_4_concurrency_cap_binds_and_is_observable
+
+3.11a  Lease outage: spend the Remaining_Lease, then refuse quota only with budget_unavailable,
+       never shared_state_unavailable
+  - tests/admit/test_lgw06_outage_posture.py::test_property4_outage_spends_remaining_then_budget_unavailable
+      partitioned store: exactly `held` admits, then verdict.code == BUDGET_UNAVAILABLE and
+      != SHARED_STATE_UNAVAILABLE.
+  - tests/admit/test_lgw06_outage_posture.py::test_property4_long_run_posture_is_always_narrow
+  - tests/admit/test_lgw06_harness.py::test_r2_09_partition_spends_remaining_then_budget_unavailable
+  - tests/runtime/test_lgw06_partition_regression.py::test_r2_09_partition_spends_remaining_then_budget_unavailable_no_request_path_read
+  - tests/admit/test_lgw06_grant.py::test_budget_verdict_defaults_carry_the_narrow_posture
+  - tests/admit/test_lgw06_grant.py::test_budget_verdict_reuses_shared_posture_code
+  - tests/admit/test_lgw06_grant.py::test_budget_verdict_retry_after_floors_at_min_with_periods
+  - tests/admit/test_lgw06_grant.py::test_budget_verdict_constructs_no_http_object
+  - tests/admit/test_lgw06_failclosed.py::test_stale_generation_lease_is_unspendable
+  - tests/admit/test_lgw06_failclosed.py::test_undecidable_decision_fails_closed
+  - tests/admit/test_lgw06_generation.py::test_property3_stale_generation_is_never_spent
+  - Lifecycle side: tests/edge/test_lgw15_refusal.py::test_property_8_pre_provider_refusal_short_circuits_the_provider
+    and tests/edge/test_gw16_embeddings_block.py::test_property_9_pre_provider_refusal_short_circuits_the_provider
+    (budget arm refuses BUDGET_UNAVAILABLE with zero provider calls).
+
+3.11b  No store I/O on the request path
+  - tests/admit/test_lgw06_refill_offpath.py::test_property5_no_store_call_on_the_request_path
+      client.request_path_calls == 0 after every try_spend, including while a refill is in flight.
+  - tests/admit/test_lgw06_harness.py::test_lgw06_5_injected_latency_bounded_and_posture_holds
+      (200 ms injected latency: request path opens 0 connections, posture holds)
+  - tests/runtime/test_lgw06_partition_regression.py::test_r2_09_partition_spends_remaining_then_budget_unavailable_no_request_path_read
+  - tests/admit/test_lgw06_retry_once.py (6 tests: retry-once on idempotent reads only; mutating
+    acquire/return never retried)
+
+3.11c  Async refill at the low watermark, single-flight
+  - tests/admit/test_lgw06_refill_offpath.py::test_property5_no_store_call_on_the_request_path
+      (refills_driven >= 1, i.e. the watermark path is exercised; async_refill metric == driven)
+  - tests/admit/test_lgw06_refill_offpath.py::test_property5_single_flight_during_in_progress_refill
+      (first watermark cross schedules exactly one refill; none while in flight)
+  - tests/admit/test_lgw06_chunk_derivation.py::test_watermark_is_function_of_chunk_only
+  - tests/admit/test_lgw06_chunk_derivation.py::test_watermark_sub_unit_chunk_refuses
+  - tests/admit/test_lgw06_chunk_derivation.py::test_watermark_examples
+  - tests/admit/test_lgw06_metrics.py::test_observe_async_refill_increments_only_refill_total
+
+3.11d  No multiplication of the org budget by worker or replica count; conservation
+  - tests/admit/test_lgw06_lease_no_multiplication.py::test_property1_no_replica_multiplication
+  - tests/admit/test_lgw06_lease_no_multiplication.py::test_property1_total_admission_cannot_exceed_pool_plus_held
+  - tests/admit/test_lgw06_harness.py::test_lgw06_3_multi_replica_no_quota_multiplication
+  - tests/admit/test_lgw06_lease_conservation.py::test_property2_budget_is_conserved_across_shutdown_and_crash
+  - tests/admit/test_lgw06_lease_conservation.py::test_property2_clean_shutdown_returns_the_exact_remainder
+  - tests/admit/test_lgw06_chunk_derivation.py::test_property9_chunk_is_pure_function_of_contract_and_qsafe
+  - tests/admit/test_lgw06_chunk_derivation.py::test_property9_chunk_bounded_by_contract_in_flight_depth
+      (task 23.4 keeps derive_lease_chunk unchanged, so these stay as-is.)
+  - tests/admit/test_lgw06_gcra.py (6 tests: local GCRA, no store round trip)
+  - tests/runtime/test_lgw06_store_keys.py (8 tests: {rv2} hash-tag, one slot per org)
+
+3.12   Refusal request_id echo (pinned in the shipped suites where it exists)
+  - tests/admit/test_lgw19_edge_seam.py::test_edge_renders_503_from_shed_verdict
+      (post-identity shed echoes the zs- request_id in the body)
+  - tests/edge/test_lgw15_lifecycle.py::test_wiring_quota_evaluate_is_called
+      (budget phase receives the gateway-minted zs- id; cost is a non-negative int, which
+      still holds under the token estimate because the estimate is >= 1)
+  - tests/edge/test_lgw15_lifecycle.py::test_property_5_pre_identity_pre_checks_reject_before_canonicalization
+  - tests/edge/test_lgw15_lifecycle.py::test_property_6_exactly_one_shared_state_round_trip
+  - tests/edge/test_lgw15_lifecycle.py::test_property_7_unresolvable_or_stale_identity_fails_closed
+  - tests/edge/test_lgw15_errors.py::test_property_18_every_value_code_renders_through_single_error_envelope
+  - tests/edge/test_gw16_errors.py::test_property_15_every_gw16_value_code_renders_through_single_error_envelope
+  - tests/edge/test_gw16_identity.py::test_property_8_unresolvable_or_stale_identity_fails_closed
+  The null-pre-identity / zs-post-identity echo is pinned end to end by the task-11 test
+  tests/edge/test_v2_leaks_enforcement_preservation.py. The default fail-closed boot table is
+  pinned by tests/edge/test_dev_profile_boot.py::test_default_boot_is_exactly_the_shipped_fail_closed_table.
+
+3.16   Embeddings BLOCK unchanged
+  - tests/edge/test_gw16_embeddings_block.py::test_property_5_block_embeddings_input_yields_zero_provider_calls
+  - tests/edge/test_gw16_embeddings_block.py::test_property_6_block_is_most_restrictive_disposition_end_to_end
+  - tests/edge/test_gw16_embeddings_block.py::test_property_9_pre_provider_refusal_short_circuits_the_provider
+
+Observation: no shipped LGW15 / GW13 / GW16 test uses a real AdmissionController, reads
+queue_report() or _in_flight, or asserts that complete() is never called. The edge suites
+therefore do not pin defect D; only their admission/budget FAKES are affected (see 3c).
+
+3. Shipped tests that encode the defect (NOT changed here; reconciled later)
+----------------------------------------------------------------------------
+Pytest node ids are given exactly as collected.
+
+3a. Task 23.4 (admit layer, Group D):
+  - tests/admit/test_lgw19_admission.py::test_property1_every_admitted_request_is_tracked_and_completes
+      lines 104-107:
+          ctl.complete(rid)
+          assert ctl._in_flight[rid].finished is True
+      Encodes the never-pruned in-flight record (1.11). After 23.2 the record is pruned, so this
+      line raises KeyError. Reconcile to `assert rid not in ctl._in_flight`. Keep the line-95
+      `rid in ctl._in_flight` pre-complete check and the admitted_total check as they are.
+  Watch item, no change expected:
+  - tests/admit/test_lgw19_admission.py::test_fail_open_total_stays_zero_across_an_overload_burst
+      calls ctl.complete(f"r{k}") on ids that may have been SHED (unknown ids). Today each such
+      call pops a foreign slot (defect 1.11). After 23.2 those calls are no-ops, so the depth-16
+      queue fills more and sheds more QUEUE_FULL. The only assertion is fail_open_total == 0,
+      which still holds. Re-run it at 23.7; do not weaken it.
+
+3b. Task 27.4 (dev-profile cleanup, Groups D/E/F):
+  - tests/edge/test_dev_profile_components.py::test_bad_plan_file_refuses_to_start[body5-scope='input']
+      (design/tasks write it as "[scope='input']"; the collected id is "[body5-scope='input']",
+      parametrize case at lines 146-150). Encodes 1.14: refuses a scope-input plan. Becomes a
+      positive boot test.
+  - tests/edge/test_dev_profile_boot.py::test_served_app_releases_admission_slots_per_request
+      (line 257). Encodes the DevServedApp per-request slot wrapper (1.12). Replace with the
+      lifecycle-level slot test.
+  - tests/edge/test_dev_profile_boot.py::test_lease_budget_admits_until_the_pool_is_spent_then_refuses
+      (line 284). Encodes 1 unit per request: LeaseSettings(pool_requests=3), evaluate(10_000)
+      admits 3 then refuses (1.15/2.18). Switch to a token pool and token cost.
+  - tests/edge/test_dev_profile_boot.py::test_dev_boot_wires_real_components_and_logs_each_loudly
+      (line 150). Asserts isinstance(deps["admission"], DevCompletingAdmission), the old boot
+      log strings, and isinstance(serve._assemble_app(deps), DevServedApp). Update for 27.1-27.3.
+  Also touched by 27.1/27.3 but NOT in the design's reconciliation table (add them to 27.4):
+  - tests/edge/test_dev_profile_boot.py::test_served_app_drives_lease_startup_on_lifespan
+      (line 305). Uses LeaseSettings(pool_requests=2) and asserts the boot line
+      "boot: DEV PROFILE budget lease acquire=ok held=2" (request units). Breaks on the
+      pool_requests -> pool tokens rename.
+  - tests/edge/test_dev_profile_boot.py::test_bare_controller_wedges_without_complete_documenting_the_lifecycle_gap
+      (line 243). Documents the D gap; built through _admission() -> build_dev_admission(),
+      typed DevCompletingAdmission. Its assertion (a bare controller admitting without
+      complete sheds after request_depth) still holds after the fix, but its helper and
+      docstring depend on DevCompletingAdmission, which 27.1 changes.
+  - tests/openai_conformance/test_dev_profile_live.py::test_lease_budget_refuses_once_the_pool_is_spent
+      (line 243; fixture lease_live, line 229 sets AMF_DEV_BUDGET_POOL_REQUESTS="3"). Runs in the
+      offline suite (passed here). After 27.3 that env name refuses to start, so the fixture must
+      move to AMF_DEV_BUDGET_POOL_TOKENS with a token pool.
+
+3c. Protocol-extension touch points (not defect encodings; design table "admission and budget
+    test doubles"). Files whose fakes implement `async def admit(` but no complete/refund:
+      tests/edge/_chat_lifecycle_fixtures.py
+      tests/edge/test_gw16_embeddings_block.py   tests/edge/test_gw16_embeddings_smoke.py
+      tests/edge/test_gw16_exports.py            tests/edge/test_gw16_failclosed.py
+      tests/edge/test_gw16_lifecycle.py          tests/edge/test_lgw15_exports.py
+      tests/edge/test_lgw15_input_block.py       tests/edge/test_lgw15_isolation.py
+      tests/edge/test_lgw15_lifecycle.py         tests/edge/test_lgw15_output.py
+      tests/edge/test_lgw15_refusal.py
+    They gain no-op complete/refund only if the edge protocol requires them. Their assertions
+    must not change.
+
+3d. Already-known strict xfail (Group A, flips in the input-REDACT fix, not 23.4/27.4):
+  - tests/edge/test_dev_profile_pipeline.py::test_input_redact_masks_pii_before_the_provider
+
+4. Outcome
+----------
+EXPECTED OUTCOME: PASS. OBSERVED: PASS (410/410 across LGW19, LGW06, LGW15, GW13, GW16).
+These five suites, unchanged apart from the 3a reconciliation and the 3c protocol doubles, are
+the preservation oracle for 3.10 / 3.11 / 3.12 at the 23.7 and 27.5 checkpoints and in the
+Group D / F verification tasks (30, 34).

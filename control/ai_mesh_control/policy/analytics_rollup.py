@@ -27,6 +27,7 @@ from policy.firewall_module_classifier import (
     specialty_modules_for_event,
 )
 from policy.models import EnforcementEvent
+from policy.v2_shadow import exclude_shadow
 
 ROLLUP_PERIODS = frozenset({"24h", "7d", "30d"})
 # security_risk_score is DELIBERATELY absent from both key sets. The gateway
@@ -165,8 +166,10 @@ def refresh_org_rollups(org_id: int, hours: int = 24 * 30) -> None:
     # [covered_from, since) were then in neither the facts nor the raw edge and
     # simply vanished from the oldest bucket of every 30d chart.
     covered_from = _hour_floor(since)
-    events = EnforcementEvent.objects.filter(
-        organization_id=org_id, created_at__gte=covered_from
+    events = exclude_shadow(
+        EnforcementEvent.objects.filter(
+            organization_id=org_id, created_at__gte=covered_from
+        )
     )
     qs = annotate_request_key(
         annotate_numeric_float(
@@ -265,9 +268,13 @@ def refresh_org_rollups(org_id: int, hours: int = 24 * 30) -> None:
 
 
 def _edge_events(org_id, since, first_full, last_hour):
-    return EnforcementEvent.objects.using(ANALYTICS_DB_ALIAS).filter(
-        organization_id=org_id,
-    ).filter(Q(created_at__gte=since, created_at__lt=first_full) | Q(created_at__gte=last_hour))
+    return exclude_shadow(
+        EnforcementEvent.objects.using(ANALYTICS_DB_ALIAS).filter(
+            organization_id=org_id,
+        ).filter(
+            Q(created_at__gte=since, created_at__lt=first_full) | Q(created_at__gte=last_hour)
+        )
+    )
 
 
 def _mttr_minutes(org_id, since):
@@ -372,8 +379,10 @@ def soc_kpis_from_rollup(org_id: int, since):
     now = timezone.now()
     first_full, last_hour = _rollup_hour_bounds(org_id, since, now)
     if first_full >= last_hour:
-        events = EnforcementEvent.objects.using(ANALYTICS_DB_ALIAS).filter(
-            organization_id=org_id, created_at__gte=since
+        events = exclude_shadow(
+            EnforcementEvent.objects.using(ANALYTICS_DB_ALIAS).filter(
+                organization_id=org_id, created_at__gte=since
+            )
         )
         return soc_kpis_from_events(events)
 
@@ -502,8 +511,10 @@ def module_kpis_from_rollup(org_id: int, since) -> dict:
     # facts with no upper bound here would double-count against the edge below.
     if first_full >= last_hour:
         for ev in _module_groups_from_events(
-            EnforcementEvent.objects.using(ANALYTICS_DB_ALIAS).filter(
-                organization_id=org_id, created_at__gte=since
+            exclude_shadow(
+                EnforcementEvent.objects.using(ANALYTICS_DB_ALIAS).filter(
+                    organization_id=org_id, created_at__gte=since
+                )
             )
         ):
             _accumulate_module(modules, ev["action"], ev["meta"], ev["n"])
@@ -546,8 +557,10 @@ def _trend_rows(org_id, since, now, bucket_minutes):
             yield ev.get("hour"), ev["action"], ev.get("meta") or {}, int(ev.get("n") or 0)
         edge = _edge_events(org_id, since, first_full, last_hour)
     else:
-        edge = EnforcementEvent.objects.using(ANALYTICS_DB_ALIAS).filter(
-            organization_id=org_id, created_at__gte=since
+        edge = exclude_shadow(
+            EnforcementEvent.objects.using(ANALYTICS_DB_ALIAS).filter(
+                organization_id=org_id, created_at__gte=since
+            )
         )
     edge = edge.annotate(_bidx=bucket_index_expr(since, bucket_minutes))
     for ev in _module_groups_from_events(edge, extra_values=("_bidx",)):

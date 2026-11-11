@@ -1,0 +1,299 @@
+/tmp/gw32venv/lib/python3.12/site-packages/pytest_asyncio/plugin.py:300: PytestDeprecationWarning: The configuration option "asyncio_default_fixture_loop_scope" is unset.
+The event loop scope for asynchronous fixtures will default to the "fixture" caching scope. Future versions of pytest-asyncio will default the loop scope for asynchronous fixtures to "function" scope. Set the default fixture loop scope explicitly in order to avoid unexpected behavior in the future. Valid fixture loop scopes are: "function", "class", "module", "package", "session"
+
+  warnings.warn(PytestDeprecationWarning(_DEFAULT_FIXTURE_LOOP_SCOPE_UNSET))
+........................................................................ [  2%]
+........................................................................ [  4%]
+........................................................................ [  6%]
+........................................................................ [  8%]
+........................................................................ [ 10%]
+........................................................................ [ 12%]
+.........sssssssssssssssss.............................................. [ 15%]
+........................................................................ [ 17%]
+........................................................................ [ 19%]
+........................................................................ [ 21%]
+........................................................................ [ 23%]
+.............ss......................................................... [ 25%]
+........................................................................ [ 27%]
+........................................................................ [ 30%]
+........................................................................ [ 32%]
+........................................................................ [ 34%]
+........sssss........................................................... [ 36%]
+........................................................................ [ 38%]
+........................................................................ [ 40%]
+........................................................................ [ 42%]
+........................................................................ [ 45%]
+........................................................................ [ 47%]
+........................................................................ [ 49%]
+........................................................................ [ 51%]
+........................................................................ [ 53%]
+........................................................................ [ 55%]
+........................................................................ [ 57%]
+........................................................................ [ 60%]
+........................................................................ [ 62%]
+........................................................................ [ 64%]
+..........................F............................................. [ 66%]
+........................................................................ [ 68%]
+........................................................................ [ 70%]
+......................................................sss............... [ 72%]
+........................................................................ [ 75%]
+..................................ssss.................................. [ 77%]
+........................................................................ [ 79%]
+........................................................................ [ 81%]
+........................................................................ [ 83%]
+.................................................sssssssssssss.......... [ 85%]
+........................................................................ [ 87%]
+........................................................................ [ 90%]
+.................ssss................................................... [ 92%]
+........................................................................ [ 94%]
+....sssssssssssssssssssssssssssssssssssssssssssssssssssss............... [ 96%]
+........................................................................ [ 98%]
+..sssss....................................                              [100%]
+=================================== FAILURES ===================================
+_____________________ test_the_shipped_data_plane_is_clean _____________________
+
+    def test_the_shipped_data_plane_is_clean() -> None:
+>       assert scan_tree(_PKG) == []
+E       AssertionError: assert [TenantScaleV... O(changes)')] == []
+E         
+E         Left contains one more item: TenantScaleViolation(path='/work/suraj/AI_Mesh_Firewall/.worktrees/gw32/gateway_v2/gateway_v2/dispatch/vector_transports/pinecone_transport.py', symbol='keys', line=140, reason='whole-collection store read: cannot be O(changes)')
+E         Use -v to get more diff
+
+tests/gates/test_check_tenant_scale.py:190: AssertionError
+=============================== warnings summary ===============================
+tests/admit/test_gw32_policy_cap.py::test_property_4_retry_after_bounds
+  /tmp/gw32venv/lib/python3.12/site-packages/redis/asyncio/client.py:1905: RuntimeWarning: coroutine 'CallCapTable._acquire' was never awaited
+    return self.immediate_execute_command(*args, **kwargs)
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/admit/test_gw32_policy_cap.py::test_property_4_retry_after_bounds
+tests/admit/test_gw36_s4_budget_isolation_property.py::test_property1_per_org_budget_isolation_and_owner_attribution
+  /tmp/gw32venv/lib/python3.12/site-packages/fakeredis/_core/_database.py:147: RuntimeWarning: coroutine 'CallCapTable._acquire' was never awaited
+    def __init__(self, key: bytes, db: Database, item: CommandItem | None = None, default: Any = None) -> None:
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/admit/test_gw32_policy_cap.py::test_property_4_retry_after_bounds
+  /tmp/gw32venv/lib/python3.12/site-packages/redis/_parsers/resp3.py:167: RuntimeWarning: coroutine 'CallCapTable._acquire' was never awaited
+    def __init__(self, socket_read_size):
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/admit/test_gw32_policy_cap.py::test_property_4_retry_after_bounds
+  /tmp/gw32venv/lib/python3.12/site-packages/redis/asyncio/connection.py:829: RuntimeWarning: coroutine 'CallCapTable._acquire' was never awaited
+    async def connect_check_health(
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/admit/test_gw32_policy_cap.py::test_property_4_retry_after_bounds
+  /tmp/gw32venv/lib/python3.12/site-packages/redis/event.py:228: RuntimeWarning: coroutine 'CallCapTable._acquire' was never awaited
+    def __init__(
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/admit/test_gw32_policy_cap.py::test_property_4_retry_after_bounds
+  /tmp/gw32venv/lib/python3.12/site-packages/redis/asyncio/connection.py:176: RuntimeWarning: coroutine 'CallCapTable._acquire' was never awaited
+    self._processed_start_maint_notifications: set[int] = set()
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/admit/test_gw32_policy_cap.py::test_property_4_retry_after_bounds
+  /tmp/gw32venv/lib/python3.12/site-packages/fakeredis/_commands.py:75: RuntimeWarning: coroutine 'CallCapTable._acquire' was never awaited
+    for i, (arg, type_) in enumerate(zip(args_list, types)):
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/admit/test_gw32_policy_cap.py::test_property_4_retry_after_bounds
+  /tmp/gw32venv/lib/python3.12/site-packages/fakeredis/_socket/_base.py:64: RuntimeWarning: coroutine 'CallCapTable._acquire' was never awaited
+    info = dict(kwargs.pop("client_info", None) or {})
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/admit/test_gw32_policy_cap.py::test_property_4_retry_after_bounds
+  /tmp/gw32venv/lib/python3.12/site-packages/redis/asyncio/connection.py:2646: RuntimeWarning: coroutine 'CallCapTable._acquire' was never awaited
+    self._in_use_connections: Set[AbstractConnection] = set()
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/admit/test_gw32_policy_cap.py::test_property_4_retry_after_bounds
+  /work/suraj/AI_Mesh_Firewall/.worktrees/gw32/gateway_v2/gateway_v2/admit/mcp_cap.py:113: RuntimeWarning: coroutine 'CallCapTable._acquire' was never awaited
+    def __init__(
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/admit/test_gw32_policy_cap.py::test_property_4_retry_after_bounds
+  /usr/lib/python3.12/threading.py:277: RuntimeWarning: coroutine 'CallCapTable._acquire' was never awaited
+    def __init__(self, lock=None):
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/admit/test_gw32_policy_cap.py::test_property_4_retry_after_bounds
+  /tmp/gw32venv/lib/python3.12/site-packages/redis/event.py:387: RuntimeWarning: coroutine 'CallCapTable._acquire' was never awaited
+    def __init__(self):
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/admit/test_gw32_policy_cap.py::test_property_4_retry_after_bounds
+  /tmp/gw32venv/lib/python3.12/site-packages/fakeredis/_socket/_base.py:264: RuntimeWarning: coroutine 'CallCapTable._acquire' was never awaited
+    for db in self._server.dbs.values():
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/admit/test_gw32_policy_cap.py::test_property_4_retry_after_bounds
+tests/admit/test_gw32_policy_cap.py::test_cap_outage_property
+  /tmp/gw32venv/lib/python3.12/site-packages/redis/utils.py:202: RuntimeWarning: coroutine 'CallCapTable._acquire' was never awaited
+    filterable_args = dict(zip(arg_names, args))
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/admit/test_gw32_policy_cap.py::test_property_4_retry_after_bounds
+  /tmp/gw32venv/lib/python3.12/site-packages/redis/utils.py:254: RuntimeWarning: coroutine 'CallCapTable._acquire' was never awaited
+    @wraps(func)
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/admit/test_gw32_policy_cap.py::test_property_4_retry_after_bounds
+  /tmp/gw32venv/lib/python3.12/site-packages/redis/asyncio/maint_notifications.py:92: RuntimeWarning: coroutine 'CallCapTable._acquire' was never awaited
+    self._processed_notifications: set[MaintenanceNotification] = set()
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/admit/test_gw32_policy_cap.py::test_property_4_retry_after_bounds
+  /usr/lib/python3.12/_weakrefset.py:39: RuntimeWarning: coroutine 'CallCapTable._acquire' was never awaited
+    def _remove(item, selfref=ref(self)):
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/admit/test_gw32_policy_cap.py::test_property_4_retry_after_bounds
+  /usr/lib/python3.12/threading.py:135: RuntimeWarning: coroutine 'CallCapTable._acquire' was never awaited
+    return _CRLock(*args, **kwargs)
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/admit/test_gw32_policy_cap.py::test_property_4_retry_after_bounds
+  /tmp/gw32venv/lib/python3.12/site-packages/fakeredis/commands_mixins/generic_mixin.py:38: RuntimeWarning: coroutine 'CallCapTable._acquire' was never awaited
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/admit/test_gw32_policy_cap.py::test_property_4_retry_after_bounds
+  /usr/lib/python3.12/asyncio/queues.py:48: RuntimeWarning: coroutine 'CallCapTable._acquire' was never awaited
+    self._queue = collections.deque()
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/admit/test_gw32_policy_cap.py::test_property_4_retry_after_bounds
+  /tmp/gw32venv/lib/python3.12/site-packages/fakeredis/model/_acl.py:88: RuntimeWarning: coroutine 'CallCapTable._acquire' was never awaited
+    and all(self._commands.values())
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/admit/test_gw32_policy_cap.py::test_cap_outage_property
+  /work/suraj/AI_Mesh_Firewall/.worktrees/gw32/gateway_v2/gateway_v2/admit/mcp_cap.py:244: RuntimeWarning: coroutine 'test_cap_outage_property.<locals>.broken' was never awaited
+    async with self._client.pipeline() as pipe:
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/admit/test_gw32_policy_cap.py::test_cap_outage_property
+  /usr/lib/python3.12/asyncio/base_events.py:636: RuntimeWarning: coroutine 'CallCapTable._acquire' was never awaited
+    sys.set_asyncgen_hooks(firstiter=self._asyncgen_firstiter_hook,
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/admit/test_gw32_policy_cap.py::test_cap_outage_property
+  /usr/lib/python3.12/asyncio/events.py:36: RuntimeWarning: coroutine 'CallCapTable._acquire' was never awaited
+    def __init__(self, callback, args, loop, context=None):
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/admit/test_gw32_policy_cap.py::test_cap_outage_property
+  /usr/lib/python3.12/selectors.py:74: RuntimeWarning: coroutine 'CallCapTable._acquire' was never awaited
+    raise KeyError("{!r} is not registered".format(fileobj)) from None
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/admit/test_gw32_policy_cap.py::test_cap_outage_property
+  /usr/lib/python3.12/asyncio/locks.py:77: RuntimeWarning: coroutine 'CallCapTable._acquire' was never awaited
+    def __init__(self):
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/admit/test_gw32_policy_cap.py::test_cap_outage_property
+  /usr/lib/python3.12/warnings.py:534: RuntimeWarning: coroutine 'CallCapTable._acquire' was never awaited
+    def _warn_unawaited_coroutine(coro):
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/admit/test_gw32_policy_cap.py::test_cap_outage_property
+  /tmp/gw32venv/lib/python3.12/site-packages/redis/event.py:130: RuntimeWarning: coroutine 'CallCapTable._acquire' was never awaited
+    listeners = list(self._event_listeners_mapping.get(type(event), []))
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/admit/test_gw32_policy_cap.py::test_cap_outage_property
+  /usr/lib/python3.12/asyncio/runners.py:57: RuntimeWarning: coroutine 'CallCapTable._acquire' was never awaited
+    def __enter__(self):
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/admit/test_gw32_policy_cap.py::test_cap_outage_property
+  /work/suraj/AI_Mesh_Firewall/.worktrees/gw32/gateway_v2/gateway_v2/admit/mcp_cap.py:240: RuntimeWarning: coroutine 'CallCapTable._acquire' was never awaited
+    async def _transact(self, key_id: str, cap: int, chunk: int) -> tuple[int, int]:
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/admit/test_gw32_sessions.py::test_open_check_close_and_foreign_bindings
+  /tmp/gw32venv/lib/python3.12/site-packages/fakeredis/_commands.py:73: RuntimeWarning: coroutine 'CallCapTable._acquire' was never awaited
+    args_list = list(args)
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/admit/test_gw32_sessions.py::test_property_10_counts_never_exceed_bounds_and_live_sessions_stay_counted
+  /tmp/gw32venv/lib/python3.12/site-packages/fakeredis/model/_hash.py:15: RuntimeWarning: coroutine 'CallCapTable._acquire' was never awaited
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/admit/test_lgw06_harness.py::test_lgw06_3_multi_replica_no_quota_multiplication
+  /work/suraj/AI_Mesh_Firewall/.worktrees/gw32/gateway_v2/gateway_v2/admit/quota.py:306: RuntimeWarning: coroutine 'BudgetLease._refill' was never awaited
+    def __init__(
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/admit/test_lgw06_harness.py::test_lgw06_3_multi_replica_no_quota_multiplication
+tests/admit/test_lgw06_lease_no_multiplication.py::test_property1_no_replica_multiplication
+  /tmp/gw32venv/lib/python3.12/site-packages/fakeredis/_commands.py:75: RuntimeWarning: coroutine 'BudgetLease._refill' was never awaited
+    for i, (arg, type_) in enumerate(zip(args_list, types)):
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/admit/test_lgw06_harness.py::test_r2_09_partition_spends_remaining_then_budget_unavailable
+  /usr/lib/python3.12/queue.py:42: RuntimeWarning: coroutine 'BudgetLease._refill' was never awaited
+    self.mutex = threading.Lock()
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/admit/test_lgw06_lease_conservation.py::test_property2_clean_shutdown_returns_the_exact_remainder
+  /tmp/gw32venv/lib/python3.12/site-packages/redis/asyncio/connection.py:177: RuntimeWarning: coroutine 'BudgetLease._refill' was never awaited
+    self._skipped_end_maint_notifications: set[int] = set()
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/admit/test_lgw06_lease_no_multiplication.py::test_property1_no_replica_multiplication
+  /work/suraj/AI_Mesh_Firewall/.worktrees/gw32/gateway_v2/gateway_v2/admit/lease.py:226: RuntimeWarning: coroutine 'BudgetLease._refill' was never awaited
+    def __init__(
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/admit/test_lgw06_outage_posture.py::test_property4_outage_spends_remaining_then_budget_unavailable
+  /tmp/gw32venv/lib/python3.12/site-packages/fakeredis/_socket/_base.py:196: RuntimeWarning: coroutine 'BudgetLease._refill' was never awaited
+    def _extract_line(self, buf: bytes) -> tuple[bytes, bytes]:
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/gates/test_check_tenant_scale.py::test_the_shipped_data_plane_is_clean
+1 failed, 3248 passed, 106 skipped, 41 warnings in 598.99s (0:09:58)
+EXIT 1

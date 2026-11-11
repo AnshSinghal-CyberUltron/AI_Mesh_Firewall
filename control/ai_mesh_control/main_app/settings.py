@@ -323,6 +323,13 @@ AGENT_API_KEY = os.environ.get("AGENT_API_KEY", "").strip()
 # Falls back to AGENT_API_KEY when unset.
 GATEWAY_INTERNAL_API_KEY = os.environ.get("GATEWAY_INTERNAL_API_KEY", "").strip()
 
+# GW35: which gateway the control plane fronts. ``v1`` (default) forwards every proxied admin and
+# MCP call as before. ``v2`` answers the calls gateway-v2 does not implement with 410
+# ``retired_on_gateway_v2`` and never contacts the gateway. Anything else refuses to start: a typo
+# must not silently keep forwarding retired routes.
+AMF_GATEWAY_BACKEND = os.environ.get("AMF_GATEWAY_BACKEND", "v1")
+if AMF_GATEWAY_BACKEND not in ("v1", "v2"):
+    raise ImproperlyConfigured(f"AMF_GATEWAY_BACKEND must be 'v1' or 'v2', got {AMF_GATEWAY_BACKEND!r}")
 # Policy audit: when True, store prompt/response snippets and hashes in EnforcementEvent metadata (Phase 3).
 POLICY_AUDIT_STORE_PROMPT_RESPONSE = os.environ.get("POLICY_AUDIT_STORE_PROMPT_RESPONSE", "true").lower() in (
     "true",
@@ -507,6 +514,19 @@ CELERY_BEAT_SCHEDULE = {
 
 # Redis
 REDIS_URL = _redis_url
+# GW27 publish gates (design D-8, D-10). Controls (org rate/burst/TPM, response cap, audit,
+# retention, compliance) are written into the signed plan only once every gateway replica is at
+# plan schema 1 (scripts/check_fleet_plan_schema.py) and the org is listed ("*" = every org).
+V2_PLAN_CONTROLS_ENABLED = os.environ.get("V2_PLAN_CONTROLS_ENABLED", "").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
+V2_PLAN_CONTROLS_ORGS = os.environ.get("V2_PLAN_CONTROLS_ORGS", "").strip()
+# off | monitor | enforce for the blocked-keyword and threat-intel rows. Default monitor: visible
+# in audit and trace, never blocking, until an owner moves it to enforce.
+V2_PLAN_NEW_RULES_MODE = os.environ.get("V2_PLAN_NEW_RULES_MODE", "monitor").strip().lower()
 
 # REST Framework configuration
 REST_FRAMEWORK = {
@@ -529,6 +549,7 @@ REST_FRAMEWORK = {
         "login_ip": os.environ.get("LOGIN_THROTTLE_IP_RATE", "10/min"),
         "login_user": os.environ.get("LOGIN_THROTTLE_USER_RATE", "5/min"),
         "policy_write": os.environ.get("POLICY_WRITE_THROTTLE_RATE", "30/min"),
+        "mcp-internal-credential": os.environ.get("MCP_INTERNAL_CREDENTIAL_THROTTLE_RATE", "600/min"),
     },
     # Number of TRUSTED reverse proxies in front of the app. DRF's get_ident
     # uses this to pick the real client IP from X-Forwarded-For; with it set,

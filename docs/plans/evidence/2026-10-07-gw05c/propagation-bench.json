@@ -1,0 +1,303 @@
+{
+  "card": "GW05c",
+  "measurement": "propagation cost only -- NOT L05c-1",
+  "what_this_covers": [
+    "store publish per write <= 25 ms",
+    "kill-switch refresh cost flat with tenant count within +/-20% of 1k"
+  ],
+  "what_needs_a_lane": [
+    "C4 p99 < 20 ms",
+    "infra <= 0.1%",
+    "loop lag p99.9 <= 5 ms"
+  ],
+  "why": "one machine, store on loopback, no gateway process, no guard, no offered load. publish numbers are OPTIMISTIC versus a cross-zone store, so a pass is necessary and not sufficient; a failure would be conclusive. the flatness ratio is scale-invariant and is the claim that matters.",
+  "rc2_baseline": {
+    "killswitch_refresh_ms": {
+      "1k": 8.5,
+      "10k": 75.0,
+      "25k": 213.0
+    },
+    "publish_p50_ms": {
+      "1k": "30-76",
+      "10k": "114-623",
+      "25k": "255-1724"
+    }
+  },
+  "writes_per_phase": 60,
+  "refresh_samples": 300,
+  "levels": {
+    "1000": {
+      "tenants": 1000,
+      "seed_s": 2.65,
+      "publish": {
+        "phase_B_key_add": {
+          "store_publish": {
+            "n": 60,
+            "p50_ms": 0.706,
+            "p99_ms": 0.886,
+            "max_ms": 0.886
+          },
+          "write_end_to_end": {
+            "n": 60,
+            "p50_ms": 12.308,
+            "p99_ms": 13.309,
+            "max_ms": 13.309
+          },
+          "records_per_publish": [
+            1
+          ]
+        },
+        "phase_C_plan_set": {
+          "store_publish": {
+            "n": 60,
+            "p50_ms": 0.715,
+            "p99_ms": 0.994,
+            "max_ms": 0.994
+          },
+          "write_end_to_end": {
+            "n": 60,
+            "p50_ms": 12.307,
+            "p99_ms": 14.181,
+            "max_ms": 14.181
+          },
+          "records_per_publish": [
+            1
+          ]
+        },
+        "phase_D_killswitch": {
+          "store_publish": {
+            "n": 60,
+            "p50_ms": 0.685,
+            "p99_ms": 1.037,
+            "max_ms": 1.037
+          },
+          "write_end_to_end": {
+            "n": 60,
+            "p50_ms": 12.304,
+            "p99_ms": 13.676,
+            "max_ms": 13.676
+          },
+          "records_per_publish": [
+            1
+          ]
+        }
+      },
+      "refresh": {
+        "cold_catch_up_s": 0.09,
+        "ks_steady_wall": {
+          "n": 300,
+          "p50_ms": 0.272,
+          "p99_ms": 0.428,
+          "max_ms": 0.444
+        },
+        "ks_steady_cpu": {
+          "n": 300,
+          "p50_ms": 0.238,
+          "p99_ms": 0.386,
+          "max_ms": 0.411
+        },
+        "plan_steady_wall": {
+          "n": 300,
+          "p50_ms": 0.279,
+          "p99_ms": 0.389,
+          "max_ms": 0.406
+        },
+        "plan_steady_cpu": {
+          "n": 300,
+          "p50_ms": 0.246,
+          "p99_ms": 0.35,
+          "max_ms": 0.376
+        }
+      }
+    },
+    "10000": {
+      "tenants": 10000,
+      "seed_s": 14.44,
+      "publish": {
+        "phase_B_key_add": {
+          "store_publish": {
+            "n": 60,
+            "p50_ms": 0.704,
+            "p99_ms": 0.941,
+            "max_ms": 0.941
+          },
+          "write_end_to_end": {
+            "n": 60,
+            "p50_ms": 12.275,
+            "p99_ms": 14.425,
+            "max_ms": 14.425
+          },
+          "records_per_publish": [
+            1
+          ]
+        },
+        "phase_C_plan_set": {
+          "store_publish": {
+            "n": 60,
+            "p50_ms": 0.762,
+            "p99_ms": 1.155,
+            "max_ms": 1.155
+          },
+          "write_end_to_end": {
+            "n": 60,
+            "p50_ms": 12.552,
+            "p99_ms": 20.155,
+            "max_ms": 20.155
+          },
+          "records_per_publish": [
+            1
+          ]
+        },
+        "phase_D_killswitch": {
+          "store_publish": {
+            "n": 60,
+            "p50_ms": 0.742,
+            "p99_ms": 1.014,
+            "max_ms": 1.014
+          },
+          "write_end_to_end": {
+            "n": 60,
+            "p50_ms": 12.433,
+            "p99_ms": 14.51,
+            "max_ms": 14.51
+          },
+          "records_per_publish": [
+            1
+          ]
+        }
+      },
+      "refresh": {
+        "cold_catch_up_s": 0.93,
+        "ks_steady_wall": {
+          "n": 300,
+          "p50_ms": 0.276,
+          "p99_ms": 0.556,
+          "max_ms": 0.612
+        },
+        "ks_steady_cpu": {
+          "n": 300,
+          "p50_ms": 0.243,
+          "p99_ms": 0.37,
+          "max_ms": 0.454
+        },
+        "plan_steady_wall": {
+          "n": 300,
+          "p50_ms": 0.273,
+          "p99_ms": 0.418,
+          "max_ms": 0.462
+        },
+        "plan_steady_cpu": {
+          "n": 300,
+          "p50_ms": 0.239,
+          "p99_ms": 0.368,
+          "max_ms": 0.397
+        }
+      }
+    },
+    "25000": {
+      "tenants": 25000,
+      "seed_s": 34.22,
+      "publish": {
+        "phase_B_key_add": {
+          "store_publish": {
+            "n": 60,
+            "p50_ms": 0.701,
+            "p99_ms": 0.923,
+            "max_ms": 0.923
+          },
+          "write_end_to_end": {
+            "n": 60,
+            "p50_ms": 12.263,
+            "p99_ms": 13.329,
+            "max_ms": 13.329
+          },
+          "records_per_publish": [
+            1
+          ]
+        },
+        "phase_C_plan_set": {
+          "store_publish": {
+            "n": 60,
+            "p50_ms": 0.713,
+            "p99_ms": 0.899,
+            "max_ms": 0.899
+          },
+          "write_end_to_end": {
+            "n": 60,
+            "p50_ms": 12.424,
+            "p99_ms": 14.667,
+            "max_ms": 14.667
+          },
+          "records_per_publish": [
+            1
+          ]
+        },
+        "phase_D_killswitch": {
+          "store_publish": {
+            "n": 60,
+            "p50_ms": 0.716,
+            "p99_ms": 1.299,
+            "max_ms": 1.299
+          },
+          "write_end_to_end": {
+            "n": 60,
+            "p50_ms": 12.425,
+            "p99_ms": 17.624,
+            "max_ms": 17.624
+          },
+          "records_per_publish": [
+            1
+          ]
+        }
+      },
+      "refresh": {
+        "cold_catch_up_s": 2.4,
+        "ks_steady_wall": {
+          "n": 300,
+          "p50_ms": 0.298,
+          "p99_ms": 0.445,
+          "max_ms": 0.531
+        },
+        "ks_steady_cpu": {
+          "n": 300,
+          "p50_ms": 0.255,
+          "p99_ms": 0.385,
+          "max_ms": 0.468
+        },
+        "plan_steady_wall": {
+          "n": 300,
+          "p50_ms": 0.285,
+          "p99_ms": 0.414,
+          "max_ms": 0.457
+        },
+        "plan_steady_cpu": {
+          "n": 300,
+          "p50_ms": 0.245,
+          "p99_ms": 0.356,
+          "max_ms": 0.405
+        }
+      }
+    }
+  },
+  "checks": {
+    "write_end_to_end_p99_ms": 20.155,
+    "publish_per_write_p99_ms": 1.299,
+    "publish_within_25ms": true,
+    "publish_is_per_record": true,
+    "killswitch_refresh_ratios": {
+      "1000": {
+        "cpu_vs_baseline": 1.0,
+        "wall_vs_baseline": 1.0
+      },
+      "10000": {
+        "cpu_vs_baseline": 1.021,
+        "wall_vs_baseline": 1.015
+      },
+      "25000": {
+        "cpu_vs_baseline": 1.071,
+        "wall_vs_baseline": 1.096
+      }
+    },
+    "killswitch_refresh_flat_within_20pct": true
+  }
+}

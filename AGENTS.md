@@ -147,6 +147,7 @@
  - PIPELINE-0032 (2026-09-10) — PII PLATFORM FLOOR + 503 TRACE HONESTY: scanner PII/secret/DoS floor restored; resolve_and_enforce gets scanner_* for data-protection threats only; JSON 503 keeps pipeline_trace (input_scan redact, model_output error); FE never badges ALLOW/"No threat detected" on 5xx without a scan. VERIFY: test_pipeline_llm_error_trace + scan-only PII + liveGateway.test.js 23.
  - PIPELINE-0033 (2026-09-17) — TIER-2 INJECTION FLOOR + SCAN DETAIL HONESTY: resolve_and_enforce receives ZeroShield Model prompt_injection/jailbreak (not ATTACK_PATTERNS); allow telemetry keeps scan threat; routing stamps org_routing_enabled; FE flags unenforced injection. LIVE zs-1b34a6759ecd HTTP 400 block, model skip, Scan Detail 339285 BLOCK/95/HIGH/injection true. VERIFY: 46 GW + 44 FE + runs/scan-251434/.
  - PIPELINE-0034 (2026-09-17) — T01 PII-OFF TRUE BYPASS + AKIA SECRET: org toggle reaches scanner (not hardcoded True); SECRET-tagged PII stays secret when PII off; strip Tier-2 PII-only labels. LIVE zs-5dcb5ad52554 allow/none, zs-4e9333afc7b1 secret. VERIFY: 25 GW T01 tests + L01 API/Playwright + quality-signed.json.
+ - PIPELINE-0035 (2026-10-21) — INPUT_SCAN "SKIP" DISPLAY-HONESTY (L14b-2 + C14): on the 503 scan-only + policy-redacted PII path the FE honestStageAction recomputed input_scan→skip from latency_ms===0 (ambiguous: a real skip and a sub-ms scan both round to 0) though the scan ran (analyzed masked text, allowed). FIX: build_pipeline_trace stamps explicit per-stage `ran` (=action!=skip) + STAGE_TRANSPARENCY_KEYS/normalize default; _attach_pipeline_trace_to_llm_error re-stamps ran after model_output→error/output_guardrail→skip; honestStageAction respects `ran` (true never→skip) + run-evidence (scan_outcome/tier/redact_noop) backward-compat, model_routing carve-out generalized. Additive. VERIFY: test_pipeline_stage_ran_flag.py 5 passed (full suite 193 pre-existing env-fails, 0 new regressions +5 tests); FE npm test:unit 183 passed + npm run build green (node:22-alpine container).
  - PIPELINE-0028 (2026-07-06) — OUTPUT SMART-MASK PARITY + REASONING PROMOTION + ROUTING PIN: main.py _output_redact_redaction_possible (PIPELINE-0012 output parity on both redact paths) + _maybe_promote_reasoning_to_content (reasoning_content→content when blank, GATEWAY_PROMOTE_REASONING_TO_CONTENT default on); pipeline_trace policy hint for pre-masked prompts; liveGateway pinnedModelRoutingPreferences + SSE reasoning_content; Attack/Isolation simulators enable_routing:false; ModelRoutingSimulator enable_routing:true explicit. +5 tests test_pipeline_pre_masked_redact.py. Gate: gateway pytest.
  - PIPELINE-0027 (2026-07-03) — CISO 100-RULE PACKAGE SEED (P7-27): ciso_rules_data.py +
   ciso_policy_catalog.py + ciso_seed.py + seed_ciso_policy_package command + tests. One policy
@@ -172,6 +173,558 @@
  patterns, {1,2} emphasis cap, G53 skip, B1 noop exemption, redact eligibility + pipeline_trace
  input_scan=redact on intentional noop. LIVE input_scan REDACT + masked prompt forwarded. 7 new
  tests. Gate: 2009 full suite. Evidence: mcp-parallel/findings/pipeline-p12-live-proof.json.
+ - PIPELINE-0036 (2026-11-05) — FALSE stream_idle_timeout ON WITHHELD STRICT STREAMS (bugfix F1):
+ edge/stream_timeouts.py + edge/chat_stream.py + egress/output_guard.py. STRICT_WITHHOLD streams
+ with an enforcing output rule withhold every byte until the whole response is decided, but
+ StreamTimeouts modelled downstream idle as time-since-last-write seeded at stream start, so a
+ healthy withheld stream longer than idle_timeout_s (3 s @ default SLO) was falsely cut with
+ stream_idle_timeout / HTTP 408 before any byte (GW33 D-20 promotes exfil/ip-leak/grounding orgs
+ to strict). FIX: egress.output_guard.withholds_until_decision(plan); a keyword-only
+ upstream_liveness flag on StreamTimeouts that re-seeds the idle clock on every upstream event
+ next_event returns (same assignment as the GW28 D-18 first-event branch; send unchanged; a
+ timeout cut never re-seeds, fail closed); wired once in ChatStream._controls as
+ upstream_liveness=withholds_until_decision(plan). Default False leaves INCREMENTAL + pass-through
+ strict byte-for-byte unchanged; no new capacity literal. VERIFY: offline full pytest 4917 passed
+ (only known Pinecone check_tenant_scale failure), mypy --strict clean (405 files), ruff clean,
+ import-linter 3/3 kept, AST gates exit 0; live amff1 strict SLOWSTREAM 200 + full content @ 6.15 s
+ zero 408 (was 408 before any byte on the F1 artifact), block still terminal zero-content, stall
+ still cut by the upstream guard, incremental unchanged. Separate owner finding on
+ max_stream_duration_s in FINDING-max-stream-duration.md. ID NOTE: sibling unmerged branch
+ bugfix-f2-request-id also claims a PIPELINE id — human reconciles at merge. Evidence:
+ docs/plans/evidence/2026-11-05-strict-idle/.
+ - PIPELINE-0037 (2026-11-05) — REQUEST-ID UNIQUENESS (gateway_v2 edge, finding F2): content-hash
+ request_id (sha256(tenant+content)[:24]) in four surfaces (chat openai_chat.py ×3 phases,
+ embeddings openai_misc.py, RAG/vector rag_common.py, MCP mcp.py whose incident gate fell back to
+ the per-org constant hash(org,"incident",{})) collided for byte-identical requests → audit/Scan
+ Detail conflation (control _upsert merged repeats into ONE EnforcementEvent) + admission/refund
+ keyed on a shared id. Same CLASS as PIPELINE-0023, DIFFERENT CAUSE (edge, not proxy_chat — which
+ is untouched). FIX: one random zs-{org}-<24 hex> minted ONCE by edge/request_ids.py
+ (mint_tenant_request_id, fail-closed → RequestIdUnavailable) + carried on RequestHolds.begin_request
+ (idempotent); four hash copies + MCP per-org constant removed; new domain code request_id_unavailable
+ → HTTP 503 no id; decisions D8 (new 503 code, not shared_state_unavailable) + D9 (no set-once guard
+ on note_request). VERIFY: offline full pytest 4954 passed / 1 known pre-existing Pinecone tenant-
+ scale fail, mypy --strict clean (406 files), ruff clean, import-linter 3/3, 5 AST gates exit 0;
+ live amff2 — 5 identical chat/stream/MCP/RAG → 5 distinct ids, 5 distinct EnforcementEvent rows,
+ refund net 0 + admission baseline, 50-way burst 50 distinct, git diff gateway/ empty; embeddings +
+ forced mint-failure NOT RUN live (covered offline). Ruflo memory NOT written (memory CLI absent;
+ human to replay). Evidence: docs/plans/evidence/2026-11-05-request-id-uniqueness/.
+
+## R2-04 / GW05 state re-hydration changelog
+- R2-04 (2026-10-08) — REHYDRATOR LOCK STALL + CONTROL-PLANE PG HARDENING, local half CLOSED.
+  (1) The four session bounds reached NO backend in the endorsed topology: `pg.py` passed them as
+  the libpq `options` startup parameter and PgBouncer's `IGNORE_STARTUP_PARAMETERS` includes
+  `options`. Measured through a real pgbouncer: all four reported `0`, and a 300ms
+  statement_timeout let `pg_sleep(2)` run. FIX: `SET LOCAL` authoritative + client-side
+  `tcp_user_timeout` + keepalives + `verify_bounds()` read-back, fatal at start-up.
+  (2) `_db_faults` caught `psycopg.Error` (every DB error), so a `lock_timeout` expiry set
+  `db_down=True`, reached `_ride_through` and minted a DEGRADED stamp claiming freshness for up to
+  PG_GRACE_MS=16s — H7 inside the mechanism built for Cloud SQL failovers. FIX:
+  `ControlPlaneBoundExceeded` vs `ControlPlaneUnavailable`; a fired bound withholds the stamp.
+  (3) No re-hydrator process existed and `state_control` was not in any image. FIX:
+  `state_control/service.py` + `__main__.py` + `metrics.py`, Dockerfile copy, two named services in
+  base + prod with a dedicated `ai-mesh-state-control` image, identity-based idle-stop exemption
+  asserted in CI (negative control verified).
+  (4) `publish_kind` was unguarded for all nine repair reasons, so two re-hydrators could regress a
+  manifest. FIX: `allow_regress` scoped to the `store_ahead` repair; the in-memory twin had no
+  guard at all and now matches the product.
+  (5) `ok_publish_pending` alarm got a producer with no schema change
+  (`MIN(updated_at) WHERE feed_seq > published`).
+  OPEN (not closable locally): >= 2 ZONES (declared as labels; needs two single-zone MIGs) and
+  L05b-3/4/6 + G-14 on the cloud lane. FOUND, NOT FIXED: a pre-existing GW05c/R2-02 defect — after
+  a `store_ahead` repair the kind loops forever on `INDEX`, republishing the whole kind every
+  period; recorded as a strict xfail.
+  VERIFY: 607 offline / 665 live passed; `mypy --strict`, ruff, import-linter, 5 AST gates x 2 trees
+  clean. Plan: docs/plans/2026-10-08-r2-04-gw05-rehydrator-lock-and-pg-hardening.md.
+  Evidence: docs/plans/evidence/2026-10-08-r2-04/.
+
+## R2-05 / GW14c audit memory and durability changelog
+- R2-05 (2026-10-08) — AUDIT MEMORY BUDGET + DURABLE SINK, local half CLOSED.
+  (1) Audit shared the hot store with no byte accounting: RC2's `MAXLEN 2,000,000` per org is a
+  RECORD count (≈5.4 GiB/tenant at 2.7 KB), so it could never engage before the store filled —
+  1.48 → 6.42 GiB in 51 min live. FIX: a global byte budget
+  (`AMF_AUDIT_STORE_BUDGET_MB`, else `AMF_AUDIT_STORE_FRACTION` 0.5 × `maxmemory`, re-read every
+  10 s) divided into a per-org approximate `MAXLEN` by a PER-ORG byte model, so each tenant holds
+  an equal BYTE share rather than an equal record share.
+  (2) `XTRIM`, not `XADD MAXLEN`: XTRIM returns what it removed, so `audit_trimmed_records` is
+  exact. That return value is the whole of the M3 fix; an AST-level test forbids moving the cap
+  back onto the append.
+  (3) **CORRECTED THE REFERENCE PATCH.** `rc3-audit-mem-v1`'s model (`payload × 1.10 + 256 B`)
+  UNDER-charges at 2 KB, 4 KB and 8 KB — the real per-entry cost oscillates with the allocator's
+  size classes (ratio 1.03–1.26), and the reference sampled 2.9 KB and 6 KB, two of the cheap
+  points. An under-charging model derives a MAXLEN that is too long, so the store fills while
+  every gauge reports the bound holding. `ENTRY_FACTOR` is now 1.35; the live gate asserts the
+  model stays above both `used_memory` Δ and `MEMORY USAGE` at eight sizes.
+  (4) Store-policy self-check (`INFO memory`, `CONFIG GET` only as fallback since Memorystore
+  restricts CONFIG) logging the eviction finding at ERROR *with* the remediation, including that
+  `noeviction` alone does not fix it; memory gauges sampled on worker 0 off the request path.
+  (5) Durable Postgres sink + exporter (`python -m audit_control`, R2-04's service shape incl. the
+  image-copy lesson) with the card's acknowledged-vs-durable high-water mark and EXACT
+  `records_lost = acknowledged − durable − pending`. My first version derived loss from the trim
+  count and was wrong on a FLUSH (reports 100 lost where 36 are lost, because a flush removes the
+  already-durable records too). `audit_completeness_ratio` is sourced from DURABLE and nothing
+  else; the sink's separate `acknowledged_ratio` is what makes the M3 window visible.
+  (6) `Finding.evidence` is never serialized — an audit stream is append-only, exported and
+  retained, so evidence would put the user's secret at rest in three places and undo the
+  redaction the pipeline just performed. Span offsets are kept; they locate without reproducing.
+  (7) C40: sheds and admission rejects get records, each with a reason (M2) and `retry_after_ms`
+  (R2-08), and completeness is measured against ADMITTED requests.
+  (8) The AST capacity gate caught a literal queue depth; the bound now comes from a new
+  `ResourceContract.audit_queue_depth(drain_rate, bytes_per_record)` — deliberately not
+  `queue_depth()`, whose slots are in-flight REQUESTS bounded by `per_worker_rss`.
+  SINK CHOICE (the card says choose and price here): **Postgres** — already in the signed fleet
+  ($526.40/mo Cloud SQL HA), inherits R2-04's verified session bounds via `pg.cursor_tx()`, and
+  has measured failure behaviour (failover 11.6–15.5 s loaded, 0 acknowledged writes lost). Disk
+  sizing + retention is an OWNER DECISION pending the signed capacity.
+  OPEN: L14c-2 (1 h at the fleet Poisson knee — needs GW12's serving path and a signed knee);
+  L14c-1's "0 refused lease refills" (NOT asserted — `admit/quota.py` is a stub, GW19); the
+  guard-registration victim is a declared `SET … PX 3000` surrogate (GW08), so the control arms
+  reproduce the chain via 23 evictions + 50,000 refused writes but not "registrations 0/5".
+  FOUND, NOT FIXED: `state_control/valkey.py:100` trips `check_tenant_scale` — pre-existing, on
+  the re-hydrator's deliberately O(records) deep-verify path.
+  ALSO OPEN: nothing EMITS an audit record yet — `edge/app.py` is a stub (GW12), so the bound is
+  around a path that carries no traffic; GW14's timing instrument is deliberately untouched.
+  `audit_control` sits outside the import-linter layer contract (`root_packages=["gateway_v2"]`),
+  same position as `state_control`; both are mypy-strict covered.
+  VERIFY: 814 offline / 13 live Valkey / 13 live Postgres 16 (`AMF_PG_DSN`, schema + ON CONFLICT
+  idempotence + one-transaction page/cursor + exact bytes + parsed-id ordering) / 4 L14c-1 arms
+  passed; `mypy --strict`, ruff, import-linter 2/2, AST gates × 3 trees clean. L14c-1: bounded 5/5 regs, 0 evicted, 0 refused
+  publishes, 0 refused writes, 65,732 trimmed, 13.9/64 MiB; unbounded control 64.0/64 MiB with
+  50,000 writes + 4 publishes refused and 23 keys evicted. L14c-3: flush → 36 lost exactly,
+  completeness 0.64 (read 1.0 before).
+  Plan: docs/plans/2026-10-08-r2-05-gw14c-audit-memory-and-durability.md.
+  Evidence: docs/plans/evidence/2026-10-08-r2-05/.
+
+## R2-06 / GW12b bounded holdback changelog
+- R2-06 (2026-10-08) — BOUNDED HOLDBACK, local half CLOSED.
+  The owner-signed "≤ 3 upstream tokens held" was unimplemented: UUID held 36 tokens, sha256 34,
+  URL 15, base64 whole, 17 ms/chunk loop block at 16 KB; C4 hid the holds by construction (a byte
+  waiting on upstream disambiguation was never charged to gateway compute). FIX: hold the MINIMAL
+  suffix, hard-cap it in upstream tokens, bound per-chunk rescan to a window, publish a held-tokens
+  histogram with SPLIT latency accounting, carry a documented per-pattern trade-off; engages only
+  under an enforcing OUTPUT rule.
+  (1) `detect/windowing.py` — single `Window` definition, trailing `window_slice` inspecting ≤
+  `Window` bytes, no block on short buffers (R4).
+  (2) `detect/holdback.py` — `TokenIndex` (`_WORD` runs; UUID = 1 token), `hold_start` +
+  `classify_hold`, frozen `TRADE_OFF` table, `scan` with word-class token-cap FORCE-RELEASE of the
+  oldest tokens and a relaxed-class `2 * cap` ceiling → overflow (R1/R3/R6). Pure, property-testable.
+  (3) `runtime/holdback_config.py` — `RV_HOLDBACK_MAX_TOKENS` default 3, range 1–100, non-integer /
+  <1 / >100 → default 3 + warning naming the value (R1).
+  (4) `runtime/holdback_metrics.py` — label-free producer: held-tokens histogram + SEPARATE
+  `T_release_processing` (p99 < 20 ms) and `T_holdback_wait` + unbroken-run byte ceiling (R4/R5).
+  (5) `egress/output_guard.py` — `enforcing_output_rules`, `OutputResolver` protocol, `apply_decision`
+  (fail-closed on uncovered redaction / BLOCK) (R2/R3).
+  (6) `egress/stream.py` — thin INJECTABLE `StreamPipeline` (chunks + decision + kill injected);
+  release loop; force-release trade-off state machine (redact-remainder vs terminate; fail-closed
+  `holdback_overflow`/`undefined_tradeoff`/`scan_failure`/`output_blocked`); in-flight kill
+  `InFlightKill.CUT_NEXT_CHUNK` (R3/R6/R7).
+  (7) `egress/holdback_tradeoff.py` — egress-side mirror of the `detect.holdback.TRADE_OFF` outcome
+  (the `egress → detect` edge is forbidden), pinned to the detect table by a drift test.
+  Trade-off table (R6.1, exactly one outcome each): aws/api_token/email/uuid/sha256/url/base64 →
+  redact-remainder; jwt/card → terminate.
+  OPEN (DEFERRED CLOUD GATES, out of local scope — no cloud resources): the full 200 RPS fleet
+  capacity run (L12b-2) and GW20b fleet certification (R10.5).
+  FOUND, NOT FIXED: the placeholder `detect.holdback` scanner is NON-CONFLUENT for some
+  delimiter-containing classes (url/uuid/card/jwt/api_token) — a `:`/`/`/`.`/`-`-delimited prefix can
+  release before a match completes, so the redaction byte-boundary is split-dependent for those
+  classes; the SAFETY invariant (no raw leak, Property 1) holds UNCONDITIONALLY; byte-boundary
+  confluence is tracked for the GW07/GW08 real detector. `classify_hold` is a conservative
+  placeholder (over-holds, safe); the egress harness is thin (GW13 wires the real SSE transport);
+  `backpressure.py`/`strict.py` stay stubs.
+  VERIFY: 955 offline / 141 lgw12b-subset passed; `mypy --strict` 102 files, ruff, import-linter 2/2
+  kept, size/mutable AST gates clean. 8 correctness properties as seeded ≥ 10,000-iteration tests
+  (house idiom, no hypothesis). L12b-1 replay 24/24 combos (max word-class hold ≤ 1–2 tokens vs cap
+  3, inspected bytes = 64 = Window, per-chunk p99 14–37 µs ≪ 0.5 ms). L12b-3 detector regression 8
+  tests (raw never leaked across 5 classes × ≥ 3 split offsets, byte-identical outcome). L12b-2 LOCAL
+  equivalent co-runner median delta ≈ 0 ms, O(window) isolation.
+  Plan: docs/plans/2026-10-08-r2-06-gw12b-bounded-holdback.md.
+  Evidence: docs/plans/evidence/2026-10-08-r2-06/.
+
+## R2-07 / R2-08 / GW19 admission control changelog
+- R2-07 / R2-08 (+ R2-18) (2026-10-08) — ADMISSION CONTROL + OVERLOAD SEMANTICS + GRACEFUL DRAIN,
+  local half CLOSED. Severity HIGH (R2-07/R2-08) / MEDIUM (R2-18).
+  No admission control existed: queues grew unbounded, p99 collapsed, never recovered. The GW03
+  per-worker cap broke the SLO under overload (~20 ms event-loop floor) and never recovered; a 12 ms
+  instantaneous bound shed long prompts first; a tenant-blind FIFO let one tenant shed another 30/30;
+  sheds carried a 6–11 ms Retry-After → OpenAI SDK retried 2× → ~2.6× amplification; post-heal C4
+  took 10–180 s. FIX: per-owner CoDel admission; admitted work answered late, NEVER abandoned;
+  explicit 503 + jittered Retry-After ≥ 1 s + x-should-retry:false; bounded queues w/ exported
+  depth+age; SIGTERM drain state machine; worker-crash isolate+respawn seam; slow-consumer
+  backpressure; bounded post-heal recovery. Built bottom-up on the import-linter layer contract
+  (`admit` imports only runtime+domain; returns a frozen ShedVerdict, `edge` renders the 503 — no
+  HTTP object in admit). Injected clock + injected random.Random throughout.
+  (1) `domain/posture.py` — `OVERLOAD_SHED` code (codes-only); REUSES `MIN_RETRY_AFTER_S=1.0` (not
+  redefined).
+  (2) `admit/codel.py` — pure per-owner CoDel: target 5 ms / interval 100 ms / hard cap 60 ms,
+  `sqrt(count)` backoff, hard-cap short-circuit, quiescence reset; decision from sojourn + CoDel
+  state ONLY, never prompt size (no 12 ms bound).
+  (3) `admit/grant.py` — `ShedVerdict(code,retry_after_s,should_retry=False,request_id)` + `Admitted`
+  + `shed_retry_after_s` (≥ 1 s jitter → never the 6–11 ms band).
+  (4) `admit/quota.py` — `derive_bounds` from `ResourceContract` + injected `q_safe`; refuse-to-start
+  (`CapacityUnset`) if `q_safe` unset; NO capacity literal in admit (AST gate).
+  (5) `admit/metrics.py` — producer-only LABEL-FREE: per-queue depth/age, admitted/shed totals,
+  `fail_open_total` pinned 0.
+  (6) `admit/queues.py` — `BoundedQueue` (shed-at-the-door, oldest-age) + `BackpressureBuffer`
+  (credit/byte bound).
+  (7) `admit/supervisor.py` — `WorkerSupervisor` seam (isolate + injected respawn; real OS
+  supervision = serving-entrypoint card).
+  (8) `admit/admission.py` — `AdmissionController`: per-owner registry (guard owner same factory),
+  admit path (fail-closed shed), drain state machine (ACCEPTING→DRAINING→TERMINATING→FLUSHED→EXITED,
+  Declared_Termination never truncated), backpressure.
+  (9) `admit/__init__.py` — public surface for `edge`.
+  OPEN (DEFERRED CLOUD/SCALE GATES, out of local scope): full live fleet 3×-`q_safe` run, GW20 live
+  `q_safe` measurement feeding this card, live G-06 (real OpenAI SDK), live G-15 post-heal cert
+  (R12.7/R11.2). SERVING-ENTRYPOINT-CARD DEPENDENCY (R3.4/R9): removing the inert
+  `--worker-connections`, migrating off the deprecated uvicorn worker class, and REAL OS process
+  supervision — this card ships the WorkerSupervisor seam + the observable cap only.
+  FOUND, NOT FIXED: a ms/seconds unit bug the fairness property (P3) caught is now FIXED; the harness
+  is an in-process injected-clock simulation (deterministic, not wall-clock); post-heal recovery is
+  cross-component (lease-refill storm → GW06; cold identity caches → GW05 — this card owns only the
+  admission backlog drain + bounded audit queue); egress transport/backpressure wiring is GW13.
+  VERIFY: 1057 full offline suite (93 skipped, 1 xfailed, 0 failed) / 99 lgw19-subset /
+  163 admit-package passed; `mypy --strict` 107 files, ruff,
+  import-linter 2/2 kept (107 files/150 deps), AST capacity-literal gate 3 passed. 10 correctness
+  properties as seeded ≥ 10,000-iteration tests (house idiom, no hypothesis). LGW19-1 (3× q_safe):
+  ~66.7% shed, admitted p99 1.0 ms within 20 ms SLO, peak depth = cap, 0 FAIL_OPEN. LGW19-4 cap binds
+  + observable. LGW19-2 highest-pass 2000 req/s / first-fail 2500 req/s. LGW19-5 shed 16.6%→58.2% on
+  halved guard rate, queue age bounded. LGW19-6 backpressure + bounded memory + fast consumers
+  unaffected. G-06 local amplification 1.0× (bound 1.5×) vs 6–11 ms baseline ≥ 2.6×. G-15 local
+  recovery ~0.055 s (budget 10 s).
+  Plan: docs/plans/2026-10-08-r2-07-r2-08-gw19-admission-control.md.
+  Evidence: docs/plans/evidence/2026-10-08-r2-07-gw19/.
+
+## R2-09 / R2-14 / R2-19 / GW06 budget-lease changelog
+- R2-09 / R2-14 / R2-19 (2026-10-08) — ORG BUDGET LEASE + LOCAL GCRA + RETRY-ONCE + STORE BOUNDARY,
+  local half CLOSED. Severity HIGH (R2-09) / MEDIUM (R2-14) / HIGH (R2-19, confirm + regression-test).
+  Three defects on the budget/quota/store-connection path: (R2-09) lease refills ran ON the request
+  path → a store partition failed large prompts from +0.15 s instead of after the declared 5 s RAM
+  window (RC2: 211 × HTTP 503 shared_state_unavailable INSIDE the window, a budget-counter problem
+  reported as a global outage); (R2-14) ~1e-4 of cross-zone round trips hit the 200 ms min TCP RTO
+  over the 25 ms request-path timeout with no retry; (R2-19) a keepalive ETIMEDOUT read as "no
+  message" spun the push listener to OOM (D2) and a dead pooled socket answered 500 (D1). FIX: org
+  budget = a shared store-backed lease SPENT LOCALLY; Low_Watermark Async_Refill OFF the request
+  path; store outage spends Remaining_Lease then refuses ONLY quota with the narrow budget_unavailable
+  (never shared_state_unavailable); generation-tagged + revoke-on-change; TTL-reclaimed on crash;
+  NEVER multiplied by worker/replica. Built bottom-up on the import-linter layer contract (`admit`
+  imports only runtime+domain; BudgetVerdict is a value, `edge` renders — no HTTP object in admit).
+  Injected clock + injected store client (fakeredis) + injected refill spawn throughout.
+  (1) `runtime/store_keys.py` — budget_remaining/budget_generation/budget_lease(org,worker) under the
+  `{rv2}` hash tag (one slot, cluster-safe), distinct from the published StateKind.BUDGET config.
+  (2) `admit/gcra.py` — pure LocalGCRA (GcraParams rate_per_s/burst, injected clock TAT carrier, no
+  store round trip; advances TAT only on admit). Property 8.
+  (3) `admit/lease.py` — store-backed BudgetLease: atomic acquire via WATCH/MULTI (NOT Lua EVAL —
+  fakeredis 2.39 lacks EVAL; real Valkey identical; `_MAX_CAS_TRIES=16`); grant=min(pool,chunk) never
+  over-grants; `try_spend` SYNCHRONOUS + LOCAL (no store read) with single-flight off-path refill via
+  injected spawn; return_unspent + TTL reclaim on the store's clock; retry-once idempotent read
+  (`_IDEMPOTENT_READ_RETRIES=1`). Properties 1/2/3/5/6.
+  (4) `admit/grant.py` — frozen BudgetVerdict (code=posture.BUDGET_UNAVAILABLE, retry_after_s via
+  gap_retry_after_s ≥ MIN_RETRY_AFTER_S, should_retry=False, request_id; no HTTP object) + budget_verdict.
+  (5) `admit/quota.py` — derive_lease_chunk(contract,*,q_safe) [raw=ceil(q_safe·target_p99_ms/1000);
+  chunk=min(raw,queue_depth); watermark=min(floor(0.25·chunk),chunk−1)] + derive_low_watermark +
+  QuotaComponent façade (GCRA-first then budget, fail-closed, owns ONLY budget_unavailable, no store
+  I/O on the request path); derive_bounds (GW19) unchanged; NO capacity literal (reused AST gate).
+  Properties 4/9/10.
+  (6) `admit/metrics.py` — QuotaMetrics producer, label-free, seeded zero: amf_quota_lease_overshoot
+  / amf_quota_async_refill_total / amf_quota_budget_unavailable_total; GW14d publishes.
+  (7) R2-19 is CONFIRM + REGRESSION-TEST, not a rewrite: state_nudge.py ALREADY had the D2 fix
+  (keepalive-ETIMEDOUT-not-silence; signatures error/no_wait/silent; FAST_NONE_LIMIT=3; reconnect-
+  after-backoff) and NudgeListener was LEFT INTACT; no D1 gap found in store_valkey.py (redis-py pool
+  reconnects) so NO guard was added. tests/runtime/test_lgw06_partition_regression.py (45 s partition,
+  Property 7) proves D2 + D1 + R2-09.
+  OPEN (DEFERRED CLOUD/SCALE GATES, out of local scope — no cloud resources): the full live
+  four-replica fleet quota run / full LGW06-3 (represented locally by N in-process replicas over one
+  fakeredis), the live store failover LGW06-6, and real cross-zone RTO measurement (modelled as a
+  deterministic injected-clock latency). R2-14 gateway zone placement (gateway in the store primary's
+  zone) = a DEPLOYMENT DEPENDENCY, not code; the code-side requirement is the retry-once-on-idempotent-
+  read-timeout, which IS implemented + tested (Property 6). KNOWN BENIGN WARNING: "coroutine
+  'BudgetLease._refill' was never awaited" in the lease property tests (undrained single-flight refill
+  coroutines) — NOT a failure.
+  VERIFY: 1131 full offline suite (93 skipped, 1 xfailed, 0 failed) / 74 lgw06-subset / 223
+  admit-package / 79 AST gates passed; `mypy --strict` 109 files, ruff, import-linter 2/2 kept (109
+  files/154 deps). 10 correctness properties as seeded ≥ 10,000-iteration tests (house idiom, no
+  hypothesis). LGW06-3: aggregate ≤ limit+overshoot, overshoot published, aggregate ≪ limit×workers
+  (no multiplication). LGW06-5: 200 ms injected latency → bounded-timeout bites, posture holds,
+  request path creates 0 connections (no store op on the hot path). R2-09 partition: spends
+  Remaining_Lease then budget_unavailable (never shared_state_unavailable), request-path store calls 0.
+  Plan: docs/plans/2026-10-08-r2-09-r2-14-r2-19-gw06-budget-lease.md.
+  Evidence: docs/plans/evidence/2026-10-08-r2-09-gw06/.
+
+## GW12 / SSE egress pipeline changelog
+- GW12 (2026-10-09) — SSE EGRESS PIPELINE (bounded buffers + backpressure + real cancellation),
+  local half CLOSED. Protocol phase; depends GW03/GW11; required by GW13/GW14/GW16b/GW19. Stands up
+  the serving skin AROUND the shipped bounded-holdback engine (GW12b/R2-06 — StreamPipeline,
+  detect/holdback, holdback_config/metrics, InFlightKill.CUT_NEXT_CHUNK), which this card WIRED INTO,
+  not rebuilt. Built bottom-up on the import-linter layer contract (edge > admit > plan > detect >
+  resolve > dispatch > egress > audit > runtime > contracts > domain), fail-closed everywhere
+  (FAIL_OPEN pinned 0), no capacity literal outside runtime/resources.py, egress NEVER imports detect
+  (scanner + ProviderClient injected from edge/dispatch above detect). (1) runtime/resources.py — C27
+  inter_chunk/idle/write + C24 max_stream_duration/max_cut_latency/max_snapshot_age + R6
+  cancellation_bound derived from target_p99_ms (only module w/ capacity literals); snapshot()
+  extended. (2) domain/posture.py — 9 stream codes + STREAM_KILLED single-spelling (codes only).
+  (3) egress/backpressure.py — bounded Coalescer + CreditFlowControl: high-water from
+  stream_buffer_bytes, credit only on downstream consume, fail-closed below 1 byte (P1 memory-bound +
+  P2 credit conservation). (4) dispatch/{provider,routing,transform}.py — ProviderClient protocol +
+  abort + StubProviderClient; deterministic DispatchRouter; byte-verified Transform round-trip (P8).
+  (5) edge/wire/sse.py — SSEEncoder ([DONE] + declared Error_Frame, no-content-after-error state
+  machine) + SSEDecoder (split-surrogate buffering, malformed() fail-closed latch) (P8 round-trip +
+  P9 split-surrogate confluence). (6) edge/errors.py — single Error_Envelope value-code → HTTP/SSE
+  (MappingProxyType, generic fallback for unmapped codes). (7) edge/app.py + edge/routes.py — raw-ASGI
+  app (no framework): router, lifespan, off-loop /metrics, /readyz, live streaming chat route,
+  registered-for-later placeholders. (8) edge/stream_control.py — FirstByteLatch + run_with_no_splice
+  (no post-first-byte splice, P3). (9) edge/cancel.py — CancellationController (disconnect →
+  provider.abort() + killed() within cancellation_bound_s, buffer+credit released, FIXED to fail
+  closed on abort-raises-within-bound) + KillLatch + InFlightControl (C24 max-duration/kill-switch/
+  key-revocation/plan-change/stale-snapshot → the one KillLatch, fail-closed-first) (P4). (10)
+  edge/stream_timeouts.py — StreamTimeouts C27 bounds flipping the KillLatch (P10). (11)
+  edge/error_frame_scan.py — mid-stream provider error-frame scan-before-forward (redact/withhold/
+  fail-closed, byte-linear, offloaded) (P5 byte-linearity + P6 fail-closed-on-scan-error). (12)
+  edge/executor.py — ScanExecutor sized by pool_size(SCANNER), off-loop scan, loop-lag SLO input
+  (C38). (13) runtime/stream_metrics.py — PerRequestExports producer (label-free, zeros-not-absence,
+  FAIL_OPEN pinned 0) (P7 no-FAIL_OPEN). 10 correctness properties as seeded random.Random ≥10,000-
+  iteration tests (house idiom, no hypothesis, asyncio.run). OPEN (DEFERRED CLOUD GATES, out of local
+  scope): LGW12-1 full 1,000-stream plateau (local = tests/egress/test_lgw12_concurrency.py), LGW12-7
+  real-TCP both-SDK conformance (local = tests/edge/test_lgw12_asgi_conformance.py), 200 RPS fleet
+  cert. GW13 FOLLOW-UPS: per-delta holdback scan stays INLINE in the shipped StreamPipeline loop
+  (offload would re-architect GW12b — out of scope; error-frame scan IS offloaded, /metrics IS
+  off-loop); thin chat handler (full /v1/chat/completions = GW15/GW16, GW12 proves wiring in
+  pass-through); STRICT_WITHHOLD + INCREMENTAL switch = GW13 (egress/strict.py stubbed). FOUND+FIXED:
+  CancellationController fails closed on abort-raises-within-bound. The GW05b edge-stub tripwire
+  (test_the_edge_layer_is_still_stubs) was DELETED per its own instruction (14 sibling handoff tests
+  still pass); its "four uncalled pieces" are a GW06 wiring concern. No real HTTP framework added (raw
+  ASGI 3.0); real provider socket is a stub (deferred live gate). KNOWN BENIGN WARNING: R2-09
+  "coroutine 'BudgetLease._refill' was never awaited" (unrelated to GW12). VERIFY: 1194 full offline
+  suite (93 skipped, 1 xfailed, 0 failed) / 205 lgw12-subset / 78 AST-gate suite passed; `mypy
+  --strict` 117 files, ruff, import-linter 2/2 kept (117 files/211 deps, no egress→detect edge), each
+  AST gate CLI (capacity_literals/no_module_mutable/frozen_dataclasses/http_outside_edge_resolve/
+  tenant_scale) exits 0. Commit range suraj-revamp f3584151 (spec) → 2a0a9170 (final fix), 16 commits.
+  Plan: docs/plans/2026-10-09-gw12-sse-egress-pipeline.md.
+  Evidence: docs/plans/evidence/2026-10-09-gw12/.
+
+## GW14d / observability contract changelog
+- GW14d (2026-10-10) — OBSERVABILITY CONTRACT (unified typed exposition + bounded cardinality +
+  windowed SLO), local half CLOSED. Fixes R2-10 ★ (CRITICAL: metric registration on the request path
+  could RAISE — ~40% of a new tenant's first requests 500 at ~480 UUID tenants, per-org series
+  truncated at 512/worker) + R2-11 (HIGH: server view could not certify the SLO — 3.2–5.8ms under-read
+  via lifetime quantiles, untyped exposition blinded the HPA, counter resets published negative rates,
+  rejected_503 merged causes, plan_unavailable uncounted, FAIL_CLOSED counted as policy BLOCK, audit
+  loss invisible). Observability phase; depends GW14/GW05c; required by GW20/T20/UI05. UNIFIES the six
+  shipped label-free PRODUCERS behind one Publisher implementing MetricsRegistry.exposition() (the
+  contract edge/app.py already consumed, nothing provided) — producers READ, not rebuilt. Built
+  bottom-up on the layer contract; Publisher lives in edge (only layer above admit; already owns
+  /metrics+/readyz+the MetricsRegistry protocol; already wires state_control across root_packages).
+  Fail-closed everywhere, no capacity literal outside runtime/resources.py, NO tenant-derived label on
+  any producer series (top-K+other is the ONLY per-tenant visibility, bounded by construction).
+  (1) runtime/resources.py — metrics_directory_slots/metrics_top_k/metrics_window_s/event_log_rate,
+  derivations of existing fields w/ documented _MULT/_FRACTION, fail-closed; only new capacity literals.
+  (2) admit/stream/holdback — fixed SERIES_COUNT (20/3, 11, 13; a histogram counts as its 3 native
+  series), matching the audit/state convention (R15). (3) edge/render.py — the one Prometheus renderer
+  + inverse parser: # TYPE per family (suffix rule reused from audit), native _bucket/_sum/_count +
+  terminal +Inf, de-dup, byte-stable, render(parse(render(x)))==render(x) (P8). (4) edge/cardinality.py
+  — the R2-10 core: observe() NEVER raises, size-check-before-insert, top-K + other + Overflow_Counter,
+  deterministic (mag desc, key asc) tie-break (P1 no-raise, P3 top-K+conservation). (5) edge/windowed.py
+  — rolling-window C4 add-on histogram (in-window quantiles ONLY, defined empty value, DISTINCT from the
+  lifetime Histogram) + generic windowed-busy gauge (external samples, # TYPE gauge w/ no sample, NO GPU
+  source fabricated) (P4 within 0.5ms). (6) edge/rates.py — reset-safe rates: no-baseline / counter-went-
+  backwards => OMIT, never negative; ABSENT sentinel gauges pass through (P5). (7) edge/counters.py —
+  rejected{status,reason} (reason from audit.record vocab) + per-posture counters (exact domain.posture
+  spellings), real zeros, distinct from policy BLOCK, out-of-vocab => indicator never a merged
+  rejected_503 (P6 distinct, P7 real-zeros). (8) edge/event_log.py — per-class rate-limited (bound from
+  contract), counter increments even when a line is suppressed, record() takes NO raw-content param so
+  no byte/secret can leak by construction (P10 bounded+no-leak). (9) edge/readiness.py —
+  make_metrics_readiness gates state_ready(view) FIRST, then directory.available(), extends not replaces
+  (P11). (10) edge/publisher.py — the keystone: six explicit guarded per-producer adapters (flat series()
+  audit/state_control/state_metrics; Reading snapshot() admit/quota/stream/holdback), per-producer
+  failure isolation (producer_read_failures_total), observe_* request-path NEVER raise, fixed SERIES_COUNT
+  asserted == rendered count, invariant to tenant count (P2). (11) edge/app.py — MetricsDirectorySource
+  protocol discriminates the Publisher from a plain registry; /readyz composed state-first then directory;
+  /metrics to_thread offload + /readyz 503 path UNCHANGED; backward-compatible (R1.8/R10.3). 11 correctness
+  properties as seeded random.Random >=10,000-iteration tests (house idiom, no hypothesis). OPEN (DEFERRED
+  CLOUD GATES): L14d-2 full 20,000-tenant live scale (local = tests/edge/test_tenant_scale_harness.py),
+  L14d-4 HPA ScalingActive, the synthetic-client/provider-canary production SLO (C39). SCOPE DECISIONS:
+  rc3-obs-v1 is a spec reference only (no Prometheus client lib — reimplemented in the gateway_v2 idiom);
+  windowed-busy MECHANISM in scope, GPU DATA SOURCE out (none fabricated); "metrics shared memory" modelled
+  as the in-memory CardinalityDirectory availability, not a new mmap. FOUND+FIXED: one Property-4
+  TEST-harness ordering bug (generator appended out-of-window samples with an earlier clock, violating the
+  deque monotone-forward contract) — fixed in the TEST, no product bug, no property weakened. KNOWN
+  FINDING: the pre-existing documented R2-05 check_tenant_scale state_control finding at valkey.py:100 is
+  unrelated and untouched (state_control tree, not gateway_v2). VERIFY: 38 GW14d new-test sweep / 75
+  tests/edge (shipped GW12 + 17 new, no regression) passed; `mypy --strict` 152 files, ruff, import-linter
+  2/2 kept, five AST gates over gateway_v2 each exit 0. Commit range suraj-revamp 380a146c (resources) →
+  486b0b42 (tests), 7 per-layer commits. Plan: docs/plans/2026-10-10-gw14d-observability-contract.md.
+  Evidence: docs/plans/evidence/2026-10-10-gw14d/.
+
+## R2-23 / push-coalescing changelog
+- R2-23 (2026-10-11) — PER-OWNER PUSH-NUDGE COALESCING (C43 push cost), local half CLOSED. Impact
+  MEDIUM; depends GW05c; fix before GW19. HONEST FRAMING: the original "72 pushes per request at 36
+  workers" is a v1/RC2 per-worker-per-request serving-path property, ALREADY GONE by construction in
+  gateway_v2 (write side emits exactly ONE PUBLISH per record write + ONE manifest-last PUBLISH per
+  batch; read-side NudgeListener already coalesces drain_max=64->1 with cursor skip-if-at-or-past; NO
+  serving-path publish at all). So Requirement 1 is a VERIFICATION OBLIGATION (a standing regression
+  tripwire), NOT a re-fix. What genuinely remained + what this card builds: a per-owner, publish-side
+  nudge coalescer bounding how many PUBLISHes one owner's WRITE BURST drives, + the microbenchmark the
+  register names. The coalescer is a thin StatePublisher DECORATOR that coalesces ONLY the lossy nudge
+  and NEVER the Durable_Write; the periodic O(1) round is the correctness backstop (a merged/dropped
+  nudge costs only latency, bounded by the Freshness_Window). Lives in state_control (OUTSIDE
+  root_packages, like the publisher it wraps), imports gateway_v2.domain.state_knobs (the allowed
+  state_control->gateway_v2.domain direction). (1) domain/state_knobs.py — coalesce_window_ms +
+  per_owner_push_bound knobs (named-constant defaults DEFAULT_COALESCE_WINDOW_MS=250 /
+  DEFAULT_PER_OWNER_PUSH_BOUND=1, no bare literal at the field) + fail-at-start validation incl.
+  window<=enforcement_bound_s (the Freshness_Window; == accepted). (2) state_control/publisher.py —
+  StatePublisher protocol gains emit_nudge(kind,feed_seq) + nudge: bool=True on publish_record/
+  publish_batch so the durable write can skip its inline PUBLISH; MemoryStore gates .nudges on the
+  flag (durable state + record_writes identical regardless), BrokenPublisher.emit_nudge raises.
+  nudge=True default keeps every existing caller unchanged. (3) state_control/valkey.py — _guarded
+  makes ONLY the trailing pipe.publish conditional on nudge (durable WATCH/MULTI byte-identical,
+  manifest-last); emit_nudge is a bare standalone PUBLISH; shared _nudge_payload keeps inline +
+  emit_nudge byte-identical so parse_nudge round-trips both. (4) state_control/coalescer.py (NEW) —
+  CoalescerCounters (frozen label-free, two series, mirrors ListenerCounters), CoalesceConfig.from_knobs
+  (authority-derived bound/window, window<=freshness re-validation), _PendingNudge per-(owner,kind)
+  accounting, CoalescingPublisher: reads + publish_kind pass through UNCOALESCED; publish_record/
+  publish_batch delegate the Durable_Write with nudge=False FIRST and RETURN the inner bool unchanged
+  (writer WriteOutcome untouched), THEN coalesce inside a swallow-everything guard (a push failure
+  NEVER changes a WriteOutcome, Req 6); emit at most per_owner_push_bound pushes/window carrying
+  Highest_Feed_Seq; monotonic guard suppresses a position <= highest_announced (counts pushes_saved,
+  never on the wire); three-layer flush (window-roll + flush_due per round + flush_all on shutdown),
+  fail-safe per-entry swallow, idempotent on a quiesced owner. (5) state_control/service.py — build()
+  wraps the WRITER's publisher in the coalescer (clock=time.monotonic), keeps the re-hydrator on the
+  BARE publisher (publish_kind wholesale restore must NOT be coalesced, R2-04 HA), flush_due(now) each
+  round + flush_all() on shutdown (defensively guarded). StateWriter UNCHANGED (depends only on the
+  protocol). 10 correctness properties as seeded random.Random >=10,000-iteration tests (house idiom,
+  no hypothesis; seeds 0xc0a01-0xc0a10). MICROBENCHMARK (Req 8, local representative of the deferred
+  knee re-measure): un-coalesced vs coalesced over a MemoryStore twin + injected clock, byte-
+  reproducible — 46 pushes saved (72->26) on a ~72-write per-owner burst, Durable_Write parity 72==72,
+  CPU-ms-shape proxy in the register's units. OPEN (DEFERRED CLOUD GATE): the fleet Knee_Re_Measure
+  (36 workers / real Valkey / real request load) — declared OPEN, the microbenchmark does NOT close it
+  (a test guards that). FOUND+FIXED: two TEST-harness bugs (counting the window-close catch-up as an
+  in-window push) — fixed in the tests, no product bug, no property weakened; the coalescer matches
+  design §4. KNOWN FINDING: pre-existing documented R2-05/GW05c check_tenant_scale finding at
+  state_control/valkey.py:100 unrelated + untouched. VERIFY: 23 R2-23 new tests (10 property + 6
+  verification + 7 microbench) + 188 tests/state_control full suite (58 skipped, 1 xfailed, no
+  regression) passed; mypy --strict 153 files, ruff, import-linter 2/2 kept, capacity-literals gate
+  over gateway_v2 PASS. Commit range suraj-revamp a3ea0dfb (state_knobs) -> bfb0ebe0 (tests), 6
+  per-layer commits. Plan: docs/plans/2026-10-11-r2-23-push-coalescing.md.
+  Evidence: docs/plans/evidence/2026-10-11-r2-23-push-coalescing/.
+
+## GW33 / output parity changelog
+- GW33 (2026-11-05) — OUTPUT GUARDRAIL PARITY (IP leak, exfil channels, canary, lexical grounding, real REWRITE, review flag): local half closed; live L33-1..L33-3 deferred. Byte-altering IP/exfil/grounding actions are STRICT_WITHHOLD-only; grounding model mode UNAVAILABLE until a backend advertises hallucination (GW33-F1). Plan: docs/plans/2026-gw33-output-parity.md; canonical entry: docs/pipeline/CHANGELOG.md.
+
+## v2-enforcement-leaks / GW15 input-REDACT + enforcement-leaks changelog
+- v2-enforcement-leaks (2026-10-26) — SIX GW15 ENFORCEMENT LEAKS CLOSED BEFORE THE PROVIDER, local
+  half CLOSED. Severity CRITICAL (A/B/C silently defeat a tenant-selected policy; D/E/F leak a
+  bounded resource or refuse valid work). The opt-in dev profile (AMF_DEV_PROFILE=1, dev/plan.example.json:
+  pii->redact, secret/credential->block, injection/jailbreak/command->flag, every rule scope:both)
+  exposed six defects in the clean-room gateway_v2. Fixed bottom-up by layer (domain->runtime->
+  dispatch->resolve->detect->admit->edge, then the dev cleanup), one commit per layer, fail-closed
+  everywhere, no capacity literal outside runtime/resources.py, egress never importing detect. Phase 0
+  wrote one exploratory bug-condition test per group + the preservation baselines on the UNFIXED tree
+  before any product change, each failing case under @pytest.mark.xfail(strict=True) so the suite
+  stayed green between commits and the marker had to go the moment its fix landed.
+  (A) INPUT REDACT MASKED + BYTE-VERIFIED BEFORE THE PROVIDER (chat + /v1/embeddings). Root: a REDACT
+  input decision forwarded raw bytes (only the output guard masked, only the echoed reply — C21, trace
+  said masked while the provider saw raw); EmbeddingsSurface acted on a decision only when BLOCK and
+  ignored REDACT; dispatch _resplit moved a byte of the next delta into the redacted one on a length
+  change; a detector-keyed verify obligation raised a false VerificationFailure on a mixed
+  SECRET->flag + CREDENTIAL->redact plan. Fix: FindingDisposition.finding_index (domain) keys each
+  obligation; resolver sets finding_index + coalesces overlapping/identical REDACT spans into their
+  union, never merging merely-touching spans; dispatch obliges exactly the indexed spans, fixes
+  _resplit (each boundary shifts by the summed length-delta of transformations ending at/before it; a
+  straddler stays in its start delta; raw bytes never cross a channel) and extracts the one
+  verified_upstream() path; edge/input_enforcement.py + edge/embeddings_input.py scan per delta + per
+  joined content-part run, shift by base offset, de-dupe then resolve once, and fail closed with
+  input_unmaskable (HTTP 400 invalid_request_error, same family as input_blocked, zero provider calls)
+  when the transformed bytes cannot be verified or an embeddings shape check fails.
+  (B) LUHN-VALID CARDS DETECTED REGARDLESS OF PATTERN ORDER. Root: the leftmost-first multi-pattern
+  pass let the pii_phone prefilter consume the PAN digit run, its precise matcher rejected it, and the
+  credential_card branch was never evaluated; no checksum. Fix (detect): PatternSpec.validator +
+  credential_card.validator="luhn"; bounded the unbounded prefilters (email local {1,64}/domain {1,253},
+  phone {9,14}, AWS key {10,16}, API-key value {12,512}); matcher keeps the one _COMBINED.finditer
+  primary pass, applies the validator after a confirm, and on a failed confirm/validator over region R
+  rescans every other pattern leftmost-first inside R (single-exclusion combined regexes precompiled at
+  import; deeper sets via the once-compiled _ALL_AT per-position lookahead restricted to R) — one
+  canonicalization + one primary match, no per-pattern loop. 4111-1111-1111-1111 / 4111111111111111 /
+  4111 1111 1111 1111 each emit one credential_card over the whole PAN; Luhn-invalid and 12/20-digit
+  runs emit none.
+  (C) JAILBREAK PHRASES + CONFUSABLES COVERED. Root: the \bDAN\b prefilter anchored the precise
+  "you are DAN" confirm at the DAN offset (same matcher defect as B); Greek Iota U+0399 was absent from
+  the fold table so "Ιgnore all previous instructions" never folded. Fix (detect): new
+  detect/confusables.py with a versioned CONFUSABLES table (CONFUSABLE_SET_VERSION="amf-confusables-1",
+  sha256 CONFUSABLES_DIGEST), a superset of both prior tables adding the Greek + Cyrillic upper/lower
+  letters whose UTS #39 prototype is one ASCII letter; canonicalize._fold_homoglyphs and
+  semantic/language.CONFUSABLE_FOLD both read it (1:1 per char, span records unchanged); ruleset_version()
+  appends the confusables record + validator field (a table change changes detector_version); lead-context
+  jailbreak alternatives (you\s+are\s+DAN\b, enable\s+developer\s+mode, answer\s+without\s+(?:any\s+)?restrictions)
+  added before the existing ones, audited for the start-superset invariant, matched from phrase start by
+  the Group B rescan with the span mapping back to the original confusable-bearing bytes.
+  (D) ADMISSION SLOTS RELEASED EXACTLY ONCE, complete() ISOLATED. Root: the GW15 lifecycle admitted but
+  never called complete (slots never released, in-flight never pruned); complete popped the FIFO head
+  for any id incl. an unknown/already-completed one, freeing a foreign slot. Fix: BoundedQueue.remove
+  (O(depth), depth contract-bounded); complete() returns untouched for an unknown id, else removes
+  exactly that id's slot, decrements the admit refcount, prunes at 0 and publishes (_decide increments
+  the refcount on admit — content-hashed ids can collide); edge/request_holds.py (per-request __slots__
+  RequestHolds: admitted/spent/mark_dispatched + a once-latched release that refunds if
+  spent-and-not-dispatched then completes if admitted, synchronous, never awaits/raises) wired in
+  edge/routes.py with try/finally and mark_dispatched() before each provider.open; the dev ASGI slot
+  wrapper removed so both boot paths release through the one lifecycle. Depth returns to 0 after
+  3 x request_depth sequential requests, no overload_shed.
+  (E) PHASE-AWARE RESOLUTION. Root: one resolver bound to one Phase served both phases, so scope:input/
+  output rules misfired or dropped and the dev profile refused to boot them. Fix: resolve(findings,
+  plan, phase) selects only rules scoped phase-or-both; edge/phase_resolvers.py resolver_for(route,
+  plan, phase) returns route.phase_resolvers(plan, phase) else route.resolver (unset branch reproduces
+  the default boot); chat input scans at Phase.INPUT, output guard / non-stream output / mid-stream
+  error-frame scan at Phase.OUTPUT with the pinned plan; dev profile drops require_phase_agnostic's
+  scope check and wires a phase_resolver_factory returning PlanResolver(plan, phase).
+  (F) ONE TOKEN UNIT FOR COST + LEASE, WITH REFUND AND A BOUNDED OUTPUT BUDGET. Root: GW06 sized the
+  chunk in requests, GW15 charged characters, so a long prompt was refused budget_unavailable with room
+  to spare; a refused request kept its charge; the output budget (max_tokens, n) was uncharged +
+  unbounded. Fix: runtime/resources.py estimate_request_tokens (v1's input=max(1, chars//4) if chars>0
+  else 0, plus max_tokens*n, min 1; _CHARS_PER_TOKEN_DIVISOR=4) + the four v1 output-budget constants
+  with an import-time ordering check (hard cap 65536, default ceiling 4096, boundary 1_000_000, max
+  completions 1) + max_request_tokens() + store_keys.budget_workers (a {rv2} ZSET scored by lease
+  expiry); admit/lease.py acquire grants min(pool, cap, max(1, pool//active)) from the store-clock-pruned
+  worker ZSET, BudgetLease(overdraft_tokens=...) + refund(cost, generation) local within the generation,
+  overshoot on amf_quota_lease_overshoot; admit/quota.py derive_lease_cap_tokens + QuotaComponent.refund;
+  edge/wire/openai.py parses max_tokens/n/max_completion_tokens via one _int_field (off-contract ->
+  MALFORMED_WRONG_SHAPE; above boundary -> invalid_max_tokens / invalid_max_completion_tokens with param)
+  + pure clamp_output_budget + prompt_chars; edge/openai_chat.py charges estimate_request_tokens(
+  prompt_chars, max_tokens, n) and clamps to the org ceiling; edge/errors.py maps input_unmaskable +
+  invalid_max_tokens + invalid_max_completion_tokens to (400, invalid_request_error), the boundary
+  rendered from max_output_tokens_boundary() not a literal. A 2000-char prompt is now admitted;
+  max_tokens=2000000 -> 400 invalid_max_tokens (param max_tokens) before admission; an input BLOCK after
+  a spend refunds on chat + embeddings; a 4-worker grant is <= pool//4.
+  NO V1 CHANGE: git diff --stat 103502b6..HEAD -- gateway/ai_mesh_gateway/ is empty, no uncommitted v1
+  change — all work is in gateway_v2/; no pipeline/CHANGELOG.md + PIPELINE-xxxx pointer needed.
+  COMMIT SEQUENCE (bottom-up, newest first): f56160c1 dev, d36caac6 edge, 2fc03f72 admit,
+  1104a90e+43dd5afd+143ca97d detect, 9835e557 resolve, 47d1c182 dispatch, 56a3ec7a runtime, 8328a399
+  domain, 103502b6 tests (Phase 0). The docs/records commit is the final commit.
+  OPEN (deferred, out of this card's scope): Phase 2 — real provider egress (HttpProviderClient seams)
+  + C29 true-up against provider-reported usage (this card pre-charges the v1 estimate only); Phase 3 —
+  decision visibility (audit, X-ZeroShield-* headers, the GW14b console contract); /v1/responses stays a
+  501 stub so GW15 remains ◐ PARTIAL on that one surface (MCP/RAG/vector = GW17/GW18, out of scope);
+  the full AuthorizedProviderEntry on chat (provider pooling/audit/rewrite) is Phase 2/3.
+  FOUND, NOT FIXED: (1) content-hash request-id collision — admitted ids can collide, so the lifecycle
+  is made collision-safe via an admit refcount, but the id scheme itself is unchanged (a GW05/identity
+  concern); (2) detection runs on the event loop — canonicalization + the deterministic match run inline
+  on the request path with no offload (fine at the current single-value sizes — scan("x"*262_144) is
+  ~0.11s on the fixed tree vs ~63.1s unfixed — but not moved off the loop; a GW12/executor concern);
+  (3) three canonicalisations per value — a value can be canonicalized up to three times across the
+  input scan, the join-run scan and verify (correct but redundant; a shared canonical form is a later
+  detect-path optimisation); (4) max_completion_tokens validated but uncharged — the field is parsed +
+  boundary-checked but the budget charges max_tokens*n only, so a request using max_completion_tokens is
+  under-charged on the output side (the charge-side fix waits on the Phase 2 usage true-up).
+  VERIFY: 2415 offline passed / 95 skipped / 1 xfailed / 0 failed (the sole xfail is the unrelated
+  pre-existing R2-04 store_ahead node; unfixed baseline was 1948/95/2, test_input_redact_masks_pii_before_the_provider
+  flipped xfail->PASS, no v2-enforcement-leaks marker remains active); mypy --strict 219 files; ruff;
+  import-linter 3/3 kept; 7 AST gates each exit 0; edge/openai_chat.py 800 (<=800) + edge/openai_misc.py
+  798 (<=799). Every Property 1-16 has a fix-checking/exploration test in the house idiom (seeded
+  random.Random, >=10,000 iterations, the seed in each assertion message, no hypothesis). LIVE: all 7
+  original dev-profile curl scenarios PASS over the REAL uvicorn HTTP server (uvicorn 0.54.0; real GW06
+  lease over a local Redis container; 9 workers) + a complementary in-process recording-provider byte-level
+  run — SSN masked at the provider (raw absent), card 4111-1111-1111-1111 -> 400 input_blocked zero
+  provider calls, "you are DAN" ASCII + Cyrillic DАN both 200 jailbreak=1, Greek Ιgnore 200
+  prompt_injection=1, 42/42 slots released with 0 overload_shed + depth 0, embeddings SSN item masked at
+  the provider, max_tokens=2000000 -> 400 invalid_max_tokens (param max_tokens).
+  Plan: docs/plans/2026-10-26-v2-enforcement-leaks.md.
+  Evidence: docs/plans/evidence/2026-10-22-v2-enforcement-leaks/ (baseline.txt, preservation-baseline.txt,
+  counterexamples.md, scan-262144-timing.txt, final-gate.txt, live-dev-profile/).
 
 ## MCP Hardening BACKSTOP changelog
 - Parallel Claude + Cursor sessions harden the multi-tenant MCP gateway. **Every hardening change is
@@ -1391,6 +1944,54 @@
     (aidefence): has_pii true raw / false masked. Parity with CHG-0098; extends CHG-0039/0064. Evidence mcp-parallel/
     findings/backstop-p-finite-sse-notification-scan/.
 
+## GW27 / FirewallConfig fields changelog
+- GW27 (2026-11-04) — 45 UNSUPPORTED FIREWALLCONFIG FIELDS: 15 BUILT, 30 RETIRED-BY-NAME (org_token_budget
+  delegated to GW36), local half CLOSED, live half OPEN. `firewall_v2_map.py` has no `unsupported` kind;
+  retired saves are refused naming the field and owner, `rewrite` is refused for the five action fields,
+  unchanged retired values are tolerated. BUILT: org request rate/burst/TPM (`admit/org_limits.py`,
+  per gateway replica, estimate-based TPM), response-token cap, audit enable/incident logging/retention
+  stamp/compliance stamp (`edge/audit_emit.py`, `audit_control/retention.py`, sweep off by default),
+  blocked keywords, output policy enable/fallback, threat intel (content-score floor). Signed plan body
+  gains `controls` + `requires: ["controls/1"]` behind `V2_PLAN_CONTROLS_ENABLED` and
+  `scripts/check_fleet_plan_schema.py`; keyword/threat rows ship in `V2_PLAN_NEW_RULES_MODE=monitor`.
+  OPEN: L27-1, L27-2, live Postgres EXPLAIN, live entry-size re-run, D-8/D-12 owner sign-offs.
+  VERIFY: 3208 passed (1 pre-existing tenant_scale failure), mypy/ruff/import-linter/AST gates as baseline.
+  Plan: .kiro/specs/gw27-firewall-config-fields/. Evidence: docs/plans/evidence/2026-10-27-gw27/.
+
+## GW29 / incident response changelog
+- GW29 (2026-11-04) — KILL SWITCH + ISOLATION + REROUTE + AUTO-ISOLATION, local half CLOSED. Branch
+  gw29-killswitch-isolation. `kill_switch_engaged` was hard-coded false and streams admitted before a kill, revoke or
+  isolation kept running; the console's org-wide and org-plus-model kills were counted "not enforced".
+  FIX (bottom-up on the layer contract, fail closed, no capacity literal outside runtime/resources.py):
+  (1) `domain/incident.py` value types, scope grammar, `canonical_model` (NFKC/casefold/alias, applied BEFORE any
+  match and sent upstream), `GateVerdict` exactly-one invariant, five new posture codes.
+  (2) `runtime/resources_incident.py` mixin (resources.py stays <= 800 via `resources_env.py`).
+  (3) `admit/killswitch.py` org-model set, isolation map, quarantine, drift latch, single-lock `evaluate`.
+  (4) `admit/incident_state.py` ONE expiry decision shared by gate and read model; `incident_gate.py` phase 4b
+  (stale, global, org, org-model, model, isolation) + `dispatch/incident_routing.py` pure `decide_route`.
+  (5) `model_risk.py` / `auto_isolation.py` (tighten only, needs an eligible fallback) / `revocation.py` /
+  `incident_metrics.py` (27 series). (6) Edge: phase 4b before `_admit`, per-attempt recheck above
+  `mark_dispatched`, `KillSwitchControlSource` (refusing default, `DevNoControlSource` dev only), single audit
+  record per refusal, 503 + `Retry-After` + `x-should-retry:false` even for streaming requests, embeddings /
+  moderations / MCP gated, notifier pump + ticker + catalog + production wiring. (7) `state_control`
+  `incident_scopes.py` + `StateWriter.isolation`, flag `AMF_STATE_PROJECT_INCIDENT_SCOPES` default OFF, refused
+  while `AMF_GATEWAY_MIN_SCOPE_GENERATION` < 2.
+  OPEN (DEFERRED, no live stack): L29-1..L29-4 live, real notification delivery, fleet convergence timing of a
+  signed auto-isolation, console agreement (GW35). WIRED (convergence fix): `emit_chat_audit` feeds
+  `IncidentAuditTap.record_attempt` (bound to `IncidentWiring.record_attempt` in `build_incident`) via
+  `edge/incident_attempt.py`, from the holds ledger (`mark_dispatched(model)`, provider/guard code); end-to-end test
+  `test_lgw29_l29_3_live_feed.py` (5xx/timeout through the real route isolates + reroutes, stream and non-stream).
+  `plan_changed` is a named constant `False` (not wired).
+  FOUND, NOT FIXED: `check_tenant_scale` exit 1 on `dispatch/vector_transports/pinecone_transport.py:140` (GW30,
+  on the base commit) and `state_control/valkey.py:100` (R2-05); both are the only failing test in the suite.
+  VERIFY: 3605 passed / 107 skipped / 1 failed (that declared tenant-scale test; baseline 3037 / 112 / 2) / 556
+  lgw29-subset passed; `mypy --strict` 303 files with only the 9 baseline import-not-found for absent optional
+  vector SDKs, ruff clean, import-linter `Contracts: 3 kept, 0 broken`, capacity/mutable/frozen/http/sizes/
+  provenance/secret_headers gates exit 0. Negative controls (phase 4b removed, DevNoControlSource default,
+  STALE as OK, creation-only expiry) each fail named tests and are reverted. Hot path: gate.decide 3.0 us clean /
+  7.6 us rerouted, 0.9 us per-chunk evaluate.
+  Plan: docs/plans/2026-11-04-gw29-killswitch-isolation.md. Evidence: docs/plans/evidence/2026-11-04-gw29/.
+
 ## Ralph autonomous loop — gateway hardening
 - Backlog + status live in scripts/ralph/prd.json; learnings in scripts/ralph/progress.txt.
 - ONE story per iteration; never break a passing gate; never mark passes:true without a green gate.
@@ -1573,3 +2174,6 @@ Dynamic full-hardware concurrency lane (perf). Mirrored in `docs/perf/CHANGELOG.
   - CHG-0153 (2026-07-03) — LOW defense-in-depth (item 8): sandbox image put CWD on the agent's Python import path (PYTHONPATH trailing colon). services/mcp-broker/sandbox-image/Dockerfile had `ENV PYTHONPATH="/opt/shared:${PYTHONPATH}"`; ${PYTHONPATH} is UNDEFINED at build → resolved to literal "/opt/shared:" — trailing colon = an EMPTY sys.path entry = the process CWD (verified in the built image: PYTHONPATH=[/opt/shared:], "" in sys.path == True). A sandbox agent spawning untrusted MCP servers must not carry CWD on its import path (import-hijack footgun); also the source of the docker build UndefinedVar(line 45) warning. FIX: `ENV PYTHONPATH="/opt/shared"` (plain; docker run -e overrides anyway). VERIFY: rebuilt via docker (no UndefinedVar warning); ran the REAL agent CMD uvicorn agent.main:app → /health {"status":"ok"} + "Application startup complete" (empty entry NOT load-bearing — uvicorn imports the agent pkg itself, ai_mesh_shared via /opt/shared); runtime PYTHONPATH=[/opt/shared]. BONUS (docker IS available here): verified CHG-0142 END-TO-END in a rebuild — /usr/local/etc/npmrc=ignore-scripts=true(+audit/fund/update-notifier off), `npm config get ignore-scripts`→true as the sandbox user, globalconfig=/usr/local/etc/npmrc, root-owned. OPERATIONAL FINDING for the deploy owner: the deployed ai-mesh/mcp-sandbox:latest PREDATES CHG-0142 (ignore-scripts→false there) — the image must be REBUILT + redeployed (sandboxes recreated) for the baked-npmrc + PYTHONPATH controls to take effect (CHG-0044 per-spawn env pin still enforces ignore-scripts at runtime today). gVisor/runsc NOT installed (docker info Runtimes: runc) → item 12 still blocked. Evidence mcp-parallel/findings/backstop-p8-sandbox-pythonpath-cwd/.
  - CHG-0154 (2026-07-06) — MCP_HOST_TOOLS end-to-end wiring (on-demand sandbox CLI binaries): shared/ai_mesh_shared/mcp_host_tools.py + presets host_tools→env_vars.MCP_HOST_TOOLS + control serializer validation + MCP_HOST_TOOL_FAILED classifier + frontend Host CLI tools UI; agent stdio_manager uses shared contract. VERIFY: 22 host-tool unit tests + gateway 2091 + broker 196. Evidence mcp-parallel/findings/backstop-p-host-tools-wiring/.
  - CHG-0155 (2026-07-07) — Sandbox writable HOME + npx isEntrypoint spawn fix for MCP_HOST_TOOLS: HOME=/var/cache/home (semgrep ~/.semgrep on RO rootfs); stdio_manager _resolve_npx_spawn rewrites bare npx -y <pkg> → node <main.js> (mcp-server-semgrep isEntrypoint gate). VERIFY: live hostToolsQuickPass semgrep connected tools=7 + bogus MCP_HOST_TOOL_FAILED. Evidence mcp-parallel/findings/backstop-p-host-tools-writable-home/.
+
+## GW35 console truth changelog
+- GW35 (2026-11-04) — CONSOLE TRUTH, local half: one console builder over request facts (auth/rate_limit real, six stages, no invented stages); honest `error` action end to end (gateway trace, control drain, frontend); failed-credential audit rows under the reserved org `_unauthenticated`; retired routes answer 410 under `AMF_GATEWAY_BACKEND=v2`; GW14b ledgers regenerated. NOT run: live Docker/staging gate, Playwright sweep, browser walk, owner signatures. Evidence: docs/plans/evidence/2026-11-04-gw35/SUMMARY.md. Spec: .kiro/specs/gw35-console-truth/.

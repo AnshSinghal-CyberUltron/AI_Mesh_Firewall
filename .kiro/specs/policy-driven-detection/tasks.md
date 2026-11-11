@@ -229,7 +229,7 @@ and the final live checkpoint (12) come last. Critical path to completion:
     - Toggling in the UI PUTs the setting and the displayed state matches the backend value
     - _Requirements: 3.6_
 
-- [-] 9. Checkpoint — gateway unit gate + zero-policy passthrough proven in unit layer
+- [ ] 9. Checkpoint — gateway unit gate + zero-policy passthrough proven in unit layer
   - Run `cd gateway && ./.venv/bin/python -m pytest ai_mesh_gateway/tests -q`; update only the
     pre-existing tests that asserted the now-removed built-in default behaviour
   - Confirm the retained Scanning_Engine, policy engine, and Enforcement_Authority tests still pass
@@ -237,36 +237,36 @@ and the final live checkpoint (12) come last. Critical path to completion:
   - _Requirements: 8.5, 8.6_
 
 - [ ] 10. Build the mandatory Docker live end-to-end verification harness (Requirement 9)
-  - [~] 10.1 Author the ≥100-prompt corpus with per-config intended outcomes
+  - [ ] 10.1 Author the ≥100-prompt corpus with per-config intended outcomes
     - Create a committed prompt corpus (may reuse/extend the G0.1 detection corpus) of at least 100
       distinct prompts spanning every re-homed family + benign prompts, each annotated with its
       intended outcome per policy configuration (all-off, and per-package-on)
     - _Requirements: 9.2_
 
-  - [~] 10.2 Author the harness that starts Docker services and drives both surfaces
+  - [ ] 10.2 Author the harness that starts Docker services and drives both surfaces
     - Script that: brings up the full stack via Docker Compose and waits for every healthcheck; seeds
       + enables/disables packages and the Tier-2 toggle per run; drives the corpus through BOTH the
       frontend surface (Playwright) and the OpenAI SDK (`openai` client to `/v1/chat/completions`);
       collects per-prompt (surface, config, observed decision, intended, pass/fail)
     - _Requirements: 9.1, 9.6_
 
-  - [~] 10.3 Implement the run matrix and pass/fail gate
+  - [ ] 10.3 Implement the run matrix and pass/fail gate
     - Config A (all packages OFF, Tier-2 OFF): assert every prompt is passthrough on the live stack
     - Config B(i) (exactly one package ON, repeated per package): assert only that package's rules
       fire with the selected action; other/disabled packages' prompts pass through
     - Both surfaces must agree; any unhealthy service or contradicting decision fails the run
     - _Requirements: 9.3, 9.4, 9.5, 9.6, 9.8, 9.9_
 
-  - [~] 10.4 Emit the reproducible evidence artefact
+  - [ ] 10.4 Emit the reproducible evidence artefact
     - Write the per-prompt results + the exact reproduce commands (Docker up, seed/enable, drive,
       collect) to a committed artefact under a permitted path (e.g. `docs/perf/`)
     - _Requirements: 9.7, 9.10, 8.7_
 
-  - [~] 10.5 Write the reproducibility property test
+  - [ ] 10.5 Write the reproducibility property test
     - **Feature: policy-driven-detection, Property 12: For any fixed input, fixed enabled policy set, and fixed `tier2_enabled=off`, Tier-1 evaluation is deterministic and repeatable (identical decision across runs), and the live end-to-end run reproduces the same per-prompt outcomes from the recorded commands.**
     - **Validates: Requirements 9.8, 9.10**
 
-- [~] 11. Cutover wiring and documentation
+- [ ] 11. Cutover wiring and documentation
   - Ensure the shipped defaults produce the Zero_Policy_State for every org at cutover (no built-in
     default path remains); no auto-enable of packages on any org's behalf
   - Document (in the evidence artefact / changelog) that an org is unprotected until it enables a
@@ -275,7 +275,7 @@ and the final live checkpoint (12) come last. Critical path to completion:
     changes under `CHG-xxxx`)
   - _Requirements: 7.1, 7.2, 7.3, 7.4, 7.5, 8.7_
 
-- [~] 12. Final checkpoint — full gates green and mandatory live E2E passed
+- [ ] 12. Final checkpoint — full gates green and mandatory live E2E passed
   - Gateway unit gate green; control gate green; frontend build/test green
   - Run the Docker live E2E harness (task 10) end to end on the actual services with the 100+ prompt
     corpus through the frontend AND the OpenAI SDK; confirm all-off ⇒ zero detections and

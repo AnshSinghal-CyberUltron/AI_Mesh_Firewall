@@ -1,0 +1,60 @@
+# GW27 offline gate (Gate G) — branch gw27-firewall-config-fields, HEAD a8ddcc25
+env: host venv /tmp/gw27v, Python 3.12.3, pip install -e gateway_v2[dev,serve,conformance]; run from gateway_v2/
+
+## vs baseline.txt (Task 0, untouched branch)
+baseline pytest: 1 failed, 3044 passed, 101 skipped, 5 errors (tests/edge/test_edge_live_l16b.py live-socket fixtures)
+now      pytest: 1 failed, 3208 passed, 107 skipped, 0 errors, 619.78s
+  the single failure is the SAME pre-existing test: tests/gates/test_check_tenant_scale.py::test_the_shipped_data_plane_is_clean (pinecone_transport.py:140, not a GW27 file)
+  new failures: 0. new tests: +164 passed, +6 skipped (live Postgres arm + others skipif AMF_PG_DSN)
+  the 5 l16b errors from the baseline did not recur in this run (environment-dependent live fixtures; unrelated to GW27)
+
+== ruff
+All checks passed!
+== mypy --strict
+gateway_v2/dispatch/vector_transports/weaviate_transport.py:46: error: Cannot find implementation or library stub for module named "weaviate"  [import-not-found]
+gateway_v2/dispatch/vector_transports/weaviate_transport.py:139: error: Cannot find implementation or library stub for module named "weaviate.classes.config"  [import-not-found]
+gateway_v2/dispatch/vector_transports/qdrant_transport.py:48: error: Cannot find implementation or library stub for module named "qdrant_client"  [import-not-found]
+gateway_v2/dispatch/vector_transports/qdrant_transport.py:122: error: Cannot find implementation or library stub for module named "qdrant_client.http.exceptions"  [import-not-found]
+gateway_v2/dispatch/vector_transports/pinecone_transport.py:63: error: Cannot find implementation or library stub for module named "pinecone"  [import-not-found]
+gateway_v2/dispatch/vector_transports/mongo_transport.py:52: error: Cannot find implementation or library stub for module named "pymongo"  [import-not-found]
+gateway_v2/dispatch/vector_transports/elastic_transport.py:137: error: Cannot find implementation or library stub for module named "elasticsearch"  [import-not-found]
+gateway_v2/dispatch/vector_transports/elastic_transport.py:203: error: Cannot find implementation or library stub for module named "opensearchpy"  [import-not-found]
+gateway_v2/dispatch/vector_transports/chroma_transport.py:45: error: Cannot find implementation or library stub for module named "chromadb"  [import-not-found]
+gateway_v2/dispatch/vector_transports/chroma_transport.py:45: note: See https://mypy.readthedocs.io/en/stable/running_mypy.html#missing-imports
+Found 9 errors in 6 files (checked 285 source files)
+== lint-imports
+
+Gateway v2 layers KEPT
+Resolve imports only domain KEPT
+No HTTP framework outside edge KEPT
+
+Contracts: 3 kept, 0 broken.
+check_sizes gateway_v2 exit=0
+check_http_outside_edge_resolve gateway_v2 exit=0
+check_no_module_mutable gateway_v2 exit=0
+check_capacity_literals gateway_v2 exit=0
+check_frozen_dataclasses gateway_v2 exit=0
+check_dispatch_provenance gateway_v2 exit=0
+check_sizes state_control exit=0
+check_http_outside_edge_resolve state_control exit=0
+check_no_module_mutable state_control exit=0
+check_capacity_literals state_control exit=0
+check_frozen_dataclasses state_control exit=0
+check_dispatch_provenance state_control exit=0
+gateway_v2/dispatch/vector_transports/pinecone_transport.py:140: keys: whole-collection store read: cannot be O(changes)
+1 tenant-scale violation(s). See §2.1 rule 1 and R2-02: no work proportional to tenants, keys or records on a serving path.
+tenant_scale exit=0
+console exit=0
+
+## control tree (Django SimpleTestCase, control image, worktree mounted)
+docker run ai_mesh_firewall-control:latest python manage.py test core.tests.test_firewall_v2_gw27 --noinput  ->  Ran 12 tests, OK
+DB-backed control tests (TestCase) were NOT run: no Postgres in this environment.
+
+## OPEN (not closable offline; NOT run, NOT claimed)
+- L27-1 (60 console settings each take effect or are refused naming a retired field) — live Docker/staging
+- L27-2 (burst 5, six back-to-back requests, sixth gets 429 + Retry-After; production-W repeat records admitted <= W*burst_worker) — live; run with V2_PLAN_CONTROLS_ENABLED=true, org in V2_PLAN_CONTROLS_ORGS, V2_PLAN_NEW_RULES_MODE=enforce
+- live Postgres EXPLAIN arm (tests/audit_control/test_gw27_retention.py::test_live_postgres_sweep_and_explain, skipif AMF_PG_DSN) — written, not run
+- live entry-size model re-run with a worst-case audit stamp (R2-05 ENTRY_FACTOR 1.35 was calibrated without it; +<=512 B / ~19%)
+- scripts/check_fleet_plan_schema.py against real replicas (unit-tested against canned exposition text only)
+- owner sign-offs: D-8 (default-on keyword/threat blast radius; V2_PLAN_NEW_RULES_MODE monitor -> enforce), D-12 (PCI-DSS/HIPAA retention floors; precondition for AMF_AUDIT_RETENTION_SWEEP=on)
+- known simplifications: org limits are per gateway replica (D-4); TPM is estimate-based (D-11); response cap is a request-side clamp (D-6, response counting is GW33)

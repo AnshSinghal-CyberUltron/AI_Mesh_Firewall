@@ -1,0 +1,136 @@
+v2-enforcement-leaks — FINAL GATE (task 36)
+===========================================
+Date run:  2026-10-26 (date +%F)
+Evidence dir date: 2026-10-22 (reused to sit beside baseline.txt per task 1)
+Python:    3.12.3 (gateway_v2/.venv)
+cwd:       gateway_v2
+Toolchain: .venv/bin (not on PATH)
+Scope:     final authoritative gate for the whole card. NO product code changed; NO commit (records = task 40).
+
+Gate G results
+--------------
+.venv/bin/python -m pytest -q -p no:cacheprovider
+    2415 passed, 95 skipped, 1 xfailed, 8 warnings in 1107.02s (0:18:27)   exit 0
+    Exact summary line:
+        2415 passed, 95 skipped, 1 xfailed, 8 warnings in 1107.02s (0:18:27)
+    This matches the Group F checkpoint target exactly: 2415 passed / 95 skipped / 1 xfailed / 0 failed.
+    Relative to the unfixed baseline (1948 passed / 95 skipped / 2 xfailed): every baseline test
+    still passes, test_input_redact_masks_pii_before_the_provider flipped from xfail to PASS, and
+    every new test passes; skipped unchanged at 95; xfailed dropped 2 -> 1.
+
+    SINGLE-XFAIL INVARIANT — CONFIRMED.
+    The one remaining xfail is ONLY:
+        tests/state_control/test_r2_04_service.py::test_a_store_ahead_repair_settles_instead_of_looping
+    Confirmed via `pytest -rx` on that node:
+        XFAIL ... - PRE-EXISTING GW05c/R2-02 defect, NOT R2-04 ... repair_epoch advances the
+        counter's feed_seq to N+1 but the records keep feed_seq <= N, so _compare returns INDEX on
+        every subsequent round (permanent O(records) whole-kind republish). A GW05c design decision,
+        not R2-04's to guess at. Remove this marker when it is fixed.
+    It is unrelated to v2-enforcement-leaks and is unchanged (same node, same reason as the baseline).
+    No `failed`; no xfail OTHER than the R2-04 one.
+
+    Warnings (8): all the known-benign R2-09 "coroutine 'BudgetLease._refill' was never awaited"
+    (undrained single-flight refill coroutines in the lease/LGW06 tests). Ignored per the task note.
+
+.venv/bin/mypy --strict
+    Success: no issues found in 219 source files                         exit 0   PASS
+
+.venv/bin/ruff check gateway_v2 state_control lint tests
+    All checks passed!                                                   exit 0   PASS
+
+.venv/bin/lint-imports
+    Contracts: 3 kept, 0 broken.                                         exit 0   PASS
+      Gateway v2 layers KEPT
+      Resolve imports only domain KEPT
+      No HTTP framework outside edge KEPT
+      (Analyzed 207 files, 1077 dependencies.)
+
+Seven AST gates (each exit 0 = PASS):
+    .venv/bin/python -m lint.check_capacity_literals gateway_v2          exit 0   PASS
+    .venv/bin/python -m lint.check_no_module_mutable gateway_v2          exit 0   PASS
+    .venv/bin/python -m lint.check_frozen_dataclasses gateway_v2         exit 0   PASS
+    .venv/bin/python -m lint.check_http_outside_edge_resolve gateway_v2  exit 0   PASS
+    .venv/bin/python -m lint.check_sizes gateway_v2                      exit 0   PASS
+    .venv/bin/python -m lint.check_tenant_scale gateway_v2              exit 0   PASS
+    .venv/bin/python -m lint.check_dispatch_provenance gateway_v2        exit 0   PASS
+
+Edge file-size ceilings (wc -l)
+-------------------------------
+    gateway_v2/edge/openai_chat.py   800   (<= 800)  OK
+    gateway_v2/edge/openai_misc.py   798   (<= 799)  OK
+
+No v2-enforcement-leaks xfail marker remains active
+---------------------------------------------------
+Searched the whole test tree for xfail markers tied to this card: every match is in a
+comment/docstring/helper definition, never an applied marker. The two mark.xfail helpers —
+tests/detect/test_v2_leaks_matcher.py::_unconfirmed and tests/edge/test_v2_leaks_phase.py::_modes —
+apply pytest.mark.xfail ONLY when a non-None reason/counterexample is passed:
+  - test_v2_leaks_phase.py: all three call sites use _modes(None) -> marks=() (no xfail).
+  - test_v2_leaks_matcher.py: every _PHRASE_CASES entry (and the card cases) now has detail=None
+    -> marks=() (no xfail); each keeps its unfixed-tree counterexample in a comment for the record.
+Therefore NO v2-enforcement-leaks xfail marker is active. The sole surviving xfail is the unrelated
+R2-04 store_ahead strict xfail documented above.
+
+Property 1–16 test inventory (seeded random.Random, >= 10,000 iterations, no hypothesis)
+----------------------------------------------------------------------------------------
+Every design property has a fix-checking/exploration test present and passing. Property-test files
+(seed + iteration count grepped from the source):
+
+  P1  Bug Condition (per group, exploration) — present across the group exploration tests:
+        tests/edge/test_v2_leaks_a_input_redact.py (A chat),
+        tests/edge/test_v2_leaks_a_embeddings_redact.py (A embeddings),
+        tests/dispatch/test_v2_leaks_verify.py (A dispatch),
+        tests/detect/test_v2_leaks_matcher.py (B, C),
+        tests/admit/test_v2_leaks_admission.py + tests/edge/test_v2_leaks_d_lifecycle.py (D),
+        tests/edge/test_v2_leaks_phase.py (E),
+        tests/admit/test_v2_leaks_budget.py (F).
+      (All exploration xfail markers removed; cases now pass on the fixed tree.)
+  P2  Preservation — tests/detect/test_v2_leaks_detect_preservation.py (_SEED=0x7610, _ITERS=10_000)
+                      + tests/edge/test_v2_leaks_enforcement_preservation.py (ITERATIONS=10_000,
+                        _BASE_SEED=20_261_022).
+  P3  Chat input-REDACT before the provider —
+        tests/edge/test_v2_leaks_a_properties.py (ITERATIONS=10_000, seeded random.Random);
+        also exercised in test_v2_leaks_a_input_redact.py and dispatch/test_v2_leaks_verify.py.
+  P4  Verify / fail-closed obligations —
+        tests/edge/test_v2_leaks_a_failclosed_properties.py (_SEED=0x2821_FA11_C105ED,
+        _ITERATIONS=10_000); dispatch/test_v2_leaks_verify.py.
+  P5  Card / Luhn + leftmost-first — tests/detect/test_v2_leaks_matcher_properties.py
+        (_SEED=0x19C, _ITERS=10_000); resolve/test_v2_leaks_resolver.py cross-ref.
+  P6  Failed-region rescan — tests/detect/test_v2_leaks_matcher_properties.py
+        (_SEED=0x19C, _ITERS=10_000); detect_preservation.py cross-ref.
+  P7  Confusable coverage — tests/detect/test_v2_leaks_confusable_property.py
+        (_SEED=0x21C, _ITERS=10_000).
+  P8  Versioned confusable set / ruleset_version — tests/detect/test_v2_leaks_version_property.py
+        (_SEED=0x21_2, _ITERS=10_000); confusable_property.py + confusable_fold.py cross-ref.
+  P9  Admission lifecycle (one complete per admitted path) —
+        tests/edge/test_v2_leaks_d_properties.py (_SEED=0xD00D_1EAC, _ITERATIONS=10_000).
+  P10 complete() isolation / in-flight drain —
+        tests/admit/test_v2_leaks_admission_properties.py (_SEED=0x23D5, _ITERS=10_000).
+  P11 Phase-scoped resolver — tests/edge/test_v2_leaks_phase_properties.py
+        (ITERATIONS, _SEED_RESOLUTION=0x1708_0011, _SEED_DEV_BOOT=0x1708_0014)
+        + tests/resolve/test_v2_leaks_resolver.py (ITERATIONS=10_000, per-case seeded).
+  P12 Budget lease / fair-share grant / refund —
+        tests/admit/test_v2_leaks_lease_properties.py (_SEED=0x23D6, _ITERS=10_000)
+        + tests/edge/test_v2_leaks_f_properties.py (_SEED=0xF00D_B0DE_C105ED, _ITERATIONS=10_000).
+  P13 Detection monotonicity vs frozen oracle —
+        tests/detect/test_v2_leaks_detect_preservation.py (_SEED=0x7610, _ITERS=10_000).
+  P14 Enforcement unchanged off the bug condition —
+        tests/edge/test_v2_leaks_enforcement_preservation.py (ITERATIONS=10_000,
+        _BASE_SEED=20_261_022); resolve/test_v2_leaks_resolver.py cross-ref.
+  P15 Embeddings per-item deltas —
+        tests/edge/test_v2_leaks_a_embeddings_properties.py (ITERATIONS=10_000, one seeded
+        random.Random); test_v2_leaks_a_embeddings_redact.py + dispatch/test_v2_leaks_verify.py.
+  P16 Output-budget contract (bounded, charged, max_tokens boundary) —
+        tests/edge/test_v2_leaks_f_output_budget_properties.py (ITERATIONS=10_000, seeded)
+        + tests/edge/test_v2_leaks_f_properties.py (P16 clause) + admit/test_v2_leaks_budget.py.
+
+All property files use a seeded random.Random (the seed named in every assertion message),
+>= 10,000 iterations, and no hypothesis — the house idiom.
+
+CONCLUSION
+----------
+Final gate PASSES. pytest 2415 passed / 95 skipped / 1 xfailed / 0 failed; the one xfail is the
+unrelated R2-04 store_ahead node. mypy/ruff/lint-imports/7 AST gates all exit 0. Edge file sizes
+within ceilings (openai_chat.py 800 <= 800, openai_misc.py 798 <= 799). No v2-enforcement-leaks
+xfail marker remains active. Every Property 1–16 test is present and passing at >= 10,000 seeded
+iterations. No product code was modified and no commit was made (records commit is task 40).

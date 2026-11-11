@@ -1,0 +1,14 @@
+# step 9: writer failover (stop projector-a; projector-b must take over within the lease)
+lease before: projector-a live=true lag_s=0.12
+takeover after 793 ms: projector-b live=true lag_s=0.63
+stamps withheld for source lag during failover: 0
+projector-b leader metric: 1
+
+# step 10: both projectors down -> stamp withheld once the heartbeat is older than 16 s
+first withheld stamp 16902 ms after the last projector stopped: projector-b live=false lag_s=17.56
+2026-11-03 07:35:19,008 WARNING amf.state.rehydrate freshness stamp withheld (projector heartbeat missing or older than 16000 ms): plan, key, ks, budget; gateways fail closed once the last stamp ages 
+gateway reader stamp after 6 s more: {'accepted': True, 'age_s': 8.647, 'fresh': False}
+
+# step 11: recovery
+stamp resumed 2313 ms after the projectors were started: projector-a live=true lag_s=1.02
+gateway reader: {'accepted': True, 'age_s': 0.304, 'fresh': True} plan True key True ks True

@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { Clock, Shield, AlertTriangle, XCircle, CheckCircle, Pin, X, ArrowRightLeft } from "lucide-react";
-import { normalizeStages, formatRouteDestination, honestStageAction } from "../../utils/pipelineTrace";
+import { normalizeStages, formatRouteDestination, honestStageAction, stageDecidingRules } from "../../utils/pipelineTrace";
 import { summarizeRoutingDecision } from "../../utils/routingExplain";
 import { summarizeInputScanStage } from "../../utils/inputScanExplain";
 import { RoutingTechnicalDetails } from "../RoutingTechnicalDetails";
@@ -49,6 +49,13 @@ const ACTION_THEME = {
     icon: "text-zinc-500",
     highlight: "ring-zinc-400/40 shadow-zinc-500/20",
   },
+  unavailable: {
+    card: "border-orange-200 bg-orange-50/80 text-orange-950 dark:border-orange-500/30 dark:bg-orange-500/10 dark:text-orange-50",
+    badge: "bg-orange-500/15 text-orange-800 dark:text-orange-200",
+    dot: "bg-orange-500",
+    icon: "text-orange-500",
+    highlight: "ring-orange-400/40 shadow-orange-500/20",
+  },
   needs_model: {
     card: "border-violet-200 bg-violet-50/80 text-violet-900 dark:border-violet-500/30 dark:bg-violet-500/10 dark:text-violet-50",
     badge: "bg-violet-500/15 text-violet-700 dark:text-violet-300",
@@ -80,6 +87,7 @@ const ACTION_ICONS = {
   flag: AlertTriangle,
   redact: Shield,
   skip: Clock,
+  unavailable: AlertTriangle,
   needs_model: AlertTriangle,
   reroute: ArrowRightLeft,
   error: AlertTriangle,
@@ -175,6 +183,7 @@ export function StageTimeline({ stages: rawStages = [], className = "" }) {
       <div className="-mx-1 flex items-stretch gap-2 overflow-x-auto pb-2 pt-1 sm:mx-0 sm:gap-3">
         {stages.map((stage, i) => {
           const displayAction = honestStageAction(stage);
+          const decidingRules = stageDecidingRules(stage);
           const theme = ACTION_THEME[displayAction] || ACTION_THEME.skip;
           const Icon = ACTION_ICONS[displayAction] || Clock;
           const isHovered = hoveredStage === i;
@@ -215,6 +224,11 @@ export function StageTimeline({ stages: rawStages = [], className = "" }) {
                 <div className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
                   {formatStageLatency(stage)}
                 </div>
+                {decidingRules.length > 0 && (
+                  <div className="mt-1 truncate text-[11px] font-medium text-sky-700 dark:text-sky-300" title={decidingRules.join(", ")}>
+                    {decidingRules.join(", ")}
+                  </div>
+                )}
 
                 <div className="mt-2 flex items-center gap-1.5">
                   <span className={`h-1.5 w-1.5 rounded-full ${theme.dot} ${isActive ? "animate-pulse" : ""}`} />
@@ -595,7 +609,7 @@ function StageDetailCard({ stage, onClose, isPinned }) {
             <span className="text-sky-600 dark:text-sky-300">{stage.matched_policies.join(", ")}</span>
           </div>
         )}
-        {stage.matched_rules?.length > 0 && (
+        {stageDecidingRules(stage).length > 0 && (
           <div className="col-span-2">
             {/* "Applied" only when the stage actually ENFORCED (block/redact/rewrite).
                 When the stage action is allow/monitor/flag the rules MATCHED their
@@ -604,7 +618,7 @@ function StageDetailCard({ stage, onClose, isPinned }) {
             <span className="text-slate-500 dark:text-slate-400">
               {["block", "redact", "rewrite"].includes(stage.action) ? "Rules applied:" : "Rules matched:"}
             </span>{" "}
-            <span className="text-sky-600 dark:text-sky-300">{stage.matched_rules.join(", ")}</span>
+            <span className="text-sky-600 dark:text-sky-300">{stageDecidingRules(stage).join(", ")}</span>
           </div>
         )}
         {stage.docs_in !== undefined && (

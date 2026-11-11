@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   consumeSSEStream,
+  normalizeStreamChatPipelineResult,
   extractRoutingFromHeaders,
   inferTerminalBlockedStage,
   normalizeChatPipelineResult,
@@ -77,6 +78,69 @@ test("non-data lines (comments / other fields) are ignored", async () => {
   );
   assert.equal(result.aggregatedContent, "ok");
   assert.equal(result.events.length, 1);
+});
+
+test("amf.trace comment line is the console trace and is not assistant text", async () => {
+  const trace = {
+    zeroshield: { action: "allow", request_id: "zs-1" },
+    pipeline_trace: {
+      final_action: "allow",
+      plan_version: "1.1.abc",
+      stages: [
+        { name: "auth", action: "allow", ran: true },
+        { name: "rate_limit", action: "allow", ran: true },
+        { name: "input_scan", action: "allow", ran: true },
+        { name: "model_routing", action: "allow", ran: true },
+        { name: "model_output", action: "allow", ran: true },
+        { name: "output_guardrail", action: "allow", ran: true },
+      ],
+    },
+  };
+  const frame = `: amf.trace ${JSON.stringify(trace)}\n\n`;
+  const result = await consumeSSEStream(
+    sseResponse([`${deltaEvent("echo")}\n\n${frame}data: [DONE]\n\n`]),
+  );
+  assert.equal(result.aggregatedContent, "echo");
+  assert.equal(result.terminalTracePayload.pipeline_trace.stages.length, 6);
+  const normalized = normalizeStreamChatPipelineResult(result, 200, {});
+  assert.deepEqual(
+    normalized.stages.map((stage) => stage.name),
+    ["auth", "rate_limit", "input_scan", "model_routing", "model_output", "output_guardrail"],
+  );
+});
+
+test("streamed output withhold uses the trace stages, not the nine-name list", async () => {
+  const trace = {
+    zeroshield: { action: "block", request_id: "zs-out" },
+    pipeline_trace: {
+      final_action: "block",
+      plan_version: "1.2.test",
+      stages: [
+        { name: "auth", action: "allow", ran: true },
+        { name: "rate_limit", action: "allow", ran: true },
+        { name: "input_scan", action: "allow", ran: true },
+        { name: "model_routing", action: "allow", ran: true },
+        { name: "model_output", action: "allow", ran: true },
+        { name: "output_guardrail", action: "block", ran: true, deciding_rule: "fw-pii-output" },
+      ],
+    },
+  };
+  const error = `data: ${JSON.stringify({
+    error: { message: "withheld", type: "gateway_error", code: "output_blocked" },
+  })}`;
+  const frame = `: amf.trace ${JSON.stringify(trace)}\n\n`;
+  const result = await consumeSSEStream(
+    sseResponse([`${deltaEvent("echo: ")}\n\n${error}\n\n${frame}`]),
+  );
+  const normalized = normalizeStreamChatPipelineResult(result, 200, {});
+  assert.equal(normalized.final_action, "block");
+  assert.equal(normalized.blocked_by, "output_guardrail");
+  assert.deepEqual(
+    normalized.stages.map((stage) => stage.name),
+    ["auth", "rate_limit", "input_scan", "model_routing", "model_output", "output_guardrail"],
+  );
+  assert.equal(normalized.stages.find((stage) => stage.name === "output_guardrail").action, "block");
+  assert.equal(normalized.stages.find((stage) => stage.name === "input_scan").action, "allow");
 });
 
 // ---------------------------------------------------------------------------
@@ -371,4 +435,96 @@ test("503 with input_scan redact trace keeps REDACT and overall ERROR", () => {
   assert.equal(input.threat_type, "pii");
   const output = result.stages.find((s) => s.name === "model_output");
   assert.equal(output.action, "error");
+});
+
+// ---- GW35: gateway-v2 traces render as returned -----------------------------------------------
+import { erroringStageName } from "./liveGateway.js";
+
+const V2_NAMES = ["auth", "rate_limit", "input_scan", "model_routing", "model_output", "output_guardrail"];
+const v2Body = (actions, final, extra = {}) => ({
+  source: "gateway_v2",
+  zeroshield: { action: final, request_id: "zs-v2-1" },
+  pipeline_trace: {
+    final_action: final,
+    plan_version: "p1",
+    stages: V2_NAMES.map((name, i) => ({ name, action: actions[i], ran: actions[i] !== "skip" })),
+  },
+  ...extra,
+});
+
+test("GW35: a v2 pre-scan refusal shows the stages it returned and no template stage", () => {
+  const body = v2Body(["block", "skip", "skip", "skip", "skip", "skip"], "block", {
+    error: { code: "invalid_api_key" },
+  });
+  const result = normalizeChatPipelineResult(body, 401, {});
+  assert.deepEqual(result.stages.map((s) => s.name), V2_NAMES);
+  for (const stage of result.stages) {
+    for (const forbidden of ["kill_switch", "policy", "model_input"]) assert.notEqual(stage.name, forbidden);
+    assert.equal(stage.latency_ms, undefined, "no latency is invented for a v2 stage");
+  }
+  assert.equal(result.final_action, "block");
+  assert.equal(result.blocked_by, "auth");
+  assert.equal(result.total_latency_ms, null);
+});
+
+test("GW35: a v2 upstream error is final_action error, from the trace not the HTTP status", () => {
+  const body = v2Body(["allow", "allow", "allow", "allow", "error", "skip"], "error");
+  const result = normalizeChatPipelineResult(body, 502, {});
+  assert.equal(result.final_action, "error");
+  assert.equal(result.errored_stage, "model_output");
+  assert.equal(result.blocked_by, "");
+  assert.equal(erroringStageName(result.stages), "model_output");
+});
+
+test("GW35: a v2 429 from the gateway's own limiter stays a block", () => {
+  const body = v2Body(["allow", "block", "skip", "skip", "skip", "skip"], "block");
+  const result = normalizeChatPipelineResult(body, 429, {});
+  assert.equal(result.final_action, "block");
+  assert.equal(result.blocked_by, "rate_limit");
+});
+
+test("GW35: v1 bodies still take the template path", () => {
+  const stages = V2_NAMES.map((name) => ({ name, action: "allow" }));
+  const result = normalizeChatPipelineResult(
+    { pipeline_trace: { stages, total_latency_ms: 46 }, zeroshield: { action: "allow" } },
+    200,
+    {},
+  );
+  assert.equal(result.total_latency_ms, 46);
+  assert.equal(result.stages[0].latency_ms !== undefined, true);
+});
+
+test("GW35: a streamed v2 refusal keeps the trace verdict, not a blanket error", async () => {
+  const trace = v2Body(["allow", "allow", "block", "skip", "skip", "skip"], "block");
+  const sse = {
+    isStream: true,
+    events: [],
+    aggregatedContent: "",
+    terminalError: { code: "input_blocked", type: "invalid_request_error" },
+    terminalTracePayload: {
+      source: "gateway_v2",
+      zeroshield: trace.zeroshield,
+      pipeline_trace: trace.pipeline_trace,
+    },
+  };
+  const result = normalizeStreamChatPipelineResult(sse, 200, {}, {});
+  assert.equal(result.final_action, "block");
+  assert.equal(result.stages.find((s) => s.name === "input_scan").action, "block");
+});
+
+test("GW35: a streamed v2 operational cut reads as error", () => {
+  const trace = v2Body(["allow", "allow", "allow", "allow", "error", "allow"], "error");
+  const sse = {
+    isStream: true,
+    events: [],
+    aggregatedContent: "partial",
+    terminalError: { code: "stream_inter_chunk_timeout" },
+    terminalTracePayload: {
+      source: "gateway_v2",
+      zeroshield: trace.zeroshield,
+      pipeline_trace: trace.pipeline_trace,
+    },
+  };
+  const result = normalizeStreamChatPipelineResult(sse, 200, {}, {});
+  assert.equal(result.final_action, "error");
 });

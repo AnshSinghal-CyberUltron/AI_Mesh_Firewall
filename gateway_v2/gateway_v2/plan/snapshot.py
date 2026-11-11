@@ -9,6 +9,7 @@ from collections.abc import Callable
 from gateway_v2.domain.locks import FRESH_MS
 from gateway_v2.domain.plan import ExecutionPlan, PlanUnavailable, PlanUnknownTenant, is_newer
 from gateway_v2.plan.store import PlanStore
+from gateway_v2.runtime.state_stamp import FreshnessGate
 
 PlanState = ExecutionPlan | PlanUnavailable | PlanUnknownTenant
 
@@ -21,24 +22,42 @@ class ReplicaSnapshot:
         fresh_ms: int = FRESH_MS,
         reconcile_period_s: float = 1.0,
         clock: Callable[[], float] = time.monotonic,
+        stamp: FreshnessGate | None = None,
     ) -> None:
         if fresh_ms <= reconcile_period_s * 1000:
             raise ValueError("freshness bound must exceed the reconcile period")
         self._store = store
         self._fresh_s = fresh_ms / 1000
         self._clock = clock
+        self._stamp = stamp
         self._lock = threading.Lock()
         self._served: dict[str, ExecutionPlan] = {}
         self._served_at: dict[str, float] = {}
         self._pins: dict[str, ExecutionPlan] = {}
 
-    def reconcile(self, now: float | None = None) -> None:
+    def absorb(self, org_id: str, now: float | None = None) -> None:
+        """Refresh last-known-good for ONE tenant. O(1).
+
+        GW05c replaced a periodic `reconcile()` that iterated every known tenant — O(tenants) on
+        the serving loop, once a second, 72 ms per round at 25,000 tenants (R2-02). The delta
+        applier calls this for exactly the tenants whose records changed, so the cost of staying
+        current is proportional to changes, not to the size of the estate.
+        """
         moment = self._clock() if now is None else now
         with self._lock:
-            for org_id in self._store.known():
-                self._absorb(org_id, moment)
+            self._absorb_locked(org_id, moment)
 
-    def _absorb(self, org_id: str, moment: float) -> None:
+    def forget(self, org_id: str) -> None:
+        """Drop the last-known-good for an offboarded tenant (GW36 S3, N19).
+
+        Without this, an org offboarded and then known again without a plan (a rejected
+        re-onboard) would be served its PRE-offboard plan for up to the freshness bound.
+        """
+        with self._lock:
+            self._served.pop(org_id, None)
+            self._served_at.pop(org_id, None)
+
+    def _absorb_locked(self, org_id: str, moment: float) -> None:
         state = self._store.read(org_id)
         if not isinstance(state, ExecutionPlan):
             return
@@ -54,6 +73,14 @@ class ReplicaSnapshot:
             return self._lookup_locked(org_id, moment)
 
     def _lookup_locked(self, org_id: str, moment: float) -> PlanState:
+        unverified = self._unverified()
+        if unverified is not None:
+            # PLAN_UNAVAILABLE, and never PlanUnknownTenant. C36: after a flush or an
+            # empty-replica failover, RC2 answered "complete onboarding" and wedged live tenants
+            # at 403 for ever. An unverified plan kind means we do not KNOW whether this tenant
+            # exists, and 403 claims we do. Refusing a plan we are holding is the point: the
+            # write that superseded it may be exactly what was never published.
+            return PlanUnavailable(org_id, unverified)
         state = self._store.read(org_id)
         if isinstance(state, ExecutionPlan):
             self._served[org_id] = state
@@ -67,7 +94,14 @@ class ReplicaSnapshot:
             return cached
         return state
 
-    def age_seconds(self, org_id: str, now: float | None = None) -> float | None:
+    def _unverified(self) -> str | None:
+        """Why no plan may be served, or None when they may be."""
+        if self._stamp is None or self._stamp.fresh():
+            return None
+        return self._stamp.unverified()
+
+    def refresh_age_seconds(self, org_id: str, now: float | None = None) -> float | None:
+        """Since THIS tenant's last-known-good was refreshed. Not a verification age."""
         moment = self._clock() if now is None else now
         with self._lock:
             stamped = self._served_at.get(org_id)

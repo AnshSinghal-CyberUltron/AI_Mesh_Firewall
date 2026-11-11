@@ -7,29 +7,110 @@ name = "gateway-v2"
 version = "0.0.0"
 description = "AI Mesh Firewall gateway v2 — workspace + OpenAI conformance + parity harness"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "psycopg[binary]>=3.2",
+    "redis>=8.1,<9",
+]
 
 [project.optional-dependencies]
+# GW30 live-gate vector-store SDK(s). Imported lazily INSIDE each transport's ``_client()``
+# (see ``dispatch/vector_transports/``), never on the base import path — so the base package
+# stays SDK-free and a tree that only runs the offline suite is unaffected, mirroring the
+# optional ``conformance`` / ``serve`` extras below. The Milvus transport raises
+# ``VectorTransportError`` (→ ``provider_unreachable``) if ``pymilvus`` is absent. Pinned to the
+# 2.5 line that matches the ``milvusdb/milvus:v2.5.*`` standalone image in
+# ``docker-compose.gw30-stores.yml``.
+vectors = [
+    "pymilvus==2.5.16",
+    # GW30 Pinecone live gate: the MODERN SDK is named ``pinecone`` (the old ``pinecone-client``
+    # name is deprecated). Pinned exactly, like ``pymilvus`` above. Imported lazily inside
+    # ``dispatch/vector_transports/pinecone_transport.py``'s ``_client()``. Unlike pymilvus it
+    # SHIPS a ``py.typed`` marker, so when it is installed --strict type-checks its import fully;
+    # the optional-SDK override below only stops an ABSENT pinecone from failing the gate.
+    "pinecone==10.3.0",
+]
 dev = [
+    "fakeredis>=2.26",
     "pytest>=8",
     "ruff>=0.6",
     "mypy>=1.11",
     "import-linter>=2.1",
 ]
+# GW15 in-process conformance subset deps (``tests/openai_conformance/test_gw15_chat_surface_v2.py``):
+# the UNMODIFIED stock OpenAI Python SDK + httpx (the in-process ASGITransport) + pytest-asyncio.
+# The subset ``importorskip``s ``openai`` / ``httpx``, so these are optional — a tree without them
+# skips the subset cleanly rather than failing collection. Install with ``.[dev,conformance]``.
+conformance = [
+    "openai>=1.0",
+    "httpx>=0.27",
+    "pytest-asyncio>=0.23",
+]
+# B3 Serving_Entrypoint host deps (``gateway_v2/edge/serve.py`` hosts ``build_app`` under uvicorn).
+# ``uvicorn[standard]`` pulls uvloop + httptools for the modern ``loop="auto"``/``http="auto"`` config.
+# ``serve.py`` lazy-imports uvicorn inside ``main`` (ImportError → ``pip install 'gateway-v2[serve]'``
+# hint), so the base package stays framework-free (``[project].dependencies`` is ``psycopg`` + ``redis``
+# only) and a tree that only runs the pure suite is unaffected — mirroring the optional ``conformance``
+# extra above.
+serve = [
+    "uvicorn[standard]>=0.30",
+    # GW36 S1: the OpenAI-compatible upstream (``dispatch/openai_upstream.py``) posts over httpx.
+    "httpx>=0.27",
+]
+
+# ``gateway-v2-serve`` == ``python -m gateway_v2.edge.serve``: the B3 Serving_Entrypoint (needs the
+# ``serve`` extra at run time). Honest fail-closed boot by default; ``AMF_DEV_PROFILE=1`` selects
+# the opt-in local dev wiring (``gateway_v2/edge/dev_profile.py``, example plan ``dev/plan.example.json``).
+[project.scripts]
+gateway-v2-serve = "gateway_v2.edge.serve:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["gateway_v2*", "lint*"]
+include = ["gateway_v2*", "state_control*", "audit_control*", "load_harness*", "lint*"]
+# B7/R2-20: a Frozen_Release (load_harness/bin/<version>/) is a data-only tar+json build artifact,
+# not an importable package. Exclude it so a stray .py there can never be discovered as a package.
+exclude = ["load_harness.bin*"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
+markers = ["real_incident_defaults: keep the fail-closed GW29 incident defaults (no pass-through gate)"]
 testpaths = ["tests"]
-addopts = "--ignore=tests/openai_conformance --ignore=tests/parity"
+# The GW15 in-process conformance subset (``tests/openai_conformance/test_gw15_chat_surface_v2.py``)
+# runs against the v2 Chat_Surface with the unmodified OpenAI SDK + ``StubProviderClient`` and is
+# collected by default (it ``importorskip``s the SDK, so a tree without ``openai`` skips cleanly;
+# it carries its own ``pytest.mark.asyncio`` so pytest-asyncio's default strict mode drives it).
+# The remaining ``tests/openai_conformance/*`` files are the V1 SDK-compat suite + the DEFERRED
+# live gates (real-TCP / Node SDK / uvicorn / the C2 replay): they target the v1 ``ai_mesh_gateway``
+# app (a separate CI job installs the v1 deps + PYTHONPATH) or stand up a real socket, so they stay
+# ignored here.
+# B3 note (task 7.2 — DONE): ``test_live_tcp_8300.py`` is turned ON here (its ``--ignore`` line is
+# removed, so it is COLLECTED). It no longer hard-imports ``openai`` + ``httpx`` at module scope —
+# task 7.2 converted those to ``pytest.importorskip`` — so on a framework-free ``.[dev]`` tree it
+# skips cleanly at collection instead of ERRORing. Its ``pytest.mark.skipif`` on
+# ``AMF_CONFORMANCE_BASE_URL`` additionally skips it at run-time when no live server URL is wired, so
+# the default framework-free ``pytest`` run (no conformance extra, env unset) stays green: the module
+# importorskips the SDK and the skipif leaves it unselected. Its RUN-GREEN counterpart lives in
+# ``test_b3_live_serve.py`` (the booted gateway_v2 child + the same R5.5 SDK-visible contract over
+# the real socket). ``test_openai_sdk_compat_live_uvicorn.py`` below targets the OLD v1 gateway
+# (``ai_mesh_gateway.main``), NOT gateway_v2 — it is out of B3 scope and stays ignored.
+# ``tests/parity`` is the v1 parity harness, also a separate job.
+addopts = """
+    --ignore=tests/parity
+    --ignore=tests/openai_conformance/stub_server.py
+    --ignore=tests/openai_conformance/node
+    --ignore=tests/openai_conformance/test_malformed_sse_frame.py
+    --ignore=tests/openai_conformance/test_mcp_rag_vector_shapes.py
+    --ignore=tests/openai_conformance/test_openai_sdk_compat.py
+    --ignore=tests/openai_conformance/test_openai_sdk_compat_live_uvicorn.py
+    --ignore=tests/openai_conformance/test_openai_sdk_compat_phase2.py
+    --ignore=tests/openai_conformance/test_openai_sdk_compat_phase2_adversarial.py
+    --ignore=tests/openai_conformance/test_openai_sdk_compat_phase5_correlation.py
+    --ignore=tests/openai_conformance/test_openai_sdk_compat_phase6_guards.py
+"""
 
 [tool.ruff]
 target-version = "py312"
 line-length = 100
-src = ["gateway_v2", "lint", "tests"]
+src = ["gateway_v2", "state_control", "audit_control", "load_harness", "lint", "tests"]
 extend-exclude = [
     "tests/openai_conformance/test_openai_sdk_compat.py",
     "tests/openai_conformance/test_openai_sdk_compat_live_uvicorn.py",
@@ -38,25 +119,58 @@ extend-exclude = [
     "tests/openai_conformance/test_openai_sdk_compat_phase5_correlation.py",
     "tests/openai_conformance/test_openai_sdk_compat_phase6_guards.py",
     "tests/openai_conformance/stub_server.py",
+    "load_harness/bin",
 ]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["gateway_v2", "lint"]
+known-first-party = ["gateway_v2", "state_control", "audit_control", "load_harness", "lint"]
 
 [tool.mypy]
 python_version = "3.12"
 strict = true
-files = ["gateway_v2", "lint"]
+files = ["gateway_v2", "state_control", "audit_control", "load_harness", "lint"]
+# B7/R2-20: never type-check a Frozen_Release (data-only tar+json artifact under load_harness/bin/).
+exclude = ["load_harness/bin/"]
 
 [[tool.mypy.overrides]]
 module = ["ai_mesh_gateway.*"]
 ignore_missing_imports = true
 
+# GW30: the optional Milvus SDK (``pymilvus``, the ``vectors`` extra) ships no ``py.typed``
+# marker, so --strict flags its lazy import inside ``dispatch/vector_transports/milvus_transport.py``
+# as import-untyped. The qdrant/weaviate SDKs ship stubs; pymilvus does not. Treat it as an
+# untyped optional dependency, exactly as the ``ai_mesh_gateway`` override above does for the v1 app.
+[[tool.mypy.overrides]]
+module = ["pymilvus.*"]
+ignore_missing_imports = true
+
+# GW30: the other live-gate store SDKs are optional too (imported lazily inside each
+# ``dispatch/vector_transports/*_transport.py`` ``_client()``) and are not in the ``dev`` extra,
+# so CI's ``mypy --strict`` cannot find them. When an SDK IS installed and ships ``py.typed``
+# (pinecone, qdrant-client, weaviate), its imports are still fully type-checked; this override
+# only stops an absent optional SDK from failing the gate.
+[[tool.mypy.overrides]]
+module = [
+    "chromadb.*",
+    "elasticsearch.*",
+    "opensearchpy.*",
+    "pinecone.*",
+    "pymongo.*",
+    "qdrant_client.*",
+    "weaviate.*",
+]
+ignore_missing_imports = true
+
 [tool.importlinter]
 root_packages = ["gateway_v2"]
+# C11 / R10.4-10.5: the "No HTTP framework outside edge" forbidden contract names the
+# external modules starlette/fastapi, so import-linter requires external-package scanning
+# at the top level. They are not runtime dependencies (the raw-ASGI edge imports neither),
+# so the contract is trivially kept — it asserts the intent per C11.
+include_external_packages = true
 
 [[tool.importlinter.contracts]]
 name = "Gateway v2 layers"
@@ -90,3 +204,20 @@ forbidden_modules = [
     "gateway_v2.runtime",
     "gateway_v2.contracts",
 ]
+
+[[tool.importlinter.contracts]]
+name = "No HTTP framework outside edge"
+type = "forbidden"
+source_modules = [
+    "gateway_v2.admit",
+    "gateway_v2.plan",
+    "gateway_v2.detect",
+    "gateway_v2.resolve",
+    "gateway_v2.dispatch",
+    "gateway_v2.egress",
+    "gateway_v2.audit",
+    "gateway_v2.runtime",
+    "gateway_v2.contracts",
+    "gateway_v2.domain",
+]
+forbidden_modules = ["starlette", "fastapi"]

@@ -1,3 +1,15 @@
 """Provider client, routing, byte-verified transform."""
 
-__all__: tuple[str, ...] = ()
+from gateway_v2.dispatch.provider import (
+    ProviderClient,
+    StubProviderClient,
+    UpstreamEvent,
+    UpstreamRequest,
+)
+
+__all__ = (
+    "ProviderClient",
+    "StubProviderClient",
+    "UpstreamEvent",
+    "UpstreamRequest",
+)

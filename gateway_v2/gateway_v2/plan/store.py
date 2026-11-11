@@ -41,11 +41,31 @@ class PlanStore:
             self._down.discard(org_id)
 
     def forget_plan(self, org_id: str) -> None:
-        """Drop the compiled plan. The tenant stays known."""
+        """Drop the compiled plan. The tenant stays known, so it reads PLAN_UNAVAILABLE.
+
+        This is what a store flush looks like. It must never make a tenant UNKNOWN: in v2.1 a
+        flush plus re-seed wedged tenants at 403 "complete onboarding" forever.
+        """
         with self._lock:
             self._plans.pop(org_id, None)
 
+    def offboard(self, org_id: str) -> None:
+        """Forget the tenant entirely, so it reads PLAN_UNKNOWN_TENANT.
+
+        Only an explicit signed OFF record may do this. Deliberately a different method from
+        `forget_plan`, because the two look identical in a diff and mean opposite things.
+        """
+        with self._lock:
+            self._tenants.discard(org_id)
+            self._plans.pop(org_id, None)
+            self._down.discard(org_id)
+
     def known(self) -> tuple[str, ...]:
+        """Every known tenant. O(tenants log tenants) — diagnostics and tests only.
+
+        Never call this from a serving path or a periodic refresh: doing so is exactly the
+        R2-02 defect (§2.1 rule 1, no work proportional to the tenant count on a serving loop).
+        """
         with self._lock:
             return tuple(sorted(self._tenants))
 

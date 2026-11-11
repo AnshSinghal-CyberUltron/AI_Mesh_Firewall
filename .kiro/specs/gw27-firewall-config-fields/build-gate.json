@@ -1,0 +1,6 @@
+{"verdict": "APPROVED", "findings": [
+"LOW: routes.py and app.py sit exactly at the 800-line cap; split before next edit.",
+"LOW: Property 3 is exercised gateway-side only; control-side coverage is example tests.",
+"LOW: live gates L27-1, L27-2, live Postgres EXPLAIN and live entry-size model remain open (disclosed).",
+"LOW: embeddings emit no audit records, so audit gating covers chat, responses and MCP only (disclosed)."
+], "reviewDoc": "/work/suraj/AI_Mesh_Firewall/.worktrees/gw27/.kiro/specs/gw27-firewall-config-fields/build-review.md"}

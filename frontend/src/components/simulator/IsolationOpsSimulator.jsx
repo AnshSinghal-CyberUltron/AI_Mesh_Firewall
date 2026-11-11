@@ -3,6 +3,8 @@ import {
   Activity, AlertTriangle, MessageSquare, RotateCcw, ShieldOff, Zap,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
+import { RetiredOnGatewayV2 } from "../RetiredOnGatewayV2";
+import { retiredFromResponse } from "../../utils/retiredRoute.js";
 import { startVisibleInterval } from "../../utils/visiblePoll.js";
 import { useIsolationPlayground } from "../../hooks/useIsolationPlayground";
 import { useSimulatorGatewayModels } from "../../hooks/useSimulatorGatewayModels";
@@ -45,6 +47,7 @@ export function IsolationOpsSimulator() {
   const [cbState, setCbState] = useState(null);
   const [cbResult, setCbResult] = useState(null);
   const [cbTriggering, setCbTriggering] = useState(false);
+  const [retired, setRetired] = useState(null);
   const [errorCount, setErrorCount] = useState(10);
   const [polling, setPolling] = useState(false);
 
@@ -54,7 +57,11 @@ export function IsolationOpsSimulator() {
 
   const loadCbState = useCallback(async () => {
     const res = await fetchWithAuth("/api/admin/gateway/circuit-breaker/state/");
-    if (!res.ok) return;
+    if (!res.ok) {
+      const gone = await retiredFromResponse(res);
+      if (gone) setRetired(gone);
+      return;
+    }
     try {
       const body = await res.json();
       if (body?.status === "ok") setCbState(body.data);
@@ -186,6 +193,8 @@ export function IsolationOpsSimulator() {
         }),
       });
       httpOk = httpRes.ok;
+      const gone = await retiredFromResponse(httpRes);
+      if (gone) setRetired(gone);
       parsed = await httpRes.json().catch(() => null);
     } catch (err) {
       parsed = { status: "error", data: { message: String(err) } };
@@ -207,10 +216,12 @@ export function IsolationOpsSimulator() {
       return;
     }
     const model = gatewayModels.selectedModel;
-    await fetchWithAuth("/api/admin/gateway/circuit-breaker/reset/", {
+    const resetRes = await fetchWithAuth("/api/admin/gateway/circuit-breaker/reset/", {
       method: "POST",
       body: JSON.stringify({ model }),
     });
+    const gone = await retiredFromResponse(resetRes);
+    if (gone) setRetired(gone);
     setCbResult(null);
     setPolling(false);
     await loadCbState();
@@ -284,6 +295,7 @@ export function IsolationOpsSimulator() {
       }
       customInput={
         <div className="space-y-4">
+          {retired ? <RetiredOnGatewayV2 model={retired} /> : null}
           <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs dark:border-slate-700 dark:bg-slate-900/40">
             <span className="text-slate-600 dark:text-slate-400">
               Playground key risk: <strong className="font-mono text-slate-800 dark:text-slate-200">{riskDisplay}</strong>

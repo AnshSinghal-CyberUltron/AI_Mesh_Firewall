@@ -1,0 +1,22 @@
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.1.1, pluggy-1.6.0 -- /home/suraj/Documents/zeroshield/AI_Mesh_Firewall/gateway_v2/.venv/bin/python
+cachedir: .pytest_cache
+rootdir: /home/suraj/Documents/zeroshield/AI_Mesh_Firewall/gateway_v2
+configfile: pyproject.toml
+collecting ... collected 13 items
+
+tests/state_control/test_lgw05c_drills.py::test_a_client_without_a_timeout_is_refused PASSED [  7%]
+tests/state_control/test_lgw05c_drills.py::test_a_timeout_at_or_above_the_refresh_period_is_refused PASSED [ 15%]
+tests/state_control/test_lgw05c_drills.py::test_a_bounded_client_is_accepted PASSED [ 23%]
+tests/state_control/test_lgw05c_drills.py::test_drill_flush_fails_closed_then_rehydrates PASSED [ 30%]
+tests/state_control/test_lgw05c_drills.py::test_drill_a_regressed_store_is_refused PASSED [ 38%]
+tests/state_control/test_lgw05c_drills.py::test_an_unpublished_write_is_invisible_until_a_round PASSED [ 46%]
+tests/state_control/test_lgw05c_drills.py::test_drill_store_partition_and_heal PASSED [ 53%]
+tests/state_control/test_lgw05c_drills.py::test_drill_postgres_outage_does_not_stop_serving PASSED [ 61%]
+tests/state_control/test_lgw05c_drills.py::test_drill_rehydration_under_a_held_row_lock PASSED [ 69%]
+tests/state_control/test_lgw05c_drills.py::test_drill_concurrent_writers_leave_no_gap PASSED [ 76%]
+tests/state_control/test_lgw05c_drills.py::test_drill_g04_cold_start_with_two_thousand_keys_over_two_hundred_orgs PASSED [ 84%]
+tests/state_control/test_lgw05c_drills.py::test_drill_bulk_onboard_of_twenty_five_thousand_records PASSED [ 92%]
+tests/state_control/test_lgw05c_drills.py::test_drill_a_steady_round_at_twenty_five_thousand_is_three_commands PASSED [100%]
+
+============================= 13 passed in 49.47s ==============================

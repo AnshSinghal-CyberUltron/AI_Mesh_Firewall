@@ -1,0 +1,22 @@
+Dev /metrics live check, 2026-10-27, gateway-v2 rebuilt with the GW14d Publisher wired (WEB_CONCURRENCY=2)
+
+Boot: boot: metrics_registry -> GW14d Publisher (969 series: admission, quota, audit sink, stream,
+holdback, tenants, rejections, postures; state and re-hydration ABSENT (no writer in dev), add-on
+latency and windowed-busy have no source yet)
+
+Traffic: 20 chat (200), 2 streamed chat (200), 3 chat with a wrong key (503 shared_state_unavailable).
+Scraped /metrics until both workers answered; values are per worker, summed.
+
+amf_tenant_magnitude{tenant="dev-org"}                per-worker [10, 12]  sum 22   (22 served)
+amf_admit_admitted_total                               per-worker [10, 12]  sum 22
+amf_posture_refusals_shared_state_unavailable_total    per-worker [1, 2]    sum 3    (3 bad keys)
+amf_rejected{status="503",reason="rejected"}          per-worker [1, 2]    sum 3
+amf_holdback_held_tokens_count                         per-worker [0, 2]    sum 2    (2 streams)
+amf_audit_produced_records_total                       per-worker [20, 24]  sum 44
+amf_audit_written_records_total                        per-worker [20, 24]  sum 44
+XLEN {rv2}:audit:dev-org growth over the same traffic: 44 (input + output record per served request;
+the bad-key calls resolve no org and write none)
+
+Before this change the holdback count could never move: ChatRoute built a fresh HoldbackMetrics() per stream.
+
+{rv2}:dev:firewall-plan sha256 after: e28cf984616f5965f82e66f9693c3927f9956f5ac20db50baef2ae5c40364afd

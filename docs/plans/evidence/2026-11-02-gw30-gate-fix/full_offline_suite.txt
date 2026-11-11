@@ -1,0 +1,87 @@
+........................................................................ [  2%]
+........................................................................ [  4%]
+........................................................................ [  7%]
+........................................................................ [  9%]
+........................................................................ [ 12%]
+...........................sssssssssssssssss............................ [ 14%]
+........................................................................ [ 17%]
+........................................................................ [ 19%]
+........................................................................ [ 22%]
+........................................................................ [ 24%]
+........................................................................ [ 27%]
+........................................................................ [ 29%]
+........................................................................ [ 32%]
+........................................................................ [ 34%]
+............................................................sssss....... [ 37%]
+........................................................................ [ 39%]
+........................................................................ [ 42%]
+........................................................................ [ 44%]
+........................................................................ [ 47%]
+........................................................................ [ 49%]
+........................................................................ [ 52%]
+........................................................................ [ 54%]
+........................................................................ [ 57%]
+........................................................................ [ 59%]
+........................................................................ [ 62%]
+........................................................................ [ 64%]
+........................................................................ [ 67%]
+........................................................................ [ 69%]
+....................................................................sss. [ 72%]
+........................................................................ [ 74%]
+.......................................ssss............................. [ 77%]
+........................................................................ [ 79%]
+........................................................................ [ 82%]
+........................................................................ [ 84%]
+......................................................sssssssssssss..... [ 87%]
+........................................................................ [ 89%]
+........................................................................ [ 92%]
+................................................ssssssssssssssssssssssss [ 94%]
+sssssssssssssssssssssssssssss........................................... [ 96%]
+..............................................sssss..................... [ 99%]
+.........x.....                                                          [100%]
+=============================== warnings summary ===============================
+tests/admit/test_lgw06_harness.py::test_lgw06_3_multi_replica_no_quota_multiplication
+  /home/suraj/Documents/zeroshield/AI_Mesh_Firewall/gateway_v2/.venv/lib/python3.12/site-packages/sortedcontainers/sortedlist.py:196: RuntimeWarning: coroutine 'BudgetLease._refill' was never awaited
+    return object.__new__(cls)
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/admit/test_lgw06_harness.py::test_lgw06_3_multi_replica_no_quota_multiplication
+tests/admit/test_lgw06_harness.py::test_lgw06_5_injected_latency_bounded_and_posture_holds
+  /home/suraj/Documents/zeroshield/AI_Mesh_Firewall/gateway_v2/.venv/lib/python3.12/site-packages/fakeredis/_core/_database.py:116: RuntimeWarning: coroutine 'BudgetLease._refill' was never awaited
+    def __init__(self, key: bytes, db: Database, item: CommandItem | None = None, default: Any = None) -> None:
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/admit/test_lgw06_lease_no_multiplication.py::test_property1_no_replica_multiplication
+  /usr/lib/python3.12/inspect.py:3045: RuntimeWarning: coroutine 'BudgetLease._refill' was never awaited
+    params = OrderedDict((param.name, param) for param in parameters)
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/admit/test_lgw06_lease_no_multiplication.py::test_property1_no_replica_multiplication
+  /usr/lib/python3.12/importlib/metadata/__init__.py:739: RuntimeWarning: coroutine 'BudgetLease._refill' was never awaited
+    return itertools.chain(infos, eggs)
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/admit/test_lgw06_outage_posture.py::test_property4_outage_spends_remaining_then_budget_unavailable
+  /usr/lib/python3.12/asyncio/queues.py:48: RuntimeWarning: coroutine 'BudgetLease._refill' was never awaited
+    self._queue = collections.deque()
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/admit/test_lgw06_outage_posture.py::test_property4_outage_spends_remaining_then_budget_unavailable
+  /home/suraj/Documents/zeroshield/AI_Mesh_Firewall/gateway_v2/.venv/lib/python3.12/site-packages/fakeredis/_commands.py:75: RuntimeWarning: coroutine 'BudgetLease._refill' was never awaited
+    for i, (arg, type_) in enumerate(zip(args_list, types)):
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/admit/test_lgw19_harness.py::test_g06_local_amplification_below_bound_vs_6_to_11ms_baseline
+  <string>:2: RuntimeWarning: coroutine 'BudgetLease._refill' was never awaited
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+2794 passed, 100 skipped, 1 xfailed, 8 warnings in 1292.81s (0:21:32)
+exit=0

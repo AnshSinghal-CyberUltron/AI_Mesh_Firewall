@@ -1,0 +1,192 @@
+# Prometheus alert rules — GW14c audit memory and durability (R2-05).
+#
+# NOT LOADED YET, and deliberately absent from prometheus-scrape.example.yml's `rule_files`.
+# These rules read the `amf_audit_*` and `amf_store_*` families, which only the v3 gateway_v2 tree
+# exports; `gateway_v2/edge/` is still stubs, so nothing serves /metrics yet. The audit exporter
+# (`python -m audit_control`) does serve its own, and its rules are usable as soon as it is
+# deployed. Wiring the gateway half up belongs with GW12/GW14.
+#
+# They ship with the card rather than after it because the THRESHOLD IS PART OF THE DESIGN. The
+# card says "an alarm at 60% of store memory"; the reference README suggested 0.7. The card wins,
+# and an alert that fired at some unrelated number would quietly redefine what was signed.
+#
+# Severity convention, and why memory pressure pages while audit loss warns:
+#   A store that fills does not lose audit — it evicts the guard-owner registrations and then
+#   REFUSES the control plane's publishes, so a committed kill switch never reaches the fleet.
+#   That is a security-enforcement outage with an audit-shaped cause, so it pages. Audit loss
+#   itself is a compliance problem on a slower clock: it is bounded, counted, and the records are
+#   already gone by the time anyone reads the alert, so it warns loudly rather than paging.
+groups:
+  - name: amf-audit-store-memory
+    rules:
+      # --- the card's alarm ---------------------------------------------------------------
+      - alert: AuditStoreMemoryHigh
+        expr: max(amf_store_memory_used_ratio) > 0.6
+        for: 5m
+        labels:
+          severity: warning
+          service: gateway
+        annotations:
+          summary: "Store memory above 60% (the GW14c alarm point)"
+          description: >-
+            Round 2 measured audit streams taking a shared 10.4 GiB store from 1.48 to 6.42 GiB in
+            51 minutes. 60% is the card's alarm point: far enough below the eviction point to act,
+            close enough that it means something is growing. Check amf_audit_budget_bytes against
+            amf_store_maxmemory_bytes first — on a SHARED instance each namespace claims the same
+            default half of maxmemory unless AMF_AUDIT_STORE_BUDGET_MB is set per namespace, and
+            that is the usual cause of this firing with every budget apparently correct.
+
+      - alert: AuditStoreMemoryCritical
+        expr: max(amf_store_memory_used_ratio) > 0.85
+        for: 1m
+        labels:
+          severity: critical
+          service: gateway
+        annotations:
+          summary: "Store memory above 85% — publishes are about to be refused"
+          description: >-
+            Past this point the failure is not audit loss. Under an evicting policy the
+            guard-owner registrations go first (they are the only TTL keys) so discovery reads
+            0/N; under noeviction every write is refused, INCLUDING the control plane's publishes,
+            so a kill switch or key revocation commits to Postgres and never reaches the
+            gateways, which keep serving the previous signed snapshot. Reduce
+            AMF_AUDIT_STORE_BUDGET_MB or raise maxmemory now.
+
+      # --- the policy self-check ----------------------------------------------------------
+      - alert: StoreEvictionPolicyUnsafe
+        expr: max(amf_store_policy_unsafe) == 1
+        for: 10m
+        labels:
+          severity: critical
+          service: gateway
+        annotations:
+          summary: "The store runs an evicting maxmemory-policy"
+          description: >-
+            A volatile-* policy (Memorystore's default is volatile-lru) evicts the guard-owner
+            registrations before anything else, because they are the only keys with a TTL.
+            allkeys-* can evict the published state itself. Set maxmemory-policy=noeviction AND
+            keep audit inside its budget — noeviction ALONE does not fix this: the heartbeats are
+            refused instead, so the registrations expire rather than being evicted, and the
+            publishes are refused either way. Fires after 10m so a maintenance window that
+            briefly reports a default does not page.
+
+      - alert: StoreKeysEvicted
+        expr: increase(amf_store_evicted_keys[10m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+          service: gateway
+        annotations:
+          summary: "The store evicted keys"
+          description: >-
+            Something the fleet depends on may already be gone. Check guard discovery (expect
+            0/N registrations) and whether the control plane's recent publishes landed. Any
+            non-zero value here means the audit budget did not hold, or something other than
+            audit filled the store.
+
+      - alert: StoreMemoryUnobserved
+        expr: max(amf_store_memory_reachable) == 0
+        for: 10m
+        labels:
+          severity: warning
+          service: gateway
+        annotations:
+          summary: "Nobody has read the store's memory posture"
+          description: >-
+            The memory gauges read zero because no sample has succeeded, NOT because the store is
+            empty. Until this clears, AuditStoreMemoryHigh and StoreEvictionPolicyUnsafe cannot
+            fire — they are being evaluated against a reading that does not exist. Check
+            amf_store_memory_sample_errors_total and the worker-0 sampler.
+
+  - name: amf-audit-durability
+    rules:
+      # --- loss, and the race that causes it ----------------------------------------------
+      - alert: AuditRecordsLost
+        expr: increase(amf_audit_records_lost_total[15m]) > 0
+        for: 0m
+        labels:
+          severity: warning
+          service: audit-exporter
+        annotations:
+          summary: "Audit records were trimmed before they were made durable"
+          description: >-
+            The budget protects the store BY TRIMMING, and these records left it before the
+            exporter had them. They are gone; this alert exists so that fact is known rather
+            than discovered at an audit. R2-11 (M3) measured the alternative: a flush erased 36%
+            of the records while audit_completeness_ratio read 1.0. Compare
+            amf_audit_trimmed_records_total against amf_audit_exported_records_total — if the
+            trim rate is outrunning the export rate, the exporter needs more throughput or the
+            budget needs more room.
+
+      - alert: AuditTrimOutrunningExport
+        expr: >-
+          increase(amf_audit_trimmed_records_total[30m])
+          > increase(amf_audit_exported_records_total[30m])
+        for: 15m
+        labels:
+          severity: warning
+          service: audit-exporter
+        annotations:
+          summary: "Audit is being trimmed faster than it is exported"
+          description: >-
+            The leading indicator for AuditRecordsLost: records are still being made durable
+            before they are trimmed, but the margin is shrinking. The reference's own stated
+            limit is exactly this — "the bound protects the store; it does not make audit
+            durable ... export must drain faster than the trim rate".
+
+      - alert: AuditCompletenessBelowOne
+        expr: min(amf_audit_completeness_ratio) < 0.999
+        for: 30m
+        labels:
+          severity: warning
+          service: audit-exporter
+        annotations:
+          summary: "Audit completeness is below 1.0"
+          description: >-
+            Durable records over acknowledged records. Sustained below 1.0 means audit is being
+            lost, not merely queued — a transient dip during a backlog is normal and is why this
+            waits 30m. Note that amf_audit_acknowledged_ratio is a DIFFERENT number (what the
+            store took, not what is durable); it reading 1.0 while this does not is the M3
+            condition, and is the pair of metrics that makes it visible.
+
+      - alert: AuditExportStalled
+        expr: increase(amf_audit_export_failures_total[10m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+          service: audit-exporter
+        annotations:
+          summary: "The audit exporter is failing rounds"
+          description: >-
+            Per-tenant isolation means one tenant's failure does not stop the others, so this can
+            fire while most export proceeds. A stalled exporter does not lose records
+            immediately; it loses them when the trim catches up with the cursor, which is what
+            AuditTrimOutrunningExport will say next.
+
+      - alert: AuditProducerDropping
+        expr: increase(amf_audit_dropped_records_total[10m]) > 0
+        for: 0m
+        labels:
+          severity: warning
+          service: gateway
+        annotations:
+          summary: "The audit producer's queue is full and records are being dropped"
+          description: >-
+            Dropped on the REQUEST path, before the store — a different loss from
+            amf_audit_records_lost_total, and earlier. The queue is bounded on purpose and the
+            drop is counted on purpose; what this says is that the writer is not draining.
+            Check the store first, then amf_audit_queue_capacity against the measured drain rate
+            (the depth comes from ResourceContract.audit_queue_depth).
+
+      - alert: AuditWritesFailing
+        expr: increase(amf_audit_failed_records_total[10m]) > 0
+        for: 2m
+        labels:
+          severity: warning
+          service: gateway
+        annotations:
+          summary: "Audit batches are being refused by the store"
+          description: >-
+            Under noeviction a refused write usually means the store is full, so check
+            AuditStoreMemoryCritical — and if that is quiet, the audit budget is not the thing
+            filling it.

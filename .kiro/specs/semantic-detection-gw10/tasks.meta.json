@@ -1,0 +1,225 @@
+{
+  "pbtResults": {},
+  "executionHistory": {
+    "1. Implement `roles.py` — role axis and pure role admission": [
+      {
+        "executionId": "17693661-b841-4f68-8586-279cd326456b",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792124667067
+      },
+      {
+        "executionId": "17693661-b841-4f68-8586-279cd326456b",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792124686318
+      },
+      {
+        "executionId": "17693661-b841-4f68-8586-279cd326456b",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792124990214
+      }
+    ],
+    "2. Implement `language.py` — language posture, confusable fold, separate multilingual reporting": [
+      {
+        "executionId": "17693661-b841-4f68-8586-279cd326456b",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792124667126
+      },
+      {
+        "executionId": "17693661-b841-4f68-8586-279cd326456b",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792124687747
+      },
+      {
+        "executionId": "17693661-b841-4f68-8586-279cd326456b",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792124991504
+      }
+    ],
+    "3. Implement `windowing.py` — tokenizer-aware input windowing (pure)": [
+      {
+        "executionId": "17693661-b841-4f68-8586-279cd326456b",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792124667183
+      },
+      {
+        "executionId": "17693661-b841-4f68-8586-279cd326456b",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792124689078
+      },
+      {
+        "executionId": "17693661-b841-4f68-8586-279cd326456b",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792124993039
+      }
+    ],
+    "4. Implement `fpr_budget.py` — the per-request FPR-budget algebra (pure)": [
+      {
+        "executionId": "17693661-b841-4f68-8586-279cd326456b",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792124667250
+      },
+      {
+        "executionId": "17693661-b841-4f68-8586-279cd326456b",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792124690016
+      },
+      {
+        "executionId": "17693661-b841-4f68-8586-279cd326456b",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792124994086
+      }
+    ],
+    "5. Implement `aggregate.py` — the declared Aggregation_Rule (pure)": [
+      {
+        "executionId": "17693661-b841-4f68-8586-279cd326456b",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792124667322
+      },
+      {
+        "executionId": "17693661-b841-4f68-8586-279cd326456b",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792125005639
+      },
+      {
+        "executionId": "17693661-b841-4f68-8586-279cd326456b",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792125170139
+      }
+    ],
+    "6. Implement `detector.py` + `__init__.py` — the `SemanticDetector` orchestrator and exports": [
+      {
+        "executionId": "17693661-b841-4f68-8586-279cd326456b",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792124667380
+      },
+      {
+        "executionId": "17693661-b841-4f68-8586-279cd326456b",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792125199438
+      },
+      {
+        "executionId": "17693661-b841-4f68-8586-279cd326456b",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792125734348
+      }
+    ],
+    "8. Run the GW10 exit gate": [
+      {
+        "executionId": "17693661-b841-4f68-8586-279cd326456b",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792124667436
+      },
+      {
+        "executionId": "17693661-b841-4f68-8586-279cd326456b",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792126454482
+      },
+      {
+        "executionId": "17693661-b841-4f68-8586-279cd326456b",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792127422220
+      }
+    ],
+    "9. Final checkpoint": [
+      {
+        "executionId": "17693661-b841-4f68-8586-279cd326456b",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792124667490
+      },
+      {
+        "executionId": "17693661-b841-4f68-8586-279cd326456b",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792127422897
+      }
+    ],
+    "7. Write the single GW10 test file": [
+      {
+        "executionId": "17693661-b841-4f68-8586-279cd326456b",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792125765584
+      },
+      {
+        "executionId": "17693661-b841-4f68-8586-279cd326456b",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792126430302
+      }
+    ],
+    "7.1 Property 1 — windowing covers the whole input, boundaries hide nothing": [
+      {
+        "executionId": "17693661-b841-4f68-8586-279cd326456b",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792126430191
+      }
+    ],
+    "7.2 Property 2 — over-length inputs explicitly rejected, never silently truncated": [
+      {
+        "executionId": "17693661-b841-4f68-8586-279cd326456b",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792126431548
+      }
+    ],
+    "7.3 Property 3 — FPR-budget derivation within ceiling and monotone in W": [
+      {
+        "executionId": "17693661-b841-4f68-8586-279cd326456b",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792126432777
+      }
+    ],
+    "7.4 Property 4 — exactly one classify call per request": [
+      {
+        "executionId": "17693661-b841-4f68-8586-279cd326456b",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792126433986
+      }
+    ],
+    "7.5 Property 5 — unavailable/timed-out/not-ready backend yields UNAVAILABLE, never partial-as-complete": [
+      {
+        "executionId": "17693661-b841-4f68-8586-279cd326456b",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792126435826
+      }
+    ],
+    "7.6 Property 6 — unsupported language is never a silent clean pass": [
+      {
+        "executionId": "17693661-b841-4f68-8586-279cd326456b",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792126436646
+      }
+    ],
+    "7.7 Property 7 — role scoping, a user-scoped rule does not fire on system/assistant-only input": [
+      {
+        "executionId": "17693661-b841-4f68-8586-279cd326456b",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792126438280
+      }
+    ],
+    "7.8 Property 8 — pure algebra is deterministic and never mutates its input": [
+      {
+        "executionId": "17693661-b841-4f68-8586-279cd326456b",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792126439714
+      }
+    ],
+    "7.9 Property 9 — aggregation is max-score-per-category with a correct Span and only semantic categories": [
+      {
+        "executionId": "17693661-b841-4f68-8586-279cd326456b",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792126441081
+      }
+    ],
+    "7.10 Mechanism tests LGW10-1..6": [
+      {
+        "executionId": "17693661-b841-4f68-8586-279cd326456b",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792126443203
+      }
+    ],
+    "7.11 Real-backend smoke + structural/unit tests": [
+      {
+        "executionId": "17693661-b841-4f68-8586-279cd326456b",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792126443437
+      }
+    ]
+  }
+}

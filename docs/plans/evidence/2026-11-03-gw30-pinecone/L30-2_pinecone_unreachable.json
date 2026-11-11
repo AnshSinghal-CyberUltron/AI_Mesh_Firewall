@@ -1,0 +1,28 @@
+{
+  "gate": "L30-2",
+  "store": "pinecone",
+  "timestamp": "2026-11-03T14:40:11.225934+00:00",
+  "cases": [
+    {
+      "store": "pinecone",
+      "request_id": "zs-111b4ef469d1",
+      "timestamp": "2026-11-03T14:40:12.316369+00:00",
+      "target": "bogus index 'gw30-does-not-exist-9b459a6c' (SDK host-resolve \u2192 NotFound)",
+      "code": "provider_unreachable",
+      "records_is_none": true,
+      "elapsed_s": 1.0904,
+      "within_30s": true,
+      "is_provider_unreachable": true,
+      "is_empty_clean_search": false
+    }
+  ],
+  "verdict": "LIVE-PASS",
+  "cleanup": {
+    "ran": true,
+    "index_deleted": "gw30-live-gate",
+    "already_absent": false
+  },
+  "discovered_cloud": "aws",
+  "discovered_region": "us-east-1",
+  "credential_ref": "cred-pinecone-gw30"
+}

@@ -5,6 +5,8 @@ import { startVisibleInterval } from "../../utils/visiblePoll.js";
 import { useSimulatorEngine } from "../../hooks/useSimulatorEngine";
 import { useSimulatorGatewayModels } from "../../hooks/useSimulatorGatewayModels";
 import { SimulatorShell } from "./SimulatorShell";
+import { RetiredOnGatewayV2 } from "../RetiredOnGatewayV2";
+import { retiredFromResponse } from "../../utils/retiredRoute.js";
 
 export function CircuitBreakerSimulator() {
   const { fetchWithAuth } = useAuth();
@@ -21,6 +23,7 @@ export function CircuitBreakerSimulator() {
   const [riskResult, setRiskResult] = useState(null);
   const [riskInjecting, setRiskInjecting] = useState(false);
   const [triggering, setTriggering] = useState(false);
+  const [retired, setRetired] = useState(null);
 
   useEffect(() => {
     if (gatewayModels.selectedModel) {
@@ -35,7 +38,11 @@ export function CircuitBreakerSimulator() {
   // Response envelope: { status: "ok" | "error", data: <gateway_json> }.
   const loadState = useCallback(async () => {
     const res = await fetchWithAuth("/api/admin/gateway/circuit-breaker/state/");
-    if (!res.ok) return;
+    if (!res.ok) {
+      const gone = await retiredFromResponse(res);
+      if (gone) setRetired(gone);
+      return;
+    }
     let body = null;
     try {
       body = await res.json();
@@ -81,6 +88,8 @@ export function CircuitBreakerSimulator() {
         },
       );
       httpOk = httpRes.ok;
+      const gone = await retiredFromResponse(httpRes);
+      if (gone) setRetired(gone);
       try {
         parsed = await httpRes.json();
       } catch {
@@ -102,10 +111,12 @@ export function CircuitBreakerSimulator() {
   const handleReset = async () => {
     if (!String(targetModel || "").trim()) return;
     // Phase 1 Fx-3: proxy reset through Django admin RBAC.
-    await fetchWithAuth("/api/admin/gateway/circuit-breaker/reset/", {
+    const resetRes = await fetchWithAuth("/api/admin/gateway/circuit-breaker/reset/", {
       method: "POST",
       body: JSON.stringify({ model: targetModel }),
     });
+    const gone = await retiredFromResponse(resetRes);
+    if (gone) setRetired(gone);
     setResult(null);
     setPolling(false);
     await loadState();
@@ -164,6 +175,7 @@ export function CircuitBreakerSimulator() {
       result={result}
       customInput={
         <div className="space-y-3">
+          {retired ? <RetiredOnGatewayV2 model={retired} /> : null}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <label className="text-[11px] text-slate-600 dark:text-slate-400 font-medium">Target Model</label>

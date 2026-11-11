@@ -762,7 +762,13 @@ async def test_error_model_not_allowed(sdk_client):
 @pytest.mark.asyncio
 async def test_error_upstream_429_maps_to_rate_limit_error(sdk_client):
     """Dim 7: an upstream 429 surfaces to the SDK as RateLimitError (not 502)."""
-    import ai_mesh_gateway.main as gm
+    # Single application module object: resolve through the ONE accessor the
+    # fixtures use (``from ai_mesh_gateway import main``) so the patched
+    # ``LLM_ROUTER`` is the SAME object the ``sdk_client`` app dispatches on. A
+    # dotted ``import ai_mesh_gateway.main as gm`` would bind a SECOND module
+    # identity (the dual-module-identity hazard) and patch a module the app no
+    # longer uses.
+    from ai_mesh_gateway import main as gm
     gm.LLM_ROUTER.acompletion = AsyncMock(return_value=(429, {
         "error": {"message": "rate limited", "type": "rate_limit_error", "code": "rate_limit_exceeded"},
     }))
@@ -920,8 +926,10 @@ async def test_error_request_id_present_across_error_classes(sdk_app, sdk_client
                                                  extra_body={"messages": "not-a-list"})
     seen[400] = e400.value.request_id
 
-    # 429 — upstream throttle (mutate the router LAST so it cannot affect the cases above)
-    import ai_mesh_gateway.main as gm
+    # 429 — upstream throttle (mutate the router LAST so it cannot affect the cases above).
+    # Single application module object: resolve via ``from ai_mesh_gateway import
+    # main`` (the fixtures' accessor), not a dotted ``import ... as gm`` second identity.
+    from ai_mesh_gateway import main as gm
     gm.LLM_ROUTER.acompletion = AsyncMock(return_value=(429, {
         "error": {"message": "rate limited", "type": "rate_limit_error", "code": "rate_limit_exceeded"}}))
     with pytest.raises(openai.RateLimitError) as e429:
@@ -1079,7 +1087,10 @@ async def test_c1_unhandled_exception_is_nested_500_with_request_id_no_traceback
     """C1: an exception that ESCAPES a /v1 handler (bypassing the shim, caught by the
     OUTER _unhandled_handler) must STILL be a nested 500 envelope + x-request-id, and must
     NOT leak a traceback / internal detail to the client."""
-    import ai_mesh_gateway.main as gm
+    # Single application module object: resolve via ``from ai_mesh_gateway import
+    # main`` (the fixtures' accessor), not a dotted ``import ... as gm`` second
+    # identity, so ``gm.LLM_ROUTER`` is the object ``sdk_app`` actually dispatches on.
+    from ai_mesh_gateway import main as gm
 
     # Force the upstream stub to raise AFTER auth+scan dispatch into the handler body.
     boom = AsyncMock(side_effect=RuntimeError("upstream exploded: secret-internal-trace"))

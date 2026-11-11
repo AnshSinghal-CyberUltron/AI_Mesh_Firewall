@@ -140,6 +140,12 @@ class CoreConfig(AppConfig):
                         logger.debug("Telemetry drain: processed %d events", count)
                 except Exception:
                     logger.warning("Telemetry drain iteration failed", exc_info=True)
+                try:
+                    from core.v2_audit_ingest import ingest_pending
+
+                    ingest_pending()
+                except Exception:
+                    logger.warning("v2 audit ingest iteration failed", exc_info=True)
                 time.sleep(interval_seconds)
 
         thread = threading.Thread(target=_drain_loop, daemon=True, name="telemetry-drain")

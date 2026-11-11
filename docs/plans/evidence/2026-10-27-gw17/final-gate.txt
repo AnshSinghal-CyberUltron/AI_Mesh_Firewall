@@ -1,0 +1,42 @@
+GW17 local gate, 2026-10-27, gateway_v2 working tree (uncommitted GW17 changes)
+
+Static
+  ruff                         All checks passed
+  mypy --strict                no issues in 241 source files
+  import-linter                3 kept, 0 broken
+  check_capacity_literals      exit 0
+  check_no_module_mutable      exit 0
+  check_frozen_dataclasses     exit 0
+  check_http_outside_edge_resolve exit 0
+  check_tenant_scale           exit 0
+  check_sizes                  exit 0 (routes.py 799, resources.py 788, mcp.py 399)
+  check_dispatch_provenance    exit 0
+  check_secret_headers --repo .. exit 0
+  admin_ledger                 clean
+
+pytest (offline; tests/live excluded)
+  run 1 (-x): 1800 passed, 17 skipped; stopped at the pre-existing
+              tests/lint/test_console_inventory.py::test_checked_in_inventory_matches_the_tree
+  run 2 (tests/lint onward, that one test deselected): 881 passed, 79 skipped, 1 xfailed,
+              2 failed: tests/parity/test_lgw02_gates.py::{v1_self_replay_identical,
+              c3_reproduces_backtick_and_paraphrase} with ModuleNotFoundError ai_mesh_gateway.
+              Environmental: they import v1 as an oracle. With PYTHONPATH=../gateway: 5 passed.
+  Total: 2683 passed, 0 product failures. The xfail is the pre-existing R2-04 store_ahead node.
+  Last recorded run (task 8.1 baseline): 2512 passed + the same console-inventory failure.
+
+GW17 suites: 155 passed (channels, bounds, url_guard, broker, jsonrpc, errors, wire,
+registry, read_body_bounded, route, properties, dev_mcp).
+
+Console inventory (python -m lint.check_console_inventory)
+  Fails as on clean HEAD 2d002e5f. Every drift line names a frontend file
+  (AttackSimulatorPanel.jsx, pipelineTrace.js, liveGateway.js, StageTimeline.jsx) or the
+  cp-consumers endpoint ledger. GW17 changes no frontend or control file: no new drift.
+
+Deferred scope (task 8.2)
+  No test claims LGW17-7 (C2 replay). test_mcp_properties.py Property 6 is labelled
+  "local LGW17-4"; the fleet-scale run stays deferred.
+  git status: no change under gateway/ai_mesh_gateway, services/mcp-broker, control, frontend.
+  docker-compose.yml changed (gateway-v2 MCP env + control's dev GATEWAY_INTERNAL_API_KEY
+  default), approved by the operator before the rebuild.
+  {rv2}:dev:firewall-plan sha256 before and after the live run:
+  e28cf984616f5965f82e66f9693c3927f9956f5ac20db50baef2ae5c40364afd (unchanged).

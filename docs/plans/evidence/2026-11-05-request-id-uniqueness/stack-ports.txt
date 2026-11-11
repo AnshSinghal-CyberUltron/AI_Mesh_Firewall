@@ -1,0 +1,14 @@
+# amff2 host port map (127.0.0.1). Base +55000.
+# NOT +60000: 8000+60000=68100 and 8770+55000... the requested numbers exceed the max TCP
+# port 65535, which Docker rejects ("invalid hostPort: 66432" / "65770"). +55000 keeps every
+# mapped port <= 65535. Distinct from amfint (+30000) and ai_mesh_firewall (+20000).
+control        63100 -> 8000
+gateway-v2     63301 -> 8301   (the surface under test)
+gateway (v1)   63300 -> 8300
+mcp-broker     63311 -> 8311
+mcp-stub       64999 -> 9999
+frontend       63180 -> 5173  (optional; not started)
+postgres       60432 -> 5432
+pgbouncer      61432 -> 6432
+redis          61379 -> 6379
+rabbitmq       60672 -> 5672 , 60673 -> 15672

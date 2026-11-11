@@ -1,0 +1,319 @@
+{
+  "pbtResults": {},
+  "executionHistory": {
+    "1.1 Create the Expected_Diff_Ledger product module **[product-code]**": [
+      {
+        "executionId": "bdfb29bb-79fd-4676-a075-c96632fcb519",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792217950802
+      },
+      {
+        "executionId": "bdfb29bb-79fd-4676-a075-c96632fcb519",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792217971680
+      },
+      {
+        "executionId": "9d3451cf-a286-41e3-ab14-ed24f85dab5f",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792218732291
+      }
+    ],
+    "1.2 Extend the App_Resolver with the ledger reader **[product-code]**": [
+      {
+        "executionId": "bdfb29bb-79fd-4676-a075-c96632fcb519",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792217950824
+      },
+      {
+        "executionId": "9d3451cf-a286-41e3-ab14-ed24f85dab5f",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792218743136
+      },
+      {
+        "executionId": "9d3451cf-a286-41e3-ab14-ed24f85dab5f",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792218889972
+      }
+    ],
+    "1.3 Verify WAVE 0 product layer **[product-code]**": [
+      {
+        "executionId": "bdfb29bb-79fd-4676-a075-c96632fcb519",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792217950845
+      },
+      {
+        "executionId": "9d3451cf-a286-41e3-ab14-ed24f85dab5f",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792218897545
+      },
+      {
+        "executionId": "9d3451cf-a286-41e3-ab14-ed24f85dab5f",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792219100497
+      }
+    ],
+    "2.1 Create the shared wire-contract helper **[test-file]**": [
+      {
+        "executionId": "bdfb29bb-79fd-4676-a075-c96632fcb519",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792217950866
+      },
+      {
+        "executionId": "9d3451cf-a286-41e3-ab14-ed24f85dab5f",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792218898618
+      },
+      {
+        "executionId": "9d3451cf-a286-41e3-ab14-ed24f85dab5f",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792219101325
+      }
+    ],
+    "3.1 Rewrite the collection gate **[test-file]**": [
+      {
+        "executionId": "bdfb29bb-79fd-4676-a075-c96632fcb519",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792217950887
+      },
+      {
+        "executionId": "9d3451cf-a286-41e3-ab14-ed24f85dab5f",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792219112010
+      },
+      {
+        "executionId": "9d3451cf-a286-41e3-ab14-ed24f85dab5f",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792219309187
+      }
+    ],
+    "4.1 Convert the phase2 file to lazy/resolver-gated imports **[test-file]**": [
+      {
+        "executionId": "bdfb29bb-79fd-4676-a075-c96632fcb519",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792217950907
+      },
+      {
+        "executionId": "9d3451cf-a286-41e3-ab14-ed24f85dab5f",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792219322079
+      },
+      {
+        "executionId": "9d3451cf-a286-41e3-ab14-ed24f85dab5f",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792219612484
+      }
+    ],
+    "4.2 Convert the live-uvicorn file to lazy/resolver-gated imports **[test-file]**": [
+      {
+        "executionId": "bdfb29bb-79fd-4676-a075-c96632fcb519",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792217950928
+      },
+      {
+        "executionId": "9d3451cf-a286-41e3-ab14-ed24f85dab5f",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792219323240
+      },
+      {
+        "executionId": "9d3451cf-a286-41e3-ab14-ed24f85dab5f",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792219612885
+      }
+    ],
+    "4.3 Enforce the single application module object across v1-only cells **[test-file]**": [
+      {
+        "executionId": "bdfb29bb-79fd-4676-a075-c96632fcb519",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792217950947
+      },
+      {
+        "executionId": "9d3451cf-a286-41e3-ab14-ed24f85dab5f",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792219623943
+      },
+      {
+        "executionId": "9d3451cf-a286-41e3-ab14-ed24f85dab5f",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792220111928
+      }
+    ],
+    "4.4 Verify WAVE 3 collection under v2 **[test-file]**": [
+      {
+        "executionId": "bdfb29bb-79fd-4676-a075-c96632fcb519",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792217950967
+      },
+      {
+        "executionId": "17617813-2206-44fb-95a6-3244a86c714c",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792223098441
+      },
+      {
+        "executionId": "17617813-2206-44fb-95a6-3244a86c714c",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792223147593
+      }
+    ],
+    "5.1 Re-point the GW15 chat-surface subset at the shared helper **[test-file]**": [
+      {
+        "executionId": "bdfb29bb-79fd-4676-a075-c96632fcb519",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792217950989
+      },
+      {
+        "executionId": "9d3451cf-a286-41e3-ab14-ed24f85dab5f",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792221156963
+      },
+      {
+        "executionId": "17617813-2206-44fb-95a6-3244a86c714c",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792222722228
+      }
+    ],
+    "5.2 Re-point the GW16 misc-surface subset at the shared helper **[test-file]**": [
+      {
+        "executionId": "bdfb29bb-79fd-4676-a075-c96632fcb519",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792217951019
+      },
+      {
+        "executionId": "9d3451cf-a286-41e3-ab14-ed24f85dab5f",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792221158128
+      },
+      {
+        "executionId": "17617813-2206-44fb-95a6-3244a86c714c",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792222723346
+      }
+    ],
+    "5.3 Re-point the MCP/RAG/vector shapes subset at the shared helper **[test-file]**": [
+      {
+        "executionId": "bdfb29bb-79fd-4676-a075-c96632fcb519",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792217951073
+      },
+      {
+        "executionId": "17617813-2206-44fb-95a6-3244a86c714c",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792222790019
+      },
+      {
+        "executionId": "17617813-2206-44fb-95a6-3244a86c714c",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792223088003
+      }
+    ],
+    "5.4 Fix genuine local v2 surface gaps exposed by the now-running suite **[product-code]**": [
+      {
+        "executionId": "bdfb29bb-79fd-4676-a075-c96632fcb519",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792217951093
+      },
+      {
+        "executionId": "17617813-2206-44fb-95a6-3244a86c714c",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792223156607
+      },
+      {
+        "executionId": "17617813-2206-44fb-95a6-3244a86c714c",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792225117237
+      }
+    ],
+    "6.1 Verify both arms run green **[test-file]**": [
+      {
+        "executionId": "bdfb29bb-79fd-4676-a075-c96632fcb519",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792217951114
+      },
+      {
+        "executionId": "17617813-2206-44fb-95a6-3244a86c714c",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792225128663
+      },
+      {
+        "executionId": "17617813-2206-44fb-95a6-3244a86c714c",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792225170035
+      }
+    ],
+    "6.2 Run the full Gate_Obligation **[product-code]**": [
+      {
+        "executionId": "bdfb29bb-79fd-4676-a075-c96632fcb519",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792217951135
+      },
+      {
+        "executionId": "17617813-2206-44fb-95a6-3244a86c714c",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792225171233
+      },
+      {
+        "executionId": "17617813-2206-44fb-95a6-3244a86c714c",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792226125941
+      }
+    ],
+    "6.3 Confirm the deferred CI/cloud scope stays out of this plan **[test-file]**": [
+      {
+        "executionId": "bdfb29bb-79fd-4676-a075-c96632fcb519",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792217951156
+      },
+      {
+        "executionId": "17617813-2206-44fb-95a6-3244a86c714c",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792226126910
+      },
+      {
+        "executionId": "17617813-2206-44fb-95a6-3244a86c714c",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792226155175
+      }
+    ],
+    "1. WAVE 0 — Expected_Diff_Ledger + resolver extension (product, lowest layer)": [
+      {
+        "executionId": "9d3451cf-a286-41e3-ab14-ed24f85dab5f",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792219100520
+      }
+    ],
+    "2. WAVE 1 — shared wire-contract assertion helper (test layer)": [
+      {
+        "executionId": "9d3451cf-a286-41e3-ab14-ed24f85dab5f",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792219101345
+      }
+    ],
+    "3. WAVE 2 — conftest collection gate rewrite (test layer)": [
+      {
+        "executionId": "9d3451cf-a286-41e3-ab14-ed24f85dab5f",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792219309217
+      }
+    ],
+    "4. WAVE 3 — v1 arm collection-error + dual-identity fixes (test layer)": [
+      {
+        "executionId": "17617813-2206-44fb-95a6-3244a86c714c",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792223147621
+      }
+    ],
+    "5. WAVE 4 — v2 arm reconcile against the shared helper (test layer)": [
+      {
+        "executionId": "17617813-2206-44fb-95a6-3244a86c714c",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792225117272
+      }
+    ],
+    "6. WAVE 5 — verification (both arms + directory + Gate_Obligation)": [
+      {
+        "executionId": "17617813-2206-44fb-95a6-3244a86c714c",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792226155207
+      }
+    ]
+  }
+}

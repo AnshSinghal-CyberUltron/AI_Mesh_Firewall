@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import threading
+from dataclasses import replace
 
 import pytest
 
@@ -102,7 +103,7 @@ def test_lgw05_3_same_rules_on_every_surface_and_phase() -> None:
     store = PlanStore()
     store.put(plan)
     snap = ReplicaSnapshot(store, clock=lambda: 10.0)
-    snap.reconcile(10.0)
+    snap.absorb("org-a", 10.0)
     seen = set()
     for surface in SURFACES:
         state = lookup_plan(snap, "org-a", surface)
@@ -116,21 +117,26 @@ def test_lgw05_3_same_rules_on_every_surface_and_phase() -> None:
 
 
 def test_lgw05_4_replicas_converge_without_regressing() -> None:
+    """GW05c: convergence is driven per tenant (absorb), not by an O(tenants) reconcile.
+
+    The assertions are unchanged from GW05 — two replicas reach the newer version and neither
+    regresses. Only the mechanism that feeds them changed.
+    """
     store = PlanStore()
     first = _compile("org-a", (_draft(action=Action.FLAG),), at=1.0)
     store.put(first)
     left = ReplicaSnapshot(store, clock=lambda: 1.0)
     right = ReplicaSnapshot(store, clock=lambda: 1.0)
-    left.reconcile(1.0)
-    right.reconcile(1.0)
+    left.absorb("org-a", 1.0)
+    right.absorb("org-a", 1.0)
     second = _compile("org-a", (_draft(action=Action.BLOCK),), previous=first, at=2.0)
     store.put(second)
-    left.reconcile(2.0)
-    right.reconcile(2.0)
+    left.absorb("org-a", 2.0)
+    right.absorb("org-a", 2.0)
     assert left.lookup("org-a", 2.0).version == second.version  # type: ignore[union-attr]
     assert right.lookup("org-a", 2.0).version == second.version  # type: ignore[union-attr]
-    assert left.age_seconds("org-a", 2.0) == 0.0
-    assert (left.age_seconds("org-a", 2.0) or 0) < FRESH_MS / 1000
+    assert left.refresh_age_seconds("org-a", 2.0) == 0.0
+    assert (left.refresh_age_seconds("org-a", 2.0) or 0) < FRESH_MS / 1000
 
 
 def test_lgw05_5_pin_ignores_a_later_push() -> None:
@@ -142,7 +148,7 @@ def test_lgw05_5_pin_ignores_a_later_push() -> None:
     assert isinstance(pinned, ExecutionPlan)
     second = _compile("org-a", (_draft(action=Action.BLOCK),), previous=first, at=6.0)
     store.put(second)
-    snap.reconcile(6.0)
+    snap.absorb("org-a", 6.0)
     assert snap.lookup("org-a", 6.0).version == second.version  # type: ignore[union-attr]
     held = snap.pinned("req-1")
     assert held is not None
@@ -180,11 +186,20 @@ def test_lgw05_6_concurrent_tenants_do_not_leak() -> None:
     assert {rule for org, rule in found if org == "org-b"} == {"b"}
 
 
-def test_lgw05_7_unsupported_selection_is_rejected() -> None:
-    with pytest.raises(CompileError, match="incremental"):
-        compile_plan("org-a", (), streaming_mode=StreamingMode.STRICT_WITHHOLD, compiled_at=1.0)
-    with pytest.raises(CompileError, match="not supported"):
+def test_lgw05_7_unsupported_action_rejected_strict_withhold_accepted() -> None:
+    # GW13 (Requirement 4) made STRICT_WITHHOLD a supported streaming mode, so the former
+    # "STRICT_WITHHOLD is rejected" assertion is replaced by the positive acceptance below.
+    plan = compile_plan(
+        "org-a", (), streaming_mode=StreamingMode.STRICT_WITHHOLD, compiled_at=1.0,
+    )
+    assert plan.streaming_mode is StreamingMode.STRICT_WITHHOLD
+    # GW33: REWRITE is a supported action (it was refused before this card), but only with a
+    # declared template: a REWRITE rule without one is still rejected at compile time.
+    with pytest.raises(CompileError, match="rewrite_template"):
         _compile("org-a", (_draft(action=Action.REWRITE),))
+    rewrite = replace(_draft(action=Action.REWRITE), rewrite_template="[{category}]")
+    ok = _compile("org-a", (rewrite,))
+    assert ok.rules[0].rewrite_template == "[{category}]"
 
 
 def test_version_cannot_regress() -> None:
@@ -199,7 +214,7 @@ def test_last_known_good_expires() -> None:
     store = PlanStore()
     store.put(_compile("org-a", (_draft(),)))
     snap = ReplicaSnapshot(store, clock=lambda: 0.0)
-    snap.reconcile(0.0)
+    snap.absorb("org-a", 0.0)
     store.mark_unreachable("org-a")
     assert isinstance(snap.lookup("org-a", 1.0), ExecutionPlan)
     later = snap.lookup("org-a", 1.0 + (FRESH_MS / 1000) + 0.1)

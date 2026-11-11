@@ -9,7 +9,9 @@ import { copyToClipboard } from "../lib/clipboard";
 import { getModuleLogCharts } from "./module-specific-log-charts";
 import { useAuth } from "../context/AuthContext";
 import {
+  NOT_REPORTED,
   formatPipelineDurationMs,
+  isGatewayV2Trace,
   formatDominantStageLabel,
   formatRouteDestination,
   resolveLatencyBreakdown,
@@ -19,6 +21,7 @@ import {
   resolveTtftMs,
   deriveStageVerdict,
   derivePipelineDetections,
+  recordedRiskScore,
 } from "../utils/pipelineTrace";
 import { formatDecisionSource } from "../constants/zeroshieldBrand";
 import { summarizeRoutingDecision } from "../utils/routingExplain";
@@ -104,7 +107,10 @@ function normalizeLogDetail(logData) {
   const latencyBreakdown = resolveLatencyBreakdown({ pipelineTrace, meta, extra, logData });
   const ttftMs = resolveTtftMs({ pipelineTrace, meta, extra, zeroshield: meta.zeroshield || extra.zeroshield });
 
-  let durationLabel = formatPipelineDurationMs(totalLatencyMs);
+  // gateway v2 reports no latency unless its trace carries one: say so, never "0ms" or "--".
+  let durationLabel = totalLatencyMs == null && isGatewayV2Trace(meta)
+    ? NOT_REPORTED
+    : formatPipelineDurationMs(totalLatencyMs);
   if (
     latencyBreakdown
     && latencyBreakdown.stage_latency_sum_ms != null
@@ -141,7 +147,7 @@ function normalizeLogDetail(logData) {
 // most-severe pipeline stage so the Scan Detail is honest regardless of which
 // telemetry path (stream vs non-stream) produced the event.
 const ACTION_TONE = { allow: "emerald", monitor: "emerald", pass: "emerald", redact: "blue", rewrite: "blue", flag: "amber", reroute: "amber", block: "red", error: "red" };
-const _STAGE_SEVERITY = { block: 3, error: 3, redact: 2, rewrite: 2, flag: 1, reroute: 1, monitor: 0, skip: 0, allow: 0, pass: 0 };
+const _STAGE_SEVERITY = { block: 4, error: 3, redact: 2, rewrite: 2, flag: 1, reroute: 1, monitor: 0, skip: 0, allow: 0, pass: 0 };
 
 // Honest timestamp: a log missing its timestamp must show "—", never the
 // current wall-clock time (which reads as if the event just happened now).
@@ -244,18 +250,20 @@ export function LogDetailPage({ logData, onBack }) {
   const timelineData = pipelineStages
     .map((s) => ({
       time: String(s?.name || s?.stage || "").replace(/_/g, " "),
-      latency: Math.round(parseNumeric(s?.latency_ms ?? s?.duration_ms ?? s?.latency)),
+      latency: recordedRiskScore(s?.latency_ms ?? s?.duration_ms ?? s?.latency),
     }))
-    .filter((s) => s.time);
+    .filter((s) => s.time && s.latency != null)
+    .map((s) => ({ time: s.time, latency: Math.round(s.latency) }));
   // Promote the displayed verdict / score / threat to the most-severe pipeline stage
   // when the event's own top-level fields under-report it (see deriveStageVerdict).
   const stageVerdict = deriveStageVerdict(pipelineStages);
   const detections = derivePipelineDetections(pipelineStages, meta);
-  const baseScore = parseNumeric(logData?.severity || meta?.security_risk_score) || 0;
-  const securityScore = Math.max(baseScore, stageVerdict.score);
-  const threatLevel = securityScore > 0
-    ? mapThreatLevel(securityScore)
-    : mapThreatLevel(logData?.severity || meta?.security_risk_score);
+  // A stored 0 still lifts to the stage score (v1 under-report). An absent score
+  // stays absent: the action must not become 75, 90, or 60 on its own.
+  const recordedScore = recordedRiskScore(meta?.security_risk_score)
+    ?? recordedRiskScore(logData?.severity);
+  const securityScore = recordedScore == null ? null : Math.max(recordedScore, stageVerdict.score);
+  const threatLevel = securityScore == null ? "—" : mapThreatLevel(securityScore);
   const _baseSeverity = _STAGE_SEVERITY[String(action || "").toLowerCase()] ?? 0;
   const _promote = stageVerdict.action && stageVerdict.severity > _baseSeverity;
   // PER-STAGE HONESTY (2026-07-16): the DELIVERY action (pipeline_trace.final_action) is
@@ -346,6 +354,14 @@ export function LogDetailPage({ logData, onBack }) {
               <button onClick={() => handleCopy(requestId, "Request ID")} className="flex min-w-0 max-w-full items-center gap-2 font-mono hover:text-teal-600 dark:hover:text-teal-400 transition-colors" title="Copy request ID">
                 <Server className="w-4 h-4 shrink-0" /><span className="truncate">Request ID: {requestId}</span>{copiedField === "Request ID" && <span className="text-teal-600 dark:text-teal-400 shrink-0">✓</span>}
               </button>
+              {pipelineTrace?.plan_version ? (
+                <>
+                  <div className="w-1 h-1 bg-slate-400 rounded-full"></div>
+                  <div className="flex min-w-0 max-w-full items-center gap-2 font-mono">
+                    <span className="truncate">Plan version: {pipelineTrace.plan_version}</span>
+                  </div>
+                </>
+              ) : null}
               {showIncidentId && (
                 <>
                   <div className="w-1 h-1 bg-slate-400 rounded-full"></div>
@@ -385,7 +401,7 @@ export function LogDetailPage({ logData, onBack }) {
         {ttftMs != null && (
           <MetricCard icon={Activity} label="Time to First Token" value={formatPipelineDurationMs(ttftMs)} color="teal" />
         )}
-        <MetricCard icon={Shield} label="Security Score" value={`${securityScore}/100`} color="purple" />
+        <MetricCard icon={Shield} label="Security Score" value={securityScore == null ? "—" : `${securityScore}/100`} color="purple" />
         <MetricCard icon={Activity} label="Threat Level" value={threatLevel} color="teal" />
       </div>
 
@@ -487,14 +503,17 @@ export function LogDetailPage({ logData, onBack }) {
       )}
 
       {/* Module-Specific Log Detail Charts */}
-      {moduleLogCharts && moduleLogCharts.charts && moduleLogCharts.charts.length > 0 && (
+      {(() => {
+        const visibleCharts = (moduleLogCharts?.charts || []).filter((chart) => !chart.empty);
+        if (!visibleCharts.length) return null;
+        return (
         <>
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">Module-Specific Scan Analysis</h2>
             <span className="text-sm text-slate-500 dark:text-slate-400">Detailed insights for this specific scan</span>
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {moduleLogCharts.charts.map((chart, index) => (
+            {visibleCharts.map((chart, index) => (
               <div key={index} className="bg-white dark:bg-slate-800 rounded-xl border-2 border-slate-200 dark:border-slate-700 shadow-sm p-6">
                 <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100 mb-4">{chart.title}</h3>
                 {chart.component}
@@ -502,7 +521,8 @@ export function LogDetailPage({ logData, onBack }) {
             ))}
           </div>
         </>
-      )}
+        );
+      })()}
 
       {/* Detailed Scan Data - Collapsible Sections */}
       <div className="space-y-4">
@@ -605,6 +625,7 @@ export function LogDetailPage({ logData, onBack }) {
           <table className="w-full text-sm">
             <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
               <DataRow label="Request ID" value={requestId} />
+              <DataRow label="Plan version" value={pipelineTrace?.plan_version || "—"} />
               {showIncidentId && <DataRow label="Incident ID" value={incidentId} />}
               <DataRow label="Scan (row) ID" value={String(scanId)} />
               <DataRow label="Timestamp" value={fmtTimestamp(timestamp)} />
@@ -735,11 +756,13 @@ function StatusBadge({ status, action }) {
   const block = { bg: "bg-red-100 dark:bg-red-800/30", text: "text-red-700 dark:text-red-300", dot: "bg-red-500" };
   const flag = { bg: "bg-amber-100 dark:bg-amber-800/30", text: "text-amber-700 dark:text-amber-300", dot: "bg-amber-500" };
   const redact = { bg: "bg-blue-100 dark:bg-blue-800/30", text: "text-blue-700 dark:text-blue-300", dot: "bg-blue-500" };
+  // GW35: a fault is not a block. Orange, and worded "Upstream error", never BLOCK.
+  const fault = { bg: "bg-orange-100 dark:bg-orange-800/30", text: "text-orange-700 dark:text-orange-300", dot: "bg-orange-500" };
   // Accept both present- and past-tense verdicts (event action is present-tense:
   // allow/redact/block/flag/reroute; legacy rows used allowed/redacted/…).
   const statusConfig = {
     allow, allowed: allow, monitor: allow, pass: allow,
-    block, blocked: block, error: block,
+    block, blocked: block, error: fault,
     flag, flagged: flag, reroute: flag,
     redact, redacted: redact, rewrite: redact,
   };
@@ -747,7 +770,7 @@ function StatusBadge({ status, action }) {
   return (
     <span className={`inline-flex items-center gap-1.5 px-3 py-1 ${config.bg} ${config.text} rounded-full text-xs font-semibold`}>
       <div className={`w-1.5 h-1.5 rounded-full ${config.dot}`}></div>
-      {action || status?.toUpperCase()}
+      {String(status || "").toLowerCase() === "error" ? "Upstream error" : action || status?.toUpperCase()}
     </span>
   );
 }

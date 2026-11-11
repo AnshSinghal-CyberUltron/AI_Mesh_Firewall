@@ -1,0 +1,40 @@
+# GW27 Task 0 baseline (untouched branch HEAD 423f9e78)
+env: host venv /tmp/gw27v py3.12 pip install -e .[dev,serve,conformance] (docker pip also verified)
+pytest: 1 failed, 3044 passed, 101 skipped, 8 warnings, 5 errors in 664s
+  FAILED tests/gates/test_check_tenant_scale.py::test_the_shipped_data_plane_is_clean (pre-existing)
+  ERROR tests/edge/test_edge_live_l16b.py x5 (live socket fixtures, pre-existing)
+--- mypy --strict
+gateway_v2/dispatch/vector_transports/weaviate_transport.py:46: error: Cannot find implementation or library stub for module named "weaviate"  [import-not-found]
+gateway_v2/dispatch/vector_transports/weaviate_transport.py:139: error: Cannot find implementation or library stub for module named "weaviate.classes.config"  [import-not-found]
+gateway_v2/dispatch/vector_transports/qdrant_transport.py:48: error: Cannot find implementation or library stub for module named "qdrant_client"  [import-not-found]
+gateway_v2/dispatch/vector_transports/qdrant_transport.py:122: error: Cannot find implementation or library stub for module named "qdrant_client.http.exceptions"  [import-not-found]
+gateway_v2/dispatch/vector_transports/pinecone_transport.py:63: error: Cannot find implementation or library stub for module named "pinecone"  [import-not-found]
+gateway_v2/dispatch/vector_transports/mongo_transport.py:52: error: Cannot find implementation or library stub for module named "pymongo"  [import-not-found]
+gateway_v2/dispatch/vector_transports/elastic_transport.py:137: error: Cannot find implementation or library stub for module named "elasticsearch"  [import-not-found]
+gateway_v2/dispatch/vector_transports/elastic_transport.py:203: error: Cannot find implementation or library stub for module named "opensearchpy"  [import-not-found]
+gateway_v2/dispatch/vector_transports/chroma_transport.py:45: error: Cannot find implementation or library stub for module named "chromadb"  [import-not-found]
+Found 9 errors in 6 files (checked 280 source files)
+--- ruff
+All checks passed!
+--- lint-imports
+Gateway v2 layers KEPT
+Resolve imports only domain KEPT
+No HTTP framework outside edge KEPT
+
+Contracts: 3 kept, 0 broken.
+--- check_sizes
+exit 0
+--- check_http_outside_edge_resolve
+exit 0
+--- check_no_module_mutable
+exit 0
+--- check_capacity_literals
+exit 0
+--- check_frozen_dataclasses
+exit 0
+--- check_dispatch_provenance
+exit 0
+--- tenant_scale
+gateway_v2/dispatch/vector_transports/pinecone_transport.py:140: keys: whole-collection store read: cannot be O(changes)
+1 tenant-scale violation(s). See §2.1 rule 1 and R2-02: no work proportional to tenants, keys or records on a serving path.
+--- console

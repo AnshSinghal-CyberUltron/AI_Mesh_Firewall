@@ -1,0 +1,295 @@
+{
+ "routes": [
+  {
+   "callers": [
+    "frontend/src/components/BedrockTestPanel.jsx"
+   ],
+   "decision": "retire",
+   "owner": "not-gw14b",
+   "path": "/api/admin/gateway/bedrock-test",
+   "reason": "This probes the v1 Bedrock guard. gateway-v2 has no Bedrock admin route, so a 200 would claim a guard that is not running."
+  },
+  {
+   "callers": [
+    "frontend/src/components/simulator/CircuitBreakerSimulator.jsx",
+    "frontend/src/components/simulator/IsolationOpsSimulator.jsx"
+   ],
+   "decision": "retire",
+   "owner": "not-gw14b",
+   "path": "/api/admin/gateway/circuit-breaker/reset",
+   "reason": "gateway-v2 sheds with CoDel and has no Redis breaker. The control proxy still forwards these calls to the v1 gateway."
+  },
+  {
+   "callers": [
+    "frontend/src/components/simulator/CircuitBreakerSimulator.jsx",
+    "frontend/src/components/simulator/IsolationOpsSimulator.jsx"
+   ],
+   "decision": "retire",
+   "owner": "not-gw14b",
+   "path": "/api/admin/gateway/circuit-breaker/state",
+   "reason": "gateway-v2 sheds with CoDel and has no Redis breaker. The control proxy still forwards these calls to the v1 gateway."
+  },
+  {
+   "callers": [
+    "frontend/src/components/simulator/CircuitBreakerSimulator.jsx",
+    "frontend/src/components/simulator/IsolationOpsSimulator.jsx"
+   ],
+   "decision": "retire",
+   "owner": "not-gw14b",
+   "path": "/api/admin/gateway/circuit-breaker/trigger",
+   "reason": "gateway-v2 sheds with CoDel and has no Redis breaker. The control proxy still forwards these calls to the v1 gateway."
+  },
+  {
+   "callers": [
+    "frontend/src/components/DatabaseConnectionPanel.jsx"
+   ],
+   "decision": "retire",
+   "owner": "GW18",
+   "path": "/api/admin/gateway/db-test",
+   "reason": "This probes a vector database through the v1 gateway. gateway-v2 has no vector client. GW18 owns that test."
+  },
+  {
+   "callers": [
+    "frontend/src/components/rag/CollectionManagerPanel.jsx",
+    "frontend/src/hooks/useCollections.js"
+   ],
+   "decision": "retire",
+   "owner": "GW18",
+   "path": "/api/admin/gateway/rag/collections",
+   "reason": "RAG and vector belong to GW18. gateway-v2 does not add a success body for them."
+  },
+  {
+   "callers": [
+    "frontend/src/components/KillSwitchPanel.jsx"
+   ],
+   "decision": "retire",
+   "owner": "not-gw14b",
+   "path": "/api/admin/redis/kill-switches/validate",
+   "reason": "This scans v1 Redis kill-switch keys. gateway-v2 does not use that key layout."
+  },
+  {
+   "callers": [
+    "gateway/ai_mesh_gateway/main.py"
+   ],
+   "decision": "retire",
+   "owner": "not-gw14b",
+   "path": "/api/gateways/instances/register",
+   "reason": "v1 posts this heartbeat into the control agent table. gateway-v2 exposes /metrics and does not register an instance."
+  },
+  {
+   "callers": [
+    "gateway/ai_mesh_gateway/main.py"
+   ],
+   "decision": "retire",
+   "owner": "not-gw14b",
+   "path": "/api/gateways/instances/telemetry",
+   "reason": "v1 posts this heartbeat into the control agent table. gateway-v2 exposes /metrics and does not register an instance."
+  },
+  {
+   "callers": [
+    "gateway/ai_mesh_gateway/mcp_proxy.py"
+   ],
+   "decision": "retire",
+   "owner": "GW17",
+   "path": "/api/mcp-connector/internal/record-event",
+   "reason": "MCP discover, call, oauth, and the record-event callback belong to GW17. gateway-v2 does not register them."
+  },
+  {
+   "callers": [
+    "frontend/src/components/MCPConnectorPanel.jsx",
+    "gateway/ai_mesh_gateway/mcp_oauth_proxy.py"
+   ],
+   "decision": "build",
+   "owner": "GW32",
+   "path": "/gateway/{org}/mcp/{server}/oauth/start",
+   "reason": "GW32 Requirement 9 builds it in gateway-v2: edge/mcp_upstream_routes.py serves oauth/start, /gateway/oauth/callback and oauth/status, with the DD-4 flow state in control."
+  },
+  {
+   "callers": [
+    "gateway/ai_mesh_gateway/main.py",
+    "gateway/ai_mesh_gateway/mcp_proxy.py",
+    "gateway_v2/gateway_v2/edge/routes.py"
+   ],
+   "decision": "build",
+   "owner": "GW17",
+   "path": "/v1/mcp",
+   "reason": "GW17 serves POST /v1/mcp/{server_slug} on the shared plan, detectors and resolver, forwarding only through the per-org broker. A gateway booted without the MCP configuration keeps the declared 501 placeholder."
+  },
+  {
+   "callers": [
+    "gateway/ai_mesh_gateway/mcp_proxy.py"
+   ],
+   "decision": "retire",
+   "owner": "GW17",
+   "path": "/v1/mcp/ext-proxy",
+   "reason": "MCP discover, call, oauth, and the record-event callback belong to GW17. gateway-v2 does not register them."
+  },
+  {
+   "callers": [
+    "gateway/ai_mesh_gateway/middleware.py"
+   ],
+   "decision": "retire",
+   "owner": "GW17",
+   "path": "/v1/mcp/health",
+   "reason": "MCP discover, call, oauth, and the record-event callback belong to GW17. gateway-v2 does not register them."
+  },
+  {
+   "callers": [
+    "gateway/ai_mesh_gateway/middleware.py"
+   ],
+   "decision": "retire",
+   "owner": "GW17",
+   "path": "/v1/mcp/internal/discover-tools",
+   "reason": "MCP discover, call, oauth, and the record-event callback belong to GW17. gateway-v2 does not register them."
+  },
+  {
+   "callers": [
+    "gateway/ai_mesh_gateway/middleware.py"
+   ],
+   "decision": "retire",
+   "owner": "GW17",
+   "path": "/v1/mcp/internal/oauth-token-mirror",
+   "reason": "MCP discover, call, oauth, and the record-event callback belong to GW17. gateway-v2 does not register them."
+  },
+  {
+   "callers": [
+    "gateway/ai_mesh_gateway/middleware.py"
+   ],
+   "decision": "retire",
+   "owner": "GW17",
+   "path": "/v1/mcp/internal/tools-call",
+   "reason": "MCP discover, call, oauth, and the record-event callback belong to GW17. gateway-v2 does not register them."
+  },
+  {
+   "callers": [],
+   "decision": "retire",
+   "decision_ref": "GW35 D-11 (requirements 7.4)",
+   "owner": "gw35",
+   "path": "/v1/observability",
+   "reason": "Used by scripts and the demo, not by the console (runbook V-06). gateway-v2 does not serve it; metrics are at /metrics.",
+   "signed": null
+  },
+  {
+   "callers": [],
+   "decision": "retire",
+   "decision_ref": "GW35 D-11 (requirements 7.4)",
+   "owner": "gw35",
+   "path": "/v1/policy/check",
+   "reason": "Used by scripts and the demo, not by the console (runbook V-06). gateway-v2 enforces policy in the chat path and has no standalone check route.",
+   "signed": null
+  },
+  {
+   "callers": [
+    "frontend/src/components/howToUseContent.js",
+    "gateway/ai_mesh_gateway/main.py",
+    "gateway_v2/gateway_v2/edge/rag_entries.py"
+   ],
+   "decision": "build",
+   "owner": "GW31",
+   "path": "/v1/rag/collections",
+   "reason": "GW31 serves this route over the shipped GW30 adapter (edge/rag_entries.py). It is no longer a 501 placeholder."
+  },
+  {
+   "callers": [
+    "gateway/ai_mesh_gateway/main.py",
+    "gateway_v2/gateway_v2/edge/rag_entries.py"
+   ],
+   "decision": "build",
+   "owner": "GW31",
+   "path": "/v1/rag/documents",
+   "reason": "GW31 serves this route over the shipped GW30 adapter (edge/rag_entries.py). It is no longer a 501 placeholder."
+  },
+  {
+   "callers": [
+    "frontend/src/components/howToUseContent.js",
+    "frontend/src/components/simulator/RAGIngestionPanel.jsx",
+    "gateway/ai_mesh_gateway/main.py",
+    "gateway/ai_mesh_gateway/vector_routes.py",
+    "gateway_v2/gateway_v2/edge/rag_entries.py"
+   ],
+   "decision": "build",
+   "owner": "GW31",
+   "path": "/v1/rag/ingest",
+   "reason": "GW31 serves this route over the shipped GW30 adapter (edge/rag_entries.py). It is no longer a 501 placeholder."
+  },
+  {
+   "callers": [
+    "frontend/src/components/DatabaseConnectionPanel.jsx",
+    "frontend/src/components/RAGAttackTrustSimulator.jsx",
+    "frontend/src/components/RAGFeatureTestPanel.jsx",
+    "frontend/src/components/howToUseContent.js",
+    "frontend/src/components/rag/SemanticSearchPanel.jsx",
+    "frontend/src/lib/gatewayFetch.js",
+    "gateway/ai_mesh_gateway/main.py",
+    "gateway/ai_mesh_gateway/vector_routes.py",
+    "gateway_v2/gateway_v2/edge/rag_entries.py"
+   ],
+   "decision": "build",
+   "owner": "GW31",
+   "path": "/v1/rag/query",
+   "reason": "GW31 serves this route over the shipped GW30 adapter (edge/rag_entries.py). It is no longer a 501 placeholder."
+  },
+  {
+   "callers": [
+    "gateway/ai_mesh_gateway/main.py",
+    "gateway/ai_mesh_gateway/middleware.py",
+    "gateway/ai_mesh_gateway/responses_adapters.py",
+    "gateway_v2/gateway_v2/edge/routes.py"
+   ],
+   "decision": "retire",
+   "owner": "GW15",
+   "path": "/v1/responses",
+   "reason": "GW15 still owns this route. It stays the existing 501 placeholder. This card does not add a success body."
+  },
+  {
+   "callers": [],
+   "decision": "retire",
+   "decision_ref": "GW35 D-11 (requirements 7.4)",
+   "owner": "gw35",
+   "path": "/v1/usage",
+   "reason": "Used by scripts and the demo, not by the console (runbook V-06). gateway-v2 does not serve it, so it is recorded as retired, not stubbed.",
+   "signed": null
+  },
+  {
+   "callers": [
+    "gateway/ai_mesh_gateway/vector_routes.py",
+    "gateway_v2/gateway_v2/edge/rag_entries.py"
+   ],
+   "decision": "build",
+   "owner": "GW31",
+   "path": "/v1/vector/config",
+   "reason": "GW31 serves this route over the shipped GW30 adapter (edge/rag_entries.py). It is no longer a 501 placeholder."
+  },
+  {
+   "callers": [
+    "gateway/ai_mesh_gateway/vector_routes.py",
+    "gateway_v2/gateway_v2/edge/rag_entries.py"
+   ],
+   "decision": "build",
+   "owner": "GW31",
+   "path": "/v1/vector/delete",
+   "reason": "GW31 serves this route over the shipped GW30 adapter (edge/rag_entries.py). It is no longer a 501 placeholder."
+  },
+  {
+   "callers": [
+    "gateway/ai_mesh_gateway/vector_routes.py",
+    "gateway_v2/gateway_v2/edge/rag_entries.py"
+   ],
+   "decision": "build",
+   "owner": "GW31",
+   "path": "/v1/vector/query",
+   "reason": "GW31 serves this route over the shipped GW30 adapter (edge/rag_entries.py). It is no longer a 501 placeholder."
+  },
+  {
+   "callers": [
+    "gateway/ai_mesh_gateway/main.py",
+    "gateway/ai_mesh_gateway/vector_routes.py",
+    "gateway_v2/gateway_v2/edge/rag_entries.py"
+   ],
+   "decision": "build",
+   "owner": "GW31",
+   "path": "/v1/vector/upsert",
+   "reason": "GW31 serves this route over the shipped GW30 adapter (edge/rag_entries.py). It is no longer a 501 placeholder."
+  }
+ ]
+}

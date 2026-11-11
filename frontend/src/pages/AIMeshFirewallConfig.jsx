@@ -24,6 +24,20 @@ import { AuditComplianceCard } from "../components/firewall/AuditComplianceCard"
 import { ImpactPanel } from "../components/firewall/ImpactPanel";
 import { VectorDbCard, ZeroShieldTestCard } from "../components/firewall/VectorDbCard";
 
+function planSaveMessage(note) {
+  if (!note || note.status === "published") {
+    const count = Number(note?.rules);
+    const rules = Number.isFinite(count) ? ` ${count} rules.` : "";
+    const revision = Number(note?.revision);
+    const version = Number.isFinite(revision) ? ` Plan revision ${revision}.` : "";
+    return `Configuration saved. Gateway v2 applies these rules within a few seconds.${rules}${version}`;
+  }
+  if (note.status === "skipped") {
+    return "Configuration saved. This configuration has no organization, so no gateway plan was published.";
+  }
+  return "Configuration saved. The gateway plan was not stored, so the gateway keeps its current plan.";
+}
+
 export function AIMeshFirewallConfig() {
   const { fetchWithAuth } = useAuth();
   const [config, dispatch] = useReducer(configReducer, DEFAULT_FIREWALL_CONFIG);
@@ -33,6 +47,7 @@ export function AIMeshFirewallConfig() {
   const [showContent, setShowContent] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [saveMessage, setSaveMessage] = useState("");
   const [error, setError] = useState(null);
 
   const isDirty = useMemo(() => !configsEqual(config, savedSnapshot), [config, savedSnapshot]);
@@ -109,6 +124,7 @@ export function AIMeshFirewallConfig() {
         dispatch({ type: "REPLACE", payload: mapped });
         setSavedSnapshot(mapped);
         setConnectedModels(Array.isArray(data.connected_models) ? data.connected_models : []);
+        setSaveMessage(planSaveMessage(data.gateway_v2_plan));
         setSaveSuccess(true);
         setTimeout(() => setSaveSuccess(false), 4000);
       } else if (res.status === 400) {
@@ -158,6 +174,7 @@ export function AIMeshFirewallConfig() {
         isDirty={isDirty}
         isSaving={isSaving}
         saveSuccess={saveSuccess}
+        saveMessage={saveMessage}
         error={error}
         updatedAt={config.updatedAt}
         onReset={handleReset}

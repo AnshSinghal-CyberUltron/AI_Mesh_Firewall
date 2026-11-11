@@ -1,0 +1,267 @@
+{
+  "gate": "L30-1",
+  "timestamp": "2026-11-03T05:38:36.274946+00:00",
+  "live": {
+    "chroma": {
+      "create_collection": {
+        "code": "vector_ok",
+        "status": "created"
+      },
+      "upsert": {
+        "code": "vector_ok",
+        "count": 3
+      },
+      "query": {
+        "code": "vector_ok",
+        "count": 3,
+        "ids": [
+          "r1",
+          "r3",
+          "r2"
+        ],
+        "top_id": "r1"
+      },
+      "delete": {
+        "code": "vector_ok",
+        "count": 3
+      }
+    },
+    "qdrant": {
+      "create_collection": {
+        "code": "vector_ok",
+        "status": "created"
+      },
+      "upsert": {
+        "code": "vector_ok",
+        "count": 3
+      },
+      "query": {
+        "code": "vector_ok",
+        "count": 3,
+        "ids": [
+          "r1",
+          "r3",
+          "r2"
+        ],
+        "top_id": "r1"
+      },
+      "delete": {
+        "code": "vector_ok",
+        "count": 3
+      }
+    },
+    "weaviate": {
+      "create_collection": {
+        "code": "vector_ok",
+        "status": "created"
+      },
+      "upsert": {
+        "code": "vector_ok",
+        "count": 3
+      },
+      "query": {
+        "code": "vector_ok",
+        "count": 3,
+        "ids": [
+          "r1",
+          "r3",
+          "r2"
+        ],
+        "top_id": "r1"
+      },
+      "delete": {
+        "code": "vector_ok",
+        "count": 3
+      }
+    },
+    "pgvector": {
+      "create_collection": {
+        "code": "vector_ok",
+        "status": "created"
+      },
+      "upsert": {
+        "code": "vector_ok",
+        "count": 3
+      },
+      "query": {
+        "code": "vector_ok",
+        "count": 3,
+        "ids": [
+          "r1",
+          "r3",
+          "r2"
+        ],
+        "top_id": "r1"
+      },
+      "delete": {
+        "code": "vector_ok",
+        "count": 3
+      }
+    },
+    "elasticsearch": {
+      "create_collection": {
+        "code": "vector_ok",
+        "status": "created"
+      },
+      "upsert": {
+        "code": "vector_ok",
+        "count": 3
+      },
+      "query": {
+        "code": "vector_ok",
+        "count": 3,
+        "ids": [
+          "r1",
+          "r3",
+          "r2"
+        ],
+        "top_id": "r1"
+      },
+      "delete": {
+        "code": "vector_ok",
+        "count": 3
+      }
+    },
+    "redis": {
+      "create_collection": {
+        "code": "vector_ok",
+        "status": "created"
+      },
+      "upsert": {
+        "code": "vector_ok",
+        "count": 3
+      },
+      "query": {
+        "code": "vector_ok",
+        "count": 3,
+        "ids": [
+          "r1",
+          "r3",
+          "r2"
+        ],
+        "top_id": "r1"
+      },
+      "delete": {
+        "code": "vector_ok",
+        "count": 3
+      }
+    },
+    "mongodb_atlas": {
+      "create_collection": {
+        "code": "vector_ok",
+        "status": "created"
+      },
+      "upsert": {
+        "code": "vector_ok",
+        "count": 3
+      },
+      "query": {
+        "code": "vector_ok",
+        "count": 3,
+        "ids": [
+          "r1",
+          "r3",
+          "r2"
+        ],
+        "top_id": "r1"
+      },
+      "delete": {
+        "code": "vector_ok",
+        "count": 3
+      }
+    },
+    "aws_opensearch_serverless": {
+      "create_collection": {
+        "code": "vector_ok",
+        "status": "created"
+      },
+      "upsert": {
+        "code": "vector_ok",
+        "count": 3
+      },
+      "query": {
+        "code": "vector_ok",
+        "count": 3,
+        "ids": [
+          "r1",
+          "r3",
+          "r2"
+        ],
+        "top_id": "r1"
+      },
+      "delete": {
+        "code": "vector_ok",
+        "count": 3
+      }
+    }
+  },
+  "infra_blocked": {
+    "pinecone": "cloud-only SaaS; no local image / no credentials",
+    "milvus": "needs etcd+minio sidecars; not brought up locally",
+    "aws_bedrock_kb": "cloud-only; no local image / no credentials",
+    "gcp_vertex_vector": "cloud-only; no local image / no credentials",
+    "azure_ai_search": "cloud-only; no local image / no credentials"
+  },
+  "parity": {
+    "stores_compared": [
+      "chroma",
+      "qdrant",
+      "weaviate",
+      "pgvector",
+      "elasticsearch",
+      "redis",
+      "mongodb_atlas",
+      "aws_opensearch_serverless"
+    ],
+    "create_collection_codes_identical": true,
+    "upsert_codes_identical": true,
+    "query_codes_identical": true,
+    "delete_codes_identical": true,
+    "query_ids": {
+      "chroma": [
+        "r1",
+        "r3",
+        "r2"
+      ],
+      "qdrant": [
+        "r1",
+        "r3",
+        "r2"
+      ],
+      "weaviate": [
+        "r1",
+        "r3",
+        "r2"
+      ],
+      "pgvector": [
+        "r1",
+        "r3",
+        "r2"
+      ],
+      "elasticsearch": [
+        "r1",
+        "r3",
+        "r2"
+      ],
+      "redis": [
+        "r1",
+        "r3",
+        "r2"
+      ],
+      "mongodb_atlas": [
+        "r1",
+        "r3",
+        "r2"
+      ],
+      "aws_opensearch_serverless": [
+        "r1",
+        "r3",
+        "r2"
+      ]
+    },
+    "query_ids_identical": true,
+    "query_count_identical": true,
+    "upsert_count_identical": true
+  },
+  "verdict": "LIVE-PASS (8 live: chroma,qdrant,weaviate,pgvector,elasticsearch,redis,mongodb_atlas,aws_opensearch_serverless) + 5 INFRA-BLOCKED"
+}

@@ -1,0 +1,221 @@
+"""The reader's Valkey/Redis adapter. The commands GW05c's cost claims are made of.
+
+Every method is ONE round trip, and the command set per round is fixed:
+
+    head()         GET meta  +  ZCARD idx  +  ZREVRANGE idx 0 0 WITHSCORES
+    index_range()  ZCOUNT idx -inf <upto>  +  ZRANGEBYSCORE idx (<after> <upto> LIMIT 0 <n>
+    records()      HMGET <hash> <keys>     or  MGET <per-record keys>
+    engaged()      SMEMBERS on:<kind>
+
+No `HGETALL`, no `HVALS`, no `SCAN`, no `KEYS`. Those are the shapes that made RC2's refresh
+O(records) (R2-02), and their absence here is what the fixed command list in the guard tests is
+asserting.
+
+`ZRANGEBYSCORE` takes `(after` so the lower bound is EXCLUSIVE: a reader must not re-apply the
+record it is already at. `upto` is the position the manifest attests, which is what keeps an
+in-flight bulk publish from being read as a fault.
+
+A store that does not answer -- refused, reset, timed out -- is `StoreDataUnavailable`, the
+reason every state reader already turns into a fail-closed 503 (GW36 S3, N7). Only TRANSPORT
+faults are converted: a `ResponseError` (WRONGTYPE, a missing module) or an authentication
+failure is a configuration defect, and it propagates loudly instead of hiding as a quiet 503.
+"""
+
+from __future__ import annotations
+
+import contextlib
+from collections.abc import Iterator, Sequence
+from typing import Any
+
+from gateway_v2.domain.state import StateKind, StoreDataUnavailable
+from gateway_v2.runtime.state_feed import Head, IndexPage
+from gateway_v2.runtime.store_keys import HASH_KINDS, KEYS, StoreKeys
+
+
+def _transport_faults() -> tuple[type[BaseException], ...]:
+    """Discovered lazily so the module imports without redis, as `state_control` does."""
+    faults: list[type[BaseException]] = [OSError, TimeoutError]
+    try:
+        from redis import exceptions
+    except ImportError:  # pragma: no cover - redis is a declared dependency
+        return tuple(faults)
+    faults.extend((exceptions.ConnectionError, exceptions.TimeoutError))
+    return tuple(faults)
+
+
+_TRANSPORT_FAULTS = _transport_faults()
+
+
+@contextlib.contextmanager
+def _reachable(operation: str) -> Iterator[None]:
+    try:
+        yield
+    except _TRANSPORT_FAULTS as exc:
+        raise StoreDataUnavailable(
+            f"state store unreachable during {operation}: {type(exc).__name__}",
+        ) from exc
+
+
+def _as_int(value: object) -> int:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return 0
+    return int(value)
+
+
+def _as_text(value: object) -> str:
+    if isinstance(value, bytes):
+        return value.decode("utf-8", "replace")
+    return str(value)
+
+
+def _as_bytes(value: object) -> bytes | None:
+    if value is None:
+        return None
+    if isinstance(value, bytes):
+        return value
+    if isinstance(value, str):
+        return value.encode("utf-8")
+    return None
+
+
+class UnboundedStoreClient(RuntimeError):
+    """A store client with no operation timeout, or one too long to be useful."""
+
+
+def bounded_timeout_s(client: object) -> float | None:
+    """The client's per-operation timeout, or None when it has none.
+
+    Reaches into redis-py's connection kwargs because there is no public accessor. Returns None
+    rather than raising if the shape is unfamiliar, so a test double is never rejected.
+    """
+    pool = getattr(client, "connection_pool", None)
+    kwargs = getattr(pool, "connection_kwargs", None)
+    if not isinstance(kwargs, dict):
+        return None
+    timeout = kwargs.get("socket_timeout")
+    return float(timeout) if isinstance(timeout, (int, float)) else None
+
+
+def require_bounded_client(client: object, *, below_s: float) -> float:
+    """Refuse to start on a client whose reads can hang past the refresh period (C36).
+
+    A paused or partitioned store does not refuse connections -- it accepts them and never
+    answers. Without a per-operation timeout a refresh round simply never returns, so the
+    snapshot never ages, `state()` never reports STALE, and the fail-closed window that the whole
+    outage posture rests on silently does not exist. RC2 validated this at start-up and the
+    round-2 lanes measured the consequence of getting the relationship wrong: a timeout EQUAL to
+    the staleness ceiling produced fleet-wide fail-closed on every half-open failover.
+
+    Call this from the process start-up path, with `below_s` the refresh period.
+    """
+    timeout = bounded_timeout_s(client)
+    if timeout is None:
+        raise UnboundedStoreClient(
+            "the state store client has no socket_timeout: a partitioned store would hang a "
+            "refresh round forever instead of ageing the snapshot",
+        )
+    if timeout >= below_s:
+        raise UnboundedStoreClient(
+            f"the state store client's socket_timeout ({timeout}s) must be below the refresh "
+            f"period ({below_s}s), or a single slow round outlives the window it protects",
+        )
+    return timeout
+
+
+class ValkeyStateStore:
+    """Satisfies `gateway_v2.runtime.state_feed.StateStore` over redis.asyncio.
+
+    The client is injected: pool sizing and operation timeouts come from the ResourceContract
+    (GW03), not from a literal in here.
+    """
+
+    def __init__(self, client: Any, keys: StoreKeys = KEYS) -> None:
+        self._client = client
+        self._keys = keys
+
+    async def head(self, kind: StateKind) -> Head:
+        """One MULTI: the manifest, the index size and the index head."""
+        index = self._keys.index(kind)
+        with _reachable("head"):
+            async with self._client.pipeline(transaction=True) as pipe:
+                pipe.get(self._keys.manifest(kind))
+                pipe.zcard(index)
+                pipe.zrevrange(index, 0, 0, withscores=True)
+                manifest_raw, count, top = await pipe.execute()
+        return Head(
+            manifest_raw=_as_bytes(manifest_raw),
+            index_count=_as_int(count),
+            index_top=0 if not top else _as_int(top[0][1]),
+        )
+
+    async def index_range(
+        self,
+        kind: StateKind,
+        *,
+        after: int,
+        upto: int,
+        limit: int,
+    ) -> IndexPage:
+        """One MULTI: the exact count at or below the attested position, and the page above."""
+        index = self._keys.index(kind)
+        with _reachable("index_range"):
+            async with self._client.pipeline(transaction=True) as pipe:
+                pipe.zcount(index, "-inf", upto)
+                pipe.zrangebyscore(
+                    index,
+                    f"({after}",
+                    upto,
+                    start=0,
+                    num=limit,
+                    withscores=True,
+                )
+                total, page = await pipe.execute()
+        return IndexPage(
+            entries=tuple((_as_text(member), _as_int(score)) for member, score in page),
+            total_at_or_below=_as_int(total),
+        )
+
+    async def records(self, kind: StateKind, keys: Sequence[str]) -> tuple[bytes | None, ...]:
+        """One command. Hash-stored kinds use HMGET; plans have a key each, so MGET."""
+        if not keys:
+            return ()
+        with _reachable("records"):
+            if kind in HASH_KINDS:
+                raw = await self._client.hmget(self._keys.record_hash(kind), list(keys))
+            else:
+                raw = await self._client.mget(
+                    [self._keys.record_key(kind, key) for key in keys],
+                )
+        return tuple(_as_bytes(value) for value in raw)
+
+    async def record_with_manifest(
+        self,
+        kind: StateKind,
+        key: str,
+    ) -> tuple[bytes | None, bytes | None]:
+        """One MULTI: `(manifest, record)` read together, for an on-demand identity fill.
+
+        Reading the record alone cannot tell a current store from one that regressed below what
+        this process already applied (a failover to a lagging replica); the manifest in the
+        same transaction can, and the caller checks it against its applied cursor.
+        """
+        with _reachable("record_with_manifest"):
+            async with self._client.pipeline(transaction=True) as pipe:
+                pipe.get(self._keys.manifest(kind))
+                if kind in HASH_KINDS:
+                    pipe.hmget(self._keys.record_hash(kind), [key])
+                else:
+                    pipe.mget([self._keys.record_key(kind, key)])
+                manifest_raw, (record_raw,) = await pipe.execute()
+        return _as_bytes(manifest_raw), _as_bytes(record_raw)
+
+    async def engaged(self, kind: StateKind) -> tuple[str, ...]:
+        """O(engaged). The cold-start read that replaces reading the whole kind."""
+        with _reachable("engaged"):
+            members = await self._client.smembers(self._keys.engaged(kind))
+        return tuple(sorted(_as_text(member) for member in members))
+
+    async def stamp(self) -> bytes | None:
+        """One GET of one key. Constant per cycle, whatever the estate or the kind count."""
+        with _reachable("stamp"):
+            return _as_bytes(await self._client.get(self._keys.stamp))

@@ -1,0 +1,35 @@
+FF                                                                       [100%]
+=================================== FAILURES ===================================
+_____________________ test_the_shipped_data_plane_is_clean _____________________
+
+    def test_the_shipped_data_plane_is_clean() -> None:
+>       assert scan_tree(_PKG) == []
+E       AssertionError: assert [TenantScaleV... O(changes)')] == []
+E         
+E         Left contains 2 more items, first extra item: TenantScaleViolation(path='/home/suraj/Documents/zeroshield/AI_Mesh_Firewall/gateway_v2/gateway_v2/edge/dev_components.py', symbol='scan', line=308, reason='whole-collection store read: cannot be O(changes)')
+E         Use -v to get more diff
+
+tests/gates/test_check_tenant_scale.py:190: AssertionError
+__________________ test_checked_in_inventory_matches_the_tree __________________
+
+    def test_checked_in_inventory_matches_the_tree() -> None:
+>       assert main([]) == 0
+E       assert 1 == 0
+E        +  where 1 = main([])
+
+tests/lint/test_console_inventory.py:28: AssertionError
+----------------------------- Captured stdout call -----------------------------
+docs/plans/evidence/2026-10-26-gw14b/frontend-verifier/fields.json does not match a fresh scan; regenerate with --write
+frontend read action via pipeline_trace in frontend/src/components/AttackSimulatorPanel.jsx is not in the inventory
+frontend read matched_rule_names via pipeline_trace in frontend/src/utils/pipelineTrace.js is not in the inventory
+frontend read matched_rules via pipeline_trace in frontend/src/utils/pipelineTrace.js is not in the inventory
+frontend read matched_rules via unscoped in frontend/src/utils/liveGateway.js is not in the inventory
+inventory lists action via pipeline_trace but frontend/src/components/AttackSimulatorPanel.jsx no longer reads it
+inventory lists matched_rule_names via unscoped but frontend/src/utils/pipelineTrace.js no longer reads it
+inventory lists matched_rules via pipeline_trace but frontend/src/components/simulator/StageTimeline.jsx no longer reads it
+inventory lists matched_rules via unscoped but frontend/src/utils/liveGateway.js no longer reads it
+docs/plans/evidence/2026-10-26-gw14b/cp-consumers/endpoints.json does not match a fresh scan; regenerate with --write
+=========================== short test summary info ============================
+FAILED tests/gates/test_check_tenant_scale.py::test_the_shipped_data_plane_is_clean
+FAILED tests/lint/test_console_inventory.py::test_checked_in_inventory_matches_the_tree
+2 failed in 10.48s

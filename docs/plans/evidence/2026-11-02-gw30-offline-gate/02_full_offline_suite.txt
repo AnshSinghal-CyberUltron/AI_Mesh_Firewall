@@ -1,0 +1,41 @@
+GW30 — full gateway_v2 offline pytest suite (task 15.1, gate 2)
+Command:  .venv/bin/python -m pytest -q   (cwd = gateway_v2/)
+Date:     2026-11-02
+
+RESULT TAIL:
+  2 failed, 2772 passed, 100 skipped, 1 xfailed, 9 warnings in 1331.98s (0:22:11)
+
+The 2 failures are PRE-EXISTING and UNRELATED to the GW30 additions. GW30 is a
+Python-only adapter layer under gateway_v2/dispatch + domain/posture.py +
+runtime/resources.py; it touches no edge/ module, no frontend file, and no
+console-inventory artifact. Proof below.
+
+FAILURE 1 — tests/gates/test_check_tenant_scale.py::test_the_shipped_data_plane_is_clean
+  Violations reported by check_tenant_scale:
+    gateway_v2/gateway_v2/edge/dev_components.py:308  scan  'whole-collection store read: cannot be O(changes)'
+    (+1 more in the same edge/dev_components.py file)
+  - File belongs to edge/, introduced by the GW26 dev-profile work
+    (git: 543b2993 "feat(gw26): bind each route surface ..." /
+     f56160c1 "fix(gw2-dev): ...").
+  - Matches the standing AGENTS.md note: a pre-existing check_tenant_scale finding
+    on the re-hydrator / dev edge path, tracked, not owned by this card.
+  - No GW30 module (dispatch/vector_*, domain/posture.py, runtime/resources*.py)
+    appears in the violation list. Running check_tenant_scale over the package
+    root exits 0 for the GW30 trees.
+
+FAILURE 2 — tests/lint/test_console_inventory.py::test_checked_in_inventory_matches_the_tree
+  All reported deltas are frontend/GW14b artifacts:
+    frontend/src/components/AttackSimulatorPanel.jsx
+    frontend/src/utils/pipelineTrace.js
+    frontend/src/utils/liveGateway.js
+    frontend/src/components/simulator/StageTimeline.jsx
+    docs/plans/evidence/2026-10-26-gw14b/frontend-verifier/fields.json
+    docs/plans/evidence/2026-10-26-gw14b/cp-consumers/endpoints.json
+  - Entirely a frontend console-inventory drift (JS reads vs checked-in inventory
+    JSON under the 2026-10-26-gw14b evidence dir). GW30 adds no JS and no console
+    inventory entry.
+
+CONCLUSION: 0 NEW regressions from GW30. Both failures live outside the GW30
+change surface (confirmed via git status: GW30 adds untracked dispatch/vector_*.py
++ runtime/resources_vector.py and modifies only domain/posture.py and
+runtime/resources.py — none of the failing paths).

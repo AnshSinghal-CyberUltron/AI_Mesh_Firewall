@@ -67,7 +67,7 @@ echo "TAG=$TAG  PLATFORM=$PLATFORM  ECR=$ECR"
 
 _ensure_ecr_repos() {
   local repo
-  for repo in ai-mesh-gateway ai-mesh-control ai-mesh-workers ai-mesh-nginx ai-mesh-demo ai-mesh-mcp-broker ai-mesh-mcp-sandbox; do
+  for repo in ai-mesh-gateway ai-mesh-state-control ai-mesh-control ai-mesh-workers ai-mesh-nginx ai-mesh-demo ai-mesh-mcp-broker ai-mesh-mcp-sandbox; do
     if aws ecr describe-repositories --repository-names "${repo}" --region "${REGION}" >/dev/null 2>&1; then
       continue
     fi
@@ -136,6 +136,15 @@ gw_args=("${COMMON[@]}"); append_ecr_tags gw_args ai-mesh-gateway
 gw_args+=(-f gateway/Dockerfile .)
 _run gateway "${gw_args[@]}"
 
+# GW05b / R2-04: the control-plane state re-hydrator (`python -m state_control`). It needs its
+# OWN image: ai-mesh-gateway is built from gateway/Dockerfile (the v1 gateway) and contains no
+# `state_control` package, so pointing the re-hydrators at it would give two containers that
+# cannot start -- and with no re-hydrator running, no freshness stamp is written and the whole
+# fleet fails closed at AMF_STATE_FRESH_MS.
+sc_args=("${COMMON[@]}"); append_ecr_tags sc_args ai-mesh-state-control
+sc_args+=(-f gateway_v2/Dockerfile .)
+_run state-control "${sc_args[@]}"
+
 ctl_args=("${COMMON[@]}"); append_ecr_tags ctl_args ai-mesh-control
 ctl_args+=(-f control/Dockerfile .)
 _run control "${ctl_args[@]}"
@@ -179,7 +188,7 @@ if ! aim_wait_pids pids names; then
 fi
 
 echo "=== ECR image verify ==="
-for repo in ai-mesh-gateway ai-mesh-control ai-mesh-workers ai-mesh-nginx ai-mesh-demo ai-mesh-mcp-broker ai-mesh-mcp-sandbox; do
+for repo in ai-mesh-gateway ai-mesh-state-control ai-mesh-control ai-mesh-workers ai-mesh-nginx ai-mesh-demo ai-mesh-mcp-broker ai-mesh-mcp-sandbox; do
   aws ecr describe-images --repository-name "$repo" --region "$REGION" \
     --image-ids "imageTag=$TAG" \
     --query 'imageDetails[0].{tag:imageTags[0],pushed:imagePushedAt,bytes:imageSizeInBytes}' \
@@ -192,6 +201,7 @@ _update_env_kv "ECR_REGISTRY" "${ECR}" "${ROOT}/.env"
 echo "=== ALL PARALLEL BUILDS PUSHED $(date -u +%Y-%m-%dT%H:%M:%SZ) ==="
 echo "Platform: ${PLATFORM}"
 echo "  ${ECR}/ai-mesh-gateway:${TAG}"
+echo "  ${ECR}/ai-mesh-state-control:${TAG}"
 echo "  ${ECR}/ai-mesh-control:${TAG}"
 echo "  ${ECR}/ai-mesh-workers:${TAG}"
 echo "  ${ECR}/ai-mesh-nginx:${TAG}"

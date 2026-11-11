@@ -1,0 +1,312 @@
+/venv/lib/python3.12/site-packages/pytest_asyncio/plugin.py:300: PytestDeprecationWarning: The configuration option "asyncio_default_fixture_loop_scope" is unset.
+The event loop scope for asynchronous fixtures will default to the "fixture" caching scope. Future versions of pytest-asyncio will default the loop scope for asynchronous fixtures to "function" scope. Set the default fixture loop scope explicitly in order to avoid unexpected behavior in the future. Valid fixture loop scopes are: "function", "class", "module", "package", "session"
+
+  warnings.warn(PytestDeprecationWarning(_DEFAULT_FIXTURE_LOOP_SCOPE_UNSET))
+........................................................................ [  2%]
+........................................................................ [  4%]
+........................................................................ [  7%]
+........................................................................ [  9%]
+........................................................................ [ 12%]
+...........................sssssssssssssssss............................ [ 14%]
+........................................................................ [ 17%]
+........................................................................ [ 19%]
+........................................................................ [ 21%]
+........................................................................ [ 24%]
+...............................ss....................................... [ 26%]
+........................................................................ [ 29%]
+........................................................................ [ 31%]
+........................................................................ [ 34%]
+........................................................................ [ 36%]
+......sssss............................................................. [ 38%]
+........................................................................ [ 41%]
+........................................................................ [ 43%]
+........................................................................ [ 46%]
+........................................................................ [ 48%]
+........................................................................ [ 51%]
+........................................................................ [ 53%]
+........................................................................ [ 56%]
+........................................................................ [ 58%]
+........................................................................ [ 60%]
+........................................................................ [ 63%]
+...............................................................ssssss... [ 65%]
+...................................F.................................... [ 68%]
+........................................................................ [ 70%]
+........................................................sss............. [ 73%]
+........................................................................ [ 75%]
+...........................ssss......................................... [ 77%]
+........................................................................ [ 80%]
+........................................................................ [ 82%]
+........................................................................ [ 85%]
+..........................................sssssssssssss................. [ 87%]
+........................................................................ [ 90%]
+........................................................................ [ 92%]
+....................................ssssssssssssssssssssssssssssssssssss [ 95%]
+sssssssssssssssss....................................................... [ 97%]
+..................................sssss..............................x.. [ 99%]
+...                                                                      [100%]
+=================================== FAILURES ===================================
+__________________ test_current_tracked_tree_yields_zero_hits __________________
+
+    def test_current_tracked_tree_yields_zero_hits() -> None:
+        """T-ZERO — scan_repo over the real git ls-files set yields zero hits and no
+        LGW00-1 residual. Offline/deterministic; runs only when .git is present
+        (the CI --fail-allowlist job is the authoritative fallback). Property 4.
+        # Validates: Requirements 4.2, 8.1"""
+        repo_root = _repo_root()
+        if repo_root is None:
+            pytest.skip("no .git present; CI --fail-allowlist is the authoritative gate")
+>       hits, known = scan_repo(repo_root, allow_known=False)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/gates/test_secret_headers.py:302: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+lint/check_secret_headers.py:152: in scan_repo
+    tracked = git_tracked_files(repo)
+              ^^^^^^^^^^^^^^^^^^^^^^^
+lint/check_secret_headers.py:145: in git_tracked_files
+    raw = subprocess.check_output(["git", "ls-files", "-z"], cwd=repo)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.12/subprocess.py:466: in check_output
+    return run(*popenargs, stdout=PIPE, timeout=timeout, check=True,
+/usr/local/lib/python3.12/subprocess.py:548: in run
+    with Popen(*popenargs, **kwargs) as process:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.12/subprocess.py:1026: in __init__
+    self._execute_child(args, executable, preexec_fn, close_fds,
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <Popen: returncode: 255 args: ['git', 'ls-files', '-z']>
+args = ['git', 'ls-files', '-z'], executable = b'git', preexec_fn = None
+close_fds = True, pass_fds = (), cwd = PosixPath('/repo'), env = None
+startupinfo = None, creationflags = 0, shell = False, p2cread = -1
+p2cwrite = -1, c2pread = 10, c2pwrite = 11, errread = -1, errwrite = -1
+restore_signals = True, gid = None, gids = None, uid = None, umask = -1
+start_new_session = False, process_group = -1
+
+    def _execute_child(self, args, executable, preexec_fn, close_fds,
+                       pass_fds, cwd, env,
+                       startupinfo, creationflags, shell,
+                       p2cread, p2cwrite,
+                       c2pread, c2pwrite,
+                       errread, errwrite,
+                       restore_signals,
+                       gid, gids, uid, umask,
+                       start_new_session, process_group):
+        """Execute program (POSIX version)"""
+    
+        if isinstance(args, (str, bytes)):
+            args = [args]
+        elif isinstance(args, os.PathLike):
+            if shell:
+                raise TypeError('path-like args is not allowed when '
+                                'shell is true')
+            args = [args]
+        else:
+            args = list(args)
+    
+        if shell:
+            # On Android the default shell is at '/system/bin/sh'.
+            unix_shell = ('/system/bin/sh' if
+                      hasattr(sys, 'getandroidapilevel') else '/bin/sh')
+            args = [unix_shell, "-c"] + args
+            if executable:
+                args[0] = executable
+    
+        if executable is None:
+            executable = args[0]
+    
+        sys.audit("subprocess.Popen", executable, args, cwd, env)
+    
+        if (_USE_POSIX_SPAWN
+                and os.path.dirname(executable)
+                and preexec_fn is None
+                and not close_fds
+                and not pass_fds
+                and cwd is None
+                and (p2cread == -1 or p2cread > 2)
+                and (c2pwrite == -1 or c2pwrite > 2)
+                and (errwrite == -1 or errwrite > 2)
+                and not start_new_session
+                and process_group == -1
+                and gid is None
+                and gids is None
+                and uid is None
+                and umask < 0):
+            self._posix_spawn(args, executable, env, restore_signals,
+                              p2cread, p2cwrite,
+                              c2pread, c2pwrite,
+                              errread, errwrite)
+            return
+    
+        orig_executable = executable
+    
+        # For transferring possible exec failure from child to parent.
+        # Data format: "exception name:hex errno:description"
+        # Pickle is not used; it is complex and involves memory allocation.
+        errpipe_read, errpipe_write = os.pipe()
+        # errpipe_write must not be in the standard io 0, 1, or 2 fd range.
+        low_fds_to_close = []
+        while errpipe_write < 3:
+            low_fds_to_close.append(errpipe_write)
+            errpipe_write = os.dup(errpipe_write)
+        for low_fd in low_fds_to_close:
+            os.close(low_fd)
+        try:
+            try:
+                # We must avoid complex work that could involve
+                # malloc or free in the child process to avoid
+                # potential deadlocks, thus we do all this here.
+                # and pass it to fork_exec()
+    
+                if env is not None:
+                    env_list = []
+                    for k, v in env.items():
+                        k = os.fsencode(k)
+                        if b'=' in k:
+                            raise ValueError("illegal environment variable name")
+                        env_list.append(k + b'=' + os.fsencode(v))
+                else:
+                    env_list = None  # Use execv instead of execve.
+                executable = os.fsencode(executable)
+                if os.path.dirname(executable):
+                    executable_list = (executable,)
+                else:
+                    # This matches the behavior of os._execvpe().
+                    executable_list = tuple(
+                        os.path.join(os.fsencode(dir), executable)
+                        for dir in os.get_exec_path(env))
+                fds_to_keep = set(pass_fds)
+                fds_to_keep.add(errpipe_write)
+                self.pid = _fork_exec(
+                        args, executable_list,
+                        close_fds, tuple(sorted(map(int, fds_to_keep))),
+                        cwd, env_list,
+                        p2cread, p2cwrite, c2pread, c2pwrite,
+                        errread, errwrite,
+                        errpipe_read, errpipe_write,
+                        restore_signals, start_new_session,
+                        process_group, gid, gids, uid, umask,
+                        preexec_fn, _USE_VFORK)
+                self._child_created = True
+            finally:
+                # be sure the FD is closed no matter what
+                os.close(errpipe_write)
+    
+            self._close_pipe_fds(p2cread, p2cwrite,
+                                 c2pread, c2pwrite,
+                                 errread, errwrite)
+    
+            # Wait for exec to fail or succeed; possibly raising an
+            # exception (limited in size)
+            errpipe_data = bytearray()
+            while True:
+                part = os.read(errpipe_read, 50000)
+                errpipe_data += part
+                if not part or len(errpipe_data) > 50000:
+                    break
+        finally:
+            # be sure the FD is closed no matter what
+            os.close(errpipe_read)
+    
+        if errpipe_data:
+            try:
+                pid, sts = os.waitpid(self.pid, 0)
+                if pid == self.pid:
+                    self._handle_exitstatus(sts)
+                else:
+                    self.returncode = sys.maxsize
+            except ChildProcessError:
+                pass
+    
+            try:
+                exception_name, hex_errno, err_msg = (
+                        errpipe_data.split(b':', 2))
+                # The encoding here should match the encoding
+                # written in by the subprocess implementations
+                # like _posixsubprocess
+                err_msg = err_msg.decode()
+            except ValueError:
+                exception_name = b'SubprocessError'
+                hex_errno = b'0'
+                err_msg = 'Bad exception data from child: {!r}'.format(
+                              bytes(errpipe_data))
+            child_exception_type = getattr(
+                    builtins, exception_name.decode('ascii'),
+                    SubprocessError)
+            if issubclass(child_exception_type, OSError) and hex_errno:
+                errno_num = int(hex_errno, 16)
+                if err_msg == "noexec:chdir":
+                    err_msg = ""
+                    # The error must be from chdir(cwd).
+                    err_filename = cwd
+                elif err_msg == "noexec":
+                    err_msg = ""
+                    err_filename = None
+                else:
+                    err_filename = orig_executable
+                if errno_num != 0:
+                    err_msg = os.strerror(errno_num)
+                if err_filename is not None:
+>                   raise child_exception_type(errno_num, err_msg, err_filename)
+E                   FileNotFoundError: [Errno 2] No such file or directory: 'git'
+
+/usr/local/lib/python3.12/subprocess.py:1955: FileNotFoundError
+=============================== warnings summary ===============================
+tests/admit/test_lgw06_harness.py::test_lgw06_3_multi_replica_no_quota_multiplication
+  /repo/gateway_v2/gateway_v2/admit/quota.py:305: RuntimeWarning: coroutine 'BudgetLease._refill' was never awaited
+    def __init__(
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/admit/test_lgw06_harness.py::test_lgw06_3_multi_replica_no_quota_multiplication
+  /venv/lib/python3.12/site-packages/fakeredis/_socket/_base.py:264: RuntimeWarning: coroutine 'BudgetLease._refill' was never awaited
+    for db in self._server.dbs.values():
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/admit/test_lgw06_harness.py::test_lgw06_3_multi_replica_no_quota_multiplication
+  /venv/lib/python3.12/site-packages/_pytest/tracemalloc.py:9: RuntimeWarning: coroutine 'BudgetLease._refill' was never awaited
+    import tracemalloc
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/admit/test_lgw06_lease_conservation.py::test_property2_budget_is_conserved_across_shutdown_and_crash
+  /venv/lib/python3.12/site-packages/fakeredis/_socket/_base.py:263: RuntimeWarning: coroutine 'BudgetLease._refill' was never awaited
+    now = time.time()
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/admit/test_lgw06_lease_no_multiplication.py::test_property1_no_replica_multiplication
+  /venv/lib/python3.12/site-packages/fakeredis/_clients/_setup.py:164: RuntimeWarning: coroutine 'BudgetLease._refill' was never awaited
+    def default_driver_info(connection_class: Type[Any], kwargs: Dict[str, Any]) -> Any:
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/admit/test_lgw06_lease_no_multiplication.py::test_property1_no_replica_multiplication
+  /venv/lib/python3.12/site-packages/fakeredis/commands_mixins/sortedset_mixin.py:34: RuntimeWarning: coroutine 'BudgetLease._refill' was never awaited
+    def __init__(self, value: float, exclusive: bool = False, bytes_val: bytes | None = None):
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/admit/test_lgw06_outage_posture.py::test_property4_outage_spends_remaining_then_budget_unavailable
+  /venv/lib/python3.12/site-packages/fakeredis/_core/_database.py:147: RuntimeWarning: coroutine 'BudgetLease._refill' was never awaited
+    def __init__(self, key: bytes, db: Database, item: CommandItem | None = None, default: Any = None) -> None:
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/admit/test_lgw06_refill_offpath.py::test_property5_single_flight_during_in_progress_refill
+  /venv/lib/python3.12/site-packages/fakeredis/commands_mixins/sortedset_mixin.py:39: RuntimeWarning: coroutine 'BudgetLease._refill' was never awaited
+    @classmethod
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/admit/test_lgw19_harness.py::test_g06_local_amplification_below_bound_vs_6_to_11ms_baseline
+  <string>:2: RuntimeWarning: coroutine 'BudgetLease._refill' was never awaited
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/gates/test_secret_headers.py::test_current_tracked_tree_yields_zero_hits
+1 failed, 2845 passed, 108 skipped, 1 xfailed, 9 warnings in 1384.51s (0:23:04)
+exit=1

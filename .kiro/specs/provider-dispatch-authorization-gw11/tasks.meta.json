@@ -1,0 +1,360 @@
+{
+  "pbtResults": {},
+  "executionHistory": {
+    "1. Sealed `DispatchAuthorization` + mint seam in the domain layer": [
+      {
+        "executionId": "bc3c7d6b-7f9a-4a58-a164-559388f382b3",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792151781236
+      },
+      {
+        "executionId": "bc3c7d6b-7f9a-4a58-a164-559388f382b3",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792151788314
+      },
+      {
+        "executionId": "bc3c7d6b-7f9a-4a58-a164-559388f382b3",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792151923272
+      }
+    ],
+    "2. `authorize()` mint site in the resolve layer": [
+      {
+        "executionId": "bc3c7d6b-7f9a-4a58-a164-559388f382b3",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792151781300
+      },
+      {
+        "executionId": "bc3c7d6b-7f9a-4a58-a164-559388f382b3",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792151929837
+      },
+      {
+        "executionId": "bc3c7d6b-7f9a-4a58-a164-559388f382b3",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792152027126
+      }
+    ],
+    "3.1 `apply_and_verify` + verification value types": [
+      {
+        "executionId": "bc3c7d6b-7f9a-4a58-a164-559388f382b3",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792151781331
+      },
+      {
+        "executionId": "bc3c7d6b-7f9a-4a58-a164-559388f382b3",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792152042725
+      },
+      {
+        "executionId": "bc3c7d6b-7f9a-4a58-a164-559388f382b3",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792152454559
+      }
+    ],
+    "3.2 Snapshot catalogue + two distinct errors": [
+      {
+        "executionId": "bc3c7d6b-7f9a-4a58-a164-559388f382b3",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792151781364
+      },
+      {
+        "executionId": "bc3c7d6b-7f9a-4a58-a164-559388f382b3",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792152043786
+      },
+      {
+        "executionId": "bc3c7d6b-7f9a-4a58-a164-559388f382b3",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792152449599
+      }
+    ],
+    "3.3 C27 provider error mapping / timeouts / size bound / payload scan / over-band": [
+      {
+        "executionId": "bc3c7d6b-7f9a-4a58-a164-559388f382b3",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792151781398
+      },
+      {
+        "executionId": "bc3c7d6b-7f9a-4a58-a164-559388f382b3",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792152045050
+      },
+      {
+        "executionId": "bc3c7d6b-7f9a-4a58-a164-559388f382b3",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792152450812
+      }
+    ],
+    "3.4 Bounded, instrumented provider pool": [
+      {
+        "executionId": "bc3c7d6b-7f9a-4a58-a164-559388f382b3",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792151781427
+      },
+      {
+        "executionId": "bc3c7d6b-7f9a-4a58-a164-559388f382b3",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792152046470
+      },
+      {
+        "executionId": "bc3c7d6b-7f9a-4a58-a164-559388f382b3",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792152452216
+      }
+    ],
+    "4. Single authorized provider entry + runtime assertion": [
+      {
+        "executionId": "bc3c7d6b-7f9a-4a58-a164-559388f382b3",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792151781456
+      },
+      {
+        "executionId": "bc3c7d6b-7f9a-4a58-a164-559388f382b3",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792152463497
+      },
+      {
+        "executionId": "bc3c7d6b-7f9a-4a58-a164-559388f382b3",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792152843630
+      }
+    ],
+    "5. Provenance AST gate": [
+      {
+        "executionId": "bc3c7d6b-7f9a-4a58-a164-559388f382b3",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792151781484
+      },
+      {
+        "executionId": "bc3c7d6b-7f9a-4a58-a164-559388f382b3",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792152047525
+      },
+      {
+        "executionId": "bc3c7d6b-7f9a-4a58-a164-559388f382b3",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792152453614
+      }
+    ],
+    "6. Fourth import-linter contract + CI wiring": [
+      {
+        "executionId": "bc3c7d6b-7f9a-4a58-a164-559388f382b3",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792151781511
+      },
+      {
+        "executionId": "bc3c7d6b-7f9a-4a58-a164-559388f382b3",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792152464208
+      },
+      {
+        "executionId": "bc3c7d6b-7f9a-4a58-a164-559388f382b3",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792152843698
+      }
+    ],
+    "7. Checkpoint - Ensure all tests pass": [
+      {
+        "executionId": "bc3c7d6b-7f9a-4a58-a164-559388f382b3",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792151781547
+      },
+      {
+        "executionId": "bc3c7d6b-7f9a-4a58-a164-559388f382b3",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792152844742
+      }
+    ],
+    "8.1 Author the one behavioral suite `gateway_v2/tests/dispatch/test_provider_dispatch_authorization_gw11.py`": [
+      {
+        "executionId": "bc3c7d6b-7f9a-4a58-a164-559388f382b3",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792151781586
+      },
+      {
+        "executionId": "bc3c7d6b-7f9a-4a58-a164-559388f382b3",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792152852617
+      },
+      {
+        "executionId": "bc3c7d6b-7f9a-4a58-a164-559388f382b3",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792154341954
+      }
+    ],
+    "9.1 Author `gateway_v2/tests/gates/test_check_dispatch_provenance.py` (separate file, co-located with the other gate tests like the secret-headers gate test)": [
+      {
+        "executionId": "bc3c7d6b-7f9a-4a58-a164-559388f382b3",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792151781627
+      },
+      {
+        "executionId": "bc3c7d6b-7f9a-4a58-a164-559388f382b3",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792152854065
+      },
+      {
+        "executionId": "bc3c7d6b-7f9a-4a58-a164-559388f382b3",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792153409114
+      }
+    ],
+    "10. LGW11-1 static-type negative harness": [
+      {
+        "executionId": "bc3c7d6b-7f9a-4a58-a164-559388f382b3",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792151781659
+      },
+      {
+        "executionId": "bc3c7d6b-7f9a-4a58-a164-559388f382b3",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792152855454
+      },
+      {
+        "executionId": "bc3c7d6b-7f9a-4a58-a164-559388f382b3",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792153407343
+      }
+    ],
+    "12. Exit gate — full verification sweep": [
+      {
+        "executionId": "bc3c7d6b-7f9a-4a58-a164-559388f382b3",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792151781692
+      },
+      {
+        "executionId": "bc3c7d6b-7f9a-4a58-a164-559388f382b3",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792153439424
+      },
+      {
+        "executionId": "bc3c7d6b-7f9a-4a58-a164-559388f382b3",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792154316316
+      }
+    ],
+    "13. Final checkpoint - Ensure all tests pass": [
+      {
+        "executionId": "bc3c7d6b-7f9a-4a58-a164-559388f382b3",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792151781734
+      },
+      {
+        "executionId": "bc3c7d6b-7f9a-4a58-a164-559388f382b3",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792154316897
+      }
+    ],
+    "3. Dispatch-core supporting modules (four independent files)": [
+      {
+        "executionId": "bc3c7d6b-7f9a-4a58-a164-559388f382b3",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792152454588
+      }
+    ],
+    "11.1 Smoke + integration guards (may live in the behavioral suite or a small sibling, implementer's choice)": [
+      {
+        "executionId": "bc3c7d6b-7f9a-4a58-a164-559388f382b3",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792152857469
+      },
+      {
+        "executionId": "bc3c7d6b-7f9a-4a58-a164-559388f382b3",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792153405906
+      }
+    ],
+    "11. Structural / smoke / integration guard tests": [
+      {
+        "executionId": "bc3c7d6b-7f9a-4a58-a164-559388f382b3",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792153405939
+      }
+    ],
+    "9. Provenance-gate forgery-matrix unit test": [
+      {
+        "executionId": "bc3c7d6b-7f9a-4a58-a164-559388f382b3",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792153409140
+      }
+    ],
+    "8.2 Properties 1–3: sealed authorization + mint-iff-non-terminal (same file, serialized)": [
+      {
+        "executionId": "bc3c7d6b-7f9a-4a58-a164-559388f382b3",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792153419338
+      }
+    ],
+    "8.3 Properties 4–5: runtime assertion + BLOCK zero-call via recorder (same file, serialized)": [
+      {
+        "executionId": "bc3c7d6b-7f9a-4a58-a164-559388f382b3",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792153420787
+      }
+    ],
+    "8.4 Property 6: transform-and-verify against finding spans (same file, serialized)": [
+      {
+        "executionId": "bc3c7d6b-7f9a-4a58-a164-559388f382b3",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792153422089
+      }
+    ],
+    "8.5 Property 7: REWRITE via local GuardBackend, zero firewall calls (same file, serialized)": [
+      {
+        "executionId": "bc3c7d6b-7f9a-4a58-a164-559388f382b3",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792153423504
+      }
+    ],
+    "8.6 Property 8: deterministic plan routing (same file, serialized)": [
+      {
+        "executionId": "bc3c7d6b-7f9a-4a58-a164-559388f382b3",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792153424943
+      }
+    ],
+    "8.7 Property 9: distinct catalogue errors, LGW11-5 (same file, serialized)": [
+      {
+        "executionId": "bc3c7d6b-7f9a-4a58-a164-559388f382b3",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792153426255
+      }
+    ],
+    "8.8 Properties 10–16: C27 error-map / timeout / size / scan / over-band / audit / malformed (same file, serialized)": [
+      {
+        "executionId": "bc3c7d6b-7f9a-4a58-a164-559388f382b3",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792153428142
+      }
+    ],
+    "8.9 Property 17: bounded pool + exported wait time (same file, serialized)": [
+      {
+        "executionId": "bc3c7d6b-7f9a-4a58-a164-559388f382b3",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792153429614
+      }
+    ],
+    "8.10 Property 19: LGW11-6 injected-clock concurrency (500 req × 20 orgs) (same file, serialized)": [
+      {
+        "executionId": "bc3c7d6b-7f9a-4a58-a164-559388f382b3",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792153431022
+      }
+    ],
+    "9.2 Property 18: gate flags every forgery outside resolve/, passes a clean tree": [
+      {
+        "executionId": "bc3c7d6b-7f9a-4a58-a164-559388f382b3",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792153432323
+      }
+    ],
+    "8. Main GW11 behavioral test suite (SINGLE FILE, ONE PASS)": [
+      {
+        "executionId": "bc3c7d6b-7f9a-4a58-a164-559388f382b3",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792154341983
+      }
+    ]
+  }
+}

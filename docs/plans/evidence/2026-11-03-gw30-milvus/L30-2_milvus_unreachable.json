@@ -1,0 +1,20 @@
+{
+  "gate": "L30-2",
+  "store": "milvus",
+  "timestamp": "2026-11-03T13:55:51.878400+00:00",
+  "cases": [
+    {
+      "store": "milvus",
+      "request_id": "zs-ed4346ea4bb8",
+      "timestamp": "2026-11-03T13:55:56.932915+00:00",
+      "target": "127.0.0.1:48639 (nothing listening)",
+      "code": "provider_unreachable",
+      "records_is_none": true,
+      "elapsed_s": 5.0544,
+      "within_30s": true,
+      "is_provider_unreachable": true,
+      "is_empty_clean_search": false
+    }
+  ],
+  "verdict": "LIVE-PASS"
+}

@@ -1,0 +1,19 @@
+# production-profile gateway boot log (AMF_PROFILE=production, 2 workers, VM stack)
+INFO:     Started server process [8]
+INFO:     Started server process [9]
+INFO:     Uvicorn running on http://0.0.0.0:8301 (Press CTRL+C to quit)
+boot: PRODUCTION PROFILE (AMF_PROFILE=production) -- GW36 S3: signed state, identity and plans are real; every other line below is still its fail-closed default (S4/S5)
+boot: admission -> fail_closed_admission (fail-closed shed)
+boot: catalog -> empty_catalog_source (every retrieve model_not_found; backend deferred)
+boot: drain hook NOT installed -- admission is fail_closed_admission (no GW19 controller wired at B3 local half); uvicorn drives per-worker graceful lifespan.shutdown + ScanExecutor release unchanged
+boot: hosting gateway_v2.edge.serve:serving_app under uvicorn multiprocess supervisor with workers=2 (factory=True, interface=asgi3) on 0.0.0.0:8301
+boot: identity -> sha256(bearer) over signed KEY records (401 invalid_api_key for a missing/unknown/revoked key, 503 shared_state_unavailable when unverified)
+boot: input_detector -> no_findings_detector (fail-closed; identity/admission refuse)
+boot: kill switch -> snapshot kept current, NOT enforced on the request path (GW29)
+boot: metrics_registry -> GW14d Publisher (786657 series; state live; admission/quota/audit zero until S4/S5)
+boot: provider -> StubProviderClient (empty, socket-free; real socket B4/GW17-18)
+boot: quota -> fail_closed_budget (fail-closed budget refusal; no GW06 decider wired)
+boot: resolver -> MinimalOutputResolver (shipped output resolver)
+boot: scanner -> detect.holdback.scan (shipped default scan protocol)
+boot: snapshot_source -> per-org plans from signed PLAN records
+boot: state -> signed-state runtime over AMF_STATE_VALKEY_URL (namespace {rv2}, fresh 5000 ms, refresh 500 ms)

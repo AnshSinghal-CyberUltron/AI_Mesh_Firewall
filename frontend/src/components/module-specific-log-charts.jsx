@@ -135,7 +135,8 @@ function get11LogCharts(logData) {
   // Stages section) — never fabricate a latency breakdown from the total.
   const ptStages = (metadata?.extra?.pipeline_trace?.stages || metadata?.pipeline_trace?.stages || logData?.pipeline_trace?.stages || []);
   const realTimeline = (Array.isArray(ptStages) ? ptStages : [])
-    .map((s) => ({ step: String(s?.name || "").replace(/_/g, " "), latency: Math.round(parseNumeric(s?.latency_ms)) }))
+    .filter((s) => s && Number.isFinite(Number(s.latency_ms)))
+    .map((s) => ({ step: String(s?.name || "").replace(/_/g, " "), latency: Math.round(Number(s.latency_ms)) }))
     .filter((s) => s.step);
   // Real token counts only (guarded below by totalTokens <= 0). No synthetic
   // 0.6/0.4 split of a request size when the real breakdown is missing.

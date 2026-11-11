@@ -1,0 +1,121 @@
+2026-11-03 13:55:56,932 [ERROR][create_connection]: Failed to create new connection using: http://127.0.0.1:48639 (_utils.py:48)
+{
+  "L30-1": "LIVE-PASS (1 live: milvus) + 12 INFRA-BLOCKED",
+  "L30-1b": "LIVE-PASS",
+  "L30-2": "LIVE-PASS",
+  "L30-3": "LIVE-PASS",
+  "generated": "2026-11-03T13:55:56.933451+00:00"
+}
+
+--- L30-1 per-store ---
+{
+  "live": {
+    "milvus": {
+      "create_collection": {
+        "code": "vector_ok",
+        "status": "created"
+      },
+      "upsert": {
+        "code": "vector_ok",
+        "count": 3
+      },
+      "query": {
+        "code": "vector_ok",
+        "count": 3,
+        "ids": [
+          "r1",
+          "r3",
+          "r2"
+        ],
+        "top_id": "r1"
+      },
+      "delete": {
+        "code": "vector_ok",
+        "count": 3
+      }
+    }
+  },
+  "infra_blocked": {
+    "pinecone": "cloud-only SaaS; no local image / no credentials",
+    "chroma": "no local backend",
+    "qdrant": "no local backend",
+    "weaviate": "no local backend",
+    "pgvector": "no local backend",
+    "elasticsearch": "no local backend",
+    "redis": "no local backend",
+    "mongodb_atlas": "no local backend",
+    "aws_opensearch_serverless": "no local backend",
+    "aws_bedrock_kb": "cloud-only; no local image / no credentials",
+    "gcp_vertex_vector": "cloud-only; no local image / no credentials",
+    "azure_ai_search": "cloud-only; no local image / no credentials"
+  },
+  "parity": {
+    "stores_compared": [
+      "milvus"
+    ]
+  }
+}
+
+--- L30-1b create preserves data ---
+{
+  "milvus": {
+    "first_create": "vector_ok",
+    "upsert": "vector_ok",
+    "second_create": "collection_exists",
+    "query_after_second_create": "vector_ok",
+    "ids_after_second_create": [
+      "r1",
+      "r3",
+      "r2"
+    ],
+    "pass": true
+  }
+}
+
+--- L30-2 cases ---
+[
+  {
+    "store": "milvus",
+    "request_id": "zs-ed4346ea4bb8",
+    "timestamp": "2026-11-03T13:55:56.932915+00:00",
+    "target": "127.0.0.1:48639 (nothing listening)",
+    "code": "provider_unreachable",
+    "records_is_none": true,
+    "elapsed_s": 5.0544,
+    "within_30s": true,
+    "is_provider_unreachable": true,
+    "is_empty_clean_search": false
+  }
+]
+
+--- L30-3 cases ---
+[
+  {
+    "scenario": "cross_org_A_cred_for_B_request",
+    "request_id": "zs-3f5edc0ad2c6",
+    "timestamp": "2026-11-03T13:55:56.933011+00:00",
+    "presented_credential_org": "orgA",
+    "target_request_org": "orgB",
+    "refused": true,
+    "refusal_code": "credential_scope_mismatch",
+    "backing_store_ops_for_request": 0,
+    "proceeded_to_store": false,
+    "org_b_payload_returned": null,
+    "secret_in_refusal_form": false,
+    "live_transport_used": "milvus"
+  },
+  {
+    "scenario": "missing_org_identity",
+    "request_id": "zs-ea78122f9424",
+    "timestamp": "2026-11-03T13:55:56.933030+00:00",
+    "presented_credential_org": "orgA",
+    "target_request_org": "(empty)",
+    "refused": true,
+    "refusal_code": "org_identity_invalid",
+    "backing_store_ops_for_request": 0,
+    "proceeded_to_store": false,
+    "org_b_payload_returned": null,
+    "secret_in_refusal_form": false,
+    "live_transport_used": "milvus"
+  }
+]

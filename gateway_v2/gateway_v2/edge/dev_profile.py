@@ -1,0 +1,556 @@
+"""DEV PROFILE boot wiring — opt-in ONLY via ``AMF_DEV_PROFILE=1``.
+
+The default boot path (:func:`gateway_v2.edge.serve.build_boot_dependencies` with the variable
+unset) is the shipped honest Fail_Closed_Fallback table and is not touched by this module. When
+``AMF_DEV_PROFILE=1`` the serving entrypoint instead calls :func:`build_dev_dependencies`, which
+wires the REAL pipeline pieces against local, explicitly-declared inputs so a developer can drive
+identity → plan → admission → budget → input scan → resolver → provider → output guard with curl
+or the stock OpenAI SDK.
+
+**Selection happens per process from the ENVIRONMENT.** uvicorn's multiprocess manager re-imports
+``serve`` in each worker and calls the module-level ``serving_app`` factory, so the decision is
+re-made in every worker from ``os.environ`` — never captured in a parent closure.
+
+**Refuse, never fall back.** Every required input is validated here; a missing / invalid value
+raises :class:`~gateway_v2.edge.dev_components.DevProfileError`, which ``serve.main`` maps to the
+shipped refuse-to-start contract (stderr JSON + exit 2). Nothing silently degrades to the
+fail-closed defaults or to an invented value: ``q_safe``, the audit calibration inputs and the
+budget inputs have NO default (no capacity literal outside ``runtime/resources.py``).
+
+**Loud.** Every dev-supplied dependency is named in one ``boot: <dep> -> <impl>`` line carrying a
+``DEV PROFILE`` marker, plus the honest notes on what the dev profile does NOT do.
+
+Environment:
+
+``AMF_DEV_PROFILE``            ``1`` to activate (``0`` / unset = shipped default boot)
+``AMF_DEV_API_KEY``            the one accepted bearer key (required)
+``AMF_DEV_ORG_ID``             the dev org (default ``dev-org``; must equal the plan's org_id)
+``AMF_DEV_PEER_API_KEY``       optional second bearer; set only together with the peer org
+``AMF_DEV_PEER_ORG_ID``        optional second org; its plan key is polled, never the dev key
+``AMF_DEV_PLAN_PATH``          JSON plan file in the signed ``plan.document`` shape (required)
+``AMF_DEV_MODELS``             comma-separated model ids for ``/v1/models`` (required)
+``AMF_DEV_Q_SAFE``             DECLARED guard service rate, float > 0 (required)
+``AMF_DEV_AUDIT_DRAIN_RATE_PER_S`` / ``AMF_DEV_AUDIT_BYTES_PER_RECORD``  DECLARED audit sizing
+``AMF_DEV_BUDGET``             ``lease`` (real GW06 over Redis) or ``unlimited`` (required)
+``AMF_DEV_REDIS_URL`` / ``AMF_DEV_BUDGET_POOL_TOKENS`` / ``AMF_DEV_RATE_PER_S`` /
+``AMF_DEV_BURST`` / ``AMF_DEV_LEASE_TTL_S``  required when ``AMF_DEV_BUDGET=lease``
+``AMF_DEV_PROVIDER_URL`` / ``AMF_DEV_PROVIDER_API_KEY``  optional OpenAI-compatible upstream base
+                               URL (``.../v1``; a full ``.../chat/completions`` URL is trimmed),
+                               else the echo provider
+"""
+
+from __future__ import annotations
+
+import time
+from collections.abc import Mapping
+from dataclasses import dataclass
+from functools import partial
+from urllib.parse import urlsplit, urlunsplit
+
+from gateway_v2.admit.admission import AdmissionController
+from gateway_v2.admit.metrics import AdmissionMetrics, QuotaMetrics
+from gateway_v2.admit.org_limits import OrgLimits
+from gateway_v2.admit.quota import AdmissionBounds
+from gateway_v2.detect.holdback import scan as holdback_scan
+from gateway_v2.dispatch.openai_upstream import (
+    CHAT_ENDPOINT,
+    OpenAIUpstreamProvider,
+    httpx_client_factory,
+)
+from gateway_v2.dispatch.routed_provider import RoutedProvider
+from gateway_v2.domain.plan import ExecutionPlan, Phase
+from gateway_v2.edge.app import ASGIApplication
+from gateway_v2.edge.chat_deps import resolve_tool_bounds
+from gateway_v2.edge.dev_admit import (
+    DevLeaseBudget,
+    DevServedApp,
+    DevUnlimitedBudget,
+    LeaseSettings,
+    _redis_client,
+    build_dev_admission,
+)
+from gateway_v2.edge.dev_audit import DevAudit, build_dev_audit
+from gateway_v2.edge.dev_components import (
+    DeterministicFindings,
+    DevProfileError,
+    DevStaticIdentity,
+    EchoProviderClient,
+    StaticCatalogSource,
+    env_text,
+    load_dev_plan,
+    parse_model_ids,
+    phase_resolver_factory,
+)
+from gateway_v2.edge.dev_mcp import build_dev_mcp
+from gateway_v2.edge.dev_metrics import build_dev_publisher
+from gateway_v2.edge.dev_plan_feed import DevPlanFeed, DevPlanWatch
+from gateway_v2.edge.dev_rag import attach_dev_surfaces
+from gateway_v2.edge.incident_passthrough import PassThroughIncidentGate
+from gateway_v2.edge.inflight_source import DevNoControlSource
+from gateway_v2.edge.mcp_deps import McpDeps
+from gateway_v2.edge.responses_store import ValkeyResponseStore
+from gateway_v2.edge.routing_boot import bounds_line, build_dev_routing
+from gateway_v2.edge.unauth_audit import UnauthAuditCounters, build_unauth_gate
+from gateway_v2.edge.wire.sse import SSEDecoder
+from gateway_v2.runtime.errors import CapacityUnavailable, CapacityUnset
+from gateway_v2.runtime.holdback_metrics import HoldbackMetrics
+from gateway_v2.runtime.kinds import PoolKind
+from gateway_v2.runtime.resources import ResourceContract
+from gateway_v2.runtime.serving_config import load_serving_config
+from gateway_v2.runtime.stream_metrics import PerRequestExports
+
+__all__ = (
+    "DEV_PROFILE_ENV",
+    "DevProfileConfig",
+    "DevProfileError",
+    "build_dev_dependencies",
+    "dev_profile_active",
+    "load_dev_config",
+    "wrap_dev_app",
+)
+
+#: The single opt-in switch.
+DEV_PROFILE_ENV = "AMF_DEV_PROFILE"
+#: The default dev org id (a name, not a capacity value).
+DEFAULT_DEV_ORG_ID = "dev-org"
+#: The two accepted ``AMF_DEV_BUDGET`` modes.
+BUDGET_LEASE = "lease"
+BUDGET_UNLIMITED = "unlimited"
+_INACTIVE_VALUES = frozenset(("", "0"))
+_ACTIVE_VALUE = "1"
+
+
+def _decoder_tool_calls(contract: ResourceContract) -> int:
+    """The SSE decoder's tool-call index bound: the contract's, or 0 (tools disabled)."""
+    bounds = resolve_tool_bounds(contract)
+    return 0 if bounds is None else bounds.max_tool_calls
+
+
+def dev_profile_active(env: Mapping[str, str]) -> bool:
+    """``True`` iff ``AMF_DEV_PROFILE=1``; unset / ``0`` / blank ⇒ ``False``; else refuse.
+
+    An unrecognised value (``yes``, ``true``) raises rather than being read as "off", so a typo
+    can never leave an operator believing the dev profile is (or is not) active.
+    """
+    raw = env.get(DEV_PROFILE_ENV)
+    if raw is None or raw.strip() in _INACTIVE_VALUES:
+        return False
+    if raw.strip() == _ACTIVE_VALUE:
+        return True
+    raise DevProfileError(f"{DEV_PROFILE_ENV}={raw!r} is not recognised; use 1 (on) or 0 (off)")
+
+
+@dataclass(frozen=True, slots=True)
+class DevProfileConfig:
+    """Every validated DEV PROFILE input (secrets are held, never logged)."""
+
+    api_key: str
+    org_id: str
+    peer_api_key: str
+    peer_org_id: str
+    plan_path: str
+    models: tuple[str, ...]
+    q_safe: float
+    audit_drain_rate_per_s: float
+    audit_bytes_per_record: int
+    budget_mode: str
+    lease: LeaseSettings | None
+    provider_url: str | None
+    provider_api_key: str
+
+
+def _required(env: Mapping[str, str], name: str) -> str:
+    value = env_text(env, name)
+    if value is None:
+        raise DevProfileError(f"{name} is required when {DEV_PROFILE_ENV}=1")
+    return value
+
+
+def _positive_float(env: Mapping[str, str], name: str) -> float:
+    raw = _required(env, name)
+    try:
+        value = float(raw)
+    except ValueError as exc:
+        raise DevProfileError(f"{name}={raw!r} is not a number") from exc
+    if not value > 0 or value != value or value == float("inf"):
+        raise DevProfileError(f"{name}={raw!r} must be a finite number > 0")
+    return value
+
+
+def _int_at_least(env: Mapping[str, str], name: str, minimum: int) -> int:
+    raw = _required(env, name)
+    try:
+        value = int(raw)
+    except ValueError as exc:
+        raise DevProfileError(f"{name}={raw!r} is not an integer") from exc
+    if value < minimum:
+        raise DevProfileError(f"{name}={raw!r} must be >= {minimum}")
+    return value
+
+
+def _lease_settings(env: Mapping[str, str]) -> LeaseSettings:
+    if env_text(env, "AMF_DEV_BUDGET_POOL_REQUESTS") is not None:
+        raise DevProfileError(
+            "AMF_DEV_BUDGET_POOL_REQUESTS was renamed to AMF_DEV_BUDGET_POOL_TOKENS (the dev "
+            "lease pool is now sized in tokens); set AMF_DEV_BUDGET_POOL_TOKENS"
+        )
+    return LeaseSettings(
+        redis_url=_required(env, "AMF_DEV_REDIS_URL"),
+        pool_tokens=_int_at_least(env, "AMF_DEV_BUDGET_POOL_TOKENS", 1),
+        rate_per_s=_positive_float(env, "AMF_DEV_RATE_PER_S"),
+        burst=_int_at_least(env, "AMF_DEV_BURST", 0),
+        ttl_s=_positive_float(env, "AMF_DEV_LEASE_TTL_S"),
+    )
+
+
+def load_dev_config(env: Mapping[str, str]) -> DevProfileConfig:
+    """Validate every DEV PROFILE input from ``env``; raise :class:`DevProfileError` on any gap."""
+    budget_mode = _required(env, "AMF_DEV_BUDGET")
+    if budget_mode not in (BUDGET_LEASE, BUDGET_UNLIMITED):
+        raise DevProfileError(
+            f"AMF_DEV_BUDGET={budget_mode!r}; use {BUDGET_LEASE!r} (real GW06 lease over Redis) "
+            f"or {BUDGET_UNLIMITED!r} (budget NOT enforced)"
+        )
+    provider_url = env_text(env, "AMF_DEV_PROVIDER_URL")
+    if provider_url is not None and urlsplit(provider_url).scheme not in ("http", "https"):
+        raise DevProfileError("AMF_DEV_PROVIDER_URL must be an http(s) URL")
+    peer_api_key = env_text(env, "AMF_DEV_PEER_API_KEY") or ""
+    peer_org_id = env_text(env, "AMF_DEV_PEER_ORG_ID") or ""
+    if bool(peer_api_key) != bool(peer_org_id):
+        raise DevProfileError(
+            "AMF_DEV_PEER_API_KEY and AMF_DEV_PEER_ORG_ID must both be set or both be empty"
+        )
+    return DevProfileConfig(
+        api_key=_required(env, "AMF_DEV_API_KEY"),
+        org_id=env_text(env, "AMF_DEV_ORG_ID") or DEFAULT_DEV_ORG_ID,
+        peer_api_key=peer_api_key,
+        peer_org_id=peer_org_id,
+        plan_path=_required(env, "AMF_DEV_PLAN_PATH"),
+        models=parse_model_ids(env_text(env, "AMF_DEV_MODELS")),
+        q_safe=_positive_float(env, "AMF_DEV_Q_SAFE"),
+        audit_drain_rate_per_s=_positive_float(env, "AMF_DEV_AUDIT_DRAIN_RATE_PER_S"),
+        audit_bytes_per_record=_int_at_least(env, "AMF_DEV_AUDIT_BYTES_PER_RECORD", 1),
+        budget_mode=budget_mode,
+        lease=_lease_settings(env) if budget_mode == BUDGET_LEASE else None,
+        provider_url=provider_url,
+        provider_api_key=env.get("AMF_DEV_PROVIDER_API_KEY", ""),
+    )
+
+
+def _redact_url(url: str) -> str:
+    """Drop any userinfo (password) from a URL before it reaches the boot log."""
+    parts = urlsplit(url)
+    host = parts.hostname or ""
+    netloc = f"{host}:{parts.port}" if parts.port is not None else host
+    return urlunsplit((parts.scheme, netloc, parts.path, "", ""))
+
+
+def _admission(
+    cfg: DevProfileConfig, contract: ResourceContract, metrics: AdmissionMetrics
+) -> tuple[AdmissionController, AdmissionBounds]:
+    """Build the bare GW19 controller + its ``derive_bounds`` result (for the boot log)."""
+    serving_cfg, _logs = load_serving_config()
+    try:
+        return build_dev_admission(
+            contract=contract,
+            q_safe=cfg.q_safe,
+            audit_drain_rate_per_s=cfg.audit_drain_rate_per_s,
+            audit_bytes_per_record=cfg.audit_bytes_per_record,
+            drain_window_s=serving_cfg.drain_s,
+            metrics=metrics,
+        )
+    except (CapacityUnset, CapacityUnavailable) as exc:
+        raise DevProfileError(f"admission bounds refused: {exc}") from exc
+
+
+def _budget(
+    cfg: DevProfileConfig, contract: ResourceContract
+) -> tuple[DevLeaseBudget | DevUnlimitedBudget, str]:
+    if cfg.lease is None:
+        return (
+            DevUnlimitedBudget(org_id=cfg.org_id),
+            "boot: quota -> DevUnlimitedBudget (DEV PROFILE: budget NOT enforced)",
+        )
+    try:
+        budget = DevLeaseBudget(
+            contract=contract, q_safe=cfg.q_safe, settings=cfg.lease, org_id=cfg.org_id
+        )
+    except (CapacityUnset, CapacityUnavailable, ValueError) as exc:
+        raise DevProfileError(f"budget lease refused: {exc}") from exc
+    lease = cfg.lease
+    return budget, (
+        f"boot: quota -> QuotaComponent(LocalGCRA + BudgetLease) GW06 over "
+        f"{_redact_url(lease.redis_url)} (DEV PROFILE: charges the real v1 token cost against a "
+        f"token-sized Lease_Chunk (Group F); chunk={budget.lease.config.chunk} low_watermark="
+        f"{budget.lease.config.low_watermark}; pool={lease.pool_tokens} tokens, "
+        f"rate={lease.rate_per_s}/s, burst={lease.burst}, lease_ttl={lease.ttl_s}s -- all "
+        "DECLARED via env; generation read once at startup, no budget-config feed)"
+    )
+
+
+def _provider(
+    cfg: DevProfileConfig, contract: ResourceContract, probe: DeterministicFindings
+) -> tuple[EchoProviderClient | OpenAIUpstreamProvider, RoutedProvider | None, str]:
+    if cfg.provider_url is None:
+        return (
+            EchoProviderClient(probe=probe),
+            None,
+            "boot: provider -> EchoProviderClient (DEV PROFILE: socket-free; replies "
+            "'echo: <exact text the gateway forwarded>'; logs provider-side finding counts)",
+        )
+    base_url = cfg.provider_url.removesuffix("/").removesuffix(f"/{CHAT_ENDPOINT}")
+    connections = contract.pool_size(PoolKind.PROVIDER)
+    provider = OpenAIUpstreamProvider(
+        base_url=base_url,
+        decoder_factory=partial(SSEDecoder, max_tool_calls=_decoder_tool_calls(contract)),
+        client_factory=httpx_client_factory(
+            api_key=cfg.provider_api_key,
+            timeout_s=contract.max_stream_duration_s(),
+            connections=connections,
+        ),
+        connections=connections,
+    )
+    routing = build_dev_routing(contract, provider)
+    return provider, routing, (
+        f"boot: provider -> OpenAIUpstreamProvider to {_redact_url(base_url)}/{CHAT_ENDPOINT} "
+        f"(GW36 S1: the verified request rebuilt with its roles; pooled client, "
+        f"{connections} connections; non-2xx / transport / malformed stream end as a declared "
+        f"error; GW28 chat routed through one passthrough candidate; {bounds_line(contract)})"
+    )
+
+
+def _plan_log(cfg: DevProfileConfig, plan: ExecutionPlan) -> tuple[str, str]:
+    rules = ", ".join(
+        f"{rule.rule_id}:{rule.category.value}->{rule.action.value}/{rule.mode.value}"
+        for rule in plan.rules
+    )
+    return (
+        f"boot: snapshot_source -> warmed ReplicaSnapshot over {cfg.plan_path} (DEV PROFILE: "
+        f"compiled by plan.compiler, org={plan.org_id} version={plan.version} "
+        f"streaming={plan.streaming_mode.value}; rules=[{rules}]; a published FirewallConfig "
+        "replaces this file when the dev redis key changes)",
+        f"boot: resolver -> phase-aware PlanResolver factory (plan {plan.version}) (DEV PROFILE: "
+        "the REAL GW07 resolver, wired per phase via resolver_for -- PlanResolver(plan, phase) is "
+        "bound at Phase.INPUT for the input scan and Phase.OUTPUT for the output guard, so "
+        "phase-scoped rules (scope: input / scope: output) are enforced on exactly their phase "
+        "(Group E))",
+    )
+
+
+def build_dev_dependencies(
+    *,
+    contract: ResourceContract,
+    env: Mapping[str, str],
+    metrics_registry: object,
+) -> tuple[dict[str, object], tuple[str, ...]]:
+    """Build the DEV PROFILE ``build_app`` kwargs + boot-log lines (refuse on any bad input)."""
+    cfg = load_dev_config(env)
+    plan = load_dev_plan(cfg.plan_path, org_id=cfg.org_id, compiled_at=time.time())
+    feed = DevPlanFeed(
+        plan,
+        now=time.monotonic(),
+        peer_orgs=(cfg.peer_org_id,) if cfg.peer_org_id else (),
+    )
+    admission_metrics = AdmissionMetrics()
+    admission, bounds = _admission(cfg, contract, admission_metrics)
+    budget, budget_log = _budget(cfg, contract)
+    budget_s = contract.guard_wait_budget_s()
+    input_detector = DeterministicFindings(
+        phase=Phase.INPUT, budget_s=budget_s, conditions_of=feed.conditions,
+    )
+    output_detector = DeterministicFindings(
+        phase=Phase.OUTPUT, budget_s=budget_s, conditions_of=feed.conditions,
+    )
+    provider, routing, provider_log = _provider(cfg, contract, input_detector)
+    catalog = StaticCatalogSource(model_ids=cfg.models, org_id=cfg.org_id, created=int(time.time()))
+    # Group E: the PHASE-AWARE resolver factory (input rules on input, output rules on output);
+    # the single ``resolver`` slot is a harmless fallback that is never consulted once it is set.
+    phase_factory = phase_resolver_factory()
+    deps: dict[str, object] = {
+        "contract": contract,
+        "provider": provider,
+        "routing": routing,
+        "scanner": holdback_scan,
+        "resolver": phase_factory(plan, Phase.INPUT),
+        "phase_resolvers": phase_factory,
+        "metrics_registry": metrics_registry,
+        "clock": time.monotonic,
+        "input_detector": input_detector,
+        "error_scanner": output_detector,
+        "output_detector": output_detector,
+        "identity": DevStaticIdentity(
+            api_key=cfg.api_key,
+            org_id=cfg.org_id,
+            peer_api_key=cfg.peer_api_key,
+            peer_org_id=cfg.peer_org_id,
+        ),
+        "snapshot_source": feed.source,
+        "plan_feed": feed,
+        "admission": admission,
+        "quota": budget,
+        "org_limits": OrgLimits(contract, metrics=admission_metrics),
+        "catalog": catalog,
+        # GW29: the dev profile never cuts or refuses on an incident (named pass-through).
+        "control": DevNoControlSource(),
+        "incident_gate": PassThroughIncidentGate(),
+        "incident_recheck": PassThroughIncidentGate().recheck,
+    }
+    audit_note = _attach_audit(
+        deps, cfg=cfg, budget=budget, queue_depth=bounds.audit_depth, env=env, contract=contract,
+    )
+    plan_note = _attach_plan_watch(deps, cfg=cfg, feed=feed, contract=contract)
+    store_note = _attach_response_store(deps, cfg=cfg, contract=contract)
+    mcp, mcp_note = _attach_mcp(deps, cfg=cfg, env=env, contract=contract)
+    attach_dev_surfaces(deps, mcp, env, contract)
+    exports, holdback = PerRequestExports(), HoldbackMetrics()
+    runtime = deps.get("audit_runtime")
+    gate = deps["unauth_audit"] = build_unauth_gate(contract, time.monotonic)
+    publisher, metrics_note = build_dev_publisher(
+        contract=contract,
+        admission=admission_metrics,
+        quota=budget.metrics if isinstance(budget, DevLeaseBudget) else QuotaMetrics(),
+        audit=runtime if isinstance(runtime, DevAudit) else None,
+        exports=exports,
+        holdback=holdback,
+        unauth=UnauthAuditCounters(gate),
+    )
+    if mcp is not None and mcp.policy_metrics is not None:
+        publisher.attach_mcp_policy(mcp.policy_metrics)  # GW17c series + enforcement version
+    deps.update(
+        metrics_registry=publisher, observer=publisher, exports=exports, holdback_metrics=holdback
+    )
+    snapshot_log, resolver_log = _plan_log(cfg, plan)
+    logs: tuple[str, ...] = (
+        "boot: DEV PROFILE ACTIVE (AMF_DEV_PROFILE=1) -- local development wiring, NOT FOR "
+        "PRODUCTION; every dependency marked DEV PROFILE below is dev-supplied",
+        provider_log,
+        "boot: scanner -> detect.holdback.scan (shipped default scan protocol)",
+        resolver_log,
+        metrics_note,
+        "boot: input_detector -> GW09 deterministic PII+secret+injection detectors "
+        "(DEV PROFILE wiring of the real detectors)",
+        "boot: error_scanner -> GW09 deterministic detectors (DEV PROFILE: non-streaming output "
+        "guard + mid-stream error frames)",
+        "boot: output_detector -> GW09 deterministic detectors (DEV PROFILE: streaming "
+        "completed-match seam of the holdback pipeline)",
+        f"boot: identity -> DevStaticIdentity (DEV PROFILE: bearer "
+        f"AMF_DEV_API_KEY -> org {cfg.org_id}"
+        + (f"; peer org {cfg.peer_org_id}" if cfg.peer_org_id else "")
+        + "; hmac.compare_digest; anything else refuses)",
+        snapshot_log,
+        f"boot: admission -> AdmissionController (GW19) (DEV PROFILE: the REAL controller, wired "
+        f"bare; q_safe={cfg.q_safe} (DECLARED, not measured — real value comes from the GW20 "
+        f"fleet run); audit_drain_rate={cfg.audit_drain_rate_per_s}/s audit_bytes_per_record="
+        f"{cfg.audit_bytes_per_record} (DECLARED); derive_bounds request_depth="
+        f"{bounds.request_depth} audit_depth={bounds.audit_depth}; the GW15 lifecycle completes "
+        "each admitted slot on exit — one completion path on both boot paths, no dev-profile "
+        "slot wrapper)",
+        budget_log,
+        audit_note,
+        plan_note,
+        store_note,
+        *mcp_note.splitlines(),
+        f"boot: catalog -> StaticCatalogSource {list(cfg.models)} (DEV PROFILE: AMF_DEV_MODELS)",
+    )
+    return deps, logs
+
+
+def _attach_mcp(
+    deps: dict[str, object],
+    *,
+    cfg: DevProfileConfig,
+    env: Mapping[str, str],
+    contract: ResourceContract,
+) -> tuple[McpDeps | None, str]:
+    """Build the MCP deps (GW17 + GW32/GW17b/GW17c services) over the dev redis, if any."""
+    mcp_redis = None
+    if cfg.lease is not None:
+        mcp_redis = _redis_client(cfg.lease.redis_url, timeout_s=contract.cancellation_bound_s())
+    mcp, note = build_dev_mcp(
+        env, contract, redis_client=mcp_redis, clock=time.monotonic, identity=deps["identity"]
+    )
+    if mcp is not None:
+        deps["mcp"] = mcp
+    return mcp, note
+
+
+def _attach_response_store(
+    deps: dict[str, object], *, cfg: DevProfileConfig, contract: ResourceContract
+) -> str:
+    """Share stored Responses objects across workers when the dev lease already has a redis."""
+    if cfg.lease is None:
+        return "boot: response store -> memory (no redis lease; a stored id stays on one worker)"
+    client = _redis_client(cfg.lease.redis_url, timeout_s=contract.cancellation_bound_s())
+    deps["response_store"] = ValkeyResponseStore(client, ttl_s=contract.response_store_ttl_s())
+    return "boot: response store -> {rv2}:responses:<org>:<id> over the dev redis"
+
+
+def _attach_plan_watch(
+    deps: dict[str, object],
+    *,
+    cfg: DevProfileConfig,
+    feed: DevPlanFeed,
+    contract: ResourceContract,
+) -> str:
+    """Poll the published plan only when the dev lease already has a redis."""
+    if cfg.lease is None:
+        return "boot: firewall plan -> file only (no redis lease; a console save is not loaded)"
+    deps["plan_watch"] = DevPlanWatch(
+        redis_url=cfg.lease.redis_url,
+        feed=feed,
+        timeout_s=contract.cancellation_bound_s(),
+    )
+    return (
+        "boot: firewall plan -> file until {rv2}:dev:firewall-plan changes "
+        "(polled off the request path)"
+    )
+
+
+def _attach_audit(
+    deps: dict[str, object],
+    *,
+    cfg: DevProfileConfig,
+    budget: DevLeaseBudget | DevUnlimitedBudget,
+    queue_depth: int,
+    env: Mapping[str, str],
+    contract: ResourceContract,
+) -> str:
+    """Put the sink callback on the boot deps when the dev lease has a redis."""
+    if not isinstance(budget, DevLeaseBudget) or cfg.lease is None:
+        return "boot: audit -> none (no redis lease; chat records are not enqueued)"
+    runtime = build_dev_audit(
+        redis_url=cfg.lease.redis_url,
+        timeout_s=contract.cancellation_bound_s(),
+        queue_depth=queue_depth,
+        env=env,
+    )
+    deps["audit"] = runtime.emit
+    deps["audit_runtime"] = runtime
+    return (
+        "boot: audit -> AuditSink over the dev redis "
+        f"(queue_depth={queue_depth}; writer starts on lifespan; "
+        "a full queue drops and counts, the chat response is unchanged)"
+    )
+
+
+def wrap_dev_app(app: ASGIApplication, deps: Mapping[str, object]) -> ASGIApplication:
+    """Wrap the shipped app ONLY when a dev GW06 lease needs lifespan startup/shutdown.
+
+    :class:`DevServedApp`'s sole remaining job is to acquire the lease on ``lifespan.startup`` and
+    return the unspent remainder on ``lifespan.shutdown``. The admission slot wrapper is gone — the
+    GW15 lifecycle completes each admitted slot on exit. So there is no reason to wrap when the
+    budget is the unlimited stand-in (no lease to drive): return ``app`` UNCHANGED, as on the
+    default boot path.
+    """
+    quota = deps.get("quota")
+    if not isinstance(quota, DevLeaseBudget):
+        return app
+    runtime = deps.get("audit_runtime")
+    audit = runtime if isinstance(runtime, DevAudit) else None
+    watch = deps.get("plan_watch")
+    plan_watch = watch if isinstance(watch, DevPlanWatch) else None
+    provider = deps.get("provider")
+    closers = (provider.aclose,) if isinstance(provider, OpenAIUpstreamProvider) else ()
+    return DevServedApp(
+        app, budget=quota, audit=audit, plan_watch=plan_watch, closers=closers
+    )

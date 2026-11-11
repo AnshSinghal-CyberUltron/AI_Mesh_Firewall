@@ -1,0 +1,23 @@
+{
+  "what": "Per-entry store cost of a Valkey 8 stream entry, measured to validate the audit byte model.",
+  "why": "rc3-audit-mem-v1 models payload x 1.10 + 256 B and its README states the model was above the real cost at every sampled size. It was, for the sizes it sampled. This re-measurement across a wider range shows the ratio oscillates with the allocator's size classes, so 1.10 UNDER-charges at 2 KB, 4 KB and 8 KB. An under-charging model derives a MAXLEN that is too long, so the store fills while every gauge reports the bound being honoured.",
+  "method": "Private valkey/valkey:8-alpine, 512 MB maxmemory, noeviction. 2,000 entries per size via the real ValkeyAuditStore.append. used_memory delta from INFO memory; MEMORY USAGE on the stream key. Divided by entry count.",
+  "image": "valkey/valkey:8-alpine",
+  "entries_per_sample": 2000,
+  "samples": [
+    {"payload_bytes": 315,  "used_delta_per_entry": 379.5,  "memory_usage_per_entry": 344.5,  "ratio_to_payload": 1.205, "factor_needed_over_256B_flat": 0.392},
+    {"payload_bytes": 512,  "used_delta_per_entry": 589.8,  "memory_usage_per_entry": 589.8,  "ratio_to_payload": 1.152, "factor_needed_over_256B_flat": 0.652},
+    {"payload_bytes": 1024, "used_delta_per_entry": 1204.4, "memory_usage_per_entry": 1204.4, "ratio_to_payload": 1.176, "factor_needed_over_256B_flat": 0.926},
+    {"payload_bytes": 2048, "used_delta_per_entry": 2587.3, "memory_usage_per_entry": 2587.3, "ratio_to_payload": 1.263, "factor_needed_over_256B_flat": 1.138},
+    {"payload_bytes": 2900, "used_delta_per_entry": 3091.7, "memory_usage_per_entry": 3098.9, "ratio_to_payload": 1.066, "factor_needed_over_256B_flat": 0.980},
+    {"payload_bytes": 4096, "used_delta_per_entry": 5146.5, "memory_usage_per_entry": 5146.5, "ratio_to_payload": 1.256, "factor_needed_over_256B_flat": 1.194},
+    {"payload_bytes": 6000, "used_delta_per_entry": 6170.5, "memory_usage_per_entry": 6170.5, "ratio_to_payload": 1.028, "factor_needed_over_256B_flat": 0.986},
+    {"payload_bytes": 8192, "used_delta_per_entry": 10267.1,"memory_usage_per_entry": 10267.1,"ratio_to_payload": 1.253, "factor_needed_over_256B_flat": 1.222}
+  ],
+  "worst_required_factor": 1.222,
+  "reference_factor": 1.10,
+  "shipped_factor": 1.35,
+  "headroom_at_worst_point": "1.10x (11315 B charged vs 10267 B measured at 8192 B payload)",
+  "note": "The reference sampled 2,900 B and 6,000 B, which are two of the cheap points (ratio 1.07 and 1.03). The three expensive points land just above an allocator size class.",
+  "gate": "tests/runtime/test_lgw14c_live_docker.py::test_the_byte_model_is_above_what_valkey_charges, parametrized over all eight sizes"
+}

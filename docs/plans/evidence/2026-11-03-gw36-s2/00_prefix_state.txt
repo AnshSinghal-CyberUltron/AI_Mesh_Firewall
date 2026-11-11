@@ -1,0 +1,28 @@
+# pre-fix: running re-hydrator, 2026-11-03 (before S2 images)
+2026-11-03 07:20:45,678 WARNING amf.state.rehydrate rehydrate round failed for kind=plan: relation "amf_state_counter" does not exist
+LINE 1: SELECT epoch, seq, feed_seq, count, on_count FROM amf_state_...
+                                                          ^
+2026-11-03 07:20:45,682 WARNING amf.state.rehydrate rehydrate round failed for kind=key: relation "amf_state_counter" does not exist
+LINE 1: SELECT epoch, seq, feed_seq, count, on_count FROM amf_state_...
+                                                          ^
+2026-11-03 07:20:45,686 WARNING amf.state.rehydrate rehydrate round failed for kind=ks: relation "amf_state_counter" does not exist
+LINE 1: SELECT epoch, seq, feed_seq, count, on_count FROM amf_state_...
+                                                          ^
+2026-11-03 07:20:45,689 WARNING amf.state.rehydrate rehydrate round failed for kind=budget: relation "amf_state_counter" does not exist
+LINE 1: SELECT epoch, seq, feed_seq, count, on_count FROM amf_state_...
+                                                          ^
+
+# {rv2} keys in the store
+{rv2}:audit:dev-org
+{rv2}:audit:org-b
+{rv2}:budget:dev-org:generation
+{rv2}:budget:dev-org:remaining
+{rv2}:budget:dev-org:workers
+{rv2}:dev:firewall-plan
+{rv2}:plan:dev-org
+{rv2}:plan:org-b
+
+# tables
+amf_state_counter=absent|core_v2_plan_document=absent
+# legacy raw document at {rv2}:plan:dev-org (head)
+{"org_id":"dev-org","rules":[{"action":"redact","category":"pii","mode":"enforce","on_unavailable":"fail_closed","priority":100,"rule_id":"fw-pii-input","scope"

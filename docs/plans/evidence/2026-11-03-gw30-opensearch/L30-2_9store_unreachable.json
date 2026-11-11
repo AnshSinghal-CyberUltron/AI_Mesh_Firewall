@@ -1,0 +1,79 @@
+{
+  "gate": "L30-2",
+  "timestamp": "2026-11-03T05:40:23.986854+00:00",
+  "cases": [
+    {
+      "store": "pgvector",
+      "request_id": "zs-635f17ef7bd9",
+      "timestamp": "2026-11-03T05:40:23.987553+00:00",
+      "target": "127.0.0.1:60189 (nothing listening)",
+      "code": "provider_unreachable",
+      "records_is_none": true,
+      "elapsed_s": 0.0005,
+      "within_30s": true,
+      "is_provider_unreachable": true,
+      "is_empty_clean_search": false
+    },
+    {
+      "store": "qdrant",
+      "request_id": "zs-8e9c52b91054",
+      "timestamp": "2026-11-03T05:40:24.018755+00:00",
+      "target": "127.0.0.1:60189 (nothing listening)",
+      "code": "provider_unreachable",
+      "records_is_none": true,
+      "elapsed_s": 0.0312,
+      "within_30s": true,
+      "is_provider_unreachable": true,
+      "is_empty_clean_search": false
+    },
+    {
+      "store": "elasticsearch",
+      "request_id": "zs-7548f4ad3421",
+      "timestamp": "2026-11-03T05:40:24.020983+00:00",
+      "target": "127.0.0.1:60189 (nothing listening)",
+      "code": "provider_unreachable",
+      "records_is_none": true,
+      "elapsed_s": 0.0022,
+      "within_30s": true,
+      "is_provider_unreachable": true,
+      "is_empty_clean_search": false
+    },
+    {
+      "store": "chroma",
+      "request_id": "zs-a479cb29e0a2",
+      "timestamp": "2026-11-03T05:40:24.041814+00:00",
+      "target": "127.0.0.1:60189 (nothing listening)",
+      "code": "provider_unreachable",
+      "records_is_none": true,
+      "elapsed_s": 0.0208,
+      "within_30s": true,
+      "is_provider_unreachable": true,
+      "is_empty_clean_search": false
+    },
+    {
+      "store": "mongodb_atlas",
+      "request_id": "zs-192e3ea5944b",
+      "timestamp": "2026-11-03T05:40:29.047442+00:00",
+      "target": "127.0.0.1:60189 (nothing listening)",
+      "code": "provider_unreachable",
+      "records_is_none": true,
+      "elapsed_s": 5.0056,
+      "within_30s": true,
+      "is_provider_unreachable": true,
+      "is_empty_clean_search": false
+    },
+    {
+      "store": "aws_opensearch_serverless",
+      "request_id": "zs-afb575f9b9cf",
+      "timestamp": "2026-11-03T05:40:29.048935+00:00",
+      "target": "127.0.0.1:60189 (nothing listening)",
+      "code": "provider_unreachable",
+      "records_is_none": true,
+      "elapsed_s": 0.0014,
+      "within_30s": true,
+      "is_provider_unreachable": true,
+      "is_empty_clean_search": false
+    }
+  ],
+  "verdict": "LIVE-PASS"
+}

@@ -399,6 +399,37 @@ def delete_model_state_from_redis(
         )
 
 
+# -- gateway-v2 plan documents (GW36 S2) --
+
+
+def _republish_v2_plan(org: Any) -> None:
+    if org is None or not getattr(org, "pk", None):
+        return
+
+    def _publish() -> None:
+        from core.firewall_v2_publish import publish_for_org
+
+        publish_for_org(org)
+
+    transaction.on_commit(_publish)
+
+
+@receiver(post_save, sender="auth_api.Organization", dispatch_uid="gw36_v2_plan_org_saved")
+def republish_v2_plan_for_org(sender: type, instance: Any, **kwargs: Any) -> None:
+    """A new org gets its platform-default document; a slug edit republishes under the new slug."""
+    _republish_v2_plan(instance)
+
+
+@receiver(post_save, sender=FirewallConfig)
+def republish_v2_plan_for_config(
+    sender: type,
+    instance: FirewallConfig,
+    **kwargs: Any,
+) -> None:
+    """Saves outside the console view (admin, commands, ``load()``) still reach the projector."""
+    _republish_v2_plan(instance.organization if instance.organization_id else None)
+
+
 # -- FirewallConfig Redis sync --
 
 CONFIG_UPDATES_CHANNEL = "config_updates"

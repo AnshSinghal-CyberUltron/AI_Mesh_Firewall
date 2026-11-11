@@ -1,0 +1,251 @@
+{
+  "pbtResults": {},
+  "executionHistory": {
+    "1. Implement the GuardBackend contract, value types, and ReadinessTracker (`detect/guard/backend.py`)": [
+      {
+        "executionId": "70a96a62-76af-457d-a821-9e6b7eeab645",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792062571296
+      },
+      {
+        "executionId": "70a96a62-76af-457d-a821-9e6b7eeab645",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792062583402
+      },
+      {
+        "executionId": "70a96a62-76af-457d-a821-9e6b7eeab645",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792062724999
+      }
+    ],
+    "2. Implement the Detector protocol, DetectorContext, and domain re-exports (`detect/base.py`)": [
+      {
+        "executionId": "70a96a62-76af-457d-a821-9e6b7eeab645",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792062571317
+      },
+      {
+        "executionId": "70a96a62-76af-457d-a821-9e6b7eeab645",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792062731755
+      },
+      {
+        "executionId": "70a96a62-76af-457d-a821-9e6b7eeab645",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792063003908
+      }
+    ],
+    "3.1 Implement the working `local_onnx` CPU default (`detect/guard/local_onnx.py`)": [
+      {
+        "executionId": "70a96a62-76af-457d-a821-9e6b7eeab645",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792062571337
+      },
+      {
+        "executionId": "70a96a62-76af-457d-a821-9e6b7eeab645",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792062733082
+      },
+      {
+        "executionId": "70a96a62-76af-457d-a821-9e6b7eeab645",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792063005308
+      }
+    ],
+    "3.2 Implement the three declared seams (`detect/guard/local_trt.py`, `detect/guard/triton_grpc.py`, `detect/guard/remote_http.py`)": [
+      {
+        "executionId": "70a96a62-76af-457d-a821-9e6b7eeab645",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792062571381
+      },
+      {
+        "executionId": "70a96a62-76af-457d-a821-9e6b7eeab645",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792062734223
+      },
+      {
+        "executionId": "70a96a62-76af-457d-a821-9e6b7eeab645",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792063006716
+      }
+    ],
+    "3.3 Wire the guard package exports (`detect/guard/__init__.py`)": [
+      {
+        "executionId": "70a96a62-76af-457d-a821-9e6b7eeab645",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792062571420
+      },
+      {
+        "executionId": "70a96a62-76af-457d-a821-9e6b7eeab645",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792063013583
+      },
+      {
+        "executionId": "70a96a62-76af-457d-a821-9e6b7eeab645",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792063129849
+      }
+    ],
+    "4. Implement the registry, config-only backend selection, and the detect public surface (`detect/registry.py` + `detect/__init__.py`)": [
+      {
+        "executionId": "70a96a62-76af-457d-a821-9e6b7eeab645",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792062571441
+      },
+      {
+        "executionId": "70a96a62-76af-457d-a821-9e6b7eeab645",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792063137074
+      },
+      {
+        "executionId": "70a96a62-76af-457d-a821-9e6b7eeab645",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792063305749
+      }
+    ],
+    "5. Checkpoint - Ensure production modules import cleanly and types resolve": [
+      {
+        "executionId": "70a96a62-76af-457d-a821-9e6b7eeab645",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792062571462
+      },
+      {
+        "executionId": "70a96a62-76af-457d-a821-9e6b7eeab645",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792063324044
+      }
+    ],
+    "7. Run the GW08 exit gate": [
+      {
+        "executionId": "70a96a62-76af-457d-a821-9e6b7eeab645",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792062571484
+      },
+      {
+        "executionId": "1825184a-3372-43aa-8588-4c7dcaf726a3",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792065863885
+      },
+      {
+        "executionId": "1825184a-3372-43aa-8588-4c7dcaf726a3",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792066743095
+      }
+    ],
+    "8. Final checkpoint - Ensure all tests pass": [
+      {
+        "executionId": "70a96a62-76af-457d-a821-9e6b7eeab645",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792062571506
+      },
+      {
+        "executionId": "1825184a-3372-43aa-8588-4c7dcaf726a3",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792066752523
+      }
+    ],
+    "3. Implement the four backend slots and the guard package exports (`detect/guard/{local_onnx,local_trt,triton_grpc,remote_http}.py` + `detect/guard/__init__.py`)": [
+      {
+        "executionId": "70a96a62-76af-457d-a821-9e6b7eeab645",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792063129870
+      }
+    ],
+    "6. Write the single GW08 test file (`gateway_v2/tests/detect/test_detector_framework_gw08.py`)": [
+      {
+        "executionId": "70a96a62-76af-457d-a821-9e6b7eeab645",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792063330286
+      },
+      {
+        "executionId": "1825184a-3372-43aa-8588-4c7dcaf726a3",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792065828710
+      }
+    ],
+    "6.1 Property test — not-ready backend yields UNAVAILABLE, never clean": [
+      {
+        "executionId": "1825184a-3372-43aa-8588-4c7dcaf726a3",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792065837246
+      }
+    ],
+    "6.2 Property test — reply-based readiness under the injected clock": [
+      {
+        "executionId": "1825184a-3372-43aa-8588-4c7dcaf726a3",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792065838052
+      }
+    ],
+    "6.3 Property test — over-budget classify resolves to UNAVAILABLE within the bound": [
+      {
+        "executionId": "1825184a-3372-43aa-8588-4c7dcaf726a3",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792065839595
+      }
+    ],
+    "6.4 Property test — manifest mismatch always fails closed": [
+      {
+        "executionId": "1825184a-3372-43aa-8588-4c7dcaf726a3",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792065840874
+      }
+    ],
+    "6.5 Property test — model identity is deterministic, distinguishing, cache-invalidating": [
+      {
+        "executionId": "1825184a-3372-43aa-8588-4c7dcaf726a3",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792065842265
+      }
+    ],
+    "6.6 Property test — capacity_hint reports a measured rate, not a constant": [
+      {
+        "executionId": "1825184a-3372-43aa-8588-4c7dcaf726a3",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792065843675
+      }
+    ],
+    "6.7 Property test — registry resolves totally or fails the load": [
+      {
+        "executionId": "1825184a-3372-43aa-8588-4c7dcaf726a3",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792065844624
+      }
+    ],
+    "6.8 Property test — model_hash appears in every Finding and audit row": [
+      {
+        "executionId": "1825184a-3372-43aa-8588-4c7dcaf726a3",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792065846306
+      }
+    ],
+    "6.9 Property test — a detector leaves its input text unchanged": [
+      {
+        "executionId": "1825184a-3372-43aa-8588-4c7dcaf726a3",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792065847484
+      }
+    ],
+    "6.10 Property test — value types round-trip": [
+      {
+        "executionId": "1825184a-3372-43aa-8588-4c7dcaf726a3",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792065848295
+      }
+    ],
+    "6.11 Example/conformance tests — protocols, value types, factories, swap, registry reuse, topology-blindness": [
+      {
+        "executionId": "1825184a-3372-43aa-8588-4c7dcaf726a3",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792065855797
+      }
+    ],
+    "6.12 Gate/AST integration tests": [
+      {
+        "executionId": "1825184a-3372-43aa-8588-4c7dcaf726a3",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792065856633
+      }
+    ]
+  }
+}

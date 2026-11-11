@@ -2,6 +2,198 @@
 
 All changes to the chat pipeline consolidation/fix/freeze effort.
 
+## PIPELINE-0036 (2026-11-05) — FALSE `stream_idle_timeout` ON WITHHELD STRICT STREAMS (bugfix F1)
+
+> ID NOTE: a sibling, currently-unmerged branch (`bugfix-f2-request-id`) also claims a
+> `PIPELINE-00NN` id. This entry took the next free id on THIS branch
+> (`bugfix-f1-strict-idle`) at authoring time; if both branches land, a human reconciles
+> the two ids at merge.
+
+Files:
+- `gateway_v2/gateway_v2/edge/stream_timeouts.py` (`StreamTimeouts.__init__`,
+  `next_event`, new private `_note_upstream_activity`, module docstring)
+- `gateway_v2/gateway_v2/edge/chat_stream.py` (`ChatStream._controls`)
+- `gateway_v2/gateway_v2/egress/output_guard.py` (new `withholds_until_decision`)
+- tests: `gateway_v2/tests/edge/test_strict_withhold_idle_timeout_bug.py`,
+  `..._preservation.py`, `..._properties.py`, `..._wiring.py`,
+  `gateway_v2/tests/egress/test_withholds_until_decision.py`,
+  `gateway_v2/tests/runtime/test_stream_timeouts_liveness.py`
+
+ROOT CAUSE: A STRICT_WITHHOLD stream with an enforcing output rule withholds every
+downstream byte until the whole response has been inspected and decided. `StreamTimeouts`
+modelled downstream idle as time-since-the-last-completed-write, with `_last_write_s`
+seeded at stream start. So a *healthy* withheld stream that outlasted `idle_timeout_s`
+(3 s at the default 20 ms SLO) was cut at its first write with `stream_idle_timeout`
+(HTTP 408, "The downstream client went idle") **before any byte** — the client was blamed
+for a gap the gateway created on purpose, and the fully-received, otherwise-deliverable
+answer was discarded. GW33 D-20 promotes exfil / ip-leak / grounding orgs to strict, so
+their long real-model answers failed before the first byte.
+
+FIX: (1) `egress/output_guard.withholds_until_decision(plan)` — pure predicate,
+`plan.streaming_mode is STRICT_WITHHOLD and bool(enforcing_output_rules(plan))`, reusing the
+existing `enforcing_output_rules` (no new import edge). (2) A keyword-only
+`upstream_liveness: bool = False` flag on `edge/stream_timeouts.StreamTimeouts`; when set,
+`next_event` re-seeds the idle clock on every upstream event it returns (the same
+`_last_write_s = _clock()` assignment the GW28 D-18 first-event branch already performs).
+`send` is unchanged, and a timeout cut in `next_event` never re-seeds — fail closed. (3)
+Wired once in `edge/chat_stream.ChatStream._controls` as
+`upstream_liveness=withholds_until_decision(plan)`. Default `False` leaves INCREMENTAL and
+pass-through strict byte-for-byte unchanged; no new capacity literal (all bounds still from
+`ResourceContract`); upstream stall still bounded by `inter_chunk_timeout_s` (1 s) and total
+time by `max_stream_duration_s` (300 s).
+
+VERIFY:
+- Offline — full `pytest` 4917 passed (only the known `check_tenant_scale` Pinecone
+  tenant-scale failure); `mypy --strict` clean (405 files); `ruff` clean; `import-linter`
+  3/3 contracts kept (no new edge); AST gates (capacity literals, no module-level mutable,
+  frozen dataclasses) each exit 0.
+- Live `amff1` — strict SLOWSTREAM (40 chunks, 150 ms apart) returns 200 with full content
+  at 6.15 s and zero 408 (the F1 artifact returned 408 before any byte); a block-tripping
+  payload is still terminal `output_blocked` with zero content before it; a mid-stream stall
+  is still cut by the upstream guard (`stream_inter_chunk_timeout`); INCREMENTAL unchanged.
+
+A separate owner finding on `max_stream_duration_s` (a 300 s wall-clock ceiling that cuts a
+20,000-token strict answer before any byte) is recorded in
+`docs/plans/evidence/2026-11-05-strict-idle/FINDING-max-stream-duration.md`; no bound was
+changed.
+
+Evidence: `docs/plans/evidence/2026-11-05-strict-idle/`.
+
+## GW33 (2026-11-05) — OUTPUT GUARDRAIL PARITY, local half closed; live L33-1..L33-3 deferred
+**v2 output guardrails restored; REWRITE is real.** IP/infrastructure leak, exfiltration channels
+(markdown/HTML/CSS sinks, DNS labels), per-request canary tokens and lexical grounding, each a
+built-in detector rule selected by detector identity (never the category label); a real
+`Disposition.REWRITE` with a declared, hashed template, byte-verified on the output and request
+sides; the review flag computed once by the resolver; five GW27-retired control fields mapped. The
+byte-altering IP/exfil/grounding actions are STRICT_WITHHOLD-only (the publisher promotes the org and
+reports it). Open items against the card text: grounding on a local model ships lexical (model mode
+UNAVAILABLE until a backend advertises hallucination; follow-up GW33-F1); INCREMENTAL IP-redaction
+parity gap. Plan note: `docs/plans/2026-gw33-output-parity.md`. No live gate was run.
+
+## PIPELINE-0037 (2026-11-05)
+
+**Request-id uniqueness: content-hash id replaced by a per-request minted id (finding F2).**
+
+Files (all in `gateway_v2/gateway_v2/`):
+- `edge/request_ids.py` (new — `mint_tenant_request_id`, `RequestIdUnavailable`)
+- `edge/request_holds.py` (`RequestHolds.begin_request`)
+- `domain/posture.py` (`REQUEST_ID_UNAVAILABLE` code)
+- `edge/errors.py` (Error_Envelope mapping → HTTP 503, no id, no `x-request-id`)
+- `edge/openai_chat.py`, `edge/openai_misc.py`, `edge/incident_misc.py`,
+  `edge/rag_common.py`, `edge/mcp.py`, `edge/wire/sse.py`
+- tests: `tests/edge/test_request_ids.py`, `test_request_holds_begin_request.py`,
+  `test_request_id_unavailable_errors.py`, `test_request_id_unavailable_mcp.py`,
+  `test_request_id_unavailable_rag.py`, `test_request_id_uniqueness_explore.py`,
+  `test_request_id_uniqueness_property.py`, `test_request_id_preservation.py`,
+  `test_embeddings_mint_failure.py`, and updated `test_gw28_edge_routing.py`,
+  `test_gw32_l17c.py`, `test_lgw15_isolation.py`
+
+WHAT: The v2 gateway minted each request's `request_id` as a pure content hash
+(`sha256(tenant + content)[:24]`) in four independent edge surfaces — chat
+(`openai_chat.py`, recomputed in three phases: lifecycle note, `_admit`, `_budget`),
+embeddings (`openai_misc.py`), RAG/vector (`rag_common.py`) and MCP (`mcp.py`, whose
+incident gate fell back to the per-org constant `hash(org, "incident", {})`). So
+byte-identical requests collided on one id.
+
+WHY (finding F2, 4 Nov 2026): five identical chat calls all returned
+`zs-dev-org-fb2340bd19bc5b758a6b2018`; stream and non-stream repeats collided; MCP
+`tools/list` reused one id; embeddings and RAG showed the same. The collision conflated
+audit and Scan Detail rows (control `_upsert` merged repeated prompts into ONE
+`EnforcementEvent`) and keyed admission slots, admit refcounts and budget refunds on a
+shared id, so one request could release/refund/attribute another's resources. This is the
+same conflation CLASS as PIPELINE-0023 but a DIFFERENT CAUSE: it is the `gateway_v2` edge
+(deterministic content hashing), NOT the control-plane `proxy_chat` path, which PIPELINE-0023
+fixed and which this change leaves completely untouched.
+
+NOW DOES: one random id `zs-{org}-<24 hex>` is minted ONCE per request by
+`edge/request_ids.py::mint_tenant_request_id(org_id)` (entropy from `secrets.token_hex`,
+injected default param, no module-level mutable state) and carried on
+`RequestHolds.begin_request` (idempotent — returns an already-set id, otherwise mints and
+notes). All four content-hash copies and the MCP per-org-constant incident-gate fallback
+are removed; every phase reads the id from `holds`. Minting fails closed: any exception or a
+result that is not exactly 24 lowercase hex chars raises `RequestIdUnavailable`, and each
+surface refuses with the new domain posture code `request_id_unavailable` → HTTP 503 with no
+id and no `x-request-id` header, before admission, budget and dispatch (zero provider calls).
+Decision D8: a dedicated `request_id_unavailable` code, not a reuse of
+`shared_state_unavailable` (which would misreport the cause). Decision D9: no set-once guard
+on `RequestHolds.note_request` (pre-id refusal paths legitimately note a pre-id; single-id-
+per-request is enforced by `begin_request` idempotence and property test B). `mint_request_id`
+pre-identity refusals, moderations' own id and the client `X-Request-ID`-is-ignored rule are
+all unchanged.
+
+VERIFY:
+- Offline gate (from `gateway_v2/`): full `pytest` 4954 passed / 1 known pre-existing
+  Pinecone tenant-scale failure (`pinecone_transport.py:140`); `mypy --strict` clean
+  (406 files); `ruff` clean; import-linter 3/3 kept (no contract change — all edits in `edge`
+  plus one domain code); the five AST gates (`capacity_literals`, `no_module_mutable`,
+  `frozen_dataclasses`, `http_outside_edge_resolve`, `tenant_scale`) each exit 0.
+- Live gate (amff2 stack, real stack not stubs): five identical calls each on chat non-stream,
+  chat stream, MCP `tools/list` and RAG → five DISTINCT ids matching `zs-{org}-<24 hex>`;
+  control created five distinct `EnforcementEvent` rows (no conflation); a zero-provider-call
+  refusal refunded net 0 and admission slots returned to baseline; a 50-way identical burst gave
+  50 distinct ids; the control-plane `proxy_chat` path untouched (`git diff gateway/` empty).
+  Embeddings uniqueness and the forced mint-failure path were NOT RUN live (covered offline).
+- Ruflo memory (`memory store --namespace pipeline/changes`) NOT written: the `memory` CLI is
+  not on PATH in this environment; a human must replay it. The other three memories
+  (this file, `AGENTS.md`, `.cursor/rules/pipeline-changelog.mdc`) are updated in this commit.
+- Evidence: `docs/plans/evidence/2026-11-05-request-id-uniqueness/`.
+
+## PIPELINE-0035 (2026-10-21)
+
+**Input Scan "SKIP" display-honesty fix on the 503 scan-only + policy-redacted path.**
+
+Files:
+- `gateway/ai_mesh_gateway/pipeline_trace.py` (`build_pipeline_trace`,
+  `STAGE_TRANSPARENCY_KEYS`, `normalize_stage_transparency`)
+- `gateway/ai_mesh_gateway/main.py` (`_attach_pipeline_trace_to_llm_error`)
+- `frontend/src/utils/pipelineTrace.js` (`honestStageAction`)
+- tests: `gateway/ai_mesh_gateway/tests/test_pipeline_stage_ran_flag.py`,
+  `frontend/src/utils/pipelineTrace.test.js`
+
+WHAT: Added a truthful, explicit per-stage boolean `ran` to every pipeline_trace stage
+dict and made the Scan Detail UI respect it instead of inferring "skip" from
+`latency_ms === 0`.
+
+WHY (L14b-2 + C14): The UI's `honestStageAction` returned "skip" whenever a stage was
+`action in (allow,"")` AND `latency_ms === 0` (carve-out only for `model_routing`/`route`).
+`latency===0` is ambiguous — a genuine skip AND a sub-millisecond scan both round to 0 —
+so on the scan-only (no-model-call) + PII path, where POLICY redacted the input and the
+input scan then analyzed the already-masked text and allowed it (`_resolve_input_scan_action`
+→ `("allow","analyzed",True)`) with `input_scan_ms` reconciling to 0, the UI mislabeled a
+stage that actually ran as "SKIP". Runbook L14b-2 (§5/GW14b) requires Scan Detail stage
+status to render FROM THE RECORD; its FAIL condition is any field "recomputed in the
+browser". C14 (operator honesty): the trace must not claim a scan was skipped when it ran.
+
+NOW DOES:
+- `build_pipeline_trace` stamps `ran = (action != "skip")` on every stage after all action
+  resolution (so blocked-upstream skips, the skip-after-block invariant, and `skip_inference`
+  model-stage skips all set `ran=False`; input_scan carrying `allow`/`analyzed`/`clean` is
+  `ran=True`). Additive — no existing action/latency value changed. `ran` added to
+  `STAGE_TRANSPARENCY_KEYS`; `normalize_stage_transparency` defaults it from the action for
+  any stage missing it (e.g. the blocked-path builder).
+- `_attach_pipeline_trace_to_llm_error` (the 503/model-error trace builder) re-stamps `ran`
+  after it flips `model_output → error` (ran=True, the model was attempted) and
+  `output_guardrail → skip` (ran=False, model output failed → nothing to guard).
+- Frontend `honestStageAction`: in the `latency===0 && allow` branch, respect the record —
+  `ran === true` is NEVER recomputed to skip, `ran === false` may render skip. Backward-compat
+  (older records without `ran`): the branch no longer latency-infers skip for a stage with
+  positive run-evidence (`scan_outcome` in analyzed/clean, a truthy `tier`, or `redact_noop`),
+  generalizing the prior model_routing-only carve-out. The redact-noop→flag and injection-rec
+  logic is unchanged. A bare 0ms allow with no evidence and no flag still reads as skip.
+
+VERIFY:
+- Gateway: `test_pipeline_stage_ran_flag.py` 5 passed (input_scan analyzed@0ms → ran=True;
+  blocked-upstream + scan-only model stages → ran=False; the exact 503 model-error +
+  policy-redacted path via `_attach_pipeline_trace_to_llm_error` → input_scan ran=True,
+  model_output error+ran=True, output_guardrail skip+ran=False). Full suite:
+  193 failed / 4815 passed — the 193 are PRE-EXISTING missing-live-env/SDK failures
+  (identical count with the change stashed on clean HEAD: 193 failed / 4810 passed),
+  i.e. this change adds 0 regressions + 5 new passing tests.
+- Frontend: `npm run test:unit` 183 passed / 0 failed (incl. 2 new honestStageAction tests:
+  input_scan allow+0ms+scan_outcome=analyzed → NOT skip; genuinely-skipped stage → skip).
+  `npm run build` green (vite v7.3.3, built in 7.28s) — run in a disposable `node:22-alpine`
+  container (host `frontend/node_modules` is root-owned / no local vite).
+
 ## PIPELINE-0034 (2026-09-17)
 
 **T01 PII-off true bypass + AKIA-as-secret floor.**

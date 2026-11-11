@@ -1,0 +1,402 @@
+{
+  "pbtResults": {
+    "7.3 Property test — run provenance records the exact release / refuses a mutated copy (PBT, async)": {
+      "status": "passed",
+      "lastRunTimestamp": 1792043977298
+    }
+  },
+  "executionHistory": {
+    "1.1 Implement the frozen `Version` value + `HARNESS_VERSION`": [
+      {
+        "executionId": "a4928eaf-9175-4ca9-bc51-32c57fa7d3c4",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792040017938
+      },
+      {
+        "executionId": "a4928eaf-9175-4ca9-bc51-32c57fa7d3c4",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792040034751
+      },
+      {
+        "executionId": "a4928eaf-9175-4ca9-bc51-32c57fa7d3c4",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792040209432
+      }
+    ],
+    "1.2 Derive the `__init__.py` / README prose from the single stamp": [
+      {
+        "executionId": "a4928eaf-9175-4ca9-bc51-32c57fa7d3c4",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792040018026
+      },
+      {
+        "executionId": "a4928eaf-9175-4ca9-bc51-32c57fa7d3c4",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792040227432
+      },
+      {
+        "executionId": "a4928eaf-9175-4ca9-bc51-32c57fa7d3c4",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792040704430
+      }
+    ],
+    "2.1 Implement `iter_source_files` + the manifest/release value types": [
+      {
+        "executionId": "a4928eaf-9175-4ca9-bc51-32c57fa7d3c4",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792040018113
+      },
+      {
+        "executionId": "a4928eaf-9175-4ca9-bc51-32c57fa7d3c4",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792040228671
+      },
+      {
+        "executionId": "a4928eaf-9175-4ca9-bc51-32c57fa7d3c4",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792040705224
+      }
+    ],
+    "2.2 Implement `freeze` — normalized tar + manifest, refuse-overwrite, idempotent": [
+      {
+        "executionId": "a4928eaf-9175-4ca9-bc51-32c57fa7d3c4",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792040018184
+      },
+      {
+        "executionId": "a4928eaf-9175-4ca9-bc51-32c57fa7d3c4",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792040723436
+      },
+      {
+        "executionId": "a4928eaf-9175-4ca9-bc51-32c57fa7d3c4",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792041026972
+      }
+    ],
+    "3.1 Implement `IntegrityResult` + `verify` + `MutatedCopyError`": [
+      {
+        "executionId": "a4928eaf-9175-4ca9-bc51-32c57fa7d3c4",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792040018214
+      },
+      {
+        "executionId": "a4928eaf-9175-4ca9-bc51-32c57fa7d3c4",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792041049590
+      },
+      {
+        "executionId": "a4928eaf-9175-4ca9-bc51-32c57fa7d3c4",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792041681096
+      }
+    ],
+    "4.1 Implement the thin freeze/verify CLI": [
+      {
+        "executionId": "a4928eaf-9175-4ca9-bc51-32c57fa7d3c4",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792040018246
+      },
+      {
+        "executionId": "a4928eaf-9175-4ca9-bc51-32c57fa7d3c4",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792041778320
+      },
+      {
+        "executionId": "a4928eaf-9175-4ca9-bc51-32c57fa7d3c4",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792042425065
+      }
+    ],
+    "5.1 Edit `pyproject.toml` + `.gitignore` to exclude the frozen-artifact tree": [
+      {
+        "executionId": "a4928eaf-9175-4ca9-bc51-32c57fa7d3c4",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792040018272
+      },
+      {
+        "executionId": "a4928eaf-9175-4ca9-bc51-32c57fa7d3c4",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792042477193
+      },
+      {
+        "executionId": "a4928eaf-9175-4ca9-bc51-32c57fa7d3c4",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792042835005
+      }
+    ],
+    "6. Gate — version + release core + CLI + packaging edits green": [
+      {
+        "executionId": "a4928eaf-9175-4ca9-bc51-32c57fa7d3c4",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792040018299
+      },
+      {
+        "executionId": "a4928eaf-9175-4ca9-bc51-32c57fa7d3c4",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792042934667
+      }
+    ],
+    "7.1 Add `RunProvenance` + the OPTIONAL `provenance` field to shipped `report.py`": [
+      {
+        "executionId": "a4928eaf-9175-4ca9-bc51-32c57fa7d3c4",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792040018326
+      },
+      {
+        "executionId": "a4928eaf-9175-4ca9-bc51-32c57fa7d3c4",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792042953665
+      },
+      {
+        "executionId": "a4928eaf-9175-4ca9-bc51-32c57fa7d3c4",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792043196109
+      }
+    ],
+    "7.2 Thread provenance through shipped `dryrun.py` with run-time verify/refuse": [
+      {
+        "executionId": "a4928eaf-9175-4ca9-bc51-32c57fa7d3c4",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792040018352
+      },
+      {
+        "executionId": "a4928eaf-9175-4ca9-bc51-32c57fa7d3c4",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792043196173
+      },
+      {
+        "executionId": "a4928eaf-9175-4ca9-bc51-32c57fa7d3c4",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792043621841
+      }
+    ],
+    "8. Gate — run provenance wiring green (shipped RunReport edit confirmed non-breaking)": [
+      {
+        "executionId": "a4928eaf-9175-4ca9-bc51-32c57fa7d3c4",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792040018385
+      },
+      {
+        "executionId": "5f6e271d-b4be-466e-a2cc-e0489ef6f165",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792045472442
+      }
+    ],
+    "9.1 Pollution-proof test — the frozen artifact never pollutes tooling": [
+      {
+        "executionId": "a4928eaf-9175-4ca9-bc51-32c57fa7d3c4",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792040018435
+      },
+      {
+        "executionId": "a4928eaf-9175-4ca9-bc51-32c57fa7d3c4",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792044188445
+      },
+      {
+        "executionId": "a4928eaf-9175-4ca9-bc51-32c57fa7d3c4",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792044526965
+      }
+    ],
+    "10.1 Run the full gate and map evidence to the card format": [
+      {
+        "executionId": "a4928eaf-9175-4ca9-bc51-32c57fa7d3c4",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792040018483
+      },
+      {
+        "executionId": "5f6e271d-b4be-466e-a2cc-e0489ef6f165",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792045473501
+      }
+    ],
+    "11. Final checkpoint": [
+      {
+        "executionId": "a4928eaf-9175-4ca9-bc51-32c57fa7d3c4",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792040018526
+      },
+      {
+        "executionId": "5f6e271d-b4be-466e-a2cc-e0489ef6f165",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792045474433
+      }
+    ],
+    "1. Version stamp — the single authority (`version.py`)": [
+      {
+        "executionId": "a4928eaf-9175-4ca9-bc51-32c57fa7d3c4",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792040704458
+      }
+    ],
+    "2. Release core — freeze + manifest (`release.py` pure functions)": [
+      {
+        "executionId": "a4928eaf-9175-4ca9-bc51-32c57fa7d3c4",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792041027010
+      }
+    ],
+    "2.3 Property test — re-freeze is byte-identical (PBT)": [
+      {
+        "executionId": "a4928eaf-9175-4ca9-bc51-32c57fa7d3c4",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792041050982
+      },
+      {
+        "executionId": "a4928eaf-9175-4ca9-bc51-32c57fa7d3c4",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792041683075
+      }
+    ],
+    "2.4 Property test — differing source yields a differing aggregate digest (PBT)": [
+      {
+        "executionId": "a4928eaf-9175-4ca9-bc51-32c57fa7d3c4",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792041052166
+      },
+      {
+        "executionId": "a4928eaf-9175-4ca9-bc51-32c57fa7d3c4",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792041683765
+      }
+    ],
+    "3. Integrity guard — detect a mutated frozen copy (`release.py`)": [
+      {
+        "executionId": "a4928eaf-9175-4ca9-bc51-32c57fa7d3c4",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792041681160
+      }
+    ],
+    "3.2 Property test — any single-byte mutation is detected (PBT)": [
+      {
+        "executionId": "a4928eaf-9175-4ca9-bc51-32c57fa7d3c4",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792041779536
+      },
+      {
+        "executionId": "a4928eaf-9175-4ca9-bc51-32c57fa7d3c4",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792042427591
+      }
+    ],
+    "3.3 Property test — missing or extra files are detected (PBT)": [
+      {
+        "executionId": "a4928eaf-9175-4ca9-bc51-32c57fa7d3c4",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792041780718
+      },
+      {
+        "executionId": "a4928eaf-9175-4ca9-bc51-32c57fa7d3c4",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792042427640
+      }
+    ],
+    "4. Release CLI — `python -m load_harness.release`": [
+      {
+        "executionId": "a4928eaf-9175-4ca9-bc51-32c57fa7d3c4",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792042425096
+      }
+    ],
+    "3.4 Unit tests — release/verify edge cases": [
+      {
+        "executionId": "a4928eaf-9175-4ca9-bc51-32c57fa7d3c4",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792042474891
+      },
+      {
+        "executionId": "a4928eaf-9175-4ca9-bc51-32c57fa7d3c4",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792042836263
+      }
+    ],
+    "4.2 Unit test — CLI exit codes": [
+      {
+        "executionId": "a4928eaf-9175-4ca9-bc51-32c57fa7d3c4",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792042476324
+      },
+      {
+        "executionId": "a4928eaf-9175-4ca9-bc51-32c57fa7d3c4",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792042833622
+      }
+    ],
+    "5. SENSITIVE EDIT (a) — packaging/ignore exclusions for `bin/` (shared build config)": [
+      {
+        "executionId": "a4928eaf-9175-4ca9-bc51-32c57fa7d3c4",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792042835039
+      }
+    ],
+    "7. SENSITIVE EDIT (b) — run provenance on the shipped `RunReport` / `dryrun` (additive, non-breaking)": [
+      {
+        "executionId": "a4928eaf-9175-4ca9-bc51-32c57fa7d3c4",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792043621877
+      }
+    ],
+    "7.4 Unit + reconciliation tests — additive `RunReport` edit broke nothing": [
+      {
+        "executionId": "a4928eaf-9175-4ca9-bc51-32c57fa7d3c4",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792043623093
+      },
+      {
+        "executionId": "a4928eaf-9175-4ca9-bc51-32c57fa7d3c4",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792044167976
+      }
+    ],
+    "7.3 Property test — run provenance records the exact release / refuses a mutated copy (PBT, async)": [
+      {
+        "executionId": "a4928eaf-9175-4ca9-bc51-32c57fa7d3c4",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792043624444
+      },
+      {
+        "executionId": "a4928eaf-9175-4ca9-bc51-32c57fa7d3c4",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792044166606
+      }
+    ],
+    "9.2 Property test — the version stamp is the single authority (PBT)": [
+      {
+        "executionId": "a4928eaf-9175-4ca9-bc51-32c57fa7d3c4",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792044189468
+      },
+      {
+        "executionId": "a4928eaf-9175-4ca9-bc51-32c57fa7d3c4",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792044527790
+      },
+      {
+        "executionId": "5f6e271d-b4be-466e-a2cc-e0489ef6f165",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792045496854
+      },
+      {
+        "executionId": "5f6e271d-b4be-466e-a2cc-e0489ef6f165",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792045503430
+      }
+    ],
+    "9. Pollution-proof test + version single-authority property": [
+      {
+        "executionId": "a4928eaf-9175-4ca9-bc51-32c57fa7d3c4",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792044526998
+      }
+    ],
+    "10. Final verification gate": [
+      {
+        "executionId": "5f6e271d-b4be-466e-a2cc-e0489ef6f165",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792045473545
+      }
+    ]
+  }
+}

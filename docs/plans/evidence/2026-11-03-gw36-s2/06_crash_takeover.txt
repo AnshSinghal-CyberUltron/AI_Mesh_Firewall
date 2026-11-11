@@ -1,0 +1,1 @@
+# step 12: crash (SIGKILL, no release) of the writer projector-a: takeover by projector-b after 5314 ms (lease TTL 5000 ms); withheld_source_lag_total now 10

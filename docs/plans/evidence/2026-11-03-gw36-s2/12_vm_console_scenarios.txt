@@ -1,0 +1,33 @@
+# step 4: create a key through the console API
+created key_id=bc2150cc-60ba-481e-a3c8-8fd8cf259472 sha256=10dcc8800814...
+new-key lag (API 201 -> signed KEY durable): 88 ms
+gateway reader: {'cursor': 'Cursor(version=Version(epoch=1, seq=3), feed_seq=3)', 'error': None, 'ok': True} {'10dcc8800814': {'key_id': 'bc2150cc-60ba-481e-a3c8-8fd8cf259472', 'org_id': 'zeroshield'}} stamp {'accepted': True, 'age_s': 0.449, 'fresh': True}
+
+# step 5: save the firewall config through the console API
+toxicity_threshold 0.61 -> 0.62; console note: {'status': 'published', 'org_id': 'zeroshield', 'revision': 4, 'rules': 107, 'unsupported': [], 'dev_copy': 'written'}
+signed PLAN zeroshield: 1.4:4 -> 1.5:5
+gateway reader: {'cursor': 'Cursor(version=Version(epoch=1, seq=5), feed_seq=5)', 'error': None, 'ok': True} {'zeroshield': 'plan v1.5 rules=107'}
+identical save: revision stays 4, signed PLAN 1.5:5 (compare-and-skip: no new version)
+
+# step 6: deactivate the key through the console API
+PATCH is_active=false -> HTTP 200
+revoke lag (API -> signed REVOKE durable): 452 ms
+revoke|t
+gateway reader: {'10dcc8800814': 'revoked'}
+
+# step 7a: the console refuses an org-wide switch; it only creates per-model ones
+{"model_name":["Global ('__global__') kill-switch scope is disabled. Target a specific model in your organization."]}
+per-model activate -> HTTP 200
+amf_projector_unsupported_switches 1
+2026-11-03 08:40:03,465 WARNING amf.state.projector engaged kill switch org='zeroshield' model='gpt-4o' credential_prefix=False action='disable' has no v2 scope and is NOT enforced by gateway v2 (GW29)
+KS records (none may exist for a per-model switch): 0
+
+# step 7b: an org-wide switch saved through the model (admin / ORM path; the API refuses it)
+kill-switch-on lag (save -> engaged KS durable): 1045 ms
+gateway reader killed: {'zeroshield': True} {'cursor': 'Cursor(version=Version(epoch=1, seq=1), feed_seq=1)', 'error': None, 'ok': True}
+kill-switch-off lag: 1236 ms
+gateway reader killed: {'zeroshield': False}
+
+# step 8: hard-delete a second key (the console's revoke button)
+DELETE -> HTTP 204
+delete->revoke lag: 1029 ms

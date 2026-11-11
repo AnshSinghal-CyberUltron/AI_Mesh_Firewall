@@ -1,0 +1,81 @@
+{
+  "card": "R2-06 / GW12b",
+  "title": "Bounded holdback",
+  "date": "2026-10-08",
+  "scope": "local",
+  "plan": "docs/plans/2026-10-08-r2-06-gw12b-bounded-holdback.md",
+  "gates": {
+    "pytest_offline_full": {
+      "command": ".venv/bin/python -m pytest tests/ -q -p no:randomly",
+      "passed": 955,
+      "skipped": 93,
+      "xfailed": 1,
+      "failed": 0,
+      "PASS": true
+    },
+    "pytest_lgw12b_subset": {
+      "command": ".venv/bin/python -m pytest tests/ -k lgw12b -q -p no:randomly",
+      "passed": 141,
+      "deselected": 908,
+      "failed": 0,
+      "PASS": true
+    },
+    "mypy_strict": {
+      "command": ".venv/bin/mypy --strict gateway_v2",
+      "source_files": 102,
+      "issues": 0,
+      "PASS": true
+    },
+    "ruff": {
+      "command": ".venv/bin/ruff check gateway_v2",
+      "issues": 0,
+      "PASS": true
+    },
+    "import_linter": {
+      "command": ".venv/bin/lint-imports",
+      "contracts_kept": 2,
+      "contracts_broken": 0,
+      "contracts": ["Gateway v2 layers", "Resolve imports only domain"],
+      "PASS": true
+    }
+  },
+  "local_gates": {
+    "L12b-1_replay_benchmark": {
+      "combinations_total": 24,
+      "combinations_passed": 24,
+      "max_word_class_hold_tokens": 2,
+      "hold_cap_tokens": 3,
+      "inspected_bytes_window": 64,
+      "per_chunk_p99_us_range": [14, 37],
+      "per_chunk_bound_ms": 0.5,
+      "PASS": true
+    },
+    "L12b-3_detector_regression": {
+      "tests": 8,
+      "pattern_classes": ["aws_key", "api_token", "jwt", "email", "payment_card"],
+      "min_split_offsets_per_pattern": 3,
+      "raw_sensitive_value_leaked": false,
+      "trade_off_outcome_byte_identical_across_offsets": true,
+      "runtime_ceiling_s": 300,
+      "PASS": true
+    },
+    "L12b-2_local_concurrency_equivalent": {
+      "heavy_stream": "base64-16KB / UUID-heavy",
+      "co_running_streams": 1,
+      "co_runner_median_per_chunk_latency_delta_ms": 0.0,
+      "threshold_ms": 0.5,
+      "isolation": "O(window)",
+      "PASS": true
+    }
+  },
+  "correctness_properties": {
+    "count": 8,
+    "idiom": "seeded random.Random loop >= 10000 iterations (no hypothesis dependency)",
+    "all_pass": true
+  },
+  "deferred_cloud_gates": {
+    "L12b-2_full_200rps_fleet_capacity_run": "deferred (needs fleet lane + serving gateway; edge/app.py is a GW12 stub)",
+    "GW20b_fleet_certification": "deferred (no cloud resources reachable)"
+  },
+  "found_not_fixed": "placeholder detect.holdback scanner is non-confluent for some delimiter-containing classes (url/uuid/card/jwt/api_token): split-dependent redaction byte-boundary. SAFETY invariant (no raw leak) holds unconditionally; byte-boundary confluence tracked for the GW07/GW08 real detector."
+}

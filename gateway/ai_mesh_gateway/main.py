@@ -3522,10 +3522,21 @@ def _attach_pipeline_trace_to_llm_error(content: dict, *, http_status: int) -> d
             stage["action"] = "error"
             stage["detail"] = "Upstream inference failed"
             stage["guard_reason"] = "Upstream inference failed"
+            # PIPELINE-0035 (L14b-2): the model attempt ran but errored — it was NOT
+            # skipped. ran stays whatever build_pipeline_trace stamped (True here,
+            # since the model was called); re-assert explicitly for clarity.
+            stage["ran"] = True
         elif name == "output_guardrail":
             stage["action"] = "skip"
             stage["detail"] = "Output guard not evaluated — model output failed"
             stage["guard_reason"] = "Output guard skipped because model output failed"
+            # Genuinely skipped (model output failed → nothing to guard).
+            stage["ran"] = False
+    # Re-stamp `ran` from the final action for every stage so the error-path post-
+    # processing above (and any skip stamped by build_pipeline_trace) stays consistent
+    # with the executed-vs-skipped record the UI renders (never recomputed in-browser).
+    for stage in trace.get("stages") or []:
+        stage["ran"] = str(stage.get("action") or "").lower() != "skip"
     trace["final_action"] = "error"
     out["pipeline_trace"] = _stamp_pipeline_trace_request_id(trace)
     out["final_action"] = "error"

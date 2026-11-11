@@ -1,0 +1,9 @@
+{"cell":"plain_nonstream","ok":true,"detail":{"content":"Hello from the fake upstream.","finish":"stop"}}
+{"cell":"plain_stream_iterator","ok":true,"detail":{"chunks":5,"text":"Hello from the fake upstream."}}
+{"cell":"chat.completions.stream helper (amf.trace comment framing)","ok":true,"detail":{"deltas":4,"final":"Hello from the fake upstream.","helper":"client.beta.chat.completions.stream"}}
+{"cell":"stream helper with streaming tool call","ok":true,"detail":{"name":"get_weather","arguments":"{\"city\": \"Paris\"}","finish":"tool_calls"}}
+{"cell":"iterator streaming tool call","ok":true,"detail":{"name":"get_weather","arguments":"{\"city\": \"Paris\"}","finish":"tool_calls"}}
+{"cell":"[DONE] terminates the SDK iterator","ok":true,"detail":{"iterated":5,"ended":true}}
+{"cell":"cancellation (controller.abort mid-stream)","ok":true,"detail":{"chunks_before_abort":3,"elapsed_ms":603}}
+{"cell":"refused stream raises a status error","ok":true,"detail":{"status":400,"code":"input_blocked"}}
+{"has_chat_completions_stream":"undefined"}

@@ -1,0 +1,124 @@
+credential ref: cred-pinecone-gw30 (key loaded from gitignored .env, never printed)
+discovered: {"default_cloud": "aws", "default_region": "us-east-1", "existing_index_names": [], "resolved_cloud": "aws", "resolved_region": "us-east-1"}
+cleanup: {"ran": true, "index_deleted": "gw30-live-gate", "already_absent": false}
+{
+  "L30-1": "LIVE-PASS (1 live: pinecone) + 4 INFRA-BLOCKED",
+  "L30-1b": "LIVE-PASS",
+  "L30-2": "LIVE-PASS",
+  "L30-3": "LIVE-PASS",
+  "cloud": "aws",
+  "region": "us-east-1",
+  "cleanup": {
+    "ran": true,
+    "index_deleted": "gw30-live-gate",
+    "already_absent": false
+  },
+  "generated": "2026-11-03T14:40:21.831309+00:00"
+}
+
+--- L30-1 ---
+{
+  "live": {
+    "pinecone": {
+      "create_collection": {
+        "code": "vector_ok",
+        "status": "created"
+      },
+      "upsert": {
+        "code": "vector_ok",
+        "count": 3
+      },
+      "poll": {
+        "poll_attempts": 2,
+        "queryable_count": 3
+      },
+      "query": {
+        "code": "vector_ok",
+        "count": 3,
+        "ids": [
+          "r1",
+          "r3",
+          "r2"
+        ],
+        "top_id": "r1"
+      },
+      "delete": {
+        "code": "vector_ok",
+        "count": 3
+      }
+    }
+  },
+  "ordering": [
+    "r1",
+    "r3",
+    "r2"
+  ]
+}
+
+--- L30-1b create preserves data ---
+{
+  "pinecone": {
+    "first_create": "vector_ok",
+    "upsert": "vector_ok",
+    "poll": {
+      "poll_attempts": 1,
+      "queryable_count": 3
+    },
+    "second_create": "collection_exists",
+    "query_after_second_create": "vector_ok",
+    "ids_after_second_create": [
+      "r1",
+      "r3",
+      "r2"
+    ],
+    "pass": true
+  }
+}
+
+--- L30-2 cases ---
+[
+  {
+    "store": "pinecone",
+    "request_id": "zs-111b4ef469d1",
+    "timestamp": "2026-11-03T14:40:12.316369+00:00",
+    "target": "bogus index 'gw30-does-not-exist-9b459a6c' (SDK host-resolve \u2192 NotFound)",
+    "code": "provider_unreachable",
+    "records_is_none": true,
+    "elapsed_s": 1.0904,
+    "within_30s": true,
+    "is_provider_unreachable": true,
+    "is_empty_clean_search": false
+  }
+]
+
+--- L30-3 cases ---
+[
+  {
+    "scenario": "cross_org_A_cred_for_B_request",
+    "request_id": "zs-99f364b5d4ed",
+    "timestamp": "2026-11-03T14:40:12.316447+00:00",
+    "presented_credential_org": "orgA",
+    "target_request_org": "orgB",
+    "refused": true,
+    "refusal_code": "credential_scope_mismatch",
+    "backing_store_ops_for_request": 0,
+    "proceeded_to_store": false,
+    "org_b_payload_returned": null,
+    "secret_in_refusal_form": false,
+    "live_transport_used": "pinecone"
+  },
+  {
+    "scenario": "missing_org_identity",
+    "request_id": "zs-24f4f3e8fd81",
+    "timestamp": "2026-11-03T14:40:12.316460+00:00",
+    "presented_credential_org": "orgA",
+    "target_request_org": "(empty)",
+    "refused": true,
+    "refusal_code": "org_identity_invalid",
+    "backing_store_ops_for_request": 0,
+    "proceeded_to_store": false,
+    "org_b_payload_returned": null,
+    "secret_in_refusal_form": false,
+    "live_transport_used": "pinecone"
+  }
+]

@@ -1,0 +1,34 @@
+# docker ps (integration stack, project amfint) 2026-11-04T12:49:32Z
+amfint-control-1	Up 7 minutes (healthy)	127.0.0.1:38100->8000/tcp
+amfint-frontend-1	Up 11 minutes	127.0.0.1:38180->5173/tcp
+amfint-gateway-v2-1	Up 29 minutes (healthy)	127.0.0.1:38301->8301/tcp
+amfint-fake-openai	Up 6 minutes	
+zeroshield-mcp-sandbox	Up 47 minutes (unhealthy)	9320/tcp
+amfint_mcp_broker	Up 47 minutes (healthy)	127.0.0.1:38311->8311/tcp
+amfint-fake-mcp	Up 59 minutes	
+amfint-gateway-1	Up About an hour (healthy)	127.0.0.1:38300->8300/tcp
+amfint-state-projector-a-1	Up About an hour (healthy)	
+amfint-state-rehydrator-a-1	Up About an hour (healthy)	
+amfint-pgbouncer-1	Up About an hour (healthy)	5432/tcp, 127.0.0.1:36432->6432/tcp
+amfint-rabbitmq-1	Up About an hour (healthy)	4369/tcp, 5671/tcp, 15671/tcp, 15691-15692/tcp, 25672/tcp, 127.0.0.1:35672->5672/tcp, 127.0.0.1:45672->15672/tcp
+amfint-mcp-stub-1	Up About an hour (healthy)	127.0.0.1:39999->9999/tcp
+amfint-redis-1	Up About an hour (healthy)	127.0.0.1:36379->6379/tcp
+amfint-postgres-1	Up About an hour (healthy)	127.0.0.1:35432->5432/tcp
+
+# main-tree containers (NOT touched)
+ai_mesh_firewall-gateway-v2-1	Up 2 hours (healthy)
+ai_mesh_mcp_broker	Up 2 hours (healthy)
+ai_mesh_firewall-mcp-sandbox-image-1	Exited (0) 28 hours ago
+ai_mesh_firewall-demo-1	Up 2 hours (healthy)
+ai_mesh_firewall-gateway-1	Up 2 hours (unhealthy)
+ai_mesh_firewall-frontend-1	Exited (1) 2 hours ago
+ai_mesh_firewall-control-1	Exited (0) 2 hours ago
+ai_mesh_firewall-state-rehydrator-b-1	Restarting (1) 2 seconds ago
+ai_mesh_firewall-state-projector-a-1	Restarting (1) 1 second ago
+ai_mesh_firewall-state-rehydrator-a-1	Restarting (1) 2 seconds ago
+ai_mesh_firewall-state-projector-b-1	Restarting (1) 1 second ago
+ai_mesh_firewall-pgbouncer-1	Exited (0) 2 hours ago
+ai_mesh_firewall-redis-1	Exited (0) 2 hours ago
+ai_mesh_firewall-mcp-stub-1	Exited (143) 2 hours ago
+ai_mesh_firewall-rabbitmq-1	Exited (0) 2 hours ago
+ai_mesh_firewall-postgres-1	Exited (0) 2 hours ago

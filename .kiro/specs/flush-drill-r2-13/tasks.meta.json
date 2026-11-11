@@ -1,0 +1,131 @@
+{
+  "pbtResults": {},
+  "executionHistory": {
+    "1.1 Write the drill harness + helpers + all 5 property tests + the example tests in a single file": [
+      {
+        "executionId": "83b5358e-8af8-4a9a-a1f3-dac25126bdf8",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792047463323
+      },
+      {
+        "executionId": "83b5358e-8af8-4a9a-a1f3-dac25126bdf8",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792047472240
+      },
+      {
+        "executionId": "83b5358e-8af8-4a9a-a1f3-dac25126bdf8",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792048642443
+      }
+    ],
+    "2.1 Write `gateway_v2/state_control/docs/declared-failure-behaviour.md`": [
+      {
+        "executionId": "83b5358e-8af8-4a9a-a1f3-dac25126bdf8",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792047463350
+      },
+      {
+        "executionId": "83b5358e-8af8-4a9a-a1f3-dac25126bdf8",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792047473090
+      },
+      {
+        "executionId": "83b5358e-8af8-4a9a-a1f3-dac25126bdf8",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792048643469
+      }
+    ],
+    "3.1 Run the full gate — confirm the test-only addition broke nothing and gates are UNCHANGED-green": [
+      {
+        "executionId": "83b5358e-8af8-4a9a-a1f3-dac25126bdf8",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792047463374
+      },
+      {
+        "executionId": "83b5358e-8af8-4a9a-a1f3-dac25126bdf8",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792048676130
+      },
+      {
+        "executionId": "83b5358e-8af8-4a9a-a1f3-dac25126bdf8",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792050125168
+      }
+    ],
+    "4. Final checkpoint": [
+      {
+        "executionId": "83b5358e-8af8-4a9a-a1f3-dac25126bdf8",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792047463398
+      },
+      {
+        "executionId": "83b5358e-8af8-4a9a-a1f3-dac25126bdf8",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792050129457
+      }
+    ],
+    "1. The flush chaos drill — harness, helpers, and all tests in ONE file": [
+      {
+        "executionId": "83b5358e-8af8-4a9a-a1f3-dac25126bdf8",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792048642471
+      }
+    ],
+    "2. The declared store-failure behaviour doc (markdown only)": [
+      {
+        "executionId": "83b5358e-8af8-4a9a-a1f3-dac25126bdf8",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792048643499
+      }
+    ],
+    "1.2 Property test — Property 1: flush then a round restores 0 Restore_Violations": [
+      {
+        "executionId": "83b5358e-8af8-4a9a-a1f3-dac25126bdf8",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792048664665
+      }
+    ],
+    "1.3 Property test — Property 2: every flushed kind repaired with reason MISSING": [
+      {
+        "executionId": "83b5358e-8af8-4a9a-a1f3-dac25126bdf8",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792048666118
+      }
+    ],
+    "1.4 Property test — Property 3: one-round bound, second round is a no-op": [
+      {
+        "executionId": "83b5358e-8af8-4a9a-a1f3-dac25126bdf8",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792048667511
+      }
+    ],
+    "1.5 Property test — Property 4: a flush never touches the durable truth": [
+      {
+        "executionId": "83b5358e-8af8-4a9a-a1f3-dac25126bdf8",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792048668462
+      }
+    ],
+    "1.6 Property test — Property 5: in-flight durable writes around a flush still restore cleanly (L05b-3, honest)": [
+      {
+        "executionId": "83b5358e-8af8-4a9a-a1f3-dac25126bdf8",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792048669860
+      }
+    ],
+    "1.7 Example / integration tests — specific scenarios": [
+      {
+        "executionId": "83b5358e-8af8-4a9a-a1f3-dac25126bdf8",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792048670891
+      }
+    ],
+    "3. Final verification gate": [
+      {
+        "executionId": "83b5358e-8af8-4a9a-a1f3-dac25126bdf8",
+        "chatSessionId": "sess_a221eac8-6880-496f-854b-5e7e4ede71ab",
+        "timestamp": 1792050125219
+      }
+    ]
+  }
+}

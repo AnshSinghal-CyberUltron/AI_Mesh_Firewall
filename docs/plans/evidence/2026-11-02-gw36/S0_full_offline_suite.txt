@@ -1,0 +1,111 @@
+........................................................................ [  2%]
+........................................................................ [  4%]
+........................................................................ [  7%]
+........................................................................ [  9%]
+........................................................................ [ 12%]
+...........................sssssssssssssssss............................ [ 14%]
+........................................................................ [ 17%]
+........................................................................ [ 19%]
+........................................................................ [ 22%]
+........................................................................ [ 24%]
+........................................................................ [ 27%]
+........................................................................ [ 29%]
+........................................................................ [ 32%]
+........................................................................ [ 34%]
+..............................................sssss..................... [ 37%]
+........................................................................ [ 39%]
+........................................................................ [ 42%]
+........................................................................ [ 44%]
+........................................................................ [ 47%]
+........................................................................ [ 49%]
+........................................................................ [ 52%]
+........................................................................ [ 54%]
+........................................................................ [ 57%]
+........................................................................ [ 59%]
+........................................................................ [ 62%]
+.................................F...F.................................. [ 64%]
+........................................................................ [ 67%]
+........................................................................ [ 69%]
+......................................................sss............... [ 72%]
+........................................................................ [ 74%]
+.........................ssss........................................... [ 77%]
+........................................................................ [ 79%]
+........................................................................ [ 82%]
+........................................................................ [ 84%]
+........................................sssssssssssss................... [ 87%]
+........................................................................ [ 89%]
+........................................................................ [ 92%]
+..................................ssssssssssssssssssssssssssssssssssssss [ 94%]
+sssssssssssssss......................................................... [ 97%]
+................................sssss..............................x.... [ 99%]
+.                                                                        [100%]
+=================================== FAILURES ===================================
+_____________________ test_the_shipped_data_plane_is_clean _____________________
+
+    def test_the_shipped_data_plane_is_clean() -> None:
+>       assert scan_tree(_PKG) == []
+E       AssertionError: assert [TenantScaleV... O(changes)')] == []
+E         
+E         Left contains 3 more items, first extra item: TenantScaleViolation(path='/home/suraj/Documents/zeroshield/AI_Mesh_Firewall/gateway_v2/gateway_v2/dispatch/vector_live_transports.py', symbol='scan_iter', line=458, reason='whole-collection store read: cannot be O(changes)')
+E         Use -v to get more diff
+
+tests/gates/test_check_tenant_scale.py:190: AssertionError
+_____________________ test_shipped_tree_within_size_limits _____________________
+
+    def test_shipped_tree_within_size_limits() -> None:
+>       assert size_scan(_PKG) == []
+E       AssertionError: assert [SizeViolatio...start_line=1)] == []
+E         
+E         Left contains one more item: SizeViolation(path='/home/suraj/Documents/zeroshield/AI_Mesh_Firewall/gateway_v2/gateway_v2/dispatch/vector_live_transports.py', kind='module', name='vector_live_transports.py', lines=1309, start_line=1)
+E         Use -v to get more diff
+
+tests/gates/test_empty_tree_passes.py:17: AssertionError
+=============================== warnings summary ===============================
+tests/admit/test_lgw06_harness.py::test_lgw06_3_multi_replica_no_quota_multiplication
+  /home/suraj/Documents/zeroshield/AI_Mesh_Firewall/gateway_v2/gateway_v2/admit/quota.py:305: RuntimeWarning: coroutine 'BudgetLease._refill' was never awaited
+    def __init__(
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/admit/test_lgw06_harness.py::test_lgw06_3_multi_replica_no_quota_multiplication
+  /usr/lib/python3.12/contextlib.py:446: RuntimeWarning: coroutine 'BudgetLease._refill' was never awaited
+    def __exit__(self, exctype, excinst, exctb):
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/admit/test_lgw06_harness.py::test_lgw06_5_injected_latency_bounded_and_posture_holds
+  /usr/lib/python3.12/enum.py:726: RuntimeWarning: coroutine 'BudgetLease._refill' was never awaited
+    def __call__(cls, value, names=_not_given, *values, module=None, qualname=None, type=None, start=1, boundary=None):
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/admit/test_lgw06_lease_no_multiplication.py::test_property1_no_replica_multiplication
+  /home/suraj/Documents/zeroshield/AI_Mesh_Firewall/gateway_v2/.venv/lib/python3.12/site-packages/fakeredis/_commands.py:75: RuntimeWarning: coroutine 'BudgetLease._refill' was never awaited
+    for i, (arg, type_) in enumerate(zip(args_list, types)):
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/admit/test_lgw06_lease_no_multiplication.py::test_property1_no_replica_multiplication
+  /usr/lib/python3.12/inspect.py:3045: RuntimeWarning: coroutine 'BudgetLease._refill' was never awaited
+    params = OrderedDict((param.name, param) for param in parameters)
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/admit/test_lgw06_metrics.py::test_satisfies_lease_quota_metrics_like
+  /usr/lib/python3.12/inspect.py:747: RuntimeWarning: coroutine 'BudgetLease._refill' was never awaited
+    def unwrap(func, *, stop=None):
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/admit/test_lgw06_outage_posture.py::test_property4_outage_spends_remaining_then_budget_unavailable
+  /home/suraj/Documents/zeroshield/AI_Mesh_Firewall/gateway_v2/.venv/lib/python3.12/site-packages/fakeredis/_core/_database.py:129: RuntimeWarning: coroutine 'BudgetLease._refill' was never awaited
+    @property
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/gates/test_check_tenant_scale.py::test_the_shipped_data_plane_is_clean
+FAILED tests/gates/test_empty_tree_passes.py::test_shipped_tree_within_size_limits
+2 failed, 2778 passed, 100 skipped, 1 xfailed, 7 warnings in 1287.03s (0:21:27)
+exit=1

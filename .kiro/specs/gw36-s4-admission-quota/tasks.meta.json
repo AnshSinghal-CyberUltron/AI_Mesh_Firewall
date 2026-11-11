@@ -1,0 +1,570 @@
+{
+  "pbtResults": {
+    "7.5 Write property test — CAS seed safety": {
+      "status": "passed",
+      "lastRunTimestamp": 1793710456100
+    }
+  },
+  "executionHistory": {
+    "1.1 Add the `BudgetRecord` value type": [
+      {
+        "executionId": "f0982723-b86e-4eb7-878f-13248758ebc6",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793704330747
+      },
+      {
+        "executionId": "f0982723-b86e-4eb7-878f-13248758ebc6",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793704467759
+      },
+      {
+        "executionId": "d55e9038-d30e-4501-a1de-391611df61ca",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793704991818
+      }
+    ],
+    "2.1 Implement `GcraCache`": [
+      {
+        "executionId": "f0982723-b86e-4eb7-878f-13248758ebc6",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793704338206
+      },
+      {
+        "executionId": "d55e9038-d30e-4501-a1de-391611df61ca",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793705019267
+      },
+      {
+        "executionId": "d55e9038-d30e-4501-a1de-391611df61ca",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793705507516
+      }
+    ],
+    "3.1 Implement `QuotaRegistry`": [
+      {
+        "executionId": "f0982723-b86e-4eb7-878f-13248758ebc6",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793704343017
+      },
+      {
+        "executionId": "d55e9038-d30e-4501-a1de-391611df61ca",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793705692762
+      },
+      {
+        "executionId": "d55e9038-d30e-4501-a1de-391611df61ca",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793706025046
+      }
+    ],
+    "4.1 Implement `QuotaGate` and widen the `BudgetDecider` owner surface": [
+      {
+        "executionId": "f0982723-b86e-4eb7-878f-13248758ebc6",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793704348457
+      },
+      {
+        "executionId": "d55e9038-d30e-4501-a1de-391611df61ca",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793706051046
+      },
+      {
+        "executionId": "d55e9038-d30e-4501-a1de-391611df61ca",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793709214080
+      }
+    ],
+    "5. Checkpoint — domain and edge logic": [
+      {
+        "executionId": "f0982723-b86e-4eb7-878f-13248758ebc6",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793704352576
+      },
+      {
+        "executionId": "c079954b-70f1-4c43-86bf-0e23acacf636",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793710576109
+      }
+    ],
+    "6.1 Add the per-org token budget field and validators": [
+      {
+        "executionId": "f0982723-b86e-4eb7-878f-13248758ebc6",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793704357844
+      },
+      {
+        "executionId": "f0982723-b86e-4eb7-878f-13248758ebc6",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793704470744
+      },
+      {
+        "executionId": "d55e9038-d30e-4501-a1de-391611df61ca",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793705503617
+      }
+    ],
+    "6.4 Expose the budget in the projector read view": [
+      {
+        "executionId": "f0982723-b86e-4eb7-878f-13248758ebc6",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793704362714
+      },
+      {
+        "executionId": "d55e9038-d30e-4501-a1de-391611df61ca",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793705022747
+      },
+      {
+        "executionId": "d55e9038-d30e-4501-a1de-391611df61ca",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793705656397
+      }
+    ],
+    "7.1 Add `StateWriter.budget_set` and the projector `_budgets` write phase": [
+      {
+        "executionId": "f0982723-b86e-4eb7-878f-13248758ebc6",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793704370456
+      },
+      {
+        "executionId": "d55e9038-d30e-4501-a1de-391611df61ca",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793705696707
+      },
+      {
+        "executionId": "d55e9038-d30e-4501-a1de-391611df61ca",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793706028537
+      }
+    ],
+    "7.2 Seed the live pool counter with generation CAS": [
+      {
+        "executionId": "f0982723-b86e-4eb7-878f-13248758ebc6",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793704377461
+      },
+      {
+        "executionId": "d55e9038-d30e-4501-a1de-391611df61ca",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793706056779
+      },
+      {
+        "executionId": "d55e9038-d30e-4501-a1de-391611df61ca",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793706651164
+      }
+    ],
+    "8.1 Implement `BudgetSnapshot` and `budget_applier`": [
+      {
+        "executionId": "f0982723-b86e-4eb7-878f-13248758ebc6",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793704384706
+      },
+      {
+        "executionId": "d55e9038-d30e-4501-a1de-391611df61ca",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793706060870
+      },
+      {
+        "executionId": "d55e9038-d30e-4501-a1de-391611df61ca",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793706648046
+      }
+    ],
+    "9. Checkpoint — state path": [
+      {
+        "executionId": "f0982723-b86e-4eb7-878f-13248758ebc6",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793704391347
+      },
+      {
+        "executionId": "c079954b-70f1-4c43-86bf-0e23acacf636",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793710580000
+      }
+    ],
+    "10.1 Add `_resolve_q_safe` refuse-to-start": [
+      {
+        "executionId": "f0982723-b86e-4eb7-878f-13248758ebc6",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793704398666
+      },
+      {
+        "executionId": "c079954b-70f1-4c43-86bf-0e23acacf636",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793710594539
+      },
+      {
+        "executionId": "bee69fec-b29a-46cc-a955-5d448fd770be",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793710991596
+      },
+      {
+        "executionId": "bee69fec-b29a-46cc-a955-5d448fd770be",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793711322121
+      }
+    ],
+    "10.2 Construct and inject the real `AdmissionController`": [
+      {
+        "executionId": "f0982723-b86e-4eb7-878f-13248758ebc6",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793704406097
+      },
+      {
+        "executionId": "bee69fec-b29a-46cc-a955-5d448fd770be",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793711326621
+      },
+      {
+        "executionId": "bee69fec-b29a-46cc-a955-5d448fd770be",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793711913588
+      }
+    ],
+    "10.3 Wire `GcraCache`, `QuotaRegistry`, and `QuotaGate` into the boot and KEY-delta path": [
+      {
+        "executionId": "f0982723-b86e-4eb7-878f-13248758ebc6",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793704412756
+      },
+      {
+        "executionId": "bee69fec-b29a-46cc-a955-5d448fd770be",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793711918112
+      }
+    ],
+    "10.4 Gate `/readyz` on BUDGET and emit the boot log": [
+      {
+        "executionId": "f0982723-b86e-4eb7-878f-13248758ebc6",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793704420017
+      },
+      {
+        "executionId": "bee69fec-b29a-46cc-a955-5d448fd770be",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793713145523
+      },
+      {
+        "executionId": "bee69fec-b29a-46cc-a955-5d448fd770be",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793713723574
+      }
+    ],
+    "11. Checkpoint — production boot wiring": [
+      {
+        "executionId": "f0982723-b86e-4eb7-878f-13248758ebc6",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793704427219
+      },
+      {
+        "executionId": "bee69fec-b29a-46cc-a955-5d448fd770be",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793714187203
+      }
+    ],
+    "12.1 Run the full offline gate suite and fix failures": [
+      {
+        "executionId": "f0982723-b86e-4eb7-878f-13248758ebc6",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793704434567
+      },
+      {
+        "executionId": "bee69fec-b29a-46cc-a955-5d448fd770be",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793714209967
+      },
+      {
+        "executionId": "bee69fec-b29a-46cc-a955-5d448fd770be",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793718185308
+      }
+    ],
+    "13.1 Compose the service and run the live acceptance scenarios": [
+      {
+        "executionId": "f0982723-b86e-4eb7-878f-13248758ebc6",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793704441727
+      },
+      {
+        "executionId": "81c5fdf5-ffdf-48f5-930b-040d223c073c",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793721488950
+      }
+    ],
+    "14. Final checkpoint — ensure all tests pass": [
+      {
+        "executionId": "f0982723-b86e-4eb7-878f-13248758ebc6",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793704448695
+      }
+    ],
+    "1. Budget value type and BUDGET snapshot/applier scaffolding (domain layer)": [
+      {
+        "executionId": "d55e9038-d30e-4501-a1de-391611df61ca",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793704999608
+      }
+    ],
+    "2. Per-principal GCRA cache (domain layer)": [
+      {
+        "executionId": "d55e9038-d30e-4501-a1de-391611df61ca",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793705514068
+      }
+    ],
+    "6. Control budget source (control plane — Django)": [
+      {
+        "executionId": "d55e9038-d30e-4501-a1de-391611df61ca",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793705663969
+      }
+    ],
+    "3. Per-org budget lease registry (domain layer)": [
+      {
+        "executionId": "d55e9038-d30e-4501-a1de-391611df61ca",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793706032714
+      }
+    ],
+    "8. BUDGET applier and snapshot (admit — gateway synchroniser)": [
+      {
+        "executionId": "d55e9038-d30e-4501-a1de-391611df61ca",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793706653776
+      }
+    ],
+    "7. Projector BUDGET writes and pool seeding (state_control)": [
+      {
+        "executionId": "d55e9038-d30e-4501-a1de-391611df61ca",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793706656722
+      }
+    ],
+    "4. Composed quota gate (edge layer)": [
+      {
+        "executionId": "d55e9038-d30e-4501-a1de-391611df61ca",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793709219050
+      }
+    ],
+    "2.2 Write unit tests for `GcraCache`": [
+      {
+        "executionId": "c079954b-70f1-4c43-86bf-0e23acacf636",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793709327649
+      },
+      {
+        "executionId": "c079954b-70f1-4c43-86bf-0e23acacf636",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793709658199
+      }
+    ],
+    "2.3 Write property test — GCRA allowance preserved on reject": [
+      {
+        "executionId": "c079954b-70f1-4c43-86bf-0e23acacf636",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793709331337
+      },
+      {
+        "executionId": "c079954b-70f1-4c43-86bf-0e23acacf636",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793709662289
+      }
+    ],
+    "2.4 Write property test — per-worker rate split sums to the principal rate": [
+      {
+        "executionId": "c079954b-70f1-4c43-86bf-0e23acacf636",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793709334407
+      },
+      {
+        "executionId": "c079954b-70f1-4c43-86bf-0e23acacf636",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793709666388
+      }
+    ],
+    "3.2 Write unit tests for `QuotaRegistry`": [
+      {
+        "executionId": "c079954b-70f1-4c43-86bf-0e23acacf636",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793709338298
+      },
+      {
+        "executionId": "c079954b-70f1-4c43-86bf-0e23acacf636",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793709684424
+      }
+    ],
+    "4.2 Write unit tests for `QuotaGate`": [
+      {
+        "executionId": "c079954b-70f1-4c43-86bf-0e23acacf636",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793709699769
+      },
+      {
+        "executionId": "c079954b-70f1-4c43-86bf-0e23acacf636",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793710213818
+      }
+    ],
+    "4.3 Write property test — per-org budget isolation and owner attribution": [
+      {
+        "executionId": "c079954b-70f1-4c43-86bf-0e23acacf636",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793709703449
+      },
+      {
+        "executionId": "c079954b-70f1-4c43-86bf-0e23acacf636",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793710210119
+      }
+    ],
+    "4.4 Write property test — refund net-zero before a provider call": [
+      {
+        "executionId": "c079954b-70f1-4c43-86bf-0e23acacf636",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793709707350
+      },
+      {
+        "executionId": "c079954b-70f1-4c43-86bf-0e23acacf636",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793710217508
+      }
+    ],
+    "4.5 Write property test — gate short-circuit order": [
+      {
+        "executionId": "c079954b-70f1-4c43-86bf-0e23acacf636",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793709711071
+      },
+      {
+        "executionId": "c079954b-70f1-4c43-86bf-0e23acacf636",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793710221188
+      }
+    ],
+    "8.2 Write unit tests for `budget_applier`": [
+      {
+        "executionId": "c079954b-70f1-4c43-86bf-0e23acacf636",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793709715018
+      },
+      {
+        "executionId": "c079954b-70f1-4c43-86bf-0e23acacf636",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793710225078
+      }
+    ],
+    "7.4 Write property test — budget generation monotonicity": [
+      {
+        "executionId": "c079954b-70f1-4c43-86bf-0e23acacf636",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793710241259
+      },
+      {
+        "executionId": "c079954b-70f1-4c43-86bf-0e23acacf636",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793710547436
+      }
+    ],
+    "7.3 Write unit tests for projector budget writes + seed": [
+      {
+        "executionId": "c079954b-70f1-4c43-86bf-0e23acacf636",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793710244846
+      },
+      {
+        "executionId": "c079954b-70f1-4c43-86bf-0e23acacf636",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793710550416
+      }
+    ],
+    "7.5 Write property test — CAS seed safety": [
+      {
+        "executionId": "c079954b-70f1-4c43-86bf-0e23acacf636",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793710249057
+      },
+      {
+        "executionId": "c079954b-70f1-4c43-86bf-0e23acacf636",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793710554198
+      }
+    ],
+    "6.2 Write unit tests for the control budget field": [
+      {
+        "executionId": "c079954b-70f1-4c43-86bf-0e23acacf636",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793710251909
+      },
+      {
+        "executionId": "c079954b-70f1-4c43-86bf-0e23acacf636",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793710545179
+      }
+    ],
+    "6.3 Write property test — control budget range validation": [
+      {
+        "executionId": "c079954b-70f1-4c43-86bf-0e23acacf636",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793710254978
+      },
+      {
+        "executionId": "c079954b-70f1-4c43-86bf-0e23acacf636",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793710556178
+      }
+    ],
+    "10. Production boot wiring (edge/production_profile.py)": [
+      {
+        "executionId": "bee69fec-b29a-46cc-a955-5d448fd770be",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793713732962
+      }
+    ],
+    "10.6 Write property test — fail closed on any undecidable input": [
+      {
+        "executionId": "bee69fec-b29a-46cc-a955-5d448fd770be",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793713750183
+      },
+      {
+        "executionId": "bee69fec-b29a-46cc-a955-5d448fd770be",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793714175114
+      }
+    ],
+    "10.5 Write unit tests for q_safe resolution and boot log": [
+      {
+        "executionId": "bee69fec-b29a-46cc-a955-5d448fd770be",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793713753628
+      },
+      {
+        "executionId": "bee69fec-b29a-46cc-a955-5d448fd770be",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793714178798
+      }
+    ],
+    "10.7 Write integration tests for production boot wiring": [
+      {
+        "executionId": "bee69fec-b29a-46cc-a955-5d448fd770be",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793713758139
+      },
+      {
+        "executionId": "bee69fec-b29a-46cc-a955-5d448fd770be",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793714183300
+      }
+    ],
+    "12. Offline gate suite": [
+      {
+        "executionId": "bee69fec-b29a-46cc-a955-5d448fd770be",
+        "chatSessionId": "sess_8caafda7-4c26-4a8c-868f-51599db02782",
+        "timestamp": 1793718202183
+      }
+    ]
+  }
+}

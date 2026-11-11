@@ -1,0 +1,220 @@
+{
+ "card": "GW27",
+ "built": [
+  {
+   "field": "audit_logging_enabled",
+   "via": "controls.audit: when false, non-mandatory audit records are suppressed and counted (amf_audit_suppressed_by_org_total); hard blocks, sheds and admission rejects are always recorded; applies to chat, responses and MCP"
+  },
+  {
+   "field": "auto_block_threats",
+   "via": "rules.threat: threat rule action block when on, flag when off"
+  },
+  {
+   "field": "blocked_keywords",
+   "via": "rules.keywords: one GW26 keyword rule (pol-fw-blocked-keywords-keywords), input scope, case-insensitive substring match (token also matches tokenizer); published as monitor/flag until V2_PLAN_NEW_RULES_MODE=enforce"
+  },
+  {
+   "field": "burst_limit",
+   "via": "controls.rate: burst per worker is its even share plus 3 binomial standard deviations (exact at one worker; aggregate burst between burst and workers*burst_worker); a single connection pinned to one worker sees burst_worker; per gateway replica (fleet ceiling up to R times the configured value; each worker holds 1/workers of the rate); billable OpenAI surfaces only (chat, responses, embeddings), not MCP or moderations"
+  },
+  {
+   "field": "compliance_frameworks",
+   "via": "controls.compliance: declarative, as in v1: published (sorted, unique), stamped on every audit record, violations surfaced in the publish note; operator values are never overridden"
+  },
+  {
+   "field": "max_response_tokens",
+   "via": "controls.max_response_tokens: request-side clamp of the upstream max_tokens (min of org value and the hard cap) on stream and non-stream; the gateway does not count response tokens (provider that ignores max_tokens is a residual risk, GW33)"
+  },
+  {
+   "field": "org_tpm_limit",
+   "via": "controls.org_tpm_limit: token bucket over the admission-time estimate (prompt estimate plus clamped output ceiling times n), no response true-up; per-worker tolerance floor admits any request below the limit; accepted overshoot is workers times the single-request cost bound; per gateway replica (fleet ceiling up to R times the configured value; each worker holds 1/workers of the rate); billable OpenAI surfaces only (chat, responses, embeddings), not MCP or moderations; 0 = off"
+  },
+  {
+   "field": "output_incident_logging_enabled",
+   "via": "controls.audit: when false, non-blocking output-phase REDACT/FLAG audit records are suppressed and counted; hard blocks, sheds and admission rejects are always recorded; applies to chat, responses and MCP"
+  },
+  {
+   "field": "output_policy_action",
+   "via": "rules.output_policy: fallback action for output/both-scope policy rows whose own action is monitor or empty; an explicit own action wins; rewrite refused (GW33); global monitor posture forces mode=monitor on rows the fallback decided"
+  },
+  {
+   "field": "output_policy_enabled",
+   "via": "rules.output_policy: false drops output-scope GW26 policy rows and rewrites both-scope rows to input scope (their input half keeps enforcing)"
+  },
+  {
+   "field": "rate_limit_enabled",
+   "via": "controls.rate: gates request rate and burst only (org_tpm_limit is enforced independently); per gateway replica (fleet ceiling up to R times the configured value; each worker holds 1/workers of the rate); billable OpenAI surfaces only (chat, responses, embeddings), not MCP or moderations"
+  },
+  {
+   "field": "requests_per_minute",
+   "via": "controls.rate: GCRA request rate, per gateway replica (fleet ceiling up to R times the configured value; each worker holds 1/workers of the rate); billable OpenAI surfaces only (chat, responses, embeddings), not MCP or moderations; default 1000 rpm is a 60 ms emission interval per worker at W=1"
+  },
+  {
+   "field": "retention_days",
+   "via": "controls.audit: stamped on each audit record at write time (non-retroactive); audit_control sweeps only rows whose own stamp elapsed, NULL stamps are kept; sweep is off by default (AMF_AUDIT_RETENTION_SWEEP)"
+  },
+  {
+   "field": "threat_intel_enabled",
+   "via": "rules.threat: content-score floor, not a reputation lookup: three input rules (prompt_injection, jailbreak, command), removed when off; published as monitor/flag until V2_PLAN_NEW_RULES_MODE=enforce"
+  },
+  {
+   "field": "threat_score_threshold",
+   "via": "rules.threat: operator confidence floor over the semantic detector (value/100); 0 means no operator floor above the derived cut, not block-everything; non-semantic detectors ignore the threshold"
+  }
+ ],
+ "retired": [
+  {
+   "field": "allowed_models",
+   "owner": "GW28",
+   "reason": "per-org model catalogue"
+  },
+  {
+   "field": "default_data_sensitivity",
+   "owner": "GW28",
+   "reason": "weighted deterministic routing"
+  },
+  {
+   "field": "default_model",
+   "owner": "GW28",
+   "reason": "per-org default model selection"
+  },
+  {
+   "field": "log_level",
+   "owner": "GW27",
+   "reason": "v2 observability is the typed GW14d exposition with bounded cardinality; there is no per-org log-detail knob to build"
+  },
+  {
+   "field": "mcp_ext_scan_action",
+   "owner": "GW17",
+   "reason": "external MCP proxy posture (GW32 consumes it)"
+  },
+  {
+   "field": "mcp_policy_only_enforcement",
+   "owner": "GW17",
+   "reason": "MCP surface posture"
+  },
+  {
+   "field": "mcp_tier2_enabled",
+   "owner": "GW17",
+   "reason": "MCP surface posture"
+  },
+  {
+   "field": "model_isolation_enabled",
+   "owner": "GW29",
+   "reason": "isolation is plan state built by GW29"
+  },
+  {
+   "field": "rag_enabled",
+   "owner": "GW31",
+   "reason": "RAG settings are built by GW31"
+  },
+  {
+   "field": "rag_max_documents",
+   "owner": "GW31",
+   "reason": "RAG settings are built by GW31"
+  },
+  {
+   "field": "rag_redaction_enabled",
+   "owner": "GW31",
+   "reason": "RAG settings are built by GW31"
+  },
+  {
+   "field": "rag_relevance_threshold",
+   "owner": "GW31",
+   "reason": "RAG settings are built by GW31"
+  },
+  {
+   "field": "rag_tier2_enabled",
+   "owner": "GW31",
+   "reason": "RAG settings are built by GW31"
+  },
+  {
+   "field": "routing_cost_weight",
+   "owner": "GW28",
+   "reason": "weighted deterministic routing"
+  },
+  {
+   "field": "routing_enabled",
+   "owner": "GW28",
+   "reason": "weighted deterministic routing"
+  },
+  {
+   "field": "routing_latency_weight",
+   "owner": "GW28",
+   "reason": "weighted deterministic routing"
+  },
+  {
+   "field": "routing_priority_weight",
+   "owner": "GW28",
+   "reason": "weighted deterministic routing"
+  },
+  {
+   "field": "routing_risk_weight",
+   "owner": "GW28",
+   "reason": "weighted deterministic routing"
+  },
+  {
+   "field": "semantic_analysis_enabled",
+   "owner": "GW10",
+   "reason": "semantic detection is governed by the GW10 detector and policy set"
+  },
+  {
+   "field": "tier2_enabled",
+   "owner": "GW10",
+   "reason": "semantic detection is governed by the GW10 detector and policy set"
+  },
+  {
+   "field": "tier2_execution_mode",
+   "owner": "GW27",
+   "reason": "there is no v2 plan primitive for sync or async Tier-2; v2 detection runs in the resolver"
+  },
+  {
+   "field": "tier2_stream_hold_enabled",
+   "owner": "GW13",
+   "reason": "stream hold is the output streaming-mode surface"
+  },
+  {
+   "field": "tier2_stream_hold_timeout_ms",
+   "owner": "GW13",
+   "reason": "stream hold is the output streaming-mode surface"
+  },
+  {
+   "field": "tier2_strict",
+   "owner": "GW27",
+   "reason": "subsumed by per-rule on_unavailable, which drafts_for already emits from tier2_fail_closed_enabled"
+  },
+  {
+   "field": "vector_db_isolation",
+   "owner": "GW31",
+   "reason": "RAG settings are built by GW31"
+  }
+ ],
+ "delegated_outside_45": [
+  "org_token_budget"
+ ],
+ "surface_exclusions": [
+  {
+   "surface": "mcp",
+   "owner": "GW17/GW32",
+   "excluded": [
+    "rate_limit_enabled",
+    "requests_per_minute",
+    "burst_limit",
+    "org_tpm_limit"
+   ],
+   "reason": "MCP surface posture; audit gating and stamp DO cover MCP"
+  },
+  {
+   "surface": "moderations",
+   "owner": "GW27",
+   "excluded": [
+    "rate_limit_enabled",
+    "requests_per_minute",
+    "burst_limit",
+    "org_tpm_limit"
+   ],
+   "reason": "scan-only, not billable, no admission or plan phase"
+  }
+ ],
+ "audit_record_growth": "the compliance/retention stamp adds at most 16 labels x 32 chars = 512 bytes plus the retention number (about 19% on the 2.7 KB reference record); the live entry-size model must be re-run with a worst-case stamp"
+}

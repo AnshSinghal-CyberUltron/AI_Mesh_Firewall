@@ -4,6 +4,7 @@
 // Per-stage action -> small status-badge label (honest per-stage; never a single
 // global action smeared across every stage).
 export const ACTION_BADGE = {
+  error: "error",
   block: "blocked",
   redact: "redacted",
   rewrite: "rewritten",
@@ -11,9 +12,25 @@ export const ACTION_BADGE = {
   monitor: "monitored",
   reroute: "rerouted",
   skip: "skipped",
+  unavailable: "unavailable",
   allow: "allowed",
 };
 
+// GW35: the stage-action vocabulary the gateway-v2 console schema speaks. A literal array so
+// `lint/check_console_inventory` can compare it with `audit/console_schema.STAGE_ACTION_VOCAB`.
+export const STAGE_ACTION_VOCAB = ["allow", "flag", "redact", "rewrite", "block", "error", "skip"];
+export const NOT_REPORTED = "Not reported by gateway v2";
+export const ERROR_LABEL = "Upstream error";
+// A gateway-v2 body or event says so itself: `source: "gateway_v2"` on a live response or an
+// `amf.trace` frame, `metadata.source` on a threat-feed event. The stage count never decides it.
+export function isGatewayV2Trace(body) {
+  if (!body || typeof body !== "object") return false;
+  return body.source === "gateway_v2" || body.metadata?.source === "gateway_v2";
+}
+// The text to show for a field gateway v2 does not produce (never 0, never a default).
+export function notReported(body) {
+  return isGatewayV2Trace(body) ? NOT_REPORTED : "";
+}
 export const STAGE_LABELS = {
   auth: "Auth",
   rate_limit: "Rate Limit",
@@ -37,10 +54,31 @@ export function honestStageAction(stage) {
   let a = String((stage && stage.action) || "allow").toLowerCase();
   const lat = stage && stage.latency_ms;
   if (typeof lat === "number" && lat === 0 && (a === "allow" || a === "")) {
+    // L14b-2 (PIPELINE-0035): executed-vs-skipped is a PROPERTY OF THE RECORD, never
+    // recomputed in the browser. latency===0 is ambiguous (a genuine skip AND a
+    // sub-millisecond scan both round to 0), so this branch must NOT fabricate "skip"
+    // for a stage the backend says actually ran.
+    // 1. Respect the explicit backend signal first: ran===true must NEVER become skip;
+    //    ran===false may render skip.
+    const ran = stage && stage.ran;
+    if (ran === true) return a || "allow";
+    if (ran === false) return "skip";
+    // 2. Backward-compat for older records lacking `ran`: do not latency-infer skip
+    //    for stages that carry positive run-evidence — model routing always runs, and
+    //    a stage carrying a real scan_outcome / tier / redact_noop clearly executed.
     const name = String(stage?.name || stage?.stage || "").toLowerCase();
     if (name === "model_routing" || name === "route") {
       return a || "allow";
     }
+    const scanOutcome = String(stage?.scan_outcome || "").toLowerCase();
+    const tier = stage?.tier;
+    const ranEvidence = (
+      scanOutcome === "analyzed"
+      || scanOutcome === "clean"
+      || (tier !== undefined && tier !== null && tier !== "" && tier !== 0)
+      || stage?.redact_noop === true
+    );
+    if (ranEvidence) return a || "allow";
     return "skip";
   }
   const noop = stage && ((stage.metadata && stage.metadata.redact_noop) || stage.redact_noop);
@@ -66,10 +104,27 @@ export function honestStageAction(stage) {
   return a;
 }
 
-const _STAGE_SEVERITY = { block: 3, error: 3, redact: 2, rewrite: 2, flag: 1, reroute: 1, monitor: 0, skip: 0, allow: 0, pass: 0 };
+const _STAGE_SEVERITY = { block: 4, error: 3, redact: 2, rewrite: 2, flag: 1, reroute: 1, monitor: 0, skip: 0, allow: 0, pass: 0 };
 const _STAGE_SCORE = { block: 90, error: 90, redact: 75, rewrite: 75, flag: 60, reroute: 40 };
 
 /** Lift score/action from stage badges including unenforced injection BLOCK recs. */
+/** Rules the record names. Does not invent a rule the stage did not carry. */
+export function stageDecidingRules(stage) {
+  const named = [];
+  if (Array.isArray(stage?.matched_rules)) named.push(...stage.matched_rules);
+  if (Array.isArray(stage?.matched_rule_names)) named.push(...stage.matched_rule_names);
+  if (Array.isArray(stage?.deciding_rules)) named.push(...stage.deciding_rules);
+  if (stage?.deciding_rule) named.push(stage.deciding_rule);
+  return [...new Set(named.filter((rule) => rule))];
+}
+
+/** A risk score the record actually stored. Words such as "medium" are not a score. */
+export function recordedRiskScore(value) {
+  if (typeof value === "number" && Number.isFinite(value) && value >= 0) return value;
+  if (typeof value === "string" && /^\d+(\.\d+)?$/.test(value.trim())) return Number(value.trim());
+  return null;
+}
+
 export function deriveStageVerdict(stages) {
   let action = null, score = 0, severity = -1;
   for (const s of Array.isArray(stages) ? stages : []) {
@@ -121,7 +176,7 @@ export function buildHonestTraceStages(realStages, finalAction, ctx = {}) {
     if (s.detection_tier || s.tier) tags.push(`tier: ${s.detection_tier || s.tier}`);
     if (s.threat_type) tags.push(`category: ${String(s.threat_type).replace(/_/g, " ")}`);
     (s.matched_policy_names || s.matched_policies || []).forEach((p) => tags.push(`policy: ${p}`));
-    (s.matched_rules || s.matched_rule_names || []).forEach((r) => tags.push(`rule: ${r}`));
+    stageDecidingRules(s).forEach((r) => tags.push(`rule: ${r}`));
     const lat = typeof s.latency_ms === "number" ? s.latency_ms : null;
     out.push({
       id: name,
@@ -141,7 +196,9 @@ export function buildHonestTraceStages(realStages, finalAction, ctx = {}) {
     content:
       fa === "block"
         ? "[Response blocked — not delivered to client]"
-        : fa === "redact"
+        : fa === "error"
+          ? "[Upstream error — no response delivered]"
+          : fa === "redact"
           ? ctx.sanitizedOutput || "(sensitive spans redacted)"
           : ctx.rawOutput || "(delivered)",
     badge: ACTION_BADGE[fa] || fa,
@@ -206,6 +263,10 @@ export function resolveTotalLatencyMs(sources = {}) {
   const meta = sources.meta || {};
   const extra = meta.extra || {};
   const trace = resolvePipelineTrace({ ...sources, meta, extra });
+  if (isGatewayV2Trace(sources) || isGatewayV2Trace(meta) || isGatewayV2Trace(sources.logData)) {
+    // gateway v2 reports no latency unless the trace carries one: no default, no client guess.
+    return finiteMs(trace?.total_latency_ms);
+  }
 
   const fromTrace = finiteMs(trace?.total_latency_ms);
   if (fromTrace != null && fromTrace > 0) return fromTrace;
@@ -283,10 +344,9 @@ export function resolveLatencyBreakdown(sources = {}) {
   let overhead = finiteMs(trace.overhead_ms);
   const total = resolveTotalLatencyMs(sources);
 
-  if (stageSum == null && Array.isArray(trace.stages) && trace.stages.length) {
-    stageSum = Math.round(
-      trace.stages.reduce((acc, s) => acc + (finiteMs(s?.latency_ms) ?? 0), 0) * 10,
-    ) / 10;
+  const measured = measuredStageLatencies(trace?.stages);
+  if (stageSum == null && measured.length) {
+    stageSum = Math.round(measured.reduce((acc, row) => acc + row.latency_ms, 0) * 10) / 10;
   }
   if (overhead == null && total != null && stageSum != null) {
     overhead = Math.round(Math.max(0, total - stageSum) * 10) / 10;
@@ -296,7 +356,7 @@ export function resolveLatencyBreakdown(sources = {}) {
     ? trace.latency_breakdown
     : null;
 
-  if (stageSum == null && overhead == null && !backend && !(trace.stages?.length)) {
+  if (stageSum == null && overhead == null && !backend && measured.length === 0) {
     return null;
   }
 
@@ -314,17 +374,21 @@ export function resolveLatencyBreakdown(sources = {}) {
   };
 }
 
-function computeByStage(trace, totalMs) {
-  const stages = Array.isArray(trace?.stages) ? trace.stages : [];
-  const total = finiteMs(totalMs) ?? 0;
+function measuredStageLatencies(stages) {
+  if (!Array.isArray(stages)) return [];
   return stages
-    .filter((s) => s && (s.name || s.stage))
-    .map((s) => {
-      const stage = s.name || s.stage;
-      const latency_ms = finiteMs(s.latency_ms) ?? 0;
-      const share_pct = total > 0 ? Math.round((latency_ms / total) * 1000) / 10 : 0;
-      return { stage, latency_ms, share_pct };
-    })
+    .filter((s) => s && (s.name || s.stage) && finiteMs(s.latency_ms) != null)
+    .map((s) => ({ stage: s.name || s.stage, latency_ms: finiteMs(s.latency_ms) }));
+}
+
+function computeByStage(trace, totalMs) {
+  const total = finiteMs(totalMs) ?? 0;
+  return measuredStageLatencies(trace?.stages)
+    .map((row) => ({
+      stage: row.stage,
+      latency_ms: row.latency_ms,
+      share_pct: total > 0 ? Math.round((row.latency_ms / total) * 1000) / 10 : 0,
+    }))
     .sort((a, b) => b.latency_ms - a.latency_ms);
 }
 
