@@ -1,5 +1,7 @@
 """ViewSet for GatewayAPIKey CRUD operations."""
 
+import ipaddress
+import json
 import logging
 
 from drf_spectacular.types import OpenApiTypes
@@ -15,7 +17,7 @@ from core.gateway_serializers import (
     GatewayAPIKeySerializer,
     GatewayAPIKeyUpdateSerializer,
 )
-from core.models import GatewayAPIKey
+from core.models import AuditLog, GatewayAPIKey
 from core.pagination import PublicUrlPagination
 
 logger = logging.getLogger(__name__)
@@ -29,6 +31,39 @@ class GatewayAPIKeyPagination(PublicUrlPagination):
     page_size = 100
     page_size_query_param = "page_size"
     max_page_size = 500
+
+
+def _client_ip(request) -> str | None:
+    """First valid address of X-Forwarded-For, else REMOTE_ADDR (AuditLog.ip_address is inet)."""
+    forwarded = (request.META.get("HTTP_X_FORWARDED_FOR") or "").split(",")[0].strip()
+    for raw in (forwarded, request.META.get("REMOTE_ADDR") or ""):
+        try:
+            return str(ipaddress.ip_address(raw))
+        except ValueError:
+            continue
+    return None
+
+
+def _audit_key_deleted(request, *, key_id, prefix, project_id, owner_id, organization_id, action):
+    """Record a hard delete of a gateway API key in AuditLog (#113 review note N3).
+
+    DELETE and purge-revoked were only in the application log. Best effort: an audit
+    write failure is logged and never turns a completed delete into an error.
+    """
+    user = getattr(request, "user", None)
+    try:
+        AuditLog.objects.create(
+            user=user if getattr(user, "is_authenticated", False) else None,
+            organization_id=organization_id,
+            action=action,
+            resource=f"gateway_api_key:{key_id}",
+            details=json.dumps(
+                {"prefix": prefix, "project_id": project_id, "owner_id": owner_id}, sort_keys=True
+            ),
+            ip_address=_client_ip(request),
+        )
+    except Exception:
+        logger.exception("Failed to write gateway key audit log: action=%s key=%s", action, key_id)
 
 
 def _profile_is_org_admin(profile) -> bool:
@@ -381,7 +416,15 @@ class GatewayAPIKeyViewSet(ModelViewSet):
             self.request.user.pk,
             instance.project_id,
         )
+        audit = {
+            "key_id": instance.id,
+            "prefix": instance.prefix,
+            "project_id": instance.project_id,
+            "owner_id": instance.owner_id,
+            "organization_id": instance.organization_id,
+        }
         instance.delete()
+        _audit_key_deleted(self.request, action="gateway_key_deleted", **audit)
 
     def _revoked_keys_for_bulk_purge(self):
         """Revoked keys the caller may permanently delete (owner or org-admin).
@@ -431,7 +474,9 @@ class GatewayAPIKeyViewSet(ModelViewSet):
         # Materialize before delete so we can return ids. Include key_hash:
         # post_delete Redis sync reads instance.key_hash; a deferred field after
         # DELETE would refresh_from_db → DoesNotExist → HTTP 500.
-        targets = list(qs.only("id", "prefix", "project_id", "owner_id", "key_hash"))
+        targets = list(
+            qs.only("id", "prefix", "project_id", "owner_id", "key_hash", "organization_id")
+        )
         deleted_ids = []
         for instance in targets:
             deleted_ids.append(str(instance.id))
@@ -441,7 +486,15 @@ class GatewayAPIKeyViewSet(ModelViewSet):
                 request.user.pk,
                 instance.project_id,
             )
+            audit = {
+                "key_id": instance.id,
+                "prefix": instance.prefix,
+                "project_id": instance.project_id,
+                "owner_id": instance.owner_id,
+                "organization_id": instance.organization_id,
+            }
             instance.delete()
+            _audit_key_deleted(request, action="gateway_key_purged", **audit)
         return Response(
             {"deleted": len(deleted_ids), "ids": deleted_ids},
             status=status.HTTP_200_OK,
