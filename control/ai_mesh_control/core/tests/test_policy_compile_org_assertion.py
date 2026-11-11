@@ -76,10 +76,62 @@ class PolicyCompileOrgAssertionTests(TestCase):
         compiler.compile_all.assert_not_called()
         compiler.push_to_redis.assert_not_called()
 
-    def test_superuser_may_compile_explicit_other_org(self):
+    # Cross-org compile is reserved for PLATFORM OPERATORS (is_staff AND
+    # profile.is_platform_operator, auth/models.py is_platform_operator). Product rule
+    # R11, 9f8c9489: "org admins and superusers are ORG-scoped only, NO global
+    # cross-org"; see the UserProfile.is_platform_operator field comment,
+    # auth/utils.py get_request_organization and policy/compile_views.py. The old
+    # test_superuser_may_compile_explicit_other_org asserted the pre-R11 rule, so
+    # it is replaced by the three tests below (#106).
+
+    def test_platform_operator_may_compile_explicit_other_org(self):
+        from auth.models import UserProfile
+        from core.models import AuditLog
+
+        operator = User.objects.create_user(
+            username="compile_operator", password="pw", is_staff=True
+        )
+        profile, _ = UserProfile.objects.get_or_create(user=operator)
+        profile.organization = self.org_a
+        profile.is_platform_operator = True
+        profile.save(update_fields=["organization", "is_platform_operator"])
+
+        compiler = self._mock_compiler()
+        client = APIClient()
+        client.force_authenticate(user=operator)
+        resp = client.post(f"/api/policies/compile/?organization_id={self.org_b.id}")
+        self.assertEqual(resp.status_code, 200, resp.content)
+        compiler.compile_all.assert_called_once_with(organization=self.org_b)
+        self.assertEqual(compiler.push_to_redis.call_args.kwargs["organization"], self.org_b)
+        # The cross-org access is audited against the target org.
+        self.assertTrue(
+            AuditLog.objects.filter(
+                user=operator, organization=self.org_b, action="cross_org_access"
+            ).exists()
+        )
+
+    def test_plain_superuser_explicit_other_org_compiles_own_org_only(self):
+        from auth.models import UserProfile
+
+        profile, _ = UserProfile.objects.get_or_create(user=self.superuser)
+        profile.organization = self.org_a
+        profile.save(update_fields=["organization"])
+
         compiler = self._mock_compiler()
         client = APIClient()
         client.force_authenticate(user=self.superuser)
         resp = client.post(f"/api/policies/compile/?organization_id={self.org_b.id}")
+        # ?organization_id is not honoured for a plain superuser: the bundle
+        # compiled and pushed is the superuser's own org, never org B.
         self.assertEqual(resp.status_code, 200, resp.content)
-        compiler.compile_all.assert_called_once_with(organization=self.org_b)
+        compiler.compile_all.assert_called_once_with(organization=self.org_a)
+        self.assertEqual(compiler.push_to_redis.call_args.kwargs["organization"], self.org_a)
+
+    def test_plain_superuser_without_org_cannot_compile_other_org(self):
+        compiler = self._mock_compiler()
+        client = APIClient()
+        client.force_authenticate(user=self.superuser)
+        resp = client.post(f"/api/policies/compile/?organization_id={self.org_b.id}")
+        self.assertEqual(resp.status_code, 403, resp.content)
+        compiler.compile_all.assert_not_called()
+        compiler.push_to_redis.assert_not_called()
