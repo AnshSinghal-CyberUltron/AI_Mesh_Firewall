@@ -44,8 +44,22 @@ class ToolBoundsMixin:
     def stream_buffer_bytes(self, active_streams: int) -> int:  # pragma: no cover
         raise NotImplementedError
 
-    def tool_bounds(self) -> ToolBounds:
+    def scan_window_s(self) -> float:
+        """The wall time one request's detector invocations may take: the scan share of p99.
+
+        `max_scanned_slots` is how many slots fit in this window, and boot calibration times
+        passes of exactly this length (edge/scan_calibration.py).
+        """
+        from gateway_v2.runtime.resources import _MS_PER_S, _SCAN_BUDGET_FRACTION
+
+        return self.target_p99_ms / _MS_PER_S * _SCAN_BUDGET_FRACTION
+
+    def tool_bounds(self, slot_cost_us: float | None = None) -> ToolBounds:
         """Derive the tool bounds; fail closed (`CapacityUnavailable`) on any value below one.
+
+        `slot_cost_us` is this host's measured per-slot scan cost (boot calibration,
+        `edge/scan_calibration.py`); without it the DECLARED `_SCAN_SLOT_COST_US` is used, so a
+        faster host admits more scanned slots and a slower one fewer, inside the same budget.
 
         `max_withheld_bytes` is the per-stream buffer ceiling at the connection budget (the
         largest stream count the worker admits), so the assembler's total withheld bytes can never
@@ -66,9 +80,11 @@ class ToolBoundsMixin:
 
         request_bytes = self.max_request_bytes()
         nodes = request_bytes // _SCHEMA_NODE_BYTES
-        slots = math.floor(
-            self.target_p99_ms * _MS_PER_S * _SCAN_BUDGET_FRACTION / _SCAN_SLOT_COST_US
-        )
+        cost_us = _SCAN_SLOT_COST_US if slot_cost_us is None else slot_cost_us
+        if cost_us <= 0:
+            raise CapacityUnavailable("scan slot cost must be positive")
+        # Same window as scan_window_s(), kept in microseconds to avoid float round-trips.
+        slots = math.floor(self.target_p99_ms * _MS_PER_S * _SCAN_BUDGET_FRACTION / cost_us)
         bounds = ToolBounds(
             max_tools=_MAX_TOOLS,
             schema_depth=_SCHEMA_DEPTH,
