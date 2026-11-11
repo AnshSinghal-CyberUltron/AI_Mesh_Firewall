@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Checkpoint: console overview</title>
+<link rel="stylesheet" href="style.css">
+<script>(function(){var t=new URLSearchParams(location.search).get("theme");if(t)document.documentElement.dataset.theme=t;})();</script>
+<script src="../shared/sample-data.js"></script>
+<script src="../shared/charts.js"></script>
+</head>
+<body>
+<div class="shell">
+  <aside class="side" aria-label="Console navigation">
+    <a class="logo" href="#">
+      <svg width="30" height="30" viewBox="0 0 34 34" aria-hidden="true"><rect x="1" y="1" width="32" height="32" rx="7" fill="var(--nav-ink)"/><rect x="8" y="9" width="3.5" height="17" rx="1" fill="var(--nav)"/><rect x="11" y="13" width="15" height="4" rx="1" fill="var(--nav)"/><circle cx="23" cy="23" r="3" fill="var(--allow)"/></svg>
+      <div><b>ZeroShield</b><br><span>AI Mesh Firewall</span></div>
+    </a>
+    <a class="on" href="#">Overview</a>
+    <a href="#">Audit log</a>
+    <h4>Checkpoints</h4>
+    <a href="#"><span class="id">1.1</span>Gateway and keys</a>
+    <a href="#"><span class="id">1.2</span>Policies</a>
+    <a href="#"><span class="id">1.3</span>RAG and vectors</a>
+    <a href="#"><span class="id">1.4</span>MCP tools</a>
+    <a href="#"><span class="id">1.5</span>Model routing</a>
+    <a href="#"><span class="id">1.6</span>Kill switch</a>
+    <a href="#"><span class="id">1.7</span>Output guardrails</a>
+    <h4>Tools</h4>
+    <a href="#">Attack simulator</a>
+    <a href="#">Connections</a>
+    <div class="foot"><b>Default organization</b>Gateway reachable, control plane healthy</div>
+  </aside>
+
+  <div class="main">
+    <header class="bar">
+      <button class="icon-btn mob-only" aria-label="Open navigation"><svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M2 4h14M2 9h14M2 14h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+      <span class="crumb">Overview</span>
+      <div class="search" role="search"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" stroke-width="1.75"/><path d="M11 11l3.5 3.5" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/></svg>Find a policy, key, model or request ID<kbd>Ctrl K</kbd></div>
+      <div class="right">
+        <span class="plate allow sm desk-only">Gateway up</span>
+        <button class="icon-btn" aria-label="Notifications, 3 unread"><svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M4 13V8a5 5 0 0110 0v5l1.5 1.5h-13zM7 16h4" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round"/></svg></button>
+        <span class="avatar" aria-label="Asha Rao">AR</span>
+      </div>
+    </header>
+
+    <main class="content">
+      <div class="board-head">
+        <h1>Today on the mesh</h1>
+        <div class="seg" role="group" aria-label="Time range"><button>1h</button><button>6h</button><button class="on" aria-pressed="true">24h</button><button>7d</button><button>30d</button></div>
+        <span class="sample-flag" style="margin-left:auto">Sample data</span>
+      </div>
+
+      <section class="routeboard" aria-labelledby="rb">
+        <div class="top"><h2 id="rb">Checkpoints, last 24 hours</h2><span class="aside">Select a checkpoint to open its controls</span></div>
+        <div class="exits" id="exits"></div>
+      </section>
+
+      <div class="cols">
+        <section class="panel" aria-labelledby="vd">
+          <header><h2 id="vd">Requests and interventions</h2><span class="aside">Per hour, local time</span></header>
+          <div class="body">
+            <div class="kpis" id="kpis"></div>
+            <div class="legend"><span><i style="background:var(--control)"></i>Requests</span></div>
+            <div class="chart" id="c-req" style="height:110px"></div>
+            <div class="legend"><span><i style="background:var(--redact-text)"></i>Redacted</span><span><i style="background:var(--monitor-text)"></i>Watched</span><span><i style="background:var(--block-text)"></i>Blocked</span></div>
+            <div class="chart" id="c-int" style="height:120px"></div>
+          </div>
+        </section>
+        <section class="panel" aria-labelledby="na">
+          <header><h2 id="na">Needs attention</h2><span class="aside">4 open</span></header>
+          <div class="body"><ul class="attn" id="attn"></ul></div>
+        </section>
+      </div>
+
+      <div class="cols">
+        <section class="panel" aria-labelledby="tr">
+          <header><h2 id="tr">Rules that fired most</h2><a class="aside" href="#">All policies</a></header>
+          <div class="body"><table class="data"><thead><tr><th>Rule</th><th class="desk-only">Policy</th><th>Action</th><th class="n">Hits</th></tr></thead><tbody id="rules"></tbody></table></div>
+        </section>
+        <section class="panel" aria-labelledby="ow">
+          <header><h2 id="ow">OWASP LLM Top 10</h2><span class="aside">Hits by category</span></header>
+          <div class="body bars" id="owasp"></div>
+        </section>
+      </div>
+    </main>
+  </div>
+</div>
+<script>
+  const S = window.SAMPLE;
+  const verdictLabel = { allow: "Allowed", redact: "Redacted", monitor: "Watched", block: "Blocked" };
+  document.getElementById("exits").innerHTML = S.checkpoints.map((c) => `
+    <a href="#" class="exit ${c.id === "1.6" ? "alert" : ""}" style="text-decoration:none">
+      <div class="row1"><span>${c.short}</span><span class="id">${c.id}</span></div>
+      <div class="num">${c.metric}</div><div class="unit">${c.unit}</div>
+      <div class="unit" style="font-weight:500;opacity:.9">${c.sub}</div>
+    </a>`).join("");
+  const T = S.totals;
+  document.getElementById("kpis").innerHTML = [
+    [fmt(T.requests), "Requests"], [`${fmt(T.blocked)} <span class="t-14 muted">${S.blockRate}%</span>`, "Blocked"],
+    [`${fmt(T.redacted)} <span class="t-14 muted">${S.redactRate}%</span>`, "Redacted"], [fmt(T.critical), "Critical events"],
+  ].map(([v, l]) => `<div class="kpi"><div class="v">${v}</div><div class="l">${l}</div></div>`).join("");
+  document.getElementById("attn").innerHTML = S.attention.map((a) => `
+    <li><span class="plate sm ${a.tone}">${a.label}</span>
+      <div><div class="t">${a.title}</div><div class="m">${a.meta.join("<br>")}</div></div>
+      <span class="w">${a.when}</span></li>`).join("");
+  document.getElementById("rules").innerHTML = S.topRules.map((r) => `
+    <tr><td><b>${r.rule}</b></td><td class="desk-only mono">${r.policy}</td><td><span class="plate sm ${r.action}">${verdictLabel[r.action]}</span></td><td class="n"><b>${fmt(r.hits)}</b></td></tr>`).join("");
+  const maxO = Math.max(...S.owasp.map((o) => o.hits));
+  document.getElementById("owasp").innerHTML = S.owasp.map((o) => `
+    <div class="row"><span class="mono" style="font-weight:600">${o.id}</span><div class="track"><div class="fill" style="width:${(o.hits / maxO) * 100}%"></div></div><b style="text-align:right">${fmt(o.hits)}</b><span class="lab">${o.name}</span></div>`).join("");
+  const rows = S.hourly.map((r) => ({ ...r, total: r.allow + r.redact + r.monitor + r.block }));
+  MockCharts.stackedBars(document.getElementById("c-req"), rows, { keys: ["total"], colors: { total: "control" }, height: 110, radius: 2 });
+  MockCharts.stackedBars(document.getElementById("c-int"), rows, { keys: ["redact", "monitor", "block"], colors: { redact: "redact-text", monitor: "monitor-text", block: "block-text" }, height: 120, radius: 1, axis: true, minSeg: 2 });
+</script>
+</body>
+</html>

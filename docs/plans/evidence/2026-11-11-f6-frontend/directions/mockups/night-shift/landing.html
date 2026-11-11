@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Night Shift: landing</title>
+<link rel="stylesheet" href="style.css">
+<script>(function(){var t=new URLSearchParams(location.search).get("theme");if(t)document.documentElement.dataset.theme=t;})();</script>
+</head>
+<body>
+<div class="lp">
+  <header class="lp-top">
+    <a class="mark" href="#" aria-label="ZeroShield AI Mesh Firewall home">
+      <svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="var(--accent)"/><path d="M8 11h16M8 16h9M8 21h16" stroke="var(--on-accent)" stroke-width="2.6" stroke-linecap="round"/><circle cx="22" cy="16" r="2.4" fill="var(--on-accent)"/></svg>
+      <div><b>ZeroShield</b> <span>AI Mesh Firewall</span></div>
+    </a>
+    <nav aria-label="Primary"><a href="#">Product</a><a href="#">Docs</a><a href="#">Security</a><a href="#">Pricing</a></nav>
+    <div class="right"><a class="btn" href="#">Sign in</a><a class="btn primary" href="#">Book a demo</a></div>
+  </header>
+
+  <main>
+  <section class="lp-hero">
+    <div>
+      <h1>Know what every model call saw. Stop the ones that should not run.</h1>
+      <p class="lede">ZeroShield is an AI firewall your on-call can read at 3 a.m. Every prompt, tool call and response gets a verdict, a reason and a trace you can search by request ID.</p>
+      <div class="cta"><a class="btn primary lg" href="#">Book a demo</a><a class="btn lg" href="#">Read the docs</a></div>
+      <p class="fine">OpenAI-compatible gateway. Runs as containers in your environment.</p>
+    </div>
+
+    <figure class="trace" style="margin:0" aria-label="Example request trace">
+      <div class="hd"><span class="v redact">Redacted</span><span class="req">req 7c1e-42ab</span><span class="meta">support-bot, key zs-prod-7f3…</span><span class="meta" style="margin-left:auto">Example trace</span></div>
+      <div class="prompt"><span class="lbl">Prompt as the model received it</span>Draft a reply to Priya Sharma (<span class="ph">EMAIL_1</span>, <span class="ph">PHONE_1</span>) about invoice 4471.</div>
+      <ol class="steps">
+        <li><span class="dot"></span><span class="st">Ingress</span><span class="why">Key valid for <b>Default organization</b>, within rate limit</span><span class="v allow">Pass</span></li>
+        <li class="hit"><span class="dot"></span><span class="st">Policy</span><span class="why"><b>PII_REDACT_OUT</b> rules 1 and 2 matched an email and a phone number</span><span class="v redact">Redact</span></li>
+        <li><span class="dot"></span><span class="st">Routing</span><span class="why">gpt-4o-mini is isolated, sent to <b>llama-3.1-70b</b> instead</span><span class="v monitor">Rerouted</span></li>
+        <li><span class="dot"></span><span class="st">Model</span><span class="why">Completed normally</span><span class="v allow">Pass</span></li>
+        <li><span class="dot"></span><span class="st">Output</span><span class="why">No secrets or personal data in the response</span><span class="v allow">Pass</span></li>
+      </ol>
+      <div class="ft"><span>Logged to the audit trail with the policy version that decided it.</span></div>
+    </figure>
+  </section>
+
+  <section class="lp-sec">
+    <h2>Built for the person holding the pager</h2>
+    <p class="intro">Security engineers and platform teams run ZeroShield as a live control plane. The console is dense on purpose, and every number in it comes from the gateway.</p>
+    <div class="feat">
+      <article>
+        <div class="demo">
+          <div class="cmd"><span style="color:var(--ink)">7c1e</span><kbd style="margin-left:auto">Enter</kbd></div>
+          <div class="cmd-res">
+            <div class="sel"><span class="v redact">Redacted</span><span class="mono">req 7c1e-42ab</span></div>
+            <div><span class="v neutral">Key</span><span class="mono">zs-prod-7c1e…</span></div>
+          </div>
+        </div>
+        <h3>Find any request in one search</h3>
+        <p>Paste a request ID, key prefix or policy code and jump straight to the trace.</p>
+      </article>
+      <article>
+        <div class="demo" style="display:grid;gap:10px">
+          <div style="display:flex;align-items:center;gap:10px"><span class="v monitor">Isolated</span><span class="mono" style="font-weight:600">gpt-4o-mini</span></div>
+          <div class="muted" style="font-size:14px">Traffic moved to llama-3.1-70b. 212 requests rerouted since 09:14.</div>
+          <div><span class="btn" style="height:32px">Restore model</span></div>
+        </div>
+        <h3>A kill switch that shows its work</h3>
+        <p>Isolate a model in one action, then watch traffic move before you close the incident.</p>
+      </article>
+      <article>
+        <div class="demo">
+          <div class="diff" style="margin:0">
+            <div class="h">PII_REDACT_OUT, rule 3</div>
+            <div class="del">- pattern \b\d{12}\b</div>
+            <div class="add">+ pattern \b\d{4}\s?\d{4}\s?\d{4}\b</div>
+          </div>
+        </div>
+        <h3>Policy changes you can review</h3>
+        <p>Every edit shows as a diff against the live version before it compiles and publishes.</p>
+      </article>
+    </div>
+  </section>
+
+  <section class="lp-sec">
+    <h2>Change the base URL. Keep everything else.</h2>
+    <div class="sdk">
+<pre class="code" tabindex="0" aria-label="Python example"><span class="k">from</span> openai <span class="k">import</span> OpenAI
+
+client = OpenAI(
+<span class="hl">    base_url=<span class="s">"https://gateway.your-company.internal/v1"</span>,</span>    api_key=os.environ[<span class="s">"ZEROSHIELD_KEY"</span>],
+)
+<span class="c"># Blocked prompts return a content-filter error.</span></pre>
+      <ul>
+        <li><b>Works with the SDKs you already use</b><span>Chat, embeddings and RAG traffic go through the same gateway.</span></li>
+        <li><b>Keys per team and per agent</b><span>Revoke one without touching the others.</span></li>
+        <li><b>Your logs stay yours</b><span>Decisions are stored in the control plane you run.</span></li>
+      </ul>
+    </div>
+  </section>
+</main>
+</div>
+</body>
+</html>

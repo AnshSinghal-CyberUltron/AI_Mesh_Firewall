@@ -1,0 +1,68 @@
+/* Generated from tokens.mjs by build-tokens.mjs. Do not edit by hand. */
+@import url("https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,400;0,500;0,600;1,400&family=Public+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap");
+
+:root {
+  --page: #E8ECF1;
+  --surface: #FFFFFF;
+  --surface2: #F4F6F9;
+  --raised: #FFFFFF;
+  --line: #D6DCE4;
+  --control: #7C8799;
+  --ink: #161D2B;
+  --ink2: #4A5467;
+  --accent: #2443C4;
+  --on-accent: #FFFFFF;
+  --accent-text: #2443C4;
+  --focus: #2443C4;
+  --allow: #16704F;
+  --allow-ink: #FFFFFF;
+  --allow-text: #16704F;
+  --redact: #161D2B;
+  --redact-ink: #FFFFFF;
+  --redact-text: #161D2B;
+  --monitor: #FFE27A;
+  --monitor-ink: #161D2B;
+  --monitor-text: #6E5600;
+  --block: #B3261E;
+  --block-ink: #FFFFFF;
+  --block-text: #B3261E;
+  --nav: #FFFFFF;
+  --nav-ink: #161D2B;
+  --nav-ink2: #4A5467;
+  --font-ui: 'Public Sans', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  --font-display: 'Spectral', Georgia, serif;
+}
+
+:root[data-theme="dark"] {
+  --page: #11161F;
+  --surface: #19202D;
+  --surface2: #20293A;
+  --raised: #263043;
+  --line: #323D52;
+  --control: #76839B;
+  --ink: #E8ECF3;
+  --ink2: #AAB4C5;
+  --accent: #93A9FF;
+  --on-accent: #0F1530;
+  --accent-text: #A3B6FF;
+  --focus: #A3B6FF;
+  --allow: #5DD3A0;
+  --allow-ink: #0B1E16;
+  --allow-text: #6BDAA9;
+  --redact: #E8ECF3;
+  --redact-ink: #11161F;
+  --redact-text: #E8ECF3;
+  --monitor: #4F4416;
+  --monitor-ink: #FFF1B8;
+  --monitor-text: #F2D36B;
+  --block: #FF8A80;
+  --block-ink: #2A0B08;
+  --block-text: #FF9C93;
+  --nav: #19202D;
+  --nav-ink: #E8ECF3;
+  --nav-ink2: #AAB4C5;
+  --font-ui: 'Public Sans', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  --font-display: 'Spectral', Georgia, serif;
+}

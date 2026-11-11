@@ -1,0 +1,66 @@
+/* Generated from tokens.mjs by build-tokens.mjs. Do not edit by hand. */
+@import url("https://fonts.googleapis.com/css2?family=Overpass:ital,wght@0,400;0,600;0,700;0,800;0,900;1,700&family=Overpass+Mono:wght@400;600&display=swap");
+
+:root {
+  --page: #ECEEEA;
+  --surface: #FFFFFF;
+  --surface2: #F4F5F2;
+  --raised: #FFFFFF;
+  --line: #D5D9D3;
+  --control: #7D8782;
+  --ink: #1B2124;
+  --ink2: #4A5458;
+  --accent: #0B6A4C;
+  --on-accent: #FFFFFF;
+  --accent-text: #0B6A4C;
+  --focus: #1A56A0;
+  --allow: #0B6A4C;
+  --allow-ink: #FFFFFF;
+  --allow-text: #0B6A4C;
+  --redact: #1A56A0;
+  --redact-ink: #FFFFFF;
+  --redact-text: #1A56A0;
+  --monitor: #F2B01E;
+  --monitor-ink: #1B2124;
+  --monitor-text: #7A5300;
+  --block: #BF2A1D;
+  --block-ink: #FFFFFF;
+  --block-text: #BF2A1D;
+  --nav: #1B2124;
+  --nav-ink: #EEF1ED;
+  --nav-ink2: #AEB7B2;
+  --font-ui: 'Overpass', system-ui, sans-serif;
+  --font-mono: 'Overpass Mono', ui-monospace, monospace;
+}
+
+:root[data-theme="dark"] {
+  --page: #141A1C;
+  --surface: #1C2427;
+  --surface2: #232C30;
+  --raised: #28333A;
+  --line: #33403E;
+  --control: #7E8C88;
+  --ink: #EDF0EC;
+  --ink2: #AEB8B4;
+  --accent: #3DBE89;
+  --on-accent: #0D1714;
+  --accent-text: #5ED3A2;
+  --focus: #7AB2F5;
+  --allow: #3DBE89;
+  --allow-ink: #0D1714;
+  --allow-text: #5ED3A2;
+  --redact: #6EA8F0;
+  --redact-ink: #0D1714;
+  --redact-text: #8DBBF4;
+  --monitor: #F2B01E;
+  --monitor-ink: #1B2124;
+  --monitor-text: #F5C24E;
+  --block: #FF6F61;
+  --block-ink: #1B0E0C;
+  --block-text: #FF8B7F;
+  --nav: #0F1416;
+  --nav-ink: #EDF0EC;
+  --nav-ink2: #A3ADA9;
+  --font-ui: 'Overpass', system-ui, sans-serif;
+  --font-mono: 'Overpass Mono', ui-monospace, monospace;
+}
