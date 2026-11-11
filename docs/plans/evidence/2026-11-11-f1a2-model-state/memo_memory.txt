@@ -1,0 +1,2 @@
+compact row memo dict[int,(32B digest,120B triple)]: 35.8 MB per 100k rows -> 358 B/row -> 179 MB at 500k rows
+per-org memo dict[int,(slug,rev,32B hash)]: 26.4 MB per 100k orgs -> 264 B/org
