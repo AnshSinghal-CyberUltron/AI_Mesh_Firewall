@@ -134,15 +134,20 @@ def test_p3_minimal_disruption() -> None:
 def test_rank_micro_benchmark_within_budget() -> None:
     cs = cset(*(cand(f"c{i}", weight=16) for i in range(8)))
     c = ctx(key="k" * 2048)
-    samples = []
-    # Thread CPU time, not wall time: on a loaded host (CI or a shared dev box) preemption
-    # between the two reads inflated wall-clock p99 past the bound with no change in _rank's
-    # cost (#112 review). The budget is a CPU-cost bound, so CPU time is what it should measure.
+    cpu: list[float] = []
+    wall: list[float] = []
+    # p99 of thread CPU time, not wall time: on a loaded host (CI or a shared dev box) preemption
+    # between two wall-clock reads set the p99 with no change in _rank's cost (#112 review). The
+    # median of wall time is kept as well: preemption hits a minority of calls, so the median
+    # stays put under load, and it still catches a blocking wait (a sleep or I/O) that CPU time
+    # cannot see.
     for _ in range(1000):
-        t = time.thread_time()
+        w, t = time.perf_counter(), time.thread_time()
         _rank(c, cs)
-        samples.append(time.thread_time() - t)
-    samples.sort()
-    p99 = samples[989]
+        cpu.append(time.thread_time() - t)
+        wall.append(time.perf_counter() - w)
+    cpu.sort()
+    wall.sort()
     budget = 20.0 / 1000.0  # default target_p99_ms in seconds; margin is ~100x
-    assert p99 < budget / 10, p99  # 2 ms vs ~0.1 ms typical
+    assert cpu[989] < budget / 10, cpu[989]  # p99 CPU: 2 ms vs ~0.1 ms typical
+    assert wall[500] < budget / 10, wall[500]  # median wall: 2 ms vs ~0.1 ms typical
