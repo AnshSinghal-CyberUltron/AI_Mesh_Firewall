@@ -36,6 +36,12 @@ from gateway_v2.runtime.resources import load_contract
 _TICK = 2.0**-10  # exactly representable, so elapsed-time arithmetic has no rounding
 
 
+@pytest.fixture(autouse=True)
+def _fresh_warn_once() -> None:
+    """The CLAMPED warning is logged once per process; clear that memo so tests are order-free."""
+    scan_calibration._warn_clamped.cache_clear()
+
+
 def _contract() -> resources.ResourceContract:
     return load_contract()[0]
 
@@ -144,6 +150,13 @@ def test_a_measured_cost_that_is_not_finite_and_positive_refuses(
             measure_scan_slot_cost_us.__wrapped__(0.05, 0.01, 1)
 
 
+def test_a_bad_re_measurement_also_refuses(monkeypatch: pytest.MonkeyPatch) -> None:
+    costs = iter([5_000.0, float("nan")])
+    monkeypatch.setattr(scan_calibration, "_measure_once", lambda _b, _p: next(costs))
+    with pytest.raises(CapacityUnavailable):
+        measure_scan_slot_cost_us.__wrapped__(0.05, 0.01, 1_000)
+
+
 def test_the_cheapest_re_measurement_is_kept(monkeypatch: pytest.MonkeyPatch) -> None:
     costs = iter([5_000.0, 900.0, 2_000.0])
     monkeypatch.setattr(scan_calibration, "_measure_once", lambda _b, _p: next(costs))
@@ -234,3 +247,18 @@ def test_an_operator_pin_is_never_overwritten() -> None:
 def test_a_contract_without_tool_bounds_has_no_sizing() -> None:
     assert scan_sizing(types.SimpleNamespace()) is None
     assert resolve_tool_bounds(types.SimpleNamespace()) is None
+
+
+def test_the_dev_profile_boot_log_carries_the_sizing_line(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from gateway_v2.edge import serve
+
+    def fake_dev(**_kwargs: object) -> tuple[dict[str, object], tuple[str, ...]]:
+        return {}, ("boot: dev -> stub",)
+
+    monkeypatch.setattr(serve, "build_dev_dependencies", fake_dev)
+    env = {"AMF_DEV_PROFILE": "1", SCAN_COST_ENV: "300"}
+    _deps, logs = serve.build_boot_dependencies(contract=_contract(), env=env)
+    assert logs[0] == "boot: dev -> stub"
+    assert sum(line.startswith("boot: tool_bounds -> max_scanned_slots=") for line in logs) == 1
