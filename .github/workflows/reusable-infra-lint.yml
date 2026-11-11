@@ -112,7 +112,7 @@ jobs:
           fi
           # PyYAML in a throwaway venv, hash-checked; --require-yaml makes the cross-check mandatory.
           python3 -m venv "$RUNNER_TEMP/workflow-guard"
-          "$RUNNER_TEMP/workflow-guard/bin/pip" install --quiet --disable-pip-version-check --require-hashes -r "$requirements"
+          "$RUNNER_TEMP/workflow-guard/bin/pip" install --quiet --disable-pip-version-check --only-binary :all: --require-hashes -r "$requirements"
           "$RUNNER_TEMP/workflow-guard/bin/python" -I "$SCRIPT" --require-yaml .github/workflows
       - name: hadolint (error threshold)
         if: always()
