@@ -2,12 +2,14 @@
 from __future__ import annotations
 
 import io
+import os
 import sys
 import tempfile
 import textwrap
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
@@ -181,11 +183,16 @@ class WorkflowGuardTests(unittest.TestCase):
         good.write_text(GOOD, encoding="utf-8")
         bad = self.dir / "bad.yml"
         bad.write_text(GOOD.replace(f"@{SHA} # v7.0.1", "@v4"), encoding="utf-8")
-        with redirect_stdout(io.StringIO()) as out:
+        # The output format depends on GITHUB_ACTIONS, which is "true" on a runner: pin it.
+        with mock.patch.dict(os.environ, {"GITHUB_ACTIONS": ""}), redirect_stdout(io.StringIO()) as out:
             self.assertEqual(workflow_guard.main([str(good)]), 0)
             self.assertEqual(workflow_guard.main([str(self.dir)]), 1)
             self.assertEqual(workflow_guard.main([str(self.dir / "missing")]), 2)
         self.assertIn("bad.yml:17: error [unpinned-uses]", out.getvalue())
+        with mock.patch.dict(os.environ, {"GITHUB_ACTIONS": "true"}), redirect_stdout(io.StringIO()) as out:
+            self.assertEqual(workflow_guard.main([str(self.dir)]), 1)
+        self.assertIn(f"::error file={bad},line=17,title=workflow guard (unpinned-uses)::", out.getvalue())
+        self.assertNotIn("bad.yml:17: error", out.getvalue())
 
     def test_repository_workflows_pass(self) -> None:
         """The guard itself: every workflow in this repository is pinned and least-privilege."""
