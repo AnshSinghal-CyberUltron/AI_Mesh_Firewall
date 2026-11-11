@@ -1,0 +1,32 @@
+# The new 'workflow guard' step's run: script, extracted from reusable-infra-lint.yml with PyYAML and run with bash -e
+--- SCRIPT='' (this branch)
+::notice title=workflow guard::skipped: workflow-guard-script is empty
+exit=0
+--- SCRIPT='scripts/ci/nope.py' (this branch)
+::error title=workflow guard::scripts/ci/nope.py not found; copy scripts/ci/workflow_guard.py into this repo or set workflow-guard-script: ''
+exit=1
+--- SCRIPT='scripts/ci/workflow_guard.py' (this branch)
+::notice file=.github/workflows/reusable-django-ci.yml,line=64,title=workflow guard (unpinned-image)::image `${{ inputs.postgres-image }}` is an expression; pin its source by digest
+workflow_guard: OK: 13 files, 55 `uses:` references, 0 findings
+exit=0
+--- SCRIPT='scripts/ci/workflow_guard.py' (origin/develop workflows)
+::notice file=.github/workflows/reusable-django-ci.yml,line=64,title=workflow guard (unpinned-image)::image `${{ inputs.postgres-image }}` is an expression; pin its source by digest
+::error file=.github/workflows/chat-pipeline-golden.yml,line=28,title=workflow guard (unpinned-uses)::`actions/checkout@v4` is pinned to `v4`, not a full 40-character commit SHA; use `owner/repo@<sha> # vX.Y.Z`
+::error file=.github/workflows/chat-pipeline-golden.yml,line=29,title=workflow guard (unpinned-uses)::`actions/setup-python@v5` is pinned to `v5`, not a full 40-character commit SHA; use `owner/repo@<sha> # vX.Y.Z`
+::error file=.github/workflows/chat-pipeline-golden.yml,line=1,title=workflow guard (permissions)::no top-level `permissions:`; add `permissions: contents: read` and grant more only on the jobs that need it
+::error file=.github/workflows/gateway-v2.yml,line=16,title=workflow guard (unpinned-uses)::`actions/checkout@v4` is pinned to `v4`, not a full 40-character commit SHA; use `owner/repo@<sha> # vX.Y.Z`
+::error file=.github/workflows/gateway-v2.yml,line=17,title=workflow guard (unpinned-uses)::`actions/setup-python@v5` is pinned to `v5`, not a full 40-character commit SHA; use `owner/repo@<sha> # vX.Y.Z`
+::error file=.github/workflows/gateway-v2.yml,line=54,title=workflow guard (unpinned-uses)::`actions/checkout@v4` is pinned to `v4`, not a full 40-character commit SHA; use `owner/repo@<sha> # vX.Y.Z`
+::error file=.github/workflows/gateway-v2.yml,line=55,title=workflow guard (unpinned-uses)::`actions/setup-python@v5` is pinned to `v5`, not a full 40-character commit SHA; use `owner/repo@<sha> # vX.Y.Z`
+::error file=.github/workflows/gateway-v2.yml,line=110,title=workflow guard (unpinned-uses)::`actions/checkout@v4` is pinned to `v4`, not a full 40-character commit SHA; use `owner/repo@<sha> # vX.Y.Z`
+::error file=.github/workflows/gateway-v2.yml,line=111,title=workflow guard (unpinned-uses)::`docker/setup-buildx-action@v3` is pinned to `v3`, not a full 40-character commit SHA; use `owner/repo@<sha> # vX.Y.Z`
+::error file=.github/workflows/gateway-v2.yml,line=156,title=workflow guard (unpinned-uses)::`actions/upload-artifact@v4` is pinned to `v4`, not a full 40-character commit SHA; use `owner/repo@<sha> # vX.Y.Z`
+::error file=.github/workflows/gateway-v2.yml,line=168,title=workflow guard (unpinned-uses)::`actions/checkout@v4` is pinned to `v4`, not a full 40-character commit SHA; use `owner/repo@<sha> # vX.Y.Z`
+::error file=.github/workflows/gateway-v2.yml,line=169,title=workflow guard (unpinned-uses)::`actions/setup-python@v5` is pinned to `v5`, not a full 40-character commit SHA; use `owner/repo@<sha> # vX.Y.Z`
+::error file=.github/workflows/gateway-v2.yml,line=172,title=workflow guard (unpinned-uses)::`actions/setup-node@v4` is pinned to `v4`, not a full 40-character commit SHA; use `owner/repo@<sha> # vX.Y.Z`
+::error file=.github/workflows/gateway-v2.yml,line=241,title=workflow guard (unpinned-uses)::`actions/checkout@v4` is pinned to `v4`, not a full 40-character commit SHA; use `owner/repo@<sha> # vX.Y.Z`
+::error file=.github/workflows/gateway-v2.yml,line=242,title=workflow guard (unpinned-uses)::`actions/setup-python@v5` is pinned to `v5`, not a full 40-character commit SHA; use `owner/repo@<sha> # vX.Y.Z`
+::error file=.github/workflows/gateway-v2.yml,line=266,title=workflow guard (unpinned-uses)::`actions/upload-artifact@v4` is pinned to `v4`, not a full 40-character commit SHA; use `owner/repo@<sha> # vX.Y.Z`
+::error file=.github/workflows/gateway-v2.yml,line=1,title=workflow guard (permissions)::no top-level `permissions:`; add `permissions: contents: read` and grant more only on the jobs that need it
+workflow_guard: FAIL: 13 files, 55 `uses:` references, 17 findings
+exit=1

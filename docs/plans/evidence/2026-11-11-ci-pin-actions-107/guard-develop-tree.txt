@@ -1,0 +1,21 @@
+$ python3 scripts/ci/workflow_guard.py .github/workflows   # origin/develop 25c33c86 workflows (before this PR)
+.github/workflows/reusable-django-ci.yml:64: notice [unpinned-image] image `${{ inputs.postgres-image }}` is an expression; pin its source by digest
+.github/workflows/chat-pipeline-golden.yml:28: error [unpinned-uses] `actions/checkout@v4` is pinned to `v4`, not a full 40-character commit SHA; use `owner/repo@<sha> # vX.Y.Z`
+.github/workflows/chat-pipeline-golden.yml:29: error [unpinned-uses] `actions/setup-python@v5` is pinned to `v5`, not a full 40-character commit SHA; use `owner/repo@<sha> # vX.Y.Z`
+.github/workflows/chat-pipeline-golden.yml:1: error [permissions] no top-level `permissions:`; add `permissions: contents: read` and grant more only on the jobs that need it
+.github/workflows/gateway-v2.yml:16: error [unpinned-uses] `actions/checkout@v4` is pinned to `v4`, not a full 40-character commit SHA; use `owner/repo@<sha> # vX.Y.Z`
+.github/workflows/gateway-v2.yml:17: error [unpinned-uses] `actions/setup-python@v5` is pinned to `v5`, not a full 40-character commit SHA; use `owner/repo@<sha> # vX.Y.Z`
+.github/workflows/gateway-v2.yml:54: error [unpinned-uses] `actions/checkout@v4` is pinned to `v4`, not a full 40-character commit SHA; use `owner/repo@<sha> # vX.Y.Z`
+.github/workflows/gateway-v2.yml:55: error [unpinned-uses] `actions/setup-python@v5` is pinned to `v5`, not a full 40-character commit SHA; use `owner/repo@<sha> # vX.Y.Z`
+.github/workflows/gateway-v2.yml:110: error [unpinned-uses] `actions/checkout@v4` is pinned to `v4`, not a full 40-character commit SHA; use `owner/repo@<sha> # vX.Y.Z`
+.github/workflows/gateway-v2.yml:111: error [unpinned-uses] `docker/setup-buildx-action@v3` is pinned to `v3`, not a full 40-character commit SHA; use `owner/repo@<sha> # vX.Y.Z`
+.github/workflows/gateway-v2.yml:156: error [unpinned-uses] `actions/upload-artifact@v4` is pinned to `v4`, not a full 40-character commit SHA; use `owner/repo@<sha> # vX.Y.Z`
+.github/workflows/gateway-v2.yml:168: error [unpinned-uses] `actions/checkout@v4` is pinned to `v4`, not a full 40-character commit SHA; use `owner/repo@<sha> # vX.Y.Z`
+.github/workflows/gateway-v2.yml:169: error [unpinned-uses] `actions/setup-python@v5` is pinned to `v5`, not a full 40-character commit SHA; use `owner/repo@<sha> # vX.Y.Z`
+.github/workflows/gateway-v2.yml:172: error [unpinned-uses] `actions/setup-node@v4` is pinned to `v4`, not a full 40-character commit SHA; use `owner/repo@<sha> # vX.Y.Z`
+.github/workflows/gateway-v2.yml:241: error [unpinned-uses] `actions/checkout@v4` is pinned to `v4`, not a full 40-character commit SHA; use `owner/repo@<sha> # vX.Y.Z`
+.github/workflows/gateway-v2.yml:242: error [unpinned-uses] `actions/setup-python@v5` is pinned to `v5`, not a full 40-character commit SHA; use `owner/repo@<sha> # vX.Y.Z`
+.github/workflows/gateway-v2.yml:266: error [unpinned-uses] `actions/upload-artifact@v4` is pinned to `v4`, not a full 40-character commit SHA; use `owner/repo@<sha> # vX.Y.Z`
+.github/workflows/gateway-v2.yml:1: error [permissions] no top-level `permissions:`; add `permissions: contents: read` and grant more only on the jobs that need it
+workflow_guard: FAIL: 13 files, 55 `uses:` references, 17 findings
+exit=1

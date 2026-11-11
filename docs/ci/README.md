@@ -30,11 +30,12 @@ feature/* fix/* ci/* docs/* chore/* refactor/* test/* perf/* dependabot/*
 | | dependencies | dependency-review: new deps with high+ CVEs or AGPL/SSPL licences | **blocks** once the Dependency graph is enabled. Until then the probe tolerates a 403/404 that is not a rate limit (GitHub answers a bare `Forbidden` while the graph is off) and passes with a warning; any other error fails |
 | | | OSV-Scanner on every lockfile, npm audit | report → code scanning |
 | | infra lint | actionlint, hadolint (error), shellcheck (error), `docker compose config`, `nginx -t` | **blocks** |
+| | | workflow guard (`scripts/ci/workflow_guard.py`): SHA-pinned `uses:`, top-level least-privilege `permissions:`, digest-pinned job images; see [below](#workflow-guard-pinned-actions-and-least-privilege-tokens) | **blocks** |
 | | | Trivy config (HIGH, CRITICAL) | report → code scanning |
 | | CodeQL | Python, JavaScript/TypeScript, GitHub Actions; `security-extended` | alerts → code scanning |
 | `PR policy` (`pr-policy.yml`) | policy | Conventional Commit title, description with a testing section, size report, promotion path, release notes into `main` | **blocks** |
-| `chat-pipeline-golden` | golden-freeze | v1 gateway golden tests | **red since 6 Aug 2026 on every branch**; waived per `MERGE_POLICY.md` until fixed |
-| Dependabot (`dependabot.yml`) | | weekly grouped update PRs into `develop` for Actions, pip, npm and Docker | |
+| `chat-pipeline-golden` | golden-freeze | v1 gateway golden tests; runs only when the v1 pipeline files, `docs/pipeline/`, the golden cases or this workflow change | **red since 6 Aug 2026 on every branch**; waived per `MERGE_POLICY.md` until fixed |
+| Dependabot (`dependabot.yml`) | | weekly grouped update PRs into `develop` for Actions (SHA pins and their version comments, titled `ci(deps): …`), pip, npm and Docker | |
 
 The weekly `schedule` run of `Security` scans the **full git history** for secrets and every lockfile, so it catches anything the diff-aware PR checks cannot see. Full sweeps are **report-only**:
 - Semgrep without a baseline, and TruffleHog over the whole history, upload SARIF and artifacts and annotate the run.
@@ -88,7 +89,7 @@ jobs:
 | `reusable-secret-scan.yml` | `full-history`, image pins |
 | `reusable-sast.yml` | `semgrep-configs`, `semgrep-severity`, `paths-exclude`, `bandit-targets`, `bandit-blocking` |
 | `reusable-dependency-scan.yml` | `fail-on-severity`, `deny-licenses`, `dependency-review-required`, `osv-blocking`, `osv-exclude`, `npm-directories`, `npm-audit-blocking` |
-| `reusable-infra-lint.yml` | `compose-files`, `compose-env`, `nginx-configs`, `paths-exclude` (hadolint and shellcheck), `trivy-skip-dirs`, `trivy-blocking` |
+| `reusable-infra-lint.yml` | `compose-files`, `compose-env`, `nginx-configs`, `paths-exclude` (hadolint and shellcheck), `trivy-skip-dirs`, `trivy-blocking`, `workflow-guard-script` |
 | `reusable-codeql.yml` | `languages`, `queries`, `paths-ignore` |
 
 **Permissions the caller must grant.** A called workflow can never have more than the calling job grants, so give the calling job at least:
@@ -103,9 +104,45 @@ Notes for callers:
 
 - The `known-failures-file` ratchet runs `scripts/ci/known_failures.py`, so copy that file into the calling repo. The ratchet fails a run that did not complete; set `min-tests` near your suite's size so a partly collected suite fails too.
 - Pin to a tag or commit (`@<sha>`), not `@main`, for reproducible builds.
-- Every action in the reusable workflows, `ci.yml`, `security.yml` and `pr-policy.yml` is pinned to a full commit SHA, with its version in a comment; Dependabot keeps them current. The older `gateway-v2.yml` and `chat-pipeline-golden.yml` still use tag pins and have no `permissions:` block; moving them is tracked in issue #107.
+- Every action in every workflow is pinned to a full commit SHA, with its version in a comment, and every workflow has a top-level `permissions: contents: read`; the [workflow guard](#workflow-guard-pinned-actions-and-least-privilege-tokens) fails CI otherwise, and Dependabot keeps the pins current. To run the guard in your repo, copy `scripts/ci/workflow_guard.py` to the same path (or point `workflow-guard-script` at it); `reusable-infra-lint` fails when the file is missing, and `workflow-guard-script: ''` skips the check.
 - Scanner and service images are pinned by digest (`name:tag@sha256:…`). Dependabot's `docker` ecosystem does not see images set in workflow inputs, so bump them by hand: `docker pull name:newtag`, then copy the digest from `docker image inspect --format '{{index .RepoDigests 0}}'`.
 - Command inputs (`install-command`, `test-command`, `compose-env`, …) are trusted shell, run with `eval`. Only the calling workflow sets them; never pass `github.event.*` or other PR-controlled text into them.
+
+## Workflow guard: pinned actions and least-privilege tokens
+
+A tag such as `@v4` can be moved to different code after review; a commit SHA cannot. A workflow without `permissions:` gives every job the repository's default token. `scripts/ci/workflow_guard.py` blocks both, in the `infra lint` job of `Security` on every PR and push. `CI helper scripts` runs its self-tests, which also check this repository's workflows.
+
+| Rule | Fails when |
+|---|---|
+| `unpinned-uses` | a `uses:` is not in this repository (`./path`, or GitHub's `$/path` self-repository form), `docker://name@sha256:<64 hex>`, or `owner/repo[/path]@<40-hex commit SHA>`. Forms the guard cannot verify (`{ uses: … }`, a value on the next line, an alias) fail too. |
+| `version-comment` | a SHA pin has no release comment (`# v4.2.1`). Reviewers read the comment, and Dependabot rewrites it with the SHA. |
+| `permissions` | a workflow has no top-level `permissions:` (composite `action.yml` files are exempt). |
+| `top-level-write` | the top-level block grants any `write` scope, or is `write-all` or `read-all`. Grant extra scopes on the job that needs them. |
+| `unpinned-image` | a literal `jobs.<id>.container`, `container.image` or `services.<id>.image` has no `@sha256:` digest. An `${{ … }}` image is a notice only: pin its input default instead. |
+
+The guard reads YAML line by line with the standard library, so it needs no install. It skips block scalars (`run: |`), so script text is never mistaken for a key.
+
+**Pinning an action.** Resolve the tag to the commit it points to; an annotated tag points to a tag object, so dereference it:
+
+```bash
+gh api repos/OWNER/REPO/git/ref/tags/vX.Y.Z --jq '.object | "\(.type) \(.sha)"'
+# type "tag" (annotated): dereference to the commit
+gh api repos/OWNER/REPO/git/tags/<sha from above> --jq '.object.sha'
+# equivalent without the API: the `^{}` line is the commit of an annotated tag
+git ls-remote --tags https://github.com/OWNER/REPO 'refs/tags/vX.Y.Z' 'refs/tags/vX.Y.Z^{}'
+```
+
+Then write `uses: OWNER/REPO@<commit sha> # vX.Y.Z`. Use the same pin as the other workflows for an action that is already used (`grep -rh 'OWNER/REPO@' .github/workflows | sort -u`), so Dependabot moves them together.
+
+**Token scopes in use.** Every workflow's top level is `contents: read`. Only these jobs ask for more:
+
+| Calling job in `security.yml` → job in the reusable workflow | Extra scope | Why |
+|---|---|---|
+| sast → `reusable-sast` semgrep, bandit; infra → `reusable-infra-lint` trivy-config; dependencies → `reusable-dependency-scan` osv; codeql → `reusable-codeql` analyze | `security-events: write` | upload SARIF to code scanning |
+| codeql → `reusable-codeql` analyze | `actions: read` | CodeQL reads the workflow run it analyses |
+| dependencies → `reusable-dependency-scan` dependency-review | `pull-requests: write` | `comment-summary-in-pr: on-failure` posts the summary on the PR |
+
+Every other job, including all of `gateway-v2.yml`, `chat-pipeline-golden.yml`, `ci.yml` and `pr-policy.yml`, runs with `contents: read` only. `upload-artifact` authenticates with the runner's own runtime token, not `GITHUB_TOKEN`.
 
 ## One-time owner setup
 
@@ -134,6 +171,7 @@ Every scanner runs from a pinned container image, so a local run matches CI exac
 ```bash
 docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.30.1 git /repo --log-opts "--remerge-diff origin/develop..HEAD" --redact
 docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.12 -oneline
+python3 scripts/ci/workflow_guard.py .github/workflows
 docker run --rm -v "$PWD:/src" -w /src semgrep/semgrep:1.185.0 semgrep scan --config p/python --baseline-commit origin/develop --error
 python3 scripts/ci/known_failures.py --log django-test.log --baseline .github/ci/control-known-failures.txt
 ```

@@ -1,0 +1,12 @@
+# zizmor 1.32.0 (PyPI), --offline, informational only (not wired into CI)
+## origin/develop 25c33c86
+     15 error[unpinned-uses]: unpinned action reference
+      7 warning[excessive-permissions]: overly broad permissions
+      7 help[self-repository]: use GitHub's dedicated self-repository syntax
+      6 warning[artipacked]: credential persistence through GitHub Actions artifacts
+      1 error[unpinned-images]: unpinned image references
+70 findings (34 suppressed, 13 unsafe fixes): 0 informational, 7 low, 13 medium, 16 high
+## this branch
+      7 help[self-repository]: use GitHub's dedicated self-repository syntax
+      1 error[unpinned-images]: unpinned image references
+40 findings (32 suppressed, 7 unsafe fixes): 0 informational, 7 low, 0 medium, 1 high

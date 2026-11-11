@@ -1,0 +1,39 @@
+$ docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.12 -oneline -verbose   # image rhysd/actionlint@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667
+bundled: version: 0.11.0, pyflakes 3.4.0 Python 3.12.12 on Linux
+verbose: Detected project: /repo
+verbose: Collected 13 YAML files
+verbose: Found 0 parse errors in 3 ms for .github/workflows/security.yml
+verbose: Found 0 parse errors in 3 ms for .github/workflows/reusable-django-ci.yml
+verbose: Found total 0 errors in 7 ms for .github/workflows/security.yml
+verbose: Found 0 parse errors in 6 ms for .github/workflows/reusable-node-ci.yml
+verbose: Found 0 parse errors in 27 ms for .github/workflows/chat-pipeline-golden.yml
+verbose: Found 0 parse errors in 37 ms for .github/workflows/gateway-v2.yml
+verbose: Found 0 parse errors in 27 ms for .github/workflows/ci.yml
+verbose: verbose: Found 0 parse errors in 37 ms for .github/workflows/reusable-secret-scan.yml
+Found 0 parse errors in 40 ms for .github/workflows/reusable-infra-lint.yml
+verbose: Found 0 parse errors in 57 ms for .github/workflows/reusable-python-ci.yml
+verbose: Found 0 parse errors in 61 ms for .github/workflows/pr-policy.yml
+verbose: Found 0 parse errors in 63 ms for .github/workflows/reusable-codeql.yml
+verbose: Found 0 parse errors in 75 ms for .github/workflows/reusable-sast.yml
+verbose: Found 0 parse errors in 56 ms for .github/workflows/reusable-dependency-scan.yml
+verbose: Found total 0 errors in 147 ms for .github/workflows/reusable-node-ci.yml
+verbose: Found total 0 errors in 220 ms for .github/workflows/reusable-django-ci.yml
+verbose: Found total 0 errors in 248 ms for .github/workflows/chat-pipeline-golden.yml
+verbose: Found total 0 errors in 412 ms for .github/workflows/ci.yml
+verbose: Found total 0 errors in 420 ms for .github/workflows/gateway-v2.yml
+verbose: Found total 0 errors in 677 ms for .github/workflows/reusable-secret-scan.yml
+verbose: Found total 0 errors in 897 ms for .github/workflows/reusable-infra-lint.yml
+verbose: Found total 0 errors in 1051 ms for .github/workflows/reusable-python-ci.yml
+verbose: Found total 0 errors in 1131 ms for .github/workflows/reusable-codeql.yml
+verbose: Found total 0 errors in 1160 ms for .github/workflows/reusable-sast.yml
+verbose: Found total 0 errors in 1205 ms for .github/workflows/pr-policy.yml
+verbose: Found total 0 errors in 1206 ms for .github/workflows/reusable-dependency-scan.yml
+verbose: Found 0 errors in 13 files
+exit=0
+
+# Canary: shellcheck integration is live (a deliberately unquoted variable in a scratch workflow)
+.github/workflows/canary.yml:9:9: shellcheck reported issue in this script: SC2086:info:1:6: Double quote to prevent globbing and word splitting [shellcheck]
+exit=1
+
+# This branch, shellcheck and pyflakes named explicitly
+exit=0

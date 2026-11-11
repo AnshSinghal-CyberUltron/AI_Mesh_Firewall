@@ -1,0 +1,44 @@
+$ check-jsonschema 0.39.0 --builtin-schema vendor.dependabot .github/dependabot.yml
+ok -- validation done
+$ check-jsonschema --builtin-schema vendor.github-workflows .github/workflows/*.yml
+ok -- validation done
+
+# Semantic diff (parsed YAML) of every changed file against origin/develop 25c33c86
+== .github/dependabot.yml
+  + .updates[0].commit-message = {'prefix': 'ci', 'include': 'scope'}
+== .github/workflows/chat-pipeline-golden.yml
+  ~ .True.pull_request.paths: ['gateway/ai_mesh_gateway/enforcement.py', 'gateway/ai_mesh_gateway/policy_engine.py', 'gateway/ai_mesh_gateway/bedrock_scanner.py', 'gateway/ai_mesh_gateway/output_guard.py', 'gateway/ai_mesh_gateway/llm_router.py', 'gateway/ai_mesh_gateway/main.py', 'gateway/tests/golden/**', 'docs/pipeline/**'] -> ['gateway/ai_mesh_gateway/enforcement.py', 'gateway/ai_mesh_gateway/policy_engine.py', 'gateway/ai_mesh_gateway/bedrock_scanner.py', 'gateway/ai_mesh_gateway/output_guard.py', 'gateway/ai_mesh_gateway/llm_router.py', 'gateway/ai_mesh_gateway/main.py', 'gateway/tests/golden/**', 'docs/pipeline/**', '.github/workflows/chat-pipeline-golden.yml']
+  ~ .True.push.paths: ['gateway/**', 'docs/pipeline/**'] -> ['gateway/**', 'docs/pipeline/**', '.github/workflows/chat-pipeline-golden.yml']
+  ~ .jobs.golden-freeze.steps[0].uses: 'actions/checkout@v4' -> 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
+  + .jobs.golden-freeze.steps[0].with = {'persist-credentials': False}
+  ~ .jobs.golden-freeze.steps[1].uses: 'actions/setup-python@v5' -> 'actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0'
+  + .permissions = {'contents': 'read'}
+== .github/workflows/ci.yml
+  ~ .jobs.ci-scripts.steps[2].name: 'known_failures self-test' -> 'known_failures + workflow_guard self-tests'
+== .github/workflows/gateway-v2.yml
+  ~ .jobs.image-digest.steps[0].uses: 'actions/checkout@v4' -> 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
+  + .jobs.image-digest.steps[0].with = {'persist-credentials': False}
+  ~ .jobs.image-digest.steps[1].uses: 'docker/setup-buildx-action@v3' -> 'docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069'
+  ~ .jobs.image-digest.steps[4].uses: 'actions/upload-artifact@v4' -> 'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9'
+  ~ .jobs.openai-conformance.steps[0].uses: 'actions/checkout@v4' -> 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
+  + .jobs.openai-conformance.steps[0].with = {'persist-credentials': False}
+  ~ .jobs.openai-conformance.steps[1].uses: 'actions/setup-python@v5' -> 'actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0'
+  ~ .jobs.openai-conformance.steps[2].uses: 'actions/setup-node@v4' -> 'actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1'
+  ~ .jobs.parity-harness.steps[0].uses: 'actions/checkout@v4' -> 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
+  + .jobs.parity-harness.steps[0].with = {'persist-credentials': False}
+  ~ .jobs.parity-harness.steps[1].uses: 'actions/setup-python@v5' -> 'actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0'
+  ~ .jobs.parity-harness.steps[4].uses: 'actions/upload-artifact@v4' -> 'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9'
+  ~ .jobs.secret-headers.steps[0].uses: 'actions/checkout@v4' -> 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
+  + .jobs.secret-headers.steps[0].with = {'persist-credentials': False}
+  ~ .jobs.secret-headers.steps[1].uses: 'actions/setup-python@v5' -> 'actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0'
+  ~ .jobs.structural-gates.steps[0].uses: 'actions/checkout@v4' -> 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
+  + .jobs.structural-gates.steps[0].with = {'persist-credentials': False}
+  ~ .jobs.structural-gates.steps[1].uses: 'actions/setup-python@v5' -> 'actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0'
+  + .permissions = {'contents': 'read'}
+== .github/workflows/pr-policy.yml
+  - .permissions.pull-requests (was 'read')
+== .github/workflows/reusable-infra-lint.yml
+  + .True.workflow_call.inputs.workflow-guard-script = {'description': "Path of workflow_guard.py in the calling repo (copy scripts/ci/workflow_guard.py from this repo; it needs only python3). It fails on an unpinned `uses:` or a missing top-level `permissions:`. A missing file fails the job; set '' to skip the check deliberately.", 'type': 'string', 'default': 'scripts/ci/workflow_guard.py'}
+  ~ .jobs.lint.steps: <new 'workflow guard' step inserted after actionlint; all other steps unchanged>
+  check: lint steps old=6 new=7; new steps minus the inserted one == old steps: True; inserted at index 2: 'workflow guard (SHA pins, least-privilege permissions, image digests)'
+  check: trivy-config job unchanged: True

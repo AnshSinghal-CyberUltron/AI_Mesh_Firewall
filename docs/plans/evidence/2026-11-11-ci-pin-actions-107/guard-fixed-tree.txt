@@ -1,0 +1,4 @@
+$ python3 scripts/ci/workflow_guard.py .github/workflows   # this branch
+.github/workflows/reusable-django-ci.yml:64: notice [unpinned-image] image `${{ inputs.postgres-image }}` is an expression; pin its source by digest
+workflow_guard: OK: 13 files, 55 `uses:` references, 0 findings
+exit=0
