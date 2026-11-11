@@ -1,0 +1,15 @@
+# Full control suites at origin/develop 25c33c86 (before), Postgres 16 (amf-pg) + Redis 7.4 (amf-redis), Python 3.12
+# cmd (control/): flock /home/claude/work/.ctl-db.lock nice -n 10 python manage.py test core policy auth mcp_connector --noinput
+Ran 513 tests in 171.417s
+FAILED (failures=22, errors=1, expected failures=2)
+# ratchet: python3 scripts/ci/known_failures.py --log before.log --baseline .github/ci/control-known-failures.txt --min-tests 500
+### Known-failure ratchet
+
+- New failures (blocking): **0**
+- Known failures still failing: 23
+- Known failures now passing (remove from baseline): 0
+
+ratchet=0
+
+[exited with code 0]
+# the 23 failing ids are identical to the 23 baseline entries (diff empty)
