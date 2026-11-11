@@ -35,7 +35,7 @@ feature/* fix/* ci/* docs/* chore/* refactor/* test/* perf/* dependabot/*
 | | CodeQL | Python, JavaScript/TypeScript, GitHub Actions; `security-extended` | alerts → code scanning |
 | `PR policy` (`pr-policy.yml`) | policy | Conventional Commit title, description with a testing section, size report, promotion path, release notes into `main`. A PR whose author is exactly `dependabot[bot]` skips only the description-length and testing-section rules ([why](#dependabot-prs-and-the-pr-policy)) | **blocks** |
 | `chat-pipeline-golden` | golden-freeze | v1 gateway golden tests; runs only when the v1 pipeline files, `docs/pipeline/`, the golden cases or this workflow change | **red since 6 Aug 2026 on every branch**; waived per `MERGE_POLICY.md` until fixed |
-| Dependabot (`dependabot.yml`) | | weekly grouped update PRs into `develop` for Actions (SHA pins and their version comments, titled `ci(deps): …`), pip, npm and Docker | |
+| Dependabot (`dependabot.yml`) | | weekly grouped update PRs into `develop` for Actions (SHA pins and their version comments, titled `ci(deps): …`), and pip, npm and Docker (titled `build(deps): …`) | |
 
 The weekly `schedule` run of `Security` scans the **full git history** for secrets and every lockfile, so it catches anything the diff-aware PR checks cannot see. Full sweeps are **report-only**:
 - Semgrep without a baseline, and TruffleHog over the whole history, upload SARIF and artifacts and annotate the run.
@@ -67,8 +67,8 @@ Dependabot writes its own PR body (release notes and a commit list), which can n
 - **What is skipped.** When `github.event.pull_request.user.login` is exactly `dependabot[bot]`, `pr-policy.yml` skips the description-length and testing-section rules, and says so in the job summary.
   - The login belongs to GitHub's Dependabot app; no person or other app can register it.
   - The check reads the event's author, never the title, body or branch name, so PR text cannot claim the exemption.
-- **What still applies.** The Conventional Commits title (`dependabot.yml` gives the Actions updates a `ci(deps):` prefix), the promotion path, release notes into `main`, and every other check. A Dependabot PR still needs two reviews under `MERGE_POLICY.md`; its tests are the CI checks.
-- **Ecosystems without a prefix.** pip, npm and Docker updates have no title prefix yet. Their default titles (`Bump …`) still fail the title rule until a reviewer retitles them.
+- **What still applies.** The Conventional Commits title, the promotion path, release notes into `main`, and every other check. `dependabot.yml` titles Actions updates `ci(deps): …` and pip, npm and Docker updates `build(deps): …` / `build(deps-dev): …`, so they pass the title rule; Dependabot's default `Bump …` title would not. A Dependabot PR still needs two reviews under `MERGE_POLICY.md`; its tests are the CI checks.
+- **A person who pushes to a Dependabot branch** keeps the exemption, because the author is still `dependabot[bot]`. The pushed code still needs both reviews and every check; only the description rules are skipped.
 - **Self-tests.** `scripts/ci/test_pr_policy.py` extracts the policy script from the workflow and runs it for these cases (`CI helper scripts` runs them).
 
 ## Reusing these workflows in another repo

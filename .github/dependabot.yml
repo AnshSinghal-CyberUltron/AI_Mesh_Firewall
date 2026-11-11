@@ -16,10 +16,13 @@ updates:
     groups:
       actions: { patterns: ["*"] }
 
+  # pip, npm and Docker updates are titled `build(deps): …` / `build(deps-dev): …`, which the
+  # Conventional Commits title rule in pr-policy.yml accepts.
   - package-ecosystem: pip
     directories: [/control, /gateway, /gateway_v2, /shared]
     target-branch: develop
     schedule: { interval: weekly, day: monday }
+    commit-message: { prefix: build, include: scope }
     open-pull-requests-limit: 5
     groups:
       python-minor-patch:
@@ -29,6 +32,7 @@ updates:
     directory: /frontend
     target-branch: develop
     schedule: { interval: weekly, day: monday }
+    commit-message: { prefix: build, include: scope }
     open-pull-requests-limit: 5
     groups:
       npm-minor-patch:
@@ -38,4 +42,5 @@ updates:
     directories: [/control, /gateway, /gateway_v2, /workers, /deploy, /services/mcp-broker]
     target-branch: develop
     schedule: { interval: weekly, day: monday }
+    commit-message: { prefix: build, include: scope }
     open-pull-requests-limit: 5
