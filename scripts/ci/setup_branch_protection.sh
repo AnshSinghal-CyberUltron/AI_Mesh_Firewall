@@ -12,6 +12,11 @@
 #   gh api -X DELETE repos/OWNER/REPO/branches/BRANCH/protection/enforce_admins
 #   gh api -X POST   repos/OWNER/REPO/branches/BRANCH/protection/enforce_admins
 # ENFORCE_ADMINS=false applies the old, advisory behaviour.
+#
+# required_conversation_resolution is OFF: with enforce_admins it would bind the agents too, and
+# review threads can be resolved only through GraphQL (blocked for agents) or the UI, so every PR
+# with a code-scanning bot thread would wait for the owner. Instead, MERGE_POLICY.md rule 3
+# requires every reviewer finding and every code-scanning thread to be answered in the PR.
 set -euo pipefail
 repo="${1:?usage: $0 owner/repo}"
 enforce_admins="${ENFORCE_ADMINS:-true}"
@@ -56,7 +61,7 @@ for branch in develop staging main; do
   "required_linear_history": false,
   "allow_force_pushes": false,
   "allow_deletions": false,
-  "required_conversation_resolution": true
+  "required_conversation_resolution": false
 }
 JSON
 done

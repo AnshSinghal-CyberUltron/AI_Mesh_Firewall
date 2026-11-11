@@ -12,6 +12,7 @@ The repository owner delegates reviewing and merging to the engineering agents (
    - Every BLOCKER is fixed.
    - Every SHOULD-FIX is either fixed or answered in a PR comment saying where it is tracked.
    - The author replies to each reviewer comment.
+   - Every code-scanning thread on the PR is answered in a PR comment: fixed, dismissed with a reason, or tracked. (Agents cannot resolve threads, so branch protection does not require resolution; this rule does.)
 4. **The PR is mergeable,** with no conflicts.
 5. **A push after a review that changes behaviour** needs the affected reviewer's re-check. The re-check may be confirmed in the merging reviewer's review.
 
