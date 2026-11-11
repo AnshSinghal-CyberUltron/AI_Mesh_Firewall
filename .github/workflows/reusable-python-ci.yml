@@ -76,8 +76,8 @@ jobs:
           python -m venv "$RUNNER_TEMP/venv"
           echo "VENV=$RUNNER_TEMP/venv" >> "$GITHUB_ENV"
           echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
-      # Commands come from the calling workflow (trusted), and are passed through env rather
-      # than templated into the script text, so no input can inject shell syntax.
+      # These inputs are trusted shell: `eval` runs them as written. Only the calling workflow
+      # (already trusted code) sets them; never pass `github.event.*` or other PR-controlled text.
       - name: Install
         env: { CMD: "${{ inputs.install-command }}" }
         run: eval "$CMD"

@@ -31,7 +31,7 @@ on:
         default: AGPL-3.0-only, AGPL-3.0-or-later, SSPL-1.0
       osv-image:
         type: string
-        default: ghcr.io/google/osv-scanner:v2.7.1
+        default: ghcr.io/google/osv-scanner:v2.7.1@sha256:a70ffffc2bfd33482953e5d6b64c6fcdb30239717a07b0f0d3ab2859ce3e4cde
       osv-blocking:
         type: boolean
         default: false
@@ -72,13 +72,21 @@ jobs:
           REQUIRED: ${{ inputs.dependency-review-required }}
         run: |
           # The review needs the repository's Dependency graph. When it is off, the compare API
-          # answers 403/404; that (and only that) is tolerated unless the caller requires it.
-          if gh api "repos/$REPO/dependency-graph/compare/$BASE...$HEAD" > /dev/null 2> err.txt; then
+          # answers a bare 403 ("Forbidden") or 404; that (and only that) is tolerated unless the
+          # caller requires it. A rate-limit 403 (message says so, X-RateLimit-Remaining is 0, or
+          # Retry-After is set) fails the job instead of silently skipping the review.
+          if gh api -i "repos/$REPO/dependency-graph/compare/$BASE...$HEAD" > resp.txt 2> err.txt; then
             echo "ok=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           cat err.txt
-          if grep -qiE 'not supported|dependency graph|HTTP 40[34]' err.txt; then
+          status=$(head -n1 resp.txt | awk '{print $2}')
+          rate_limited=false
+          if grep -qiE '^x-ratelimit-remaining: *0\b|^retry-after:' resp.txt || grep -qi 'rate limit' resp.txt err.txt; then
+            rate_limited=true
+          fi
+          echo "probe: HTTP ${status:-none}, rate_limited=$rate_limited"
+          if { [ "$status" = "403" ] || [ "$status" = "404" ]; } && [ "$rate_limited" = "false" ]; then
             echo "ok=false" >> "$GITHUB_OUTPUT"
             msg="Dependency review is unavailable: enable the Dependency graph (Settings > Code security)."
             if [ "$REQUIRED" = "true" ]; then echo "::error::$msg"; exit 1; fi

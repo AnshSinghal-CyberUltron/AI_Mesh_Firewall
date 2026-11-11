@@ -24,7 +24,7 @@ feature/* fix/* ci/* docs/* chore/* refactor/* test/* perf/* dependabot/*
 | | CI helper scripts | self-tests for `scripts/ci/known_failures.py` | **blocks** |
 | `gateway-v2` (`gateway-v2.yml`) | structural-gates | size, HTTP, mutability, capacity, tenant-scale AST gates; import-linter; ruff; mypy --strict; console inventory; ~5,000 pytest | **blocks** |
 | | secret-headers, image-digest, openai-conformance, parity-harness | repo-specific gates | **block** |
-| `Security` (`security.yml`) | secrets | gitleaks + TruffleHog (verified only) on the PR's commits, or the pushed range | **blocks** |
+| `Security` (`security.yml`) | secrets | gitleaks (merge commits included, `--remerge-diff`) + TruffleHog (verified only) on the PR's commits, or the pushed range | **blocks**, also on a TruffleHog scan error; the weekly full-history gitleaks sweep blocks too |
 | | SAST | Semgrep OSS, diff-aware: new ERROR findings against the merge base (PR) or the previous head (push) | **blocks** |
 | | | Bandit (high severity, high confidence) | report → code scanning |
 | | dependencies | dependency-review: new deps with high+ CVEs or AGPL/SSPL licences | **blocks** once the Dependency graph is enabled. Until then it passes with a warning, and only that case is tolerated |
@@ -57,7 +57,7 @@ Flip `osv-blocking`, `bandit-blocking`, `npm-audit-blocking` or `trivy-blocking`
 |---|---|---|
 | `.github/ci/control-known-failures.txt` | 23 control tests failing when the gate was introduced | delete a line when its test passes (the ratchet prints a notice); never add one |
 | `.gitleaksignore` | fingerprints of findings in **old commits** (no secret values) | never add a fingerprint for a new commit; remove the secret instead |
-| `.gitleaks.toml` | allowlist for synthetic credentials in tests, specs and evidence | never widen it to hide a real finding |
+| `.gitleaks.toml` | every rule off only in the detector test corpora, specs and evidence; other `tests/`/`fixtures/` skip `generic-api-key` only | never widen it to hide a real finding |
 
 ## Reusing these workflows in another repo
 
@@ -103,13 +103,17 @@ Notes for callers:
 
 - The `known-failures-file` ratchet runs `scripts/ci/known_failures.py`, so copy that file into the calling repo. The ratchet fails a run that did not complete; set `min-tests` near your suite's size so a partly collected suite fails too.
 - Pin to a tag or commit (`@<sha>`), not `@main`, for reproducible builds.
-- Every third-party action here is pinned to a full commit SHA, with its version in a comment. Dependabot keeps them current.
+- Every action in the reusable workflows, `ci.yml`, `security.yml` and `pr-policy.yml` is pinned to a full commit SHA, with its version in a comment; Dependabot keeps them current. The older `gateway-v2.yml` and `chat-pipeline-golden.yml` still use tag pins and have no `permissions:` block; moving them is tracked in issue #107.
+- Scanner and service images are pinned by digest (`name:tag@sha256:…`). Dependabot's `docker` ecosystem does not see images set in workflow inputs, so bump them by hand: `docker pull name:newtag`, then copy the digest from `docker image inspect --format '{{index .RepoDigests 0}}'`.
+- Command inputs (`install-command`, `test-command`, `compose-env`, …) are trusted shell, run with `eval`. Only the calling workflow sets them; never pass `github.event.*` or other PR-controlled text into them.
 
 ## One-time owner setup
 
 1. **Branch protection.** The CI token cannot change protection, so the owner runs `./scripts/ci/setup_branch_protection.sh AnshSinghal-CyberUltron/AI_Mesh_Firewall` once.
    - It **replaces** any existing protection on `develop`, `staging` and `main`.
    - It skips a branch that does not exist, with a warning.
+   - It turns on `enforce_admins`. Every agent acts as the owner's admin account, so without it the required checks would be advisory. `ENFORCE_ADMINS=false` restores the advisory behaviour; the script header shows how to lift it for one emergency merge.
+   - Each required check is bound to the GitHub Actions app (id 15368), so a commit status of the same name posted by anyone else cannot satisfy it.
 2. **Repository settings:**
    - Enable the *Dependency graph*. Until it is on, `dependency-review` reports "not supported" without blocking. Then set `dependency-review-required: true` in `security.yml`.
    - Enable *Dependabot alerts* and *Dependabot security updates*.
@@ -126,7 +130,7 @@ Notes for callers:
 Every scanner runs from a pinned container image, so a local run matches CI exactly. For example:
 
 ```bash
-docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.30.1 git /repo --log-opts "origin/develop..HEAD" --redact
+docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.30.1 git /repo --log-opts "--remerge-diff origin/develop..HEAD" --redact
 docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.12 -oneline
 docker run --rm -v "$PWD:/src" -w /src semgrep/semgrep:1.185.0 semgrep scan --config p/python --baseline-commit origin/develop --error
 python3 scripts/ci/known_failures.py --log django-test.log --baseline .github/ci/control-known-failures.txt

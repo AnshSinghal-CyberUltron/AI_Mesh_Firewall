@@ -25,7 +25,7 @@ on:
         default: p/python p/django p/javascript p/react p/docker p/github-actions p/secrets
       semgrep-image:
         type: string
-        default: semgrep/semgrep:1.185.0
+        default: semgrep/semgrep:1.185.0@sha256:67518c174185a2043fdbed16c70631b79209499b3671178e7194379b48295a0d
       semgrep-severity:
         description: Lowest severity that fails the job (INFO, WARNING, ERROR).
         type: string

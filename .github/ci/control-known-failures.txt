@@ -1,6 +1,8 @@
 # Control-plane tests that already failed when the CI gate was introduced (11 Nov 2026, base
 # bd3b0442, Postgres 16 + Redis 7.4). scripts/ci/known_failures.py blocks on any failure NOT
 # listed here and flags listed tests that now pass. Only ever delete lines from this file.
+# About 10 entries are security tests (authz, ingestion auth, kill-switch credential, cross-org
+# isolation, OAuth transport guard). They are tracked for fixing in issue #106, not accepted.
 core.tests.test_gateway_key_owner_perm.GatewayKeyOwnerPermTests.test_org_admin_can_mutate_nonowned_same_org_key
 core.tests.test_gw36_s4_org_token_budget_property.OrgTokenBudgetRangeValidationProperty.test_property_model_full_clean_path
 core.tests.test_ingestion_auth.IngestionAuthTests.test_bearer_agent_key_accepted_on_batch

@@ -5,8 +5,21 @@
 #   ./scripts/ci/setup_branch_protection.sh AnshSinghal-CyberUltron/AI_Mesh_Firewall
 #
 # Required checks are the job names GitHub shows on a PR. Re-run after renaming a job.
+#
+# enforce_admins is ON by default. Every agent acts as the owner's (admin) account, so with it
+# off every required check would be advisory for every merge made under MERGE_POLICY.md. For an
+# emergency the owner can lift it for one merge and restore it:
+#   gh api -X DELETE repos/OWNER/REPO/branches/BRANCH/protection/enforce_admins
+#   gh api -X POST   repos/OWNER/REPO/branches/BRANCH/protection/enforce_admins
+# ENFORCE_ADMINS=false applies the old, advisory behaviour.
 set -euo pipefail
 repo="${1:?usage: $0 owner/repo}"
+enforce_admins="${ENFORCE_ADMINS:-true}"
+case "$enforce_admins" in true|false) ;; *) echo "ENFORCE_ADMINS must be true or false" >&2; exit 2 ;; esac
+
+# Each required check is bound to the GitHub Actions app (id 15368). A bare context name could
+# be satisfied by anyone with write access posting a commit status of the same name.
+actions_app_id=15368
 
 required_checks=(
   "control (Django + Postgres + Redis) / django"
@@ -22,7 +35,7 @@ required_checks=(
   "openai-conformance"
 )
 
-contexts_json=$(printf '%s\n' "${required_checks[@]}" | python3 -c 'import json,sys; print(json.dumps([l.strip() for l in sys.stdin if l.strip()]))')
+checks_json=$(printf '%s\n' "${required_checks[@]}" | APP_ID="$actions_app_id" python3 -c 'import json,os,sys; app=int(os.environ["APP_ID"]); print(json.dumps([{"context": l.strip(), "app_id": app} for l in sys.stdin if l.strip()]))')
 
 echo "This REPLACES any existing protection on develop, staging and main with the settings below."
 for branch in develop staging main; do
@@ -33,8 +46,8 @@ for branch in develop staging main; do
   echo "Protecting $branch"
   gh api -X PUT "repos/$repo/branches/$branch/protection" --input - <<JSON
 {
-  "required_status_checks": { "strict": true, "contexts": $contexts_json },
-  "enforce_admins": false,
+  "required_status_checks": { "strict": true, "checks": $checks_json },
+  "enforce_admins": $enforce_admins,
   "required_pull_request_reviews": {
     "required_approving_review_count": 0,
     "dismiss_stale_reviews": true

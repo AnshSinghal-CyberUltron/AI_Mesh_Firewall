@@ -54,7 +54,8 @@ jobs:
           cache-dependency-path: ${{ inputs.working-directory }}/package-lock.json
       - name: Install (lockfile only)
         run: npm ci --no-audit --no-fund
-      # Commands are passed through env, not templated into the script text.
+      # These inputs are trusted shell: `eval` runs them as written. Only the calling workflow
+      # (already trusted code) sets them; never pass `github.event.*` or other PR-controlled text.
       - name: Lint
         if: inputs.lint-command != ''
         env: { CMD: "${{ inputs.lint-command }}" }

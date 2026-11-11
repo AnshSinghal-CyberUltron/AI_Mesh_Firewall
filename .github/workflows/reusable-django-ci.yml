@@ -43,7 +43,7 @@ on:
         default: 1
       postgres-image:
         type: string
-        default: pgvector/pgvector:pg16
+        default: pgvector/pgvector:pg16@sha256:0dd3149a06e4579a0d70d8fef9945636cd514005e7237deb27f9b67886f8dc4f
       extra-env:
         description: Extra `KEY=value` lines appended to the job environment.
         type: string
@@ -70,7 +70,7 @@ jobs:
           --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s
           --health-retries 20
       redis:
-        image: redis:7.4-alpine
+        image: redis:7.4-alpine@sha256:7b1753b4c5ad8458906c272a8132b8c15f5557b000379eb115fb239706a384b7
         ports: ["6379:6379"]
         options: >-
           --health-cmd "redis-cli ping" --health-interval 5s --health-timeout 3s --health-retries 20
@@ -96,6 +96,8 @@ jobs:
           # A fresh high-entropy key per run; settings refuse placeholders.
           echo "DJANGO_SECRET_KEY=$(python -c 'import secrets; print(secrets.token_urlsafe(48))')" >> "$GITHUB_ENV"
           if [ -n "$EXTRA_ENV" ]; then printf '%s\n' "$EXTRA_ENV" >> "$GITHUB_ENV"; fi
+      # These inputs are trusted shell: `eval` runs them as written. Only the calling workflow
+      # (already trusted code) sets them; never pass `github.event.*` or other PR-controlled text.
       - name: Install
         env: { CMD: "${{ inputs.install-command }}" }
         run: eval "$CMD"
