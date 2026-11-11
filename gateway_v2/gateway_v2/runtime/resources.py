@@ -252,6 +252,13 @@ _SCAN_SLOT_COST_US = 200  # DECLARED per-slot cost when none was measured (gw34 
 # 2-4x. The declared value was measured on one VM and was ~40% optimistic on GitHub's runners.
 _SCAN_CALIBRATION_PASSES = 5  # timed passes of one scan-budget window each; the median is kept
 _SCAN_COST_MARGIN = 1.5  # measured median per-slot cost x margin = the cost the bound is sized for
+_SCAN_CALIBRATION_MAX_PASS_S = 0.05  # longest timed pass: a huge target_p99 cannot stall boot
+_SCAN_CALIBRATION_RETRIES = 2  # re-calibrations when the bound comes out below the floor
+# A realistic tool request (20 tools, call history, response_format) uses every joined channel,
+# and the GW34 design keeps such a request at <= this share of max_scanned_slots. The floor is
+# ceil(joined channels / headroom); a host calibrated below it serves the floor and logs that a
+# scan may overrun its budget (every slot is still scanned; only latency is at stake).
+_SCAN_SLOT_HEADROOM = 0.7
 _PARTS_PER_SCHEMA_NODE = 2  # a schema node adds at most one `{` and one `,` to the C26 count
 @dataclass(frozen=True, slots=True)
 class McpBounds:
@@ -633,7 +640,9 @@ def from_signals(
     worker_override: int | None = None,
     guard_capacity: CapacityHint | None = None,
 ) -> ResourceContract:
-    if target_p99_ms <= 0 or utilization_cap <= 0 or per_worker_rss < 1:
+    if not (math.isfinite(target_p99_ms) and target_p99_ms > 0):
+        raise CapacityUnavailable("deployment SLO invalid: target_p99_ms must be finite and > 0")
+    if not (math.isfinite(utilization_cap) and utilization_cap > 0) or per_worker_rss < 1:
         raise CapacityUnavailable("deployment SLO / rss invalid")
     contract = ResourceContract(
         cpu_quota=signals.cpu_quota,

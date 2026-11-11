@@ -51,6 +51,16 @@ _SHIPPED_DEFAULT_LOGS = (
     "boot: quota -> fail_closed_budget (fail-closed budget refusal; no GW06 decider wired)",
     "boot: catalog -> empty_catalog_source (every retrieve model_not_found; backend deferred)",
 )
+_TOOL_BOUNDS_LINE = "boot: tool_bounds -> max_scanned_slots="
+
+
+def _fallback_lines(logs: tuple[str, ...]) -> tuple[str, ...]:
+    """The fallback table, after checking the one GW34 scan-sizing line every profile adds."""
+    sizing = [line for line in logs if line.startswith(_TOOL_BOUNDS_LINE)]
+    assert len(sizing) == 1, logs
+    return tuple(line for line in logs if not line.startswith(_TOOL_BOUNDS_LINE))
+
+
 _SHIPPED_DEFAULT_KEYS = frozenset(
     {
         "contract",
@@ -105,7 +115,7 @@ def _dev_env(**overrides: str) -> dict[str, str]:
 def test_default_boot_is_exactly_the_shipped_fail_closed_table(env: Mapping[str, str]) -> None:
     contract = _contract()
     deps, logs = serve.build_boot_dependencies(contract=contract, env=env)
-    assert logs == _SHIPPED_DEFAULT_LOGS
+    assert _fallback_lines(logs) == _SHIPPED_DEFAULT_LOGS
     assert frozenset(deps) == _SHIPPED_DEFAULT_KEYS
     assert deps["contract"] is contract
     assert isinstance(deps["provider"], StubProviderClient) and deps["provider"].script == ()
@@ -127,7 +137,7 @@ def test_default_boot_reads_os_environ_and_is_unaffected_by_dev_inputs(
         monkeypatch.setenv(key, value)
     monkeypatch.delenv("AMF_DEV_PROFILE", raising=False)
     _deps, logs = serve.build_boot_dependencies(contract=_contract())
-    assert logs == _SHIPPED_DEFAULT_LOGS
+    assert _fallback_lines(logs) == _SHIPPED_DEFAULT_LOGS
 
 
 def test_default_assembled_app_is_not_wrapped() -> None:

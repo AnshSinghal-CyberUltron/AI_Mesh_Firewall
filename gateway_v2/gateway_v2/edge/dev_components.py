@@ -47,11 +47,7 @@ from gateway_v2.detect.conditions import (
     raise_if_refused,
     scan_conditions,
 )
-from gateway_v2.detect.deterministic.detectors import (
-    InjectionSignalDetector,
-    PiiDetector,
-    SecretDetector,
-)
+from gateway_v2.detect.deterministic.detectors import BASE_DETECTORS
 from gateway_v2.detect.guard.backend import Budget
 from gateway_v2.dispatch.provider import UpstreamEvent, UpstreamRequest
 from gateway_v2.dispatch.transform import BODY_DELTAS_KEY
@@ -348,9 +344,8 @@ class DeterministicFindings:
         """
         context = DetectorContext(phase=self.phase, rules=(), budget=Budget(self.budget_s))
         findings: list[Finding] = []
-        findings.extend(PiiDetector().detect(text, context))
-        findings.extend(SecretDetector().detect(text, context))
-        findings.extend(InjectionSignalDetector().detect(text, context))
+        for detector in BASE_DETECTORS:
+            findings.extend(detector().detect(text, context))
         if self.conditions_of is not None:
             scanned = scan_conditions(
                 self.conditions_of(),
