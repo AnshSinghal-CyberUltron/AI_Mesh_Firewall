@@ -137,7 +137,9 @@ class PineconeTransport:
             client = self._client()
             index = self._index(client)
             stats = index.describe_index_stats()
-            names = tuple(sorted(stats.get("namespaces", {}).keys()))
+            # One in-memory response: iterate its ``namespaces`` mapping (the org's own index).
+            # This is not a store KEYS command, so it does not enumerate the keyspace.
+            names = tuple(sorted(stats.get("namespaces", {})))
         except Exception as exc:  # noqa: BLE001
             raise self._wrap(exc, "list") from exc
         return AdapterResult(code=posture.VECTOR_OK, collections=names)

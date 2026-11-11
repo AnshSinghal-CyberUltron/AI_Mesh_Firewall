@@ -147,6 +147,23 @@ ignore_missing_imports = true
 module = ["pymilvus.*"]
 ignore_missing_imports = true
 
+# GW30: the other live-gate store SDKs are optional too (imported lazily inside each
+# ``dispatch/vector_transports/*_transport.py`` ``_client()``) and are not in the ``dev`` extra,
+# so CI's ``mypy --strict`` cannot find them. When an SDK IS installed and ships ``py.typed``
+# (pinecone, qdrant-client, weaviate), its imports are still fully type-checked; this override
+# only stops an absent optional SDK from failing the gate.
+[[tool.mypy.overrides]]
+module = [
+    "chromadb.*",
+    "elasticsearch.*",
+    "opensearchpy.*",
+    "pinecone.*",
+    "pymongo.*",
+    "qdrant_client.*",
+    "weaviate.*",
+]
+ignore_missing_imports = true
+
 [tool.importlinter]
 root_packages = ["gateway_v2"]
 # C11 / R10.4-10.5: the "No HTTP framework outside edge" forbidden contract names the
