@@ -109,10 +109,15 @@ class ScanSizing:
 def _cost_remedy(pinned: bool) -> str:
     """What lowers the per-slot cost, by where the cost came from (Reviewers A and B on #105)."""
     if pinned:
-        return f"lower or unset {SCAN_COST_ENV} (the pinned cost decides the bound)"
+        # Only a pin that overstates the cost should be lowered: lowering a true pin removes the
+        # warning while scans stay as slow (Reviewer A on #109).
+        return (
+            f"if the pin overstates this host's cost, lower it, or unset {SCAN_COST_ENV} to "
+            "measure (the pinned cost decides the bound)"
+        )
     return (
-        "a faster or less-contended CPU while the parent calibrates (the cost is measured "
-        "before workers start, so fewer workers eases serving latency only)"
+        "run on a faster or less-contended CPU while the parent calibrates (the cost is "
+        "measured before workers start, so fewer workers eases serving latency only)"
     )
 
 

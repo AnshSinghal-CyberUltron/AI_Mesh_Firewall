@@ -272,9 +272,11 @@ def test_the_remedy_names_what_lowers_the_cost_for_each_source() -> None:
     pinned = scan_sizing(c, {SCAN_COST_ENV: "2000"})
     inherited = scan_sizing(c, {SCAN_COST_ENV: "2000", SCAN_COST_SOURCE_ENV: "parent"})
     assert pinned is not None and inherited is not None and pinned.clamped and inherited.clamped
-    assert f"or lower or unset {SCAN_COST_ENV}" in pinned.boot_line()
+    pinned_remedy = f"if the pin overstates this host's cost, lower it, or unset {SCAN_COST_ENV}"
+    assert pinned_remedy in pinned.boot_line()
     assert "measured" not in pinned.boot_line().split("Remedy:")[1]
-    assert "faster or less-contended CPU while the parent calibrates" in inherited.boot_line()
+    measured_remedy = "run on a faster or less-contended CPU while the parent calibrates"
+    assert measured_remedy in inherited.boot_line()
     assert SCAN_COST_ENV + " (" not in inherited.boot_line().split("Remedy:")[1]
 
 
@@ -282,10 +284,10 @@ def test_the_refusal_names_its_source_and_the_remedy_for_it(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     c = _contract()
-    pinned_refusal = rf"\(pinned\)\): .*lower or unset {SCAN_COST_ENV}"
+    pinned_refusal = rf"\(pinned\)\): .*lower it, or unset {SCAN_COST_ENV} to measure"
     with pytest.raises(CapacityUnavailable, match=pinned_refusal):
         scan_sizing(c, {SCAN_COST_ENV: "100000"})
     monkeypatch.setattr(scan_calibration, "measure_scan_slot_cost_us", lambda _b, _w, _f: 100_000.0)
-    measured_refusal = r"measured at boot\): .*faster or less-contended CPU"
+    measured_refusal = r"measured at boot\): .*run on a faster or less-contended CPU"
     with pytest.raises(CapacityUnavailable, match=measured_refusal):
         scan_sizing(c, {})

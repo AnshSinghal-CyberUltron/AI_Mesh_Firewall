@@ -26,6 +26,18 @@ KEY = "sk-dev-gw28"
 _REAL_CLIENT = httpx.AsyncClient  # captured before any test patches httpx.AsyncClient
 _C = H.contract(p99_ms=1.0)  # first_event 1.5 s, max_stream_duration 15 s
 
+# A 1 ms p99 leaves a 500 us scan budget, and GW34 refuses to start when no scan slot fits it
+# (#104). These tests check timers, not calibration, so the scan cost is pinned far below that:
+# both in os.environ (`resolve_tool_bounds` reads it) and in every explicit boot env below.
+_SCAN_COST_PIN = {"AMF_SCAN_SLOT_COST_US": "40"}
+
+
+@pytest.fixture(autouse=True)
+def _pin_scan_cost(monkeypatch: pytest.MonkeyPatch) -> None:
+    for name, value in _SCAN_COST_PIN.items():
+        monkeypatch.setenv(name, value)
+
+
 
 def _sse(text: str) -> bytes:
     chunk = {"choices": [{"index": 0, "delta": {"role": "assistant", "content": text}}]}
@@ -48,6 +60,7 @@ def _boot(monkeypatch: pytest.MonkeyPatch, delay_s: float, log: list[str] | None
         httpx, "AsyncClient", lambda **kw: real(transport=httpx.MockTransport(handler), **kw)
     )
     env = {
+        **_SCAN_COST_PIN,
         "AMF_DEV_PROFILE": "1",
         "AMF_DEV_API_KEY": KEY,
         "AMF_DEV_PLAN_PATH": str(EXAMPLE_PLAN),
@@ -97,6 +110,7 @@ def test_dev_profile_builds_one_plain_provider_and_one_passthrough_routing(
 
 def test_dev_profile_without_upstream_url_has_no_routing(monkeypatch: pytest.MonkeyPatch) -> None:
     env = {
+        **_SCAN_COST_PIN,
         "AMF_DEV_PROFILE": "1",
         "AMF_DEV_API_KEY": KEY,
         "AMF_DEV_PLAN_PATH": str(EXAMPLE_PLAN),
