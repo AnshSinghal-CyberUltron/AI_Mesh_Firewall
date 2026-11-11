@@ -97,7 +97,9 @@ jobs:
         env:
           JUNIT: ${{ inputs.working-directory }}/${{ inputs.junit-path }}
           BASELINE: ${{ inputs.known-failures-file }}
-        run: python scripts/ci/known_failures.py --junit "$JUNIT" --baseline "$BASELINE"
+        run: |
+          python -m pip install --quiet "defusedxml==0.7.1"
+          python scripts/ci/known_failures.py --junit "$JUNIT" --baseline "$BASELINE"
       - name: Upload test report
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
