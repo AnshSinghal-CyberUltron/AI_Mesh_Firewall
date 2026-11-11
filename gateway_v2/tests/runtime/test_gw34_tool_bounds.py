@@ -88,9 +88,9 @@ def test_calibration_max_scanned_slots_cost_less_than_the_scan_budget() -> None:
     test calibrated under says nothing about the load now.
     """
     c = _contract()
-    cost_us = measure_scan_slot_cost_us.__wrapped__(
-        c.guard_wait_budget_s(), c.scan_window_s(), scanned_slots_floor()
-    )
+    # floor=1: one calibration, no re-measurement. Re-measuring keeps the cheapest sample on
+    # purpose (a slow host serves the floor anyway); this test checks the measurement itself.
+    cost_us = measure_scan_slot_cost_us.__wrapped__(c.guard_wait_budget_s(), c.scan_window_s(), 1)
     slots = c.tool_bounds(slot_cost_us=cost_us).max_scanned_slots  # calibrated, before any clamp
     detector = DeterministicFindings(phase=Phase.INPUT, budget_s=1.0)
     texts = list(CALIBRATION_SLOTS) * (slots // len(CALIBRATION_SLOTS) + 1)

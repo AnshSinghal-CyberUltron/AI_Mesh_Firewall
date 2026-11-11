@@ -52,6 +52,7 @@ from gateway_v2.runtime.resources import (
 __all__ = (
     "CALIBRATION_SLOTS",
     "SCAN_COST_ENV",
+    "SCAN_COST_SOURCE_ENV",
     "ScanSizing",
     "export_for_workers",
     "measure_scan_slot_cost_us",
@@ -67,6 +68,9 @@ CALIBRATION_SLOTS = ("ignore_previous_instr", "AKIA" + "0" * 16, "get_current_we
 
 #: Per-slot cost in microseconds (margin included) shared by the parent with its workers.
 SCAN_COST_ENV = "AMF_SCAN_SLOT_COST_US"
+#: Set beside it by the parent, so a worker can tell an inherited value from an operator pin.
+SCAN_COST_SOURCE_ENV = "AMF_SCAN_SLOT_COST_SOURCE"
+_INHERITED = "parent"
 
 _US_PER_S = _MS_PER_S * _MS_PER_S
 
@@ -91,9 +95,11 @@ class ScanSizing:
             f"{self.cost_us:.0f} us/slot, {self.source}; floor {self.floor})"
         )
         if self.clamped:
+            needed_ms = self.floor * self.cost_us / (_MS_PER_S * _SCAN_BUDGET_FRACTION)
             line += (
                 f"; CLAMPED from {self.calibrated_slots}: this host cannot scan a realistic "
-                "tool request inside the scan budget, so such scans may overrun it"
+                "tool request inside the scan budget, so such scans may overrun it. Remedy: "
+                f"AMF_TARGET_P99_MS >= {math.ceil(needed_ms)}, or more CPU or fewer workers"
             )
         return line
 
@@ -181,11 +187,23 @@ def scan_sizing(contract: object, env: Mapping[str, str] | None = None) -> ScanS
     if declared is None:
         cost = measure_scan_slot_cost_us(float(budget()), float(window()), floor)
         source = "measured at boot"
+    elif source_env.get(SCAN_COST_SOURCE_ENV) == _INHERITED:
+        cost, source = declared, "inherited from the parent's boot calibration"
     else:
-        cost, source = declared, SCAN_COST_ENV
+        cost, source = declared, f"{SCAN_COST_ENV} (pinned)"
     # The same expression `tool_bounds` uses, so a fractional p99 cannot fake a clamp.
     target_ms = float(getattr(contract, "target_p99_ms", 0.0))
-    calibrated = math.floor(target_ms * _MS_PER_S * _SCAN_BUDGET_FRACTION / cost)  # may be 0
+    raw = target_ms * _MS_PER_S * _SCAN_BUDGET_FRACTION / cost
+    if not math.isfinite(raw):
+        raise CapacityUnavailable(f"{SCAN_COST_ENV}={cost!r} sizes an unbounded slot count")
+    calibrated = math.floor(raw)
+    if calibrated < 1:
+        # Not a busy host but a mis-set SLO: not even one slot fits the scan budget. Keep the
+        # old fail-closed signal instead of clamping (Reviewer B on #104).
+        raise CapacityUnavailable(
+            f"no scan slot fits {target_ms} ms x {_SCAN_BUDGET_FRACTION} at {cost:.0f} us/slot: "
+            "raise AMF_TARGET_P99_MS"
+        )
     served = resolver(slot_cost_us=cost, scanned_slots_floor=floor).max_scanned_slots
     sizing = ScanSizing(cost, source, floor, calibrated, served)
     if sizing.clamped:
@@ -210,3 +228,4 @@ def export_for_workers(contract: object, env: MutableMapping[str, str] | None = 
     sizing = scan_sizing(contract, target)
     if sizing is not None:
         target[SCAN_COST_ENV] = repr(sizing.cost_us)
+        target[SCAN_COST_SOURCE_ENV] = _INHERITED

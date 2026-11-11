@@ -22,6 +22,7 @@ from gateway_v2.edge.chat_deps import resolve_tool_bounds
 from gateway_v2.edge.scan_calibration import (
     CALIBRATION_SLOTS,
     SCAN_COST_ENV,
+    SCAN_COST_SOURCE_ENV,
     export_for_workers,
     measure_scan_slot_cost_us,
     scan_sizing,
@@ -103,7 +104,7 @@ def test_a_declared_cost_is_used_without_measuring(monkeypatch: pytest.MonkeyPat
     c = _contract()
     sizing = scan_sizing(c, {SCAN_COST_ENV: "250.5"})
     assert sizing is not None
-    assert sizing.cost_us == 250.5 and sizing.source == SCAN_COST_ENV
+    assert sizing.cost_us == 250.5 and sizing.source == f"{SCAN_COST_ENV} (pinned)"
     assert calls == []
     assert sizing.served_slots == c.tool_bounds(
         slot_cost_us=250.5, scanned_slots_floor=scanned_slots_floor()
@@ -118,7 +119,7 @@ def test_an_invalid_declared_cost_refuses_to_start(raw: str) -> None:
 
 def test_a_slow_host_serves_the_floor_and_says_so(caplog: pytest.LogCaptureFixture) -> None:
     c = _contract()
-    sizing = scan_sizing(c, {SCAN_COST_ENV: "100000"})  # 100 ms per slot: bound would be 0
+    sizing = scan_sizing(c, {SCAN_COST_ENV: "2000"})  # 2 ms per slot: 5 slots, below the floor
     assert sizing is not None
     assert sizing.calibrated_slots < sizing.floor == sizing.served_slots
     assert sizing.clamped
@@ -128,7 +129,7 @@ def test_a_slow_host_serves_the_floor_and_says_so(caplog: pytest.LogCaptureFixtu
 
 def test_the_served_bound_is_floored_on_a_slow_host(monkeypatch: pytest.MonkeyPatch) -> None:
     """Review of #104: pin the cost, so the served-path floor is tested on every host."""
-    monkeypatch.setenv(SCAN_COST_ENV, "100000")  # 100 ms per slot: the calibrated bound is 0
+    monkeypatch.setenv(SCAN_COST_ENV, "2000")  # 2 ms per slot: the calibrated bound is 5
     served = resolve_tool_bounds(_contract())
     assert served is not None
     assert served.max_scanned_slots == scanned_slots_floor()
@@ -161,7 +162,7 @@ def test_the_clamp_warning_is_logged_once(caplog: pytest.LogCaptureFixture) -> N
     scan_calibration._warn_clamped.cache_clear()
     c = _contract()
     for _ in range(3):
-        scan_sizing(c, {SCAN_COST_ENV: "123456"})
+        scan_sizing(c, {SCAN_COST_ENV: "2500"})
     assert sum("CLAMPED" in r.getMessage() for r in caplog.records) == 1
 
 
@@ -173,6 +174,29 @@ def test_main_exports_the_calibration_for_its_workers() -> None:
     source = inspect.getsource(serve.main)
     assert "export_for_workers(contract)" in source
     assert source.index("_assemble_app(deps)") < source.index("export_for_workers(contract)")
+
+
+@pytest.mark.parametrize("raw", ["100000", "1e-320", "5e-324"])
+def test_a_cost_that_fits_no_slot_or_overflows_refuses_with_a_clear_message(raw: str) -> None:
+    """Reviewer B on #104: an absurd SLO or cost is a mis-configuration, not a busy host."""
+    with pytest.raises(CapacityUnavailable, match="AMF_"):
+        scan_sizing(_contract(), {SCAN_COST_ENV: raw})
+
+
+def test_the_clamp_line_names_the_remedy() -> None:
+    sizing = scan_sizing(_contract(), {SCAN_COST_ENV: "2000"})
+    assert sizing is not None and sizing.clamped
+    # floor 12 x 2000 us / (1000 x 0.5) = 48 ms
+    assert "AMF_TARGET_P99_MS >= 48" in sizing.boot_line()
+
+
+def test_the_source_label_tells_inherited_from_pinned() -> None:
+    c = _contract()
+    inherited = scan_sizing(c, {SCAN_COST_ENV: "300", SCAN_COST_SOURCE_ENV: "parent"})
+    pinned = scan_sizing(c, {SCAN_COST_ENV: "300"})
+    assert inherited is not None and pinned is not None
+    assert "inherited from the parent" in inherited.boot_line()
+    assert "(pinned)" in pinned.boot_line()
 
 
 def test_a_fast_host_is_not_clamped() -> None:
@@ -192,7 +216,7 @@ def test_the_parent_exports_one_cost_and_workers_serve_the_same_bound(
         scan_calibration, "measure_scan_slot_cost_us", lambda _b, _w, _f: 321.0
     )
     export_for_workers(c, env)
-    assert env == {SCAN_COST_ENV: repr(321.0)}
+    assert env == {SCAN_COST_ENV: repr(321.0), SCAN_COST_SOURCE_ENV: "parent"}
     first = scan_sizing(c, env)
     monkeypatch.setattr(
         scan_calibration, "measure_scan_slot_cost_us", lambda _b, _w, _f: 9_999.0
