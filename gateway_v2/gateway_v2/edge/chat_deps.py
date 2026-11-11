@@ -233,5 +233,16 @@ def resolve_tool_bounds(contract: object) -> ToolBounds | None:
     ``ResourceContract`` always provides it.
     """
     resolver = getattr(contract, "tool_bounds", None)
-    bounds = resolver() if callable(resolver) else None
+    if not callable(resolver):
+        return None
+    budget = getattr(contract, "guard_wait_budget_s", None)
+    window = getattr(contract, "scan_window_s", None)
+    if callable(budget) and callable(window):
+        # Size the scanned-slot bound for THIS host (edge/scan_calibration.py), not a constant.
+        from gateway_v2.edge.scan_calibration import measure_scan_slot_cost_us
+
+        cost_us = measure_scan_slot_cost_us(float(budget()), float(window()))
+        bounds = resolver(slot_cost_us=cost_us)
+    else:
+        bounds = resolver()
     return bounds if isinstance(bounds, ToolBounds) else None

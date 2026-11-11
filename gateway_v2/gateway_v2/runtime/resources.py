@@ -244,7 +244,14 @@ _SCHEMA_DEPTH = 32  # JSON-schema nesting: deeper than generated schemas, cheap 
 _SCHEMA_NODE_BYTES = 64  # nodes <= max_request_bytes // this (a node is >= 4 B of JSON)
 _TOOL_ARGUMENTS_DIVISOR = 4  # one call's arguments may use at most 1/4 of the request bytes
 _SCAN_BUDGET_FRACTION = 0.5  # share of target_p99_ms that detector invocations may consume
-_SCAN_SLOT_COST_US = 200  # per detector call: measured p99 ~152 us (evidence gw34), +margin
+_SCAN_SLOT_COST_US = 200  # DECLARED per-slot cost when none was measured (gw34 VM p99 ~152 us)
+# Boot calibration (edge/scan_calibration.py) replaces the declared cost with this host's: the
+# median of N timed passes over worst-case slots, times a margin for the p99-vs-median spread.
+# Each pass lasts one scan budget (target_p99 x fraction), the window the bound limits: a pass of
+# a few slots fits inside one scheduler slice and, on a busy host, understated a full window by
+# 2-4x. The declared value was measured on one VM and was ~40% optimistic on GitHub's runners.
+_SCAN_CALIBRATION_PASSES = 5  # timed passes of one scan-budget window each; the median is kept
+_SCAN_COST_MARGIN = 1.5  # measured median per-slot cost x margin = the cost the bound is sized for
 _PARTS_PER_SCHEMA_NODE = 2  # a schema node adds at most one `{` and one `,` to the C26 count
 @dataclass(frozen=True, slots=True)
 class McpBounds:
