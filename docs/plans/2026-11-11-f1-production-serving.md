@@ -144,6 +144,9 @@ Signed state has kinds PLAN, KEY, KS and BUDGET only (`domain/state.py:43-49`). 
   - The closure captures the immutable program by value, with no `ContextVar`.
   - Both profiles use it, and `request_org` is deleted.
   - The 12 `bind_surface` call sites take the factory; moderations passes `plan=None` (built-ins only).
+- **Customer regex must be pre-emptible (blocker for F1a).** This was Reviewer A's finding on #100, and it is confirmed. Today a customer regex runs on Python `re` in a thread with `join(budget_s)` (`detect/conditions.py:190-208`). `re` holds the GIL, so the join cannot interrupt a catastrophic match. `^(\w+\s?)+$` on 25 characters took 1.31 s against a 100 ms budget, returned no timeout code, and froze every thread in the worker. The shape filter (`:115-121`) misses it.
+  - Fix: compile customer conditions with a linear-time engine. Use `google-re2` where the pattern is RE2-compatible; otherwise use the `regex` package with `timeout=`, which releases the GIL and raises. A pattern neither engine accepts is refused at publish time with `policy_regex_timeout`.
+  - Tests: both reviewer patterns, plus a throughput test proving that one tenant's pattern cannot stall another tenant's request.
 - **Resolvers:** `phase_resolvers=phase_resolver_factory()` in production. Base input and output detectors are the deterministic GW09 set. These helpers move out of `dev_components.py`.
 - **Audit:**
   1. Build admission before the incident wiring, so `bounds.audit_depth` exists.
@@ -199,4 +202,5 @@ The projector gets `AMF_PROVIDER_CRED_KEYS` and control's model key.
 | Ciphertext persisted in the append-only state log | AES-GCM under a gateway-only key; rotation by kid; the log never holds plaintext |
 | Detector factory refactor touches 12 call sites | Off-loop regression tests per site; full suite |
 | Provider coverage depends on vendor OpenAI-compat endpoints (cohere, google, meta) | F1b/F1c add native adapters where compat is partial; L36-1 per family with a protocol-faithful fake |
+| Catastrophic customer regex stalls a worker for every tenant (GIL-bound `re`) | Linear-time engine (RE2 / `regex` with timeout) before production detectors go live (§4.5) |
 | CPU guard model not in F1 | Semantic stage stays FLAG/UNAVAILABLE-declared until F2 (GW36 S6) |
