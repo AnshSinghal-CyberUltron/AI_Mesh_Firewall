@@ -1,0 +1,7 @@
+# After the fix: the new tests plus neighbours, branch head ffaf5f53
+Ran 70 tests in 220.381s
+FAILED (failures=3)
+FAIL: test_websocket_ws_scheme_url_is_allowed (mcp_connector.tests.test_oauth_transport_guard.OAuthTransportGuardTests.test_websocket_ws_scheme_url_is_allowed)
+FAIL: test_superuser_may_compile_explicit_other_org (core.tests.test_policy_compile_org_assertion.PolicyCompileOrgAssertionTests.test_superuser_may_compile_explicit_other_org)
+FAIL: test_org_admin_can_mutate_nonowned_same_org_key (core.tests.test_gateway_key_owner_perm.GatewayKeyOwnerPermTests.test_org_admin_can_mutate_nonowned_same_org_key)
+# The 3 failures are #106 baseline entries on develop (fixed by PR #113, not merged yet): known failures, not regressions.
