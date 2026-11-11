@@ -73,6 +73,7 @@ from gateway_v2.detect.deterministic.patterns import RULESET, ruleset_version
 from gateway_v2.domain import Category, Finding, FindingStatus
 
 __all__ = (
+    "BASE_DETECTORS",
     "InjectionSignalDetector",
     "PiiDetector",
     "SecretDetector",
@@ -199,3 +200,9 @@ class InjectionSignalDetector(_DeterministicBase):
     _family: ClassVar[str] = "injection"
     _detector_id: ClassVar[str] = "deterministic.injection"
     _unavailable_category: ClassVar[Category] = Category.PROMPT_INJECTION
+
+
+#: The GW09 deterministic set every scan seam runs, in order. One tuple, so the served detector
+#: (`DeterministicFindings`) and the GW34 boot calibration (`edge/scan_calibration.py`) can never
+#: time a different set than the one that serves.
+BASE_DETECTORS: Final = (PiiDetector, SecretDetector, InjectionSignalDetector)

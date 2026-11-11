@@ -24,6 +24,7 @@ from gateway_v2.detect.deterministic.canonicalize import (
     canonicalize,
 )
 from gateway_v2.detect.deterministic.detectors import (
+    BASE_DETECTORS,
     InjectionSignalDetector,
     PiiDetector,
     SecretDetector,
@@ -38,6 +39,7 @@ from gateway_v2.detect.deterministic.patterns import (
 from gateway_v2.detect.deterministic.redactor import RedactResult, redact, verify
 
 __all__ = (
+    "BASE_DETECTORS",
     "DEFAULT_BUDGET",
     "REDACTION_PLACEHOLDER",
     "RULESET",

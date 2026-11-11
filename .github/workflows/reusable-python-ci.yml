@@ -42,6 +42,10 @@ on:
       known-failures-file:
         type: string
         default: ""
+      min-tests:
+        description: With a ratchet, fewer test cases than this means the run crashed.
+        type: number
+        default: 1
       timeout-minutes:
         type: number
         default: 45
@@ -72,8 +76,8 @@ jobs:
           python -m venv "$RUNNER_TEMP/venv"
           echo "VENV=$RUNNER_TEMP/venv" >> "$GITHUB_ENV"
           echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
-      # Commands come from the calling workflow (trusted), and are passed through env rather
-      # than templated into the script text, so no input can inject shell syntax.
+      # These inputs are trusted shell: `eval` runs them as written. Only the calling workflow
+      # (already trusted code) sets them; never pass `github.event.*` or other PR-controlled text.
       - name: Install
         env: { CMD: "${{ inputs.install-command }}" }
         run: eval "$CMD"
@@ -87,19 +91,29 @@ jobs:
         run: eval "$CMD"
       - name: Test
         id: test
-        # With a known-failures baseline the ratchet below decides pass/fail, not pytest's exit.
-        continue-on-error: ${{ inputs.known-failures-file != '' }}
-        env: { CMD: "${{ inputs.test-command }}" }
-        run: eval "$CMD"
+        env:
+          CMD: ${{ inputs.test-command }}
+          BASELINE: ${{ inputs.known-failures-file }}
+        run: |
+          set +e
+          eval "$CMD"
+          rc=$?
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+          # With a baseline the ratchet decides (it also fails a crashed run); without one,
+          # the test command's own exit status does.
+          if [ -z "$BASELINE" ]; then exit "$rc"; fi
       - name: Known-failure ratchet
         if: inputs.known-failures-file != ''
         working-directory: .
         env:
           JUNIT: ${{ inputs.working-directory }}/${{ inputs.junit-path }}
           BASELINE: ${{ inputs.known-failures-file }}
+          RC: ${{ steps.test.outputs.rc }}
+          MIN_TESTS: ${{ inputs.min-tests }}
         run: |
           python -m pip install --quiet "defusedxml==0.7.1"
-          python scripts/ci/known_failures.py --junit "$JUNIT" --baseline "$BASELINE"
+          python scripts/ci/known_failures.py --junit "$JUNIT" --baseline "$BASELINE" \
+            --exit-code "$RC" --min-tests "$MIN_TESTS"
       - name: Upload test report
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

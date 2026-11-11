@@ -16,6 +16,7 @@ from typing import Any
 import pytest
 
 from gateway_v2.domain import Surface
+from gateway_v2.edge.chat_deps import resolve_tool_bounds
 from gateway_v2.edge.wire.openai import OpenAIRequestParser
 from tests.edge.test_gw36_s1_upstream_body import SSN, _chat, _contract, _Recorder
 
@@ -265,7 +266,9 @@ def _scan_slots(n_tools: int) -> tuple[int, int]:
     )
     template = req.upstream_template
     assert template is not None
-    return len(template.joined), contract.tool_bounds().max_scanned_slots
+    served = resolve_tool_bounds(contract)  # the bound build_app serves (calibrated, floored)
+    assert served is not None
+    return len(template.joined), served.max_scanned_slots
 
 
 def test_twenty_and_forty_tool_requests_have_scan_slot_headroom() -> None:

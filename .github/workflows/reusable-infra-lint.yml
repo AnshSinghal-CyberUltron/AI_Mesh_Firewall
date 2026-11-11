@@ -19,7 +19,7 @@ on:
   workflow_call:
     inputs:
       paths-exclude:
-        description: Extended regex of paths skipped by hadolint, shellcheck and Trivy.
+        description: Extended regex of paths skipped by hadolint and shellcheck (Trivy uses `trivy-skip-dirs`).
         type: string
         default: "^(docs|\\.kiro|\\.swarm|\\.skill-workspace|mcp-parallel|semantic-review|runs)/|node_modules"
       compose-files:
@@ -43,22 +43,26 @@ on:
         default: deploy
       nginx-image:
         type: string
-        default: nginx:1.30-alpine
+        default: nginx:1.30-alpine@sha256:583b7f2fce1cdb8da5ad5c39ebd3c33b98b87d493190e548bdee1fa8c619c311
       trivy-blocking:
         type: boolean
         default: false
       actionlint-image:
         type: string
-        default: rhysd/actionlint:1.7.12
+        default: rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667
       hadolint-image:
         type: string
-        default: hadolint/hadolint:v2.14.0
+        default: hadolint/hadolint:v2.14.0@sha256:27086352fd5e1907ea2b934eb1023f217c5ae087992eb59fde121dce9c9ff21e
       shellcheck-image:
         type: string
-        default: koalaman/shellcheck:v0.11.0
+        default: koalaman/shellcheck:v0.11.0@sha256:61862eba1fcf09a484ebcc6feea46f1782532571a34ed51fedf90dd25f925a8d
+      trivy-skip-dirs:
+        description: Comma-separated directories (globs allowed) that `trivy config` skips.
+        type: string
+        default: "docs,.kiro,.swarm,.skill-workspace,mcp-parallel,semantic-review,runs,node_modules"
       trivy-image:
         type: string
-        default: aquasec/trivy:0.76.2
+        default: aquasec/trivy:0.76.2@sha256:8f6bb947dbc528902e11f2f5be52f7b519f6a39d5d148f41166f2040499768fb
 
 permissions:
   contents: read
@@ -104,6 +108,7 @@ jobs:
           EXTRA_ENV: ${{ inputs.compose-env }}
           ENV_TEMPLATE: ${{ inputs.compose-env-file-template }}
         run: |
+          # compose-env is trusted shell (eval); only the calling workflow may set it.
           if [ -n "$EXTRA_ENV" ]; then set -a; eval "$EXTRA_ENV"; set +a; fi
           if [ -n "$ENV_TEMPLATE" ] && [ ! -e .env ]; then cp "$ENV_TEMPLATE" .env; fi
           status=0
@@ -155,11 +160,13 @@ jobs:
         continue-on-error: ${{ !inputs.trivy-blocking }}
         env:
           IMAGE: ${{ inputs.trivy-image }}
+          SKIP_DIRS: ${{ inputs.trivy-skip-dirs }}
         run: |
+          args=(config --quiet --severity "HIGH,CRITICAL" --format sarif
+                --output /src/trivy-config.sarif --exit-code 1)
+          if [ -n "$SKIP_DIRS" ]; then args+=(--skip-dirs "$SKIP_DIRS"); fi
           docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$PWD:/src" -w /src "$IMAGE" \
-            config --quiet --severity HIGH,CRITICAL \
-            --skip-dirs docs,.kiro,.swarm,.skill-workspace,mcp-parallel,semantic-review,runs,node_modules \
-            --format sarif --output /src/trivy-config.sarif --exit-code 1 .
+            "${args[@]}" .
       - name: Upload SARIF
         if: always() && hashFiles('trivy-config.sarif') != ''
         continue-on-error: true

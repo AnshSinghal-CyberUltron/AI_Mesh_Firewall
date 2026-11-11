@@ -284,7 +284,11 @@ def test_boot_log_has_exactly_one_line_per_fallback_naming_dep_and_fallback() ->
     Exactly ten fallback lines (one per unwired dependency), each a ``boot: <dep> -> <fallback>``
     diagnostic naming BOTH the dependency and the shipped fallback it uses.
     """
-    _deps, logs = serve.build_boot_dependencies(contract=_contract())
+    _deps, all_logs = serve.build_boot_dependencies(contract=_contract())
+    # Every profile also logs the GW34 scan sizing once; it is a measurement, not a fallback.
+    sizing = [line for line in all_logs if line.startswith("boot: tool_bounds ->")]
+    assert len(sizing) == 1 and "max_scanned_slots=" in sizing[0], all_logs
+    logs = tuple(line for line in all_logs if line not in sizing)
     assert len(logs) == len(_LOGGED_FALLBACK_DEPS), (
         f"expected {len(_LOGGED_FALLBACK_DEPS)} fallback log lines, got {len(logs)}: {logs!r}"
     )

@@ -32,6 +32,8 @@ jobs:
       # is tracked in the defect-fix work; flip this to true once it is cleared.
       check-migrations: false
       known-failures-file: .github/ci/control-known-failures.txt
+      # 513 tests today: a run that collects far fewer has lost an app (import error, crash).
+      min-tests: 500
 
   frontend:
     name: frontend (unit tests + production build)

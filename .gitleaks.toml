@@ -1,9 +1,16 @@
 # gitleaks configuration (used by .github/workflows/reusable-secret-scan.yml).
 #
-# Extends the upstream default rules. The allowlist covers ONLY material that is a deliberate,
-# fake credential: the detector test corpora (this product's job is to find secrets, so its
-# tests are full of secret-shaped strings), agent specs and evidence transcripts that quote
-# them. Production code, config, compose, deploy and scripts are never allowlisted.
+# Extends the upstream default rules. Allowlists cover ONLY material that is a deliberate,
+# fake credential:
+#
+#   1. The detector test corpora, for every rule. This product's job is to find secrets, so
+#      those tests are full of secret-shaped strings of every kind.
+#   2. Agent specs and recorded evidence that quote them, for every rule.
+#   3. Every other tests/ or fixtures/ path, for the noisy `generic-api-key` rule ONLY. A
+#      real-format AWS key, private key, token or password in, say, control/.../tests/ is
+#      still a finding (Reviewer B on #102: the old repo-wide tests/ allowlist let one through).
+#
+# Production code, config, compose, deploy and scripts are never allowlisted.
 #
 # To silence one confirmed false positive elsewhere, add its fingerprint to .gitleaksignore
 # with a comment saying why. Never widen the paths below to make a real finding go away.
@@ -12,16 +19,34 @@ title = "AI Mesh Firewall gitleaks config"
 [extend]
 useDefault = true
 
-[allowlist]
-description = "Synthetic credentials in detector tests, specs and recorded evidence"
+[[allowlists]]
+description = "Detector test corpora: synthetic credentials of every kind, by design"
 paths = [
-  '''(^|/)tests?/''',
-  '''(^|/)test_[^/]*\.py$''',
-  '''(^|/)fixtures?[^/]*''',
+  '''^gateway/ai_mesh_gateway/tests/''',
+  '''^gateway/tests/''',
+  '''^gateway_v2/tests/''',
+  '''^tests/detection_corpus/''',
+]
+
+[[allowlists]]
+description = "Agent specs and recorded evidence that quote the corpora"
+paths = [
   '''^\.kiro/specs/''',
   '''^docs/plans/evidence/''',
   '''^semantic-review/''',
 ]
+
+[[allowlists]]
+description = "Other tests and fixtures: the high-false-positive generic rule only"
+targetRules = ["generic-api-key"]
+paths = [
+  '''(^|/)tests?/''',
+  '''(^|/)test_[^/]*\.py$''',
+  '''(^|/)fixtures?/''',
+]
+
+[[allowlists]]
+description = "Documented example values and repo-published placeholders"
 regexes = [
   # AWS's documented example key, used throughout the detector tests.
   '''AKIAIOSFODNN7EXAMPLE''',

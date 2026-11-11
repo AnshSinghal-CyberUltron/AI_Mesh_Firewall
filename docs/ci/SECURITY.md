@@ -43,6 +43,12 @@ Until then, development continues with these values. The `.gitleaksignore` basel
 
 ## How CI prevents a recurrence
 
-- **On every PR and push:** gitleaks and TruffleHog (verified) scan the new commits and block on any finding.
-- **Every week:** the history scan alerts on anything not in `.gitleaksignore`. That file lists the historic fingerprints above, so the weekly scan does not re-alert on them. Being listed there does not make a value safe.
+- **On every PR and push:** gitleaks and TruffleHog (verified only) scan the new commits and block on any finding.
+  - **Merge commits are covered.** `git log -p` shows no diff for a merge, so a secret added while resolving a merge would otherwise pass. gitleaks runs with `--remerge-diff`, which shows exactly what each merge commit itself introduced. TruffleHog has no equivalent option; gitleaks is the merge-commit gate.
+  - **Test paths are not a blind spot.** Every rule is skipped only in the detector test corpora (`gateway/ai_mesh_gateway/tests/`, `gateway/tests/`, `gateway_v2/tests/`, `tests/detection_corpus/`) and in specs and recorded evidence. In any other `tests/` or `fixtures/` path only the noisy `generic-api-key` rule is skipped, so a real-format AWS key, private key or token there is still caught.
+  - **A scan that errors fails.** TruffleHog runs with `--fail-on-scan-errors` on a change range, so an aborted scan cannot report "0 found".
+- **Every week:** the full-history sweep (all refs, merge commits included).
+  - **gitleaks blocks** on anything not in `.gitleaksignore`. That file lists the historic fingerprints above, so the sweep does not re-alert on them. Being listed there does not make a value safe.
+  - **TruffleHog reports** (a warning annotation per verified credential): history cannot be fixed by the run that finds it.
+- **Reports never carry a secret value.** gitleaks runs with `--redact`. TruffleHog's JSON carries each value, so its raw output stays in the runner's temp directory and the uploaded artifact keeps only detector, file, commit and line.
 - **Locally:** `.gitignore` should exclude `.env*` except the `*.sample` files. Pair it with a pre-commit hook: `scripts/ralph/precommit-secret-scan.sh` already exists.

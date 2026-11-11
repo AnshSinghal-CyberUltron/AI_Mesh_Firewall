@@ -119,3 +119,7 @@ e06452f519ef080a2fc7dcb804fa98d570732894:mcp-parallel/findings/backstop-p2-priva
 e9e81554531a18a3b5de041b56171109176bf3bc:.env.ec2.sample:generic-api-key:47
 e9e81554531a18a3b5de041b56171109176bf3bc:.env:azure-ad-client-secret:48
 ef53196ad314bf671938cc6781a45f8fb49880d3:docs/policies/CISO_100.md:stripe-access-token:78
+# Added 11 Nov 2026 when the repo-wide tests/ allowlist was narrowed to generic-api-key (Reviewer B
+# on #102, S2). A truncated, non-functional PEM header in a guardrail unit test; not a key.
+4259666e90db501964d92d4f42e14f96dd54f738:control/ai_mesh_control/policy/tests/test_mcp_guardrail.py:private-key:191
+74827ed56a9aba389d001606f8dff8cc4a651a20:control/ai_mesh_control/policy/tests/test_mcp_guardrail.py:private-key:191

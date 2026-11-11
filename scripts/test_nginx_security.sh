@@ -52,13 +52,13 @@ grep -q 'COPY deploy/deny-public-openapi.inc /etc/nginx/deny-public-openapi.inc'
   || die "Dockerfile.nginx must COPY deny-public-openapi.inc"
 grep -q 'COPY deploy/deny-internal-api.inc /etc/nginx/deny-internal-api.inc' "${DF}" \
   || die "Dockerfile.nginx must COPY deny-internal-api.inc"
-grep -c 'include /etc/nginx/deny-internal-api.inc;' "${HTTP}" | grep -qx 2 \
+[ "$(grep -c 'include /etc/nginx/deny-internal-api.inc;' "${HTTP}")" = 2 ] \
   || die "nginx.conf must include deny-internal-api.inc on the firewall and backend vhosts"
-grep -c 'include /etc/nginx/deny-internal-api.inc;' "${SSL}" | grep -qx 2 \
+[ "$(grep -c 'include /etc/nginx/deny-internal-api.inc;' "${SSL}")" = 2 ] \
   || die "nginx-ssl.conf must include deny-internal-api.inc on the firewall and backend vhosts"
 grep -E 'COPY deploy/security-headers.inc .*/conf.d/' "${DF}" \
   && die "security-headers.inc must not land in conf.d/ (auto-loaded as a vhost)"
-grep -c 'include /etc/nginx/require-edge-https.inc;' "${HTTP}" | grep -qx 3 \
+[ "$(grep -c 'include /etc/nginx/require-edge-https.inc;' "${HTTP}")" = 3 ] \
     || die "nginx.conf must include require-edge-https.inc on all 3 named HTTP vhosts"
 grep -q 'include /etc/nginx/deny-public-openapi.inc;' "${HTTP}" \
   || die "nginx.conf must include deny-public-openapi.inc on the gateway vhost"
@@ -162,7 +162,7 @@ fi
 
 grep -q 'listen 443 ssl default_server' "${SSL}" \
   || die "nginx-ssl.conf missing listen 443 ssl default_server (unknown Host on :443)"
-if grep -A80 'listen 443 ssl default_server' "${SSL}" | grep -q 'try_files'; then
+if grep -A80 'listen 443 ssl default_server' "${SSL}" | grep 'try_files' >/dev/null; then
   die "HTTPS default_server must not try_files the SPA"
 fi
 
@@ -240,17 +240,22 @@ docker run --rm "${NGINX_MOUNTS[@]}" nginx:1.30-alpine \
   || die "nginx -t failed with baked-path includes"
 
 # Header proof: start nginx, curl named Host /login vs unknown Host /login.
+# Host ports: free ones by default (concurrent runs must not clash); override with
+# NGINX_TEST_HTTP_PORT / NGINX_TEST_HTTPS_PORT.
+free_port() { python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])'; }
+HTTP_PORT="${NGINX_TEST_HTTP_PORT:-$(free_port)}"
+HTTPS_PORT="${NGINX_TEST_HTTPS_PORT:-$(free_port)}"
 cid="$(docker run -d --rm \
   "${NGINX_MOUNTS[@]}" \
-  -p 127.0.0.1:18091:80 \
-  -p 127.0.0.1:18453:443 \
+  -p "127.0.0.1:${HTTP_PORT}:80" \
+  -p "127.0.0.1:${HTTPS_PORT}:443" \
   nginx:1.30-alpine \
   sh -c 'rm -f /etc/nginx/conf.d/default.conf && nginx -g "daemon off;"')"
 cleanup_cid() { docker rm -f "${cid}" >/dev/null 2>&1 || true; }
 trap 'cleanup_cid; rm -rf "${TMP}"' EXIT
 
 for _ in 1 2 3 4 5 6 7 8 9 10; do
-  curl -sf -o /dev/null -H "Host: 127.0.0.1" "http://127.0.0.1:18091/" && break
+  curl -sf -o /dev/null -H "Host: 127.0.0.1" "http://127.0.0.1:${HTTP_PORT}/" && break
   sleep 0.2
 done
 
@@ -266,76 +271,81 @@ done
 # "Failed to load: Attack Trends, SOC KPIs" long after the origin was fixed and
 # without a single request leaving the browser. 302 keeps a future misconfig
 # recoverable by reload instead of sticky.
-clear_login="$(curl -sI -H "Host: aimeshfirewall.zeroshield.ai" "http://127.0.0.1:18091/login")"
-echo "${clear_login}" | grep -qE '^HTTP/1\.[01] 301' \
+clear_login="$(curl -sI -H "Host: aimeshfirewall.zeroshield.ai" "http://127.0.0.1:${HTTP_PORT}/login")"
+grep -qE '^HTTP/1\.[01] 301' <<<"${clear_login}" \
   && die "cleartext GET /login must NOT 301 (sticky browser cache; use 302):"$'\n'"${clear_login}"
-echo "${clear_login}" | grep -qE '^HTTP/1\.[01] 302' \
+grep -qE '^HTTP/1\.[01] 302' <<<"${clear_login}" \
   || die "cleartext GET /login expected 302, got:"$'\n'"${clear_login}"
-echo "${clear_login}" | grep -qi '^location: https://aimeshfirewall.zeroshield.ai/login' \
+grep -qi '^location: https://aimeshfirewall.zeroshield.ai/login' <<<"${clear_login}" \
   || die "cleartext GET /login missing Location https://…/login"$'\n'"${clear_login}"
 
 clear_post="$(curl -sD - -o /dev/null -X POST -H "Host: aimeshfirewall.zeroshield.ai" \
   -H "Content-Type: application/json" --data-raw '{"email":"x","password":"y"}' \
-  "http://127.0.0.1:18091/api/auth/token/")"
-echo "${clear_post}" | grep -qE '^HTTP/1\.[01] 403' \
+  "http://127.0.0.1:${HTTP_PORT}/api/auth/token/")"
+grep -qE '^HTTP/1\.[01] 403' <<<"${clear_post}" \
   || die "cleartext POST /api/auth/token/ expected 403, got:"$'\n'"${clear_post}"
 
 edge_post="$(curl -sD - -o /dev/null -X POST -H "Host: aimeshfirewall.zeroshield.ai" \
   -H "X-Forwarded-Proto: https" -H "Content-Type: application/json" \
   --data-raw '{"email":"x","password":"y"}' \
-  "http://127.0.0.1:18091/api/auth/token/")"
-echo "${edge_post}" | grep -qE '^HTTP/1\.[01] 403' \
+  "http://127.0.0.1:${HTTP_PORT}/api/auth/token/")"
+grep -qE '^HTTP/1\.[01] 403' <<<"${edge_post}" \
   && die "ALB-like POST /api/auth/token/ must not 403 (need to reach proxy), got:"$'\n'"${edge_post}"
 
 hdrs="$(curl -sI -H "Host: aimeshfirewall.zeroshield.ai" \
-  -H "X-Forwarded-Proto: https" "http://127.0.0.1:18091/login")"
-echo "${hdrs}" | grep -qi '^x-frame-options: DENY' || die "/login missing X-Frame-Options: DENY"$'\n'"${hdrs}"
-echo "${hdrs}" | grep -qi '^x-content-type-options: nosniff' || die "/login missing X-Content-Type-Options"
-echo "${hdrs}" | grep -qi '^content-security-policy:.*frame-ancestors' || die "/login missing CSP frame-ancestors"
-echo "${hdrs}" | grep -qi '^strict-transport-security: max-age=31536000' || die "/login missing HSTS"
-echo "${hdrs}" | grep -qi '^referrer-policy: strict-origin-when-cross-origin' || die "/login missing Referrer-Policy"
-echo "${hdrs}" | grep -qi '^cache-control:.*no-store' || die "/login missing Cache-Control no-store"
-if echo "${hdrs}" | grep -qi '^server: nginx/'; then
+  -H "X-Forwarded-Proto: https" "http://127.0.0.1:${HTTP_PORT}/login")"
+grep -qi '^x-frame-options: DENY' <<<"${hdrs}" || die "/login missing X-Frame-Options: DENY"$'\n'"${hdrs}"
+grep -qi '^x-content-type-options: nosniff' <<<"${hdrs}" || die "/login missing X-Content-Type-Options"
+grep -qi '^content-security-policy:.*frame-ancestors' <<<"${hdrs}" || die "/login missing CSP frame-ancestors"
+grep -qi '^strict-transport-security: max-age=31536000' <<<"${hdrs}" || die "/login missing HSTS"
+grep -qi '^referrer-policy: strict-origin-when-cross-origin' <<<"${hdrs}" || die "/login missing Referrer-Policy"
+grep -qi '^cache-control:.*no-store' <<<"${hdrs}" || die "/login missing Cache-Control no-store"
+if grep -qi '^server: nginx/' <<<"${hdrs}"; then
   die "Server still discloses version: ${hdrs}"
 fi
-echo "${hdrs}" | grep -qi '^server: nginx' || die "expected Server: nginx (tokens off, name remains)"
+grep -qi '^server: nginx' <<<"${hdrs}" || die "expected Server: nginx (tokens off, name remains)"
 
 get_body_hdrs="$(curl -sD - -o /dev/null -H "Host: aimeshfirewall.zeroshield.ai" \
-  -H "X-Forwarded-Proto: https" "http://127.0.0.1:18091/login")"
-echo "${get_body_hdrs}" | grep -qi '^x-frame-options: DENY' || die "GET /login missing X-Frame-Options"$'\n'"${get_body_hdrs}"
+  -H "X-Forwarded-Proto: https" "http://127.0.0.1:${HTTP_PORT}/login")"
+grep -qi '^x-frame-options: DENY' <<<"${get_body_hdrs}" || die "GET /login missing X-Frame-Options"$'\n'"${get_body_hdrs}"
 
-tls_hdrs="$(curl -skI -H "Host: aimeshfirewall.zeroshield.ai" "https://127.0.0.1:18453/login")"
-echo "${tls_hdrs}" | grep -qi '^x-frame-options: DENY' || die "HTTPS /login missing X-Frame-Options"$'\n'"${tls_hdrs}"
-echo "${tls_hdrs}" | grep -qi '^strict-transport-security:' || die "HTTPS /login missing HSTS"
-if echo "${tls_hdrs}" | grep -qi '^server: nginx/'; then
+tls_hdrs="$(curl -skI -H "Host: aimeshfirewall.zeroshield.ai" "https://127.0.0.1:${HTTPS_PORT}/login")"
+grep -qi '^x-frame-options: DENY' <<<"${tls_hdrs}" || die "HTTPS /login missing X-Frame-Options"$'\n'"${tls_hdrs}"
+grep -qi '^strict-transport-security:' <<<"${tls_hdrs}" || die "HTTPS /login missing HSTS"
+if grep -qi '^server: nginx/' <<<"${tls_hdrs}"; then
   die "HTTPS Server still discloses version: ${tls_hdrs}"
 fi
 
-tls_unk="$(curl -skI -H "Host: evil.example" "https://127.0.0.1:18453/login")"
-echo "${tls_unk}" | grep -qE '^HTTP/2 403|^HTTP/1\.[01] 403' || die "HTTPS unknown Host /login expected 403, got:"$'\n'"${tls_unk}"
+tls_unk="$(curl -skI -H "Host: evil.example" "https://127.0.0.1:${HTTPS_PORT}/login")"
+grep -qE '^HTTP/2 403|^HTTP/1\.[01] 403' <<<"${tls_unk}" || die "HTTPS unknown Host /login expected 403, got:"$'\n'"${tls_unk}"
 
-unk="$(curl -sI -H "Host: evil.example" "http://127.0.0.1:18091/login")"
-echo "${unk}" | grep -qE '^HTTP/1\.[01] 403' || die "unknown Host /login expected 403, got:"$'\n'"${unk}"
+unk="$(curl -sI -H "Host: evil.example" "http://127.0.0.1:${HTTP_PORT}/login")"
+grep -qE '^HTTP/1\.[01] 403' <<<"${unk}" || die "unknown Host /login expected 403, got:"$'\n'"${unk}"
 
-okroot="$(curl -sI -H "Host: 127.0.0.1" "http://127.0.0.1:18091/")"
-echo "${okroot}" | grep -qE '^HTTP/1\.[01] 200' || die "default_server GET / expected 200 for ALB health, got:"$'\n'"${okroot}"
+okroot="$(curl -sI -H "Host: 127.0.0.1" "http://127.0.0.1:${HTTP_PORT}/")"
+grep -qE '^HTTP/1\.[01] 200' <<<"${okroot}" || die "default_server GET / expected 200 for ALB health, got:"$'\n'"${okroot}"
 
 gw_oa="$(curl -sI -H "Host: aimeshgateway.zeroshield.ai" \
-  -H "X-Forwarded-Proto: https" "http://127.0.0.1:18091/openapi.json")"
-echo "${gw_oa}" | grep -qE '^HTTP/1\.[01] 401' \
+  -H "X-Forwarded-Proto: https" "http://127.0.0.1:${HTTP_PORT}/openapi.json")"
+grep -qE '^HTTP/1\.[01] 401' <<<"${gw_oa}" \
   || die "gateway /openapi.json expected 401, got:"$'\n'"${gw_oa}"
 gw_docs="$(curl -sI -H "Host: aimeshgateway.zeroshield.ai" \
-  -H "X-Forwarded-Proto: https" "http://127.0.0.1:18091/docs")"
-echo "${gw_docs}" | grep -qE '^HTTP/1\.[01] 401' \
+  -H "X-Forwarded-Proto: https" "http://127.0.0.1:${HTTP_PORT}/docs")"
+grep -qE '^HTTP/1\.[01] 401' <<<"${gw_docs}" \
   || die "gateway /docs expected 401, got:"$'\n'"${gw_docs}"
 
 # The internal control API (decrypted upstream credentials) must 404 on BOTH public vhosts,
 # which also proves each include sits in the right server block, not just that two exist.
+# Both files: nginx.conf serves :80 (HTTP_PORT) and nginx-ssl.conf serves :443 (HTTPS_PORT).
 for host in aimeshfirewall.zeroshield.ai aimeshbackend.zeroshield.ai; do
   internal="$(curl -sD - -o /dev/null -H "Host: ${host}" -H "X-Forwarded-Proto: https" \
-    "http://127.0.0.1:18091/api/mcp-connector/internal/credential/")"
-  echo "${internal}" | grep -qE '^HTTP/1\.[01] 404' \
-    || die "${host} /api/mcp-connector/internal/ expected 404, got:"$'\n'"${internal}"
+    "http://127.0.0.1:${HTTP_PORT}/api/mcp-connector/internal/credential/")"
+  grep -qE '^HTTP/1\.[01] 404' <<<"${internal}" \
+    || die "${host} :80 /api/mcp-connector/internal/ expected 404, got:"$'\n'"${internal}"
+  internal_tls="$(curl -skD - -o /dev/null -H "Host: ${host}" \
+    "https://127.0.0.1:${HTTPS_PORT}/api/mcp-connector/internal/credential/")"
+  grep -qE '^HTTP/[0-9.]+ 404' <<<"${internal_tls}" \
+    || die "${host} :443 /api/mcp-connector/internal/ expected 404, got:"$'\n'"${internal_tls}"
 done
 
 pass "docker nginx -t + /login headers + unknown-Host 403 + gateway OpenAPI 401 + internal API 404"
