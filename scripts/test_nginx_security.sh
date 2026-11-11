@@ -16,6 +16,7 @@ INC="${ROOT}/deploy/security-headers.inc"
 EDGE="${ROOT}/deploy/edge-error.inc"
 EDGE_HTTPS="${ROOT}/deploy/require-edge-https.inc"
 OPENAPI_DENY="${ROOT}/deploy/deny-public-openapi.inc"
+INTERNAL_DENY="${ROOT}/deploy/deny-internal-api.inc"
 DF="${ROOT}/deploy/Dockerfile.nginx"
 
 [[ -f "${HTTP}" ]] || die "missing ${HTTP}"
@@ -48,6 +49,12 @@ grep -q 'COPY deploy/require-edge-https.inc /etc/nginx/require-edge-https.inc' "
   || die "Dockerfile.nginx must COPY require-edge-https.inc"
 grep -q 'COPY deploy/deny-public-openapi.inc /etc/nginx/deny-public-openapi.inc' "${DF}" \
   || die "Dockerfile.nginx must COPY deny-public-openapi.inc"
+grep -q 'COPY deploy/deny-internal-api.inc /etc/nginx/deny-internal-api.inc' "${DF}" \
+  || die "Dockerfile.nginx must COPY deny-internal-api.inc"
+grep -c 'include /etc/nginx/deny-internal-api.inc;' "${HTTP}" | grep -qx 2 \
+  || die "nginx.conf must include deny-internal-api.inc on the firewall and backend vhosts"
+grep -c 'include /etc/nginx/deny-internal-api.inc;' "${SSL}" | grep -qx 2 \
+  || die "nginx-ssl.conf must include deny-internal-api.inc on the firewall and backend vhosts"
 grep -E 'COPY deploy/security-headers.inc .*/conf.d/' "${DF}" \
   && die "security-headers.inc must not land in conf.d/ (auto-loaded as a vhost)"
 grep -c 'include /etc/nginx/require-edge-https.inc;' "${HTTP}" | grep -qx 3 \
@@ -218,6 +225,7 @@ NGINX_MOUNTS=(
   -v "${EDGE}:/etc/nginx/edge-error.inc:ro"
   -v "${EDGE_HTTPS}:/etc/nginx/require-edge-https.inc:ro"
   -v "${OPENAPI_DENY}:/etc/nginx/deny-public-openapi.inc:ro"
+  -v "${INTERNAL_DENY}:/etc/nginx/deny-internal-api.inc:ro"
   -v "${TMP}/edge:/etc/nginx/edge_errors:ro"
   -v "${TMP}/html:/usr/share/nginx/html:ro"
   -v "${TMP}/ssl:/etc/nginx/ssl:ro"
