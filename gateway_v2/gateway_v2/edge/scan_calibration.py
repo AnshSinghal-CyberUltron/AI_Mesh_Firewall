@@ -84,6 +84,8 @@ class ScanSizing:
     floor: int
     calibrated_slots: int
     served_slots: int
+    pinned: bool = False
+    """The operator pinned the cost (`AMF_SCAN_SLOT_COST_US`): nothing was measured."""
 
     @property
     def clamped(self) -> bool:
@@ -99,10 +101,24 @@ class ScanSizing:
             line += (
                 f"; CLAMPED from {self.calibrated_slots}: this host cannot scan a realistic "
                 "tool request inside the scan budget, so such scans may overrun it. Remedy: "
-                f"AMF_TARGET_P99_MS >= {math.ceil(needed_ms)}, or more CPU per worker (the cost is "
-                "measured before workers start, so fewer workers eases serving latency only)"
+                f"AMF_TARGET_P99_MS >= {math.ceil(needed_ms)}, or {_cost_remedy(self.pinned)}"
             )
         return line
+
+
+def _cost_remedy(pinned: bool) -> str:
+    """What lowers the per-slot cost, by where the cost came from (Reviewers A and B on #105)."""
+    if pinned:
+        # Only a pin that overstates the cost should be lowered: lowering a true pin removes the
+        # warning while scans stay as slow (Reviewer A on #109).
+        return (
+            f"if the pin overstates this host's cost, lower it, or unset {SCAN_COST_ENV} to "
+            "measure (the pinned cost decides the bound)"
+        )
+    return (
+        "run on a faster or less-contended CPU while the parent calibrates (the cost is "
+        "measured before workers start, so fewer workers eases serving latency only)"
+    )
 
 
 def scanned_slots_floor() -> int:
@@ -185,13 +201,14 @@ def scan_sizing(contract: object, env: Mapping[str, str] | None = None) -> ScanS
     source_env = os.environ if env is None else env
     floor = scanned_slots_floor()
     declared = _declared_cost(source_env)
+    pinned = False
     if declared is None:
         cost = measure_scan_slot_cost_us(float(budget()), float(window()), floor)
         source = "measured at boot"
     elif source_env.get(SCAN_COST_SOURCE_ENV) == _INHERITED:
         cost, source = declared, "inherited from the parent's boot calibration"
     else:
-        cost, source = declared, f"{SCAN_COST_ENV} (pinned)"
+        cost, source, pinned = declared, f"{SCAN_COST_ENV} (pinned)", True
     # The same expression `tool_bounds` uses, so a fractional p99 cannot fake a clamp.
     target_ms = float(getattr(contract, "target_p99_ms", 0.0))
     raw = target_ms * _MS_PER_S * _SCAN_BUDGET_FRACTION / cost
@@ -203,10 +220,10 @@ def scan_sizing(contract: object, env: Mapping[str, str] | None = None) -> ScanS
         # old fail-closed signal instead of clamping (Reviewer B on #104).
         raise CapacityUnavailable(
             f"no scan slot fits {target_ms} ms x {_SCAN_BUDGET_FRACTION} at {cost:.0f} us/slot "
-            f"({source}): raise AMF_TARGET_P99_MS, or give the host more CPU"
+            f"({source}): raise AMF_TARGET_P99_MS, or {_cost_remedy(pinned)}"
         )
     served = resolver(slot_cost_us=cost, scanned_slots_floor=floor).max_scanned_slots
-    sizing = ScanSizing(cost, source, floor, calibrated, served)
+    sizing = ScanSizing(cost, source, floor, calibrated, served, pinned)
     if sizing.clamped:
         _warn_clamped(sizing.boot_line())
     return sizing
