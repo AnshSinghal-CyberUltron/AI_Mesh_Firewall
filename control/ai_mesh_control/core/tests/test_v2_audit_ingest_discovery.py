@@ -61,6 +61,17 @@ class DiscoveryTests(TestCase):
             [prefix + "_unauthenticated", prefix + "acme", prefix + "dev-org"],
         )
 
+    def test_an_alias_of_an_inactive_org_is_left_unread(self):
+        prefix = "{rv2}:audit:"
+        self.client_.xadd(prefix + "old-alias", {"r": "{}"})
+        self.client_.xadd(prefix + "dev-org", {"r": "{}"})
+
+        found = v2_audit_ingest._streams(
+            self.client_, prefix, {"old-alias": "gone", "dev-org": "acme"}
+        )
+
+        self.assertEqual(found, [prefix + "dev-org"])
+
     def test_ingest_end_to_end_without_scan(self):
         prefix = "{rv2}:audit:"
         self.client_.xadd(prefix + "acme", {"r": _record("acme", "req-1")})

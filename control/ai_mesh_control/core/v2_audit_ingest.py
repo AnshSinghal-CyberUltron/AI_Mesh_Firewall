@@ -60,8 +60,11 @@ def _streams(client: Any, prefix: str, mapping: dict[str, str]) -> list[str]:
     """
     from auth.models import Organization
 
-    org_ids = set(Organization.objects.filter(is_active=True).values_list("slug", flat=True))
-    org_ids.update(mapping)
+    active = set(Organization.objects.filter(is_active=True).values_list("slug", flat=True))
+    org_ids = set(active)
+    # An alias whose target org is inactive is left unread, like the org itself: reading it would
+    # drop every entry (no active org to attribute it to) and advance the cursor past them.
+    org_ids.update(alias for alias, target in mapping.items() if target in active)
     org_ids.add(_UNAUTHENTICATED)
     candidates = sorted(f"{prefix}{org_id}" for org_id in org_ids if org_id)
     pipe = client.pipeline(transaction=False)

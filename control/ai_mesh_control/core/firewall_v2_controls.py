@@ -191,16 +191,24 @@ def built_value_errors(
     changed: Collection[str] | None = None,
     *,
     controls_ok: bool = True,
+    v2_limits: bool = True,
 ) -> dict[str, str]:
     """Field-keyed refusals for BUILT values the gateway cannot represent.
 
     ``merged`` is stored plus incoming. A rule runs when its field, or a field it depends on,
     changed (``changed=None`` checks everything), so an unchanged stored value is always accepted.
+
+    ``v2_limits=False`` keeps only the sanity checks that hold for any gateway (rates, tokens and
+    retention at least 1, ranges), which the console applies while v1 serves. Without them a v1
+    save of ``retention_days=0`` made the daily cleanup delete every event of the org. The
+    compliance retention floors, list caps and the fleet controls gate describe gateway-v2.
     """
     errors: dict[str, str] = {}
     _rate_errors(merged, changed, errors)
     _range_errors(merged, changed, errors)
-    _retention_errors(merged, changed, errors)
+    _retention_errors(merged, changed, errors, floors=v2_limits)
+    if not v2_limits:
+        return errors
     _list_errors(merged, changed, errors)
     if not controls_ok:
         for field in sorted(CONTROLS_BACKED):
@@ -237,13 +245,19 @@ def _range_errors(
 
 
 def _retention_errors(
-    merged: Mapping[str, Any], changed: Collection[str] | None, errors: dict[str, str]
+    merged: Mapping[str, Any],
+    changed: Collection[str] | None,
+    errors: dict[str, str],
+    *,
+    floors: bool = True,
 ) -> None:
     if not _active("retention_days", changed, "compliance_frameworks") or "retention_days" not in merged:
         return
     days = _whole(merged["retention_days"])
     if days < 1:
         errors["retention_days"] = "retention_days must be at least 1."
+        return
+    if not floors:
         return
     floors = [(RETENTION_FLOOR_DAYS[f], f) for f in frameworks_of(merged) if f in RETENTION_FLOOR_DAYS]
     if floors:
