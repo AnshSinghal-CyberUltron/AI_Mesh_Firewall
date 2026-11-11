@@ -1,0 +1,1 @@
+trust_env True | follow_redirects False | https:// mount pool ['AsyncHTTPProxy'] | default authorization header True

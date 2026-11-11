@@ -1,0 +1,6 @@
+# PinnedRefused escapes the provider's except clauses (develop 25c33c86)
+raised PinnedRefused | isinstance httpx.HTTPError: False | isinstance OSError: False
+
+# Contract on this host (venv-ci, Python 3.13, 2 CPUs)
+workers 1 | pool_size(PROVIDER) 1 | connection_budget 14999
+upstream first_event_s 30.0 | gap_s 0.8 | total_s 299.94 | edge inter_chunk_s 1.0 | max_stream_duration_s 300.0

@@ -1,0 +1,1 @@
+pool_size(PROVIDER)=1 streams=4 upstream hold=1.0 s completion times (s)=[1.35, 2.36, 3.37, 4.38]
