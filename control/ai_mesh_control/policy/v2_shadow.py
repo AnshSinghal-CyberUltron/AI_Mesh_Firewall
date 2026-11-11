@@ -28,7 +28,14 @@ def split_source(
 
 
 def exclude_shadow(qs: Any) -> Any:
-    return qs.exclude(metadata__source=SOURCE)
+    """Every row that is not a gateway-v2 shadow row.
+
+    ``exclude(metadata__source=...)`` alone is ``NOT (metadata -> 'source' = ...)``, which is
+    NULL (so the row is dropped) when the key is absent. Keep keyless rows explicitly.
+    """
+    from django.db.models import Q
+
+    return qs.filter(~Q(metadata__has_key="source") | ~Q(metadata__source=SOURCE))
 
 
 def only_shadow(qs: Any) -> Any:

@@ -16,6 +16,7 @@ INC="${ROOT}/deploy/security-headers.inc"
 EDGE="${ROOT}/deploy/edge-error.inc"
 EDGE_HTTPS="${ROOT}/deploy/require-edge-https.inc"
 OPENAPI_DENY="${ROOT}/deploy/deny-public-openapi.inc"
+INTERNAL_DENY="${ROOT}/deploy/deny-internal-api.inc"
 DF="${ROOT}/deploy/Dockerfile.nginx"
 
 [[ -f "${HTTP}" ]] || die "missing ${HTTP}"
@@ -24,6 +25,7 @@ DF="${ROOT}/deploy/Dockerfile.nginx"
 [[ -f "${EDGE}" ]] || die "missing ${EDGE}"
 [[ -f "${EDGE_HTTPS}" ]] || die "missing ${EDGE_HTTPS} (CWE-319 cleartext gate)"
 [[ -f "${OPENAPI_DENY}" ]] || die "missing ${OPENAPI_DENY} (CDL #12 gateway OpenAPI gate)"
+[[ -f "${INTERNAL_DENY}" ]] || die "missing ${INTERNAL_DENY} (internal control API deny)"
 [[ -f "${DF}" ]] || die "missing ${DF}"
 
 grep -q 'server_tokens off;' "${HTTP}" || die "deploy/nginx.conf missing server_tokens off;"
@@ -48,6 +50,12 @@ grep -q 'COPY deploy/require-edge-https.inc /etc/nginx/require-edge-https.inc' "
   || die "Dockerfile.nginx must COPY require-edge-https.inc"
 grep -q 'COPY deploy/deny-public-openapi.inc /etc/nginx/deny-public-openapi.inc' "${DF}" \
   || die "Dockerfile.nginx must COPY deny-public-openapi.inc"
+grep -q 'COPY deploy/deny-internal-api.inc /etc/nginx/deny-internal-api.inc' "${DF}" \
+  || die "Dockerfile.nginx must COPY deny-internal-api.inc"
+grep -c 'include /etc/nginx/deny-internal-api.inc;' "${HTTP}" | grep -qx 2 \
+  || die "nginx.conf must include deny-internal-api.inc on the firewall and backend vhosts"
+grep -c 'include /etc/nginx/deny-internal-api.inc;' "${SSL}" | grep -qx 2 \
+  || die "nginx-ssl.conf must include deny-internal-api.inc on the firewall and backend vhosts"
 grep -E 'COPY deploy/security-headers.inc .*/conf.d/' "${DF}" \
   && die "security-headers.inc must not land in conf.d/ (auto-loaded as a vhost)"
 grep -c 'include /etc/nginx/require-edge-https.inc;' "${HTTP}" | grep -qx 3 \
@@ -218,6 +226,7 @@ NGINX_MOUNTS=(
   -v "${EDGE}:/etc/nginx/edge-error.inc:ro"
   -v "${EDGE_HTTPS}:/etc/nginx/require-edge-https.inc:ro"
   -v "${OPENAPI_DENY}:/etc/nginx/deny-public-openapi.inc:ro"
+  -v "${INTERNAL_DENY}:/etc/nginx/deny-internal-api.inc:ro"
   -v "${TMP}/edge:/etc/nginx/edge_errors:ro"
   -v "${TMP}/html:/usr/share/nginx/html:ro"
   -v "${TMP}/ssl:/etc/nginx/ssl:ro"
@@ -320,4 +329,13 @@ gw_docs="$(curl -sI -H "Host: aimeshgateway.zeroshield.ai" \
 echo "${gw_docs}" | grep -qE '^HTTP/1\.[01] 401' \
   || die "gateway /docs expected 401, got:"$'\n'"${gw_docs}"
 
-pass "docker nginx -t + /login headers + unknown-Host 403 + gateway OpenAPI 401"
+# The internal control API (decrypted upstream credentials) must 404 on BOTH public vhosts,
+# which also proves each include sits in the right server block, not just that two exist.
+for host in aimeshfirewall.zeroshield.ai aimeshbackend.zeroshield.ai; do
+  internal="$(curl -sD - -o /dev/null -H "Host: ${host}" -H "X-Forwarded-Proto: https" \
+    "http://127.0.0.1:18091/api/mcp-connector/internal/credential/")"
+  echo "${internal}" | grep -qE '^HTTP/1\.[01] 404' \
+    || die "${host} /api/mcp-connector/internal/ expected 404, got:"$'\n'"${internal}"
+done
+
+pass "docker nginx -t + /login headers + unknown-Host 403 + gateway OpenAPI 401 + internal API 404"

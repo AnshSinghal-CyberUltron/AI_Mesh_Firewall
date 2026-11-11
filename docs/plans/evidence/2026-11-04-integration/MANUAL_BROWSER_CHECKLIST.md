@@ -44,7 +44,7 @@ Known not-working areas on this stack (do not log these as new bugs): GW28 routi
 1. Open `?tab=firewall-config`. Expected: tab title "Firewall Configuration & Policy Settings | ZeroShield" and cards including General Settings (Firewall Enabled, Enforcement Mode, Log Level). Fail: blank page or spinner that never ends.
 2. Applied setting: in blocked keywords add `zzbanana`, save. Expected: success message, no error banner. Then in 1.1 send `tell me about zzbanana`. Expected: blocked. Remove the keyword, save, resend. Expected: allowed. Fail: save returns a 500 (this was the defect fixed in `239a5449`) or the traffic result does not change.
 3. Applied setting: set Enforcement Mode to monitor, save, resend a blocked prompt in 1.1. Expected: allowed (200) and flagged. Set it back to block afterwards.
-4. Retired field: change one of the four model routing weights (cost, risk, etc.) and save. Expected: the save is REFUSED with a message that names the field and says it belongs to GW28. Fail: silent success, generic "save failed", or a 500.
+4. Retired field (requires control with `AMF_GATEWAY_BACKEND=v2`; set it for this section only, because it also retires the v1 MCP proxies used in section 7): change one of the four model routing weights (cost, risk, etc.) and save. Expected: the save is REFUSED with a message that names the field and says it belongs to GW28. Fail: silent success, generic "save failed", or a 500.
 5. Retired field: change `allowed_models` / `default_model` with no connected models. Expected: refused, message names the field (connected-model governance). Fail: accepted silently.
 6. Validation refusal: HIPAA retention below 365 days. Expected: a field-level validation message. Fail: accepted.
 7. Reload (F5). Expected: values you saved are still shown; refused values are NOT shown as saved.
@@ -68,7 +68,7 @@ Caveat: dev profile has one fixed route, so real rerouting was not tested.
 1. Open `?tab=firewall-1-5`. Expected: "Multi-Model Governance" with the routing governance panel and a Model Routing Simulator. Fail: error boundary.
 2. In the Model Routing Simulator send a normal prompt with routing enabled. Expected: the result appears with stages.
 3. Open the resulting event in Scan Detail (click the row or "view detail"). Expected: an indigo card with `data-testid="routing-decision-card"` titled as a routing decision, showing requested model, selected/routed model, reason, and candidate count. Fail: card absent for an allowed request, or fields all blank/NaN.
-4. Try to save a routing weight on this page or in section 2. Expected: refused naming GW28 (consistent with section 2 step 4).
+4. Try to save a routing weight on this page or in section 2 (needs control with `AMF_GATEWAY_BACKEND=v2`, as in section 2 step 4). Expected: refused naming GW28 (consistent with section 2 step 4).
 5. A blocked event should NOT show a routing card (the model was skipped). Expected for a blocked event: `model_routing` stage reads skip.
 
 ## 5. Kill switch / isolation controls (GW29)

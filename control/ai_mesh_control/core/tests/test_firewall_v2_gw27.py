@@ -8,7 +8,7 @@ decoder and compiled.
 import json
 from types import SimpleNamespace
 
-from django.test import SimpleTestCase
+from django.test import SimpleTestCase, override_settings
 
 from core.firewall_config_serializer import FirewallConfigSerializer
 from core.firewall_v2_controls import (
@@ -46,6 +46,7 @@ class DispositionTests(SimpleTestCase):
         self.assertIn("GW31", errors["rag_enabled"])
 
 
+@override_settings(AMF_GATEWAY_BACKEND="v2")
 class SerializerTests(SimpleTestCase):
     def test_a_retired_change_is_refused_with_the_field_and_owner(self):
         errors = _validate({"routing_enabled": True}, routing_enabled=False)
@@ -92,6 +93,49 @@ class SerializerTests(SimpleTestCase):
                 audit_logging_enabled=True,
             )
         self.assertEqual(errors, {})
+
+
+@override_settings(AMF_GATEWAY_BACKEND="v1")
+class V1BackendSaveTests(SimpleTestCase):
+    """While v1 serves traffic it enforces every field, so the GW27 v2 refusals must not apply."""
+
+    def test_a_field_retired_on_v2_still_saves_on_v1(self):
+        self.assertEqual(_validate({"routing_enabled": True}, routing_enabled=False), {})
+        self.assertEqual(_validate({"rag_enabled": True}, rag_enabled=False), {})
+
+    def test_a_controls_backed_change_saves_on_v1_with_the_fleet_gate_closed(self):
+        self.assertEqual(_validate({"requests_per_minute": 7}, requests_per_minute=1000), {})
+
+    def test_rewrite_stays_refused_on_v1(self):
+        errors = _validate({"output_policy_action": "rewrite"})
+        self.assertIn("output_policy_action", errors)
+
+    def test_values_no_gateway_can_serve_stay_refused_on_v1(self):
+        # retention_days=0 would make the daily cleanup delete every event of the org.
+        self.assertIn("retention_days", _validate({"retention_days": 0}, retention_days=30))
+        self.assertIn(
+            "max_response_tokens", _validate({"max_response_tokens": 0}, max_response_tokens=512)
+        )
+        errors = _validate(
+            {"rate_limit_enabled": True, "requests_per_minute": 0},
+            rate_limit_enabled=False, requests_per_minute=60, burst_limit=10,
+        )
+        self.assertIn("requests_per_minute", errors)
+        self.assertIn(
+            "threat_score_threshold", _validate({"threat_score_threshold": 101})
+        )
+
+    def test_v2_only_limits_do_not_apply_on_v1(self):
+        # The compliance retention floor describes gateway-v2; v1 saved this on main.
+        self.assertEqual(
+            _validate(
+                {"compliance_frameworks": ["HIPAA"], "retention_days": 30}, retention_days=90
+            ),
+            {},
+        )
+
+    def test_an_unchanged_stored_value_is_accepted_on_v1(self):
+        self.assertEqual(_validate({"firewall_enabled": True}, retention_days=0), {})
 
 
 class PublishTests(SimpleTestCase):
