@@ -30,7 +30,7 @@ feature/* fix/* ci/* docs/* chore/* refactor/* test/* perf/* dependabot/*
 | | dependencies | dependency-review: new deps with high+ CVEs or AGPL/SSPL licences | **blocks** once the Dependency graph is enabled. Until then the probe tolerates a 403/404 that is not a rate limit (GitHub answers a bare `Forbidden` while the graph is off) and passes with a warning; any other error fails |
 | | | OSV-Scanner on every lockfile, npm audit | report → code scanning |
 | | infra lint | actionlint, hadolint (error), shellcheck (error), `docker compose config`, `nginx -t` | **blocks** |
-| | | workflow guard (`scripts/ci/workflow_guard.py`): SHA-pinned `uses:`, top-level least-privilege `permissions:`, digest-pinned job images; see [below](#workflow-guard-pinned-actions-and-least-privilege-tokens) | **blocks** |
+| | | workflow guard (`scripts/ci/workflow_guard.py`): SHA-pinned `uses:` in every workflow and every local action they use, top-level least-privilege `permissions:`, digest-pinned job images; see [below](#workflow-guard-pinned-actions-and-least-privilege-tokens) | **blocks** |
 | | | Trivy config (HIGH, CRITICAL) | report → code scanning |
 | | CodeQL | Python, JavaScript/TypeScript, GitHub Actions; `security-extended` | alerts → code scanning |
 | `PR policy` (`pr-policy.yml`) | policy | Conventional Commit title, description with a testing section, size report, promotion path, release notes into `main`. A PR whose author is exactly `dependabot[bot]` skips only the description-length and testing-section rules ([why](#dependabot-prs-and-the-pr-policy)) | **blocks** |
@@ -125,13 +125,15 @@ A tag such as `@v4` can be moved to different code after review; a commit SHA ca
 
 | Rule | Fails when |
 |---|---|
-| `unpinned-uses` | a `uses:` is not in this repository (`./path`, or GitHub's `$/path` self-repository form), `docker://name@sha256:<64 hex>`, or `owner/repo[/path]@<40-hex commit SHA>`. Forms the guard cannot verify (`{ uses: … }`, a value on the next line, an alias) fail too. |
+| `unpinned-uses` | a `uses:` is not in this repository (`./path`, or GitHub's `$/path` self-repository form), `docker://name@sha256:<64 hex>`, or `owner/repo[/path]@<40-hex commit SHA>`. A flow-style `{ uses: … }`, an alias or a block scalar as the value, and a value on the next line fail too. |
+| `local-ref` | a `./path` or `$/path` does not resolve, inside the repository, to a workflow file or a directory with `action.yml`/`action.yaml`. The guard checks each local action it finds by the same rules, so a local composite action cannot hide an unpinned `uses:`. |
 | `version-comment` | a SHA pin has no release comment (`# v4.2.1`). Reviewers read the comment, and Dependabot rewrites it with the SHA. |
 | `permissions` | a workflow has no top-level `permissions:` (composite `action.yml` files are exempt). |
 | `top-level-write` | the top-level block grants any `write` scope, or is `write-all` or `read-all`. Grant extra scopes on the job that needs them. |
-| `unpinned-image` | a literal `jobs.<id>.container`, `container.image` or `services.<id>.image` has no `@sha256:` digest. An `${{ … }}` image is a notice only: pin its input default instead. |
+| `unpinned-image` | a literal `jobs.<id>.container`, `container.image` or `services.<id>.image`, or a local action's `runs.image: docker://…`, has no `@sha256:` digest. An `${{ … }}` image is a notice only: pin its input default instead. |
+| `unverifiable` | the file uses YAML that a line scanner cannot read the way a YAML parser does. Each of these fails: control characters or the line separators U+0085/U+2028/U+2029; a second document (`---` or `...` after content); explicit-key syntax (`? key` / `: value`); a double-quoted key with an escape (`"use\x73":`); a quoted scalar or a flow collection that continues on the next line; and a top-level permission level other than a plain `read` or `none`. |
 
-The guard reads YAML line by line with the standard library, so it needs no install. It skips block scalars (`run: |`), so script text is never mistaken for a key.
+The guard reads YAML line by line with the standard library, so it needs no install. It skips block scalars (`run: |`), so script text is never mistaken for a key. Where a line scanner and a YAML parser could disagree, the guard fails (`unverifiable`) rather than guess. `docs/plans/evidence/2026-11-11-ci-pin-actions-107/guard-s1-corpus.txt` runs 27 such forms against PyYAML as the reference: every unpinned or over-privileged one fails. Local references resolve against the repository root, so run the guard from there or pass `--root`.
 
 **Pinning an action.** Resolve the tag to the commit it points to; an annotated tag points to a tag object, so dereference it:
 

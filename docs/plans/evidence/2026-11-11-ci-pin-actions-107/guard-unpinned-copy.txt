@@ -29,5 +29,5 @@ $ python3 scripts/ci/workflow_guard.py .github/workflows   # on the deliberately
 .github/workflows/gateway-v2.yml:122: error [unpinned-uses] `docker/setup-buildx-action@v4` is pinned to `v4`, not a full 40-character commit SHA; use `owner/repo@<sha> # vX.Y.Z`
 .github/workflows/gateway-v2.yml:185: error [version-comment] `actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1` needs its release as a trailing comment, e.g. `# v1.2.3`
 .github/workflows/pr-policy.yml:18: error [top-level-write] top-level `permissions` grants `pull-requests: write`; grant it on the job that needs it
-workflow_guard: FAIL: 13 files, 55 `uses:` references, 5 findings
+workflow_guard: FAIL: 13 files (+0 local actions followed), 55 `uses:` references, 5 findings
 exit=1

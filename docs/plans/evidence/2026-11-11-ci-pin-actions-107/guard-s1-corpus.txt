@@ -1,0 +1,32 @@
+# Review S1 corpus (#114): every YAML form Reviewer A listed, plus the cases the guard already caught.
+# Oracle: PyYAML 6 safe_load_all (what a YAML parser sees). Guard: scripts/ci/workflow_guard.py at this commit.
+# Every case must make the guard exit 1, except the comment-only case (exit 0).
+case                               PyYAML oracle                                              guard
+plain step                         unpinned uses 'actions/checkout@v4'                        exit=1 OK  unpinned-uses
+anchor on key                      unpinned uses 'actions/checkout@v4'                        exit=1 OK  unpinned-uses
+alias value                        unpinned uses 'actions/checkout@v4'                        exit=1 OK  unpinned-uses
+steps alias                        unpinned uses 'actions/checkout@v4'                        exit=1 OK  unpinned-uses
+flow step                          unpinned uses 'actions/checkout@v4'                        exit=1 OK  unpinned-uses
+flow step multi-line               unpinned uses 'actions/checkout@v4'                        exit=1 OK  unpinned-uses,unverifiable
+block scalar value                 unpinned uses 'actions/checkout@v4'                        exit=1 OK  unpinned-uses
+value on next line                 unpinned uses 'actions/checkout@v4'                        exit=1 OK  unpinned-uses
+trailing spaces                    unpinned uses 'actions/checkout@v4'                        exit=1 OK  unpinned-uses
+quoted value                       unpinned uses 'actions/checkout@v4'                        exit=1 OK  unpinned-uses
+quoted key single                  unpinned uses 'actions/checkout@v4'                        exit=1 OK  unpinned-uses
+spaced colon                       unpinned uses 'actions/checkout@v4'                        exit=1 OK  unpinned-uses
+tagged value                       unpinned uses 'actions/checkout@v4'                        exit=1 OK  unpinned-uses
+job-level reusable @main           unpinned uses 'octo/repo/.github/workflows/w.yml@main'     exit=1 OK  unpinned-uses
+second document unpinned           unpinned uses 'actions/checkout@v4'; 2 documents           exit=1 OK  unpinned-uses,unverifiable
+comment only (must pass)           clean                                                      exit=0 OK  
+M1 escaped key x73                 unpinned uses 'actions/checkout@v4'                        exit=1 OK  unverifiable
+M2 double-quoted uses key          unpinned uses 'actions/checkout@v4'                        exit=1 OK  unpinned-uses
+M2b escaped key u0073              unpinned uses 'actions/checkout@v4'                        exit=1 OK  unverifiable
+M3 explicit key                    unpinned uses 'actions/checkout@v4'                        exit=1 OK  unverifiable
+M4 flow escaped key                unpinned uses 'actions/checkout@v4'                        exit=1 OK  unverifiable
+M5 flow explicit key               unpinned uses 'actions/checkout@v4'                        exit=1 OK  unverifiable
+M6 multi-line dq hides job         unpinned uses 'actions/checkout@v4'                        exit=1 OK  unpinned-uses,unverifiable
+M7 U+2028 in dq name               unpinned uses 'actions/checkout@v4'                        exit=1 OK  unpinned-uses,unverifiable
+R1 permissions only in 2nd doc     no top-level permissions in doc 1; 2 documents             exit=1 OK  unverifiable
+R2 contents writ\x65               top-level write                                            exit=1 OK  unverifiable
+R3 contents !!str write            top-level write                                            exit=1 OK  unverifiable
+ALL CASES AS EXPECTED
