@@ -20,9 +20,10 @@ jobs:
       - name: Install v2 dev deps
         run: |
           python -m venv .venv
-          # `serve` brings httpx + uvicorn: the provider, MCP broker and serve entrypoint import
-          # them, so `mypy --strict` cannot type-check those modules without it.
-          .venv/bin/pip install -q -e ".[dev,serve]"
+          # `serve` brings httpx + uvicorn (the provider, MCP broker and serve entrypoint import
+          # them, so `mypy --strict` needs them); `conformance` brings pytest-asyncio + openai, which
+          # the httpx-backed tests need once httpx is installed (they importorskip httpx only).
+          .venv/bin/pip install -q -e ".[dev,serve,conformance]"
       - name: Size + HTTP AST + mutable-state + capacity + tenant-scale gates
         run: |
           for tree in gateway_v2 state_control; do
