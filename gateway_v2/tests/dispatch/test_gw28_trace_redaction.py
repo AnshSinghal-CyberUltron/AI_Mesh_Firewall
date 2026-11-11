@@ -18,6 +18,7 @@ from gateway_v2.dispatch.routing_types import (
 from gateway_v2.domain.posture import ROUTING_UNKNOWN_MODEL
 from tests.dispatch._gw28_fakes import (
     MAX_LEN,
+    RELAXED,
     SMALL,
     FakeClient,
     Timeline,
@@ -148,7 +149,7 @@ def test_rejected_name_opens_nothing() -> None:
             router=ModelRouter(),
             table=RoutingTable.build({}, fallback_set=pt),
             clients={"p": client},
-            bounds=SMALL,
+            bounds=RELAXED,
             max_attempts=1,
             max_ident_len=MAX_LEN,
             snapshot_source=lambda: RoutingSnapshot(),

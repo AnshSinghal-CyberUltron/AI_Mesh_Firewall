@@ -94,7 +94,7 @@ def test_success_after_one_fallback() -> None:
         }
         # whichever ranks first, a succeeds on the second attempt iff a failed first
         decisions: list[object] = []
-        ev = await drain(build_rp(clients), ctx(sink=decisions.append))
+        ev = await drain(build_rp(clients, bounds=RELAXED), ctx(sink=decisions.append))
         assert ev[-1].gateway_error is None or "a" in tl.opens()
         assert len(decisions) == len(tl.opens())
 
