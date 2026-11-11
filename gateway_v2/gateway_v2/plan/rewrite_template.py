@@ -92,7 +92,13 @@ def check_template(rule: Rule) -> None:
         scan = scan_conditions(
             compile_conditions((rule,)), rendered, budget_s=_CHECK_BUDGET_S, phase=Phase.OUTPUT,
         )
-        if scan.findings or scan.refuse_code is not None:
+        if scan.refuse_code is not None:
+            raise TemplateError(
+                f"rule {rule.rule_id}: the rule's own condition pattern is refused (ReDoS shape, "
+                "nested too deep, does not compile, or timed out), so the template cannot be "
+                "checked",
+            )
+        if scan.findings:
             raise TemplateError(
                 f"rule {rule.rule_id}: rewrite_template matches the rule's own condition",
             )
