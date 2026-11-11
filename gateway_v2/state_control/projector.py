@@ -556,7 +556,20 @@ def validate_plan(slug: str, raw: str) -> tuple[Mapping[str, object] | None, int
     control character as `\\u0000` even with `ensure_ascii=False`.) A customer regex the matcher
     refuses is NOT a rejection: the gateway refuses that rule per request
     (`POLICY_REGEX_TIMEOUT`), and the count is reported so the console can show it.
+
+    No exception escapes. Anything the checks did not anticipate (a `RecursionError` from a
+    deeply nested body, say) makes THIS document not projectable, so the caller keeps the org's
+    previous record and the round still reaches the heartbeat for every other tenant. Letting it
+    escape would fail every round while the row exists, age the heartbeat, and fail the whole
+    fleet closed on one tenant's data.
     """
+    try:
+        return _validate_plan(slug, raw)
+    except Exception as exc:  # noqa: BLE001 - one tenant's row must never stop the round
+        return None, 0, f"{type(exc).__name__}: {exc}"[:200]
+
+
+def _validate_plan(slug: str, raw: str) -> tuple[Mapping[str, object] | None, int, str]:
     try:
         parsed: Any = json.loads(raw)
         if not isinstance(parsed, dict):
