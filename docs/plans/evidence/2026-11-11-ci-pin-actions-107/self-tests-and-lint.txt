@@ -55,7 +55,7 @@ test_yaml_tags_fail_closed (test_workflow_guard.WorkflowGuardTests.test_yaml_tag
 test_line_scanner_alone_fails_every_bad_case (test_workflow_guard_review_cases.ReviewCaseTests.test_line_scanner_alone_fails_every_bad_case) ... ok
 test_there_are_26_cases (test_workflow_guard_review_cases.ReviewCaseTests.test_there_are_26_cases) ... ok
 test_with_parser_cross_check (test_workflow_guard_review_cases.ReviewCaseTests.test_with_parser_cross_check) ... ok
-Ran 56 tests in 1.153s
+Ran 56 tests in 0.829s
 OK
 
 $ WORKFLOW_GUARD_REQUIRE_YAML=1 GITHUB_ACTIONS='true' python -m unittest discover -s scripts/ci -p "test_*.py" -v   # PyYAML 6.0.3, as in CI
@@ -115,34 +115,18 @@ test_yaml_tags_fail_closed (test_workflow_guard.WorkflowGuardTests.test_yaml_tag
 test_line_scanner_alone_fails_every_bad_case (test_workflow_guard_review_cases.ReviewCaseTests.test_line_scanner_alone_fails_every_bad_case) ... ok
 test_there_are_26_cases (test_workflow_guard_review_cases.ReviewCaseTests.test_there_are_26_cases) ... ok
 test_with_parser_cross_check (test_workflow_guard_review_cases.ReviewCaseTests.test_with_parser_cross_check) ... ok
-Ran 56 tests in 1.134s
+Ran 56 tests in 1.319s
 OK
 
 $ python3 -I -S -m unittest discover -s scripts/ci -p "test_workflow_guard*.py"   # no PyYAML: cross-check tests skip
-Ran 38 tests in 0.285s
+Ran 38 tests in 0.464s
 OK (skipped=3)
 
 Python 3.13.18
 $ ruff check (repo pyproject config) && mypy --strict
 ruff 0.17.4
-PIE808 [*] Unnecessary `start` argument in `range`
-   --> scripts/ci/test_workflow_guard.py:263:28
-    |
-262 |     def test_bad_character_set_is_exactly_the_33_intended_code_points(self) -> None:
-263 |         intended = {*range(0x00, 0x09), 0x0B, 0x0C, *range(0x0E, 0x20), 0x7F, 0x85, 0x2028, 0x2029}
-    |                            ^^^^
-264 |         self.assertEqual(len(intended), 33)
-265 |         matched = {cp for cp in range(0x3000) if workflow_guard.BAD_CHAR_RE.fullmatch(chr(cp))}
-    |
-help: Remove `start` argument
-    |
-262 |     def test_bad_character_set_is_exactly_the_33_intended_code_points(self) -> None:
-    -         intended = {*range(0x00, 0x09), 0x0B, 0x0C, *range(0x0E, 0x20), 0x7F, 0x85, 0x2028, 0x2029}
-263 +         intended = {*range(0x09), 0x0B, 0x0C, *range(0x0E, 0x20), 0x7F, 0x85, 0x2028, 0x2029}
-264 |         self.assertEqual(len(intended), 33)
-    |
-
-Found 1 error.
-[*] 1 fixable with `--fix`.
+All checks passed!
+ruff exit=0
 mypy 2.4.1 (compiled: yes)
 Success: no issues found in 4 source files
+mypy exit=0

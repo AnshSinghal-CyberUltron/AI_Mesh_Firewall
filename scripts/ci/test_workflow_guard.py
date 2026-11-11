@@ -260,7 +260,7 @@ class WorkflowGuardTests(unittest.TestCase):
         self.assertEqual(self.check(expressions), [])  # `${{ !x }}` and a quoted `!` are not tags
 
     def test_bad_character_set_is_exactly_the_33_intended_code_points(self) -> None:
-        intended = {*range(0x00, 0x09), 0x0B, 0x0C, *range(0x0E, 0x20), 0x7F, 0x85, 0x2028, 0x2029}
+        intended = {*range(0x09), 0x0B, 0x0C, *range(0x0E, 0x20), 0x7F, 0x85, 0x2028, 0x2029}
         self.assertEqual(len(intended), 33)
         matched = {cp for cp in range(0x3000) if workflow_guard.BAD_CHAR_RE.fullmatch(chr(cp))}
         self.assertEqual(matched, intended)
