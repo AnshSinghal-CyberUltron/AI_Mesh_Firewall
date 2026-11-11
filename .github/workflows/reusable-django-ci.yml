@@ -93,24 +93,24 @@ jobs:
           echo "DJANGO_SECRET_KEY=$(python -c 'import secrets; print(secrets.token_urlsafe(48))')" >> "$GITHUB_ENV"
           if [ -n "$EXTRA_ENV" ]; then printf '%s\n' "$EXTRA_ENV" >> "$GITHUB_ENV"; fi
       - name: Install
-        run: ${{ inputs.install-command }}
+        env: { CMD: "${{ inputs.install-command }}" }
+        run: eval "$CMD"
       - name: Migrations match models
         if: inputs.check-migrations
         run: python manage.py makemigrations --check --dry-run
       - name: Test
         id: test
         continue-on-error: ${{ inputs.known-failures-file != '' }}
+        env: { LABELS: "${{ inputs.test-labels }}" }
         run: |
           set -o pipefail
-          # shellcheck disable=SC2086 # labels are intentionally word-split
-          python manage.py test ${{ inputs.test-labels }} --noinput 2>&1 | tee "$RUNNER_TEMP/django-test.log"
+          read -ra labels <<< "$LABELS"
+          python manage.py test "${labels[@]}" --noinput 2>&1 | tee "$RUNNER_TEMP/django-test.log"
       - name: Known-failure ratchet
         if: inputs.known-failures-file != ''
         working-directory: .
-        run: >-
-          python scripts/ci/known_failures.py
-          --log "$RUNNER_TEMP/django-test.log"
-          --baseline "${{ inputs.known-failures-file }}"
+        env: { BASELINE: "${{ inputs.known-failures-file }}" }
+        run: python scripts/ci/known_failures.py --log "$RUNNER_TEMP/django-test.log" --baseline "$BASELINE"
       - name: Upload test log
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

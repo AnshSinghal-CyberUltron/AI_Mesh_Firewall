@@ -59,16 +59,17 @@ jobs:
         env:
           PATHS_IGNORE: ${{ inputs.paths-ignore }}
         run: |
+          # codeql-action requires the config file to live inside the workspace.
           {
             echo "paths-ignore:"
             while IFS= read -r p; do [ -n "$p" ] && echo "  - '$p'"; done <<< "$PATHS_IGNORE"
-          } > "$RUNNER_TEMP/codeql-config.yml"
-          cat "$RUNNER_TEMP/codeql-config.yml"
+          } > "$GITHUB_WORKSPACE/.codeql-config.generated.yml"
+          cat "$GITHUB_WORKSPACE/.codeql-config.generated.yml"
       - uses: github/codeql-action/init@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
         with:
           languages: ${{ matrix.language }}
           queries: ${{ inputs.queries }}
-          config-file: ${{ runner.temp }}/codeql-config.yml
+          config-file: ./.codeql-config.generated.yml
           build-mode: none
       - uses: github/codeql-action/analyze@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
         with:

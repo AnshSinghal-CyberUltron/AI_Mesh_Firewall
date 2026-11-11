@@ -38,7 +38,8 @@ def from_django_log(text: str) -> set[str]:
 
 def from_junit(path: Path) -> set[str]:
     found: set[str] = set()
-    for case in ET.parse(path).getroot().iter("testcase"):
+    # The junit file is written by the test run in the same job, not fetched from anywhere.
+    for case in ET.parse(path).getroot().iter("testcase"):  # nosemgrep: use-defused-xml-parse
         if any(child.tag.split("}")[-1] in {"failure", "error"} for child in case):
             found.add(f"{case.attrib.get('classname', '')}::{case.attrib.get('name', '')}")
     return found

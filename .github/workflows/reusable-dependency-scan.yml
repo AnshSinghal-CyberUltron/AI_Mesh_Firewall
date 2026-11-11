@@ -19,6 +19,12 @@ on:
       fail-on-severity:
         type: string
         default: high
+      dependency-review-required:
+        description: >-
+          Fail when dependency review cannot run. Dependency review needs the repository's
+          Dependency graph enabled (Settings > Code security); set false until it is.
+        type: boolean
+        default: true
       deny-licenses:
         description: Comma-separated SPDX ids that a PR may not introduce.
         type: string
@@ -57,6 +63,7 @@ jobs:
         with:
           persist-credentials: false
       - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        continue-on-error: ${{ !inputs.dependency-review-required }}
         with:
           fail-on-severity: ${{ inputs.fail-on-severity }}
           deny-licenses: ${{ inputs.deny-licenses }}

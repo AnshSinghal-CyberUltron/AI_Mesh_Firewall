@@ -97,6 +97,7 @@ Notes for callers:
 
 1. **Branch protection.** The CI token cannot change protection, so the owner runs `./scripts/ci/setup_branch_protection.sh AnshSinghal-CyberUltron/AI_Mesh_Firewall` once.
 2. **Repository settings:**
+   - Enable the *Dependency graph*. Until it is on, `dependency-review` reports "not supported" without blocking. Then set `dependency-review-required: true` in `security.yml`.
    - Enable *Dependabot alerts* and *Dependabot security updates*.
    - Enable *Code scanning*, which receives the SARIF uploads and CodeQL alerts.
    - Enable *Private vulnerability reporting*.

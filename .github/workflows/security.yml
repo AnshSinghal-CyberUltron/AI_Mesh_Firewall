@@ -46,6 +46,9 @@ jobs:
       security-events: write
     with:
       npm-directories: frontend
+      # Dependency graph is not enabled on this repo yet (owner setting); until it is, dependency
+      # review reports "not supported" instead of blocking. See docs/ci/README.md, owner setup.
+      dependency-review-required: false
 
   infra:
     name: infra lint (actions, Docker, shell, compose, nginx, Trivy)

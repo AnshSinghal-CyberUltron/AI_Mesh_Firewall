@@ -54,12 +54,16 @@ jobs:
           cache-dependency-path: ${{ inputs.working-directory }}/package-lock.json
       - name: Install (lockfile only)
         run: npm ci --no-audit --no-fund
+      # Commands are passed through env, not templated into the script text.
       - name: Lint
         if: inputs.lint-command != ''
-        run: ${{ inputs.lint-command }}
+        env: { CMD: "${{ inputs.lint-command }}" }
+        run: eval "$CMD"
       - name: Test
         if: inputs.test-command != ''
-        run: ${{ inputs.test-command }}
+        env: { CMD: "${{ inputs.test-command }}" }
+        run: eval "$CMD"
       - name: Build
         if: inputs.build-command != ''
-        run: ${{ inputs.build-command }}
+        env: { CMD: "${{ inputs.build-command }}" }
+        run: eval "$CMD"

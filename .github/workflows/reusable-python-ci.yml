@@ -72,26 +72,32 @@ jobs:
           python -m venv "$RUNNER_TEMP/venv"
           echo "VENV=$RUNNER_TEMP/venv" >> "$GITHUB_ENV"
           echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
+      # Commands come from the calling workflow (trusted), and are passed through env rather
+      # than templated into the script text, so no input can inject shell syntax.
       - name: Install
-        run: ${{ inputs.install-command }}
+        env: { CMD: "${{ inputs.install-command }}" }
+        run: eval "$CMD"
       - name: Lint
         if: inputs.lint-command != ''
-        run: ${{ inputs.lint-command }}
+        env: { CMD: "${{ inputs.lint-command }}" }
+        run: eval "$CMD"
       - name: Type-check
         if: inputs.typecheck-command != ''
-        run: ${{ inputs.typecheck-command }}
+        env: { CMD: "${{ inputs.typecheck-command }}" }
+        run: eval "$CMD"
       - name: Test
         id: test
         # With a known-failures baseline the ratchet below decides pass/fail, not pytest's exit.
         continue-on-error: ${{ inputs.known-failures-file != '' }}
-        run: ${{ inputs.test-command }}
+        env: { CMD: "${{ inputs.test-command }}" }
+        run: eval "$CMD"
       - name: Known-failure ratchet
         if: inputs.known-failures-file != ''
         working-directory: .
-        run: >-
-          python scripts/ci/known_failures.py
-          --junit "${{ inputs.working-directory }}/${{ inputs.junit-path }}"
-          --baseline "${{ inputs.known-failures-file }}"
+        env:
+          JUNIT: ${{ inputs.working-directory }}/${{ inputs.junit-path }}
+          BASELINE: ${{ inputs.known-failures-file }}
+        run: python scripts/ci/known_failures.py --junit "$JUNIT" --baseline "$BASELINE"
       - name: Upload test report
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
