@@ -1,0 +1,71 @@
+# Security: secrets, SAST, dependencies, IaC/infra lint and CodeQL on every PR and push to a
+# promotion branch, plus a weekly full-history sweep.
+#
+# Blocking on PRs (diff-aware, so legacy findings never block): gitleaks + TruffleHog on the PR's
+# commits, Semgrep ERROR findings the PR introduces, dependency-review on newly added packages,
+# actionlint / hadolint / shellcheck / compose / nginx. Report-only (SARIF to code scanning):
+# Bandit, OSV-Scanner, npm audit, Trivy config. See docs/ci/README.md.
+name: Security
+
+on:
+  pull_request:
+    branches: [develop, staging, main, revamp, "release/**"]
+  push:
+    branches: [develop, staging, main, revamp]
+  schedule:
+    - cron: "17 3 * * 1" # Monday 03:17 UTC: full git history + all lockfiles
+  workflow_dispatch:
+
+concurrency:
+  group: security-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  secrets:
+    name: secrets (gitleaks + TruffleHog)
+    uses: ./.github/workflows/reusable-secret-scan.yml
+
+  sast:
+    name: SAST (Semgrep + Bandit)
+    uses: ./.github/workflows/reusable-sast.yml
+    permissions:
+      contents: read
+      security-events: write
+    with:
+      bandit-targets: gateway_v2/gateway_v2 gateway_v2/state_control control/ai_mesh_control gateway/ai_mesh_gateway shared
+
+  dependencies:
+    name: dependencies (review + OSV + npm audit)
+    uses: ./.github/workflows/reusable-dependency-scan.yml
+    permissions:
+      contents: read
+      pull-requests: write
+      security-events: write
+    with:
+      npm-directories: frontend
+      # Dependency graph is not enabled on this repo yet (owner setting); until it is, dependency
+      # review reports "not supported" instead of blocking. See docs/ci/README.md, owner setup.
+      dependency-review-required: false
+
+  infra:
+    name: infra lint (actions, Docker, shell, compose, nginx, Trivy)
+    uses: ./.github/workflows/reusable-infra-lint.yml
+    permissions:
+      contents: read
+      security-events: write
+    with:
+      compose-files: "docker-compose.yml|docker-compose.yml docker-compose.prod.yml"
+      compose-env: "ECR_REGISTRY=ci.invalid"
+      compose-env-file-template: .env.sample
+      nginx-configs: "deploy/nginx.conf:01-http.conf"
+
+  codeql:
+    name: CodeQL
+    uses: ./.github/workflows/reusable-codeql.yml
+    permissions:
+      contents: read
+      security-events: write
+      actions: read

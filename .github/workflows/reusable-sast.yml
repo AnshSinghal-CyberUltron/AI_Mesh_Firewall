@@ -1,0 +1,159 @@
+# Reusable: static application security testing with free, account-less tools.
+#
+#   Semgrep OSS  registry rulesets (default p/python p/django p/javascript p/react p/docker
+#                p/github-actions p/secrets). On pull_request it is DIFF-AWARE
+#                (--baseline-commit = merge base on PRs, the previous head on pushes): only
+#                findings a change introduces fail the job. Scheduled and manual full scans are
+#                report-only (SARIF + artifact).
+#   Bandit       Python security linter. Report-only by default (legacy code has findings);
+#                set `bandit-blocking: true` once a repo is clean.
+#
+# Results are uploaded as SARIF to the repository's code-scanning alerts when the caller grants
+# `security-events: write`, and always as an artifact.
+#
+#   jobs:
+#     sast:
+#       uses: AnshSinghal-CyberUltron/AI_Mesh_Firewall/.github/workflows/reusable-sast.yml@main
+#       permissions: { contents: read, security-events: write }
+name: reusable-sast
+
+on:
+  workflow_call:
+    inputs:
+      semgrep-configs:
+        type: string
+        default: p/python p/django p/javascript p/react p/docker p/github-actions p/secrets
+      semgrep-image:
+        type: string
+        default: semgrep/semgrep:1.185.0@sha256:67518c174185a2043fdbed16c70631b79209499b3671178e7194379b48295a0d
+      semgrep-severity:
+        description: Lowest severity that fails the job (INFO, WARNING, ERROR).
+        type: string
+        default: ERROR
+      paths-exclude:
+        description: Space-separated paths/globs excluded from every scanner.
+        type: string
+        default: docs .kiro .agents .swarm .skill-workspace mcp-parallel semantic-review runs node_modules
+      bandit-targets:
+        description: Space-separated Python source roots for Bandit (empty = skip Bandit).
+        type: string
+        default: ""
+      bandit-blocking:
+        type: boolean
+        default: false
+      upload-sarif:
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  semgrep:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Semgrep
+        env:
+          EVENT: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          CONFIGS: ${{ inputs.semgrep-configs }}
+          EXCLUDES: ${{ inputs.paths-exclude }}
+          SEVERITY: ${{ inputs.semgrep-severity }}
+          IMAGE: ${{ inputs.semgrep-image }}
+        run: |
+          args=(semgrep scan --metrics=off --disable-version-check --sarif --output /src/semgrep.sarif)
+          for c in $CONFIGS; do args+=(--config "$c"); done
+          for e in $EXCLUDES; do args+=(--exclude "$e"); done
+          case "$SEVERITY" in
+            INFO) args+=(--severity INFO --severity WARNING --severity ERROR) ;;
+            WARNING) args+=(--severity WARNING --severity ERROR) ;;
+            *) args+=(--severity ERROR) ;;
+          esac
+          # Blocking scans are diff-aware: only findings a change introduces fail the job.
+          #   pull_request: against the merge base with the target branch;
+          #   push: against the commit the branch pointed at before the push;
+          #   schedule / manual / a new branch: full scan, report-only (SARIF + artifact),
+          #   because pre-existing findings are tracked work, not a failure of this run.
+          base=""
+          if [ "$EVENT" = "pull_request" ] && [ -n "$PR_BASE" ]; then
+            base=$(git merge-base "$PR_BASE" HEAD)
+          elif [ "$EVENT" = "push" ] && [ -n "$PUSH_BEFORE" ] \
+              && [ "$PUSH_BEFORE" != "0000000000000000000000000000000000000000" ] \
+              && git cat-file -e "${PUSH_BEFORE}^{commit}" 2>/dev/null; then
+            base="$PUSH_BEFORE"
+          fi
+          if [ -n "$base" ]; then
+            args+=(--baseline-commit "$base" --error)
+            echo "Diff-aware, blocking scan against $base"
+          else
+            echo "Full scan, report-only (event: $EVENT)"
+          fi
+          git config --global --add safe.directory '*'
+          docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -e SEMGREP_SEND_METRICS=off \
+            -v "$PWD:/src" -w /src "$IMAGE" "${args[@]}"
+      - name: Upload SARIF
+        if: always() && inputs.upload-sarif && hashFiles('semgrep.sarif') != ''
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          sarif_file: semgrep.sarif
+          category: semgrep
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: semgrep-sarif
+          path: semgrep.sarif
+          if-no-files-found: ignore
+          retention-days: 30
+
+  bandit:
+    if: inputs.bandit-targets != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - name: Bandit
+        id: bandit
+        continue-on-error: ${{ !inputs.bandit-blocking }}
+        env:
+          TARGETS: ${{ inputs.bandit-targets }}
+          EXCLUDES: ${{ inputs.paths-exclude }}
+        run: |
+          python -m pip install --quiet "bandit[sarif,toml]==1.9.4"
+          read -ra excl_list <<< "$EXCLUDES"
+          excl=$(printf '%s,' "${excl_list[@]}" "*/tests/*" "*/test_*.py" | sed 's/,$//')
+          # shellcheck disable=SC2086 # targets are intentionally word-split
+          bandit -r $TARGETS -x "$excl" -lll -iii -f sarif -o bandit.sarif
+      - name: Upload SARIF
+        if: always() && inputs.upload-sarif && hashFiles('bandit.sarif') != ''
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          sarif_file: bandit.sarif
+          category: bandit
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: bandit-sarif
+          path: bandit.sarif
+          if-no-files-found: ignore
+          retention-days: 30

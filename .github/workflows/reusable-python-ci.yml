@@ -1,0 +1,124 @@
+# Reusable: lint, type-check and test one Python package.
+#
+# Call from any repo:
+#   jobs:
+#     api:
+#       uses: AnshSinghal-CyberUltron/AI_Mesh_Firewall/.github/workflows/reusable-python-ci.yml@main
+#       with:
+#         working-directory: services/api
+#         install-command: pip install -e ".[dev]"
+#         test-command: pytest -q --junitxml=junit.xml
+#
+# Every command runs inside a fresh venv at $VENV (on PATH), from `working-directory`.
+# Leave a command empty to skip that step. Set `known-failures-file` (relative to the repo
+# root) to ratchet against legacy failures instead of requiring a fully green suite; the test
+# command must then write pytest junit XML to `junit-path`.
+name: reusable-python-ci
+
+on:
+  workflow_call:
+    inputs:
+      working-directory:
+        type: string
+        required: true
+      python-version:
+        type: string
+        default: "3.12"
+      install-command:
+        type: string
+        required: true
+      lint-command:
+        type: string
+        default: ""
+      typecheck-command:
+        type: string
+        default: ""
+      test-command:
+        type: string
+        required: true
+      junit-path:
+        type: string
+        default: junit.xml
+      known-failures-file:
+        type: string
+        default: ""
+      min-tests:
+        description: With a ratchet, fewer test cases than this means the run crashed.
+        type: number
+        default: 1
+      timeout-minutes:
+        type: number
+        default: 45
+      report-name:
+        description: Artifact name for the junit report; must be unique within the calling run.
+        type: string
+        default: python-tests
+
+permissions:
+  contents: read
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: ${{ inputs.python-version }}
+      - name: Create venv
+        run: |
+          python -m venv "$RUNNER_TEMP/venv"
+          echo "VENV=$RUNNER_TEMP/venv" >> "$GITHUB_ENV"
+          echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
+      # These inputs are trusted shell: `eval` runs them as written. Only the calling workflow
+      # (already trusted code) sets them; never pass `github.event.*` or other PR-controlled text.
+      - name: Install
+        env: { CMD: "${{ inputs.install-command }}" }
+        run: eval "$CMD"
+      - name: Lint
+        if: inputs.lint-command != ''
+        env: { CMD: "${{ inputs.lint-command }}" }
+        run: eval "$CMD"
+      - name: Type-check
+        if: inputs.typecheck-command != ''
+        env: { CMD: "${{ inputs.typecheck-command }}" }
+        run: eval "$CMD"
+      - name: Test
+        id: test
+        env:
+          CMD: ${{ inputs.test-command }}
+          BASELINE: ${{ inputs.known-failures-file }}
+        run: |
+          set +e
+          eval "$CMD"
+          rc=$?
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+          # With a baseline the ratchet decides (it also fails a crashed run); without one,
+          # the test command's own exit status does.
+          if [ -z "$BASELINE" ]; then exit "$rc"; fi
+      - name: Known-failure ratchet
+        if: inputs.known-failures-file != ''
+        working-directory: .
+        env:
+          JUNIT: ${{ inputs.working-directory }}/${{ inputs.junit-path }}
+          BASELINE: ${{ inputs.known-failures-file }}
+          RC: ${{ steps.test.outputs.rc }}
+          MIN_TESTS: ${{ inputs.min-tests }}
+        run: |
+          python -m pip install --quiet "defusedxml==0.7.1"
+          python scripts/ci/known_failures.py --junit "$JUNIT" --baseline "$BASELINE" \
+            --exit-code "$RC" --min-tests "$MIN_TESTS"
+      - name: Upload test report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ${{ inputs.report-name }}
+          path: ${{ inputs.working-directory }}/${{ inputs.junit-path }}
+          if-no-files-found: ignore
+          retention-days: 14
