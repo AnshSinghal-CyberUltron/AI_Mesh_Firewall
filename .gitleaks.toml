@@ -1,0 +1,30 @@
+# gitleaks configuration (used by .github/workflows/reusable-secret-scan.yml).
+#
+# Extends the upstream default rules. The allowlist covers ONLY material that is a deliberate,
+# fake credential: the detector test corpora (this product's job is to find secrets, so its
+# tests are full of secret-shaped strings), agent specs and evidence transcripts that quote
+# them. Production code, config, compose, deploy and scripts are never allowlisted.
+#
+# To silence one confirmed false positive elsewhere, add its fingerprint to .gitleaksignore
+# with a comment saying why. Never widen the paths below to make a real finding go away.
+title = "AI Mesh Firewall gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Synthetic credentials in detector tests, specs and recorded evidence"
+paths = [
+  '''(^|/)tests?/''',
+  '''(^|/)test_[^/]*\.py$''',
+  '''(^|/)fixtures?[^/]*''',
+  '''^\.kiro/specs/''',
+  '''^docs/plans/evidence/''',
+  '''^semantic-review/''',
+]
+regexes = [
+  # AWS's documented example key, used throughout the detector tests.
+  '''AKIAIOSFODNN7EXAMPLE''',
+  # Repo-published development placeholders (compose defaults); real values come from .env.
+  '''[a-z0-9-]*-change-me\b''',
+]

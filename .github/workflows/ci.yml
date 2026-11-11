@@ -1,0 +1,56 @@
+# CI: build and test every component on each PR and on every push to a promotion branch.
+#
+# Branch flow: feature/* | fix/* | ci/* -> develop -> staging -> main (hotfix/* may target
+# staging or main). gateway_v2 has its own deep pipeline in gateway-v2.yml; this file covers the
+# control plane and the console. Every job calls a reusable workflow (reusable-*.yml) so other
+# repos can use the same building blocks.
+name: CI
+
+on:
+  pull_request:
+    branches: [develop, staging, main, revamp, "release/**"]
+  push:
+    branches: [develop, staging, main, revamp]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  control:
+    name: control (Django + Postgres + Redis)
+    uses: ./.github/workflows/reusable-django-ci.yml
+    with:
+      working-directory: control
+      install-command: python -m pip install --quiet -e ".[dev]" -e ../shared
+      test-labels: core policy auth mcp_connector
+      # Pre-existing model/migration drift (core 0043 routing_enabled, policy 0043 index renames)
+      # is tracked in the defect-fix work; flip this to true once it is cleared.
+      check-migrations: false
+      known-failures-file: .github/ci/control-known-failures.txt
+
+  frontend:
+    name: frontend (unit tests + production build)
+    uses: ./.github/workflows/reusable-node-ci.yml
+    with:
+      working-directory: frontend
+      test-command: npm run test:unit
+      build-command: npm run build
+
+  ci-scripts:
+    name: CI helper scripts
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - name: known_failures self-test
+        run: python -m unittest discover -s scripts/ci -p "test_*.py" -v

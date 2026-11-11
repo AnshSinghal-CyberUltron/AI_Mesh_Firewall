@@ -1,0 +1,78 @@
+# PR policy: title convention, description completeness, size, and the promotion path.
+#
+#   develop  <- feature/*, fix/*, ci/*, docs/*, chore/*, refactor/*, test/*, perf/*, dependabot/*
+#   staging  <- develop, hotfix/*
+#   main     <- staging, hotfix/*
+#
+# PRs into other branches (e.g. the `revamp` integration branch) get the size report only.
+name: PR policy
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  policy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check title, description, size and promotion path
+        env:
+          BASE: ${{ github.event.pull_request.base.ref }}
+          HEAD: ${{ github.event.pull_request.head.ref }}
+          TITLE: ${{ github.event.pull_request.title }}
+          BODY: ${{ github.event.pull_request.body }}
+          ADDITIONS: ${{ github.event.pull_request.additions }}
+          DELETIONS: ${{ github.event.pull_request.deletions }}
+          CHANGED_FILES: ${{ github.event.pull_request.changed_files }}
+        run: |
+          python3 - <<'PY'
+          import os, re, sys
+
+          base, head = os.environ["BASE"], os.environ["HEAD"]
+          title, body = os.environ["TITLE"], os.environ.get("BODY") or ""
+          lines = int(os.environ["ADDITIONS"]) + int(os.environ["DELETIONS"])
+          files = int(os.environ["CHANGED_FILES"])
+          errors, notes = [], []
+
+          size = next(s for limit, s in ((50, "XS"), (200, "S"), (800, "M"), (2000, "L"), (10**12, "XL")) if lines <= limit)
+          notes.append(f"Size {size}: {lines} changed lines in {files} files.")
+          if size == "XL":
+              print(f"::warning title=Large PR::{lines} changed lines; consider splitting for review quality.")
+
+          governed = base in {"develop", "staging", "main"} or base.startswith("release/")
+          if governed:
+              types = "feat|fix|docs|chore|ci|test|refactor|perf|build|revert|security|release"
+              if not re.match(rf"^({types})(\([\w./-]+\))?!?: \S", title):
+                  errors.append(
+                      f"Title must follow Conventional Commits, e.g. 'fix(control): ...'. Allowed types: {types.replace('|', ', ')}."
+                  )
+              if len(body.strip()) < 80:
+                  errors.append("Description is too short: say why, what changed, and how it was tested.")
+              if not re.search(r"^#+ .*(test|evidence|verification|validation)", body, re.I | re.M):
+                  errors.append("Description needs a testing section (a heading containing Test, Evidence, Verification or Validation).")
+
+          allowed = {
+              "staging": lambda h: h == "develop" or h.startswith("hotfix/"),
+              "main": lambda h: h == "staging" or h.startswith("hotfix/"),
+          }
+          if base in allowed and not allowed[base](head):
+              errors.append(f"'{head}' cannot be merged into '{base}'. Promotion path: develop -> staging -> main (hotfix/* may target staging or main).")
+          if base == "develop" and head in {"staging", "main"}:
+              errors.append("Back-merges into develop must come from a sync/* branch, not directly from staging or main.")
+          if base == "main" and not re.search(r"^#+ .*release notes", body, re.I | re.M):
+              errors.append("PRs into main need a 'Release notes' section.")
+
+          summary = os.environ.get("GITHUB_STEP_SUMMARY")
+          report = "### PR policy\n\n" + "\n".join(f"- {n}" for n in notes) + "\n" + "".join(f"- ❌ {e}\n" for e in errors)
+          if summary:
+              open(summary, "a").write(report)
+          print(report)
+          for e in errors:
+              print(f"::error title=PR policy::{e}")
+          sys.exit(1 if errors else 0)
+          PY

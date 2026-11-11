@@ -1,0 +1,121 @@
+# Reusable: run a Django project's tests against real Postgres and Redis service containers.
+#
+#   jobs:
+#     control:
+#       uses: AnshSinghal-CyberUltron/AI_Mesh_Firewall/.github/workflows/reusable-django-ci.yml@main
+#       with:
+#         working-directory: control
+#         install-command: pip install -e ".[dev]" -e ../shared
+#         test-labels: core policy
+#         known-failures-file: .github/ci/control-known-failures.txt
+#
+# DATABASE_URL, REDIS_URL and a random DJANGO_SECRET_KEY are exported for the run. With
+# `known-failures-file` set, only failures NOT in that file fail the job (scripts/ci/known_failures.py
+# must exist in the caller repo); without it the suite must be fully green.
+name: reusable-django-ci
+
+on:
+  workflow_call:
+    inputs:
+      working-directory:
+        type: string
+        required: true
+      python-version:
+        type: string
+        default: "3.12"
+      install-command:
+        type: string
+        required: true
+      test-labels:
+        description: Space-separated app labels passed to `manage.py test` (empty = all).
+        type: string
+        default: ""
+      check-migrations:
+        description: Fail when models and migrations disagree (`makemigrations --check`).
+        type: boolean
+        default: true
+      known-failures-file:
+        type: string
+        default: ""
+      postgres-image:
+        type: string
+        default: pgvector/pgvector:pg16
+      extra-env:
+        description: Extra `KEY=value` lines appended to the job environment.
+        type: string
+        default: ""
+      timeout-minutes:
+        type: number
+        default: 40
+
+permissions:
+  contents: read
+
+jobs:
+  django:
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+    services:
+      postgres:
+        image: ${{ inputs.postgres-image }}
+        env:
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: ci
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s
+          --health-retries 20
+      redis:
+        image: redis:7.4-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 5s --health-timeout 3s --health-retries 20
+    env:
+      DATABASE_URL: postgresql://postgres:ci@127.0.0.1:5432/ci
+      REDIS_URL: redis://127.0.0.1:6379/0
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: ${{ inputs.python-version }}
+      - name: Environment
+        env:
+          EXTRA_ENV: ${{ inputs.extra-env }}
+        run: |
+          python -m venv "$RUNNER_TEMP/venv"
+          echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
+          # A fresh high-entropy key per run; settings refuse placeholders.
+          echo "DJANGO_SECRET_KEY=$(python -c 'import secrets; print(secrets.token_urlsafe(48))')" >> "$GITHUB_ENV"
+          if [ -n "$EXTRA_ENV" ]; then printf '%s\n' "$EXTRA_ENV" >> "$GITHUB_ENV"; fi
+      - name: Install
+        run: ${{ inputs.install-command }}
+      - name: Migrations match models
+        if: inputs.check-migrations
+        run: python manage.py makemigrations --check --dry-run
+      - name: Test
+        id: test
+        continue-on-error: ${{ inputs.known-failures-file != '' }}
+        run: |
+          set -o pipefail
+          # shellcheck disable=SC2086 # labels are intentionally word-split
+          python manage.py test ${{ inputs.test-labels }} --noinput 2>&1 | tee "$RUNNER_TEMP/django-test.log"
+      - name: Known-failure ratchet
+        if: inputs.known-failures-file != ''
+        working-directory: .
+        run: >-
+          python scripts/ci/known_failures.py
+          --log "$RUNNER_TEMP/django-test.log"
+          --baseline "${{ inputs.known-failures-file }}"
+      - name: Upload test log
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: django-test-log
+          path: ${{ runner.temp }}/django-test.log
+          if-no-files-found: ignore
+          retention-days: 14

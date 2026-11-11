@@ -1,0 +1,177 @@
+# Reusable: lint workflows, containers, shell, compose and nginx; scan IaC for misconfigurations.
+#
+#   actionlint   every .github/workflows/*.yml (includes shellcheck of run: blocks)    blocking
+#   hadolint     every Dockerfile outside `paths-exclude`, failure threshold `error`     blocking
+#   shellcheck   every tracked *.sh outside `paths-exclude`, severity `error`            blocking
+#   compose      `docker compose config` for each entry of `compose-files`              blocking
+#   nginx        `nginx -t` for each entry of `nginx-configs` (with its include files)  blocking
+#   Trivy        `trivy config` (Dockerfile, k8s, terraform, ...) HIGH+CRITICAL        report-only
+#                unless `trivy-blocking: true`
+#
+#   jobs:
+#     infra:
+#       uses: AnshSinghal-CyberUltron/AI_Mesh_Firewall/.github/workflows/reusable-infra-lint.yml@main
+#       with:
+#         compose-files: "docker-compose.yml|docker-compose.yml docker-compose.prod.yml"
+name: reusable-infra-lint
+
+on:
+  workflow_call:
+    inputs:
+      paths-exclude:
+        description: Extended regex of paths skipped by hadolint, shellcheck and Trivy.
+        type: string
+        default: "^(docs|\\.kiro|\\.swarm|\\.skill-workspace|mcp-parallel|semantic-review|runs)/|node_modules"
+      compose-files:
+        description: "'|'-separated stacks; each stack is space-separated -f files. Empty = skip."
+        type: string
+        default: ""
+      compose-env:
+        description: Extra `KEY=value` lines exported before `docker compose config`.
+        type: string
+        default: ""
+      compose-env-file-template:
+        description: File copied to `.env` before `docker compose config` when no `.env` exists (e.g. `.env.sample`).
+        type: string
+        default: ""
+      nginx-configs:
+        description: "'|'-separated entries 'conf_path:conf_d_name'; include files from `nginx-includes-dir` are mounted at /etc/nginx/. Empty = skip."
+        type: string
+        default: ""
+      nginx-includes-dir:
+        type: string
+        default: deploy
+      nginx-image:
+        type: string
+        default: nginx:1.30-alpine
+      trivy-blocking:
+        type: boolean
+        default: false
+      actionlint-image:
+        type: string
+        default: rhysd/actionlint:1.7.12
+      hadolint-image:
+        type: string
+        default: hadolint/hadolint:v2.14.0
+      shellcheck-image:
+        type: string
+        default: koalaman/shellcheck:v0.11.0
+      trivy-image:
+        type: string
+        default: aquasec/trivy:0.76.2
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: actionlint
+        env:
+          IMAGE: ${{ inputs.actionlint-image }}
+        run: docker run --rm -v "$PWD:/repo" -w /repo "$IMAGE" -color -oneline
+      - name: hadolint (error threshold)
+        if: always()
+        env:
+          IMAGE: ${{ inputs.hadolint-image }}
+          EXCLUDE: ${{ inputs.paths-exclude }}
+        run: |
+          status=0
+          while IFS= read -r f; do
+            echo "::group::$f"
+            docker run --rm -i "$IMAGE" hadolint --no-color -t error - < "$f" || { status=1; echo "::error file=$f::hadolint errors"; }
+            echo "::endgroup::"
+          done < <(git ls-files | grep -E '(^|/)Dockerfile[^/]*$' | grep -Ev "$EXCLUDE" || true)
+          exit "$status"
+      - name: shellcheck (error severity)
+        if: always()
+        env:
+          IMAGE: ${{ inputs.shellcheck-image }}
+          EXCLUDE: ${{ inputs.paths-exclude }}
+        run: |
+          mapfile -t files < <(git ls-files '*.sh' | grep -Ev "$EXCLUDE" || true)
+          if [ "${#files[@]}" -eq 0 ]; then echo "no shell scripts"; exit 0; fi
+          docker run --rm -v "$PWD:/mnt" -w /mnt "$IMAGE" -S error "${files[@]}"
+      - name: docker compose config
+        if: always() && inputs.compose-files != ''
+        env:
+          STACKS: ${{ inputs.compose-files }}
+          EXTRA_ENV: ${{ inputs.compose-env }}
+          ENV_TEMPLATE: ${{ inputs.compose-env-file-template }}
+        run: |
+          if [ -n "$EXTRA_ENV" ]; then set -a; eval "$EXTRA_ENV"; set +a; fi
+          if [ -n "$ENV_TEMPLATE" ] && [ ! -e .env ]; then cp "$ENV_TEMPLATE" .env; fi
+          status=0
+          IFS='|' read -ra stacks <<< "$STACKS"
+          for stack in "${stacks[@]}"; do
+            args=()
+            for f in $stack; do args+=(-f "$f"); done
+            echo "::group::compose ${stack}"
+            docker compose "${args[@]}" config --quiet || { status=1; echo "::error::compose config failed for: ${stack}"; }
+            echo "::endgroup::"
+          done
+          exit "$status"
+      - name: nginx -t
+        if: always() && inputs.nginx-configs != ''
+        env:
+          CONFIGS: ${{ inputs.nginx-configs }}
+          INCLUDES: ${{ inputs.nginx-includes-dir }}
+          IMAGE: ${{ inputs.nginx-image }}
+        run: |
+          status=0
+          mounts=()
+          for inc in "$INCLUDES"/*.inc; do
+            [ -e "$inc" ] && mounts+=(-v "$PWD/$inc:/etc/nginx/$(basename "$inc"):ro")
+          done
+          if [ -e "$INCLUDES/edge-error.json" ]; then
+            mounts+=(-v "$PWD/$INCLUDES/edge-error.json:/etc/nginx/edge_errors/__edge_error.json:ro")
+          fi
+          IFS='|' read -ra entries <<< "$CONFIGS"
+          for entry in "${entries[@]}"; do
+            conf="${entry%%:*}"; name="${entry##*:}"
+            echo "::group::nginx -t $conf"
+            docker run --rm "${mounts[@]}" -v "$PWD/$conf:/etc/nginx/conf.d/$name:ro" "$IMAGE" \
+              sh -c 'rm -f /etc/nginx/conf.d/default.conf; nginx -t' || { status=1; echo "::error file=$conf::nginx -t failed"; }
+            echo "::endgroup::"
+          done
+          exit "$status"
+
+  trivy-config:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Trivy config (HIGH, CRITICAL)
+        continue-on-error: ${{ !inputs.trivy-blocking }}
+        env:
+          IMAGE: ${{ inputs.trivy-image }}
+        run: |
+          docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$PWD:/src" -w /src "$IMAGE" \
+            config --quiet --severity HIGH,CRITICAL \
+            --skip-dirs docs,.kiro,.swarm,.skill-workspace,mcp-parallel,semantic-review,runs,node_modules \
+            --format sarif --output /src/trivy-config.sarif --exit-code 1 .
+      - name: Upload SARIF
+        if: always() && hashFiles('trivy-config.sarif') != ''
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          sarif_file: trivy-config.sarif
+          category: trivy-config
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: trivy-config-sarif
+          path: trivy-config.sarif
+          if-no-files-found: ignore
+          retention-days: 30

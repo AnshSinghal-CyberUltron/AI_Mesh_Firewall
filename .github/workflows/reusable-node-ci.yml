@@ -1,0 +1,65 @@
+# Reusable: install, test and build one Node project from its lockfile.
+#
+#   jobs:
+#     web:
+#       uses: AnshSinghal-CyberUltron/AI_Mesh_Firewall/.github/workflows/reusable-node-ci.yml@main
+#       with:
+#         working-directory: frontend
+#         test-command: npm run test:unit
+#         build-command: npm run build
+#
+# Empty commands are skipped. `npm ci` fails when package-lock.json and package.json disagree.
+name: reusable-node-ci
+
+on:
+  workflow_call:
+    inputs:
+      working-directory:
+        type: string
+        required: true
+      node-version:
+        type: string
+        default: "22"
+      lint-command:
+        type: string
+        default: ""
+      test-command:
+        type: string
+        default: ""
+      build-command:
+        type: string
+        default: ""
+      timeout-minutes:
+        type: number
+        default: 20
+
+permissions:
+  contents: read
+
+jobs:
+  node:
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: npm
+          cache-dependency-path: ${{ inputs.working-directory }}/package-lock.json
+      - name: Install (lockfile only)
+        run: npm ci --no-audit --no-fund
+      - name: Lint
+        if: inputs.lint-command != ''
+        run: ${{ inputs.lint-command }}
+      - name: Test
+        if: inputs.test-command != ''
+        run: ${{ inputs.test-command }}
+      - name: Build
+        if: inputs.build-command != ''
+        run: ${{ inputs.build-command }}

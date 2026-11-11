@@ -1,0 +1,75 @@
+# Reusable: GitHub CodeQL semantic code analysis (free for public repositories).
+#
+# Alerts land in the repository's Security > Code scanning tab and on the PR diff. The job
+# itself fails only on analysis errors; block merges on alerts with a branch-protection
+# "code scanning results" rule.
+#
+#   jobs:
+#     codeql:
+#       uses: AnshSinghal-CyberUltron/AI_Mesh_Firewall/.github/workflows/reusable-codeql.yml@main
+#       permissions: { contents: read, security-events: write, actions: read }
+#       with:
+#         languages: '["python", "javascript-typescript", "actions"]'
+name: reusable-codeql
+
+on:
+  workflow_call:
+    inputs:
+      languages:
+        description: JSON array of CodeQL languages.
+        type: string
+        default: '["python", "javascript-typescript", "actions"]'
+      queries:
+        description: security-extended (default) or security-and-quality.
+        type: string
+        default: security-extended
+      paths-ignore:
+        description: Newline-separated globs CodeQL does not analyse.
+        type: string
+        default: |
+          docs/**
+          .kiro/**
+          .swarm/**
+          .skill-workspace/**
+          mcp-parallel/**
+          semantic-review/**
+          runs/**
+          **/node_modules/**
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+    strategy:
+      fail-fast: false
+      matrix:
+        language: ${{ fromJSON(inputs.languages) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: CodeQL config
+        env:
+          PATHS_IGNORE: ${{ inputs.paths-ignore }}
+        run: |
+          {
+            echo "paths-ignore:"
+            while IFS= read -r p; do [ -n "$p" ] && echo "  - '$p'"; done <<< "$PATHS_IGNORE"
+          } > "$RUNNER_TEMP/codeql-config.yml"
+          cat "$RUNNER_TEMP/codeql-config.yml"
+      - uses: github/codeql-action/init@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          languages: ${{ matrix.language }}
+          queries: ${{ inputs.queries }}
+          config-file: ${{ runner.temp }}/codeql-config.yml
+          build-mode: none
+      - uses: github/codeql-action/analyze@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          category: /language:${{ matrix.language }}

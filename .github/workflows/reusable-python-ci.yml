@@ -1,0 +1,102 @@
+# Reusable: lint, type-check and test one Python package.
+#
+# Call from any repo:
+#   jobs:
+#     api:
+#       uses: AnshSinghal-CyberUltron/AI_Mesh_Firewall/.github/workflows/reusable-python-ci.yml@main
+#       with:
+#         working-directory: services/api
+#         install-command: pip install -e ".[dev]"
+#         test-command: pytest -q --junitxml=junit.xml
+#
+# Every command runs inside a fresh venv at $VENV (on PATH), from `working-directory`.
+# Leave a command empty to skip that step. Set `known-failures-file` (relative to the repo
+# root) to ratchet against legacy failures instead of requiring a fully green suite; the test
+# command must then write pytest junit XML to `junit-path`.
+name: reusable-python-ci
+
+on:
+  workflow_call:
+    inputs:
+      working-directory:
+        type: string
+        required: true
+      python-version:
+        type: string
+        default: "3.12"
+      install-command:
+        type: string
+        required: true
+      lint-command:
+        type: string
+        default: ""
+      typecheck-command:
+        type: string
+        default: ""
+      test-command:
+        type: string
+        required: true
+      junit-path:
+        type: string
+        default: junit.xml
+      known-failures-file:
+        type: string
+        default: ""
+      timeout-minutes:
+        type: number
+        default: 45
+      report-name:
+        description: Artifact name for the junit report; must be unique within the calling run.
+        type: string
+        default: python-tests
+
+permissions:
+  contents: read
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: ${{ inputs.python-version }}
+      - name: Create venv
+        run: |
+          python -m venv "$RUNNER_TEMP/venv"
+          echo "VENV=$RUNNER_TEMP/venv" >> "$GITHUB_ENV"
+          echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
+      - name: Install
+        run: ${{ inputs.install-command }}
+      - name: Lint
+        if: inputs.lint-command != ''
+        run: ${{ inputs.lint-command }}
+      - name: Type-check
+        if: inputs.typecheck-command != ''
+        run: ${{ inputs.typecheck-command }}
+      - name: Test
+        id: test
+        # With a known-failures baseline the ratchet below decides pass/fail, not pytest's exit.
+        continue-on-error: ${{ inputs.known-failures-file != '' }}
+        run: ${{ inputs.test-command }}
+      - name: Known-failure ratchet
+        if: inputs.known-failures-file != ''
+        working-directory: .
+        run: >-
+          python scripts/ci/known_failures.py
+          --junit "${{ inputs.working-directory }}/${{ inputs.junit-path }}"
+          --baseline "${{ inputs.known-failures-file }}"
+      - name: Upload test report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ${{ inputs.report-name }}
+          path: ${{ inputs.working-directory }}/${{ inputs.junit-path }}
+          if-no-files-found: ignore
+          retention-days: 14

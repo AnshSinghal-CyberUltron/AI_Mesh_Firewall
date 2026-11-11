@@ -1,0 +1,133 @@
+# Reusable: dependency vulnerability and licence checks (free, account-less).
+#
+#   dependency-review  pull_request only, DIFF-AWARE: fails when the PR ADDS a dependency with a
+#                      known vulnerability at or above `fail-on-severity`, or a denied licence.
+#   OSV-Scanner        every lockfile in the repo (uv.lock, package-lock.json, requirements*.txt,
+#                      ...) against osv.dev. Report-only by default because existing lockfiles
+#                      carry known advisories; set `osv-blocking: true` once they are clean.
+#   npm audit          per `npm-directories` entry, report-only unless `npm-audit-blocking`.
+#
+#   jobs:
+#     deps:
+#       uses: AnshSinghal-CyberUltron/AI_Mesh_Firewall/.github/workflows/reusable-dependency-scan.yml@main
+#       permissions: { contents: read, pull-requests: write, security-events: write }
+name: reusable-dependency-scan
+
+on:
+  workflow_call:
+    inputs:
+      fail-on-severity:
+        type: string
+        default: high
+      deny-licenses:
+        description: Comma-separated SPDX ids that a PR may not introduce.
+        type: string
+        default: AGPL-3.0-only, AGPL-3.0-or-later, SSPL-1.0
+      osv-image:
+        type: string
+        default: ghcr.io/google/osv-scanner:v2.7.1
+      osv-blocking:
+        type: boolean
+        default: false
+      osv-exclude:
+        description: Space-separated directories OSV-Scanner skips.
+        type: string
+        default: docs .kiro .swarm .skill-workspace mcp-parallel node_modules
+      npm-directories:
+        description: Space-separated directories holding a package-lock.json to `npm audit`.
+        type: string
+        default: ""
+      npm-audit-blocking:
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  dependency-review:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: ${{ inputs.fail-on-severity }}
+          deny-licenses: ${{ inputs.deny-licenses }}
+          comment-summary-in-pr: on-failure
+
+  osv:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: OSV-Scanner
+        id: osv
+        continue-on-error: ${{ !inputs.osv-blocking }}
+        env:
+          IMAGE: ${{ inputs.osv-image }}
+          EXCLUDES: ${{ inputs.osv-exclude }}
+        run: |
+          args=(scan source --recursive --format sarif --output-file /src/osv.sarif)
+          for e in $EXCLUDES; do args+=("--experimental-exclude=$e"); done
+          docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$PWD:/src" -w /src \
+            "$IMAGE" "${args[@]}" /src
+      - name: Summary
+        if: always() && hashFiles('osv.sarif') != ''
+        run: |
+          python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          runs = json.load(open("osv.sarif")).get("runs", [])
+          results = [r for run in runs for r in run.get("results", [])]
+          print(f"### OSV-Scanner: {len(results)} vulnerable package findings")
+          PY
+      - name: Upload SARIF
+        if: always() && hashFiles('osv.sarif') != ''
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          sarif_file: osv.sarif
+          category: osv-scanner
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: osv-sarif
+          path: osv.sarif
+          if-no-files-found: ignore
+          retention-days: 30
+
+  npm-audit:
+    if: inputs.npm-directories != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+      - name: npm audit (production dependencies, high and above)
+        continue-on-error: ${{ !inputs.npm-audit-blocking }}
+        env:
+          DIRS: ${{ inputs.npm-directories }}
+        run: |
+          status=0
+          for d in $DIRS; do
+            echo "::group::npm audit $d"
+            (cd "$d" && npm audit --omit=dev --audit-level=high) || status=1
+            echo "::endgroup::"
+          done
+          exit "$status"
