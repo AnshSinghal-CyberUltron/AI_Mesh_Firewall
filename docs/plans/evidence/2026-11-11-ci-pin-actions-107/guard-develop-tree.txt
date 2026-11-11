@@ -1,4 +1,4 @@
-$ python3 scripts/ci/workflow_guard.py .github/workflows   # origin/develop 25c33c86 workflows (before this PR)
+$ python3 scripts/ci/workflow_guard.py --require-yaml .github/workflows   # origin/develop 25c33c86 workflows (before this PR)
 .github/workflows/reusable-django-ci.yml:64: notice [unpinned-image] image `${{ inputs.postgres-image }}` is an expression; pin its source by digest
 .github/workflows/chat-pipeline-golden.yml:28: error [unpinned-uses] `actions/checkout@v4` is pinned to `v4`, not a full 40-character commit SHA; use `owner/repo@<sha> # vX.Y.Z`
 .github/workflows/chat-pipeline-golden.yml:29: error [unpinned-uses] `actions/setup-python@v5` is pinned to `v5`, not a full 40-character commit SHA; use `owner/repo@<sha> # vX.Y.Z`
@@ -17,5 +17,5 @@ $ python3 scripts/ci/workflow_guard.py .github/workflows   # origin/develop 25c3
 .github/workflows/gateway-v2.yml:242: error [unpinned-uses] `actions/setup-python@v5` is pinned to `v5`, not a full 40-character commit SHA; use `owner/repo@<sha> # vX.Y.Z`
 .github/workflows/gateway-v2.yml:266: error [unpinned-uses] `actions/upload-artifact@v4` is pinned to `v4`, not a full 40-character commit SHA; use `owner/repo@<sha> # vX.Y.Z`
 .github/workflows/gateway-v2.yml:1: error [permissions] no top-level `permissions:`; add `permissions: contents: read` and grant more only on the jobs that need it
-workflow_guard: FAIL: 13 files (+0 local actions followed), 55 `uses:` references, 17 findings
+workflow_guard: FAIL: 13 files (+0 local actions followed), 55 `uses:` references, parser cross-check on, 17 findings
 exit=1

@@ -1,12 +1,12 @@
-$ GITHUB_ACTIONS='' python3 -m unittest discover -s scripts/ci -p "test_*.py" -v
+$ WORKFLOW_GUARD_REQUIRE_YAML=1 GITHUB_ACTIONS='' python -m unittest discover -s scripts/ci -p "test_*.py" -v   # PyYAML 6.0.3, as in CI
 ok
 ok
-ok
+test_all_known_passes (test_known_failures.KnownFailuresTests.test_all_known_passes) ... ok
 ok
 test_django_log_ids (test_known_failures.KnownFailuresTests.test_django_log_ids) ... ok
-ok
+test_fixed_known_failure_does_not_block (test_known_failures.KnownFailuresTests.test_fixed_known_failure_does_not_block) ... ok
 test_junit_counts_failures_and_errors_not_skips (test_known_failures.KnownFailuresTests.test_junit_counts_failures_and_errors_not_skips) ... ok
-ok
+test_new_failure_blocks (test_known_failures.KnownFailuresTests.test_new_failure_blocks) ... ok
 ok
 ok
 test_dependabot_promotion_rules_still_apply (test_pr_policy.PrPolicyTests.test_dependabot_promotion_rules_still_apply) ... ok
@@ -18,8 +18,12 @@ test_human_pr_with_complete_description_passes (test_pr_policy.PrPolicyTests.tes
 test_pr_text_cannot_claim_the_exemption (test_pr_policy.PrPolicyTests.test_pr_text_cannot_claim_the_exemption) ... ok
 test_script_is_extracted_from_the_workflow (test_pr_policy.PrPolicyTests.test_script_is_extracted_from_the_workflow) ... ok
 test_anchored_and_quoted_uses_are_checked (test_workflow_guard.WorkflowGuardTests.test_anchored_and_quoted_uses_are_checked) ... ok
+test_any_quoted_key_fails_closed (test_workflow_guard.WorkflowGuardTests.test_any_quoted_key_fails_closed) ... ok
+test_bad_character_set_is_exactly_the_33_intended_code_points (test_workflow_guard.WorkflowGuardTests.test_bad_character_set_is_exactly_the_33_intended_code_points) ... ok
 test_composite_action_needs_no_permissions (test_workflow_guard.WorkflowGuardTests.test_composite_action_needs_no_permissions) ... ok
 test_counts_only_real_uses_keys (test_workflow_guard.WorkflowGuardTests.test_counts_only_real_uses_keys) ... ok
+test_cross_check_agrees_on_a_clean_file (test_workflow_guard.WorkflowGuardTests.test_cross_check_agrees_on_a_clean_file) ... ok
+test_cross_check_fails_when_the_parser_disagrees (test_workflow_guard.WorkflowGuardTests.test_cross_check_fails_when_the_parser_disagrees) ... ok
 test_docker_action_image_needs_digest (test_workflow_guard.WorkflowGuardTests.test_docker_action_image_needs_digest) ... ok
 test_docker_uses_needs_digest (test_workflow_guard.WorkflowGuardTests.test_docker_uses_needs_digest) ... ok
 test_empty_top_level_permissions_passes (test_workflow_guard.WorkflowGuardTests.test_empty_top_level_permissions_passes) ... ok
@@ -29,15 +33,16 @@ test_flow_style_and_next_line_uses_fail_closed (test_workflow_guard.WorkflowGuar
 test_job_level_permissions_do_not_count (test_workflow_guard.WorkflowGuardTests.test_job_level_permissions_do_not_count) ... ok
 test_job_level_write_is_allowed (test_workflow_guard.WorkflowGuardTests.test_job_level_write_is_allowed) ... ok
 test_local_composite_action_is_followed (test_workflow_guard.WorkflowGuardTests.test_local_composite_action_is_followed) ... ok
+test_lone_carriage_return_fails_but_crlf_passes (test_workflow_guard.WorkflowGuardTests.test_lone_carriage_return_fails_but_crlf_passes) ... ok
 ok
 test_missing_or_escaping_local_reference_fails (test_workflow_guard.WorkflowGuardTests.test_missing_or_escaping_local_reference_fails) ... ok
 test_missing_top_level_permissions_fails (test_workflow_guard.WorkflowGuardTests.test_missing_top_level_permissions_fails) ... ok
 test_multiline_flow_collection_fails (test_workflow_guard.WorkflowGuardTests.test_multiline_flow_collection_fails) ... ok
 test_multiline_quoted_scalar_cannot_hide_later_steps (test_workflow_guard.WorkflowGuardTests.test_multiline_quoted_scalar_cannot_hide_later_steps) ... ok
 test_pinned_workflow_passes (test_workflow_guard.WorkflowGuardTests.test_pinned_workflow_passes) ... ok
-test_plain_quoted_key_is_checked_not_rejected (test_workflow_guard.WorkflowGuardTests.test_plain_quoted_key_is_checked_not_rejected) ... ok
 test_remote_reusable_workflow_tag_fails (test_workflow_guard.WorkflowGuardTests.test_remote_reusable_workflow_tag_fails) ... ok
 The guard itself: every workflow in this repository is pinned and least-privilege. ... ok
+ok
 test_second_document_fails (test_workflow_guard.WorkflowGuardTests.test_second_document_fails) ... ok
 test_sha_without_version_comment_fails (test_workflow_guard.WorkflowGuardTests.test_sha_without_version_comment_fails) ... ok
 test_short_sha_and_branch_fail (test_workflow_guard.WorkflowGuardTests.test_short_sha_and_branch_fail) ... ok
@@ -46,18 +51,22 @@ test_top_level_permission_must_be_plain_read_or_none (test_workflow_guard.Workfl
 test_top_level_write_fails (test_workflow_guard.WorkflowGuardTests.test_top_level_write_fails) ... ok
 test_unicode_line_separators_fail (test_workflow_guard.WorkflowGuardTests.test_unicode_line_separators_fail) ... ok
 test_unpinned_images_fail (test_workflow_guard.WorkflowGuardTests.test_unpinned_images_fail) ... ok
-Ran 47 tests in 1.637s
+test_yaml_tags_fail_closed (test_workflow_guard.WorkflowGuardTests.test_yaml_tags_fail_closed) ... ok
+test_line_scanner_alone_fails_every_bad_case (test_workflow_guard_review_cases.ReviewCaseTests.test_line_scanner_alone_fails_every_bad_case) ... ok
+test_there_are_26_cases (test_workflow_guard_review_cases.ReviewCaseTests.test_there_are_26_cases) ... ok
+test_with_parser_cross_check (test_workflow_guard_review_cases.ReviewCaseTests.test_with_parser_cross_check) ... ok
+Ran 56 tests in 1.153s
 OK
 
-$ GITHUB_ACTIONS='true' python3 -m unittest discover -s scripts/ci -p "test_*.py" -v
+$ WORKFLOW_GUARD_REQUIRE_YAML=1 GITHUB_ACTIONS='true' python -m unittest discover -s scripts/ci -p "test_*.py" -v   # PyYAML 6.0.3, as in CI
 ok
 ok
-ok
+test_all_known_passes (test_known_failures.KnownFailuresTests.test_all_known_passes) ... ok
 ok
 test_django_log_ids (test_known_failures.KnownFailuresTests.test_django_log_ids) ... ok
-ok
+test_fixed_known_failure_does_not_block (test_known_failures.KnownFailuresTests.test_fixed_known_failure_does_not_block) ... ok
 test_junit_counts_failures_and_errors_not_skips (test_known_failures.KnownFailuresTests.test_junit_counts_failures_and_errors_not_skips) ... ok
-ok
+test_new_failure_blocks (test_known_failures.KnownFailuresTests.test_new_failure_blocks) ... ok
 ok
 ok
 test_dependabot_promotion_rules_still_apply (test_pr_policy.PrPolicyTests.test_dependabot_promotion_rules_still_apply) ... ok
@@ -69,8 +78,12 @@ test_human_pr_with_complete_description_passes (test_pr_policy.PrPolicyTests.tes
 test_pr_text_cannot_claim_the_exemption (test_pr_policy.PrPolicyTests.test_pr_text_cannot_claim_the_exemption) ... ok
 test_script_is_extracted_from_the_workflow (test_pr_policy.PrPolicyTests.test_script_is_extracted_from_the_workflow) ... ok
 test_anchored_and_quoted_uses_are_checked (test_workflow_guard.WorkflowGuardTests.test_anchored_and_quoted_uses_are_checked) ... ok
+test_any_quoted_key_fails_closed (test_workflow_guard.WorkflowGuardTests.test_any_quoted_key_fails_closed) ... ok
+test_bad_character_set_is_exactly_the_33_intended_code_points (test_workflow_guard.WorkflowGuardTests.test_bad_character_set_is_exactly_the_33_intended_code_points) ... ok
 test_composite_action_needs_no_permissions (test_workflow_guard.WorkflowGuardTests.test_composite_action_needs_no_permissions) ... ok
 test_counts_only_real_uses_keys (test_workflow_guard.WorkflowGuardTests.test_counts_only_real_uses_keys) ... ok
+test_cross_check_agrees_on_a_clean_file (test_workflow_guard.WorkflowGuardTests.test_cross_check_agrees_on_a_clean_file) ... ok
+test_cross_check_fails_when_the_parser_disagrees (test_workflow_guard.WorkflowGuardTests.test_cross_check_fails_when_the_parser_disagrees) ... ok
 test_docker_action_image_needs_digest (test_workflow_guard.WorkflowGuardTests.test_docker_action_image_needs_digest) ... ok
 test_docker_uses_needs_digest (test_workflow_guard.WorkflowGuardTests.test_docker_uses_needs_digest) ... ok
 test_empty_top_level_permissions_passes (test_workflow_guard.WorkflowGuardTests.test_empty_top_level_permissions_passes) ... ok
@@ -80,15 +93,16 @@ test_flow_style_and_next_line_uses_fail_closed (test_workflow_guard.WorkflowGuar
 test_job_level_permissions_do_not_count (test_workflow_guard.WorkflowGuardTests.test_job_level_permissions_do_not_count) ... ok
 test_job_level_write_is_allowed (test_workflow_guard.WorkflowGuardTests.test_job_level_write_is_allowed) ... ok
 test_local_composite_action_is_followed (test_workflow_guard.WorkflowGuardTests.test_local_composite_action_is_followed) ... ok
+test_lone_carriage_return_fails_but_crlf_passes (test_workflow_guard.WorkflowGuardTests.test_lone_carriage_return_fails_but_crlf_passes) ... ok
 ok
 test_missing_or_escaping_local_reference_fails (test_workflow_guard.WorkflowGuardTests.test_missing_or_escaping_local_reference_fails) ... ok
 test_missing_top_level_permissions_fails (test_workflow_guard.WorkflowGuardTests.test_missing_top_level_permissions_fails) ... ok
 test_multiline_flow_collection_fails (test_workflow_guard.WorkflowGuardTests.test_multiline_flow_collection_fails) ... ok
 test_multiline_quoted_scalar_cannot_hide_later_steps (test_workflow_guard.WorkflowGuardTests.test_multiline_quoted_scalar_cannot_hide_later_steps) ... ok
 test_pinned_workflow_passes (test_workflow_guard.WorkflowGuardTests.test_pinned_workflow_passes) ... ok
-test_plain_quoted_key_is_checked_not_rejected (test_workflow_guard.WorkflowGuardTests.test_plain_quoted_key_is_checked_not_rejected) ... ok
 test_remote_reusable_workflow_tag_fails (test_workflow_guard.WorkflowGuardTests.test_remote_reusable_workflow_tag_fails) ... ok
 The guard itself: every workflow in this repository is pinned and least-privilege. ... ok
+ok
 test_second_document_fails (test_workflow_guard.WorkflowGuardTests.test_second_document_fails) ... ok
 test_sha_without_version_comment_fails (test_workflow_guard.WorkflowGuardTests.test_sha_without_version_comment_fails) ... ok
 test_short_sha_and_branch_fail (test_workflow_guard.WorkflowGuardTests.test_short_sha_and_branch_fail) ... ok
@@ -97,12 +111,38 @@ test_top_level_permission_must_be_plain_read_or_none (test_workflow_guard.Workfl
 test_top_level_write_fails (test_workflow_guard.WorkflowGuardTests.test_top_level_write_fails) ... ok
 test_unicode_line_separators_fail (test_workflow_guard.WorkflowGuardTests.test_unicode_line_separators_fail) ... ok
 test_unpinned_images_fail (test_workflow_guard.WorkflowGuardTests.test_unpinned_images_fail) ... ok
-Ran 47 tests in 1.483s
+test_yaml_tags_fail_closed (test_workflow_guard.WorkflowGuardTests.test_yaml_tags_fail_closed) ... ok
+test_line_scanner_alone_fails_every_bad_case (test_workflow_guard_review_cases.ReviewCaseTests.test_line_scanner_alone_fails_every_bad_case) ... ok
+test_there_are_26_cases (test_workflow_guard_review_cases.ReviewCaseTests.test_there_are_26_cases) ... ok
+test_with_parser_cross_check (test_workflow_guard_review_cases.ReviewCaseTests.test_with_parser_cross_check) ... ok
+Ran 56 tests in 1.134s
 OK
+
+$ python3 -I -S -m unittest discover -s scripts/ci -p "test_workflow_guard*.py"   # no PyYAML: cross-check tests skip
+Ran 38 tests in 0.285s
+OK (skipped=3)
 
 Python 3.13.18
-$ ruff check (repo pyproject config) && mypy --strict (new and changed scripts)
+$ ruff check (repo pyproject config) && mypy --strict
 ruff 0.17.4
-All checks passed!
+PIE808 [*] Unnecessary `start` argument in `range`
+   --> scripts/ci/test_workflow_guard.py:263:28
+    |
+262 |     def test_bad_character_set_is_exactly_the_33_intended_code_points(self) -> None:
+263 |         intended = {*range(0x00, 0x09), 0x0B, 0x0C, *range(0x0E, 0x20), 0x7F, 0x85, 0x2028, 0x2029}
+    |                            ^^^^
+264 |         self.assertEqual(len(intended), 33)
+265 |         matched = {cp for cp in range(0x3000) if workflow_guard.BAD_CHAR_RE.fullmatch(chr(cp))}
+    |
+help: Remove `start` argument
+    |
+262 |     def test_bad_character_set_is_exactly_the_33_intended_code_points(self) -> None:
+    -         intended = {*range(0x00, 0x09), 0x0B, 0x0C, *range(0x0E, 0x20), 0x7F, 0x85, 0x2028, 0x2029}
+263 +         intended = {*range(0x09), 0x0B, 0x0C, *range(0x0E, 0x20), 0x7F, 0x85, 0x2028, 0x2029}
+264 |         self.assertEqual(len(intended), 33)
+    |
+
+Found 1 error.
+[*] 1 fixable with `--fix`.
 mypy 2.4.1 (compiled: yes)
-Success: no issues found in 3 source files
+Success: no issues found in 4 source files

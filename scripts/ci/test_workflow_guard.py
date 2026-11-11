@@ -111,9 +111,9 @@ class WorkflowGuardTests(unittest.TestCase):
         anchored = GOOD.replace(f"      - uses: actions/checkout@{SHA} # v7.0.1", "      - &co uses: actions/checkout@v4")
         self.assertEqual(self.check(anchored), [("unpinned-uses", 17)])
         quoted = GOOD.replace(f"      - uses: actions/checkout@{SHA} # v7.0.1", "      - 'uses': 'actions/checkout@v4'")
-        self.assertEqual(self.check(quoted), [("unpinned-uses", 17)])
+        self.assertIn(("unverifiable", 17), self.check(quoted))  # any quoted key fails closed
         alias = GOOD.replace(f"      - uses: actions/checkout@{SHA} # v7.0.1", "      - uses: *checkout")
-        self.assertEqual(self.check(alias), [("unpinned-uses", 17)])
+        self.assertIn(("unpinned-uses", 17), self.check(alias))  # PyYAML, if present, also rejects it
 
     def test_missing_top_level_permissions_fails(self) -> None:
         bad = GOOD.replace("permissions:\n  contents: read\njobs:", "jobs:")
@@ -229,10 +229,53 @@ class WorkflowGuardTests(unittest.TestCase):
                 rules = {rule for rule, _ in self.check(GOOD.replace(step, form))}
                 self.assertIn("unverifiable", rules)
 
-    def test_plain_quoted_key_is_checked_not_rejected(self) -> None:
+    def test_any_quoted_key_fails_closed(self) -> None:
         step = f"      - uses: actions/checkout@{SHA} # v7.0.1"
-        self.assertEqual(self.check(GOOD.replace(step, '      - "uses": actions/checkout@v4')),
-                         [("unpinned-uses", 17)])
+        for form in (
+            '      - "uses": actions/checkout@v4',
+            "      - 'uses': actions/checkout@v4",
+            '      - "uses":actions/checkout@v4',                        # adjacent colon, block
+            '      - {"use\\x73":actions/checkout@v4}',                  # review A, cd191475 residual
+            '      - {name: x,"use\\x73":actions/checkout@v4}',
+            '      - {"uses":actions/checkout@v4}',
+            '      - {name: x,"uses":actions/checkout@v4}',
+            f"      - 'uses': actions/checkout@{SHA} # v7.0.1",           # even a pinned value
+        ):
+            with self.subTest(form=form):
+                self.assertIn(("unverifiable", 17), self.check(GOOD.replace(step, form)))
+
+    def test_yaml_tags_fail_closed(self) -> None:
+        step = f"      - uses: actions/checkout@{SHA} # v7.0.1"
+        for form in (
+            f"      - uses: !!str actions/checkout@{SHA} # v7.0.1",       # pinned-looking, still a tag
+            "      - !!map {uses: actions/checkout@v4}",
+            f"      - &a !!str uses: actions/checkout@{SHA} # v7.0.1",
+            "      - {uses: !!str actions/checkout@v4}",
+            "      - if: !cancelled()",                                    # YAML reads this as a tag
+        ):
+            with self.subTest(form=form):
+                self.assertIn(("unverifiable", 17), self.check(GOOD.replace(step, form)))
+        expressions = GOOD.replace(step, step + "\n        continue-on-error: ${{ !inputs.x }}"
+                                   + "\n        if: \"!cancelled()\"")
+        self.assertEqual(self.check(expressions), [])  # `${{ !x }}` and a quoted `!` are not tags
+
+    def test_bad_character_set_is_exactly_the_33_intended_code_points(self) -> None:
+        intended = {*range(0x00, 0x09), 0x0B, 0x0C, *range(0x0E, 0x20), 0x7F, 0x85, 0x2028, 0x2029}
+        self.assertEqual(len(intended), 33)
+        matched = {cp for cp in range(0x3000) if workflow_guard.BAD_CHAR_RE.fullmatch(chr(cp))}
+        self.assertEqual(matched, intended)
+        for allowed in "\t\n\r ":
+            self.assertIsNone(workflow_guard.BAD_CHAR_RE.fullmatch(allowed))
+        for high in (0xFEFF, 0xFFFD, 0x1F600, 0x10FFFF):
+            self.assertIsNone(workflow_guard.BAD_CHAR_RE.fullmatch(chr(high)))
+
+    def test_lone_carriage_return_fails_but_crlf_passes(self) -> None:
+        step = f"      - uses: actions/checkout@{SHA} # v7.0.1"
+        hidden = GOOD.replace(step, "      - name: x\r      - uses: actions/checkout@v4")
+        self.assertIn(("unverifiable", 17), self.check(hidden))
+        path = self.dir / "crlf.yml"
+        path.write_bytes(GOOD.replace("\n", "\r\n").encode("utf-8"))
+        self.assertEqual(workflow_guard.check_file(path).errors, [])
 
     def test_multiline_quoted_scalar_cannot_hide_later_steps(self) -> None:
         # The continuation line looks like `y: |`; a naive scanner would skip the rest of the job.
@@ -245,7 +288,7 @@ class WorkflowGuardTests(unittest.TestCase):
         self.assertIn(("unverifiable", 20), self.check(single))
 
     def test_unicode_line_separators_fail(self) -> None:
-        for char in ("\u2028", "\u2029", "\x85", "\x0b", "\x0c", "\x1c", "\x00"):
+        for char in ("\u2028", "\u2029", "\x85", "\x0b", "\x0c", "\x1c", "\x00", "\r"):
             with self.subTest(char=hex(ord(char))):
                 text = GOOD.replace("      - name: script text is not a key",
                                     f'      - name: "x{char}y: |"')
@@ -304,6 +347,41 @@ class WorkflowGuardTests(unittest.TestCase):
                          [("unpinned-image", 4)])
         action.write_text("name: d\nruns:\n  using: docker\n  image: Dockerfile\n", encoding="utf-8")
         self.assertEqual(workflow_guard.check_file(action).errors, [])
+
+    # --- PyYAML cross-check ------------------------------------------------------------------
+
+    def require_yaml(self) -> None:
+        if workflow_guard.yaml is None:
+            if os.environ.get("WORKFLOW_GUARD_REQUIRE_YAML") == "1":
+                self.fail("WORKFLOW_GUARD_REQUIRE_YAML=1 but PyYAML is not importable")
+            self.skipTest("PyYAML not installed")
+
+    def test_cross_check_agrees_on_a_clean_file(self) -> None:
+        self.require_yaml()
+        path = self.dir / "wf.yml"
+        path.write_text(GOOD, encoding="utf-8")
+        result = workflow_guard.check_file(path)
+        self.assertEqual(result.errors, [])
+        self.assertTrue(result.cross_checked)
+
+    def test_cross_check_fails_when_the_parser_disagrees(self) -> None:
+        self.require_yaml()
+        # The scanner counts a (pinned) `uses:` under env:, which GitHub never runs; the parser does
+        # not list it as a step, so the two readings differ and the guard fails closed.
+        extra = GOOD.replace("    runs-on: ubuntu-latest\n", "    runs-on: ubuntu-latest\n    env:\n"
+                             f"      uses: actions/checkout@{SHA} # v7.0.1\n", 1)
+        self.assertEqual(self.check(extra), [("parser-mismatch", 1)])
+        self.assertEqual(workflow_guard.check_file(self.dir / "wf.yml", cross_check=False).errors, [])
+
+    def test_require_yaml_without_pyyaml_is_a_usage_error(self) -> None:
+        self.make_local_targets()
+        (self.dir / "wf.yml").write_text(GOOD, encoding="utf-8")
+        root = ["--root", str(self.dir)]
+        with mock.patch.object(workflow_guard, "yaml", None), redirect_stdout(io.StringIO()) as out:
+            code = workflow_guard.main([str(self.dir / "wf.yml"), "--require-yaml", *root])
+            self.assertEqual(code, 2)
+            self.assertEqual(workflow_guard.main([str(self.dir / "wf.yml"), *root]), 0)
+        self.assertIn("parser cross-check off", out.getvalue())
 
     def test_repository_workflows_pass(self) -> None:
         """The guard itself: every workflow in this repository is pinned and least-privilege."""

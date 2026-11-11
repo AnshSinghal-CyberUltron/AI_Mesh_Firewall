@@ -115,7 +115,7 @@ Notes for callers:
 
 - The `known-failures-file` ratchet runs `scripts/ci/known_failures.py`, so copy that file into the calling repo. The ratchet fails a run that did not complete; set `min-tests` near your suite's size so a partly collected suite fails too.
 - Pin to a tag or commit (`@<sha>`), not `@main`, for reproducible builds.
-- Every action in every workflow is pinned to a full commit SHA, with its version in a comment, and every workflow has a top-level `permissions: contents: read`; the [workflow guard](#workflow-guard-pinned-actions-and-least-privilege-tokens) fails CI otherwise, and Dependabot keeps the pins current. To run the guard in your repo, copy `scripts/ci/workflow_guard.py` to the same path (or point `workflow-guard-script` at it); `reusable-infra-lint` fails when the file is missing, and `workflow-guard-script: ''` skips the check.
+- Every action in every workflow is pinned to a full commit SHA, with its version in a comment, and every workflow has a top-level `permissions: contents: read`; the [workflow guard](#workflow-guard-pinned-actions-and-least-privilege-tokens) fails CI otherwise, and Dependabot keeps the pins current. To run the guard in your repo, copy `scripts/ci/workflow_guard.py` and `scripts/ci/workflow_guard.requirements.txt` into one directory (default `scripts/ci/`, or point `workflow-guard-script` at the script). `reusable-infra-lint` fails when either file is missing; `workflow-guard-script: ''` skips the check. PyYAML in the requirements file is hash-pinned and bumped by hand: Dependabot's pip ecosystem does not cover `scripts/ci`.
 - Scanner and service images are pinned by digest (`name:tag@sha256:…`). Dependabot's `docker` ecosystem does not see images set in workflow inputs, so bump them by hand: `docker pull name:newtag`, then copy the digest from `docker image inspect --format '{{index .RepoDigests 0}}'`.
 - Command inputs (`install-command`, `test-command`, `compose-env`, …) are trusted shell, run with `eval`. Only the calling workflow sets them; never pass `github.event.*` or other PR-controlled text into them.
 
@@ -131,9 +131,15 @@ A tag such as `@v4` can be moved to different code after review; a commit SHA ca
 | `permissions` | a workflow has no top-level `permissions:` (composite `action.yml` files are exempt). |
 | `top-level-write` | the top-level block grants any `write` scope, or is `write-all` or `read-all`. Grant extra scopes on the job that needs them. |
 | `unpinned-image` | a literal `jobs.<id>.container`, `container.image` or `services.<id>.image`, or a local action's `runs.image: docker://…`, has no `@sha256:` digest. An `${{ … }}` image is a notice only: pin its input default instead. |
-| `unverifiable` | the file uses YAML that a line scanner cannot read the way a YAML parser does. Each of these fails: control characters or the line separators U+0085/U+2028/U+2029; a second document (`---` or `...` after content); explicit-key syntax (`? key` / `: value`); a double-quoted key with an escape (`"use\x73":`); a quoted scalar or a flow collection that continues on the next line; and a top-level permission level other than a plain `read` or `none`. |
+| `unverifiable` | the file uses YAML that a line scanner cannot read the way a YAML parser does. Each of these fails: control characters, a carriage return not followed by a line feed, or the line breaks U+0085/U+2028/U+2029; a second document (`---` or `...` after content); explicit-key syntax (`? key` / `: value`); any quoted key (`"uses":`, `'uses':`, `"use\x73":`, `{"uses":x}`); a YAML tag (`!!str`, `!cancelled()` written without quotes); a quoted scalar or a flow collection that continues on the next line; and a top-level permission level other than a plain `read` or `none`. |
+| `parser-mismatch` | PyYAML reads the file's `uses:` values or top-level `permissions` differently from the scanner. CI always runs this cross-check: the step installs the hash-pinned PyYAML in `scripts/ci/workflow_guard.requirements.txt` and passes `--require-yaml`. Run locally without PyYAML, the guard prints `parser cross-check off`. |
 
-The guard reads YAML line by line with the standard library, so it needs no install. It skips block scalars (`run: |`), so script text is never mistaken for a key. Where a line scanner and a YAML parser could disagree, the guard fails (`unverifiable`) rather than guess. `docs/plans/evidence/2026-11-11-ci-pin-actions-107/guard-s1-corpus.txt` runs 27 such forms against PyYAML as the reference: every unpinned or over-privileged one fails. Local references resolve against the repository root, so run the guard from there or pass `--root`.
+**How it reads YAML.**
+- The scanner reads YAML line by line with the standard library. It skips block scalars (`run: |`), so script text is never mistaken for a key.
+- It fails closed: where a line scanner and a YAML parser could disagree, it reports `unverifiable` rather than guess.
+- In CI, PyYAML also parses every file, and any difference from the scanner's reading fails (`parser-mismatch`). A form the scanner misreads is therefore caught twice.
+- Reviewer A's 26 review cases are self-tests (`scripts/ci/test_workflow_guard_review_cases.py`). `docs/plans/evidence/2026-11-11-ci-pin-actions-107/guard-s1-corpus.txt` runs 27 forms against PyYAML: every unpinned or over-privileged one fails.
+- Local references resolve against the repository root, so run the guard from there or pass `--root`.
 
 **Pinning an action.** Resolve the tag to the commit it points to; an annotated tag points to a tag object, so dereference it:
 
@@ -184,7 +190,7 @@ Every scanner runs from a pinned container image, so a local run matches CI exac
 ```bash
 docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.30.1 git /repo --log-opts "--remerge-diff origin/develop..HEAD" --redact
 docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.12 -oneline
-python3 scripts/ci/workflow_guard.py .github/workflows
+python3 scripts/ci/workflow_guard.py .github/workflows   # add --require-yaml once PyYAML is installed
 docker run --rm -v "$PWD:/src" -w /src semgrep/semgrep:1.185.0 semgrep scan --config p/python --baseline-commit origin/develop --error
 python3 scripts/ci/known_failures.py --log django-test.log --baseline .github/ci/control-known-failures.txt
 ```

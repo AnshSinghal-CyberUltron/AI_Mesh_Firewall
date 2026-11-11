@@ -1,4 +1,4 @@
-$ python3 scripts/ci/workflow_guard.py .github/workflows   # this branch
+$ python3 scripts/ci/workflow_guard.py --require-yaml .github/workflows   # this branch, PyYAML 6.0.3
 .github/workflows/reusable-django-ci.yml:64: notice [unpinned-image] image `${{ inputs.postgres-image }}` is an expression; pin its source by digest
-workflow_guard: OK: 13 files (+0 local actions followed), 55 `uses:` references, 0 findings
+workflow_guard: OK: 13 files (+0 local actions followed), 55 `uses:` references, parser cross-check on, 0 findings
 exit=0

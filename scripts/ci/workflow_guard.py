@@ -23,29 +23,44 @@ Rules, checked in every ``*.yml``/``*.yaml`` file under the given paths
                   are reported as a notice, not checked.
   unverifiable    YAML the line scanner cannot read the way a YAML parser does. The guard fails
                   rather than skip it.
+  parser-mismatch when PyYAML is importable, each file is also parsed and the guard's reading of
+                  its ``uses:`` values and top-level ``permissions`` must equal the parser's.
+                  CI installs a hash-pinned PyYAML (workflow_guard.requirements.txt) and passes
+                  ``--require-yaml``, so there the cross-check always runs.
 
-Standard library only, so it runs on any runner without an install step. It reads YAML line
-by line and skips block scalars (``run: |``), so text inside a script is never mistaken for a
-key. A line scanner can be led astray by YAML that a parser reads differently, so every such
-form is an ``unverifiable`` error:
-  - control characters and the Unicode line separators U+0085, U+2028 and U+2029;
+The scanner itself needs only the standard library. It reads YAML line by line and skips
+block scalars (``run: |``), so text inside a script is never mistaken for a key. A line scanner
+can be led astray by YAML that a parser reads differently, so every such form is an
+``unverifiable`` error:
+  - control characters, a carriage return not followed by a line feed, and the line breaks
+    U+0085, U+2028 and U+2029;
   - a second YAML document (``---``/``...`` after content);
   - an explicit key (``? key`` / ``: value``);
-  - a double-quoted key containing an escape (``"use\\x73":``);
+  - a quoted key (``"uses":``, ``'uses':``, an escaped ``"use\\x73":``), in block or flow style,
+    with or without a space after the colon (``{"uses":x}``);
+  - a tag (``!!str``, ``!foo``) on any node;
   - a quoted scalar or a flow collection (``[...]``, ``{...}``) that does not close on its line;
   - flow-style ``uses:``, an alias or a block scalar as the ``uses:`` value, a ``uses:`` value on
     the next line.
 
-Exit status: 0 clean, 1 findings, 2 usage error (no workflow files found).
+Exit status: 0 clean, 1 findings, 2 usage error (no workflow files found, or
+``--require-yaml`` without PyYAML).
 """
 from __future__ import annotations
 
 import argparse
+import importlib
 import os
 import re
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
+
+try:  # optional: the parser cross-check runs only when PyYAML is importable
+    yaml: Any = importlib.import_module("yaml")
+except ImportError:
+    yaml = None
 
 SHA_RE = re.compile(r"[0-9a-fA-F]{40}")
 DIGEST_RE = re.compile(r"@sha256:[0-9a-f]{64}$")
@@ -62,11 +77,22 @@ KEY_RE = re.compile(
 )
 LEAD_RE = re.compile(r"^\s*(?:-\s+)*")
 FLOW_USES_RE = re.compile(r"[{,]\s*[\"']?uses[\"']?\s*:")
-# YAML line breaks or non-printables that str.splitlines() or a YAML parser treat differently.
-BAD_CHAR_RE = re.compile("[\x00-\x08\x0b\x0c\x0e-\x1f\x7f\x85  ]")
+# The 33 code points a YAML parser and this line scanner may split or fold differently, listed one
+# by one with escapes (no ranges, no literal characters): C0 controls except TAB, LF and CR, then
+# DEL, NEL, LINE SEPARATOR and PARAGRAPH SEPARATOR. CR is handled by LONE_CR_RE: CRLF line ends
+# are read alike by YAML and by this scanner, a CR on its own is not.
+BAD_CHAR_RE = re.compile(
+    r"[\x00\x01\x02\x03\x04\x05\x06\x07\x08\x0b\x0c\x0e\x0f\x10\x11\x12\x13"
+    r"\x14\x15\x16\x17\x18\x19\x1a\x1b\x1c\x1d\x1e\x1f\x7f\x85\u2028\u2029]"
+)
+LONE_CR_RE = re.compile(r"\r(?!\n)")
 EXPLICIT_KEY_RE = re.compile(r"^\s*(?:-\s+)*[?:](?:\s|$)")
 FLOW_EXPLICIT_KEY_RE = re.compile(r"[{\[,]\s*\?(?:\s|$)")
-ESCAPED_KEY_RE = re.compile(r'"(?:[^"\\]|\\.)*\\(?:[^"\\]|\\.)*"\s*:(?:\s|$)')
+# A quoted key, block or flow style: `"uses":`, `'uses':`, `{"use\x73": ...}`.
+QUOTED_KEY_RE = re.compile(r"""(?:^|[\s{,\[])(?:"(?:[^"\\]|\\.)*"|'(?:[^']|'')*')\s*:""")
+FLOW_TAG_RE = re.compile(r"[\[{,]\s*!")
+ANCHOR_PREFIX_RE = re.compile(r"^&\S+\s+")
+EXPRESSION_RE = re.compile(r"\$\{\{.*?\}\}")
 DOC_MARKER_RE = re.compile(r"^(---|\.\.\.)(?:\s|$)")
 TOP_LEVEL_READS = ("read", "none")
 
@@ -85,6 +111,7 @@ class Result:
     notices: list[Finding]
     uses: int  # `uses:` keys checked (block-scalar text excluded)
     local_refs: list[tuple[int, str]] = field(default_factory=list)  # (line, ./path or $/path)
+    cross_checked: bool = False  # True when PyYAML parsed the file and agreed with the scanner
 
 
 def _quoted_end(raw: str) -> int:
@@ -172,34 +199,50 @@ def _check_uses(value: str, comment: str) -> tuple[str, str] | None:
 
 def _unverifiable(line: str) -> str | None:
     """A reason the line scanner cannot read this (non-block-scalar) line reliably, or None."""
-    if EXPLICIT_KEY_RE.match(line) or FLOW_EXPLICIT_KEY_RE.search(line):
+    if EXPLICIT_KEY_RE.match(line):
         return "explicit-key syntax (`? key` / `: value`); write `key: value`"
-    if ESCAPED_KEY_RE.search(line):
-        return "a double-quoted key with an escape sequence; write the key plainly"
     lead = LEAD_RE.match(line)
     rest = line[lead.end():] if lead else line
     match = KEY_RE.match(line)
-    candidates = [rest]
+    candidates = [rest]  # every node that starts on this line: the line itself and a key's value
     if match and match.group("value"):
         candidates.append(match.group("value").strip())
     for text in candidates:
-        if text[:1] in ("'", '"') and _quoted_end(text) == -1:
-            return "a quoted scalar that continues on the next line; keep it on one line"
-        if text[:1] in ("[", "{") and not _flow_closes(text):
-            return "a flow collection that continues on the next line; keep it on one line"
+        text = ANCHOR_PREFIX_RE.sub("", text)
+        if text.startswith("!"):
+            return "a YAML tag (`!...`); quote the value or drop the tag"
+        if text[:1] in ("'", '"'):
+            end = _quoted_end(text)
+            if end == -1:
+                return "a quoted scalar that continues on the next line; keep it on one line"
+            if re.match(r"\s*:", text[end:]):  # `"uses":x` is a key too (adjacent colon)
+                return "a quoted key; write keys plainly"
+        if text[:1] in ("[", "{"):
+            flow = EXPRESSION_RE.sub("x", text)  # `${{ !a }}` is an expression, not YAML
+            if FLOW_EXPLICIT_KEY_RE.search(flow):
+                return "explicit-key syntax (`? key`) in a flow collection"
+            if QUOTED_KEY_RE.search(flow):
+                return "a quoted key in a flow collection; write keys plainly"
+            if FLOW_TAG_RE.search(flow):
+                return "a YAML tag (`!...`) in a flow collection"
+            if not _flow_closes(text):
+                return "a flow collection that continues on the next line; keep it on one line"
     return None
 
 
-def check_file(path: Path, shown: str | None = None) -> Result:
+def check_file(path: Path, shown: str | None = None, cross_check: bool = True) -> Result:
     """Check one workflow or composite-action file."""
     shown = shown or str(path)
+    guard_uses: list[str] = []
+    guard_perms: Any = None  # the scanner's reading of the top-level permissions
     errors: list[Finding] = []
     notices: list[Finding] = []
     local_refs: list[tuple[int, str]] = []
     uses_count = 0
     is_action = path.name in ("action.yml", "action.yaml")
-    text = path.read_text(encoding="utf-8").removeprefix("﻿")
-    for bad in BAD_CHAR_RE.finditer(text):
+    with path.open(encoding="utf-8", newline="") as handle:  # no newline translation: see LONE_CR_RE
+        text = handle.read().removeprefix("\ufeff")
+    for bad in [*BAD_CHAR_RE.finditer(text), *LONE_CR_RE.finditer(text)]:
         number = text.count("\n", 0, bad.start()) + 1
         errors.append(Finding(shown, number, "unverifiable",
                               f"character U+{ord(bad.group()):04X}: YAML and line-based tools "
@@ -264,11 +307,15 @@ def check_file(path: Path, shown: str | None = None) -> Result:
             if in_top_permissions:
                 top_permissions_line = number
                 errors.extend(_check_top_permissions_value(shown, number, raw_value, value))
+                guard_perms = _read_inline_permissions(raw_value, value)
         elif in_top_permissions and len(keys) == 2:
             errors.extend(_check_top_permission_level(shown, number, key, value))
+            if isinstance(guard_perms, dict):
+                guard_perms[key] = value
 
         if key == "uses":
             uses_count += 1
+            guard_uses.append(value)
             problem = _check_uses(value, comment)
             if problem:
                 errors.append(Finding(shown, number, *problem))
@@ -290,7 +337,62 @@ def check_file(path: Path, shown: str | None = None) -> Result:
         errors.append(Finding(shown, 1, "permissions",
                               "no top-level `permissions:`; add `permissions: contents: read` "
                               "and grant more only on the jobs that need it"))
-    return Result(errors, notices, uses_count, local_refs)
+    cross_checked = False
+    if cross_check and yaml is not None:
+        mismatch = _cross_check(text, is_action, guard_uses, guard_perms)
+        if mismatch:
+            errors.append(Finding(shown, 1, "parser-mismatch", mismatch))
+        else:
+            cross_checked = True
+    return Result(errors, notices, uses_count, local_refs, cross_checked)
+
+
+def _read_inline_permissions(raw: str, value: str) -> Any:
+    """The scanner's reading of `permissions:` written on its own line."""
+    if not raw:
+        return {}  # block mapping: the children fill it in
+    if value == "{}":
+        return {}
+    if raw.lstrip().startswith("{"):
+        return dict(re.findall(r"([\w-]+)\s*:\s*([\w-]+)", raw))
+    return value
+
+
+def _cross_check(text: str, is_action: bool, guard_uses: list[str], guard_perms: Any) -> str | None:
+    """Compare the scanner's reading with PyYAML's; return a description of any difference."""
+    try:
+        docs = list(yaml.safe_load_all(text))
+    except yaml.YAMLError as exc:
+        return f"PyYAML cannot parse the file: {str(exc).splitlines()[0]}"
+    if len(docs) != 1 or not isinstance(docs[0], dict):
+        return f"PyYAML reads {len(docs)} documents (or no mapping); expected exactly one"
+    doc = docs[0]
+    parsed_uses: list[str] = []
+    if is_action:
+        containers = [doc.get("runs")]
+    else:
+        jobs = doc.get("jobs")
+        containers = list(jobs.values()) if isinstance(jobs, dict) else []
+    for item in containers:
+        if not isinstance(item, dict):
+            continue
+        if not is_action and "uses" in item:
+            parsed_uses.append(str(item["uses"]))
+        steps = item.get("steps")
+        for step in steps if isinstance(steps, list) else []:
+            if isinstance(step, dict) and "uses" in step:
+                parsed_uses.append(str(step["uses"]))
+    if sorted(parsed_uses) != sorted(guard_uses):
+        return (f"the scanner read `uses:` values {sorted(guard_uses)} but PyYAML reads "
+                f"{sorted(parsed_uses)}; write each step plainly")
+    if not is_action:
+        parsed = doc.get("permissions")
+        if isinstance(parsed, dict):
+            parsed = {str(k): str(v) for k, v in parsed.items()}
+        if parsed != guard_perms:
+            return (f"the scanner read top-level permissions {guard_perms!r} but PyYAML reads "
+                    f"{parsed!r}; write them as a plain block mapping")
+    return None
 
 
 def _check_top_permission_level(shown: str, number: int, scope: str, level: str) -> list[Finding]:
@@ -377,7 +479,15 @@ def main(argv: list[str] | None = None) -> int:
                         help="workflow files or directories (default: .github/workflows)")
     parser.add_argument("--root", default=".",
                         help="repository root that ./path references resolve against (default: .)")
+    parser.add_argument("--require-yaml", action="store_true",
+                        help="fail (exit 2) if PyYAML is missing, so the parser cross-check always runs")
     args = parser.parse_args(argv)
+    if yaml is None:
+        if args.require_yaml:
+            print("workflow_guard: --require-yaml but PyYAML is not importable; "
+                  "pip install --require-hashes -r scripts/ci/workflow_guard.requirements.txt", file=sys.stderr)
+            return 2
+        print("workflow_guard: PyYAML not importable; parser cross-check skipped (CI runs it)")
     try:
         files = collect(args.paths)
     except FileNotFoundError as missing:
@@ -412,8 +522,9 @@ def main(argv: list[str] | None = None) -> int:
     for e in all_errors:
         print(_annotation("error", e) if gha else f"{e.path}:{e.line}: error [{e.rule}] {e.message}")
     verdict = "FAIL" if all_errors else "OK"
+    cross = "on" if yaml is not None else "off"
     print(f"workflow_guard: {verdict}: {len(files)} files (+{followed} local actions followed), "
-          f"{uses_count} `uses:` references, {len(all_errors)} findings")
+          f"{uses_count} `uses:` references, parser cross-check {cross}, {len(all_errors)} findings")
     return 1 if all_errors else 0
 
 

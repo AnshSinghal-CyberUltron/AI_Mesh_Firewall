@@ -2,8 +2,9 @@
 #
 #   actionlint   every .github/workflows/*.yml (includes shellcheck of run: blocks)    blocking
 #   workflow     `workflow-guard-script` (scripts/ci/workflow_guard.py): every `uses:`   blocking
-#     guard      SHA-pinned with a version comment, a top-level least-privilege
-#                `permissions:`, digest-pinned job/service images
+#     guard      SHA-pinned with a version comment (local actions followed), a top-level
+#                least-privilege `permissions:`, digest-pinned images; cross-checked
+#                against a hash-pinned PyYAML (workflow_guard.requirements.txt)
 #   hadolint     every Dockerfile outside `paths-exclude`, failure threshold `error`     blocking
 #   shellcheck   every tracked *.sh outside `paths-exclude`, severity `error`            blocking
 #   compose      `docker compose config` for each entry of `compose-files`              blocking
@@ -52,9 +53,11 @@ on:
         default: false
       workflow-guard-script:
         description: >-
-          Path of workflow_guard.py in the calling repo (copy scripts/ci/workflow_guard.py from this
-          repo; it needs only python3). It fails on an unpinned `uses:` or a missing top-level
-          `permissions:`. A missing file fails the job; set '' to skip the check deliberately.
+          Path of workflow_guard.py in the calling repo. Copy scripts/ci/workflow_guard.py and
+          scripts/ci/workflow_guard.requirements.txt (hash-pinned PyYAML for its parser
+          cross-check) from this repo into one directory. It fails on an unpinned `uses:` or a
+          missing top-level `permissions:`. A missing file fails the job; set '' to skip the check
+          deliberately.
         type: string
         default: scripts/ci/workflow_guard.py
       actionlint-image:
@@ -102,7 +105,15 @@ jobs:
             echo "::error title=workflow guard::$SCRIPT not found; copy scripts/ci/workflow_guard.py into this repo or set workflow-guard-script: ''"
             exit 1
           fi
-          python3 "$SCRIPT" .github/workflows
+          requirements="$(dirname "$SCRIPT")/workflow_guard.requirements.txt"
+          if [ ! -f "$requirements" ]; then
+            echo "::error title=workflow guard::$requirements not found; copy it next to $SCRIPT (hash-pinned PyYAML for the parser cross-check)"
+            exit 1
+          fi
+          # PyYAML in a throwaway venv, hash-checked; --require-yaml makes the cross-check mandatory.
+          python3 -m venv "$RUNNER_TEMP/workflow-guard"
+          "$RUNNER_TEMP/workflow-guard/bin/pip" install --quiet --disable-pip-version-check --require-hashes -r "$requirements"
+          "$RUNNER_TEMP/workflow-guard/bin/python" -I "$SCRIPT" --require-yaml .github/workflows
       - name: hadolint (error threshold)
         if: always()
         env:
