@@ -1,8 +1,9 @@
 # F1: production gateway serves real completions (GW36 S5 + per-org providers)
 
-Status: 11 Nov 2026, **revision 3**.
+Status: 11 Nov 2026, **revision 4**.
 - Revision 1 (`8484c571`) was challenged by five reviewers.
-- Revision 2 (`4d23ed07`) was challenged by two more (Plan Reviewer A: completeness; Plan Reviewer B: security, scale and operability). Both requested changes.
+- Revisions 2 (`4d23ed07`) and 3 (`91785d9b`) were challenged by Plan Reviewer A (completeness) and Plan Reviewer B (security, scale and operability). Both requested changes each time.
+- Revision 4 replaces the customer-regex design (§5.2) with one backed by a working prototype and measurements, and fixes the other revision-3 findings (§10).
 
 Revision 3 changes how the plan is organised:
 - **§5 is the implementable design of F1a-1 only.** Both revision-2 reviewers judged F1a-1 releasable once its own blockers were fixed, and §5 fixes them.
@@ -49,7 +50,7 @@ Production profile today (`edge/production_profile.py`, `edge/serve.py`):
 | Publisher | `_NoAudit`; publishes the 44-series re-hydrator family (N14) | `amf_store_memory_reachable 0` is false, and the series are duplicated |
 | response store | per-worker memory (`openai_responses.py:407`) | `/v1/responses` breaks across workers |
 | GW35 unauth audit | unwired (no `unauth_audit` dep) | failed-credential records dropped |
-| boot log | survivors of the fail-closed table, such as `input_detector -> no_findingsors_detector (fail-closed; identity/admission refuse)` (`serve.py:256`), plus a stale "every other line is fail-closed (S4/S5)" header (`production_profile.py:545`) | the log misdescribes production |
+| boot log | survivors of the fail-closed table, such as `input_detector -> no_findings_detector (fail-closed; identity/admission refuse)` (`serve.py:256`), plus a stale "every other line is fail-closed (S4/S5)" header (`production_profile.py:545`) | the log misdescribes production |
 
 **Customer conditions (GW26).**
 - **How they reach detectors.**
@@ -122,31 +123,105 @@ No new error codes are introduced in F1a-1.
   - `Session.plan` (`rag_common.py:129`);
   - `chat_stream.py:324`.
 - **`plan=None` sites** (`openai_nonstream.py:290,309`, where `collect_and_enforce` defaults to `None`): pass the plan from `routes.py:298`, which already has it. No call site keeps `None` on a tenant request.
-- **Moderations.** Behaviour is unchanged from dev: the org's plan is resolved (as `openai_misc.py:368` does for embeddings) and customer conditions run phase-only. Revision 2's `plan=None` would have dropped customer rules from moderations; it is withdrawn.
+- **Moderations.** Behaviour is unchanged from dev: the org's plan is resolved (as `openai_misc.py:368` does for embeddings) and customer conditions run phase-only. Revision 2's `plan=None` would have dropped customer rules from moderations; it is withdrawn. If the plan is unavailable, moderations refuse with the same declared code as the chat surface's unresolved plan. They never fall back to built-ins only.
+- **RAG tier-1 detectors.** `RagDeps.detector_tier1` and `detector_tier1_output` (`dev_rag.py:83,88`, used at `rag_stages.py:131-134`) are built by the same factory, so they also scan with the request's program.
+- **No silent fail-open after `request_org` goes.** A detector not built by the factory would scan with no customer program. So:
+  - `bind_surface` refuses a detector that carries no program;
+  - a parametrised test drives an org-B rule through all 9 `bind_surface` sites, moderations and both RAG tier-1 detectors, and asserts org B's program fires at each.
 
-### 5.2 Customer-regex engine and the per-request scan deadline
+### 5.2 Customer regex: exact `re` meaning, pre-emptible matching, bounded loop time
 
-The goal is to keep today's semantics exactly while making every customer pattern pre-emptible and bounded.
+**Requirements.**
+1. **Exact semantics:** a customer pattern matches exactly what Python `re` matches today, with no bypass through Unicode digits, separators, combining marks or case folding.
+2. **Pre-emption:** a catastrophic pattern is stopped within a bound.
+3. **Event-loop bound:** no tenant holds the event loop longer than a bounded slice.
+4. **No false refusals:** long streams, slow upstreams and many ordinary rules are not refused.
+5. **Bounded compile cost.**
 
-- **Engine: the `regex` package (mrab) for every customer pattern, in VERSION0 mode.** That mode is compatible with `re`: `\d`, `\w`, `\s` and `\b` are Unicode-aware, exactly as today.
-  - **RE2 is not used.** Its ASCII-only classes would let an attacker bypass a card-number rule by switching digit scripts. Both revision-2 reviewers measured this.
-  - Matching uses `pattern.finditer(text, timeout=<remaining>, concurrent=True)`. `concurrent=True` releases the GIL; this was measured three times, with 90–93 ticks with it and 1–2 without.
-  - The thread created per match is removed (63 µs each).
-- **Per-request `ScanDeadline`.**
-  - One monotonic deadline is created when the request is admitted. Its length is `contract.guard_wait_budget_s()`, the value each single call gets today.
-  - Every customer-regex call on that request draws from it. This replaces today's "full budget per rule per call".
-  - On the inline streaming path (`egress/stream.py:548`), each call is also capped at `contract.scan_window_s()`. So one call can hold the loop for at most one scan window (10 ms at the default p99), and a pathological pattern fails on its first delta.
-- **Timeout posture: unchanged.** A timeout, or a pattern that cannot compile, refuses the request with the existing `policy_regex_timeout`. It does not route through `on_unavailable`; revision 2's change to that is withdrawn.
-- **Publish-time limits (control).** `policy/serializers.py` `validate_condition` keeps its length ≤ 1000 and ReDoS-shape checks, and adds:
-  - a compile with `regex` (not `re`);
-  - refusal of a counted repetition above 1000, and of nested counted repetitions whose product is above 1000. `(?:a{1000}){1000}` compiles in 471 ms, and `regex` compile cost grows with that product;
-  - a per-plan cap on regex rules, whose value is taken from the existing plan rule limits.
+**Why the obvious engines fail (measured by the reviewers and re-measured here).**
+- **RE2** has ASCII-only `\d`, `\w`, `\s` and `\b`.
+- **`regex` in VERSION0** differs from `re`:
+  - `\s` misses U+001C–U+001F;
+  - `\w` differs on about 25k code points;
+  - `\b` differs next to combining marks;
+  - case folding differs (`re` folds i/ı/İ and k/K/K together);
+  - it reads fuzzy `{e<=1}` and POSIX `[[:alpha:]]` syntax where `re` reads literals.
+- **`re`** cannot be pre-empted.
 
-  Control's own `_matches_own_pattern` (`firewall_v2_publish.py:586-593`) switches to `regex` with a timeout, so publish can no longer hang a control worker.
-- **The compile-time scan** (`rewrite_template.py:91-98`): its literal `_CHECK_BUDGET_S = 0.25` is replaced by a contract-derived value, through the same `regex` path.
-- **Projector:** `validate_plan` memoises by body hash, so the projector does not recompile every org's rules every round (Reviewer B). `refused_conditions` counts patterns that `regex` refuses.
-- **Dependency.** `regex` goes into the gateway_v2 **base** dependencies, pinned to a release at least two weeks old (2026.9.29). The image installs no extras by default. mypy needs a typed shim or an `ignore_missing_imports` override. Control already depends on `regex`.
-- **What does not change.** `_redos_shape` keeps refusing the shapes it refuses today. That is an existing fail-closed behaviour, and loosening it is out of scope.
+**Design: a translator from `re` to `regex`, then `regex` with a timeout.** A working prototype and its evidence are in `docs/plans/evidence/2026-11-11-f1a1-regex/`.
+
+- **Parsing.** The pattern is parsed by `re`'s own parser (`re._parser`). Escapes, sets, verbose mode, scoped flags and quantifier syntax therefore mean what `re` says.
+  - The tree is re-emitted for `regex`, and no global flag reaches `regex`.
+  - `.`, `^` and `$` get explicit scoped flags.
+  - Braces and brackets are emitted only as `re` parsed them, so fuzzy and POSIX syntax cannot appear.
+- **Categories.**
+  - `\w` becomes `[\p{L}\p{N}_]`, `\d` becomes `\p{Nd}`, and `\s` becomes an explicit 10-range set taken from `re`. Negations follow the same pattern.
+  - They are never case-folded, because `re` matches a category by the character itself.
+  - Inside sets, the categories are split out of the set.
+- **Word boundaries.** `\b` and `\B` become lookarounds over that `\w`. `\B` is false on the empty string, as in `re`.
+- **Case-insensitive literals and sets.** These use `regex`'s native case folding. The translator then asks `re` for its own verdict on every one of the 2,927 cased code points, and adds or removes the code points where the two engines disagree. That keeps `re`'s special folds exact.
+- **The Unicode database must match.**
+  - `regex` is pinned to the release whose Unicode database equals the interpreter's: **regex 2023.8.8 with Python 3.12, both Unicode 15.0**. On those, `[\p{L}\p{N}_]` equals `re`'s `\w` on all 1,114,112 code points, and `\p{Nd}` equals `\d`.
+    - Newer releases (Unicode 15.1/16) mark up to 5,004 code points as letters that Python leaves unassigned. An attacker could use those to defeat `\b`. Excluding them with lookaheads cost about 10× in matching speed.
+  - **Boot check:** the gateway refuses to start when `regex.__version__` and `unicodedata.unidata_version` are not the pinned pair.
+  - **CI check:** an exhaustive test compares every code point. Upgrading Python then forces a matching `regex` pin.
+- **A `regex` prefilter bug, worked around.**
+  - `regex` (2023.8.8 and 2026.9.29 alike) builds a first-character prefilter that folds a case-sensitive set when the pattern starts with an optional case-insensitive item. Measured: `(?i:a)?[^\p{L}]` misses U+0345.
+  - Patterns containing a case-insensitive part get a leading `(?=[\s\S]|\Z)`, which disables that prefilter. Other patterns keep it.
+- **Refused at translation:** the ASCII and LOCALE flags, and a backreference under IGNORECASE. `regex` compares backreferences with its own case folding.
+- **Evidence for the prototype:**
+
+  | Check | Result |
+  |---|---|
+  | Exhaustive per-code-point comparison of `\d \D \w \W \s \S`, in and out of sets, with and without `(?i)` | 0 mismatches |
+  | `\b`, `\B` and their neighbours for every code point | 0 mismatches |
+  | Differential fuzz against `re` on a corpus of control separators, NBSP, U+2000, Arabic-Indic and fullwidth digits, combining marks, ß/ẞ, ı/İ/K, superscripts and σ/Σ (32,000 random patterns, about 244,000 pattern-text pairs) | 0 mismatches |
+  | Match time against `re` (`perf.md`) | from 3× faster to 3.5× slower. Worst: `\w+@\w+\.\w+`, 4.1 ms against 1.2 ms on 21 KB |
+  | Translation | 0.1–18 ms per pattern |
+  | Compile | at most 9 ms per pattern (most under 1 ms) |
+
+- **Placement.**
+  - Translation and compile run in gateway_v2 only: in the gateway and in the projector's plan validation.
+  - Control validates with `re` plus the translator's refusal rules and the limits below. It never compiles with `regex`, so control's own `regex` pin (used by a dependency) does not matter.
+- **Matching.** `compiled.finditer(text, timeout=t, concurrent=True)`, which releases the GIL (measured: 90–93 ticks against 1–2). The thread created per match is removed.
+  - When the computed `t` is ≤ 0, the scan refuses without calling `regex`. A negative timeout means *no* timeout in `regex`.
+- **Time budget.** There is no per-request aggregate and no wall-clock deadline (the revision-3 design was wrong on both counts).
+  - **Off-loop calls:** each scan pass gets today's per-pass budget, `guard_wait_budget_s()` (100 ms), shared by all of its rules.
+  - **The inline streaming per-delta call** (`egress/stream.py:548`): each delta gets one inline budget, shared by all its rules, of **half a scan window** (5 ms at the default p99). That leaves room for timeout overshoot (measured: a 2 ms timeout fired at 5.4 ms, a 10 ms one at 14.6 ms), so one delta holds the loop for at most one scan window.
+  - The budget is counted as consumed regex time, never as a deadline from admission. A slow upstream therefore costs nothing.
+  - A timeout refuses the request with `policy_regex_timeout`, as today.
+- **Every non-streaming customer scan moves off the event loop.** Their callers are all `async` (checked by AST), so each sync scan is wrapped in `await executor.run(...)`. The sites:
+  - chat input (`openai_chat.py:300`, in `run_lifecycle`);
+  - the non-streaming whole-response scan (`openai_nonstream.py:176-177`, in `collect_and_enforce`);
+  - MCP input and replies (`mcp.py` `_forward`);
+  - embeddings (`openai_misc.py:445`, in `_scan_stage_dispatch`);
+  - moderations.
+
+  RAG and the error frame are already off the loop. Only the streaming per-delta path stays inline. Its offload is the documented GW13 follow-up (`executor.py:37-40`), and it is bounded as above.
+- **Why this bounds cross-tenant loop time.**
+  - A pathological rule hits the inline cap on its first delta, and the stream is refused. Each such request therefore costs the loop at most one scan window.
+  - Tenant A's concurrent requests are bounded by admission and the GW27 org rate and concurrency limits. So the loop time A can take is at most (A's admitted request rate × one scan window), not unbounded.
+  - Ordinary rules cost microseconds per delta. Revision 3's measured refusal of a 4k-token stream came from the per-request aggregate, which is gone.
+  - The two-tenant tests below assert this with R rules each tuned just under the cap, and with C concurrent streams from tenant A.
+- **Publish-time limits.**
+  - **Where enforced:** control's serializer, the projector's `validate_plan` and the gateway compile all enforce them; Django admin and `load_policies` go through the projector check.
+  - **The limits:**
+    - pattern length ≤ 1000 (today's limit);
+    - each counted repetition ≤ 1000, and the product of nested counted repetitions ≤ 1000;
+    - at most **64 regex rules per plan** (`_MAX_REGEX_RULES_PER_PLAN`, a new capacity constant in `runtime/resources.py`);
+    - translation refusals.
+  - **Breaking a limit:**
+    - control refuses at save;
+    - an existing stored rule over a limit becomes a refused rule, which fails closed with `policy_regex_timeout` on an applicable request, as today. It is counted in the projector's `refused_conditions`.
+- **Compile cost.**
+  - Translation and compile are lazy: on the first request that needs the org's program, in the executor, off the loop.
+  - The result is cached in a per-worker LRU keyed by `(org, plan version)`, with a contract-derived capacity and an eviction metric.
+  - On the measured patterns, compile took at most 9 ms (most under 1 ms) and translation 0.1–18 ms (the slow end for a case-insensitive pattern).
+  - The projector memoises validation by plan body hash.
+- **Other `re` call sites.**
+  - `rewrite_template.py:91-98` (compile-time scan): goes through the same engine, with its literal `_CHECK_BUDGET_S = 0.25` replaced by `guard_wait_budget_s()`.
+  - Control's `_matches_own_pattern` (`firewall_v2_publish.py:586-593`): runs the pattern with `re` today, so a hostile pattern can hang a control worker. It is gated by the publish-time limits and `_has_redos_shape` first, and runs off the request thread with a bound.
+- **What does not change.** `_redos_shape` keeps refusing the shapes it refuses today, and the timeout posture is unchanged.
 
 ### 5.3 Resolvers and base detectors
 
@@ -159,16 +234,29 @@ The goal is to keep today's semantics exactly while making every customer patter
 2. **Sink.** `AuditSink(ValkeyAuditStore(runtime.store_client, runtime.store_keys), budget, queue_depth=bounds.audit_depth)`. `build_incident(..., audit=sink.emit)` makes the sink the tap's downstream. `deps["audit"]` stays the `IncidentAuditTap`, because the risk tracker needs an `AttemptSink`. `DevAudit`'s tested pieces are promoted to the production module rather than duplicated.
 3. **The budget's tenant count (Reviewer 4 B2, Reviewer A B4).**
    - `StreamBudget`'s `tenants` is the cardinality of the signed PLAN index (`StoreKeys.index(StateKind.PLAN)`, one `ZCARD`). It is read by the sampler owner each tick and shared, never taken from a worker's local plan cache.
-   - **Unknown rule:** until the first decision exists, the budget is the existing declared fallback, `stream_maxlen` per org, with `startup_check` logging the warning it logs today.
-4. **Sampler owner.** Production workers have no index, so ownership is a Valkey lease: `SET {ns}:audit:sampler <worker-id> NX PX <ttl>`, renewed by the holder.
-   - The TTL is contract-derived from the sampler period.
-   - The holder runs `MemorySampler` and publishes its `BudgetDecision` to a key. Every worker adopts it (`StreamBudget.adopt`).
+   - The count over-counts in the safe direction:
+     - the PLAN index keeps offboarded orgs (no `ZREM`);
+     - `_unauthenticated` has a stream but no PLAN entry, so 1 is added.
+   - **Unknown budget:** in production it is refused, not defaulted.
+     - The per-org `stream_maxlen` fallback is the RC2 configuration that filled a 10.4 GiB store in 51 minutes (`storemem.py:123-131`).
+     - `gateway-v2-prod` therefore requires `AMF_AUDIT_STORE_BUDGET_MB`, or a store `maxmemory`. Without one, readiness fails with the reason.
+4. **Sampler owner.** Production workers have no index, so ownership is a Valkey lease.
+   - **Keys:** two new `StoreKeys` entries **outside** the per-org audit namespace, so no org slug can collide with them (an org named `sampler` could, under `{ns}:audit:`):
+     - `{ns}:auditctl:sampler`, the lease;
+     - `{ns}:auditctl:decision`, the published `BudgetDecision` with its timestamp.
+   - **Lease:** taken with `SET … NX PX <ttl>`. It is renewed by compare-and-expire, a Lua script that runs `GET == me` then `PEXPIRE`, so only the holder renews. The TTL is contract-derived from the sampler period.
+   - **Decision:** the holder runs `MemorySampler` and publishes the decision. Every worker adopts it, unless it is older than two sampler periods; then the previous decision stays in force and a staleness gauge is raised.
    - Losing the lease stops sampling; any worker can take it over.
-   - Every worker runs `startup_check`, as today.
+   - Every worker still runs `startup_check`, as today.
 5. **Lifecycle.**
    - An `AuditLifespan` hook starts the writer and the sampler task.
-   - At shutdown, `drain(timeout)` runs before the runtime closes the client. `StateServedApp` already closes the client after the hooks. `run()` is cancelled before `drain()`, because the two read the same queue.
-   - **A hook's start failure fails readiness.** `StateServedApp._run_hooks` records failures, and the readiness probe reports them. Today failures are only logged (`state_runtime.py:475-481`).
+   - **At shutdown,** the writer is asked to stop after its current batch, not cancelled mid-write. Cancelling mid-write lost the in-flight batch, which was counted as produced but not written (measured: 300 produced, 0 written). `drain(timeout)` then writes what remains, before the runtime closes the client. `StateServedApp` already closes the client after the hooks.
+   - **The drain gets time to run:**
+     - uvicorn gets a contract-derived `timeout_graceful_shutdown`;
+     - the drain hook is bound in the multi-process path too, which today does not bind it.
+   - **Readiness reflects the writer:**
+     - a hook's start failure fails readiness (`StateServedApp._run_hooks` records it; today it is only logged, `state_runtime.py:475-481`);
+     - the writer task's done-callback marks readiness unhealthy if the task ever ends while serving.
    - The one-tuple unpack in `test_lgw29_production_wiring` changes, because there are now two hooks.
 6. **Metrics (Reviewer 4 M4).** The gateway publishes **producer and bound** series only: queue depth, drops, written-by-org count and budget bytes. The durability series (`completeness_ratio`, `records_lost`, `store_memory_reachable`) belong to audit_control and are not published by the gateway.
 7. **Record attribution.** Each audit record carries the worker id it already uses (`host:pid`) in its detail. No index is invented.
@@ -202,30 +290,49 @@ The goal is to keep today's semantics exactly while making every customer patter
 ### 5.8 F1a-1 tests
 
 - **Unit and property tests:**
-  - **N5:** an org-B request through each off-loop path uses org B's program: `chat_stream:271`, STRICT_WITHHOLD with a family at `:435`, RAG stages and the error frame. These fail on HEAD.
+  - **N5:** an org-B rule fires with org B's program at every scan site, not only the four off-loop ones. The sites are all 9 `bind_surface` calls, moderations and both RAG tier-1 detectors. The off-loop ones fail on HEAD. `bind_surface` refuses a detector with no program.
   - **Pinning:** a mid-request plan update does not change the program a request uses.
-  - **Semantics against `re`:** each customer pattern in a corpus is matched by `re` and by the production path on a Unicode corpus. The corpus covers Nd digits from three or more scripts, U+00A0 and the U+2000 spaces, and Latin-1 letters. The results must be identical.
+  - **Semantics against `re`:**
+    - the exhaustive per-code-point class and boundary test;
+    - the differential fuzz, from the prototype, in CI;
+    - the reviewers' bypass cases: U+001F separators in a card pattern, U+001C in `password\s*=`, a combining mark after `\bpassword\b`, and `(?i)\bssn\b` against `ssǹ`;
+    - the pinned-pair boot check.
   - **Regex DoS:**
-    - both reviewers' patterns;
-    - a two-tenant test: tenant A's pathological rule runs on the non-strict streaming path while tenant B streams on the same worker. B's per-delta latency stays within one scan window, and A is refused with `policy_regex_timeout`;
-    - the deadline is shared across rules and deltas.
-  - **Publish limits:** counted-repetition refusals in control. `_matches_own_pattern` cannot hang.
+    - patterns that pass `_redos_shape` and the limits yet time out under `regex`, for example `(\w+\s?){1,30}$`. The reviewers' earlier patterns never time out, so they cannot be the test.
+    - **Two-tenant tests:**
+      - (a) tenant A has R rules, each tuned just under the inline cap, on the non-strict streaming path. Tenant B's per-delta loop delay stays within one scan window.
+      - (b) tenant A has C concurrent pathological streams. Each costs at most one scan window, and each is refused.
+      - (c) the same as (b) on the chat input path, which is now off the loop.
+    - Negative and zero remaining time never reaches `regex`.
+  - **No false refusals:**
+    - a benign 6k-token stream with 10 ordinary rules completes;
+    - a request whose first token arrives after 2 s still runs its output rules.
+  - **Limits:**
+    - counted-repetition and per-plan cap refusals in control, the projector and the gateway;
+    - `_matches_own_pattern` cannot hang a control worker.
   - **Audit:**
-    - sink lifecycle: start, drain at shutdown, and a hook start failure fails `/readyz`;
-    - a lease takeover between two fake workers;
-    - the tenant count comes from the PLAN index.
+    - sink lifecycle: start, then stop-after-batch and drain at shutdown, with no batch lost;
+    - a hook start failure fails `/readyz`, and so does a writer task that dies;
+    - a lease takeover between two fake workers, and compare-and-expire renewal;
+    - an org slugged `sampler` writes normally;
+    - a stale decision is not adopted;
+    - the tenant count comes from the PLAN index, +1;
+    - an unknown budget in production fails readiness.
+  - **Production resolvers:** with a fake provider, an **output** plan rule is enforced by the production `phase_resolvers`, and RAG stages no longer refuse.
   - **Metrics:** the Publisher series count without the re-hydrator family; the gateway publishes no durability series.
   - **Response store:** a cross-worker `/v1/responses` round trip, with two app instances on one store.
   - **Hardening:** `PR_GET_DUMPABLE` inside a spawned worker.
   - **Boot log:** the full production line set.
-- **Live production boot** (postgres, redis, control, projector, re-hydrator, gateway in production, one worker):
+- **Live production boot** (postgres, redis, control, projector, re-hydrator, gateway in production, **one worker**):
   1. A BLOCK prompt gives its declared refusal, zero provider calls, and an `EnforcementEvent` row matched by nonce.
-  2. An allowed prompt gives the stub's declared error and no fail-open pass.
+  2. An allowed prompt gives the stub's declared error and no fail-open pass. The console row's stage shows `error`, not `block`.
   3. An invalid key gives 401, and `amf_audit_unauthenticated_total` increments.
   4. `amf_audit_budget_bytes > 0`, and `XLEN ≤ maxlen` for the org stream.
-  5. Δproduced = Δwritten + dropped + failed, measured on a single-worker gateway.
+  5. Δproduced = Δwritten + dropped + failed, measured outside shutdown.
   6. `/metrics` series count equals `SERIES_COUNT`, with `AMF_FD_LIMIT` stated.
-  7. `/v1/responses` store-then-retrieve across two workers.
+  7. Valkey operations per request are recorded as the F1d baseline.
+
+  Cross-worker `/v1/responses` is covered by the unit test, because nothing can be stored behind the empty stub.
 - **Regression:** full gateway_v2 suite, control suites and CI.
 
 ## 6. F1a-2 requirements: MODEL state (binding; design and review before code)
@@ -234,14 +341,18 @@ The goal is to keep today's semantics exactly while making every customer patter
    - The stamp verifies over the raw cursor map, ignores unknown kinds, and requires only the kinds this build applies.
    - The re-hydrator's held-stamp comparison also ignores missing kinds.
    - The re-hydrator names MODEL, and the projector emits it, only behind explicit flags. This follows the `project_mcp_key_policy` precedent (`domain/state_knobs.py:199`).
-   - The rollout floor is documented: every gateway image that could be deployed (rollbacks included) runs step 1 before any step-2 re-hydrator starts. Rolling back a re-hydrator after step-2 gateways are deployed is forbidden.
+   - **The rollout floor is enforced, not only documented.**
+     - Every gateway exports its build's state generation.
+     - The re-hydrator and projector flags are declarations checked against the fleet's minimum, as GW29 does with `AMF_GATEWAY_MIN_SCOPE_GENERATION`.
+     - Every gateway image that could be deployed, rollbacks included, runs step 1 before any step-2 re-hydrator starts.
+     - Rolling back a re-hydrator after step-2 gateways are deployed is forbidden, and is refused by that check.
    - Tests cover a mixed-build re-hydrator pair and stamp time never moving backwards.
 2. **MODEL applier contract.**
    - Signature and index failures are round-fatal and raise an alert.
    - Body failures (decode, unknown provider or field, decrypt, unknown kid) are caught per record. They set an org-level `unavailable(version)` marker and the cursor advances.
    - An unknown provider or field omits only that entry, and is counted.
    - Readiness never depends on one org's record.
-   - Rollback refusal applies per warm org. For cold fetch, the bound is stated as in the KEY model (signed index score plus deep repair).
+   - Rollback refusal applies per warm org. A cold fetch reads only the manifest and the record (`state_runtime.py:299-318`); the index score is not signed. The F1a-2 design must close that gap or state the bound it accepts.
    - `StateWriter.rollback` refuses MODEL.
 3. **Request path O(1) in orgs.**
    - `serves_alias(org, alias)`, `preflight` and `_plan` read a per-org `(org, casefolded alias)` dict.
@@ -350,15 +461,20 @@ The goal is to keep today's semantics exactly while making every customer patter
 - The request-path Valkey families (audit, responses, budget) share the `{rv2}` hash tag, so in a Valkey Cluster they land on one slot.
 - F1a-1 keeps the existing key layout. Every current deployment is a single Valkey node, and changing the audit key would also change control's ingest prefix.
 - F1d moves the request-path families to per-org hash tags, migrates the control prefix with them, and reports Valkey operations per request.
+- **Conditions for this deferral (Reviewer B):**
+  - F1d lands before any Valkey Cluster deployment;
+  - the F1a-1 live run records Valkey operations per request as F1d's baseline;
+  - the audit lease keys sit outside `{ns}:audit:` (§5.4).
 
 ## 9. Risks (F1a-1)
 
 | Risk | Mitigation |
 |---|---|
-| Engine swap changes what customer rules match | `regex` VERSION0 has `re` semantics; Unicode corpus agreement test against `re` |
-| Inline streaming scans hold the loop | Per-call cap of one scan window; per-request deadline; a pathological rule fails on its first delta |
+| Engine swap changes what customer rules match | Translator from `re`'s own parse tree; a pinned `regex` whose Unicode database matches the interpreter's, checked at boot; exhaustive and fuzz tests against `re` |
+| The `regex` pin is old (2023.8.8) | It is required for an exact Unicode match on Python 3.12. The pair moves together on a Python upgrade, and the exhaustive CI test fails until it does |
+| Inline streaming scans hold the loop | Per-delta inline budget of half a scan window across all rules; a pathological rule fails on its first delta; every other scan site moves off the loop |
 | Detector factory touches every scan seam | Off-loop N5 test per path; the same objects re-exported for dev; full suite |
-| A legitimately heavy plan exhausts the per-request regex budget | Same budget as one call today; publish-time limits; timeouts are counted, and the refusal is declared and visible |
+| A heavy but legitimate plan hits the inline per-delta budget | It refuses only that tenant's request, with a declared code and a counter; ordinary rules take microseconds per delta; there are 64 rules per plan at most |
 | Audit lease flaps between workers | Contract-derived TTL; the takeover test; adopting a decision is idempotent |
 
 ## 10. Disposition of the revision-2 reviews
@@ -398,6 +514,29 @@ The goal is to keep today's semantics exactly while making every customer patter
 | A-N8, A-N9, B-15…B-19 | §6.11, §7.1, §7.3, §7.7 |
 
 Revision-1 dispositions (reviewers 1–5) are unchanged except where the table above supersedes them.
+
+### Revision-3 findings (Plan Reviewers A and B at `91785d9b`)
+
+| Finding | Where handled |
+|---|---|
+| A-B1 / B-S: `regex` V0 is not `re` (`\s` U+001C–1F, `\w`, `\d`, `\b` with combining marks, i/ı/İ folding, fuzzy and POSIX syntax) | §5.2: translator from `re`'s parse tree, a Unicode-matched `regex` pin checked at boot, the case-fold verdict taken from `re`, exhaustive and fuzz evidence |
+| A-B2 / B-1: the per-request deadline refuses long streams and slow upstreams; `remaining ≤ 0` disables the timeout | §5.2: no aggregate or wall-clock budget; per-pass budget off-loop; half-scan-window per-delta inline budget; refuse without calling at `≤ 0` |
+| A-B2 / B-2: isolation shown only for streaming; R rules × cap; C concurrent streams | §5.2: every non-streaming scan moves off the loop; the per-delta budget is shared by all rules; per-request loop cost ≤ one scan window; tests (a)–(c) |
+| B-3: compile cost unbounded; no real per-plan cap; admin bypasses the serializer; eager compile | §5.2: repetition product limit, 64 rules per plan, enforced in control, projector and gateway; lazy off-loop compile with an LRU |
+| A-S3 / B-4: sampler key collides with an org slug; decision key unnamed; renewal not compare-and-set | §5.4: `{ns}:auditctl:*` keys, Lua compare-and-expire, decision age check |
+| A-S4: unknown budget is the R2-05 configuration | §5.4: production requires a budget, or readiness fails |
+| B-S: shutdown loses the in-flight batch; drain may never run; readiness blind to a dead writer | §5.4: stop after batch, graceful-shutdown timeout, drain bound under multiprocess, done-callback |
+| A-S1: DoS tests never time out; timeout overshoot | §5.8: patterns that time out under `regex`; half-window cap |
+| A-S2: removing `request_org` can fail open; RAG tier-1 not named | §5.1: tier-1 built by the factory; `bind_surface` refuses a program-less detector; test over all sites |
+| A-S5: output plan rule and per-plan cap untested | §5.8 |
+| A-N1, N2, N3 | `BASE_DETECTORS` comes from PR #104; the per-plan cap is a new named constant; control does not compile with `regex` (§5.2 Placement) |
+| A-N4: shutdown drops a batch | §5.4 |
+| A-N5: live setup said one worker but tested two | §5.8: one worker; responses are unit-tested |
+| A-N6, A-N7 | §6.2 KEY cold-fetch wording; §6.1 rollout floor enforced |
+| A-N8: moderations with no plan | §5.1 |
+| A-N9: typo | §3 |
+| B: projector notes logged `base_url` | §6.6 |
+| B: hash-tag deferral conditions | §8 and §5.8 live step 7 (Valkey ops baseline); lease keys moved (§5.4) |
 
 ---
 _Generated by [Claude Code](https://claude.ai/code/session_01SDCVQVj8LRKW3CZ99zfdW1)_
