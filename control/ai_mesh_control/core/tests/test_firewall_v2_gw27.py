@@ -166,7 +166,11 @@ class PublishTests(SimpleTestCase):
         self.assertEqual(body["requires"], ["controls/1"])
         ids = {rule["rule_id"] for rule in body["rules"]}
         self.assertIn("pol-fw-blocked-keywords-keywords", ids)
-        self.assertEqual(len([i for i in ids if i.startswith("fw-threat-")]), 3)
+        # F4/F3: the three chat threat rows, plus one non-chat extension row each.
+        chat = {f"fw-threat-{c}-input" for c in ("prompt_injection", "jailbreak", "command")}
+        self.assertEqual(
+            {i for i in ids if i.startswith("fw-threat-")}, chat | {f"{i}-ext" for i in chat}
+        )
         keywords = next(r for r in body["rules"] if r["rule_id"].startswith("pol-fw-blocked"))
         self.assertEqual(keywords["condition"]["keywords"], ["alpha", "beta"])
 
