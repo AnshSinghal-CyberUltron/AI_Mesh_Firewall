@@ -114,7 +114,7 @@ Notes for callers:
    - It skips a branch that does not exist, with a warning.
    - It turns on `enforce_admins`. Every agent acts as the owner's admin account, so without it the required checks would be advisory. `ENFORCE_ADMINS=false` restores the advisory behaviour; the script header shows how to lift it for one emergency merge.
    - Each required check is bound to the GitHub Actions app (id 15368), so a commit status of the same name posted by anyone else cannot satisfy it.
-   - It leaves `required_conversation_resolution` off: agents cannot resolve review threads (GraphQL is blocked for them), so bot threads are answered in the PR conversation under MERGE_POLICY rule 3 instead.
+   - It leaves `required_conversation_resolution` off: agents cannot resolve review threads (GraphQL is blocked for them), so MERGE_POLICY rule 3 requires every code-scanning thread to be answered in a PR comment instead (fixed, dismissed with a reason, or tracked).
 2. **Repository settings:**
    - Enable the *Dependency graph*. Until it is on, `dependency-review` reports "not supported" without blocking. Then set `dependency-review-required: true` in `security.yml`.
    - Enable *Dependabot alerts* and *Dependabot security updates*.

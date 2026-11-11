@@ -15,8 +15,8 @@
 #
 # required_conversation_resolution is OFF: with enforce_admins it would bind the agents too, and
 # review threads can be resolved only through GraphQL (blocked for agents) or the UI, so every PR
-# with a code-scanning bot thread would wait for the owner. MERGE_POLICY.md rule 3 already
-# requires every finding to be answered.
+# with a code-scanning bot thread would wait for the owner. Instead, MERGE_POLICY.md rule 3
+# requires every reviewer finding and every code-scanning thread to be answered in the PR.
 set -euo pipefail
 repo="${1:?usage: $0 owner/repo}"
 enforce_admins="${ENFORCE_ADMINS:-true}"

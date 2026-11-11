@@ -264,7 +264,7 @@ for _attempt in 1 2 3; do
   cid=""
   [ -z "${NGINX_TEST_HTTP_PORT:-}${NGINX_TEST_HTTPS_PORT:-}" ] || break  # pinned ports: no retry
 done
-[ -n "$cid" ] || die "could not start nginx on free ports"
+[ -n "$cid" ] || die "could not start nginx on ports ${HTTP_PORT}/${HTTPS_PORT}"
 cleanup_cid() { docker rm -f "${cid}" >/dev/null 2>&1 || true; }
 trap 'cleanup_cid; rm -rf "${TMP}"' EXIT
 
