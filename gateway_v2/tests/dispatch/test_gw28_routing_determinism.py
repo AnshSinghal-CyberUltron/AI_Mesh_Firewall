@@ -135,10 +135,13 @@ def test_rank_micro_benchmark_within_budget() -> None:
     cs = cset(*(cand(f"c{i}", weight=16) for i in range(8)))
     c = ctx(key="k" * 2048)
     samples = []
+    # Thread CPU time, not wall time: on a loaded host (CI or a shared dev box) preemption
+    # between the two reads inflated wall-clock p99 past the bound with no change in _rank's
+    # cost (#112 review). The budget is a CPU-cost bound, so CPU time is what it should measure.
     for _ in range(1000):
-        t = time.perf_counter()
+        t = time.thread_time()
         _rank(c, cs)
-        samples.append(time.perf_counter() - t)
+        samples.append(time.thread_time() - t)
     samples.sort()
     p99 = samples[989]
     budget = 20.0 / 1000.0  # default target_p99_ms in seconds; margin is ~100x
