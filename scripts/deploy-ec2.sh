@@ -77,7 +77,7 @@ bash scripts/publish-stack-ready-metric.sh 0 || true
 # by default, and they refuse to start without this key (docker-compose.yml passes it through
 # empty instead of a compose `:?` error, so v1-only dev commands keep working). Every v2
 # gateway must share the same value.
-[[ -n "${AMF_STATE_HMAC_KEY:-}" ]] || die "set AMF_STATE_HMAC_KEY in .env (required by the state re-hydrators/projectors and every v2 gateway; all must share it): openssl rand -hex 32"
+[[ -n "${AMF_STATE_HMAC_KEY:-}" && -n "${AMF_STATE_HMAC_KEY//[[:space:]]/}" ]] || die "set AMF_STATE_HMAC_KEY in .env (required by the state re-hydrators/projectors and every v2 gateway; all must share it): openssl rand -hex 32"
 export FRONTEND_HOST="${FRONTEND_HOST:-aimeshfirewall.zeroshield.ai}"
 export BACKEND_HOST="${BACKEND_HOST:-aimeshbackend.zeroshield.ai}"
 export GATEWAY_HOST="${GATEWAY_HOST:-aimeshgateway.zeroshield.ai}"

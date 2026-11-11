@@ -110,6 +110,33 @@ class V1BackendSaveTests(SimpleTestCase):
         errors = _validate({"output_policy_action": "rewrite"})
         self.assertIn("output_policy_action", errors)
 
+    def test_values_no_gateway_can_serve_stay_refused_on_v1(self):
+        # retention_days=0 would make the daily cleanup delete every event of the org.
+        self.assertIn("retention_days", _validate({"retention_days": 0}, retention_days=30))
+        self.assertIn(
+            "max_response_tokens", _validate({"max_response_tokens": 0}, max_response_tokens=512)
+        )
+        errors = _validate(
+            {"rate_limit_enabled": True, "requests_per_minute": 0},
+            rate_limit_enabled=False, requests_per_minute=60, burst_limit=10,
+        )
+        self.assertIn("requests_per_minute", errors)
+        self.assertIn(
+            "threat_score_threshold", _validate({"threat_score_threshold": 101})
+        )
+
+    def test_v2_only_limits_do_not_apply_on_v1(self):
+        # The compliance retention floor describes gateway-v2; v1 saved this on main.
+        self.assertEqual(
+            _validate(
+                {"compliance_frameworks": ["HIPAA"], "retention_days": 30}, retention_days=90
+            ),
+            {},
+        )
+
+    def test_an_unchanged_stored_value_is_accepted_on_v1(self):
+        self.assertEqual(_validate({"firewall_enabled": True}, retention_days=0), {})
+
 
 class PublishTests(SimpleTestCase):
     PAYLOAD = {
