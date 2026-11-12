@@ -9,8 +9,8 @@ write paths, the MCP envelope handling and the staging and byte verification are
 The plan document is built by the real control publisher (``firewall_v2_publish.document_bytes``)
 and loaded through the dev boot path (``AMF_DEV_PLAN_PATH``), as ``gw31_harness`` does.
 
-Two cases pin documented gaps (register R18 and R19), so a change that closes one fails here and
-has to update the register with it.
+Four cases pin documented gaps (register R18, R19, R22 and R23; issue #156), so a change that
+closes one fails here and has to update the register with it.
 """
 from __future__ import annotations
 
@@ -388,3 +388,31 @@ def test_gap_r19_vector_query_returns_card_under_enforce(tmp_path: Path) -> None
     applies there and a stored card is returned verbatim."""
     got = vector_query(tmp_path, "enforce", f"refund card {CARD}")
     assert got[:2] == (200, "") and got[4] is True
+
+
+def test_gap_r22_one_jailbreak_word_document_refuses_the_whole_batch(tmp_path: Path) -> None:
+    """Register R22 (#156): under ``enforce`` the content rows apply at write, and any BLOCK
+    refuses the whole batch (GW31 Req 8.3): three benign documents are refused with one that
+    merely mentions the word "jailbreak". Reviewer A's ``fp_probe`` case."""
+    docs: list[dict[str, str]] = [
+        {"id": f"ok{i}", "text": f"benign doc {i}", "source": "s"} for i in range(3)
+    ]
+    docs.append({"id": "bad", "source": "s",
+                 "text": "Our guide explains how to detect a jailbreak attempt against an LLM."})
+    got: dict[str, tuple[int, str]] = {}
+    for mode in ("off", "enforce"):
+        app, _d, _p = _app(tmp_path, mode)
+        status, body, _ = asyncio.run(
+            call(app, "POST", "/v1/rag/ingest", {"collection": "docs", "documents": docs})
+        )
+        got[mode] = (status, _code(body))
+    assert got == {"off": (202, ""), "enforce": (400, "rag_ingest_blocked")}
+
+
+def test_gap_r23_an_unscannable_mcp_result_is_blocked(tmp_path: Path) -> None:
+    """Register R23 (#156): text the deterministic detectors cannot scan (here 300,000 chars,
+    above 262,144) is UNAVAILABLE, and the ``-ext`` rows inherit ``fail_closed``, so under
+    ``enforce`` a clean 300 KB tool result becomes 403. Reviewer A's ``unavailable_probe``."""
+    big = ("lorem ipsum dolor sit amet " * 11000)[:300_000]
+    got = {mode: mcp_result(tmp_path, mode, big)[:2] for mode in ("off", "enforce")}
+    assert got == {"off": (200, ""), "enforce": (403, "output_blocked")}
