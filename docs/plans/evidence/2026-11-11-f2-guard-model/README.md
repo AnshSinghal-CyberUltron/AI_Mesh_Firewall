@@ -33,7 +33,13 @@ Backs `docs/plans/2026-11-11-f2-guard-model.md`. Prototype code only; nothing he
 | `manifest.py` | bundle + manifest build, boot verify, tamper matrix | `results/guard-manifest.json`, `guard-manifest.sha256`, `manifest_verify.json` | no (≈ 15 s CPU, mostly hashing) |
 | `ort_bytes_rss.py` | RSS of a session built from verified bytes, with and without onnxruntime's retained copy | `results/ort_bytes_rss.json` | no (3 × 2 s) |
 | `injection_lengths.py` | token lengths of the injection sets (overlap choice) | `results/injection_lengths.json` | no (seconds) |
+| `guard_tier_sim.py` (12 Nov, rev 2) | **weight-free** discrete-event model of the GPU guard tier: gateways, owners (one per L4), tenants; window-granular DRR, per-tenant cap, deadline-aware admission, P2C routing, fan-out; compared with FIFO, size-aware EDF and no fan-out. Calibrated against the September L4 measurements (2.15 ms per window reproduces the one-L4 Poisson curve). Standard library only, fixed seeds | `results/guard_tier_sim.json` | no (25.5 s CPU, 38 s wall, `nice -n 10`; load 1.9 → 4.6) |
+| `script_posture_probe.py` (12 Nov, rev 2) | **weight-free** prototype of the per-word script posture (K1, A9, A10) on Reviewer A's and B's attack strings and benign controls, using gateway_v2's own `fold_confusables` (run with `PYTHONPATH=<wt>/gateway_v2:<wt>/shared` and the gateway_v2 venv) | `results/script_posture_probe.json` | no (instant) |
 | `proxy_latency.py` (12 Nov) | **weight-free** latency proxy: DeBERTa-v3-xsmall architecture with random weights (parameter count asserted equal to the real 70,830,722), same exporter; thread-CPU and wall p50/p99 for fp32, fixed-shape fp32 and INT8 (`quantize_dynamic` QInt8) at 16–512 positions; optimised-graph node counts. Needs no gated file and no token | `results/proxy_latency.json` | no (80 s CPU; run with `nice -n 10` while ~7 jobs queued on the heavy lock) |
+
+**12 Nov, revision 2.** The owner added a GPU guard tier. The September L4 measurements this plan
+cites live in `../2026-09-23-runbook-v2-validation/lanes/guard-bench/` and the round-2 split-topology
+results in `../2026-09-24-runbook-v3-round2/report/FINDINGS_LEDGER.md`; they are quoted, not re-run.
 
 **12 Nov.** The weights are no longer on this host and `HF_TOKEN` is not set, so every
 weight-dependent script above is pending. Plan §3.2 lists them. They run next in the GitHub
