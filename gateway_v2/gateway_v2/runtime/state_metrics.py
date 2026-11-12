@@ -139,6 +139,12 @@ class KindMetrics:
     rounds_truncated: int = 0
     rounds_offloaded: int = 0
     records_applied: int = 0
+    records_rejected: int = 0
+    """Verified records the applier refused (a plan that did not compile): last-good kept."""
+
+    records_quarantined: int = 0
+    """Records that failed verification: that one tenant or key is failed closed."""
+
     cursor: int = 0
     attested: int = 0
 
@@ -226,6 +232,8 @@ class StateMetrics:
             out[f"{PREFIX}_rounds_truncated_total{tag}"] = metrics.rounds_truncated
             out[f"{PREFIX}_rounds_offloaded_total{tag}"] = metrics.rounds_offloaded
             out[f"{PREFIX}_records_applied_total{tag}"] = metrics.records_applied
+            out[f"{PREFIX}_records_rejected_total{tag}"] = metrics.records_rejected
+            out[f"{PREFIX}_records_quarantined_total{tag}"] = metrics.records_quarantined
             out[f"{PREFIX}_cursor{tag}"] = metrics.cursor
             out[f"{PREFIX}_attested{tag}"] = metrics.attested
             out[f"{PREFIX}_lag{tag}"] = metrics.lag
@@ -259,10 +267,11 @@ class StateMetrics:
         return out
 
 
-SERIES_COUNT = 9 * len(StateKind) + 6 + 3 + 6 + 8 + 1
+SERIES_COUNT = 11 * len(StateKind) + 6 + 3 + 6 + 8 + 1
 """How many series this surface can ever produce. A constant, by construction.
 
-`9 *` is the eight per-kind round metrics plus GW05b's per-kind floor; the trailing `+ 8` is
+`11 *` is the ten per-kind round metrics (rejected and quarantined records among them) plus
+GW05b's per-kind floor; the trailing `+ 8` is
 freshness and the final `+ 1` is GW27's `plan_schema_version` gauge. R2-10 is the reason this
 is a fixed expression rather than a count of whatever happens to be emitted: a full metric
 directory made 40% of new tenants' first requests fail with HTTP 500, so a series whose
@@ -290,6 +299,8 @@ class StateMetricsRecorder:
             rounds_truncated=current.rounds_truncated + (1 if report.truncated else 0),
             rounds_offloaded=current.rounds_offloaded + (1 if report.offloaded else 0),
             records_applied=current.records_applied + report.applied,
+            records_rejected=current.records_rejected + report.rejected,
+            records_quarantined=current.records_quarantined + report.quarantined,
             cursor=max(current.cursor, report.cursor.feed_seq),
             attested=max(
                 current.attested,
