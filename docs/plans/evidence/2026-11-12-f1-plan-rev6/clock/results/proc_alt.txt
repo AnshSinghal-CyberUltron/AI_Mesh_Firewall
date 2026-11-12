@@ -1,0 +1,27 @@
+# 2026-11-11T11:42:14Z  load average: 4.33, 6.41, 6.00
+python 3.12.3, regex 2023.8.8, pid 1371
+
+## 1. IPC per pass (worker does no scanning; 40 round trips, median)
+| Text | Transport | sender thread CPU ms | worker CPU ms | round trip wall, median / p90 ms |
+|---|---|---|---|---|
+| 128 KiB ASCII | Pipe + pickle | 0.028 | 0.028 | 0.06 / 0.09 |
+| 128 KiB ASCII | SharedMemory (UTF-8 copy) | 0.020 | 0.021 | 0.05 / 0.18 |
+| 128 KiB non-ASCII | Pipe + pickle | 0.042 | 0.201 | 0.25 / 1.53 |
+| 128 KiB non-ASCII | SharedMemory (UTF-8 copy) | 0.049 | 0.278 | 0.35 / 0.43 |
+| 512 KiB ASCII | Pipe + pickle | 0.167 | 0.216 | 0.43 / 0.74 |
+| 512 KiB ASCII | SharedMemory (UTF-8 copy) | 0.102 | 0.112 | 0.24 / 0.31 |
+| 512 KiB non-ASCII | Pipe + pickle | 0.219 | 1.218 | 1.50 / 4.00 |
+| 512 KiB non-ASCII | SharedMemory (UTF-8 copy) | 0.211 | 0.821 | 1.26 / 4.00 |
+
+## 2. Per-process memory (fresh spawned worker; VmRSS)
+- 64 realistic DLP rules: worker RSS after importing regex + translator 21.7 MiB; compiling 64 rules adds 0.4 MiB (total 22.1 MiB)
+- 64 compile-heavy rules at the limits: worker RSS after importing regex + translator 21.7 MiB; compiling 64 rules adds 65.9 MiB (total 87.6 MiB)
+
+## 3. Worker startup to first answer (median of 5)
+- fork: 2 ms wall
+- spawn: 65 ms wall
+# other top CPU at end:
+49.8 /home/claude/work/venv-ci/bin/python -m pytest -q -p no:cacheprovider tests
+49.0 .f2-scratch/venv/bin/python -I docs/plans/evidence/2026-11-11-f2-guard-model/scripts/bench_wind
+23.5 python3 scripts/ci/workflow_guard.py
+ 3.5 /opt/claude-code/bin/claude --preload /home/claude/.claude/remote/spare.sock

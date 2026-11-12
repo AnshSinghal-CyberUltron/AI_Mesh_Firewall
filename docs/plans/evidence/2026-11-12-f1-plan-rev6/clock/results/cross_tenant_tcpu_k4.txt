@@ -1,0 +1,14 @@
+# tcpu  2026-11-11T11:38:05Z  load average: 8.36, 7.36, 6.00
+regex 2023.8.8 .so sha256 64a8bac6ca333786
+B's pass: 4 rules over 131072 chars (128 KiB); alone it costs 80.8 ms of thread CPU = 81% of its 100 ms budget (20 passes per row)
+| T (scan threads) | org A threads busy | B refused | B own CPU per pass, median / max ms | B wall per pass, median ms | A's passes: own CPU at refusal, median ms (n) |
+|---|---|---|---|---|---|
+| baseline (B alone) | 0 | 2/20 | 80.5 / 100.0 | 115 | - |
+| 2 | 1 | 3/20 | 86.3 / 100.0 | 284 | 100.3 (19) |
+| 4 | 3 | 1/20 | 79.6 / 100.1 | 534 | 100.3 (55) |
+| 8 | 7 | 2/20 | 82.9 / 100.0 | 1327 | 100.3 (154) |
+# other top CPU at end:
+ 100 ps -eo pcpu,args --sort=-pcpu
+49.2 /home/claude/work/venv-ci/bin/python -m pytest -q -p no:cacheprovider tests
+44.0 .f2-scratch/venv/bin/python -I docs/plans/evidence/2026-11-11-f2-guard-model/scripts/bench_wind
+32.0 ../../venv-ci/bin/python -m pytest -q -p no:cacheprovider tests/dispatch/test_gw28_stall_bound.

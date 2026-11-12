@@ -1,0 +1,12 @@
+started 2026-11-12T06:00:00Z
+python: /usr/bin/python3.12
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+ModuleNotFoundError: No module named 'regex'
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+ModuleNotFoundError: No module named 'regex'
+limits changes included: yes (LIMITS6_SWAPPED.txt present at snapshot)
+seeds: 11 12 13
+suite: r6
+finished 2026-11-12T06:00:01Z

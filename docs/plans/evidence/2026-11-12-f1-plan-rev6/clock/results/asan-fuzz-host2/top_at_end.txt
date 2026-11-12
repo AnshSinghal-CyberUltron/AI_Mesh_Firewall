@@ -1,0 +1,6 @@
+%CPU COMMAND
+ 2.8 /opt/claude-code/bin/claude mcp serve --transport http --port 28471 --result-format rendered --session-tunnel
+ 0.1 redis-server 127.0.0.1:56379
+ 0.0 [rcu_preempt]
+ 0.0 [kworker/1:1H-kblockd]
+ 0.0 /usr/lib/postgresql/16/bin/postgres -D /home/claude/work/pg/data -p 55432 -k /tmp -c listen_addresses=127.0.0.1 -c max_connections=200

@@ -1,0 +1,1 @@
+single-char alternations: 86640 patterns, 0 mismatches in 336s

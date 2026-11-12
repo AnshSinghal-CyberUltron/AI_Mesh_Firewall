@@ -1,0 +1,70 @@
+--- a/regex_3/_regex.c
++++ b/regex_3/_regex.c
+@@ -2264,9 +2264,42 @@
+ }
+ 
+ /* Checks whether to cancel due to a KeyboardInterrupt or a timeout. */
++/* AMF patch 2 (PROTOTYPE, not shipped; plan PR #103 section 5.2.4, the GIL
++ * convoy): CPython handles signals only on the main thread, so on any other
++ * thread PyErr_CheckSignals() does nothing a scan needs. A scan that released
++ * the GIL (concurrent=True) on a non-main thread therefore checks its own
++ * timeout WITHOUT the GIL, and takes the GIL only to raise. Upstream takes the
++ * GIL every 256 matcher iterations, which serialises off-loop scans with a
++ * busy event loop.
++ */
++static unsigned long amf_main_thread_ident = 0; /* 0: unknown, keep upstream behaviour. */
++
++Py_LOCAL_INLINE(BOOL) timed_out_nogil(RE_State* state) {
++    int64_t now;
++
++    if (state->timeout == RE_NO_TIMEOUT)
++        return FALSE;
++
++    if (PyThread_get_thread_ident() != state->start_thread)
++        return TRUE; /* check_timed_out raises the fail-closed error. */
++
++    now = thread_cpu_ticks();
++    if (now >= 0 && state->start_time >= 0 && now >= state->start_time &&
++      now - state->start_time < (int64_t)state->timeout)
++        return FALSE;
++
++    return TRUE;
++}
++
+ Py_LOCAL_INLINE(BOOL) safe_check_cancel(RE_State* state) {
+     BOOL result;
+ 
++    if (state->is_multithreaded && state->thread_state &&
++      amf_main_thread_ident != 0 &&
++      PyThread_get_thread_ident() != amf_main_thread_ident &&
++      !timed_out_nogil(state))
++        return FALSE;
++
+     acquire_GIL(state);
+ 
+     result = (BOOL)PyErr_CheckSignals();
+@@ -26545,5 +26578,24 @@
+         return NULL;
+     }
+ 
++    /* AMF patch 2: the main thread's ident, as threading reports it. */
++    {
++        PyObject* threading_mod = PyImport_ImportModule("threading");
++        PyObject* main_thread = threading_mod ?
++          PyObject_CallMethod(threading_mod, "main_thread", NULL) : NULL;
++        PyObject* ident = main_thread ?
++          PyObject_GetAttrString(main_thread, "ident") : NULL;
++
++        if (ident && ident != Py_None)
++            amf_main_thread_ident = PyLong_AsUnsignedLong(ident);
++        if (PyErr_Occurred()) {
++            PyErr_Clear();
++            amf_main_thread_ident = 0;
++        }
++        Py_XDECREF(ident);
++        Py_XDECREF(main_thread);
++        Py_XDECREF(threading_mod);
++    }
++
+     return m;
+ }

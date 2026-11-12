@@ -1,0 +1,3 @@
+# 2026-11-12T06:03:01Z  load average: 2.39 2.63 2.26  cmd: bash -c '/home/claude/work/runs/103-rev6-author/xlate6/clock/venv-tcpu/bin/python' cpu_variance.py 60; '/home/claude/work/runs/103-rev6-author/xlate6/clock/venv-tcpu/bin/python' cpu_variance.py 60
+60 passes: min 53.4, p50 54.2, p95 61.8, max 66.5 ms; max/min 1.24
+60 passes: min 53.5, p50 54.7, p95 69.8, max 79.0 ms; max/min 1.48

@@ -1,0 +1,25 @@
+# 2026-11-12T06:03:26Z  load average: 2.95 2.73 2.30  cmd: bash -c for p in '/home/claude/work/runs/103-rev6-author/xlate6/venv-stock/bin/python' '/home/claude/work/runs/103-rev6-author/xlate6/clock/venv-tcpu/bin/python' '/home/claude/work/runs/103-rev6-author/xlate6/clock/venv-tcpu-nogil/bin/python'; do echo "== $p"; "$p" -I '/home/claude/work/runs/103-rev6-author/xlate6/clock/probes/semantics_check.py'; done
+== /home/claude/work/runs/103-rev6-author/xlate6/venv-stock/bin/python
+main thread: TimeoutError at 51.0 ms own CPU
+worker thread: TimeoutError at 50.1 ms own CPU
+migrated iterator: TimeoutError (regex timed out)
+nan: accepted
+Traceback (most recent call last):
+  File "/home/claude/work/runs/103-rev6-author/xlate6/clock/probes/semantics_check.py", line 22, in <module>
+    t0 = time.perf_counter(); print("inf:", regex.compile("a+b").search("a" * 1000 + "b", timeout=float("inf")) is not None, f"{(time.perf_counter()-t0)*1e3:.1f} ms")
+                                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TimeoutError: regex timed out
+== /home/claude/work/runs/103-rev6-author/xlate6/clock/venv-tcpu/bin/python
+main thread: TimeoutError at 50.1 ms own CPU
+worker thread: TimeoutError at 50.1 ms own CPU
+migrated iterator: TimeoutError (regex timed out (timeout started on another thread))
+nan: ValueError
+inf: True 0.2 ms
+signal on main thread: interrupted after 200 ms wall
+== /home/claude/work/runs/103-rev6-author/xlate6/clock/venv-tcpu-nogil/bin/python
+main thread: TimeoutError at 50.1 ms own CPU
+worker thread: TimeoutError at 50.1 ms own CPU
+migrated iterator: TimeoutError (regex timed out (timeout started on another thread))
+nan: ValueError
+inf: True 0.2 ms
+signal on main thread: interrupted after 200 ms wall

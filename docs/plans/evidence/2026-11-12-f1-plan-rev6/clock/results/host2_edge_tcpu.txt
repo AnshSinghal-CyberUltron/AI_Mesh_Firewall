@@ -1,0 +1,14 @@
+# 2026-11-12T06:02:22Z  load average: 3.32 2.80 2.30  cmd: /home/claude/work/runs/103-rev6-author/xlate6/clock/venv-tcpu/bin/python edge_timeouts.py
+timeout=               nan: ValueError(timeout not float or None)    after      0.0 ms thread CPU
+timeout=               inf: completed (300 digits)                   after    116.2 ms thread CPU
+timeout=            1e+300: completed (300 digits)                   after     95.7 ms thread CPU
+timeout=  10000000000000.0: completed (300 digits)                   after     92.0 ms thread CPU
+timeout=   9200000000000.0: completed (300 digits)                   after     94.2 ms thread CPU
+timeout=               0.0: TimeoutError(regex timed out)            after      0.0 ms thread CPU
+timeout=              -1.0: completed (short text)                   after      1.0 ms thread CPU
+timeout=              0.05: TimeoutError(regex timed out)            after     50.3 ms thread CPU
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+ValueError: timeout not float or None
+timeout=float('nan'): finished within 3 s
+timeout=-1.0: still running after 3 s (no limit applied)

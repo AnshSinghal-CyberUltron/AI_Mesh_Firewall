@@ -1,0 +1,6 @@
+== venv-tcpu (2026-11-12T06:36:21Z, load 1.97 1.62 1.65)
+Ran 100 tests in 0.345s
+OK
+== venv-tcpu-nogil (2026-11-12T06:36:21Z, load 1.97 1.62 1.65)
+Ran 100 tests in 0.286s
+OK

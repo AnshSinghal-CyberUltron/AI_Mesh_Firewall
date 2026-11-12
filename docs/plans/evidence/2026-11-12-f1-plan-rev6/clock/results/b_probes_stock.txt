@@ -1,0 +1,21 @@
+# stock: /tmp/claude-0/-home-claude/2a18a307-83e0-5467-9172-0939d20bde00/scratchpad/rv2023.8.8/bin/python  2026-11-11T11:32:45Z  load average: 6.49, 7.04, 5.44
+## clock_semantics.py
+B alone, no timeout: 36 ms own thread CPU (202 KiB)
+0 tenant-A scan threads busy: B with timeout=100 ms -> 0/5 TimeoutError; B's own thread CPU at the end 34 ms (median), wall 69 ms
+1 tenant-A scan threads busy: B with timeout=100 ms -> 0/5 TimeoutError; B's own thread CPU at the end 31 ms (median), wall 134 ms
+2 tenant-A scan threads busy: B with timeout=100 ms -> 1/5 TimeoutError; B's own thread CPU at the end 35 ms (median), wall 185 ms
+3 tenant-A scan threads busy: B with timeout=100 ms -> 5/5 TimeoutError; B's own thread CPU at the end 28 ms (median), wall 178 ms
+## clock_t2.py
+B alone: 62 ms own CPU on 312 KiB (per-pass budget 100 ms)
+org A on 0 scan thread(s): B refused 0/10, B own CPU at refusal ~56 ms
+org A on 1 scan thread(s): B refused 8/10, B own CPU at refusal ~50 ms
+## clock_pass.py
+B's pass alone: ('ok', 0.07912942100000002)
+org A busy on 0 other scan thread(s): B's pass refused 0/10; B's own thread CPU when refused ~80-89 ms of its 100 ms
+org A busy on 1 other scan thread(s): B's pass refused 2/10; B's own thread CPU when refused ~55-85 ms of its 100 ms
+org A busy on 3 other scan thread(s): B's pass refused 10/10; B's own thread CPU when refused ~22-55 ms of its 100 ms
+# other top CPU at end:
+ 100 ps -eo pcpu,args --sort=-pcpu
+49.9 /home/claude/work/venv-ci/bin/python -m pytest -q -p no:cacheprovider tests
+48.6 ../../rv2023.8.8/bin/python nesting_test.py 20000
+18.8 /home/claude/work/venv-ci/bin/python -m pytest -q -p no:cacheprovider -p hiccup tests/dispatch/

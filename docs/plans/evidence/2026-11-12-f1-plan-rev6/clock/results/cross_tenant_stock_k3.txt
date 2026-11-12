@@ -1,0 +1,14 @@
+# stock  2026-11-11T11:36:23Z  load average: 6.37, 6.77, 5.66
+regex 2023.8.8 .so sha256 35499bbcad0ab02a
+B's pass: 3 rules over 131072 chars (128 KiB); alone it costs 85.6 ms of thread CPU = 86% of its 100 ms budget (20 passes per row)
+| T (scan threads) | org A threads busy | B refused | B own CPU per pass, median / max ms | B wall per pass, median ms | A's passes: own CPU at refusal, median ms (n) |
+|---|---|---|---|---|---|
+| baseline (B alone) | 0 | 0/20 | 59.8 / 87.9 | 234 | - |
+| 2 | 1 | 7/20 | 75.9 / 88.4 | 277 | 45.5 (26) |
+| 4 | 3 | 20/20 | 23.1 / 41.2 | 262 | 26.7 (72) |
+| 8 | 7 | 20/20 | 11.9 / 16.0 | 138 | 14.0 (151) |
+# other top CPU at end:
+51.6 .f2-scratch/venv/bin/python -I docs/plans/evidence/2026-11-11-f2-guard-model/scripts/bench_wind
+49.9 /home/claude/work/venv-ci/bin/python -m pytest -q -p no:cacheprovider tests
+39.4 ../../venv-ci/bin/python /tmp/claude-0/-home-claude/2a18a307-83e0-5467-9172-0939d20bde00/scratc
+31.0 postgres: postgres f1a2_bench 172.17.0.1(43854) INSERT

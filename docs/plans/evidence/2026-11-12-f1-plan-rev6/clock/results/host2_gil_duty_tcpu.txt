@@ -1,0 +1,22 @@
+# 2026-11-12T06:02:34Z  load average: 3.19 2.79 2.30  cmd: /home/claude/work/runs/103-rev6-author/xlate6/clock/venv-tcpu/bin/python gil_duty.py 384 5
+# 2026-11-12T06:02:35Z  load average: 3.19, 2.79, 2.30
+text 384 KiB, 5 runs per row; regex 2023.8.8 .so sha256 64a8bac6ca333786; H period 10 ms
+| switch interval | H Python duty cycle | H measured duty | M own CPU median ms | M wall median ms | wall / CPU |
+|---|---|---|---|---|---|
+| 5 ms | 0% | - | 54.2 | 55 | 1.0 |
+| 5 ms | 25% | 22% | 54.6 | 73 | 1.3 |
+| 5 ms | 50% | 43% | 67.4 | 113 | 1.7 |
+| 5 ms | 75% | 63% | 54.2 | 145 | 2.7 |
+| 5 ms | 90% | 66% | 53.8 | 171 | 3.2 |
+| 5 ms | 100% | 94% | 53.9 | 170 | 3.2 |
+| 1 ms | 0% | - | 54.5 | 55 | 1.0 |
+| 1 ms | 25% | 23% | 56.0 | 77 | 1.4 |
+| 1 ms | 50% | 49% | 57.3 | 112 | 2.0 |
+| 1 ms | 75% | 72% | 64.7 | 232 | 3.6 |
+| 1 ms | 90% | 86% | 77.3 | 536 | 6.9 |
+| 1 ms | 100% | 96% | 73.0 | 420 | 5.8 |
+# other top CPU at end:
+# 99.5 /home/claude/work/runs/103-rev6-author/xlate6/clock/venv-tcpu/bin/python gil_duty.py 384 5
+# 88.2 ugrep -G --ignore-files --hidden -I --exclude-dir=.git --exclude-dir=.svn --exclude-dir=.hg --exclude-dir=.bzr --ex
+#  3.9 /opt/claude-code/bin/claude mcp serve --transport http --port 28471 --result-format rendered --session-tunnel
+#  0.1 redis-server 127.0.0.1:56379

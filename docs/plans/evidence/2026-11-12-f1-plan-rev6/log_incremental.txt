@@ -1,0 +1,8 @@
+seed=1 patterns=6000 incremental=5010 streams-ok=5008 steps=82429 mismatches=0 rx-timeouts=2 in 16.4s
+seed=2 patterns=6000 incremental=4990 streams-ok=4983 steps=81916 mismatches=0 rx-timeouts=7 in 21.2s
+seed=3 patterns=6000 incremental=5020 streams-ok=5010 steps=82057 mismatches=0 rx-timeouts=10 in 21.5s
+seed=4 patterns=6000 incremental=5009 streams-ok=4998 steps=82732 mismatches=0 rx-timeouts=11 in 27.8s
+seed=5 patterns=6000 incremental=4978 streams-ok=4971 steps=81006 mismatches=0 rx-timeouts=7 in 17.7s
+seed=6 patterns=6000 incremental=4996 streams-ok=4990 steps=82266 mismatches=0 rx-timeouts=6 in 27.3s
+seed=7 patterns=6000 incremental=4991 streams-ok=4982 steps=81805 mismatches=0 rx-timeouts=9 in 26.2s
+seed=8 patterns=6000 incremental=5004 streams-ok=4997 steps=81758 mismatches=0 rx-timeouts=7 in 14.7s

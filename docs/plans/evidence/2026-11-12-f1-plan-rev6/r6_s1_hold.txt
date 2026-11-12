@@ -1,0 +1,120 @@
+
+S1 A's sentence, 110 chars in 28 deltas, budget 100 ms:
+  reference (whole text once): decided
+  refuse    refused at 28    CPU   184.6 ms, timed-out passes   100.0 ms (1), mismatches 0, undecided deltas 0, held while undecided: up to 0 chars, 0 deltas
+  hold      decided          CPU   277.6 ms, timed-out passes   200.1 ms (2), mismatches 0, undecided deltas 21, held while undecided: up to 108 chars, 21 deltas
+  hold-once decided          CPU   293.8 ms, timed-out passes   200.6 ms (2), mismatches 0, undecided deltas 21, held while undecided: up to 108 chars, 21 deltas
+
+S1 A's sentence with a comma (the expensive attempt becomes final), 111 chars in 28 deltas, budget 100 ms:
+  reference (whole text once): refused
+  refuse    refused at 28    CPU   177.6 ms, timed-out passes   100.0 ms (1), mismatches 0, undecided deltas 0, held while undecided: up to 0 chars, 0 deltas
+  hold      refused at end   CPU   477.1 ms, timed-out passes   400.1 ms (4), mismatches 0, undecided deltas 21, held while undecided: up to 108 chars, 21 deltas
+  hold-once refused at end   CPU   477.5 ms, timed-out passes   400.1 ms (4), mismatches 0, undecided deltas 21, held while undecided: up to 108 chars, 21 deltas
+
+S1 8 KiB of words, no stopper and no terminator (worst case for 'hold': refused at the 4 KiB cap), 8192 chars in 512 deltas, budget 100 ms:
+  reference (whole text once): refused
+  refuse    refused at 32    CPU   101.2 ms, timed-out passes   100.0 ms (1), mismatches 0, undecided deltas 0, held while undecided: up to 0 chars, 0 deltas
+  hold      refused at 4112 (hold cap) CPU   819.8 ms, timed-out passes   800.2 ms (8), mismatches 0, undecided deltas 255, held while undecided: up to 4096 chars, 255 deltas
+  hold-once refused at 4112 (hold cap) CPU   829.0 ms, timed-out passes   800.3 ms (8), mismatches 0, undecided deltas 255, held while undecided: up to 4096 chars, 255 deltas
+
+Corpus seed 1, budget 1 ms per pass (5s): 1616 streams
+  refuse    refused   66 (where the whole text is NOT refused:  33); CPU     365.0 ms, of which timed-out passes     66.7 ms (66 timeouts)
+  hold      refused   33 (where the whole text is NOT refused:   0); CPU     434.8 ms, of which timed-out passes    125.2 ms (124 timeouts); mismatches 0; undecided deltas 526; per stream held while undecided: chars median 47 max 140, consecutive deltas median 6 max 23
+  hold-once refused   33 (where the whole text is NOT refused:   0); CPU     433.0 ms, of which timed-out passes    127.2 ms (126 timeouts); mismatches 0; undecided deltas 528; per stream held while undecided: chars median 46 max 140, consecutive deltas median 6 max 23
+  whole-text reference refuses 33
+
+  of which streams where some pass timed out: 66 streams
+  refuse    refused   66 (where the whole text is NOT refused:  33); CPU     124.0 ms, of which timed-out passes     66.7 ms (66 timeouts)
+  hold      refused   33 (where the whole text is NOT refused:   0); CPU     187.2 ms, of which timed-out passes    125.2 ms (124 timeouts); mismatches 0; undecided deltas 526; per stream held while undecided: chars median 47 max 140, consecutive deltas median 6 max 23
+  hold-once refused   33 (where the whole text is NOT refused:   0); CPU     186.9 ms, of which timed-out passes    126.2 ms (125 timeouts); mismatches 0; undecided deltas 527; per stream held while undecided: chars median 46 max 140, consecutive deltas median 6 max 23
+  whole-text reference refuses 33
+
+S1 A's sentence, 110 chars in 28 deltas, budget 100 ms:
+  reference (whole text once): decided
+  refuse    refused at 28    CPU   178.2 ms, timed-out passes   100.1 ms (1), mismatches 0, undecided deltas 0, held while undecided: up to 0 chars, 0 deltas
+  hold      decided          CPU   314.1 ms, timed-out passes   200.1 ms (2), mismatches 0, undecided deltas 21, held while undecided: up to 108 chars, 21 deltas
+  hold-once decided          CPU   277.4 ms, timed-out passes   200.1 ms (2), mismatches 0, undecided deltas 21, held while undecided: up to 108 chars, 21 deltas
+
+S1 A's sentence with a comma (the expensive attempt becomes final), 111 chars in 28 deltas, budget 100 ms:
+  reference (whole text once): refused
+  refuse    refused at 28    CPU   177.0 ms, timed-out passes   100.0 ms (1), mismatches 0, undecided deltas 0, held while undecided: up to 0 chars, 0 deltas
+  hold      refused at end   CPU   476.9 ms, timed-out passes   400.1 ms (4), mismatches 0, undecided deltas 21, held while undecided: up to 108 chars, 21 deltas
+  hold-once refused at end   CPU   480.4 ms, timed-out passes   400.2 ms (4), mismatches 0, undecided deltas 21, held while undecided: up to 108 chars, 21 deltas
+
+S1 8 KiB of words, no stopper and no terminator (worst case for 'hold': refused at the 4 KiB cap), 8192 chars in 512 deltas, budget 100 ms:
+  reference (whole text once): refused
+  refuse    refused at 32    CPU   101.3 ms, timed-out passes   100.0 ms (1), mismatches 0, undecided deltas 0, held while undecided: up to 0 chars, 0 deltas
+  hold      refused at 4112 (hold cap) CPU   826.3 ms, timed-out passes   800.3 ms (8), mismatches 0, undecided deltas 255, held while undecided: up to 4096 chars, 255 deltas
+  hold-once refused at 4112 (hold cap) CPU   819.7 ms, timed-out passes   800.2 ms (8), mismatches 0, undecided deltas 255, held while undecided: up to 4096 chars, 255 deltas
+
+Corpus seed 2, budget 1 ms per pass (5s): 1609 streams
+  refuse    refused   68 (where the whole text is NOT refused:  35); CPU     374.7 ms, of which timed-out passes     68.6 ms (68 timeouts)
+  hold      refused   33 (where the whole text is NOT refused:   0); CPU     457.4 ms, of which timed-out passes    142.3 ms (141 timeouts); mismatches 0; undecided deltas 650; per stream held while undecided: chars median 46 max 93, consecutive deltas median 10 max 25
+  hold-once refused   33 (where the whole text is NOT refused:   0); CPU     456.0 ms, of which timed-out passes    142.3 ms (141 timeouts); mismatches 0; undecided deltas 649; per stream held while undecided: chars median 46 max 93, consecutive deltas median 10 max 25
+  whole-text reference refuses 33
+
+  of which streams where some pass timed out: 68 streams
+  refuse    refused   68 (where the whole text is NOT refused:  35); CPU     130.6 ms, of which timed-out passes     68.6 ms (68 timeouts)
+  hold      refused   33 (where the whole text is NOT refused:   0); CPU     205.9 ms, of which timed-out passes    142.3 ms (141 timeouts); mismatches 0; undecided deltas 650; per stream held while undecided: chars median 46 max 93, consecutive deltas median 10 max 25
+  hold-once refused   33 (where the whole text is NOT refused:   0); CPU     206.8 ms, of which timed-out passes    142.3 ms (141 timeouts); mismatches 0; undecided deltas 649; per stream held while undecided: chars median 46 max 93, consecutive deltas median 10 max 25
+  whole-text reference refuses 33
+
+S1 A's sentence, 110 chars in 28 deltas, budget 100 ms:
+  reference (whole text once): decided
+  refuse    refused at 28    CPU   178.7 ms, timed-out passes   100.0 ms (1), mismatches 0, undecided deltas 0, held while undecided: up to 0 chars, 0 deltas
+  hold      decided          CPU   281.3 ms, timed-out passes   200.1 ms (2), mismatches 0, undecided deltas 21, held while undecided: up to 108 chars, 21 deltas
+  hold-once decided          CPU   295.8 ms, timed-out passes   200.0 ms (2), mismatches 0, undecided deltas 21, held while undecided: up to 108 chars, 21 deltas
+
+S1 A's sentence with a comma (the expensive attempt becomes final), 111 chars in 28 deltas, budget 100 ms:
+  reference (whole text once): refused
+  refuse    refused at 28    CPU   183.1 ms, timed-out passes   100.0 ms (1), mismatches 0, undecided deltas 0, held while undecided: up to 0 chars, 0 deltas
+  hold      refused at end   CPU   478.5 ms, timed-out passes   400.1 ms (4), mismatches 0, undecided deltas 21, held while undecided: up to 108 chars, 21 deltas
+  hold-once refused at end   CPU   484.1 ms, timed-out passes   400.2 ms (4), mismatches 0, undecided deltas 21, held while undecided: up to 108 chars, 21 deltas
+
+S1 8 KiB of words, no stopper and no terminator (worst case for 'hold': refused at the 4 KiB cap), 8192 chars in 512 deltas, budget 100 ms:
+  reference (whole text once): refused
+  refuse    refused at 32    CPU   101.2 ms, timed-out passes   100.0 ms (1), mismatches 0, undecided deltas 0, held while undecided: up to 0 chars, 0 deltas
+  hold      refused at 4112 (hold cap) CPU   821.8 ms, timed-out passes   800.3 ms (8), mismatches 0, undecided deltas 255, held while undecided: up to 4096 chars, 255 deltas
+  hold-once refused at 4112 (hold cap) CPU   820.2 ms, timed-out passes   800.2 ms (8), mismatches 0, undecided deltas 255, held while undecided: up to 4096 chars, 255 deltas
+
+Corpus seed 3, budget 1 ms per pass (5s): 1651 streams
+  refuse    refused   69 (where the whole text is NOT refused:  37); CPU     348.7 ms, of which timed-out passes     69.7 ms (69 timeouts)
+  hold      refused   32 (where the whole text is NOT refused:   0); CPU     433.3 ms, of which timed-out passes    141.3 ms (140 timeouts); mismatches 0; undecided deltas 629; per stream held while undecided: chars median 50 max 150, consecutive deltas median 8 max 25
+  hold-once refused   32 (where the whole text is NOT refused:   0); CPU     427.6 ms, of which timed-out passes    141.2 ms (140 timeouts); mismatches 0; undecided deltas 630; per stream held while undecided: chars median 50 max 150, consecutive deltas median 8 max 25
+  whole-text reference refuses 32
+
+  of which streams where some pass timed out: 69 streams
+  refuse    refused   69 (where the whole text is NOT refused:  37); CPU     132.3 ms, of which timed-out passes     69.7 ms (69 timeouts)
+  hold      refused   32 (where the whole text is NOT refused:   0); CPU     210.3 ms, of which timed-out passes    141.3 ms (140 timeouts); mismatches 0; undecided deltas 629; per stream held while undecided: chars median 50 max 150, consecutive deltas median 8 max 25
+  hold-once refused   32 (where the whole text is NOT refused:   0); CPU     208.6 ms, of which timed-out passes    141.2 ms (140 timeouts); mismatches 0; undecided deltas 630; per stream held while undecided: chars median 50 max 150, consecutive deltas median 8 max 25
+  whole-text reference refuses 32
+
+S1 A's sentence, 110 chars in 28 deltas, budget 100 ms:
+  reference (whole text once): decided
+  refuse    refused at 28    CPU   197.0 ms, timed-out passes   100.0 ms (1), mismatches 0, undecided deltas 0, held while undecided: up to 0 chars, 0 deltas
+  hold      decided          CPU   278.8 ms, timed-out passes   200.1 ms (2), mismatches 0, undecided deltas 21, held while undecided: up to 108 chars, 21 deltas
+  hold-once decided          CPU   281.0 ms, timed-out passes   200.1 ms (2), mismatches 0, undecided deltas 21, held while undecided: up to 108 chars, 21 deltas
+
+S1 A's sentence with a comma (the expensive attempt becomes final), 111 chars in 28 deltas, budget 100 ms:
+  reference (whole text once): refused
+  refuse    refused at 28    CPU   178.4 ms, timed-out passes   100.0 ms (1), mismatches 0, undecided deltas 0, held while undecided: up to 0 chars, 0 deltas
+  hold      refused at end   CPU   479.2 ms, timed-out passes   400.2 ms (4), mismatches 0, undecided deltas 21, held while undecided: up to 108 chars, 21 deltas
+  hold-once refused at end   CPU   497.5 ms, timed-out passes   400.1 ms (4), mismatches 0, undecided deltas 21, held while undecided: up to 108 chars, 21 deltas
+
+S1 8 KiB of words, no stopper and no terminator (worst case for 'hold': refused at the 4 KiB cap), 8192 chars in 512 deltas, budget 100 ms:
+  reference (whole text once): refused
+  refuse    refused at 32    CPU   101.3 ms, timed-out passes   100.0 ms (1), mismatches 0, undecided deltas 0, held while undecided: up to 0 chars, 0 deltas
+  hold      refused at 4112 (hold cap) CPU   822.3 ms, timed-out passes   800.3 ms (8), mismatches 0, undecided deltas 255, held while undecided: up to 4096 chars, 255 deltas
+  hold-once refused at 4112 (hold cap) CPU   820.4 ms, timed-out passes   800.2 ms (8), mismatches 0, undecided deltas 255, held while undecided: up to 4096 chars, 255 deltas
+
+Corpus seed 4, budget 10 ms per pass (12s): 1621 streams
+  refuse    refused   68 (where the whole text is NOT refused:  27); CPU    1503.8 ms, of which timed-out passes    681.1 ms (68 timeouts)
+  hold      refused   41 (where the whole text is NOT refused:   0); CPU    2182.5 ms, of which timed-out passes   1311.7 ms (131 timeouts); mismatches 0; undecided deltas 510; per stream held while undecided: chars median 47 max 132, consecutive deltas median 6 max 22
+  hold-once refused   41 (where the whole text is NOT refused:   0); CPU    2159.0 ms, of which timed-out passes   1321.8 ms (132 timeouts); mismatches 0; undecided deltas 513; per stream held while undecided: chars median 47 max 132, consecutive deltas median 6 max 22
+  whole-text reference refuses 41
+
+  of which streams where some pass timed out: 68 streams
+  refuse    refused   68 (where the whole text is NOT refused:  27); CPU    1217.5 ms, of which timed-out passes    681.1 ms (68 timeouts)
+  hold      refused   41 (where the whole text is NOT refused:   0); CPU    1888.9 ms, of which timed-out passes   1311.7 ms (131 timeouts); mismatches 0; undecided deltas 510; per stream held while undecided: chars median 47 max 132, consecutive deltas median 6 max 22
+  hold-once refused   41 (where the whole text is NOT refused:   0); CPU    1869.1 ms, of which timed-out passes   1321.8 ms (132 timeouts); mismatches 0; undecided deltas 513; per stream held while undecided: chars median 47 max 132, consecutive deltas median 6 max 22
+  whole-text reference refuses 41

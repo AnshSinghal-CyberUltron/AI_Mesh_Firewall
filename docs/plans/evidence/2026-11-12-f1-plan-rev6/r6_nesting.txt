@@ -1,0 +1,5 @@
+[1] scanner vs re: 20000 patterns, 7505 accepted by re, exact on 7505; below re on rejected: 0 (3s)
+[2] bombs refused by every entry point
+[3] 8 worst shapes at depth 16 compiled from 600 frames deep; random 16-deep: 204 compiled from 600 deep, 96 refused by another limit, 0 recursion errors expected
+[4] exceptions become Refused; plan with bombs: ['Analysis', 'Refused', 'Analysis', 'Refused']
+FAILURES: 0

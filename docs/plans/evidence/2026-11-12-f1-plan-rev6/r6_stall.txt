@@ -1,0 +1,6 @@
+plan: 12 rules accepted by check_plan; translate + compile 371 ms CPU; switch interval 5 ms
+| Worker thread | Loop ticks | Lag p50 | p99 | max (median of rounds) | max (worst round) |
+|---|---|---|---|---|---|
+| compile, yield between rules | 217 | 5.27 ms | 14.84 ms | 15.7 ms | 23.5 ms |
+| compile, no yield | 210 | 5.27 ms | 19.31 ms | 19.3 ms | 24.2 ms |
+| busy pure-Python thread (same duration) | 161 | 5.23 ms | 13.23 ms | 11.8 ms | 17.3 ms |
