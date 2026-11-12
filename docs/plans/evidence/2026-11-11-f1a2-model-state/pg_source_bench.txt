@@ -1,0 +1,27 @@
+2026-11-11T11:36:15Z  11:36:15 up  6:23,  0 user,  load average: 6.41, 6.78, 5.66
+python=3.13.18 psycopg=3.3.8 orgs=100,000 rows=500,000
+PostgreSQL 16.15 (Debian 16.15-1.pgdg12+2) on x86_64-pc-linux-gnu, compiled by gcc (Debian 12.2.0-14+deb12u1) 12.2.0, 64-bit
+setup: 43 s
+table sizes: llm=163 MB amf_state_record(model)=36 MB
+
+| read | per round | result under the 800 ms bound | server execution |
+|---|---|---|---|
+| naive: every model row (HEAD pattern) | every round | CANCELLED by statement_timeout=800 ms after 856 ms | 4137.361 ms |
+| design: per-org revisions | every round | 100,000 rows, ~0.4 MB as text, 72 ms wall | 9.780 ms |
+| design: rows of 1,000 changed orgs | on change | 4,975 rows, ~1.2 MB as text, 297 ms wall | 299.635 ms |
+| design: rows of 2,000 changed orgs | on change | 9,900 rows, ~2.4 MB as text, 583 ms wall | 375.208 ms |
+| naive: every MODEL state record (HEAD projector.py:220, verify rehydrate.py:349) | every round / deep | CANCELLED by statement_timeout=800 ms after 842 ms | 183.430 ms |
+| design: index only (key, feed_seq) | deep verify | 100,000 rows, ~1.3 MB as text, 142 ms wall | 38.352 ms |
+| design: memo seed (key, content_hash) | projector start | 100,000 rows, ~7.4 MB as text, 119 ms wall | 28.970 ms |
+
+unbounded naive reads (how long they really take):
+  every model row: 500,000 rows, ~121.5 MB as text, 17,670 ms wall
+  every MODEL record: 100,000 rows, ~221.0 MB as text, 1,124 ms wall
+
+console write cost with and without the revision trigger (autocommit, 2,000 updates):
+  trigger enabled: 6.596 ms per update (wall, includes round trip)
+  trigger disabled: 4.961 ms per update (wall, includes round trip)
+  trigger enabled: 4.748 ms per update (wall, includes round trip)
+  orgs whose revision moved: 1,983; distinct orgs of the updated rows: 1,983
+scratch database dropped
+exit 0 wall incl lock wait 111 s

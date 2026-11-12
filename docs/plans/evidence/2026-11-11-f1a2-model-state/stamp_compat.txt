@@ -1,0 +1,15 @@
+replacing an unverifiable freshness stamp
+seed=20261111 iterations=5000 python=3.13.18
+[1] 5000/5000 HEAD stamps: raw-map signature byte-identical; step-1 reader accepts all
+[1b] 5000/5000 step-1 stamps over the base kinds: HEAD decode_stamp accepts all
+[2] 5000/5000 stamps naming 'model': step-1 accepts (model ignored); HEAD decode_stamp refuses 5000/5000 ('unknown kind')
+[3] held stamp at 1800000000500 ms names 'model'; a round that started 400 ms earlier: HEAD _stamp_is_newer=False (False = overwrite: stamp time moves BACK 400 ms); step-1 comparison keeps the newer stamp=True
+[4] refused: forged signature: signature
+[4] refused: required kind missing: does not cover required ['model']
+[4] refused: newline in a kind name: bad kind name 'mo\ndel'
+[4] refused: '=' in a kind name: bad kind name 'a=1.2:3'
+[4] refused: bool cursor: bad cursor for model
+[4] refused: negative cursor: bad cursor for model
+[cost] HEAD decode_stamp: 26.5 us thread CPU per stamp
+[cost] step-1 lenient_decode: 20.5 us thread CPU per stamp
+OK

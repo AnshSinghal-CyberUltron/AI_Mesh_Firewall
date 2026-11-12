@@ -1,0 +1,6 @@
+python=3.12.3 cryptography=50.0.2 (thread CPU)
+AES-256-GCM decrypt, cached AESGCM per kid : 0.86 us
+AES-256-GCM decrypt, AESGCM built per call: 2.46 us
+AES-256-GCM encrypt (projector, per changed row): 1.47 us
+Fernet decrypt (projector, per changed row): 12.43 us
+Fernet token length for a 51-byte key: 164 chars
