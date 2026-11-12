@@ -232,7 +232,7 @@ def test_the_series_count_still_matches_the_fixed_expression() -> None:
     recorder = StateMetricsRecorder()
 
     assert len(recorder.snapshot().series()) == SERIES_COUNT
-    assert SERIES_COUNT == 11 * len(StateKind) + 15 + 8 + 1  # GW27 plan_schema_version
+    assert SERIES_COUNT == 14 * len(StateKind) + 15 + 8 + 1  # GW27 plan_schema_version
 
 
 def test_every_freshness_series_is_present_before_anything_happens() -> None:

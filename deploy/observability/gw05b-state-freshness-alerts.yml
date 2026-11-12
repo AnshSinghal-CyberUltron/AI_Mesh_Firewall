@@ -268,29 +268,42 @@ groups:
 
   # --- the gateway half of one tenant's bad record (fix/state-applier-isolation) -------------
   # A gateway no longer refuses a whole kind for one record: the record's tenant (PLAN) or key
-  # (KEY) is handled alone and every other tenant applies. These two series are how that stays
-  # loud. Their twin on the control plane is StateProjectorOrgsWithoutPlan above.
+  # (KEY) is handled alone and every other tenant applies. These rules are how that stays loud.
+  # Their twin on the control plane is StateProjectorOrgsWithoutPlan above.
+  #
+  # Both page on the HELD-BACK GAUGES, which say a tenant or key IS held back right now, not on
+  # the counters, which say a record WAS refused: a quarantined tenant stays at 503 until it is
+  # restored, and an `increase()` alert resolved five minutes after the event while it still was
+  # -- and never moved at all when a restarted worker re-detected the same record. The counter
+  # term is kept only as an OR, so a quarantine restored between two scrapes is still seen.
   - name: amf-state-gateway-records
     rules:
       - alert: StateGatewayRecordQuarantined
-        expr: sum by (kind) (increase(amf_state_records_quarantined_total[5m])) > 0
+        expr: >-
+          max by (kind) (amf_state_held_back_quarantined) > 0
+          or sum by (kind) (increase(amf_state_records_quarantined_total[5m])) > 0
         for: 0m
         labels:
           severity: critical
           service: gateway
         annotations:
-          summary: "A gateway refused a {{ $labels.kind }} record that failed verification"
+          summary: "A gateway refuses a {{ $labels.kind }} record that failed verification"
           description: >-
             A stored record's envelope, signature, key or index position did not verify, so the
             store does not hold what the control plane wrote: tampering, corruption, or a writer
             signing with another key. That one tenant (plan) or key is refused with 503 until a
-            verified record replaces it; every other tenant is served. The gateway's warning
-            line "plan record quarantined" / "key record quarantined" names the org or key hash,
-            the feed position and the exception type. Re-save the tenant's policy to publish a
-            fresh record, then find out how the stored one changed.
+            verified record replaces it; every other tenant is served. The alert stays firing
+            for as long as amf_state_held_back_quarantined is above zero on any worker. The
+            gateway's warning line "plan record quarantined" / "key record quarantined" names
+            the org or key hash, the feed position and the exception type. Re-save the tenant's
+            policy (or re-issue the key) to publish a fresh record, then find out how the stored
+            one changed. A same-position repair by the re-hydrator is picked up by the gateway's
+            bounded re-check within a few freshness windows ("quarantine lifted").
 
       - alert: StateGatewayPlanRejected
-        expr: sum(increase(amf_state_records_rejected_total{kind="plan"}[15m])) > 0
+        expr: >-
+          max(amf_state_held_back_rejected{kind="plan"}) > 0
+          or sum(increase(amf_state_records_rejected_total{kind="plan"}[15m])) > 0
         for: 0m
         labels:
           severity: warning
@@ -299,8 +312,8 @@ groups:
           summary: "A gateway could not compile a published plan; that tenant keeps its previous plan"
           description: >-
             The record verified, so the control plane did publish it, but this gateway's compiler
-            refused it. The tenant keeps serving its previous valid plan (or 503 if it had none)
-            and the applied-version report shows held_back=rejected for it. The projector
-            validates with the same compiler, so the usual cause is a gateway and a projector on
-            different versions. The warning line "plan record rejected" names the org, the feed
-            position and the exception type.
+            refused it. The tenant keeps serving its previous valid plan (or 503 if it had none,
+            or if it was already quarantined) and the applied-version report shows
+            held_back=rejected for it. The projector validates with the same compiler, so the
+            usual cause is a gateway and a projector on different versions. The warning line
+            "plan record rejected" names the org, the feed position and the exception type.

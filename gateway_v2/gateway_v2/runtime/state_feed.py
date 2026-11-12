@@ -126,6 +126,10 @@ class FeedRound:
     faults: tuple[RecordFault, ...] = ()
     """Entries whose record failed verification. Only an isolating poll produces any."""
 
+    in_flight: int = 0
+    """Entries skipped because a newer publish landed mid-round (`_in_flight`). Counted, so a
+    writer stuck between its record write and its manifest write is visible from the gateway."""
+
     @property
     def changed(self) -> bool:
         return bool(self.records) or bool(self.faults)
@@ -211,7 +215,9 @@ class FeedReader:
         if manifest.feed_seq == cursor.feed_seq:
             return FeedRound(kind, manifest, (), cursor, truncated=False)
         page = await self._read_page(kind, manifest, cursor, limit)
-        records, faults = await self._read_records(kind, manifest, page, isolate=isolate)
+        records, faults, in_flight = await self._read_records(
+            kind, manifest, page, isolate=isolate,
+        )
         # The last INDEX entry, not the last verified record: with isolation the last entry may
         # be a fault or a skipped in-flight publish, and the round has still accounted for it.
         last = page.entries[-1][1]
@@ -229,6 +235,7 @@ class FeedReader:
             cursor=cursor.advanced(cursor.version if truncated else manifest.version, last),
             truncated=truncated,
             faults=faults,
+            in_flight=in_flight,
         )
 
     async def bootstrap_engaged(
@@ -351,7 +358,7 @@ class FeedReader:
         page: IndexPage,
         *,
         isolate: bool = False,
-    ) -> tuple[tuple[SignedRecord, ...], tuple[RecordFault, ...]]:
+    ) -> tuple[tuple[SignedRecord, ...], tuple[RecordFault, ...], int]:
         keys = tuple(key for key, _ in page.entries)
         raws = await self._store.records(kind, keys)
         if len(raws) != len(page.entries):
@@ -360,6 +367,7 @@ class FeedReader:
             )
         out: list[SignedRecord] = []
         faults: list[RecordFault] = []
+        in_flight = 0
         for (key, score), raw in zip(page.entries, raws, strict=True):
             if not isolate:
                 out.append(self._verified(kind, manifest, key, score, raw))
@@ -367,11 +375,12 @@ class FeedReader:
             try:
                 record = decode_record(self._secret, kind, raw)
                 if _in_flight(record, key, score, manifest):
+                    in_flight += 1
                     continue  # a newer publish landed mid-round: next round reads it
                 out.append(self._paired(kind, manifest, key, score, record))
             except Exception as exc:  # noqa: BLE001 - one record never refuses the round here
                 faults.append(RecordFault(key=key, feed_seq=score, error=type(exc).__name__))
-        return tuple(out), tuple(faults)
+        return tuple(out), tuple(faults), in_flight
 
     def _verified(
         self,

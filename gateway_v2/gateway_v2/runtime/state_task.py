@@ -25,15 +25,19 @@ A failed round does NOT advance the cursor. The next round retries from the same
 partially applied generation is never mistaken for a complete one.
 
 Logging names the kind and the exception TYPE only. Exception text from a decoder or a compiler
-can quote the record that caused it, and that record is a tenant's data.
+can quote the record that caused it, and that record is a tenant's data. The one exception is a
+`StoreDataUnavailable` refusal: its message is code-written (it names a key and a position, never
+a body), so a STANDING refusal is logged once per change with that message, truncated -- the index
+key it names is unauthenticated and may be any length.
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from collections.abc import Awaitable, Callable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Protocol, runtime_checkable
 
 from gateway_v2.domain.state import START, Cursor, StateKind, StoreDataUnavailable
@@ -68,6 +72,8 @@ class RejectionCount(Protocol):
 MAX_DRAIN_ROUNDS = 64
 """A drain stops here and reports lag rather than monopolising the loop."""
 
+_DIGITS = re.compile(r"\d+")
+
 
 @dataclass(frozen=True, slots=True)
 class DeltaBudget:
@@ -95,6 +101,9 @@ class RoundReport:
 
     quarantined: int = 0
     """Records that failed verification on an isolating kind: that subject is failed closed."""
+
+    in_flight: int = 0
+    """Index entries skipped because a newer publish landed mid-round (read again next round)."""
 
     @property
     def ok(self) -> bool:
@@ -149,8 +158,10 @@ class StateSynchroniser:
         self._isolate = isolate_kinds
         self._cursors: dict[StateKind, Cursor] = {kind: START for kind in appliers}
         self._floors: dict[StateKind, Cursor] = {kind: START for kind in appliers}
-        self._failing: dict[StateKind, str] = {}
-        """Each kind's current unexpected failure, so a standing fault logs once, not per cycle."""
+        self._failing: dict[StateKind, tuple[str, str]] = {}
+        """Each kind's current refusal as `(shape, type)`: a standing one logs once per change."""
+        self._stamp_failing: str | None = None
+        """The stamp read's current defect type, so a standing one logs once, not per cycle."""
 
     def cursor(self, kind: StateKind) -> Cursor:
         """Where this process IS: the generation it has actually applied."""
@@ -212,6 +223,7 @@ class StateSynchroniser:
             offloaded=offloaded,
             rejected=result.rejected_count if isinstance(result, RejectionCount) else 0,
             quarantined=len(round_.faults),
+            in_flight=round_.in_flight,
         )
 
     async def _poll(self, kind: StateKind, cursor: Cursor) -> FeedRound:
@@ -229,29 +241,57 @@ class StateSynchroniser:
         *,
         offloaded: bool,
     ) -> RoundReport:
-        """A refused round, as a report. Logs a defect once per change, by type only."""
+        """A refused round, as a report. Logs a standing refusal once per change, then not again.
+
+        A defect (anything but `StoreDataUnavailable`) is logged by type alone, at ERROR. A
+        `StoreDataUnavailable` refusal -- an outage, or a kill-switch or budget record that does
+        not verify, which refuses its whole kind by design -- is logged at WARNING with its
+        code-written message cut to 160 characters. "Once per change" compares the message with
+        its numbers removed, so a refusal whose positions move every cycle is still one line.
+        """
+        label = type(exc).__name__
         if isinstance(exc, StoreDataUnavailable):
             error = str(exc)
+            shape = _DIGITS.sub("N", error)
+            if self._failing.get(kind, ("", ""))[0] != shape:
+                LOG.warning(
+                    "state round refused: kind=%s error=%s detail=%.160s", kind.value, label, error,
+                )
         else:
-            error = type(exc).__name__
-            if self._failing.get(kind) != error:
+            error = shape = label
+            if self._failing.get(kind, ("", ""))[0] != shape:
                 LOG.error("state round failed: kind=%s error=%s", kind.value, error)
-            self._failing[kind] = error
+        self._failing[kind] = (shape, label)
         return RoundReport(kind, cursor, 0, truncated=False, offloaded=offloaded, error=error)
 
     def _recovered(self, kind: StateKind) -> None:
         previous = self._failing.pop(kind, None)
         if previous is not None:
-            LOG.warning("state round recovered: kind=%s after error=%s", kind.value, previous)
+            LOG.warning("state round recovered: kind=%s after error=%s", kind.value, previous[1])
 
     async def drain(self, kind: StateKind, *, max_rounds: int = MAX_DRAIN_ROUNDS) -> RoundReport:
-        """Round until caught up, bounded. Reports the LAST round, so lag stays visible."""
+        """Round until caught up, bounded. One report for the whole drain.
+
+        The cursor, `truncated`, `offloaded` and `error` are the LAST round's, so lag and a
+        failure stay visible. The record counts are SUMMED over every round: a delta larger than
+        the budget (a bulk onboarding, every cold start's plan replay) takes several rounds, and
+        a record rejected or quarantined in an early one must still be counted -- reporting only
+        the last round's counts lost it.
+        """
         report = await self.round_once(kind)
+        total = report
         rounds = 1
         while report.ok and report.truncated and rounds < max_rounds:
             report = await self.round_once(kind)
+            total = replace(
+                report,
+                applied=total.applied + report.applied,
+                rejected=total.rejected + report.rejected,
+                quarantined=total.quarantined + report.quarantined,
+                in_flight=total.in_flight + report.in_flight,
+            )
             rounds += 1
-        return report
+        return total
 
     async def observe_stamp(self) -> bool:
         """Read the freshness stamp and raise every kind's floor from it. GW05b's call site.
@@ -275,6 +315,26 @@ class StateSynchroniser:
         # log belongs here and nowhere near it.
         self._stamp.note_freshness()
         return adopted
+
+    async def observe_stamp_isolated(self) -> None:
+        """`observe_stamp`, but nothing it raises stops the caller's drains.
+
+        A store that did not answer is the expected case: the view keeps what it had and ages
+        out on its own. Anything else is a defect someone must look at, logged by type, once per
+        change rather than once per cycle (a stamp the decoder cannot refuse cleanly would
+        otherwise log twice a second for as long as it stays in the store).
+        """
+        try:
+            await self.observe_stamp()
+        except StoreDataUnavailable:
+            self._stamp_failing = None
+        except Exception as exc:  # noqa: BLE001 - a stamp defect never stops the kinds' drains
+            error = type(exc).__name__
+            if self._stamp_failing != error:
+                LOG.error("freshness stamp read failed: error=%s", error)
+            self._stamp_failing = error
+        else:
+            self._stamp_failing = None
 
     def next_delay_s(
         self,
@@ -300,16 +360,7 @@ class StateSynchroniser:
         `drain` are the per-kind primitives underneath it and assume the floor is already
         current, so product code schedules THIS.
         """
-        try:
-            await self.observe_stamp()
-        except StoreDataUnavailable:
-            # The store did not answer the stamp read. The view keeps what it had and ages out
-            # on its own; the kinds are still drained, each reporting its own outcome.
-            pass
-        except Exception as exc:  # noqa: BLE001 - a stamp defect never stops the kinds' drains
-            # Same as a missing stamp: no floor moves, the view ages out on its own. Logged by
-            # type, because unlike a store outage this is a defect someone must look at.
-            LOG.error("freshness stamp read failed: error=%s", type(exc).__name__)
+        await self.observe_stamp_isolated()
         return tuple(
             [await self.drain(kind, max_rounds=max_rounds) for kind in self._appliers],
         )

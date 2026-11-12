@@ -145,6 +145,19 @@ class KindMetrics:
     records_quarantined: int = 0
     """Records that failed verification: that one tenant or key is failed closed."""
 
+    records_in_flight: int = 0
+    """Index entries skipped because a newer publish landed mid-round (read next round)."""
+
+    held_rejected: int = 0
+    """GAUGE: subjects serving their previous valid plan because their newest record was refused
+    by the compiler."""
+
+    held_quarantined: int = 0
+    """GAUGE: subjects refused (503) right now because their record failed verification. The
+    counters above say a record WAS refused; this says a tenant or key IS, so an alert on it
+    stays firing for as long as the subject is held back -- including after a restart re-detects
+    it without the counter moving."""
+
     cursor: int = 0
     attested: int = 0
 
@@ -234,6 +247,9 @@ class StateMetrics:
             out[f"{PREFIX}_records_applied_total{tag}"] = metrics.records_applied
             out[f"{PREFIX}_records_rejected_total{tag}"] = metrics.records_rejected
             out[f"{PREFIX}_records_quarantined_total{tag}"] = metrics.records_quarantined
+            out[f"{PREFIX}_records_in_flight_total{tag}"] = metrics.records_in_flight
+            out[f"{PREFIX}_held_back_rejected{tag}"] = metrics.held_rejected
+            out[f"{PREFIX}_held_back_quarantined{tag}"] = metrics.held_quarantined
             out[f"{PREFIX}_cursor{tag}"] = metrics.cursor
             out[f"{PREFIX}_attested{tag}"] = metrics.attested
             out[f"{PREFIX}_lag{tag}"] = metrics.lag
@@ -267,11 +283,12 @@ class StateMetrics:
         return out
 
 
-SERIES_COUNT = 11 * len(StateKind) + 6 + 3 + 6 + 8 + 1
+SERIES_COUNT = 14 * len(StateKind) + 6 + 3 + 6 + 8 + 1
 """How many series this surface can ever produce. A constant, by construction.
 
-`11 *` is the ten per-kind round metrics (rejected and quarantined records among them) plus
-GW05b's per-kind floor; the trailing `+ 8` is
+`14 *` is the eleven per-kind round metrics (rejected, quarantined and in-flight records among
+them), the two per-kind held-back gauges (rejected, quarantined) and GW05b's per-kind floor;
+the trailing `+ 8` is
 freshness and the final `+ 1` is GW27's `plan_schema_version` gauge. R2-10 is the reason this
 is a fixed expression rather than a count of whatever happens to be emitted: a full metric
 directory made 40% of new tenants' first requests fail with HTTP 500, so a series whose
@@ -301,11 +318,19 @@ class StateMetricsRecorder:
             records_applied=current.records_applied + report.applied,
             records_rejected=current.records_rejected + report.rejected,
             records_quarantined=current.records_quarantined + report.quarantined,
+            records_in_flight=current.records_in_flight + report.in_flight,
             cursor=max(current.cursor, report.cursor.feed_seq),
             attested=max(
                 current.attested,
                 report.cursor.feed_seq if attested is None else attested,
             ),
+        )
+
+    def observe_held_back(self, kind: StateKind, *, rejected: int, quarantined: int) -> None:
+        """How many subjects of `kind` are held back RIGHT NOW. Counts, never names. O(1)."""
+        current = self._kinds.get(kind, KindMetrics())
+        self._kinds[kind] = replace(
+            current, held_rejected=rejected, held_quarantined=quarantined,
         )
 
     def observe_identity(self, stats: IdentityStats) -> None:
