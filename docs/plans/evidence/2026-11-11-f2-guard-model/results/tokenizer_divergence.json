@@ -1,0 +1,53 @@
+{
+  "versions": {
+    "a": [
+      "4.57.1",
+      "0.22.2",
+      "DebertaV2TokenizerFast"
+    ],
+    "b": [
+      "5.22.2",
+      "0.23.3",
+      "DebertaV2Tokenizer"
+    ]
+  },
+  "id_mismatch_rows": {
+    "transformers4_auto_vs_tokenizer_json": 0,
+    "transformers5_auto_vs_tokenizer_json": 752,
+    "tokenizers_0.22_vs_0.23_raw": 0,
+    "rows": 752
+  },
+  "max_abs_p_diff_shipped_vs_transformers5": 0.9949099838965164,
+  "decision_flips": {
+    "0.5": 45,
+    "0.9": 38
+  },
+  "in_repo_corpus_at_0.5": {
+    "raw": {
+      "recall": "75/323",
+      "fpr": "1/425"
+    },
+    "tf5_auto": {
+      "recall": "33/323",
+      "fpr": "0/425"
+    }
+  },
+  "whitespace_examples": {
+    "ws-1": {
+      "p_shipped_tokenizer": 0.998992,
+      "p_transformers5": 0.998826
+    },
+    "ws-2": {
+      "p_shipped_tokenizer": 0.998992,
+      "p_transformers5": 0.990918
+    },
+    "ws-3": {
+      "p_shipped_tokenizer": 0.998992,
+      "p_transformers5": 0.998987
+    },
+    "nfc-1": {
+      "p_shipped_tokenizer": 0.99894,
+      "p_transformers5": 0.998164
+    }
+  }
+}

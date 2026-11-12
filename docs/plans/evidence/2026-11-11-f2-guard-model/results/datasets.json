@@ -1,0 +1,98 @@
+[
+  {
+    "repo": "deepset/prompt-injections",
+    "revision": "4f61ecb038e9c3fb77e21034b22511b523772cdd",
+    "license": "apache-2.0",
+    "file": "data/train-00000-of-00001-9564e8b05b4757ab.parquet",
+    "bytes": 40323,
+    "sha256": "2e10bc7ab30f542c97e4e83e2a5683000b5057d25ec10908784c631d44124c04"
+  },
+  {
+    "repo": "deepset/prompt-injections",
+    "revision": "4f61ecb038e9c3fb77e21034b22511b523772cdd",
+    "license": "apache-2.0",
+    "file": "data/test-00000-of-00001-701d16158af87368.parquet",
+    "bytes": 10892,
+    "sha256": "39ac797cabc157eeed58435a08593b2952bb6cb16fc394a2d383f447cc7b246e"
+  },
+  {
+    "repo": "jackhhao/jailbreak-classification",
+    "revision": "2f2ceeb39658696fd3f462403562b6eea5306287",
+    "license": "apache-2.0",
+    "file": "default/jailbreak_dataset_full.csv",
+    "bytes": 2143822,
+    "sha256": "79a7b90b0abe00e3586cc5048353c3236543cca228a1ee261fe3b57a7cb7e29f"
+  },
+  {
+    "repo": "Lakera/gandalf_ignore_instructions",
+    "revision": "04737b65e90a6794ec227012e4a255a7def6344b",
+    "license": "mit",
+    "file": "data/train-00000-of-00001-ded53be747ff55cd.parquet",
+    "bytes": 36715,
+    "sha256": "5b6acf3e5a5998d21f8e1222bb45bbdec25a14408747b1cd63bebef4a75fa439"
+  },
+  {
+    "repo": "Lakera/gandalf_ignore_instructions",
+    "revision": "04737b65e90a6794ec227012e4a255a7def6344b",
+    "license": "mit",
+    "file": "data/validation-00000-of-00001-94481a2a09ff2fff.parquet",
+    "bytes": 7464,
+    "sha256": "f51ab3e3407a368845b0f57932cc745c09280429416d7507bd178a16326a79f6"
+  },
+  {
+    "repo": "Lakera/gandalf_ignore_instructions",
+    "revision": "04737b65e90a6794ec227012e4a255a7def6344b",
+    "license": "mit",
+    "file": "data/test-00000-of-00001-bc92128b9288a6d1.parquet",
+    "bytes": 7336,
+    "sha256": "56b646d133335ebc535266bd55dbe1b5bee7caa4b95bf49d040684b9b5dd9972"
+  },
+  {
+    "repo": "TrustAIRLab/in-the-wild-jailbreak-prompts",
+    "revision": "a10aab8eff1c73165a442d4464dce192bd28b9c5",
+    "license": "mit",
+    "file": "jailbreak_2023_12_25/train-00000-of-00001.parquet",
+    "bytes": 1871641,
+    "sha256": "55bbc5e2be771ee16ed67aed4edb5ecef5f44ac69cea317a67e5405c5c6057a4"
+  },
+  {
+    "repo": "TrustAIRLab/in-the-wild-jailbreak-prompts",
+    "revision": "a10aab8eff1c73165a442d4464dce192bd28b9c5",
+    "license": "mit",
+    "file": "regular_2023_12_25/train-00000-of-00001.parquet",
+    "bytes": 12560543,
+    "sha256": "23e90010ccbc85574bf46678528cddce5b02abc86d9a047209218af65cb37c68"
+  },
+  {
+    "repo": "databricks/databricks-dolly-15k",
+    "revision": "bdd27f4d94b9c1f951818a7da7fd7aeea5dbff1a",
+    "license": "cc-by-sa-3.0",
+    "file": "databricks-dolly-15k.jsonl",
+    "bytes": 13085339,
+    "sha256": "2df9083338b4abd6bceb5635764dab5d833b393b55759dffb0959b6fcbf794ec"
+  },
+  {
+    "repo": "OpenAssistant/oasst1",
+    "revision": "fdf72ae0827c1cda404aff25b6603abec9e3399b",
+    "license": "apache-2.0",
+    "file": "data/validation-00000-of-00001-134b8fd0c89408b6.parquet",
+    "bytes": 2080179,
+    "sha256": "24002597bb13a7edd42d92f773762f25e285f72c31a70449393d0ded1dc7b416"
+  },
+  {
+    "repo": "yanismiraoui/prompt_injections",
+    "revision": "bd55359f2f332afc35f277ac3dd08f7111b024c9",
+    "license": "apache-2.0",
+    "file": "prompt_injections.csv",
+    "bytes": 77986,
+    "sha256": "f4843f1841fa19b980f804796a68fc72f06841775eaba2723c768c7d772aabad"
+  },
+  {
+    "repo": "microsoft/llmail-inject-challenge",
+    "revision": "1063bdf01ec8762b812d5e06ee768a06faa5a6f7",
+    "license": "mit",
+    "file": "data/emails_for_fp_tests.json",
+    "bytes": 55486,
+    "sha256": "4ddd950b5dbaa8548f5597c886d8e09a051ba07f80a9291fdcca9c2397d22abe"
+  }
+]

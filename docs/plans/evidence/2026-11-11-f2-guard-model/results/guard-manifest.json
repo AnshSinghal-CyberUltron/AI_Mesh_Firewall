@@ -1,0 +1,103 @@
+{
+  "schema": "amf.guard.manifest/v1",
+  "model": {
+    "name": "Llama-Prompt-Guard-2-22M",
+    "upstream": "huggingface.co/meta-llama/Llama-Prompt-Guard-2-22M",
+    "upstream_revision": "11614a155199674a0a95e6602d6ab0417b790ed0",
+    "license": "Llama 4 Community License Agreement (see LICENSE, USE_POLICY.md, NOTICE)",
+    "attribution": "Built with Llama"
+  },
+  "files": {
+    "model.onnx": {
+      "sha256": "fe637bbc12fad24abf9dbbb0bf0dbb9f3bfa7ec568d5d7c34934b0141984d76a",
+      "bytes": 284233017
+    },
+    "tokenizer.json": {
+      "sha256": "6eb983352e73f1697b883a8c3f6b66bdfa336ab3d29dd3687f8316d0ff2789c1",
+      "bytes": 8657051
+    },
+    "config.json": {
+      "sha256": "1dc4742d04507072cafffb7235dc5dba5af9ba126f7a9830b95ed7ec00fd9104",
+      "bytes": 870
+    },
+    "LICENSE": {
+      "sha256": "73755cee886613ae3135140882289e0a4955d5f0e90f8b1c1ffc962aa9082917",
+      "bytes": 7554
+    },
+    "USE_POLICY.md": {
+      "sha256": "5ae40fe842b87b5773c47cfd25992a496cc09b17cbb246968762f06352d89270",
+      "bytes": 5796
+    },
+    "NOTICE": {
+      "sha256": "b550af6a77c08f976bdfd836062bf9fee8411a13d2d8e5d69236644578008062",
+      "bytes": 112
+    },
+    "golden.json": {
+      "sha256": "ab89a5fb2e078f1b0f16ea65d3058e66f0b43a180ecc5467809e45ae1c639513",
+      "bytes": 5742
+    }
+  },
+  "source": {
+    "model.safetensors": {
+      "sha256": "5120e30bcd536ce285345d9ec104bea6bd6e8f94365b99a340c764f417ea5fa1"
+    },
+    "tokenizer.json": {
+      "sha256": "6eb983352e73f1697b883a8c3f6b66bdfa336ab3d29dd3687f8316d0ff2789c1"
+    },
+    "config.json": {
+      "sha256": "1dc4742d04507072cafffb7235dc5dba5af9ba126f7a9830b95ed7ec00fd9104"
+    }
+  },
+  "export": {
+    "exporter": "torch.onnx.export(dynamo=False, do_constant_folding=True)",
+    "opset": 17,
+    "onnx_ir_version": 8,
+    "versions": {
+      "python": "3.13.18",
+      "torch": "2.15.0+cpu",
+      "transformers": "5.22.2",
+      "onnx": "1.23.2",
+      "onnxruntime": "1.31.1",
+      "numpy": "2.5.4"
+    }
+  },
+  "runtime": {
+    "onnxruntime": "1.31.1",
+    "tokenizers": "0.23.3",
+    "execution_provider": "CPUExecutionProvider",
+    "dtype": "float32"
+  },
+  "io": {
+    "inputs": [
+      "input_ids",
+      "attention_mask"
+    ],
+    "output": "logits",
+    "positive_index": 1,
+    "max_positions": 512,
+    "cls_id": 1,
+    "sep_id": 2,
+    "pad_id": 0,
+    "tokenizer": "tokenizers.Tokenizer.from_str; truncation and padding disabled"
+  },
+  "windowing": {
+    "payload_tokens": 510,
+    "overlap_tokens": 64,
+    "max_windows": 32,
+    "aggregate": "max"
+  },
+  "decision": {
+    "threshold": 0.5,
+    "category": "prompt_injection"
+  },
+  "parity": {
+    "max_abs_logit_diff": 1.33514404296875e-05,
+    "rows": 811,
+    "decision_agreement_0.5": "811/811"
+  },
+  "golden": {
+    "file": "golden.json",
+    "rows": 32,
+    "p_tolerance": 0.0001
+  }
+}

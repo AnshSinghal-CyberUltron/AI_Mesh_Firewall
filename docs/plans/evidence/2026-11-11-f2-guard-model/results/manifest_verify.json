@@ -1,0 +1,55 @@
+{
+  "manifest_digest": "a7f29c2002bd69e7d7af090244340629d90d603fc3abf6ca56cd91b867c80527",
+  "threshold_recorded": 0.5,
+  "verify_ok_timings_s": {
+    "hash_files": 0.987,
+    "session_from_bytes": 5.923,
+    "golden_self_test": 2.834,
+    "total": 9.744
+  },
+  "tamper_cases": [
+    {
+      "case": "onnx_one_bit_flipped",
+      "refused": true,
+      "reason": "sha256:model.onnx",
+      "seconds": 1.255
+    },
+    {
+      "case": "tokenizer_one_byte_added",
+      "refused": true,
+      "reason": "sha256:tokenizer.json",
+      "seconds": 1.577
+    },
+    {
+      "case": "license_file_missing",
+      "refused": true,
+      "reason": "missing:LICENSE",
+      "seconds": 0.0
+    },
+    {
+      "case": "manifest_threshold_edited",
+      "refused": true,
+      "reason": "manifest_digest",
+      "seconds": 0.0
+    },
+    {
+      "case": "wrong_pinned_digest",
+      "refused": true,
+      "reason": "manifest_digest",
+      "seconds": 0.0
+    },
+    {
+      "case": "model_swapped_and_manifest_rewritten",
+      "refused": true,
+      "reason": "manifest_digest",
+      "seconds": 0.0
+    },
+    {
+      "case": "golden_scores_disagree_with_model",
+      "refused": true,
+      "reason": "golden_decision",
+      "seconds": 8.204
+    }
+  ],
+  "all_tamper_cases_refused": true
+}

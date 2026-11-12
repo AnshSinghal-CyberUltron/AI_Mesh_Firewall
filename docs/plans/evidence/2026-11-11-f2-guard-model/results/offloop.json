@@ -1,0 +1,132 @@
+{
+  "loadavg_at_start": [
+    6.396484375,
+    5.84130859375,
+    5.84814453125
+  ],
+  "onnx": "pg2-22m-fp32-opset17.onnx",
+  "memory": {
+    "rss_mb_python_ort_imported": 52.1,
+    "rss_mb_first_session_warm_1x512": 534.2,
+    "rss_mb_second_session_warm_1x512": 884.1,
+    "rss_mb_after_8x512_batch": 1162.9,
+    "mb_per_session": 349.9
+  },
+  "loop_lag": [
+    {
+      "mode": "inline",
+      "workers": 0,
+      "requests": 6,
+      "windows_per_request": 2,
+      "loop_lag_ms_p50": 0.11,
+      "loop_lag_ms_p99": 16810.6,
+      "loop_lag_ms_max": 16810.6,
+      "heartbeats": 32,
+      "request_ms_p50": 2634.4,
+      "request_ms_p99": 3503.7,
+      "windows_per_s": 0.71,
+      "cpu_ms_per_window": 521.03
+    },
+    {
+      "mode": "executor",
+      "workers": 1,
+      "requests": 6,
+      "windows_per_request": 2,
+      "loop_lag_ms_p50": 0.12,
+      "loop_lag_ms_p99": 7.97,
+      "loop_lag_ms_max": 28.31,
+      "heartbeats": 12968,
+      "request_ms_p50": 9991.3,
+      "request_ms_p99": 22262.4,
+      "windows_per_s": 0.54,
+      "cpu_ms_per_window": 648.75
+    },
+    {
+      "mode": "executor",
+      "workers": 2,
+      "requests": 6,
+      "windows_per_request": 2,
+      "loop_lag_ms_p50": 0.76,
+      "loop_lag_ms_p99": 22.91,
+      "loop_lag_ms_max": 44.87,
+      "heartbeats": 5849,
+      "request_ms_p50": 17312.2,
+      "request_ms_p99": 27009.2,
+      "windows_per_s": 0.44,
+      "cpu_ms_per_window": 636.19
+    }
+  ],
+  "tokenizer_gil": {
+    "text_bytes": 65536,
+    "encodes": 10,
+    "idle": {
+      "loop_lag_ms_p50": 0.12,
+      "loop_lag_ms_p99": 3.79,
+      "loop_lag_ms_max": 4.19,
+      "wall_s": 0.207
+    },
+    "executor": {
+      "loop_lag_ms_p50": 0.12,
+      "loop_lag_ms_p99": 182.56,
+      "loop_lag_ms_max": 215.67,
+      "wall_s": 1.48
+    },
+    "batch_executor": {
+      "loop_lag_ms_p50": 0.12,
+      "loop_lag_ms_p99": 11.0,
+      "loop_lag_ms_max": 25.16,
+      "wall_s": 1.961
+    }
+  },
+  "terminate": {
+    "batch": "8x512",
+    "cases": [
+      {
+        "terminate_after_ms": 5.0,
+        "outcome": "Fail: [ONNXRuntimeError] : 1 : FAIL : Exiting due to terminate flag being set to true.",
+        "run_ms_total": 28.2,
+        "stopped_ms_after_terminate": 16.4
+      },
+      {
+        "terminate_after_ms": 20.0,
+        "outcome": "Fail: [ONNXRuntimeError] : 1 : FAIL : Exiting due to terminate flag being set to true.",
+        "run_ms_total": 44.3,
+        "stopped_ms_after_terminate": 24.2
+      },
+      {
+        "terminate_after_ms": 50.0,
+        "outcome": "Fail: [ONNXRuntimeError] : 1 : FAIL : Exiting due to terminate flag being set to true.",
+        "run_ms_total": 89.3,
+        "stopped_ms_after_terminate": 40.3
+      }
+    ],
+    "session_usable_after": true
+  },
+  "overload": {
+    "requests": 40,
+    "windows_per_request": 2,
+    "workers": 2,
+    "max_windows_in_flight": 8,
+    "budget_s": 0.25,
+    "outcomes": {
+      "overloaded": 36,
+      "timeout": 4
+    },
+    "terminated_runs": 4,
+    "answer_ms_p50": 0.0,
+    "answer_ms_max": 258.3,
+    "in_flight_after_drain": 0
+  },
+  "process_pool": {
+    "start_incl_session_s": 5.76,
+    "child_rss_mb": 1050.8,
+    "process_pool_128tok_ms_p50": 163.7,
+    "in_process_128tok_ms_p50": 183.8,
+    "ipc_overhead_ms_p50_estimate": -20.1
+  },
+  "loadavg_at_end": [
+    7.50048828125,
+    6.353515625,
+    6.02783203125
+  ]
+}

@@ -1,0 +1,90 @@
+{
+  "ru_injection": {
+    "original": {
+      "p": 0.0008,
+      "lang_id": "ru"
+    },
+    "folded": {
+      "p": 0.0008,
+      "lang_id": "ru"
+    },
+    "fold_changed_text": true
+  },
+  "en_homoglyph_injection": {
+    "original": {
+      "p": 0.999,
+      "lang_id": "en"
+    },
+    "folded": {
+      "p": 0.999,
+      "lang_id": "en"
+    },
+    "fold_changed_text": true
+  },
+  "en_injection": {
+    "original": {
+      "p": 0.999,
+      "lang_id": "en"
+    },
+    "folded": {
+      "p": 0.999,
+      "lang_id": "en"
+    },
+    "fold_changed_text": false
+  },
+  "de_injection": {
+    "original": {
+      "p": 0.993,
+      "lang_id": "en"
+    },
+    "folded": {
+      "p": 0.993,
+      "lang_id": "en"
+    },
+    "fold_changed_text": false
+  },
+  "es_injection": {
+    "original": {
+      "p": 0.9749,
+      "lang_id": "en"
+    },
+    "folded": {
+      "p": 0.9749,
+      "lang_id": "en"
+    },
+    "fold_changed_text": false
+  },
+  "fr_injection": {
+    "original": {
+      "p": 0.9989,
+      "lang_id": "en"
+    },
+    "folded": {
+      "p": 0.9989,
+      "lang_id": "en"
+    },
+    "fold_changed_text": false
+  },
+  "zh_injection": {
+    "original": {
+      "p": 0.0877,
+      "lang_id": "zh"
+    },
+    "folded": {
+      "p": 0.0877,
+      "lang_id": "zh"
+    },
+    "fold_changed_text": false
+  },
+  "hi_injection": {
+    "original": {
+      "p": 0.0009,
+      "lang_id": "hi"
+    },
+    "folded": {
+      "p": 0.0009,
+      "lang_id": "hi"
+    },
+    "fold_changed_text": false
+  }
+}
