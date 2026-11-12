@@ -154,6 +154,25 @@ class ReconcileTests(TestCase):
             V2PlanDocument.objects.filter(organization__is_active=True).count(), active
         )
 
+    def test_a_systemic_failure_ends_the_sweep_early(self) -> None:
+        """Database down or schema not migrated: every publish fails and logs a traceback, so
+        the sweep stops after MAX_CONSECUTIVE_FAILURES instead of walking the whole fleet."""
+        for n in range(4):
+            Organization.objects.create(name=f"Down {n}", slug=f"f4-down-{n}")
+        calls: list[str] = []
+
+        def down(org: Any) -> dict[str, object]:
+            calls.append(org.slug)
+            return {"status": "unavailable", "org_id": org.slug}
+
+        with mock.patch.object(rollout, "MAX_CONSECUTIVE_FAILURES", 3), mock.patch(
+            "core.firewall_v2_publish.publish_for_org", side_effect=down
+        ):
+            note = rollout.reconcile(client=self.redis)
+        self.assertEqual((note["status"], note["published"], note["failed"]), ("incomplete", 0, 3))
+        self.assertEqual(len(calls), 3)
+        self.assertIsNone(self.redis.get(rollout.MARKER_KEY))
+
     def test_settling_retries_until_the_other_runner_is_gone(self) -> None:
         self.redis.set(rollout.LOCK_KEY, "dead-runner")
         waits: list[float] = []

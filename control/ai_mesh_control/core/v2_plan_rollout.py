@@ -50,6 +50,11 @@ LOCK_KEY = "v2plan:rollout:lock"
 LOCK_TTL_S = 300
 #: Orgs fetched per query (keyset pagination on the primary key).
 BATCH = 500
+#: Consecutive failed publishes that end a sweep early. A systemic failure (database down, schema
+#: not yet migrated) fails every org, and ``publish_for_org`` logs a traceback for each one, so
+#: without this a 100k-org fleet would log 100k tracebacks per attempt. One bad org does not stop
+#: the sweep; the sweep is incomplete either way, so it is retried.
+MAX_CONSECUTIVE_FAILURES = 50
 #: Deployment settings the publisher reads (``firewall_v2_map._setting``,
 #: ``firewall_v2_controls._setting``, ``firewall_v2_publish._dev_copy``). A change to any of them
 #: changes some org's document, so each is part of the fingerprint.
@@ -146,11 +151,14 @@ def fingerprint() -> str:
 
 
 def sweep(on_batch: Callable[[], None] | None = None) -> tuple[int, int]:
-    """Republish every active org, :data:`BATCH` per query. Returns ``(published, failed)``."""
+    """Republish every active org, :data:`BATCH` per query. Returns ``(published, failed)``.
+
+    Stops after :data:`MAX_CONSECUTIVE_FAILURES` failures in a row (``failed`` is then non-zero).
+    """
     from auth.models import Organization
     from core.firewall_v2_publish import publish_for_org
 
-    published = failed = 0
+    published = failed = streak = 0
     last = 0
     while True:
         batch = list(
@@ -163,8 +171,15 @@ def sweep(on_batch: Callable[[], None] | None = None) -> tuple[int, int]:
         for org in batch:
             if publish_for_org(org).get("status") == "published":
                 published += 1
-            else:
-                failed += 1
+                streak = 0
+                continue
+            failed += 1
+            streak += 1
+            if streak >= MAX_CONSECUTIVE_FAILURES:
+                logger.warning(
+                    "gateway-v2 plan rollout stopped after %d consecutive failures", streak
+                )
+                return published, failed
         last = batch[-1].pk
         if on_batch is not None:
             on_batch()
