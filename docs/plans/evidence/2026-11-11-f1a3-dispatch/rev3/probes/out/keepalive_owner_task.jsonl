@@ -1,0 +1,3 @@
+{"pattern": "owner task, cancel+await, then aclose", "ticks_before_event": 2, "event": [["content", "late"]], "teardown_error": null, "log": ["source closed"]}
+{"pattern": "aclose while the read is pending", "teardown_error": "aclose(): asynchronous generator is already running", "log": ["source closed"]}
+{"all_expectations_hold": true}

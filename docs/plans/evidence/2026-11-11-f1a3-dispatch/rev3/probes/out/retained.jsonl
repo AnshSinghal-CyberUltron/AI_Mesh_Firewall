@@ -1,0 +1,8 @@
+{"per_worker_rss_mib": 400, "max_request_bytes": 1048576, "shape": "short", "raw_bytes": 64671, "raw_plus_parsed_kib": 156, "plus_render_kib": 219, "peak_kib": 303, "factor_held": 3.47, "factor_peak": 4.79}
+{"per_worker_rss_mib": 400, "max_request_bytes": 1048576, "shape": "long", "raw_bytes": 57634, "raw_plus_parsed_kib": 118, "plus_render_kib": 174, "peak_kib": 254, "factor_held": 3.1, "factor_peak": 4.51}
+{"per_worker_rss_mib": 400, "max_request_bytes": 1048576, "shape": "short", "raw_bytes": 1043649, "raw_plus_parsed_kib": 2361, "plus_render_kib": 3380, "peak_kib": 4753, "factor_held": 3.32, "factor_peak": 4.66}
+{"per_worker_rss_mib": 400, "max_request_bytes": 1048576, "shape": "long", "raw_bytes": 983614, "raw_plus_parsed_kib": 1930, "plus_render_kib": 2891, "peak_kib": 4093, "factor_held": 3.01, "factor_peak": 4.26}
+{"per_worker_rss_mib": 1024, "max_request_bytes": 2684354, "shape": "short", "raw_bytes": 64671, "raw_plus_parsed_kib": 156, "plus_render_kib": 219, "peak_kib": 303, "factor_held": 3.47, "factor_peak": 4.79}
+{"per_worker_rss_mib": 1024, "max_request_bytes": 2684354, "shape": "long", "raw_bytes": 57634, "raw_plus_parsed_kib": 118, "plus_render_kib": 174, "peak_kib": 254, "factor_held": 3.1, "factor_peak": 4.51}
+{"per_worker_rss_mib": 1024, "max_request_bytes": 2684354, "shape": "short", "raw_bytes": 2672103, "raw_plus_parsed_kib": 6041, "plus_render_kib": 8651, "peak_kib": 12048, "factor_held": 3.32, "factor_peak": 4.62}
+{"per_worker_rss_mib": 1024, "max_request_bytes": 2684354, "shape": "long", "raw_bytes": 2622904, "raw_plus_parsed_kib": 5143, "plus_render_kib": 7705, "peak_kib": 10814, "factor_held": 3.01, "factor_peak": 4.22}
