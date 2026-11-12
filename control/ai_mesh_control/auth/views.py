@@ -725,6 +725,8 @@ class UserManagementListCreateView(APIView):
             User.objects.filter(Q(profile__roles__name__in=[admin_role, user_role]) | Q(is_superuser=True))
             .distinct()
             .order_by("email")
+            .select_related("profile")
+            .prefetch_related("profile__roles")
         )
         if org is not None:
             users = users.filter(profile__organization_id=org.id)

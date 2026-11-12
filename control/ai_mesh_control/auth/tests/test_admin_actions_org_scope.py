@@ -227,6 +227,29 @@ class AdminActionsOrgScopeTests(TestCase):
         self.assertEqual(self._client(self.super_a).get(url).status_code, 200)
         self.assertEqual(self._rows("cross_org_access"), [])
 
+    def test_user_list_query_count_does_not_grow_with_users(self):
+        # Reviewer B N5 on #122: one profile + one roles query per user (611 for ~300).
+        from auth.models import Role, UserProfile
+
+        role = Role.objects.get(name="platform_user")
+        client = self._client(self.orgless_super)
+        client.get("/api/auth/users/?offering=platform")  # warm-up (auth, content types)
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+
+        with CaptureQueriesContext(connection) as small:
+            client.get("/api/auth/users/?offering=platform")
+        for i in range(15):
+            u = User.objects.create_user(username=f"adm_bulk_{i}", email=f"adm_bulk_{i}@example.com")
+            profile, _ = UserProfile.objects.get_or_create(user=u)
+            profile.organization = self.org_a
+            profile.save(update_fields=["organization"])
+            profile.roles.add(role)
+        with CaptureQueriesContext(connection) as large:
+            resp = client.get("/api/auth/users/?offering=platform")
+        self.assertGreaterEqual(len(resp.json()), 15)
+        self.assertEqual(len(large.captured_queries), len(small.captured_queries))
+
     def test_staff_with_an_org_lists_only_own_org(self):
         resp = self._client(self.super_a).get("/api/auth/users/?offering=platform")
         self.assertEqual(resp.status_code, 200, resp.content)
