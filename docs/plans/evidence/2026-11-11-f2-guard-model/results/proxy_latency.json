@@ -1,0 +1,192 @@
+{
+  "what": "weight-free latency proxy: identical architecture, random weights",
+  "parameters": 70830722,
+  "parameters_match_real_export": true,
+  "host": {
+    "cpus": 2,
+    "cpu": "x86_64",
+    "loadavg_at_start": [
+      4.01,
+      3.69,
+      3.02
+    ],
+    "loadavg_at_end": [
+      4.95,
+      4.12,
+      3.27
+    ]
+  },
+  "versions": {
+    "python": "3.13.18",
+    "torch": "2.15.0+cpu",
+    "transformers": "5.22.2",
+    "onnx": "1.23.2",
+    "onnxruntime": "1.31.1",
+    "numpy": "2.5.4"
+  },
+  "timing": "batch 1, intra-op 1, inter-op 1, sequential, ORT_ENABLE_ALL, no spinning; thread CPU = time.thread_time_ns of the calling thread",
+  "variants": {
+    "fp32_dynamic": {
+      "export_s": 7.33,
+      "bytes": 284001363,
+      "exported_nodes": 4721,
+      "optimized_nodes": 1732,
+      "optimized_matmul_like": {
+        "FusedMatMul": 24,
+        "Gemm": 2,
+        "MatMul": 96
+      },
+      "per_window": [
+        {
+          "seq": 16,
+          "runs": 120,
+          "thread_cpu_ms_p50": 19.47,
+          "thread_cpu_ms_p99": 24.33,
+          "thread_cpu_ms_mean": 20.42,
+          "wall_ms_p50": 39.56,
+          "wall_ms_p99": 50.76
+        },
+        {
+          "seq": 64,
+          "runs": 80,
+          "thread_cpu_ms_p50": 40.73,
+          "thread_cpu_ms_p99": 52.14,
+          "thread_cpu_ms_mean": 41.58,
+          "wall_ms_p50": 82.06,
+          "wall_ms_p99": 109.54
+        },
+        {
+          "seq": 128,
+          "runs": 50,
+          "thread_cpu_ms_p50": 72.89,
+          "thread_cpu_ms_p99": 104.32,
+          "thread_cpu_ms_mean": 75.45,
+          "wall_ms_p50": 148.12,
+          "wall_ms_p99": 249.89
+        },
+        {
+          "seq": 256,
+          "runs": 25,
+          "thread_cpu_ms_p50": 169.13,
+          "thread_cpu_ms_p99": 209.71,
+          "thread_cpu_ms_mean": 175.98,
+          "wall_ms_p50": 344.1,
+          "wall_ms_p99": 423.53
+        },
+        {
+          "seq": 512,
+          "runs": 15,
+          "thread_cpu_ms_p50": 477.99,
+          "thread_cpu_ms_p99": 546.29,
+          "thread_cpu_ms_mean": 485.89,
+          "wall_ms_p50": 974.08,
+          "wall_ms_p99": 1101.93
+        }
+      ]
+    },
+    "int8_dynamic": {
+      "quantize_s": 7.66,
+      "weight_type": "QInt8",
+      "bytes": 86893491,
+      "exported_nodes": 4996,
+      "optimized_nodes": 1673,
+      "optimized_matmul_like": {
+        "DynamicQuantizeMatMul": 38,
+        "FusedMatMul": 24,
+        "MatMul": 24,
+        "MatMulIntegerToFloat": 36
+      },
+      "per_window": [
+        {
+          "seq": 16,
+          "runs": 120,
+          "thread_cpu_ms_p50": 9.89,
+          "thread_cpu_ms_p99": 14.9,
+          "thread_cpu_ms_mean": 10.16,
+          "wall_ms_p50": 21.45,
+          "wall_ms_p99": 30.87
+        },
+        {
+          "seq": 64,
+          "runs": 80,
+          "thread_cpu_ms_p50": 22.53,
+          "thread_cpu_ms_p99": 33.8,
+          "thread_cpu_ms_mean": 24.26,
+          "wall_ms_p50": 53.62,
+          "wall_ms_p99": 96.14
+        },
+        {
+          "seq": 128,
+          "runs": 50,
+          "thread_cpu_ms_p50": 43.47,
+          "thread_cpu_ms_p99": 62.29,
+          "thread_cpu_ms_mean": 46.98,
+          "wall_ms_p50": 108.81,
+          "wall_ms_p99": 183.36
+        },
+        {
+          "seq": 256,
+          "runs": 25,
+          "thread_cpu_ms_p50": 103.08,
+          "thread_cpu_ms_p99": 134.89,
+          "thread_cpu_ms_mean": 108.75,
+          "wall_ms_p50": 210.73,
+          "wall_ms_p99": 299.35
+        },
+        {
+          "seq": 512,
+          "runs": 15,
+          "thread_cpu_ms_p50": 370.69,
+          "thread_cpu_ms_p99": 444.22,
+          "thread_cpu_ms_mean": 370.11,
+          "wall_ms_p50": 777.59,
+          "wall_ms_p99": 1014.39
+        }
+      ]
+    },
+    "fp32_static_16": {
+      "export_s": 6.68,
+      "bytes": 283450122,
+      "exported_nodes": 1743,
+      "optimized_nodes": 587,
+      "optimized_matmul_like": {
+        "FusedMatMul": 12,
+        "Gemm": 74,
+        "MatMul": 36
+      },
+      "per_window": [
+        {
+          "seq": 16,
+          "runs": 120,
+          "thread_cpu_ms_p50": 19.23,
+          "thread_cpu_ms_p99": 25.66,
+          "thread_cpu_ms_mean": 20.18,
+          "wall_ms_p50": 42.43,
+          "wall_ms_p99": 60.52
+        }
+      ]
+    },
+    "fp32_static_64": {
+      "export_s": 7.36,
+      "bytes": 283503890,
+      "exported_nodes": 1743,
+      "optimized_nodes": 587,
+      "optimized_matmul_like": {
+        "FusedMatMul": 12,
+        "Gemm": 74,
+        "MatMul": 36
+      },
+      "per_window": [
+        {
+          "seq": 64,
+          "runs": 80,
+          "thread_cpu_ms_p50": 43.31,
+          "thread_cpu_ms_p99": 57.98,
+          "thread_cpu_ms_mean": 45.58,
+          "wall_ms_p50": 95.7,
+          "wall_ms_p99": 130.49
+        }
+      ]
+    }
+  }
+}

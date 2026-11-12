@@ -33,6 +33,15 @@ Backs `docs/plans/2026-11-11-f2-guard-model.md`. Prototype code only; nothing he
 | `manifest.py` | bundle + manifest build, boot verify, tamper matrix | `results/guard-manifest.json`, `guard-manifest.sha256`, `manifest_verify.json` | no (≈ 15 s CPU, mostly hashing) |
 | `ort_bytes_rss.py` | RSS of a session built from verified bytes, with and without onnxruntime's retained copy | `results/ort_bytes_rss.json` | no (3 × 2 s) |
 | `injection_lengths.py` | token lengths of the injection sets (overlap choice) | `results/injection_lengths.json` | no (seconds) |
+| `proxy_latency.py` (12 Nov) | **weight-free** latency proxy: DeBERTa-v3-xsmall architecture with random weights (parameter count asserted equal to the real 70,830,722), same exporter; thread-CPU and wall p50/p99 for fp32, fixed-shape fp32 and INT8 (`quantize_dynamic` QInt8) at 16–512 positions; optimised-graph node counts. Needs no gated file and no token | `results/proxy_latency.json` | no (80 s CPU; run with `nice -n 10` while ~7 jobs queued on the heavy lock) |
+
+**12 Nov.** The weights are no longer on this host and `HF_TOKEN` is not set, so every
+weight-dependent script above is pending. Plan §3.2 lists them. They run next in the GitHub
+`guard-model` workflow (plan §9.4), not on this host.
+
+`proxy_latency.py` ran in a separate venv outside the repo (`/home/claude/work/runs/f2-author/venv`),
+with the same pinned toolchain as `results/venv-freeze.txt`. Its ONNX files are under
+`/home/claude/work/runs/f2-author/out` and are not committed.
 
 Heavy steps ran as `flock /home/claude/work/.heavy.lock nice -n 10 <python> -I <script>`. The lock
 queue was ~1 hour deep (full suites of other agents), so the short steps ran with `nice -n 10`
