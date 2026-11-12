@@ -1,0 +1,13 @@
+# after: f4-author 6b4bee0fd; Reviewer A's unavailable_probe.py, import switched
+off      mcp_result text_300KB           -> 200 '' [{'name': 'output_guardrail', 'action': 'allow', 'ran': True}]
+off      mcp_result image_b64_200KB      -> 200 '' [{'name': 'output_guardrail', 'action': 'allow', 'ran': True}]
+off      mcp_result html_5000_entities   -> 200 '' [{'name': 'output_guardrail', 'action': 'allow', 'ran': True}]
+off      vector_upsert html_5000_entities -> (413, 'rag_ingest_too_large')
+monitor  mcp_result text_300KB           -> 200 '' [{'name': 'output_guardrail', 'action': 'allow', 'ran': True}]
+monitor  mcp_result image_b64_200KB      -> 200 '' [{'name': 'output_guardrail', 'action': 'allow', 'ran': True}]
+monitor  mcp_result html_5000_entities   -> 200 '' [{'name': 'output_guardrail', 'action': 'allow', 'ran': True}]
+monitor  vector_upsert html_5000_entities -> (413, 'rag_ingest_too_large')
+enforce  mcp_result text_300KB           -> 403 'output_blocked' [{'name': 'output_guardrail', 'action': 'block', 'ran': True}]
+enforce  mcp_result image_b64_200KB      -> 200 '' [{'name': 'output_guardrail', 'action': 'allow', 'ran': True}]
+enforce  mcp_result html_5000_entities   -> 403 'output_blocked' [{'name': 'output_guardrail', 'action': 'block', 'ran': True}]
+enforce  vector_upsert html_5000_entities -> (413, 'rag_ingest_too_large')

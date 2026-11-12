@@ -1,0 +1,4 @@
+# Reviewer A, PR #115 review 5869763490, head f1984718: r15_scope_probe.py run from gateway_v2/ with venv-ci. Copied verbatim below.
+input-scope rewrite, ingest: job stored stored: ['refund policy zebracode here']
+input-scope rewrite, rag query: 200 [{'stage': 'query', 'action': 'rewrite', 'reason': '', 'dropped': 0, 'rule_ids': ['rw']}, {'stage': 'retriever', 'action': 'allow', 'reason': 'unscorable=0,blocked=0,failed=0', 'dropped': 0, 'rule_ids': ['rw']}] context: ['refund policy zebracode here']
+input-scope rewrite, vector query: 200 ['refund policy zebracode here']

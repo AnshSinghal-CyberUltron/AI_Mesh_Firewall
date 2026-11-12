@@ -1,0 +1,11 @@
+# R9/R10 captured at f4-author 6b4bee0fd (gateway_v2 identical to develop 943a5f21 outside edge/rag_ingest.py and tests), run from gateway_v2/ with venv-ci
+## R9: python -m lint.check_tenant_scale
+exit=0 (output lines: 0)
+## R9: pytest tests/gates/test_check_tenant_scale.py
+13 passed in 0.74s
+## R10: grep -rn 'req.filter' gateway_v2/dispatch/vector_transports/ | wc -l
+0
+## R10: grep -n 'filters=True' gateway_v2/dispatch/vector_connectors.py
+268:    return Capabilities(filters=True, namespaces=namespaces, hybrid_search=hybrid_search)
+## R10: importers of dispatch.vector_transports outside the package and tests
+(end of list)
