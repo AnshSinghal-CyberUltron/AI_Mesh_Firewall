@@ -16,7 +16,7 @@ Each step says where to click, what to choose and why. GitHub renames menu items
 | Dependency graph | on (the SBOM lists 568 packages) |
 | Dependabot security updates | **off** |
 | Private vulnerability reporting | on |
-| Actions concurrency | **at most 8 jobs running at once since the move** (12 Nov 04:00–05:50 UTC, 41 runs, 187 jobs). Today's jobs waited p50 6.2 min, p90 15 min, max 26 min for a runner. Before the move (11 Nov 06:00–11:00 UTC, 97 runs) the peak was 22 and p90 0.6 min |
+| Actions concurrency | **queueing since the move**: on 12 Nov 04:00–06:40 UTC (90 runs, 420 jobs) at most 14 jobs ran at once, and jobs waited p50 3.7 min, p90 12.7 min, max 26 min for a runner. Before the move (11 Nov 06:00–11:00 UTC, 97 runs) the peak was 22, and p90 0.6 min |
 
 ## 1. Check the plan's Actions concurrency
 
@@ -24,7 +24,10 @@ Each step says where to click, what to choose and why. GitHub renames menu items
 
 **What:** confirm that the organisation is on GitHub Enterprise for Actions, and whether other repositories in the organisation hold runner slots.
 
-**Why:** GitHub documents 500 concurrent jobs on standard runners for Enterprise (20 for Free). This repository has not had more than 8 running at once since the move, and jobs queue for up to 26 minutes. Every other step speeds up CI only once runners are available. Sharding the gateway_v2 suite (PR #137) cuts the critical path from about 22 minutes of pytest to a few, but under an 8-job cap its 8 shards wait in the same queue.
+**Why:**
+- GitHub documents 500 concurrent jobs on standard runners for Enterprise (20 for Free).
+- Since the move, this repository has peaked at 14 running at once (22 before), and jobs wait a median 3.7 min and up to 26 min for a runner (before: median 0, p90 0.6 min). The numbers are in `docs/plans/evidence/2026-11-12-ci-gateway-v2-shards/actions-concurrency.txt` (PR #137).
+- Sharding the gateway_v2 suite (PR #137) cuts its critical path from about 22 minutes to under 5, but the 8 shards wait in the same queue. Every other step speeds up CI only once runners are available.
 
 ## 2. CodeQL: default setup or advanced
 
@@ -222,7 +225,7 @@ Its target also lists `refs/heads/"main"`, with literal quotes, which matches no
 
 | Area | What changes |
 |---|---|
-| Actions minutes | Standard runners start counting against the plan's **50,000 included minutes a month** (Linux 1×). Every job's minutes round up to the next whole minute, so 8 shards cost more minutes than one long job: see the per-push numbers in PR #137. Larger runners stay billed per minute as before |
+| Actions minutes | Standard runners start counting against the plan's **50,000 included minutes a month** (Linux 1×). Every job's minutes round up to the next whole minute, so 8 shards cost more minutes than one long job. Measured on PR #137, the gateway-v2 workflow costs 43 billed minutes per push sharded, against 29 unsharded (`ci-timings.txt` in its evidence). Fewer shards trade speed for minutes. Larger runners stay billed per minute as before |
 | Fork PRs | Forks become private and need your permission; the fork-approval setting matters less |
 | CodeQL and every SARIF upload | need **GitHub Code Security** (paid). Without it the CodeQL job fails (its `analyze` step uploads), and the scanners' SARIF upload steps fail softly (`continue-on-error`). Buy it, or remove the `codeql` job and run `setup_rulesets.sh --without-codeql` |
 | Dependency review | needs GitHub Code Security too; without it set `dependency-review-required: false` again |
