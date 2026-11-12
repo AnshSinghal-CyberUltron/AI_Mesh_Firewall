@@ -9,6 +9,13 @@ Environment (optional):
   ZEROSHIELD_ADMIN_PASSWORD  required in production; dev default if unset
   ZEROSHIELD_ORG_SLUG        default: zeroshield
   ZEROSHIELD_ORG_NAME        default: ZeroShield
+
+The account it makes is a superuser + staff, i.e. ZeroShield staff (owner decision
+12 Nov 2026, #122): never use it to provision a customer's admin (use
+POST /api/auth/users/ with role=admin). Promoting an EXISTING account that is not
+already a superuser needs --promote-existing, so a mistyped customer email cannot turn
+a customer into staff silently. Every flag change is written to AuditLog
+(privilege_change, via "manage.py ensure_zeroshield_admin").
 """
 
 from __future__ import annotations
@@ -16,7 +23,7 @@ from __future__ import annotations
 import os
 
 from django.contrib.auth import get_user_model
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
 
@@ -53,9 +60,19 @@ class Command(BaseCommand):
             action="store_true",
             help="Update password when the user already exists",
         )
+        parser.add_argument(
+            "--promote-existing",
+            action="store_true",
+            help="Allow making an existing NON-superuser account a superuser (ZeroShield staff)",
+        )
 
-    @transaction.atomic
     def handle(self, *args, **options):
+        from auth.privilege_audit import privilege_actor
+
+        with privilege_actor(None, "manage.py ensure_zeroshield_admin"), transaction.atomic():
+            self._handle(**options)
+
+    def _handle(self, **options):
         from auth.models import Organization, Role, UserProfile
         from core.models import FirewallConfig
 
@@ -107,6 +124,11 @@ class Command(BaseCommand):
             )
             user_created = True
         else:
+            if not user.is_superuser and not options["promote_existing"]:
+                raise CommandError(
+                    f"{email} exists and is not a superuser. This command makes ZeroShield staff; "
+                    "pass --promote-existing to promote this account on purpose."
+                )
             if options["reset_password"]:
                 user.set_password(password)
             user.is_staff = True
