@@ -52,12 +52,20 @@ on:
         type: number
         default: 40
 
+      runs-on:
+        description: >-
+          Runner label for the job. The callers in this repository pass the repository variable
+          AMF_RUNNER_HEAVY with an 'ubuntu-latest' fallback, so a larger runner is a settings
+          change, not a workflow edit.
+        type: string
+        default: ubuntu-latest
+
 permissions:
   contents: read
 
 jobs:
   django:
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runs-on }}
     timeout-minutes: ${{ inputs.timeout-minutes }}
     services:
       postgres:

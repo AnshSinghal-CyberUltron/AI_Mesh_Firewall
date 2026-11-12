@@ -6,15 +6,36 @@ on:
     branches:
       - revamp
 
+# Least privilege: every job only checks out and reads the repository. upload-artifact
+# authenticates with the runner's ACTIONS_RUNTIME_TOKEN, not GITHUB_TOKEN, so no job needs more.
+permissions:
+  contents: read
+
+# A new push to a PR cancels the run it supersedes, as in ci.yml and security.yml.
+concurrency:
+  group: gateway-v2-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+# Runners and timeouts (docs/ci/README.md, "Runners and timeouts"):
+# - Jobs that mostly run tests read `runs-on` from the repository variable AMF_RUNNER_HEAVY and
+#   fall back to the free standard runner when it is unset. image-digest stays on the standard
+#   runner: its LGW03-1 step runs the image with --cpus 2 and --cpus 4.
+# - Every job has a `timeout-minutes` several times its measured duration, so a hang fails the
+#   job instead of running to GitHub's 360-minute default. pytest-timeout (gateway_v2
+#   pyproject) fails a single hung test first and names it.
 jobs:
   structural-gates:
     runs-on: ubuntu-latest
+    # Install plus the lint gates take about 1 min; the full pytest runs in the shards below.
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: gateway_v2
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
       - name: Install v2 dev deps
@@ -45,14 +66,113 @@ jobs:
         run: .venv/bin/mypy --strict
       - name: GW14b console inventory matches this tree
         run: .venv/bin/python -m lint.check_console_inventory
-      - name: v2 pytest (placeholder + negative fixtures)
-        run: .venv/bin/python -m pytest -q
+
+  # The full gateway_v2 pytest, split by whole test file across the matrix below. Every shard
+  # collects the whole suite and runs only its own files (scripts/ci/amf_pytest_shards.py); the
+  # `gateway-v2 pytest` job then proves the shards ran every collected test exactly once. The
+  # shard jobs' names change with the shard count, so require `gateway-v2 pytest`, not them.
+  pytest-shard:
+    name: gateway-v2 pytest shard ${{ matrix.shard }}/${{ strategy.job-total }}
+    runs-on: ${{ vars.AMF_RUNNER_HEAVY || 'ubuntu-latest' }}
+    timeout-minutes: 20
+    strategy:
+      # Run every shard to the end, so one run lists every failing test.
+      fail-fast: false
+      matrix:
+        # The shard count is the length of this list (strategy.job-total); the plugin gets
+        # strategy.job-index, so the labels are display-only.
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
+    defaults:
+      run:
+        working-directory: gateway_v2
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - name: Install v2 dev deps
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install -q -e ".[dev,serve,conformance]"
+      - name: v2 pytest (this shard's test files)
+        env:
+          PYTHONPATH: ${{ github.workspace }}/scripts/ci
+          SHARD_INDEX: ${{ strategy.job-index }}
+          SHARD_COUNT: ${{ strategy.job-total }}
+        run: |
+          .venv/bin/python -m pytest -q -p amf_pytest_shards \
+            --shard-index "$SHARD_INDEX" --shard-count "$SHARD_COUNT" \
+            --shard-weights ../.github/ci/gateway-v2-test-durations.json \
+            --shard-report "$RUNNER_TEMP/gw2-shard/shard-$SHARD_INDEX.json"
+      - name: Upload shard report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: gw2-shard-${{ strategy.job-index }}
+          path: ${{ runner.temp }}/gw2-shard/
+          if-no-files-found: ignore
+          retention-days: 7
+          # "Re-run failed jobs" uploads the same name again; the aggregate then reads the newest.
+          overwrite: true
+
+  pytest:
+    # The check to require. Green only when every shard passed and the shards together selected
+    # every collected test exactly once. `always()`, not `!cancelled()`: GitHub counts a SKIPPED
+    # required check as passed, so this job must run, and fail, when a shard failed or the run
+    # was cancelled.
+    name: gateway-v2 pytest
+    needs: pytest-shard
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - name: Download shard reports
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: gw2-shard-*
+          path: ${{ runner.temp }}/gw2-shards
+          merge-multiple: true
+      - name: Shards partition the collected suite, and every shard passed
+        run: python scripts/ci/amf_pytest_shards.py verify "$RUNNER_TEMP/gw2-shards"
+      - name: Every shard job succeeded
+        if: always()
+        env:
+          RESULT: ${{ needs.pytest-shard.result }}
+        run: |
+          if [ "$RESULT" != "success" ]; then
+            echo "::error title=gateway-v2 pytest::the shard jobs ended '$RESULT'; open the failing shard's log"
+            exit 1
+          fi
+      - name: Per-file durations (to refresh .github/ci/gateway-v2-test-durations.json)
+        run: |
+          python scripts/ci/amf_pytest_shards.py weights "$RUNNER_TEMP/gw2-shards" > "$RUNNER_TEMP/gateway-v2-test-durations.json"
+          echo "::group::gateway-v2-test-durations.json"
+          cat "$RUNNER_TEMP/gateway-v2-test-durations.json"
+          echo "::endgroup::"
+      - name: Upload durations
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: gateway-v2-test-durations
+          path: ${{ runner.temp }}/gateway-v2-test-durations.json
+          retention-days: 14
+          overwrite: true
 
   secret-headers:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
       - name: Fail closed on any tracked OpenSSH/PEM key-shaped file
@@ -104,11 +224,14 @@ jobs:
 
   image-digest:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     env:
       SOURCE_DATE_EPOCH: "1704067200"
     steps:
-      - uses: actions/checkout@v4
-      - uses: docker/setup-buildx-action@v3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
         with:
           driver: docker-container
           driver-opts: |
@@ -153,7 +276,7 @@ jobs:
           print("lgw03_1_gha_ok")
           PY
       - name: Upload image id
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: gw00-image-id
           path: |
@@ -161,15 +284,18 @@ jobs:
             gw00-rootfs-layers.json
 
   openai-conformance:
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.AMF_RUNNER_HEAVY || 'ubuntu-latest' }}
+    timeout-minutes: 15
     env:
       PYTHONPATH: ${{ github.workspace }}/gateway:${{ github.workspace }}/shared:${{ github.workspace }}/gateway_v2
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "20"
       - name: Install v1 + suite deps
@@ -234,12 +360,15 @@ jobs:
           kill "$stub_pid" || true
 
   parity-harness:
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.AMF_RUNNER_HEAVY || 'ubuntu-latest' }}
+    timeout-minutes: 15
     env:
       PYTHONPATH: ${{ github.workspace }}/gateway:${{ github.workspace }}/shared:${{ github.workspace }}/gateway_v2
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
       - name: Install v2 + v1 scanner deps
@@ -263,7 +392,7 @@ jobs:
           ../.venv/bin/python -m gateway_v2.contracts.parity.generate 50000 /tmp/gw02-c2-coverage.json
           ../.venv/bin/python -m pytest tests/parity -q --tb=short --override-ini="addopts="
       - name: Upload C2 coverage
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: gw02-c2-coverage
           path: /tmp/gw02-c2-coverage.json

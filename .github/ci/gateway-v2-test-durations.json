@@ -1,0 +1,6 @@
+{
+ "format": 1,
+ "about": "Per-file pytest seconds (setup+call+teardown) from one CI run; balances scripts/ci/amf_pytest_shards.py. Regenerate with its `weights` command.",
+ "per_test_default": 1.0,
+ "files": {}
+}

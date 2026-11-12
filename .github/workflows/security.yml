@@ -69,3 +69,5 @@ jobs:
       contents: read
       security-events: write
       actions: read
+    with:
+      runs-on: ${{ vars.AMF_RUNNER_HEAVY || 'ubuntu-latest' }}
