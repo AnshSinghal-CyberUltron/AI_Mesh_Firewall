@@ -22,11 +22,23 @@ Three changes, each closing one part of that:
 The epoch-checked fill from C36 is kept verbatim: a principal enters the cache only at the cursor
 position this process has applied, so a lagging replica cannot re-admit a key revoked at a newer
 position.
+
+**Per-key quarantine.** A KEY record that fails verification on the delta path (a `RecordFault`)
+quarantines its key at the fault's index position. Evicting it alone was not enough: the next
+request re-read the store, and a store holding the key's OLDER, genuinely signed record (the
+pre-revocation ON record put back under the revocation's index entry) verifies on its own, so a
+revoked key was admitted again. While quarantined, `_fetch_once` refuses (503) any answer below the
+faulted position, including "absent". A verified record at or above it lifts the quarantine: a
+later delta (`on_delta`), or the request path once the stored record verifies and pairs with its
+index entry again (`StateRuntime.fetch_key`, `lift_quarantine`). The map is not capacity-bounded,
+because dropping an entry would re-admit the key; it holds at most one entry per key the signed
+KEY manifest counts, since every entry is a distinct index entry a verified round accounted for.
 """
 
 from __future__ import annotations
 
 import asyncio
+import itertools
 import json
 import time
 from collections import OrderedDict
@@ -55,6 +67,8 @@ class CacheStats:
     evicted: int
     single_flight_joins: int
     feed_seq: int
+    quarantined: int = 0
+    """Keys refused because their record failed verification. A gauge: the alert reads it."""
 
 
 class ProjectInvalid(StoreDataUnavailable):
@@ -87,6 +101,8 @@ def principal_of(record: SignedRecord, *, max_project_len: int | None = None) ->
         return None  # explicit OFF record: revoked
     try:
         body: object = json.loads(record.body)
+    except RecursionError as exc:
+        raise StoreDataUnavailable("key record body is nested too deeply") from exc
     except (ValueError, UnicodeDecodeError) as exc:
         raise StoreDataUnavailable(f"key record body is not valid JSON: {exc}") from exc
     if not isinstance(body, dict):
@@ -180,6 +196,8 @@ class IdentityCache:
         self._inflight: dict[str, asyncio.Task[Principal | None]] = {}
         self._touched: set[str] = set()
         """Keys a delta changed while their fill was in flight (N18). Bounded by `_inflight`."""
+        self._quarantined: OrderedDict[str, int] = OrderedDict()
+        """Key hash -> index position of its record that failed verification. See the module."""
         self._feed_seq = 0
         self._evicted = 0
         self._joins = 0
@@ -268,6 +286,13 @@ class IdentityCache:
             principal = await fetch(key_hash)
             if key_hash in self._touched:
                 continue
+            floor = self._quarantined.get(key_hash)
+            if floor is not None and (principal is None or principal.feed_seq < floor):
+                # Below the record that failed verification: a replayed older record, or one
+                # that is gone. Neither proves the key's current state, so refuse (503).
+                raise StoreDataUnavailable(
+                    "key record failed verification; refused until a verified record replaces it",
+                )
             if principal is None:
                 self._deny(key_hash)
                 return None
@@ -291,17 +316,65 @@ class IdentityCache:
         records: Iterable[SignedRecord] | Sequence[SignedRecord],
         feed_seq: int,
     ) -> tuple[str, ...]:
-        """Evict exactly the keys that changed. Returns what was evicted, for metrics."""
-        evicted: list[str] = []
+        """Evict exactly the keys that changed. Returns what was evicted, for metrics.
+
+        A verified record at or above a key's quarantined position lifts that quarantine.
+        """
+        keys: list[str] = []
         for record in records:
             if record.kind is not StateKind.KEY:
                 raise StoreDataUnavailable(f"{record.kind.value} record is not a key")
-            if record.key in self._inflight:
-                self._touched.add(record.key)
-            dropped = self._held.pop(record.key, None)
-            had_negative = self._negative.pop(record.key, None)
+            keys.append(record.key)
+            self.lift_quarantine(record.key, record.feed_seq)
+        return self.evict(keys, feed_seq)
+
+    def quarantine(self, faults: Iterable[tuple[str, int]], feed_seq: int) -> tuple[str, ...]:
+        """Fail these keys CLOSED: `(key_hash, index position)` of records that failed verification.
+
+        Nothing cached for them survives (`evict`), and until a verified record at or above the
+        position replaces it every fill is refused (`_fetch_once`). Returns what was evicted.
+        """
+        keys: list[str] = []
+        for key_hash, at in faults:
+            self._quarantined[key_hash] = max(at, self._quarantined.get(key_hash, at))
+            self._quarantined.move_to_end(key_hash)
+            keys.append(key_hash)
+        return self.evict(keys, feed_seq)
+
+    def quarantined_at(self, key_hash: str) -> int | None:
+        """The faulted index position this key is refused below, or None. O(1)."""
+        return self._quarantined.get(key_hash)
+
+    def lift_quarantine(self, key_hash: str, feed_seq: int) -> bool:
+        """A VERIFIED record of this key at `feed_seq`: lift its quarantine if it is not older."""
+        at = self._quarantined.get(key_hash)
+        if at is None or feed_seq < at:
+            return False
+        del self._quarantined[key_hash]
+        return True
+
+    def quarantined_for_recheck(self, limit: int) -> tuple[str, ...]:
+        """Up to `limit` quarantined keys, round robin, for a bounded re-check. O(limit)."""
+        visit = list(itertools.islice(self._quarantined, max(limit, 0)))
+        for key_hash in visit:
+            self._quarantined.move_to_end(key_hash)
+        return tuple(visit)
+
+    def evict(self, key_hashes: Iterable[str], feed_seq: int) -> tuple[str, ...]:
+        """Evict these key hashes, whatever their records say. Returns what was evicted.
+
+        Part of the fail-closed answer for a KEY record that failed verification (`quarantine`):
+        nothing cached for the key survives -- not a principal it may have revoked, not a
+        negative entry -- and a fill already in flight for the key is not cached either.
+        """
+        evicted: list[str] = []
+        for key_hash in key_hashes:
+            if key_hash in self._inflight:
+                self._touched.add(key_hash)
+            dropped = self._held.pop(key_hash, None)
+            had_negative = self._negative.pop(key_hash, None)
             if dropped is not None or had_negative is not None:
-                evicted.append(record.key)
+                evicted.append(key_hash)
         self._evicted += len(evicted)
         self._feed_seq = max(self._feed_seq, feed_seq)
         return tuple(evicted)
@@ -318,6 +391,7 @@ class IdentityCache:
             evicted=self._evicted,
             single_flight_joins=self._joins,
             feed_seq=self._feed_seq,
+            quarantined=len(self._quarantined),
         )
 
     # --- fills ---------------------------------------------------------------------------------
@@ -351,6 +425,12 @@ def identity_applier(cache: IdentityCache) -> Callable[[FeedRound], None]:
     """
 
     def apply(round_: FeedRound) -> None:
+        if round_.faults:
+            # A KEY record that failed verification: fail that key closed until a verified record
+            # at or above the fault's position replaces it (`quarantine`).
+            cache.quarantine(
+                ((fault.key, fault.feed_seq) for fault in round_.faults), round_.manifest.feed_seq,
+            )
         if round_.records:
             cache.on_delta(round_.records, round_.manifest.feed_seq)
         else:

@@ -9,13 +9,22 @@ is what GW05c is for.
 A malformed or unsupported body is a `CompileError`, not a `StoreDataUnavailable`: the record is
 genuinely signed, so the store is not at fault. The tenant keeps serving its previous valid plan
 and the round continues for every other tenant — GW05's "never fail to an empty plan".
+
+A body nested deeper than `MAX_BODY_DEPTH` is refused BEFORE `json` parses it. `json` decodes
+recursively, so a deep enough body raises `RecursionError`, and where that happens depends on how
+deep the caller's stack already is: the same record would compile in a worker thread and fail on
+the event loop, or on one gateway and not another. Measuring the depth first makes the verdict a
+property of the bytes alone, in one linear pass that never recurses.
 """
 
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from itertools import accumulate
+from types import MappingProxyType
 
 from gateway_v2.domain.category import Category
 from gateway_v2.domain.plan import (
@@ -36,6 +45,55 @@ from gateway_v2.plan.compiler import CompileError, RuleDraft
 from gateway_v2.plan.controls_codec import CONTROLS_VERSION, REQUIRES_CONTROLS, controls_body
 
 REQUIRES_REWRITE = "rewrite/1"
+
+MAX_BODY_DEPTH = 32
+"""The deepest array/object nesting a plan body may have.
+
+A published body is about five levels deep (body, rules, rule, condition, keywords), so 32 is
+far above anything the encoder produces and far below the ~1,000 frames `json` would need to
+raise `RecursionError`. The control plane's projector validates through `decode_plan_body` too,
+so both planes refuse the same bodies."""
+
+_STRING = re.compile(rb'"[^"]*"')
+_NOT_BRACKETS = bytes(byte for byte in range(256) if byte not in b"[]{}")
+"""Every byte but the four brackets: `bytes.translate` deletes them in one fast C pass."""
+_STEP = MappingProxyType({ord("["): 1, ord("{"): 1, ord("]"): -1, ord("}"): -1})
+_SLICE = 1 << 20
+"""Brackets summed per C call. Between slices the interpreter may switch threads, so a 16 MB
+bracket run holds the event loop for one slice (tens of ms), not for the whole run (~750 ms)."""
+
+
+def nesting_depth(raw: bytes) -> int:
+    """The deepest bracket nesting in ``raw``, outside JSON strings. Linear; never recurses.
+
+    Linear passes: drop every escaped backslash, then every escaped quote, so ``\\"`` cannot
+    end a string; drop every string (no bracket inside one counts); drop every byte that is not a
+    bracket (``bytes.translate``); then a running sum over the brackets. For any body ``json``
+    would parse, this is its exact depth; for a malformed one it is at least the depth ``json``
+    reaches before it gives up, because up to the first defect the text is valid JSON and the
+    passes read it exactly as ``json`` does. (Brackets after the first defect can be
+    under-counted -- ``]]][[[`` -- but ``json`` raises at that defect and never recurses into
+    them.)
+
+    Why the escapes are two ``bytes.replace`` calls and not one ``\\.`` regex: only ``\\\\``
+    and ``\\"`` can move where a string ends (every other escape stays inside its string,
+    which the next pass drops whole), and backslash pairs are consumed left to right exactly as
+    ``json`` consumes them. Each pass is one uninterruptible C call that holds the loop: the
+    regex took 694 ms on an 8 MB escape-dense body that ``json.loads`` decodes in 37 ms, and
+    the two replaces bring the whole scan to about 53 ms (reviewer B, PR #136). The results are
+    identical (`test_nesting_depth_matches_the_escape_regex`). For the same reason the non-bracket
+    bytes go by ``translate`` (a ``[^...]+`` regex took 150-280 ms on dense 8-16 MB bodies,
+    ``translate`` 6-20 ms), and the running sum is taken in `_SLICE`-sized steps, carrying the
+    depth from one slice to the next.
+    """
+    unescaped = raw.replace(b"\\\\", b"").replace(b'\\"', b"")
+    brackets = _STRING.sub(b"", unescaped).translate(None, _NOT_BRACKETS)
+    depth = deepest = 0
+    for start in range(0, len(brackets), _SLICE):
+        part = brackets[start:start + _SLICE]
+        deepest = max(deepest, max(accumulate(map(_STEP.__getitem__, part), initial=depth)))
+        depth += part.count(b"[") + part.count(b"{") - part.count(b"]") - part.count(b"}")
+    return deepest
 
 #: Capabilities a body may require: GW27 ``controls/1`` and GW33 ``rewrite/1``. An unknown entry is
 #: refused so an older gateway can never apply a body whose meaning it does not understand (fail
@@ -229,6 +287,9 @@ def _rag_settings(body: Mapping[str, object]) -> Mapping[str, object] | None:
 
 
 def _object(raw: bytes) -> Mapping[str, object]:
+    depth = nesting_depth(raw)
+    if depth > MAX_BODY_DEPTH:
+        raise CompileError(f"plan body nests {depth} levels deep, over {MAX_BODY_DEPTH}")
     try:
         parsed: object = json.loads(raw)
     except (ValueError, UnicodeDecodeError) as exc:

@@ -282,13 +282,22 @@ def encode_stamp(stamp: Stamp) -> bytes:
 
 
 def _envelope(raw: bytes | str | None, where: str) -> Mapping[str, object]:
-    """`where` already names what is being decoded, e.g. "ks manifest", "freshness stamp"."""
+    """`where` already names what is being decoded, e.g. "ks manifest", "freshness stamp".
+
+    Every envelope defect is `StoreDataUnavailable`, including one `json` raises as something
+    other than `ValueError`: a stored value nested past the interpreter's recursion limit raises
+    `RecursionError`, and letting that escape turned one bad stored value into an exception no
+    caller handles -- it aborted the whole state cycle, every kind, on every gateway reading it.
+    Envelopes are flat objects, so no legitimate one comes near that depth.
+    """
     if raw is None:
         raise StoreDataUnavailable(
             f"{where} missing (store empty, flushed or not yet re-hydrated)",
         )
     try:
         parsed: object = json.loads(raw)
+    except RecursionError as exc:
+        raise StoreDataUnavailable(f"{where} is nested too deeply to be an envelope") from exc
     except (ValueError, UnicodeDecodeError) as exc:
         raise StoreDataUnavailable(f"{where} is not valid JSON: {exc}") from exc
     if not isinstance(parsed, dict):
@@ -297,10 +306,25 @@ def _envelope(raw: bytes | str | None, where: str) -> Mapping[str, object]:
 
 
 def _text(env: Mapping[str, object], name: str, where: str) -> str:
+    """A text field that can be signed: a JSON `"\\ud800"` escape decodes to a lone surrogate,
+    which `str.encode` refuses with `UnicodeEncodeError` -- so it is refused HERE, as a store
+    fault, instead of escaping a decoder as an exception no caller expects. Only non-ASCII text
+    pays for the check."""
     value = env.get(name)
     if not isinstance(value, str):
         raise StoreDataUnavailable(f"{where} field {name!r} is not a string")
+    if not value.isascii():
+        try:
+            value.encode("utf-8")
+        except UnicodeEncodeError as exc:
+            raise StoreDataUnavailable(f"{where} field {name!r} is not valid UTF-8") from exc
     return value
+
+
+def _signed(signature: str, expected: str) -> bool:
+    """`hmac.compare_digest` raises `TypeError` on a non-ASCII `str`; a stored signature is not
+    ours to trust, so a non-ASCII one is simply a signature that does not match."""
+    return signature.isascii() and hmac.compare_digest(signature, expected)
 
 
 def _whole_value(value: object, where: str) -> int:
@@ -348,7 +372,7 @@ def decode_record(secret: bytes, kind: StateKind, raw: bytes | str | None) -> Si
     expected = record_signature(
         secret, kind, key, version, feed_seq, content_hash, deleted, op,
     )
-    if not hmac.compare_digest(signature, expected):
+    if not _signed(signature, expected):
         raise StoreDataUnavailable(f"{kind.value} record {key!r} fails its signature")
     return SignedRecord(
         kind=kind,
@@ -385,7 +409,7 @@ def decode_manifest(
     on_count = _whole(env, "on_count", where)
     signature = _text(env, "sig", where)
     expected = manifest_signature(secret, kind, version, feed_seq, count, on_count)
-    if not hmac.compare_digest(signature, expected):
+    if not _signed(signature, expected):
         raise StoreDataUnavailable(f"{kind.value} manifest fails its signature")
     if on_count > count:
         raise StoreDataUnavailable(
@@ -455,7 +479,7 @@ def decode_stamp(secret: bytes, raw: bytes | str | None) -> Stamp:
     expected = stamp_signature(
         secret, verified_at_ms, cursors, by, deep=deep, degraded=degraded,
     )
-    if not hmac.compare_digest(signature, expected):
+    if not _signed(signature, expected):
         raise StoreDataUnavailable(f"{STAMP_WHERE} fails its signature")
     return Stamp(
         verified_at=verified_at_ms / 1000,

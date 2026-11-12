@@ -90,6 +90,10 @@ def scope_is_on(record: SignedRecord) -> bool:
         return False
     try:
         body: object = json.loads(record.body)
+    except RecursionError as exc:
+        raise StoreDataUnavailable(
+            f"kill-switch record {record.key!r} body is nested too deeply",
+        ) from exc
     except (ValueError, UnicodeDecodeError) as exc:
         raise StoreDataUnavailable(
             f"kill-switch record {record.key!r} body is not valid JSON: {exc}",
@@ -291,10 +295,12 @@ class KillSwitchSnapshot:
     ) -> None:
         try:
             self._absorb_checked(records, attested_feed_seq, attested_engaged)
-        except StoreDataUnavailable:
+        except Exception:
             # Drift latch (C3): whatever was half-applied must not be served as fresh. Clearing the
             # stamp makes the snapshot STALE immediately, not after `stale_ms`; a later clean round
-            # sets it again.
+            # sets it again. ANY exception latches, not only `StoreDataUnavailable`: a parser that
+            # raised something else mid-delta has half-applied it just the same, and before this
+            # the snapshot kept reading FRESH on that half until `stale_ms` ran out.
             self._refreshed_at = None
             raise
         self._feed_seq = max(self._feed_seq, attested_feed_seq)

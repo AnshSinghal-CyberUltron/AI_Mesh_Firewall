@@ -228,7 +228,10 @@ class Projector:
             self._budgets(desired, current[StateKind.BUDGET], tally)
             deferred = self._key_adds(desired, current[StateKind.KEY], tally)
         except LeaseLost as exc:
-            LOG.warning("projector %s lost the lease mid-round: %s", self._holder, exc)
+            # The type only, as at every driver/store site below: a message can carry a DSN.
+            LOG.warning(
+                "projector %s lost the lease mid-round: %s", self._holder, type(exc).__name__,
+            )
             return self._summary(view, desired, tally, heartbeat=False, lease_lost=True)
         return self._summary(view, desired, tally, heartbeat=True, deferred=deferred)
 
@@ -237,7 +240,9 @@ class Projector:
         try:
             self._db.release_lease(self._holder)
         except Exception as exc:  # noqa: BLE001 - the TTL is the fallback
-            LOG.warning("projector %s could not release the lease: %s", self._holder, exc)
+            LOG.warning(
+                "projector %s could not release the lease: %s", self._holder, type(exc).__name__,
+            )
 
     # --- the phases, in order ------------------------------------------------------------------
 
@@ -350,10 +355,9 @@ class Projector:
         except Exception as exc:  # noqa: BLE001 - the signed record is durable; the seed retries
             if "budget-seed" not in self._noted:
                 LOG.warning(
-                    "projector could not seed a budget pool counter (%s: %s); the signed BUDGET "
+                    "projector could not seed a budget pool counter (%s); the signed BUDGET "
                     "record is durable and the next round retries the seed",
                     type(exc).__name__,
-                    exc,
                 )
                 self._noted = self._noted | {"budget-seed"}
 

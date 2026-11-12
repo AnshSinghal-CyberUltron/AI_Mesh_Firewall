@@ -169,9 +169,9 @@ class StateWriter:
                 records, manifest, engaged=engaged, chunk=self._chunk,
             )
         except Exception as exc:  # noqa: BLE001 - store, OS and driver errors alike
-            LOG.warning(
+            LOG.warning(  # the type only: a store driver's message can carry a host or a DSN
                 "state batch publish failed, durable in postgres, re-hydrator will publish: %s",
-                exc,
+                type(exc).__name__,
             )
             return WriteOutcome(
                 OK_PUBLISH_PENDING, kind, counters.version, counters.feed_seq, len(records),

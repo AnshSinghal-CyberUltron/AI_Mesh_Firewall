@@ -1,0 +1,10 @@
+load average before: (2.3935546875, 2.92919921875, 3.01318359375)
+body                                 bytes  depth  bound cpu ms  bound wall ms  decode cpu ms  decode wall ms
+plan 1 rule                            298      4         0.007          0.007          0.035           0.035
+plan 50 rules                        11951      4         0.160          0.160          0.617           0.722
+plan 500 rules                      119451      4         1.587          1.710          7.395          14.219
+1 MiB '[' (refused)                1048576 1048576        67.574        111.100         77.802         113.744
+1 MiB escapes in one string        1048578      0        48.681         75.687         52.272          71.354
+1 MiB empty strings                1048576      0        52.822         91.146         53.560          80.877
+1 MiB unterminated string          1048577      0         6.365          7.792          7.635          13.231
+load average after: (2.4873046875, 2.93212890625, 3.01220703125)

@@ -11,21 +11,40 @@ Three properties this module exists to guarantee, each measured by R2-02 or name
   more than the work.
 * **Per-kind isolation.** One kind's store or database error never stalls another's rounds
   (H7 / the rc3-state-p0 re-hydrator fix). `drain_all` reports every kind's outcome and raises
-  for none of them; the caller decides what a failure means for serving.
+  for none of them; the caller decides what a failure means for serving. That holds for ANY
+  exception a reader or an applier raises, not only `StoreDataUnavailable`: before it did, one
+  tenant's record that made the plan compiler raise `RecursionError` escaped `round_once`,
+  aborted `drain_all` before the kill-switch, key and budget kinds were read, and did so again
+  every cycle until every gate aged out -- on every gateway, because they all read that record.
+* **Per-record isolation, for the kinds that can fail one subject closed.** A kind listed in
+  `isolate_kinds` is polled with `isolate=True`: a record that fails verification arrives as a
+  `RecordFault` on the round and its applier fails that one subject closed. The round, its
+  cursor and every other tenant move on.
 
 A failed round does NOT advance the cursor. The next round retries from the same position, so a
 partially applied generation is never mistaken for a complete one.
+
+Logging names the kind and the exception TYPE only. Exception text from a decoder or a compiler
+can quote the record that caused it, and that record is a tenant's data. The one exception is a
+`StoreDataUnavailable` refusal: its message is code-written (it names a key and a position, never
+a body), so a STANDING refusal is logged once per change with that message, truncated -- the index
+key it names is unauthenticated and may be any length.
 """
 
 from __future__ import annotations
 
 import asyncio
+import logging
+import re
 from collections.abc import Awaitable, Callable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from typing import Protocol, runtime_checkable
 
 from gateway_v2.domain.state import START, Cursor, StateKind, StoreDataUnavailable
 from gateway_v2.runtime.state_feed import FeedReader, FeedRound
 from gateway_v2.runtime.state_stamp import StampView
+
+LOG = logging.getLogger("amf.gateway.state")
 
 Applier = Callable[[FeedRound], object]
 """Applies one round's records. Synchronous, so it may be handed to a worker thread.
@@ -37,8 +56,23 @@ synchroniser having to know the shape of it.
 Offload = Callable[[Callable[[], object]], Awaitable[None]]
 """Runs a synchronous apply somewhere other than the calling loop."""
 
+
+@runtime_checkable
+class RejectionCount(Protocol):
+    """An applier outcome that counts the verified records it refused to apply.
+
+    Structural, because the plan applier's `ApplyOutcome` lives in `plan`, above this layer.
+    An outcome without it counts zero.
+    """
+
+    @property
+    def rejected_count(self) -> int:
+        ...
+
 MAX_DRAIN_ROUNDS = 64
 """A drain stops here and reports lag rather than monopolising the loop."""
+
+_DIGITS = re.compile(r"\d+")
 
 
 @dataclass(frozen=True, slots=True)
@@ -62,6 +96,14 @@ class RoundReport:
     truncated: bool
     offloaded: bool
     error: str | None = None
+    rejected: int = 0
+    """Verified records the applier refused (the plan compiler's rejections): last-good kept."""
+
+    quarantined: int = 0
+    """Records that failed verification on an isolating kind: that subject is failed closed."""
+
+    in_flight: int = 0
+    """Index entries skipped because a newer publish landed mid-round (read again next round)."""
 
     @property
     def ok(self) -> bool:
@@ -93,12 +135,17 @@ class StateSynchroniser:
         offload: Offload = _in_thread,
         stamp: StampView | None = None,
         inline_kinds: frozenset[StateKind] = frozenset(),
+        isolate_kinds: frozenset[StateKind] = frozenset(),
     ) -> None:
         """`inline_kinds`: appliers that must never leave the loop, whatever the round size.
 
         The identity cache is unlocked loop-owned state (GW36 S3, N8); a thread-run applier
         would mutate it concurrently with request-path reads. The plan and kill-switch
         appliers lock, so they keep the offload.
+
+        `isolate_kinds`: kinds read with per-record isolation. List a kind here ONLY when its
+        applier fails every `round_.faults` subject closed: an applier that ignored them would
+        serve those subjects their pre-fault state, which is failing open.
         """
         if budget.records <= 0:
             raise ValueError("delta budget must be positive")
@@ -108,8 +155,13 @@ class StateSynchroniser:
         self._offload = offload
         self._stamp = stamp
         self._inline = inline_kinds
+        self._isolate = isolate_kinds
         self._cursors: dict[StateKind, Cursor] = {kind: START for kind in appliers}
         self._floors: dict[StateKind, Cursor] = {kind: START for kind in appliers}
+        self._failing: dict[StateKind, tuple[str, str]] = {}
+        """Each kind's current refusal as `(shape, type)`: a standing one logs once per change."""
+        self._stamp_failing: str | None = None
+        """The stamp read's current defect type, so a standing one logs once, not per cycle."""
 
     def cursor(self, kind: StateKind) -> Cursor:
         """Where this process IS: the generation it has actually applied."""
@@ -138,43 +190,108 @@ class StateSynchroniser:
         self._floors[kind] = floor
 
     async def round_once(self, kind: StateKind) -> RoundReport:
-        """One bounded round. Reports a failure instead of raising, so siblings keep running."""
+        """One bounded round. Reports ANY failure instead of raising, so siblings keep running.
+
+        `StoreDataUnavailable` is the expected refusal (an outage, drift, an ambiguous switch)
+        and its message is code-written, so it is carried. Anything else is a defect -- a
+        decoder or compiler raising on data it should have refused -- and is reported and logged
+        by type alone. Either way the cursor stays put and the next round retries.
+        """
         applier = self._appliers.get(kind)
         if applier is None:
             raise KeyError(f"no applier registered for {kind.value}")
         cursor = self.cursor(kind)
         try:
-            round_ = await self._reader.poll(
-                kind, cursor, limit=self._budget.records, floor=self.floor(kind),
-            )
-        except StoreDataUnavailable as exc:
-            return RoundReport(kind, cursor, 0, truncated=False, offloaded=False, error=str(exc))
+            round_ = await self._poll(kind, cursor)
+        except Exception as exc:  # noqa: BLE001 - one kind's fault must not stop its siblings
+            return self._failed(kind, cursor, exc, offloaded=False)
         offloaded = len(round_.records) > self._budget.offload_above and kind not in self._inline
         runner = self._offload if offloaded else _inline
+        outcome: list[object] = []
         try:
-            await runner(lambda: applier(round_))
-        except StoreDataUnavailable as exc:
-            # The applier refused the delta (drift, an ambiguous switch). The cursor stays put.
-            return RoundReport(
-                kind, cursor, 0, truncated=False, offloaded=offloaded, error=str(exc),
-            )
+            await runner(lambda: outcome.append(applier(round_)))
+        except Exception as exc:  # noqa: BLE001 - the applier refused the delta; cursor stays
+            return self._failed(kind, cursor, exc, offloaded=offloaded)
         self._cursors[kind] = round_.cursor
+        self._recovered(kind)
+        result = outcome[0] if outcome else None
         return RoundReport(
             kind=kind,
             cursor=round_.cursor,
             applied=len(round_.records),
             truncated=round_.truncated,
             offloaded=offloaded,
+            rejected=result.rejected_count if isinstance(result, RejectionCount) else 0,
+            quarantined=len(round_.faults),
+            in_flight=round_.in_flight,
         )
 
+    async def _poll(self, kind: StateKind, cursor: Cursor) -> FeedRound:
+        """`isolate` is passed only when set, so a non-isolating kind keeps its old call shape."""
+        limit, floor = self._budget.records, self.floor(kind)
+        if kind in self._isolate:
+            return await self._reader.poll(kind, cursor, limit=limit, floor=floor, isolate=True)
+        return await self._reader.poll(kind, cursor, limit=limit, floor=floor)
+
+    def _failed(
+        self,
+        kind: StateKind,
+        cursor: Cursor,
+        exc: Exception,
+        *,
+        offloaded: bool,
+    ) -> RoundReport:
+        """A refused round, as a report. Logs a standing refusal once per change, then not again.
+
+        A defect (anything but `StoreDataUnavailable`) is logged by type alone, at ERROR. A
+        `StoreDataUnavailable` refusal -- an outage, or a kill-switch or budget record that does
+        not verify, which refuses its whole kind by design -- is logged at WARNING with its
+        code-written message cut to 160 characters. "Once per change" compares the message with
+        its numbers removed, so a refusal whose positions move every cycle is still one line.
+        """
+        label = type(exc).__name__
+        if isinstance(exc, StoreDataUnavailable):
+            error = str(exc)
+            shape = _DIGITS.sub("N", error)
+            if self._failing.get(kind, ("", ""))[0] != shape:
+                LOG.warning(
+                    "state round refused: kind=%s error=%s detail=%.160s", kind.value, label, error,
+                )
+        else:
+            error = shape = label
+            if self._failing.get(kind, ("", ""))[0] != shape:
+                LOG.error("state round failed: kind=%s error=%s", kind.value, error)
+        self._failing[kind] = (shape, label)
+        return RoundReport(kind, cursor, 0, truncated=False, offloaded=offloaded, error=error)
+
+    def _recovered(self, kind: StateKind) -> None:
+        previous = self._failing.pop(kind, None)
+        if previous is not None:
+            LOG.warning("state round recovered: kind=%s after error=%s", kind.value, previous[1])
+
     async def drain(self, kind: StateKind, *, max_rounds: int = MAX_DRAIN_ROUNDS) -> RoundReport:
-        """Round until caught up, bounded. Reports the LAST round, so lag stays visible."""
+        """Round until caught up, bounded. One report for the whole drain.
+
+        The cursor, `truncated`, `offloaded` and `error` are the LAST round's, so lag and a
+        failure stay visible. The record counts are SUMMED over every round: a delta larger than
+        the budget (a bulk onboarding, every cold start's plan replay) takes several rounds, and
+        a record rejected or quarantined in an early one must still be counted -- reporting only
+        the last round's counts lost it.
+        """
         report = await self.round_once(kind)
+        total = report
         rounds = 1
         while report.ok and report.truncated and rounds < max_rounds:
             report = await self.round_once(kind)
+            total = replace(
+                report,
+                applied=total.applied + report.applied,
+                rejected=total.rejected + report.rejected,
+                quarantined=total.quarantined + report.quarantined,
+                in_flight=total.in_flight + report.in_flight,
+            )
             rounds += 1
-        return report
+        return total
 
     async def observe_stamp(self) -> bool:
         """Read the freshness stamp and raise every kind's floor from it. GW05b's call site.
@@ -198,6 +315,26 @@ class StateSynchroniser:
         # log belongs here and nowhere near it.
         self._stamp.note_freshness()
         return adopted
+
+    async def observe_stamp_isolated(self) -> None:
+        """`observe_stamp`, but nothing it raises stops the caller's drains.
+
+        A store that did not answer is the expected case: the view keeps what it had and ages
+        out on its own. Anything else is a defect someone must look at, logged by type, once per
+        change rather than once per cycle (a stamp the decoder cannot refuse cleanly would
+        otherwise log twice a second for as long as it stays in the store).
+        """
+        try:
+            await self.observe_stamp()
+        except StoreDataUnavailable:
+            self._stamp_failing = None
+        except Exception as exc:  # noqa: BLE001 - a stamp defect never stops the kinds' drains
+            error = type(exc).__name__
+            if self._stamp_failing != error:
+                LOG.error("freshness stamp read failed: error=%s", error)
+            self._stamp_failing = error
+        else:
+            self._stamp_failing = None
 
     def next_delay_s(
         self,
@@ -223,12 +360,7 @@ class StateSynchroniser:
         `drain` are the per-kind primitives underneath it and assume the floor is already
         current, so product code schedules THIS.
         """
-        try:
-            await self.observe_stamp()
-        except StoreDataUnavailable:
-            # The store did not answer the stamp read. The view keeps what it had and ages out
-            # on its own; the kinds are still drained, each reporting its own outcome.
-            pass
+        await self.observe_stamp_isolated()
         return tuple(
             [await self.drain(kind, max_rounds=max_rounds) for kind in self._appliers],
         )
@@ -248,11 +380,12 @@ class StateSynchroniser:
         cursor = self.cursor(kind)
         try:
             manifest = await self._reader.head(kind, cursor, self.floor(kind))
-        except StoreDataUnavailable as exc:
-            return RoundReport(kind, cursor, 0, truncated=False, offloaded=False, error=str(exc))
+        except Exception as exc:  # noqa: BLE001 - reported like any refused round
+            return self._failed(kind, cursor, exc, offloaded=False)
         moved = Cursor(version=manifest.version, feed_seq=manifest.feed_seq)
         mark(manifest.feed_seq)
         self._cursors[kind] = moved
+        self._recovered(kind)
         return RoundReport(kind=kind, cursor=moved, applied=0, truncated=False, offloaded=False)
 
     async def bootstrap_engaged(
@@ -274,9 +407,10 @@ class StateSynchroniser:
                 truncated=False,
             )
             adopt(round_)
-        except StoreDataUnavailable as exc:
-            return RoundReport(kind, cursor, 0, truncated=False, offloaded=False, error=str(exc))
+        except Exception as exc:  # noqa: BLE001 - reported like any refused round
+            return self._failed(kind, cursor, exc, offloaded=False)
         self._cursors[kind] = round_.cursor
+        self._recovered(kind)
         return RoundReport(
             kind=kind,
             cursor=round_.cursor,

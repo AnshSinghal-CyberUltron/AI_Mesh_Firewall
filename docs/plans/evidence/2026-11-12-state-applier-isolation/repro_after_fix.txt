@@ -1,0 +1,44 @@
+== rewrite_deep_regex
+  before: ready=True
+  cycle completed: plan=ok, ks=ok, key=ok, budget=ok
+  right after the cycle: good tenants served 100/100; hostile tenant 'victim': plan seq=1
+  after the bound: good tenants served 100/100; hostile tenant 'victim': plan seq=1
+  KEY cursor=2 BUDGET good-a0=True KS org:good-b0 engaged=True
+  metrics: {'amf_state_records_rejected_total{kind="plan"}': 1}
+  cycle_failures=0
+  after the 1500 ms freshness bound: ready=True (None)
+  log lines: 1; canary (payload) in logs: False; 'maximum recursion' text in logs: False
+    | plan record rejected: org='victim' feed_seq=52 error=RecursionError; the previous valid plan, if any, keeps serving
+== rewrite_overflow
+  before: ready=True
+  cycle completed: plan=ok, ks=ok, key=ok, budget=ok
+  right after the cycle: good tenants served 100/100; hostile tenant 'victim': plan seq=1
+  after the bound: good tenants served 100/100; hostile tenant 'victim': plan seq=1
+  KEY cursor=2 BUDGET good-a0=True KS org:good-b0 engaged=True
+  metrics: {'amf_state_records_rejected_total{kind="plan"}': 1}
+  cycle_failures=0
+  after the 1500 ms freshness bound: ready=True (None)
+  log lines: 1; canary (payload) in logs: False; 'maximum recursion' text in logs: False
+    | plan record rejected: org='victim' feed_seq=52 error=OverflowError; the previous valid plan, if any, keeps serving
+== signature
+  before: ready=True
+  cycle completed: plan=ok, ks=ok, key=ok, budget=ok
+  right after the cycle: good tenants served 100/100; hostile tenant 'victim': PlanUnavailable(plan_quarantined)
+  after the bound: good tenants served 100/100; hostile tenant 'victim': PlanUnavailable(plan_quarantined)
+  KEY cursor=2 BUDGET good-a0=True KS org:good-b0 engaged=True
+  metrics: {'amf_state_records_quarantined_total{kind="plan"}': 1}
+  cycle_failures=0
+  after the 1500 ms freshness bound: ready=True (None)
+  log lines: 1; canary (payload) in logs: False; 'maximum recursion' text in logs: False
+    | plan record quarantined: org='victim' feed_seq=52 error=StoreDataUnavailable; the tenant is refused until a verified record replaces it
+== deep_envelope
+  before: ready=True
+  cycle completed: plan=ok, ks=ok, key=ok, budget=ok
+  right after the cycle: good tenants served 100/100; hostile tenant 'victim': PlanUnavailable(plan_quarantined)
+  after the bound: good tenants served 100/100; hostile tenant 'victim': PlanUnavailable(plan_quarantined)
+  KEY cursor=2 BUDGET good-a0=True KS org:good-b0 engaged=True
+  metrics: {'amf_state_records_quarantined_total{kind="plan"}': 1}
+  cycle_failures=0
+  after the 1500 ms freshness bound: ready=True (None)
+  log lines: 1; canary (payload) in logs: False; 'maximum recursion' text in logs: False
+    | plan record quarantined: org='victim' feed_seq=52 error=StoreDataUnavailable; the tenant is refused until a verified record replaces it

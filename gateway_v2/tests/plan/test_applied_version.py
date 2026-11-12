@@ -66,7 +66,7 @@ def test_a_replica_past_the_freshness_bound_reports_no_version() -> None:
         now=clocks["a"],
         fresh_s=_FRESH_S,
     )
-    assert stale == {"replica_id": "b", "version": None, "fresh": False}
+    assert stale == {"replica_id": "b", "version": None, "fresh": False, "held_back": None}
     assert live["version"] == plan.version
     assert live["fresh"] is True
 

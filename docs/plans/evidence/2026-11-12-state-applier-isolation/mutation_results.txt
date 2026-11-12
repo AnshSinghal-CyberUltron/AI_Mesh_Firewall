@@ -1,0 +1,60 @@
+baseline (fix intact): exit=0 97 passed in 2.74s
+KILLED   M1 round_once catches only StoreDataUnavailable from the applier (develop): 1 failed, 96 passed in 2.75s
+KILLED   M2 the plan applier catches only CompileError (develop): 12 failed, 85 passed in 3.10s
+KILLED   M3 the reader ignores isolate=True (develop: one bad record refuses the round): 32 failed, 65 passed in 3.21s
+KILLED   M4 _envelope does not catch RecursionError (develop): 1 failed, 96 passed in 2.79s
+KILLED   M5 the snapshot serves last-known-good to a quarantined tenant: 1 failed, 96 passed in 2.81s
+KILLED   M6 no depth bound on plan bodies: 1 failed, 96 passed in 3.05s
+KILLED   M7 kill-switch drift latch only on StoreDataUnavailable (develop): 1 failed, 96 passed in 2.98s
+KILLED   M8a state loop logs exception text (develop): 1 failed, 96 passed in 2.96s
+KILLED   M8b projector service logs exception text (develop): 1 failed, 96 passed in 2.83s
+KILLED   M8c re-hydrator logs exception text (develop): 1 failed, 96 passed in 2.75s
+KILLED   M9 a plan rejection records the exception text: 12 failed, 85 passed in 3.02s
+KILLED   M10 the KEY applier ignores faults: 6 failed, 91 passed in 3.04s
+KILLED   M11 a faulted plan record keeps last-good instead of failing closed: 22 failed, 75 passed in 2.99s
+KILLED   M12 a faulted plan record is ignored (cursor moves, nothing quarantined): 22 failed, 75 passed in 3.25s
+KILLED   MA1/BM5 _in_flight drops the manifest bound (a moved index entry is skipped, not faulted): 1 failed, 96 passed in 2.74s
+KILLED   MA2 _in_flight drops the key check (another key's newer record is skipped): 1 failed, 96 passed in 2.99s
+KILLED   MA3 cursor from the last VERIFIED record, not the last index entry: 10 failed, 87 passed in 3.10s
+KILLED   MA4 _already_served orders against read(), not current(): 1 failed, 96 passed in 2.92s
+KILLED   MA5 the isolating reader catches only StoreDataUnavailable: 1 failed, 96 passed in 3.58s
+KILLED   MA6 the stamp read catches only StoreDataUnavailable: 1 failed, 96 passed in 4.24s
+KILLED   MA7 a KEY fault does not invalidate the GCRA cache: 1 failed, 96 passed in 4.70s
+SURVIVED MA8/BM3 a quarantine does not forget the snapshot's last-known-good (expected EQUIVALENT): 97 passed in 3.01s
+KILLED   MA9 nesting_depth without the escape passes: 4 failed, 93 passed in 2.70s
+KILLED   MA10 a verified no-op record does not clear what is held back: 2 failed, 95 passed in 3.30s
+KILLED   BM1 the snapshot's early return for a quarantined tenant is removed: 1 failed, 96 passed in 2.93s
+KILLED   BM2 PlanStore.read ignores a quarantine (the held plan is served): 18 failed, 79 passed in 3.64s
+KILLED   BM4 the plan applier ignores faults (cursor still moves): 22 failed, 75 passed in 3.34s
+KILLED   BM6 _in_flight also swallows an OLDER record under a newer score (a replay): 7 failed, 90 passed in 3.36s
+KILLED   BM7 KS and BUDGET are isolated too: 2 failed, 95 passed in 3.15s
+KILLED   BM8/B1 a KEY fault only evicts (the reviewed head: no quarantine): 3 failed, 94 passed in 3.05s
+KILLED   R1 fetch_key does not pair the record with its index entry (B1, B's P2): 2 failed, 95 passed in 3.25s
+KILLED   R2 fetch_key answers an indexed key with no record as absent (A's N3): 1 failed, 96 passed in 2.96s
+KILLED   R3 a quarantined key's fill is not refused below its position: 1 failed, 96 passed in 3.12s
+KILLED   R4 a verified KEY delta record does not lift a quarantine: 1 failed, 96 passed in 2.88s
+KILLED   R5 a verified, paired fetch does not lift a quarantine: 1 failed, 96 passed in 2.79s
+KILLED   R6 a quarantine lifts for a record below its position: 1 failed, 96 passed in 2.94s
+KILLED   R7 a KEY fault does not tell the revocation ledger: 2 failed, 95 passed in 3.04s
+KILLED   R8 a rejection lifts a quarantine (the reviewed head): 2 failed, 95 passed in 3.10s
+KILLED   R9 a rejection keeps a quarantine even for the quarantined record itself: 2 failed, 95 passed in 3.03s
+KILLED   R10 clear_held lifts a quarantine from below its position: 1 failed, 96 passed in 3.02s
+KILLED   R11 drain reports the last round's counts only (the reviewed head): 2 failed, 95 passed in 2.94s
+KILLED   R12 drain sums no rejections: 1 failed, 96 passed in 2.75s
+KILLED   R13 the in-flight skip is not counted: 1 failed, 96 passed in 2.72s
+KILLED   R14 the held-back gauge is not observed: 1 failed, 96 passed in 2.85s
+KILLED   R15 a standing StoreDataUnavailable refusal is not logged: 4 failed, 93 passed in 3.48s
+KILLED   R16 refusals are de-duplicated on the raw message (positions included): 1 failed, 96 passed in 3.25s
+KILLED   R17 the refusal detail is not cut: 1 failed, 96 passed in 3.49s
+KILLED   R18 a stamp defect is logged every cycle: 1 failed, 96 passed in 3.32s
+KILLED   R19 a non-ASCII signature reaches hmac.compare_digest (TypeError): 4 failed, 93 passed in 3.81s
+KILLED   R20 unencodable text is not refused by the decoder (UnicodeEncodeError): 2 failed, 95 passed in 3.53s
+KILLED   R21 a non-integral index score is truncated into a pairing position: 1 failed, 96 passed in 4.64s
+KILLED   R22 the quarantine re-check never runs: 1 failed, 96 passed in 3.17s
+KILLED   R23 the PLAN re-check does not pair the record with the quarantined position: 1 failed, 96 passed in 3.18s
+SURVIVED R24 the PLAN re-check applies a record whose index entry moved on: 97 passed in 3.47s
+KILLED   R25 the escaped-quote pass is dropped: 4 failed, 93 passed in 2.85s
+KILLED   R26 the depth scan's running sum restarts at 0 in every slice: 1 failed, 96 passed in 3.02s
+KILLED   R27 the depth scan does not carry the depth to the next slice: 1 failed, 96 passed in 2.79s
+restored (fix intact): exit=0 97 passed in 3.23s
+exit=1 wall=241s

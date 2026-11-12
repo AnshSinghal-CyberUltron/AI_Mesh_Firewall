@@ -524,7 +524,7 @@ def parse_isolation_body(
     """
     try:
         body: object = json.loads(record.body)
-    except (ValueError, UnicodeDecodeError):
+    except (ValueError, UnicodeDecodeError, RecursionError):
         return _malformed(model, record)
     if not isinstance(body, dict):
         return _malformed(model, record)

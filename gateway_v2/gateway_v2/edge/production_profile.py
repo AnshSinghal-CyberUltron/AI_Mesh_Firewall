@@ -457,7 +457,7 @@ def _wire_incident(
         # AC12: production never runs on a dev/fail-closed control source.
         if not isinstance(wiring.control_factory, KillSwitchControlFactory):
             raise ProfileError("production needs the real kill-switch control factory")
-        runtime.set_revocation_observer(wiring.ledger.observe)
+        runtime.set_revocation_ledger(wiring.ledger)
         LOG.info(
             "incident wiring: scope generation %d, catalog digest %s",
             KS_SCOPE_GENERATION, config.digest or "none",

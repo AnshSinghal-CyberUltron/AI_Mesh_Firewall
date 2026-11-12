@@ -1,0 +1,9 @@
+BM0 baseline (no mutation) => pytest: 91 passed in 2.73s || live p1: | FAIL-CLOSED
+BM1 snapshot: quarantined tenant falls through to last-known-good inside the window => pytest: 1 failed, 90 passed in 2.69s || live p1: | FAIL-CLOSED
+BM2 PlanStore.read ignores quarantine (the held v1 plan is served) => pytest: 18 failed, 73 passed in 4.84s || live p1: | SERVED (develop: last-good inside window)
+BM3 quarantine does not drop the snapshot's last-known-good => pytest: 91 passed in 2.55s || live p1: | FAIL-CLOSED
+BM4 plan applier ignores faults entirely (cursor still moves past them) => pytest: 22 failed, 69 passed in 3.24s || live p1: | SERVED (develop: last-good inside window)
+BM5 in-flight skip without the manifest bound (newer-than-index record inside the manifest is skipped, not faulted) => pytest: 1 failed, 90 passed in 2.84s || live p1: | FAIL-CLOSED
+BM6 in-flight skip also swallows an OLDER record under a newer score (replay) => pytest: 7 failed, 84 passed in 2.63s || live p1: | FAIL-CLOSED
+BM7 KS and BUDGET isolated too (their appliers ignore faults: an unreadable switch would read as off) => pytest: 2 failed, 89 passed in 2.59s || live p1: | FAIL-CLOSED
+BM8 a KEY fault only evicts the identity cache (no quarantine: the reviewed head) => pytest: 3 failed, 88 passed in 4.44s || live p1: | FAIL-CLOSED

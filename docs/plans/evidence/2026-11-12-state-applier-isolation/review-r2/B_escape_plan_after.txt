@@ -1,0 +1,2 @@
+  500 rules of 1,000 '"' (1.2 MB): gateway apply compiled, thread CPU    31.9 ms, worker wall    41.3 ms, longest loop stall    19.6 ms | projector validate_plan SIGNED CPU    43.5 ms
+ 4000 rules of 1,000 '"' (9.4 MB): gateway apply compiled, thread CPU   258.6 ms, worker wall   306.3 ms, longest loop stall    83.4 ms | projector validate_plan SIGNED CPU   378.7 ms

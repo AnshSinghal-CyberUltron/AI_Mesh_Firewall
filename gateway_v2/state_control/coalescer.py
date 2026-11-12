@@ -266,9 +266,9 @@ class CoalescingPublisher:
         try:
             self._record_write(record.key, record.kind, manifest.feed_seq)
         except Exception as exc:  # noqa: BLE001 - the push is a lossy hint; durability already stands
-            LOG.warning(
+            LOG.warning(  # the type only: a store driver's message can carry a host or a DSN
                 "nudge coalesce/emit failed, durable write stands, owner left to next round: %s",
-                exc,
+                type(exc).__name__,
             )
         return result
 
@@ -300,7 +300,7 @@ class CoalescingPublisher:
                 LOG.warning(
                     "batch nudge coalesce/emit failed, durable write stands, owner left to "
                     "next round: %s",
-                    exc,
+                    type(exc).__name__,
                 )
         return result
 
@@ -399,7 +399,7 @@ class CoalescingPublisher:
                     "flush_due emit failed for owner=%s kind=%s, left to next round: %s",
                     owner,
                     kind,
-                    exc,
+                    type(exc).__name__,
                 )
 
     def flush_all(self) -> None:
@@ -426,5 +426,5 @@ class CoalescingPublisher:
                     "flush_all emit failed for owner=%s kind=%s, left to backstop round: %s",
                     owner,
                     kind,
-                    exc,
+                    type(exc).__name__,
                 )
