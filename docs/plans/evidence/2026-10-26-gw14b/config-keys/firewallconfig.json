@@ -76,7 +76,7 @@
    "name": "organization",
    "quoted_in_gateway_v2": false,
    "quoted_in_v1_gateway": true,
-   "read_only": false
+   "read_only": true
   },
   {
    "exposed": true,
@@ -718,6 +718,7 @@
   "updated_by"
  ],
  "serializer_read_only": [
+  "organization",
   "updated_at",
   "connected_models",
   "allowed_models_list",

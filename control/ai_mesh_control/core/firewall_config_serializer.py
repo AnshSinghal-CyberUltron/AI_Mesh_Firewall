@@ -74,7 +74,17 @@ class FirewallConfigSerializer(serializers.ModelSerializer):
     class Meta:
         model = FirewallConfig
         exclude = ("id", "updated_by")
-        read_only_fields = ("updated_at", "connected_models", "allowed_models_list", "governance_stale_models")
+        # ``organization`` is decided by the view, never by the request body (#130). Writable, a
+        # PUT of {"organization": null} turned the caller's row into a platform-default row (served
+        # by the v1 gateway to every org without its own), and {"organization": <id>} moved it
+        # onto another org. It stays in the output.
+        read_only_fields = (
+            "organization",
+            "updated_at",
+            "connected_models",
+            "allowed_models_list",
+            "governance_stale_models",
+        )
 
     def get_connected_models(self, obj) -> list:
         org = self.context.get("organization")
