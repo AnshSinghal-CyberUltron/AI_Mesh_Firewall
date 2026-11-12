@@ -455,8 +455,12 @@ class Rehydrator:
                 errors.append((kind, f"ControlPlaneUnavailable: {exc}"))
                 faults.append((kind, FAULT_OUTAGE))
             except Exception as exc:  # noqa: BLE001 - store, driver and OS errors alike
-                LOG.warning("rehydrate round failed for kind=%s: %s", kind.value, exc)
-                errors.append((kind, f"{type(exc).__name__}: {exc}"))
+                # The type only, in the log and in the summary: an unanticipated exception's text
+                # is not ours to vouch for (it can quote a stored record or a driver's DSN).
+                LOG.warning(
+                    "rehydrate round failed for kind=%s: %s", kind.value, type(exc).__name__,
+                )
+                errors.append((kind, type(exc).__name__))
                 faults.append((kind, FAULT_ERROR))
         lag_s, lagging = self._source_check(db_down=db_down)
         minted, won = self._stamp(

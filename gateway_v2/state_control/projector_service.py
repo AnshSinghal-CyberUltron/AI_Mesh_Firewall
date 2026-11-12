@@ -277,7 +277,9 @@ class ProjectorService:
         try:
             summary = self._projector.round_once()
         except Exception as exc:  # noqa: BLE001 - a round may fail; the heartbeat then ages
-            LOG.warning("projection round failed: %s: %s", type(exc).__name__, exc)
+            # The type only: a round reads every tenant's rows, and an exception raised on one of
+            # them can quote it. Expected faults name themselves in their own warning lines.
+            LOG.warning("projection round failed: %s", type(exc).__name__)
             summary = None
         self._log_transition(summary)
         with self._lock:
