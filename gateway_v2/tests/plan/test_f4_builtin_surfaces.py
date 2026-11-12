@@ -14,6 +14,7 @@ The extension rows are new rule drafts, so they follow the D-8 gate (``V2_PLAN_N
 
 from __future__ import annotations
 
+import dataclasses
 import json
 from typing import Any
 
@@ -22,6 +23,7 @@ import pytest
 from gateway_v2.detect.base import DetectorContext
 from gateway_v2.detect.deterministic.detectors import BASE_DETECTORS
 from gateway_v2.detect.guard.backend import Budget
+from gateway_v2.domain.decision import Decision
 from gateway_v2.domain.plan import ExecutionPlan, Phase, Surface
 from gateway_v2.plan.compiler import compile_plan
 from gateway_v2.plan.document import decode_plan_body
@@ -80,10 +82,19 @@ def _plan(payload: dict[str, Any], rules_mode: str) -> ExecutionPlan:
     )
 
 
-def _decide(plan: ExecutionPlan, text: str, phase: Phase, surface: Surface) -> str:
+def _resolved(plan: ExecutionPlan, text: str, phase: Phase, surface: Surface) -> Decision:
     context = DetectorContext(phase=phase, rules=(), budget=Budget(1.0))
     findings = [f for detector in BASE_DETECTORS for f in detector().detect(text, context)]
-    return resolve(findings, plan, phase, surface=surface).disposition.value
+    return resolve(findings, plan, phase, surface=surface)
+
+
+def _decide(plan: ExecutionPlan, text: str, phase: Phase, surface: Surface) -> str:
+    return _resolved(plan, text, phase, surface).disposition.value
+
+
+def _decision(plan: ExecutionPlan, text: str, phase: Phase, surface: Surface) -> Decision:
+    """The full decision minus ``plan_version`` (the two plans differ in content hash)."""
+    return dataclasses.replace(_resolved(plan, text, phase, surface), plan_version="")
 
 
 @pytest.mark.parametrize(("text", "phase", "surface"), sorted(ENFORCED, key=repr))
@@ -101,14 +112,23 @@ def test_a_clean_text_stays_allowed_on_every_surface(surface: Surface) -> None:
         assert _decide(plan, CLEAN, phase, surface) == "allow"
 
 
-def test_monitor_gate_records_off_chat_and_changes_no_decision() -> None:
-    """D-8 default: the extension rows are MONITOR, which the resolver records but never lets
-    decide (``_winning_action`` takes ENFORCE rules only). Off-chat decisions stay as today."""
+def test_monitor_gate_publishes_off_chat_rows_and_changes_no_decision() -> None:
+    """D-8 default: the extension rows are published as ``flag``/``monitor``, and a MONITOR rule
+    never decides (``_winning_action`` takes ENFORCE rules only). Off-chat decisions stay as today.
+
+    A MONITOR match is NOT recorded either: the whole ``Decision`` (``per_finding``,
+    ``deciding_rules``) equals the one under ``off``, so the monitor phase leaves no trace,
+    metric or audit difference (Reviewers A-S1 and B-S1; issue #135). Pinned here so a change
+    that starts recording them updates this test deliberately.
+    """
     plan = _plan(_PAYLOAD, "monitor")
+    off = _plan(_PAYLOAD, "off")
     for (text, phase, surface), enforced in ENFORCED.items():
         got = _decide(plan, text, phase, surface)
         # The pre-existing chat rows keep their action; only the threat rows are gated there.
         assert got == (enforced if surface is Surface.CHAT else "allow"), (text, phase, surface)
+        if surface is not Surface.CHAT:
+            assert _decision(plan, text, phase, surface) == _decision(off, text, phase, surface)
     for surface in (Surface.EMBEDDINGS, Surface.MCP, Surface.RAG, Surface.VECTOR):
         rows = [rule for rule in plan.rules if surface in rule.surfaces]
         assert rows, surface

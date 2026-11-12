@@ -524,8 +524,10 @@ V2_PLAN_CONTROLS_ENABLED = os.environ.get("V2_PLAN_CONTROLS_ENABLED", "").strip(
     "on",
 }
 V2_PLAN_CONTROLS_ORGS = os.environ.get("V2_PLAN_CONTROLS_ORGS", "").strip()
-# off | monitor | enforce for the blocked-keyword and threat-intel rows. Default monitor: visible
-# in audit and trace, never blocking, until an owner moves it to enforce.
+# off | monitor | enforce for the blocked-keyword and threat-intel rows and the F4 built-in
+# extension rows. Default monitor: published as flag/monitor rows that never block, until an owner
+# moves it to enforce. The gateway does not record a MONITOR match in audit or trace today
+# (issue #135). A change here reaches every org: control republishes on start (core/v2_plan_rollout).
 V2_PLAN_NEW_RULES_MODE = os.environ.get("V2_PLAN_NEW_RULES_MODE", "monitor").strip().lower()
 
 # REST Framework configuration
