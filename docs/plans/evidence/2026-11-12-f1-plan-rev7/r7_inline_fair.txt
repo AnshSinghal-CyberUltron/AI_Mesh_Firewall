@@ -1,0 +1,27 @@
+one delta = 4.90 ms CPU (24644 chars); per-org bucket 25%, burst 10 ms; 3 s per run, median of 3
+| Worker-wide inline bucket | Busy orgs | Inline customer-regex share of the loop | Tenant B wall delay p50 | p99 | Loop CPU ahead of B p50 | p99 | max |
+|---|---|---|---|---|---|---|---|
+#   K=1 agg=0.25 refill=avail bypass=False: tenant B light stream inline 21, pushed off the loop 111 (16% inline)
+#   K=1 agg=0.25 refill=avail bypass=False: tenant B light stream inline 32, pushed off the loop 98 (25% inline)
+#   K=1 agg=0.25 refill=avail bypass=False: tenant B light stream inline 17, pushed off the loop 115 (13% inline)
+| 25%, refill by loop-available time | 1 | 25% | 0.2 ms | 5.7 ms | 0.10 ms | 5.46 ms | 10.9 ms |
+#   K=1 agg=0.25 refill=avail bypass=True: tenant B light stream inline 137, pushed off the loop 0 (100% inline)
+#   K=1 agg=0.25 refill=avail bypass=True: tenant B light stream inline 133, pushed off the loop 0 (100% inline)
+#   K=1 agg=0.25 refill=avail bypass=True: tenant B light stream inline 137, pushed off the loop 0 (100% inline)
+| 25%, refill by loop-available time, cheap-call bypass (rev 7) | 1 | 25% | 0.2 ms | 5.6 ms | 0.09 ms | 5.38 ms | 10.9 ms |
+#   K=2 agg=0.25 refill=avail bypass=False: tenant B light stream inline 7, pushed off the loop 107 (6% inline)
+#   K=2 agg=0.25 refill=avail bypass=False: tenant B light stream inline 8, pushed off the loop 105 (7% inline)
+#   K=2 agg=0.25 refill=avail bypass=False: tenant B light stream inline 10, pushed off the loop 108 (8% inline)
+| 25%, refill by loop-available time | 2 | 24% | 0.2 ms | 7.6 ms | 0.11 ms | 5.29 ms | 10.1 ms |
+#   K=2 agg=0.25 refill=avail bypass=True: tenant B light stream inline 136, pushed off the loop 1 (99% inline)
+#   K=2 agg=0.25 refill=avail bypass=True: tenant B light stream inline 137, pushed off the loop 0 (100% inline)
+#   K=2 agg=0.25 refill=avail bypass=True: tenant B light stream inline 135, pushed off the loop 1 (99% inline)
+| 25%, refill by loop-available time, cheap-call bypass (rev 7) | 2 | 24% | 0.2 ms | 7.8 ms | 0.11 ms | 5.38 ms | 11.1 ms |
+#   K=4 agg=0.25 refill=avail bypass=True: tenant B light stream inline 131, pushed off the loop 1 (99% inline)
+#   K=4 agg=0.25 refill=avail bypass=True: tenant B light stream inline 126, pushed off the loop 0 (100% inline)
+#   K=4 agg=0.25 refill=avail bypass=True: tenant B light stream inline 126, pushed off the loop 0 (100% inline)
+| 25%, refill by loop-available time, cheap-call bypass (rev 7) | 4 | 21% | 0.3 ms | 11.3 ms | 0.14 ms | 5.64 ms | 11.8 ms |
+#   K=6 agg=0.25 refill=avail bypass=True: tenant B light stream inline 121, pushed off the loop 1 (99% inline)
+#   K=6 agg=0.25 refill=avail bypass=True: tenant B light stream inline 128, pushed off the loop 0 (100% inline)
+#   K=6 agg=0.25 refill=avail bypass=True: tenant B light stream inline 122, pushed off the loop 1 (99% inline)
+| 25%, refill by loop-available time, cheap-call bypass (rev 7) | 6 | 21% | 0.3 ms | 12.9 ms | 0.14 ms | 6.00 ms | 11.1 ms |

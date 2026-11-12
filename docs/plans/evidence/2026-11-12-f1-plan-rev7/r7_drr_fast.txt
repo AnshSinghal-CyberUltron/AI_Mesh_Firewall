@@ -1,0 +1,18 @@
+| T | Heavy orgs | Scheduler | Light-pass wait p50 | p99 | max | Heavy orgs' share of the scan threads |
+|---|---|---|---|---|---|---|
+| 2 | 1 | rev 6: DRR only | 0.0 ms | 2.1 ms | 7.2 ms | 50% |
+| 2 | 1 | rev 7: fast lane | 0.0 ms | 2.0 ms | 5.6 ms | 50% |
+| 2 | 2 | rev 6: DRR only | 94.9 ms | 1008.3 ms | 1329.1 ms | 90% |
+| 2 | 2 | rev 7: fast lane | 0.0 ms | 2.0 ms | 5.6 ms | 50% |
+| 2 | 3 | rev 6: DRR only | 90.2 ms | 299.4 ms | 424.3 ms | 90% |
+| 2 | 3 | rev 7: fast lane | 0.0 ms | 2.0 ms | 5.6 ms | 50% |
+| 2 | 7 | rev 6: DRR only | 205.0 ms | 691.1 ms | 1480.7 ms | 90% |
+| 2 | 7 | rev 7: fast lane | 0.0 ms | 2.0 ms | 5.6 ms | 50% |
+| 4 | 1 | rev 6: DRR only | 0.0 ms | 2.1 ms | 6.5 ms | 75% |
+| 4 | 1 | rev 7: fast lane | 0.0 ms | 2.0 ms | 5.6 ms | 75% |
+| 4 | 2 | rev 6: DRR only | 41.3 ms | 141.1 ms | 202.5 ms | 95% |
+| 4 | 2 | rev 7: fast lane | 0.0 ms | 2.0 ms | 5.6 ms | 75% |
+| 4 | 3 | rev 6: DRR only | 51.6 ms | 181.9 ms | 246.2 ms | 95% |
+| 4 | 3 | rev 7: fast lane | 0.0 ms | 2.0 ms | 5.6 ms | 75% |
+| 4 | 7 | rev 6: DRR only | 96.4 ms | 369.0 ms | 503.7 ms | 95% |
+| 4 | 7 | rev 7: fast lane | 0.0 ms | 2.0 ms | 5.6 ms | 75% |

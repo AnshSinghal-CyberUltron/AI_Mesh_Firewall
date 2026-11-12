@@ -1,0 +1,6 @@
+part 1, properties over all 1114112 code points, violations: {'P1': 0, 'P2': 0, 'P3': 0, 'P4': 0, 'P6': 0}
+  code points a split at U+FFFF would lose (kept-whole rule): ['U+0149', 'U+0390', 'U+1FB2', 'U+1FC2', 'U+1FF2']
+part 2a: 20000 BMP ranges over 397 edge points (positive and negated): 0 mismatches, 46.1 s
+part 2b: 20000 random sets: 12 mismatches, 121.2 s
+part 2c: 586 items from Reviewer A's probes: 0 mismatches
+TOTAL: 40586 items, 12 mismatches; examples [('[^\\u1cbd\\u1fd3-\\u85e2\\u3063\\u1227-\\u1fc6\\u1f5c\\u68fe-\\u790e]', ['ῇ', 'ῒ']), ('[^\\u0557-\\u1f4f\\u0bfb\\W\\u1f57-\\uce08]', ['ὐ', 'ὒ', 'ὔ', 'ὖ']), ('[^\\U00018acc-\\U000611fc\\u0df2-\\u1fc1\\ua770-\\uc92c\\u1fc6-\\u5f67\\ua78d]', ['ῂ', 'ῄ']), ('[\\u134e\\U0002dcfe\\u1fbf-\\u5e7a\\u24e9-\\ueac1\\u0587-\\u1fb4\\uec35]', ['ͅ', 'Ι', 'ι', 'ᾶ', 'ᾷ']), ('[\\u0222-\\u0262\\u0264-\\u13f7\\s]', ['Ɣ', 'ɣ'])]; 172.2 s CPU; seed 1

@@ -1,0 +1,12 @@
+started 2026-11-12T09:42:24Z on vm, 2 CPUs
+/home/claude/work/runs/103-rev7-author/venv-cand/bin/python python 3.12.3 regex 2023.8.8 _regex .so sha256 ab284ecaf7ace845bca68ca225ad20635af0689f13f00b219879f568cbefaf28 memcap True
+/home/claude/work/runs/103-rev6-author/xlate6/clock/venv-tcpu/bin/python python 3.12.3 regex 2023.8.8 _regex .so sha256 64a8bac6ca333786a9121f2cd46d615f6e0cf358fdb7e516c199a85dee195b77 memcap False
+==5453==ASan runtime does not come first in initial library list; you should either link runtime to your application or manually preload it with LD_PRELOAD.
+a41884c21f4ea4e5092fe73f7c8f22f3c033e8708f5a76e4b27fdf3012038132  translate_prototype.py
+fddf4aa624deb955527200a53125ce08315d903e48885a5debeb14fb7eaba034  incremental.py
+41ae09f42c490a02dced56f5d40adf3dca25e0b0cc54b3c8d74678451e4d539b  _cased_table.py
+00bdce224ef52fa22c815223b93cb2f595003a5a891cb48acf58f6fe7bbf8d0c  gen_cased.py
+ceb08f8341359b102a9c9a4ec6b76f6980fc583f0b11a13a3ed226f5f2c955ea  clock/regex-2023.8.8-match-memory-cap.patch
+cb544353400b9870ff8d3018d0c7bf783873f18447566d5bd899783e8ef3cd7d  clock/regex-2023.8.8-thread-cputime.patch
+ccda1ce22b6b1bdcbb451c66e04f32acd078c0da5819751f3220b5fe96f71111  clock/regex-2023.8.8-upstream-611-614.patch
+finished 2026-11-12T10:27:59Z

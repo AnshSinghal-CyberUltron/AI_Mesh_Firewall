@@ -1,0 +1,17 @@
+== part 1: per-item cost of each feature (microseconds, cold, median of 5) ==
+item                                     real    units real/units
+literal item                              151      340       0.44
+set, 2 literal members                    243      580       0.42
+set, 32 literal members                   983     1825       0.54
+set, 8 narrow ranges                      577     1984       0.29
+set, 32 narrow ranges                    2590     7768       0.33
+set with 1 category (heavy)              1160     2240       0.52
+negated, 2 members (heavy)               1395     2240       0.62
+negated literal (heavy)                   767     1840       0.42
+clipped wide [A-U+FFEF] (heavy)          1380     2421       0.57
+astral-only wide range                    463      720       0.64
+BMP-to-astral [U+0001-astral]            5815    12942       0.45
+
+== part 2: 300 random rules, seed 4 ==
+accepted 300, refused 0; real/model ratio: median 0.44, p99 0.75, max 0.79 ('(?i)[\u2000\\s\\u0468\\u2860-\\U000ecf5a\\u5dcb-\\U00060b34\\w\\u0c58-\\uf')
+worst accepted rule: 17.8 ms of translation CPU (8 items, 23760 units); cap 50 ms; per-rule unit cap 24000

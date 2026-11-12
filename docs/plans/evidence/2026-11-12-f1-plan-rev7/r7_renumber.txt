@@ -1,0 +1,3 @@
+seed=1 patterns=3000 checked=15168 mismatch=0 count_wrong=0 refused=466 re_invalid=1270 examples=[]
+seed=2 patterns=3000 checked=15024 mismatch=0 count_wrong=0 refused=484 re_invalid=1264 examples=[]
+seed=3 patterns=3000 checked=14508 mismatch=0 count_wrong=0 refused=504 re_invalid=1287 examples=[]

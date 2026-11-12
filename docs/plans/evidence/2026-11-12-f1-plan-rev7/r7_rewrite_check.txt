@@ -1,0 +1,8 @@
+pattern '^(([^#]+))+#': accepted by the limits (size 36, units 79)
+template | (a) HEAD control: CPU / ticker gap     | (b) rev-7 control          | (c) rev-7 gateway: outcome, CPU / ticker gap    
+      20 |       47 ms /     52 ms                |      2.1 us, no regex     | no match                      0.0 ms /   1.1 ms
+      22 |      190 ms /    191 ms                |      3.1 us, no regex     | no match                      0.0 ms /   1.2 ms
+      24 |      772 ms /    780 ms                |      2.4 us, no regex     | no match                      0.0 ms /   1.3 ms
+      26 | not run (doubles per character)        |      2.3 us, no regex     | no match                      0.0 ms /   1.2 ms
+      28 | not run (doubles per character)        |      2.4 us, no regex     | no match                      0.0 ms /   1.2 ms
+     128 | not run (doubles per character)        |      6.9 us, no regex     | no match                      0.0 ms /   1.2 ms

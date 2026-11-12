@@ -1,0 +1,2 @@
+10 ordinary rules (868 B body): check_plan cold 1.85 ms, warm 1.42 ms -> x100k orgs 185 s; hash skip 1.1 us -> x100k orgs 0.11 s
+64 ordinary rules (5670 B body): check_plan cold 11.03 ms, warm 9.93 ms -> x100k orgs 1103 s; hash skip 4.7 us -> x100k orgs 0.47 s

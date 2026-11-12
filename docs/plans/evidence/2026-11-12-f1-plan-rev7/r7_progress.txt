@@ -1,0 +1,61 @@
+lock acquired 2026-11-12T09:42:24Z
+start gen_cased_check 09:42:24 load 1.39 1.45 1.43
+end   gen_cased_check 09:42:26 exit 0 2 s: clip properties (violations): {'P1': 0, 'P2': 0, 'P3': 0, 'P6': 0}
+start ci_clip 09:42:26 load 1.36 1.44 1.43
+end   ci_clip 09:45:21 exit 0 175 s: TOTAL: 40586 items, 12 mismatches; examples [('[^\\u1cbd\\u1fd3-\\u85e2\\u3063\\u1227-\\u1fc6\\u1f5c\\u68fe-\\u790e]', ['ῇ', 'ῒ']), ('[^\\u0557-\\u1f4f\\u0b
+start exhaustive 09:45:21 load 1.21 1.34 1.39
+end   exhaustive 09:48:01 exit 0 160 s: boundaries: 0 mismatches in 150.1s
+start exhaustive_boundary 09:48:01 load 1.65 1.54 1.46
+end   exhaustive_boundary 09:49:52 exit 0 111 s: one-sided boundaries: 60 patterns, 0 mismatches in 110.6s
+start icase 09:49:52 load 3.13 2.05 1.65
+end   icase 09:50:32 exit 0 40 s: part 0: 2927 literals, mismatches=0 in 39s
+start alt_exhaustive 09:50:32 load 2.53 2.04 1.67
+end   alt_exhaustive 09:56:37 exit 0 365 s: single-char alternations: 86640 patterns, 0 mismatches in 365s
+start alt_negated 09:56:37 load 1.75 2.07 1.83
+end   alt_negated 10:01:45 exit 0 308 s: one-code-point negations: 65040 patterns, 0 mismatches, 0 lone negated sets emitted; raw `regex` still merges: 3/3 (308s)
+start fuzz 10:01:45 load 1.99 1.95 1.84
+end   fuzz 10:06:13 exit 0 268 s: seed=13 patterns=6000 checks=44616 ok=5577 mismatch=0 rx-timeout=3 skipped=418 refused=0 compile-fail=0 re-hang=2 in 80.1s
+start incremental_fuzz 10:06:13 load 2.16 2.09 1.94
+end   incremental_fuzz 10:07:38 exit 0 85 s: seed=13 patterns=6000 incremental=5008 streams-ok=4999 steps=82301 mismatches=0 rx-timeouts=9 in 32.3s
+start renumber 10:07:38 load 1.52 1.91 1.89
+end   renumber 10:07:40 exit 0 2 s: seed=3 patterns=3000 checked=14508 mismatch=0 count_wrong=0 refused=504 re_invalid=1287 examples=[]
+start nesting 10:07:40 load 1.52 1.91 1.89
+end   nesting 10:07:44 exit 0 4 s: FAILURES: 0
+start estimate 10:07:44 load 1.48 1.89 1.88
+end   estimate 10:08:28 exit 0 44 s: seed=3 patterns=3400 checked=3241 refused=159 estimate-below-actual=0 accepted-but-re.compile-refuses=0 sets=3400 (patched 923) premise-violations=0 size ratio 
+start s1_test 10:08:28 load 1.32 1.80 1.85
+end   s1_test 10:08:29 exit 0 1 s: S1 tests pass: whole text 0.03 ms; 'refuse' refused at 28 chars; 'hold' decided [(0, 110)]; with a comma both 'hold' and the whole-text scan refuse
+start upstream_tests 10:08:29 load 1.32 1.80 1.85
+end   upstream_tests 10:08:30 exit 0 1 s: match-memory cap 16777216 tests run 100 failures 0 errors 0
+start ci_model 10:08:30 load 1.32 1.80 1.85
+end   ci_model 10:08:40 exit 0 10 s: worst accepted rule: 17.8 ms of translation CPU (8 items, 23760 units); cap 50 ms; per-rule unit cap 24000
+start ci_cost 10:08:40 load 1.27 1.77 1.84
+end   ci_cost 10:08:46 exit 0 6 s: plan of 8 '2-character sets (rev-6 worst)' rules: 0 accepted by the per-plan sums; gateway translate + compile of those 0 ms (cold, one pass)
+start mem_corpus 10:08:46 load 1.25 1.76 1.83
+end   mem_corpus 10:08:49 exit 0 3 s: largest charged growth over the corpus: 0.003 MiB
+start mem_nocap 10:08:49 load 1.23 1.74 1.83
+end   mem_nocap 10:08:56 exit 0 7 s: refcap     '(?:(\\w)\\1?)*(?!)'                     cap     0 MiB  512 KiB x3: timeout 405 ms, timeout 405 ms, timeout 407 ms   charged peak   136.0 MiB  RSS pe
+start mem_cap16 10:08:56 load 1.37 1.76 1.83
+end   mem_cap16 10:08:58 exit 0 2 s: refcap     '(?:(\\w)\\1?)*(?!)'                     cap    16 MiB  512 KiB x3: MemoryError 16 ms, MemoryError 17 ms, MemoryError 16 ms charged peak     9.0 MiB 
+start mem_speed 10:08:58 load 1.34 1.75 1.83
+end   mem_speed 10:10:13 exit 0 75 s: total 2402.8 ms; median per pattern 0.85 ms; _regex /home/claude/work/runs/103-rev7-author/venv-cand/lib/python3.12/site-packages/regex/_regex.cpython-312-x86_6
+start cross_tenant 10:10:13 load 1.15 1.60 1.77
+end   cross_tenant 10:10:30 exit 0 17 s: | 8 | 7 | 0/20 | 66.8 / 73.1 | 386 | 100.4 (136) |
+start s1_hold 10:10:30 load 2.27 1.82 1.84
+end   s1_hold 10:11:42 exit 0 72 s:   bullet list, 2 KiB: decided; 506 passes; ordinary rules left undecided 0 times; expensive rule timed out 2 times; CPU 0.35 s
+start rewrite_check 10:11:42 load 1.52 1.70 1.79
+end   rewrite_check 10:11:44 exit 0 2 s:      128 | not run (doubles per character)        |      6.9 us, no regex     | no match                      0.0 ms /   1.2 ms
+start idle 10:11:44 load 1.52 1.70 1.79
+end   idle 10:11:46 exit 0 2 s: openai 3.49.0 SSEDecoder over a stream with 4 keep-alive comments (7-byte chunks): 3 events: ['{"id":"c1","choices":[{"delta"', '{"id":"c1","choices":[{"delta"'
+start inline_fair 10:11:46 load 1.52 1.70 1.79
+end   inline_fair 10:12:41 exit 0 55 s: | 25%, refill by loop-available time, cheap-call bypass (rev 7) | 6 | 21% | 0.3 ms | 12.9 ms | 0.14 ms | 6.00 ms | 11.1 ms |
+start drr_fast 10:12:41 load 2.05 1.78 1.81
+end   drr_fast 10:12:46 exit 0 5 s: | 4 | 7 | rev 7: fast lane | 0.0 ms | 2.0 ms | 5.6 ms | 75% |
+start cost 10:12:46 load 1.97 1.77 1.81
+end   cost 10:12:52 exit 0 6 s: | 64 (same shapes) | 8 KiB | end only chars | 1 | 0.82 ms | 0.10 ms |
+start cache 10:12:52 load 1.89 1.75 1.81
+end   cache 10:12:57 exit 0 5 s: 64 ordinary rules: revision-7 charge 946 KiB per plan; plans resident in a 64 MiB cache: 69
+start check_plan 10:12:57 load 1.75 1.73 1.80
+end   check_plan 10:12:58 exit 0 1 s: 64 ordinary rules (5670 B body): check_plan cold 11.03 ms, warm 9.93 ms -> x100k orgs 1103 s; hash skip 4.7 us -> x100k orgs 0.47 s
+start asan 10:12:58 load 1.75 1.73 1.80
+end   asan 10:27:59 exit 0 901 s: {"seconds": 900.0, "workers": 2, "seed": 7, "patterns_scheduled": 132000, "totals": {"patterns": 132025, "compiled": 122480, "refused": 3, "invalid": 9542, "mat

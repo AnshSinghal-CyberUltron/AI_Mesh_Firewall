@@ -1,0 +1,1 @@
+S1 tests pass: whole text 0.03 ms; 'refuse' refused at 28 chars; 'hold' decided [(0, 110)]; with a comma both 'hold' and the whole-text scan refuse

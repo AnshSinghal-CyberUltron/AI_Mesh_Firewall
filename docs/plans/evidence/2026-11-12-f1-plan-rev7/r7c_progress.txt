@@ -1,0 +1,5 @@
+started 2026-11-12T10:29:07Z load 1.75 2.29 2.16; outside the heavy lock (about 2 min of CPU; the lock queue held 8 jobs)
+ab152878afc2ea652647738c4759385328f50777037099cc9c8540472d43d1ed  translate_prototype.py
+7d7d6dff61d2f15aaa2d9d77c4de1e6158ae61c3a28a063e436e76f8b626cae4  ci_clip_test.py
+ci_clip_test.py 1 20000 2b exit 0 150 s
+finished 2026-11-12T10:31:37Z load 2.96 2.68 2.33

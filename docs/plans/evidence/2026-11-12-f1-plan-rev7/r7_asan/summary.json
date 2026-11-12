@@ -1,0 +1,20 @@
+{
+ "summary": {
+  "seconds": 900.0,
+  "workers": 2,
+  "seed": 7,
+  "patterns_scheduled": 132000,
+  "totals": {
+   "patterns": 132025,
+   "compiled": 122480,
+   "refused": 3,
+   "invalid": 9542,
+   "matches": 52595924,
+   "timeouts": 1409,
+   "errors": 0
+  },
+  "child_deaths": 0,
+  "sanitizer_report_files": []
+ },
+ "deaths": []
+}

@@ -1,0 +1,38 @@
+== 1. one case-insensitive item, whole-item translation (ms, median of 5, cold) ==
+item                                      rev 6    rev 7  rev-7 ci_units
+[A-U+005A]                                 0.50     0.52             684
+[A-U+005A + astral range]                  0.87     0.85             864
+[A-U+0100]                                 0.35     0.43           1,999
+[A-U+0100 + astral range]                  0.61     0.64           2,179
+[A-U+1000]                                 1.15     1.00           2,141
+[A-U+1000 + astral range]                  1.67     1.21           2,321
+[A-U+4000]                                 2.34     1.16           2,318
+[A-U+4000 + astral range]                  2.57     1.31           2,498
+[A-U+FFEF]                                 6.11     1.33           2,381
+[A-U+FFEF + astral range]                  6.31     1.57           2,561
+[\x01-\U0001e943]                          6.31     5.77          12,902
+[\U00010400-\U0001e943]                    0.46     0.41             680
+
+== 2. Reviewer A's flat 64-set rule and 8-rule plan ==
+rev 6: check_limits(flat) 3.3 ms -> ok
+rev 6: translate(flat), no CPU cap 438.3 ms -> ok
+rev 6: translate(flat) with the 50 ms cap: TRANSLATED (the cap did not fire) after 414.1 ms; budget checks 1
+rev 6: 8-rule plan: check_plan 26 ms, 8 accepted, refused reasons []; gateway compile of the accepted rules 3439 ms
+rev 7: check_limits(flat) 0.7 ms -> Refused: case-insensitive verdict units 163790 over 24000
+rev 7: translate(flat), no CPU cap 93.7 ms -> ok
+rev 7: translate(flat) with the 50 ms cap: Refused: translation exceeded its CPU budget after 50.3 ms; budget checks 138
+rev 7: 8-rule plan: check_plan 7 ms, 0 accepted, refused reasons ['case-insensitive verdict units 161472 over 24000', 'case-insensitive verdict units 161499 over 24000', 'case-insensitive verdict units 161774 over 24000', 'case-insensitive verdict units 162328 over 24000', 'case-insensitive verdict units 162994 over 24000', 'case-insensitive verdict units 163587 over 24000', 'case-insensitive verdict units 164245 over 24000', 'case-insensitive verdict units 164919 over 24000']; gateway compile of the accepted rules 0 ms
+
+== 3. worst accepted shapes at the rev-7 limits (ci_units 24,000 per rule, 96,000 per plan; 64 items per rule) ==
+shape                              items  ci_units   check  translate  compile
+literals (64)                         64    21,760     0.5        9.7      2.0
+2-character sets (rev-6 worst)        41    23,780     0.5       10.3      1.9
+clipped full-BMP ranges                9    21,789     0.5       12.1      0.6
+negated literals                      13    23,920     0.2       10.0      0.6
+negated category sets                 10    22,400     0.2       13.5      2.0
+BMP-to-astral ranges                   1    12,942     0.1        5.9      0.2
+sets of 32 narrow ranges               2    15,536     0.8        5.1      1.2
+worst accepted shape: 13.5 ms of translation CPU, against the 50 ms cap
+plan of 8 'clipped full-BMP ranges' rules: 4 accepted by the per-plan sums; gateway translate + compile of those 22 ms (cold, one pass)
+plan of 8 'negated category sets' rules: 4 accepted by the per-plan sums; gateway translate + compile of those 25 ms (cold, one pass)
+plan of 8 '2-character sets (rev-6 worst)' rules: 0 accepted by the per-plan sums; gateway translate + compile of those 0 ms (cold, one pass)
