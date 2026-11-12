@@ -1,0 +1,32 @@
+# golden-freeze on PR #114 vs the last baseline run (pre-existing waiver, docs/ci/MERGE_POLICY.md 'Current waivers')
+baseline: run 42977201040 job 130378920740, head bd88e563 (suraj-revamp, PR #100), actions/checkout@v4 + setup-python@v5
+this PR : run 43009933149 job 130486687591, head 08625084, actions pinned by SHA (checkout v7.0.1, setup-python v7.1.0)
+gateway/ and shared/ tree ids: bd88e563 = develop 50cb47d6 = 08625084 = 409b8b98a696 / e6de7617502f (byte-identical code under test)
+
+## step results on this PR
+success	Set up job
+success	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+success	Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
+success	Install test deps
+success	Enforcement + policy engine unit tests
+failure	Chat pipeline golden freeze (offline; live cases skipped)
+skipped	Post Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
+success	Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+success	Complete job
+
+## pytest summaries (unit tests step, golden step)
+baseline: 34 passed in 0.19s;153 failed, 515 passed, 7 skipped in 10.31s;
+this PR : 34 passed in 0.28s;153 failed, 515 passed, 7 skipped in 15.97s;
+
+## failing tests: FAILED lines baseline=153 PR=153 (the 151 short ids below are the same lines truncated at the first space of a parametrised id)
+set of failing test ids: IDENTICAL
+failure messages (addresses normalised): IDENTICAL
+all failures are in: tests/golden/test_adversarial_attacks.py 
+
+## first 5 failures (both runs)
+FAILED tests/golden/test_adversarial_attacks.py::test_g101_parenthesized_digit_pii_detected_and_masked - AssertionError: card: parenthesized-digit PII not detected
+FAILED tests/golden/test_adversarial_attacks.py::test_g103_legacy_function_call_injection_blocked[g103_fc_dict_args-messages1] - AssertionError: g103_fc_dict_args: injection in legacy function_call not blocked (fail-open)
+FAILED tests/golden/test_adversarial_attacks.py::test_g103_legacy_function_call_injection_blocked[g103_fc_injection-messages0] - AssertionError: g103_fc_injection: injection in legacy function_call not blocked (fail-open)
+FAILED tests/golden/test_adversarial_attacks.py::test_g104_responses_function_call_defended_via_conversion[g104_fc_arguments-input_value0] - AssertionError: g104_fc_arguments: Responses injection not blocked via conversion path
+FAILED tests/golden/test_adversarial_attacks.py::test_g104_responses_function_call_defended_via_conversion[g104_fc_output-input_value1] - AssertionError: g104_fc_output: Responses injection not blocked via conversion path
+full FAILED lines (all 153, sorted, addresses normalised): IDENTICAL

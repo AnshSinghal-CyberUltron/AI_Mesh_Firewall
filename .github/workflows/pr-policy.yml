@@ -5,15 +5,21 @@
 #   main     <- staging, hotfix/*
 #
 # PRs into other branches (e.g. the `revamp` integration branch) get the size report only.
+#
+# Dependabot: when the PR author is exactly `dependabot[bot]` (the event's user.login, which no
+# person can register), the description-length and testing-heading rules are skipped: its body is
+# generated and cannot carry a testing section. The title (dependabot.yml gives it a `ci(deps):`
+# prefix) and promotion-path rules still apply. scripts/ci/test_pr_policy.py runs this script.
 name: PR policy
 
 on:
   pull_request:
     types: [opened, edited, synchronize, reopened, ready_for_review]
 
+# The job reads only the event payload (title, body, refs, line counts) and calls no API, so it
+# needs no pull-requests scope; contents: read is the repository-wide baseline.
 permissions:
   contents: read
-  pull-requests: read
 
 jobs:
   policy:
@@ -29,6 +35,7 @@ jobs:
           ADDITIONS: ${{ github.event.pull_request.additions }}
           DELETIONS: ${{ github.event.pull_request.deletions }}
           CHANGED_FILES: ${{ github.event.pull_request.changed_files }}
+          AUTHOR: ${{ github.event.pull_request.user.login }}
         run: |
           python3 - <<'PY'
           import os, re, sys
@@ -37,6 +44,8 @@ jobs:
           title, body = os.environ["TITLE"], os.environ.get("BODY") or ""
           lines = int(os.environ["ADDITIONS"]) + int(os.environ["DELETIONS"])
           files = int(os.environ["CHANGED_FILES"])
+          # Keyed on the event's author login, never on PR text: only GitHub's Dependabot app is `dependabot[bot]`.
+          dependabot = os.environ.get("AUTHOR", "") == "dependabot[bot]"
           errors, notes = [], []
 
           size = next(s for limit, s in ((50, "XS"), (200, "S"), (800, "M"), (2000, "L"), (10**12, "XL")) if lines <= limit)
@@ -51,10 +60,13 @@ jobs:
                   errors.append(
                       f"Title must follow Conventional Commits, e.g. 'fix(control): ...'. Allowed types: {types.replace('|', ', ')}."
                   )
-              if len(body.strip()) < 80:
-                  errors.append("Description is too short: say why, what changed, and how it was tested.")
-              if not re.search(r"^#+ .*(test|evidence|verification|validation)", body, re.I | re.M):
-                  errors.append("Description needs a testing section (a heading containing Test, Evidence, Verification or Validation).")
+              if dependabot:
+                  notes.append("Author is dependabot[bot]: description-length and testing-section rules skipped; CI checks are its tests.")
+              else:
+                  if len(body.strip()) < 80:
+                      errors.append("Description is too short: say why, what changed, and how it was tested.")
+                  if not re.search(r"^#+ .*(test|evidence|verification|validation)", body, re.I | re.M):
+                      errors.append("Description needs a testing section (a heading containing Test, Evidence, Verification or Validation).")
 
           allowed = {
               "staging": lambda h: h == "develop" or h.startswith("hotfix/"),

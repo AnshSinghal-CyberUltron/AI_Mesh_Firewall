@@ -15,6 +15,10 @@ The repository owner delegates reviewing and merging to the engineering agents (
    - Every code-scanning thread on the PR is answered in a PR comment: fixed, dismissed with a reason, or tracked. (Agents cannot resolve threads, so branch protection does not require resolution; this rule does.)
 4. **The PR is mergeable,** with no conflicts.
 5. **A push after a review that changes behaviour** needs the affected reviewer's re-check. The re-check may be confirmed in the merging reviewer's review.
+6. **CI and policy changes.**
+   - A PR that changes anything under `.github/`, `scripts/ci/` or `docs/ci/`, or a `.gitleaks*` file, needs Reviewer B's explicit sign-off on those files in B's review.
+   - Its description must name every gate it relaxes, under a heading such as "Gates relaxed". Relaxing a gate means a check removed or made non-blocking, a rule skipped or exempted, a baseline or allowlist widened, or a token permission broadened.
+   - A PR that relaxes nothing says so.
 
 Reviewer B merges, using a merge commit (`merge_method=merge`), which keeps the history readable and revertible.
 

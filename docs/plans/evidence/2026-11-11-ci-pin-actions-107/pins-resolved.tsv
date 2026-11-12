@@ -1,0 +1,14 @@
+repo	tag	tag_kind	commit_from_ls_remote	commit_from_fetch(rev-parse tag^{commit})	agree
+actions/checkout	v7.0.1	lightweight	3d3c42e5aac5ba805825da76410c181273ba90b1	3d3c42e5aac5ba805825da76410c181273ba90b1(commit)	MATCH
+actions/setup-python	v7.1.0	lightweight	6d4fd22b20465ccc0f7354476588e8df7c9ca0e0	6d4fd22b20465ccc0f7354476588e8df7c9ca0e0(commit)	MATCH
+actions/setup-node	v7.1.0	lightweight	949feb2413d6458794dcd2491c4babbbce0c15c1	949feb2413d6458794dcd2491c4babbbce0c15c1(commit)	MATCH
+actions/upload-artifact	v7.0.2	lightweight	cf430e030ddbb5b0abf93d22962f4752f3646cd9	cf430e030ddbb5b0abf93d22962f4752f3646cd9(commit)	MATCH
+docker/setup-buildx-action	v4.4.1	lightweight	f87e5991a6d7451dcb8d9637bfbc97413f497069	f87e5991a6d7451dcb8d9637bfbc97413f497069(commit)	MATCH
+docker/setup-buildx-action	v3.12.0	lightweight	8d2750c68a42422c14e847fe6c8ac0403b4cbd6f	8d2750c68a42422c14e847fe6c8ac0403b4cbd6f(commit)	MATCH
+github/codeql-action	v4.39.3	annotated	33d7b85da1a04171e211befe2c739303b9a4c066	33d7b85da1a04171e211befe2c739303b9a4c066(commit)	MATCH
+actions/dependency-review-action	v5.0.0	lightweight	a1d282b36b6f3519aa1f3fc636f609c47dddb294	a1d282b36b6f3519aa1f3fc636f609c47dddb294(commit)	MATCH
+aquasecurity/trivy-action	v0.36.0	annotated	ed142fd0673e97e23eac54620cfb913e5ce36c25	ed142fd0673e97e23eac54620cfb913e5ce36c25(commit)	MATCH
+trufflesecurity/trufflehog	v3.99.8	lightweight	ea68ca03c865c5f324e86e849ced20ed3cf9dbbb	ea68ca03c865c5f324e86e849ced20ed3cf9dbbb(commit)	MATCH
+google/osv-scanner-action	v2.7.1	annotated	32d3cd482bdadfb38b186c0ad1b031902d55d932	32d3cd482bdadfb38b186c0ad1b031902d55d932(commit)	MATCH
+amannn/action-semantic-pull-request	v6.1.2	lightweight	2252a14e810aa9b85c2d560bd7070c802206ecf6	2252a14e810aa9b85c2d560bd7070c802206ecf6(commit)	MATCH
+actions/labeler	v7.0.0	lightweight	bf12e9b00b37c5c0ca2b87b79b2daf7891dbda13	bf12e9b00b37c5c0ca2b87b79b2daf7891dbda13(commit)	MATCH

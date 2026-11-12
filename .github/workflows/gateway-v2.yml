@@ -6,6 +6,11 @@ on:
     branches:
       - revamp
 
+# Least privilege: every job only checks out and reads the repository. upload-artifact
+# authenticates with the runner's ACTIONS_RUNTIME_TOKEN, not GITHUB_TOKEN, so no job needs more.
+permissions:
+  contents: read
+
 jobs:
   structural-gates:
     runs-on: ubuntu-latest
@@ -13,8 +18,10 @@ jobs:
       run:
         working-directory: gateway_v2
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
       - name: Install v2 dev deps
@@ -51,8 +58,10 @@ jobs:
   secret-headers:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
       - name: Fail closed on any tracked OpenSSH/PEM key-shaped file
@@ -107,8 +116,10 @@ jobs:
     env:
       SOURCE_DATE_EPOCH: "1704067200"
     steps:
-      - uses: actions/checkout@v4
-      - uses: docker/setup-buildx-action@v3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
         with:
           driver: docker-container
           driver-opts: |
@@ -153,7 +164,7 @@ jobs:
           print("lgw03_1_gha_ok")
           PY
       - name: Upload image id
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: gw00-image-id
           path: |
@@ -165,11 +176,13 @@ jobs:
     env:
       PYTHONPATH: ${{ github.workspace }}/gateway:${{ github.workspace }}/shared:${{ github.workspace }}/gateway_v2
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "20"
       - name: Install v1 + suite deps
@@ -238,8 +251,10 @@ jobs:
     env:
       PYTHONPATH: ${{ github.workspace }}/gateway:${{ github.workspace }}/shared:${{ github.workspace }}/gateway_v2
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
       - name: Install v2 + v1 scanner deps
@@ -263,7 +278,7 @@ jobs:
           ../.venv/bin/python -m gateway_v2.contracts.parity.generate 50000 /tmp/gw02-c2-coverage.json
           ../.venv/bin/python -m pytest tests/parity -q --tb=short --override-ini="addopts="
       - name: Upload C2 coverage
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: gw02-c2-coverage
           path: /tmp/gw02-c2-coverage.json

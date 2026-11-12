@@ -3,17 +3,26 @@
 # once "Dependabot security updates" is enabled in the repo settings.
 version: 2
 updates:
+  # Every `uses:` is pinned to a commit SHA with its release in a comment
+  # (`owner/repo@<sha> # vX.Y.Z`); scripts/ci/workflow_guard.py fails CI otherwise. Dependabot
+  # matches the SHA to its release tag, moves it to the newer release's commit and rewrites the
+  # version comment. `directory: /` covers .github/workflows. The `ci(deps):` title prefix passes
+  # the Conventional Commits check in pr-policy.yml.
   - package-ecosystem: github-actions
     directory: /
     target-branch: develop
     schedule: { interval: weekly, day: monday }
+    commit-message: { prefix: ci, include: scope }
     groups:
       actions: { patterns: ["*"] }
 
+  # pip, npm and Docker updates are titled `build(deps): …` / `build(deps-dev): …`, which the
+  # Conventional Commits title rule in pr-policy.yml accepts.
   - package-ecosystem: pip
     directories: [/control, /gateway, /gateway_v2, /shared]
     target-branch: develop
     schedule: { interval: weekly, day: monday }
+    commit-message: { prefix: build, include: scope }
     open-pull-requests-limit: 5
     groups:
       python-minor-patch:
@@ -23,6 +32,7 @@ updates:
     directory: /frontend
     target-branch: develop
     schedule: { interval: weekly, day: monday }
+    commit-message: { prefix: build, include: scope }
     open-pull-requests-limit: 5
     groups:
       npm-minor-patch:
@@ -32,4 +42,5 @@ updates:
     directories: [/control, /gateway, /gateway_v2, /workers, /deploy, /services/mcp-broker]
     target-branch: develop
     schedule: { interval: weekly, day: monday }
+    commit-message: { prefix: build, include: scope }
     open-pull-requests-limit: 5

@@ -1,0 +1,16 @@
+# The 'workflow guard' step's run: script, extracted from reusable-infra-lint.yml with PyYAML and run with bash -e (RUNNER_TEMP=a scratch dir)
+--- SCRIPT='' (this branch)
+::notice title=workflow guard::skipped: workflow-guard-script is empty
+exit=0
+--- SCRIPT='scripts/ci/nope.py' (this branch)
+::error title=workflow guard::scripts/ci/nope.py not found; copy scripts/ci/workflow_guard.py into this repo or set workflow-guard-script: ''
+exit=1
+--- SCRIPT='scripts/ci/workflow_guard.py' (this branch)
+workflow_guard: OK: 13 files (+0 local actions followed), 55 `uses:` references, parser cross-check on, 0 findings
+exit=0
+--- SCRIPT='scripts/ci/workflow_guard.py' without workflow_guard.requirements.txt next to it
+::error title=workflow guard::scripts/ci/workflow_guard.requirements.txt not found; copy it next to scripts/ci/workflow_guard.py (hash-pinned PyYAML for the parser cross-check)
+exit=1
+--- SCRIPT='scripts/ci/workflow_guard.py' (origin/develop workflows)
+workflow_guard: FAIL: 13 files (+0 local actions followed), 55 `uses:` references, parser cross-check on, 17 findings
+exit=1

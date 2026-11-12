@@ -1,0 +1,33 @@
+$ diff -r <fixed tree>/.github/workflows <deliberately unpinned copy>/.github/workflows
+diff -r fixed/.github/workflows/chat-pipeline-golden.yml .github/workflows/chat-pipeline-golden.yml
+24,27d23
+< # Least privilege: the job only checks out and reads the repository.
+< permissions:
+<   contents: read
+< 
+diff -r fixed/.github/workflows/gateway-v2.yml .github/workflows/gateway-v2.yml
+21c21
+<       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+---
+>       - uses: actions/checkout@v4
+122c122
+<       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+---
+>       - uses: docker/setup-buildx-action@v4
+185c185
+<       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+---
+>       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+diff -r fixed/.github/workflows/pr-policy.yml .github/workflows/pr-policy.yml
+17a18
+>   pull-requests: write
+
+$ python3 scripts/ci/workflow_guard.py --require-yaml .github/workflows   # on the deliberately unpinned copy
+.github/workflows/reusable-django-ci.yml:64: notice [unpinned-image] image `${{ inputs.postgres-image }}` is an expression; pin its source by digest
+.github/workflows/chat-pipeline-golden.yml:1: error [permissions] no top-level `permissions:`; add `permissions: contents: read` and grant more only on the jobs that need it
+.github/workflows/gateway-v2.yml:21: error [unpinned-uses] `actions/checkout@v4` is pinned to `v4`, not a full 40-character commit SHA; use `owner/repo@<sha> # vX.Y.Z`
+.github/workflows/gateway-v2.yml:122: error [unpinned-uses] `docker/setup-buildx-action@v4` is pinned to `v4`, not a full 40-character commit SHA; use `owner/repo@<sha> # vX.Y.Z`
+.github/workflows/gateway-v2.yml:185: error [version-comment] `actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1` needs its release as a trailing comment, e.g. `# v1.2.3`
+.github/workflows/pr-policy.yml:18: error [top-level-write] top-level `permissions` grants `pull-requests: write`; grant it on the job that needs it
+workflow_guard: FAIL: 13 files (+0 local actions followed), 55 `uses:` references, parser cross-check on, 5 findings
+exit=1
