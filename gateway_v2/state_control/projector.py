@@ -34,6 +34,8 @@ import logging
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass, field
+from itertools import accumulate
+from types import MappingProxyType
 from typing import Any, Protocol
 
 from gateway_v2.detect.conditions import compile_conditions
@@ -74,6 +76,39 @@ _KEY_HASH = re.compile(r"[0-9a-f]{64}")
 
 _ORG_WIDE = "__global__"
 _DISABLE = "disable"
+
+MAX_PLAN_BODY_DEPTH = 32
+"""The deepest array/object nesting a plan body may have; measured BEFORE `json` parses it.
+
+A published body is at most five levels deep (body, rules, rule, condition, keywords). `json`
+decodes recursively, and how deep it gets before `RecursionError` depends on the C stack its
+caller already uses. So the projector, on its own stack, signed an unknown-key array ~9,996
+deep that every gateway applier, deeper in its own stack, then failed to decode (#117 review
+B1 / A-S2): one signed record aborted the PLAN round of the whole fleet. Measuring first makes
+the verdict a property of the bytes alone, and everything signed decodes on any stack.
+
+TWIN: the gateway applier's `gateway_v2.plan.document.MAX_BODY_DEPTH` / `nesting_depth`
+(fix/state-applier-isolation, #136) uses the same limit and the same three-pass scan. The two
+MUST agree: a body this projector signs must be one every gateway decodes.
+`tests/state_control/test_projector_body_depth.py` asserts it once both are on develop."""
+
+_JSON_ESCAPE = re.compile(r"\\.", re.DOTALL)
+_JSON_STRING = re.compile(r'"[^"]*"')
+_JSON_NOT_BRACKET = re.compile(r"[^\[\]{}]+")
+_JSON_STEP = MappingProxyType({"[": 1, "{": 1, "]": -1, "}": -1})
+
+
+def body_depth(raw: str) -> int:
+    """The deepest bracket nesting in ``raw``, outside JSON strings. Linear; never recurses.
+
+    The same three passes as the gateway's `nesting_depth`: drop every two-character escape (so
+    ``\\"`` cannot end a string), drop every string (a bracket inside one does not count), drop
+    everything that is not a bracket; then a running sum. For any body `json` would parse this
+    is its exact depth; for a malformed one it is at least the depth `json` reaches before the
+    first defect, where it raises without recursing further.
+    """
+    brackets = _JSON_NOT_BRACKET.sub("", _JSON_STRING.sub("", _JSON_ESCAPE.sub("", raw)))
+    return max(0, max(accumulate(map(_JSON_STEP.__getitem__, brackets)), default=0))
 
 
 class ProjectorDB(Protocol):
@@ -557,30 +592,43 @@ def validate_plan(slug: str, raw: str) -> tuple[Mapping[str, object] | None, int
     refuses is NOT a rejection: the gateway refuses that rule per request
     (`POLICY_REGEX_TIMEOUT`), and the count is reported so the console can show it.
 
-    No exception escapes. Anything the checks did not anticipate (a `RecursionError` from a
-    deeply nested body, say) makes THIS document not projectable, so the caller keeps the org's
-    previous record and the round still reaches the heartbeat for every other tenant. Letting it
-    escape would fail every round while the row exists, age the heartbeat, and fail the whole
-    fleet closed on one tenant's data.
+    A body nested deeper than `MAX_PLAN_BODY_DEPTH` is not projectable, decided before `json`
+    parses it, so the verdict does not depend on this caller's stack and nothing signed is too
+    deep for a gateway's.
+
+    No exception escapes. Anything the checks did not anticipate makes THIS document not
+    projectable, so the caller keeps the org's previous record and the round still reaches the
+    heartbeat for every other tenant. Letting it escape would fail every round while the row
+    exists, age the heartbeat, and fail the whole fleet closed on one tenant's data.
+
+    The reason is a fixed phrase, prefixed by the exception's TYPE where there is one: never an
+    exception's text and never a value from the body. It goes into a note the round logs, and an
+    exception raised on one tenant's row can quote that row (#118 S8). An operator with access to
+    the row gets the full message by running `compile_plan` on it.
     """
     try:
         return _validate_plan(slug, raw)
     except Exception as exc:  # noqa: BLE001 - one tenant's row must never stop the round
-        return None, 0, f"{type(exc).__name__}: {exc}"[:200]
+        return None, 0, f"{type(exc).__name__}: unanticipated fault while validating"
 
 
 def _validate_plan(slug: str, raw: str) -> tuple[Mapping[str, object] | None, int, str]:
+    if body_depth(raw) > MAX_PLAN_BODY_DEPTH:
+        return None, 0, f"body nests deeper than {MAX_PLAN_BODY_DEPTH} levels"
     try:
         parsed: Any = json.loads(raw)
-        if not isinstance(parsed, dict):
-            return None, 0, "body is not a JSON object"
+    except ValueError as exc:
+        return None, 0, f"{type(exc).__name__}: body is not valid JSON"
+    if not isinstance(parsed, dict):
+        return None, 0, "body is not a JSON object"
+    try:
         canonical = canonical_body(parsed)
     except (ValueError, UnicodeEncodeError) as exc:
-        return None, 0, f"{type(exc).__name__}: {exc}"[:200]
+        return None, 0, f"{type(exc).__name__}: no canonical form (NaN, Infinity, lone surrogate)"
     try:
         document = decode_plan_body(canonical)
         if document.org_id != slug:
-            return None, 0, f"body claims org {document.org_id!r}"
+            return None, 0, "body claims another org"
         plan = compile_plan(
             document.org_id,
             document.drafts,
@@ -588,8 +636,8 @@ def _validate_plan(slug: str, raw: str) -> tuple[Mapping[str, object] | None, in
             compiled_at=0.0,
             rag_settings=document.rag_settings,
         )
-    except CompileError as exc:
-        return None, 0, f"CompileError: {exc}"[:200]
+    except CompileError:
+        return None, 0, "CompileError: the plan does not compile"
     refused = sum(1 for item in compile_conditions(plan.rules).prepared if item.refused)
     return parsed, refused, ""
 

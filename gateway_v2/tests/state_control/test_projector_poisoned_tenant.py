@@ -17,7 +17,9 @@ import pytest
 
 from gateway_v2.domain.plan import ExecutionPlan, StreamingMode
 from gateway_v2.domain.state import StateKind
-from gateway_v2.plan.document import PlanDocument, encode_plan_body
+from gateway_v2.plan.compiler import CompileError, compile_plan
+from gateway_v2.plan.document import PlanDocument, decode_plan_body, encode_plan_body
+from gateway_v2.runtime.state_sig import canonical_body
 from state_control import projector as projector_module
 from state_control.projector import validate_plan
 from tests.plan.test_lgw05c_delta import _draft
@@ -83,15 +85,17 @@ def test_the_verdict_does_not_depend_on_the_projectors_stack(frames: int) -> Non
 def test_deeply_nested_json_is_not_projectable_and_does_not_raise(raw: str) -> None:
     body, refused, why = validate_plan("acme", raw)
     assert body is None and refused == 0
-    assert why.startswith("RecursionError: ") and len(why) <= 200
+    assert why == "body nests deeper than 32 levels", "refused before json recurses"
 
 
 def test_a_rewrite_rule_with_a_deep_condition_is_a_compile_error_not_an_exception() -> None:
     """`compile_plan` runs `check_template`, which compiles the rule's own condition."""
     raw = _body_with(DEEP, action="rewrite", rewrite_template="Removed by policy")
     body, _refused, why = validate_plan("acme", raw)
-    assert body is None and why.startswith("CompileError: ")
-    assert "condition pattern is refused" in why
+    assert body is None and why == "CompileError: the plan does not compile"
+    document = decode_plan_body(canonical_body(json.loads(raw)))
+    with pytest.raises(CompileError, match="condition pattern is refused"):
+        compile_plan("acme", document.drafts, compiled_at=0.0)
 
 
 def test_any_unanticipated_exception_is_not_projectable(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -101,7 +105,7 @@ def test_any_unanticipated_exception_is_not_projectable(monkeypatch: pytest.Monk
     monkeypatch.setattr(projector_module, "compile_plan", explode)
     body, refused, why = validate_plan("acme", _doc("acme"))
     assert body is None and refused == 0
-    assert why.startswith("RuntimeError: compiler bug") and len(why) == 200
+    assert why == "RuntimeError: unanticipated fault while validating", "the type, never the text"
 
 
 # --- the round: one poisoned tenant, everyone else keeps being projected ---------------------
