@@ -1,0 +1,190 @@
+{
+  "P10_keys_filter": {
+    "count_unfiltered": 2,
+    "count_with_is_active_true": 2,
+    "is_active_values": [
+      "False",
+      "True"
+    ],
+    "page_size_default": 2
+  },
+  "P11_scan_cap": {
+    "collapsed_pages": {
+      "0": {
+        "count": 4050,
+        "results": 100,
+        "scan_truncated": true
+      },
+      "3900": {
+        "count": 4050,
+        "results": 100,
+        "scan_truncated": true
+      },
+      "3990": {
+        "count": 4050,
+        "results": 10,
+        "scan_truncated": true
+      },
+      "4000": {
+        "count": 4050,
+        "results": 0,
+        "scan_truncated": true
+      }
+    },
+    "seeded_requests": 4050,
+    "uncollapsed_offset_4000": {
+      "count": 4050,
+      "results": 50
+    }
+  },
+  "P1_rule_writes": {
+    "plan_publishes_for_4_rule_writes": 4,
+    "plan_publishes_total": 5,
+    "policy_patch_with_initial_version_after_policy_write": 409,
+    "policy_patch_with_initial_version_after_rule_writes": 200,
+    "rule_create_status": 201,
+    "rule_delete_status": 204,
+    "rule_patch_status": 200,
+    "rules_in_db_now": [
+      [
+        "r1",
+        "redact",
+        50
+      ],
+      [
+        "r2",
+        "block",
+        5
+      ]
+    ],
+    "version_after_rule_create": 1,
+    "version_after_rule_delete": 1,
+    "version_after_rule_patch": 1,
+    "version_initial": 1
+  },
+  "P2_policy_test": {
+    "disabled_policy": {
+      "body": {
+        "detail": "Policy not found or disabled."
+      },
+      "status": 404
+    },
+    "draft_rule_in_body_prompt_matches_draft_only": {
+      "action": "allow",
+      "status": 200
+    },
+    "saved_rule_prompt": {
+      "action": "block",
+      "status": 200
+    }
+  },
+  "P3_logs": {
+    "200": {
+      "echoed": "ui-traffic-probe2-0001",
+      "records": [
+        {
+          "level": "INFO",
+          "logger": "core.signals",
+          "msg": "FirewallConfig synced to Redis (firewall:config:default) and published to config_updates",
+          "rid": "ui-traffic-probe2-0001"
+        },
+        {
+          "level": "INFO",
+          "logger": "mcp_connector.signals",
+          "msg": "MCP scan version bumped: mcp:scan_ver:default -> 3",
+          "rid": "ui-traffic-probe2-0001"
+        }
+      ],
+      "records_with_rid": 2,
+      "status": 200
+    },
+    "404": {
+      "echoed": "ui-detail-probe2-0002",
+      "records": [
+        {
+          "level": "WARNING",
+          "logger": "django.request",
+          "msg": "Not Found: /api/security/threat-feed/999999999/",
+          "rid": ""
+        }
+      ],
+      "records_with_rid": 0,
+      "status": 404
+    }
+  },
+  "P4_busy": {
+    "anonymous_status_when_idle": 401,
+    "anonymous_status_while_busy": 503,
+    "body": {
+      "detail": "Too many concurrent analytics queries",
+      "error": "analytics_busy"
+    },
+    "retry_after": null,
+    "status": 503
+  },
+  "P5_threat_feed_window": {
+    "default_hours": {
+      "count": 0,
+      "results": 0
+    },
+    "hours_8760": {
+      "count": 11,
+      "results": 1
+    }
+  },
+  "P6_params": {
+    "model_usage_days_abc": 200,
+    "owasp_hours_24_for_comparison": {
+      "status": 200,
+      "unique_events_count": 12
+    },
+    "owasp_hours_minus5": {
+      "status": 200,
+      "unique_events_count": 0
+    }
+  },
+  "P7_module_kpis_1_7_keys": [
+    "blocked",
+    "critical",
+    "flagged",
+    "redacted",
+    "total"
+  ],
+  "P8_siblings": {
+    "action": [
+      "redact",
+      "block"
+    ],
+    "event_ids": [
+      11,
+      12
+    ],
+    "id_returned": [
+      "11",
+      "12"
+    ],
+    "related_event_ids": [
+      [
+        "12"
+      ],
+      [
+        "11"
+      ]
+    ],
+    "request_id": [
+      "probe2-req-dual",
+      "probe2-req-dual"
+    ]
+  },
+  "P9_key_patch": {
+    "create_status": 201,
+    "final_name": "renamed in tab B",
+    "final_rate_limit": 5000,
+    "has_version_field": false,
+    "patch_statuses": [
+      200,
+      200,
+      200
+    ]
+  }
+}

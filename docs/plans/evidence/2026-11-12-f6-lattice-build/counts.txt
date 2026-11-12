@@ -1,0 +1,27 @@
+commit: 94b6a65ea6cfe98e3c458a7d455122837da18417
+frontend/src tree: 81157b28fbf709ddcd9be87eb59794e1876e097e
+A-05 raw Tailwind palette classes (.js/.jsx): 9746
+A-05 files containing them: 85
+A-05 top 10 files (occurrences, not lines):
+      713 ./frontend/src/components/MCPManagerPanel.jsx
+      591 ./frontend/src/components/PolicyManagementPanel.jsx
+      429 ./frontend/src/components/MCPScannerPanel.jsx
+      400 ./frontend/src/components/RAGAttackTrustSimulator.jsx
+      366 ./frontend/src/components/AttackSimulatorPanel.jsx
+      361 ./frontend/src/components/ModelConnectionPanel.jsx
+      305 ./frontend/src/components/simulator/StageTimeline.jsx
+      287 ./frontend/src/pages/AIMeshFirewallOverview.jsx
+      275 ./frontend/src/components/MCPConnectorPanel.jsx
+      269 ./frontend/src/components/VectorPolicyPanel.jsx
+dark: variant usages: 4471
+hex colour literals in .js/.jsx: 157
+Google Fonts @imports in index.css: 3
+role=tablist / Tabs / SegmentedControl usages outside ui/:
+        5 ./frontend/src/components/MCPConnectorPanel.jsx
+        3 ./frontend/src/components/firewall/Tier2ScanControl.jsx
+        2 ./frontend/src/components/ServerTier2Manager.jsx
+        2 ./frontend/src/components/MCPScanControlMatrix.jsx
+        1 ./frontend/src/components/simulator/IsolationOpsSimulator.jsx
+        1 ./frontend/src/components/PolicyDomainSwitcher.jsx
+frontend source lines (.js/.jsx): 47624
+distinct /api/ paths referenced (approx.): 82
