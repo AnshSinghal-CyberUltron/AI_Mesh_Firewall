@@ -1145,8 +1145,9 @@ def cleanup_old_audit_logs() -> dict:
                 org.slug, deleted_events, deleted_audit, retention_days, cutoff.isoformat(),
             )
 
-    # Also clean orphan records with no org using the global default
-    default_config = FirewallConfig.load(organization=None)
+    # Also clean orphan records with no org using the global default. Read without creating it
+    # (#130): only an audited platform-operator write may create or change the platform default.
+    default_config = FirewallConfig.platform_default()
     default_cutoff = timezone.now() - timedelta(days=default_config.retention_days)
     orphan_events, _ = EnforcementEvent.objects.filter(
         organization_id__isnull=True,

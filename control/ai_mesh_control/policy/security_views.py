@@ -1350,7 +1350,7 @@ class SocKpisView(AnalyticsConcurrencyMixin, APIView):
         response_score = max(0, 100 - int(avg_latency_ms / 10)) if avg_latency_ms else 80
         try:
             from core.models import FirewallConfig
-            cfg = FirewallConfig.load()
+            cfg = FirewallConfig.platform_default()  # #130: load() created + published it for any caller
             compliance_score = 90 if (cfg.firewall_enabled and cfg.audit_logging_enabled) else 50
         except Exception:
             compliance_score = 70
