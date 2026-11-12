@@ -54,7 +54,6 @@ far above anything the encoder produces and far below the ~1,000 frames `json` w
 raise `RecursionError`. The control plane's projector validates through `decode_plan_body` too,
 so both planes refuse the same bodies."""
 
-_ESCAPE = re.compile(rb"\\.", re.DOTALL)
 _STRING = re.compile(rb'"[^"]*"')
 _NOT_BRACKET = re.compile(rb"[^\[\]{}]+")
 _STEP = MappingProxyType({ord("["): 1, ord("{"): 1, ord("]"): -1, ord("}"): -1})
@@ -63,15 +62,24 @@ _STEP = MappingProxyType({ord("["): 1, ord("{"): 1, ord("]"): -1, ord("}"): -1})
 def nesting_depth(raw: bytes) -> int:
     """The deepest bracket nesting in ``raw``, outside JSON strings. Linear; never recurses.
 
-    Three regex passes, each linear: drop every two-byte escape (so ``\\"`` cannot end a string),
-    drop every string (no bracket inside one counts), drop everything that is not a bracket; then
-    a running sum over the brackets. For any body ``json`` would parse, this is its exact depth;
-    for a malformed one it is at least the depth ``json`` reaches before it gives up, because up
-    to the first defect the text is valid JSON and the passes read it exactly as ``json`` does.
-    (Brackets after the first defect can be under-counted -- ``]]][[[`` -- but ``json`` raises at
-    that defect and never recurses into them.)
+    Four linear passes: drop every escaped backslash, then every escaped quote, so ``\\"``
+    cannot end a string; drop every string (no bracket inside one counts); drop everything that
+    is not a bracket; then a running sum over the brackets. For any body ``json`` would parse,
+    this is its exact depth; for a malformed one it is at least the depth ``json`` reaches before
+    it gives up, because up to the first defect the text is valid JSON and the passes read it
+    exactly as ``json`` does. (Brackets after the first defect can be under-counted -- ``]]][[[``
+    -- but ``json`` raises at that defect and never recurses into them.)
+
+    Why the escapes are two ``bytes.replace`` calls and not one ``\\.`` regex: only ``\\\\``
+    and ``\\"`` can move where a string ends (every other escape stays inside its string,
+    which the next pass drops whole), and backslash pairs are consumed left to right exactly as
+    ``json`` consumes them. Each pass is one uninterruptible C call that holds the loop: the
+    regex took 694 ms on an 8 MB escape-dense body that ``json.loads`` decodes in 37 ms, and
+    the two replaces bring the whole scan to about 53 ms (reviewer B, PR #136). The results are
+    identical (`test_nesting_depth_matches_the_escape_regex`).
     """
-    brackets = _NOT_BRACKET.sub(b"", _STRING.sub(b"", _ESCAPE.sub(b"", raw)))
+    unescaped = raw.replace(b"\\\\", b"").replace(b'\\"', b"")
+    brackets = _NOT_BRACKET.sub(b"", _STRING.sub(b"", unescaped))
     return max(0, max(accumulate(map(_STEP.__getitem__, brackets)), default=0))
 
 #: Capabilities a body may require: GW27 ``controls/1`` and GW33 ``rewrite/1``. An unknown entry is
