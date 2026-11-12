@@ -1,0 +1,16 @@
+baseline (fix intact): exit=0 51 passed in 1.39s
+KILLED   M1 round_once catches only StoreDataUnavailable from the applier (develop): 1 failed, 50 passed in 1.65s
+KILLED   M2 the plan applier catches only CompileError (develop): 11 failed, 40 passed in 2.02s
+KILLED   M3 the reader ignores isolate=True (develop: one bad record refuses the round): 15 failed, 36 passed in 1.59s
+KILLED   M4 _envelope does not catch RecursionError (develop): 1 failed, 50 passed in 1.59s
+KILLED   M5 the snapshot serves last-known-good to a quarantined tenant: 1 failed, 50 passed in 1.44s
+KILLED   M6 no depth bound on plan bodies: 1 failed, 50 passed in 1.47s
+KILLED   M7 kill-switch drift latch only on StoreDataUnavailable (develop): 1 failed, 50 passed in 0.96s
+KILLED   M8a state loop logs exception text (develop): 1 failed, 50 passed in 0.98s
+KILLED   M8b projector service logs exception text (develop): 1 failed, 50 passed in 1.16s
+KILLED   M8c re-hydrator logs exception text (develop): 1 failed, 50 passed in 0.95s
+KILLED   M9 a plan rejection records the exception text: 12 failed, 39 passed in 1.85s
+KILLED   M10 the KEY applier ignores faults: 1 failed, 50 passed in 1.03s
+KILLED   M11 a faulted plan record keeps last-good instead of failing closed: 12 failed, 39 passed in 1.80s
+KILLED   M12 a faulted plan record is ignored (cursor moves, nothing quarantined): 12 failed, 39 passed in 1.43s
+restored (fix intact): exit=0 51 passed in 1.00s

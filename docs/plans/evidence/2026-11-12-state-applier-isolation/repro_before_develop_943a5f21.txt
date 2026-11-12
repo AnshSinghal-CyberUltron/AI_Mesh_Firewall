@@ -1,0 +1,52 @@
+== rewrite_deep_regex
+  before: ready=True
+  cycle RAISED RecursionError
+  right after the cycle: good tenants served 50/100; hostile tenant 'victim': plan seq=1
+  after the bound: good tenants served 0/100; hostile tenant 'victim': PlanUnavailable(plan state was last read to its head 2.2 s ago, over the 1.5 s bound)
+  KEY cursor=1 BUDGET good-a0=False KS org:good-b0 engaged=False
+  metrics: no quarantine/rejection series exist
+  cycle_failures=25
+  after the 1500 ms freshness bound: ready=False (plan state was last read to its head 2.2 s ago, over the 1.5 s bound)
+  log lines: 25; canary (payload) in logs: False; 'maximum recursion' text in logs: True
+    | state cycle failed: RecursionError: maximum recursion depth exceeded
+    | state cycle failed: RecursionError: maximum recursion depth exceeded
+    | state cycle failed: RecursionError: maximum recursion depth exceeded
+    | state cycle failed: RecursionError: maximum recursion depth exceeded
+== rewrite_overflow
+  before: ready=True
+  cycle RAISED OverflowError
+  right after the cycle: good tenants served 50/100; hostile tenant 'victim': plan seq=1
+  after the bound: good tenants served 0/100; hostile tenant 'victim': PlanUnavailable(plan state was last read to its head 2.2 s ago, over the 1.5 s bound)
+  KEY cursor=1 BUDGET good-a0=False KS org:good-b0 engaged=False
+  metrics: no quarantine/rejection series exist
+  cycle_failures=28
+  after the 1500 ms freshness bound: ready=False (plan state was last read to its head 2.2 s ago, over the 1.5 s bound)
+  log lines: 28; canary (payload) in logs: False; 'maximum recursion' text in logs: False
+    | state cycle failed: OverflowError: the repetition number is too large
+    | state cycle failed: OverflowError: the repetition number is too large
+    | state cycle failed: OverflowError: the repetition number is too large
+    | state cycle failed: OverflowError: the repetition number is too large
+== signature
+  before: ready=True
+  cycle completed: plan=FAILED, ks=ok, key=ok, budget=ok
+  right after the cycle: good tenants served 0/100; hostile tenant 'victim': plan seq=1
+  after the bound: good tenants served 0/100; hostile tenant 'victim': PlanUnavailable(plan state was last read to its head 2.3 s ago, over the 1.5 s bound)
+  KEY cursor=2 BUDGET good-a0=True KS org:good-b0 engaged=True
+  metrics: no quarantine/rejection series exist
+  cycle_failures=0
+  after the 1500 ms freshness bound: ready=False (plan state was last read to its head 2.3 s ago, over the 1.5 s bound)
+  log lines: 0; canary (payload) in logs: False; 'maximum recursion' text in logs: False
+== deep_envelope
+  before: ready=True
+  cycle RAISED RecursionError
+  right after the cycle: good tenants served 0/100; hostile tenant 'victim': plan seq=1
+  after the bound: good tenants served 0/100; hostile tenant 'victim': PlanUnavailable(plan state was last read to its head 2.3 s ago, over the 1.5 s bound)
+  KEY cursor=1 BUDGET good-a0=False KS org:good-b0 engaged=False
+  metrics: no quarantine/rejection series exist
+  cycle_failures=32
+  after the 1500 ms freshness bound: ready=False (plan state was last read to its head 2.3 s ago, over the 1.5 s bound)
+  log lines: 32; canary (payload) in logs: False; 'maximum recursion' text in logs: True
+    | state cycle failed: RecursionError: maximum recursion depth exceeded while decoding a JSON array from a unicode string
+    | state cycle failed: RecursionError: maximum recursion depth exceeded while decoding a JSON array from a unicode string
+    | state cycle failed: RecursionError: maximum recursion depth exceeded while decoding a JSON array from a unicode string
+    | state cycle failed: RecursionError: maximum recursion depth exceeded while decoding a JSON array from a unicode string
