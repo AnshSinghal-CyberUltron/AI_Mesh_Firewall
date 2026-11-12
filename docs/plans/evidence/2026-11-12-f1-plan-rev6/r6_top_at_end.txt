@@ -1,0 +1,8 @@
+%CPU COMMAND
+27.9 /home/claude/work/venv-ctl312/bin/python /home/claude/work/runs/122-B/harness/attack.py http://127.0.0.1:18122 /tmp/rv122b_seed_head.js
+26.9 /home/claude/work/venv-ctl312/bin/python -m uvicorn main_app.asgi:application --host 127.0.0.1 --port 18122 --no-access-log --workers 1
+ 6.1 postgres: postgres aimesh_rv122b_run 127.0.0.1(38216) idle
+ 4.3 /opt/claude-code/bin/claude mcp serve --transport http --port 28471 --result-format rendered --session-tunnel
+ 0.1 /usr/lib/postgresql/16/bin/postgres -D /home/claude/work/pg/data -p 55432 -k /tmp -c listen_addresses=127.0.0.1 -c max_connections=200
+ 0.1 redis-server 127.0.0.1:56379
+ 0.0 [kworker/u8:0-ext4-rsv-conversion]

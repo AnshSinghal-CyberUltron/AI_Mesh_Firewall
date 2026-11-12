@@ -1,0 +1,8 @@
+RX-TIMEOUT '(?:.|\\s|.)*?[^ck]1|[^éıX]+^\\d|σ\\d{,2}bx{2,}' re 13257.4 ms on '_\ńa\xa0ẞ１y\x1fy_\x1fͅ١y١xé\x1cBK_\xa0z'
+RX-TIMEOUT '\\s{2,}1{,2}ß+|(?:.|.){2,}x{1,3}|\\Z0' re 504.4 ms on '́:\u2000Kıy²Y²١ckͅİ１²１²́ZKK'
+seed=11 patterns=6000 checks=44424 ok=5553 mismatch=0 rx-timeout=3 skipped=442 refused=0 compile-fail=0 re-hang=2 in 73.2s
+RX-TIMEOUT '(?im)(?:.|0|.)+(?=.X{1,3}+a)' re 789.2 ms on 'B１ßz,bBßͅaéCa\xa0ß.１\x1cσΣıͅ'
+seed=12 patterns=6000 checks=44504 ok=5563 mismatch=0 rx-timeout=1 skipped=431 refused=0 compile-fail=0 re-hang=5 in 114.8s
+RX-TIMEOUT '(?i)Z\\W{2}\\d[19]|(?:\\S|[^A]|\\S)+[ı]Z\\s*?' re 9597.2 ms on '\xa0cabıéka²Zͅ9σZ\n:XbB'
+RX-TIMEOUT '(?im)X{,2}(?:(?:0|[^b]|.)+[ba-z](?:\\D|\\W))Z{1,3}|\\B|\\d{2}+(?:.|.|é)*?[^\\w1]+' re 518.3 ms on 'ẞ,ßıKß_é\x1cKßXX\x1céZYxıẞbΣ'
+seed=13 patterns=6000 checks=44616 ok=5577 mismatch=0 rx-timeout=3 skipped=418 refused=0 compile-fail=0 re-hang=2 in 80.1s

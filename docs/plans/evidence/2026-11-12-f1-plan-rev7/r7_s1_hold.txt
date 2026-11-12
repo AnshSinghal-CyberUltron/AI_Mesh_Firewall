@@ -1,0 +1,15 @@
+budget 100 ms per pass (x len/128 KiB); 4-character deltas; thread CPU
+case                                chars whole text | rev 6: outcome                  t/o  CPU s  held | rev 7: outcome                  t/o  CPU s  held
+A's sentence (s1_test)                100    decided | decided                           2   0.24    72 | decided                           2   0.23    72
+H1 plain sentences, 6 KiB            6044    decided | REFUSED at 4112 (undecided over the hold )    7   1.16  2048 | decided                           2   0.48  2684
+H1b plain sentences, 3 KiB           3015    decided | decided                           7   0.96  2004 | decided                           3   0.42  1988
+H2 quoted sentences, 6 KiB           6010    decided | decided                          92  14.61    60 | decided                           2   0.31    84
+H3 whole-text-rescan rule, 6 KiB     6041    decided | REFUSED at 4100 (undecided over the hold )    7   0.94  3292 | REFUSED at 5892 (undecided over the hold )    4   0.44  4096
+bullet list, 2 KiB                   2024    decided | decided                          32   4.92    60 | decided                           2   0.32    84
+bullet list, 16 KiB                 16019    decided | decided                         261  40.59    64 | decided                           2   0.33    84
+plain sentences, 64 KiB             65572    decided | REFUSED at 4100 (undecided over the hold )    7   0.87  3796 | REFUSED at 7684 (undecided over the hold )    3   0.66  4096
+code, 16 KiB                        16425    decided | decided                           0   0.15     0 | decided                           0   0.16     0
+
+part 2: scan_pass, the expensive rule plus 9 ordinary rules, one shared budget per pass
+  H2 quoted sentences, 6 KiB: decided; 1513 passes; ordinary rules left undecided 0 times; expensive rule timed out 3 times; CPU 0.47 s
+  bullet list, 2 KiB: decided; 506 passes; ordinary rules left undecided 0 times; expensive rule timed out 2 times; CPU 0.35 s

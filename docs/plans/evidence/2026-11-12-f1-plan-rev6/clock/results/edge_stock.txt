@@ -1,0 +1,14 @@
+# stock 2026-11-11T11:51:49Z
+timeout=               nan: completed (short text)                   after      1.1 ms thread CPU
+timeout=               inf: TimeoutError(regex timed out)            after      0.0 ms thread CPU
+timeout=            1e+300: TimeoutError(regex timed out)            after      0.0 ms thread CPU
+timeout=  10000000000000.0: TimeoutError(regex timed out)            after      0.0 ms thread CPU
+timeout=   9200000000000.0: completed (300 digits)                   after     98.0 ms thread CPU
+timeout=               0.0: TimeoutError(regex timed out)            after      0.0 ms thread CPU
+timeout=              -1.0: completed (short text)                   after      1.0 ms thread CPU
+timeout=              0.05: TimeoutError(regex timed out)            after     50.4 ms thread CPU
+timeout=float('nan'): still running after 3 s (no limit applied)
+timeout=-1.0: still running after 3 s (no limit applied)
+## migrate.py
+timeout=None: created on main thread, advanced on another: 1 match(es)
+timeout=5.0: created on main thread, advanced on another: 1 match(es)

@@ -1,0 +1,12 @@
+CHARACTER MATCH 'a'
+----------------------------------------------------------------------
+Ran 100 tests in 0.287s
+
+OK
+match-memory cap 0 tests run 100 failures 0 errors 0
+CHARACTER MATCH 'a'
+----------------------------------------------------------------------
+Ran 100 tests in 0.266s
+
+OK
+match-memory cap 16777216 tests run 100 failures 0 errors 0

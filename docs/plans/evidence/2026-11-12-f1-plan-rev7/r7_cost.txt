@@ -1,0 +1,20 @@
+| Rules | Response | Scan every | Scans | Stream scan CPU | Per KiB |
+|---|---|---|---|---|---|
+| 10 (TEN_B) | input scan, 4 KiB prompt | once | 1 | 0.09 ms | |
+| 10 (TEN_B) | 2 KiB | 4 chars | 512 | 18.35 ms | 9.18 ms |
+| 10 (TEN_B) | 2 KiB | 64 chars | 32 | 1.37 ms | 0.68 ms |
+| 10 (TEN_B) | 2 KiB | 256 chars | 8 | 0.40 ms | 0.20 ms |
+| 10 (TEN_B) | 2 KiB | end only chars | 1 | 0.10 ms | 0.05 ms |
+| 10 (TEN_B) | 8 KiB | 4 chars | 2048 | 84.21 ms | 10.53 ms |
+| 10 (TEN_B) | 8 KiB | 64 chars | 128 | 5.79 ms | 0.72 ms |
+| 10 (TEN_B) | 8 KiB | 256 chars | 32 | 1.63 ms | 0.20 ms |
+| 10 (TEN_B) | 8 KiB | end only chars | 1 | 0.24 ms | 0.03 ms |
+| 64 (same shapes) | input scan, 4 KiB prompt | once | 1 | 0.34 ms | |
+| 64 (same shapes) | 2 KiB | 4 chars | 512 | 116.06 ms | 58.03 ms |
+| 64 (same shapes) | 2 KiB | 64 chars | 32 | 9.28 ms | 4.64 ms |
+| 64 (same shapes) | 2 KiB | 256 chars | 8 | 2.53 ms | 1.27 ms |
+| 64 (same shapes) | 2 KiB | end only chars | 1 | 0.46 ms | 0.23 ms |
+| 64 (same shapes) | 8 KiB | 4 chars | 2048 | 482.88 ms | 60.36 ms |
+| 64 (same shapes) | 8 KiB | 64 chars | 128 | 39.28 ms | 4.91 ms |
+| 64 (same shapes) | 8 KiB | 256 chars | 32 | 11.02 ms | 1.38 ms |
+| 64 (same shapes) | 8 KiB | end only chars | 1 | 0.82 ms | 0.10 ms |

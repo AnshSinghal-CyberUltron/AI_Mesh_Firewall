@@ -1,0 +1,9 @@
+started 2026-11-12T06:11:21Z
+python: /home/claude/work/runs/103-rev6-author/xlate6/clock/venv-tcpu/bin/python
+regex 2023.8.8 /home/claude/work/runs/103-rev6-author/xlate6/clock/venv-tcpu/lib/python3.12/site-packages/regex/_regex.cpython-312-x86_64-linux-gnu.so
+3.12.3 (main, Aug 31 2026, 10:18:26) [GCC 13.3.0]
+_regex .so sha256 64a8bac6ca333786a9121f2cd46d615f6e0cf358fdb7e516c199a85dee195b77
+limits changes included: yes (LIMITS6_SWAPPED.txt present at snapshot)
+seeds: 11 12 13
+suite: r6
+finished 2026-11-12T06:34:05Z

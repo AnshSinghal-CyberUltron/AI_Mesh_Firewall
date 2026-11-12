@@ -1,0 +1,16 @@
+# 2026-11-12T06:02:26Z  load average: 3.30 2.80 2.30  cmd: /home/claude/work/runs/103-rev6-author/xlate6/clock/venv-tcpu/bin/python gil_probe.py 384 5
+text 384 KiB, 5 runs per row; regex 2023.8.8 .so sha256 64a8bac6ca333786  switch interval 5.0 ms
+| H (pure-Python busy thread) | switch interval | concurrent= | M outcome | M own CPU median ms | M wall median ms | process CPU during M, median ms (what stock clock() counts) |
+|---|---|---|---|---|---|---|
+| none | 5 ms | True | 5 ok, 0 timeout | 58.1 | 58 | 58 |
+| none | 5 ms | None | 5 ok, 0 timeout | 58.1 | 59 | 58 |
+| none | 5 ms | False | 5 ok, 0 timeout | 58.0 | 60 | 58 |
+| busy | 5 ms | True | 5 ok, 0 timeout | 64.3 | 250 | 248 |
+| busy | 5 ms | None | 5 ok, 0 timeout | 60.0 | 245 | 245 |
+| busy | 5 ms | False | 5 ok, 0 timeout | 57.1 | 66 | 66 |
+| none | 1 ms | True | 5 ok, 0 timeout | 59.4 | 63 | 59 |
+| none | 1 ms | None | 5 ok, 0 timeout | 58.1 | 59 | 58 |
+| none | 1 ms | False | 5 ok, 0 timeout | 57.7 | 62 | 58 |
+| busy | 1 ms | True | 5 ok, 0 timeout | 60.1 | 144 | 141 |
+| busy | 1 ms | None | 5 ok, 0 timeout | 63.9 | 158 | 150 |
+| busy | 1 ms | False | 5 ok, 0 timeout | 58.2 | 64 | 62 |

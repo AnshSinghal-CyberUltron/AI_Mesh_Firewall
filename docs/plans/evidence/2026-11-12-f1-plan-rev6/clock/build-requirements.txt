@@ -1,0 +1,5 @@
+# PEP 517 build backend for regex 2023.8.8 (pyproject: setuptools.build_meta).
+# setuptools >= 70.1 builds wheels itself, so no 'wheel' package is needed.
+# Installed with: pip install --require-hashes --no-deps --only-binary :all: -r build-requirements.txt
+setuptools==80.9.0 \
+    --hash=sha256:062d34222ad13e0cc312a4c02d73f059e86a4acbfbdea8f8f76b28c99f306922

@@ -1,0 +1,3 @@
+seed=1 patterns=3400 checked=3257 refused=143 estimate-below-actual=0 accepted-but-re.compile-refuses=0 sets=3400 (patched 913) premise-violations=0 size ratio est/actual: median 1.00 p99 2.80 max 3.54; units ratio max 3.65 in 19s
+seed=2 patterns=3400 checked=3246 refused=154 estimate-below-actual=0 accepted-but-re.compile-refuses=0 sets=3400 (patched 876) premise-violations=0 size ratio est/actual: median 1.00 p99 2.87 max 3.55; units ratio max 3.55 in 21s
+seed=3 patterns=3400 checked=3241 refused=159 estimate-below-actual=0 accepted-but-re.compile-refuses=0 sets=3400 (patched 923) premise-violations=0 size ratio est/actual: median 1.00 p99 2.81 max 3.34; units ratio max 3.37 in 20s

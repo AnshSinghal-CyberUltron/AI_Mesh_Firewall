@@ -1,0 +1,6 @@
+10 ordinary rules: cold translate + compile median 9.8 ms; compile units 2650; retained 72 KiB; rev-6 charge 367 KiB
+64 ordinary rules: cold translate + compile median 57.1 ms; compile units 17531; retained 446 KiB; rev-6 charge 2394 KiB
+2074 accepted rules: retained bytes median 3172, max 36736; retained / Pattern.__sizeof__(): median 1.60, max 4.26
+revision-7 charge 2 x Pattern.__sizeof__() + 4 KiB: rules retaining more than their charge: 0 of 2074; charge / retained median 2.53, max 4.74
+10 ordinary rules: revision-7 charge 143 KiB per plan; plans resident in a 64 MiB cache: 456
+64 ordinary rules: revision-7 charge 946 KiB per plan; plans resident in a 64 MiB cache: 69

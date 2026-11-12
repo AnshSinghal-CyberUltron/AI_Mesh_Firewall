@@ -1,0 +1,7 @@
+scenario                                         HEAD (no keep-alive)                     revision 7 (keep-alive every 1 s)       
+1. pass waits 3.2 s, upstream every 50 ms        cut: stream_idle_timeout at 3.25 s       completed                               
+2. final pass waits 6 s, upstream finished       cut: stream_idle_timeout at 6.05 s       completed                               
+3. rule undecided 10 s, upstream every 50 ms     cut: stream_idle_timeout at 10.00 s      completed                               
+4. client stops reading during a 6 s wait        (no write to block)                      cut: stream_write_timeout at 1.00 s     
+
+openai 3.49.0 SSEDecoder over a stream with 4 keep-alive comments (7-byte chunks): 3 events: ['{"id":"c1","choices":[{"delta"', '{"id":"c1","choices":[{"delta"', '[DONE]']

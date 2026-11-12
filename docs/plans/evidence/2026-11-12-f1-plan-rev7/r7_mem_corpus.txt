@@ -1,0 +1,22 @@
+ordinary rules over 512 KiB, no cap: largest charged growth per pass (MiB) / thread CPU (ms)
+  '\\bpassword\\b'                                 punctuated prose: 0.000 MiB / 0 ms; unpunctuated prose: 0.000 MiB / 0 ms; code: 0.000 MiB / 0 ms
+  '(?i)\\bconfidential\\b'                         punctuated prose: 0.000 MiB / 2 ms; unpunctuated prose: 0.000 MiB / 2 ms; code: 0.000 MiB / 2 ms
+  '\\w+@\\w+\\.\\w+'                               punctuated prose: 0.000 MiB / 0 ms; unpunctuated prose: 0.000 MiB / 0 ms; code: 0.000 MiB / 0 ms
+  '\\d{4}[\\s-]?\\d{4}[\\s-]?\\d{4}[\\s-]?\\d{4}'  punctuated prose: 0.000 MiB / 6 ms; unpunctuated prose: 0.000 MiB / 6 ms; code: 0.000 MiB / 10 ms
+  'api[_-]?key\\s*[:=]\\s*\\w{16,}'                punctuated prose: 0.000 MiB / 1 ms; unpunctuated prose: 0.000 MiB / 1 ms; code: 0.000 MiB / 0 ms
+  '(?i)bitcoin'                                    punctuated prose: 0.000 MiB / 2 ms; unpunctuated prose: 0.000 MiB / 2 ms; code: 0.000 MiB / 6 ms
+  'AKIA[0-9A-Z]{16}'                               punctuated prose: 0.000 MiB / 0 ms; unpunctuated prose: 0.000 MiB / 0 ms; code: 0.000 MiB / 0 ms
+  '\\bEMP-\\d{6}\\b'                               punctuated prose: 0.000 MiB / 0 ms; unpunctuated prose: 0.000 MiB / 0 ms; code: 0.000 MiB / 0 ms
+  '(?i)\\bproject\\s+falcon\\b'                    punctuated prose: 0.000 MiB / 0 ms; unpunctuated prose: 0.000 MiB / 0 ms; code: 0.000 MiB / 0 ms
+  '\\b[A-Z]{2}\\d{2}[A-Z0-9]{11,30}\\b'            punctuated prose: 0.000 MiB / 0 ms; unpunctuated prose: 0.000 MiB / 1 ms; code: 0.000 MiB / 4 ms
+  '\\b\\w+\\b'                                     punctuated prose: 0.001 MiB / 96 ms; unpunctuated prose: 0.000 MiB / 82 ms; code: 0.000 MiB / 53 ms
+  '\\b\\w+\\s+(?:token|secret)\\b'                 punctuated prose: 0.001 MiB / 77 ms; unpunctuated prose: 0.000 MiB / 80 ms; code: 0.000 MiB / 72 ms
+  '(?i)\\binternal use only\\b'                    punctuated prose: 0.000 MiB / 0 ms; unpunctuated prose: 0.000 MiB / 0 ms; code: 0.000 MiB / 0 ms
+  '\\b\\d{3}-\\d{2}-\\d{4}\\b'                     punctuated prose: 0.000 MiB / 0 ms; unpunctuated prose: 0.000 MiB / 0 ms; code: 0.000 MiB / 0 ms
+  '(?i)\\bproject\\s+\\w+\\b'                      punctuated prose: 0.000 MiB / 0 ms; unpunctuated prose: 0.000 MiB / 0 ms; code: 0.000 MiB / 0 ms
+  '^(\\w+\\s?){1,30}[.!?]'                         punctuated prose: 0.003 MiB / 400 ms timeout; unpunctuated prose: 0.003 MiB / 400 ms timeout; code: 0.000 MiB / 0 ms
+  '(?:\\w+\\s)*!'                                  punctuated prose: 0.000 MiB / 0 ms; unpunctuated prose: 0.000 MiB / 0 ms; code: 0.000 MiB / 0 ms
+  '(?i)\\b(?:invoice|receipt|payment|refund|orde'  punctuated prose: 0.001 MiB / 150 ms; unpunctuated prose: 0.000 MiB / 189 ms; code: 0.000 MiB / 167 ms
+  '(\\w+)\\s+\\1'                                  punctuated prose: 0.001 MiB / 147 ms; unpunctuated prose: 0.000 MiB / 154 ms; code: 0.000 MiB / 183 ms
+  '[^\\n]{200,}'                                   punctuated prose: 0.000 MiB / 6 ms; unpunctuated prose: 0.000 MiB / 5 ms; code: 0.000 MiB / 183 ms
+largest charged growth over the corpus: 0.003 MiB

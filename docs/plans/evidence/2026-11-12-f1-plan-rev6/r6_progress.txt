@@ -1,0 +1,33 @@
+lock acquired 2026-11-12T04:53:04Z
+start exhaustive 04:53:04 load 1.80 1.31 0.62
+end   exhaustive 04:56:11 exit 0 187 s: boundaries: 0 mismatches in 175.5s
+start exhaustive_boundary 04:56:11 load 2.33 1.92 1.00
+end   exhaustive_boundary 04:58:44 exit 0 153 s: one-sided boundaries: 60 patterns, 0 mismatches in 152.5s
+start alt_exhaustive 04:58:44 load 4.14 2.87 1.50
+end   alt_exhaustive 05:07:05 exit 0 501 s: single-char alternations: 86640 patterns, 0 mismatches in 500s
+start fuzz 05:07:05 load 3.91 3.64 2.50
+end   fuzz 05:12:11 exit 0 306 s: seed=13 patterns=6000 checks=44616 ok=5577 mismatch=0 rx-timeout=3 skipped=418 refused=0 compile-fail=0 re-hang=2 in 105.9s
+start incremental_fuzz 05:12:11 load 3.57 3.70 2.87
+end   incremental_fuzz 05:14:06 exit 0 115 s: seed=13 patterns=6000 incremental=5008 streams-ok=4999 steps=82300 mismatches=0 rx-timeouts=9 in 42.3s
+start icase 05:14:06 load 3.41 3.54 2.91
+end   icase 05:15:09 exit 0 63 s: part 0: 2927 literals, mismatches=0 in 63s
+start gen_cased_check 05:15:09 load 3.82 3.65 2.99
+end   gen_cased_check 05:15:12 exit 0 3 s: 
+start alt_negated 05:15:12 load 3.82 3.65 2.99
+end   alt_negated 05:22:49 exit 0 457 s: one-code-point negations: 65040 patterns, 0 mismatches, 0 lone negated sets emitted; raw `regex` still merges: 3/3 (457s)
+start nesting 05:22:49 load 1.50 2.88 3.00
+end   nesting 05:22:53 exit 0 4 s: FAILURES: 0
+start estimate 05:22:53 load 1.62 2.88 3.00
+end   estimate 05:23:56 exit 0 63 s: seed=3 patterns=3400 checked=3241 refused=159 estimate-below-actual=0 accepted-but-re.compile-refuses=0 sets=3400 (patched 923) premise-violations=0 size ratio 
+start s1_test 05:23:56 load 2.77 2.97 3.02
+end   s1_test 05:23:58 exit 0 2 s: S1 tests pass: whole text 0.03 ms; 'refuse' refused at 28 chars; 'hold' decided [(0, 110)]; with a comma both 'hold' and the whole-text scan refuse
+start s1_hold 05:23:58 load 2.77 2.97 3.02
+end   s1_hold 05:24:42 exit 0 44 s:   whole-text reference refuses 41
+start drr_bound 05:24:42 load 1.99 2.74 2.94
+end   drr_bound 05:24:43 exit 0 1 s: | 4 | 31 | 400 ms (512 KiB) | 2999 ms | 6600 ms | 12800 ms |
+start inline_bucket6 05:24:43 load 1.99 2.74 2.94
+end   inline_bucket6 05:27:37 exit 0 174 s: | 25% + lag gate 5 ms | 6 | 24% | 0.4 ms | 63.3 ms | 0.11 ms | 16.26 ms | 31.9 ms |
+start stall6 05:27:37 load 3.38 2.96 2.98
+end   stall6 05:27:44 exit 0 7 s: | busy pure-Python thread (same duration) | 161 | 5.23 ms | 13.23 ms | 11.8 ms | 17.3 ms |
+start perf6 05:27:44 load 3.56 3.01 3.00
+end   perf6 05:27:53 exit 0 9 s: Host: 2 shared CPUs, load average 3.4 at the end; thread CPU throughout.

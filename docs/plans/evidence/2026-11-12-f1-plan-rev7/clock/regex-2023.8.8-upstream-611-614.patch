@@ -1,0 +1,48 @@
+--- a/regex_3/_regex_core.py
++++ b/regex_3/_regex_core.py
+@@ -3287,8 +3287,7 @@
+             self.no_item.dump(indent + 1, reverse)
+ 
+     def is_empty(self):
+-        return (self.subpattern.is_empty() and self.yes_item.is_empty() or
+-          self.no_item.is_empty())
++        return self.subpattern.is_empty() and self.yes_item.is_empty()
+ 
+     def __eq__(self, other):
+         return type(self) is type(other) and (self.subpattern, self.yes_item,
+--- a/regex_3/_regex.c
++++ b/regex_3/_regex.c
+@@ -15859,9 +15859,15 @@
+             if (step > 0) {
+                 if (limit < state->slice_start)
+                     limit = state->slice_start;
++
++                if (pos < limit)
++                    limit = pos;
+             } else {
+                 if (limit > state->slice_end)
+                     limit = state->slice_end;
++
++                if (pos > limit)
++                    limit = pos;
+             }
+ 
+             if (pos == limit) {
+@@ -17820,6 +17826,9 @@
+                 else
+                     state->slice_end = slice_end;
+ 
++                /* We've narrowed the slice. The required string position might now be outside it. */
++                state->req_pos = -1;
++
+                 state->max_errors = fewest_errors;
+                 state->text_pos = entry->match_pos;
+                 init_match(state);
+@@ -24721,6 +24730,7 @@
+      * group.
+      */
+     subargs = *args;
++    subargs.forward = forward;
+     status = build_sequence(&subargs);
+     if (status != RE_ERROR_SUCCESS)
+         return status;

@@ -1,0 +1,12 @@
+# 2026-11-12T06:00:18Z  load average: 2.74 2.49 2.13  cmd: /home/claude/work/runs/103-rev6-author/xlate6/venv-stock/bin/python inline_bucket6.py 3 3 none:4,0.25:2,0.25:4,0.25:6,0.25:2:avail,0.25:4:avail,0.25:6:avail,0.0:4
+one delta = 4.58 ms CPU (32122 chars); per-org bucket 25%, burst 10 ms; 3 s per run, median of 3
+| Worker-wide inline bucket | Busy orgs | Inline customer-regex share of the loop | Tenant B wall delay p50 | p99 | Loop CPU ahead of B p50 | p99 | max |
+|---|---|---|---|---|---|---|---|
+| none (rev. 5) | 4 | 84% | 53.3 ms | 107.5 ms | 50.08 ms | 71.82 ms | 94.1 ms |
+| 25% | 2 | 24% | 0.6 ms | 62.4 ms | 0.11 ms | 18.43 ms | 30.4 ms |
+| 25% | 4 | 25% | 0.5 ms | 45.0 ms | 0.08 ms | 14.56 ms | 29.2 ms |
+| 25% | 6 | 25% | 0.2 ms | 23.5 ms | 0.11 ms | 10.54 ms | 27.2 ms |
+| 25%, refill by loop-available time | 2 | 24% | 0.2 ms | 9.4 ms | 0.10 ms | 6.31 ms | 11.0 ms |
+| 25%, refill by loop-available time | 4 | 20% | 0.2 ms | 13.4 ms | 0.11 ms | 5.81 ms | 12.6 ms |
+| 25%, refill by loop-available time | 6 | 20% | 0.2 ms | 15.2 ms | 0.12 ms | 7.51 ms | 14.2 ms |
+| 0% (every scan off the loop) | 4 | 0% | 0.1 ms | 6.1 ms | 0.05 ms | 0.19 ms | 9.5 ms |

@@ -1,0 +1,3 @@
+2026-11-11T12:03:10Z
+LIMITS6 swap: translate_prototype.py, incremental.py, _cased_table.py (adds FOLD_DISAGREE), gen_cased.py replaced by the revision-6 versions (nesting limit 16 + iterative depth scan before re._parser; any exception -> Refused; parse-only size/compile-unit estimate and caps; one-code-point negated sets always doubled; variable-width lookbehinds refused; scan_or_hold policy). Revision-5 originals kept in r5_orig/. New tests: nesting_test.py, estimate_test.py, alt_negated.py, s1_test.py.
+2026-11-11T12:17:59Z addendum: incremental.py scan_or_hold gains hold_cap=4096 (undecided text over 4 KiB refuses); scan() unchanged.

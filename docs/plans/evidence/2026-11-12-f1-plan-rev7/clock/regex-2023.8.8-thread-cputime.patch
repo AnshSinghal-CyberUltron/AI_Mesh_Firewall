@@ -1,0 +1,118 @@
+--- a/regex_3/_regex.c
++++ b/regex_3/_regex.c
+@@ -53,6 +53,26 @@
+ #include "_regex.h"
+ #include "pyport.h"
+ #include "pythread.h"
++#include <stdint.h>
++#include <time.h>
++
++/* AMF patch (thread CPU timeout): the 'timeout' argument is measured in the
++ * CPU time of the thread that is matching, read with
++ * clock_gettime(CLOCK_THREAD_CPUTIME_ID). Upstream used C clock(), which on
++ * POSIX is the CPU time of the whole process, so work on any other thread
++ * shortened every timeout. CLOCK_THREAD_CPUTIME_ID is POSIX: Linux, and macOS
++ * 10.12 or later. There is deliberately no fallback to clock(): a platform
++ * without it (Windows) fails to build rather than silently measuring process
++ * time.
++ */
++#if !defined(CLOCK_THREAD_CPUTIME_ID)
++#error "regex (AMF patch): CLOCK_THREAD_CPUTIME_ID is required (POSIX only)"
++#endif
++
++/* Timeout ticks per second: microseconds, the same unit as upstream (POSIX
++ * requires CLOCKS_PER_SEC to be 1000000).
++ */
++#define RE_TICKS_PER_SEC 1000000
+ 
+ #if PY_VERSION_HEX < 0x03070000
+ /* Issue 29943: PySlice_GetIndicesEx change broke ABI in 3.5 and 3.6 branches
+@@ -514,8 +534,9 @@
+     size_t capture_change; /* Incremented every time a captive group changes. */
+     Py_ssize_t req_pos; /* The position where the required string matched. */
+     Py_ssize_t req_end; /* The end position where the required string matched. */
+-    Py_ssize_t timeout; /* The timeout in clock ticks. */
+-    clock_t start_time; /* The clock time when matching started. */
++    Py_ssize_t timeout; /* The timeout in ticks of thread CPU time. */
++    int64_t start_time; /* The thread CPU time, in ticks, when matching started. */
++    unsigned long start_thread; /* The thread whose CPU time start_time is. */
+     int partial_side; /* The side that could truncate in a partial match. */
+     /* Various flags. */
+     RE_UINT16 iterations; /* The number of iterations the matching engine has performed since checking for KeyboardInterrupt. */
+@@ -2202,13 +2223,38 @@
+     release_GIL(state);
+ }
+ 
++/* Returns the calling thread's CPU time in ticks, or -1 if it can't be read. */
++Py_LOCAL_INLINE(int64_t) thread_cpu_ticks(void) {
++    struct timespec ts;
++
++    if (clock_gettime(CLOCK_THREAD_CPUTIME_ID, &ts) != 0)
++        return -1;
++
++    return (int64_t)ts.tv_sec * RE_TICKS_PER_SEC +
++      (int64_t)ts.tv_nsec / (1000000000 / RE_TICKS_PER_SEC);
++}
++
+ /* Checks whether matching has timed out. */
+ Py_LOCAL_INLINE(BOOL) check_timed_out(RE_State* state) {
++    int64_t now;
++
+     if (state->timeout == RE_NO_TIMEOUT)
+         /* No timeout. */
+         return FALSE;
+ 
+-    if ((Py_ssize_t)(clock() - state->start_time) < state->timeout)
++    /* A thread's CPU clock means nothing on another thread, so a timed match
++     * that continues on a thread other than the one that started it fails
++     * closed, as does an unreadable clock or one that went backwards.
++     */
++    if (PyThread_get_thread_ident() != state->start_thread) {
++        PyErr_SetString(PyExc_TimeoutError,
++          "regex timed out (timeout started on another thread)");
++        return TRUE;
++    }
++
++    now = thread_cpu_ticks();
++    if (now >= 0 && state->start_time >= 0 && now >= state->start_time &&
++      now - state->start_time < (int64_t)state->timeout)
+         /* Hasn't timed out yet. */
+         return FALSE;
+ 
+@@ -18334,7 +18380,8 @@
+     }
+ 
+     state->timeout = timeout;
+-    state->start_time = timeout == RE_NO_TIMEOUT ? 0 : clock();
++    state->start_time = timeout == RE_NO_TIMEOUT ? 0 : thread_cpu_ticks();
++    state->start_thread = PyThread_get_thread_ident();
+ 
+     /* A state struct can sometimes be shared across threads. In such
+      * instances, if multithreading is enabled we need to protect the state
+@@ -20783,12 +20830,24 @@
+         return RE_NO_TIMEOUT;
+ 
+     value = PyFloat_AsDouble(timeout);
+-    if (value == -1.0 && PyErr_Occurred()) {
++    /* A NaN used to mean no timeout at all; it is now refused. */
++    if ((value == -1.0 && PyErr_Occurred()) || Py_IS_NAN(value)) {
+         set_error(RE_ERROR_BAD_TIMEOUT, NULL);
+         return RE_BAD_TIMEOUT;
+     }
+ 
+-    return value >= 0.0 ? (Py_ssize_t)(value * CLOCKS_PER_SEC) : RE_NO_TIMEOUT;
++    /* A negative timeout still means no timeout, as upstream. */
++    if (value < 0.0)
++        return RE_NO_TIMEOUT;
++
++    /* Clamp instead of the undefined double-to-integer conversion, which made
++     * a huge or infinite timeout fire at once.
++     */
++    value *= RE_TICKS_PER_SEC;
++    if (value >= (double)PY_SSIZE_T_MAX)
++        return PY_SSIZE_T_MAX;
++
++    return (Py_ssize_t)value;
+ }
+ 
+ /* Creates a new ScannerObject. */

@@ -1,0 +1,125 @@
+/home/claude/wt/f1a-plan-rev6/docs/plans/evidence/2026-11-12-f1-plan-rev7/alt_negated.py:53: FutureWarning: Possible nested set at position 20
+  re.compile(p); t = T.translate(p)
+/home/claude/wt/f1a-plan-rev6/docs/plans/evidence/2026-11-12-f1-plan-rev7/translate_prototype.py:90: FutureWarning: Possible nested set at position 20
+  return fn(*args, **kwargs)
+/home/claude/wt/f1a-plan-rev6/docs/plans/evidence/2026-11-12-f1-plan-rev7/alt_negated.py:53: FutureWarning: Possible nested set at position 5
+  re.compile(p); t = T.translate(p)
+/home/claude/wt/f1a-plan-rev6/docs/plans/evidence/2026-11-12-f1-plan-rev7/translate_prototype.py:90: FutureWarning: Possible nested set at position 5
+  return fn(*args, **kwargs)
+/home/claude/wt/f1a-plan-rev6/docs/plans/evidence/2026-11-12-f1-plan-rev7/alt_negated.py:53: FutureWarning: Possible nested set at position 27
+  re.compile(p); t = T.translate(p)
+/home/claude/wt/f1a-plan-rev6/docs/plans/evidence/2026-11-12-f1-plan-rev7/translate_prototype.py:90: FutureWarning: Possible nested set at position 27
+  return fn(*args, **kwargs)
+/home/claude/wt/f1a-plan-rev6/docs/plans/evidence/2026-11-12-f1-plan-rev7/alt_negated.py:53: FutureWarning: Possible nested set at position 10
+  re.compile(p); t = T.translate(p)
+/home/claude/wt/f1a-plan-rev6/docs/plans/evidence/2026-11-12-f1-plan-rev7/translate_prototype.py:90: FutureWarning: Possible nested set at position 10
+  return fn(*args, **kwargs)
+/home/claude/wt/f1a-plan-rev6/docs/plans/evidence/2026-11-12-f1-plan-rev7/alt_negated.py:53: FutureWarning: Possible nested set at position 7
+  re.compile(p); t = T.translate(p)
+/home/claude/wt/f1a-plan-rev6/docs/plans/evidence/2026-11-12-f1-plan-rev7/translate_prototype.py:90: FutureWarning: Possible nested set at position 7
+  return fn(*args, **kwargs)
+/home/claude/wt/f1a-plan-rev6/docs/plans/evidence/2026-11-12-f1-plan-rev7/alt_negated.py:53: FutureWarning: Possible nested set at position 1
+  re.compile(p); t = T.translate(p)
+/home/claude/wt/f1a-plan-rev6/docs/plans/evidence/2026-11-12-f1-plan-rev7/translate_prototype.py:90: FutureWarning: Possible nested set at position 1
+  return fn(*args, **kwargs)
+/home/claude/wt/f1a-plan-rev6/docs/plans/evidence/2026-11-12-f1-plan-rev7/alt_negated.py:53: FutureWarning: Possible nested set at position 16
+  re.compile(p); t = T.translate(p)
+/home/claude/wt/f1a-plan-rev6/docs/plans/evidence/2026-11-12-f1-plan-rev7/translate_prototype.py:90: FutureWarning: Possible nested set at position 16
+  return fn(*args, **kwargs)
+/home/claude/wt/f1a-plan-rev6/docs/plans/evidence/2026-11-12-f1-plan-rev7/alt_negated.py:53: FutureWarning: Possible nested set at position 8
+  re.compile(p); t = T.translate(p)
+/home/claude/wt/f1a-plan-rev6/docs/plans/evidence/2026-11-12-f1-plan-rev7/translate_prototype.py:90: FutureWarning: Possible nested set at position 8
+  return fn(*args, **kwargs)
+/home/claude/wt/f1a-plan-rev6/docs/plans/evidence/2026-11-12-f1-plan-rev7/alt_negated.py:53: FutureWarning: Possible set difference at position 7
+  re.compile(p); t = T.translate(p)
+/home/claude/wt/f1a-plan-rev6/docs/plans/evidence/2026-11-12-f1-plan-rev7/translate_prototype.py:90: FutureWarning: Possible set difference at position 7
+  return fn(*args, **kwargs)
+/home/claude/wt/f1a-plan-rev6/docs/plans/evidence/2026-11-12-f1-plan-rev7/alt_negated.py:53: FutureWarning: Possible nested set at position 12
+  re.compile(p); t = T.translate(p)
+/home/claude/wt/f1a-plan-rev6/docs/plans/evidence/2026-11-12-f1-plan-rev7/translate_prototype.py:90: FutureWarning: Possible nested set at position 12
+  return fn(*args, **kwargs)
+/home/claude/wt/f1a-plan-rev6/docs/plans/evidence/2026-11-12-f1-plan-rev7/alt_negated.py:53: FutureWarning: Possible nested set at position 6
+  re.compile(p); t = T.translate(p)
+/home/claude/wt/f1a-plan-rev6/docs/plans/evidence/2026-11-12-f1-plan-rev7/translate_prototype.py:90: FutureWarning: Possible nested set at position 6
+  return fn(*args, **kwargs)
+/home/claude/wt/f1a-plan-rev6/docs/plans/evidence/2026-11-12-f1-plan-rev7/alt_negated.py:53: FutureWarning: Possible nested set at position 2
+  re.compile(p); t = T.translate(p)
+/home/claude/wt/f1a-plan-rev6/docs/plans/evidence/2026-11-12-f1-plan-rev7/translate_prototype.py:90: FutureWarning: Possible nested set at position 2
+  return fn(*args, **kwargs)
+/home/claude/wt/f1a-plan-rev6/docs/plans/evidence/2026-11-12-f1-plan-rev7/alt_negated.py:53: FutureWarning: Possible nested set at position 9
+  re.compile(p); t = T.translate(p)
+/home/claude/wt/f1a-plan-rev6/docs/plans/evidence/2026-11-12-f1-plan-rev7/translate_prototype.py:90: FutureWarning: Possible nested set at position 9
+  return fn(*args, **kwargs)
+/home/claude/wt/f1a-plan-rev6/docs/plans/evidence/2026-11-12-f1-plan-rev7/alt_negated.py:53: FutureWarning: Possible nested set at position 15
+  re.compile(p); t = T.translate(p)
+/home/claude/wt/f1a-plan-rev6/docs/plans/evidence/2026-11-12-f1-plan-rev7/translate_prototype.py:90: FutureWarning: Possible nested set at position 15
+  return fn(*args, **kwargs)
+/home/claude/wt/f1a-plan-rev6/docs/plans/evidence/2026-11-12-f1-plan-rev7/alt_negated.py:53: FutureWarning: Possible nested set at position 18
+  re.compile(p); t = T.translate(p)
+/home/claude/wt/f1a-plan-rev6/docs/plans/evidence/2026-11-12-f1-plan-rev7/translate_prototype.py:90: FutureWarning: Possible nested set at position 18
+  return fn(*args, **kwargs)
+/home/claude/wt/f1a-plan-rev6/docs/plans/evidence/2026-11-12-f1-plan-rev7/alt_negated.py:53: FutureWarning: Possible nested set at position 17
+  re.compile(p); t = T.translate(p)
+/home/claude/wt/f1a-plan-rev6/docs/plans/evidence/2026-11-12-f1-plan-rev7/alt_negated.py:53: FutureWarning: Possible nested set at position 41
+  re.compile(p); t = T.translate(p)
+/home/claude/wt/f1a-plan-rev6/docs/plans/evidence/2026-11-12-f1-plan-rev7/translate_prototype.py:90: FutureWarning: Possible nested set at position 41
+  return fn(*args, **kwargs)
+/home/claude/wt/f1a-plan-rev6/docs/plans/evidence/2026-11-12-f1-plan-rev7/alt_negated.py:53: FutureWarning: Possible nested set at position 11
+  re.compile(p); t = T.translate(p)
+/home/claude/wt/f1a-plan-rev6/docs/plans/evidence/2026-11-12-f1-plan-rev7/translate_prototype.py:90: FutureWarning: Possible nested set at position 11
+  return fn(*args, **kwargs)
+/home/claude/wt/f1a-plan-rev6/docs/plans/evidence/2026-11-12-f1-plan-rev7/alt_negated.py:53: FutureWarning: Possible set difference at position 15
+  re.compile(p); t = T.translate(p)
+/home/claude/wt/f1a-plan-rev6/docs/plans/evidence/2026-11-12-f1-plan-rev7/alt_negated.py:53: FutureWarning: Possible nested set at position 30
+  re.compile(p); t = T.translate(p)
+/home/claude/wt/f1a-plan-rev6/docs/plans/evidence/2026-11-12-f1-plan-rev7/translate_prototype.py:90: FutureWarning: Possible nested set at position 30
+  return fn(*args, **kwargs)
+/home/claude/wt/f1a-plan-rev6/docs/plans/evidence/2026-11-12-f1-plan-rev7/alt_negated.py:53: FutureWarning: Possible nested set at position 3
+  re.compile(p); t = T.translate(p)
+/home/claude/wt/f1a-plan-rev6/docs/plans/evidence/2026-11-12-f1-plan-rev7/translate_prototype.py:90: FutureWarning: Possible nested set at position 3
+  return fn(*args, **kwargs)
+/home/claude/wt/f1a-plan-rev6/docs/plans/evidence/2026-11-12-f1-plan-rev7/alt_negated.py:53: FutureWarning: Possible nested set at position 14
+  re.compile(p); t = T.translate(p)
+/home/claude/wt/f1a-plan-rev6/docs/plans/evidence/2026-11-12-f1-plan-rev7/translate_prototype.py:90: FutureWarning: Possible nested set at position 14
+  return fn(*args, **kwargs)
+/home/claude/wt/f1a-plan-rev6/docs/plans/evidence/2026-11-12-f1-plan-rev7/alt_negated.py:53: FutureWarning: Possible nested set at position 46
+  re.compile(p); t = T.translate(p)
+/home/claude/wt/f1a-plan-rev6/docs/plans/evidence/2026-11-12-f1-plan-rev7/translate_prototype.py:90: FutureWarning: Possible nested set at position 46
+  return fn(*args, **kwargs)
+/home/claude/wt/f1a-plan-rev6/docs/plans/evidence/2026-11-12-f1-plan-rev7/alt_negated.py:53: FutureWarning: Possible nested set at position 22
+  re.compile(p); t = T.translate(p)
+/home/claude/wt/f1a-plan-rev6/docs/plans/evidence/2026-11-12-f1-plan-rev7/translate_prototype.py:90: FutureWarning: Possible nested set at position 22
+  return fn(*args, **kwargs)
+/home/claude/wt/f1a-plan-rev6/docs/plans/evidence/2026-11-12-f1-plan-rev7/alt_negated.py:53: FutureWarning: Possible nested set at position 34
+  re.compile(p); t = T.translate(p)
+/home/claude/wt/f1a-plan-rev6/docs/plans/evidence/2026-11-12-f1-plan-rev7/translate_prototype.py:90: FutureWarning: Possible nested set at position 34
+  return fn(*args, **kwargs)
+/home/claude/wt/f1a-plan-rev6/docs/plans/evidence/2026-11-12-f1-plan-rev7/alt_negated.py:53: FutureWarning: Possible nested set at position 26
+  re.compile(p); t = T.translate(p)
+/home/claude/wt/f1a-plan-rev6/docs/plans/evidence/2026-11-12-f1-plan-rev7/translate_prototype.py:90: FutureWarning: Possible nested set at position 26
+  return fn(*args, **kwargs)
+/home/claude/wt/f1a-plan-rev6/docs/plans/evidence/2026-11-12-f1-plan-rev7/alt_negated.py:53: FutureWarning: Possible nested set at position 45
+  re.compile(p); t = T.translate(p)
+/home/claude/wt/f1a-plan-rev6/docs/plans/evidence/2026-11-12-f1-plan-rev7/translate_prototype.py:90: FutureWarning: Possible nested set at position 45
+  return fn(*args, **kwargs)
+/home/claude/wt/f1a-plan-rev6/docs/plans/evidence/2026-11-12-f1-plan-rev7/alt_negated.py:53: FutureWarning: Possible nested set at position 37
+  re.compile(p); t = T.translate(p)
+/home/claude/wt/f1a-plan-rev6/docs/plans/evidence/2026-11-12-f1-plan-rev7/translate_prototype.py:90: FutureWarning: Possible nested set at position 37
+  return fn(*args, **kwargs)
+/home/claude/wt/f1a-plan-rev6/docs/plans/evidence/2026-11-12-f1-plan-rev7/alt_negated.py:53: FutureWarning: Possible nested set at position 43
+  re.compile(p); t = T.translate(p)
+/home/claude/wt/f1a-plan-rev6/docs/plans/evidence/2026-11-12-f1-plan-rev7/translate_prototype.py:90: FutureWarning: Possible nested set at position 43
+  return fn(*args, **kwargs)
+/home/claude/wt/f1a-plan-rev6/docs/plans/evidence/2026-11-12-f1-plan-rev7/alt_negated.py:53: FutureWarning: Possible nested set at position 13
+  re.compile(p); t = T.translate(p)
+/home/claude/wt/f1a-plan-rev6/docs/plans/evidence/2026-11-12-f1-plan-rev7/translate_prototype.py:90: FutureWarning: Possible nested set at position 13
+  return fn(*args, **kwargs)
+/home/claude/wt/f1a-plan-rev6/docs/plans/evidence/2026-11-12-f1-plan-rev7/alt_negated.py:53: FutureWarning: Possible nested set at position 47
+  re.compile(p); t = T.translate(p)
+/home/claude/wt/f1a-plan-rev6/docs/plans/evidence/2026-11-12-f1-plan-rev7/translate_prototype.py:90: FutureWarning: Possible nested set at position 47
+  return fn(*args, **kwargs)
+/home/claude/wt/f1a-plan-rev6/docs/plans/evidence/2026-11-12-f1-plan-rev7/alt_negated.py:53: FutureWarning: Possible nested set at position 4
+  re.compile(p); t = T.translate(p)
+/home/claude/wt/f1a-plan-rev6/docs/plans/evidence/2026-11-12-f1-plan-rev7/translate_prototype.py:90: FutureWarning: Possible nested set at position 4
+  return fn(*args, **kwargs)
+one-code-point negations: 65040 patterns, 0 mismatches, 0 lone negated sets emitted; raw `regex` still merges: 3/3 (308s)

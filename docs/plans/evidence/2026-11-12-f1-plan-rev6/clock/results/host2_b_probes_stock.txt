@@ -1,0 +1,16 @@
+# 2026-11-12T06:01:31Z  load average: 3.11 2.69 2.23  cmd: bash -c cd b && for f in clock_semantics.py clock_t2.py clock_pass.py; do echo "## $f"; '/home/claude/work/runs/103-rev6-author/xlate6/venv-stock/bin/python' $f; done
+## clock_semantics.py
+B alone, no timeout: 44 ms own thread CPU (202 KiB)
+0 tenant-A scan threads busy: B with timeout=100 ms -> 0/5 TimeoutError; B's own thread CPU at the end 31 ms (median), wall 34 ms
+1 tenant-A scan threads busy: B with timeout=100 ms -> 0/5 TimeoutError; B's own thread CPU at the end 31 ms (median), wall 32 ms
+2 tenant-A scan threads busy: B with timeout=100 ms -> 4/5 TimeoutError; B's own thread CPU at the end 26 ms (median), wall 52 ms
+3 tenant-A scan threads busy: B with timeout=100 ms -> 5/5 TimeoutError; B's own thread CPU at the end 24 ms (median), wall 52 ms
+## clock_t2.py
+B alone: 61 ms own CPU on 429 KiB (per-pass budget 100 ms)
+org A on 0 scan thread(s): B refused 0/10, B own CPU at refusal ~67 ms
+org A on 1 scan thread(s): B refused 10/10, B own CPU at refusal ~50 ms
+## clock_pass.py
+B's pass alone: ('ok', 0.05922669399999999)
+org A busy on 0 other scan thread(s): B's pass refused 0/10; B's own thread CPU when refused ~59-67 ms of its 100 ms
+org A busy on 1 other scan thread(s): B's pass refused 0/10; B's own thread CPU when refused ~59-75 ms of its 100 ms
+org A busy on 3 other scan thread(s): B's pass refused 10/10; B's own thread CPU when refused ~22-42 ms of its 100 ms

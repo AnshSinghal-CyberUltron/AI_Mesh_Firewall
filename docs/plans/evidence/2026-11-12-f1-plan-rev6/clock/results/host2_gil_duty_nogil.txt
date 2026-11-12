@@ -1,0 +1,22 @@
+# 2026-11-12T06:03:08Z  load average: 2.27 2.61 2.25  cmd: /home/claude/work/runs/103-rev6-author/xlate6/clock/venv-tcpu-nogil/bin/python gil_duty.py 384 5
+# 2026-11-12T06:03:08Z  load average: 2.27, 2.61, 2.25
+text 384 KiB, 5 runs per row; regex 2023.8.8 .so sha256 919321b39a1c75c5; H period 10 ms
+| switch interval | H Python duty cycle | H measured duty | M own CPU median ms | M wall median ms | wall / CPU |
+|---|---|---|---|---|---|
+| 5 ms | 0% | - | 55.3 | 57 | 1.0 |
+| 5 ms | 25% | 24% | 52.9 | 53 | 1.0 |
+| 5 ms | 50% | 48% | 53.4 | 60 | 1.1 |
+| 5 ms | 75% | 56% | 53.7 | 79 | 1.5 |
+| 5 ms | 90% | 75% | 54.6 | 81 | 1.5 |
+| 5 ms | 100% | 98% | 53.7 | 65 | 1.2 |
+| 1 ms | 0% | - | 54.4 | 55 | 1.0 |
+| 1 ms | 25% | 24% | 52.9 | 53 | 1.0 |
+| 1 ms | 50% | 49% | 53.0 | 54 | 1.0 |
+| 1 ms | 75% | 68% | 52.7 | 55 | 1.0 |
+| 1 ms | 90% | 78% | 56.1 | 59 | 1.1 |
+| 1 ms | 100% | 97% | 55.2 | 61 | 1.1 |
+# other top CPU at end:
+#  131 /home/claude/work/runs/103-rev6-author/xlate6/clock/venv-tcpu-nogil/bin/python gil_duty.py 384 5
+#  3.9 /opt/claude-code/bin/claude mcp serve --transport http --port 28471 --result-format rendered --session-tunnel
+#  0.1 redis-server 127.0.0.1:56379
+#  0.0 /usr/lib/postgresql/16/bin/postgres -D /home/claude/work/pg/data -p 55432 -k /tmp -c listen_addresses=127.0.0.1 -c 

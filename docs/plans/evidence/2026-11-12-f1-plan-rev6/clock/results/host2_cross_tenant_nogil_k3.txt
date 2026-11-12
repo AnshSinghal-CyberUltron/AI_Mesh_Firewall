@@ -1,0 +1,9 @@
+# 2026-11-12T06:03:13Z  load average: 2.33 2.61 2.26  cmd: /home/claude/work/runs/103-rev6-author/xlate6/clock/venv-tcpu-nogil/bin/python cross_tenant.py 20 3 131072
+regex 2023.8.8 .so sha256 919321b39a1c75c5
+B's pass: 3 rules over 131072 chars (128 KiB); alone it costs 62.8 ms of thread CPU = 63% of its 100 ms budget (20 passes per row)
+| T (scan threads) | org A threads busy | B refused | B own CPU per pass, median / max ms | B wall per pass, median ms | A's passes: own CPU at refusal, median ms (n) |
+|---|---|---|---|---|---|
+| baseline (B alone) | 0 | 0/20 | 59.7 / 80.9 | 65 | - |
+| 2 | 1 | 0/20 | 64.4 / 88.1 | 67 | 100.3 (16) |
+| 4 | 3 | 0/20 | 66.8 / 90.4 | 150 | 100.3 (50) |
+| 8 | 7 | 0/20 | 64.1 / 70.2 | 257 | 100.4 (93) |

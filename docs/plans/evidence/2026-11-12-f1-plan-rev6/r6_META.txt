@@ -1,0 +1,8 @@
+started 2026-11-12T04:53:03Z on vm, 2 CPUs
+python 3.12.3
+regex 2023.8.8 /home/claude/work/runs/103-rev6-author/xlate6/venv-stock/lib/python3.12/site-packages/regex/_regex.cpython-312-x86_64-linux-gnu.so
+_regex .so sha256 d07e53d1a45cab4b0c34af6dd54277fa9ffbe395f0b477e25eaea17fd072a967
+95f6cfa9e3cdc47848ab4b42a34de55edb4c49f3dfc2d30296c789e82852397d  translate_prototype.py
+9f0af4cc09d381c330f342689c2018abb1d8e05bda3262517eddd1de9b234aba  incremental.py
+41ae09f42c490a02dced56f5d40adf3dca25e0b0cc54b3c8d74678451e4d539b  _cased_table.py
+finished 2026-11-12T05:27:53Z
