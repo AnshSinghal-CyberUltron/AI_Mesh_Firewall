@@ -23,7 +23,11 @@ from unittest import mock
 from django.test import TestCase, override_settings
 from rest_framework.test import APIClient
 
-from core.ingestion_views import REDIS_TELEMETRY_KEY
+# The CONSUMER's key: drain_telemetry_from_redis reads this list. Comparing pushes
+# with the drain's constant, not the producer's own (core.ingestion_views), makes
+# a producer/drain key mismatch (the dead `event_queue` defect fixed in 9f8c9489)
+# fail these tests (#113 review, A2).
+from core.tasks import REDIS_TELEMETRY_KEY as DRAIN_QUEUE_KEY
 
 AGENT_KEY = "test-agent-key-123"
 
@@ -38,11 +42,11 @@ def _valid_event():
 
 
 def _enqueued(redis_mock) -> list[dict]:
-    """Every telemetry event pushed onto the drain queue, decoded."""
+    """Every telemetry event pushed onto the queue the drain reads, decoded."""
     out = []
     for call in redis_mock.rpush.call_args_list:
         key, payload = call.args
-        assert key == REDIS_TELEMETRY_KEY, key
+        assert key == DRAIN_QUEUE_KEY, f"pushed to {key!r}, the drain reads {DRAIN_QUEUE_KEY!r}"
         out.append(json.loads(payload))
     return out
 
