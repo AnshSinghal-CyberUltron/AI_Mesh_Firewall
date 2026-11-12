@@ -1,0 +1,54 @@
+# PR #115 round 3 (D3). g26_run.sh runs an entrypoint under gunicorn 26.0.0 (control/uv.lock) with PATH stubs; see its header.
+# entrypoint_82fdadcd.sh = control/server-entrypoint.sh at 82fdadcd; entrypoint_review_shape.sh = the same with the launch replaced by the shape both reviews suggested, `( cd "$(dirname "$0")" && "$PYTHON_BIN" manage.py ... 2>&1 | sed ... >&2; exit 0 ) &`; server-entrypoint.sh = this round.
+# "Shutting down: Master" at INFO is the harness stopping gunicorn after 6 s; at ERROR with "Reason: App failed to load." gunicorn halted on its own.
+# gunicorn 26.0.0, /bin/sh -> dash; 2026-11-12T10:06:16Z
+=== entrypoint_82fdadcd.sh [] rollout exit 1
+[23722] [INFO] Listening at: http://127.0.0.1:18677 (23722)
+[control-entrypoint] v2-plan-rollout: rollout stub argv0=./manage.py cwd=/home/claude/work/runs/115-author3/g26 exiting 1
+[23722] [ERROR] Worker (pid:23730) exited with code 1.
+[23722] [INFO] Shutting down: Master
+after 6 s: gunicorn serving, HTTP 200
+=== entrypoint_82fdadcd.sh [] rollout exit 4
+[23773] [INFO] Listening at: http://127.0.0.1:18490 (23773)
+[control-entrypoint] v2-plan-rollout: rollout stub argv0=./manage.py cwd=/home/claude/work/runs/115-author3/g26 exiting 4
+[23773] [ERROR] Worker (pid:23781) exited with code 4.
+[23773] [ERROR] Shutting down: Master
+[23773] [ERROR] Reason: App failed to load.
+after 6 s: gunicorn exited rc=4, HTTP 000
+=== entrypoint_82fdadcd.sh [] rollout exit 1, sed exit 4
+[23820] [INFO] Listening at: http://127.0.0.1:18699 (23820)
+[23820] [ERROR] Worker (pid:23829) exited with code 1.
+[23820] [ERROR] Worker (pid:23830) exited with code 4.
+[23820] [ERROR] Shutting down: Master
+[23820] [ERROR] Reason: App failed to load.
+after 6 s: gunicorn exited rc=4, HTTP 000
+=== entrypoint_review_shape.sh [] rollout exit 1
+[23860] [INFO] Listening at: http://127.0.0.1:18586 (23860)
+[control-entrypoint] v2-plan-rollout: rollout stub argv0=manage.py cwd=/home/claude/work/runs/115-author3/g26 exiting 1
+[23860] [INFO] Shutting down: Master
+after 6 s: gunicorn serving, HTTP 200
+=== entrypoint_review_shape.sh [] rollout exit 4
+[23939] [INFO] Listening at: http://127.0.0.1:18531 (23939)
+[control-entrypoint] v2-plan-rollout: rollout stub argv0=manage.py cwd=/home/claude/work/runs/115-author3/g26 exiting 4
+[23939] [INFO] Shutting down: Master
+after 6 s: gunicorn serving, HTTP 200
+=== entrypoint_review_shape.sh [] rollout exit 1, sed exit 4
+[23983] [INFO] Listening at: http://127.0.0.1:18596 (23983)
+[23983] [ERROR] Worker (pid:23992) exited with code 4.
+[23983] [ERROR] Shutting down: Master
+[23983] [ERROR] Reason: App failed to load.
+after 6 s: gunicorn exited rc=4, HTTP 000
+=== server-entrypoint.sh [this PR, round 3] rollout exit 1
+[24046] [INFO] Listening at: http://127.0.0.1:18223 (24046)
+[control-entrypoint] v2-plan-rollout: rollout stub argv0=manage.py cwd=/home/claude/wt/f4-author/control exiting 1
+[24046] [INFO] Shutting down: Master
+after 6 s: gunicorn serving, HTTP 200
+=== server-entrypoint.sh [this PR, round 3] rollout exit 4
+[24098] [INFO] Listening at: http://127.0.0.1:18540 (24098)
+[control-entrypoint] v2-plan-rollout: rollout stub argv0=manage.py cwd=/home/claude/wt/f4-author/control exiting 4
+[24098] [INFO] Shutting down: Master
+after 6 s: gunicorn serving, HTTP 200
+=== server-entrypoint.sh [this PR, round 3] rollout exit 1, sed exit 4
+[24146] [INFO] Listening at: http://127.0.0.1:18349 (24146)
+[24146] [INFO] Shutting down: Master
+after 6 s: gunicorn serving, HTTP 200
