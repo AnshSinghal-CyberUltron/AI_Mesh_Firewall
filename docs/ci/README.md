@@ -107,25 +107,27 @@ Notes for callers:
 - Scanner and service images are pinned by digest (`name:tag@sha256:…`). Dependabot's `docker` ecosystem does not see images set in workflow inputs, so bump them by hand: `docker pull name:newtag`, then copy the digest from `docker image inspect --format '{{index .RepoDigests 0}}'`.
 - Command inputs (`install-command`, `test-command`, `compose-env`, …) are trusted shell, run with `eval`. Only the calling workflow sets them; never pass `github.event.*` or other PR-controlled text into them.
 
-## One-time owner setup
+## Branch protection and one-time owner setup
 
-1. **Branch protection.** The CI token cannot change protection, so the owner runs `./scripts/ci/setup_branch_protection.sh AnshSinghal-CyberUltron/AI_Mesh_Firewall` once.
-   - It **replaces** any existing protection on `develop`, `staging` and `main`.
-   - It skips a branch that does not exist, with a warning.
-   - It turns on `enforce_admins`. Every agent acts as the owner's admin account, so without it the required checks would be advisory. `ENFORCE_ADMINS=false` restores the advisory behaviour; the script header shows how to lift it for one emergency merge.
-   - Each required check is bound to the GitHub Actions app (id 15368), so a commit status of the same name posted by anyone else cannot satisfy it.
-   - It leaves `required_conversation_resolution` off: agents cannot resolve review threads (GraphQL is blocked for them), so MERGE_POLICY rule 3 requires every code-scanning thread to be answered in a PR comment instead (fixed, dismissed with a reason, or tracked).
-2. **Repository settings:**
-   - Enable the *Dependency graph*. Until it is on, `dependency-review` reports "not supported" without blocking. Then set `dependency-review-required: true` in `security.yml`.
-   - Enable *Dependabot alerts* and *Dependabot security updates*.
-   - Enable *Code scanning*, which receives the SARIF uploads and CodeQL alerts.
-   - **If the repository goes private:** code scanning (CodeQL and every SARIF upload) needs GitHub Advanced Security, which is paid for private repositories.
-     - Without it, the SARIF upload steps of the other scanners fail softly (`continue-on-error`).
-     - **CodeQL does not:** its `analyze` step uploads as part of the analysis and fails. CodeQL is not a required check, but MERGE_POLICY rule 2 would see a red check on every PR. Either buy Advanced Security or remove the `codeql` job from `security.yml`.
-     - The scanners still run, still block where marked, and still publish their reports as run artifacts.
-     - Only the Security-tab view is lost.
-   - Enable *Private vulnerability reporting*.
-3. **Optional paid or account tools.** GitGuardian, CodeRabbit, Snyk and SonarCloud are deliberately not wired. The owner chose free tools only. Each would add a job or app without changing the structure above.
+**Today *(read 12 Nov 2026)*:** `develop` and `staging` have **no protection at all**: no classic branch protection, no ruleset. `main` has only the ruleset "Main Protected by Ansh" (id 19609105; see [ENTERPRISE_SETUP.md](ENTERPRISE_SETUP.md) step 11). Until the owner applies the ruleset below, `MERGE_POLICY.md` and Reviewer B enforce the required checks and the PR-only flow, not GitHub.
+
+1. **Ruleset.** The CI token cannot change protection, so the owner runs `scripts/ci/setup_rulesets.sh` (`--dry-run` first). It creates or updates ONE repository ruleset, "AMF protected branches: develop, staging, main":
+   - active, with **no bypass actors**: admins, and every agent (they act as the owner's admin account), are bound, as `enforce_admins` did for classic protection;
+   - deletion and force-push blocked;
+   - changes only through PRs;
+   - merge commits only;
+   - required approvals 0 until agent reviews come from GitHub Apps (`AMF_REQUIRED_APPROVALS`, ENTERPRISE_SETUP.md step 9);
+   - every check in `.github/ci/required-checks.txt` required, bound to the GitHub Actions app (id 15368), so a commit status of the same name posted by anyone else cannot satisfy it;
+   - branches must be up to date with the base before merging;
+   - no conversation-resolution rule: agents cannot resolve review threads (GraphQL is blocked for them), so MERGE_POLICY rule 3 requires every code-scanning thread to be answered in a PR comment instead (fixed, dismissed with a reason, or tracked);
+   - behind flags: Copilot code review (`--copilot-review`) and the merge queue (`--merge-queue`, off because enqueueing is GraphQL-only, so agents could not merge).
+
+   It never modifies "Main Protected by Ansh", and it aborts if a required check is already failing on `develop`'s head. It replaces `setup_branch_protection.sh` (classic protection, never applied; removed).
+
+   `required-checks.txt` lists only checks that run on every PR into `develop`, `staging` and `main`. `scripts/ci/test_setup_scripts.py` fails when a listed name no longer matches such a job, so a renamed job cannot silently leave every PR waiting for a check that never reports. Re-run the script after a change to the file merges.
+2. **Environments.** `scripts/ci/setup_environments.sh` creates `staging` (deployable from the `staging` branch) and `production` (from `main`), with the owner's required reviewers.
+3. **Everything else** (Actions concurrency, CodeQL default vs advanced setup, larger runners, the organisation Actions policy, Dependabot, secret scanning, Copilot code review, GitHub Apps for the agents' reviews, and what changes when the repository goes private) is the owner's click-list in [ENTERPRISE_SETUP.md](ENTERPRISE_SETUP.md), in order.
+4. **Optional paid or account tools.** GitGuardian, CodeRabbit, Snyk and SonarCloud are deliberately not wired. The owner chose free tools only. Each would add a job or app without changing the structure above.
 
 ## Running the checks locally
 

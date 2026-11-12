@@ -1,0 +1,55 @@
+# Status checks to require on develop, staging and main (scripts/ci/setup_rulesets.sh reads
+# this file; scripts/ci/test_required_checks.py ties every name to a job in .github/workflows).
+#
+# One check-run name per line, exactly as GitHub shows it on a PR. A job called through a
+# reusable workflow is "<calling job name> / <called job name>"; a matrix job adds " (<value>)".
+# setup_rulesets.sh binds each name to the GitHub Actions app (integration id 15368), so a
+# commit status of the same name posted by anyone else cannot satisfy it.
+#
+# Rule for adding a name: its workflow runs on EVERY pull request into develop, staging and main
+# (no `paths:` filter, no job-level `if:` that skips it on a PR) and blocks on a real failure. A
+# required check that never reports leaves every PR "Expected - waiting" and unmergeable.
+#
+# Deliberately NOT required:
+# - golden-freeze (chat-pipeline-golden.yml): runs only when its `paths:` match, and it is the
+#   v1 golden suite, red on every branch since 6 Aug 2026 (153 known failures, MERGE_POLICY.md
+#   "Current waivers"). Owner decision: v1 production stays untouched until v2 is complete.
+# - gateway-v2 pytest shard N/M: the shard names change with the shard count. `gateway-v2
+#   pytest` below fails unless every shard passed and the shards ran the whole suite.
+# - Report-only scanners (SAST / bandit, dependencies / osv and npm-audit, infra lint /
+#   trivy-config): they never fail on findings, only on a tool or network error, so requiring
+#   them would block merges on outages without adding a gate. Their findings go to code scanning.
+# - Code-scanning result checks ("CodeQL", "Semgrep OSS", "Bandit", "osv-scanner", "Trivy"):
+#   GitHub's code-scanning app posts them, not Actions; use a `code_scanning` ruleset rule if
+#   alerts should block (docs/ci/ENTERPRISE_SETUP.md).
+
+# ci.yml
+control (Django + Postgres + Redis) / django
+frontend (unit tests + production build) / node
+CI helper scripts
+
+# security.yml
+secrets (gitleaks + TruffleHog) / secrets
+SAST (Semgrep + Bandit) / semgrep
+dependencies (review + OSV + npm audit) / dependency-review
+infra lint (actions, Docker, shell, compose, nginx, Trivy) / lint
+
+# pr-policy.yml
+policy
+
+# gateway-v2.yml (`gateway-v2 pytest` exists once PR #137 has merged)
+structural-gates
+gateway-v2 pytest
+secret-headers
+image-digest
+openai-conformance
+parity-harness
+
+# security.yml, CodeQL. NOTE: red on every PR and push since the move to the organisation
+# (11 Nov 2026): CodeQL "default setup" was enabled for the repository then, and GitHub rejects
+# the analyses this workflow uploads while default setup is on. Owner decision pending
+# (docs/ci/ENTERPRISE_SETUP.md, step 2). Until it is switched to advanced setup, run
+# setup_rulesets.sh with --without-codeql, or every merge is blocked.
+CodeQL / analyze (actions)
+CodeQL / analyze (javascript-typescript)
+CodeQL / analyze (python)

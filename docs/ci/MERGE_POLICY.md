@@ -7,12 +7,14 @@ The repository owner delegates reviewing and merging to the engineering agents (
    - Each reviewer works from the diff and the evidence, not from the author's summary, and records the review on the PR.
    - GitHub does not let a PR's author approve their own PR. Agent reviews are therefore `COMMENT` reviews whose first line states the verdict: `**Reviewer A (correctness & tests): APPROVE**`.
 2. **Every check on the head commit passed.** The only exception is a check that fails **identically on the base branch**. A reviewer may waive that check only with a written reason in their review, naming the evidence: the same failing tests on base and head, and the run links.
-   - Branch protection enforces the **required** checks for admins too (`enforce_admins`), and every agent acts as the owner's admin account. A waiver therefore applies only to a check that is not required; a failing required check blocks the merge until it is fixed, or until the owner lifts `enforce_admins` for that one merge.
+   - **What GitHub enforces.** Today *(12 Nov 2026)* `develop` and `staging` have no branch protection and no ruleset, so GitHub enforces none of these rules there; the merging reviewer does.
+     - Once the owner applies the ruleset from `scripts/ci/setup_rulesets.sh` (`docs/ci/ENTERPRISE_SETUP.md`), every check in `.github/ci/required-checks.txt` is required for everyone. That includes admins and every agent: the ruleset has no bypass actors, and agents act as the owner's admin account.
+     - A waiver then applies only to a check that is not required. A failing required check blocks the merge until it is fixed, or until the owner switches the ruleset to `evaluate` for that one merge.
 3. **Findings are answered.**
    - Every BLOCKER is fixed.
    - Every SHOULD-FIX is either fixed or answered in a PR comment saying where it is tracked.
    - The author replies to each reviewer comment.
-   - Every code-scanning thread on the PR is answered in a PR comment: fixed, dismissed with a reason, or tracked. (Agents cannot resolve threads, so branch protection does not require resolution; this rule does.)
+   - Every code-scanning thread on the PR is answered in a PR comment: fixed, dismissed with a reason, or tracked. (Agents cannot resolve threads, so the ruleset does not require resolution; this rule does.)
 4. **The PR is mergeable,** with no conflicts.
 5. **A push after a review that changes behaviour** needs the affected reviewer's re-check. The re-check may be confirmed in the merging reviewer's review.
 
