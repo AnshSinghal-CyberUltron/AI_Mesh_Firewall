@@ -1381,6 +1381,18 @@ class FirewallConfig(models.Model):
             obj, _ = cls.objects.get_or_create(organization__isnull=True)
         return obj
 
+    @classmethod
+    def platform_default(cls) -> "FirewallConfig":
+        """The platform-default row (``organization IS NULL``), or an unsaved one with the model defaults.
+
+        Never writes. ``load(organization=None)`` creates the row when it is missing, and the
+        ``post_save`` signal then publishes it to ``firewall:config:default``, which the v1 gateway
+        serves to every org without a row of its own (``ConfigSync.get_config``). A read must not
+        do that: only an audited platform-operator write may (#130). The lowest id wins if a race
+        ever left two such rows.
+        """
+        return cls.objects.filter(organization__isnull=True).order_by("pk").first() or cls()
+
     def build_redis_key(self) -> str:
         slug = self.organization.slug if self.organization_id else "default"
         return f"firewall:config:{slug}"
