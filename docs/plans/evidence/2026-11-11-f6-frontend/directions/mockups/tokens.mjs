@@ -1,4 +1,4 @@
-// Single source of truth for the three F6 visual directions.
+// Single source of truth for the F6 visual directions (three on 11 Nov, Lattice on 12 Nov).
 // `node build-tokens.mjs` writes <direction>/tokens.css from this file;
 // `node check-contrast.mjs` verifies every text/UI pair against WCAG 2.1 AA.
 //
@@ -120,6 +120,45 @@ export const directions = {
         monitor: "#4F4416", monitorInk: "#FFF1B8", monitorText: "#F2D36B",
         block: "#FF8A80", blockInk: "#2A0B08", blockText: "#FF9C93",
         nav: "#19202D", navInk: "#E8ECF3", navInk2: "#AAB4C5",
+      },
+    },
+  },
+
+  // Direction 4 (12 Nov, after the owner's feedback): the calm, boxed structure of
+  // the AI-DSPM console, with AI Mesh Firewall's own accent (violet, not the
+  // DSPM sky blue) and its own type (Geist, not Work Sans / JetBrains Mono).
+  lattice: {
+    title: "Lattice",
+    primary: "dark",
+    fonts: {
+      ui: "'Geist', system-ui, sans-serif",
+      mono: "'Geist Mono', ui-monospace, monospace",
+      google: "family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600",
+    },
+    themes: {
+      dark: {
+        page: "#090E1A", surface: "#0E1524", surface2: "#131B2D", raised: "#18223A",
+        line: "#1F2A41", control: "#5B6885",
+        ink: "#E8EDF6", ink2: "#9BA6BC",
+        accent: "#A48CFF", onAccent: "#130B33", accentText: "#B7A4FF",
+        focus: "#B7A4FF",
+        allow: "#3FBF86", allowInk: "#04140D", allowText: "#5FD6A0",
+        redact: "#5CBDE6", redactInk: "#04131B", redactText: "#7FCDEE",
+        monitor: "#E9B949", monitorInk: "#1A1404", monitorText: "#F0C766",
+        block: "#F2685C", blockInk: "#1C0806", blockText: "#FF8C80",
+        nav: "#0B111E", navInk: "#E8EDF6", navInk2: "#96A2B9",
+      },
+      light: {
+        page: "#F2F4F8", surface: "#FFFFFF", surface2: "#F6F7FB", raised: "#FFFFFF",
+        line: "#E1E5ED", control: "#7A8499",
+        ink: "#0E1526", ink2: "#4E596F",
+        accent: "#6B4FE0", onAccent: "#FFFFFF", accentText: "#5A3DD4",
+        focus: "#6B4FE0",
+        allow: "#1D8558", allowInk: "#FFFFFF", allowText: "#17714B",
+        redact: "#1C779F", redactInk: "#FFFFFF", redactText: "#17678A",
+        monitor: "#E3A82B", monitorInk: "#1A1404", monitorText: "#855700",
+        block: "#C9372C", blockInk: "#FFFFFF", blockText: "#B32E24",
+        nav: "#FFFFFF", navInk: "#0E1526", navInk2: "#525D73",
       },
     },
   },

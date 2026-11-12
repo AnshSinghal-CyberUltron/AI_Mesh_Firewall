@@ -1,9 +1,116 @@
-# F6: three visual directions for the console and the public landing page
+# F6: visual directions for the console and the public landing page
 
 Status: **for the owner to pick. No redesign build starts until one is chosen** (owner decision, 11 Nov).
+On 12 Nov the owner reviewed directions 1 to 3 and chose none of them. He pointed to the AI-DSPM
+console as the style he wants, so **direction 4, Lattice, was added below and is the current
+proposal**. Directions 1 to 3 stay in this file for the record.
 Audit of the current UI: [AUDIT.md](AUDIT.md). Mockup source: [`directions/mockups/`](directions/mockups/).
+Rendered screenshots: [`../2026-11-12-f6-directions/`](../2026-11-12-f6-directions/).
 
-Each direction renders the **same three screens with the same content**, so the choice is about the
+## Direction 4: Lattice (12 Nov, after the owner's feedback)
+
+**The owner's brief, 12 Nov, in his words:** "check out this style https://aidspm.zeroshield.ai/app
+… another project but I want similar designs. No notification or small tabs; by notification tab I
+mean multiple small boxes on the same screen for different purposes." On clarification he chose:
+
+- **Many small boxes.** The overview packs many small boxes side by side, each with its own purpose.
+  There is no notification bell, no activity or notification feed, no "needs attention", "since you
+  last looked" or "for review" lists, and no tab strips of small views.
+- **Inspired, own identity.** Use the same calm, precise structure as AI-DSPM, but give AI Mesh
+  Firewall its own accent colour and details. Do not clone AI-DSPM's blue or copy its components
+  verbatim.
+
+**Pitch: every checkpoint gets a box, every box says where its number came from.**
+
+Why it fits: the overview is a strict lattice of 16 equal boxes on a 12-column grid: traffic,
+verdicts, firewall overhead, gateway fleet, the seven checkpoints 1.1 to 1.7, detectors, top rules,
+OWASP LLM Top 10, models and the enforcement log. Each box has three parts in a fixed order: a title,
+a one-line purpose, and a source line naming the endpoint the number came from, how old it is, and
+whether it is Fresh or Stale. An operator can scan the whole firewall at once. A reviewer can see
+which numbers to trust.
+
+- **Type:** Geist 400 to 700 for the interface and Geist Mono for IDs, eyebrows, endpoints and
+  patterns. Scale 11 / 12 / 13.5 / 14 / 26 / 28 / 54, with mono labels at 10.5 to 11.5.
+- **Palette (dark, primary):** page `#090E1A`, surfaces `#0E1524` / `#131B2D`, ink `#E8EDF6`.
+  The single accent is **Lattice violet `#A48CFF`** (text `#B7A4FF`), used for brand, focus and the
+  primary action. Verdicts are allow `#3FBF86`, redact `#5CBDE6`, monitor `#E9B949` and block
+  `#F2685C`, each shown as a word with a square glyph. A light theme is included, with violet
+  `#6B4FE0` as the accent.
+- **Density:** high, but calm. At 1440x900, 12 boxes are fully in view and the fourth row starts
+  above the fold. The radius is 6 px, surfaces are flat, and there are no shadows.
+- **Signature:** registration ticks at every box corner, which form a "+" wherever four boxes meet
+  and make the grid visible. Each checkpoint box also ends with a 24-hour cell strip (one cell per
+  hour, coloured by the verdict that box decides).
+- **Optimises for:** the owner's stated preference (the AI-DSPM family look) and a single scan of
+  the whole firewall. It adds the two screens no earlier direction drew: request detail and gateway
+  keys.
+
+**Borrowed from AI-DSPM** (read from the Lovable source `src/styles.css`, `primitives.tsx`,
+`source-data.tsx`, `navigation.ts`, and from the live demo):
+
+- dark navy base with thin-bordered panels and no decoration
+- monospace uppercase eyebrows above page titles
+- a title, a one-line subtitle and a source footer on every panel
+- compact status chips that always carry a word
+- a left sidebar with icons, sections and utilities at the foot
+- the ZeroShield wordmark (the company mark, used as is)
+
+**Deliberately different:**
+
+| | AI-DSPM | Lattice |
+|---|---|---|
+| Accent | sky blue `#38A8FF` (dark) / `#1D56DF` (light) | violet `#A48CFF` (dark) / `#6B4FE0` (light) |
+| Type | Work Sans + JetBrains Mono (console); Sora + Manrope + IBM Plex Mono (site) | Geist + Geist Mono everywhere |
+| Panels | larger radius, one wide panel per topic | 6 px radius; many equal boxes on one 12-column grid, with corner ticks |
+| Source footer | "Source data · N stages · M systems · freshness bar · Show rows" | freshness word and age, plus the endpoint it came from (for example `policies/analytics`) |
+| Chips | soft filled, round glyph | outlined, square glyph |
+| Navigation | sections with tab strips under each page title | no tab strips: checkpoints by module ID in the sidebar, and policy types as groups in a list |
+| Overview | a few large charts | 16 small boxes, 7 of them one per checkpoint |
+
+**Screens.** Lattice draws five screens: the landing page, the console overview, the policy editor,
+the request detail (today's `LogDetailPage`, "Scan Detail Report") and gateway and API keys (module
+1.1, today's `GatewayKeyPanel`). Field names follow today's frontend and the v2 console inventory
+(`docs/plans/evidence/2026-10-26-gw14b/`): `pipeline_trace.stages`, `stage_metrics_ms`,
+`matched_rules`, `routing`, `plan_version`, `key_prefix`, `rate_limit_status`, `auth_status`, the
+stage labels from `frontend/src/utils/pipelineTrace.js`, and the endpoints from the audit's route
+map. The request detail page has a "Copy link" action because the redesign gives every view a real
+URL (audit A-02, A-03).
+
+| Console overview (desktop) | Landing (desktop) |
+|---|---|
+| ![Lattice console desktop](../2026-11-12-f6-directions/f6-lattice-console-desktop.png) | ![Lattice landing desktop](../2026-11-12-f6-directions/f6-lattice-landing-desktop.png) |
+| **Policy editor (desktop)** | **Request detail (desktop)** |
+| ![Lattice policy desktop](../2026-11-12-f6-directions/f6-lattice-policy-desktop.png) | ![Lattice request desktop](../2026-11-12-f6-directions/f6-lattice-request-desktop.png) |
+| **Gateway and API keys (desktop)** | **Console overview, light theme** |
+| ![Lattice keys desktop](../2026-11-12-f6-directions/f6-lattice-keys-desktop.png) | ![Lattice console light](../2026-11-12-f6-directions/f6-lattice-console-light-desktop.png) |
+
+Next to AI-DSPM:
+[overview](../2026-11-12-f6-directions/f6-compare-lattice-console.png),
+[landing](../2026-11-12-f6-directions/f6-compare-lattice-landing.png),
+[policy](../2026-11-12-f6-directions/f6-compare-lattice-policy.png),
+[request detail](../2026-11-12-f6-directions/f6-compare-lattice-request.png),
+[keys](../2026-11-12-f6-directions/f6-compare-lattice-keys.png).
+AI-DSPM has no API-key page, so the keys comparison uses its Integrations page, the closest
+equivalent. Mobile: `f6-lattice-<screen>-mobile.png` in the same folder.
+
+**Trade-offs:** this is the closest to a page the owner already approved, so it carries the lowest
+taste risk. The ZeroShield products will look like one family. It is the densest of the four, so
+every box has to earn its place. The 16 boxes on the overview are a proposal and the owner can cut
+them. The violet accent and Geist are new to the brand and need the owner's yes.
+
+**Accessibility, verified.** `check-contrast.mjs` covers Lattice's 23 token pairs in both themes:
+**46 pairs, 0 failures**. The full report now covers 184 pairs across 4 directions, with 0 failures.
+A further 24 Lattice-only pairs pass, run with
+`../2026-11-12-f6-directions/contrast_extra.py`: footer labels on the inset band, the active nav
+fill, selected rows and the placeholder chip. axe-core 4.10.3 (`wcag2a`, `wcag2aa`, `wcag21aa`,
+`best-practice`) reports **0 violations on 20 of 20 Lattice page variants**: 5 pages, 2 themes,
+desktop and mobile. There is no horizontal scroll at 390 px.
+
+---
+
+## Directions 1 to 3 (11 Nov, not chosen; kept for the record)
+
+Directions 1 to 3 render the **same three screens with the same content**, so the choice is about the
 visual system only:
 
 1. Public landing page (hero and first sections)
@@ -15,6 +122,9 @@ direction's primary theme. The console overview is also captured in the other th
 themes are production (PRODUCT.md, principle 5).
 
 ## What is the same in all three
+
+Lattice (direction 4) keeps the shared data file, the verdict vocabulary and the token contract below.
+Its navigation replaces "Audit log" with "Requests", the request log with a page per request.
 
 - **Content and data.** One shared file, [`shared/sample-data.js`](directions/mockups/shared/sample-data.js),
   whose fields mirror the real control API (`soc-kpis`, `module-kpis`, `policies`, `policies/{id}/rules`,
@@ -47,7 +157,7 @@ themes are production (PRODUCT.md, principle 5).
   - [`check-contrast.mjs`](directions/mockups/check-contrast.mjs) checks 23 text and UI pairs per theme:
     body and secondary text on every surface at 4.5:1 or better, control borders and focus rings at 3:1
     or better (WCAG 1.4.11), labels on every verdict fill, verdict colours used as text. That is
-    **138 pairs across 3 directions x 2 themes, 0 failures**
+    **138 pairs across 3 directions x 2 themes, 0 failures** (184 pairs with Lattice, still 0 failures)
     ([contrast-report.md](directions/mockups/contrast-report.md)).
   - axe-core 4.10.3 (rules `wcag2a`, `wcag2aa`, `wcag21aa`, `best-practice`) on every mockup page, both
     themes, desktop and mobile: **36 of 36 page variants report no violations**.
@@ -155,16 +265,20 @@ Full-length pages: [landing](directions/shots/redline--landing--desktop--full.we
 
 ## Side by side
 
-| | Checkpoint | Night Shift | Redline |
-|---|---|---|---|
-| Default theme | Light | Dark | Light |
-| Density | Medium | High | Low to medium |
-| Landing personality | Bold, memorable | Technical, calm | Editorial, evidential |
-| Strongest for | Buyers, brand recognition | On-call operators, SREs | Compliance reviewers, auditors |
-| Distance from today's UI | Far | Near | Far |
-| Main risk | Loud if plates spread beyond verdicts | Reads as "another dark console" on the landing page | Serif-led console may feel slow to power users |
+| | Lattice (12 Nov) | Checkpoint | Night Shift | Redline |
+|---|---|---|---|---|
+| Default theme | Dark | Light | Dark | Light |
+| Density | High, boxed | Medium | High | Low to medium |
+| Landing personality | Calm, product-led (AI-DSPM family) | Bold, memorable | Technical, calm | Editorial, evidential |
+| Strongest for | The owner's stated style; scanning every checkpoint at once | Buyers, brand recognition | On-call operators, SREs | Compliance reviewers, auditors |
+| Distance from today's UI | Medium (dark, dense, new grid) | Far | Near | Far |
+| Screens drawn | 5 (adds request detail and keys) | 3 | 3 | 3 |
+| Main risk | Too many boxes if they are not curated | Loud if plates spread beyond verdicts | Reads as "another dark console" on the landing page | Serif-led console may feel slow to power users |
 
-**Design lead's recommendation (the owner decides):** Night Shift for the console, because it matches the
+**Superseded on 12 Nov:** the owner chose none of directions 1 to 3 and asked for the AI-DSPM style, which became Lattice.
+The 11 Nov recommendation is kept for the record.
+
+**Design lead's recommendation, 11 Nov (the owner decides):** Night Shift for the console, because it matches the
 users and principles in PRODUCT.md most directly and migrates with the least risk. If the landing page
 needs a stronger identity than Night Shift gives it, choose Checkpoint for both surfaces rather than
 mixing two systems; its route board also works for operators.
@@ -190,20 +304,34 @@ node check-contrast.mjs      # WCAG pairs, writes contrast-report.md, exit 1 on 
 node shoot.mjs /tmp/shots    # Playwright screenshots (needs `playwright` resolvable)
 ```
 
+The PNG evidence of 12 Nov (all four directions, plus Lattice next to AI-DSPM) was made with the Python
+harness in `../2026-11-12-f6-directions/`. It uses headless Chrome and Python Playwright:
+
+```bash
+cd docs/plans/evidence/2026-11-12-f6-directions
+python3 -I shoot.py ../2026-11-11-f6-frontend/directions/mockups <out> lattice   # or no name: all four
+python3 -I ref_shoot.py <ref> https://aidspm.zeroshield.ai/app app               # AI-DSPM reference pages
+python3 -I compare_ref.py <out> <ref> 1200 256                                   # Lattice next to AI-DSPM
+python3 -I contrast_extra.py ../2026-11-11-f6-frontend/directions/mockups/lattice/tokens.css
+python3 -I axe_lattice.py ../2026-11-11-f6-frontend/directions/mockups/lattice <axe.min.js>
+```
+
 The pages are plain HTML and CSS with a little inline JavaScript to render the sample data; open any
-`*/landing.html`, `*/console.html` or `*/policy.html` directly in a browser. Add `?theme=dark` or
+`*/landing.html`, `*/console.html` or `*/policy.html` (Lattice adds `request.html` and `keys.html`) directly in a browser. Add `?theme=dark` or
 `?theme=light` to switch theme. Fonts load from Google Fonts.
 
 ## Questions for the owner
 
-1. **Which direction?** Or which parts to combine (for example Night Shift console with the Checkpoint landing).
+1. **Is Lattice the direction?** (12 Nov; the owner chose none of 1 to 3.) If yes, which of the 16 overview
+   boxes stay, and is anything missing?
 2. **Product name on the landing page.** The repo uses "ZeroShield", "AI Mesh Firewall", "ZeroShield AI Mesh
    Firewall" and "AI Security Platform" (sidebar). The mockups use "ZeroShield" with "AI Mesh Firewall"
    as the product line. Is that right, or should the landing page use the AISecShield name?
 3. **Where does the landing page live?** A public route in this app (today `/` is the protected
    console), a separate static site, or a page on zeroshield.ai?
-4. **Brand assets.** Is there an existing logo, wordmark or brand colour that must be kept? The mockups use
-   placeholder marks drawn for each direction; none is a final logo.
+4. **Brand assets.** Is there an existing logo, wordmark or brand colour that must be kept? Directions 1 to 3
+   use placeholder marks. Lattice uses the ZeroShield wordmark that the AI-DSPM console serves, with
+   "AI Mesh Firewall" as the product line.
 5. **Calls to action and pricing.** Is the primary CTA "Book a demo"? Should there be a pricing page, and
    is pricing public?
 6. **Claims we may make.** The landing copy avoids performance numbers, customer names and certifications.
@@ -212,4 +340,6 @@ The pages are plain HTML and CSS with a little inline JavaScript to render the s
 7. **Navigation.** Keep the 1.1 to 1.7 module numbering in the console (all three mockups keep it), or move
    to task names only?
 8. **Default theme.** DESIGN.md says the console defaults to dark; the code defaults to light (audit A-09).
-   Which should ship?
+   Which should ship? (Lattice is dark first, like AI-DSPM.)
+9. **Lattice's own identity.** Is violet `#A48CFF` the AI Mesh Firewall accent, and Geist its typeface? Both
+   were chosen to sit beside AI-DSPM's blue and Work Sans without copying them.

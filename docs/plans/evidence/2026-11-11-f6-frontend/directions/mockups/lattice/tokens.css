@@ -1,0 +1,66 @@
+/* Generated from tokens.mjs by build-tokens.mjs. Do not edit by hand. */
+@import url("https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap");
+
+:root {
+  --page: #090E1A;
+  --surface: #0E1524;
+  --surface2: #131B2D;
+  --raised: #18223A;
+  --line: #1F2A41;
+  --control: #5B6885;
+  --ink: #E8EDF6;
+  --ink2: #9BA6BC;
+  --accent: #A48CFF;
+  --on-accent: #130B33;
+  --accent-text: #B7A4FF;
+  --focus: #B7A4FF;
+  --allow: #3FBF86;
+  --allow-ink: #04140D;
+  --allow-text: #5FD6A0;
+  --redact: #5CBDE6;
+  --redact-ink: #04131B;
+  --redact-text: #7FCDEE;
+  --monitor: #E9B949;
+  --monitor-ink: #1A1404;
+  --monitor-text: #F0C766;
+  --block: #F2685C;
+  --block-ink: #1C0806;
+  --block-text: #FF8C80;
+  --nav: #0B111E;
+  --nav-ink: #E8EDF6;
+  --nav-ink2: #96A2B9;
+  --font-ui: 'Geist', system-ui, sans-serif;
+  --font-mono: 'Geist Mono', ui-monospace, monospace;
+}
+
+:root[data-theme="light"] {
+  --page: #F2F4F8;
+  --surface: #FFFFFF;
+  --surface2: #F6F7FB;
+  --raised: #FFFFFF;
+  --line: #E1E5ED;
+  --control: #7A8499;
+  --ink: #0E1526;
+  --ink2: #4E596F;
+  --accent: #6B4FE0;
+  --on-accent: #FFFFFF;
+  --accent-text: #5A3DD4;
+  --focus: #6B4FE0;
+  --allow: #1D8558;
+  --allow-ink: #FFFFFF;
+  --allow-text: #17714B;
+  --redact: #1C779F;
+  --redact-ink: #FFFFFF;
+  --redact-text: #17678A;
+  --monitor: #E3A82B;
+  --monitor-ink: #1A1404;
+  --monitor-text: #855700;
+  --block: #C9372C;
+  --block-ink: #FFFFFF;
+  --block-text: #B32E24;
+  --nav: #FFFFFF;
+  --nav-ink: #0E1526;
+  --nav-ink2: #525D73;
+  --font-ui: 'Geist', system-ui, sans-serif;
+  --font-mono: 'Geist Mono', ui-monospace, monospace;
+}

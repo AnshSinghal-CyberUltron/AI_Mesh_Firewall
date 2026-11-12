@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gateway and API keys · AI Mesh Firewall (Lattice)</title>
+<link rel="stylesheet" href="style.css">
+<script>(function(){var t=new URLSearchParams(location.search).get("theme");if(t)document.documentElement.dataset.theme=t;})();</script>
+<script src="../shared/sample-data.js"></script>
+<script src="shell.js"></script>
+</head>
+<body>
+<noscript>This mockup renders its sample data with JavaScript.</noscript>
+<script>
+(function () {
+  const { S, fmt, icon, head, box, chip, cells, mount } = window.L;
+  const K = S.keys, T = S.totals;
+  const st = { active: ["allow", "Active"], expiring: ["monitor", "Expiring"], revoked: ["neutral", "Revoked"] };
+  const top = K.rows.filter((r) => r.requests).slice(0, 4);
+  const fails = S.hourly.map((h, i) => ({ v: [0.1, 0.05, 0, 0, 0.05, 0.1, 0.2, 0.3, 0.35, 0.9, 0.6, 0.3, 0.2, 0.25, 0.15, 0.2, 0.1, 0.15, 0.1, 0.05, 0.1, 0.05, 0.1, 0.2][i], tone: "block" }));
+
+  const html = head({
+    eyebrow: `Checkpoint <b>1.1</b> · Gateway and keys`,
+    title: "Gateway and API keys",
+    sub: `Keys authenticate every call to the gateway and carry project scope, allowed models and rate limits <span class="sample">Sample data</span>`,
+    ctrls: `<button class="btn search desk">${icon("search")}Find a key or project<kbd>Ctrl K</kbd></button>
+      <button class="btn danger">${icon("trash")}Delete revoked (${K.revoked})</button>
+      <button class="btn pri">${icon("plus")}Create key</button>`,
+  }) + `<div class="lattice">` + [
+    box({ title: "Active keys", purpose: "Keys that can call the gateway right now",
+      tag: chip("allow", "Enforcing"),
+      body: `<div class="kpi"><span class="v">${K.active}</span><span class="u">of ${K.total} keys</span></div>
+        <div class="mix" role="img" aria-label="${K.active - K.idle} used, ${K.idle} idle, ${K.revoked} revoked"><i style="flex:${K.active - K.idle};background:var(--allow)"></i><i style="flex:${K.idle};background:color-mix(in srgb, var(--allow) 35%, var(--surface2))"></i><i style="flex:${K.revoked};background:color-mix(in srgb, var(--ink2) 30%, transparent)"></i></div>
+        <div class="mini"><span><b>${K.active - K.idle}</b> used today</span><span><b>${K.idle}</b> idle</span><span><b>${K.revoked}</b> revoked</span></div>`,
+      src: "gateways/keys", path: "/api/gateways/keys/", age: "40 s ago" }),
+    box({ title: "Requests by key", purpose: "Which keys carried today's traffic",
+      body: `<div class="rows bar">${top.map((r) => `<div><span class="k mono" style="font-size:12px">${r.prefix}</span><span class="track"><i style="width:${(r.requests / T.requests) * 100}%"></i></span><span class="v" style="text-align:right">${Math.round((r.requests / T.requests) * 100)}%</span></div>`).join("")}</div>`,
+      src: "gateways/stats", path: "/api/gateways/stats/", age: "40 s ago" }),
+    box({ title: "Auth failures", purpose: "Calls refused before any policy ran",
+      tag: chip("block", "41 refused"),
+      body: `<div class="kpi"><span class="v">${K.authFailures}</span><span class="u">failed calls</span></div>
+        <div class="mini"><span><b>${K.invalid}</b> unknown key</span><span><b>${K.expired}</b> expired key</span></div>${cells(fails, "block", "Auth failures per hour")}`,
+      src: "auth_status", path: "enforcement_event.auth_status", age: "40 s ago" }),
+    box({ title: "Expiring soon", purpose: "Keys that stop working within 7 days",
+      tag: chip("monitor", `${K.expiringSoon} keys`),
+      body: `<div class="rows">${K.rows.filter((r) => r.status === "expiring").map((r) => `<div><span class="k"><span class="mono" style="font-size:12px">${r.prefix}</span><span class="t muted">${r.name}</span></span><span class="v">${r.expires.replace(" 2026", "")}</span></div>`).join("")}</div>
+        <button class="btn" style="align-self:flex-start;height:30px">Rotate both</button>`,
+      src: "gateways/keys", path: "/api/gateways/keys/", age: "40 s ago" }),
+
+    box({ span: "s12", title: "Keys", purpose: "Every key in this organization, newest traffic first",
+      tag: `<span class="id">${K.rows.length} of ${K.total}</span>`,
+      body: `<table class="t"><thead><tr><th>Name</th><th>Prefix</th><th class="desk-only">Project</th><th class="desk-only">Allowed models</th><th class="desk-only num">Rate limit</th><th class="desk-only num">Risk</th><th class="num">Requests 24 h</th><th class="desk-only">Last used</th><th class="desk-only">Expires</th><th>Status</th><th class="desk-only"><span class="sr">Actions</span></th></tr></thead><tbody>
+        ${K.rows.map((r) => `<tr class="${r.status === "revoked" ? "dim" : ""}"><td><b style="font-weight:600">${r.name}</b></td><td class="mono">${r.prefix}…</td><td class="desk-only">${r.project}</td><td class="desk-only">${r.models}</td><td class="desk-only num mono">${r.tpm} TPM</td>
+          <td class="desk-only num mono">${r.risk === null ? "–" : r.risk.toFixed(2)}</td><td class="num mono">${fmt(r.requests)}</td><td class="desk-only">${r.used}</td><td class="desk-only">${r.expires}</td><td>${chip(...st[r.status])}</td>
+          <td class="desk-only num"><button class="btn sq ghost" style="height:28px;width:28px" aria-label="Actions for ${r.name}">${icon("more")}</button></td></tr>`).join("")}
+        </tbody></table>`,
+      src: "gateways/keys", path: "/api/gateways/keys/", age: "40 s ago" }),
+
+    box({ span: "s6", title: "Call the gateway", purpose: "OpenAI-compatible: change the base URL and the key, keep the SDK",
+      body: `<div class="code"><span class="k">from</span> openai <span class="k">import</span> OpenAI
+<span class="k">import</span> os
+
+client = OpenAI(
+    base_url=<span class="s">"${K.baseUrl}"</span>,
+    api_key=os.environ[<span class="s">"ZEROSHIELD_API_KEY"</span>],  <span class="c"># zs-prod-…</span>
+)</div>`,
+      src: "gateways/public-url", path: "/api/gateways/public-url/", age: "5 min ago" }),
+    box({ title: "Rate limit headroom", purpose: "Tokens per minute in use, by key",
+      body: `<div class="rows bar">${[["zs-prod-7f3", 2140, 60000], ["zs-prod-a91", 1310, 40000], ["zs-prod-e5d", 21900, 30000], ["zs-prod-c22", 640, 20000]].map(([p, u, l]) => `<div><span class="k mono" style="font-size:12px">${p}</span><span class="track"><i class="${u / l > 0.6 ? "monitor" : ""}" style="width:${Math.max(2, (u / l) * 100)}%"></i></span><span class="v" style="text-align:right">${Math.round((u / l) * 100)}%</span></div>`).join("")}</div>`,
+      src: "rate_limit_status", path: "enforcement_event.rate_limit_status", age: "10 s ago" }),
+    box({ title: "Key hygiene", purpose: "Settings worth a second look",
+      body: `<div class="rows">
+        <div><span class="k">No expiry date</span><span class="v">${chip("monitor", "2 keys")}</span></div>
+        <div><span class="k">Allowed every model</span><span class="v">${chip("monitor", "2 keys")}</span></div>
+        <div><span class="k">Idle for 30 days</span><span class="v">${chip("neutral", "1 key")}</span></div>
+        <div><span class="k">Revoked, not deleted</span><span class="v">${chip("neutral", "3 keys")}</span></div></div>`,
+      src: "gateways/keys", path: "/api/gateways/keys/", age: "40 s ago" }),
+  ].join("") + `</div>`;
+
+  mount("keys", html);
+})();
+</script>
+</body>
+</html>

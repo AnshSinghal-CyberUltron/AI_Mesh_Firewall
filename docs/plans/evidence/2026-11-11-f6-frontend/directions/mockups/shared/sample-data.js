@@ -93,3 +93,72 @@
     },
   };
 })();
+
+// Added 12 Nov for direction 4 (Lattice): the screens no earlier direction drew
+// (request detail, gateway and API keys) and the extra overview boxes. New keys
+// only; nothing above changes, so the first three directions render as before.
+// Field names follow the console inventory (docs/plans/evidence/2026-10-26-gw14b)
+// and today's LogDetailPage / GatewayKeyPanel.
+(function () {
+  const S = window.SAMPLE;
+  S.asOf = "11 Nov 2026, 12:00 IST";
+  S.fleet = { service: "gateway-v2", replicas: 3, serving: 3, plan: 14, syncAgo: "4 s", configKeys: 66 };
+  S.overhead = { p50: 6.8, p95: 11.9, p99: 16.4, budget: 20,
+    hist: [2, 9, 26, 41, 52, 44, 31, 22, 14, 9, 6, 4, 3, 2, 1, 1, 0, 0, 0, 0] };
+  S.detectors = { tier1Presets: 42, tier1Regex: 7, tier2Model: "guard model on Bedrock", tier2P95: 38, failClosed: true, unavailable: 0 };
+  S.models = [
+    { name: "gpt-4o", provider: "OpenAI", state: "live", share: 21 },
+    { name: "gpt-4o-mini", provider: "OpenAI", state: "isolated", share: 0 },
+    { name: "llama-3.1-70b", provider: "Bedrock", state: "live", share: 64 },
+    { name: "claude-3.5-sonnet", provider: "Bedrock", state: "live", share: 9 },
+    { name: "mistral-large", provider: "Mistral", state: "live", share: 6 },
+    { name: "text-embedding-3-small", provider: "OpenAI", state: "live", share: 0 },
+  ];
+  S.mcp = { servers: 5, reachable: 4, tools: 61, denied: 14, unreachable: "docs-search", since: "6 min" };
+  S.rag = { stores: [
+    { name: "support-kb", withheld: 96, chunks: "41,200" },
+    { name: "policies-kb", withheld: 0, chunks: "3,180" },
+    { name: "product-docs", withheld: 0, chunks: "12,904" },
+  ] };
+  S.enforcementLog = { written: 18204, lastAgo: "3 s", dropped: 0 };
+  S.keys = {
+    total: 15, active: 12, revoked: 3, idle: 6, expiringSoon: 2, authFailures: 41, invalid: 33, expired: 8,
+    baseUrl: "https://gateway.example.internal/v1",
+    rows: [
+      { name: "Production support bot", prefix: "zs-prod-7f3", project: "Support", models: "gpt-4o-mini, llama-3.1-70b", tpm: "60,000", risk: 0.42, used: "12 s ago", expires: "30 Jan 2027", status: "active", requests: 11286 },
+      { name: "Sales assistant", prefix: "zs-prod-a91", project: "Sales", models: "gpt-4o", tpm: "40,000", risk: 0.18, used: "1 min ago", expires: "14 Mar 2027", status: "active", requests: 3904 },
+      { name: "Internal RAG search", prefix: "zs-prod-c22", project: "Knowledge", models: "llama-3.1-70b", tpm: "20,000", risk: 0.1, used: "3 min ago", expires: "No expiry", status: "active", requests: 1722 },
+      { name: "Build tools agent", prefix: "zs-prod-e5d", project: "Platform", models: "claude-3.5-sonnet", tpm: "30,000", risk: 0.65, used: "6 min ago", expires: "18 Nov 2026", status: "expiring", requests: 871 },
+      { name: "Staging smoke tests", prefix: "zs-stg-41b", project: "QA", models: "All models", tpm: "10,000", risk: 0.05, used: "2 h ago", expires: "15 Nov 2026", status: "expiring", requests: 412 },
+      { name: "Analytics batch", prefix: "zs-prod-90f", project: "Data", models: "gpt-4o-mini", tpm: "15,000", risk: 0.22, used: "9 h ago", expires: "No expiry", status: "active", requests: 9 },
+      { name: "Old demo key", prefix: "zs-dev-3aa", project: "Demo", models: "All models", tpm: "5,000", risk: null, used: "41 days ago", expires: "Revoked 2 Oct", status: "revoked", requests: 0 },
+      { name: "Contractor sandbox", prefix: "zs-dev-7c0", project: "Demo", models: "gpt-4o-mini", tpm: "5,000", risk: null, used: "63 days ago", expires: "Revoked 9 Sep", status: "revoked", requests: 0 },
+    ],
+  };
+  S.request = {
+    id: "7c1e-42ab-9d10-5be2", short: "7c1e-42ab", eventId: 48211, incident: null, plan: 14,
+    time: "11 Nov 2026, 11:42:08 IST", method: "POST", endpoint: "/v1/chat/completions",
+    sourceIp: "10.20.4.17", userAgent: "openai-python/1.54.3", key: "zs-prod-7f3", keyName: "Production support bot",
+    project: "Support", agent: "support-bot", requested: "gpt-4o-mini", routed: "llama-3.1-70b",
+    routeReason: "gpt-4o-mini isolated by the kill switch since 09:14", action: "redact", status: 200,
+    totalMs: 742.0, overheadMs: 11.7, ttftMs: 318, tokensIn: 182, tokensOut: 214, cost: "0.0009",
+    risk: 0.62, threat: "Medium", owasp: "LLM02", tags: ["DPDP", "GDPR"],
+    stages: [
+      { name: "Auth", action: "allow", ms: 0.4, detail: "Key zs-prod-7f3… valid for Default organization" },
+      { name: "Rate Limit", action: "allow", ms: 0.2, detail: "2,140 of 60,000 tokens per minute used" },
+      { name: "Policy Engine", action: "redact", ms: 1.9, detail: "PII_REDACT_OUT rule 1 (email) and rule 2 (phone)" },
+      { name: "Input Scan (Tier-1/2)", action: "allow", ms: 6.1, detail: "No injection or jailbreak signal; Tier-2 guard 5.2 ms" },
+      { name: "Kill-Switch", action: "reroute", ms: 0.1, detail: "gpt-4o-mini isolated since 09:14" },
+      { name: "Model Routing", action: "reroute", ms: 0.6, detail: "Sent to llama-3.1-70b, the policy fallback" },
+      { name: "Model Call", action: "upstream", ms: 730.3, detail: "llama-3.1-70b on Bedrock; not firewall time" },
+      { name: "Output Guard", action: "allow", ms: 2.4, detail: "No secrets or personal data in the response" },
+    ],
+    inputBefore: "Draft a reply to Priya Sharma (priya.sharma@example.com, +91 98765 43210) about invoice 4471 and copy her manager.",
+    output: "Hi Priya, thanks for flagging invoice 4471. I have copied your manager, and we will confirm the corrected amount by Friday.",
+    checks: [
+      ["Input validation", "allow", "Passed"], ["PII detection", "redact", "2 found, replaced"], ["Prompt injection", "allow", "None"],
+      ["Jailbreak attempt", "allow", "None"], ["Content safety", "allow", "Passed"], ["Rate limit", "allow", "Within limit"],
+      ["Auth", "allow", "Valid key"], ["Policy violations", "redact", "1 policy, 2 rules"],
+    ],
+  };
+})();

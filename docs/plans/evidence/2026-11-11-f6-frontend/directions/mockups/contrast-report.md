@@ -140,5 +140,51 @@
 | Redline | dark | `blockText` #FF9C93 on `surface` #19202D | block as text | 8.11 | 4.5 | pass |
 | Redline | dark | `navInk` #E8ECF3 on `nav` #19202D | navigation text | 13.78 | 4.5 | pass |
 | Redline | dark | `navInk2` #AAB4C5 on `nav` #19202D | navigation secondary text | 7.81 | 4.5 | pass |
+| Lattice | dark | `ink` #E8EDF6 on `page` #090E1A | body text on page | 16.41 | 4.5 | pass |
+| Lattice | dark | `ink` #E8EDF6 on `surface` #0E1524 | body text on surface | 15.52 | 4.5 | pass |
+| Lattice | dark | `ink` #E8EDF6 on `surface2` #131B2D | body text on inset surface | 14.62 | 4.5 | pass |
+| Lattice | dark | `ink` #E8EDF6 on `raised` #18223A | body text on raised surface | 13.45 | 4.5 | pass |
+| Lattice | dark | `ink2` #9BA6BC on `page` #090E1A | secondary text on page | 7.87 | 4.5 | pass |
+| Lattice | dark | `ink2` #9BA6BC on `surface` #0E1524 | secondary text on surface | 7.45 | 4.5 | pass |
+| Lattice | dark | `ink2` #9BA6BC on `surface2` #131B2D | secondary text on inset surface | 7.01 | 4.5 | pass |
+| Lattice | dark | `accentText` #B7A4FF on `surface` #0E1524 | link / brand text on surface | 8.48 | 4.5 | pass |
+| Lattice | dark | `accentText` #B7A4FF on `page` #090E1A | link / brand text on page | 8.97 | 4.5 | pass |
+| Lattice | dark | `onAccent` #130B33 on `accent` #A48CFF | primary button label | 6.92 | 4.5 | pass |
+| Lattice | dark | `control` #5B6885 on `surface` #0E1524 | input / button boundary (1.4.11) | 3.27 | 3 | pass |
+| Lattice | dark | `focus` #B7A4FF on `surface` #0E1524 | focus ring on surface (1.4.11) | 8.48 | 3 | pass |
+| Lattice | dark | `focus` #B7A4FF on `page` #090E1A | focus ring on page (1.4.11) | 8.97 | 3 | pass |
+| Lattice | dark | `allowInk` #04140D on `allow` #3FBF86 | label on allow fill | 8.11 | 4.5 | pass |
+| Lattice | dark | `redactInk` #04131B on `redact` #5CBDE6 | label on redact fill | 8.86 | 4.5 | pass |
+| Lattice | dark | `monitorInk` #1A1404 on `monitor` #E9B949 | label on monitor fill | 10.04 | 4.5 | pass |
+| Lattice | dark | `blockInk` #1C0806 on `block` #F2685C | label on block fill | 6.36 | 4.5 | pass |
+| Lattice | dark | `allowText` #5FD6A0 on `surface` #0E1524 | allow as text | 10.09 | 4.5 | pass |
+| Lattice | dark | `redactText` #7FCDEE on `surface` #0E1524 | redact as text | 10.31 | 4.5 | pass |
+| Lattice | dark | `monitorText` #F0C766 on `surface` #0E1524 | monitor as text | 11.35 | 4.5 | pass |
+| Lattice | dark | `blockText` #FF8C80 on `surface` #0E1524 | block as text | 8.09 | 4.5 | pass |
+| Lattice | dark | `navInk` #E8EDF6 on `nav` #0B111E | navigation text | 16.06 | 4.5 | pass |
+| Lattice | dark | `navInk2` #96A2B9 on `nav` #0B111E | navigation secondary text | 7.34 | 4.5 | pass |
+| Lattice | light | `ink` #0E1526 on `page` #F2F4F8 | body text on page | 16.53 | 4.5 | pass |
+| Lattice | light | `ink` #0E1526 on `surface` #FFFFFF | body text on surface | 18.20 | 4.5 | pass |
+| Lattice | light | `ink` #0E1526 on `surface2` #F6F7FB | body text on inset surface | 17.00 | 4.5 | pass |
+| Lattice | light | `ink` #0E1526 on `raised` #FFFFFF | body text on raised surface | 18.20 | 4.5 | pass |
+| Lattice | light | `ink2` #4E596F on `page` #F2F4F8 | secondary text on page | 6.39 | 4.5 | pass |
+| Lattice | light | `ink2` #4E596F on `surface` #FFFFFF | secondary text on surface | 7.04 | 4.5 | pass |
+| Lattice | light | `ink2` #4E596F on `surface2` #F6F7FB | secondary text on inset surface | 6.58 | 4.5 | pass |
+| Lattice | light | `accentText` #5A3DD4 on `surface` #FFFFFF | link / brand text on surface | 6.88 | 4.5 | pass |
+| Lattice | light | `accentText` #5A3DD4 on `page` #F2F4F8 | link / brand text on page | 6.25 | 4.5 | pass |
+| Lattice | light | `onAccent` #FFFFFF on `accent` #6B4FE0 | primary button label | 5.50 | 4.5 | pass |
+| Lattice | light | `control` #7A8499 on `surface` #FFFFFF | input / button boundary (1.4.11) | 3.76 | 3 | pass |
+| Lattice | light | `focus` #6B4FE0 on `surface` #FFFFFF | focus ring on surface (1.4.11) | 5.50 | 3 | pass |
+| Lattice | light | `focus` #6B4FE0 on `page` #F2F4F8 | focus ring on page (1.4.11) | 4.99 | 3 | pass |
+| Lattice | light | `allowInk` #FFFFFF on `allow` #1D8558 | label on allow fill | 4.62 | 4.5 | pass |
+| Lattice | light | `redactInk` #FFFFFF on `redact` #1C779F | label on redact fill | 5.01 | 4.5 | pass |
+| Lattice | light | `monitorInk` #1A1404 on `monitor` #E3A82B | label on monitor fill | 8.64 | 4.5 | pass |
+| Lattice | light | `blockInk` #FFFFFF on `block` #C9372C | label on block fill | 5.16 | 4.5 | pass |
+| Lattice | light | `allowText` #17714B on `surface` #FFFFFF | allow as text | 6.00 | 4.5 | pass |
+| Lattice | light | `redactText` #17678A on `surface` #FFFFFF | redact as text | 6.28 | 4.5 | pass |
+| Lattice | light | `monitorText` #855700 on `surface` #FFFFFF | monitor as text | 6.25 | 4.5 | pass |
+| Lattice | light | `blockText` #B32E24 on `surface` #FFFFFF | block as text | 6.30 | 4.5 | pass |
+| Lattice | light | `navInk` #0E1526 on `nav` #FFFFFF | navigation text | 18.20 | 4.5 | pass |
+| Lattice | light | `navInk2` #525D73 on `nav` #FFFFFF | navigation secondary text | 6.62 | 4.5 | pass |
 
-Total pairs: 138, failures: 0
+Total pairs: 184, failures: 0

@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PII redaction (outbound) · AI Mesh Firewall (Lattice)</title>
+<link rel="stylesheet" href="style.css">
+<script>(function(){var t=new URLSearchParams(location.search).get("theme");if(t)document.documentElement.dataset.theme=t;})();</script>
+<script src="../shared/sample-data.js"></script>
+<script src="shell.js"></script>
+</head>
+<body>
+<noscript>This mockup renders its sample data with JavaScript.</noscript>
+<script>
+(function () {
+  const { S, fmt, icon, head, box, chip, mount } = window.L;
+  const E = S.editor, P = S.policies;
+  const act = { redact: ["redact", "Redact"], block: ["block", "Block"], monitor: ["monitor", "Watch"], allow: ["allow", "Allow"] };
+  const sev = { critical: "block", high: "monitor", medium: "neutral", low: "neutral" };
+  const group = (label, list) => `<p class="eyebrow" style="font-size:10.5px;margin:4px 0 2px">${label} · ${list.length}</p>` + list.map((p) => `
+    <div class="pitem${p.selected ? " on" : ""}"><span class="pn">${p.name}</span><span class="pc mono">${p.code}</span>
+      <span class="pm">${p.enabled ? `P${p.priority}` : "Paused"}</span><span class="ps">${chip(sev[p.severity], p.severity[0].toUpperCase() + p.severity.slice(1))}</span></div>`).join("");
+  const maxHits = Math.max(...E.rules.map((r) => r.hits));
+  const segs = E.test.segments.map(([t, ph]) => (ph ? `<span class="ph">${ph}</span>` : t)).join("");
+
+  const html = head({
+    eyebrow: `Checkpoint <b>1.2</b> · Policies · Pipeline`,
+    title: E.name,
+    sub: `<span class="mono">${E.code}</span> · priority ${E.priority} · live version ${E.compiled.version} · <b style="color:var(--monitor-text);font-weight:600">${E.compiled.pending} unpublished change</b> <span class="sample">Sample data</span>`,
+    ctrls: `<button class="btn">Discard draft</button><button class="btn pri">Compile and publish v15</button>`,
+  }) + `<div class="lattice">` + [
+    box({ span: "s3 r2 m-last mw", title: "Policies", purpose: "Every policy, in the order it runs",
+      tag: `<span class="id">6</span>`,
+      body: `<div class="input" style="height:32px;color:var(--ink2)">${icon("search")}Filter by name or code</div>
+        <div class="plist">${group("Pipeline", P.pipeline)}${group("RAG", P.rag)}${group("MCP", P.mcp)}</div>
+        <button class="btn" style="align-self:flex-start">${icon("plus")}New policy</button>`,
+      src: "policies", path: "/api/policies/", age: "12 s ago" }),
+    box({ span: "s6", title: "Policy", purpose: "What it is called, how severe a match is, and whether it enforces",
+      tag: chip("allow", "Enforcing"),
+      body: `<div class="fgrid">
+          <div class="field"><label>Name</label><div class="input">${E.name}</div></div>
+          <div class="field"><label>Code</label><div class="input mono">${E.code}</div></div>
+          <div class="field"><label>Category</label><div class="input">${E.category}<span class="caret">${icon("chev")}</span></div></div>
+          <div class="field"><label>Severity</label><div class="input">High<span class="caret">${icon("chev")}</span></div></div>
+          <div class="field"><label>Priority</label><div class="input mono">${E.priority}</div></div>
+          <div class="field"><label>Enforcement</label><div class="input"><span class="toggle" aria-hidden="true"></span>Enforcing</div></div>
+          <div class="field" style="grid-column:1/-1"><label>Description</label><div class="input area">${E.description}</div></div></div>`,
+      src: "policies/12", path: "/api/policies/12/", age: "12 s ago" }),
+    box({ span: "s3 mw", title: "Draft against live v14", purpose: "What publishing would change",
+      tag: chip("monitor", "1 change"),
+      body: `<div class="diff"><div class="h">rule 3 · National ID numbers</div><div class="m">− \\b\\d{12}\\b</div><div class="p">+ \\b\\d{4}\\s?\\d{4}\\s?\\d{4}\\b</div></div>
+        <dl class="facts"><dt>Edited by</dt><dd>Asha Rao, 11:55</dd><dt>Live v14</dt><dd>published 10:05</dd><dt>Dry run</dt><dd>compiles, 0 errors</dd></dl>`,
+      src: "policies/compile/status", path: "/api/policies/compile/status/", age: "1 min ago" }),
+
+    box({ span: "s6", title: "Rules, in the order they run", purpose: "The first rule that matches decides the action",
+      tag: `<span class="id">${E.rules.length} rules</span>`,
+      body: `<table class="t"><thead><tr><th>#</th><th>Rule</th><th>Matches</th><th class="desk-only">Stage</th><th>Action</th><th class="num desk-only">24 h</th></tr></thead><tbody>
+        ${E.rules.map((r, i) => `<tr class="${i === 2 ? "sel" : ""}"><td class="mono muted">${i + 1}</td><td><b style="font-weight:600">${r.name}</b><div class="muted" style="font-size:12px">${r.type === "preset" ? "Preset" : "Custom regex"}${i === 2 ? " · changed in draft" : ""}</div></td>
+          <td style="max-width:180px"><span class="pat">${r.pattern}</span></td><td class="desk-only">${r.stage}</td><td>${chip(...act[r.action])}</td><td class="num mono desk-only">${fmt(r.hits)}</td></tr>`).join("")}</tbody></table>
+        <button class="btn" style="align-self:flex-start">${icon("plus")}Add rule</button>`,
+      src: "policies/12/rules", path: "/api/policies/12/rules/", age: "12 s ago" }),
+    box({ span: "s3 mw", title: "Test against the draft", purpose: "Run a sample prompt before you publish",
+      tag: chip("redact", "Redact"),
+      body: `<div class="input area" style="font-size:12.5px;color:var(--ink2)">${E.test.input}</div>
+        <div class="seg" style="font-size:13px;line-height:1.75"><span class="lab">Model would receive</span>${segs}</div>
+        <p class="muted" style="font-size:12px">Rules 1 and 2 matched. Rules 3 and 4 did not. Draft and live agree.</p>`,
+      src: "policies/test", path: "/api/policies/test/", age: "just now" }),
+
+    box({ title: "Where it applies", purpose: "Agents, users and roles in scope",
+      body: `<dl class="facts"><dt>Agents</dt><dd>support-bot, sales-assistant</dd><dt>Users</dt><dd>Every user</dd><dt>Roles</dt><dd>Every role</dd><dt>Models</dt><dd>All 6 models</dd></dl>
+        <a href="#" style="font-size:12.5px">Change scope</a>`,
+      src: "policies/12", path: "/api/policies/12/", age: "12 s ago" }),
+    box({ title: "Hits by rule", purpose: "How often each rule decided, 24 h",
+      body: `<div class="rows bar">${E.rules.map((r) => `<div><span class="k"><span class="t">${r.name}</span></span><span class="track"><i class="${r.action}" style="width:${Math.max(2, (r.hits / maxHits) * 100)}%"></i></span><span class="v" style="text-align:right">${fmt(r.hits)}</span></div>`).join("")}</div>`,
+      src: "policies/analytics", path: "/api/policies/analytics/", age: "40 s ago" }),
+    box({ title: "Rollout", purpose: "Which replicas run which version",
+      tag: chip("allow", "In sync"),
+      body: `<div class="kpi"><span class="v">3 of 3</span><span class="u">on v14</span></div>
+        <dl class="facts"><dt>Compiled</dt><dd>${E.compiled.ago}, 84 ms</dd><dt>Plan</dt><dd>v14 · 6 policies</dd></dl>`,
+      src: "policies/compile/status", path: "/api/policies/compile/status/", age: "1 min ago" }),
+    box({ title: "Mapped to", purpose: "Frameworks this policy gives evidence for",
+      body: `<div class="rows">
+        <div><span class="k"><span class="mono muted" style="font-size:11.5px">LLM02</span><span class="t">Sensitive information disclosure</span></span></div>
+        <div><span class="k"><span class="mono muted" style="font-size:11.5px">DPDP</span><span class="t">Section 8, reasonable safeguards</span></span></div>
+        <div><span class="k"><span class="mono muted" style="font-size:11.5px">GDPR</span><span class="t">Article 32, security of processing</span></span></div></div>`,
+      src: "compliance_tags", path: "policy.compliance_tags", age: "12 s ago" }),
+  ].join("") + `</div>`;
+
+  mount("policy", html);
+})();
+</script>
+</body>
+</html>

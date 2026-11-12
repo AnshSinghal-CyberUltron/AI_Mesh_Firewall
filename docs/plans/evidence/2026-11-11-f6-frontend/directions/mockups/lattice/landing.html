@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ZeroShield AI Mesh Firewall (Lattice)</title>
+<link rel="stylesheet" href="style.css">
+<script>(function(){var t=new URLSearchParams(location.search).get("theme");if(t)document.documentElement.dataset.theme=t;})();</script>
+<script src="../shared/sample-data.js"></script>
+<script src="shell.js"></script>
+</head>
+<body>
+<noscript>This mockup renders its sample data with JavaScript.</noscript>
+<script>
+(function () {
+  const { S, fmt, icon, box, chip, id, spark, cells, mark } = window.L;
+  const T = S.totals, H = S.hourly;
+  const norm = (a) => { const m = Math.max(...a); return a.map((x) => x / m); };
+  const v = [["allow", "Allowed", T.allowed], ["redact", "Redacted", T.redacted], ["monitor", "Watched", T.monitored], ["block", "Blocked", T.blocked]];
+
+  // A marketing box keeps the console anatomy; its footer names the verdicts the checkpoint can return.
+  const lbox = (n, title, purpose, text, verdicts) => `<section class="box s3" aria-label="${title}">
+      <div class="bh"><h2>${title}</h2><span class="r">${id(n)}</span></div><p class="bp">${purpose}</p>
+      <div class="bb"><p style="font-size:13px;line-height:1.55;color:var(--ink2)">${text}</p></div>
+      <div class="bf">${verdicts.map(([t, w]) => `<span class="fr" style="color:var(--${t}-text)">${w}</span>`).join("")}</div></section>`;
+
+  const preview = [
+    box({ span: "s4", title: "Traffic", purpose: "Requests per hour",
+      body: `<div class="kpi"><span class="v">${fmt(T.requests)}</span><span class="u">requests</span></div>${spark(H.map((h) => h.allow + h.redact + h.monitor + h.block))}`,
+      src: "soc-kpis", age: "40 s ago" }),
+    box({ span: "s4", title: "Verdicts", purpose: "What was decided",
+      body: `<div class="mix">${v.map(([k, , n]) => `<i style="flex:${Math.max(n, 300)};background:var(--${k})"></i>`).join("")}</div>
+        <div class="legend">${[v[1], v[3]].map(([k, w, n]) => `<span><i style="background:var(--${k})"></i>${w}<b>${fmt(n)}</b></span>`).join("")}</div>`,
+      src: "analytics", age: "40 s ago" }),
+    box({ span: "s4", title: "Overhead", purpose: "Added time, p99",
+      body: `<div class="kpi"><span class="v">${S.overhead.p99}</span><span class="u">ms p99</span></div>${spark(S.overhead.hist, { stroke: "var(--ink2)" })}`,
+      src: "stage metrics", age: "15 s ago" }),
+    box({ span: "s4", title: "Policies", purpose: "Pipeline, RAG and MCP", tag: id("1.2"),
+      body: `<div class="kpi"><span class="v">${T.blocked}</span><span class="u">blocked</span></div>${cells(norm(H.map((h) => h.block)), "block")}`,
+      src: "analytics", age: "40 s ago" }),
+    box({ span: "s4", title: "MCP tools", purpose: "Tool calls scanned", tag: id("1.4"),
+      body: `<div class="kpi"><span class="v">14</span><span class="u">calls denied</span></div>${cells(norm(H.map((h) => h.block)).map((x) => x * 0.7), "block")}`,
+      src: "mcp health", age: "30 s ago" }),
+    box({ span: "s4", title: "Kill switch", purpose: "Models in service", tag: id("1.6"),
+      body: `<div class="kpi"><span class="v">1</span><span class="u">isolated</span></div>${cells(H.map((h) => (h.h >= 9 ? { v: 0.75, tone: "monitor" } : { v: 0.05, tone: "ink2" })))}`,
+      src: "kill-switches", age: "10 s ago" }),
+  ].map((b) => b.replace('aria-label="', 'aria-label="Console preview, ')).join("");
+
+  const checkpoints = [
+    ["1.1", "Gateway and keys", "Checks every key and its limits", "Each call carries a ZeroShield key with a project, allowed models and a tokens-per-minute limit.", [["allow", "Allow"], ["block", "Refuse"]]],
+    ["1.2", "Policies", "Runs policies in priority order", "Pipeline, RAG and MCP policies run in priority order. The first rule that matches decides.", [["redact", "Redact"], ["monitor", "Watch"], ["block", "Block"]]],
+    ["1.3", "RAG and vectors", "Filters what retrieval hands a model", "Retrieved chunks are checked against the caller's scope before they reach the prompt.", [["redact", "Withhold"], ["allow", "Allow"]]],
+    ["1.4", "MCP tools", "Scans calls to and from MCP tools", "Tool calls and their results are scanned; write tools can be held to policy only.", [["block", "Deny"], ["allow", "Allow"]]],
+    ["1.5", "Model routing", "Picks the model a request may reach", "Routing rules and fallbacks decide which model answers, and the response says so.", [["monitor", "Reroute"], ["allow", "Route"]]],
+    ["1.6", "Kill switch", "Isolates a model and reroutes it", "Take a model out of service in one step. Its traffic moves to the fallback you set.", [["monitor", "Isolate"], ["allow", "Restore"]]],
+    ["1.7", "Output guardrails", "Checks responses before they leave", "Responses are checked for personal data, secrets and leaked internals before the client sees them.", [["redact", "Redact"], ["block", "Block"]]],
+    ["Log", "Enforcement log", "Each decision, with rule and plan", "Every decision is written with the rule that made it and the policy version that ran.", [["allow", "Recorded"]]],
+  ];
+
+  document.body.innerHTML = `<div class="lp">
+    <header class="lp-top"><a class="brand" href="landing.html"><img src="${mark}" alt="ZeroShield"><span>AI Mesh Firewall</span></a>
+      <nav aria-label="Site"><a href="#">Product</a><a href="#how">How it works</a><a href="#">Docs</a><a href="#">Pricing</a></nav>
+      <div class="r"><a class="btn ghost desk" href="console.html">Sign in</a><a class="btn pri" href="#">Book a demo</a></div></header>
+    <main>
+      <section class="hero">
+        <div>
+          <p class="eyebrow">ZeroShield / <b>AI Mesh Firewall</b></p>
+          <h1>One firewall in front of every model, tool and vector store.</h1>
+          <p class="lede">AI Mesh Firewall sits between your applications and the models, MCP tools and vector stores they call. Seven checkpoints read each request and response, and every decision is written down with the rule that made it.</p>
+          <div class="cta"><a class="btn pri" href="#">Book a demo</a><a class="btn" href="console.html">Explore the console</a></div>
+          <p class="fine">OpenAI-compatible gateway · change the base URL and the key</p>
+        </div>
+        <div class="frame" aria-label="Console preview with sample data">
+          <div class="fh"><span>AI Mesh Firewall / Overview</span><span class="r">Sample data</span></div>
+          <div class="lattice">${preview}</div>
+        </div>
+      </section>
+      <section class="sec" id="how">
+        <p class="eyebrow">How it works</p>
+        <h2>Every request passes seven checkpoints.</h2>
+        <p class="lede">The console shows each one as its own box, with the number that matters, its state, and where that number came from.</p>
+        <div class="lattice">${checkpoints.map((c) => lbox(...c)).join("")}</div>
+      </section>
+    </main></div>`;
+})();
+</script>
+</body>
+</html>

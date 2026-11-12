@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Request 7c1e-42ab · AI Mesh Firewall (Lattice)</title>
+<link rel="stylesheet" href="style.css">
+<script>(function(){var t=new URLSearchParams(location.search).get("theme");if(t)document.documentElement.dataset.theme=t;})();</script>
+<script src="../shared/sample-data.js"></script>
+<script src="shell.js"></script>
+</head>
+<body>
+<noscript>This mockup renders its sample data with JavaScript.</noscript>
+<script>
+(function () {
+  const { S, fmt, icon, head, box, chip, mount } = window.L;
+  const R = S.request;
+  const word = { allow: "Allow", redact: "Redact", reroute: "Reroute", upstream: "Model", block: "Block" };
+  const tone = { allow: "allow", redact: "redact", reroute: "monitor", upstream: "neutral", block: "block" };
+  const maxFw = Math.max(...R.stages.filter((s) => s.action !== "upstream").map((s) => s.ms));
+  const rec = { fresh: "record", age: "11:42:08" };
+  const masked = R.inputBefore.replace("priya.sharma@example.com", '<span class="hl-pii">priya.sharma@example.com</span>').replace("+91 98765 43210", '<span class="hl-pii">+91 98765 43210</span>');
+  const forwarded = R.inputBefore.replace("priya.sharma@example.com", '<span class="ph">EMAIL_1</span>').replace("+91 98765 43210", '<span class="ph">PHONE_1</span>');
+
+  const html = head({
+    eyebrow: `Requests / <b>${R.short}</b>`,
+    title: `Request ${R.short}`,
+    sub: `${R.time} · ${R.agent} · key <span class="mono">${R.key}…</span> · ${R.requested} → ${R.routed} <span class="sample">Sample data</span>`,
+    ctrls: `<a class="btn desk" href="console.html">${icon("back")}Requests</a>
+      <button class="btn">${icon("link")}Copy link</button>
+      <button class="btn pri">${icon("play")}Replay in simulator</button>`,
+  }) + `<div class="lattice">` + [
+    box({ title: "Outcome", purpose: "The final decision and what the client got",
+      body: `<div>${chip("redact", "Redacted", "lg")}</div>
+        <dl class="facts"><dt>Final action</dt><dd>redact</dd><dt>HTTP status</dt><dd>${R.status}</dd><dt>Client got</dt><dd>the model's answer</dd></dl>`,
+      src: "threat-feed/" + R.eventId, path: `/api/security/threat-feed/${R.eventId}/`, ...rec }),
+    box({ title: "Latency", purpose: "Where the time went, firewall and model",
+      body: `<div class="kpi"><span class="v">${R.totalMs.toFixed(0)}</span><span class="u">ms total</span></div>
+        <div class="mix" role="img" aria-label="Firewall ${R.overheadMs} ms, model ${R.totalMs - R.overheadMs} ms"><i style="flex:${R.overheadMs * 6};background:var(--accent)"></i><i style="flex:${R.totalMs - R.overheadMs};background:color-mix(in srgb, var(--ink2) 40%, transparent)"></i></div>
+        <dl class="facts"><dt>Firewall</dt><dd>${R.overheadMs} ms</dd><dt>Model</dt><dd>${(R.totalMs - R.overheadMs).toFixed(1)} ms</dd><dt>First token</dt><dd>${R.ttftMs} ms</dd></dl>`,
+      src: "stage_metrics_ms", path: "pipeline_trace.stage_metrics_ms", ...rec }),
+    box({ title: "Tokens and cost", purpose: "Usage billed to this key's project",
+      body: `<div class="kpi"><span class="v">${R.tokensIn + R.tokensOut}</span><span class="u">tokens</span></div>
+        <dl class="facts"><dt>Input</dt><dd>${R.tokensIn}</dd><dt>Output</dt><dd>${R.tokensOut}</dd><dt>Cost</dt><dd>$${R.cost}</dd></dl>`,
+      src: "usage", path: "OpenAI usage object", ...rec }),
+    box({ title: "Risk", purpose: "How risky the prompt looked, and why",
+      tag: chip("monitor", R.threat),
+      body: `<div class="kpi"><span class="v">${R.risk.toFixed(2)}</span><span class="u">risk score</span></div>
+        <dl class="facts"><dt>OWASP</dt><dd>${R.owasp} Sensitive information</dd><dt>Compliance</dt><dd>${R.tags.join(", ")}</dd><dt>Incident</dt><dd>None opened</dd></dl>`,
+      src: "risk_score", path: "enforcement_event.risk_score", ...rec }),
+
+    box({ span: "s8", title: "Pipeline, stage by stage", purpose: "Each checkpoint this request passed, what it did and how long it took",
+      tag: `<span class="id">${R.stages.length} stages</span>`,
+      body: `<div class="stages">${R.stages.map((s, i) => `<div class="stage${s.action === "upstream" ? " up" : ""}">
+          <span class="no">${i + 1}</span><span class="nm">${s.name}</span>${chip(tone[s.action], word[s.action])}<span class="dt">${s.detail}</span>
+          <span class="ms">${s.action === "upstream" ? '<span class="muted" style="text-align:left">upstream</span>' : `<span class="track"><i style="width:${(s.ms / maxFw) * 100}%"></i></span>`}<span>${s.ms.toFixed(1)} ms</span></span></div>`).join("")}</div>`,
+      src: "pipeline_trace.stages", path: "pipeline_trace.stages", ...rec }),
+    box({ span: "s4", title: "Routing decision", purpose: "Which model was asked for, and which one answered",
+      tag: chip("monitor", "Rerouted"),
+      body: `<div class="rows">
+          <div><span class="k">Requested</span><span class="v mono">${R.requested}</span></div>
+          <div><span class="k">Routed to</span><span class="v mono">${R.routed}</span></div>
+          <div><span class="k">Decision source</span><span class="v">Kill switch</span></div>
+          <div><span class="k">Fallback chain</span><span class="v mono">llama-3.1-70b, gpt-4o</span></div></div>
+        <p class="muted" style="font-size:12.5px">${R.routeReason}. The client sees <span class="mono">x-zeroshield-rerouted: true</span>.</p>`,
+      src: "routing", path: "zeroshield.routing", ...rec }),
+
+    box({ span: "s8", title: "Prompt and response", purpose: "What the client sent, what the model saw, and what came back",
+      body: `<div class="seg"><span class="lab">Prompt from the client · operator view, personal data underlined</span>${masked}</div>
+        <div class="seg"><span class="lab">Prompt forwarded to ${R.routed}</span>${forwarded}</div>
+        <div class="seg"><span class="lab">Response returned to the client · output guard passed</span>${R.output}</div>`,
+      src: "input_text_before / after", path: "pipeline_trace.input_text_before, input_text_after, final_response", ...rec }),
+    box({ span: "s4", title: "Rules that decided", purpose: "The policy clauses that matched, in the plan that ran",
+      tag: `<span class="id">plan v${R.plan}</span>`,
+      body: `<div class="rows">
+          <div><span class="k"><i class="vg redact"></i><span class="t">PII_REDACT_OUT · rule 1 Email</span></span><span class="v mono">EMAIL_1</span></div>
+          <div><span class="k"><i class="vg redact"></i><span class="t">PII_REDACT_OUT · rule 2 Phone</span></span><span class="v mono">PHONE_1</span></div>
+          <div><span class="k muted"><i class="vg allow"></i><span class="t">INJECTION_BLOCK · 3 rules</span></span><span class="v muted">no match</span></div>
+          <div><span class="k muted"><i class="vg allow"></i><span class="t">CODE_EXFIL_WATCH · 2 rules</span></span><span class="v muted">no match</span></div></div>
+        <a href="policy.html" style="font-size:12.5px">Open PII_REDACT_OUT</a>`,
+      src: "matched_rules", path: "zeroshield.matched_rules", ...rec }),
+
+    box({ span: "s4", title: "Request", purpose: "Identifiers and transport details",
+      body: `<dl class="facts"><dt>Request ID</dt><dd class="mono">${R.id}</dd><dt>Event ID</dt><dd class="mono">${R.eventId}</dd><dt>Time</dt><dd>${R.time}</dd>
+        <dt>Method</dt><dd>${R.method} <span class="mono">${R.endpoint}</span></dd><dt>Source IP</dt><dd class="mono">${R.sourceIp}</dd><dt>User agent</dt><dd class="mono">${R.userAgent}</dd></dl>`,
+      src: "request", path: "enforcement_event", ...rec }),
+    box({ span: "s4", title: "Security checks", purpose: "Every check the scan ran, including the clean ones",
+      body: `<div class="rows">${R.checks.slice(0, 6).map(([k, t, w]) => `<div><span class="k">${k}</span><span class="v">${chip(t, w)}</span></div>`).join("")}</div>`,
+      src: "security analysis", path: "enforcement_event.metadata", ...rec }),
+    box({ span: "s4", title: "Context", purpose: "Who sent it and under which key and project",
+      body: `<dl class="facts"><dt>Organization</dt><dd>${S.org}</dd><dt>Project</dt><dd>${R.project}</dd><dt>Agent</dt><dd>${R.agent}</dd>
+        <dt>Key</dt><dd><span class="mono">${R.key}…</span> ${R.keyName}</dd><dt>Event type</dt><dd>request</dd><dt>Plan version</dt><dd>v${R.plan}</dd></dl>`,
+      src: "metadata", path: "enforcement_event.metadata.extra", ...rec }),
+  ].join("") + `</div>`;
+
+  mount("request", html);
+})();
+</script>
+</body>
+</html>

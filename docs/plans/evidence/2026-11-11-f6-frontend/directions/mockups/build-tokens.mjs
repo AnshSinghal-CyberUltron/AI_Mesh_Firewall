@@ -3,7 +3,7 @@
 import fs from "node:fs";
 import { directions } from "./tokens.mjs";
 
-const folder = { checkpoint: "checkpoint", nightShift: "night-shift", redline: "redline" };
+const folder = { checkpoint: "checkpoint", nightShift: "night-shift", redline: "redline", lattice: "lattice" };
 const kebab = (s) => s.replace(/[A-Z]/g, (m) => "-" + m.toLowerCase());
 
 for (const [key, d] of Object.entries(directions)) {

@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Overview · AI Mesh Firewall (Lattice)</title>
+<link rel="stylesheet" href="style.css">
+<script>(function(){var t=new URLSearchParams(location.search).get("theme");if(t)document.documentElement.dataset.theme=t;})();</script>
+<script src="../shared/sample-data.js"></script>
+<script src="shell.js"></script>
+</head>
+<body>
+<noscript>This mockup renders its sample data with JavaScript.</noscript>
+<script>
+(function () {
+  const { S, fmt, head, box, chip, id, spark, cells, mount } = window.L;
+  const T = S.totals, H = S.hourly;
+  const norm = (a) => { const m = Math.max(...a); return a.map((x) => x / m); };
+  const hourlyTotals = H.map((h) => h.allow + h.redact + h.monitor + h.block);
+  const v = [["allow", "Allowed", T.allowed], ["redact", "Redacted", T.redacted], ["monitor", "Watched", T.monitored], ["block", "Blocked", T.blocked]];
+  const O = S.overhead, budgetAt = (O.budget / O.hist.length) * 100;
+  const NAMES = ["Gateway and keys", "Policies", "RAG and vectors", "MCP tools", "Model routing", "Kill switch", "Output guardrails"];
+  const PURPOSE = ["Checks every key and its limits", "Runs policies in priority order", "Filters what retrieval hands a model",
+    "Scans calls to and from MCP tools", "Picks the model a request may reach", "Isolates a model and reroutes it", "Checks responses before they leave"];
+  const cp = (n, word, tone, metric, unit, lines, strip, src, path, age, fresh = "fresh") => box({
+    title: NAMES[n], purpose: PURPOSE[n], tag: id(S.checkpoints[n].id) + chip(tone, word),
+    body: `<div class="kpi"><span class="v">${metric}</span><span class="u">${unit}</span></div><div class="mini">${lines}</div>${strip}`,
+    src, path, age, fresh,
+  });
+  const ks = H.map((h) => (h.h >= 9 ? { v: 0.75, tone: "monitor" } : { v: 0.05, tone: "ink2" }));
+  const mcp = norm(H.map((h) => h.block)).map((x, i) => (i === 23 ? { v: 0.9, tone: "monitor" } : { v: x * 0.8, tone: "block" }));
+
+  const html = head({
+    eyebrow: `${S.org} · Production`,
+    title: "Overview",
+    sub: `Last 24 hours to 12:00 IST, 11 Nov 2026 · 16 boxes · 14 fresh, 2 stale <span class="sample">Sample data</span>`,
+  }) + `<div class="lattice">` + [
+    // Row 1: the shape of the day
+    box({ title: "Traffic", purpose: "Requests through the gateway, per hour",
+      body: `<div class="kpi"><span class="v">${fmt(T.requests)}</span><span class="u">requests</span><span class="d">+6%</span></div>${spark(hourlyTotals)}`,
+      src: "soc-kpis", path: "/api/security/soc-kpis/", age: "40 s ago" }),
+    box({ title: "Verdicts", purpose: "What the firewall decided per request",
+      body: `<div class="mix" role="img" aria-label="Allowed ${T.allowed}, redacted ${T.redacted}, watched ${T.monitored}, blocked ${T.blocked}">${v.map(([k, , n]) => `<i style="flex:${Math.max(n, 300)};background:var(--${k})"></i>`).join("")}</div>
+        <div class="legend">${v.map(([k, w, n]) => `<span><i style="background:var(--${k})"></i>${w}<b>${fmt(n)}</b></span>`).join("")}</div>`,
+      src: "policies/analytics", path: "/api/policies/analytics/", age: "40 s ago" }),
+    box({ title: "Firewall overhead", purpose: "Added time per request; budget 20 ms p99",
+      tag: chip("allow", "Within budget"),
+      body: `<div class="kpi"><span class="v">${O.p99}</span><span class="u">ms p99</span><span class="d">p50 ${O.p50} · p95 ${O.p95}</span></div>
+        <div class="hist" role="img" aria-label="Overhead histogram, 0 to 20 ms">${O.hist.map((h) => `<i style="height:${4 + (h / 52) * 92}%"></i>`).join("")}<span class="budget" style="left:${budgetAt * 0.98}%"><span>20 ms</span></span></div>`,
+      src: "stage_metrics_ms", path: "gateway-v2 stage metrics", age: "15 s ago" }),
+    box({ title: "Gateway fleet", purpose: "Replicas serving and the plan they run",
+      tag: chip("allow", "Serving"),
+      body: `<div class="kpi"><span class="v">${S.fleet.serving} of ${S.fleet.replicas}</span><span class="u">replicas serving</span></div>
+        <dl class="facts"><dt>Policy plan</dt><dd>v${S.fleet.plan} on every replica</dd><dt>Config sync</dt><dd>${S.fleet.syncAgo} ago</dd><dt>Config keys</dt><dd>${S.fleet.configKeys} in the console</dd></dl>`,
+      src: "health", path: "/api/health/", age: "4 s ago" }),
+
+    // Rows 2 and 3: the seven checkpoints, plus the detectors behind them
+    cp(0, "Enforcing", "allow", "12", "active keys", `<span><b>41</b> auth failures</span><span><b>2</b> expiring</span><span><b>6</b> idle</span>`,
+      cells(norm(hourlyTotals), "ink2"), "gateways/stats", "/api/gateways/stats/", "40 s ago"),
+    cp(1, "Enforcing", "allow", fmt(T.blocked), "blocked", `<span><b>${fmt(T.redacted)}</b> redacted</span><span><b>6</b> live</span><span>plan <b>v14</b></span>`,
+      cells(norm(H.map((h) => h.block)), "block"), "policies/analytics", "/api/policies/analytics/", "40 s ago"),
+    cp(2, "Enforcing", "allow", "96", "chunks withheld", `<span><b>3</b> stores</span><span><b>57,284</b> chunks</span>`,
+      cells(norm(H.map((h) => h.redact)).map((x) => x * 0.8), "redact"), "rag-pipeline-kpis", "/api/security/rag-pipeline-kpis/", "1 min ago"),
+    cp(3, "Degraded", "monitor", "14", "calls denied", `<span><b>4 of 5</b> servers up</span><span>docs-search down</span>`,
+      cells(mcp), "mcp-connector/health", "/api/mcp-connector/health/", "30 s ago"),
+    cp(4, "Enforcing", "allow", "31", "reroutes", `<span><b>6</b> models</span><span><b>1</b> fallback rule</span>`,
+      cells(norm(H.map((h) => h.monitor)), "ink2"), "firewall/models", "/api/firewall/models/", "1 min ago"),
+    cp(5, "1 isolated", "monitor", "1", "model isolated", `<span><b>gpt-4o-mini</b> since 09:14</span>`,
+      cells(ks, "monitor", "Isolated from 09:14 to now"), "kill-switches", "/api/kill-switches/", "10 s ago"),
+    cp(6, "Enforcing", "allow", "57", "redacted", `<span><b>2</b> blocked</span><span><b>0</b> withheld</span>`,
+      cells(norm(H.map((h) => h.redact)), "redact"), "module-kpis", "/api/security/module-kpis/", "40 s ago"),
+    box({ title: "Detectors", purpose: "Tier-1 patterns and the Tier-2 guard",
+      tag: chip("allow", "All up"),
+      body: `<div class="rows">
+        <div><span class="k">Tier-1 presets</span><span class="v">${S.detectors.tier1Presets}</span></div>
+        <div><span class="k">Tier-1 custom regex</span><span class="v">${S.detectors.tier1Regex}</span></div>
+        <div><span class="k">Tier-2 guard p95</span><span class="v">${S.detectors.tier2P95} ms</span></div>
+        <div><span class="k">Fail closed</span><span class="v">On</span></div></div>`,
+      src: "firewall/config", path: "/api/firewall/config/", age: "2 min ago" }),
+
+    // Row 4: lists
+    box({ title: "Rules that fired most", purpose: "Rules that decided the most requests",
+      body: `<div class="rows">${S.topRules.map((r) => `<div><span class="k"><i class="vg ${r.action}" title="${r.action}"></i><span class="t">${r.rule}</span></span><span class="v">${fmt(r.hits)}</span></div>`).join("")}</div>`,
+      src: "policy/top-rules", path: "/api/policy/top-rules/", age: "40 s ago" }),
+    box({ title: "OWASP LLM Top 10", purpose: "Decisions mapped to the 2025 list",
+      body: `<div class="rows">${S.owasp.slice(0, 5).map((o) => `<div><span class="k"><span class="mono muted" style="font-size:11.5px">${o.id}</span><span class="t">${o.name}</span></span><span class="v">${fmt(o.hits)}</span></div>`).join("")}</div>`,
+      src: "owasp-stats", path: "/api/security/owasp-stats/", age: "26 min ago", fresh: "stale" }),
+    box({ title: "Models", purpose: "Connected models, share of traffic",
+      body: `<div class="rows">${S.models.slice(0, 5).map((m) => `<div><span class="k">${m.name}<span class="muted" style="font-size:11.5px">${m.provider}</span></span><span class="v">${m.state === "isolated" ? chip("monitor", "Isolated") : m.share + "%"}</span></div>`).join("")}</div>`,
+      src: "firewall/models", path: "/api/firewall/models/", age: "18 min ago", fresh: "stale" }),
+    box({ title: "Enforcement log", purpose: "Each decision, with rule and plan",
+      tag: chip("allow", "Writing"),
+      body: `<div class="kpi"><span class="v">${fmt(S.enforcementLog.written)}</span><span class="u">records</span></div>
+        <dl class="facts"><dt>Last written</dt><dd>${S.enforcementLog.lastAgo} ago</dd><dt>Dropped</dt><dd>${S.enforcementLog.dropped}</dd><dt>Plan versions</dt><dd>v13, v14</dd></dl>`,
+      src: "threat-feed", path: "/api/security/threat-feed/", age: "3 s ago" }),
+  ].join("") + `</div>`;
+
+  mount("console", html);
+})();
+</script>
+</body>
+</html>
