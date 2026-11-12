@@ -1,0 +1,32 @@
+# Protection state read through the REST API, 2026-11-12T06:20Z (read-only GETs)
+## branches/develop
+{"name":"develop","protected":false,"sha":"562619c867f0a2a21718832b9d7edbb0944fdc3e"}
+## rules/branches/develop (rule types)
+[]
+## branches/staging
+{"name":"staging","protected":false,"sha":"6cec3e28570a9797454fb34981ffc211f6d1d8c7"}
+## rules/branches/staging (rule types)
+[]
+## branches/main
+{"name":"main","protected":true,"sha":"6cec3e28570a9797454fb34981ffc211f6d1d8c7"}
+## rules/branches/main (rule types)
+["deletion (ruleset 19609105)","non_fast_forward (ruleset 19609105)","creation (ruleset 19609105)","update (ruleset 19609105)","pull_request (ruleset 19609105)"]
+## rulesets
+{"enforcement":"active","id":19609105,"name":"Main Protected by Ansh","source_type":"Repository"}
+## ruleset 19609105 (Main Protected by Ansh)
+{"bypass_actors":[],"conditions":{"ref_name":{"exclude":[],"include":["~DEFAULT_BRANCH","refs/heads/\"main\""]}},"current_user_can_bypass":"never","rules":[{"type":"deletion"},{"type":"non_fast_forward"},{"type":"creation"},{"type":"update"},{"parameters":{"allowed_merge_methods":["merge","squash","rebase"],"dismiss_stale_reviews_on_push":false,"dismissal_restriction":{"allowed_actors":[],"enabled":false},"require_code_owner_review":true,"require_extra_approval_for_unattributed_changes":true,"require_last_push_approval":false,"required_approving_review_count":1,"required_review_thread_resolution":false,"required_reviewers":[]},"type":"pull_request"}]}
+## code-scanning default setup
+{"languages":["actions","c-cpp","javascript","javascript-typescript","python","typescript"],"query_suite":"default","schedule":"weekly","state":"configured","updated_at":"2026-11-11T12:30:00Z"}
+## security_and_analysis
+{"dependabot_security_updates":{"status":"disabled"},"secret_scanning":{"status":"enabled"},"secret_scanning_ai_detection":{"status":"disabled"},"secret_scanning_delegated_alert_dismissal":{"status":"disabled"},"secret_scanning_delegated_bypass":{"status":"disabled"},"secret_scanning_non_provider_patterns":{"status":"enabled"},"secret_scanning_push_protection":{"status":"enabled"},"secret_scanning_validity_checks":{"status":"enabled"}}
+## dependency graph: SBOM package count
+568
+## private vulnerability reporting
+{"enabled":true}
+## repo merge settings
+{"allow_auto_merge":false,"allow_merge_commit":true,"allow_rebase_merge":true,"allow_squash_merge":true,"allow_update_branch":false,"visibility":"public"}
+## CodeQL / analyze (python) on f47a1ec8: error lines from the job log
+job 131005077202
+##[error]Code Scanning could not process the submitted SARIF file:
+CodeQL analyses from advanced configurations cannot be processed when the default setup is enabled
+## Not readable through this session's proxy (HTTP 403): environments, actions/variables, actions/permissions, org endpoints, vulnerability-alerts
