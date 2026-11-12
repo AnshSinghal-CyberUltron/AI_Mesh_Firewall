@@ -119,7 +119,13 @@ async def scan_documents(
     docs: Sequence[IngestDoc],
     surface: Surface,
 ) -> tuple[IngestDoc, ...]:
-    """Content scan with stage ``None``. BLOCK refuses; REDACT stores the verified masked text."""
+    """Content scan with stage ``None``. BLOCK refuses; REDACT stores the verified masked text.
+
+    The masked text is what the store keeps, so the redaction is permanent. It is applied only
+    when ``rag_redaction_enabled`` (the default), the same gate the vector query and the
+    generator apply (GW31 Req 14). With the setting off a REDACT stores the text as sent, and a
+    BLOCK still refuses (Req 14.4: a BLOCK is never downgraded).
+    """
     detector = detector_for(chat, deps, s.eff, surface)
     resolver = resolver_at(chat, s.plan, Phase.INPUT, surface, None)
     out: list[IngestDoc] = []
@@ -131,7 +137,7 @@ async def scan_documents(
         if decision.disposition is Disposition.BLOCK:
             raise RagRefused(posture.RAG_INGEST_BLOCKED)
         text = doc.text
-        if decision.disposition is Disposition.REDACT:
+        if decision.disposition is Disposition.REDACT and s.eff.rag_redaction_enabled:
             masked = redact_text(text, decision)
             if masked is None:
                 raise RagRefused("input_unmaskable")

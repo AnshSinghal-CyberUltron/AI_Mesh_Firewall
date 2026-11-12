@@ -349,6 +349,33 @@ def test_default_monitor_gate_changes_no_route_outcome(tmp_path: Path, case: str
     assert probe(tmp_path / "m", "monitor", text) == probe(tmp_path / "o", "off", text)
 
 
+# --------------------------------------------------------------------------- write-time redaction
+@pytest.mark.parametrize("route", ["rag_ingest", "vector_upsert"])
+@pytest.mark.parametrize("redaction", [True, False])
+def test_write_paths_honour_rag_redaction_enabled(
+    tmp_path: Path, route: str, redaction: bool
+) -> None:
+    """A REDACT at write is applied to the STORED text only when ``rag_redaction_enabled``
+    (the default), the gate the vector query and the generator already apply (GW31 Req 14).
+    Before this fix the store always kept ``[REDACTED]``, even with the setting off."""
+    settings = {"rag_redaction_enabled": redaction}
+    if route == "rag_ingest":
+        status, state, raw_kept = rag_ingest(tmp_path, "enforce", E, settings)
+        assert (status, state) == (202, "stored")
+    else:
+        status, code, raw_kept = vector_upsert(tmp_path, "enforce", E, settings)
+        assert (status, code) == (200, "")
+    assert raw_kept is (not redaction)
+
+
+@pytest.mark.parametrize("route", ["rag_ingest", "vector_upsert"])
+def test_write_block_still_refuses_with_redaction_off(tmp_path: Path, route: str) -> None:
+    """Req 14.4: switching redaction off never turns a BLOCK into an allow."""
+    probe = rag_ingest if route == "rag_ingest" else vector_upsert
+    got = probe(tmp_path, "enforce", INJECTION, {"rag_redaction_enabled": False})
+    assert got[:2] == (400, "rag_ingest_blocked")
+
+
 # --------------------------------------------------------------------------- documented gaps
 def test_gap_r18_mcp_result_injection_is_allowed_under_enforce(tmp_path: Path) -> None:
     """Register R18: an injection in an MCP tool RESULT is not covered (the extension carries
