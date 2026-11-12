@@ -208,3 +208,4 @@ Every reusable workflow's job already had one.
 - SIGALRM fails the hung test, its log shows the stack and the test id, and the rest of the shard runs.
 - 300 s is 3.6× the slowest test measured on CI (84 s).
 - A slower machine sets `PYTEST_TIMEOUT=600`; it overrides the file, and `--timeout` overrides both.
+- openai-conformance accepts recorded failures (pytest exit 1) when its two runs agree, but a test that hit the per-test timeout fails the step anyway (`scripts/ci/junit_timeouts.py` on both JUnit files): a hang is never a ledger entry. It is found by pytest-timeout's message, or by a JUnit time within 1 s of the limit, which also catches a hang that an `xfail` or an `except BaseException` hides.

@@ -366,6 +366,9 @@ jobs:
       - name: LGW01-1/2/4/5 Python ASGI + loopback TCP (twice)
         working-directory: gateway_v2
         run: |
+          # No JUnit file left from an earlier job on a reused runner: a run that dies without
+          # writing one (pytest-timeout's thread method ends it with os._exit(1)) must fail below.
+          rm -f /tmp/gw01-a.xml /tmp/gw01-b.xml
           set +e
           ../.venv/bin/python -m pytest tests/openai_conformance \
             --ignore=tests/openai_conformance/node \
@@ -384,6 +387,11 @@ jobs:
             exit 1
           fi
           test -s /tmp/gw01-a.xml && test -s /tmp/gw01-b.xml
+          # A test that hit the per-test timeout (pytest-timeout, 300 s) is a hang, not a ledger
+          # entry: fail even when both runs agree on it (exit 1 and an identical compare would
+          # pass it). Also catches a hang an xfail or `except BaseException` hides (its duration).
+          ../.venv/bin/python ../scripts/ci/junit_timeouts.py --config=pyproject.toml \
+            /tmp/gw01-a.xml /tmp/gw01-b.xml
           ../.venv/bin/python -m lint.compare_junit /tmp/gw01-a.xml /tmp/gw01-b.xml
           ../.venv/bin/python - <<'PY'
           import xml.etree.ElementTree as ET
