@@ -1,0 +1,25 @@
+dark  allow-text   #5FD6A0 on surface2 (footer 'Fresh')      #131B2D   9.50  pass
+dark  monitor-text #F0C766 on surface2 (footer 'Stale')      #131B2D  10.69  pass
+dark  ink2         #9BA6BC on surface2 (footer source, age)  #131B2D   7.01  pass
+dark  redact-text  #7FCDEE on surface2 (chip on inset)       #131B2D   9.71  pass
+dark  block-text   #FF8C80 on surface2 (chip on inset)       #131B2D   7.62  pass
+dark  monitor-text #F0C766 on page (header note)             #090E1A  11.99  pass
+dark  accent-text  #B7A4FF on active nav fill                #20223E   7.18  pass
+dark  nav-ink      #E8EDF6 on active nav fill                #20223E  13.15  pass
+dark  ink          #E8EDF6 on selected policy fill           #1D213A  13.43  pass
+dark  ink          #E8EDF6 on selected table row             #1A1F36  13.82  pass
+dark  ink2         #9BA6BC on page (eyebrow, sub)            #090E1A   7.87  pass
+dark  redact-ink   #04131B on redact (placeholder chip)      #5CBDE6   8.86  pass
+light allow-text   #17714B on surface2 (footer 'Fresh')      #F6F7FB   5.60  pass
+light monitor-text #855700 on surface2 (footer 'Stale')      #F6F7FB   5.84  pass
+light ink2         #4E596F on surface2 (footer source, age)  #F6F7FB   6.58  pass
+light redact-text  #17678A on surface2 (chip on inset)       #F6F7FB   5.87  pass
+light block-text   #B32E24 on surface2 (chip on inset)       #F6F7FB   5.89  pass
+light monitor-text #855700 on page (header note)             #F2F4F8   5.67  pass
+light accent-text  #5A3DD4 on active nav fill                #EAE6FB   5.64  pass
+light nav-ink      #0E1526 on active nav fill                #EAE6FB  14.91  pass
+light ink          #0E1526 on selected policy fill           #F0EDFC  15.79  pass
+light ink          #0E1526 on selected table row             #F3F1FD  16.30  pass
+light ink2         #4E596F on page (eyebrow, sub)            #F2F4F8   6.39  pass
+light redact-ink   #FFFFFF on redact (placeholder chip)      #1C779F   5.01  pass
+extra pairs: 24 failures: 0

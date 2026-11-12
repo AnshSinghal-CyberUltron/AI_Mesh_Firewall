@@ -1,0 +1,171 @@
+{
+  "chrome": "153.0.8010.12",
+  "seconds": 17.4,
+  "pages": [
+    {
+      "file": "f6-lattice-landing-desktop.png",
+      "url": "file://<mockups>/lattice/landing.html",
+      "fonts_loaded_faces": {
+        "Geist": 3,
+        "Geist Mono": 2
+      },
+      "scroll_width": 1440,
+      "client_width": 1440,
+      "scroll_height": 1256,
+      "text_chars": 2322,
+      "horizontal_overflow": false,
+      "errors": [],
+      "failed_requests": []
+    },
+    {
+      "file": "f6-lattice-console-desktop.png",
+      "url": "file://<mockups>/lattice/console.html",
+      "fonts_loaded_faces": {
+        "Geist": 3,
+        "Geist Mono": 2
+      },
+      "scroll_width": 1440,
+      "client_width": 1440,
+      "scroll_height": 1070,
+      "text_chars": 2941,
+      "horizontal_overflow": false,
+      "errors": [],
+      "failed_requests": []
+    },
+    {
+      "file": "f6-lattice-policy-desktop.png",
+      "url": "file://<mockups>/lattice/policy.html",
+      "fonts_loaded_faces": {
+        "Geist": 3,
+        "Geist Mono": 3
+      },
+      "scroll_width": 1440,
+      "client_width": 1440,
+      "scroll_height": 1149,
+      "text_chars": 3045,
+      "horizontal_overflow": false,
+      "errors": [],
+      "failed_requests": []
+    },
+    {
+      "file": "f6-lattice-request-desktop.png",
+      "url": "file://<mockups>/lattice/request.html",
+      "fonts_loaded_faces": {
+        "Geist": 3,
+        "Geist Mono": 3
+      },
+      "scroll_width": 1440,
+      "client_width": 1440,
+      "scroll_height": 1448,
+      "text_chars": 3673,
+      "horizontal_overflow": false,
+      "errors": [],
+      "failed_requests": []
+    },
+    {
+      "file": "f6-lattice-keys-desktop.png",
+      "url": "file://<mockups>/lattice/keys.html",
+      "fonts_loaded_faces": {
+        "Geist": 3,
+        "Geist Mono": 2
+      },
+      "scroll_width": 1440,
+      "client_width": 1440,
+      "scroll_height": 1206,
+      "text_chars": 2692,
+      "horizontal_overflow": false,
+      "errors": [],
+      "failed_requests": []
+    },
+    {
+      "file": "f6-lattice-console-light-desktop.png",
+      "url": "file://<mockups>/lattice/console.html?theme=light",
+      "fonts_loaded_faces": {
+        "Geist": 3,
+        "Geist Mono": 2
+      },
+      "scroll_width": 1440,
+      "client_width": 1440,
+      "scroll_height": 1070,
+      "text_chars": 2941,
+      "horizontal_overflow": false,
+      "errors": [],
+      "failed_requests": []
+    },
+    {
+      "file": "f6-lattice-landing-mobile.png",
+      "url": "file://<mockups>/lattice/landing.html",
+      "fonts_loaded_faces": {
+        "Geist": 3,
+        "Geist Mono": 2
+      },
+      "scroll_width": 390,
+      "client_width": 390,
+      "scroll_height": 2421,
+      "text_chars": 2263,
+      "horizontal_overflow": false,
+      "errors": [],
+      "failed_requests": []
+    },
+    {
+      "file": "f6-lattice-console-mobile.png",
+      "url": "file://<mockups>/lattice/console.html",
+      "fonts_loaded_faces": {
+        "Geist": 2,
+        "Geist Mono": 2
+      },
+      "scroll_width": 390,
+      "client_width": 390,
+      "scroll_height": 2420,
+      "text_chars": 2431,
+      "horizontal_overflow": false,
+      "errors": [],
+      "failed_requests": []
+    },
+    {
+      "file": "f6-lattice-policy-mobile.png",
+      "url": "file://<mockups>/lattice/policy.html",
+      "fonts_loaded_faces": {
+        "Geist": 3,
+        "Geist Mono": 3
+      },
+      "scroll_width": 390,
+      "client_width": 390,
+      "scroll_height": 3239,
+      "text_chars": 2637,
+      "horizontal_overflow": false,
+      "errors": [],
+      "failed_requests": []
+    },
+    {
+      "file": "f6-lattice-request-mobile.png",
+      "url": "file://<mockups>/lattice/request.html",
+      "fonts_loaded_faces": {
+        "Geist": 3,
+        "Geist Mono": 3
+      },
+      "scroll_width": 390,
+      "client_width": 390,
+      "scroll_height": 3071,
+      "text_chars": 3028,
+      "horizontal_overflow": false,
+      "errors": [],
+      "failed_requests": []
+    },
+    {
+      "file": "f6-lattice-keys-mobile.png",
+      "url": "file://<mockups>/lattice/keys.html",
+      "fonts_loaded_faces": {
+        "Geist": 3,
+        "Geist Mono": 2
+      },
+      "scroll_width": 390,
+      "client_width": 390,
+      "scroll_height": 2033,
+      "text_chars": 1768,
+      "horizontal_overflow": false,
+      "errors": [],
+      "failed_requests": []
+    }
+  ]
+}

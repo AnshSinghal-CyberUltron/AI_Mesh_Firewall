@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Night Shift: policy editor</title>
+<link rel="stylesheet" href="style.css">
+<script>(function(){var t=new URLSearchParams(location.search).get("theme");if(t)document.documentElement.dataset.theme=t;})();</script>
+<script src="../shared/sample-data.js"></script>
+<script src="../shared/charts.js"></script>
+<script src="rail.js"></script>
+</head>
+<body>
+<div class="app">
+  <nav class="rail" id="rail" aria-label="Console navigation" data-active="policies"></nav>
+  <header class="topbar">
+    <span class="org"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2" width="12" height="12" rx="3" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M5 8h6" stroke="currentColor" stroke-width="1.6"/></svg><span>Default organization</span></span>
+    <span class="env">Production</span>
+    <div class="cmdbar" role="search"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M11 11l3.5 3.5" stroke="currentColor" stroke-width="1.6"/></svg>Search request IDs, keys, policies, models<kbd>/</kbd></div>
+    <div class="right"><span class="health"><i></i><span>Gateway up</span></span><span class="who" aria-label="Asha Rao">AR</span></div>
+  </header>
+
+  <main class="work">
+    <div class="publish">
+      <span class="v monitor">Draft</span>
+      <span><b>1 change</b> against live version 14 (published 10:05 by Asha Rao)</span>
+      <span class="sample desk">Sample data</span>
+      <div class="right"><a class="btn" href="#">Discard</a><a class="btn primary" href="#">Review and publish</a></div>
+    </div>
+
+    <div class="pol">
+      <section class="card plist desk" aria-labelledby="pl">
+        <h2 id="pl" style="padding-bottom:8px">Policies <span class="r">6</span></h2>
+        <div class="tabsm" style="margin:0 16px 10px" role="tablist"><button class="on" role="tab" aria-selected="true">Pipeline</button><button role="tab">RAG</button><button role="tab">MCP</button></div>
+        <div class="filter">Filter by name or code</div>
+        <div id="plist"></div>
+      </section>
+
+      <section class="card" aria-labelledby="pn" style="overflow:hidden">
+        <div class="ed-head">
+          <div><h1 id="pn" style="font-size:20px;font-weight:800">PII redaction (outbound)</h1><span class="cd">PII_REDACT_OUT</span></div>
+          <div class="right">
+            <div class="tabsm" role="group" aria-label="Editor view"><button class="on" aria-pressed="true">Form</button><button>Source</button></div>
+            <span class="v allow">Enforcing</span>
+          </div>
+        </div>
+        <dl class="props" style="margin:0">
+          <div><dt>Severity</dt><dd>High</dd></div>
+          <div><dt>Priority</dt><dd class="mono">10</dd></div>
+          <div><dt>Applies to</dt><dd>2 agents</dd></div>
+          <div><dt>Category</dt><dd>Data protection</dd></div>
+        </dl>
+        <div class="in" style="padding-top:14px">
+          <h2 style="font-size:15px;font-weight:800;margin-bottom:8px">Rules <span class="muted" style="font-weight:600;font-size:13.5px">first match decides</span></h2>
+          <div style="overflow-x:auto"><table class="t rules">
+            <thead><tr><th>#</th><th>Rule</th><th>Pattern</th><th class="desk">Stage</th><th>Action</th><th class="num desk">24h</th></tr></thead>
+            <tbody id="rules"></tbody>
+          </table></div>
+          <div class="diff" aria-label="Pending change">
+            <div class="h">Rule 3, National ID numbers</div>
+            <div class="del">- pattern  \b\d{12}\b</div>
+            <div class="add">+ pattern  \b\d{4}\s?\d{4}\s?\d{4}\b</div>
+          </div>
+          <div style="margin-top:12px;display:flex;gap:8px"><a class="btn" href="#">Add rule</a><a class="btn" href="#">Edit scope</a></div>
+        </div>
+      </section>
+
+      <section class="card testp" aria-labelledby="tp">
+        <h2 id="tp">Test against draft <span class="r"><kbd>Ctrl</kbd> <kbd>Enter</kbd></span></h2>
+        <div class="in">
+          <div class="box" id="tin"></div>
+          <div style="display:flex;gap:8px;align-items:center;margin-top:12px;flex-wrap:wrap"><span class="v redact">Redact</span><span class="muted" style="font-size:13.5px">Draft and live agree</span></div>
+          <div class="res" id="tout"></div>
+          <ul class="why">
+            <li><b>Rule 1</b> Email addresses matched <span class="mono">EMAIL_1</span></li>
+            <li><b>Rule 2</b> Phone numbers matched <span class="mono">PHONE_1</span></li>
+            <li>Rules 3 and 4 did not match</li>
+          </ul>
+        </div>
+      </section>
+    </div>
+  </main>
+</div>
+<script>
+  const S = window.SAMPLE, E = S.editor;
+  const label = { allow: "Allow", redact: "Redact", monitor: "Watch", block: "Block" };
+  document.getElementById("plist").innerHTML = S.policies.pipeline.map((p) => `
+    <div class="item ${p.selected ? "on" : ""}"><span class="nm">${p.name}</span><span class="sv" style="color:${p.severity === "critical" ? "var(--block-text)" : "var(--ink2)"}">${p.severity[0].toUpperCase() + p.severity.slice(1)}</span>
+    <span class="cd">${p.code}</span><span class="sv muted" style="font-weight:600">${p.enabled ? "P" + p.priority : "Paused"}</span></div>`).join("");
+  document.getElementById("rules").innerHTML = E.rules.map((r, i) => `
+    <tr class="${i === 2 ? "changed" : ""}"><td class="id">${i + 1}</td><td><b>${r.name}</b><div class="muted" style="font-size:13px">${r.type === "preset" ? "Preset" : "Regex"}</div></td>
+    <td class="pat">${r.pattern}</td><td class="desk">${r.stage}</td><td><span class="v ${r.action}">${label[r.action]}</span></td><td class="num desk"><b>${fmt(r.hits)}</b></td></tr>`).join("");
+  document.getElementById("tin").textContent = E.test.input;
+  document.getElementById("tout").innerHTML = E.test.segments.map(([t, ph]) => ph ? `<span class="ph">${ph}</span>` : t).join("");
+</script>
+</body>
+</html>

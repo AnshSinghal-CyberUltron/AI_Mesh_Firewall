@@ -1,0 +1,328 @@
+{
+  "chrome": "153.0.8010.12",
+  "seconds": 34.3,
+  "pages": [
+    {
+      "file": "f6-checkpoint-landing-desktop.png",
+      "url": "file://<mockups>/checkpoint/landing.html",
+      "fonts_loaded_faces": {
+        "Overpass": 5,
+        "Overpass Mono": 2
+      },
+      "scroll_width": 1440,
+      "client_width": 1440,
+      "scroll_height": 2139,
+      "text_chars": 2538,
+      "horizontal_overflow": false,
+      "errors": [],
+      "failed_requests": []
+    },
+    {
+      "file": "f6-checkpoint-console-desktop.png",
+      "url": "file://<mockups>/checkpoint/console.html",
+      "fonts_loaded_faces": {
+        "Overpass": 5,
+        "Overpass Mono": 2
+      },
+      "scroll_width": 1440,
+      "client_width": 1440,
+      "scroll_height": 1308,
+      "text_chars": 1826,
+      "horizontal_overflow": false,
+      "errors": [],
+      "failed_requests": []
+    },
+    {
+      "file": "f6-checkpoint-policy-desktop.png",
+      "url": "file://<mockups>/checkpoint/policy.html",
+      "fonts_loaded_faces": {
+        "Overpass": 4,
+        "Overpass Mono": 2
+      },
+      "scroll_width": 1440,
+      "client_width": 1440,
+      "scroll_height": 1365,
+      "text_chars": 1780,
+      "horizontal_overflow": false,
+      "errors": [],
+      "failed_requests": []
+    },
+    {
+      "file": "f6-checkpoint-console-dark-desktop.png",
+      "url": "file://<mockups>/checkpoint/console.html?theme=dark",
+      "fonts_loaded_faces": {
+        "Overpass": 5,
+        "Overpass Mono": 2
+      },
+      "scroll_width": 1440,
+      "client_width": 1440,
+      "scroll_height": 1308,
+      "text_chars": 1826,
+      "horizontal_overflow": false,
+      "errors": [],
+      "failed_requests": []
+    },
+    {
+      "file": "f6-night-shift-landing-desktop.png",
+      "url": "file://<mockups>/night-shift/landing.html",
+      "fonts_loaded_faces": {
+        "Atkinson Hyperlegible Next": 4,
+        "Atkinson Hyperlegible Mono": 2
+      },
+      "scroll_width": 1440,
+      "client_width": 1440,
+      "scroll_height": 1767,
+      "text_chars": 2205,
+      "horizontal_overflow": false,
+      "errors": [],
+      "failed_requests": []
+    },
+    {
+      "file": "f6-night-shift-console-desktop.png",
+      "url": "file://<mockups>/night-shift/console.html",
+      "fonts_loaded_faces": {
+        "Atkinson Hyperlegible Next": 4,
+        "Atkinson Hyperlegible Mono": 2
+      },
+      "scroll_width": 1440,
+      "client_width": 1440,
+      "scroll_height": 1033,
+      "text_chars": 1674,
+      "horizontal_overflow": false,
+      "errors": [],
+      "failed_requests": []
+    },
+    {
+      "file": "f6-night-shift-policy-desktop.png",
+      "url": "file://<mockups>/night-shift/policy.html",
+      "fonts_loaded_faces": {
+        "Atkinson Hyperlegible Next": 4,
+        "Atkinson Hyperlegible Mono": 2
+      },
+      "scroll_width": 1440,
+      "client_width": 1440,
+      "scroll_height": 900,
+      "text_chars": 1445,
+      "horizontal_overflow": false,
+      "errors": [],
+      "failed_requests": []
+    },
+    {
+      "file": "f6-night-shift-console-light-desktop.png",
+      "url": "file://<mockups>/night-shift/console.html?theme=light",
+      "fonts_loaded_faces": {
+        "Atkinson Hyperlegible Next": 4,
+        "Atkinson Hyperlegible Mono": 2
+      },
+      "scroll_width": 1440,
+      "client_width": 1440,
+      "scroll_height": 1033,
+      "text_chars": 1674,
+      "horizontal_overflow": false,
+      "errors": [],
+      "failed_requests": []
+    },
+    {
+      "file": "f6-redline-landing-desktop.png",
+      "url": "file://<mockups>/redline/landing.html",
+      "fonts_loaded_faces": {
+        "Spectral": 4,
+        "Public Sans": 4,
+        "JetBrains Mono": 2
+      },
+      "scroll_width": 1440,
+      "client_width": 1440,
+      "scroll_height": 1489,
+      "text_chars": 1699,
+      "horizontal_overflow": false,
+      "errors": [],
+      "failed_requests": []
+    },
+    {
+      "file": "f6-redline-console-desktop.png",
+      "url": "file://<mockups>/redline/console.html",
+      "fonts_loaded_faces": {
+        "Spectral": 4,
+        "Public Sans": 4,
+        "JetBrains Mono": 2
+      },
+      "scroll_width": 1440,
+      "client_width": 1440,
+      "scroll_height": 1183,
+      "text_chars": 1909,
+      "horizontal_overflow": false,
+      "errors": [],
+      "failed_requests": []
+    },
+    {
+      "file": "f6-redline-policy-desktop.png",
+      "url": "file://<mockups>/redline/policy.html",
+      "fonts_loaded_faces": {
+        "Spectral": 4,
+        "Public Sans": 4,
+        "JetBrains Mono": 2
+      },
+      "scroll_width": 1440,
+      "client_width": 1440,
+      "scroll_height": 1146,
+      "text_chars": 1803,
+      "horizontal_overflow": false,
+      "errors": [],
+      "failed_requests": []
+    },
+    {
+      "file": "f6-redline-console-dark-desktop.png",
+      "url": "file://<mockups>/redline/console.html?theme=dark",
+      "fonts_loaded_faces": {
+        "Spectral": 4,
+        "Public Sans": 4,
+        "JetBrains Mono": 2
+      },
+      "scroll_width": 1440,
+      "client_width": 1440,
+      "scroll_height": 1183,
+      "text_chars": 1909,
+      "horizontal_overflow": false,
+      "errors": [],
+      "failed_requests": []
+    },
+    {
+      "file": "f6-checkpoint-landing-mobile.png",
+      "url": "file://<mockups>/checkpoint/landing.html",
+      "fonts_loaded_faces": {
+        "Overpass": 5,
+        "Overpass Mono": 2
+      },
+      "scroll_width": 390,
+      "client_width": 390,
+      "scroll_height": 3289,
+      "text_chars": 2399,
+      "horizontal_overflow": false,
+      "errors": [],
+      "failed_requests": []
+    },
+    {
+      "file": "f6-checkpoint-console-mobile.png",
+      "url": "file://<mockups>/checkpoint/console.html",
+      "fonts_loaded_faces": {
+        "Overpass": 5,
+        "Overpass Mono": 2
+      },
+      "scroll_width": 390,
+      "client_width": 390,
+      "scroll_height": 2753,
+      "text_chars": 1362,
+      "horizontal_overflow": false,
+      "errors": [],
+      "failed_requests": []
+    },
+    {
+      "file": "f6-checkpoint-policy-mobile.png",
+      "url": "file://<mockups>/checkpoint/policy.html",
+      "fonts_loaded_faces": {
+        "Overpass": 3,
+        "Overpass Mono": 2
+      },
+      "scroll_width": 390,
+      "client_width": 390,
+      "scroll_height": 2387,
+      "text_chars": 1126,
+      "horizontal_overflow": false,
+      "errors": [],
+      "failed_requests": []
+    },
+    {
+      "file": "f6-night-shift-landing-mobile.png",
+      "url": "file://<mockups>/night-shift/landing.html",
+      "fonts_loaded_faces": {
+        "Atkinson Hyperlegible Next": 4,
+        "Atkinson Hyperlegible Mono": 2
+      },
+      "scroll_width": 390,
+      "client_width": 390,
+      "scroll_height": 3205,
+      "text_chars": 2167,
+      "horizontal_overflow": false,
+      "errors": [],
+      "failed_requests": []
+    },
+    {
+      "file": "f6-night-shift-console-mobile.png",
+      "url": "file://<mockups>/night-shift/console.html",
+      "fonts_loaded_faces": {
+        "Atkinson Hyperlegible Next": 4,
+        "Atkinson Hyperlegible Mono": 2
+      },
+      "scroll_width": 390,
+      "client_width": 390,
+      "scroll_height": 2249,
+      "text_chars": 1410,
+      "horizontal_overflow": false,
+      "errors": [],
+      "failed_requests": []
+    },
+    {
+      "file": "f6-night-shift-policy-mobile.png",
+      "url": "file://<mockups>/night-shift/policy.html",
+      "fonts_loaded_faces": {
+        "Atkinson Hyperlegible Next": 4,
+        "Atkinson Hyperlegible Mono": 2
+      },
+      "scroll_width": 390,
+      "client_width": 390,
+      "scroll_height": 1486,
+      "text_chars": 984,
+      "horizontal_overflow": false,
+      "errors": [],
+      "failed_requests": []
+    },
+    {
+      "file": "f6-redline-landing-mobile.png",
+      "url": "file://<mockups>/redline/landing.html",
+      "fonts_loaded_faces": {
+        "Spectral": 4,
+        "Public Sans": 3,
+        "JetBrains Mono": 2
+      },
+      "scroll_width": 390,
+      "client_width": 390,
+      "scroll_height": 2199,
+      "text_chars": 1534,
+      "horizontal_overflow": false,
+      "errors": [],
+      "failed_requests": []
+    },
+    {
+      "file": "f6-redline-console-mobile.png",
+      "url": "file://<mockups>/redline/console.html",
+      "fonts_loaded_faces": {
+        "Spectral": 2,
+        "Public Sans": 3,
+        "JetBrains Mono": 1
+      },
+      "scroll_width": 390,
+      "client_width": 390,
+      "scroll_height": 2084,
+      "text_chars": 1492,
+      "horizontal_overflow": false,
+      "errors": [],
+      "failed_requests": []
+    },
+    {
+      "file": "f6-redline-policy-mobile.png",
+      "url": "file://<mockups>/redline/policy.html",
+      "fonts_loaded_faces": {
+        "Spectral": 2,
+        "Public Sans": 3,
+        "JetBrains Mono": 2
+      },
+      "scroll_width": 390,
+      "client_width": 390,
+      "scroll_height": 1816,
+      "text_chars": 1350,
+      "horizontal_overflow": false,
+      "errors": [],
+      "failed_requests": []
+    }
+  ]
+}

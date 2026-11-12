@@ -1,0 +1,66 @@
+/* Generated from tokens.mjs by build-tokens.mjs. Do not edit by hand. */
+@import url("https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&family=Atkinson+Hyperlegible+Mono:wght@400;500;600&display=swap");
+
+:root {
+  --page: #0E1A2B;
+  --surface: #13233A;
+  --surface2: #192C47;
+  --raised: #203656;
+  --line: #273D5E;
+  --control: #5E7698;
+  --ink: #EAF0F8;
+  --ink2: #A9B8CE;
+  --accent: #7CC4FF;
+  --on-accent: #0B1B2E;
+  --accent-text: #8FCDFF;
+  --focus: #9AD3FF;
+  --allow: #52D6A6;
+  --allow-ink: #08241A;
+  --allow-text: #62DDB0;
+  --redact: #BBA3FF;
+  --redact-ink: #1E1240;
+  --redact-text: #C5B1FF;
+  --monitor: #F6C85F;
+  --monitor-ink: #2A1F05;
+  --monitor-text: #F6C85F;
+  --block: #FF8173;
+  --block-ink: #2E0B07;
+  --block-text: #FF9488;
+  --nav: #0B1524;
+  --nav-ink: #EAF0F8;
+  --nav-ink2: #9FB0C8;
+  --font-ui: 'Atkinson Hyperlegible Next', system-ui, sans-serif;
+  --font-mono: 'Atkinson Hyperlegible Mono', ui-monospace, monospace;
+}
+
+:root[data-theme="light"] {
+  --page: #F2F5F9;
+  --surface: #FFFFFF;
+  --surface2: #E9EEF5;
+  --raised: #FFFFFF;
+  --line: #D3DCE7;
+  --control: #7A8AA1;
+  --ink: #11223A;
+  --ink2: #46566E;
+  --accent: #1460B8;
+  --on-accent: #FFFFFF;
+  --accent-text: #1460B8;
+  --focus: #1460B8;
+  --allow: #0C7A55;
+  --allow-ink: #FFFFFF;
+  --allow-text: #0A6E4C;
+  --redact: #6A4BD1;
+  --redact-ink: #FFFFFF;
+  --redact-text: #5B3DC2;
+  --monitor: #F2BE45;
+  --monitor-ink: #2A1F05;
+  --monitor-text: #805400;
+  --block: #C0362B;
+  --block-ink: #FFFFFF;
+  --block-text: #B3302A;
+  --nav: #11223A;
+  --nav-ink: #EAF0F8;
+  --nav-ink2: #A9B8CE;
+  --font-ui: 'Atkinson Hyperlegible Next', system-ui, sans-serif;
+  --font-mono: 'Atkinson Hyperlegible Mono', ui-monospace, monospace;
+}

@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Redline: console overview</title>
+<link rel="stylesheet" href="style.css">
+<script>(function(){var t=new URLSearchParams(location.search).get("theme");if(t)document.documentElement.dataset.theme=t;})();</script>
+<script src="../shared/sample-data.js"></script>
+<script src="../shared/charts.js"></script>
+<script src="nav.js"></script>
+</head>
+<body>
+<div class="app">
+  <nav class="nav" id="nav" data-active="overview" aria-label="Console navigation"></nav>
+  <div class="main">
+    <header class="top">
+      <button class="menu" aria-label="Open navigation"><svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M2 4h14M2 9h14M2 14h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
+      <span class="crumb"><b>Overview</b><span class="desk"> for Default organization</span></span>
+      <div class="find" role="search"><svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M11 11l3.5 3.5" stroke="currentColor" stroke-width="1.6"/></svg>Find a request, rule or key<kbd>Ctrl K</kbd></div>
+      <span class="me" aria-label="Asha Rao">AR</span>
+    </header>
+
+    <main class="page">
+      <article class="sheet brief">
+        <div class="dateline"><span>Tuesday 11 November, last 24 hours to 12:00</span><span class="sample">Sample data</span><span class="desk" style="margin-left:auto"><a href="#">Change period</a></span></div>
+        <h1>Morning brief</h1>
+        <p class="prose" id="prose"></p>
+        <div class="strip">
+          <div class="lg"><span><i style="background:var(--redact)"></i>Redacted</span><span><i style="background:var(--monitor-text)"></i>Flagged</span><span><i style="background:var(--block)"></i>Blocked</span><span class="muted">per hour, last 24 hours</span></div>
+          <div id="strip" style="height:84px"></div>
+        </div>
+      </article>
+
+      <aside class="side-notes" aria-labelledby="rv">
+        <h2 id="rv">For review</h2>
+        <div id="notes" style="display:grid;gap:12px"></div>
+      </aside>
+
+      <div class="full twocol">
+        <section class="sheet sec" aria-labelledby="tr">
+          <h2 id="tr">Rules that fired most</h2>
+          <p class="sub">Each rule links to its clause in the policy.</p>
+          <table class="ledger" style="margin-top:12px">
+            <thead><tr><th>Rule</th><th class="desk">Policy</th><th>Decision</th><th class="num">Hits</th></tr></thead>
+            <tbody id="rules"></tbody>
+          </table>
+        </section>
+        <section class="sheet sec" aria-labelledby="ow">
+          <h2 id="ow">OWASP LLM Top 10</h2>
+          <p class="sub">Decisions mapped to the 2025 categories.</p>
+          <div class="leaders" id="owasp"></div>
+        </section>
+      </div>
+    </main>
+  </div>
+</div>
+<script>
+  const S = window.SAMPLE, T = S.totals;
+  document.getElementById("prose").innerHTML =
+    `In the last 24 hours the mesh handled <b>${fmt(T.requests)}</b> requests. <b>${fmt(T.blocked)}</b> were blocked (${S.blockRate}%), mostly <a href="#">instruction overrides</a> from one key, and <b>${fmt(T.redacted)}</b> were sent on with placeholders (${S.redactRate}%). ` +
+    `<span class="hilite">gpt-4o-mini has been isolated since 09:14</span>; its traffic is going to llama-3.1-70b. ` +
+    `No policy changed overnight except <a href="#">PII_REDACT_OUT</a>, now at version 14.`;
+  const lab = { block: "Blocked", monitor: "Isolated", redact: "Withheld" };
+  document.getElementById("notes").innerHTML = S.attention.map((a) => `
+    <div class="note ${a.tone === "redact" ? "" : a.tone}"><b>${a.label}.</b> ${a.title}. ${a.meta.join(". ")}.<span class="when">${a.when}</span>
+    <div class="acts"><a class="btn sm" href="#">Open trace</a><a class="btn sm" href="#">Mark reviewed</a></div></div>`).join("");
+  const dec = { redact: '<span class="tag redact">Redacted</span>', block: '<span class="tag block"><span class="x">Blocked</span></span>', monitor: '<span class="tag monitor">Flagged</span>' };
+  document.getElementById("rules").innerHTML = S.topRules.map((r) => `<tr><td>${r.rule}</td><td class="desk mono">${r.policy}</td><td>${dec[r.action]}</td><td class="num"><b>${fmt(r.hits)}</b></td></tr>`).join("");
+  document.getElementById("owasp").innerHTML = S.owasp.map((o) => `<div class="ln"><span class="id">${o.id}</span><span>${o.name}</span><span class="dots"></span><b>${fmt(o.hits)}</b></div>`).join("");
+  MockCharts.stackedBars(document.getElementById("strip"), S.hourly, { keys: ["redact", "monitor", "block"], colors: { monitor: "monitor-text" }, height: 84, gap: 3, axis: true, minSeg: 2 });
+</script>
+</body>
+</html>

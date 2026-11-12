@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Night Shift: console overview</title>
+<link rel="stylesheet" href="style.css">
+<script>(function(){var t=new URLSearchParams(location.search).get("theme");if(t)document.documentElement.dataset.theme=t;})();</script>
+<script src="../shared/sample-data.js"></script>
+<script src="../shared/charts.js"></script>
+<script src="rail.js"></script>
+</head>
+<body>
+<div class="app">
+  <nav class="rail" id="rail" aria-label="Console navigation" data-active="overview"></nav>
+
+  <header class="topbar">
+    <span class="org"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2" width="12" height="12" rx="3" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M5 8h6" stroke="currentColor" stroke-width="1.6"/></svg><span>Default organization</span></span>
+    <span class="env">Production</span>
+    <div class="cmdbar" role="search"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M11 11l3.5 3.5" stroke="currentColor" stroke-width="1.6"/></svg>Search request IDs, keys, policies, models<kbd>/</kbd></div>
+    <div class="right">
+      <span class="health"><i></i><span>Gateway up</span></span>
+      <button class="icon" aria-label="Notifications, 3 unread"><svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M4 13V8a5 5 0 0110 0v5l1.5 1.5h-13zM7 16h4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg><span class="n">3</span></button>
+      <span class="who" aria-label="Asha Rao">AR</span>
+    </div>
+  </header>
+
+  <main class="work">
+    <div class="head">
+      <h1>Shift overview</h1>
+      <span class="sub">Default organization, production</span>
+      <div class="right">
+        <span class="sample">Sample data</span>
+        <div class="tabsm" role="group" aria-label="Time range"><button>1h</button><button>6h</button><button class="on" aria-pressed="true">24h</button><button class="desk">7d</button><button class="desk">30d</button></div>
+      </div>
+    </div>
+
+    <section class="card span5" aria-labelledby="dg">
+      <h2 id="dg">Since you last looked <span class="r">06:00 to now</span></h2>
+      <div class="in"><ul class="digest">
+        <li><time>11:42</time><div><span class="v block">Blocked</span> Prompt injection from key <span class="mono">zs-prod-7f3…</span>, 38 times<div class="who2">Policy INJECTION_BLOCK</div></div></li>
+        <li><time>10:05</time><div><b>PII_REDACT_OUT</b> published as version 14<div class="who2">Rule 3 pattern changed by Asha Rao</div></div></li>
+        <li><time>09:14</time><div><span class="v monitor">Isolated</span> <span class="mono">gpt-4o-mini</span> taken out of service<div class="who2">Kill switch engaged by Asha Rao</div></div></li>
+        <li><time>08:57</time><div>MCP server <b>build-tools</b> registered with 9 tools<div class="who2">Write tools blocked by MCP_WRITE_GUARD</div></div></li>
+      </ul></div>
+    </section>
+
+    <section class="card span4" aria-labelledby="mt">
+      <h2 id="mt">Traffic <span class="r">vs previous 24h</span></h2>
+      <div class="in metrics" id="metrics"></div>
+    </section>
+
+    <section class="card span3" aria-labelledby="ks">
+      <h2 id="ks">Kill switch</h2>
+      <div class="in ks">
+        <div class="model"><span class="v monitor">Isolated</span><div><b>gpt-4o-mini</b><br><span>since 09:14, by Asha Rao</span></div></div>
+        <small>212 requests rerouted to llama-3.1-70b. 5 other models live.</small>
+        <div class="row"><a class="btn" href="#">Restore</a><a class="btn danger" href="#">Isolate a model</a></div>
+      </div>
+    </section>
+
+    <section class="card span12" aria-labelledby="hm">
+      <h2 id="hm">Verdicts, every 15 minutes <span class="r">Darker means more requests in that window</span></h2>
+      <div class="in"><div class="heat" id="heat"></div></div>
+    </section>
+
+    <section class="card span7" aria-labelledby="inc">
+      <h2 id="inc">Open incidents <span class="r">4 need a decision</span></h2>
+      <div class="in" style="overflow-x:auto"><table class="t">
+        <thead><tr><th>Verdict</th><th>Event</th><th class="desk">Policy</th><th class="desk">First seen</th><th><span style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)">Action</span></th></tr></thead>
+        <tbody id="inc-rows"></tbody>
+      </table></div>
+    </section>
+
+    <section class="card span5" aria-labelledby="cp">
+      <h2 id="cp">Checkpoints <span class="r">24h</span></h2>
+      <div class="in"><table class="t">
+        <thead><tr><th>Stage</th><th>Status</th><th class="num">Events</th><th class="desk trend">Trend</th></tr></thead>
+        <tbody id="cp-rows"></tbody>
+      </table></div>
+    </section>
+  </main>
+</div>
+<script>
+  const S = window.SAMPLE, T = S.totals;
+  const tot = S.hourly.map((r) => r.allow + r.redact + r.monitor + r.block);
+  const metrics = [
+    ["Requests", fmt(T.requests), tot, "var(--accent-text)"],
+    ["Block rate", S.blockRate + "%", S.hourly.map((r, i) => r.block / tot[i]), "var(--block-text)"],
+    ["Redaction rate", S.redactRate + "%", S.hourly.map((r, i) => r.redact / tot[i]), "var(--redact-text)"],
+    ["Critical events", fmt(T.critical), [0,0,0,0,0,0,1,0,1,0,2,1,0,1,0,1,0,1,0,0,1,0,0,0], "var(--monitor-text)"],
+  ];
+  document.getElementById("metrics").innerHTML = metrics.map(([l, v], i) => `<div class="metric"><span class="l">${l}</span><span class="spark" id="sp${i}"></span><span class="val">${v}</span></div>`).join("");
+  metrics.forEach(([, , vals, c], i) => MockCharts.sparkline(document.getElementById("sp" + i), vals, { stroke: c, area: c, height: 28 }));
+
+  const keys = [["allow", "Allowed", T.allowed], ["redact", "Redacted", T.redacted], ["monitor", "Watched", T.monitored], ["block", "Blocked", T.blocked]];
+  const mobile = matchMedia("(max-width: 720px)").matches, per = mobile ? 2 : 4;
+  let html = "";
+  keys.forEach(([k, label, total]) => {
+    const cells = [];
+    S.hourly.forEach((r, h) => { for (let q = 0; q < per; q++) cells.push(r[k] * (0.75 + 0.5 * Math.abs(Math.sin((h * per + q) * 2.3)))); });
+    const max = Math.max(...cells);
+    html += `<span class="lab"><span class="v ${k}">${label}</span></span><div class="row" aria-hidden="true">${cells.map((c) => `<span style="background:color-mix(in srgb, var(--${k}) ${Math.round(8 + (c / max) * 88)}%, var(--surface2))"></span>`).join("")}</div><span class="tot">${fmt(total)}</span>`;
+  });
+  html += `<div class="axis"><span>00:00</span><span>06:00</span><span>12:00</span><span>18:00</span><span>now</span></div>`;
+  document.getElementById("heat").innerHTML = html;
+
+  const label = { block: "Blocked", monitor: "Isolated", redact: "Withheld" };
+  document.getElementById("inc-rows").innerHTML = S.attention.map((a) => `<tr><td><span class="v ${a.tone}">${a.label}</span></td><td><b>${a.title}</b><div class="muted" style="font-size:13px">${a.meta[0]}</div></td><td class="desk id">${a.meta[1].replace("Policy ", "").replace("Traffic rerouted to ", "")}</td><td class="desk id">${a.when}</td><td class="num"><a class="btn" style="height:30px;font-size:13px" href="#">Triage</a></td></tr>`).join("");
+  const counts = [18204, 1789, 96, 14, 31, 1, 59];
+  document.getElementById("cp-rows").innerHTML = S.checkpoints.map((c, i) => `<tr><td><span class="id">${c.id}</span> <b>${c.short}</b></td><td>${c.id === "1.6" ? '<span class="status warn"><i></i>1 isolated</span>' : '<span class="status"><i></i>Healthy</span>'}</td><td class="num"><b>${fmt(counts[i])}</b></td><td class="desk trend"><span id="cps${i}" style="display:block;width:90px;height:22px"></span></td></tr>`).join("");
+  S.checkpoints.forEach((c, i) => MockCharts.sparkline(document.getElementById("cps" + i), tot.map((t, h) => t * (0.6 + 0.4 * Math.abs(Math.sin(h * (i + 1) * 0.7)))), { height: 22, stroke: "var(--ink2)", width: 1.5 }));
+</script>
+</body>
+</html>
