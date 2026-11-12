@@ -34,7 +34,9 @@ Backs `docs/plans/2026-11-11-f2-guard-model.md`. Prototype code only; nothing he
 | `ort_bytes_rss.py` | RSS of a session built from verified bytes, with and without onnxruntime's retained copy | `results/ort_bytes_rss.json` | no (3 × 2 s) |
 | `injection_lengths.py` | token lengths of the injection sets (overlap choice) | `results/injection_lengths.json` | no (seconds) |
 | `guard_tier_sim.py` (12 Nov, rev 2) | **weight-free** discrete-event model of the GPU guard tier: gateways, owners (one per L4), tenants; window-granular DRR, per-tenant cap, deadline-aware admission, P2C routing, fan-out; compared with FIFO, size-aware EDF and no fan-out. Calibrated against the September L4 measurements (2.15 ms per window reproduces the one-L4 Poisson curve). Standard library only, fixed seeds | `results/guard_tier_sim.json` | no (25.5 s CPU, 38 s wall, `nice -n 10`; load 1.9 → 4.6) |
-| `script_posture_probe.py` (12 Nov, rev 2) | **weight-free** prototype of the per-word script posture (K1, A9, A10) on Reviewer A's and B's attack strings and benign controls, using gateway_v2's own `fold_confusables` (run with `PYTHONPATH=<wt>/gateway_v2:<wt>/shared` and the gateway_v2 venv) | `results/script_posture_probe.json` | no (instant) |
+| `script_posture_probe.py` (12 Nov, rev 2; superseded) | **weight-free** prototype of the rev-2 per-word script posture (K1, A9, A10). Rev 3: it now puts this worktree's gateway_v2 on `sys.path` itself, because `-I` ignores `PYTHONPATH` and the venv's editable install points at another tree (Reviewer A N6); its output is byte-identical after the change. Run: `<gateway_v2 venv python> -I scripts/script_posture_probe.py` | `results/script_posture_probe.json` | no (instant) |
+| `guard_tier_sim_r3.py` (12 Nov, rev 3) | **weight-free** extension of `guard_tier_sim.py` (imported unchanged): owner faults (error / black hole), Sybil keys, short-request floods, bursty and MMPP arrivals, service-time perturbations, per-worker routing views, a gateway timer, and the rev-3 mitigations (class-priority owner, trial pool key, window budgets, local in-flight, acks, ejection, retry, newest-window retry, tokenizer lane). **Self-test first:** with every extension off, `run3()` must return output identical to rev 2's `run()` on the planning and K3 scenarios, or the script refuses to report. Groups: `design`, `stress`, `fail`, `k3`, `long`, `curve` | `results/guard_tier_sim_r3.json` | see note below |
+| `script_posture_probe_r3.py` (12 Nov, rev 3) | **weight-free** prototype of the rev-3 script posture: residual-letter count per window after NFKC, `Default_Ignorable_Code_Point` removal and the confusable fold; every window classified. 80 cases: the rev-2 probe's 16, Reviewer A's 27 and Reviewer B's 31 rev-2 cases, 6 more; and a K grid with attack and benign counts. Run: `<gateway_v2 venv python> -I scripts/script_posture_probe_r3.py` | `results/script_posture_probe_r3.json` | no (instant) |
 | `proxy_latency.py` (12 Nov) | **weight-free** latency proxy: DeBERTa-v3-xsmall architecture with random weights (parameter count asserted equal to the real 70,830,722), same exporter; thread-CPU and wall p50/p99 for fp32, fixed-shape fp32 and INT8 (`quantize_dynamic` QInt8) at 16–512 positions; optimised-graph node counts. Needs no gated file and no token | `results/proxy_latency.json` | no (80 s CPU; run with `nice -n 10` while ~7 jobs queued on the heavy lock) |
 
 **12 Nov, revision 2.** The owner added a GPU guard tier. The September L4 measurements this plan
@@ -53,3 +55,11 @@ Heavy steps ran as `flock /home/claude/work/.heavy.lock nice -n 10 <python> -I <
 queue was ~1 hour deep (full suites of other agents), so the short steps ran with `nice -n 10`
 only; `bench_window.py` used ≈ 3 min CPU, slightly over the guide's 2-minute threshold, and its
 numbers are CPU-time based for that reason.
+
+**12 Nov, revision 3.** `guard_tier_sim_r3.py` ran as six separate invocations,
+`nice -n 19 python3 -I scripts/guard_tier_sim_r3.py --group <g> --out <file>`, merged into
+`results/guard_tier_sim_r3.json`: 270 s of CPU in total (design 44, stress 32, fail 12, k3 130,
+long 28, curve 23, each including the 5 s self-test). The heavy lock's queue held four other
+agents' jobs; a discrete-event model's output does not depend on host load, so the groups ran one
+at a time at the lowest priority instead of queueing (the `k3` group alone is about 2 min of CPU).
+Load average 2.1–2.5 on 2 vCPU. Python 3.13.18, standard library only.

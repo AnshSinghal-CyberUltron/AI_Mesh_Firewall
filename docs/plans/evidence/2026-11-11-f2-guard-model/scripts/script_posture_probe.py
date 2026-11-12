@@ -23,9 +23,10 @@ fail_closed orgs refuse UNSUPPORTED content (422) unless the org explicitly chos
 `forward_recorded` for unreadable scripts (plan Q12); degrade orgs classify the readable windows
 and record the rest.
 
-Uses gateway_v2's own `fold_confusables` (imported from the worktree on PYTHONPATH) so the probe
-shows what today's table already covers. Run:
-  PYTHONPATH=<wt>/gateway_v2:<wt>/shared <gateway_v2 venv python> -I script_posture_probe.py
+Uses gateway_v2's own `fold_confusables` (imported from this worktree; see the sys.path lines)
+so the probe shows what today's table already covers. Run:
+  <gateway_v2 venv python> -I script_posture_probe.py
+Superseded by `script_posture_probe_r3.py` (rev 3): both rev-2 plan reviews bypassed this rule.
 """
 
 from __future__ import annotations
@@ -33,6 +34,13 @@ from __future__ import annotations
 import json
 import sys
 import unicodedata
+from pathlib import Path
+
+# Rev 3 (Reviewer A N6): `-I` ignores PYTHONPATH, so put this worktree's gateway_v2 first on
+# sys.path here; otherwise the venv's editable install (another tree) is imported.
+_WT = Path(__file__).resolve().parents[5]
+sys.path.insert(0, str(_WT / "shared"))
+sys.path.insert(0, str(_WT / "gateway_v2"))
 
 from gateway_v2.detect.semantic.language import fold_confusables, identify_language
 
