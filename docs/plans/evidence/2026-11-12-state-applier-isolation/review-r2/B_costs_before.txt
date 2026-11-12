@@ -1,0 +1,6 @@
+load before before: 2.15 1.77 1.51 1/143 13633
+C depth bound on large bodies, run in a worker thread; loop-thread stall
+  1 MiB of [               1,048,576 B: wall    72.1 ms, longest loop stall    71.0 ms
+  8 MB string              8,000,002 B: wall     9.7 ms, longest loop stall     9.7 ms
+  8 MB of \" escapes       8,000,002 B: wall   518.8 ms, longest loop stall   518.8 ms
+  16 MB of []             16,000,000 B: wall   945.5 ms, longest loop stall   762.5 ms

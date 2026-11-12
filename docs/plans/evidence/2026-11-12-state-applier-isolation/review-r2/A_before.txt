@@ -1,0 +1,53 @@
+== tests/edge/test_rv136a_key_replay.py
+
+before revoke: victim 200 other 200
+cycle 0 t=0.00s KEY ok=True error=None quarantined=1 ready=True victim=200 other=200
+cycle 1 t=0.46s KEY ok=True error=None quarantined=0 ready=True victim=200 other=200
+cycle 2 t=0.92s KEY ok=True error=None quarantined=0 ready=True victim=200 other=200
+cycle 3 t=1.37s KEY ok=True error=None quarantined=0 ready=True victim=200 other=200
+cycle 4 t=1.83s KEY ok=True error=None quarantined=0 ready=True victim=200 other=200
+cycle 5 t=2.29s KEY ok=True error=None quarantined=0 ready=True victim=200 other=200
+cycle 6 t=2.74s KEY ok=True error=None quarantined=0 ready=True victim=200 other=200
+cycle 7 t=3.20s KEY ok=True error=None quarantined=0 ready=True victim=200 other=200
+cycle 8 t=3.66s KEY ok=True error=None quarantined=0 ready=True victim=200 other=200
+cycle 9 t=4.11s KEY ok=True error=None quarantined=0 ready=True victim=200 other=200
+cycle 10 t=4.57s KEY ok=True error=None quarantined=0 ready=True victim=200 other=200
+cycle 11 t=5.02s KEY ok=True error=None quarantined=0 ready=True victim=200 other=200
+cycle 12 t=5.48s KEY ok=True error=None quarantined=0 ready=True victim=200 other=200
+cycle 13 t=5.93s KEY ok=True error=None quarantined=0 ready=True victim=200 other=200
+after-repair cycle 0 victim=200
+after-repair cycle 1 victim=200
+after-repair cycle 2 victim=200
+.
+1 passed in 7.72s
+== tests/edge/test_rv136a_key_cold.py
+
+cold worker cycle 0: ok=[('ks', True), ('key', True), ('plan', True), ('ks', True), ('key', True), ('budget', True)] ready=True victim=200
+cold worker cycle 1: ok=[('plan', True), ('ks', True), ('key', True), ('budget', True)] ready=True victim=200
+cold worker cycle 2: ok=[('plan', True), ('ks', True), ('key', True), ('budget', True)] ready=True victim=200
+.
+1 passed in 0.97s
+== tests/edge/test_rv136a_e2e_counter.py
+
+
+E2E plan report ok=True applied(last round)=45 quarantined(last round)=0; tenant=PlanUnavailable:plan_quarantined; held_back=HeldBack(state='quarantined', feed_seq=2, error='StoreDataUnavailable'); records_applied_total=46 quarantined_total=0
+.
+1 passed in 0.58s
+== probes
+P1[_bad_signature] drain ok=True final-round rejected=0 quarantined=0 held_back=HeldBack(state='quarantined', feed_seq=22, error='StoreDataUnavailable') rejected_total=0 quarantined_total=0
+P1[_compile_error] drain ok=True final-round rejected=0 quarantined=0 held_back=HeldBack(state='rejected', feed_seq=22, error='CompileError') rejected_total=0 quarantined_total=0
+P2 first: cursor=7 q=1; second: q=0
+P3 report q=1 held=HeldBack(state='quarantined', feed_seq=2, error='StoreDataUnavailable')
+P4 report q=1
+P5[count] refused: plan index holds 6 records at or below 5, manifest attests 5
+P5[order] refused: plan index entry 'org-2' at 4 is not above 4
+P5[above_manifest] refused: plan index holds 4 records at or below 5, manifest attests 5
+P5[values_len] refused: plan store returned 3 values for 4 keys
+P6 served after v2-quarantine + v3-reject: ExecutionPlan seq=1 (v1=1)
+P7 running process after repair: PlanUnavailable; restarted process: ExecutionPlan
+P8 ok=True q=1 held=HeldBack(state='quarantined', feed_seq=2, error='TypeError')
+P9 reports ok=[True] plan=ExecutionPlan
+P10 ok=True q=0 served seq=1 (v1=1, v2 published)
+FAILED tests/runtime/test_rv136a_probes.py::test_p1_counter_when_the_fault_is_not_in_the_last_round_of_a_drain[quarantine]
+FAILED tests/runtime/test_rv136a_probes.py::test_p1_counter_when_the_fault_is_not_in_the_last_round_of_a_drain[reject]
+2 failed, 12 passed in 0.19s

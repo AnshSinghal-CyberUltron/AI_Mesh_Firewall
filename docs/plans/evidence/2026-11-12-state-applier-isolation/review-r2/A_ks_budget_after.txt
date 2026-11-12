@@ -1,0 +1,7 @@
+WARNING  amf.gateway.state:state_task.py:257 state round refused: kind=ks error=StoreDataUnavailable detail=ks record 'org:other' fails its signature
+ks cycle 0 t=0.0s ks.ok=False others_ok=True ready=(True, None) acme_key=200 failures=0
+ks cycle 11 t=5.0s ks.ok=False others_ok=True ready=(False, 'ks state was last read to its head 5.0 s ago, over the 5 s bound') acme_key=200 failures=0
+WARNING  amf.gateway.state:state_task.py:257 state round refused: kind=budget error=StoreDataUnavailable detail=budget record 'other' fails its signature
+budget cycle 0 t=0.0s budget.ok=False others_ok=True ready=(True, None) acme_key=200 failures=0
+budget cycle 11 t=5.0s budget.ok=False others_ok=True ready=(False, 'budget state was last read to its head 5.0 s ago, over the 5 s bound') acme_key=200 failures=0
+============================== 2 passed in 12.38s ==============================
