@@ -58,8 +58,9 @@ def _ext(org: Organization) -> str:
     return "absent" if row is None else f"{row['action']}/{row['mode']}"
 
 
-def _stamp(org: Organization) -> str:
-    return V2PlanDocument.objects.get(organization=org).publisher
+def _held(redis: Any, key: str) -> str:
+    """The lock's value as text (the shared pool may or may not decode responses)."""
+    return rollout._text(redis.get(key))
 
 
 class _Counting:
@@ -226,7 +227,7 @@ class ReconcileTests(_RedisLockMixin, TestCase):
         note = rollout.reconcile(client=self.redis)
         self.assertEqual(note["status"], "locked")
         self.assertEqual(V2PlanDocument.objects.get(organization=self.stale).body, STALE)
-        self.assertEqual(self.redis.get(self.lock_key), b"elsewhere")
+        self.assertEqual(_held(self.redis, self.lock_key), "elsewhere")
 
     def test_pending_migrations_hold_the_sweep(self) -> None:
         self.assertEqual(rollout.unapplied_migrations(), [])
@@ -357,7 +358,7 @@ class ReconcileTests(_RedisLockMixin, TestCase):
         ):
             note = rollout.reconcile(client=self.redis)
         self.assertEqual((note["status"], note["published"], len(calls)), ("lost_lock", 1, 1))
-        self.assertEqual(self.redis.get(self.lock_key), b"runner-b")
+        self.assertEqual(_held(self.redis, self.lock_key), "runner-b")
 
     def test_release_never_deletes_another_runners_lock(self) -> None:
         """B-D5: the release is compare-and-delete (was GET then DEL)."""
@@ -368,7 +369,7 @@ class ReconcileTests(_RedisLockMixin, TestCase):
 
         with mock.patch.object(rollout, "sweep", side_effect=sweep):
             rollout.reconcile(client=self.redis)
-        self.assertEqual(self.redis.get(self.lock_key), b"runner-b")
+        self.assertEqual(_held(self.redis, self.lock_key), "runner-b")
 
     def test_the_sweep_reports_progress(self) -> None:
         with mock.patch.object(rollout, "PROGRESS_EVERY_S", 0.0), self.assertLogs(
