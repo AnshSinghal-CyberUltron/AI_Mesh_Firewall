@@ -1,0 +1,68 @@
+# harness: mutate139c.py (host-local, /home/claude/work/runs/139-author2/harness/), detached worktree at 33da2d226ead3150f1762ca6868ca6a965b4eec1
+# each mutant: one textual change, run core.tests.test_firewall_config_platform_default (-v 2, --keepdb), restore with git checkout; then a clean run
+# N1-N9 target this round's fixes (N1 = Reviewer A's M9 / Reviewer B's MB6; N2 = A's M12 / B's MB5); M1-M11 are A's (round 1), MB4 and MB8 are B's
+# shim rv139c_settings (out of repo); under the heavy lock; each test run under the ctl-db lock
+KILLED   N1 (A-M9/B-MB6) audit IP taken from X-Forwarded-For first: Ran 19 tests in 16.871s | FAILED (failures=1)
+           fails: test_platform_operator_put_changes_the_default_publishes_it_and_audits
+KILLED   N2 (A-M12/B-MB5) platform_default() picks the highest id: Ran 19 tests in 16.329s | FAILED (failures=1)
+           fails: test_duplicate_default_rows_are_logged_and_the_operator_put_answers_409
+KILLED   N3 platform_default() stays silent on duplicates (no ERROR): Ran 19 tests in 17.286s | FAILED (failures=1)
+           fails: test_duplicate_default_rows_are_logged_and_the_operator_put_answers_409
+KILLED   N4 operator PUT does not catch duplicates (500 again): Ran 19 tests in 16.781s | FAILED (failures=2)
+           fails: test_duplicate_default_rows_are_logged_and_the_operator_put_answers_409
+           fails: test_losing_a_concurrent_first_create_answers_409_and_leaves_nothing
+KILLED   N5 409 returned instead of raised (losing create's row committed): Ran 19 tests in 17.502s | FAILED (failures=1)
+           fails: test_losing_a_concurrent_first_create_answers_409_and_leaves_nothing
+KILLED   N6 409 without the ERROR log: Ran 19 tests in 18.123s | FAILED (failures=1)
+           fails: test_duplicate_default_rows_are_logged_and_the_operator_put_answers_409
+KILLED   N7 retention purge deletes platform-default audit rows again: Ran 19 tests in 17.065s | FAILED (failures=1)
+           fails: test_retention_cleanup_keeps_platform_default_audit_rows
+KILLED   N8 retention exemption widened to every org-NULL audit row: Ran 19 tests in 17.439s | FAILED (failures=2)
+           fails: test_retention_cleanup_does_not_create_the_platform_default
+           fails: test_retention_cleanup_keeps_platform_default_audit_rows
+KILLED   N9 client-supplied XFF not recorded in the audit details: Ran 19 tests in 16.947s | FAILED (failures=1)
+           fails: test_platform_operator_put_changes_the_default_publishes_it_and_audits
+KILLED   M1 permission check reverted: Ran 19 tests in 17.325s | FAILED (failures=18)
+           fails: test_orgless_non_operator_get_is_refused_and_creates_nothing
+           fails: test_orgless_non_operator_put_does_not_create_a_missing_default
+           fails: test_orgless_non_operator_put_is_refused_and_nothing_is_written_or_published
+KILLED   M2 serializer organization writable again: Ran 19 tests in 16.464s | FAILED (failures=3)
+           fails: test_member_cannot_move_their_row_onto_another_org
+           fails: test_member_cannot_rehome_their_row_into_a_platform_default
+           fails: test_org_superuser_cannot_change_the_platform_default
+KILLED   M3 GET of the default uses load(): Ran 19 tests in 16.494s | FAILED (failures=2)
+           fails: test_duplicate_default_rows_are_logged_and_the_operator_put_answers_409
+           fails: test_platform_operator_get_reads_the_default_without_creating_it
+KILLED   M4 platform-default write not audited: Ran 19 tests in 16.374s | FAILED (failures=2, errors=1)
+           fails: test_audit_row_and_write_commit_together
+           fails: test_platform_operator_put_changes_the_default_publishes_it_and_audits
+           fails: test_platform_operator_put_creates_a_missing_default_in_the_audited_write
+KILLED   M5 audit swallowed (best-effort): Ran 19 tests in 16.922s | FAILED (failures=1)
+           fails: test_audit_row_and_write_commit_together
+KILLED   M6 default created before the transaction: Ran 19 tests in 17.199s | FAILED (failures=4)
+           fails: test_duplicate_default_rows_are_logged_and_the_operator_put_answers_409
+           fails: test_losing_a_concurrent_first_create_answers_409_and_leaves_nothing
+           fails: test_platform_operator_invalid_put_leaves_no_row_and_no_audit
+           fails: test_platform_operator_put_creates_a_missing_default_in_the_audited_write
+KILLED   M7 SocKpisView back to load(): Ran 19 tests in 16.417s | FAILED (failures=2)
+           fails: test_soc_kpis_does_not_create_the_platform_default
+KILLED   M8 retention task back to load(organization=None): Ran 19 tests in 16.396s | FAILED (failures=1)
+           fails: test_retention_cleanup_does_not_create_the_platform_default
+KILLED   M10 audit after the transaction commits: Ran 19 tests in 17.013s | FAILED (failures=1)
+           fails: test_audit_row_and_write_commit_together
+KILLED   M11 operator = is_staff only: Ran 19 tests in 16.066s | FAILED (failures=15)
+           fails: test_orgless_non_operator_get_is_refused_and_creates_nothing
+           fails: test_orgless_non_operator_put_does_not_create_a_missing_default
+           fails: test_orgless_non_operator_put_is_refused_and_nothing_is_written_or_published
+KILLED   MB4 operator = profile flag only: Ran 19 tests in 16.198s | FAILED (failures=3)
+           fails: test_orgless_non_operator_get_is_refused_and_creates_nothing
+           fails: test_orgless_non_operator_put_does_not_create_a_missing_default
+           fails: test_orgless_non_operator_put_is_refused_and_nothing_is_written_or_published
+KILLED   MB8 audit 'changed' always empty: Ran 19 tests in 16.457s | FAILED (failures=2)
+           fails: test_platform_operator_put_changes_the_default_publishes_it_and_audits
+           fails: test_platform_operator_put_creates_a_missing_default_in_the_audited_write
+CLEAN-OK clean run at 33da2d226ead3150f1762ca6868ca6a965b4eec1: Ran 19 tests in 16.760s | OK
+worktree dirty after restore: no
+# real	7m1.222s
+# user	6m28.658s
+# sys	0m6.086s

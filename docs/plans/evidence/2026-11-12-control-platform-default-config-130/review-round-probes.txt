@@ -1,0 +1,49 @@
+# Review-round probes. Host-local harness: /home/claude/work/runs/139-author2/harness/rv139c_probe.py (out-of-repo Django TestCase,
+# shim rv139c_settings, own test DB, Redis db 12, heavy + ctl-db locks). PROBE lines copied verbatim.
+# The QC and PRE probes passed at both heads (PRE is skipped at the old head, which has no check files). The probe's own
+# LOG and DUP tests failed on a harness bug (assertLogs on the root logger; the 'core' and 'django' loggers do not
+# propagate), so the LOG and DUP sections below come from the targeted run's console log instead.
+
+## QC: SQL statements on the default alias per request, APIClient.force_authenticate, warm, 3 runs each ([status, queries])
+# new head 33da2d226ead3150f1762ca6868ca6a965b4eec1:
+PROBE QC {"op0 GET default": [[200, 1], [200, 1], [200, 1]], "op0 PUT default": [[200, 7], [200, 7], [200, 7]], "a1 GET own": [[200, 3], [200, 3], [200, 3]], "a1 PUT own": [[200, 17], [200, 17], [200, 17]]}
+# old head cf9421d361914574119f5337e667eeb736f66f85:
+PROBE QC {"op0 GET default": [[200, 1], [200, 1], [200, 1]], "op0 PUT default": [[200, 7], [200, 7], [200, 7]], "a1 GET own": [[200, 3], [200, 3], [200, 3]], "a1 PUT own": [[200, 17], [200, 17], [200, 17]]}
+
+## PRE: the committed pre-promotion check (prepromotion/check.sql statements and check_redis.py) on a simulated pre-fix state
+# legit = NULL row never written (pass); rehomed = NULL row last written by org-A member m1; orgless = NULL row written by a
+# createsuperuser account with no profile; moved = org C's row last written by m1 (org A); clean = org A's row written by its admin.
+# Redis: firewall:config:default = the re-homed row's payload (saved last); firewall:config:p139c-org-a (has a row); firewall:config:p139c-gone (no row).
+PROBE PRE rows legit 57 rehomed 58 orgless 59 moved 60 clean 61
+PROBE PRE sql#1 cols=['id', 'updated_at', 'updated_by_id', 'username', 'is_staff', 'is_platform_operator', 'updater_org_id', 'firewall_enabled', 'enforcement_mode', 'retention_days']
+PROBE PRE sql#1   [57, "2026-11-12 09:21:08.136179+00:00", null, null, null, null, null, true, "block", 90]
+PROBE PRE sql#1   [58, "2026-11-12 09:21:08.539570+00:00", 48, "p-m1", false, false, 52, false, "block", 90]
+PROBE PRE sql#1   [59, "2026-11-12 09:21:08.893852+00:00", 49, "p-nsc", true, null, null, true, "block", 90]
+PROBE PRE sql#2 cols=['id', 'organization_id', 'slug', 'updated_by_id', 'username', 'updater_org_id', 'updater_is_operator', 'updated_at']
+PROBE PRE sql#2   [58, null, null, 48, "p-m1", 52, false, "2026-11-12 09:21:08.539570+00:00"]
+PROBE PRE sql#2   [59, null, null, 49, "p-nsc", null, false, "2026-11-12 09:21:08.893852+00:00"]
+PROBE PRE sql#2   [60, 53, "p139c-org-c", 48, "p-m1", 52, false, "2026-11-12 09:21:08.895037+00:00"]
+PROBE PRE sql#3 cols=['id', 'slug', 'is_active', 'config_id', 'firewall_enabled', 'updated_by_id', 'updated_at', 'members']
+PROBE PRE sql#4 cols=['id', 'model_name', 'api_key_prefix', 'is_active', 'action', 'activated_by_id', 'created_at']
+PROBE PRE sql#5 cols=['platform_default_audit_rows', 'min', 'max']
+PROBE PRE sql#5   [0, null, null]
+PROBE PRE redis null rows: [57, 58, 59]
+PROBE PRE redis redis firewall:config:default present: True
+PROBE PRE redis redis == platform-default row (lowest id): {'firewall_enabled': (True, False)}
+PROBE PRE redis redis == 'default' org row: no 'default' org row
+PROBE PRE redis firewall:config:* keys with no FirewallConfig row (stale): ['firewall:config:p139c-gone']
+PROBE PRE redis kill_switch:default:* keys: []
+PROBE PRE redis org-NULL KillSwitch rows: []
+
+## LOG and DUP: excerpts of the console log of the targeted run (review-round-targeted-tests.txt, same head; timestamps and pids removed)
+# Each refused request logs this view's WARNING and Django's own django.request WARNING ('Forbidden: <path>', logger module 'log',
+# django/core/handlers/base.py get_response -> log_response, written for every response >= 400).
+# In the run: 18 'FirewallConfig ... refused: user=' lines and 18 'Forbidden: /api/firewall/config/' lines.
+# One org-less non-operator GET (first refusal in the run):
+WARNING firewall_config_views FirewallConfig GET refused: user=15 has no organization and is not a platform operator
+WARNING log Forbidden: /api/firewall/config/
+# test_duplicate_default_rows_are_logged_and_the_operator_put_answers_409, PUT (the view's ERROR is captured by assertLogs, so only Django's line reaches the console):
+WARNING log Conflict: /api/firewall/config/
+# test_losing_a_concurrent_first_create_answers_409_and_leaves_nothing (not captured, so both lines show):
+ERROR firewall_config_views FirewallConfig PUT refused (409): duplicate platform-default rows (organization IS NULL) ids=[11, 12] user=3; nothing was changed
+WARNING log Conflict: /api/firewall/config/
