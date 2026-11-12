@@ -1,0 +1,128 @@
+Answers to the #138 reviews (5870839620 A, 5870792770 B), 12 Nov 2026. Nothing was applied to the repository.
+Real-API runs went through a gh wrapper that logs every call and refuses -X/--method/--input/-f/-F/--field/
+--raw-field (harness: /home/claude/work/runs/137-138-author/harness138/ghwrap/gh). Calls refused: 0; calls made: 13, all GET.
+
+== 1. A S1: reviewer lookups and gh's error JSON
+Real gh through this session's proxy (users/* is 403 here):
+  real gh: exit 1 stdout={"message":"This GitHub API path is not available: sessions are bound to their configured repositories. Use repository-scoped endpoints (...
+Old script (bcaeec95), --dry-run --staging-reviewers user:<owner login>:
+  {"wait_timer":0,"prevent_self_review":false,"can_admins_bypass":false,"reviewers":[{"type":"User","id":{"message":"This GitHub API path is not available: sessions are bou...
+New script, same input:
+  {"wait_timer":0,"prevent_self_review":false,"can_admins_bypass":false,"reviewers":[{"type":"User","id":"<id of user AnshSinghal-CyberUltron, resolved when applied>"}],"deployment_branch_policy":{"prot
+
+== 2. Dry runs and read-only modes against the repository
+setup_rulesets.sh --dry-run: active ['deletion', 'non_fast_forward', 'pull_request', 'required_status_checks'] 17 checks; 0 gh calls.
+setup_rulesets.sh --org --dry-run conditions: {"ref_name": {"include": ["refs/heads/develop", "refs/heads/staging", "refs/heads/main"], "exclude": []}, "repository_name": {"include": ["AI_Mesh_Firewall"], "exclude": [], "protected": true}}; 0 gh calls.
+
+setup_rulesets.sh --verify-sha 790e3e41 (#137's reviewed head):
+  Required checks on 790e3e414164b55b564bacc1c7e0703f4de18d59 in CyberUltron-Consulting-Private-Limited/AI_Mesh_Firewall:
+  ok    success      control (Django + Postgres + Redis) / django
+  ok    success      frontend (unit tests + production build) / node
+  ok    success      CI helper scripts
+  ok    success      secrets (gitleaks + TruffleHog) / secrets
+  ok    success      SAST (Semgrep + Bandit) / semgrep
+  ok    success      dependencies (review + OSV + npm audit) / dependency-review
+  ok    success      infra lint (actions, Docker, shell, compose, nginx, Trivy) / lint
+  ok    success      policy
+  ok    success      structural-gates
+  ok    success      gateway-v2 pytest
+  ok    success      secret-headers
+  ok    success      image-digest
+  ok    success      openai-conformance
+  ok    success      parity-harness
+  FAIL  failure      CodeQL / analyze (actions)
+  FAIL  failure      CodeQL / analyze (javascript-typescript)
+  FAIL  failure      CodeQL / analyze (python)
+  14 of 17 required checks succeeded
+  with --without-codeql: 14 of 14 required checks succeeded, exit 0
+
+setup_rulesets.sh --check (repository scope), exit 1, as expected before anything is applied:
+  Checking the Repository ruleset 'AMF protected branches: develop, staging, main' (repos/CyberUltron-Consulting-Private-Limited/AI_Mesh_Firewall) and the rules on develop, staging, main:
+  FAIL  no Repository ruleset named 'AMF protected branches: develop, staging, main' in repos/CyberUltron-Consulting-Private-Limited/AI_Mesh_Firewall
+  Ruleset 19609105 'Main Protected by Ansh' still applies to main (rules: deletion, non_fast_forward, creation, update, pull_request; enforcement: active). This
+  script never modifies it; the owner deletes it once --check is OK (ENTERPRISE_SETUP.md step 11).
+setup_rulesets.sh --org --check, exit 3 (organisation endpoints are 403 to agents, which is why --org is recommended):
+  Checking the Organization ruleset 'AMF protected branches: develop, staging, main' (orgs/CyberUltron-Consulting-Private-Limited) and the rules on develop, staging, main:
+  gh: This GitHub API path is not available: sessions are bound to their configured repositories. Use repository-scoped endpoints (repos/{owner}/{repo}/...). (HTTP 403)
+  cannot list the rulesets of orgs/CyberUltron-Consulting-Private-Limited: {"message":"This GitHub API path is not available: sessions are bound to their configured repositories. Use repository-scoped
+  Ruleset 19609105 'Main Protected by Ansh' still applies to main (rules: deletion, non_fast_forward, creation, update, pull_request; enforcement: active). This
+  script never modifies it; the owner deletes it once --check is OK (ENTERPRISE_SETUP.md step 11).
+GET rules/branches/main today (ruleset_id source type rule):
+  19609105 Repository deletion
+  19609105 Repository non_fast_forward
+  19609105 Repository creation
+  19609105 Repository update
+  19609105 Repository pull_request
+GET rules/branches/develop today: []
+
+== 3. Self-tests (offline gh stub; every write refused and recorded with its body)
+python3 -m unittest scripts/ci/test_setup_scripts.py -v: Ran 32 tests in 5.569s, OK
+  test_another_human_reviewer_passes_the_rule (scripts.ci.test_setup_scripts.EnvironmentsApplyTest.test_another_human_reviewer_passes_the_rule) ... ok
+  test_override_warns_then_writes (scripts.ci.test_setup_scripts.EnvironmentsApplyTest.test_override_warns_then_writes) ... ok
+  test_own_account_as_production_reviewer_is_refused (scripts.ci.test_setup_scripts.EnvironmentsApplyTest.test_own_account_as_production_reviewer_is_refused) ... ok
+  test_unreadable_own_account_fails_closed (scripts.ci.test_setup_scripts.EnvironmentsApplyTest.test_unreadable_own_account_fails_closed) ... ok
+  test_unresolvable_reviewer_fails_before_any_write (scripts.ci.test_setup_scripts.EnvironmentsApplyTest.test_unresolvable_reviewer_fails_before_any_write) ... ok
+  test_dry_run_requests (scripts.ci.test_setup_scripts.EnvironmentsDryRunTest.test_dry_run_requests) ... ok
+  test_names_unresolved_offline_are_placeholders (scripts.ci.test_setup_scripts.EnvironmentsDryRunTest.test_names_unresolved_offline_are_placeholders) ... ok
+  test_rejects_bad_input (scripts.ci.test_setup_scripts.EnvironmentsDryRunTest.test_rejects_bad_input) ... ok
+  test_aggregate_pytest_check_once_sharded (scripts.ci.test_setup_scripts.RequiredChecksTest.test_aggregate_pytest_check_once_sharded) ... ok
+  test_every_required_check_is_a_job_that_runs_on_every_pr (scripts.ci.test_setup_scripts.RequiredChecksTest.test_every_required_check_is_a_job_that_runs_on_every_pr) ... ok
+  test_excluded_checks (scripts.ci.test_setup_scripts.RequiredChecksTest.test_excluded_checks) ... ok
+  test_reader_sees_the_workflows (scripts.ci.test_setup_scripts.RequiredChecksTest.test_reader_sees_the_workflows) ... ok
+  test_apply_needs_a_pr_head (scripts.ci.test_setup_scripts.RulesetsApplyTest.test_apply_needs_a_pr_head) ... ok
+  test_check_missing_on_the_pr_head_aborts (scripts.ci.test_setup_scripts.RulesetsApplyTest.test_check_missing_on_the_pr_head_aborts) ... ok
+  test_check_ok_when_live_and_in_force (scripts.ci.test_setup_scripts.RulesetsApplyTest.test_check_ok_when_live_and_in_force) ... ok
+  test_check_reports_every_difference (scripts.ci.test_setup_scripts.RulesetsApplyTest.test_check_reports_every_difference) ... ok
+  test_check_unreadable_is_not_ok (scripts.ci.test_setup_scripts.RulesetsApplyTest.test_check_unreadable_is_not_ok) ... ok
+  test_check_without_the_ruleset_fails (scripts.ci.test_setup_scripts.RulesetsApplyTest.test_check_without_the_ruleset_fails) ... ok
+  test_creates_with_the_dry_run_body (scripts.ci.test_setup_scripts.RulesetsApplyTest.test_creates_with_the_dry_run_body) ... ok
+  test_org_scope_writes_to_the_organisation (scripts.ci.test_setup_scripts.RulesetsApplyTest.test_org_scope_writes_to_the_organisation) ... ok
+  test_red_check_on_develop_aborts (scripts.ci.test_setup_scripts.RulesetsApplyTest.test_red_check_on_develop_aborts) ... ok
+  test_refuses_to_write_19609105 (scripts.ci.test_setup_scripts.RulesetsApplyTest.test_refuses_to_write_19609105) ... ok
+  test_two_rulesets_with_the_name_abort (scripts.ci.test_setup_scripts.RulesetsApplyTest.test_two_rulesets_with_the_name_abort) ... ok
+  test_unreadable_develop_check_runs_abort (scripts.ci.test_setup_scripts.RulesetsApplyTest.test_unreadable_develop_check_runs_abort) ... ok
+  test_updates_the_existing_ruleset_by_name (scripts.ci.test_setup_scripts.RulesetsApplyTest.test_updates_the_existing_ruleset_by_name) ... ok
+  test_verify_sha_reading_error_is_not_success (scripts.ci.test_setup_scripts.RulesetsApplyTest.test_verify_sha_reading_error_is_not_success) ... ok
+  test_approvals_from_variable_and_flag (scripts.ci.test_setup_scripts.RulesetsDryRunTest.test_approvals_from_variable_and_flag) ... ok
+  test_defaults (scripts.ci.test_setup_scripts.RulesetsDryRunTest.test_defaults) ... ok
+  test_flags (scripts.ci.test_setup_scripts.RulesetsDryRunTest.test_flags) ... ok
+  test_never_writes_the_main_ruleset (scripts.ci.test_setup_scripts.RulesetsDryRunTest.test_never_writes_the_main_ruleset) ... ok
+  test_org_scope_targets_this_repository_only (scripts.ci.test_setup_scripts.RulesetsDryRunTest.test_org_scope_targets_this_repository_only) ... ok
+  test_rejects_bad_input (scripts.ci.test_setup_scripts.RulesetsDryRunTest.test_rejects_bad_input) ... ok
+
+== 4. Mutation tests (each fix reverted in place, self-tests rerun, file restored and checksum-verified)
+  A S1: reviewer lookup ignores gh's exit status (old code): FAILED (failures=2) ['test_names_unresolved_offline_are_placeholders', 'test_unresolvable_reviewer_fails_before_any_write']
+  B S2: no production-reviewer refusal: FAILED (failures=1) ['test_own_account_as_production_reviewer_is_refused']
+  A N5: unreadable develop check runs not fatal: FAILED (failures=1) ['test_unreadable_develop_check_runs_abort']
+  B N2: no --pr-head requirement: FAILED (failures=1) ['test_apply_needs_a_pr_head']
+  B N2: PR-head result ignored: FAILED (failures=1) ['test_check_missing_on_the_pr_head_aborts']
+  19609105 guard removed: FAILED (failures=1) ['test_refuses_to_write_19609105']
+  --check ignores branch rules: FAILED (failures=1) ['test_check_reports_every_difference']
+  verify_on_commit accepts gh error output: FAILED (failures=1) ['test_verify_sha_reading_error_is_not_success']
+
+== 5. With #114 and #137
+git merge-tree over all six orders of #114 (93ffdaad), #137 (92d481a6) and this PR: no conflict, one tree
+(49736864). On it: WORKFLOW_GUARD_REQUIRE_YAML=1 python3 -m unittest discover -s scripts/ci: Ran 134 tests in 6.273s, OK;
+#114's workflow_guard.py --require-yaml: 0 findings over 64 uses:; actionlint 1.7.12 + shellcheck 0.11.0: clean.
+The 'gateway-v2 pytest' skip in the consistency test is off there (scripts/ci/amf_pytest_shards.py exists),
+and the test passes.
+
+== 6. Sources for the docs (read 12 Nov 2026)
+- docs.github.com/en/enterprise-cloud@latest/billing/concepts/product-billing/github-actions
+  ('How use of GitHub Actions is measured'): included compute usage is a monetary amount; Enterprise Cloud $300 USD;
+  '$300 USD covers 50,000 minutes on a standard Linux runner at $0.006 USD per minute'; 'The following usage can
+  draw from the same included compute usage: ... Larger runners, where available, when the billing account uses
+  GitHub Team or GitHub Enterprise Cloud'; 'Larger runners are billed for public repositories.'
+- docs.github.com/en/enterprise-cloud@latest/billing/reference/actions-runner-pricing: Linux 2-core $0.006,
+  Linux 4-core $0.012, Linux 16-core $0.042 per minute; 'GitHub rounds the minutes and partial minutes each job
+  uses up to the nearest whole minute.'
+- docs.github.com/en/actions/reference/limits: Enterprise 500 concurrent jobs on standard runners, 1000 on larger
+  runners; no statement that the totals are separate; macOS concurrency is shared.
+- docs.github.com/en/actions/reference/runners/github-hosted-runners: standard Linux x64, public repositories
+  4 CPU / 16 GB, private repositories 2 CPU / 8 GB.
+- docs.github.com/en/enterprise-cloud@latest/rest/orgs/rules: organisation rulesets take conditions.repository_name
+  {include, exclude, protected}; required_status_checks, pull_request, copilot_code_review allowed; merge_queue not.
+- docs.github.com/en/enterprise-cloud@latest/rest/repos/rules: 'Get rules for a branch' returns active rules only,
+  from every level; evaluate/disabled rulesets are not returned.
+- github.blog changelog 2026-04-27 (Copilot code review consumes Actions minutes from 1 June 2026 on private
+  repositories) and 'GitHub Copilot is moving to usage-based billing' (premium requests replaced by GitHub AI Credits).
