@@ -1,6 +1,7 @@
 """Render the F6 direction mockups (static HTML) to PNG with headless Chrome.
 
-Usage: python3 -I shoot.py <mockups_dir> <out_dir>
+Usage: python3 -I shoot.py <mockups_dir> <out_dir> [direction ...]
+With no direction names, every direction is captured.
 
 For each direction x screen: desktop 1440x900 (DSF 1) and mobile 390x844 (DSF 2,
 isMobile, touch), primary theme, viewport-only (what the owner sees first).
@@ -27,13 +28,14 @@ MOCK = pathlib.Path(sys.argv[1]).resolve()
 OUT = pathlib.Path(sys.argv[2]).resolve()
 OUT.mkdir(parents=True, exist_ok=True)
 
-DIRECTIONS = ["checkpoint", "night-shift", "redline"]
-SCREENS = ["landing", "console", "policy"]
-ALT = {"checkpoint": "dark", "night-shift": "light", "redline": "dark"}
+DIRECTIONS = sys.argv[3:] or ["checkpoint", "night-shift", "redline", "lattice"]
+SCREENS = {"lattice": ["landing", "console", "policy", "request", "keys"]}  # others: the first three
+ALT = {"checkpoint": "dark", "night-shift": "light", "redline": "dark", "lattice": "light"}
 FAMILIES = {
     "checkpoint": ["Overpass", "Overpass Mono"],
     "night-shift": ["Atkinson Hyperlegible Next", "Atkinson Hyperlegible Mono"],
     "redline": ["Spectral", "Public Sans", "JetBrains Mono"],
+    "lattice": ["Geist", "Geist Mono"],
 }
 VIEW = {
     "desktop": {"viewport": {"width": 1440, "height": 900}, "device_scale_factor": 1},
@@ -43,7 +45,7 @@ VIEW = {
 
 jobs = []
 for d in DIRECTIONS:
-    for s in SCREENS:
+    for s in SCREENS.get(d, ["landing", "console", "policy"]):
         for vp in ("desktop", "mobile"):
             jobs.append((d, s, None, vp))
     jobs.append((d, "console", ALT[d], "desktop"))
@@ -95,6 +97,6 @@ with sync_playwright() as p:
     chrome_version = browser.version
     browser.close()
 
-(OUT / "shoot-log.json").write_text(json.dumps(
+(OUT / ("shoot-log.json" if not sys.argv[3:] else f"shoot-log-{'-'.join(sys.argv[3:])}.json")).write_text(json.dumps(
     {"chrome": chrome_version, "seconds": round(time.time() - t0, 1), "pages": log}, indent=2))
 print(f"done {len(log)} pages in {time.time() - t0:.1f}s, chrome {chrome_version}")
