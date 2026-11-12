@@ -69,7 +69,7 @@ async def _close(it: AsyncIterator[UpstreamEvent], teardown_s: float) -> None:
     aclose = getattr(it, "aclose", None)
     if aclose is None:
         return
-    await asyncio.wait_for(aclose(), teardown_s)
+    await aclose()  # TEMPORARY #116 CI EXPERIMENT: unbounded teardown; reverted in the next commit
 
 
 async def bounded_events(
