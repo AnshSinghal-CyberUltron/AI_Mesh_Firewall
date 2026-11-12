@@ -1,12 +1,15 @@
-python=3.13.18 (thread CPU; host shared, load ~2.3 on 2 CPUs)
+ 12:21:39 up  7:09,  0 user,  load average: 7.83, 5.67, 5.35
+python=3.12.3 (thread CPU; host shared with other agents)
 
 ## Record sizes and costs (per record)
 | shape | canonical body bytes | envelope bytes | make_record us | decode_record us | parse+build us | apply total us |
 |---|---|---|---|---|---|---|
-| empty org (0 models) | 109 | 372 | 13.9 | 17.8 | 8.2 | 26.0 |
-| typical (5 models, 51-byte keys) | 2,068 | 2,597 | 41.8 | 30.6 | 76.7 | 107.4 |
-| large (20 models) | 8,086 | 9,409 | 135.2 | 62.0 | 195.5 | 257.5 |
-| worst (64 max-length models, 4 KiB keys, 64 omitted) | 452,009 | 457,394 | 2556.8 | 1380.8 | 2738.3 | 4119.0 |
+| empty org (0 models) | 109 | 372 | 9.8 | 15.5 | 5.7 | 21.2 |
+| typical (5 models, 51-byte keys) | 2,068 | 2,597 | 35.7 | 24.2 | 49.3 | 73.4 |
+| large (20 models) | 8,086 | 9,409 | 102.9 | 47.0 | 234.8 | 281.8 |
+| 64 typical models (the per-org cap) | 25,475 | 29,126 | 373.3 | 141.0 | 727.9 | 869.0 |
+| 64 typical + 64 omitted | 42,374 | 46,781 | 457.6 | 158.2 | 724.9 | 883.1 |
+| worst (64 max-length models, 4 KiB keys, 64 omitted) | 452,009 | 457,394 | 5745.7 | 1068.5 | 2164.1 | 3232.7 |
 
 idempotence: 1000/1000 shuffled sources -> byte-identical canonical body
 
@@ -14,9 +17,17 @@ idempotence: 1000/1000 shuffled sources -> byte-identical canonical body
 10,000 orgs x 5 models: 61.8 MB -> 6,179 bytes per org
   a 20 MiB view share holds 3,394 typical orgs
   a 40 MiB view share holds 6,788 typical orgs
-10,000 empty orgs: 419 bytes per org
+10,000 empty orgs: 420 bytes per org
+
+## View bytes by org shape vs the rev-2 charge (3 x canonical bytes + 512)
+| shape | canonical bytes | measured view bytes/org | charge | measured / charge |
+|---|---|---|---|---|
+| typical 5 models | 2,092 | 6,123 | 6,789 | 0.90 |
+| 64 typical models | 25,470 | 73,053 | 76,921 | 0.95 |
+| 64 typical + 64 omitted | 42,615 | 87,871 | 128,356 | 0.68 |
+| worst (64 max, 4 KiB keys, 64 omitted) | 452,010 | 549,332 | 1,356,542 | 0.40 |
 
 ## Request-path lookup (pin org + resolve alias), ns per lookup
-    1,000 orgs: 109 ns per lookup (best of 5, 200k lookups)
-  100,000 orgs: 475 ns per lookup (best of 5, 200k lookups)
+    1,000 orgs: 122 ns per lookup (best of 5, 200k lookups)
+  100,000 orgs: 605 ns per lookup (best of 5, 200k lookups)
 OK

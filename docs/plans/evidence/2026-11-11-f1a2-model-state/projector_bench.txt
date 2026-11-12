@@ -1,9 +1,12 @@
-run without the heavy lock (job < 2 min CPU; other agents' suites were queued on it); nice 10;  11:22:26 up  6:09,  0 user,  load average: 6.12, 4.89, 3.56
-python=3.13.18 orgs=100,000 models/org=5 (thread CPU)
-cold round (derive 500k rows, assemble+canonicalise+hash 100k bodies): 8.24 s; omissions={'row_invalid': 1}
+nice 10, no heavy lock (< 1 min CPU; the heavy-lock queue held ~15 jobs);  12:24:00 up  7:11,  0 user,  load average: 7.09, 6.24, 5.62
+python=3.12.3 orgs=100,000 models/org=5 (thread CPU)
+cold round (derive 500k rows, assemble+canonicalise+hash 100k bodies): 8.26 s; omissions={'row_invalid': 1}
 steady round (compare 100k source revisions, nothing changed): 3.8 ms; changed=0
-1% churn round (1,000 orgs, one row each): 47 ms; bodies changed=1,000
+1% churn round (1,000 orgs, one row each): 55 ms; bodies changed=1,000
+1% churn round WITHOUT a row memo (1,000 orgs, every row re-derived): 49 ms
+breaker, bad release, one 1,000-org reconcile slice: drift=4,999 of 5,000 examined; rev-1 rule trips=False (threshold 25,000); rev-2 rule trips=True
+breaker, console mass deactivation of the same slice: drift=0 (console facts change the digest; never held)
 idempotence: re-projecting 1,000 unchanged orgs -> 0 body changes
 row memo: 104.6 MB for 100k rows -> 1,046 bytes/row; linear extrapolation to 500k rows: 523 MB (F1a-2 holds only the digest and the derived entry; F1a-3 adds the triple)
 OK
-wall 57 s
+wall 42 s

@@ -1,5 +1,5 @@
 replacing an unverifiable freshness stamp
-seed=20261111 iterations=5000 python=3.13.18
+seed=20261111 iterations=5000 python=3.12.3
 [1] 5000/5000 HEAD stamps: raw-map signature byte-identical; step-1 reader accepts all
 [1b] 5000/5000 step-1 stamps over the base kinds: HEAD decode_stamp accepts all
 [2] 5000/5000 stamps naming 'model': step-1 accepts (model ignored); HEAD decode_stamp refuses 5000/5000 ('unknown kind')
@@ -10,6 +10,6 @@ seed=20261111 iterations=5000 python=3.13.18
 [4] refused: '=' in a kind name: bad kind name 'a=1.2:3'
 [4] refused: bool cursor: bad cursor for model
 [4] refused: negative cursor: bad cursor for model
-[cost] HEAD decode_stamp: 26.5 us thread CPU per stamp
-[cost] step-1 lenient_decode: 20.5 us thread CPU per stamp
+[cost] HEAD decode_stamp: 23.8 us thread CPU per stamp
+[cost] step-1 lenient_decode: 19.5 us thread CPU per stamp
 OK

@@ -217,6 +217,47 @@ def main() -> int:
     print(f"1% churn round ({len(changed):,} orgs, one row each): {churned * 1000:.0f} ms; "
           f"bodies changed={writes:,}")
 
+    # rev 2 (Reviewer A NIT 6): the same churn WITHOUT a per-row memo (rev 2 keeps no derived
+    # entries per row; it re-derives every row of a changed org)
+    for org in churn:
+        revs[org] += 1
+    t0 = time.thread_time()
+    for org in churn:
+        body, _ = assemble(slugs[org], rows[org], {})
+        body_hash(canonical_body(body))
+    print(f"1% churn round WITHOUT a row memo ({len(churn):,} orgs, every row re-derived): "
+          f"{(time.thread_time() - t0) * 1000:.0f} ms")
+
+    # rev 2 (Reviewer B6): the drift breaker at 100k. A bad projector release makes derivation
+    # omit every entry while the source digests are unchanged. Rev 1's rule (max(128, 5% of all
+    # served entries) newly omitted per round) against rev 2's (drift ratio over entries EXAMINED
+    # this iteration, min sample 128 entries across 3 orgs).
+    served_total = n_orgs * per_org
+    slice_orgs = sorted(rows)[:1_000]  # one reconcile slice
+    examined = drift = 0
+    for org in slice_orgs:
+        for r in rows[org]:
+            examined += 1
+            before = memo.get(r.row_id)
+            if before is None or isinstance(before[1][1], str):
+                continue
+            # the bad release: same digest, outcome now omitted
+            if row_digest(r) == before[0]:
+                drift += 1
+    rev1_trips = drift >= max(128, 0.05 * served_total)
+    rev2_trips = examined >= 128 and len(slice_orgs) >= 3 and drift >= 16 and drift / examined >= 0.05
+    print(f"breaker, bad release, one 1,000-org reconcile slice: drift={drift:,} of {examined:,} examined; "
+          f"rev-1 rule trips={rev1_trips} (threshold {max(128, 0.05 * served_total):,.0f}); rev-2 rule trips={rev2_trips}")
+    # a console mass deactivation: digests change, so drift is 0 and nothing is held
+    deact = 0
+    for org in slice_orgs:
+        for r in rows[org]:
+            changed = Row(**{**{f: getattr(r, f) for f in Row.__slots__}, "is_active": False})
+            held = memo.get(r.row_id)
+            if held is not None and row_digest(changed) == held[0]:
+                deact += 1
+    print(f"breaker, console mass deactivation of the same slice: drift={deact} (console facts change the digest; never held)")
+
     # idempotence: re-running an unchanged org writes nothing
     again = sum(
         1 for org in churn

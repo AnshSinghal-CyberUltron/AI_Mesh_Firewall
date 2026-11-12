@@ -1,9 +1,9 @@
-python=3.13.18 (thread CPU)
+python=3.12.3 (thread CPU)
 ## HEAD (tuple scan / all_candidates), us per request
-    1,000 orgs: candidates_for 12 us; serves_alias 55 us
-   10,000 orgs: candidates_for 120 us; serves_alias 517 us
-  100,000 orgs: candidates_for 1,212 us; serves_alias 5,137 us
+    1,000 orgs: candidates_for 7 us; serves_alias 50 us
+   10,000 orgs: candidates_for 100 us; serves_alias 488 us
+  100,000 orgs: candidates_for 890 us; serves_alias 5,501 us
 ## Design (LRU by org -> dict by alias key): probes and ns per request
-    1,000 orgs: 1.00 alias probes per request, 287 ns per request
-  100,000 orgs: 1.00 alias probes per request, 1,461 ns per request
+    1,000 orgs: 1.00 alias probes per request, 475 ns per request
+  100,000 orgs: 1.00 alias probes per request, 1,321 ns per request
 OK

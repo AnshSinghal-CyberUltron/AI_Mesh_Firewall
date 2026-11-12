@@ -1,0 +1,88 @@
+2026-11-11T12:21:03Z  12:21:03 up  7:08,  0 user,  load average: 8.22, 5.43, 5.26
+lock: .ctl-db.lock only (Postgres-bound; the heavy-lock queue held ~15 full suites at the time)
+python=3.13.18 psycopg=3.3.8
+PostgreSQL 16.15 (Debian 16.15-1.pgdg12+2) on x86_64-pc-linux-gnu, compiled by gcc (Debian 12.2.0-14+deb12u1) 12.2.0, 64-bit
+setup 85 s
+
+## A. Bounded source read (row-budget chunks, token never selected)
+| chunk | unbounded HEAD-style read | bounded rev-2 read |
+|---|---|---|
+| 400 typical orgs (2,000 rows) | ok 2,000 rows, 265 ms / ok 2,000 rows, 207 ms | ok 2,000 rows, 61 ms / ok 2,000 rows, 26 ms |
+| 31 dense orgs x 64 (1,984 rows) | ok 1,984 rows, 150 ms / ok 1,984 rows, 77 ms | ok 1,984 rows, 33 ms / ok 1,984 rows, 42 ms |
+| 399 typical + 250,000 inactive rows in one org | FAILED QueryCanceled after 879 ms / FAILED QueryCanceled after 805 ms | ok 2,124 rows, 50 ms / ok 2,124 rows, 45 ms |
+| 399 typical + one org with 50 x ~1.4 MB tokens | ok 2,045 rows, 707 ms / ok 2,045 rows, 485 ms | ok 2,045 rows, 58 ms / ok 2,045 rows, 47 ms |
+| 399 typical + an `infinity` created_at | FAILED FeatureNotSupported after 93 ms / FAILED FeatureNotSupported after 92 ms | ok 1,996 rows, 42 ms / ok 1,996 rows, 42 ms |
+| 500 dense orgs x 64 (rev-1 chunk shape) | ok 32,000 rows, 814 ms / ok 32,000 rows, 678 ms | ok 32,000 rows, 733 ms / ok 32,000 rows, 654 ms |
+row counts returned: wide=129 (129 = over the 128 cap -> org unavailable), fat=50 key_len=1,408,007 shape_ok=None (over cap -> not checked), infinity created=0
+
+## B. Bisection to the org inside one REPEATABLE READ snapshot (SAVEPOINTs)
+  statement error (1/0): isolated=[102004] other orgs read=399/399 statements=17 wall=227 ms same snapshot=True
+  statement timeout (pg_sleep 1 s > 800 ms): isolated=[102005] other orgs read=399/399 statements=19 wall=8,074 ms same snapshot=True
+  singleton re-read of a quarantined org (next rounds): 1 statement, bounded by the 800 ms bound
+
+## C. Statement-level revision triggers (transition tables, projected-column filter)
+  created triggers and backfilled 102,005 revision rows in 2.7 s
+  non-projected bulk update (routing_priority + updated_at), 128,000 rows: 8.7 s, orgs bumped 0
+  same update with the trigger disabled: 8.7 s
+  projected bulk update (is_active), 128,000 rows: 11.7 s, orgs bumped 2,000 (expected 2,000; one bump per org per statement)
+  dense orgs' revisions after one statement: min=2 max=2
+  session_replication_role = replica, org 7 deactivated: rev 1 -> 2 (ENABLE ALWAYS fires)
+  projector check pg_trigger.tgenabled: [('llm_rev_del', 'A'), ('llm_rev_ins', 'A'), ('llm_rev_upd', 'A')] ('A' = always; anything else -> MODEL uncovered)
+  org delete cascading 5 model deletes: revision row remaining = 0 (FK ON DELETE CASCADE)
+  single-row projected update, autocommit: 4.28 ms each (wall, loaded host)
+Exception in thread Thread-1 (worker):
+Exception in thread Thread-2 (worker):
+Traceback (most recent call last):
+  File "/usr/local/lib/python3.13/threading.py", line 1044, in _bootstrap_inner
+    self.run()
+    ~~~~~~~~^^
+  File "/usr/local/lib/python3.13/threading.py", line 995, in run
+    self._target(*self._args, **self._kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/claude/work/wt-f1a2/gateway_v2/../docs/plans/evidence/2026-11-11-f1a2-model-state/pg_rev2_bench.py", line 315, in worker
+    with psycopg.connect(DSN.rsplit("/", 1)[0] + "/" + DB) as c:
+         ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/claude/work/venv-ci/lib/python3.13/site-packages/psycopg/connection.py", line 126, in connect
+    raise last_ex.with_traceback(None)
+psycopg.OperationalError: connection failed: connection to server at "127.0.0.1", port 55432 failed: FATAL:  sorry, too many clients already
+Traceback (most recent call last):
+  File "/usr/local/lib/python3.13/threading.py", line 1044, in _bootstrap_inner
+    self.run()
+    ~~~~~~~~^^
+  File "/usr/local/lib/python3.13/threading.py", line 995, in run
+    self._target(*self._args, **self._kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/claude/work/wt-f1a2/gateway_v2/../docs/plans/evidence/2026-11-11-f1a2-model-state/pg_rev2_bench.py", line 315, in worker
+    with psycopg.connect(DSN.rsplit("/", 1)[0] + "/" + DB) as c:
+         ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/claude/work/venv-ci/lib/python3.13/site-packages/psycopg/connection.py", line 126, in connect
+    raise last_ex.with_traceback(None)
+psycopg.OperationalError: connection failed: connection to server at "127.0.0.1", port 55432 failed: FATAL:  sorry, too many clients already
+  two transactions, disjoint rows, orgs in opposite order across statements: {} (residual: one is aborted and retried; within ONE statement the org-ordered upsert cannot deadlock)
+
+## D. State-table reads at 100k orgs
+  loaded 3 x 100k state records (549 MB) in 70 s; MODEL bodies 2,560 B of low-compressibility hex
+| read | result under the 800 ms bound |
+|---|---|
+| MODEL whole-kind snapshot (HEAD repair read) | FAILED QueryCanceled after 816 ms / FAILED QueryCanceled after 838 ms |
+| PLAN whole-kind snapshot (HEAD projector.py:220) | FAILED QueryCanceled after 927 ms / FAILED QueryCanceled after 883 ms |
+| KEY whole-kind snapshot (HEAD projector.py:220) | ok 100,000 rows, 916 ms / FAILED QueryCanceled after 825 ms |
+| PLAN slim snapshot (key, content_hash, deleted, engaged) | ok 100,000 rows, 424 ms / ok 100,000 rows, 380 ms |
+| KEY slim snapshot (key, content_hash, deleted, engaged) | ok 100,000 rows, 307 ms / ok 100,000 rows, 286 ms |
+| MODEL index read (key, feed_seq) | ok 100,000 rows, 219 ms / ok 100,000 rows, 209 ms |
+| MODEL incremental STALE read: 1,000 above a position | ok 1,000 rows, 19 ms / ok 1,000 rows, 13 ms |
+| MODEL targeted CONTENTS read: 100 keys | ok 100 rows, 17 ms / ok 100 rows, 2 ms |
+| PLAN source, every body (HEAD source_pg.py:68-71) | FAILED QueryCanceled after 876 ms / FAILED QueryCanceled after 948 ms |
+| PLAN source, revisions only | ok 99,999 rows, 286 ms / ok 99,999 rows, 213 ms |
+| KEY source, every row (HEAD source_pg.py:59-66) | ok 99,999 rows, 1,372 ms / FAILED QueryCanceled after 803 ms |
+  keyset-paged MODEL repair read, 500 records/page: 200 pages, worst page 18 ms, total 1.6 s, 256 MB of bodies (one snapshot)
+  keyset-paged MODEL repair read, 1000 records/page: 100 pages, worst page 45 ms, total 1.8 s, 256 MB of bodies (one snapshot)
+
+## E. Writer throughput on the real path (StateWriter + PostgresControlDB + ValkeyPublisher)
+  put_many 100 x typical 5-model (~2.1 KB): median 174 ms, max 259 ms per chunk (1.7 ms per record)
+  put_many 100 x 64-model (~25.6 KB): median 371 ms, max 536 ms per chunk (3.7 ms per record)
+  put(if_changed) one existing record, typical body: median 19.9 ms, p95 42.7 ms
+  scratch Valkey keys deleted: 1502
+scratch database dropped
+OK
+exit 0 wall incl lock wait 231 s

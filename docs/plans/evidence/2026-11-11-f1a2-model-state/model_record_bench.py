@@ -261,11 +261,13 @@ def per_op(fn, n: int) -> float:
 
 def main() -> int:
     rng = random.Random(20261111)
-    print(f"python={sys.version.split()[0]} (thread CPU; host shared, load ~2.3 on 2 CPUs)")
+    print(f"python={sys.version.split()[0]} (thread CPU; host shared with other agents)")
     shapes = {
         "empty org (0 models)": body("org-00001", rng, 0),
         "typical (5 models, 51-byte keys)": body("org-00001", rng, 5),
         "large (20 models)": body("org-00001", rng, 20),
+        "64 typical models (the per-org cap)": body("org-00001", rng, 64),
+        "64 typical + 64 omitted": body("org-00001", rng, 64, omitted=64),
         "worst (64 max-length models, 4 KiB keys, 64 omitted)": body("org-00001", rng, 64, worst=True, omitted=64),
     }
     print("\n## Record sizes and costs (per record)")
@@ -318,6 +320,29 @@ def main() -> int:
     tracemalloc.stop()
     del empties
     print(f"10,000 empty orgs: {empty_used / 10_000:,.0f} bytes per org")
+
+    # rev 2 (Reviewer B5): bytes per org by shape, and the byte charge the view uses
+    print("\n## View bytes by org shape vs the rev-2 charge (3 x canonical bytes + 512)")
+    print("| shape | canonical bytes | measured view bytes/org | charge | measured / charge |")
+    print("|---|---|---|---|---|")
+    for label, n, kwargs in (
+        ("typical 5 models", 5_000, {"n": 5}),
+        ("64 typical models", 400, {"n": 64}),
+        ("64 typical + 64 omitted", 400, {"n": 64, "omitted": 64}),
+        ("worst (64 max, 4 KiB keys, 64 omitted)", 40, {"n": 64, "worst": True, "omitted": 64}),
+    ):
+        raws = [(f"org-{i:06d}", canonical_body(body(f"org-{i:06d}", rng, **kwargs))) for i in range(n)]
+        gc.collect()
+        tracemalloc.start()
+        base = tracemalloc.get_traced_memory()[0]
+        held = [parse(org, Version(1, 1), 1, raw) for org, raw in raws]
+        used = (tracemalloc.get_traced_memory()[0] - base) / n
+        tracemalloc.stop()
+        del held
+        canon = sum(len(r) for _, r in raws) / n
+        charge = 3 * canon + 512
+        print(f"| {label} | {canon:,.0f} | {used:,.0f} | {charge:,.0f} | {used / charge:.2f} |")
+        assert used <= charge, label
 
     # request path: lookup cost at 1k vs 100k orgs
     print("\n## Request-path lookup (pin org + resolve alias), ns per lookup")
