@@ -72,8 +72,8 @@ GROUP_DEPTH_VECTORS = (
         "(?x:(?#^]]:))*#)x\n)",
         3,
     ),
-    (_nested(32), 32),
-    (_nested(33), 33),
+    (_nested(16), 16),
+    (_nested(17), 17),
     ("(?#[)" + _nested(40), 40),  # a `[` in a comment group cannot hide what follows
     ("(?x)#[\n" + _nested(40), 40),  # nor can a `[` in a VERBOSE comment
     ("(a)(b)" * 40, 1),
@@ -91,27 +91,28 @@ class GroupDepthVectorTests(SimpleTestCase):
                     warnings.simplefilter("ignore", FutureWarning)  # "[[(]": possible nested set
                     re.compile(pattern)
 
-    def test_the_limit_is_thirty_two(self):
-        self.assertEqual(MAX_GROUP_DEPTH, 32)
+    def test_the_limit_is_sixteen(self):
+        # 16, not 32: the #117 reviews' measurements; see MAX_GROUP_DEPTH in serializers.py.
+        self.assertEqual(MAX_GROUP_DEPTH, 16)
 
 
 class ValidatorTests(SimpleTestCase):
     """The validators alone: every failure is a ValidationError (a 400), never another error."""
 
-    def test_thirty_two_deep_is_accepted(self):
-        value = {"regex": _nested(32), "field": "prompt"}
+    def test_sixteen_deep_is_accepted(self):
+        value = {"regex": _nested(16), "field": "prompt"}
         self.assertEqual(validate_condition(value), value)
-        self.assertEqual(validate_redaction_config({"regex": _nested(32)}), {"regex": _nested(32)})
+        self.assertEqual(validate_redaction_config({"regex": _nested(16)}), {"regex": _nested(16)})
 
     def test_deeper_is_a_validation_error_in_both_fields(self):
         self.assertEqual(len(DEEP), 999)
-        for depth in (33, 400, 499):
+        for depth in (17, 32, 33, 400, 499):
             for validator in (validate_condition, validate_redaction_config):
                 for key in ("regex", "pattern"):
                     with self.subTest(depth=depth, validator=validator.__name__, key=key):
                         re.purge()
                         with self.assertRaisesRegex(
-                            drf_serializers.ValidationError, "deeper than 32 levels",
+                            drf_serializers.ValidationError, "deeper than 16 levels",
                         ):
                             validator({key: _nested(depth)})
 
@@ -171,8 +172,14 @@ class RuleApiTests(TestCase):
         self.assertIn("redaction_config", response.json())
         self.assertFalse(self.policy.rules.exists())
 
-    def test_a_32_deep_condition_is_created(self):
-        response = self._post(condition={"regex": _nested(32, "secret"), "field": "prompt"})
+    def test_a_17_deep_condition_is_a_400(self):
+        response = self._post(condition={"regex": _nested(17, "secret"), "field": "prompt"})
+        self.assertEqual(response.status_code, 400, response.content)
+        self.assertIn("deeper than 16 levels", str(response.json()["condition"]))
+        self.assertFalse(self.policy.rules.exists())
+
+    def test_a_16_deep_condition_is_created(self):
+        response = self._post(condition={"regex": _nested(16, "secret"), "field": "prompt"})
         self.assertEqual(response.status_code, 201, response.content)
         self.assertTrue(self.policy.rules.exists())
 

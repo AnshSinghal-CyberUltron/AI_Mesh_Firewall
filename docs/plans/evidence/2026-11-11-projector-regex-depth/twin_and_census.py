@@ -40,7 +40,7 @@ def _vectors(path: str, name: str) -> str:
 
 
 ctl_max, ctl_depth = _control_twin()
-assert ctl_max == MAX_GROUP_DEPTH == 32
+assert ctl_max == MAX_GROUP_DEPTH == 16
 gw_vectors = _vectors("gateway_v2/tests/detect/test_condition_group_depth.py", "GROUP_DEPTH_VECTORS")
 ctl_vectors = _vectors(
     "control/ai_mesh_control/policy/tests/test_regex_group_depth.py", "GROUP_DEPTH_VECTORS"

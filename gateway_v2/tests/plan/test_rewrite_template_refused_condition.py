@@ -45,7 +45,7 @@ def _rule(pattern: str) -> Rule:
 
 
 @pytest.mark.parametrize(
-    "pattern", ["(" * 499 + "a" + ")" * 499, "(" * 33 + "a" + ")" * 33, "a{4294967296}", "(a+)+"],
+    "pattern", ["(" * 499 + "a" + ")" * 499, "(" * 17 + "a" + ")" * 17, "a{4294967296}", "(a+)+"],
 )
 def test_a_refused_condition_is_a_template_error(pattern: str) -> None:
     re.purge()
@@ -53,7 +53,7 @@ def test_a_refused_condition_is_a_template_error(pattern: str) -> None:
         check_template(_rule(pattern))
 
 
-def test_a_thirty_two_deep_condition_is_checked_normally() -> None:
-    check_template(_rule("(" * 32 + "secret" + ")" * 32))
+def test_a_sixteen_deep_condition_is_checked_normally() -> None:
+    check_template(_rule("(" * 16 + "secret" + ")" * 16))
     with pytest.raises(TemplateError, match="matches the rule's own condition"):
-        check_template(_rule("(" * 32 + "Removed" + ")" * 32))
+        check_template(_rule("(" * 16 + "Removed" + ")" * 16))

@@ -82,8 +82,8 @@ GROUP_DEPTH_VECTORS: tuple[tuple[str, int], ...] = (
         "(?x:(?#^]]:))*#)x\n)",
         3,
     ),
-    (_nested(32), 32),
-    (_nested(33), 33),
+    (_nested(16), 16),
+    (_nested(17), 17),
     ("(?#[)" + _nested(40), 40),  # a `[` in a comment group cannot hide what follows
     ("(?x)#[\n" + _nested(40), 40),  # nor can a `[` in a VERBOSE comment
     ("(a)(b)" * 40, 1),
@@ -100,8 +100,9 @@ def test_group_depth_vectors(pattern: str, expected: int) -> None:
         re.compile(pattern)  # every vector is a pattern `re` accepts at a shallow stack
 
 
-def test_the_limit_is_thirty_two() -> None:
-    assert MAX_GROUP_DEPTH == 32
+def test_the_limit_is_sixteen() -> None:
+    """16, not 32: the #117 reviews' measurements; see `MAX_GROUP_DEPTH`."""
+    assert MAX_GROUP_DEPTH == 16
 
 
 def _rule(pattern: str, *, rule_id: str = "rx") -> Rule:
@@ -133,8 +134,8 @@ def _refused(pattern: str) -> bool:
     return item.refused
 
 
-def test_thirty_two_deep_is_accepted_and_matches() -> None:
-    pattern = _nested(32)
+def test_sixteen_deep_is_accepted_and_matches() -> None:
+    pattern = _nested(16)
     assert not _refused(pattern)
     scanned = scan_conditions(
         compile_conditions((_rule(pattern),)), "xax", budget_s=1.0, phase=Phase.INPUT,
@@ -142,8 +143,8 @@ def test_thirty_two_deep_is_accepted_and_matches() -> None:
     assert scanned.refuse_code is None and len(scanned.findings) == 1
 
 
-@pytest.mark.parametrize("depth", [33, 400, 499])
-def test_deeper_than_thirty_two_is_refused_without_raising(depth: int) -> None:
+@pytest.mark.parametrize("depth", [17, 32, 33, 400, 499])
+def test_deeper_than_sixteen_is_refused_without_raising(depth: int) -> None:
     pattern = _nested(depth)
     assert len(_nested(499)) == 999, "the reported pattern fits the 1000-char limit"
     assert not conditions._redos_shape(pattern), "it passes every ReDoS-shape check"
@@ -161,13 +162,21 @@ def _at_depth(frames: int, pattern: str) -> bool:
     return _refused(pattern)
 
 
+def _worst_shape(depth: int) -> str:
+    """`(?i:a|...)*+`: the most frames per level of the 14 shapes Reviewer A measured on #117."""
+    return "(?i:a|" * depth + "b" + ")" + ")*+" * (depth - 1)
+
+
 @pytest.mark.parametrize("frames", [0, 300, 600])
 def test_the_answer_does_not_depend_on_the_callers_stack(frames: int) -> None:
     """Before the fix a 400-deep pattern compiled at a shallow stack and raised after ~200."""
     re.purge()
     assert _at_depth(frames, _nested(400)), "refused at every stack depth"
-    re.purge()
-    assert not _at_depth(frames, _nested(32)), "accepted at every stack depth"
+    for accepted in (_nested(16), _worst_shape(16)):
+        re.purge()
+        assert not _at_depth(frames, accepted), f"accepted at every stack depth: {accepted!r}"
+    assert not conditions._redos_shape(_worst_shape(16))
+    assert _at_depth(frames, _worst_shape(17)), "one level more is refused"
 
 
 def test_an_overflowing_repeat_is_refused_not_raised() -> None:

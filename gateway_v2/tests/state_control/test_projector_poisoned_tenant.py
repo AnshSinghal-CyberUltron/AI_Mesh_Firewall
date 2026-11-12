@@ -46,15 +46,15 @@ def _body_with(pattern: str, slug: str = "acme", **extra: Any) -> str:
     return json.dumps(body)
 
 
-@pytest.mark.parametrize("pattern", [DEEP, "(" * 33 + "a" + ")" * 33, "a{4294967296}"])
+@pytest.mark.parametrize("pattern", [DEEP, "(" * 17 + "a" + ")" * 17, "a{4294967296}"])
 def test_a_regex_re_cannot_compile_is_a_counted_refusal_not_an_exception(pattern: str) -> None:
     re.purge()
     projected, refused, why = validate_plan("acme", _body_with(pattern))
     assert projected is not None and refused == 1 and why == ""
 
 
-def test_thirty_two_deep_is_projected_and_not_refused() -> None:
-    projected, refused, why = validate_plan("acme", _body_with("(" * 32 + "a" + ")" * 32))
+def test_sixteen_deep_is_projected_and_not_refused() -> None:
+    projected, refused, why = validate_plan("acme", _body_with("(" * 16 + "a" + ")" * 16))
     assert projected is not None and refused == 0 and why == ""
 
 

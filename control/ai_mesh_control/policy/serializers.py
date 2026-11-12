@@ -79,12 +79,18 @@ def _has_redos_shape(pattern):
 # frames per nesting level, so a 999-char pattern of 499 nested groups raises RecursionError
 # (not re.error), and a ~400-deep one compiles or raises depending on how deep the caller's
 # stack already is. The depth is checked BEFORE ``re`` sees the pattern, so the answer is the
-# same on every stack: 32 levels need about 72 frames (measured on 3.12 and 3.13).
+# same on every stack.
+#
+# Why 16 (#117 reviews A-S4 / B-S3, measured): 16 levels need 40 frames in ``re`` (52 for the
+# worst shape) and hold at any caller stack; the ``regex`` engine F1 moves customer conditions
+# to unrolls ``(a)+`` nesting (16 levels: 163 ms, +102 MiB; 20+: exhausts 1 GiB) and its
+# translator refuses more than 16. One number fleet-wide means a rule accepted here today is
+# not refused at that rollout. The deepest pattern in the repository census is 5.
 #
 # TWIN: ``gateway_v2/gateway_v2/detect/conditions.py`` (``MAX_GROUP_DEPTH`` / ``group_depth``)
 # holds the same limit and scan; the packages share no code, and both suites pin the same test
 # vectors, so change them together.
-MAX_GROUP_DEPTH = 32
+MAX_GROUP_DEPTH = 16
 
 # ``(?flags)`` (global: opens no group) or ``(?flags-flags:`` (scoped). Deliberately permissive:
 # anything ``re`` would reject as flags aborts its parse there, so it cannot nest deeper after it.

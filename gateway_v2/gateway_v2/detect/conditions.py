@@ -24,14 +24,21 @@ _NESTED_QUANTIFIER = re.compile(r"\([^()]*[+*]\s*\)\s*[+*{]")
 _QUANTIFIED_WILDCARD = re.compile(r"\([^()]*\.[*+][^()]*\)\s*[+*{]")
 _QUANTIFIED_ALTERNATION = re.compile(r"\([^()]*\|[^()]*\)[+*{]")
 
-MAX_GROUP_DEPTH = 32
+MAX_GROUP_DEPTH = 16
 """The deepest group nesting a customer pattern may have.
 
 `re` parses and compiles a pattern recursively, about two Python frames per nesting level, so
 a 999-character pattern of 499 nested groups raises `RecursionError` (not `re.error`), and a
 ~400-deep one compiles or raises depending on how deep the caller's stack already is. Checking
-the depth BEFORE `re` sees the pattern makes the answer the same on every stack: 32 levels need
-about 72 frames (measured on 3.12 and 3.13), far inside the default limit of 1000.
+the depth BEFORE `re` sees the pattern makes the answer the same on every stack.
+
+Why 16 and not more (#117 reviews A-S4 / B-S3, measured): 16 levels need 40 frames in `re`
+(52 for the worst of 14 shapes) and every shape's verdict held at 900 caller frames, whereas
+at 32 the worst shape needs 100 frames and flipped. And the pinned `regex` engine F1 moves
+customer conditions to unrolls `(a)+` nesting: 16 levels cost 163 ms and +102 MiB to compile,
+20 or more exhaust a 1 GiB cap. Its translator refuses more than 16, so one number fleet-wide
+keeps a rule control accepts today from becoming refused at that rollout. The deepest pattern
+in the repository census is 5.
 
 The twin of this limit and of `group_depth` is `control/ai_mesh_control/policy/serializers.py`
 (the packages share no code); both suites pin the same vectors, so change them together."""
