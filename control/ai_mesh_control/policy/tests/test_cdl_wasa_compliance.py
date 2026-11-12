@@ -7,6 +7,7 @@ from django.test import TestCase, override_settings
 from rest_framework.test import APIClient
 
 from policy.views import PolicyWriteThrottle
+from policy.tests.analytics_api_testcase import AnalyticsAPITestCase
 
 User = get_user_model()
 
@@ -87,7 +88,10 @@ class SchemaProtectionTests(TestCase):
         self.assertIn(b"openapi", resp.content[:200])
 
 
-class ThreatFeedValidationTests(TestCase):
+class ThreatFeedValidationTests(AnalyticsAPITestCase):
+    # /api/security/ requests open a transaction on the 'analytics' alias
+    # (AnalyticsTimeoutMiddleware, Phase 0a C-7, 8b7c221b); a plain TestCase forbids
+    # that alias, so the request raised before the hours validation ran (#106).
     def setUp(self):
         from auth.models import Organization, UserProfile
 

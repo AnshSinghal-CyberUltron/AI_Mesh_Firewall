@@ -4,6 +4,11 @@
 UserProfile has `roles` (M2M), NOT `role`. The permission is checked with a mocked
 profile so no DB is needed. Behavior also proven standalone this session via AST
 extraction of has_object_permission.
+
+The admin role set includes `platform_admin` since e5278418 ("superusers +
+platform_admins can delete/purge gateway API keys they don't own"): production
+operators carry that role, and test_gateway_key_purge_revoked asserts the same set.
+The org-admin path stays ORG-scoped: an admin of another org is denied (#106).
 """
 
 from types import SimpleNamespace
@@ -12,6 +17,9 @@ from unittest import mock
 from django.test import SimpleTestCase
 
 from core.gateway_key_views import IsGatewayKeyOwner
+
+# The role names that grant same-org key mutation (core/gateway_key_views.py).
+_ADMIN_ROLES = ("admin", "superadmin", "org_admin", "platform_admin")
 
 
 def _req(method, roles_exist, user_id=99, org=1):
@@ -30,7 +38,14 @@ class GatewayKeyOwnerPermTests(SimpleTestCase):
         req, roles = _req("DELETE", roles_exist=True)
         obj = SimpleNamespace(owner_id=5, organization_id=1)  # different owner, same org
         self.assertTrue(self.perm.has_object_permission(req, None, obj))
-        roles.filter.assert_called_once_with(name__in=("admin", "superadmin", "org_admin"))
+        roles.filter.assert_called_once_with(name__in=_ADMIN_ROLES)
+
+    def test_org_admin_cannot_mutate_other_org_key(self):
+        # An admin role is only honoured inside the admin's own organization.
+        req, roles = _req("DELETE", roles_exist=True, org=1)
+        obj = SimpleNamespace(owner_id=5, organization_id=2)  # another org's key
+        self.assertFalse(self.perm.has_object_permission(req, None, obj))
+        roles.filter.assert_not_called()
 
     def test_non_admin_same_org_denied_cleanly_not_500(self):
         req, _ = _req("PATCH", roles_exist=False)

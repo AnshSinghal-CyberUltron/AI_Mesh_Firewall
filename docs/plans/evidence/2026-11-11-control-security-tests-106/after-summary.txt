@@ -1,0 +1,27 @@
+# After run for this PR: CI job "control (Django + Postgres + Redis) / django" on head 2f54740b42de8668bd0f60a7cf77975f431659e2
+# https://github.com/AnshSinghal-CyberUltron/AI_Mesh_Firewall/actions/runs/43009390524/job/130484875693
+# (GitHub-hosted runner, Postgres 16 + Redis 7.4, Python 3.12; command: python manage.py test core policy auth mcp_connector --noinput)
+Ran 525 tests in 101.151s
+FAILED (failures=3, expected failures=2)
+# ratchet (scripts/ci/known_failures.py, same job):
+### Known-failure ratchet
+
+- New failures (blocking): **0**
+- Known failures still failing: 3
+- Known failures now passing (remove from baseline): 0
+# The 3 failing ids (after-fails.txt) are exactly the 3 entries left in .github/ci/control-known-failures.txt.
+
+# Base for comparison: the same CI job on develop 25c33c86 (job 130473282601)
+Ran 513 tests in 86.013s
+FAILED (failures=22, errors=1, expected failures=2)
+# Suite time 86.0 s -> 101.2 s (+12 tests, 5 classes moved to TransactionTestCase); job wall 3m11s -> 3m14s.
+
+# After the #113 review fixes: CI job "control (Django + Postgres + Redis) / django" on 235a15a987cde9e74ea155ecddd4fc052aa3f88f
+# https://github.com/CyberUltron-Consulting-Private-Limited/AI_Mesh_Firewall/actions/runs/43165524139/job/131006381961 (06:06:46-06:09:59 UTC 12 Nov)
+Ran 527 tests in 96.308s
+FAILED (failures=3, expected failures=2)
+# ratchet: New failures (blocking): 0 / Known failures still failing: 3 / Known failures now passing: 0
+# +2 tests (A1 superuser compile guard, A4 operator needs is_staff). The 3 failures are still exactly after-fails.txt.
+# The previous push, c2a1754b6 (job 131001742430), failed this job with 1 new failure: the first version of the A4
+# test used a non-staff user without the platform_admin role, which IsAdminOrSuperuser refuses (403) before org
+# resolution. Fixed in 235a15a98; no product change.

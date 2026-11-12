@@ -55,7 +55,7 @@ Flip `osv-blocking`, `bandit-blocking`, `npm-audit-blocking` or `trivy-blocking`
 
 | File | What it holds | Rule |
 |---|---|---|
-| `.github/ci/control-known-failures.txt` | 23 control tests failing when the gate was introduced | delete a line when its test passes (the ratchet prints a notice); never add one |
+| `.github/ci/control-known-failures.txt` | control tests failing when the gate was introduced (23; 3 non-security left after #106) | delete a line when its test passes (the ratchet prints a notice); never add one |
 | `.gitleaksignore` | fingerprints of findings in **old commits** (no secret values) | never add a fingerprint for a new commit; remove the secret instead |
 | `.gitleaks.toml` | every rule off only in the detector test corpora, specs and evidence; other `tests/`/`fixtures/` skip `generic-api-key` only | never widen it to hide a real finding |
 

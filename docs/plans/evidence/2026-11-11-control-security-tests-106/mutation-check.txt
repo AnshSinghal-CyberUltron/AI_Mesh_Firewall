@@ -1,0 +1,36 @@
+# Mutation check: each mutation in mutate.py undoes one security property in PRODUCT code (applied all at once,
+# product files restored with git checkout afterwards). The fixed tests must fail. Run at branch commit 693f1db092206f18aa138675619dc96bd94402ad (tests as in this PR).
+# cmd (control/): flock .ctl-db.lock nice -n 10 python manage.py test <the 7 security test modules> --noinput
+Ran 52 tests in 14.969s
+FAILED (failures=12)
+
+# CORRECTION (12 Nov, PR #113 review A1): all mutations below were applied TOGETHER, so this run shows that
+# the set is caught, not that each mutation is. M4 is two mutations (M4a in auth/utils.py, M4b in
+# policy/compile_views.py). Applied one at a time (Reviewer A, review 5869548782, tests as at c48b355d):
+#   M4a alone -> 1 failure (test_plain_superuser_explicit_other_org_compiles_own_org_only)
+#   M4b alone -> 0 failures: SURVIVED. Nothing reached the compile guard's superuser branch.
+#   test_plain_superuser_without_org_cannot_compile_other_org fails only when M4a and M4b are applied together.
+# M4b is now caught by test_org_mismatch_is_rejected_for_superuser (commit 7a2701946); per-mutation rerun in
+# mutation-rerun-2026-11-12.txt.
+
+# mutation -> failing tests (all applied together)
+M1 key-owner org check removed           -> test_org_admin_cannot_mutate_other_org_key
+M2 ingestion org taken from body         -> test_org_key_event_is_scoped_to_key_org, test_org_key_batch_is_scoped_to_key_org
+M3 global kill-switch refusal removed     -> rejects_global_with_prefix, rejects_global_reroute, rejects_plain_global_disable
+M4 superuser cross-org (M4a utils + M4b compile, TOGETHER; see CORRECTION above) -> test_plain_superuser_explicit_other_org_compiles_own_org_only, test_plain_superuser_without_org_cannot_compile_other_org
+M5 isolation recipients not org-filtered -> test_notify_creates_escalation_notification
+M6 module-1.6 audit feed not org-filtered -> test_org_b_cannot_see_org_a_audit_in_feed
+M7 SSRF private-address check removed    -> test_websocket_ws_url_to_private_address_is_rejected, test_websocket_ws_stub_allowed_only_via_explicit_allowlist
+
+FAIL: test_org_key_batch_is_scoped_to_key_org (core.tests.test_ingestion_auth.IngestionOrgKeyScopeTests.test_org_key_batch_is_scoped_to_key_org)
+FAIL: test_org_key_event_is_scoped_to_key_org (core.tests.test_ingestion_auth.IngestionOrgKeyScopeTests.test_org_key_event_is_scoped_to_key_org)
+FAIL: test_notify_creates_escalation_notification (core.tests.test_isolation_notify.IsolationNotifyTests.test_notify_creates_escalation_notification)
+FAIL: test_killswitch_create_serializer_rejects_global_reroute (core.tests.test_kill_switch_credential.KillSwitchCredentialTests.test_killswitch_create_serializer_rejects_global_reroute)
+FAIL: test_killswitch_create_serializer_rejects_global_with_prefix (core.tests.test_kill_switch_credential.KillSwitchCredentialTests.test_killswitch_create_serializer_rejects_global_with_prefix)
+FAIL: test_killswitch_create_serializer_rejects_plain_global_disable (core.tests.test_kill_switch_credential.KillSwitchCredentialTests.test_killswitch_create_serializer_rejects_plain_global_disable)
+FAIL: test_plain_superuser_explicit_other_org_compiles_own_org_only (core.tests.test_policy_compile_org_assertion.PolicyCompileOrgAssertionTests.test_plain_superuser_explicit_other_org_compiles_own_org_only)
+FAIL: test_plain_superuser_without_org_cannot_compile_other_org (core.tests.test_policy_compile_org_assertion.PolicyCompileOrgAssertionTests.test_plain_superuser_without_org_cannot_compile_other_org)
+FAIL: test_websocket_ws_stub_allowed_only_via_explicit_allowlist (mcp_connector.tests.test_oauth_transport_guard.OAuthTransportGuardTests.test_websocket_ws_stub_allowed_only_via_explicit_allowlist)
+FAIL: test_websocket_ws_url_to_private_address_is_rejected (mcp_connector.tests.test_oauth_transport_guard.OAuthTransportGuardTests.test_websocket_ws_url_to_private_address_is_rejected)
+FAIL: test_org_admin_cannot_mutate_other_org_key (core.tests.test_gateway_key_owner_perm.GatewayKeyOwnerPermTests.test_org_admin_cannot_mutate_other_org_key)
+FAIL: test_org_b_cannot_see_org_a_audit_in_feed (core.tests.test_module_16_telemetry.Module16ApiTests.test_org_b_cannot_see_org_a_audit_in_feed)
