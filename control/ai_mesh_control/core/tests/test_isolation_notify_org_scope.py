@@ -1,8 +1,10 @@
-"""#120: Module 1.6 isolation bells reach only the event org's admins.
+"""#120 / #122: Module 1.6 isolation bells reach only the event org's admins.
 
 Before #120 the recipient query added `| Q(is_superuser=True)`, so every superuser of
 every org (and one with no org) received "[Isolation] ... model=<other org's model>".
-R11 (auth/models.py): superusers are ORG-scoped.
+Superusers are ZeroShield staff (owner decision 12 Nov), but bells stay per org: staff
+reach other orgs through the audited incident and WebSocket paths, and a fan-out to every
+staff member for every tenant's event grows with orgs x staff.
 """
 
 from __future__ import annotations
