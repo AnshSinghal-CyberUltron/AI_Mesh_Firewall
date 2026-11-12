@@ -49,6 +49,11 @@ class FakeRedis:
         return sum(1 for name in names if self.data.pop(name, None) is not None)
 
 
+def _active() -> int:
+    """Active orgs, including the ones migrations seed (auth 0005 backfills a default org)."""
+    return Organization.objects.filter(is_active=True).count()
+
+
 def _rules(org: Organization) -> dict[str, dict[str, Any]]:
     body = json.loads(V2PlanDocument.objects.get(organization=org).body)
     return {row["rule_id"]: row for row in body["rules"]}
@@ -68,7 +73,7 @@ class ReconcileTests(TestCase):
     def test_a_changed_publisher_republishes_every_active_org_once(self) -> None:
         note = rollout.reconcile(client=self.redis)
         self.assertEqual(note["status"], "swept")
-        self.assertEqual((note["published"], note["failed"]), (2, 0))
+        self.assertEqual((note["published"], note["failed"]), (_active(), 0))
         stale = V2PlanDocument.objects.get(organization=self.stale)
         self.assertEqual(stale.revision, 2)
         self.assertIn("fw-pii-input-ext", _rules(self.stale))
@@ -127,7 +132,9 @@ class ReconcileTests(TestCase):
 
         with mock.patch("core.firewall_v2_publish.publish_for_org", side_effect=flaky):
             note = rollout.reconcile(client=self.redis)
-        self.assertEqual((note["status"], note["published"], note["failed"]), ("incomplete", 1, 1))
+        self.assertEqual(
+            (note["status"], note["published"], note["failed"]), ("incomplete", _active() - 1, 1)
+        )
         self.assertIsNone(self.redis.get(rollout.MARKER_KEY))
         self.assertIsNone(self.redis.get(rollout.LOCK_KEY))
         self.assertEqual(rollout.reconcile(client=self.redis)["status"], "swept")
@@ -139,9 +146,13 @@ class ReconcileTests(TestCase):
         batches: list[int] = []
         with mock.patch.object(rollout, "BATCH", 2):
             published, failed = rollout.sweep(lambda: batches.append(1))
-        self.assertEqual((published, failed), (5, 0))
-        self.assertEqual(len(batches), 3)
-        self.assertEqual(V2PlanDocument.objects.filter(organization__is_active=True).count(), 5)
+        active = _active()
+        self.assertGreaterEqual(active, 5)
+        self.assertEqual((published, failed), (active, 0))
+        self.assertEqual(len(batches), -(-active // 2))
+        self.assertEqual(
+            V2PlanDocument.objects.filter(organization__is_active=True).count(), active
+        )
 
     def test_settling_retries_until_the_other_runner_is_gone(self) -> None:
         self.redis.set(rollout.LOCK_KEY, "dead-runner")
