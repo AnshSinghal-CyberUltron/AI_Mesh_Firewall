@@ -146,15 +146,17 @@ python3 scripts/ci/known_failures.py --log django-test.log --baseline .github/ci
 The full gateway_v2 pytest (5,162 tests) took 21.6 min as one step of `structural-gates`. It now runs as the matrix job `gateway-v2 pytest shard N/8` in `gateway-v2.yml`:
 
 - **Split by whole test file.** Every shard collects the whole suite. `scripts/ci/amf_pytest_shards.py`, a stdlib pytest plugin, assigns whole files to shards and deselects the other shards' tests. Module-scoped fixtures and in-file test order therefore behave as in an unsharded run.
-- **Balanced by measured durations.** The plugin uses longest-processing-time-first over `.github/ci/gateway-v2-test-durations.json` (per-file seconds from a CI run). A file missing from it weighs `tests × per_test_default`. The weights only balance the shards: a stale file never drops or repeats a test.
+- **Balanced by measured durations.** The plugin uses longest-processing-time-first over `.github/ci/gateway-v2-test-durations.json` (per-file seconds from a CI run). A file missing from it weighs `tests × per_test_default`. Every weight is clamped to 0.001 s – 10⁶ s, and a value that is not a finite number ≥ 0 counts as missing, so zero, NaN or infinite weights cannot pile every file onto one shard. The weights only balance the shards: a stale or hostile file never drops or repeats a test.
 - **Proved on every run.** `structural-gates` uploads the ids of the plain `pytest --collect-only -q`. `gateway-v2 pytest` downloads every shard's report and fails unless:
   - each shard index reported once;
   - all shards saw the same collection and the same assignment;
   - no test was selected twice;
   - the union of the shards equals the unsharded collection;
-  - every shard's pytest exited 0.
+  - every shard's pytest exited 0;
+  - every selected test ran to the end: each shard's report records every test's setup, call and teardown outcomes, and a selected test with no setup report, no call report after a passing setup, or no teardown report fails the check. A shard can exit 0 with tests left unrun: `pytest.exit(returncode=0)` in a test or fixture, or a `pytest_collection_modifyitems` hookwrapper in a conftest that drops items after the plugin selected them;
+  - no shard reported a test it did not select.
 
-  The last of these catches a drift that all shards share, such as another config file or a lost `--ignore`.
+  The comparison with the unsharded collection catches a drift that all shards share, such as another config file or a lost `--ignore`. `structural-gates` collects on `ubuntu-latest` while the shards follow `AMF_RUNNER_HEAVY`; if a larger runner with another image or architecture collects different ids, this check fails with the missing and extra ids (it never passes), and `structural-gates` should then move to the same runner.
 - **Require `gateway-v2 pytest`, never the shards:** their names change with the shard count. It runs with `if: always()` because GitHub counts a *skipped* required check as passed; when a shard fails or the run is cancelled, it fails instead.
 - **Plugin options are written `--option=value`, with `--config-file=pyproject.toml`.**
   - Pytest picks its rootdir and config file before it loads `-p` plugins. So `--shard-weights PATH` (with a space) made it treat PATH as a test path and read the repository root's `pyproject.toml`: 5,257 tests, no `--ignore` list, no timeout.
@@ -182,9 +184,9 @@ Jobs that mostly run tests read `runs-on: ${{ vars.AMF_RUNNER_HEAVY || 'ubuntu-l
 
 `reusable-python-ci` and `reusable-node-ci` take the same input. With the repository variable `AMF_RUNNER_HEAVY` unset, everything stays on free standard runners. Set it to a larger runner's label to move those jobs without a workflow edit.
 
-`image-digest` stays on `ubuntu-latest`: its LGW03-1 step runs the image with `--cpus 2` and `--cpus 4`.
+`image-digest` needs a runner with **at least 4 CPUs**: its LGW03-1 step runs the image with `--cpus=2` and `--cpus=4`, and Docker refuses a CPU limit above the host's count. GitHub's standard Linux runners have 4 CPUs for public repositories and 2 for private ones, so it runs on `ubuntu-latest` while the repository is public and must move to a runner with 4 or more cores before it goes private (ENTERPRISE_SETUP.md, "When the repository goes private"). The step checks the CPU count first and says so.
 
-Larger runners are billed per minute even for a public repository, and a single pytest or Django process does not run faster on more cores. Creating the runners and the variable is an owner step.
+Larger runners are billed per minute even for a public repository; on GitHub Team and Enterprise Cloud their cost can draw from the plan's included compute usage, the same allowance private-repository standard runners use (ENTERPRISE_SETUP.md step 3 quotes GitHub's billing page). A single pytest or Django process does not run faster on more cores. Creating the runners and the variable is an owner step.
 
 ### Timeouts
 

@@ -7,8 +7,12 @@ concurrency:
 
 # Runners and timeouts (docs/ci/README.md, "Runners and timeouts"):
 # - Jobs that mostly run tests read `runs-on` from the repository variable AMF_RUNNER_HEAVY and
-#   fall back to the free standard runner when it is unset. image-digest stays on the standard
-#   runner: its LGW03-1 step runs the image with --cpus 2 and --cpus 4.
+#   fall back to the free standard runner when it is unset.
+# - image-digest needs a runner with at least 4 CPUs: its LGW03-1 step runs the image with
+#   --cpus=2 and --cpus=4, and Docker refuses a CPU limit above the host's count. Standard
+#   runners have 4 CPUs for public repositories but 2 for private ones, so this job must move to
+#   a runner with 4 or more cores BEFORE the repository goes private (docs/ci/ENTERPRISE_SETUP.md,
+#   "When the repository goes private"). The step checks the count and names the cause.
 # - Every job has a `timeout-minutes` several times its measured duration, so a hang fails the
 #   job instead of running to GitHub's 360-minute default. pytest-timeout (gateway_v2
 #   pyproject) fails a single hung test first and names it.
@@ -47,6 +51,10 @@ jobs:
           # the httpx-backed tests need once httpx is installed (they importorskip httpx only).
           .venv/bin/pip install -q -e ".[dev,serve,conformance]"
       # The reference for `gateway-v2 pytest`: the test ids of the plain, unsharded command.
+      # This job stays on ubuntu-latest while the shards follow AMF_RUNNER_HEAVY. Both must
+      # collect the same ids; if a larger runner has another image or architecture and the
+      # collections differ, `gateway-v2 pytest` fails with the missing/extra ids (never green).
+      # Then move this job to the shards' runner too.
       - name: Unsharded pytest collection (reference for the shards)
         run: |
           .venv/bin/python -m pytest --collect-only -q > "$RUNNER_TEMP/gw2-collection.txt"
@@ -134,10 +142,12 @@ jobs:
           overwrite: true
 
   pytest:
-    # The check to require. Green only when every shard passed and the shards together selected
-    # every test of the unsharded collection (from structural-gates) exactly once. `always()`,
-    # not `!cancelled()`: GitHub counts a SKIPPED required check as passed, so this job must run,
-    # and fail, when a shard failed or the run was cancelled.
+    # The check to require. Green only when every shard passed, the shards together selected
+    # every test of the unsharded collection (from structural-gates) exactly once, and each
+    # selected test ran to the end: setup, call and teardown reported (`verify` in
+    # scripts/ci/amf_pytest_shards.py). `always()`, not `!cancelled()`: GitHub counts a SKIPPED
+    # required check as passed, so this job must run, and fail, when a shard failed or the run
+    # was cancelled.
     name: gateway-v2 pytest
     needs: [pytest-shard, structural-gates]
     if: ${{ always() }}
@@ -161,7 +171,7 @@ jobs:
         with:
           name: gw2-collection
           path: ${{ runner.temp }}
-      - name: Shards ran the unsharded collection exactly once, and every shard passed
+      - name: Shards ran every test of the unsharded collection once, and every shard passed
         run: |
           python scripts/ci/amf_pytest_shards.py verify "$RUNNER_TEMP/gw2-shards" \
             --expect-collection "$RUNNER_TEMP/gw2-collection.txt"
@@ -272,7 +282,16 @@ jobs:
         run: |
           python3 - <<'PY'
           import json
+          import os
           import subprocess
+
+          # --cpus=4 needs 4 host CPUs. Private-repository standard runners have 2.
+          if (os.cpu_count() or 0) < 4:
+              raise SystemExit(
+                  f"LGW03-1 GHA FAIL: this runner has {os.cpu_count()} CPUs; --cpus=4 needs 4 or "
+                  "more. Standard runners for private repositories have 2: move image-digest to "
+                  "a runner with 4+ cores (docs/ci/ENTERPRISE_SETUP.md)."
+              )
 
           def snap(cpus: str) -> dict:
               out = subprocess.check_output(
