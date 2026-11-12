@@ -46,6 +46,18 @@ jobs:
           # them, so `mypy --strict` needs them); `conformance` brings pytest-asyncio + openai, which
           # the httpx-backed tests need once httpx is installed (they importorskip httpx only).
           .venv/bin/pip install -q -e ".[dev,serve,conformance]"
+      # The reference for `gateway-v2 pytest`: the test ids of the plain, unsharded command.
+      - name: Unsharded pytest collection (reference for the shards)
+        run: |
+          .venv/bin/python -m pytest --collect-only -q > "$RUNNER_TEMP/gw2-collection.txt"
+          tail -n 1 "$RUNNER_TEMP/gw2-collection.txt"
+      - name: Upload the unsharded collection
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: gw2-collection
+          path: ${{ runner.temp }}/gw2-collection.txt
+          retention-days: 7
+          overwrite: true
       - name: Size + HTTP AST + mutable-state + capacity + tenant-scale gates
         run: |
           for tree in gateway_v2 state_control; do
@@ -97,16 +109,19 @@ jobs:
         run: |
           python -m venv .venv
           .venv/bin/pip install -q -e ".[dev,serve,conformance]"
+      # `--option=value` only, and the config pinned: pytest picks its rootdir and config file
+      # before -p plugins load, so `--shard-weights PATH` made it read the repository root's
+      # pyproject.toml (5,257 tests, no --ignore list, no timeout). The plugin refuses that form.
       - name: v2 pytest (this shard's test files)
         env:
           PYTHONPATH: ${{ github.workspace }}/scripts/ci
           SHARD_INDEX: ${{ strategy.job-index }}
           SHARD_COUNT: ${{ strategy.job-total }}
         run: |
-          .venv/bin/python -m pytest -q -p amf_pytest_shards \
-            --shard-index "$SHARD_INDEX" --shard-count "$SHARD_COUNT" \
-            --shard-weights ../.github/ci/gateway-v2-test-durations.json \
-            --shard-report "$RUNNER_TEMP/gw2-shard/shard-$SHARD_INDEX.json"
+          .venv/bin/python -m pytest -q --config-file=pyproject.toml -p amf_pytest_shards \
+            --shard-index="$SHARD_INDEX" --shard-count="$SHARD_COUNT" \
+            --shard-weights=../.github/ci/gateway-v2-test-durations.json \
+            --shard-report="$RUNNER_TEMP/gw2-shard/shard-$SHARD_INDEX.json"
       - name: Upload shard report
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -120,11 +135,11 @@ jobs:
 
   pytest:
     # The check to require. Green only when every shard passed and the shards together selected
-    # every collected test exactly once. `always()`, not `!cancelled()`: GitHub counts a SKIPPED
-    # required check as passed, so this job must run, and fail, when a shard failed or the run
-    # was cancelled.
+    # every test of the unsharded collection (from structural-gates) exactly once. `always()`,
+    # not `!cancelled()`: GitHub counts a SKIPPED required check as passed, so this job must run,
+    # and fail, when a shard failed or the run was cancelled.
     name: gateway-v2 pytest
-    needs: pytest-shard
+    needs: [pytest-shard, structural-gates]
     if: ${{ always() }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -141,8 +156,15 @@ jobs:
           pattern: gw2-shard-*
           path: ${{ runner.temp }}/gw2-shards
           merge-multiple: true
-      - name: Shards partition the collected suite, and every shard passed
-        run: python scripts/ci/amf_pytest_shards.py verify "$RUNNER_TEMP/gw2-shards"
+      - name: Download the unsharded collection
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: gw2-collection
+          path: ${{ runner.temp }}
+      - name: Shards ran the unsharded collection exactly once, and every shard passed
+        run: |
+          python scripts/ci/amf_pytest_shards.py verify "$RUNNER_TEMP/gw2-shards" \
+            --expect-collection "$RUNNER_TEMP/gw2-collection.txt"
       - name: Every shard job succeeded
         if: always()
         env:

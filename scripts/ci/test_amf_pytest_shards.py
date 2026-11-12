@@ -180,6 +180,71 @@ class VerifyTest(unittest.TestCase):
         self._fails(reports, "shard 1: exit 1")
 
 
+class ExpectedCollectionTest(unittest.TestCase):
+    def test_union_equals_unsharded(self) -> None:
+        result = shards.verify(_reports(NODEIDS, 3), list(reversed(NODEIDS)))
+        self.assertTrue(result["matched_unsharded"])
+
+    def test_shared_drift_is_caught(self) -> None:
+        # Every shard collected one more test than the canonical run (e.g. an --ignore lost to
+        # another config file): the shards agree with each other, the canonical list does not.
+        drifted = NODEIDS + ["tests/ignored/test_extra.py::test_t"]
+        reports = _reports(drifted, 3)
+        shards.verify(reports)  # internally consistent
+        with self.assertRaises(shards.VerifyError) as ctx:
+            shards.verify(reports, NODEIDS)
+        self.assertIn("1 extra", str(ctx.exception))
+        with self.assertRaises(shards.VerifyError) as ctx:
+            shards.verify(_reports(NODEIDS[:-1], 2), NODEIDS)
+        self.assertIn("1 missing", str(ctx.exception))
+
+    def test_duplicate_in_unsharded_list(self) -> None:
+        with self.assertRaises(shards.VerifyError):
+            shards.verify(_reports(NODEIDS, 2), NODEIDS + NODEIDS[:1])
+
+
+class _Config:
+    def __init__(self, args: list[str], **options: object) -> None:
+        self.invocation_params = type("P", (), {"args": tuple(args)})()
+        self.options = options
+        self.registered: list[object] = []
+        self.pluginmanager = type(
+            "PM", (), {"register": lambda _s, obj, _n: self.registered.append(obj)}
+        )()
+
+    def getoption(self, name: str) -> object:
+        return self.options.get(name)
+
+
+class ConfigureTest(unittest.TestCase):
+    def test_space_separated_values_are_refused(self) -> None:
+        cfg = _Config(
+            ["--shard-weights", "w.json", "--shard-index=0"],
+            **{"--shard-index": 0, "--shard-count": 2},
+        )
+        with self.assertRaises(shards._UsageError) as ctx:
+            shards.pytest_configure(cfg)
+        self.assertIn("--option=value", str(ctx.exception))
+        self.assertEqual(cfg.registered, [])
+
+    def test_equals_form_registers(self) -> None:
+        cfg = _Config(
+            ["--shard-index=1", "--shard-count=2"], **{"--shard-index": 1, "--shard-count": 2}
+        )
+        shards.pytest_configure(cfg)
+        self.assertEqual(len(cfg.registered), 1)
+
+    def test_no_options_no_plugin(self) -> None:
+        cfg = _Config(["-q"])
+        shards.pytest_configure(cfg)
+        self.assertEqual(cfg.registered, [])
+
+    def test_bad_combinations(self) -> None:
+        for opts in ({"--shard-index": 0}, {"--shard-index": 2, "--shard-count": 2}):
+            with self.assertRaises(shards._UsageError):
+                shards.pytest_configure(_Config([], **opts))
+
+
 class CliTest(unittest.TestCase):
     def _write(self, tmp: str, reports: list[dict]) -> Path:
         directory = Path(tmp) / "reports"
@@ -202,6 +267,21 @@ class CliTest(unittest.TestCase):
             doc = json.loads(out.getvalue())
             self.assertEqual(doc["format"], shards.WEIGHTS_FORMAT)
             self.assertEqual(set(doc["files"]), {shards.file_of(n) for n in NODEIDS})
+
+    def test_verify_expect_collection(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = self._write(tmp, _reports(NODEIDS, 3))
+            listing = Path(tmp) / "collect.txt"
+            listing.write_text("\n".join(NODEIDS) + f"\n\n{len(NODEIDS)} tests collected in 1.0s\n")
+            out = io.StringIO()
+            with redirect_stdout(out):
+                code = shards.main(["verify", str(directory), "--expect-collection", str(listing)])
+            self.assertEqual(code, 0, out.getvalue())
+            self.assertIn("union equal to the unsharded collection", out.getvalue())
+            listing.write_text("\n".join(NODEIDS[:-1]) + "\n")
+            with redirect_stdout(io.StringIO()):
+                code = shards.main(["verify", str(directory), "--expect-collection", str(listing)])
+            self.assertEqual(code, 1)
 
     def test_verify_fails_with_annotation(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

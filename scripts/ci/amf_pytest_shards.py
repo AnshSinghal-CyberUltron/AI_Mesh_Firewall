@@ -2,9 +2,15 @@
 
 Pytest plugin (``scripts/ci`` on ``PYTHONPATH``)::
 
-    pytest -p amf_pytest_shards --shard-index 0 --shard-count 8 \\
-        --shard-weights ../.github/ci/gateway-v2-test-durations.json \\
-        --shard-report "$RUNNER_TEMP/shard-0.json"
+    pytest --config-file=pyproject.toml -p amf_pytest_shards --shard-index=0 --shard-count=8 \\
+        --shard-weights=../.github/ci/gateway-v2-test-durations.json \\
+        --shard-report="$RUNNER_TEMP/shard-0.json"
+
+Write every option of this plugin as ``--option=value``. Pytest picks its rootdir and config file
+before it loads ``-p`` plugins, so with ``--shard-weights PATH`` it takes PATH for a test path:
+the rootdir moved to the repository root, and the root ``pyproject.toml`` (no ``--ignore`` list,
+no timeout) replaced gateway_v2's, which collected 5,257 tests instead of 5,162. The plugin
+refuses that form, and ``--config-file`` pins the config whatever the arguments are.
 
 Every shard collects the WHOLE suite, assigns whole test files to shards, and deselects the
 tests of every other shard. The assignment depends only on the collected test ids and the
@@ -47,10 +53,13 @@ try:  # the plugin hooks need pytest; the CLI and its self-tests do not
     import pytest
 
     _trylast = pytest.hookimpl(trylast=True)
+    _UsageError: type[Exception] = pytest.UsageError
 except ImportError:  # pragma: no cover - exercised by the stdlib-only self-tests
 
     def _trylast(func: Any) -> Any:
         return func
+
+    _UsageError = ValueError
 
 
 REPORT_FORMAT = 1
@@ -212,15 +221,24 @@ class _Shard:
         target.write_text(json.dumps(report, indent=1) + "\n", encoding="utf-8")
 
 
+_OPTIONS = ("--shard-index", "--shard-count", "--shard-weights", "--shard-report")
+
+
 def pytest_configure(config: Any) -> None:
+    spaced = [arg for arg in config.invocation_params.args if arg in _OPTIONS]
+    if spaced:
+        raise _UsageError(
+            f"write {', '.join(spaced)} as --option=value: pytest chose its rootdir and config "
+            "file before this plugin loaded, so a separate value was taken for a test path"
+        )
     count = config.getoption("--shard-count")
     index = config.getoption("--shard-index")
     if count is None and index is None:
         return
     if count is None or index is None:
-        raise ValueError("--shard-index and --shard-count go together")
+        raise _UsageError("--shard-index and --shard-count go together")
     if count < 1 or not 0 <= index < count:
-        raise ValueError(f"--shard-index {index} is outside 0..{count - 1}")
+        raise _UsageError(f"--shard-index {index} is outside 0..{count - 1}")
     shard = _Shard(
         index, count, config.getoption("--shard-weights"), config.getoption("--shard-report")
     )
@@ -245,8 +263,15 @@ def read_reports(directory: Path) -> list[dict[str, Any]]:
     return reports
 
 
-def verify(reports: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
-    """Check that the reports partition one collection; return the merged totals."""
+def verify(
+    reports: Sequence[Mapping[str, Any]], expected: Sequence[str] | None = None
+) -> dict[str, Any]:
+    """Check that the reports partition one collection; return the merged totals.
+
+    With ``expected`` (the node ids of an unsharded ``pytest --collect-only -q``), the shards'
+    union must also equal it: a config drift that every shard shares (another rootdir, another
+    ``--ignore`` list) changes the shards' collection but not the canonical one.
+    """
     if not reports:
         raise VerifyError("no shard reports found")
     first = reports[0]
@@ -269,6 +294,16 @@ def verify(reports: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
             f"the shards selected {len(seen)} tests; the collection has {first['collected']} "
             "(or the same number of different ids)"
         )
+    if expected is not None:
+        want = set(expected)
+        if len(want) != len(expected):
+            raise VerifyError("the unsharded collection lists a test id twice")
+        missing, extra = sorted(want - set(seen)), sorted(set(seen) - want)
+        if missing or extra:
+            raise VerifyError(
+                f"the shards' union differs from the unsharded collection ({len(want)} tests): "
+                f"{len(missing)} missing, e.g. {missing[:3]}; {len(extra)} extra, e.g. {extra[:3]}"
+            )
     bad = [
         f"shard {r['index']}: exit {r['exitstatus']}" for r in reports if int(r["exitstatus"]) != 0
     ]
@@ -296,6 +331,7 @@ def verify(reports: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
             for r in sorted(reports, key=lambda r: int(r["index"]))
         ],
         "slowest": [list(p) for p in slowest[:SLOWEST_KEPT]],
+        "matched_unsharded": expected is not None,
     }
 
 
@@ -318,7 +354,8 @@ def weights_doc(reports: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
 def _summary_markdown(result: Mapping[str, Any]) -> str:
     lines = [
         f"### pytest shards: {result['collected']} tests in {result['count']} shards, "
-        "each selected exactly once",
+        "each selected exactly once"
+        + (", union equal to the unsharded collection" if result["matched_unsharded"] else ""),
         "",
         "Outcomes: " + ", ".join(f"{n} {k}" for k, n in result["outcomes"].items()),
         "",
@@ -341,6 +378,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     for name in ("verify", "weights"):
         p = sub.add_parser(name)
         p.add_argument("reports", type=Path, help="directory holding the shard report JSON files")
+    sub.choices["verify"].add_argument(
+        "--expect-collection",
+        type=Path,
+        help="output of an unsharded `pytest --collect-only -q`; its ids must equal the union",
+    )
     args = parser.parse_args(argv)
     try:
         reports = read_reports(args.reports)
@@ -348,7 +390,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             verify(reports)
             print(json.dumps(weights_doc(reports), indent=1))
             return 0
-        result = verify(reports)
+        expected = None
+        if args.expect_collection is not None:
+            text = args.expect_collection.read_text(encoding="utf-8")
+            expected = [line.strip() for line in text.splitlines() if "::" in line]
+        result = verify(reports, expected)
     except (VerifyError, KeyError, ValueError, TypeError) as exc:
         print(f"::error title=pytest shards::{exc}")
         return 1
