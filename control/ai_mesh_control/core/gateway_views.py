@@ -14,6 +14,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from auth.audit import orgless_staff_fleet_read
 from core.models import Agent, GatewayAPIKey
 from policy.models import EnforcementEvent
 
@@ -139,8 +140,8 @@ class GatewayStatsListView(APIView):
         gateways = Agent.objects.filter(agent_type="gateway").order_by("-updated_at")
         if org is not None:
             gateways = gateways.filter(endpoint__organization=org)
-        else:
-            # #120 / R11: a superuser without an org gets nothing, not every tenant's gateways.
+        elif not orgless_staff_fleet_read(request, "gateways.stats"):
+            # No org: nothing. Org-less staff keep the fleet view, audited (owner decision 12 Nov).
             gateways = gateways.none()
         agent_ids = list(gateways.values_list("id", flat=True))
 

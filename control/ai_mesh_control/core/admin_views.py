@@ -11,6 +11,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from auth.audit import orgless_staff_fleet_read
 from core.models import Endpoint, SystemConfig
 
 
@@ -67,8 +68,8 @@ class AdminAgentVersionStatsView(APIView):
         endpoints_qs = Endpoint.objects.values("metadata")
         if org is not None:
             endpoints_qs = endpoints_qs.filter(organization=org)
-        else:
-            # #120 / R11: a superuser without an org gets nothing, not every tenant's endpoints.
+        elif not orgless_staff_fleet_read(request, "admin.agent_version_stats"):
+            # No org: nothing. Org-less staff keep the fleet view, audited (owner decision 12 Nov).
             endpoints_qs = endpoints_qs.none()
         by_version = defaultdict(int)
         for ep in endpoints_qs:
@@ -111,8 +112,8 @@ class AdminEndpointHealthView(APIView):
         endpoints_qs = Endpoint.objects.all()
         if org is not None:
             endpoints_qs = endpoints_qs.filter(organization=org)
-        else:
-            # #120 / R11: a superuser without an org gets nothing, not every tenant's endpoints.
+        elif not orgless_staff_fleet_read(request, "admin.endpoint_health"):
+            # No org: nothing. Org-less staff keep the fleet view, audited (owner decision 12 Nov).
             endpoints_qs = endpoints_qs.none()
         total = endpoints_qs.count()
         online = endpoints_qs.filter(status="online").count()

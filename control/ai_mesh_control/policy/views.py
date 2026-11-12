@@ -15,6 +15,7 @@ from rest_framework.response import Response
 from rest_framework.throttling import UserRateThrottle
 from rest_framework.viewsets import ModelViewSet
 
+from auth.audit import orgless_staff_fleet_read
 from auth.utils import get_request_organization
 from core.admin_views import IsAdminOrSuperuser
 
@@ -498,8 +499,9 @@ class PolicyViewSet(ModelViewSet):
         org = get_request_organization(self.request)
         if org is not None:
             qs = qs.filter(organization=org)
-        else:
-            # #120 / R11: a superuser without an org gets nothing, not every tenant's policies.
+        elif not orgless_staff_fleet_read(self.request, "policies"):
+            # No org: nothing. Org-less staff keep develop's all-tenants READ (owner decision
+            # 12 Nov, audited); writes never fall through to every tenant (#120).
             qs = qs.none()
         enabled = self.request.query_params.get("enabled")
         if enabled is not None:
@@ -909,7 +911,10 @@ class RuleViewSet(ModelViewSet):
         org = get_request_organization(self.request)
         if org is not None:
             return qs.filter(policy__organization=org)
-        # #120 / R11: a superuser without an org gets nothing, not every tenant's rules.
+        if orgless_staff_fleet_read(self.request, "rules"):
+            # Org-less staff: all-tenants READ, audited (owner decision 12 Nov). Writes and
+            # the rule create below never fall through to every tenant (#120).
+            return qs
         return qs.none()
 
     def get_serializer_class(self):
@@ -931,7 +936,8 @@ class RuleViewSet(ModelViewSet):
         if org is not None:
             policy_qs = policy_qs.filter(organization=org)
         else:
-            # #120 / R11: a superuser without an org gets nothing, not every tenant's policies to add rules to.
+            # #120: no org, no policy to add rules to, for staff too (a write; develop let an
+            # org-less superuser inject a rule into any tenant's policy).
             policy_qs = policy_qs.none()
 
         policy = policy_qs.first()

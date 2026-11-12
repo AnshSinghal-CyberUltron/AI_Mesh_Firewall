@@ -373,7 +373,8 @@ class PolicyWriteSerializer(serializers.ModelSerializer):
             if org is not None:
                 self.fields["mcp_server"].queryset = mcp_model.objects.filter(organization=org)
             else:
-                # #120 / R11: a superuser without an org gets nothing, not every tenant's servers.
+                # #120: no org, no servers, for staff too: this is a write serializer, and org-less
+                # staff keep fleet READS only (owner decision 12 Nov).
                 self.fields["mcp_server"].queryset = mcp_model.objects.none()
 
     def validate_code(self, value):

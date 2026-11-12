@@ -2261,21 +2261,42 @@ class AttackGraphView(APIView):
         return Response({"nodes": nodes_list, "edges": edges_list})
 
 
-def _incident_for_request(request, pk):
-    """The incident ``pk`` if it belongs to the request's org, else None (caller 404s).
+def _incident_for_request(request, pk, action):
+    """The incident ``pk`` the caller may act on, else None (the caller 404s).
 
-    #120: fail-closed tenant scoping for EVERY caller, superusers included (R11,
-    auth/models.py UserProfile.is_platform_operator). It reuses the Phase 0a X-1 rule of
-    _enforcement_events_for_request: the event must be in the org that
-    get_request_organization resolves, so a caller without an org (including a superuser
-    without one) finds nothing, and a platform operator reaches another org only by
-    naming it with ?organization_id (audited there). The lookup runs on the default
-    alias because the caller writes to the row.
+    #120 / #122, owner decision 12 Nov ("superuser = ZeroShield staff"):
+    - Staff (``is_zeroshield_staff``) reach any org's incident, as on develop. When the
+      event's org is not the staff member's own, a ``cross_org_access`` AuditLog row
+      (actor, target org, action, object) is written BEFORE the caller acts; if it cannot
+      be written the request fails and nothing changes.
+    - Everyone else is scoped by the Phase 0a X-1 rule (_enforcement_events_for_request):
+      the event must be in get_request_organization's org (own org; a platform operator
+      may name one, audited there). A miss writes ``cross_org_denied`` with the requested
+      id only, the same row whether the id exists in another org or not at all.
+    The lookup runs on the default alias because the caller writes to the row.
     """
     from django.db import DEFAULT_DB_ALIAS
 
-    qs = _enforcement_events_for_request(request).using(DEFAULT_DB_ALIAS)
-    return qs.filter(pk=pk).first()
+    from auth.audit import actor_org_id, audit_cross_org_access, audit_cross_org_denied
+    from auth.models import is_zeroshield_staff
+
+    user = request.user
+    if is_zeroshield_staff(user):
+        ev = EnforcementEvent.objects.using(DEFAULT_DB_ALIAS).filter(pk=pk).first()
+        if ev is not None:
+            target_org_id = _event_organization_id(ev)
+            if target_org_id != actor_org_id(user):
+                audit_cross_org_access(
+                    user=user, target_org_id=target_org_id, action=f"incident.{action}",
+                    obj=f"enforcement_event:{ev.pk}", request=request,
+                )
+        return ev
+    ev = _enforcement_events_for_request(request).using(DEFAULT_DB_ALIAS).filter(pk=pk).first()
+    if ev is None:
+        audit_cross_org_denied(
+            user=user, action=f"incident.{action}", requested=f"enforcement_event:{pk}", request=request
+        )
+    return ev
 
 
 def _is_platform_admin(user):
@@ -2297,9 +2318,9 @@ class EscalateIncidentView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, pk):
-        # #120: org-scoped for every caller (see _incident_for_request). Before, a
-        # superuser skipped the org filter and could escalate another org's incident.
-        ev = _incident_for_request(request, pk)
+        # #120/#122: staff reach any org (audited); everyone else only their own org
+        # (see _incident_for_request).
+        ev = _incident_for_request(request, pk, "escalate")
         if ev is None:
             return Response({"detail": "Incident not found."}, status=404)
 
@@ -2378,10 +2399,10 @@ class ResolveIncidentView(APIView):
         if not _is_platform_admin(request.user):
             raise PermissionDenied("Only admins can resolve incidents.")
 
-        # #120: org-scoped for every caller (see _incident_for_request). Before, a
-        # superuser skipped the org filter and could resolve (silence) another org's
-        # incident, close its compliance violations and mark its bells read.
-        ev = _incident_for_request(request, pk)
+        # #120/#122: staff reach any org (audited); everyone else only their own org, so a
+        # customer can no longer resolve (silence) another org's incident, close its
+        # compliance violations or mark its bells read (see _incident_for_request).
+        ev = _incident_for_request(request, pk, "resolve")
         if ev is None:
             return Response({"detail": "Incident not found."}, status=404)
 

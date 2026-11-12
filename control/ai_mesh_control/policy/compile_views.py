@@ -17,6 +17,7 @@ from rest_framework.response import Response
 from rest_framework.throttling import UserRateThrottle
 from rest_framework.views import APIView
 
+from auth.audit import orgless_staff_fleet_read
 from auth.utils import get_request_organization
 from core.admin_views import IsAdminOrSuperuser
 from policy.compiler import (
@@ -160,10 +161,11 @@ class PolicyCompileStatusView(APIView):
     )
     def get(self, request: Request) -> Response:
         org = get_request_organization(request)
-        # #120 / R11: a superuser without an org is refused too. Without an org this view
-        # read the "default" key, which load_policies / compile_policies fill with
-        # compile_all() over EVERY org's policies.
-        if org is None:
+        # Without an org this view reads the "default" key, which load_policies /
+        # compile_policies fill with compile_all() over EVERY org's policies: a fleet read.
+        # Only org-less ZeroShield staff get it, audited (owner decision 12 Nov); any other
+        # caller without an org is refused (#120).
+        if org is None and not orgless_staff_fleet_read(request, "policy_compile_status"):
             return Response(
                 {"detail": "Organization scope required."},
                 status=status.HTTP_403_FORBIDDEN,
