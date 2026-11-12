@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import stat
 import subprocess
@@ -453,8 +454,19 @@ class FingerprintTests(TestCase):
                 seen.add(rollout.fingerprint())
         self.assertEqual(len(seen), 3)
 
-    def test_it_follows_every_publish_setting(self) -> None:
-        for name in rollout.PUBLISH_SETTINGS:
+    def test_it_follows_every_setting_the_publisher_reads(self) -> None:
+        """The names come from the publisher's source, not from ``PUBLISH_SETTINGS``, so a
+        setting dropped from the hash, or a new read nobody added to it, fails here."""
+        read = set()
+        for module in ("core.firewall_v2_publish", "core.firewall_v2_map",
+                       "core.firewall_v2_controls"):
+            read |= set(re.findall(
+                r'(?:_setting|_deployment_setting|org_listed|environ\.get)\(\s*"([A-Z0-9_]+)"',
+                rollout._source(module).decode("utf-8"),
+            ))
+        self.assertEqual(read, set(rollout.PUBLISH_SETTINGS))
+        self.assertEqual(len(read), 10)
+        for name in sorted(read):
             with self.subTest(setting=name), mock.patch.dict(os.environ, {name: "f4-changed"}):
                 self.assertNotEqual(rollout.fingerprint(), self.base)
         for name in ("V2_PLAN_CONTROLS_ENABLED", "V2_PLAN_CONTROLS_ORGS"):
