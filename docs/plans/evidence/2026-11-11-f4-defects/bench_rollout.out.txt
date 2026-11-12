@@ -1,0 +1,12 @@
+# F4 author, PR #115: v2 plan rollout timing. Control test DB (local Postgres 16, settings shim from runs/113-A with its own test DB name; not committed), head 6b4bee0f+e05e7e8e code, heavy and ctl-db locks held, nothing else heavy running (top: claude 3%).
+# 401 orgs: 400 bulk-created (no FirewallConfig row, no policies) plus the migration-seeded default org. process_cpu includes the app's start-up warm-up threads. No-op reconcile uses an in-process fake Redis (a real GET adds its round trip).
+start 2026-11-12T07:09:01Z load 1.27 1.67 1.87; top:  3.0 claude; 0.1 redis-server; 0.0 rcu_preempt;
+BENCH first sweep (create): orgs=401 status=swept published=401 wall=4.09s (10.20 ms/org) process_cpu=2.96s (7.38 ms/org)
+BENCH flip to enforce (update): orgs=401 status=swept published=401 wall=4.26s (10.62 ms/org) process_cpu=3.14s (7.83 ms/org)
+BENCH same settings, forced (no change): orgs=401 status=swept published=401 wall=3.54s (8.84 ms/org) process_cpu=2.69s (6.71 ms/org)
+BENCH no-op reconcile (marker current): median=0.24 ms p99=0.35 ms (n=200)
+BENCH fingerprint(): median=0.16 ms (n=200)
+BENCH document bytes (enforce, default org): 4376
+Ran 1 test in 12.276s
+OK
+end 2026-11-12T07:09:23Z load 1.26 1.65 1.86
