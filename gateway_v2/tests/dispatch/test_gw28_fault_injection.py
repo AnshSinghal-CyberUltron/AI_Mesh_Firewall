@@ -18,6 +18,7 @@ from gateway_v2.domain.posture import (
 )
 from tests.dispatch._gw28_fakes import (
     MAX_LEN,
+    RELAXED,
     SMALL,
     FakeClient,
     Timeline,
@@ -68,7 +69,7 @@ def test_p10_exceptions_at_each_point() -> None:
         # snapshot source raising and returning the wrong type
         for source in (lambda: 1 / 0, lambda: "healthy"):
             tl = Timeline()
-            rp = build_rp(_two(tl), snapshot=source, bounds=_slow())  # type: ignore[arg-type,return-value]
+            rp = build_rp(_two(tl), snapshot=source, bounds=RELAXED)  # type: ignore[arg-type,return-value]
             ev = await drain(rp, ctx())
             assert [e.gateway_error for e in ev] == [ROUTING_SNAPSHOT_UNAVAILABLE]
             assert tl.opens() == []
@@ -78,12 +79,12 @@ def test_p10_exceptions_at_each_point() -> None:
         def bad_sink(_d: RoutingDecision) -> None:
             raise RuntimeError("sink boom")
 
-        ev = await drain(build_rp(_two(tl), bounds=_slow()), ctx(sink=bad_sink))
+        ev = await drain(build_rp(_two(tl), bounds=RELAXED), ctx(sink=bad_sink))
         assert [e.gateway_error for e in ev] == [ROUTING_INTERNAL_ERROR] and tl.opens() == []
         # mid-iteration exception: live iterator closed, no further open
         tl = Timeline()
         clients = _two(tl, [role(), RuntimeError("mid boom")])
-        ev = await drain(build_rp(clients, bounds=_slow()), ctx())
+        ev = await drain(build_rp(clients, bounds=RELAXED), ctx())
         assert [e.gateway_error for e in ev] == [ROUTING_INTERNAL_ERROR]
         assert len(tl.opens()) == 1 and tl.live == 0
         # aclose failure
@@ -91,7 +92,7 @@ def test_p10_exceptions_at_each_point() -> None:
         clients = {
             n: FakeClient(n, [err("upstream_unavailable")], tl, close_raises=True) for n in "ab"
         }
-        ev = await drain(build_rp(clients, bounds=_slow()), ctx())
+        ev = await drain(build_rp(clients, bounds=RELAXED), ctx())
         assert [e.gateway_error for e in ev] == [ROUTING_TEARDOWN_UNCONFIRMED]
         assert len(tl.opens()) == 1
 
@@ -106,7 +107,7 @@ def test_p10_rebind_exception(monkeypatch: pytest.MonkeyPatch) -> None:
 
     async def main() -> None:
         tl = Timeline()
-        ev = await drain(build_rp(_two(tl), bounds=_slow()), ctx())
+        ev = await drain(build_rp(_two(tl), bounds=RELAXED), ctx())
         assert [e.gateway_error for e in ev] == [ROUTING_INTERNAL_ERROR] and tl.opens() == []
 
     asyncio.run(main())
@@ -124,7 +125,7 @@ def test_p10_random_exceptions_yield_exactly_one_terminal() -> None:
                 *([text("x")] * rng.randint(0, 2)),
                 RuntimeError("x"),
             ]
-            events = await drain(build_rp(_two(tl, script), bounds=_slow()), ctx(key=str(i)))
+            events = await drain(build_rp(_two(tl, script), bounds=RELAXED), ctx(key=str(i)))
             assert (
                 len(terminals(events)) == 1 and events[-1].gateway_error == ROUTING_INTERNAL_ERROR
             )
@@ -137,7 +138,7 @@ def test_p10_cancellation_propagates_and_closes_live_iterator() -> None:
     async def main() -> None:
         tl = Timeline()
         clients = {"a": FakeClient("a", [], tl, hang_after=True)}
-        rp = build_rp(clients, bounds=_slow())
+        rp = build_rp(clients, bounds=RELAXED)
 
         async def consume() -> None:
             async for _ in rp.open_routed(request(), ctx()):
@@ -158,7 +159,7 @@ def test_p10_generator_exit_closes_live_iterator() -> None:
     async def main() -> None:
         tl = Timeline()
         clients = {"a": FakeClient("a", [text("x"), text("y")], tl, hang_after=True)}
-        gen = build_rp(clients, bounds=_slow()).open_routed(request(), ctx())
+        gen = build_rp(clients, bounds=RELAXED).open_routed(request(), ctx())
         first = await gen.__anext__()
         assert first.text_deltas
         await gen.aclose()  # type: ignore[attr-defined]
@@ -168,7 +169,7 @@ def test_p10_generator_exit_closes_live_iterator() -> None:
 
 
 def test_post_commit_sink_failure_is_logged_not_raised() -> None:
-    rp = build_rp(_two(Timeline()), bounds=_slow())
+    rp = build_rp(_two(Timeline()), bounds=RELAXED)
 
     def bad_sink(_d: RoutingDecision) -> None:
         raise RuntimeError("late sink boom")
@@ -178,13 +179,3 @@ def test_post_commit_sink_failure_is_logged_not_raised() -> None:
     rp._emit(c, d, committed=True)  # does not raise
     with pytest.raises(RuntimeError):
         rp._emit(c, d, committed=False)
-
-
-def _slow():  # type: ignore[no-untyped-def]
-    """Stall bounds no scheduling hiccup reaches. The exception-path tests use them: with the
-    shared SMALL bounds (first event 30 ms), a loaded CI runner that delays the first event past
-    30 ms turns an exception test into a stall test, and the router falls back to the second
-    candidate (structural-gates on #109: 2 opens instead of 1)."""
-    from gateway_v2.dispatch.stall_guard import StallBounds
-
-    return StallBounds(first_event_s=5.0, gap_s=2.0, total_s=30.0, teardown_s=1.0)

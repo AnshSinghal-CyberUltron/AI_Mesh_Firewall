@@ -63,8 +63,12 @@ def test_p7_never_yielding_cut_at_first_event() -> None:
 def test_p7_role_only_then_silence_is_cumulative() -> None:
     for _ in range(100):
         tl = Timeline()
-        # role frame at ~0.03 s, then silence: cut at ~0.05 s (cumulative), not 0.03 + gap
-        c = FakeClient("a", [0.03, role()], tl, hang_after=True)
+        # role frame at once, then silence: cut at ~0.05 s (cumulative), not at role + gap
+        # (~0.02 s, the bug where a role-only frame counts as content). The frame used to come at
+        # 0.03 s, 20 ms before the deadline, so a scheduler hiccup on a loaded host pushed it past
+        # the deadline and the test saw only the timeout (#112); and at 0.03 s, role + gap is
+        # 0.05 s, so that bug was indistinguishable from the correct cut.
+        c = FakeClient("a", [role()], tl, hang_after=True)
         events, elapsed = asyncio.run(_collect(c))
         assert [e.gateway_error for e in events] == [None, UPSTREAM_TIMEOUT]
         assert _within(elapsed, _B.first_event_s)

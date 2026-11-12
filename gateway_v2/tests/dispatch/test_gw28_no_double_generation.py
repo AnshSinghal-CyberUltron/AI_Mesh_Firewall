@@ -7,6 +7,7 @@ import random
 
 from gateway_v2.dispatch.provider import UpstreamEvent
 from tests.dispatch._gw28_fakes import (
+    RELAXED,
     FakeClient,
     Timeline,
     build_rp,
@@ -89,7 +90,7 @@ def test_p4_single_open_for_clean_primary() -> None:
     async def main() -> None:
         tl = Timeline()
         clients = {n: FakeClient(n, [text("x", final=True)], tl) for n in ("a", "b")}
-        events = await drain(build_rp(clients), ctx(), tl=tl)
+        events = await drain(build_rp(clients, bounds=RELAXED), ctx(), tl=tl)
         assert len(tl.opens()) == 1 and events[-1].final
 
     asyncio.run(main())

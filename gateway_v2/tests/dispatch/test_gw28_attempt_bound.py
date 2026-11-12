@@ -9,7 +9,16 @@ from gateway_v2.domain.posture import (
     ROUTING_ATTEMPTS_EXHAUSTED,
     ROUTING_TEARDOWN_UNCONFIRMED,
 )
-from tests.dispatch._gw28_fakes import FakeClient, Timeline, build_rp, ctx, drain, err, text
+from tests.dispatch._gw28_fakes import (
+    RELAXED,
+    FakeClient,
+    Timeline,
+    build_rp,
+    ctx,
+    drain,
+    err,
+    text,
+)
 
 _RETRYABLE = (
     "upstream_timeout",
@@ -56,7 +65,7 @@ def test_non_retryable_failure_is_not_retried_and_keeps_its_code() -> None:
         ):
             tl = Timeline()
             clients = {n: FakeClient(n, [err(code)], tl) for n in ("a", "b")}
-            ev = await drain(build_rp(clients), ctx())
+            ev = await drain(build_rp(clients, bounds=RELAXED), ctx())
             assert [e.gateway_error for e in ev] == [code] and len(tl.opens()) == 1
 
     asyncio.run(main())
@@ -69,7 +78,7 @@ def test_teardown_failure_stops_further_attempts() -> None:
             n: FakeClient(n, [err("upstream_unavailable")], tl, close_raises=True)
             for n in ("a", "b")
         }
-        ev = await drain(build_rp(clients), ctx())
+        ev = await drain(build_rp(clients, bounds=RELAXED), ctx())
         assert [e.gateway_error for e in ev] == [ROUTING_TEARDOWN_UNCONFIRMED]
         assert len(tl.opens()) == 1
 
@@ -85,7 +94,7 @@ def test_success_after_one_fallback() -> None:
         }
         # whichever ranks first, a succeeds on the second attempt iff a failed first
         decisions: list[object] = []
-        ev = await drain(build_rp(clients), ctx(sink=decisions.append))
+        ev = await drain(build_rp(clients, bounds=RELAXED), ctx(sink=decisions.append))
         assert ev[-1].gateway_error is None or "a" in tl.opens()
         assert len(decisions) == len(tl.opens())
 
