@@ -287,7 +287,12 @@ class ProjectorService:
         return summary
 
     def _log_transition(self, summary: ProjectionSummary | None) -> None:
-        leading = summary is not None and summary.leader
+        if summary is None:
+            # The round raised and said so in its own warning. Leadership is unknown, not lost:
+            # logging "standing by" here read as a hand-over while the projector still held the
+            # lease and failed every round (#117 review B-N3). The next summary says who leads.
+            return
+        leading = summary.leader
         if leading != self._leader:
             LOG.info(
                 "projector %s is %s",

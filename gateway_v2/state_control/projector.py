@@ -38,7 +38,7 @@ from itertools import accumulate
 from types import MappingProxyType
 from typing import Any, Protocol
 
-from gateway_v2.detect.conditions import compile_conditions
+from gateway_v2.detect.conditions import MAX_GROUP_DEPTH, compile_conditions
 from gateway_v2.domain.identity import DENY_ALL_TOOLS
 from gateway_v2.domain.state import SignedRecord, StateKind, StateOp
 from gateway_v2.domain.state_knobs import ProjectorKnobs
@@ -511,6 +511,16 @@ def desired_state(
             )
         else:
             plans[plan.org_slug] = body
+            if refusals:
+                # Signed by design (the gateway refuses the rule per request), so without this
+                # line the only trace is the fleet-wide `refused_conditions` gauge, naming no org.
+                # Org, revision and a count only: never a rule id or pattern (tenant data).
+                notes.append(
+                    f"plan document for {plan.org_slug!r} revision {plan.revision} is signed "
+                    f"with {refusals} customer condition(s) the matcher refuses (ReDoS shape, "
+                    f"groups nested deeper than {MAX_GROUP_DEPTH}, or does not compile); "
+                    "gateways refuse those rules per request (policy_regex_timeout)",
+                )
     without_plan = len(active - documented)
     budgets: dict[str, int] = {}
     for budget in view.budgets:
