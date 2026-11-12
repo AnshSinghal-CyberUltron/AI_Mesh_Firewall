@@ -1,0 +1,5 @@
+# Repository-wide GitHub-hosted job concurrency and queueing, from the Actions runs/jobs API
+# (max concurrent = most jobs in progress at one instant; queue = job created -> started)
+2026-11-11T06:00:00Z..2026-11-11T11:00:00Z: runs=97 jobs=484 max_concurrent=22 queue p50=0.0 min p90=0.6 min max=2.3 min
+2026-11-12T04:00:00Z..2026-11-12T06:40:00Z: runs=90 jobs=420 max_concurrent=14 queue p50=3.7 min p90=12.7 min max=26.2 min
+# 11 Nov was before the move to the organisation; 12 Nov is after it. GitHub documents 500 concurrent standard-runner jobs for Enterprise, 20 for Free.

@@ -191,7 +191,13 @@ def _phase_gate_open(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def _modes(reason: str | None) -> list[object]:
-    marks = () if reason is None else (pytest.mark.xfail(strict=True, reason=_LEAK + reason),)
+    # ``raises=AssertionError``: only the counterexample's assertion counts as the expected
+    # failure. Without it, any exception would, including pytest-timeout's ``Failed`` for a hang.
+    marks = (
+        ()
+        if reason is None
+        else (pytest.mark.xfail(strict=True, raises=AssertionError, reason=_LEAK + reason),)
+    )
     return [
         pytest.param(stream, id="stream" if stream else "json", marks=marks)
         for stream in (False, True)

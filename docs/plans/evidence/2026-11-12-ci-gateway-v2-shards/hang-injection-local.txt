@@ -1,0 +1,68 @@
+# #116 acceptance, local: Reviewer B's hang (stall_guard._close without wait_for), per-test timeout 20 s
+# mutation: gateway_v2/gateway_v2/dispatch/stall_guard.py:72
+#   -    await asyncio.wait_for(aclose(), teardown_s)
+#   +    await aclose()  # MUTATION (#116 repro): unbounded teardown
+# command (from gateway_v2/, PYTHONPATH=<wt>/gateway_v2:<wt>/shared, pytest 9.2.0, pytest-timeout 2.4.0):
+#   python -m pytest tests/dispatch/test_gw28_stall_bound.py -q -p no:cacheprovider -o timeout=20
+# result: exit 1 after 34 s wall; the hung test FAILED with 'Timeout (>20.0s) from pytest-timeout' and its stack; the other 11 tests ran and passed
+
+
+..........F.                                                             [100%]
+=================================== FAILURES ===================================
+___________ test_teardown_timeout_raises_unconfirmed_on_normal_exit ____________
+
+    def test_teardown_timeout_raises_unconfirmed_on_normal_exit() -> None:
+        async def run() -> None:
+            async for _ in bounded_events(_SlowClose(), _B):
+                pass
+    
+        with pytest.raises(TeardownUnconfirmed):
+>           asyncio.run(run())
+
+tests/dispatch/test_gw28_stall_bound.py:171: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/lib/python3.12/asyncio/runners.py:194: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+/usr/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/lib/python3.12/asyncio/base_events.py:674: in run_until_complete
+    self.run_forever()
+/usr/lib/python3.12/asyncio/base_events.py:641: in run_forever
+    self._run_once()
+/usr/lib/python3.12/asyncio/base_events.py:1949: in _run_once
+    event_list = self._selector.select(timeout)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <selectors.EpollSelector object at 0x7f6db7cee9f0>, timeout = 3600.0
+
+    def select(self, timeout=None):
+        if timeout is None:
+            timeout = -1
+        elif timeout <= 0:
+            timeout = 0
+        else:
+            # epoll_wait() has a resolution of 1 millisecond, round away
+            # from zero to wait *at least* timeout seconds.
+            timeout = math.ceil(timeout * 1e3) * 1e-3
+    
+        # epoll_wait() expects `maxevents` to be greater than zero;
+        # we want to make sure that `select()` can be called when no
+        # FD is registered.
+        max_ev = max(len(self._fd_to_key), 1)
+    
+        ready = []
+        try:
+>           fd_event_list = self._selector.poll(timeout, max_ev)
+                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           Failed: Timeout (>20.0s) from pytest-timeout.
+
+/usr/lib/python3.12/selectors.py:468: Failed
+=========================== short test summary info ============================
+FAILED tests/dispatch/test_gw28_stall_bound.py::test_teardown_timeout_raises_unconfirmed_on_normal_exit
+1 failed, 11 passed in 32.85s
+
+# control: the same command on the unmutated file (mutation reverted with git checkout; cmp against the saved original)
+12 passed in 13.25s

@@ -1,0 +1,28 @@
+# #116 acceptance on CI: Reviewer B's hang injected by commit b517accb (reverted by the next commit)
+# gateway-v2 run 43169008197; shard job 131017515034 (gateway-v2 pytest shard 6/8 = index 5); aggregate job 131021124131
+# per-test timeout 300 s (gateway_v2/pyproject.toml); shard job timeout-minutes 20
+
+## shard 6/8: pytest step 2026-11-12T06:34:20Z -> 2026-11-12T06:43:15Z, failure; job ran 9.4 min of its 20
+=================================== FAILURES ===================================
+___________ test_teardown_timeout_raises_unconfirmed_on_normal_exit ____________
+    def test_teardown_timeout_raises_unconfirmed_on_normal_exit() -> None:
+        async def run() -> None:
+            async for _ in bounded_events(_SlowClose(), _B):
+                pass
+        with pytest.raises(TeardownUnconfirmed):
+>           asyncio.run(run())
+tests/dispatch/test_gw28_stall_bound.py:171: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/opt/hostedtoolcache/Python/3.12.16/x64/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+E           Failed: Timeout (>300.0s) from pytest-timeout.
+/opt/hostedtoolcache/Python/3.12.16/x64/lib/python3.12/selectors.py:468: Failed
+FAILED tests/dispatch/test_gw28_stall_bound.py::test_teardown_timeout_raises_unconfirmed_on_normal_exit - Failed: Timeout (>300.0s) from pytest-timeout.
+1 failed, 382 passed, 4779 deselected in 533.09s (0:08:53)
+##[error]Process completed with exit code 1.
+
+## aggregate (gateway-v2 pytest): error annotations
+##[error]pytest failed in shard 5: exit 1
+##[error]Process completed with exit code 1.
+##[error]the shard jobs ended 'failure'; open the failing shard's log
+##[error]Process completed with exit code 1.

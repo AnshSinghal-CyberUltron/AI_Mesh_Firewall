@@ -32,6 +32,10 @@ vectors = [
 dev = [
     "fakeredis>=2.26",
     "pytest>=8",
+    # Per-test timeout (`timeout` below): a hung test fails and is named instead of hanging the
+    # CI job until its timeout-minutes (issue #116). A pytest-dev project, pure Python, that
+    # needs only pytest.
+    "pytest-timeout>=2.3",
     "ruff>=0.6",
     "mypy>=1.11",
     "import-linter>=2.1",
@@ -74,6 +78,18 @@ exclude = ["load_harness.bin*"]
 pythonpath = ["."]
 markers = ["real_incident_defaults: keep the fail-closed GW29 incident defaults (no pass-through gate)"]
 testpaths = ["tests"]
+# Per-test timeout (pytest-timeout, `dev` extra; issue #116), in seconds, covering setup + call +
+# teardown. The slowest test on CI takes 84 s (gateway-v2 run 43165116680, a GW36 property
+# test), so 300 s is 3.6x that. The 2-CPU agent host runs the suite 1.2x (quiet) to about 2.3x
+# (contended) slower than CI, about 195 s for that test at worst. A slower environment sets
+# PYTEST_TIMEOUT (it overrides this value; `--timeout` overrides both).
+timeout = 300
+# SIGALRM interrupts the hung test, fails it with its stack, and the session continues.
+timeout_method = "signal"
+# Without the plugin, `timeout` above is only a "Unknown config option" warning and no test has
+# a timeout. Make that an error instead. Every venv that runs pytest from this directory installs
+# it: the `dev` extra, and the openai-conformance job reads the same pin from the extra.
+required_plugins = ["pytest-timeout>=2.3"]
 # The GW15 in-process conformance subset (``tests/openai_conformance/test_gw15_chat_surface_v2.py``)
 # runs against the v2 Chat_Surface with the unmodified OpenAI SDK + ``StubProviderClient`` and is
 # collected by default (it ``importorskip``s the SDK, so a tree without ``openai`` skips cleanly;
