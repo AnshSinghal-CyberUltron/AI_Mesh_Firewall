@@ -1,0 +1,9 @@
+# setup_environments.sh --dry-run --staging-reviewers 'user:#11' --production-reviewers 'user:#11,team:#22' --production-wait-minutes 10
+PUT repos/CyberUltron-Consulting-Private-Limited/AI_Mesh_Firewall/environments/staging
+{"wait_timer":0,"prevent_self_review":false,"can_admins_bypass":false,"reviewers":[{"type":"User","id":11}],"deployment_branch_policy":{"protected_branches":false,"custom_branch_policies":true}}
+deployment branch policies of staging: exactly [{"name":"staging","type":"branch"}]
+
+PUT repos/CyberUltron-Consulting-Private-Limited/AI_Mesh_Firewall/environments/production
+{"wait_timer":10,"prevent_self_review":false,"can_admins_bypass":false,"reviewers":[{"type":"User","id":11},{"type":"Team","id":22}],"deployment_branch_policy":{"protected_branches":false,"custom_branch_policies":true}}
+deployment branch policies of production: exactly [{"name":"main","type":"branch"}]
+

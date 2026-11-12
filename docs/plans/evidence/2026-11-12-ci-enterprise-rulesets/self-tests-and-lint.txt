@@ -1,0 +1,89 @@
+# python3 -m unittest discover -s scripts/ci -p 'test_*.py' -v  (Python 3.13.18)
+test_a_crashed_run_never_passes (test_known_failures.KnownFailuresTests.test_a_crashed_run_never_passes)
+Review of #102: no database, 0 tests run, exit 1 must not read as "no new failures". ... known_failures: the test run did not complete (tests reported: -1); a crashed or empty run never passes the ratchet
+::error title=Test run incomplete::no test summary, or fewer tests than expected
+known_failures: the test run did not complete (tests reported: -1); a crashed or empty run never passes the ratchet
+::error title=Test run incomplete::no test summary, or fewer tests than expected
+ok
+test_a_non_zero_exit_without_a_parsed_failure_is_a_crash (test_known_failures.KnownFailuresTests.test_a_non_zero_exit_without_a_parsed_failure_is_a_crash) ... ### Known-failure ratchet
+
+- New failures (blocking): **0**
+- Known failures still failing: 0
+- Known failures now passing (remove from baseline): 0
+
+known_failures: the test command exited 1 but no failing test was parsed: treating it as a crash
+::error title=Test run crashed::non-zero exit with no parsed test failure
+ok
+test_all_known_passes (test_known_failures.KnownFailuresTests.test_all_known_passes) ... ### Known-failure ratchet
+
+- New failures (blocking): **0**
+- Known failures still failing: 3
+- Known failures now passing (remove from baseline): 0
+
+ok
+test_an_empty_junit_report_is_a_crash (test_known_failures.KnownFailuresTests.test_an_empty_junit_report_is_a_crash) ... known_failures: the test run did not complete (tests reported: 0); a crashed or empty run never passes the ratchet
+::error title=Test run incomplete::no test summary, or fewer tests than expected
+ok
+test_django_log_ids (test_known_failures.KnownFailuresTests.test_django_log_ids) ... ok
+test_fixed_known_failure_does_not_block (test_known_failures.KnownFailuresTests.test_fixed_known_failure_does_not_block) ... ### Known-failure ratchet
+
+- New failures (blocking): **0**
+- Known failures still failing: 3
+- Known failures now passing (remove from baseline): 1
+
+<details><summary>Now passing</summary>
+
+- `core.tests.gone.Tests.test_fixed`
+
+</details>
+
+::notice title=Known failure now passes::core.tests.gone.Tests.test_fixed (remove it from /tmp/tmpce8xx0nm/b.txt)
+ok
+test_junit_counts_failures_and_errors_not_skips (test_known_failures.KnownFailuresTests.test_junit_counts_failures_and_errors_not_skips) ... ok
+test_new_failure_blocks (test_known_failures.KnownFailuresTests.test_new_failure_blocks) ... ### Known-failure ratchet
+
+- New failures (blocking): **2**
+- Known failures still failing: 1
+- Known failures now passing (remove from baseline): 0
+
+<details><summary>New failures</summary>
+
+- `core.tests.mod.ATests.test_c`
+- `policy.tests.mod.BTests.test_b`
+
+</details>
+
+::error title=New test failure::core.tests.mod.ATests.test_c
+::error title=New test failure::policy.tests.mod.BTests.test_b
+ok
+test_too_few_tests_is_a_crash (test_known_failures.KnownFailuresTests.test_too_few_tests_is_a_crash) ... ### Known-failure ratchet
+
+- New failures (blocking): **0**
+- Known failures still failing: 3
+- Known failures now passing (remove from baseline): 0
+
+known_failures: the test run did not complete (tests reported: 3); a crashed or empty run never passes the ratchet
+::error title=Test run incomplete::no test summary, or fewer tests than expected
+ok
+test_unreadable_input_is_an_error (test_known_failures.KnownFailuresTests.test_unreadable_input_is_an_error) ... known_failures: cannot read test output: [Errno 2] No such file or directory: '/tmp/tmp6kwqrus6/missing.xml'
+ok
+test_dry_run_requests (test_setup_scripts.EnvironmentsDryRunTest.test_dry_run_requests) ... ok
+test_names_unresolved_offline_are_placeholders (test_setup_scripts.EnvironmentsDryRunTest.test_names_unresolved_offline_are_placeholders) ... ok
+test_rejects_bad_input (test_setup_scripts.EnvironmentsDryRunTest.test_rejects_bad_input) ... ok
+test_aggregate_pytest_check_once_sharded (test_setup_scripts.RequiredChecksTest.test_aggregate_pytest_check_once_sharded) ... ok
+test_every_required_check_is_a_job_that_runs_on_every_pr (test_setup_scripts.RequiredChecksTest.test_every_required_check_is_a_job_that_runs_on_every_pr) ... ok
+test_excluded_checks (test_setup_scripts.RequiredChecksTest.test_excluded_checks) ... ok
+test_reader_sees_the_workflows (test_setup_scripts.RequiredChecksTest.test_reader_sees_the_workflows) ... ok
+test_approvals_from_variable_and_flag (test_setup_scripts.RulesetsDryRunTest.test_approvals_from_variable_and_flag) ... ok
+test_defaults (test_setup_scripts.RulesetsDryRunTest.test_defaults) ... ok
+test_flags (test_setup_scripts.RulesetsDryRunTest.test_flags) ... ok
+test_never_writes_the_main_ruleset (test_setup_scripts.RulesetsDryRunTest.test_never_writes_the_main_ruleset) ... ok
+test_rejects_bad_input (test_setup_scripts.RulesetsDryRunTest.test_rejects_bad_input) ... ok
+
+----------------------------------------------------------------------
+Ran 22 tests in 0.372s
+
+OK
+
+# shellcheck version: 0.11.0 -x scripts/ci/setup_rulesets.sh scripts/ci/setup_environments.sh
+shellcheck: clean (exit 0)

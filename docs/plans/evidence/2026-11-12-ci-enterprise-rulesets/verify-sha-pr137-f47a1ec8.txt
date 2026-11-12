@@ -1,0 +1,22 @@
+Required checks on f47a1ec831b285038638838cec89dc41ddfef35c in CyberUltron-Consulting-Private-Limited/AI_Mesh_Firewall:
+ok    success      control (Django + Postgres + Redis) / django
+ok    success      frontend (unit tests + production build) / node
+ok    success      CI helper scripts
+ok    success      secrets (gitleaks + TruffleHog) / secrets
+ok    success      SAST (Semgrep + Bandit) / semgrep
+ok    success      dependencies (review + OSV + npm audit) / dependency-review
+ok    success      infra lint (actions, Docker, shell, compose, nginx, Trivy) / lint
+ok    success      policy
+ok    success      structural-gates
+ok    success      gateway-v2 pytest
+ok    success      secret-headers
+ok    success      image-digest
+ok    success      openai-conformance
+ok    success      parity-harness
+FAIL  failure      CodeQL / analyze (actions)
+FAIL  failure      CodeQL / analyze (javascript-typescript)
+FAIL  failure      CodeQL / analyze (python)
+14 of 17 required checks succeeded
+
+# gh calls made (through a wrapper that refuses -X/--method/--input/-f/-F):
+gh api --paginate repos/CyberUltron-Consulting-Private-Limited/AI_Mesh_Firewall/commits/f47a1ec8.../check-runs?per_page=100 (GET)
