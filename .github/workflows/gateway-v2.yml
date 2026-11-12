@@ -1,16 +1,5 @@
 name: gateway-v2
 
-on:
-  pull_request:
-  push:
-    branches:
-      - revamp
-
-# Least privilege: every job only checks out and reads the repository. upload-artifact
-# authenticates with the runner's ACTIONS_RUNTIME_TOKEN, not GITHUB_TOKEN, so no job needs more.
-permissions:
-  contents: read
-
 # A new push to a PR cancels the run it supersedes, as in ci.yml and security.yml.
 concurrency:
   group: gateway-v2-${{ github.event.pull_request.number || github.ref }}
@@ -23,6 +12,18 @@ concurrency:
 # - Every job has a `timeout-minutes` several times its measured duration, so a hang fails the
 #   job instead of running to GitHub's 360-minute default. pytest-timeout (gateway_v2
 #   pyproject) fails a single hung test first and names it.
+
+on:
+  pull_request:
+  push:
+    branches:
+      - revamp
+
+# Least privilege: every job only checks out and reads the repository. upload-artifact
+# authenticates with the runner's ACTIONS_RUNTIME_TOKEN, not GITHUB_TOKEN, so no job needs more.
+permissions:
+  contents: read
+
 jobs:
   structural-gates:
     runs-on: ubuntu-latest
