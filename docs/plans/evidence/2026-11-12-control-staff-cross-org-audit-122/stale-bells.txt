@@ -1,0 +1,34 @@
+# Deploy over develop's cross-org bells, then purge (adapted from Reviewer B's stale_bells.sh). Startup INFO/WARNING lines removed.
+seeded {'1': 2, '2': 3} users 11
+server up: 562619c86
+[develop] org-2 member escalates org-2 incident 26; org-2 admin activates org-2 kill switch
+  escalate 200
+  kill-switch activate 200
+  s1 sees 2 org-2 bells: [('[Isolation] kill_switch action=block model=rv-mo', 'investigating'), ('m2 escalated: RV-CAT-ORG2 (incident #26)', 'escalated')]
+  s0 sees 2 org-2 bells: [('[Isolation] kill_switch action=block model=rv-mo', 'investigating'), ('m2 escalated: RV-CAT-ORG2 (incident #26)', 'escalated')]
+  db rows:  {'s1': 2, 's0': 2, 'a2': 42}
+[deploy rework head 420f9bf58 on the same database]
+server up: 420f9bf58
+  s1 sees 0 org-2 bells: []
+  s0 sees 0 org-2 bells: []
+[head] org-2 admin resolves org-2 incident 26 (own org)
+  resolve 200
+  s1 sees 0 org-2 bells: []
+  s0 sees 0 org-2 bells: []
+  a2 sees 42 org-2 bells: [('[Isolation] kill_switch action=block model=rv-mo', 'investigating'), ('m2 escalated: RV-CAT-ORG2 (incident #26)', 'resolved'), ]
+[head] new escalation after deploy (no new cross-org bell)
+  escalate 200
+  s1 sees 0 org-2 bells: []
+  db rows:  {'s1': 2, 's0': 2, 'a2': 43}
+[head] purge_cross_org_notifications (dry run, then --apply, then --apply again)
+cross-org notifications: 4
+  recipient_org=2 event_org=3: 2
+  recipient_org=None event_org=3: 2
+dry run: nothing deleted (pass --apply)
+cross-org notifications: 4
+  recipient_org=2 event_org=3: 2
+  recipient_org=None event_org=3: 2
+deleted: 4
+cross-org notifications: 0
+deleted: 0
+  db rows:  {'s1': 0, 's0': 0, 'a2': 43}

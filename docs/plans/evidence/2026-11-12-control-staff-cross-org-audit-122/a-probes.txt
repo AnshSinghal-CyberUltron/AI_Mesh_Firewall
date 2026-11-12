@@ -1,0 +1,16 @@
+# Reviewer A's #122 probes (/home/claude/work/runs/122-A/scripts/test_zz_rva_probes.py, uncommitted), run at 420f9bf5
+# in a detached worktree, pgvector shim, --keepdb. Each probe asserts the behaviour A found at 2ed68710, so a PASS
+# means that behaviour is still present.
+# Ran 6 tests in 23.568s  FAILED (failures=3)
+P1  admin change form, org-B superuser resolves org A's event     FAIL  same harness form-validation error as at
+                                                                       2ed68710 (200 "Error:" title); the write is
+                                                                       shown by P1b/P2. By design: staff, audited
+                                                                       (admin_access row per view).
+P1b admin delete_selected of org A's event by org-B superuser     PASS  by design (staff); audited (admin_access);
+                                                                       Django LogEntry records the delete.
+P2  superuser self-grants is_platform_operator in admin, then     PASS  by design (staff granting staff); now writes
+    resolves org A's incident via the API (200)                        privilege_change (actor, via django_admin) and the
+                                                                       API resolve writes cross_org_access.
+P3  pre-fix cross-org bell still readable, tracks live status     FAIL  fixed (0 bells listed; A's S1 / B's B1).
+P4  WS accepts terminated and inactive users                       FAIL  fixed (refused at connect; A's S2, #131 connect part).
+P5  endpoint_id injection into org A's dashboards                  PASS  still present: tracked in #148 (A's S3).
