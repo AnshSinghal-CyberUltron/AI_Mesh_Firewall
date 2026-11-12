@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import itertools
 import threading
+from collections import OrderedDict
 from dataclasses import dataclass
 
 from gateway_v2.domain.plan import (
@@ -42,6 +44,10 @@ class PlanStore:
         self._down: set[str] = set()
         self._held: dict[str, HeldBack] = {}
         """One entry per tenant at most, removed by the next record that applies: O(held)."""
+        self._counts: dict[str, int] = {REJECTED: 0, QUARANTINED: 0}
+        """`_held` by state, kept in step by `_hold`, so the held-back gauge is O(1) to read."""
+        self._recheck: OrderedDict[str, None] = OrderedDict()
+        """The quarantined tenants, in the order a bounded re-check visits them (round robin)."""
 
     def register_tenant(self, org_id: str) -> None:
         with self._lock:
@@ -55,18 +61,25 @@ class PlanStore:
                 raise ValueError("plan version regressed")
             self._plans[plan.org_id] = plan
             self._down.discard(plan.org_id)
-            self._held.pop(plan.org_id, None)
+            self._hold(plan.org_id, None)
 
     def reject(self, org_id: str, *, feed_seq: int, error: str) -> None:
         """A verified record that did not compile. The tenant stays known and keeps its plan.
 
-        It also lifts a quarantine: the newest record is now a VERIFIED one, so what the tenant
-        is served is decided by GW05's rejection rule (previous valid plan, or PLAN_UNAVAILABLE
-        when there is none), not by an integrity fault an older record had.
+        A rejection does NOT lift a quarantine. The plan held here is older than the record that
+        failed verification, so serving it would pin the tenant below a record this replica could
+        not check -- what a quarantine exists to prevent. The tenant stays at 503 until a
+        verified record that compiles replaces it (`put`, `clear_held`). The one exception is the
+        quarantined record ITSELF, at the same position, verifying on a re-check (a same-position
+        repair): that record is no longer unverifiable, it is a genuine record the compiler
+        refuses, so GW05's rejection rule applies -- the previous valid plan keeps serving.
         """
         with self._lock:
             self._tenants.add(org_id)
-            self._held[org_id] = HeldBack(REJECTED, feed_seq, error)
+            held = self._held.get(org_id)
+            if held is not None and held.state == QUARANTINED and held.feed_seq != feed_seq:
+                return
+            self._hold(org_id, HeldBack(REJECTED, feed_seq, error))
 
     def quarantine(self, org_id: str, *, feed_seq: int, error: str) -> None:
         """The tenant's newest record failed verification: refuse it, keep it known.
@@ -79,16 +92,53 @@ class PlanStore:
         """
         with self._lock:
             self._tenants.add(org_id)
-            self._held[org_id] = HeldBack(QUARANTINED, feed_seq, error)
+            self._hold(org_id, HeldBack(QUARANTINED, feed_seq, error))
 
-    def clear_held(self, org_id: str) -> None:
-        """A verified record that changes nothing (already served): nothing is held back now."""
+    def clear_held(self, org_id: str, *, feed_seq: int) -> None:
+        """A verified record that compiles but changes nothing (already served).
+
+        It lifts a rejection, and a quarantine only from at or above the quarantined position:
+        a verified record older than the one that failed verification proves nothing about it.
+        """
         with self._lock:
-            self._held.pop(org_id, None)
+            held = self._held.get(org_id)
+            if held is None or (held.state == QUARANTINED and feed_seq < held.feed_seq):
+                return
+            self._hold(org_id, None)
 
     def held_back(self, org_id: str) -> HeldBack | None:
         with self._lock:
             return self._held.get(org_id)
+
+    def held_counts(self) -> tuple[int, int]:
+        """`(rejected, quarantined)` tenants on this replica right now. O(1): a gauge reads it."""
+        with self._lock:
+            return self._counts[REJECTED], self._counts[QUARANTINED]
+
+    def quarantined_for_recheck(self, limit: int) -> tuple[tuple[str, int], ...]:
+        """Up to `limit` quarantined tenants with their quarantined position, round robin.
+
+        O(limit): the visited tenants move to the back, so every quarantined tenant is visited
+        within `ceil(quarantined / limit)` passes however many there are.
+        """
+        with self._lock:
+            visit = list(itertools.islice(self._recheck, max(limit, 0)))
+            for org_id in visit:
+                self._recheck.move_to_end(org_id)
+            return tuple((org_id, self._held[org_id].feed_seq) for org_id in visit)
+
+    def _hold(self, org_id: str, held: HeldBack | None) -> None:
+        """Set or clear what is held back for one tenant, keeping the counts in step. Locked."""
+        previous = self._held.pop(org_id, None)
+        if previous is not None:
+            self._counts[previous.state] -= 1
+            self._recheck.pop(org_id, None)
+        if held is None:
+            return
+        self._held[org_id] = held
+        self._counts[held.state] += 1
+        if held.state == QUARANTINED:
+            self._recheck[org_id] = None
 
     def current(self, org_id: str) -> ExecutionPlan | None:
         """The compiled plan held for ordering, whether or not it may be served right now.
@@ -127,7 +177,7 @@ class PlanStore:
             self._tenants.discard(org_id)
             self._plans.pop(org_id, None)
             self._down.discard(org_id)
-            self._held.pop(org_id, None)
+            self._hold(org_id, None)
 
     def known(self) -> tuple[str, ...]:
         """Every known tenant. O(tenants log tenants) — diagnostics and tests only.

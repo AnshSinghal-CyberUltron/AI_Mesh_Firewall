@@ -31,8 +31,12 @@ Two different failures, two different answers, both per tenant:
   (`PlanStore.quarantine`, `amf_state_records_quarantined_total`). Last-good would let a store
   writer pin a tenant to a superseded policy.
 
+A rejection never lifts a quarantine (`PlanStore.reject`): the plan held is older than the record
+that failed verification, and serving it would pin the tenant below a record nobody could check.
+
 Logs name the org, the feed position and the exception TYPE. Never the exception's text: a
 `CompileError` quotes rule ids and a decoder can quote the body, and both are the tenant's data.
+The org is the INDEX key for a quarantine -- unauthenticated, any length -- so it is cut at 128.
 """
 
 from __future__ import annotations
@@ -146,14 +150,14 @@ class PlanDeltaApplier:
                 error = type(exc).__name__
                 self._store.reject(org_id, feed_seq=record.feed_seq, error=error)
                 LOG.warning(
-                    "plan record rejected: org=%r feed_seq=%d error=%s; the previous valid plan, "
-                    "if any, keeps serving",
+                    "plan record rejected: org=%.128r feed_seq=%d error=%s; the previous valid "
+                    "plan, if any, keeps serving (a quarantined tenant stays refused)",
                     org_id, record.feed_seq, error,
                 )
                 rejected.append((org_id, error))
                 continue
             if self._already_served(plan):
-                self._store.clear_held(org_id)
+                self._store.clear_held(org_id, feed_seq=record.feed_seq)
                 skipped.append(org_id)
                 continue
             self._store.put(plan)
@@ -176,7 +180,7 @@ class PlanDeltaApplier:
             if self._snapshot is not None:
                 self._snapshot.forget(fault.key)
             LOG.warning(
-                "plan record quarantined: org=%r feed_seq=%d error=%s; the tenant is refused "
+                "plan record quarantined: org=%.128r feed_seq=%d error=%s; the tenant is refused "
                 "until a verified record replaces it",
                 fault.key, fault.feed_seq, fault.error,
             )

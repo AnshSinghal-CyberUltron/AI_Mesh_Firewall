@@ -365,18 +365,35 @@ def test_a_quarantined_tenant_is_restored_by_the_next_verified_record() -> None:
     assert lab.snapshot.held_back(HOSTILE) is None
 
 
-def test_a_rejection_after_a_quarantine_serves_the_previous_valid_plan() -> None:
-    """The newest record is verified again, so GW05's rejection rule decides, not the fault."""
+def test_a_rejection_after_a_quarantine_keeps_the_tenant_refused() -> None:
+    """v1 served, v2 fails verification, v3 verifies but does not compile (reviewers A S2, B N3).
+
+    Serving v1 would pin the tenant BELOW v2, a record this replica could not check -- what the
+    quarantine exists to prevent. The tenant stays at 503 until a verified record that compiles,
+    newer than the quarantined position, arrives; then it is served that record.
+    """
     lab = Lab(offload_above=1_000)
     lab.queue_delta(_bad_signature)
     lab.drain()
+    quarantined_at = lab.snapshot.held_back(HOSTILE)
+    assert quarantined_at is not None and quarantined_at.state == QUARANTINED
 
     _compile_error(lab)
-    lab.drain()
+    report = lab.drain()
 
-    assert lab.served(HOSTILE).sequence == lab.previous
-    held = lab.snapshot.held_back(HOSTILE)
-    assert held is not None and held.state == REJECTED
+    state = lab.snapshot.lookup(HOSTILE)
+    assert isinstance(state, PlanUnavailable) and state.reason == PLAN_QUARANTINED, (
+        "never the plan older than the record that failed verification"
+    )
+    assert lab.snapshot.held_back(HOSTILE) == quarantined_at, "still the quarantine, unchanged"
+    assert report.rejected == 1, "the rejection is still counted"
+    assert lab.plans.held_counts() == (0, 1)
+
+    lab.publish(HOSTILE, _body(HOSTILE))  # v4: verified, compiles, newer
+    lab.drain()
+    assert lab.served(HOSTILE).feed_seq == lab.position
+    assert lab.snapshot.held_back(HOSTILE) is None
+    assert lab.plans.held_counts() == (0, 0)
 
 
 def test_a_quarantined_tenant_is_not_served_last_good_even_inside_the_freshness_window() -> None:
@@ -425,9 +442,7 @@ def test_without_isolation_one_bad_record_still_refuses_the_round() -> None:
 
 def test_the_applied_version_report_tells_the_console() -> None:
     lab = Lab(offload_above=1_000)
-    lab.queue_delta(_bad_signature)
-    lab.drain()
-    _compile_error(lab)
+    lab.queue_delta(_compile_error)
     lab.publish("org-q", _body("org-q"))
     lab.drain()
     lab.publish("org-q", _body("org-q"))
