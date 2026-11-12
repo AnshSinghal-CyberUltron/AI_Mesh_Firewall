@@ -1,7 +1,22 @@
 -- #139 pre-promotion check (run read-only on each environment BEFORE promoting #139 to staging/main).
+-- Promotion gate: issue #155. Written by Reviewer B (#139 review 5871024207); the author added this header,
+-- the P1 note on the 409 and, in check_redis.py, Reviewer A's stale-key check (#139 review 5870996702, S1).
+--
+-- Run (both read-only):
+--   PGOPTIONS='-c default_transaction_read_only=on' psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f check.sql
+--   cd control && python manage.py shell < ../docs/plans/evidence/2026-11-12-control-platform-default-config-130/prepromotion/check_redis.py
+--
+-- Limits (Reviewer A, S1):
+--   * Writes before #139 were never audited, so these queries can only use updated_by / updated_at.
+--   * updated_by is overwritten by the next write: a moved row that its new org has since edited is not flagged.
+--   * Deduplicating is a human choice. Keep the NULL row last written by an org-less platform operator, or never
+--     written (updated_by NULL); NOT the newest, which is usually the re-homed row. Repair from a shell as an
+--     org-less operator and write an AuditLog row for it. A partial unique index follows the repair (#155).
+--   * The real Organization with slug 'default' shares the Redis key firewall:config:default (P3; issue #152).
 -- P1. Platform-default rows (organization IS NULL). Pass: at most 1 row, last written by nobody or by an
---     org-less platform operator. More than 1 row => the operator PUT answers 500 (MultipleObjectsReturned)
---     and GET shows the lowest id while Redis serves whichever row was saved/reconciled last.
+--     org-less platform operator. More than 1 row => the operator PUT answers 409 naming the ids (500 before
+--     #139's review fixes), every platform_default() read logs an ERROR, and GET shows the lowest id while
+--     Redis serves whichever row was saved/reconciled last.
 SELECT fc.id, fc.updated_at, fc.updated_by_id, u.username, u.is_staff, up.is_platform_operator,
        up.organization_id AS updater_org_id, fc.firewall_enabled, fc.enforcement_mode, fc.retention_days
 FROM core_firewallconfig fc
