@@ -35,6 +35,11 @@ __all__ = ("TemplateError", "check_template")
 
 _TOKENS: Final = ("{category}", "{rule_id}")
 _CHECK_BUDGET_S: Final = 0.25
+"""How long `check_template` waits for the rule's own condition. It is a thread-join timeout, so
+it cannot preempt `re`, which holds the GIL for the whole of one match: a slow pattern costs its
+full time here, on the projector and on every gateway, and the late result is used. "Overran"
+below means only a scan the join could interrupt between matches. Tracked as #125; until the F1
+engine's CPU timeout lands, keep `V2_REWRITE_ORGS` empty."""
 _FORBIDDEN_SUBSTRINGS: Final = ("://", "![", "](", "<", ">", "@", "www.")
 _DIGIT_DOT_DIGIT: Final = re.compile(r"\d\.\d")
 _DOT_BETWEEN_ALNUM: Final = re.compile(r"[A-Za-z0-9]\.[A-Za-z0-9]")
@@ -95,8 +100,8 @@ def check_template(rule: Rule) -> None:
         if scan.refuse_code is not None:
             raise TemplateError(
                 f"rule {rule.rule_id}: the rule's own condition pattern is refused (ReDoS shape, "
-                "nested too deep, does not compile, or timed out), so the template cannot be "
-                "checked",
+                "nested too deep, does not compile, faulted, or overran the check budget), so "
+                "the template cannot be checked",
             )
         if scan.findings:
             raise TemplateError(
