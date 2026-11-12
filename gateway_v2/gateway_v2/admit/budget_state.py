@@ -95,6 +95,10 @@ def record_of(record: SignedRecord) -> BudgetRecord:
         raise StoreDataUnavailable(f"budget record {record.key!r} is deleted")
     try:
         body: object = json.loads(record.body)
+    except RecursionError as exc:
+        raise StoreDataUnavailable(
+            f"budget record {record.key!r} body is nested too deeply",
+        ) from exc
     except (ValueError, UnicodeDecodeError) as exc:
         raise StoreDataUnavailable(
             f"budget record {record.key!r} body is not valid JSON: {exc}",

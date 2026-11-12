@@ -36,6 +36,30 @@ Residual, stated plainly: on a short-circuit round (nothing changed) completenes
 `index_count >= manifest.count`, so one missing entry masked by one in-flight extra would not be
 caught until the next round that reads a delta. The re-hydrator's full digest comparison, which
 runs off the serving loop, is the backstop for that window.
+
+Record isolation (`poll(isolate=True)`)
+---------------------------------------
+The checks above are of two different kinds, and only one of them is about the whole round:
+
+* the manifest's signature and anti-regress floors, the index's completeness count, its order and
+  its bounds prove the STORE is a complete, current copy. Any of them failing is a store-level
+  fault and the round is refused, isolated or not: nothing read in it can be trusted.
+* a record's envelope, signature, key and score pairing prove ONE RECORD. With `isolate=False`
+  (the default, and the kill switch's and budget's contract) the first bad record still refuses
+  the round. With `isolate=True` it becomes a `RecordFault` instead -- its key, its index score
+  and the exception TYPE, never the bytes -- and every other record in the round is still
+  verified and returned. The applier of an isolating kind owns failing that one subject closed;
+  the round, the cursor and every other tenant move on.
+
+Refusing the round for one record was the fleet-wide failure: every gateway reads the same record,
+every one refused the kind every cycle, and once the kind aged past the freshness bound every
+tenant on every gateway was answered 503. Completeness is not weakened by isolating: the faulted
+entry is still one of the entries the signed count proves, it is just not applied.
+
+One record mismatch is NOT a fault even when isolating: a genuinely signed record whose position
+is ABOVE both its index entry and the attested manifest is a newer publish that landed between
+this round's index read and its record read. It is skipped like any record above the attested
+generation, and the next round reads it under its new score.
 """
 
 from __future__ import annotations
@@ -75,6 +99,20 @@ class IndexPage:
 
 
 @dataclass(frozen=True, slots=True)
+class RecordFault:
+    """One index entry whose record could not be verified. Carries nothing the record said.
+
+    `key` is the INDEX's key (the record itself was not trusted, so its own claim is not used),
+    `feed_seq` the index score, and `error` the exception type name -- never its text, which for a
+    decoder can quote the stored bytes.
+    """
+
+    key: str
+    feed_seq: int
+    error: str
+
+
+@dataclass(frozen=True, slots=True)
 class FeedRound:
     """What one round found. `records` is empty on the steady-state short circuit."""
 
@@ -85,9 +123,12 @@ class FeedRound:
     truncated: bool
     """The delta budget was reached. Run again immediately; do not wait for the next period."""
 
+    faults: tuple[RecordFault, ...] = ()
+    """Entries whose record failed verification. Only an isolating poll produces any."""
+
     @property
     def changed(self) -> bool:
-        return bool(self.records)
+        return bool(self.records) or bool(self.faults)
 
 
 class StateStore(Protocol):
@@ -148,8 +189,12 @@ class FeedReader:
         *,
         limit: int,
         floor: Cursor = START,
+        isolate: bool = False,
     ) -> FeedRound:
         """One round. Raises StoreDataUnavailable; never returns a partially trusted view.
+
+        `isolate` turns a defect in ONE record into a `RecordFault` on the round instead of a
+        refused round (module docstring). Every store-level proof still refuses the round.
 
         `cursor` is where this reader IS; `floor` is the oldest generation it may accept. They
         are separate because GW05b's stamp raises the second without the first: a process that
@@ -166,8 +211,10 @@ class FeedReader:
         if manifest.feed_seq == cursor.feed_seq:
             return FeedRound(kind, manifest, (), cursor, truncated=False)
         page = await self._read_page(kind, manifest, cursor, limit)
-        records = await self._read_records(kind, manifest, page)
-        last = records[-1].feed_seq
+        records, faults = await self._read_records(kind, manifest, page, isolate=isolate)
+        # The last INDEX entry, not the last verified record: with isolation the last entry may
+        # be a fault or a skipped in-flight publish, and the round has still accounted for it.
+        last = page.entries[-1][1]
         truncated = last < manifest.feed_seq
         if truncated and len(page.entries) < limit:
             raise StoreDataUnavailable(
@@ -181,6 +228,7 @@ class FeedReader:
             # stays put. Only the cursor position moves.
             cursor=cursor.advanced(cursor.version if truncated else manifest.version, last),
             truncated=truncated,
+            faults=faults,
         )
 
     async def bootstrap_engaged(
@@ -301,7 +349,9 @@ class FeedReader:
         kind: StateKind,
         manifest: Manifest,
         page: IndexPage,
-    ) -> tuple[SignedRecord, ...]:
+        *,
+        isolate: bool = False,
+    ) -> tuple[tuple[SignedRecord, ...], tuple[RecordFault, ...]]:
         keys = tuple(key for key, _ in page.entries)
         raws = await self._store.records(kind, keys)
         if len(raws) != len(page.entries):
@@ -309,20 +359,62 @@ class FeedReader:
                 f"{kind.value} store returned {len(raws)} values for {len(page.entries)} keys",
             )
         out: list[SignedRecord] = []
+        faults: list[RecordFault] = []
         for (key, score), raw in zip(page.entries, raws, strict=True):
-            record = decode_record(self._secret, kind, raw)
-            if record.key != key:
-                raise StoreDataUnavailable(
-                    f"{kind.value} record at {key!r} identifies itself as {record.key!r}",
-                )
-            if not record_matches_index(record, score):
-                raise StoreDataUnavailable(
-                    f"{kind.value} record {key!r} is at {record.feed_seq}, index says {score}",
-                )
-            if record.version > manifest.version:
-                raise StoreDataUnavailable(
-                    f"{kind.value} record {key!r} at {record.version} is newer than its "
-                    f"manifest {manifest.version}",
-                )
-            out.append(record)
-        return tuple(out)
+            if not isolate:
+                out.append(self._verified(kind, manifest, key, score, raw))
+                continue
+            try:
+                record = decode_record(self._secret, kind, raw)
+                if _in_flight(record, key, score, manifest):
+                    continue  # a newer publish landed mid-round: next round reads it
+                out.append(self._paired(kind, manifest, key, score, record))
+            except Exception as exc:  # noqa: BLE001 - one record never refuses the round here
+                faults.append(RecordFault(key=key, feed_seq=score, error=type(exc).__name__))
+        return tuple(out), tuple(faults)
+
+    def _verified(
+        self,
+        kind: StateKind,
+        manifest: Manifest,
+        key: str,
+        score: int,
+        raw: bytes | None,
+    ) -> SignedRecord:
+        return self._paired(kind, manifest, key, score, decode_record(self._secret, kind, raw))
+
+    @staticmethod
+    def _paired(
+        kind: StateKind,
+        manifest: Manifest,
+        key: str,
+        score: int,
+        record: SignedRecord,
+    ) -> SignedRecord:
+        """The record IS the entry that selected it, and no newer than what the manifest attests."""
+        if record.key != key:
+            raise StoreDataUnavailable(
+                f"{kind.value} record at {key!r} identifies itself as {record.key!r}",
+            )
+        if not record_matches_index(record, score):
+            raise StoreDataUnavailable(
+                f"{kind.value} record {key!r} is at {record.feed_seq}, index says {score}",
+            )
+        if record.version > manifest.version:
+            raise StoreDataUnavailable(
+                f"{kind.value} record {key!r} at {record.version} is newer than its "
+                f"manifest {manifest.version}",
+            )
+        return record
+
+
+def _in_flight(record: SignedRecord, key: str, score: int, manifest: Manifest) -> bool:
+    """A verified record for this key, published AFTER this round read the manifest.
+
+    Its position is above the index entry that selected it and above the attested generation, so
+    it is a newer generation of the same key, not a regress: the writer replaced the stored value
+    between the index read and the record read. Skipping it is what the reader already does for
+    any record above the attested position. An OLDER record under a newer score is the regress
+    `record_matches_index` exists for, and stays a fault.
+    """
+    return record.key == key and record.feed_seq > score and record.feed_seq > manifest.feed_seq

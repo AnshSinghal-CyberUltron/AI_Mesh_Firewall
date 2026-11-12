@@ -282,13 +282,22 @@ def encode_stamp(stamp: Stamp) -> bytes:
 
 
 def _envelope(raw: bytes | str | None, where: str) -> Mapping[str, object]:
-    """`where` already names what is being decoded, e.g. "ks manifest", "freshness stamp"."""
+    """`where` already names what is being decoded, e.g. "ks manifest", "freshness stamp".
+
+    Every envelope defect is `StoreDataUnavailable`, including one `json` raises as something
+    other than `ValueError`: a stored value nested past the interpreter's recursion limit raises
+    `RecursionError`, and letting that escape turned one bad stored value into an exception no
+    caller handles -- it aborted the whole state cycle, every kind, on every gateway reading it.
+    Envelopes are flat objects, so no legitimate one comes near that depth.
+    """
     if raw is None:
         raise StoreDataUnavailable(
             f"{where} missing (store empty, flushed or not yet re-hydrated)",
         )
     try:
         parsed: object = json.loads(raw)
+    except RecursionError as exc:
+        raise StoreDataUnavailable(f"{where} is nested too deeply to be an envelope") from exc
     except (ValueError, UnicodeDecodeError) as exc:
         raise StoreDataUnavailable(f"{where} is not valid JSON: {exc}") from exc
     if not isinstance(parsed, dict):
