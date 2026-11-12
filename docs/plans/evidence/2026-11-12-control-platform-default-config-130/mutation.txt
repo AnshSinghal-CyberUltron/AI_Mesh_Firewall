@@ -1,0 +1,28 @@
+KILLED  M1 permission check reverted (org-less non-operators allowed again): ran=16 FAILED (failures=18)
+    fails: test_orgless_non_operator_get_is_refused_and_creates_nothing
+    fails: test_orgless_non_operator_put_does_not_create_a_missing_default
+    fails: test_orgless_non_operator_put_is_refused_and_nothing_is_written_or_published
+KILLED  M2 serializer organization writable again: ran=16 FAILED (failures=3)
+    fails: test_member_cannot_move_their_row_onto_another_org
+    fails: test_member_cannot_rehome_their_row_into_a_platform_default
+    fails: test_org_superuser_cannot_change_the_platform_default
+KILLED  M3 GET of the default uses load() (creates + publishes): ran=16 FAILED (failures=1)
+    fails: test_platform_operator_get_reads_the_default_without_creating_it
+KILLED  M4 platform-default write not audited: ran=16 FAILED (failures=2, errors=1)
+    fails: test_audit_row_and_write_commit_together
+    fails: test_platform_operator_put_changes_the_default_publishes_it_and_audits
+    fails: test_platform_operator_put_creates_a_missing_default_in_the_audited_write
+KILLED  M5 audit best-effort (swallowed) instead of in the write's transaction: ran=16 FAILED (failures=1)
+    fails: test_audit_row_and_write_commit_together
+KILLED  M6 default created before the transaction (develop's load() for org None): ran=16 FAILED (failures=2)
+    fails: test_platform_operator_invalid_put_leaves_no_row_and_no_audit
+    fails: test_platform_operator_put_creates_a_missing_default_in_the_audited_write
+KILLED  M7 SocKpisView back to FirewallConfig.load(): ran=16 FAILED (failures=2)
+    fails: test_soc_kpis_does_not_create_the_platform_default
+KILLED  M8 retention task back to FirewallConfig.load(organization=None): ran=16 FAILED (failures=1)
+    fails: test_retention_cleanup_does_not_create_the_platform_default
+clean (all mutants restored, HEAD 77c829c4d19c3551b724d2327b50cb310202b5d3 dirty=0): ran=16 OK
+
+real	2m55.391s
+user	2m38.502s
+sys	0m2.110s

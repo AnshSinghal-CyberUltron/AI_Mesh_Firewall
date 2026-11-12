@@ -1,0 +1,4 @@
+    raise self.model.MultipleObjectsReturned(
+core.models.FirewallConfig.MultipleObjectsReturned: get() returned more than one FirewallConfig -- it returned 2!
+ERROR 2026-11-12 05:56:37,293 log 1765 140425187808960 Internal Server Error: /api/firewall/config/
+INFO 2026-11-12 05:56:37,459 signals 1765 140424962373312 FirewallConfig synced to Redis (firewall:config:rv-org-1) and published to config_updates

@@ -1,0 +1,49 @@
+#130 live attack: before/after matrix (real HTTP against uvicorn + Postgres + Redis; state re-read from the DB and Redis after every request)
+base = develop 943a5f2107898d419ea733a55691f92843ff6426, head = branch fix/control-platform-default-config-130
+base counts {'VULN': 18, 'SAFE': 4, 'OK': 6, 'FAIL': 3}  head counts {'VULN': 0, 'SAFE': 18, 'OK': 13, 'FAIL': 0}
+
+probe                                  actor base verdict head verdict head audit rows
+orgless-put-default/s0                 s0     200 VULN     403 SAFE    +0
+orgless-put-create-default/s0          s0     200 VULN     403 SAFE    +0
+orgless-get-create-default/s0          s0     200 VULN     403 SAFE    +0
+orgless-get-default/s0                 s0     200 SAFE     403 SAFE    +0
+orgless-put-default/ns0                ns0    200 VULN     403 SAFE    +0
+orgless-put-create-default/ns0         ns0    200 VULN     403 SAFE    +0
+orgless-get-create-default/ns0         ns0    200 VULN     403 SAFE    +0
+orgless-get-default/ns0                ns0    200 SAFE     403 SAFE    +0
+orgless-put-default/u0                 u0     200 VULN     403 SAFE    +0
+orgless-put-create-default/u0          u0     200 VULN     403 SAFE    +0
+orgless-get-create-default/u0          u0     200 VULN     403 SAFE    +0
+orgless-get-default/u0                 u0     200 SAFE     403 SAFE    +0
+orgless-put-default/fs0                fs0    200 VULN     403 SAFE    +0
+orgless-put-create-default/fs0         fs0    200 VULN     403 SAFE    +0
+orgless-get-create-default/fs0         fs0    200 VULN     403 SAFE    +0
+orgless-get-default/fs0                fs0    200 SAFE     403 SAFE    +0
+member-rehome-own-row-to-null          m1     200 VULN     200 OK      +0
+member-rehome-own-row-to-org3          m1     200 VULN     200 OK      +0
+admin-rehome-own-row-to-null           a1     200 VULN     200 OK      +0
+member-rehome-then-operator-put        m1     200 VULN     200 OK      +0
+operator-put-after-duplicate-default   op0    500 FAIL     200 OK      +1
+org1-superuser-put                     s1     200 OK       200 OK      +0
+org1-admin-put                         a1     200 OK       200 OK      +0
+org1-member-put                        m1     200 OK       200 OK      +0
+org2-operator-put                      op     200 OK       200 OK      +0
+operator-put-default                   op0    200 OK       200 OK      +1
+operator-put-create-default            op0    200 OK       200 OK      +1
+operator-put-invalid-no-default        op0    400 FAIL     400 OK      +0
+operator-get-no-default                op0    200 FAIL     200 OK      +0
+soc-kpis-creates-default/m1            m1     200 VULN     200 SAFE    +0
+soc-kpis-creates-default/s0            s0     200 VULN     200 SAFE    +0
+
+Notes
+- Verdicts judge state: VULN = a non-operator changed or created a platform-default row (organization IS NULL),
+  changed Redis firewall:config:default (the v1 fallback for every org without its own row), or moved a row to
+  another org. FAIL = a positive control misbehaved (base: 500 MultipleObjectsReturned after a re-home created a
+  second NULL row; a 400 or a GET left a newly created + published default behind).
+- orgless-get-default is SAFE at base only because the verdict judges writes: base answered 200 with the platform
+  default's settings to a caller who is not an operator; head answers 403.
+- Actors: s0 org-less superuser with a profile; ns0 superuser with no profile (createsuperuser); u0 org-less plain
+  user; fs0 operator flag without is_staff; m1/a1/s1 member/admin/superuser of org 1; op operator in org 2;
+  op0 org-less platform operator (is_staff + flag).
+- Settings: out-of-repo shim (policy 0021 without CREATE EXTENSION vector; this host has no pgvector), fresh
+  database per pass from one migrated template, in-memory channel layer, isolated Redis db.

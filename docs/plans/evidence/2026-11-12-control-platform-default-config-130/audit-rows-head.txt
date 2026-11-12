@@ -1,0 +1,3 @@
+platform_default_config_updated|op0|NULL|firewall_config:platform_default|127.0.0.1|{"changed": {"requests_per_minute": [1000, 777]}, "created": false, "requested_fields": ["requests_per_minute"], "x_forwarded_for_client_supplied": ""}
+platform_default_config_updated|op0|NULL|firewall_config:platform_default|127.0.0.1|{"changed": {"firewall_enabled": [true, false]}, "created": false, "requested_fields": ["firewall_enabled"], "x_forwarded_for_client_supplied": ""}
+platform_default_config_updated|op0|NULL|firewall_config:platform_default|127.0.0.1|{"changed": {"firewall_enabled": [true, false]}, "created": true, "requested_fields": ["firewall_enabled"], "x_forwarded_for_client_supplied": ""}

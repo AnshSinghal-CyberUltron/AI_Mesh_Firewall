@@ -1115,7 +1115,7 @@ def cleanup_old_audit_logs() -> dict:
     Respects per-org retention settings; falls back to the global default config.
     """
     from auth.models import Organization
-    from core.models import FirewallConfig
+    from core.models import PLATFORM_DEFAULT_AUDIT_ACTION, FirewallConfig
     from policy.models import EnforcementEvent
 
     total_deleted_events = 0
@@ -1145,17 +1145,20 @@ def cleanup_old_audit_logs() -> dict:
                 org.slug, deleted_events, deleted_audit, retention_days, cutoff.isoformat(),
             )
 
-    # Also clean orphan records with no org using the global default
-    default_config = FirewallConfig.load(organization=None)
+    # Also clean orphan records with no org using the global default. Read without creating it
+    # (#130): only an audited platform-operator write may create or change the platform default.
+    default_config = FirewallConfig.platform_default()
     default_cutoff = timezone.now() - timedelta(days=default_config.retention_days)
     orphan_events, _ = EnforcementEvent.objects.filter(
         organization_id__isnull=True,
         created_at__lt=default_cutoff,
     ).delete()
+    # Platform-default change records are kept: the operator they record also sets this
+    # retention_days, so purging them would let that operator erase their own trail (#130).
     orphan_audit, _ = AuditLog.objects.filter(
         organization_id__isnull=True,
         created_at__lt=default_cutoff,
-    ).delete()
+    ).exclude(action=PLATFORM_DEFAULT_AUDIT_ACTION).delete()
     total_deleted_events += orphan_events
     total_deleted_audit += orphan_audit
 
