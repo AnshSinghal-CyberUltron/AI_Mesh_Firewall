@@ -1,0 +1,2 @@
+{"variant": "current", "thread_us_median": 8047.1, "proc_us_median": 8047.1, "thread_us_runs": [8047.1], "util_runs": [0.016], "wall_s_runs": [48.59], "events_per_req": 24.0, "errors": 0}
+{"variant": "aiohttp_design", "thread_us_median": 4043.1, "proc_us_median": 4043.1, "thread_us_runs": [4043.1], "util_runs": [0.008], "wall_s_runs": [49.17], "events_per_req": 24.0, "errors": 0}

@@ -1,0 +1,38 @@
+{
+ "aiohttp": "3.12.15",
+ "rows": [
+  {
+   "url_host": "localhost",
+   "resolver_called": true,
+   "reached_server": false,
+   "result": "ClientConnectorDNSError"
+  },
+  {
+   "url_host": "127.0.0.1",
+   "resolver_called": false,
+   "reached_server": true,
+   "result": 200
+  },
+  {
+   "url_host": "[::1]",
+   "resolver_called": false,
+   "reached_server": false,
+   "result": "ClientConnectorError"
+  },
+  {
+   "url_host": "[::ffff:127.0.0.1]",
+   "resolver_called": false,
+   "reached_server": false,
+   "result": "ClientConnectorError"
+  }
+ ],
+ "defaults": {
+  "ClientSession._request allow_redirects": true,
+  "ClientSession(trust_env) default": false,
+  "ClientSession(auto_decompress) default": true,
+  "TCPConnector(use_dns_cache, ttl_dns_cache)": [
+   true,
+   10
+  ]
+ }
+}

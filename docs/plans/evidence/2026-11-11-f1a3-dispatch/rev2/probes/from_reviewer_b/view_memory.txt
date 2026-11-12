@@ -1,0 +1,11 @@
+{
+ "python": "3.12.3",
+ "orgs": 100000,
+ "models_per_org": 5,
+ "entries": 500000,
+ "key_bytes": 164,
+ "rss_mib_with_precomputed_aad": 341.0,
+ "rss_mib_without_aad": 240.1,
+ "bytes_per_entry_with_aad": 715,
+ "note": "per worker process; excludes the routing table, aliases index, plans and the F1a-2 record cache"
+}

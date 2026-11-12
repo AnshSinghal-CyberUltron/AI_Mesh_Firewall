@@ -1,0 +1,146 @@
+{
+  "meta": {
+    "python": "3.12.3",
+    "httpx": "0.28.1",
+    "concurrency": 32,
+    "requests_per_run": 1500,
+    "repeats": 2,
+    "unit": "client process CPU microseconds per request (process_time, all threads)"
+  },
+  "results": [
+    {
+      "variant": "current",
+      "cpu_us_per_req_median": 3189.7,
+      "cpu_us_per_req_min": 3112.0,
+      "cpu_us_per_req_runs": [
+        3267.4,
+        3112.0
+      ],
+      "wall_rps_median": 137.0,
+      "upstream_cpu_us_per_req_median": 116.7,
+      "errors": 0.0
+    },
+    {
+      "variant": "design",
+      "cpu_us_per_req_median": 3155.3,
+      "cpu_us_per_req_min": 3097.8,
+      "cpu_us_per_req_runs": [
+        3212.9,
+        3097.8
+      ],
+      "wall_rps_median": 110.0,
+      "upstream_cpu_us_per_req_median": 126.7,
+      "errors": 0.0
+    },
+    {
+      "variant": "design_json",
+      "cpu_us_per_req_median": 2637.0,
+      "cpu_us_per_req_min": 2529.8,
+      "cpu_us_per_req_runs": [
+        2529.8,
+        2744.3
+      ],
+      "wall_rps_median": 221.0,
+      "upstream_cpu_us_per_req_median": 126.7,
+      "errors": 0.0
+    },
+    {
+      "variant": "httpx_raw",
+      "cpu_us_per_req_median": 2669.8,
+      "cpu_us_per_req_min": 2496.7,
+      "cpu_us_per_req_runs": [
+        2842.9,
+        2496.7
+      ],
+      "wall_rps_median": 221.0,
+      "upstream_cpu_us_per_req_median": 110.0,
+      "errors": 0.0
+    },
+    {
+      "variant": "httpx_json",
+      "cpu_us_per_req_median": 2334.4,
+      "cpu_us_per_req_min": 2313.5,
+      "cpu_us_per_req_runs": [
+        2355.2,
+        2313.5
+      ],
+      "wall_rps_median": 210.0,
+      "upstream_cpu_us_per_req_median": 110.0,
+      "errors": 0.0
+    },
+    {
+      "variant": "aiohttp_raw",
+      "cpu_us_per_req_median": 203.5,
+      "cpu_us_per_req_min": 193.6,
+      "cpu_us_per_req_runs": [
+        213.3,
+        193.6
+      ],
+      "wall_rps_median": 1493.0,
+      "upstream_cpu_us_per_req_median": 23.3,
+      "errors": 0.0
+    },
+    {
+      "variant": "aiohttp_decode",
+      "cpu_us_per_req_median": 361.1,
+      "cpu_us_per_req_min": 353.8,
+      "cpu_us_per_req_runs": [
+        353.8,
+        368.5
+      ],
+      "wall_rps_median": 1080.0,
+      "upstream_cpu_us_per_req_median": 26.7,
+      "errors": 0.0
+    },
+    {
+      "variant": "aiohttp_json",
+      "cpu_us_per_req_median": 135.0,
+      "cpu_us_per_req_min": 127.3,
+      "cpu_us_per_req_runs": [
+        142.6,
+        127.3
+      ],
+      "wall_rps_median": 2030.0,
+      "upstream_cpu_us_per_req_median": 20.0,
+      "errors": 0.0
+    },
+    {
+      "variant": "design_tls",
+      "cpu_us_per_req_median": 3289.2,
+      "cpu_us_per_req_min": 3049.3,
+      "cpu_us_per_req_runs": [
+        3529.2,
+        3049.3
+      ],
+      "wall_rps_median": 139.0,
+      "upstream_cpu_us_per_req_median": 183.3,
+      "errors": 0.0
+    },
+    {
+      "variant": "tls_handshake",
+      "cpu_us_per_req_median": 3347.2,
+      "cpu_us_per_req_min": 3186.1,
+      "cpu_us_per_req_runs": [
+        3186.1,
+        3508.4
+      ],
+      "wall_rps_median": 133.0,
+      "upstream_cpu_us_per_req_median": 730.0,
+      "errors": 0.0
+    },
+    {
+      "variant": "getaddrinfo",
+      "cpu_us_per_call": 68.3
+    },
+    {
+      "variant": "memory_plain",
+      "pooled_connections": 256,
+      "rss_bytes_per_connection": 22240.0
+    },
+    {
+      "variant": "memory_tls",
+      "pooled_connections": 256,
+      "rss_bytes_per_connection": 36416.0
+    }
+  ]
+}

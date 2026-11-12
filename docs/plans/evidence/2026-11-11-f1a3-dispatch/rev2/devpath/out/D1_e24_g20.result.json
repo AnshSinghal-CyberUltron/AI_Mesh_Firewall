@@ -1,0 +1,1 @@
+{"label": "D1_e24_g20", "events": 24, "gap_ms": 20.0, "requests": 96, "concurrency": 4, "qualified_ok": 96, "load": {"ok": 96, "bad_status": 0, "error_frame": 0, "no_done": 0, "statuses": {"200": 96}, "wall_s": 49.03}, "wall_s": 49.41, "gateway_cpu_s": 2.66, "idle_cpu_s_per_s": 0.001, "cpu_ms_per_qualified_request": 27.194, "cpu_us_per_event": 1133.1, "gateway_util": 0.054}

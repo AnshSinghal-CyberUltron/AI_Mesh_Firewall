@@ -1,0 +1,119 @@
+{
+  "note": "Same harness as client_results.json, --only design,httpx_raw,aiohttp_raw --requests 800 --warmup 100 --repeats 2, unlocked (< 2 min CPU), load average 4.9-5.6 from other agents",
+  "by_concurrency": {
+    "1": [
+      {
+        "variant": "design",
+        "cpu_us_per_req_median": 2007.7,
+        "cpu_us_per_req_min": 1998.0,
+        "cpu_us_per_req_runs": [
+          1998.0,
+          2017.4
+        ],
+        "wall_rps_median": 172.0,
+        "upstream_cpu_us_per_req_median": 100.0,
+        "errors": 0.0
+      },
+      {
+        "variant": "httpx_raw",
+        "cpu_us_per_req_median": 1491.2,
+        "cpu_us_per_req_min": 1477.1,
+        "cpu_us_per_req_runs": [
+          1505.3,
+          1477.1
+        ],
+        "wall_rps_median": 349.0,
+        "upstream_cpu_us_per_req_median": 93.8,
+        "errors": 0.0
+      },
+      {
+        "variant": "aiohttp_raw",
+        "cpu_us_per_req_median": 137.2,
+        "cpu_us_per_req_min": 123.0,
+        "cpu_us_per_req_runs": [
+          123.0,
+          151.4
+        ],
+        "wall_rps_median": 5845.0,
+        "upstream_cpu_us_per_req_median": 25.0,
+        "errors": 0.0
+      }
+    ],
+    "8": [
+      {
+        "variant": "design",
+        "cpu_us_per_req_median": 1922.2,
+        "cpu_us_per_req_min": 1895.3,
+        "cpu_us_per_req_runs": [
+          1949.2,
+          1895.3
+        ],
+        "wall_rps_median": 384.0,
+        "upstream_cpu_us_per_req_median": 81.2,
+        "errors": 0.0
+      },
+      {
+        "variant": "httpx_raw",
+        "cpu_us_per_req_median": 1586.8,
+        "cpu_us_per_req_min": 1342.5,
+        "cpu_us_per_req_runs": [
+          1342.5,
+          1831.2
+        ],
+        "wall_rps_median": 491.0,
+        "upstream_cpu_us_per_req_median": 81.2,
+        "errors": 0.0
+      },
+      {
+        "variant": "aiohttp_raw",
+        "cpu_us_per_req_median": 211.9,
+        "cpu_us_per_req_min": 211.7,
+        "cpu_us_per_req_runs": [
+          212.0,
+          211.7
+        ],
+        "wall_rps_median": 2776.0,
+        "upstream_cpu_us_per_req_median": 31.2,
+        "errors": 0.0
+      }
+    ],
+    "128": [
+      {
+        "variant": "design",
+        "cpu_us_per_req_median": 5001.6,
+        "cpu_us_per_req_min": 3203.1,
+        "cpu_us_per_req_runs": [
+          6800.1,
+          3203.1
+        ],
+        "wall_rps_median": 161.0,
+        "upstream_cpu_us_per_req_median": 118.8,
+        "errors": 0.0
+      },
+      {
+        "variant": "httpx_raw",
+        "cpu_us_per_req_median": 5320.9,
+        "cpu_us_per_req_min": 3602.7,
+        "cpu_us_per_req_runs": [
+          7039.2,
+          3602.7
+        ],
+        "wall_rps_median": 161.0,
+        "upstream_cpu_us_per_req_median": 125.0,
+        "errors": 0.0
+      },
+      {
+        "variant": "aiohttp_raw",
+        "cpu_us_per_req_median": 149.8,
+        "cpu_us_per_req_min": 133.3,
+        "cpu_us_per_req_runs": [
+          133.3,
+          166.4
+        ],
+        "wall_rps_median": 4775.0,
+        "upstream_cpu_us_per_req_median": 18.8,
+        "errors": 0.0
+      }
+    ]
+  }
+}

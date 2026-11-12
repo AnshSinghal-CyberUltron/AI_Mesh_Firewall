@@ -1,0 +1,127 @@
+{
+ "label": "P2_e200_g20_c64",
+ "python": "3.12.3",
+ "httpx": "0.28.1",
+ "aiohttp": "3.14.5",
+ "concurrency": 64,
+ "requests": 256,
+ "repeats": 2,
+ "maxrss_kib": 62652,
+ "elapsed_s": 227.5,
+ "results": [
+  {
+   "variant": "httpx_raw",
+   "thread_us_median": 20931.8,
+   "proc_us_median": 20931.8,
+   "thread_us_runs": [
+    21173.9,
+    20689.6
+   ],
+   "util_runs": [
+    0.319,
+    0.309
+   ],
+   "wall_s_runs": [
+    17.0,
+    17.12
+   ],
+   "events_per_req": 201.0,
+   "errors": 0
+  },
+  {
+   "variant": "httpx_decode",
+   "thread_us_median": 26020.9,
+   "proc_us_median": 26020.9,
+   "thread_us_runs": [
+    25623.6,
+    26418.2
+   ],
+   "util_runs": [
+    0.387,
+    0.4
+   ],
+   "wall_s_runs": [
+    16.96,
+    16.9
+   ],
+   "events_per_req": 200.0,
+   "errors": 0
+  },
+  {
+   "variant": "current",
+   "thread_us_median": 27792.3,
+   "proc_us_median": 27792.3,
+   "thread_us_runs": [
+    27678.6,
+    27906.0
+   ],
+   "util_runs": [
+    0.416,
+    0.421
+   ],
+   "wall_s_runs": [
+    17.05,
+    16.98
+   ],
+   "events_per_req": 200.0,
+   "errors": 0
+  },
+  {
+   "variant": "aiohttp_design",
+   "thread_us_median": 10032.1,
+   "proc_us_median": 10032.1,
+   "thread_us_runs": [
+    9993.4,
+    10070.9
+   ],
+   "util_runs": [
+    0.156,
+    0.156
+   ],
+   "wall_s_runs": [
+    16.4,
+    16.48
+   ],
+   "events_per_req": 200.0,
+   "errors": 0
+  },
+  {
+   "variant": "aiohttp_raw",
+   "thread_us_median": 5213.1,
+   "proc_us_median": 5213.1,
+   "thread_us_runs": [
+    5122.1,
+    5304.0
+   ],
+   "util_runs": [
+    0.079,
+    0.083
+   ],
+   "wall_s_runs": [
+    16.52,
+    16.44
+   ],
+   "events_per_req": 201.0,
+   "errors": 0
+  },
+  {
+   "variant": "aiohttp_decode",
+   "thread_us_median": 10220.5,
+   "proc_us_median": 10220.5,
+   "thread_us_runs": [
+    10095.4,
+    10345.5
+   ],
+   "util_runs": [
+    0.157,
+    0.161
+   ],
+   "wall_s_runs": [
+    16.46,
+    16.44
+   ],
+   "events_per_req": 200.0,
+   "errors": 0
+  }
+ ]
+}

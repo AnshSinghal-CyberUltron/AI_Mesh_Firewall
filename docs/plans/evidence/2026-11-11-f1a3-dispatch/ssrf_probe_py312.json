@@ -1,0 +1,139 @@
+{
+  "python": "3.12.3",
+  "url_guard": [
+    {
+      "address": "8.8.8.8",
+      "shipped_url_guard": "ALLOWED",
+      "is_global": true,
+      "embedded_ipv4": null
+    },
+    {
+      "address": "127.0.0.1",
+      "shipped_url_guard": "refused",
+      "is_global": false,
+      "embedded_ipv4": null
+    },
+    {
+      "address": "10.0.0.5",
+      "shipped_url_guard": "refused",
+      "is_global": false,
+      "embedded_ipv4": null
+    },
+    {
+      "address": "169.254.169.254",
+      "shipped_url_guard": "refused",
+      "is_global": false,
+      "embedded_ipv4": null
+    },
+    {
+      "address": "100.64.0.1",
+      "shipped_url_guard": "ALLOWED",
+      "is_global": false,
+      "embedded_ipv4": null
+    },
+    {
+      "address": "192.0.0.10",
+      "shipped_url_guard": "ALLOWED",
+      "is_global": true,
+      "embedded_ipv4": null
+    },
+    {
+      "address": "198.18.0.1",
+      "shipped_url_guard": "refused",
+      "is_global": false,
+      "embedded_ipv4": null
+    },
+    {
+      "address": "192.88.99.1",
+      "shipped_url_guard": "ALLOWED",
+      "is_global": true,
+      "embedded_ipv4": null
+    },
+    {
+      "address": "233.252.0.1",
+      "shipped_url_guard": "refused",
+      "is_global": true,
+      "embedded_ipv4": null
+    },
+    {
+      "address": "::ffff:127.0.0.1",
+      "shipped_url_guard": "refused",
+      "is_global": false,
+      "embedded_ipv4": "127.0.0.1"
+    },
+    {
+      "address": "64:ff9b::a9fe:a9fe",
+      "shipped_url_guard": "refused",
+      "is_global": true,
+      "embedded_ipv4": "169.254.169.254"
+    },
+    {
+      "address": "64:ff9b::7f00:1",
+      "shipped_url_guard": "refused",
+      "is_global": true,
+      "embedded_ipv4": "127.0.0.1"
+    },
+    {
+      "address": "64:ff9b:1::a00:5",
+      "shipped_url_guard": "refused",
+      "is_global": false,
+      "embedded_ipv4": "10.0.0.5"
+    },
+    {
+      "address": "2002:7f00:1::1",
+      "shipped_url_guard": "refused",
+      "is_global": false,
+      "embedded_ipv4": "127.0.0.1"
+    },
+    {
+      "address": "2002:a9fe:a9fe::1",
+      "shipped_url_guard": "refused",
+      "is_global": false,
+      "embedded_ipv4": "169.254.169.254"
+    },
+    {
+      "address": "2001:0:4136:e378:8000:63bf:80ff:fefe",
+      "shipped_url_guard": "refused",
+      "is_global": false,
+      "embedded_ipv4": "127.0.1.1"
+    },
+    {
+      "address": "::7f00:1",
+      "shipped_url_guard": "refused",
+      "is_global": true,
+      "embedded_ipv4": "127.0.0.1"
+    },
+    {
+      "address": "fd00:ec2::254",
+      "shipped_url_guard": "refused",
+      "is_global": false,
+      "embedded_ipv4": null
+    },
+    {
+      "address": "fe80::1",
+      "shipped_url_guard": "refused",
+      "is_global": false,
+      "embedded_ipv4": null
+    }
+  ],
+  "sse_decoder": [
+    {
+      "input": "lf_framing",
+      "frames": 1,
+      "malformed": false,
+      "finished": true
+    },
+    {
+      "input": "crlf_framing",
+      "frames": 0,
+      "malformed": false,
+      "finished": false
+    },
+    {
+      "input": "comment_keepalive",
+      "frames": 1,
+      "malformed": true,
+      "finished": true
+    }
+  ]
+}

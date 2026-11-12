@@ -1,0 +1,7 @@
+# PY=/home/claude/work/venv-ci/bin/python GW=<wt>/gateway_v2 proto/mutation_check.sh  (2026-11-12T09:38:22Z)
+M1 hand-off without re-registering the drain record (revision 2): 1 failed, 12 deselected in 0.38s
+M2 no release on cancel-after-grant: 1 failed, 12 deselected in 1.49s
+M3 cancel without the grant loop: 1 failed, 12 deselected in 0.45s
+M4 no per-org wait cap: 2 failed, 11 deselected in 0.88s
+M5 no reserve rule: 1 failed, 12 deselected in 0.60s
+M6 release to the oldest waiter instead of the smallest share: 1 failed, 12 deselected in 0.75s

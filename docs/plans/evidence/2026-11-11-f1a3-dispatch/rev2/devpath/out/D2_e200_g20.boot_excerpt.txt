@@ -1,0 +1,3 @@
+boot: DEV PROFILE ACTIVE (AMF_DEV_PROFILE=1) -- local development wiring, NOT FOR PRODUCTION; every dependency marked DEV PROFILE below is dev-supplied
+boot: resolver -> phase-aware PlanResolver factory (plan 1.1.19663cec401a7665) (DEV PROFILE: the REAL GW07 resolver, wired per phase via resolver_for -- PlanResolver(plan, phase) is bound at Phase.INPUT for the input scan and Phase.OUTPUT f
+boot: metrics_registry -> GW14d Publisher (15241 series: admission, quota, audit none, stream, holdback, tenants, rejections, postures; state and re-hydration ABSENT (no writer in dev), add-on latency and windowed-busy have no source yet)

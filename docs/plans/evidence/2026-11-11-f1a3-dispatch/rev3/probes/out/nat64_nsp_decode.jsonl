@@ -1,0 +1,33 @@
+{"prefix": "2600:1f14:abc:64::/96", "ipv4": "10.0.0.5", "synthesised": "2600:1f14:abc:64::a00:5", "is_global": true, "refused_if_undeclared": false, "refused_if_declared": true, "expected": true, "ok": true}
+{"prefix": "2600:1f14:abc:64::/96", "ipv4": "169.254.169.254", "synthesised": "2600:1f14:abc:64::a9fe:a9fe", "is_global": true, "refused_if_undeclared": false, "refused_if_declared": true, "expected": true, "ok": true}
+{"prefix": "2600:1f14:abc:64::/96", "ipv4": "127.0.0.1", "synthesised": "2600:1f14:abc:64::7f00:1", "is_global": true, "refused_if_undeclared": false, "refused_if_declared": true, "expected": true, "ok": true}
+{"prefix": "2600:1f14:abc:64::/96", "ipv4": "100.64.0.1", "synthesised": "2600:1f14:abc:64::6440:1", "is_global": true, "refused_if_undeclared": false, "refused_if_declared": true, "expected": true, "ok": true}
+{"prefix": "2600:1f14:abc:64::/96", "ipv4": "93.184.216.34", "synthesised": "2600:1f14:abc:64::5db8:d822", "is_global": true, "refused_if_undeclared": false, "refused_if_declared": false, "expected": false, "ok": true}
+{"prefix": "2600:1f14:a00::/40", "ipv4": "10.0.0.5", "synthesised": "2600:1f14:a0a:0:5::", "is_global": true, "refused_if_undeclared": false, "refused_if_declared": true, "expected": true, "ok": true}
+{"prefix": "2600:1f14:a00::/40", "ipv4": "169.254.169.254", "synthesised": "2600:1f14:aa9:fea9:fe::", "is_global": true, "refused_if_undeclared": false, "refused_if_declared": true, "expected": true, "ok": true}
+{"prefix": "2600:1f14:a00::/40", "ipv4": "127.0.0.1", "synthesised": "2600:1f14:a7f:0:1::", "is_global": true, "refused_if_undeclared": false, "refused_if_declared": true, "expected": true, "ok": true}
+{"prefix": "2600:1f14:a00::/40", "ipv4": "100.64.0.1", "synthesised": "2600:1f14:a64:4000:1::", "is_global": true, "refused_if_undeclared": false, "refused_if_declared": true, "expected": true, "ok": true}
+{"prefix": "2600:1f14:a00::/40", "ipv4": "93.184.216.34", "synthesised": "2600:1f14:a5d:b8d8:22::", "is_global": true, "refused_if_undeclared": false, "refused_if_declared": false, "expected": false, "ok": true}
+{"prefix": "2600:1f14::/32", "ipv4": "10.0.0.5", "synthesised": "2600:1f14:a00:5::", "is_global": true, "refused_if_undeclared": false, "refused_if_declared": true, "expected": true, "ok": true}
+{"prefix": "2600:1f14::/32", "ipv4": "169.254.169.254", "synthesised": "2600:1f14:a9fe:a9fe::", "is_global": true, "refused_if_undeclared": false, "refused_if_declared": true, "expected": true, "ok": true}
+{"prefix": "2600:1f14::/32", "ipv4": "127.0.0.1", "synthesised": "2600:1f14:7f00:1::", "is_global": true, "refused_if_undeclared": false, "refused_if_declared": true, "expected": true, "ok": true}
+{"prefix": "2600:1f14::/32", "ipv4": "100.64.0.1", "synthesised": "2600:1f14:6440:1::", "is_global": true, "refused_if_undeclared": false, "refused_if_declared": true, "expected": true, "ok": true}
+{"prefix": "2600:1f14::/32", "ipv4": "93.184.216.34", "synthesised": "2600:1f14:5db8:d822::", "is_global": true, "refused_if_undeclared": false, "refused_if_declared": false, "expected": false, "ok": true}
+{"prefix": "2600:1f14:abc::/48", "ipv4": "10.0.0.5", "synthesised": "2600:1f14:abc:a00:0:500::", "is_global": true, "refused_if_undeclared": false, "refused_if_declared": true, "expected": true, "ok": true}
+{"prefix": "2600:1f14:abc::/48", "ipv4": "169.254.169.254", "synthesised": "2600:1f14:abc:a9fe:a9:fe00::", "is_global": true, "refused_if_undeclared": false, "refused_if_declared": true, "expected": true, "ok": true}
+{"prefix": "2600:1f14:abc::/48", "ipv4": "127.0.0.1", "synthesised": "2600:1f14:abc:7f00:0:100::", "is_global": true, "refused_if_undeclared": false, "refused_if_declared": true, "expected": true, "ok": true}
+{"prefix": "2600:1f14:abc::/48", "ipv4": "100.64.0.1", "synthesised": "2600:1f14:abc:6440:0:100::", "is_global": true, "refused_if_undeclared": false, "refused_if_declared": true, "expected": true, "ok": true}
+{"prefix": "2600:1f14:abc::/48", "ipv4": "93.184.216.34", "synthesised": "2600:1f14:abc:5db8:d8:2200::", "is_global": true, "refused_if_undeclared": false, "refused_if_declared": false, "expected": false, "ok": true}
+{"prefix": "2600:1f14:abc:6400::/56", "ipv4": "10.0.0.5", "synthesised": "2600:1f14:abc:640a:0:5::", "is_global": true, "refused_if_undeclared": false, "refused_if_declared": true, "expected": true, "ok": true}
+{"prefix": "2600:1f14:abc:6400::/56", "ipv4": "169.254.169.254", "synthesised": "2600:1f14:abc:64a9:fe:a9fe::", "is_global": true, "refused_if_undeclared": false, "refused_if_declared": true, "expected": true, "ok": true}
+{"prefix": "2600:1f14:abc:6400::/56", "ipv4": "127.0.0.1", "synthesised": "2600:1f14:abc:647f:0:1::", "is_global": true, "refused_if_undeclared": false, "refused_if_declared": true, "expected": true, "ok": true}
+{"prefix": "2600:1f14:abc:6400::/56", "ipv4": "100.64.0.1", "synthesised": "2600:1f14:abc:6464:40:1::", "is_global": true, "refused_if_undeclared": false, "refused_if_declared": true, "expected": true, "ok": true}
+{"prefix": "2600:1f14:abc:6400::/56", "ipv4": "93.184.216.34", "synthesised": "2600:1f14:abc:645d:b8:d822::", "is_global": true, "refused_if_undeclared": false, "refused_if_declared": false, "expected": false, "ok": true}
+{"prefix": "2600:1f14:abc:64::/64", "ipv4": "10.0.0.5", "synthesised": "2600:1f14:abc:64:a:0:500:0", "is_global": true, "refused_if_undeclared": false, "refused_if_declared": true, "expected": true, "ok": true}
+{"prefix": "2600:1f14:abc:64::/64", "ipv4": "169.254.169.254", "synthesised": "2600:1f14:abc:64:a9:fea9:fe00:0", "is_global": true, "refused_if_undeclared": false, "refused_if_declared": true, "expected": true, "ok": true}
+{"prefix": "2600:1f14:abc:64::/64", "ipv4": "127.0.0.1", "synthesised": "2600:1f14:abc:64:7f:0:100:0", "is_global": true, "refused_if_undeclared": false, "refused_if_declared": true, "expected": true, "ok": true}
+{"prefix": "2600:1f14:abc:64::/64", "ipv4": "100.64.0.1", "synthesised": "2600:1f14:abc:64:64:4000:100:0", "is_global": true, "refused_if_undeclared": false, "refused_if_declared": true, "expected": true, "ok": true}
+{"prefix": "2600:1f14:abc:64::/64", "ipv4": "93.184.216.34", "synthesised": "2600:1f14:abc:64:5d:b8d8:2200:0", "is_global": true, "refused_if_undeclared": false, "refused_if_declared": false, "expected": false, "ok": true}
+{"prefix": "64:ff9b::/96", "ipv4": "10.0.0.5", "synthesised": "64:ff9b::a00:5", "refused_if_undeclared": true, "ok": true}
+{"prefix": "64:ff9b::/96", "ipv4": "169.254.169.254", "synthesised": "64:ff9b::a9fe:a9fe", "refused_if_undeclared": true, "ok": true}
+{"all_expectations_hold": true}

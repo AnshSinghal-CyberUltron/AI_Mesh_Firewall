@@ -1,0 +1,1 @@
+{"label": "D2_e200_g20", "events": 200, "gap_ms": 20.0, "requests": 24, "concurrency": 4, "qualified_ok": 24, "load": {"ok": 24, "bad_status": 0, "error_frame": 0, "no_done": 0, "statuses": {"200": 24}, "wall_s": 98.34}, "wall_s": 98.61, "gateway_cpu_s": 15.63, "idle_cpu_s_per_s": 0.044, "cpu_ms_per_qualified_request": 470.465, "cpu_us_per_event": 2352.3, "gateway_util": 0.159}

@@ -1,0 +1,10 @@
+# cd /tmp && PYTHONPATH=<wt>/gateway_v2:<rev3>/proto /home/claude/work/venv-ci/bin/python -m pytest -q -p no:cacheprovider -s <rev3>/proto/check_stream_slots_proto.py  (2026-11-12T09:38:21Z, Python 3.12.3, develop 562619c8 code)
+drain with a handed-off live stream: (60.0, 1, 0); after it ended: (0.0, 0, 0)
+..
+w=1: org-b admit=Admitted, org-b slot=org-b; org-a extra: 14 refused (wait_full), 1 waiting; request-queue depth=0
+.
+w=2: org-b admit=Admitted, org-b slot=org-b; org-a extra: 13 refused (wait_full), 2 waiting; request-queue depth=0
+..
+per-candidate (rev 2): attempt 2 refused: wait_expired; per-request (rev 3): att2 ran under the same slot
+........
+13 passed in 0.43s

@@ -1,0 +1,45 @@
+{
+ "label": "C1_e24",
+ "python": "3.12.3",
+ "httpx": "0.28.1",
+ "aiohttp": "3.14.5",
+ "concurrency": 1,
+ "requests": 96,
+ "repeats": 1,
+ "maxrss_kib": 59136,
+ "elapsed_s": 106.2,
+ "results": [
+  {
+   "variant": "current",
+   "thread_us_median": 8047.1,
+   "proc_us_median": 8047.1,
+   "thread_us_runs": [
+    8047.1
+   ],
+   "util_runs": [
+    0.016
+   ],
+   "wall_s_runs": [
+    48.59
+   ],
+   "events_per_req": 24.0,
+   "errors": 0
+  },
+  {
+   "variant": "aiohttp_design",
+   "thread_us_median": 4043.1,
+   "proc_us_median": 4043.1,
+   "thread_us_runs": [
+    4043.1
+   ],
+   "util_runs": [
+    0.008
+   ],
+   "wall_s_runs": [
+    49.17
+   ],
+   "events_per_req": 24.0,
+   "errors": 0
+  }
+ ]
+}

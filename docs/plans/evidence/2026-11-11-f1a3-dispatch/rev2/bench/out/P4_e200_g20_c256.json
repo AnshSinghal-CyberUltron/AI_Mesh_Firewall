@@ -1,0 +1,108 @@
+{
+ "label": "P4_e200_g20_c256",
+ "python": "3.12.3",
+ "httpx": "0.28.1",
+ "aiohttp": "3.14.5",
+ "concurrency": 256,
+ "requests": 512,
+ "repeats": 2,
+ "maxrss_kib": 67184,
+ "elapsed_s": 163.4,
+ "results": [
+  {
+   "variant": "httpx_raw",
+   "thread_us_median": 34450.0,
+   "proc_us_median": 34450.0,
+   "thread_us_runs": [
+    34800.1,
+    34099.9
+   ],
+   "util_runs": [
+    0.87,
+    0.808
+   ],
+   "wall_s_runs": [
+    20.48,
+    21.6
+   ],
+   "events_per_req": 201.0,
+   "errors": 0
+  },
+  {
+   "variant": "httpx_decode",
+   "thread_us_median": 36263.6,
+   "proc_us_median": 36263.6,
+   "thread_us_runs": [
+    35368.2,
+    37159.0
+   ],
+   "util_runs": [
+    0.849,
+    0.935
+   ],
+   "wall_s_runs": [
+    21.34,
+    20.35
+   ],
+   "events_per_req": 200.0,
+   "errors": 0
+  },
+  {
+   "variant": "aiohttp_design",
+   "thread_us_median": 6404.5,
+   "proc_us_median": 6404.5,
+   "thread_us_runs": [
+    6418.0,
+    6391.0
+   ],
+   "util_runs": [
+    0.394,
+    0.394
+   ],
+   "wall_s_runs": [
+    8.34,
+    8.31
+   ],
+   "events_per_req": 200.0,
+   "errors": 0
+  },
+  {
+   "variant": "aiohttp_raw",
+   "thread_us_median": 3490.6,
+   "proc_us_median": 3490.6,
+   "thread_us_runs": [
+    3132.0,
+    3849.3
+   ],
+   "util_runs": [
+    0.192,
+    0.236
+   ],
+   "wall_s_runs": [
+    8.34,
+    8.37
+   ],
+   "events_per_req": 200.8,
+   "errors": 0
+  },
+  {
+   "variant": "aiohttp_decode",
+   "thread_us_median": 5776.5,
+   "proc_us_median": 5776.5,
+   "thread_us_runs": [
+    5903.2,
+    5649.8
+   ],
+   "util_runs": [
+    0.363,
+    0.343
+   ],
+   "wall_s_runs": [
+    8.34,
+    8.43
+   ],
+   "events_per_req": 200.0,
+   "errors": 0
+  }
+ ]
+}

@@ -1,0 +1,11 @@
+gateway_v2 from /home/claude/wt/rv-121-B/gateway_v2/gateway_v2/__init__.py
+contract: workers 1 target_p99_ms 20.0 util 0.75 per_worker_rss MB 400 memory_limit MB 8022 fd_limit 20000
+q_safe=  500 -> admission concurrency (held for the whole stream, routes.py:326) =   14; max stream RPS/worker at T_upstream= 3.0s =     4.7; plan §6.2 assumes 500 RPS x 3 s = 1500 in flight
+q_safe=  500 -> admission concurrency (held for the whole stream, routes.py:326) =   14; max stream RPS/worker at T_upstream=10.0s =     1.4; plan §6.2 assumes 500 RPS x 3 s = 1500 in flight
+q_safe= 2000 -> admission concurrency (held for the whole stream, routes.py:326) =   15; max stream RPS/worker at T_upstream= 3.0s =     5.0; plan §6.2 assumes 500 RPS x 3 s = 1500 in flight
+q_safe= 2000 -> admission concurrency (held for the whole stream, routes.py:326) =   15; max stream RPS/worker at T_upstream=10.0s =     1.5; plan §6.2 assumes 500 RPS x 3 s = 1500 in flight
+q_safe= 5000 -> admission concurrency (held for the whole stream, routes.py:326) =   15; max stream RPS/worker at T_upstream= 3.0s =     5.0; plan §6.2 assumes 500 RPS x 3 s = 1500 in flight
+q_safe= 5000 -> admission concurrency (held for the whole stream, routes.py:326) =   15; max stream RPS/worker at T_upstream=10.0s =     1.5; plan §6.2 assumes 500 RPS x 3 s = 1500 in flight
+pool_size(PROVIDER) = 1
+live AdmissionController, q_safe=500, request_depth = 14
+admits while all earlier streams still in flight (no complete): ['Admitted', 'Admitted', 'Admitted', 'Admitted', 'Admitted', 'Admitted', 'Admitted', 'Admitted', 'Admitted', 'Admitted', 'Admitted', 'Admitted', 'Admitted', 'Admitted', 'ShedVerdict', 'ShedVerdict', 'ShedVerdict']
