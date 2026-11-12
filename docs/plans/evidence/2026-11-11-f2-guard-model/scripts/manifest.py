@@ -166,6 +166,10 @@ def verify(bundle: Path, manifest_bytes: bytes, pinned_digest: str) -> Loaded:
     opts.add_session_config_entry("session.intra_op.allow_spinning", "0")
     sess = ort.InferenceSession(blobs["model.onnx"], sess_options=opts,
                                 providers=["CPUExecutionProvider"])
+    sess.disable_fallback()
+    if sess.get_providers()[0] != "CPUExecutionProvider":
+        raise ManifestMismatch("execution_provider")
+    sess._model_bytes = None  # onnxruntime keeps the bytes for fallback; fallback is disabled
     del blobs["model.onnx"]
     t_session = time.perf_counter()
     golden = json.loads(blobs["golden.json"])

@@ -31,6 +31,7 @@ Backs `docs/plans/2026-11-11-f2-guard-model.md`. Prototype code only; nothing he
 | `bench_window.py` | per-window CPU/wall at 1/2 threads, cold start, concurrency, tokenizer | `results/bench_window.json` | no (≈ 3 min CPU, see note) |
 | `offloop.py` | loop lag inline vs executor, tokenizer GIL, terminate, overload, process pool, RSS | `results/offloop.json` | no (< 2 min CPU) |
 | `manifest.py` | bundle + manifest build, boot verify, tamper matrix | `results/guard-manifest.json`, `guard-manifest.sha256`, `manifest_verify.json` | no (≈ 15 s CPU, mostly hashing) |
+| `ort_bytes_rss.py` | RSS of a session built from verified bytes, with and without onnxruntime's retained copy | `results/ort_bytes_rss.json` | no (3 × 2 s) |
 | `injection_lengths.py` | token lengths of the injection sets (overlap choice) | `results/injection_lengths.json` | no (seconds) |
 
 Heavy steps ran as `flock /home/claude/work/.heavy.lock nice -n 10 <python> -I <script>`. The lock
