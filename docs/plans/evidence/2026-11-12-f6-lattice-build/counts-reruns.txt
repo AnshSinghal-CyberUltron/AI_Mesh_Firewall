@@ -1,0 +1,7 @@
+counts.sh determinism check (rev 2, 12 Nov 2026)
+frontend/src tree 81157b28fbf709ddcd9be87eb59794e1876e097e (identical at develop 562619c8)
+rev-1 script, 10 runs, output line counts:
+        2 14
+        8 26
+rev-2 script, 10 runs, md5 of full output:
+       10 903cac921052875396d4b24616dcc2f1
