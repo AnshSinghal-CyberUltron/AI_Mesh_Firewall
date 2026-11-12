@@ -13,9 +13,12 @@ document indefinitely, and the rollback "set the gate to ``off``" would not reac
   reads (:data:`MIGRATION_APPS`, so a data migration such as ``core/0040`` counts), every publish
   setting (:data:`PUBLISH_SETTINGS`), and two documents it builds now: an org with every built-in
   on, and a never-saved org (the ``FirewallConfig`` model defaults through the serializer).
-* Every publish stamps the document with the fingerprint of the process that built it
-  (``V2PlanDocument.publisher``), console saves included.
-* A document whose stamp differs from the running fingerprint is stale. No stale active org: done
+* Every publish stamps the document with the fingerprint of the process that built it, at the
+  revision it stored (``V2PlanDocument.publisher``, ``publisher_revision``), console saves
+  included.
+* A document whose stamp is not the running fingerprint at its current revision is stale. That
+  includes a body an older image changed after a rollback: it raises ``revision`` but does not know
+  the stamp. No stale active org: done
   (one indexed query, no Redis). Otherwise, once the publisher's migrations are applied, one
   runner (an owner-checked Redis lock) republishes the stale orgs in primary-key order,
   :data:`BATCH` per query, so memory stays bounded at any org count.
@@ -213,11 +216,15 @@ def fingerprint() -> str:
 
 
 def stale_orgs(current: str, skip: Collection[int] = ()) -> Any:
-    """Active orgs with no document, or with a document another publisher built."""
+    """Active orgs with no document, or whose document is not stamped by ``current`` at its
+    current revision (another publisher built it, or an older image changed it after a
+    rollback: it raises ``revision`` but does not know the stamp)."""
     from auth.models import Organization
+    from django.db.models import F
 
     orgs = Organization.objects.filter(is_active=True).exclude(
-        v2_plan_document__publisher=current
+        v2_plan_document__publisher=current,
+        v2_plan_document__publisher_revision=F("v2_plan_document__revision"),
     )
     if skip:
         orgs = orgs.exclude(pk__in=list(skip))

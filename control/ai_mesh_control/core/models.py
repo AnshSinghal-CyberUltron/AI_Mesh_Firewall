@@ -1984,9 +1984,11 @@ class V2PlanDocument(models.Model):
     bytes the mapper produced, and the projector validates and canonicalises them itself.
     ``revision`` rises only when the body changes, so the console can show which save is live.
     ``publisher`` is the fingerprint of the publisher that built the body
-    (``core.v2_plan_rollout.fingerprint``: its code, its migrations and its deployment settings).
-    The start-up rollout republishes every active org whose stamp differs from the running one;
-    ``""`` (rows written before F4, or by code that predates the column) is always stale.
+    (``core.v2_plan_rollout.fingerprint``: its code, its migrations and its deployment settings),
+    and ``publisher_revision`` the revision it stamped. The start-up rollout republishes every
+    active org whose stamp is not the running fingerprint AT the current revision: rows written
+    before F4 (``""``), and bodies an older image changed after a rollback (it raises ``revision``
+    without knowing these columns), are stale.
     """
 
     id = models.BigAutoField(primary_key=True)
@@ -1998,8 +2000,9 @@ class V2PlanDocument(models.Model):
     body = models.TextField()
     revision = models.BigIntegerField(default=1)
     updated_at = models.DateTimeField(auto_now=True)
-    # db_default too: an older control image (a rollback) inserts rows without this column.
+    # db_default too: an older control image (a rollback) inserts rows without these columns.
     publisher = models.CharField(max_length=64, blank=True, default="", db_default="")
+    publisher_revision = models.BigIntegerField(default=0, db_default=0)
 
     class Meta:
         db_table = "core_v2_plan_document"

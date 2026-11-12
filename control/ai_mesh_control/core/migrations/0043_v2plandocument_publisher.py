@@ -1,7 +1,9 @@
-"""F4 (PR #115 round 3): stamp each v2 plan document with the publisher fingerprint that built it.
+"""F4 (PR #115 round 3): stamp each v2 plan document with the publisher that built it.
 
-``db_default`` keeps a database default, so an older control image (a rollback) that does not know
-the column still inserts rows; ``""`` is always stale, and the next start-up rollout republishes it.
+``publisher`` is the fingerprint, ``publisher_revision`` the revision it was stamped at. An older
+control image (a rollback) does not know these columns: ``db_default`` lets it still insert rows
+(stamp ``""``, always stale), and when it changes a body it raises ``revision`` past
+``publisher_revision``, so the next start-up rollout of this release republishes that org.
 On PostgreSQL 11+ adding a column with a constant default does not rewrite the table.
 """
 
@@ -18,5 +20,10 @@ class Migration(migrations.Migration):
             model_name="v2plandocument",
             name="publisher",
             field=models.CharField(blank=True, db_default="", default="", max_length=64),
+        ),
+        migrations.AddField(
+            model_name="v2plandocument",
+            name="publisher_revision",
+            field=models.BigIntegerField(db_default=0, default=0),
         ),
     ]

@@ -174,17 +174,52 @@ class ReconcileTests(_RedisLockMixin, TestCase):
             self.assertEqual((note["status"], counting.calls), ("swept", [self.stale.pk]))
             self.assertEqual(_ext(self.stale), repaired)
 
+    def test_a_rollback_image_that_changes_or_inserts_documents_leaves_them_stale(self) -> None:
+        """An older control image does not know the stamp columns. Its body change raises the
+        revision past the stamp, and its insert (raw SQL without the new columns, which needs
+        the database defaults) carries an empty stamp: the next start of this release repairs
+        both."""
+        from django.db import connection
+        from django.db.models import F
+
+        rollout.reconcile(client=self.redis)
+        V2PlanDocument.objects.filter(organization=self.stale).update(
+            body=STALE, revision=F("revision") + 1
+        )
+        V2PlanDocument.objects.filter(organization=self.fresh).delete()
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "INSERT INTO core_v2_plan_document (organization_id, body, revision, updated_at) "
+                "VALUES (%s, %s, 1, now())",
+                [self.fresh.pk, STALE],
+            )
+        self.assertEqual(rollout.status()["stale_orgs"], 2)
+        counting = _Counting()
+        with counting.patch():
+            note = rollout.reconcile(client=self.redis)
+        self.assertEqual(note["status"], "swept")
+        self.assertEqual(sorted(counting.calls), sorted([self.stale.pk, self.fresh.pk]))
+        self.assertIn("fw-pii-input-ext", _rules(self.stale))
+        self.assertIn("fw-pii-input-ext", _rules(self.fresh))
+        self.assertEqual(rollout.status()["stale_orgs"], 0)
+
     def test_a_console_publish_stamps_the_running_publisher(self) -> None:
         from core.firewall_v2_publish import publish_for_org
 
+        current = rollout.fingerprint()
         publish_for_org(self.fresh)
         document = V2PlanDocument.objects.get(organization=self.fresh)
-        self.assertEqual(document.publisher, rollout.fingerprint())
+        self.assertEqual((document.publisher, document.publisher_revision), (current, 1))
         V2PlanDocument.objects.filter(pk=document.pk).update(publisher="an-older-release")
         publish_for_org(self.fresh)
         again = V2PlanDocument.objects.get(organization=self.fresh)
         self.assertEqual((again.revision, again.body), (document.revision, document.body))
-        self.assertEqual(again.publisher, rollout.fingerprint())
+        self.assertEqual((again.publisher, again.publisher_revision), (current, 1))
+        publish_for_org(self.stale)  # body changes: revision 2, stamped at 2
+        changed = V2PlanDocument.objects.get(organization=self.stale)
+        self.assertEqual(
+            (changed.revision, changed.publisher, changed.publisher_revision), (2, current, 2)
+        )
 
     def test_another_runner_holding_the_lock_means_no_work_here(self) -> None:
         self.redis.set(self.lock_key, "elsewhere")

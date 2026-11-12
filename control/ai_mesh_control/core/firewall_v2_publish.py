@@ -414,8 +414,8 @@ def _notes(
 def _store(org: Any, raw: bytes, publisher: str = "") -> int:
     """Upsert the document; the revision rises only when the body changed.
 
-    ``publisher`` is stamped either way: a body another release or other settings would also
-    build keeps its revision, and only its stamp moves to the running publisher.
+    The stamp (``publisher`` at ``publisher_revision``) is written either way: a body another
+    release or other settings would also build keeps its revision, and only its stamp moves.
     """
     from core.models import V2PlanDocument
 
@@ -423,15 +423,20 @@ def _store(org: Any, raw: bytes, publisher: str = "") -> int:
     document = V2PlanDocument.objects.filter(organization=org).first()
     if document is None:
         return V2PlanDocument.objects.create(
-            organization=org, body=text, revision=1, publisher=publisher,
+            organization=org, body=text, revision=1, publisher=publisher, publisher_revision=1,
         ).revision
     if document.body != text:
         document.body = text
         document.revision += 1
         document.publisher = publisher
-        document.save(update_fields=["body", "revision", "publisher", "updated_at"])
-    elif document.publisher != publisher:
-        V2PlanDocument.objects.filter(pk=document.pk).update(publisher=publisher)
+        document.publisher_revision = document.revision
+        document.save(
+            update_fields=["body", "revision", "publisher", "publisher_revision", "updated_at"]
+        )
+    elif (document.publisher, document.publisher_revision) != (publisher, document.revision):
+        V2PlanDocument.objects.filter(pk=document.pk).update(
+            publisher=publisher, publisher_revision=document.revision,
+        )
     return document.revision
 
 
