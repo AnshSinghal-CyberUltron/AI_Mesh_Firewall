@@ -1,16 +1,17 @@
-# F4 author, PR #115: control clean run and rollout mutants (harness run_control.sh), mutation worktree at e05e7e8e. Each mutant is applied alone and reverted.
-start 2026-11-12T07:08:11Z load 1.30 1.75 1.90
-clean rc=0 wall=13s Ran 49 tests in 2.571s OK 
-entrypoint-clamp pytest rc=0 wall=1s 1 passed in 0.24s
-MR1_marker_ignored rc=1 wall=4s Ran 13 tests in 0.994s FAILED (failures=2)  :: FAIL test_an_unchanged_publisher_is_a_no_op;FAIL test_the_command_runs_the_rollout;
-MR2_marker_on_failure rc=1 wall=3s Ran 13 tests in 0.845s FAILED (failures=1)  :: FAIL test_a_failed_org_leaves_the_marker_unset_so_the_sweep_repeats;
-MR3_settings_not_hashed rc=1 wall=3s Ran 13 tests in 0.858s FAILED (failures=1)  :: FAIL test_it_is_stable_and_follows_every_publish_setting;
-MR4_inactive_swept rc=1 wall=3s Ran 13 tests in 1.017s FAILED (failures=3)  :: FAIL test_a_changed_publisher_republishes_every_active_org_once;FAIL test_a_failed_org_leaves_the_marker_unset_so_the_sweep_repeats;FAIL test_the_sweep_pages_by_primary_key;
-MR5_lock_not_exclusive rc=1 wall=3s Ran 13 tests in 0.922s FAILED (failures=2)  :: FAIL test_another_runner_holding_the_lock_means_no_work_here;FAIL test_settling_retries_until_the_other_runner_is_gone;
-MR6_keyset_off_by_one rc=1 wall=3s Ran 13 tests in 1.123s FAILED (failures=3)  :: FAIL test_a_changed_publisher_republishes_every_active_org_once;FAIL test_a_failed_org_leaves_the_marker_unset_so_the_sweep_repeats;FAIL test_the_sweep_pages_by_primary_key;
-MR7_entrypoint_foreground rc=1 wall=3s Ran 13 tests in 0.889s FAILED (failures=1)  :: FAIL test_the_server_entrypoint_starts_the_rollout_in_the_background;
-clean-fresh-db (drops the test DB) rc=0 wall=13s Ran 49 tests in 2.451s OK 
-end 2026-11-12T07:09:01Z clean=yes
+# F4 author, PR #115: control clean run and rollout mutants (harness run_control.sh), mutation worktree at a89794f8 (adds MR8 for the early stop). Each mutant is applied alone and reverted.
+start 2026-11-12T07:29:29Z load 3.42 2.38 1.81
+clean rc=0 wall=13s Ran 50 tests in 2.687s OK 
+entrypoint-clamp pytest rc=0 wall=1s 1 passed in 0.20s
+MR1_marker_ignored rc=1 wall=3s Ran 14 tests in 0.985s FAILED (failures=2)  :: FAIL test_an_unchanged_publisher_is_a_no_op;FAIL test_the_command_runs_the_rollout;
+MR2_marker_on_failure rc=1 wall=4s Ran 14 tests in 0.827s FAILED (failures=2)  :: FAIL test_a_failed_org_leaves_the_marker_unset_so_the_sweep_repeats;FAIL test_a_systemic_failure_ends_the_sweep_early;
+MR3_settings_not_hashed rc=1 wall=3s Ran 14 tests in 0.743s FAILED (failures=1)  :: FAIL test_it_is_stable_and_follows_every_publish_setting;
+MR4_inactive_swept rc=1 wall=3s Ran 14 tests in 1.041s FAILED (failures=3)  :: FAIL test_a_changed_publisher_republishes_every_active_org_once;FAIL test_a_failed_org_leaves_the_marker_unset_so_the_sweep_repeats;FAIL test_the_sweep_pages_by_primary_key;
+MR5_lock_not_exclusive rc=1 wall=4s Ran 14 tests in 0.931s FAILED (failures=2)  :: FAIL test_another_runner_holding_the_lock_means_no_work_here;FAIL test_settling_retries_until_the_other_runner_is_gone;
+MR6_keyset_off_by_one rc=1 wall=4s Ran 14 tests in 1.269s FAILED (failures=3)  :: FAIL test_a_changed_publisher_republishes_every_active_org_once;FAIL test_a_failed_org_leaves_the_marker_unset_so_the_sweep_repeats;FAIL test_the_sweep_pages_by_primary_key;
+MR8_no_early_stop rc=1 wall=3s Ran 14 tests in 0.735s FAILED (failures=1)  :: FAIL test_a_systemic_failure_ends_the_sweep_early;
+MR7_entrypoint_foreground rc=1 wall=3s Ran 14 tests in 0.991s FAILED (failures=1)  :: FAIL test_the_server_entrypoint_starts_the_rollout_in_the_background;
+clean-fresh-db (drops the test DB) rc=0 wall=13s Ran 50 tests in 2.757s OK 
+end 2026-11-12T07:30:24Z clean=yes
 
 # gateway_v2 (venv-ci, worktree tree on PYTHONPATH):
 ## G1: drop the rag_redaction_enabled check in scan_documents; tests/edge/test_f4_route_surfaces.py

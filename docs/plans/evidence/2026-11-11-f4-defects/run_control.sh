@@ -4,7 +4,8 @@
 set -u
 M=/home/claude/wt/f4-author-mut
 H=/home/claude/work/runs/115-author/harness
-OUT=/home/claude/work/runs/115-author/mutations
+OUT=/home/claude/work/runs/115-author/mutations2
+# The first run (at e05e7e8e, without MR8) wrote to mutations/ instead.
 PY=/home/claude/work/venv-ctl312/bin/python
 cd "$M/control" || exit 2
 . /home/claude/work/env-ctl.sh >/dev/null 2>&1
@@ -43,6 +44,7 @@ mut MR3_settings_not_hashed $R '{"document": document.decode("utf-8"), "settings
 mut MR4_inactive_swept $R 'Organization.objects.filter(is_active=True, pk__gt=last)' 'Organization.objects.filter(pk__gt=last)'
 mut MR5_lock_not_exclusive $R 'redis.set(LOCK_KEY, token, nx=True, ex=LOCK_TTL_S)' 'redis.set(LOCK_KEY, token, ex=LOCK_TTL_S)'
 mut MR6_keyset_off_by_one $R 'last = batch[-1].pk' 'last = batch[0].pk'
+mut MR8_no_early_stop $R '            if streak >= MAX_CONSECUTIVE_FAILURES:' '            if False:'
 mut MR7_entrypoint_foreground server-entrypoint.sh "2>&1 | sed 's/^/[control-entrypoint] v2-plan-rollout: /' >&2 &" "2>&1 | sed 's/^/[control-entrypoint] v2-plan-rollout: /' >&2"
 git -C "$M" checkout -q -- .
 s=$(date +%s)
