@@ -1,0 +1,45 @@
+{
+ "label": "C1_e200",
+ "python": "3.12.3",
+ "httpx": "0.28.1",
+ "aiohttp": "3.14.5",
+ "concurrency": 1,
+ "requests": 24,
+ "repeats": 1,
+ "maxrss_kib": 59260,
+ "elapsed_s": 261.6,
+ "results": [
+  {
+   "variant": "current",
+   "thread_us_median": 63308.8,
+   "proc_us_median": 63308.8,
+   "thread_us_runs": [
+    63308.8
+   ],
+   "util_runs": [
+    0.016
+   ],
+   "wall_s_runs": [
+    97.62
+   ],
+   "events_per_req": 200.0,
+   "errors": 0
+  },
+  {
+   "variant": "aiohttp_design",
+   "thread_us_median": 29981.6,
+   "proc_us_median": 29981.6,
+   "thread_us_runs": [
+    29981.6
+   ],
+   "util_runs": [
+    0.007
+   ],
+   "wall_s_runs": [
+    98.64
+   ],
+   "events_per_req": 200.0,
+   "errors": 0
+  }
+ ]
+}

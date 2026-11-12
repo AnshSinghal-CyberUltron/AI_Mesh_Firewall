@@ -1,0 +1,51 @@
+## Per scenario: main-thread CPU us per request (median of 2 runs) [util] (reads or events/req)
+| scenario | E | C | httpx_raw | httpx_decode | current | aiohttp_raw | aiohttp_decode | aiohttp_design |
+|---|---|---|---|---|---|---|---|---|
+| P1_e24_g20_c64 | 24 | 64 | 4,463 [0.47] (25) | 4,710 [0.53] (24) | — | 925 [0.11] (25) | 1,462 [0.18] (24) | 1,338 [0.17] (24) |
+| P2_e200_g20_c64 | 200 | 64 | 20,932 [0.32] (201) | 26,021 [0.40] (200) | 27,792 [0.42] (200) | 5,213 [0.08] (201) | 10,220 [0.16] (200) | 10,032 [0.16] (200) |
+| P3_e600_g20_c64 | 600 | 64 | 54,473 [0.28] (601) | 71,121 [0.37] (600) | — | 16,078 [0.08] (601) | 27,449 [0.15] (600) | 28,890 [0.15] (600) |
+| P5_e24_g20_c256 | 24 | 256 | 20,690 [0.93] (25) | 21,357 [0.92] (24) | — | 466 [0.23] (24.9) | 734 [0.36] (24) | 793 [0.38] (24) |
+| P4_e200_g20_c256 | 200 | 256 | 34,450 [0.87] (201) | 36,264 [0.94] (200) | — | 3,491 [0.24] (200.8) | 5,776 [0.36] (200) | 6,404 [0.39] (200) |
+
+## Ratios httpx/aiohttp (same scenario)
+- P1_e24_g20_c64: decode 3.2x, raw 4.8x, httpx_decode/aiohttp_design 3.5x; design overhead over aiohttp_decode -124 us
+- P2_e200_g20_c64: decode 2.5x, raw 4.0x, httpx_decode/aiohttp_design 2.6x, current/aiohttp_design 2.8x; design overhead over aiohttp_decode -188 us
+- P3_e600_g20_c64: decode 2.6x, raw 3.4x, httpx_decode/aiohttp_design 2.5x; design overhead over aiohttp_decode +1,441 us
+- P5_e24_g20_c256: decode 29.1x, raw 44.4x, httpx_decode/aiohttp_design 26.9x; design overhead over aiohttp_decode +59 us
+- P4_e200_g20_c256: decode 6.3x, raw 9.9x, httpx_decode/aiohttp_design 5.7x; design overhead over aiohttp_decode +628 us
+
+## Linear model c(E) = a + b*E (us), per client, at a fixed per-worker event rate
+- 3,200 ev/s (C=64, 20 ms) httpx_decode: a = 2,402 us per request, b = 114.9 us per event (points E=24:4,710, E=200:26,021, E=600:71,121)
+- 3,200 ev/s (C=64, 20 ms) aiohttp_decode: a = 748 us per request, b = 44.8 us per event (points E=24:1,462, E=200:10,220, E=600:27,449)
+- 3,200 ev/s (C=64, 20 ms) aiohttp_design: a = 314 us per request, b = 47.7 us per event (points E=24:1,338, E=200:10,032, E=600:28,890)
+- 3,200 ev/s (C=64, 20 ms) httpx_raw: a = 2,915 us per request, b = 86.3 us per event (points E=24:4,463, E=200:20,932, E=600:54,473)
+- 3,200 ev/s (C=64, 20 ms) aiohttp_raw: a = 139 us per request, b = 26.5 us per event (points E=24:925, E=200:5,213, E=600:16,078)
+- 12,800 ev/s (C=256, 20 ms) httpx_decode: a = 19,325 us per request, b = 84.7 us per event (points E=24:21,357, E=200:36,264)
+- 12,800 ev/s (C=256, 20 ms) aiohttp_decode: a = 46 us per request, b = 28.7 us per event (points E=24:734, E=200:5,776)
+- 12,800 ev/s (C=256, 20 ms) aiohttp_design: a = 28 us per request, b = 31.9 us per event (points E=24:793, E=200:6,404)
+- 12,800 ev/s (C=256, 20 ms) httpx_raw: a = 18,813 us per request, b = 78.2 us per event (points E=24:20,690, E=200:34,450)
+- 12,800 ev/s (C=256, 20 ms) aiohttp_raw: a = 54 us per request, b = 17.2 us per event (points E=24:466, E=200:3,491)
+
+## Planning distribution [(0.3, 24), (0.5, 200), (0.2, 600)] -> mean E = 227.2 events per streamed response
+| rate | client | CPU ms / streamed request at mean E | vCPU at 100k RPS | $/month at 100k RPS | RPS per vCPU (dispatch scope) | RPS per $1,000-month (dispatch scope) |
+|---|---|---|---|---|---|---|
+| 3,200 ev/s (C=64, 20 ms) | httpx_decode | 28.50 | 3,800 | $125,187 | 26 | 799 |
+| 3,200 ev/s (C=64, 20 ms) | aiohttp_design | 11.16 | 1,487 | $49,001 | 67 | 2,041 |
+| 12,800 ev/s (C=256, 20 ms) | httpx_decode | 38.57 | 5,142 | $169,417 | 19 | 590 |
+| 12,800 ev/s (C=256, 20 ms) | aiohttp_design | 7.27 | 970 | $31,943 | 103 | 3,131 |
+
+## Reviewer A harness (lock-step pacing, ~100 B events, process CPU, raw reads), aiohttp 3.14.5
+- gap 0 ms aiohttp: 131, 144 us/req, reads/req 1.0
+- gap 0 ms httpx: 3,255, 3,244 us/req, reads/req 23.0
+- gap 5 ms aiohttp: 522, 535 us/req, reads/req 23.0
+- gap 5 ms httpx: 3,861, 3,501 us/req, reads/req 23.0
+
+## develop dev-profile full path (gateway process CPU per qualified streamed request)
+- D1_e24_g20: E=24 ok=96/96 27.19 ms/request (1133 us/event), util 0.054, statuses {'200': 96}
+- D2_e200_g20: E=200 ok=24/24 470.46 ms/request (2352 us/event), util 0.159, statuses {'200': 24}
+- D2b_e200_g20: E=200 ok=24/24 639.67 ms/request (3198 us/event), util 0.158, statuses {'200': 24}
+- D3_e600_g20: E=600 ok=6/8 4932.20 ms/request (8220 us/event), util 0.405, statuses {'200': 6, '504': 2}
+- dispatch only, one stream at a time, C1_e200 current: 63,309 us/request
+- dispatch only, one stream at a time, C1_e200 aiohttp_design: 29,982 us/request
+- dispatch only, one stream at a time, C1_e24 current: 8,047 us/request
+- dispatch only, one stream at a time, C1_e24 aiohttp_design: 4,043 us/request
