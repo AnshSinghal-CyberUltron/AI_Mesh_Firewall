@@ -1,0 +1,39 @@
+isolated redis db flushed: 13
+== base: code under test 943a5f2107898d419ea733a55691f92843ff6426 dirty=0 settings=rv130_settings
+imports /home/claude/wt/fix-130/control/ai_mesh_control/core/__init__.py
+seeded {'1': 2, '2': 3} users 11
+seed130 extras: u0 ns0 fs0 op0 org3 4
+health 200
+[base] VULN orgless-put-default/s0             s0   200 PUT /api/firewall/config/ default_rows=1->1 default_changed redis_default {"firewall_enabled": true, "requests_per_minute": 1000}->{"firewall_enabled": false, "requests_per_minute": 1000} audit+0
+[base] VULN orgless-put-create-default/s0      s0   200 PUT /api/firewall/config/ default_rows=0->1 default_changed redis_default null->{"firewall_enabled": false, "requests_per_minute": 1000} audit+0
+[base] VULN orgless-get-create-default/s0      s0   200 GET /api/firewall/config/ default_rows=0->1 default_changed redis_default null->{"firewall_enabled": true, "requests_per_minute": 1000} audit+0
+[base] SAFE orgless-get-default/s0             s0   200 GET /api/firewall/config/ default_rows=1->1 audit+0
+[base] VULN orgless-put-default/ns0            ns0  200 PUT /api/firewall/config/ default_rows=1->1 default_changed redis_default {"firewall_enabled": true, "requests_per_minute": 1000}->{"firewall_enabled": false, "requests_per_minute": 1000} audit+0
+[base] VULN orgless-put-create-default/ns0     ns0  200 PUT /api/firewall/config/ default_rows=0->1 default_changed redis_default null->{"firewall_enabled": false, "requests_per_minute": 1000} audit+0
+[base] VULN orgless-get-create-default/ns0     ns0  200 GET /api/firewall/config/ default_rows=0->1 default_changed redis_default null->{"firewall_enabled": true, "requests_per_minute": 1000} audit+0
+[base] SAFE orgless-get-default/ns0            ns0  200 GET /api/firewall/config/ default_rows=1->1 audit+0
+[base] VULN orgless-put-default/u0             u0   200 PUT /api/firewall/config/ default_rows=1->1 default_changed redis_default {"firewall_enabled": true, "requests_per_minute": 1000}->{"firewall_enabled": false, "requests_per_minute": 1000} audit+0
+[base] VULN orgless-put-create-default/u0      u0   200 PUT /api/firewall/config/ default_rows=0->1 default_changed redis_default null->{"firewall_enabled": false, "requests_per_minute": 1000} audit+0
+[base] VULN orgless-get-create-default/u0      u0   200 GET /api/firewall/config/ default_rows=0->1 default_changed redis_default null->{"firewall_enabled": true, "requests_per_minute": 1000} audit+0
+[base] SAFE orgless-get-default/u0             u0   200 GET /api/firewall/config/ default_rows=1->1 audit+0
+[base] VULN orgless-put-default/fs0            fs0  200 PUT /api/firewall/config/ default_rows=1->1 default_changed redis_default {"firewall_enabled": true, "requests_per_minute": 1000}->{"firewall_enabled": false, "requests_per_minute": 1000} audit+0
+[base] VULN orgless-put-create-default/fs0     fs0  200 PUT /api/firewall/config/ default_rows=0->1 default_changed redis_default null->{"firewall_enabled": false, "requests_per_minute": 1000} audit+0
+[base] VULN orgless-get-create-default/fs0     fs0  200 GET /api/firewall/config/ default_rows=0->1 default_changed redis_default null->{"firewall_enabled": true, "requests_per_minute": 1000} audit+0
+[base] SAFE orgless-get-default/fs0            fs0  200 GET /api/firewall/config/ default_rows=1->1 audit+0
+[base] VULN member-rehome-own-row-to-null      m1   200 PUT /api/firewall/config/ default_rows=1->2 default_changed redis_default {"firewall_enabled": true, "requests_per_minute": 1000}->{"firewall_enabled": false, "requests_per_minute": 1000} MOVED audit+0
+[base] VULN member-rehome-own-row-to-org3      m1   200 PUT /api/firewall/config/ default_rows=1->1 MOVED other_org_changed audit+0
+[base] VULN admin-rehome-own-row-to-null       a1   200 PUT /api/firewall/config/ default_rows=1->2 default_changed redis_default {"firewall_enabled": true, "requests_per_minute": 1000}->{"firewall_enabled": false, "requests_per_minute": 1000} MOVED audit+0
+[base] VULN member-rehome-then-operator-put    m1   200 PUT /api/firewall/config/ default_rows=1->2 default_changed redis_default {"firewall_enabled": true, "requests_per_minute": 1000}->{"firewall_enabled": false, "requests_per_minute": 1000} MOVED audit+0
+[base] FAIL operator-put-after-duplicate-default op0  500 PUT /api/firewall/config/ default_rows=2->2 audit+0
+[base] OK   org1-superuser-put                 s1   200 PUT /api/firewall/config/ default_rows=1->1 audit+0
+[base] OK   org1-admin-put                     a1   200 PUT /api/firewall/config/ default_rows=1->1 audit+0
+[base] OK   org1-member-put                    m1   200 PUT /api/firewall/config/ default_rows=1->1 audit+0
+[base] OK   org2-operator-put                  op   200 PUT /api/firewall/config/ default_rows=1->1 audit+0
+[base] OK   operator-put-default               op0  200 PUT /api/firewall/config/ default_rows=1->1 default_changed redis_default {"firewall_enabled": true, "requests_per_minute": 1000}->{"firewall_enabled": false, "requests_per_minute": 1000} audit+0
+[base] OK   operator-put-create-default        op0  200 PUT /api/firewall/config/ default_rows=0->1 default_changed redis_default null->{"firewall_enabled": false, "requests_per_minute": 1000} audit+0
+[base] FAIL operator-put-invalid-no-default    op0  400 PUT /api/firewall/config/ default_rows=0->1 default_changed redis_default null->{"firewall_enabled": true, "requests_per_minute": 1000} audit+0
+[base] FAIL operator-get-no-default            op0  200 GET /api/firewall/config/ default_rows=0->1 default_changed redis_default null->{"firewall_enabled": true, "requests_per_minute": 1000} audit+0
+[base] VULN soc-kpis-creates-default/m1        m1   200 GET /api/security/soc-kpis/?period=24h default_rows=0->1 default_changed redis_default null->{"firewall_enabled": true, "requests_per_minute": 1000} audit+0
+[base] VULN soc-kpis-creates-default/s0        s0   200 GET /api/security/soc-kpis/?period=24h default_rows=0->1 default_changed redis_default null->{"firewall_enabled": true, "requests_per_minute": 1000} audit+0
+{"label": "base", "counts": {"VULN": 18, "SAFE": 4, "OK": 6, "FAIL": 3}}
+attack rc=0
