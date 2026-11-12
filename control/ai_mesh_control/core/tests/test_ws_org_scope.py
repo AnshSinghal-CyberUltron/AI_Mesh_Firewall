@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 from datetime import timedelta
+from typing import ClassVar
 from unittest import mock
 
 from asgiref.sync import async_to_sync
@@ -33,7 +34,7 @@ User = get_user_model()
 class _ProbeConsumer(NotificationConsumer):
     """Records the group each accepted connection joined (the communicator hides the instance)."""
 
-    joined: list = []
+    joined: ClassVar[list] = []
 
     async def connect(self):
         await super().connect()

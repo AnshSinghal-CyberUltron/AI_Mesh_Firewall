@@ -37,7 +37,7 @@ def actor_org_id(user):
     """The user's own profile org id, or None (no profile, no org, or any error)."""
     try:
         return user.profile.organization_id
-    except Exception:
+    except Exception:  # noqa: BLE001 - no profile (RelatedObjectDoesNotExist), AnonymousUser, None
         return None
 
 

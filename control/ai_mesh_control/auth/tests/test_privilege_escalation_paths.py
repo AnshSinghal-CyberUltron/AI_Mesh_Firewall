@@ -18,6 +18,7 @@ from __future__ import annotations
 import datetime as _dt
 import json
 from io import StringIO
+from types import MappingProxyType
 
 from django.contrib import admin as djadmin
 from django.contrib.auth import get_user_model
@@ -111,7 +112,7 @@ class _Base(TestCase):
 class RestApiEscalationTests(_Base):
     """An org admin tries every REST path that writes users."""
 
-    FLAGS = {"is_superuser": True, "is_staff": True, "is_platform_operator": True}
+    FLAGS = MappingProxyType({"is_superuser": True, "is_staff": True, "is_platform_operator": True})
 
     def _client(self):
         client = APIClient()
@@ -278,7 +279,9 @@ class ModelLevelAuditTests(_Base):
     def test_saves_that_do_not_touch_the_flags_write_nothing(self):
         self.member.first_name = "Renamed"
         self.member.save()
-        self.member.save(update_fields=["last_login"])
+        # A save that names other fields (login's last_login) costs no extra query.
+        with self.assertNumQueries(1):
+            self.member.save(update_fields=["last_login"])
         self.assertEqual(self._rows(), [])
 
 
