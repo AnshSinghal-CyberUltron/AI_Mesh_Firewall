@@ -45,7 +45,9 @@ def _mask_phone(match: re.Match[str]) -> str:
 def _smart_substitute(result: str, regex_pattern: str, replacement: str) -> str:
     try:
         compiled = _compile_cached(regex_pattern)
-    except re.error:
+    except Exception:  # noqa: BLE001 - RecursionError/OverflowError behave as re.error
+        # Hotfix (projector round): any compile failure takes the pre-existing re.error path,
+        # which is fail-OPEN (the text is returned unredacted); reported in the PR, not changed.
         return result
 
     normalized = regex_pattern.replace("\\", "")
@@ -106,7 +108,7 @@ def apply_redaction(
             try:
                 compiled = _compile_cached(rf"\b{pattern}\b")
                 result = compiled.sub(repl, result)
-            except re.error:
+            except Exception:  # noqa: BLE001, S112 - any compile failure behaves as re.error (skip)
                 continue
 
     return result

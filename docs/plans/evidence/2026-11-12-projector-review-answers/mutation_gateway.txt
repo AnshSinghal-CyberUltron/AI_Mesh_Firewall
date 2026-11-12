@@ -1,0 +1,28 @@
+baseline: 96 passed, 1 skipped in 1.58s
+G1 depth pre-scan removed: 7 failed, 89 passed, 1 skipped in 1.36s
+      killed by: test_projector_body_depth.py::test_a_round_signs_the_deepest_body_refuses_deeper_and_every_other_tenant_proceeds; test_projector_body_depth.py::test_the_deepest_accepted_body_is_signed_and_one_more_level_is_not; test_projector_body_depth.py::test_the_verdict_and_the_gateway_decode_do_not_depend_on_the_stack; test_projector_poisoned_tenant.py::test_deeply_nested_json_is_not_projectable_and_does_not_raise
+G2 off-by-one (>=): 5 failed, 91 passed, 1 skipped in 1.48s
+      killed by: test_projector_body_depth.py::test_a_round_signs_the_deepest_body_refuses_deeper_and_every_other_tenant_proceeds; test_projector_body_depth.py::test_the_deepest_accepted_body_is_signed_and_one_more_level_is_not; test_projector_body_depth.py::test_the_verdict_and_the_gateway_decode_do_not_depend_on_the_stack
+G3 MAX_PLAN_BODY_DEPTH = 64: 8 failed, 88 passed, 1 skipped in 1.58s
+      killed by: test_projector_body_depth.py::test_a_round_signs_the_deepest_body_refuses_deeper_and_every_other_tenant_proceeds; test_projector_body_depth.py::test_real_bodies_are_far_below_the_limit; test_projector_body_depth.py::test_the_deepest_accepted_body_is_signed_and_one_more_level_is_not; test_projector_body_depth.py::test_the_verdict_and_the_gateway_decode_do_not_depend_on_the_stack; test_projector_poisoned_tenant.py::test_deeply_nested_json_is_not_projectable_and_does_not_raise
+G4 escape pass dropped: 1 failed, 95 passed, 1 skipped in 1.67s
+      killed by: test_projector_body_depth.py::test_body_depth_vectors
+G5 string pass dropped: 3 failed, 93 passed, 1 skipped in 1.54s
+      killed by: test_projector_body_depth.py::test_body_depth_vectors
+G6 catch-all logs exception text: 2 failed, 94 passed, 1 skipped in 1.51s
+      killed by: test_projector_notes.py::test_no_note_carries_exception_text_or_a_value_from_the_body; test_projector_poisoned_tenant.py::test_any_unanticipated_exception_is_not_projectable
+G7 CompileError logs its text: 3 failed, 93 passed, 1 skipped in 1.60s
+      killed by: test_projector_notes.py::test_a_compile_error_quoting_the_body_is_reduced_to_its_type; test_projector_notes.py::test_no_note_carries_exception_text_or_a_value_from_the_body; test_projector_poisoned_tenant.py::test_a_rewrite_rule_with_a_deep_condition_is_a_compile_error_not_an_exception
+G8 claimed org quoted: 1 failed, 95 passed, 1 skipped in 1.47s
+      killed by: test_projector_notes.py::test_no_note_carries_exception_text_or_a_value_from_the_body
+G9 canonical-form error text: 1 failed, 95 passed, 1 skipped in 1.78s
+      killed by: test_projector_notes.py::test_no_note_carries_exception_text_or_a_value_from_the_body
+G10 JSON error text: 1 failed, 95 passed, 1 skipped in 1.45s
+      killed by: test_projector_notes.py::test_no_note_carries_exception_text_or_a_value_from_the_body
+G11 refused-conditions note removed (N1): 1 failed, 95 passed, 1 skipped in 1.41s
+      killed by: test_projector_notes.py::test_a_refused_condition_names_the_org_once_and_never_the_pattern
+G12 failed round logged as hand-over (N3): 1 failed, 95 passed, 1 skipped in 1.52s
+      killed by: test_projector_notes.py::test_a_round_that_raises_is_not_logged_as_a_hand_over
+G13 MAX_GROUP_DEPTH = 32 (gateway): 9 failed, 87 passed, 1 skipped in 1.48s
+      killed by: test_condition_group_depth.py::test_deeper_than_sixteen_is_refused_without_raising; test_condition_group_depth.py::test_the_answer_does_not_depend_on_the_callers_stack; test_condition_group_depth.py::test_the_limit_is_sixteen; test_projector_notes.py::test_a_refused_condition_names_the_org_once_and_never_the_pattern; test_projector_poisoned_tenant.py::test_a_regex_re_cannot_compile_is_a_counted_refusal_not_an_exception; test_rewrite_template_refused_condition.py::test_a_refused_condition_is_a_template_error
+restored: 96 passed, 1 skipped in 1.37s

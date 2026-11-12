@@ -589,7 +589,7 @@ def _matches_own_pattern(condition: Mapping[str, Any], text: str) -> bool:
         return False
     try:
         return re.search(pattern, text) is not None
-    except re.error:
+    except Exception:  # noqa: BLE001 - re also raises RecursionError/OverflowError
         return True  # an unusable pattern: do not forward a row template
 
 

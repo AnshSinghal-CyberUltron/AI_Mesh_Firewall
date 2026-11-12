@@ -321,10 +321,15 @@ def _evaluate_rule(rule: Rule, context: dict[str, Any]) -> bool:
             return False
         try:
             compiled = re.compile(pattern, re.IGNORECASE)
-        except re.error as exc:
+        except Exception as exc:  # noqa: BLE001 - RecursionError/OverflowError behave as re.error
+            # Hotfix (projector round): ``re`` also raises RecursionError (deeply nested groups)
+            # and OverflowError (``a{4294967296}``); they now take the SAME path as re.error
+            # instead of escaping ``evaluate`` as a 500 for the org's whole evaluation. NOTE that
+            # path is pre-existing and fail-OPEN for this rule: it never matches, so a block rule
+            # with an uncompilable pattern blocks nothing (reported in the PR; not changed here).
             logger.warning(
-                "Rule id=%s has an invalid regex and will never match: %s",
-                getattr(rule, "id", "?"), exc,
+                "Rule id=%s has an invalid regex and will never match: %s: %s",
+                getattr(rule, "id", "?"), type(exc).__name__, exc,
             )
             return False
         for text in texts:

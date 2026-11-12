@@ -1,0 +1,7 @@
+Trial merge of fix/projector-validate-any-error eaaf74d97 with #136 fix/state-applier-isolation 1dba148ab (local, not pushed):
+Auto-merging gateway_v2/state_control/projector_service.py
+Automatic merge went well; stopped before committing as requested
+
+On the merged tree: test_projector_body_depth + notes + poisoned_tenant + gw36_s2_projector + gw36_s2_service + #136's test_state_applier_isolation + e2e + test_generic_handlers_log_type_only + condition_group_depth + rewrite_template_refused_condition: 190 passed, 0 skipped
+============================== 21 passed in 0.39s ==============================
+test_the_gateway_applier_bound_agrees_once_both_are_on_develop on the merged tree: PASSED (not skipped); 5,000 random strings + vectors, 0 disagreements between body_depth(str) and #136 nesting_depth(bytes); MAX_BODY_DEPTH == MAX_PLAN_BODY_DEPTH == 32

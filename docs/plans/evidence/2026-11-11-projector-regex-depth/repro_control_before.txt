@@ -1,0 +1,10 @@
+validate_condition({'regex': 499-deep}): RAISED RecursionError: maximum recursion depth exceeded
+validate_redaction_config({'regex': 499-deep}): RAISED RecursionError: maximum recursion depth exceeded
+validate_condition({'regex': 'a{4294967296}'}): RAISED OverflowError: the repetition number is too large
+validate_condition({'regex': 'a(b'}) [re.error baseline]: RAISED ValidationError: [ErrorDetail(string='condition regex does not compile: missing ), unterminated s
+redaction._smart_substitute(text, 499-deep): RAISED RecursionError: maximum recursion depth exceeded
+redaction._smart_substitute(text, 'a(b') [re.error baseline]: returned 'secret a(b'
+firewall_v2_publish._matches_own_pattern(499-deep): RAISED RecursionError: maximum recursion depth exceeded
+engine._evaluate_rule(block rule, 499-deep): RAISED RecursionError: maximum recursion depth exceeded
+WARNING engine Rule id=8 has an invalid regex and will never match: missing ), unterminated subpattern at position 1
+engine._evaluate_rule(block rule, 'a(b') [re.error baseline]: returned False

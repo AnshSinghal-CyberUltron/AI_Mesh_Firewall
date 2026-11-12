@@ -1,0 +1,3 @@
+1-rule body (the test _doc): 295 chars | body_depth min 5.7 us median 5.9 us | validate_plan min 52.7 us median 57.5 us | scan share 10.8%
+5 regex rules: 2,062 chars | body_depth min 26.9 us median 29.5 us | validate_plan min 245.2 us median 313.5 us | scan share 11.0%
+3,000 rules x 1,000-char pattern (B-S2 shape): 4,126,952 chars | body_depth min 22,607.9 us median 26,238.5 us | validate_plan min 446,763.8 us median 472,787.2 us | scan share 5.1%
