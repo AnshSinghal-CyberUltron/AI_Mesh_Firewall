@@ -55,20 +55,25 @@ raise `RecursionError`. The control plane's projector validates through `decode_
 so both planes refuse the same bodies."""
 
 _STRING = re.compile(rb'"[^"]*"')
-_NOT_BRACKET = re.compile(rb"[^\[\]{}]+")
+_NOT_BRACKETS = bytes(byte for byte in range(256) if byte not in b"[]{}")
+"""Every byte but the four brackets: `bytes.translate` deletes them in one fast C pass."""
 _STEP = MappingProxyType({ord("["): 1, ord("{"): 1, ord("]"): -1, ord("}"): -1})
+_SLICE = 1 << 20
+"""Brackets summed per C call. Between slices the interpreter may switch threads, so a 16 MB
+bracket run holds the event loop for one slice (tens of ms), not for the whole run (~750 ms)."""
 
 
 def nesting_depth(raw: bytes) -> int:
     """The deepest bracket nesting in ``raw``, outside JSON strings. Linear; never recurses.
 
-    Four linear passes: drop every escaped backslash, then every escaped quote, so ``\\"``
-    cannot end a string; drop every string (no bracket inside one counts); drop everything that
-    is not a bracket; then a running sum over the brackets. For any body ``json`` would parse,
-    this is its exact depth; for a malformed one it is at least the depth ``json`` reaches before
-    it gives up, because up to the first defect the text is valid JSON and the passes read it
-    exactly as ``json`` does. (Brackets after the first defect can be under-counted -- ``]]][[[``
-    -- but ``json`` raises at that defect and never recurses into them.)
+    Linear passes: drop every escaped backslash, then every escaped quote, so ``\\"`` cannot
+    end a string; drop every string (no bracket inside one counts); drop every byte that is not a
+    bracket (``bytes.translate``); then a running sum over the brackets. For any body ``json``
+    would parse, this is its exact depth; for a malformed one it is at least the depth ``json``
+    reaches before it gives up, because up to the first defect the text is valid JSON and the
+    passes read it exactly as ``json`` does. (Brackets after the first defect can be
+    under-counted -- ``]]][[[`` -- but ``json`` raises at that defect and never recurses into
+    them.)
 
     Why the escapes are two ``bytes.replace`` calls and not one ``\\.`` regex: only ``\\\\``
     and ``\\"`` can move where a string ends (every other escape stays inside its string,
@@ -76,11 +81,19 @@ def nesting_depth(raw: bytes) -> int:
     ``json`` consumes them. Each pass is one uninterruptible C call that holds the loop: the
     regex took 694 ms on an 8 MB escape-dense body that ``json.loads`` decodes in 37 ms, and
     the two replaces bring the whole scan to about 53 ms (reviewer B, PR #136). The results are
-    identical (`test_nesting_depth_matches_the_escape_regex`).
+    identical (`test_nesting_depth_matches_the_escape_regex`). For the same reason the non-bracket
+    bytes go by ``translate`` (a ``[^...]+`` regex took 150-280 ms on dense 8-16 MB bodies,
+    ``translate`` 6-20 ms), and the running sum is taken in `_SLICE`-sized steps, carrying the
+    depth from one slice to the next.
     """
     unescaped = raw.replace(b"\\\\", b"").replace(b'\\"', b"")
-    brackets = _NOT_BRACKET.sub(b"", _STRING.sub(b"", unescaped))
-    return max(0, max(accumulate(map(_STEP.__getitem__, brackets)), default=0))
+    brackets = _STRING.sub(b"", unescaped).translate(None, _NOT_BRACKETS)
+    depth = deepest = 0
+    for start in range(0, len(brackets), _SLICE):
+        part = brackets[start:start + _SLICE]
+        deepest = max(deepest, max(accumulate(map(_STEP.__getitem__, part), initial=depth)))
+        depth += part.count(b"[") + part.count(b"{") - part.count(b"]") - part.count(b"}")
+    return deepest
 
 #: Capabilities a body may require: GW27 ``controls/1`` and GW33 ``rewrite/1``. An unknown entry is
 #: refused so an older gateway can never apply a body whose meaning it does not understand (fail
