@@ -1,0 +1,26 @@
+baseline: Ran 5 tests in 0.015s OK 
+1
+C1 MAX_GROUP_DEPTH = 32 (control): Ran 5 tests in 0.033s FAILED (failures=21) 
+      1 FAIL: test_deeper_is_a_validation_error_in_both_fields (policy.tests.test_regex_group_depth.ValidatorTests.test_deeper_is_a_validation_error_in_both_fields) (depth=17, validator='validate_condition', key='pattern')
+      1 FAIL: test_deeper_is_a_validation_error_in_both_fields (policy.tests.test_regex_group_depth.ValidatorTests.test_deeper_is_a_validation_error_in_both_fields) (depth=17, validator='validate_condition', key='regex')
+      1 FAIL: test_deeper_is_a_validation_error_in_both_fields (policy.tests.test_regex_group_depth.ValidatorTests.test_deeper_is_a_validation_error_in_both_fields) (depth=17, validator='validate_redaction_config', key='pattern')
+      1 FAIL: test_deeper_is_a_validation_error_in_both_fields (policy.tests.test_regex_group_depth.ValidatorTests.test_deeper_is_a_validation_error_in_both_fields) (depth=17, validator='validate_redaction_config', key='regex')
+      1 FAIL: test_deeper_is_a_validation_error_in_both_fields (policy.tests.test_regex_group_depth.ValidatorTests.test_deeper_is_a_validation_error_in_both_fields) (depth=32, validator='validate_condition', key='pattern')
+      1 FAIL: test_deeper_is_a_validation_error_in_both_fields (policy.tests.test_regex_group_depth.ValidatorTests.test_deeper_is_a_validation_error_in_both_fields) (depth=32, validator='validate_condition', key='regex')
+      1 FAIL: test_deeper_is_a_validation_error_in_both_fields (policy.tests.test_regex_group_depth.ValidatorTests.test_deeper_is_a_validation_error_in_both_fields) (depth=32, validator='validate_redaction_config', key='pattern')
+      1 FAIL: test_deeper_is_a_validation_error_in_both_fields (policy.tests.test_regex_group_depth.ValidatorTests.test_deeper_is_a_validation_error_in_both_fields) (depth=32, validator='validate_redaction_config', key='regex')
+      1 FAIL: test_deeper_is_a_validation_error_in_both_fields (policy.tests.test_regex_group_depth.ValidatorTests.test_deeper_is_a_validation_error_in_both_fields) (depth=33, validator='validate_condition', key='pattern')
+      1 FAIL: test_deeper_is_a_validation_error_in_both_fields (policy.tests.test_regex_group_depth.ValidatorTests.test_deeper_is_a_validation_error_in_both_fields) (depth=33, validator='validate_condition', key='regex')
+      1 FAIL: test_deeper_is_a_validation_error_in_both_fields (policy.tests.test_regex_group_depth.ValidatorTests.test_deeper_is_a_validation_error_in_both_fields) (depth=33, validator='validate_redaction_config', key='pattern')
+      1 FAIL: test_deeper_is_a_validation_error_in_both_fields (policy.tests.test_regex_group_depth.ValidatorTests.test_deeper_is_a_validation_error_in_both_fields) (depth=33, validator='validate_redaction_config', key='regex')
+      1 FAIL: test_deeper_is_a_validation_error_in_both_fields (policy.tests.test_regex_group_depth.ValidatorTests.test_deeper_is_a_validation_error_in_both_fields) (depth=400, validator='validate_condition', key='pattern')
+      1 FAIL: test_deeper_is_a_validation_error_in_both_fields (policy.tests.test_regex_group_depth.ValidatorTests.test_deeper_is_a_validation_error_in_both_fields) (depth=400, validator='validate_condition', key='regex')
+      1 FAIL: test_deeper_is_a_validation_error_in_both_fields (policy.tests.test_regex_group_depth.ValidatorTests.test_deeper_is_a_validation_error_in_both_fields) (depth=400, validator='validate_redaction_config', key='pattern')
+      1 FAIL: test_deeper_is_a_validation_error_in_both_fields (policy.tests.test_regex_group_depth.ValidatorTests.test_deeper_is_a_validation_error_in_both_fields) (depth=400, validator='validate_redaction_config', key='regex')
+      1 FAIL: test_deeper_is_a_validation_error_in_both_fields (policy.tests.test_regex_group_depth.ValidatorTests.test_deeper_is_a_validation_error_in_both_fields) (depth=499, validator='validate_condition', key='pattern')
+      1 FAIL: test_deeper_is_a_validation_error_in_both_fields (policy.tests.test_regex_group_depth.ValidatorTests.test_deeper_is_a_validation_error_in_both_fields) (depth=499, validator='validate_condition', key='regex')
+      1 FAIL: test_deeper_is_a_validation_error_in_both_fields (policy.tests.test_regex_group_depth.ValidatorTests.test_deeper_is_a_validation_error_in_both_fields) (depth=499, validator='validate_redaction_config', key='pattern')
+      1 FAIL: test_deeper_is_a_validation_error_in_both_fields (policy.tests.test_regex_group_depth.ValidatorTests.test_deeper_is_a_validation_error_in_both_fields) (depth=499, validator='validate_redaction_config', key='regex')
+      1 FAIL: test_the_limit_is_sixteen (policy.tests.test_regex_group_depth.GroupDepthVectorTests.test_the_limit_is_sixteen)
+restored: Ran 5 tests in 0.011s OK 
+worktree clean
