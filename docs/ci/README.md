@@ -109,9 +109,9 @@ Notes for callers:
 
 ## One-time owner setup
 
-**Today *(read 12 Nov 2026)*:** `develop` and `staging` have **no protection at all**: no classic branch protection, no ruleset. `main` has only the ruleset "Main Protected by Ansh" (id 19609105; see [ENTERPRISE_SETUP.md](ENTERPRISE_SETUP.md) step 11). Until the owner applies the ruleset below, `MERGE_POLICY.md` and Reviewer B enforce the required checks and the PR-only flow, not GitHub.
+**Today *(read 12 Nov 2026)*:** `develop` and `staging` have **no protection at all**: no classic branch protection, no ruleset. `main` has only the ruleset "Main Protected by Ansh" (id 19609105), which the ruleset below replaces ([ENTERPRISE_SETUP.md](ENTERPRISE_SETUP.md) step 11). Until the owner applies it, `MERGE_POLICY.md` and Reviewer B enforce the required checks and the PR-only flow, not GitHub.
 
-1. **Ruleset.** The CI token cannot change protection, so the owner runs `scripts/ci/setup_rulesets.sh` (`--dry-run` first). It creates or updates ONE repository ruleset, "AMF protected branches: develop, staging, main":
+1. **Ruleset.** The CI token cannot change protection, so the owner runs `scripts/ci/setup_rulesets.sh` (`--dry-run` first), from `develop` once #114, #137 and #138 have merged. It creates or updates ONE ruleset, "AMF protected branches: develop, staging, main"; with `--org` (recommended, because agents act through the owner's token and cannot reach organisation endpoints) it is an organisation ruleset that targets this repository only:
    - active, with **no bypass actors**: admins, and every agent (they act as the owner's admin account), are bound, as `enforce_admins` did for classic protection;
    - deletion and force-push blocked;
    - changes only through PRs;
@@ -122,10 +122,10 @@ Notes for callers:
    - no conversation-resolution rule: agents cannot resolve review threads (GraphQL is blocked for them), so MERGE_POLICY rule 3 requires every code-scanning thread to be answered in a PR comment instead (fixed, dismissed with a reason, or tracked);
    - behind flags: Copilot code review (`--copilot-review`) and the merge queue (`--merge-queue`, off because enqueueing is GraphQL-only, so agents could not merge).
 
-   It never modifies "Main Protected by Ansh", and it aborts if a required check is already failing on `develop`'s head. It replaces `setup_branch_protection.sh` (classic protection, never applied; removed).
+   Before writing, it aborts if a required check is already failing on `develop`'s head or cannot be read there, and unless every required check succeeded on the PR head given with `--pr-head`. After writing it runs `--check`, which compares the live ruleset with what it writes and requires its rules in `GET rules/branches/{develop,staging,main}`. Only when `--check` is OK does the owner delete "Main Protected by Ansh"; the script never writes it. It replaces `setup_branch_protection.sh` (classic protection, never applied; removed).
 
    `required-checks.txt` lists only checks that run on every PR into `develop`, `staging` and `main`. `scripts/ci/test_setup_scripts.py` fails when a listed name no longer matches such a job, so a renamed job cannot silently leave every PR waiting for a check that never reports. Re-run the script after a change to the file merges.
-2. **Environments.** `scripts/ci/setup_environments.sh` creates `staging` (deployable from the `staging` branch) and `production` (from `main`), with the owner's required reviewers.
+2. **Environments.** `scripts/ci/setup_environments.sh` creates `staging` (deployable from the `staging` branch) and `production` (from `main`, the owner's decision of 12 Nov 2026), with required reviewers. Production's reviewer must be a human account whose token the agents do not hold; the script refuses the account running it there unless overridden.
 3. **Everything else** (Actions concurrency, CodeQL default vs advanced setup, larger runners, the organisation Actions policy, Dependabot, secret scanning, Copilot code review, GitHub Apps for the agents' reviews, and what changes when the repository goes private) is the owner's click-list in [ENTERPRISE_SETUP.md](ENTERPRISE_SETUP.md), in order.
 4. **Optional paid or account tools.** GitGuardian, CodeRabbit, Snyk and SonarCloud are deliberately not wired. The owner chose free tools only. Each would add a job or app without changing the structure above.
 
