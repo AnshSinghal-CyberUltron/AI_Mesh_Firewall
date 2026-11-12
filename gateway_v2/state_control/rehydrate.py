@@ -149,6 +149,18 @@ _BOUND_FAULTS = _bound_faults()
 _OUTAGE_FAULTS = _outage_faults()
 
 
+def _described(exc: BaseException) -> str:
+    """An exception by TYPE, and its cause's type: never the text.
+
+    A database or store driver's message can carry a DSN, a host or a statement, and a wrapped
+    exception's message repeats its cause's. The types are enough to tell a held lock from a dead
+    database from a refused connection, which is what these lines are read for.
+    """
+    cause = exc.__cause__
+    name = type(exc).__name__
+    return name if cause is None else f"{name} from {type(cause).__name__}"
+
+
 def _bound_of(exc: BaseException) -> str:
     """Which declared bound this is. `_bound_faults` returns lock first, by construction."""
     if _BOUND_FAULTS and isinstance(exc, _BOUND_FAULTS[0]):
@@ -442,17 +454,18 @@ class Rehydrator:
                 # A declared bound fired. `db_down` stays FALSE, so the ride-through cannot
                 # cover it and the stamp is withheld rather than minted degraded (R2-04).
                 LOG.warning(
-                    "declared control-plane bound fired for kind=%s: %s "
+                    "declared control-plane bound fired for kind=%s: bound=%s %s "
                     "(stamp withheld; this is a bounded fault, not a postgres outage)",
                     kind.value,
-                    exc,
+                    exc.bound,
+                    _described(exc),
                 )
-                errors.append((kind, f"ControlPlaneBoundExceeded: {exc}"))
+                errors.append((kind, f"ControlPlaneBoundExceeded: {exc.bound}"))
                 faults.append((kind, exc.bound))
             except ControlPlaneUnavailable as exc:
                 db_down = True
-                LOG.warning("postgres unavailable for kind=%s: %s", kind.value, exc)
-                errors.append((kind, f"ControlPlaneUnavailable: {exc}"))
+                LOG.warning("postgres unavailable for kind=%s: %s", kind.value, _described(exc))
+                errors.append((kind, _described(exc)))
                 faults.append((kind, FAULT_OUTAGE))
             except Exception as exc:  # noqa: BLE001 - store, driver and OS errors alike
                 # The type only, in the log and in the summary: an unanticipated exception's text
@@ -489,7 +502,7 @@ class Rehydrator:
         try:
             lag_s = self._source_lag()
         except Exception as exc:  # noqa: BLE001 - an unreadable heartbeat is not a fresh one
-            LOG.warning("projector heartbeat could not be read: %s", exc)
+            LOG.warning("projector heartbeat could not be read: %s", _described(exc))
             return None, True
         if lag_s is None:
             return None, True
@@ -538,7 +551,9 @@ class Rehydrator:
         try:
             written_at = self._db.oldest_unpublished_at(kind, published)
         except Exception as exc:  # noqa: BLE001 - an alarm input must never fail a round
-            LOG.warning("could not measure the unpublished age for %s: %s", kind.value, exc)
+            LOG.warning(
+                "could not measure the unpublished age for %s: %s", kind.value, _described(exc),
+            )
             return 0.0
         if written_at is None:
             return 0.0
@@ -586,7 +601,7 @@ class Rehydrator:
         try:
             won = self._publisher.put_stamp(stamp)
         except Exception as exc:  # noqa: BLE001 - store, driver and OS errors alike
-            LOG.warning("freshness stamp could not be written: %s", exc)
+            LOG.warning("freshness stamp could not be written: %s", _described(exc))
             self._withheld = True
             return None, False
         if self._stamped is None or self._withheld:
@@ -678,7 +693,9 @@ class Rehydrator:
                     self._secret, kind, head.manifest_raw, not_before=ZERO,
                 )
             except Exception as exc:  # noqa: BLE001 - a store or data fault voids the claim
-                LOG.warning("ride-through check failed for kind=%s: %s", kind.value, exc)
+                LOG.warning(
+                    "ride-through check failed for kind=%s: %s", kind.value, _described(exc),
+                )
                 return False
             if manifest.version < cursor.version or manifest.feed_seq < cursor.feed_seq:
                 LOG.warning(
