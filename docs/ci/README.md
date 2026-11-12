@@ -107,7 +107,7 @@ Notes for callers:
 - Scanner and service images are pinned by digest (`name:tag@sha256:…`). Dependabot's `docker` ecosystem does not see images set in workflow inputs, so bump them by hand: `docker pull name:newtag`, then copy the digest from `docker image inspect --format '{{index .RepoDigests 0}}'`.
 - Command inputs (`install-command`, `test-command`, `compose-env`, …) are trusted shell, run with `eval`. Only the calling workflow sets them; never pass `github.event.*` or other PR-controlled text into them.
 
-## Branch protection and one-time owner setup
+## One-time owner setup
 
 **Today *(read 12 Nov 2026)*:** `develop` and `staging` have **no protection at all**: no classic branch protection, no ruleset. `main` has only the ruleset "Main Protected by Ansh" (id 19609105; see [ENTERPRISE_SETUP.md](ENTERPRISE_SETUP.md) step 11). Until the owner applies the ruleset below, `MERGE_POLICY.md` and Reviewer B enforce the required checks and the PR-only flow, not GitHub.
 
