@@ -19,6 +19,15 @@
 #
 # Reviewers: `user:LOGIN`, `team:SLUG` (an organisation team), or `user:#ID` / `team:#ID`.
 # At most 6 per environment (GitHub's limit). A deployment waits until one of them approves.
+#
+# Production's reviewer must be a HUMAN account whose token the agents do not hold. Agents act
+# through the owner's account token, and approving a waiting deployment is a REST call
+# (`POST repos/{repo}/actions/runs/{run_id}/pending_deployments`), so with the owner's own
+# account as the only production reviewer any agent session could approve a production deploy
+# whenever its proxy lets that call through. The script therefore refuses a production
+# `user:` reviewer that is the account running it, unless --allow-own-account-in-production
+# (until a second human account exists). A team reviewer must not include that account either;
+# the script cannot check team membership, so ENTERPRISE_SETUP.md step 10 says so.
 # Defaults: admins may NOT bypass the reviewers (--allow-admin-bypass to change; every agent acts
 # as the owner's admin account), self-review is allowed (--prevent-self-review to forbid it; with
 # one human account, forbidding it means nobody can approve that account's own deployments).
@@ -32,7 +41,7 @@ repo="CyberUltron-Consulting-Private-Limited/AI_Mesh_Firewall"
 staging_reviewers="" production_reviewers=""
 staging_branch="staging" production_branch="main"
 production_wait=0
-dry_run=false prevent_self_review=false admin_bypass=false
+dry_run=false prevent_self_review=false admin_bypass=false allow_own_account=false
 
 usage() { sed -n '2,/^set -euo/p' "${BASH_SOURCE[0]}" | sed -e '$d' -e 's/^# \{0,1\}//'; cat <<'USAGE'
 Options:
@@ -44,6 +53,9 @@ Options:
   --production-wait-minutes N     wait timer before a production deployment starts (default 0)
   --prevent-self-review           a reviewer cannot approve a deployment they triggered
   --allow-admin-bypass            admins may deploy without a reviewer's approval
+  --allow-own-account-in-production
+                                  accept the account running this script (the account agents
+                                  act as) as a production reviewer; read the header first
   --dry-run                       print the requests; change nothing
 USAGE
 }
@@ -58,6 +70,7 @@ while [ $# -gt 0 ]; do
     --production-wait-minutes) production_wait="${2:?}"; shift 2 ;;
     --prevent-self-review) prevent_self_review=true; shift ;;
     --allow-admin-bypass) admin_bypass=true; shift ;;
+    --allow-own-account-in-production) allow_own_account=true; shift ;;
     --dry-run) dry_run=true; shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo "unknown option: $1 (see --help)" >&2; exit 2 ;;
@@ -76,17 +89,17 @@ org="${repo%%/*}"
 
 # Prints the GitHub id for one reviewer spec, or a placeholder in --dry-run when the read fails.
 reviewer_id() {
-  local kind="$1" ref="$2" id
+  local kind="$1" ref="$2" id path
   case "$ref" in
     \#*) id="${ref#\#}"; case "$id" in ''|*[!0-9]*) echo "bad id in $kind:$ref" >&2; return 2 ;; esac
          printf '%s\n' "$id"; return 0 ;;
   esac
   case "$ref" in ''|*[!A-Za-z0-9._-]*) echo "bad name in $kind:$ref" >&2; return 2 ;; esac
-  if [ "$kind" = user ]; then
-    id="$(gh api "users/$ref" --jq .id 2>/dev/null || true)"
-  else
-    id="$(gh api "orgs/$org/teams/$ref" --jq .id 2>/dev/null || true)"
-  fi
+  if [ "$kind" = user ]; then path="users/$ref"; else path="orgs/$org/teams/$ref"; fi
+  # On an HTTP error gh exits non-zero and prints GitHub's error JSON on stdout (it skips
+  # --jq), so check the status, and accept only a number.
+  id="$(gh api "$path" --jq .id 2>/dev/null)" || id=""
+  case "$id" in *[!0-9]*) id="" ;; esac
   if [ -z "$id" ]; then
     if $dry_run; then printf '"<id of %s %s, resolved when applied>"\n' "$kind" "$ref"; return 0; fi
     echo "cannot resolve $kind '$ref' (does it exist, and can this token read it?)" >&2
@@ -154,6 +167,27 @@ apply_environment() {
 if ! $dry_run && ! command -v gh >/dev/null; then echo "gh (GitHub CLI) is required" >&2; exit 2; fi
 staging_json="$(reviewers_json "$staging_reviewers")" || exit $?
 production_json="$(reviewers_json "$production_reviewers")" || exit $?
+
+# Production's reviewer must not be the account agents act as (header). Checked before any write.
+if $dry_run; then
+  echo "note: applying refuses a production user reviewer that is the account running this script" >&2
+  echo "      (the account agents act as), unless --allow-own-account-in-production." >&2
+else
+  me="$(gh api user --jq .id 2>/dev/null)" || me=""
+  case "$me" in ''|*[!0-9]*) echo "cannot read the account running this script (gh api user)" >&2; exit 1 ;; esac
+  case "$production_json" in
+    *"{\"type\":\"User\",\"id\":$me}"*)
+      if $allow_own_account; then
+        echo "WARNING: production reviewer user #$me is the account running this script, which agents act" >&2
+        echo "as: an agent session could approve production deployments (--allow-own-account-in-production)." >&2
+      else
+        echo "REFUSED: production reviewer user #$me is the account running this script. Agents act as this" >&2
+        echo "account, so they could approve production deployments. Name a human account whose token the" >&2
+        echo "agents do not hold, or pass --allow-own-account-in-production (ENTERPRISE_SETUP.md step 10)." >&2
+        exit 2
+      fi ;;
+  esac
+fi
 apply_environment staging "$staging_json" 0 "$staging_branch"
 apply_environment production "$production_json" "$production_wait" "$production_branch"
 $dry_run || echo "Done. A deploy job opts in with 'environment: staging' or 'environment: production'." >&2

@@ -1,5 +1,5 @@
 # Status checks to require on develop, staging and main (scripts/ci/setup_rulesets.sh reads
-# this file; scripts/ci/test_required_checks.py ties every name to a job in .github/workflows).
+# this file; scripts/ci/test_setup_scripts.py ties every name to a job in .github/workflows).
 #
 # One check-run name per line, exactly as GitHub shows it on a PR. A job called through a
 # reusable workflow is "<calling job name> / <called job name>"; a matrix job adds " (<value>)".
@@ -37,7 +37,8 @@ infra lint (actions, Docker, shell, compose, nginx, Trivy) / lint
 # pr-policy.yml
 policy
 
-# gateway-v2.yml (`gateway-v2 pytest` exists once PR #137 has merged)
+# gateway-v2.yml (`gateway-v2 pytest` exists once PR #137 has merged; the self-test enforces it
+# from then on, keyed on scripts/ci/amf_pytest_shards.py, which #137 adds)
 structural-gates
 gateway-v2 pytest
 secret-headers
