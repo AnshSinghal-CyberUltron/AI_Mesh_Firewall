@@ -87,6 +87,8 @@ def principal_of(record: SignedRecord, *, max_project_len: int | None = None) ->
         return None  # explicit OFF record: revoked
     try:
         body: object = json.loads(record.body)
+    except RecursionError as exc:
+        raise StoreDataUnavailable("key record body is nested too deeply") from exc
     except (ValueError, UnicodeDecodeError) as exc:
         raise StoreDataUnavailable(f"key record body is not valid JSON: {exc}") from exc
     if not isinstance(body, dict):
@@ -292,16 +294,29 @@ class IdentityCache:
         feed_seq: int,
     ) -> tuple[str, ...]:
         """Evict exactly the keys that changed. Returns what was evicted, for metrics."""
-        evicted: list[str] = []
+        keys: list[str] = []
         for record in records:
             if record.kind is not StateKind.KEY:
                 raise StoreDataUnavailable(f"{record.kind.value} record is not a key")
-            if record.key in self._inflight:
-                self._touched.add(record.key)
-            dropped = self._held.pop(record.key, None)
-            had_negative = self._negative.pop(record.key, None)
+            keys.append(record.key)
+        return self.evict(keys, feed_seq)
+
+    def evict(self, key_hashes: Iterable[str], feed_seq: int) -> tuple[str, ...]:
+        """Evict these key hashes, whatever their records say. Returns what was evicted.
+
+        The fail-closed answer for a KEY record that failed verification: nothing cached for the
+        key survives -- not a principal it may have revoked, not a negative entry -- so the next
+        request re-reads the record through `fetch_key`, which refuses (503) for as long as the
+        stored copy still fails. A fill already in flight for the key is not cached either.
+        """
+        evicted: list[str] = []
+        for key_hash in key_hashes:
+            if key_hash in self._inflight:
+                self._touched.add(key_hash)
+            dropped = self._held.pop(key_hash, None)
+            had_negative = self._negative.pop(key_hash, None)
             if dropped is not None or had_negative is not None:
-                evicted.append(record.key)
+                evicted.append(key_hash)
         self._evicted += len(evicted)
         self._feed_seq = max(self._feed_seq, feed_seq)
         return tuple(evicted)
@@ -351,6 +366,9 @@ def identity_applier(cache: IdentityCache) -> Callable[[FeedRound], None]:
     """
 
     def apply(round_: FeedRound) -> None:
+        if round_.faults:
+            # A KEY record that failed verification: fail that key closed (`evict`).
+            cache.evict((fault.key for fault in round_.faults), round_.manifest.feed_seq)
         if round_.records:
             cache.on_delta(round_.records, round_.manifest.feed_seq)
         else:

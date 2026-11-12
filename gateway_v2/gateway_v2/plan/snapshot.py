@@ -8,7 +8,7 @@ from collections.abc import Callable
 
 from gateway_v2.domain.locks import FRESH_MS
 from gateway_v2.domain.plan import ExecutionPlan, PlanUnavailable, PlanUnknownTenant, is_newer
-from gateway_v2.plan.store import PlanStore
+from gateway_v2.plan.store import PLAN_QUARANTINED, HeldBack, PlanStore
 from gateway_v2.runtime.state_stamp import FreshnessGate
 
 PlanState = ExecutionPlan | PlanUnavailable | PlanUnknownTenant
@@ -88,6 +88,10 @@ class ReplicaSnapshot:
             return state
         if isinstance(state, PlanUnknownTenant):
             return state
+        if state.reason == PLAN_QUARANTINED:
+            # Never the last-known-good: the tenant's newest record failed verification, so the
+            # plan held here is one the control plane has superseded (PlanStore.quarantine).
+            return state
         cached = self._served.get(org_id)
         stamped = self._served_at.get(org_id)
         if cached is not None and stamped is not None and moment - stamped <= self._fresh_s:
@@ -99,6 +103,10 @@ class ReplicaSnapshot:
         if self._stamp is None or self._stamp.fresh():
             return None
         return self._stamp.unverified()
+
+    def held_back(self, org_id: str) -> HeldBack | None:
+        """Why this replica is not serving the tenant's newest record, or None. O(1)."""
+        return self._store.held_back(org_id)
 
     def refresh_age_seconds(self, org_id: str, now: float | None = None) -> float | None:
         """Since THIS tenant's last-known-good was refreshed. Not a verification age."""

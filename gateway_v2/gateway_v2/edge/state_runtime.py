@@ -15,7 +15,11 @@ lifetime:
   identity cache, which holds nothing to evict, jumps its cursor to the head (fills are
   fetched on demand). Only plans are replayed, because a plan must be compiled to be served.
 * **The loop never dies.** A store fault is a failed round (`StoreDataUnavailable`); anything
-  else is logged with its class, counted, and the next cycle runs.
+  else is logged with its class -- never its text, which can quote a tenant's record -- counted,
+  and the next cycle runs.
+* **One record never stops the cycle.** Every kind's round reports instead of raising, and PLAN
+  and KEY are read with per-record isolation: a record that fails verification fails only its
+  own tenant (PLAN) or key (KEY) closed, and every other tenant applies in the same round.
 * **A worker is not ready until it has caught up.** `startup()` waits, bounded by the freshness
   window, for its first good cycle, and uvicorn routes nothing to a worker before its lifespan
   startup completes -- so a cold worker does not flap `/readyz` while its siblings serve.
@@ -82,6 +86,11 @@ _ASGIApp = Callable[
 #: records as fresh, so a worker with no BUDGET records still becomes ready once it has drained the
 #: kind -- adding it to `READY_KINDS` does not wedge startup.
 READY_KINDS = (StateKind.PLAN, StateKind.KS, StateKind.KEY, StateKind.BUDGET)
+
+#: Kinds read with per-record isolation (`StateSynchroniser(isolate_kinds=...)`). A PLAN record that
+#: fails verification quarantines its tenant (503 for that tenant only); a KEY record evicts its key
+#: (the next request re-reads it and is refused while it still fails). Both fail CLOSED per subject.
+ISOLATED_KINDS = frozenset({StateKind.PLAN, StateKind.KEY})
 
 
 def _noop_reacquire(org: str) -> None:
@@ -229,6 +238,10 @@ class StateRuntime:
             },
             stamp=self.stamp,
             inline_kinds=frozenset({StateKind.KEY}),
+            # Only kinds whose applier fails a faulted subject closed. KS and BUDGET keep their
+            # whole-round refusal: an unreadable switch must never read as off, and a budget
+            # round is applied all-or-nothing (Req 7.4).
+            isolate_kinds=ISOLATED_KINDS,
         )
         self.metrics = StateMetricsRecorder()
         self._listener = NudgeListener(client, self._keys.updates)
@@ -256,6 +269,18 @@ class StateRuntime:
         identity = identity_applier(self.identity_cache)
 
         def apply(round_: FeedRound) -> None:
+            if round_.faults:
+                # A KEY record that failed verification: nothing cached for that key survives,
+                # in either cache, so its next request re-reads it and is refused while it fails.
+                faulted = tuple(fault.key for fault in round_.faults)
+                self.identity_cache.evict(faulted, round_.manifest.feed_seq)
+                self._gcra_invalidate(faulted)
+                for fault in round_.faults:
+                    LOG.warning(
+                        "key record quarantined: key=%r feed_seq=%d error=%s; the key is "
+                        "refused until a verified record replaces it",
+                        fault.key, fault.feed_seq, fault.error,
+                    )
             if round_.records:
                 evicted = self.identity_cache.on_delta(round_.records, round_.manifest.feed_seq)
                 if evicted:
@@ -404,9 +429,13 @@ class StateRuntime:
     async def _cold_start(self) -> list[RoundReport]:
         if not self._cold:
             return []
-        with contextlib.suppress(StoreDataUnavailable):
+        try:
             # The floor first: a cold start read below it is exactly SP1's window.
             await self.sync.observe_stamp()
+        except StoreDataUnavailable:
+            pass
+        except Exception as exc:  # noqa: BLE001 - as in `drain_all`: never stops the cycle
+            LOG.error("freshness stamp read failed: error=%s", type(exc).__name__)
         reports: list[RoundReport] = []
         if StateKind.KS in self._cold:
             reports.append(
@@ -435,7 +464,9 @@ class StateRuntime:
                 raise
             except Exception as exc:  # noqa: BLE001 - the loop is the fleet's freshness
                 self.cycle_failures += 1
-                LOG.error("state cycle failed: %s: %s", type(exc).__name__, exc)
+                # The type only: the text of an exception raised while reading tenant records
+                # can quote those records.
+                LOG.error("state cycle failed: %s", type(exc).__name__)
             self._wake.clear()
             with contextlib.suppress(TimeoutError):
                 await asyncio.wait_for(self._wake.wait(), timeout=delay_s)
@@ -497,7 +528,7 @@ class StateServedApp:
                 try:
                     await self._runtime.startup()
                 except Exception as exc:  # noqa: BLE001 - fail closed, but start
-                    LOG.error("state runtime did not start: %s: %s", type(exc).__name__, exc)
+                    LOG.error("state runtime did not start: %s", type(exc).__name__)
                 await self._run_hooks(start=True)
             elif kind == "lifespan.shutdown":
                 await self._run_hooks(start=False)
