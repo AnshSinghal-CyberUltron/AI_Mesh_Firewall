@@ -107,4 +107,17 @@ if [ "${CONTROL_ENTRYPOINT_DRYRUN:-0}" = "1" ]; then
     exit 0
 fi
 
+# F4 (PR #115): republish every org's gateway-v2 plan document when what the publisher writes
+# changed: a release, or V2_PLAN_NEW_RULES_MODE or another publish setting (a flip and a rollback
+# are env changes, which take effect only by recreating this container). Once per container start,
+# not per gunicorn worker; in the background so the health check never waits on a long sweep; one
+# Redis GET when nothing changed (core/v2_plan_rollout.py). The retries cover a container that
+# starts before deploy-ec2.sh runs migrate. V2_PLAN_ROLLOUT_ON_START=0 disables it; then run
+# `manage.py sync_v2_plan_documents --if-changed` by hand after every deploy and gate change.
+if [ "${V2_PLAN_ROLLOUT_ON_START:-1}" != "0" ]; then
+    "$PYTHON_BIN" "$(dirname "$0")/manage.py" sync_v2_plan_documents --if-changed \
+        --attempts "${V2_PLAN_ROLLOUT_ATTEMPTS:-20}" --wait "${V2_PLAN_ROLLOUT_WAIT_S:-30}" \
+        2>&1 | sed 's/^/[control-entrypoint] v2-plan-rollout: /' >&2 &
+fi
+
 exec "$@"
