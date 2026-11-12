@@ -1,0 +1,17 @@
+vite v7.3.3 building client environment for production...
+transforming...
+✓ 2892 modules transformed.
+[plugin vite:reporter] 
+(!) /home/claude/wt/f6-lattice-plan/frontend/src/utils/liveGateway.js is dynamically imported by /home/claude/wt/f6-lattice-plan/frontend/src/utils/gatewayChatFetch.js but also statically imported by /home/claude/wt/f6-lattice-plan/frontend/src/components/AttackSimulatorPanel.jsx, /home/claude/wt/f6-lattice-plan/frontend/src/components/simulator/IsolationOpsSimulator.jsx, /home/claude/wt/f6-lattice-plan/frontend/src/components/simulator/ModelRoutingSimulator.jsx, dynamic import will not move module into another chunk.
+
+rendering chunks...
+computing gzip size...
+dist/index.html                     0.47 kB │ gzip:   0.30 kB
+dist/assets/index-DjHMDlUR.css    224.66 kB │ gzip:  28.53 kB
+dist/assets/index-Dajx6Z1g.js   2,211.83 kB │ gzip: 646.14 kB
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 11.98s

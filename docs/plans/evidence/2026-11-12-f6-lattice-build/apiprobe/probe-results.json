@@ -1,0 +1,735 @@
+{
+  "agreement": {
+    "health_body": {
+      "status": "ok"
+    },
+    "keys_last_used_at": [
+      null
+    ],
+    "policies_analytics": {
+      "total_blocked": 2,
+      "total_monitored": 1,
+      "total_redacted": 3,
+      "total_violations": 12
+    },
+    "soc_kpis": {
+      "action_breakdown": {
+        "allow": 6,
+        "block": 2,
+        "monitor": 1,
+        "redact": 3
+      },
+      "avg_latency_ms": 52.83,
+      "blocked": 2,
+      "redacted": 3,
+      "requests_allowed": 7,
+      "requests_blocked": 2,
+      "requests_inspected": 11,
+      "requests_redacted": 2,
+      "total_threats": 12
+    }
+  },
+  "calls": [
+    {
+      "body_scrubbed": {
+        "allowed_models": [],
+        "created_at": "2026-11-12T07:57:25.585217Z",
+        "expires_at": null,
+        "id": "<dropped>",
+        "is_active": true,
+        "key": "<dropped>",
+        "last_used_at": null,
+        "max_context_tokens": 0,
+        "mcp_allowed_tools": [],
+        "mcp_max_tool_calls": 0,
+        "name": "probe key",
+        "organization_name": "Probe Org",
+        "organization_slug": "probe-org",
+        "permissions": {
+          "allowed_actions": [
+            "chat",
+            "completion",
+            "embedding"
+          ],
+          "denied_actions": []
+        },
+        "prefix": "<dropped>",
+        "project_id": "probe",
+        "rate_limit_tokens_per_minute": 100000,
+        "risk_score": 0.0,
+        "updated_at": "2026-11-12T07:57:25.585224Z",
+        "warning": "Store this key securely. It will not be shown again."
+      },
+      "label": "gateways/keys POST",
+      "method": "POST",
+      "ms": 12.1,
+      "path": "/api/gateways/keys/",
+      "shape": {
+        "keys": [
+          "allowed_models",
+          "created_at",
+          "expires_at",
+          "id",
+          "is_active",
+          "key",
+          "last_used_at",
+          "max_context_tokens",
+          "mcp_allowed_tools",
+          "mcp_max_tool_calls",
+          "name",
+          "organization_name",
+          "organization_slug",
+          "permissions",
+          "prefix",
+          "project_id",
+          "rate_limit_tokens_per_minute",
+          "risk_score",
+          "updated_at",
+          "warning"
+        ],
+        "type": "object"
+      },
+      "status": 201,
+      "x_analytics_source": null
+    },
+    {
+      "label": "soc-kpis 24h",
+      "method": "GET",
+      "ms": 48.1,
+      "path": "/api/security/soc-kpis/?period=24h",
+      "shape": {
+        "keys": [
+          "action_breakdown",
+          "avg_latency_ms",
+          "block_rate",
+          "blocked",
+          "critical_count",
+          "enforcement_rate",
+          "gateway_v2",
+          "health_radar",
+          "latency_distribution",
+          "mttr_minutes",
+          "period",
+          "redact_rate",
+          "redacted",
+          "requests_allowed",
+          "requests_blocked",
+          "requests_critical",
+          "requests_inspected",
+          "requests_redacted",
+          "total_threats"
+        ],
+        "type": "object"
+      },
+      "status": 200,
+      "x_analytics_source": "raw"
+    },
+    {
+      "label": "module-kpis 24h",
+      "method": "GET",
+      "ms": 4.0,
+      "path": "/api/security/module-kpis/?period=24h",
+      "shape": {
+        "keys": [
+          "modules",
+          "period"
+        ],
+        "type": "object"
+      },
+      "status": 200,
+      "x_analytics_source": "raw"
+    },
+    {
+      "label": "module-trends 24h",
+      "method": "GET",
+      "ms": 5.8,
+      "path": "/api/security/module-trends/?period=24h",
+      "shape": {
+        "keys": [
+          "1.1",
+          "1.2",
+          "1.3",
+          "1.4",
+          "1.5",
+          "1.6",
+          "1.7",
+          "period",
+          "pressure_metric"
+        ],
+        "type": "object"
+      },
+      "status": 200,
+      "x_analytics_source": "raw"
+    },
+    {
+      "label": "attack-vector-trends 24h",
+      "method": "GET",
+      "ms": 3.0,
+      "path": "/api/security/attack-vector-trends/?period=24h",
+      "shape": {
+        "item_keys": [
+          "dataLeakage",
+          "goalHijacking",
+          "jailbreak",
+          "promptInjection",
+          "time",
+          "toolOverreach"
+        ],
+        "length": 25,
+        "type": "array"
+      },
+      "status": 200,
+      "x_analytics_source": "raw"
+    },
+    {
+      "label": "policies/analytics days=1",
+      "method": "GET",
+      "ms": 10.7,
+      "path": "/api/policies/analytics/?days=1",
+      "shape": {
+        "keys": [
+          "avg_effectiveness",
+          "avg_response_time",
+          "category_performance",
+          "effectiveness_trend",
+          "total_blocked",
+          "total_monitored",
+          "total_redacted",
+          "total_violations",
+          "violations_by_day",
+          "violations_by_hour",
+          "violations_by_week"
+        ],
+        "type": "object"
+      },
+      "status": 200,
+      "x_analytics_source": null
+    },
+    {
+      "label": "policy/top-rules days=1",
+      "method": "GET",
+      "ms": 4.5,
+      "path": "/api/policy/top-rules/?days=1&limit=5",
+      "shape": {
+        "item_keys": null,
+        "length": 0,
+        "type": "array"
+      },
+      "status": 200,
+      "x_analytics_source": null
+    },
+    {
+      "label": "owasp-stats hours=24",
+      "method": "GET",
+      "ms": 2.9,
+      "path": "/api/security/owasp-stats/?hours=24",
+      "shape": {
+        "keys": [
+          "agentic",
+          "llm",
+          "mcp",
+          "unique_events_count"
+        ],
+        "type": "object"
+      },
+      "status": 200,
+      "x_analytics_source": null
+    },
+    {
+      "label": "rag-pipeline-kpis",
+      "method": "GET",
+      "ms": 5.8,
+      "path": "/api/security/rag-pipeline-kpis/",
+      "shape": {
+        "keys": [
+          "document_funnel",
+          "escalation_distribution",
+          "period",
+          "stages"
+        ],
+        "type": "object"
+      },
+      "status": 200,
+      "x_analytics_source": null
+    },
+    {
+      "label": "threat-feed hours=24",
+      "method": "GET",
+      "ms": 18.3,
+      "path": "/api/security/threat-feed/?hours=24&limit=5",
+      "shape": {
+        "keys": [
+          "action_counts",
+          "collapsed_by_request",
+          "count",
+          "results",
+          "scan_truncated"
+        ],
+        "type": "object"
+      },
+      "status": 200,
+      "x_analytics_source": null
+    },
+    {
+      "label": "health",
+      "method": "GET",
+      "ms": 0.7,
+      "path": "/api/health/",
+      "shape": {
+        "keys": [
+          "status"
+        ],
+        "type": "object"
+      },
+      "status": 200,
+      "x_analytics_source": null
+    },
+    {
+      "label": "health/services",
+      "method": "GET",
+      "ms": 641.4,
+      "path": "/api/health/services/",
+      "shape": {
+        "keys": [
+          "celery",
+          "database",
+          "rabbitmq",
+          "redis"
+        ],
+        "type": "object"
+      },
+      "status": 200,
+      "x_analytics_source": null
+    },
+    {
+      "label": "gateways/stats",
+      "method": "GET",
+      "ms": 3.8,
+      "path": "/api/gateways/stats/",
+      "shape": {
+        "item_keys": null,
+        "length": 0,
+        "type": "array"
+      },
+      "status": 200,
+      "x_analytics_source": null
+    },
+    {
+      "label": "gateways/keys",
+      "method": "GET",
+      "ms": 5.8,
+      "path": "/api/gateways/keys/",
+      "shape": {
+        "keys": [
+          "count",
+          "next",
+          "previous",
+          "results"
+        ],
+        "type": "object"
+      },
+      "status": 200,
+      "x_analytics_source": null
+    },
+    {
+      "label": "gateways/public-url",
+      "method": "GET",
+      "ms": 0.6,
+      "path": "/api/gateways/public-url/",
+      "shape": {
+        "keys": [
+          "api_endpoint",
+          "backend_url",
+          "gateway_url"
+        ],
+        "type": "object"
+      },
+      "status": 200,
+      "x_analytics_source": null
+    },
+    {
+      "label": "firewall/config",
+      "method": "GET",
+      "ms": 21.3,
+      "path": "/api/firewall/config/",
+      "shape": {
+        "keys": [
+          "allowed_models",
+          "allowed_models_list",
+          "audit_logging_enabled",
+          "auto_block_threats",
+          "blocked_keywords",
+          "burst_limit",
+          "compliance_frameworks",
+          "connected_models",
+          "content_filtering_enabled",
+          "default_data_sensitivity",
+          "default_model",
+          "enforcement_mode",
+          "factuality_check_enabled",
+          "firewall_enabled",
+          "governance_stale_models",
+          "hallucination_grounding_mode",
+          "hallucination_grounding_model",
+          "hallucination_grounding_threshold",
+          "jailbreak_detection_enabled",
+          "log_level",
+          "max_response_tokens",
+          "mcp_ext_scan_action",
+          "mcp_policy_only_enforcement",
+          "mcp_tier2_enabled",
+          "model_isolation_enabled",
+          "org_token_budget",
+          "org_tpm_limit",
+          "organization",
+          "output_credential_action",
+          "output_credential_enabled",
+          "output_hallucination_action",
+          "output_incident_logging_enabled",
+          "output_ip_leakage_action",
+          "output_ip_leakage_enabled",
+          "output_pii_action",
+          "output_pii_enabled",
+          "output_policy_action",
+          "output_policy_enabled",
+          "pii_detection_enabled",
+          "prompt_injection_threshold",
+          "rag_enabled",
+          "rag_max_documents",
+          "rag_redaction_enabled",
+          "rag_relevance_threshold",
+          "rag_tier2_enabled",
+          "rate_limit_enabled",
+          "requests_per_minute",
+          "response_filtering_enabled",
+          "retention_days",
+          "routing_cost_weight",
+          "routing_enabled",
+          "routing_latency_weight",
+          "routing_priority_weight",
+          "routing_risk_weight",
+          "semantic_analysis_enabled",
+          "threat_intel_enabled",
+          "threat_score_threshold",
+          "tier2_enabled",
+          "tier2_execution_mode",
+          "tier2_fail_closed_enabled",
+          "tier2_stream_hold_enabled",
+          "tier2_stream_hold_timeout_ms",
+          "tier2_strict",
+          "toxicity_threshold",
+          "updated_at",
+          "vector_db_isolation"
+        ],
+        "type": "object"
+      },
+      "status": 200,
+      "x_analytics_source": null
+    },
+    {
+      "label": "firewall/models",
+      "method": "GET",
+      "ms": 2.2,
+      "path": "/api/firewall/models/",
+      "shape": {
+        "item_keys": null,
+        "length": 0,
+        "type": "array"
+      },
+      "status": 200,
+      "x_analytics_source": null
+    },
+    {
+      "label": "kill-switches",
+      "method": "GET",
+      "ms": 6.3,
+      "path": "/api/kill-switches/",
+      "shape": {
+        "keys": [
+          "count",
+          "next",
+          "previous",
+          "results"
+        ],
+        "type": "object"
+      },
+      "status": 200,
+      "x_analytics_source": null
+    },
+    {
+      "label": "models/status",
+      "method": "GET",
+      "ms": 4.3,
+      "path": "/api/models/status/",
+      "shape": {
+        "item_keys": null,
+        "length": 0,
+        "type": "array"
+      },
+      "status": 200,
+      "x_analytics_source": null
+    },
+    {
+      "label": "mcp-connector/health",
+      "method": "GET",
+      "ms": 0.6,
+      "path": "/api/mcp-connector/health/",
+      "shape": {
+        "keys": [
+          "builtin_detectors",
+          "mcp_firewall"
+        ],
+        "type": "object"
+      },
+      "status": 200,
+      "x_analytics_source": null
+    },
+    {
+      "label": "mcp-connector/servers",
+      "method": "GET",
+      "ms": 1.9,
+      "path": "/api/mcp-connector/servers/",
+      "shape": {
+        "item_keys": null,
+        "length": 0,
+        "type": "array"
+      },
+      "status": 200,
+      "x_analytics_source": null
+    },
+    {
+      "label": "mcp-connector/events/summary hours=24",
+      "method": "GET",
+      "ms": 6.0,
+      "path": "/api/mcp-connector/events/summary/?hours=24",
+      "shape": {
+        "keys": [
+          "decisions",
+          "recent",
+          "top_tools",
+          "top_users",
+          "total"
+        ],
+        "type": "object"
+      },
+      "status": 200,
+      "x_analytics_source": null
+    },
+    {
+      "label": "policies",
+      "method": "GET",
+      "ms": 2.2,
+      "path": "/api/policies/",
+      "shape": {
+        "keys": [
+          "policy_domain"
+        ],
+        "type": "object"
+      },
+      "status": 400,
+      "x_analytics_source": null
+    },
+    {
+      "label": "policies/compile/status",
+      "method": "GET",
+      "ms": 1.0,
+      "path": "/api/policies/compile/status/",
+      "shape": {
+        "keys": [
+          "compiled_at",
+          "policies",
+          "policy_count",
+          "redis_available",
+          "version"
+        ],
+        "type": "object"
+      },
+      "status": 200,
+      "x_analytics_source": null
+    },
+    {
+      "label": "threat-feed/{pk}",
+      "method": "GET",
+      "ms": 6.8,
+      "path": "/api/security/threat-feed/11/",
+      "shape": {
+        "keys": [
+          "action",
+          "agent_id",
+          "assignee",
+          "category",
+          "data_accessed",
+          "endpoint_id",
+          "endpoint_identifier",
+          "endpoint_name",
+          "enforcement_action_text",
+          "escalated_at",
+          "escalated_by_id",
+          "id",
+          "incident_id",
+          "incident_status",
+          "incident_title",
+          "metadata",
+          "organization_name",
+          "prompt_lineage",
+          "record_type",
+          "related_event_ids",
+          "request_id",
+          "resolved_at",
+          "resolved_by_id",
+          "severity",
+          "source",
+          "source_display",
+          "subcategory",
+          "timestamp",
+          "tools_invoked",
+          "user_display",
+          "user_id"
+        ],
+        "type": "object"
+      },
+      "status": 200,
+      "x_analytics_source": null
+    }
+  ],
+  "malformed": [
+    {
+      "body_excerpt": "{\"detail\": \"Invalid period 'abc'. Use one of: 1h, 24h, 30d, 6h, 7d.\", \"code\": \"invalid_period\"}",
+      "label": "soc-kpis period=abc",
+      "method": "GET",
+      "ms": 1.0,
+      "path": "/api/security/soc-kpis/?period=abc",
+      "shape": {
+        "keys": [
+          "code",
+          "detail"
+        ],
+        "type": "object"
+      },
+      "status": 400,
+      "x_analytics_source": null
+    },
+    {
+      "body_excerpt": "{\"detail\": \"Invalid request parameter.\"}",
+      "label": "owasp-stats hours=abc",
+      "method": "GET",
+      "ms": 0.9,
+      "path": "/api/security/owasp-stats/?hours=abc",
+      "shape": {
+        "keys": [
+          "detail"
+        ],
+        "type": "object"
+      },
+      "status": 400,
+      "x_analytics_source": null
+    },
+    {
+      "body_excerpt": "{\"detail\": \"Invalid request parameter.\"}",
+      "label": "policies/analytics days=abc",
+      "method": "GET",
+      "ms": 0.6,
+      "path": "/api/policies/analytics/?days=abc",
+      "shape": {
+        "keys": [
+          "detail"
+        ],
+        "type": "object"
+      },
+      "status": 400,
+      "x_analytics_source": null
+    },
+    {
+      "body_excerpt": "{\"detail\": \"Invalid request parameter.\"}",
+      "label": "policy/top-rules days=abc",
+      "method": "GET",
+      "ms": 0.6,
+      "path": "/api/policy/top-rules/?days=abc",
+      "shape": {
+        "keys": [
+          "detail"
+        ],
+        "type": "object"
+      },
+      "status": 400,
+      "x_analytics_source": null
+    },
+    {
+      "body_excerpt": "{\"detail\": \"Invalid request parameter.\"}",
+      "label": "threat-feed hours=abc",
+      "method": "GET",
+      "ms": 0.9,
+      "path": "/api/security/threat-feed/?hours=abc",
+      "shape": {
+        "keys": [
+          "detail"
+        ],
+        "type": "object"
+      },
+      "status": 400,
+      "x_analytics_source": null
+    },
+    {
+      "body_excerpt": "{\"detail\": \"Event not found.\"}",
+      "label": "threat-feed/{pk} unknown",
+      "method": "GET",
+      "ms": 3.0,
+      "path": "/api/security/threat-feed/999999999/",
+      "shape": {
+        "keys": [
+          "detail"
+        ],
+        "type": "object"
+      },
+      "status": 404,
+      "x_analytics_source": null
+    },
+    {
+      "body_excerpt": "{\"error\": \"analytics_busy\", \"detail\": \"Too many concurrent analytics queries\"}",
+      "label": "soc-kpis while 2 analytics in flight",
+      "method": "GET",
+      "ms": 0.8,
+      "path": "/api/security/soc-kpis/?period=24h",
+      "shape": {
+        "keys": [
+          "detail",
+          "error"
+        ],
+        "type": "object"
+      },
+      "status": 503,
+      "x_analytics_source": null
+    }
+  ],
+  "notes": [],
+  "seeded": {
+    "events_in_window": 12,
+    "events_outside_window": 1,
+    "requests_allowed_only": 6,
+    "requests_blocked": 2,
+    "requests_in_window": 11,
+    "requests_monitored": 1,
+    "requests_redacted": 2
+  },
+  "series_lengths": {
+    "attack-vector-trends 24h": 25,
+    "module-trends 24h": {
+      "1.1": 25,
+      "1.2": 25,
+      "1.3": 25,
+      "1.4": 25,
+      "1.5": 25,
+      "1.6": 25,
+      "1.7": 25,
+      "pressure_metric": {
+        "1.1": "str",
+        "1.2": "str",
+        "1.3": "str",
+        "1.4": "str",
+        "1.5": "str",
+        "1.6": "str",
+        "1.7": "str"
+      }
+    }
+  }
+}

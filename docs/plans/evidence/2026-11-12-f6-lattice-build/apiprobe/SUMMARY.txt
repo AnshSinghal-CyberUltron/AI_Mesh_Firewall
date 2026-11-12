@@ -1,0 +1,45 @@
+F6 Lattice API probe: summary of probe-results.json (develop 562619c8, throwaway test DB)
+
+Seeded (one org, last 24 h): 12 events in 11 requests
+  6 allow, 2 redact, 1 monitor, 1 block, plus request "probe-req-dual" with redact then block
+  (must count as ONE blocked request); 1 block event 30 h old (outside the window).
+
+1. Agreement: request-level against event-level numbers
+   soc-kpis?period=24h        requests_inspected 11 (=11 seeded)   requests_blocked 2 (=2)
+                              requests_redacted 2 (=2)              requests_allowed 7 (= 6 allow + 1 monitor)
+                              total_threats 12 (events)             action_breakdown {allow 6, redact 3, monitor 1, block 2} (events)
+   policies/analytics?days=1  total_violations 12 (counts ALL events, including the 6 allow events)
+                              total_redacted 3, total_blocked 2, total_monitored 1 (events)
+   -> soc-kpis request-level counts match the seed; the out-of-window event is excluded.
+   -> "Watched" has no request-level field: requests_allowed folds the monitored request in (B7).
+   -> policies/analytics would show Redacted 3 where the request-level truth is 2, so it must not
+      source the Verdicts box (plan section 6.1, box 2).
+
+2. Shapes and status (all 200 unless noted)
+   soc-kpis, module-kpis, module-trends, attack-vector-trends: X-Analytics-Source: raw
+   module-trends?period=24h: 25 buckets per module (1.1..1.7)    attack-vector-trends?period=24h: 25 buckets
+     -> N-12 confirmed: 24 h at 60-minute buckets gives 25 buckets, not 24.
+   /api/health/               {"status": "ok"} only (N-6)
+   /api/health/services/      641 ms (probes Celery and RabbitMQ); AllowAny; not suitable for box polling
+   /api/gateways/keys/        paginated {count,next,previous,results}; last_used_at null on the new key (N-7)
+   /api/gateways/keys/ POST   201; response carries the plaintext "key" once plus a "warning" (dropped here)
+   /api/mcp-connector/health/ {builtin_detectors, mcp_firewall}: no per-server reachability (N-9)
+   /api/policies/             **400 {"policy_domain": ...}**: the list REQUIRES ?policy_domain= (N-14)
+   /api/policies/compile/status/ {compiled_at, policies, policy_count, redis_available, version}
+   /api/security/threat-feed/?hours=24 {action_counts, collapsed_by_request, count, results, scan_truncated}
+   /api/security/threat-feed/<pk>/ 200 for the org's event; 404 {"detail": "Event not found."} for an unknown id
+
+3. Malformed parameters (B2)
+   soc-kpis?period=abc        400 {"detail": "...", "code": "invalid_period"}
+   owasp-stats?hours=abc      400 {"detail": "Invalid request parameter."}   (no code)
+   policies/analytics?days=abc 400 {"detail": "Invalid request parameter."}  (no code)
+   policy/top-rules?days=abc  400 {"detail": "Invalid request parameter."}   (no code)
+   threat-feed?hours=abc      400 {"detail": "Invalid request parameter."}   (no code)
+   -> All return 400, not 500: main_app/exception_handlers.py:57 maps ValueError/TypeError to 400.
+      Only the period-based views return a machine-readable "code".
+
+4. Analytics concurrency cap (N-4)
+   soc-kpis with both semaphore permits held: 503 {"error": "analytics_busy",
+   "detail": "Too many concurrent analytics queries"} (measured).
+   No Retry-After header: the JsonResponse at policy/analytics_concurrency.py:34-40 sets none
+   (read from the code; the probe does not record headers other than X-Analytics-Source).

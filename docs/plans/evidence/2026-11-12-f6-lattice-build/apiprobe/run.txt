@@ -1,0 +1,35 @@
+F6 Lattice API probe: how it was run (12 Nov 2026)
+
+Code under test: develop 562619c867f0a2a21718832b9d7edbb0944fdc3e (worktree /home/claude/wt/f6-lattice-plan, branch plan/f6-lattice-build).
+Host: 2 CPUs, native Postgres 16 (no pgvector), Redis 7.0. CI uses pgvector/pgvector:pg16 and redis:7.4.
+
+Command (from <worktree>/control; settings values loaded from the host env script, never printed):
+  . /home/claude/work/env-ctl.sh
+  DJANGO_SETTINGS_MODULE=f6_settings \
+  PYTHONPATH=<shim dir>:<worktree>/control/ai_mesh_control:<worktree>/shared:<this dir> \
+  LATTICE_PROBE_OUT=<out>/probe.json \
+  flock /home/claude/work/.heavy.lock flock /home/claude/work/.ctl-db.lock \
+  nice -n 10 python manage.py test test_lattice_probe --noinput -v 1
+
+f6_settings is an out-of-repo settings shim (same as the 113-A / 130-author harnesses):
+it imports main_app.settings, names the test DB test_aimesh_f6lattice, and strips
+"CREATE EXTENSION IF NOT EXISTS vector;" from migration policy/0021 (VECTOR(1536) -> TEXT),
+because this host's Postgres has no pgvector. No control code reads that table.
+
+Result: "Ran 1 test in 2.336s", OK, exit 0. Wall time including the lock queue: 517 s.
+Rollups: X-Analytics-Source was "raw" on every analytics call (ANALYTICS_SERVE_ROLLUPS off in
+this environment), so the rollup path was NOT exercised by this probe.
+Timings (ms) in probe-results.json are for a tiny seeded DB and say nothing about production latency.
+
+First attempt (without the shim) failed creating the test DB on the pgvector extension
+(django.db.utils.NotSupportedError: extension "vector" is not available). With --noinput it
+first dropped a pre-existing database named test_aimesh. Nothing on this host should rely on that
+name persisting (the guide's control command recreates it without --keepdb), but it is recorded here.
+
+Two edits were made to test_lattice_probe.py after this run, and neither changes a recorded value:
+(1) a hard-coded "retry_after_header": null field was removed; it was never read from the response,
+so it was also deleted from probe-results.json (the missing Retry-After is cited from the code instead);
+(2) the test user's literal password was replaced by an unusable one (the client uses force_authenticate).
+
+The raw runner log is not committed: it carries application log lines from the host environment.
+Key plaintext, key prefix and key id from the create response are replaced by "<dropped>".

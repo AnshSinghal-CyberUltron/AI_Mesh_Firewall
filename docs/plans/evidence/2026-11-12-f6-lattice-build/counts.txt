@@ -1,0 +1,14 @@
+commit: 562619c867f0a2a21718832b9d7edbb0944fdc3e
+A-05 raw Tailwind palette classes (.js/.jsx): 9746
+A-05 files containing them: 85
+A-05 top 10 files (occurrences, not lines):
+      713 ./frontend/src/components/MCPManagerPanel.jsx
+      591 ./frontend/src/components/PolicyManagementPanel.jsx
+      429 ./frontend/src/components/MCPScannerPanel.jsx
+      400 ./frontend/src/components/RAGAttackTrustSimulator.jsx
+      366 ./frontend/src/components/AttackSimulatorPanel.jsx
+      361 ./frontend/src/components/ModelConnectionPanel.jsx
+      305 ./frontend/src/components/simulator/StageTimeline.jsx
+      287 ./frontend/src/pages/AIMeshFirewallOverview.jsx
+      275 ./frontend/src/components/MCPConnectorPanel.jsx
+      269 ./frontend/src/components/VectorPolicyPanel.jsx
