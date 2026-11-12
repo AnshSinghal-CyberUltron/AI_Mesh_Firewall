@@ -178,13 +178,13 @@ python ../scripts/ci/amf_pytest_shards.py verify /tmp/reports --expect-collectio
 ### Runners
 
 Jobs that mostly run tests read `runs-on: ${{ vars.AMF_RUNNER_HEAVY || 'ubuntu-latest' }}`:
-- the gateway_v2 shards, `openai-conformance` and `parity-harness`;
+- the gateway_v2 shards, `openai-conformance`, `parity-harness` and `image-digest`;
 - control (Django), through the `runs-on` input of `reusable-django-ci`;
 - CodeQL, through `reusable-codeql`.
 
 `reusable-python-ci` and `reusable-node-ci` take the same input. With the repository variable `AMF_RUNNER_HEAVY` unset, everything stays on free standard runners. Set it to a larger runner's label to move those jobs without a workflow edit.
 
-`image-digest` needs a runner with **at least 4 CPUs**: its LGW03-1 step runs the image with `--cpus=2` and `--cpus=4`, and Docker refuses a CPU limit above the host's count. GitHub's standard Linux runners have 4 CPUs for public repositories and 2 for private ones, so it runs on `ubuntu-latest` while the repository is public and must move to a runner with 4 or more cores before it goes private (ENTERPRISE_SETUP.md, "When the repository goes private"). The step checks the CPU count first and says so.
+`image-digest` needs a runner with **at least 4 CPUs**: its LGW03-1 step runs the image with `--cpus=2` and `--cpus=4`, and Docker refuses a CPU limit above the host's count. GitHub's standard Linux runners have 4 CPUs for public repositories and 2 for private ones. So `AMF_RUNNER_HEAVY` must name a runner with 4 or more cores, and it must be set **before the repository goes private** (ENTERPRISE_SETUP.md, "When the repository goes private"); unset, `image-digest` stays on `ubuntu-latest`, which has 4 CPUs only while the repository is public. The step checks the CPU count first and says so.
 
 Larger runners are billed per minute even for a public repository; on GitHub Team and Enterprise Cloud their cost can draw from the plan's included compute usage, the same allowance private-repository standard runners use (ENTERPRISE_SETUP.md step 3 quotes GitHub's billing page). A single pytest or Django process does not run faster on more cores. Creating the runners and the variable is an owner step.
 

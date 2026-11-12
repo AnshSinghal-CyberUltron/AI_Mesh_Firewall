@@ -10,9 +10,10 @@ concurrency:
 #   fall back to the free standard runner when it is unset.
 # - image-digest needs a runner with at least 4 CPUs: its LGW03-1 step runs the image with
 #   --cpus=2 and --cpus=4, and Docker refuses a CPU limit above the host's count. Standard
-#   runners have 4 CPUs for public repositories but 2 for private ones, so this job must move to
-#   a runner with 4 or more cores BEFORE the repository goes private (docs/ci/ENTERPRISE_SETUP.md,
-#   "When the repository goes private"). The step checks the count and names the cause.
+#   runners have 4 CPUs for public repositories but 2 for private ones. So image-digest follows
+#   AMF_RUNNER_HEAVY too, which must name a runner with 4 or more cores, and the variable must be
+#   set BEFORE the repository goes private (docs/ci/ENTERPRISE_SETUP.md, "When the repository
+#   goes private"). The step checks the count first and names the cause.
 # - Every job has a `timeout-minutes` several times its measured duration, so a hang fails the
 #   job instead of running to GitHub's 360-minute default. pytest-timeout (gateway_v2
 #   pyproject) fails a single hung test first and names it.
@@ -256,7 +257,8 @@ jobs:
           PY
 
   image-digest:
-    runs-on: ubuntu-latest
+    # 4+ CPUs (LGW03-1 runs --cpus=4): see the header.
+    runs-on: ${{ vars.AMF_RUNNER_HEAVY || 'ubuntu-latest' }}
     timeout-minutes: 15
     env:
       SOURCE_DATE_EPOCH: "1704067200"
@@ -289,8 +291,8 @@ jobs:
           if (os.cpu_count() or 0) < 4:
               raise SystemExit(
                   f"LGW03-1 GHA FAIL: this runner has {os.cpu_count()} CPUs; --cpus=4 needs 4 or "
-                  "more. Standard runners for private repositories have 2: move image-digest to "
-                  "a runner with 4+ cores (docs/ci/ENTERPRISE_SETUP.md)."
+                  "more. Standard runners for private repositories have 2: set AMF_RUNNER_HEAVY "
+                  "to a runner with 4+ cores (docs/ci/ENTERPRISE_SETUP.md)."
               )
 
           def snap(cpus: str) -> dict:

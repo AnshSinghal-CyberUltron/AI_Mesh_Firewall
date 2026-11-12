@@ -117,7 +117,8 @@ Scratch project, timeout = 2 s, a 30 s sleep under xfail(strict=True):
 
 == 6. image-digest CPU guard (A NIT 2)
 The LGW03-1 heredoc, run on this 2-CPU host (docker not reached):
-  exit 1 | LGW03-1 GHA FAIL: this runner has 2 CPUs; --cpus=4 needs 4 or more. Standard runners for private
-  repositories have 2: move image-digest to a runner with 4+ cores (docs/ci/ENTERPRISE_SETUP.md).
+  exit 1 | LGW03-1 GHA FAIL: this runner has 2 CPUs; --cpus=4 needs 4 or more. Standard runners for private repositories have 2: set AMF_RUNNER_HEAVY to a runner with 4+ cores (docs/ci/ENTERPRISE_SETUP.md).
+image-digest's runs-on now follows AMF_RUNNER_HEAVY (unset: ubuntu-latest), so going private needs the
+variable set to a 4+-core runner first.
 Specs (docs.github.com/en/actions/reference/runners/github-hosted-runners, read 12 Nov 2026): standard Linux
 x64 runner, public repositories 4 CPU / 16 GB; private repositories 2 CPU / 8 GB.
