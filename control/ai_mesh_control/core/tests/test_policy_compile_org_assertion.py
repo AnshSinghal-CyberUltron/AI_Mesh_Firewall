@@ -157,7 +157,10 @@ class PolicyCompileOrgAssertionTests(TestCase):
         # (auth/models.py is_platform_operator). The flag alone grants nothing:
         # ?organization_id is ignored, the user's own org is compiled and pushed,
         # and no cross_org_access audit row is written (#113 review, A4).
-        from auth.models import UserProfile
+        # The user holds the platform_admin role so that, without is_staff, it
+        # still passes the view's IsAdminOrSuperuser permission
+        # (core/admin_views.py) and reaches org resolution.
+        from auth.models import Role, UserProfile
         from core.models import AuditLog
 
         flagged = User.objects.create_user(
@@ -167,6 +170,8 @@ class PolicyCompileOrgAssertionTests(TestCase):
         profile.organization = self.org_a
         profile.is_platform_operator = True
         profile.save(update_fields=["organization", "is_platform_operator"])
+        platform_admin, _ = Role.objects.get_or_create(name="platform_admin")
+        profile.roles.add(platform_admin)
 
         compiler = self._mock_compiler()
         client = APIClient()
