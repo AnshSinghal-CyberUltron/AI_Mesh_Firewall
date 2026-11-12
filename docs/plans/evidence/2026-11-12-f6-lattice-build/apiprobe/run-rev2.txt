@@ -1,0 +1,36 @@
+F6 Lattice API probe, revision 2: how it was run (12 Nov 2026)
+
+Code under test: develop 562619c867f0a2a21718832b9d7edbb0944fdc3e (control/ and shared/ are identical
+on the plan branch; worktree /home/claude/wt/f6-lattice-rev2).
+Host: 2 CPUs, native Postgres 16 (no pgvector), Redis 7.0. CI uses pgvector/pgvector:pg16 and redis:7.4.
+
+Command (from <worktree>/control; settings values loaded from the host env script, never printed):
+  . /home/claude/work/env-ctl.sh
+  DJANGO_SETTINGS_MODULE=f6rev2_settings \
+  LATTICE_PROBE2_OUT=<out>/probe2.json \
+  PYTHONPATH=<shim dir>:<worktree>/control/ai_mesh_control:<worktree>/shared:<this dir> \
+  flock /home/claude/work/.heavy.lock flock /home/claude/work/.ctl-db.lock \
+  nice -n 10 python manage.py test test_lattice_probe_rev2 --noinput -v 2
+
+f6rev2_settings is an out-of-repo copy of /home/claude/work/runs/113-A/harness/rv113_settings.py
+(it imports main_app.settings and strips "CREATE EXTENSION IF NOT EXISTS vector;" from migration
+policy/0021, VECTOR(1536) -> TEXT, because this host's Postgres has no pgvector) with one added line
+that gives the test database its own name, test_aimesh_f6rev2. No shared database was created,
+dropped or touched. The shim is not committed.
+
+Result: "Ran 3 tests in 8.031s", OK, exit 0. Wall time including the lock queue: 2,841 s
+(queued 09:43:45Z, finished 10:31:06Z; almost all of it waiting for the heavy lock behind other
+agents' runs).
+
+Environment noise in the raw log (not a probe result): Celery's broker is not running on this host
+(kombu "Connection refused" from post-save signal tasks) and the Bedrock client logs failed health
+checks during migrations. Neither affects the recorded values: every check reads the HTTP response
+or the database directly, and plan publishes were mocked and counted.
+
+One edit after the run: the result key "plan_publishes_for_3_rule_writes" was renamed to
+"plan_publishes_for_4_rule_writes", in both the probe and probe-rev2-results.json, because the probe
+makes 4 rule writes (PATCH r1, POST r2, POST r3, DELETE r3). The value (4) is unchanged.
+
+The raw runner log is not committed: it carries application log lines from the host environment.
+Key plaintext from create responses is never written (only status codes and non-secret fields are
+recorded). The test user has no usable password (the client uses force_authenticate).

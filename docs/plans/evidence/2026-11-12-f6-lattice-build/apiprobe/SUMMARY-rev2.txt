@@ -1,0 +1,82 @@
+F6 Lattice API probe, revision 2: summary of probe-rev2-results.json
+(develop 562619c8 code; throwaway test DB test_aimesh_f6rev2; 12 Nov 2026)
+
+It checks every rev-1 review claim the rev-2 plan relies on, plus three new findings.
+"Confirmed" means the measurement agrees with the claim; differences are stated.
+
+P1  Rule writes against Policy.version and plan publishes (Review A, A-B1)       CONFIRMED
+    4 rule writes through /api/policies/rules/ (PATCH r1, POST r2, POST r3, DELETE r3):
+      statuses 200, 201, 201 (not recorded; the later DELETE of r3 returned 204), 204;
+      Policy.version stays 1 after every one of them.
+    Plan publishes (core.firewall_v2_publish.publish_for_org, mocked and counted): 4 for the
+      4 rule writes, i.e. every rule write republishes the org plan on its own.
+    Policy PATCH carrying the ORIGINAL version (1) after the rule writes: 200 (not 409).
+    A second PATCH with version 1 after that policy-field write: 409.
+    -> The 409 check covers policy fields only. N-11; S6a/S6b; B13.
+
+P2  /api/policies/test evaluates saved rules only (new finding N-16)
+    Body with policy_id plus a draft "rules" list whose keyword matches the prompt "zeta":
+      200, action "allow" (the draft rule was ignored).
+    Prompt "beta", which a SAVED rule matches: 200, action "block".
+    The same policy after enabled=False: 404 {"detail": "Policy not found or disabled."}
+    -> A client-side draft cannot be tested. B13 (dry run of an unsaved body).
+
+P3  Log records for requests that carry X-Request-ID (Review B, B-B1)           CONFIRMED (no access line)
+    200 soc-kpis with X-Request-ID ui-traffic-probe2-0001: the header is echoed. Two records
+      carry the id, and both are incidental side effects of first-time org config creation:
+      core.signals "FirewallConfig synced to Redis …" and mcp_connector.signals "MCP scan
+      version bumped …". Neither names the method, path or status. No access line exists.
+      (The reviewer's run, which had no such side effects, recorded 0 records.)
+    404 threat-feed/999999999/ with X-Request-ID ui-detail-probe2-0002: one django.request
+      WARNING "Not Found: …" whose request id is EMPTY (""), because the middleware resets
+      the id before Django's log_response runs.
+    -> A box fetch cannot be matched to a log line that says what was requested and how it
+       ended. N-13; B16; A2 gated on B16.
+
+P4  Analytics semaphore (Review B, B-S2c)                                         CONFIRMED
+    soc-kpis with both permits held: 503 {"error": "analytics_busy", "detail": "Too many
+      concurrent analytics queries"}; Retry-After header: absent.
+    Anonymous call while busy: 503. Anonymous call when idle: 401.
+    -> The semaphore runs before authentication. N-17; B19.
+
+P5  threat-feed?limit=1 default window (Review A, A-N3)                          CONFIRMED
+    All events moved to 60 h ago. Default (hours=48): count 0, 0 rows.
+    hours=8760: count 11, 1 row.
+    -> Rev 2 does not use threat-feed for box 16 at all (cost of a year-wide window).
+
+P6  Silent parameter fallbacks (Review A, A-N2)                                  CONFIRMED
+    dashboard/model-usage?days=abc: 200 (clamp_days falls back to 30 days).
+    owasp-stats?hours=-5: 200 with unique_events_count 0; hours=24 gives 12.
+    -> N-5; B2 forbids silent fallbacks.
+
+P7  module-kpis 1.7 fields (Review A, A-S2)                                       CONFIRMED
+    keys: blocked, critical, flagged, redacted, total. No "withheld".
+    -> Box 11 partial; B14.
+
+P8  Sibling events of one request (Review A, A-N8)                               CONFIRMED, with a nuance
+    Request "probe2-req-dual" has a redact event (id 11) and a block event (id 12).
+    threat-feed/11/ and threat-feed/12/ both return request_id "probe2-req-dual", and
+      related_event_ids points each at the other.
+    BUT each returns its OWN action: 11 -> "redact", 12 -> "block".
+    -> Any sibling id opens the request, but the Outcome box must not present the opened
+       event's action as the request's outcome. It shows each event's action until B9
+       returns a request-level outcome (plan §6.1b).
+
+P9  Gateway key PATCH from two "tabs" (Review A, edge cases)                     CONFIRMED
+    3 PATCHes (rate limit 1000; name; rate limit 5000 with "version": 1): 200, 200, 200.
+    The key has no version field; the "version" sent was ignored. Final: name from tab B,
+      rate limit 5000. Last write wins. N-21.
+
+P10 Keys list filter (Review A, A-N4)                                            CONFIRMED
+    2 keys, one revoked. /api/gateways/keys/ count 2; ?is_active=true count 2 (ignored).
+    -> Active and expiring counts must be computed over every page until B5's counts endpoint.
+
+P11 Collapsed threat-feed paging (new finding N-15)
+    4,050 events, each its own request, all within 24 h.
+    hours=24&limit=100&offset=0     -> count 4050, 100 rows, scan_truncated true
+                         offset=3900  -> count 4050, 100 rows
+                         offset=3990  -> count 4050,  10 rows
+                         offset=4000  -> count 4050,   0 rows   (50 requests unreachable)
+    collapse=false&offset=4000      -> count 4050,  50 rows   (the per-event path pages fully)
+    -> A requests list built on the collapsed feed cannot page past the newest 4,000 events.
+       B17 (keyset-paged request list); S4 depends on it.
