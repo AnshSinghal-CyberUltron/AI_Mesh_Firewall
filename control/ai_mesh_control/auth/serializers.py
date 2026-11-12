@@ -199,7 +199,9 @@ def _get_offering_role(user, offering):
     if user.is_superuser:
         return "admin"
     try:
-        role_names = set(user.profile.roles.values_list("name", flat=True))
+        # .all() (not .values_list) so a list view that prefetches profile__roles costs no
+        # query per user (#122 review, Reviewer B N5: 611 queries for ~300 users).
+        role_names = {role.name for role in user.profile.roles.all()}
     except Exception:
         role_names = set()
     admin_role, user_role = OFFERING_ROLES.get(offering, (None, None))

@@ -35,6 +35,7 @@ from .serializers import (
     UserUpdateSerializer,
     _get_offering_role,
 )
+from .audit import orgless_staff_fleet_read
 from .utils import get_request_organization
 
 User = get_user_model()
@@ -480,6 +481,50 @@ class ChangePasswordView(APIView):
         return Response({"detail": "Password changed successfully."}, status=status.HTTP_200_OK)
 
 
+_BAD_USER_ID = object()
+
+
+def _session_target_or_none(request, user_id, action):
+    """The user whose session the caller may terminate or reinstate, else None.
+
+    #120 / #122, owner decision 12 Nov ("superuser = ZeroShield staff"):
+    - Staff reach a user in any org, as on develop (the documented staff-only endpoint).
+      When the target is not in the staff member's own org a ``cross_org_access`` row is
+      written before the caller acts; if it cannot be written the request fails.
+    - Any other caller (IsAdminUser: is_staff without superuser, e.g. a platform operator)
+      reaches only users in get_request_organization's org (own org, or an org an operator
+      names, audited there). No org reaches nobody (develop let an org-less staff user act
+      on every tenant). A miss writes ``cross_org_denied`` with the requested id only.
+    Returns ``_BAD_USER_ID`` for a user_id that is not an integer (the view answers 400 with
+    a field message; before, the ValueError reached the generic 400 handler).
+    """
+    from auth.audit import actor_org_id, audit_cross_org_access, audit_cross_org_denied
+    from auth.models import is_zeroshield_staff
+
+    try:
+        user_pk = int(str(user_id).strip())
+    except (TypeError, ValueError):
+        return _BAD_USER_ID
+    caller = request.user
+    if is_zeroshield_staff(caller):
+        user = User.objects.filter(pk=user_pk).select_related("profile").first()
+        if user is not None:
+            target_org_id = actor_org_id(user)
+            if target_org_id != actor_org_id(caller):
+                audit_cross_org_access(
+                    user=caller, target_org_id=target_org_id, action=action, obj=f"user:{user.pk}",
+                    request=request,
+                )
+        return user
+    req_org = get_request_organization(request)
+    user = None
+    if req_org is not None:
+        user = User.objects.filter(pk=user_pk, profile__organization_id=req_org.id).select_related("profile").first()
+    if user is None:
+        audit_cross_org_denied(user=caller, action=action, requested=f"user:{user_pk}", request=request)
+    return user
+
+
 class SessionTerminateView(APIView):
     """POST /api/auth/sessions/terminate/ — terminate a user session (admin/staff only)."""
 
@@ -535,14 +580,10 @@ class SessionTerminateView(APIView):
         user_id = request.data.get("user_id")
         if user_id is None:
             return Response({"user_id": "Required."}, status=status.HTTP_400_BAD_REQUEST)
-
-        user = User.objects.filter(pk=user_id).select_related("profile").first()
-        if not user:
-            return Response({"detail": "User not found."}, status=status.HTTP_404_NOT_FOUND)
-
-        req_org = get_request_organization(request)
-        target_org_id = getattr(getattr(user, "profile", None), "organization_id", None)
-        if req_org is not None and target_org_id != req_org.id and not request.user.is_superuser:
+        user = _session_target_or_none(request, user_id, "session.terminate")
+        if user is _BAD_USER_ID:
+            return Response({"user_id": "Must be an integer."}, status=status.HTTP_400_BAD_REQUEST)
+        if user is None:
             return Response({"detail": "User not found."}, status=status.HTTP_404_NOT_FOUND)
 
         reason = request.data.get("reason", "")
@@ -609,14 +650,10 @@ class SessionReinstateView(APIView):
         user_id = request.data.get("user_id")
         if user_id is None:
             return Response({"user_id": "Required."}, status=status.HTTP_400_BAD_REQUEST)
-
-        user = User.objects.filter(pk=user_id).select_related("profile").first()
-        if not user:
-            return Response({"detail": "User not found."}, status=status.HTTP_404_NOT_FOUND)
-
-        req_org = get_request_organization(request)
-        target_org_id = getattr(getattr(user, "profile", None), "organization_id", None)
-        if req_org is not None and target_org_id != req_org.id and not request.user.is_superuser:
+        user = _session_target_or_none(request, user_id, "session.reinstate")
+        if user is _BAD_USER_ID:
+            return Response({"user_id": "Must be an integer."}, status=status.HTTP_400_BAD_REQUEST)
+        if user is None:
             return Response({"detail": "User not found."}, status=status.HTTP_404_NOT_FOUND)
 
         cleared = TerminatedSession.objects.filter(user=user, cleared_at__isnull=True).update(
@@ -688,10 +725,14 @@ class UserManagementListCreateView(APIView):
             User.objects.filter(Q(profile__roles__name__in=[admin_role, user_role]) | Q(is_superuser=True))
             .distinct()
             .order_by("email")
+            .select_related("profile")
+            .prefetch_related("profile__roles")
         )
         if org is not None:
             users = users.filter(profile__organization_id=org.id)
-        elif not request.user.is_superuser:
+        elif not orgless_staff_fleet_read(request, "auth.users"):
+            # No org and not org-less staff: no users. Org-less staff keep develop's
+            # all-tenants list (owner decision 12 Nov), audited by orgless_staff_fleet_read.
             users = users.none()
 
         serializer = UserManagementSerializer(users, many=True)
@@ -755,7 +796,12 @@ class UserManagementDetailView(APIView):
         if not user:
             return Response({"detail": "User not found."}, status=status.HTTP_404_NOT_FOUND)
         org = get_request_organization(request)
-        if org is not None and getattr(user.profile, "organization_id", None) != org.id:
+        if org is None:
+            # #120: fail closed without an org (develop let ANY admin with no org read any
+            # user). Org-less staff keep the fleet read, audited (owner decision 12 Nov).
+            if not orgless_staff_fleet_read(request, "auth.user_detail"):
+                return Response({"detail": "User not found."}, status=status.HTTP_404_NOT_FOUND)
+        elif getattr(getattr(user, "profile", None), "organization_id", None) != org.id:
             return Response({"detail": "User not found."}, status=status.HTTP_404_NOT_FOUND)
         return Response(UserManagementSerializer(user).data)
 
@@ -774,7 +820,8 @@ class UserManagementDetailView(APIView):
         if not user:
             return Response({"detail": "User not found."}, status=status.HTTP_404_NOT_FOUND)
         org = get_request_organization(request)
-        if org is not None and getattr(user.profile, "organization_id", None) != org.id:
+        # #120 / R11: fail closed without an org (was: an admin with no org reached any user).
+        if org is None or getattr(user.profile, "organization_id", None) != org.id:
             return Response({"detail": "User not found."}, status=status.HTTP_404_NOT_FOUND)
         serializer = UserUpdateSerializer(user, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
@@ -793,7 +840,8 @@ class UserManagementDetailView(APIView):
         if not user:
             return Response({"detail": "User not found."}, status=status.HTTP_404_NOT_FOUND)
         org = get_request_organization(request)
-        if org is not None and getattr(user.profile, "organization_id", None) != org.id:
+        # #120 / R11: fail closed without an org (was: an admin with no org reached any user).
+        if org is None or getattr(user.profile, "organization_id", None) != org.id:
             return Response({"detail": "User not found."}, status=status.HTTP_404_NOT_FOUND)
         if user == request.user:
             return Response({"detail": "You cannot delete your own account."}, status=status.HTTP_400_BAD_REQUEST)

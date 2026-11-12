@@ -2261,6 +2261,44 @@ class AttackGraphView(APIView):
         return Response({"nodes": nodes_list, "edges": edges_list})
 
 
+def _incident_for_request(request, pk, action):
+    """The incident ``pk`` the caller may act on, else None (the caller 404s).
+
+    #120 / #122, owner decision 12 Nov ("superuser = ZeroShield staff"):
+    - Staff (``is_zeroshield_staff``) reach any org's incident, as on develop. When the
+      event's org is not the staff member's own, a ``cross_org_access`` AuditLog row
+      (actor, target org, action, object) is written BEFORE the caller acts; if it cannot
+      be written the request fails and nothing changes.
+    - Everyone else is scoped by the Phase 0a X-1 rule (_enforcement_events_for_request):
+      the event must be in get_request_organization's org (own org; a platform operator
+      may name one, audited there). A miss writes ``cross_org_denied`` with the requested
+      id only, the same row whether the id exists in another org or not at all.
+    The lookup runs on the default alias because the caller writes to the row.
+    """
+    from django.db import DEFAULT_DB_ALIAS
+
+    from auth.audit import actor_org_id, audit_cross_org_access, audit_cross_org_denied
+    from auth.models import is_zeroshield_staff
+
+    user = request.user
+    if is_zeroshield_staff(user):
+        ev = EnforcementEvent.objects.using(DEFAULT_DB_ALIAS).filter(pk=pk).first()
+        if ev is not None:
+            target_org_id = _event_organization_id(ev)
+            if target_org_id != actor_org_id(user):
+                audit_cross_org_access(
+                    user=user, target_org_id=target_org_id, action=f"incident.{action}",
+                    obj=f"enforcement_event:{ev.pk}", request=request,
+                )
+        return ev
+    ev = _enforcement_events_for_request(request).using(DEFAULT_DB_ALIAS).filter(pk=pk).first()
+    if ev is None:
+        audit_cross_org_denied(
+            user=user, action=f"incident.{action}", requested=f"enforcement_event:{pk}", request=request
+        )
+    return ev
+
+
 def _is_platform_admin(user):
     """Return True if the user is a superuser or has the platform_admin role."""
     if user.is_superuser:
@@ -2280,23 +2318,10 @@ class EscalateIncidentView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, pk):
-        from auth.utils import get_request_organization
-
-        request_org_id = get_request_organization(request)
-        if request_org_id is not None:
-            request_org_id = request_org_id.id
-
-        # Fail-closed tenant scoping: non-superusers may only act on incidents in
-        # their own org. Scope the lookup itself so cross-org / org-less requests
-        # 404 rather than fall through (drained events have only organization_id).
-        base_qs = EnforcementEvent.objects.all()
-        if not request.user.is_superuser:
-            if request_org_id is None:
-                return Response({"detail": "Incident not found."}, status=404)
-            base_qs = base_qs.filter(organization_id=request_org_id)
-        try:
-            ev = base_qs.get(pk=pk)
-        except EnforcementEvent.DoesNotExist:
+        # #120/#122: staff reach any org (audited); everyone else only their own org
+        # (see _incident_for_request).
+        ev = _incident_for_request(request, pk, "escalate")
+        if ev is None:
             return Response({"detail": "Incident not found."}, status=404)
 
         event_org_id = _event_organization_id(ev)
@@ -2320,11 +2345,11 @@ class EscalateIncidentView(APIView):
         )
         message = f"{escalator_name} escalated: {category} (incident #{ev.id})"
 
-        # Notify platform_admin in the same organization as the event; superusers always receive.
-        admin_qs = User.objects.filter(Q(is_superuser=True) | Q(profile__roles__name="platform_admin")).distinct()
-        if event_org_id is not None:
-            admin_qs = admin_qs.filter(Q(profile__organization_id=event_org_id) | Q(is_superuser=True))
-        admin_ids = list(admin_qs.values_list("id", flat=True))
+        # #120: notify the event org's superusers and platform_admins only. Before,
+        # `| Q(is_superuser=True)` sent the bell to every superuser of every org.
+        from core.isolation_notify import org_admin_recipient_ids
+
+        admin_ids = org_admin_recipient_ids(event_org_id)
         notifications = [
             Notification(
                 type="escalation",
@@ -2374,23 +2399,11 @@ class ResolveIncidentView(APIView):
         if not _is_platform_admin(request.user):
             raise PermissionDenied("Only admins can resolve incidents.")
 
-        from auth.utils import get_request_organization
-
-        request_org_id = get_request_organization(request)
-        if request_org_id is not None:
-            request_org_id = request_org_id.id
-
-        # Fail-closed tenant scoping: non-superusers may only act on incidents in
-        # their own org. Scope the lookup itself so cross-org / org-less requests
-        # 404 rather than fall through (drained events have only organization_id).
-        base_qs = EnforcementEvent.objects.all()
-        if not request.user.is_superuser:
-            if request_org_id is None:
-                return Response({"detail": "Incident not found."}, status=404)
-            base_qs = base_qs.filter(organization_id=request_org_id)
-        try:
-            ev = base_qs.get(pk=pk)
-        except EnforcementEvent.DoesNotExist:
+        # #120/#122: staff reach any org (audited); everyone else only their own org, so a
+        # customer can no longer resolve (silence) another org's incident, close its
+        # compliance violations or mark its bells read (see _incident_for_request).
+        ev = _incident_for_request(request, pk, "resolve")
+        if ev is None:
             return Response({"detail": "Incident not found."}, status=404)
 
         event_org_id = _event_organization_id(ev)

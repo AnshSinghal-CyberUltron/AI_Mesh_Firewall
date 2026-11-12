@@ -1,0 +1,49 @@
+# Reproduction: the new #120 tests run against UNMODIFIED develop product code (943a5f21; control identical to 25c33c86).
+# Harness fixes made after these runs (not product): WebsocketCommunicator has no .instance (run 1 errors),
+# EnforcementEvent takes endpoint_id (run 1 errors), /api/policies/ needs ?policy_domain= (run 2, the 400 below).
+# test_compile_status_of_the_all_orgs_bundle_refused was added after these runs; it fails the same way on develop
+# (an org-less superuser got 200 on /api/policies/compile/status/, see compile_views.py:163 at base).
+# cmd (control/): flock /home/claude/work/.ctl-db.lock nice -n 10 python manage.py test <new modules> --noinput
+
+## run 1: incident, isolation, auth modules (ws and org-less modules errored on harness bugs, see run 2)
+Ran 34 tests in 129.896s
+FAILED (failures=13, errors=11)
+FAIL: test_drained_event_without_org_notifies_nobody (core.tests.test_isolation_notify_org_scope.IsolationNotifyOrgScopeTests.test_drained_event_without_org_notifies_nobody)
+FAIL: test_isolation_bell_recipients_are_the_event_org_admins (core.tests.test_isolation_notify_org_scope.IsolationNotifyOrgScopeTests.test_isolation_bell_recipients_are_the_event_org_admins)
+FAIL: test_orgless_admin_cannot_read_update_or_delete_other_org_user (auth.tests.test_admin_actions_org_scope.AdminActionsOrgScopeTests.test_orgless_admin_cannot_read_update_or_delete_other_org_user)
+FAIL: test_orgless_admin_cannot_terminate (auth.tests.test_admin_actions_org_scope.AdminActionsOrgScopeTests.test_orgless_admin_cannot_terminate)
+FAIL: test_orgless_superuser_lists_no_users (auth.tests.test_admin_actions_org_scope.AdminActionsOrgScopeTests.test_orgless_superuser_lists_no_users)
+FAIL: test_other_org_superuser_cannot_reinstate (auth.tests.test_admin_actions_org_scope.AdminActionsOrgScopeTests.test_other_org_superuser_cannot_reinstate)
+FAIL: test_other_org_superuser_cannot_terminate (auth.tests.test_admin_actions_org_scope.AdminActionsOrgScopeTests.test_other_org_superuser_cannot_terminate)
+FAIL: test_escalation_bells_stay_in_the_event_org (policy.tests.test_incident_org_scope.IncidentOrgScopeTests.test_escalation_bells_stay_in_the_event_org)
+FAIL: test_orgless_superuser_cannot_escalate (policy.tests.test_incident_org_scope.IncidentOrgScopeTests.test_orgless_superuser_cannot_escalate)
+FAIL: test_orgless_superuser_cannot_resolve (policy.tests.test_incident_org_scope.IncidentOrgScopeTests.test_orgless_superuser_cannot_resolve)
+FAIL: test_other_org_superuser_cannot_escalate (policy.tests.test_incident_org_scope.IncidentOrgScopeTests.test_other_org_superuser_cannot_escalate)
+FAIL: test_other_org_superuser_cannot_resolve (policy.tests.test_incident_org_scope.IncidentOrgScopeTests.test_other_org_superuser_cannot_resolve)
+FAIL: test_other_org_superuser_cannot_resolve_by_naming_the_org (policy.tests.test_incident_org_scope.IncidentOrgScopeTests.test_other_org_superuser_cannot_resolve_by_naming_the_org)
+
+## run 2: ws + org-less modules after the harness fixes
+Ran 11 tests in 27.945s
+FAILED (failures=10)
+FAIL: test_orgless_superuser_naming_an_org_is_refused (core.tests.test_ws_org_scope.NotificationSocketOrgScopeTests.test_orgless_superuser_naming_an_org_is_refused)
+FAIL: test_platform_operator_may_name_another_org (core.tests.test_ws_org_scope.NotificationSocketOrgScopeTests.test_platform_operator_may_name_another_org)
+FAIL: test_superuser_naming_another_org_joins_own_org_only (core.tests.test_ws_org_scope.NotificationSocketOrgScopeTests.test_superuser_naming_another_org_joins_own_org_only)
+FAIL: test_admin_endpoint_stats (core.tests.test_orgless_superuser_scope.OrglessSuperuserScopeTests.test_admin_endpoint_stats)
+FAIL: test_dashboard_compliance (core.tests.test_orgless_superuser_scope.OrglessSuperuserScopeTests.test_dashboard_compliance)
+FAIL: test_gateway_stats (core.tests.test_orgless_superuser_scope.OrglessSuperuserScopeTests.test_gateway_stats)
+FAIL: test_llm_models (core.tests.test_orgless_superuser_scope.OrglessSuperuserScopeTests.test_llm_models)
+FAIL: test_policies_and_rules (core.tests.test_orgless_superuser_scope.OrglessSuperuserScopeTests.test_policies_and_rules)
+FAIL: test_policy_mcp_server_choices (core.tests.test_orgless_superuser_scope.OrglessSuperuserScopeTests.test_policy_mcp_server_choices)
+FAIL: test_rule_create_on_other_org_policy_refused (core.tests.test_orgless_superuser_scope.OrglessSuperuserScopeTests.test_rule_create_on_other_org_policy_refused)
+
+## assertion messages from run 2 (what an org-less or other-org superuser got on develop)
+AssertionError: True is not false
+AssertionError: 'notifications_5' != 'notifications_4'
+AssertionError: 'notifications_6' != 'notifications_7'
+AssertionError: Lists differ: [{'version': '9.9.9', 'endpoints': 1, 'status': 'STABLE', 'released': None}] != []
+AssertionError: b'GDPR' unexpectedly found in b'{"frameworks":[{"framework":"GDPR","totalViolations":1,"resolved":0,"pending":1,"resolutionRate":0.0,"avgResolutionTime":null,"lastAudit":null,"status":"AT RISK"}],"overall
+AssertionError: Lists differ: [{'serverId': 'e0c9e8b3-ba45-4a5a-bff2-c52[245 chars]HY'}] != []
+AssertionError: b'orgless-a-model' unexpectedly found in b'[{"id":4,"provider":"openai","provider_display":"OpenAI","model_name":"orgless-a-model","model_id":"openai/gpt-4o-mini","api_key_set":false,"api_key_last4":"","a
+AssertionError: 400 != 200 : ('/api/policies/', b'{"policy_domain":"This field is required."}')
+AssertionError: True != False
+AssertionError: 201 != 404 : b'{"id":75,"name":"injected","rule_type":"regex","condition":{"pattern":"y"},"action":"block","redaction_config":{},"priority":1,"enabled":true,"description":"","pipeline_stage":"","target_to

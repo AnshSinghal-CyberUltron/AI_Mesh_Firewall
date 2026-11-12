@@ -114,6 +114,17 @@ def is_safe_outbound_url(url: str, allowed_schemes: tuple[str, ...] = ("http", "
     if scheme not in {s.lower() for s in allowed_schemes}:
         return False, f"scheme '{scheme or '(none)'}' not allowed (allowed: {', '.join(allowed_schemes)})"
 
+    # Refuse userinfo and any '@' in the authority, as the gateway_v2 dispatch guard does
+    # (gateway_v2/dispatch/url_guard.py). urlparse splits on the LAST '@', so
+    # "ws://127.0.0.1\@public.example/" was checked as public.example while another
+    # parser may connect to 127.0.0.1 (#113 review note N1).
+    try:
+        has_userinfo = parsed.username is not None or parsed.password is not None
+    except ValueError:
+        return False, "unparseable URL authority"
+    if has_userinfo or "@" in (parsed.netloc or ""):
+        return False, "userinfo in URL not allowed"
+
     host = parsed.hostname
     if not host:
         return False, "URL has no host"

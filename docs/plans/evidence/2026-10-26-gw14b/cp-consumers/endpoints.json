@@ -481,7 +481,7 @@
   },
   {
    "file": "control/ai_mesh_control/policy/security_views.py",
-   "line": 2274,
+   "line": 2312,
    "metadata_keys": [
     "detail",
     "escalated_at",
@@ -498,7 +498,7 @@
   },
   {
    "file": "control/ai_mesh_control/policy/security_views.py",
-   "line": 2365,
+   "line": 2390,
    "metadata_keys": [
     "detail",
     "incident_id",
@@ -575,7 +575,7 @@
   },
   {
    "file": "control/ai_mesh_control/policy/security_views.py",
-   "line": 2471,
+   "line": 2484,
    "metadata_keys": [
     "agent_id",
     "avg_block_rate",
@@ -592,7 +592,7 @@
   },
   {
    "file": "control/ai_mesh_control/policy/security_views.py",
-   "line": 2555,
+   "line": 2568,
    "metadata_keys": [
     "action",
     "allowed",
@@ -607,7 +607,7 @@
   },
   {
    "file": "control/ai_mesh_control/policy/security_views.py",
-   "line": 2589,
+   "line": 2602,
    "metadata_keys": [
     "action",
     "blocked",
@@ -621,7 +621,7 @@
   },
   {
    "file": "control/ai_mesh_control/policy/security_views.py",
-   "line": 2633,
+   "line": 2646,
    "metadata_keys": [
     "_owasp_code",
     "_owasp_codes",
@@ -645,7 +645,7 @@
   },
   {
    "file": "control/ai_mesh_control/policy/security_views.py",
-   "line": 2688,
+   "line": 2701,
    "metadata_keys": [
     "_risk",
     "agentType",
@@ -662,7 +662,7 @@
   },
   {
    "file": "control/ai_mesh_control/policy/security_views.py",
-   "line": 2741,
+   "line": 2754,
    "metadata_keys": [
     "action",
     "automated",
@@ -679,7 +679,7 @@
   },
   {
    "file": "control/ai_mesh_control/policy/security_views.py",
-   "line": 2786,
+   "line": 2799,
    "metadata_keys": [
     "_owasp_code",
     "_owasp_codes",
@@ -715,7 +715,7 @@
   },
   {
    "file": "control/ai_mesh_control/policy/security_views.py",
-   "line": 2920,
+   "line": 2933,
    "metadata_keys": [
     "_esc",
     "_lat_n",
@@ -747,7 +747,7 @@
   },
   {
    "file": "control/ai_mesh_control/policy/security_views.py",
-   "line": 3007,
+   "line": 3020,
    "metadata_keys": [
     "_detail_extra",
     "_detail_top",

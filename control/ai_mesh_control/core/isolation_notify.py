@@ -12,6 +12,24 @@ _ISOLATION_EVENT_TYPES = frozenset({"kill_switch", "model_isolation", "circuit_b
 _NOTIFY_ACTIONS = frozenset({"block", "disable", "reroute", "isolate", "isolated", "monitor", "alert"})
 
 
+def org_admin_recipient_ids(org_id) -> list[int]:
+    """Users who receive an org's incident bells: that org's superusers and platform_admins.
+
+    #120 / R11 (auth/models.py UserProfile.is_platform_operator): ORG-scoped only.
+    Superusers of other orgs, or with no org, are not recipients, and an event without
+    an org notifies nobody (fail closed). Shared with EscalateIncidentView.
+    """
+    if org_id is None:
+        return []
+    User = get_user_model()
+    return list(
+        User.objects.filter(profile__organization_id=org_id)
+        .filter(Q(is_superuser=True) | Q(profile__roles__name="platform_admin"))
+        .distinct()
+        .values_list("id", flat=True)
+    )
+
+
 def create_isolation_bell_notifications_for_events(events) -> int:
     """Persist Notification(type=escalation) rows for org admins from EnforcementEvents.
 
@@ -24,7 +42,6 @@ def create_isolation_bell_notifications_for_events(events) -> int:
 
     from policy.models import Notification
 
-    User = get_user_model()
     created = 0
     for ev in events:
         try:
@@ -50,14 +67,8 @@ def create_isolation_bell_notifications_for_events(events) -> int:
                 + f" (event #{ev.id})"
             )
 
-            admin_qs = User.objects.filter(
-                Q(is_superuser=True) | Q(profile__roles__name="platform_admin")
-            ).distinct()
-            if org_id is not None:
-                admin_qs = admin_qs.filter(
-                    Q(profile__organization_id=org_id) | Q(is_superuser=True)
-                )
-            admin_ids = list(admin_qs.values_list("id", flat=True))
+            # #120: the event org's admins only (was: plus every superuser anywhere).
+            admin_ids = org_admin_recipient_ids(org_id)
             if not admin_ids:
                 continue
 

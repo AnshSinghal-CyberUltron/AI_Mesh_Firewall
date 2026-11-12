@@ -1,0 +1,161 @@
+# Live attack matrix, PR #122 rework (author). Harness: Reviewer B's #122 attack.py/seed.py, copied to
+# /home/claude/work/runs/122-rework/harness/ and re-classified for the owner decision (s1, s0 = staff).
+# Real control server (uvicorn, 1 worker), fresh DB per pass from one migrated template, in-memory channel layer,
+# isolated Redis db, out-of-repo pgvector settings shim (not committed). develop = 562619c8, head = 420f9bf5.
+# Rows matched by (group, probe, actor, request); '-' = request path differs between runs (random UUID ids).
+# acc/den = the actor's cross_org_access / cross_org_denied AuditLog rows added by the probes (WS: per phase).
+
+summary base: {"VULN": 3, "SAFE": 167, "OK": 6, "FAIL": 0, "INFO": 2, "STAFF-AUDITED": 0, "STAFF-UNAUDITED": 48} 
+summary head: {"VULN": 0, "SAFE": 179, "OK": 6, "FAIL": 0, "INFO": 2, "STAFF-AUDITED": 38, "STAFF-UNAUDITED": 1}
+auditlog head: {"privilege_change": 5, "cross_org_access": 128, "cross_org_denied": 70, "seed": 2, "gateway_key_purged": 1}
+
+verdict transitions (base -> head):
+  SAFE             -> SAFE             149
+  STAFF-UNAUDITED  -> STAFF-AUDITED    38
+  -                -> SAFE             18
+  STAFF-UNAUDITED  -> SAFE             9
+  OK               -> OK               6
+  VULN             -> SAFE             3
+  INFO             -> INFO             2
+  STAFF-UNAUDITED  -> STAFF-UNAUDITED  1
+
+per group / actor (base verdicts -> head verdicts; head status codes; head audit deltas acc/den):
+  A.filter         filter-orgid                           s1   | SAFEx16                        -> SAFEx16                        | 200x15,400             | acc+0 den+0
+  A.filter         filter-orgid                           a1   | SAFEx16                        -> SAFEx16                        | 200x15,400             | acc+0 den+0
+  A.filter         filter-orgid                           m1   | SAFEx16                        -> SAFEx16                        | 200x14,400,403         | acc+0 den+0
+  A.idor-read      idor-read                              s1   | SAFEx10,-x3                    -> SAFEx13                        | 404x12,200             | acc+0 den+0
+  A.idor-read      idor-read                              a1   | SAFEx10,-x3                    -> SAFEx13                        | 404x12,200             | acc+0 den+0
+  A.orgless        orgless-read                           s0   | STAFF-UNAUDITEDx8,SAFEx13      -> STAFF-AUDITEDx8,SAFEx13        | 200x21                 | acc+14 den+0
+  A.orgless-count  orgless-count                          s0   | STAFF-UNAUDITEDx10,SAFE        -> STAFF-AUDITEDx10,SAFE          | 200x11                 | acc+11 den+0
+  A.orgless        orgless-dashboard-agents-rules_applied s0   | INFO                           -> INFO                           | 200                    | acc+0 den+0
+  B.ws             ws-s1-names-org2                       s1   | STAFF-UNAUDITED                -> STAFF-AUDITED                  | accepted               | acc+1 den+0
+  B.ws             ws-a1-names-org2                       a1   | SAFE                           -> SAFE                           | accepted               | acc+0 den+1
+  B.ws             ws-m1-names-org2                       m1   | SAFE                           -> SAFE                           | accepted               | acc+0 den+1
+  B.ws             ws-s0-no-org                           s0   | SAFE                           -> SAFE                           | refused serv           | acc+1 den+0
+  B.ws             ws-s0-names-org2                       s0   | STAFF-UNAUDITED                -> STAFF-AUDITED                  | accepted               | acc+1 den+0
+  B.ws             ws-op(org2)-names-org1                 op   | OK                             -> OK                             | accepted               | acc+1 den+0
+  B.ws             ws-s1-own-org                          s1   | SAFE                           -> SAFE                           | accepted               | acc+1 den+0
+  B.ws             ws-s2-own-org(control)                 s2   | OK                             -> OK                             | accepted               | acc+0 den+0
+  B.ws             ws-t2-terminated-session               t2   | VULN                           -> SAFE                           | refused serv           | acc+0 den+0
+  B.bells          trigger-isolation-org2                 a2   | OK                             -> OK                             | 200                    | acc+0 den+0
+  B.bells          bells-read-org2                        s1   | VULN                           -> SAFE                           | 200                    | acc+0 den+0
+  B.bells          bells-read-org2                        a1   | SAFE                           -> SAFE                           | 200                    | acc+0 den+0
+  B.bells          bells-read-org2                        s0   | VULN                           -> SAFE                           | 200                    | acc+0 den+0
+  B.bells          bells-read-org2                        op   | INFO                           -> INFO                           | 200                    | acc+0 den+0
+  B.bells          bell-mark-read-by-id                   s1   | SAFE                           -> SAFE                           | 404                    | acc+0 den+0
+  B.bells          bell-mark-all-read                     s1   | SAFE                           -> SAFE                           | 200                    | acc+0 den+0
+  C.incident       resolve-org2-incident                  s1   | STAFF-UNAUDITEDx2              -> STAFF-AUDITEDx2                | 200x2                  | acc+2 den+0
+  C.incident       escalate-org2-incident                 s1   | STAFF-UNAUDITEDx2              -> STAFF-AUDITEDx2                | 200x2                  | acc+2 den+0
+  C.incident       resolve-org2-incident                  a1   | SAFE                           -> SAFE                           | 404                    | acc+0 den+1
+  C.incident       escalate-org2-incident                 a1   | SAFE                           -> SAFE                           | 404                    | acc+0 den+1
+  C.incident       resolve-org2-incident                  s0   | STAFF-UNAUDITEDx2              -> STAFF-AUDITEDx2                | 200x2                  | acc+2 den+0
+  C.incident       escalate-org2-incident                 s0   | STAFF-UNAUDITEDx2              -> STAFF-AUDITEDx2                | 200x2                  | acc+2 den+0
+  C.incident       resolve-org2-incident                  m1   | SAFE                           -> SAFE                           | 403                    | acc+0 den+0
+  C.incident       escalate-org2-incident                 m1   | SAFE                           -> SAFE                           | 404                    | acc+0 den+1
+  C.incident       resolve-org2-incident                  k1   | SAFE                           -> SAFE                           | 401                    | acc+0 den+0
+  C.incident       escalate-org2-incident                 k1   | SAFE                           -> SAFE                           | 401                    | acc+0 den+0
+  C.incident       resolve-org2-body-orgid                s1   | STAFF-UNAUDITED                -> STAFF-AUDITED                  | 200                    | acc+1 den+0
+  C.incident       resolve-org2-body-orgid                s0   | STAFF-UNAUDITED                -> STAFF-AUDITED                  | 200                    | acc+1 den+0
+  C.incident       si-escalate-incident                   s1   | SAFE                           -> SAFE                           | 404                    | acc+0 den+0
+  C.incident       si-resolve-incident                    s1   | SAFE                           -> SAFE                           | 404                    | acc+0 den+0
+  C.incident       review-approve                         s1   | SAFE                           -> SAFE                           | 404                    | acc+0 den+0
+  C.incident       review-reject                          s1   | SAFE                           -> SAFE                           | 404                    | acc+0 den+0
+  C.incident       si-escalate-incident                   a1   | SAFE                           -> SAFE                           | 404                    | acc+0 den+0
+  C.incident       si-resolve-incident                    a1   | SAFE                           -> SAFE                           | 404                    | acc+0 den+0
+  C.incident       review-approve                         a1   | SAFE                           -> SAFE                           | 404                    | acc+0 den+0
+  C.incident       review-reject                          a1   | SAFE                           -> SAFE                           | 404                    | acc+0 den+0
+  C.incident       si-escalate-incident                   s0   | SAFE                           -> SAFE                           | 404                    | acc+0 den+0
+  C.incident       si-resolve-incident                    s0   | SAFE                           -> SAFE                           | 404                    | acc+0 den+0
+  C.incident       review-approve                         s0   | SAFE                           -> SAFE                           | 404                    | acc+0 den+0
+  C.incident       review-reject                          s0   | SAFE                           -> SAFE                           | 404                    | acc+0 den+0
+  C.sessions       terminate-org2-user                    s1   | STAFF-UNAUDITEDx2              -> STAFF-AUDITEDx2                | 200x2                  | acc+2 den+0
+  C.sessions       reinstate-org2-user                    s1   | STAFF-UNAUDITEDx2              -> STAFF-AUDITEDx2                | 200x2                  | acc+2 den+0
+  C.sessions       terminate-org2-user                    a1   | SAFE                           -> SAFE                           | 403                    | acc+0 den+0
+  C.sessions       reinstate-org2-user                    a1   | SAFE                           -> SAFE                           | 403                    | acc+0 den+0
+  C.sessions       terminate-org2-user                    s0   | STAFF-UNAUDITEDx2              -> STAFF-AUDITEDx2                | 200x2                  | acc+2 den+0
+  C.sessions       reinstate-org2-user                    s0   | STAFF-UNAUDITEDx2              -> STAFF-AUDITEDx2                | 200x2                  | acc+2 den+0
+  C.users          patch-org2-user                        s1   | SAFE                           -> SAFE                           | 404                    | acc+0 den+0
+  C.policy         patch-org2-policy                      s1   | SAFE                           -> SAFE                           | 404                    | acc+0 den+0
+  C.policy         add-rule-via-policy-action             s1   | SAFE                           -> SAFE                           | 404                    | acc+0 den+0
+  C.policy         rule-create-on-org2-policy             s1   | SAFE                           -> SAFE                           | 404                    | acc+0 den+0
+  C.policy         patch-org2-rule                        s1   | SAFE                           -> SAFE                           | 404                    | acc+0 den+0
+  C.mcp            patch-org2-mcp-server                  s1   | -                              -> SAFE                           | 404                    | acc+0 den+0
+  C.keys           patch-org2-gateway-key                 s1   | -                              -> SAFE                           | 404                    | acc+0 den+0
+  C.keys           purge-revoked-keys                     s1   | SAFE                           -> SAFE                           | 200                    | acc+0 den+0
+  C.kill           deactivate-org2-killswitch             s1   | SAFE                           -> SAFE                           | 404                    | acc+0 den+0
+  C.kill           isolate-model-naming-org2              s1   | SAFE                           -> SAFE                           | 200                    | acc+0 den+0
+  C.kill           recover-org2-model                     s1   | SAFE                           -> SAFE                           | 200                    | acc+0 den+0
+  C.llm            patch-org2-llm                         s1   | SAFE                           -> SAFE                           | 404                    | acc+0 den+0
+  C.users          patch-org2-user                        a1   | SAFE                           -> SAFE                           | 404                    | acc+0 den+0
+  C.policy         patch-org2-policy                      a1   | SAFE                           -> SAFE                           | 404                    | acc+0 den+0
+  C.policy         add-rule-via-policy-action             a1   | SAFE                           -> SAFE                           | 404                    | acc+0 den+0
+  C.policy         rule-create-on-org2-policy             a1   | SAFE                           -> SAFE                           | 404                    | acc+0 den+0
+  C.policy         patch-org2-rule                        a1   | SAFE                           -> SAFE                           | 404                    | acc+0 den+0
+  C.mcp            patch-org2-mcp-server                  a1   | -                              -> SAFE                           | 404                    | acc+0 den+0
+  C.keys           patch-org2-gateway-key                 a1   | -                              -> SAFE                           | 404                    | acc+0 den+0
+  C.keys           purge-revoked-keys                     a1   | SAFE                           -> SAFE                           | 200                    | acc+0 den+0
+  C.kill           deactivate-org2-killswitch             a1   | SAFE                           -> SAFE                           | 404                    | acc+0 den+0
+  C.kill           isolate-model-naming-org2              a1   | SAFE                           -> SAFE                           | 200                    | acc+0 den+0
+  C.kill           recover-org2-model                     a1   | SAFE                           -> SAFE                           | 200                    | acc+0 den+0
+  C.llm            patch-org2-llm                         a1   | SAFE                           -> SAFE                           | 404                    | acc+0 den+0
+  C.users          patch-org2-user                        s0   | STAFF-UNAUDITED                -> SAFE                           | 404                    | acc+0 den+0
+  C.policy         patch-org2-policy                      s0   | STAFF-UNAUDITED                -> SAFE                           | 404                    | acc+0 den+0
+  C.policy         add-rule-via-policy-action             s0   | STAFF-UNAUDITED                -> SAFE                           | 404                    | acc+0 den+0
+  C.policy         rule-create-on-org2-policy             s0   | STAFF-UNAUDITED                -> SAFE                           | 404                    | acc+0 den+0
+  C.policy         patch-org2-rule                        s0   | STAFF-UNAUDITED                -> SAFE                           | 404                    | acc+0 den+0
+  C.mcp            patch-org2-mcp-server                  s0   | -                              -> SAFE                           | 404                    | acc+0 den+0
+  C.keys           patch-org2-gateway-key                 s0   | -                              -> SAFE                           | 404                    | acc+0 den+0
+  C.keys           purge-revoked-keys                     s0   | SAFE                           -> SAFE                           | 200                    | acc+0 den+0
+  C.kill           deactivate-org2-killswitch             s0   | SAFE                           -> SAFE                           | 404                    | acc+0 den+0
+  C.kill           isolate-model-naming-org2              s0   | SAFE                           -> SAFE                           | 400                    | acc+0 den+0
+  C.kill           recover-org2-model                     s0   | SAFE                           -> SAFE                           | 400                    | acc+0 den+0
+  C.llm            patch-org2-llm                         s0   | SAFE                           -> SAFE                           | 404                    | acc+0 den+0
+  C.agentkey       agentkey-enforcement-event-org2        k1   | SAFE                           -> SAFE                           | 201                    | acc+0 den+0
+  C.agentkey       agentkey-jwt-endpoint                  k1   | SAFE                           -> SAFE                           | 401                    | acc+0 den+0
+  C.global         orgless-put-default-firewall-config    s0   | STAFF-UNAUDITED                -> STAFF-UNAUDITED                | 200                    | acc+0 den+0
+  C.global         vector-compile-all-orgs                s1   | SAFE                           -> SAFE                           | 200                    | acc+0 den+0
+  C.delete         delete-org2-user                       s1   | SAFE                           -> SAFE                           | 404                    | acc+0 den+0
+  C.delete         delete-org2-rule                       s1   | SAFE                           -> SAFE                           | 404                    | acc+0 den+0
+  C.delete         delete-org2-mcp-server                 s1   | -                              -> SAFE                           | 404                    | acc+0 den+0
+  C.delete         delete-org2-gateway-key                s1   | -                              -> SAFE                           | 404                    | acc+0 den+0
+  C.delete         delete-org2-killswitch                 s1   | SAFE                           -> SAFE                           | 404                    | acc+0 den+0
+  C.delete         delete-org2-llm                        s1   | SAFE                           -> SAFE                           | 404                    | acc+0 den+0
+  C.delete         delete-org2-policy                     s1   | SAFE                           -> SAFE                           | 404                    | acc+0 den+0
+  C.delete         delete-org2-user                       a1   | SAFE                           -> SAFE                           | 404                    | acc+0 den+0
+  C.delete         delete-org2-rule                       a1   | SAFE                           -> SAFE                           | 404                    | acc+0 den+0
+  C.delete         delete-org2-mcp-server                 a1   | -                              -> SAFE                           | 404                    | acc+0 den+0
+  C.delete         delete-org2-gateway-key                a1   | -                              -> SAFE                           | 404                    | acc+0 den+0
+  C.delete         delete-org2-killswitch                 a1   | SAFE                           -> SAFE                           | 404                    | acc+0 den+0
+  C.delete         delete-org2-llm                        a1   | SAFE                           -> SAFE                           | 404                    | acc+0 den+0
+  C.delete         delete-org2-policy                     a1   | SAFE                           -> SAFE                           | 404                    | acc+0 den+0
+  C.delete         delete-org2-user                       s0   | STAFF-UNAUDITED                -> SAFE                           | 404                    | acc+0 den+0
+  C.delete         delete-org2-rule                       s0   | STAFF-UNAUDITED                -> SAFE                           | 404                    | acc+0 den+0
+  C.delete         delete-org2-mcp-server                 s0   | -                              -> SAFE                           | 404                    | acc+0 den+0
+  C.delete         delete-org2-gateway-key                s0   | -                              -> SAFE                           | 404                    | acc+0 den+0
+  C.delete         delete-org2-killswitch                 s0   | SAFE                           -> SAFE                           | 404                    | acc+0 den+0
+  C.delete         delete-org2-llm                        s0   | STAFF-UNAUDITED                -> SAFE                           | 404                    | acc+0 den+0
+  C.delete         delete-org2-policy                     s0   | STAFF-UNAUDITED                -> SAFE                           | 404                    | acc+0 den+0
+  D.positive       op-resolve-org1-unnamed                op   | SAFE                           -> SAFE                           | 404                    | acc+0 den+1
+  D.positive       op-resolve-org1-named                  op   | OK                             -> OK                             | 200                    | acc+0 den+0
+  D.positive       a1-resolve-own                         a1   | OK                             -> OK                             | 200                    | acc+0 den+0
+  D.positive       s1-escalate-own                        s1   | OK                             -> OK                             | 200                    | acc+0 den+0
+
+## Existence oracle and timing (head; 15 interleaved pairs, medians)
+  s1  POST /api/security/incidents/{}/resolve/      identical=False other-org=200 missing=404 median ms 34.94/31.33
+  s0  POST /api/security/incidents/{}/resolve/      identical=False other-org=400 missing=404 median ms 32.17/27.09
+  a1  POST /api/security/incidents/{}/resolve/      identical=True other-org=404 missing=404 median ms 36.93/37.19
+  s1  POST /api/security/incidents/{}/escalate/     identical=False other-org=400 missing=404 median ms 34.5/32.19
+  s0  POST /api/security/incidents/{}/escalate/     identical=False other-org=400 missing=404 median ms 30.06/27.37
+  a1  POST /api/security/incidents/{}/escalate/     identical=True other-org=404 missing=404 median ms 30.67/33.32
+  s1  GET /api/security/threat-feed/{}/             identical=True other-org=404 missing=404 median ms 31.9/32.5
+  s0  GET /api/security/threat-feed/{}/             identical=True other-org=404 missing=404 median ms 25.99/26.64
+  a1  GET /api/security/threat-feed/{}/             identical=True other-org=404 missing=404 median ms 34.97/33.37
+  s1  GET /api/auth/users/{}/?offering=platform     identical=True other-org=404 missing=404 median ms 22.2/17.67
+  s0  GET /api/auth/users/{}/?offering=platform     identical=False other-org=200 missing=404 median ms 20.99/17.9
+  a1  GET /api/auth/users/{}/?offering=platform     identical=True other-org=404 missing=404 median ms 23.0/18.88
+  s1  POST /api/notifications/{}/read/              identical=True other-org=404 missing=404 median ms 22.09/22.37
+  s0  POST /api/notifications/{}/read/              identical=True other-org=404 missing=404 median ms 18.72/16.45
+  a1  POST /api/notifications/{}/read/              identical=True other-org=404 missing=404 median ms 19.79/20.21
+  s1  GET /api/firewall/models/{}/                  identical=True other-org=404 missing=404 median ms 17.42/17.13
+  s0  GET /api/firewall/models/{}/                  identical=True other-org=404 missing=404 median ms 18.85/17.41
+  a1  GET /api/firewall/models/{}/                  identical=True other-org=404 missing=404 median ms 23.39/23.76

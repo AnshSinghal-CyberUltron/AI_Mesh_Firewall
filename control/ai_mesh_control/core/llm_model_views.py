@@ -9,6 +9,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from auth.audit import orgless_staff_fleet_read
 from core.llm_model_serializer import LLMModelConfigSerializer
 from core.models import AuditLog, LLMModelConfig
 
@@ -91,7 +92,8 @@ class LLMModelConfigListView(APIView):
         org = self._get_org(request)
         if org is not None:
             qs = LLMModelConfig.objects.filter(organization=org)
-        elif getattr(request.user, "is_superuser", False):
+        elif orgless_staff_fleet_read(request, "llm_models"):
+            # Org-less staff: all-tenants READ, audited (owner decision 12 Nov).
             qs = LLMModelConfig.objects.all()
         else:
             qs = LLMModelConfig.objects.none()
@@ -159,9 +161,12 @@ class LLMModelConfigDetailView(APIView):
             obj = LLMModelConfig.objects.get(pk=pk)
         except LLMModelConfig.DoesNotExist:
             return None
-        if org is not None and obj.organization_id != org.id:
-            return None
-        if org is None and not getattr(request.user, "is_superuser", False):
+        if org is None:
+            # #120: no org, no object, except an org-less staff READ (GET only, audited; owner
+            # decision 12 Nov). PUT/PATCH/DELETE never reach another tenant's config.
+            if not orgless_staff_fleet_read(request, "llm_model_detail"):
+                return None
+        elif obj.organization_id != org.id:
             return None
         if obj.is_platform_managed:
             return None

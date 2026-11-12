@@ -101,7 +101,8 @@ if not DEBUG:
 INSTALLED_APPS = [
     "daphne",
     "channels",
-    "django.contrib.admin",
+    # #122: staff-only admin site (refuses terminated staff, audits access and privilege changes).
+    "main_app.admin_site.StaffAdminConfig",
     "django.contrib.auth",
     "django.contrib.contenttypes",
     "django.contrib.sessions",
@@ -608,11 +609,13 @@ SPECTACULAR_SETTINGS = {
         "- **Frontend:** The frontend is a **login-only dashboard** "
         "(registration is not currently available through the frontend)\n\n"
         "**Superuser vs Regular User:**\n"
-        "- A **superuser** is a regular user with Django admin panel access\n"
-        "- **Both superusers and regular users** can authenticate via the API\n"
-        "- The API does not distinguish between them -- any active user can log in, "
-        "create Gateway keys, manage policies, etc.\n"
-        "- The only difference: superusers can access `/admin/` and terminate other users' sessions\n\n"
+        "- A **superuser** is ZeroShield platform staff. Customers are never superusers or staff: "
+        "no API call can set either flag, and every change to them is audited\n"
+        "- **Both superusers and regular users** authenticate via the API the same way\n"
+        "- Superusers can use `/admin/`, terminate or reinstate any user's session, resolve or "
+        "escalate any organization's incident, subscribe to any organization's notification "
+        "stream, and (with no organization of their own) read fleet-wide admin views. Each "
+        "use outside their own organization writes a `cross_org_access` audit record\n\n"
         "**What happens after account creation:**\n"
         "1. User logs in via `POST /api/auth/token/` (email + password)\n"
         "2. Receives JWT access + refresh tokens\n"

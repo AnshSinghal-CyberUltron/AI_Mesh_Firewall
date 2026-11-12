@@ -88,6 +88,22 @@ def access_token_predates_password_change(user, validated_token) -> bool:
         return False
 
 
+def is_zeroshield_staff(user) -> bool:
+    """True for ZeroShield platform staff: an active, authenticated superuser.
+
+    Owner decision (12 Nov 2026, #120/#122): "superuser = ZeroShield staff". Staff keep
+    the cross-org powers they had (incident resolve/escalate, session terminate/reinstate,
+    a WebSocket subscription to any org, fleet-wide reads when they have no org); every
+    such cross-org use is written to AuditLog (auth/audit.py). Customers must never be
+    superusers: no API path can set the flag (auth/privilege_audit.py lists the paths and
+    audits every change). Separate from ``is_platform_operator`` (is_staff AND the profile
+    flag, the explicit ?organization_id selector, #139), which is unchanged.
+    """
+    if not user or not getattr(user, "is_authenticated", False):
+        return False
+    return bool(getattr(user, "is_active", False) and getattr(user, "is_superuser", False))
+
+
 def is_platform_operator(user) -> bool:
     """True only for a dedicated platform operator (is_staff AND profile flag).
 

@@ -32,16 +32,19 @@ except ModuleNotFoundError:
 def _dashboard_org_context(request):
     """
     Return (org, endpoint_ids) for dashboard scoping.
-    - org None and endpoint_ids None: superuser, no filter (use all data).
+    - org None and endpoint_ids None: org-less ZeroShield staff, no filter (all data).
+      Owner decision 12 Nov ("superuser = ZeroShield staff"): kept from develop, and
+      every such request writes a cross_org_access AuditLog row (scope "all").
     - org set and endpoint_ids list: filter by these endpoint ids (and org for Policy).
-    - org None and endpoint_ids []: non-superuser without org, show empty.
+    - org None and endpoint_ids []: any other caller without an org, show empty.
     """
+    from auth.audit import orgless_staff_fleet_read
     from auth.utils import get_request_organization
     org = get_request_organization(request)
     if org is not None:
         endpoint_ids = list(Endpoint.objects.filter(organization=org).values_list("id", flat=True))
         return org, endpoint_ids
-    if getattr(request, "user", None) and request.user.is_superuser:
+    if orgless_staff_fleet_read(request, "dashboard"):
         return None, None
     return None, []
 
