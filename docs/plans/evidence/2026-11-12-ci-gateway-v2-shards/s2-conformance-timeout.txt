@@ -1,0 +1,493 @@
+PR #137 review round 2, Reviewer B S2 / Reviewer A A1: openai-conformance passed on a deterministic hang
+=========================================================================================================
+
+Host: agent host, 2 CPUs, nice -n 10. pytest 9.2.0 + pytest-timeout 2.4.0 (venv-ci; the same versions
+the openai-conformance job installs, job 131056733836). Old head 92d481a6, new head bd41ceb6.
+
+1. The LGW01 step, run VERBATIM from gateway-v2.yml at each head (harness below)
+------------------------------------------------------------------------------
+The step's `run:` text is read from `git show <ref>:.github/workflows/gateway-v2.yml` (yaml, job
+openai-conformance, step "LGW01-1/2/4/5 ...") and run with `bash --noprofile --norc -eo pipefail`
+(GitHub's default shell) from <scratch>/gateway_v2. The only change to the text: /tmp/gw01- ->
+<scratch>/gw01-. lint/compare_junit.py and scripts/ci/junit_timeouts.py come from the same ref.
+Scratch suite: 80 passing tests (so the >= 70 cases check passes) plus the scenario's tests;
+pyproject: timeout = 3 (CI: 300), timeout_method = "signal", required_plugins, as gateway_v2.
+"hang_call_B_repro" is Reviewer B's conf-hang reproduction (test_hangs sleeps 60 s).
+
+| scenario | 92d481a6 | bd41ceb6 |
+|---|---|---|
+| all_pass | GREEN (0) | GREEN (0) |
+| ledger_failures | GREEN (0) | GREEN (0) |
+| hang_call_B_repro | GREEN (0) | RED (1) |
+| hang_setup | GREEN (0) | RED (1) |
+| hang_teardown | GREEN (0) | RED (1) |
+| hang_under_xfail | GREEN (0) | RED (1) |
+| hang_swallowed | GREEN (0) | RED (1) |
+| hang_lowered_marker | GREEN (0) | RED (1) |
+| ledger_plus_hang | GREEN (0) | RED (1) |
+| hang_in_run_a_only | RED (1) | RED (1) |
+| hang_conftest_forces_exit0 | GREEN (0) | RED (1) |
+| thread_method_hang | RED (1) | RED (2) |
+| thread_method_hang_stale_junit | GREEN (0) | RED (2) |
+
+- ledger_failures (an assertion failure and a setup error in both runs): GREEN at both heads, the
+  ledger behaviour is unchanged.
+- Every hang that both runs share was GREEN at 92d481a6 and is RED at bd41ceb6.
+- hang_in_run_a_only was already RED (drift); it is now named as a timeout first.
+- thread_method_hang: pytest-timeout's thread method ends pytest with os._exit(1) (exit 1, the
+  ledger code) and writes no JUnit file. Already RED at 92d481a6 when /tmp is fresh, but GREEN
+  when an earlier job left JUnit files (a reused runner): the step now removes them first.
+- hang_conftest_forces_exit0: a conftest sets session.exitstatus = 0 (Reviewer A's A2 shape):
+  the JUnit file still records the timeout, so the step is RED.
+
+New-head output, per scenario (filtered lines):
+=== bd41ceb6 all_pass: step GREEN, exit 0, 1.1 s
+    80 passed in 0.07s
+    80 passed in 0.07s
+    junit_timeouts_ok files=2 cases=160 limit=3s
+    lgw01_5_identical cases=80
+    lgw01_1_collected 80
+=== bd41ceb6 ledger_failures: step GREEN, exit 0, 1.3 s
+    <root>/gateway_v2/tests/openai_conformance/test_conf.py:11: assert 1 == 2
+    1 failed, 80 passed, 1 error in 0.08s
+    <root>/gateway_v2/tests/openai_conformance/test_conf.py:11: assert 1 == 2
+    1 failed, 80 passed, 1 error in 0.09s
+    junit_timeouts_ok files=2 cases=164 limit=3s
+    lgw01_5_identical cases=82
+    lgw01_1_collected 82
+=== bd41ceb6 hang_call_B_repro: step RED, exit 1, 6.9 s
+    1 failed, 80 passed in 3.08s
+    E   Failed: Timeout (>3.0s) from pytest-timeout.
+    <root>/gateway_v2/tests/openai_conformance/test_conf.py:11: Failed: Timeout (>3.0s) from pytest-timeout.
+    FAILED tests/openai_conformance/test_conf.py::test_hangs - Failed: Timeout (>...
+    1 failed, 80 passed in 3.08s
+    junit_timeouts FAIL <tmp>/gw01-a.xml: tests.openai_conformance.test_conf::test_hangs: failure 'Timeout (>3.0s) from pytest-timeout'
+    junit_timeouts FAIL <tmp>/gw01-b.xml: tests.openai_conformance.test_conf::test_hangs: failure 'Timeout (>3.0s) from pytest-timeout'
+    junit_timeouts FAIL: 2 test result(s) hit the per-test timeout. A hang is not a recorded failure, even when every run agrees.
+=== bd41ceb6 hang_setup: step RED, exit 1, 6.9 s
+    ERROR tests/openai_conformance/test_conf.py::test_hangs - Failed: Timeout (>3...
+    80 passed, 1 error in 3.07s
+    E   Failed: Timeout (>3.0s) from pytest-timeout.
+    ERROR tests/openai_conformance/test_conf.py::test_hangs - Failed: Timeout (>3...
+    80 passed, 1 error in 3.07s
+    junit_timeouts FAIL <tmp>/gw01-a.xml: tests.openai_conformance.test_conf::test_hangs: error 'Timeout (>3.0s) from pytest-timeout'
+    junit_timeouts FAIL <tmp>/gw01-b.xml: tests.openai_conformance.test_conf::test_hangs: error 'Timeout (>3.0s) from pytest-timeout'
+    junit_timeouts FAIL: 2 test result(s) hit the per-test timeout. A hang is not a recorded failure, even when every run agrees.
+=== bd41ceb6 hang_teardown: step RED, exit 1, 6.9 s
+    ERROR tests/openai_conformance/test_conf.py::test_hangs - Failed: Timeout (>3...
+    81 passed, 1 error in 3.08s
+    E   Failed: Timeout (>3.0s) from pytest-timeout.
+    ERROR tests/openai_conformance/test_conf.py::test_hangs - Failed: Timeout (>3...
+    81 passed, 1 error in 3.07s
+    junit_timeouts FAIL <tmp>/gw01-a.xml: tests.openai_conformance.test_conf::test_hangs: error 'Timeout (>3.0s) from pytest-timeout'
+    junit_timeouts FAIL <tmp>/gw01-b.xml: tests.openai_conformance.test_conf::test_hangs: error 'Timeout (>3.0s) from pytest-timeout'
+    junit_timeouts FAIL: 2 test result(s) hit the per-test timeout. A hang is not a recorded failure, even when every run agrees.
+=== bd41ceb6 hang_under_xfail: step RED, exit 1, 6.9 s
+    80 passed, 1 xfailed in 3.07s
+    80 passed, 1 xfailed in 3.07s
+    junit_timeouts FAIL <tmp>/gw01-a.xml: tests.openai_conformance.test_conf::test_hangs: ran 3.000 s against a per-test timeout of 3 s (reported xfail), so its timer fired
+    junit_timeouts FAIL <tmp>/gw01-b.xml: tests.openai_conformance.test_conf::test_hangs: ran 3.000 s against a per-test timeout of 3 s (reported xfail), so its timer fired
+    junit_timeouts FAIL: 2 test result(s) hit the per-test timeout. A hang is not a recorded failure, even when every run agrees.
+=== bd41ceb6 hang_swallowed: step RED, exit 1, 7.0 s
+    81 passed in 3.07s
+    81 passed in 3.11s
+    junit_timeouts FAIL <tmp>/gw01-a.xml: tests.openai_conformance.test_conf::test_hangs: ran 3.000 s against a per-test timeout of 3 s (reported passed), so its timer fired
+    junit_timeouts FAIL <tmp>/gw01-b.xml: tests.openai_conformance.test_conf::test_hangs: ran 3.000 s against a per-test timeout of 3 s (reported passed), so its timer fired
+    junit_timeouts FAIL: 2 test result(s) hit the per-test timeout. A hang is not a recorded failure, even when every run agrees.
+=== bd41ceb6 hang_lowered_marker: step RED, exit 1, 2.9 s
+    1 failed, 80 passed in 1.06s
+    E   Failed: Timeout (>1.0s) from pytest-timeout.
+    <root>/gateway_v2/tests/openai_conformance/test_conf.py:12: Failed: Timeout (>1.0s) from pytest-timeout.
+    FAILED tests/openai_conformance/test_conf.py::test_hangs - Failed: Timeout (>...
+    1 failed, 80 passed in 1.07s
+    junit_timeouts FAIL <tmp>/gw01-a.xml: tests.openai_conformance.test_conf::test_hangs: failure 'Timeout (>1.0s) from pytest-timeout'
+    junit_timeouts FAIL <tmp>/gw01-b.xml: tests.openai_conformance.test_conf::test_hangs: failure 'Timeout (>1.0s) from pytest-timeout'
+    junit_timeouts FAIL: 2 test result(s) hit the per-test timeout. A hang is not a recorded failure, even when every run agrees.
+=== bd41ceb6 ledger_plus_hang: step RED, exit 1, 6.9 s
+    <root>/gateway_v2/tests/openai_conformance/test_conf.py:11: assert 1 == 2
+    E   Failed: Timeout (>3.0s) from pytest-timeout.
+    <root>/gateway_v2/tests/openai_conformance/test_conf.py:14: Failed: Timeout (>3.0s) from pytest-timeout.
+    FAILED tests/openai_conformance/test_conf.py::test_hangs - Failed: Timeout (>...
+    2 failed, 80 passed in 3.08s
+    junit_timeouts FAIL <tmp>/gw01-a.xml: tests.openai_conformance.test_conf::test_hangs: failure 'Timeout (>3.0s) from pytest-timeout'
+    junit_timeouts FAIL <tmp>/gw01-b.xml: tests.openai_conformance.test_conf::test_hangs: failure 'Timeout (>3.0s) from pytest-timeout'
+    junit_timeouts FAIL: 2 test result(s) hit the per-test timeout. A hang is not a recorded failure, even when every run agrees.
+=== bd41ceb6 hang_in_run_a_only: step RED, exit 1, 3.9 s
+    E   Failed: Timeout (>3.0s) from pytest-timeout.
+    <root>/gateway_v2/tests/openai_conformance/test_conf.py:14: Failed: Timeout (>3.0s) from pytest-timeout.
+    1 failed, 80 passed in 3.06s
+    81 passed in 0.10s
+    junit_timeouts FAIL <tmp>/gw01-a.xml: tests.openai_conformance.test_conf::test_hangs_once: failure 'Timeout (>3.0s) from pytest-timeout'
+    junit_timeouts FAIL: 1 test result(s) hit the per-test timeout. A hang is not a recorded failure, even when every run agrees.
+=== bd41ceb6 hang_conftest_forces_exit0: step RED, exit 1, 7.1 s
+    1 failed, 80 passed in 3.07s
+    E   Failed: Timeout (>3.0s) from pytest-timeout.
+    <root>/gateway_v2/tests/openai_conformance/test_conf.py:11: Failed: Timeout (>3.0s) from pytest-timeout.
+    FAILED tests/openai_conformance/test_conf.py::test_hangs - Failed: Timeout (>...
+    1 failed, 80 passed in 3.09s
+    junit_timeouts FAIL <tmp>/gw01-a.xml: tests.openai_conformance.test_conf::test_hangs: failure 'Timeout (>3.0s) from pytest-timeout'
+    junit_timeouts FAIL <tmp>/gw01-b.xml: tests.openai_conformance.test_conf::test_hangs: failure 'Timeout (>3.0s) from pytest-timeout'
+    junit_timeouts FAIL: 2 test result(s) hit the per-test timeout. A hang is not a recorded failure, even when every run agrees.
+=== bd41ceb6 thread_method_hang: step RED, exit 2, 6.9 s
+      File "<root>/gateway_v2/tests/openai_conformance/test_conf.py", line 12, in test_hangs
+      File "<root>/gateway_v2/tests/openai_conformance/test_conf.py", line 12, in test_hangs
+    junit_timeouts: cannot judge, failing: <tmp>/gw01-a.xml: No such file or directory
+=== bd41ceb6 thread_method_hang_stale_junit: step RED, exit 2, 6.9 s
+      File "<root>/gateway_v2/tests/openai_conformance/test_conf.py", line 12, in test_hangs
+      File "<root>/gateway_v2/tests/openai_conformance/test_conf.py", line 12, in test_hangs
+    junit_timeouts: cannot judge, failing: <tmp>/gw01-a.xml: No such file or directory
+
+2. Self-tests (scripts/ci/test_junit_timeouts.py, stdlib; `CI helper scripts` runs them)
+---------------------------------------------------------------------------------------
+Fixtures are real pytest 9.2.0 / pytest-timeout 2.4.0 JUnit output: Reviewer B's
+conf-hang/junit-hang.xml verbatim (HANG_B), a ledger run (LEDGER: pass, assertion failure, setup
+error, skip, quick xfail) and one with every hang shape (SHAPES: call, setup, teardown, xfail,
+swallowed, lower marker).
+  python3 -m unittest discover -s scripts/ci -p 'test_*.py'      (Python 3.13)  Ran 76 tests  OK
+  venv-ci python (3.12) -m unittest ... -p 'test_junit_timeouts.py'              Ran 20 tests  OK
+
+Mutation tests, each on a copy of the checker or of the workflow (all must fail the self-tests):
+unmutated: exit 0: Ran 20 tests in 0.048s OK
+killed: message rule never matches: Ran 20 tests in 0.065s FAILED (failures=6)
+killed: duration rule removed: Ran 20 tests in 0.053s FAILED (failures=5)
+killed: no slack: Ran 20 tests in 0.055s FAILED (failures=4)
+killed: >= becomes >: Ran 20 tests in 0.069s FAILED (failures=3)
+killed: only <failure> searched: Ran 20 tests in 0.061s FAILED (failures=5)
+killed: PYTEST_TIMEOUT ignored: Ran 20 tests in 0.063s FAILED (failures=4)
+killed: DOCTYPE accepted: Ran 20 tests in 0.049s FAILED (failures=1)
+killed: bad time accepted: Ran 20 tests in 0.071s FAILED (failures=5)
+killed: timeout_func_only not checked: Ran 20 tests in 0.056s FAILED (failures=2)
+killed: junit_duration_report not checked: Ran 20 tests in 0.050s FAILED (failures=1)
+killed: missing ini table tolerated: Ran 20 tests in 0.050s FAILED (failures=1)
+killed: step: check removed: Ran 20 tests in 0.049s FAILED (failures=1)
+killed: step: check only run a: Ran 20 tests in 0.048s FAILED (failures=1)
+killed: step: stale files not removed: Ran 20 tests in 0.062s FAILED (failures=1)
+killed: step: check after compare_junit: Ran 20 tests in 0.052s FAILED (failures=1)
+mutations: 15, survived: 0
+
+3. Lint
+-------
+ruff format --check, ruff check --select E,F,W,B,UP,PIE,SIM,I --line-length 100, mypy --strict on
+both new files: clean. actionlint 1.7.12 (with shellcheck) over .github/workflows: clean.
+No `uses:` line changed.
+
+4. Harness source (lgw01_harness.py)
+------------------------------------
+"""Run openai-conformance's LGW01 step VERBATIM (from gateway-v2.yml at a git ref) against
+scratch conformance suites with real pytest + pytest-timeout, and report GREEN/RED.
+
+Reviewer B's conf-hang reproduction (PR #137 S2), extended. Usage:
+    python lgw01_harness.py REPO REF [REF ...]
+Only change to the step text: /tmp/gw01- -> <scratch>/gw01- (no clash with other agents).
+The scratch tree mirrors the job: <root>/.venv/bin/python (venv-ci: pytest 9.2.0,
+pytest-timeout 2.4.0, as in the CI job), <root>/gateway_v2/{pyproject.toml,lint/,tests/},
+<root>/scripts/ci/junit_timeouts.py; both lint/compare_junit.py and junit_timeouts.py come from
+the same REF. pyproject: timeout = 3 (CI: 300), signal method, required_plugins, as gateway_v2.
+"""
+
+from __future__ import annotations
+
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
+import time
+from pathlib import Path
+
+import yaml
+
+VENV_PY = "/home/claude/work/venv-ci/bin/python"
+
+PYPROJECT = """[tool.pytest.ini_options]
+timeout = 3
+timeout_method = "signal"
+required_plugins = ["pytest-timeout>=2.3"]
+"""
+
+BASE = '''import os
+import time
+import pytest
+
+@pytest.mark.parametrize("i", range(80))
+def test_ok(i):
+    pass
+'''
+
+SCENARIOS: dict[str, tuple[str, str, bool]] = {
+    # name: (extra test code, conftest code, pre-create stale JUnit files from a green run)
+    "all_pass": ("", "", False),
+    "ledger_failures": (
+        "def test_ledger_assert():\n    assert 1 == 2\n\n"
+        "@pytest.fixture\ndef broken():\n    raise RuntimeError('recorded setup error')\n\n"
+        "def test_ledger_setup_error(broken):\n    pass\n",
+        "",
+        False,
+    ),
+    "hang_call_B_repro": ("def test_hangs():\n    time.sleep(60)\n", "", False),
+    "hang_setup": (
+        "@pytest.fixture\ndef slow():\n    time.sleep(60)\n    yield\n\n"
+        "def test_hangs(slow):\n    pass\n",
+        "",
+        False,
+    ),
+    "hang_teardown": (
+        "@pytest.fixture\ndef slow():\n    yield\n    time.sleep(60)\n\n"
+        "def test_hangs(slow):\n    pass\n",
+        "",
+        False,
+    ),
+    "hang_under_xfail": (
+        "@pytest.mark.xfail(reason='known defect')\ndef test_hangs():\n    time.sleep(60)\n",
+        "",
+        False,
+    ),
+    "hang_swallowed": (
+        "def test_hangs():\n    try:\n        time.sleep(60)\n    except BaseException:\n"
+        "        pass\n",
+        "",
+        False,
+    ),
+    "hang_lowered_marker": (
+        "@pytest.mark.timeout(1)\ndef test_hangs():\n    time.sleep(60)\n",
+        "",
+        False,
+    ),
+    "ledger_plus_hang": (
+        "def test_ledger_assert():\n    assert 1 == 2\n\n"
+        "def test_hangs():\n    time.sleep(60)\n",
+        "",
+        False,
+    ),
+    "hang_in_run_a_only": (
+        "def test_hangs_once():\n"
+        "    flag = os.environ['HARNESS_FLAG']\n"
+        "    if not os.path.exists(flag):\n"
+        "        open(flag, 'w').close()\n"
+        "        time.sleep(60)\n",
+        "",
+        False,
+    ),
+    "hang_conftest_forces_exit0": (
+        "def test_hangs():\n    time.sleep(60)\n",
+        "def pytest_sessionfinish(session, exitstatus):\n    session.exitstatus = 0\n",
+        False,
+    ),
+    "thread_method_hang": (
+        "@pytest.mark.timeout(method='thread')\ndef test_hangs():\n    time.sleep(60)\n",
+        "",
+        False,
+    ),
+    "thread_method_hang_stale_junit": (
+        "@pytest.mark.timeout(method='thread')\ndef test_hangs():\n    time.sleep(60)\n",
+        "",
+        True,
+    ),
+}
+
+
+def git_show(repo: str, ref: str, path: str) -> str | None:
+    proc = subprocess.run(
+        ["git", "-C", repo, "show", f"{ref}:{path}"], capture_output=True, text=True
+    )
+    return proc.stdout if proc.returncode == 0 else None
+
+
+def step_text(repo: str, ref: str) -> str:
+    wf = yaml.safe_load(git_show(repo, ref, ".github/workflows/gateway-v2.yml") or "")
+    for step in wf["jobs"]["openai-conformance"]["steps"]:
+        if str(step.get("name", "")).startswith("LGW01-1/2/4/5"):
+            return str(step["run"])
+    raise SystemExit("LGW01 step not found")
+
+
+def build(root: Path, repo: str, ref: str, scenario: str) -> None:
+    extra, conftest, _ = SCENARIOS[scenario]
+    (root / ".venv/bin").mkdir(parents=True)
+    py = root / ".venv/bin/python"
+    py.write_text(f'#!/bin/sh\nexec {VENV_PY} "$@"\n')
+    py.chmod(0o755)
+    gw = root / "gateway_v2"
+    (gw / "lint").mkdir(parents=True)
+    (gw / "lint/__init__.py").write_text("")
+    (gw / "lint/compare_junit.py").write_text(
+        git_show(repo, ref, "gateway_v2/lint/compare_junit.py") or ""
+    )
+    (gw / "pyproject.toml").write_text(PYPROJECT)
+    tests = gw / "tests/openai_conformance"
+    tests.mkdir(parents=True)
+    (tests / "test_conf.py").write_text(BASE + "\n\n" + extra)
+    if conftest:
+        (tests / "conftest.py").write_text(conftest)
+    checker = git_show(repo, ref, "scripts/ci/junit_timeouts.py")
+    if checker is not None:
+        (root / "scripts/ci").mkdir(parents=True)
+        (root / "scripts/ci/junit_timeouts.py").write_text(checker)
+
+
+def stale_green_junit(root: Path, out: Path) -> None:
+    """JUnit files from an all-pass run, as an earlier job on a reused runner would leave."""
+    for name in ("gw01-a.xml", "gw01-b.xml"):
+        subprocess.run(
+            [VENV_PY, "-m", "pytest", "-q", "-p", "no:cacheprovider", "-k", "test_ok",
+             "tests/openai_conformance", f"--junitxml={out / name}"],
+            cwd=root / "gateway_v2", capture_output=True, text=True, check=False,
+        )
+
+
+KEYS = ("junit_timeouts", "lgw01", "drift", "crashed", "LGW01", "Traceback",
+        "FileNotFoundError", "passed", "failed", "Timeout (>")
+
+
+def run(repo: str, ref: str, scenario: str) -> tuple[str, int, float, list[str]]:
+    script = step_text(repo, ref)
+    with tempfile.TemporaryDirectory(prefix="lgw01-") as tmp:
+        root = Path(tmp) / "repo"
+        out = Path(tmp) / "out"
+        out.mkdir()
+        build(root, repo, ref, scenario)
+        script = script.replace("/tmp/gw01-", f"{out}/gw01-")
+        if SCENARIOS[scenario][2]:
+            stale_green_junit(root, out)
+        (Path(tmp) / "step.sh").write_text(script)
+        env = {
+            "PATH": os.environ["PATH"],
+            "HOME": os.environ.get("HOME", "/root"),
+            "PYTHONPATH": str(root / "gateway_v2"),
+            "HARNESS_FLAG": str(Path(tmp) / "hang-once.flag"),
+            "PYTHONDONTWRITEBYTECODE": "1",
+        }
+        start = time.monotonic()
+        proc = subprocess.run(
+            ["bash", "--noprofile", "--norc", "-eo", "pipefail", str(Path(tmp) / "step.sh")],
+            cwd=root / "gateway_v2", env=env, capture_output=True, text=True, timeout=300,
+        )
+        took = time.monotonic() - start
+        lines = [
+            ln.rstrip() for ln in (proc.stdout + proc.stderr).splitlines()
+            if any(k in ln for k in KEYS) and "PytestDeprecationWarning" not in ln
+        ]
+        lines = [ln.replace(str(out), "<tmp>").replace(str(root), "<root>") for ln in lines]
+        return ("GREEN" if proc.returncode == 0 else "RED"), proc.returncode, took, lines
+
+
+def main() -> int:
+    repo, refs = sys.argv[1], sys.argv[2:]
+    only = os.environ.get("HARNESS_ONLY")
+    names = [n for n in SCENARIOS if not only or n in only.split(",")]
+    table: dict[str, dict[str, str]] = {n: {} for n in names}
+    for ref in refs:
+        for name in names:
+            verdict, code, took, lines = run(repo, ref, name)
+            table[name][ref] = f"{verdict} ({code})"
+            print(f"=== {ref[:8]} {name}: step {verdict}, exit {code}, {took:.1f} s")
+            for ln in lines[-8:]:
+                print(f"    {ln}")
+            sys.stdout.flush()
+    print()
+    print("| scenario | " + " | ".join(r[:8] for r in refs) + " |")
+    print("|---|" + "---|" * len(refs))
+    for name in names:
+        print(f"| {name} | " + " | ".join(table[name][r] for r in refs) + " |")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
+
+5. Mutation script (mutate.py)
+------------------------------
+"""Mutation tests: each mutation of junit_timeouts.py or of the LGW01 step, on a copy, must make
+scripts/ci/test_junit_timeouts.py fail. Usage: python mutate.py WORKTREE"""
+
+from __future__ import annotations
+
+import shutil
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+CHECKER = "scripts/ci/junit_timeouts.py"
+WF = ".github/workflows/gateway-v2.yml"
+
+MUTATIONS: list[tuple[str, str, str, str]] = [
+    ("message rule never matches", CHECKER,
+     'TIMEOUT_MESSAGE = re.compile(r"Timeout \\(>[^)]*\\) from pytest-timeout")',
+     'TIMEOUT_MESSAGE = re.compile(r"(?!x)x")'),
+    ("duration rule removed", CHECKER,
+     "elif threshold is not None and seconds >= threshold:",
+     "elif False:"),
+    ("no slack", CHECKER,
+     "limit - min(MAX_SLACK_SECONDS, limit / 10)", "limit"),
+    (">= becomes >", CHECKER,
+     "seconds >= threshold", "seconds > threshold"),
+    ("only <failure> searched", CHECKER,
+     'if _tag(child) in {"failure", "error"}:\n                match',
+     'if _tag(child) in {"failure"}:\n                match'),
+    ("PYTEST_TIMEOUT ignored", CHECKER,
+     'raw: object = environ.get("PYTEST_TIMEOUT")', "raw: object = None"),
+    ("DOCTYPE accepted", CHECKER,
+     'if b"<!DOCTYPE" in data or b"<!ENTITY" in data:', "if False:"),
+    ("bad time accepted", CHECKER,
+     "if not math.isfinite(seconds) or seconds < 0:", "if False:"),
+    ("timeout_func_only not checked", CHECKER,
+     'if str(ini.get("timeout_func_only", "false")).strip().lower() in _TRUE:', "if False:"),
+    ("junit_duration_report not checked", CHECKER,
+     'if str(ini.get("junit_duration_report", "total")) != "total":', "if False:"),
+    ("missing ini table tolerated", CHECKER,
+     "    if not isinstance(ini, dict):\n        raise CannotJudge(",
+     "    if not isinstance(ini, dict):\n        ini = {}\n    if False:\n        raise CannotJudge("),
+    ("step: check removed", WF,
+     "          ../.venv/bin/python ../scripts/ci/junit_timeouts.py --config=pyproject.toml \\\n"
+     "            /tmp/gw01-a.xml /tmp/gw01-b.xml\n", ""),
+    ("step: check only run a", WF,
+     "            /tmp/gw01-a.xml /tmp/gw01-b.xml\n          ../.venv/bin/python -m lint",
+     "            /tmp/gw01-a.xml\n          ../.venv/bin/python -m lint"),
+    ("step: stale files not removed", WF,
+     "          rm -f /tmp/gw01-a.xml /tmp/gw01-b.xml\n", ""),
+    ("step: check after compare_junit", WF,
+     "          ../.venv/bin/python ../scripts/ci/junit_timeouts.py --config=pyproject.toml \\\n"
+     "            /tmp/gw01-a.xml /tmp/gw01-b.xml\n"
+     "          ../.venv/bin/python -m lint.compare_junit /tmp/gw01-a.xml /tmp/gw01-b.xml\n",
+     "          ../.venv/bin/python -m lint.compare_junit /tmp/gw01-a.xml /tmp/gw01-b.xml\n"
+     "          ../.venv/bin/python ../scripts/ci/junit_timeouts.py --config=pyproject.toml \\\n"
+     "            /tmp/gw01-a.xml /tmp/gw01-b.xml\n"),
+]
+
+
+def run_tests(root: Path) -> tuple[int, str]:
+    proc = subprocess.run(
+        [sys.executable, "-m", "unittest", "discover", "-s", str(root / "scripts/ci"),
+         "-p", "test_junit_timeouts.py"],
+        capture_output=True, text=True,
+    )
+    tail = [ln for ln in proc.stderr.splitlines() if ln.startswith(("Ran ", "OK", "FAILED"))]
+    return proc.returncode, " ".join(tail)
+
+
+def main() -> int:
+    wt = Path(sys.argv[1])
+    bad = 0
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        for rel in (CHECKER, "scripts/ci/test_junit_timeouts.py", WF):
+            (root / rel).parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy(wt / rel, root / rel)
+        code, tail = run_tests(root)
+        print(f"unmutated: exit {code}: {tail}")
+        bad += code != 0
+        for name, rel, old, new in MUTATIONS:
+            original = (wt / rel).read_text()
+            assert original.count(old) == 1, (name, original.count(old))
+            (root / rel).write_text(original.replace(old, new))
+            code, tail = run_tests(root)
+            print(f"{'killed' if code else 'SURVIVED'}: {name}: {tail}")
+            bad += code == 0
+            (root / rel).write_text(original)
+    print(f"mutations: {len(MUTATIONS)}, survived: {bad}")
+    return 1 if bad else 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
