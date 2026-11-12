@@ -1,0 +1,69 @@
+The event loop scope for asynchronous fixtures will default to the "fixture" caching scope. Future versions of pytest-asyncio will default the loop scope for asynchronous fixtures to "function" scope. Set the default fixture loop scope explicitly in order to avoid unexpected behavior in the future. Valid fixture loop scopes are: "function", "class", "module", "package", "session"
+
+.C4 workers=1 pool_size(PROVIDER)=1 done=[1.0408024080002178, 2.045041797000067, 3.04853231900006, 4.0525749110001925]
+.C5 {'literal 100.64.0.1': ('100.64.0.1',), 'dns 100.100.100.200': ('100.100.100.200',), '6to4 default': Refusal(reason='private address'), '6to4 allowlisted': ('2002:a9fe:a9fe::1',), 'teredo allowlisted': ('2001:0:4136:e378:8000:63bf:5601:5601',)}
+.........C13 {'inter_chunk': 1.0, 'gap': 0.8, 'first_event': 30.0, 'idle': 3.0, 'total': 299.94, 'edge_pre_content_budget': 60.18}
+.......admission concurrency by q_safe on this host: {200: 6, 1000: 15, 5000: 15, 50000: 15}
+..
+==================================== PASSES ====================================
+_____ test_c6_pinned_refused_escapes_provider_into_routing_internal_error ______
+------------------------------ Captured log call -------------------------------
+ERROR    gateway_v2.dispatch.routed_provider:routed_provider.py:296 routing internal error
+Traceback (most recent call last):
+  File "/home/claude/wt/rv-121-A-dev/gateway_v2/gateway_v2/dispatch/routed_provider.py", line 279, in _run
+    event, failure = await _step(att)
+                     ^^^^^^^^^^^^^^^^
+  File "/home/claude/wt/rv-121-A-dev/gateway_v2/gateway_v2/dispatch/routed_provider.py", line 333, in _step
+    event = await live.__anext__()
+            ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/claude/wt/rv-121-A-dev/gateway_v2/gateway_v2/dispatch/stall_guard.py", line 96, in bounded_events
+    event = await asyncio.wait_for(it.__anext__(), limit)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/tasks.py", line 520, in wait_for
+    return await fut
+           ^^^^^^^^^
+  File "/home/claude/wt/rv-121-A-dev/gateway_v2/gateway_v2/dispatch/openai_upstream.py", line 201, in _stream
+    async with self._pooled().stream("POST", url, json=_plain(body)) as response:
+  File "/usr/lib/python3.12/contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/claude/work/venv-ci/lib/python3.12/site-packages/httpx/_client.py", line 1583, in stream
+    response = await self.send(
+               ^^^^^^^^^^^^^^^^
+  File "/home/claude/work/venv-ci/lib/python3.12/site-packages/httpx/_client.py", line 1629, in send
+    response = await self._send_handling_auth(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/claude/work/venv-ci/lib/python3.12/site-packages/httpx/_client.py", line 1657, in _send_handling_auth
+    response = await self._send_handling_redirects(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/claude/work/venv-ci/lib/python3.12/site-packages/httpx/_client.py", line 1694, in _send_handling_redirects
+    response = await self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/claude/work/venv-ci/lib/python3.12/site-packages/httpx/_client.py", line 1730, in _send_single_request
+    response = await transport.handle_async_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/claude/wt/rv-121-A-dev/gateway_v2/gateway_v2/dispatch/pinned_transport.py", line 45, in handle_async_request
+    raise PinnedRefused("destination refused")
+gateway_v2.dispatch.pinned_transport.PinnedRefused: destination refused
+=========================== short test summary info ============================
+PASSED ../../../work/runs/121-A/scripts/test_repro_develop.py::test_c3_trust_env_proxy_and_default_auth
+PASSED ../../../work/runs/121-A/scripts/test_repro_develop.py::test_c4_one_connection_per_worker_serialises_streams
+PASSED ../../../work/runs/121-A/scripts/test_repro_develop.py::test_c5_cgnat_and_alibaba_metadata_pass_ssrf
+PASSED ../../../work/runs/121-A/scripts/test_repro_develop.py::test_c5_pinned_transport_resolves_every_request
+PASSED ../../../work/runs/121-A/scripts/test_repro_develop.py::test_c6_pinned_refused_escapes_provider_into_routing_internal_error
+PASSED ../../../work/runs/121-A/scripts/test_repro_develop.py::test_c7_refusal_decision_has_no_candidate
+PASSED ../../../work/runs/121-A/scripts/test_repro_develop.py::test_c8_crlf_framing_yields_nothing_and_never_finishes
+PASSED ../../../work/runs/121-A/scripts/test_repro_develop.py::test_c8_comment_keepalive_sets_malformed
+PASSED ../../../work/runs/121-A/scripts/test_repro_develop.py::test_lens5_bom_and_unknown_finish_reason_are_malformed
+PASSED ../../../work/runs/121-A/scripts/test_repro_develop.py::test_lens5_arbitrary_delta_keys_become_channels_unbounded
+PASSED ../../../work/runs/121-A/scripts/test_repro_develop.py::test_lens5_reasoning_key_variants_pass_as_free_channels
+PASSED ../../../work/runs/121-A/scripts/test_repro_develop.py::test_c13_bounds_on_this_host
+PASSED ../../../work/runs/121-A/scripts/test_repro_develop.py::test_c13_edge_cuts_a_1_2s_pause_and_stall_guard_cuts_0_9s
+PASSED ../../../work/runs/121-A/scripts/test_repro_develop.py::test_lens2_idle_bound_cuts_after_3s_without_a_write
+PASSED ../../../work/runs/121-A/scripts/test_repro_develop.py::test_r17_org_credential_pickles_its_secret
+PASSED ../../../work/runs/121-A/scripts/test_repro_develop.py::test_c10_c11_forwarded_set
+PASSED ../../../work/runs/121-A/scripts/test_repro_develop.py::test_lens5_lone_surrogate_passes_decoder_then_breaks_utf8_encode
+PASSED ../../../work/runs/121-A/scripts/test_repro_develop.py::test_lens5_non_string_content_is_silently_dropped
+PASSED ../../../work/runs/121-A/scripts/test_repro_develop.py::test_lens2_admission_concurrency_caps_streams_per_worker
+PASSED ../../../work/runs/121-A/scripts/test_repro_develop.py::test_plan_standard_class_bounds_violate_stallbounds_invariant
+20 passed in 6.64s

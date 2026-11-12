@@ -1,0 +1,2 @@
+{"client": "httpx 0.28.1", "default_accept_encoding": "gzip, deflate", "wire_bytes": 205051, "inflated_total_mib": 201.2, "largest_single_chunk_mib": 64.3, "rss_start_mib": 19.8, "peak_rss_mib": 238.8}
+{"client": "aiohttp 3.12.15", "default_accept_encoding": "gzip, deflate", "wire_bytes": 205051, "inflated_total_mib": 201.2, "largest_single_chunk_mib": 125.5, "rss_start_mib": 19.8, "peak_rss_mib": 360.0}

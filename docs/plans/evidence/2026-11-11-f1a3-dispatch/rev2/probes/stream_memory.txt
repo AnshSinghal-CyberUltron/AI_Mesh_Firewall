@@ -1,0 +1,3 @@
+# stream_memory.py 19199 <client> 64 576  (Python 3.12.3, aiohttp 3.14.5, httpx 0.28.1; upstream 120 events at 400 ms; plain HTTP loopback; 2026-11-12T06:33:28Z)
+{"client": "aiohttp", "rss_at_n0_64": 66478080, "rss_at_n_576": 74080256, "bytes_per_stream": 14848}
+{"client": "httpx", "rss_at_n0_64": 58159104, "rss_at_n_576": 71442432, "bytes_per_stream": 25944}

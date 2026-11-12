@@ -1,0 +1,11 @@
+# python -I aiohttp_transport_guard.py  (aiohttp 3.14.5, Python 3.12.3, 2026-11-12T06:33:12Z)
+{"check": "0_control_literal_without_factory", "status": 200, "server_connections": 1, "pass": true}
+{"check": "1_ip_literal_refused", "url_host": "127.0.0.2:41145", "outcome": "exc:ClientConnectorError", "server_connections": 0, "rss_growth_kib": 0, "pass": true}
+{"check": "2_hostname_allowed", "url_host": "provider.test:41145", "outcome": "status:200", "server_connections": 1, "rss_growth_kib": 8, "pass": true}
+{"check": "3_rebind_refused", "url_host": "rebind.test:41145", "outcome": "exc:ClientConnectorError", "server_connections": 0, "rss_growth_kib": 4, "pass": true}
+{"check": "4_redirect_not_followed", "url_host": "provider.test:41145", "outcome": "status:302", "server_connections": 1, "rss_growth_kib": 8, "pass": true}
+{"check": "5_gzip_refused_before_body", "url_host": "provider.test:41145", "outcome": "refused_encoding:gzip", "server_connections": 1, "rss_growth_kib": 0, "pass": true}
+{"check": "6_wire_accept_encoding_and_direct", "accept_encoding_values": ["identity"], "every_connection_direct": true, "resolver_calls": 4, "aiohttp": "3.14.5", "pass": true}
+{"all_pass": true, "maxrss_kib": 100860}
+# DialRefused is distinguishable: aiohttp ClientConnectorError.os_error is the socket_factory exception (checked on aiohttp 3.14.5):
+# ClientConnectorError.os_error type: Refused | __cause__: Refused
