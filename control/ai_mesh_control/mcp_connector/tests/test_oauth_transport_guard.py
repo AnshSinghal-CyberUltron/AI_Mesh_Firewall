@@ -104,7 +104,10 @@ class OAuthTransportGuardTests(TestCase):
         getaddrinfo.assert_not_called()
 
     def test_websocket_ws_stub_allowed_only_via_explicit_allowlist(self):
-        # The deployed configuration: the stub's host:port is allowlisted on purpose.
+        # Guard semantics for a host:port allowlist entry, not a copy of the deployed
+        # list: scripts/mcp_enable_http_via_sandbox.sh:8 allowlists both
+        # ws-everything.stub:3003 and the bare ws-everything.stub, and a bare host
+        # entry admits every port (_url_guard._host_is_allowlisted).
         ok, errors, _ = self._ws_errors(
             self._WS_STUB, resolves_to="172.20.0.7", allow_internal="ws-everything.stub:3003"
         )
