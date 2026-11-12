@@ -518,6 +518,17 @@ def test_nesting_depth_of_escape_dense_bodies() -> None:
     assert nesting_depth(b'["' + b"\\n" * 1_000 + b'"]') == 1
 
 
+def test_nesting_depth_carries_the_depth_across_its_slices() -> None:
+    """The running sum is taken a slice at a time so the loop is never held for a whole body."""
+    from gateway_v2.plan import document
+
+    over = document._SLICE + 2  # noqa: SLF001 - the slice size is the boundary under test
+    assert nesting_depth(b"[" * over) == over
+    assert nesting_depth(b"[" * (over - 4) + b"]" * 3 + b"[" * 9) == over - 4 - 3 + 9
+    assert nesting_depth(b"]" * over + b"[" * 40) == 0, "json raises at byte 0"
+    assert nesting_depth(b"[]" * over) == 1
+
+
 def test_quarantine_is_answered_plan_quarantined() -> None:
     lab = Lab(offload_above=1_000)
     lab.queue_delta(_bad_signature)

@@ -30,6 +30,7 @@ from gateway_v2.domain.state_knobs import StateKnobs
 from gateway_v2.edge import serve
 from gateway_v2.edge.incident_wiring import build_incident
 from gateway_v2.edge.state_runtime import StateRuntime, StateRuntimeConfig
+from gateway_v2.plan import delta as delta_module
 from gateway_v2.plan.store import PLAN_QUARANTINED, QUARANTINED, REJECTED
 from tests.edge.test_dev_profile_boot import _contract
 from tests.edge.test_gw36_s3_state_identity import (
@@ -223,7 +224,11 @@ def test_moving_the_index_entry_too_does_not_lift_a_key_quarantine() -> None:
 
 
 def test_a_key_whose_record_vanished_under_its_index_entry_is_a_503_not_a_401() -> None:
-    """Reviewer A's N3: "cannot verify" is 503, never a 401 and a negative-cache entry."""
+    """Reviewer A's N3: "cannot verify" is 503, never a 401 and a negative-cache entry.
+
+    Twice: the record vanishes inside a delta the worker reads (a fault, so a quarantine), and
+    after the worker applied it (no fault; the request path's own pairing refuses it).
+    """
 
     async def go() -> None:
         lab = KeyLab()
@@ -237,6 +242,82 @@ def test_a_key_whose_record_vanished_under_its_index_entry_is_a_503_not_a_401() 
         for _ in range(2):
             assert await _models(lab.app, lab.victim) == (503, "shared_state_unavailable")
         assert lab.runtime.identity_cache.stats().negative == 0
+
+        lab.runtime.identity_cache.evict([_sha(lab.other)], 0)  # not cached: the next ask reads
+        lab.sync.hdel(lab.hash_name, _sha(lab.other))  # applied long ago, no delta announces it
+        assert lab.runtime.identity_cache.quarantined_at(_sha(lab.other)) is None
+        assert await _models(lab.app, lab.other) == (503, "shared_state_unavailable")
+        assert lab.runtime.identity_cache.stats().negative == 0
+
+    asyncio.run(go())
+
+
+def test_a_newer_verified_key_record_lifts_the_quarantine_on_the_delta_path() -> None:
+    """Before any request reads the key: the delta that carries the verified record lifts it."""
+
+    async def go() -> None:
+        lab = KeyLab()
+        await lab.admit_both()
+        older = lab.raw()
+        lab.writer.key_revoke(_sha(lab.victim))
+        lab.put(older)
+        lab.rehydrator.round_once()
+        await lab.runtime.cycle()
+        assert lab.runtime.identity_cache.quarantined_at(_sha(lab.victim)) is not None
+
+        lab.writer.key_add(_sha(lab.victim), "acme", key_id="again", rate_per_s=0.0, burst=0.0)
+        lab.rehydrator.round_once()
+        await lab.runtime.cycle()
+
+        assert lab.runtime.identity_cache.quarantined_at(_sha(lab.victim)) is None
+        await lab.runtime.cycle()
+        assert lab.gauge(KEY_GAUGE) == 0
+        assert (await _models(lab.app, lab.victim))[0] == 200, "re-issued by the control plane"
+
+    asyncio.run(go())
+
+
+@pytest.mark.parametrize("kind", [StateKind.KS, StateKind.BUDGET])
+def test_a_tampered_kill_switch_or_budget_record_refuses_its_whole_kind_and_says_so(
+    kind: StateKind, caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Reviewer B's S4 / A's N1: both kinds keep their whole-round refusal BY DESIGN (an
+    unauthenticated index key cannot name a switch scope; budget rounds are all-or-nothing), so
+    one bad record still refuses the kind -- and, after FRESH_MS, readiness, on every worker.
+    What changed is that it is no longer silent: one line names the record, once."""
+
+    async def go() -> None:
+        lab = Lab()
+        lab.plan("acme")
+        lab.plan("other")
+        await lab.settle()
+        if kind is StateKind.KS:
+            lab.writer.put(StateKind.KS, "org:other", {"on": True}, engaged=True)
+            key = "org:other"
+        else:
+            lab.writer.budget_set("other", 500)
+            key = "other"
+        name = lab.runtime._keys.record_hash(kind)  # noqa: SLF001
+        sync = lab.publisher._client  # noqa: SLF001
+        raw = sync.hget(name, key)
+        assert isinstance(raw, bytes)
+        sync.hset(name, key, raw.replace(b'"sig":"', b'"sig":"0', 1))
+        lab.rehydrator.round_once()
+
+        with caplog.at_level(logging.DEBUG, logger="amf"):
+            for _ in range(3):
+                reports = {report.kind: report for report in await lab.runtime.cycle()}
+                assert not reports[kind].ok, "the whole kind is refused, never applied in part"
+                assert all(r.ok for k, r in reports.items() if k is not kind)
+                lab.rehydrator.round_once()
+
+        assert reports[kind].quarantined == 0
+        messages = [record.getMessage() for record in caplog.records]
+        refused = [message for message in messages if "state round refused" in message]
+        assert refused == [
+            f"state round refused: kind={kind.value} error=StoreDataUnavailable "
+            f"detail={kind.value} record {key!r} fails its signature",
+        ]
 
     asyncio.run(go())
 
@@ -388,7 +469,9 @@ def test_the_re_check_runs_at_most_once_per_freshness_window(
     asyncio.run(go())
 
 
-def test_a_replayed_older_plan_record_stays_quarantined_through_the_re_check() -> None:
+def test_a_replayed_older_plan_record_stays_quarantined_through_the_re_check(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """PLAN's version of B1: the tenant's older genuine record under its newer index entry."""
 
     async def go() -> None:
@@ -402,10 +485,20 @@ def test_a_replayed_older_plan_record_stays_quarantined_through_the_re_check() -
         lab.rehydrator.round_once()
         await lab.runtime.cycle()
         assert lab.runtime.snapshot.held_back("victim").state == QUARANTINED  # type: ignore[union-attr]
+        compiled: list[str] = []
+        real = delta_module.compile_plan
 
-        assert await lab.runtime.recheck_quarantined() == (0, 0)
+        def counting(org_id: str, *args: object, **kwargs: object) -> object:
+            compiled.append(org_id)
+            return real(org_id, *args, **kwargs)  # type: ignore[arg-type]
+
+        monkeypatch.setattr(delta_module, "compile_plan", counting)
+
+        for _ in range(3):
+            assert await lab.runtime.recheck_quarantined() == (0, 0)
 
         state = lab.runtime.snapshot.lookup("victim")
         assert isinstance(state, PlanUnavailable) and state.reason == PLAN_QUARANTINED
+        assert compiled == [], "a record that does not pair is never compiled, pass after pass"
 
     asyncio.run(go())
