@@ -8,7 +8,7 @@ from asgiref.sync import sync_to_async
 from channels.generic.websocket import AsyncWebsocketConsumer
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from rest_framework_simplejwt.exceptions import ExpiredTokenError, InvalidToken
+from rest_framework_simplejwt.exceptions import ExpiredTokenError, InvalidToken, TokenError
 from rest_framework_simplejwt.tokens import AccessToken
 
 LOG = logging.getLogger("ws.consumers")
@@ -54,18 +54,38 @@ def _get_org_id_from_scope(scope):
 
 
 async def _get_user_from_token(token_string):
-    """Validate JWT and return User or None."""
+    """Validate the access JWT and return its User, or None to refuse the socket.
+
+    #122 review (A S2 / #131, connect part): the same user checks REST applies in
+    auth/authentication.py JWTAuthenticationWithTermination, which this path skipped:
+    an inactive user, a user with an active (uncleared) TerminatedSession, and a token
+    minted before the user's last password change are refused. Sockets that are already
+    open are not re-checked (#131).
+    """
     User = get_user_model()
 
     def _get_user():
+        from auth.authentication import token_predates_password_change
+        from auth.models import TerminatedSession
+
         try:
             access = AccessToken(token_string)
             user_id = access.get("user_id") or access.get("user")
             if not user_id:
                 return None
-            return User.objects.get(id=user_id)
-        except (InvalidToken, ExpiredTokenError, User.DoesNotExist):
+            user = User.objects.select_related("profile").get(id=user_id)
+        except (InvalidToken, ExpiredTokenError, TokenError, User.DoesNotExist, ValueError, TypeError):
             return None
+        if not user.is_active:
+            LOG.warning("WebSocket rejected: inactive user_id=%s", user.pk)
+            return None
+        if TerminatedSession.objects.filter(user=user, cleared_at__isnull=True).exists():
+            LOG.warning("WebSocket rejected: terminated session user_id=%s", user.pk)
+            return None
+        if token_predates_password_change(user, access):
+            LOG.warning("WebSocket rejected: token predates password change user_id=%s", user.pk)
+            return None
+        return user
 
     return await sync_to_async(_get_user)()
 
@@ -126,15 +146,39 @@ class NotificationConsumer(AsyncWebsocketConsumer):
                 return None
 
         def _resolve_org_id(u, requested_org_id):
-            # #120 / R11 (auth/models.py UserProfile.is_platform_operator): only a
-            # platform operator may pick another tenant's stream with ?organization_id.
-            # Before, ANY superuser could, so an org B superuser could subscribe to org
-            # A's notifications. Everyone else gets their own profile org.
-            from auth.models import is_platform_operator
+            # #120 / #122, owner decision 12 Nov ("superuser = ZeroShield staff"):
+            # - no ?organization_id, or the caller's own org: the caller's profile org;
+            # - ZeroShield staff, or a platform operator (#139: is_staff + flag), may name
+            #   any EXISTING org; the subscription is audited (cross_org_access) before
+            #   the socket joins, and refused if the row cannot be written;
+            # - anyone else naming another org joins their own org (the parameter is
+            #   ignored, as REST's get_request_organization does) and the attempt is
+            #   audited (cross_org_denied, the requested id only).
+            from auth.audit import audit_cross_org_access, audit_cross_org_denied
+            from auth.models import Organization, is_platform_operator, is_zeroshield_staff
 
-            if requested_org_id is not None and is_platform_operator(u):
+            own_org_id = _get_org_from_profile(u)
+            if requested_org_id is None or requested_org_id == own_org_id:
+                return own_org_id
+            if is_zeroshield_staff(u) or is_platform_operator(u):
+                if not Organization.objects.filter(pk=requested_org_id).exists():
+                    LOG.warning(
+                        "WebSocket rejected: user_id=%s named unknown organization_id=%s", u.pk, requested_org_id
+                    )
+                    return None
+                try:
+                    audit_cross_org_access(
+                        user=u, target_org_id=requested_org_id, action="ws.subscribe",
+                        obj=f"ws:{notification_group_for_org(requested_org_id)}", via="websocket",
+                    )
+                except Exception:
+                    LOG.exception("WebSocket rejected: cross-org audit write failed for user_id=%s", u.pk)
+                    return None
                 return requested_org_id
-            return _get_org_from_profile(u)
+            audit_cross_org_denied(
+                user=u, action="ws.subscribe", requested=f"organization:{requested_org_id}", via="websocket"
+            )
+            return own_org_id
 
         # M-08: never default to a tenant. With no org, the guard below rejects (4403).
         org_id = await sync_to_async(_resolve_org_id, thread_sensitive=True)(
