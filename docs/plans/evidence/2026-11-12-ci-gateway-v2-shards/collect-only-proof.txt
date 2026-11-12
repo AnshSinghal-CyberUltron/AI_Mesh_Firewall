@@ -1,0 +1,52 @@
+# Collect-only proof: the 8 shards select exactly the unsharded collection, each test once
+
+## 1. pytest itself, head f47a1ec8 (this host, pytest 9.2.0, shared deps of venv-ci + pytest-timeout 2.4.0)
+# unsharded: (cd gateway_v2 && python -m pytest --collect-only -q -p no:cacheprovider)
+# shard i:   ... --config-file=pyproject.toml -p amf_pytest_shards --shard-index=i --shard-count=8 --shard-weights=../.github/ci/gateway-v2-test-durations.json
+imports: /home/claude/wt/ci-enterprise/gateway_v2/gateway_v2/__init__.py /home/claude/wt/ci-enterprise/scripts/ci/amf_pytest_shards.py
+head: f47a1ec831b285038638838cec89dc41ddfef35c
+
+5162 tests collected in 3.16s
+shard 0: 646 ids; 646/5162 tests collected (4516 deselected) in 2.93s
+shard 1: 646 ids; 646/5162 tests collected (4516 deselected) in 2.87s
+shard 2: 645 ids; 645/5162 tests collected (4517 deselected) in 2.93s
+shard 3: 645 ids; 645/5162 tests collected (4517 deselected) in 2.97s
+shard 4: 645 ids; 645/5162 tests collected (4517 deselected) in 2.88s
+shard 5: 645 ids; 645/5162 tests collected (4517 deselected) in 2.83s
+shard 6: 645 ids; 645/5162 tests collected (4517 deselected) in 3.89s
+shard 7: 645 ids; 645/5162 tests collected (4517 deselected) in 3.34s
+unsharded ids: 5162  union of shards: 5162
+duplicates across shards: 0
+diff unsharded vs union: EMPTY (identical)
+### pytest shards: 5162 tests in 8 shards, each selected exactly once, union equal to the unsharded collection
+
+Outcomes: 
+
+| shard | tests | files | test seconds | pytest wall seconds |
+|---:|---:|---:|---:|---:|
+| 0 | 646 | 0 | 0 | 2.9 |
+| 1 | 646 | 0 | 0 | 2.9 |
+| 2 | 645 | 0 | 0 | 2.9 |
+| 3 | 645 | 0 | 0 | 3.0 |
+| 4 | 645 | 0 | 0 | 2.9 |
+| 5 | 645 | 0 | 0 | 2.8 |
+# (verify() had passed and printed its summary when a '| head' in the first version of the script closed the pipe;
+#  the script now writes verify's output to a file)
+space-separated options: refused, pytest exit 4: write --shard-index, --shard-count, --shard-weights as --option=value
+
+## 2. the selection recomputed with the FINAL weights (.github/ci/gateway-v2-test-durations.json at 9a6f5d430),
+##    using the plugin's own select() over the 5,162 ids pytest collected in 1 (tests and plugin unchanged since f47a1ec8: git diff --stat is empty)
+shard 0: 251 ids
+shard 1: 296 ids
+shard 2: 254 ids
+shard 3: 284 ids
+shard 4: 281 ids
+shard 5: 383 ids
+shard 6: 424 ids
+shard 7: 2989 ids
+unsharded 5162; union 5162; distinct in union 5162; union == unsharded: True
+# these per-shard counts equal those of CI run 43167400681 (head 59f9754d, the same tree as this PR's head): 251 296 254 284 281 383 424 2989
+
+## 3. on CI, every run: the gateway-v2 pytest job compares the shards' reports with structural-gates' unsharded collect-only
+run log: ### pytest shards: 5162 tests in 8 shards, each selected exactly once, union equal to the unsharded collection
+run log: ### pytest shards: 5162 tests in 8 shards, each selected exactly once, union equal to the unsharded collection

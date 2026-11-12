@@ -1,0 +1,108 @@
+# gateway-v2 CI timings before and after sharding (read from the Actions jobs API, 2026-11-12T06:34Z)
+# 'queued' = job created -> started (waiting for a runner); 'ran' = started -> completed; billed = ran rounded up per job
+# (GitHub bills each job's minutes rounded up; standard runners are free while the repository is public)
+
+## before, unsharded (PR #114 head, same workflow file minus this PR): head 93ffdaad, gateway-v2 run 43156325595
+job                                queued min  ran min billed min  result
+image-digest                              9.5      0.7          1  success
+openai-conformance                        0.3      2.0          2  success
+parity-harness                           12.9      1.4          2  success
+secret-headers                           12.5      0.3          1  success
+structural-gates                          0.3     22.4         23  success
+workflow wall (first job created -> last job completed, queueing included): 22.7 min
+billed minutes if private (each job rounded up), whole gateway-v2 workflow: 29
+
+## after, count-based split (first green run): head f47a1ec8, gateway-v2 run 43165116680
+job                                queued min  ran min billed min  result
+gateway-v2 pytest                         0.1      0.2          1  success
+gateway-v2 pytest shard 1/8               9.8      4.0          4  success
+gateway-v2 pytest shard 2/8               9.3      5.7          6  success
+gateway-v2 pytest shard 3/8               8.2      3.3          4  success
+gateway-v2 pytest shard 4/8               7.9      3.0          4  success
+gateway-v2 pytest shard 5/8               7.0      4.9          5  success
+gateway-v2 pytest shard 6/8               7.9      1.9          2  success
+gateway-v2 pytest shard 7/8               7.5      3.8          4  success
+gateway-v2 pytest shard 8/8               7.3      3.5          4  success
+image-digest                              9.2      0.9          1  success
+openai-conformance                        7.4      1.9          2  success
+parity-harness                            6.0      1.4          2  success
+secret-headers                            7.0      0.2          1  success
+structural-gates                          2.8      1.2          2  success
+workflow wall (first job created -> last job completed, queueing included): 15.3 min
+slowest shard ran 5.7 min; sum of shard run time 30.0 min; aggregate ran 0.2 min
+critical path without queueing (slowest shard + aggregate): 5.9 min
+billed minutes if private (each job rounded up), whole gateway-v2 workflow: 42
+
+## after, duration-balanced split: head 59f9754d, gateway-v2 run 43167400681
+job                                queued min  ran min billed min  result
+gateway-v2 pytest                         1.1      0.3          1  success
+gateway-v2 pytest shard 1/8               0.7      3.7          4  success
+gateway-v2 pytest shard 2/8               4.7      3.6          4  success
+gateway-v2 pytest shard 3/8               5.6      4.2          5  success
+gateway-v2 pytest shard 4/8               0.4      4.4          5  success
+gateway-v2 pytest shard 5/8               6.5      3.9          4  success
+gateway-v2 pytest shard 6/8               7.7      3.5          4  success
+gateway-v2 pytest shard 7/8               3.4      3.3          4  success
+gateway-v2 pytest shard 8/8               5.9      3.4          4  success
+image-digest                              0.1      0.7          1  success
+openai-conformance                        1.8      2.1          3  success
+parity-harness                            1.6      1.6          2  success
+secret-headers                            5.2      0.3          1  success
+structural-gates                          1.9      1.0          1  success
+workflow wall (first job created -> last job completed, queueing included): 12.5 min
+slowest shard ran 4.4 min; sum of shard run time 30.0 min; aggregate ran 0.3 min
+critical path without queueing (slowest shard + aggregate): 4.7 min
+billed minutes if private (each job rounded up), whole gateway-v2 workflow: 43
+
+## baseline distribution: every successful unsharded structural-gates job since 2026-11-10 (other branches)
+unsharded structural-gates (success), runs created since 2026-11-10, other branches
+created              branch                                 head      run          job min  pytest-step min
+2026-11-11T05:55:15Z  fix/release-blockers                   bd3b0442  42968867701    17.3   16.7
+2026-11-11T06:19:48Z  feat/f1a-production-serving            8484c571  42971652352    16.9   16.2
+2026-11-11T07:07:28Z  suraj-revamp                           bd88e563  42977201016    21.8   21.1
+2026-11-11T07:07:43Z  ci/reusable-pipelines                  ae71356c  42977231084    22.2   21.3
+2026-11-11T07:07:43Z  fix/release-blockers                   94f691cc  42977230151    30.7   29.8
+2026-11-11T07:07:45Z  feat/f1a-production-serving            117c0e29  42977235553    30.4   29.6
+2026-11-11T07:30:17Z  fix/release-blockers                   3aea5806  42979957269    25.7   24.7
+2026-11-11T07:30:54Z  ci/reusable-pipelines                  f1e51fe0  42980036960    24.9   24.1
+2026-11-11T07:30:54Z  feat/f1a-production-serving            b5f23140  42980037951    21.8   21.1
+2026-11-11T07:34:55Z  feat/f1a-production-serving            91785d9b  42980533668    26.7   25.9
+2026-11-11T07:36:07Z  revamp                                 9f681c46  42980686065    17.2   16.6
+2026-11-11T07:57:29Z  fix/gw34-calibration-hardening         3f202553  42983277190    21.9   21.1
+2026-11-11T07:59:38Z  ci/reusable-pipelines                  a43bbe11  42983526036    18.9   18.3
+2026-11-11T08:20:32Z  fix/gw34-calibration-hardening         f3406bc8  42986259403    17.3   16.7
+2026-11-11T08:24:08Z  fix/gw34-calibration-hardening         f152d7e2  42986739218    17.3   16.7
+2026-11-11T08:26:21Z  ci/reusable-pipelines                  a70602b4  42987034010    30.4   29.6
+2026-11-11T08:34:33Z  feat/f1a-production-serving            9df2980c  42988125140    22.1   21.4
+2026-11-11T08:45:20Z  test/gw34-calibration-followups        924d9b81  42989536623    21.9   21.1
+2026-11-11T08:52:54Z  ci/reusable-pipelines                  5bdd43b4  42990539728    31.3   30.5
+2026-11-11T09:48:48Z  ci/protection-followups                3cb2114a  42998310543    31.0   30.1
+2026-11-11T10:10:35Z  ci/protection-followups                3c6d1a7c  43001383113    31.4   30.4
+2026-11-11T10:26:49Z  feat/f1a-production-serving            e2c3e2cf  43003676253    30.9   30.1
+2026-11-11T10:28:16Z  test/gw28-pin-scan-cost                196d08ca  43003877647    30.8   29.8
+2026-11-11T10:44:17Z  ci/gitleaks-count-attrs                2add0353  43006109834    30.6   29.8
+2026-11-11T11:04:55Z  test/gw28-relaxed-bounds               711120cc  43008950917    25.4   24.6
+2026-11-11T11:08:04Z  fix/control-security-tests-106         2f54740b  43009390503    17.2   16.6
+2026-11-11T11:11:55Z  ci/pin-actions-107                     08625084  43009933332    22.1   21.4
+2026-11-11T11:14:08Z  ci/pin-actions-107                     911b1694  43010249021    17.6   17.0
+2026-11-11T11:18:17Z  ci/pin-actions-107                     156495fa  43010828735    30.7   29.8
+2026-11-11T11:18:43Z  ci/pin-actions-107                     a78d1655  43010887934    22.3   21.5
+2026-11-11T11:21:27Z  fix/f4-builtin-surfaces                17139715  43011271535    26.5   25.8
+2026-11-11T11:27:06Z  test/gw28-relaxed-bounds               8faf6a47  43012049202    17.4   16.8
+2026-11-11T11:36:08Z  ci/pin-actions-107                     cd191475  43013298890    30.4   29.5
+2026-11-11T11:37:14Z  test/gw28-relaxed-bounds               ef3ef131  43013449787    21.7   21.0
+2026-11-11T11:37:59Z  fix/projector-validate-any-error       92a2e78c  43013549812    30.5   29.6
+2026-11-11T11:39:13Z  plan/f1a2-model-state                  b284dc9e  43013713358    30.7   29.9
+2026-11-11T11:39:52Z  fix/f4-builtin-surfaces                98f93773  43013800187    30.6   29.8
+2026-11-11T11:47:42Z  ci/pin-actions-107                     6f5d9aed  43014877404    26.4   25.6
+2026-11-11T11:48:12Z  ci/pin-actions-107                     ac1dc07d  43014945803    31.9   31.0
+2026-11-12T04:40:22Z  ci/pin-actions-107                     93ffdaad  43156325595    22.4   21.6
+2026-11-12T04:41:23Z  fix/control-security-tests-106         c48b355d  43156433693    31.9   31.0
+2026-11-12T04:41:28Z  fix/f4-builtin-surfaces                f1984718  43156442083    22.2   21.4
+2026-11-12T04:41:33Z  fix/control-superuser-org-scope        2ed68710  43156450590    31.0   30.2
+2026-11-12T04:41:38Z  plan/f1a3-dispatch-credentials         c10c16e4  43156459390    22.1   21.2
+2026-11-12T04:56:33Z  plan/f6-frontend-directions            9eeb8fc2  43158043355    30.8   29.9
+2026-11-12T05:28:03Z  plan/f2-guard-model                    79f482ac  43161569037    22.2   21.4
+2026-11-12T05:40:55Z  fix/state-applier-isolation            1dba148a  43162995453    21.9   21.1
+2026-11-12T06:04:00Z  fix/control-security-tests-106         235a15a9  43165524077    16.7   16.1
+n=48  job: min 16.7 median 24.9 max 31.9   pytest step: min 16.1 median 24.1 max 31.0
