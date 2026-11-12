@@ -79,7 +79,10 @@ pythonpath = ["."]
 markers = ["real_incident_defaults: keep the fail-closed GW29 incident defaults (no pass-through gate)"]
 testpaths = ["tests"]
 # Per-test timeout (pytest-timeout, `dev` extra; issue #116), in seconds, covering setup + call +
-# teardown. PROVISIONAL: sized from measured CI durations in a later commit.
+# teardown. The slowest test on CI takes 84 s (gateway-v2 run 43165116680, a GW36 property
+# test), so 300 s is 3.6x that. The 2-CPU agent host runs the suite 1.2x (quiet) to about 2.3x
+# (contended) slower than CI, about 195 s for that test at worst. A slower environment sets
+# PYTEST_TIMEOUT (it overrides this value; `--timeout` overrides both).
 timeout = 300
 # SIGALRM interrupts the hung test, fails it with its stack, and the session continues.
 timeout_method = "signal"
