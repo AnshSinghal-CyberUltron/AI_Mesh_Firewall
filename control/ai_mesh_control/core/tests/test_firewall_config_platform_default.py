@@ -296,6 +296,57 @@ class PlatformDefaultFirewallConfigTests(TestCase):
         self.assertFalse(FirewallConfig.objects.filter(organization__isnull=True).exists())
         self.assertEqual(callbacks, [])
 
+    # -- duplicate platform-default rows (nothing constrains NULLs yet: #155) --
+
+    def test_duplicate_default_rows_are_logged_and_the_operator_put_answers_409(self):
+        # A pre-fix re-homed org row: newer, and serving "off" through Redis.
+        dup = FirewallConfig.objects.create(organization=None, firewall_enabled=False)
+        ids = [self.default.pk, dup.pk]
+        with self.assertLogs("core.models", level="ERROR") as logs:
+            res = self._call(self.operator, "GET")
+        self.assertEqual(res.status_code, 200, res.data)
+        self.assertIs(res.data["firewall_enabled"], True)  # the lowest id, never silently
+        self.assertIn(f"ids={ids}", "\n".join(logs.output))
+
+        before = self._rows()
+        redis_client = mock.MagicMock()
+        with (
+            self.assertLogs("core.firewall_config_views", level="ERROR") as logs,
+            mock.patch("core.signals._get_redis_client", return_value=redis_client),
+            self.captureOnCommitCallbacks(execute=True) as callbacks,
+        ):
+            res = self._call(self.operator, "PUT", {"firewall_enabled": True})
+        self.assertEqual(res.status_code, 409, res.data)
+        self.assertIn(f"ids {ids}", str(res.data["detail"]))
+        self.assertIn(f"ids={ids}", "\n".join(logs.output))
+        self.assertEqual(self._rows(), before)
+        self.assertFalse(self._platform_audit().exists())
+        self.assertEqual(callbacks, [])
+        redis_client.set.assert_not_called()
+
+    def test_losing_a_concurrent_first_create_answers_409_and_leaves_nothing(self):
+        # Simulates a second operator committing the first platform-default row between this
+        # request's get_or_create (which inserted its own row) and its locking read.
+        self.default.delete()
+        real_get_or_create = FirewallConfig.objects.get_or_create
+
+        def racing_get_or_create(**kwargs):
+            result = real_get_or_create(**kwargs)
+            FirewallConfig.objects.create(organization=None)  # the other operator's row
+            return result
+
+        with (
+            mock.patch.object(FirewallConfig.objects, "get_or_create", side_effect=racing_get_or_create),
+            self.captureOnCommitCallbacks(execute=True) as callbacks,
+        ):
+            res = self._call(self.operator, "PUT", OFF)
+        self.assertEqual(res.status_code, 409, res.data)
+        # This request's insert is rolled back with it. (The simulated row shares the test's
+        # transaction, so it goes too; a real concurrent row would stay, alone.)
+        self.assertFalse(FirewallConfig.objects.filter(organization__isnull=True).exists())
+        self.assertFalse(self._platform_audit().exists())
+        self.assertEqual(callbacks, [])
+
 
 class PlatformDefaultReadsDoNotCreateItTests(TestCase):
     def test_platform_default_returns_the_stored_row_or_an_unsaved_default(self):

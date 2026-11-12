@@ -1388,10 +1388,29 @@ class FirewallConfig(models.Model):
         Never writes. ``load(organization=None)`` creates the row when it is missing, and the
         ``post_save`` signal then publishes it to ``firewall:config:default``, which the v1 gateway
         serves to every org without a row of its own (``ConfigSync.get_config``). A read must not
-        do that: only an audited platform-operator write may (#130). The lowest id wins if a race
-        ever left two such rows.
+        do that: only an audited platform-operator write may (#130).
+
+        More than one such row (a pre-fix re-home, or two concurrent first-time creates; nothing
+        constrains NULLs yet, #155) is an integrity error: it is logged as an ERROR naming every
+        id, and the lowest id is returned so readers keep working. The operator PUT refuses that
+        state with 409 (``core.firewall_config_views``).
         """
-        return cls.objects.filter(organization__isnull=True).order_by("pk").first() or cls()
+        rows = list(cls.objects.filter(organization__isnull=True).order_by("pk")[:2])
+        if len(rows) > 1:
+            import logging
+
+            logging.getLogger(__name__).error(
+                "FirewallConfig: duplicate platform-default rows (organization IS NULL) ids=%s; reading "
+                "the lowest id, but Redis firewall:config:default holds whichever was saved or reconciled last. "
+                "Deduplicate before any platform-default write.",
+                cls.platform_default_ids(),
+            )
+        return rows[0] if rows else cls()
+
+    @classmethod
+    def platform_default_ids(cls) -> list[int]:
+        """Ids of every platform-default row, lowest first. More than one is an integrity error."""
+        return list(cls.objects.filter(organization__isnull=True).order_by("pk").values_list("pk", flat=True))
 
     def build_redis_key(self) -> str:
         slug = self.organization.slug if self.organization_id else "default"

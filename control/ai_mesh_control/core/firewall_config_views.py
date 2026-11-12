@@ -14,7 +14,7 @@ import logging
 
 from django.db import transaction
 from rest_framework import status
-from rest_framework.exceptions import PermissionDenied
+from rest_framework.exceptions import APIException, PermissionDenied
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -71,6 +71,27 @@ def _audit_platform_default_write(request, before: dict, config: FirewallConfig,
         resource=PLATFORM_DEFAULT_RESOURCE,
         details=json.dumps(details, sort_keys=True, default=str),
         ip_address=_remote_addr(request),
+    )
+
+
+class PlatformDefaultConflict(APIException):
+    status_code = status.HTTP_409_CONFLICT
+    default_code = "platform_default_duplicate_rows"
+
+
+def _duplicate_platform_defaults(request) -> PlatformDefaultConflict:
+    """The 409 for an operator PUT that finds more than one platform-default row. Logs the ids."""
+    ids = FirewallConfig.platform_default_ids()
+    logger.error(
+        "FirewallConfig PUT refused (409): duplicate platform-default rows (organization IS NULL) ids=%s "
+        "user=%s; nothing was changed",
+        ids,
+        request.user.pk,
+    )
+    return PlatformDefaultConflict(
+        f"There are {len(ids)} platform-default firewall configurations (ids {ids}); nothing was changed. "
+        "If another operator was creating the platform default at the same moment, retry. Otherwise the "
+        "duplicate rows must be removed first."
     )
 
 
@@ -132,8 +153,13 @@ class FirewallConfigView(APIView):
             else:
                 # Platform default (operator only). Created inside the transaction, so a request
                 # that fails validation leaves no row behind, and the audit row covers creation.
-                _, created = FirewallConfig.objects.get_or_create(organization__isnull=True)
-                config = FirewallConfig.objects.select_for_update().get(organization__isnull=True)
+                try:
+                    _, created = FirewallConfig.objects.get_or_create(organization__isnull=True)
+                    config = FirewallConfig.objects.select_for_update().get(organization__isnull=True)
+                except FirewallConfig.MultipleObjectsReturned:
+                    # Raised, not returned: leaving the atomic block by exception rolls back a row
+                    # this request may have just inserted (it lost a concurrent first-time create).
+                    raise _duplicate_platform_defaults(request) from None
                 before = _stored_values(config)
             serializer = FirewallConfigSerializer(
                 config,
