@@ -86,6 +86,10 @@ testpaths = ["tests"]
 timeout = 300
 # SIGALRM interrupts the hung test, fails it with its stack, and the session continues.
 timeout_method = "signal"
+# Without the plugin, `timeout` above is only a "Unknown config option" warning and no test has
+# a timeout. Make that an error instead. Every venv that runs pytest from this directory installs
+# it: the `dev` extra, and the openai-conformance job reads the same pin from the extra.
+required_plugins = ["pytest-timeout>=2.3"]
 # The GW15 in-process conformance subset (``tests/openai_conformance/test_gw15_chat_surface_v2.py``)
 # runs against the v2 Chat_Surface with the unmodified OpenAI SDK + ``StubProviderClient`` and is
 # collected by default (it ``importorskip``s the SDK, so a tree without ``openai`` skips cleanly;

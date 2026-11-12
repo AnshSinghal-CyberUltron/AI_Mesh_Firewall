@@ -204,7 +204,7 @@ Every job has `timeout-minutes`, several times its measured duration, so a hang 
 
 Every reusable workflow's job already had one.
 
-**Per test,** gateway_v2 uses pytest-timeout (`dev` extra), set to `timeout = 300` in `gateway_v2/pyproject.toml`:
+**Per test,** gateway_v2 uses pytest-timeout (`dev` extra), set to `timeout = 300` in `gateway_v2/pyproject.toml`. `required_plugins` there makes a missing plugin an error rather than a warning; the openai-conformance job, which runs pytest from `gateway_v2/` in its own venv, installs the same pin.
 - SIGALRM fails the hung test, its log shows the stack and the test id, and the rest of the shard runs.
 - 300 s is 3.6× the slowest test measured on CI (84 s).
 - A slower machine sets `PYTEST_TIMEOUT=600`; it overrides the file, and `--timeout` overrides both.

@@ -353,6 +353,12 @@ jobs:
           data = tomllib.loads(Path("gateway/pyproject.toml").read_text())
           deps = list(data["project"]["dependencies"])
           deps += data["project"]["optional-dependencies"]["dev"]
+          # pytest runs from gateway_v2/ below, whose pyproject requires pytest-timeout
+          # (required_plugins): install the pin from gateway_v2's dev extra.
+          v2 = tomllib.loads(Path("gateway_v2/pyproject.toml").read_text())
+          timeout = [d for d in v2["project"]["optional-dependencies"]["dev"] if d.startswith("pytest-timeout")]
+          assert len(timeout) == 1, timeout
+          deps += timeout
           subprocess.check_call([sys.executable, "-m", "pip", "install", *deps])
           PY
       - name: LGW01-1/2/4/5 Python ASGI + loopback TCP (twice)
