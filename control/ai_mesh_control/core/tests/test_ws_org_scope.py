@@ -111,10 +111,14 @@ class NotificationSocketOrgScopeTests(TransactionTestCase):
         self.assertEqual(len(self._rows("cross_org_access", user=self.orgless_staff)), 1)
 
     def test_staff_naming_an_unknown_org_is_refused(self):
-        connected, code, _group = self._connect(self.staff_b, "&organization_id=99999999")
+        with self.assertLogs("ws.consumers", level="WARNING") as logs:
+            connected, code, _group = self._connect(self.staff_b, "&organization_id=99999999")
         self.assertFalse(connected)
         self.assertEqual(code, 4403)
         self.assertEqual(self._rows("cross_org_access"), [])
+        # Refused by the existence check, not by a failed audit write (the AuditLog FK).
+        self.assertTrue(any("named unknown organization_id=99999999" in line for line in logs.output), logs.output)
+        self.assertFalse(any("audit write failed" in line for line in logs.output), logs.output)
 
     def test_staff_subscription_is_refused_when_the_audit_row_cannot_be_written(self):
         with mock.patch("core.models.AuditLog.objects.create", side_effect=RuntimeError("audit down")):

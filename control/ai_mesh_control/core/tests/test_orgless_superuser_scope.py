@@ -16,6 +16,8 @@ import json
 from django.contrib.auth import get_user_model
 from rest_framework.test import APIClient
 
+from django.test import RequestFactory, TestCase
+
 from policy.tests.analytics_api_testcase import AnalyticsAPITestCase
 
 User = get_user_model()
@@ -162,11 +164,6 @@ class OrglessStaffFleetReadTests(AnalyticsAPITestCase):
         self._assert_one_fleet_row("policy_compile_status")
         self.assertEqual(self._client(self.orgless_admin).get("/api/policies/compile/status/").status_code, 403)
 
-    def test_one_row_per_request_even_when_several_helpers_ask(self):
-        # /api/policies/ runs get_queryset more than once on some paths; still one row.
-        self._get(self.orgless_staff, "/api/policies/?policy_domain=pipeline")
-        self.assertEqual(len(self._fleet_rows(self.orgless_staff)), 1)
-
     # ── writes never fall through to another tenant, for staff too ────────────────
 
     def test_orgless_staff_cannot_write_another_tenants_objects(self):
@@ -218,3 +215,55 @@ class OrglessStaffFleetReadTests(AnalyticsAPITestCase):
             request.user = actor
             field = PolicyWriteSerializer(context={"request": request}).fields["mcp_server"]
             self.assertEqual(field.queryset.filter(pk=self.mcp_server.pk).exists(), expected)
+
+
+class OrglessStaffFleetReadHelperTests(TestCase):
+    """auth.audit.orgless_staff_fleet_read on its own: who gets the fleet, and one row per request."""
+
+    def setUp(self):
+        from auth.models import Organization, UserProfile
+
+        org = Organization.objects.create(name="Helper org", slug="fleet-helper-org")
+
+        def user(name, org, *, superuser):
+            u = User.objects.create_user(
+                username=name, email=f"{name}@example.com", password="pw",
+                is_superuser=superuser, is_staff=superuser,
+            )
+            profile, _ = UserProfile.objects.get_or_create(user=u)
+            profile.organization = org
+            profile.save(update_fields=["organization"])
+            return User.objects.get(pk=u.pk)
+
+        self.orgless_staff = user("helper_staff_none", None, superuser=True)
+        self.staff_with_org = user("helper_staff_org", org, superuser=True)
+        self.orgless_member = user("helper_member_none", None, superuser=False)
+
+    def _request(self, user, method="get"):
+        request = getattr(RequestFactory(), method)("/api/x/")
+        request.user = user
+        return request
+
+    def _rows(self):
+        from core.models import AuditLog
+
+        return AuditLog.objects.filter(action="cross_org_access").count()
+
+    def test_orgless_staff_read_is_audited_once_per_request(self):
+        from auth.audit import orgless_staff_fleet_read
+
+        request = self._request(self.orgless_staff)
+        self.assertTrue(orgless_staff_fleet_read(request, "a"))
+        self.assertTrue(orgless_staff_fleet_read(request, "b"))  # a second helper on the same request
+        self.assertEqual(self._rows(), 1)
+        self.assertTrue(orgless_staff_fleet_read(self._request(self.orgless_staff), "a"))
+        self.assertEqual(self._rows(), 2)
+
+    def test_nobody_else_gets_the_fleet(self):
+        from auth.audit import orgless_staff_fleet_read
+
+        self.assertFalse(orgless_staff_fleet_read(self._request(self.staff_with_org), "a"))
+        self.assertFalse(orgless_staff_fleet_read(self._request(self.orgless_member), "a"))
+        for method in ("post", "put", "patch", "delete"):
+            self.assertFalse(orgless_staff_fleet_read(self._request(self.orgless_staff, method), "a"), method)
+        self.assertEqual(self._rows(), 0)
