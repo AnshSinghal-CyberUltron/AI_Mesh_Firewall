@@ -41,7 +41,13 @@ def _stored_values(config: FirewallConfig) -> dict:
 def _remote_addr(request) -> str | None:
     """REMOTE_ADDR if it is a valid address (AuditLog.ip_address is inet), else None.
 
-    X-Forwarded-For is client-controlled, so it is kept only as a labelled detail.
+    This code never parses X-Forwarded-For; the raw header is kept only as a labelled detail. That
+    does not make REMOTE_ADDR trustworthy in production: control runs under gunicorn's
+    UvicornWorker with ``--forwarded-allow-ips "${GUNICORN_FORWARDED_ALLOW_IPS:-*}"``
+    (``control/server-entrypoint.sh``). With ``*`` uvicorn trusts every peer and sets the client,
+    hence REMOTE_ADDR, to the left-most X-Forwarded-For entry, which the client chooses (nginx
+    appends the real peer on the right). Until that is pinned to the proxy (#154), this address is
+    client-forgeable.
     """
     try:
         return str(ipaddress.ip_address(request.META.get("REMOTE_ADDR") or ""))

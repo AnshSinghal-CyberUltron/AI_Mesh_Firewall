@@ -34,6 +34,7 @@ from policy.tests.analytics_api_testcase import AnalyticsAPITestCase
 
 User = get_user_model()
 OFF = {"firewall_enabled": False}
+XFF = "203.0.113.9, 10.0.0.1"
 
 
 def _user(name, org=None, *, profile=True, staff=False, superuser=False, operator=False, admin=False):
@@ -70,12 +71,12 @@ class PlatformDefaultFirewallConfigTests(TestCase):
     def _rows(self):
         return list(FirewallConfig.objects.order_by("pk").values())
 
-    def _call(self, user, method, body=None):
+    def _call(self, user, method, body=None, **extra):
         self.client.force_authenticate(user=user)
         url = reverse("firewall-config")
         if method == "GET":
-            return self.client.get(url)
-        return self.client.put(url, body, format="json")
+            return self.client.get(url, **extra)
+        return self.client.put(url, body, format="json", **extra)
 
     def _platform_audit(self):
         return AuditLog.objects.filter(action=PLATFORM_DEFAULT_AUDIT_ACTION)
@@ -210,7 +211,12 @@ class PlatformDefaultFirewallConfigTests(TestCase):
             mock.patch("core.signals._get_redis_client", return_value=redis_client),
             self.captureOnCommitCallbacks(execute=True),
         ):
-            res = self._call(self.operator, "PUT", {**OFF, "requests_per_minute": 500})
+            # The test client's REMOTE_ADDR is 127.0.0.1. The audit must not take the address from
+            # a client-supplied X-Forwarded-For (#122 N2). In production uvicorn's proxy trust still
+            # decides REMOTE_ADDR (#154); see _remote_addr.
+            res = self._call(
+                self.operator, "PUT", {**OFF, "requests_per_minute": 500}, HTTP_X_FORWARDED_FOR=XFF
+            )
         self.assertEqual(res.status_code, 200, res.data)
         self.assertIsNone(res.data["organization"])
         self.assertEqual(res.data["gateway_v2_plan"], {"status": "skipped", "reason": "no_org"})
@@ -231,6 +237,7 @@ class PlatformDefaultFirewallConfigTests(TestCase):
         details = json.loads(row.details)
         self.assertEqual(details["changed"], {"firewall_enabled": [True, False], "requests_per_minute": [1000, 500]})
         self.assertEqual(details["requested_fields"], ["firewall_enabled", "requests_per_minute"])
+        self.assertEqual(details["x_forwarded_for_client_supplied"], XFF)
         self.assertFalse(details["created"])
 
         redis_client.set.assert_called_once()
