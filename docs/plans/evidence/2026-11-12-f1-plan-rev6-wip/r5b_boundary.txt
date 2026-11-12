@@ -1,0 +1,1 @@
+one-sided boundaries: 60 patterns, 0 mismatches in 104.5s

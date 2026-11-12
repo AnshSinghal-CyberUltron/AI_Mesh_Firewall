@@ -1,0 +1,14 @@
+2026-11-11T11:30:44Z
+ 11:30:44 up  6:18,  0 user,  load average: 6.45, 6.79, 5.12
+%CPU COMMAND
+50.7 /home/claude/work/venv-ci/bin/python -m pytest -q -p no:cacheprovider tests
+50.0 pgrep --ignore-ancestors -f p hiccup tests/dispatch/test_gw28_attempt_bound.py
+46.6 /home/claude/work/venv-ci/bin/python /home/claude/work/wt-hotfix/docs/plans/evidence/2026-11-11-projector
+35.9 ../../rv2023.8.8/bin/python exhaustive.py
+| Call | ns per call (bench thread CPU, best of 5 x 400000) | +3 busy threads | +7 busy threads |
+|---|---|---|---|
+| clock() [upstream] | 216 | 237 | 279 |
+| clock_gettime(THREAD_CPUTIME) [patch] | 204 | 230 | 242 |
+| clock_gettime(PROCESS_CPUTIME) | 222 | 236 | 254 |
+| pthread_self() [patch thread check] | 2 | 2 | 2 |
+| clock_gettime(MONOTONIC) [vDSO ref] | 25 | 26 | 28 |

@@ -1,0 +1,21 @@
+# tcpu  2026-11-11T11:40:47Z  load average: 6.47, 7.30, 6.22
+text 384 KiB, 5 runs per row; regex 2023.8.8 .so sha256 64a8bac6ca333786  switch interval 5.0 ms
+| H (pure-Python busy thread) | switch interval | concurrent= | M outcome | M own CPU median ms | M wall median ms | process CPU during M, median ms (what stock clock() counts) |
+|---|---|---|---|---|---|---|
+| none | 5 ms | True | 5 ok, 0 timeout | 60.6 | 76 | 61 |
+| none | 5 ms | None | 5 ok, 0 timeout | 62.6 | 88 | 63 |
+| none | 5 ms | False | 5 ok, 0 timeout | 78.6 | 135 | 79 |
+| busy | 5 ms | True | 5 ok, 0 timeout | 79.4 | 964 | 434 |
+| busy | 5 ms | None | 5 ok, 0 timeout | 82.7 | 751 | 289 |
+| busy | 5 ms | False | 5 ok, 0 timeout | 69.1 | 219 | 78 |
+| none | 1 ms | True | 5 ok, 0 timeout | 56.2 | 68 | 56 |
+| none | 1 ms | None | 5 ok, 0 timeout | 59.0 | 64 | 59 |
+| none | 1 ms | False | 5 ok, 0 timeout | 77.6 | 173 | 79 |
+| busy | 1 ms | True | 5 ok, 0 timeout | 54.0 | 273 | 137 |
+| busy | 1 ms | None | 5 ok, 0 timeout | 71.9 | 214 | 178 |
+| busy | 1 ms | False | 5 ok, 0 timeout | 70.1 | 123 | 75 |
+# other top CPU at end:
+49.2 /home/claude/work/venv-ci/bin/python -m pytest -q -p no:cacheprovider tests
+45.7 .f2-scratch/venv/bin/python -I docs/plans/evidence/2026-11-11-f2-guard-model/scripts/bench_wind
+16.6 /home/claude/work/venv-ci/bin/python -m pytest -q -p no:cacheprovider tests/dispatch/test_gw28_
+15.8 ../../venv-ci/bin/python -m pytest -q -p no:cacheprovider -rf tests/dispatch/test_gw28_attempt_

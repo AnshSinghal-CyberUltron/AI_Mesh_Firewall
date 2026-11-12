@@ -1,0 +1,23 @@
+RX-TIMEOUT '(?m)(?:[^k]|ı|.)*\\W\\ {2,}' re 699.7 ms on 'x9\x1fẞ1İΣß A\u2000٠aΣBσẞßb́İA'
+RX-TIMEOUT '(?i)(?:.|\\S|c)+(?:\\Bx{2}+9{1,3}+)[k]{,2}' re 1732.2 ms on 'a²x１acyC١.écx\xa0X\x1fCcxZY\x1c'
+seed=1 patterns=6000 checks=44208 ok=5526 mismatch=0 rx-timeout=2 skipped=465 refused=0 compile-fail=0 re-hang=7 in 155.6s
+RX-TIMEOUT '(?i)\\S(?:\\D|.|.){2,}[0-9]\\W|k{2,}x' re 11900.8 ms on '\n.aı\x1f１ß1ı²kİ١k\u2000Béİ́K'
+RX-TIMEOUT '(?im)(?:.|\\D|9)+?Z{2}(?:[^y]|\\s|.){1,3}' re 378.8 ms on ' yß²CẞCΣ9ı\nİKẞ_é.Bİ:CZ'
+seed=2 patterns=6000 checks=44656 ok=5582 mismatch=0 rx-timeout=4 skipped=409 refused=0 compile-fail=0 re-hang=5 in 147.7s
+RX-TIMEOUT '(?s)^(?:.|z|.)+?c{1,3}?_{2,}' re 1649.8 ms on '１cσ, a٠.Cxb._c\xa00C\xa0İb \xa0\xa0\x1c'
+seed=3 patterns=6000 checks=44392 ok=5549 mismatch=0 rx-timeout=1 skipped=442 refused=0 compile-fail=0 re-hang=8 in 175.7s
+RX-TIMEOUT '(?s)^(?:.|[^_])+?{{2}?(?<=a\\Z[^x]A[éXı])|9{2,}[^\\ ]*\\D{,2}+' re 1230.7 ms on 'C١Zı²Kx\nx,Y0́Σı\x1cy\x1cΣ\x1f\n.-\x1f'
+RX-TIMEOUT '(?s).*(?:\\d|.|[^é])*?\\A' re 16254.9 ms on '_\xa0\x1cYaKa١ß-A１9éAΣk²\x1cͅcİσ9'
+seed=4 patterns=6000 checks=44696 ok=5587 mismatch=0 rx-timeout=6 skipped=399 refused=0 compile-fail=0 re-hang=8 in 235.4s
+RX-TIMEOUT '(?im).?(?:[^y]|.|.){2,}A?+ı' re 9978.7 ms on 'Bẞ１٠١kkCAy٠.y١ẞß1'
+seed=5 patterns=6000 checks=44616 ok=5577 mismatch=0 rx-timeout=1 skipped=416 refused=0 compile-fail=0 re-hang=6 in 153.2s
+RX-TIMEOUT '(?m)(?:.|\\s|.)*[^é9x]^' re 619.3 ms on '-K\u2000\x1c- aK\u2000CAk\xa0BY١bb.'
+RX-TIMEOUT '(?m)\\A\\s|(?:\\d|.|\\D){2,}.Z?\\A' re 1862.1 ms on 'bXσ\n٠１Cı٠-XZK٠,azcaXσ0 \x1c'
+seed=6 patterns=6000 checks=44544 ok=5568 mismatch=0 rx-timeout=2 skipped=423 refused=0 compile-fail=0 re-hang=7 in 162.9s
+RX-TIMEOUT '(?im)(?:\\S|.|x)*[^éı\\W]?[^ı\\S]{2,}?' re 1025.9 ms on 'x١X́y,Akͅ\x1fẞyC-σK٠-Ac9\x1c'
+seed=7 patterns=6000 checks=44976 ok=5622 mismatch=0 rx-timeout=1 skipped=369 refused=0 compile-fail=0 re-hang=8 in 198.9s
+RX-TIMEOUT '(?s)(?:[^Z]|y|.)+?1(?:\\W|k|.){,2}+x{2,}' re 895.4 ms on '1²:Byéz-K.Kx\x1cİ:_ẞé-İ\x1fK'
+RX-TIMEOUT '(?s)(?:.|\\W|.){2,}[\\d]+?\\w{2}?\\w+' re 575.6 ms on '\nyy_ßB́é́0 -Bé́kẞ0'
+seed=8 patterns=6000 checks=44440 ok=5555 mismatch=0 rx-timeout=3 skipped=438 refused=0 compile-fail=0 re-hang=4 in 107.7s
+RX-TIMEOUT '(?:\\d|[^σ]|.)+\\s\\W?\\d' re 1187.5 ms on 'K\x1c:_K\u2000́́\x1f́ͅ１Xz\nΣk ẞK:\nc:'
+seed=303 patterns=6000 checks=44880 ok=5610 mismatch=0 rx-timeout=1 skipped=382 refused=0 compile-fail=0 re-hang=7 in 156.2s
