@@ -7,6 +7,10 @@ Every method is ONE round trip, and the command set per round is fixed:
     records()      HMGET <hash> <keys>     or  MGET <per-record keys>
     engaged()      SMEMBERS on:<kind>
 
+and, off the round path, one per on-demand identity fill or quarantine re-check:
+
+    record_with_manifest()  GET meta  +  HMGET/MGET <key>  +  ZSCORE idx <key>
+
 No `HGETALL`, no `HVALS`, no `SCAN`, no `KEYS`. Those are the shapes that made RC2's refresh
 O(records) (R2-02), and their absence here is what the fixed command list in the guard tests is
 asserting.
@@ -59,6 +63,18 @@ def _reachable(operation: str) -> Iterator[None]:
 def _as_int(value: object) -> int:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         return 0
+    return int(value)
+
+
+def _as_score(value: object) -> int | None:
+    """An index score as a position, or None when absent or not a whole number.
+
+    Strict where `_as_int` is lenient: a score that is not a whole number cannot be any record's
+    `feed_seq`, so it must not be truncated into one that pairs."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    if isinstance(value, float) and not value.is_integer():
+        return None
     return int(value)
 
 
@@ -192,12 +208,15 @@ class ValkeyStateStore:
         self,
         kind: StateKind,
         key: str,
-    ) -> tuple[bytes | None, bytes | None]:
-        """One MULTI: `(manifest, record)` read together, for an on-demand identity fill.
+    ) -> tuple[bytes | None, bytes | None, int | None]:
+        """One MULTI: `(manifest, record, index score)` read together, for an on-demand read.
 
         Reading the record alone cannot tell a current store from one that regressed below what
         this process already applied (a failover to a lagging replica); the manifest in the
-        same transaction can, and the caller checks it against its applied cursor.
+        same transaction can, and the caller checks it against its applied cursor. Nor can it
+        tell the key's current record from an OLDER genuinely signed one put back in its place:
+        the index score, read in the same transaction, can (`record_matches_index`). The score
+        is None when the key has no index entry.
         """
         with _reachable("record_with_manifest"):
             async with self._client.pipeline(transaction=True) as pipe:
@@ -206,8 +225,9 @@ class ValkeyStateStore:
                     pipe.hmget(self._keys.record_hash(kind), [key])
                 else:
                     pipe.mget([self._keys.record_key(kind, key)])
-                manifest_raw, (record_raw,) = await pipe.execute()
-        return _as_bytes(manifest_raw), _as_bytes(record_raw)
+                pipe.zscore(self._keys.index(kind), key)
+                manifest_raw, (record_raw,), score = await pipe.execute()
+        return _as_bytes(manifest_raw), _as_bytes(record_raw), _as_score(score)
 
     async def engaged(self, kind: StateKind) -> tuple[str, ...]:
         """O(engaged). The cold-start read that replaces reading the whole kind."""

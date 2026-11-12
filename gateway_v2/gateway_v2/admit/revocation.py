@@ -71,12 +71,28 @@ class RevocationLedger:
             for record in records:
                 if record.kind is not StateKind.KEY or not record.deleted:
                     continue
-                held = self._entries.pop(record.key, None)
-                top = record.feed_seq if held is None else max(held[0], record.feed_seq)
-                self._entries[record.key] = (top, now)
-                while len(self._entries) > self._slots:
-                    _, (dropped_seq, _) = self._entries.popitem(last=False)
-                    self._floor = max(self._floor, dropped_seq)
+                self._record_locked(record.key, record.feed_seq, now)
+
+    def refuse(self, key_hash: str, feed_seq: int) -> None:
+        """A KEY record at index position `feed_seq` failed verification: cut like a revoke.
+
+        The record may be a revocation this gateway could not read, so every stream admitted
+        below that position is cut (`revoked_since`), exactly as a verified revoke at it would
+        cut them. A principal admitted later, from a verified record at or above it, is not.
+        Never raises.
+        """
+        with self._lock:
+            now = self._clock()
+            self._expire_locked(now)
+            self._record_locked(key_hash, feed_seq, now)
+
+    def _record_locked(self, key_hash: str, feed_seq: int, now: float) -> None:
+        held = self._entries.pop(key_hash, None)
+        top = feed_seq if held is None else max(held[0], feed_seq)
+        self._entries[key_hash] = (top, now)
+        while len(self._entries) > self._slots:
+            _, (dropped_seq, _) = self._entries.popitem(last=False)
+            self._floor = max(self._floor, dropped_seq)
 
     def revoked_since(self, key_hash: str, key_feed_seq: int) -> bool:
         """True if revoked after the stream was admitted, or if that can no longer be ruled out."""
