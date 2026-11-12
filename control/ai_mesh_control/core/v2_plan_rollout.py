@@ -1,63 +1,89 @@
-"""Deterministic rollout of the gateway-v2 plan documents (F4 R1; PR #115 reviews A-S2, B-S4).
+"""Deterministic rollout of the gateway-v2 plan documents (F4 R1/R21; PR #115 reviews).
 
 ``publish_for_org`` runs only when an Organization or FirewallConfig is saved
-(``core/signals.py``), from the console views, or from ``manage.py sync_v2_plan_documents``, which
-nothing ran. So when what the publisher writes changes, through a release (the F4 extension rows)
-or a deployment setting it reads (``V2_PLAN_NEW_RULES_MODE`` and the others in
-:data:`PUBLISH_SETTINGS`), an org that does not save keeps its old document indefinitely and the
-fleet is silently mixed. That also defeated the rollback "set the gate to ``off``".
+(``core/signals.py``), from the console views, or from ``manage.py sync_v2_plan_documents``. So when
+what the publisher writes changes (a release, a data migration of its inputs, or a deployment
+setting it reads, such as ``V2_PLAN_NEW_RULES_MODE``), an org that does not save would keep its old
+document indefinitely, and the rollback "set the gate to ``off``" would not reach it.
 
 :func:`reconcile` closes that:
 
-* :func:`fingerprint` hashes what the running publisher writes: a probe document built by the
-  current code under the current settings, plus the settings themselves.
-* It is compared with the fingerprint of the last COMPLETE sweep, kept in Redis. Equal: nothing to
-  do (one GET), so a restart costs nothing.
-* Different: one runner, elected with a Redis lock, republishes every active org in primary-key
-  order, :data:`BATCH` orgs per query, so memory stays bounded at any org count. Only a sweep with
-  no failure records the new fingerprint; a failed or interrupted sweep repeats on the next run.
-  Repeating is safe: ``_store`` raises an org's revision only when its body changed.
+* :func:`fingerprint` identifies the running publisher: a sha256 over the source of every module
+  that shapes a document (:data:`PUBLISHER_MODULES`), the migration files of the apps whose rows it
+  reads (:data:`MIGRATION_APPS`, so a data migration such as ``core/0040`` counts), every publish
+  setting (:data:`PUBLISH_SETTINGS`), and two documents it builds now: an org with every built-in
+  on, and a never-saved org (the ``FirewallConfig`` model defaults through the serializer).
+* Every publish stamps the document with the fingerprint of the process that built it
+  (``V2PlanDocument.publisher``), console saves included.
+* A document whose stamp differs from the running fingerprint is stale. No stale active org: done
+  (one indexed query, no Redis). Otherwise, once the publisher's migrations are applied, one
+  runner (an owner-checked Redis lock) republishes the stale orgs in primary-key order,
+  :data:`BATCH` per query, so memory stays bounded at any org count.
 
-It runs once per control container start (``server-entrypoint.sh``, in the background, so the
-health check never waits on a long sweep) and from ``manage.py sync_v2_plan_documents
---if-changed``. A gate flip and a rollback are environment changes, and an environment change takes
-effect only when the container is recreated, so the same start-up run covers deploy, flip and
-rollback. Running per container rather than per gunicorn worker matters: workers are recycled
-(``--max-requests``), and a recycled worker of an OLD container must never republish with the old
-settings after a new container has swept.
+The sweep is resumable by construction: an interrupted or failed run leaves only the orgs it did
+not reach (or that failed) stale, and the next run republishes only those. Repeating is safe:
+``_store`` raises an org's revision only when its body changed.
 
-A lost Redis marker costs one extra, idempotent sweep. Losing the lock mid-sweep (TTL expiry) can
-let a second runner sweep concurrently; each org is published inside its own row lock
-(``publish_for_org``), so the two produce the same documents.
+:func:`reconcile_until_settled` is what control runs once per container start
+(``server-entrypoint.sh``, in the background, so the health check never waits on a sweep). It
+retries a failed org at most :data:`ORG_MAX_TRIES` times per start; then it settles as
+``partial``, logs those org ids, and leaves them stale for the next start. A gate flip and a
+rollback are environment changes, which take effect only when the container is recreated, so the
+same start-up run covers deploy, flip and rollback. The publish settings must be the same on every
+process that publishes (control and the workers, which publish through the save signals): a
+process with other settings stamps its own fingerprint, and the last control start wins.
+``sync_v2_plan_documents --status`` reports how many active orgs are still stale.
+
+Scope: this runs wherever control starts through ``server-entrypoint.sh`` (docker compose, the EC2
+deploy). The Terraform ECS service overrides the container command and does not run it (register
+R28).
 """
 
 from __future__ import annotations
 
+import functools
 import hashlib
+import importlib.util
 import json
 import logging
-import secrets
 import time
-from collections.abc import Callable
-from typing import Any, Protocol
+from collections import Counter
+from collections.abc import Callable, Collection
+from pathlib import Path
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
-#: Redis key holding the fingerprint of the last complete sweep.
-MARKER_KEY = "v2plan:rollout:fingerprint"
-#: Redis key electing the one runner. Its TTL is refreshed after every batch.
+#: Redis key electing the one runner (owner-checked: release and refresh are compare-and-act).
 LOCK_KEY = "v2plan:rollout:lock"
 LOCK_TTL_S = 300
+#: How often a running sweep refreshes its lock. A refresh that finds another owner (or none)
+#: stops the sweep, so two runners never sweep side by side for longer than one org's publish.
+LOCK_REFRESH_S = 60.0
 #: Orgs fetched per query (keyset pagination on the primary key).
 BATCH = 500
-#: Consecutive failed publishes that end a sweep early. A systemic failure (database down, schema
-#: not yet migrated) fails every org, and ``publish_for_org`` logs a traceback for each one, so
-#: without this a 100k-org fleet would log 100k tracebacks per attempt. One bad org does not stop
-#: the sweep; the sweep is incomplete either way, so it is retried.
+#: Consecutive failed publishes that end a sweep early. A systemic failure fails every org, and
+#: ``publish_for_org`` logs a traceback for each one; this bounds the noise per attempt.
 MAX_CONSECUTIVE_FAILURES = 50
+#: Tries per org within one start before the org is left for the next start (``partial``).
+ORG_MAX_TRIES = 3
+#: Seconds between progress lines during a sweep.
+PROGRESS_EVERY_S = 30.0
+#: Modules whose source shapes a document: the publisher, its maps, the console payload
+#: serializer, the dev-copy alias map, and this module (an edit here forces one sweep).
+PUBLISHER_MODULES = (
+    "core.firewall_v2_publish",
+    "core.firewall_v2_map",
+    "core.firewall_v2_controls",
+    "core.firewall_config_serializer",
+    "core.v2_audit_adapter",
+    "core.v2_plan_rollout",
+)
+#: Apps whose rows the publisher reads (Organization, FirewallConfig, Policy). A new migration in
+#: any of them (a data migration of publisher inputs emits no save signal) changes the fingerprint.
+MIGRATION_APPS = ("auth_api", "core", "policy")
 #: Deployment settings the publisher reads (``firewall_v2_map._setting``,
-#: ``firewall_v2_controls._setting``, ``firewall_v2_publish._dev_copy``). A change to any of them
-#: changes some org's document, so each is part of the fingerprint.
+#: ``firewall_v2_controls._setting``, ``firewall_v2_publish._dev_copy``).
 PUBLISH_SETTINGS = (
     "V2_PLAN_NEW_RULES_MODE",
     "V2_PLAN_CONTROLS_ENABLED",
@@ -70,10 +96,9 @@ PUBLISH_SETTINGS = (
     "V2_CANARY_STRICT_ORGS",
     "AMF_V2_AUDIT_ORG_MAP",
 )
+SETTLED = ("current", "swept")
 _PROBE_SLUG = "_v2-plan-fingerprint"
-#: Every built-in the console can turn on, so the probe document carries every row kind the
-#: publisher emits (category rows, threat rows, their extension rows, output detector rows,
-#: a rewrite row, the keyword policy row and the controls object).
+#: Every built-in the console can turn on, so one probe document carries every row kind.
 _PROBE: dict[str, Any] = {
     "firewall_enabled": True,
     "enforcement_mode": "block",
@@ -97,17 +122,7 @@ _PROBE: dict[str, Any] = {
 }
 
 
-class _Redis(Protocol):
-    def get(self, name: str) -> Any: ...
-
-    def set(self, name: str, value: str, *, nx: bool = ..., ex: int | None = ...) -> Any: ...
-
-    def expire(self, name: str, time: int) -> Any: ...
-
-    def delete(self, *names: str) -> Any: ...
-
-
-def _redis() -> _Redis:
+def _redis() -> Any:
     from core.signals import _get_redis_client
 
     return _get_redis_client()
@@ -117,6 +132,36 @@ def _text(value: Any) -> str:
     if isinstance(value, bytes):
         return value.decode("utf-8", "replace")
     return "" if value is None else str(value)
+
+
+def _source(module: str) -> bytes:
+    spec = importlib.util.find_spec(module)
+    if spec is None or not spec.origin:
+        raise RuntimeError(f"publisher module {module} has no source file")
+    return Path(spec.origin).read_bytes()
+
+
+@functools.cache
+def code_digest() -> str:
+    """sha256 over the source of :data:`PUBLISHER_MODULES` (read once per process)."""
+    digest = hashlib.sha256()
+    for name in PUBLISHER_MODULES:
+        digest.update(name.encode() + b"\0" + hashlib.sha256(_source(name)).digest())
+    return digest.hexdigest()
+
+
+def _migration_names(label: str) -> list[str]:
+    from django.apps import apps
+
+    folder = Path(apps.get_app_config(label).path) / "migrations"
+    return [f"{label}.{path.stem}" for path in folder.glob("[0-9]*.py")]
+
+
+@functools.cache
+def migrations_digest() -> str:
+    """sha256 over the migration file names of :data:`MIGRATION_APPS` (read once per process)."""
+    names = sorted(name for label in MIGRATION_APPS for name in _migration_names(label))
+    return hashlib.sha256("\n".join(names).encode()).hexdigest()
 
 
 def _settings() -> dict[str, str]:
@@ -131,115 +176,251 @@ def _settings() -> dict[str, str]:
     return out
 
 
-def fingerprint() -> str:
-    """sha256 over the probe document the running code publishes and the publish settings."""
-    from core.firewall_v2_controls import new_rules_mode
-    from core.firewall_v2_publish import document_bytes, keyword_row, policy_drafts
+def _documents(mode: str) -> dict[str, str]:
+    """The probe documents the running publisher builds now, through the real org path."""
+    from core.firewall_config_serializer import FirewallConfigSerializer
+    from core.firewall_v2_publish import document_bytes, drafts_from_policies
+    from core.models import FirewallConfig
 
-    mode = new_rules_mode()
-    keyword = keyword_row(_PROBE, mode)
-    rows, _unsupported = policy_drafts([keyword] if keyword else [], _PROBE_SLUG)
-    document = document_bytes(
-        _PROBE_SLUG, _PROBE, rows, _PROBE_SLUG, controls_enabled=True, rules_mode=mode,
-    )
+    payloads = {
+        "every_builtin": dict(_PROBE),
+        "never_saved": dict(FirewallConfigSerializer(FirewallConfig()).data),
+    }
+    out: dict[str, str] = {}
+    for name, payload in payloads.items():
+        rows, _unsupported = drafts_from_policies(_PROBE_SLUG, payload, mode, [])
+        out[name] = document_bytes(
+            _PROBE_SLUG, payload, rows, _PROBE_SLUG, controls_enabled=True, rules_mode=mode,
+        ).decode("utf-8")
+    return out
+
+
+def fingerprint() -> str:
+    """sha256 identifying what the running publisher writes (see the module docstring)."""
+    from core.firewall_v2_controls import new_rules_mode
+
     blob = json.dumps(
-        {"document": document.decode("utf-8"), "settings": _settings()},
+        {
+            "code": code_digest(),
+            "migrations": migrations_digest(),
+            "settings": _settings(),
+            "documents": _documents(new_rules_mode()),
+        },
         separators=(",", ":"),
         sort_keys=True,
     )
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()
 
 
-def sweep(on_batch: Callable[[], None] | None = None) -> tuple[int, int]:
-    """Republish every active org, :data:`BATCH` per query. Returns ``(published, failed)``.
+def stale_orgs(current: str, skip: Collection[int] = ()) -> Any:
+    """Active orgs with no document, or with a document another publisher built."""
+    from auth.models import Organization
 
-    Stops after :data:`MAX_CONSECUTIVE_FAILURES` failures in a row (``failed`` is then non-zero).
+    orgs = Organization.objects.filter(is_active=True).exclude(
+        v2_plan_document__publisher=current
+    )
+    if skip:
+        orgs = orgs.exclude(pk__in=list(skip))
+    return orgs
+
+
+def unapplied_migrations() -> list[str]:
+    """Migrations of :data:`MIGRATION_APPS` (and their dependencies) not applied yet.
+
+    A container can start before ``deploy-ec2.sh`` runs ``migrate``; sweeping then would build
+    documents from rows a pending data migration is about to change.
+    """
+    from django.db import connection
+    from django.db.migrations.executor import MigrationExecutor
+
+    executor = MigrationExecutor(connection)
+    targets = [node for node in executor.loader.graph.leaf_nodes() if node[0] in MIGRATION_APPS]
+    return [f"{m.app_label}.{m.name}" for m, _backwards in executor.migration_plan(targets)]
+
+
+def sweep(
+    current: str,
+    *,
+    lock: Any = None,
+    skip: Collection[int] = (),
+    force: bool = False,
+) -> dict[str, Any]:
+    """Republish the stale active orgs (every active org with ``force``), :data:`BATCH` per query.
+
+    Returns ``published``, ``failed_orgs`` (ids) and ``stopped`` (``""``, ``consecutive_failures``
+    or ``lost_lock``). The lock, when given, is refreshed every :data:`LOCK_REFRESH_S`.
     """
     from auth.models import Organization
     from core.firewall_v2_publish import publish_for_org
+    from redis.exceptions import LockError
 
-    published = failed = streak = 0
-    last = 0
+    published = streak = last = 0
+    failed: list[int] = []
+    started = refreshed = reported = time.monotonic()
+
+    def result(stopped: str = "") -> dict[str, Any]:
+        return {"published": published, "failed_orgs": failed, "stopped": stopped}
+
     while True:
-        batch = list(
-            Organization.objects.filter(is_active=True, pk__gt=last)
-            .order_by("pk")
-            .only("pk", "slug")[:BATCH]
-        )
+        if force:
+            base = Organization.objects.filter(is_active=True).exclude(pk__in=list(skip))
+        else:
+            base = stale_orgs(current, skip)
+        batch = list(base.filter(pk__gt=last).order_by("pk").only("pk", "slug")[:BATCH])
         if not batch:
-            return published, failed
+            return result()
         for org in batch:
-            if publish_for_org(org).get("status") == "published":
+            now = time.monotonic()
+            if lock is not None and now - refreshed >= LOCK_REFRESH_S:
+                try:
+                    lock.extend(LOCK_TTL_S, replace_ttl=True)
+                except LockError:
+                    logger.warning("gateway-v2 plan rollout lost its lock; stopping this sweep")
+                    return result("lost_lock")
+                refreshed = now
+            if now - reported >= PROGRESS_EVERY_S:
+                logger.info(
+                    "gateway-v2 plan rollout progress: published=%d failed=%d last_org=%d "
+                    "seconds=%.0f", published, len(failed), last, now - started,
+                )
+                reported = now
+            last = org.pk
+            if publish_for_org(org, publisher=current, notes=False).get("status") == "published":
                 published += 1
                 streak = 0
                 continue
-            failed += 1
+            failed.append(org.pk)
             streak += 1
             if streak >= MAX_CONSECUTIVE_FAILURES:
                 logger.warning(
                     "gateway-v2 plan rollout stopped after %d consecutive failures", streak
                 )
-                return published, failed
-        last = batch[-1].pk
-        if on_batch is not None:
-            on_batch()
+                return result("consecutive_failures")
 
 
-def reconcile(*, client: _Redis | None = None, force: bool = False) -> dict[str, object]:
-    """Republish every active org once if the publisher's fingerprint changed. Idempotent.
+def reconcile(
+    *, client: Any = None, force: bool = False, skip: Collection[int] = ()
+) -> dict[str, object]:
+    """Republish the stale active orgs once. Idempotent.
 
-    ``force`` sweeps even when the marker matches (the manual ``sync_v2_plan_documents``).
-    Statuses: ``current`` (nothing to do), ``locked`` (another runner holds the lock),
-    ``swept`` (complete; marker written) or ``incomplete`` (some org failed; marker unchanged).
+    ``force`` republishes every active org (the stamps are ignored). ``skip`` leaves these org ids
+    alone. Statuses: ``current`` (nothing stale), ``waiting_for_migrations``, ``locked`` (another
+    runner holds the lock), ``swept`` (every org it tried was published), ``incomplete`` (some
+    failed) or ``lost_lock`` (stopped; the next run resumes).
     """
-    redis = client if client is not None else _redis()
     current = fingerprint()
-    if not force and _text(redis.get(MARKER_KEY)) == current:
+    if not force and not stale_orgs(current, skip).exists():
         return {"status": "current", "fingerprint": current}
-    token = secrets.token_hex(8)
-    if not redis.set(LOCK_KEY, token, nx=True, ex=LOCK_TTL_S):
+    pending = unapplied_migrations()
+    if pending:
+        return {
+            "status": "waiting_for_migrations",
+            "fingerprint": current,
+            "pending": len(pending),
+            "first_pending": pending[0],
+        }
+    from redis.exceptions import LockError
+
+    redis = client if client is not None else _redis()
+    lock = redis.lock(LOCK_KEY, timeout=LOCK_TTL_S, blocking=False, thread_local=False)
+    if not lock.acquire(blocking=False):
         return {"status": "locked", "fingerprint": current}
     started = time.monotonic()
     try:
-        published, failed = sweep(lambda: redis.expire(LOCK_KEY, LOCK_TTL_S))
-        if failed == 0:
-            redis.set(MARKER_KEY, current)
+        todo = stale_orgs(current, skip).count() if not force else None
+        logger.info(
+            "gateway-v2 plan rollout started: fingerprint=%s stale_orgs=%s", current[:16], todo,
+        )
+        done = sweep(current, lock=lock, skip=skip, force=force)
     finally:
-        if _text(redis.get(LOCK_KEY)) == token:
-            redis.delete(LOCK_KEY)
+        try:
+            lock.release()
+        except LockError:
+            logger.warning("gateway-v2 plan rollout lock was no longer ours at release")
+    failed = done["failed_orgs"]
+    status = "swept"
+    if done["stopped"] == "lost_lock":
+        status = "lost_lock"
+    elif failed or done["stopped"]:
+        status = "incomplete"
     note: dict[str, object] = {
-        "status": "swept" if failed == 0 else "incomplete",
+        "status": status,
         "fingerprint": current,
-        "published": published,
-        "failed": failed,
+        "published": done["published"],
+        "failed": len(failed),
+        "failed_orgs": failed,
+        "remaining": stale_orgs(current).count(),
         "seconds": round(time.monotonic() - started, 3),
     }
-    logger.info("gateway-v2 plan rollout: %s", note)
+    logger.info("gateway-v2 plan rollout: %s", {**note, "failed_orgs": failed[:20]})
     return note
+
+
+def _drop_broken_connections() -> None:
+    """``close_old_connections`` for a long-lived command: after the database went away, the next
+    attempt reconnects instead of failing on the dead connection. Never inside a transaction."""
+    from django.db import connections
+
+    for conn in connections.all(initialized_only=True):
+        if not conn.in_atomic_block:
+            conn.close_if_unusable_or_obsolete()
 
 
 def reconcile_until_settled(
     *,
     attempts: int,
     wait_s: float,
-    client: _Redis | None = None,
+    client: Any = None,
     sleep: Callable[[float], None] = time.sleep,
 ) -> dict[str, object]:
-    """:func:`reconcile` until ``current`` or ``swept``, at most ``attempts`` times.
+    """:func:`reconcile` until it settles, at most ``attempts`` times.
 
-    Retries cover a container that starts before its migrations ran (``deploy-ec2.sh`` migrates
-    after control is healthy), a database or Redis that is not up yet, and a runner on another
-    replica that holds the lock and then dies before writing the marker.
+    Retries cover a container that starts before ``migrate`` ran, a database or Redis that is not
+    up yet, a runner elsewhere that holds the lock, and transient per-org failures. Each retry
+    republishes only what is still stale. An org that failed :data:`ORG_MAX_TRIES` times is left
+    for the next start: the result is then ``partial`` with those org ids in ``failed_orgs``.
     """
+    tries: Counter[int] = Counter()
     note: dict[str, object] = {"status": "not_run"}
     for attempt in range(1, max(attempts, 1) + 1):
+        skip = frozenset(pk for pk, count in tries.items() if count >= ORG_MAX_TRIES)
         try:
-            note = reconcile(client=client)
+            _drop_broken_connections()
+            note = reconcile(client=client, skip=skip)
         except Exception:
             logger.warning("gateway-v2 plan rollout attempt %d failed", attempt, exc_info=True)
             note = {"status": "error"}
-        if note.get("status") in ("current", "swept"):
-            return note
+        failed = note.get("failed_orgs")
+        tries.update(failed if isinstance(failed, list) else ())
+        if note.get("status") in SETTLED:
+            if not skip:
+                return note
+            left = sorted(
+                stale_orgs(str(note["fingerprint"])).filter(pk__in=list(skip))
+                .values_list("pk", flat=True)
+            )
+            if not left:
+                return note
+            logger.error(
+                "gateway-v2 plan rollout settled without %d org(s) that failed %d times; they "
+                "keep their previous document until the next start: %s",
+                len(left), ORG_MAX_TRIES, left[:50],
+            )
+            return {**note, "status": "partial", "failed": len(left), "failed_orgs": left}
         if attempt < attempts:
             sleep(wait_s)
     return note
+
+
+def status() -> dict[str, object]:
+    """How many active orgs still carry a document another publisher built (``--status``)."""
+    from auth.models import Organization
+
+    current = fingerprint()
+    stale = stale_orgs(current)
+    return {
+        "fingerprint": current,
+        "active_orgs": Organization.objects.filter(is_active=True).count(),
+        "stale_orgs": stale.count(),
+        "stale_sample": list(stale.order_by("pk").values_list("pk", flat=True)[:20]),
+    }

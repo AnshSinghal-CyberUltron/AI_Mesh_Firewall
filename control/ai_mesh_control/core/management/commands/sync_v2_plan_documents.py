@@ -7,10 +7,11 @@ views -- seed commands and bulk ``QuerySet.update()`` emit no signal.
 ``--purge-legacy-plan-keys`` deletes the unsigned documents control wrote to ``{rv2}:plan:*``
 before S2. Only raw documents are removed; a signed feed envelope is never touched.
 
-``--if-changed`` is the deploy step (F4; ``core/v2_plan_rollout.py``): it sweeps every active org
-only when what the publisher writes changed since the last complete sweep (a release, or a change
-to ``V2_PLAN_NEW_RULES_MODE`` or another publish setting), and records the new fingerprint.
-``control/server-entrypoint.sh`` runs it in the background on every container start.
+``--if-changed`` is the deploy step (F4; ``core/v2_plan_rollout.py``): it republishes only the
+active orgs whose document another publisher built (an older release, other publish settings such
+as ``V2_PLAN_NEW_RULES_MODE``, or a pending data migration of its inputs), once the publisher's
+migrations are applied. ``control/server-entrypoint.sh`` runs it in the background on every
+container start. ``--status`` reports how many active orgs are still stale.
 """
 
 from __future__ import annotations
@@ -23,7 +24,7 @@ from core.firewall_v2_publish import (
     is_raw_document,
     publish_for_org,
 )
-from core.v2_plan_rollout import reconcile_until_settled
+from core.v2_plan_rollout import SETTLED, fingerprint, reconcile_until_settled, status
 from django.core.management.base import BaseCommand, CommandError
 
 
@@ -40,7 +41,12 @@ class Command(BaseCommand):
         parser.add_argument(
             "--if-changed",
             action="store_true",
-            help="Sweep every active org only if the publisher fingerprint changed (deploy step).",
+            help="Republish only the active orgs another publisher built (deploy step).",
+        )
+        parser.add_argument(
+            "--status",
+            action="store_true",
+            help="Print how many active orgs carry a document another publisher built; change nothing.",
         )
         parser.add_argument(
             "--attempts", type=int, default=1, help="With --if-changed: tries before giving up.",
@@ -50,6 +56,9 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args: Any, **options: Any) -> None:
+        if options.get("status"):
+            self.stdout.write(json.dumps(status(), sort_keys=True))
+            return
         if options.get("if_changed"):
             self._if_changed(options)
             return
@@ -61,8 +70,9 @@ class Command(BaseCommand):
             if not orgs.exists():
                 raise CommandError(f"no active organization {options['org_slug']!r}")
         failed = 0
+        current = fingerprint()
         for org in orgs:
-            note = publish_for_org(org)
+            note = publish_for_org(org, publisher=current)
             if note.get("status") != "published":
                 failed += 1
             self.stdout.write(
@@ -79,7 +89,7 @@ class Command(BaseCommand):
             raise CommandError("--if-changed sweeps every org; it takes no other option")
         note = reconcile_until_settled(attempts=options["attempts"], wait_s=options["wait"])
         self.stdout.write(f"gateway-v2 plan rollout: {json.dumps(note, sort_keys=True)}")
-        if note.get("status") not in ("current", "swept"):
+        if note.get("status") not in SETTLED:
             raise CommandError(f"gateway-v2 plan rollout did not settle: {note.get('status')}")
 
     @staticmethod

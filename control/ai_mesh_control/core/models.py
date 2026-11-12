@@ -1983,6 +1983,10 @@ class V2PlanDocument(models.Model):
     the body into the PLAN record gateways load. ``body`` is TEXT, not JSON: it holds the exact
     bytes the mapper produced, and the projector validates and canonicalises them itself.
     ``revision`` rises only when the body changes, so the console can show which save is live.
+    ``publisher`` is the fingerprint of the publisher that built the body
+    (``core.v2_plan_rollout.fingerprint``: its code, its migrations and its deployment settings).
+    The start-up rollout republishes every active org whose stamp differs from the running one;
+    ``""`` (rows written before F4, or by code that predates the column) is always stale.
     """
 
     id = models.BigAutoField(primary_key=True)
@@ -1994,6 +1998,8 @@ class V2PlanDocument(models.Model):
     body = models.TextField()
     revision = models.BigIntegerField(default=1)
     updated_at = models.DateTimeField(auto_now=True)
+    # db_default too: an older control image (a rollback) inserts rows without this column.
+    publisher = models.CharField(max_length=64, blank=True, default="", db_default="")
 
     class Meta:
         db_table = "core_v2_plan_document"
