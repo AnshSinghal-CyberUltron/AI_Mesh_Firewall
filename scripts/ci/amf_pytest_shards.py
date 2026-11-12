@@ -21,20 +21,29 @@ fixtures and in-file test order behave as in an unsharded run.
 Assignment: longest-processing-time first. Files are sorted by weight (descending, then by
 path) and each goes to the currently lightest shard (lowest index on a tie). A file's weight
 is its measured duration from the weights file; a file missing from it weighs
-``tests in the file * per_test_default``. Weights only balance the shards: a stale or missing
-weights file never drops or duplicates a test.
+``tests in the file * per_test_default``. Every weight is clamped to
+``[MIN_WEIGHT, MAX_WEIGHT]``, and a value that is not a finite number >= 0 counts as missing:
+with all-zero or NaN weights the loads never grew, so every file went to shard 0. Weights
+only balance the shards: a stale, missing or hostile weights file never drops or duplicates a
+test.
 
 ``--shard-report`` writes JSON: the full collection's size and SHA-256, the selected test ids,
-outcome counts, per-file durations and the slowest tests. The aggregate CI job checks the
-reports with the stdlib-only CLI below; it needs no pytest::
+each test's setup/call/teardown outcomes (``phases``), outcome counts, per-file durations and
+the slowest tests. The aggregate CI job checks the reports with the stdlib-only CLI below; it
+needs no pytest::
 
     python3 scripts/ci/amf_pytest_shards.py verify REPORT_DIR    # fails unless the shards
                                                                  # partition one collection
+                                                                 # and ran every test
     python3 scripts/ci/amf_pytest_shards.py weights REPORT_DIR   # weights file on stdout
 
 ``verify`` fails when: no report; shards disagree on the shard count, the collection or the
 assignment; a shard index is missing or repeated; two shards selected the same test; the
-union of the selections is not the collection; or a shard's pytest exit status is not 0.
+union of the selections is not the collection; a shard's pytest exit status is not 0; a
+selected test did not run to the end (no setup report, no call report after a passing setup,
+or no teardown report: ``pytest.exit(returncode=0)`` in a test or fixture, or a later
+``pytest_collection_modifyitems`` hookwrapper that drops selected items, both exit 0); or a
+test that no shard selected produced a report.
 """
 
 from __future__ import annotations
@@ -42,7 +51,9 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import os
+import re
 import sys
 import time
 from collections.abc import Iterable, Mapping, Sequence
@@ -62,11 +73,19 @@ except ImportError:  # pragma: no cover - exercised by the stdlib-only self-test
     _UsageError = ValueError
 
 
-REPORT_FORMAT = 1
+# 2: adds `phases` (per-test setup/call/teardown outcomes); `verify` needs it.
+REPORT_FORMAT = 2
 WEIGHTS_FORMAT = 1
 SLOWEST_KEPT = 30
+# Weight bounds in seconds. The floor keeps every file's weight positive, so the loads grow and
+# LPT spreads files over the shards even when measured weights are 0 (a file under 0.05 s rounds
+# to 0.0 in the weights file); the cap keeps sums finite.
+MIN_WEIGHT = 1e-3
+MAX_WEIGHT = 1e6
 # pytest's exit status when no test was selected; an empty shard is not a failure.
 _NO_TESTS_COLLECTED = 5
+_PHASES = ("setup", "call", "teardown")
+_NO_PHASE = "-"
 
 
 # --------------------------------------------------------------------------- pure functions
@@ -82,18 +101,32 @@ def digest(nodeids: Iterable[str]) -> str:
     return hashlib.sha256("\n".join(sorted(nodeids)).encode("utf-8")).hexdigest()
 
 
+def _clamp(seconds: float) -> float:
+    return min(max(seconds, MIN_WEIGHT), MAX_WEIGHT)
+
+
+def _seconds(value: Any) -> float | None:
+    """A usable weight: a finite number >= 0, clamped to the bounds; anything else is None."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    seconds = float(value)
+    if not math.isfinite(seconds) or seconds < 0:
+        return None
+    return _clamp(seconds)
+
+
 def file_weights(
     tests_per_file: Mapping[str, int], weights: Mapping[str, Any] | None
 ) -> dict[str, float]:
-    """Weight of every collected file: measured seconds, else ``tests * per_test_default``."""
+    """Weight of every collected file: measured seconds, else ``tests * per_test_default``.
+
+    Every weight lies in ``[MIN_WEIGHT, MAX_WEIGHT]``; ``per_test_default`` falls back to 1.0.
+    """
     measured: Mapping[str, Any] = (weights or {}).get("files", {})
-    per_test = float((weights or {}).get("per_test_default", 1.0))
+    per_test = _seconds((weights or {}).get("per_test_default")) or 1.0
     result: dict[str, float] = {}
     for path, n_tests in tests_per_file.items():
-        value = measured.get(path)
-        result[path] = (
-            float(value) if isinstance(value, (int, float)) and value >= 0 else n_tests * per_test
-        )
+        result[path] = _seconds(measured.get(path)) or _clamp(n_tests * per_test)
     return result
 
 
@@ -138,6 +171,63 @@ def load_weights(path: str | None) -> dict[str, Any] | None:
     return dict(doc)
 
 
+def unfinished(selected: Iterable[str], phases: Mapping[str, str]) -> list[str]:
+    """Selected tests that did not run to the end, each with the reason.
+
+    ``phases`` maps a node id to ``"<setup>/<call>/<teardown>"`` outcomes, ``-`` for a phase
+    with no report. A test ran to the end when it has a setup and a teardown report, and a
+    call report too when its setup passed (a skipped or failed setup has no call phase).
+    """
+    left = []
+    for nodeid in selected:
+        value = phases.get(nodeid, "/".join([_NO_PHASE] * len(_PHASES)))
+        parts = value.split("/") if isinstance(value, str) else []
+        if len(parts) != len(_PHASES):
+            raise ValueError(f"{nodeid}: phases {value!r} is not '<setup>/<call>/<teardown>'")
+        setup, call, teardown = parts
+        if setup == _NO_PHASE:
+            why = "never set up"
+        elif setup == "passed" and call == _NO_PHASE:
+            why = "set up, never called"
+        elif teardown == _NO_PHASE:
+            why = "never torn down"
+        else:
+            continue
+        left.append(f"{nodeid} ({why})")
+    return left
+
+
+_COLLECTED_LINE = re.compile(r"^(\d+)(?:/\d+)? tests? collected\b")
+
+
+def collection_ids(text: str) -> list[str]:
+    """The test ids in the output of ``pytest --collect-only -q``.
+
+    The ids are the lines from the first one containing ``::`` up to the next blank line: a
+    warning printed before them has no ``::`` and ends at a blank line, and anything after the
+    ids (the warnings summary also names tests ``path::test``) is not read. The count must
+    equal the ``N tests collected`` line, so a truncated listing fails.
+    """
+    lines = text.splitlines()
+    start = next((i for i, line in enumerate(lines) if "::" in line), None)
+    if start is None:
+        raise ValueError("the unsharded collection lists no test ids")
+    ids = []
+    for line in lines[start:]:
+        if not line.strip():
+            break
+        ids.append(line.strip())
+    counts = [m for line in lines if (m := _COLLECTED_LINE.match(line.strip()))]
+    if not counts:
+        raise ValueError("the unsharded collection has no 'N tests collected' line")
+    if int(counts[-1].group(1)) != len(ids):
+        raise ValueError(
+            f"the unsharded collection lists {len(ids)} ids, but pytest reported "
+            f"'{counts[-1].group(0)}'"
+        )
+    return ids
+
+
 # --------------------------------------------------------------------------- pytest plugin
 
 
@@ -163,6 +253,8 @@ class _Shard:
         self.files: dict[str, float] = {}
         self.per_test: dict[str, float] = {}
         self.outcomes: dict[str, int] = {}
+        # node id -> {phase: outcome} for every test report this shard produced
+        self.phases: dict[str, dict[str, str]] = {}
 
     @_trylast
     def pytest_collection_modifyitems(self, config: Any, items: list[Any]) -> None:
@@ -176,6 +268,9 @@ class _Shard:
             config.hook.pytest_deselected(items=deselected)
 
     def pytest_runtest_logreport(self, report: Any) -> None:
+        # Which phases reported, per test: `verify` fails on a selected test that never ran to
+        # the end, which the exit status alone does not show (pytest.exit(returncode=0)).
+        self.phases.setdefault(report.nodeid, {})[str(report.when)] = str(report.outcome)
         path = file_of(report.nodeid)
         self.files[path] = self.files.get(path, 0.0) + float(report.duration)
         self.per_test[report.nodeid] = self.per_test.get(report.nodeid, 0.0) + float(
@@ -210,6 +305,10 @@ class _Shard:
             "assignment_sha256": self.assignment,
             "weights_file": self.weights_path,
             "selected": sorted(self.selected),
+            "phases": {
+                nodeid: "/".join(seen.get(when, _NO_PHASE) for when in _PHASES)
+                for nodeid, seen in sorted(self.phases.items())
+            },
             "outcomes": dict(sorted(self.outcomes.items())),
             "files": {p: round(s, 3) for p, s in sorted(self.files.items())},
             "slowest": [[n, round(s, 3)] for n, s in slowest],
@@ -266,7 +365,10 @@ def read_reports(directory: Path) -> list[dict[str, Any]]:
 def verify(
     reports: Sequence[Mapping[str, Any]], expected: Sequence[str] | None = None
 ) -> dict[str, Any]:
-    """Check that the reports partition one collection; return the merged totals.
+    """Check that the reports partition one collection and ran it; return the merged totals.
+
+    Every selected test must have run to the end (``unfinished``), and no shard may report a
+    test it did not select.
 
     With ``expected`` (the node ids of an unsharded ``pytest --collect-only -q``), the shards'
     union must also equal it: a config drift that every shard shares (another rootdir, another
@@ -304,11 +406,32 @@ def verify(
                 f"the shards' union differs from the unsharded collection ({len(want)} tests): "
                 f"{len(missing)} missing, e.g. {missing[:3]}; {len(extra)} extra, e.g. {extra[:3]}"
             )
-    bad = [
+    problems = []
+    failed = [
         f"shard {r['index']}: exit {r['exitstatus']}" for r in reports if int(r["exitstatus"]) != 0
     ]
-    if bad:
-        raise VerifyError("pytest failed in " + ", ".join(bad))
+    if failed:
+        problems.append("pytest failed in " + ", ".join(failed))
+    # Selected is not ran: pytest.exit(returncode=0) ends a shard green with tests left, and a
+    # pytest_collection_modifyitems hookwrapper can drop items after this plugin selected them.
+    for r in sorted(reports, key=lambda r: int(r["index"])):
+        phases = r["phases"]
+        if not isinstance(phases, dict):
+            raise VerifyError(f"shard {r['index']}: `phases` is not an object")
+        left = unfinished(r["selected"], phases)
+        if left:
+            problems.append(
+                f"shard {r['index']}: {len(left)} of {len(r['selected'])} selected tests did not "
+                f"run to the end, e.g. {left[:3]}"
+            )
+        unselected = sorted(set(phases) - set(r["selected"]))
+        if unselected:
+            problems.append(
+                f"shard {r['index']}: {len(unselected)} tests ran without being selected, "
+                f"e.g. {unselected[:3]}"
+            )
+    if problems:
+        raise VerifyError("; ".join(problems))
     outcomes: dict[str, int] = {}
     for r in reports:
         for name, n in r["outcomes"].items():
@@ -354,7 +477,7 @@ def weights_doc(reports: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
 def _summary_markdown(result: Mapping[str, Any]) -> str:
     lines = [
         f"### pytest shards: {result['collected']} tests in {result['count']} shards, "
-        "each selected exactly once"
+        "each selected exactly once and run to the end"
         + (", union equal to the unsharded collection" if result["matched_unsharded"] else ""),
         "",
         "Outcomes: " + ", ".join(f"{n} {k}" for k, n in result["outcomes"].items()),
@@ -392,8 +515,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 0
         expected = None
         if args.expect_collection is not None:
-            text = args.expect_collection.read_text(encoding="utf-8")
-            expected = [line.strip() for line in text.splitlines() if "::" in line]
+            expected = collection_ids(args.expect_collection.read_text(encoding="utf-8"))
         result = verify(reports, expected)
     except (VerifyError, KeyError, ValueError, TypeError) as exc:
         print(f"::error title=pytest shards::{exc}")

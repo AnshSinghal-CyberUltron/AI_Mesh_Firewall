@@ -44,6 +44,7 @@ def _reports(nodeids: list[str], count: int, weights: dict | None = None) -> lis
                 "collected_sha256": shards.digest(nodeids),
                 "assignment_sha256": shards.assignment_digest(shard_of),
                 "selected": sorted(selected),
+                "phases": {n: "passed/passed/passed" for n in selected},
                 "outcomes": {"passed": len(selected)},
                 "files": {shards.file_of(n): 1.0 for n in selected},
                 "slowest": [[n, 0.5] for n in selected[:2]],
@@ -98,6 +99,46 @@ class AssignmentTest(unittest.TestCase):
             shards.file_weights({"x.py": 3, "y.py": 4, "bad.py": 2}, weights),
             {"x.py": 7.0, "y.py": 2.0, "bad.py": 1.0},
         )
+
+    def test_hostile_weights_are_bounded(self) -> None:
+        nan, inf = float("nan"), float("inf")
+        weights = {
+            "format": 1,
+            "per_test_default": nan,
+            "files": {
+                "z.py": 0.0,
+                "n.py": nan,
+                "i.py": inf,
+                "s.py": "9",
+                "t.py": True,
+                "h.py": 1e300,
+            },
+        }
+        got = shards.file_weights(
+            {"z.py": 1, "n.py": 2, "i.py": 3, "s.py": 4, "t.py": 5, "h.py": 6}, weights
+        )
+        # 0 -> floor; NaN, Infinity, strings and booleans -> tests * 1.0 (NaN default -> 1.0)
+        self.assertEqual(
+            got,
+            {
+                "z.py": shards.MIN_WEIGHT,
+                "n.py": 2.0,
+                "i.py": 3.0,
+                "s.py": 4.0,
+                "t.py": 5.0,
+                "h.py": shards.MAX_WEIGHT,
+            },
+        )
+
+    def test_degenerate_weights_still_spread_files(self) -> None:
+        # All-zero (or all-NaN) weights used to leave every load at 0, so every file went to
+        # shard 0 and that shard ran the whole suite.
+        nodeids = [f"tests/test_{i:02d}.py::t" for i in range(16)]
+        for value in (0.0, float("nan"), float("inf")):
+            files = {shards.file_of(n): value for n in nodeids}
+            weights = {"format": 1, "per_test_default": value, "files": files}
+            sizes = [len(shards.select(nodeids, i, 4, weights)[0]) for i in range(4)]
+            self.assertEqual(sizes, [4, 4, 4, 4], value)
 
     def test_bad_index_or_count(self) -> None:
         with self.assertRaises(ValueError):
@@ -179,6 +220,66 @@ class VerifyTest(unittest.TestCase):
         reports[1]["exitstatus"] = 1
         self._fails(reports, "shard 1: exit 1")
 
+    def test_selected_but_never_set_up(self) -> None:
+        # pytest.exit(returncode=0) in an earlier test, or a hookwrapper that dropped the item
+        # after selection: exit 0, but no report for the test.
+        reports = _reports(NODEIDS, 2)
+        del reports[0]["phases"][reports[0]["selected"][0]]
+        self._fails(reports, "did not run to the end")
+        self._fails(reports, "(never set up)")
+
+    def test_set_up_but_never_called(self) -> None:
+        # pytest.exit(returncode=0) inside the test: setup passed, no call, no teardown report.
+        reports = _reports(NODEIDS, 2)
+        reports[1]["phases"][reports[1]["selected"][-1]] = "passed/-/-"
+        self._fails(reports, "(set up, never called)")
+
+    def test_called_but_never_torn_down(self) -> None:
+        # pytest.exit(returncode=0) in a fixture finalizer.
+        reports = _reports(NODEIDS, 2)
+        reports[1]["phases"][reports[1]["selected"][0]] = "passed/passed/-"
+        self._fails(reports, "(never torn down)")
+
+    def test_setup_skip_or_error_needs_no_call(self) -> None:
+        reports = _reports(NODEIDS, 2)
+        first, second = reports[0]["selected"][:2]
+        reports[0]["phases"][first] = "skipped/-/passed"
+        reports[0]["phases"][second] = "failed/-/passed"
+        shards.verify(reports)  # complete runs: the exit status reports the error
+
+    def test_ran_without_being_selected(self) -> None:
+        reports = _reports(NODEIDS, 2)
+        stray = reports[1]["selected"][0]
+        reports[0]["phases"][stray] = "passed/passed/passed"
+        self._fails(reports, "1 tests ran without being selected")
+
+    def test_malformed_phases(self) -> None:
+        reports = _reports(NODEIDS, 2)
+        reports[0]["phases"][reports[0]["selected"][0]] = "passed"
+        with self.assertRaises(ValueError):
+            shards.verify(reports)
+        reports = _reports(NODEIDS, 2)
+        reports[0]["phases"] = []
+        self._fails(reports, "`phases` is not an object")
+
+    def test_failure_and_unfinished_both_reported(self) -> None:
+        reports = _reports(NODEIDS, 2)
+        reports[0]["exitstatus"] = 2
+        del reports[0]["phases"][reports[0]["selected"][-1]]
+        with self.assertRaises(shards.VerifyError) as ctx:
+            shards.verify(reports)
+        self.assertIn("shard 0: exit 2", str(ctx.exception))
+        self.assertIn("did not run to the end", str(ctx.exception))
+
+    def test_format_1_reports_are_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            report = _reports(NODEIDS, 1)[0]
+            report["format"] = 1
+            del report["phases"]
+            (Path(tmp) / "shard-0.json").write_text(json.dumps(report))
+            with self.assertRaises(shards.VerifyError):
+                shards.read_reports(Path(tmp))
+
 
 class ExpectedCollectionTest(unittest.TestCase):
     def test_union_equals_unsharded(self) -> None:
@@ -201,6 +302,42 @@ class ExpectedCollectionTest(unittest.TestCase):
     def test_duplicate_in_unsharded_list(self) -> None:
         with self.assertRaises(shards.VerifyError):
             shards.verify(_reports(NODEIDS, 2), NODEIDS + NODEIDS[:1])
+
+
+class CollectionIdsTest(unittest.TestCase):
+    def test_ci_layout(self) -> None:
+        text = "\n".join(NODEIDS) + f"\n\n{len(NODEIDS)} tests collected in 1.0s\n"
+        self.assertEqual(shards.collection_ids(text), NODEIDS)
+
+    def test_warning_before_and_warnings_summary_after(self) -> None:
+        # A stdout warning before the ids, and a warnings summary after them that names tests
+        # with `::`: only the id block counts.
+        text = (
+            "/venv/site-packages/plugin.py:300: PytestDeprecationWarning: option unset.\n"
+            "Valid scopes are: function, module\n\n"
+            + "\n".join(NODEIDS)
+            + "\n\n=== warnings summary ===\n"
+            + f"{NODEIDS[0]}\n  /x.py:3: UserWarning: careful\n\n"
+            + f"{len(NODEIDS)} tests collected in 1.0s\n"
+        )
+        self.assertEqual(shards.collection_ids(text), NODEIDS)
+
+    def test_deselected_summary(self) -> None:
+        text = "\n".join(NODEIDS) + f"\n\n{len(NODEIDS)}/9 tests collected (2 deselected) in 1s\n"
+        self.assertEqual(len(shards.collection_ids(text)), len(NODEIDS))
+        self.assertEqual(
+            shards.collection_ids(f"{NODEIDS[0]}\n\n1 test collected in 0.1s"), NODEIDS[:1]
+        )
+
+    def test_truncated_or_empty_listing_fails(self) -> None:
+        for text in (
+            "\n".join(NODEIDS[:-1]) + f"\n\n{len(NODEIDS)} tests collected in 1.0s\n",
+            "\n".join(NODEIDS) + "\n",  # no summary line
+            "no tests collected in 0.1s\n",
+            "",
+        ):
+            with self.assertRaises(ValueError, msg=text):
+                shards.collection_ids(text)
 
 
 class _Config:
